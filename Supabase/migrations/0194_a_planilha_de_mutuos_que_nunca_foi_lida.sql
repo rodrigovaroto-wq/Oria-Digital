@@ -117,9 +117,10 @@
 -- é quem exercita o formato de produção.
 --
 -- A PREVISÃO DO EFEITO EM PRODUÇÃO — MEDIDA, não estimada (28/09/2026,
--- SOMENTE LEITURA, replicando a lógica dos três achados por consulta direta
--- contra produção — a mesma técnica do revisor). Ainda ESCRITA, NÃO
--- APLICADA: quem responde de verdade, depois de aplicar, é a sonda:
+-- SOMENTE LEITURA, replicando a lógica corrigida por consulta direta contra
+-- produção — a mesma técnica do revisor, REMEDIDA depois da correção do
+-- achado 1 estendido, ver abaixo). Ainda ESCRITA, NÃO APLICADA: quem
+-- responde de verdade, depois de aplicar, é a sonda:
 --
 --   select chave, migration, tipo, objeto, presente, detalhe, porque
 --     from fn_instalacao_conferir() where not presente order by 1;
@@ -132,12 +133,12 @@
 -- | teste Canastra                       | 2025 |   16.300.000 |      16.300.000 |  16.060.000 | zona_cinzenta, diff 240 mil (mesmos números do acima) |
 -- | Teste comparativo - Grupo Canastra    | 2025 |   16.300.000 |      16.300.000 |  16.060.000 | zona_cinzenta, diff 240 mil |
 -- | teste v48                            | 2025 |   16.300.000 |      16.300.000 |  16.060.000 | zona_cinzenta, diff 240 mil |
--- | Teste 00                             | 2023 |            0 |       1.100.000 |  33.060.000 | **SUSPEITO — ver nota abaixo, não aceitar sem checar** |
+-- | Teste 00                             | 2023 |            0 |       1.100.000 |  33.060.000 | zona_cinzenta, diff 31,96 mi — NÚMERO EXPLICADO, não bug (ver nota) |
 -- | Teste 00                             | 2025 |   74.800.000 |      74.800.000 |  74.560.000 | **zona_cinzenta, diff 240 mil** |
--- | teste alto volume - grupo araucária  | 2021 |    8.965.000 |      27.090.000 |  (não comparada) | zona_cinzenta (os DOIS LADOS do balanço não se espelham — achado da própria correção, não bug) |
--- | teste alto volume - grupo araucária  | 2022 |   19.490.000 |      31.180.000 |  (não comparada) | zona_cinzenta (idem) |
--- | teste alto volume - grupo araucária  | 2023 |   33.300.000 |      46.300.000 |  (não comparada) | zona_cinzenta (idem) |
--- | teste alto volume - grupo araucária  | 2024 |   51.600.000 |      58.900.000 |  (não comparada) | zona_cinzenta (idem) |
+-- | teste alto volume - grupo araucária  | 2021 |    8.965.000 |       9.374.000 |  (não comparada) | zona_cinzenta (os DOIS LADOS do balanço não se espelham — achado real, não bug) |
+-- | teste alto volume - grupo araucária  | 2022 |   19.490.000 |      20.380.000 |  (não comparada) | zona_cinzenta (idem) |
+-- | teste alto volume - grupo araucária  | 2023 |   33.300.000 |      33.300.000 |  33.060.000 | zona_cinzenta, diff 240 mil |
+-- | teste alto volume - grupo araucária  | 2024 |   51.600.000 |      51.600.000 |  51.360.000 | zona_cinzenta, diff 240 mil |
 -- | teste alto volume - grupo araucária  | 2025 |   74.800.000 |      74.800.000 |  74.560.000 | zona_cinzenta, diff 240 mil |
 -- | Araucária teste (7º caso, achado na medição — não citado no cabeçalho original) | 2021 | 8.965.000 | 7.217.000 | (não comparada) | zona_cinzenta (os dois lados do balanço não se espelham) |
 -- | Araucária teste                      | 2022 |   19.490.000 |      19.490.000 |  19.250.000 | zona_cinzenta, diff 240 mil |
@@ -145,14 +146,40 @@
 -- | Araucária teste                      | 2024 |   51.600.000 |      51.600.000 |  51.360.000 | zona_cinzenta, diff 240 mil |
 -- | Araucária teste                      | 2025 |   74.800.000 |      83.400.000 |  (não comparada) | zona_cinzenta (os dois lados não se espelham) |
 --
--- LEITURA: nos anos em que os dois lados do balanço SE ESPELHAM, o efeito é
--- estável e consistente entre casos e anos — a mesma divergência plantada
--- de 240 mil (a régua do book Canastra), medida onde a checagem agora
--- CONSEGUE olhar (antes: 12/12 casos em `documento_ausente`, texto falso).
--- Nos anos em que os dois lados NÃO se espelham (vários em "alto volume" e
--- em "Araucária teste"), a planilha não é comparada — é o comportamento
--- JÁ DESENHADO pela 0123 (preservado, não desta migration): o achado é dos
--- BALANÇOS, não da planilha.
+-- ATUALIZAÇÃO (28/09/2026, tarde — acompanhamento pós-revisão). "Teste
+-- 00"/2023 tinha ficado SUSPEITO na primeira medição (lado A 1,1 mi contra
+-- 33,3 mi nos casos irmãos no MESMO ano). Rastreado e CORRIGIDO no mesmo
+-- arquivo: a causa era um achado 1 mais profundo do que o corrigido antes —
+-- um documento SEM `periodo_coluna` (retrato/anual de UM ano) tinha suas
+-- linhas contadas para QUALQUER `v_ano` perguntado, não só o seu próprio
+-- (`fn_coluna_periodo_do_ano(...) is null` passava sem checar se o PERÍODO
+-- DO DOCUMENTO ancora o ano). Corrigido: o `linhas` (e o desempate do
+-- `balancos`, que tinha de concordar) agora só deixam a linha entrar quando
+-- o período do PRÓPRIO documento ancora `v_ano` (ou é ambíguo — aí undecidable
+-- é melhor que excluir à toa, comportamento preservado). MEDIDO de novo
+-- depois da correção: "teste alto volume - grupo araucária"/2021 e 2022
+-- MUDARAM (passivo caiu de 27,09/31,18 mi para 9,37/20,38 mi — o vazamento
+-- saindo da conta), e agora 2023/2024/2025 desse caso passam a FECHAR
+-- (antes ficavam "os dois lados não se espelham" por causa do mesmo
+-- vazamento). "Teste 00"/2023 ficou EXATAMENTE IGUAL (1,1 mi) — não era bug
+-- da checagem: rastreado até o dado, a maioria dos balanços de "Teste 00"
+-- para 2023 são documentos comparativos ("multi 24,25"/"multi 21..25") que
+-- SIMPLESMENTE NÃO TÊM linha de mútuo nenhuma (0 linhas, conferido
+-- diretamente nos `campo_extraido`) — só duas entidades ("ARAUCÁRIA
+-- FERRAGENS E METAIS", "Grupo Araucária") têm documento PRÓPRIO de 2023 com
+-- a conta. O número 1,1 mi é honesto: reflete o que os balanços de fato
+-- têm para aquele ano, não um vazamento. Continua zona_cinzenta (a planilha
+-- do ano, 33,06 mi, diverge muito do lado A real) — mas agora é um achado
+-- genuíno de dado incompleto no balanço de 2023, não um defeito da
+-- checagem, e por isso deixa de estar "suspeito".
+--
+-- LEITURA GERAL: nos anos em que os dois lados do balanço SE ESPELHAM, o
+-- efeito é estável e consistente entre casos e anos — a mesma divergência
+-- plantada de 240 mil (a régua do book Canastra), medida onde a checagem
+-- agora CONSEGUE olhar (antes: 12/12 casos em `documento_ausente`, texto
+-- falso). Nos anos em que os dois lados NÃO se espelham, a planilha não é
+-- comparada — comportamento JÁ DESENHADO pela 0123 (preservado, não desta
+-- migration): o achado é dos BALANÇOS, não da planilha.
 --
 -- "Araucária teste" (e as variantes "Araucária teste 1"/"araucária test 52",
 -- e ~14 casos "teste vNN" com poucas linhas) apareceram na medição além dos
@@ -161,20 +188,23 @@
 -- qualificam pelo mesmo critério (planilha MUTUOS + conta de mútuo no
 -- balanço) e a sonda os pegará na próxima rodada de cada um.
 --
--- "Teste 00"/2023 é MARCADO SUSPEITO e não deve ser aceito sem checar: o
--- lado A (R$ 1,1 mi, uma única linha) é muito menor que o mesmo ano nos
--- casos irmãos "Araucária teste"/"teste alto volume" (R$ 33,3 mi) — a causa
--- provável, investigada mas NÃO CORRIGIDA aqui (fora do escopo dos três
--- achados revisados): quando uma entidade só tem UM documento de balanço
--- candidato para o ano e ele é de OUTRO ano (ex.: só "anual 2025", sem
--- alternativa para 2023), o filtro de coluna do LADO A (herdado da 0123,
--- `fn_coluna_periodo_do_ano(...) is null` passa por um documento de um ano
--- só independente de qual ano está sendo perguntado) deixa esse documento
--- "aparecer" para qualquer ano, inclusive quando não é dele — os 3 achados
--- desta revisão não tocam essa parte do desenho da 0123, e corrigi-la
--- exigiria mudar o filtro de LINHA (não só a ESCOLHA do documento), o que é
--- maior que os 3 achados pedidos. Registrado aqui para a próxima rodada, não
--- corrigido: revisar "Teste 00"/2023 à mão antes de comunicar ao cliente.
+-- fn_reconciliar_intragrupo (0124:229-239, tipo `intragrupo_espelho`) TEM O
+-- MESMO VÍCIO DE LINHA (`fn_coluna_periodo_do_ano(v.ver, v_ano) is null`
+-- sem checar o período do documento) — e pior: nem tem a escolha de
+-- documento por "tem dado" que o achado 1 já trouxe para esta função; ela
+-- escolhe um documento por entidade só por tipo/`criado_em`, reaplicado
+-- SEM MUDANÇA a cada ano do laço. MEDIDO em produção só-leitura (28/09/2026,
+-- réplica fiel do filtro de 0124, sem alterar nada): nos 7 casos acima,
+-- TODAS as linhas intragrupo incluídas em quase todo (caso, ano) vêm de um
+-- documento cujo período NÃO ancora aquele ano — por exemplo "teste -
+-- Canastra"/2023: 4 de 4 linhas; "teste alto volume"/2025: 5 de 5;
+-- "Araucária teste" em todos os 5 anos: 2 a 7 de 7 linhas, sempre 100%.
+-- Historicamente a tabela `reconciliacao` tem 52 linhas `intragrupo_espelho`
+-- com resultado `ok` e 117 `documento_ausente` — NENHUMA `zona_cinzenta`
+-- registrada ainda, o que é consistente com "ok" por SORTE de os números
+-- vazados ainda coincidirem, não com o defeito não existir. NÃO CORRIGIDO
+-- AQUI (fora do arquivo desta migration, por instrução explícita) — fica
+-- registrado para uma migration própria.
 -- =============================================================================
 
 create or replace function fn_reconciliar_mutuos(
@@ -315,21 +345,41 @@ begin
       -- COMBINADO > DF_AUDITADA > BALANCETE) e o mais recente. Um "multi
       -- 24,25" que TEM colunas por ano e linha de mútuo continua valendo — o
       -- critério é "tem dado", não "é anual".
-      select distinct on (d.entidade_id) d.id, d.entidade_id
+      select distinct on (d.entidade_id) d.id, d.entidade_id,
+             pe.tipo as periodo_tipo, pe.referencia as periodo_ref
       from documento d
       join lateral (select fn_versao_atual(d.id) as ver) v on true
+      left join periodo pe on pe.id = d.periodo_id
       where d.caso_id = p_caso_id
         and d.tipo_taxonomia in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA')
       order by d.entidade_id,
+               -- 0194 (achado 1, ESTENDIDO em revisão de acompanhamento —
+               -- 28/09/2026, medido em produção só-leitura, caso "Teste 00"
+               -- ano 2023: lado A 1,1 mi contra 33,3 mi nos casos irmãos,
+               -- mesmo desenho, mesmo ano). O `exists` abaixo TEM de
+               -- concordar com o filtro do `linhas`, logo abaixo: um
+               -- documento sem `periodo_coluna` (retrato/anual de UM ano) só
+               -- "tem dado do ano" quando o PRÓPRIO PERÍODO do documento
+               -- ancora `v_ano` — não para qualquer ano perguntado. Antes
+               -- desta correção, `fn_coluna_periodo_do_ano(v.ver, v_ano) is
+               -- null` passava para QUALQUER `v_ano`, e um documento "anual
+               -- 2025" sem alternativa podia "aparecer" como se tivesse dado
+               -- de 2023 — a mesma folga que o `linhas` tinha.
                (exists (
                   select 1 from campo_extraido ce2
                   where ce2.documento_versao_id = v.ver
                     and ce2.valor_num is not null
                     and fn_texto_nomeia_mutuo(ce2.chave)
-                    and (v_ano is null
-                         or fn_coluna_periodo_do_ano(v.ver, v_ano) is null
-                         or fn_normalizar_texto(ce2.periodo_coluna)
-                            = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+                    and (
+                      v_ano is null
+                      or (fn_coluna_periodo_do_ano(v.ver, v_ano) is not null
+                          and fn_normalizar_texto(ce2.periodo_coluna)
+                              = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+                      or (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
+                          and (pe.id is null
+                               or cardinality(coalesce(fn_anos_periodo(pe.tipo, pe.referencia), '{}'::int[])) = 0
+                               or v_ano = any(fn_anos_periodo(pe.tipo, pe.referencia))))
+                    )
                )) desc,
                array_position(array['BALANCO','COMBINADO','DF_AUDITADA','BALANCETE'],
                               d.tipo_taxonomia),
@@ -355,9 +405,31 @@ begin
         -- então ele não espelha e não é da população da planilha intragrupo.
         and not fn_mutuo_com_socio(ce.chave, ce.secao)
         and fn_papel_linha(ce.chave) <> 'subtotal'
-        and (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
-             or fn_normalizar_texto(ce.periodo_coluna)
-                = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+        -- 0194 (achado 1, ESTENDIDO — 28/09/2026, mesma causa medida acima):
+        -- um documento SEM `periodo_coluna` (fn_coluna_periodo_do_ano
+        -- devolve null, não a sentinela) não é automaticamente "de qualquer
+        -- ano" — ele só vale para `v_ano` quando o PRÓPRIO PERÍODO do
+        -- documento (`periodo_tipo`/`periodo_ref`, carregados pelo
+        -- `balancos` acima) ancora esse ano. "Teste 00"/2023, MEDIDO em
+        -- produção só-leitura: o único balanço candidato de várias
+        -- controladas era "anual 2025" (sem coluna, período 2025) — o
+        -- filtro antigo deixava as linhas dele contarem também para 2023,
+        -- inflando nenhuma entidade a mais e ESVAZIANDO o lado A do ano
+        -- certo (1,1 mi contra os 33,3 mi que os casos irmãos têm no mesmo
+        -- ano). Período que NÃO ANCORA ano nenhum (`cardinality(...) = 0`)
+        -- ou documento SEM período: sem como afirmar de qual ano ele é —
+        -- comportamento de ANTES desta correção (passa, undecidable é
+        -- melhor que excluir à toa).
+        and (
+          v_ano is null
+          or (fn_coluna_periodo_do_ano(v.ver, v_ano) is not null
+              and fn_normalizar_texto(ce.periodo_coluna)
+                  = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+          or (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
+              and (d.periodo_tipo is null
+                   or cardinality(coalesce(fn_anos_periodo(d.periodo_tipo, d.periodo_ref), '{}'::int[])) = 0
+                   or v_ano = any(fn_anos_periodo(d.periodo_tipo, d.periodo_ref))))
+        )
         and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
     ), por_lado as (
       select lado, abs(sum(valor_base)) as soma_base
@@ -740,7 +812,10 @@ comment on function fn_reconciliar_mutuos(uuid, uuid, numeric, numeric) is
   '`secao_canonica` sem sentido de lado; (3) a planilha agora é escolhida POR ANO, não uma vez para '
   'a checagem inteira — o ano sem planilha própria vira "planilha deste exercício não entregue" '
   '(documento_ausente, cobrança de checklist), não mais uma pendência falsa quando o caso TEM a '
-  'planilha certa de outro ano. 0123: a natureza "mútuo" é lida na linha OU na seção. Confere os '
+  'planilha certa de outro ano. ACOMPANHAMENTO (28/09/2026, tarde): o achado 1 foi ESTENDIDO — um '
+  'documento sem `periodo_coluna` só conta para `v_ano` quando o PRÓPRIO PERÍODO dele ancora esse '
+  'ano (não para qualquer ano perguntado); mesma checagem no desempate do `balancos` e no filtro do '
+  '`linhas`, que têm de concordar. 0123: a natureza "mútuo" é lida na linha OU na seção. Confere os '
   'dois lados entre si antes de comparar a planilha; lados que discordam são o achado, e aí a '
   'planilha não é atribuída a um deles. Mútuo com sócio fica fora: não tem espelho no mandato.';
 

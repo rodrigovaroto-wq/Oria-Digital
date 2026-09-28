@@ -9379,21 +9379,41 @@ begin
       -- COMBINADO > DF_AUDITADA > BALANCETE) e o mais recente. Um "multi
       -- 24,25" que TEM colunas por ano e linha de mútuo continua valendo — o
       -- critério é "tem dado", não "é anual".
-      select distinct on (d.entidade_id) d.id, d.entidade_id
+      select distinct on (d.entidade_id) d.id, d.entidade_id,
+             pe.tipo as periodo_tipo, pe.referencia as periodo_ref
       from documento d
       join lateral (select fn_versao_atual(d.id) as ver) v on true
+      left join periodo pe on pe.id = d.periodo_id
       where d.caso_id = p_caso_id
         and d.tipo_taxonomia in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA')
       order by d.entidade_id,
+               -- 0194 (achado 1, ESTENDIDO em revisão de acompanhamento —
+               -- 28/09/2026, medido em produção só-leitura, caso "Teste 00"
+               -- ano 2023: lado A 1,1 mi contra 33,3 mi nos casos irmãos,
+               -- mesmo desenho, mesmo ano). O `exists` abaixo TEM de
+               -- concordar com o filtro do `linhas`, logo abaixo: um
+               -- documento sem `periodo_coluna` (retrato/anual de UM ano) só
+               -- "tem dado do ano" quando o PRÓPRIO PERÍODO do documento
+               -- ancora `v_ano` — não para qualquer ano perguntado. Antes
+               -- desta correção, `fn_coluna_periodo_do_ano(v.ver, v_ano) is
+               -- null` passava para QUALQUER `v_ano`, e um documento "anual
+               -- 2025" sem alternativa podia "aparecer" como se tivesse dado
+               -- de 2023 — a mesma folga que o `linhas` tinha.
                (exists (
                   select 1 from campo_extraido ce2
                   where ce2.documento_versao_id = v.ver
                     and ce2.valor_num is not null
                     and fn_texto_nomeia_mutuo(ce2.chave)
-                    and (v_ano is null
-                         or fn_coluna_periodo_do_ano(v.ver, v_ano) is null
-                         or fn_normalizar_texto(ce2.periodo_coluna)
-                            = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+                    and (
+                      v_ano is null
+                      or (fn_coluna_periodo_do_ano(v.ver, v_ano) is not null
+                          and fn_normalizar_texto(ce2.periodo_coluna)
+                              = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+                      or (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
+                          and (pe.id is null
+                               or cardinality(coalesce(fn_anos_periodo(pe.tipo, pe.referencia), '{}'::int[])) = 0
+                               or v_ano = any(fn_anos_periodo(pe.tipo, pe.referencia))))
+                    )
                )) desc,
                array_position(array['BALANCO','COMBINADO','DF_AUDITADA','BALANCETE'],
                               d.tipo_taxonomia),
@@ -9419,9 +9439,31 @@ begin
         -- então ele não espelha e não é da população da planilha intragrupo.
         and not fn_mutuo_com_socio(ce.chave, ce.secao)
         and fn_papel_linha(ce.chave) <> 'subtotal'
-        and (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
-             or fn_normalizar_texto(ce.periodo_coluna)
-                = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+        -- 0194 (achado 1, ESTENDIDO — 28/09/2026, mesma causa medida acima):
+        -- um documento SEM `periodo_coluna` (fn_coluna_periodo_do_ano
+        -- devolve null, não a sentinela) não é automaticamente "de qualquer
+        -- ano" — ele só vale para `v_ano` quando o PRÓPRIO PERÍODO do
+        -- documento (`periodo_tipo`/`periodo_ref`, carregados pelo
+        -- `balancos` acima) ancora esse ano. "Teste 00"/2023, MEDIDO em
+        -- produção só-leitura: o único balanço candidato de várias
+        -- controladas era "anual 2025" (sem coluna, período 2025) — o
+        -- filtro antigo deixava as linhas dele contarem também para 2023,
+        -- inflando nenhuma entidade a mais e ESVAZIANDO o lado A do ano
+        -- certo (1,1 mi contra os 33,3 mi que os casos irmãos têm no mesmo
+        -- ano). Período que NÃO ANCORA ano nenhum (`cardinality(...) = 0`)
+        -- ou documento SEM período: sem como afirmar de qual ano ele é —
+        -- comportamento de ANTES desta correção (passa, undecidable é
+        -- melhor que excluir à toa).
+        and (
+          v_ano is null
+          or (fn_coluna_periodo_do_ano(v.ver, v_ano) is not null
+              and fn_normalizar_texto(ce.periodo_coluna)
+                  = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+          or (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
+              and (d.periodo_tipo is null
+                   or cardinality(coalesce(fn_anos_periodo(d.periodo_tipo, d.periodo_ref), '{}'::int[])) = 0
+                   or v_ano = any(fn_anos_periodo(d.periodo_tipo, d.periodo_ref))))
+        )
         and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
     ), por_lado as (
       select lado, abs(sum(valor_base)) as soma_base
@@ -9791,7 +9833,7 @@ $$;
 -- Name: FUNCTION fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS '0194: a planilha de mútuos é um RETRATO de uma data (0145 — o conceito mora na coluna, não é comparativa): quando a coluna de período sai sentinela e o documento escolhido para o ano cobre de fato o ano (achado 3), a coluna do saldo é achada pelo localizador da 0145 (MUTUOS/saldo_de_mutuo, termo ''saldo''), em vez de zerar a comparação e devolver documento_ausente falso. Retrato sem coluna de saldo, ou planilha sem linha para o lado do balanço: linha_nao_localizada; escala incomparável: unidade_divergente — abrem pendência (0186), diferente de documento_ausente. A REVISÃO DE FIDELIDADE (28/09/2026, antes da migration ser aplicada) mediu três achados sobreviventes, todos corrigidos AQUI: (1) o balanço escolhido por entidade agora é POR ANO — um documento que só ANCORA o ano sem trazer linha de mútuo não vence mais o que TRAZ o dado; (2) `fn_lado_do_mutuo` só filtra a planilha quando ela é COMPARATIVA (0123: rótulo declara lado de verdade) — numa planilha-RETRATO a chave é o PAR de empresas, e o filtro descartava linha boa por casar "administrativos" com "ativo" ou por herdar `secao_canonica` sem sentido de lado; (3) a planilha agora é escolhida POR ANO, não uma vez para a checagem inteira — o ano sem planilha própria vira "planilha deste exercício não entregue" (documento_ausente, cobrança de checklist), não mais uma pendência falsa quando o caso TEM a planilha certa de outro ano. 0123: a natureza "mútuo" é lida na linha OU na seção. Confere os dois lados entre si antes de comparar a planilha; lados que discordam são o achado, e aí a planilha não é atribuída a um deles. Mútuo com sócio fica fora: não tem espelho no mandato.';
+COMMENT ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS '0194: a planilha de mútuos é um RETRATO de uma data (0145 — o conceito mora na coluna, não é comparativa): quando a coluna de período sai sentinela e o documento escolhido para o ano cobre de fato o ano (achado 3), a coluna do saldo é achada pelo localizador da 0145 (MUTUOS/saldo_de_mutuo, termo ''saldo''), em vez de zerar a comparação e devolver documento_ausente falso. Retrato sem coluna de saldo, ou planilha sem linha para o lado do balanço: linha_nao_localizada; escala incomparável: unidade_divergente — abrem pendência (0186), diferente de documento_ausente. A REVISÃO DE FIDELIDADE (28/09/2026, antes da migration ser aplicada) mediu três achados sobreviventes, todos corrigidos AQUI: (1) o balanço escolhido por entidade agora é POR ANO — um documento que só ANCORA o ano sem trazer linha de mútuo não vence mais o que TRAZ o dado; (2) `fn_lado_do_mutuo` só filtra a planilha quando ela é COMPARATIVA (0123: rótulo declara lado de verdade) — numa planilha-RETRATO a chave é o PAR de empresas, e o filtro descartava linha boa por casar "administrativos" com "ativo" ou por herdar `secao_canonica` sem sentido de lado; (3) a planilha agora é escolhida POR ANO, não uma vez para a checagem inteira — o ano sem planilha própria vira "planilha deste exercício não entregue" (documento_ausente, cobrança de checklist), não mais uma pendência falsa quando o caso TEM a planilha certa de outro ano. ACOMPANHAMENTO (28/09/2026, tarde): o achado 1 foi ESTENDIDO — um documento sem `periodo_coluna` só conta para `v_ano` quando o PRÓPRIO PERÍODO dele ancora esse ano (não para qualquer ano perguntado); mesma checagem no desempate do `balancos` e no filtro do `linhas`, que têm de concordar. 0123: a natureza "mútuo" é lida na linha OU na seção. Confere os dois lados entre si antes de comparar a planilha; lados que discordam são o achado, e aí a planilha não é atribuída a um deles. Mútuo com sócio fica fora: não tem espelho no mandato.';
 
 --
 -- Name: fn_reconciliar_por_documento(uuid, text); Type: FUNCTION; Schema: public; Owner: -

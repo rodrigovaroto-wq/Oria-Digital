@@ -639,29 +639,45 @@ supabase db execute --file Supabase/migrations/0193_a_tolerancia_que_crescia_com
 #      planilha certa de OUTRO ano. Agora é por ANO: sem planilha própria de
 #      um ano é "não entregue" (documento_ausente, cobrança de checklist),
 #      não pendência falsa.
-# Testes: Supabase/test/mutuos_retrato_de_uma_data.test.sql (via run.sh) — 8
-# blocos, com os cenários dos três achados (5 casos base + 3 novos).
+#   ACOMPANHAMENTO (28/09/2026, tarde): o achado 1 foi ESTENDIDO — um
+#   documento SEM `periodo_coluna` (retrato/anual de um ano só) só conta para
+#   `v_ano` quando o PRÓPRIO PERÍODO do documento ancora esse ano, não para
+#   qualquer ano perguntado (o "anual 2025" de uma entidade não pode contar
+#   para 2023). MEDIDO em produção só-leitura: corrigiu "Teste 00"/2023, que
+#   tinha ficado SUSPEITO na primeira medição — ver a nota completa (com o
+#   número final, não mais "suspeito") no cabeçalho da migration. TAMBÉM
+#   ACHADO, e NÃO CORRIGIDO aqui (fora do escopo, é outra função):
+#   fn_reconciliar_intragrupo (0124) tem o MESMO vício de linha — medido em
+#   7 casos de produção, praticamente 100% das linhas `intragrupo_espelho`
+#   incluídas por ano vêm de um documento que não ancora aquele ano.
+# Testes: Supabase/test/mutuos_retrato_de_uma_data.test.sql (via run.sh) — 9
+# blocos, com os cenários dos três achados + o acompanhamento (5 casos base +
+# 4 novos).
 supabase db execute --file Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql
 # DEPOIS DE APLICAR, confira o catálogo:
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0194' and not presente;                 -- ZERO linhas
 # E, na próxima rodada de cada caso com planilha MUTUOS, o efeito MEDIDO
-# (28/09/2026, somente leitura, replicando a lógica corrigida por consulta —
+# (28/09/2026, somente leitura, REMEDIDO depois do acompanhamento acima —
 # não estimado; ver a tabela completa no cabeçalho da migration):
 #   - teste - Canastra / teste Canastra / Teste comparativo - Grupo Canastra /
 #     teste v48: 2025 passa a CONCLUIR zona_cinzenta, diff R$ 240 mil (a
 #     divergência plantada do book Canastra, finalmente acusada); 2023/2024
 #     ficam documento_ausente (a planilha do caso é só de 2025 — cobrança de
 #     checklist, não achado).
-#   - Teste 00: 2025 idem (zona_cinzenta, 240 mil); 2023 saiu SUSPEITO na
-#     medição (lado A muito menor que o mesmo ano em casos irmãos) — NÃO
-#     ACEITAR sem checar à mão antes de comunicar ao cliente (nota completa
-#     no cabeçalho da migration).
-#   - teste alto volume - grupo araucária / Araucária teste: a maioria dos
-#     anos passa a acusar zona_cinzenta nos PRÓPRIOS BALANÇOS (os dois lados
-#     do mútuo não se espelham dentro do mandato — achado real, não bug; a
-#     planilha não é comparada nesses anos, por desenho da 0123); os anos em
-#     que os balanços se espelham reproduzem o mesmo padrão de 240 mil.
+#   - Teste 00: 2025 idem (zona_cinzenta, 240 mil); 2023 CONTINUA
+#     zona_cinzenta (diff ~32 mi), mas o número agora está EXPLICADO: os
+#     balanços comparativos de 2023 do caso simplesmente não têm linha de
+#     mútuo (0 linhas, conferido nos campo_extraido) — só 2 entidades têm
+#     documento próprio de 2023. Não é bug da checagem; é achado real de
+#     dado incompleto no balanço.
+#   - teste alto volume - grupo araucária: 2021/2022 MUDARAM depois do
+#     acompanhamento (o vazamento saindo da conta) e 2023/2024/2025 passam a
+#     FECHAR (240 mil, como os outros casos) — antes ficavam presos em "os
+#     dois lados não se espelham" por causa do mesmo vazamento.
+#   - Araucária teste: mesma leitura — anos que se espelham reproduzem 240
+#     mil; 2021/2025 continuam "os dois lados não se espelham" (achado real
+#     dos balanços, não da planilha, comportamento já desenhado pela 0123).
 # Para achar as linhas antigas (gravadas ANTES desta migration, que não se
 # corrigem sozinhas):
 #   select id, caso_id, criado_em from reconciliacao

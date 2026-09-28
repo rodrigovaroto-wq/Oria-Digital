@@ -484,6 +484,87 @@ begin
 end $$;
 
 -- =============================================================================
+-- 9. ACHADO 1, ESTENDIDO (acompanhamento de 28/09/2026, tarde — MEDIDO em
+-- produção só-leitura, "Teste 00"/2023: lado A saía 1,1 mi contra 33,3 mi
+-- nos casos irmãos). Causa: um documento SEM `periodo_coluna` (retrato/anual
+-- de UM ano) tinha suas linhas contadas para QUALQUER `v_ano`, não só o seu
+-- próprio — `fn_coluna_periodo_do_ano(...) is null` passava sem checar se o
+-- PERÍODO DO DOCUMENTO ancora o ano perguntado. Arranjo real: uma entidade
+-- cujo ÚNICO balanço é "anual 2025" (sem coluna de ano) consultada em 2023 —
+-- a linha dela não pode entrar na soma de 2023.
+-- =============================================================================
+do $$
+declare
+  v_caso uuid;
+  v_r    jsonb;
+  v_per_consulta uuid;
+  v_ok   boolean;
+  v_res  text;
+  v_motivo text;
+  v_num  numeric;
+begin
+  raise notice '--- 9. achado 1 estendido: balanço "anual 2025" sem coluna não conta para 2023 ---';
+  v_caso := (fn_upsert_caso('0194: balanço de um ano só não vaza para outro ano'))::uuid;
+
+  -- SÓ2025 PARTICIPAÇÕES: o ÚNICO balanço é "anual 2025", SEM coluna de ano
+  -- (documento de um ano só) — não existe candidato nenhum para 2023.
+  v_r := fn_registrar_documento(v_caso, 'SO2025 PARTICIPACOES S.A.', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-so2025-part.pdf', 'BP SO2025 PART.pdf', true, 'HASH-0194-40', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a receber - partes relacionadas','valor_num','9000','unidade','milhar','confianca','0.97')
+  ), 'N2');
+
+  -- SÓ2025 CONTROLADA: tem um balanço PRÓPRIO de 2023 (passivo 3.000) E outro
+  -- de 2025 (passivo 9.000, espelha a participações). O de 2023 é o que deve
+  -- responder por 2023 — nunca o "anual 2025" da outra entidade.
+  v_r := fn_registrar_documento(v_caso, 'SO2025 CONTROLADA LTDA.', 'anual', '2023', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-so2025-contr-2023.pdf', 'BP SO2025 CONTR 2023.pdf', true, 'HASH-0194-41', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a pagar - partes relacionadas','valor_num','3000','unidade','milhar','confianca','0.97')
+  ), 'N2');
+  v_r := fn_registrar_documento(v_caso, 'SO2025 CONTROLADA LTDA.', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-so2025-contr-2025.pdf', 'BP SO2025 CONTR 2025.pdf', true, 'HASH-0194-42', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a pagar - partes relacionadas','valor_num','9000','unidade','milhar','confianca','0.97')
+  ), 'N2');
+
+  -- Planilhas-retrato: 2023 (3.000, só o passivo real) e 2025 (9.000, os
+  -- dois lados se espelham).
+  v_r := fn_registrar_documento(v_caso, 'GRUPO SO2025', 'data-base', '2023-12-31', 'MUTUOS', 0.96,
+    'nome_arquivo', 'supabase_storage', '0194/mutuos-so2025-2023.pdf', 'MUTUOS SO2025 2023.pdf', true, 'HASH-0194-43', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','SO2025 PARTICIPACOES S.A. -> SO2025 CONTROLADA LTDA.','valor_num','3000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96')
+  ), 'N2');
+  v_r := fn_registrar_documento(v_caso, 'GRUPO SO2025', 'data-base', '2025-12-31', 'MUTUOS', 0.96,
+    'nome_arquivo', 'supabase_storage', '0194/mutuos-so2025-2025.pdf', 'MUTUOS SO2025 2025.pdf', true, 'HASH-0194-44', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','SO2025 PARTICIPACOES S.A. -> SO2025 CONTROLADA LTDA.','valor_num','9000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96')
+  ), 'N2');
+
+  v_per_consulta := fn_upsert_periodo(v_caso, 'multi', '23,25');
+  v_r := fn_reconciliar_mutuos(v_caso, v_per_consulta);
+  select precondicoes_ok, resultado, motivo_precondicao, divergencia_abs
+    into v_ok, v_res, v_motivo, v_num
+    from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
+
+  -- Se o "anual 2025" da SÓ2025 PARTICIPAÇÕES vazasse para 2023 (o defeito),
+  -- 2023 sairia com os DOIS lados (9.000 ativo vazado + 3.000 passivo real)
+  -- e NÃO se espelhando (diferença de 6.000) — zona_cinzenta na comparação
+  -- dos BALANÇOS, planilha nem comparada. Corrigido: 2023 tem só o passivo
+  -- real (3.000, n_lados=1) contra a planilha de 2023 (3.000) — ok; 2025
+  -- também fecha (9.000 = 9.000) — ok nos dois anos, sem divergência nenhuma.
+  perform pg_temp.teste_assert_0194(v_ok and v_res = 'ok' and v_motivo is null,
+    'achado 1 estendido: o balanço "anual 2025" sem coluna NÃO vaza para 2023 — os dois anos concluem ok',
+    format('precondicoes_ok=%s resultado=%s motivo=%s divergencia_abs=%s', v_ok, v_res, v_motivo, v_num));
+
+  select count(*) into v_num from pendencia
+    where caso_id = v_caso and motivo = 'reconciliacao:mutuos_planilha_vs_balanco' and estado <> 'resolvida';
+  perform pg_temp.teste_assert_0194(v_num = 0,
+    'e SEM pendência nenhuma (nem a falsa zona_cinzenta de "balanços que não se espelham")',
+    format('%s pendência(s)', v_num));
+end $$;
+
+-- =============================================================================
 do $$
 declare
   v_n int;
