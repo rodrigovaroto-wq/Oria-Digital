@@ -684,6 +684,43 @@ supabase db execute --file Supabase/migrations/0194_a_planilha_de_mutuos_que_nun
 #    where tipo = 'mutuos_planilha_vs_balanco' and resultado = 'precondicao_nao_satisfeita'
 #      and motivo_precondicao = 'documento_ausente';
 
+# A 0195 FATORA fn_linha_vale_para_ano (a conta que a 0194 escreveu duas
+# vezes dentro de fn_reconciliar_mutuos) e reemite fn_reconciliar_mutuos
+# usando-a — SEM MUDAR COMPORTAMENTO (só o mecanismo; nenhum assert de
+# canastra.test.sql/reconciliacao.test.sql/mutuos_retrato_de_uma_data.test.sql
+# muda). fn_reconciliar_intragrupo (0124) ganha os DOIS consertos que a 0194
+# já tinha aplicado a mútuos e registrado, sem corrigir, no próprio
+# cabeçalho: o balanço de cada entidade agora é escolhido POR ANO (o que TEM
+# dado intragrupo do exercício vence o que só ancora o ano sem trazer
+# linha), e uma linha de documento sem periodo_coluna só vale para o ano que
+# o PRÓPRIO PERÍODO do documento ancora — não para qualquer ano perguntado.
+# MEDIDO EM PRODUÇÃO (28/09/2026, somente leitura, réplica fiel do filtro da
+# 0124): nos 7 casos com intragrupo, praticamente 100% das linhas incluídas
+# por (caso, ano) vinham de um documento que não ancora aquele ano ("teste -
+# Canastra"/2023: 4 de 4; "teste alto volume"/2025: 5 de 5; "Araucária
+# teste", os 5 anos, sempre 100%). Historicamente `reconciliacao` tem 52
+# linhas intragrupo_espelho ok e 117 documento_ausente, ZERO zona_cinzenta —
+# consistente com "ok" por SORTE (o mesmo saldo vazando para todo ano), não
+# com o defeito não existir (ver a tabela completa no cabeçalho da
+# migration). IDEMPOTENTE — não roda reconciliação em caso nenhum; as
+# fixtures dos dois books não exercitam o vício (cada entidade só tem UM
+# documento BALANCO no Canastra, e a única entidade com dois no Vertentes já
+# tinha o documento certo vencendo pela prioridade de tipo) — nenhum assert
+# existente muda.
+# Testes: Supabase/test/intragrupo_le_o_ano_certo.test.sql (via run.sh).
+supabase db execute --file Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0195' and not presente;                 -- ZERO linhas
+# E, na próxima rodada de cada caso com intragrupo, o efeito PREVISTO
+# (réplica da lógica corrigida, somente leitura — ver a tabela completa no
+# cabeçalho da migration): os 52 ok históricos continuam ok (mesmos números,
+# menos anos por caso); os anos sem balanço próprio do par passam de "ok"
+# fabricado para documento_ausente, honesto. Para achar as linhas antigas
+# (gravadas ANTES desta migration, que não se corrigem sozinhas):
+#   select id, caso_id, criado_em from reconciliacao
+#    where tipo = 'intragrupo_espelho' and resultado = 'ok';
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

@@ -37,6 +37,14 @@
 > em produção (planilha MUTUOS é retrato de uma data, não comparativa; 12/12 casos ficavam em
 > `documento_ausente`, 7 com conta de mútuo no balanço). Escrita, não aplicada.
 >
+> **`0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql`** — `fn_reconciliar_intragrupo` (0124) tinha
+> os dois vícios que a 0194 já tinha corrigido em `fn_reconciliar_mutuos` (fatorados agora em
+> `fn_linha_vale_para_ano`): o balanço de cada entidade era escolhido uma vez para a checagem
+> inteira, sem preferir o que TRAZ dado do ano; e uma linha sem `periodo_coluna` valia para
+> QUALQUER ano perguntado. Medido em produção (28/09/2026, só-leitura): quase 100% das linhas
+> intragrupo incluídas por (caso, ano) vinham de documento que não ancora aquele ano. Escrita, não
+> aplicada.
+>
 > **`0190`** (abaixo):
 >
 > **O defeito.** `fn_reconciliar_arvore` (corpo vigente na `0133`) testava só dois ramos:

@@ -5673,6 +5673,45 @@ $$;
 COMMENT ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica text) IS '0124: crédito (ativo) ou obrigação (passivo) de uma linha intragrupo. Seção canônica primeiro; rótulo só como desempate, porque "Fornecedores intragrupo - X" não diz "a pagar".';
 
 --
+-- Name: fn_linha_vale_para_ano(uuid, text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) RETURNS boolean
+    LANGUAGE plpgsql STABLE
+    AS $$
+declare
+  v_col text;
+begin
+  if p_ano is null then
+    return true;
+  end if;
+
+  v_col := fn_coluna_periodo_do_ano(p_versao, p_ano);
+
+  if v_col is not null then
+    -- Documento com coluna de período: só a coluna DESTE ano vale — inclusive
+    -- quando `v_col` é a sentinela `E'\x01'` (nenhuma coluna é deste ano):
+    -- nenhuma `periodo_coluna` normaliza para o byte sentinela, então o
+    -- `=` abaixo nunca casa, e a linha corretamente não vale para o ano.
+    return fn_normalizar_texto(p_periodo_coluna) = fn_normalizar_texto(v_col);
+  end if;
+
+  -- Sem coluna de período nenhuma (retrato/anual de um ano só): vale só
+  -- quando o PERÍODO DO PRÓPRIO DOCUMENTO ancora este ano, ou não ancora ano
+  -- nenhum (undecidable, passa — comportamento de sempre para este caso).
+  return p_periodo_tipo is null
+      or cardinality(coalesce(fn_anos_periodo(p_periodo_tipo, p_periodo_ref), '{}'::int[])) = 0
+      or p_ano = any(fn_anos_periodo(p_periodo_tipo, p_periodo_ref));
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) IS '0195: uma linha (versão do documento, sua periodo_coluna, e o período PRÓPRIO do documento) vale para o ano pedido? Fatorada da lógica que a 0194 escreveu duas vezes dentro de fn_reconciliar_mutuos — documento sem coluna de período só conta para o ano que o SEU período ancora, nunca para qualquer ano perguntado.';
+
+--
 -- Name: fn_linhas_do_realizado(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -9122,14 +9161,37 @@ begin
   foreach v_ano in array fn_anos_alvo(p_periodo_id) loop
     for v_par in
       with balancos as (
-        -- UM DOCUMENTO POR ENTIDADE, e `COMBINADO` fica FORA (ver o cabeçalho:
-        -- as linhas intragrupo dele são eliminações, que nomeiam as duas pontas).
-        select distinct on (d.entidade_id) d.id, d.entidade_id
+        -- UM DOCUMENTO POR ENTIDADE **por ano** — o MESMO defeito que a 0194
+        -- mediu e corrigiu em fn_reconciliar_mutuos, medido aqui em produção
+        -- só-leitura (28/09/2026): escolher só por tipo/`criado_em`, sem
+        -- olhar o ano, reaplica o MESMO documento a todo `v_ano` do laço —
+        -- "teste - Canastra"/2023: 4 de 4 linhas incluídas vinham de um
+        -- documento que não ancora 2023; "Araucária teste", nos 5 anos,
+        -- sempre 100%. Critério agora (0195, mesmo da 0194): entre os
+        -- documentos do exercício, o que TEM dado intragrupo elegível para
+        -- ESTE ano (`fn_linha_vale_para_ano`) vence o que só ANCORA o ano
+        -- sem trazer linha; só então a prioridade de tipo e o mais recente
+        -- desempatam. `COMBINADO` fica FORA (ver o cabeçalho da 0124: as
+        -- linhas intragrupo dele são eliminações).
+        select distinct on (d.entidade_id) d.id, d.entidade_id,
+               pe.tipo as periodo_tipo, pe.referencia as periodo_ref
         from documento d
+        join lateral (select fn_versao_atual(d.id) as ver) v on true
+        left join periodo pe on pe.id = d.periodo_id
         where d.caso_id = p_caso_id
           and d.tipo_taxonomia in ('BALANCO', 'BALANCETE', 'DF_AUDITADA')
           and d.entidade_id is not null
         order by d.entidade_id,
+                 (exists (
+                    select 1 from campo_extraido ce2
+                    where ce2.documento_versao_id = v.ver
+                      and ce2.valor_num is not null
+                      and ce2.valor_num <> 0
+                      and fn_papel_linha(ce2.chave) <> 'subtotal'
+                      and not fn_texto_nomeia_mutuo(ce2.chave)
+                      and not fn_mutuo_com_socio(ce2.chave, ce2.secao)
+                      and fn_linha_vale_para_ano(v.ver, ce2.periodo_coluna, pe.tipo, pe.referencia, v_ano)
+                 )) desc,
                  array_position(array['BALANCO','DF_AUDITADA','BALANCETE'], d.tipo_taxonomia),
                  d.criado_em desc
       ), linhas as (
@@ -9150,9 +9212,14 @@ begin
           -- MÚTUO É DA OUTRA CHECAGEM. Uma linha, uma régua.
           and not fn_texto_nomeia_mutuo(ce.chave)
           and not fn_mutuo_com_socio(ce.chave, ce.secao)
-          and (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
-               or fn_normalizar_texto(ce.periodo_coluna)
-                  = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+          -- 0195 (mesmo vício de linha que a 0194 corrigiu em
+          -- fn_reconciliar_mutuos): documento SEM `periodo_coluna` (retrato/
+          -- anual de um ano só) só vale para `v_ano` quando o PRÓPRIO
+          -- PERÍODO do documento ancora esse ano — não para qualquer ano
+          -- perguntado. `fn_linha_vale_para_ano` responde a MESMA pergunta
+          -- que o `balancos` acima já usou para escolher o documento, com o
+          -- período DESSE documento (b.periodo_tipo/periodo_ref).
+          and fn_linha_vale_para_ano(v.ver, ce.periodo_coluna, b.periodo_tipo, b.periodo_ref, v_ano)
       ), intragrupo as (
         select * from linhas
         where contraparte is not null and lado is not null
@@ -9238,7 +9305,7 @@ $$;
 -- Name: FUNCTION fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS '0124: a posição intragrupo entre cada PAR de empresas fecha nos dois balanços? Pareia pelo par de empresas (a contraparte vem do rótulo), não pela natureza — cada ponta usa o vocabulário dela. Mútuo fica com fn_reconciliar_mutuos.';
+COMMENT ON FUNCTION public.fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS '0195: a posição intragrupo entre cada PAR de empresas fecha nos dois balanços? Pareia pelo par de empresas (a contraparte vem do rótulo), não pela natureza — cada ponta usa o vocabulário dela. Mútuo fica com fn_reconciliar_mutuos. CORRIGIDO (mesmo vício que a 0194 já tinha corrigido em fn_reconciliar_mutuos, medido em produção só-leitura 28/09/2026): o balanço de cada entidade é escolhido POR ANO (fn_linha_vale_para_ano decide quem TEM dado do exercício, antes da prioridade de tipo) — não mais uma escolha só por criado_em, reaplicada sem mudança a cada ano do laço; e uma linha de documento SEM periodo_coluna só vale para o ano que o PRÓPRIO PERÍODO do documento ancora — não para qualquer ano perguntado.';
 
 --
 -- Name: fn_reconciliar_mutuos(uuid, uuid, numeric, numeric); Type: FUNCTION; Schema: public; Owner: -
@@ -9387,33 +9454,15 @@ begin
       where d.caso_id = p_caso_id
         and d.tipo_taxonomia in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA')
       order by d.entidade_id,
-               -- 0194 (achado 1, ESTENDIDO em revisão de acompanhamento —
-               -- 28/09/2026, medido em produção só-leitura, caso "Teste 00"
-               -- ano 2023: lado A 1,1 mi contra 33,3 mi nos casos irmãos,
-               -- mesmo desenho, mesmo ano). O `exists` abaixo TEM de
-               -- concordar com o filtro do `linhas`, logo abaixo: um
-               -- documento sem `periodo_coluna` (retrato/anual de UM ano) só
-               -- "tem dado do ano" quando o PRÓPRIO PERÍODO do documento
-               -- ancora `v_ano` — não para qualquer ano perguntado. Antes
-               -- desta correção, `fn_coluna_periodo_do_ano(v.ver, v_ano) is
-               -- null` passava para QUALQUER `v_ano`, e um documento "anual
-               -- 2025" sem alternativa podia "aparecer" como se tivesse dado
-               -- de 2023 — a mesma folga que o `linhas` tinha.
+               -- 0195: fatorada em `fn_linha_vale_para_ano` — mesma conta,
+               -- mesmos argumentos (v.ver, ce2.periodo_coluna, pe.tipo,
+               -- pe.referencia, v_ano), agora nomeada uma vez só.
                (exists (
                   select 1 from campo_extraido ce2
                   where ce2.documento_versao_id = v.ver
                     and ce2.valor_num is not null
                     and fn_texto_nomeia_mutuo(ce2.chave)
-                    and (
-                      v_ano is null
-                      or (fn_coluna_periodo_do_ano(v.ver, v_ano) is not null
-                          and fn_normalizar_texto(ce2.periodo_coluna)
-                              = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
-                      or (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
-                          and (pe.id is null
-                               or cardinality(coalesce(fn_anos_periodo(pe.tipo, pe.referencia), '{}'::int[])) = 0
-                               or v_ano = any(fn_anos_periodo(pe.tipo, pe.referencia))))
-                    )
+                    and fn_linha_vale_para_ano(v.ver, ce2.periodo_coluna, pe.tipo, pe.referencia, v_ano)
                )) desc,
                array_position(array['BALANCO','COMBINADO','DF_AUDITADA','BALANCETE'],
                               d.tipo_taxonomia),
@@ -9439,31 +9488,10 @@ begin
         -- então ele não espelha e não é da população da planilha intragrupo.
         and not fn_mutuo_com_socio(ce.chave, ce.secao)
         and fn_papel_linha(ce.chave) <> 'subtotal'
-        -- 0194 (achado 1, ESTENDIDO — 28/09/2026, mesma causa medida acima):
-        -- um documento SEM `periodo_coluna` (fn_coluna_periodo_do_ano
-        -- devolve null, não a sentinela) não é automaticamente "de qualquer
-        -- ano" — ele só vale para `v_ano` quando o PRÓPRIO PERÍODO do
-        -- documento (`periodo_tipo`/`periodo_ref`, carregados pelo
-        -- `balancos` acima) ancora esse ano. "Teste 00"/2023, MEDIDO em
-        -- produção só-leitura: o único balanço candidato de várias
-        -- controladas era "anual 2025" (sem coluna, período 2025) — o
-        -- filtro antigo deixava as linhas dele contarem também para 2023,
-        -- inflando nenhuma entidade a mais e ESVAZIANDO o lado A do ano
-        -- certo (1,1 mi contra os 33,3 mi que os casos irmãos têm no mesmo
-        -- ano). Período que NÃO ANCORA ano nenhum (`cardinality(...) = 0`)
-        -- ou documento SEM período: sem como afirmar de qual ano ele é —
-        -- comportamento de ANTES desta correção (passa, undecidable é
-        -- melhor que excluir à toa).
-        and (
-          v_ano is null
-          or (fn_coluna_periodo_do_ano(v.ver, v_ano) is not null
-              and fn_normalizar_texto(ce.periodo_coluna)
-                  = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
-          or (fn_coluna_periodo_do_ano(v.ver, v_ano) is null
-              and (d.periodo_tipo is null
-                   or cardinality(coalesce(fn_anos_periodo(d.periodo_tipo, d.periodo_ref), '{}'::int[])) = 0
-                   or v_ano = any(fn_anos_periodo(d.periodo_tipo, d.periodo_ref))))
-        )
+        -- 0195: fatorada em `fn_linha_vale_para_ano` (mesma conta que a 0194
+        -- escreveu inline: documento sem coluna de período só conta para
+        -- `v_ano` quando o PRÓPRIO PERÍODO do documento ancora esse ano).
+        and fn_linha_vale_para_ano(v.ver, ce.periodo_coluna, d.periodo_tipo, d.periodo_ref, v_ano)
         and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
     ), por_lado as (
       select lado, abs(sum(valor_base)) as soma_base
@@ -9833,7 +9861,7 @@ $$;
 -- Name: FUNCTION fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS '0194: a planilha de mútuos é um RETRATO de uma data (0145 — o conceito mora na coluna, não é comparativa): quando a coluna de período sai sentinela e o documento escolhido para o ano cobre de fato o ano (achado 3), a coluna do saldo é achada pelo localizador da 0145 (MUTUOS/saldo_de_mutuo, termo ''saldo''), em vez de zerar a comparação e devolver documento_ausente falso. Retrato sem coluna de saldo, ou planilha sem linha para o lado do balanço: linha_nao_localizada; escala incomparável: unidade_divergente — abrem pendência (0186), diferente de documento_ausente. A REVISÃO DE FIDELIDADE (28/09/2026, antes da migration ser aplicada) mediu três achados sobreviventes, todos corrigidos AQUI: (1) o balanço escolhido por entidade agora é POR ANO — um documento que só ANCORA o ano sem trazer linha de mútuo não vence mais o que TRAZ o dado; (2) `fn_lado_do_mutuo` só filtra a planilha quando ela é COMPARATIVA (0123: rótulo declara lado de verdade) — numa planilha-RETRATO a chave é o PAR de empresas, e o filtro descartava linha boa por casar "administrativos" com "ativo" ou por herdar `secao_canonica` sem sentido de lado; (3) a planilha agora é escolhida POR ANO, não uma vez para a checagem inteira — o ano sem planilha própria vira "planilha deste exercício não entregue" (documento_ausente, cobrança de checklist), não mais uma pendência falsa quando o caso TEM a planilha certa de outro ano. ACOMPANHAMENTO (28/09/2026, tarde): o achado 1 foi ESTENDIDO — um documento sem `periodo_coluna` só conta para `v_ano` quando o PRÓPRIO PERÍODO dele ancora esse ano (não para qualquer ano perguntado); mesma checagem no desempate do `balancos` e no filtro do `linhas`, que têm de concordar. 0123: a natureza "mútuo" é lida na linha OU na seção. Confere os dois lados entre si antes de comparar a planilha; lados que discordam são o achado, e aí a planilha não é atribuída a um deles. Mútuo com sócio fica fora: não tem espelho no mandato.';
+COMMENT ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS '0195: mesmo corpo da 0194, SEM MUDAR COMPORTAMENTO — os dois trechos que decidiam "esta linha vale para este ano" (a prioridade de escolha do balanço em ''balancos'' e o filtro de ''linhas'') agora chamam fn_linha_vale_para_ano em vez de repetir a conta inline, para não divergir de fn_reconciliar_intragrupo, que precisa da MESMA resposta. 0194: a planilha de mútuos é um RETRATO de uma data (0145 — o conceito mora na coluna, não é comparativa): quando a coluna de período sai sentinela e o documento escolhido para o ano cobre de fato o ano (achado 3), a coluna do saldo é achada pelo localizador da 0145 (MUTUOS/saldo_de_mutuo, termo ''saldo''), em vez de zerar a comparação e devolver documento_ausente falso. Retrato sem coluna de saldo, ou planilha sem linha para o lado do balanço: linha_nao_localizada; escala incomparável: unidade_divergente — abrem pendência (0186), diferente de documento_ausente. 0123: a natureza "mútuo" é lida na linha OU na seção. Confere os dois lados entre si antes de comparar a planilha; lados que discordam são o achado, e aí a planilha não é atribuída a um deles. Mútuo com sócio fica fora: não tem espelho no mandato.';
 
 --
 -- Name: fn_reconciliar_por_documento(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -17283,6 +17311,12 @@ GRANT ALL ON FUNCTION public.fn_lado_do_mutuo(p_chave text, p_secao_canonica tex
 --
 
 GRANT ALL ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) TO authenticated;
 
 --
 -- Name: FUNCTION fn_linhas_do_realizado(p_caso_id uuid, p_entidade text); Type: ACL; Schema: public; Owner: -
