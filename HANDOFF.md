@@ -4,6 +4,151 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
+## ▶ SESSÃO 102 (25–28/09/2026) — PLANO EXECUTIVO PARA A PRÓXIMA SESSÃO · PR #245 (rascunho)
+
+> Escrito no fim da S102, com o limite semanal de uso em 97%. **Leia isto inteiro antes de qualquer
+> coisa.** Branch `claude/eager-mccarthy-m4g1md`; o PR é
+> [#245](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/245).
+
+### 0. Onde estamos (conferido em 28/09, produção só leitura)
+
+- **Produção está em `0182`**, e NADA foi escrito lá desde 22/09: nenhuma reconciliação, pendência
+  ou evento. O `ate_migration = '0182'` está ERRADO (a `0183` conserta). As migrations `0183`,
+  `0189` e `0190`–`0195` existem só no repositório.
+- **Repositório:** `0190`–`0195` commitadas, uma fatia por commit, cada uma medida não-vazia. O
+  `run.sh` está verde com 1.656 `ok` no `2cce60e`, e o CI está verde.
+- **Em andamento quando a sessão parou:** um agente `migrations-postgres` corrigindo o GRUPO A
+  (abaixo) no próprio arquivo da `0195`. **Se houver mudança não commitada na árvore, é esse
+  trabalho pela metade:** rode `git diff`, confira contra o grupo A, rode o `run.sh` e só então
+  commite. Se estiver incompleto, termine; não descarte sem ler.
+
+### 1. O que a S102 entregou (detalhe e medição em cada commit: `git log 909e959..HEAD`)
+
+| Migration | Defeito | Medição |
+|---|---|---|
+| `0190` | `fn_reconciliar_arvore` gravava `ok` com 0 seções conferidas | 12 linhas em 4 casos em produção; 4 de 12 asserts reprovam desligado |
+| `0191` | despfin comparava cada ano da DRE com o Mapa de Dívida inteiro (o mapa é de UMA data) | 5 de 9 |
+| `0192` | na mesma rodada, o `ok` de um período resolvia a divergência do irmão compatível | v33/v35: R$ 4,34 mi nascida e morta no mesmo instante; 3 de 15 |
+| `0193` | tolerância de receita/caixa × escala (R$ 50 mi numa DRE em milhar); piso de arredondamento do caixa | 0 casos hoje; 1 por função |
+| `0194` | a checagem de mútuos NUNCA leu a planilha em produção (sentinela `E'\x01'`); lado A escolhia o balanço sem olhar o ano; a razão social decidia o lado; uma planilha por chamada; balanço de um ano entrava em qualquer ano | 5+3, 4+1+2, 2 |
+| `0195` | intragrupo com os mesmos vícios; regra fatorada em `fn_linha_vale_para_ano` | 7 de 10 |
+
+**Decisão do dono em 25/09:** a F2.3 (checagem de FAT_INTRAGRUPO) foi ADIADA. Não existe o outro
+lado da comparação em produção: o FAT_INTRAGRUPO do AMO não traz a contraparte, e nenhum COMBINADO
+tem receita em "Eliminações". **Refutado por medição:** a hipótese de "DVA/DMPL contadas duas vezes
+no realizado" — há 0 colisões, e `fn_linhas_do_realizado` escolhe um valor por grupo, não soma.
+
+### 2. ACHADOS ABERTOS DA REVISÃO — resolver ANTES de aplicar `0192`/`0194`/`0195`
+
+A revisão de defeito silencioso da S102 (refeita em 28/09, depois de morrer no limite) devolveu
+seis achados. **Nenhum está resolvido no commit `2cce60e`.**
+
+**GRUPO A — arquivo `0195` (corpo final de `fn_reconciliar_mutuos`/`fn_reconciliar_intragrupo`). Era o que estava em andamento.**
+1. **CRÍTICO — o lado A de mútuos soma DUAS vezes a conta repetida na nota "Partes Relacionadas".**
+   - Onde: CTE `linhas`, herdado da 0123. No alto volume, o doc `2f17a7ba` (Varejo, multi 21..25)
+     traz "Mútuos a pagar - controladora" na face (ordem 38) E na nota (ordem 62).
+   - As "divergências reais" de 2021/2022 que o cabeçalho da 0194 e o README descrevem (409 e 890
+     mil) SÃO essa duplicata: sem ela, os dois lados fecham exatos. **Corrigir e desmentir o
+     cabeçalho e o README.**
+2. **ALTO — desempate por `criado_em desc` empata em produção:** 44 grupos, 160 documentos, 14 casos.
+   O plano de execução escolhe o documento e o resultado muda (1,6 mi × 240 mil). Acrescentar
+   `d.id` como último critério nas duas funções e remedir a previsão.
+3. **MÉDIO — o `exists` de "tem dado intragrupo" aceita qualquer linha ≠ 0.** Deve exigir
+   contraparte/lado, como a função reconhece uma linha intragrupo.
+
+**GRUPO B — arquivo `0192` (`fn_registrar_reconciliacao`/`fn_reconciliar_caso`). NÃO começado.**
+4. **ALTO — entre rodadas a ordem ainda decide o destino da pendência.**
+   - Reproduzido no tdf_test: com a divergência ainda de pé, o `ok` do período que ordena primeiro
+     RESOLVE a pendência (inclusive em `em_correcao_interna`/`aceita_com_ressalva`), e a
+     divergente abre OUTRA. Some o trabalho humano e a trilha diz "resolvida".
+   - Desenho sugerido: dentro de `fn_reconciliar_caso`, não resolver dentro de
+     `fn_registrar_reconciliacao`; resolver no FIM da rodada só as pendências cujas chaves
+     compatíveis desta transação concluíram sem divergência (flag local da transação,
+     `set_config(..., true)`).
+   - **É mudança de desenho: tratar como decisão, e medir.**
+5. **ALTO — `secao_fecha` é POR DOCUMENTO, mas a pendência é casada por (entidade, período
+   compatível).**
+   - O n8n chama `fn_reconciliar_por_documento($1,'documento')` em transações separadas
+     (`queryBatching: 'independently'`, `N8N/build-workflow.mjs:2405` e `:2030`), e o `ok` de outro
+     balanço resolve a divergência.
+   - Produção: 21 pendências `secao_fecha` resolvidas em menos de 10 minutos (ex.: `866d4c3d`,
+     `c5c10450`). A `0190` agrava, porque `documento_ausente` também resolve.
+   - Correção: casar a pendência de `secao_fecha` por `documento_id`.
+6. **MÉDIO — regra 1: o texto da checagem se perde quando ela não abre pendência.**
+   - `reconciliacao` não tem coluna de descrição.
+   - Na 0190, "hierarquia achatada/rótulo duplicado" some; na 0194, "planilha deste exercício não
+     entregue" fica igual a "nenhum balanço traz mútuo".
+   - O `ok` da 0191 diz "em 1 ano(s)" sem dizer que 2024 ficou sem par (13 chaves assim em
+     produção).
+   - Sugestão: coluna `reconciliacao.descricao`, gravada sempre por `fn_registrar_reconciliacao`.
+
+**Também registrado, sem fatia (é anterior a este PR):** o texto das pendências de receita/caixa
+mistura escalas ("Receita Bruta 183480 vs 1 meses de faturamento 38.2 — diferença de 183441800.0").
+
+### 3. O que o DONO faz à mão, NESTA ORDEM (auto mode recusa apply em produção: modo manual ou SQL Editor)
+
+1. **`0183`** em duas chamadas: primeiro a linha do `alter type`, depois o resto com essa linha
+   comentada (roteiro no `ESTADO.md`, bloco F1.7). Conferir: `select ate_migration from
+   instalacao_cobertura` volta a `0188`+, e 18 pendências `forma_de_controle_indefinida` abrem.
+2. **`0189`**. Conferir: `select chave, objeto from fn_instalacao_conferir() where tipo='gatilho' and
+   not presente` → vazio.
+3. **`0190`, `0191`, `0193`**: independentes e seguras (o revisor conferiu que um prefixo deixa o
+   banco coerente). Conferências no `Supabase/README.md`.
+4. **`0192`, `0194`, `0195`: SÓ depois de o grupo A e o grupo B fecharem neste PR.** A `0191` vem
+   antes da `0192`.
+5. Depois de aplicar: rodar a sonda (`fn_instalacao_conferir() where not presente` → vazio) e uma
+   rodada de um caso de teste, conferindo a tabela de previsão do README da 0194/0195.
+6. Backfills não automáticos (medir o alcance ANTES): as 12 linhas `secao_fecha` 'ok' com 0
+   conferidas; as pendências nascidas e mortas no mesmo instante. Consultas no README.
+7. O merge do PR #245 é do dono.
+
+### 4. Roteiro da PRÓXIMA sessão de engenharia (em ordem, cada item com critério de pronto)
+
+1. **Terminar o grupo A** (se ficou pela metade) e commitar. Pronto quando: run.sh verde; cada
+   correção medida não-vazia; tabela de previsão remedida em produção, só leitura, sem empate que
+   mude o resultado.
+2. **Grupo B (achados 4, 5, 6)** no arquivo da `0192`. Começar pelo 5, que é o mais claro
+   (`secao_fecha` por documento); o 4 e o 6 são desenho: escrever a escolha no cabeçalho antes do
+   código. Pronto quando: um teste para cada cenário reproduzido acima reprova desligado; os 21
+   casos de produção são explicados.
+3. **`/revisar` de novo** sobre `909e959..HEAD` com as DUAS lentes (defeito silencioso e fidelidade
+   do número), porque o grupo B mexe no registro que TODAS as checagens usam. "Nada sobreviveu" é
+   o critério de pronto do PR.
+4. **`/fechar`**: `ESTADO.md` (o bloco S102 do topo precisa das linhas finais da 0194/0195 e dos
+   achados), ficha em `.claude/conhecimento/fichas/`, memória, `indexar.mjs` e `conferir.mjs`,
+   descrição do PR.
+5. **Memória nova sugerida** (padrão que custou caro 3 vezes nesta sessão): *"ligar um estágio que
+   nunca rodou expõe os defeitos que ele escondia"*. A 0194 religou os mútuos e trouxe cinco
+   defeitos antigos do lado A. Antes de ligar, medir em produção o número que vai sair.
+6. **Depois do PR — o roadmap** (`Arquitetura do Sistema/3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md`):
+   - **F1.6:** o aceite do perímetro. Bloqueado: depende do COMBINADO real do cliente e da decisão
+     do dono sobre bloco familiar (§12.2).
+   - **F2.3:** adiada; reabre quando houver FAT_INTRAGRUPO com contraparte, ou COMBINADO com
+     eliminação de receita.
+   - **Próxima de engenharia no caminho crítico: F4** (conta canônica, hierarquia e resolução), a
+     intervenção central do plano. Pode ir em paralelo a F3/F3b se os arquivos forem disjuntos
+     (§8). A F3b toca o `SYSTEM_PROMPT` e o schema da linha.
+   - Erros de classificação medidos em 25/09, candidatos a fatia pequena: o "COMBINADO" do AMO é
+     um balancete de uma empresa; os PDFs de faturamento mensal do AMOBELEZA estão classificados
+     como FAT_INTRAGRUPO.
+
+### 5. Como começar (e as armadilhas desta sessão)
+
+- Preparo: os comandos canônicos do `CLAUDE.md`. O Postgres local NÃO sobrevive a um container
+  novo: suba com `pg_ctl` e rode `chmod a+w Supabase Supabase/schema.sql`.
+- Produção só leitura: API de gerenciamento com `begin read only; ...; commit;`
+  (`.claude/memory/aplicar-migration-em-producao-pela-api.md`).
+- **As fixtures NÃO têm o formato de produção.** A planilha MUTUOS das fixtures traz
+  `periodo_coluna='2025'`, e a de produção traz o cabeçalho "Saldo devedor". Tudo passava no teste
+  e falhava em produção. Meça o formato real antes de confiar num teste verde.
+- A migration mais nova precisa estar citada no `ESTADO.md`, senão o `run.sh` reprova.
+- Agente em segundo plano avisa "esperando o run.sh" várias vezes; confira com `ps` antes de achar
+  que travou. Nunca commite a árvore enquanto um agente a tem.
+- `git checkout <arquivo>` é bloqueado pelo hook: copie para o scratchpad e restaure com
+  `git show HEAD:<arq> > <arq>`.
+
+---
+
 ## ✅ SESSÃO 101 (23–24/09/2026) — `0189`: a sonda vê gatilho; PR #242
 
 1. **`0189` escrita, medida e revisada duas vezes** (revisores independentes). A sonda passa a
