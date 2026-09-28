@@ -8571,7 +8571,34 @@ begin
     -- efeito ainda medido nesta checagem. MEDIDO (regra 2): com o `× fator`
     -- de volta, o assert do bloco 1 de
     -- Supabase/test/tolerancia_na_base.test.sql reprova.
-    v_tol := greatest(p_tolerancia_abs, abs(v_a) * p_tolerancia_pct);
+    --
+    -- REVISÃO DE FIDELIDADE (28/09/2026): a tolerância na base, sozinha, tem
+    -- um segundo vício — o piso de ARREDONDAMENTO do próprio documento. Num
+    -- Balanço/DFC em 'milhar' cada número impresso já carrega até R$ 1.000
+    -- de arredondamento (duas linhas arredondadas podem diferir em 1 unidade
+    -- da escala sem que nada esteja errado). Com caixa abaixo de R$ 200 mil,
+    -- 0,5% de v_a fica ABAIXO de R$ 1.000: uma DFC "12" contra um Balanço
+    -- "11" (em milhar, diferença de R$ 1.000, arredondamento puro) sairia
+    -- 'divergente' — mesma forma do vício que motivou esta migration, só que
+    -- pela ESCALA DO DOCUMENTO, não pela unidade monetária. MEDIDO EM
+    -- PRODUÇÃO (28/09/2026, somente leitura): 0 casos hoje — das 39 linhas de
+    -- caixa em 'milhar', nenhuma com caixa abaixo de R$ 200 mil. Correção
+    -- LATENTE, mesmo raciocínio da árvore (0133: tolerância de arredondamento
+    -- em unidade do documento). Por isso o piso ganha também 1 unidade da
+    -- escala mais grossa dos dois lados (Balanço/DFC podem, em tese, estar em
+    -- escalas diferentes conhecidas — 0023 permite comparar), coalescida a 1
+    -- (unidade/escala ausente = já está na base). Não é `× fator` de volta:
+    -- é um PISO fixo de 1 unidade, não uma multiplicação da tolerância
+    -- inteira. A receita (fn_reconciliar_receita_dre_vs_faturamento) NÃO
+    -- ganha o mesmo piso: com pct 5%, o piso percentual só fica abaixo de 1
+    -- unidade da escala quando a receita é menor que R$ 20 mil em 'milhar' —
+    -- irrelevante neste domínio (nenhuma receita de mandato chega perto
+    -- disso). MEDIDO (regra 2): com o piso removido (voltando a
+    -- `greatest(p_tolerancia_abs, abs(v_a) * p_tolerancia_pct)`), o assert do
+    -- bloco 3 de Supabase/test/tolerancia_na_base.test.sql reprova.
+    v_tol := greatest(p_tolerancia_abs,
+      greatest(coalesce(fn_fator_escala(v_caixa.unidade), 1), coalesce(fn_fator_escala(v_saldo.unidade), 1)),
+      abs(v_a) * p_tolerancia_pct);
     if v_div_abs > v_tol then
       v_resultado := 'divergente';
       v_partes := v_partes || format('%s: Caixa no Balanço %s ("%s") vs Saldo final na DFC %s ("%s") — diferença de %s',

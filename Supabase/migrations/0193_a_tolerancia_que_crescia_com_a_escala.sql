@@ -60,6 +60,33 @@
 -- `motivo_especifico.test.sql`, os fixtures do book-canastra/book-vertentes)
 -- muda — medido rodando `Supabase/test/run.sh` antes e depois desta
 -- migration.
+--
+-- REVISÃO DE FIDELIDADE (28/09/2026, achado MÉDIO, corrigido NO PRÓPRIO
+-- arquivo — 0193 ainda não aplicada em produção). A tolerância na base,
+-- sozinha, abre um segundo buraco em `fn_reconciliar_caixa_bp_fluxo`: o
+-- ARREDONDAMENTO do próprio documento. Num Balanço/DFC em 'milhar', cada
+-- número impresso já carrega até R$ 1.000 de arredondamento — duas linhas
+-- corretas podem diferir em 1 unidade da escala sem que nada esteja errado.
+-- Com caixa abaixo de R$ 200 mil, 0,5% de `abs(v_a)` fica ABAIXO de R$ 1.000
+-- (a unidade da escala 'milhar'): uma DFC impressa "12" contra um Balanço
+-- "11" sairia 'divergente' por puro arredondamento — Classe A, abre
+-- pendência. MEDIDO EM PRODUÇÃO (28/09/2026, somente leitura): 0 casos hoje
+-- (39 linhas de caixa em 'milhar', nenhuma com caixa abaixo de R$ 200 mil).
+-- Correção LATENTE, mesmo raciocínio da árvore que já valia para a 0133
+-- (tolerância de arredondamento em unidade do documento). CORREÇÃO: a
+-- tolerância absoluta de `fn_reconciliar_caixa_bp_fluxo` ganha um terceiro
+-- piso — 1 unidade da escala mais grossa dos dois lados (Balanço/DFC, cada
+-- `fn_fator_escala` coalescido a 1), sem voltar ao `× fator` (que dava R$ 100
+-- MIL): `greatest(p_tolerancia_abs, greatest(fn_fator_escala(unid. do BP),
+-- fn_fator_escala(unid. da DFC)) coalescidos a 1, abs(v_a) * p_tolerancia_pct)`.
+-- A receita (`fn_reconciliar_receita_dre_vs_faturamento`) NÃO ganha o mesmo
+-- piso: com pct 5%, o piso percentual só cai abaixo de 1 unidade da escala
+-- quando a receita é menor que R$ 20 mil em 'milhar' — irrelevante neste
+-- domínio (nenhuma receita de mandato chega perto disso), então a função
+-- fica como estava. MEDIÇÃO NÃO-VAZIA (regra 2): com o piso de
+-- arredondamento removido, o assert do bloco 3 de
+-- `Supabase/test/tolerancia_na_base.test.sql` reprova — contado junto com os
+-- outros dois, sem parar no primeiro `raise`.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -232,7 +259,34 @@ begin
     -- efeito ainda medido nesta checagem. MEDIDO (regra 2): com o `× fator`
     -- de volta, o assert do bloco 1 de
     -- Supabase/test/tolerancia_na_base.test.sql reprova.
-    v_tol := greatest(p_tolerancia_abs, abs(v_a) * p_tolerancia_pct);
+    --
+    -- REVISÃO DE FIDELIDADE (28/09/2026): a tolerância na base, sozinha, tem
+    -- um segundo vício — o piso de ARREDONDAMENTO do próprio documento. Num
+    -- Balanço/DFC em 'milhar' cada número impresso já carrega até R$ 1.000
+    -- de arredondamento (duas linhas arredondadas podem diferir em 1 unidade
+    -- da escala sem que nada esteja errado). Com caixa abaixo de R$ 200 mil,
+    -- 0,5% de v_a fica ABAIXO de R$ 1.000: uma DFC "12" contra um Balanço
+    -- "11" (em milhar, diferença de R$ 1.000, arredondamento puro) sairia
+    -- 'divergente' — mesma forma do vício que motivou esta migration, só que
+    -- pela ESCALA DO DOCUMENTO, não pela unidade monetária. MEDIDO EM
+    -- PRODUÇÃO (28/09/2026, somente leitura): 0 casos hoje — das 39 linhas de
+    -- caixa em 'milhar', nenhuma com caixa abaixo de R$ 200 mil. Correção
+    -- LATENTE, mesmo raciocínio da árvore (0133: tolerância de arredondamento
+    -- em unidade do documento). Por isso o piso ganha também 1 unidade da
+    -- escala mais grossa dos dois lados (Balanço/DFC podem, em tese, estar em
+    -- escalas diferentes conhecidas — 0023 permite comparar), coalescida a 1
+    -- (unidade/escala ausente = já está na base). Não é `× fator` de volta:
+    -- é um PISO fixo de 1 unidade, não uma multiplicação da tolerância
+    -- inteira. A receita (fn_reconciliar_receita_dre_vs_faturamento) NÃO
+    -- ganha o mesmo piso: com pct 5%, o piso percentual só fica abaixo de 1
+    -- unidade da escala quando a receita é menor que R$ 20 mil em 'milhar' —
+    -- irrelevante neste domínio (nenhuma receita de mandato chega perto
+    -- disso). MEDIDO (regra 2): com o piso removido (voltando a
+    -- `greatest(p_tolerancia_abs, abs(v_a) * p_tolerancia_pct)`), o assert do
+    -- bloco 3 de Supabase/test/tolerancia_na_base.test.sql reprova.
+    v_tol := greatest(p_tolerancia_abs,
+      greatest(coalesce(fn_fator_escala(v_caixa.unidade), 1), coalesce(fn_fator_escala(v_saldo.unidade), 1)),
+      abs(v_a) * p_tolerancia_pct);
     if v_div_abs > v_tol then
       v_resultado := 'divergente';
       v_partes := v_partes || format('%s: Caixa no Balanço %s ("%s") vs Saldo final na DFC %s ("%s") — diferença de %s',
@@ -449,11 +503,15 @@ insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, porque, severidade, ordem) values
 
   ('caixa_bp_fluxo_tolerancia_na_base', '0193', 'corpo', 'fn_reconciliar_caixa_bp_fluxo',
-   'v_tol := greatest(p_tolerancia_abs, abs(v_a) * p_tolerancia_pct)',
+   'greatest(coalesce(fn_fator_escala(v_caixa.unidade), 1), coalesce(fn_fator_escala(v_saldo.unidade), 1))',
    'Sem este corpo, a tolerância absoluta do Caixa × Saldo final do Fluxo de Caixa é multiplicada '
-   'pela escala do Balanço: em milhar, R$ 100 MIL em vez de R$ 100. Mesmo vício estrutural que a '
-   '0188 corrigiu na despfin; latente hoje (0 das 33 caixa_bp_fluxo ''ok'' em produção mudariam de '
-   'resultado, medido 25/09/2026).',
+   'pela escala do Balanço (em milhar, R$ 100 MIL em vez de R$ 100 — mesmo vício estrutural que a '
+   '0188 corrigiu na despfin; latente hoje, 0 das 33 caixa_bp_fluxo ''ok'' em produção mudariam de '
+   'resultado, medido 25/09/2026) OU não tem o piso de arredondamento de 1 unidade da escala mais '
+   'grossa dos dois lados (sem ele, caixa abaixo de R$ 200 mil em ''milhar'' pode sair '
+   '''divergente'' por puro arredondamento do documento — latente hoje, 0 casos em 39 linhas de '
+   'caixa em ''milhar'', medido 28/09/2026). O marcador é o argumento novo da tolerância, e não '
+   'casa a forma antiga ''× fator'' nem a forma sem piso.',
    'importante', 833),
 
   ('receita_dre_vs_faturamento_tolerancia_na_base', '0193', 'corpo',
@@ -481,5 +539,10 @@ update instalacao_cobertura
          '(0 de 33 caixa_bp_fluxo e 0 de 30 receita_dre_vs_faturamento ''ok'' mudariam de '
          'resultado) — correção latente, não achado novo. Catalogado pelo corpo '
          '(caixa_bp_fluxo_tolerancia_na_base, receita_dre_vs_faturamento_tolerancia_na_base) — as '
-         'assinaturas não mudam.'
+         'assinaturas não mudam. REVISÃO DE FIDELIDADE (28/09/2026): a tolerância na base '
+         'sozinha ainda saía ''divergente'' por arredondamento do documento (caixa abaixo de '
+         'R$ 200 mil em ''milhar''); fn_reconciliar_caixa_bp_fluxo ganhou um piso de 1 unidade da '
+         'escala mais grossa dos dois lados — latente, 0 casos em 39 linhas de caixa em ''milhar'', '
+         'medido 28/09/2026. A receita não precisa do mesmo piso (pct 5% só cairia abaixo de 1 '
+         'unidade com receita < R$ 20 mil em ''milhar'', irrelevante neste domínio).'
  where id = true;

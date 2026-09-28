@@ -1344,12 +1344,12 @@
 {"k":"e","de":"arquivo:Supabase/test/sonda-producao.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"Supabase/test/sonda-producao.test.mjs","l":37}
 {"k":"e","de":"arquivo:Supabase/test/sonda_ve_gatilho.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/sonda_ve_gatilho.test.sql","l":4}
 {"k":"e","de":"arquivo:Supabase/test/sonda_ve_gatilho.test.sql","rel":"CHAMA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/test/sonda_ve_gatilho.test.sql","l":8}
-{"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"Supabase/test/tolerancia_na_base.test.sql","l":24}
+{"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"Supabase/test/tolerancia_na_base.test.sql","l":34}
 {"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_caixa_bp_fluxo","f":"Supabase/test/tolerancia_na_base.test.sql","l":6}
 {"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/test/tolerancia_na_base.test.sql","l":12}
-{"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/tolerancia_na_base.test.sql","l":64}
-{"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/tolerancia_na_base.test.sql","l":61}
-{"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/tolerancia_na_base.test.sql","l":60}
+{"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/tolerancia_na_base.test.sql","l":77}
+{"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/tolerancia_na_base.test.sql","l":74}
+{"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/tolerancia_na_base.test.sql","l":73}
 {"k":"e","de":"arquivo:Supabase/test/transcricao_humana.test.sql","rel":"CHAMA","pa":"fn:fn_golden_campos","f":"Supabase/test/transcricao_humana.test.sql","l":11}
 {"k":"e","de":"arquivo:Supabase/test/transcricao_humana.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_transcricao_humana","f":"Supabase/test/transcricao_humana.test.sql","l":77}
 {"k":"e","de":"arquivo:Supabase/test/transcricao_humana.test.sql","rel":"CHAMA","pa":"fn:fn_secao_e_de_resultado","f":"Supabase/test/transcricao_humana.test.sql","l":196}
@@ -1921,8 +1921,8 @@
 {"k":"e","de":"migration:0191","rel":"CRIA","pa":"fn:fn_reconciliar_despfin_dre_vs_divida","f":"Supabase/migrations/0191_o_mapa_de_um_ano_contra_a_dre_de_dois.sql","l":126}
 {"k":"e","de":"migration:0192","rel":"CRIA","pa":"fn:fn_reconciliar_caso","f":"Supabase/migrations/0192_o_ok_que_matava_a_divergencia_irma.sql","l":374}
 {"k":"e","de":"migration:0192","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0192_o_ok_que_matava_a_divergencia_irma.sql","l":106}
-{"k":"e","de":"migration:0193","rel":"CRIA","pa":"fn:fn_reconciliar_caixa_bp_fluxo","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","l":69}
-{"k":"e","de":"migration:0193","rel":"CRIA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","l":281}
+{"k":"e","de":"migration:0193","rel":"CRIA","pa":"fn:fn_reconciliar_caixa_bp_fluxo","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","l":96}
+{"k":"e","de":"migration:0193","rel":"CRIA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","l":335}
 {"k":"e","de":"migration:0194","rel":"CRIA","pa":"fn:fn_reconciliar_mutuos","f":"Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql","l":17}
 {"k":"e","de":"migration:0194","rel":"CRIA","pa":"fn:fn_reconciliar_mutuos","f":"Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql","l":210}
 {"k":"e","de":"migration:0195","rel":"CRIA","pa":"fn:fn_linha_vale_para_ano","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","l":162}

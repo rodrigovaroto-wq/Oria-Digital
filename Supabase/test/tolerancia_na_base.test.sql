@@ -15,15 +15,28 @@
 --      'zona_cinzenta' (não 'ok', que é o que o piso × escala de R$ 50
 --      MILHÕES daria); e uma diferença de ~2% continua 'ok'.
 --
+--   3. fn_reconciliar_caixa_bp_fluxo: REVISÃO DE FIDELIDADE (28/09/2026) — a
+--      tolerância na base, sozinha, ainda sai 'divergente' por puro
+--      arredondamento do documento quando o caixa é pequeno: Caixa do
+--      Balanço R$ 12.000 (12 'milhar') × Saldo final R$ 11.000 (11 'milhar')
+--      — diferença de R$ 1.000, exatamente 1 unidade da escala, sem que nada
+--      esteja errado — continua 'ok' com o piso de arredondamento (greatest
+--      chega a R$ 1.000); sem o piso (só `greatest(100, 0,5% de 12.000 =
+--      60)` = R$ 100), sairia 'divergente'.
+--
 -- OS CASOS SÃO MONTADOS AQUI, NÃO SÃO FIXTURE DE PRODUÇÃO (regra 4): a
 -- correção é LATENTE em produção hoje (0 de 33 caixa_bp_fluxo e 0 de 30
 -- receita_dre_vs_faturamento 'ok' mudam de resultado, medido 25/09/2026 —
--- ver o cabeçalho da 0193). O que se afirma aqui é só o comportamento da
--- tolerância, com os números redondos que bastam para exercitá-lo.
+-- ver o cabeçalho da 0193; e 0 casos de arredondamento com caixa abaixo de
+-- R$ 200 mil, medido 28/09/2026). O que se afirma aqui é só o comportamento
+-- da tolerância, com os números redondos que bastam para exercitá-lo.
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2): com o `× fn_fator_escala(...)` de volta em
 -- cada função SEPARADAMENTE (no lugar da tolerância na base), o assert
--- correspondente reprova — contado sem parar no primeiro `raise`.
+-- correspondente reprova — contado sem parar no primeiro `raise`. E com o
+-- piso de arredondamento removido de `fn_reconciliar_caixa_bp_fluxo` (volta
+-- a `greatest(p_tolerancia_abs, abs(v_a) * p_tolerancia_pct)`), o assert do
+-- bloco 3 reprova.
 
 begin;
 
@@ -155,6 +168,52 @@ begin
   perform pg_temp.teste_assert_0193(v_ok and v_res = 'ok',
     'diferença de ~2% (74.000 × 72.500 em milhar) continua dentro do piso na base e sai ok',
     format('precondicoes_ok=%s resultado=%s', v_ok, v_res));
+end $$;
+
+-- =============================================================================
+do $$
+declare
+  v_caso uuid;
+  v_r    jsonb;
+  v_doc_bp uuid;
+  v_ent  uuid;
+  v_per  uuid;
+  v_ok   boolean;
+  v_res  text;
+  v_div  text;
+begin
+  raise notice '--- 3. caixa_bp_fluxo: piso de arredondamento (1 unidade da escala), caixa pequeno ---';
+  -- Caixa do Balanço R$ 12.000 (12 'milhar'), Saldo final da DFC R$ 11.000
+  -- (11 'milhar') — diferença de R$ 1.000, exatamente o arredondamento de 1
+  -- unidade da escala do documento, sem nada errado. SEM o piso de
+  -- arredondamento, greatest(100, 0,5% de 12.000 = 60) = R$ 100 — a
+  -- diferença de R$ 1.000 sairia 'divergente'. COM o piso (greatest(100,
+  -- 1.000, 60) = R$ 1.000), a diferença (R$ 1.000) não passa do piso e sai
+  -- 'ok'.
+  v_caso := (fn_upsert_caso('0193: piso de arredondamento com caixa pequeno em milhar'))::uuid;
+  v_r := fn_registrar_documento(v_caso, 'CAIXA PEQUENO MILHAR LTDA.', 'anual', '2025', 'BALANCO',
+    0.95, 'nome_arquivo', 'supabase_storage', '0193/bp-tol-pequeno.pdf', 'BP TOL PEQUENO.pdf',
+    true, 'HASH-0193-5', 'ok');
+  v_doc_bp := (v_r->>'documento_id')::uuid;
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Caixa e equivalentes de caixa','valor_num','12',
+      'periodo_coluna','2025','unidade','milhar','confianca','0.97')
+  ), 'N2');
+  v_r := fn_registrar_documento(v_caso, 'CAIXA PEQUENO MILHAR LTDA.', 'anual', '2025',
+    'FLUXO_CAIXA', 0.95, 'nome_arquivo', 'supabase_storage', '0193/fx-tol-pequeno.pdf',
+    'FX TOL PEQUENO.pdf', true, 'HASH-0193-6', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Saldo final de caixa','valor_num','11',
+      'periodo_coluna','2025','unidade','milhar','confianca','0.97')
+  ), 'N2');
+  select entidade_id, periodo_id into v_ent, v_per from documento where id = v_doc_bp;
+
+  v_r := fn_reconciliar_caixa_bp_fluxo(v_caso, v_ent, v_per);
+  select precondicoes_ok, resultado, divergencia_abs::text into v_ok, v_res, v_div
+    from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
+  perform pg_temp.teste_assert_0193(v_ok and v_res = 'ok',
+    'Caixa 12 × Saldo 11 em milhar (R$ 1.000 de arredondamento, caixa pequeno) continua ok, não "divergente"',
+    format('precondicoes_ok=%s resultado=%s divergencia_abs=%s', v_ok, v_res, v_div));
 end $$;
 
 -- =============================================================================
