@@ -132,7 +132,15 @@ end $$;
 
 -- =============================================================================
 -- 3. Planilha-retrato de OUTRO ano (31/12/2024) consultada no período de
--- 2025: não conclui — sem_periodo_par, pendência aberta dizendo o ano sem par.
+-- 2025 (achado 3 da revisão de fidelidade): a planilha É escolhida POR ANO,
+-- não uma vez para a checagem inteira — o ano sem planilha própria (2025)
+-- vira "planilha deste exercício não entregue", documento_ausente, SEM
+-- pendência (é cobrança de checklist, não achado de reconciliação; a versão
+-- original de 0194 abria pendência falsa aqui, com o texto "a planilha é
+-- retrato de 2024 — não há esse exercício", mesmo quando o caso tivesse a
+-- planilha certa de outro ano em produção — não é este caso, mas a régua de
+-- comportamento é a mesma: não confundir "ano sem par" com "documento
+-- presente que não localizou algo").
 -- =============================================================================
 do $$
 declare
@@ -140,10 +148,11 @@ declare
   v_r    jsonb;
   v_per_consulta uuid;
   v_ok   boolean;
+  v_res  text;
   v_motivo text;
-  v_desc text;
+  v_n    int;
 begin
-  raise notice '--- 3. planilha-retrato de 2024 consultada em 2025: sem_periodo_par ---';
+  raise notice '--- 3. planilha-retrato de 2024 consultada em 2025: documento_ausente, sem pendência ---';
   v_caso := (fn_upsert_caso('0194: planilha-retrato de outro ano'))::uuid;
 
   -- Planilha: retrato de 31/12/2024.
@@ -156,30 +165,40 @@ begin
   -- Balanço com conta de mútuo — SÓ para 2025 (periodo_coluna='2025'), para
   -- que o ano de 2024 (sem coluna correspondente no balanço) fique com
   -- n_lados=0 e não interfira: o que este teste isola é o ano de 2025, cujo
-  -- balanço TEM conta de mútuo mas a planilha não tem retrato para comparar.
+  -- balanço TEM conta de mútuo mas nenhuma planilha do caso cobre 2025 (a
+  -- única planilha do caso é o retrato de 2024).
   v_r := fn_registrar_documento(v_caso, 'OUTRO ANO PARTICIPAÇÕES S.A.', 'anual', '2025', 'BALANCO', 0.97,
     'nome_arquivo', 'supabase_storage', '0194/bp-outro-ano.pdf', 'BP OUTRO ANO.pdf', true, 'HASH-0194-6', 'ok');
   perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
     jsonb_build_object('ordem',0,'chave','Mútuos a receber - partes relacionadas','valor_num','5200','unidade','milhar','periodo_coluna','2025','confianca','0.97')
   ), 'N2');
 
-  -- Período de CONSULTA cobrindo 2024 e 2025 — precisa ancorar os dois anos
-  -- para (a) achar a planilha de 2024 por compatibilidade e (b) o laço
-  -- alcançar v_ano=2025, que é o que este teste isola.
+  -- Período de CONSULTA cobrindo 2024 e 2025 — precisa alcançar os dois
+  -- anos para o laço avaliar v_ano=2025, que é o que este teste isola (2024
+  -- fica silencioso por n_lados=0, como o cenário negativo #5).
   v_per_consulta := fn_upsert_periodo(v_caso, 'multi', '24,25');
 
   v_r := fn_reconciliar_mutuos(v_caso, v_per_consulta);
-  select precondicoes_ok, motivo_precondicao into v_ok, v_motivo
+  select precondicoes_ok, resultado, motivo_precondicao into v_ok, v_res, v_motivo
     from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
-  perform pg_temp.teste_assert_0194(not v_ok and v_motivo = 'sem_periodo_par',
-    'a planilha é retrato de 2024, o balanço tem mútuo em 2025: NÃO conclui, sem_periodo_par',
-    format('precondicoes_ok=%s motivo=%s', v_ok, v_motivo));
+  perform pg_temp.teste_assert_0194(not v_ok and v_res = 'precondicao_nao_satisfeita' and v_motivo = 'documento_ausente',
+    'a planilha é retrato de 2024, o balanço tem mútuo em 2025: NÃO conclui, documento_ausente (achado 3 — não sem_periodo_par)',
+    format('precondicoes_ok=%s resultado=%s motivo=%s', v_ok, v_res, v_motivo));
 
-  select descricao into v_desc from pendencia
+  select count(*) into v_n from pendencia
     where caso_id = v_caso and motivo = 'reconciliacao:mutuos_planilha_vs_balanco' and estado <> 'resolvida';
-  perform pg_temp.teste_assert_0194(
-    v_desc like 'MOTIVO: sem período par%' and v_desc like '%2025%' and v_desc like '%2024%',
-    'e o texto diz QUAL ano ficou sem par e de que data é a planilha (regra 1)', left(v_desc, 400));
+  perform pg_temp.teste_assert_0194(v_n = 0,
+    'e NÃO abre pendência — documento_ausente continua sendo o único motivo que não abre (0117/0123, preservado)',
+    format('%s pendência(s)', v_n));
+
+  -- O texto ("%s: a planilha de mútuos deste exercício não foi entregue...")
+  -- não fica em coluna nenhuma acessível por SQL: `documento_ausente` nunca
+  -- abre pendência (é a própria 0117/0123, preservado — ver o teste 5), e
+  -- `reconciliacao` não tem coluna `descricao` (só `pendencia` tem, e só
+  -- quando abre uma). Mesma limitação de design de TODO `documento_ausente`
+  -- desta função, não uma lacuna nova desta correção — não é um comportamento
+  -- que este arquivo consiga travar em SQL sem mudar essa decisão de schema,
+  -- que está fora do escopo dos três achados revisados.
 end $$;
 
 -- =============================================================================
@@ -267,6 +286,201 @@ begin
   perform pg_temp.teste_assert_0194(v_n = 0,
     'e NÃO abre pendência — documento_ausente continua sendo o único motivo que não abre (0117/0123, preservado)',
     format('%s pendência(s)', v_n));
+end $$;
+
+-- =============================================================================
+-- 6. ACHADO 1 (revisão de fidelidade, 28/09/2026): uma entidade tem DOIS
+-- balanços do MESMO exercício — um "multi 24,25" carregado por ÚLTIMO, sem
+-- coluna por ano e sem linha de mútuo (só lista as controladas, como o
+-- documento real que causou o defeito), e um "anual 2025" carregado ANTES,
+-- que TEM a linha de mútuo. Escolher só por `criado_em` (a versão original
+-- desta migration) fazia o "multi" vencer e a entidade sumir do lado A. A
+-- escolha correta é POR ANO: o documento que TRAZ dado do exercício vence.
+-- =============================================================================
+do $$
+declare
+  v_caso    uuid;
+  v_per     uuid;
+  v_doc_multi uuid;
+  v_r       jsonb;
+  v_ok      boolean;
+  v_res     text;
+  v_motivo  text;
+  v_num     numeric;
+begin
+  raise notice '--- 6. achado 1: multi sem mútuo mais recente não vence anual com mútuo ---';
+  v_caso := (fn_upsert_caso('0194: multi sem mútuo mais recente que anual com mútuo'))::uuid;
+
+  -- A CONTROLADA: primeiro o "anual 2025", COM a linha de mútuo (passivo).
+  v_r := fn_registrar_documento(v_caso, 'MULTI CONTROLADA LTDA.', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-multi-anual.pdf', 'BP MULTI ANUAL.pdf', true, 'HASH-0194-20', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a pagar - partes relacionadas','valor_num','5000','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+
+  -- Depois, para a MESMA entidade, um "multi 24,25" SEM coluna por ano e SEM
+  -- linha de mútuo (só uma conta de caixa) — a forma real do documento que
+  -- listava as controladas sem detalhar mútuo. `criado_em` empurrado para
+  -- ADIANTE (mesma transação, `now()` fixo — o avanço explícito é o que
+  -- reproduz "carregado depois" de forma determinística).
+  v_r := fn_registrar_documento(v_caso, 'MULTI CONTROLADA LTDA.', 'multi', '24,25', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-multi-2425.pdf', 'BP MULTI 24-25.pdf', true, 'HASH-0194-21', 'ok');
+  v_doc_multi := (v_r->>'documento_id')::uuid;
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Caixa e equivalentes','valor_num','900','unidade','milhar','confianca','0.97')
+  ), 'N2');
+  update documento set criado_em = criado_em + interval '1 minute' where id = v_doc_multi;
+
+  -- A CONTRAPARTE: um único balanço, ativo 5.000 — espelha a MULTI CONTROLADA.
+  v_r := fn_registrar_documento(v_caso, 'MULTI HOLDING S.A.', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-multi-holding.pdf', 'BP MULTI HOLDING.pdf', true, 'HASH-0194-22', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a receber - partes relacionadas','valor_num','5000','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+
+  -- A PLANILHA — retrato de 2025, batendo com os 5.000.
+  v_r := fn_registrar_documento(v_caso, 'GRUPO MULTI', 'data-base', '2025-12-31', 'MUTUOS', 0.96,
+    'nome_arquivo', 'supabase_storage', '0194/mutuos-multi.pdf', 'MUTUOS MULTI.pdf', true, 'HASH-0194-23', 'ok');
+  v_per := (select periodo_id from documento where id = (v_r->>'documento_id')::uuid);
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','MULTI HOLDING S.A. → MULTI CONTROLADA LTDA.','valor_num','5000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96')
+  ), 'N2');
+
+  v_r := fn_reconciliar_mutuos(v_caso, v_per);
+  select precondicoes_ok, resultado, motivo_precondicao, divergencia_abs
+    into v_ok, v_res, v_motivo, v_num
+    from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
+  perform pg_temp.teste_assert_0194(v_ok and v_res = 'ok' and v_motivo is null,
+    'achado 1: o "anual 2025" (tem a linha) vence o "multi 24,25" (não tem) mesmo carregado depois — conclui ok',
+    format('precondicoes_ok=%s resultado=%s motivo=%s', v_ok, v_res, v_motivo));
+
+  -- O assert acima sozinho é FRACO: se o "multi" vencesse (o bug), a
+  -- MULTI CONTROLADA sumiria do lado A e sobraria só a HOLDING (ativo
+  -- 5.000) contra a mesma planilha de 5.000 — ainda "ok", por coincidência
+  -- de valor. O que distingue comportamento é os DOIS lados terem sido
+  -- encontrados: `fonte_a->>'lado'` só é "os dois lados" quando n_lados=2
+  -- (a MULTI CONTROLADA contribuiu o passivo).
+  perform pg_temp.teste_assert_0194(
+    (select fonte_a->>'lado' from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid) = 'os dois lados',
+    'e os DOIS lados foram encontrados (não só a holding, por coincidência de valor)',
+    (select fonte_a->>'lado' from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid));
+end $$;
+
+-- =============================================================================
+-- 7. ACHADO 2 (revisão de fidelidade, 28/09/2026): razão social com
+-- "ADMINISTRATIVOS" — `fn_lado_do_mutuo` casa "administr**ativo**s" com
+-- "...ativo" e, aplicado à CHAVE da planilha-retrato (que é o PAR de
+-- empresas, não um lado), derrubava a linha inteira quando o balanço só
+-- tinha um lado. Numa planilha-retrato o filtro de lado não se aplica.
+-- =============================================================================
+do $$
+declare
+  v_caso   uuid;
+  v_per    uuid;
+  v_r      jsonb;
+  v_ok     boolean;
+  v_res    text;
+  v_motivo text;
+begin
+  raise notice '--- 7. achado 2: razão social "ADMINISTRATIVOS" não derruba a linha da planilha-retrato ---';
+  v_caso := (fn_upsert_caso('0194: razão social com ADMINISTRATIVOS'))::uuid;
+
+  -- Só o lado PASSIVO no balanço.
+  v_r := fn_registrar_documento(v_caso, 'AR SERVIÇOS ADMINISTRATIVOS E COMPARTILHADOS LTDA.', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-ar-servicos.pdf', 'BP AR SERVICOS.pdf', true, 'HASH-0194-24', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a pagar - partes relacionadas','valor_num','8000','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+
+  -- A planilha-retrato: a CHAVE é o par "ARAUCÁRIA PARTICIPAÇÕES S.A. - AR
+  -- SERVIÇOS ADMINISTRATIVOS E COMPARTILHADOS LTDA." — `fn_lado_do_mutuo`
+  -- casaria "ativo" dentro de "administrativos" se fosse aplicada aqui.
+  v_r := fn_registrar_documento(v_caso, 'GRUPO ARAUCÁRIA TESTE', 'data-base', '2025-12-31', 'MUTUOS', 0.96,
+    'nome_arquivo', 'supabase_storage', '0194/mutuos-araucaria.pdf', 'MUTUOS ARAUCARIA.pdf', true, 'HASH-0194-25', 'ok');
+  v_per := (select periodo_id from documento where id = (v_r->>'documento_id')::uuid);
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','ARAUCÁRIA PARTICIPAÇÕES S.A. - AR SERVIÇOS ADMINISTRATIVOS E COMPARTILHADOS LTDA.','valor_num','8000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96')
+  ), 'N2');
+
+  v_r := fn_reconciliar_mutuos(v_caso, v_per);
+  select precondicoes_ok, resultado, motivo_precondicao into v_ok, v_res, v_motivo
+    from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
+  perform pg_temp.teste_assert_0194(v_ok and v_res = 'ok' and v_motivo is null,
+    'achado 2: a linha da planilha-retrato ENTRA mesmo com "ADMINISTRATIVOS" no par — conclui ok (não linha_nao_localizada)',
+    format('precondicoes_ok=%s resultado=%s motivo=%s', v_ok, v_res, v_motivo));
+end $$;
+
+-- =============================================================================
+-- 8. ACHADO 3 (revisão de fidelidade, 28/09/2026), positivo com DUAS
+-- planilhas: o caso tem uma planilha-retrato por ano (2024 e 2025, como
+-- "Teste 00"/"teste alto volume" em produção). Cada ano tem de casar com A
+-- SUA planilha, não com "a" planilha escolhida uma vez para a checagem
+-- inteira — 2024 fecha (ok) e 2025 diverge, na MESMA rodada.
+-- =============================================================================
+do $$
+declare
+  v_caso uuid;
+  v_r    jsonb;
+  v_per_consulta uuid;
+  v_ok   boolean;
+  v_res  text;
+  v_motivo text;
+  v_desc text;
+  v_n    numeric;
+begin
+  raise notice '--- 8. achado 3: duas planilhas-retrato (2024 e 2025), cada ano casa com a sua ---';
+  v_caso := (fn_upsert_caso('0194: duas planilhas-retrato, dois anos'))::uuid;
+
+  -- Planilhas: 2024 bate exato (5.000); 2025 diverge (planilha 6.700 x balanço 7.000).
+  v_r := fn_registrar_documento(v_caso, 'GRUPO DUPLO', 'data-base', '2024-12-31', 'MUTUOS', 0.96,
+    'nome_arquivo', 'supabase_storage', '0194/mutuos-duplo-2024.pdf', 'MUTUOS DUPLO 2024.pdf', true, 'HASH-0194-26', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','DUPLO PARTICIPAÇÕES S.A. → DUPLO INDÚSTRIA LTDA.','valor_num','5000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96')
+  ), 'N2');
+  v_r := fn_registrar_documento(v_caso, 'GRUPO DUPLO', 'data-base', '2025-12-31', 'MUTUOS', 0.96,
+    'nome_arquivo', 'supabase_storage', '0194/mutuos-duplo-2025.pdf', 'MUTUOS DUPLO 2025.pdf', true, 'HASH-0194-27', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','DUPLO PARTICIPAÇÕES S.A. → DUPLO INDÚSTRIA LTDA.','valor_num','6700','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96')
+  ), 'N2');
+
+  -- Balanços: 2024 (5.000 = 5.000) e 2025 (7.000 x 7.000, mas a planilha
+  -- de 2025 erra para 6.700 — a divergência que este teste isola).
+  v_r := fn_registrar_documento(v_caso, 'DUPLO PARTICIPAÇÕES S.A.', 'anual', '2024', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-duplo-part-2024.pdf', 'BP DUPLO PART 2024.pdf', true, 'HASH-0194-28', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a receber - partes relacionadas','valor_num','5000','unidade','milhar','periodo_coluna','2024','confianca','0.97')
+  ), 'N2');
+  v_r := fn_registrar_documento(v_caso, 'DUPLO INDÚSTRIA LTDA.', 'anual', '2024', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-duplo-ind-2024.pdf', 'BP DUPLO IND 2024.pdf', true, 'HASH-0194-29', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a pagar - partes relacionadas','valor_num','5000','unidade','milhar','periodo_coluna','2024','confianca','0.97')
+  ), 'N2');
+  v_r := fn_registrar_documento(v_caso, 'DUPLO PARTICIPAÇÕES S.A.', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-duplo-part-2025.pdf', 'BP DUPLO PART 2025.pdf', true, 'HASH-0194-30', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a receber - partes relacionadas','valor_num','7000','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+  v_r := fn_registrar_documento(v_caso, 'DUPLO INDÚSTRIA LTDA.', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', '0194/bp-duplo-ind-2025.pdf', 'BP DUPLO IND 2025.pdf', true, 'HASH-0194-31', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a pagar - partes relacionadas','valor_num','7000','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+
+  v_per_consulta := fn_upsert_periodo(v_caso, 'multi', '24,25');
+  v_r := fn_reconciliar_mutuos(v_caso, v_per_consulta);
+  select precondicoes_ok, resultado, motivo_precondicao, divergencia_abs
+    into v_ok, v_res, v_motivo, v_n
+    from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
+  perform pg_temp.teste_assert_0194(v_ok and v_res = 'zona_cinzenta' and v_motivo is null,
+    'achado 3: as DUAS planilhas casam cada uma com o SEU ano — a checagem conclui (não documento_ausente/sem_periodo_par)',
+    format('precondicoes_ok=%s resultado=%s motivo=%s', v_ok, v_res, v_motivo));
+  perform pg_temp.teste_assert_0194(v_n between 295000 and 305000,
+    'e a divergência é a de 2025 (7.000 x 6.700 = 300 mil), sem contaminar 2024', format('divergencia_abs=%s', v_n));
+
+  select descricao into v_desc from pendencia
+    where caso_id = v_caso and motivo = 'reconciliacao:mutuos_planilha_vs_balanco' and estado <> 'resolvida';
+  perform pg_temp.teste_assert_0194(v_desc like '%2024%confere%' and v_desc like '%2025%',
+    'e o texto nomeia os DOIS anos, com 2024 conferindo', left(v_desc, 400));
 end $$;
 
 -- =============================================================================

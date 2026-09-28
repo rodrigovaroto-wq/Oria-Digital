@@ -116,20 +116,65 @@
 -- DO CÓDIGO", acima). O teste novo (`mutuos_retrato_de_uma_data.test.sql`)
 -- é quem exercita o formato de produção.
 --
--- A PREVISÃO DO EFEITO EM PRODUÇÃO, por ser escrita e não aplicada: os 7
--- casos com planilha MUTUOS e conta de mútuo no balanço passam a CONCLUIR
--- (deixam de responder `documento_ausente`) na próxima rodada de cada caso;
--- no "teste - Canastra"/"teste Canastra" a divergência plantada de 240 mil
--- passa a abrir pendência `reconciliacao:mutuos_planilha_vs_balanco` — isso é
--- a checagem VOLTANDO A FUNCIONAR, não uma regressão. Os outros 5 casos
--- podem concluir `ok`, `zona_cinzenta` ou algum dos motivos de precondição
--- (`sem_periodo_par`/`linha_nao_localizada`/`unidade_divergente`), a depender
--- do que o dado real disser — não há como prever qual sem rodar contra
--- produção, e esta migration NÃO roda reconciliação em caso nenhum. Quem
--- responde é a sonda:
+-- A PREVISÃO DO EFEITO EM PRODUÇÃO — MEDIDA, não estimada (28/09/2026,
+-- SOMENTE LEITURA, replicando a lógica dos três achados por consulta direta
+-- contra produção — a mesma técnica do revisor). Ainda ESCRITA, NÃO
+-- APLICADA: quem responde de verdade, depois de aplicar, é a sonda:
 --
 --   select chave, migration, tipo, objeto, presente, detalhe, porque
 --     from fn_instalacao_conferir() where not presente order by 1;
+--
+-- | caso                                | ano  | lado A ativo | lado A passivo | planilha    | previsto |
+-- |--------------------------------------|------|-------------:|----------------:|------------:|----------|
+-- | teste - Canastra                     | 2023 |            0 |       4.200.000 |  (ausente)  | documento_ausente (planilha deste exercício não entregue) |
+-- | teste - Canastra                     | 2024 |   12.700.000 |      12.700.000 |  (ausente)  | documento_ausente (idem) |
+-- | teste - Canastra                     | 2025 |   16.300.000 |      16.300.000 |  16.060.000 | **zona_cinzenta, diff 240 mil** (a plantada) |
+-- | teste Canastra                       | 2025 |   16.300.000 |      16.300.000 |  16.060.000 | zona_cinzenta, diff 240 mil (mesmos números do acima) |
+-- | Teste comparativo - Grupo Canastra    | 2025 |   16.300.000 |      16.300.000 |  16.060.000 | zona_cinzenta, diff 240 mil |
+-- | teste v48                            | 2025 |   16.300.000 |      16.300.000 |  16.060.000 | zona_cinzenta, diff 240 mil |
+-- | Teste 00                             | 2023 |            0 |       1.100.000 |  33.060.000 | **SUSPEITO — ver nota abaixo, não aceitar sem checar** |
+-- | Teste 00                             | 2025 |   74.800.000 |      74.800.000 |  74.560.000 | **zona_cinzenta, diff 240 mil** |
+-- | teste alto volume - grupo araucária  | 2021 |    8.965.000 |      27.090.000 |  (não comparada) | zona_cinzenta (os DOIS LADOS do balanço não se espelham — achado da própria correção, não bug) |
+-- | teste alto volume - grupo araucária  | 2022 |   19.490.000 |      31.180.000 |  (não comparada) | zona_cinzenta (idem) |
+-- | teste alto volume - grupo araucária  | 2023 |   33.300.000 |      46.300.000 |  (não comparada) | zona_cinzenta (idem) |
+-- | teste alto volume - grupo araucária  | 2024 |   51.600.000 |      58.900.000 |  (não comparada) | zona_cinzenta (idem) |
+-- | teste alto volume - grupo araucária  | 2025 |   74.800.000 |      74.800.000 |  74.560.000 | zona_cinzenta, diff 240 mil |
+-- | Araucária teste (7º caso, achado na medição — não citado no cabeçalho original) | 2021 | 8.965.000 | 7.217.000 | (não comparada) | zona_cinzenta (os dois lados do balanço não se espelham) |
+-- | Araucária teste                      | 2022 |   19.490.000 |      19.490.000 |  19.250.000 | zona_cinzenta, diff 240 mil |
+-- | Araucária teste                      | 2023 |   33.300.000 |      33.300.000 |  33.060.000 | zona_cinzenta, diff 240 mil |
+-- | Araucária teste                      | 2024 |   51.600.000 |      51.600.000 |  51.360.000 | zona_cinzenta, diff 240 mil |
+-- | Araucária teste                      | 2025 |   74.800.000 |      83.400.000 |  (não comparada) | zona_cinzenta (os dois lados não se espelham) |
+--
+-- LEITURA: nos anos em que os dois lados do balanço SE ESPELHAM, o efeito é
+-- estável e consistente entre casos e anos — a mesma divergência plantada
+-- de 240 mil (a régua do book Canastra), medida onde a checagem agora
+-- CONSEGUE olhar (antes: 12/12 casos em `documento_ausente`, texto falso).
+-- Nos anos em que os dois lados NÃO se espelham (vários em "alto volume" e
+-- em "Araucária teste"), a planilha não é comparada — é o comportamento
+-- JÁ DESENHADO pela 0123 (preservado, não desta migration): o achado é dos
+-- BALANÇOS, não da planilha.
+--
+-- "Araucária teste" (e as variantes "Araucária teste 1"/"araucária test 52",
+-- e ~14 casos "teste vNN" com poucas linhas) apareceram na medição além dos
+-- 6 nomeados no cabeçalho original — não foram todos medidos linha a linha
+-- aqui (a maioria são artefatos de sondagem antiga, não mandatos), mas
+-- qualificam pelo mesmo critério (planilha MUTUOS + conta de mútuo no
+-- balanço) e a sonda os pegará na próxima rodada de cada um.
+--
+-- "Teste 00"/2023 é MARCADO SUSPEITO e não deve ser aceito sem checar: o
+-- lado A (R$ 1,1 mi, uma única linha) é muito menor que o mesmo ano nos
+-- casos irmãos "Araucária teste"/"teste alto volume" (R$ 33,3 mi) — a causa
+-- provável, investigada mas NÃO CORRIGIDA aqui (fora do escopo dos três
+-- achados revisados): quando uma entidade só tem UM documento de balanço
+-- candidato para o ano e ele é de OUTRO ano (ex.: só "anual 2025", sem
+-- alternativa para 2023), o filtro de coluna do LADO A (herdado da 0123,
+-- `fn_coluna_periodo_do_ano(...) is null` passa por um documento de um ano
+-- só independente de qual ano está sendo perguntado) deixa esse documento
+-- "aparecer" para qualquer ano, inclusive quando não é dele — os 3 achados
+-- desta revisão não tocam essa parte do desenho da 0123, e corrigi-la
+-- exigiria mudar o filtro de LINHA (não só a ESCOLHA do documento), o que é
+-- maior que os 3 achados pedidos. Registrado aqui para a próxima rodada, não
+-- corrigido: revisar "Teste 00"/2023 à mão antes de comunicar ao cliente.
 -- =============================================================================
 
 create or replace function fn_reconciliar_mutuos(
@@ -164,18 +209,29 @@ declare
   v_lado_alvo text;
   v_rotulo_lado text;
   -- 0194: a planilha é um RETRATO de uma data (0145: o conceito mora na
-  -- coluna). Estes três respondem "de qual ano é este retrato" e "onde mora a
-  -- coluna do saldo", lidos UMA VEZ fora do laço — o documento não muda de
-  -- período ano a ano.
-  v_periodo_id_mut uuid;
-  v_tipo_mut        text;
-  v_ref_mut         text;
-  v_anos_mut        int[];
-  v_col_saldo       text;
+  -- coluna). `v_col_saldo` responde "onde mora a coluna do saldo" no
+  -- documento escolhido para ESTE ano; `v_pl_retrato` (achado 2 da revisão de
+  -- fidelidade, 28/09/2026) diz se ESTE documento é matricial (chave = par de
+  -- empresas) — quando é, o rótulo/a seção da linha não carregam lado nenhum,
+  -- e filtrar por `fn_lado_do_mutuo` descarta linha boa (ver o filtro do
+  -- LADO B, abaixo).
+  v_col_saldo  text;
+  v_pl_retrato boolean;
+  -- 0194 (achado 3 da revisão): a planilha é escolhida POR ANO, não uma vez
+  -- para a checagem inteira — `v_doc_ano` é o documento MUTUOS do caso cujo
+  -- período cobre `v_ano` (ou, faltando isso, um documento cujo período não
+  -- ancora ano nenhum — o mesmo fallback ambíguo de ANTES desta migration).
+  -- `v_doc_ano_cobre_ano` distingue os dois: só no primeiro caso é seguro
+  -- resolver a sentinela pela coluna de saldo.
+  v_doc_ano           uuid;
+  v_doc_ano_cobre_ano boolean;
   -- 0194 (mesmo padrão da 0188/0191/0193): o motivo de cada ano/lado que não
   -- concluiu, e o que fica faltando dito em texto — para o `v_n = 0` do fim
   -- distinguir "nenhum balanço tem conta de mútuo" (silêncio de sempre) de
-  -- "documento presente, checagem não concluiu" (achado, abre pendência).
+  -- "documento presente, checagem não concluiu" (achado, abre pendência) de
+  -- "a planilha deste exercício não foi entregue" (achado 3: silêncio
+  -- também — é cobrança de checklist, não achado — mas ainda assim dita em
+  -- texto em `v_faltas`, para quando for o ÚNICO motivo de nada concluir).
   v_motivos_ano text[] := '{}';
   v_faltas      text[] := '{}';
   v_motivo_prec text;
@@ -190,6 +246,18 @@ begin
   -- sequer. A checagem "não achava o par" e abria pendência de pré-condição num
   -- caso que está perfeitamente em ordem. O par certo é o outro: a planilha
   -- lista "A → B", e o saldo mora no balanço de A (a receber) ou de B (a pagar).
+  --
+  -- 0194 (achado 3 da revisão): a EXISTÊNCIA da planilha, para esta
+  -- pré-condição de abertura, não precisa de período específico — é só
+  -- "existe QUALQUER planilha MUTUOS no caso?". QUAL planilha vale para QUAL
+  -- ano é resolvido ano a ano, dentro do laço abaixo — nunca uma escolha só
+  -- para a checagem inteira (era esse o defeito: aqui em cima ainda tentava
+  -- o período específico primeiro, mas o resultado só alimentava a
+  -- pré-condição e o `p_documento_id` do registro; era o USO ano a ano, mais
+  -- abaixo, que faltava — corrigido no laço, não aqui). A chamada com
+  -- `p_periodo_id` é o marcador do catálogo da sonda (D6, 0187,
+  -- `d6_cobertura_de_tipos_estrita`) — preservada por isso, embora o valor
+  -- que ela devolve não decida mais nada sozinho.
   v_doc_mut := fn_documento_por_tipo(p_caso_id, null, p_periodo_id, 'MUTUOS');
   if v_doc_mut is null then
     v_doc_mut := fn_documento_por_tipo(p_caso_id, null, null, 'MUTUOS');
@@ -211,52 +279,7 @@ begin
              when v_doc_mut is null then 'a planilha de mútuos' else 'nenhum balanço' end));
   end if;
 
-  v_ver_mut  := fn_versao_atual(v_doc_mut);
-  v_unid_mut := fn_unidade_predominante(v_ver_mut);
-
-  -- 0194: o PERÍODO DO DOCUMENTO da planilha — não a coluna. É o mesmo
-  -- caminho que a 0191 já usa para o Mapa de Dívida (outro retrato de uma
-  -- data): `documento.periodo_id` → `periodo.tipo, referencia` →
-  -- `fn_anos_periodo`. Vazio = "sem como afirmar de qual ano é o retrato"
-  -- (documento sem período, ou período que não ancora ano nenhum).
-  select periodo_id into v_periodo_id_mut from documento where id = v_doc_mut;
-  if v_periodo_id_mut is not null then
-    select tipo, referencia into v_tipo_mut, v_ref_mut from periodo where id = v_periodo_id_mut;
-    v_anos_mut := fn_anos_periodo(v_tipo_mut, v_ref_mut);
-  end if;
-
-  -- 0194: A COLUNA DO SALDO, achada pelo MESMO localizador que a 0145 já
-  -- cadastrou para este conceito (`taxonomia_linha_localizador`,
-  -- MUTUOS/saldo_de_mutuo, termo 'saldo') — reuso do termo, não um `like`
-  -- novo. Lida uma vez: o retrato tem uma coluna de saldo só, não uma por ano.
-  select ce.periodo_coluna into v_col_saldo
-  from campo_extraido ce
-  where ce.documento_versao_id = v_ver_mut
-    and ce.periodo_coluna is not null
-    and fn_normalizar_texto(ce.periodo_coluna) like '%saldo%'
-  group by ce.periodo_coluna
-  order by count(*) desc, ce.periodo_coluna
-  limit 1;
-
-  -- OS DEGRAUS SÃO RESOLVIDOS UMA VEZ, PARA O DOCUMENTO TODO — e é essencial que
-  -- seja assim, não linha a linha. A pergunta do degrau é "este documento
-  -- diferencia natureza no rótulo?"; respondê-la por linha faria a linha calada de
-  -- um documento que diferencia entrar junto (que é justamente o erro), e a de um
-  -- que não diferencia ficar de fora (que é o outro erro).
-  select bool_or(fn_texto_nomeia_mutuo(ce.chave)),
-         bool_or(fn_texto_nomeia_mutuo(ce.secao))
-    into v_pl_rotulo, v_pl_secao
-  from campo_extraido ce
-  where ce.documento_versao_id = v_ver_mut
-    and ce.valor_num is not null
-    and fn_papel_linha(ce.chave) <> 'subtotal';
-  v_pl_rotulo := coalesce(v_pl_rotulo, false);
-  v_pl_secao  := coalesce(v_pl_secao, false);
-
   foreach v_ano in array fn_anos_alvo(p_periodo_id) loop
-    v_col_mut := case when v_ano is null then null
-                      else fn_coluna_periodo_do_ano(v_ver_mut, v_ano) end;
-
     -- ---- LADO A: o saldo de mútuos, somado sobre TODOS os balanços do caso --
     -- Soma, e não `fn_valor_conceito_col`: o saldo aparece numa conta por
     -- empresa, e pegar UMA compararia parte do saldo com a planilha inteira.
@@ -267,18 +290,47 @@ begin
     -- de percorrido lado a lado. É essa mudança de forma que torna possível
     -- perguntar "os dois lados concordam?" antes de comparar qualquer coisa.
     with balancos as (
-      -- UM DOCUMENTO POR ENTIDADE, e isto é correção de defeito medido, não
-      -- zelo: o book Vertentes entrega para a mesma controlada um BALANÇO e
-      -- um BALANCETE do mesmo exercício, com o mesmo saldo de mútuo (3.974).
-      -- Somando os dois, o lado passivo saía 15.427 contra 11.453 do ativo e
-      -- a checagem acusava 2.394 de divergência — uma divergência que ela
-      -- mesma tinha criado. Balanço e balancete são a MESMA realidade dita
-      -- duas vezes; a ordem abaixo escolhe a peça mais definitiva.
+      -- UM DOCUMENTO POR ENTIDADE **por ano** — correção de defeito medido,
+      -- não zelo. A 0123 escolhia por `criado_em` sem olhar o ano: o book
+      -- Vertentes entrega para a mesma controlada um BALANÇO e um BALANCETE
+      -- do mesmo exercício, com o mesmo saldo de mútuo (3.974) — somar os
+      -- dois duplicava o lado. Essa parte não muda.
+      --
+      -- 0194 (achado 1 da revisão de fidelidade, MEDIDO em produção
+      -- só-leitura, 28/09/2026): olhar só `criado_em` sem o ANO tem o MESMO
+      -- vício quando duas peças da MESMA entidade são de ANOS diferentes —
+      -- um documento "multi 24,25" sem coluna por ano e sem linha de mútuo
+      -- (só lista as controladas) vencia o "anual 2025", que TEM a linha, só
+      -- por ter sido carregado depois. Caso "Teste 00", ano 2025: 10/12
+      -- controladas escolhiam assim — lado A saía 8,6 mi (só passivo, 2
+      -- documentos) contra a planilha 68,16 mi, uma `zona_cinzenta`
+      -- fabricada de 59,56 mi; o correto é os dois lados fechando em 74,8 mi
+      -- contra 74,56 da planilha — divergência real de 240 mil (a mesma
+      -- plantada no book Canastra). Mesmo desenho no "teste alto volume -
+      -- grupo araucária" (2024: passivo 25,8 mi de 6 documentos × planilha
+      -- 46,76 mi). Critério agora: entre os documentos do exercício, o que
+      -- TRAZ dado do ano (linha de mútuo na coluna certa, ou sem coluna
+      -- nenhuma — documento de um ano só) vence o que só ANCORA o ano sem
+      -- trazer dado; só então a prioridade de tipo da 0123 (BALANCO >
+      -- COMBINADO > DF_AUDITADA > BALANCETE) e o mais recente. Um "multi
+      -- 24,25" que TEM colunas por ano e linha de mútuo continua valendo — o
+      -- critério é "tem dado", não "é anual".
       select distinct on (d.entidade_id) d.id, d.entidade_id
       from documento d
+      join lateral (select fn_versao_atual(d.id) as ver) v on true
       where d.caso_id = p_caso_id
         and d.tipo_taxonomia in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA')
       order by d.entidade_id,
+               (exists (
+                  select 1 from campo_extraido ce2
+                  where ce2.documento_versao_id = v.ver
+                    and ce2.valor_num is not null
+                    and fn_texto_nomeia_mutuo(ce2.chave)
+                    and (v_ano is null
+                         or fn_coluna_periodo_do_ano(v.ver, v_ano) is null
+                         or fn_normalizar_texto(ce2.periodo_coluna)
+                            = fn_normalizar_texto(fn_coluna_periodo_do_ano(v.ver, v_ano)))
+               )) desc,
                array_position(array['BALANCO','COMBINADO','DF_AUDITADA','BALANCETE'],
                               d.tipo_taxonomia),
                d.criado_em desc
@@ -329,9 +381,99 @@ begin
     if coalesce(v_lados.n_lados, 0) = 0 then
       -- SEM MOTIVO: é o caso comum e legítimo (0117/0123, comportamento
       -- desenhado e preservado) — não achar linha de mútuo NO BALANÇO não é
-      -- achado. É o ÚNICO `continue` que não alimenta `v_motivos_ano`.
+      -- achado. É o ÚNICO `continue` de LADO A que não alimenta `v_motivos_ano`.
       continue;
     end if;
+
+    -- ---- A PLANILHA DESTE ANO ----------------------------------------------
+    -- 0194 (achado 3 da revisão): escolhida POR ANO, não uma vez para a
+    -- checagem inteira (ver o cabeçalho da função — MEDIDO em produção
+    -- só-leitura, 28/09/2026: "Teste 00" e "teste alto volume - grupo
+    -- araucária" têm um documento MUTUOS por data-base, um por ano de
+    -- 2021 a 2025; escolher só um fazia os outros anos acusarem
+    -- `sem_periodo_par` mesmo com a planilha certa presente no caso;
+    -- "teste - Canastra", com uma única planilha de 2025, abria a mesma
+    -- pendência falsa para os anos 2023/2024 do período de consulta).
+    -- Prioridade: o documento cujo período COBRE `v_ano`; faltando isso, um
+    -- documento cujo período não ancora ano nenhum (o mesmo fallback
+    -- ambíguo de ANTES desta migration — `v_doc_ano_cobre_ano = false` avisa
+    -- o resto do laço para não tratar a sentinela como resolvida). Nenhum
+    -- dos dois: a planilha deste exercício não foi entregue — não é achado
+    -- de reconciliação, é cobrança de checklist (0186), e fica silenciosa
+    -- como o `continue` de cima, só registrada em `v_faltas` para o texto do
+    -- `documento_ausente` final, se for o caso.
+    --
+    -- MEDIDO em produção só-leitura (28/09/2026, "Teste 00", MUTUOS de
+    -- 31/12/2023): o caso tem DUAS versões de documento para o MESMO ano — a
+    -- reextração deixou uma casca de 0 linhas ao lado da que TEM as 13
+    -- linhas — e desempatar só por `criado_em` tinha a MESMA falha do achado
+    -- 1 (a casca vazia podia vencer por ter sido criada depois). O critério
+    -- é o mesmo dos dois achados: entre os documentos empatados no ano, o
+    -- que TEM linha (`tem_linha` abaixo) vence antes do mais recente.
+    select d.id,
+           (v_ano is not null and pe.id is not null
+            and v_ano = any(fn_anos_periodo(pe.tipo, pe.referencia)))
+      into v_doc_ano, v_doc_ano_cobre_ano
+    from documento d
+    left join periodo pe on pe.id = d.periodo_id
+    where d.caso_id = p_caso_id
+      and d.tipo_taxonomia = 'MUTUOS'
+      and (v_ano is null
+           or pe.id is null
+           or cardinality(coalesce(fn_anos_periodo(pe.tipo, pe.referencia), '{}'::int[])) = 0
+           or v_ano = any(fn_anos_periodo(pe.tipo, pe.referencia)))
+    order by (v_ano is not null and pe.id is not null
+              and v_ano = any(fn_anos_periodo(pe.tipo, pe.referencia))) desc,
+             (exists (
+                select 1 from campo_extraido ce3
+                where ce3.documento_versao_id = fn_versao_atual(d.id)
+                  and ce3.valor_num is not null
+              )) desc,
+             d.criado_em desc
+    limit 1;
+
+    if v_doc_ano is null then
+      v_faltas := v_faltas || format(
+        '%s: a planilha de mútuos deste exercício não foi entregue neste mandato', v_ano);
+      continue;
+    end if;
+
+    v_ver_mut  := fn_versao_atual(v_doc_ano);
+    v_unid_mut := fn_unidade_predominante(v_ver_mut);
+
+    -- OS DEGRAUS SÃO RESOLVIDOS UMA VEZ POR DOCUMENTO (0123) — e agora o
+    -- documento pode mudar de ano para ano (achado 3), então esta resolução
+    -- entra no laço junto com ele. A pergunta do degrau é "este documento
+    -- diferencia natureza no rótulo?"; respondê-la por linha faria a linha
+    -- calada de um documento que diferencia entrar junto (o erro original),
+    -- e a de um que não diferencia ficar de fora (o outro erro).
+    select bool_or(fn_texto_nomeia_mutuo(ce.chave)),
+           bool_or(fn_texto_nomeia_mutuo(ce.secao))
+      into v_pl_rotulo, v_pl_secao
+    from campo_extraido ce
+    where ce.documento_versao_id = v_ver_mut
+      and ce.valor_num is not null
+      and fn_papel_linha(ce.chave) <> 'subtotal';
+    v_pl_rotulo := coalesce(v_pl_rotulo, false);
+    v_pl_secao  := coalesce(v_pl_secao, false);
+
+    -- 0194: A COLUNA DO SALDO, achada pelo MESMO localizador que a 0145 já
+    -- cadastrou para este conceito (`taxonomia_linha_localizador`,
+    -- MUTUOS/saldo_de_mutuo, termo 'saldo') — reuso do termo, não um `like`
+    -- novo. Lida uma vez por documento: o retrato tem uma coluna de saldo
+    -- só, não uma por ano. `v_pl_retrato` (achado 2 da revisão) reaproveita
+    -- o MESMO achado: um documento com coluna "saldo" é matricial (chave =
+    -- par de empresas), e é isso — não uma palavra no rótulo da linha — que
+    -- diz se a linha carrega lado.
+    select ce.periodo_coluna into v_col_saldo
+    from campo_extraido ce
+    where ce.documento_versao_id = v_ver_mut
+      and ce.periodo_coluna is not null
+      and fn_normalizar_texto(ce.periodo_coluna) like '%saldo%'
+    group by ce.periodo_coluna
+    order by count(*) desc, ce.periodo_coluna
+    limit 1;
+    v_pl_retrato := v_col_saldo is not null;
 
     -- Escala ausente de um dos lados é o mesmo critério conservador da 0009:
     -- não há o que converter, e afirmar "confere" seria pior que calar.
@@ -380,10 +522,11 @@ begin
       v_rotulo_lado := v_lado_alvo;
     end if;
 
-    -- 0194: A PLANILHA-RETRATO. Chegamos aqui só quando o BALANÇO tem conta de
-    -- mútuo para este ano (n_lados>0, escala comparável) — então o que falta
-    -- resolver agora é só o lado da PLANILHA, e é aí que mora o defeito desta
-    -- migration.
+    -- 0194: A COLUNA DA PLANILHA-RETRATO. Chegamos aqui só quando o BALANÇO
+    -- tem conta de mútuo para este ano (n_lados>0, escala comparável) e uma
+    -- planilha foi achada PARA ESTE ANO (achado 3) — então o que falta
+    -- resolver agora é só a COLUNA, e é aí que morava o defeito original
+    -- desta migration.
     --
     -- `fn_coluna_periodo_do_ano` devolve a sentinela quando o documento TEM
     -- colunas de período e nenhuma é deste ano — a pergunta certa para um
@@ -395,37 +538,35 @@ begin
     -- desta migration o filtro do LADO B (escrito para NULL) zerava a soma, o
     -- laço caía no `continue` mudo e a função devolvia `documento_ausente`
     -- com um texto falso (ver o cabeçalho). A pergunta certa para um retrato:
-    -- o PERÍODO DO DOCUMENTO cobre `v_ano`? Se sim, a coluna do saldo é a que
-    -- `v_col_saldo` já achou; se não cobre, não há o que comparar neste ano.
-    if v_col_mut = E'\x01'
-       and v_ano is not null
-       and cardinality(coalesce(v_anos_mut, '{}'::int[])) > 0 then
-      if v_ano = any(v_anos_mut) then
-        v_col_mut := v_col_saldo;
-        if v_col_mut is null then
-          -- O documento cobre o ano, mas nenhuma coluna diz "saldo": achado
-          -- acionável (o documento pode ter mudado de formato), não silêncio.
-          v_motivos_ano := v_motivos_ano || 'linha_nao_localizada'::text;
-          v_faltas := v_faltas || format(
-            '%s: a planilha de mútuos é retrato deste exercício, mas nenhuma coluna diz '
-            '"saldo" (o mesmo termo do localizador da 0145)', v_ano);
-          continue;
-        end if;
-      else
-        -- O documento é retrato de OUTRO(S) ano(s) — não há o que comparar
-        -- neste `v_ano`, e é o CONTRATO da 0186 que nomeia isso, não o
-        -- genérico.
-        v_motivos_ano := v_motivos_ano || 'sem_periodo_par'::text;
+    -- o documento escolhido para ESTE ano REALMENTE cobre `v_ano`
+    -- (`v_doc_ano_cobre_ano`, achado 3 — não o fallback ambíguo)? Se sim, a
+    -- coluna do saldo é a que `v_col_saldo` já achou.
+    v_col_mut := case when v_ano is null then null
+                      else fn_coluna_periodo_do_ano(v_ver_mut, v_ano) end;
+    if v_col_mut = E'\x01' and v_doc_ano_cobre_ano then
+      v_col_mut := v_col_saldo;
+      if v_col_mut is null then
+        -- O documento cobre o ano, mas nenhuma coluna diz "saldo": achado
+        -- acionável (o documento pode ter mudado de formato), não silêncio.
+        v_motivos_ano := v_motivos_ano || 'linha_nao_localizada'::text;
         v_faltas := v_faltas || format(
-          '%s: a planilha de mútuos é retrato de %s — não há esse exercício para comparar',
-          v_ano, coalesce(v_ref_mut, 'outra data'));
+          '%s: a planilha de mútuos é retrato deste exercício, mas nenhuma coluna diz '
+          '"saldo" (o mesmo termo do localizador da 0145)', v_ano);
         continue;
       end if;
     end if;
-    -- `v_anos_mut` vazio (documento sem período, ou período que não ancora
-    -- ano nenhum): sem como afirmar retrato de QUAL ano, então `v_col_mut`
-    -- segue sentinela — comportamento de ANTES desta migration (mesma
-    -- exceção que a 0191 já abre para o Mapa de Dívida).
+    -- `v_ano` nulo (período de consulta que não ancora ano nenhum) ou
+    -- `v_doc_ano_cobre_ano = false` (o documento MUTUOS achado só pelo
+    -- fallback ambíguo — sem período, ou período que não ancora ano
+    -- nenhum): sem como afirmar retrato de QUAL ano, `v_col_mut` segue o que
+    -- `fn_coluna_periodo_do_ano` devolveu (tipicamente a sentinela) —
+    -- comportamento de ANTES desta migration (mesma exceção que a 0191 já
+    -- abre para o Mapa de Dívida). A antiga ramificação "documento não cobre
+    -- o ano → `sem_periodo_par`" saiu: a seleção acima (achado 3) já garante
+    -- que só se chega aqui com um documento que cobre `v_ano`, ou com o
+    -- fallback ambíguo — o caso "não cobre" não sobrevive à seleção. Um
+    -- `sem_periodo_par` ainda pode nascer adiante (`fn_motivo_do_lado`), no
+    -- raro caso do fallback ambíguo cuja sentinela não resolve nenhuma linha.
 
     -- ---- LADO B: a planilha ----------------------------------------------
     select coalesce(sum(fn_valor_em_base(ce.valor_num, ce.unidade)), 0) as soma_base,
@@ -456,11 +597,25 @@ begin
       -- planilha não, a diferença que sobra é da régua e não do dado — é o defeito
       -- que a 0123 consertou, cometido de novo em espelho.
       and not fn_mutuo_com_socio(ce.chave, ce.secao)
-      -- Quando o balanço tem um lado só, a linha da planilha que DECLARA lado
-      -- tem de ser do mesmo; a que não declara entra (ela é as duas pontas).
-      -- Com os dois lados concordando, `v_lado_alvo` é nulo e não há o que
-      -- filtrar: compara-se a planilha inteira contra o saldo estabelecido.
-      and (v_lado_alvo is null
+      -- 0194 (achado 2 da revisão de fidelidade, MEDIDO em produção
+      -- só-leitura, 28/09/2026): numa planilha-RETRATO (`v_pl_retrato`) a
+      -- `chave` é o PAR de empresas ("ARAUCÁRIA PARTICIPAÇÕES … - AR
+      -- SERVIÇOS ADMINISTRATIVOS E COMPARTILHADOS LTDA."), não o lado — e
+      -- `fn_lado_do_mutuo` casava "administr**ativo**s" com "...ativo" e
+      -- derrubava a linha inteira do lado errado (6,4 mi fora da soma, no
+      -- book Canastra — o mesmo 74,56 − 6,40 = 68,16 do achado 1). No "teste
+      -- alto volume - grupo araucária" de 2021, as 11 linhas da planilha
+      -- chegam com `secao_canonica = 'ativo_circulante'` herdada da
+      -- classificação genérica da extração — não é lado contábil nenhum para
+      -- uma linha de retrato — e o filtro esvaziava a planilha inteira:
+      -- `linha_nao_localizada` falso, 8,725 mi somem. Quando o balanço tem
+      -- um lado só e a planilha É comparativa de verdade (`not v_pl_retrato`
+      -- — formato da 0123, preservado: o rótulo declara lado de verdade e o
+      -- filtro continua valendo), a linha que DECLARA lado tem de ser do
+      -- mesmo; a que não declara entra (ela é as duas pontas). Com os dois
+      -- lados concordando, `v_lado_alvo` é nulo e não há o que filtrar em
+      -- nenhum dos dois formatos.
+      and (v_pl_retrato or v_lado_alvo is null
            or coalesce(fn_lado_do_mutuo(ce.chave, ce.secao_canonica), v_lado_alvo) = v_lado_alvo)
       and (v_col_mut is null
            or fn_normalizar_texto(ce.periodo_coluna) = fn_normalizar_texto(v_col_mut));
@@ -515,19 +670,30 @@ begin
     if cardinality(v_motivos_ano) = 0 then
       -- SEM PENDÊNCIA, e é decisão de projeto: `documento_ausente` é o único
       -- resultado que `fn_registrar_reconciliacao` não transforma em pendência.
-      -- Não achar linha de mútuo NO BALANÇO é o caso comum e correto — a
-      -- demonstração combinada elimina o intragrupo, e o balanço individual pode
-      -- agregar o saldo em "outras partes relacionadas". Abrir pendência aqui
-      -- encheria a fila de todo mandato com um aviso que não pede ação nenhuma,
-      -- e uma fila assim é uma fila que ninguém lê. TODOS os anos pularam por
-      -- essa via (0194: `v_motivos_ano` vazio é a prova).
+      -- 0194 (achado 3 da revisão): quando o ÚNICO motivo de nenhum ano ter
+      -- concluído é "a planilha deste exercício não foi entregue" (`v_faltas`
+      -- não vazio), o texto diz QUAIS anos — ainda é cobrança de checklist,
+      -- não achado, mas nomear o ano que falta é a regra 1 (nota com o
+      -- efeito, nunca silêncio liso). Sem NENHUM motivo (`v_faltas` também
+      -- vazio): o texto genérico de sempre — não achar linha de mútuo NO
+      -- BALANÇO é o caso comum e correto (combinado elimina intragrupo;
+      -- individual às vezes agrega em "outras partes relacionadas"). Abrir
+      -- pendência aqui encheria a fila de todo mandato com um aviso que não
+      -- pede ação nenhuma, e uma fila assim é uma fila que ninguém lê.
       return fn_registrar_reconciliacao(p_caso_id, null, p_periodo_id,
         'mutuos_planilha_vs_balanco', 'B', v_doc_mut, null, null,
         'documento_ausente', null, null,
         jsonb_build_object('tolerancia_abs', p_tolerancia_abs, 'tolerancia_pct', p_tolerancia_pct),
-        'Planilha de mútuos presente, mas nenhum balanço do mandato traz conta de mútuo com lado '
-        || 'reconhecível (combinado elimina intragrupo; individual às vezes agrega em "partes '
-        || 'relacionadas"). Sem par, não há o que conferir.');
+        case when cardinality(v_faltas) > 0 then
+          'Balanço com conta de mútuo presente, mas a planilha de mútuos não cobre o(s) '
+          || 'exercício(s) em que ela seria comparada — ' || array_to_string(v_faltas, '; ')
+          || '. Sem a planilha do exercício, não há o que conferir; é cobrança de checklist '
+          || '(kit básico), não achado de reconciliação.'
+        else
+          'Planilha de mútuos presente, mas nenhum balanço do mandato traz conta de mútuo com lado '
+          || 'reconhecível (combinado elimina intragrupo; individual às vezes agrega em "partes '
+          || 'relacionadas"). Sem par, não há o que conferir.'
+        end);
     end if;
 
     -- 0194: o balanço TEM conta de mútuo em algum ano, mas a checagem não
@@ -557,14 +723,24 @@ begin
 end;
 $$;
 
+
 comment on function fn_reconciliar_mutuos(uuid, uuid, numeric, numeric) is
   '0194: a planilha de mútuos é um RETRATO de uma data (0145 — o conceito mora na coluna, não é '
-  'comparativa): quando a coluna de período sai sentinela e o PERÍODO DO DOCUMENTO cobre o ano, a '
-  'coluna do saldo é achada pelo localizador da 0145 (MUTUOS/saldo_de_mutuo, termo ''saldo''), em '
-  'vez de zerar a comparação e devolver documento_ausente falso. Ano fora do retrato: '
-  'sem_periodo_par; retrato sem coluna de saldo, ou planilha sem linha para o lado do balanço: '
-  'linha_nao_localizada; escala incomparável: unidade_divergente — os três abrem pendência (0186), '
-  'diferente de documento_ausente. 0123: a natureza "mútuo" é lida na linha OU na seção. Confere os '
+  'comparativa): quando a coluna de período sai sentinela e o documento escolhido para o ano cobre '
+  'de fato o ano (achado 3), a coluna do saldo é achada pelo localizador da 0145 '
+  '(MUTUOS/saldo_de_mutuo, termo ''saldo''), em vez de zerar a comparação e devolver '
+  'documento_ausente falso. Retrato sem coluna de saldo, ou planilha sem linha para o lado do '
+  'balanço: linha_nao_localizada; escala incomparável: unidade_divergente — abrem pendência (0186), '
+  'diferente de documento_ausente. A REVISÃO DE FIDELIDADE (28/09/2026, antes da migration ser '
+  'aplicada) mediu três achados sobreviventes, todos corrigidos AQUI: (1) o balanço escolhido por '
+  'entidade agora é POR ANO — um documento que só ANCORA o ano sem trazer linha de mútuo não vence '
+  'mais o que TRAZ o dado; (2) `fn_lado_do_mutuo` só filtra a planilha quando ela é COMPARATIVA '
+  '(0123: rótulo declara lado de verdade) — numa planilha-RETRATO a chave é o PAR de empresas, e o '
+  'filtro descartava linha boa por casar "administrativos" com "ativo" ou por herdar '
+  '`secao_canonica` sem sentido de lado; (3) a planilha agora é escolhida POR ANO, não uma vez para '
+  'a checagem inteira — o ano sem planilha própria vira "planilha deste exercício não entregue" '
+  '(documento_ausente, cobrança de checklist), não mais uma pendência falsa quando o caso TEM a '
+  'planilha certa de outro ano. 0123: a natureza "mútuo" é lida na linha OU na seção. Confere os '
   'dois lados entre si antes de comparar a planilha; lados que discordam são o achado, e aí a '
   'planilha não é atribuída a um deles. Mútuo com sócio fica fora: não tem espelho no mandato.';
 
@@ -588,7 +764,10 @@ insert into instalacao_requisito
    'devolve a sentinela em fn_coluna_periodo_do_ano, o filtro do lado B (escrito para NULL) exclui '
    'todas as linhas, e a checagem devolve documento_ausente com um texto falso — MEDIDO EM '
    'PRODUÇÃO (25/09/2026): os 12 casos com planilha MUTUOS nunca concluem, 7 deles com conta de '
-   'mútuo no balanço.',
+   'mútuo no balanço. A REVISÃO DE FIDELIDADE (28/09/2026, antes de aplicar) corrigiu no mesmo '
+   'corpo três achados: escolha do balanço POR ANO (não só por criado_em), o filtro de lado só '
+   'para planilha comparativa (não para o retrato, cuja chave é o par de empresas), e a planilha '
+   'escolhida POR ANO (não uma vez para a checagem inteira).',
    'importante', 835)
 
 on conflict (chave) do update
@@ -607,12 +786,21 @@ update instalacao_cobertura
          'sentinela de fn_coluna_periodo_do_ano sempre disparava e o filtro (escrito para NULL) '
          'zerava a comparação, devolvendo documento_ausente com texto falso em produção (12/12 '
          'casos nunca concluem, 7 com conta de mútuo no balanço, medido 25/09/2026). Agora, quando '
-         'o período do DOCUMENTO cobre o ano, a coluna do saldo é achada pelo localizador da 0145 '
-         '(MUTUOS/saldo_de_mutuo, termo ''saldo''). Ano fora do retrato: sem_periodo_par; sem '
-         'coluna de saldo ou sem linha para o lado do balanço: linha_nao_localizada; escala '
-         'incomparável: unidade_divergente — os três abrem pendência (0186), diferente de '
-         'documento_ausente, que continua reservado a ''nenhum balanço tem conta de mútuo''. '
-         'IDEMPOTENTE — não roda reconciliação em caso nenhum; só a próxima rodada de cada caso '
-         'grava com o ramo novo. Catalogado pelo corpo (mutuos_retrato_de_uma_data) — a assinatura '
-         'da função não muda.'
+         'o documento escolhido para o ano cobre de fato o ano, a coluna do saldo é achada pelo '
+         'localizador da 0145 (MUTUOS/saldo_de_mutuo, termo ''saldo''). Sem coluna de saldo ou sem '
+         'linha para o lado do balanço: linha_nao_localizada; escala incomparável: '
+         'unidade_divergente — abrem pendência (0186), diferente de documento_ausente, que '
+         'continua reservado a ''nenhum balanço tem conta de mútuo'' ou ''planilha deste exercício '
+         'não entregue''. A REVISÃO DE FIDELIDADE (28/09/2026, antes de aplicar) corrigiu, no MESMO '
+         'corpo, três achados medidos em produção só-leitura: (1) o balanço por entidade agora é '
+         'escolhido POR ANO — um documento que só ancora o ano sem trazer linha de mútuo (ex.: '
+         '"multi 24,25" sem coluna nem linha) não vence mais o que traz o dado (ex.: "anual 2025"); '
+         '(2) fn_lado_do_mutuo só filtra quando a planilha É comparativa (0123) — numa '
+         'planilha-retrato a chave é o par de empresas, e o filtro derrubava linha boa; (3) a '
+         'planilha agora é escolhida POR ANO, e não mais uma vez para a checagem inteira — o ano '
+         'sem planilha própria vira "planilha deste exercício não entregue" (documento_ausente, '
+         'cobrança de checklist), não mais uma pendência falsa quando o caso TEM a planilha certa '
+         'de outro ano. IDEMPOTENTE — não roda reconciliação em caso nenhum; só a próxima rodada de '
+         'cada caso grava com o ramo novo. Catalogado pelo corpo (mutuos_retrato_de_uma_data) — a '
+         'assinatura da função não muda.'
  where id = true;

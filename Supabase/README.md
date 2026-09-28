@@ -609,27 +609,59 @@ supabase db execute --file Supabase/migrations/0193_a_tolerancia_que_crescia_com
 # nos 7 que TÊM conta de mútuo no balanço, com um texto de descrição FALSO
 # ("nenhum balanço traz conta de mútuo"). Causa: fn_coluna_periodo_do_ano
 # devolve a sentinela para um retrato (nenhuma coluna é "ano"), e o filtro do
-# lado da planilha, escrito para NULL, zerava a soma. Agora, quando o PERÍODO
-# DO DOCUMENTO cobre o ano, a coluna do saldo é achada pelo localizador que a
-# 0145 já cadastrou para este conceito (MUTUOS/saldo_de_mutuo, termo
-# 'saldo'). Ano fora do retrato: sem_periodo_par; retrato sem coluna de
-# saldo, ou planilha sem linha para o lado do balanço: linha_nao_localizada;
-# escala incomparável: unidade_divergente — os três ABREM pendência (0186),
-# diferente de documento_ausente, que continua reservado a "nenhum balanço
-# tem conta de mútuo" (comportamento desenhado da 0117/0123, preservado).
-# IDEMPOTENTE — não roda reconciliação em caso nenhum; as fixtures dos dois
-# books gravam periodo_coluna como o ANO (não o cabeçalho), então o ramo novo
-# nunca dispara sobre elas — nenhum assert existente muda.
-# Testes: Supabase/test/mutuos_retrato_de_uma_data.test.sql (via run.sh).
+# lado da planilha, escrito para NULL, zerava a soma. Agora, quando o
+# documento escolhido para o ano cobre de fato o ano, a coluna do saldo é
+# achada pelo localizador que a 0145 já cadastrou para este conceito
+# (MUTUOS/saldo_de_mutuo, termo 'saldo'). Sem coluna de saldo, ou planilha
+# sem linha para o lado do balanço: linha_nao_localizada; escala
+# incomparável: unidade_divergente — abrem pendência (0186), diferente de
+# documento_ausente, que continua reservado a "nenhum balanço tem conta de
+# mútuo" OU "planilha deste exercício não entregue" (comportamento desenhado
+# da 0117/0123, preservado). IDEMPOTENTE — não roda reconciliação em caso
+# nenhum; as fixtures dos dois books gravam periodo_coluna como o ANO (não o
+# cabeçalho), então o ramo novo nunca dispara sobre elas — nenhum assert
+# existente muda.
+#
+# A REVISÃO DE FIDELIDADE (28/09/2026, ANTES de aplicar) mediu três achados
+# sobreviventes na primeira versão desta migration, corrigidos NO MESMO
+# arquivo (nunca foi aplicada, então corrigir no lugar é permitido — como a
+# 0187/0188 já fizeram):
+#   1. o balanço por entidade era escolhido só por `criado_em`, sem olhar o
+#      ANO — um documento "multi 24,25" sem coluna nem linha de mútuo vencia
+#      o "anual 2025" que TEM a linha. Agora é por ANO: o que TRAZ dado do
+#      exercício vence.
+#   2. fn_lado_do_mutuo era aplicada à CHAVE da planilha-retrato, que é o
+#      PAR de empresas, não um lado — "administr**ativo**s" casava "ativo" e
+#      derrubava linha boa. Agora o filtro de lado só vale para planilha
+#      COMPARATIVA (0123); numa planilha-retrato ele não se aplica.
+#   3. a planilha era escolhida UMA vez para a checagem inteira — o ano que
+#      ela não cobria virava sem_periodo_par mesmo quando o caso tinha a
+#      planilha certa de OUTRO ano. Agora é por ANO: sem planilha própria de
+#      um ano é "não entregue" (documento_ausente, cobrança de checklist),
+#      não pendência falsa.
+# Testes: Supabase/test/mutuos_retrato_de_uma_data.test.sql (via run.sh) — 8
+# blocos, com os cenários dos três achados (5 casos base + 3 novos).
 supabase db execute --file Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql
 # DEPOIS DE APLICAR, confira o catálogo:
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0194' and not presente;                 -- ZERO linhas
-# E, na próxima rodada de cada um dos 12 casos com planilha MUTUOS, o efeito
-# previsto (regra de projeto: escrita ≠ aplicada, só a sonda/o dado real
-# responde): os 7 casos com conta de mútuo no balanço deixam de responder
-# documento_ausente — no "teste - Canastra"/"teste Canastra" a divergência
-# plantada de 240 mil passa a abrir reconciliacao:mutuos_planilha_vs_balanco.
+# E, na próxima rodada de cada caso com planilha MUTUOS, o efeito MEDIDO
+# (28/09/2026, somente leitura, replicando a lógica corrigida por consulta —
+# não estimado; ver a tabela completa no cabeçalho da migration):
+#   - teste - Canastra / teste Canastra / Teste comparativo - Grupo Canastra /
+#     teste v48: 2025 passa a CONCLUIR zona_cinzenta, diff R$ 240 mil (a
+#     divergência plantada do book Canastra, finalmente acusada); 2023/2024
+#     ficam documento_ausente (a planilha do caso é só de 2025 — cobrança de
+#     checklist, não achado).
+#   - Teste 00: 2025 idem (zona_cinzenta, 240 mil); 2023 saiu SUSPEITO na
+#     medição (lado A muito menor que o mesmo ano em casos irmãos) — NÃO
+#     ACEITAR sem checar à mão antes de comunicar ao cliente (nota completa
+#     no cabeçalho da migration).
+#   - teste alto volume - grupo araucária / Araucária teste: a maioria dos
+#     anos passa a acusar zona_cinzenta nos PRÓPRIOS BALANÇOS (os dois lados
+#     do mútuo não se espelham dentro do mandato — achado real, não bug; a
+#     planilha não é comparada nesses anos, por desenho da 0123); os anos em
+#     que os balanços se espelham reproduzem o mesmo padrão de 240 mil.
 # Para achar as linhas antigas (gravadas ANTES desta migration, que não se
 # corrigem sozinhas):
 #   select id, caso_id, criado_em from reconciliacao

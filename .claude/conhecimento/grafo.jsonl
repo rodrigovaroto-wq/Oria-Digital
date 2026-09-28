@@ -1205,12 +1205,13 @@
 {"k":"e","de":"arquivo:Supabase/test/motivo_especifico.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/motivo_especifico.test.sql","l":461}
 {"k":"e","de":"arquivo:Supabase/test/motivo_especifico.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/motivo_especifico.test.sql","l":457}
 {"k":"e","de":"arquivo:Supabase/test/motivo_especifico.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/motivo_especifico.test.sql","l":456}
+{"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_lado_do_mutuo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":371}
 {"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_mutuos","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":103}
 {"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":70}
-{"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":261}
+{"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":280}
 {"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":67}
-{"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_periodo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":169}
+{"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_periodo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":179}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"Supabase/test/operacao.test.sql","l":35}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_resumo","f":"Supabase/test/operacao.test.sql","l":90}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"Supabase/test/papel_da_linha.test.sql","l":233}
@@ -1913,8 +1914,8 @@
 {"k":"e","de":"migration:0192","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0192_o_ok_que_matava_a_divergencia_irma.sql","l":106}
 {"k":"e","de":"migration:0193","rel":"CRIA","pa":"fn:fn_reconciliar_caixa_bp_fluxo","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","l":69}
 {"k":"e","de":"migration:0193","rel":"CRIA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","l":281}
-{"k":"e","de":"migration:0194","rel":"CRIA","pa":"fn:fn_reconciliar_mutuos","f":"Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql","l":135}
 {"k":"e","de":"migration:0194","rel":"CRIA","pa":"fn:fn_reconciliar_mutuos","f":"Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql","l":17}
+{"k":"e","de":"migration:0194","rel":"CRIA","pa":"fn:fn_reconciliar_mutuos","f":"Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql","l":180}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Conferir Fontes","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/workflow.macro.json"}
