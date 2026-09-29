@@ -523,6 +523,204 @@ supabase db execute --file Supabase/migrations/0189_o_gatilho_que_a_sonda_nao_vi
 #   select chave, objeto, detalhe from fn_instalacao_conferir()
 #    where tipo = 'gatilho' and not presente;
 
+# A 0190 NÃO DEPENDE DA 0189 (que segue pendente do dono nesta lista) — só
+# reemite fn_reconciliar_arvore, que já usa o vocabulário 'documento_ausente'
+# desde a 0186/0188. Corrige o ramo em que TODAS as seções de um documento
+# caem em pré-condição: antes gravava resultado='ok' (afirmando que a árvore
+# fechou quando nada foi de fato conferido); passa a gravar 'documento_ausente'
+# — mesmo motivo do ramo "sem árvore", sem abrir pendência nova. IDEMPOTENTE.
+# Testes: Supabase/test/secao_fecha.test.sql, bloco 8 (via run.sh).
+supabase db execute --file Supabase/migrations/0190_a_arvore_que_nao_conferiu_nada.sql
+# DEPOIS DE APLICAR, as 12 linhas já erradas (medidas em 25/09/2026) NÃO se
+# corrigem sozinhas — só a próxima rodada de cada caso grava com o ramo novo.
+# Para achar as antigas sem escrever nada:
+#   select id, caso_id, tipo, criado_em from reconciliacao
+#    where tipo = 'secao_fecha' and resultado = 'ok'
+#      and fonte_a->>'secoes_conferidas' = '0';
+# E que o requisito novo está presente:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where chave = 'reconciliar_arvore_nao_mente_ok';               -- presente = true
+
+# A 0191 REEMITE fn_reconciliar_despfin_dre_vs_divida: só compara o ano da DRE
+# contra o Mapa de Dívida quando o PERÍODO DO DOCUMENTO do mapa cobre esse ano
+# (fn_anos_periodo do período do mapa) — o Mapa é um retrato de UMA data
+# (MEDIDO EM PRODUÇÃO, 25/09/2026: todo MAPA_DIVIDA hoje tem período de um ano
+# só), e antes desta migration a checagem comparava CADA ano da DRE contra a
+# soma de juros do documento inteiro, sem recorte — inclusive anos que o mapa
+# não cobre. Ano fora do período do mapa: sem_periodo_par (CONTRATO da 0186),
+# não ok nem zona_cinzenta. Mapa sem período, ou período que não ancora ano
+# nenhum: comportamento antigo, sem filtro. IDEMPOTENTE — não roda
+# reconciliação nem recompute em caso nenhum. Testes: Supabase/test/despfin_-
+# ano_par_do_mapa.test.sql (via run.sh).
+supabase db execute --file Supabase/migrations/0191_o_mapa_de_um_ano_contra_a_dre_de_dois.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0191' and not presente;                 -- ZERO linhas
+# E, depois da próxima rodada de um caso com DRE multi-ano e Mapa de Dívida de
+# um ano só, o ano fora do período do mapa parando de comparar:
+#   select motivo_precondicao, count(*) from reconciliacao
+#    where tipo = 'despfin_dre_vs_divida' and motivo_precondicao = 'sem_periodo_par'
+#      and criado_em > '<data do apply>' group by 1;
+
+# 0192: dentro da MESMA rodada (fn_reconciliar_caso, uma transação), um achado
+# que CONCLUIU divergente/divergencia/zona_cinzenta prevalece sobre um ok ou
+# uma pré-condição de OUTRO período compatível — antes, a ORDEM em que a
+# rodada visitava as chaves decidia se a divergência terminava aberta ou
+# resolvida (medido em produção 25/09/2026: 4 pendências divergencia_-
+# reconciliacao criadas e resolvidas no MESMO instante). fn_reconciliar_caso
+# ganha `order by` — determinismo de qual período a pendência carrega.
+# IDEMPOTENTE (reemissão de função + catálogo).
+# Testes: Supabase/test/divergencia_prevalece_na_rodada.test.sql (via run.sh).
+supabase db execute --file Supabase/migrations/0192_o_ok_que_matava_a_divergencia_irma.sql
+# DEPOIS DE APLICAR, as pendências já nascidas-e-mortas na mesma rodada (4
+# medidas em 25/09/2026) NÃO se corrigem sozinhas — só a próxima rodada de
+# cada caso resolve/mantém com a guarda nova. Para achar as antigas:
+#   select id, caso_id, motivo, criada_em, resolvida_em from pendencia
+#    where motivo like 'reconciliacao:%' and tipo = 'divergencia_reconciliacao'
+#      and criada_em = resolvida_em;
+# E que o requisito novo está presente:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where chave = 'ok_nao_mata_divergencia_irma';                  -- presente = true
+
+# A 0193 REEMITE fn_reconciliar_caixa_bp_fluxo e fn_reconciliar_receita_-
+# dre_vs_faturamento: a mesma correção que a 0188 aplicou na despfin — a
+# tolerância absoluta passa a estar em moeda BASE, não multiplicada pelo
+# fator de escala do documento (numa DRE/Balanço em 'milhar', o piso virava
+# 1000× maior que o default). MEDIDO EM PRODUÇÃO (25/09/2026, somente
+# leitura): efeito ZERO hoje — 0 das 33 caixa_bp_fluxo e 0 das 30 receita_-
+# dre_vs_faturamento com resultado 'ok' mudariam de resultado com a
+# tolerância na base. Correção LATENTE (mesmo vício estrutural da despfin,
+# ainda sem caso real que o exercite). IDEMPOTENTE — não roda reconciliação
+# nem recompute em caso nenhum; as assinaturas não mudam.
+# Testes: Supabase/test/tolerancia_na_base.test.sql (via run.sh).
+supabase db execute --file Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0193' and not presente;                 -- ZERO linhas
+# E, se algum dia esta correção DEIXAR de ser latente (uma checagem em milhar
+# muda de 'ok' para 'divergente'/'zona_cinzenta' na próxima rodada de um
+# caso), a diferença aparece nas linhas novas de reconciliacao — não há nada
+# para reprocessar à mão, e nada muda sozinho nas linhas já gravadas.
+
+# A 0194 REEMITE fn_reconciliar_mutuos: a planilha de mútuos de PRODUÇÃO é um
+# RETRATO de uma data (conceito na coluna — 0145), não uma demonstração
+# comparativa. MEDIDO EM PRODUÇÃO (25/09/2026, somente leitura): os 12 casos
+# com planilha MUTUOS nunca concluem — resultado documento_ausente, inclusive
+# nos 7 que TÊM conta de mútuo no balanço, com um texto de descrição FALSO
+# ("nenhum balanço traz conta de mútuo"). Causa: fn_coluna_periodo_do_ano
+# devolve a sentinela para um retrato (nenhuma coluna é "ano"), e o filtro do
+# lado da planilha, escrito para NULL, zerava a soma. Agora, quando o
+# documento escolhido para o ano cobre de fato o ano, a coluna do saldo é
+# achada pelo localizador que a 0145 já cadastrou para este conceito
+# (MUTUOS/saldo_de_mutuo, termo 'saldo'). Sem coluna de saldo, ou planilha
+# sem linha para o lado do balanço: linha_nao_localizada; escala
+# incomparável: unidade_divergente — abrem pendência (0186), diferente de
+# documento_ausente, que continua reservado a "nenhum balanço tem conta de
+# mútuo" OU "planilha deste exercício não entregue" (comportamento desenhado
+# da 0117/0123, preservado). IDEMPOTENTE — não roda reconciliação em caso
+# nenhum; as fixtures dos dois books gravam periodo_coluna como o ANO (não o
+# cabeçalho), então o ramo novo nunca dispara sobre elas — nenhum assert
+# existente muda.
+#
+# A REVISÃO DE FIDELIDADE (28/09/2026, ANTES de aplicar) mediu três achados
+# sobreviventes na primeira versão desta migration, corrigidos NO MESMO
+# arquivo (nunca foi aplicada, então corrigir no lugar é permitido — como a
+# 0187/0188 já fizeram):
+#   1. o balanço por entidade era escolhido só por `criado_em`, sem olhar o
+#      ANO — um documento "multi 24,25" sem coluna nem linha de mútuo vencia
+#      o "anual 2025" que TEM a linha. Agora é por ANO: o que TRAZ dado do
+#      exercício vence.
+#   2. fn_lado_do_mutuo era aplicada à CHAVE da planilha-retrato, que é o
+#      PAR de empresas, não um lado — "administr**ativo**s" casava "ativo" e
+#      derrubava linha boa. Agora o filtro de lado só vale para planilha
+#      COMPARATIVA (0123); numa planilha-retrato ele não se aplica.
+#   3. a planilha era escolhida UMA vez para a checagem inteira — o ano que
+#      ela não cobria virava sem_periodo_par mesmo quando o caso tinha a
+#      planilha certa de OUTRO ano. Agora é por ANO: sem planilha própria de
+#      um ano é "não entregue" (documento_ausente, cobrança de checklist),
+#      não pendência falsa.
+#   ACOMPANHAMENTO (28/09/2026, tarde): o achado 1 foi ESTENDIDO — um
+#   documento SEM `periodo_coluna` (retrato/anual de um ano só) só conta para
+#   `v_ano` quando o PRÓPRIO PERÍODO do documento ancora esse ano, não para
+#   qualquer ano perguntado (o "anual 2025" de uma entidade não pode contar
+#   para 2023). MEDIDO em produção só-leitura: corrigiu "Teste 00"/2023, que
+#   tinha ficado SUSPEITO na primeira medição — ver a nota completa (com o
+#   número final, não mais "suspeito") no cabeçalho da migration. TAMBÉM
+#   ACHADO, e NÃO CORRIGIDO aqui (fora do escopo, é outra função):
+#   fn_reconciliar_intragrupo (0124) tem o MESMO vício de linha — medido em
+#   7 casos de produção, praticamente 100% das linhas `intragrupo_espelho`
+#   incluídas por ano vêm de um documento que não ancora aquele ano.
+# Testes: Supabase/test/mutuos_retrato_de_uma_data.test.sql (via run.sh) — 9
+# blocos, com os cenários dos três achados + o acompanhamento (5 casos base +
+# 4 novos).
+supabase db execute --file Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0194' and not presente;                 -- ZERO linhas
+# E, na próxima rodada de cada caso com planilha MUTUOS, o efeito MEDIDO
+# (28/09/2026, somente leitura, REMEDIDO depois do acompanhamento acima —
+# não estimado; ver a tabela completa no cabeçalho da migration):
+#   - teste - Canastra / teste Canastra / Teste comparativo - Grupo Canastra /
+#     teste v48: 2025 passa a CONCLUIR zona_cinzenta, diff R$ 240 mil (a
+#     divergência plantada do book Canastra, finalmente acusada); 2023/2024
+#     ficam documento_ausente (a planilha do caso é só de 2025 — cobrança de
+#     checklist, não achado).
+#   - Teste 00: 2025 idem (zona_cinzenta, 240 mil); 2023 CONTINUA
+#     zona_cinzenta (diff ~32 mi), mas o número agora está EXPLICADO: os
+#     balanços comparativos de 2023 do caso simplesmente não têm linha de
+#     mútuo (0 linhas, conferido nos campo_extraido) — só 2 entidades têm
+#     documento próprio de 2023. Não é bug da checagem; é achado real de
+#     dado incompleto no balanço.
+#   - teste alto volume - grupo araucária: 2021/2022 MUDARAM depois do
+#     acompanhamento (o vazamento saindo da conta) e 2023/2024/2025 passam a
+#     FECHAR (240 mil, como os outros casos) — antes ficavam presos em "os
+#     dois lados não se espelham" por causa do mesmo vazamento.
+#   - Araucária teste: mesma leitura — anos que se espelham reproduzem 240
+#     mil; 2021/2025 continuam "os dois lados não se espelham" (achado real
+#     dos balanços, não da planilha, comportamento já desenhado pela 0123).
+# Para achar as linhas antigas (gravadas ANTES desta migration, que não se
+# corrigem sozinhas):
+#   select id, caso_id, criado_em from reconciliacao
+#    where tipo = 'mutuos_planilha_vs_balanco' and resultado = 'precondicao_nao_satisfeita'
+#      and motivo_precondicao = 'documento_ausente';
+
+# A 0195 FATORA fn_linha_vale_para_ano (a conta que a 0194 escreveu duas
+# vezes dentro de fn_reconciliar_mutuos) e reemite fn_reconciliar_mutuos
+# usando-a — SEM MUDAR COMPORTAMENTO (só o mecanismo; nenhum assert de
+# canastra.test.sql/reconciliacao.test.sql/mutuos_retrato_de_uma_data.test.sql
+# muda). fn_reconciliar_intragrupo (0124) ganha os DOIS consertos que a 0194
+# já tinha aplicado a mútuos e registrado, sem corrigir, no próprio
+# cabeçalho: o balanço de cada entidade agora é escolhido POR ANO (o que TEM
+# dado intragrupo do exercício vence o que só ancora o ano sem trazer
+# linha), e uma linha de documento sem periodo_coluna só vale para o ano que
+# o PRÓPRIO PERÍODO do documento ancora — não para qualquer ano perguntado.
+# MEDIDO EM PRODUÇÃO (28/09/2026, somente leitura, réplica fiel do filtro da
+# 0124): nos 7 casos com intragrupo, praticamente 100% das linhas incluídas
+# por (caso, ano) vinham de um documento que não ancora aquele ano ("teste -
+# Canastra"/2023: 4 de 4; "teste alto volume"/2025: 5 de 5; "Araucária
+# teste", os 5 anos, sempre 100%). Historicamente `reconciliacao` tem 52
+# linhas intragrupo_espelho ok e 117 documento_ausente, ZERO zona_cinzenta —
+# consistente com "ok" por SORTE (o mesmo saldo vazando para todo ano), não
+# com o defeito não existir (ver a tabela completa no cabeçalho da
+# migration). IDEMPOTENTE — não roda reconciliação em caso nenhum; as
+# fixtures dos dois books não exercitam o vício (cada entidade só tem UM
+# documento BALANCO no Canastra, e a única entidade com dois no Vertentes já
+# tinha o documento certo vencendo pela prioridade de tipo) — nenhum assert
+# existente muda.
+# Testes: Supabase/test/intragrupo_le_o_ano_certo.test.sql (via run.sh).
+supabase db execute --file Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0195' and not presente;                 -- ZERO linhas
+# E, na próxima rodada de cada caso com intragrupo, o efeito PREVISTO
+# (réplica da lógica corrigida, somente leitura — ver a tabela completa no
+# cabeçalho da migration): os 52 ok históricos continuam ok (mesmos números,
+# menos anos por caso); os anos sem balanço próprio do par passam de "ok"
+# fabricado para documento_ausente, honesto. Para achar as linhas antigas
+# (gravadas ANTES desta migration, que não se corrigem sozinhas):
+#   select id, caso_id, criado_em from reconciliacao
+#    where tipo = 'intragrupo_espelho' and resultado = 'ok';
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

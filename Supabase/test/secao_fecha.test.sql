@@ -426,6 +426,159 @@ begin
 end $$;
 
 -- =============================================================================
+do $$
+declare
+  v_caso        uuid;
+  v_doc_achat   uuid;
+  v_doc_dup     uuid;
+  v_doc_mista   uuid;
+  v_ver_achat   uuid;
+  v_ver_dup     uuid;
+  v_ver_mista   uuid;
+  v_json        jsonb;
+  v_rec_id      uuid;
+  v_ok          boolean;
+  v_res         text;
+  v_mot         text;
+  v_fonte_a     jsonb;
+  v_fonte_b     jsonb;
+  v_n           int;
+begin
+  raise notice '--- 8. A ÁRVORE QUE NÃO CONFERIU NADA (0190): resultado deixa de mentir ---';
+
+  -- POR QUE ESTE BLOCO EXISTE. Medido em produção (25/09/2026, somente
+  -- leitura): 12 linhas de `reconciliacao` com `tipo='secao_fecha'`,
+  -- `resultado='ok'` e `fonte_a->>'secoes_conferidas'='0'` — a árvore não
+  -- conferiu NADA e mesmo assim afirmou que fechou. Os três documentos abaixo
+  -- espelham as três formas que produção mostrou: hierarquia achatada
+  -- sozinha, rótulo duplicado sozinho, e uma árvore MISTA que prova que o
+  -- ramo 'ok' parcial (pelo menos uma seção de verdade) não muda.
+  insert into caso (nome) values ('gate: arvore que nao conferiu nada') returning id into v_caso;
+
+  -- ---- (A) A ÁRVORE INTEIRA CAI NA GUARDA DA 0143 (hierarquia achatada) -----
+  -- Uma seção só, e ela sozinha decide o documento inteiro: soma = 2× o pai
+  -- (50 + 25 + 25 = 100 = 2×50), exatamente a assinatura que a 0143 reconhece.
+  insert into documento (caso_id, tipo_taxonomia) values (v_caso, 'BALANCO')
+    returning id into v_doc_achat;
+  insert into documento_versao (documento_id, n_versao, arquivo_ref, hash)
+    values (v_doc_achat, 1, 'arvore_achatada.pdf', 'test-0190-achatada')
+    returning id into v_ver_achat;
+  insert into campo_extraido
+    (documento_versao_id, ordem, secao, chave, valor_num, unidade, periodo_coluna) values
+    (v_ver_achat, 0, null,                 'ATIVO CIRCULANTE', 50, 'milhar', '2024'),
+    (v_ver_achat, 1, 'ATIVO CIRCULANTE',   'Disponível',       50, 'milhar', '2024'),
+    (v_ver_achat, 2, 'ATIVO CIRCULANTE',   'Caixa',            25, 'milhar', '2024'),
+    (v_ver_achat, 3, 'ATIVO CIRCULANTE',   'Bancos',           25, 'milhar', '2024');
+
+  select resultado, achado into v_res, v_mot from fn_conferir_arvore(v_ver_achat);
+  perform teste_assert(v_res = 'precondicao_nao_satisfeita' and v_mot = 'hierarquia_achatada',
+    'PRÉ-CONDIÇÃO: a ÚNICA seção deste documento cai na guarda da 0143 (soma = 2× o pai)',
+    format('resultado=%s achado=%s', coalesce(v_res, 'nulo'), coalesce(v_mot, 'nulo')));
+
+  v_json   := fn_reconciliar_arvore(v_doc_achat);
+  v_rec_id := (v_json ->> 'reconciliacao_id')::uuid;
+  select precondicoes_ok, resultado, motivo_precondicao, fonte_a, fonte_b
+    into v_ok, v_res, v_mot, v_fonte_a, v_fonte_b
+  from reconciliacao where id = v_rec_id;
+
+  perform teste_assert(v_ok = false,
+    'ANTES DA 0190 esta linha saía precondicoes_ok=TRUE — o defeito medido em produção (12 '
+    'linhas assim, 4 casos). Com a correção, false: a linha para de afirmar que conferiu',
+    format('precondicoes_ok=%s', v_ok));
+  perform teste_assert(v_res = 'precondicao_nao_satisfeita',
+    'e o resultado gravado NÃO é ''ok'' quando zero seções foram de fato conferidas',
+    coalesce(v_res, 'nulo'));
+  perform teste_assert(v_mot = 'documento_ausente',
+    'o motivo é o MESMO do ramo "sem árvore" — não abre pendência nova (o achado, quando tem '
+    'dono, já tem: hierarquia achatada é decisão da própria 0143 de não acusar)',
+    coalesce(v_mot, 'nulo'));
+  perform teste_assert(v_fonte_a ->> 'secoes_conferidas' = '0' and v_fonte_b ->> 'sem_conferir' = '1',
+    'fonte_a/fonte_b continuam nomeando a contagem real: 0 conferidas, 1 sem conferir',
+    format('fonte_a=%s fonte_b=%s', v_fonte_a, v_fonte_b));
+
+  select count(*) into v_n from pendencia
+   where caso_id = v_caso and motivo = 'reconciliacao:secao_fecha' and estado <> 'resolvida';
+  perform teste_assert(v_n = 0,
+    'A FILA NÃO MUDA: documento_ausente não abre pendência, exatamente como no ramo "sem árvore"',
+    format('%s pendência(s)', v_n));
+
+  -- ---- (B) SÓ RÓTULO DUPLICADO: a mesma forma, achado diferente -------------
+  insert into documento (caso_id, tipo_taxonomia) values (v_caso, 'BALANCO')
+    returning id into v_doc_dup;
+  insert into documento_versao (documento_id, n_versao, arquivo_ref, hash)
+    values (v_doc_dup, 1, 'arvore_rotulo_duplicado.pdf', 'test-0190-duplicado')
+    returning id into v_ver_dup;
+  insert into campo_extraido
+    (documento_versao_id, ordem, secao, chave, valor_num, unidade, periodo_coluna) values
+    (v_ver_dup, 0, null,                  'PASSIVO CIRCULANTE', 100, 'milhar', '2024'),
+    (v_ver_dup, 1, 'PASSIVO CIRCULANTE',  'Fornecedores',        50, 'milhar', '2024'),
+    (v_ver_dup, 2, 'PASSIVO CIRCULANTE',  'Fornecedores',        50, 'milhar', '2024');
+
+  select resultado, achado into v_res, v_mot from fn_conferir_arvore(v_ver_dup);
+  perform teste_assert(v_res = 'precondicao_nao_satisfeita' and v_mot = 'rotulo_duplicado',
+    'PRÉ-CONDIÇÃO: a ÚNICA seção cai na guarda de rótulo duplicado (0105 já cobra)',
+    format('resultado=%s achado=%s', coalesce(v_res, 'nulo'), coalesce(v_mot, 'nulo')));
+
+  v_json   := fn_reconciliar_arvore(v_doc_dup);
+  v_rec_id := (v_json ->> 'reconciliacao_id')::uuid;
+  select precondicoes_ok, resultado, motivo_precondicao into v_ok, v_res, v_mot
+  from reconciliacao where id = v_rec_id;
+  perform teste_assert(v_ok = false and v_res = 'precondicao_nao_satisfeita'
+                        and v_mot = 'documento_ausente',
+    'mesmo comportamento com a causa trocada: rótulo duplicado sozinho também não afirma ok',
+    format('precondicoes_ok=%s resultado=%s motivo=%s', v_ok, v_res, v_mot));
+
+  select count(*) into v_n from pendencia
+   where caso_id = v_caso and motivo = 'reconciliacao:secao_fecha' and estado <> 'resolvida';
+  perform teste_assert(v_n = 0, 'e continua sem abrir pendência nova', format('%s pendência(s)', v_n));
+
+  -- ---- (C) O 'OK' PARCIAL NÃO MUDA: ≥1 seção conferida continua 'ok' --------
+  -- A MESMA árvore tem uma seção que fecha de verdade (ATIVO CIRCULANTE) e
+  -- outra que cai em pré-condição (PASSIVO CIRCULANTE, rótulo duplicado) —
+  -- v_n_ok=1, v_n_div=0, v_n_prec=1, o ramo que este bloco prova que NÃO muda.
+  insert into documento (caso_id, tipo_taxonomia) values (v_caso, 'BALANCO')
+    returning id into v_doc_mista;
+  insert into documento_versao (documento_id, n_versao, arquivo_ref, hash)
+    values (v_doc_mista, 1, 'arvore_mista.pdf', 'test-0190-mista')
+    returning id into v_ver_mista;
+  insert into campo_extraido
+    (documento_versao_id, ordem, secao, chave, valor_num, unidade, periodo_coluna) values
+    -- fecha de verdade:
+    (v_ver_mista, 0, null,                  'ATIVO CIRCULANTE',  100, 'milhar', '2024'),
+    (v_ver_mista, 1, 'ATIVO CIRCULANTE',    'Caixa',              60, 'milhar', '2024'),
+    (v_ver_mista, 2, 'ATIVO CIRCULANTE',    'Bancos',             40, 'milhar', '2024'),
+    -- cai em pré-condição (rótulo duplicado), na MESMA árvore:
+    (v_ver_mista, 3, null,                  'PASSIVO CIRCULANTE', 50, 'milhar', '2024'),
+    (v_ver_mista, 4, 'PASSIVO CIRCULANTE',  'Fornecedores',       30, 'milhar', '2024'),
+    (v_ver_mista, 5, 'PASSIVO CIRCULANTE',  'Fornecedores',       30, 'milhar', '2024');
+
+  v_json   := fn_reconciliar_arvore(v_doc_mista);
+  v_rec_id := (v_json ->> 'reconciliacao_id')::uuid;
+  select precondicoes_ok, resultado, fonte_a, fonte_b into v_ok, v_res, v_fonte_a, v_fonte_b
+  from reconciliacao where id = v_rec_id;
+
+  perform teste_assert(v_ok = true and v_res = 'ok',
+    'com PELO MENOS uma seção conferida (ATIVO CIRCULANTE fecha), o resultado CONTINUA ok — '
+    'este ramo é o que este bloco prova que NÃO muda de comportamento',
+    format('precondicoes_ok=%s resultado=%s', v_ok, v_res));
+  perform teste_assert(v_fonte_a ->> 'secoes_conferidas' = '1' and v_fonte_b ->> 'sem_conferir' = '1',
+    'e a contagem parcial continua correta: 1 seção conferida, 1 sem conferir',
+    format('fonte_a=%s fonte_b=%s', v_fonte_a, v_fonte_b));
+
+  select count(*) into v_n from pendencia
+   where caso_id = v_caso and motivo = 'reconciliacao:secao_fecha' and estado <> 'resolvida';
+  perform teste_assert(v_n = 0, 'ok parcial também não abre pendência (comportamento herdado, '
+    'não mudou)', format('%s pendência(s)', v_n));
+
+  -- limpeza
+  delete from campo_extraido where documento_versao_id in (v_ver_achat, v_ver_dup, v_ver_mista);
+  delete from reconciliacao where caso_id = v_caso;
+  delete from documento_versao where documento_id in (v_doc_achat, v_doc_dup, v_doc_mista);
+  delete from documento where caso_id = v_caso;
+  delete from caso where id = v_caso;
+end $$;
+
+-- =============================================================================
 do $$ begin raise notice 'TODOS OS TESTES DA ÁRVORE DA SEÇÃO (0133) PASSARAM'; end $$;
 
 drop function teste_assert(boolean, text, text);

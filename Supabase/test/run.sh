@@ -322,6 +322,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/motivo_especifico.test.sql 2>&
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o mapa de um ano contra a DRE de dois (0191): só compara o ano que o mapa cobre"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/despfin_ano_par_do_mapa.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== testes de reconciliação"
 # A ÁRVORE DA SEÇÃO VEM ANTES DA RECONCILIAÇÃO, E A ORDEM É OBRIGATÓRIA.
 # O bloco 6 do reconciliacao.test.sql renomeia TODA chave da versão ...0001 para
@@ -350,6 +355,26 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/reconciliacao_motivo_precondic
 echo
 echo "== os três eixos (0144/0145/0146): documento, coluna e a capa que não responde por oito"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/eixo_documento_e_coluna.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== o ok que matava a divergência irmã (0192): a ordem da mesma rodada deixa de decidir o desfecho"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/divergencia_prevalece_na_rodada.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== a tolerância que crescia com a escala (0193): absoluta na base em caixa_bp_fluxo e receita_dre_vs_faturamento"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/tolerancia_na_base.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== a planilha de mútuos que nunca foi lida (0194): retrato de uma data, conceito na coluna"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/mutuos_retrato_de_uma_data.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== o espelho intragrupo que lia o balanço de outro ano (0195)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/intragrupo_le_o_ano_certo.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo

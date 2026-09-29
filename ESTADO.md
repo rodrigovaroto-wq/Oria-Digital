@@ -1,5 +1,87 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 102 (25/09/2026) — dívidas da reconciliação: `0190` (árvore), `0191` (despfin por ano do mapa), …
+
+> **PR [#245](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/245). Nada aplicado em produção.**
+> A F2.3 foi ADIADA por decisão do dono (25/09): medido em produção, nenhum caso tem o outro lado
+> da comparação (o FAT_INTRAGRUPO do AMO não traz contraparte; nenhum COMBINADO tem receita em
+> "Eliminações").
+>
+> **`0191_o_mapa_de_um_ano_contra_a_dre_de_dois.sql`** — `fn_reconciliar_despfin_dre_vs_divida`
+> comparava CADA ano da DRE com os juros do Mapa de Dívida INTEIRO; o mapa é retrato de UMA data
+> (produção: todo MAPA_DIVIDA é `data-base`/`anual` de um ano). DRE `multi "24,25"` × mapa de
+> 31/12/2025 comparava 2024 com os juros de 2025 (fixture: R$ 3,5 mi de `zona_cinzenta` falsa,
+> apagada na mesma rodada pelo `ok` de 2025 — o defeito da fatia seguinte). Agora ano que o mapa
+> não cobre é `sem_periodo_par`. `despfin_ano_par_do_mapa.test.sql`: 9 asserts, 5 reprovam
+> desligado (medido pelo agente); nenhum assert existente mudou. **Vem ANTES da guarda
+> "divergência prevalece na rodada"**, que sem ela faria a pendência falsa sobreviver.
+>
+> **`0192_o_ok_que_matava_a_divergencia_irma.sql`** — `fn_registrar_reconciliacao` acha a
+> pendência por período COMPATÍVEL; na mesma rodada, o `ok` de um período RESOLVIA a divergência
+> de outro, e a ordem (`select distinct` sem `order by` no `fn_reconciliar_caso`) decidia o
+> desfecho. Produção: Teste v33/v35, caixa com R$ 4,34 mi de divergência em 2024, pendência criada e
+> resolvida no MESMO instante pelo `ok` de 2025; teste AMOBELEZA, mesmo arranjo na ordem inversa,
+> ficou aberta. 41 pendências nascidas e mortas no mesmo instante (37 pré-condição do retry
+> desenhado da 0152, que NÃO muda; 4 divergências). Agora a divergência mais recente da rodada, em
+> período compatível, prevalece sobre `ok` e sobre pré-condição; `order by` nos laços.
+> `divergencia_prevalece_na_rodada.test.sql`: 15 asserts, 3 reprovam desligado (contados sem parar
+> no primeiro raise). Os asserts do `reconciliacao.test.sql` NÃO mudaram — a versão do agente os
+> alterava para exigir a pendência falsa de despfin/2024, e foi isso que fez a `0191` nascer antes.
+>
+> **`0193_a_tolerancia_que_crescia_com_a_escala.sql`** — o mesmo vício da 0188 (tolerância
+> absoluta × fator de escala) em `fn_reconciliar_caixa_bp_fluxo` e
+> `fn_reconciliar_receita_dre_vs_faturamento`, corrigido igual (na base). Efeito ZERO medido em
+> produção (25/09/2026, somente leitura) — correção latente, não aplicada.
+>
+> **`0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql`** — `fn_reconciliar_mutuos` nunca concluía
+> em produção (planilha MUTUOS é retrato de uma data, não comparativa; 12/12 casos ficavam em
+> `documento_ausente`, 7 com conta de mútuo no balanço). Escrita, não aplicada.
+>
+> **`0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql`** — `fn_reconciliar_intragrupo` (0124) tinha
+> os dois vícios que a 0194 já tinha corrigido em `fn_reconciliar_mutuos` (fatorados agora em
+> `fn_linha_vale_para_ano`): o balanço de cada entidade era escolhido uma vez para a checagem
+> inteira, sem preferir o que TRAZ dado do ano; e uma linha sem `periodo_coluna` valia para
+> QUALQUER ano perguntado. Medido em produção (28/09/2026, só-leitura): quase 100% das linhas
+> intragrupo incluídas por (caso, ano) vinham de documento que não ancora aquele ano. Escrita, não
+> aplicada.
+>
+> **`0190`** (abaixo):
+>
+> **O defeito.** `fn_reconciliar_arvore` (corpo vigente na `0133`) testava só dois ramos:
+> `v_n_ok+v_n_div+v_n_prec=0` (sem árvore) e, senão, `resultado := case when v_n_div>0 then
+> 'divergente' else 'ok' end`. Faltava o meio: `v_n_ok=0 and v_n_div=0 and v_n_prec>0` — TODAS as
+> seções em pré-condição, NENHUMA conferida — caía no `else` e saía `resultado='ok'`,
+> `precondicoes_ok=true`. A `0143` (hierarquia achatada) abriu esse buraco: um balanço inteiramente
+> achatado passou a cair inteiro em pré-condição de uma vez. **Medido em produção (25/09/2026,
+> somente leitura): 12 linhas de `reconciliacao` com `tipo='secao_fecha'`, `resultado='ok'` e
+> `fonte_a->>'secoes_conferidas'='0'`, em 4 casos; 48 documentos atuais com 0 conferidas e >0
+> pré-condição.**
+>
+> **A correção.** No ramo `v_n_ok+v_n_div=0`, grava `p_resultado='documento_ausente'` — o mesmo
+> motivo do ramo "sem árvore" (CONTRATO da `0186`). Efeito: `precondicoes_ok=false`,
+> `resultado='precondicao_nao_satisfeita'`, `motivo_precondicao='documento_ausente'`. **A fila NÃO
+> muda**: `documento_ausente` já não abre pendência (mesma linha da `0186`/`0188`), então isto só
+> corrige a AFIRMAÇÃO, não o comportamento de quem já não acusava rótulo duplicado ou hierarquia
+> achatada como achado próprio. Reemitida a função inteira a partir do corpo da `0133` (nunca
+> `replace`). Catálogo: requisito corpo `reconciliar_arvore_nao_mente_ok`, ordem 830 (a `0189` usa
+> 820–829). `Supabase/README.md` não depende da `0189` (segue pendente do dono).
+>
+> **Teste `Supabase/test/secao_fecha.test.sql`, bloco 8 — 12 asserts novos, 4 reprovaram com a
+> correção desligada** (guarda `if false and v_n_ok + v_n_div = 0`, medido fora do arquivo de
+> teste para não perder no primeiro `raise exception`): as 4 que checam `precondicoes_ok=false`/
+> `resultado`/`motivo_precondicao` para o documento "hierarquia achatada" e a que checa o mesmo
+> para "rótulo duplicado". As outras 8 (as duas pré-condições medidas por `fn_conferir_arvore`,
+> fonte_a/fonte_b, a fila inalterada nos três documentos, o `ok` parcial) continuam verdes porque
+> não dependem do ramo novo. Religada a correção, `Supabase/test/run.sh` completo: verde, 1.600
+> linhas `NOTICE:  ok`, `Supabase/schema.sql` sem diff.
+>
+> **O que falta** — aplicar em produção (a 0182/0183/0189 seguem pendentes do dono antes desta) e,
+> à parte, um backfill das 12 linhas já erradas (a consulta que as acha está no `Supabase/README.md`,
+> bloco da `0190`) — não incluído aqui por exigir a mesma medição de alcance que a `0179`/`0183`
+> pularam.
+
+---
+
 ## SESSÃO 101 (23–24/09/2026) — `0189`: a sonda passa a ver GATILHO, não só a função que ele chama
 
 > **PR [#242](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/242). Nada aplicado em produção.**
