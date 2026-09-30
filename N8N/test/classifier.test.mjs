@@ -502,3 +502,19 @@ test('o limiar do fallback vem do DIAL, e mexer no dial move a decisão', () => 
       `limiar inválido ${JSON.stringify(invalido)} tinha de cair na queda 0,70`);
   }
 });
+
+// Krauspenhar real: os dois nomes abaixo cobrem jan-ago/2026 (8 meses). O nome NÃO
+// dava período e a IA respondeu "anual 2026" para a DRE.
+test('YTD no nome: "janaago26" vira 8M26 (multi), nunca anual — nomes reais do Krauspenhar', () => {
+  for (const nome of ['DRE_janaago26.pdf', 'balancete_janaago26.pdf', 'DRE Janeiro a Agosto de 2026.pdf', 'DRE jan-ago 2026.pdf']) {
+    const r = classifyByFilename(nome);
+    assert.deepEqual([r.periodo?.tipo, r.periodo?.referencia], ['multi', '8M26'], nome);
+  }
+});
+
+test('YTD no nome: é sinal fraco (a classificação por conteúdo continua rodando) e só vale para faixa que começa em janeiro', () => {
+  assert.equal(classifyByFilename('DRE_janaago26.pdf').precisa_fallback_ia, true);
+  assert.equal(classifyByFilename('DRE_janaago26.pdf').confianca, 0.65);
+  assert.equal(classifyByFilename('DRE mar a ago 2026.pdf').periodo?.referencia, '2026', 'outra faixa não ganha referência ambígua');
+  assert.equal(classifyByFilename('DRE_jan a dez 2025.pdf').periodo?.referencia, '2025', 'jan-dez é o ano inteiro');
+});

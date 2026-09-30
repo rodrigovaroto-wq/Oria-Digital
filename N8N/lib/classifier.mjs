@@ -48,6 +48,24 @@ export function parsePeriodo(textoNormalizado) {
     // "2025x2024"/"2025 x 2024" é comparativo: o 'x' separa exercícios.
     .replace(/(\d)\s*[x\u00d7]\s*(\d)/g, '$1 $2');
 
+  // ACUMULADO NO ANO (YTD) — "janaago26", "jan a ago 26", "janeiro a agosto de 2026".
+  // Krauspenhar real: `DRE_janaago26.pdf` foi registrada como período anual 2026 e
+  // são 8 meses (jan-ago); a receita de 8 meses era comparada com ano cheio. Faixa
+  // que COMEÇA em janeiro e termina antes de dezembro vira "NM" + ano (8M26), na
+  // forma que o banco já canoniza (fn_periodo_canonico: NM → "nm"+ano) e que o
+  // prompt já usa para "9 meses de 2024". Só YTD (começa em jan): outra faixa
+  // ("mar a ago") compartilharia a referência com outra do mesmo tamanho, então
+  // fica sem período do nome em vez de ganhar um ambíguo.
+  const mesesFim = ['fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov'];
+  const ytd = t.match(/\bjan[a-z]*?\s*(?:a\s*|ate\s*)?(fev|mar|abr|mai|jun|jul|ago|set|out|nov)[a-z]*\s*(?:de\s*)?((?:20)?\d{2})\b/);
+  if (ytd) {
+    const meses = mesesFim.indexOf(ytd[1]) + 2;
+    // `fraco`: é uma DICA do nome (soma 0,05 e não 0,3), de propósito — com 0,3 o
+    // documento passaria do limiar e PULARIA a classificação por conteúdo, que hoje
+    // roda para esses nomes. O que este sinal faz é impedir que a IA o sobrescreva
+    // com "anual" (ver mergeClassification).
+    return { tipo: 'multi', referencia: `${meses}M${ytd[2].slice(-2)}`, fraco: true };
+  }
   // 12M25 / 12M2025  → anual (12 meses do ano)
   let m = t.match(/\b(\d{1,2})m(\d{2,4})\b/);
   if (m && Number(m[1]) === 12) {

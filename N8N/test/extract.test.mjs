@@ -1310,3 +1310,9 @@ test('o workflow embute limparRotuloColado junto com achatarGrupos (Parse Extrac
   assert.ok(codigo.includes('const limparRotuloColado = '));
   assert.ok(codigo.includes('const achatarGrupos = '));
 });
+
+test('o prompt de extração manda o acumulado no ano (YTD) virar NM+ano, nunca anual (DRE jan-ago/2026)', () => {
+  assert.match(SYSTEM_PROMPT, /ACUMULADO NO ANO \(YTD\)/);
+  assert.match(SYSTEM_PROMPT, /"8M26"/);
+  assert.match(SYSTEM_PROMPT, /ERRO emitir "12M26"/);
+});

@@ -49,3 +49,28 @@ test('entidade e assinado: IA preenche o que o nome nunca souber', () => {
   assert.equal(r.entidade, 'Empresa Y S.A.');
   assert.equal(r.assinado, true);
 });
+
+// Krauspenhar real: `DRE_janaago26.pdf` (8 meses, jan-ago) foi registrada como
+// período "anual 2026". O nome dá 8M26 e a IA devolve o exercício cheio do mesmo ano.
+test('faixa de meses do nome (8M26) NÃO é sobrescrita por "anual" do mesmo ano vindo da IA', () => {
+  const fromName = { tipo_taxonomia: 'DRE', periodo_tipo: 'multi', periodo_ref: '8M26', assinado: null, entidade: null, confianca: 0.65 };
+  for (const refIA of ['2026', '12M26', '26']) {
+    const fromAI = { tipo_taxonomia: 'DRE', periodo_tipo: 'anual', periodo_ref: refIA, assinado: null, entidade: 'Krauspenhar', confianca: 0.9, justificativa: '' };
+    const r = mergeClassification(fromName, fromAI);
+    assert.equal(r.periodo_ref, '8M26', `IA ${refIA}`);
+    assert.equal(r.periodo_tipo, 'multi');
+    assert.equal(r.entidade, 'Krauspenhar', 'o resto continua vindo da IA');
+  }
+});
+
+test('a IA continua mandando no período quando NÃO é o anual do mesmo ano (outra faixa, outro ano)', () => {
+  const fromName = { tipo_taxonomia: 'DRE', periodo_tipo: 'multi', periodo_ref: '8M26', assinado: null, entidade: null, confianca: 0.65 };
+  for (const [tipo, ref] of [['multi', '01/01/2026 a 31/08/2026'], ['anual', '2025'], ['multi', '9M26']]) {
+    const fromAI = { tipo_taxonomia: 'DRE', periodo_tipo: tipo, periodo_ref: ref, assinado: null, entidade: null, confianca: 0.9, justificativa: '' };
+    assert.equal(mergeClassification(fromName, fromAI).periodo_ref, ref);
+  }
+  // e nome de exercício cheio (12M25) não entra na regra
+  const cheio = { tipo_taxonomia: 'DRE', periodo_tipo: 'anual', periodo_ref: '12M25', confianca: 0.9 };
+  const ia = { tipo_taxonomia: 'DRE', periodo_tipo: 'anual', periodo_ref: '2025', confianca: 0.9, justificativa: '' };
+  assert.equal(mergeClassification(cheio, ia).periodo_ref, '2025');
+});

@@ -25,10 +25,21 @@ export function mergeClassification(fromName, fromAI) {
     winner = fromAI; // nenhuma achou tipo; usa confiança/justificativa da IA mesmo assim
   }
 
+  // FAIXA DO NOME VALE MAIS QUE "ANUAL" DA IA, NO MESMO ANO. O nome mostra N meses
+  // (NMaa, N < 12: "DRE_janaago26.pdf" = 8M26) e a IA devolve o exercício cheio do
+  // mesmo ano ("anual 2026", "12M26", "2026", "26"): é a IA lendo o ano e perdendo
+  // a faixa — o caso Krauspenhar, 8 meses registrados como anual 2026. A IA
+  // continua mandando em todo o resto (inclusive numa faixa diferente da do nome).
+  const parcial = /^(\d{1,2})m(\d{2})$/i.exec(String(fromName.periodo_ref ?? ''));
+  const refIA = String(fromAI.periodo_ref ?? '').trim().toLowerCase();
+  const iaAnualDoMesmoAno = parcial !== null && Number(parcial[1]) < 12
+    && (refIA === '12m' + parcial[2] || refIA === parcial[2] || refIA === '20' + parcial[2]);
+  const usaNome = iaAnualDoMesmoAno;
   return {
     tipo_taxonomia: winner.tipo_taxonomia ?? null,
-    periodo_tipo: fromAI.periodo_ref ? fromAI.periodo_tipo : (fromName.periodo_ref ? fromName.periodo_tipo : null),
-    periodo_ref: fromAI.periodo_ref ?? fromName.periodo_ref ?? null,
+    periodo_tipo: usaNome ? fromName.periodo_tipo
+      : (fromAI.periodo_ref ? fromAI.periodo_tipo : (fromName.periodo_ref ? fromName.periodo_tipo : null)),
+    periodo_ref: usaNome ? fromName.periodo_ref : (fromAI.periodo_ref ?? fromName.periodo_ref ?? null),
     assinado: fromAI.assinado ?? fromName.assinado ?? null,
     entidade: fromAI.entidade ?? fromName.entidade ?? null,
     // 0170/0171: o CNPJ só pode vir do CONTEÚDO (o nome do arquivo nunca carrega
