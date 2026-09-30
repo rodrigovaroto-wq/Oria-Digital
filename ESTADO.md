@@ -6,6 +6,7 @@
 > - Migrations `0183` (em dois envios; o backfill abriu as 18 pendências previstas), `0189`–`0195`.
 >   Conferido depois: sonda com 174 requisitos e 0 ausentes, `ate_migration = '0195'`, e as 15
 >   chamadas do n8n resolvem.
+> - **Escrita, NÃO aplicada:** `0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql` (caixa/receita/despfin deixam de ler documento de outro ano; faturamento tira o ano da coluna).
 > - n8n de ingestão republicado (`N8N/republicar.sh`: 42 nós conferidos). Entra o `Classificar Nome`
 >   de 24/09, que nunca tinha sido publicado, e os nós `Agrupar Linhas XLSX/XLS`.
 > - **Credencial Postgres do n8n CONSERTADA.** Ela estava inválida desde depois de 17/09

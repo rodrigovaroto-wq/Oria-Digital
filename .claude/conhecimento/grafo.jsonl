@@ -63,6 +63,7 @@
 {"k":"n","id":"arquivo:Supabase/test/autoridade_combinado.test.sql","t":"arquivo","f":"Supabase/test/autoridade_combinado.test.sql","txt":"autoridade_combinado.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/balcao_ambiguo_e_cnpj.test.sql","t":"arquivo","f":"Supabase/test/balcao_ambiguo_e_cnpj.test.sql","txt":"balcao_ambiguo_e_cnpj.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/balcao_nao_absorve_confirmada.test.sql","t":"arquivo","f":"Supabase/test/balcao_nao_absorve_confirmada.test.sql","txt":"balcao_nao_absorve_confirmada.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","t":"arquivo","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","txt":"caixa_dfc_de_um_ano.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/canastra.test.sql","t":"arquivo","f":"Supabase/test/canastra.test.sql","txt":"canastra.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/canonico.test.sql","t":"arquivo","f":"Supabase/test/canonico.test.sql","txt":"canonico.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/classificacao_contabil.test.sql","t":"arquivo","f":"Supabase/test/classificacao_contabil.test.sql","txt":"classificacao_contabil.test.sql"}
@@ -387,15 +388,15 @@
 {"k":"n","id":"fn:fn_recomputar_completude","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"recomputar completude"}
 {"k":"n","id":"fn:fn_reconciliar_arvore","t":"fn","f":"Supabase/migrations/0190_a_arvore_que_nao_conferiu_nada.sql","txt":"reconciliar arvore"}
 {"k":"n","id":"fn:fn_reconciliar_ativo_passivo_pl","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"reconciliar ativo passivo pl"}
-{"k":"n","id":"fn:fn_reconciliar_caixa_bp_fluxo","t":"fn","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","txt":"reconciliar caixa bp fluxo"}
+{"k":"n","id":"fn:fn_reconciliar_caixa_bp_fluxo","t":"fn","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"reconciliar caixa bp fluxo"}
 {"k":"n","id":"fn:fn_reconciliar_caso","t":"fn","f":"Supabase/migrations/0192_o_ok_que_matava_a_divergencia_irma.sql","txt":"reconciliar caso"}
 {"k":"n","id":"fn:fn_reconciliar_chaves_do_documento","t":"fn","f":"Supabase/migrations/0192_o_ok_que_matava_a_divergencia_irma.sql","txt":"reconciliar chaves do documento"}
-{"k":"n","id":"fn:fn_reconciliar_despfin_dre_vs_divida","t":"fn","f":"Supabase/migrations/0191_o_mapa_de_um_ano_contra_a_dre_de_dois.sql","txt":"reconciliar despfin dre vs divida"}
+{"k":"n","id":"fn:fn_reconciliar_despfin_dre_vs_divida","t":"fn","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"reconciliar despfin dre vs divida"}
 {"k":"n","id":"fn:fn_reconciliar_duplicidade","t":"fn","f":"Supabase/migrations/0144_duplicidade_e_entre_documentos.sql","txt":"reconciliar duplicidade"}
 {"k":"n","id":"fn:fn_reconciliar_intragrupo","t":"fn","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","txt":"reconciliar intragrupo"}
 {"k":"n","id":"fn:fn_reconciliar_mutuos","t":"fn","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","txt":"reconciliar mutuos"}
 {"k":"n","id":"fn:fn_reconciliar_por_documento","t":"fn","f":"Supabase/migrations/0152_a_reconciliacao_do_lote.sql","txt":"reconciliar por documento"}
-{"k":"n","id":"fn:fn_reconciliar_receita_dre_vs_faturamento","t":"fn","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","txt":"reconciliar receita dre vs faturamento"}
+{"k":"n","id":"fn:fn_reconciliar_receita_dre_vs_faturamento","t":"fn","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"reconciliar receita dre vs faturamento"}
 {"k":"n","id":"fn:fn_reconciliar_versoes_do_periodo","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"reconciliar versoes do periodo"}
 {"k":"n","id":"fn:fn_reconferir_caso","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"reconferir caso"}
 {"k":"n","id":"fn:fn_reescrever_recado_linha_exigida","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"reescrever recado linha exigida"}
@@ -426,7 +427,7 @@
 {"k":"n","id":"fn:fn_secao_e_de_resultado","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"secao e de resultado"}
 {"k":"n","id":"fn:fn_soma_secao","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"soma secao"}
 {"k":"n","id":"fn:fn_somar_conceito","t":"fn","f":"Supabase/migrations/0015_reconciliacao_classe_b.sql","txt":"somar conceito"}
-{"k":"n","id":"fn:fn_somar_faturamento_ano","t":"fn","f":"Supabase/migrations/0167_o_faturamento_que_somava_a_coluna_total.sql","txt":"somar faturamento ano"}
+{"k":"n","id":"fn:fn_somar_faturamento_ano","t":"fn","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"somar faturamento ano"}
 {"k":"n","id":"fn:fn_sugerir_perguntas","t":"fn","f":"Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql","txt":"sugerir perguntas"}
 {"k":"n","id":"fn:fn_tem_palavra_longa","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tem palavra longa"}
 {"k":"n","id":"fn:fn_teto_ressalvas","t":"fn","f":"Supabase/migrations/0037_portao2.sql","txt":"teto ressalvas"}
@@ -591,6 +592,7 @@
 {"k":"n","id":"migration:0193","t":"migration","f":"Supabase/migrations/0193_a_tolerancia_que_crescia_com_a_escala.sql","txt":"a tolerancia que crescia com a escala"}
 {"k":"n","id":"migration:0194","t":"migration","f":"Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql","txt":"a planilha de mutuos que nunca foi lida"}
 {"k":"n","id":"migration:0195","t":"migration","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","txt":"o espelho que lia o balanco de outro ano"}
+{"k":"n","id":"migration:0196","t":"migration","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"o caixa que lia a dfc de outro ano"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -908,6 +910,14 @@
 {"k":"e","de":"arquivo:Supabase/test/balcao_nao_absorve_confirmada.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/balcao_nao_absorve_confirmada.test.sql","l":73}
 {"k":"e","de":"arquivo:Supabase/test/balcao_nao_absorve_confirmada.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/balcao_nao_absorve_confirmada.test.sql","l":71}
 {"k":"e","de":"arquivo:Supabase/test/balcao_nao_absorve_confirmada.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"Supabase/test/balcao_nao_absorve_confirmada.test.sql","l":452}
+{"k":"e","de":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_caixa_bp_fluxo","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","l":102}
+{"k":"e","de":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_despfin_dre_vs_divida","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","l":311}
+{"k":"e","de":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","l":221}
+{"k":"e","de":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","l":91}
+{"k":"e","de":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","l":89}
+{"k":"e","de":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","rel":"CHAMA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","l":213}
+{"k":"e","de":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","l":88}
+{"k":"e","de":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_periodo","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","l":310}
 {"k":"e","de":"arquivo:Supabase/test/canastra.test.sql","rel":"CHAMA","pa":"fn:fn_contraparte_intragrupo","f":"Supabase/test/canastra.test.sql","l":363}
 {"k":"e","de":"arquivo:Supabase/test/canastra.test.sql","rel":"CHAMA","pa":"fn:fn_lado_intragrupo","f":"Supabase/test/canastra.test.sql","l":381}
 {"k":"e","de":"arquivo:Supabase/test/canastra.test.sql","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"Supabase/test/canastra.test.sql","l":566}
@@ -1437,12 +1447,13 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":69}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_desativar_premissa","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":137}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_vincular_linha_premissa","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":10}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":195}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_diagnostico_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":507}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":328}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":208}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":181}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":214}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":224}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":196}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_diagnostico_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":528}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":336}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":209}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":182}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":215}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_aprovar_caso","f":"portal/src/app/casos/[id]/page.tsx","l":174}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/page.tsx","l":176}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"portal/src/app/casos/[id]/page.tsx","l":345}
@@ -1464,6 +1475,7 @@
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/src/lib/kit-basico.ts","l":10}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/lib/kit-basico.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/src/lib/kit-basico.ts","l":6}
+{"k":"e","de":"arquivo:portal/src/lib/modelagem-cobertura.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/lib/modelagem-cobertura.ts","l":39}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-cobertura.ts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/lib/modelagem-cobertura.ts","l":5}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":75}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":9}
@@ -1955,6 +1967,10 @@
 {"k":"e","de":"migration:0195","rel":"CRIA","pa":"fn:fn_reconciliar_intragrupo","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","l":6}
 {"k":"e","de":"migration:0195","rel":"CRIA","pa":"fn:fn_reconciliar_intragrupo","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","l":860}
 {"k":"e","de":"migration:0195","rel":"CRIA","pa":"fn:fn_reconciliar_mutuos","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","l":235}
+{"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_reconciliar_caixa_bp_fluxo","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":117}
+{"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_reconciliar_despfin_dre_vs_divida","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":572}
+{"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":390}
+{"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":819}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Conferir Fontes","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/workflow.macro.json"}
