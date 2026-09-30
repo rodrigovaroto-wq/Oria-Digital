@@ -310,7 +310,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (modo === "completo") {
     const portao = await supabase.rpc("fn_avaliar_portao2", { p_caso_id: id });
     const aval = portao.data as { elegivel?: boolean; motivos?: string[] } | null;
-    if (aval && aval.elegivel === false) {
+    // FAIL-CLOSED: se o RPC falhou (ou não devolveu veredito) o Portão 2 é DESCONHECIDO,
+    // e desconhecido não é aberto. Antes o export seguia sobre base possivelmente não
+    // aprovada. Mesma resposta amigável do 409, status 503 por ser falha de conferência.
+    if (portao.error || !aval || typeof aval.elegivel !== "boolean") {
+      return NextResponse.json(
+        {
+          error: "O export COMPLETO foi recusado: não foi possível conferir o Portão 2.",
+          motivos: [portao.error ? `consulta falhou: ${portao.error.message}` : "a consulta não devolveu veredito"],
+          dica: "Tente de novo em instantes. \"Exportar dados\" continua disponível para conferir a "
+            + "extração — esse modo não depende do portão. O completo carrega modelo projetado, e "
+            + "projetar sem saber se a base foi aprovada daria aparência de resultado aprovado.",
+        },
+        { status: 503 },
+      );
+    }
+    if (aval.elegivel === false) {
       return NextResponse.json(
         {
           error: "O export COMPLETO foi recusado: este caso não passou o Portão 2.",

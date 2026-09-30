@@ -49,6 +49,21 @@ export function portaoFechado(portao: PortaoDoExport | null | undefined): boolea
   return !!portao && portao.elegivel === false;
 }
 
+/**
+ * TRÊS ESTADOS, NUNCA DOIS: aberto, fechado e NÃO CONFERIDO.
+ *
+ * `null` é "perguntei e a consulta falhou" (o RPC `fn_avaliar_portao2` deu erro);
+ * `undefined` é "quem chama não passou o portão" (os testes antigos) e segue no
+ * texto de antes. Com só dois estados, `null` caía em "não está fechado" e o topo
+ * da tela voltava a dizer "pronto — X% das contas projetam" e habilitava o botão
+ * sem ninguém saber se o Portão 2 estava aberto: ausência apresentada como estado
+ * (regra 1). `portaoFechado(null)` continua `false` de propósito — não conferido
+ * NÃO é fechado, é desconhecido, e quem lê o veredito usa esta função.
+ */
+export function portaoNaoConferido(portao: PortaoDoExport | null | undefined): boolean {
+  return portao === null;
+}
+
 /** A fração (0 a 1) medida pelo banco, como percentual inteiro — ou `null`
  * quando o banco não a mediu (chave ausente) ou não pôde medi-la
  * (`linhas_do_caso` zero). Nunca `0` por omissão. */
@@ -64,6 +79,7 @@ export function textoChipModelagem(
   conf: ConferenciaModelagemCobertura, portao?: PortaoDoExport | null,
 ): string {
   if (!conf.pronto) return "falta algo";
+  if (portaoNaoConferido(portao)) return "premissas prontas — Portão 2 NÃO CONFERIDO, export travado";
   if (portaoFechado(portao)) return "premissas prontas — export travado pelo Portão 2";
   const pct = fracaoPctDe(conf);
   return pct !== null ? `pronto — ${pct}% das contas projetam` : "pronto para exportar";
@@ -79,6 +95,11 @@ export function textoTituloConferenciaModelagem(
   conf: ConferenciaModelagemCobertura, portao?: PortaoDoExport | null,
 ): string {
   if (!conf.pronto) return "Ainda falta algo para o export de modelagem";
+  if (portaoNaoConferido(portao)) {
+    return "As premissas estão prontas, mas NÃO foi possível conferir o Portão 2 (a consulta falhou): "
+      + "o export de modelagem fica travado até a conferência responder. Recarregue a página; se "
+      + "persistir, o motivo está na faixa de consultas com erro.";
+  }
   if (portaoFechado(portao)) {
     return "As premissas estão prontas, mas o export de modelagem está travado pelo Portão 2: "
       + `${(portao!.motivos ?? []).join("; ") || "o caso ainda não pode ser aprovado"}. `
