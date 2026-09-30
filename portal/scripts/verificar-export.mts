@@ -4087,7 +4087,7 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
                      valor_num: 3000, documento_versao_id: "vDup2", ordem: 5 })),
     ].map((c) => ({ campo: c, colKey: "2025" }));
     const achadosBP = rotulosDeSubtotalInformado(new Map([["Balanço", itensBP]]), null);
-    checar(achadosBP.some((r) => r.endsWith("||provisoes")),
+    checar(achadosBP.some((r) => /||provisoes(||\d{4})?$/.test(r)),
       "(0109d) …e o subtotal DE VERDADE continua sendo reconhecido mesmo com todas as "
       + "ocorrências duplicadas — sem isto o grupo dobrava",
       achadosBP.join(" · ") || "(nenhum)");
@@ -7235,6 +7235,82 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
         `(39c) …e a nota do ${nome} diz o motivo (sem saldo para ratear) E o efeito (bloco menor)`, nota.slice(0, 160));
     }
   }
+}
+
+// =============================================================================
+// (39d) O NOME DE UM AGRUPAMENTO DECLARADO NUM DOCUMENTO NÃO TIRA A CONTA HOMÔNIMA DOS OUTROS.
+//
+// O DEFEITO, medido no Excel do mandato Krauspenhar (caso 33b58a89): "Venda de peças e
+// lubrificantes" é CONTA na DRE 2025 (36,19 mi) e, no balancete de 2026, é o NOME DO
+// AGRUPAMENTO sob o qual as filhas ("Peças GTS", "Peças Massey"…) são impressas. A
+// regra (A) de `detectarSubtotaisInformados` ("rótulo == nome de agrupamento declarado
+// pelo documento, e o agrupamento tem membros") olhava a ABA INTEIRA: bastava um
+// documento declarar o agrupamento para marcar como subtotal TODA ocorrência do rótulo,
+// inclusive a folha da DRE de outro exercício. O modelo tirava a linha da soma em todos os
+// anos: receita bruta de 2025 = 77,19 mi contra 113,38 mi da DRE, e os 36,19 mi viravam uma
+// "reconciliação" constante na projeção.
+//
+// REGRA 4: a fixture é SINTÉTICA. Os campos reais (`campo_extraido`) do Krauspenhar não
+// foram vistos; o arranjo abaixo — filhas com `secao` igual ao rótulo da conta no
+// COMBINADO de 2026, a mesma conta como folha na DRE de 2025, mesma aba — é a leitura do
+// código (regra A, aba inteira), e fica afirmado só o comportamento: cada documento decide
+// sobre as linhas DELE.
+// =============================================================================
+{
+  const ENT = "KRAUSPENHAR TESTE LTDA.";
+  const NOME = "Venda de peças e lubrificantes";
+  const mk = (id: string, tipo: string, ref: string) => ({
+    id, tipo_taxonomia: tipo, entidade: { razao_social: ENT },
+    periodo: { tipo: "anual", referencia: ref }, documento_versao: [{ id: `v${id}`, nome_original: `${id}.pdf` }],
+  }) as DocumentoParaExport;
+  const c = (v: string, chave: string, secao: string, valor: number, ordem: number) =>
+    campo({ chave, secao, secao_canonica: "receita_bruta", valor_num: valor, ordem,
+            documento_versao_id: v, unidade: "milhar" } as never);
+  const campos: CampoExtraido[] = [
+    // DRE 2025: a peça é FOLHA (36.190 + 77.000 = 113.190)
+    c("vDRE25", NOME, "Receitas", 36190, 1),
+    c("vDRE25", "Venda de veículos", "Receitas", 77000, 2),
+    // COMBINADO 2026: a MESMA conta é o agrupamento das filhas (12.000 + 8.000 = 20.000)
+    c("vCOMB26", NOME, "Receitas", 20000, 1),
+    c("vCOMB26", "Peças GTS", NOME, 12000, 2),
+    c("vCOMB26", "Peças Massey", NOME, 8000, 3),
+    c("vCOMB26", "Venda de veículos", "Receitas", 70000, 4),
+  ];
+  const documentos = [mk("DRE25", "DRE", "2025"), mk("COMB26", "COMBINADO", "2026")];
+  const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const linhaA = (chave: string, valores: Record<string, number>, doc: string) => ({
+    secao_canonica: "receita_bruta", chave, rotulo_norm: norm(chave),
+    papel: "conta" as const, unidade: "milhar", moeda: "BRL", documentos: [doc], valores,
+  });
+  const entrada = {
+    caso: { nome: "Rótulo folha e agrupamento", produto: "reestruturacao" },
+    agora: new Date("2026-09-05T12:00:00Z"), entidade: ENT, setor: "comercio",
+    anosHistoricos: [2025, 2026], anosProjetados: [2027, 2028],
+    stressPct: 0.2, caixaMinimo: 0, aliquotaTributos: 0.34,
+    linhas: [
+      linhaA(NOME, { "2025": 36190, "2026": 20000 }, "DRE"),
+      linhaA("Peças GTS", { "2026": 12000 }, "COMBINADO"),
+      linhaA("Peças Massey", { "2026": 8000 }, "COMBINADO"),
+      linhaA("Venda de veículos", { "2025": 77000, "2026": 70000 }, "DRE"),
+    ],
+    premissas: [], vinculos: [], macro: [], unidade: "R$ mil",
+  };
+  const wb = buildExportWorkbook({
+    caso: entrada.caso, documentos, campos, agora: entrada.agora, modo: "completo",
+    modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+  });
+  const ws = wb.getWorksheet("Revenues, COGS & SG&A")!;
+  esquecerMemoria(ws);
+  let rG = 0;
+  for (let r = 1; r <= ws.rowCount; r++) if (String(ws.getRow(r).getCell(3).value ?? "") === "GROSS REVENUES") { rG = r; break; }
+  const g25 = avaliarCelula(ws, "E", rG);
+  const g26 = avaliarCelula(ws, "F", rG);
+  checar(typeof g25 === "number" && Math.abs(g25 - 113190) < 0.5,
+    "(39d) a peça é CONTA na DRE 2025: a receita bruta de 2025 soma a conta (113.190, não 77.000)",
+    `2025: ${JSON.stringify(g25)}`);
+  checar(typeof g26 === "number" && Math.abs(g26 - 90000) < 0.5,
+    "(39d) …e no COMBINADO 2026 o agrupamento não soma junto das filhas (90.000, não 110.000)",
+    `2026: ${JSON.stringify(g26)}`);
 }
 
 // =============================================================================

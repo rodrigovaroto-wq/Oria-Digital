@@ -1009,15 +1009,28 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   // A chave é o PAR (seção, rótulo) — ver o comentário de
   // `rotulosDeSubtotalInformado`: casar só pelo rótulo tirava da DRE uma despesa
   // que tem o mesmo nome de um subtotal do balanço.
+  // `seção||rótulo` = subtotal em todos os exercícios (regra antiga, período ilegível);
+  // `seção||rótulo||ano` = subtotal SÓ naquele exercício — nos outros a linha é conta e soma.
   const subtotaisEstruturais = new Set<string>();
+  const subtotaisPorAno = new Map<string, Set<string>>(); // seção||rótulo → anos
   for (const r of ent.subtotaisInformados ?? []) {
-    const [secao, rotulo] = r.split("||");
-    subtotaisEstruturais.add(`${chaveDeAncora(secao ?? "")}||${chaveDeAncora(rotulo ?? "")}`);
+    const [secao, rotulo, ano] = r.split("||");
+    const k = `${chaveDeAncora(secao ?? "")}||${chaveDeAncora(rotulo ?? "")}`;
+    if (ano === undefined) { subtotaisEstruturais.add(k); continue; }
+    if (!subtotaisPorAno.has(k)) subtotaisPorAno.set(k, new Set());
+    subtotaisPorAno.get(k)!.add(ano);
   }
-  const ehSubtotalEstrutural = (l: LinhaModelo) => {
+  const chavesDaLinha = (l: LinhaModelo) => {
     const secao = chaveDeAncora(l.secao_canonica ?? "");
-    return subtotaisEstruturais.has(`${secao}||${chaveDeAncora(l.rotulo_norm)}`)
-      || subtotaisEstruturais.has(`${secao}||${chaveDeAncora(l.chave)}`);
+    return [`${secao}||${chaveDeAncora(l.rotulo_norm)}`, `${secao}||${chaveDeAncora(l.chave)}`];
+  };
+  const ehSubtotalEstrutural = (l: LinhaModelo) => chavesDaLinha(l).some((k) => subtotaisEstruturais.has(k));
+  /** A linha SEM os exercícios em que ela é subtotal; `null` se não sobrou nenhum. */
+  const semOsAnosDeSubtotal = (l: LinhaModelo): LinhaModelo | null => {
+    const anos = new Set(chavesDaLinha(l).flatMap((k) => [...(subtotaisPorAno.get(k) ?? [])]));
+    if (anos.size === 0) return l;
+    const valores = Object.fromEntries(Object.entries(l.valores).filter(([a]) => !anos.has(a)));
+    return Object.keys(valores).length > 0 ? { ...l, valores } : null;
   };
 
   // As âncoras vêm das linhas que NÃO são conta (subtotais do documento). Quando o
@@ -1081,9 +1094,11 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     // SUBTOTAL FORA DA SOMA. Ele continua no arquivo (a aba analítica o mostra
     // marcado) e continua servindo de âncora acima — só não entra como conta.
     if (ehSubtotalEstrutural(l)) continue;
-    const b = blocoDaLinha(l);
+    const lSoma = semOsAnosDeSubtotal(l);
+    if (lSoma === null) continue;
+    const b = blocoDaLinha(lSoma);
     if (!linhasPorBloco.has(b)) linhasPorBloco.set(b, []);
-    linhasPorBloco.get(b)!.push(l);
+    linhasPorBloco.get(b)!.push(lSoma);
   }
 
   // ---- CABEÇALHO DE GRUPO IMPRESSO: fora da soma, e só COM PROVA ----------
