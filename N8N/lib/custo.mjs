@@ -1249,13 +1249,43 @@ export function orcamentoDoLotePorConteudo({
   // razão — a frase da recusa já é longa, e um `? :` no meio dela é onde um
   // erro de pontuação passa despercebido numa revisão.
   const avisoNaMensagem = aviso === null ? '' : `${aviso} `;
+  // O DOCUMENTO QUE NÃO CABE NEM SOZINHO TEM DE SER NOMEADO (17/09/2026). A
+  // execução 7888 recusou 7 documentos (US$ 40,31) com "Envie no máximo 0
+  // documento(s) por vez (7 levas)": `maxDocumentos` sai da média do lote, e a
+  // média passou do teto porque UM documento custava US$ 10,81 — mais que os
+  // US$ 3,00 do teto. Nenhuma leva de tamanho nenhum o faria passar, e a
+  // instrução "envie 0" não diz isso nem qual arquivo é. Agora cada documento
+  // cujo custo SOZINHO passa do teto é nomeado com o seu custo, e a instrução
+  // de levas fala só dos demais.
+  const acimaDoTeto = partes
+    .map((p, i) => ({ nome: docs[i]?.nome ?? null, usd: p.usd }))
+    .filter((p) => p.usd > teto);
+  const restantes = n - acimaDoTeto.length;
+  const somaRestantes = partes.reduce((s, p) => s + (p.usd > teto ? 0 : p.usd), 0);
+  const maxRestantes = restantes > 0 && somaRestantes > 0
+    ? Math.max(1, Math.floor(teto / (somaRestantes / restantes)))
+    : restantes;
+  let instrucaoDeLevas;
+  if (acimaDoTeto.length === 0) {
+    instrucaoDeLevas = `Envie no máximo ${maxDocumentos} documento(s) por vez (${Math.ceil(n / Math.max(1, maxDocumentos))} levas). `;
+  } else {
+    const nomesAcima = acimaDoTeto.slice(0, MAX_NOMES)
+      .map((p) => `${p.nome || '(sem nome)'} (~US$ ${p.usd.toFixed(2)})`).join('; ');
+    const restoAcima = acimaDoTeto.length > MAX_NOMES ? ` e mais ${acimaDoTeto.length - MAX_NOMES}` : '';
+    instrucaoDeLevas = `${acimaDoTeto.length} documento(s) custam sozinhos MAIS que o teto de US$ ${teto.toFixed(2)} e `
+      + `nenhuma leva os faz passar: ${nomesAcima}${restoAcima}. Divida cada um em arquivos menores (por período ou por entidade) `
+      + 'ou suba o teto. '
+      + (restantes > 0
+        ? `Os outros ${restantes} documento(s) cabem em levas de no máximo ${maxRestantes} por vez. `
+        : '');
+  }
   const mensagem = cabe
     ? null
     : `[orçamento ${VERSAO_ORCAMENTO}] ` +
       `Lote recusado ANTES de gastar: ${n} documento(s) = ${chamadas} chamada(s) de IA ` +
       `≈ US$ ${estimadoUSD.toFixed(2)}, acima do teto de US$ ${teto.toFixed(2)} por execução. ` +
       `A conta saiu de ${base}. ${avisoNaMensagem}` +
-      `Envie no máximo ${maxDocumentos} documento(s) por vez (${Math.ceil(n / Math.max(1, maxDocumentos))} levas). ` +
+      instrucaoDeLevas +
       `Nada foi enviado ao provedor de IA e nada foi gravado, então reenviar não duplica nem custa. ` +
       `Se o lote precisa rodar inteiro, o teto vive em TETO_EXECUCAO_USD (N8N/lib/custo.mjs) ` +
       `— e subir ele exige subir também o teto do projeto no provedor, senão a API barra no meio.`;
