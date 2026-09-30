@@ -215,3 +215,96 @@ export function conferirTotalDaSerie(campos) {
   }
   return problemas;
 }
+
+/**
+ * Identidade de BALANCETE, linha a linha: para cada conta com as quatro colunas
+ * "Saldo anterior | Débito | Crédito | Saldo atual" (rótulos normalizados;
+ * "Saldo inicial/final", "Débitos", "Créditos" valem), o saldo atual tem de ser
+ * o anterior mais o movimento, na natureza da conta:
+ *   devedora: SAt = SA + D - C        credora: SAt = SA - D + C
+ *
+ * POR QUÊ EXISTE. No balancete_janaago26.pdf do mandato real Krauspenhar (320
+ * contas, 288 com as quatro colunas; medido em produção, 30/09/2026) só 111
+ * contas fecham como rotuladas, e 90 delas são triviais (movimento zero). 196
+ * fecham se a coluna gravada como "Débito" for o saldo atual real, a "Crédito"
+ * o débito real e a "Saldo atual" o crédito real (com sinal): ESTOQUES grava
+ * 43.569.482,33 | 47.956.795,90 | 65.971.485,41 | -61.584.171,84, e o saldo real
+ * é 47,96 mi (43,57 + 65,97 - 61,58). A troca muda POR PÁGINA. Nenhuma pendência
+ * nomeava isto, e uma análise leu o crédito do período como saldo ("estoque
+ * subiu para 61,6 mi"; o real é 47,96). NÃO corrige o número: o dado do cliente
+ * não é reescrito por palpite — só NOMEIA a troca.
+ *
+ * FORMA DE FECHAR. Como rotulada: acima, nas duas naturezas. Com a troca:
+ * D_gravado = SA +/- C_gravado +/- SAt_gravado (os dois sinais livres, porque
+ * o saldo real vem com sinal e a natureza muda de conta para conta). Tolerância
+ * de 1 na unidade do documento, a do precedente desta casa para identidade de 3
+ * parcelas sem ser 0,5% do total (ver TOLERÂNCIA no topo do arquivo).
+ *
+ * LIMIAR: UM problema por documento quando mais de 20% das contas NÃO triviais
+ * (D ou C diferente de zero) não fecham como rotuladas, com no mínimo 10 contas
+ * não triviais. 20% porque um balancete certo só perde conta por extração
+ * isolada (o exemplo Adiantamentos, que não fecha de jeito nenhum, é 1 de 198)
+ * e a troca por página do documento medido deixou ~89% sem fechar; entre 1% e
+ * 20% é ruído de extração que o dono vê conta a conta, acima disso a coluna está
+ * sistematicamente errada. O mínimo de 10 evita acusar documento de 3 contas.
+ *
+ * UMA CONTA = (chave, seção, página, entidade); se a mesma coluna aparece de
+ * novo para essa chave, é outra conta (o balancete real repete uma conta
+ * idêntica), contada à parte. Coluna com valor ausente (null) tira a conta:
+ * ausência não é zero.
+ * AUTO-CONTIDA, embutida por toString() no nó Code (ver FONTE_ARITMETICA).
+ */
+export function conferirBalanceteLinhaALinha(campos) {
+  const problemas = [];
+  if (!Array.isArray(campos)) return problemas;
+  const norm = (s) => String(s ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const papel = (pc) => {
+    const r = norm(pc);
+    if (/^saldo (anterior|inicial)\b/.test(r)) return 'SA';
+    if (/^debitos?\b/.test(r)) return 'D';
+    if (/^creditos?\b/.test(r)) return 'C';
+    if (/^saldo (atual|final)\b/.test(r)) return 'SAt';
+    return null;
+  };
+  const contas = [];
+  const abertas = new Map();
+  const papeis = new Set();
+  for (const c of campos) {
+    if (!c || typeof c !== 'object') continue;
+    const p = papel(c.periodo_coluna);
+    if (!p) continue;
+    papeis.add(p);
+    const k = `${c.chave}\u0000${c.secao ?? ''}\u0000${c.origem_pagina ?? ''}\u0000${c.entidade_coluna ?? ''}`;
+    let conta = abertas.get(k);
+    // A mesma chave repetida na mesma seção e página (o balancete real repete
+    // CHEQUES A COMPENSAR, duas vezes idêntica) é OUTRA conta, não a mesma com a
+    // coluna em dobro: abre-se um novo grupo quando o papel já está preenchido.
+    if (!conta || p in conta) { conta = { chave: c.chave, pagina: c.origem_pagina ?? null }; abertas.set(k, conta); contas.push(conta); }
+    conta[p] = typeof c.valor_num === 'number' && Number.isFinite(c.valor_num) ? c.valor_num : null;
+  }
+  if (papeis.size < 4) return problemas;
+  const TOL = 1;
+  const perto = (a, b) => Math.abs(a - b) <= TOL;
+  let rotulada = 0; let trocada = 0; let nenhuma = 0;
+  let exTroca = null; let exNenhuma = null;
+  for (const v of contas) {
+    if (['SA', 'D', 'C', 'SAt'].some((p) => typeof v[p] !== 'number')) continue;
+    if (Math.abs(v.D) <= TOL && Math.abs(v.C) <= TOL) continue; // movimento zero: fecha de qualquer jeito
+    if (perto(v.SAt, v.SA + v.D - v.C) || perto(v.SAt, v.SA - v.D + v.C)) { rotulada += 1; continue; }
+    const permutada = [1, -1].some((s1) => [1, -1].some((s2) => perto(v.D, v.SA + s1 * v.C + s2 * v.SAt)));
+    if (permutada) { trocada += 1; if (!exTroca) exTroca = v; } else { nenhuma += 1; if (!exNenhuma) exNenhuma = v; }
+  }
+  const naoTriviais = rotulada + trocada + nenhuma;
+  if (naoTriviais < 10 || (trocada + nenhuma) / naoTriviais <= 0.2) return problemas;
+  const fmt = (v) => `"${v.chave}"${v.pagina ? ` (p. ${v.pagina})` : ''}: saldo anterior ${v.SA}, débito ${v.D}, crédito ${v.C}, saldo atual ${v.SAt}`;
+  const ex = exTroca ?? exNenhuma;
+  problemas.push(
+    `balancete não fecha linha a linha (saldo atual = saldo anterior +/- débito -/+ crédito, tolerância ${TOL}): `
+    + `das ${naoTriviais} conta(s) com movimento, ${rotulada} fecham como rotuladas, ${trocada} fecham só com a `
+    + 'troca de colunas (a gravada como "Débito" é o saldo atual, a "Crédito" é o débito e a "Saldo atual" é o '
+    + `crédito) e ${nenhuma} não fecham de jeito nenhum. Exemplo${exTroca ? ' com a troca' : ''}: ${fmt(ex)}. `
+    + 'O número NÃO foi corrigido: com as colunas trocadas, ler "Saldo atual" como saldo dá o crédito do período.',
+  );
+  return problemas;
+}

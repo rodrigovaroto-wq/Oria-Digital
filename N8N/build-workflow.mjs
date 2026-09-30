@@ -53,7 +53,7 @@ import {
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
   MAX_CELULAS_POR_BLOCO, LIMIAR_COBERTURA, MINIMO_PARA_AVALIAR,
 } from './lib/cobertura.mjs';
-import { conferirIdentidadeDeLinha, conferirTotalDaSerie } from './lib/aritmetica.mjs';
+import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha } from './lib/aritmetica.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -324,6 +324,7 @@ const FONTE_COBERTURA = [
 const FONTE_ARITMETICA = [
   `const conferirIdentidadeDeLinha = ${conferirIdentidadeDeLinha.toString()};`,
   `const conferirTotalDaSerie = ${conferirTotalDaSerie.toString()};`,
+  `const conferirBalanceteLinhaALinha = ${conferirBalanceteLinhaALinha.toString()};`,
 ].join('\n');
 
 // `sha256Hex` idem — embutida do fonte. Ela substituiu a dependência de
@@ -1748,6 +1749,8 @@ for(const [chave, blocos] of porDocumento){
   if(problemasLinha.length>0) motivos.push(problemasLinha.slice(0,5).join(' | ')+(problemasLinha.length>5?' | ...':''));
   const problemasSerie=conferirTotalDaSerie(r.campos);
   if(problemasSerie.length>0) motivos.push(problemasSerie.slice(0,5).join(' | ')+(problemasSerie.length>5?' | ...':''));
+  const problemasBalancete=conferirBalanceteLinhaALinha(r.campos);
+  if(problemasBalancete.length>0) motivos.push(problemasBalancete.join(' | '));
   // A EMENDA LIMPA NAO E' FALHA -- e' a costura fazendo exatamente o que ela
   // existe para fazer. Ate a rodada do lote 7377 (02/09, "teste Canastra"),
   // \`r.emendasLimpas>0\` sozinho virava \`motivos.push(...)\`, e qualquer motivo

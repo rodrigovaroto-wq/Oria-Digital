@@ -27,7 +27,7 @@
 // já pega.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { conferirIdentidadeDeLinha, conferirTotalDaSerie } from '../lib/aritmetica.mjs';
+import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha } from '../lib/aritmetica.mjs';
 
 const linha = (ordem, chave, periodo_coluna, valor_num, extra = {}) => ({
   ordem, chave, periodo_coluna, entidade_coluna: null, valor_num,
@@ -285,4 +285,104 @@ test('total da série: colunas não aditivas continuam fora (%, ticket, taxa, va
     ];
     assert.deepEqual(conferirTotalDaSerie(campos), [], col);
   }
+});
+
+// -----------------------------------------------------------------------------
+// conferirBalanceteLinhaALinha — balancete_janaago26.pdf, mandato real Krauspenhar
+// -----------------------------------------------------------------------------
+// conferirBalanceteLinhaALinha — balancete_janaago26.pdf, mandato real Krauspenhar
+// -----------------------------------------------------------------------------
+// FIXTURE 100% REAL (regra 4): as 28 contas com movimento nao nulo do
+// `campo_extraido` de producao (30/09/2026), valores copiados como gravados em
+// Saldo anterior | Debito | Credito | Saldo atual. 14 fecham SO com a troca de
+// colunas (paginas 1-2) e 14 SO como rotuladas (paginas 8-9). Nenhum numero
+// inventado. CHEQUES A COMPENSAR aparece DUAS vezes identica no documento real e
+// conta como duas contas. O que isto NAO prova: os 111/196/288 do documento
+// inteiro (so 28 contas foram copiadas); prova a regra sobre contas reais.
+const QUATRO = ['Saldo anterior', 'Débito', 'Crédito', 'Saldo atual'];
+const REAIS = [
+  ['perm', 1, 'ADIANTAMENTOS A FUNCIONARIOS', [156963.24, 356454.33, 494860.28, -295369.19]],
+  ['perm', 1, 'ADIANTAMENTO A EMPREGADOS', [6831.09, 1501.35, 161022.66, -166352.4]],
+  ['perm', 1, 'ADIANTAMENTO PARA VIAGEM', [146543.97, 328211.21, 220176.12, -38508.88]],
+  ['perm', 1, 'EMPRESTIMO P/ FUNCIONARIOS', [3588.18, 6596.18, 11508, -8500]],
+  ['perm', 1, 'TRIBUTOS A COMPENSAR E A RECUPERAR', [147843.76, 294533.56, 3200616.28, -3053926.48]],
+  ['perm', 1, 'IRRF SOBRE APLICAÇÃO', [1378.72, 31930.39, 38525.6, -7973.93]],
+  ['perm', 1, 'IRRF SOBRE SERVIÇOS', [3478.6, 3009.21, 3009.21, -3478.6]],
+  ['perm', 2, 'CHEQUES A COMPENSAR', [376206.47, 270803.47, 0, -105403]],
+  ['perm', 2, 'CHEQUES A COMPENSAR', [376206.47, 270803.47, 0, -105403]],
+  ['perm', 2, 'FUNDO DE RESERVA MASSEY - CP', [3667595.49, 3635861.87, 1330672.66, -1362406.28]],
+  ['perm', 2, 'BRADESCO FICFI RF CAPITALIZAÇÃO REDE APLICAÇÃO', [126937.38, 95203.76, 439020.86, -470754.48]],
+  ['perm', 2, 'ESTOQUES', [43569482.33, 47956795.9, 65971485.41, -61584171.84]],
+  ['perm', 2, 'MARCA MASSEY FERGUSSON - NOVOS', [12004600.42, 16032443.29, 22364938.8, -18337095.93]],
+  ['perm', 2, 'PLANTADEIRAS', [3441426.09, 2212053.88, 1853550.64, -3082922.85]],
+  ['rot', 8, '(-) DEVOLUÇÃO VENDA DE PEÇAS E LUBRIFICANTES', [-903659.2, 903659.2, 0, 0]],
+  ['rot', 9, 'CUSTO COM VENDA DE COLHEITADEIRA', [-1434850.56, 1434850.56, 0, 0]],
+  ['rot', 9, 'CUSTO COM VENDA DE PLATAFORMAS', [-113.23, 113.23, 0, 0]],
+  ['rot', 9, 'CUSTO COM TRATORES USADOS', [-1207826.53, 1207826.53, 0, 0]],
+  ['rot', 9, 'COFINS OUTROS DEBITOS', [-9922.11, 9922.11, 0, 0]],
+  ['rot', 9, 'CUSTO COM VENDA DE AGRICULTURA DE PRECISÃO', [-67550.28, 67550.28, 0, 0]],
+  ['rot', 9, 'CUSTO DE VENDA DE PEÇAS WOODS', [-6491.84, 6491.84, 0, 0]],
+  ['rot', 9, 'EMBALAGENS', [-34723.28, 34723.28, 0, 0]],
+  ['rot', 9, 'ICMS OUTROS DEBITOS', [-2875.12, 2875.12, 0, 0]],
+  ['rot', 9, 'PIS OUTROS DEBITOS', [-1777.13, 1777.13, 0, 0]],
+  ['rot', 9, 'CUSTO DE SERVIÇOS', [-1002864.05, 1002864.05, 0, 0]],
+  ['rot', 9, 'CUSTO COM SERVIÇO DE ASSIST TECNICA E CONSERTO', [-30736.16, 30736.16, 0, 0]],
+  ['rot', 9, 'ASSISTÊNCIA MÉDICA E ODONTOLÓGICA', [-4687.83, 4687.83, 0, 0]],
+  ['rot', 9, 'COMISSOES', [-16338.4, 16338.4, 0, 0]],
+];
+let ordemBalancete = 0;
+const docReal = (tipos) => REAIS.filter(([t]) => tipos.includes(t)).flatMap(([, pg, chave, v]) =>
+  QUATRO.map((pc, j) => linha(ordemBalancete++, chave, pc, v[j], { secao: 'Balancete', origem_pagina: pg })));
+const docMisto = () => docReal(['perm', 'rot']);
+
+test('balancete: o documento MISTO real (14 com a troca + 14 rotuladas, muda por página) reprova e dá as contagens', () => {
+  const campos = docMisto();
+  const copia = JSON.stringify(campos);
+  const problemas = conferirBalanceteLinhaALinha(campos);
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /das 28 conta\(s\) com movimento, 14 fecham como rotuladas, 14 fecham só com a troca/);
+  assert.match(problemas[0], /e 0 não fecham de jeito nenhum/);
+  assert.match(problemas[0], /gravada como "Débito" é o saldo atual/);
+  assert.match(problemas[0], /Exemplo com a troca: "ADIANTAMENTOS A FUNCIONARIOS" \(p\. 1\).*saldo atual -295369\.19/);
+  assert.equal(JSON.stringify(campos), copia, 'não corrige o dado');
+});
+
+test('balancete: só as páginas com a troca (14 reais) reprova com 0 rotuladas', () => {
+  const problemas = conferirBalanceteLinhaALinha(docReal(['perm']));
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /das 14 conta\(s\) com movimento, 0 fecham como rotuladas, 14 fecham só com a troca/);
+});
+
+test('balancete: só as contas reais que fecham como rotuladas (14) não reprova', () => {
+  assert.deepEqual(conferirBalanceteLinhaALinha(docReal(['rot'])), []);
+});
+
+test('balancete: 1 conta real com a troca entre 13 rotuladas reais (7%, abaixo do limiar) não reprova', () => {
+  const rot = REAIS.filter(([t]) => t === 'rot').slice(0, 13);
+  const perm = REAIS.filter(([t]) => t === 'perm').slice(0, 1);
+  const campos = [...rot, ...perm].flatMap(([, pg, chave, v], i) =>
+    QUATRO.map((pc, j) => linha(i * 4 + j, chave, pc, v[j], { secao: 'Balancete', origem_pagina: pg })));
+  assert.deepEqual(conferirBalanceteLinhaALinha(campos), []);
+});
+
+test('balancete: conta de movimento zero não conta (nem como fechada, nem como aberta)', () => {
+  // Contas reais com a troca + contas paradas: se as paradas contassem como
+  // "fecham como rotuladas", 14/214 < 20% e o defeito sumia.
+  const paradas = Array.from({ length: 200 }, (_, i) =>
+    QUATRO.map((pc, j) => linha(5000 + i * 4 + j, `PARADA ${i}`, pc, [500, 0, 0, 500][j], { secao: 'Balancete', origem_pagina: 3 }))).flat();
+  const problemas = conferirBalanceteLinhaALinha([...docReal(['perm']), ...paradas]);
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /das 14 conta\(s\) com movimento/);
+  assert.deepEqual(conferirBalanceteLinhaALinha(paradas), []);
+});
+
+test('balancete: documento sem as quatro colunas ou entrada inválida não reprova', () => {
+  assert.deepEqual(conferirBalanceteLinhaALinha(docReal(['perm']).filter((c) => c.periodo_coluna !== 'Crédito')), []);
+  assert.deepEqual(conferirBalanceteLinhaALinha(null), []);
+});
+
+test('balancete: conferirBalanceteLinhaALinha é AUTO-CONTIDA (embutida por toString no nó Code)', () => {
+  const isolada = new Function(`return (${conferirBalanceteLinhaALinha.toString()})`)();
+  assert.equal(isolada(docMisto()).length, 1);
+  assert.deepEqual(isolada(docReal(['rot'])), []);
 });
