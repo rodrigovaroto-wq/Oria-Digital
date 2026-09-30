@@ -375,7 +375,7 @@ export function blocosDeLinha(ordenados) {
 
 /**
  * Linhas da HIERARQUIA de códigos de um relatório (DRE analítica, plano de contas):
- * código sintético = "3", "3.01", "3.01.01"...; analítico = 6 dígitos ("000880").
+ * código sintético = "3", "3.01", "3.01.01"...; analítico = qualquer número sem ponto com 2+ dígitos ("000880", "8241").
  * Descarta a linha SEM código ("TOTAL") e recolhe chave repetida em sequência numa
  * linha só (a primeira vale; as chaves repetidas voltam em `repetidas`).
  * AUTO-CONTIDA, embutida por toString() com as outras.
@@ -392,9 +392,15 @@ export function linhasDaHierarquia(campos) {
       continue;
     }
     anterior = bloco;
+    // SINTÉTICA = código COM ponto ("3.01.01") ou um dígito só no topo ("2", "3").
+    // Qualquer outro número sem ponto, de qualquer tamanho, é ANALÍTICA: o balanço
+    // real do Krauspenhar intercala códigos reduzidos de 4 dígitos ("8241 CAPITAL DE
+    // GIRO…"); contá-los como sintética cortava a busca de filhas em "2.01.01.01" e
+    // deixava "2.01.01.02 (-) JUROS" de fora — 3 de 10 não fechavam num documento
+    // CERTO (15.563.518,86 - 2.440.052,07 = 13.123.466,79).
     const cod = bloco.chave.split(' ')[0];
-    if (/^\d{6}$/.test(cod)) bloco.tipo = 'A';
-    else if (/^\d+(\.\d+)*$/.test(cod)) bloco.tipo = 'S';
+    if (/^\d+\.\d+(\.\d+)*$/.test(cod) || /^\d$/.test(cod)) bloco.tipo = 'S';
+    else if (/^\d+$/.test(cod)) bloco.tipo = 'A';
     else continue;
     bloco.cod = cod;
     linhas.push(bloco);
