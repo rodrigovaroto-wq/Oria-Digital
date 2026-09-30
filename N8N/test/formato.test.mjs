@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { detectarFormato, formaDoTexto } from '../lib/formato.mjs';
+import { detectarFormato, formaDoTexto, abasDoXlsx } from '../lib/formato.mjs';
+import { xlsxMinimo } from './zip-minimo.mjs';
 
 // --------------------------------------------------------------------------
 // O CASO DA AMO, REPRODUZIDO — 60/60 documentos em 12/09/2026.
@@ -183,4 +184,27 @@ test('formaDoTexto de texto vazio devolve forma vazio, sem lançar', () => {
   assert.deepEqual(formaDoTexto(''), { forma: 'vazio', separador: null, colunas: 0 });
   assert.deepEqual(formaDoTexto('   \n  \n'), { forma: 'vazio', separador: null, colunas: 0 });
   assert.deepEqual(formaDoTexto(null), { forma: 'vazio', separador: null, colunas: 0 });
+});
+
+// --------------------------------------------------------------------------
+// QUANTAS ABAS — o que o extrator nativo não diz (lê só a primeira).
+// --------------------------------------------------------------------------
+// `Endividamento Krauspenhar.xlsx` (mandato real) gravou 0 linhas: a 1ª aba é um
+// índice e a tabela está em "Abertura endividamento". O arquivo real não está no
+// repositório; o xlsx abaixo é MÍNIMO, gerado com a estrutura descrita (zip com
+// deflate de verdade), não a planilha do cliente.
+const ABERTURA = [['Conta', 'Saldo'], ['Banco A', '1000']];
+test('abasDoXlsx: xlsx com índice + tabela tem 2 abas, e o NOME da aba não é legível sem descompactar', () => {
+  const buf = xlsxMinimo([['Índice', [['Abas']]], ['Abertura endividamento', ABERTURA]]);
+  assert.equal(detectarFormato(buf, { mimeDeclarado: '', nome: 'Endividamento.xlsx' }).formato, 'xlsx');
+  assert.equal(abasDoXlsx(buf), 2);
+  // O limite, dito em teste: o nome mora no workbook.xml comprimido.
+  assert.equal(buf.includes('Abertura endividamento'), false);
+});
+
+test('abasDoXlsx: uma aba conta 1; buffer vazio é null (ausência, não zero); não-zip é 0', () => {
+  assert.equal(abasDoXlsx(xlsxMinimo([['Única', ABERTURA]])), 1);
+  assert.equal(abasDoXlsx(Buffer.alloc(0)), null);
+  assert.equal(abasDoXlsx(null), null);
+  assert.equal(abasDoXlsx(Buffer.from('conta;saldo\n1;2')), 0);
 });

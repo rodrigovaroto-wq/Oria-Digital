@@ -30,9 +30,10 @@ import { mergeClassification } from '../lib/merge.mjs';
 import { spreadsheetToText, colunasDaPlanilha, avisoTruncamentoPlanilha } from '../lib/spreadsheet.mjs';
 import { sha256Hex } from '../lib/hash.mjs';
 import {
-  byteEm, casaAssinatura, trechoLatin1, saborDoZip, pareceTexto, contarFora,
+  byteEm, casaAssinatura, trechoLatin1, saborDoZip, abasDoXlsx, pareceTexto, contarFora,
   formaDoTexto, detectarFormato,
 } from '../lib/formato.mjs';
+import { xlsxMinimo } from './zip-minimo.mjs';
 import { parseTipo, parsePeriodo, parseEntidade, parseAssinado, classifyByFilename } from '../lib/classifier.mjs';
 import {
   avaliarCobertura, celulasDaLinha, celulasEstimadas, linhasComNumero, linhasDeConta,
@@ -456,6 +457,10 @@ const TABELA = [
     [Buffer.from('PK\u0003\u0004...word/document.xml...', 'latin1')],
     [Buffer.from('PK\u0003\u0004...ppt/presentation.xml...', 'latin1')],
     [Buffer.from('PK\u0003\u0004...fotos/a.jpg...', 'latin1')],
+  ] },
+  { nome: 'abasDoXlsx', lib: abasDoXlsx, casos: [
+    [xlsxMinimo([['A', [['x']]], ['B', [['y']]]])], [xlsxMinimo([['A', [['x']]]])],
+    [Buffer.alloc(0)], [Buffer.from('texto')],
   ] },
   { nome: 'pareceTexto', lib: pareceTexto, casos: [
     [Buffer.from('CONTA 2025\nATIVO 137.624\n', 'utf-8')],

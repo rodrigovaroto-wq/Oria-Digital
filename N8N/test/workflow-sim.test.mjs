@@ -3827,3 +3827,44 @@ test('MEDIDO: documento que sozinho passa do teto e NOMEADO -- nunca "no maximo 
   assert.match(r.mensagem, /CR_Gigante\.xlsx/);
   assert.match(r.mensagem, /sozinhos MAIS que o teto/);
 });
+
+// --- XLSX com mais de uma aba: o extrator nativo leu SO a primeira -----------
+// `Endividamento Krauspenhar.xlsx` (mandato real) gravou 0 linhas sem pendência
+// nenhuma: 1ª aba = índice, tabela na 2ª. Sem fixture real no repositório, o xlsx
+// é MÍNIMO e gerado aqui (`zip-minimo.mjs` declara isso): índice + tabela.
+test('xlsx de 2 abas: Preparar Conteudo MEDE as abas e Recompor as declara na pendência', async () => {
+  const { xlsxMinimo } = await import('./zip-minimo.mjs');
+  const buf = xlsxMinimo([['Índice', [['Abas']]], ['Abertura endividamento', [['Conta', 'Saldo'], ['Banco A', '1000']]]]);
+  const item = {
+    json: { caso_id: 'c-1', nome_original: 'Endividamento.xlsx' },
+    binary: { data: { fileName: 'Endividamento.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', data: buf.toString('base64') } },
+  };
+  const prep = await run('Preparar Conteudo', { item });
+  assert.equal(prep.json.formato_detectado, 'xlsx');
+  assert.equal(prep.json.abas_xlsx, 2);
+
+  // a 1ª aba (índice) devolveu 1 linha; é tudo o que o extrator entrega
+  const out = await run('Recompor Conteudo Extraido', {
+    items: [{ json: { Abas: 'Abertura endividamento' } }], refs: { 'Preparar Conteudo': [{ json: prep.json }] },
+  });
+  assert.equal(out.length, 1);
+  assert.match(out[0].json.aviso_conteudo, /tem 2 abas e o extrator nativo leu SO a primeira \(1 linha/);
+  assert.match(out[0].json.aviso_conteudo, /1 aba\(s\) NAO foram lidas/);
+  assert.match(out[0].json.aviso_conteudo, /nomes das abas nao estao disponiveis/);
+  assert.match(out[0].json.text, /Abertura endividamento/, 'o que foi lido NÃO é descartado');
+});
+
+test('xlsx de UMA aba não abre a pendência de abas', async () => {
+  const { xlsxMinimo } = await import('./zip-minimo.mjs');
+  const buf = xlsxMinimo([['Única', [['Conta', 'Saldo'], ['Banco A', '1000']]]]);
+  const item = {
+    json: { caso_id: 'c-1', nome_original: 'Um.xlsx' },
+    binary: { data: { fileName: 'Um.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', data: buf.toString('base64') } },
+  };
+  const prep = await run('Preparar Conteudo', { item });
+  assert.equal(prep.json.abas_xlsx, 1);
+  const out = await run('Recompor Conteudo Extraido', {
+    items: [{ json: { Conta: 'Banco A', Saldo: '1000' } }], refs: { 'Preparar Conteudo': [{ json: prep.json }] },
+  });
+  assert.equal(out[0].json.aviso_conteudo, null);
+});

@@ -39,7 +39,7 @@ import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, ve
 import { sha256Hex } from './lib/hash.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
-  pareceTexto, contarFora, formaDoTexto, detectarFormato,
+  pareceTexto, contarFora, formaDoTexto, detectarFormato, abasDoXlsx,
 } from './lib/formato.mjs';
 import {
   spreadsheetToText, colunasDaPlanilha, avisoTruncamentoPlanilha,
@@ -368,6 +368,7 @@ const FONTE_FORMATO = [
   `const casaAssinatura = ${casaAssinatura.toString()};`,
   `const trechoLatin1 = ${trechoLatin1.toString()};`,
   `const saborDoZip = ${saborDoZip.toString()};`,
+  `const abasDoXlsx = ${abasDoXlsx.toString()};`,
   `const pareceTexto = ${pareceTexto.toString()};`,
   `const contarFora = ${contarFora.toString()};`,
   `const formaDoTexto = ${formaDoTexto.toString()};`,
@@ -877,7 +878,12 @@ try{
 // lateral) e o \`Extrair Texto\`, que le a camada de texto do PDF. Da\u00ed para a
 // frente ninguem mais precisa -- o \`content_part\` ja' carrega o arquivo em
 // base64 DENTRO do json, e e' ele que vai para a OpenAI.
-return {json:{...item, content_part: part, content_mime: mt, hash, aviso_conteudo: aviso,
+// QUANTAS ABAS O XLSX TEM, medido nos bytes (lib/formato.mjs, abasDoXlsx). O
+// extrator nativo le UMA aba so'; o Recompor usa este numero para nao deixar o
+// resto do arquivo sumir sem pendencia. null fora de xlsx: ausencia, nao zero.
+let abasXlsx=null;
+if(formato==='xlsx'){ try{ abasXlsx=abasDoXlsx(buf); }catch(e){ abasXlsx=null; } }
+return {json:{...item, content_part: part, content_mime: mt, hash, aviso_conteudo: aviso, abas_xlsx: abasXlsx,
   // O QUE FOI MEDIDO viaja com o item: o roteador decide por
   // \`formato_detectado\`, e \`formato_confiavel\`/\`formato_evidencia\` deixam
   // quem le' distinguir medicao de suposicao (regra 1 do CLAUDE.md aplicada
@@ -1242,7 +1248,19 @@ const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,pr
     // Planilha extraida com sucesso NAO abre mais a pendencia de 'nao lida' --
     // so' abre a de TRUNCAMENTO, se a planilha estourar o teto (regra 1: so'
     // declara ausencia onde ela e' real).
-    aviso_conteudo: avisoTruncamentoPlanilha(linhas,{totais:{linhas:total,colunas:uniaoColunas.length}}),
+    aviso_conteudo: [
+      avisoTruncamentoPlanilha(linhas,{totais:{linhas:total,colunas:uniaoColunas.length}}),
+      // XLSX COM MAIS DE UMA ABA: o \`Extract From File\` leu so' a primeira. O
+      // que estava nas outras sumia sem pendencia -- \`Endividamento
+      // Krauspenhar.xlsx\` gravou 0 linhas porque a 1a aba e' um indice e a
+      // tabela esta na 2a. O numero de abas vem dos bytes (Preparar Conteudo); o
+      // NOME delas nao, porque mora no workbook.xml comprimido e o no' Code nao
+      // tem zip. O conteudo lido NAO e' descartado: so' deixa de ser apresentado
+      // como o arquivo inteiro.
+      (ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>1)
+        ? 'O arquivo .xlsx tem '+ctx.abas_xlsx+' abas e o extrator nativo leu SO a primeira ('+total+' linha(s)); as outras '+(ctx.abas_xlsx-1)+' aba(s) NAO foram lidas e a tabela financeira pode estar em qualquer uma delas. Os nomes das abas nao estao disponiveis (ficam no workbook.xml, comprimido). Abra o arquivo e reenvie a aba certa, ou confirme que a primeira e a unica com dado.'
+        : null,
+    ].filter(Boolean).join(' | ')||null,
   }};
 });
 // O QUE ESTE NO' NAO FECHA, e fica DITO em vez de escondido: um extrator que
