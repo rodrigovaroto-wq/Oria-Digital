@@ -11,7 +11,7 @@
 // mão, que é a origem conhecida de mirror desatualizado neste repositório.
 
 import { posicionar } from './layout.mjs';
-import { writeFileSync } from 'node:fs';
+import { renameSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { SERIES_MACRO, INDICADORES_FOCUS, urlSgs, urlFocus, urlSidraIpca, numeroMacro } from './lib/macro.mjs';
@@ -295,5 +295,16 @@ const workflow = {
   },
 };
 
-writeFileSync(join(__dirname, 'workflow.macro.json'), JSON.stringify(workflow, null, 2) + '\n');
+// GRAVAÇÃO ATÔMICA (arquivo temporário + `rename`). `N8N/test/macro.test.mjs` roda
+// ESTE gerador no meio da suíte, e o `node --test` executa os arquivos de teste em
+// processos paralelos: `preparar-republicacao.test.mjs` lia o `workflow.macro.json`
+// no instante em que o `writeFileSync` o tinha truncado e morria em "Unexpected end
+// of JSON input" — 1 de 566 reprovado, medido no CI (PR #242) e de novo em
+// 30/09/2026 numa passada local. `rename` no mesmo diretório troca o arquivo de uma
+// vez: o leitor vê o antigo inteiro ou o novo inteiro, nunca a metade. O nome
+// temporário começa com `.` para não casar `/^workflow\..+\.json$/` de quem lista a pasta.
+const destino = join(__dirname, 'workflow.macro.json');
+const temporario = join(__dirname, `.workflow.macro.json.${process.pid}.tmp`);
+writeFileSync(temporario, JSON.stringify(workflow, null, 2) + '\n');
+renameSync(temporario, destino);
 console.log('Escrito workflow macro —', nodes.length, 'nós,', Object.keys(connections).length, 'conexões');
