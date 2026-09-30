@@ -6924,40 +6924,56 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
 //
 // Cada conta de giro é projetada por `dias ÷ 360 × base`, e nada olhava o
 // AGREGADO. Vincular a MESMA premissa de prazo a N contas — um clique por linha
-// na tela, o caminho natural de quem tem pressa — prende N × dias de receita em
+// na tela, o caminho natural de quem tem pressa — prendia N × dias de receita em
 // capital de giro, e o balanço CONTINUA FECHANDO porque o patrimônio líquido
-// absorve. O arquivo ia ao comitê com passivo circulante crescendo oitenta vezes
-// em cinco anos e nenhuma célula vermelha.
+// absorve (Krauspenhar: ativo circulante operacional 36,10 mi -> 340,32 mi).
 //
 // O `modelo-da-fixture.mts` faz exatamente isso: liga UMA premissa de 60 dias a
-// TODA conta de circulante. Isso era um defeito da fixture; passa a ser o CASO DE
-// TESTE da guarda — o arquivo de demonstração agora DECLARA o problema em vez de
-// escondê-lo, que é o comportamento certo dos dois lados.
+// TODA conta de circulante. Enquanto o modelo aplicava o valor a CADA conta, isto
+// era o caso de teste da guarda (medido: histórico 157 + 84 = 241 dias; projetado
+// 767 + 852 = 1.619 dias; razão 5,9× contra o limiar de 2×).
 //
-// Medido: histórico 157 + 84 = 241 dias; projetado 767 + 852 = 1.619 dias; razão
-// 5,9× contra o limiar de 2×.
+// A CAUSA FOI CORRIGIDA NA ORIGEM (premissa ligada a K contas = valor do GRUPO,
+// rateado pela parcela histórica — ver `gruposRateados`), então a fixture deixa de
+// disparar a guarda, e o teste passa a afirmar as DUAS metades do comportamento:
+//   (a) 60 dias ligados a todas as contas do ativo projetam 60 dias de receita, não
+//       60 × N — e a guarda fica quieta;
+//   (b) a guarda continua VIVA: uma HIPÓTESE genuinamente excessiva (600 dias) a
+//       acusa. Sem (b) a guarda poderia ter morrido junto com o defeito que a
+//       alimentava, e o verde de (a) não distinguiria "quieta porque está certo"
+//       de "quieta porque não mede".
 {
   const fixture = JSON.parse(
     readFileSync(new URL("./fixtures/book-vertentes.json", import.meta.url), "utf8"),
   ) as { documentos: DocumentoParaExport[]; campos: CampoExtraido[] };
   const agora = new Date("2026-07-27T12:00:00Z");
-  const wbG = buildExportWorkbook({
-    caso: { nome: "Book Vertentes", produto: "reestruturacao" },
-    documentos: fixture.documentos, campos: fixture.campos, agora,
-    modeloInstitucional: entradaModeloDaFixture(fixture, agora),
-  });
-  const wsG = wbG.getWorksheet("Working Capital");
+  const montarG = (diasDaPremissa: number | null) => {
+    const entrada = entradaModeloDaFixture(fixture, agora);
+    if (diasDaPremissa !== null) {
+      for (const p of entrada.premissas) {
+        if (p.formula === "dias_de_giro") {
+          p.valores = Object.fromEntries(Object.keys(p.valores).map((a) => [a, diasDaPremissa]));
+        }
+      }
+    }
+    return buildExportWorkbook({
+      caso: { nome: "Book Vertentes", produto: "reestruturacao" },
+      documentos: fixture.documentos, campos: fixture.campos, agora,
+      modeloInstitucional: entrada,
+    });
+  };
+  const wsG = montarG(null).getWorksheet("Working Capital");
   checar(wsG != null, "(39) a aba Working Capital existe");
   if (wsG) {
-    const acha = (re: RegExp) => {
-      for (let r = 1; r <= wsG.rowCount; r++) {
-        if (re.test(String(wsG.getRow(r).getCell(3).value ?? ""))) return r;
+    const acha = (ws: typeof wsG, re: RegExp) => {
+      for (let r = 1; r <= ws.rowCount; r++) {
+        if (re.test(String(ws.getRow(r).getCell(3).value ?? ""))) return r;
       }
       return 0;
     };
-    const rAC = acha(/Ativo de giro, em dias de receita/);
-    const rPC = acha(/Passivo de giro, em dias de receita/);
-    const rCk = acha(/CHECK — giro projetado/);
+    const rAC = acha(wsG, /Ativo de giro, em dias de receita/);
+    const rPC = acha(wsG, /Passivo de giro, em dias de receita/);
+    const rCk = acha(wsG, /CHECK — giro projetado/);
     checar(rAC > 0 && rPC > 0 && rCk > 0,
       "(39) as três linhas da guarda do giro agregado existem", `${rAC}/${rPC}/${rCk}`);
     if (rAC > 0 && rCk > 0) {
@@ -6967,19 +6983,240 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
       const noHist = avaliarCelula(wsG, "E", rCk);
       checar(typeof noHist !== "number",
         "(39) a razão NÃO é publicada nas colunas de realizado", String(noHist));
-      // E na projeção ela EXISTE e ACUSA — a fixture é patológica de propósito.
+      // (a) 60 dias ligados a TODAS as contas do ativo = 60 dias de receita.
+      const diasAtivo = ["G", "H", "I", "J", "K"].map((c) => avaliarCelula(wsG, c, rAC));
+      // <= 60 e não == 60: a redutora "(-) Perdas estimadas..." não é ligada à premissa
+      // (fica nos −13 dias que o realizado dela implica) e puxa o agregado para 47. O
+      // exato de "grupo = dias/360 × base" está no bloco (39c) abaixo, com fixture própria.
+      checar(diasAtivo.every((v) => typeof v === "number" && v > 0 && v <= 60.5),
+        "(39a) premissa de 60 dias ligada a TODAS as contas do ativo projeta NO MÁXIMO 60 dias de "
+        + "receita, não 60 × N contas (era 767)",
+        `ativo de giro projetado (dias): ${diasAtivo.map((v) => typeof v === "number" ? v.toFixed(1) : String(v)).join(" · ")}`);
       let pior = 0;
       for (const c of ["G", "H", "I", "J", "K"]) {
         const v = avaliarCelula(wsG, c, rCk);
         if (typeof v === "number") pior = Math.max(pior, v);
       }
-      checar(pior > 2,
-        "(39) a guarda ACUSA a fixture, que liga uma premissa de 60 dias a toda conta de circulante",
-        `razão máxima: ${pior.toFixed(1)}× (limiar 2×)`);
-      const diasProj = avaliarCelula(wsG, "G", rAC);
-      checar(typeof diasProj === "number" && diasProj > 400,
-        "(39) …e o número que sustenta o veredito está publicado, em dias",
-        `ativo de giro projetado: ${typeof diasProj === "number" ? diasProj.toFixed(0) : diasProj} dias`);
+      checar(pior <= 2,
+        "(39a) …e a guarda fica QUIETA nessa configuração (era 5,9×, o defeito do lote)",
+        `razão máxima: ${pior.toFixed(2)}× (limiar 2×)`);
+    }
+    // (b) a guarda continua viva diante de uma hipótese genuinamente excessiva.
+    const wsX = montarG(600).getWorksheet("Working Capital")!;
+    const rCkX = acha(wsX, /CHECK — giro projetado/);
+    const rACX = acha(wsX, /Ativo de giro, em dias de receita/);
+    esquecerMemoria(wsX);
+    let piorX = 0;
+    for (const c of ["G", "H", "I", "J", "K"]) {
+      const v = avaliarCelula(wsX, c, rCkX);
+      if (typeof v === "number") piorX = Math.max(piorX, v);
+    }
+    checar(piorX > 2,
+      "(39b) a guarda ACUSA uma hipótese excessiva (600 dias de receita no ativo de giro)",
+      `razão máxima: ${piorX.toFixed(1)}× (limiar 2×)`);
+    const diasProjX = avaliarCelula(wsX, "G", rACX);
+    checar(typeof diasProjX === "number" && diasProjX > 400,
+      "(39b) …e o número que sustenta o veredito está publicado, em dias",
+      `ativo de giro projetado: ${typeof diasProjX === "number" ? diasProjX.toFixed(0) : diasProjX} dias`);
+  }
+}
+
+// =============================================================================
+// (39c) PREMISSA LIGADA A K CONTAS = VALOR DO GRUPO, NÃO DE CADA CONTA.
+//
+// O DEFEITO, medido no Excel entregue do mandato Krauspenhar (caso 33b58a89): a
+// premissa PME (150 dias) ligada em lote a 40 contas de estoque virava `dias/360 ×
+// RECEITA_LÍQUIDA` EM CADA UMA. O ativo circulante operacional foi de 36,10 mi para
+// 340,32 mi, a dívida de curto prazo de 18,00 para 333,11 mi, o ativo total de
+// 113,86 para 413,15 mi — sem célula vermelha, o CHECK fechava. O mesmo vale para
+// "Custo variável 88%" em lote numa seção de 47 contas (47 × 88% da receita) e para
+// o capex por classe.
+//
+// O INVARIANTE AFIRMA COMPORTAMENTO: ligar a MESMA premissa a 1 conta ou a K contas
+// que somam o MESMO saldo histórico dá o MESMO total projetado no bloco, e esse
+// total é `dias/360 × base` (ou `taxa × base`). Cada conta leva a parcela histórica
+// dela. Sem saldo realizado no grupo não há como ratear: a conta fica em BRANCO com
+// nota de motivo e efeito — nem zero medido, nem divisão igual em silêncio.
+//
+// A fixture é SINTÉTICA de propósito (regra 4 do CLAUDE.md): o Krauspenhar não se
+// reproduz sem o banco dele. O que se afirma aqui é a conta, não o caso real.
+// =============================================================================
+{
+  const linhaA = (
+    secao: string, chave: string, valores: Record<string, number>, doc = "BALANCO",
+  ) => ({
+    secao_canonica: secao, chave, rotulo_norm: chave.toLowerCase(),
+    papel: "conta" as const, unidade: "milhar", moeda: "BRL", documentos: [doc], valores,
+  });
+  type ContaK = [string, number];
+  // `estoques`, `custos` e `imobs` SOMAM o mesmo saldo em qualquer K.
+  const montarK = (
+    estoques: ContaK[], custos: ContaK[], imobs: ContaK[],
+  ) => {
+    const todas = [
+      linhaA("receita_bruta", "Vendas de produtos", { "2024": 180000, "2025": 200000 }, "DRE"),
+      ...custos.map(([n, v]) => linhaA("custos", n, { "2024": -v * 0.9, "2025": -v }, "DRE")),
+      ...estoques.map(([n, v]) => linhaA("ativo_circulante", n, { "2024": v * 0.9, "2025": v })),
+      ...imobs.map(([n, v]) => linhaA("ativo_nao_circulante", n, { "2024": v * 1.1, "2025": v })),
+    ];
+    const ligar = (cs: ContaK[], cod: string) => cs.map(([n]) => ({
+      rotulo_norm: n.toLowerCase(), premissa_codigo: cod, sazonalidade_codigo: null,
+    }));
+    const entrada = {
+      caso: { nome: "Premissa em lote", produto: "reestruturacao" },
+      agora: new Date("2026-08-05T12:00:00Z"), entidade: "VERTENTES METALÚRGICA LTDA.",
+      setor: "industria", anosHistoricos: [2024, 2025], anosProjetados: [2026, 2027, 2028],
+      stressPct: 0.2, caixaMinimo: 5000, aliquotaTributos: 0.34,
+      linhas: todas,
+      premissas: [
+        { codigo: "CRESC", nome: "Crescimento", natureza: "receita", formula: "crescimento_composto",
+          unidade: "%", valores: { "2026": 8, "2027": 6, "2028": 5 }, origem: "digitado" },
+        { codigo: "CUSTO", nome: "Custo variável", natureza: "custo", formula: "pct_de_linha",
+          unidade: "%", valores: { "2026": 70, "2027": 70, "2028": 69 }, origem: "digitado" },
+        { codigo: "PME", nome: "Prazo médio de estoque", natureza: "giro", formula: "dias_de_giro",
+          unidade: "dias", valores: { "2026": 150, "2027": 150, "2028": 120 }, origem: "digitado" },
+        { codigo: "CAPEX", nome: "Capex sobre receita líquida", natureza: "investimento",
+          formula: "pct_de_linha", unidade: "%", valores: { "2026": 3, "2027": 3, "2028": 3 },
+          origem: "digitado" },
+      ],
+      vinculos: [
+        { rotulo_norm: "vendas de produtos", premissa_codigo: "CRESC", sazonalidade_codigo: null },
+        ...ligar(custos, "CUSTO"), ...ligar(estoques, "PME"), ...ligar(imobs, "CAPEX"),
+      ],
+      macro: [], unidade: "R$ mil",
+    };
+    // O export só constrói o modelo com entidade reconhecível NOS CAMPOS extraídos.
+    const V = "vK";
+    return buildExportWorkbook({
+      caso: entrada.caso,
+      documentos: [{
+        id: "dK", tipo_taxonomia: "BALANCO",
+        entidade: { razao_social: "VERTENTES METALÚRGICA LTDA." },
+        periodo: { tipo: "anual", referencia: "12M25" },
+        documento_versao: [{ id: V, nome_original: "01_BP_2025.pdf" }],
+      }] as DocumentoParaExport[],
+      campos: [campo({ chave: "Caixa e equivalentes de caixa", secao: "Ativo Circulante",
+        secao_canonica: "ativo_circulante", valor_num: 1000, documento_versao_id: V, ordem: 1 })],
+      agora: entrada.agora, modo: "completo",
+      modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+  };
+
+  // ---- leitura: rótulo EXATO (as linhas-filhas têm 4 espaços na frente)
+  const rotDe = (ws: ExcelJS.Worksheet, r: number) => String(ws.getRow(r).getCell(3).value ?? "");
+  const achaExato = (ws: ExcelJS.Worksheet, rotulo: string, depoisDe = 0) => {
+    for (let r = depoisDe + 1; r <= ws.rowCount; r++) if (rotDe(ws, r) === rotulo) return r;
+    return 0;
+  };
+  const COLS_K = { 2026: "G", 2027: "H", 2028: "I" } as const;
+  const ANOS_K = [2026, 2027, 2028] as const;
+  const num = (v: unknown) => (typeof v === "number" ? v : NaN);
+  const somaDe = (ws: ExcelJS.Worksheet, rotulos: string[], ano: 2026 | 2027 | 2028) =>
+    rotulos.reduce((a, rot) => a + num(avaliarCelula(ws, COLS_K[ano], achaExato(ws, rot))), 0);
+
+  // O MESMO saldo histórico: estoque 10.000, custo 100.000, imobilizado 60.000.
+  const K1 = montarK([["Estoques", 10000]], [["Custo dos produtos vendidos", 100000]],
+    [["Imobilizado", 60000]]);
+  const nEst = ["Estoque matéria-prima", "Estoque produto acabado", "Estoque em trânsito", "Estoque de peças"];
+  const nCus = ["Custo matéria-prima", "Custo mão de obra direta", "Custo frete", "Custo energia"];
+  const nImo = ["Imobilizado - Máquinas", "Imobilizado - Veículos", "Imobilizado - Edificações"];
+  const K4 = montarK(
+    [[nEst[0], 4000], [nEst[1], 3000], [nEst[2], 2000], [nEst[3], 1000]],
+    [[nCus[0], 50000], [nCus[1], 30000], [nCus[2], 15000], [nCus[3], 5000]],
+    [[nImo[0], 30000], [nImo[1], 12000], [nImo[2], 18000]]);
+
+  const RC = "Revenues, COGS & SG&A";
+  const leitura = (wb: ReturnType<typeof montarK>, est: string[], cus: string[], imo: string[]) => {
+    const wr = wb.getWorksheet(RC)!; const wc = wb.getWorksheet("Working Capital")!;
+    const wf = wb.getWorksheet("Fixed Assets & CAPEX")!;
+    for (const w of [wr, wc, wf]) esquecerMemoria(w);
+    return { wr, wc, wf, est, cus, imo };
+  };
+  const L1 = leitura(K1, ["Estoques"], ["Custo dos produtos vendidos"], ["Capex — Imobilizado"]);
+  const L4 = leitura(K4, nEst, nCus, nImo.map((n) => `Capex — ${n}`));
+
+  for (const ano of ANOS_K) {
+    const rl = num(avaliarCelula(L1.wr, COLS_K[ano], achaExato(L1.wr, "RECEITA LÍQUIDA")));
+    checar(rl > 0, `(39c) ${ano}: a receita líquida projetada existe`, String(rl));
+    const pctCusto = ano === 2028 ? 0.69 : 0.70;
+    const dias = ano === 2028 ? 120 : 150;
+
+    // ---- CUSTO: taxa × base, em 1 conta ou em 4
+    const c1 = somaDe(L1.wr, L1.cus, ano); const c4 = somaDe(L4.wr, L4.cus, ano);
+    checar(Math.abs(c1 - pctCusto * rl) < 0.5,
+      `(39c) ${ano}: custo ligado a 1 conta = taxa × receita líquida`, `${c1} vs ${pctCusto * rl}`);
+    checar(Math.abs(c4 - pctCusto * rl) < 0.5,
+      `(39c) ${ano}: a MESMA taxa ligada a 4 contas dá taxa × receita líquida UMA vez (não 4×)`,
+      `${c4} vs ${pctCusto * rl}`);
+    // ---- GIRO: dias/360 × base
+    const nr1 = num(avaliarCelula(L1.wc, COLS_K[ano], achaExato(L1.wc, "Receita líquida (base dos dias de giro do ativo)")));
+    const e1 = somaDe(L1.wc, L1.est, ano); const e4 = somaDe(L4.wc, L4.est, ano);
+    checar(Math.abs(e1 - dias / 360 * nr1) < 0.5,
+      `(39c) ${ano}: estoque ligado a 1 conta = dias/360 × receita líquida`, `${e1} vs ${dias / 360 * nr1}`);
+    checar(Math.abs(e4 - dias / 360 * nr1) < 0.5,
+      `(39c) ${ano}: os MESMOS dias ligados a 4 contas de estoque dão dias/360 × receita UMA vez (não 4×)`,
+      `${e4} vs ${dias / 360 * nr1}`);
+    // ---- CAPEX: taxa × base
+    const x1 = somaDe(L1.wf, L1.imo, ano); const x3 = somaDe(L4.wf, L4.imo, ano);
+    checar(Math.abs(x1 - 0.03 * rl) < 0.5 && Math.abs(x3 - 0.03 * rl) < 0.5,
+      `(39c) ${ano}: a mesma taxa de capex em 1 classe ou em 3 dá taxa × receita líquida UMA vez`,
+      `1 classe ${x1} · 3 classes ${x3} · esperado ${0.03 * rl}`);
+  }
+  // ---- cada conta leva a PARCELA HISTÓRICA dela (estoque 40/30/20/10%)
+  {
+    const tot = somaDe(L4.wc, nEst, 2026);
+    const partes = nEst.map((n) => num(avaliarCelula(L4.wc, "G", achaExato(L4.wc, n))) / tot);
+    checar([0.4, 0.3, 0.2, 0.1].every((e, i) => Math.abs(partes[i] - e) < 1e-6),
+      "(39c) cada conta de estoque leva a parcela do saldo realizado (40/30/20/10%)", partes.join(" · "));
+    const totC = somaDe(L4.wr, nCus, 2026);
+    const partesC = nCus.map((n) => num(avaliarCelula(L4.wr, "G", achaExato(L4.wr, n))) / totC);
+    checar([0.5, 0.3, 0.15, 0.05].every((e, i) => Math.abs(partesC[i] - e) < 1e-6),
+      "(39c) …e cada conta de custo a dela (50/30/15/5%)", partesC.join(" · "));
+  }
+  // ---- as sombras (Base, Cliente, Stress) e o Stress saem do MESMO cálculo
+  {
+    const dif = (a: unknown) => (typeof a === "number" ? Math.abs(a) : Infinity);
+    const rSh = achaExato(L4.wr, "    CHECK: sombra do cenário ATIVO − linha ativa (0 = as duas concordam)");
+    const rShWC = achaExato(L4.wc, "    CHECK: a sombra do cenário ATIVO bate com a NCG ativa (0 = bate)");
+    checar(rSh > 0 && rShWC > 0, "(39c) os dois CHECK de sombra existem", `${rSh}/${rShWC}`);
+    checar(ANOS_K.every((a) => dif(avaliarCelula(L4.wr, COLS_K[a], rSh)) < 0.5),
+      "(39c) com K=4 a sombra de receita/custo concorda com a linha ativa em todo ano");
+    checar(ANOS_K.every((a) => dif(avaliarCelula(L4.wc, COLS_K[a], rShWC)) < 0.5),
+      "(39c) com K=4 a NCG por cenário concorda com a NCG ativa em todo ano");
+    // Stress do estoque: a soma das sombras de Stress das 4 contas = a de 1 conta.
+    const shStr = (ws: ExcelJS.Worksheet, n: string) => {
+      const r = achaExato(ws, n);
+      for (let i = r + 1; i <= ws.rowCount; i++) {
+        if (rotDe(ws, i) === "    sombra — str") return num(avaliarCelula(ws, "G", i));
+      }
+      return NaN;
+    };
+    const s1 = shStr(L1.wc, "Estoques"); const s4 = nEst.reduce((a, n) => a + shStr(L4.wc, n), 0);
+    checar(s1 > 0 && Math.abs(s1 - s4) < 0.5,
+      "(39c) o STRESS do estoque ligado a 4 contas soma o mesmo que a 1 conta",
+      `1 conta ${s1} · 4 contas ${s4}`);
+  }
+
+  // ---- SEM SALDO para ratear: BRANCO + nota (motivo e efeito); nunca zero, nunca divisão igual
+  {
+    const KZ = montarK(
+      [["Estoque zerado A", 0], ["Estoque zerado B", 0]],
+      [["Custo zerado A", 0], ["Custo zerado B", 0]],
+      [["Imobilizado zerado A", 0], ["Imobilizado zerado B", 0]]);
+    const wr = KZ.getWorksheet(RC)!; const wc = KZ.getWorksheet("Working Capital")!;
+    const wf = KZ.getWorksheet("Fixed Assets & CAPEX")!;
+    const cel = (ws: ExcelJS.Worksheet, rot: string) => ws.getRow(achaExato(ws, rot)).getCell(7);
+    const alvos: Array<[string, ExcelJS.Cell]> = [
+      ["estoque", cel(wc, "Estoque zerado A")], ["custo", cel(wr, "Custo zerado A")],
+      ["capex", cel(wf, "Capex — Imobilizado zerado A")],
+    ];
+    for (const [nome, c] of alvos) {
+      const vazia = c.value === null || c.value === undefined;
+      const nota = typeof c.note === "string" ? c.note : JSON.stringify(c.note ?? "");
+      checar(vazia, `(39c) grupo de ${nome} sem saldo realizado: a célula fica em BRANCO (não zero, não rateio igual)`,
+        JSON.stringify(c.value));
+      checar(/NÃO é projetada/.test(nota) && /(MENOR|MENOS)/.test(nota) && /ratear/.test(nota),
+        `(39c) …e a nota do ${nome} diz o motivo (sem saldo para ratear) E o efeito (bloco menor)`, nota.slice(0, 160));
     }
   }
 }

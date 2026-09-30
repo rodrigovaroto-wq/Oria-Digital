@@ -1222,6 +1222,77 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   };
 }
 
+// =============================================================================
+// PREMISSA LIGADA A K CONTAS: o valor é do GRUPO, não de cada conta.
+//
+// O DEFEITO (medido no Excel do mandato Krauspenhar, caso 33b58a89): a premissa
+// PME (150 dias) estava ligada em lote a 40 contas de estoque, e cada conta virava
+// `dias/360 × RECEITA_LÍQUIDA`. O "Ativo circulante operacional" foi de 36,10 mi
+// (2025) para 340,32 mi (2026), a dívida de curto prazo de 18,00 para 333,11 mi e
+// o ativo total de 113,86 para 413,15 mi — sem célula vermelha, e o CHECK fechava
+// (o patrimônio absorve). O mesmo vale para `pct_de_linha` em custo/SG&A (47 contas
+// × 88% da receita) e para o capex por classe.
+//
+// A LEITURA: a premissa tem UM valor por (caso, código) em `caso_premissa.valores`.
+// Ligada a K contas, o único sentido possível é "o GRUPO vale isto". O total do
+// grupo é `dias/360 × base` (ou `taxa × base`) e cada conta recebe a PARCELA
+// HISTÓRICA dela: saldo da conta ÷ soma do grupo, no último exercício realizado,
+// em fórmula visível (linha `#part`). Grupo = contas do MESMO bloco, ligadas ao
+// MESMO código, com a MESMA base (fornecedor gira contra custo, o resto contra
+// receita — misturar as duas bases no mesmo grupo não teria total único).
+//
+// K = 1 NÃO MUDA NADA: sem linha `#part`, sem rateio, mesma fórmula de antes.
+// SEM SALDO para ratear (soma do grupo zero ou ausente) NÃO se divide igualmente
+// em silêncio: as contas ficam em BRANCO com nota de motivo e efeito (regra 1).
+// =============================================================================
+interface GrupoRateado {
+  /** as contas do grupo (inclui a própria) */
+  membros: LinhaModelo[];
+  /** soma dos saldos do último exercício realizado, na escala do modelo */
+  somaHist: number;
+  /** não há saldo realizado para ratear: as contas não projetam */
+  semSaldo: boolean;
+}
+
+function gruposRateados(
+  ctx: Ctx, lista: LinhaModelo[], chaveDe: (l: LinhaModelo) => string,
+  formula: PremissaModelo["formula"], saldo: (l: LinhaModelo) => number,
+  mesmaBase: (a: LinhaModelo, b: LinhaModelo) => boolean = () => true,
+): Map<string, GrupoRateado> {
+  const out = new Map<string, GrupoRateado>();
+  for (const l of lista) {
+    const p = ctx.premissaPorLinha.get(l.rotulo_norm);
+    if (!p || p.formula !== formula) continue;
+    const membros = lista.filter((o) => {
+      const po = ctx.premissaPorLinha.get(o.rotulo_norm);
+      return po !== undefined && po.codigo === p.codigo && po.formula === formula && mesmaBase(l, o);
+    });
+    if (membros.length <= 1) continue;
+    const somaHist = membros.reduce((s, o) => s + saldo(o), 0);
+    out.set(chaveDe(l), { membros, somaHist, semSaldo: !(Math.abs(somaHist) > 1e-9) });
+  }
+  return out;
+}
+
+/** `saldo da conta ÷ soma do grupo` no último exercício realizado (fórmula, não valor). */
+function formulaParcela(g: Grade, ch: string, chavesDoGrupo: string[], ultimoHist: number): string {
+  return `=${g.ref(ch, ultimoHist)}/(${chavesDoGrupo.map((k) => g.ref(k, ultimoHist)).join("+")})`;
+}
+
+function notaParcela(p: PremissaModelo, gr: GrupoRateado, ultimoHist: number, total: string): string {
+  return `Premissa "${p.nome}" está ligada a ${gr.membros.length} contas deste bloco: o valor dela é do `
+    + `GRUPO (${total}) e esta conta recebe a parcela que tinha no grupo em ${ultimoHist} (saldo ÷ `
+    + "soma dos saldos). Aplicar o valor inteiro a cada conta multiplicaria o bloco por "
+    + `${gr.membros.length}.`;
+}
+
+function notaGrupoSemSaldo(p: PremissaModelo, gr: GrupoRateado, ultimoHist: number, efeito: string): string {
+  return `Premissa "${p.nome}" está ligada a ${gr.membros.length} contas deste bloco, mas o grupo não tem `
+    + `saldo realizado em ${ultimoHist} para ratear o valor entre elas (soma ${gr.somaHist}). Esta conta `
+    + `NÃO é projetada: fica em branco e os subtotais a leem como zero — ${efeito} `
+    + "Para projetar, ligue a premissa a uma conta com saldo realizado.";
+}
+
 /** O valor da âncora do documento naquele ano, na escala do modelo. */
 function valorDaAncora(ctx: Ctx, chave: string, ano: number): { valor: number; nota: string } | null {
   const l = ctx.ancoras.get(chave);
@@ -1768,6 +1839,10 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
   // ---- CUSTOS --------------------------------------------------------------
   g.linha("CUSTOS", { sinal: "(-)", rotulo: "CUSTOS", bloco: true, fmt: NUM });
   const custos = ctx.linhasPorBloco.get("custo") ?? [];
+  // `% da receita líquida` ligada a K contas do MESMO bloco é taxa do GRUPO (ver
+  // `gruposRateados`); cada conta recebe a parcela histórica dela em `#part`.
+  const saldoHistRec = (l: LinhaModelo) => valorNaEscala(l, ctx.ultimoHist, ctx.ent.unidade)?.valor ?? 0;
+  const rateioCusto = gruposRateados(ctx, custos, (l) => chaveLinha("custo", l), "pct_de_linha", saldoHistRec);
   for (const l of custos) {
     const ch = chaveLinha("custo", l);
     const p = ctx.premissaPorLinha.get(l.rotulo_norm);
@@ -1775,6 +1850,9 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     g.linha(`${ch}#base`, { rotulo: "    Base Case", fmt: PCT });
     g.linha(`${ch}#cli`, { rotulo: "    Cliente Case", fmt: PCT });
     g.linha(`${ch}#str`, { rotulo: "    Stress Case", fmt: PCT });
+    if (rateioCusto.get(ch) && !rateioCusto.get(ch)!.semSaldo) {
+      g.linha(`${ch}#part`, { rotulo: "    Parcela da conta no grupo da premissa", fmt: PCT });
+    }
   }
   g.linha("CUSTOS_PCT", { rotulo: "    % da receita líquida", fmt: PCT });
   g.pular();
@@ -1782,6 +1860,7 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
   // ---- SG&A ----------------------------------------------------------------
   g.linha("SGA", { sinal: "(-)", rotulo: "SG&A", bloco: true, fmt: NUM });
   const sga = ctx.linhasPorBloco.get("sga") ?? [];
+  const rateioSga = gruposRateados(ctx, sga, (l) => chaveLinha("sga", l), "pct_de_linha", saldoHistRec);
   for (const l of sga) {
     const ch = chaveLinha("sga", l);
     const p = ctx.premissaPorLinha.get(l.rotulo_norm);
@@ -1789,6 +1868,9 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     g.linha(`${ch}#base`, { rotulo: "    Base Case", fmt: PCT });
     g.linha(`${ch}#cli`, { rotulo: "    Cliente Case", fmt: PCT });
     g.linha(`${ch}#str`, { rotulo: "    Stress Case", fmt: PCT });
+    if (rateioSga.get(ch) && !rateioSga.get(ch)!.semSaldo) {
+      g.linha(`${ch}#part`, { rotulo: "    Parcela da conta no grupo da premissa", fmt: PCT });
+    }
   }
   g.linha("SGA_PCT", { rotulo: "    % da receita líquida", fmt: PCT });
   g.pular();
@@ -1881,7 +1963,7 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     ano: number,
     ant: number,
     cenS: CenSuf | null,
-  ): string => {
+  ): string | null => {
     const ch = chaveLinha(bloco, l);
     const p = ctx.premissaPorLinha.get(l.rotulo_norm);
     // A RAIZ DA SOMBRA É A LINHA ATIVA, e este detalhe é a diferença entre o bloco
@@ -1899,7 +1981,13 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     if (!p) return `=${anterior}`;
 
     if (bloco !== "receita" && p.formula === "pct_de_linha") {
-      return `=${taxaCen(ch, ano, cenS)}*${g.ref(alvoCen("RECEITA_LIQUIDA", cenS), ano)}`;
+      // Taxa ligada a K contas é do GRUPO: a conta leva a parcela dela (`#part`).
+      // Sem saldo para ratear a conta NÃO projeta (branco + nota na linha ativa) —
+      // nunca divisão igual em silêncio.
+      const gr = (bloco === "custo" ? rateioCusto : rateioSga).get(ch);
+      if (gr?.semSaldo) return null;
+      const parte = gr ? `*${g.ref(`${ch}#part`, ano)}` : "";
+      return `=${taxaCen(ch, ano, cenS)}*${g.ref(alvoCen("RECEITA_LIQUIDA", cenS), ano)}${parte}`;
     }
 
     if (bloco !== "receita" && p.formula === "indice_macro" && !painel.get(p.codigo)) {
@@ -2022,6 +2110,12 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
           : v === undefined
             ? `Premissa "${p.nome}" sem valor para ${ano}.`
             : `Premissa "${p.nome}" (${p.origem ?? "digitado"}).`;
+        const gr = (bloco === "custo" ? rateioCusto : rateioSga).get(ch);
+        if (gr && p.formula === "pct_de_linha" && !gr.semSaldo) {
+          g.set(`${ch}#part`, ano, formulaParcela(g, ch, gr.membros.map((o) => chaveLinha(bloco, o)), ctx.ultimoHist), {
+            fmt: PCT, nota: notaParcela(p, gr, ctx.ultimoHist, "taxa × receita líquida"),
+          });
+        }
         if (p.formula === "pct_de_linha" || p.formula === "indice_macro" || p.formula === "crescimento_composto") {
           g.set(`${ch}#base`, ano,
             doPainel ? `=${g.ref(doPainel, ano)}` : (v === undefined ? null : v / 100),
@@ -2045,6 +2139,15 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
             nota: `Corrigido pela série ${p.codigo} da aba Anual (dado versionado, não digitado). `
               + "Sem painel de premissas, esta conta é IMÓVEL entre cenários — o bloco de "
               + "comparação dos três cenários mostra isso em vez de esconder.",
+          });
+        } else if (gr && p.formula === "pct_de_linha") {
+          g.set(ch, ano, formulaConta(bloco, l, ano, ant!, null), {
+            fmt: NUM,
+            nota: gr.semSaldo
+              ? notaGrupoSemSaldo(p, gr, ctx.ultimoHist,
+                `o bloco de ${bloco === "custo" ? "custos" : "SG&A"} projeta MENOS do que a premissa indica `
+                + "(taxa × receita líquida), pela parte inteira deste grupo.")
+              : "Taxa do GRUPO × receita líquida × parcela histórica desta conta (linha #part).",
           });
         } else {
           g.set(ch, ano, formulaConta(bloco, l, ano, ant!, null), fmtCel);
@@ -2684,10 +2787,34 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
     + "É a mesma separação do Modelo Base.",
   );
   g.pular();
+  // A base de cada conta (ver o comentário longo mais abaixo). Sobe para cá porque o
+  // GRUPO de uma premissa compartilhada só vale entre contas de MESMA base.
+  const nomeBase = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
+    pref === "wc_p" && ehFornecedor(l.chave) ? "custos" : "receita líquida";
+  // `dias_de_giro` ligada a K contas é prazo do GRUPO (ver `gruposRateados`): o
+  // grupo vale `dias/360 × base` e cada conta recebe a parcela histórica dela.
+  const saldoGiro = (pref: "wc_a" | "wc_p") => (l: LinhaModelo) => {
+    const v = valorNaEscala(l, ctx.ultimoHist, ctx.ent.unidade)?.valor ?? 0;
+    return pref === "wc_a" ? v : Math.abs(v);
+  };
+  const rateioWC = new Map<string, GrupoRateado>([
+    ...gruposRateados(ctx, ativos, (l) => chaveLinha("wc_a", l), "dias_de_giro", saldoGiro("wc_a"),
+      (a, b) => nomeBase("wc_a", a) === nomeBase("wc_a", b)),
+    ...gruposRateados(ctx, passivos, (l) => chaveLinha("wc_p", l), "dias_de_giro", saldoGiro("wc_p"),
+      (a, b) => nomeBase("wc_p", a) === nomeBase("wc_p", b)),
+  ]);
+  // As linhas extras só existem para conta de grupo COM saldo; sem saldo a conta fica em branco.
+  const linhasDoGrupo = (ch: string) => {
+    const gr = rateioWC.get(ch);
+    if (!gr || gr.semSaldo) return;
+    g.linha(`${ch}#grupo`, { rotulo: "    dias do GRUPO (premissa)", fmt: NUM2 });
+    g.linha(`${ch}#part`, { rotulo: "    parcela da conta no grupo", fmt: PCT });
+  };
   g.linha(null, { rotulo: "ATIVO CIRCULANTE OPERACIONAL", bloco: true });
   for (const l of ativos) {
     const ch = chaveLinha("wc_a", l);
     g.linha(ch, { rotulo: l.chave, fmt: NUM });
+    linhasDoGrupo(ch);
     g.linha(`${ch}#dias`, { rotulo: "    dias de giro (base)", fmt: NUM2 });
     g.linha(`${ch}#diasStr`, { rotulo: "    dias de giro (stress)", fmt: NUM2 });
     // A SOMBRA POR CENÁRIO, no mesmo desenho do `CHECK_SOMBRA` da aba de receita
@@ -2703,6 +2830,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   for (const l of passivos) {
     const ch = chaveLinha("wc_p", l);
     g.linha(ch, { rotulo: l.chave, fmt: NUM });
+    linhasDoGrupo(ch);
     g.linha(`${ch}#dias`, { rotulo: "    dias de giro (base)", fmt: NUM2 });
     g.linha(`${ch}#diasStr`, { rotulo: "    dias de giro (stress)", fmt: NUM2 });
     for (const [suf] of CENARIOS_SUF) g.linha(`${ch}#v_${suf}`, { rotulo: `    sombra — ${suf}`, fmt: NUM });
@@ -2767,8 +2895,6 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   // RECEITA LÍQUIDA.
   const baseDe = (pref: "wc_a" | "wc_p", l: LinhaModelo, ano: number) =>
     pref === "wc_p" && ehFornecedor(l.chave) ? g.ref("BASE_COGS", ano) : g.ref("NET_REV", ano);
-  const nomeBase = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
-    pref === "wc_p" && ehFornecedor(l.chave) ? "custos" : "receita líquida";
 
   for (const ano of ctx.anos) {
     const hist = !g.ehProjetado(ano);
@@ -2814,13 +2940,43 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
         }
         const p = ctx.premissaPorLinha.get(l.rotulo_norm);
         const usaPremissa = p && p.formula === "dias_de_giro" && p.valores[String(ano)] !== undefined;
-        g.set(`${ch}#dias`, ano, usaPremissa ? p!.valores[String(ano)] : `=${g.ref(`${ch}#dias`, ant!)}`, {
-          fmt: DIAS, fill: FILL_INPUT,
-          nota: usaPremissa
-            ? `Premissa "${p!.nome}" (${p!.origem ?? "digitado"}). Aplicada sobre ${nomeBase(pref, l)}.`
-            : "Sem premissa de dias de giro para esta conta: mantém os dias do período anterior. "
-              + "É a hipótese conservadora — o giro não melhora sozinho.",
-        });
+        const gr = rateioWC.get(ch);
+        if (gr?.semSaldo && p) {
+          // Sem saldo realizado no grupo não há como ratear: BRANCO + nota (motivo e
+          // efeito), nunca zero medido nem divisão igual em silêncio.
+          const nota = notaGrupoSemSaldo(p, gr, ctx.ultimoHist,
+            `o capital de giro projetado fica MENOR que o da premissa (dias/360 × ${nomeBase(pref, l)}), `
+            + "pela parte inteira deste grupo.");
+          g.set(`${ch}#dias`, ano, null, { fmt: DIAS, fill: FILL_INPUT, nota });
+          g.set(ch, ano, null, { fmt: NUM, nota });
+          continue;
+        }
+        if (gr && p && usaPremissa) {
+          // Os dias da conta = dias do GRUPO × parcela dela; a fórmula de `ch`, o Stress
+          // e as sombras seguem lendo `#dias` como antes (um ponto só).
+          g.set(`${ch}#grupo`, ano, p.valores[String(ano)], {
+            fmt: NUM2, fill: FILL_INPUT,
+            nota: `Premissa "${p.nome}" (${p.origem ?? "digitado"}): dias do GRUPO de ${gr.membros.length} `
+              + `contas, aplicados sobre ${nomeBase(pref, l)} UMA vez.`,
+          });
+          g.set(`${ch}#part`, ano, formulaParcela(g, ch,
+            gr.membros.map((o) => chaveLinha(pref, o)), ctx.ultimoHist), {
+            fmt: PCT, nota: notaParcela(p, gr, ctx.ultimoHist, `dias/360 × ${nomeBase(pref, l)}`),
+          });
+          g.set(`${ch}#dias`, ano, `=${g.ref(`${ch}#grupo`, ano)}*${g.ref(`${ch}#part`, ano)}`, {
+            fmt: DIAS,
+            nota: "Dias do grupo × parcela histórica desta conta. A soma das contas do grupo dá os "
+              + "dias do grupo.",
+          });
+        } else {
+          g.set(`${ch}#dias`, ano, usaPremissa ? p!.valores[String(ano)] : `=${g.ref(`${ch}#dias`, ant!)}`, {
+            fmt: DIAS, fill: FILL_INPUT,
+            nota: usaPremissa
+              ? `Premissa "${p!.nome}" (${p!.origem ?? "digitado"}). Aplicada sobre ${nomeBase(pref, l)}.`
+              : "Sem premissa de dias de giro para esta conta: mantém os dias do período anterior. "
+                + "É a hipótese conservadora — o giro não melhora sozinho.",
+          });
+        }
         g.set(`${ch}#diasStr`, ano, `=${g.ref(`${ch}#dias`, ano)}*(1+${refStress()}*${pref === "wc_a" ? "1" : "-1"})`, {
           fmt: DIAS,
           nota: pref === "wc_a"
@@ -3028,10 +3184,17 @@ function abaImobilizado(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   g.linha("TOTAL_FA", { rotulo: "Imobilizado líquido total", negrito: true, topo: true, fmt: NUM });
   g.pular();
   g.linha(null, { rotulo: "CAPEX", bloco: true });
+  // `% da receita líquida` ligada a K classes é taxa do GRUPO de classes (ver
+  // `gruposRateados`): cada classe leva a parcela dela no imobilizado realizado.
+  const rateioCapex = gruposRateados(ctx, classes, (l) => chaveLinha("capex", l), "pct_de_linha",
+    (l) => valorNaEscala(l, ctx.ultimoHist, ctx.ent.unidade)?.valor ?? 0);
   for (const l of classes) {
     const ch = chaveLinha("capex", l);
     g.linha(ch, { rotulo: `Capex — ${l.chave}`, fmt: NUM });
     g.linha(`${ch}#pct`, { rotulo: "    % da receita líquida (base)", fmt: PCT });
+    if (rateioCapex.get(ch) && !rateioCapex.get(ch)!.semSaldo) {
+      g.linha(`${ch}#part`, { rotulo: "    parcela da classe no grupo da premissa", fmt: PCT });
+    }
   }
   g.linha("TOTAL_CAPEX", { rotulo: "CAPEX total", negrito: true, topo: true, fmt: NUM });
   g.linha("CAPEX_PCT", { rotulo: "    % da receita líquida", fmt: PCT });
@@ -3068,10 +3231,25 @@ function abaImobilizado(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
             + "rápido de fazer um modelo fechar bonito e não acontecer."
           : `Premissa "${p!.nome}".`,
       });
+      const grCx = rateioCapex.get(chCx);
+      if (grCx && p && !grCx.semSaldo) {
+        g.set(`${chCx}#part`, ano,
+          formulaParcela(g, chFa, grCx.membros.map((o) => chaveLinha("fa", o)), ctx.ultimoHist),
+          { fmt: PCT, nota: notaParcela(p, grCx, ctx.ultimoHist, "taxa × receita líquida") });
+      }
       g.set(chCx, ano,
-        `=CHOOSE(${cen},${g.ref(`${chCx}#pct`, ano)},${g.ref(`${chCx}#pct`, ano)},`
-        + `${g.ref(`${chCx}#pct`, ano)}*(1-${refStress()}))*${g.externa("Revenues, COGS & SG&A", gRec, "RECEITA_LIQUIDA", ano)}`,
-        { fmt: NUM, nota: "No Stress o capex é CORTADO (é a primeira coisa que se corta numa crise de caixa)." });
+        grCx?.semSaldo ? null
+          : `=CHOOSE(${cen},${g.ref(`${chCx}#pct`, ano)},${g.ref(`${chCx}#pct`, ano)},`
+            + `${g.ref(`${chCx}#pct`, ano)}*(1-${refStress()}))*${g.externa("Revenues, COGS & SG&A", gRec, "RECEITA_LIQUIDA", ano)}`
+            + (grCx ? `*${g.ref(`${chCx}#part`, ano)}` : ""),
+        {
+          fmt: NUM,
+          nota: grCx?.semSaldo && p
+            ? notaGrupoSemSaldo(p, grCx, ctx.ultimoHist,
+              "o CAPEX projeta MENOS do que a premissa indica (taxa × receita líquida), pela parte inteira "
+              + "deste grupo de classes.")
+            : "No Stress o capex é CORTADO (é a primeira coisa que se corta numa crise de caixa).",
+        });
       // RATEIO EXAUSTIVO DA DEPRECIAÇÃO — e é uma correção que a álgebra do
       // balanço exige, não estética.
       //
