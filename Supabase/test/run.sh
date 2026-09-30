@@ -363,6 +363,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/divergencia_prevalece_na_rodad
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o estado vigente entre rodadas (0192, revisão S102): secao_fecha por documento, ok do irmão, descricao"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/divergencia_vigente_entre_rodadas.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== a tolerância que crescia com a escala (0193): absoluta na base em caixa_bp_fluxo e receita_dre_vs_faturamento"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/tolerancia_na_base.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
