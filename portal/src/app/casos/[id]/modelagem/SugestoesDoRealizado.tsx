@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { ativarPremissa, type Resultado } from "./actions";
-import type { PremissaSugerida } from "@/lib/premissas-do-realizado";
+import { valorParaGravar, type PremissaSugerida } from "@/lib/premissas-do-realizado";
 
 // O QUE ESTE BLOCO ENTREGA, e por que ele fica ACIMA da lista de premissas.
 //
@@ -53,7 +53,7 @@ function Sugestao({
       <input type="hidden" name="codigo" value={p.codigo} />
       <input type="hidden" name="origem" value="historico" />
       {p.valor !== null && anos.map((ano) => (
-        <input key={ano} type="hidden" name={`valor_${ano}`} value={String(p.valor)} />
+        <input key={ano} type="hidden" name={`valor_${ano}`} value={String(valorParaGravar(p))} />
       ))}
 
       <span className="min-w-48 flex-1 font-medium text-tinta-800">{p.nome}</span>

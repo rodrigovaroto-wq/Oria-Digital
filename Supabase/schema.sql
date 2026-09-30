@@ -8438,6 +8438,14 @@ declare
   v_motivo_ano  text;
   v_faltas      text[] := '{}';
   v_motivo_prec text;
+  -- 0196: o PERÍODO PRÓPRIO de cada documento (Balanço e DFC), lido uma vez fora do
+  -- laço, e se ESTE ano do laço cai fora dele. Ver o cabeçalho da migration.
+  v_bp_tipo      text;
+  v_bp_ref       text;
+  v_fx_tipo      text;
+  v_fx_ref       text;
+  v_bp_outro_ano boolean;
+  v_fx_outro_ano boolean;
 begin
   v_doc_bp := fn_documento_balanco(p_caso_id, p_entidade_id, p_periodo_id);
   v_doc_fx := fn_documento_por_tipo(p_caso_id, p_entidade_id, p_periodo_id, 'FLUXO_CAIXA');
@@ -8457,10 +8465,25 @@ begin
   v_ver_bp  := fn_versao_atual(v_doc_bp);
   v_ver_fx  := fn_versao_atual(v_doc_fx);
   v_col_ent := fn_coluna_entidade(v_ver_bp, p_entidade_id);
+  select pe.tipo, pe.referencia into v_bp_tipo, v_bp_ref
+    from documento d left join periodo pe on pe.id = d.periodo_id where d.id = v_doc_bp;
+  select pe.tipo, pe.referencia into v_fx_tipo, v_fx_ref
+    from documento d left join periodo pe on pe.id = d.periodo_id where d.id = v_doc_fx;
 
   foreach v_ano in array fn_anos_alvo(p_periodo_id) loop
     v_col_per := case when v_ano is null then null
                       else fn_coluna_periodo_do_ano(v_ver_bp, v_ano) end;
+    -- 0196: Balanço SEM coluna de período (v_col_per nulo) deixava a linha valer para
+    -- QUALQUER ano do laço. `fn_linha_vale_para_ano` (0195) responde se o PERÍODO
+    -- PRÓPRIO do documento ancora o ano; se não, a sentinela E'\x01' — a mesma que
+    -- a 0023 já usa para "documento com colunas, nenhuma é deste ano" — faz a busca
+    -- não devolver nada e o motivo sair `sem_periodo_par` (contrato 0186/0188).
+    v_bp_outro_ano := false;
+    if v_ano is not null and v_col_per is null
+       and not fn_linha_vale_para_ano(v_ver_bp, null, v_bp_tipo, v_bp_ref, v_ano) then
+      v_col_per := E'\x01';
+      v_bp_outro_ano := true;
+    end if;
     v_col_bp := v_col_per;
 
     -- Caixa no Balanço. "Disponível"/"Disponibilidades" é o rótulo mais comum em
@@ -8515,6 +8538,14 @@ begin
     -- Saldo final na DFC (a coluna de período da DFC é a dela, não a do BP).
     v_col_per := case when v_ano is null then null
                       else fn_coluna_periodo_do_ano(v_ver_fx, v_ano) end;
+    -- 0196: o mesmo do Balanço, agora para a DFC — a DFC ANUAL de um exercício só tem
+    -- periodo_coluna nulo e era lida como saldo final de 2024 e de 2025.
+    v_fx_outro_ano := false;
+    if v_ano is not null and v_col_per is null
+       and not fn_linha_vale_para_ano(v_ver_fx, null, v_fx_tipo, v_fx_ref, v_ano) then
+      v_col_per := E'\x01';
+      v_fx_outro_ano := true;
+    end if;
     select * into v_saldo from fn_valor_conceito_col(v_ver_fx,
       array['saldo', 'final'], array['inicial', 'inicio'], null, v_col_per);
     if v_saldo.id is null then
@@ -8537,11 +8568,13 @@ begin
         coalesce(v_ano::text, 'período do documento'),
         array_to_string(array_remove(array[
           case when v_caixa.id is null then
-            case when v_col_bp = E'\x01' then 'o Balanço não tem coluna deste exercício'
+            case when v_bp_outro_ano then format('o Balanço é de %s — não traz este exercício', v_bp_ref)
+                 when v_col_bp = E'\x01' then 'o Balanço não tem coluna deste exercício'
                  when v_col_ent = E'\x01' then 'o Balanço não tem coluna desta entidade'
                  else 'o Caixa/Disponível do Balanço não foi localizado' end end,
           case when v_saldo.id is null then
-            case when v_col_per = E'\x01' then 'o Fluxo de Caixa não tem coluna deste exercício'
+            case when v_fx_outro_ano then format('o Fluxo de Caixa é de %s — não traz este exercício', v_fx_ref)
+                 when v_col_per = E'\x01' then 'o Fluxo de Caixa não tem coluna deste exercício'
                  else 'o Saldo final do Fluxo de Caixa não foi localizado' end end
         ], null), ' e '));
       continue;
@@ -8634,10 +8667,19 @@ begin
     'caixa_bp_fluxo', 'A', v_doc_bp, v_fonte_a, v_fonte_b, v_resultado, v_pior_abs, v_pior_pct,
     jsonb_build_object('tolerancia_abs', p_tolerancia_abs, 'tolerancia_pct', p_tolerancia_pct,
                        'anos_checados', v_n),
-    format('Caixa do Balanço vs Saldo final do Fluxo de Caixa em %s ano(s): %s.',
-           v_n, array_to_string(v_partes, '; ')));
+    format('Caixa do Balanço vs Saldo final do Fluxo de Caixa em %s ano(s): %s.%s',
+           v_n, array_to_string(v_partes, '; '),
+           -- 0196 (regra 1): ano sem par não some calado — fica dito que não foi comparado.
+           case when cardinality(v_faltas) > 0
+                then ' Não comparado — ' || array_to_string(v_faltas, '; ') || '.' else '' end));
 end;
 $_$;
+
+--
+-- Name: FUNCTION fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS '0196: Balanço e DFC sem periodo_coluna só valem para o ano que o PERÍODO PRÓPRIO do documento ancora (fn_linha_vale_para_ano); ano sem linha válida do outro lado é sem_periodo_par, não divergência. Tolerância na base com piso de arredondamento (0193).';
 
 --
 -- Name: fn_reconciliar_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -8921,6 +8963,10 @@ declare
   v_tipo_div        text;
   v_ref_div         text;
   v_anos_mapa       int[];
+  -- 0196: período PRÓPRIO da DRE e se este ano do laço cai fora dele.
+  v_dre_tipo      text;
+  v_dre_ref       text;
+  v_dre_outro_ano boolean;
 begin
   v_doc_dre := fn_documento_por_tipo(p_caso_id, p_entidade_id, p_periodo_id, 'DRE');
   v_doc_div := fn_documento_por_tipo(p_caso_id, p_entidade_id, p_periodo_id, 'MAPA_DIVIDA');
@@ -8939,6 +8985,8 @@ begin
   v_ver_div  := fn_versao_atual(v_doc_div);
   v_col_ent  := fn_coluna_entidade(v_ver_dre, p_entidade_id);
   v_unid_div := fn_unidade_predominante(v_ver_div);
+  select pe.tipo, pe.referencia into v_dre_tipo, v_dre_ref
+    from documento d left join periodo pe on pe.id = d.periodo_id where d.id = v_doc_dre;
 
   -- 0191: o Mapa de Dívida é um retrato de UMA data — MEDIDO EM PRODUÇÃO
   -- (25/09/2026): todo MAPA_DIVIDA hoje tem período de um ano só. Sem este
@@ -8954,6 +9002,14 @@ begin
   foreach v_ano in array fn_anos_alvo(p_periodo_id) loop
     v_col_per := case when v_ano is null then null
                       else fn_coluna_periodo_do_ano(v_ver_dre, v_ano) end;
+    -- 0196: DRE SEM coluna de período valia para qualquer ano do laço (o corte da
+    -- 0191 só olhava o lado do MAPA). Ver o cabeçalho da migration.
+    v_dre_outro_ano := false;
+    if v_ano is not null and v_col_per is null
+       and not fn_linha_vale_para_ano(v_ver_dre, null, v_dre_tipo, v_dre_ref, v_ano) then
+      v_col_per := E'\x01';
+      v_dre_outro_ano := true;
+    end if;
 
     -- 0191: o ano deste laço não é coberto pelo período do Mapa de Dívida —
     -- não compara. `v_anos_mapa` vazio (mapa sem período, ou período que não
@@ -9006,7 +9062,8 @@ begin
         end if;
       end if;
       v_faltas := v_faltas || format('%s: %s', coalesce(v_ano::text, 'período do documento'),
-        case when v_col_per = E'\x01' then 'a DRE não tem coluna deste exercício'
+        case when v_dre_outro_ano then format('a DRE é de %s — não traz este exercício', v_dre_ref)
+             when v_col_per = E'\x01' then 'a DRE não tem coluna deste exercício'
              when v_col_ent = E'\x01' then 'a DRE não tem coluna desta entidade'
              else 'a Despesa Financeira da DRE não foi localizada' end);
       continue;
@@ -9106,8 +9163,10 @@ begin
     v_pior_abs, v_pior_pct,
     jsonb_build_object('tolerancia_abs', p_tolerancia_abs, 'tolerancia_pct', p_tolerancia_pct,
                        'anos_checados', v_n),
-    format('Despesa Financeira da DRE vs juros do Mapa de Dívida em %s ano(s): %s.',
-           v_n, array_to_string(v_partes, '; ')));
+    format('Despesa Financeira da DRE vs juros do Mapa de Dívida em %s ano(s): %s.%s',
+           v_n, array_to_string(v_partes, '; '),
+           case when cardinality(v_faltas) > 0
+                then ' Não comparado — ' || array_to_string(v_faltas, '; ') || '.' else '' end));
 end;
 $_$;
 
@@ -10064,6 +10123,10 @@ declare
   v_motivos_ano text[] := '{}';
   v_faltas      text[] := '{}';
   v_motivo_prec text;
+  -- 0196: período PRÓPRIO da DRE e se este ano do laço cai fora dele.
+  v_dre_tipo      text;
+  v_dre_ref       text;
+  v_dre_outro_ano boolean;
 begin
   v_doc_dre := fn_documento_por_tipo(p_caso_id, p_entidade_id, p_periodo_id, 'DRE');
   v_doc_fat := fn_documento_por_tipo(p_caso_id, p_entidade_id, p_periodo_id, 'FATURAMENTO_24M');
@@ -10082,6 +10145,8 @@ begin
   v_ver_fat  := fn_versao_atual(v_doc_fat);
   v_col_ent  := fn_coluna_entidade(v_ver_dre, p_entidade_id);
   v_unid_fat := fn_unidade_predominante(v_ver_fat);
+  select pe.tipo, pe.referencia into v_dre_tipo, v_dre_ref
+    from documento d left join periodo pe on pe.id = d.periodo_id where d.id = v_doc_dre;
 
   foreach v_ano in array fn_anos_alvo(p_periodo_id) loop
     if v_ano is null then
@@ -10091,6 +10156,15 @@ begin
       continue;
     end if;
     v_col_per := fn_coluna_periodo_do_ano(v_ver_dre, v_ano);
+    -- 0196: DRE SEM coluna de período valia para qualquer ano do laço, enquanto o
+    -- faturamento é recortado POR ANO — a receita de um exercício saía contra os
+    -- meses de outro. Ver o cabeçalho da migration.
+    v_dre_outro_ano := false;
+    if v_col_per is null
+       and not fn_linha_vale_para_ano(v_ver_dre, null, v_dre_tipo, v_dre_ref, v_ano) then
+      v_col_per := E'\x01';
+      v_dre_outro_ano := true;
+    end if;
 
     select * into v_receita from fn_valor_conceito_col(v_ver_dre,
       array['receita', 'bruta'], array['liquida', 'deducoes', 'deducao'], v_col_ent, v_col_per);
@@ -10107,7 +10181,8 @@ begin
       if coalesce(v_soma_sec.n_linhas, 0) = 0 then
         v_motivos_ano := v_motivos_ano || fn_motivo_do_lado(false, v_col_ent, v_col_per);
         v_faltas := v_faltas || format('%s: %s', v_ano,
-          case when v_col_per = E'\x01' then 'a DRE não tem coluna deste exercício'
+          case when v_dre_outro_ano then format('a DRE é de %s — não traz este exercício', v_dre_ref)
+               when v_col_per = E'\x01' then 'a DRE não tem coluna deste exercício'
                when v_col_ent = E'\x01' then 'a DRE não tem coluna desta entidade'
                else 'a Receita Bruta da DRE não foi localizada (nem como linha, nem como seção)' end);
         continue;
@@ -10188,8 +10263,10 @@ begin
     v_pior_abs, v_pior_pct,
     jsonb_build_object('tolerancia_abs', p_tolerancia_abs, 'tolerancia_pct', p_tolerancia_pct,
                        'anos_checados', v_n),
-    format('Receita Bruta da DRE vs faturamento mensal em %s ano(s): %s.',
-           v_n, array_to_string(v_partes, '; ')));
+    format('Receita Bruta da DRE vs faturamento mensal em %s ano(s): %s.%s',
+           v_n, array_to_string(v_partes, '; '),
+           case when cardinality(v_faltas) > 0
+                then ' Não comparado — ' || array_to_string(v_faltas, '; ') || '.' else '' end));
 end;
 $_$;
 
@@ -12714,25 +12791,48 @@ $$;
 CREATE FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) RETURNS TABLE(soma numeric, n_linhas integer)
     LANGUAGE sql STABLE
     AS $_$
-  with candidatos as (
+  with modo as (
+    -- O documento traz o ANO na coluna? ('2024', '2025', '31/12/2024'...) Só então o
+    -- ano sai da `periodo_coluna`; colunas de CATEGORIA (Saídas R$, Total R$) não
+    -- ancoram ano nenhum e ficam no modo do rótulo, o de sempre (0167).
+    select exists (
+      select 1 from campo_extraido ce
+      where ce.documento_versao_id = p_documento_versao_id
+        and ce.periodo_coluna is not null
+        and cardinality(fn_anos_texto(ce.periodo_coluna)) > 0
+    ) as ano_na_coluna
+  ),
+  candidatos as (
     select ce.chave, ce.periodo_coluna, ce.valor_num
-    from campo_extraido ce
+    from campo_extraido ce cross join modo
     where ce.documento_versao_id = p_documento_versao_id
       and ce.valor_num is not null
       and (
-        position(p_ano4 in fn_normalizar_texto(ce.chave)) > 0
-        or fn_normalizar_texto(ce.chave) ~ ('[/. -]' || p_ano2 || '($|[^0-9])')
+        case when modo.ano_na_coluna then
+          -- 0196: a célula é do ano pedido quando a COLUNA diz que é; o rótulo só
+          -- precisa parecer um mês (o "jan/2024 — jan/2025" traz os DOIS anos, e a
+          -- linha "Ticket médio…" não é mês nenhum).
+          fn_anos_texto(ce.periodo_coluna) && fn_anos_texto(p_ano4)
+          and (
+            position(p_ano4 in fn_normalizar_texto(ce.chave)) > 0
+            or fn_normalizar_texto(ce.chave) ~ ('[/. -]' || p_ano2 || '($|[^0-9])')
+            or fn_normalizar_texto(ce.chave) ~ '^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)'
+          )
+        else
+          position(p_ano4 in fn_normalizar_texto(ce.chave)) > 0
+          or fn_normalizar_texto(ce.chave) ~ ('[/. -]' || p_ano2 || '($|[^0-9])')
+        end
       )
       and fn_normalizar_texto(ce.chave) not like '%total%'
       and fn_normalizar_texto(ce.chave) not like '%acumulad%'
       and fn_normalizar_texto(ce.chave) not like '%media%'
       and fn_normalizar_texto(ce.chave) not like '%médi%'
+      -- 0196: coluna de PERCENTUAL nunca é dinheiro (a 'Variação %' do relatório de
+      -- 3 colunas somava -41,2 a -6,7 ao faturamento de cada mês).
+      and position('%' in coalesce(ce.periodo_coluna, '')) = 0
+      and fn_normalizar_texto(coalesce(ce.periodo_coluna, '')) not like '%variac%'
   ),
-  -- UM VALOR POR MÊS, e é aqui que mora a correção. A categoria
-  -- (Saídas/Serviços/Outros/Total) mora em `periodo_coluna`, não na `chave` —
-  -- a chave repete o MESMO mês nas quatro células. Se o mês tem uma célula de
-  -- TOTAL, ela é a resposta; as outras três são a decomposição dela, e somar as
-  -- quatro conta o mesmo dinheiro duas vezes.
+  -- UM VALOR POR MÊS (0167) — inalterado.
   por_rotulo as (
     select
       chave,
@@ -12750,7 +12850,7 @@ $_$;
 -- Name: FUNCTION fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) IS 'Soma o faturamento de um ano, UM VALOR POR MÊS. 0167: a categoria mora em periodo_coluna (Saídas/Serviços/Outros/Total) e a chave repete o mês nas quatro — somar tudo dava 48 "meses" num relatório de 12 e o dobro do faturamento. Com coluna de total, ela manda; sem ela, soma-se a quebra.';
+COMMENT ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) IS 'Soma o faturamento de um ano, UM VALOR POR MÊS. 0167: a categoria mora em periodo_coluna (Saídas/Serviços/Outros/Total) e a chave repete o mês nas quatro — com coluna de total, ela manda. 0196: quando as colunas do documento são ANOS (2024, 2025), o ano sai da COLUNA — o rótulo "jan/2024 — jan/2025" traz os dois anos e somava as duas colunas e a Variação % juntas; coluna de percentual nunca entra na soma.';
 
 --
 -- Name: fn_sugerir_perguntas(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17694,6 +17794,12 @@ GRANT ALL ON FUNCTION public.fn_reavaliar_guardas_extracao(p_documento_versao_id
 GRANT ALL ON FUNCTION public.fn_reconciliar_arvore(p_documento_id uuid) TO authenticated;
 
 --
+-- Name: FUNCTION fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
+
+--
 -- Name: FUNCTION fn_reconciliar_caso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -17728,6 +17834,12 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id 
 --
 
 GRANT ALL ON FUNCTION public.fn_reconciliar_por_documento(p_documento_id uuid, p_escopo text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_reconciliar_receita_dre_vs_faturamento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_reconciliar_receita_dre_vs_faturamento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 
 --
 -- Name: FUNCTION fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p_entidade_id uuid); Type: ACL; Schema: public; Owner: -
@@ -17843,6 +17955,12 @@ GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO authenti
 --
 
 GRANT ALL ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_sugerir_perguntas(p_caso_id uuid); Type: ACL; Schema: public; Owner: -

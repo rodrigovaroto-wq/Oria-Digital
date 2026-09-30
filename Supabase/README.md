@@ -733,6 +733,34 @@ supabase db execute --file Supabase/migrations/0195_o_espelho_que_lia_o_balanco_
 #   select id, caso_id, criado_em from reconciliacao
 #    where tipo = 'intragrupo_espelho' and resultado = 'ok';
 
+# A 0196 REEMITE fn_reconciliar_caixa_bp_fluxo, fn_reconciliar_receita_dre_vs_faturamento,
+# fn_reconciliar_despfin_dre_vs_divida e fn_somar_faturamento_ano. O DEFEITO (30/09/2026,
+# caso bb37f726, book-vertentes): a DFC ANUAL 2025 (sem periodo_coluna) era lida como saldo
+# final de 2024 e o Balanço "multi 24,25" (Disponível 2024 = 4.840) saía `divergente` — pendência
+# Classe A FALSA de R$ 4,34 mi. É o MESMO R$ 4,34 mi do "Teste v33/v35" que o cabeçalho da 0192
+# descreveu como divergência real: era falso positivo (a 0192, já aplicada, não foi editada).
+# A causa é a da 0194/0195 (linha sem periodo_coluna vale para qualquer ano); a correção usa
+# fn_linha_vale_para_ano nos dois lados, e o ano sem linha válida vira `sem_periodo_par`, com a
+# frase "Não comparado — 2024: ..." na descrição (regra 1). MESMO VÍCIO, provado por teste, na
+# receita (DRE de um ano só) e na despesa financeira (latente: 0 de 17 em produção); NÃO têm:
+# ativo_passivo_pl (compara dentro do mesmo documento). SEGUNDO DEFEITO, mesmo caso: o faturamento
+# "jan/2024 — jan/2025" com colunas 2024, 2025 e 'Variação %' somava as três (321.579,6 em vez dos
+# 183.480 de 2024); agora o ano sai da coluna e percentual nunca entra na soma.
+# MEDIDO EM PRODUÇÃO (30/09/2026, só-leitura): 5 pendências abertas de caixa com o arranjo, em 4
+# casos (4 só com o 2024 falso; a 5ª, caso 03c8804c, tem também 2025 = 320 contra 500, real);
+# 3 de 25 receitas; 1 documento de faturamento com 'Variação %'. SEM BACKFILL: vale na próxima
+# rodada de cada caso, e as 4 pendências falsas se resolvem sozinhas quando a checagem rodar.
+# Teste: Supabase/test/caixa_dfc_de_um_ano.test.sql (21 asserts; 17 reprovam com as 4 funções
+# de volta ao corpo anterior). ACHADO NÃO CORRIGIDO: fn_reconciliar_ativo_passivo_pl ainda
+# multiplica a tolerância absoluta pelo fator de escala (vício da 0188/0193).
+supabase db execute --file Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0196' and not presente;                 -- ZERO linhas
+# E para achar as pendências de caixa que a correção vai fechar na próxima rodada:
+#   select id, caso_id from pendencia where motivo = 'reconciliacao:caixa_bp_fluxo'
+#    and estado = 'aberta' and descricao like '%2024: Caixa no Balanço%';
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

@@ -116,6 +116,24 @@ console.log("--- 5. não pronto: nunca mostra fração, mesmo que o banco a tenh
     "o título do bloco de 'falta algo' também fica como sempre foi");
 }
 
+console.log("--- 6. Portão 2 fechado: a tela NÃO diz 'pronto para o export' (o export recusa com 409) ---");
+{
+  // Medido em 30/09/2026 (caso bb37f726): premissas prontas, 3 pendências
+  // bloqueantes sem decisão, a tela dizia "Pronto para o export de modelagem" e
+  // o clique devolvia um JSON 409. O comportamento afirmado: com o portão
+  // fechado nenhum dos dois textos promete o export, e o título nomeia o motivo.
+  const conf: ConferenciaModelagemCobertura = { pronto: true, fracao_linhas_com_premissa: 0.1 };
+  const fechado = { elegivel: false, motivos: ["3 pendência(s) BLOQUEANTE(s) sem decisão"] };
+  const chip = textoChipModelagem(conf, fechado);
+  const titulo = textoTituloConferenciaModelagem(conf, fechado);
+  ok(!/^pronto/i.test(chip), "chip com portão fechado não começa por 'pronto'", chip);
+  ok(!/Pronto para o export/.test(titulo), "título com portão fechado não diz 'Pronto para o export'", titulo);
+  ok(titulo.includes("3 pendência(s) BLOQUEANTE(s) sem decisão"), "título nomeia o motivo do portão", titulo);
+  const aberto = { elegivel: true, motivos: [] };
+  ok(textoTituloConferenciaModelagem(conf, aberto) === textoTituloConferenciaModelagem(conf),
+    "portão aberto: o texto é o mesmo de antes (nada muda para quem pode exportar)");
+}
+
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);
 if (falhas > 0) process.exit(1);
 console.log("MODELAGEM COBERTURA OK — o veredito 'pronto' não pinta 5% e 100% do mesmo verde");

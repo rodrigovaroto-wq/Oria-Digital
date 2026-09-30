@@ -28,7 +28,7 @@
  *     exercício sem estoque. O que não pode é inventar a base.
  */
 
-import { sugerirDoRealizado, type LinhaRealizada } from "../src/lib/premissas-do-realizado.ts";
+import { sugerirDoRealizado, valorParaGravar, type LinhaRealizada } from "../src/lib/premissas-do-realizado.ts";
 import { projetarPremissa } from "../src/lib/projetar-premissa.ts";
 
 let falhas = 0;
@@ -355,6 +355,35 @@ console.log("10. a projeção automática");
      "valor de decisão do caso NÃO é projetado por conta própria", String(capex.porQueNao));
   ok(capex.porQueNao!.includes("inventar a tese"),
      "e o motivo diz o que estaria sendo inventado", capex.porQueNao!);
+}
+
+
+// 11. O QUE O "USAR" GRAVA. A sugestão em % sai como FRAÇÃO da razão (0,8797),
+// mas o catálogo guarda PONTOS PERCENTUAIS — o que a pessoa digita e o que o
+// modelo divide por 100. Medido em produção (30/09/2026, caso bb37f726): gravar
+// a fração projetou Custo variável de 0,9% e SG&A de 0,2%. O contrato afirmado
+// aqui é o COMPORTAMENTO: o que se grava, dividido por 100 como o modelo faz,
+// devolve a razão sugerida; e aceitar a sugestão grava o mesmo número que
+// digitar o percentual.
+console.log("11. o que o \"Usar\" grava");
+{
+  const custo = { unidade: "%" as const, valor: 0.8797 };
+  const gravado = valorParaGravar(custo);
+  // Comparado com tolerância (Sonar `typescript:S1244`: igualdade exata de ponto
+  // flutuante). O texto exato é conferido logo abaixo, onde o ruído existe de fato.
+  ok(gravado !== null && Math.abs(gravado - 87.97) < 1e-9,
+    "sugestão de 87,97% grava 87,97 (pontos percentuais), não 0,8797", String(gravado));
+  // 0,57 × 100 em ponto flutuante é 56,99999999999999 (medido no Node): é esse o
+  // ruído que o arredondamento tira. 0,8797 × 100 sai exato e não serviria de prova.
+  const ruidoso = valorParaGravar({ unidade: "%", valor: 0.57 });
+  ok(String(ruidoso) === "57", "e grava sem o ruído de ponto flutuante (57, não 56.99999999999999)", String(ruidoso));
+  ok(gravado !== null && Math.abs(gravado / 100 - custo.valor) < 1e-9,
+    "o que o modelo aplica (gravado ÷ 100) é a razão sugerida", String(gravado));
+  ok(valorParaGravar({ unidade: "%", valor: 0.34 }) === 34,
+    "aceitar 34% grava o MESMO que digitar 34");
+  const dias = valorParaGravar({ unidade: "dias", valor: 176.4 });
+  ok(dias !== null && Math.abs(dias - 176.4) < 1e-9, "premissa em dias grava os dias, sem conversão", String(dias));
+  ok(valorParaGravar({ unidade: "%", valor: null }) === null, "sugestão sem valor não grava zero");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

@@ -163,7 +163,21 @@ export function conferirTotalDaSerie(campos) {
     if (totais.length !== 1) continue;
     const total = totais[0];
     if (typeof total.valor_num !== 'number') continue;
-    const partes = linhas.filter((c) => c !== total && !ehTotal(c.chave));
+    const [pcCol, ecCol] = colKey.split('\u0000');
+    // COLUNA NÃO ADITIVA NÃO É SÉRIE. "Variação %" do faturamento tem uma
+    // variação por mês e a do ano na linha de total: somar doze variações nunca
+    // dá a anual, e a checagem acusava diferença de 293,6 num documento certo
+    // (medido em 30/09/2026, mandato de teste em produção, caso bb37f726).
+    if (/%|varia|\bvar\b|margem|media|ticket|indice|taxa/.test(normRotulo(pcCol || ecCol))) continue;
+    // A SÉRIE É O QUE VEM ANTES DO TOTAL, na ordem do documento. As linhas
+    // DEPOIS dele são memória ("Média mensal", "Ticket médio por pedido"), não
+    // parcela. Somá-las acusou "soma das 14 linhas 198.808,2 contra 183.480"
+    // quando os 12 meses fecham EXATOS em 183.480: 183.480 + 15.290 + 38,2 é o
+    // número da pendência falsa (mesmo caso bb37f726). Sem `ordem` em alguma
+    // linha, fica a regra antiga, porque não há como saber o que veio antes.
+    const temOrdem = linhas.every((c) => Number.isFinite(c.ordem));
+    const partes = linhas.filter((c) => c !== total && !ehTotal(c.chave)
+      && (!temOrdem || c.ordem < total.ordem));
     // Precisa de pelo menos DUAS parcelas para ser série (uma parcela só não
     // é série, é a mesma conta repetida) — abaixo disso não dá para concluir.
     if (partes.length < 2) continue;
@@ -177,8 +191,7 @@ export function conferirTotalDaSerie(campos) {
     const diff = Math.abs(soma - total.valor_num);
     if (diff <= tolerancia) continue;
 
-    const [pc, ec] = colKey.split('\u0000');
-    const rotuloCol = pc || ec || '(coluna única)';
+    const rotuloCol = pcCol || ecCol || '(coluna única)';
     problemas.push(
       `total da série não fecha em "${total.chave}" (coluna "${rotuloCol}"): total declarado `
       + `${total.valor_num}, soma das ${partes.length} linha(s) da série ${soma} — diferença de `

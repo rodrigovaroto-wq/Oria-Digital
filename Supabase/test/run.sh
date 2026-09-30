@@ -388,6 +388,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/espelho_grupo_a.test.sql 2>&1 
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o caixa que lia a DFC de outro ano (0196): documento de um exercício só, faturamento pela coluna"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/caixa_dfc_de_um_ano.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

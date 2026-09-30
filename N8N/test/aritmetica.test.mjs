@@ -185,3 +185,41 @@ test('GENERAL TABACO (CIRCULANTE+NAO_CIRCULANTE=ATIVO): nenhuma das duas funçõ
   assert.deepEqual(conferirIdentidadeDeLinha(campos), []);
   assert.deepEqual(conferirTotalDaSerie(campos), []);
 });
+
+// O ARRANJO REAL do faturamento 24M do book Vertentes, como a extração de
+// produção o gravou (30/09/2026, caso bb37f726, `10_Faturamento_24M_...pdf`):
+// 12 meses, a linha "TOTAL DO EXERCÍCIO", e DEPOIS dela duas linhas de memória
+// na MESMA coluna ("Média mensal" e um indicador). Os 12 meses fecham EXATOS em
+// 183.480. A checagem somava as memórias como parcela e abria `extracao_falhou`
+// falsa: "soma das 14 linha(s) 198808.2" = 183.480 + 15.290 + 38,2.
+test('total da série: as linhas DEPOIS do total são memória, não parcela (arranjo medido em produção)', () => {
+  const meses = [15493, 15948, 16404, 16100, 16708, 15796, 15189, 15644, 14885, 14429, 13974, 12910];
+  const campos = [
+    ...meses.map((v, i) => linha(i, `mes ${i + 1}`, '2024', v)),
+    linha(12, 'TOTAL DO EXERCÍCIO', '2024', 183480),
+    linha(13, 'Média mensal', '2024', 15290),
+    linha(14, 'Ticket médio por pedido (R$ mil) — indicador gerencial', '2024', 38.2),
+  ];
+  assert.deepEqual(conferirTotalDaSerie(campos), []);
+});
+
+test('total da série: uma coluna de variação % não é série (somar variações mensais não dá a anual)', () => {
+  const variacoes = [-2.1, -3.4, -5, -1.2, -4.8, -2.2, -0.9, -3.1, -2.5, -1.7, -2.8, -3.4];
+  const campos = [
+    ...variacoes.map((v, i) => linha(i, `mes ${i + 1}`, 'Variação %', v)),
+    linha(12, 'TOTAL DO EXERCÍCIO', 'Variação %', -24.6),
+  ];
+  assert.deepEqual(conferirTotalDaSerie(campos), []);
+});
+
+test('total da série: o controle — um mês perdido ANTES do total continua acusando', () => {
+  const meses = [15493, 15948, 16404, 16100, 16708, 15796, 15189, 15644, 14885, 14429, 13974];
+  const campos = [
+    ...meses.map((v, i) => linha(i, `mes ${i + 1}`, '2024', v)),
+    linha(11, 'TOTAL DO EXERCÍCIO', '2024', 183480),
+    linha(12, 'Média mensal', '2024', 15290),
+  ];
+  const problemas = conferirTotalDaSerie(campos);
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /12910\.00/);
+});
