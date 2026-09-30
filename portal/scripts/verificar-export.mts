@@ -4087,7 +4087,7 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
                      valor_num: 3000, documento_versao_id: "vDup2", ordem: 5 })),
     ].map((c) => ({ campo: c, colKey: "2025" }));
     const achadosBP = rotulosDeSubtotalInformado(new Map([["Balanço", itensBP]]), null);
-    checar(achadosBP.some((r) => /||provisoes(||\d{4})?$/.test(r)),
+    checar(achadosBP.some((r) => /\|\|provisoes(\|\|\d{4})?$/.test(r)),
       "(0109d) …e o subtotal DE VERDADE continua sendo reconhecido mesmo com todas as "
       + "ocorrências duplicadas — sem isto o grupo dobrava",
       achadosBP.join(" · ") || "(nenhum)");
@@ -7126,7 +7126,7 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   };
   const COLS_K = { 2026: "G", 2027: "H", 2028: "I" } as const;
   const ANOS_K = [2026, 2027, 2028] as const;
-  const num = (v: unknown) => (typeof v === "number" ? v : NaN);
+  const num = (v: unknown) => (typeof v === "number" ? v : Number.NaN);
   const somaDe = (ws: ExcelJS.Worksheet, rotulos: string[], ano: 2026 | 2027 | 2028) =>
     rotulos.reduce((a, rot) => a + num(avaliarCelula(ws, COLS_K[ano], achaExato(ws, rot))), 0);
 
@@ -7205,7 +7205,7 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
       for (let i = r + 1; i <= ws.rowCount; i++) {
         if (rotDe(ws, i) === "    sombra — str") return num(avaliarCelula(ws, "G", i));
       }
-      return NaN;
+      return Number.NaN;
     };
     const s1 = shStr(L1.wc, "Estoques"); const s4 = nEst.reduce((a, n) => a + shStr(L4.wc, n), 0);
     checar(s1 > 0 && Math.abs(s1 - s4) < 0.5,
