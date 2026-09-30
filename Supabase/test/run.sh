@@ -378,6 +378,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/intragrupo_le_o_ano_certo.test
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o espelho, grupo A da revisão da 0195: face+nota, empate de criado_em, linha sem contraparte"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/espelho_grupo_a.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

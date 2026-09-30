@@ -9217,10 +9217,18 @@ begin
                       and fn_papel_linha(ce2.chave) <> 'subtotal'
                       and not fn_texto_nomeia_mutuo(ce2.chave)
                       and not fn_mutuo_com_socio(ce2.chave, ce2.secao)
+                      -- 0195 (achado 3 da revisão): "tem dado intragrupo" = a MESMA
+                      -- definição de linha intragrupo que o CTE `intragrupo` usa
+                      -- (contraparte, lado e escala), não "qualquer linha ≠ 0" —
+                      -- senão o documento com saldo de caixa vence o que tem o espelho.
+                      and fn_contraparte_intragrupo(p_caso_id, ce2.chave, d.entidade_id) is not null
+                      and fn_lado_intragrupo(ce2.chave, ce2.secao_canonica) is not null
+                      and ce2.unidade is not null
                       and fn_linha_vale_para_ano(v.ver, ce2.periodo_coluna, pe.tipo, pe.referencia, v_ano)
                  )) desc,
                  array_position(array['BALANCO','DF_AUDITADA','BALANCETE'], d.tipo_taxonomia),
-                 d.criado_em desc
+                 d.criado_em desc,
+                 d.id   -- 0195: desempate final determinístico (ver fn_reconciliar_mutuos)
       ), linhas as (
         select
           b.entidade_id as dona,
@@ -9493,9 +9501,31 @@ begin
                )) desc,
                array_position(array['BALANCO','COMBINADO','DF_AUDITADA','BALANCETE'],
                               d.tipo_taxonomia),
-               d.criado_em desc
+               d.criado_em desc,
+               -- 0195 (achado 2 da revisão): `criado_em` EMPATA em produção (44 grupos,
+               -- 160 documentos, 14 casos) e sem último critério o plano escolhe o
+               -- documento. `d.id` torna a escolha determinística.
+               d.id
     ), linhas as (
-      select d.id as doc_id,
+      -- 0195 (achado 1 da revisão, CRÍTICO): A MESMA CONTA NA FACE E NA NOTA
+      -- ERA SOMADA DUAS VEZES. Medido em produção só-leitura (30/09/2026): o
+      -- doc 2f17a7ba (Varejo, multi 21..25) traz "Mútuos a pagar -
+      -- controladora" na face do balanço (ordem 38, sem seção) E na nota
+      -- "Partes Relacionadas" (ordem 62), mesmo valor, mesma coluna, nos 5
+      -- anos — 409 (2021), 890 (2022), 1.600, 2.600, 3.900 mil, todos dobrados.
+      -- As "divergências reais" de 409 e 890 mil que o cabeçalho da 0194 e o
+      -- Supabase/README.md descreviam ERAM essa duplicata: sem ela os dois
+      -- lados fecham exatos. Critério: no MESMO documento, a mesma conta
+      -- (rótulo normalizado) na mesma coluna, com o mesmo lado, valor e
+      -- escala, é UMA posição lida em dois lugares — conta uma vez (fica a
+      -- de menor `ordem`, a face). Valor DIFERENTE com o mesmo rótulo não é
+      -- deduplicado (seria outra posição). Medido em TODA a produção: 5
+      -- grupos assim em mútuos, todos nesse único documento, 0 com valor
+      -- diferente — o critério não toca mais nada.
+      select distinct on (d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
+                          fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
+                          fn_valor_em_base(ce.valor_num, ce.unidade), ce.unidade)
+             d.id as doc_id,
              fn_lado_do_mutuo(ce.chave, ce.secao_canonica) as lado,
              fn_valor_em_base(ce.valor_num, ce.unidade) as valor_base,
              ce.chave,
@@ -9520,6 +9550,9 @@ begin
         -- `v_ano` quando o PRÓPRIO PERÍODO do documento ancora esse ano).
         and fn_linha_vale_para_ano(v.ver, ce.periodo_coluna, d.periodo_tipo, d.periodo_ref, v_ano)
         and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
+      order by d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
+               fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
+               fn_valor_em_base(ce.valor_num, ce.unidade), ce.unidade, ce.ordem
     ), por_lado as (
       select lado, abs(sum(valor_base)) as soma_base
       from linhas group by lado
@@ -9590,7 +9623,8 @@ begin
                 where ce3.documento_versao_id = fn_versao_atual(d.id)
                   and ce3.valor_num is not null
               )) desc,
-             d.criado_em desc
+             d.criado_em desc,
+             d.id   -- 0195: desempate final determinístico (ver `balancos`)
     limit 1;
 
     if v_doc_ano is null then

@@ -675,6 +675,12 @@ supabase db execute --file Supabase/migrations/0194_a_planilha_de_mutuos_que_nun
 #     acompanhamento (o vazamento saindo da conta) e 2023/2024/2025 passam a
 #     FECHAR (240 mil, como os outros casos) — antes ficavam presos em "os
 #     dois lados não se espelham" por causa do mesmo vazamento.
+#     CORREÇÃO (30/09/2026): o que sobrava em 2021/2022 (409 e 890 mil de
+#     "divergência real" entre os lados do balanço) NÃO era divergência: era a
+#     mesma conta "Mútuos a pagar - controladora" somada na face e na nota
+#     "Partes Relacionadas" do doc 2f17a7ba. Corrigido na 0195 (deduplicação
+#     da conta repetida no mesmo documento): os cinco anos fecham exatos, cada
+#     um com os 240 mil da planilha.
 #   - Araucária teste: mesma leitura — anos que se espelham reproduzem 240
 #     mil; 2021/2025 continuam "os dois lados não se espelham" (achado real
 #     dos balanços, não da planilha, comportamento já desenhado pela 0123).
@@ -686,9 +692,14 @@ supabase db execute --file Supabase/migrations/0194_a_planilha_de_mutuos_que_nun
 
 # A 0195 FATORA fn_linha_vale_para_ano (a conta que a 0194 escreveu duas
 # vezes dentro de fn_reconciliar_mutuos) e reemite fn_reconciliar_mutuos
-# usando-a — SEM MUDAR COMPORTAMENTO (só o mecanismo; nenhum assert de
+# usando-a — SEM MUDAR COMPORTAMENTO nisso (só o mecanismo; nenhum assert de
 # canastra.test.sql/reconciliacao.test.sql/mutuos_retrato_de_uma_data.test.sql
-# muda). fn_reconciliar_intragrupo (0124) ganha os DOIS consertos que a 0194
+# muda). GRUPO A DA REVISÃO (30/09/2026, no mesmo arquivo): mútuos deixa de
+# somar duas vezes a mesma conta na face e na nota do mesmo documento (doc
+# 2f17a7ba: as 'divergências' de 409 e 890 mil eram essa duplicata); `d.id`
+# fecha o desempate de criado_em (44 grupos, 160 documentos, 14 casos
+# empatam); o 'tem dado intragrupo' exige contraparte/lado/escala. Teste:
+# Supabase/test/espelho_grupo_a.test.sql. fn_reconciliar_intragrupo (0124) ganha os DOIS consertos que a 0194
 # já tinha aplicado a mútuos e registrado, sem corrigir, no próprio
 # cabeçalho: o balanço de cada entidade agora é escolhido POR ANO (o que TEM
 # dado intragrupo do exercício vence o que só ancora o ano sem trazer
@@ -707,7 +718,8 @@ supabase db execute --file Supabase/migrations/0194_a_planilha_de_mutuos_que_nun
 # documento BALANCO no Canastra, e a única entidade com dois no Vertentes já
 # tinha o documento certo vencendo pela prioridade de tipo) — nenhum assert
 # existente muda.
-# Testes: Supabase/test/intragrupo_le_o_ano_certo.test.sql (via run.sh).
+# Testes: Supabase/test/intragrupo_le_o_ano_certo.test.sql e
+# Supabase/test/espelho_grupo_a.test.sql (via run.sh).
 supabase db execute --file Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql
 # DEPOIS DE APLICAR, confira o catálogo:
 #   select chave, presente, detalhe from fn_instalacao_conferir()
