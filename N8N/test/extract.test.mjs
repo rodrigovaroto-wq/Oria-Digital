@@ -1125,3 +1125,176 @@ test('o RPD está declarado, porque é ele que decide se o lote cabe no DIA', ()
     `a ${porMinuto}/min a cota do dia acaba em ${Math.round(minutosParaEsgotarODia)} min — `
     + 'se este número passar de um dia de trabalho, o RPD deixou de ser o gargalo e este teste envelheceu');
 });
+
+// --- Número colado no rótulo (Balanço 2025 real, Krauspenhar) ---------------
+// A chave real gravada foi "2 113.860.002,40PASSIVO": o valor da linha
+// (113.860.002,40) vazou para o rótulo e a reconciliação acusou "Passivo+PL não
+// localizado". A chave e o valor vêm da produção; a estrutura do grupo em volta
+// (seção, coluna "2025") é a mínima, não a extração inteira.
+const grupoComChave = (k, vn, vt) => [{
+  s: 'Passivo', sc: 'passivo_circulante', op: 1, cols: [{ ec: null, pc: '2025' }],
+  l: [{ k, vt: [vt], vn: [vn], cf: 0.9 }],
+}];
+
+test('rótulo com o VALOR DA LINHA colado: o número sai do rótulo e a conta fica', () => {
+  const r = achatarGrupos(grupoComChave('2 113.860.002,40PASSIVO', 113860002.4, '113.860.002,40'));
+  assert.equal(r.linhas.length, 1);
+  assert.equal(r.linhas[0].chave, '2 PASSIVO');
+  assert.equal(r.linhas[0].valor_num, 113860002.4, 'o valor não muda');
+  assert.deepEqual(r.rotulosSuspeitos, []);
+  assert.deepEqual(r.problemas, []);
+});
+
+test('rótulo com número colado que NÃO é o valor da linha: nada é apagado, e é declarado com a chave crua', () => {
+  const r = achatarGrupos(grupoComChave('Emprestimo 2.500,00parcelas', 9000, '9.000,00'));
+  assert.equal(r.linhas.length, 1, 'a conta não é descartada');
+  assert.equal(r.linhas[0].chave, 'Emprestimo 2.500,00parcelas', 'o rótulo NÃO é reescrito por palpite');
+  assert.equal(r.rotulosSuspeitos.length, 1);
+  assert.match(r.rotulosSuspeitos[0], /"Emprestimo 2\.500,00parcelas"/);
+  assert.match(r.rotulosSuspeitos[0], /2\.500,00/);
+});
+
+test('número monetário com ESPAÇO no rótulo não é "colado" e passa intacto', () => {
+  const r = achatarGrupos(grupoComChave('Saldo em 31/12 1.234,56 reais', 50, '50'));
+  assert.equal(r.linhas[0].chave, 'Saldo em 31/12 1.234,56 reais');
+  assert.deepEqual(r.rotulosSuspeitos, []);
+});
+
+test('o motivo da falha nomeia o rótulo suspeito (falhaMotivo)', () => {
+  const api = { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({
+    moeda: 'BRL', unidade: 'unidade',
+    diagnostico: {
+      entidade: null, tipo_confirma: true, tipo_sugerido: 'BALANCO', periodo_tipo: 'anual',
+      periodo_referencia: '25', legibilidade: 'ok', nota_legibilidade: null,
+      resumo: 'x', justificativa: 'y',
+    },
+    grupos: grupoComChave('Emprestimo 2.500,00parcelas', 9000, '9.000,00'),
+  }) } }] };
+  const r = parseExtracao(api);
+  assert.match(r.falhaMotivo, /1 rótulo\(s\) com número colado que não é o valor da linha/);
+  assert.match(r.falhaMotivo, /Emprestimo 2\.500,00parcelas/);
+});
+
+// AS 72 LINHAS REAIS do caso Krauspenhar (consulta de produção, 30/09/2026, só
+// leitura): 64 do Balanço 2025, em que o valor da linha vazou para o rótulo, e 8
+// do balancete, em que a chave é SÓ o número. [chave, valor_num] copiados.
+const BALANCO_COLADO = [
+  ['849 -3.630,00(-) INSTALAÇÕES', -3630],
+  ['853 -163.412,25(-) COMPUTADORES E PERIFÉRICOS', -163412.25],
+  ['850 -325.460,82(-) FERRAMENTAS', -325460.82],
+  ['843 -241.862,11(-) MAQUINAS E EQUIPAMENTOS', -241862.11],
+  ['851 -266.484,53(-) MOVEIS E UTENSILIOS', -266484.53],
+  ['841 -715.148,30(-) PRÉDIOS E CONSTRUÇÕES', -715148.3],
+  ['852 -1.592.900,65(-) VEÍCULOS', -1592900.65],
+  ['1.02.02.05 1.275,00INTANGIVEL', 1275],
+  ['656 1.275,00MARCAS, DIREITOS E PATENTES', 1275],
+  ['1.80 0,00CONTAS TEMPORARIAS', 0],
+  ['1.80.01 0,00CONTAS TEMPORARIAS', 0],
+  ['350000 0,00COMPRAS A DISTRIBUIR', 0],
+  ['350003 0,00DEVOLUÇÃO DE COMPRAS A DISTRIBUIR', 0],
+  ['350002 0,00DEVOLUÇÃO DE VENDAS A DISTRIBUIR', 0],
+  ['6650 0,00FORMACAO DE KIT', 0],
+  ['350005 0,00FRETES A DISTRIBUIR', 0],
+  ['5748 0,00TRANSITORIA DO FINANCEIRO', 0],
+  ['350001 0,00VENDAS A DISTRIBUIR', 0],
+  ['2 113.860.002,40PASSIVO', 113860002.4],
+  ['2.01 59.064.131,02CIRCULANTE', 59064131.02],
+  ['2.01.01 13.123.466,79EMPRESTIMOS', 13123466.79],
+  ['2.01.01.01 15.563.518,86EMPRESTIMOS BANCÁRIOS', 15563518.86],
+  ['8241 2.213.181,84CAPITAL DE GIRO BANCO BRADESCO 23702524980 - C', 2213181.84],
+  ['6345 1.758.642,42CAPITAL DE GIRO BANCO BRADESCO 23702525000 - C', 1758642.42],
+  ['7614 0,00CAPITAL DE GIRO BANCO BRADESCO 570942203 - CP', 0],
+  ['3635 0,00CAPITAL DE GIRO BANCO BRADESCO AVAL- FGI/PEA', 0],
+  ['6036 0,00CAPITAL DE GIRO BANCO DO BRASIL 328318885 - CP', 0],
+  ['6338 0,00CAPITAL DE GIRO BANCO DO BRASIL 420502766 - CP', 0],
+  ['7286 0,00CAPITAL DE GIRO BANCO DO BRASIL 650326 - CP', 0],
+  ['7747 0,00CAPITAL DE GIRO BANCO DO BRASIL 697056 - CP', 0],
+  ['7833 444.444,46CAPITAL DE GIRO BANCO DO BRASIL 707679 - CP', 444444.46],
+  ['8286 1.323.529,42CAPITAL DE GIRO BANCO DO BRASIL 747979 - CP', 1323529.42],
+  ['8295 1.000.000,00CAPITAL DE GIRO BANCO DO BRASIL 751291 - CP', 1000000],
+  ['8438 175.000,00CAPITAL DE GIRO BANCO DO BRASIL 763771 - CP', 175000],
+  ['8921 2.000.000,00CAPITAL DE GIRO BANCO DO BRASIL 790051 - CP', 2000000],
+  ['8950 1.500.000,00CAPITAL DE GIRO BANCO DO BRASIL 790721 - CP', 1500000],
+  ['8922 500.000,00CAPITAL DE GIRO BANCO DO BRASIL 790800 - CP', 500000],
+  ['8923 500.000,00CAPITAL DE GIRO BANCO DO BRASIL 792652 - CP', 500000],
+  ['8920 500.000,00CAPITAL DE GIRO BANCO DO BRASIL 792663 - CP', 500000],
+  ['7832 1.200.000,00CAPITAL DE GIRO BANCO SICREDI 40627207-3 - CP', 1200000],
+  ['7745 866.666,67CAPITAL DE GIRO BANCO SICREDI 40636095-9 - CP', 866666.67],
+  ['8924 1.582.054,05CAPITAL DE GIRO BANCO SICREDI 50626263-0 - CP', 1582054.05],
+  ['2.01.01.02 -2.440.052,07(-) JUROS S/EMPRESTIMOS E FINANCIAMENTOS', -2440052.07],
+  ['9131 -962.002,83(-) JUROS A APROPRIAR', -962002.83],
+  ['8246 -969.406,84(-) JUROS CAPITAL DE GIRO BRADESCO 23702524980', -969406.84],
+  ['6557 -508.642,40(-) JUROS CAPITAL DE GIRO BRADESCO 23702525000', -508642.4],
+  ['2.01.03 39.827.828,28FORNECEDORES', 39827828.28],
+  ['2.01.03.01 39.827.828,28FORNECEDORES', 39827828.28],
+  ['2.01.04 16.494,33CONTAS A PAGAR', 16494.33],
+  ['2.01.04.01 16.494,33OBRIGAÇÕES DE CURTO PRAZO', 16494.33],
+  ['2362 0,00IPTU A PAGAR', 0],
+  ['1920 0,00IPVA/DPVAT A PAGAR', 0],
+  ['1921 16.494,33SEGUROS A PAGAR', 16494.33],
+  ['2.01.05 403.156,29TRIBUTOS A RECOLHER', 403156.29],
+  ['2.01.05.01 403.156,29TRIBUTOS E RETENÇÕES A RECOLHER', 403156.29],
+  ['180 12.562,79COFINS A RECOLHER', 12562.79],
+  ['513 268.247,34ICMS A RECOLHER', 268247.34],
+  ['2185 0,00ICMS DIFERENCIAL DE ALIQUOTA', 0],
+  ['2712 118.033,83ICMS ST', 118033.83],
+  ['173 1.439,86ISS A RECOLHER', 1439.86],
+  ['179 2.497,16PIS A RECOLHER', 2497.16],
+  ['2121 375,31PIS/COFINS/CSLL/IR RETIDO A RECOLHER', 375.31],
+  ['2.01.05.02 0,00PARCELAMENTOS FISCAIS - CP', 0],
+  ['8512 0,00(-) JUROS S/ PARCELAMENTO ICMS 11361027', 0],
+];
+const BALANCETE_SO_NUMERO = [
+  ['21.493.237,90', 'Saldo anterior', 21493237.9],
+  ['21.493.237,90', 'Saldo atual', 0],
+  ['21.493.237,90', 'Crédito', 3030000.08],
+  ['21.493.237,90', 'Débito', 24523237.98],
+  ['-3.308.898,66', 'Saldo atual', -359507.62],
+  ['-3.308.898,66', 'Saldo anterior', -3308898.66],
+  ['-3.308.898,66', 'Débito', -3389319.44],
+  ['-3.308.898,66', 'Crédito', 279086.84],
+];
+
+test('REAL: as 64 chaves do Balanço 2025 com o valor colado saem limpas, e o valor não muda', () => {
+  assert.equal(BALANCO_COLADO.length, 64);
+  for (const [chave, valor] of BALANCO_COLADO) {
+    const r = achatarGrupos(grupoComChave(chave, valor, String(valor)));
+    assert.equal(r.linhas.length, 1, chave);
+    assert.equal(r.linhas[0].valor_num, valor, chave);
+    assert.doesNotMatch(r.linhas[0].chave, /\d{1,3}(\.\d{3})*,\d{2}/, `sobrou número em ${chave}`);
+    assert.match(r.linhas[0].chave, /[A-Za-z]/, `o rótulo virou vazio em ${chave}`);
+    assert.deepEqual(r.rotulosSuspeitos, [], chave);
+  }
+  const exato = achatarGrupos(grupoComChave('849 -3.630,00(-) INSTALAÇÕES', -3630, '-3.630,00'));
+  assert.equal(exato.linhas[0].chave, '849 (-) INSTALAÇÕES');
+});
+
+test('REAL: balancete com a chave SÓ número — a conta fica, o rótulo não é inventado, e é declarado', () => {
+  const porChave = new Map();
+  for (const [chave, pc, v] of BALANCETE_SO_NUMERO) {
+    if (!porChave.has(chave)) porChave.set(chave, []);
+    porChave.get(chave).push([pc, v]);
+  }
+  let declarados = 0;
+  for (const [chave, colunas] of porChave) {
+    const r = achatarGrupos([{
+      s: 'Balancete', sc: 'NAO_CLASSIFICAVEL', op: 1,
+      cols: colunas.map(([pc]) => ({ ec: null, pc })),
+      l: [{ k: chave, vt: colunas.map(([, v]) => String(v)), vn: colunas.map(([, v]) => v), cf: 0.9 }],
+    }]);
+    assert.equal(r.linhas.length, colunas.length, 'nenhum valor é descartado');
+    assert.ok(r.linhas.every((l) => l.chave === chave), 'o rótulo NÃO é reescrito');
+    assert.equal(r.rotulosSuspeitos.length, 1, chave);
+    assert.match(r.rotulosSuspeitos[0], /SÓ um número/);
+    declarados += 1;
+  }
+  assert.ok(declarados >= 1);
+});
+
+test('frases legítimas com valor no meio do texto NÃO são mexidas (contrato social, DRE)', () => {
+  for (const k of ['O Capital Social será de R$ 100.000,00 (cem mil reais)', 'PREJUÍZO DE 10.058,20']) {
+    const r = achatarGrupos(grupoComChave(k, 100000, '100.000,00'));
+    assert.equal(r.linhas[0].chave, k);
+    assert.deepEqual(r.rotulosSuspeitos, [], k);
+  }
+});

@@ -1905,6 +1905,12 @@ if(ach.problemas.length>0){
   const dizer=ach.problemas.length+' conta(s) descartada(s) por desalinhamento entre colunas e valores (a associacao valor-coluna ficou desconhecida, e adivinha-la trocaria um periodo pelo outro): '+ach.problemas.slice(0,5).join('; ')+(ach.problemas.length>5?'; ...':'');
   falhaMotivo=falhaMotivo?falhaMotivo+' | '+dizer:dizer;
 }
+// Rotulo com numero monetario colado que NAO e' o valor da linha: a conta ficou,
+// o rotulo nao foi limpo (so' se limpa o que e' provadamente o valor vazado).
+if(ach.rotulosSuspeitos.length>0){
+  const dizer2=ach.rotulosSuspeitos.length+' rotulo(s) com numero colado que nao e o valor da linha (a conta foi mantida, o rotulo NAO foi limpo e pode nao casar na reconciliacao): '+ach.rotulosSuspeitos.slice(0,5).join('; ')+(ach.rotulosSuspeitos.length>5?'; ...':'');
+  falhaMotivo=falhaMotivo?falhaMotivo+' | '+dizer2:dizer2;
+}
 const d=p.diagnostico||{};
 const diagnostico={
   entidade: d.entidade??null,

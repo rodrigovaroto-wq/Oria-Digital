@@ -411,7 +411,10 @@ export const SYSTEM_PROMPT = [
 export function achatarGrupos(grupos) {
   const linhas = [];
   const problemas = [];
-  if (!Array.isArray(grupos)) return { linhas, problemas };
+  // Rótulos com número monetário COLADO que não deu para provar ser o valor da
+  // linha: a linha NÃO é descartada nem reescrita, só declarada (ver abaixo).
+  const rotulosSuspeitos = [];
+  if (!Array.isArray(grupos)) return { linhas, problemas, rotulosSuspeitos };
   // Índice da LINHA DO DOCUMENTO que originou cada entrada. Uma conta com três
   // colunas vira três entradas com o MESMO `linha_origem`, e é isso que permite
   // contar de volta quantas linhas o modelo devolveu — a unidade em que a guarda
@@ -449,6 +452,54 @@ export function achatarGrupos(grupos) {
             : ''));
         continue;
       }
+      // NÚMERO COLADO NO RÓTULO. Balanço 2025 real (Krauspenhar): o total do passivo
+      // veio com a chave "2 113.860.002,40PASSIVO" e a reconciliação acusou
+      // "Passivo+PL não localizado" — o valor da linha (113.860.002,40) vazou para o
+      // rótulo. CONSERVADOR: só se limpa quando o número colado é IGUAL a um dos
+      // valores da PRÓPRIA linha (prova de que é o valor vazado); qualquer outro
+      // número colado é declarado em `rotulosSuspeitos` com a chave crua e nada é
+      // apagado — "Empréstimo 2.500,00parcelas" pode ser texto legítimo. "Colado" =
+      // encostado em letra ou parêntese, sem espaço (frase com o número no meio, com
+      // espaços — "PREJUÍZO DE 10.058,20" — não é mexida). O prefixo de código de conta ("2 ") NÃO é
+      // mexido aqui: a chave fica "2 PASSIVO" e o casamento da reconciliação é por
+      // palavra (0042: regexp_replace não-alfanumérico por espaço), mas isso NÃO foi
+      // medido contra o banco.
+      let chave = l.k;
+      // PADRÃO 2 (balancete real, 8 linhas de 72): a chave é SÓ o número
+      // ("21.493.237,90"), igual ao Saldo anterior da linha — o nome da conta se
+      // perdeu e um valor entrou no lugar dele. Não há texto para recuperar: a
+      // conta fica (não se descarta dado), o rótulo não é inventado, e a chave crua
+      // vai declarada.
+      if (/^\s*-?\d{1,3}(?:\.\d{3})*,\d{2}\s*$/.test(chave)) {
+        rotulosSuspeitos.push(
+          `"${l.k}"${g.s ? ` (${g.s})` : ''}: o rótulo é SÓ um número — o nome da conta se perdeu e `
+          + 'a conta foi mantida sem nome');
+      } else {
+        const padrao = /(?:(?<=^|\s)-)?\d{1,3}(?:\.\d{3})*,\d{2}/g;
+        const vizinho = /[A-Za-z\u00C0-\u00FF()]/;
+        let achado = padrao.exec(chave);
+        while (achado !== null) {
+          const ini = achado.index;
+          const fim = ini + achado[0].length;
+          const colado = (ini > 0 && vizinho.test(chave[ini - 1])) || (fim < chave.length && vizinho.test(chave[fim]));
+          if (colado) {
+            const numero = Math.abs(Number(achado[0].replace(/\./g, '').replace(',', '.')));
+            const digitos = achado[0].replace(/\D/g, '');
+            const eValorDaLinha = vn.some((v) => typeof v === 'number' && Math.abs(Math.abs(v) - numero) < 0.005)
+              || vt.some((t) => typeof t === 'string' && t.replace(/\D/g, '') === digitos);
+            if (eValorDaLinha) {
+              chave = `${chave.slice(0, ini)} ${chave.slice(fim)}`.replace(/\s+/g, ' ').trim();
+              padrao.lastIndex = 0;
+              achado = padrao.exec(chave);
+              continue;
+            }
+            rotulosSuspeitos.push(
+              `"${l.k}"${g.s ? ` (${g.s})` : ''}: o rótulo traz o número ${achado[0]} colado ao texto, e ele `
+              + 'NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio');
+          }
+          achado = padrao.exec(chave);
+        }
+      }
       for (let j = 0; j < cols.length; j += 1) {
         const valorTexto = typeof vt[j] === 'string' ? vt[j] : null;
         const valorNum = typeof vn[j] === 'number' ? vn[j] : null;
@@ -463,7 +514,7 @@ export function achatarGrupos(grupos) {
           secao_canonica: g.sc && g.sc !== 'NAO_CLASSIFICAVEL' ? g.sc : null,
           entidade_coluna: cols[j].ec,
           periodo_coluna: cols[j].pc,
-          chave: l.k,
+          chave,
           valor_texto: valorTexto,
           valor_num: valorNum,
           confianca: typeof l.cf === 'number' ? l.cf : null,
@@ -472,7 +523,7 @@ export function achatarGrupos(grupos) {
       }
     }
   }
-  return { linhas, problemas };
+  return { linhas, problemas, rotulosSuspeitos };
 }
 
 export function extractionSchema() {
@@ -1156,7 +1207,7 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
   // meses antes. Enquanto existir um JSON velho em alguma instância, ele vai
   // responder no formato plano — e responder em formato plano tem de continuar
   // funcionando, em vez de virar "zero linhas extraídas" sem explicação.
-  const { linhas: linhasAgrupadas, problemas } = achatarGrupos(p.grupos);
+  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos } = achatarGrupos(p.grupos);
   const camposAgrupados = linhasAgrupadas.map((l, i) => ({
     ordem: i,
     ...l,
@@ -1246,6 +1297,11 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
       ? `${problemas.length} conta(s) descartada(s) por desalinhamento entre colunas e valores `
         + `(a associação valor↔coluna ficou desconhecida, e adivinhá-la trocaria um período pelo `
         + `outro): ${problemas.slice(0, 5).join('; ')}${problemas.length > 5 ? '; …' : ''}`
+      : null,
+    rotulosSuspeitos.length > 0
+      ? `${rotulosSuspeitos.length} rótulo(s) com número colado que não é o valor da linha (a conta foi `
+        + `mantida, o rótulo NÃO foi limpo e pode não casar na reconciliação): `
+        + `${rotulosSuspeitos.slice(0, 5).join('; ')}${rotulosSuspeitos.length > 5 ? '; …' : ''}`
       : null,
   ].filter(Boolean);
   const falhaMotivo = comAviso(motivos.length > 0 ? motivos.join(' | ') : null);
