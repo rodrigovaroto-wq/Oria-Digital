@@ -168,16 +168,29 @@ export function conferirTotalDaSerie(campos) {
     // variação por mês e a do ano na linha de total: somar doze variações nunca
     // dá a anual, e a checagem acusava diferença de 293,6 num documento certo
     // (medido em 30/09/2026, mandato de teste em produção, caso bb37f726).
-    if (/%|varia|\bvar\b|margem|media|ticket|indice|taxa/.test(normRotulo(pcCol || ecCol))) continue;
+    // PALAVRA INTEIRA, não substring: "Intermediação" contém "media" e "Receita
+    // variável" contém "varia", e são colunas de R$ que têm série. "Taxas" (plural)
+    // fica de fora de propósito: "Taxas de serviço" é R$; "Taxa" e "Taxa anual" não.
+    if (/%|\b(variacao|variacoes|var|margem|margens|media|medias|medio|ticket|indice|taxa)\b/.test(normRotulo(pcCol || ecCol))) continue;
     // A SÉRIE É O QUE VEM ANTES DO TOTAL, na ordem do documento. As linhas
     // DEPOIS dele são memória ("Média mensal", "Ticket médio por pedido"), não
     // parcela. Somá-las acusou "soma das 14 linhas 198.808,2 contra 183.480"
     // quando os 12 meses fecham EXATOS em 183.480: 183.480 + 15.290 + 38,2 é o
     // número da pendência falsa (mesmo caso bb37f726). Sem `ordem` em alguma
     // linha, fica a regra antiga, porque não há como saber o que veio antes.
+    // MAS o modelo às vezes devolve o total ANTES dos meses (doc 63a36efe,
+    // FATURAMENTO OMNIBEAUTY PR 202606.pdf: "Totais" na ordem 0, 12 meses
+    // depois). Com menos de duas parcelas antes do total, a série é o que vem
+    // DEPOIS — senão a checagem se pula em silêncio (6 grupos no campo_extraido
+    // de produção, 4 colunas do AMO e 2 do Teste v40). Linha de memória pelo
+    // rótulo (média, ticket, índice) nunca é parcela, esteja onde estiver.
+    const ehMemoria = (c) => /\b(media|medias|medio|ticket|indice)\b/.test(normRotulo(c.chave));
     const temOrdem = linhas.every((c) => Number.isFinite(c.ordem));
-    const partes = linhas.filter((c) => c !== total && !ehTotal(c.chave)
-      && (!temOrdem || c.ordem < total.ordem));
+    const candidatas = linhas.filter((c) => c !== total && !ehTotal(c.chave) && !ehMemoria(c));
+    const antes = temOrdem ? candidatas.filter((c) => c.ordem < total.ordem) : candidatas;
+    const partes = antes.length >= 2 || !temOrdem
+      ? antes
+      : candidatas.filter((c) => c.ordem > total.ordem);
     // Precisa de pelo menos DUAS parcelas para ser série (uma parcela só não
     // é série, é a mesma conta repetida) — abaixo disso não dá para concluir.
     if (partes.length < 2) continue;

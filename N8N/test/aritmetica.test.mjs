@@ -223,3 +223,66 @@ test('total da série: o controle — um mês perdido ANTES do total continua ac
   assert.equal(problemas.length, 1);
   assert.match(problemas[0], /12910\.00/);
 });
+
+// O ARRANJO REAL do doc 63a36efe (FATURAMENTO OMNIBEAUTY PR 202606.pdf, caso
+// "AMO teste 00"): o modelo devolveu "Totais" na ordem 0, ANTES dos 12 meses, e com
+// os valores deslocados de coluna ("Outros R$" = soma dos meses contra meses que
+// somam 0; "Total R$" = 0 contra meses que somam a soma). A pendência que o código
+// anterior à 9bd2f88 abria está CERTA; com a regra "só o que vem antes do total" ela
+// sumia e a checagem era pulada sem aviso (6 grupos no campo_extraido de produção).
+// Os valores dos meses são os da reprodução do revisor, não os do PDF.
+test('total da série: total impresso ANTES dos meses — os meses que vêm depois entram e a coluna deslocada reprova', () => {
+  const meses = [242930.61, 267912.14, 264724.14, 280000, 290000, 300000, 310000, 320000, 330000, 250000, 246100.73, 250000];
+  const soma = meses.reduce((a, b) => a + b, 0);
+  const campos = [
+    linha(0, 'Totais', 'Outros R$', soma),
+    linha(0, 'Totais', 'Total R$', 0),
+    ...meses.flatMap((v, i) => [
+      linha(i + 1, `Mes ${i + 1} 2025`, 'Outros R$', 0),
+      linha(i + 1, `Mes ${i + 1} 2025`, 'Total R$', v),
+    ]),
+  ];
+  const problemas = conferirTotalDaSerie(campos);
+  assert.equal(problemas.length, 2);
+  assert.ok(problemas.some((p) => /coluna "Outros R\$"/.test(p) && /soma das 12 linha/.test(p)));
+  assert.ok(problemas.some((p) => /coluna "Total R\$"/.test(p) && /soma das 12 linha/.test(p)));
+});
+
+test('total da série: total no topo que FECHA com os meses depois não acusa', () => {
+  const meses = [100, 200, 300];
+  const campos = [
+    linha(0, 'Totais', '2025', 600),
+    ...meses.map((v, i) => linha(i + 1, `mes ${i + 1}`, '2025', v)),
+  ];
+  assert.deepEqual(conferirTotalDaSerie(campos), []);
+});
+
+test('total da série: total no topo, memória depois dos meses, nunca entra na soma', () => {
+  const campos = [
+    linha(0, 'Totais', '2025', 600),
+    linha(1, 'mes 1', '2025', 100), linha(2, 'mes 2', '2025', 200), linha(3, 'mes 3', '2025', 300),
+    linha(4, 'Média mensal', '2025', 200),
+    linha(5, 'Ticket médio', '2025', 38.2),
+  ];
+  assert.deepEqual(conferirTotalDaSerie(campos), []);
+});
+
+// Coluna não aditiva por PALAVRA INTEIRA: "Intermediação" contém "media" e
+// "Receita variável" contém "varia", e são colunas de R$ com série.
+test('total da série: coluna de R$ cujo nome CONTÉM media/varia por substring ainda é conferida', () => {
+  for (const col of ['Intermediação R$', 'Receita variável', 'Taxas de serviço']) {
+    const campos = [
+      linha(0, 'mes 1', col, 100), linha(1, 'mes 2', col, 200), linha(2, 'Total', col, 999),
+    ];
+    assert.equal(conferirTotalDaSerie(campos).length, 1, col);
+  }
+});
+
+test('total da série: colunas não aditivas continuam fora (%, ticket, taxa, variação)', () => {
+  for (const col of ['% do total', 'Ticket médio (R$)', '%', 'Taxa', 'Taxa anual', 'Variação %', '(%)', 'Variação', 'Média', 'Margem bruta']) {
+    const campos = [
+      linha(0, 'mes 1', col, 100), linha(1, 'mes 2', col, 200), linha(2, 'Total', col, 999),
+    ];
+    assert.deepEqual(conferirTotalDaSerie(campos), [], col);
+  }
+});
