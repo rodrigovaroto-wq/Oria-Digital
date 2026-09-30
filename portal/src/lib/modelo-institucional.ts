@@ -1295,14 +1295,14 @@ function formulaParcela(g: Grade, ch: string, chavesDoGrupo: string[], ultimoHis
 }
 
 function notaParcela(p: PremissaModelo, gr: GrupoRateado, ultimoHist: number, total: string): string {
-  return `Premissa "${p.nome}" está ligada a ${gr.membros.length} contas deste bloco: o valor dela é do `
+  return `Premissa "${p.nome}" está ligada a ${gr.membros.length} contas (do mesmo bloco, ou de custo e SG&A, que têm a mesma base): o valor dela é do `
     + `GRUPO (${total}) e esta conta recebe a parcela que tinha no grupo em ${ultimoHist} (saldo ÷ `
     + "soma dos saldos). Aplicar o valor inteiro a cada conta multiplicaria o bloco por "
     + `${gr.membros.length}.`;
 }
 
 function notaGrupoSemSaldo(p: PremissaModelo, gr: GrupoRateado, ultimoHist: number, efeito: string): string {
-  return `Premissa "${p.nome}" está ligada a ${gr.membros.length} contas deste bloco, mas o grupo não tem `
+  return `Premissa "${p.nome}" está ligada a ${gr.membros.length} contas do mesmo grupo, mas o grupo não tem `
     + `saldo realizado em ${ultimoHist} para ratear o valor entre elas (soma ${gr.somaHist}). Esta conta `
     + `NÃO é projetada: fica em branco e os subtotais a leem como zero — ${efeito} `
     + "Para projetar, ligue a premissa a uma conta com saldo realizado.";
@@ -1857,7 +1857,14 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
   // `% da receita líquida` ligada a K contas do MESMO bloco é taxa do GRUPO (ver
   // `gruposRateados`); cada conta recebe a parcela histórica dela em `#part`.
   const saldoHistRec = (l: LinhaModelo) => valorNaEscala(l, ctx.ultimoHist, ctx.ent.unidade)?.valor ?? 0;
-  const rateioCusto = gruposRateados(ctx, custos, (l) => chaveLinha("custo", l), "pct_de_linha", saldoHistRec);
+  // UM GRUPO POR CÓDIGO ENTRE CUSTO E SG&A: os dois blocos são medidos contra a MESMA base
+  // (receita líquida), então o mesmo código ligado a contas de custo E de SG&A é UMA taxa de
+  // UM grupo. Dois grupos (um por bloco) somavam 1 cada e o total saía 2× a premissa, sem
+  // nota (em produção: MARKDOWN 2% em 7 contas de custo + 6 de SG&A projetava 4%).
+  const sgaDoCaso = ctx.linhasPorBloco.get("sga") ?? [];
+  const blocoCS = (l: LinhaModelo) => (custos.includes(l) ? "custo" : "sga");
+  const rateioCS = gruposRateados(ctx, [...custos, ...sgaDoCaso], (l) => chaveLinha(blocoCS(l), l),
+    "pct_de_linha", saldoHistRec);
   for (const l of custos) {
     const ch = chaveLinha("custo", l);
     const p = ctx.premissaPorLinha.get(l.rotulo_norm);
@@ -1865,7 +1872,7 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     g.linha(`${ch}#base`, { rotulo: "    Base Case", fmt: PCT });
     g.linha(`${ch}#cli`, { rotulo: "    Cliente Case", fmt: PCT });
     g.linha(`${ch}#str`, { rotulo: "    Stress Case", fmt: PCT });
-    if (rateioCusto.get(ch) && !rateioCusto.get(ch)!.semSaldo) {
+    if (rateioCS.get(ch) && !rateioCS.get(ch)!.semSaldo) {
       g.linha(`${ch}#part`, { rotulo: "    Parcela da conta no grupo da premissa", fmt: PCT });
     }
   }
@@ -1875,7 +1882,6 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
   // ---- SG&A ----------------------------------------------------------------
   g.linha("SGA", { sinal: "(-)", rotulo: "SG&A", bloco: true, fmt: NUM });
   const sga = ctx.linhasPorBloco.get("sga") ?? [];
-  const rateioSga = gruposRateados(ctx, sga, (l) => chaveLinha("sga", l), "pct_de_linha", saldoHistRec);
   for (const l of sga) {
     const ch = chaveLinha("sga", l);
     const p = ctx.premissaPorLinha.get(l.rotulo_norm);
@@ -1883,7 +1889,7 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     g.linha(`${ch}#base`, { rotulo: "    Base Case", fmt: PCT });
     g.linha(`${ch}#cli`, { rotulo: "    Cliente Case", fmt: PCT });
     g.linha(`${ch}#str`, { rotulo: "    Stress Case", fmt: PCT });
-    if (rateioSga.get(ch) && !rateioSga.get(ch)!.semSaldo) {
+    if (rateioCS.get(ch) && !rateioCS.get(ch)!.semSaldo) {
       g.linha(`${ch}#part`, { rotulo: "    Parcela da conta no grupo da premissa", fmt: PCT });
     }
   }
@@ -1999,7 +2005,7 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
       // Taxa ligada a K contas é do GRUPO: a conta leva a parcela dela (`#part`).
       // Sem saldo para ratear a conta NÃO projeta (branco + nota na linha ativa) —
       // nunca divisão igual em silêncio.
-      const gr = (bloco === "custo" ? rateioCusto : rateioSga).get(ch);
+      const gr = rateioCS.get(ch);
       if (gr?.semSaldo) return null;
       const parte = gr ? `*${g.ref(`${ch}#part`, ano)}` : "";
       return `=${taxaCen(ch, ano, cenS)}*${g.ref(alvoCen("RECEITA_LIQUIDA", cenS), ano)}${parte}`;
@@ -2125,9 +2131,9 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
           : v === undefined
             ? `Premissa "${p.nome}" sem valor para ${ano}.`
             : `Premissa "${p.nome}" (${p.origem ?? "digitado"}).`;
-        const gr = (bloco === "custo" ? rateioCusto : rateioSga).get(ch);
+        const gr = rateioCS.get(ch);
         if (gr && p.formula === "pct_de_linha" && !gr.semSaldo) {
-          g.set(`${ch}#part`, ano, formulaParcela(g, ch, gr.membros.map((o) => chaveLinha(bloco, o)), ctx.ultimoHist), {
+          g.set(`${ch}#part`, ano, formulaParcela(g, ch, gr.membros.map((o) => chaveLinha(blocoCS(o), o)), ctx.ultimoHist), {
             fmt: PCT, nota: notaParcela(p, gr, ctx.ultimoHist, "taxa × receita líquida"),
           });
         }
@@ -2818,6 +2824,31 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
     ...gruposRateados(ctx, passivos, (l) => chaveLinha("wc_p", l), "dias_de_giro", saldoGiro("wc_p"),
       (a, b) => nomeBase("wc_p", a) === nomeBase("wc_p", b)),
   ]);
+  // O MESMO CÓDIGO EM BASES DIFERENTES (ativo × passivo, fornecedor contra custo × resto contra
+  // receita): somar os grupos não tem sentido e rateá-los entre si seria regra inventada. Ficam
+  // separados e CADA UM projeta os dias inteiros — então o agregado leva N× a premissa. Isso é
+  // dito na célula, com motivo e efeito (regra 1), em vez de passar calado (em produção: PMR em
+  // 16 contas do ativo + 2 do passivo; PMP em 5 do ativo + 59 do passivo).
+  const gruposDoCodigo = new Map<string, Set<string>>();
+  const rotuloGrupoWC = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
+    `${pref === "wc_a" ? "ativo" : "passivo"}/${nomeBase(pref, l)}`;
+  for (const [pref, lista] of [["wc_a", ativos], ["wc_p", passivos]] as const) {
+    for (const l of lista) {
+      const p = ctx.premissaPorLinha.get(l.rotulo_norm);
+      if (!p || p.formula !== "dias_de_giro") continue;
+      if (!gruposDoCodigo.has(p.codigo)) gruposDoCodigo.set(p.codigo, new Set());
+      gruposDoCodigo.get(p.codigo)!.add(rotuloGrupoWC(pref, l));
+    }
+  }
+  const avisoBases = (pref: "wc_a" | "wc_p", l: LinhaModelo): string => {
+    const p = ctx.premissaPorLinha.get(l.rotulo_norm);
+    const gs = p && p.formula === "dias_de_giro" ? gruposDoCodigo.get(p.codigo) : undefined;
+    if (!p || !gs || gs.size < 2) return "";
+    return `\n\nATENÇÃO: a premissa ${p.codigo} está aplicada a ${gs.size} grupos com bases diferentes `
+      + `(${[...gs].join(" e ")}); cada grupo projeta os dias INTEIROS, então o circulante projetado `
+      + `carrega ${gs.size}× a premissa — revise o vínculo. Esta conta pertence ao grupo `
+      + `${rotuloGrupoWC(pref, l)}.`;
+  };
   // As linhas extras só existem para conta de grupo COM saldo; sem saldo a conta fica em branco.
   const linhasDoGrupo = (ch: string) => {
     const gr = rateioWC.get(ch);
@@ -2956,12 +2987,13 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
         const p = ctx.premissaPorLinha.get(l.rotulo_norm);
         const usaPremissa = p && p.formula === "dias_de_giro" && p.valores[String(ano)] !== undefined;
         const gr = rateioWC.get(ch);
+        const aviso = avisoBases(pref, l);
         if (gr?.semSaldo && p) {
           // Sem saldo realizado no grupo não há como ratear: BRANCO + nota (motivo e
           // efeito), nunca zero medido nem divisão igual em silêncio.
           const nota = notaGrupoSemSaldo(p, gr, ctx.ultimoHist,
             `o capital de giro projetado fica MENOR que o da premissa (dias/360 × ${nomeBase(pref, l)}), `
-            + "pela parte inteira deste grupo.");
+            + "pela parte inteira deste grupo." + aviso);
           g.set(`${ch}#dias`, ano, null, { fmt: DIAS, fill: FILL_INPUT, nota });
           g.set(ch, ano, null, { fmt: NUM, nota });
           continue;
@@ -2972,7 +3004,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
           g.set(`${ch}#grupo`, ano, p.valores[String(ano)], {
             fmt: NUM2, fill: FILL_INPUT,
             nota: `Premissa "${p.nome}" (${p.origem ?? "digitado"}): dias do GRUPO de ${gr.membros.length} `
-              + `contas, aplicados sobre ${nomeBase(pref, l)} UMA vez.`,
+              + `contas, aplicados sobre ${nomeBase(pref, l)} UMA vez.${aviso}`,
           });
           g.set(`${ch}#part`, ano, formulaParcela(g, ch,
             gr.membros.map((o) => chaveLinha(pref, o)), ctx.ultimoHist), {
@@ -2981,15 +3013,15 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
           g.set(`${ch}#dias`, ano, `=${g.ref(`${ch}#grupo`, ano)}*${g.ref(`${ch}#part`, ano)}`, {
             fmt: DIAS,
             nota: "Dias do grupo × parcela histórica desta conta. A soma das contas do grupo dá os "
-              + "dias do grupo.",
+              + "dias do grupo." + aviso,
           });
         } else {
           g.set(`${ch}#dias`, ano, usaPremissa ? p!.valores[String(ano)] : `=${g.ref(`${ch}#dias`, ant!)}`, {
             fmt: DIAS, fill: FILL_INPUT,
             nota: usaPremissa
-              ? `Premissa "${p!.nome}" (${p!.origem ?? "digitado"}). Aplicada sobre ${nomeBase(pref, l)}.`
+              ? `Premissa "${p!.nome}" (${p!.origem ?? "digitado"}). Aplicada sobre ${nomeBase(pref, l)}.${aviso}`
               : "Sem premissa de dias de giro para esta conta: mantém os dias do período anterior. "
-                + "É a hipótese conservadora — o giro não melhora sozinho.",
+                + `É a hipótese conservadora — o giro não melhora sozinho.${aviso}`,
           });
         }
         g.set(`${ch}#diasStr`, ano, `=${g.ref(`${ch}#dias`, ano)}*(1+${refStress()}*${pref === "wc_a" ? "1" : "-1"})`, {

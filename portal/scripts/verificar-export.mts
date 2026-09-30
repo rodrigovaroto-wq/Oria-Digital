@@ -7314,6 +7314,146 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
 }
 
 // =============================================================================
+// (39e) O MESMO CÓDIGO EM CUSTO E SG&A É UM GRUPO; EM BASES DIFERENTES, O ARQUIVO AVISA.
+//
+// O RESÍDUO DO (39c), medido em produção (caso "AMO teste 00"): o grupo se formava por bloco,
+// então o mesmo código ligado a contas de custo E de SG&A (MARKDOWN 2%: 7 + 6 contas) virava
+// dois grupos, cada um com parcelas somando 1 — o total projetado saía 2× a premissa (4% da
+// receita), sem nota. Custo e SG&A são medidos contra a MESMA base (receita líquida), então
+// são um grupo só. Onde a base é outra (ativo × passivo, fornecedor contra custo × resto contra
+// receita — PMR em 16 + 2 contas, PMP em 5 + 59), somar não tem sentido e ratear entre eles
+// seria regra inventada: os grupos ficam separados, cada um projeta os dias inteiros, e a
+// célula DIZ isso (motivo e efeito) em vez de passar calado.
+//
+// REGRA 4: fixture sintética; o "AMO teste 00" é o caso de teste de produção e não se
+// reproduz sem o banco. Afirma-se a conta, não o caso.
+// =============================================================================
+{
+  const linhaA = (secao: string, chave: string, valores: Record<string, number>, doc = "BALANCO") => ({
+    secao_canonica: secao, chave, rotulo_norm: chave.toLowerCase(),
+    papel: "conta" as const, unidade: "milhar", moeda: "BRL", documentos: [doc], valores,
+  });
+  const montar = (
+    custos: Array<[string, number]>, sgas: Array<[string, number]>,
+    ativos: Array<[string, number]>, passivos: Array<[string, number]>,
+    pmp: Array<[string, number]>,
+  ) => {
+    const entrada = {
+      caso: { nome: "Mesmo código, dois blocos", produto: "reestruturacao" },
+      agora: new Date("2026-08-05T12:00:00Z"), entidade: "VERTENTES METALÚRGICA LTDA.",
+      setor: "industria", anosHistoricos: [2024, 2025], anosProjetados: [2026, 2027],
+      stressPct: 0.2, caixaMinimo: 5000, aliquotaTributos: 0.34,
+      linhas: [
+        linhaA("receita_bruta", "Vendas de produtos", { "2024": 180000, "2025": 200000 }, "DRE"),
+        // despesa na convenção do documento (negativa): o modelo normaliza por bloco
+        ...custos.map(([n, v]) => linhaA("custos", n, { "2024": -v, "2025": -v }, "DRE")),
+        ...sgas.map(([n, v]) => linhaA("despesas_operacionais", n, { "2024": -v, "2025": -v }, "DRE")),
+        ...ativos.map(([n, v]) => linhaA("ativo_circulante", n, { "2024": v, "2025": v })),
+        ...[...passivos, ...pmp].map(([n, v]) => linhaA("passivo_circulante", n, { "2024": v, "2025": v })),
+      ],
+      premissas: [
+        { codigo: "CRESC", nome: "Crescimento", natureza: "receita", formula: "crescimento_composto",
+          unidade: "%", valores: { "2026": 8, "2027": 6 }, origem: "digitado" },
+        { codigo: "MARKDOWN", nome: "Markdown", natureza: "custo", formula: "pct_de_linha",
+          unidade: "%", valores: { "2026": 50, "2027": 50 }, origem: "digitado" },
+        { codigo: "PMR", nome: "Prazo médio de recebimento", natureza: "giro", formula: "dias_de_giro",
+          unidade: "dias", valores: { "2026": 90, "2027": 90 }, origem: "digitado" },
+        { codigo: "PMP", nome: "Prazo médio de pagamento", natureza: "giro", formula: "dias_de_giro",
+          unidade: "dias", valores: { "2026": 60, "2027": 60 }, origem: "digitado" },
+      ],
+      vinculos: [
+        { rotulo_norm: "vendas de produtos", premissa_codigo: "CRESC", sazonalidade_codigo: null },
+        ...[...custos, ...sgas].map(([n]) => ({ rotulo_norm: n.toLowerCase(), premissa_codigo: "MARKDOWN", sazonalidade_codigo: null })),
+        ...[...ativos, ...passivos].map(([n]) => ({ rotulo_norm: n.toLowerCase(), premissa_codigo: "PMR", sazonalidade_codigo: null })),
+        ...pmp.map(([n]) => ({ rotulo_norm: n.toLowerCase(), premissa_codigo: "PMP", sazonalidade_codigo: null })),
+      ],
+      macro: [], unidade: "R$ mil",
+    };
+    const V = "vE";
+    return buildExportWorkbook({
+      caso: entrada.caso, agora: entrada.agora, modo: "completo",
+      documentos: [{
+        id: "dE", tipo_taxonomia: "BALANCO", entidade: { razao_social: "VERTENTES METALÚRGICA LTDA." },
+        periodo: { tipo: "anual", referencia: "12M25" }, documento_versao: [{ id: V, nome_original: "bp.pdf" }],
+      }] as DocumentoParaExport[],
+      campos: [campo({ chave: "Caixa e equivalentes de caixa", secao: "Ativo Circulante",
+        secao_canonica: "ativo_circulante", valor_num: 1000, documento_versao_id: V, ordem: 1 })],
+      modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+  };
+  const rotDe = (ws: ExcelJS.Worksheet, r: number) => String(ws.getRow(r).getCell(3).value ?? "");
+  const acha = (ws: ExcelJS.Worksheet, rot: string, depois = 0) => {
+    for (let r = depois + 1; r <= ws.rowCount; r++) if (rotDe(ws, r) === rot) return r;
+    return 0;
+  };
+  const RC = "Revenues, COGS & SG&A";
+  const soma = (ws: ExcelJS.Worksheet, nomes: string[], col: string) =>
+    nomes.reduce((a, n) => a + Number(avaliarCelula(ws, col, acha(ws, n))), 0);
+
+  // ---- custo + SG&A, mesmo código: taxa × receita líquida UMA vez (não 2×)
+  const cusN = ["Custo A", "Custo B"]; const sgaN = ["Despesa X", "Despesa Y"];
+  const W1 = montar([["Custo A", 60000]], [["Despesa X", 40000]], [], [], []);
+  const W4 = montar([["Custo A", 60000], ["Custo B", 40000]], [["Despesa X", 30000], ["Despesa Y", 10000]], [], [], []);
+  for (const [nome, wb, cs, sg] of [
+    ["1 custo + 1 SG&A", W1, ["Custo A"], ["Despesa X"]], ["2 custos + 2 SG&A", W4, cusN, sgaN],
+  ] as const) {
+    const ws = wb.getWorksheet(RC)!; esquecerMemoria(ws);
+    const rl = Number(avaliarCelula(ws, "G", acha(ws, "RECEITA LÍQUIDA")));
+    const tot = soma(ws, [...cs, ...sg], "G");
+    checar(rl > 0 && Math.abs(tot - 0.5 * rl) < 0.5,
+      `(39e) ${nome}, mesmo código: custo + SG&A somam taxa × receita líquida UMA vez (não 2×)`,
+      `${tot} vs ${0.5 * rl} (2× seria ${rl})`);
+  }
+  {
+    const ws = W4.getWorksheet(RC)!; esquecerMemoria(ws);
+    const tot = soma(ws, [...cusN, ...sgaN], "G");
+    const partes = [...cusN, ...sgaN].map((n) => Number(avaliarCelula(ws, "G", acha(ws, n))) / tot);
+    checar([0.4286, 0.2857, 0.2143, 0.0714].every((e, i) => Math.abs(partes[i] - e) < 1e-3),
+      "(39e) cada conta leva a parcela no grupo INTEIRO (custo e SG&A juntos: 60/40/30/10 de 140)",
+      partes.map((x) => x.toFixed(4)).join(" · "));
+  }
+
+  // ---- bases diferentes: grupos separados, cada um com os dias inteiros, e a NOTA
+  const WB = montar([], [], [["Conta a receber A", 10000], ["Conta a receber B", 6000]],
+    [["Obrigações trabalhistas", 5000]], [["Fornecedores nacionais", 20000]]);
+  {
+    const wc = WB.getWorksheet("Working Capital")!; esquecerMemoria(wc);
+    const nota = (nome: string) => {
+      const r = acha(wc, nome);
+      const rd = acha(wc, "    dias de giro (base)", r);
+      const c = wc.getRow(rd).getCell(7);
+      return typeof c.note === "string" ? c.note : JSON.stringify(c.note ?? "");
+    };
+    const nAtivo = nota("Conta a receber A");
+    checar(/ATENÇÃO/.test(nAtivo) && /2 grupos com bases diferentes/.test(nAtivo) && /ativo\/receita líquida/.test(nAtivo)
+      && /passivo\/receita líquida/.test(nAtivo) && /revise o vínculo/.test(nAtivo),
+      "(39e) PMR no ativo e no passivo: a célula diz que são 2 grupos de bases diferentes e o efeito",
+      nAtivo.slice(-260));
+    checar(/ATENÇÃO/.test(nota("Obrigações trabalhistas")),
+      "(39e) …e a conta do PASSIVO recebe o mesmo aviso");
+    const nRec = Number(avaliarCelula(wc, "G", acha(wc, "Receita líquida (base dos dias de giro do ativo)")));
+    const gAtivo = soma(wc, ["Conta a receber A", "Conta a receber B"], "G");
+    checar(Math.abs(gAtivo - 90 / 360 * nRec) < 0.5,
+      "(39e) …cada grupo projeta os dias inteiros: o do ativo soma dias/360 × receita (não rateia contra o passivo)",
+      `${gAtivo} vs ${90 / 360 * nRec}`);
+    const pas = Number(avaliarCelula(wc, "G", acha(wc, "Obrigações trabalhistas")));
+    checar(Math.abs(pas - 90 / 360 * nRec) < 0.5,
+      "(39e) …e o do passivo também (K=1: idêntico ao de antes)", `${pas} vs ${90 / 360 * nRec}`);
+  }
+  // fornecedor contra custo × resto contra receita, MESMO código
+  {
+    const W2 = montar([], [], [], [], [["Fornecedores nacionais", 20000], ["Outras obrigações operacionais", 4000]]);
+    const wc = W2.getWorksheet("Working Capital")!; esquecerMemoria(wc);
+    const r = acha(wc, "Outras obrigações operacionais");
+    const c = wc.getRow(acha(wc, "    dias de giro (base)", r)).getCell(7);
+    const n = typeof c.note === "string" ? c.note : JSON.stringify(c.note ?? "");
+    checar(/ATENÇÃO/.test(n) && /passivo\/custos/.test(n) && /passivo\/receita líquida/.test(n),
+      "(39e) PMP em fornecedor (base custos) e em outra conta (base receita): dois grupos, e a nota diz as duas bases",
+      n.slice(-260));
+  }
+}
+
+// =============================================================================
 // (40) O REPERFILAMENTO MEDE CAIXA — e a prova é a alavanca de HAIRCUT mexer nele.
 //
 // O bloco REPERFILAMENTO compara o serviço do cronograma original com o serviço
@@ -7417,11 +7557,25 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     readFileSync(new URL("./fixtures/book-vertentes.json", import.meta.url), "utf8"),
   ) as { documentos: DocumentoParaExport[]; campos: CampoExtraido[] };
   const agora = new Date("2026-07-27T12:00:00Z");
-  const montar = () => buildExportWorkbook({
-    caso: { nome: "Book Vertentes", produto: "reestruturacao" },
-    documentos: fixture.documentos, campos: fixture.campos, agora,
-    modeloInstitucional: entradaModeloDaFixture(fixture, agora),
-  });
+  // `custoPct` força a premissa de custo variável. A fixture tinha PL negativo POR ACIDENTE: o
+  // mesmo código de custo ligado a custo E a SG&A projetava 60% + 60% = 120% da receita (o
+  // defeito do grupo por bloco). Com o grupo único (60% no total) o PL deixa de ser negativo,
+  // e o caso "PL a descoberto" passa a ser montado de propósito, com custo de 120%.
+  const montar = (custoPct?: number) => {
+    const entrada = entradaModeloDaFixture(fixture, agora);
+    if (custoPct !== undefined) {
+      for (const pr of entrada.premissas) {
+        if (pr.codigo === "CUSTO_VARIAVEL") {
+          pr.valores = Object.fromEntries(Object.keys(pr.valores).map((k) => [k, custoPct]));
+        }
+      }
+    }
+    return buildExportWorkbook({
+      caso: { nome: "Book Vertentes", produto: "reestruturacao" },
+      documentos: fixture.documentos, campos: fixture.campos, agora,
+      modeloInstitucional: entrada,
+    });
+  };
   const acharEm = (ws: ExcelJS.Worksheet, re: RegExp) => {
     for (let r = 1; r <= ws.rowCount; r++) {
       if (re.test(String(ws.getRow(r).getCell(3).value ?? ""))) return r;
@@ -7430,14 +7584,14 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   };
   const COL = "G";
 
-  // (b) A FIXTURE JÁ TEM PL NEGATIVO — este assert não fabrica o caso, ele o lê.
+  // (b) PL NEGATIVO: custo de 120% da receita (prejuízo) consome o patrimônio — caso de reestruturação.
   {
-    const wb = montar(); const out = wb.getWorksheet("Output")!;
+    const wb = montar(120); const out = wb.getWorksheet("Output")!;
     esquecerMemoria(out);
     const rPL = acharEm(out, /^Shareholder's Equity$/);
     const pl = avaliarCelula(out, COL, rPL);
     checar(typeof pl === "number" && pl < 0,
-      "(41) a fixture tem patrimônio líquido NEGATIVO nesta coluna — o caso é real",
+      "(41) com custo de 120% da receita o patrimônio líquido fica NEGATIVO nesta coluna",
       String(pl));
     const alav = avaliarCelula(out, COL, acharEm(out, /^Dívida bruta \/ Patrim/));
     checar(alav === "PL<=0",
