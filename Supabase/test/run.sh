@@ -393,6 +393,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/caixa_dfc_de_um_ano.test.sql 2
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o faturamento que não via o mês na coluna (0197): mês/ano na coluna; ticket médio fora da soma"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/faturamento_mes_na_coluna.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

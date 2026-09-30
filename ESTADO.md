@@ -1,5 +1,12 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 104 (30/09/2026) — PR #248 (rascunho): o modelo que multiplicava por K, e a análise externa do Krauspenhar conferida
+
+> **Produção NÃO mudou nesta sessão**: o modo automático recusou aplicar migration ("Production
+> Deploy"). Supabase segue em `0195`; faltam `0196` e `0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql`,
+> nessa ordem, e republicar a ingestão do n8n. Comandos prontos no bloco SESSÃO 104 do `HANDOFF.md`.
+> O portal de produção é o `main` — os consertos do portal só chegam com o merge do #248.
+
 ## SESSÃO 103 (30/09/2026) — produção em `0195`, ingestão destravada, mandato de teste ponta a ponta no ar
 
 > **Tudo APLICADO em produção nesta sessão, com o dono em modo manual.**
