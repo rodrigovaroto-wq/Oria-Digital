@@ -775,6 +775,17 @@ supabase db execute --file Supabase/migrations/0197_o_faturamento_que_nao_via_o_
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0197' and not presente;                 -- ZERO linhas
 
+# A 0198 REEMITE fn_anos_periodo: a FAIXA "AAAA-AAAA" perdia o ano do meio ("multi 2024-2026" = 2024 e
+# 2026). MEDIDO EM PRODUÇÃO (30/09/2026, só-leitura): 1 período muda de conjunto, o do Mapa de Dívida do
+# Krauspenhar (4 reconciliações gravadas, todas sem_periodo_par, não regravadas); sem backfill. Não expande
+# faixa ambígua (fim antes do início, >10 anos, 2 dígitos) nem data. ACHADO NÃO CORRIGIDO: listas de 2
+# dígitos que não são anos ("multi 02,25" = 2002 e 2025; 5+5+5+5 períodos em produção).
+# Teste: Supabase/test/faixa_de_anos_do_periodo.test.sql (9 asserts; 4 reprovam sem a 0198).
+supabase db execute --file Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0198' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

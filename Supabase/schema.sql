@@ -511,8 +511,15 @@ declare
   canonico text := fn_periodo_canonico(p_tipo, p_ref);
   anos int[] := '{}';
   tok text;
+  m text[];
 begin
   if canonico is null then return anos; end if;
+  -- 0198: FAIXA "AAAA-AAAA" (ou "AAAAaAAAA", "AAAA–AAAA") inteira = todos os anos dela. Só quando
+  -- é crescente e de até 10 anos; fora disso cai no comportamento antigo (as pontas).
+  m := regexp_match(canonico, '^((?:19|20)[0-9]{2})(?:-|–|—|a|ate|até)((?:19|20)[0-9]{2})$');
+  if m is not null and m[2]::int >= m[1]::int and m[2]::int - m[1]::int <= 10 then
+    return array(select generate_series(m[1]::int, m[2]::int));
+  end if;
   -- anos de 4 dígitos explícitos (cobre ISO, ano isolado, listas já expandidas)
   foreach tok in array regexp_split_to_array(canonico, '[^0-9]+') loop
     if tok ~ '^(19|20)[0-9]{2}$' then
@@ -528,7 +535,7 @@ $_$;
 -- Name: FUNCTION fn_anos_periodo(p_tipo text, p_ref text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) IS 'Conjunto ordenado de anos implícito num período (qualquer notação). Vazio quando a referência não ancora ano.';
+COMMENT ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) IS 'Conjunto ordenado de anos implícito num período (qualquer notação). Vazio quando a referência não ancora ano. 0198: a FAIXA "AAAA-AAAA" devolve todos os anos dela (2024-2026 = 2024, 2025, 2026); a lista "2024,2026" devolve só os listados.';
 
 --
 -- Name: fn_anos_texto(text); Type: FUNCTION; Schema: public; Owner: -
@@ -17153,6 +17160,12 @@ GRANT ALL ON FUNCTION public.fn_ano_da_coluna(p_periodo_coluna text, p_referenci
 --
 
 GRANT ALL ON FUNCTION public.fn_anos_do_periodo(p_referencia text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_anos_periodo(p_tipo text, p_ref text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_aplicar_premissa_em_lote(p_caso_id uuid, p_secao_canonica text, p_premissa text, p_autor text, p_sazonalidade text); Type: ACL; Schema: public; Owner: -

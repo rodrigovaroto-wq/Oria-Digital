@@ -3,7 +3,7 @@
 ## SESSÃO 104 (30/09/2026) — PR #248 (rascunho): o modelo que multiplicava por K, e a análise externa do Krauspenhar conferida
 
 > **Produção NÃO mudou nesta sessão**: o modo automático recusou aplicar migration ("Production
-> Deploy"). Supabase segue em `0195`; faltam `0196` e `0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql`,
+> Deploy"). Supabase segue em `0195`; faltam `0196`, `0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql` e `0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql`,
 > nessa ordem, e republicar a ingestão do n8n. Comandos prontos no bloco SESSÃO 104 do `HANDOFF.md`.
 > O portal de produção é o `main` — os consertos do portal só chegam com o merge do #248.
 

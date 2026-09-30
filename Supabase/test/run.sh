@@ -398,6 +398,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/faturamento_mes_na_coluna.test
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== a faixa de anos que perdia o ano do meio (0198): multi 2024-2026"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/faixa_de_anos_do_periodo.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
