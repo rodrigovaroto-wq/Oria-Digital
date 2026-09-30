@@ -25,6 +25,8 @@
 --   C (achado 6)  a descrição é gravada quando NÃO abre pendência.
 --   E/F/G (S102, achado 1) estado velho não prende: documento reclassificado pela fila de revisão
 --                 (tipo por chave e por documento) e documento com período NULL.
+--   H/H2          (terceira correção) a guarda por CHAVE: o laço desce a período de outra entidade
+--                 (cenário Pa/Pb, as duas ordens) e os laços gravam a chave.
 --   D             o retry da 0152 (pré-condição de um período, ok de outro da MESMA chave) fecha.
 
 \set ON_ERROR_STOP on
@@ -410,6 +412,184 @@ begin
     format('%s aberta(s)', v_n));
 end $$;
 
+-- =============================================================================
+-- H. TERCEIRA CORREÇÃO DA GUARDA (por CHAVE, não por período gravado): o laço DESCE a períodos
+-- compatíveis de OUTRAS entidades, e o resultado conclusivo fica num período SEM documento da
+-- entidade. Entidade E com Balanço "23,24" (Pa) e "24,25" (Pb); o caso tem 12M24 (P24) de OUTRA
+-- entidade. Rodada 1: a chave Pb dá pré-condição, desce a P24 e diverge (pendência em P24; um
+-- humano a põe em em_correcao_interna). Rodada 2: a chave Pa dá ok; P24 é compatível com Pa, acha a
+-- pendência — e a guarda por período descartava a divergente de P24 (rodada anterior, sem documento
+-- exato) e RESOLVIA; Pb, ao chegar, abria OUTRA. Nas DUAS ordens de chave. A chave é simulada com o
+-- mesmo `set_config` que os laços fazem; que os laços o fazem é provado em H2.
+-- (Regra 4: a rodada 2 é um `do $$` = UMA transação, como a chamada única de fn_reconciliar_caso.)
+-- =============================================================================
+create or replace function teste_divvig_chave(p_caso text, p_chave text, p_per text, p_res text, p_desc text)
+returns jsonb language plpgsql as $$
+declare v_caso uuid; v_ent uuid; v_chave uuid; v_per uuid;
+begin
+  select id into v_caso from caso where nome = p_caso;
+  select d.entidade_id into v_ent from documento d join entidade e on e.id = d.entidade_id
+   where d.caso_id = v_caso and e.razao_social like 'Chaves E%' limit 1;
+  select id into v_chave from periodo where caso_id = v_caso and referencia = p_chave;
+  select id into v_per from periodo where caso_id = v_caso and referencia = p_per;
+  perform set_config('oria.periodo_chave', v_chave::text, true);
+  return fn_registrar_reconciliacao(v_caso, v_ent, v_per, 'caixa_bp_fluxo', 'A', null, null, null,
+    p_res, null, null, null, p_desc);
+end $$;
+
+create or replace function teste_divvig_monta_chaves(p_caso text)
+returns void language plpgsql as $$
+declare v_caso uuid;
+begin
+  v_caso := (fn_upsert_caso(p_caso))::uuid;
+  perform fn_registrar_documento(v_caso, 'Chaves E Ltda.', 'multi', '23,24', 'BALANCO', 0.95,
+    'nome_arquivo', 'supabase_storage', 'mp/0192h-' || p_caso || '-a.pdf', 'BP Pa.pdf', true, 'HASH-0192H-A-' || p_caso, 'ok');
+  perform fn_registrar_documento(v_caso, 'Chaves E Ltda.', 'multi', '24,25', 'BALANCO', 0.95,
+    'nome_arquivo', 'supabase_storage', 'mp/0192h-' || p_caso || '-b.pdf', 'BP Pb.pdf', true, 'HASH-0192H-B-' || p_caso, 'ok');
+  perform fn_registrar_documento(v_caso, 'Outra Ltda.', 'anual', '12M24', 'BALANCO', 0.95,
+    'nome_arquivo', 'supabase_storage', 'mp/0192h-' || p_caso || '-c.pdf', 'BP P24.pdf', true, 'HASH-0192H-C-' || p_caso, 'ok');
+end $$;
+
+create or replace function teste_divvig_estado(p_caso text, out n_total int, out n_abertas int, out estado text, out descr text)
+language plpgsql as $$
+declare v_caso uuid;
+begin
+  select id into v_caso from caso where nome = p_caso;
+  select count(*), count(*) filter (where pe.estado <> 'resolvida'),
+         min(pe.estado::text) filter (where pe.estado <> 'resolvida'),
+         min(pe.descricao) filter (where pe.estado <> 'resolvida')
+    into n_total, n_abertas, estado, descr
+    from pendencia pe where pe.caso_id = v_caso and pe.motivo = 'reconciliacao:caixa_bp_fluxo';
+end $$;
+
+do $$ begin perform teste_divvig_monta_chaves('0192h: Pa primeiro'); perform teste_divvig_monta_chaves('0192h: Pb primeiro'); end $$;
+
+-- Rodada 1 (as duas): a chave Pb dá pré-condição em Pb e diverge em P24.
+do $$ begin
+  perform teste_divvig_chave('0192h: Pa primeiro', '24,25', '24,25', 'precondicao_nao_satisfeita', 'Pb sem par');
+  perform teste_divvig_chave('0192h: Pa primeiro', '24,25', '12M24', 'divergente', 'P24 diverge 4340');
+  perform teste_divvig_chave('0192h: Pb primeiro', '24,25', '24,25', 'precondicao_nao_satisfeita', 'Pb sem par');
+  perform teste_divvig_chave('0192h: Pb primeiro', '24,25', '12M24', 'divergente', 'P24 diverge 4340');
+  update pendencia set estado = 'em_correcao_interna'
+   where motivo = 'reconciliacao:caixa_bp_fluxo' and estado <> 'resolvida'
+     and caso_id in (select id from caso where nome like '0192h:%');
+end $$;
+
+do $$
+declare v_caso uuid; v_chave uuid; v_per uuid; v_n int; e record;
+begin
+  raise notice '--- H. terceira correção: a guarda raciocina por CHAVE ---';
+  select id into v_caso from caso where nome = '0192h: Pa primeiro';
+  select periodo_chave_id, periodo_id into v_chave, v_per from reconciliacao
+   where caso_id = v_caso and resultado = 'divergente';
+  perform teste_assert_divvig(v_chave = (select id from periodo where caso_id = v_caso and referencia = '24,25')
+                              and v_per = (select id from periodo where caso_id = v_caso and referencia = '12M24'),
+    '0192/4: a linha divergente fica em P24 mas carrega a CHAVE Pb (periodo_chave_id != periodo_id)',
+    format('chave=%s periodo=%s', v_chave, v_per));
+  select * into e from teste_divvig_estado('0192h: Pa primeiro');
+  perform teste_assert_divvig(e.n_total = 1 and e.estado = 'em_correcao_interna',
+    'rodada 1: uma pendência, em_correcao_interna', format('%s total, estado %s', e.n_total, e.estado));
+end $$;
+
+-- Rodada 2, ORDEM 1: a chave Pa (irmã) é visitada PRIMEIRO e dá ok; depois Pb desce de novo e diverge.
+do $$ begin
+  perform teste_divvig_chave('0192h: Pa primeiro', '23,24', '23,24', 'ok', 'Pa confere');
+end $$;
+do $$
+declare e record;
+begin
+  select * into e from teste_divvig_estado('0192h: Pa primeiro');
+  perform teste_assert_divvig(e.n_abertas = 1 and e.estado = 'em_correcao_interna',
+    '0192/4 (Pa primeiro): o ok da chave irmã Pa NÃO resolve a pendência que a chave Pb deixou em P24',
+    format('%s aberta(s), estado %s — a guarda por período a resolvia', e.n_abertas, coalesce(e.estado,'(nenhum)')));
+end $$;
+do $$ begin
+  perform teste_divvig_chave('0192h: Pa primeiro', '24,25', '24,25', 'precondicao_nao_satisfeita', 'Pb sem par');
+  perform teste_divvig_chave('0192h: Pa primeiro', '24,25', '12M24', 'divergente', 'P24 diverge 4340');
+end $$;
+do $$
+declare e record;
+begin
+  select * into e from teste_divvig_estado('0192h: Pa primeiro');
+  perform teste_assert_divvig(e.n_total = 1 and e.n_abertas = 1 and e.estado = 'em_correcao_interna'
+                              and e.descr = 'P24 diverge 4340',
+    '0192/4 (Pa primeiro): a divergente que chega depois NÃO abre outra — mesma pendência, em correção, com o texto da divergência',
+    format('%s no total, %s aberta(s), estado %s', e.n_total, e.n_abertas, coalesce(e.estado,'(nenhum)')));
+end $$;
+
+-- Rodada 2, ORDEM 2: Pb primeiro (precondição em Pb, divergência em P24), depois Pa ok — em UMA transação.
+do $$ begin
+  perform teste_divvig_chave('0192h: Pb primeiro', '24,25', '24,25', 'precondicao_nao_satisfeita', 'Pb sem par');
+  perform teste_divvig_chave('0192h: Pb primeiro', '24,25', '12M24', 'divergente', 'P24 diverge 4340');
+  perform teste_divvig_chave('0192h: Pb primeiro', '23,24', '23,24', 'ok', 'Pa confere');
+end $$;
+do $$
+declare e record;
+begin
+  select * into e from teste_divvig_estado('0192h: Pb primeiro');
+  perform teste_assert_divvig(e.n_total = 1 and e.n_abertas = 1 and e.estado = 'em_correcao_interna'
+                              and e.descr = 'P24 diverge 4340',
+    '0192/4 (Pb primeiro): uma pendência só, em correção, com o texto da divergência',
+    format('%s no total, %s aberta(s), estado %s', e.n_total, e.n_abertas, coalesce(e.estado,'(nenhum)')));
+end $$;
+
+-- Rodada 3 (o dado foi corrigido): as DUAS chaves concluem ok -> a guarda não trava a resolução legítima.
+do $$ begin
+  perform teste_divvig_chave('0192h: Pa primeiro', '23,24', '23,24', 'ok', 'Pa confere');
+  perform teste_divvig_chave('0192h: Pa primeiro', '24,25', '24,25', 'ok', 'Pb confere');
+  perform teste_divvig_chave('0192h: Pb primeiro', '24,25', '24,25', 'ok', 'Pb confere');
+  perform teste_divvig_chave('0192h: Pb primeiro', '23,24', '23,24', 'ok', 'Pa confere');
+end $$;
+do $$
+declare e1 record; e2 record;
+begin
+  select * into e1 from teste_divvig_estado('0192h: Pa primeiro');
+  select * into e2 from teste_divvig_estado('0192h: Pb primeiro');
+  perform teste_assert_divvig(e1.n_abertas = 0 and e2.n_abertas = 0,
+    '0192/4: com todas as chaves concluindo ok a pendência resolve (nas duas ordens)',
+    format('%s e %s aberta(s)', e1.n_abertas, e2.n_abertas));
+end $$;
+
+-- H2. Os LAÇOS gravam a chave: fn_reconciliar_caso e fn_reconciliar_por_documento(...,'tudo'). Sem
+-- isto o fallback (período da descida) reabre o defeito em produção mesmo com H verde.
+do $$
+declare v_caso uuid; v_pb uuid; v_n_nulo int; v_n_desce int; v_doc uuid; v_resto text;
+begin
+  raise notice '--- H2. os laços gravam periodo_chave_id ---';
+  perform teste_divvig_monta_chaves('0192h: laços');
+  select id into v_caso from caso where nome = '0192h: laços';
+  select id into v_pb from periodo where caso_id = v_caso and referencia = '24,25';
+
+  perform fn_reconciliar_caso(v_caso);
+  select count(*) filter (where periodo_chave_id is null),
+         count(*) filter (where periodo_chave_id is distinct from periodo_id)
+    into v_n_nulo, v_n_desce
+    from reconciliacao where caso_id = v_caso and tipo in ('ativo_passivo_pl', 'caixa_bp_fluxo');
+  perform teste_assert_divvig(v_n_nulo = 0 and v_n_desce > 0,
+    'fn_reconciliar_caso grava a CHAVE em toda linha por período, e ela difere do período quando o laço desce',
+    format('%s sem chave, %s com chave diferente do período', v_n_nulo, v_n_desce));
+  perform teste_assert_divvig(coalesce(current_setting('oria.periodo_chave', true), '') = '',
+    'fn_reconciliar_caso zera a chave ao sair (não vaza para a chamada seguinte)',
+    coalesce(current_setting('oria.periodo_chave', true), '(null)'));
+
+  delete from reconciliacao where caso_id = v_caso;
+  select d.id into v_doc from documento d join documento_versao v on v.documento_id = d.id
+   where d.caso_id = v_caso and v.nome_original = 'BP Pb.pdf';
+  perform fn_reconciliar_por_documento(v_doc, 'tudo');
+  select count(*) filter (where periodo_chave_id is distinct from v_pb),
+         count(*) filter (where periodo_chave_id is distinct from periodo_id)
+    into v_n_nulo, v_n_desce
+    from reconciliacao where caso_id = v_caso and tipo in ('ativo_passivo_pl', 'caixa_bp_fluxo');
+  perform teste_assert_divvig(v_n_nulo = 0 and v_n_desce > 0,
+    'fn_reconciliar_por_documento(tudo) grava a chave do DOCUMENTO (Pb) em toda linha por período',
+    format('%s com outra chave, %s com chave diferente do período', v_n_nulo, v_n_desce));
+  perform teste_assert_divvig(coalesce(current_setting('oria.periodo_chave', true), '') = '',
+    'fn_reconciliar_por_documento zera a chave ao sair');
+end $$;
+
+drop function teste_divvig_estado(text);
+drop function teste_divvig_chave(text, text, text, text, text);
+drop function teste_divvig_monta_chaves(text);
 drop function teste_divvig_reg2(text, text, text);
 drop function teste_divvig_reg3(text, text, text, text, text, text, text);
 drop function teste_divvig_reg(text, text, text, text, text);

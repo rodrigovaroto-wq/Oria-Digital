@@ -417,10 +417,20 @@ begin
       -- linhas está em seção de nota: duas linhas de face iguais continuam
       -- somando; nota sem linha de face igual conta (uma vez, se repetida na
       -- própria nota); nota com linha de face igual sai.
+      -- REVISÃO 2 (30/09/2026, achado médio): a 2ª versão ainda contava UMA só
+      -- linha de nota sem par de face (`rn = 1`). Em produção "partes
+      -- relacionadas" é quase sempre a SUBSEÇÃO DE FACE (~85 de ~95 documentos
+      -- com mútuo nela não têm outra linha de mútuo fora dela): duas posições
+      -- de face ambas em "Partes relacionadas" (AC e ANC, mesmo valor) eram
+      -- fundidas numa. Agora linha marcada como nota SEM par de face conta
+      -- SEMPRE; só a nota com face igual sai. Nota repetida dentro de si mesma
+      -- (a hipótese que o `rn = 1` protegia): 0 grupos em produção, medido só-leitura
+      -- (30/09/2026, 448 grupos de mútuo, 0 com duas ou mais linhas e nenhuma de face).
       -- TETO: "nota" é o nome da seção (`partes relacionadas` ou `nota`); uma
-      -- face cuja subseção se chame "Partes Relacionadas" seria tratada como
-      -- nota. Em produção a face do doc 2f17a7ba tem `secao` NULL e a nota,
-      -- "Partes Relacionadas" (medido, só-leitura, 30/09/2026).
+      -- face cuja subseção se chame "Partes Relacionadas" é tratada como nota,
+      -- e só sai se HOUVER linha de face igual fora da subseção. Em produção a face
+      -- do doc 2f17a7ba tem `secao` NULL e a nota, "Partes Relacionadas" (5 pares,
+      -- medido de novo em 30/09/2026).
       -- Medido em TODA a produção: 5 grupos assim em mútuos (face ordem 38 +
       -- nota ordem 62), todos nesse único documento, 0 com valor diferente.
       select doc_id, lado, valor_base, chave, unidade
@@ -431,12 +441,6 @@ begin
                ce.chave,
                ce.unidade,
                coalesce(fn_normalizar_texto(ce.secao) ~ '(partes relacionadas|\mnotas?\M)', false) as e_nota,
-               row_number() over (
-                 partition by d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
-                              fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
-                              fn_valor_em_base(ce.valor_num, ce.unidade), ce.unidade,
-                              coalesce(fn_normalizar_texto(ce.secao) ~ '(partes relacionadas|\mnotas?\M)', false)
-                 order by ce.ordem) as rn,
                count(*) filter (where not coalesce(fn_normalizar_texto(ce.secao) ~ '(partes relacionadas|\mnotas?\M)', false)) over (
                  partition by d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
                               fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
@@ -463,7 +467,7 @@ begin
           and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
       ) bruto
       -- face: todas somam. nota: só a primeira, e só se não há face igual.
-      where not e_nota or (n_face = 0 and rn = 1)
+      where not e_nota or n_face = 0
     ), por_lado as (
       select lado, abs(sum(valor_base)) as soma_base
       from linhas group by lado
@@ -1062,12 +1066,14 @@ insert into instalacao_requisito
    'importante', 836),
 
   ('mutuos_conta_repetida_conta_uma_vez', '0195', 'corpo', 'fn_reconciliar_mutuos',
-   'where not e_nota or (n_face = 0 and rn = 1)',
+   'where not e_nota or n_face = 0',
    'Sem este corpo o lado A de mútuos soma DUAS vezes a mesma conta quando o balanço a traz na face E '
    'na nota "Partes Relacionadas" — MEDIDO EM PRODUÇÃO (30/09/2026, só-leitura): o doc 2f17a7ba '
    '(Varejo, multi 21..25) repete "Mútuos a pagar - controladora" nos 5 anos (409, 890, 1.600, 2.600, '
    '3.900 mil), e as "divergências reais" de 409 e 890 mil do teste alto volume eram essa duplicata. '
-   'Em TODA a produção são 5 grupos assim em mútuos, todos nesse documento.',
+   'Em TODA a produção são 5 grupos assim em mútuos, todos nesse documento. Linha marcada como nota '
+   'SEM par de face conta sempre (sem `rn = 1`): "partes relacionadas" é quase sempre a subseção de '
+   'FACE em produção, e duas posições de face ali (AC e ANC, mesmo valor) não são uma só.',
    'importante', 837),
 
   ('intragrupo_dado_exige_contraparte', '0195', 'corpo', 'fn_reconciliar_intragrupo',

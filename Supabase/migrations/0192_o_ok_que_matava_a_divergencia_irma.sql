@@ -126,45 +126,66 @@
 -- `aceita_com_ressalva`) e a divergente, ao chegar, abria OUTRA: o trabalho
 -- humano sumia e a trilha dizia "resolvida". A guarda `criado_em = now()` não
 -- enxergava nada de transação anterior.
---   DESENHO ESCOLHIDO (a sessão principal decidiu): generalizar a guarda de
---   "mesma transação" para "ESTADO VIGENTE". Antes de resolver (ou de trocar a
---   descrição por uma de pré-condição), olha-se o ÚLTIMO registro de `reconciliacao`
---   de CADA outro período compatível com o da pendência (mesmo caso/tipo/entidade),
---   no tempo: `criado_em desc`, e dentro da mesma transação (mesmo `criado_em`) o
---   critério `cmin` que já existia. Só resolve se nenhum desses últimos estados é
---   divergente (`divergente`, `divergencia`, `zona_cinzenta`). O período desta própria
---   chamada fica fora da conta: o resultado dele é o que está sendo decidido.
---   Para não prender pendência para sempre por estado velho (revisão da S102, achado 1),
---   um estado de OUTRO período só conta se é desta MESMA rodada (`criado_em = now()`) OU
---   se existe documento vivo com `periodo_id` EXATAMENTE igual ao do estado (não nulo):
---   aí o período ainda é chave que `fn_reconciliar_caso` revisita. Compatibilidade
---   (`fn_periodos_compativeis`) não serve de filtro: devolve true com período NULL/sem
---   ano (29 de 59 casos em produção têm documento assim) e um documento reclassificado
---   por `fn_revisar_documento` ("24,25" -> 12M24) deixava o estado velho de "24,25"
---   divergente e sem chave que o revisitasse. Tipos POR DOCUMENTO (secao_fecha) não rodam
---   a guarda: o casamento da pendência por `documento_id` já isola cada documento.
---   A coluna NOVA `reconciliacao.documento_id` (nullable, FK `on delete set null`) é
---   gravada por `fn_registrar_reconciliacao` com `p_documento_id`; linha antiga fica NULL.
---   O QUE NÃO MUDA: o retry da 0152 (pré-condição de um período seguida de
---   `ok` de outro período da MESMA chave fecha normalmente: o último estado do
---   período 1 é pré-condição, que não é divergente); o contrato de motivos da
---   0186/0188; o dial/sombra da 0127.
---   TETO QUE SOBRA (declarado): (i) pendência cujo período irmão ficou com estado
---   divergente e tem documento vivo com esse período EXATO só fecha quando o irmão for
---   reconciliado de novo: `fn_reconciliar_caso` visita todo período que é chave de algum
---   documento, mas o laço de `fn_reconciliar_por_documento(...,'tudo')` sai no primeiro
---   período que conclui (`exit when ... <> 'precondicao_nao_satisfeita'`), então
---   reconciliar só o documento do período `ok` não fecha a pendência (fica aberta,
---   nunca fechada em falso); período sem documento exato NÃO entra no teto: seu estado
---   velho não conta;
---   (ii) "documento vivo" é
---   (caso, entidade, período) com qualquer tipo de documento, não "o tipo
---   de documento que alimenta ESTA checagem" — um período cujo único documento
---   vivo é de outro tipo ainda conta; (iii) o critério de ordem entre transações
---   é `criado_em` (relógio do banco): duas rodadas no mesmo microssegundo de
---   transações diferentes não se ordenam — não medido, improvável; (iv) ainda não há
---   identificador de rodada (`lote_execucao`): a guarda olha o estado vigente,
---   não "esta rodada concluiu sem divergência".
+--   A GUARDA FOI CORRIGIDA TRÊS VEZES (db6a258, 0202b8f, e esta) e as duas primeiras
+--   raciocinavam por PERÍODO GRAVADO ("o último estado de cada outro período compatível").
+--   Falhavam pelo mesmo motivo: o período em que o resultado FICA gravado não é o período
+--   da CHAVE que o produziu. `fn_reconciliar_caso` (e `fn_reconciliar_chaves_do_documento`)
+--   percorre `fn_periodos_compativeis_array(caso, chave)` e DESCE para períodos compatíveis
+--   de OUTRAS entidades enquanto der pré-condição; o resultado conclusivo fica num período
+--   sem documento da entidade. Cenário (reproduzido em divergencia_vigente_entre_rodadas):
+--   entidade E com Balanço "23,24" (Pa) e "24,25" (Pb); o caso tem 12M24 (P24) de outra
+--   entidade. Rodada 1: a chave Pb dá pré-condição, desce a P24 e diverge — pendência em
+--   P24, e um humano a põe em `em_correcao_interna`. Rodada 2: a chave Pa, visitada
+--   primeiro, dá `ok`; P24 é compatível com Pa, acha a pendência, e a guarda por período
+--   descartava a divergente de P24 ("rodada anterior, sem documento exato") -> RESOLVIA;
+--   depois Pb descia de novo, divergia e abria OUTRA. Em produção, 332 estados vigentes
+--   (20 dias, 30/09/2026) estão em período SEM documento exato da entidade: o mecanismo
+--   está vivo, não é hipótese.
+--   O DESENHO AGORA É POR CHAVE (a sessão principal decidiu, pela regra das três
+--   correções falhas): o que a guarda pergunta é "alguma CHAVE ainda viva concluiu
+--   divergente, no seu último registro?", não "algum período gravado está divergente?".
+--     (1) Coluna NOVA `reconciliacao.periodo_chave_id` (nullable, FK `on delete set null`):
+--         o período da CHAVE que originou a chamada. Os laços (`fn_reconciliar_caso` e
+--         `fn_reconciliar_chaves_do_documento` — os DOIS únicos que despacham as checagens
+--         por chave, conferido por grep em todas as migrations) fazem
+--         `set_config('oria.periodo_chave', <período da chave>, true)` antes de cada laço de
+--         período, e `fn_registrar_reconciliacao` grava
+--         `nullif(current_setting('oria.periodo_chave', true), '')::uuid`. Sem o setting
+--         (chamada direta, como nos testes e na `fn_reconciliar_arvore`), a chave é o
+--         próprio `p_periodo_id`: uma chamada avulsa é a sua própria chave. Os laços
+--         ZERAM o setting antes das checagens sem período (duplicidade, versões) e ao
+--         sair, para a chave de uma chamada nunca vazar para a seguinte.
+--     (2) Antes de resolver (ou de trocar a descrição por uma de pré-condição), para cada
+--         CHAVE viva K — existe documento do caso com `periodo_id = K` (da entidade, quando
+--         a entidade não é nula) — olha-se o ÚLTIMO registro com `periodo_chave_id = K`
+--         (mesmo caso/tipo/entidade; `criado_em desc`, `cmin` desempata dentro da
+--         transação). Se ele é divergente (`divergente`, `divergencia`, `zona_cinzenta`)
+--         num período igual ou compatível com o da pendência, NÃO resolve (e não troca a
+--         descrição). Mais: qualquer linha DESTA transação (`criado_em = now()`), de outro
+--         período que o desta chamada, divergente e compatível, também bloqueia (a guarda
+--         original, que vale dentro de uma rodada mesmo para chave sem documento).
+--     (3) Continua resolvendo: reclassificação (a chave antiga deixa de ter documento ->
+--         não prende), período NULL (nenhum documento tem `periodo_id = NULL` como chave),
+--         o retry da 0152 (o último registro da chave é pré-condição, não divergente) e a
+--         resolução legítima (todas as chaves concluem ok). Tipos POR DOCUMENTO
+--         (secao_fecha) seguem SEM guarda: o casamento por `documento_id` isola o documento.
+--     A coluna `reconciliacao.documento_id` (nullable, FK `on delete set null`) é gravada
+--     com `p_documento_id`; linha antiga fica NULL.
+--   TETO DECLARADO: (i) linha gravada ANTES desta migration não tem `periodo_chave_id` e NÃO
+--   bloqueia — falha para o lado de RESOLVER, como era antes da 0192 (ninguém sabe de que
+--   chave ela veio; inventar seria fabricar dado). Uma divergência já aberta em produção só
+--   passa a ser protegida depois da primeira rodada do caso com o corpo novo;
+--   (ii) o laço de `fn_reconciliar_por_documento(...,'tudo')` sai no primeiro período que
+--   conclui, então reconciliar só o documento do período `ok` não fecha a pendência cuja
+--   chave irmã ficou divergente (fica aberta, nunca fechada em falso);
+--   (iii) "documento vivo" é (caso, entidade, período) com QUALQUER tipo de documento, não
+--   "o tipo que alimenta ESTA checagem" — uma chave cujo único documento é de outro tipo
+--   ainda conta e segura a pendência até ser reconciliada de novo;
+--   (iv) a ordem entre transações é `criado_em` (relógio do banco): duas rodadas no mesmo
+--   microssegundo não se ordenam (não medido, improvável);
+--   (v) checagens por período apenas (mútuos, intragrupo: entidade NULL) têm a chave viva
+--   por QUALQUER documento do caso naquele período;
+--   (vi) ainda não há identificador de rodada (`lote_execucao`).
 --
 -- ACHADO 6 (MÉDIO) — regra 1: o texto da checagem se perdia quando ela não
 -- abria pendência. `reconciliacao` não tinha coluna de descrição; "hierarquia
@@ -197,7 +218,8 @@
 -- -----------------------------------------------------------------------------
 alter table reconciliacao
   add column if not exists documento_id uuid references documento(id) on delete set null,
-  add column if not exists descricao    text;
+  add column if not exists descricao    text,
+  add column if not exists periodo_chave_id uuid references periodo(id) on delete set null;
 
 comment on column reconciliacao.documento_id is
   'O documento que a checagem recebeu (p_documento_id de fn_registrar_reconciliacao), ou NULL. '
@@ -211,10 +233,18 @@ comment on column reconciliacao.descricao is
   'por quê" de "conferiu e fechou". NULL nas linhas anteriores à 0192: o texto delas não existe em '
   'lugar nenhum (ausência, não string vazia).';
 
--- O estado vigente lê o último registro por (caso, tipo, período): sem o índice é ordenar o
+comment on column reconciliacao.periodo_chave_id is
+  'O período da CHAVE que originou a chamada (o período do documento que o laço de fn_reconciliar_caso / '
+  'fn_reconciliar_chaves_do_documento estava visitando), que NÃO é o `periodo_id` quando o laço DESCEU '
+  'para um período compatível de outra entidade. É por esta coluna que a guarda de '
+  'fn_registrar_reconciliacao lê o ESTADO VIGENTE de cada chave. NULL nas linhas anteriores à 0192 '
+  '(não bloqueiam a resolução: ninguém sabe de que chave vieram) e quando o período foi apagado '
+  '(on delete set null).';
+
+-- O estado vigente lê o último registro por (caso, tipo, CHAVE): sem o índice é ordenar o
 -- histórico do caso inteiro a cada registro (6.236 linhas em 44 casos em produção, 28/09/2026).
 create index if not exists idx_reconciliacao_vigente
-  on reconciliacao (caso_id, tipo, periodo_id, criado_em desc);
+  on reconciliacao (caso_id, tipo, periodo_chave_id, criado_em desc);
 
 -- -----------------------------------------------------------------------------
 -- (1) fn_registrar_reconciliacao — REEMITIDA INTEIRA a partir do corpo vigente
@@ -305,6 +335,11 @@ declare
   -- CONCLUIU divergente para um período compatível com ele.
   v_pendencia_periodo_id    uuid;
   v_divergencia_concorrente boolean := false;
+  -- 0192 (terceira correção da guarda): o período da CHAVE que originou esta chamada — o que o
+  -- laço de fn_reconciliar_caso / fn_reconciliar_chaves_do_documento deixou em `oria.periodo_chave`.
+  -- Chamada avulsa (sem laço, como a `fn_reconciliar_arvore` e os testes) é a sua própria chave.
+  v_periodo_chave_id        uuid := coalesce(nullif(current_setting('oria.periodo_chave', true), '')::uuid,
+                                             p_periodo_id);
   -- 0192 (achado 5): os tipos cuja checagem é POR DOCUMENTO — a pendência e o estado
   -- vigente são do documento, não da chave (caso, entidade, período). Hoje só `secao_fecha`
   -- (fn_reconciliar_arvore, 0133/0190). Tipo novo por documento entra AQUI e na sonda.
@@ -343,13 +378,15 @@ begin
   insert into reconciliacao
     (caso_id, entidade_id, periodo_id, tipo, classe, fonte_a, fonte_b,
      precondicoes_ok, resultado, motivo_precondicao, divergencia_abs, divergencia_pct, materialidade,
-     documento_id, descricao)
+     documento_id, descricao, periodo_chave_id)
   values (
     p_caso_id, p_entidade_id, p_periodo_id, p_tipo, p_classe, p_fonte_a, p_fonte_b,
     v_res_log <> 'precondicao_nao_satisfeita', v_res_log, v_motivo_precondicao,
     p_divergencia_abs, p_divergencia_pct, p_materialidade,
     -- 0192 (achados 4/5/6): o documento que a checagem recebeu e o texto que ela deu, SEMPRE.
-    p_documento_id, p_descricao
+    p_documento_id, p_descricao,
+    -- 0192 (guarda por CHAVE): o período da chave que originou a chamada, não o que o laço desceu.
+    v_periodo_chave_id
   )
   returning id into v_reconciliacao_id;
 
@@ -368,59 +405,61 @@ begin
   order by criada_em
   limit 1;
 
-  -- 0192: O OK (OU A PRÉ-CONDIÇÃO) QUE MATAVA A DIVERGÊNCIA IRMÃ — ESTADO VIGENTE.
-  -- Antes de decidir se resolve ou sobrescreve a descrição da pendência achada acima,
-  -- confere o ÚLTIMO registro de `reconciliacao` de CADA período compatível com o da
-  -- pendência (mesmo caso/tipo/entidade e, nos tipos por documento, mesmo documento),
-  -- ao longo do TEMPO — não só desta transação. Se algum desses últimos estados é
-  -- `divergente`/`divergencia`/`zona_cinzenta`, a pendência NÃO resolve e NÃO perde a
-  -- descrição. Duas checagens do mesmo tipo/entidade com períodos COMPATÍVEIS (Balanço
-  -- "multi 24,25" × "anual 12M25", {2024,2025} ∩ {2025} ≠ ∅) caem na MESMA pendência
-  -- (linha acima, desde a 0023), e sem isto SÓ A ORDEM de visita decidia se o `ok` de um
-  -- período RESOLVIA a divergência do outro: dentro da rodada (medido em produção,
-  -- 25/09/2026: v33/v35, `caixa_bp_fluxo`, 4.340.000 criada e resolvida no mesmo instante)
-  -- e, pior, ENTRE rodadas — a 1ª versão desta guarda olhava `criado_em = now()` e não via
-  -- a divergência gravada numa transação anterior (reproduzido no tdf_test: o `ok` do
-  -- irmão resolvia a pendência em `em_correcao_interna` e a divergente, ao chegar, abria
-  -- OUTRA). O período desta chamada fica fora da conta: o resultado dele é o que se decide.
-  -- Só roda a query quando há pendência a proteger.
+  -- 0192: O OK (OU A PRÉ-CONDIÇÃO) QUE MATAVA A DIVERGÊNCIA IRMÃ — ESTADO VIGENTE POR CHAVE.
+  -- Duas checagens do mesmo tipo/entidade com períodos COMPATÍVEIS (Balanço "multi 24,25" ×
+  -- "anual 12M25", {2024,2025} ∩ {2025} ≠ ∅) caem na MESMA pendência (busca acima, desde a
+  -- 0023), e sem guarda SÓ A ORDEM de visita decidia se o `ok` de uma RESOLVIA a divergência da
+  -- outra: dentro da rodada (medido em produção, 25/09/2026: v33/v35, `caixa_bp_fluxo`,
+  -- 4.340.000 criada e resolvida no mesmo instante) e ENTRE rodadas.
+  -- A guarda raciocina por CHAVE (o período do documento que o laço visita), não pelo período
+  -- em que o resultado FICOU gravado: o laço desce a períodos compatíveis de outras entidades
+  -- enquanto der pré-condição, e o resultado conclusivo fica num período sem documento da
+  -- entidade (332 estados vigentes assim em produção, 30/09/2026). Duas versões que olhavam o
+  -- período gravado (db6a258, 0202b8f) descartavam exatamente esse estado e resolviam.
+  -- Bloqueia se:
+  --   (a) alguma CHAVE VIVA (há documento do caso com `periodo_id` = a chave, da entidade quando
+  --       ela não é nula) tem como ÚLTIMO registro (`periodo_chave_id` = a chave; `criado_em desc`,
+  --       `cmin` desempata dentro da transação) um resultado divergente, gravado num período
+  --       igual ou compatível com o da pendência. Chave sem documento (reclassificada, NULL) não
+  --       prende; linha anterior à 0192 (sem `periodo_chave_id`) não bloqueia — teto declarado;
+  --   (b) OU alguma linha DESTA transação (`criado_em = now()`), de outro período que o desta
+  --       chamada, é divergente e compatível — a guarda original da mesma rodada, que vale
+  --       mesmo sem documento na chave.
   -- Tipo POR DOCUMENTO (secao_fecha) não roda a guarda: o casamento por `documento_id`
-  -- (acima) já isola a pendência do próprio documento, e um documento tem UM período.
+  -- (acima) já isola a pendência do próprio documento.
   if v_pendencia_id is not null and not v_por_documento then
     select exists (
       select 1 from (
-        -- SÓ O ÚLTIMO por período (`distinct on`): o histórico do período é uma sequência
-        -- de estados, e quem decide é o mais recente. Dentro da mesma transação (mesmo
-        -- `criado_em`) desempata o `cmin`, o contador de COMANDO, que cresce a cada INSERT
-        -- (não há coluna serial em `reconciliacao`).
+        select distinct on (r.periodo_chave_id) r.periodo_id, r.resultado
+        from reconciliacao r
+        where r.caso_id = p_caso_id and r.tipo = p_tipo
+          and coalesce(r.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+            = coalesce(p_entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+          and r.periodo_chave_id is not null
+          and exists (
+            select 1 from documento d
+            where d.caso_id = p_caso_id
+              and (p_entidade_id is null or d.entidade_id = p_entidade_id)
+              and d.periodo_id = r.periodo_chave_id)
+        order by r.periodo_chave_id, r.criado_em desc, r.cmin::text::int desc
+      ) ultimo_por_chave
+      where ultimo_por_chave.resultado in ('divergente', 'divergencia', 'zona_cinzenta')
+        and (ultimo_por_chave.periodo_id is not distinct from v_pendencia_periodo_id
+             or fn_periodos_compativeis(ultimo_por_chave.periodo_id, v_pendencia_periodo_id))
+    ) or exists (
+      select 1 from (
         select distinct on (r.periodo_id) r.periodo_id, r.resultado
         from reconciliacao r
         where r.caso_id = p_caso_id and r.tipo = p_tipo
           and coalesce(r.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
             = coalesce(p_entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
           and r.periodo_id is distinct from p_periodo_id
-          -- estado VELHO não prende pendência para sempre. Só conta um estado de OUTRO período se
-          -- (a) ele é desta MESMA rodada (`criado_em = now()`: a ordem de visita dentro da
-          -- transação é o que a guarda existe para neutralizar), OU (b) existe documento vivo
-          -- cujo período é EXATAMENTE o dele (`d.periodo_id = r.periodo_id`, não nulo): o período
-          -- ainda é CHAVE que `fn_reconciliar_caso` revisita (o laço itera os períodos dos
-          -- documentos), então o estado será refeito e a pendência fecha quando o dado corrigir.
-          -- `fn_periodos_compativeis` NÃO serve aqui: devolve true com período NULL/sem ano
-          -- (29 de 59 casos em produção têm documento assim, 30/09/2026) e um documento
-          -- reclassificado por `fn_revisar_documento` (multi "24,25" -> 12M24) deixava o estado
-          -- velho de "24,25" vivo para sempre, sem chave que o revisitasse.
-          and (r.criado_em = now()
-               or exists (
-                 select 1 from documento d
-                 where d.caso_id = p_caso_id
-                   and (p_entidade_id is null or d.entidade_id = p_entidade_id)
-                   and d.periodo_id is not null
-                   and d.periodo_id = r.periodo_id))
+          and r.criado_em = now()
         order by r.periodo_id, r.criado_em desc, r.cmin::text::int desc
-      ) ultimo_por_periodo
-      where ultimo_por_periodo.resultado in ('divergente', 'divergencia', 'zona_cinzenta')
-        and (ultimo_por_periodo.periodo_id is not distinct from v_pendencia_periodo_id
-             or fn_periodos_compativeis(ultimo_por_periodo.periodo_id, v_pendencia_periodo_id))
+      ) ultimo_na_rodada
+      where ultimo_na_rodada.resultado in ('divergente', 'divergencia', 'zona_cinzenta')
+        and (ultimo_na_rodada.periodo_id is not distinct from v_pendencia_periodo_id
+             or fn_periodos_compativeis(ultimo_na_rodada.periodo_id, v_pendencia_periodo_id))
     ) into v_divergencia_concorrente;
   end if;
 
@@ -438,7 +477,7 @@ begin
       returning id into v_pendencia_id;
     elsif v_res_log = 'precondicao_nao_satisfeita' and v_divergencia_concorrente then
       -- 0192: este achado é PRÉ-CONDIÇÃO, e o ESTADO VIGENTE de um período
-      -- IRMÃO compatível é divergente — não troca a descrição
+      -- IRMÃO (chave viva, ou linha desta rodada) compatível é divergente — não troca a descrição
       -- da divergência pela de "não especificado"/checklist. A pendência
       -- continua com o texto e o `tipo` da divergência.
       null;
@@ -470,7 +509,7 @@ begin
   elsif v_pendencia_id is not null then
     if v_divergencia_concorrente then
       -- 0192: este achado CONCLUIU (ok/documento_ausente), mas o estado VIGENTE de
-      -- um período IRMÃO compatível (desta ou de rodada anterior) ainda é divergente — não
+      -- uma chave IRMÃ (desta ou de rodada anterior) ainda é divergente num período compatível — não
       -- resolve. O `ok` de um período não apaga a divergência de outro.
       null;
     else
@@ -499,10 +538,10 @@ $$;
 comment on function fn_registrar_reconciliacao(uuid, uuid, uuid, text, text, uuid, jsonb, jsonb, text,
   numeric, numeric, jsonb, text) is
   'Registro unificado de reconciliação (0023), motivo fino por pré-condição (0186/0188). 0192: '
-  'a pendência só resolve (ou troca a descrição por uma de pré-condição) se o ÚLTIMO estado de cada '
-  'OUTRO período compatível não é divergente/divergencia/zona_cinzenta, em qualquer rodada; tipo por '
-  'documento (secao_fecha) casa a pendência e o estado por documento_id; grava documento_id e '
-  'descricao em toda linha de reconciliacao.';
+  'a pendência só resolve (ou troca a descrição por uma de pré-condição) se nenhuma CHAVE viva (período '
+  'de documento) tem como último registro uma divergência em período compatível, em qualquer rodada; '
+  'tipo por documento (secao_fecha) casa a pendência e o estado por documento_id; grava documento_id, '
+  'descricao e periodo_chave_id em toda linha de reconciliacao.';
 
 -- -----------------------------------------------------------------------------
 -- (2) fn_reconciliar_caso — REEMITIDA INTEIRA a partir do corpo vigente
@@ -519,6 +558,10 @@ returns jsonb language plpgsql as $$
 -- 0192: `order by` em cada laço — determinismo de qual período a pendência
 -- carrega (a guarda de fn_registrar_reconciliacao já não depende da ordem
 -- para decidir aberto/resolvido; isto é só reprodutibilidade).
+-- 0192 (guarda por CHAVE): cada laço grava em `oria.periodo_chave` o período da chave que visita
+-- (set_config local à transação); fn_registrar_reconciliacao o lê e o grava em
+-- `reconciliacao.periodo_chave_id`. O laço DESCE a períodos compatíveis (foreach), o que muda o
+-- `periodo_id` da linha mas não a chave.
 declare
   v_k          record;
   v_per        uuid;
@@ -541,6 +584,7 @@ begin
   for v_k in select distinct d.entidade_id, d.periodo_id from documento d
              where d.caso_id = p_caso_id and d.tipo_taxonomia = any(c_arvore)
              order by d.entidade_id, d.periodo_id loop
+    perform set_config('oria.periodo_chave', coalesce(v_k.periodo_id::text, ''), true);
     foreach v_per in array fn_periodos_compativeis_array(p_caso_id, v_k.periodo_id) loop
       v_res := fn_reconciliar_ativo_passivo_pl(p_caso_id, v_k.entidade_id, v_per);
       exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
@@ -551,6 +595,7 @@ begin
   for v_k in select distinct d.entidade_id, d.periodo_id from documento d
              where d.caso_id = p_caso_id and d.tipo_taxonomia = any(c_fluxo)
              order by d.entidade_id, d.periodo_id loop
+    perform set_config('oria.periodo_chave', coalesce(v_k.periodo_id::text, ''), true);
     foreach v_per in array fn_periodos_compativeis_array(p_caso_id, v_k.periodo_id) loop
       v_res := fn_reconciliar_caixa_bp_fluxo(p_caso_id, v_k.entidade_id, v_per);
       exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
@@ -561,6 +606,7 @@ begin
   for v_k in select distinct d.entidade_id, d.periodo_id from documento d
              where d.caso_id = p_caso_id and d.tipo_taxonomia = any(c_receita)
              order by d.entidade_id, d.periodo_id loop
+    perform set_config('oria.periodo_chave', coalesce(v_k.periodo_id::text, ''), true);
     foreach v_per in array fn_periodos_compativeis_array(p_caso_id, v_k.periodo_id) loop
       v_res := fn_reconciliar_receita_dre_vs_faturamento(p_caso_id, v_k.entidade_id, v_per);
       exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
@@ -571,6 +617,7 @@ begin
   for v_k in select distinct d.entidade_id, d.periodo_id from documento d
              where d.caso_id = p_caso_id and d.tipo_taxonomia = any(c_despfin)
              order by d.entidade_id, d.periodo_id loop
+    perform set_config('oria.periodo_chave', coalesce(v_k.periodo_id::text, ''), true);
     foreach v_per in array fn_periodos_compativeis_array(p_caso_id, v_k.periodo_id) loop
       v_res := fn_reconciliar_despfin_dre_vs_divida(p_caso_id, v_k.entidade_id, v_per);
       exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
@@ -582,6 +629,7 @@ begin
   for v_k in select distinct d.periodo_id from documento d
              where d.caso_id = p_caso_id and d.tipo_taxonomia = any(c_mutuos)
              order by d.periodo_id loop
+    perform set_config('oria.periodo_chave', coalesce(v_k.periodo_id::text, ''), true);
     foreach v_per in array fn_periodos_compativeis_array(p_caso_id, v_k.periodo_id) loop
       v_res := fn_reconciliar_mutuos(p_caso_id, v_per);
       exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
@@ -592,6 +640,7 @@ begin
   for v_k in select distinct d.periodo_id from documento d
              where d.caso_id = p_caso_id and d.tipo_taxonomia = any(c_intra)
              order by d.periodo_id loop
+    perform set_config('oria.periodo_chave', coalesce(v_k.periodo_id::text, ''), true);
     foreach v_per in array fn_periodos_compativeis_array(p_caso_id, v_k.periodo_id) loop
       v_res := fn_reconciliar_intragrupo(p_caso_id, v_per);
       exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
@@ -600,6 +649,8 @@ begin
   end loop;
 
   -- ---- só (entidade) — sem período nenhum ----------------------------------
+  -- 0192: sem chave de período; o que o último laço deixou não pode vazar para estas.
+  perform set_config('oria.periodo_chave', '', true);
   for v_k in select distinct d.entidade_id from documento d
              where d.caso_id = p_caso_id and d.tipo_taxonomia = any(c_arvore)
              order by d.entidade_id loop
@@ -616,6 +667,7 @@ begin
     v_chamadas := v_chamadas + 1;
   end loop;
 
+  perform set_config('oria.periodo_chave', '', true);
   return jsonb_build_object(
     'executado', true, 'caso_id', p_caso_id,
     'documentos', v_documentos, 'chamadas', v_chamadas,
@@ -623,10 +675,120 @@ begin
 end;
 $$;
 
+-- 0192: fn_reconciliar_chaves_do_documento — REEMITIDA INTEIRA (corpo 0152:394).
+create or replace function fn_reconciliar_chaves_do_documento(
+  p_caso_id     uuid,
+  p_entidade_id uuid,
+  p_periodo_id  uuid,
+  p_tipo        text
+)
+returns jsonb language plpgsql as $$
+-- 0152: extraída de fn_reconciliar_por_documento sem mudança de lógica.
+-- 0192: REEMITIDA INTEIRA (corpo vigente 0152:394, nenhuma migration a reemitiu) só para gravar a
+-- CHAVE em `oria.periodo_chave` (ver fn_registrar_reconciliacao).
+-- 0151: o conflito entre documentos do mesmo período mora aqui, no fim.
+declare
+  v_checagens jsonb := '[]'::jsonb;
+  v_periodos  uuid[];
+  v_per       uuid;
+  v_res       jsonb;
+begin
+  select array_agg(p.id order by (p.id = p_periodo_id) desc, p.referencia)
+    into v_periodos
+  from periodo p
+  where p.caso_id = p_caso_id
+    and (p.id = p_periodo_id or fn_periodos_compativeis(p.id, p_periodo_id));
+  if v_periodos is null or cardinality(v_periodos) = 0 then
+    v_periodos := array[p_periodo_id];
+  end if;
+
+  -- 0192 (guarda por CHAVE): o período do documento é a chave de TODAS as checagens por período
+  -- abaixo; o laço desce a períodos compatíveis, a chave não muda. As duas sem período (duplicidade,
+  -- versões) zeram o setting.
+  perform set_config('oria.periodo_chave', coalesce(p_periodo_id::text, ''), true);
+
+  -- Classe A (0009)
+  if p_tipo in ('BALANCO', 'BALANCETE', 'COMBINADO') then
+    foreach v_per in array v_periodos loop
+      v_res := fn_reconciliar_ativo_passivo_pl(p_caso_id, p_entidade_id, v_per);
+      exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
+    end loop;
+    v_checagens := v_checagens || jsonb_build_array(v_res);
+  end if;
+  if p_tipo in ('BALANCO', 'BALANCETE', 'COMBINADO', 'FLUXO_CAIXA') then
+    foreach v_per in array v_periodos loop
+      v_res := fn_reconciliar_caixa_bp_fluxo(p_caso_id, p_entidade_id, v_per);
+      exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
+    end loop;
+    v_checagens := v_checagens || jsonb_build_array(v_res);
+  end if;
+
+  -- Classe B (0015/0021)
+  if p_tipo in ('DRE', 'FATURAMENTO_24M') then
+    foreach v_per in array v_periodos loop
+      v_res := fn_reconciliar_receita_dre_vs_faturamento(p_caso_id, p_entidade_id, v_per);
+      exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
+    end loop;
+    v_checagens := v_checagens || jsonb_build_array(v_res);
+  end if;
+  if p_tipo in ('DRE', 'MAPA_DIVIDA') then
+    foreach v_per in array v_periodos loop
+      v_res := fn_reconciliar_despfin_dre_vs_divida(p_caso_id, p_entidade_id, v_per);
+      exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
+    end loop;
+    v_checagens := v_checagens || jsonb_build_array(v_res);
+  end if;
+
+  -- Mútuos (0117/0123). Pelos dois lados: quem chega por último fecha o par.
+  if p_tipo in ('MUTUOS', 'BALANCO', 'COMBINADO', 'DF_AUDITADA') then
+    foreach v_per in array v_periodos loop
+      v_res := fn_reconciliar_mutuos(p_caso_id, v_per);
+      exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
+    end loop;
+    v_checagens := v_checagens || jsonb_build_array(v_res);
+  end if;
+
+  -- Intragrupo FORA mútuo (0124). Disparada por balanço individual, que é a
+  -- única peça de que ela precisa — não há documento par a esperar. `COMBINADO`
+  -- não dispara e não é lido: as linhas intragrupo dele são eliminações.
+  if p_tipo in ('BALANCO', 'BALANCETE', 'DF_AUDITADA') then
+    foreach v_per in array v_periodos loop
+      v_res := fn_reconciliar_intragrupo(p_caso_id, v_per);
+      exit when coalesce(v_res->>'resultado', '') <> 'precondicao_nao_satisfeita';
+    end loop;
+    v_checagens := v_checagens || jsonb_build_array(v_res);
+  end if;
+
+  -- Duplicidade de rótulo (0105). Sem laço de período: é por caso/entidade.
+  perform set_config('oria.periodo_chave', '', true);
+  if p_tipo in ('BALANCO', 'BALANCETE', 'COMBINADO') then
+    v_checagens := v_checagens || jsonb_build_array(
+      fn_reconciliar_duplicidade(p_caso_id, p_entidade_id));
+  end if;
+
+  -- Conflito entre documentos do mesmo período (0151). Sem laço de período: a
+  -- checagem descobre sozinha quais exercícios existem.
+  if p_tipo in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA', 'DRE',
+                'FLUXO_CAIXA', 'DMPL', 'DVA', 'NOTAS_EXPL') then
+    v_checagens := v_checagens || jsonb_build_array(
+      fn_reconciliar_versoes_do_periodo(p_caso_id, p_entidade_id));
+  end if;
+
+  perform set_config('oria.periodo_chave', '', true);
+  return v_checagens;
+end;
+$$;
+
+comment on function fn_reconciliar_chaves_do_documento(uuid, uuid, uuid, text) is
+  'As oito checagens que leem (caso, entidade, período) e não o documento (0152). Extraída de '
+  'fn_reconciliar_por_documento sem mudança de lógica, para que o lote possa rodá-las uma vez '
+  'por CHAVE em vez de uma vez por documento. 0192: grava o período da chave em oria.periodo_chave.';
+
 comment on function fn_reconciliar_caso(uuid) is
   'Roda cada uma das oito checagens de reconciliação sobre a SUA chave (0152). 0192: `order by` em '
   'cada laço `select distinct` — determinismo de qual período a pendência carrega quando mais de um '
-  'é compatível; o aberto/resolvido em si já não depende da ordem (guarda em fn_registrar_reconciliacao).';
+  'é compatível; o aberto/resolvido em si já não depende da ordem (guarda em fn_registrar_reconciliacao). '
+  '0192: cada laço grava o período da CHAVE em oria.periodo_chave (lido por fn_registrar_reconciliacao).';
 
 grant execute on function fn_registrar_reconciliacao(uuid, uuid, uuid, text, text, uuid, jsonb, jsonb,
   text, numeric, numeric, jsonb, text) to authenticated;
@@ -646,8 +808,8 @@ insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, porque, severidade, ordem) values
 
   ('ok_nao_mata_divergencia_irma', '0192', 'corpo', 'fn_registrar_reconciliacao',
-   'v_divergencia_concorrente',
-   'Sem esta guarda (estado VIGENTE do período irmão, em qualquer rodada), duas checagens do mesmo '
+   'ultimo_por_chave',
+   'Sem esta guarda (último registro de cada CHAVE viva, em qualquer rodada), duas checagens do mesmo '
    'caso/tipo/entidade com períodos COMPATÍVEIS (ex.: Balanço multi "24,25" x anual "12M25"), caem na '
    'MESMA pendência por período compatível — e a ORDEM de visita decide se um ''ok'' de um período '
    'RESOLVE a divergência gravada pelo outro. Medido em produção (25/09/2026, somente leitura): '
@@ -687,13 +849,40 @@ insert into instalacao_requisito
    'importante', 842),
 
   ('guarda_vigente_so_periodo_chave', '0192', 'corpo', 'fn_registrar_reconciliacao',
-   'd.periodo_id = r.periodo_id',
-   'A guarda de estado vigente só conta o estado de OUTRO período se é da mesma rodada ou se há '
-   'documento vivo com esse período EXATO (chave que fn_reconciliar_caso ainda revisita). Com '
-   'fn_periodos_compativeis no lugar, período NULL/sem ano é "compatível com tudo" (29 de 59 casos '
-   'em produção têm documento assim, 30/09/2026) e a divergência velha de um período que um '
-   'fn_revisar_documento esvaziou prende a pendência para sempre.',
-   'importante', 843)
+   'd.periodo_id = r.periodo_chave_id',
+   'A guarda olha o último registro de cada CHAVE (período do documento que o laço visita) e só '
+   'conta a chave se há documento vivo com esse período EXATO. Raciocinar pelo período GRAVADO '
+   '(versões db6a258 e 0202b8f) descartava o resultado que o laço deixa num período compatível '
+   'SEM documento da entidade (fn_periodos_compativeis_array desce a períodos de outras entidades): '
+   'o ok da chave irmã resolvia a divergência em em_correcao_interna e a chave original abria OUTRA. '
+   'Medido em produção (30/09/2026, somente leitura): 332 estados vigentes (20 dias) em período sem '
+   'documento exato da entidade.',
+   'importante', 843),
+
+  ('reconciliacao_periodo_chave_existe', '0192', 'coluna', 'reconciliacao.periodo_chave_id',
+   null,
+   'O período da CHAVE que originou a chamada, gravado por fn_registrar_reconciliacao. Sem a coluna '
+   'a guarda por chave não tem de onde ler e fn_registrar_reconciliacao morre no INSERT.',
+   'importante', 844),
+
+  ('laco_caso_grava_periodo_chave', '0192', 'corpo', 'fn_reconciliar_caso',
+   'set_config(''oria.periodo_chave'', coalesce(v_k.periodo_id::text, ''''), true)',
+   'Sem isto o laço de fn_reconciliar_caso não diz a fn_registrar_reconciliacao qual é a chave: '
+   'periodo_chave_id cai no fallback (o período em que o laço DESCEU) e a guarda volta a raciocinar '
+   'pelo período gravado — o cenário Pa/Pb (resultado conclusivo em período de outra entidade).',
+   'importante', 845),
+
+  ('laco_documento_grava_periodo_chave', '0192', 'corpo', 'fn_reconciliar_chaves_do_documento',
+   'set_config(''oria.periodo_chave'', coalesce(p_periodo_id::text, ''''), true)',
+   'Idem para o caminho por documento (fn_reconciliar_por_documento(...,''tudo'')): sem a chave '
+   'gravada, o laço que desce a períodos compatíveis grava a linha com o período da descida.',
+   'importante', 846),
+
+  ('registro_grava_periodo_chave', '0192', 'corpo', 'fn_registrar_reconciliacao',
+   'current_setting(''oria.periodo_chave'', true)',
+   'O INSERT em reconciliacao grava periodo_chave_id lido de oria.periodo_chave. Sem isto a coluna '
+   'existe e fica NULL em toda linha nova, e a guarda por chave nunca bloqueia nada.',
+   'importante', 847)
 
 on conflict (chave) do update
   set migration = excluded.migration,
@@ -707,9 +896,11 @@ on conflict (chave) do update
 update instalacao_cobertura
    set ate_migration = '0192', revisado_em = current_date,
        observacao = 'A 0192 reemite fn_registrar_reconciliacao e fn_reconciliar_caso: a pendência só '
-         'resolve se o ÚLTIMO estado de cada outro período compatível (em qualquer rodada) não é '
-         'divergente; secao_fecha casa pendência e estado por documento_id; reconciliacao ganha '
-         'documento_id e descricao, gravados sempre. fn_reconciliar_caso ganha `order by` nos laços. '
+         'resolve se o ÚLTIMO registro de cada CHAVE viva (em qualquer rodada) não é divergente em período compatível; secao_fecha casa pendência e estado por documento_id; reconciliacao ganha '
+         'documento_id, descricao e periodo_chave_id, gravados sempre; a guarda é POR CHAVE (o período do '
+         'documento que o laço visita), e fn_reconciliar_caso e fn_reconciliar_chaves_do_documento '
+         '(reemitida inteira) a gravam em oria.periodo_chave. fn_reconciliar_caso ganha `order by` nos laços. '
          'Catalogado pelo corpo (ok_nao_mata_divergencia_irma, pendencia_por_documento_secao_fecha, '
-         'reconciliacao_documento_id_gravado, guarda_vigente_so_periodo_chave) e pelas colunas.'
+         'reconciliacao_documento_id_gravado, guarda_vigente_so_periodo_chave, laco_caso_grava_periodo_chave, '
+         'laco_documento_grava_periodo_chave, registro_grava_periodo_chave) e pelas colunas.'
  where id = true;

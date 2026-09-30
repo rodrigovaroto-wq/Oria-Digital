@@ -18,6 +18,7 @@
 --      siga o id — a escolha é função do dado (vence o menor id), nunca da ordem física das
 --      linhas, que é o que decidia antes (medido: com o espelho no menor id o banco antigo
 --      respondia zona_cinzenta, e ok com ele no maior).
+--   1c. (revisão 2) FACE + FACE na subseção "Partes Relacionadas": duas posições, somam duas vezes.
 --   3. LINHA ≠ 0 SEM CONTRAPARTE. Um documento mais novo só com "Caixa" (≠ 0, sem
 --      contraparte nem lado) não pode vencer o mais antigo que TEM a linha intragrupo.
 --
@@ -143,6 +144,48 @@ begin
     from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
   perform pg_temp.teste_assert_ga(v_res = 'zona_cinzenta' and v_div between 499000 and 501000,
     'face + nota com o mesmo valor: conta UMA vez (500 x 1.000)',
+    format('resultado=%s divergencia=%s', v_res, v_div));
+end $$;
+
+-- 1c. REVISÃO 2 (achado médio): em produção "Partes Relacionadas" é quase sempre a SUBSEÇÃO DE
+-- FACE (~85 de ~95 documentos com mútuo nela não têm outra linha de mútuo fora). Duas posições de
+-- face, AMBAS nessa subseção (AC e ANC, mesmo valor, sem linha de face fora dela), são DUAS
+-- posições e somam duas vezes (500 + 500 = 1.000 = planilha). A forma antiga (`rn = 1`) contava
+-- só a primeira e dava 500 x 1.000. Arranjo real (subseção de face) só reproduzido no que
+-- importa: rótulo, valor e seção; os números são inventados.
+do $$
+declare
+  v_caso uuid; v_r jsonb; v_per uuid; v_res text; v_div numeric;
+begin
+  raise notice '--- 1c. duas linhas na subseção de face "Partes Relacionadas" somam duas vezes ---';
+  v_caso := (fn_upsert_caso('GA1c: duas posições na subseção de face'))::uuid;
+
+  v_r := fn_registrar_documento(v_caso, 'GA1c HOLDING', 'data-base', '2025-12-31', 'MUTUOS', 0.96,
+    'nome_arquivo', 'supabase_storage', 'ga/mutuos-c.pdf', 'MUTUOS C.pdf', true, 'HASH-GA-1C-1', 'ok');
+  v_per := (select periodo_id from documento where id = (v_r->>'documento_id')::uuid);
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','GA1c HOLDING → GA1c VAREJO','valor_num','1000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96'),
+    jsonb_build_object('ordem',1,'chave','TOTAL','valor_num','1000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96')
+  ), 'N2');
+
+  v_r := fn_registrar_documento(v_caso, 'GA1c HOLDING', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', 'ga/bp-holding-c.pdf', 'BP HOLDING C.pdf', true, 'HASH-GA-1C-2', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a receber - controlada','valor_num','1000','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+
+  v_r := fn_registrar_documento(v_caso, 'GA1c VAREJO', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', 'ga/bp-varejo-c.pdf', 'BP VAREJO C.pdf', true, 'HASH-GA-1C-3', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',10,'chave','Mútuos a pagar - controladora','secao','Partes Relacionadas','valor_num','500','unidade','milhar','periodo_coluna','2025','confianca','0.97'),
+    jsonb_build_object('ordem',20,'chave','Mútuos a pagar - controladora','secao','Partes Relacionadas','valor_num','500','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+
+  v_r := fn_reconciliar_mutuos(v_caso, v_per);
+  select resultado, divergencia_abs into v_res, v_div
+    from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
+  perform pg_temp.teste_assert_ga(v_res = 'ok' and coalesce(v_div, 0) = 0,
+    'face + face, ambas em "Partes Relacionadas" sem linha de face fora: somam duas vezes (500 + 500 = 1.000), ok',
     format('resultado=%s divergencia=%s', v_res, v_div));
 end $$;
 
