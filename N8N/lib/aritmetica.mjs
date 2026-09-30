@@ -350,3 +350,171 @@ export function conferirBalanceteLinhaALinha(campos) {
   problemas.push(mensagemDoBalancete(naoTriviais, r));
   return problemas;
 }
+
+/**
+ * Quebra os campos (já na ordem do documento) em BLOCOS de linha: um bloco novo
+ * começa quando a chave muda OU quando a coluna já está preenchida (mesma chave
+ * outra vez = linha repetida). Cada bloco guarda o valor por coluna, em minúsculas.
+ * AUTO-CONTIDA, embutida por toString() com as outras (extraída pelo Sonar S3776).
+ */
+export function blocosDeLinha(ordenados) {
+  const norm = (s) => String(s ?? '').trim().replace(/\s+/g, ' ');
+  const blocos = [];
+  let atual = null;
+  for (const c of ordenados) {
+    const chave = norm(c.chave);
+    const col = norm(c.periodo_coluna).toLowerCase();
+    if (!atual || atual.chave !== chave || col in atual.valores) {
+      atual = { chave, valores: {} };
+      blocos.push(atual);
+    }
+    atual.valores[col] = typeof c.valor_num === 'number' ? c.valor_num : null;
+  }
+  return blocos;
+}
+
+/**
+ * Linhas da HIERARQUIA de códigos de um relatório (DRE analítica, plano de contas):
+ * código sintético = "3", "3.01", "3.01.01"...; analítico = 6 dígitos ("000880").
+ * Descarta a linha SEM código ("TOTAL") e recolhe chave repetida em sequência numa
+ * linha só (a primeira vale; as chaves repetidas voltam em `repetidas`).
+ * AUTO-CONTIDA, embutida por toString() com as outras.
+ */
+export function linhasDaHierarquia(campos) {
+  const validos = campos.filter((c) => c && typeof c === 'object' && typeof c.chave === 'string');
+  const ordenados = validos.sort((a, b) => (Number.isFinite(a.ordem) && Number.isFinite(b.ordem) ? a.ordem - b.ordem : 0));
+  const linhas = [];
+  const repetidas = [];
+  let anterior = null;
+  for (const bloco of blocosDeLinha(ordenados)) {
+    if (anterior && anterior.chave === bloco.chave) {
+      if (!repetidas.includes(bloco.chave)) repetidas.push(bloco.chave);
+      continue;
+    }
+    anterior = bloco;
+    const cod = bloco.chave.split(' ')[0];
+    if (/^\d{6}$/.test(cod)) bloco.tipo = 'A';
+    else if (/^\d+(\.\d+)*$/.test(cod)) bloco.tipo = 'S';
+    else continue;
+    bloco.cod = cod;
+    linhas.push(bloco);
+  }
+  return { linhas, repetidas };
+}
+
+/**
+ * Posições das filhas DIRETAS da sintética `i`: as sintéticas que a estendem em um
+ * nível e, enquanto não aparece sintética filha, as analíticas logo abaixo. Para
+ * na primeira sintética que não a estende. AUTO-CONTIDA.
+ */
+export function filhasDiretas(linhas, i) {
+  const pai = linhas[i].cod;
+  const filhas = [];
+  let temSinteticaFilha = false;
+  for (let j = i + 1; j < linhas.length; j += 1) {
+    const l = linhas[j];
+    if (l.tipo === 'S' && !l.cod.startsWith(pai + '.')) break;
+    if (l.tipo === 'S') {
+      temSinteticaFilha = true;
+      if (l.cod.split('.').length === pai.split('.').length + 1) filhas.push(j);
+    } else if (!temSinteticaFilha) {
+      filhas.push(j);
+    }
+  }
+  return filhas;
+}
+
+/**
+ * A sintética `i` fecha na coluna `col`? Valor = soma das filhas diretas (tolerância
+ * max(1, ceil(0.5*(n+1))), a da série). `desloc` = 1 lê cada valor na linha ANTERIOR
+ * (hipótese de valor deslocado). null quando falta dado — ausência não é zero.
+ * AUTO-CONTIDA.
+ */
+export function fechaComDeslocamento(linhas, i, filhas, col, desloc) {
+  const valor = (x) => (x - desloc >= 0 ? linhas[x - desloc].valores[col] : undefined);
+  const partes = filhas.map(valor);
+  const meu = valor(i);
+  if (typeof meu !== 'number' || partes.some((p) => typeof p !== 'number')) return null;
+  const tol = Math.max(1, Math.ceil(0.5 * (filhas.length + 1)));
+  return Math.abs(partes.reduce((a, b) => a + b, 0) - meu) <= tol;
+}
+
+/**
+ * Cada sintética com filhas e valores presentes numa coluna é: 'fecha' (valor =
+ * soma das filhas diretas), 'desloca' (não fecha, mas fecha lendo cada valor na
+ * linha ANTERIOR) ou 'nao'. É hipótese contada, nunca causa afirmada. Devolve
+ * { avaliaveis, fecham, deslocam, nao, exemplo, exNao }. AUTO-CONTIDA.
+ */
+export function classificarHierarquia(linhas, colunas) {
+  const r = { avaliaveis: 0, fecham: 0, deslocam: 0, nao: 0, exemplo: null, exNao: null };
+  for (let i = 0; i < linhas.length; i += 1) {
+    const filhas = linhas[i].tipo === 'S' ? filhasDiretas(linhas, i) : [];
+    for (const col of colunas) {
+      const gravado = filhas.length > 0 ? fechaComDeslocamento(linhas, i, filhas, col, 0) : null;
+      if (gravado === null) continue;
+      r.avaliaveis += 1;
+      if (gravado) {
+        r.fecham += 1;
+      } else if (i > 0 && fechaComDeslocamento(linhas, i, filhas, col, 1) === true) {
+        r.deslocam += 1;
+        r.exemplo = r.exemplo ?? { pai: linhas[i], col, onde: linhas[i - 1] };
+      } else {
+        r.nao += 1;
+        r.exNao = r.exNao ?? { pai: linhas[i], col, soma: filhas.reduce((a, f) => a + linhas[f].valores[col], 0) };
+      }
+    }
+  }
+  return r;
+}
+
+/**
+ * Identidade de HIERARQUIA: a sintética (código com pontos) vale a soma das filhas
+ * diretas, na coluna Total (sem Total, em cada coluna). DETECTA E CONTA; não afirma
+ * causa, nem página de início, e não reescreve valor.
+ *
+ * POR QUE. DRE analítica real do Krauspenhar (223 linhas, `DRE 2025`): cada rótulo,
+ * a partir de certo ponto, carrega o valor do rótulo SEGUINTE, e cada linha continua
+ * somando certo mês a mês contra o próprio Total — nenhuma guarda de linha dispara
+ * (221 de 223 batem). Medido: de ~43 sintéticas avaliáveis, 8 fecham como gravadas
+ * (81% não fecham); a hipótese de valor deslocado uma linha fecha cerca de 26 das
+ * que não fecham, mas o deslocamento NÃO é constante (0, +1, +2 conforme a faixa) —
+ * por isso a mensagem só CONTA a hipótese (K), sem nomear página de início.
+ *
+ * LIMIAR: um problema por documento quando mais de 20% das sintéticas avaliáveis
+ * não fecham como gravadas, com no mínimo 10 avaliáveis. 20% porque plano de contas
+ * real tem rótulo repetido e conta faltando isolados (o mesmo ruído que o balancete
+ * tolera), e o documento medido está em 81%; o mínimo de 10 evita acusar relatório
+ * de 3 sintéticas (as ordens 1-13 da página 1 real têm 3, e fecham).
+ * AUTO-CONTIDA, embutida por toString() junto com os 3 helpers acima.
+ */
+export function conferirHierarquiaDeCodigos(campos) {
+  const problemas = [];
+  if (!Array.isArray(campos)) return problemas;
+  const { linhas, repetidas } = linhasDaHierarquia(campos);
+  const colunas = [...new Set(linhas.flatMap((l) => Object.keys(l.valores)))];
+  const usadas = colunas.includes('total') ? ['total'] : colunas;
+  const r = classificarHierarquia(linhas, usadas);
+  const falham = r.deslocam + r.nao;
+  if (r.avaliaveis < 10 || falham / r.avaliaveis <= 0.2) return problemas;
+  const f = (n) => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  let exemplo = '';
+  if (r.exemplo) {
+    const e = r.exemplo;
+    exemplo = ' Exemplo: "' + e.pai.chave + '" declara ' + f(e.pai.valores[e.col]) + ' e as filhas diretas dele não somam isso; '
+      + 'lendo cada valor uma linha acima, ele seria ' + f(e.onde.valores[e.col]) + ' (o gravado em "' + e.onde.chave
+      + '", coluna ' + e.col + ') e as filhas fecham.';
+  } else if (r.exNao) {
+    const e = r.exNao;
+    exemplo = ' Exemplo: "' + e.pai.chave + '" declara ' + f(e.pai.valores[e.col]) + ' e a soma das filhas diretas é ' + f(e.soma) + '.';
+  }
+  const dup = repetidas.length > 0
+    ? ' Rótulo repetido em sequência em: ' + repetidas.slice(0, 5).join('; ') + (repetidas.length > 5 ? '; …' : '') + '.'
+    : '';
+  problemas.push(
+    `${falham} de ${r.avaliaveis} contas sintéticas não fecham com a soma das filhas diretas (coluna ${usadas.join('/')}): `
+    + `${r.fecham} fecham como gravadas e a hipótese de valor deslocado uma linha explica ${r.deslocam} delas.`
+    + exemplo + dup
+    + ' O número NÃO foi corrigido: os valores do documento podem estar associados ao rótulo errado, e isso não aparece em nenhuma conferência de linha.',
+  );
+  return problemas;
+}

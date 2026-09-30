@@ -53,7 +53,7 @@ import {
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
   MAX_CELULAS_POR_BLOCO, LIMIAR_COBERTURA, MINIMO_PARA_AVALIAR,
 } from './lib/cobertura.mjs';
-import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha, papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete } from './lib/aritmetica.mjs';
+import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha, conferirHierarquiaDeCodigos, blocosDeLinha, linhasDaHierarquia, fechaComDeslocamento, filhasDiretas, classificarHierarquia, papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete } from './lib/aritmetica.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -328,6 +328,12 @@ const FONTE_ARITMETICA = [
   `const agruparContasDeBalancete = ${agruparContasDeBalancete.toString()};`,
   `const classificarContasDeBalancete = ${classificarContasDeBalancete.toString()};`,
   `const mensagemDoBalancete = ${mensagemDoBalancete.toString()};`,
+  `const blocosDeLinha = ${blocosDeLinha.toString()};`,
+  `const linhasDaHierarquia = ${linhasDaHierarquia.toString()};`,
+  `const filhasDiretas = ${filhasDiretas.toString()};`,
+  `const fechaComDeslocamento = ${fechaComDeslocamento.toString()};`,
+  `const classificarHierarquia = ${classificarHierarquia.toString()};`,
+  `const conferirHierarquiaDeCodigos = ${conferirHierarquiaDeCodigos.toString()};`,
   `const conferirBalanceteLinhaALinha = ${conferirBalanceteLinhaALinha.toString()};`,
 ].join('\n');
 
@@ -1775,6 +1781,8 @@ for(const [chave, blocos] of porDocumento){
   if(problemasSerie.length>0) motivos.push(problemasSerie.slice(0,5).join(' | ')+(problemasSerie.length>5?' | ...':''));
   const problemasBalancete=conferirBalanceteLinhaALinha(r.campos);
   if(problemasBalancete.length>0) motivos.push(problemasBalancete.join(' | '));
+  const problemasHierarquia=conferirHierarquiaDeCodigos(r.campos);
+  if(problemasHierarquia.length>0) motivos.push(problemasHierarquia.join(' | '));
   // A EMENDA LIMPA NAO E' FALHA -- e' a costura fazendo exatamente o que ela
   // existe para fazer. Ate a rodada do lote 7377 (02/09, "teste Canastra"),
   // \`r.emendasLimpas>0\` sozinho virava \`motivos.push(...)\`, e qualquer motivo
