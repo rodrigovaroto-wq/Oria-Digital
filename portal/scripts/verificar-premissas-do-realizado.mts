@@ -369,12 +369,20 @@ console.log("11. o que o \"Usar\" grava");
 {
   const custo = { unidade: "%" as const, valor: 0.8797 };
   const gravado = valorParaGravar(custo);
-  ok(gravado === 87.97, "sugestão de 87,97% grava 87,97 (pontos percentuais), não 0,8797", String(gravado));
+  // Comparado com tolerância (Sonar `typescript:S1244`: igualdade exata de ponto
+  // flutuante). O texto exato é conferido logo abaixo, onde o ruído existe de fato.
+  ok(gravado !== null && Math.abs(gravado - 87.97) < 1e-9,
+    "sugestão de 87,97% grava 87,97 (pontos percentuais), não 0,8797", String(gravado));
+  // 0,57 × 100 em ponto flutuante é 56,99999999999999 (medido no Node): é esse o
+  // ruído que o arredondamento tira. 0,8797 × 100 sai exato e não serviria de prova.
+  const ruidoso = valorParaGravar({ unidade: "%", valor: 0.57 });
+  ok(String(ruidoso) === "57", "e grava sem o ruído de ponto flutuante (57, não 56.99999999999999)", String(ruidoso));
   ok(gravado !== null && Math.abs(gravado / 100 - custo.valor) < 1e-9,
     "o que o modelo aplica (gravado ÷ 100) é a razão sugerida", String(gravado));
   ok(valorParaGravar({ unidade: "%", valor: 0.34 }) === 34,
     "aceitar 34% grava o MESMO que digitar 34");
-  ok(valorParaGravar({ unidade: "dias", valor: 176.4 }) === 176.4, "premissa em dias grava os dias, sem conversão");
+  const dias = valorParaGravar({ unidade: "dias", valor: 176.4 });
+  ok(dias !== null && Math.abs(dias - 176.4) < 1e-9, "premissa em dias grava os dias, sem conversão", String(dias));
   ok(valorParaGravar({ unidade: "%", valor: null }) === null, "sugestão sem valor não grava zero");
 }
 
