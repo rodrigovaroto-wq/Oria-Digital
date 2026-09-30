@@ -28,6 +28,27 @@ export interface ConferenciaModelagemCobertura {
   fracao_linhas_com_premissa?: number | null;
 }
 
+/**
+ * O PORTÃO 2 TAMBÉM DECIDE O EXPORT DE MODELAGEM, e a tela não sabia disso.
+ *
+ * Medido em 30/09/2026 no mandato de teste em produção (caso bb37f726): a
+ * modelagem dizia "Pronto para o export de modelagem" enquanto
+ * `/casos/[id]/export` recusava com 409, porque havia 3 pendências bloqueantes
+ * sem decisão. O analista clicava e recebia um JSON cru. `pronto` aqui é a
+ * conferência das PREMISSAS (`fn_conferir_modelagem`); a do export é a
+ * `fn_avaliar_portao2`, a mesma que a rota usa. Passar o veredito do portão faz
+ * a tela dizer o que o clique vai de fato encontrar. Quem não passa o portão
+ * (os testes antigos, qualquer outro chamador) mantém o texto de antes.
+ */
+export interface PortaoDoExport {
+  elegivel: boolean;
+  motivos?: string[];
+}
+
+export function portaoFechado(portao: PortaoDoExport | null | undefined): boolean {
+  return !!portao && portao.elegivel === false;
+}
+
 /** A fração (0 a 1) medida pelo banco, como percentual inteiro — ou `null`
  * quando o banco não a mediu (chave ausente) ou não pôde medi-la
  * (`linhas_do_caso` zero). Nunca `0` por omissão. */
@@ -39,8 +60,11 @@ export function fracaoPctDe(conf: ConferenciaModelagemCobertura | null | undefin
 
 /** O texto do chip da barra de título. Só o veredito `pronto` ganha a fração:
  * é o caso que o defeito original pintava de verde plano, 23 de 480 incluído. */
-export function textoChipModelagem(conf: ConferenciaModelagemCobertura): string {
+export function textoChipModelagem(
+  conf: ConferenciaModelagemCobertura, portao?: PortaoDoExport | null,
+): string {
   if (!conf.pronto) return "falta algo";
+  if (portaoFechado(portao)) return "premissas prontas — export travado pelo Portão 2";
   const pct = fracaoPctDe(conf);
   return pct !== null ? `pronto — ${pct}% das contas projetam` : "pronto para exportar";
 }
@@ -51,8 +75,15 @@ export function textoChipModelagem(conf: ConferenciaModelagemCobertura): string 
  * sozinha esconde a ordem de grandeza (2 de 3 e 400 de 600 são os mesmos
  * 67%). Este título é o mesmo texto de sempre, com a fração ao lado quando o
  * banco a mede. */
-export function textoTituloConferenciaModelagem(conf: ConferenciaModelagemCobertura): string {
+export function textoTituloConferenciaModelagem(
+  conf: ConferenciaModelagemCobertura, portao?: PortaoDoExport | null,
+): string {
   if (!conf.pronto) return "Ainda falta algo para o export de modelagem";
+  if (portaoFechado(portao)) {
+    return "As premissas estão prontas, mas o export de modelagem está travado pelo Portão 2: "
+      + `${(portao!.motivos ?? []).join("; ") || "o caso ainda não pode ser aprovado"}. `
+      + "Decida as pendências na tela do mandato.";
+  }
   const pct = fracaoPctDe(conf);
   return pct !== null
     ? `Pronto para o export de modelagem — ${pct}% das contas projetam`

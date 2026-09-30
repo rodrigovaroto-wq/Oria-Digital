@@ -7,7 +7,7 @@ import { FormParametros, FormPremissa } from "./FormsTopo";
 import { SugestoesDoRealizado } from "./SugestoesDoRealizado";
 import { sugerirDoRealizado } from "@/lib/premissas-do-realizado";
 import { chaveDaLinha, vinculoPorLinha } from "@/lib/modelagem-linha";
-import { textoChipModelagem, textoTituloConferenciaModelagem } from "@/lib/modelagem-cobertura";
+import { portaoFechado, textoChipModelagem, textoTituloConferenciaModelagem, type PortaoDoExport } from "@/lib/modelagem-cobertura";
 import { humanizar, rotuloDaSecao } from "@/lib/rotulos";
 
 // A seção MODELAGEM do mandato (pedido do dono, Fase 7.3; revisada na Fase 8
@@ -171,12 +171,13 @@ export default async function ModelagemPage({
   // custar idas e vindas: a tela relatava o sintoma sem a única grandeza capaz de
   // distinguir "a função está lenta" de "o teto é mais baixo do que supomos".
   //
-  // O cronômetro fica FORA do `Promise.all` de propósito: as sete chamadas são
+  // O cronômetro fica FORA do `Promise.all` de propósito: as oito chamadas são
   // concorrentes, então o que interessa é o tempo de parede de cada uma sob a
   // concorrência real da página, não um tempo isolado que ninguém experimenta.
   const [
     [sugeridasRes, msSugeridas], [ativasRes, msAtivas], [vinculosRes, msVinculos],
     [confRes, msConf], [camposRes, msCampos], [sazRes, msSaz], [docsRes, msDocs],
+    [portaoRes, msPortao],
   ] = await Promise.all([
     medir(supabase.rpc("fn_premissas_sugeridas", { p_setor: parametros?.setor ?? null })),
     medir(supabase.from("caso_premissa").select("premissa_codigo, valores, origem")
@@ -217,12 +218,16 @@ export default async function ModelagemPage({
       (de, ate) => supabase.from("documento")
         .select("tipo_taxonomia, entidade(razao_social), periodo(referencia)")
         .eq("caso_id", id).order("id", { ascending: true }).range(de, ate))),
+    // O PORTÃO 2 — a mesma avaliação que `/casos/[id]/export` usa para recusar
+    // o export de modelagem. Sem ela a tela dizia "pronto" e o clique devolvia
+    // 409 (ver `PortaoDoExport` em lib/modelagem-cobertura.ts).
+    medir(supabase.rpc("fn_avaliar_portao2", { p_caso_id: id })),
   ]);
 
   // ---------------------------------------------------------------------------
   // ERRO DE RPC NUNCA MAIS VIRA "LISTA VAZIA".
   //
-  // Todas as sete chamadas acima terminavam em `?? []`, e o `.error` de nenhuma
+  // Todas as chamadas acima (eram sete; a oitava, do Portão 2, entrou em 30/09/2026) terminavam em `?? []`, e o `.error` de nenhuma
   // era lido. O efeito apareceu em produção do jeito mais enganoso possível: a
   // seção 3 anunciou "Este caso ainda não tem linha extraída com valor" num caso
   // com 203 linhas, porque `fn_linhas_para_modelagem` tinha FALHADO e a falha foi
@@ -245,6 +250,7 @@ export default async function ModelagemPage({
     ["linhas do caso (fn_linhas_para_modelagem)", camposRes.error, msCampos],
     ["curva de sazonalidade (fn_sazonalidade_do_caso)", sazRes.error, msSaz],
     ["documentos do caso", docsRes.error, msDocs],
+    ["Portão 2 (fn_avaliar_portao2)", portaoRes.error, msPortao],
   ] as const);
 
   // O tempo entra na linha da falha. Num cancelamento por tempo ele é o TETO do
@@ -266,6 +272,8 @@ export default async function ModelagemPage({
   const sugeridas = (sugeridasRes.data as PremissaCatalogo[] | null) ?? [];
   const ativas = (ativasRes.data as CasoPremissa[] | null) ?? [];
   const vinculos = (vinculosRes.data as LinhaVinculo[] | null) ?? [];
+  const portao = (portaoRes.data as PortaoDoExport | null) ?? null;
+  const exportTravado = portaoFechado(portao);
   const conf = confRes.data as {
     premissas_ativas: number; premissas_sem_valor: string[];
     // 0134: informação, não bloqueio — curva mensal ativa num caso sem documento
@@ -413,7 +421,7 @@ export default async function ModelagemPage({
                     sempre que o banco a mede, para os dois deixarem de parecer
                     o mesmo caso. Lógica em `lib/modelagem-cobertura.ts`, para
                     o invariante medir COMPORTAMENTO sem reimplementar JSX. */}
-                {textoChipModelagem(conf)}
+                {textoChipModelagem(conf, portao)}
               </span>
             )}
           </div>
@@ -440,13 +448,26 @@ export default async function ModelagemPage({
           >
             Exportar dados
           </a>
-          <a
-            href={`/casos/${id}/export`}
-            className="btn-primario"
-            title="As 14 abas do modelo institucional, projetadas e editáveis dentro do Excel, mais a Modelagem e os índices macro. Sem as abas de dado cru."
-          >
-            Exportar modelagem
-          </a>
+          {/* Com o Portão 2 fechado a rota recusa com 409 e o navegador mostraria
+              um JSON cru: o botão leva à tela do mandato, onde as pendências
+              bloqueantes se decidem, e diz por quê. */}
+          {exportTravado ? (
+            <Link
+              href={`/casos/${id}`}
+              className="btn-primario"
+              title={`O export de modelagem está travado pelo Portão 2: ${(portao?.motivos ?? []).join("; ")}. Decida as pendências na tela do mandato.`}
+            >
+              Exportar modelagem — decidir pendências antes
+            </Link>
+          ) : (
+            <a
+              href={`/casos/${id}/export`}
+              className="btn-primario"
+              title="As 14 abas do modelo institucional, projetadas e editáveis dentro do Excel, mais a Modelagem e os índices macro. Sem as abas de dado cru."
+            >
+              Exportar modelagem
+            </a>
+          )}
         </div>
       </div>
 
@@ -538,7 +559,7 @@ export default async function ModelagemPage({
                 (`linhas_com_premissa` de `linhas_do_caso`) já vem no item
                 logo abaixo, porque porcentagem sozinha esconde a ordem de
                 grandeza: 2 de 3 e 400 de 600 são os mesmos 67%. */}
-            {textoTituloConferenciaModelagem(conf)}
+            {textoTituloConferenciaModelagem(conf, portao)}
           </p>
           <ul className="mt-1 space-y-0.5 text-tinta-600">
             <li>
