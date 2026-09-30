@@ -1142,6 +1142,35 @@ export function estimativaDoDocumento(d, tokensPromptSistema = 0, peso = pesoDaC
   };
 }
 
+// A INSTRUÇÃO DE LEVAS da recusa, fora de `orcamentoDoLotePorConteudo` para a
+// função ficar dentro do teto de complexidade cognitiva do Sonar
+// (`javascript:S3776`: ela passou de 15 para 21 quando o ramo do documento que
+// não cabe sozinho entrou, e o Sonar acusou isso no PR #246). O comportamento é
+// o mesmo, e as suítes de `N8N/test` o cobrem.
+export function instrucaoDeLevasDoLote({ partes, docs, teto, maxDocumentos, maxNomes }) {
+  const n = docs.length;
+  const acimaDoTeto = partes
+    .map((p, i) => ({ nome: docs[i]?.nome ?? null, usd: p.usd }))
+    .filter((p) => p.usd > teto);
+  const restantes = n - acimaDoTeto.length;
+  const somaRestantes = partes.reduce((s, p) => s + (p.usd > teto ? 0 : p.usd), 0);
+  const maxRestantes = restantes > 0 && somaRestantes > 0
+    ? Math.max(1, Math.floor(teto / (somaRestantes / restantes)))
+    : restantes;
+  if (acimaDoTeto.length === 0) {
+    return `Envie no máximo ${maxDocumentos} documento(s) por vez (${Math.ceil(n / Math.max(1, maxDocumentos))} levas). `;
+  }
+  const nomesAcima = acimaDoTeto.slice(0, maxNomes)
+    .map((p) => `${p.nome || '(sem nome)'} (~US$ ${p.usd.toFixed(2)})`).join('; ');
+  const restoAcima = acimaDoTeto.length > maxNomes ? ` e mais ${acimaDoTeto.length - maxNomes}` : '';
+  return `${acimaDoTeto.length} documento(s) custam sozinhos MAIS que o teto de US$ ${teto.toFixed(2)} e `
+    + `nenhuma leva os faz passar: ${nomesAcima}${restoAcima}. Divida cada um em arquivos menores (por período ou por entidade) `
+    + 'ou suba o teto. '
+    + (restantes > 0
+      ? `Os outros ${restantes} documento(s) cabem em levas de no máximo ${maxRestantes} por vez. `
+      : '');
+}
+
 /**
  * A decisão de orçamento do lote QUANDO O CONTEÚDO JÁ FOI LIDO.
  *
@@ -1257,28 +1286,7 @@ export function orcamentoDoLotePorConteudo({
   // instrução "envie 0" não diz isso nem qual arquivo é. Agora cada documento
   // cujo custo SOZINHO passa do teto é nomeado com o seu custo, e a instrução
   // de levas fala só dos demais.
-  const acimaDoTeto = partes
-    .map((p, i) => ({ nome: docs[i]?.nome ?? null, usd: p.usd }))
-    .filter((p) => p.usd > teto);
-  const restantes = n - acimaDoTeto.length;
-  const somaRestantes = partes.reduce((s, p) => s + (p.usd > teto ? 0 : p.usd), 0);
-  const maxRestantes = restantes > 0 && somaRestantes > 0
-    ? Math.max(1, Math.floor(teto / (somaRestantes / restantes)))
-    : restantes;
-  let instrucaoDeLevas;
-  if (acimaDoTeto.length === 0) {
-    instrucaoDeLevas = `Envie no máximo ${maxDocumentos} documento(s) por vez (${Math.ceil(n / Math.max(1, maxDocumentos))} levas). `;
-  } else {
-    const nomesAcima = acimaDoTeto.slice(0, MAX_NOMES)
-      .map((p) => `${p.nome || '(sem nome)'} (~US$ ${p.usd.toFixed(2)})`).join('; ');
-    const restoAcima = acimaDoTeto.length > MAX_NOMES ? ` e mais ${acimaDoTeto.length - MAX_NOMES}` : '';
-    instrucaoDeLevas = `${acimaDoTeto.length} documento(s) custam sozinhos MAIS que o teto de US$ ${teto.toFixed(2)} e `
-      + `nenhuma leva os faz passar: ${nomesAcima}${restoAcima}. Divida cada um em arquivos menores (por período ou por entidade) `
-      + 'ou suba o teto. '
-      + (restantes > 0
-        ? `Os outros ${restantes} documento(s) cabem em levas de no máximo ${maxRestantes} por vez. `
-        : '');
-  }
+  const instrucaoDeLevas = instrucaoDeLevasDoLote({ partes, docs, teto, maxDocumentos, maxNomes: MAX_NOMES });
   const mensagem = cabe
     ? null
     : `[orçamento ${VERSAO_ORCAMENTO}] ` +

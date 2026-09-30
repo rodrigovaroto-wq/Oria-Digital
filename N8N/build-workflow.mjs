@@ -35,7 +35,7 @@ import { ALIASES } from './lib/taxonomia.mjs';
 import { classifyByFilename, parseTipo, parsePeriodo, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
 import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
-import { orcamentoDoLote, orcamentoDoLotePorConteudo, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
+import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
 import { sha256Hex } from './lib/hash.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
@@ -269,6 +269,7 @@ const FONTE_ORCAMENTO_LOTE = [
   // nenhum caso do espelho exercitava o ramo de texto. O caso entrou junto.
   `const CARACTERES_POR_CELULA_ESTIMADA = ${CARACTERES_POR_CELULA_ESTIMADA};`,
   `const estimativaDoDocumento = ${estimativaDoDocumento.toString()};`,
+  `const instrucaoDeLevasDoLote = ${instrucaoDeLevasDoLote.toString()};`,
   `const orcamentoDoLotePorConteudo = ${orcamentoDoLotePorConteudo.toString()};`,
 ].join('\n');
 const FONTE_BYTES_BINARIO = `const bytesDoBinario = ${bytesDoBinario.toString()};`;
