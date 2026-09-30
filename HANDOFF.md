@@ -4,6 +4,121 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
+## ▶ SESSÃO 103 (30/09/2026) — PLANO EXECUTIVO PARA A PRÓXIMA SESSÃO · branch `claude/epic-euler-gzuifi`
+
+> Escrito no fim da S103, com o limite de uso da conta acabando. **Leia isto inteiro antes de
+> qualquer coisa.** PR [#246](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/246)
+> (fase 1) está MERGEADO. A fase 2 (este bloco) está no PR aberto no fim da S103 — a branch foi
+> reiniciada do `main` depois do merge do #246.
+
+### 0. Estado de PRODUÇÃO agora (conferido em 30/09, ~22h UTC)
+
+- **Supabase em `0195`**: `ate_migration = '0195'`, `fn_instalacao_conferir()` = 174 requisitos,
+  0 ausentes, `conferir_chamadas.sql` = "PODE RODAR". A **`0196` está só no repositório** (commit
+  `cbcc74b`, NÃO aplicada, revisão independente NÃO concluída — foi interrompida pelo limite).
+- **n8n**: ingestão (`na1AEv3m8fjDXlwM`) republicada e conferida (42 nós) no commit `bc439fa`
+  (fase 1). O commit `9bd2f88` (total da série) **NÃO foi republicado**.
+- **Credencial Postgres do n8n** (`D7NYaWY1UYKy2vBc`, "Postgres (Trat. Dados)") foi CONSERTADA
+  hoje: estava com a senha inválida desde algum momento depois de 17/09 e nenhum mandato gravava.
+  Ver `.claude/memory/credencial-do-n8n-quebra-sem-deixar-rastro.md`.
+- **Portal (Vercel)**: produção no `main` (`af1aa90`, merge do #246). Os commits `ac9458d` e
+  `4db4e9d` (portal) só chegam lá quando o PR da fase 2 for mergeado.
+- O dono está com a sessão em **modo manual**: é assim que o apply em produção passa (o
+  classificador do modo automático recusa — `.claude/memory/auto-mode-recusa-migration-producao.md`).
+
+### 1. O MANDATO REAL — "KRAUSPENHAR E HARTMANN" (caso `33b58a89-0d77-417a-8859-e193c61e8db8`)
+
+Subido pelo dono em 30/09 21:19 (execução n8n 8316, sucesso): 7 documentos, 8.915 linhas, US$ 0,42.
+**É o caso que importa — trate com mais cuidado que qualquer caso de teste. O dono está trabalhando
+nele (já resolveu tipo/período/entidade na revisão). NÃO rode reconciliação nem nada que ESCREVA
+nele sem perguntar.** O que foi diagnosticado (só leitura):
+
+| Documento | Problema medido | Contorno para o dono HOJE |
+|---|---|---|
+| `Endividamento Krauspenhar.xlsx` | **0 linhas.** O extrator do n8n lê SÓ A PRIMEIRA ABA, que é um índice; a tabela está na aba "Abertura endividamento" | Salvar a aba de dívida como arquivo próprio (ou movê-la para a 1ª posição) e reenviar por "Adicionar arquivos" |
+| `balancete_janaago26.pdf` | Classificado COMBINADO (o dono corrigiu). 38 contas SINTÉTICAS (ATIVO, CIRCULANTE, DISPONÍVEL, CAIXA…) descartadas: modelo declara 4 colunas e devolve 5 valores. E as colunas gravadas não fecham entre si (ex.: Adiantamentos: 156.963 + 356.454 − 494.860 ≠ −295.369 do "Saldo atual"); "Crédito" tem 288 linhas contra 320 das outras | Não usar o balancete como base de número; usar Balanço 2025 e DREs |
+| `Balanço 2025 Krauspenhar assinado.pdf` | Rótulo do total do passivo veio COLADO ao número (`"2 113.860.002,40PASSIVO"`) → Passivo+PL não localizado; ATIVO 113,86 mi com filhos 84,37 mi (ANC não pendurado no ATIVO); `extracao_padrao_suspeito` com 4 contas = 4.183.333,35 (pode ser legítimo: NC = ELP = Empréstimos LP quando há uma conta só) | Conferir na revisão o total do passivo contra o PDF |
+| `DRE Krauspenhar 2025`, `DRE Centro Oeste 2024` | Cobertura 45% e 47% (223 de 493, 47 de 101 linhas de conta) | Conferir a DRE na revisão antes de confiar; se faltar muito, reenviar fatiado |
+| `DRE_janaago26.pdf` | Registrada "anual 2026", mas é jan–ago (8 meses); cobertura 58%; 1 conta com 13 valores para 12 colunas | Na modelagem, **último exercício realizado = 2025** (não 2026) |
+| `Balanço Centro Oeste 2024` | Entidade "Centro Oeste" × conteúdo Krauspenhar | O dono já resolveu |
+
+Pendências abertas no caso (30/09): 5 `extracao_falhou`, 5 `item_faltante` (FAT_INTRAGRUPO,
+CONTRATO_SOCIAL, FATURAMENTO_24M, FLUXO_CAIXA, MUTUOS), 3 `linha_exigida_ausente`, 5
+`precondicao_nao_satisfeita`, 2 `secao_fecha` divergentes, papel/forma de controle das 2 entidades.
+
+### 2. O que a fase 2 entregou (commits na branch, um por fatia, cada um medido desligado)
+
+| Commit | Defeito | Medição | Em produção? |
+|---|---|---|---|
+| `ac9458d` | "Usar" numa sugestão em % gravava fração (0,8797) e o modelo dividia por 100 → Custo variável 0,9%, SG&A 0,2% no Excel | 3 de 5 reprovam desligado | só após merge (portal) |
+| `4db4e9d` | Modelagem dizia "Pronto para o export" com Portão 2 fechado; export devolvia JSON 409 | 3 de 4 | só após merge (portal) |
+| `9bd2f88` | `conferirTotalDaSerie` somava "Média mensal"/"Ticket médio" (depois do total) e colunas "Variação %" → `extracao_falhou` falsa no faturamento | 2+1 | **precisa republicar o n8n** |
+| `cbcc74b` | **0196**: caixa/receita/despfin/faturamento liam linha de outro ano e somavam colunas de outro ano (R$ 4,34 mi falso de caixa; faturamento 321.579,6 em vez de 183.480) | 17 de 21 | **precisa aplicar** |
+
+Suíte em `cbcc74b` (parcial, interrompida): 19 etapas verdes — n8n, hooks, Supabase .mjs, as 8 do
+portal, conhecimento, índice, comandos, espelho, **run.sh (1.716 ok)**, conferidor, sonda, e2e.
+NÃO rodaram nesta passada: `variacoes.mts`, medidores, geradores, fixtures, `next build`.
+
+### 3. Roteiro da PRÓXIMA sessão, EM ORDEM (critério de pronto em cada item)
+
+1. **Preparar o container** (comandos do `CLAUDE.md`) e rodar a suíte COMPLETA em `HEAD`. Pronto:
+   as 26 etapas verdes.
+2. **Revisão independente da 0196 e dos 3 commits** (`revisor-defeito-silencioso`), com foco em:
+   o que a 0196 muda no caso Krauspenhar (simular por consulta só-leitura); a regex de coluna não
+   aditiva do n8n (`/%|varia|\bvar\b|margem|media|ticket|indice|taxa/`) pular série legítima;
+   `valorParaGravar` contra TODA leitura de `p.valores` em `modelo-institucional.ts` (há fórmula %
+   que não divide por 100?); a tela de modelagem com `fn_avaliar_portao2` falhando. Pronto: "nada
+   sobreviveu", ou cada achado corrigido e medido.
+3. **Com autorização do dono (modo manual)**: aplicar a `0196` pela API de gerenciamento (arquivo
+   inteiro, uma chamada — não tem `alter type`), conferir `fn_instalacao_conferir() where not
+   presente` = vazio e `ate_migration = '0196'`; republicar o n8n (`N8N/republicar.sh`, com
+   `N8N_URL="$N8N_BASE_URL" N8N_WORKFLOW_ID=na1AEv3m8fjDXlwM`). Pronto: os dois conferidos.
+4. **Testar o fluxo** com um caso de TESTE novo (nunca no Krauspenhar sem autorização): BP + DRE +
+   DFC + Faturamento do book `Dados de Teste/book-vertentes` pelo portal (roteiro Playwright no
+   §5). Pronto: sem pendência falsa de caixa 2024, sem `extracao_falhou` do faturamento, receita
+   2024 = 183.480.
+5. **Abrir/atualizar o PR da fase 2** e levar ao verde.
+6. **Próximas correções, pela ordem de impacto no mandato real** (cada uma com diagnóstico no dado
+   real ANTES de codar):
+   a. **xlsx lê só a primeira aba** (Endividamento perdido). O `Extract From File` só aceita UMA
+      `sheetName`; ler todas exige outra abordagem (medir se o Code node da instância aceita
+      `require` de builtin; ou um nó por aba). Maior valor para o dono.
+   b. **Coluna N declarada × N+1 valores** (balancete: 38 contas sintéticas; COMBINADO do book
+      Vertentes: 32 contas; DRE jan–ago: 1). Precisa ver QUAL é o valor a mais — provavelmente o
+      código da conta sintética. NÃO baixe a execução 8316 com `includeData` (derruba o n8n,
+      `.claude/memory/n8n-nao-aguenta-baixar-execucao-grande.md`); peça o PDF ao dono ou reproduza
+      com o texto do book.
+   c. **Rótulo com número colado** (`"2 113.860.002,40PASSIVO"`) no Balanço 2025.
+   d. **Cobertura 45–58% nas DREs analíticas** (223 de 493 linhas).
+   e. **Período YTD tratado como anual** (DRE jan–ago → "anual 2026").
+   f. `fn_reconciliar_ativo_passivo_pl` ainda multiplica a tolerância pela escala (achado da 0196).
+   g. **COMBINADO do book** com 0 linhas é o mesmo defeito de (b).
+
+### 4. Armadilhas desta sessão (não repita)
+
+- **Nunca baixe execução grande do n8n** (`includeData=true`): deu 502 na instância por ~2 min.
+- **Verde da sonda/conferidor NÃO prova que o n8n alcança o banco** — a credencial ficou 13 dias
+  quebrada. Um mandato de teste criando o caso no banco é a prova.
+- Função da lib embutida em nó por `toString()`: helper nova tem de ser embutida também (o Sonar
+  S3776 obrigou a extrair uma; sem embutir, 11 testes reprovam e o nó quebraria em produção).
+- `pkill -f run.sh` do próprio shell mata a chamada (exit 144); confira `ps` em chamada separada.
+- LibreOffice deste container não abre .xlsx (é o ambiente); o auditor é `auditar-xlsx.mts`.
+- `rm /base.log` é bloqueado pelo hook de segurança — arquivo de 318 KB deixado por um agente na raiz
+  do sistema do container; inofensivo, some com o container.
+
+### 5. Como dirigir o portal publicado (usado nesta sessão)
+
+`playwright-core@1.56` no scratchpad, Chromium em `/opt/pw-browsers/chromium-1194/chrome-linux/chrome`
+com `--ignore-certificate-errors-spki-list=<SPKI da CA do proxy>` (calcular com
+`openssl x509 -in /root/.ccr/agent-proxy-ca.crt -pubkey -noout | openssl pkey -pubin -outform der |
+openssl dgst -sha256 -binary | base64`). Login com o e-mail/senha do dono em variáveis de ambiente
+(nunca em arquivo). Seletores que funcionam: upload `form:has(input[type=file])`; premissa
+`#premissas form:has(input[name=codigo][value="X"]):has(input[type=text])`; lote
+`#linhas form:has(input[name=secao_canonica][value="S"]):has(select[name=premissa])`; download via
+`ctx.request.get('/casos/<id>/export')` (dá o status HTTP — o clique esconde o 409).
+
+---
+
 ## ▶ SESSÃO 102 (25–28/09/2026) — PLANO EXECUTIVO PARA A PRÓXIMA SESSÃO · PR #245 (rascunho)
 
 > Escrito no fim da S102, com o limite semanal de uso em 97%. **Leia isto inteiro antes de qualquer

@@ -25,7 +25,16 @@
 > `auditar-xlsx.mts` **11/11**, e o gabarito bate (ativo 121.198/95.780, receita líquida
 > 143.380/106.580).
 >
-> **Defeitos ACHADOS e NÃO corrigidos** (o dono pediu só testar nesta rodada):
+> **FASE 2 (mesma sessão, depois do merge do #246)** — plano completo e roteiro no topo do
+> `HANDOFF.md` (bloco SESSÃO 103). Os itens 1–3 abaixo e o faturamento do item 4 foram CORRIGIDOS
+> no repositório: `ac9458d` (item 1), `4db4e9d` (item 3), `9bd2f88` (total da série) e `cbcc74b`
+> (0196: item 2 + faturamento/receita/despfin). **Nada disso está em produção ainda.** A 0196 falta
+> aplicar e o n8n falta republicar, ambos depois da revisão independente, que foi interrompida
+> pelo limite. O mandato REAL "KRAUSPENHAR E HARTMANN" (caso `33b58a89`) foi diagnosticado: xlsx
+> lido só na 1ª aba, balancete com colunas N×N+1, rótulo com número colado, DREs com cobertura
+> 45–58%. Ver a tabela do HANDOFF.
+>
+> **Defeitos ACHADOS na fase 1** (o dono pediu só testar naquela rodada):
 > 1. **CRÍTICO — "Usar" numa sugestão em % grava fração.** `SugestoesDoRealizado.tsx` manda
 >    `0,8797`, e o modelo divide por 100 (`modelo-institucional.ts:2027`). Resultado medido no
 >    arquivo: Custo variável sai 0,9% e SG&A 0,2%. **Contorno:** digitar o % (88; 23,6) e clicar
