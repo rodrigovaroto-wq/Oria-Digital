@@ -6,6 +6,18 @@
 > Deploy"). Supabase segue em `0195`; faltam `0196`, `0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql` e `0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql`,
 > nessa ordem, e republicar a ingestão do n8n. Comandos prontos no bloco SESSÃO 104 do `HANDOFF.md`.
 > O portal de produção é o `main` — os consertos do portal só chegam com o merge do #248.
+>
+> **O que o #248 corrige, medido no Excel real do Krauspenhar** (portal do branch servido contra
+> produção, só leitura): premissa ligada a K contas multiplicava por K (ativo 2026 413,15 → 89,07 mi,
+> `e093f57`); o agrupamento de um documento apagava a folha homônima de outro (receita bruta 2025
+> 77,19 → 113,38 mi, resíduo 36,19 → 0, `d5be032`). Mais: aba Modelagem com 8797%, Portão 2 não
+> conferido tratado como aberto, e seis guardas novas na ingestão (série com total no topo,
+> balancete com colunas trocadas, hierarquia de códigos, rótulo com valor colado, xlsx de várias
+> abas, YTD como anual) — todas pedem republicar o n8n.
+>
+> **A análise externa do Krauspenhar colada no pedido foi conferida item a item** (HANDOFF S104 §2):
+> 1, 3, 6, 8 e 11 confirmados; 2 e 5 parciais; 9 invertido; 10 desatualizado; e os "sinais de
+> estresse em ago/26" são artefato das colunas trocadas do balancete (estoque real 47,96 mi, não 61,6).
 
 ## SESSÃO 103 (30/09/2026) — produção em `0195`, ingestão destravada, mandato de teste ponta a ponta no ar
 

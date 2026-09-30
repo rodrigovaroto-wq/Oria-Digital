@@ -4,6 +4,176 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
+## ▶ SESSÃO 104 (30/09/2026) — PR [#248](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/248) (rascunho) · branch `claude/compassionate-cray-gk5ade`
+
+> O PR #247 (fase 2 da S103) já estava MERGEADO no início desta sessão (8c0821d). Esta sessão:
+> revisou a fase 2, conferiu item a item uma análise externa do Krauspenhar, e corrigiu o que ela
+> e a revisão acharam. **Nada foi aplicado em produção**: o classificador do modo automático recusou
+> a 0196 ("Production Deploy") — exatamente o que `.claude/memory/auto-mode-recusa-migration-producao.md`
+> prevê. Ver §4.
+
+### 0. Estado de produção agora (medido só leitura, 30/09 ~22h40 UTC)
+
+- Supabase em **`0195`** (174 requisitos, 0 ausentes). `0196`, `0197`, `0198` só no repositório.
+- n8n de ingestão no estado do `bc439fa`. Nenhum commit de ingestão desta sessão nem o `9bd2f88`
+  (S103) foi republicado.
+- Portal = `main` (inclui `ac9458d`/`4db4e9d` da S103). **Atenção:** o `ac9458d` ("Usar" grava 88,
+  não 0,88) já está no ar e tirou a máscara do defeito do lote — em produção, HOJE, premissa em %
+  ou em dias ligada a K contas multiplica por K (medido no Krauspenhar: ativo 2026 de 413 mi). O
+  conserto (`e093f57`) só chega com o merge do #248. **Até lá, não exporte modelo com premissa em
+  lote para cliente.**
+- Caso de teste criado nesta sessão pelo portal publicado: **"S104 teste E2E Vertentes"**
+  (`72d9210a`, 4 PDFs do book Vertentes). Serve de "antes": caixa 2024 falso (4.840 vs 500),
+  faturamento 321.579,6 e `extracao_falhou` do faturamento — os três devem sumir com 0196+republicação.
+  O roteiro completo do §5 da S103 (modelagem, Portão 2, export, auditor) NÃO foi feito neste caso:
+  ele depende do merge e da republicação para medir o que importa.
+
+### 1. O mandato Krauspenhar (`33b58a89`) — o que mudou desde a S103
+
+Entre 21:50 e 21:53 de 30/09 uma OUTRA sessão Claude (ator `claude:reconstrucao-contabil`) gravou no
+caso: v2 "transcrição humana" em 5 documentos (26–31 linhas cada, descritas como "digitadas a partir
+do arquivo ilegível" — o arquivo era legível, foi reconstrução por identidade), 7 premissas, ~150
+vínculos de linha, e **fundiu a entidade "Centro Oeste" na Krauspenhar** (`entidade_fundida`). Às
+21:53:34 o dono aprovou o Portão 2 (caso `aprovado`). Nada disso foi tocado nesta sessão (não alterar
+decisão tomada). A aritmética da v2 confere (custos 37,22+10,34+13,82+23,92+2,04 = 87,34; RL 97,95).
+**O export que o portal de produção entrega hoje para este caso tem ativo 2026 de 413 mi e receita
+bruta de 77 mi em 2025** — os dois defeitos corrigidos em `e093f57` e `d5be032`.
+
+### 2. A análise externa, conferida item a item
+
+Uma análise feita por outra sessão Claude (ator `claude:reconstrucao-contabil`) foi colada pelo dono
+no pedido da S104. Cada afirmação foi conferida contra o banco de produção e contra o Excel que o
+portal publicado entrega HOJE para o caso `33b58a89` (baixado por GET, que é só leitura: as
+funções que a rota chama são `stable` e não escrevem; fórmulas recalculadas com `formulas` 1.3.4).
+
+| # | Afirmação | Veredito | Evidência |
+|---|---|---|---|
+| 1 | Extração desloca rótulo↔valor | **CONFIRMADO** | DRE 2025 v1: "(-) pis sobre serviços" = −87.341.204,08 no Total (é o de `3.02 CUSTOS`); o deslocamento é de UMA linha para cima a partir da pág. 2 |
+| 2 | Subtotal codificado entra como conta | **CONFIRMADO no dado, NÃO como descrito no Excel** | `fn_papel_linha` dá `conta` para 222 de 223 linhas da DRE 2025 v1, inclusive `3.01 RECEITA LIQUIDA`. Mas o Excel do caso NÃO tem receita de 234,6 mi: tem receita bruta de 81,27 mi (menor) porque a detecção estrutural do export tirou "Venda de peças e lubrificantes" (36,19 mi) da soma — ver achado novo N1 |
+| 3 | "% da receita" multiplica pelo nº de linhas | **CONFIRMADO, e pior no Excel real** | `formulaConta` (`modelo-institucional.ts:1901`) e o capital de giro (`:2816-2834`). No arquivo do caso: PME 150 dias ligado a 40 contas de estoque → ativo circulante operacional 36,10 → **340,32 mi** em 2026, revolver 18,00 → **333,11 mi**, ativo total 413 mi. CHECK fecha, nenhuma célula vermelha |
+| 4 | Estoque em dias sobre a receita, não sobre o custo | **CONFIRMADO no código** | `baseFonte` = `RECEITA_LIQUIDA` para todo ativo; `CUSTOS` só para fornecedor (`:2838`) |
+| 5 | Depreciação: vida útil fixa e terreno depreciado; EBITDA distorcido | **PARCIAL** | Vida útil 10 fixa (`:2981`), sim. EBITDA soma de volta a depreciação do ativo fixo (0,43 mi) enquanto o SG&A projeta a da DRE (0,61 mi): 0,18 mi em 2026, sim. **Terreno NÃO é depreciado** neste arquivo (17,78 mi fora do `TOTAL_FA`) — os "1,8 mi sobre terra" não procedem |
+| 6 | Storage vazio | **CONFIRMADO** | `storage.objects` = 0 linhas; 1.968 versões com `origem_arquivo='supabase_storage'` e `arquivo_ref` preenchido. Pendência conhecida desde 17/07 (nó `Upload Storage` desligado por bug do n8n), mas o `origem_arquivo` afirma o que não aconteceu (regra 7) |
+| 7 | Endividamento 0 linhas | **CONFIRMADO** (já no HANDOFF S103) | 1ª aba é índice |
+| 8 | Colunas do balancete trocadas | **CONFIRMADO, com a permutação exata** | Nas págs. 1–8, gravado "Débito" = saldo atual real, "Crédito" = débito real, "Saldo atual" = crédito real (com sinal); 196 contas fecham assim, 111 como rotuladas (90 triviais). Págs. 9–10 como rotuladas |
+| 9 | Entidade duplicada; pendência aberta para a DRE e não para o balanço | **INVERTIDO** | A `entidade_incorreta` foi aberta para o **Balanço** CO 2024 e resolvida pelo dono. A fusão Centro Oeste → Krauspenhar foi feita pela própria reconstrução (`entidade_fundida`, 21:50:53) |
+| 10 | Defeitos da S103 abertos | **DESATUALIZADO** | PR #247 mergeado (8c0821d): portal corrigido em produção; só a 0196 (não aplicada) e o n8n (não republicado) seguem pendentes |
+| 11 | A reconstrução gravada como "transcrição humana" | **CONFIRMADO, e o texto é falso** | As 5 v2 dizem "digitadas a partir do arquivo ilegível". O arquivo era legível; foi reconstrução por identidade. Aritmética da v2 confere (custos 37,22+10,34+13,82+23,92+2,04 = 87,34; RL 97,95) |
+| 12 | Catálogo sem drivers de revenda | **PARCIAL** | Há `MARGEM_BRUTA`, `PRECO_MEDIO`×`VOLUME`, `CRESC_REAL`. O limite real é UM valor por código por caso — a mesma raiz do item 3 |
+
+**Os "sinais de estresse em ago/26" são artefato do item 8.** A análise leu o crédito do período
+como saldo. Pela identidade contábil (fecha nas seis contas), os saldos reais de ago/26 são:
+
+| Conta | Análise | Real (SA − C + D ou SA + D − C) |
+|---|---|---|
+| Estoques | 61,6 mi | **47,96 mi** |
+| Fornecedores | ~62 mi | **41,39 mi** |
+| ICMS a recolher | 2,65 mi | **0,05 mi** |
+| Adiantamento de clientes | 10,6 mi | **1,95 mi** |
+| INSS/IRRF a pagar | 1,1 mi | **0,14 mi** |
+| Salários a pagar | 2,3 mi | **0,15 mi** |
+
+A conclusão "padrão de uso de tributo e folha como financiamento" NÃO é sustentada pelo dado.
+
+**Achados novos (não estavam na análise):**
+- N1. A detecção estrutural de subtotal do export tira um rótulo da soma em TODOS os anos da
+  entidade quando ele é subtotal em QUALQUER documento dela: "Venda de peças e lubrificantes" é
+  subtotal no balancete 2026 e folha na DRE 2025 → 36,19 mi viram resíduo de reconciliação
+  constante na projeção (não crescem com o SSS).
+- N2. O bloco de cenários (sombras) mostra EBITDA 2026 de −36,83 mi (margem −94,7%), porque o
+  resíduo não entra nas sombras.
+- N3. A reconstrução ligou premissas a rótulos da v1 E da v2 ao mesmo tempo (ex.: 27 contas de
+  custo, incluindo subtotal e filhos) — decisões registradas com ator `claude:reconstrucao-contabil`,
+  anteriores à aprovação do Portão 2 pelo dono (21:53:34).
+
+**Sobre N1:** a primeira medição do conserto dizia "não muda nada" porque o servidor local antigo
+continuava na porta 3100 (os `next start` seguintes falharam por EADDRINUSE sem eu ver). Refeita
+com o processo certo: receita bruta 114,76/113,38 mi, resíduo ~0, EBITDA de cenários −2,46 mi.
+
+### 3. Commits desta sessão (um por fatia, cada um medido desligado — números na mensagem)
+
+| Commit | O quê | Onde vale |
+|---|---|---|
+| `efd19ef` | Série: total impresso ANTES dos meses fazia a conferência se pular (OMNIBEAUTY 63a36efe; bloqueava republicar o 9bd2f88) | republicar n8n |
+| `05af713` | Balancete com colunas trocadas por página → `extracao_falhou` nomeando a troca (28 contas reais no teste) | republicar |
+| `e093f57` | **Modelo: premissa ligada a K contas multiplicava por K** — rateio pela parcela histórica. Krauspenhar real: ativo 2026 413,15 → 89,07 mi | merge (portal) |
+| `5ff57ac` | Aba Modelagem mostrava 8797% (premissa em pontos sem /100) | merge |
+| `3854db7` | xlsx com várias abas → pendência "só a 1ª aba foi lida" (ler todas: sem caminho provado) | republicar |
+| `4fb5b23` | Portão 2 com RPC falhando: tela dizia "Pronto" e export passava → 3 estados, export 503 fail-closed | merge |
+| `578577e` | Valor colado ao rótulo ("2 113.860.002,40PASSIVO") limpo só quando prova ser o valor; chave só-número declarada | republicar |
+| `6a94f9d` | **0197**: faturamento com mês na coluna somava 0 meses; ticket médio por rótulo entrava | aplicar |
+| `8d1235e` | DRE jan–ago registrada "anual 2026" → `multi 8M26` pelo nome; prompts proíbem anual <12 meses | republicar |
+| `86c459f` | **0198**: faixa "2024-2026" perdia 2025 (só o Mapa de Dívida do Krauspenhar muda) | aplicar |
+| `d5be032` | **Export: agrupamento de um documento apagava a folha homônima de outro** — Krauspenhar: receita bruta 77,19 → 113,38 mi, resíduo 36,19 → 0 | merge |
+| `1b440ac` | DRE analítica com 33 de 43 sintéticas sem fechar → `extracao_falhou` (hierarquia de códigos) | republicar |
+| `a6d5231`, `9d692a1` | Sonar (complexidade, template aninhado), sem mudar comportamento | — |
+| grafo | derivado regerado a cada leva | — |
+
+### 4. O QUE O DONO FAZ À MÃO (modo manual — o automático recusa)
+
+Na ordem. Cada migration numa chamada (nenhuma tem `alter type`):
+```bash
+REF=$(echo "$SUPABASE_URL" | sed -E 's#https://([^.]+)\..*#\1#')
+for m in 0196_o_caixa_que_lia_a_dfc_de_outro_ano 0197_o_faturamento_que_nao_via_o_mes_na_coluna 0198_a_faixa_de_anos_que_perdia_o_ano_do_meio; do
+  jq -Rs '{query: .}' < Supabase/migrations/$m.sql > /tmp/p.json
+  curl -sS -X POST "https://api.supabase.com/v1/projects/$REF/database/query" \
+    -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" -H "Content-Type: application/json" --data-binary @/tmp/p.json; echo " <- $m"
+done
+# conferir: a primeira vazia, a segunda '0198'
+#   select chave from fn_instalacao_conferir() where not presente;
+#   select ate_migration from instalacao_cobertura;
+```
+Depois do MERGE do #248 (o `republicar.sh` exige a árvore igual ao `origin/main`):
+```bash
+git checkout main && git pull
+N8N_URL="$N8N_BASE_URL" N8N_WORKFLOW_ID=na1AEv3m8fjDXlwM bash N8N/republicar.sh   # tem de dizer PUBLICADO E CONFERIDO
+```
+Depois: `fn_reconciliar_caso` no Krauspenhar (permitido pelo dono) e no `72d9210a`, registrando
+antes/depois das pendências de reconciliação. Reprocessar o E2E: caixa 2024 sem divergência falsa,
+receita 2024 = 183.480, sem `extracao_falhou` do faturamento. E um mandato novo pelo portal é a
+única prova de que o n8n republicado alcança o banco.
+
+### 5. Próximas fatias, pela ordem de impacto
+
+a. **Causa do deslocamento rótulo↔valor** (a guarda de `1b440ac` só nomeia). Medido na DRE 2025 v1:
+   deslocamento 0 até a ordem 13, +1 até 35, 0 até 55, +1 até 111, +2 até 170, mistura depois; as
+   mudanças coincidem com 4 rótulos repetidos em sequência (3.01.01.03, 001259, 3.05.01.01, 3.05.02).
+   Hipótese: o modelo duplica uma linha e o pareamento anda. Precisa da resposta crua do modelo dessas
+   páginas (NÃO baixar execução grande do n8n; reproduzir com o PDF, que só o dono tem — o Storage
+   está vazio, item 6 da tabela).
+b. **Controle negativo real da guarda de hierarquia**: um DRE/balancete de produção com ≥10 sintéticas
+   que feche (nenhum book do repositório tem hierarquia).
+c. **Resíduo de reconciliação da receita fora das sombras e da base dos dias de giro**
+   (`modelo-institucional.ts`, comentário ~2197 diz que ele "só existe no realizado" — falso).
+d. **Subtotal codificado entra como conta** em `fn_papel_linha` (222 de 223 linhas da DRE 2025 v1,
+   inclusive `3.01 RECEITA LIQUIDA`). O export tem detecção estrutural que cobre parte; medir num caso
+   que use a v1 antes de mexer.
+e. **Storage vazio** com `origem_arquivo='supabase_storage'` em 1.968 versões: subir do portal
+   (upload assinado direto do navegador, sem passar pela Vercel) ou gravar a origem verdadeira.
+f. **xlsx: ler todas as abas** (um nó por `sheetName`, ou liberar `zlib` no sandbox).
+g. **Períodos "multi 02,25"** (17 em produção) viram {2002,2025} — `fn_periodo_canonico` lê "02" como ano.
+h. **PME sobre receita (modelo institucional) × sobre custo (aba Modelagem)** — decidir a base.
+i. **Um valor por código de premissa por caso** impede crescimentos diferentes por linha (máquinas
+   −38% × pós-venda 0%): desenho de premissa por grupo de linhas.
+j. `fn_reconciliar_ativo_passivo_pl` multiplica a tolerância pela escala (S103 §3.6f) — não tocado.
+k. Sonar: issues menores do portal no PR (template aninhado, ternário) — Quality Gate passa.
+
+### 6. Armadilhas novas
+
+- **Servidor local velho na porta**: `next start` que falha por EADDRINUSE deixa o antigo servindo e
+  a medição mente. Conferir `ps -eo pid,lstart,cmd | grep next-server` antes de medir.
+- **Preview da Vercel tem SSO**: para testar o portal do branch contra produção, compile numa worktree
+  (`node_modules` COPIADO — symlink quebra o Turbopack), sirva com a anon key (API de gerenciamento,
+  `/v1/projects/<ref>/api-keys`) e baixe o export por Playwright. O export é só leitura (a rota chama
+  só funções `stable`).
+- **Recalcular o Excel sem LibreOffice**: `pip install formulas openpyxl`; ~1 min por arquivo.
+- **O `run.sh` exige o ESTADO.md citando a migration mais nova** — o agente de banco não toca o
+  ESTADO; quem comita acrescenta.
+- **O hook de descarte bloqueia restaurar arquivo pelo índice até numa worktree descartável** (e casa
+  até texto de heredoc que cite o comando): use `git show HEAD:arquivo > arquivo`.
+
+---
+
 ## ▶ SESSÃO 103 (30/09/2026) — PLANO EXECUTIVO PARA A PRÓXIMA SESSÃO · branch `claude/epic-euler-gzuifi`
 
 > Escrito no fim da S103, com o limite de uso da conta acabando. **Leia isto inteiro antes de
