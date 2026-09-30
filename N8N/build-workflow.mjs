@@ -911,29 +911,56 @@ return {json:{...item, content_part: part, content_mime: mt, hash, aviso_conteud
 // `caso_id` e item sem rastro (itemMatching falhou) — com `pairedItem` do próprio
 // índice, como o Recompor faz. NUNCA agrupa às cegas.
 //
+// ORIGEM POR LINHA, SEM `itemMatching` POR LINHA (18/09/2026, revisão independente).
+// `$input.all()[i].pairedItem` NÃO serve: o motor REESCREVE o pairedItem de toda
+// entrada para `{item: itemIndex, input}` antes de o nó rodar (n8n-core 2.16.1,
+// `execution-engine/workflow-execute.js:790-812`), então ali `pi.item === i` sempre e
+// um cache por origem nunca acerta. O que sobrevive é o RUNDATA do extrator, que
+// guarda a saída como o nó a emitiu: `fromFile.operation.js:191-206` (n8n-nodes-base
+// 2.15.1, SpreadsheetFile/v2) carimba `pairedItem: {item: <índice no input do
+// extrator>}` em cada linha, e é esse campo que `getPairedItem` de
+// `n8n-workflow/workflow-data-proxy.js:784-830` lê (`outputData[pairedItem.item]
+// .pairedItem`) para subir a cadeia do `itemMatching`. `$('<extrator>').all()` devolve
+// esse rundata (`workflow-data-proxy.js` get 'all' -> getNodeExecutionData). Linha i
+// da entrada deste nó = linha i do extrator (conexão direta, mesma ordem), e o código
+// confere o tamanho antes de confiar. Cada origem resolve o contexto UMA vez
+// (`itemMatching` da primeira linha dela); as demais reusam.
+// Sem origem (rundata sem pairedItem, p.ex. `binaryMode` combinado, que devolve só o
+// json; tamanho diferente; `$()` que lança) cai em `itemMatching(i)` POR LINHA: correto,
+// só mais lento. TEMPO MEDIDO LOCAL (Node, 150.000 linhas, 2 documentos, 2000 linhas
+// mantidas; `itemMatching` replicando o algoritmo de getPairedItem com 3 saltos, não o
+// n8n inteiro): COM origem 8-15 ms (2 resoluções), SEM origem 158-245 ms (150.000
+// resoluções). Com `itemMatching` O(1) de mock as duas dão ~15-35 ms, então o ganho
+// real depende do custo da chamada no motor -- por isso o número acima e não esse.
+// Nenhum dos dois chega perto de um teto de task runner; o que não se mediu é a cópia
+// de `$('<extrator>').all()` de 150 mil itens dentro do runner.
+//
 // ⚠️ NÃO CONFIRMADO CONTRA O N8N DO DONO (mesma categoria do Recompor): (a) que o
 // item agrupado, com `pairedItem: {item: primeiro}`, encadeia até `Preparar
 // Conteudo` através do Merge de 4 entradas quando o `Recompor` chama
 // `itemMatching(i)` — na simulação do repositório encadeia, na instância real
-// ninguém viu; (b) que `$input.all()` traz `pairedItem` em cada linha do extrator
-// (é o que o cache por origem usa; sem ele o nó cai em `itemMatching(i)` por linha,
-// correto porém mais lento); (c) o custo de `itemMatching` por linha em 100 mil+
-// linhas. Conferir depois de republicar: subir 2+ planilhas grandes no MESMO lote
-// e checar que cada uma virou o SEU documento, com as SUAS linhas e o aviso
-// "N de TOTAL linhas não foram enviadas".
-const CODE_AGRUPAR_PLANILHA = `
+// ninguém viu; (b) que o `$('Extrair ...').all()` do TASK RUNNER traz `pairedItem`
+// (o fonte do runner não está no repositório; o motor e o nó, sim, como citado
+// acima) -- se não trouxer, o fallback por linha entra sozinho; (c) o custo real de
+// `itemMatching` por linha em 100 mil+ linhas contra o teto do task runner. Conferir
+// depois de republicar: subir 2+ planilhas grandes no MESMO lote e checar que cada
+// uma virou o SEU documento, com as SUAS linhas e o aviso "N de TOTAL linhas não
+// foram enviadas", e o tempo do nó na execução.
+const codeAgruparPlanilha = (extrator) => `
 ${FONTE_SPREADSHEET}
 const entradas=$input.all();
 const passam=[];
 const grupos=new Map();
 const ctxPorOrigem=new Map();
+let extr=null;
+try{ extr=$(${JSON.stringify(extrator)}).all(); }catch(e){ extr=null; }
+if(!Array.isArray(extr)||extr.length!==entradas.length) extr=null;
 for(let i=0;i<entradas.length;i+=1){
   const raw=entradas[i].json||{};
   if('caso_id' in raw||('error' in raw)){ passam.push({json:raw, pairedItem:{item:i}}); continue; }
-  // A origem da linha (indice no INPUT do extrator) identifica o documento: linhas
-  // da mesma origem tem o mesmo contexto, e resolver uma vez por origem evita
-  // 150 mil chamadas de itemMatching.
-  const pi=entradas[i].pairedItem;
+  // origem = indice no INPUT do extrator, lido do rundata dele (nao de $input, que o
+  // motor reescreve). Linhas da mesma origem tem o mesmo contexto.
+  const pi=extr?extr[i].pairedItem:undefined;
   const origem=(pi!==undefined&&pi!==null&&typeof pi==='object'&&!Array.isArray(pi)&&Number.isInteger(pi.item))?pi.item
     :(Number.isInteger(pi)?pi:null);
   let ctx;
@@ -2286,14 +2313,14 @@ const nodes = [
   node('Extrair XLS', 'n8n-nodes-base.extractFromFile', 1, {
     operation: 'xls', binaryPropertyName: 'data',
   }, { onError: 'continueRegularOutput' }),
-  // UM ITEM POR PLANILHA ANTES DO MERGE -- ver o comentário de CODE_AGRUPAR_PLANILHA.
+  // UM ITEM POR PLANILHA ANTES DO MERGE -- ver o comentário de codeAgruparPlanilha.
   // SEM `onError`, como o Recompor: falhar aqui tem de ser visível, não virar
   // planilha vazia. Nó Code, não Postgres: não substitui o contexto do lote.
   node('Agrupar Linhas XLSX', 'n8n-nodes-base.code', 2, {
-    mode: 'runOnceForAllItems', jsCode: CODE_AGRUPAR_PLANILHA,
+    mode: 'runOnceForAllItems', jsCode: codeAgruparPlanilha('Extrair XLSX'),
   }),
   node('Agrupar Linhas XLS', 'n8n-nodes-base.code', 2, {
-    mode: 'runOnceForAllItems', jsCode: CODE_AGRUPAR_PLANILHA,
+    mode: 'runOnceForAllItems', jsCode: codeAgruparPlanilha('Extrair XLS'),
   }),
 
   // O MERGE QUE CONVERGE OS 7 RAMOS DO ROTEADOR — a resposta canônica do n8n

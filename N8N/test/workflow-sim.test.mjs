@@ -3669,9 +3669,23 @@ test('MEDIDO: camada de texto CORROMPIDA por glifo dobrado vai para OCR — sen�
 // do Merge. Os testes rodam o CODIGO REAL dos nos. Nao confirmado: o encadeamento
 // de pairedItem atraves do Merge na instancia real (so' na simulacao).
 // ---------------------------------------------------------------------------
+// Duas formas, porque o motor do n8n entrega DUAS coisas diferentes (n8n-core 2.16.1,
+// `workflow-execute.js:790-812`): o que o nó RECEBE em `$input.all()` tem o pairedItem
+// REESCRITO para `{item: <índice na entrada>}` -- ou seja, `{item: i}` em toda linha --,
+// e o RUNDATA do extrator (`$('Extrair XLSX').all()`) guarda o que o extrator emitiu:
+// `{item: <índice no INPUT do extrator>}` (`fromFile.operation.js:191-206`).
 const linhasDaPlanilha = (n, prefixo) => Array.from({ length: n }, (_, k) => ({
   json: { Conta: `${prefixo}-${k}`, Valor: String(k) }, pairedItem: { item: prefixo === 'B' ? 1 : 0 },
 }));
+// O que o nó Code recebe: pairedItem = índice da própria entrada.
+const comoEntradaDoNo = (itens) => itens.map((it, i) => ({ json: it.json, pairedItem: { item: i } }));
+// Conta quantas vezes o nó LEU o contexto de um item (`itemMatching(i).json`): o mock de `$()`
+// também toca `lista[itemIndex]` a cada chamada, então contar acesso ao índice contaria em dobro.
+const listaContada = (lista) => {
+  const c = { chamadas: 0 };
+  c.lista = lista.map((it) => (it ? { get json() { c.chamadas += 1; return it.json; } } : it));
+  return c;
+};
 const ctxPlanGrande = (hash, nome) => ({
   caso_id: 'caso-uuid-1', hash, nome_original: nome, formato_detectado: 'xlsx', bytes: 5_755_000,
   content_mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -3689,13 +3703,17 @@ test('controle positivo: push.apply com 150.000 argumentos ESTOURA a pilha neste
 test('MEDIDO: Agrupar Linhas + Recompor -- planilha de 150.000 linhas e outra no MESMO lote, um item por documento, total verdadeiro, sem estouro', async () => {
   const A = linhasDaPlanilha(150_000, 'A');
   const B = linhasDaPlanilha(30, 'B');
-  const entradas = [...A, ...B];
+  const rundata = [...A, ...B]; // o que o extrator emitiu (origem 0 e 1)
+  const entradas = comoEntradaDoNo(rundata); // o que o Code recebe (pairedItem = i)
   const ctxA = ctxPlanGrande('hash-a', 'CR_Liquidado.xlsx');
   const ctxB = ctxPlanGrande('hash-b', 'Outra.xlsx');
   const ctxPorLinha = entradas.map((_, i) => ({ json: i < A.length ? ctxA : ctxB }));
+  const cont = listaContada(ctxPorLinha);
   const agrupado = await run('Agrupar Linhas XLSX', {
-    items: entradas, refs: { 'Preparar Conteudo': ctxPorLinha },
+    items: entradas, refs: { 'Preparar Conteudo': cont.lista, 'Extrair XLSX': rundata },
   });
+  // COMPORTAMENTO medido: 2 documentos resolvem o contexto 2 vezes, nao 150.030.
+  assert.equal(cont.chamadas, 2, 'uma resolucao de contexto por ORIGEM, nao por linha');
   assert.equal(agrupado.length, 2, 'duas planilhas => dois itens, nunca 150.030');
   const gA = agrupado.find((i) => i.json.linhas[0].Conta === 'A-0');
   const gB = agrupado.find((i) => i.json.linhas[0].Conta === 'B-0');
@@ -3722,6 +3740,34 @@ test('MEDIDO: Agrupar Linhas + Recompor -- planilha de 150.000 linhas e outra no
   assert.equal(oB.json.aviso_conteudo, null, 'planilha pequena nao abre aviso de truncamento');
   assert.equal(oA.json.leitura_planilha, 'texto');
   assert.ok(oA.json.caracteres_do_texto > 0 && oA.json.caracteres_do_texto === oA.json.content_part.text.length);
+});
+
+test('Agrupar Linhas: sem a origem no rundata do extrator, cai em itemMatching por linha e o RESULTADO e o mesmo', async () => {
+  // Fallback (binaryMode combinado devolve so' o json; tamanho diferente; `$()` que lanca).
+  // Custo declarado no comentario de codeAgruparPlanilha: uma resolucao por linha.
+  const A = linhasDaPlanilha(3000, 'A');
+  const B = linhasDaPlanilha(30, 'B');
+  const entradas = comoEntradaDoNo([...A, ...B]);
+  const ctxA = ctxPlanGrande('hash-a', 'CR.xlsx');
+  const ctxB = ctxPlanGrande('hash-b', 'Outra.xlsx');
+  const ctxPorLinha = entradas.map((_, i) => ({ json: i < A.length ? ctxA : ctxB }));
+  const variantes = {
+    'sem a referencia ($() lanca)': {},
+    'so json (binaryMode combinado)': { 'Extrair XLSX': [...A, ...B].map((it) => ({ json: it.json })) },
+    'tamanho diferente': { 'Extrair XLSX': A },
+  };
+  for (const [nome, extra] of Object.entries(variantes)) {
+    const cont = listaContada(ctxPorLinha);
+    const out = await run('Agrupar Linhas XLSX', { items: entradas, refs: { 'Preparar Conteudo': cont.lista, ...extra } });
+    assert.equal(cont.chamadas, entradas.length, `${nome}: uma resolucao por linha`);
+    assert.equal(out.length, 2, nome);
+    assert.deepEqual(out.map((i) => i.json.total_linhas).sort((a, b) => a - b), [30, 3000], nome);
+  }
+});
+
+test('Agrupar Linhas: o extrator do ramo XLS e lido pelo nome do PROPRIO ramo', () => {
+  assert.match(code('Agrupar Linhas XLSX'), /\$\("Extrair XLSX"\)\.all\(\)/);
+  assert.match(code('Agrupar Linhas XLS'), /\$\("Extrair XLS"\)\.all\(\)/);
 });
 
 test('Agrupar Linhas: item de erro e item sem rastro passam intactos, com pairedItem', async () => {
