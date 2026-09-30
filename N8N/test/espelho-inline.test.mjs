@@ -49,7 +49,7 @@ import {
 } from '../lib/custo.mjs';
 import {
   normalizarUnidade, normalizarMoeda, diagnosticarErroApi, achatarGrupos,
-  ehLinhaNaoMonetaria, escalaDeclaradaNaColuna,
+  ehLinhaNaoMonetaria, escalaDeclaradaNaColuna, limparRotuloColado,
 } from '../lib/extract.mjs';
 import { ALIASES } from '../lib/taxonomia.mjs';
 
@@ -633,6 +633,16 @@ const TABELA = [
     [[]], [null],
     [[{ s: 'ATIVO', sc: 'ativo_circulante', pc: '2025', linhas: [
       { k: 'Caixa', vn: 100 }, { k: 'Estoques', vn: 200 }] }]],
+    // rótulo com o valor colado: o espelho executa o achatarGrupos EMBUTIDO, que
+    // chama limparRotuloColado — sem ela no nó, ReferenceError aqui.
+    [[{ s: 'Passivo', sc: 'passivo_circulante', op: 1, cols: [{ ec: null, pc: '2025' }],
+      l: [{ k: '2 113.860.002,40PASSIVO', vt: ['113.860.002,40'], vn: [113860002.4], cf: 0.9 }] }]],
+  ] },
+  { nome: 'limparRotuloColado', lib: limparRotuloColado, casos: [
+    ['2 113.860.002,40PASSIVO', [113860002.4], ['113.860.002,40'], 'Passivo'],
+    ['Emprestimo 2.500,00parcelas', [9000], ['9.000,00'], null],
+    ['21.493.237,90', [21493237.9], ['21.493.237,90'], 'Balancete'],
+    ['PREJUÍZO DE 10.058,20', [10058.2], ['10.058,20'], null],
   ] },
 ];
 

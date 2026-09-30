@@ -1,9 +1,10 @@
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   buildExtractionRequest, parseExtractionResponse, extractionSchema, SECAO_CANONICA_ENUM,
   normalizarUnidade, normalizarMoeda, SYSTEM_PROMPT, ehLinhaNaoMonetaria, diagnosticarErroApi,
-  achatarGrupos,
+  achatarGrupos, limparRotuloColado,
 } from '../lib/extract.mjs';
 import {
   spreadsheetToText, parseCsv, avisoTruncamentoPlanilha, colunasDaPlanilha,
@@ -977,7 +978,11 @@ test('o formato PLANO antigo continua sendo aceito (workflow importado velho)', 
 test('achatarGrupos é AUTO-CONTIDA (o nó Code do n8n a embute por toString)', () => {
   // Se ela passar a referenciar constante do módulo, o nó quebra com
   // ReferenceError na primeira execução real e nenhum teste daqui pega.
-  const isolada = new Function(`return (${achatarGrupos.toString()})`)();
+  // `limparRotuloColado` (extraída pelo Sonar S3776) VAI JUNTO: é o que o gerador
+  // embute em FONTE_ACHATAR_GRUPOS. Sem ela aqui, o teste reprova com ReferenceError
+  // — a mesma lição de bc439fa.
+  const helper = 'const limparRotuloColado = ' + limparRotuloColado.toString() + ';\n';
+  const isolada = new Function(helper + 'return (' + achatarGrupos.toString() + ')')();
   const { linhas } = isolada([{ s: 'x', sc: 'custos', op: 1, cols: [], l: [{ k: 'a', vt: ['1'], vn: [1], cf: 1 }] }]);
   assert.equal(linhas.length, 1);
   // E resiste a lixo em vez de estourar: resposta malformada vira "nada
@@ -1297,4 +1302,11 @@ test('frases legítimas com valor no meio do texto NÃO são mexidas (contrato s
     assert.equal(r.linhas[0].chave, k);
     assert.deepEqual(r.rotulosSuspeitos, [], k);
   }
+});
+
+test('o workflow embute limparRotuloColado junto com achatarGrupos (Parse Extracao)', () => {
+  const wf = JSON.parse(readFileSync(new URL('../workflow.e1-ingestao.json', import.meta.url), 'utf8'));
+  const codigo = JSON.stringify(wf.nodes.find((n) => n.name === 'Parse Extracao').parameters.jsCode);
+  assert.ok(codigo.includes('const limparRotuloColado = '));
+  assert.ok(codigo.includes('const achatarGrupos = '));
 });

@@ -27,7 +27,11 @@
 // já pega.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha } from '../lib/aritmetica.mjs';
+import {
+  conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha,
+  papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete,
+} from '../lib/aritmetica.mjs';
+import { readFileSync } from 'node:fs';
 
 const linha = (ordem, chave, periodo_coluna, valor_num, extra = {}) => ({
   ordem, chave, periodo_coluna, entidade_coluna: null, valor_num,
@@ -381,8 +385,25 @@ test('balancete: documento sem as quatro colunas ou entrada inválida não repro
   assert.deepEqual(conferirBalanceteLinhaALinha(null), []);
 });
 
-test('balancete: conferirBalanceteLinhaALinha é AUTO-CONTIDA (embutida por toString no nó Code)', () => {
-  const isolada = new Function(`return (${conferirBalanceteLinhaALinha.toString()})`)();
+// A função é embutida por toString() e toString() NÃO leva o escopo do módulo: os 4
+// helpers extraídos (Sonar S3776) têm de ir junto, como declarações irmãs. Este
+// teste monta o escopo SÓ com o que o gerador embute; helper que faltasse lá
+// reprovaria aqui com ReferenceError (precedente: bc439fa, 11 testes).
+const HELPERS_DO_BALANCETE = [
+  papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete,
+];
+test('balancete: a função + os helpers embutidos funcionam isolados (toString, sem o escopo do módulo)', () => {
+  const fonte = [...HELPERS_DO_BALANCETE, conferirBalanceteLinhaALinha]
+    .map((f) => `const ${f.name} = ${f.toString()};`).join('\n');
+  const isolada = new Function(`${fonte}\nreturn conferirBalanceteLinhaALinha;`)();
   assert.equal(isolada(docMisto()).length, 1);
   assert.deepEqual(isolada(docReal(['rot'])), []);
+});
+
+test('balancete: o workflow publicado embute a função E cada helper dela', () => {
+  const wf = JSON.parse(readFileSync(new URL('../workflow.e1-ingestao.json', import.meta.url), 'utf8'));
+  const codigo = JSON.stringify(wf.nodes.find((n) => n.name === 'Juntar Blocos').parameters.jsCode);
+  for (const f of [...HELPERS_DO_BALANCETE, conferirBalanceteLinhaALinha]) {
+    assert.ok(codigo.includes(`const ${f.name} = `), `${f.name} não está embutida em Juntar Blocos`);
+  }
 });

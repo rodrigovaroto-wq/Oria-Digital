@@ -388,12 +388,66 @@ export const SYSTEM_PROMPT = [
 ].join(' ');
 
 /**
+ * NÚMERO COLADO NO RÓTULO. Balanço 2025 real (Krauspenhar): o total do passivo
+ * veio com a chave "2 113.860.002,40PASSIVO" e a reconciliação acusou
+ * "Passivo+PL não localizado" — o valor da linha (113.860.002,40) vazou para o
+ * rótulo. CONSERVADOR: só se limpa quando o número colado é IGUAL a um dos
+ * valores da PRÓPRIA linha (prova de que é o valor vazado); qualquer outro
+ * número colado é declarado em `rotulosSuspeitos` com a chave crua e nada é
+ * apagado — "Empréstimo 2.500,00parcelas" pode ser texto legítimo. "Colado" =
+ * encostado em letra ou parêntese, sem espaço (frase com o número no meio, com
+ * espaços — "PREJUÍZO DE 10.058,20" — não é mexida). O prefixo de código de conta ("2 ") NÃO é
+ * mexido aqui: a chave fica "2 PASSIVO" e o casamento da reconciliação é por
+ * palavra (0042: regexp_replace não-alfanumérico por espaço), mas isso NÃO foi
+ * medido contra o banco.
+ *
+ * Devolve { chave, suspeitos }: a chave (limpa só quando provado) e as mensagens de
+ * rótulo suspeito (chave crua). AUTO-CONTIDA, embutida por toString() ao lado de
+ * `achatarGrupos` (FONTE_ACHATAR_GRUPOS) — extraída dela pelo Sonar S3776.
+ */
+export function limparRotuloColado(chaveCrua, vn, vt, secao) {
+  const suspeitos = [];
+  const onde = secao ? ` (${secao})` : '';
+  let chave = chaveCrua;
+  // PADRÃO 2 (balancete real, 8 linhas de 72): a chave é SÓ o número
+  // ("21.493.237,90"), igual ao Saldo anterior da linha — o nome da conta se
+  // perdeu. Não há texto para recuperar: a conta fica e a chave crua é declarada.
+  if (/^\s*-?\d{1,3}(?:\.\d{3})*,\d{2}\s*$/.test(chave)) {
+    suspeitos.push(`"${chaveCrua}"${onde}: o rótulo é SÓ um número — o nome da conta se perdeu e a conta foi mantida sem nome`);
+    return { chave, suspeitos };
+  }
+  const padrao = /(?:(?<=^|\s)-)?\d{1,3}(?:\.\d{3})*,\d{2}/g;
+  const vizinho = /[A-Za-z\u00C0-\u00FF()]/;
+  let achado = padrao.exec(chave);
+  while (achado !== null) {
+    const ini = achado.index;
+    const fim = ini + achado[0].length;
+    const colado = vizinho.test(chave[ini - 1] ?? '') || vizinho.test(chave[fim] ?? '');
+    if (colado) {
+      const numero = Math.abs(Number(achado[0].replace(/\./g, '').replace(',', '.')));
+      const digitos = achado[0].replace(/\D/g, '');
+      const eValorDaLinha = vn.some((v) => typeof v === 'number' && Math.abs(Math.abs(v) - numero) < 0.005)
+        || vt.some((t) => typeof t === 'string' && t.replace(/\D/g, '') === digitos);
+      if (eValorDaLinha) {
+        chave = `${chave.slice(0, ini)} ${chave.slice(fim)}`.replace(/\s+/g, ' ').trim();
+        padrao.lastIndex = 0;
+        achado = padrao.exec(chave);
+        continue;
+      }
+      suspeitos.push(`"${chaveCrua}"${onde}: o rótulo traz o número ${achado[0]} colado ao texto, e ele NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio`);
+    }
+    achado = padrao.exec(chave);
+  }
+  return { chave, suspeitos };
+}
+
+/**
  * Achata os GRUPOS da resposta de volta para uma linha por (conta × coluna) —
  * a forma que `campo_extraido` sempre teve. Nada rio abaixo sabe que a conversa
  * com a OpenAI passou a ser agrupada.
  *
  * AUTO-CONTIDA de propósito: o nó Code do n8n não importa arquivo, então ela é
- * embutida lá por `toString()`. Não referencia nada do módulo — se alguém puser
+ * embutida lá por `toString()`. Só referencia `limparRotuloColado`, que VAI JUNTO (FONTE_ACHATAR_GRUPOS) — e nada mais do módulo — se alguém puser
  * uma constante daqui dentro dela, o nó quebra com ReferenceError na primeira
  * execução real e nenhum teste daqui pega isso.
  *
@@ -452,54 +506,10 @@ export function achatarGrupos(grupos) {
             : ''));
         continue;
       }
-      // NÚMERO COLADO NO RÓTULO. Balanço 2025 real (Krauspenhar): o total do passivo
-      // veio com a chave "2 113.860.002,40PASSIVO" e a reconciliação acusou
-      // "Passivo+PL não localizado" — o valor da linha (113.860.002,40) vazou para o
-      // rótulo. CONSERVADOR: só se limpa quando o número colado é IGUAL a um dos
-      // valores da PRÓPRIA linha (prova de que é o valor vazado); qualquer outro
-      // número colado é declarado em `rotulosSuspeitos` com a chave crua e nada é
-      // apagado — "Empréstimo 2.500,00parcelas" pode ser texto legítimo. "Colado" =
-      // encostado em letra ou parêntese, sem espaço (frase com o número no meio, com
-      // espaços — "PREJUÍZO DE 10.058,20" — não é mexida). O prefixo de código de conta ("2 ") NÃO é
-      // mexido aqui: a chave fica "2 PASSIVO" e o casamento da reconciliação é por
-      // palavra (0042: regexp_replace não-alfanumérico por espaço), mas isso NÃO foi
-      // medido contra o banco.
-      let chave = l.k;
-      // PADRÃO 2 (balancete real, 8 linhas de 72): a chave é SÓ o número
-      // ("21.493.237,90"), igual ao Saldo anterior da linha — o nome da conta se
-      // perdeu e um valor entrou no lugar dele. Não há texto para recuperar: a
-      // conta fica (não se descarta dado), o rótulo não é inventado, e a chave crua
-      // vai declarada.
-      if (/^\s*-?\d{1,3}(?:\.\d{3})*,\d{2}\s*$/.test(chave)) {
-        rotulosSuspeitos.push(
-          `"${l.k}"${g.s ? ` (${g.s})` : ''}: o rótulo é SÓ um número — o nome da conta se perdeu e `
-          + 'a conta foi mantida sem nome');
-      } else {
-        const padrao = /(?:(?<=^|\s)-)?\d{1,3}(?:\.\d{3})*,\d{2}/g;
-        const vizinho = /[A-Za-z\u00C0-\u00FF()]/;
-        let achado = padrao.exec(chave);
-        while (achado !== null) {
-          const ini = achado.index;
-          const fim = ini + achado[0].length;
-          const colado = (ini > 0 && vizinho.test(chave[ini - 1])) || (fim < chave.length && vizinho.test(chave[fim]));
-          if (colado) {
-            const numero = Math.abs(Number(achado[0].replace(/\./g, '').replace(',', '.')));
-            const digitos = achado[0].replace(/\D/g, '');
-            const eValorDaLinha = vn.some((v) => typeof v === 'number' && Math.abs(Math.abs(v) - numero) < 0.005)
-              || vt.some((t) => typeof t === 'string' && t.replace(/\D/g, '') === digitos);
-            if (eValorDaLinha) {
-              chave = `${chave.slice(0, ini)} ${chave.slice(fim)}`.replace(/\s+/g, ' ').trim();
-              padrao.lastIndex = 0;
-              achado = padrao.exec(chave);
-              continue;
-            }
-            rotulosSuspeitos.push(
-              `"${l.k}"${g.s ? ` (${g.s})` : ''}: o rótulo traz o número ${achado[0]} colado ao texto, e ele `
-              + 'NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio');
-          }
-          achado = padrao.exec(chave);
-        }
-      }
+      // NÚMERO COLADO NO RÓTULO — ver `limparRotuloColado` (a regra e o porquê moram lá).
+      const rotulo = limparRotuloColado(l.k, vn, vt, g.s);
+      const chave = rotulo.chave;
+      rotulo.suspeitos.forEach((m) => rotulosSuspeitos.push(m));
       for (let j = 0; j < cols.length; j += 1) {
         const valorTexto = typeof vt[j] === 'string' ? vt[j] : null;
         const valorNum = typeof vn[j] === 'number' ? vn[j] : null;

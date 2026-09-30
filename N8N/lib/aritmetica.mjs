@@ -217,6 +217,90 @@ export function conferirTotalDaSerie(campos) {
 }
 
 /**
+ * Papel de uma coluna de balancete pelo rótulo normalizado (sem acento, minúsculo):
+ * 'SA' (saldo anterior/inicial), 'D', 'C', 'SAt' (saldo atual/final) ou null.
+ * AUTO-CONTIDA; helper de `conferirBalanceteLinhaALinha`, embutida junto com ela
+ * (FONTE_ARITMETICA) — extraída do corpo dela pelo Sonar S3776 (complexidade 31).
+ */
+export function papelDeColunaDeBalancete(pc) {
+  const r = String(pc ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+  if (/^saldo (anterior|inicial)\b/.test(r)) return 'SA';
+  if (/^debitos?\b/.test(r)) return 'D';
+  if (/^creditos?\b/.test(r)) return 'C';
+  if (/^saldo (atual|final)\b/.test(r)) return 'SAt';
+  return null;
+}
+
+/**
+ * Agrupa os campos em contas ({chave, pagina, SA, D, C, SAt}) e devolve também o
+ * conjunto de papéis vistos. A mesma chave repetida na mesma seção e página (o
+ * balancete real repete CHEQUES A COMPENSAR, duas vezes idêntica) é OUTRA conta,
+ * não a mesma com a coluna em dobro: abre-se um novo grupo quando o papel já está
+ * preenchido. AUTO-CONTIDA, embutida por toString().
+ */
+export function agruparContasDeBalancete(campos) {
+  const contas = [];
+  const abertas = new Map();
+  const papeis = new Set();
+  for (const c of campos) {
+    const p = c && typeof c === 'object' ? papelDeColunaDeBalancete(c.periodo_coluna) : null;
+    if (!p) continue;
+    papeis.add(p);
+    const k = [c.chave, c.secao ?? '', c.origem_pagina ?? '', c.entidade_coluna ?? ''].join('\u0000');
+    let conta = abertas.get(k);
+    if (!conta || p in conta) {
+      conta = { chave: c.chave, pagina: c.origem_pagina ?? null };
+      abertas.set(k, conta);
+      contas.push(conta);
+    }
+    conta[p] = Number.isFinite(c.valor_num) ? c.valor_num : null;
+  }
+  return { contas, papeis };
+}
+
+/**
+ * Para cada conta com as quatro colunas e movimento, diz se fecha como rotulada
+ * (SAt = SA + D - C, ou SA - D + C), só com a troca de colunas (D gravado = SA
+ * +/- C gravado +/- SAt gravado) ou de nenhum jeito; guarda o 1º exemplo de cada
+ * um dos dois últimos. Tolerância 1 na unidade do documento. Conta de movimento
+ * zero (D e C dentro da tolerância) fecha de qualquer jeito e não conta.
+ * AUTO-CONTIDA, embutida por toString().
+ */
+export function classificarContasDeBalancete(contas) {
+  const TOL = 1;
+  const perto = (a, b) => Math.abs(a - b) <= TOL;
+  const r = { rotulada: 0, trocada: 0, nenhuma: 0, exTroca: null, exNenhuma: null };
+  for (const v of contas) {
+    const completa = ['SA', 'D', 'C', 'SAt'].every((p) => typeof v[p] === 'number');
+    if (!completa || (Math.abs(v.D) <= TOL && Math.abs(v.C) <= TOL)) continue;
+    if (perto(v.SAt, v.SA + v.D - v.C) || perto(v.SAt, v.SA - v.D + v.C)) {
+      r.rotulada += 1;
+    } else if ([1, -1].some((s1) => [1, -1].some((s2) => perto(v.D, v.SA + s1 * v.C + s2 * v.SAt)))) {
+      r.trocada += 1;
+      r.exTroca = r.exTroca ?? v;
+    } else {
+      r.nenhuma += 1;
+      r.exNenhuma = r.exNenhuma ?? v;
+    }
+  }
+  return r;
+}
+
+/** O texto do problema único do balancete (contagens + exemplo). AUTO-CONTIDA. */
+export function mensagemDoBalancete(naoTriviais, r) {
+  const ex = r.exTroca ?? r.exNenhuma;
+  const pagina = ex.pagina ? ' (p. ' + ex.pagina + ')' : '';
+  const exemplo = '"' + ex.chave + '"' + pagina + ': saldo anterior ' + ex.SA + ', débito ' + ex.D
+    + ', crédito ' + ex.C + ', saldo atual ' + ex.SAt;
+  return 'balancete não fecha linha a linha (saldo atual = saldo anterior +/- débito -/+ crédito, tolerância 1): '
+    + `das ${naoTriviais} conta(s) com movimento, ${r.rotulada} fecham como rotuladas, ${r.trocada} fecham só com a `
+    + 'troca de colunas (a gravada como "Débito" é o saldo atual, a "Crédito" é o débito e a "Saldo atual" é o '
+    + `crédito) e ${r.nenhuma} não fecham de jeito nenhum. Exemplo${r.exTroca ? ' com a troca' : ''}: ${exemplo}. `
+    + 'O número NÃO foi corrigido: com as colunas trocadas, ler "Saldo atual" como saldo dá o crédito do período.';
+}
+
+/**
  * Identidade de BALANCETE, linha a linha: para cada conta com as quatro colunas
  * "Saldo anterior | Débito | Crédito | Saldo atual" (rótulos normalizados;
  * "Saldo inicial/final", "Débitos", "Créditos" valem), o saldo atual tem de ser
@@ -252,59 +336,17 @@ export function conferirTotalDaSerie(campos) {
  * novo para essa chave, é outra conta (o balancete real repete uma conta
  * idêntica), contada à parte. Coluna com valor ausente (null) tira a conta:
  * ausência não é zero.
- * AUTO-CONTIDA, embutida por toString() no nó Code (ver FONTE_ARITMETICA).
+ * AUTO-CONTIDA, embutida por toString() no nó Code (ver FONTE_ARITMETICA) JUNTO com os 4
+ * helpers acima: toString() não leva o escopo do módulo (bc439fa, PR #246).
  */
 export function conferirBalanceteLinhaALinha(campos) {
   const problemas = [];
   if (!Array.isArray(campos)) return problemas;
-  const norm = (s) => String(s ?? '')
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
-  const papel = (pc) => {
-    const r = norm(pc);
-    if (/^saldo (anterior|inicial)\b/.test(r)) return 'SA';
-    if (/^debitos?\b/.test(r)) return 'D';
-    if (/^creditos?\b/.test(r)) return 'C';
-    if (/^saldo (atual|final)\b/.test(r)) return 'SAt';
-    return null;
-  };
-  const contas = [];
-  const abertas = new Map();
-  const papeis = new Set();
-  for (const c of campos) {
-    if (!c || typeof c !== 'object') continue;
-    const p = papel(c.periodo_coluna);
-    if (!p) continue;
-    papeis.add(p);
-    const k = `${c.chave}\u0000${c.secao ?? ''}\u0000${c.origem_pagina ?? ''}\u0000${c.entidade_coluna ?? ''}`;
-    let conta = abertas.get(k);
-    // A mesma chave repetida na mesma seção e página (o balancete real repete
-    // CHEQUES A COMPENSAR, duas vezes idêntica) é OUTRA conta, não a mesma com a
-    // coluna em dobro: abre-se um novo grupo quando o papel já está preenchido.
-    if (!conta || p in conta) { conta = { chave: c.chave, pagina: c.origem_pagina ?? null }; abertas.set(k, conta); contas.push(conta); }
-    conta[p] = typeof c.valor_num === 'number' && Number.isFinite(c.valor_num) ? c.valor_num : null;
-  }
+  const { contas, papeis } = agruparContasDeBalancete(campos);
   if (papeis.size < 4) return problemas;
-  const TOL = 1;
-  const perto = (a, b) => Math.abs(a - b) <= TOL;
-  let rotulada = 0; let trocada = 0; let nenhuma = 0;
-  let exTroca = null; let exNenhuma = null;
-  for (const v of contas) {
-    if (['SA', 'D', 'C', 'SAt'].some((p) => typeof v[p] !== 'number')) continue;
-    if (Math.abs(v.D) <= TOL && Math.abs(v.C) <= TOL) continue; // movimento zero: fecha de qualquer jeito
-    if (perto(v.SAt, v.SA + v.D - v.C) || perto(v.SAt, v.SA - v.D + v.C)) { rotulada += 1; continue; }
-    const permutada = [1, -1].some((s1) => [1, -1].some((s2) => perto(v.D, v.SA + s1 * v.C + s2 * v.SAt)));
-    if (permutada) { trocada += 1; if (!exTroca) exTroca = v; } else { nenhuma += 1; if (!exNenhuma) exNenhuma = v; }
-  }
-  const naoTriviais = rotulada + trocada + nenhuma;
-  if (naoTriviais < 10 || (trocada + nenhuma) / naoTriviais <= 0.2) return problemas;
-  const fmt = (v) => `"${v.chave}"${v.pagina ? ` (p. ${v.pagina})` : ''}: saldo anterior ${v.SA}, débito ${v.D}, crédito ${v.C}, saldo atual ${v.SAt}`;
-  const ex = exTroca ?? exNenhuma;
-  problemas.push(
-    `balancete não fecha linha a linha (saldo atual = saldo anterior +/- débito -/+ crédito, tolerância ${TOL}): `
-    + `das ${naoTriviais} conta(s) com movimento, ${rotulada} fecham como rotuladas, ${trocada} fecham só com a `
-    + 'troca de colunas (a gravada como "Débito" é o saldo atual, a "Crédito" é o débito e a "Saldo atual" é o '
-    + `crédito) e ${nenhuma} não fecham de jeito nenhum. Exemplo${exTroca ? ' com a troca' : ''}: ${fmt(ex)}. `
-    + 'O número NÃO foi corrigido: com as colunas trocadas, ler "Saldo atual" como saldo dá o crédito do período.',
-  );
+  const r = classificarContasDeBalancete(contas);
+  const naoTriviais = r.rotulada + r.trocada + r.nenhuma;
+  if (naoTriviais < 10 || (r.trocada + r.nenhuma) / naoTriviais <= 0.2) return problemas;
+  problemas.push(mensagemDoBalancete(naoTriviais, r));
   return problemas;
 }

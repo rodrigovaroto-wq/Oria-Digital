@@ -30,7 +30,7 @@ import {
   capacidadesDoModelo, CAPACIDADES_POR_MODELO, CAPACIDADES_PADRAO,
 } from './lib/provedor.mjs';
 import { createHash } from 'node:crypto';
-import { SYSTEM_PROMPT, diagnosticarErroApi, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, normalizarMoeda, extractionSchema, achatarGrupos, ehLinhaNaoMonetaria, escalaDeclaradaNaColuna } from './lib/extract.mjs';
+import { SYSTEM_PROMPT, diagnosticarErroApi, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, normalizarMoeda, extractionSchema, achatarGrupos, limparRotuloColado, ehLinhaNaoMonetaria, escalaDeclaradaNaColuna } from './lib/extract.mjs';
 import { ALIASES } from './lib/taxonomia.mjs';
 import { classifyByFilename, parseTipo, parsePeriodo, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
 import { normalize } from './lib/normalize.mjs';
@@ -53,7 +53,7 @@ import {
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
   MAX_CELULAS_POR_BLOCO, LIMIAR_COBERTURA, MINIMO_PARA_AVALIAR,
 } from './lib/cobertura.mjs';
-import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha } from './lib/aritmetica.mjs';
+import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha, papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete } from './lib/aritmetica.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -279,7 +279,7 @@ const FONTE_BYTES_BINARIO = `const bytesDoBinario = ${bytesDoBinario.toString()}
 // lugar onde valor e coluna são associados. Espelhá-la à mão seria escolher o
 // erro mais caro possível: uma divergência aqui grava o número de 2024 na coluna
 // de 2025, sem sintoma nenhum.
-const FONTE_ACHATAR_GRUPOS = `const achatarGrupos = ${achatarGrupos.toString()};`;
+const FONTE_ACHATAR_GRUPOS = `const limparRotuloColado = ${limparRotuloColado.toString()};\nconst achatarGrupos = ${achatarGrupos.toString()};`;
 
 // As três camadas contra o truncamento e a extração pela metade (lib/cobertura.mjs),
 // embutidas do fonte como todo o resto. O comentário do topo daquele arquivo tem
@@ -324,6 +324,10 @@ const FONTE_COBERTURA = [
 const FONTE_ARITMETICA = [
   `const conferirIdentidadeDeLinha = ${conferirIdentidadeDeLinha.toString()};`,
   `const conferirTotalDaSerie = ${conferirTotalDaSerie.toString()};`,
+  `const papelDeColunaDeBalancete = ${papelDeColunaDeBalancete.toString()};`,
+  `const agruparContasDeBalancete = ${agruparContasDeBalancete.toString()};`,
+  `const classificarContasDeBalancete = ${classificarContasDeBalancete.toString()};`,
+  `const mensagemDoBalancete = ${mensagemDoBalancete.toString()};`,
   `const conferirBalanceteLinhaALinha = ${conferirBalanceteLinhaALinha.toString()};`,
 ].join('\n');
 
