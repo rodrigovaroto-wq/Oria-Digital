@@ -66,8 +66,11 @@ export interface PremissaSugerida {
   codigo: string;
   nome: string;
   /**
-   * A MÉDIA DOS EXERCÍCIOS, na escala que o catálogo espera (fração para
-   * `pct_de_linha`, dias para `dias_de_giro`). Era o valor de UM exercício; virou
+   * A MÉDIA DOS EXERCÍCIOS, na escala da RAZÃO (fração para `pct_de_linha`, dias
+   * para `dias_de_giro`). ATENÇÃO: NÃO é a escala que se grava. A premissa em %
+   * é gravada em PONTOS PERCENTUAIS (34 = 34%), que é o que a pessoa digita e o
+   * que o modelo divide por 100 (`modelo-institucional.ts`, `v / 100`). Para gravar,
+   * use `valorParaGravar`. Era o valor de UM exercício; virou
    * média porque projetar cinco anos a partir do pior ano de uma empresa em
    * reestruturação é projetar a crise como se fosse o regime.
    */
@@ -259,6 +262,26 @@ function razoesDeUmExercicio(linhas: LinhaRealizada[]): PremissaSugerida[] {
  * que governa cada razão isolada. Se nenhum exercício responder, a premissa sai
  * sem valor e com o porquê do primeiro que falhou, que é o mais informativo.
  */
+/**
+ * O VALOR QUE O "USAR" GRAVA — na escala do catálogo, não na da razão.
+ *
+ * O DEFEITO QUE ISTO CORRIGE, medido em 30/09/2026 num mandato de teste em
+ * produção (caso bb37f726): o botão "Usar" gravava a fração crua. O Custo
+ * variável de 88% ia como `0,8797`, e o modelo, que divide premissa em % por
+ * 100, projetou 0,9%. O SG&A de 23,6% virou 0,2%, e o lucro projetado ficou
+ * inflado sem erro nenhum. A mesma premissa DIGITADA (88) saía certa, porque
+ * a pessoa digita pontos percentuais. As premissas em dias não tinham o
+ * problema.
+ *
+ * Arredondado a 4 casas: `0,8797 × 100` em ponto flutuante é
+ * `87,97000000000001`, e esse ruído iria para o banco e para a célula do Excel.
+ */
+export function valorParaGravar(p: Pick<PremissaSugerida, "valor" | "unidade">): number | null {
+  if (p.valor === null) return null;
+  if (p.unidade === "%") return Math.round(p.valor * 100 * 10_000) / 10_000;
+  return p.valor;
+}
+
 export function sugerirDoRealizado(linhas: LinhaRealizada[]): PremissaSugerida[] {
   const porExercicio = new Map<number, LinhaRealizada[]>();
   for (const l of linhas) {
