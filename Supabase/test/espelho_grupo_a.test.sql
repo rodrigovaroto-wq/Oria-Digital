@@ -93,6 +93,59 @@ begin
     format('resultado=%s divergencia=%s', v_res, v_div));
 end $$;
 
+-- 1b. REVISÃO (achado 3): DUAS LINHAS DE FACE IGUAIS SÃO DUAS POSIÇÕES. O mesmo rótulo e o mesmo
+-- valor em duas linhas da face (ex.: circulante e não circulante, sem seção de nota) somam as duas
+-- vezes — a deduplicação só vale quando uma das linhas está em seção de NOTA. A planilha traz
+-- 1.000 (= 500 + 500); fundir as duas daria 500 x 1.000.
+do $$
+declare
+  v_caso uuid; v_r jsonb; v_per uuid; v_res text; v_div numeric;
+begin
+  raise notice '--- 1b. duas linhas de face com o mesmo valor somam; face + nota conta uma ---';
+  v_caso := (fn_upsert_caso('GA1b: duas posições iguais na face'))::uuid;
+
+  v_r := fn_registrar_documento(v_caso, 'GA1b HOLDING', 'data-base', '2025-12-31', 'MUTUOS', 0.96,
+    'nome_arquivo', 'supabase_storage', 'ga/mutuos-b.pdf', 'MUTUOS B.pdf', true, 'HASH-GA-1B-1', 'ok');
+  v_per := (select periodo_id from documento where id = (v_r->>'documento_id')::uuid);
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','GA1b HOLDING → GA1b VAREJO','valor_num','1000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96'),
+    jsonb_build_object('ordem',1,'chave','TOTAL','valor_num','1000','unidade','milhar','periodo_coluna','Saldo devedor','confianca','0.96')
+  ), 'N2');
+
+  v_r := fn_registrar_documento(v_caso, 'GA1b HOLDING', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', 'ga/bp-holding-b.pdf', 'BP HOLDING B.pdf', true, 'HASH-GA-1B-2', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',0,'chave','Mútuos a receber - controlada','valor_num','1000','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+
+  -- O VAREJO: a MESMA conta, o MESMO valor, em DUAS linhas da face (ordem 10 e 20, sem seção).
+  v_r := fn_registrar_documento(v_caso, 'GA1b VAREJO', 'anual', '2025', 'BALANCO', 0.97,
+    'nome_arquivo', 'supabase_storage', 'ga/bp-varejo-b.pdf', 'BP VAREJO B.pdf', true, 'HASH-GA-1B-3', 'ok');
+  perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, jsonb_build_array(
+    jsonb_build_object('ordem',10,'chave','Mútuos a pagar - controladora','valor_num','500','unidade','milhar','periodo_coluna','2025','confianca','0.97'),
+    jsonb_build_object('ordem',20,'chave','Mútuos a pagar - controladora','valor_num','500','unidade','milhar','periodo_coluna','2025','confianca','0.97')
+  ), 'N2');
+
+  v_r := fn_reconciliar_mutuos(v_caso, v_per);
+  select resultado, divergencia_abs into v_res, v_div
+    from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
+  perform pg_temp.teste_assert_ga(v_res = 'ok' and coalesce(v_div, 0) = 0,
+    'face + face com o mesmo valor: as duas posições somam (500 + 500 = 1.000 = planilha), ok',
+    format('resultado=%s divergencia=%s', v_res, v_div));
+
+  -- Agora a segunda linha vai para a NOTA "Partes Relacionadas": é a mesma posição lida em dois
+  -- lugares e conta UMA vez (500 x 1.000 -> não fecha).
+  update campo_extraido ce set secao = 'Partes Relacionadas'
+    from documento_versao dv join documento d on d.id = dv.documento_id
+   where ce.documento_versao_id = dv.id and d.caso_id = v_caso and ce.ordem = 20;
+  v_r := fn_reconciliar_mutuos(v_caso, v_per);
+  select resultado, divergencia_abs into v_res, v_div
+    from reconciliacao where id = (v_r->>'reconciliacao_id')::uuid;
+  perform pg_temp.teste_assert_ga(v_res = 'zona_cinzenta' and v_div between 499000 and 501000,
+    'face + nota com o mesmo valor: conta UMA vez (500 x 1.000)',
+    format('resultado=%s divergencia=%s', v_res, v_div));
+end $$;
+
 -- =============================================================================
 -- 2. EMPATE DE criado_em (achado 2, ALTO) — as duas funções.
 --    Par de empresas P → Q. Q tem DOIS balanços BALANCO de 2025, com criado_em idêntico:

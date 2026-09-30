@@ -129,33 +129,35 @@
 --   DESENHO ESCOLHIDO (a sessão principal decidiu): generalizar a guarda de
 --   "mesma transação" para "ESTADO VIGENTE". Antes de resolver (ou de trocar a
 --   descrição por uma de pré-condição), olha-se o ÚLTIMO registro de `reconciliacao`
---   de CADA período compatível com o da pendência (mesmo caso/tipo/entidade —
---   e mesmo documento nos tipos por documento), no tempo: `criado_em desc`, e
---   dentro da mesma transação (mesmo `criado_em`) o critério `cmin` que já
---   existia. Só resolve se nenhum desses últimos estados é divergente
---   (`divergente`, `divergencia`, `zona_cinzenta`). O período desta própria
+--   de CADA outro período compatível com o da pendência (mesmo caso/tipo/entidade),
+--   no tempo: `criado_em desc`, e dentro da mesma transação (mesmo `criado_em`) o
+--   critério `cmin` que já existia. Só resolve se nenhum desses últimos estados é
+--   divergente (`divergente`, `divergencia`, `zona_cinzenta`). O período desta própria
 --   chamada fica fora da conta: o resultado dele é o que está sendo decidido.
---   Para não prender pendência para sempre por estado velho, só contam
---   períodos que AINDA têm documento vivo no caso para aquela entidade (entidade
---   nula — mútuos, intragrupo — é "qualquer documento do caso"); nos tipos por
---   documento, o próprio documento tem de existir (a FK `on delete set null`
---   de `reconciliacao.documento_id` zera o documento apagado, que então não
---   casa). Isto exige a coluna NOVA `reconciliacao.documento_id` (nullable, FK
---   `on delete set null`), gravada por `fn_registrar_reconciliacao` com
---   `p_documento_id`; linha antiga fica com NULL e, nos tipos por documento,
---   não bloqueia nada (falha para o lado de resolver, que era o comportamento
---   de antes — não piora).
+--   Para não prender pendência para sempre por estado velho (revisão da S102, achado 1),
+--   um estado de OUTRO período só conta se é desta MESMA rodada (`criado_em = now()`) OU
+--   se existe documento vivo com `periodo_id` EXATAMENTE igual ao do estado (não nulo):
+--   aí o período ainda é chave que `fn_reconciliar_caso` revisita. Compatibilidade
+--   (`fn_periodos_compativeis`) não serve de filtro: devolve true com período NULL/sem
+--   ano (29 de 59 casos em produção têm documento assim) e um documento reclassificado
+--   por `fn_revisar_documento` ("24,25" -> 12M24) deixava o estado velho de "24,25"
+--   divergente e sem chave que o revisitasse. Tipos POR DOCUMENTO (secao_fecha) não rodam
+--   a guarda: o casamento da pendência por `documento_id` já isola cada documento.
+--   A coluna NOVA `reconciliacao.documento_id` (nullable, FK `on delete set null`) é
+--   gravada por `fn_registrar_reconciliacao` com `p_documento_id`; linha antiga fica NULL.
 --   O QUE NÃO MUDA: o retry da 0152 (pré-condição de um período seguida de
 --   `ok` de outro período da MESMA chave fecha normalmente: o último estado do
 --   período 1 é pré-condição, que não é divergente); o contrato de motivos da
 --   0186/0188; o dial/sombra da 0127.
---   TETO QUE SOBRA (declarado): (i) pendência cujo período irmão ficou com
---   estado VELHO divergente e cujo documento segue vivo só fecha quando esse
---   irmão for reconciliado de novo — `fn_reconciliar_caso` visita todo período,
---   mas `fn_reconciliar_por_documento(...,'tudo')` sai do laço de períodos no
---   primeiro que concluir, então reconciliar só o documento do período `ok` não
---   fecha a pendência (é o preço de não resolver sobre estado que não foi
---   remedido; fica aberta, nunca fechada em falso); (ii) "documento vivo" é
+--   TETO QUE SOBRA (declarado): (i) pendência cujo período irmão ficou com estado
+--   divergente e tem documento vivo com esse período EXATO só fecha quando o irmão for
+--   reconciliado de novo: `fn_reconciliar_caso` visita todo período que é chave de algum
+--   documento, mas o laço de `fn_reconciliar_por_documento(...,'tudo')` sai no primeiro
+--   período que conclui (`exit when ... <> 'precondicao_nao_satisfeita'`), então
+--   reconciliar só o documento do período `ok` não fecha a pendência (fica aberta,
+--   nunca fechada em falso); período sem documento exato NÃO entra no teto: seu estado
+--   velho não conta;
+--   (ii) "documento vivo" é
 --   (caso, entidade, período) com qualquer tipo de documento, não "o tipo
 --   de documento que alimenta ESTA checagem" — um período cujo único documento
 --   vivo é de outro tipo ainda conta; (iii) o critério de ordem entre transações
@@ -382,7 +384,9 @@ begin
   -- irmão resolvia a pendência em `em_correcao_interna` e a divergente, ao chegar, abria
   -- OUTRA). O período desta chamada fica fora da conta: o resultado dele é o que se decide.
   -- Só roda a query quando há pendência a proteger.
-  if v_pendencia_id is not null then
+  -- Tipo POR DOCUMENTO (secao_fecha) não roda a guarda: o casamento por `documento_id`
+  -- (acima) já isola a pendência do próprio documento, e um documento tem UM período.
+  if v_pendencia_id is not null and not v_por_documento then
     select exists (
       select 1 from (
         -- SÓ O ÚLTIMO por período (`distinct on`): o histórico do período é uma sequência
@@ -395,17 +399,23 @@ begin
           and coalesce(r.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
             = coalesce(p_entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
           and r.periodo_id is distinct from p_periodo_id
-          -- tipo por documento: só os estados DESTE documento (linha antiga, sem
-          -- documento_id, não entra: falha para o lado de resolver, como antes da 0192)
-          and (not v_por_documento or r.documento_id = p_documento_id)
-          -- estado VELHO não prende pendência para sempre: o período tem de ter ainda um
-          -- documento vivo no caso para a entidade (entidade nula = qualquer do caso)
-          and exists (
-            select 1 from documento d
-            where d.caso_id = p_caso_id
-              and (p_entidade_id is null or d.entidade_id = p_entidade_id)
-              and (not v_por_documento or d.id = p_documento_id)
-              and fn_periodos_compativeis(d.periodo_id, r.periodo_id))
+          -- estado VELHO não prende pendência para sempre. Só conta um estado de OUTRO período se
+          -- (a) ele é desta MESMA rodada (`criado_em = now()`: a ordem de visita dentro da
+          -- transação é o que a guarda existe para neutralizar), OU (b) existe documento vivo
+          -- cujo período é EXATAMENTE o dele (`d.periodo_id = r.periodo_id`, não nulo): o período
+          -- ainda é CHAVE que `fn_reconciliar_caso` revisita (o laço itera os períodos dos
+          -- documentos), então o estado será refeito e a pendência fecha quando o dado corrigir.
+          -- `fn_periodos_compativeis` NÃO serve aqui: devolve true com período NULL/sem ano
+          -- (29 de 59 casos em produção têm documento assim, 30/09/2026) e um documento
+          -- reclassificado por `fn_revisar_documento` (multi "24,25" -> 12M24) deixava o estado
+          -- velho de "24,25" vivo para sempre, sem chave que o revisitasse.
+          and (r.criado_em = now()
+               or exists (
+                 select 1 from documento d
+                 where d.caso_id = p_caso_id
+                   and (p_entidade_id is null or d.entidade_id = p_entidade_id)
+                   and d.periodo_id is not null
+                   and d.periodo_id = r.periodo_id))
         order by r.periodo_id, r.criado_em desc, r.cmin::text::int desc
       ) ultimo_por_periodo
       where ultimo_por_periodo.resultado in ('divergente', 'divergencia', 'zona_cinzenta')
@@ -674,7 +684,16 @@ insert into instalacao_requisito
    'p_documento_id, p_descricao',
    'O INSERT em reconciliacao grava documento_id e descricao. Sem o marcador, a coluna existe e '
    'continua NULL em toda linha nova — a ausência vira "não sei qual documento nem por quê".',
-   'importante', 842)
+   'importante', 842),
+
+  ('guarda_vigente_so_periodo_chave', '0192', 'corpo', 'fn_registrar_reconciliacao',
+   'd.periodo_id = r.periodo_id',
+   'A guarda de estado vigente só conta o estado de OUTRO período se é da mesma rodada ou se há '
+   'documento vivo com esse período EXATO (chave que fn_reconciliar_caso ainda revisita). Com '
+   'fn_periodos_compativeis no lugar, período NULL/sem ano é "compatível com tudo" (29 de 59 casos '
+   'em produção têm documento assim, 30/09/2026) e a divergência velha de um período que um '
+   'fn_revisar_documento esvaziou prende a pendência para sempre.',
+   'importante', 843)
 
 on conflict (chave) do update
   set migration = excluded.migration,
@@ -692,5 +711,5 @@ update instalacao_cobertura
          'divergente; secao_fecha casa pendência e estado por documento_id; reconciliacao ganha '
          'documento_id e descricao, gravados sempre. fn_reconciliar_caso ganha `order by` nos laços. '
          'Catalogado pelo corpo (ok_nao_mata_divergencia_irma, pendencia_por_documento_secao_fecha, '
-         'reconciliacao_documento_id_gravado) e pelas colunas.'
+         'reconciliacao_documento_id_gravado, guarda_vigente_so_periodo_chave) e pelas colunas.'
  where id = true;

@@ -49,8 +49,9 @@
 --
 -- GRUPO A DA REVISÃO (30/09/2026, corrigido NO PRÓPRIO ARQUIVO — a 0195 nunca
 -- foi aplicada): três achados, cada um medido não-vazio em
--- Supabase/test/espelho_grupo_a.test.sql (8 asserts; desligado cada item,
--- reprovam 2 + 2 + 2 = 6 dos 8):
+-- Supabase/test/espelho_grupo_a.test.sql (10 asserts, medidos; desligado cada item,
+-- reprovam 3 (deduplicação desligada) + 2 + 2 = 7 dos 10; com a deduplicação CEGA À NOTA
+-- (a 1ª versão: funde toda linha igual) reprova 1 — face + face):
 --   1. CRÍTICO — `linhas` de fn_reconciliar_mutuos (herdada da 0123) somava
 --      DUAS vezes a conta repetida na face e na nota "Partes Relacionadas" do
 --      mesmo documento (doc 2f17a7ba, Varejo: 409/890/1.600/2.600/3.900 mil).
@@ -405,42 +406,64 @@ begin
       -- Supabase/README.md descreviam ERAM essa duplicata: sem ela os dois
       -- lados fecham exatos. Critério: no MESMO documento, a mesma conta
       -- (rótulo normalizado) na mesma coluna, com o mesmo lado, valor e
-      -- escala, é UMA posição lida em dois lugares — conta uma vez (fica a
-      -- de menor `ordem`, a face). Valor DIFERENTE com o mesmo rótulo não é
-      -- deduplicado (seria outra posição). Medido em TODA a produção: 5
-      -- grupos assim em mútuos, todos nesse único documento, 0 com valor
-      -- diferente — o critério não toca mais nada.
-      select distinct on (d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
-                          fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
-                          fn_valor_em_base(ce.valor_num, ce.unidade), ce.unidade)
-             d.id as doc_id,
-             fn_lado_do_mutuo(ce.chave, ce.secao_canonica) as lado,
-             fn_valor_em_base(ce.valor_num, ce.unidade) as valor_base,
-             ce.chave,
-             ce.unidade
-      from balancos d
-      join lateral (select fn_versao_atual(d.id) as ver) v on true
-      join campo_extraido ce on ce.documento_versao_id = v.ver
-      where ce.valor_num is not null
-        -- O LADO DO BALANÇO CONTINUA LENDO O RÓTULO, e isto é deliberado: o
-        -- defeito medido é do lado da PLANILHA, e nos balanços do Canastra e de
-        -- Vertentes a conta diz "Mútuos a pagar" / "Mútuos a receber" no próprio
-        -- rótulo. Alargar aqui para a seção seria consertar um caso que não
-        -- existe — e traria a mesma over-inclusão: a subseção de balanço é
-        -- "Partes Relacionadas", que agrupa mútuo, conta corrente e aluguel.
-        and fn_texto_nomeia_mutuo(ce.chave)
-        -- 0123: mútuo com SÓCIO sai — a outra ponta dele não está no mandato,
-        -- então ele não espelha e não é da população da planilha intragrupo.
-        and not fn_mutuo_com_socio(ce.chave, ce.secao)
-        and fn_papel_linha(ce.chave) <> 'subtotal'
-        -- 0195: fatorada em `fn_linha_vale_para_ano` (mesma conta que a 0194
-        -- escreveu inline: documento sem coluna de período só conta para
-        -- `v_ano` quando o PRÓPRIO PERÍODO do documento ancora esse ano).
-        and fn_linha_vale_para_ano(v.ver, ce.periodo_coluna, d.periodo_tipo, d.periodo_ref, v_ano)
-        and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
-      order by d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
-               fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
-               fn_valor_em_base(ce.valor_num, ce.unidade), ce.unidade, ce.ordem
+      -- escala, lida na FACE e numa seção de NOTA ("Partes Relacionadas",
+      -- "Nota 12"...) é UMA posição lida em dois lugares — conta uma vez (fica
+      -- a da face). Valor DIFERENTE com o mesmo rótulo não é deduplicado
+      -- (seria outra posição).
+      -- REVISÃO (30/09/2026, achado 3): a 1ª versão deduplicava QUALQUER par
+      -- igual, e com isso fundia duas posições genuínas da FACE ("Mútuos a
+      -- receber - controladas" 500.000 no AC e o mesmo no ANC: mesmo rótulo,
+      -- mesmo valor, contas DIFERENTES). Agora só se deduplica quando uma das
+      -- linhas está em seção de nota: duas linhas de face iguais continuam
+      -- somando; nota sem linha de face igual conta (uma vez, se repetida na
+      -- própria nota); nota com linha de face igual sai.
+      -- TETO: "nota" é o nome da seção (`partes relacionadas` ou `nota`); uma
+      -- face cuja subseção se chame "Partes Relacionadas" seria tratada como
+      -- nota. Em produção a face do doc 2f17a7ba tem `secao` NULL e a nota,
+      -- "Partes Relacionadas" (medido, só-leitura, 30/09/2026).
+      -- Medido em TODA a produção: 5 grupos assim em mútuos (face ordem 38 +
+      -- nota ordem 62), todos nesse único documento, 0 com valor diferente.
+      select doc_id, lado, valor_base, chave, unidade
+      from (
+        select d.id as doc_id,
+               fn_lado_do_mutuo(ce.chave, ce.secao_canonica) as lado,
+               fn_valor_em_base(ce.valor_num, ce.unidade) as valor_base,
+               ce.chave,
+               ce.unidade,
+               coalesce(fn_normalizar_texto(ce.secao) ~ '(partes relacionadas|\mnotas?\M)', false) as e_nota,
+               row_number() over (
+                 partition by d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
+                              fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
+                              fn_valor_em_base(ce.valor_num, ce.unidade), ce.unidade,
+                              coalesce(fn_normalizar_texto(ce.secao) ~ '(partes relacionadas|\mnotas?\M)', false)
+                 order by ce.ordem) as rn,
+               count(*) filter (where not coalesce(fn_normalizar_texto(ce.secao) ~ '(partes relacionadas|\mnotas?\M)', false)) over (
+                 partition by d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
+                              fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
+                              fn_valor_em_base(ce.valor_num, ce.unidade), ce.unidade) as n_face
+        from balancos d
+        join lateral (select fn_versao_atual(d.id) as ver) v on true
+        join campo_extraido ce on ce.documento_versao_id = v.ver
+        where ce.valor_num is not null
+          -- O LADO DO BALANÇO CONTINUA LENDO O RÓTULO, e isto é deliberado: o
+          -- defeito medido é do lado da PLANILHA, e nos balanços do Canastra e de
+          -- Vertentes a conta diz "Mútuos a pagar" / "Mútuos a receber" no próprio
+          -- rótulo. Alargar aqui para a seção seria consertar um caso que não
+          -- existe — e traria a mesma over-inclusão: a subseção de balanço é
+          -- "Partes Relacionadas", que agrupa mútuo, conta corrente e aluguel.
+          and fn_texto_nomeia_mutuo(ce.chave)
+          -- 0123: mútuo com SÓCIO sai — a outra ponta dele não está no mandato,
+          -- então ele não espelha e não é da população da planilha intragrupo.
+          and not fn_mutuo_com_socio(ce.chave, ce.secao)
+          and fn_papel_linha(ce.chave) <> 'subtotal'
+          -- 0195: fatorada em `fn_linha_vale_para_ano` (mesma conta que a 0194
+          -- escreveu inline: documento sem coluna de período só conta para
+          -- `v_ano` quando o PRÓPRIO PERÍODO do documento ancora esse ano).
+          and fn_linha_vale_para_ano(v.ver, ce.periodo_coluna, d.periodo_tipo, d.periodo_ref, v_ano)
+          and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
+      ) bruto
+      -- face: todas somam. nota: só a primeira, e só se não há face igual.
+      where not e_nota or (n_face = 0 and rn = 1)
     ), por_lado as (
       select lado, abs(sum(valor_base)) as soma_base
       from linhas group by lado
@@ -1039,7 +1062,7 @@ insert into instalacao_requisito
    'importante', 836),
 
   ('mutuos_conta_repetida_conta_uma_vez', '0195', 'corpo', 'fn_reconciliar_mutuos',
-   'select distinct on (d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,',
+   'where not e_nota or (n_face = 0 and rn = 1)',
    'Sem este corpo o lado A de mútuos soma DUAS vezes a mesma conta quando o balanço a traz na face E '
    'na nota "Partes Relacionadas" — MEDIDO EM PRODUÇÃO (30/09/2026, só-leitura): o doc 2f17a7ba '
    '(Varejo, multi 21..25) repete "Mútuos a pagar - controladora" nos 5 anos (409, 890, 1.600, 2.600, '

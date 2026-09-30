@@ -23,6 +23,8 @@
 --                 em `em_correcao_interna`) nem duplica; nas duas ordens.
 --   B2            estado VELHO de período sem documento vivo não prende a pendência.
 --   C (achado 6)  a descrição é gravada quando NÃO abre pendência.
+--   E/F/G (S102, achado 1) estado velho não prende: documento reclassificado pela fila de revisão
+--                 (tipo por chave e por documento) e documento com período NULL.
 --   D             o retry da 0152 (pré-condição de um período, ok de outro da MESMA chave) fecha.
 
 \set ON_ERROR_STOP on
@@ -314,6 +316,101 @@ begin
     format('%s aberta(s) — devia ser 0', v_n));
 end $$;
 
+-- =============================================================================
+-- E/F/G. REVISÃO DA S102, ACHADO 1 — estado velho NÃO prende a pendência para sempre
+-- =============================================================================
+-- Helper: registra um achado pelo NOME do caso, pelo nome do arquivo do documento e pelo período
+-- (tipo, referência). O período é buscado/criado por `fn_upsert_periodo`.
+create or replace function teste_divvig_reg3(p_caso text, p_arquivo text, p_per_tipo text,
+  p_per_ref text, p_tipo text, p_res text, p_desc text)
+returns jsonb language plpgsql as $$
+declare v_caso uuid; v_ent uuid; v_per uuid; v_doc uuid;
+begin
+  select id into v_caso from caso where nome = p_caso;
+  select d.id, d.entidade_id into v_doc, v_ent from documento d
+    join documento_versao v on v.documento_id = d.id
+   where d.caso_id = v_caso and v.nome_original = p_arquivo limit 1;
+  select id into v_per from periodo where caso_id = v_caso and tipo = p_per_tipo and referencia = p_per_ref;
+  return fn_registrar_reconciliacao(v_caso, v_ent, v_per, p_tipo, 'A', v_doc, null, null,
+    p_res, null, null, null, p_desc);
+end $$;
+
+-- E. O documento é RECLASSIFICADO pela fila de revisão do portal (multi "24,25" -> anual 12M24).
+-- A divergência gravada em "24,25" é estado velho de um período que não é mais chave de ninguém:
+-- a rodada seguinte reconcilia 12M24, e o ok dela tem de fechar a pendência.
+do $$
+declare v_caso uuid; v_doc uuid;
+begin
+  v_caso := (fn_upsert_caso('0192v: documento reclassificado'))::uuid;
+  v_doc := (fn_registrar_documento(v_caso, 'Reclass Ltda.', 'multi', '24,25', 'BALANCO', 0.95,
+    'nome_arquivo', 'supabase_storage', 'mp/0192v-e.pdf', 'BP E.pdf', true, 'HASH-0192V-E', 'ok')->>'documento_id')::uuid;
+  perform fn_upsert_periodo(v_caso, 'anual', '12M24');
+end $$;
+do $$ begin perform teste_divvig_reg3('0192v: documento reclassificado', 'BP E.pdf', 'multi', '24,25',
+  'caixa_bp_fluxo', 'divergente', 'E: caixa diverge em 24,25'); end $$;
+do $$ begin perform teste_divvig_reg3('0192v: documento reclassificado', 'BP E.pdf', 'multi', '24,25',
+  'secao_fecha', 'divergente', 'E: seção não fecha em 24,25'); end $$;
+do $$
+declare v_doc uuid;
+begin  -- o revisor do portal corrige o período do documento
+  select d.id into v_doc from documento d join documento_versao v on v.documento_id = d.id
+   where v.nome_original = 'BP E.pdf';
+  perform fn_revisar_documento(v_doc, 'humano:revisor', null, null, 'anual', '12M24', 'período era 12M24');
+  -- `fn_revisar_documento` grava uma `decisao` (veredito de classificação). Este banco é
+  -- COMPARTILHADO com `veredito_producao.test.sql`, que espera zero vereditos: a decisão de
+  -- fixture sai daqui, o que este teste prova (a pendência) não depende dela.
+  delete from decisao where autor = 'humano:revisor' and payload->>'documento_id' = v_doc::text;
+end $$;
+do $$ begin perform teste_divvig_reg3('0192v: documento reclassificado', 'BP E.pdf', 'anual', '12M24',
+  'caixa_bp_fluxo', 'ok', 'E: 12M24 confere'); end $$;
+do $$ begin perform teste_divvig_reg3('0192v: documento reclassificado', 'BP E.pdf', 'anual', '12M24',
+  'secao_fecha', 'ok', 'E: 12M24 fecha'); end $$;
+do $$
+declare v_caso uuid; v_n int;
+begin
+  raise notice '--- E. achado 1: documento reclassificado pela fila de revisão ---';
+  select id into v_caso from caso where nome = '0192v: documento reclassificado';
+  select count(*) into v_n from pendencia
+   where caso_id = v_caso and motivo = 'reconciliacao:caixa_bp_fluxo' and estado <> 'resolvida';
+  perform teste_assert_divvig(v_n = 0,
+    '0192/1: tipo por chave — a divergência velha de "24,25" (sem documento nesse período) não prende a pendência',
+    format('%s aberta(s) depois do ok de 12M24, com o dado corrigido', v_n));
+  select count(*) into v_n from pendencia
+   where caso_id = v_caso and motivo = 'reconciliacao:secao_fecha' and estado <> 'resolvida';
+  perform teste_assert_divvig(v_n = 0,
+    '0192/1: secao_fecha (por documento) — o documento reclassificado de M para A compatível fecha a pendência',
+    format('%s aberta(s) depois do ok do próprio documento em 12M24', v_n));
+end $$;
+
+-- F. Documento com período NULL na entidade: `fn_periodos_compativeis(NULL, x)` é true, e o
+-- filtro de "documento vivo" não filtrava nada (29 de 59 casos em produção têm documento assim).
+do $$
+declare v_caso uuid;
+begin
+  v_caso := (fn_upsert_caso('0192v: documento sem período'))::uuid;
+  perform fn_registrar_documento(v_caso, 'Sem Periodo Ltda.', 'anual', '12M25', 'BALANCO', 0.95,
+    'nome_arquivo', 'supabase_storage', 'mp/0192v-f.pdf', 'BP F.pdf', true, 'HASH-0192V-F', 'ok');
+  perform fn_upsert_periodo(v_caso, 'multi', '23,24');
+  perform fn_upsert_periodo(v_caso, 'anual', '12M24');
+  update documento set periodo_id = null where caso_id = v_caso;
+end $$;
+do $$ begin perform teste_divvig_reg3('0192v: documento sem período', 'BP F.pdf', 'multi', '23,24',
+  'caixa_bp_fluxo', 'divergente', 'F: caixa diverge em 23,24'); end $$;
+do $$ begin perform teste_divvig_reg3('0192v: documento sem período', 'BP F.pdf', 'anual', '12M24',
+  'caixa_bp_fluxo', 'ok', 'F: 12M24 confere'); end $$;
+do $$
+declare v_caso uuid; v_n int;
+begin
+  raise notice '--- F. achado 1: documento com período NULL na entidade ---';
+  select id into v_caso from caso where nome = '0192v: documento sem período';
+  select count(*) into v_n from pendencia
+   where caso_id = v_caso and motivo = 'reconciliacao:caixa_bp_fluxo' and estado <> 'resolvida';
+  perform teste_assert_divvig(v_n = 0,
+    '0192/1: documento com período NULL não conta como "documento vivo" do período velho (não prende)',
+    format('%s aberta(s)', v_n));
+end $$;
+
 drop function teste_divvig_reg2(text, text, text);
+drop function teste_divvig_reg3(text, text, text, text, text, text, text);
 drop function teste_divvig_reg(text, text, text, text, text);
 drop function teste_assert_divvig(boolean, text, text);
