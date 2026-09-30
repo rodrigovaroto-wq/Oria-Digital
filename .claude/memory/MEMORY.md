@@ -64,6 +64,12 @@ Uma linha por entrada; teto mole de 130 linhas não vazias.
   aparecer. Erro com número HTTP e sem frase nossa: pergunte se a rota chegou a rodar
 
 ## Armadilhas de ferramenta (custaram tempo real)
+- [A credencial do n8n quebra sem deixar rastro](credencial-do-n8n-quebra-sem-deixar-rastro.md) — de 17/09 a 30/09
+  nenhum mandato gravava no banco, e sonda, conferidor e `execucao_falha` estavam limpos: o workflow
+  de erros usa a MESMA credencial. Verde neles não diz que o n8n alcança o banco
+- [Baixar execução grande derruba o n8n](n8n-nao-aguenta-baixar-execucao-grande.md) — `includeData=true`
+  numa execução de planilha grande deu 502 na instância; diagnostique pelo banco
+
 
 - [Âncora de texto quebra com CRLF](ancora-de-texto-quebra-com-crlf.md) — o corpo que
   `pg_get_functiondef` devolve em produção pode estar em CRLF, e âncora multi-linha sem `\r?`
