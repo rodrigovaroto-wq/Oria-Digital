@@ -35,7 +35,7 @@ import { ALIASES } from './lib/taxonomia.mjs';
 import { classifyByFilename, parseTipo, parsePeriodo, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
 import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
-import { orcamentoDoLote, orcamentoDoLotePorConteudo, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
+import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
 import { sha256Hex } from './lib/hash.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
@@ -269,6 +269,7 @@ const FONTE_ORCAMENTO_LOTE = [
   // nenhum caso do espelho exercitava o ramo de texto. O caso entrou junto.
   `const CARACTERES_POR_CELULA_ESTIMADA = ${CARACTERES_POR_CELULA_ESTIMADA};`,
   `const estimativaDoDocumento = ${estimativaDoDocumento.toString()};`,
+  `const instrucaoDeLevasDoLote = ${instrucaoDeLevasDoLote.toString()};`,
   `const orcamentoDoLotePorConteudo = ${orcamentoDoLotePorConteudo.toString()};`,
 ].join('\n');
 const FONTE_BYTES_BINARIO = `const bytesDoBinario = ${bytesDoBinario.toString()};`;
@@ -535,13 +536,13 @@ const docs = itens.map((i) => {
     // como TEXTO (\`leitura_pdf === 'texto'\`) manda caracteres, nao paginas de
     // imagem -- cobrar imagem dele superestima a entrada em ~4x num balanco
     // tipico e recusa lote que cabe.
-    formato: j.leitura_pdf==='texto' ? 'texto' : (j.formato_detectado || null),
+    formato: (j.leitura_pdf==='texto' || j.leitura_planilha==='texto') ? 'texto' : (j.formato_detectado || null),
     // E O TAMANHO TAMBEM: para o PDF lido como texto, o que vai na chamada e' o
     // TEXTO (\`caracteres_do_texto\`), nao os bytes do PDF. Sem esta linha a conta
     // por texto dividiria os BYTES DO PDF por 4 -- um PDF de 2 MB viraria 500 mil
     // tokens onde ha 1.700 caracteres. Trocar um exagero por outro maior nao e'
     // correcao.
-    bytes: j.leitura_pdf==='texto' && Number.isFinite(Number(j.caracteres_do_texto))
+    bytes: (j.leitura_pdf==='texto' || j.leitura_planilha==='texto') && Number.isFinite(Number(j.caracteres_do_texto))
       ? Number(j.caracteres_do_texto) : Number(j.bytes),
   };
 });
@@ -887,6 +888,108 @@ return {json:{...item, content_part: part, content_mime: mt, hash, aviso_conteud
 }, binary: $input.item.binary};
 `.trim();
 
+// --- Code (ALL ITEMS): AGRUPA as linhas de UMA planilha ANTES do Merge ---------
+//
+// POR QUE ESTE NÓ EXISTE (17/09/2026, produção). O `Extract From File` de XLSX/XLS
+// emite UMA LINHA POR ITEM, e o Merge (modo append, n8n-nodes-base Merge/v3
+// actions/mode/append.js:17) junta com `returnData.push.apply(returnData, itens)`.
+// `push.apply` passa cada item como ARGUMENTO, e acima de ~120 mil argumentos a
+// pilha estoura: "Maximum call stack size exceeded" em `Juntar Extracao de
+// Conteudo`. Três execuções (7883, 7886 e a das 00:16) morreram ali com as CP/CR
+// "liquidadas" de 1 a 5,7 MB — dezenas de milhares de linhas —, e essas linhas
+// eram JOGADAS FORA logo depois: `spreadsheetToText` corta em
+// MAX_LINHAS_PLANILHA (2000). Planilha grande de mandato real NUNCA entrava.
+//
+// O QUE ELE FAZ: um item por DOCUMENTO (mesma chave do `Recompor Conteudo
+// Extraido`: o hash do contexto de `Preparar Conteudo`), com só as primeiras
+// MAX_LINHAS_PLANILHA linhas e os TOTAIS medidos sobre todas (nº de linhas, união
+// de colunas). Os totais existem para o aviso de truncamento continuar dizendo o
+// número verdadeiro — sem eles a planilha de 150.000 linhas chegaria ao Recompor
+// como uma de 2.000 e o corte sumiria (regra 1: ausência apresentada como dado).
+// Sem spread nem `push.apply` de array grande em lugar nenhum: só laço.
+//
+// O QUE PASSA INTACTO: item de erro do extrator (`{error}`), item que já traz
+// `caso_id` e item sem rastro (itemMatching falhou) — com `pairedItem` do próprio
+// índice, como o Recompor faz. NUNCA agrupa às cegas.
+//
+// ORIGEM POR LINHA, SEM `itemMatching` POR LINHA (18/09/2026, revisão independente).
+// `$input.all()[i].pairedItem` NÃO serve: o motor REESCREVE o pairedItem de toda
+// entrada para `{item: itemIndex, input}` antes de o nó rodar (n8n-core 2.16.1,
+// `execution-engine/workflow-execute.js:790-812`), então ali `pi.item === i` sempre e
+// um cache por origem nunca acerta. O que sobrevive é o RUNDATA do extrator, que
+// guarda a saída como o nó a emitiu: `fromFile.operation.js:191-206` (n8n-nodes-base
+// 2.15.1, SpreadsheetFile/v2) carimba `pairedItem: {item: <índice no input do
+// extrator>}` em cada linha, e é esse campo que `getPairedItem` de
+// `n8n-workflow/workflow-data-proxy.js:784-830` lê (`outputData[pairedItem.item]
+// .pairedItem`) para subir a cadeia do `itemMatching`. `$('<extrator>').all()` devolve
+// esse rundata (`workflow-data-proxy.js` get 'all' -> getNodeExecutionData). Linha i
+// da entrada deste nó = linha i do extrator (conexão direta, mesma ordem), e o código
+// confere o tamanho antes de confiar. Cada origem resolve o contexto UMA vez
+// (`itemMatching` da primeira linha dela); as demais reusam.
+// Sem origem (rundata sem pairedItem, p.ex. `binaryMode` combinado, que devolve só o
+// json; tamanho diferente; `$()` que lança) cai em `itemMatching(i)` POR LINHA: correto,
+// só mais lento. TEMPO MEDIDO LOCAL (Node, 150.000 linhas, 2 documentos, 2000 linhas
+// mantidas; `itemMatching` replicando o algoritmo de getPairedItem com 3 saltos, não o
+// n8n inteiro): COM origem 8-15 ms (2 resoluções), SEM origem 158-245 ms (150.000
+// resoluções). Com `itemMatching` O(1) de mock as duas dão ~15-35 ms, então o ganho
+// real depende do custo da chamada no motor -- por isso o número acima e não esse.
+// Nenhum dos dois chega perto de um teto de task runner; o que não se mediu é a cópia
+// de `$('<extrator>').all()` de 150 mil itens dentro do runner.
+//
+// ⚠️ NÃO CONFIRMADO CONTRA O N8N DO DONO (mesma categoria do Recompor): (a) que o
+// item agrupado, com `pairedItem: {item: primeiro}`, encadeia até `Preparar
+// Conteudo` através do Merge de 4 entradas quando o `Recompor` chama
+// `itemMatching(i)` — na simulação do repositório encadeia, na instância real
+// ninguém viu; (b) que o `$('Extrair ...').all()` do TASK RUNNER traz `pairedItem`
+// (o fonte do runner não está no repositório; o motor e o nó, sim, como citado
+// acima) -- se não trouxer, o fallback por linha entra sozinho; (c) o custo real de
+// `itemMatching` por linha em 100 mil+ linhas contra o teto do task runner. Conferir
+// depois de republicar: subir 2+ planilhas grandes no MESMO lote e checar que cada
+// uma virou o SEU documento, com as SUAS linhas e o aviso "N de TOTAL linhas não
+// foram enviadas", e o tempo do nó na execução.
+const codeAgruparPlanilha = (extrator) => `
+${FONTE_SPREADSHEET}
+const entradas=$input.all();
+const passam=[];
+const grupos=new Map();
+const ctxPorOrigem=new Map();
+let extr=null;
+try{ extr=$(${JSON.stringify(extrator)}).all(); }catch(e){ extr=null; }
+if(!Array.isArray(extr)||extr.length!==entradas.length) extr=null;
+for(let i=0;i<entradas.length;i+=1){
+  const raw=entradas[i].json||{};
+  if('caso_id' in raw||('error' in raw)){ passam.push({json:raw, pairedItem:{item:i}}); continue; }
+  // origem = indice no INPUT do extrator, lido do rundata dele (nao de $input, que o
+  // motor reescreve). Linhas da mesma origem tem o mesmo contexto.
+  const pi=extr?extr[i].pairedItem:undefined;
+  const origem=(pi!==undefined&&pi!==null&&typeof pi==='object'&&!Array.isArray(pi)&&Number.isInteger(pi.item))?pi.item
+    :(Number.isInteger(pi)?pi:null);
+  let ctx;
+  if(origem!==null&&ctxPorOrigem.has(origem)) ctx=ctxPorOrigem.get(origem);
+  else{
+    ctx=null;
+    try{ ctx=$('Preparar Conteudo').itemMatching(i).json||null; }catch(e){ ctx=null; }
+    if(origem!==null) ctxPorOrigem.set(origem,ctx);
+  }
+  if(!ctx){ passam.push({json:raw, pairedItem:{item:i}}); continue; }
+  const chave=ctx.hash||ctx.nome_original||('__sem_chave_'+i);
+  if(!grupos.has(chave)) grupos.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i});
+  const g=grupos.get(chave);
+  const lote=Array.isArray(raw.data)?raw.data:[raw];
+  for(let k=0;k<lote.length;k+=1){
+    const linha=lote[k];
+    g.total+=1;
+    if(linha&&typeof linha==='object'){ const ks=Object.keys(linha); for(let c=0;c<ks.length;c+=1) g.colunas.add(ks[c]); }
+    if(g.linhas.length<MAX_LINHAS_PLANILHA) g.linhas.push(linha);
+  }
+}
+const agrupados=[];
+for(const g of grupos.values()){
+  agrupados.push({json:{planilha_agrupada:true, linhas:g.linhas, total_linhas:g.total, colunas:Array.from(g.colunas)}, pairedItem:{item:g.primeiro}});
+}
+return passam.concat(agrupados);
+`.trim();
+
 // --- Code (ALL ITEMS): RECOMPÕE o que os 5 extratores por formato devolveram --
 //
 // POR QUE ESTE NÓ EXISTE. `Preparar Conteudo` classifica o mimetype e manda o
@@ -1087,15 +1190,34 @@ for(let i=0;i<entradas.length;i+=1){
   // posicao criaria dois documentos que o banco depois fundiria, e a identidade
   // do sistema passaria a ter duas definicoes diferentes.
   const chave=ctx.hash||ctx.nome_original||('__sem_chave_'+i);
-  if(!porDocumento.has(chave)) porDocumento.set(chave,{ctx,linhas:[],primeiro:i});
+  if(!porDocumento.has(chave)) porDocumento.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i});
   const grupo=porDocumento.get(chave);
+  // SEM SPREAD (17/09/2026): \`push(...array)\` passa cada elemento como argumento
+  // e estoura a pilha acima de ~120 mil linhas -- o mesmo defeito do Merge. O
+  // caminho normal agora e' o item ja AGRUPADO por \`Agrupar Linhas\` (so' as
+  // primeiras linhas + os totais medidos sobre todas); os outros dois formatos
+  // continuam aceitos, so' que em laco.
+  if(raw.planilha_agrupada===true){
+    for(let k=0;k<raw.linhas.length;k+=1) grupo.linhas.push(raw.linhas[k]);
+    grupo.total+=Number(raw.total_linhas)||raw.linhas.length;
+    for(let k=0;k<raw.colunas.length;k+=1) grupo.colunas.add(raw.colunas[k]);
+    continue;
+  }
   // Defensivo aos DOIS formatos possiveis do extrator: um item com o array
   // inteiro sob '.data', ou uma linha por item (o comportamento documentado).
-  if(Array.isArray(raw.data)) grupo.linhas.push(...raw.data);
-  else grupo.linhas.push(raw);
+  const lote=Array.isArray(raw.data)?raw.data:[raw];
+  for(let k=0;k<lote.length;k+=1){
+    const linha=lote[k];
+    grupo.total+=1;
+    if(linha&&typeof linha==='object'){ const ks=Object.keys(linha); for(let c=0;c<ks.length;c+=1) grupo.colunas.add(ks[c]); }
+    grupo.linhas.push(linha);
+  }
 }
-const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,primeiro})=>{
-  const textoPlanilha=spreadsheetToText(linhas);
+const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,primeiro})=>{
+  // Os TOTAIS vem da medicao sobre a planilha inteira (nao do que sobrou depois do
+  // corte): o texto e o aviso dizem o numero verdadeiro de linhas e colunas.
+  const uniaoColunas=Array.from(colunas);
+  const textoPlanilha=spreadsheetToText(linhas,{colunas:uniaoColunas,totalLinhas:total});
   return {pairedItem:{item:primeiro},json:{...ctx,
     content_part: parteDeTexto(PROVEDOR, textoPlanilha),
     // \`text\`: A MESMA CORRECAO DO CASO XML, e o mesmo achado (revisao
@@ -1109,10 +1231,17 @@ const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,primeiro})=>{
     // (calculado uma unica vez aqui, nao duas): a regua passa a medir
     // exatamente o que foi mandado a' IA.
     text: textoPlanilha||null,
+    // COMO A PLANILHA FOI LIDA, e o orcamento cobra por isto: o que vai a' IA e'
+    // este TEXTO (<= 2000 linhas), nao os bytes do arquivo. Sem estas duas chaves
+    // o orcamento caia no proxy por byte calibrado em PDF-imagem e recusava, para
+    // sempre, o CR_Liquidado de 5,7 MB (US$ 10,81 estimados) -- o mesmo erro que
+    // ja' foi corrigido para o PDF lido como texto.
+    leitura_planilha:'texto',
+    caracteres_do_texto:textoPlanilha.length,
     // Planilha extraida com sucesso NAO abre mais a pendencia de 'nao lida' --
     // so' abre a de TRUNCAMENTO, se a planilha estourar o teto (regra 1: so'
     // declara ausencia onde ela e' real).
-    aviso_conteudo: avisoTruncamentoPlanilha(linhas),
+    aviso_conteudo: avisoTruncamentoPlanilha(linhas,{totais:{linhas:total,colunas:uniaoColunas.length}}),
   }};
 });
 // O QUE ESTE NO' NAO FECHA, e fica DITO em vez de escondido: um extrator que
@@ -1421,6 +1550,7 @@ return {json:{...item,
   // guarda recusaria lote que cabe, que e' o v31 pelo outro lado.
   leitura_pdf: doExtrator.leitura_pdf??null,
   leitura_pdf_motivo: doExtrator.leitura_pdf_motivo??null,
+  leitura_planilha: doExtrator.leitura_planilha??null,
   caracteres_do_texto: Number.isFinite(Number(doExtrator.caracteres_do_texto))
     ?Number(doExtrator.caracteres_do_texto):(temTexto?textoPdf.length:null),
 }};
@@ -2184,6 +2314,15 @@ const nodes = [
   node('Extrair XLS', 'n8n-nodes-base.extractFromFile', 1, {
     operation: 'xls', binaryPropertyName: 'data',
   }, { onError: 'continueRegularOutput' }),
+  // UM ITEM POR PLANILHA ANTES DO MERGE -- ver o comentário de codeAgruparPlanilha.
+  // SEM `onError`, como o Recompor: falhar aqui tem de ser visível, não virar
+  // planilha vazia. Nó Code, não Postgres: não substitui o contexto do lote.
+  node('Agrupar Linhas XLSX', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForAllItems', jsCode: codeAgruparPlanilha('Extrair XLSX'),
+  }),
+  node('Agrupar Linhas XLS', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForAllItems', jsCode: codeAgruparPlanilha('Extrair XLS'),
+  }),
 
   // O MERGE QUE CONVERGE OS 7 RAMOS DO ROTEADOR — a resposta canônica do n8n
   // para "vários caminhos, um documento por vez", a MESMA que `Juntar Ramos` e
@@ -2529,8 +2668,10 @@ const connections = {
     [{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 3 }],
   ] },
   'Extrair Texto': { main: [[{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 0 }]] },
-  'Extrair XLSX': { main: [[{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 1 }]] },
-  'Extrair XLS': { main: [[{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 2 }]] },
+  'Extrair XLSX': { main: [[{ node: 'Agrupar Linhas XLSX', type: 'main', index: 0 }]] },
+  'Extrair XLS': { main: [[{ node: 'Agrupar Linhas XLS', type: 'main', index: 0 }]] },
+  'Agrupar Linhas XLSX': { main: [[{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 1 }]] },
+  'Agrupar Linhas XLS': { main: [[{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 2 }]] },
   'Juntar Extracao de Conteudo': { main: [[{ node: 'Recompor Conteudo Extraido', type: 'main', index: 0 }]] },
   'Recompor Conteudo Extraido': { main: [[{ node: 'Medir Documento', type: 'main', index: 0 }]] },
   // O ORÇAMENTO ENTRA AQUI, e não antes do preparo do conteúdo (onde ficava até

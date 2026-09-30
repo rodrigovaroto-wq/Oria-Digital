@@ -41,7 +41,7 @@ import {
 } from '../lib/cobertura.mjs';
 import {
   custoDaChamada, tokensDeSaida, bytesDoBinario, orcamentoDoLote,
-  pesoDaChamadaDeClassificacao, custoEstimadoPorConteudo, orcamentoDoLotePorConteudo,
+  pesoDaChamadaDeClassificacao, custoEstimadoPorConteudo, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote,
   custoEstimadoPorTamanho, custoPorMbDeTextoUSD, estimativaDoDocumento,
   vereditoDaCotaDiaria,
   ehFormatoDeTexto,
@@ -566,6 +566,12 @@ const TABELA = [
     [{ celulas: 0, paginas: 0, bytes: 1024 * 1024, formato: 'csv' }],
     [{ celulas: 0, paginas: 30, bytes: 600_000, formato: 'texto' }],
     [{ celulas: 0, paginas: 0, bytes: 0 }],
+  ] },
+  // Os DOIS ramos da instrução de levas: lote que cabe em levas, e documento que
+  // sozinho passa do teto (a recusa "envie no máximo 0" da execução 7888).
+  { nome: 'instrucaoDeLevasDoLote', lib: instrucaoDeLevasDoLote, casos: [
+    [{ partes: [{ usd: 1 }, { usd: 2 }], docs: [{ nome: 'a' }, { nome: 'b' }], teto: 3, maxDocumentos: 2, maxNomes: 5 }],
+    [{ partes: [{ usd: 10.81 }, { usd: 0.2 }], docs: [{ nome: 'CR.xlsx' }, { nome: 'b' }], teto: 3, maxDocumentos: 0, maxNomes: 5 }],
   ] },
   { nome: 'orcamentoDoLotePorConteudo', lib: orcamentoDoLotePorConteudo, casos: [
     [{ documentos: [] }],

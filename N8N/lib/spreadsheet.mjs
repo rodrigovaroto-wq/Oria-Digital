@@ -19,18 +19,25 @@ export const MAX_COLUNAS_PLANILHA = 60;
 
 // rows: array de objetos (uma linha = um objeto coluna→valor), como sai do
 // nó "Extract From File" do N8N ou de um CSV parseado.
+//
+// `colunas` (opcional): a UNIÇÃO de colunas medida sobre TODAS as linhas, quando
+// `rows` já vem cortada em `maxRows` pelo `Agrupar Linhas` (17/09/2026) — sem
+// ela o cabeçalho sairia só das linhas que sobraram e uma coluna que só existe
+// depois da linha 2000 sumiria do texto, que é o que o código antigo NÃO fazia.
 export function spreadsheetToText(
   rows,
-  { maxRows = MAX_LINHAS_PLANILHA, maxCols = MAX_COLUNAS_PLANILHA } = {},
+  { maxRows = MAX_LINHAS_PLANILHA, maxCols = MAX_COLUNAS_PLANILHA, colunas = null, totalLinhas = null } = {},
 ) {
   if (!Array.isArray(rows) || rows.length === 0) return '(planilha vazia)';
-  const cols = colunasDaPlanilha(rows).slice(0, maxCols);
+  const cols = (Array.isArray(colunas) ? colunas : colunasDaPlanilha(rows)).slice(0, maxCols);
+  const nTotal = Number.isFinite(Number(totalLinhas)) && Number(totalLinhas) > rows.length
+    ? Number(totalLinhas) : rows.length;
   const header = cols.join(' | ');
   const corpo = rows
     .slice(0, maxRows)
     .map((r) => cols.map((c) => String(r[c] ?? '')).join(' | '))
     .join('\n');
-  const extra = rows.length > maxRows ? `\n… (+${rows.length - maxRows} linhas omitidas)` : '';
+  const extra = nTotal > maxRows ? `\n… (+${nTotal - maxRows} linhas omitidas)` : '';
   return `${header}\n${corpo}${extra}`;
 }
 
@@ -61,13 +68,18 @@ export function colunasDaPlanilha(rows) {
 // legítimo). Quando corta, o texto entra em `falha_motivo` — que a 0016 já
 // converte em pendência `extracao_falhou` visível no portal. Sem isto, o corte
 // existia só dentro do prompt: a IA sabia, o analista não.
+//
+// `totais` (opcional, `{linhas, colunas}`): o que foi MEDIDO sobre a planilha
+// inteira quando `rows` já chegou cortada pelo `Agrupar Linhas`. Sem ele vale
+// `rows.length`, como sempre — e com ele o aviso diz "150000 linhas", não
+// "2000 de 2000" (a ausência apresentada como completude, regra 1).
 export function avisoTruncamentoPlanilha(
   rows,
-  { maxRows = MAX_LINHAS_PLANILHA, maxCols = MAX_COLUNAS_PLANILHA } = {},
+  { maxRows = MAX_LINHAS_PLANILHA, maxCols = MAX_COLUNAS_PLANILHA, totais = null } = {},
 ) {
   if (!Array.isArray(rows) || rows.length === 0) return null;
-  const nLinhas = rows.length;
-  const nColunas = colunasDaPlanilha(rows).length;
+  const nLinhas = totais && Number(totais.linhas) > rows.length ? Number(totais.linhas) : rows.length;
+  const nColunas = totais && Number.isFinite(Number(totais.colunas)) ? Number(totais.colunas) : colunasDaPlanilha(rows).length;
   const partes = [];
   if (nLinhas > maxRows) {
     partes.push(

@@ -363,6 +363,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/divergencia_prevalece_na_rodad
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o estado vigente entre rodadas (0192, revisão S102): secao_fecha por documento, ok do irmão, descricao"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/divergencia_vigente_entre_rodadas.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== a tolerância que crescia com a escala (0193): absoluta na base em caixa_bp_fluxo e receita_dre_vs_faturamento"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/tolerancia_na_base.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
@@ -375,6 +380,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/mutuos_retrato_de_uma_data.tes
 echo
 echo "== o espelho intragrupo que lia o balanço de outro ano (0195)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/intragrupo_le_o_ano_certo.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== o espelho, grupo A da revisão da 0195: face+nota, empate de criado_em, linha sem contraparte"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/espelho_grupo_a.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo

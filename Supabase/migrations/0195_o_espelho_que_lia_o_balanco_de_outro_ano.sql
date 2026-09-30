@@ -47,6 +47,24 @@
 -- `fn_reconciliar_intragrupo`, reemitida com a correção) passam a chamá-la, em
 -- vez de cada uma repetir a mesma conta de três ramos.
 --
+-- GRUPO A DA REVISÃO (30/09/2026, corrigido NO PRÓPRIO ARQUIVO — a 0195 nunca
+-- foi aplicada): três achados, cada um medido não-vazio em
+-- Supabase/test/espelho_grupo_a.test.sql (10 asserts, medidos; desligado cada item,
+-- reprovam 3 (deduplicação desligada) + 2 + 2 = 7 dos 10; com a deduplicação CEGA À NOTA
+-- (a 1ª versão: funde toda linha igual) reprova 1 — face + face):
+--   1. CRÍTICO — `linhas` de fn_reconciliar_mutuos (herdada da 0123) somava
+--      DUAS vezes a conta repetida na face e na nota "Partes Relacionadas" do
+--      mesmo documento (doc 2f17a7ba, Varejo: 409/890/1.600/2.600/3.900 mil).
+--      As "divergências reais" de 409 e 890 mil que a 0194 e o README
+--      descreviam ERAM essa duplicata (ver o bloco no corpo e a CORREÇÃO no
+--      cabeçalho da 0194). Mútuos MUDA de comportamento nesse ponto.
+--   2. ALTO — `criado_em` empata em produção (44 grupos, 160 documentos, 14
+--      casos): `d.id` é o último critério nas 3 ordenações (balancos e
+--      planilha-do-ano de mútuos; balancos de intragrupo).
+--   3. MÉDIO — o "tem dado intragrupo" de fn_reconciliar_intragrupo exige
+--      contraparte, lado e escala (a mesma definição do CTE `intragrupo`),
+--      não "qualquer linha diferente de zero".
+-- Fora desses três pontos, fn_reconciliar_mutuos abaixo é só troca de mecanismo:
 -- fn_reconciliar_mutuos NÃO MUDA DE COMPORTAMENTO — é só troca de mecanismo
 -- (as duas ocorrências do bloco `v_ano is null or (... is not null and ...)
 -- or (... is null and ...)` viram uma chamada a `fn_linha_vale_para_ano`, com
@@ -87,7 +105,8 @@
 -- a escolha de sempre; as 8 checagens (`reconciliacao.test.sql`) continuam
 -- chegando a `ok` com o mesmo número.
 --
--- O TESTE NOVO (`Supabase/test/intragrupo_le_o_ano_certo.test.sql`) exercita
+-- OS TESTES NOVOS: `Supabase/test/espelho_grupo_a.test.sql` (grupo A da revisão)
+-- e `Supabase/test/intragrupo_le_o_ano_certo.test.sql`, este último exercita
 -- o arranjo que os dois fixtures não têm — entidade com balanço de um ano só
 -- (sem `periodo_coluna`) consultada em outro ano, e entidade com dois
 -- documentos do mesmo par em anos diferentes.
@@ -100,37 +119,43 @@
 --   select chave, migration, tipo, objeto, presente, detalhe, porque
 --     from fn_instalacao_conferir() where not presente order by 1;
 --
--- Por (caso, ano), quantas linhas intragrupo entram e o resultado previsto:
+-- Por (caso, ano), linhas intragrupo que entram / pares com os DOIS balanços /
+-- pares que divergem além da tolerância. REMEDIDO em 30/09/2026 (só-leitura,
+-- réplica da lógica corrigida INCLUINDO o desempate por `d.id` e a exigência
+-- de contraparte+lado+escala na escolha do balanço — os itens 2 e 3 do grupo
+-- A da revisão). ANTES = corpo da 0124; DEPOIS = esta migration:
 --
--- | caso                                | ano  | linhas ANTES | linhas DEPOIS | previsto |
--- |--------------------------------------|------|-------------:|--------------:|----------|
--- | teste - Canastra                     | 2023 |            4 |             0 | documento_ausente (sem par de balanço em 2023) |
--- | teste - Canastra                     | 2024 |            4 |             0 | documento_ausente (idem) |
--- | teste - Canastra                     | 2025 |            4 |             4 | ok — os 4 pares plantados fecham (mesmos números do fixture) |
--- | teste alto volume - grupo araucária  | 2021 |            5 |             0 | documento_ausente |
--- | teste alto volume - grupo araucária  | 2022 |            5 |             0 | documento_ausente |
--- | teste alto volume - grupo araucária  | 2023 |            5 |             5 | ok |
--- | teste alto volume - grupo araucária  | 2024 |            5 |             5 | ok |
--- | teste alto volume - grupo araucária  | 2025 |            5 |             5 | ok |
--- | Araucária teste                      | 2021 |          2-7 |             0 | documento_ausente |
--- | Araucária teste                      | 2022 |          2-7 |             2 | ok |
--- | Araucária teste                      | 2023 |          2-7 |             2 | ok |
--- | Araucária teste                      | 2024 |          2-7 |             2 | ok |
--- | Araucária teste                      | 2025 |          2-7 |             2 | ok |
+-- | caso                                | ano  | ANTES linhas/pares/div | DEPOIS linhas/pares/div | previsto |
+-- |--------------------------------------|------|-----------------------:|------------------------:|----------|
+-- | teste - Canastra  (= teste Canastra) | 2023 | 4/0/0 | 5/1/0 | ok (1 par) |
+-- | teste - Canastra  (= teste Canastra) | 2024 | 8/4/0 | 8/4/0 | ok (4 pares) |
+-- | teste - Canastra  (= teste Canastra) | 2025 | 8/4/0 | 8/4/0 | ok (4 pares) |
+-- | Teste comparativo - Grupo Canastra   | 2023 | 5/1/0 | 5/1/0 | ok (1 par) |
+-- | Teste comparativo - Grupo Canastra   | 2024 | 8/4/0 | 8/4/0 | ok (4 pares) |
+-- | Teste comparativo - Grupo Canastra   | 2025 | 7/3/0 | 8/4/0 | ok (4 pares) |
+-- | teste v48                            | 2023 | 4/0/0 | 5/1/0 | ok (1 par) |
+-- | teste v48                            | 2024 | 7/3/0 | 8/4/0 | ok (4 pares) |
+-- | teste v48                            | 2025 | 7/3/0 | 8/4/0 | ok (4 pares) |
+-- | teste alto volume - grupo araucária  | 2021 | 3/0/0 | 2/0/0 | documento_ausente (nenhum par com os dois balanços) |
+-- | teste alto volume - grupo araucária  | 2022 | (vazio) | 2/0/0 | documento_ausente |
+-- | teste alto volume - grupo araucária  | 2023 | 2/0/0 | 2/0/0 | documento_ausente |
+-- | teste alto volume - grupo araucária  | 2024 | 2/0/0 | 5/0/0 | documento_ausente |
+-- | teste alto volume - grupo araucária  | 2025 | 4/0/0 | 5/0/0 | documento_ausente |
+-- | Teste 00                             | 2025 | 2/0/0 | 5/0/0 | documento_ausente |
 --
--- LEITURA: nos casos medidos, cada relação intragrupo tem, no fundo, UM único
--- documento por entidade (o retrato do exercício mais recente do book) —
--- reaplicado pelo vício 1 a TODOS os anos do laço. Corrigido, cada ano só
--- soma o que TEM balanço PRÓPRIO daquele ano; anos sem balanço para o par
--- viram `documento_ausente` (não achado — é a falta do documento, e o Portão
--- 1 já cobra isso, comportamento desenhado da 0124, preservado). Nos anos que
--- sobram com balanço próprio, o NÚMERO não muda (é o mesmo saldo que já
--- vazava) — por isso os 52 `ok` históricos são estáveis: TODOS continuariam
--- `ok`, só que agora em MENOS anos por caso (o ano certo, não todo ano do
--- período consultado) — nenhum vira `zona_cinzenta` nesta medição. Efeito
--- real: fecha o "ok" por sorteio (mesmo número replicado) e some com o
--- "ok" fabricado nos anos sem par de balanço — que passam a `documento_-
--- ausente`, honesto.
+-- CORREÇÃO DESTA TABELA (30/09/2026). A versão de 28/09 previa "documento_-
+-- ausente" para Canastra 2023/2024 e "ok" para o alto volume 2023–2025; a
+-- remedição com a réplica acima NÃO sustenta nenhuma das duas: o balanço
+-- Canastra tem coluna 2023 e 2024 (há par em ambos), e o alto volume não tem
+-- NENHUM par com os dois balanços em ano nenhum (pares = 0 nos 5). Os números
+-- da versão anterior não eram reproduzíveis e saíram. O que a remedição
+-- confirma: nenhuma divergência (div = 0 em todas as 18 linhas), e os itens 2
+-- e 3 do grupo A NÃO mudam nenhuma linha da produção (DEPOIS é idêntico com e
+-- sem `d.id` e com e sem a exigência de contraparte) — são guardas contra o
+-- empate de `criado_em` (44 grupos / 160 documentos / 14 casos) e contra o
+-- documento "só com Caixa" vencer, que hoje não mordem em nenhum dos 7 casos.
+-- Segue valendo: não há `zona_cinzenta` prevista, e quem responde de verdade,
+-- depois de aplicar, é a sonda.
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -365,33 +390,84 @@ begin
                )) desc,
                array_position(array['BALANCO','COMBINADO','DF_AUDITADA','BALANCETE'],
                               d.tipo_taxonomia),
-               d.criado_em desc
+               d.criado_em desc,
+               -- 0195 (achado 2 da revisão): `criado_em` EMPATA em produção (44 grupos,
+               -- 160 documentos, 14 casos) e sem último critério o plano escolhe o
+               -- documento. `d.id` torna a escolha determinística.
+               d.id
     ), linhas as (
-      select d.id as doc_id,
-             fn_lado_do_mutuo(ce.chave, ce.secao_canonica) as lado,
-             fn_valor_em_base(ce.valor_num, ce.unidade) as valor_base,
-             ce.chave,
-             ce.unidade
-      from balancos d
-      join lateral (select fn_versao_atual(d.id) as ver) v on true
-      join campo_extraido ce on ce.documento_versao_id = v.ver
-      where ce.valor_num is not null
-        -- O LADO DO BALANÇO CONTINUA LENDO O RÓTULO, e isto é deliberado: o
-        -- defeito medido é do lado da PLANILHA, e nos balanços do Canastra e de
-        -- Vertentes a conta diz "Mútuos a pagar" / "Mútuos a receber" no próprio
-        -- rótulo. Alargar aqui para a seção seria consertar um caso que não
-        -- existe — e traria a mesma over-inclusão: a subseção de balanço é
-        -- "Partes Relacionadas", que agrupa mútuo, conta corrente e aluguel.
-        and fn_texto_nomeia_mutuo(ce.chave)
-        -- 0123: mútuo com SÓCIO sai — a outra ponta dele não está no mandato,
-        -- então ele não espelha e não é da população da planilha intragrupo.
-        and not fn_mutuo_com_socio(ce.chave, ce.secao)
-        and fn_papel_linha(ce.chave) <> 'subtotal'
-        -- 0195: fatorada em `fn_linha_vale_para_ano` (mesma conta que a 0194
-        -- escreveu inline: documento sem coluna de período só conta para
-        -- `v_ano` quando o PRÓPRIO PERÍODO do documento ancora esse ano).
-        and fn_linha_vale_para_ano(v.ver, ce.periodo_coluna, d.periodo_tipo, d.periodo_ref, v_ano)
-        and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
+      -- 0195 (achado 1 da revisão, CRÍTICO): A MESMA CONTA NA FACE E NA NOTA
+      -- ERA SOMADA DUAS VEZES. Medido em produção só-leitura (30/09/2026): o
+      -- doc 2f17a7ba (Varejo, multi 21..25) traz "Mútuos a pagar -
+      -- controladora" na face do balanço (ordem 38, sem seção) E na nota
+      -- "Partes Relacionadas" (ordem 62), mesmo valor, mesma coluna, nos 5
+      -- anos — 409 (2021), 890 (2022), 1.600, 2.600, 3.900 mil, todos dobrados.
+      -- As "divergências reais" de 409 e 890 mil que o cabeçalho da 0194 e o
+      -- Supabase/README.md descreviam ERAM essa duplicata: sem ela os dois
+      -- lados fecham exatos. Critério: no MESMO documento, a mesma conta
+      -- (rótulo normalizado) na mesma coluna, com o mesmo lado, valor e
+      -- escala, lida na FACE e numa seção de NOTA ("Partes Relacionadas",
+      -- "Nota 12"...) é UMA posição lida em dois lugares — conta uma vez (fica
+      -- a da face). Valor DIFERENTE com o mesmo rótulo não é deduplicado
+      -- (seria outra posição).
+      -- REVISÃO (30/09/2026, achado 3): a 1ª versão deduplicava QUALQUER par
+      -- igual, e com isso fundia duas posições genuínas da FACE ("Mútuos a
+      -- receber - controladas" 500.000 no AC e o mesmo no ANC: mesmo rótulo,
+      -- mesmo valor, contas DIFERENTES). Agora só se deduplica quando uma das
+      -- linhas está em seção de nota: duas linhas de face iguais continuam
+      -- somando; nota sem linha de face igual conta (uma vez, se repetida na
+      -- própria nota); nota com linha de face igual sai.
+      -- REVISÃO 2 (30/09/2026, achado médio): a 2ª versão ainda contava UMA só
+      -- linha de nota sem par de face (`rn = 1`). Em produção "partes
+      -- relacionadas" é quase sempre a SUBSEÇÃO DE FACE (~85 de ~95 documentos
+      -- com mútuo nela não têm outra linha de mútuo fora dela): duas posições
+      -- de face ambas em "Partes relacionadas" (AC e ANC, mesmo valor) eram
+      -- fundidas numa. Agora linha marcada como nota SEM par de face conta
+      -- SEMPRE; só a nota com face igual sai. Nota repetida dentro de si mesma
+      -- (a hipótese que o `rn = 1` protegia): 0 grupos em produção, medido só-leitura
+      -- (30/09/2026, 448 grupos de mútuo, 0 com duas ou mais linhas e nenhuma de face).
+      -- TETO: "nota" é o nome da seção (`partes relacionadas` ou `nota`); uma
+      -- face cuja subseção se chame "Partes Relacionadas" é tratada como nota,
+      -- e só sai se HOUVER linha de face igual fora da subseção. Em produção a face
+      -- do doc 2f17a7ba tem `secao` NULL e a nota, "Partes Relacionadas" (5 pares,
+      -- medido de novo em 30/09/2026).
+      -- Medido em TODA a produção: 5 grupos assim em mútuos (face ordem 38 +
+      -- nota ordem 62), todos nesse único documento, 0 com valor diferente.
+      select doc_id, lado, valor_base, chave, unidade
+      from (
+        select d.id as doc_id,
+               fn_lado_do_mutuo(ce.chave, ce.secao_canonica) as lado,
+               fn_valor_em_base(ce.valor_num, ce.unidade) as valor_base,
+               ce.chave,
+               ce.unidade,
+               coalesce(fn_normalizar_texto(ce.secao) ~ '(partes relacionadas|\mnotas?\M)', false) as e_nota,
+               count(*) filter (where not coalesce(fn_normalizar_texto(ce.secao) ~ '(partes relacionadas|\mnotas?\M)', false)) over (
+                 partition by d.id, fn_normalizar_texto(ce.chave), ce.periodo_coluna,
+                              fn_lado_do_mutuo(ce.chave, ce.secao_canonica),
+                              fn_valor_em_base(ce.valor_num, ce.unidade), ce.unidade) as n_face
+        from balancos d
+        join lateral (select fn_versao_atual(d.id) as ver) v on true
+        join campo_extraido ce on ce.documento_versao_id = v.ver
+        where ce.valor_num is not null
+          -- O LADO DO BALANÇO CONTINUA LENDO O RÓTULO, e isto é deliberado: o
+          -- defeito medido é do lado da PLANILHA, e nos balanços do Canastra e de
+          -- Vertentes a conta diz "Mútuos a pagar" / "Mútuos a receber" no próprio
+          -- rótulo. Alargar aqui para a seção seria consertar um caso que não
+          -- existe — e traria a mesma over-inclusão: a subseção de balanço é
+          -- "Partes Relacionadas", que agrupa mútuo, conta corrente e aluguel.
+          and fn_texto_nomeia_mutuo(ce.chave)
+          -- 0123: mútuo com SÓCIO sai — a outra ponta dele não está no mandato,
+          -- então ele não espelha e não é da população da planilha intragrupo.
+          and not fn_mutuo_com_socio(ce.chave, ce.secao)
+          and fn_papel_linha(ce.chave) <> 'subtotal'
+          -- 0195: fatorada em `fn_linha_vale_para_ano` (mesma conta que a 0194
+          -- escreveu inline: documento sem coluna de período só conta para
+          -- `v_ano` quando o PRÓPRIO PERÍODO do documento ancora esse ano).
+          and fn_linha_vale_para_ano(v.ver, ce.periodo_coluna, d.periodo_tipo, d.periodo_ref, v_ano)
+          and fn_lado_do_mutuo(ce.chave, ce.secao_canonica) is not null
+      ) bruto
+      -- face: todas somam. nota: só a primeira, e só se não há face igual.
+      where not e_nota or n_face = 0
     ), por_lado as (
       select lado, abs(sum(valor_base)) as soma_base
       from linhas group by lado
@@ -462,7 +538,8 @@ begin
                 where ce3.documento_versao_id = fn_versao_atual(d.id)
                   and ce3.valor_num is not null
               )) desc,
-             d.criado_em desc
+             d.criado_em desc,
+             d.id   -- 0195: desempate final determinístico (ver `balancos`)
     limit 1;
 
     if v_doc_ano is null then
@@ -829,10 +906,18 @@ begin
                       and fn_papel_linha(ce2.chave) <> 'subtotal'
                       and not fn_texto_nomeia_mutuo(ce2.chave)
                       and not fn_mutuo_com_socio(ce2.chave, ce2.secao)
+                      -- 0195 (achado 3 da revisão): "tem dado intragrupo" = a MESMA
+                      -- definição de linha intragrupo que o CTE `intragrupo` usa
+                      -- (contraparte, lado e escala), não "qualquer linha ≠ 0" —
+                      -- senão o documento com saldo de caixa vence o que tem o espelho.
+                      and fn_contraparte_intragrupo(p_caso_id, ce2.chave, d.entidade_id) is not null
+                      and fn_lado_intragrupo(ce2.chave, ce2.secao_canonica) is not null
+                      and ce2.unidade is not null
                       and fn_linha_vale_para_ano(v.ver, ce2.periodo_coluna, pe.tipo, pe.referencia, v_ano)
                  )) desc,
                  array_position(array['BALANCO','DF_AUDITADA','BALANCETE'], d.tipo_taxonomia),
-                 d.criado_em desc
+                 d.criado_em desc,
+                 d.id   -- 0195: desempate final determinístico (ver fn_reconciliar_mutuos)
       ), linhas as (
         select
           b.entidade_id as dona,
@@ -978,7 +1063,24 @@ insert into instalacao_requisito
    '4 de 4; ''teste alto volume''/2025: 5 de 5; ''Araucária teste'', os 5 anos, sempre 100%). É o MESMO '
    'vício que a 0194 já corrigiu em fn_reconciliar_mutuos, medido e não corrigido lá por instrução '
    'explícita de escopo.',
-   'importante', 836)
+   'importante', 836),
+
+  ('mutuos_conta_repetida_conta_uma_vez', '0195', 'corpo', 'fn_reconciliar_mutuos',
+   'where not e_nota or n_face = 0',
+   'Sem este corpo o lado A de mútuos soma DUAS vezes a mesma conta quando o balanço a traz na face E '
+   'na nota "Partes Relacionadas" — MEDIDO EM PRODUÇÃO (30/09/2026, só-leitura): o doc 2f17a7ba '
+   '(Varejo, multi 21..25) repete "Mútuos a pagar - controladora" nos 5 anos (409, 890, 1.600, 2.600, '
+   '3.900 mil), e as "divergências reais" de 409 e 890 mil do teste alto volume eram essa duplicata. '
+   'Em TODA a produção são 5 grupos assim em mútuos, todos nesse documento. Linha marcada como nota '
+   'SEM par de face conta sempre (sem `rn = 1`): "partes relacionadas" é quase sempre a subseção de '
+   'FACE em produção, e duas posições de face ali (AC e ANC, mesmo valor) não são uma só.',
+   'importante', 837),
+
+  ('intragrupo_dado_exige_contraparte', '0195', 'corpo', 'fn_reconciliar_intragrupo',
+   'fn_contraparte_intragrupo(p_caso_id, ce2.chave, d.entidade_id) is not null',
+   'Sem este corpo o "documento tem dado intragrupo" aceita qualquer linha diferente de zero (um saldo '
+   'de caixa), e o balanço sem contraparte pode vencer o que tem o espelho.',
+   'importante', 838)
 
 on conflict (chave) do update
   set migration = excluded.migration,

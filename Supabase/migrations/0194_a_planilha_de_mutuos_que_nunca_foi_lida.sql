@@ -135,16 +135,32 @@
 -- | teste v48                            | 2025 |   16.300.000 |      16.300.000 |  16.060.000 | zona_cinzenta, diff 240 mil |
 -- | Teste 00                             | 2023 |            0 |       1.100.000 |  33.060.000 | zona_cinzenta, diff 31,96 mi — NÚMERO EXPLICADO, não bug (ver nota) |
 -- | Teste 00                             | 2025 |   74.800.000 |      74.800.000 |  74.560.000 | **zona_cinzenta, diff 240 mil** |
--- | teste alto volume - grupo araucária  | 2021 |    8.965.000 |       9.374.000 |  (não comparada) | zona_cinzenta (os DOIS LADOS do balanço não se espelham — achado real, não bug) |
--- | teste alto volume - grupo araucária  | 2022 |   19.490.000 |      20.380.000 |  (não comparada) | zona_cinzenta (idem) |
--- | teste alto volume - grupo araucária  | 2023 |   33.300.000 |      33.300.000 |  33.060.000 | zona_cinzenta, diff 240 mil |
--- | teste alto volume - grupo araucária  | 2024 |   51.600.000 |      51.600.000 |  51.360.000 | zona_cinzenta, diff 240 mil |
--- | teste alto volume - grupo araucária  | 2025 |   74.800.000 |      74.800.000 |  74.560.000 | zona_cinzenta, diff 240 mil |
+-- | teste alto volume - grupo araucária  | 2021 |    8.965.000 |       9.374.000 |  (não comparada) | [ERRADO — ver CORREÇÃO DE 30/09 abaixo] "os dois lados não se espelham — achado real": o passivo 9.374.000 tem 409 mil A MAIS por conta repetida; corrigido pela 0195: passivo 8.965.000, planilha 8.725.000, zona_cinzenta diff 240 mil |
+-- | teste alto volume - grupo araucária  | 2022 |   19.490.000 |      20.380.000 |  (não comparada) | [ERRADO — idem] o passivo tem 890 mil A MAIS por conta repetida; corrigido pela 0195: passivo 19.490.000, planilha 19.250.000, zona_cinzenta diff 240 mil |
+-- | teste alto volume - grupo araucária  | 2023 |   33.300.000 |      33.300.000 |  33.060.000 | zona_cinzenta, diff 240 mil  (passivo medido AQUI como 34.900.000 — também dobrado; ver CORREÇÃO) |
+-- | teste alto volume - grupo araucária  | 2024 |   51.600.000 |      51.600.000 |  51.360.000 | zona_cinzenta, diff 240 mil  (idem: 54.200.000 dobrado) |
+-- | teste alto volume - grupo araucária  | 2025 |   74.800.000 |      74.800.000 |  74.560.000 | zona_cinzenta, diff 240 mil  (idem: 78.700.000 dobrado) |
 -- | Araucária teste (7º caso, achado na medição — não citado no cabeçalho original) | 2021 | 8.965.000 | 7.217.000 | (não comparada) | zona_cinzenta (os dois lados do balanço não se espelham) |
 -- | Araucária teste                      | 2022 |   19.490.000 |      19.490.000 |  19.250.000 | zona_cinzenta, diff 240 mil |
 -- | Araucária teste                      | 2023 |   33.300.000 |      33.300.000 |  33.060.000 | zona_cinzenta, diff 240 mil |
 -- | Araucária teste                      | 2024 |   51.600.000 |      51.600.000 |  51.360.000 | zona_cinzenta, diff 240 mil |
 -- | Araucária teste                      | 2025 |   74.800.000 |      83.400.000 |  (não comparada) | zona_cinzenta (os dois lados não se espelham) |
+--
+-- CORREÇÃO DE 30/09/2026 — A TABELA ACIMA ERRAVA NO "teste alto volume".
+-- As "divergências reais" de 2021 (409 mil) e 2022 (890 mil) que este
+-- cabeçalho descrevia como "os dois lados não se espelham — achado real, não
+-- bug" NÃO ERAM DIVERGÊNCIA DE DADO: eram a MESMA conta somada duas vezes.
+-- O documento 2f17a7ba (Varejo, multi 21..25) traz "Mútuos a pagar -
+-- controladora" na face do balanço (ordem 38) E na nota "Partes Relacionadas"
+-- (ordem 62), mesmo valor e mesma coluna: 409, 890, 1.600, 2.600 e 3.900 mil
+-- nos cinco anos — e as diferenças passivo-ativo medidas aqui (9.374-8.965,
+-- 20.380-19.490, 34.900-33.300, 54.200-51.600, 78.700-74.800) batem EXATAMENTE
+-- com esses cinco valores. Sem a duplicata, os dois lados fecham exatos nos
+-- cinco anos (8,965 / 19,49 / 33,3 / 51,6 / 74,8 mi) e cada ano fica com a
+-- diferença de 240 mil da planilha (8,725 / 19,25 / 33,06 / 51,36 / 74,56).
+-- Corrigido na 0195 (CTE `linhas` de fn_reconciliar_mutuos, herdada da 0123).
+-- Os outros "não se espelham" da tabela (Araucária teste 2021: 8,965 x 7,217;
+-- 2025: 74,8 x 83,4) NÃO têm duplicata — remedidos com a correção, não mudam.
 --
 -- ATUALIZAÇÃO (28/09/2026, tarde — acompanhamento pós-revisão). "Teste
 -- 00"/2023 tinha ficado SUSPEITO na primeira medição (lado A 1,1 mi contra

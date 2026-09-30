@@ -1528,7 +1528,7 @@ test('Modos e referências: cada node Code no modo certo; toda $(ref) existe no 
       // de `Medir Documento` — o mesmo motivo de `Juntar Blocos`, um nível acima.
       if (['Listar Arquivos', 'Orcamento do Lote', 'Abortar Lote', 'Resumo de Custo',
         'Fatiar Extracao', 'Juntar Blocos', 'Recompor Contexto',
-        'Recompor Conteudo Extraido'].includes(n.name)) {
+        'Recompor Conteudo Extraido', 'Agrupar Linhas XLSX', 'Agrupar Linhas XLS'].includes(n.name)) {
         assert.equal(n.parameters.mode, 'runOnceForAllItems', `${n.name} enxerga o lote inteiro`);
       } else {
         assert.equal(n.parameters.mode, 'runOnceForEachItem', `${n.name} é transformação 1:1`);
@@ -2890,6 +2890,10 @@ const CODE_QUE_DEVE_ABORTAR = {
   // existe para evitar, só que via falha silenciosa em vez de fio solto no
   // editor.
   'Recompor Conteudo Extraido': 'falha aqui = linhas de planilha voltam soltas, sem reagrupar',
+  // Mesma razao do Recompor: continuar devolveria as 150 mil linhas soltas ao Merge,
+  // que e' exatamente o que estoura a pilha (17/09/2026).
+  'Agrupar Linhas XLSX': 'falha aqui = linhas soltas chegam ao Merge e estouram a pilha',
+  'Agrupar Linhas XLS': 'falha aqui = linhas soltas chegam ao Merge e estouram a pilha',
 };
 
 test('todo nó Code continua o lote quando um item falha (exceto os que devem abortar)', () => {
@@ -3655,4 +3659,171 @@ test('MEDIDO: camada de texto CORROMPIDA por glifo dobrado vai para OCR — sen�
     'camada corrompida NÃO pode virar o conteúdo — a imagem é a versão correta do documento');
   assert.equal(out[0].json.leitura_pdf_motivo, 'camada-de-texto-corrompida');
   assert.ok(!('content_part' in out[0].json), 'e o base64 de Preparar Conteudo tem de sobreviver');
+});
+
+// ---------------------------------------------------------------------------
+// PLANILHA GRANDE (17/09/2026): o `Extract From File` emite UMA LINHA POR ITEM e o
+// Merge junta com `push.apply` -- acima de ~120 mil itens a pilha estoura
+// ("Maximum call stack size exceeded" em `Juntar Extracao de Conteudo`, execucoes
+// 7883, 7886 e a das 00:16). `Agrupar Linhas` reduz a UM item por documento ANTES
+// do Merge. Os testes rodam o CODIGO REAL dos nos. Nao confirmado: o encadeamento
+// de pairedItem atraves do Merge na instancia real (so' na simulacao).
+// ---------------------------------------------------------------------------
+// Duas formas, porque o motor do n8n entrega DUAS coisas diferentes (n8n-core 2.16.1,
+// `workflow-execute.js:790-812`): o que o nó RECEBE em `$input.all()` tem o pairedItem
+// REESCRITO para `{item: <índice na entrada>}` -- ou seja, `{item: i}` em toda linha --,
+// e o RUNDATA do extrator (`$('Extrair XLSX').all()`) guarda o que o extrator emitiu:
+// `{item: <índice no INPUT do extrator>}` (`fromFile.operation.js:191-206`).
+const linhasDaPlanilha = (n, prefixo) => Array.from({ length: n }, (_, k) => ({
+  json: { Conta: `${prefixo}-${k}`, Valor: String(k) }, pairedItem: { item: prefixo === 'B' ? 1 : 0 },
+}));
+// O que o nó Code recebe: pairedItem = índice da própria entrada.
+const comoEntradaDoNo = (itens) => itens.map((it, i) => ({ json: it.json, pairedItem: { item: i } }));
+// Conta quantas vezes o nó LEU o contexto de um item (`itemMatching(i).json`): o mock de `$()`
+// também toca `lista[itemIndex]` a cada chamada, então contar acesso ao índice contaria em dobro.
+const listaContada = (lista) => {
+  const c = { chamadas: 0 };
+  c.lista = lista.map((it) => (it ? { get json() { c.chamadas += 1; return it.json; } } : it));
+  return c;
+};
+const ctxPlanGrande = (hash, nome) => ({
+  caso_id: 'caso-uuid-1', hash, nome_original: nome, formato_detectado: 'xlsx', bytes: 5_755_000,
+  content_mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  content_part: { type: 'text', text: '(pendente)' }, aviso_conteudo: 'pendente',
+});
+
+test('controle positivo: push.apply com 150.000 argumentos ESTOURA a pilha neste Node', () => {
+  // Sem isto, os testes abaixo poderiam passar porque o Node do container
+  // aguenta 150 mil -- e a correcao nao estaria sendo medida (regra 2).
+  const alvo = [];
+  const itens = new Array(150_000).fill({});
+  assert.throws(() => alvo.push.apply(alvo, itens), RangeError);
+});
+
+test('MEDIDO: Agrupar Linhas + Recompor -- planilha de 150.000 linhas e outra no MESMO lote, um item por documento, total verdadeiro, sem estouro', async () => {
+  const A = linhasDaPlanilha(150_000, 'A');
+  const B = linhasDaPlanilha(30, 'B');
+  const rundata = [...A, ...B]; // o que o extrator emitiu (origem 0 e 1)
+  const entradas = comoEntradaDoNo(rundata); // o que o Code recebe (pairedItem = i)
+  const ctxA = ctxPlanGrande('hash-a', 'CR_Liquidado.xlsx');
+  const ctxB = ctxPlanGrande('hash-b', 'Outra.xlsx');
+  const ctxPorLinha = entradas.map((_, i) => ({ json: i < A.length ? ctxA : ctxB }));
+  const cont = listaContada(ctxPorLinha);
+  const agrupado = await run('Agrupar Linhas XLSX', {
+    items: entradas, refs: { 'Preparar Conteudo': cont.lista, 'Extrair XLSX': rundata },
+  });
+  // COMPORTAMENTO medido: 2 documentos resolvem o contexto 2 vezes, nao 150.030.
+  assert.equal(cont.chamadas, 2, 'uma resolucao de contexto por ORIGEM, nao por linha');
+  assert.equal(agrupado.length, 2, 'duas planilhas => dois itens, nunca 150.030');
+  const gA = agrupado.find((i) => i.json.linhas[0].Conta === 'A-0');
+  const gB = agrupado.find((i) => i.json.linhas[0].Conta === 'B-0');
+  assert.ok(gA && gB);
+  assert.equal(gA.json.total_linhas, 150_000);
+  assert.equal(gA.json.linhas.length, 2000);
+  assert.equal(gB.json.total_linhas, 30);
+  assert.ok(gB.json.linhas.every((l) => l.Conta.startsWith('B-')), 'linhas de B nao vazam para A nem ao contrario');
+  assert.ok(gA.json.linhas.every((l) => l.Conta.startsWith('A-')));
+  for (const it of agrupado) assert.ok(Number.isInteger(it.pairedItem.item));
+
+  // O Merge real empilha estes itens; aqui o Recompor recebe o resultado.
+  const ctxDoAgrupado = agrupado.map((it) => ({ json: it === gA ? ctxA : ctxB }));
+  const out = await run('Recompor Conteudo Extraido', {
+    items: agrupado, refs: { 'Preparar Conteudo': ctxDoAgrupado },
+  });
+  assert.equal(out.length, 2);
+  const oA = out.find((i) => i.json.hash === 'hash-a');
+  const oB = out.find((i) => i.json.hash === 'hash-b');
+  assert.match(oA.json.content_part.text, /A-0/);
+  assert.doesNotMatch(oA.json.content_part.text, /B-0/);
+  assert.match(oB.json.content_part.text, /B-29/);
+  assert.match(oA.json.aviso_conteudo, /150000/, 'o aviso diz o total VERDADEIRO, nao 2000 de 2000');
+  assert.equal(oB.json.aviso_conteudo, null, 'planilha pequena nao abre aviso de truncamento');
+  assert.equal(oA.json.leitura_planilha, 'texto');
+  assert.ok(oA.json.caracteres_do_texto > 0 && oA.json.caracteres_do_texto === oA.json.content_part.text.length);
+});
+
+test('Agrupar Linhas: sem a origem no rundata do extrator, cai em itemMatching por linha e o RESULTADO e o mesmo', async () => {
+  // Fallback (binaryMode combinado devolve so' o json; tamanho diferente; `$()` que lanca).
+  // Custo declarado no comentario de codeAgruparPlanilha: uma resolucao por linha.
+  const A = linhasDaPlanilha(3000, 'A');
+  const B = linhasDaPlanilha(30, 'B');
+  const entradas = comoEntradaDoNo([...A, ...B]);
+  const ctxA = ctxPlanGrande('hash-a', 'CR.xlsx');
+  const ctxB = ctxPlanGrande('hash-b', 'Outra.xlsx');
+  const ctxPorLinha = entradas.map((_, i) => ({ json: i < A.length ? ctxA : ctxB }));
+  const variantes = {
+    'sem a referencia ($() lanca)': {},
+    'so json (binaryMode combinado)': { 'Extrair XLSX': [...A, ...B].map((it) => ({ json: it.json })) },
+    'tamanho diferente': { 'Extrair XLSX': A },
+  };
+  for (const [nome, extra] of Object.entries(variantes)) {
+    const cont = listaContada(ctxPorLinha);
+    const out = await run('Agrupar Linhas XLSX', { items: entradas, refs: { 'Preparar Conteudo': cont.lista, ...extra } });
+    assert.equal(cont.chamadas, entradas.length, `${nome}: uma resolucao por linha`);
+    assert.equal(out.length, 2, nome);
+    assert.deepEqual(out.map((i) => i.json.total_linhas).sort((a, b) => a - b), [30, 3000], nome);
+  }
+});
+
+test('Agrupar Linhas: o extrator do ramo XLS e lido pelo nome do PROPRIO ramo', () => {
+  assert.match(code('Agrupar Linhas XLSX'), /\$\("Extrair XLSX"\)\.all\(\)/);
+  assert.match(code('Agrupar Linhas XLS'), /\$\("Extrair XLS"\)\.all\(\)/);
+});
+
+test('Agrupar Linhas: item de erro e item sem rastro passam intactos, com pairedItem', async () => {
+  const ctx = ctxPlanGrande('hash-a', 'a.xlsx');
+  const entradas = [
+    { json: { Conta: 'x', Valor: '1' }, pairedItem: { item: 0 } },
+    { json: { error: 'arquivo corrompido' }, pairedItem: { item: 1 } },
+    { json: { Conta: 'orfa', Valor: '2' }, pairedItem: { item: 2 } },
+  ];
+  // itemMatching do mock devolve lista[i]; para i=2 simulamos ausencia com undefined.
+  const out = await run('Agrupar Linhas XLSX', {
+    items: entradas, refs: { 'Preparar Conteudo': [{ json: ctx }, { json: ctx }, undefined] },
+  });
+  assert.equal(out.length, 3);
+  assert.ok(out.some((i) => i.json.error === 'arquivo corrompido'));
+  assert.ok(out.some((i) => i.json.Conta === 'orfa'), 'sem rastro: isolada, nunca fundida');
+  assert.ok(out.some((i) => i.json.planilha_agrupada === true && i.json.total_linhas === 1));
+  for (const it of out) assert.ok(it.pairedItem && Number.isInteger(it.pairedItem.item));
+});
+
+test('MEDIDO: o orcamento trata a planilha recomposta como TEXTO e ela cabe no teto', async () => {
+  const ctx = ctxPlanGrande('hash-a', 'CR_Liquidado_Generalcorporate.xlsx');
+  const grande = { planilha_agrupada: true, linhas: linhasDaPlanilha(2000, 'A').map((i) => i.json),
+    total_linhas: 150_000, colunas: ['Conta', 'Valor'] };
+  const rec = await run('Recompor Conteudo Extraido', {
+    items: [{ json: grande }], refs: { 'Preparar Conteudo': [{ json: ctx }] },
+  });
+  const medido = await run('Medir Documento', { item: rec[0], refs: { 'Preparar Conteudo': rec[0] } });
+  assert.equal(medido.json.leitura_planilha, 'texto', 'o veredito sobrevive a Medir Documento');
+  const c = code('Orcamento do Lote');
+  const preambulo = c.slice(0, c.indexOf('const itens = $input'));
+  const j = medido.json;
+  const comoTexto = new Function('j', `${preambulo}
+    return orcamentoDoLotePorConteudo({ documentos: [
+      { celulas: 0, paginas: null, colunas: 2, blocos: 1, formato: 'texto', bytes: Number(j.caracteres_do_texto), nome: 'CR.xlsx' },
+    ], tokensPromptSistema: 100 });`)(j);
+  const comoArquivo = new Function(`${preambulo}
+    return orcamentoDoLotePorConteudo({ documentos: [
+      { celulas: 0, paginas: null, colunas: 2, blocos: 1, formato: 'xlsx', bytes: 5_755_000, nome: 'CR.xlsx' },
+    ], tokensPromptSistema: 100 });`)();
+  assert.equal(comoArquivo.cabe, false, 'controle: pelo tamanho do arquivo o orcamento recusava (US$ 10,81)');
+  assert.equal(comoTexto.cabe, true, 'pelo texto enviado cabe');
+  // e o no real de orcamento le o veredito do item:
+  assert.match(c, /leitura_planilha==='texto'/);
+});
+
+test('MEDIDO: documento que sozinho passa do teto e NOMEADO -- nunca "no maximo 0"', () => {
+  const c = code('Orcamento do Lote');
+  const preambulo = c.slice(0, c.indexOf('const itens = $input'));
+  const r = new Function(`${preambulo}
+    return orcamentoDoLotePorConteudo({ documentos: [
+      { celulas: 0, paginas: null, colunas: 2, blocos: 1, formato: 'xlsx', bytes: 5_755_000, nome: 'CR_Gigante.xlsx' },
+      { celulas: 40, paginas: 1, colunas: 3, blocos: 1, formato: 'texto', bytes: 2000, nome: 'pequeno.pdf' },
+    ], tokensPromptSistema: 100 });`)();
+  assert.equal(r.cabe, false);
+  assert.doesNotMatch(r.mensagem, /no máximo 0/);
+  assert.match(r.mensagem, /CR_Gigante\.xlsx/);
+  assert.match(r.mensagem, /sozinhos MAIS que o teto/);
 });
