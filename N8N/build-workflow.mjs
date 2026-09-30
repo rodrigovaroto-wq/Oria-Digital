@@ -32,7 +32,7 @@ import {
 import { createHash } from 'node:crypto';
 import { SYSTEM_PROMPT, diagnosticarErroApi, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, normalizarMoeda, extractionSchema, achatarGrupos, limparRotuloColado, ehLinhaNaoMonetaria, escalaDeclaradaNaColuna } from './lib/extract.mjs';
 import { ALIASES } from './lib/taxonomia.mjs';
-import { classifyByFilename, parseTipo, parsePeriodo, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
+import { classifyByFilename, parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAnos, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
 import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
 import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
@@ -740,6 +740,8 @@ return out;
 const FONTE_CLASSIFICADOR = [
   `const THRESHOLD_AUTO=${JSON.stringify(THRESHOLD_AUTO)};`,
   `const normalize = ${normalize.toString()};`,
+  `const periodoAcumuladoNoAno = ${periodoAcumuladoNoAno.toString()};`,
+  `const periodoDeIntervaloDeAnos = ${periodoDeIntervaloDeAnos.toString()};`,
   `const parsePeriodo = ${parsePeriodo.toString()};`,
   `const parseTipo = ${parseTipo.toString()};`,
   `const parseAssinado = ${parseAssinado.toString()};`,

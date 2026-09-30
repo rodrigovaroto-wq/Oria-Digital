@@ -92,7 +92,7 @@ export function saborDoZip(buf) {
 // `xl/workbook.xml`, comprimido. Conta também aba oculta (limite conhecido: pode
 // acusar a mais, nunca a menos). Devolve null quando não há buffer.
 export function abasDoXlsx(buf) {
-  if (!buf || !buf.length) return null;
+  if (!buf?.length) return null;
   const texto = trechoLatin1(buf, 0, buf.length);
   const partes = new Set();
   const re = /xl\/worksheets\/([A-Za-z0-9_-]+)\.xml/g;

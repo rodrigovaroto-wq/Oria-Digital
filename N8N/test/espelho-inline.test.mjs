@@ -34,7 +34,7 @@ import {
   formaDoTexto, detectarFormato,
 } from '../lib/formato.mjs';
 import { xlsxMinimo } from './zip-minimo.mjs';
-import { parseTipo, parsePeriodo, parseEntidade, parseAssinado, classifyByFilename } from '../lib/classifier.mjs';
+import { parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAnos, parseEntidade, parseAssinado, classifyByFilename } from '../lib/classifier.mjs';
 import {
   avaliarCobertura, celulasDaLinha, celulasEstimadas, linhasComNumero, linhasDeConta,
   juntarFragmentosDeLinha, ehLinhaSemValor, ehLinhaDeConta,
@@ -326,6 +326,12 @@ const TABELA = [
   // `FONTE_CLASSIFICADOR` em build-workflow.mjs.
   { nome: 'parseTipo', lib: parseTipo,
     casos: [['balanco patrimonial 2025'], ['dre 2025'], ['mapa de divida'], ['arquivo qualquer']] },
+  { nome: 'periodoAcumuladoNoAno', lib: periodoAcumuladoNoAno, casos: [
+    ['dre janaago26'], ['dre janeiro a agosto de 2026'], ['dre mar a ago 2026'], ['balanco 12m25'],
+  ] },
+  { nome: 'periodoDeIntervaloDeAnos', lib: periodoDeIntervaloDeAnos, casos: [
+    ['balanco 2021-2025'], ['balanco 21 a 25'], ['balanco 2025'], ['balanco 2030-2025'],
+  ] },
   { nome: 'parsePeriodo', lib: parsePeriodo,
     // O CRUZAMENTO DE SÉCULO ENTROU AQUI PORQUE A GUARDA JÁ DEIXOU PASSAR UMA
     // DIVERGÊNCIA REAL. A lib foi corrigida para ordenar o ano de QUATRO dígitos

@@ -30,24 +30,9 @@ import { ALIASES } from './taxonomia.mjs';
 // moverem juntas.
 const THRESHOLD_AUTO = 0.7;
 
-// --- Período -----------------------------------------------------------------
-// Reconhece as convenções de Arquitetura do Sistema/2 Especificação/f0/03 (12M25, 1T25/1T26, L24M, listas multi-ano)
-// e formatos adicionais pedidos pelo dono: ano isolado ("2025") e intervalo de
-// anos ("2021-2025", "2021 a 2025") — expandido para a lista completa, não só
-// os extremos.
-export function parsePeriodo(textoNormalizado) {
-  // Prefixo de ORDENAÇÃO do arquivo não é ano. Achado com dado real
-  // ("13_Balancete_Analitico_Componentes_2025.pdf" saía como período
-  // "multi 13,25" — o "13" do prefixo virou o ano 2013 e o 2025 virou 25):
-  // um número no COMEÇO do nome, seguido de separador, é numeração de arquivo,
-  // não competência. Remover antes de procurar ano evita períodos-lixo, que
-  // além de exibirem errado fragmentam a tabela `periodo` e impedem a
-  // reconciliação de casar os documentos do mesmo exercício.
-  const t = String(textoNormalizado || '')
-    .replace(/^\s*\d{1,3}\s*[-_. ]+/, '')
-    // "2025x2024"/"2025 x 2024" é comparativo: o 'x' separa exercícios.
-    .replace(/(\d)\s*[x\u00d7]\s*(\d)/g, '$1 $2');
-
+// Helper de `parsePeriodo` (extraído pelo Sonar S3776; AUTO-CONTIDO, embutido por
+// toString() junto com ela em FONTE_CLASSIFICADOR).
+export function periodoAcumuladoNoAno(t) {
   // ACUMULADO NO ANO (YTD) — "janaago26", "jan a ago 26", "janeiro a agosto de 2026".
   // Krauspenhar real: `DRE_janaago26.pdf` foi registrada como período anual 2026 e
   // são 8 meses (jan-ago); a receita de 8 meses era comparada com ano cheio. Faixa
@@ -66,6 +51,48 @@ export function parsePeriodo(textoNormalizado) {
     // com "anual" (ver mergeClassification).
     return { tipo: 'multi', referencia: `${meses}M${ytd[2].slice(-2)}`, fraco: true };
   }
+  return null;
+}
+
+// Helper de `parsePeriodo` (idem): intervalo de anos "2021-2025" → lista.
+export function periodoDeIntervaloDeAnos(t) {
+  // intervalo de anos: "2021-2025" | "2021 a 2025" | "21-25" → expande a lista
+  // inteira (não só os extremos), no formato multi-ano existente ("21,22,...").
+  const m = t.match(/\b(20\d{2}|\d{2})\s*(?:-|–|a)\s*(20\d{2}|\d{2})\b/);
+  if (m) {
+    const full = (y) => (y.length === 2 ? `20${y}` : y);
+    const start = Number(full(m[1]));
+    const end = Number(full(m[2]));
+    if (start <= end && end - start <= 50) {
+      const anos = [];
+      for (let y = start; y <= end; y++) anos.push(String(y).slice(-2));
+      return { tipo: 'multi', referencia: anos.join(',') };
+    }
+  }
+  return null;
+}
+
+// --- Período -----------------------------------------------------------------
+// Reconhece as convenções de Arquitetura do Sistema/2 Especificação/f0/03 (12M25, 1T25/1T26, L24M, listas multi-ano)
+// e formatos adicionais pedidos pelo dono: ano isolado ("2025") e intervalo de
+// anos ("2021-2025", "2021 a 2025") — expandido para a lista completa, não só
+// os extremos.
+export function parsePeriodo(textoNormalizado) {
+  // Prefixo de ORDENAÇÃO do arquivo não é ano. Achado com dado real
+  // ("13_Balancete_Analitico_Componentes_2025.pdf" saía como período
+  // "multi 13,25" — o "13" do prefixo virou o ano 2013 e o 2025 virou 25):
+  // um número no COMEÇO do nome, seguido de separador, é numeração de arquivo,
+  // não competência. Remover antes de procurar ano evita períodos-lixo, que
+  // além de exibirem errado fragmentam a tabela `periodo` e impedem a
+  // reconciliação de casar os documentos do mesmo exercício.
+  const t = String(textoNormalizado || '')
+    .replace(/^\s*\d{1,3}\s*[-_. ]+/, '')
+    // "2025x2024"/"2025 x 2024" é comparativo: o 'x' separa exercícios.
+    .replace(/(\d)\s*[x\u00d7]\s*(\d)/g, '$1 $2');
+
+  const acumulado = periodoAcumuladoNoAno(t);
+  if (acumulado) return acumulado;
+
   // 12M25 / 12M2025  → anual (12 meses do ano)
   let m = t.match(/\b(\d{1,2})m(\d{2,4})\b/);
   if (m && Number(m[1]) === 12) {
@@ -82,19 +109,8 @@ export function parsePeriodo(textoNormalizado) {
   if (m) {
     return { tipo: 'trimestre', referencia: `${m[1]}T${m[2].slice(-2)}` };
   }
-  // intervalo de anos: "2021-2025" | "2021 a 2025" | "21-25" → expande a lista
-  // inteira (não só os extremos), no formato multi-ano existente ("21,22,...").
-  m = t.match(/\b(20\d{2}|\d{2})\s*(?:-|–|a)\s*(20\d{2}|\d{2})\b/);
-  if (m) {
-    const full = (y) => (y.length === 2 ? `20${y}` : y);
-    const start = Number(full(m[1]));
-    const end = Number(full(m[2]));
-    if (start <= end && end - start <= 50) {
-      const anos = [];
-      for (let y = start; y <= end; y++) anos.push(String(y).slice(-2));
-      return { tipo: 'multi', referencia: anos.join(',') };
-    }
-  }
+  const intervalo = periodoDeIntervaloDeAnos(t);
+  if (intervalo) return intervalo;
   // listas multi-ano: "23, 24 e 25" | "2023 2024 2025" | "23 24 26"
   // Só é multi-ano de verdade quando os candidatos têm a MESMA largura: um nome
   // como "Balancete 13 2025" mistura numeração com ano, e tratar os dois como

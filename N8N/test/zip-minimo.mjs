@@ -49,11 +49,15 @@ export function zip(entradas) {
 }
 
 /** xlsx minimo: `abas` = [[nome, [[celula, ...], ...]], ...]. */
+const celula = (v) => '<c t="inlineStr"><is><t>' + v + '</t></is></c>';
+const linhaXml = (l, i) => '<row r="' + (i + 1) + '">' + l.map(celula).join('') + '</row>';
+const planilhaXml = (linhas) => '<worksheet><sheetData>' + linhas.map(linhaXml).join('') + '</sheetData></worksheet>';
+const abaNoWorkbook = ([n], i) => '<sheet name="' + n + '" sheetId="' + (i + 1) + '" r:id="rId' + (i + 1) + '"/>';
+
 export function xlsxMinimo(abas) {
-  const planilha = (linhas) => `<worksheet><sheetData>${linhas.map((l, i) => `<row r="${i + 1}">${l.map((v) => `<c t="inlineStr"><is><t>${v}</t></is></c>`).join('')}</row>`).join('')}</sheetData></worksheet>`;
   return zip([
     ['[Content_Types].xml', '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">spreadsheetml</Types>'],
-    ['xl/workbook.xml', `<workbook><sheets>${abas.map(([n], i) => `<sheet name="${n}" sheetId="${i + 1}" r:id="rId${i + 1}"/>`).join('')}</sheets></workbook>`],
-    ...abas.map(([, linhas], i) => [`xl/worksheets/sheet${i + 1}.xml`, planilha(linhas)]),
+    ['xl/workbook.xml', '<workbook><sheets>' + abas.map(abaNoWorkbook).join('') + '</sheets></workbook>'],
+    ...abas.map(([, linhas], i) => ['xl/worksheets/sheet' + (i + 1) + '.xml', planilhaXml(linhas)]),
   ]);
 }
