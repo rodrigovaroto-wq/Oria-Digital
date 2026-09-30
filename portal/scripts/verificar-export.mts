@@ -3755,11 +3755,15 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
       entidade: "Projetada Ltda", ultimoExercicioReal: 2025, anosProjetados: 3,
       premissas: [
         { codigo: "CRESC_REAL", nome: "Crescimento real da receita", formula: "crescimento_composto",
-          unidade: "%", valores: { "2026": 0.1, "2027": 0.1 } },
+          unidade: "%", valores: { "2026": 10, "2027": 10 } },
         { codigo: "CAPEX_ANO", nome: "Capex por ano", formula: "valor_por_ano",
           unidade: "R$/ano", valores: { "2026": 50 } },
         { codigo: "MARGEM_BRUTA", nome: "Margem bruta", formula: "pct_de_linha",
-          unidade: "%", valores: { "2026": 0.4 } },
+          unidade: "%", valores: { "2026": 40 } },
+        // 88 = 88%: pontos percentuais, como o "Usar" grava desde o ac9458d. É o valor do
+        // Krauspenhar que a aba mostrava como 8800,0%.
+        { codigo: "CUSTO_VARIAVEL", nome: "Custo variável", formula: "pct_de_linha",
+          unidade: "%", valores: { "2026": 87.97, "2027": 88 } },
         { codigo: "PMR", nome: "Prazo médio de recebimento", formula: "dias_de_giro",
           unidade: "dias", valores: { "2026": 45 } },
         // Primitiva que segue NÃO desenhada: precisa de duas premissas na mesma
@@ -3812,6 +3816,18 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   checar(Math.abs(Number(mod.getRow(rPremCresc).getCell(mod.getColumn(c2026).number).value) - 0.1) < 1e-9,
     "(49) …com o valor configurado para cada exercício",
     String(mod.getRow(rPremCresc).getCell(mod.getColumn(c2026).number).value));
+
+  // `%` armazenado em PONTOS (88 = 88%) chega à célula como 0,88, formatada como %:
+  // antes chegava 88 sob o formato `0.0%` e aparecia como 8800,0% (aceito 87,97 → 8797,0%).
+  const rCv = rotulos.indexOf("↳ Custo variável") + 1;
+  const cCv = mod.getRow(rCv).getCell(mod.getColumn(c2027).number);
+  const cCv26 = mod.getRow(rCv).getCell(mod.getColumn(c2026).number);
+  checar(rCv > 0 && Math.abs(Number(cCv.value) - 0.88) < 1e-9 && Math.abs(Number(cCv26.value) - 0.8797) < 1e-9,
+    "(49) premissa % de 88 pontos aparece na aba Modelagem como 0,88 (e 87,97 como 0,8797), não como 88",
+    `${String(cCv.value)} / ${String(cCv26.value)}`);
+  checar(String(cCv.numFmt).includes("%"), "(49) …formatada como percentual (88,0%, não 8800,0%)", String(cCv.numFmt));
+  // Um número exibido > 100% numa premissa de custo sobre a receita é o sintoma.
+  checar(Number(cCv.value) <= 1, "(49) …e a exibição nunca passa de 100% para um custo sobre a receita", String(cCv.value));
 
   // A nota da linha diz ONDE o número projetado vive. Célula vazia sem
   // explicação é lida como "o sistema não conseguiu", que é outra coisa.
