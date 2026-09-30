@@ -90,6 +90,7 @@
 {"k":"n","id":"arquivo:Supabase/test/entidade_participacao.test.sql","t":"arquivo","f":"Supabase/test/entidade_participacao.test.sql","txt":"entidade_participacao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/entidade_titulo_suspeito.test.sql","t":"arquivo","f":"Supabase/test/entidade_titulo_suspeito.test.sql","txt":"entidade_titulo_suspeito.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/espelho_grupo_a.test.sql","t":"arquivo","f":"Supabase/test/espelho_grupo_a.test.sql","txt":"espelho_grupo_a.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","t":"arquivo","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","txt":"faixa_de_anos_do_periodo.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fato_material.test.sql","t":"arquivo","f":"Supabase/test/fato_material.test.sql","txt":"fato_material.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/faturamento_mes_na_coluna.test.sql","t":"arquivo","f":"Supabase/test/faturamento_mes_na_coluna.test.sql","txt":"faturamento_mes_na_coluna.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/faturamento_por_mes.test.sql","t":"arquivo","f":"Supabase/test/faturamento_por_mes.test.sql","txt":"faturamento_por_mes.test.sql"}
@@ -248,7 +249,7 @@
 {"k":"n","id":"fn:fn_ano_da_coluna","t":"fn","f":"Supabase/migrations/0044_valores_por_ano.sql","txt":"ano da coluna"}
 {"k":"n","id":"fn:fn_anos_alvo","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"anos alvo"}
 {"k":"n","id":"fn:fn_anos_do_periodo","t":"fn","f":"Supabase/migrations/0122_pergunta_em_portugues.sql","txt":"anos do periodo"}
-{"k":"n","id":"fn:fn_anos_periodo","t":"fn","f":"Supabase/migrations/0022_periodo_por_ano_e_guardas.sql","txt":"anos periodo"}
+{"k":"n","id":"fn:fn_anos_periodo","t":"fn","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","txt":"anos periodo"}
 {"k":"n","id":"fn:fn_anos_texto","t":"fn","f":"Supabase/migrations/0122_pergunta_em_portugues.sql","txt":"anos texto"}
 {"k":"n","id":"fn:fn_aplicar_premissa_em_lote","t":"fn","f":"Supabase/migrations/0100_papel_por_secao.sql","txt":"aplicar premissa em lote"}
 {"k":"n","id":"fn:fn_aprovar_caso","t":"fn","f":"Supabase/migrations/0037_portao2.sql","txt":"aprovar caso"}
@@ -595,6 +596,7 @@
 {"k":"n","id":"migration:0195","t":"migration","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","txt":"o espelho que lia o balanco de outro ano"}
 {"k":"n","id":"migration:0196","t":"migration","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"o caixa que lia a dfc de outro ano"}
 {"k":"n","id":"migration:0197","t":"migration","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","txt":"o faturamento que nao via o mes na coluna"}
+{"k":"n","id":"migration:0198","t":"migration","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","txt":"a faixa de anos que perdia o ano do meio"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -801,21 +803,21 @@
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/build-workflow-macro.mjs","l":235}
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/build-workflow-macro.mjs","l":260}
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/build-workflow-macro.mjs","l":227}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/build-workflow.mjs","l":2648}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/build-workflow.mjs","l":2662}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/build-workflow.mjs","l":2656}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/build-workflow.mjs","l":2670}
 {"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"N8N/build-workflow.mjs","l":144}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/build-workflow.mjs","l":2462}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/build-workflow.mjs","l":1769}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/build-workflow.mjs","l":1769}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/build-workflow.mjs","l":2583}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/build-workflow.mjs","l":2171}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/build-workflow.mjs","l":1367}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/build-workflow.mjs","l":2517}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/build-workflow.mjs","l":2457}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/build-workflow.mjs","l":2280}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/build-workflow.mjs","l":1933}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/build-workflow.mjs","l":2622}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/build-workflow.mjs","l":2253}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/build-workflow.mjs","l":2470}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/build-workflow.mjs","l":1775}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/build-workflow.mjs","l":1775}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/build-workflow.mjs","l":2591}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/build-workflow.mjs","l":2179}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/build-workflow.mjs","l":1373}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/build-workflow.mjs","l":2525}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/build-workflow.mjs","l":2465}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/build-workflow.mjs","l":2288}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/build-workflow.mjs","l":1941}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/build-workflow.mjs","l":2630}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/build-workflow.mjs","l":2261}
 {"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/build-workflow.mjs","l":143}
 {"k":"e","de":"arquivo:N8N/gerar-seed-macro.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/gerar-seed-macro.mjs","l":57}
 {"k":"e","de":"arquivo:N8N/gerar-seed-macro.mjs","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"N8N/gerar-seed-macro.mjs","l":107}
@@ -1111,6 +1113,13 @@
 {"k":"e","de":"arquivo:Supabase/test/espelho_grupo_a.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/espelho_grupo_a.test.sql","l":53}
 {"k":"e","de":"arquivo:Supabase/test/espelho_grupo_a.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/espelho_grupo_a.test.sql","l":51}
 {"k":"e","de":"arquivo:Supabase/test/espelho_grupo_a.test.sql","rel":"CHAMA","pa":"fn:fn_versao_atual","f":"Supabase/test/espelho_grupo_a.test.sql","l":234}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_anos_periodo","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":38}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_compativeis","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":99}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_despfin_dre_vs_divida","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":91}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":78}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":76}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":75}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_periodo","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":98}
 {"k":"e","de":"arquivo:Supabase/test/fato_material.test.sql","rel":"CHAMA","pa":"fn:fn_fatos_do_caso","f":"Supabase/test/fato_material.test.sql","l":194}
 {"k":"e","de":"arquivo:Supabase/test/fato_material.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"Supabase/test/fato_material.test.sql","l":223}
 {"k":"e","de":"arquivo:Supabase/test/fato_material.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"Supabase/test/fato_material.test.sql","l":38}
@@ -1478,7 +1487,7 @@
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/export-modelagem.ts","l":97}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/lib/export-modelagem.ts","l":765}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"portal/src/lib/export.ts","l":691}
-{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/export.ts","l":1125}
+{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/export.ts","l":1133}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_conceito","f":"portal/src/lib/export.ts","l":673}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"portal/src/lib/export.ts","l":692}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/src/lib/kit-basico.ts","l":10}
@@ -1489,10 +1498,10 @@
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":75}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelagem-linha.ts","l":107}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/modelo-institucional.ts","l":1375}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/modelo-institucional.ts","l":1390}
 {"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelo-institucional.ts","l":25}
 {"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/src/lib/modelo-institucional.ts","l":226}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelo-institucional.ts","l":6582}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelo-institucional.ts","l":6597}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"portal/src/lib/perguntas.ts","l":30}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/lib/perguntas.ts","l":3}
 {"k":"e","de":"arquivo:portal/src/lib/premissas-do-realizado.ts","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"portal/src/lib/premissas-do-realizado.ts","l":40}
@@ -1981,6 +1990,7 @@
 {"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":390}
 {"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":819}
 {"k":"e","de":"migration:0197","rel":"CRIA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","l":69}
+{"k":"e","de":"migration:0198","rel":"CRIA","pa":"fn:fn_anos_periodo","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","l":58}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
