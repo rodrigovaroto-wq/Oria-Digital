@@ -1,5 +1,45 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 103 (30/09/2026) — produção em `0195`, ingestão destravada, mandato de teste ponta a ponta no ar
+
+> **Tudo APLICADO em produção nesta sessão, com o dono em modo manual.**
+> - Migrations `0183` (em dois envios; o backfill abriu as 18 pendências previstas), `0189`–`0195`.
+>   Conferido depois: sonda com 174 requisitos e 0 ausentes, `ate_migration = '0195'`, e as 15
+>   chamadas do n8n resolvem.
+> - n8n de ingestão republicado (`N8N/republicar.sh`: 42 nós conferidos). Entra o `Classificar Nome`
+>   de 24/09, que nunca tinha sido publicado, e os nós `Agrupar Linhas XLSX/XLS`.
+> - **Credencial Postgres do n8n CONSERTADA.** Ela estava inválida desde depois de 17/09
+>   (`password authentication failed`) e nenhum mandato gravava. Ninguém viu: o workflow de erros
+>   usa a mesma credencial. Ver `.claude/memory/credencial-do-n8n-quebra-sem-deixar-rastro.md`.
+>
+> **O que o repositório ganhou** (um commit por fatia, cada uma medida):
+> - Grupos A e B da revisão da S102 (0195 e 0192). A guarda da divergência irmã foi redesenhada
+>   por CHAVE (`reconciliacao.periodo_chave_id`), porque três correções por período tinham falhado.
+> - Ingestão: planilha grande estourava a pilha no Merge e o orçamento a recusava para sempre.
+> - Gravação atômica do gerador macro.
+>
+> **Mandato de teste ponta a ponta** (caso `bb37f726`, book sintético Vertentes, tudo pelo portal
+> publicado): 14 PDFs, 889 linhas, US$ 0,05. Parâmetros, 10 premissas (realizado, Focus, digitadas,
+> uma editada), 23 contas em lote e 3 por linha, Portão 2 decidido na tela, export da modelagem:
+> `auditar-xlsx.mts` **11/11**, e o gabarito bate (ativo 121.198/95.780, receita líquida
+> 143.380/106.580).
+>
+> **Defeitos ACHADOS e NÃO corrigidos** (o dono pediu só testar nesta rodada):
+> 1. **CRÍTICO — "Usar" numa sugestão em % grava fração.** `SugestoesDoRealizado.tsx` manda
+>    `0,8797`, e o modelo divide por 100 (`modelo-institucional.ts:2027`). Resultado medido no
+>    arquivo: Custo variável sai 0,9% e SG&A 0,2%. **Contorno:** digitar o % (88; 23,6) e clicar
+>    "Atualizar". Medido: 0,88/0,236 no Base Case.
+> 2. **ALTO — `fn_reconciliar_caixa_bp_fluxo` deixa linha de DFC sem `periodo_coluna` valer para
+>    qualquer ano.** DFC anual × BP comparativo abre divergência Classe A falsa (R$ 4,34 mi no teste;
+>    é o "v33/v35" que o cabeçalho da 0192 tratou como real). A correção é a mesma
+>    `fn_linha_vale_para_ano` da 0195. **Contorno:** marcar a pendência "não procede".
+> 3. MÉDIO — a tela de modelagem diz "Pronto para o export" com o Portão 2 fechado, e o export
+>    devolve 409 em JSON.
+> 4. Extração: COMBINADO com 0 linhas (32 contas descartadas por desalinhamento de coluna) e a série
+>    do faturamento 24M não fecha. As duas já abrem pendência (regra 1).
+
+---
+
 ## SESSÃO 102 (25/09/2026) — dívidas da reconciliação: `0190` (árvore), `0191` (despfin por ano do mapa), …
 
 > **PR [#245](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/245). Nada aplicado em produção.**
