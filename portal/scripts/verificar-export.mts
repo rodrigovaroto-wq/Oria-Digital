@@ -8059,6 +8059,118 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   }
 }
 
+// =============================================================================
+// (39f) "ESTOQUES" É FOLHA NO BALANÇO E AGRUPAMENTO NO BALANCETE: UM DOCUMENTO NÃO APAGA A CONTA DO OUTRO.
+//
+// O DEFEITO, medido no Excel do mandato Krauspenhar (caso 33b58a89, 01/10/2026): a linha
+// "reconciliação com o ativo circulante informado no documento" do `Balance Sheet` saía
+// 53.924.564,46 (2024) e 43.569.482,33 (2025 em diante) — 43% do ativo — e a auditoria
+// reprovava "resíduo imaterial" em 14 células. O resíduo era EXATAMENTE a linha "Estoques"
+// dos Balanços (folha `ativo_circulante`: 53.924.564,46 em 2024, 43.569.482,33 em 2025),
+// que não tinha linha no `Working Capital`.
+//
+// O ARRANJO é o de produção, não inventado: Balanço Centro Oeste 2024 (versão 1e096ac5),
+// Balanço 2025 (07f650d8) e Balancete jan–ago/26 COMBINADO (b3c179e1), em que "ESTOQUES" é
+// SINTÉTICO (ordem 22) sobre "ESTOQUE DA EMPRESA EM PODER DE TERCEIROS" (56), "MERCADORIA EM
+// CONSIGNAÇÃO"… Os VALORES do balancete e das contas vizinhas são de ilustração (os campos
+// reais não se reproduzem sem o banco — regra 4); o que se afirma é o COMPORTAMENTO: o
+// resíduo de 2024/2025 é ~0, "Estoques" tem linha no `Working Capital` com os valores
+// realizados, e no ano do balancete o sintético NÃO soma junto com as filhas.
+// =============================================================================
+{
+  const ENT = "KRAUSPENHAR TESTE LTDA.";
+  const mk = (id: string, tipo: string, ref: string) => ({
+    id, tipo_taxonomia: tipo, entidade: { razao_social: ENT },
+    periodo: { tipo: "anual", referencia: ref }, documento_versao: [{ id: `v${id}`, nome_original: `${id}.pdf` }],
+  }) as DocumentoParaExport;
+  const c = (v: string, chave: string, secao: string, valor: number, ordem: number, per: string) =>
+    campo({ chave, secao, secao_canonica: "ativo_circulante", valor_num: valor, ordem, periodo_coluna: per,
+            documento_versao_id: v, unidade: "milhar" } as never);
+  const ES24 = 53924.56446; const ES25 = 43569.48233;
+  const campos: CampoExtraido[] = [
+    // Balanços 2024 e 2025: "Estoques" é FOLHA (ordem 5), entre as outras contas do circulante
+    c("vB24", "Clientes", "Ativo Circulante", 32730, 1, "2024"),
+    c("vB24", "Adiantamentos a fornecedores", "Ativo Circulante", 2770, 2, "2024"),
+    c("vB24", "Outros créditos", "Ativo Circulante", 530, 3, "2024"),
+    c("vB24", "Despesas antecipadas", "Ativo Circulante", 30, 4, "2024"),
+    c("vB24", "Estoques", "Ativo Circulante", ES24, 5, "2024"),
+    c("vB25", "Clientes", "Ativo Circulante", 30000, 1, "2025"),
+    c("vB25", "Adiantamentos a fornecedores", "Ativo Circulante", 2500, 2, "2025"),
+    c("vB25", "Outros créditos", "Ativo Circulante", 600, 3, "2025"),
+    c("vB25", "Despesas antecipadas", "Ativo Circulante", 40, 4, "2025"),
+    c("vB25", "Estoques", "Ativo Circulante", ES25, 5, "2025"),
+    // Balancete 2026 (COMBINADO): "ESTOQUES" é SINTÉTICO (30.000 + 20.000) e as filhas trazem
+    // `secao` = "ESTOQUES"
+    c("vBC26", "CLIENTES", "Ativo Circulante", 28000, 20, "jan–ago/26"),
+    c("vBC26", "ESTOQUES", "Ativo Circulante", 50000, 22, "jan–ago/26"),
+    c("vBC26", "ESTOQUE DA EMPRESA EM PODER DE TERCEIROS", "ESTOQUES", 30000, 56, "jan–ago/26"),
+    c("vBC26", "MERCADORIA EM CONSIGNAÇÃO", "ESTOQUES", 20000, 59, "jan–ago/26"),
+  ];
+  const documentos = [mk("B24", "BALANCO", "2024"), mk("B25", "BALANCO", "2025"), mk("BC26", "COMBINADO", "2026")];
+  const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const linhaA = (chave: string, valores: Record<string, number>, doc: string, papel: "conta" | "subtotal" = "conta") => ({
+    secao_canonica: "ativo_circulante", chave, rotulo_norm: norm(chave),
+    papel, unidade: "milhar", moeda: "BRL", documentos: [doc], valores,
+  });
+  const T24 = 32730 + 2770 + 530 + 30 + ES24;
+  const T25 = 30000 + 2500 + 600 + 40 + ES25;
+  const T26 = 28000 + 50000;
+  const entrada = {
+    caso: { nome: "Estoques folha e agrupamento", produto: "reestruturacao" },
+    agora: new Date("2026-10-01T12:00:00Z"), entidade: ENT, setor: "comercio",
+    anosHistoricos: [2024, 2025, 2026], anosProjetados: [2027, 2028],
+    stressPct: 0.2, caixaMinimo: 0, aliquotaTributos: 0.34,
+    linhas: [
+      linhaA("Ativo Circulante", { "2024": T24, "2025": T25, "2026": T26 }, "BALANCO", "subtotal"),
+      linhaA("Clientes", { "2024": 32730, "2025": 30000, "2026": 28000 }, "BALANCO"),
+      linhaA("Adiantamentos a fornecedores", { "2024": 2770, "2025": 2500 }, "BALANCO"),
+      linhaA("Outros créditos", { "2024": 530, "2025": 600 }, "BALANCO"),
+      linhaA("Despesas antecipadas", { "2024": 30, "2025": 40 }, "BALANCO"),
+      // UMA linha lógica por rótulo (é assim que `fn_linhas_para_modelagem` agrega): folha em
+      // 2024/2025, sintético em 2026
+      linhaA("Estoques", { "2024": ES24, "2025": ES25, "2026": 50000 }, "BALANCO"),
+      linhaA("ESTOQUE DA EMPRESA EM PODER DE TERCEIROS", { "2026": 30000 }, "COMBINADO"),
+      linhaA("MERCADORIA EM CONSIGNAÇÃO", { "2026": 20000 }, "COMBINADO"),
+    ],
+    premissas: [], vinculos: [], macro: [], unidade: "R$ mil",
+  };
+  const wb = buildExportWorkbook({
+    caso: entrada.caso, documentos, campos, agora: entrada.agora, modo: "completo",
+    modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+  });
+  const achar = (ws: ExcelJS.Worksheet, rot: string) => {
+    for (let r = 1; r <= ws.rowCount; r++) if (String(ws.getRow(r).getCell(3).value ?? "").trim() === rot) return r;
+    return 0;
+  };
+  const bs = wb.getWorksheet("Balance Sheet")!; esquecerMemoria(bs);
+  const wc = wb.getWorksheet("Working Capital")!; esquecerMemoria(wc);
+  const rRec = achar(bs, "reconciliação com o ativo circulante informado no documento");
+  const rEst = achar(wc, "Estoques");
+  checar(rRec > 0 && rEst > 0, "(39f) o Balance Sheet tem a reconciliação do circulante e o Working Capital tem linha de Estoques",
+    `reconciliação: linha ${rRec} · Estoques: linha ${rEst}`);
+  // Linha ausente NÃO pula os asserts: cada um reprova por si (a contagem off/on fica honesta).
+  const lerWc = (col: string) => (rEst > 0 ? avaliarCelula(wc, col, rEst) : null);
+  const lerRec = (col: string) => (rRec > 0 ? avaliarCelula(bs, col, rRec) : null);
+  // colunas E,F,G = 2024, 2025, 2026
+  for (const [col, ano, esperado] of [["E", 2024, ES24], ["F", 2025, ES25]] as const) {
+    const res = lerRec(col);
+    checar(typeof res === "number" && Math.abs(res) < 0.5,
+      `(39f) ${ano}: "Estoques" é folha do Balanço e não vira resíduo (reconciliação ~0)`, JSON.stringify(res));
+    const est = lerWc(col);
+    checar(typeof est === "number" && Math.abs(est - esperado) < 0.5,
+      `(39f) ${ano}: o Working Capital carrega os Estoques realizados do Balanço`, `${JSON.stringify(est)} vs ${esperado}`);
+  }
+  // No ano do balancete o agrupamento e as filhas não somam juntos: o circulante do modelo
+  // fecha no informado (78.000), não em 128.000 (sintético + filhas).
+  const res26 = lerRec("G");
+  checar(typeof res26 === "number" && Math.abs(res26) < 0.5,
+    "(39f) 2026 (balancete): o sintético não soma junto com as filhas (reconciliação ~0, não 50.000)", JSON.stringify(res26));
+  const est26 = lerWc("G");
+  checar(typeof est26 === "number" && Math.abs(est26) < 0.5,
+    "(39f) 2026 (balancete): a linha 'Estoques' (sintético) não carrega valor — quem carrega são as filhas",
+    JSON.stringify(est26));
+}
+
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);
 for (const f of falhas) console.log("  FALHOU:", f);
 process.exit(falhas.length ? 1 : 0);

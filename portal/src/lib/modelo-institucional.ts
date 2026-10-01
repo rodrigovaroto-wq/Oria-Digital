@@ -1170,15 +1170,22 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     passivo_circulante: "DOC_PC", passivo_nao_circulante: "DOC_PNC",
     patrimonio_liquido: "DOC_PL",
   };
-  const anoBase = [...ent.anosHistoricos].sort((a, b) => b - a)[0];
-  if (anoBase !== undefined) {
+  // A PROVA É POR EXERCÍCIO, e a remoção também. Antes ela rodava só no último exercício
+  // histórico e tirava a LINHA INTEIRA (todos os anos): "Estoques" é cabeçalho sintético no
+  // balancete de 2026 (soma das contas > total informado) e FOLHA nos Balanços de 2024 e 2025
+  // — a prova do último ano apagava a conta dos três. Medido no Krauspenhar (caso 33b58a89):
+  // resíduo de 53.924.564,46 (2024) e 43.569.482,33 (2025), 43% do ativo, e `Working Capital`
+  // sem linha de Estoques. Agora cada exercício histórico prova o seu e a linha perde SÓ o
+  // valor daquele ano; sem excesso naquele ano, nada sai dele.
+  for (const ano of [...ent.anosHistoricos].sort((a, b) => b - a)) {
+    const anoS = String(ano);
     for (const [bloco, chaveAncora] of Object.entries(ANCORA_DO_BLOCO) as Array<[BlocoModelo, string]>) {
       const lista = linhasPorBloco.get(bloco);
       const ancora = ancoras.get(chaveAncora);
       if (!lista || lista.length === 0 || !ancora) continue;
-      const informado = ancora.valores[String(anoBase)];
+      const informado = ancora.valores[anoS];
       if (typeof informado !== "number" || informado === 0) continue;
-      const valorDe = (l: LinhaModelo) => l.valores[String(anoBase)] ?? 0;
+      const valorDe = (l: LinhaModelo) => l.valores[anoS] ?? 0;
       let soma = lista.reduce((s, l) => s + valorDe(l), 0);
       // TOLERÂNCIA EM MÓDULO, e não `informado * 1.005`. O total informado pode
       // ser NEGATIVO — patrimônio líquido a descoberto é o caso normal num
@@ -1214,7 +1221,11 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
         soma = depois;
       }
       if (remover.size > 0) {
-        linhasPorBloco.set(bloco, lista.filter((l) => !remover.has(l)));
+        linhasPorBloco.set(bloco, lista.flatMap((l) => {
+          if (!remover.has(l)) return [l];
+          const valores = Object.fromEntries(Object.entries(l.valores).filter(([a]) => a !== anoS));
+          return Object.keys(valores).length > 0 ? [{ ...l, valores }] : [];
+        }));
       }
     }
   }

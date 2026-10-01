@@ -1163,6 +1163,10 @@ export function rotulosDeSubtotalInformado(
 ): string[] {
   const alvo = entidade ? normalizar(entidade) : null;
   const rotulos = new Set<string>();
+  // O rótulo que ALGUMA aba marcou como subtotal numa coluna de exercício ilegível, e os
+  // exercícios legíveis que o mesmo (seção, rótulo) tem em QUALQUER aba — ver o fim da função.
+  const ilegiveisMarcados = new Set<string>();
+  const anosLegiveis = new Map<string, Set<string>>();
   for (const [aba, itens] of camposPorAba) {
     if (!ESTRUTURA_POR_ABA.has(aba)) continue;
     // DETECTA SOBRE A ABA INTEIRA e só DEPOIS filtra pela entidade. A ordem
@@ -1175,6 +1179,18 @@ export function rotulosDeSubtotalInformado(
     // vereditos se aplicam às linhas do modelo.
     // `idsFortes` = regras (A) e (B), que olham a estrutura declarada e a soma dos irmãos
     // EM CADA COLUNA; `PorOrdem` é a única que decide por coincidência de soma numa célula.
+    // Os exercícios legíveis de cada (seção, rótulo) valem MESMO quando a aba não tem
+    // subtotal nenhum — é justamente a aba "limpa" (os Balanços) que o veredito ilegível de
+    // outra aba não pode apagar.
+    for (const { campo, colKey } of itens) {
+      if (alvo !== null && normalizar(colKey.split(CHAVE_SEP)[0] ?? "") !== alvo) continue;
+      if (typeof campo.valor_num !== "number") continue;
+      const ano = anoDaColuna(colKey);
+      if (ano === null) continue;
+      const k = `${normalizar(campo.secao_canonica ?? "")}||${normalizar(campo.chave)}`;
+      if (!anosLegiveis.has(k)) anosLegiveis.set(k, new Set());
+      anosLegiveis.get(k)!.add(ano);
+    }
     const idsFortes = detectarSubtotaisInformados(itens);
     const ids = new Set([...idsFortes, ...detectarSubtotaisPorOrdem(itens)]);
     if (ids.size === 0) continue;
@@ -1250,10 +1266,21 @@ export function rotulosDeSubtotalInformado(
         if (!anos.has(ano)) anos.set(ano, []);
         anos.get(ano)!.push(efetiva(colKey));
       }
-      if (ilegivel) { if (todasMarcam) rotulos.add(k); continue; }
+      if (ilegivel) { if (todasMarcam) ilegiveisMarcados.add(k); continue; }
       for (const [ano, marcas] of anos) if (marcas.every(Boolean)) rotulos.add(`${k}||${ano}`);
     }
   }
+  // COLUNA DE EXERCÍCIO ILEGÍVEL: o veredito sem ano vale para TODOS os exercícios, então só
+  // pode sair quando nenhuma outra coluna do mesmo (seção, rótulo) — em QUALQUER aba — tem
+  // exercício legível. O laço acima julga uma aba por vez: o balancete (aba Combinado, período
+  // "jan–ago/26") declara "Estoques" agrupamento e, sendo a única coluna DAQUELA aba, "todas
+  // marcam"; o veredito sem ano tirava a conta também dos Balanços de 2024 e 2025 (aba Balanço),
+  // onde ela é folha. Medido no Krauspenhar (caso 33b58a89): resíduo de 53,92 mi (2024) e
+  // 43,57 mi (2025), 43% do ativo. Havendo exercício legível em outra aba, o ano do ilegível
+  // não se conhece: o rótulo NÃO sai da soma por aqui (teto: o agrupamento pode dobrar nesse
+  // exercício; a prova aritmética do modelo — total informado do grupo — tira o excesso, e o
+  // que ela não tirar aparece na linha de reconciliação, em vez de a conta sumir calada).
+  for (const k of ilegiveisMarcados) if (!anosLegiveis.has(k)) rotulos.add(k);
   return [...rotulos];
 }
 
