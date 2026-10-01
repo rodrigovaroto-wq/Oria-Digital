@@ -315,6 +315,15 @@ jobs:
         run: npm ci --ignore-scripts
 
       # ---- rápido e barato primeiro ---------------------------------------
+      # O `verificar-export.mts` lê o GABARITO do book Vertentes, que é GERADO (não
+      # versionado). Em série ele vinha de um passo anterior do mesmo job; aqui o job
+      # é outro runner, então gera o seu (o run fa6ccda morreu em ENOENT sem isto).
+      - name: Gerar o book sintético (insumo do verificar-export)
+        working-directory: Dados de Teste/book-vertentes
+        run: |
+          python3 -m pip install --quiet --only-binary :all: 'reportlab==5.0.1'
+          PYTHONPATH=. python3 gerar.py
+
       - name: Lint e tipos do portal
         # OS BINÁRIOS DO LOCK, CHAMADOS POR CAMINHO — a mesma razão já escrita no
         # passo da suíte de export mais abaixo, e a regra que o CLAUDE.md manda.
