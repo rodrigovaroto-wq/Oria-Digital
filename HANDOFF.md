@@ -31,7 +31,18 @@ só como referência — não precisa ler tudo pra continuar, comece por aqui.
     "Venda de peças e lubrificantes" 2026: DRE +24,22 mi × COMBINADO −24,67 mi (sinal invertido;
     DRE vence por autoridade) e o Mapa de Dívida 2025 sem coluna de juros.
 - **PR #249:** `2ae4589` (nomes `erros`/`macro` = publicados, item m) e `3f40571` (Estoques
-  apagados pelo sintético do balancete, item l: reconciliação do AC 53,92/43,57 mi → 0).
+  apagados pelo sintético do balancete, item l: reconciliação do AC 53,92/43,57 mi → 0). A revisão
+  do `3f40571` achou dupla contagem calada em arranjos plausíveis; dois remendos (`45c8df2`) e a
+  regra de três levaram ao REDESENHO `eb3592f`: num exercício, uma linha de CABECALHOS_DE_GRUPO só
+  deixa de somar quando outras contas do bloco presentes NAQUELE ano a explicam (soma de
+  subconjuntos; filha que é nome de grupo só se for SUBGRUPO conhecido); a âncora (total
+  informado) só corrobora e mostra resíduo. Ajustes `2bc1aa2` (poda pelo alvo, folga de
+  arredondamento em milhar, corroboração quando ambíguo) e `028d2f2` (aviso no ramo calado;
+  "Outros créditos" é irmã). Leitura final: nada sobreviveu; poda conferida contra força bruta
+  em 20.000 casos. Krauspenhar real: 0 células mudam desde o `3f40571`. Alarme conhecido e
+  aceito: "Adiantamentos de clientes" 2.072 do Vertentes recebe aviso "pode estar somando".
+  Teto declarado: bloco grande, sem total informado e com uma única via exata ainda pode remover
+  por coincidência (força bruta no Krauspenhar: nenhuma).
 - **Aberto — dívida de longo prazo do Krauspenhar** (4,18 mi 2024, 9,54 mi 2025): não chega a
   `ESP_DIVIDA_LP` e vira só o plug da reconciliação do PNC (sem juros nem amortização). Hipótese
   por leitura de código, NÃO medida: `blocoDaLinha` (modelo-institucional.ts ~719) manda a linha
