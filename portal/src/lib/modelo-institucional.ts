@@ -834,8 +834,40 @@ const PADROES_DIVIDA_FINANCEIRA = [
   /antecipa(ç|c)(ã|a)o de receb(í|i)veis/i,
   /adiantamento de contrato de c(â|a)mbio/i, /\bACC\b/, /\bACE\b/,
 ];
+// TRANCHE BANCÁRIA CHAMADA SÓ DE "CAPITAL DE GIRO". Nenhum dos padrões acima a pega: o rótulo
+// do balancete é "CAPITAL DE GIRO BANCO X - CP/LP", sem "empréstimo" nem "financiamento", e
+// "capital de giro" sozinho também nomeia a NCG (ativo) e linhas que não são dívida. Por isso o
+// padrão EXIGE o nome de uma instituição financeira no mesmo rótulo (lookahead, qualquer ordem):
+// "Banco Alfa - capital de giro" e "CAPITAL DE GIRO BANCO X - LP" entram; "Capital de giro" e
+// "Capital de giro - longo prazo" (sem credor no rótulo) continuam fora, como estavam.
+const CAPITAL_DE_GIRO_BANCARIO =
+  /^(?=.*\bcapital de giro\b)(?=.*\b(?:banco|bco|bradesco|ita(?:ú|u)|santander|sicredi|sicoob|safra|bndes|daycoval)\b)/i;
+
+// UM GRUPO DE OBRIGAÇÕES QUE APENAS CITA UM INSTRUMENTO DE DÍVIDA NÃO É DÍVIDA.
+//
+// O DEFEITO (Krauspenhar, caso 33b58a89): "Outras obrigações (adiantamentos de clientes, JCP a
+// pagar e desconto de duplicatas)" casava /desconto de duplicatas?/ e entrava INTEIRA como dívida
+// bancária: a "Dívida de curto prazo" de 2024 saía 20,65 mi onde a dívida medida é 15,99 mi — os
+// 4,66 mi de adiantamento de cliente e JCP a pagar recebiam juro de empréstimo. O rótulo é o NOME
+// DE UM GRUPO ("outras obrigações", "outras contas a pagar"…) seguido da ENUMERAÇÃO do que há
+// dentro (parêntese ou dois-pontos): citar "desconto de duplicatas" ali diz que o grupo PODE conter
+// duplicata descontada, não que o saldo todo seja. O documento não separa os valores, então a
+// escolha conservadora é não cobrar juro (ela fica no giro, com nota — ver
+// `grupoDeObrigacoesQueCitaDivida`). Rótulo SEM enumeração ("Outras contas a pagar - empréstimo
+// de sócios") não é afetado: aí o próprio nome diz o que é.
+const GRUPO_DE_OBRIGACOES =
+  /^\s*(?:outras?|demais|diversas?)\s+(?:obriga(?:ç|c)(?:õ|o)es|contas? a pagar|passivos?|d(?:é|e)bitos|valores a pagar)\b[^(:]*[(:]/i;
+
+const citaInstrumentoDeDivida = (chave: string) =>
+  PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave)) || CAPITAL_DE_GIRO_BANCARIO.test(chave);
+
 export const ehDividaFinanceira = (chave: string) =>
-  PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave));
+  !GRUPO_DE_OBRIGACOES.test(chave) && citaInstrumentoDeDivida(chave);
+
+/** O grupo que `ehDividaFinanceira` deixa de fora por citar um instrumento de dívida — a linha
+ * que carrega a nota da regra 1 (o efeito: o saldo todo é giro e não recebe juro). */
+export const grupoDeObrigacoesQueCitaDivida = (chave: string) =>
+  GRUPO_DE_OBRIGACOES.test(chave) && citaInstrumentoDeDivida(chave);
 
 // AS TRÊS CONTAS DO CICLO DE CAIXA, isoladas por nome.
 //
@@ -3129,7 +3161,16 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   g.linha(null, { rotulo: "PASSIVO CIRCULANTE OPERACIONAL", bloco: true });
   for (const l of passivos) {
     const ch = chaveLinha("wc_p", l);
-    g.linha(ch, { rotulo: l.chave, fmt: NUM });
+    const rLinhaPassivo = g.linha(ch, { rotulo: l.chave, fmt: NUM });
+    if (grupoDeObrigacoesQueCitaDivida(l.chave)) {
+      g.celula(rLinhaPassivo, COL_ROTULO).note = comoNota(
+        "Este grupo cita um instrumento de dívida (ex.: desconto de duplicatas) junto com contas "
+        + "operacionais, e o documento não separa os valores. O saldo todo foi tratado como GIRO: "
+        + "não recebe juro nem amortização de dívida. Se parte dele for duplicata descontada, o "
+        + "custo financeiro e a dívida bancária estão SUBESTIMADOS por essa parcela — confirme com "
+        + "a empresa a composição do grupo.",
+      );
+    }
     linhasDoGrupo(ch);
     g.linha(`${ch}#dias`, { rotulo: "    dias de giro (base)", fmt: NUM2 });
     g.linha(`${ch}#diasStr`, { rotulo: "    dias de giro (stress)", fmt: NUM2 });

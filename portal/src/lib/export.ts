@@ -1017,6 +1017,16 @@ function detectarSubtotaisPorOrdem(
       return true;
     });
     if (linhas.length < 3) continue; // subtotal + 2 componentes é o mínimo
+    // O grupo é (versão × coluna × `secao`), e `secao` nula forma UM grupo com todas as linhas sem
+    // seção do documento (medido no Krauspenhar: ordens 13, 22 e 23 juntas). Por isso o total da
+    // seção é reconhecido pelo nome da seção DO CANDIDATO (`secao` ou `secao_canonica`
+    // humanizada), lido no rótulo da linha seguinte — que pode vir com `secao` e
+    // `secao_canonica` nulas, e com ou sem "Total d[oa]".
+    const ehTotalDaSecaoDe = (cand: CampoExtraido, c: CampoExtraido) => {
+      const n = normalizar(c.chave).replace(/^total (?:d[oa] )?/, "");
+      return [cand.secao ?? "", (cand.secao_canonica ?? "").replace(/_/g, " ")]
+        .map(normalizar).some((nome) => nome !== "" && nome === n);
+    };
     let i = 0;
     while (i < linhas.length) {
       const candidato = linhas[i];
@@ -1037,6 +1047,14 @@ function detectarSubtotaisPorOrdem(
       for (let j = i + 1; j < linhas.length; j++) {
         const v = linhas[j].valor_num;
         if (v == null) break;
+        // O TOTAL DA PRÓPRIA SEÇÃO NÃO É COMPONENTE DE NINGUÉM DA SEÇÃO. Seção com UMA conta só
+        // imprime a conta e, logo abaixo, o total dela com o MESMO valor — e com um nome de
+        // agrupamento no rótulo (1 componente basta) a conta virava "subtotal do próprio total".
+        // Medido no Krauspenhar (caso 33b58a89): "Empréstimos e financiamentos - longo prazo"
+        // (4,18 mi em 2024, 9,54 mi em 2025), única conta do passivo não circulante, saía do
+        // modelo nos DOIS anos; a "Dívida de longo prazo" ficava 0 e o valor só reaparecia como
+        // resíduo de reconciliação (6 células de 8% a 11% do ativo).
+        if (ehTotalDaSecaoDe(candidato, linhas[j])) break;
         acumulado += v;
         if (j - i >= minComponentes && Math.abs(acumulado - valor) < 0.01) { casouEm = j; break; }
       }

@@ -7051,6 +7051,11 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     "Leasing operacional a pagar",
     "Nota promissória comercial",
     "Cédula de crédito bancário",
+    // (39t) a tranche bancária que o balancete chama só de "capital de giro" + o credor
+    "CAPITAL DE GIRO BANCO ALFA - LP",
+    "Banco Alfa - capital de giro",
+    // sem enumeração o próprio nome diz o que é: continua dívida
+    "Outras contas a pagar - empréstimo de sócios",
   ];
   // O CONTRAPONTO É OBRIGATÓRIO: sem ele um `() => true` passaria em tudo acima.
   const GIRO: string[] = [
@@ -7066,6 +7071,10 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     // financeiro por conta própria. Está escrito no vocabulário.
     "Risco sacado a pagar",
     "Confirming - fornecedores",
+    // (39s) grupo de obrigações que só CITA desconto de duplicatas entre outras contas
+    "Outras obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)",
+    // (39t) "capital de giro" sem credor no rótulo continua sem classificar como dívida
+    "Capital de giro",
   ];
   for (const r of DIVIDA) {
     checar(ehDividaFinanceira(r), `(37) "${r}" é dívida financeira (não gira contra receita)`);
@@ -8066,8 +8075,9 @@ const arranjoDeCirculante = (ENT: string) => {
     id, tipo_taxonomia: tipo, entidade: { razao_social: ENT },
     periodo: { tipo: "anual", referencia: ref }, documento_versao: [{ id: `v${id}`, nome_original: `${id}.pdf` }],
   }) as DocumentoParaExport;
-  const c = (v: string, chave: string, secao: string, valor: number, ordem: number, per: string) =>
-    campo({ chave, secao, secao_canonica: "ativo_circulante", valor_num: valor, ordem, periodo_coluna: per,
+  const c = (v: string, chave: string, secao: string, valor: number | null, ordem: number, per: string,
+             canonica = "ativo_circulante") =>
+    campo({ chave, secao, secao_canonica: canonica, valor_num: valor, ordem, periodo_coluna: per,
             documento_versao_id: v, unidade: "milhar" } as never);
   const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
   const linhaA = (chave: string, valores: Record<string, number>, doc: string, papel: "conta" | "subtotal" = "conta",
@@ -8455,6 +8465,119 @@ const arranjoDeCirculante = (ENT: string) => {
     checar(rCr > 0 && perto(m.ler(m.wc, rCr, "E"), 1200),
       "(39q) 2024: 'Contas a receber' (folha) fica no modelo — Outros créditos + Adiantamento somam 1.200 por acaso",
       JSON.stringify(rCr > 0 ? m.ler(m.wc, rCr, "E") : "linha ausente"));
+  }
+
+  // ===========================================================================
+  // (39r)-(39t) KRAUSPENHAR (caso 33b58a89, 01/10/2026): TRÊS DEFEITOS NA CADEIA DA DÍVIDA.
+  // O arranjo dos Balanços é o de produção (2024 versão 1e096ac5, 2025 versão 07f650d8): o PNC
+  // tem UMA conta, ordem 22 "Empréstimos e financiamentos - longo prazo" (4.183.333,35 e
+  // 9.535.722,84), e logo abaixo, ordem 23, "Passivo Não Circulante" com o MESMO valor. O que
+  // NÃO se reproduz de fora do banco (regra 4): as demais linhas do Balanço real; só o Ativo Não
+  // Circulante (valores medidos) entra, como 3a linha do grupo sem seção. Afirma-se o COMPORTAMENTO: com a conta única e o
+  // total da seção na sequência, a conta é folha.
+  // O balancete (COMBINADO, jan-ago/26) tem o sintético "EMPRESTIMOS E FINANCIAMENTOS LONGO
+  // PRAZO" sobre as tranches "CAPITAL DE GIRO BANCO … - LP"; aqui 2026 é histórico, para a
+  // regra "o sintético não soma junto com as tranches no próprio ano" ter onde ser lida.
+  // ===========================================================================
+  {
+    const EMP = "Empréstimos e financiamentos - longo prazo";
+    const PNC = "Passivo Não Circulante";
+    const P = "passivo_nao_circulante";
+    const L24 = 4183333.35; const L25 = 9535722.84;
+    const CP24 = 15985290.43; const CP25 = 12000000;
+    const OUT24 = 4664446.92; const OUT25 = 4871633.53;
+    const OUTROS = "Outras obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)";
+    const SINT = "EMPRESTIMOS E FINANCIAMENTOS LONGO PRAZO";
+    const TR_A = "CAPITAL DE GIRO BANCO ALFA - LP"; const TR_B = "CAPITAL DE GIRO BANCO BETA - LP";
+    const { mk, c, linhaA } = arranjoDeCirculante("KRAUSPENHAR DIVIDA LTDA.");
+    // FORMATO REAL (medido no export do caso): o total "Passivo Não Circulante" e a conta chegam
+    // com `secao` NULA, e a conta traz só `secao_canonica`. O grupo do detector por ordem é
+    // (versão × coluna × secao): `secao` nula junta todas as linhas sem seção do documento, então
+    // "Ativo Não Circulante" (ordem 13) é a terceira linha do grupo — não há linha inventada.
+    const semSecao = (v: string, chave: string, valor: number | null, ordem: number, per: string, canon: string | null) =>
+      campo({ chave, secao: null, secao_canonica: canon, valor_num: valor, ordem, periodo_coluna: per,
+              documento_versao_id: v, unidade: "milhar" } as never);
+    const campos = [
+      semSecao("vB24", "Ativo Não Circulante", 25822691.85, 13, "2024", "ativo_nao_circulante"),
+      semSecao("vB24", EMP, L24, 22, "2024", P),
+      semSecao("vB24", PNC, L24, 23, "2024", null),
+      semSecao("vB25", "Ativo Não Circulante", 29494095.41, 13, "2025", "ativo_nao_circulante"),
+      semSecao("vB25", EMP, L25, 22, "2025", P),
+      semSecao("vB25", PNC, L25, 23, "2025", null),
+      c("vBC26", SINT, PNC, 3000000, 5, "01/01/2026 a 31/08/2026", P),
+      c("vBC26", TR_A, SINT, 1000000, 6, "01/01/2026 a 31/08/2026", P),
+      c("vBC26", TR_B, SINT, 2000000, 7, "01/01/2026 a 31/08/2026", P),
+    ];
+    const entrada = {
+      caso: { nome: "Krauspenhar dívida", produto: "reestruturacao" },
+      agora: new Date("2026-10-01T12:00:00Z"), entidade: "KRAUSPENHAR DIVIDA LTDA.", setor: "comercio",
+      anosHistoricos: [2024, 2025, 2026], anosProjetados: [2027, 2028],
+      stressPct: 0.2, caixaMinimo: 0, aliquotaTributos: 0.34,
+      linhas: [
+        linhaA("Passivo Circulante", { "2024": CP24 + OUT24, "2025": CP25 + OUT25 }, "BALANCO", "subtotal", "passivo_circulante"),
+        linhaA("Empréstimos e financiamentos - curto prazo", { "2024": CP24, "2025": CP25 }, "BALANCO", "conta", "passivo_circulante"),
+        linhaA(OUTROS, { "2024": OUT24, "2025": OUT25 }, "BALANCO", "conta", "passivo_circulante"),
+        linhaA(PNC, { "2024": L24, "2025": L25, "2026": 3000000 }, "BALANCO", "subtotal", P),
+        linhaA(EMP, { "2024": L24, "2025": L25 }, "BALANCO", "conta", P),
+        linhaA(SINT, { "2026": 3000000 }, "COMBINADO", "conta", P),
+        linhaA(TR_A, { "2026": 1000000 }, "COMBINADO", "conta", P),
+        linhaA(TR_B, { "2026": 2000000 }, "COMBINADO", "conta", P),
+      ],
+      premissas: [], vinculos: [], macro: [], unidade: "R$ mil",
+    };
+    const wb = buildExportWorkbook({
+      caso: entrada.caso, documentos: [mk("B24", "BALANCO", "2024"), mk("B25", "BALANCO", "2025"), mk("BC26", "COMBINADO", "2026")],
+      campos, agora: entrada.agora, modo: "completo",
+      modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+    const bs = wb.getWorksheet("Balance Sheet")!; esquecerMemoria(bs);
+    const wc = wb.getWorksheet("Working Capital")!; esquecerMemoria(wc);
+    const sd = wb.getWorksheet("ST Inv. & Debt")!; esquecerMemoria(sd);
+    const rLP = achar(bs, "Dívida de longo prazo");
+    const rRecPnc = achar(bs, "reconciliação com o passivo não circulante informado no documento");
+    const rCpSd = achar(sd, "Dívida de curto prazo (fim do período)");
+    const lerCel = (ws: ExcelJS.Worksheet, r: number, col: string) => (r > 0 ? avaliarCelula(ws, col, r) : null);
+    checar(rLP > 0 && rRecPnc > 0 && rCpSd > 0, "(39r) as linhas lidas existem no arquivo",
+      `LP=${rLP} reconciliação PNC=${rRecPnc} CP(ST)=${rCpSd}`);
+
+    // (39r) DEFEITO 1: conta única que iguala o total da seção não é subtotal dele.
+    for (const [col, ano, esperado] of [["E", 2024, L24], ["F", 2025, L25]] as const) {
+      const lp = lerCel(bs, rLP, col);
+      checar(perto(lp, esperado),
+        `(39r) ${ano}: a Dívida de longo prazo do Balance Sheet é o empréstimo do Balanço (conta única do PNC), não zero`,
+        `${JSON.stringify(lp)} vs ${esperado}`);
+      const res = lerCel(bs, rRecPnc, col);
+      checar(perto(res, 0),
+        `(39r) ${ano}: o PNC fecha no informado — o empréstimo não vira resíduo de reconciliação`, JSON.stringify(res));
+    }
+    // …e a regra que não pode se perder: no ano do balancete o sintético não soma com as tranches.
+    // A tranche só é dívida com o (39t); o que o (39r) afirma é o PNC de 2026 fechar nos 3.000.000
+    // do informado (3.000.000 = tranches; somar o sintético daria 6.000.000).
+    checar(perto(lerCel(bs, rRecPnc, "G"), 0),
+      "(39r) 2026 (balancete): o sintético não soma junto com as tranches (reconciliação do PNC ~0, não 3.000.000)",
+      JSON.stringify(lerCel(bs, rRecPnc, "G")));
+
+    // (39s) DEFEITO 2: o grupo de obrigações que só cita "desconto de duplicatas" não é dívida.
+    for (const [col, ano, esperado] of [["E", 2024, CP24], ["F", 2025, CP25]] as const) {
+      const cp = lerCel(sd, rCpSd, col);
+      checar(perto(cp, esperado),
+        `(39s) ${ano}: a Dívida de curto prazo é só o empréstimo (adiantamento de cliente e JCP não recebem juro de dívida)`,
+        `${JSON.stringify(cp)} vs ${esperado}`);
+    }
+    const rOut = achar(wc, OUTROS);
+    checar(rOut > 0 && perto(lerCel(wc, rOut, "E"), OUT24),
+      "(39s) 2024: 'Outras obrigações (…)' fica no Working Capital com o saldo do Balanço", JSON.stringify(lerCel(wc, rOut, "E")));
+    const notaOut = rOut > 0 ? JSON.stringify(wc.getRow(rOut).getCell(3).note ?? "") : "";
+    checar(/duplicata/i.test(notaOut) && /n(ã|a)o recebe juro/i.test(notaOut) && /SUBESTIMAD/.test(notaOut),
+      "(39s) …e a célula diz o motivo (o documento não separa a duplicata descontada) e o efeito (sem juro, dívida subestimada)", notaOut);
+
+    // (39t) DEFEITO 3: tranche "CAPITAL DE GIRO BANCO …" é dívida. Só 2026 tem valor (balancete),
+    // então o efeito nas colunas históricas de 2024/2025 do Krauspenhar é NULO; a asserção é no ano
+    // do balancete, onde o sintético (excluído) e as tranches (agora dívida) somam 3.000.000.
+    const lp26 = lerCel(bs, rLP, "G");
+    checar(perto(lp26, 3000000),
+      "(39t) 2026 (balancete): as tranches 'CAPITAL DE GIRO BANCO …' são a dívida de longo prazo (3.000.000, não 0 nem 6.000.000)",
+      JSON.stringify(lp26));
   }
 
 }
