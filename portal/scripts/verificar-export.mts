@@ -7054,6 +7054,11 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     // (39t) a tranche bancária que o balancete chama só de "capital de giro" + o credor
     "CAPITAL DE GIRO BANCO ALFA - LP",
     "Banco Alfa - capital de giro",
+    // credores com acento ou sigla (sem a flag `u` o \b não existia depois de "ú")
+    "Capital de giro Itaú - LP", "Capital de giro BB", "Capital de giro Caixa Econômica Federal",
+    "Capital de giro Banrisul - CP",
+    // grupo com UM item só, e esse item é dívida: o rótulo diz o que é (tirá-lo calava dívida e juro)
+    "Outras obrigações (financiamento BNDES)", "Outras contas a pagar: empréstimo Banco X",
     // sem enumeração o próprio nome diz o que é: continua dívida
     "Outras contas a pagar - empréstimo de sócios",
   ];
@@ -8488,6 +8493,9 @@ const arranjoDeCirculante = (ENT: string) => {
     const OUT24 = 4664446.92; const OUT25 = 4871633.53;
     const OUTROS = "Outras obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)";
     const SINT = "EMPRESTIMOS E FINANCIAMENTOS LONGO PRAZO";
+    // grupo MISTO no PNC (mesma regra do Working Capital): fica no balanço como conta constante e
+    // TEM de levar a nota, senão dívida e juro ficam subestimados calados
+    const MISTO = "Outras obrigações (dividendos a pagar e desconto de duplicatas)"; const MISTO24 = 100000;
     const TR_A = "CAPITAL DE GIRO BANCO ALFA - LP"; const TR_B = "CAPITAL DE GIRO BANCO BETA - LP";
     const { mk, c, linhaA } = arranjoDeCirculante("KRAUSPENHAR DIVIDA LTDA.");
     // FORMATO REAL (medido no export do caso): o total "Passivo Não Circulante" e a conta chegam
@@ -8517,7 +8525,8 @@ const arranjoDeCirculante = (ENT: string) => {
         linhaA("Passivo Circulante", { "2024": CP24 + OUT24, "2025": CP25 + OUT25 }, "BALANCO", "subtotal", "passivo_circulante"),
         linhaA("Empréstimos e financiamentos - curto prazo", { "2024": CP24, "2025": CP25 }, "BALANCO", "conta", "passivo_circulante"),
         linhaA(OUTROS, { "2024": OUT24, "2025": OUT25 }, "BALANCO", "conta", "passivo_circulante"),
-        linhaA(PNC, { "2024": L24, "2025": L25, "2026": 3000000 }, "BALANCO", "subtotal", P),
+        linhaA(PNC, { "2024": L24 + MISTO24, "2025": L25, "2026": 3000000 }, "BALANCO", "subtotal", P),
+        linhaA(MISTO, { "2024": MISTO24 }, "BALANCO", "conta", P),
         linhaA(EMP, { "2024": L24, "2025": L25 }, "BALANCO", "conta", P),
         linhaA(SINT, { "2026": 3000000 }, "COMBINADO", "conta", P),
         linhaA(TR_A, { "2026": 1000000 }, "COMBINADO", "conta", P),
@@ -8570,6 +8579,14 @@ const arranjoDeCirculante = (ENT: string) => {
     const notaOut = rOut > 0 ? JSON.stringify(wc.getRow(rOut).getCell(3).note ?? "") : "";
     checar(/duplicata/i.test(notaOut) && /n(ã|a)o recebe juro/i.test(notaOut) && /SUBESTIMAD/.test(notaOut),
       "(39s) …e a célula diz o motivo (o documento não separa a duplicata descontada) e o efeito (sem juro, dívida subestimada)", notaOut);
+
+    const rMisto = achar(bs, MISTO);
+    const notaMisto = rMisto > 0 ? JSON.stringify(bs.getRow(rMisto).getCell(3).note ?? "") : "";
+    checar(rMisto > 0 && perto(lerCel(bs, rMisto, "E"), MISTO24) && perto(lerCel(bs, rRecPnc, "E"), 0),
+      "(39s) PNC 2024: o grupo misto fica no Balance Sheet como conta constante e o PNC segue fechando",
+      `${JSON.stringify(rMisto > 0 ? lerCel(bs, rMisto, "E") : "linha ausente")} · ${JSON.stringify(lerCel(bs, rRecPnc, "E"))}`);
+    checar(/duplicata/i.test(notaMisto) && /n(ã|a)o recebe juro/i.test(notaMisto) && /SUBESTIMAD/.test(notaMisto),
+      "(39s) …e a linha do PNC leva a nota (motivo e efeito), não cai calada fora da dívida", notaMisto);
 
     // (39t) DEFEITO 3: tranche "CAPITAL DE GIRO BANCO …" é dívida. Só 2026 tem valor (balancete),
     // então o efeito nas colunas históricas de 2024/2025 do Krauspenhar é NULO; a asserção é no ano

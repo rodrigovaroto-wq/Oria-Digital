@@ -840,8 +840,13 @@ const PADROES_DIVIDA_FINANCEIRA = [
 // padrão EXIGE o nome de uma instituição financeira no mesmo rótulo (lookahead, qualquer ordem):
 // "Banco Alfa - capital de giro" e "CAPITAL DE GIRO BANCO X - LP" entram; "Capital de giro" e
 // "Capital de giro - longo prazo" (sem credor no rótulo) continuam fora, como estavam.
-const CAPITAL_DE_GIRO_BANCARIO =
-  /^(?=.*\bcapital de giro\b)(?=.*\b(?:banco|bco|bradesco|ita(?:ú|u)|santander|sicredi|sicoob|safra|bndes|daycoval)\b)/i;
+// Sem a flag `u` o `\b` não existe entre "ú" e o espaço ("Itaú - LP" não casava): as bordas são
+// "não-letra" por propriedade Unicode. "caixa" sozinho fica fora (é também o caixa da empresa):
+// só "Caixa Econômica".
+const CAPITAL_DE_GIRO_BANCARIO = new RegExp(
+  String.raw`^(?=.*(?<![\p{L}\d])capital de giro(?![\p{L}\d]))`
+  + String.raw`(?=.*(?<![\p{L}\d])(?:banco|bco|bradesco|ita[úu]|santander|sicredi|sicoob|safra|bndes|daycoval|bb|`
+  + String.raw`caixa econ[ôo]mica|banrisul|brb)(?![\p{L}\d]))`, "iu");
 
 // UM GRUPO DE OBRIGAÇÕES QUE APENAS CITA UM INSTRUMENTO DE DÍVIDA NÃO É DÍVIDA.
 //
@@ -850,24 +855,40 @@ const CAPITAL_DE_GIRO_BANCARIO =
 // bancária: a "Dívida de curto prazo" de 2024 saía 20,65 mi onde a dívida medida é 15,99 mi — os
 // 4,66 mi de adiantamento de cliente e JCP a pagar recebiam juro de empréstimo. O rótulo é o NOME
 // DE UM GRUPO ("outras obrigações", "outras contas a pagar"…) seguido da ENUMERAÇÃO do que há
-// dentro (parêntese ou dois-pontos): citar "desconto de duplicatas" ali diz que o grupo PODE conter
-// duplicata descontada, não que o saldo todo seja. O documento não separa os valores, então a
-// escolha conservadora é não cobrar juro (ela fica no giro, com nota — ver
-// `grupoDeObrigacoesQueCitaDivida`). Rótulo SEM enumeração ("Outras contas a pagar - empréstimo
-// de sócios") não é afetado: aí o próprio nome diz o que é.
-const GRUPO_DE_OBRIGACOES =
+// dentro: citar "desconto de duplicatas" ali diz que o grupo PODE conter duplicata descontada, não
+// que o saldo todo seja. O documento não separa os valores, então a escolha conservadora é não
+// cobrar juro (fica no giro, ou no PNC como conta constante, SEMPRE com nota — ver
+// `NOTA_GRUPO_MISTO`).
+//
+// SÓ É GRUPO MISTO QUEM TEM ENUMERAÇÃO DE FATO e um item que NÃO é dívida: dois ou mais itens
+// (vírgula, ";" ou " e ") com pelo menos um instrumento de dívida E pelo menos um que não é.
+// "Outras obrigações (financiamento BNDES)" e "Outras contas a pagar: empréstimo Banco X" têm um
+// item só, e esse item é dívida: continuam dívida (tirá-los calava dívida e juro). Rótulo SEM
+// enumeração ("Outras contas a pagar - empréstimo de sócios") também continua dívida.
+const CABECA_DE_GRUPO =
   /^\s*(?:outras?|demais|diversas?)\s+(?:obriga(?:ç|c)(?:õ|o)es|contas? a pagar|passivos?|d(?:é|e)bitos|valores a pagar)\b[^(:]*[(:]/i;
 
 const citaInstrumentoDeDivida = (chave: string) =>
   PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave)) || CAPITAL_DE_GIRO_BANCARIO.test(chave);
 
-export const ehDividaFinanceira = (chave: string) =>
-  !GRUPO_DE_OBRIGACOES.test(chave) && citaInstrumentoDeDivida(chave);
+/** O grupo que mistura instrumento de dívida com contas que não são dívida, sem separar valores. */
+export const grupoDeObrigacoesQueCitaDivida = (chave: string) => {
+  const cabeca = CABECA_DE_GRUPO.exec(chave);
+  if (!cabeca) return false;
+  const itens = chave.slice(cabeca[0].length).split(/\s*(?:,|;|\s+e\s+)\s*/).map((i) => i.trim()).filter(Boolean);
+  return itens.length >= 2 && itens.some(citaInstrumentoDeDivida) && itens.some((i) => !citaInstrumentoDeDivida(i));
+};
 
-/** O grupo que `ehDividaFinanceira` deixa de fora por citar um instrumento de dívida — a linha
- * que carrega a nota da regra 1 (o efeito: o saldo todo é giro e não recebe juro). */
-export const grupoDeObrigacoesQueCitaDivida = (chave: string) =>
-  GRUPO_DE_OBRIGACOES.test(chave) && citaInstrumentoDeDivida(chave);
+export const ehDividaFinanceira = (chave: string) =>
+  citaInstrumentoDeDivida(chave) && !grupoDeObrigacoesQueCitaDivida(chave);
+
+/** A nota (regra 1: motivo e efeito) de quem fica de fora da dívida por ser grupo misto. */
+export const NOTA_GRUPO_MISTO =
+  "Este grupo cita um instrumento de dívida (ex.: desconto de duplicatas) junto com contas "
+  + "que não são dívida, e o documento não separa os valores. O saldo todo foi tratado como conta "
+  + "operacional: não recebe juro nem amortização de dívida. Se parte dele for dívida bancária, "
+  + "o custo financeiro e a dívida estão SUBESTIMADOS por essa parcela — confirme com a empresa "
+  + "a composição do grupo.";
 
 // AS TRÊS CONTAS DO CICLO DE CAIXA, isoladas por nome.
 //
@@ -3163,13 +3184,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
     const ch = chaveLinha("wc_p", l);
     const rLinhaPassivo = g.linha(ch, { rotulo: l.chave, fmt: NUM });
     if (grupoDeObrigacoesQueCitaDivida(l.chave)) {
-      g.celula(rLinhaPassivo, COL_ROTULO).note = comoNota(
-        "Este grupo cita um instrumento de dívida (ex.: desconto de duplicatas) junto com contas "
-        + "operacionais, e o documento não separa os valores. O saldo todo foi tratado como GIRO: "
-        + "não recebe juro nem amortização de dívida. Se parte dele for duplicata descontada, o "
-        + "custo financeiro e a dívida bancária estão SUBESTIMADOS por essa parcela — confirme com "
-        + "a empresa a composição do grupo.",
-      );
+      g.celula(rLinhaPassivo, COL_ROTULO).note = comoNota(NOTA_GRUPO_MISTO);
     }
     linhasDoGrupo(ch);
     g.linha(`${ch}#dias`, { rotulo: "    dias de giro (base)", fmt: NUM2 });
@@ -4782,7 +4797,10 @@ function abaBalanco(
   g.pular();
   g.linha("DIVIDA_LP", { rotulo: "Dívida de longo prazo", fmt: NUM });
   g.linha("TRIB_PNC", { rotulo: "Tributos a recolher e parcelamentos (longo prazo)", fmt: NUM });
-  for (const l of pnc) g.linha(chaveLinha("pnc", l), { rotulo: l.chave, fmt: NUM });
+  for (const l of pnc) {
+    const rPnc = g.linha(chaveLinha("pnc", l), { rotulo: l.chave, fmt: NUM });
+    if (grupoDeObrigacoesQueCitaDivida(l.chave)) g.celula(rPnc, COL_ROTULO).note = comoNota(NOTA_GRUPO_MISTO);
+  }
   linhaReconc(rPNC, "passivo não circulante");
   g.linha("PNC", { rotulo: "PASSIVO NÃO CIRCULANTE", negrito: true, topo: true, fmt: NUM });
   g.pular();
