@@ -1424,28 +1424,60 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
         g.set(`macro:${s.codigo}`, ano, null, {
           nota: `O realizado de ${ano} cobre ${v!.meses} meses: realizado de ${v!.meses} meses não é taxa `
             + `anual e não é publicado numa linha "% a.a.". A célula fica VAZIA (e o que a lê cai em `
-            + `zero por N()) até haver Focus ou o ano fechar. Origem: ${v!.fonte}`,
+            + `zero por N()) até ${s.codigo === "INPC" ? "o ano fechar (o Focus não publica INPC)" : "haver Focus ou o ano fechar"}. `
+            + `Origem: ${v!.fonte}`,
         });
         continue;
       }
       // CDI: o Focus NÃO publica CDI, então ano projetado sem CDI realizado de 12 meses
       // ficava vazio e a curva da dívida (ST Inv. & Debt) lia zero: "Custo efetivo do
-      // revolver" 10,89% | 14,33% | 9,71% | 0 | 0 | 0 | 0 no export medido. A proxy é a
-      // Selic do mesmo ano, por FÓRMULA (uma revisão do Focus move o CDI junto). Base
-      // medida em produção: CDI e Selic realizados são IDÊNTICOS em todo ano fechado de
-      // 2022 a 2025 (12,380 / 13,028 / 10,888 / 14,333, os dois). Só vale quando a Selic
-      // do ano é Focus ou realizado de 12 meses — nunca o parcial.
+      // revolver" 10,89% | 14,33% | 9,71% | 0 | 0 | 0 | 0 no export medido. A proxy vem da
+      // Selic, por FÓRMULA (uma revisão do Focus move o CDI junto). Base medida em
+      // produção: CDI e Selic REALIZADOS (SGS 4390, acumulado do ano) são IDÊNTICOS em todo
+      // ano fechado de 2022 a 2025 (12,380 / 13,028 / 10,888 / 14,333).
+      //
+      // MAS A SELIC DO FOCUS NÃO É ESSA GRANDEZA: é a META NO FIM DO ANO. Copiá-la como
+      // CDI do ano subestima o custo num ciclo de corte (meta 13,75 no fim de 2026 e 12 no
+      // fim de 2027: acumulado de 2027 ≈ 12,9, a célula diria 12,0) e, em 2026, jogaria
+      // fora os 9 meses já realizados (9,713). Por isso, com Selic do Focus:
+      //   • ano corrente com realizado parcial: realizado de m meses composto com os
+      //     (12−m) restantes à meta do fim do ano;
+      //   • ano seguinte com meta no ano anterior: média das duas metas (trajetória linear
+      //     da meta ao longo do ano);
+      //   • primeiro ano projetado sem nada disso: a meta do próprio ano.
+      // Só a Selic REALIZADA de 12 meses entra como igualdade (a base medida acima).
       if (s.codigo === "CDI" && (!v || parcial(v, s.codigo))) {
         const selic = porSerieAno.get(`SELIC|${ano}`);
+        const ehMeta = (x: { fonte: string } | undefined) => x !== undefined && x.fonte.startsWith("Focus");
         if (selic && !parcial(selic, "SELIC")) {
-          g.set("macro:CDI", ano, `=${g.ref("macro:SELIC", ano)}`, {
-            fmt: NUM2,
-            nota: `CDI de ${ano} = Selic de ${ano} (célula acima, por fórmula): o Focus não publica CDI `
-              + "e o CDI realizado ficou IDÊNTICO à Selic em todo ano fechado de 2022 a 2025 "
-              + "(12,380 / 13,028 / 10,888 / 14,333). É proxy medida, não expectativa publicada para o CDI. "
+          const refSelic = g.ref("macro:SELIC", ano);
+          const antAno = g.anoAnterior(ano);
+          const selicAnt = antAno === null ? undefined : porSerieAno.get(`SELIC|${antAno}`);
+          const limite = "Aproximação a partir da META de fim de ano (o Focus não publica a taxa acumulada nem o CDI), "
+            + "NÃO é o CDI realizado.";
+          let formula = `=${refSelic}`;
+          let nota: string;
+          if (!ehMeta(selic)) {
+            nota = `CDI de ${ano} = Selic realizada de ${ano} (célula acima, por fórmula): o CDI realizado ficou `
+              + "IDÊNTICO à Selic em todo ano fechado de 2022 a 2025 (12,380 / 13,028 / 10,888 / 14,333). "
               + (v ? `O realizado de ${ano} cobre só ${v.meses} meses e não é taxa anual (${v.fonte}). ` : "")
-              + `Selic: ${selic.fonte}`,
-          });
+              + `Selic: ${selic.fonte}`;
+          } else if (v && v.meses !== undefined && ehMeta(selic)) {
+            formula = `=((1+${v.valor}/100)*(1+${refSelic}/100)^((12-${v.meses})/12)-1)*100`;
+            nota = `CDI de ${ano} = realizado de ${v.meses} meses (${v.valor.toLocaleString("pt-BR")}%, ${v.fonte}) `
+              + `composto com os ${12 - v.meses} meses restantes à meta de Selic do fim de ${ano} (célula acima, Focus): `
+              + `(1+realizado)×(1+meta)^((12−${v.meses})/12)−1. ${limite} Limite: os meses restantes usam a meta `
+              + "do fim do ano, não a trajetória mês a mês.";
+          } else if (ehMeta(selicAnt)) {
+            formula = `=(${g.ref("macro:SELIC", antAno!)}+${refSelic})/2`;
+            nota = `CDI de ${ano} = média das metas de Selic de fim de ${antAno} e ${ano} (Focus, células acima): `
+              + `trajetória linear da meta ao longo do ano. ${limite} Limite: curva não linear de juros desvia dela.`;
+          } else {
+            nota = `CDI de ${ano} = meta de Selic do fim de ${ano} (Focus, célula acima), sem meta do ano anterior `
+              + `para compor. ${limite} Limite: superestima o custo num ciclo de corte e subestima num de alta. `
+              + `Selic: ${selic.fonte}`;
+          }
+          g.set("macro:CDI", ano, formula, { fmt: NUM2, nota });
           continue;
         }
         if (v) {
@@ -1468,7 +1500,14 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
         });
         continue;
       }
-      g.set(`macro:${s.codigo}`, ano, v.valor, { fmt: NUM2, nota: `Fonte: ${v.fonte}` });
+      g.set(`macro:${s.codigo}`, ano, v.valor, {
+        fmt: NUM2,
+        nota: `Fonte: ${v.fonte}`
+          + (s.codigo === "SELIC" && v.fonte.startsWith("Focus")
+            ? ". ATENÇÃO: o valor projetado é a META de Selic no fim do ano (Focus), NÃO a taxa acumulada no ano "
+              + "como o rótulo da linha sugere; o realizado é o acumulado."
+            : ""),
+      });
     }
   }
   g.pular();

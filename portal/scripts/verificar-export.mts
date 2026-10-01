@@ -4961,9 +4961,9 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
       { serie: "CDI", ano: 2026, valor: 9.713, fonte: "realizado (9 meses)", natureza: "taxa" as const, meses: 9 },
       { serie: "SELIC", ano: 2024, valor: 10.888, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
       { serie: "SELIC", ano: 2025, valor: 14.333, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
-      { serie: "SELIC", ano: 2026, valor: 14.25, fonte: "Focus", natureza: "taxa" as const },
-      { serie: "SELIC", ano: 2027, valor: 12.5, fonte: "Focus", natureza: "taxa" as const },
-      { serie: "SELIC", ano: 2028, valor: 10.5, fonte: "Focus", natureza: "taxa" as const },
+      { serie: "SELIC", ano: 2026, valor: 13.75, fonte: "Focus, coleta 2026-09-28", natureza: "taxa" as const },
+      { serie: "SELIC", ano: 2027, valor: 12.5, fonte: "Focus, coleta 2026-09-28", natureza: "taxa" as const },
+      { serie: "SELIC", ano: 2028, valor: 10.5, fonte: "Focus, coleta 2026-09-28", natureza: "taxa" as const },
       { serie: "INPC", ano: 2026, valor: 3.1, fonte: "realizado (8 meses)", natureza: "taxa" as const, meses: 8 },
     ];
     const wb0 = buildExportWorkbook({
@@ -4991,26 +4991,49 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     if (rCdi > 0 && rInpc > 0 && rSelic > 0) {
       const cdi = COLS_ANO.map((c) => avaliarCelula(anual0, c, rCdi));
       // 1. realizado de 12 meses segue chegando como está
-      checar(cdi[0] === 10.888 && cdi[1] === 14.333,
+      checar(Math.abs(Number(cdi[0]) - 10.888) < 1e-9 && Math.abs(Number(cdi[1]) - 14.333) < 1e-9,
         "(0106j) o CDI realizado de 12 meses continua publicado como veio", JSON.stringify(cdi.slice(0, 2)));
-      // 2. o ano de 9 meses NÃO é publicado como taxa anual
-      checar(cdi[2] !== 9.713,
-        "(0106j) o CDI de 9 meses de 2026 NÃO é publicado numa linha \"% a.a.\"", JSON.stringify(cdi[2]));
-      // 3. ano projetado sem CDI no Focus segue a Selic do mesmo ano — e se move com ela
-      checar(cdi[2] === 14.25 && cdi[3] === 12.5 && cdi[4] === 10.5,
-        "(0106j) 2026-2028 sem CDI no Focus usam a Selic do mesmo ano (proxy medida)", JSON.stringify(cdi.slice(2)));
-      const celCdi27 = anual0.getRow(rCdi).getCell(COLS_ANO[iAnoDe(2027)]).value as { formula?: string } | null;
-      checar(typeof celCdi27 === "object" && celCdi27 !== null && "formula" in celCdi27
-        && celCdi27.formula === `${COLS_ANO[iAnoDe(2027)]}${rSelic}`,
-        "(0106j) …por FÓRMULA que lê a célula da Selic (revisão do Focus move o CDI)", JSON.stringify(celCdi27));
-      checar(/Selic/.test(notaDe(anual0, rCdi, COLS_ANO[iAnoDe(2027)]))
-        && /12,380/.test(notaDe(anual0, rCdi, COLS_ANO[iAnoDe(2027)])),
-        "(0106j) …e a nota cita a base medida (CDI = Selic em 2022-2025) e que o Focus não publica CDI",
-        notaDe(anual0, rCdi, COLS_ANO[iAnoDe(2027)]).slice(0, 120));
+      // 2. o ano de 9 meses NÃO é publicado como taxa anual, e NÃO é a meta de fim de ano
+      //    crua: compõe o realizado (9,713 em 9 meses) com os 3 meses restantes à meta
+      //    13,75 do Focus = (1,09713)×(1,1375)^(3/12)−1 ≈ 13,30 (e não 13,75, que
+      //    descartaria os 9 meses realizados, nem 9,713).
+      const perto = (x: unknown, alvo: number, eps: number) => typeof x === "number" && Math.abs(x - alvo) < eps;
+      const esperado26 = ((1 + 9.713 / 100) * Math.pow(1 + 13.75 / 100, 3 / 12) - 1) * 100;
+      checar(perto(cdi[2], esperado26, 1e-6) && Math.abs(esperado26 - 13.30) < 0.01,
+        "(0106j) o CDI de 2026 (9 meses realizados + meta 13,75) compõe ≈ 13,30 — nem 9,713 nem 13,75",
+        `${JSON.stringify(cdi[2])} (esperado ${esperado26.toFixed(4)})`);
+      // 3. ano projetado seguinte: média das metas de fim de ano de t-1 e t (13,75 e 12,5;
+      //    12,5 e 10,5), e o primeiro ano sem meta anterior usaria a meta sozinha.
+      checar(perto(cdi[3], (13.75 + 12.5) / 2, 1e-9) && perto(cdi[4], (12.5 + 10.5) / 2, 1e-9),
+        "(0106j) 2027-2028 sem CDI no Focus = média das metas de Selic do ano anterior e do ano",
+        JSON.stringify(cdi.slice(3)));
+      // COMPORTAMENTO, não mecanismo: mexer na Selic do Focus tem de mover o CDI (revisão
+      // do Focus chega ao CDI). `avaliarCelula` não segue referência entre abas, mas as
+      // duas linhas moram na mesma aba Anual, então a reavaliação vale.
+      const celSelic = (a: number) => anual0.getRow(rSelic).getCell(COLS_ANO[iAnoDe(a)]);
+      const selic26 = celSelic(2026).value; const selic27 = celSelic(2027).value;
+      celSelic(2026).value = 11.75; celSelic(2027).value = 10.5;
+      esquecerMemoria(anual0);
+      const movido = [2026, 2027].map((a) => avaliarCelula(anual0, COLS_ANO[iAnoDe(a)], rCdi));
+      const esperadoMov26 = ((1 + 9.713 / 100) * Math.pow(1 + 11.75 / 100, 3 / 12) - 1) * 100;
+      checar(perto(movido[0], esperadoMov26, 1e-6) && perto(movido[1], (11.75 + 10.5) / 2, 1e-9)
+        && perto(movido[0], esperado26, 1e-6) === false,
+        "(0106j) …e uma revisão da Selic do Focus MOVE o CDI de 2026 e de 2027 (a planilha segue viva)",
+        JSON.stringify(movido));
+      celSelic(2026).value = selic26; celSelic(2027).value = selic27;
+      esquecerMemoria(anual0);
+      const notaCdi27 = notaDe(anual0, rCdi, COLS_ANO[iAnoDe(2027)]);
+      checar(/META/.test(notaCdi27) && /NÃO é o CDI realizado/.test(notaCdi27),
+        "(0106j) …e a nota diz o método (média das metas) e o limite (aproximação, não é o realizado)",
+        notaCdi27.slice(0, 120));
+      checar(/META/.test(notaDe(anual0, rSelic, COLS_ANO[iAnoDe(2027)])),
+        "(0106j) a nota da célula de Selic do Focus diz que é a meta de fim de ano, não o acumulado",
+        notaDe(anual0, rSelic, COLS_ANO[iAnoDe(2027)]).slice(0, 120));
       // 4. outra série de taxa: o parcial fica vazio e a nota diz por quê
       const inpc26 = anual0.getRow(rInpc).getCell(COLS_ANO[iAnoDe(2026)]);
-      checar(inpc26.value == null && /8 meses não é taxa anual/.test(notaDe(anual0, rInpc, COLS_ANO[iAnoDe(2026)])),
-        "(0106j) INPC de 8 meses fica VAZIO, com a nota \"realizado de 8 meses não é taxa anual\"",
+      const notaInpc = notaDe(anual0, rInpc, COLS_ANO[iAnoDe(2026)]);
+      checar(inpc26.value == null && /8 meses não é taxa anual/.test(notaInpc) && !/haver Focus/.test(notaInpc),
+        "(0106j) INPC de 8 meses fica VAZIO; a nota não promete Focus (ele não publica INPC), só o fechamento do ano",
         JSON.stringify(inpc26.value));
 
       // 5. O EFEITO NA DÍVIDA: com Selic no Focus, revolver e aplicação não são
