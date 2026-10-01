@@ -12,7 +12,14 @@ só como referência — não precisa ler tudo pra continuar, comece por aqui.
 > a 0196 ("Production Deploy") — exatamente o que `.claude/memory/auto-mode-recusa-migration-producao.md`
 > prevê. Ver §4.
 
-### 0. Estado de produção agora (medido só leitura, 30/09 ~22h40 UTC)
+### 0. Estado de produção agora (medido só leitura, 30/09 ~22h40 UTC; reconferido 01/10 ~11h30 UTC)
+
+> Reconferência de 01/10: `instalacao_cobertura.ate_migration = '0195'`, 174/0 ausentes; n8n
+> `na1AEv3m8fjDXlwM` atualizado em 30/09 21:08 UTC, 42 nós, `conferir-publicado.mjs` dá "ok" contra
+> o repositório em `bc439fa` e diverge do HEAD (`Juntar Blocos`); Vercel produção = `8c0821d`
+> (main, 30/09 21:53); nenhum `evento_auditoria`/`decisao` no Krauspenhar depois de 21:54 de 30/09
+> (esta sessão não escreveu nele); caso de teste `72d9210a` em `em_triagem`, 4 docs, 10 pendências
+> abertas, 0 premissas (o roteiro de modelagem/export NÃO foi feito nele).
 
 - Supabase em **`0195`** (174 requisitos, 0 ausentes). `0196`, `0197`, `0198` só no repositório.
 - n8n de ingestão no estado do `bc439fa`. Nenhum commit de ingestão desta sessão nem o `9bd2f88`
@@ -109,7 +116,7 @@ com o processo certo: receita bruta 114,76/113,38 mi, resíduo ~0, EBITDA de cen
 | `69e6666` | O assert (0109d) do verificar-export passava SEMPRE (regex com `|` sem escape casava vazio) — achado pelo Sonar como bug | — |
 | `507915b` | Revisão independente: a guarda de hierarquia acusava o Balanço 2025 real (código reduzido de 4 dígitos cortava as filhas). Controle negativo real agora no teste | republicar |
 | `012087e` | Revisão independente: mesma premissa em custo E SG&A ainda projetava 2×; bases diferentes no giro ganham nota do efeito | merge |
-| `a6d5231`, `9d692a1` | Sonar (complexidade, template aninhado), sem mudar comportamento | — |
+| `a6d5231`, `9d692a1`, `466bc32` | Sonar (complexidade, template aninhado, duplicação 5,3% do Quality Gate), sem mudar comportamento | — |
 | grafo | derivado regerado a cada leva | — |
 
 **Revisão independente de `8c0821d..HEAD`:** feita. Os 2 achados que sobreviveram (falso positivo
