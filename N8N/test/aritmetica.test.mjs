@@ -25,9 +25,15 @@
 // funções NOVAS deste arquivo ficam caladas nesse formato de rótulo — não
 // reimplementam (a)/(b) e não abrem pendência duplicada para o que o Postgres
 // já pega.
+import { BALANCO_2025_COLADAS } from './fixture-krauspenhar.mjs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { conferirIdentidadeDeLinha, conferirTotalDaSerie } from '../lib/aritmetica.mjs';
+import {
+  conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha,
+  papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete,
+  conferirHierarquiaDeCodigos, blocoDaSintetica, blocosDeLinha, linhasDaHierarquia, fechaComDeslocamento, filhasDiretas, classificarHierarquia,
+} from '../lib/aritmetica.mjs';
+import { readFileSync } from 'node:fs';
 
 const linha = (ordem, chave, periodo_coluna, valor_num, extra = {}) => ({
   ordem, chave, periodo_coluna, entidade_coluna: null, valor_num,
@@ -222,4 +228,908 @@ test('total da série: o controle — um mês perdido ANTES do total continua ac
   const problemas = conferirTotalDaSerie(campos);
   assert.equal(problemas.length, 1);
   assert.match(problemas[0], /12910\.00/);
+});
+
+// O ARRANJO REAL do doc 63a36efe (FATURAMENTO OMNIBEAUTY PR 202606.pdf, caso
+// "AMO teste 00"): o modelo devolveu "Totais" na ordem 0, ANTES dos 12 meses, e com
+// os valores deslocados de coluna ("Outros R$" = soma dos meses contra meses que
+// somam 0; "Total R$" = 0 contra meses que somam a soma). A pendência que o código
+// anterior à 9bd2f88 abria está CERTA; com a regra "só o que vem antes do total" ela
+// sumia e a checagem era pulada sem aviso (6 grupos no campo_extraido de produção).
+// Os valores dos meses são os da reprodução do revisor, não os do PDF.
+test('total da série: total impresso ANTES dos meses — os meses que vêm depois entram e a coluna deslocada reprova', () => {
+  const meses = [242930.61, 267912.14, 264724.14, 280000, 290000, 300000, 310000, 320000, 330000, 250000, 246100.73, 250000];
+  const soma = meses.reduce((a, b) => a + b, 0);
+  const campos = [
+    linha(0, 'Totais', 'Outros R$', soma),
+    linha(0, 'Totais', 'Total R$', 0),
+    ...meses.flatMap((v, i) => [
+      linha(i + 1, `Mes ${i + 1} 2025`, 'Outros R$', 0),
+      linha(i + 1, `Mes ${i + 1} 2025`, 'Total R$', v),
+    ]),
+  ];
+  const problemas = conferirTotalDaSerie(campos);
+  assert.equal(problemas.length, 2);
+  assert.ok(problemas.some((p) => /coluna "Outros R\$"/.test(p) && /soma das 12 linha/.test(p)));
+  assert.ok(problemas.some((p) => /coluna "Total R\$"/.test(p) && /soma das 12 linha/.test(p)));
+});
+
+test('total da série: total no topo que FECHA com os meses depois não acusa', () => {
+  const meses = [100, 200, 300];
+  const campos = [
+    linha(0, 'Totais', '2025', 600),
+    ...meses.map((v, i) => linha(i + 1, `mes ${i + 1}`, '2025', v)),
+  ];
+  assert.deepEqual(conferirTotalDaSerie(campos), []);
+});
+
+test('total da série: total no topo, memória depois dos meses, nunca entra na soma', () => {
+  const campos = [
+    linha(0, 'Totais', '2025', 600),
+    linha(1, 'mes 1', '2025', 100), linha(2, 'mes 2', '2025', 200), linha(3, 'mes 3', '2025', 300),
+    linha(4, 'Média mensal', '2025', 200),
+    linha(5, 'Ticket médio', '2025', 38.2),
+  ];
+  assert.deepEqual(conferirTotalDaSerie(campos), []);
+});
+
+// Coluna não aditiva por PALAVRA INTEIRA: "Intermediação" contém "media" e
+// "Receita variável" contém "varia", e são colunas de R$ com série.
+test('total da série: coluna de R$ cujo nome CONTÉM media/varia por substring ainda é conferida', () => {
+  for (const col of ['Intermediação R$', 'Receita variável', 'Taxas de serviço']) {
+    const campos = [
+      linha(0, 'mes 1', col, 100), linha(1, 'mes 2', col, 200), linha(2, 'Total', col, 999),
+    ];
+    assert.equal(conferirTotalDaSerie(campos).length, 1, col);
+  }
+});
+
+test('total da série: colunas não aditivas continuam fora (%, ticket, taxa, variação)', () => {
+  for (const col of ['% do total', 'Ticket médio (R$)', '%', 'Taxa', 'Taxa anual', 'Variação %', '(%)', 'Variação', 'Média', 'Margem bruta']) {
+    const campos = [
+      linha(0, 'mes 1', col, 100), linha(1, 'mes 2', col, 200), linha(2, 'Total', col, 999),
+    ];
+    assert.deepEqual(conferirTotalDaSerie(campos), [], col);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// conferirBalanceteLinhaALinha — balancete_janaago26.pdf, mandato real Krauspenhar
+// -----------------------------------------------------------------------------
+// conferirBalanceteLinhaALinha — balancete_janaago26.pdf, mandato real Krauspenhar
+// -----------------------------------------------------------------------------
+// FIXTURE 100% REAL (regra 4): as 28 contas com movimento nao nulo do
+// `campo_extraido` de producao (30/09/2026), valores copiados como gravados em
+// Saldo anterior | Debito | Credito | Saldo atual. 14 fecham SO com a troca de
+// colunas (paginas 1-2) e 14 SO como rotuladas (paginas 8-9). Nenhum numero
+// inventado. CHEQUES A COMPENSAR aparece DUAS vezes identica no documento real e
+// conta como duas contas. O que isto NAO prova: os 111/196/288 do documento
+// inteiro (so 28 contas foram copiadas); prova a regra sobre contas reais.
+const QUATRO = ['Saldo anterior', 'Débito', 'Crédito', 'Saldo atual'];
+const REAIS = [
+  ['perm', 1, 'ADIANTAMENTOS A FUNCIONARIOS', [156963.24, 356454.33, 494860.28, -295369.19]],
+  ['perm', 1, 'ADIANTAMENTO A EMPREGADOS', [6831.09, 1501.35, 161022.66, -166352.4]],
+  ['perm', 1, 'ADIANTAMENTO PARA VIAGEM', [146543.97, 328211.21, 220176.12, -38508.88]],
+  ['perm', 1, 'EMPRESTIMO P/ FUNCIONARIOS', [3588.18, 6596.18, 11508, -8500]],
+  ['perm', 1, 'TRIBUTOS A COMPENSAR E A RECUPERAR', [147843.76, 294533.56, 3200616.28, -3053926.48]],
+  ['perm', 1, 'IRRF SOBRE APLICAÇÃO', [1378.72, 31930.39, 38525.6, -7973.93]],
+  ['perm', 1, 'IRRF SOBRE SERVIÇOS', [3478.6, 3009.21, 3009.21, -3478.6]],
+  ['perm', 2, 'CHEQUES A COMPENSAR', [376206.47, 270803.47, 0, -105403]],
+  ['perm', 2, 'CHEQUES A COMPENSAR', [376206.47, 270803.47, 0, -105403]],
+  ['perm', 2, 'FUNDO DE RESERVA MASSEY - CP', [3667595.49, 3635861.87, 1330672.66, -1362406.28]],
+  ['perm', 2, 'BRADESCO FICFI RF CAPITALIZAÇÃO REDE APLICAÇÃO', [126937.38, 95203.76, 439020.86, -470754.48]],
+  ['perm', 2, 'ESTOQUES', [43569482.33, 47956795.9, 65971485.41, -61584171.84]],
+  ['perm', 2, 'MARCA MASSEY FERGUSSON - NOVOS', [12004600.42, 16032443.29, 22364938.8, -18337095.93]],
+  ['perm', 2, 'PLANTADEIRAS', [3441426.09, 2212053.88, 1853550.64, -3082922.85]],
+  ['rot', 8, '(-) DEVOLUÇÃO VENDA DE PEÇAS E LUBRIFICANTES', [-903659.2, 903659.2, 0, 0]],
+  ['rot', 9, 'CUSTO COM VENDA DE COLHEITADEIRA', [-1434850.56, 1434850.56, 0, 0]],
+  ['rot', 9, 'CUSTO COM VENDA DE PLATAFORMAS', [-113.23, 113.23, 0, 0]],
+  ['rot', 9, 'CUSTO COM TRATORES USADOS', [-1207826.53, 1207826.53, 0, 0]],
+  ['rot', 9, 'COFINS OUTROS DEBITOS', [-9922.11, 9922.11, 0, 0]],
+  ['rot', 9, 'CUSTO COM VENDA DE AGRICULTURA DE PRECISÃO', [-67550.28, 67550.28, 0, 0]],
+  ['rot', 9, 'CUSTO DE VENDA DE PEÇAS WOODS', [-6491.84, 6491.84, 0, 0]],
+  ['rot', 9, 'EMBALAGENS', [-34723.28, 34723.28, 0, 0]],
+  ['rot', 9, 'ICMS OUTROS DEBITOS', [-2875.12, 2875.12, 0, 0]],
+  ['rot', 9, 'PIS OUTROS DEBITOS', [-1777.13, 1777.13, 0, 0]],
+  ['rot', 9, 'CUSTO DE SERVIÇOS', [-1002864.05, 1002864.05, 0, 0]],
+  ['rot', 9, 'CUSTO COM SERVIÇO DE ASSIST TECNICA E CONSERTO', [-30736.16, 30736.16, 0, 0]],
+  ['rot', 9, 'ASSISTÊNCIA MÉDICA E ODONTOLÓGICA', [-4687.83, 4687.83, 0, 0]],
+  ['rot', 9, 'COMISSOES', [-16338.4, 16338.4, 0, 0]],
+];
+let ordemBalancete = 0;
+const docReal = (tipos) => REAIS.filter(([t]) => tipos.includes(t)).flatMap(([, pg, chave, v]) =>
+  QUATRO.map((pc, j) => linha(ordemBalancete++, chave, pc, v[j], { secao: 'Balancete', origem_pagina: pg })));
+const docMisto = () => docReal(['perm', 'rot']);
+
+test('balancete: o documento MISTO real (14 com a troca + 14 rotuladas, muda por página) reprova e dá as contagens', () => {
+  const campos = docMisto();
+  const copia = JSON.stringify(campos);
+  const problemas = conferirBalanceteLinhaALinha(campos);
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /das 28 conta\(s\) com movimento, 14 fecham como rotuladas, 14 fecham só com a troca/);
+  assert.match(problemas[0], /e 0 não fecham de jeito nenhum/);
+  assert.match(problemas[0], /gravada como "Débito" é o saldo atual/);
+  assert.match(problemas[0], /Exemplo com a troca: "ADIANTAMENTOS A FUNCIONARIOS" \(p\. 1\).*saldo atual -295369\.19/);
+  assert.equal(JSON.stringify(campos), copia, 'não corrige o dado');
+});
+
+test('balancete: só as páginas com a troca (14 reais) reprova com 0 rotuladas', () => {
+  const problemas = conferirBalanceteLinhaALinha(docReal(['perm']));
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /das 14 conta\(s\) com movimento, 0 fecham como rotuladas, 14 fecham só com a troca/);
+});
+
+test('balancete: só as contas reais que fecham como rotuladas (14) não reprova', () => {
+  assert.deepEqual(conferirBalanceteLinhaALinha(docReal(['rot'])), []);
+});
+
+test('balancete: 1 conta real com a troca entre 13 rotuladas reais (7%, abaixo do limiar) não reprova', () => {
+  const rot = REAIS.filter(([t]) => t === 'rot').slice(0, 13);
+  const perm = REAIS.filter(([t]) => t === 'perm').slice(0, 1);
+  const campos = [...rot, ...perm].flatMap(([, pg, chave, v], i) =>
+    QUATRO.map((pc, j) => linha(i * 4 + j, chave, pc, v[j], { secao: 'Balancete', origem_pagina: pg })));
+  assert.deepEqual(conferirBalanceteLinhaALinha(campos), []);
+});
+
+test('balancete: conta de movimento zero não conta (nem como fechada, nem como aberta)', () => {
+  // Contas reais com a troca + contas paradas: se as paradas contassem como
+  // "fecham como rotuladas", 14/214 < 20% e o defeito sumia.
+  const paradas = Array.from({ length: 200 }, (_, i) =>
+    QUATRO.map((pc, j) => linha(5000 + i * 4 + j, `PARADA ${i}`, pc, [500, 0, 0, 500][j], { secao: 'Balancete', origem_pagina: 3 }))).flat();
+  const problemas = conferirBalanceteLinhaALinha([...docReal(['perm']), ...paradas]);
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /das 14 conta\(s\) com movimento/);
+  assert.deepEqual(conferirBalanceteLinhaALinha(paradas), []);
+});
+
+test('balancete: documento sem as quatro colunas ou entrada inválida não reprova', () => {
+  assert.deepEqual(conferirBalanceteLinhaALinha(docReal(['perm']).filter((c) => c.periodo_coluna !== 'Crédito')), []);
+  assert.deepEqual(conferirBalanceteLinhaALinha(null), []);
+});
+
+// A função é embutida por toString() e toString() NÃO leva o escopo do módulo: os 4
+// helpers extraídos (Sonar S3776) têm de ir junto, como declarações irmãs. Este
+// teste monta o escopo SÓ com o que o gerador embute; helper que faltasse lá
+// reprovaria aqui com ReferenceError (precedente: bc439fa, 11 testes).
+const HELPERS_DO_BALANCETE = [
+  papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete,
+];
+test('balancete: a função + os helpers embutidos funcionam isolados (toString, sem o escopo do módulo)', () => {
+  const fonte = [...HELPERS_DO_BALANCETE, conferirBalanceteLinhaALinha]
+    .map((f) => `const ${f.name} = ${f.toString()};`).join('\n');
+  const isolada = new Function(`${fonte}\nreturn conferirBalanceteLinhaALinha;`)();
+  assert.equal(isolada(docMisto()).length, 1);
+  assert.deepEqual(isolada(docReal(['rot'])), []);
+});
+
+test('balancete: o workflow publicado embute a função E cada helper dela', () => {
+  const wf = JSON.parse(readFileSync(new URL('../workflow.e1-ingestao.json', import.meta.url), 'utf8'));
+  const codigo = JSON.stringify(wf.nodes.find((n) => n.name === 'Juntar Blocos').parameters.jsCode);
+  for (const f of [...HELPERS_DO_BALANCETE, conferirBalanceteLinhaALinha]) {
+    assert.ok(codigo.includes(`const ${f.name} = `), `${f.name} não está embutida em Juntar Blocos`);
+  }
+});
+
+// -----------------------------------------------------------------------------
+// conferirHierarquiaDeCodigos — DRE analítica real do Krauspenhar (DRE 2025)
+// -----------------------------------------------------------------------------
+// FIXTURE REAL (regra 4): as 223 linhas da DRE 2025 como a extração as gravou em
+// produção (30/09/2026), só a coluna Total, [chave, valor] na ordem do documento.
+// O defeito: a partir de certo ponto cada rótulo carrega o valor do rótulo
+// seguinte, e cada linha continua somando certo mês a mês contra o próprio Total.
+// NÃO existe aqui um documento real GRANDE que feche (as ordens 1-13 da página 1
+// têm 3 sintéticas); o controle negativo com dado real de outro caso depende de
+// consulta à produção e está pendente — o que este arquivo prova é a regra sobre o
+// documento deslocado, o mínimo de 10 avaliáveis e o fechamento das sintéticas
+// alinhadas da página 1.
+const DRE_TOTAL = [
+  ['3 RESULTADO', -6805591.61],
+  ['3.01 RECEITA LIQUIDA', 97950953.78],
+  ['3.01.01 VENDA DE EQUIPAMENTOS', 63195010.98],
+  ['3.01.01.01 VENDAS DE MAQUINAS E IMPLEMENTOS MASSEY F', 46341096.97],
+  ['000880 Colheitadeira', 2940000],
+  ['000883 Plantadeiras', 10335999.98],
+  ['000881 Plataforma', 8112],
+  ['000882 Pulverizadores', 2390000],
+  ['000878 Tratores', 30641984.99],
+  ['002200 Venda de implementos massey', 25000],
+  ['3.01.01.02 VENDA DE OUTRAS MARCAS NOVAS', 15942754.6],
+  ['006540 Venda de equipamentos para pulverizacao', 187166.35],
+  ['000887 Venda de implementos', 15755588.25],
+  ['3.01.01.03 VENDAS DE USADOS', 12945617.98],
+  ['3.01.01.03 VENDAS DE USADOS', 3222699],
+  ['000889 Colheitadeiras usados', 1952000.08],
+  ['000897 Implementos - usados', 581500],
+  ['000896 Plantadeiras usados', 875000],
+  ['000890 Plataformas usados', 1010000],
+  ['000895 Pulverizadores - usados', 5304418.9],
+  ['000888 Tratores - usados', -7115901.16],
+  ['3.01.01.04 (-) DEDUCOES DE VENDAS E SERVICOS', -12864.22],
+  ['000915 (-) cofins', -4830798.87],
+  ['000910 (-) devolução venda', -2289101.75],
+  ['000912 (-) icms mtz', 19655.81],
+  ['001241 (-) iss', -2792.13],
+  ['000913 (-) pis', -3294795.69],
+  ['3.01.01.05 (-) DEDUÇÃO VENDA DE OUTRAS MARCAS NOVOS', -2271500],
+  ['001243 (-) devolução de venda de om novos', -1027540.39],
+  ['001244 (-) icms sobre venda om novos', 4244.7],
+  ['001246 (-) pis sobre venda de om novos', -1623761.72],
+  ['3.01.01.06 (-) DEDUÇÃO VENDA DE USADOS', -69974.15],
+  ['000930 (-) cofins sobre vendas usados', -1538125],
+  ['000922 (-) devolução vendas de usados', -501.5],
+  ['000924 (-) icms sobre venda usados', -15161.07],
+  ['000929 (-) pis sobre vendas usados', 0],
+  ['3.01.02 VENDA DE PEÇAS E LUBRIFICANTES', 32964473.02],
+  ['3.01.02.01 VENDA DE PEÇAS E LUBRIFICANTES', 36189770.85],
+  ['000934 Lubrificantes', 1860921.99],
+  ['000936 Peças gts', 12214979.4],
+  ['000933 Peças massey fergusson', 19504227.12],
+  ['000935 Peças mp agro', 805193.22],
+  ['001255 Peças woods', 30961.46],
+  ['001259 Receita com venda de outras peças', 1773487.66],
+  ['001259 Receita com venda de outras peças', 1773487.66],
+  ['3.01.02.02 (-) DEDUÇÃO COM VENDA DE PEÇAS E LUBRIFICAN', -3225297.83],
+  ['000945 (-) cofins sobre venda de peças e lubrificantes', -989850.09],
+  ['000939 (-) devolução venda de peças e lubrificantes', -990842.52],
+  ['000941 (-) icms sobre venda de peças e lubrificantes', -1030063.1],
+  ['000946 (-) icms st sobre vendas de peças e lubrificantes', 364.02],
+  ['000943 (-) pis sobre venda de peças e lubrificantes', -214906.14],
+  ['3.01.03 OUTRAS RECEITAS', 1791469.78],
+  ['3.01.03.01 SERVIÇOS DE ASSISTENCIA TECNICA E CONSERTO', 1450178.96],
+  ['000953 Assistência técnica e conserto', 772558.9],
+  ['000955 Serviço de garantia', 677620.06],
+  ['3.01.03.02 SERVIÇO DE ENTREGA TECNICA/COMISSOES', 514495.66],
+  ['003705 Representacao comercial', -173204.84],
+  ['3.01.03.04 (-) DEDUÇÃO RECEITA DE SERVIÇOS', -98196.5],
+  ['000960 (-) cofins sobre serviços', -53688.78],
+  ['000958 (-) iss sobre serviços', -21319.56],
+  ['000959 (-) pis sobre serviços', -87341204.08],
+  ['3.02 CUSTOS', -85305637.32],
+  ['3.02.01 CUSTOS DAS MERCADORIAS VENDIDAS / SERVIÇOS P', -37219870.1],
+  ['3.02.01.01 CUSTO DE VENDA DE EQUIP MS NOVOS', -3674730.7],
+  ['001015 Custo com venda de colheitadeira', -19247.47],
+  ['001019 Custo com venda de implementos', -6176383.54],
+  ['001018 Custo com venda de plantadeira', -4509.34],
+  ['001016 Custo com venda de plataformas', -2790589.22],
+  ['001017 Custo com venda de pulverizadores', -24504591.68],
+  ['000994 Custo com venda de trator', 4203.39],
+  ['001181 Descontos obtidos (recuperacao de custos)', -54021.54],
+  ['001840 Devolução de compra', -10339916.47],
+  ['3.02.01.02 CUSTO DE VENDA DE OUTRAS MARCAS NOVOS', -10263855.22],
+  ['001296 Custo com venda de implementos om', -76061.25],
+  ['006537 Custo com venda equipamentos para pulverizacao', -13822777.36],
+  ['3.02.01.03 CUSTO DE VENDA DE USADOS', -1097265.6],
+  ['001022 Custo com colheitadeiras usadas', -6004400.25],
+  ['001021 Custo com tratores usados', -680850],
+  ['001247 Custo com venda de plantadeiras usadas', -535500],
+  ['001023 Custo com venda de plataformas - usados', -2927811.51],
+  ['001026 Custo de venda de implementos - usados', -2576950],
+  ['000995 Custo de venda de pulverizadores - usados', -23923073.39],
+  ['3.02.01.04 CUSTO DE VENDA DE PEÇAS E LUBRIFICANTES', 137726.69],
+  ['005838 (-) cofins outros creditos', -71700.01],
+  ['005588 Cofins outros debitos', -372017.42],
+  ['003302 Custo com peças/consumo interno', -72056.43],
+  ['002612 Custo com venda de agricultura de precisão', -1416257.74],
+  ['001038 Custo com venda de lubrificantes', -1088526.37],
+  ['001260 Custo com venda de outras peças', -7628757.77],
+  ['001042 Custo com venda de peças gts', -13396286.7],
+  ['001005 Custo com venda de peças massey fergusson', -473151.87],
+  ['001034 Custo de venda de peças mp agro', -14590.98],
+  ['001028 Custo de venda de peças woods', -74198.29],
+  ['005617 Embalagens', 547836.04],
+  ['006356 (-) icms outros creditos', -5393.62],
+  ['006743 Icms outros debitos', -8903.55],
+  ['008686 Icms st', 29434.23],
+  ['005839 (-) pis outros cretidos', -16229.6],
+  ['005589 Pis outros debitos', -2035566.76],
+  ['3.02.02 CUSTO DE SERVIÇOS', -28455.62],
+  ['3.02.02.01 CUSTO COM SERVIÇO DE ASSIST TECNICA E CONS', -11206.46],
+  ['001896 13º salario', -10867.7],
+  ['001900 Comissoes', -6381.46],
+  ['002004 Vale compra', -2006860.46],
+  ['3.02.02.02 CUSTO SERVICOS DE TERCEIROS', -539946.54],
+  ['004711 Custo combustivel/lubrificantes', -54113],
+  ['004714 Custo com munck', -556987.9],
+  ['004712 Custo manutencao de veiculos', -855813.02],
+  ['004713 Custo serviços terceiros', -250.68],
+  ['3.02.02.04 CUSTO COM SERVIÇO DE GARANTIA', -250.68],
+  ['001045 Custo com serviço de garantia', -12136521.35],
+  ['3.03 DESPESAS OPERACIONAIS', -12136521.35],
+  ['3.03.01 DESPESAS OPERACIONAIS GERAIS', -6883410.06],
+  ['3.03.01.01 PESSOAL', -258984.41],
+  ['000334 13 salario', -719.31],
+  ['005663 Anuenio', -116951.31],
+  ['001056 Assistência médica e odontológica', -813],
+  ['006744 Brindes e bonificacoes a funcionarios', -1744261.09],
+  ['000308 Comissoes', -6275.5],
+  ['006548 Dias afastados inss', 10548.59],
+  ['005815 Dias faltas/dsr faltas', -2723],
+  ['000937 Exames admissional, demissional e periódico', -353989.3],
+  ['000335 Ferias', -384807.18],
+  ['000304 Fgts', -323967.06],
+  ['001050 Hora extra', -122417.09],
+  ['007048 Insalubridade', -1084899.81],
+  ['000303 Inss', -829.53],
+  ['001057 Outras despesas com pessoal', -76182.86],
+  ['000300 Premios e gratificacoes', -36326],
+  ['000299 Pro-labore', -5837.42],
+  ['005565 Provisao de 13 salario - d', -18787.96],
+  ['005564 Provisao de ferias - d', -219668.54],
+  ['000680 Rescisao', -1826947.67],
+  ['000298 Salarios e ordenados', 28019.5],
+  ['001053 Seguro de vida', -14000],
+  ['006747 Servicos prestados - pessoal', -329841.65],
+  ['003902 Vale alimentação', -5253111.29],
+  ['002006 Vale compra', -311.73],
+  ['000492 Vale transporte', -4175640.79],
+  ['001959 Brindes e gratificações', -29182.85],
+  ['001271 Cartório', -27979.3],
+  ['001060 Combustiveis e lubrificantes', -35663.09],
+  ['008504 Condominio', -434241.84],
+  ['001256 Confraternizações, feiras e eventos', -37746.6],
+  ['001601 Contribuição associativa', -85.9],
+  ['000664 Correios', -288102.53],
+  ['001067 Cursos e treinamentos', -14854.46],
+  ['007353 Doaçoes', -50074.76],
+  ['001064 Energia elétrica', -745818.77],
+  ['001066 Fretes e carretos', -14192],
+  ['001068 Honorários advocaticios', -19410.95],
+  ['000679 Lanches e refeiçoes', -14933.74],
+  ['001100 Legais e judiciais', -343145.08],
+  ['001076 Locação de veículos', -22315.84],
+  ['000893 Manutencao e reparo de maquinas e veiculos', -82828.73],
+  ['001522 Manutenção e reparos', -17933.14],
+  ['001077 Material de escritório', -7980.1],
+  ['001266 Material de higiene e limpeza', -377777.16],
+  ['001061 Material de uso e consumo', -14790.76],
+  ['007449 Proteção veicular', -88844.94],
+  ['000658 Publicidade e propaganda', -31118],
+  ['001088 Segurança e monitoramento', -106514.21],
+  ['001086 Seguros', -12630.61],
+  ['001270 Serasa', -241645.82],
+  ['001269 Serviços de terceiros', -251576.16],
+  ['002181 Sistemas e softwares', -31693.93],
+  ['001087 Telefone celular', -10206.47],
+  ['001071 Telefone e internet', -72046.23],
+  ['001923 Uniformes/epi', -355858.45],
+  ['001001 Viagem e hospedagens', -355858.45],
+  ['3.03.02.02 DEPRECIACOES E AMORTIZACOES', -580100.93],
+  ['001063 Depreciação e amortização', -497369.57],
+  ['3.03.02.03 TRIBUTARIAS', -141767.48],
+  ['002396 Icms diferencial de aliquota', 93782.18],
+  ['005570 (-) icms outros creditos', -11206.95],
+  ['005569 Icms outros debitos', -14827.37],
+  ['001089 Iptu', -15013.64],
+  ['001995 Ipva/dpvat', -31871.76],
+  ['005585 Pis/cofins sobre receitas financeiras', -73599.21],
+  ['005688 Taxas e impostos estaduais', -7519.27],
+  ['000663 Taxas e impostos municipais', -302865.34],
+  ['3.05 OUTRAS RECEITAS E DESPESAS', 976094.21],
+  ['3.05.01 OUTRAS RECEITAS E DESPESAS OPERACIONAIS', 973661.57],
+  ['3.05.01.01 OUTRAS RECEITAS E DESPESAS OPERACIONAIS', 1032964.41],
+  ['3.05.01.01 OUTRAS RECEITAS E DESPESAS OPERACIONAIS', 1032964.41],
+  ['001521 Doação e bonificação recebidas', 12619.68],
+  ['003117 Perdas com liquidação duvidosas', -59679.27],
+  ['007038 Receita com bonificação de serviços massey', 0],
+  ['002129 Receita com bonificação massey', 1080024],
+  ['3.05.01.02 DESPESAS NÃO DEDUTIVEIS', -171352.6],
+  ['008631 Comissoes - nd', -8040.34],
+  ['007448 Despesa com pessoal - nd', -74628.17],
+  ['001274 Doações - nd', 0],
+  ['006745 Material de uso e consumo - nd', -8926.38],
+  ['001160 Multas de transito - nd', -27119.13],
+  ['005989 Servicos terceiros - nd', 112049.76],
+  ['3.05.01.03 GANHO/PERDA NA ALIENAÇÃO ATIVO IMOBILIZADO', 0],
+  ['009025 Baixa de ativo imobilizado', -38450.24],
+  ['009024 Venda de ativo imobilizado', 150500],
+  ['3.05.02 RECEITAS E DESPESAS NÃO OPERACIONAL', 2432.64],
+  ['3.05.02 RECEITAS E DESPESAS NÃO OPERACIONAL', 2432.64],
+  ['3.05.02.01 RECEITAS E DESPESAS NÃO OPERACIONAL', -9777.93],
+  ['006279 Reembolso de despesas', 12210.57],
+  ['008160 Ressarcimento de seguro', 0],
+  ['3.06 RESULTADO FINANCEIRO', -6254914.17],
+  ['3.06.01 RECEITAS FINANCEIRAS', 734494.88],
+  ['3.06.01.01 RECEITAS FINANCEIRAS', 108036.15],
+  ['005571 Contribuição agco/fundo bradesco', 168275.03],
+  ['001180 Juros ativos', 458183.7],
+  ['001179 Rendimento de aplicação financeira', -6989409.05],
+  ['3.06.02 DESPESAS FINANCEIRAS', -6989409.05],
+  ['3.06.02.01 DESPESAS FINANCEIRAS', -7519.27],
+  ['001189 Credito concedido a cliente', -566.15],
+  ['006561 Custos/taxas/emolumentos com investimentos em bolsa', -145144.7],
+  ['001188 Descontos concedidos', -184282.49],
+  ['001185 Iof', -184282.49],
+  ['007546 Irrf s/aplicaçao financeira', -38870.36],
+  ['003192 Juros e multas s/ tributos', -169775.24],
+  ['001186 Juros passivos', -3301838.68],
+  ['001190 Juros s/ emprestimos e financiamentos', -2863530.56],
+  ['001184 Tarifas bancárias', -196014.64],
+  ['006146 Taxa flat', -81866.96],
+  ['TOTAL', -6805591.61],
+];
+const camposDaDre = (linhas) => linhas.map(([chave, v], i) => ({
+  ordem: i, chave, periodo_coluna: 'Total', valor_num: Number(v),
+}));
+
+test('hierarquia: a DRE real deslocada reprova — UM problema, com contagens, exemplo e rótulos repetidos', () => {
+  const campos = camposDaDre(DRE_TOTAL);
+  const copia = JSON.stringify(campos);
+  const problemas = conferirHierarquiaDeCodigos(campos);
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /31 de 41 contas sintéticas não fecham com a soma das filhas diretas \(coluna total\)/);
+  assert.match(problemas[0], /10 fecham como gravadas e a hipótese de valor deslocado uma linha explica 17 delas/);
+  assert.match(problemas[0], /Rótulo repetido em sequência em: 3\.01\.01\.03 VENDAS DE USADOS; 001259 Receita com venda de outras peças/);
+  assert.match(problemas[0], /Exemplo: "3\.01\.01\.04 \(-\) DEDUCOES DE VENDAS E SERVICOS" declara -12\.864,22/);
+  assert.doesNotMatch(problemas[0], /a partir da p[áa]gina/i, 'não afirma página de início');
+  assert.equal(JSON.stringify(campos), copia, 'não corrige o dado');
+});
+
+test('hierarquia: as sintéticas ALINHADAS da página 1 real fecham como gravadas (medição, abaixo do mínimo de 10)', () => {
+  // ordens 0-13: 3.01.01.01 e 3.01.01.02 fecham com as analíticas (números reais)
+  const { linhas } = linhasDaHierarquia(camposDaDre(DRE_TOTAL.slice(0, 14)));
+  const r = classificarHierarquia(linhas, ['total']);
+  assert.ok(r.avaliaveis < 10, 'abaixo do mínimo: não pode acusar');
+  assert.ok(r.fecham >= 2, 'as sintéticas alinhadas fecham como gravadas');
+  assert.deepEqual(conferirHierarquiaDeCodigos(camposDaDre(DRE_TOTAL.slice(0, 14))), []);
+});
+
+test('hierarquia: chave repetida em sequência não conta duas vezes como filha; linha sem código fica fora', () => {
+  const { linhas, repetidas } = linhasDaHierarquia(camposDaDre(DRE_TOTAL));
+  assert.deepEqual(repetidas.slice(0, 2), ['3.01.01.03 VENDAS DE USADOS', '001259 Receita com venda de outras peças']);
+  assert.equal(linhas.length, DRE_TOTAL.length - 5, '4 repetidas + a linha "TOTAL" sem código saem da hierarquia');
+  assert.ok(!linhas.some((l) => l.chave === 'TOTAL'));
+  const i = linhas.findIndex((l) => l.cod === '001259');
+  assert.equal(linhas.filter((l) => l.cod === '001259').length, 1, 'repetida vira uma linha só');
+  assert.ok(i > 0 && filhasDiretas(linhas, linhas.findIndex((l) => l.cod === '3.01.02.01')).includes(i));
+});
+
+test('hierarquia: sem códigos hierárquicos, entrada inválida e coluna Total ausente não acusam nem quebram', () => {
+  assert.deepEqual(conferirHierarquiaDeCodigos(null), []);
+  assert.deepEqual(conferirHierarquiaDeCodigos([]), []);
+  const semCodigo = Array.from({ length: 30 }, (_, i) => ({ ordem: i, chave: `Conta ${i}`, periodo_coluna: 'Total', valor_num: i }));
+  assert.deepEqual(conferirHierarquiaDeCodigos(semCodigo), []);
+});
+
+test('hierarquia: a função + helpers embutidos funcionam isolados (toString) e estão no workflow', () => {
+  const fs = [blocosDeLinha, linhasDaHierarquia, blocoDaSintetica, filhasDiretas, fechaComDeslocamento, classificarHierarquia, conferirHierarquiaDeCodigos];
+  const fonte = fs.map((f) => `const ${f.name} = ${f.toString()};`).join('\n');
+  const isolada = new Function(`${fonte}\nreturn conferirHierarquiaDeCodigos;`)();
+  assert.equal(isolada(camposDaDre(DRE_TOTAL)).length, 1);
+  const wf = JSON.parse(readFileSync(new URL('../workflow.e1-ingestao.json', import.meta.url), 'utf8'));
+  const codigo = JSON.stringify(wf.nodes.find((n) => n.name === 'Juntar Blocos').parameters.jsCode);
+  for (const f of fs) assert.ok(codigo.includes(`const ${f.name} = `), `${f.name} não está em Juntar Blocos`);
+});
+
+// CONTROLE NEGATIVO REAL: "Balanço 2025 Krauspenhar assinado.pdf" (v1, 235 campos, como
+// a extração gravou em produção; as chaves trazem o valor colado porque foram
+// gravadas ANTES da limpeza do rótulo). O plano de contas intercala códigos
+// reduzidos de 4 dígitos ("8241 CAPITAL DE GIRO…") entre as filhas de 2.01.01. O
+// documento está CERTO (15.563.518,86 - 2.440.052,07 = 13.123.466,79) e a revisão
+// independente reproduziu o falso positivo: 3 de 10 não fechavam.
+const BALANCO_KRAUSPENHAR = [
+  ['ATIVO', 113860002.4],
+  ['CIRCULANTE', 84365906.99],
+  ['DISPONIVEL', 4699506.06],
+  ['CAIXA', 21492.73],
+  ['CAIXA GERAL', 21492.73],
+  ['CONTA MOVIMENTO', 129953.74],
+  ['BANCO BRADESCO AG. 252 C/C 87642-9', 1],
+  ['BANCO DO BRASIL AG. 3283-2 C/C 18476-4', 0],
+  ['BANCO INTER AG. 0001-9 C/C 30405313-9', 5049.44],
+  ['BANCO SICREDI AG. 0809 C/C 28815-2', 124903.3],
+  ['BANCO XP AG. 0001 C/C 8723645', 0],
+  ['APLICACOES FINANCEIRAS', 4548059.59],
+  ['APLICAÇAO BANCO BRADESCO', 37872.15],
+  ['APLICAÇAO BANCO DO BRASIL CDB', 0],
+  ['APLICAÇAO BANCO DO BRASIL RENDE FACIL', 620492.17],
+  ['APLICAÇAO BANCO SICREDI FUNDOS', 1096.94],
+  ['APLICAÇÃO BANCO SICREDI SICREDINVEST', 3441856.92],
+  ['APLICAÇAO BANCO XP - FUNDOS SULAMÉRICA PREM', 260000],
+  ['APLICAÇAO BANCO XP - FUNDOS V8 CASH PLATINUM', 25741.41],
+  ['APLICAÇAO BANCO XP - MOVIDA PARTICIPACOES S/A', 155000],
+  ['APLICAO BANCO XP - COMPRA CDB | CDB BANCO C6', 6000],
+  ['BANCO XP -CDB422J9T8O | CDB AGIBANK - OUT/2025', 0],
+  ['BANCO XP - CDBB2476LCB | CDB BMG - NOV/2025', 0],
+  ['BANCO XP - CDB BRADESCO ZUPO', 0],
+  ['BANCO XP - CDBC241IGVQ', 0],
+  ['BANCO XP- CDBC242IT0W', 0],
+  ['BANCO XP - CDBC24352KI', 0],
+  ['BANCO XP - CDB STONE SCFI', 0],
+  ['TITULO DE CAPITALIZAÇÃO BRADESCO 4510', 0],
+  ['CLIENTES', 27454114.68],
+  ['DUPLICATAS A RECEBER', 28118680.96],
+  ['(-) DUPLICATAS DESCONTADAS', -3988],
+  ['DUPLICATAS EM GARANTIA A RECEBER', -3988],
+  ['CREDITOS VENCIDOS E NAO LIQUIDADOS', -660578.28],
+  ['(-) PROVISÃO PARA CRÉDITO DE LIQUIDAÇÃO DUVID', -660578.28],
+  ['OUTROS CREDITOS', 8599013.03],
+  ['ADIANTAMENTO A FORNECEDORES', 4250404.07],
+  ['ADIANTAMENTO A FORNECEDORES', 4250404.07],
+  ['ADIANTAMENTO AOS SOCIOS', 0],
+  ['ADIANTAMENTO AOS SOCIOS', 0],
+  ['ADIANTAMENTOS A FUNCIONARIOS', 156963.24],
+  ['ADIANTAMENTO A EMPREGADOS', 6831.09],
+  ['ADIANTAMENTO DE 13º SALÁRIO', 0],
+  ['ADIANTAMENTO DE FÉRIAS', 0],
+  ['ADIANTAMENTO PARA VIAGEM', 146543.97],
+  ['EMPRESTIMO P/ FUNCIONARIOS', 3588.18],
+  ['TRIBUTOS A COMPENSAR E A RECUPERAR', 147843.76],
+  ['COFINS A RECUPERAR', 0],
+  ['ICMS A RECUPERAR', 0],
+  ['IRRF SOBRE APLICAÇÃO', 1378.72],
+  ['IRRF SOBRE SERVIÇOS', 3478.6],
+  ['ISS A RECUPERAR', 0],
+  ['PIS A RECUPERAR', 0],
+  ['PIS/COFINS A COMPENSAR GUIA', 21423.68],
+  ['SALDO NEGATIVO IRPJ', 121562.76],
+  ['TRIBUTOS A COMPENSAR E A RECUPERAR', 147843.76],
+  ['CHEQUES A COMPENSAR', 376206.47],
+  ['CHEQUES A COMPENSAR', 376206.47],
+  ['ADIANTAMENTO FUNDO DE RESERVA MASSEY', 3540658.11],
+  ['BRADESCO FICFI RF CAPITALIZAÇÃO REDE APLICAÇÃO', 126937.38],
+  ['FUNDO DE RESERVA MASSEY', 0],
+  ['FUNDO DE RESERVA MASSEY - CP', 3667595.49],
+  ['OUTROS CREDITOS', 8599013.03],
+  ['ESTOQUES', 43569482.33],
+  ['COLHEITADEIRAS', 0],
+  ['IMPLEMENTOS MASSEY', 3846.87],
+  ['PLANTADEIRAS', 3441426.09],
+  ['PLATAFORMAS', 180232.45],
+  ['PULVERIZADORES', 14904.13],
+  ['TRATORES', 8364190.88],
+  ['MARCA MASSEY FERGUSSON - NOVOS', 12004600.42],
+  ['EQUIPAMENTOS PARA PULVERIZACAO - OM', 304213.99],
+  ['IMPLEMENTOS - OM', 7972636.61],
+  ['OUTRAS MARCAS NOVOS', 8276850.6],
+  ['COLHEITADEIRA - USADOS', 1430644.5],
+  ['IMPLEMENTOS - USADOS', 1107331],
+  ['PLANTADEIRAS - USADOS', 400600],
+  ['PLATAFORMAS - USADOS', 471656.4],
+  ['PULVERIZADORES - USADOS', 250000],
+  ['TRATORES - USADOS', 2726457.56],
+  ['USADOS', 6386689.46],
+  ['AGRICULTURA DE PRECISÃO', 156826.6],
+  ['ICMS TRANSF ENTRE FILIAIS', -306],
+  ['LUBRIFICANTES', 738129.75],
+  ['OUTRAS PEÇAS', 626747.85],
+  ['PEÇAS GTS', 3862413.21],
+  ['PEÇAS MASSEY FERGUSSON', 10385711.17],
+  ['PEÇAS MP AGRO', 368060.03],
+  ['PEÇAS WOODS', 12799.07],
+  ['TRANSFERENCIAS ENTRE FILIAIS A DISTRIBUIR', 521460.17],
+  ['PEÇAS', 16671841.85],
+  ['MAQUINAS CONSIGNADAS USADAS', 229500],
+  ['MAQUINAS CONSIGNADAS', 229500],
+  ['IPTU A APROPRIAR', 5349.33],
+  ['IPVA/DPVAT A APROPRIAR', 5949.32],
+  ['SEGUROS A APROPRIAR', 32492.24],
+  ['DESPESAS PAGAS ANTECIPADAMENTE', 43790.89],
+  ['NAO CIRCULANTE', 29494095.41],
+  ['REALIZAVEL A LONGO PRAZO', 7489099.62],
+  ['ADIANTAMENTO CONSORCIO MASSEY', 2088.87],
+  ['CONSORCIO MASSEY', 6070764.95],
+  ['CONSORCIOS E TITULOS DE CAPITALIZACAO', 6072853.82],
+  ['PREVIDENCIA PRIVADA', 356389.78],
+  ['SICREDI COTA CAPITAL', 98000],
+  ['INVESTIMENTOS', 454389.78],
+  ['CENTROAGRO - DIREITO', 961856.02],
+  ['EMPRESTIMOS / MUTUOS COM TERCEIROS', 961856.02],
+  ['COMPUTADORES E PERIFÉRICOS', 240562.54],
+  ['FERRAMENTAS', 450009.34],
+  ['INSTALAÇÕES', 19800],
+  ['MAQUINAS E EQUIPAMENTOS', 492454.48],
+  ['MOVEIS E UTENSILIOS', 468282.51],
+  ['VEICULOS', 2148272.68],
+  ['BENS MOVEIS', 3819381.55],
+  ['OBRAS EM ANDAMENTO', 1091652.31],
+  ['PRÉDIOS E CONSTRUÇÕES', 2616839.29],
+  ['TERRENOS RONDONOPOLIS - MT', 11500000],
+  ['TERRENOS SAO GABRIEL DO OESTE - MS', 3730000],
+  ['TERRENO VARZEA GRANDE - MT - LOTEAMENTO J. E', 2554746.3],
+  ['BENS IMOVEIS', 21493237.9],
+  ['(-) COMPUTADORES E PERIFÉRICOS', -163412.25],
+  ['(-) FERRAMENTAS', -325460.82],
+  ...BALANCO_2025_COLADAS,
+  ['PARCELAMENTO ICMS 11335736', 0],
+  ['PARCELAMENTO ICMS 11361027', 0],
+  ['OUTRAS OBRIGAÇÕES', 4871633.53],
+  ['OUTRAS OBRIGAÇÕES', 4220601.62],
+  ['ADIANTAMENTO DE CLIENTES', 1684818.54],
+  ['JUROS S/ CAPITAL PROPRIO DAURI LEOMIR KRAUSP', 1386956.3],
+  ['JUROS S/ CAPITAL PROPRIO JOAO HATMANN', 1148826.78],
+  ['DESCONTO DE DUPLICATAS', 651031.91],
+  ['DESCONTO DE DUPLICATAS', 651387.26],
+  ['(-) JUROS S/ DUPLICATAS DESCONTADAS', -355.35],
+  ['OBRIGACOES TRABALHISTAS A PAGAR', 821551.8],
+  ['OBRIGACOES TRABALHISTA A PAGAR', 821551.8],
+  ['13 SALARIO A PAGAR', 0],
+  ['EMPRESTIMO CONSIGNADO FUNCIONARIOS', 12999.52],
+  ['FERIAS A PAGAR', 330.13],
+  ['FGTS A RECOLHER', 33243.12],
+  ['INSS/IRRF A PAGAR', 160839.18],
+  ['PRO LABORE A PAGAR', 0],
+  ['PROVISAO DE 13 SALARIO', 0],
+  ['PROVISAO DE FERIAS', 454431.73],
+  ['RESCISÕES A PAGAR', 0],
+  ['SALARIOS E ORDENADOS A PAGAR', 159708.12],
+  ['NAO CIRCULANTE', 9535722.84],
+  ['EXIGIVEL A LONGO PRAZO', 9535722.84],
+  ['EMPRESTIMOS E FINANCIAMENTOS LONGO PRAZO', 9535722.84],
+  ['EMPRESTIMOS E FINANCIAMENTOS - LP', 12443943.36],
+  ['CAPITAL DE GIRO BANCO BRADESCO 23702524980 - L', 6559108.52],
+  ['CAPITAL DE GIRO BANCO BRADESCO 23702525000 - L', 0],
+  ['CAPITAL DE GIRO BANCO SICREDI 40627207-3 - LP', 1000000],
+  ['CAPITAL DE GIRO BANCO SICREDI 40636095-9 - LP', 1588888.89],
+  ['CAPITAL DE GIRO BANCO SICREDI 50626263-0 - LP', 3295945.95],
+  ['(-) JUROS S/EMPRESTIMOS E FINANCIAMENTOS', -2908220.52],
+  ['(-) JUROS CAPITAL DE GIRO BRADESCO 23702524980', -2908220.52],
+  ['(-) JUROS CAPITAL DE GIRO BRADESCO 23702525000', 0],
+  ['PATRIMONIO LIQUIDO', 45260148.54],
+  ['CAPITAL SOCIAL', 45178500],
+  ['CAPITAL SUBSCRITO', 45178500],
+  ['CAPITAL SOCIAL', 45178500],
+  ['RESERVAS DE CAPITAL', 0],
+  ['RESERVA DE SUBVENCAO PARA INVESTIMENTO', 0],
+  ['RESERVAS DE LUCROS', 8087167.58],
+  ['RESERVA DE LUCRO', 8087167.58],
+  ['LUCROS OU PREJUIZOS ACUMULADOS', -6805591.61],
+  ['LUCROS OU PREJUIZOS ACUMULADOS', -6805591.61],
+  ['RESULTADO DO EXERCICIO DO PERIODO', -6805591.61],
+  ['(-) DISTRIBUIÇÃO DE LUCROS', -1199927.43],
+  ['(-) DISTRIBUIÇÃO DE LUCROS', -1199927.43],
+  ['LUCROS DIST. DAURI LEOMIR KRAUSPENHAR', -659960.09],
+  ['LUCROS DIST. JOAO HATMANN', -539967.34],
+];
+const camposDoBalanco = () => BALANCO_KRAUSPENHAR.map(([chave, v], i) => ({
+  ordem: i, chave, periodo_coluna: null, valor_num: v,
+}));
+
+test('hierarquia: o Balanço 2025 real (códigos reduzidos de 4 dígitos intercalados) NÃO reprova', () => {
+  assert.deepEqual(conferirHierarquiaDeCodigos(camposDoBalanco()), []);
+  const { linhas } = linhasDaHierarquia(camposDoBalanco());
+  const r = classificarHierarquia(linhas, ['']);
+  // Desenho de 01/10/2026: os códigos reduzidos de 1 a 5 dígitos ("8241 CAPITAL DE GIRO…")
+  // são linhas AMBÍGUAS (X) e tornam NÃO AVALIÁVEL toda sintética em cujo bloco caem —
+  // só sobra 1 avaliável (2.01.03, que fecha). Perde-se detecção de propósito: com a
+  // regra anterior 14 eram avaliadas e 12 fechavam, mas o veredito dependia de decidir
+  // o que o código de 4 dígitos era, e errou três documentos certos em sequência.
+  assert.deepEqual([r.avaliaveis, r.fecham, r.deslocam, r.nao], [1, 1, 0, 0]);
+});
+
+test('hierarquia: código de 1 a 5 dígitos sem ponto é AMBÍGUO (X), e a sintética que o contém não é avaliável', () => {
+  const { linhas } = linhasDaHierarquia(camposDoBalanco());
+  const tipo = (cod) => linhas.find((l) => l.cod === cod)?.tipo;
+  assert.equal(tipo('8241'), 'X');
+  assert.equal(tipo('2.01.01'), 'S');
+  assert.equal(filhasDiretas(linhas, linhas.findIndex((l) => l.cod === '2.01.01')), null);
+  assert.notEqual(filhasDiretas(linhas, linhas.findIndex((l) => l.cod === '2.01.03')), null, 'a sem ambiguidade continua avaliada');
+});
+
+// CONTROLE NEGATIVO REAL 2: "22_Aging_de_Contas_a_Receber_Canastra_Industria_2025.pdf"
+// (versão 1f1f8144, caso "Teste v41 - Grupo canastra", 91 campos como gravados em
+// produção). As chaves são "A vencer", "1 a 30 dias", "31 a 60 dias"... repetidas por
+// cliente. O documento está CERTO (2236+709+545+491+764+709 = 5454 = Total) e a regra
+// "um dígito é sintética de topo" fazia o "1" de "1 a 30 dias" virar sintética:
+// 13 de 13 "não fecham".
+const AGING_CANASTRA = [
+  ['A vencer', 2236.0],
+  ['1 a 30 dias', 709.0],
+  ['31 a 60 dias', 545.0],
+  ['61 a 90 dias', 491.0],
+  ['91 a 180 dias', 764.0],
+  ['Acima de 180 dias', 709.0],
+  ['Total', 5454.0],
+  ['A vencer', 1648.0],
+  ['1 a 30 dias', 522.0],
+  ['31 a 60 dias', 402.0],
+  ['61 a 90 dias', 362.0],
+  ['91 a 180 dias', 563.0],
+  ['Acima de 180 dias', 522.0],
+  ['Total', 4019.0],
+  ['A vencer', 1295.0],
+  ['1 a 30 dias', 411.0],
+  ['31 a 60 dias', 316.0],
+  ['61 a 90 dias', 284.0],
+  ['91 a 180 dias', 442.0],
+  ['Acima de 180 dias', 410.0],
+  ['Total', 3158.0],
+  ['A vencer', 1059.0],
+  ['1 a 30 dias', 336.0],
+  ['31 a 60 dias', 258.0],
+  ['61 a 90 dias', 233.0],
+  ['91 a 180 dias', 362.0],
+  ['Acima de 180 dias', 336.0],
+  ['Total', 2584.0],
+  ['A vencer', 941.0],
+  ['1 a 30 dias', 298.0],
+  ['31 a 60 dias', 230.0],
+  ['61 a 90 dias', 207.0],
+  ['91 a 180 dias', 321.0],
+  ['Acima de 180 dias', 299.0],
+  ['Total', 2296.0],
+  ['A vencer', 824.0],
+  ['1 a 30 dias', 261.0],
+  ['31 a 60 dias', 201.0],
+  ['61 a 90 dias', 181.0],
+  ['91 a 180 dias', 281.0],
+  ['Acima de 180 dias', 261.0],
+  ['Total', 2009.0],
+  ['A vencer', 706.0],
+  ['1 a 30 dias', 224.0],
+  ['31 a 60 dias', 172.0],
+  ['61 a 90 dias', 155.0],
+  ['91 a 180 dias', 241.0],
+  ['Acima de 180 dias', 224.0],
+  ['Total', 1722.0],
+  ['A vencer', 588.0],
+  ['1 a 30 dias', 187.0],
+  ['31 a 60 dias', 144.0],
+  ['61 a 90 dias', 129.0],
+  ['91 a 180 dias', 201.0],
+  ['Acima de 180 dias', 186.0],
+  ['Total', 1435.0],
+  ['A vencer', 471.0],
+  ['1 a 30 dias', 149.0],
+  ['31 a 60 dias', 115.0],
+  ['61 a 90 dias', 103.0],
+  ['91 a 180 dias', 161.0],
+  ['Acima de 180 dias', 149.0],
+  ['Total', 1148.0],
+  ['A vencer', 471.0],
+  ['1 a 30 dias', 149.0],
+  ['31 a 60 dias', 115.0],
+  ['61 a 90 dias', 103.0],
+  ['91 a 180 dias', 161.0],
+  ['Acima de 180 dias', 149.0],
+  ['Total', 1148.0],
+  ['A vencer', 353.0],
+  ['1 a 30 dias', 112.0],
+  ['31 a 60 dias', 86.0],
+  ['61 a 90 dias', 77.0],
+  ['91 a 180 dias', 121.0],
+  ['Acima de 180 dias', 112.0],
+  ['Total', 861.0],
+  ['A vencer', 1178.0],
+  ['1 a 30 dias', 373.0],
+  ['31 a 60 dias', 287.0],
+  ['61 a 90 dias', 258.0],
+  ['91 a 180 dias', 402.0],
+  ['Acima de 180 dias', 374.0],
+  ['Total', 2872.0],
+  ['A vencer', 11770.0],
+  ['1 a 30 dias', 3731.0],
+  ['31 a 60 dias', 2871.0],
+  ['61 a 90 dias', 2583.0],
+  ['91 a 180 dias', 4020.0],
+  ['Acima de 180 dias', 3731.0],
+  ['Total', 28706.0],
+];
+const camposDoAging = () => AGING_CANASTRA.map(([chave, v], i) => ({
+  ordem: i, chave, periodo_coluna: null, valor_num: v,
+}));
+
+test('hierarquia: o aging real ("1 a 30 dias") NÃO é plano de contas hierárquico e não é avaliado', () => {
+  assert.deepEqual(conferirHierarquiaDeCodigos(camposDoAging()), []);
+  const { linhas } = linhasDaHierarquia(camposDoAging());
+  assert.equal(classificarHierarquia(linhas, ['']).avaliaveis, 0);
+  assert.ok(!linhas.some((l) => l.tipo === 'S'), 'nenhuma linha do aging vira sintética');
+});
+
+test('hierarquia: um dígito só é sintética de topo SE o documento tem código com ponto que o estende', () => {
+  const tipos = (chaves) => linhasDaHierarquia(chaves.map((chave, i) => ({ ordem: i, chave, periodo_coluna: null, valor_num: 1 })))
+    .linhas.map((l) => `${l.cod}:${l.tipo}`);
+  assert.deepEqual(tipos(['2 PASSIVO', '2.01 CIRCULANTE', '8241 X']), ['2:S', '2.01:S', '8241:X']);
+  assert.deepEqual(tipos(['2 PASSIVO', '8241 X']), ['2:F', '8241:X'], 'sem código com ponto que o estenda, é fronteira');
+  assert.ok(!tipos(['1 a 30 dias', '31 a 60 dias']).includes('1:S'));
+});
+
+// CONTROLE NEGATIVO REAL 3 (o terceiro falso positivo em sequência): a DFC da Fort Lub
+// (74 campos como gravados em produção). "1 -", "2 -" e "3 -" têm filhas com ponto
+// ("1.1 - …"); "4 - ACRESCIMO/DECRESCIMO…", "5 - CAIXA… INÍCIO" e "6 - CAIXA… FINAL"
+// NÃO têm. A regra anterior os tornava analíticas e os adotava como filhas de
+// "3.4 - Capital Social", que passava a "não fechar"; montada em 12 colunas mensais
+// (como a DFC aparece em outros documentos) isso disparava "12 de 48 não fecham".
+const DFC_FORT_LUB = [
+  ['DISPONIBILIDADES', 550962.36],
+  ['DISPONIBILIDADES IMEDIATAS', 5902.79],
+  ['BANCOS C/ MOVIMENTO', 2798.99],
+  ['APLICACOES FINANCEIRAS', 523326.05],
+  ['DISPONIBILIDADES EM TRANSITO', 18934.53],
+  ['CLIENTES', 10978210.69],
+  ['DUPLICATAS A RECEBER', 10978210.69],
+  ['OUTRAS CONTAS A RECEBER', 1912.23],
+  ['ESTOQUES', 127480.1],
+  ['MERCADORIAS PARA REVENDA', 127480.1],
+  ['OUTROS CRÉDITOS', 2995447.77],
+  ['ADIANTAMENTOS A FORNECEDORES INDUSTRIA', 2995447.77],
+  ['IMPOSTOS E CONTRIB. A RECUPERAR', 4060.66],
+  ['DESPESAS EXERCICIO SEGUINTE', 35986.24],
+  ['REALIZAVEL A LONGO PRAZO', 16022225.17],
+  ['CRÉDITOS COM PESSOAS LIGADAS', 16022225.17],
+  ['INVESTIMENTOS', 2023.48],
+  ['PARTICIPACAO EM OUTRAS EMPRESAS', 2023.48],
+  ['IMOBILIZADO', 728550.0],
+  ['IMOBILIZADO', 754181.49],
+  ['(-) DEPRECIACAO ACUMULADA', -3322.47],
+  ['(-) AMORTIZACAO ACUMULADA', -22309.02],
+  ['TOTAL DO ATIVO', 31446858.7],
+  ['EMPRESTIMOS E FINANCIAMENTOS', 13235448.04],
+  ['EMPRESTIMOS E FINANCIAMENTOS BANCARIOS', 13235448.04],
+  ['FORNECEDORES', 2751290.98],
+  ['FORNECEDORES DIVERSOS', 2751290.98],
+  ['IMPOSTOS E CONTRIBUIÇÕES A RECOLHER', 405581.01],
+  ['OBRIGAÇÕES TRABALHISTAS', 445347.07],
+  ['SALÁRIOS E ORDENADOS', 187749.13],
+  ['ENCARGOS SOCIAIS', 110969.89],
+  ['PROVISÕES TRABALHISTAS', 146628.05],
+  ['OUTRAS CONTAS A PAGAR', 43889.59],
+  ['ADIANTAMENTO DE CLIENTES', 43889.59],
+  ['EMPRESTIMOS E FINANCIAMENTOS BANCARIOS', 14191570.09],
+  ['PATRIMONIO LIQUIDO', 373731.92],
+  ['CAPITAL SOCIAL INTEGRALIZADO', 1000000.0],
+  ['PREJUÍZOS ACUMULADOS', -626268.08],
+  ['TOTAL DO PATRIMÔNIO LÍQUIDO E PASSIVO', 31446858.7],
+  ['RECEITA OPERACIONAL BRUTA', 34929357.95],
+  ['(-) DEDUÇÕES DA RECEITA BRUTA', -3561589.29],
+  ['VENDAS CANCELADAS', -321600.4],
+  ['IMPOSTOS INCIDENTES SOBRE VENDAS', -3239988.89],
+  ['(=) RECEITA OPERACIONAL LIQUIDA', 31367768.66],
+  ['(-) CUSTO DOS PRODUTOS/MERCADORIAS/SERVICOS', -20686966.86],
+  ['(+/-) DESPESAS/RECEITAS OPERACIONAIS', -11307069.88],
+  ['PESSOAL', -1603470.45],
+  ['ADMINISTRATIVAS', -172729.2],
+  ['COMERCIAIS', -8417767.13],
+  ['DEPRECIAÇÕES E AMORTIZAÇÕES', -25631.49],
+  ['RESULTADO FINANCEIRO LIQUIDO', -1480092.62],
+  ['(-) DESPESAS FINANCEIRAS', -1514476.71],
+  ['RECEITAS FINANCEIRAS', 34384.09],
+  ['DESPESAS TRIBUTARIAS', -40031.7],
+  ['1 - FLUXOS DE CAIXA DAS ATIVIDADES OPERACIONAIS', -11097625.63],
+  ['1.1 - Resultado do Exercicio', -626268.08],
+  ['1.2 - Depreciação/Amortização', 25631.49],
+  ['1.3 - Contas a Receber', -10980122.92],
+  ['1.4 - Estoques', -127480.1],
+  ['1.5 - Impostos e Contribuições', 401520.35],
+  ['1.6 - Despesas Antecipadas', -35986.24],
+  ['1.7 - Fornecedores', -244156.79],
+  ['1.8 - Obrigações Trabalhistas', 445347.07],
+  ['1.9 - Contas a Pagar e Provisões', 43889.59],
+  ['2 - FLUXOS DE CAIXA DAS ATIVIDADES DE INVESTIMENTOS', -756204.97],
+  ['2.1 - Aquisições de Ações/Cotas', -2023.48],
+  ['2.2 - Aquisições de Imobilizados/Intangiveis', -754181.49],
+  ['3 - FLUXOS DE CAIXA DAS ATIVIDADES DE FINANCIAMENTOS', 12404792.96],
+  ['3.1 - Emprestimos Concedidos a Terceiros', -16022225.17],
+  ['3.2 - Emprestimos Tomados com Bancos', 27427018.13],
+  ['3.4 - Capital Social', 1000000.0],
+  ['4 - ACRESCIMO/DECRESCIMO LÍQUIDO DE EQUIVALENTE DE CAIXA', 550962.36],
+  ['5 - CAIXA E EQUIVALENTE DE CAIXA NO ÍNICIO DO PERIODO', 0.0],
+  ['6 - CAIXA E EQUIVALENTE DE CAIXA NO FINAL DO PERIODO', 550962.36],
+];
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const camposDaDfcEm12Colunas = () => MESES.flatMap((m, k) => DFC_FORT_LUB.map(([chave, v], i) => ({
+  ordem: k * 1000 + i, chave, periodo_coluna: m, valor_num: v,
+})));
+
+test('hierarquia: a DFC real da Fort Lub (4 -, 5 -, 6 - sem filhas) NÃO reprova, nem em 12 colunas', () => {
+  assert.deepEqual(conferirHierarquiaDeCodigos(camposDaDfcEm12Colunas()), []);
+  const { linhas } = linhasDaHierarquia(camposDaDfcEm12Colunas());
+  const tipo = (prefixo) => linhas.find((l) => l.chave.startsWith(prefixo))?.tipo;
+  assert.equal(tipo('4 - '), 'F', '"4 -" sem extensão com ponto é FRONTEIRA, não filha de ninguém');
+  assert.equal(tipo('1 - '), 'S');
+  const i = linhas.findIndex((l) => l.chave.startsWith('3.4 - '));
+  assert.ok(!(filhasDiretas(linhas, i) ?? []).some((j) => /^[456] - /.test(linhas[j].chave)), '4, 5 e 6 não são filhas de 3.4');
+});
+
+test('hierarquia: sintética com nível pulado ou linha ambígua no bloco é NÃO AVALIÁVEL — nunca "não fecha"', () => {
+  const doc = (chaves) => chaves.map(([chave, v], i) => ({ ordem: i, chave, periodo_coluna: null, valor_num: v }));
+  const filhas = (chaves, cod) => {
+    const { linhas } = linhasDaHierarquia(doc(chaves));
+    return filhasDiretas(linhas, linhas.findIndex((l) => l.cod === cod));
+  };
+  // nível pulado: 3.03.02.02 sem 3.03.02 (o que a DRE real do Krauspenhar faz)
+  assert.equal(filhas([['3 X', 5], ['3.03 A', 5], ['3.03.01 B', 2], ['3.03.02.02 C', 3]], '3.03'), null);
+  // linha sem código dentro do bloco
+  assert.equal(filhas([['3 X', 5], ['3.01 A', 5], ['Observação', 1], ['3.01.01 B', 5]], '3.01'), null);
+  // estrutura limpa continua avaliada
+  assert.deepEqual(filhas([['3 X', 5], ['3.01 A', 5], ['3.01.01 B', 2], ['3.01.02 C', 3]], '3.01'), [2, 3]);
 });

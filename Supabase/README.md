@@ -761,6 +761,31 @@ supabase db execute --file Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_out
 #   select id, caso_id from pendencia where motivo = 'reconciliacao:caixa_bp_fluxo'
 #    and estado = 'aberta' and descricao like '%2024: Caixa no Balanço%';
 
+# A 0197 REEMITE fn_somar_faturamento_ano (achado da revisão da 0196). (1) Faturamento com o mês na
+# COLUNA (chave "Faturamento", colunas "jan/2024"…) somava 0 meses, porque a 0196 exigia que o
+# RÓTULO parecesse um mês, e a receita ficava sem conferência com um motivo FALSO ("não traz linha
+# mensal deste ano"); agora a coluna "mês/ano" do ano pedido conta como mês. (2) O `not like '%médi%'`
+# era código morto (o texto normalizado é "medio"): "Ticket médio por pedido 2024" entrava na soma.
+# Coluna-INTERVALO "jan/2024 — jan/2025" (uma célula) NÃO é atribuída a ano: segue 0 meses.
+# MEDIDO EM PRODUÇÃO (30/09/2026, só-leitura): 84 documentos de faturamento; 9 com mês na coluna somavam 0 meses (v20-v23, v27, v28, v29, v40, Canastra) e passam a somar; v24 somava o ticket (38,2) e passa a 0 meses; v33/v35/v39 têm coluna-INTERVALO e seguem 0 (conserto na extração); 76 dos 90 pares com soma não mudam.
+# SEM BACKFILL: vale na próxima rodada de cada caso.
+# Teste: Supabase/test/faturamento_mes_na_coluna.test.sql (13 asserts; 9 reprovam sem a 0197).
+supabase db execute --file Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0197' and not presente;                 -- ZERO linhas
+
+# A 0198 REEMITE fn_anos_periodo: a FAIXA "AAAA-AAAA" perdia o ano do meio ("multi 2024-2026" = 2024 e
+# 2026). MEDIDO EM PRODUÇÃO (30/09/2026, só-leitura): 1 período muda de conjunto, o do Mapa de Dívida do
+# Krauspenhar (4 reconciliações gravadas, todas sem_periodo_par, não regravadas); sem backfill. Não expande
+# faixa ambígua (fim antes do início, >10 anos, 2 dígitos) nem data. ACHADO NÃO CORRIGIDO: listas de 2
+# dígitos que não são anos ("multi 02,25" = 2002 e 2025; 5+5+5+5 períodos em produção).
+# Teste: Supabase/test/faixa_de_anos_do_periodo.test.sql (9 asserts; 4 reprovam sem a 0198).
+supabase db execute --file Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0198' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

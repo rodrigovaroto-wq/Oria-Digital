@@ -7,7 +7,7 @@ import { FormParametros, FormPremissa } from "./FormsTopo";
 import { SugestoesDoRealizado } from "./SugestoesDoRealizado";
 import { sugerirDoRealizado } from "@/lib/premissas-do-realizado";
 import { chaveDaLinha, vinculoPorLinha } from "@/lib/modelagem-linha";
-import { portaoFechado, textoChipModelagem, textoTituloConferenciaModelagem, type PortaoDoExport } from "@/lib/modelagem-cobertura";
+import { portaoFechado, portaoNaoConferido, textoChipModelagem, textoTituloConferenciaModelagem, veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import { humanizar, rotuloDaSecao } from "@/lib/rotulos";
 
 // A seção MODELAGEM do mandato (pedido do dono, Fase 7.3; revisada na Fase 8
@@ -272,8 +272,13 @@ export default async function ModelagemPage({
   const sugeridas = (sugeridasRes.data as PremissaCatalogo[] | null) ?? [];
   const ativas = (ativasRes.data as CasoPremissa[] | null) ?? [];
   const vinculos = (vinculosRes.data as LinhaVinculo[] | null) ?? [];
-  const portao = (portaoRes.data as PortaoDoExport | null) ?? null;
+  // `null` = NÃO CONFERIDO (RPC falhou ou não devolveu nada): nunca "aberto" — ver
+  // `portaoNaoConferido` em lib/modelagem-cobertura.ts.
+  // A MESMA regra da rota do export (`veredictoDoPortao`): erro, resposta ausente ou sem
+  // `elegivel` booleano é NÃO CONFERIDO.
+  const { portao } = veredictoDoPortao(portaoRes);
   const exportTravado = portaoFechado(portao);
+  const portaoNaoConf = portaoNaoConferido(portao);
   const conf = confRes.data as {
     premissas_ativas: number; premissas_sem_valor: string[];
     // 0134: informação, não bloqueio — curva mensal ativa num caso sem documento
@@ -451,7 +456,18 @@ export default async function ModelagemPage({
           {/* Com o Portão 2 fechado a rota recusa com 409 e o navegador mostraria
               um JSON cru: o botão leva à tela do mandato, onde as pendências
               bloqueantes se decidem, e diz por quê. */}
-          {exportTravado ? (
+          {portaoNaoConf ? (
+            <div className="flex flex-col items-end gap-1">
+              <button type="button" className="btn-primario" disabled>
+                Exportar modelagem — Portão 2 não conferido
+              </button>
+              <p role="status" className="max-w-xs text-right text-xs text-alerta-900">
+                Não foi possível conferir o Portão 2 (a consulta falhou ou não devolveu veredito); o
+                export de modelagem fica desabilitado até a conferência responder. Recarregue a
+                página; se persistir, o motivo está na faixa de consultas com erro.
+              </p>
+            </div>
+          ) : exportTravado ? (
             <Link
               href={`/casos/${id}`}
               className="btn-primario"

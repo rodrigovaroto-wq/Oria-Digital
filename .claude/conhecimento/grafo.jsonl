@@ -90,7 +90,9 @@
 {"k":"n","id":"arquivo:Supabase/test/entidade_participacao.test.sql","t":"arquivo","f":"Supabase/test/entidade_participacao.test.sql","txt":"entidade_participacao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/entidade_titulo_suspeito.test.sql","t":"arquivo","f":"Supabase/test/entidade_titulo_suspeito.test.sql","txt":"entidade_titulo_suspeito.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/espelho_grupo_a.test.sql","t":"arquivo","f":"Supabase/test/espelho_grupo_a.test.sql","txt":"espelho_grupo_a.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","t":"arquivo","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","txt":"faixa_de_anos_do_periodo.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fato_material.test.sql","t":"arquivo","f":"Supabase/test/fato_material.test.sql","txt":"fato_material.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/faturamento_mes_na_coluna.test.sql","t":"arquivo","f":"Supabase/test/faturamento_mes_na_coluna.test.sql","txt":"faturamento_mes_na_coluna.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/faturamento_por_mes.test.sql","t":"arquivo","f":"Supabase/test/faturamento_por_mes.test.sql","txt":"faturamento_por_mes.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fechar_mandato.test.sql","t":"arquivo","f":"Supabase/test/fechar_mandato.test.sql","txt":"fechar_mandato.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fixture_book_canastra.sql","t":"arquivo","f":"Supabase/test/fixture_book_canastra.sql","txt":"fixture_book_canastra.sql"}
@@ -229,6 +231,7 @@
 {"k":"n","id":"ficha:republicacao-do-n8n-perde-toggles","t":"ficha","f":".claude/memory/republicacao-do-n8n-perde-toggles.md","txt":"republicar o workflow pela API perde onError em 23 nós, retryOnFail em 11 e o multipleFiles do campo de arquivo — sem ele o intake aceita um documento por vez ","d":"republicar o workflow pela API perde onError em 23 nós, retryOnFail em 11 e o multipleFiles do campo de arquivo — sem ele o intake aceita um documento por vez","kw":"duas republicações seguidas perderam mesma família coisas isso preparar republicacao existe nunca faça json repositório direto bash curl n8n_api_key n8n_url workflows node publicar content type application data binary conferir publicado pior toggles perdidos multiplefiles true campo arquivo formulário intake aceita documento sintoma aparece quando alguém tenta subir 190 arquivos confira esse toggle editor antes rodada grande nenhuma suíte cobre test workflow mede está mudança topologia novo executeonce querybatching produção republicação nenhum teste verde contrário","tp":"defeito"}
 {"k":"n","id":"ficha:republicar-sobrescreve-nome-renomeado-ao-vivo","t":"ficha","f":".claude/conhecimento/fichas/republicar-sobrescreve-nome-renomeado-ao-vivo.md","txt":"Armadilha: republicar sobrescreve um nome que o dono trocou no editor ","kw":"armadilha republicar sobrescreve nome dono trocou editor achado preparação republicação ingestão 2026 sintoma workflow publicado na1aev3m8fjdxlwm estava name oria sarf sistema automático reestruturação financeira rebranding feito direto registro estado claude memory repositório ainda gerava técnico fatia diagnóstico extração sombra reconciliação classe importa preparar republicacao 228 grava repo vivo sempre ganha porque nunca null perceber divergência reverteria silêncio teria sucesso conferir dado confere topo notaria abrir antigo volta aparecer antes agir casa pelo chave declarada próprio script renomear quebra esta ligação rodar leitura workflows bastou para notar preciso adivinhar está correção perguntado qual preservar como saber sozinho deliberado desatualizado gerador resposta build passou gravar marca meta note quem abre json continuar sabendo dentro lição generaliza qualquer compare curl mais evita reverter decisão produto tomada fora vale campo merge prefira lado fonte verdade tudo existe artefato comportamento conexões jscode metadado apresentação descrição pode sido decidido precisa conferido presumido","tp":"armadilha"}
 {"k":"n","id":"ficha:rodape-do-export-em-linha-fixa-estoura","t":"ficha","f":".claude/conhecimento/fichas/rodape-do-export-em-linha-fixa-estoura.md","txt":"Armadilha: endereço fixo no rodapé do export estoura quando o caso cresce ","kw":"armadilha endereço fixo rodapé export estoura quando caso cresce achado produção mandato teste 2026 dono abriu casos recebeu erro arquivo sintoma modelagem modelo chegou linha 1349 bloco parâmetros começa 186 aumente linha_param_inicio linha_base_inicio adiante causa raiz eram constantes 200 elas precisam conhecidas antes escrito porque toda fórmula coluna cita refentidade refcorte escolha fixa configuração escreve premissa ativa vinculada isso estourou título premissas 188 linhas 215 contra 134 esqueleto cobria folga guarda certo abortou sobrescrever cima abriria normalmente estaria errado exatamente defeito este projeto chama lente central fica correção offset passa somar tamanho único esse conhecido escrever config length mantém como termo soma zero medição regra invariante novo verificar configuradas constante antiga religada reproduz palavra 1318 723 verificações falhas 721 lição generaliza planilha gerada dívida vence cliente grande baixo antemão precisa calculável escrita pergunta certa qual número bastante crescer consigo contar mesmo limite apareceu duas vezes mesma passada reproduzir real portal","tp":"armadilha"}
+{"k":"n","id":"ficha:servidor-velho-na-porta-mede-o-build-errado","t":"ficha","f":".claude/memory/servidor-velho-na-porta-mede-o-build-errado.md","txt":"medir um conserto do portal servindo o build localmente — se a porta já estiver ocupada, o `next start` novo morre calado e o antigo responde; a medição \"não mudou nada\" é do build velho ","d":"medir um conserto do portal servindo o build localmente — se a porta já estiver ocupada, o `next start` novo morre calado e o antigo responde; a medição \"não mudou nada\" é do build velho","kw":"medido 2026 sessão 104 para validar consertos export contra mandato real krauspenhar caso 33b58a89 compilou portal branch numa worktree serviu porta 3100 apontado supabase produção leitura primeiro servidor subiu dois next start seguintes depois recompilar falharam eaddrinuse dentro nohup continuou respondendo 200 pelo antigo custo concluiu duas vezes correção detecção subtotal muda nada arquivo quase descartou conserto certo receita bruta 113 mandou agente procurar outra causa checagem processo lstart grep server hora início mostrou engano regra antes medir confira quem responde build você acabou compilar ready novo aplicada própria medição cara mudou pkill mesmo comando quer morre exit 144 armadilha s103 mate chamada separada","tp":"ambiente"}
 {"k":"n","id":"ficha:sessao-perto-do-limite-fecha-e-documenta","t":"ficha","f":".claude/memory/sessao-perto-do-limite-fecha-e-documenta.md","txt":"perto do limite de uso da sessão, a prioridade vira commitar o que está pronto e escrever o estado — nunca deixar trabalho pela metade sem rastro para a próxima sessão ","d":"perto do limite de uso da sessão, a prioridade vira commitar o que está pronto e escrever o estado — nunca deixar trabalho pela metade sem rastro para a próxima sessão","kw":"pedido explícito dono 2026 quando sessão passar limite prioridade deixa avançar mais fatia vira fechar segurança commitar tudo está pronto testado nenhuma validada fica working tree commit porque próxima ainda começou nunca parar meio migration mudança pela metade escrita testada commitada termina couber tempo resta reverte para último estado limpo sujo pior possível sabe aquilo intenção acidente escrever handoff feito falta ordem mesma doutrina mapa_de_execucao nova abre isso reconstrói raciocínio zero reconstruir custa caro documentar nomear próximo passo exato continuar plano comando arquivo linha onde recomeça ambiguidade aqui mesmo defeito estagio desligado parece descreve parecer isto memória senso custo errar assimétrico esquecer inteira estava numa tarefa multi como esta diagnóstico fatias cada perde contexto paga novo trabalho pago","tp":"doutrina"}
 {"k":"n","id":"ficha:sessoes-paralelas-aplicam-fora-de-ordem","t":"ficha","f":".claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md","txt":"duas sessões em paralelo aplicam migrations fora de ordem em produção — a numeração reservada segura, mas o marcador de cobertura regrediu e a sonda ficou cega ao buraco; antes de aplicar, compare o corpo de toda função reemitida com o de produção ","d":"duas sessões em paralelo aplicam migrations fora de ordem em produção — a numeração reservada segura, mas o marcador de cobertura regrediu e a sonda ficou cega ao buraco; antes de aplicar, compare o corpo de toda função reemitida com o de produção","kw":"medido 2026 0182 0183 0185 0188 foram feitas duas sessões mesmo tempo aplicou 0186 produção segurou reservar numeração antes começar pediu 0184 começou portão prefixo duplicado nunca disparou mais grátis repositório convive buraco 0044 0100 menos fatal quebrou nenhum erro marcador cobertura regrediu migrations terminam update instalacao_cobertura ate_migration nnnn incondicional aplicada depois escreveu cima corrigido tabela gatilho recalcula partir catálogo quando sonda 132 requisitos ausentes fora migration rodou deixa requisito para acusar producao agora compara contra lista supabase readme cheque evita pior caso sozinho reemite função create replace recebeu outra sessão ponto você compare corpo está rodando instala diferença mudança tiver reemitido mesma aplicar desfaz dela silêncio limpo fn_upsert_entidade prod linha nova nada feito porque houve desconfiança bloqueio classificador modo automático claude code bloqueou apply como production deploy dentro trabalho consultas somente leitura pode estar alcance token ambiente permissão settings local json paralela tinha contorna legitimamente dono trocar manual aprovar","tp":"ambiente"}
 {"k":"n","id":"ficha:sinal-com-multiplos-gates-desligados-independentes","t":"ficha","f":".claude/conhecimento/fichas/sinal-com-multiplos-gates-desligados-independentes.md","txt":"Armadilha: Sinal com múltiplos gates — segundo nunca ligado ao primeiro ","kw":"armadilha sinal múltiplos gates segundo nunca ligado primeiro achado rodada real teste 2026 sintoma tem_dado_financeiro false calava guarda veio vazia migration 0111 javascript cobertura parcial avaliarcobertura build workflow juntar blocos causa raiz quando novo adicionado como lugar natural pensar funciona naquele mesmo precisa desligar guardas pontos pipeline cada gate implementação separada outro desenvolvedor acrescenta assume está todo efeito documentos certidões jucesp planilha controle estava correto banco assim abriram extracao_falhou porque conhecia segunda camada mesma achada revisão multilente 234 ligar dois bastou eles também precisam condição primeira versão commit 378f23a para qualquer cala ademais v_count nada extraído essa documento 200 linhas extraídas misto erro modelo silenciava gravava campos pendência pior defeito original corrigido replicando exata semdadoextraido posterior lição toda procurar todos lugares aquele deveria listar qual linguagem typescript escrever prova desliga cobre existe copiar inteira invariante lado vale test testes dado contraprova continua acusando houve extração ambos falham antes respectivo passam","tp":"armadilha"}
@@ -247,7 +250,7 @@
 {"k":"n","id":"fn:fn_ano_da_coluna","t":"fn","f":"Supabase/migrations/0044_valores_por_ano.sql","txt":"ano da coluna"}
 {"k":"n","id":"fn:fn_anos_alvo","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"anos alvo"}
 {"k":"n","id":"fn:fn_anos_do_periodo","t":"fn","f":"Supabase/migrations/0122_pergunta_em_portugues.sql","txt":"anos do periodo"}
-{"k":"n","id":"fn:fn_anos_periodo","t":"fn","f":"Supabase/migrations/0022_periodo_por_ano_e_guardas.sql","txt":"anos periodo"}
+{"k":"n","id":"fn:fn_anos_periodo","t":"fn","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","txt":"anos periodo"}
 {"k":"n","id":"fn:fn_anos_texto","t":"fn","f":"Supabase/migrations/0122_pergunta_em_portugues.sql","txt":"anos texto"}
 {"k":"n","id":"fn:fn_aplicar_premissa_em_lote","t":"fn","f":"Supabase/migrations/0100_papel_por_secao.sql","txt":"aplicar premissa em lote"}
 {"k":"n","id":"fn:fn_aprovar_caso","t":"fn","f":"Supabase/migrations/0037_portao2.sql","txt":"aprovar caso"}
@@ -427,7 +430,7 @@
 {"k":"n","id":"fn:fn_secao_e_de_resultado","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"secao e de resultado"}
 {"k":"n","id":"fn:fn_soma_secao","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"soma secao"}
 {"k":"n","id":"fn:fn_somar_conceito","t":"fn","f":"Supabase/migrations/0015_reconciliacao_classe_b.sql","txt":"somar conceito"}
-{"k":"n","id":"fn:fn_somar_faturamento_ano","t":"fn","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"somar faturamento ano"}
+{"k":"n","id":"fn:fn_somar_faturamento_ano","t":"fn","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","txt":"somar faturamento ano"}
 {"k":"n","id":"fn:fn_sugerir_perguntas","t":"fn","f":"Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql","txt":"sugerir perguntas"}
 {"k":"n","id":"fn:fn_tem_palavra_longa","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tem palavra longa"}
 {"k":"n","id":"fn:fn_teto_ressalvas","t":"fn","f":"Supabase/migrations/0037_portao2.sql","txt":"teto ressalvas"}
@@ -593,6 +596,8 @@
 {"k":"n","id":"migration:0194","t":"migration","f":"Supabase/migrations/0194_a_planilha_de_mutuos_que_nunca_foi_lida.sql","txt":"a planilha de mutuos que nunca foi lida"}
 {"k":"n","id":"migration:0195","t":"migration","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","txt":"o espelho que lia o balanco de outro ano"}
 {"k":"n","id":"migration:0196","t":"migration","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"o caixa que lia a dfc de outro ano"}
+{"k":"n","id":"migration:0197","t":"migration","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","txt":"o faturamento que nao via o mes na coluna"}
+{"k":"n","id":"migration:0198","t":"migration","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","txt":"a faixa de anos que perdia o ano do meio"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -657,107 +662,112 @@
 {"k":"n","id":"no8n:Upload Storage","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Upload Storage httpRequest"}
 {"k":"n","id":"no8n:Upsert Caso (Postgres)","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Upsert Caso (Postgres) postgres"}
 {"k":"n","id":"no8n:Veredito","t":"no8n","f":"N8N/workflow.diagnostico-ia.json","txt":"Veredito code"}
-{"k":"n","id":"portao:A sonda do buraco no meio não dá alarme falso num banco completo","t":"portao","f":".github/workflows/suites.yml","txt":"A sonda do buraco no meio não dá alarme falso num banco completo","l":483}
-{"k":"n","id":"portao:Arnês de variações — a cadeia real sobre documento sujo","t":"portao","f":".github/workflows/suites.yml","txt":"Arnês de variações — a cadeia real sobre documento sujo","l":496}
-{"k":"n","id":"portao:Build do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Build do portal","l":513}
-{"k":"n","id":"portao:Cliente psql 16","t":"portao","f":".github/workflows/suites.yml","txt":"Cliente psql 16","l":123}
-{"k":"n","id":"portao:Custo do lote (medido no artefato, sem chamar a OpenAI)","t":"portao","f":".github/workflows/suites.yml","txt":"Custo do lote (medido no artefato, sem chamar a OpenAI)","l":267}
-{"k":"n","id":"portao:Espelho CLAUDE.md ↔ CI (suítes e medidores)","t":"portao","f":".github/workflows/suites.yml","txt":"Espelho CLAUDE.md ↔ CI (suítes e medidores)","l":338}
-{"k":"n","id":"portao:Fixtures derivadas do gerador do book (SQL, JSON) e git diff","t":"portao","f":".github/workflows/suites.yml","txt":"Fixtures derivadas do gerador do book (SQL, JSON) e git diff","l":217}
-{"k":"n","id":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","t":"portao","f":".github/workflows/suites.yml","txt":"Geradores de workflow — e o gerado tem de ser igual ao commitado","l":183}
-{"k":"n","id":"portao:Gerar o book sintético","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book sintético","l":197}
-{"k":"n","id":"portao:Gerar o book-canastra","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book-canastra","l":250}
-{"k":"n","id":"portao:Gerar o book-distress","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book-distress","l":259}
-{"k":"n","id":"portao:Instalar dependências do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Instalar dependências do portal","l":91}
-{"k":"n","id":"portao:Lint e tipos do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Lint e tipos do portal","l":135}
-{"k":"n","id":"portao:O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","t":"portao","f":".github/workflows/suites.yml","txt":"O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","l":467}
-{"k":"n","id":"portao:O que o código chama existe no banco","t":"portao","f":".github/workflows/suites.yml","txt":"O que o código chama existe no banco","l":449}
-{"k":"n","id":"portao:O schema materializado bate com as migrations","t":"portao","f":".github/workflows/suites.yml","txt":"O schema materializado bate com as migrations","l":443}
-{"k":"n","id":"portao:Portão dos comandos de barra (todo subagent_type existe)","t":"portao","f":".github/workflows/suites.yml","txt":"Portão dos comandos de barra (todo subagent_type existe)","l":329}
-{"k":"n","id":"portao:Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","t":"portao","f":".github/workflows/suites.yml","txt":"Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","l":273}
-{"k":"n","id":"portao:Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","l":423}
-{"k":"n","id":"portao:Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","l":407}
-{"k":"n","id":"portao:Suíte da mensagem de falha (o texto do dia ruim)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da mensagem de falha (o texto do dia ruim)","l":366}
-{"k":"n","id":"portao:Suíte da planilha de transcrição (ida e volta do formato)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da planilha de transcrição (ida e volta do formato)","l":358}
-{"k":"n","id":"portao:Suíte da sonda de produção (a tradução de \"não perguntei\" em veredito)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da sonda de produção (a tradução de \"não perguntei\" em veredito)","l":149}
-{"k":"n","id":"portao:Suíte das premissas sugeridas do realizado","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte das premissas sugeridas do realizado","l":374}
-{"k":"n","id":"portao:Suíte de banco (migrations do zero + testes SQL)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte de banco (migrations do zero + testes SQL)","l":433}
-{"k":"n","id":"portao:Suíte de export (invariantes do arquivo entregue)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte de export (invariantes do arquivo entregue)","l":350}
-{"k":"n","id":"portao:Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","l":383}
-{"k":"n","id":"portao:Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","l":392}
-{"k":"n","id":"portao:Suíte dos hooks do agente","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte dos hooks do agente","l":163}
-{"k":"n","id":"portao:Suíte e2e (extração → banco → export)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte e2e (extração → banco → export)","l":493}
-{"k":"n","id":"portao:Suíte n8n","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte n8n","l":146}
-{"k":"n","id":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","t":"portao","f":".github/workflows/suites.yml","txt":"Índice do conhecimento — o grafo derivado bate com o repositório","l":291}
-{"k":"n","id":"sessao:10","t":"sessao","f":"HANDOFF.md","txt":"10 Teste v25: reconciliação sem ruído, export que fecha (PRs #49 #52)","l":5201}
-{"k":"n","id":"sessao:11","t":"sessao","f":"HANDOFF.md","txt":"11 DMPL e DVA: código próprio na taxonomia e aba própria (`Supabase/migrations/0024`)","l":5148}
-{"k":"n","id":"sessao:12","t":"sessao","f":"HANDOFF.md","txt":"12 Aba Modelagem: modelo pronto em fórmula + consolidação de entidade (v27)","l":5106}
-{"k":"n","id":"sessao:13","t":"sessao","f":"HANDOFF.md","txt":"13 Índices macro: histórico (BCB/IBGE) + Focus, e o modelo consumindo os dois","l":5070}
-{"k":"n","id":"sessao:14","t":"sessao","f":"HANDOFF.md","txt":"14 DF auditada: o conjunto num arquivo só é separado por demonstração","l":5012}
-{"k":"n","id":"sessao:15","t":"sessao","f":"HANDOFF.md","txt":"15 Reextração é versão nova, e substitui em vez de acumular (`Supabase/migrations/0026`)","l":4956}
-{"k":"n","id":"sessao:16","t":"sessao","f":"HANDOFF.md","txt":"16 Teste v28: aba ausente deixa de ser buraco silencioso","l":4890}
-{"k":"n","id":"sessao:17","t":"sessao","f":"HANDOFF.md","txt":"17 Testes v29/v30: macro vazio por AUTORIZAÇÃO, e 429 sem causa conhecida (a causa saiu na sessão 18: teto de gasto do PROJETO)","l":4793}
-{"k":"n","id":"sessao:18","t":"sessao","f":"HANDOFF.md","txt":"18 (2026 07 31)   Etapa 1 completa + Etapa 2 começada; e dois invariantes MEUS nasceram vazios","l":4721}
-{"k":"n","id":"sessao:19","t":"sessao","f":"HANDOFF.md","txt":"19 (2026 07 31, tarde)   pendências do dono fechadas, Etapa 2 quase inteira (PR #69)","l":4413}
-{"k":"n","id":"sessao:20","t":"sessao","f":"HANDOFF.md","txt":"20 (2026 07 31, noite)   Etapa 2 FECHADA, dupla contagem sinalizada, e CI","l":4247}
-{"k":"n","id":"sessao:21","t":"sessao","f":"HANDOFF.md","txt":"21 (2026 08 01)   Etapas 1 a 6, a partir do teste v35","l":4143}
-{"k":"n","id":"sessao:22","t":"sessao","f":"HANDOFF.md","txt":"22 (2026 08 03)   Fase 1: os dois itens que perdiam dado em silêncio","l":4046}
-{"k":"n","id":"sessao:23","t":"sessao","f":"HANDOFF.md","txt":"23 (2026 08 03)   Fase 2: documento que chegou vazio para de contar","l":3960}
-{"k":"n","id":"sessao:24","t":"sessao","f":"HANDOFF.md","txt":"24 (2026 08 03)   Fases 4 e 5: abas resolvidas, Portão 2 existe, roteiro do teste","l":3851}
-{"k":"n","id":"sessao:25","t":"sessao","f":"HANDOFF.md","txt":"25 (2026 08 03)   Fase 7.1: granularidade total e o export de dados","l":3754}
-{"k":"n","id":"sessao:26","t":"sessao","f":"HANDOFF.md","txt":"26 (2026 08 03)   Fase 7.2: a premissa deixa de ser código e passa a ser dado","l":3663}
-{"k":"n","id":"sessao:27","t":"sessao","f":"HANDOFF.md","txt":"27 (2026 08 03)   Fase 7.3: a tela onde linha e premissa se cruzam","l":3592}
-{"k":"n","id":"sessao:28","t":"sessao","f":"HANDOFF.md","txt":"28 (2026 08 03)   Fase 7.4: o export dirigido pelas escolhas do portal","l":3498}
-{"k":"n","id":"sessao:29","t":"sessao","f":"HANDOFF.md","txt":"29 (2026 08 03)   Fase 7.5: as primitivas de projeção que faltavam","l":3417}
-{"k":"n","id":"sessao:30","t":"sessao","f":"HANDOFF.md","txt":"30 (2026 08 03)   Fase 6: calibração   o dial volta a mandar","l":3303}
-{"k":"n","id":"sessao:31","t":"sessao","f":"HANDOFF.md","txt":"31 (2026 08 04)   Fase 8 (papel da linha) + Fase 9 (modelo institucional)","l":6716}
-{"k":"n","id":"sessao:32","t":"sessao","f":"HANDOFF.md","txt":"32 (2026 08 04)   o lote da Modelagem destravado, e a captura de produção","l":6783}
-{"k":"n","id":"sessao:33","t":"sessao","f":"HANDOFF.md","txt":"33 (2026 08 04)   por que a Modelagem continuou quebrada DEPOIS do merge","l":6889}
-{"k":"n","id":"sessao:34","t":"sessao","f":"HANDOFF.md","txt":"34 (2026 08 04)   o timeout sobreviveu ao apply, e a investigação virou de ambiente","l":7045}
-{"k":"n","id":"sessao:35","t":"sessao","f":"HANDOFF.md","txt":"35 (2026 08 05)   a `0103`, a regra do cabeçalho, e um agente que não gravou nada","l":7144}
-{"k":"n","id":"sessao:36","t":"sessao","f":"HANDOFF.md","txt":"36 (2026 08 05)   RESOLVIDO: as três fatias do timeout, medidas na produção","l":7242}
-{"k":"n","id":"sessao:37","t":"sessao","f":"HANDOFF.md","txt":"37 (2026 08 05)   a modelagem exercitada de ponta a ponta, e três defeitos que só o uso real acha","l":7379}
-{"k":"n","id":"sessao:38","t":"sessao","f":"HANDOFF.md","txt":"38 (2026 08 05)   Fase 1 do espelhamento: o Modelo Base mapeado inteiro, e três números que mudam o placar","l":7509}
-{"k":"n","id":"sessao:39","t":"sessao","f":"HANDOFF.md","txt":"39 (2026 08 05)   o espelhamento executado: 11 defeitos corrigidos, o balanço fechando, e os 8 gráficos","l":7661}
-{"k":"n","id":"sessao:40","t":"sessao","f":"HANDOFF.md","txt":"40 (2026 08 06)   o arquivo entregue mentia; seis defeitos e a conferência que os pega","l":3189}
-{"k":"n","id":"sessao:40b","t":"sessao","f":"HANDOFF.md","txt":"40b (2026 08 06)   a Fase A do plano: o portão de fidelidade que faltava","l":3155}
-{"k":"n","id":"sessao:40c","t":"sessao","f":"HANDOFF.md","txt":"40c (2026 08 06)   Fases B e C do plano","l":3124}
-{"k":"n","id":"sessao:40d","t":"sessao","f":"HANDOFF.md","txt":"40d (2026 08 06)   Fase D: a auditoria do arquivo entregue virou comando","l":3070}
-{"k":"n","id":"sessao:40e","t":"sessao","f":"HANDOFF.md","txt":"40e (2026 08 07)   as três premissas decididas, e a dívida passou a amortizar","l":3030}
-{"k":"n","id":"sessao:40f","t":"sessao","f":"HANDOFF.md","txt":"40f (2026 08 07)   dois exports, e as alavancas em uma tela só","l":2982}
-{"k":"n","id":"sessao:40g","t":"sessao","f":"HANDOFF.md","txt":"40g (2026 08 07)   a tela deixou de falar canônico","l":2938}
-{"k":"n","id":"sessao:40h","t":"sessao","f":"HANDOFF.md","txt":"40h (2026 08 07)   o tributo ganhou dono, e o parcelamento passou a ser pago","l":2883}
-{"k":"n","id":"sessao:41","t":"sessao","f":"HANDOFF.md","txt":"41 (2026 08 11)   o diagnóstico, e o backlog dele executado por impacto","l":2829}
-{"k":"n","id":"sessao:42","t":"sessao","f":"HANDOFF.md","txt":"42 (2026 08 11)   o custo mentia por 5×, e o \"aguarde\" mentia duas vezes","l":2732}
-{"k":"n","id":"sessao:43","t":"sessao","f":"HANDOFF.md","txt":"43 (2026 08 13)   a recusa vinha de um workflow de julho, e a 2ª chamada era cobrada como se fosse a 1ª","l":2639}
-{"k":"n","id":"sessao:44","t":"sessao","f":"HANDOFF.md","txt":"44 (2026 08 13)   a primeira fatura real, e metade da saída era contexto repetido","l":2533}
-{"k":"n","id":"sessao:44b","t":"sessao","f":"HANDOFF.md","txt":"44b (2026 08 13)   a linha exigida por tipo vira dado, e o Portão 1 cobra pelo nome (0113)","l":2487}
-{"k":"n","id":"sessao:45","t":"sessao","f":"HANDOFF.md","txt":"45 (2026 08 13)   o custo estava resolvido e o dado não estava: 39% de cobertura, e as três camadas","l":2398}
-{"k":"n","id":"sessao:46","t":"sessao","f":"HANDOFF.md","txt":"46 (2026 08 14)   as três camadas rodaram: 39% → 58%, truncamento zerado, e três defeitos seguidos de mecânica do n8n","l":2348}
-{"k":"n","id":"sessao:47","t":"sessao","f":"HANDOFF.md","txt":"47 (2026 08 17)   o \"Teste V45\": 19 dos 35 documentos nunca tiveram a extração chamada","l":2270}
-{"k":"n","id":"sessao:48","t":"sessao","f":"HANDOFF.md","txt":"48 (2026 08 17)   a v46 auditada contra o gabarito, dois erros de unidade, e o portal com a cara da Oria","l":2140}
-{"k":"n","id":"sessao:5","t":"sessao","f":"HANDOFF.md","txt":"5 Teste aprofundado do export (E4) com dados sintéticos mais realistas","l":5591}
-{"k":"n","id":"sessao:6","t":"sessao","f":"HANDOFF.md","txt":"6 IA sugere a seção canônica (classificação do export, N1)","l":5654}
-{"k":"n","id":"sessao:6#2","t":"sessao","f":"HANDOFF.md","txt":"6 (cont.)   Roteamento por linha: separar cada demonstração em sua aba","l":5695}
-{"k":"n","id":"sessao:7","t":"sessao","f":"HANDOFF.md","txt":"7 BUG CRÍTICO: item errado no upload em lote (conteúdo trocado entre documentos)","l":5735}
-{"k":"n","id":"sessao:7#10","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁹)   Documentos COMPARATIVOS: coluna de período (`Supabase/migrations/0017`)","l":6096}
-{"k":"n","id":"sessao:7#11","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁰)   Upload pelo portal + mandato explícito (intake amigável)","l":6128}
-{"k":"n","id":"sessao:7#12","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹¹)   \"Teste v18\" (16 docs reais, US$3): 9/16 ok, 7 falharam   2ª rodada de hardening","l":6159}
-{"k":"n","id":"sessao:7#13","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹²)   BUG CRÍTICO: upload pelo portal \"sucesso\" mas workflow nunca rodava","l":6216}
-{"k":"n","id":"sessao:7#14","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹³)   \"Teste v19\" (9 arquivos pequenos, kit sintético): confirmação de tier + 2º bug crítico","l":6255}
-{"k":"n","id":"sessao:7#15","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁴)   \"Teste v20\" (kit sintético reprocessado): 2 bugs reais + auto aceite + limpeza de export","l":6287}
-{"k":"n","id":"sessao:7#16","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁵)   \"Total informado × calculado\" divergindo mesmo em arquivo de teste + limpeza final do export","l":6354}
-{"k":"n","id":"sessao:7#17","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁶)   Tipo/período em texto natural no dashboard/planilha do documento + resumo menos redundante","l":6407}
-{"k":"n","id":"sessao:7#2","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.)   Causa raiz da fabricação de valores + guarda de segurança","l":5798}
-{"k":"n","id":"sessao:7#3","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.²)   Reforço de prompt (3 achados secundários) + confirmação do multi entidade","l":5858}
-{"k":"n","id":"sessao:7#4","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.³)   Balanço/DRE/Fluxo completos com FÓRMULAS (reescrita do export)","l":5890}
-{"k":"n","id":"sessao:7#5","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁴)   Layout analítico (margens) inspirado num modelo de FP&A real","l":5933}
-{"k":"n","id":"sessao:7#6","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁵)   Ajustes no export após o teste v12 do dono","l":5959}
-{"k":"n","id":"sessao:7#7","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁶)   Reconciliação Classe B (`Supabase/migrations/0015`)","l":5981}
-{"k":"n","id":"sessao:7#8","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁷)   BUG CRÍTICO: extração silenciosamente vazia (`Supabase/migrations/0016`)","l":6023}
-{"k":"n","id":"sessao:7#9","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁸)   Causa real da extração vazia: rate limit (429) no upload em lote","l":6068}
-{"k":"n","id":"sessao:8","t":"sessao","f":"HANDOFF.md","txt":"8 Camada analítica + rodada de endurecimento (PRs #43 #46)","l":5344}
-{"k":"n","id":"sessao:9","t":"sessao","f":"HANDOFF.md","txt":"9 Correções do teste v24 (PRs #47 #48)","l":5291}
+{"k":"n","id":"portao:A sonda do buraco no meio não dá alarme falso num banco completo","t":"portao","f":".github/workflows/suites.yml","txt":"A sonda do buraco no meio não dá alarme falso num banco completo","l":530}
+{"k":"n","id":"portao:Arnês de variações — a cadeia real sobre documento sujo","t":"portao","f":".github/workflows/suites.yml","txt":"Arnês de variações — a cadeia real sobre documento sujo","l":640}
+{"k":"n","id":"portao:Build do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Build do portal","l":673}
+{"k":"n","id":"portao:Cliente psql 16 para este job","t":"portao","f":".github/workflows/suites.yml","txt":"Cliente psql 16 para este job","l":634}
+{"k":"n","id":"portao:Cliente psql 16","t":"portao","f":".github/workflows/suites.yml","txt":"Cliente psql 16","l":454}
+{"k":"n","id":"portao:Custo do lote (medido no artefato, sem chamar a OpenAI)","t":"portao","f":".github/workflows/suites.yml","txt":"Custo do lote (medido no artefato, sem chamar a OpenAI)","l":188}
+{"k":"n","id":"portao:Espelho CLAUDE.md ↔ CI (suítes e medidores)","t":"portao","f":".github/workflows/suites.yml","txt":"Espelho CLAUDE.md ↔ CI (suítes e medidores)","l":259}
+{"k":"n","id":"portao:Fixtures derivadas do gerador do book (SQL, JSON) e git diff","t":"portao","f":".github/workflows/suites.yml","txt":"Fixtures derivadas do gerador do book (SQL, JSON) e git diff","l":138}
+{"k":"n","id":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","t":"portao","f":".github/workflows/suites.yml","txt":"Geradores de workflow — e o gerado tem de ser igual ao commitado","l":104}
+{"k":"n","id":"portao:Gerar o book sintético (insumo do e2e)","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book sintético (insumo do e2e)","l":586}
+{"k":"n","id":"portao:Gerar o book sintético (insumo do verificar-export)","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book sintético (insumo do verificar-export)","l":321}
+{"k":"n","id":"portao:Gerar o book sintético","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book sintético","l":118}
+{"k":"n","id":"portao:Gerar o book-canastra","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book-canastra","l":171}
+{"k":"n","id":"portao:Gerar o book-distress","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book-distress","l":180}
+{"k":"n","id":"portao:Instalar dependências do portal para este job","t":"portao","f":".github/workflows/suites.yml","txt":"Instalar dependências do portal para este job","l":670}
+{"k":"n","id":"portao:Instalar dependências do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Instalar dependências do portal","l":284}
+{"k":"n","id":"portao:Lint e tipos do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Lint e tipos do portal","l":326}
+{"k":"n","id":"portao:O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","t":"portao","f":".github/workflows/suites.yml","txt":"O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","l":514}
+{"k":"n","id":"portao:O que o código chama existe no banco","t":"portao","f":".github/workflows/suites.yml","txt":"O que o código chama existe no banco","l":496}
+{"k":"n","id":"portao:O schema materializado bate com as migrations","t":"portao","f":".github/workflows/suites.yml","txt":"O schema materializado bate com as migrations","l":490}
+{"k":"n","id":"portao:Portão dos comandos de barra (todo subagent_type existe)","t":"portao","f":".github/workflows/suites.yml","txt":"Portão dos comandos de barra (todo subagent_type existe)","l":250}
+{"k":"n","id":"portao:Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","t":"portao","f":".github/workflows/suites.yml","txt":"Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","l":194}
+{"k":"n","id":"portao:Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","l":411}
+{"k":"n","id":"portao:Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","l":395}
+{"k":"n","id":"portao:Suíte da mensagem de falha (o texto do dia ruim)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da mensagem de falha (o texto do dia ruim)","l":354}
+{"k":"n","id":"portao:Suíte da planilha de transcrição (ida e volta do formato)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da planilha de transcrição (ida e volta do formato)","l":346}
+{"k":"n","id":"portao:Suíte da sonda de produção (a tradução de \"não perguntei\" em veredito)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da sonda de produção (a tradução de \"não perguntei\" em veredito)","l":464}
+{"k":"n","id":"portao:Suíte das premissas sugeridas do realizado","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte das premissas sugeridas do realizado","l":362}
+{"k":"n","id":"portao:Suíte de banco (migrations do zero + testes SQL)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte de banco (migrations do zero + testes SQL)","l":480}
+{"k":"n","id":"portao:Suíte de export (invariantes do arquivo entregue)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte de export (invariantes do arquivo entregue)","l":338}
+{"k":"n","id":"portao:Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","l":371}
+{"k":"n","id":"portao:Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","l":380}
+{"k":"n","id":"portao:Suíte dos hooks do agente","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte dos hooks do agente","l":84}
+{"k":"n","id":"portao:Suíte e2e (extração → banco → export)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte e2e (extração → banco → export)","l":591}
+{"k":"n","id":"portao:Suíte n8n","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte n8n","l":81}
+{"k":"n","id":"portao:Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)","t":"portao","f":".github/workflows/suites.yml","txt":"Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)","l":691}
+{"k":"n","id":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","t":"portao","f":".github/workflows/suites.yml","txt":"Índice do conhecimento — o grafo derivado bate com o repositório","l":212}
+{"k":"n","id":"sessao:10","t":"sessao","f":"HANDOFF.md","txt":"10 Teste v25: reconciliação sem ruído, export que fecha (PRs #49 #52)","l":5418}
+{"k":"n","id":"sessao:11","t":"sessao","f":"HANDOFF.md","txt":"11 DMPL e DVA: código próprio na taxonomia e aba própria (`Supabase/migrations/0024`)","l":5365}
+{"k":"n","id":"sessao:12","t":"sessao","f":"HANDOFF.md","txt":"12 Aba Modelagem: modelo pronto em fórmula + consolidação de entidade (v27)","l":5323}
+{"k":"n","id":"sessao:13","t":"sessao","f":"HANDOFF.md","txt":"13 Índices macro: histórico (BCB/IBGE) + Focus, e o modelo consumindo os dois","l":5287}
+{"k":"n","id":"sessao:14","t":"sessao","f":"HANDOFF.md","txt":"14 DF auditada: o conjunto num arquivo só é separado por demonstração","l":5229}
+{"k":"n","id":"sessao:15","t":"sessao","f":"HANDOFF.md","txt":"15 Reextração é versão nova, e substitui em vez de acumular (`Supabase/migrations/0026`)","l":5173}
+{"k":"n","id":"sessao:16","t":"sessao","f":"HANDOFF.md","txt":"16 Teste v28: aba ausente deixa de ser buraco silencioso","l":5107}
+{"k":"n","id":"sessao:17","t":"sessao","f":"HANDOFF.md","txt":"17 Testes v29/v30: macro vazio por AUTORIZAÇÃO, e 429 sem causa conhecida (a causa saiu na sessão 18: teto de gasto do PROJETO)","l":5010}
+{"k":"n","id":"sessao:18","t":"sessao","f":"HANDOFF.md","txt":"18 (2026 07 31)   Etapa 1 completa + Etapa 2 começada; e dois invariantes MEUS nasceram vazios","l":4938}
+{"k":"n","id":"sessao:19","t":"sessao","f":"HANDOFF.md","txt":"19 (2026 07 31, tarde)   pendências do dono fechadas, Etapa 2 quase inteira (PR #69)","l":4630}
+{"k":"n","id":"sessao:20","t":"sessao","f":"HANDOFF.md","txt":"20 (2026 07 31, noite)   Etapa 2 FECHADA, dupla contagem sinalizada, e CI","l":4464}
+{"k":"n","id":"sessao:21","t":"sessao","f":"HANDOFF.md","txt":"21 (2026 08 01)   Etapas 1 a 6, a partir do teste v35","l":4360}
+{"k":"n","id":"sessao:22","t":"sessao","f":"HANDOFF.md","txt":"22 (2026 08 03)   Fase 1: os dois itens que perdiam dado em silêncio","l":4263}
+{"k":"n","id":"sessao:23","t":"sessao","f":"HANDOFF.md","txt":"23 (2026 08 03)   Fase 2: documento que chegou vazio para de contar","l":4177}
+{"k":"n","id":"sessao:24","t":"sessao","f":"HANDOFF.md","txt":"24 (2026 08 03)   Fases 4 e 5: abas resolvidas, Portão 2 existe, roteiro do teste","l":4068}
+{"k":"n","id":"sessao:25","t":"sessao","f":"HANDOFF.md","txt":"25 (2026 08 03)   Fase 7.1: granularidade total e o export de dados","l":3971}
+{"k":"n","id":"sessao:26","t":"sessao","f":"HANDOFF.md","txt":"26 (2026 08 03)   Fase 7.2: a premissa deixa de ser código e passa a ser dado","l":3880}
+{"k":"n","id":"sessao:27","t":"sessao","f":"HANDOFF.md","txt":"27 (2026 08 03)   Fase 7.3: a tela onde linha e premissa se cruzam","l":3809}
+{"k":"n","id":"sessao:28","t":"sessao","f":"HANDOFF.md","txt":"28 (2026 08 03)   Fase 7.4: o export dirigido pelas escolhas do portal","l":3715}
+{"k":"n","id":"sessao:29","t":"sessao","f":"HANDOFF.md","txt":"29 (2026 08 03)   Fase 7.5: as primitivas de projeção que faltavam","l":3634}
+{"k":"n","id":"sessao:30","t":"sessao","f":"HANDOFF.md","txt":"30 (2026 08 03)   Fase 6: calibração   o dial volta a mandar","l":3520}
+{"k":"n","id":"sessao:31","t":"sessao","f":"HANDOFF.md","txt":"31 (2026 08 04)   Fase 8 (papel da linha) + Fase 9 (modelo institucional)","l":6933}
+{"k":"n","id":"sessao:32","t":"sessao","f":"HANDOFF.md","txt":"32 (2026 08 04)   o lote da Modelagem destravado, e a captura de produção","l":7000}
+{"k":"n","id":"sessao:33","t":"sessao","f":"HANDOFF.md","txt":"33 (2026 08 04)   por que a Modelagem continuou quebrada DEPOIS do merge","l":7106}
+{"k":"n","id":"sessao:34","t":"sessao","f":"HANDOFF.md","txt":"34 (2026 08 04)   o timeout sobreviveu ao apply, e a investigação virou de ambiente","l":7262}
+{"k":"n","id":"sessao:35","t":"sessao","f":"HANDOFF.md","txt":"35 (2026 08 05)   a `0103`, a regra do cabeçalho, e um agente que não gravou nada","l":7361}
+{"k":"n","id":"sessao:36","t":"sessao","f":"HANDOFF.md","txt":"36 (2026 08 05)   RESOLVIDO: as três fatias do timeout, medidas na produção","l":7459}
+{"k":"n","id":"sessao:37","t":"sessao","f":"HANDOFF.md","txt":"37 (2026 08 05)   a modelagem exercitada de ponta a ponta, e três defeitos que só o uso real acha","l":7596}
+{"k":"n","id":"sessao:38","t":"sessao","f":"HANDOFF.md","txt":"38 (2026 08 05)   Fase 1 do espelhamento: o Modelo Base mapeado inteiro, e três números que mudam o placar","l":7726}
+{"k":"n","id":"sessao:39","t":"sessao","f":"HANDOFF.md","txt":"39 (2026 08 05)   o espelhamento executado: 11 defeitos corrigidos, o balanço fechando, e os 8 gráficos","l":7878}
+{"k":"n","id":"sessao:40","t":"sessao","f":"HANDOFF.md","txt":"40 (2026 08 06)   o arquivo entregue mentia; seis defeitos e a conferência que os pega","l":3406}
+{"k":"n","id":"sessao:40b","t":"sessao","f":"HANDOFF.md","txt":"40b (2026 08 06)   a Fase A do plano: o portão de fidelidade que faltava","l":3372}
+{"k":"n","id":"sessao:40c","t":"sessao","f":"HANDOFF.md","txt":"40c (2026 08 06)   Fases B e C do plano","l":3341}
+{"k":"n","id":"sessao:40d","t":"sessao","f":"HANDOFF.md","txt":"40d (2026 08 06)   Fase D: a auditoria do arquivo entregue virou comando","l":3287}
+{"k":"n","id":"sessao:40e","t":"sessao","f":"HANDOFF.md","txt":"40e (2026 08 07)   as três premissas decididas, e a dívida passou a amortizar","l":3247}
+{"k":"n","id":"sessao:40f","t":"sessao","f":"HANDOFF.md","txt":"40f (2026 08 07)   dois exports, e as alavancas em uma tela só","l":3199}
+{"k":"n","id":"sessao:40g","t":"sessao","f":"HANDOFF.md","txt":"40g (2026 08 07)   a tela deixou de falar canônico","l":3155}
+{"k":"n","id":"sessao:40h","t":"sessao","f":"HANDOFF.md","txt":"40h (2026 08 07)   o tributo ganhou dono, e o parcelamento passou a ser pago","l":3100}
+{"k":"n","id":"sessao:41","t":"sessao","f":"HANDOFF.md","txt":"41 (2026 08 11)   o diagnóstico, e o backlog dele executado por impacto","l":3046}
+{"k":"n","id":"sessao:42","t":"sessao","f":"HANDOFF.md","txt":"42 (2026 08 11)   o custo mentia por 5×, e o \"aguarde\" mentia duas vezes","l":2949}
+{"k":"n","id":"sessao:43","t":"sessao","f":"HANDOFF.md","txt":"43 (2026 08 13)   a recusa vinha de um workflow de julho, e a 2ª chamada era cobrada como se fosse a 1ª","l":2856}
+{"k":"n","id":"sessao:44","t":"sessao","f":"HANDOFF.md","txt":"44 (2026 08 13)   a primeira fatura real, e metade da saída era contexto repetido","l":2750}
+{"k":"n","id":"sessao:44b","t":"sessao","f":"HANDOFF.md","txt":"44b (2026 08 13)   a linha exigida por tipo vira dado, e o Portão 1 cobra pelo nome (0113)","l":2704}
+{"k":"n","id":"sessao:45","t":"sessao","f":"HANDOFF.md","txt":"45 (2026 08 13)   o custo estava resolvido e o dado não estava: 39% de cobertura, e as três camadas","l":2615}
+{"k":"n","id":"sessao:46","t":"sessao","f":"HANDOFF.md","txt":"46 (2026 08 14)   as três camadas rodaram: 39% → 58%, truncamento zerado, e três defeitos seguidos de mecânica do n8n","l":2565}
+{"k":"n","id":"sessao:47","t":"sessao","f":"HANDOFF.md","txt":"47 (2026 08 17)   o \"Teste V45\": 19 dos 35 documentos nunca tiveram a extração chamada","l":2487}
+{"k":"n","id":"sessao:48","t":"sessao","f":"HANDOFF.md","txt":"48 (2026 08 17)   a v46 auditada contra o gabarito, dois erros de unidade, e o portal com a cara da Oria","l":2357}
+{"k":"n","id":"sessao:5","t":"sessao","f":"HANDOFF.md","txt":"5 Teste aprofundado do export (E4) com dados sintéticos mais realistas","l":5808}
+{"k":"n","id":"sessao:6","t":"sessao","f":"HANDOFF.md","txt":"6 IA sugere a seção canônica (classificação do export, N1)","l":5871}
+{"k":"n","id":"sessao:6#2","t":"sessao","f":"HANDOFF.md","txt":"6 (cont.)   Roteamento por linha: separar cada demonstração em sua aba","l":5912}
+{"k":"n","id":"sessao:7","t":"sessao","f":"HANDOFF.md","txt":"7 BUG CRÍTICO: item errado no upload em lote (conteúdo trocado entre documentos)","l":5952}
+{"k":"n","id":"sessao:7#10","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁹)   Documentos COMPARATIVOS: coluna de período (`Supabase/migrations/0017`)","l":6313}
+{"k":"n","id":"sessao:7#11","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁰)   Upload pelo portal + mandato explícito (intake amigável)","l":6345}
+{"k":"n","id":"sessao:7#12","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹¹)   \"Teste v18\" (16 docs reais, US$3): 9/16 ok, 7 falharam   2ª rodada de hardening","l":6376}
+{"k":"n","id":"sessao:7#13","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹²)   BUG CRÍTICO: upload pelo portal \"sucesso\" mas workflow nunca rodava","l":6433}
+{"k":"n","id":"sessao:7#14","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹³)   \"Teste v19\" (9 arquivos pequenos, kit sintético): confirmação de tier + 2º bug crítico","l":6472}
+{"k":"n","id":"sessao:7#15","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁴)   \"Teste v20\" (kit sintético reprocessado): 2 bugs reais + auto aceite + limpeza de export","l":6504}
+{"k":"n","id":"sessao:7#16","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁵)   \"Total informado × calculado\" divergindo mesmo em arquivo de teste + limpeza final do export","l":6571}
+{"k":"n","id":"sessao:7#17","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁶)   Tipo/período em texto natural no dashboard/planilha do documento + resumo menos redundante","l":6624}
+{"k":"n","id":"sessao:7#2","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.)   Causa raiz da fabricação de valores + guarda de segurança","l":6015}
+{"k":"n","id":"sessao:7#3","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.²)   Reforço de prompt (3 achados secundários) + confirmação do multi entidade","l":6075}
+{"k":"n","id":"sessao:7#4","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.³)   Balanço/DRE/Fluxo completos com FÓRMULAS (reescrita do export)","l":6107}
+{"k":"n","id":"sessao:7#5","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁴)   Layout analítico (margens) inspirado num modelo de FP&A real","l":6150}
+{"k":"n","id":"sessao:7#6","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁵)   Ajustes no export após o teste v12 do dono","l":6176}
+{"k":"n","id":"sessao:7#7","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁶)   Reconciliação Classe B (`Supabase/migrations/0015`)","l":6198}
+{"k":"n","id":"sessao:7#8","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁷)   BUG CRÍTICO: extração silenciosamente vazia (`Supabase/migrations/0016`)","l":6240}
+{"k":"n","id":"sessao:7#9","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁸)   Causa real da extração vazia: rate limit (429) no upload em lote","l":6285}
+{"k":"n","id":"sessao:8","t":"sessao","f":"HANDOFF.md","txt":"8 Camada analítica + rodada de endurecimento (PRs #43 #46)","l":5561}
+{"k":"n","id":"sessao:9","t":"sessao","f":"HANDOFF.md","txt":"9 Correções do teste v24 (PRs #47 #48)","l":5508}
 {"k":"n","id":"suite:.claude/verificar-comandos.mjs","t":"suite","f":".claude/verificar-comandos.mjs","txt":"verificar comandos mjs"}
 {"k":"n","id":"suite:N8N/medir-custo-book.mjs","t":"suite","f":"N8N/medir-custo-book.mjs","txt":"medir custo book mjs"}
 {"k":"n","id":"suite:N8N/medir-fase0-denominador.mjs","t":"suite","f":"N8N/medir-fase0-denominador.mjs","txt":"medir fase0 denominador mjs"}
@@ -799,21 +809,21 @@
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/build-workflow-macro.mjs","l":235}
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/build-workflow-macro.mjs","l":260}
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/build-workflow-macro.mjs","l":227}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/build-workflow.mjs","l":2615}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/build-workflow.mjs","l":2629}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/build-workflow.mjs","l":2657}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/build-workflow.mjs","l":2671}
 {"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"N8N/build-workflow.mjs","l":144}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/build-workflow.mjs","l":2429}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/build-workflow.mjs","l":1744}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/build-workflow.mjs","l":1744}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/build-workflow.mjs","l":2550}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/build-workflow.mjs","l":2138}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/build-workflow.mjs","l":1342}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/build-workflow.mjs","l":2484}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/build-workflow.mjs","l":2424}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/build-workflow.mjs","l":2247}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/build-workflow.mjs","l":1900}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/build-workflow.mjs","l":2589}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/build-workflow.mjs","l":2220}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/build-workflow.mjs","l":2471}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/build-workflow.mjs","l":1776}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/build-workflow.mjs","l":1776}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/build-workflow.mjs","l":2592}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/build-workflow.mjs","l":2180}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/build-workflow.mjs","l":1374}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/build-workflow.mjs","l":2526}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/build-workflow.mjs","l":2466}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/build-workflow.mjs","l":2289}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/build-workflow.mjs","l":1942}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/build-workflow.mjs","l":2631}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/build-workflow.mjs","l":2262}
 {"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/build-workflow.mjs","l":143}
 {"k":"e","de":"arquivo:N8N/gerar-seed-macro.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/gerar-seed-macro.mjs","l":57}
 {"k":"e","de":"arquivo:N8N/gerar-seed-macro.mjs","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"N8N/gerar-seed-macro.mjs","l":107}
@@ -824,18 +834,19 @@
 {"k":"e","de":"arquivo:N8N/lib/aritmetica.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"N8N/lib/aritmetica.mjs","l":33}
 {"k":"e","de":"arquivo:N8N/lib/aritmetica.mjs","rel":"CHAMA","pa":"fn:fn_valor_conceito","f":"N8N/lib/aritmetica.mjs","l":22}
 {"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_dial_permite_auto","f":"N8N/lib/classifier.mjs","l":20}
-{"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/lib/classifier.mjs","l":188}
-{"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/lib/classifier.mjs","l":150}
+{"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/lib/classifier.mjs","l":222}
+{"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/lib/classifier.mjs","l":40}
+{"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/lib/classifier.mjs","l":184}
 {"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/lib/classifier.mjs","l":19}
 {"k":"e","de":"arquivo:N8N/lib/cobertura.mjs","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/lib/cobertura.mjs","l":373}
 {"k":"e","de":"arquivo:N8N/lib/completude.mjs","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"N8N/lib/completude.mjs","l":35}
 {"k":"e","de":"arquivo:N8N/lib/completude.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/lib/completude.mjs","l":39}
-{"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_anos_texto","f":"N8N/lib/extract.mjs","l":596}
-{"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/lib/extract.mjs","l":715}
+{"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_anos_texto","f":"N8N/lib/extract.mjs","l":662}
+{"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/lib/extract.mjs","l":781}
 {"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/lib/extract.mjs","l":30}
 {"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/lib/extract.mjs","l":83}
-{"k":"e","de":"arquivo:N8N/lib/merge.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/lib/merge.mjs","l":43}
-{"k":"e","de":"arquivo:N8N/lib/merge.mjs","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"N8N/lib/merge.mjs","l":36}
+{"k":"e","de":"arquivo:N8N/lib/merge.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/lib/merge.mjs","l":54}
+{"k":"e","de":"arquivo:N8N/lib/merge.mjs","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"N8N/lib/merge.mjs","l":47}
 {"k":"e","de":"arquivo:N8N/lib/repetibilidade.mjs","rel":"CHAMA","pa":"fn:fn_conferir_arvore","f":"N8N/lib/repetibilidade.mjs","l":17}
 {"k":"e","de":"arquivo:N8N/lib/repetibilidade.mjs","rel":"CHAMA","pa":"fn:fn_conflitos_do_caso","f":"N8N/lib/repetibilidade.mjs","l":19}
 {"k":"e","de":"arquivo:N8N/lib/repetibilidade.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/lib/repetibilidade.mjs","l":18}
@@ -861,6 +872,7 @@
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json","l":916}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/workflow.e1-ingestao.json","l":944}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json","l":77}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json","l":77}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/workflow.e1-ingestao.json","l":574}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/workflow.e1-ingestao.json","l":747}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/workflow.e1-ingestao.json","l":747}
@@ -1107,9 +1119,21 @@
 {"k":"e","de":"arquivo:Supabase/test/espelho_grupo_a.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/espelho_grupo_a.test.sql","l":53}
 {"k":"e","de":"arquivo:Supabase/test/espelho_grupo_a.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/espelho_grupo_a.test.sql","l":51}
 {"k":"e","de":"arquivo:Supabase/test/espelho_grupo_a.test.sql","rel":"CHAMA","pa":"fn:fn_versao_atual","f":"Supabase/test/espelho_grupo_a.test.sql","l":234}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_anos_periodo","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":38}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_compativeis","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":99}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_despfin_dre_vs_divida","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":91}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":78}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":76}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":75}
+{"k":"e","de":"arquivo:Supabase/test/faixa_de_anos_do_periodo.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_periodo","f":"Supabase/test/faixa_de_anos_do_periodo.test.sql","l":98}
 {"k":"e","de":"arquivo:Supabase/test/fato_material.test.sql","rel":"CHAMA","pa":"fn:fn_fatos_do_caso","f":"Supabase/test/fato_material.test.sql","l":194}
 {"k":"e","de":"arquivo:Supabase/test/fato_material.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"Supabase/test/fato_material.test.sql","l":223}
 {"k":"e","de":"arquivo:Supabase/test/fato_material.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"Supabase/test/fato_material.test.sql","l":38}
+{"k":"e","de":"arquivo:Supabase/test/faturamento_mes_na_coluna.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/test/faturamento_mes_na_coluna.test.sql","l":96}
+{"k":"e","de":"arquivo:Supabase/test/faturamento_mes_na_coluna.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/faturamento_mes_na_coluna.test.sql","l":77}
+{"k":"e","de":"arquivo:Supabase/test/faturamento_mes_na_coluna.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/faturamento_mes_na_coluna.test.sql","l":75}
+{"k":"e","de":"arquivo:Supabase/test/faturamento_mes_na_coluna.test.sql","rel":"CHAMA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/test/faturamento_mes_na_coluna.test.sql","l":87}
+{"k":"e","de":"arquivo:Supabase/test/faturamento_mes_na_coluna.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/faturamento_mes_na_coluna.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/faturamento_por_mes.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/faturamento_por_mes.test.sql","l":53}
 {"k":"e","de":"arquivo:Supabase/test/faturamento_por_mes.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/faturamento_por_mes.test.sql","l":48}
 {"k":"e","de":"arquivo:Supabase/test/faturamento_por_mes.test.sql","rel":"CHAMA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/test/faturamento_por_mes.test.sql","l":83}
@@ -1397,13 +1421,13 @@
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/run.mts","l":316}
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/run.mts","l":305}
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/run.mts","l":540}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":720}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":736}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":717}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":655}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":650}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":637}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":739}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":731}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":747}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":728}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":666}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":661}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":648}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":750}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/gerar-export-do-banco.mts","l":170}
@@ -1411,12 +1435,12 @@
 {"k":"e","de":"arquivo:portal/scripts/medir-auto-aceite.mts","rel":"CHAMA","pa":"fn:fn_dial","f":"portal/scripts/medir-auto-aceite.mts","l":70}
 {"k":"e","de":"arquivo:portal/scripts/medir-auto-aceite.mts","rel":"CHAMA","pa":"fn:fn_golden_campos","f":"portal/scripts/medir-auto-aceite.mts","l":36}
 {"k":"e","de":"arquivo:portal/scripts/medir-auto-aceite.mts","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"portal/scripts/medir-auto-aceite.mts","l":28}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-export.mts","l":4114}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/scripts/verificar-export.mts","l":4386}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-export.mts","l":6310}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/scripts/verificar-export.mts","l":4298}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/scripts/verificar-export.mts","l":5702}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-export.mts","l":4083}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-export.mts","l":4130}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/scripts/verificar-export.mts","l":4402}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-export.mts","l":6519}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/scripts/verificar-export.mts","l":4314}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/scripts/verificar-export.mts","l":5911}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-export.mts","l":4099}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/scripts/verificar-kit-basico.mts","l":10}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/verificar-kit-basico.mts","l":8}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}
@@ -1437,11 +1461,11 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/actions.ts","rel":"CHAMA","pa":"fn:fn_registrar_transcricao_humana","f":"portal/src/app/casos/[id]/documentos/[docId]/actions.ts","l":101}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/page.tsx","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"portal/src/app/casos/[id]/documentos/[docId]/page.tsx","l":67}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/transcricao/route.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_transcrever","f":"portal/src/app/casos/[id]/documentos/[docId]/transcricao/route.ts","l":62}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/export/route.ts","l":311}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/app/casos/[id]/export/route.ts","l":193}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/export/route.ts","l":344}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/app/casos/[id]/export/route.ts","l":362}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/app/casos/[id]/export/route.ts","l":456}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/export/route.ts","l":312}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/app/casos/[id]/export/route.ts","l":194}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/export/route.ts","l":363}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/app/casos/[id]/export/route.ts","l":381}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/app/casos/[id]/export/route.ts","l":475}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":104}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":69}
@@ -1449,8 +1473,8 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_vincular_linha_premissa","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":10}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":224}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":196}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_diagnostico_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":528}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":336}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_diagnostico_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":544}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":341}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":209}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":182}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":215}
@@ -1469,7 +1493,7 @@
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/export-modelagem.ts","l":97}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/lib/export-modelagem.ts","l":765}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"portal/src/lib/export.ts","l":691}
-{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/export.ts","l":1125}
+{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/export.ts","l":1133}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_conceito","f":"portal/src/lib/export.ts","l":673}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"portal/src/lib/export.ts","l":692}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/src/lib/kit-basico.ts","l":10}
@@ -1480,10 +1504,10 @@
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":75}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelagem-linha.ts","l":107}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/modelo-institucional.ts","l":1304}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/modelo-institucional.ts","l":221}
 {"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelo-institucional.ts","l":25}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/src/lib/modelo-institucional.ts","l":226}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelo-institucional.ts","l":6404}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/src/lib/modelo-institucional.ts","l":243}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelo-institucional.ts","l":6739}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"portal/src/lib/perguntas.ts","l":30}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/lib/perguntas.ts","l":3}
 {"k":"e","de":"arquivo:portal/src/lib/premissas-do-realizado.ts","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"portal/src/lib/premissas-do-realizado.ts","l":40}
@@ -1567,6 +1591,7 @@
 {"k":"e","de":"ficha:republicar-sobrescreve-nome-renomeado-ao-vivo","rel":"TOCA","pa":"arquivo:N8N/preparar-republicacao.mjs","f":".claude/conhecimento/fichas/republicar-sobrescreve-nome-renomeado-ao-vivo.md"}
 {"k":"e","de":"ficha:rodape-do-export-em-linha-fixa-estoura","rel":"PROVADA_POR","pa":"suite:portal/scripts/verificar-export.mts","f":".claude/conhecimento/fichas/rodape-do-export-em-linha-fixa-estoura.md"}
 {"k":"e","de":"ficha:rodape-do-export-em-linha-fixa-estoura","rel":"TOCA","pa":"arquivo:portal/src/lib/export-modelagem.ts","f":".claude/conhecimento/fichas/rodape-do-export-em-linha-fixa-estoura.md"}
+{"k":"e","de":"ficha:servidor-velho-na-porta-mede-o-build-errado","rel":"TOCA","pa":"arquivo:portal/src/lib/export.ts","f":".claude/memory/servidor-velho-na-porta-mede-o-build-errado.md"}
 {"k":"e","de":"ficha:sessoes-paralelas-aplicam-fora-de-ordem","rel":"TOCA","pa":"arquivo:Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","f":".claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md"}
 {"k":"e","de":"ficha:sessoes-paralelas-aplicam-fora-de-ordem","rel":"TOCA","pa":"arquivo:Supabase/test/instalacao_cobertura_nao_regride.test.sql","f":".claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md"}
 {"k":"e","de":"ficha:sessoes-paralelas-aplicam-fora-de-ordem","rel":"TOCA","pa":"arquivo:Supabase/test/sonda-producao.mjs","f":".claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md"}
@@ -1971,8 +1996,11 @@
 {"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_reconciliar_despfin_dre_vs_divida","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":572}
 {"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_reconciliar_receita_dre_vs_faturamento","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":390}
 {"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":819}
+{"k":"e","de":"migration:0197","rel":"CRIA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","l":69}
+{"k":"e","de":"migration:0198","rel":"CRIA","pa":"fn:fn_anos_periodo","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","l":58}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
+{"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Conferir Fontes","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/workflow.macro.json"}
 {"k":"e","de":"no8n:Conferir Lote","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Fatiar Extracao","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
@@ -2001,223 +2029,223 @@
 {"k":"e","de":"no8n:Registrar Falha","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/workflow.erros.json"}
 {"k":"e","de":"no8n:Registrar Recusa","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Upsert Caso (Postgres)","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/workflow.e1-ingestao.json"}
-{"k":"e","de":"portao:A sonda do buraco no meio não dá alarme falso num banco completo","rel":"RODA","pa":"arquivo:Supabase/test/sonda-producao.mjs","f":".github/workflows/suites.yml","l":483}
-{"k":"e","de":"portao:Arnês de variações — a cadeia real sobre documento sujo","rel":"RODA","pa":"arquivo:Verificação/variacoes.mts","f":".github/workflows/suites.yml","l":496}
-{"k":"e","de":"portao:Custo do lote (medido no artefato, sem chamar a OpenAI)","rel":"RODA","pa":"arquivo:N8N/medir-custo-book.mjs","f":".github/workflows/suites.yml","l":267}
-{"k":"e","de":"portao:Espelho CLAUDE.md ↔ CI (suítes e medidores)","rel":"RODA","pa":"arquivo:.claude/verificar-espelho-claude-md.mjs","f":".github/workflows/suites.yml","l":338}
-{"k":"e","de":"portao:Fixtures derivadas do gerador do book (SQL, JSON) e git diff","rel":"RODA","pa":"arquivo:Supabase/test/gerar_fixture.py","f":".github/workflows/suites.yml","l":217}
-{"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow-diagnostico.mjs","f":".github/workflows/suites.yml","l":183}
-{"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow-erros.mjs","f":".github/workflows/suites.yml","l":183}
-{"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow-macro.mjs","f":".github/workflows/suites.yml","l":183}
-{"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow.mjs","f":".github/workflows/suites.yml","l":183}
-{"k":"e","de":"portao:O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","rel":"RODA","pa":"arquivo:Supabase/conferir/gerar-conferir-chamadas.mjs","f":".github/workflows/suites.yml","l":467}
-{"k":"e","de":"portao:O que o código chama existe no banco","rel":"RODA","pa":"arquivo:Supabase/test/conferir-chamadas.mjs","f":".github/workflows/suites.yml","l":449}
-{"k":"e","de":"portao:O schema materializado bate com as migrations","rel":"RODA","pa":"arquivo:Supabase/test/run.sh","f":".github/workflows/suites.yml","l":443}
-{"k":"e","de":"portao:Portão dos comandos de barra (todo subagent_type existe)","rel":"RODA","pa":"arquivo:.claude/verificar-comandos.mjs","f":".github/workflows/suites.yml","l":329}
-{"k":"e","de":"portao:Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","rel":"RODA","pa":"arquivo:N8N/medir-regua-cobertura.mjs","f":".github/workflows/suites.yml","l":273}
-{"k":"e","de":"portao:Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-modelagem-cobertura.mts","f":".github/workflows/suites.yml","l":423}
-{"k":"e","de":"portao:Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-linhas-por-versao.mts","f":".github/workflows/suites.yml","l":407}
-{"k":"e","de":"portao:Suíte da mensagem de falha (o texto do dia ruim)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","f":".github/workflows/suites.yml","l":366}
-{"k":"e","de":"portao:Suíte da planilha de transcrição (ida e volta do formato)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-transcricao.mts","f":".github/workflows/suites.yml","l":358}
-{"k":"e","de":"portao:Suíte das premissas sugeridas do realizado","rel":"RODA","pa":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","f":".github/workflows/suites.yml","l":374}
-{"k":"e","de":"portao:Suíte de banco (migrations do zero + testes SQL)","rel":"RODA","pa":"arquivo:Supabase/test/run.sh","f":".github/workflows/suites.yml","l":433}
-{"k":"e","de":"portao:Suíte de export (invariantes do arquivo entregue)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-export.mts","f":".github/workflows/suites.yml","l":350}
-{"k":"e","de":"portao:Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-kit-basico.mts","f":".github/workflows/suites.yml","l":383}
-{"k":"e","de":"portao:Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-limite-de-envio.mts","f":".github/workflows/suites.yml","l":392}
-{"k":"e","de":"portao:Suíte e2e (extração → banco → export)","rel":"RODA","pa":"arquivo:Verificação/run.mts","f":".github/workflows/suites.yml","l":493}
-{"k":"e","de":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","rel":"RODA","pa":"arquivo:.claude/conhecimento/conferir.mjs","f":".github/workflows/suites.yml","l":291}
-{"k":"e","de":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","rel":"RODA","pa":"arquivo:.claude/conhecimento/indexar.mjs","f":".github/workflows/suites.yml","l":291}
-{"k":"e","de":"sessao:10","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5201}
-{"k":"e","de":"sessao:11","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5148}
-{"k":"e","de":"sessao:11","rel":"CITA","pa":"migration:0024","f":"HANDOFF.md","l":5148}
-{"k":"e","de":"sessao:13","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5070}
-{"k":"e","de":"sessao:14","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5012}
-{"k":"e","de":"sessao:14","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5012}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0004","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0007","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0008","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":4956}
-{"k":"e","de":"sessao:16","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":4890}
-{"k":"e","de":"sessao:17","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":4793}
-{"k":"e","de":"sessao:17","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":4793}
-{"k":"e","de":"sessao:18","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4721}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0022","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0029","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":4413}
-{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4247}
-{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":4247}
-{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":4247}
-{"k":"e","de":"sessao:21","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":4143}
-{"k":"e","de":"sessao:21","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":4143}
-{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":4046}
-{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":4046}
-{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0035","f":"HANDOFF.md","l":4046}
-{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":3960}
-{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0035","f":"HANDOFF.md","l":3960}
-{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3960}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":3851}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":3851}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":3851}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3851}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3851}
-{"k":"e","de":"sessao:25","rel":"CITA","pa":"migration:0027","f":"HANDOFF.md","l":3754}
-{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3663}
-{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3663}
-{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":3663}
-{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3592}
-{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3592}
-{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":3592}
-{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":3592}
-{"k":"e","de":"sessao:29","rel":"CITA","pa":"migration:0040","f":"HANDOFF.md","l":3417}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0029","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0040","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0041","f":"HANDOFF.md","l":3303}
-{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":6716}
-{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":6716}
-{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0043","f":"HANDOFF.md","l":6716}
-{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":6716}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":6783}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":6783}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":6783}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":6783}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":6783}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0043","f":"HANDOFF.md","l":6783}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":6783}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":6783}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":6889}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":6889}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":6889}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":6889}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":6889}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":6889}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":6889}
-{"k":"e","de":"sessao:34","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7045}
-{"k":"e","de":"sessao:34","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7045}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":7144}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7144}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7144}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7144}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":7144}
-{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7242}
-{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7242}
-{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7242}
-{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":7242}
-{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":7379}
-{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":7379}
-{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":7379}
-{"k":"e","de":"sessao:38","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":7509}
-{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":7661}
-{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":7661}
-{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":7661}
-{"k":"e","de":"sessao:40","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3189}
-{"k":"e","de":"sessao:40","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3189}
-{"k":"e","de":"sessao:40c","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3124}
-{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3070}
-{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3070}
-{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":3070}
-{"k":"e","de":"sessao:40e","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3030}
-{"k":"e","de":"sessao:40e","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3030}
-{"k":"e","de":"sessao:40f","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":2982}
-{"k":"e","de":"sessao:40f","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2982}
-{"k":"e","de":"sessao:40g","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2938}
-{"k":"e","de":"sessao:40h","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":2883}
-{"k":"e","de":"sessao:41","rel":"CITA","pa":"migration:0106","f":"HANDOFF.md","l":2829}
-{"k":"e","de":"sessao:41","rel":"CITA","pa":"migration:0107","f":"HANDOFF.md","l":2829}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":2732}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0106","f":"HANDOFF.md","l":2732}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0107","f":"HANDOFF.md","l":2732}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":2732}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0109","f":"HANDOFF.md","l":2732}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":2732}
-{"k":"e","de":"sessao:44","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":2533}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":2487}
-{"k":"e","de":"sessao:47","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2270}
-{"k":"e","de":"sessao:47","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2270}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":2140}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0027","f":"HANDOFF.md","l":2140}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2140}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2140}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":2140}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0114","f":"HANDOFF.md","l":2140}
-{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5591}
-{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0003","f":"HANDOFF.md","l":5591}
-{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":5591}
-{"k":"e","de":"sessao:6","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":5654}
-{"k":"e","de":"sessao:6","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":5654}
-{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6096}
-{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0014","f":"HANDOFF.md","l":6096}
-{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6096}
-{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0017","f":"HANDOFF.md","l":6096}
-{"k":"e","de":"sessao:7#11","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6128}
-{"k":"e","de":"sessao:7#12","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":6159}
-{"k":"e","de":"sessao:7#13","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6216}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":6287}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0008","f":"HANDOFF.md","l":6287}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6287}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0018","f":"HANDOFF.md","l":6287}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":6287}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0007","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":6407}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5798}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":5798}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":5798}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":5798}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":5798}
-{"k":"e","de":"sessao:7#3","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":5858}
-{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5981}
-{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":5981}
-{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0014","f":"HANDOFF.md","l":5981}
-{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0015","f":"HANDOFF.md","l":5981}
-{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6023}
-{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6023}
-{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":6023}
-{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6023}
-{"k":"e","de":"sessao:7#9","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6068}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0018","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0020","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0021","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0024","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5344}
-{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5291}
-{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0020","f":"HANDOFF.md","l":5291}
-{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0022","f":"HANDOFF.md","l":5291}
+{"k":"e","de":"portao:A sonda do buraco no meio não dá alarme falso num banco completo","rel":"RODA","pa":"arquivo:Supabase/test/sonda-producao.mjs","f":".github/workflows/suites.yml","l":530}
+{"k":"e","de":"portao:Arnês de variações — a cadeia real sobre documento sujo","rel":"RODA","pa":"arquivo:Verificação/variacoes.mts","f":".github/workflows/suites.yml","l":640}
+{"k":"e","de":"portao:Custo do lote (medido no artefato, sem chamar a OpenAI)","rel":"RODA","pa":"arquivo:N8N/medir-custo-book.mjs","f":".github/workflows/suites.yml","l":188}
+{"k":"e","de":"portao:Espelho CLAUDE.md ↔ CI (suítes e medidores)","rel":"RODA","pa":"arquivo:.claude/verificar-espelho-claude-md.mjs","f":".github/workflows/suites.yml","l":259}
+{"k":"e","de":"portao:Fixtures derivadas do gerador do book (SQL, JSON) e git diff","rel":"RODA","pa":"arquivo:Supabase/test/gerar_fixture.py","f":".github/workflows/suites.yml","l":138}
+{"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow-diagnostico.mjs","f":".github/workflows/suites.yml","l":104}
+{"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow-erros.mjs","f":".github/workflows/suites.yml","l":104}
+{"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow-macro.mjs","f":".github/workflows/suites.yml","l":104}
+{"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow.mjs","f":".github/workflows/suites.yml","l":104}
+{"k":"e","de":"portao:O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","rel":"RODA","pa":"arquivo:Supabase/conferir/gerar-conferir-chamadas.mjs","f":".github/workflows/suites.yml","l":514}
+{"k":"e","de":"portao:O que o código chama existe no banco","rel":"RODA","pa":"arquivo:Supabase/test/conferir-chamadas.mjs","f":".github/workflows/suites.yml","l":496}
+{"k":"e","de":"portao:O schema materializado bate com as migrations","rel":"RODA","pa":"arquivo:Supabase/test/run.sh","f":".github/workflows/suites.yml","l":490}
+{"k":"e","de":"portao:Portão dos comandos de barra (todo subagent_type existe)","rel":"RODA","pa":"arquivo:.claude/verificar-comandos.mjs","f":".github/workflows/suites.yml","l":250}
+{"k":"e","de":"portao:Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","rel":"RODA","pa":"arquivo:N8N/medir-regua-cobertura.mjs","f":".github/workflows/suites.yml","l":194}
+{"k":"e","de":"portao:Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-modelagem-cobertura.mts","f":".github/workflows/suites.yml","l":411}
+{"k":"e","de":"portao:Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-linhas-por-versao.mts","f":".github/workflows/suites.yml","l":395}
+{"k":"e","de":"portao:Suíte da mensagem de falha (o texto do dia ruim)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","f":".github/workflows/suites.yml","l":354}
+{"k":"e","de":"portao:Suíte da planilha de transcrição (ida e volta do formato)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-transcricao.mts","f":".github/workflows/suites.yml","l":346}
+{"k":"e","de":"portao:Suíte das premissas sugeridas do realizado","rel":"RODA","pa":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","f":".github/workflows/suites.yml","l":362}
+{"k":"e","de":"portao:Suíte de banco (migrations do zero + testes SQL)","rel":"RODA","pa":"arquivo:Supabase/test/run.sh","f":".github/workflows/suites.yml","l":480}
+{"k":"e","de":"portao:Suíte de export (invariantes do arquivo entregue)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-export.mts","f":".github/workflows/suites.yml","l":338}
+{"k":"e","de":"portao:Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-kit-basico.mts","f":".github/workflows/suites.yml","l":371}
+{"k":"e","de":"portao:Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-limite-de-envio.mts","f":".github/workflows/suites.yml","l":380}
+{"k":"e","de":"portao:Suíte e2e (extração → banco → export)","rel":"RODA","pa":"arquivo:Verificação/run.mts","f":".github/workflows/suites.yml","l":591}
+{"k":"e","de":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","rel":"RODA","pa":"arquivo:.claude/conhecimento/conferir.mjs","f":".github/workflows/suites.yml","l":212}
+{"k":"e","de":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","rel":"RODA","pa":"arquivo:.claude/conhecimento/indexar.mjs","f":".github/workflows/suites.yml","l":212}
+{"k":"e","de":"sessao:10","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5418}
+{"k":"e","de":"sessao:11","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5365}
+{"k":"e","de":"sessao:11","rel":"CITA","pa":"migration:0024","f":"HANDOFF.md","l":5365}
+{"k":"e","de":"sessao:13","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5287}
+{"k":"e","de":"sessao:14","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5229}
+{"k":"e","de":"sessao:14","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5229}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0004","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0007","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0008","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":5173}
+{"k":"e","de":"sessao:16","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5107}
+{"k":"e","de":"sessao:17","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5010}
+{"k":"e","de":"sessao:17","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":5010}
+{"k":"e","de":"sessao:18","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4938}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0022","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0029","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":4630}
+{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4464}
+{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":4464}
+{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":4464}
+{"k":"e","de":"sessao:21","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":4360}
+{"k":"e","de":"sessao:21","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":4360}
+{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":4263}
+{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":4263}
+{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0035","f":"HANDOFF.md","l":4263}
+{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":4177}
+{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0035","f":"HANDOFF.md","l":4177}
+{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4177}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":4068}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":4068}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":4068}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4068}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":4068}
+{"k":"e","de":"sessao:25","rel":"CITA","pa":"migration:0027","f":"HANDOFF.md","l":3971}
+{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3880}
+{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3880}
+{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":3880}
+{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3809}
+{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3809}
+{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":3809}
+{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":3809}
+{"k":"e","de":"sessao:29","rel":"CITA","pa":"migration:0040","f":"HANDOFF.md","l":3634}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0029","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0040","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0041","f":"HANDOFF.md","l":3520}
+{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":6933}
+{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":6933}
+{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0043","f":"HANDOFF.md","l":6933}
+{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":6933}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":7000}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":7000}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7000}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":7000}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":7000}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0043","f":"HANDOFF.md","l":7000}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":7000}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7000}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":7106}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":7106}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":7106}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":7106}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7106}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7106}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7106}
+{"k":"e","de":"sessao:34","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7262}
+{"k":"e","de":"sessao:34","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7262}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":7361}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7361}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7361}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7361}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":7361}
+{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7459}
+{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7459}
+{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7459}
+{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":7459}
+{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":7596}
+{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":7596}
+{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":7596}
+{"k":"e","de":"sessao:38","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":7726}
+{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":7878}
+{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":7878}
+{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":7878}
+{"k":"e","de":"sessao:40","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3406}
+{"k":"e","de":"sessao:40","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3406}
+{"k":"e","de":"sessao:40c","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3341}
+{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3287}
+{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3287}
+{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":3287}
+{"k":"e","de":"sessao:40e","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3247}
+{"k":"e","de":"sessao:40e","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3247}
+{"k":"e","de":"sessao:40f","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":3199}
+{"k":"e","de":"sessao:40f","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":3199}
+{"k":"e","de":"sessao:40g","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":3155}
+{"k":"e","de":"sessao:40h","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":3100}
+{"k":"e","de":"sessao:41","rel":"CITA","pa":"migration:0106","f":"HANDOFF.md","l":3046}
+{"k":"e","de":"sessao:41","rel":"CITA","pa":"migration:0107","f":"HANDOFF.md","l":3046}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":2949}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0106","f":"HANDOFF.md","l":2949}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0107","f":"HANDOFF.md","l":2949}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":2949}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0109","f":"HANDOFF.md","l":2949}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":2949}
+{"k":"e","de":"sessao:44","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":2750}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":2704}
+{"k":"e","de":"sessao:47","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2487}
+{"k":"e","de":"sessao:47","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2487}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":2357}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0027","f":"HANDOFF.md","l":2357}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2357}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2357}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":2357}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0114","f":"HANDOFF.md","l":2357}
+{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5808}
+{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0003","f":"HANDOFF.md","l":5808}
+{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":5808}
+{"k":"e","de":"sessao:6","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":5871}
+{"k":"e","de":"sessao:6","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":5871}
+{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6313}
+{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0014","f":"HANDOFF.md","l":6313}
+{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6313}
+{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0017","f":"HANDOFF.md","l":6313}
+{"k":"e","de":"sessao:7#11","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6345}
+{"k":"e","de":"sessao:7#12","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":6376}
+{"k":"e","de":"sessao:7#13","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6433}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":6504}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0008","f":"HANDOFF.md","l":6504}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6504}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0018","f":"HANDOFF.md","l":6504}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":6504}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0007","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":6624}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6015}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6015}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6015}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6015}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":6015}
+{"k":"e","de":"sessao:7#3","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":6075}
+{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6198}
+{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":6198}
+{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0014","f":"HANDOFF.md","l":6198}
+{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0015","f":"HANDOFF.md","l":6198}
+{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6240}
+{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6240}
+{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":6240}
+{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6240}
+{"k":"e","de":"sessao:7#9","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6285}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0018","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0020","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0021","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0024","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5561}
+{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5508}
+{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0020","f":"HANDOFF.md","l":5508}
+{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0022","f":"HANDOFF.md","l":5508}

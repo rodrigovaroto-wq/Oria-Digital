@@ -120,3 +120,11 @@ test('a URL da chamada é a do provedor, e o modelo do Google vai NELA', () => {
     }
   }
 });
+
+test('o prompt de classificação manda o acumulado no ano virar NM+ano, nunca anual (DRE jan-ago/2026)', () => {
+  for (const prov of CADA_PROVEDOR) {
+    const part = contentPartFromFile({ mimeType: 'application/pdf', base64: 'QUJD', filename: 'x.pdf' }, prov);
+    const req = buildClassificationRequest({ nomeOriginal: 'DRE_janaago26.pdf', conteudo: part, prov });
+    assert.match(JSON.stringify(req.body), /MENOS de 12 meses[^]*8M26[^]*nunca[^]*anual/, prov.id);
+  }
+});

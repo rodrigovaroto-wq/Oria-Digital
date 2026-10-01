@@ -30,10 +30,11 @@ import { mergeClassification } from '../lib/merge.mjs';
 import { spreadsheetToText, colunasDaPlanilha, avisoTruncamentoPlanilha } from '../lib/spreadsheet.mjs';
 import { sha256Hex } from '../lib/hash.mjs';
 import {
-  byteEm, casaAssinatura, trechoLatin1, saborDoZip, pareceTexto, contarFora,
+  byteEm, casaAssinatura, trechoLatin1, saborDoZip, abasDoXlsx, pareceTexto, contarFora,
   formaDoTexto, detectarFormato,
 } from '../lib/formato.mjs';
-import { parseTipo, parsePeriodo, parseEntidade, parseAssinado, classifyByFilename } from '../lib/classifier.mjs';
+import { xlsxMinimo } from './zip-minimo.mjs';
+import { parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAnos, parseEntidade, parseAssinado, classifyByFilename } from '../lib/classifier.mjs';
 import {
   avaliarCobertura, celulasDaLinha, celulasEstimadas, linhasComNumero, linhasDeConta,
   juntarFragmentosDeLinha, ehLinhaSemValor, ehLinhaDeConta,
@@ -48,7 +49,7 @@ import {
 } from '../lib/custo.mjs';
 import {
   normalizarUnidade, normalizarMoeda, diagnosticarErroApi, achatarGrupos,
-  ehLinhaNaoMonetaria, escalaDeclaradaNaColuna,
+  ehLinhaNaoMonetaria, escalaDeclaradaNaColuna, limparRotuloColado,
 } from '../lib/extract.mjs';
 import { ALIASES } from '../lib/taxonomia.mjs';
 
@@ -325,6 +326,12 @@ const TABELA = [
   // `FONTE_CLASSIFICADOR` em build-workflow.mjs.
   { nome: 'parseTipo', lib: parseTipo,
     casos: [['balanco patrimonial 2025'], ['dre 2025'], ['mapa de divida'], ['arquivo qualquer']] },
+  { nome: 'periodoAcumuladoNoAno', lib: periodoAcumuladoNoAno, casos: [
+    ['dre janaago26'], ['dre janeiro a agosto de 2026'], ['dre mar a ago 2026'], ['balanco 12m25'],
+  ] },
+  { nome: 'periodoDeIntervaloDeAnos', lib: periodoDeIntervaloDeAnos, casos: [
+    ['balanco 2021-2025'], ['balanco 21 a 25'], ['balanco 2025'], ['balanco 2030-2025'],
+  ] },
   { nome: 'parsePeriodo', lib: parsePeriodo,
     // O CRUZAMENTO DE SÉCULO ENTROU AQUI PORQUE A GUARDA JÁ DEIXOU PASSAR UMA
     // DIVERGÊNCIA REAL. A lib foi corrigida para ordenar o ano de QUATRO dígitos
@@ -456,6 +463,10 @@ const TABELA = [
     [Buffer.from('PK\u0003\u0004...word/document.xml...', 'latin1')],
     [Buffer.from('PK\u0003\u0004...ppt/presentation.xml...', 'latin1')],
     [Buffer.from('PK\u0003\u0004...fotos/a.jpg...', 'latin1')],
+  ] },
+  { nome: 'abasDoXlsx', lib: abasDoXlsx, casos: [
+    [xlsxMinimo([['A', [['x']]], ['B', [['y']]]])], [xlsxMinimo([['A', [['x']]]])],
+    [Buffer.alloc(0)], [Buffer.from('texto')],
   ] },
   { nome: 'pareceTexto', lib: pareceTexto, casos: [
     [Buffer.from('CONTA 2025\nATIVO 137.624\n', 'utf-8')],
@@ -628,6 +639,16 @@ const TABELA = [
     [[]], [null],
     [[{ s: 'ATIVO', sc: 'ativo_circulante', pc: '2025', linhas: [
       { k: 'Caixa', vn: 100 }, { k: 'Estoques', vn: 200 }] }]],
+    // rótulo com o valor colado: o espelho executa o achatarGrupos EMBUTIDO, que
+    // chama limparRotuloColado — sem ela no nó, ReferenceError aqui.
+    [[{ s: 'Passivo', sc: 'passivo_circulante', op: 1, cols: [{ ec: null, pc: '2025' }],
+      l: [{ k: '2 113.860.002,40PASSIVO', vt: ['113.860.002,40'], vn: [113860002.4], cf: 0.9 }] }]],
+  ] },
+  { nome: 'limparRotuloColado', lib: limparRotuloColado, casos: [
+    ['2 113.860.002,40PASSIVO', [113860002.4], ['113.860.002,40'], 'Passivo'],
+    ['Emprestimo 2.500,00parcelas', [9000], ['9.000,00'], null],
+    ['21.493.237,90', [21493237.9], ['21.493.237,90'], 'Balancete'],
+    ['PREJUÍZO DE 10.058,20', [10058.2], ['10.058,20'], null],
   ] },
 ];
 

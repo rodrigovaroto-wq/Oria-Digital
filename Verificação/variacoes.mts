@@ -137,7 +137,18 @@ function garantirMolde() {
   if (existe === "1") return;
   console.log(`   (molde ${MOLDE} não existe — aplicando as migrations uma vez)`);
   psql(`create database ${MOLDE}`, "postgres");
-  psql(`create schema if not exists storage;
+  // OS PAPÉIS DO SUPABASE são criados AQUI, como o `Verificação/run.mts` faz. Até
+  // 01/10/2026 este molde dependia de outro processo (o `Supabase/test/run.sh`) já
+  // tê-los criado no mesmo cluster: funcionava porque o CI rodava tudo num job só,
+  // em série, e morreu com "role anon does not exist" no primeiro run com os jobs em
+  // paralelo (fa6ccda). Dependência de ordem que ninguém declarou é dependência que
+  // quebra no dia em que a ordem muda.
+  psql(`do $$ begin
+          if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
+          if not exists (select 1 from pg_roles where rolname = 'authenticated') then create role authenticated nologin; end if;
+          if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin; end if;
+        end $$;
+        create schema if not exists storage;
         create table if not exists storage.buckets(id text primary key, name text, public boolean default false);
         create table if not exists storage.objects(id uuid default gen_random_uuid() primary key,
           bucket_id text, name text, owner uuid);

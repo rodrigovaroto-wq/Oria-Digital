@@ -64,6 +64,8 @@ Uma linha por entrada; teto mole de 130 linhas não vazias.
   aparecer. Erro com número HTTP e sem frase nossa: pergunte se a rota chegou a rodar
 
 ## Armadilhas de ferramenta (custaram tempo real)
+- [Servidor velho na porta mede o build errado](servidor-velho-na-porta-mede-o-build-errado.md) — o `next start`
+  novo morreu em EADDRINUSE e o antigo respondeu: "o conserto não muda nada" era do build velho (S104)
 - [A credencial do n8n quebra sem deixar rastro](credencial-do-n8n-quebra-sem-deixar-rastro.md) — de 17/09 a 30/09
   nenhum mandato gravava no banco, e sonda, conferidor e `execucao_falha` estavam limpos: o workflow
   de erros usa a MESMA credencial. Verde neles não diz que o n8n alcança o banco

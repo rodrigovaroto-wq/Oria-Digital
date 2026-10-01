@@ -81,6 +81,29 @@ export function saborDoZip(buf) {
   return 'zip';
 }
 
+// QUANTAS ABAS O XLSX TEM — sem descompactar. O `Extract From File` de XLSX lê UMA
+// aba só (a primeira, porque o repositório não fixa `sheetName`), e o resto do
+// arquivo some sem aviso: `Endividamento Krauspenhar.xlsx` gravou 0 linhas porque
+// a 1ª aba é um índice e a tabela está em "Abertura endividamento". Cada aba é uma
+// entrada `xl/worksheets/<nome>.xml` do zip, e o NOME DA ENTRADA fica em claro no
+// diretório central — o mesmo fato que `saborDoZip` já usa para distinguir xlsx de
+// docx, então é um caminho já em produção, não uma aposta no sandbox (sem `zlib`,
+// sem `require`). O que NÃO dá para saber daqui: o NOME da aba, que mora em
+// `xl/workbook.xml`, comprimido. Conta também aba oculta (limite conhecido: pode
+// acusar a mais, nunca a menos). Devolve null quando não há buffer.
+export function abasDoXlsx(buf) {
+  if (!buf?.length) return null;
+  const texto = trechoLatin1(buf, 0, buf.length);
+  const partes = new Set();
+  const re = /xl\/worksheets\/([A-Za-z0-9_-]+)\.xml/g;
+  let m = re.exec(texto);
+  while (m !== null) {
+    partes.add(m[1]);
+    m = re.exec(texto);
+  }
+  return partes.size;
+}
+
 /** Bytes → string latin1, sem depender de TextDecoder (o nó Code não garante). */
 export function trechoLatin1(buf, inicio, fim) {
   if (!buf) return '';

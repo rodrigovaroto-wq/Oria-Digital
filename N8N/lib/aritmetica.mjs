@@ -168,16 +168,29 @@ export function conferirTotalDaSerie(campos) {
     // variação por mês e a do ano na linha de total: somar doze variações nunca
     // dá a anual, e a checagem acusava diferença de 293,6 num documento certo
     // (medido em 30/09/2026, mandato de teste em produção, caso bb37f726).
-    if (/%|varia|\bvar\b|margem|media|ticket|indice|taxa/.test(normRotulo(pcCol || ecCol))) continue;
+    // PALAVRA INTEIRA, não substring: "Intermediação" contém "media" e "Receita
+    // variável" contém "varia", e são colunas de R$ que têm série. "Taxas" (plural)
+    // fica de fora de propósito: "Taxas de serviço" é R$; "Taxa" e "Taxa anual" não.
+    if (/%|\b(variacao|variacoes|var|margem|margens|media|medias|medio|ticket|indice|taxa)\b/.test(normRotulo(pcCol || ecCol))) continue;
     // A SÉRIE É O QUE VEM ANTES DO TOTAL, na ordem do documento. As linhas
     // DEPOIS dele são memória ("Média mensal", "Ticket médio por pedido"), não
     // parcela. Somá-las acusou "soma das 14 linhas 198.808,2 contra 183.480"
     // quando os 12 meses fecham EXATOS em 183.480: 183.480 + 15.290 + 38,2 é o
     // número da pendência falsa (mesmo caso bb37f726). Sem `ordem` em alguma
     // linha, fica a regra antiga, porque não há como saber o que veio antes.
+    // MAS o modelo às vezes devolve o total ANTES dos meses (doc 63a36efe,
+    // FATURAMENTO OMNIBEAUTY PR 202606.pdf: "Totais" na ordem 0, 12 meses
+    // depois). Com menos de duas parcelas antes do total, a série é o que vem
+    // DEPOIS — senão a checagem se pula em silêncio (6 grupos no campo_extraido
+    // de produção, 4 colunas do AMO e 2 do Teste v40). Linha de memória pelo
+    // rótulo (média, ticket, índice) nunca é parcela, esteja onde estiver.
+    const ehMemoria = (c) => /\b(media|medias|medio|ticket|indice)\b/.test(normRotulo(c.chave));
     const temOrdem = linhas.every((c) => Number.isFinite(c.ordem));
-    const partes = linhas.filter((c) => c !== total && !ehTotal(c.chave)
-      && (!temOrdem || c.ordem < total.ordem));
+    const candidatas = linhas.filter((c) => c !== total && !ehTotal(c.chave) && !ehMemoria(c));
+    const antes = temOrdem ? candidatas.filter((c) => c.ordem < total.ordem) : candidatas;
+    const partes = antes.length >= 2 || !temOrdem
+      ? antes
+      : candidatas.filter((c) => c.ordem > total.ordem);
     // Precisa de pelo menos DUAS parcelas para ser série (uma parcela só não
     // é série, é a mesma conta repetida) — abaixo disso não dá para concluir.
     if (partes.length < 2) continue;
@@ -200,5 +213,350 @@ export function conferirTotalDaSerie(campos) {
       + 'diferença.',
     );
   }
+  return problemas;
+}
+
+/**
+ * Papel de uma coluna de balancete pelo rótulo normalizado (sem acento, minúsculo):
+ * 'SA' (saldo anterior/inicial), 'D', 'C', 'SAt' (saldo atual/final) ou null.
+ * AUTO-CONTIDA; helper de `conferirBalanceteLinhaALinha`, embutida junto com ela
+ * (FONTE_ARITMETICA) — extraída do corpo dela pelo Sonar S3776 (complexidade 31).
+ */
+export function papelDeColunaDeBalancete(pc) {
+  const r = String(pc ?? '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+  if (/^saldo (anterior|inicial)\b/.test(r)) return 'SA';
+  if (/^debitos?\b/.test(r)) return 'D';
+  if (/^creditos?\b/.test(r)) return 'C';
+  if (/^saldo (atual|final)\b/.test(r)) return 'SAt';
+  return null;
+}
+
+/**
+ * Agrupa os campos em contas ({chave, pagina, SA, D, C, SAt}) e devolve também o
+ * conjunto de papéis vistos. A mesma chave repetida na mesma seção e página (o
+ * balancete real repete CHEQUES A COMPENSAR, duas vezes idêntica) é OUTRA conta,
+ * não a mesma com a coluna em dobro: abre-se um novo grupo quando o papel já está
+ * preenchido. AUTO-CONTIDA, embutida por toString().
+ */
+export function agruparContasDeBalancete(campos) {
+  const contas = [];
+  const abertas = new Map();
+  const papeis = new Set();
+  for (const c of campos) {
+    const p = c && typeof c === 'object' ? papelDeColunaDeBalancete(c.periodo_coluna) : null;
+    if (!p) continue;
+    papeis.add(p);
+    const k = [c.chave, c.secao ?? '', c.origem_pagina ?? '', c.entidade_coluna ?? ''].join('\u0000');
+    let conta = abertas.get(k);
+    if (!conta || p in conta) {
+      conta = { chave: c.chave, pagina: c.origem_pagina ?? null };
+      abertas.set(k, conta);
+      contas.push(conta);
+    }
+    conta[p] = Number.isFinite(c.valor_num) ? c.valor_num : null;
+  }
+  return { contas, papeis };
+}
+
+/**
+ * Para cada conta com as quatro colunas e movimento, diz se fecha como rotulada
+ * (SAt = SA + D - C, ou SA - D + C), só com a troca de colunas (D gravado = SA
+ * +/- C gravado +/- SAt gravado) ou de nenhum jeito; guarda o 1º exemplo de cada
+ * um dos dois últimos. Tolerância 1 na unidade do documento. Conta de movimento
+ * zero (D e C dentro da tolerância) fecha de qualquer jeito e não conta.
+ * AUTO-CONTIDA, embutida por toString().
+ */
+export function classificarContasDeBalancete(contas) {
+  const TOL = 1;
+  const perto = (a, b) => Math.abs(a - b) <= TOL;
+  const r = { rotulada: 0, trocada: 0, nenhuma: 0, exTroca: null, exNenhuma: null };
+  for (const v of contas) {
+    const completa = ['SA', 'D', 'C', 'SAt'].every((p) => typeof v[p] === 'number');
+    if (!completa || (Math.abs(v.D) <= TOL && Math.abs(v.C) <= TOL)) continue;
+    if (perto(v.SAt, v.SA + v.D - v.C) || perto(v.SAt, v.SA - v.D + v.C)) {
+      r.rotulada += 1;
+    } else if ([1, -1].some((s1) => [1, -1].some((s2) => perto(v.D, v.SA + s1 * v.C + s2 * v.SAt)))) {
+      r.trocada += 1;
+      r.exTroca = r.exTroca ?? v;
+    } else {
+      r.nenhuma += 1;
+      r.exNenhuma = r.exNenhuma ?? v;
+    }
+  }
+  return r;
+}
+
+/** O texto do problema único do balancete (contagens + exemplo). AUTO-CONTIDA. */
+export function mensagemDoBalancete(naoTriviais, r) {
+  const ex = r.exTroca ?? r.exNenhuma;
+  const pagina = ex.pagina ? ' (p. ' + ex.pagina + ')' : '';
+  const exemplo = '"' + ex.chave + '"' + pagina + ': saldo anterior ' + ex.SA + ', débito ' + ex.D
+    + ', crédito ' + ex.C + ', saldo atual ' + ex.SAt;
+  return 'balancete não fecha linha a linha (saldo atual = saldo anterior +/- débito -/+ crédito, tolerância 1): '
+    + `das ${naoTriviais} conta(s) com movimento, ${r.rotulada} fecham como rotuladas, ${r.trocada} fecham só com a `
+    + 'troca de colunas (a gravada como "Débito" é o saldo atual, a "Crédito" é o débito e a "Saldo atual" é o '
+    + `crédito) e ${r.nenhuma} não fecham de jeito nenhum. Exemplo${r.exTroca ? ' com a troca' : ''}: ${exemplo}. `
+    + 'O número NÃO foi corrigido: com as colunas trocadas, ler "Saldo atual" como saldo dá o crédito do período.';
+}
+
+/**
+ * Identidade de BALANCETE, linha a linha: para cada conta com as quatro colunas
+ * "Saldo anterior | Débito | Crédito | Saldo atual" (rótulos normalizados;
+ * "Saldo inicial/final", "Débitos", "Créditos" valem), o saldo atual tem de ser
+ * o anterior mais o movimento, na natureza da conta:
+ *   devedora: SAt = SA + D - C        credora: SAt = SA - D + C
+ *
+ * POR QUÊ EXISTE. No balancete_janaago26.pdf do mandato real Krauspenhar (320
+ * contas, 288 com as quatro colunas; medido em produção, 30/09/2026) só 111
+ * contas fecham como rotuladas, e 90 delas são triviais (movimento zero). 196
+ * fecham se a coluna gravada como "Débito" for o saldo atual real, a "Crédito"
+ * o débito real e a "Saldo atual" o crédito real (com sinal): ESTOQUES grava
+ * 43.569.482,33 | 47.956.795,90 | 65.971.485,41 | -61.584.171,84, e o saldo real
+ * é 47,96 mi (43,57 + 65,97 - 61,58). A troca muda POR PÁGINA. Nenhuma pendência
+ * nomeava isto, e uma análise leu o crédito do período como saldo ("estoque
+ * subiu para 61,6 mi"; o real é 47,96). NÃO corrige o número: o dado do cliente
+ * não é reescrito por palpite — só NOMEIA a troca.
+ *
+ * FORMA DE FECHAR. Como rotulada: acima, nas duas naturezas. Com a troca:
+ * D_gravado = SA +/- C_gravado +/- SAt_gravado (os dois sinais livres, porque
+ * o saldo real vem com sinal e a natureza muda de conta para conta). Tolerância
+ * de 1 na unidade do documento, a do precedente desta casa para identidade de 3
+ * parcelas sem ser 0,5% do total (ver TOLERÂNCIA no topo do arquivo).
+ *
+ * LIMIAR: UM problema por documento quando mais de 20% das contas NÃO triviais
+ * (D ou C diferente de zero) não fecham como rotuladas, com no mínimo 10 contas
+ * não triviais. 20% porque um balancete certo só perde conta por extração
+ * isolada (o exemplo Adiantamentos, que não fecha de jeito nenhum, é 1 de 198)
+ * e a troca por página do documento medido deixou ~89% sem fechar; entre 1% e
+ * 20% é ruído de extração que o dono vê conta a conta, acima disso a coluna está
+ * sistematicamente errada. O mínimo de 10 evita acusar documento de 3 contas.
+ *
+ * UMA CONTA = (chave, seção, página, entidade); se a mesma coluna aparece de
+ * novo para essa chave, é outra conta (o balancete real repete uma conta
+ * idêntica), contada à parte. Coluna com valor ausente (null) tira a conta:
+ * ausência não é zero.
+ * AUTO-CONTIDA, embutida por toString() no nó Code (ver FONTE_ARITMETICA) JUNTO com os 4
+ * helpers acima: toString() não leva o escopo do módulo (bc439fa, PR #246).
+ */
+export function conferirBalanceteLinhaALinha(campos) {
+  const problemas = [];
+  if (!Array.isArray(campos)) return problemas;
+  const { contas, papeis } = agruparContasDeBalancete(campos);
+  if (papeis.size < 4) return problemas;
+  const r = classificarContasDeBalancete(contas);
+  const naoTriviais = r.rotulada + r.trocada + r.nenhuma;
+  if (naoTriviais < 10 || (r.trocada + r.nenhuma) / naoTriviais <= 0.2) return problemas;
+  problemas.push(mensagemDoBalancete(naoTriviais, r));
+  return problemas;
+}
+
+/**
+ * Quebra os campos (já na ordem do documento) em BLOCOS de linha: um bloco novo
+ * começa quando a chave muda OU quando a coluna já está preenchida (mesma chave
+ * outra vez = linha repetida). Cada bloco guarda o valor por coluna, em minúsculas.
+ * AUTO-CONTIDA, embutida por toString() com as outras (extraída pelo Sonar S3776).
+ */
+export function blocosDeLinha(ordenados) {
+  const norm = (s) => String(s ?? '').trim().replace(/\s+/g, ' ');
+  const blocos = [];
+  let atual = null;
+  for (const c of ordenados) {
+    const chave = norm(c.chave);
+    const col = norm(c.periodo_coluna).toLowerCase();
+    if (!atual || atual.chave !== chave || col in atual.valores) {
+      atual = { chave, valores: {} };
+      blocos.push(atual);
+    }
+    atual.valores[col] = typeof c.valor_num === 'number' ? c.valor_num : null;
+  }
+  return blocos;
+}
+
+/**
+ * Linhas da HIERARQUIA de códigos de um relatório (DRE analítica, plano de contas):
+ * código sintético = "3", "3.01", "3.01.01"...; analítico = qualquer número sem ponto com 2+ dígitos ("000880", "8241").
+ * Descarta a linha SEM código ("TOTAL") e recolhe chave repetida em sequência numa
+ * linha só (a primeira vale; as chaves repetidas voltam em `repetidas`).
+ * AUTO-CONTIDA, embutida por toString() com as outras.
+ */
+export function linhasDaHierarquia(campos) {
+  const validos = campos.filter((c) => c && typeof c === 'object' && typeof c.chave === 'string');
+  const ordenados = validos.sort((a, b) => (Number.isFinite(a.ordem) && Number.isFinite(b.ordem) ? a.ordem - b.ordem : 0));
+  const linhas = [];
+  const repetidas = [];
+  let anterior = null;
+  const blocos = blocosDeLinha(ordenados);
+  // UM DÍGITO SÓ É SINTÉTICA DE TOPO apenas se o documento tem um código COM PONTO que
+  // o estende ("3" → "3.01"). Sem isso o "1" de "1 a 30 dias" virava sintética e o
+  // aging CERTO do Canastra (2236+709+545+491+764+709 = 5454 = Total) ganhava
+  // `extracao_falhou` falsa: 13 de 13 "não fecham" (produção, versão 1f1f8144).
+  const topos = new Set(blocos.map((b) => /^\d+(\.\d+)+$/.test(b.chave.split(' ')[0]) ? b.chave.split(' ')[0].split('.')[0] : null));
+  for (const bloco of blocos) {
+    if (anterior && anterior.chave === bloco.chave) {
+      if (!repetidas.includes(bloco.chave)) repetidas.push(bloco.chave);
+      continue;
+    }
+    anterior = bloco;
+    // TIPOS (desenho de 01/10/2026, depois de TRÊS falsos positivos seguidos: o Balanço
+    // do Krauspenhar com códigos reduzidos de 4 dígitos, o aging do Canastra com
+    // "1 a 30 dias" e a DFC da Fort Lub com "4 - ACRESCIMO…", "5 - CAIXA… INÍCIO" e
+    // "6 - CAIXA… FINAL" adotados como filhas de "3.4 - Capital Social"). A guarda só
+    // AVALIA ESTRUTURA INEQUÍVOCA, e na dúvida se cala:
+    //  S = código com ponto ("3.01.01"), ou um dígito só QUE TEM extensão com ponto no
+    //      documento ("3" → "3.01");
+    //  A = 6 dígitos ("000880"), a analítica do plano reduzido;
+    //  F = um dígito sem extensão ("4 - …", "1 a 30 dias"): FRONTEIRA, encerra o bloco
+    //      anterior e não é filha de ninguém;
+    //  X = qualquer outra linha (1 a 5 dígitos sem ponto, 7+ dígitos, sem código): torna
+    //      NÃO AVALIÁVEL a sintética em cujo bloco cair. Só "TOTAL" sai da hierarquia.
+    // Perder detecção é o preço, aceito: falso positivo acusa documento CERTO.
+    const cod = bloco.chave.split(' ')[0];
+    if (bloco.chave.toUpperCase() === 'TOTAL') continue;
+    bloco.cod = cod;
+    if (/^\d+\.\d+(\.\d+)*$/.test(cod)) bloco.tipo = 'S';
+    else if (/^\d$/.test(cod)) bloco.tipo = topos.has(cod) ? 'S' : 'F';
+    else if (/^\d{6}$/.test(cod)) bloco.tipo = 'A';
+    else bloco.tipo = 'X';
+    linhas.push(bloco);
+  }
+  return { linhas, repetidas };
+}
+
+/**
+ * Linhas do BLOCO da sintética `i`: da seguinte até a próxima linha com código que
+ * não a estende (sintética de outro ramo ou fronteira F). Analíticas (A) e linhas
+ * ambíguas (X) ficam dentro do bloco. AUTO-CONTIDA.
+ */
+export function blocoDaSintetica(linhas, i) {
+  const pai = linhas[i].cod;
+  const bloco = [];
+  for (let j = i + 1; j < linhas.length; j += 1) {
+    const l = linhas[j];
+    if (l.tipo === 'F' || (l.tipo === 'S' && !l.cod.startsWith(pai + '.'))) break;
+    bloco.push(j);
+  }
+  return bloco;
+}
+
+/**
+ * Posições das filhas DIRETAS da sintética `i`, ou null quando ela NÃO É AVALIÁVEL.
+ * Só se avalia estrutura inequívoca: todas as linhas do bloco têm de ser sintéticas
+ * que a estendem ou analíticas de 6 dígitos, e toda sintética mais funda que o
+ * filho direto precisa do seu pai imediato presente no bloco. Qualquer outra linha
+ * (X) ou nível pulado → null (nem fecha, nem não fecha). Filhas: as sintéticas um
+ * nível abaixo e as analíticas que aparecem antes de qualquer sintética filha.
+ * AUTO-CONTIDA.
+ */
+export function filhasDiretas(linhas, i) {
+  const bloco = blocoDaSintetica(linhas, i).map((j) => ({ j, l: linhas[j] }));
+  if (bloco.some(({ l }) => l.tipo === 'X')) return null;
+  const nivel = linhas[i].cod.split('.').length + 1;
+  const codigos = new Set(bloco.filter(({ l }) => l.tipo === 'S').map(({ l }) => l.cod));
+  const pulaNivel = bloco.some(({ l }) => l.tipo === 'S' && l.cod.split('.').length > nivel
+    && !codigos.has(l.cod.split('.').slice(0, -1).join('.')));
+  if (pulaNivel) return null;
+  const filhas = [];
+  let temSinteticaFilha = false;
+  for (const { j, l } of bloco) {
+    if (l.tipo === 'S') temSinteticaFilha = true;
+    if (l.tipo === 'S' && l.cod.split('.').length === nivel) filhas.push(j);
+    else if (l.tipo === 'A' && !temSinteticaFilha) filhas.push(j);
+  }
+  return filhas;
+}
+
+/**
+ * A sintética `i` fecha na coluna `col`? Valor = soma das filhas diretas (tolerância
+ * max(1, ceil(0.5*(n+1))), a da série). `desloc` = 1 lê cada valor na linha ANTERIOR
+ * (hipótese de valor deslocado). null quando falta dado — ausência não é zero.
+ * AUTO-CONTIDA.
+ */
+export function fechaComDeslocamento(linhas, i, filhas, col, desloc) {
+  const valor = (x) => (x - desloc >= 0 ? linhas[x - desloc].valores[col] : undefined);
+  const partes = filhas.map(valor);
+  const meu = valor(i);
+  if (typeof meu !== 'number' || partes.some((p) => typeof p !== 'number')) return null;
+  const tol = Math.max(1, Math.ceil(0.5 * (filhas.length + 1)));
+  return Math.abs(partes.reduce((a, b) => a + b, 0) - meu) <= tol;
+}
+
+/**
+ * Cada sintética com filhas e valores presentes numa coluna é: 'fecha' (valor =
+ * soma das filhas diretas), 'desloca' (não fecha, mas fecha lendo cada valor na
+ * linha ANTERIOR) ou 'nao'. É hipótese contada, nunca causa afirmada. Devolve
+ * { avaliaveis, fecham, deslocam, nao, exemplo, exNao }. AUTO-CONTIDA.
+ */
+export function classificarHierarquia(linhas, colunas) {
+  const r = { avaliaveis: 0, fecham: 0, deslocam: 0, nao: 0, exemplo: null, exNao: null };
+  for (let i = 0; i < linhas.length; i += 1) {
+    const filhas = linhas[i].tipo === 'S' ? filhasDiretas(linhas, i) : null;
+    for (const col of colunas) {
+      const gravado = filhas && filhas.length > 0 ? fechaComDeslocamento(linhas, i, filhas, col, 0) : null;
+      if (gravado === null) continue;
+      r.avaliaveis += 1;
+      if (gravado) {
+        r.fecham += 1;
+      } else if (i > 0 && fechaComDeslocamento(linhas, i, filhas, col, 1) === true) {
+        r.deslocam += 1;
+        r.exemplo = r.exemplo ?? { pai: linhas[i], col, onde: linhas[i - 1] };
+      } else {
+        r.nao += 1;
+        r.exNao = r.exNao ?? { pai: linhas[i], col, soma: filhas.reduce((a, f) => a + linhas[f].valores[col], 0) };
+      }
+    }
+  }
+  return r;
+}
+
+/**
+ * Identidade de HIERARQUIA: a sintética (código com pontos) vale a soma das filhas
+ * diretas, na coluna Total (sem Total, em cada coluna). DETECTA E CONTA; não afirma
+ * causa, nem página de início, e não reescreve valor.
+ *
+ * POR QUE. DRE analítica real do Krauspenhar (223 linhas, `DRE 2025`): cada rótulo,
+ * a partir de certo ponto, carrega o valor do rótulo SEGUINTE, e cada linha continua
+ * somando certo mês a mês contra o próprio Total — nenhuma guarda de linha dispara
+ * (221 de 223 batem). Medido: de ~43 sintéticas avaliáveis, 8 fecham como gravadas
+ * (81% não fecham); a hipótese de valor deslocado uma linha fecha cerca de 26 das
+ * que não fecham, mas o deslocamento NÃO é constante (0, +1, +2 conforme a faixa) —
+ * por isso a mensagem só CONTA a hipótese (K), sem nomear página de início.
+ *
+ * LIMIAR: um problema por documento quando mais de 20% das sintéticas avaliáveis
+ * não fecham como gravadas, com no mínimo 10 avaliáveis. 20% porque plano de contas
+ * real tem rótulo repetido e conta faltando isolados (o mesmo ruído que o balancete
+ * tolera), e o documento medido está em 81%; o mínimo de 10 evita acusar relatório
+ * de 3 sintéticas (as ordens 1-13 da página 1 real têm 3, e fecham).
+ * AUTO-CONTIDA, embutida por toString() junto com os 3 helpers acima.
+ */
+export function conferirHierarquiaDeCodigos(campos) {
+  const problemas = [];
+  if (!Array.isArray(campos)) return problemas;
+  const { linhas, repetidas } = linhasDaHierarquia(campos);
+  const colunas = [...new Set(linhas.flatMap((l) => Object.keys(l.valores)))];
+  const usadas = colunas.includes('total') ? ['total'] : colunas;
+  const r = classificarHierarquia(linhas, usadas);
+  const falham = r.deslocam + r.nao;
+  if (r.avaliaveis < 10 || falham / r.avaliaveis <= 0.2) return problemas;
+  const f = (n) => Number(n).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  let exemplo = '';
+  if (r.exemplo) {
+    const e = r.exemplo;
+    exemplo = ' Exemplo: "' + e.pai.chave + '" declara ' + f(e.pai.valores[e.col]) + ' e as filhas diretas dele não somam isso; '
+      + 'lendo cada valor uma linha acima, ele seria ' + f(e.onde.valores[e.col]) + ' (o gravado em "' + e.onde.chave
+      + '", coluna ' + e.col + ') e as filhas fecham.';
+  } else if (r.exNao) {
+    const e = r.exNao;
+    exemplo = ' Exemplo: "' + e.pai.chave + '" declara ' + f(e.pai.valores[e.col]) + ' e a soma das filhas diretas é ' + f(e.soma) + '.';
+  }
+  const dup = repetidas.length > 0
+    ? ' Rótulo repetido em sequência em: ' + repetidas.slice(0, 5).join('; ') + (repetidas.length > 5 ? '; …' : '') + '.'
+    : '';
+  problemas.push(
+    `${falham} de ${r.avaliaveis} contas sintéticas não fecham com a soma das filhas diretas (coluna ${usadas.join('/')}): `
+    + `${r.fecham} fecham como gravadas e a hipótese de valor deslocado uma linha explica ${r.deslocam} delas.`
+    + exemplo + dup
+    + ' O número NÃO foi corrigido: os valores do documento podem estar associados ao rótulo errado, e isso não aparece em nenhuma conferência de linha.',
+  );
   return problemas;
 }

@@ -1062,13 +1062,21 @@ function detectarSubtotaisInformados(
   }
 
   // (A) rótulo == nome de um agrupamento declarado pelo documento.
-  for (const { campo } of camposDaAba) {
+  for (const { campo, colKey } of camposDaAba) {
     const chaveNorm = normalizar(campo.chave);
     if (!chaveNorm || !secoesDeclaradas.has(chaveNorm)) continue;
     // exige que o agrupamento tenha MEMBROS (linhas cuja secao é esse nome e
     // cujo rótulo é diferente) — senão não há nada que este total duplique.
+    //
+    // OS MEMBROS TÊM DE SER DO MESMO DOCUMENTO E DA MESMA COLUNA da ocorrência. Olhar a
+    // aba inteira fazia um documento declarar o agrupamento e marcar como subtotal a
+    // conta HOMÔNIMA de outro documento. Medido no Krauspenhar (caso 33b58a89):
+    // "Venda de peças e lubrificantes" é o agrupamento das "Peças GTS/Massey…" no
+    // balancete de 2026 e é CONTA na DRE de 2025 (36,19 mi); marcada como subtotal, saía
+    // da soma do modelo em todos os anos (receita bruta 2025: 77,19 mi contra 113,38 mi).
     const temMembros = camposDaAba.some(
-      ({ campo: c }) => normalizar(c.secao ?? "") === chaveNorm && normalizar(c.chave) !== chaveNorm,
+      ({ campo: c, colKey: ck }) => c.documento_versao_id === campo.documento_versao_id && ck === colKey
+        && normalizar(c.secao ?? "") === chaveNorm && normalizar(c.chave) !== chaveNorm,
     );
     if (temMembros) subtotais.add(campo.id);
   }
@@ -1146,7 +1154,8 @@ function detectarSubtotaisInformados(
  * 1.900 maior — trocando uma dupla contagem por uma conta escondida. O mesmo
  * aconteceu com "Imposto de renda e contribuição social - corrente".
  *
- * O par devolvido é `secao_canonica||rotulo`, ambos normalizados.
+ * O par devolvido é `secao_canonica||rotulo`, ambos normalizados, e ganha um terceiro
+ * campo `||ano` quando o subtotal vale só naquele exercício (ver o fim da função).
  */
 export function rotulosDeSubtotalInformado(
   camposPorAba: Map<string, Array<{ campo: CampoExtraido; colKey: string }>>,
@@ -1164,10 +1173,10 @@ export function rotulosDeSubtotalInformado(
     // coincidência de soma que não existe quando a aba é vista inteira. A aba e o
     // modelo têm de receber o MESMO veredito; a entidade decide apenas QUAIS
     // vereditos se aplicam às linhas do modelo.
-    const ids = new Set([
-      ...detectarSubtotaisInformados(itens),
-      ...detectarSubtotaisPorOrdem(itens),
-    ]);
+    // `idsFortes` = regras (A) e (B), que olham a estrutura declarada e a soma dos irmãos
+    // EM CADA COLUNA; `PorOrdem` é a única que decide por coincidência de soma numa célula.
+    const idsFortes = detectarSubtotaisInformados(itens);
+    const ids = new Set([...idsFortes, ...detectarSubtotaisPorOrdem(itens)]);
     if (ids.size === 0) continue;
     // O VEREDITO É POR RÓTULO, MAS A DETECÇÃO É POR CÉLULA — e a diferença
     // apagava conta de verdade.
@@ -1199,6 +1208,7 @@ export function rotulosDeSubtotalInformado(
     // verdade nesse caso e devolvia a dupla contagem — foi o assert (0109d) que
     // pegou. Uma coluna conta como marcada quando QUALQUER ocorrência dela foi.
     const porRotulo = new Map<string, Map<string, boolean>>();
+    const fortePorRotulo = new Map<string, Set<string>>(); // colunas marcadas por (A)/(B)
     for (const { campo, colKey } of itens) {
       if (alvo !== null && normalizar(colKey.split(CHAVE_SEP)[0] ?? "") !== alvo) continue;
       if (typeof campo.valor_num !== "number") continue;
@@ -1206,12 +1216,54 @@ export function rotulosDeSubtotalInformado(
       if (!porRotulo.has(k)) porRotulo.set(k, new Map());
       const cols = porRotulo.get(k)!;
       cols.set(colKey, (cols.get(colKey) ?? false) || ids.has(campo.id));
+      if (idsFortes.has(campo.id)) {
+        if (!fortePorRotulo.has(k)) fortePorRotulo.set(k, new Set());
+        fortePorRotulo.get(k)!.add(colKey);
+      }
     }
+    // O VEREDITO É POR EXERCÍCIO.
+    //
+    // O DEFEITO (Krauspenhar, caso 33b58a89): "Venda de peças e lubrificantes" é CONTA
+    // na DRE 2025 (36,19 mi) e NOME DE AGRUPAMENTO, com filhas ("Peças GTS", "Peças
+    // Massey"…), no balancete de 2026. O veredito saía por (seção, rótulo) sem exercício:
+    // o modelo tirava a linha da soma em TODOS os anos, a receita bruta de 2025 saía
+    // 77,19 mi contra 113,38 mi da DRE e os 36,19 mi viravam "reconciliação", constante na
+    // projeção. Falso positivo aqui ESCONDE conta (ver acima).
+    //
+    // A REGRA: a chave devolvida é `seção||rótulo||ano`, e o rótulo só sai da soma NOS
+    // EXERCÍCIOS em que ele é subtotal. Uma coluna conta como subtotal quando (A)/(B) — as
+    // regras estruturais, que conferem a estrutura declarada e a soma dos irmãos por coluna
+    // — a marcam; uma marca que só a coincidência de soma por ordem deu (a célula de 2024
+    // do assert 38) continua exigindo o acordo de TODAS as colunas da aba, como antes.
+    // Coluna de exercício ilegível (texto livre, vários anos) cai no comportamento antigo:
+    // `seção||rótulo` em todos os anos, se todas as colunas da aba marcam.
     for (const [k, cols] of porRotulo) {
-      if (cols.size > 0 && [...cols.values()].every(Boolean)) rotulos.add(k);
+      if (cols.size === 0) continue;
+      const todasMarcam = [...cols.values()].every(Boolean);
+      const fortes = fortePorRotulo.get(k) ?? new Set<string>();
+      const efetiva = (colKey: string) => fortes.has(colKey) || (todasMarcam && cols.get(colKey) === true);
+      const anos = new Map<string, boolean[]>();
+      let ilegivel = false;
+      for (const colKey of cols.keys()) {
+        const ano = anoDaColuna(colKey);
+        if (ano === null) { ilegivel = true; continue; }
+        if (!anos.has(ano)) anos.set(ano, []);
+        anos.get(ano)!.push(efetiva(colKey));
+      }
+      if (ilegivel) { if (todasMarcam) rotulos.add(k); continue; }
+      for (const [ano, marcas] of anos) if (marcas.every(Boolean)) rotulos.add(`${k}||${ano}`);
     }
   }
   return [...rotulos];
+}
+
+/** O exercício de uma coluna `entidade<SEP>período`, ou `null` quando o período não
+ * deixa ler UM ano só (texto livre, intervalo de vários anos). `null` nunca vira um
+ * ano chutado: quem recebe cai na regra antiga, por rótulo. */
+function anoDaColuna(colKey: string): string | null {
+  const periodo = colKey.includes(CHAVE_SEP) ? colKey.split(CHAVE_SEP).slice(1).join(CHAVE_SEP) : colKey;
+  const anos = new Set(periodo.match(/\b(?:19|20)\d{2}\b/g) ?? []);
+  return anos.size === 1 ? [...anos][0] : null;
 }
 
 // ----- Aba classificada por seção (Balanço/Balancete/DRE/Fluxo/Combinado) --

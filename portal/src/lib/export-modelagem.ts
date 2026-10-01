@@ -1276,7 +1276,12 @@ export function construirAbaModelagem(
         const v = p.valores[String(ano)];
         const cell = r.getCell(idxFY(y));
         if (typeof v === "number") {
-          cell.value = v;
+          // `%` é armazenado em PONTOS percentuais (88 = 88%; é o que o "Usar" grava desde
+          // o ac9458d e o que `modelo-institucional.ts` divide por 100). A célula é
+          // formatada como `0.0%`, que multiplica por 100 ao exibir: o valor cru aparecia
+          // como 8797,0% para 87,97. É o ÚNICO leitor de `valores` neste arquivo — o bloco
+          // não projeta, e as fórmulas da aba leem as próprias linhas de premissa.
+          cell.value = p.unidade === "%" ? v / 100 : v;
           cell.numFmt = p.unidade === "%" ? PCT_FMT : VALOR_NUM_FMT;
           marcarInput(cell);
         } else {

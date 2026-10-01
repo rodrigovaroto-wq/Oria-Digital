@@ -511,8 +511,15 @@ declare
   canonico text := fn_periodo_canonico(p_tipo, p_ref);
   anos int[] := '{}';
   tok text;
+  m text[];
 begin
   if canonico is null then return anos; end if;
+  -- 0198: FAIXA "AAAA-AAAA" (ou "AAAAaAAAA", "AAAA–AAAA") inteira = todos os anos dela. Só quando
+  -- é crescente e de até 10 anos; fora disso cai no comportamento antigo (as pontas).
+  m := regexp_match(canonico, '^((?:19|20)[0-9]{2})(?:-|–|—|a|ate|até)((?:19|20)[0-9]{2})$');
+  if m is not null and m[2]::int >= m[1]::int and m[2]::int - m[1]::int <= 10 then
+    return array(select generate_series(m[1]::int, m[2]::int));
+  end if;
   -- anos de 4 dígitos explícitos (cobre ISO, ano isolado, listas já expandidas)
   foreach tok in array regexp_split_to_array(canonico, '[^0-9]+') loop
     if tok ~ '^(19|20)[0-9]{2}$' then
@@ -528,7 +535,7 @@ $_$;
 -- Name: FUNCTION fn_anos_periodo(p_tipo text, p_ref text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) IS 'Conjunto ordenado de anos implícito num período (qualquer notação). Vazio quando a referência não ancora ano.';
+COMMENT ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) IS 'Conjunto ordenado de anos implícito num período (qualquer notação). Vazio quando a referência não ancora ano. 0198: a FAIXA "AAAA-AAAA" devolve todos os anos dela (2024-2026 = 2024, 2025, 2026); a lista "2024,2026" devolve só os listados.';
 
 --
 -- Name: fn_anos_texto(text); Type: FUNCTION; Schema: public; Owner: -
@@ -12792,8 +12799,8 @@ CREATE FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_an
     LANGUAGE sql STABLE
     AS $_$
   with modo as (
-    -- O documento traz o ANO na coluna? ('2024', '2025', '31/12/2024'...) Só então o
-    -- ano sai da `periodo_coluna`; colunas de CATEGORIA (Saídas R$, Total R$) não
+    -- O documento traz o ANO na coluna? ('2024', 'jan/2024', '31/12/2024'...) Só então
+    -- o ano sai da `periodo_coluna`; colunas de CATEGORIA (Saídas R$, Total R$) não
     -- ancoram ano nenhum e ficam no modo do rótulo, o de sempre (0167).
     select exists (
       select 1 from campo_extraido ce
@@ -12802,19 +12809,33 @@ CREATE FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_an
         and cardinality(fn_anos_texto(ce.periodo_coluna)) > 0
     ) as ano_na_coluna
   ),
-  candidatos as (
-    select ce.chave, ce.periodo_coluna, ce.valor_num
-    from campo_extraido ce cross join modo
+  celulas as (
+    select ce.chave, ce.periodo_coluna, ce.valor_num,
+           -- 0197: a COLUNA é, ela mesma, um mês DESTE ano ("jan/2024", "Janeiro/2023",
+           -- "01/2024"). O intervalo "jan/2024 — jan/2025" não casa (ancorado no fim).
+           (
+             fn_normalizar_texto(ce.periodo_coluna)
+               ~ ('^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-z]*[/. -]+(' || p_ano4 || '|' || p_ano2 || ')$')
+             or fn_normalizar_texto(ce.periodo_coluna)
+               ~ ('^(0?[1-9]|1[0-2])[/. -]+(' || p_ano4 || '|' || p_ano2 || ')$')
+           ) as coluna_e_mes
+    from campo_extraido ce
     where ce.documento_versao_id = p_documento_versao_id
-      and ce.valor_num is not null
+  ),
+  candidatos as (
+    select ce.chave, ce.periodo_coluna, ce.valor_num,
+           case when ce.coluna_e_mes then fn_normalizar_texto(ce.periodo_coluna) else '' end as mes_da_coluna
+    from celulas ce cross join modo
+    where ce.valor_num is not null
       and (
         case when modo.ano_na_coluna then
           -- 0196: a célula é do ano pedido quando a COLUNA diz que é; o rótulo só
           -- precisa parecer um mês (o "jan/2024 — jan/2025" traz os DOIS anos, e a
-          -- linha "Ticket médio…" não é mês nenhum).
+          -- linha "Ticket médio…" não é mês nenhum). 0197: ou a coluna É o mês.
           fn_anos_texto(ce.periodo_coluna) && fn_anos_texto(p_ano4)
           and (
-            position(p_ano4 in fn_normalizar_texto(ce.chave)) > 0
+            ce.coluna_e_mes
+            or position(p_ano4 in fn_normalizar_texto(ce.chave)) > 0
             or fn_normalizar_texto(ce.chave) ~ ('[/. -]' || p_ano2 || '($|[^0-9])')
             or fn_normalizar_texto(ce.chave) ~ '^(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)'
           )
@@ -12825,32 +12846,37 @@ CREATE FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_an
       )
       and fn_normalizar_texto(ce.chave) not like '%total%'
       and fn_normalizar_texto(ce.chave) not like '%acumulad%'
-      and fn_normalizar_texto(ce.chave) not like '%media%'
-      and fn_normalizar_texto(ce.chave) not like '%médi%'
+      -- 0197: a forma NORMALIZADA (sem acento) é "medio"/"media". O '%médi%' da 0196 nunca
+      -- casava, porque o acento já tinha sido tirado. Por palavra, para não pegar "remédios".
+      and fn_normalizar_texto(ce.chave) !~ '(^|[^a-z])(medio|media)s?([^a-z]|$)'
       -- 0196: coluna de PERCENTUAL nunca é dinheiro (a 'Variação %' do relatório de
       -- 3 colunas somava -41,2 a -6,7 ao faturamento de cada mês).
       and position('%' in coalesce(ce.periodo_coluna, '')) = 0
       and fn_normalizar_texto(coalesce(ce.periodo_coluna, '')) not like '%variac%'
   ),
-  -- UM VALOR POR MÊS (0167) — inalterado.
+  -- UM VALOR POR MÊS (0167). 0197: com o mês na COLUNA, o mês entra na chave do grupo —
+  -- senão as 12 células de chave "Faturamento" virariam uma linha só.
   por_rotulo as (
     select
       chave,
+      mes_da_coluna,
       coalesce(
         max(valor_num) filter (where fn_normalizar_texto(periodo_coluna) like '%total%'),
         sum(valor_num)
       ) as valor
     from candidatos
-    group by chave
+    group by chave, mes_da_coluna
   )
-  select coalesce(sum(valor), 0)::numeric, count(*)::int from por_rotulo;
+  select coalesce(sum(valor), 0)::numeric,
+         count(distinct case when mes_da_coluna <> '' then mes_da_coluna else chave end)::int
+  from por_rotulo;
 $_$;
 
 --
 -- Name: FUNCTION fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) IS 'Soma o faturamento de um ano, UM VALOR POR MÊS. 0167: a categoria mora em periodo_coluna (Saídas/Serviços/Outros/Total) e a chave repete o mês nas quatro — com coluna de total, ela manda. 0196: quando as colunas do documento são ANOS (2024, 2025), o ano sai da COLUNA — o rótulo "jan/2024 — jan/2025" traz os dois anos e somava as duas colunas e a Variação % juntas; coluna de percentual nunca entra na soma.';
+COMMENT ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) IS 'Soma o faturamento de um ano, UM VALOR POR MÊS. 0167: a categoria mora em periodo_coluna (Saídas/Serviços/Outros/Total) e a chave repete o mês nas quatro — com coluna de total, ela manda. 0196: quando as colunas do documento são ANOS (2024, 2025), o ano sai da COLUNA; coluna de percentual nunca entra na soma. 0197: coluna "mês/ano" do ano pedido conta como mês mesmo com rótulo genérico ("Faturamento"); intervalo de dois anos numa célula não é atribuído; "Ticket médio"/média ficam fora também no modo por rótulo.';
 
 --
 -- Name: fn_sugerir_perguntas(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17134,6 +17160,12 @@ GRANT ALL ON FUNCTION public.fn_ano_da_coluna(p_periodo_coluna text, p_referenci
 --
 
 GRANT ALL ON FUNCTION public.fn_anos_do_periodo(p_referencia text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_anos_periodo(p_tipo text, p_ref text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_aplicar_premissa_em_lote(p_caso_id uuid, p_secao_canonica text, p_premissa text, p_autor text, p_sazonalidade text); Type: ACL; Schema: public; Owner: -

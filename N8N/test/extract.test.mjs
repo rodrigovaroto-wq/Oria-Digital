@@ -1,9 +1,11 @@
 import { test } from 'node:test';
+import { BALANCO_2025_COLADAS } from './fixture-krauspenhar.mjs';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import {
   buildExtractionRequest, parseExtractionResponse, extractionSchema, SECAO_CANONICA_ENUM,
   normalizarUnidade, normalizarMoeda, SYSTEM_PROMPT, ehLinhaNaoMonetaria, diagnosticarErroApi,
-  achatarGrupos,
+  achatarGrupos, limparRotuloColado,
 } from '../lib/extract.mjs';
 import {
   spreadsheetToText, parseCsv, avisoTruncamentoPlanilha, colunasDaPlanilha,
@@ -977,7 +979,11 @@ test('o formato PLANO antigo continua sendo aceito (workflow importado velho)', 
 test('achatarGrupos é AUTO-CONTIDA (o nó Code do n8n a embute por toString)', () => {
   // Se ela passar a referenciar constante do módulo, o nó quebra com
   // ReferenceError na primeira execução real e nenhum teste daqui pega.
-  const isolada = new Function(`return (${achatarGrupos.toString()})`)();
+  // `limparRotuloColado` (extraída pelo Sonar S3776) VAI JUNTO: é o que o gerador
+  // embute em FONTE_ACHATAR_GRUPOS. Sem ela aqui, o teste reprova com ReferenceError
+  // — a mesma lição de bc439fa.
+  const helper = 'const limparRotuloColado = ' + limparRotuloColado.toString() + ';\n';
+  const isolada = new Function(helper + 'return (' + achatarGrupos.toString() + ')')();
   const { linhas } = isolada([{ s: 'x', sc: 'custos', op: 1, cols: [], l: [{ k: 'a', vt: ['1'], vn: [1], cf: 1 }] }]);
   assert.equal(linhas.length, 1);
   // E resiste a lixo em vez de estourar: resposta malformada vira "nada
@@ -1124,4 +1130,125 @@ test('o RPD está declarado, porque é ele que decide se o lote cabe no DIA', ()
   assert.ok(minutosParaEsgotarODia < 8 * 60,
     `a ${porMinuto}/min a cota do dia acaba em ${Math.round(minutosParaEsgotarODia)} min — `
     + 'se este número passar de um dia de trabalho, o RPD deixou de ser o gargalo e este teste envelheceu');
+});
+
+// --- Número colado no rótulo (Balanço 2025 real, Krauspenhar) ---------------
+// A chave real gravada foi "2 113.860.002,40PASSIVO": o valor da linha
+// (113.860.002,40) vazou para o rótulo e a reconciliação acusou "Passivo+PL não
+// localizado". A chave e o valor vêm da produção; a estrutura do grupo em volta
+// (seção, coluna "2025") é a mínima, não a extração inteira.
+const grupoComChave = (k, vn, vt) => [{
+  s: 'Passivo', sc: 'passivo_circulante', op: 1, cols: [{ ec: null, pc: '2025' }],
+  l: [{ k, vt: [vt], vn: [vn], cf: 0.9 }],
+}];
+
+test('rótulo com o VALOR DA LINHA colado: o número sai do rótulo e a conta fica', () => {
+  const r = achatarGrupos(grupoComChave('2 113.860.002,40PASSIVO', 113860002.4, '113.860.002,40'));
+  assert.equal(r.linhas.length, 1);
+  assert.equal(r.linhas[0].chave, '2 PASSIVO');
+  assert.equal(r.linhas[0].valor_num, 113860002.4, 'o valor não muda');
+  assert.deepEqual(r.rotulosSuspeitos, []);
+  assert.deepEqual(r.problemas, []);
+});
+
+test('rótulo com número colado que NÃO é o valor da linha: nada é apagado, e é declarado com a chave crua', () => {
+  const r = achatarGrupos(grupoComChave('Emprestimo 2.500,00parcelas', 9000, '9.000,00'));
+  assert.equal(r.linhas.length, 1, 'a conta não é descartada');
+  assert.equal(r.linhas[0].chave, 'Emprestimo 2.500,00parcelas', 'o rótulo NÃO é reescrito por palpite');
+  assert.equal(r.rotulosSuspeitos.length, 1);
+  assert.match(r.rotulosSuspeitos[0], /"Emprestimo 2\.500,00parcelas"/);
+  assert.match(r.rotulosSuspeitos[0], /2\.500,00/);
+});
+
+test('número monetário com ESPAÇO no rótulo não é "colado" e passa intacto', () => {
+  const r = achatarGrupos(grupoComChave('Saldo em 31/12 1.234,56 reais', 50, '50'));
+  assert.equal(r.linhas[0].chave, 'Saldo em 31/12 1.234,56 reais');
+  assert.deepEqual(r.rotulosSuspeitos, []);
+});
+
+test('o motivo da falha nomeia o rótulo suspeito (falhaMotivo)', () => {
+  const api = { choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({
+    moeda: 'BRL', unidade: 'unidade',
+    diagnostico: {
+      entidade: null, tipo_confirma: true, tipo_sugerido: 'BALANCO', periodo_tipo: 'anual',
+      periodo_referencia: '25', legibilidade: 'ok', nota_legibilidade: null,
+      resumo: 'x', justificativa: 'y',
+    },
+    grupos: grupoComChave('Emprestimo 2.500,00parcelas', 9000, '9.000,00'),
+  }) } }] };
+  const r = parseExtracao(api);
+  assert.match(r.falhaMotivo, /1 rótulo\(s\) com número colado que não é o valor da linha/);
+  assert.match(r.falhaMotivo, /Emprestimo 2\.500,00parcelas/);
+});
+
+// AS 72 LINHAS REAIS do caso Krauspenhar (consulta de produção, 30/09/2026, só
+// leitura): 64 do Balanço 2025, em que o valor da linha vazou para o rótulo, e 8
+// do balancete, em que a chave é SÓ o número. [chave, valor_num] copiados.
+const BALANCO_COLADO = BALANCO_2025_COLADAS;
+const BALANCETE_SO_NUMERO = [
+  ['21.493.237,90', 'Saldo anterior', 21493237.9],
+  ['21.493.237,90', 'Saldo atual', 0],
+  ['21.493.237,90', 'Crédito', 3030000.08],
+  ['21.493.237,90', 'Débito', 24523237.98],
+  ['-3.308.898,66', 'Saldo atual', -359507.62],
+  ['-3.308.898,66', 'Saldo anterior', -3308898.66],
+  ['-3.308.898,66', 'Débito', -3389319.44],
+  ['-3.308.898,66', 'Crédito', 279086.84],
+];
+
+test('REAL: as 64 chaves do Balanço 2025 com o valor colado saem limpas, e o valor não muda', () => {
+  assert.equal(BALANCO_COLADO.length, 64);
+  for (const [chave, valor] of BALANCO_COLADO) {
+    const r = achatarGrupos(grupoComChave(chave, valor, String(valor)));
+    assert.equal(r.linhas.length, 1, chave);
+    assert.equal(r.linhas[0].valor_num, valor, chave);
+    assert.doesNotMatch(r.linhas[0].chave, /\d{1,3}(\.\d{3})*,\d{2}/, `sobrou número em ${chave}`);
+    assert.match(r.linhas[0].chave, /[A-Za-z]/, `o rótulo virou vazio em ${chave}`);
+    assert.deepEqual(r.rotulosSuspeitos, [], chave);
+  }
+  const exato = achatarGrupos(grupoComChave('849 -3.630,00(-) INSTALAÇÕES', -3630, '-3.630,00'));
+  assert.equal(exato.linhas[0].chave, '849 (-) INSTALAÇÕES');
+});
+
+test('REAL: balancete com a chave SÓ número — a conta fica, o rótulo não é inventado, e é declarado', () => {
+  const porChave = new Map();
+  for (const [chave, pc, v] of BALANCETE_SO_NUMERO) {
+    if (!porChave.has(chave)) porChave.set(chave, []);
+    porChave.get(chave).push([pc, v]);
+  }
+  let declarados = 0;
+  for (const [chave, colunas] of porChave) {
+    const r = achatarGrupos([{
+      s: 'Balancete', sc: 'NAO_CLASSIFICAVEL', op: 1,
+      cols: colunas.map(([pc]) => ({ ec: null, pc })),
+      l: [{ k: chave, vt: colunas.map(([, v]) => String(v)), vn: colunas.map(([, v]) => v), cf: 0.9 }],
+    }]);
+    assert.equal(r.linhas.length, colunas.length, 'nenhum valor é descartado');
+    assert.ok(r.linhas.every((l) => l.chave === chave), 'o rótulo NÃO é reescrito');
+    assert.equal(r.rotulosSuspeitos.length, 1, chave);
+    assert.match(r.rotulosSuspeitos[0], /SÓ um número/);
+    declarados += 1;
+  }
+  assert.ok(declarados >= 1);
+});
+
+test('frases legítimas com valor no meio do texto NÃO são mexidas (contrato social, DRE)', () => {
+  for (const k of ['O Capital Social será de R$ 100.000,00 (cem mil reais)', 'PREJUÍZO DE 10.058,20']) {
+    const r = achatarGrupos(grupoComChave(k, 100000, '100.000,00'));
+    assert.equal(r.linhas[0].chave, k);
+    assert.deepEqual(r.rotulosSuspeitos, [], k);
+  }
+});
+
+test('o workflow embute limparRotuloColado junto com achatarGrupos (Parse Extracao)', () => {
+  const wf = JSON.parse(readFileSync(new URL('../workflow.e1-ingestao.json', import.meta.url), 'utf8'));
+  const codigo = JSON.stringify(wf.nodes.find((n) => n.name === 'Parse Extracao').parameters.jsCode);
+  assert.ok(codigo.includes('const limparRotuloColado = '));
+  assert.ok(codigo.includes('const achatarGrupos = '));
+});
+
+test('o prompt de extração manda o acumulado no ano (YTD) virar NM+ano, nunca anual (DRE jan-ago/2026)', () => {
+  assert.match(SYSTEM_PROMPT, /ACUMULADO NO ANO \(YTD\)/);
+  assert.match(SYSTEM_PROMPT, /"8M26"/);
+  assert.match(SYSTEM_PROMPT, /ERRO emitir "12M26"/);
 });

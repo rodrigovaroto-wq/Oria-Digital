@@ -36,6 +36,9 @@
 
 import {
   fracaoPctDe,
+  portaoFechado,
+  portaoNaoConferido,
+  veredictoDoPortao,
   textoChipModelagem,
   textoTituloConferenciaModelagem,
   type ConferenciaModelagemCobertura,
@@ -132,6 +135,53 @@ console.log("--- 6. Portão 2 fechado: a tela NÃO diz 'pronto para o export' (o
   const aberto = { elegivel: true, motivos: [] };
   ok(textoTituloConferenciaModelagem(conf, aberto) === textoTituloConferenciaModelagem(conf),
     "portão aberto: o texto é o mesmo de antes (nada muda para quem pode exportar)");
+}
+
+console.log("--- 7. Portão 2 NÃO CONFERIDO (RPC falhou → null): nem 'pronto', nem botão; três estados ---");
+{
+  // O defeito: `portaoFechado(null)` é false, então com o RPC falhando o chip voltava a
+  // "pronto — X% das contas projetam" e o botão ficava ativo — ausência como estado.
+  const conf: ConferenciaModelagemCobertura = { pronto: true, fracao_linhas_com_premissa: 0.62 };
+  const chip = textoChipModelagem(conf, null);
+  const titulo = textoTituloConferenciaModelagem(conf, null);
+  ok(!/^pronto/i.test(chip) && /NÃO CONFERIDO/.test(chip),
+    "chip com portão não conferido não começa por 'pronto' e diz que não foi conferido", chip);
+  ok(!/%/.test(chip), "…e não mostra a fração 'X% das contas projetam' como se o export estivesse liberado", chip);
+  ok(!/Pronto para o export/.test(titulo) && /NÃO foi possível conferir o Portão 2/.test(titulo),
+    "título com portão não conferido diz que não foi possível conferir", titulo);
+  ok(portaoNaoConferido(null) && !portaoNaoConferido(undefined)
+    && !portaoNaoConferido({ elegivel: true }) && !portaoNaoConferido({ elegivel: false }),
+    "só `null` é NÃO CONFERIDO: `undefined` (não perguntado), aberto e fechado são outros estados");
+  ok(!portaoFechado(null),
+    "não conferido NÃO é 'fechado' (seria outra afirmação sem prova): são estados distintos");
+  ok(textoChipModelagem(conf, null) !== textoChipModelagem(conf, { elegivel: false, motivos: [] })
+    && textoChipModelagem(conf, null) !== textoChipModelagem(conf, { elegivel: true }),
+    "os três estados produzem três textos diferentes no chip");
+}
+
+console.log("--- 8. UMA regra para tela e rota (`veredictoDoPortao`): resposta do RPC → aberto/fechado/não conferido ---");
+{
+  // A rota recusava (503) quando `elegivel` não era booleano; a tela só tratava `null`. Com o
+  // RPC respondendo `{}` a tela dizia "pronto" e o clique devolvia JSON cru. Os dois
+  // consumidores chamam ESTA função, então cobrir ela cobre os dois.
+  const est = (r: { data?: unknown; error?: unknown } | null | undefined) => veredictoDoPortao(r).estado;
+  ok(est({ data: {} }) === "nao_conferido", "resposta `{}` (sem `elegivel`) é NÃO CONFERIDO");
+  ok(est({ data: { motivos: [] } }) === "nao_conferido", "resposta só com motivos é NÃO CONFERIDO");
+  ok(est({ data: { elegivel: "x" } }) === "nao_conferido", "`elegivel` que não é booleano é NÃO CONFERIDO");
+  ok(est({ data: { elegivel: 1 } }) === "nao_conferido", "`elegivel` numérico não é aberto");
+  ok(est({ data: null }) === "nao_conferido" && est({}) === "nao_conferido" && est(null) === "nao_conferido",
+    "resposta ausente é NÃO CONFERIDO");
+  ok(est({ data: { elegivel: true }, error: { message: "boom" } }) === "nao_conferido",
+    "erro na consulta é NÃO CONFERIDO mesmo que haja dado junto");
+  ok(est({ data: { elegivel: false, motivos: ["pendência"] } }) === "fechado", "`elegivel` false é FECHADO");
+  ok(est({ data: { elegivel: true } }) === "aberto", "`elegivel` true é ABERTO");
+  const f = veredictoDoPortao({ data: { elegivel: false, motivos: ["a", 3, "b"] } });
+  ok(f.portao !== null && f.portao.motivos?.join("|") === "a|b",
+    "fechado entrega só motivos textuais", JSON.stringify(f.portao));
+  ok(veredictoDoPortao({ data: {} }).portao === null,
+    "não conferido entrega `portao: null`, que a tela lê com `portaoNaoConferido`");
+  ok(textoChipModelagem({ pronto: true, fracao_linhas_com_premissa: 0.9 }, veredictoDoPortao({ data: {} }).portao).includes("NÃO CONFERIDO"),
+    "a tela, alimentada pela MESMA função, não diz 'pronto' diante de `{}`");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

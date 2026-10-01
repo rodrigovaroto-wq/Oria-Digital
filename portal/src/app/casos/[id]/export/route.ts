@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
+import { veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import type { EntradaModeloInstitucional, LinhaModelo } from "@/lib/modelo-institucional";
 import {
   buildExportWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, type ConfigModelagem,
@@ -309,8 +310,26 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   let modeloInstitucional: EntradaModeloInstitucional | undefined;
   if (modo === "completo") {
     const portao = await supabase.rpc("fn_avaliar_portao2", { p_caso_id: id });
-    const aval = portao.data as { elegivel?: boolean; motivos?: string[] } | null;
-    if (aval && aval.elegivel === false) {
+    const { estado, portao: aval } = veredictoDoPortao(portao);
+    // FAIL-CLOSED: se o RPC falhou (ou não devolveu veredito) o Portão 2 é DESCONHECIDO,
+    // e desconhecido não é aberto — a MESMA regra da tela (`veredictoDoPortao`). Antes o
+    // export seguia sobre base possivelmente não aprovada. Mesma resposta amigável do 409,
+    // status 503 por ser falha de conferência. O erro cru fica no log do servidor: a
+    // mensagem do Postgres não é para o navegador.
+    if (estado === "nao_conferido" || !aval) {
+      console.error("[export] Portão 2 não conferido", { caso_id: id, erro: portao.error?.message ?? null });
+      return NextResponse.json(
+        {
+          error: "O export COMPLETO foi recusado: não foi possível conferir o Portão 2.",
+          motivos: ["Não foi possível conferir o Portão 2; recarregue a página ou tente mais tarde."],
+          dica: "Tente de novo em instantes. \"Exportar dados\" continua disponível para conferir a "
+            + "extração — esse modo não depende do portão. O completo carrega modelo projetado, e "
+            + "projetar sem saber se a base foi aprovada daria aparência de resultado aprovado.",
+        },
+        { status: 503 },
+      );
+    }
+    if (aval.elegivel === false) {
       return NextResponse.json(
         {
           error: "O export COMPLETO foi recusado: este caso não passou o Portão 2.",
@@ -506,6 +525,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // vez de publicar variação numa linha de nível).
       type MacroDoModelo = {
         serie: string; ano: number; valor: number; fonte: string; natureza: "taxa" | "nivel";
+        /** meses que o REALIZADO cobre; < 12 não é taxa anual (o modelo recusa na aba Anual) */
+        meses?: number;
+        /** estruturado: a aba Anual decide a fórmula do CDI por ele, nunca pelo texto de `fonte` */
+        origem: "focus" | "realizado";
       };
       const macroModelo: MacroDoModelo[] = [
         ...anuais.flatMap((a): MacroDoModelo[] => {
@@ -514,12 +537,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             if (nivel === undefined) return [];
             return [{
               serie: a.serie, ano: a.ano, valor: nivel.valor, natureza: "nivel",
-              fonte: `realizado — fechamento de ${nivel.data}`,
+              fonte: `realizado — fechamento de ${nivel.data}`, origem: "realizado",
             }];
           }
           return [{
             serie: a.serie, ano: a.ano, valor: Number(a.retorno), natureza: "taxa",
-            fonte: `realizado (${a.meses} meses)`,
+            fonte: `realizado (${a.meses} meses)`, meses: Number(a.meses), origem: "realizado",
           }];
         }),
         ...expectativas.map((e): MacroDoModelo => ({
@@ -528,7 +551,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           // período), e para IPCA/Selic/CDI em taxa — a natureza é da SÉRIE, então ela
           // vem da mesma classificação usada no realizado.
           natureza: naturezaDaSerie.get(e.serie) ?? "taxa",
-          fonte: `Focus, coleta ${e.coletado_em}`,
+          fonte: `Focus, coleta ${e.coletado_em}`, origem: "focus",
         })),
       ];
 

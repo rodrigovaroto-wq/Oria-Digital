@@ -30,16 +30,16 @@ import {
   capacidadesDoModelo, CAPACIDADES_POR_MODELO, CAPACIDADES_PADRAO,
 } from './lib/provedor.mjs';
 import { createHash } from 'node:crypto';
-import { SYSTEM_PROMPT, diagnosticarErroApi, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, normalizarMoeda, extractionSchema, achatarGrupos, ehLinhaNaoMonetaria, escalaDeclaradaNaColuna } from './lib/extract.mjs';
+import { SYSTEM_PROMPT, diagnosticarErroApi, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, normalizarMoeda, extractionSchema, achatarGrupos, limparRotuloColado, ehLinhaNaoMonetaria, escalaDeclaradaNaColuna } from './lib/extract.mjs';
 import { ALIASES } from './lib/taxonomia.mjs';
-import { classifyByFilename, parseTipo, parsePeriodo, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
+import { classifyByFilename, parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAnos, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
 import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
 import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
 import { sha256Hex } from './lib/hash.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
-  pareceTexto, contarFora, formaDoTexto, detectarFormato,
+  pareceTexto, contarFora, formaDoTexto, detectarFormato, abasDoXlsx,
 } from './lib/formato.mjs';
 import {
   spreadsheetToText, colunasDaPlanilha, avisoTruncamentoPlanilha,
@@ -53,7 +53,7 @@ import {
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
   MAX_CELULAS_POR_BLOCO, LIMIAR_COBERTURA, MINIMO_PARA_AVALIAR,
 } from './lib/cobertura.mjs';
-import { conferirIdentidadeDeLinha, conferirTotalDaSerie } from './lib/aritmetica.mjs';
+import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha, conferirHierarquiaDeCodigos, blocosDeLinha, linhasDaHierarquia, fechaComDeslocamento, blocoDaSintetica, filhasDiretas, classificarHierarquia, papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete } from './lib/aritmetica.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -279,7 +279,7 @@ const FONTE_BYTES_BINARIO = `const bytesDoBinario = ${bytesDoBinario.toString()}
 // lugar onde valor e coluna são associados. Espelhá-la à mão seria escolher o
 // erro mais caro possível: uma divergência aqui grava o número de 2024 na coluna
 // de 2025, sem sintoma nenhum.
-const FONTE_ACHATAR_GRUPOS = `const achatarGrupos = ${achatarGrupos.toString()};`;
+const FONTE_ACHATAR_GRUPOS = `const limparRotuloColado = ${limparRotuloColado.toString()};\nconst achatarGrupos = ${achatarGrupos.toString()};`;
 
 // As três camadas contra o truncamento e a extração pela metade (lib/cobertura.mjs),
 // embutidas do fonte como todo o resto. O comentário do topo daquele arquivo tem
@@ -324,6 +324,18 @@ const FONTE_COBERTURA = [
 const FONTE_ARITMETICA = [
   `const conferirIdentidadeDeLinha = ${conferirIdentidadeDeLinha.toString()};`,
   `const conferirTotalDaSerie = ${conferirTotalDaSerie.toString()};`,
+  `const papelDeColunaDeBalancete = ${papelDeColunaDeBalancete.toString()};`,
+  `const agruparContasDeBalancete = ${agruparContasDeBalancete.toString()};`,
+  `const classificarContasDeBalancete = ${classificarContasDeBalancete.toString()};`,
+  `const mensagemDoBalancete = ${mensagemDoBalancete.toString()};`,
+  `const blocosDeLinha = ${blocosDeLinha.toString()};`,
+  `const linhasDaHierarquia = ${linhasDaHierarquia.toString()};`,
+  `const blocoDaSintetica = ${blocoDaSintetica.toString()};`,
+  `const filhasDiretas = ${filhasDiretas.toString()};`,
+  `const fechaComDeslocamento = ${fechaComDeslocamento.toString()};`,
+  `const classificarHierarquia = ${classificarHierarquia.toString()};`,
+  `const conferirHierarquiaDeCodigos = ${conferirHierarquiaDeCodigos.toString()};`,
+  `const conferirBalanceteLinhaALinha = ${conferirBalanceteLinhaALinha.toString()};`,
 ].join('\n');
 
 // `sha256Hex` idem — embutida do fonte. Ela substituiu a dependência de
@@ -367,6 +379,7 @@ const FONTE_FORMATO = [
   `const casaAssinatura = ${casaAssinatura.toString()};`,
   `const trechoLatin1 = ${trechoLatin1.toString()};`,
   `const saborDoZip = ${saborDoZip.toString()};`,
+  `const abasDoXlsx = ${abasDoXlsx.toString()};`,
   `const pareceTexto = ${pareceTexto.toString()};`,
   `const contarFora = ${contarFora.toString()};`,
   `const formaDoTexto = ${formaDoTexto.toString()};`,
@@ -734,6 +747,8 @@ return out;
 const FONTE_CLASSIFICADOR = [
   `const THRESHOLD_AUTO=${JSON.stringify(THRESHOLD_AUTO)};`,
   `const normalize = ${normalize.toString()};`,
+  `const periodoAcumuladoNoAno = ${periodoAcumuladoNoAno.toString()};`,
+  `const periodoDeIntervaloDeAnos = ${periodoDeIntervaloDeAnos.toString()};`,
   `const parsePeriodo = ${parsePeriodo.toString()};`,
   `const parseTipo = ${parseTipo.toString()};`,
   `const parseAssinado = ${parseAssinado.toString()};`,
@@ -876,7 +891,12 @@ try{
 // lateral) e o \`Extrair Texto\`, que le a camada de texto do PDF. Da\u00ed para a
 // frente ninguem mais precisa -- o \`content_part\` ja' carrega o arquivo em
 // base64 DENTRO do json, e e' ele que vai para a OpenAI.
-return {json:{...item, content_part: part, content_mime: mt, hash, aviso_conteudo: aviso,
+// QUANTAS ABAS O XLSX TEM, medido nos bytes (lib/formato.mjs, abasDoXlsx). O
+// extrator nativo le UMA aba so'; o Recompor usa este numero para nao deixar o
+// resto do arquivo sumir sem pendencia. null fora de xlsx: ausencia, nao zero.
+let abasXlsx=null;
+if(formato==='xlsx'){ try{ abasXlsx=abasDoXlsx(buf); }catch(e){ abasXlsx=null; } }
+return {json:{...item, content_part: part, content_mime: mt, hash, aviso_conteudo: aviso, abas_xlsx: abasXlsx,
   // O QUE FOI MEDIDO viaja com o item: o roteador decide por
   // \`formato_detectado\`, e \`formato_confiavel\`/\`formato_evidencia\` deixam
   // quem le' distinguir medicao de suposicao (regra 1 do CLAUDE.md aplicada
@@ -1241,7 +1261,19 @@ const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,pr
     // Planilha extraida com sucesso NAO abre mais a pendencia de 'nao lida' --
     // so' abre a de TRUNCAMENTO, se a planilha estourar o teto (regra 1: so'
     // declara ausencia onde ela e' real).
-    aviso_conteudo: avisoTruncamentoPlanilha(linhas,{totais:{linhas:total,colunas:uniaoColunas.length}}),
+    aviso_conteudo: [
+      avisoTruncamentoPlanilha(linhas,{totais:{linhas:total,colunas:uniaoColunas.length}}),
+      // XLSX COM MAIS DE UMA ABA: o \`Extract From File\` leu so' a primeira. O
+      // que estava nas outras sumia sem pendencia -- \`Endividamento
+      // Krauspenhar.xlsx\` gravou 0 linhas porque a 1a aba e' um indice e a
+      // tabela esta na 2a. O numero de abas vem dos bytes (Preparar Conteudo); o
+      // NOME delas nao, porque mora no workbook.xml comprimido e o no' Code nao
+      // tem zip. O conteudo lido NAO e' descartado: so' deixa de ser apresentado
+      // como o arquivo inteiro.
+      (ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>1)
+        ? 'O arquivo .xlsx tem '+ctx.abas_xlsx+' abas e o extrator nativo leu SO a primeira ('+total+' linha(s)); as outras '+(ctx.abas_xlsx-1)+' aba(s) NAO foram lidas e a tabela financeira pode estar em qualquer uma delas. Os nomes das abas nao estao disponiveis (ficam no workbook.xml, comprimido). Abra o arquivo e reenvie a aba certa, ou confirme que a primeira e a unica com dado.'
+        : null,
+    ].filter(Boolean).join(' | ')||null,
   }};
 });
 // O QUE ESTE NO' NAO FECHA, e fica DITO em vez de escondido: um extrator que
@@ -1748,6 +1780,10 @@ for(const [chave, blocos] of porDocumento){
   if(problemasLinha.length>0) motivos.push(problemasLinha.slice(0,5).join(' | ')+(problemasLinha.length>5?' | ...':''));
   const problemasSerie=conferirTotalDaSerie(r.campos);
   if(problemasSerie.length>0) motivos.push(problemasSerie.slice(0,5).join(' | ')+(problemasSerie.length>5?' | ...':''));
+  const problemasBalancete=conferirBalanceteLinhaALinha(r.campos);
+  if(problemasBalancete.length>0) motivos.push(problemasBalancete.join(' | '));
+  const problemasHierarquia=conferirHierarquiaDeCodigos(r.campos);
+  if(problemasHierarquia.length>0) motivos.push(problemasHierarquia.join(' | '));
   // A EMENDA LIMPA NAO E' FALHA -- e' a costura fazendo exatamente o que ela
   // existe para fazer. Ate a rodada do lote 7377 (02/09, "teste Canastra"),
   // \`r.emendasLimpas>0\` sozinho virava \`motivos.push(...)\`, e qualquer motivo
@@ -1883,6 +1919,12 @@ const campos=ach.linhas.length>0||Array.isArray(p.grupos)
 if(ach.problemas.length>0){
   const dizer=ach.problemas.length+' conta(s) descartada(s) por desalinhamento entre colunas e valores (a associacao valor-coluna ficou desconhecida, e adivinha-la trocaria um periodo pelo outro): '+ach.problemas.slice(0,5).join('; ')+(ach.problemas.length>5?'; ...':'');
   falhaMotivo=falhaMotivo?falhaMotivo+' | '+dizer:dizer;
+}
+// Rotulo com numero monetario colado que NAO e' o valor da linha: a conta ficou,
+// o rotulo nao foi limpo (so' se limpa o que e' provadamente o valor vazado).
+if(ach.rotulosSuspeitos.length>0){
+  const dizer2=ach.rotulosSuspeitos.length+' rotulo(s) com numero colado que nao e o valor da linha (a conta foi mantida, o rotulo NAO foi limpo e pode nao casar na reconciliacao): '+ach.rotulosSuspeitos.slice(0,5).join('; ')+(ach.rotulosSuspeitos.length>5?'; ...':'');
+  falhaMotivo=falhaMotivo?falhaMotivo+' | '+dizer2:dizer2;
 }
 const d=p.diagnostico||{};
 const diagnostico={

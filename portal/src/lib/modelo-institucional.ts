@@ -217,7 +217,24 @@ export interface EntradaModeloInstitucional {
    * Focus, que é nível. Duas grandezas na mesma linha é dado mentiroso, e a linha
    * alimenta a conversão de dívida em moeda estrangeira.
    */
-  macro: { serie: string; ano: number; valor: number; fonte: string; natureza?: "taxa" | "nivel" }[];
+  /**
+   * `meses` = quantos meses o REALIZADO cobre (`fn_indice_macro_anual`). Expectativa do
+   * Focus não tem (é projeção do ano inteiro). Ausente = tratado como ano completo, que é
+   * o que as fixtures sem o campo sempre assumiram; a rota do export sempre o manda.
+   */
+  macro: {
+    serie: string; ano: number; valor: number; fonte: string; natureza?: "taxa" | "nivel"; meses?: number;
+    /**
+     * De onde o número vem, em campo ESTRUTURADO — `fonte` é só texto de exibição. "focus" =
+     * expectativa de mercado (para a Selic, a META de fim de ano); "realizado" = observação
+     * do BCB/IBGE. A aba Anual decide a fórmula do CDI por este campo: decidir pelo texto de
+     * `fonte` fazia a troca do rótulo na rota reverter o CDI para a cópia da meta, sem erro.
+     * AUSENTE = "realizado": as fixtures antigas sem o campo são realizado de 12 meses ou
+     * série de nível, e tratar um número de origem desconhecida como meta (compor/fazer média)
+     * inventaria uma aproximação; tratá-lo como realizado só mantém a igualdade medida.
+     */
+    origem?: "focus" | "realizado";
+  }[];
   /**
    * Rótulos normalizados que a detecção ESTRUTURAL do export (`export.ts`,
    * `detectarSubtotaisInformados` + `detectarSubtotaisPorOrdem`) reconheceu como
@@ -1009,15 +1026,28 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   // A chave é o PAR (seção, rótulo) — ver o comentário de
   // `rotulosDeSubtotalInformado`: casar só pelo rótulo tirava da DRE uma despesa
   // que tem o mesmo nome de um subtotal do balanço.
+  // `seção||rótulo` = subtotal em todos os exercícios (regra antiga, período ilegível);
+  // `seção||rótulo||ano` = subtotal SÓ naquele exercício — nos outros a linha é conta e soma.
   const subtotaisEstruturais = new Set<string>();
+  const subtotaisPorAno = new Map<string, Set<string>>(); // seção||rótulo → anos
   for (const r of ent.subtotaisInformados ?? []) {
-    const [secao, rotulo] = r.split("||");
-    subtotaisEstruturais.add(`${chaveDeAncora(secao ?? "")}||${chaveDeAncora(rotulo ?? "")}`);
+    const [secao, rotulo, ano] = r.split("||");
+    const k = `${chaveDeAncora(secao ?? "")}||${chaveDeAncora(rotulo ?? "")}`;
+    if (ano === undefined) { subtotaisEstruturais.add(k); continue; }
+    if (!subtotaisPorAno.has(k)) subtotaisPorAno.set(k, new Set());
+    subtotaisPorAno.get(k)!.add(ano);
   }
-  const ehSubtotalEstrutural = (l: LinhaModelo) => {
+  const chavesDaLinha = (l: LinhaModelo) => {
     const secao = chaveDeAncora(l.secao_canonica ?? "");
-    return subtotaisEstruturais.has(`${secao}||${chaveDeAncora(l.rotulo_norm)}`)
-      || subtotaisEstruturais.has(`${secao}||${chaveDeAncora(l.chave)}`);
+    return [`${secao}||${chaveDeAncora(l.rotulo_norm)}`, `${secao}||${chaveDeAncora(l.chave)}`];
+  };
+  const ehSubtotalEstrutural = (l: LinhaModelo) => chavesDaLinha(l).some((k) => subtotaisEstruturais.has(k));
+  /** A linha SEM os exercícios em que ela é subtotal; `null` se não sobrou nenhum. */
+  const semOsAnosDeSubtotal = (l: LinhaModelo): LinhaModelo | null => {
+    const anos = new Set(chavesDaLinha(l).flatMap((k) => [...(subtotaisPorAno.get(k) ?? [])]));
+    if (anos.size === 0) return l;
+    const valores = Object.fromEntries(Object.entries(l.valores).filter(([a]) => !anos.has(a)));
+    return Object.keys(valores).length > 0 ? { ...l, valores } : null;
   };
 
   // As âncoras vêm das linhas que NÃO são conta (subtotais do documento). Quando o
@@ -1081,9 +1111,11 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     // SUBTOTAL FORA DA SOMA. Ele continua no arquivo (a aba analítica o mostra
     // marcado) e continua servindo de âncora acima — só não entra como conta.
     if (ehSubtotalEstrutural(l)) continue;
-    const b = blocoDaLinha(l);
+    const lSoma = semOsAnosDeSubtotal(l);
+    if (lSoma === null) continue;
+    const b = blocoDaLinha(lSoma);
     if (!linhasPorBloco.has(b)) linhasPorBloco.set(b, []);
-    linhasPorBloco.get(b)!.push(l);
+    linhasPorBloco.get(b)!.push(lSoma);
   }
 
   // ---- CABEÇALHO DE GRUPO IMPRESSO: fora da soma, e só COM PROVA ----------
@@ -1222,6 +1254,77 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   };
 }
 
+// =============================================================================
+// PREMISSA LIGADA A K CONTAS: o valor é do GRUPO, não de cada conta.
+//
+// O DEFEITO (medido no Excel do mandato Krauspenhar, caso 33b58a89): a premissa
+// PME (150 dias) estava ligada em lote a 40 contas de estoque, e cada conta virava
+// `dias/360 × RECEITA_LÍQUIDA`. O "Ativo circulante operacional" foi de 36,10 mi
+// (2025) para 340,32 mi (2026), a dívida de curto prazo de 18,00 para 333,11 mi e
+// o ativo total de 113,86 para 413,15 mi — sem célula vermelha, e o CHECK fechava
+// (o patrimônio absorve). O mesmo vale para `pct_de_linha` em custo/SG&A (47 contas
+// × 88% da receita) e para o capex por classe.
+//
+// A LEITURA: a premissa tem UM valor por (caso, código) em `caso_premissa.valores`.
+// Ligada a K contas, o único sentido possível é "o GRUPO vale isto". O total do
+// grupo é `dias/360 × base` (ou `taxa × base`) e cada conta recebe a PARCELA
+// HISTÓRICA dela: saldo da conta ÷ soma do grupo, no último exercício realizado,
+// em fórmula visível (linha `#part`). Grupo = contas do MESMO bloco, ligadas ao
+// MESMO código, com a MESMA base (fornecedor gira contra custo, o resto contra
+// receita — misturar as duas bases no mesmo grupo não teria total único).
+//
+// K = 1 NÃO MUDA NADA: sem linha `#part`, sem rateio, mesma fórmula de antes.
+// SEM SALDO para ratear (soma do grupo zero ou ausente) NÃO se divide igualmente
+// em silêncio: as contas ficam em BRANCO com nota de motivo e efeito (regra 1).
+// =============================================================================
+interface GrupoRateado {
+  /** as contas do grupo (inclui a própria) */
+  membros: LinhaModelo[];
+  /** soma dos saldos do último exercício realizado, na escala do modelo */
+  somaHist: number;
+  /** não há saldo realizado para ratear: as contas não projetam */
+  semSaldo: boolean;
+}
+
+function gruposRateados(
+  ctx: Ctx, lista: LinhaModelo[], chaveDe: (l: LinhaModelo) => string,
+  formula: PremissaModelo["formula"], saldo: (l: LinhaModelo) => number,
+  mesmaBase: (a: LinhaModelo, b: LinhaModelo) => boolean = () => true,
+): Map<string, GrupoRateado> {
+  const out = new Map<string, GrupoRateado>();
+  for (const l of lista) {
+    const p = ctx.premissaPorLinha.get(l.rotulo_norm);
+    if (!p || p.formula !== formula) continue;
+    const membros = lista.filter((o) => {
+      const po = ctx.premissaPorLinha.get(o.rotulo_norm);
+      return po !== undefined && po.codigo === p.codigo && po.formula === formula && mesmaBase(l, o);
+    });
+    if (membros.length <= 1) continue;
+    const somaHist = membros.reduce((s, o) => s + saldo(o), 0);
+    out.set(chaveDe(l), { membros, somaHist, semSaldo: !(Math.abs(somaHist) > 1e-9) });
+  }
+  return out;
+}
+
+/** `saldo da conta ÷ soma do grupo` no último exercício realizado (fórmula, não valor). */
+function formulaParcela(g: Grade, ch: string, chavesDoGrupo: string[], ultimoHist: number): string {
+  return `=${g.ref(ch, ultimoHist)}/(${chavesDoGrupo.map((k) => g.ref(k, ultimoHist)).join("+")})`;
+}
+
+function notaParcela(p: PremissaModelo, gr: GrupoRateado, ultimoHist: number, total: string): string {
+  return `Premissa "${p.nome}" está ligada a ${gr.membros.length} contas (do mesmo bloco, ou de custo e SG&A, que têm a mesma base): o valor dela é do `
+    + `GRUPO (${total}) e esta conta recebe a parcela que tinha no grupo em ${ultimoHist} (saldo ÷ `
+    + "soma dos saldos). Aplicar o valor inteiro a cada conta multiplicaria o bloco por "
+    + `${gr.membros.length}.`;
+}
+
+function notaGrupoSemSaldo(p: PremissaModelo, gr: GrupoRateado, ultimoHist: number, efeito: string): string {
+  return `Premissa "${p.nome}" está ligada a ${gr.membros.length} contas do mesmo grupo, mas o grupo não tem `
+    + `saldo realizado em ${ultimoHist} para ratear o valor entre elas (soma ${gr.somaHist}). Esta conta `
+    + `NÃO é projetada: fica em branco e os subtotais a leem como zero — ${efeito} `
+    + "Para projetar, ligue a premissa a uma conta com saldo realizado.";
+}
+
 /** O valor da âncora do documento naquele ano, na escala do modelo. */
 function valorDaAncora(ctx: Ctx, chave: string, ano: number): { valor: number; nota: string } | null {
   const l = ctx.ancoras.get(chave);
@@ -1287,10 +1390,14 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
       return i <= 0 ? String(ano) : `=${g.letraDoAno(ctx.anos[i - 1])}1+1`;
     }, "0");
 
-  const porSerieAno = new Map<string, { valor: number; fonte: string; natureza?: "taxa" | "nivel" }>();
+  const porSerieAno = new Map<string, { valor: number; fonte: string; natureza?: "taxa" | "nivel"; meses?: number; origem?: "focus" | "realizado" }>();
   for (const m of ctx.ent.macro) {
-    porSerieAno.set(`${m.serie}|${m.ano}`, { valor: m.valor, fonte: m.fonte, natureza: m.natureza });
+    porSerieAno.set(`${m.serie}|${m.ano}`, { valor: m.valor, fonte: m.fonte, natureza: m.natureza, meses: m.meses, origem: m.origem });
   }
+  /** Realizado de menos de 12 meses numa série de TAXA: acumulado parcial, não taxa anual. */
+  const parcial = (v: { natureza?: "taxa" | "nivel"; meses?: number } | undefined, codigo: string) =>
+    v !== undefined && v.meses !== undefined && v.meses < 12
+    && v.natureza !== "nivel" && !SERIES_DE_NIVEL.has(codigo);
 
   for (const s of SERIES_MACRO) {
     g.linha(`macro:${s.codigo}`, { rotulo: s.rotulo, nota: s.codigo, fmt: NUM2 });
@@ -1318,6 +1425,82 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
         });
         continue;
       }
+      // ANO CORRENTE PARCIAL NÃO É TAXA ANUAL. Medido em 01/10/2026 no export do caso de
+      // teste 72d9210a: a linha "CDI (% a.a.)" saía com 10,888 / 14,333 (12 meses) e
+      // **9,713 em 2026, que é o acumulado de 9 meses**, e VAZIA de 2027 a 2030 — o Focus
+      // não publica CDI (só CAMBIO_USD, IGPM, IPCA, PIB, SELIC). Nove meses de CDI numa
+      // linha "% a.a." subestima o ano e vira a curva da dívida; para IPCA e Selic o
+      // Focus sobrescrevia o parcial por acaso (as expectativas entram depois), para CDI
+      // e INPC nada sobrescrevia. Vale para toda série de taxa, não só o CDI.
+      if (parcial(v, s.codigo) && s.codigo !== "CDI") {
+        g.set(`macro:${s.codigo}`, ano, null, {
+          nota: `O realizado de ${ano} cobre ${v!.meses} meses: realizado de ${v!.meses} meses não é taxa `
+            + `anual e não é publicado numa linha "% a.a.". A célula fica VAZIA (e o que a lê cai em `
+            + `zero por N()) até ${s.codigo === "INPC" ? "o ano fechar (o Focus não publica INPC)" : "haver Focus ou o ano fechar"}. `
+            + `Origem: ${v!.fonte}`,
+        });
+        continue;
+      }
+      // CDI: o Focus NÃO publica CDI, então ano projetado sem CDI realizado de 12 meses
+      // ficava vazio e a curva da dívida (ST Inv. & Debt) lia zero: "Custo efetivo do
+      // revolver" 10,89% | 14,33% | 9,71% | 0 | 0 | 0 | 0 no export medido. A proxy vem da
+      // Selic, por FÓRMULA (uma revisão do Focus move o CDI junto). Base medida em
+      // produção: CDI e Selic REALIZADOS (SGS 4390, acumulado do ano) são IDÊNTICOS em todo
+      // ano fechado de 2022 a 2025 (12,380 / 13,028 / 10,888 / 14,333).
+      //
+      // MAS A SELIC DO FOCUS NÃO É ESSA GRANDEZA: é a META NO FIM DO ANO. Copiá-la como
+      // CDI do ano subestima o custo num ciclo de corte (meta 13,75 no fim de 2026 e 12 no
+      // fim de 2027: acumulado de 2027 ≈ 12,9, a célula diria 12,0) e, em 2026, jogaria
+      // fora os 9 meses já realizados (9,713). Por isso, com Selic do Focus:
+      //   • ano corrente com realizado parcial: realizado de m meses composto com os
+      //     (12−m) restantes à meta do fim do ano;
+      //   • ano seguinte com meta no ano anterior: média das duas metas (trajetória linear
+      //     da meta ao longo do ano);
+      //   • primeiro ano projetado sem nada disso: a meta do próprio ano.
+      // Só a Selic REALIZADA de 12 meses entra como igualdade (a base medida acima).
+      if (s.codigo === "CDI" && (!v || parcial(v, s.codigo))) {
+        const selic = porSerieAno.get(`SELIC|${ano}`);
+        const ehMeta = (x: { origem?: "focus" | "realizado" } | undefined) => x?.origem === "focus";
+        if (selic && !parcial(selic, "SELIC")) {
+          const refSelic = g.ref("macro:SELIC", ano);
+          const antAno = g.anoAnterior(ano);
+          const selicAnt = antAno === null ? undefined : porSerieAno.get(`SELIC|${antAno}`);
+          const limite = "Aproximação a partir da META de fim de ano (o Focus não publica a taxa acumulada nem o CDI), "
+            + "NÃO é o CDI realizado.";
+          let formula = `=${refSelic}`;
+          let nota: string;
+          if (!ehMeta(selic)) {
+            nota = `CDI de ${ano} = Selic realizada de ${ano} (célula acima, por fórmula): o CDI realizado ficou `
+              + "IDÊNTICO à Selic em todo ano fechado de 2022 a 2025 (12,380 / 13,028 / 10,888 / 14,333). "
+              + (v ? `O realizado de ${ano} cobre só ${v.meses} meses e não é taxa anual (${v.fonte}). ` : "")
+              + `Selic: ${selic.fonte}`;
+          } else if (v && v.meses !== undefined && ehMeta(selic)) {
+            formula = `=((1+${v.valor}/100)*(1+${refSelic}/100)^((12-${v.meses})/12)-1)*100`;
+            nota = `CDI de ${ano} = realizado de ${v.meses} meses (${v.valor.toLocaleString("pt-BR")}%, ${v.fonte}) `
+              + `composto com os ${12 - v.meses} meses restantes à meta de Selic do fim de ${ano} (célula acima, Focus): `
+              + `(1+realizado)×(1+meta)^((12−${v.meses})/12)−1. ${limite} Limite: os meses restantes usam a meta `
+              + "do fim do ano, não a trajetória mês a mês.";
+          } else if (ehMeta(selicAnt)) {
+            formula = `=(${g.ref("macro:SELIC", antAno!)}+${refSelic})/2`;
+            nota = `CDI de ${ano} = média das metas de Selic de fim de ${antAno} e ${ano} (Focus, células acima): `
+              + `trajetória linear da meta ao longo do ano. ${limite} Limite: curva não linear de juros desvia dela.`;
+          } else {
+            nota = `CDI de ${ano} = meta de Selic do fim de ${ano} (Focus, célula acima), sem meta do ano anterior `
+              + `para compor. ${limite} Limite: a meta de fim de ano fica ABAIXO do acumulado num ciclo de corte (SUBESTIMA o custo) e ACIMA num de alta (superestima). `
+              + `Selic: ${selic.fonte}`;
+          }
+          g.set("macro:CDI", ano, formula, { fmt: NUM2, nota });
+          continue;
+        }
+        if (v) {
+          g.set("macro:CDI", ano, null, {
+            nota: `O realizado de ${ano} cobre ${v.meses} meses (não é taxa anual) e não há Selic de ${ano} `
+              + "completa nem Focus para usar de proxy. A célula fica VAZIA: a curva da dívida lê ZERO neste ano. "
+              + `Origem: ${v.fonte}`,
+          });
+          continue;
+        }
+      }
       if (!v) {
         // AUSÊNCIA É AUSÊNCIA: célula vazia, e a nota diz o que falta. Repetir a
         // última observação conhecida projetaria uma expectativa que ninguém
@@ -1329,7 +1512,14 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
         });
         continue;
       }
-      g.set(`macro:${s.codigo}`, ano, v.valor, { fmt: NUM2, nota: `Fonte: ${v.fonte}` });
+      g.set(`macro:${s.codigo}`, ano, v.valor, {
+        fmt: NUM2,
+        nota: `Fonte: ${v.fonte}`
+          + (s.codigo === "SELIC" && v.origem === "focus"
+            ? ". ATENÇÃO: o valor projetado é a META de Selic no fim do ano (Focus), NÃO a taxa acumulada no ano "
+              + "como o rótulo da linha sugere; o realizado é o acumulado."
+            : ""),
+      });
     }
   }
   g.pular();
@@ -1768,28 +1958,39 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
   // ---- CUSTOS --------------------------------------------------------------
   g.linha("CUSTOS", { sinal: "(-)", rotulo: "CUSTOS", bloco: true, fmt: NUM });
   const custos = ctx.linhasPorBloco.get("custo") ?? [];
-  for (const l of custos) {
-    const ch = chaveLinha("custo", l);
+  // `% da receita líquida` ligada a K contas do MESMO bloco é taxa do GRUPO (ver
+  // `gruposRateados`); cada conta recebe a parcela histórica dela em `#part`.
+  const saldoHistRec = (l: LinhaModelo) => valorNaEscala(l, ctx.ultimoHist, ctx.ent.unidade)?.valor ?? 0;
+  // UM GRUPO POR CÓDIGO ENTRE CUSTO E SG&A: os dois blocos são medidos contra a MESMA base
+  // (receita líquida), então o mesmo código ligado a contas de custo E de SG&A é UMA taxa de
+  // UM grupo. Dois grupos (um por bloco) somavam 1 cada e o total saía 2× a premissa, sem
+  // nota (em produção: MARKDOWN 2% em 7 contas de custo + 6 de SG&A projetava 4%).
+  const sgaDoCaso = ctx.linhasPorBloco.get("sga") ?? [];
+  const blocoCS = (l: LinhaModelo) => (custos.includes(l) ? "custo" : "sga");
+  const rateioCS = gruposRateados(ctx, [...custos, ...sgaDoCaso], (l) => chaveLinha(blocoCS(l), l),
+    "pct_de_linha", saldoHistRec);
+  // Custo e SG&A declaram as MESMAS linhas por conta (valor, três cenários e, se a
+  // conta está num grupo de rateio com saldo, a parcela) — um ponto só, para os dois
+  // blocos não divergirem (e o Sonar reprovou a cópia: 12 linhas duplicadas).
+  const declararContaCS = (bloco: "custo" | "sga", l: LinhaModelo) => {
+    const ch = chaveLinha(bloco, l);
     const p = ctx.premissaPorLinha.get(l.rotulo_norm);
     g.linha(ch, { rotulo: l.chave, nota: p ? p.nome : "(sem premissa)", fmt: NUM });
     g.linha(`${ch}#base`, { rotulo: "    Base Case", fmt: PCT });
     g.linha(`${ch}#cli`, { rotulo: "    Cliente Case", fmt: PCT });
     g.linha(`${ch}#str`, { rotulo: "    Stress Case", fmt: PCT });
-  }
+    if (rateioCS.get(ch) && !rateioCS.get(ch)!.semSaldo) {
+      g.linha(`${ch}#part`, { rotulo: "    Parcela da conta no grupo da premissa", fmt: PCT });
+    }
+  };
+  for (const l of custos) declararContaCS("custo", l);
   g.linha("CUSTOS_PCT", { rotulo: "    % da receita líquida", fmt: PCT });
   g.pular();
 
   // ---- SG&A ----------------------------------------------------------------
   g.linha("SGA", { sinal: "(-)", rotulo: "SG&A", bloco: true, fmt: NUM });
   const sga = ctx.linhasPorBloco.get("sga") ?? [];
-  for (const l of sga) {
-    const ch = chaveLinha("sga", l);
-    const p = ctx.premissaPorLinha.get(l.rotulo_norm);
-    g.linha(ch, { rotulo: l.chave, nota: p ? p.nome : "(sem premissa)", fmt: NUM });
-    g.linha(`${ch}#base`, { rotulo: "    Base Case", fmt: PCT });
-    g.linha(`${ch}#cli`, { rotulo: "    Cliente Case", fmt: PCT });
-    g.linha(`${ch}#str`, { rotulo: "    Stress Case", fmt: PCT });
-  }
+  for (const l of sga) declararContaCS("sga", l);
   g.linha("SGA_PCT", { rotulo: "    % da receita líquida", fmt: PCT });
   g.pular();
 
@@ -1881,7 +2082,7 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     ano: number,
     ant: number,
     cenS: CenSuf | null,
-  ): string => {
+  ): string | null => {
     const ch = chaveLinha(bloco, l);
     const p = ctx.premissaPorLinha.get(l.rotulo_norm);
     // A RAIZ DA SOMBRA É A LINHA ATIVA, e este detalhe é a diferença entre o bloco
@@ -1899,7 +2100,13 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     if (!p) return `=${anterior}`;
 
     if (bloco !== "receita" && p.formula === "pct_de_linha") {
-      return `=${taxaCen(ch, ano, cenS)}*${g.ref(alvoCen("RECEITA_LIQUIDA", cenS), ano)}`;
+      // Taxa ligada a K contas é do GRUPO: a conta leva a parcela dela (`#part`).
+      // Sem saldo para ratear a conta NÃO projeta (branco + nota na linha ativa) —
+      // nunca divisão igual em silêncio.
+      const gr = rateioCS.get(ch);
+      if (gr?.semSaldo) return null;
+      const parte = gr ? `*${g.ref(`${ch}#part`, ano)}` : "";
+      return `=${taxaCen(ch, ano, cenS)}*${g.ref(alvoCen("RECEITA_LIQUIDA", cenS), ano)}${parte}`;
     }
 
     if (bloco !== "receita" && p.formula === "indice_macro" && !painel.get(p.codigo)) {
@@ -2022,6 +2229,12 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
           : v === undefined
             ? `Premissa "${p.nome}" sem valor para ${ano}.`
             : `Premissa "${p.nome}" (${p.origem ?? "digitado"}).`;
+        const gr = rateioCS.get(ch);
+        if (gr && p.formula === "pct_de_linha" && !gr.semSaldo) {
+          g.set(`${ch}#part`, ano, formulaParcela(g, ch, gr.membros.map((o) => chaveLinha(blocoCS(o), o)), ctx.ultimoHist), {
+            fmt: PCT, nota: notaParcela(p, gr, ctx.ultimoHist, "taxa × receita líquida"),
+          });
+        }
         if (p.formula === "pct_de_linha" || p.formula === "indice_macro" || p.formula === "crescimento_composto") {
           g.set(`${ch}#base`, ano,
             doPainel ? `=${g.ref(doPainel, ano)}` : (v === undefined ? null : v / 100),
@@ -2045,6 +2258,15 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
             nota: `Corrigido pela série ${p.codigo} da aba Anual (dado versionado, não digitado). `
               + "Sem painel de premissas, esta conta é IMÓVEL entre cenários — o bloco de "
               + "comparação dos três cenários mostra isso em vez de esconder.",
+          });
+        } else if (gr && p.formula === "pct_de_linha") {
+          g.set(ch, ano, formulaConta(bloco, l, ano, ant!, null), {
+            fmt: NUM,
+            nota: gr.semSaldo
+              ? notaGrupoSemSaldo(p, gr, ctx.ultimoHist,
+                `o bloco de ${bloco === "custo" ? "custos" : "SG&A"} projeta MENOS do que a premissa indica `
+                + "(taxa × receita líquida), pela parte inteira deste grupo.")
+              : "Taxa do GRUPO × receita líquida × parcela histórica desta conta (linha #part).",
           });
         } else {
           g.set(ch, ano, formulaConta(bloco, l, ano, ant!, null), fmtCel);
@@ -2684,10 +2906,59 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
     + "É a mesma separação do Modelo Base.",
   );
   g.pular();
+  // A base de cada conta (ver o comentário longo mais abaixo). Sobe para cá porque o
+  // GRUPO de uma premissa compartilhada só vale entre contas de MESMA base.
+  const nomeBase = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
+    pref === "wc_p" && ehFornecedor(l.chave) ? "custos" : "receita líquida";
+  // `dias_de_giro` ligada a K contas é prazo do GRUPO (ver `gruposRateados`): o
+  // grupo vale `dias/360 × base` e cada conta recebe a parcela histórica dela.
+  const saldoGiro = (pref: "wc_a" | "wc_p") => (l: LinhaModelo) => {
+    const v = valorNaEscala(l, ctx.ultimoHist, ctx.ent.unidade)?.valor ?? 0;
+    return pref === "wc_a" ? v : Math.abs(v);
+  };
+  const rateioWC = new Map<string, GrupoRateado>([
+    ...gruposRateados(ctx, ativos, (l) => chaveLinha("wc_a", l), "dias_de_giro", saldoGiro("wc_a"),
+      (a, b) => nomeBase("wc_a", a) === nomeBase("wc_a", b)),
+    ...gruposRateados(ctx, passivos, (l) => chaveLinha("wc_p", l), "dias_de_giro", saldoGiro("wc_p"),
+      (a, b) => nomeBase("wc_p", a) === nomeBase("wc_p", b)),
+  ]);
+  // O MESMO CÓDIGO EM BASES DIFERENTES (ativo × passivo, fornecedor contra custo × resto contra
+  // receita): somar os grupos não tem sentido e rateá-los entre si seria regra inventada. Ficam
+  // separados e CADA UM projeta os dias inteiros — então o agregado leva N× a premissa. Isso é
+  // dito na célula, com motivo e efeito (regra 1), em vez de passar calado (em produção: PMR em
+  // 16 contas do ativo + 2 do passivo; PMP em 5 do ativo + 59 do passivo).
+  const gruposDoCodigo = new Map<string, Set<string>>();
+  const rotuloGrupoWC = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
+    `${pref === "wc_a" ? "ativo" : "passivo"}/${nomeBase(pref, l)}`;
+  for (const [pref, lista] of [["wc_a", ativos], ["wc_p", passivos]] as const) {
+    for (const l of lista) {
+      const p = ctx.premissaPorLinha.get(l.rotulo_norm);
+      if (!p || p.formula !== "dias_de_giro") continue;
+      if (!gruposDoCodigo.has(p.codigo)) gruposDoCodigo.set(p.codigo, new Set());
+      gruposDoCodigo.get(p.codigo)!.add(rotuloGrupoWC(pref, l));
+    }
+  }
+  const avisoBases = (pref: "wc_a" | "wc_p", l: LinhaModelo): string => {
+    const p = ctx.premissaPorLinha.get(l.rotulo_norm);
+    const gs = p && p.formula === "dias_de_giro" ? gruposDoCodigo.get(p.codigo) : undefined;
+    if (!p || !gs || gs.size < 2) return "";
+    return `\n\nATENÇÃO: a premissa ${p.codigo} está aplicada a ${gs.size} grupos com bases diferentes `
+      + `(${[...gs].join(" e ")}); cada grupo projeta os dias INTEIROS, então o circulante projetado `
+      + `carrega ${gs.size}× a premissa — revise o vínculo. Esta conta pertence ao grupo `
+      + `${rotuloGrupoWC(pref, l)}.`;
+  };
+  // As linhas extras só existem para conta de grupo COM saldo; sem saldo a conta fica em branco.
+  const linhasDoGrupo = (ch: string) => {
+    const gr = rateioWC.get(ch);
+    if (!gr || gr.semSaldo) return;
+    g.linha(`${ch}#grupo`, { rotulo: "    dias do GRUPO (premissa)", fmt: NUM2 });
+    g.linha(`${ch}#part`, { rotulo: "    parcela da conta no grupo", fmt: PCT });
+  };
   g.linha(null, { rotulo: "ATIVO CIRCULANTE OPERACIONAL", bloco: true });
   for (const l of ativos) {
     const ch = chaveLinha("wc_a", l);
     g.linha(ch, { rotulo: l.chave, fmt: NUM });
+    linhasDoGrupo(ch);
     g.linha(`${ch}#dias`, { rotulo: "    dias de giro (base)", fmt: NUM2 });
     g.linha(`${ch}#diasStr`, { rotulo: "    dias de giro (stress)", fmt: NUM2 });
     // A SOMBRA POR CENÁRIO, no mesmo desenho do `CHECK_SOMBRA` da aba de receita
@@ -2703,6 +2974,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   for (const l of passivos) {
     const ch = chaveLinha("wc_p", l);
     g.linha(ch, { rotulo: l.chave, fmt: NUM });
+    linhasDoGrupo(ch);
     g.linha(`${ch}#dias`, { rotulo: "    dias de giro (base)", fmt: NUM2 });
     g.linha(`${ch}#diasStr`, { rotulo: "    dias de giro (stress)", fmt: NUM2 });
     for (const [suf] of CENARIOS_SUF) g.linha(`${ch}#v_${suf}`, { rotulo: `    sombra — ${suf}`, fmt: NUM });
@@ -2767,8 +3039,6 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   // RECEITA LÍQUIDA.
   const baseDe = (pref: "wc_a" | "wc_p", l: LinhaModelo, ano: number) =>
     pref === "wc_p" && ehFornecedor(l.chave) ? g.ref("BASE_COGS", ano) : g.ref("NET_REV", ano);
-  const nomeBase = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
-    pref === "wc_p" && ehFornecedor(l.chave) ? "custos" : "receita líquida";
 
   for (const ano of ctx.anos) {
     const hist = !g.ehProjetado(ano);
@@ -2814,13 +3084,44 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
         }
         const p = ctx.premissaPorLinha.get(l.rotulo_norm);
         const usaPremissa = p && p.formula === "dias_de_giro" && p.valores[String(ano)] !== undefined;
-        g.set(`${ch}#dias`, ano, usaPremissa ? p!.valores[String(ano)] : `=${g.ref(`${ch}#dias`, ant!)}`, {
-          fmt: DIAS, fill: FILL_INPUT,
-          nota: usaPremissa
-            ? `Premissa "${p!.nome}" (${p!.origem ?? "digitado"}). Aplicada sobre ${nomeBase(pref, l)}.`
-            : "Sem premissa de dias de giro para esta conta: mantém os dias do período anterior. "
-              + "É a hipótese conservadora — o giro não melhora sozinho.",
-        });
+        const gr = rateioWC.get(ch);
+        const aviso = avisoBases(pref, l);
+        if (gr?.semSaldo && p) {
+          // Sem saldo realizado no grupo não há como ratear: BRANCO + nota (motivo e
+          // efeito), nunca zero medido nem divisão igual em silêncio.
+          const nota = notaGrupoSemSaldo(p, gr, ctx.ultimoHist,
+            `o capital de giro projetado fica MENOR que o da premissa (dias/360 × ${nomeBase(pref, l)}), `
+            + "pela parte inteira deste grupo." + aviso);
+          g.set(`${ch}#dias`, ano, null, { fmt: DIAS, fill: FILL_INPUT, nota });
+          g.set(ch, ano, null, { fmt: NUM, nota });
+          continue;
+        }
+        if (gr && p && usaPremissa) {
+          // Os dias da conta = dias do GRUPO × parcela dela; a fórmula de `ch`, o Stress
+          // e as sombras seguem lendo `#dias` como antes (um ponto só).
+          g.set(`${ch}#grupo`, ano, p.valores[String(ano)], {
+            fmt: NUM2, fill: FILL_INPUT,
+            nota: `Premissa "${p.nome}" (${p.origem ?? "digitado"}): dias do GRUPO de ${gr.membros.length} `
+              + `contas, aplicados sobre ${nomeBase(pref, l)} UMA vez.${aviso}`,
+          });
+          g.set(`${ch}#part`, ano, formulaParcela(g, ch,
+            gr.membros.map((o) => chaveLinha(pref, o)), ctx.ultimoHist), {
+            fmt: PCT, nota: notaParcela(p, gr, ctx.ultimoHist, `dias/360 × ${nomeBase(pref, l)}`),
+          });
+          g.set(`${ch}#dias`, ano, `=${g.ref(`${ch}#grupo`, ano)}*${g.ref(`${ch}#part`, ano)}`, {
+            fmt: DIAS,
+            nota: "Dias do grupo × parcela histórica desta conta. A soma das contas do grupo dá os "
+              + "dias do grupo." + aviso,
+          });
+        } else {
+          g.set(`${ch}#dias`, ano, usaPremissa ? p!.valores[String(ano)] : `=${g.ref(`${ch}#dias`, ant!)}`, {
+            fmt: DIAS, fill: FILL_INPUT,
+            nota: usaPremissa
+              ? `Premissa "${p!.nome}" (${p!.origem ?? "digitado"}). Aplicada sobre ${nomeBase(pref, l)}.${aviso}`
+              : "Sem premissa de dias de giro para esta conta: mantém os dias do período anterior. "
+                + `É a hipótese conservadora — o giro não melhora sozinho.${aviso}`,
+          });
+        }
         g.set(`${ch}#diasStr`, ano, `=${g.ref(`${ch}#dias`, ano)}*(1+${refStress()}*${pref === "wc_a" ? "1" : "-1"})`, {
           fmt: DIAS,
           nota: pref === "wc_a"
@@ -3028,10 +3329,17 @@ function abaImobilizado(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   g.linha("TOTAL_FA", { rotulo: "Imobilizado líquido total", negrito: true, topo: true, fmt: NUM });
   g.pular();
   g.linha(null, { rotulo: "CAPEX", bloco: true });
+  // `% da receita líquida` ligada a K classes é taxa do GRUPO de classes (ver
+  // `gruposRateados`): cada classe leva a parcela dela no imobilizado realizado.
+  const rateioCapex = gruposRateados(ctx, classes, (l) => chaveLinha("capex", l), "pct_de_linha",
+    (l) => valorNaEscala(l, ctx.ultimoHist, ctx.ent.unidade)?.valor ?? 0);
   for (const l of classes) {
     const ch = chaveLinha("capex", l);
     g.linha(ch, { rotulo: `Capex — ${l.chave}`, fmt: NUM });
     g.linha(`${ch}#pct`, { rotulo: "    % da receita líquida (base)", fmt: PCT });
+    if (rateioCapex.get(ch) && !rateioCapex.get(ch)!.semSaldo) {
+      g.linha(`${ch}#part`, { rotulo: "    parcela da classe no grupo da premissa", fmt: PCT });
+    }
   }
   g.linha("TOTAL_CAPEX", { rotulo: "CAPEX total", negrito: true, topo: true, fmt: NUM });
   g.linha("CAPEX_PCT", { rotulo: "    % da receita líquida", fmt: PCT });
@@ -3068,10 +3376,25 @@ function abaImobilizado(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
             + "rápido de fazer um modelo fechar bonito e não acontecer."
           : `Premissa "${p!.nome}".`,
       });
+      const grCx = rateioCapex.get(chCx);
+      if (grCx && p && !grCx.semSaldo) {
+        g.set(`${chCx}#part`, ano,
+          formulaParcela(g, chFa, grCx.membros.map((o) => chaveLinha("fa", o)), ctx.ultimoHist),
+          { fmt: PCT, nota: notaParcela(p, grCx, ctx.ultimoHist, "taxa × receita líquida") });
+      }
       g.set(chCx, ano,
-        `=CHOOSE(${cen},${g.ref(`${chCx}#pct`, ano)},${g.ref(`${chCx}#pct`, ano)},`
-        + `${g.ref(`${chCx}#pct`, ano)}*(1-${refStress()}))*${g.externa("Revenues, COGS & SG&A", gRec, "RECEITA_LIQUIDA", ano)}`,
-        { fmt: NUM, nota: "No Stress o capex é CORTADO (é a primeira coisa que se corta numa crise de caixa)." });
+        grCx?.semSaldo ? null
+          : `=CHOOSE(${cen},${g.ref(`${chCx}#pct`, ano)},${g.ref(`${chCx}#pct`, ano)},`
+            + `${g.ref(`${chCx}#pct`, ano)}*(1-${refStress()}))*${g.externa("Revenues, COGS & SG&A", gRec, "RECEITA_LIQUIDA", ano)}`
+            + (grCx ? `*${g.ref(`${chCx}#part`, ano)}` : ""),
+        {
+          fmt: NUM,
+          nota: grCx?.semSaldo && p
+            ? notaGrupoSemSaldo(p, grCx, ctx.ultimoHist,
+              "o CAPEX projeta MENOS do que a premissa indica (taxa × receita líquida), pela parte inteira "
+              + "deste grupo de classes.")
+            : "No Stress o capex é CORTADO (é a primeira coisa que se corta numa crise de caixa).",
+        });
       // RATEIO EXAUSTIVO DA DEPRECIAÇÃO — e é uma correção que a álgebra do
       // balanço exige, não estética.
       //
@@ -3546,10 +3869,22 @@ function abaDivida(wb: ExcelJS.Workbook, ctx: Ctx, gAnual: Grade, gRec: Grade): 
     // mapa). Aqui ano sem publicação fica VAZIO (nunca texto) e o consumo tem
     // guarda `N()`, que trata vazio como zero e não propaga erro.
     const curva = refCDI ? `=N(${refCDI})` : null;
+    // O ANO SEM CURVA diz o EFEITO. Medido em 01/10/2026: CDI vazio em 2027-2030 zerava
+    // TAXA_REVOLVER, TAXA_APLIC, EMISSAO_TAXA, NM_TAXA e a TAXA_MEDIA sem juros no mapa —
+    // revolver de ~21 mi grátis — e a nota não dizia nada (afirmava "projetado Focus").
+    const semCurva = refCDI !== null
+      && gAnual.celula(gAnual.n("macro:CDI"), gAnual.colDoAno(ano)).value == null;
     g.set("CURVA_CDI", ano, curva ?? 0, {
       fmt: PCT2,
-      nota: curva
-        ? "Curva de referência da aba Anual (realizado BCB, projetado Focus), em pontos percentuais "
+      nota: semCurva
+        ? `Sem curva de CDI para ${ano}: nem CDI realizado de 12 meses, nem Selic (Focus ou realizada) para `
+          + "usar de proxy. revolver/aplicação/new money cobram juro ZERO neste ano, e a taxa média da "
+          + "dívida também quando o mapa não traz juros — rever antes de comitê."
+        : curva
+        ? "Curva de referência da aba Anual, em pontos percentuais: CDI realizado de 12 meses nos anos "
+          + "fechados e, nos projetados, uma APROXIMAÇÃO a partir das metas de Selic de fim de ano do Focus "
+          + "(realizado composto com a meta no ano corrente; média das metas de t-1 e t nos seguintes; o Focus "
+          + "NÃO publica CDI nem a taxa acumulada — ver a nota da célula na aba Anual) "
           + "— daí o /100. O N() trata ano sem publicação como zero em vez de propagar erro: é a "
           + "guarda que falta no Modelo Base, onde um 'nd' na série da Libor apagou o resultado de "
           + "11 anos de projeção."
