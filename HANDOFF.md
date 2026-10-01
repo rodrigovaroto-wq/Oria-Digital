@@ -119,7 +119,7 @@ com o processo certo: receita bruta 114,76/113,38 mi, resíduo ~0, EBITDA de cen
 | `7ad782c`, `9f096c5` | Guarda de hierarquia: aging certo acusado → regra de três → REDESENHO (só estrutura inequívoca; cala na dúvida). Corpus 1.387 docs: 0 disparos novos, 0 vereditos invertidos | republicar |
 | `5f40d21` | Portão 2: helper único do veredito, botão desabilitado com texto visível, 503 sem erro cru | merge |
 | `fa6ccda`, `7b9e820`, `3b803cb` | CI em 6 jobs paralelos + agregador `suites` (falha se qualquer job não for `success`, inclusive cancelado) | — |
-| `bf19d42` | **Export: CDI parcial (9 meses) virava taxa anual e, sem Focus de CDI, a projeção cobrava juro ZERO** — achado no E2E. Krauspenhar real: curva 2027-30 0 → 12/10,5/10/10%; juros do revolver 0 → 2,64–4,21 mi/ano; revolver 2030 36,16 → 50,02 mi | merge |
+| `bf19d42`, `7f49566` | **Export: CDI parcial (9 meses) virava taxa anual e, sem Focus de CDI, a projeção cobrava juro ZERO** — achado no E2E. A revisão pegou que copiar a Selic do Focus (META de fim de ano) subestima o acumulado num ciclo de corte: agora compõe o realizado parcial com a meta e usa a média das metas t-1/t. Krauspenhar real: CDI 2026-30 9,71/0/0/0/0 → 13,30/12,88/11,25/10,25/10; juros do revolver 0 → 2,83–4,26 mi/ano; revolver 2030 36,16 → 50,55 mi | merge |
 | `a6d5231`, `9d692a1`, `466bc32` | Sonar (complexidade, template aninhado, duplicação 5,3% do Quality Gate), sem mudar comportamento | — |
 | grafo | derivado regerado a cada leva | — |
 

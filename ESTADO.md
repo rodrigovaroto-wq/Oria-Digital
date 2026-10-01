@@ -21,8 +21,8 @@
 >
 > **Validação de 01/10** (HANDOFF S104 §3b): suíte local 27/27, CI (6 jobs + agregador) e Sonar
 > verdes; revisão da guarda de hierarquia redesenhada (`9f096c5`): nada sobreviveu — a republicação
-> está liberada. O E2E do portal do branch no caso de teste achou e o `bf19d42` corrigiu o CDI que
-> cobrava juro ZERO de 2027 em diante (Krauspenhar: juros do revolver 0 → 2,64–4,21 mi/ano).
+> está liberada. O E2E do portal do branch no caso de teste achou e o `bf19d42`/`7f49566` corrigiram o CDI
+> que cobrava juro ZERO de 2027 em diante (Krauspenhar: juros do revolver 0 → 2,83–4,26 mi/ano).
 
 ## SESSÃO 103 (30/09/2026) — produção em `0195`, ingestão destravada, mandato de teste ponta a ponta no ar
 
