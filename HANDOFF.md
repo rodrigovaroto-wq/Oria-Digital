@@ -43,14 +43,20 @@ só como referência — não precisa ler tudo pra continuar, comece por aqui.
   aceito: "Adiantamentos de clientes" 2.072 do Vertentes recebe aviso "pode estar somando".
   Teto declarado: bloco grande, sem total informado e com uma única via exata ainda pode remover
   por coincidência (força bruta no Krauspenhar: nenhuma).
-- **Aberto — dívida de longo prazo do Krauspenhar** (4,18 mi 2024, 9,54 mi 2025): não chega a
-  `ESP_DIVIDA_LP` e vira só o plug da reconciliação do PNC (sem juros nem amortização). Hipótese
-  por leitura de código, NÃO medida: `blocoDaLinha` (modelo-institucional.ts ~719) manda a linha
-  INTEIRA para o bloco `divida` quando `documentos` inclui MAPA_DIVIDA, e lá `doMapa` só aceita
-  `/saldo|principal/`; correção candidata: rotear para `divida` só quando TODOS os documentos
-  forem MAPA_DIVIDA. Bloqueio: o agente do portal teve a leitura de produção negada
-  ("Production Reads"); medir exige `fn_linhas_para_modelagem` do caso para rótulos com
-  emprestimo/financiamento/capital de giro.
+- **Dívida de longo prazo do Krauspenhar — CORRIGIDA no PR #249 (`d7db504`)**, com a leitura de
+  produção liberada pelo dono. Três causas: (1) o PNC dos Balanços tem UMA conta, igual ao total
+  "Passivo Não Circulante" (que vem com secao/secao_canonica nulas), e `detectarSubtotaisPorOrdem`
+  a tomava por subtotal do próprio total — apagada em 2024 e 2025 (a hipótese anterior,
+  `blocoDaLinha`/MAPA_DIVIDA, estava ERRADA: o Mapa nem entra, `doMapa=0`); (2) "Outras
+  obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)" era dívida
+  bancária inteira (4,66 mi em 2024); (3) "CAPITAL DE GIRO BANCO X" não era dívida. No real:
+  Dívida LP 0/0 → 4,18/9,54 mi; CP 2024 20,65 → 15,99; resíduo do PNC → 0; despesa financeira
+  2026 2,39 → 3,01 mi (a mensagem do commit diz 1,75: era de um build intermediário);
+  **auditar-xlsx do Krauspenhar 11/11 pela primeira vez**. A primeira versão da causa 1 passava
+  no teste e falhava no real (o arranjo trazia a seção no total) — o (39r) foi refeito no
+  formato medido. Para o dono: com prazo implícito de 1,7 ano a dívida LP vence até 2027, e
+  CP + revolver sobe de 11,5 para 39,8 mi entre 2026 e 2030. Em aberto (decisão do dono):
+  "Capital de giro" SEM credor nos books Canastra/Vertentes segue como giro.
 
 ### 0. Estado de produção agora (medido só leitura, 30/09 ~22h40 UTC; reconferido 01/10 ~11h30 UTC)
 
