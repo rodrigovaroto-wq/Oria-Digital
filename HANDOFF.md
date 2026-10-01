@@ -127,6 +127,16 @@ RECONFIRMAÇÃO desses dois pelo revisor NÃO aconteceu: o agente parou no limit
 `campo_extraido` de produção) sobre a lib nova e revise `012087e` (sinais opostos no mesmo grupo
 custo+SG&A). Até lá, a republicação do n8n está liberada pelo achado 1, mas sem a segunda leitura.
 
+**A guarda de hierarquia (`1b440ac`) bateu na regra de três correções.** Cada correção abriu um
+falso positivo novo em documento CERTO, achado pela revisão sobre o corpus de produção: Balanço 2025
+Krauspenhar (corrigido em `507915b`) → aging do Canastra "1 a 30 dias" (`7ad782c`) → DFC da Fort Lub,
+cujas seções de topo sem desdobramento ("4 -", "5 -", "6 -") eram adotadas como filhas de "3.4". Em
+vez de um quarto remendo, o desenho mudou (01/10): a guarda só avalia sintética de estrutura
+INEQUÍVOCA e se cala na dúvida — perder detecção é aceito para não acusar documento certo. E a
+medição passou a ser a MUDANÇA DE VEREDITO por sintética no corpus, não só a contagem de disparos
+(5 documentos mudaram de veredito sem disparar, e por isso a medição da `7ad782c` não viu).
+**Não republique a ingestão com a guarda antes de o desenho novo estar medido e revisado.**
+
 ### 4. O QUE O DONO FAZ À MÃO (modo manual — o automático recusa)
 
 Na ordem. Cada migration numa chamada (nenhuma tem `alter type`):
