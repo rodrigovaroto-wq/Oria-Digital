@@ -205,6 +205,21 @@ test('cada workflow publicado escolhe o SEU arquivo do repositório, pelo `name`
   }
 });
 
+test('MEDIDO em produção (01/10/2026): o nome PUBLICADO de cada workflow acha o seu arquivo', () => {
+  // Os nomes abaixo são os que `GET /api/v1/workflows` devolveu da instância real. O dono
+  // renomeou dois deles no editor ("Oria SARF — …") e o repositório ficou com o nome antigo:
+  // o conferidor respondia "não sei contra qual conferir" e esses dois nunca eram conferidos.
+  const publicados = {
+    'Oria SARF — Reportar Erros': 'N8N/workflow.erros.json',
+    'Oria SARF — Índices Macroeconômicos': 'N8N/workflow.macro.json',
+    'Oria — SARF (Sistema Automático de Reestruturação Financeira)': 'N8N/workflow.e1-ingestao.json',
+    'Oria — Diagnostico da conta OpenAI (1 token, custo ~zero)': 'N8N/workflow.diagnostico-ia.json',
+  };
+  for (const [nome, caminho] of Object.entries(publicados)) {
+    assert.equal(escolherDoRepo({ name: nome })?.caminho, caminho, `"${nome}" não achou ${caminho}`);
+  }
+});
+
 test('nome desconhecido devolve null — o conferidor NUNCA escolhe um alvo por padrão', () => {
   // É esta asserção que impede o retorno do defeito: um palpite produz uma lista de achados que
   // parece deriva da publicação e é só a diferença entre dois workflows distintos.

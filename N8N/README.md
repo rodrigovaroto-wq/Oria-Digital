@@ -13,7 +13,7 @@ cuidado" sobre um processamento que já morreu.
 
 1. importar `N8N/workflow.erros.json`;
 2. abrir o **Intake Oria — E1** → menu ⋯ → **Settings** → **Error Workflow** → escolher
-   *Oria — Reportar Erros*;
+   *Oria SARF — Reportar Erros*;
 3. salvar.
 
 Sem esse passo, só a recusa de orçamento chega ao portal (ela tem ramo próprio no workflow

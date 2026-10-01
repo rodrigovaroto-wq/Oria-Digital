@@ -19,7 +19,7 @@
 // COMO LIGAR (uma vez, e o passo é do dono — ver `N8N/README.md`):
 //   1. importar `workflow.erros.json` no n8n;
 //   2. abrir o `Intake Oria — E1`, menu ⋯ → Settings → **Error Workflow** →
-//      escolher "Oria — Reportar Erros";
+//      escolher "Oria SARF — Reportar Erros";
 //   3. salvar. A partir daí toda falha daquele workflow cai aqui.
 //
 // O QUE ELE FAZ, e o que deliberadamente NÃO faz: grava a falha e para. Não
@@ -132,7 +132,13 @@ const connections = {
 posicionar(nodes, connections);
 
 const workflow = {
-  name: 'Oria — Reportar Erros',
+  // O NOME É O QUE ESTÁ PUBLICADO (medido em 01/10/2026 pela API do n8n): o dono
+  // renomeou no editor para "Oria SARF — …", e o repositório seguiu com o nome
+  // antigo. O custo era duplo: `conferir-publicado.mjs` escolhe o arquivo pelo
+  // nome e devolvia "não sei contra qual conferir" (o workflow nunca era
+  // conferido), e o PUT da republicação leva o `name` — republicar desfaria o
+  // nome que o dono deu.
+  name: 'Oria SARF — Reportar Erros',
   nodes,
   connections,
   settings: { executionOrder: 'v1' },
