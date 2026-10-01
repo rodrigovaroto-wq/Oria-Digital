@@ -161,6 +161,9 @@ export interface LinhaModelo {
    * branco sem explicação é ausência apresentada como dado (regra 1).
    */
   semValorPorCabecalho?: Record<string, string>;
+  /** Marcado por `contexto()`: exercícios em que a busca de filhas desistiu (teto) e a linha FICOU
+   * na soma sem ter sido verificada (ano -> aviso com o efeito). Vai no fim da nota da célula. */
+  avisoDeCabecalho?: Record<string, string>;
   /**
    * A PROVENIÊNCIA DE CADA CÉLULA HISTÓRICA, por ano: arquivo, página, confiança e
    * aceite (`0125`).
@@ -666,6 +669,13 @@ function frasesDeProveniencia(l: LinhaModelo, ano: number): string {
 /** Valor histórico já na escala do modelo, com o aviso quando houve conversão. */
 function valorNaEscala(l: LinhaModelo, ano: number, unidadeModelo: string):
   { valor: number; nota: string } | null {
+  const r = valorNaEscalaSemAviso(l, ano, unidadeModelo);
+  const aviso = l.avisoDeCabecalho?.[String(ano)];
+  return r && aviso ? { ...r, nota: `${r.nota}\n\n${aviso}` } : r;
+}
+
+function valorNaEscalaSemAviso(l: LinhaModelo, ano: number, unidadeModelo: string):
+  { valor: number; nota: string } | null {
   const bruto = l.valores[String(ano)];
   if (bruto === undefined) return null;
   const f = fatorDeEscala(l.unidade, unidadeModelo);
@@ -1143,7 +1153,7 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   // O PRINCÍPIO ÚNICO (redesenho depois de três remendos seguidos na mesma lógica —
   // 3f40571, 45c8df2 e o que viria): uma linha só deixa de somar NUM EXERCÍCIO quando, NAQUELE
   // exercício, outras contas do mesmo bloco a EXPLICAM — duas ou mais delas somam o valor dela
-  // (centavo a centavo). Sem filhas que a expliquem, ela é conta-folha naquele exercício e fica.
+  // (dentro da folga de arredondamento da série). Sem filhas que a expliquem, ela é conta-folha naquele exercício e fica.
   //
   //   1. o rótulo tem de ser EXATAMENTE um nome de grupo (lista fechada abaixo) —
   //      "Estoques" entra, "Estoques de matéria-prima" não;
@@ -1176,6 +1186,21 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     "capital social", "reservas", "reservas de lucros", "reservas de capital",
     "ajustes de avaliacao patrimonial",
   ]);
+  // SUBGRUPOS CONHECIDOS: um nome de grupo só conta como FILHA de outro se está aqui sob ele. Dois
+  // nomes de grupo quaisquer são IRMÃOS (Vertentes: "Clientes" 26.000 = "Caixa" 8.000 +
+  // "Estoques" 18.000 por acaso), e só a hierarquia que o balanço brasileiro de fato imprime
+  // separa uma coisa da outra. Teto: sob um cabeçalho fora desta tabela, filha com nome de grupo
+  // não o explica; o cabeçalho fica na soma e o excesso aparece na reconciliação.
+  const SUBGRUPOS: Record<string, string[]> = {
+    "disponivel": ["caixa e equivalentes", "caixa e equivalentes de caixa", "aplicacoes financeiras", "titulos e valores mobiliarios"],
+    "disponibilidades": ["caixa e equivalentes", "caixa e equivalentes de caixa", "aplicacoes financeiras", "titulos e valores mobiliarios"],
+    "contas a receber": ["clientes", "outros creditos"],
+    "reservas": ["reservas de lucros", "reservas de capital"],
+    "obrigacoes tributarias": ["tributos a recolher", "impostos a recolher"],
+    "obrigacoes fiscais": ["tributos a recolher", "impostos a recolher"],
+    "emprestimos e financiamentos": ["financiamentos"],
+    "ativo permanente": ["investimentos", "imobilizado", "intangivel"],
+  };
   const ANCORA_DO_BLOCO: Partial<Record<BlocoModelo, string>> = {
     ativo_circulante: "DOC_AC", ativo_nao_circulante: "DOC_ANC",
     passivo_circulante: "DOC_PC", passivo_nao_circulante: "DOC_PNC",
@@ -1197,33 +1222,69 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     }));
   };
   /**
-   * Duas ou mais contas de `pool` cujos valores somam `alvo` (±0,5 — a mesma folga da checagem de
-   * transposição), ou `null`. Soma de subconjuntos por programação dinâmica sobre centavos.
-   * TETO: 20.000 somas distintas; passando disso a busca desiste e o cabeçalho FICA na soma
-   * (o excesso aparece na reconciliação). Um bloco real tem dezenas de contas, não milhares.
+   * As contas de `pool` (duas ou mais) cujos valores somam `alvo`, com o NÚMERO DE SUBCONJUNTOS
+   * que o fazem (`vias`) — ou `null` (nenhuma soma) ou `"teto"` (a busca desistiu). Soma de subconjuntos por programação dinâmica sobre centavos, PODADA:
+   * um estado que, somando tudo o que resta com o sinal certo, não alcança mais a janela do
+   * alvo morre — com saldos do mesmo sinal as somas ficam em [0, alvo]. Sem a poda as somas
+   * distintas crescem 2^n e ~15 contas com centavos estouravam o teto antigo (medido: 32
+   * desistências no corpus, Vertentes PC com 20–21 contas, e um circulante de 17 contas que
+   * somava 600 a mais, calado). O teto restante (200.000 estados) só vale para blocos de dezenas
+   * de contas com sinais mistos e grandes.
+   *
+   * UNICIDADE. Com muitas contas, ALGUM subconjunto soma qualquer valor por acaso (15 contas de
+   * ~500 em milhar: dezenas de acertos para 5.000 ±2). Uma estrutura de verdade é uma só: com
+   * mais de uma via, só se remove se o TOTAL INFORMADO corrobora (o bloco sem a linha fecha nele,
+   * ver o chamador); senão a linha fica e o aviso diz que a explicação é ambígua.
+   *
+   * FOLGA. Em série declarada em mil ou maior o subtotal vem arredondado (Provisões 4.000 =
+   * 1.500 + 2.501): a folga é 0,5 por conta somada, com teto de 2 — mas uma soma que só fecha
+   * COM a folga (`exatas` = 0) nunca remove sozinha: precisa do total informado (ver o
+   * chamador). Medido: com folga livre, "Adiantamentos de clientes" 2.072, uma FOLHA do PC 2024
+   * do Vertentes, saía por coincidência (1.218 + 68 + 787 = 2.073) em 8 execuções da suíte.
+   * Em reais, ±0,5 fixo.
    */
-  const filhasQueSomam = (alvo: number, pool: Array<{ l: LinhaModelo; v: number }>): LinhaModelo[] | null => {
-    const TETO = 20000;
+  const filhasQueSomam = (alvo: number, bruto: Array<{ l: LinhaModelo; v: number }>, arredondada: boolean):
+    { filhas: LinhaModelo[]; vias: number; exatas: number } | null | "teto" => {
+    const TETO = 200000;
+    const pool = [...bruto].sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+    const vC = pool.map((x) => Math.round(x.v * 100));
+    const pos: number[] = new Array(pool.length + 1).fill(0);
+    const neg: number[] = new Array(pool.length + 1).fill(0);
+    for (let i = pool.length - 1; i >= 0; i--) {
+      pos[i] = pos[i + 1] + Math.max(vC[i], 0);
+      neg[i] = neg[i + 1] + Math.min(vC[i], 0);
+    }
     const alvoC = Math.round(alvo * 100);
-    let estados = new Map<number, number[]>([[0, []]]);
+    const janela = arredondada ? 200 : 50;
+    const folgaC = (k: number) => (arredondada ? Math.min(50 * (k + 1), 200) : 50);
+    const viva = (soma: number, i: number) => soma + pos[i] >= alvoC - janela && soma + neg[i] <= alvoC + janela;
+    let estados = new Map<number, { idx: number[]; vias: number }>([[0, { idx: [], vias: 1 }]]);
     for (let i = 0; i < pool.length; i++) {
-      const vC = Math.round(pool[i].v * 100);
-      const novos = new Map(estados);
-      for (const [soma, idx] of estados) {
-        const ns = soma + vC;
-        const atual = novos.get(ns);
-        if (atual === undefined || atual.length < idx.length + 1) novos.set(ns, [...idx, i]);
+      const novos = new Map<number, { idx: number[]; vias: number }>();
+      const somar = (soma: number, idx: number[], vias: number) => {
+        const atual = novos.get(soma);
+        if (!atual) { novos.set(soma, { idx, vias }); return; }
+        atual.vias += vias;
+        if (idx.length > atual.idx.length) atual.idx = idx;
+      };
+      for (const [soma, { idx, vias }] of estados) {
+        if (viva(soma, i + 1)) somar(soma, idx, vias);
+        const ns = soma + vC[i];
+        if (viva(ns, i + 1)) somar(ns, [...idx, i], vias);
       }
       estados = novos;
-      if (estados.size > TETO) return null;
+      if (estados.size > TETO) return "teto";
     }
-    for (let d = 0; d <= 50; d++) {
-      for (const k of d === 0 ? [alvoC] : [alvoC - d, alvoC + d]) {
-        const idx = estados.get(k);
-        if (idx && idx.length >= 2) return idx.map((i) => pool[i].l);
-      }
+    let vias = 0; let exatas = 0;
+    let idxExato: number[] | null = null; let idxFolgado: number[] | null = null;
+    for (const [soma, e] of estados) {
+      if (e.idx.length === 0 || Math.abs(soma - alvoC) > folgaC(e.idx.length)) continue;
+      vias += e.vias;
+      if (Math.abs(soma - alvoC) <= 50) { exatas += e.vias; if (e.idx.length >= 2) idxExato = e.idx; }
+      else if (e.idx.length >= 2) idxFolgado = e.idx;
     }
-    return null;
+    const idxAchado = idxExato ?? idxFolgado;
+    return idxAchado ? { filhas: idxAchado.map((j) => pool[j].l), vias, exatas } : null;
   };
   for (const ano of [...ent.anosHistoricos].sort((a, b) => b - a)) {
     const anoS = String(ano);
@@ -1236,6 +1297,7 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
           || CABECALHOS_DE_GRUPO.has(chaveDeAncora(l.rotulo_norm)))
         .sort((a, b) => Math.abs(valorDe(b)) - Math.abs(valorDe(a)));
       const removidas = new Map<LinhaModelo, string>();
+      const avisos = new Map<LinhaModelo, string>();
       for (const c of candidatos) {
         const v = valorDe(c);
         if (v === 0) continue;
@@ -1247,29 +1309,49 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
         // um cabeçalho de grupo é a SOMA de vários componentes, e coincidir no
         // centavo com um deles é assinatura de transposição, não de agrupamento.
         if (lista.some((o) => o !== c && Math.abs(valorDe(o) - v) < 0.5)) continue;
-        // FILHA NÃO É NOME DE GRUPO. Sem esta guarda a aritmética casa por acaso: no Vertentes
-        // (assert do modelo base) "Clientes" 26.000 = "Caixa e equivalentes de caixa" 8.000 +
-        // "Estoques" 18.000, e a conta de verdade saía do circulante (17 remoções erradas na
-        // suíte, medidas contra o 45c8df2). Duas contas que são, elas mesmas, nomes de grupo são
-        // IRMÃS do candidato, não componentes dele. Teto: um componente que tenha nome de grupo
-        // ("Reservas de lucros" sob "Reservas") não explica ninguém — o cabeçalho fica na soma e o
-        // excesso aparece na reconciliação, que é o erro visível e não o calado.
-        const ehNomeDeGrupo = (o: LinhaModelo) => CABECALHOS_DE_GRUPO.has(chaveDeAncora(o.chave))
-          || CABECALHOS_DE_GRUPO.has(chaveDeAncora(o.rotulo_norm));
+        // FILHA COM NOME DE GRUPO só se for SUBGRUPO CONHECIDO deste candidato (ver SUBGRUPOS):
+        // sem isso a aritmética casa por acaso entre irmãs — no Vertentes "Clientes" 26.000 =
+        // "Caixa e equivalentes de caixa" 8.000 + "Estoques" 18.000, e a conta de verdade saía do
+        // circulante (17 remoções erradas na suíte). Disponível = Caixa + Aplicações, Reservas =
+        // Reservas de lucros + Reservas de capital, Contas a receber = Clientes + Outros créditos
+        // continuam sendo explicados.
+        const nomesDe = (o: LinhaModelo) => [chaveDeAncora(o.chave), chaveDeAncora(o.rotulo_norm)];
+        const subDoCandidato = new Set(nomesDe(c).flatMap((n) => SUBGRUPOS[n] ?? []));
+        const ehIrma = (o: LinhaModelo) => nomesDe(o).some((n) => CABECALHOS_DE_GRUPO.has(n))
+          && !nomesDe(o).some((n) => subDoCandidato.has(n));
         const pool = lista
-          .filter((o) => o !== c && !removidas.has(o) && valorDe(o) !== 0 && !ehNomeDeGrupo(o))
+          .filter((o) => o !== c && !removidas.has(o) && valorDe(o) !== 0 && !ehIrma(o))
           .map((o) => ({ l: o, v: valorDe(o) }));
-        const filhas = filhasQueSomam(v, pool);
-        if (!filhas) continue;
-        const soma = filhas.reduce((t, f) => t + valorDe(f), 0);
+        const filhas = filhasQueSomam(v, pool, /mil|milh/i.test(c.unidade ?? "") && !/^unidade/i.test(c.unidade ?? ""));
         const informado = ancoras.get(ANCORA_DO_BLOCO[bloco]!)?.valores[anoS];
-        removidas.set(c, `Cabeçalho de grupo: em ${anoS}, ${filhas.map((f) => f.chave).join(" + ")} somam `
-          + `${soma.toLocaleString("pt-BR")}, exatamente o valor desta linha (${v.toLocaleString("pt-BR")}) — ela é o `
+        const somaDoBloco = lista.reduce((t, o) => t + (removidas.has(o) ? 0 : valorDe(o)), 0);
+        const corroborado = typeof informado === "number" && informado !== 0
+          && Math.abs(somaDoBloco - v - informado) <= Math.abs(informado) * 0.005;
+        const precisaCorroborar = filhas !== null && filhas !== "teto" && (filhas.vias > 1 || filhas.exatas === 0);
+        if (filhas === "teto" || (precisaCorroborar && !corroborado && filhas.vias > 1)) {
+          avisos.set(c, `Cabeçalho de grupo NÃO verificado em ${anoS}: `
+            + (filhas === "teto"
+              ? `a busca de contas que somem ${v.toLocaleString("pt-BR")} desistiu por excesso de combinações. `
+              : `mais de um conjunto de contas do bloco soma ${v.toLocaleString("pt-BR")} (coincidência, não estrutura) `
+                + "e o total informado não corrobora a remoção. ")
+            + "Efeito: a linha ficou na soma do modelo; se for o total de um grupo, o bloco está dobrado "
+            + "por este valor — confira a linha de reconciliação.");
+          continue;
+        }
+        if (!filhas || (precisaCorroborar && !corroborado)) continue;
+        const filhasLinhas = filhas.filhas;
+        const soma = filhasLinhas.reduce((t, f) => t + valorDe(f), 0);
+        removidas.set(c, `Cabeçalho de grupo: em ${anoS}, ${filhasLinhas.map((f) => f.chave).join(" + ")} somam `
+          + `${soma.toLocaleString("pt-BR")}, o valor desta linha (${v.toLocaleString("pt-BR")}) — ela é o `
           + "total do grupo, não uma conta, e quem carrega o saldo são as filhas. Efeito: o valor sai da soma do "
           + "modelo neste exercício; mantê-lo dobraria o grupo."
           + (typeof informado === "number" ? ` Total do bloco informado no documento: ${informado.toLocaleString("pt-BR")}.` : ""));
       }
       if (removidas.size > 0) tirarAno(bloco, removidas, anoS);
+      if (avisos.size > 0) {
+        linhasPorBloco.set(bloco, (linhasPorBloco.get(bloco) ?? []).map((l) => avisos.has(l)
+          ? { ...l, avisoDeCabecalho: { ...l.avisoDeCabecalho, [anoS]: avisos.get(l)! } } : l));
+      }
     }
   }
 

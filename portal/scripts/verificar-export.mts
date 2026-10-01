@@ -8371,6 +8371,63 @@ const arranjoDeCirculante = (ENT: string) => {
       JSON.stringify(rRecP > 0 ? m.ler(m.bs, rRecP, "E") : "linha ausente"));
   }
 
+  // ---- (39m) ALTO: bloco com ~17 contas e centavos: a busca de filhas não desiste calada ----
+  // Clientes 5.000, Estoques 600 (cabeçalho: filhas 350,25 + 249,75) e 15 contas com centavos. As
+  // somas distintas cresciam 2^n, a busca estourava o teto e o Estoques voltava a somar (25.819,30
+  // em vez de 25.219,30; sem total informado, a reconciliação nem acusava).
+  {
+    // 15 saldos IRREGULARES (sorteio fixo, semente 2): 30.872 somas distintas, acima do teto antigo de
+    // 20.000; só UM subconjunto soma 600 e 128 somam 5.000 (a coincidência de Clientes, que a
+    // unicidade impede de virar remoção).
+    const outras = [1106.03, 1097.83, 206.55, 234.87, 985.5, 885.97, 819.73, 458.14, 755.94, 756.8,
+                    731.2, 308.38, 580.67, 543.53, 873.01];
+    const base = 5000 + 350.25 + 249.75 + outras.reduce((t, v) => t + v, 0);
+    const m = montarSemOrdem("M", "2024", "Clientes", "ativo_circulante", 5000, [
+      linhaA("Clientes", { "2024": 5000 }, "BALANCO"),
+      linhaA("Estoques", { "2024": 600 }, "BALANCO"),
+      linhaA("Matéria-prima", { "2024": 350.25 }, "BALANCO"),
+      linhaA("Produtos acabados", { "2024": 249.75 }, "BALANCO"),
+      ...outras.map((v, i) => linhaA(`Conta diversa ${String(i).padStart(2, "0")}`, { "2024": v }, "BALANCO")),
+    ], [2024], [2025, 2026]);
+    checar(perto(m.ler(m.bs, m.rAc, "E"), base),
+      "(39m) 2024: com 15 contas de centavos no bloco, o cabeçalho explicado pelas filhas ainda sai da soma (e Clientes, coincidência, fica)",
+      `${JSON.stringify(m.ler(m.bs, m.rAc, "E"))} vs ${base}`);
+  }
+
+  // ---- (39n) MÉDIO: grupo cujas filhas também têm nome de grupo, mas são SUBGRUPOS dele ----
+  // Disponível 1.000 = Caixa e equivalentes 300 + Aplicações financeiras 700; Clientes 5.000;
+  // total informado 6.000. A guarda "filha não é nome de grupo" do eb3592f impedia a remoção:
+  // Caixa 2.000 e reconciliação -1.000. (O Vertentes — Clientes 26.000 = Caixa 8.000 + Estoques
+  // 18.000, irmãs por acaso — segue bloqueado pelo assert do modelo base.)
+  {
+    const m = montarSemOrdem("N", "2024", "Clientes", "ativo_circulante", 5000, [
+      linhaA("Ativo Circulante", { "2024": 6000 }, "BALANCO", "subtotal"),
+      linhaA("Disponível", { "2024": 1000 }, "BALANCO"),
+      linhaA("Caixa e equivalentes", { "2024": 300 }, "BALANCO"),
+      linhaA("Aplicações financeiras", { "2024": 700 }, "BALANCO"),
+      linhaA("Clientes", { "2024": 5000 }, "BALANCO"),
+    ], [2024], [2025, 2026]);
+    checar(perto(m.ler(m.bs, m.rRec, "E"), 0),
+      "(39n) 2024: Disponível (Caixa + Aplicações, subgrupos dele) sai da soma: reconciliação ~0, não -1.000",
+      JSON.stringify(m.ler(m.bs, m.rRec, "E")));
+  }
+
+  // ---- (39o) MÉDIO: subtotal arredondado em milhar (4.000 = 1.500 + 2.501) ----------------------
+  // A folga absoluta de ±0,5 reprovava a soma por 1 unidade de arredondamento do documento.
+  {
+    const P = "passivo_nao_circulante";
+    const m = montarSemOrdem("O", "2024", "Empréstimos bancários", P, 30000, [
+      linhaA("Passivo Não Circulante", { "2024": 34001 }, "BALANCO", "subtotal", P),
+      ...([["Empréstimos bancários", 30000], ["Provisões", 4000], ["Provisão cível", 1500],
+           ["Provisão trabalhista", 2501]] as const)
+        .map(([n, v]) => linhaA(n, { "2024": v }, "BALANCO", "conta", P)),
+    ], [2024], [2025, 2026]);
+    const rRecP = m.achar(m.bs, "reconciliação com o passivo não circulante informado no documento");
+    checar(rRecP > 0 && perto(m.ler(m.bs, rRecP, "E"), 0),
+      "(39o) PNC 2024: Provisões 4.000 = 1.500 + 2.501 (arredondamento do documento) sai da soma: reconciliação ~0, não -4.000",
+      JSON.stringify(rRecP > 0 ? m.ler(m.bs, rRecP, "E") : "linha ausente"));
+  }
+
 }
 
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);
