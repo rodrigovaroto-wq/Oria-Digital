@@ -12,6 +12,35 @@ só como referência — não precisa ler tudo pra continuar, comece por aqui.
 > a 0196 ("Production Deploy") — exatamente o que `.claude/memory/auto-mode-recusa-migration-producao.md`
 > prevê. Ver §4.
 
+### 0b. Produção atualizada em 01/10 (tarde) — o dono pediu no chat, e o modo automático aceitou
+
+- **Supabase `0195` → `0198`.** Antes: os corpos das 5 funções que 0196–0198 reemitem
+  (`fn_reconciliar_caixa_bp_fluxo`, `…_despfin_dre_vs_divida`, `…_receita_dre_vs_faturamento`,
+  `fn_somar_faturamento_ano`, `fn_anos_periodo`) comparados por md5 (sem CRLF) com um banco local
+  montado até a 0195: idênticos. Depois: idênticos ao repositório completo; sonda 181/0 ausentes.
+- **n8n:** ingestão `na1AEv3m8fjDXlwM` republicada do `main` 36e2aac — 42 nós conferidos.
+  `FINGERPRINT_EXTRACAO` `6f5a9374a9d2b1ae` → `7e7549834ed4eb3f` (prompts do `8d1235e`): reenviar
+  um caso já processado RE-EXTRAI cada documento (cota RPD). `erros` republicado do PR #249 com o
+  nome publicado; `macro` e `diagnostico` batem nó a nó.
+- **`fn_reconciliar_caso`** (antes, conferido que `fn_registrar_reconciliacao` só toca motivo
+  `reconciliacao:*` e que nenhuma pendência DECIDIDA nos dois casos tem esse motivo; retrato
+  antes/depois: 0 de 26 decididas/resolvidas alteradas):
+  - `72d9210a`: caixa BP×DFC 2/2 ok e receita DRE×faturamento 2/2 ok — as duas divergências falsas
+    que a 0196/0197 corrigem foram resolvidas pelo sistema.
+  - Krauspenhar: 2 precondições de ativo×passivo+PL resolvidas; 2 pendências NOVAS e reais —
+    "Venda de peças e lubrificantes" 2026: DRE +24,22 mi × COMBINADO −24,67 mi (sinal invertido;
+    DRE vence por autoridade) e o Mapa de Dívida 2025 sem coluna de juros.
+- **PR #249:** `2ae4589` (nomes `erros`/`macro` = publicados, item m) e `3f40571` (Estoques
+  apagados pelo sintético do balancete, item l: reconciliação do AC 53,92/43,57 mi → 0).
+- **Aberto — dívida de longo prazo do Krauspenhar** (4,18 mi 2024, 9,54 mi 2025): não chega a
+  `ESP_DIVIDA_LP` e vira só o plug da reconciliação do PNC (sem juros nem amortização). Hipótese
+  por leitura de código, NÃO medida: `blocoDaLinha` (modelo-institucional.ts ~719) manda a linha
+  INTEIRA para o bloco `divida` quando `documentos` inclui MAPA_DIVIDA, e lá `doMapa` só aceita
+  `/saldo|principal/`; correção candidata: rotear para `divida` só quando TODOS os documentos
+  forem MAPA_DIVIDA. Bloqueio: o agente do portal teve a leitura de produção negada
+  ("Production Reads"); medir exige `fn_linhas_para_modelagem` do caso para rótulos com
+  emprestimo/financiamento/capital de giro.
+
 ### 0. Estado de produção agora (medido só leitura, 30/09 ~22h40 UTC; reconferido 01/10 ~11h30 UTC)
 
 > Reconferência de 01/10: `instalacao_cobertura.ate_migration = '0195'`, 174/0 ausentes; n8n
