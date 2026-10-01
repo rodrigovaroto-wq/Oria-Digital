@@ -217,7 +217,12 @@ export interface EntradaModeloInstitucional {
    * Focus, que é nível. Duas grandezas na mesma linha é dado mentiroso, e a linha
    * alimenta a conversão de dívida em moeda estrangeira.
    */
-  macro: { serie: string; ano: number; valor: number; fonte: string; natureza?: "taxa" | "nivel" }[];
+  /**
+   * `meses` = quantos meses o REALIZADO cobre (`fn_indice_macro_anual`). Expectativa do
+   * Focus não tem (é projeção do ano inteiro). Ausente = tratado como ano completo, que é
+   * o que as fixtures sem o campo sempre assumiram; a rota do export sempre o manda.
+   */
+  macro: { serie: string; ano: number; valor: number; fonte: string; natureza?: "taxa" | "nivel"; meses?: number }[];
   /**
    * Rótulos normalizados que a detecção ESTRUTURAL do export (`export.ts`,
    * `detectarSubtotaisInformados` + `detectarSubtotaisPorOrdem`) reconheceu como
@@ -1373,10 +1378,14 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
       return i <= 0 ? String(ano) : `=${g.letraDoAno(ctx.anos[i - 1])}1+1`;
     }, "0");
 
-  const porSerieAno = new Map<string, { valor: number; fonte: string; natureza?: "taxa" | "nivel" }>();
+  const porSerieAno = new Map<string, { valor: number; fonte: string; natureza?: "taxa" | "nivel"; meses?: number }>();
   for (const m of ctx.ent.macro) {
-    porSerieAno.set(`${m.serie}|${m.ano}`, { valor: m.valor, fonte: m.fonte, natureza: m.natureza });
+    porSerieAno.set(`${m.serie}|${m.ano}`, { valor: m.valor, fonte: m.fonte, natureza: m.natureza, meses: m.meses });
   }
+  /** Realizado de menos de 12 meses numa série de TAXA: acumulado parcial, não taxa anual. */
+  const parcial = (v: { natureza?: "taxa" | "nivel"; meses?: number } | undefined, codigo: string) =>
+    v !== undefined && v.meses !== undefined && v.meses < 12
+    && v.natureza !== "nivel" && !SERIES_DE_NIVEL.has(codigo);
 
   for (const s of SERIES_MACRO) {
     g.linha(`macro:${s.codigo}`, { rotulo: s.rotulo, nota: s.codigo, fmt: NUM2 });
@@ -1403,6 +1412,50 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
             + "arquivo de 06/08/2026 fez. Origem: " + v.fonte,
         });
         continue;
+      }
+      // ANO CORRENTE PARCIAL NÃO É TAXA ANUAL. Medido em 01/10/2026 no export do caso de
+      // teste 72d9210a: a linha "CDI (% a.a.)" saía com 10,888 / 14,333 (12 meses) e
+      // **9,713 em 2026, que é o acumulado de 9 meses**, e VAZIA de 2027 a 2030 — o Focus
+      // não publica CDI (só CAMBIO_USD, IGPM, IPCA, PIB, SELIC). Nove meses de CDI numa
+      // linha "% a.a." subestima o ano e vira a curva da dívida; para IPCA e Selic o
+      // Focus sobrescrevia o parcial por acaso (as expectativas entram depois), para CDI
+      // e INPC nada sobrescrevia. Vale para toda série de taxa, não só o CDI.
+      if (parcial(v, s.codigo) && s.codigo !== "CDI") {
+        g.set(`macro:${s.codigo}`, ano, null, {
+          nota: `O realizado de ${ano} cobre ${v!.meses} meses: realizado de ${v!.meses} meses não é taxa `
+            + `anual e não é publicado numa linha "% a.a.". A célula fica VAZIA (e o que a lê cai em `
+            + `zero por N()) até haver Focus ou o ano fechar. Origem: ${v!.fonte}`,
+        });
+        continue;
+      }
+      // CDI: o Focus NÃO publica CDI, então ano projetado sem CDI realizado de 12 meses
+      // ficava vazio e a curva da dívida (ST Inv. & Debt) lia zero: "Custo efetivo do
+      // revolver" 10,89% | 14,33% | 9,71% | 0 | 0 | 0 | 0 no export medido. A proxy é a
+      // Selic do mesmo ano, por FÓRMULA (uma revisão do Focus move o CDI junto). Base
+      // medida em produção: CDI e Selic realizados são IDÊNTICOS em todo ano fechado de
+      // 2022 a 2025 (12,380 / 13,028 / 10,888 / 14,333, os dois). Só vale quando a Selic
+      // do ano é Focus ou realizado de 12 meses — nunca o parcial.
+      if (s.codigo === "CDI" && (!v || parcial(v, s.codigo))) {
+        const selic = porSerieAno.get(`SELIC|${ano}`);
+        if (selic && !parcial(selic, "SELIC")) {
+          g.set("macro:CDI", ano, `=${g.ref("macro:SELIC", ano)}`, {
+            fmt: NUM2,
+            nota: `CDI de ${ano} = Selic de ${ano} (célula acima, por fórmula): o Focus não publica CDI `
+              + "e o CDI realizado ficou IDÊNTICO à Selic em todo ano fechado de 2022 a 2025 "
+              + "(12,380 / 13,028 / 10,888 / 14,333). É proxy medida, não expectativa publicada para o CDI. "
+              + (v ? `O realizado de ${ano} cobre só ${v.meses} meses e não é taxa anual (${v.fonte}). ` : "")
+              + `Selic: ${selic.fonte}`,
+          });
+          continue;
+        }
+        if (v) {
+          g.set("macro:CDI", ano, null, {
+            nota: `O realizado de ${ano} cobre ${v.meses} meses (não é taxa anual) e não há Selic de ${ano} `
+              + "completa nem Focus para usar de proxy. A célula fica VAZIA: a curva da dívida lê ZERO neste ano. "
+              + `Origem: ${v.fonte}`,
+          });
+          continue;
+        }
       }
       if (!v) {
         // AUSÊNCIA É AUSÊNCIA: célula vazia, e a nota diz o que falta. Repetir a
@@ -3765,10 +3818,21 @@ function abaDivida(wb: ExcelJS.Workbook, ctx: Ctx, gAnual: Grade, gRec: Grade): 
     // mapa). Aqui ano sem publicação fica VAZIO (nunca texto) e o consumo tem
     // guarda `N()`, que trata vazio como zero e não propaga erro.
     const curva = refCDI ? `=N(${refCDI})` : null;
+    // O ANO SEM CURVA diz o EFEITO. Medido em 01/10/2026: CDI vazio em 2027-2030 zerava
+    // TAXA_REVOLVER, TAXA_APLIC, EMISSAO_TAXA, NM_TAXA e a TAXA_MEDIA sem juros no mapa —
+    // revolver de ~21 mi grátis — e a nota não dizia nada (afirmava "projetado Focus").
+    const semCurva = refCDI !== null
+      && gAnual.celula(gAnual.n("macro:CDI"), gAnual.colDoAno(ano)).value == null;
     g.set("CURVA_CDI", ano, curva ?? 0, {
       fmt: PCT2,
-      nota: curva
-        ? "Curva de referência da aba Anual (realizado BCB, projetado Focus), em pontos percentuais "
+      nota: semCurva
+        ? `Sem curva de CDI para ${ano}: nem CDI realizado de 12 meses, nem Selic (Focus ou realizada) para `
+          + "usar de proxy. revolver/aplicação/new money cobram juro ZERO neste ano, e a taxa média da "
+          + "dívida também quando o mapa não traz juros — rever antes de comitê."
+        : curva
+        ? "Curva de referência da aba Anual, em pontos percentuais: CDI realizado de 12 meses nos anos "
+          + "fechados e, nos projetados, a Selic do Focus (o Focus NÃO publica CDI; ver a nota da célula "
+          + "na aba Anual) "
           + "— daí o /100. O N() trata ano sem publicação como zero em vez de propagar erro: é a "
           + "guarda que falta no Modelo Base, onde um 'nd' na série da Libor apagou o resultado de "
           + "11 anos de projeção."

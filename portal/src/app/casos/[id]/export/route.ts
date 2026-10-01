@@ -525,6 +525,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // vez de publicar variação numa linha de nível).
       type MacroDoModelo = {
         serie: string; ano: number; valor: number; fonte: string; natureza: "taxa" | "nivel";
+        /** meses que o REALIZADO cobre; < 12 não é taxa anual (o modelo recusa na aba Anual) */
+        meses?: number;
       };
       const macroModelo: MacroDoModelo[] = [
         ...anuais.flatMap((a): MacroDoModelo[] => {
@@ -538,7 +540,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           }
           return [{
             serie: a.serie, ano: a.ano, valor: Number(a.retorno), natureza: "taxa",
-            fonte: `realizado (${a.meses} meses)`,
+            fonte: `realizado (${a.meses} meses)`, meses: Number(a.meses),
           }];
         }),
         ...expectativas.map((e): MacroDoModelo => ({

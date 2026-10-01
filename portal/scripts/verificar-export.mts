@@ -4944,6 +4944,119 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
       JSON.stringify(v2026));
   }
 
+  // ---- (0106j) CDI: ANO PARCIAL NÃO É TAXA ANUAL, E SEM FOCUS NÃO É JURO ZERO --
+  //
+  // Medido em 01/10/2026 no export do caso de teste 72d9210a, recalculado: a linha
+  // "CDI (% a.a.)" da aba Anual trazia 10,888 / 14,333 (12 meses), **9,713 em 2026 =
+  // realizado de 9 meses** e VAZIO em 2027-2030; "Custo efetivo do revolver" saía
+  // 10,89% | 14,33% | 9,71% | 0 | 0 | 0 | 0. O Focus não publica CDI (só CAMBIO_USD,
+  // IGPM, IPCA, PIB, SELIC), e CDI = Selic realizados em todo ano fechado de 2022-2025.
+  // O ARRANJO ABAIXO É O DE PRODUÇÃO medido (CDI e Selic realizados de 12 meses nos
+  // anos fechados, CDI e INPC de 9/8 meses no corrente, Focus com Selic e sem CDI) —
+  // não é fixture inventada para provar o bug. Só os valores do Focus são ilustrativos.
+  {
+    const macro0 = [
+      { serie: "CDI", ano: 2024, valor: 10.888, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
+      { serie: "CDI", ano: 2025, valor: 14.333, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
+      { serie: "CDI", ano: 2026, valor: 9.713, fonte: "realizado (9 meses)", natureza: "taxa" as const, meses: 9 },
+      { serie: "SELIC", ano: 2024, valor: 10.888, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
+      { serie: "SELIC", ano: 2025, valor: 14.333, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
+      { serie: "SELIC", ano: 2026, valor: 14.25, fonte: "Focus", natureza: "taxa" as const },
+      { serie: "SELIC", ano: 2027, valor: 12.5, fonte: "Focus", natureza: "taxa" as const },
+      { serie: "SELIC", ano: 2028, valor: 10.5, fonte: "Focus", natureza: "taxa" as const },
+      { serie: "INPC", ano: 2026, valor: 3.1, fonte: "realizado (8 meses)", natureza: "taxa" as const, meses: 8 },
+    ];
+    const wb0 = buildExportWorkbook({
+      caso: entradaModelo.caso, documentos: docsModelo, campos: camposModelo,
+      agora: new Date("2026-08-05T12:00:00Z"), modo: "completo",
+      modeloInstitucional: { ...entradaModelo, macro: macro0 } as unknown as
+        Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+    const lin = (aba: string, rotulo: string, col = 3): number => {
+      const ws = wb0.getWorksheet(aba)!;
+      for (let r = 1; r <= ws.rowCount; r++) {
+        if (String(ws.getRow(r).getCell(col).value ?? "").trim() === rotulo) return r;
+      }
+      return -1;
+    };
+    const anual0 = wb0.getWorksheet("Anual")!;
+    const rCdi = lin("Anual", "CDI (% a.a.)");
+    const rInpc = lin("Anual", "INPC — IBGE (% a.a.)");
+    const rSelic = lin("Anual", "Selic acumulada (% a.a.)");
+    const notaDe = (ws: import("exceljs").Worksheet, r: number, c: string) =>
+      String((ws.getRow(r).getCell(c).note as { texts?: Array<{ text: string }> } | undefined)
+        ?.texts?.map((t) => t.text).join("") ?? "");
+    checar(rCdi > 0 && rInpc > 0 && rSelic > 0, "(0106j) as linhas CDI, INPC e Selic existem na aba Anual",
+      `${rCdi}/${rInpc}/${rSelic}`);
+    if (rCdi > 0 && rInpc > 0 && rSelic > 0) {
+      const cdi = COLS_ANO.map((c) => avaliarCelula(anual0, c, rCdi));
+      // 1. realizado de 12 meses segue chegando como está
+      checar(cdi[0] === 10.888 && cdi[1] === 14.333,
+        "(0106j) o CDI realizado de 12 meses continua publicado como veio", JSON.stringify(cdi.slice(0, 2)));
+      // 2. o ano de 9 meses NÃO é publicado como taxa anual
+      checar(cdi[2] !== 9.713,
+        "(0106j) o CDI de 9 meses de 2026 NÃO é publicado numa linha \"% a.a.\"", JSON.stringify(cdi[2]));
+      // 3. ano projetado sem CDI no Focus segue a Selic do mesmo ano — e se move com ela
+      checar(cdi[2] === 14.25 && cdi[3] === 12.5 && cdi[4] === 10.5,
+        "(0106j) 2026-2028 sem CDI no Focus usam a Selic do mesmo ano (proxy medida)", JSON.stringify(cdi.slice(2)));
+      const celCdi27 = anual0.getRow(rCdi).getCell(COLS_ANO[iAnoDe(2027)]).value as { formula?: string } | null;
+      checar(typeof celCdi27 === "object" && celCdi27 !== null && "formula" in celCdi27
+        && celCdi27.formula === `${COLS_ANO[iAnoDe(2027)]}${rSelic}`,
+        "(0106j) …por FÓRMULA que lê a célula da Selic (revisão do Focus move o CDI)", JSON.stringify(celCdi27));
+      checar(/Selic/.test(notaDe(anual0, rCdi, COLS_ANO[iAnoDe(2027)]))
+        && /12,380/.test(notaDe(anual0, rCdi, COLS_ANO[iAnoDe(2027)])),
+        "(0106j) …e a nota cita a base medida (CDI = Selic em 2022-2025) e que o Focus não publica CDI",
+        notaDe(anual0, rCdi, COLS_ANO[iAnoDe(2027)]).slice(0, 120));
+      // 4. outra série de taxa: o parcial fica vazio e a nota diz por quê
+      const inpc26 = anual0.getRow(rInpc).getCell(COLS_ANO[iAnoDe(2026)]);
+      checar(inpc26.value == null && /8 meses não é taxa anual/.test(notaDe(anual0, rInpc, COLS_ANO[iAnoDe(2026)])),
+        "(0106j) INPC de 8 meses fica VAZIO, com a nota \"realizado de 8 meses não é taxa anual\"",
+        JSON.stringify(inpc26.value));
+
+      // 5. O EFEITO NA DÍVIDA: com Selic no Focus, revolver e aplicação não são
+      // zero em nenhum ano projetado (antes: 0 em 2027-2028).
+      const val = (aba: string, rotulo: string, i: number) => {
+        const r = lin(aba, rotulo);
+        return r < 0 ? null : avaliarCelula(wb0.getWorksheet(aba)!, COLS_ANO[i], r);
+      };
+      for (const rot of ["Curva de juros de referência (CDI, da aba Anual)",
+        "Custo efetivo do revolver", "Rendimento efetivo da aplicação"]) {
+        for (const a of [2027, 2028]) {
+          const v = val("ST Inv. & Debt", rot, iAnoDe(a));
+          checar(typeof v === "number" && v > 0.05,
+            `(0106j) \"${rot}\" em ${a} não é zero quando o Focus tem Selic`, JSON.stringify(v));
+        }
+      }
+    }
+
+    // 6. SEM Selic nem CDI para o ano: célula vazia e a nota da CURVA_CDI diz o EFEITO.
+    const wb1 = buildExportWorkbook({
+      caso: entradaModelo.caso, documentos: docsModelo, campos: camposModelo,
+      agora: new Date("2026-08-05T12:00:00Z"), modo: "completo",
+      modeloInstitucional: { ...entradaModelo, macro: macro0.filter((m) => m.serie !== "SELIC" || m.ano < 2027) } as unknown as
+        Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+    const a1 = wb1.getWorksheet("Anual")!;
+    const d1 = wb1.getWorksheet("ST Inv. & Debt")!;
+    let rC1 = -1; let rCurva1 = -1;
+    for (let r = 1; r <= a1.rowCount; r++) if (String(a1.getRow(r).getCell(3).value ?? "").trim() === "CDI (% a.a.)") rC1 = r;
+    for (let r = 1; r <= d1.rowCount; r++) {
+      if (String(d1.getRow(r).getCell(3).value ?? "").startsWith("Curva de juros de referência")) rCurva1 = r;
+    }
+    const c27 = a1.getRow(rC1).getCell(COLS_ANO[iAnoDe(2027)]).value;
+    checar(rC1 > 0 && (c27 === null || c27 === undefined),
+      "(0106j) sem Selic nem CDI em 2027 a célula do CDI fica VAZIA (não inventa)", JSON.stringify(c27));
+    const nCurva = String((d1.getRow(rCurva1).getCell(COLS_ANO[iAnoDe(2027)]).note as
+      { texts?: Array<{ text: string }> } | undefined)?.texts?.map((t) => t.text).join("") ?? "");
+    checar(/Sem curva de CDI para 2027/.test(nCurva) && /juro ZERO/.test(nCurva),
+      "(0106j) …e a nota da curva na aba de dívida diz o EFEITO (juro ZERO — rever antes de comitê)",
+      nCurva.slice(0, 140));
+    const nOk = String((d1.getRow(rCurva1).getCell(COLS_ANO[iAnoDe(2026)]).note as
+      { texts?: Array<{ text: string }> } | undefined)?.texts?.map((t) => t.text).join("") ?? "");
+    checar(!/Sem curva/.test(nOk) && !/projetado Focus/.test(nOk),
+      "(0106j) …e o ano COM curva não carrega o aviso, nem a afirmação falsa de \"projetado Focus\"", nOk.slice(0, 140));
+  }
+
   // ---- (0106i) O PAINEL DE PREMISSAS RESPONDE À EDIÇÃO NO EXCEL ------------
   //
   // A promessa é "trocar o índice ou o spread dentro do arquivo reprojeta o
