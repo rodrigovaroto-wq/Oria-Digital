@@ -22,8 +22,19 @@
 #                    duas pontas, e as duas pontas podem errar juntas.
 #   • tsc/eslint/build  o portal tem de continuar compilando.
 #
-# A ORDEM É DELIBERADA: o que falha rápido e barato vem primeiro (lint, n8n,
-# geradores), e o que precisa de banco vem depois.
+# EM PARALELO, desde 01/10/2026 (S104). Eram 34 passos num job só, em série
+# (8,5 min no run de 30/09 23:06–23:15). Agora são seis jobs independentes, cada
+# um no seu runner, rodando ao mesmo tempo — n8n-e-derivados, portal, banco, e2e,
+# variacoes, build — e um agregador `suites` que só fica verde se os seis
+# ficaram. Os COMANDOS são os mesmos, letra por letra (o espelho com o CLAUDE.md
+# confere); só a distribuição mudou. Cada job traz o próprio preparo (npm ci,
+# psql, book gerado) porque runners não compartilham disco. Dentro de cada job,
+# `node --test` já roda os arquivos em paralelo (padrão do Node 22: núcleos − 1).
+#
+# E TODO PUSH E TODO PR RODAM TUDO — não há filtro por caminho, de propósito: a
+# pergunta "esta mudança quebrou outro arquivo?" só tem resposta rodando o
+# repositório inteiro. No `pull_request`, o GitHub testa o commit de MERGE com a
+# base, não só a branch: é isso que pega a quebra que só aparece junto do main.
 
 name: suítes
 
@@ -55,30 +66,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  suites:
+  n8n-e-derivados:
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        # 16 é a versão do Supabase em uso e a que as migrations assumem.
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_USER: postgres
-          POSTGRES_DB: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 20
-
-    env:
-      PGHOST: localhost
-      PGPORT: "5432"
-      PGUSER: postgres
-      PGPASSWORD: postgres
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -89,77 +79,8 @@ jobs:
           cache: npm
           cache-dependency-path: portal/package-lock.json
 
-      - name: Instalar dependências do portal
-        # `--ignore-scripts` porque `npm ci` sem ele executa o postinstall de
-        # QUALQUER dependência transitiva — código arbitrário de terceiro rodando
-        # no runner, com o checkout e o token do job à mão, antes de a primeira
-        # suíte começar.
-        #
-        # E ELE FOI MEDIDO, não presumido. O número vem do LOCK, não de memória:
-        # `hasInstallScript` é verdadeiro em QUATRO pacotes — `esbuild`
-        # (postinstall), `sharp` (install), `unrs-resolver` (postinstall) e
-        # `fsevents` (install). No runner rodariam TRÊS: o `fsevents` é
-        # `os: ["darwin"]` e opcional, e nunca chega a instalar no Linux. (Os
-        # ~20 `prepare` da árvore não contam: `prepare` não roda para tarball do
-        # registro, só para dependência de git ou link local.)
-        #
-        # Os três continuam funcionando sem o script porque o binário nativo de
-        # cada um vem do pacote por plataforma em `optionalDependencies` — o
-        # script só o confirma. Conferido na árvore REAL, não numa cópia:
-        # `rm -rf node_modules` + `npm ci --ignore-scripts`, e em cima disso
-        # `./node_modules/.bin/tsc --noEmit` limpo, `eslint .` limpo,
-        # `next build` compilado, mais a suíte inteira (01/09).
-        #
-        # O QUE ESTA FLAG CUSTA, e fica registrado porque a memória
-        # `portao-mede-a-entrada-de-producao` é exatamente sobre isso: a Vercel
-        # roda o install DELA, COM scripts, e não lê este arquivo. A partir daqui
-        # o portão mede uma instalação que não é a de produção. A troca é
-        # deliberada — o risco de código de terceiro no runner é concreto e o
-        # `next build` daqui nunca provou nada sobre o build da Vercel de qualquer
-        # forma —, mas quem for investigar uma quebra que só aparece lá deve
-        # começar por esta linha.
-        working-directory: portal
-        run: npm ci --ignore-scripts
-
-
-      - name: Cliente psql 16
-        # O runner traz um cliente, mas não necessariamente o 16. As migrations
-        # usam sintaxe que não vale a pena depender da sorte da imagem.
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends postgresql-client-16 \
-            || sudo apt-get install -y --no-install-recommends postgresql-client
-          psql --version
-
-      # ---- rápido e barato primeiro ---------------------------------------
-      - name: Lint e tipos do portal
-        # OS BINÁRIOS DO LOCK, CHAMADOS POR CAMINHO — a mesma razão já escrita no
-        # passo da suíte de export mais abaixo, e a regra que o CLAUDE.md manda.
-        # `npx tsc` não é o tsc deste `package-lock.json`: quando o npx não acha o
-        # pacote ele BAIXA o que estiver publicado no registro no dia, sem versão
-        # fixada e rodando os scripts de instalação desse pacote. Um portão que
-        # muda de versão sozinho é um portão que muda de opinião sozinho.
-        working-directory: portal
-        run: |
-          ./node_modules/.bin/tsc --noEmit
-          ./node_modules/.bin/eslint .
-
       - name: Suíte n8n
         run: node --test 'N8N/test/*.test.mjs'
-
-      - name: Suíte da sonda de produção (a tradução de "não perguntei" em veredito)
-        # O portão agendado (`sonda-producao.yml`) roda contra um banco que ESTA suíte não tem.
-        # O que dá para provar aqui é a única parte que decide alguma coisa: que "não consegui
-        # perguntar" (código 2) nunca colapsa em "está tudo bem" (código 0). MEDIDO em 16/09 com
-        # o colapso religado de propósito: 4 asserts reprovam.
-        #
-        # `TESTE_PSQL` declara que ESTE job tem banco (o serviço postgres:16, via PGHOST/PGUSER do
-        # job): com ela, os testes do executor do `perimetro-inventario.mjs` — não escreve, não vaza
-        # a senha — são obrigatórios aqui. O `perimetro-inventario.yml`, que roda o mesmo glob sem
-        # Postgres, não a define e os vê declarados NÃO CONFERIDOS, em vez de ficar vermelho.
-        env:
-          TESTE_PSQL: psql
-        run: node --test 'Supabase/test/*.test.mjs'
 
       - name: Suíte dos hooks do agente
         # A trava que impede o descarte de arquivo é a única trava DURA do repositório, e ela erra
@@ -348,6 +269,64 @@ jobs:
         # acusadas, incluindo arquivo citado que não existe.
         run: node .claude/verificar-espelho-claude-md.mjs
 
+  portal:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+
+      - name: Instalar dependências do portal
+        # `--ignore-scripts` porque `npm ci` sem ele executa o postinstall de
+        # QUALQUER dependência transitiva — código arbitrário de terceiro rodando
+        # no runner, com o checkout e o token do job à mão, antes de a primeira
+        # suíte começar.
+        #
+        # E ELE FOI MEDIDO, não presumido. O número vem do LOCK, não de memória:
+        # `hasInstallScript` é verdadeiro em QUATRO pacotes — `esbuild`
+        # (postinstall), `sharp` (install), `unrs-resolver` (postinstall) e
+        # `fsevents` (install). No runner rodariam TRÊS: o `fsevents` é
+        # `os: ["darwin"]` e opcional, e nunca chega a instalar no Linux. (Os
+        # ~20 `prepare` da árvore não contam: `prepare` não roda para tarball do
+        # registro, só para dependência de git ou link local.)
+        #
+        # Os três continuam funcionando sem o script porque o binário nativo de
+        # cada um vem do pacote por plataforma em `optionalDependencies` — o
+        # script só o confirma. Conferido na árvore REAL, não numa cópia:
+        # `rm -rf node_modules` + `npm ci --ignore-scripts`, e em cima disso
+        # `./node_modules/.bin/tsc --noEmit` limpo, `eslint .` limpo,
+        # `next build` compilado, mais a suíte inteira (01/09).
+        #
+        # O QUE ESTA FLAG CUSTA, e fica registrado porque a memória
+        # `portao-mede-a-entrada-de-producao` é exatamente sobre isso: a Vercel
+        # roda o install DELA, COM scripts, e não lê este arquivo. A partir daqui
+        # o portão mede uma instalação que não é a de produção. A troca é
+        # deliberada — o risco de código de terceiro no runner é concreto e o
+        # `next build` daqui nunca provou nada sobre o build da Vercel de qualquer
+        # forma —, mas quem for investigar uma quebra que só aparece lá deve
+        # começar por esta linha.
+        working-directory: portal
+        run: npm ci --ignore-scripts
+
+      # ---- rápido e barato primeiro ---------------------------------------
+      - name: Lint e tipos do portal
+        # OS BINÁRIOS DO LOCK, CHAMADOS POR CAMINHO — a mesma razão já escrita no
+        # passo da suíte de export mais abaixo, e a regra que o CLAUDE.md manda.
+        # `npx tsc` não é o tsc deste `package-lock.json`: quando o npx não acha o
+        # pacote ele BAIXA o que estiver publicado no registro no dia, sem versão
+        # fixada e rodando os scripts de instalação desse pacote. Um portão que
+        # muda de versão sozinho é um portão que muda de opinião sozinho.
+        working-directory: portal
+        run: |
+          ./node_modules/.bin/tsc --noEmit
+          ./node_modules/.bin/eslint .
+
       - name: Suíte de export (invariantes do arquivo entregue)
         # O binário do lock, chamado por caminho. `npx tsx` NÃO serve aqui, e isto
         # foi medido na primeira execução do CI: mesmo com o .bin do portal no
@@ -429,6 +408,65 @@ jobs:
         # quando o banco não tem a 0158, que é estado normal aqui.
         run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-modelagem-cobertura.mts
 
+  banco:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        # 16 é a versão do Supabase em uso e a que as migrations assumem.
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+
+
+      - name: Cliente psql 16
+        # O runner traz um cliente, mas não necessariamente o 16. As migrations
+        # usam sintaxe que não vale a pena depender da sorte da imagem.
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client-16 \
+            || sudo apt-get install -y --no-install-recommends postgresql-client
+          psql --version
+
+      - name: Suíte da sonda de produção (a tradução de "não perguntei" em veredito)
+        # O portão agendado (`sonda-producao.yml`) roda contra um banco que ESTA suíte não tem.
+        # O que dá para provar aqui é a única parte que decide alguma coisa: que "não consegui
+        # perguntar" (código 2) nunca colapsa em "está tudo bem" (código 0). MEDIDO em 16/09 com
+        # o colapso religado de propósito: 4 asserts reprovam.
+        #
+        # `TESTE_PSQL` declara que ESTE job tem banco (o serviço postgres:16, via PGHOST/PGUSER do
+        # job): com ela, os testes do executor do `perimetro-inventario.mjs` — não escreve, não vaza
+        # a senha — são obrigatórios aqui. O `perimetro-inventario.yml`, que roda o mesmo glob sem
+        # Postgres, não a define e os vê declarados NÃO CONFERIDOS, em vez de ficar vermelho.
+        env:
+          TESTE_PSQL: psql
+        run: node --test 'Supabase/test/*.test.mjs'
+
       # ---- o que precisa de banco -----------------------------------------
       - name: Suíte de banco (migrations do zero + testes SQL)
         run: Supabase/test/run.sh
@@ -491,9 +529,105 @@ jobs:
         # critério de voltar a ser testado só contra ele mesmo.
         run: SONDA_PSQL="psql -d tdf_test" node Supabase/test/sonda-producao.mjs --so-buraco
 
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        # 16 é a versão do Supabase em uso e a que as migrations assumem.
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+      # Mesmo comando (e mesmo porquê do --ignore-scripts) do job .
+      - name: Instalar dependências do portal para este job
+        working-directory: portal
+        run: npm ci --ignore-scripts
+      # Mesmo motivo do job : o cliente da imagem não é necessariamente o 16.
+      - name: Cliente psql 16 para este job
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client-16 \
+            || sudo apt-get install -y --no-install-recommends postgresql-client
+          psql --version
+      - name: Gerar o book sintético (insumo do e2e)
+        working-directory: Dados de Teste/book-vertentes
+        run: |
+          python3 -m pip install --quiet --only-binary :all: 'reportlab==5.0.1'
+          PYTHONPATH=. python3 gerar.py
+
       - name: Suíte e2e (extração → banco → export)
         run: ./portal/node_modules/.bin/tsx Verificação/run.mts
 
+  variacoes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        # 16 é a versão do Supabase em uso e a que as migrations assumem.
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGPASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+      # Mesmo comando (e mesmo porquê do --ignore-scripts) do job .
+      - name: Instalar dependências do portal para este job
+        working-directory: portal
+        run: npm ci --ignore-scripts
+      # Mesmo motivo do job : o cliente da imagem não é necessariamente o 16.
+      - name: Cliente psql 16 para este job
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client-16 \
+            || sudo apt-get install -y --no-install-recommends postgresql-client
+          psql --version
       - name: Arnês de variações — a cadeia real sobre documento sujo
         # POR QUE ELE ESTÁ NO CI. Cinco rodadas de variantes trocadas por completo
         # acharam cinco defeitos que nenhuma das outras suítes pega, porque todas
@@ -511,9 +645,44 @@ jobs:
         # o jeito mais bobo de deixar um portão vermelho.
         run: ./portal/node_modules/.bin/tsx Verificação/variacoes.mts
 
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: portal/package-lock.json
+      # Mesmo comando (e mesmo porquê do --ignore-scripts) do job .
+      - name: Instalar dependências do portal para este job
+        working-directory: portal
+        run: npm ci --ignore-scripts
       - name: Build do portal
         # O binário do lock, pelo mesmo motivo do passo de lint e tipos: `npx next`
         # sem versão baixaria o Next publicado no dia, e não o `next` que o
         # `package-lock.json` fixa e que o portal em produção usa.
         working-directory: portal
         run: ./node_modules/.bin/next build
+
+  # O AGREGADOR. Os seis jobs acima rodam EM PARALELO, cada um num runner próprio
+  # (antes era um job só, em série: 8,5 min medidos no run de 30/09 23:06–23:15).
+  # Este job existe para que a checagem continue se chamando `suites` — o nome que o PR e a proteção da
+  # branch esperam — e para que ela só fique verde se TODOS ficaram. Com
+  # `if: always()` ele roda mesmo quando um job falha, e é ELE que diz qual.
+  # Sem isso, um job cancelado ou pulado passaria por "não falhou".
+  suites:
+    if: always()
+    needs: [n8n-e-derivados, portal, banco, e2e, variacoes, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)
+        env:
+          RESULTADOS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTADOS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          ruins=$(echo "$RESULTADOS" | jq -r '[to_entries[] | select(.value.result != "success") | .key] | join(", ")')
+          if [ -n "$ruins" ]; then echo "::error::jobs que não passaram: $ruins"; exit 1; fi
