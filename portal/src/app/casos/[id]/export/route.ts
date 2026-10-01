@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
+import { veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import type { EntradaModeloInstitucional, LinhaModelo } from "@/lib/modelo-institucional";
 import {
   buildExportWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, type ConfigModelagem,
@@ -309,15 +310,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   let modeloInstitucional: EntradaModeloInstitucional | undefined;
   if (modo === "completo") {
     const portao = await supabase.rpc("fn_avaliar_portao2", { p_caso_id: id });
-    const aval = portao.data as { elegivel?: boolean; motivos?: string[] } | null;
+    const { estado, portao: aval } = veredictoDoPortao(portao);
     // FAIL-CLOSED: se o RPC falhou (ou não devolveu veredito) o Portão 2 é DESCONHECIDO,
-    // e desconhecido não é aberto. Antes o export seguia sobre base possivelmente não
-    // aprovada. Mesma resposta amigável do 409, status 503 por ser falha de conferência.
-    if (portao.error || !aval || typeof aval.elegivel !== "boolean") {
+    // e desconhecido não é aberto — a MESMA regra da tela (`veredictoDoPortao`). Antes o
+    // export seguia sobre base possivelmente não aprovada. Mesma resposta amigável do 409,
+    // status 503 por ser falha de conferência. O erro cru fica no log do servidor: a
+    // mensagem do Postgres não é para o navegador.
+    if (estado === "nao_conferido" || !aval) {
+      console.error("[export] Portão 2 não conferido", { caso_id: id, erro: portao.error?.message ?? null });
       return NextResponse.json(
         {
           error: "O export COMPLETO foi recusado: não foi possível conferir o Portão 2.",
-          motivos: [portao.error ? `consulta falhou: ${portao.error.message}` : "a consulta não devolveu veredito"],
+          motivos: ["Não foi possível conferir o Portão 2; recarregue a página ou tente mais tarde."],
           dica: "Tente de novo em instantes. \"Exportar dados\" continua disponível para conferir a "
             + "extração — esse modo não depende do portão. O completo carrega modelo projetado, e "
             + "projetar sem saber se a base foi aprovada daria aparência de resultado aprovado.",

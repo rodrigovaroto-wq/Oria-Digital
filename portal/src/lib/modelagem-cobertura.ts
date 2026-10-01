@@ -64,6 +64,31 @@ export function portaoNaoConferido(portao: PortaoDoExport | null | undefined): b
   return portao === null;
 }
 
+export type EstadoDoPortao = "aberto" | "fechado" | "nao_conferido";
+
+/**
+ * UMA REGRA SÓ para ler a resposta do RPC `fn_avaliar_portao2`, usada pela PÁGINA e pela
+ * ROTA do export. Antes cada uma tinha a sua: a rota recusava (503) quando `elegivel` não
+ * era booleano, e a tela só tratava `null` como não conferido — com o RPC respondendo `{}`
+ * a tela dizia "pronto", habilitava o botão, e o clique devolvia JSON cru.
+ *
+ * NÃO CONFERIDO = erro na consulta, resposta ausente, ou resposta sem `elegivel` booleano.
+ * Só `elegivel === true` é aberto e só `elegivel === false` é fechado: o que não é nenhum
+ * dos dois é desconhecido, e desconhecido nunca é aberto (regra 1).
+ */
+export function veredictoDoPortao(
+  resposta: { data?: unknown; error?: unknown } | null | undefined,
+): { estado: EstadoDoPortao; portao: PortaoDoExport | null } {
+  const d = resposta?.data;
+  if (resposta?.error || d === null || typeof d !== "object"
+      || typeof (d as { elegivel?: unknown }).elegivel !== "boolean") {
+    return { estado: "nao_conferido", portao: null };
+  }
+  const { elegivel, motivos } = d as { elegivel: boolean; motivos?: unknown };
+  const lista = Array.isArray(motivos) ? motivos.filter((m): m is string => typeof m === "string") : [];
+  return { estado: elegivel ? "aberto" : "fechado", portao: { elegivel, motivos: lista } };
+}
+
 /** A fração (0 a 1) medida pelo banco, como percentual inteiro — ou `null`
  * quando o banco não a mediu (chave ausente) ou não pôde medi-la
  * (`linhas_do_caso` zero). Nunca `0` por omissão. */
