@@ -1140,19 +1140,24 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   // 67.878 informados, e a linha de reconciliação absorvia 99 mil, ou seja, mais
   // do que o próprio grupo.
   //
-  // A REGRA AQUI EXIGE PROVA ARITMÉTICA, e é isso que a torna segura:
+  // O PRINCÍPIO ÚNICO (redesenho depois de três remendos seguidos na mesma lógica —
+  // 3f40571, 45c8df2 e o que viria): uma linha só deixa de somar NUM EXERCÍCIO quando, NAQUELE
+  // exercício, outras contas do mesmo bloco a EXPLICAM — duas ou mais delas somam o valor dela
+  // (centavo a centavo). Sem filhas que a expliquem, ela é conta-folha naquele exercício e fica.
   //
   //   1. o rótulo tem de ser EXATAMENTE um nome de grupo (lista fechada abaixo) —
   //      "Estoques" entra, "Estoques de matéria-prima" não;
-  //   2. o documento tem de informar o total DAQUELE grupo (a âncora DOC_*);
-  //   3. a soma das contas extraídas tem de EXCEDER esse total — sem excesso não
-  //      há dupla contagem para explicar, e nada é removido;
-  //   4. remover a linha tem de APROXIMAR a soma do informado, nunca ultrapassá-lo.
+  //   2. a explicação é DO EXERCÍCIO: as filhas presentes em Y somam o valor dela em Y. Um
+  //      exercício em que ela não tem filhas (o Balanço de 2024, sem abertura) a mantém, mesmo
+  //      que noutro exercício ela seja cabeçalho — por isso nada é herdado de outro ano;
+  //   3. o TOTAL INFORMADO (âncora DOC_*) não decide remoção: serve à linha de reconciliação,
+  //      que mostra o resíduo. Decidir por ele criava dois erros medidos: tirar conta de
+  //      verdade para "aproximar" um total (Clientes 28.000 no 39i; Fornecedores/Empréstimos no
+  //      0113) e deixar de tirar o cabeçalho certo porque o bloco tinha OUTRO excesso (PNC do
+  //      0113, reconciliação −7.500 em vez de −3.500).
   //
-  // Com isso, o documento simples — que imprime "Estoques" como conta-folha, sem
-  // abertura — nunca perde a conta: lá a soma não excede o informado, e a
-  // condição 3 já barra. A remoção é do MODELO; a linha continua no arquivo, na
-  // aba de dados, com o valor que a extração trouxe.
+  // A remoção é do MODELO; a linha continua no arquivo, na aba de dados, com o valor que a
+  // extração trouxe.
   const CABECALHOS_DE_GRUPO = new Set([
     // ativo circulante
     "disponivel", "disponibilidades", "caixa e equivalentes", "caixa e equivalentes de caixa",
@@ -1176,53 +1181,61 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     passivo_circulante: "DOC_PC", passivo_nao_circulante: "DOC_PNC",
     patrimonio_liquido: "DOC_PL",
   };
-  // A PROVA É POR EXERCÍCIO, e a remoção também. Antes ela rodava só no último exercício
-  // histórico e tirava a LINHA INTEIRA (todos os anos): "Estoques" é cabeçalho sintético no
-  // balancete de 2026 (soma das contas > total informado) e FOLHA nos Balanços de 2024 e 2025
-  // — a prova do último ano apagava a conta dos três. Medido no Krauspenhar (caso 33b58a89):
-  // resíduo de 53.924.564,46 (2024) e 43.569.482,33 (2025), 43% do ativo, e `Working Capital`
-  // sem linha de Estoques. Agora cada exercício histórico prova o seu e a linha perde SÓ o
-  // valor daquele ano; sem excesso naquele ano, nada sai dele.
-  const chaveDaLinha = (l: LinhaModelo) => `${l.secao_canonica ?? ""}||${l.chave}`;
-  const tirarAno = (bloco: BlocoModelo, quais: (l: LinhaModelo) => string | null, anoS: string) => {
+  // A REMOÇÃO É POR EXERCÍCIO e a linha perde SÓ o valor daquele ano. Antes (até 3f40571) a
+  // prova rodava no último exercício e tirava a LINHA INTEIRA: "Estoques" é cabeçalho sintético
+  // no balancete de 2026 e FOLHA nos Balanços de 2024 e 2025 — a conta sumia dos três.
+  // Medido no Krauspenhar (caso 33b58a89): resíduo de 53.924.564,46 (2024) e 43.569.482,33
+  // (2025), 43% do ativo.
+  const tirarAno = (bloco: BlocoModelo, motivos: Map<LinhaModelo, string>, anoS: string) => {
     const lista = linhasPorBloco.get(bloco) ?? [];
     linhasPorBloco.set(bloco, lista.flatMap((l) => {
-      const motivo = quais(l);
-      if (motivo === null) return [l];
+      const motivo = motivos.get(l);
+      if (motivo === undefined) return [l];
       const valores = Object.fromEntries(Object.entries(l.valores).filter(([a]) => a !== anoS));
       if (Object.keys(valores).length === 0) return [];
       return [{ ...l, valores, semValorPorCabecalho: { ...l.semValorPorCabecalho, [anoS]: motivo } }];
     }));
   };
-  // Linhas que a prova aritmética JÁ provou cabeçalho de grupo em algum exercício, por bloco, e
-  // os exercícios históricos sem total informado (sem âncora não há prova possível).
-  const provadas = new Map<BlocoModelo, Set<string>>();
-  const semAncora: Array<[BlocoModelo, string]> = [];
+  /**
+   * Duas ou mais contas de `pool` cujos valores somam `alvo` (±0,5 — a mesma folga da checagem de
+   * transposição), ou `null`. Soma de subconjuntos por programação dinâmica sobre centavos.
+   * TETO: 20.000 somas distintas; passando disso a busca desiste e o cabeçalho FICA na soma
+   * (o excesso aparece na reconciliação). Um bloco real tem dezenas de contas, não milhares.
+   */
+  const filhasQueSomam = (alvo: number, pool: Array<{ l: LinhaModelo; v: number }>): LinhaModelo[] | null => {
+    const TETO = 20000;
+    const alvoC = Math.round(alvo * 100);
+    let estados = new Map<number, number[]>([[0, []]]);
+    for (let i = 0; i < pool.length; i++) {
+      const vC = Math.round(pool[i].v * 100);
+      const novos = new Map(estados);
+      for (const [soma, idx] of estados) {
+        const ns = soma + vC;
+        const atual = novos.get(ns);
+        if (atual === undefined || atual.length < idx.length + 1) novos.set(ns, [...idx, i]);
+      }
+      estados = novos;
+      if (estados.size > TETO) return null;
+    }
+    for (let d = 0; d <= 50; d++) {
+      for (const k of d === 0 ? [alvoC] : [alvoC - d, alvoC + d]) {
+        const idx = estados.get(k);
+        if (idx && idx.length >= 2) return idx.map((i) => pool[i].l);
+      }
+    }
+    return null;
+  };
   for (const ano of [...ent.anosHistoricos].sort((a, b) => b - a)) {
     const anoS = String(ano);
-    for (const [bloco, chaveAncora] of Object.entries(ANCORA_DO_BLOCO) as Array<[BlocoModelo, string]>) {
+    for (const bloco of Object.keys(ANCORA_DO_BLOCO) as BlocoModelo[]) {
       const lista = linhasPorBloco.get(bloco);
-      const ancora = ancoras.get(chaveAncora);
       if (!lista || lista.length === 0) continue;
-      const informado = ancora?.valores[anoS];
-      if (typeof informado !== "number" || informado === 0) { semAncora.push([bloco, anoS]); continue; }
       const valorDe = (l: LinhaModelo) => l.valores[anoS] ?? 0;
-      let soma = lista.reduce((s, l) => s + valorDe(l), 0);
-      // TOLERÂNCIA EM MÓDULO, e não `informado * 1.005`. O total informado pode
-      // ser NEGATIVO — patrimônio líquido a descoberto é o caso normal num
-      // mandato de reestruturação (a Canastra Indústria do book tem PL −4.221) —
-      // e multiplicar um número negativo por 1,005 afrouxa o limiar para o lado
-      // errado. Nos cenários que medi as duas formas decidem igual (a segunda
-      // guarda segura o caso), mas "meio por cento do tamanho" é o que a regra
-      // quer dizer, e é o que ela passa a dizer.
-      const tolerancia = Math.abs(informado) * 0.005;
-      if (soma - informado <= tolerancia) continue;
-      const somaAntes = soma;
       const candidatos = lista
         .filter((l) => CABECALHOS_DE_GRUPO.has(chaveDeAncora(l.chave))
           || CABECALHOS_DE_GRUPO.has(chaveDeAncora(l.rotulo_norm)))
         .sort((a, b) => Math.abs(valorDe(b)) - Math.abs(valorDe(a)));
-      const remover = new Set<LinhaModelo>();
+      const removidas = new Map<LinhaModelo, string>();
       for (const c of candidatos) {
         const v = valorDe(c);
         if (v === 0) continue;
@@ -1234,48 +1247,30 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
         // um cabeçalho de grupo é a SOMA de vários componentes, e coincidir no
         // centavo com um deles é assinatura de transposição, não de agrupamento.
         if (lista.some((o) => o !== c && Math.abs(valorDe(o) - v) < 0.5)) continue;
-        const depois = soma - v;
-        // Só remove o que APROXIMA do informado sem passar do ponto — as duas
-        // comparações em MÓDULO, pelo mesmo motivo da tolerância acima.
-        if (depois - informado < -tolerancia) continue;
-        if (Math.abs(depois - informado) >= Math.abs(soma - informado)) continue;
-        remover.add(c);
-        soma = depois;
+        // FILHA NÃO É NOME DE GRUPO. Sem esta guarda a aritmética casa por acaso: no Vertentes
+        // (assert do modelo base) "Clientes" 26.000 = "Caixa e equivalentes de caixa" 8.000 +
+        // "Estoques" 18.000, e a conta de verdade saía do circulante (17 remoções erradas na
+        // suíte, medidas contra o 45c8df2). Duas contas que são, elas mesmas, nomes de grupo são
+        // IRMÃS do candidato, não componentes dele. Teto: um componente que tenha nome de grupo
+        // ("Reservas de lucros" sob "Reservas") não explica ninguém — o cabeçalho fica na soma e o
+        // excesso aparece na reconciliação, que é o erro visível e não o calado.
+        const ehNomeDeGrupo = (o: LinhaModelo) => CABECALHOS_DE_GRUPO.has(chaveDeAncora(o.chave))
+          || CABECALHOS_DE_GRUPO.has(chaveDeAncora(o.rotulo_norm));
+        const pool = lista
+          .filter((o) => o !== c && !removidas.has(o) && valorDe(o) !== 0 && !ehNomeDeGrupo(o))
+          .map((o) => ({ l: o, v: valorDe(o) }));
+        const filhas = filhasQueSomam(v, pool);
+        if (!filhas) continue;
+        const soma = filhas.reduce((t, f) => t + valorDe(f), 0);
+        const informado = ancoras.get(ANCORA_DO_BLOCO[bloco]!)?.valores[anoS];
+        removidas.set(c, `Cabeçalho de grupo: em ${anoS}, ${filhas.map((f) => f.chave).join(" + ")} somam `
+          + `${soma.toLocaleString("pt-BR")}, exatamente o valor desta linha (${v.toLocaleString("pt-BR")}) — ela é o `
+          + "total do grupo, não uma conta, e quem carrega o saldo são as filhas. Efeito: o valor sai da soma do "
+          + "modelo neste exercício; mantê-lo dobraria o grupo."
+          + (typeof informado === "number" ? ` Total do bloco informado no documento: ${informado.toLocaleString("pt-BR")}.` : ""));
       }
-      // TUDO OU NADA. Tirar uma conta que só "aproxima" e deixa o excesso de pé é compensar o
-      // erro de OUTRA linha com uma conta de verdade: medido num arranjo em que um sintético de
-      // 50.000 fora da lista de nomes dobrava o circulante, a prova tirava "Clientes" (28.000,
-      // folha) e o modelo ficava 100.000 contra 78.000 informados — o erro trocado de lugar e
-      // com cara de tratado. Se a remoção não fecha o grupo no informado (dentro da tolerância),
-      // nada sai e o excesso fica à vista na linha de reconciliação.
-      if (remover.size > 0 && soma - informado > tolerancia) continue;
-      if (remover.size > 0) {
-        const nomes = new Set([...remover].map(chaveDaLinha));
-        if (!provadas.has(bloco)) provadas.set(bloco, new Set());
-        for (const n of nomes) provadas.get(bloco)!.add(n);
-        tirarAno(bloco, (l) => nomes.has(chaveDaLinha(l))
-          ? `Cabeçalho de grupo: em ${anoS} a soma das contas do bloco excedia o total informado `
-            + `no documento (${informado.toLocaleString("pt-BR")}) em ${(somaAntes - informado).toLocaleString("pt-BR")}, `
-            + `e este valor (${valorDe(l).toLocaleString("pt-BR")}) é o do grupo, não de uma conta. Quem carrega o `
-            + "saldo são as filhas. Efeito: o valor sai da soma do modelo neste exercício; deixá-lo dobraria o grupo."
-          : null, anoS);
-      }
+      if (removidas.size > 0) tirarAno(bloco, removidas, anoS);
     }
-  }
-  // EXERCÍCIO SEM TOTAL INFORMADO: não há como provar, e somar de volta o grupo que a prova
-  // tirou noutro exercício dobraria o bloco calado (antes de 3f40571 a prova do último ano
-  // tirava a linha de todos os anos; aqui o ano sem âncora herda a decisão, e DIZ que herdou).
-  // Teto: se a conta for folha neste ano, ela sai por herança — por isso a nota da célula.
-  for (const [bloco, anoS] of semAncora) {
-    const nomes = provadas.get(bloco);
-    if (!nomes) continue;
-    tirarAno(bloco, (l) => nomes.has(chaveDaLinha(l)) && l.valores[anoS] !== undefined
-      ? `Cabeçalho de grupo por herança: o documento não informa o total do bloco em ${anoS}, então `
-        + "não há prova aritmética neste exercício; a linha foi provada cabeçalho de grupo em outro "
-        + "exercício (a soma das contas excedia o total informado) e seu valor "
-        + `(${(l.valores[anoS] ?? 0).toLocaleString("pt-BR")}) fica fora da soma. Efeito: se aqui ela for uma conta `
-        + "(e não o grupo), o bloco fica menor que o real por este valor."
-      : null, anoS);
   }
 
   // ---- normalização de sinal, bloco a bloco --------------------------------
