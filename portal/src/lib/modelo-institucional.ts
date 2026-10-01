@@ -1865,8 +1865,11 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
   const blocoCS = (l: LinhaModelo) => (custos.includes(l) ? "custo" : "sga");
   const rateioCS = gruposRateados(ctx, [...custos, ...sgaDoCaso], (l) => chaveLinha(blocoCS(l), l),
     "pct_de_linha", saldoHistRec);
-  for (const l of custos) {
-    const ch = chaveLinha("custo", l);
+  // Custo e SG&A declaram as MESMAS linhas por conta (valor, três cenários e, se a
+  // conta está num grupo de rateio com saldo, a parcela) — um ponto só, para os dois
+  // blocos não divergirem (e o Sonar reprovou a cópia: 12 linhas duplicadas).
+  const declararContaCS = (bloco: "custo" | "sga", l: LinhaModelo) => {
+    const ch = chaveLinha(bloco, l);
     const p = ctx.premissaPorLinha.get(l.rotulo_norm);
     g.linha(ch, { rotulo: l.chave, nota: p ? p.nome : "(sem premissa)", fmt: NUM });
     g.linha(`${ch}#base`, { rotulo: "    Base Case", fmt: PCT });
@@ -1875,24 +1878,15 @@ function abaReceita(wb: ExcelJS.Workbook, ctx: Ctx, gPrem: Grade, gAnual: Grade)
     if (rateioCS.get(ch) && !rateioCS.get(ch)!.semSaldo) {
       g.linha(`${ch}#part`, { rotulo: "    Parcela da conta no grupo da premissa", fmt: PCT });
     }
-  }
+  };
+  for (const l of custos) declararContaCS("custo", l);
   g.linha("CUSTOS_PCT", { rotulo: "    % da receita líquida", fmt: PCT });
   g.pular();
 
   // ---- SG&A ----------------------------------------------------------------
   g.linha("SGA", { sinal: "(-)", rotulo: "SG&A", bloco: true, fmt: NUM });
   const sga = ctx.linhasPorBloco.get("sga") ?? [];
-  for (const l of sga) {
-    const ch = chaveLinha("sga", l);
-    const p = ctx.premissaPorLinha.get(l.rotulo_norm);
-    g.linha(ch, { rotulo: l.chave, nota: p ? p.nome : "(sem premissa)", fmt: NUM });
-    g.linha(`${ch}#base`, { rotulo: "    Base Case", fmt: PCT });
-    g.linha(`${ch}#cli`, { rotulo: "    Cliente Case", fmt: PCT });
-    g.linha(`${ch}#str`, { rotulo: "    Stress Case", fmt: PCT });
-    if (rateioCS.get(ch) && !rateioCS.get(ch)!.semSaldo) {
-      g.linha(`${ch}#part`, { rotulo: "    Parcela da conta no grupo da premissa", fmt: PCT });
-    }
-  }
+  for (const l of sga) declararContaCS("sga", l);
   g.linha("SGA_PCT", { rotulo: "    % da receita líquida", fmt: PCT });
   g.pular();
 
