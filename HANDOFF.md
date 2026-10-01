@@ -106,8 +106,19 @@ com o processo certo: receita bruta 114,76/113,38 mi, resíduo ~0, EBITDA de cen
 | `86c459f` | **0198**: faixa "2024-2026" perdia 2025 (só o Mapa de Dívida do Krauspenhar muda) | aplicar |
 | `d5be032` | **Export: agrupamento de um documento apagava a folha homônima de outro** — Krauspenhar: receita bruta 77,19 → 113,38 mi, resíduo 36,19 → 0 | merge |
 | `1b440ac` | DRE analítica com 33 de 43 sintéticas sem fechar → `extracao_falhou` (hierarquia de códigos) | republicar |
+| `69e6666` | O assert (0109d) do verificar-export passava SEMPRE (regex com `|` sem escape casava vazio) — achado pelo Sonar como bug | — |
+| `507915b` | Revisão independente: a guarda de hierarquia acusava o Balanço 2025 real (código reduzido de 4 dígitos cortava as filhas). Controle negativo real agora no teste | republicar |
+| `012087e` | Revisão independente: mesma premissa em custo E SG&A ainda projetava 2×; bases diferentes no giro ganham nota do efeito | merge |
 | `a6d5231`, `9d692a1` | Sonar (complexidade, template aninhado), sem mudar comportamento | — |
 | grafo | derivado regerado a cada leva | — |
+
+**Revisão independente de `8c0821d..HEAD`:** feita. Os 2 achados que sobreviveram (falso positivo
+da hierarquia no Balanço 2025; premissa em custo+SG&A 2×) viraram `507915b` e `012087e`. A
+RECONFIRMAÇÃO desses dois pelo revisor NÃO aconteceu: o agente parou no limite de uso da conta.
+**Primeira coisa da próxima sessão:** pedir ao `revisor-defeito-silencioso` que rode os scripts dele
+(`revisor2/dbg2.mjs`, `hier.mjs` — o scratchpad some com o container; refazer a medição contra
+`campo_extraido` de produção) sobre a lib nova e revise `012087e` (sinais opostos no mesmo grupo
+custo+SG&A). Até lá, a republicação do n8n está liberada pelo achado 1, mas sem a segunda leitura.
 
 ### 4. O QUE O DONO FAZ À MÃO (modo manual — o automático recusa)
 
