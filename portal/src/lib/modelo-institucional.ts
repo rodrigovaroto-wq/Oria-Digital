@@ -1194,7 +1194,7 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   const SUBGRUPOS: Record<string, string[]> = {
     "disponivel": ["caixa e equivalentes", "caixa e equivalentes de caixa", "aplicacoes financeiras", "titulos e valores mobiliarios"],
     "disponibilidades": ["caixa e equivalentes", "caixa e equivalentes de caixa", "aplicacoes financeiras", "titulos e valores mobiliarios"],
-    "contas a receber": ["clientes", "outros creditos"],
+    "contas a receber": ["clientes"],
     "reservas": ["reservas de lucros", "reservas de capital"],
     "obrigacoes tributarias": ["tributos a recolher", "impostos a recolher"],
     "obrigacoes fiscais": ["tributos a recolher", "impostos a recolher"],
@@ -1258,30 +1258,39 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     const janela = arredondada ? 200 : 50;
     const folgaC = (k: number) => (arredondada ? Math.min(50 * (k + 1), 200) : 50);
     const viva = (soma: number, i: number) => soma + pos[i] >= alvoC - janela && soma + neg[i] <= alvoC + janela;
-    let estados = new Map<number, { idx: number[]; vias: number }>([[0, { idx: [], vias: 1 }]]);
+    // `vias` por TAMANHO do subconjunto: a folga depende de quantas contas somam, e contar tudo
+    // junto aceitava subconjuntos fora da folga deles (alvo 33 em 9 contas: 19 vias contra 16).
+    type Estado = { idx: number[]; vias: Map<number, number> };
+    let estados = new Map<number, Estado>([[0, { idx: [], vias: new Map([[0, 1]]) }]]);
     for (let i = 0; i < pool.length; i++) {
-      const novos = new Map<number, { idx: number[]; vias: number }>();
-      const somar = (soma: number, idx: number[], vias: number) => {
-        const atual = novos.get(soma);
-        if (!atual) { novos.set(soma, { idx, vias }); return; }
-        atual.vias += vias;
-        if (idx.length > atual.idx.length) atual.idx = idx;
+      const novos = new Map<number, Estado>();
+      const somar = (soma: number, idx: number[], vias: Map<number, number>, deslocar: number) => {
+        let atual = novos.get(soma);
+        if (!atual) { atual = { idx, vias: new Map() }; novos.set(soma, atual); }
+        else if (idx.length > atual.idx.length) atual.idx = idx;
+        for (const [k, n] of vias) atual.vias.set(k + deslocar, (atual.vias.get(k + deslocar) ?? 0) + n);
       };
       for (const [soma, { idx, vias }] of estados) {
-        if (viva(soma, i + 1)) somar(soma, idx, vias);
+        if (viva(soma, i + 1)) somar(soma, idx, vias, 0);
         const ns = soma + vC[i];
-        if (viva(ns, i + 1)) somar(ns, [...idx, i], vias);
+        if (viva(ns, i + 1)) somar(ns, [...idx, i], vias, 1);
       }
       estados = novos;
       if (estados.size > TETO) return "teto";
     }
+    // Teto declarado: o `idx` guardado é o do subconjunto MAIS LONGO da soma. Se só ele estiver
+    // fora da folga e um menor estiver dentro, as `vias` contam o menor mas não há como removê-lo
+    // (devolve `null`: a linha fica, o lado conservador).
     let vias = 0; let exatas = 0;
     let idxExato: number[] | null = null; let idxFolgado: number[] | null = null;
     for (const [soma, e] of estados) {
-      if (e.idx.length === 0 || Math.abs(soma - alvoC) > folgaC(e.idx.length)) continue;
-      vias += e.vias;
-      if (Math.abs(soma - alvoC) <= 50) { exatas += e.vias; if (e.idx.length >= 2) idxExato = e.idx; }
-      else if (e.idx.length >= 2) idxFolgado = e.idx;
+      const dentro = [...e.vias].filter(([k]) => k >= 1 && Math.abs(soma - alvoC) <= folgaC(k));
+      if (dentro.length === 0) continue;
+      const n = dentro.reduce((t, [, c]) => t + c, 0);
+      vias += n;
+      const valido = e.idx.length >= 2 && Math.abs(soma - alvoC) <= folgaC(e.idx.length);
+      if (Math.abs(soma - alvoC) <= 50) { exatas += n; if (valido) idxExato = e.idx; }
+      else if (valido) idxFolgado = e.idx;
     }
     const idxAchado = idxExato ?? idxFolgado;
     return idxAchado ? { filhas: idxAchado.map((j) => pool[j].l), vias, exatas } : null;
@@ -1328,17 +1337,19 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
         const corroborado = typeof informado === "number" && informado !== 0
           && Math.abs(somaDoBloco - v - informado) <= Math.abs(informado) * 0.005;
         const precisaCorroborar = filhas !== null && filhas !== "teto" && (filhas.vias > 1 || filhas.exatas === 0);
-        if (filhas === "teto" || (precisaCorroborar && !corroborado && filhas.vias > 1)) {
+        if (filhas === "teto" || (precisaCorroborar && !corroborado)) {
+          const alvoTxt = v.toLocaleString("pt-BR");
           avisos.set(c, `Cabeçalho de grupo NÃO verificado em ${anoS}: `
             + (filhas === "teto"
-              ? `a busca de contas que somem ${v.toLocaleString("pt-BR")} desistiu por excesso de combinações. `
-              : `mais de um conjunto de contas do bloco soma ${v.toLocaleString("pt-BR")} (coincidência, não estrutura) `
-                + "e o total informado não corrobora a remoção. ")
+              ? `a busca de contas que somem ${alvoTxt} desistiu por excesso de combinações. `
+              : filhas.vias > 1
+                ? `mais de um conjunto de contas do bloco soma ${alvoTxt} (coincidência, não estrutura) e o total informado não corrobora a remoção. `
+                : `um conjunto de contas soma ${alvoTxt} só com a folga de arredondamento da série e o total informado não corrobora a remoção — a linha pode estar somando com as filhas. `)
             + "Efeito: a linha ficou na soma do modelo; se for o total de um grupo, o bloco está dobrado "
             + "por este valor — confira a linha de reconciliação.");
           continue;
         }
-        if (!filhas || (precisaCorroborar && !corroborado)) continue;
+        if (!filhas) continue;
         const filhasLinhas = filhas.filhas;
         const soma = filhasLinhas.reduce((t, f) => t + valorDe(f), 0);
         removidas.set(c, `Cabeçalho de grupo: em ${anoS}, ${filhasLinhas.map((f) => f.chave).join(" + ")} somam `

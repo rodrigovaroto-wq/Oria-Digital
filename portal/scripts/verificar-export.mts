@@ -8428,6 +8428,35 @@ const arranjoDeCirculante = (ENT: string) => {
       JSON.stringify(rRecP > 0 ? m.ler(m.bs, rRecP, "E") : "linha ausente"));
   }
 
+  // ---- (39p) MÉDIO: soma que só fecha com a folga e sem total informado: a linha fica, COM aviso ----
+  // O 39o sem "Passivo Não Circulante" informado: Provisões 4.000 = 1.500 + 2.501 só com a folga de
+  // arredondamento, nada corrobora a remoção. Ela fica na soma (o PNC dobra 4.000) — e a célula
+  // tem de DIZER que não foi verificada e o efeito, porque sem total não há reconciliação.
+  {
+    const P = "passivo_nao_circulante";
+    const m = montarSemOrdem("P", "2024", "Empréstimos bancários", P, 30000, ([
+      ["Empréstimos bancários", 30000], ["Provisões", 4000], ["Provisão cível", 1500], ["Provisão trabalhista", 2501],
+    ] as const).map(([n, v]) => linhaA(n, { "2024": v }, "BALANCO", "conta", P)), [2024], [2025, 2026]);
+    const nota = m.nota(m.bs, m.achar(m.bs, "Provisões"), "E");
+    checar(/NÃO verificado/.test(nota) && /Efeito/.test(nota) && /folga de arredondamento/.test(nota),
+      "(39p) 2024: Provisões que só fecha com a folga, sem total informado, fica na soma COM aviso (motivo e efeito)", nota);
+  }
+
+  // ---- (39q) BAIXO: "Outros créditos" é IRMÃ de Contas a receber, não filha ------------------
+  // Contas a receber 1.200 (folha), Outros créditos 700, Adiantamento a fornecedores 500: 700 + 500
+  // = 1.200 por acaso. A tabela de subgrupos listava "outros creditos" sob "contas a receber".
+  {
+    const m = montarSemOrdem("Q", "2024", "Contas a receber", "ativo_circulante", 1200, [
+      linhaA("Contas a receber", { "2024": 1200 }, "BALANCO"),
+      linhaA("Outros créditos", { "2024": 700 }, "BALANCO"),
+      linhaA("Adiantamento a fornecedores", { "2024": 500 }, "BALANCO"),
+    ], [2024], [2025, 2026]);
+    const rCr = m.achar(m.wc, "Contas a receber");
+    checar(rCr > 0 && perto(m.ler(m.wc, rCr, "E"), 1200),
+      "(39q) 2024: 'Contas a receber' (folha) fica no modelo — Outros créditos + Adiantamento somam 1.200 por acaso",
+      JSON.stringify(rCr > 0 ? m.ler(m.wc, rCr, "E") : "linha ausente"));
+  }
+
 }
 
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);
