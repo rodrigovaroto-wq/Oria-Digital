@@ -7059,6 +7059,9 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     "Capital de giro Banrisul - CP",
     // grupo com UM item só, e esse item é dívida: o rótulo diz o que é (tirá-lo calava dívida e juro)
     "Outras obrigações (financiamento BNDES)", "Outras contas a pagar: empréstimo Banco X",
+    // vários itens, todos dívida (credor ou linha de financiamento só pelo nome): não é misto
+    "Outras obrigações (BNDES, FINAME e capital de giro Banco X)",
+    "Outras obrigações: capital de giro Bradesco e Itaú",
     // sem enumeração o próprio nome diz o que é: continua dívida
     "Outras contas a pagar - empréstimo de sócios",
   ];

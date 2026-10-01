@@ -843,10 +843,16 @@ const PADROES_DIVIDA_FINANCEIRA = [
 // Sem a flag `u` o `\b` não existe entre "ú" e o espaço ("Itaú - LP" não casava): as bordas são
 // "não-letra" por propriedade Unicode. "caixa" sozinho fica fora (é também o caixa da empresa):
 // só "Caixa Econômica".
+// A lista de credores é UMA só: serve ao capital de giro e a `itemDeGrupoEhDivida`.
+const CREDORES = String.raw`banco|bco|bradesco|ita[úu]|santander|sicredi|sicoob|safra|bndes|daycoval|bb|`
+  + String.raw`caixa econ[ôo]mica|banrisul|brb`;
 const CAPITAL_DE_GIRO_BANCARIO = new RegExp(
   String.raw`^(?=.*(?<![\p{L}\d])capital de giro(?![\p{L}\d]))`
-  + String.raw`(?=.*(?<![\p{L}\d])(?:banco|bco|bradesco|ita[úu]|santander|sicredi|sicoob|safra|bndes|daycoval|bb|`
-  + String.raw`caixa econ[ôo]mica|banrisul|brb)(?![\p{L}\d]))`, "iu");
+  + String.raw`(?=.*(?<![\p{L}\d])(?:${CREDORES})(?![\p{L}\d]))`, "iu");
+// Item de enumeração que é só o NOME do credor ou da linha de financiamento ("BNDES", "FINAME",
+// "Itaú") não casa nenhum padrão de dívida, mas é dívida: sem isto "Outras obrigações (BNDES,
+// FINAME e capital de giro Banco X)" virava grupo misto e o saldo todo saía da dívida.
+const ITEM_DE_CREDOR = new RegExp(String.raw`(?<![\p{L}\d])(?:${CREDORES}|finame)(?![\p{L}\d])`, "iu");
 
 // UM GRUPO DE OBRIGAÇÕES QUE APENAS CITA UM INSTRUMENTO DE DÍVIDA NÃO É DÍVIDA.
 //
@@ -876,7 +882,8 @@ export const grupoDeObrigacoesQueCitaDivida = (chave: string) => {
   const cabeca = CABECA_DE_GRUPO.exec(chave);
   if (!cabeca) return false;
   const itens = chave.slice(cabeca[0].length).split(/\s*(?:,|;|\s+e\s+)\s*/).map((i) => i.trim()).filter(Boolean);
-  return itens.length >= 2 && itens.some(citaInstrumentoDeDivida) && itens.some((i) => !citaInstrumentoDeDivida(i));
+  const ehDivida = (i: string) => citaInstrumentoDeDivida(i) || ITEM_DE_CREDOR.test(i);
+  return itens.length >= 2 && itens.some(ehDivida) && itens.some((i) => !ehDivida(i));
 };
 
 export const ehDividaFinanceira = (chave: string) =>
