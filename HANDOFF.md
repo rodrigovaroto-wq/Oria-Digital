@@ -116,26 +116,41 @@ com o processo certo: receita bruta 114,76/113,38 mi, resíduo ~0, EBITDA de cen
 | `69e6666` | O assert (0109d) do verificar-export passava SEMPRE (regex com `|` sem escape casava vazio) — achado pelo Sonar como bug | — |
 | `507915b` | Revisão independente: a guarda de hierarquia acusava o Balanço 2025 real (código reduzido de 4 dígitos cortava as filhas). Controle negativo real agora no teste | republicar |
 | `012087e` | Revisão independente: mesma premissa em custo E SG&A ainda projetava 2×; bases diferentes no giro ganham nota do efeito | merge |
+| `7ad782c`, `9f096c5` | Guarda de hierarquia: aging certo acusado → regra de três → REDESENHO (só estrutura inequívoca; cala na dúvida). Corpus 1.387 docs: 0 disparos novos, 0 vereditos invertidos | republicar |
+| `5f40d21` | Portão 2: helper único do veredito, botão desabilitado com texto visível, 503 sem erro cru | merge |
+| `fa6ccda`, `7b9e820`, `3b803cb` | CI em 6 jobs paralelos + agregador `suites` (falha se qualquer job não for `success`, inclusive cancelado) | — |
+| `bf19d42` | **Export: CDI parcial (9 meses) virava taxa anual e, sem Focus de CDI, a projeção cobrava juro ZERO** — achado no E2E. Krauspenhar real: curva 2027-30 0 → 12/10,5/10/10%; juros do revolver 0 → 2,64–4,21 mi/ano; revolver 2030 36,16 → 50,02 mi | merge |
 | `a6d5231`, `9d692a1`, `466bc32` | Sonar (complexidade, template aninhado, duplicação 5,3% do Quality Gate), sem mudar comportamento | — |
 | grafo | derivado regerado a cada leva | — |
 
-**Revisão independente de `8c0821d..HEAD`:** feita. Os 2 achados que sobreviveram (falso positivo
-da hierarquia no Balanço 2025; premissa em custo+SG&A 2×) viraram `507915b` e `012087e`. A
-RECONFIRMAÇÃO desses dois pelo revisor NÃO aconteceu: o agente parou no limite de uso da conta.
-**Primeira coisa da próxima sessão:** pedir ao `revisor-defeito-silencioso` que rode os scripts dele
-(`revisor2/dbg2.mjs`, `hier.mjs` — o scratchpad some com o container; refazer a medição contra
-`campo_extraido` de produção) sobre a lib nova e revise `012087e` (sinais opostos no mesmo grupo
-custo+SG&A). Até lá, a republicação do n8n está liberada pelo achado 1, mas sem a segunda leitura.
+**Revisão independente de `8c0821d..HEAD`:** feita, e RECONFIRMADA em 01/10. Os achados que
+sobreviveram viraram `507915b`, `012087e`, `7ad782c`. A guarda de hierarquia bateu na regra de três
+correções (Balanço 2025 Krauspenhar → aging do Canastra → DFC da Fort Lub) e foi REDESENHADA em
+`9f096c5`: só avalia sintética de estrutura inequívoca e se cala na dúvida. Segunda leitura do
+desenho novo (revisor, corpus de 1.387 documentos de produção, veredito por sintética contra
+`1b440ac`): **nada sobreviveu** — 3 disparos (o único perdido é o falso positivo do Balanço), 0
+vereditos invertidos, 13 sintéticas viram "não avaliável" (o preço declarado). As três DREs com
+deslocamento seguem disparando (31/41, 10/15, 36/50). **A republicação da ingestão está liberada.**
 
-**A guarda de hierarquia (`1b440ac`) bateu na regra de três correções.** Cada correção abriu um
-falso positivo novo em documento CERTO, achado pela revisão sobre o corpus de produção: Balanço 2025
-Krauspenhar (corrigido em `507915b`) → aging do Canastra "1 a 30 dias" (`7ad782c`) → DFC da Fort Lub,
-cujas seções de topo sem desdobramento ("4 -", "5 -", "6 -") eram adotadas como filhas de "3.4". Em
-vez de um quarto remendo, o desenho mudou (01/10): a guarda só avalia sintética de estrutura
-INEQUÍVOCA e se cala na dúvida — perder detecção é aceito para não acusar documento certo. E a
-medição passou a ser a MUDANÇA DE VEREDITO por sintética no corpus, não só a contagem de disparos
-(5 documentos mudaram de veredito sem disparar, e por isso a medição da `7ad782c` não viu).
-**Não republique a ingestão com a guarda antes de o desenho novo estar medido e revisado.**
+### 3b. Validação de 01/10 (tudo só leitura em produção, exceto o caso de TESTE `72d9210a`)
+
+- **Suíte local no HEAD:** 27/27 etapas do `suites.yml` OK (inclusive `run.sh`, conferidor, sonda
+  sem buraco, E2E, variações e `next build`). CI: os 6 jobs + agregador verdes; Sonar QG OK.
+- **Conexões de produção:** as 60 funções que n8n e portal chamam existem no `pg_proc` de produção;
+  workflows `erros` (59DPz4s2d3DHSR9M) e `macro` (UGhv57BU3YNukVxV) batem com o repositório nó a nó
+  (só default do n8n difere) — o `conferir-publicado` não os acha porque o NOME publicado tem
+  "SARF" ("Oria SARF — Reportar Erros") e o do repositório não; ingestão = `bc439fa` (diverge do
+  HEAD, esperado até republicar); portal de produção = `8c0821d` (`main`), `/login` 200.
+- **E2E do portal do branch no caso de TESTE** (build local contra produção, Playwright): parâmetros
+  salvos; as 7 sugestões do realizado "Usar" gravaram os valores em pontos (SG&A 23,62; PMR 153,30;
+  PME 96,79; PMP 111,13; parcela onerosa 38,39; taxa 15,17; custo variável 87,97); lote "aplicar às
+  6 contas" ok; **Portão 2 recusou o export completo (409, 4 bloqueantes)**; com as 4 pendências de
+  Kit Básico decididas "Prosseguir sem resolução" (só no caso de teste) → 200, `auditar-xlsx` 11/11,
+  balanço fecha nas 7 colunas, DRE do realizado com diferença zero. Krauspenhar NÃO foi tocado
+  (hash das linhas de modelagem conferido antes/depois).
+- **O E2E achou o `bf19d42`** (CDI → juro zero na projeção, ver tabela). Ainda no Krauspenhar, o
+  `auditar-xlsx` dá 10/11 ANTES e DEPOIS: o resíduo de reconciliação do ativo circulante é 43% do
+  ativo total (14 células) — anterior a este PR, entra em §5 como item novo (l).
 
 ### 4. O QUE O DONO FAZ À MÃO (modo manual — o automático recusa)
 
@@ -185,6 +200,10 @@ i. **Um valor por código de premissa por caso** impede crescimentos diferentes 
    −38% × pós-venda 0%): desenho de premissa por grupo de linhas.
 j. `fn_reconciliar_ativo_passivo_pl` multiplica a tolerância pela escala (S103 §3.6f) — não tocado.
 k. Sonar: issues menores do portal no PR (template aninhado, ternário) — Quality Gate passa.
+l. **Krauspenhar: resíduo do ativo circulante 43% do ativo total** (Balance Sheet!E6:G6, 53,9/43,6 mi) —
+   medir se é o subtotal codificado de (d) entrando como conta antes de mexer.
+m. `conferir-publicado` não acha `erros`/`macro` por nome ("Oria SARF — …" publicado × "Oria — …" no
+   repositório): renomear um dos lados é decisão do dono; o conteúdo bate.
 
 ### 6. Armadilhas novas
 

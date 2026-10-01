@@ -18,6 +18,11 @@
 > **A análise externa do Krauspenhar colada no pedido foi conferida item a item** (HANDOFF S104 §2):
 > 1, 3, 6, 8 e 11 confirmados; 2 e 5 parciais; 9 invertido; 10 desatualizado; e os "sinais de
 > estresse em ago/26" são artefato das colunas trocadas do balancete (estoque real 47,96 mi, não 61,6).
+>
+> **Validação de 01/10** (HANDOFF S104 §3b): suíte local 27/27, CI (6 jobs + agregador) e Sonar
+> verdes; revisão da guarda de hierarquia redesenhada (`9f096c5`): nada sobreviveu — a republicação
+> está liberada. O E2E do portal do branch no caso de teste achou e o `bf19d42` corrigiu o CDI que
+> cobrava juro ZERO de 2027 em diante (Krauspenhar: juros do revolver 0 → 2,64–4,21 mi/ano).
 
 ## SESSÃO 103 (30/09/2026) — produção em `0195`, ingestão destravada, mandato de teste ponta a ponta no ar
 
