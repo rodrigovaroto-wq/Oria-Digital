@@ -31,7 +31,7 @@ import assert from 'node:assert/strict';
 import {
   conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha,
   papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete,
-  conferirHierarquiaDeCodigos, blocosDeLinha, linhasDaHierarquia, fechaComDeslocamento, filhasDiretas, classificarHierarquia,
+  conferirHierarquiaDeCodigos, blocoDaSintetica, blocosDeLinha, linhasDaHierarquia, fechaComDeslocamento, filhasDiretas, classificarHierarquia,
 } from '../lib/aritmetica.mjs';
 import { readFileSync } from 'node:fs';
 
@@ -656,8 +656,8 @@ test('hierarquia: a DRE real deslocada reprova — UM problema, com contagens, e
   const copia = JSON.stringify(campos);
   const problemas = conferirHierarquiaDeCodigos(campos);
   assert.equal(problemas.length, 1);
-  assert.match(problemas[0], /33 de 43 contas sintéticas não fecham com a soma das filhas diretas \(coluna total\)/);
-  assert.match(problemas[0], /10 fecham como gravadas e a hipótese de valor deslocado uma linha explica 18 delas/);
+  assert.match(problemas[0], /31 de 41 contas sintéticas não fecham com a soma das filhas diretas \(coluna total\)/);
+  assert.match(problemas[0], /10 fecham como gravadas e a hipótese de valor deslocado uma linha explica 17 delas/);
   assert.match(problemas[0], /Rótulo repetido em sequência em: 3\.01\.01\.03 VENDAS DE USADOS; 001259 Receita com venda de outras peças/);
   assert.match(problemas[0], /Exemplo: "3\.01\.01\.04 \(-\) DEDUCOES DE VENDAS E SERVICOS" declara -12\.864,22/);
   assert.doesNotMatch(problemas[0], /a partir da p[áa]gina/i, 'não afirma página de início');
@@ -691,7 +691,7 @@ test('hierarquia: sem códigos hierárquicos, entrada inválida e coluna Total a
 });
 
 test('hierarquia: a função + helpers embutidos funcionam isolados (toString) e estão no workflow', () => {
-  const fs = [blocosDeLinha, linhasDaHierarquia, filhasDiretas, fechaComDeslocamento, classificarHierarquia, conferirHierarquiaDeCodigos];
+  const fs = [blocosDeLinha, linhasDaHierarquia, blocoDaSintetica, filhasDiretas, fechaComDeslocamento, classificarHierarquia, conferirHierarquiaDeCodigos];
   const fonte = fs.map((f) => `const ${f.name} = ${f.toString()};`).join('\n');
   const isolada = new Function(`${fonte}\nreturn conferirHierarquiaDeCodigos;`)();
   assert.equal(isolada(camposDaDre(DRE_TOTAL)).length, 1);
@@ -888,20 +888,21 @@ test('hierarquia: o Balanço 2025 real (códigos reduzidos de 4 dígitos interca
   assert.deepEqual(conferirHierarquiaDeCodigos(camposDoBalanco()), []);
   const { linhas } = linhasDaHierarquia(camposDoBalanco());
   const r = classificarHierarquia(linhas, ['']);
-  // 14 avaliáveis (acima do mínimo de 10: o que salva o documento é FECHAR, não o
-  // mínimo): 12 fecham; as 2 que não fecham são "2 PASSIVO" e "2.01 CIRCULANTE", cujas
-  // irmãs/filhas não estão na extração (não medi por quê) — 14%, abaixo dos 20%.
-  assert.deepEqual([r.avaliaveis, r.fecham, r.deslocam, r.nao], [14, 12, 0, 2]);
+  // Desenho de 01/10/2026: os códigos reduzidos de 1 a 5 dígitos ("8241 CAPITAL DE GIRO…")
+  // são linhas AMBÍGUAS (X) e tornam NÃO AVALIÁVEL toda sintética em cujo bloco caem —
+  // só sobra 1 avaliável (2.01.03, que fecha). Perde-se detecção de propósito: com a
+  // regra anterior 14 eram avaliadas e 12 fechavam, mas o veredito dependia de decidir
+  // o que o código de 4 dígitos era, e errou três documentos certos em sequência.
+  assert.deepEqual([r.avaliaveis, r.fecham, r.deslocam, r.nao], [1, 1, 0, 0]);
 });
 
-test('hierarquia: código numérico sem ponto é ANALÍTICA, e ela não interrompe a busca de filhas', () => {
+test('hierarquia: código de 1 a 5 dígitos sem ponto é AMBÍGUO (X), e a sintética que o contém não é avaliável', () => {
   const { linhas } = linhasDaHierarquia(camposDoBalanco());
   const tipo = (cod) => linhas.find((l) => l.cod === cod)?.tipo;
-  assert.equal(tipo('8241'), 'A');
+  assert.equal(tipo('8241'), 'X');
   assert.equal(tipo('2.01.01'), 'S');
-  const i = linhas.findIndex((l) => l.cod === '2.01.01');
-  const filhas = filhasDiretas(linhas, i).map((j) => linhas[j].cod);
-  assert.ok(filhas.includes('2.01.01.01') && filhas.includes('2.01.01.02'), `filhas de 2.01.01: ${filhas}`);
+  assert.equal(filhasDiretas(linhas, linhas.findIndex((l) => l.cod === '2.01.01')), null);
+  assert.notEqual(filhasDiretas(linhas, linhas.findIndex((l) => l.cod === '2.01.03')), null, 'a sem ambiguidade continua avaliada');
 });
 
 // CONTROLE NEGATIVO REAL 2: "22_Aging_de_Contas_a_Receber_Canastra_Industria_2025.pdf"
@@ -1017,7 +1018,118 @@ test('hierarquia: o aging real ("1 a 30 dias") NÃO é plano de contas hierárqu
 test('hierarquia: um dígito só é sintética de topo SE o documento tem código com ponto que o estende', () => {
   const tipos = (chaves) => linhasDaHierarquia(chaves.map((chave, i) => ({ ordem: i, chave, periodo_coluna: null, valor_num: 1 })))
     .linhas.map((l) => `${l.cod}:${l.tipo}`);
-  assert.deepEqual(tipos(['2 PASSIVO', '2.01 CIRCULANTE', '8241 X']), ['2:S', '2.01:S', '8241:A']);
-  assert.deepEqual(tipos(['2 PASSIVO', '8241 X']), ['2:A', '8241:A'], 'sem código com ponto que o estenda, não é sintética');
+  assert.deepEqual(tipos(['2 PASSIVO', '2.01 CIRCULANTE', '8241 X']), ['2:S', '2.01:S', '8241:X']);
+  assert.deepEqual(tipos(['2 PASSIVO', '8241 X']), ['2:F', '8241:X'], 'sem código com ponto que o estenda, é fronteira');
   assert.ok(!tipos(['1 a 30 dias', '31 a 60 dias']).includes('1:S'));
+});
+
+// CONTROLE NEGATIVO REAL 3 (o terceiro falso positivo em sequência): a DFC da Fort Lub
+// (74 campos como gravados em produção). "1 -", "2 -" e "3 -" têm filhas com ponto
+// ("1.1 - …"); "4 - ACRESCIMO/DECRESCIMO…", "5 - CAIXA… INÍCIO" e "6 - CAIXA… FINAL"
+// NÃO têm. A regra anterior os tornava analíticas e os adotava como filhas de
+// "3.4 - Capital Social", que passava a "não fechar"; montada em 12 colunas mensais
+// (como a DFC aparece em outros documentos) isso disparava "12 de 48 não fecham".
+const DFC_FORT_LUB = [
+  ['DISPONIBILIDADES', 550962.36],
+  ['DISPONIBILIDADES IMEDIATAS', 5902.79],
+  ['BANCOS C/ MOVIMENTO', 2798.99],
+  ['APLICACOES FINANCEIRAS', 523326.05],
+  ['DISPONIBILIDADES EM TRANSITO', 18934.53],
+  ['CLIENTES', 10978210.69],
+  ['DUPLICATAS A RECEBER', 10978210.69],
+  ['OUTRAS CONTAS A RECEBER', 1912.23],
+  ['ESTOQUES', 127480.1],
+  ['MERCADORIAS PARA REVENDA', 127480.1],
+  ['OUTROS CRÉDITOS', 2995447.77],
+  ['ADIANTAMENTOS A FORNECEDORES INDUSTRIA', 2995447.77],
+  ['IMPOSTOS E CONTRIB. A RECUPERAR', 4060.66],
+  ['DESPESAS EXERCICIO SEGUINTE', 35986.24],
+  ['REALIZAVEL A LONGO PRAZO', 16022225.17],
+  ['CRÉDITOS COM PESSOAS LIGADAS', 16022225.17],
+  ['INVESTIMENTOS', 2023.48],
+  ['PARTICIPACAO EM OUTRAS EMPRESAS', 2023.48],
+  ['IMOBILIZADO', 728550.0],
+  ['IMOBILIZADO', 754181.49],
+  ['(-) DEPRECIACAO ACUMULADA', -3322.47],
+  ['(-) AMORTIZACAO ACUMULADA', -22309.02],
+  ['TOTAL DO ATIVO', 31446858.7],
+  ['EMPRESTIMOS E FINANCIAMENTOS', 13235448.04],
+  ['EMPRESTIMOS E FINANCIAMENTOS BANCARIOS', 13235448.04],
+  ['FORNECEDORES', 2751290.98],
+  ['FORNECEDORES DIVERSOS', 2751290.98],
+  ['IMPOSTOS E CONTRIBUIÇÕES A RECOLHER', 405581.01],
+  ['OBRIGAÇÕES TRABALHISTAS', 445347.07],
+  ['SALÁRIOS E ORDENADOS', 187749.13],
+  ['ENCARGOS SOCIAIS', 110969.89],
+  ['PROVISÕES TRABALHISTAS', 146628.05],
+  ['OUTRAS CONTAS A PAGAR', 43889.59],
+  ['ADIANTAMENTO DE CLIENTES', 43889.59],
+  ['EMPRESTIMOS E FINANCIAMENTOS BANCARIOS', 14191570.09],
+  ['PATRIMONIO LIQUIDO', 373731.92],
+  ['CAPITAL SOCIAL INTEGRALIZADO', 1000000.0],
+  ['PREJUÍZOS ACUMULADOS', -626268.08],
+  ['TOTAL DO PATRIMÔNIO LÍQUIDO E PASSIVO', 31446858.7],
+  ['RECEITA OPERACIONAL BRUTA', 34929357.95],
+  ['(-) DEDUÇÕES DA RECEITA BRUTA', -3561589.29],
+  ['VENDAS CANCELADAS', -321600.4],
+  ['IMPOSTOS INCIDENTES SOBRE VENDAS', -3239988.89],
+  ['(=) RECEITA OPERACIONAL LIQUIDA', 31367768.66],
+  ['(-) CUSTO DOS PRODUTOS/MERCADORIAS/SERVICOS', -20686966.86],
+  ['(+/-) DESPESAS/RECEITAS OPERACIONAIS', -11307069.88],
+  ['PESSOAL', -1603470.45],
+  ['ADMINISTRATIVAS', -172729.2],
+  ['COMERCIAIS', -8417767.13],
+  ['DEPRECIAÇÕES E AMORTIZAÇÕES', -25631.49],
+  ['RESULTADO FINANCEIRO LIQUIDO', -1480092.62],
+  ['(-) DESPESAS FINANCEIRAS', -1514476.71],
+  ['RECEITAS FINANCEIRAS', 34384.09],
+  ['DESPESAS TRIBUTARIAS', -40031.7],
+  ['1 - FLUXOS DE CAIXA DAS ATIVIDADES OPERACIONAIS', -11097625.63],
+  ['1.1 - Resultado do Exercicio', -626268.08],
+  ['1.2 - Depreciação/Amortização', 25631.49],
+  ['1.3 - Contas a Receber', -10980122.92],
+  ['1.4 - Estoques', -127480.1],
+  ['1.5 - Impostos e Contribuições', 401520.35],
+  ['1.6 - Despesas Antecipadas', -35986.24],
+  ['1.7 - Fornecedores', -244156.79],
+  ['1.8 - Obrigações Trabalhistas', 445347.07],
+  ['1.9 - Contas a Pagar e Provisões', 43889.59],
+  ['2 - FLUXOS DE CAIXA DAS ATIVIDADES DE INVESTIMENTOS', -756204.97],
+  ['2.1 - Aquisições de Ações/Cotas', -2023.48],
+  ['2.2 - Aquisições de Imobilizados/Intangiveis', -754181.49],
+  ['3 - FLUXOS DE CAIXA DAS ATIVIDADES DE FINANCIAMENTOS', 12404792.96],
+  ['3.1 - Emprestimos Concedidos a Terceiros', -16022225.17],
+  ['3.2 - Emprestimos Tomados com Bancos', 27427018.13],
+  ['3.4 - Capital Social', 1000000.0],
+  ['4 - ACRESCIMO/DECRESCIMO LÍQUIDO DE EQUIVALENTE DE CAIXA', 550962.36],
+  ['5 - CAIXA E EQUIVALENTE DE CAIXA NO ÍNICIO DO PERIODO', 0.0],
+  ['6 - CAIXA E EQUIVALENTE DE CAIXA NO FINAL DO PERIODO', 550962.36],
+];
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const camposDaDfcEm12Colunas = () => MESES.flatMap((m, k) => DFC_FORT_LUB.map(([chave, v], i) => ({
+  ordem: k * 1000 + i, chave, periodo_coluna: m, valor_num: v,
+})));
+
+test('hierarquia: a DFC real da Fort Lub (4 -, 5 -, 6 - sem filhas) NÃO reprova, nem em 12 colunas', () => {
+  assert.deepEqual(conferirHierarquiaDeCodigos(camposDaDfcEm12Colunas()), []);
+  const { linhas } = linhasDaHierarquia(camposDaDfcEm12Colunas());
+  const tipo = (prefixo) => linhas.find((l) => l.chave.startsWith(prefixo))?.tipo;
+  assert.equal(tipo('4 - '), 'F', '"4 -" sem extensão com ponto é FRONTEIRA, não filha de ninguém');
+  assert.equal(tipo('1 - '), 'S');
+  const i = linhas.findIndex((l) => l.chave.startsWith('3.4 - '));
+  assert.ok(!(filhasDiretas(linhas, i) ?? []).some((j) => /^[456] - /.test(linhas[j].chave)), '4, 5 e 6 não são filhas de 3.4');
+});
+
+test('hierarquia: sintética com nível pulado ou linha ambígua no bloco é NÃO AVALIÁVEL — nunca "não fecha"', () => {
+  const doc = (chaves) => chaves.map(([chave, v], i) => ({ ordem: i, chave, periodo_coluna: null, valor_num: v }));
+  const filhas = (chaves, cod) => {
+    const { linhas } = linhasDaHierarquia(doc(chaves));
+    return filhasDiretas(linhas, linhas.findIndex((l) => l.cod === cod));
+  };
+  // nível pulado: 3.03.02.02 sem 3.03.02 (o que a DRE real do Krauspenhar faz)
+  assert.equal(filhas([['3 X', 5], ['3.03 A', 5], ['3.03.01 B', 2], ['3.03.02.02 C', 3]], '3.03'), null);
+  // linha sem código dentro do bloco
+  assert.equal(filhas([['3 X', 5], ['3.01 A', 5], ['Observação', 1], ['3.01.01 B', 5]], '3.01'), null);
+  // estrutura limpa continua avaliada
+  assert.deepEqual(filhas([['3 X', 5], ['3.01 A', 5], ['3.01.01 B', 2], ['3.01.02 C', 3]], '3.01'), [2, 3]);
 });

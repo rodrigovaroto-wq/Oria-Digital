@@ -53,7 +53,7 @@ import {
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
   MAX_CELULAS_POR_BLOCO, LIMIAR_COBERTURA, MINIMO_PARA_AVALIAR,
 } from './lib/cobertura.mjs';
-import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha, conferirHierarquiaDeCodigos, blocosDeLinha, linhasDaHierarquia, fechaComDeslocamento, filhasDiretas, classificarHierarquia, papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete } from './lib/aritmetica.mjs';
+import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha, conferirHierarquiaDeCodigos, blocosDeLinha, linhasDaHierarquia, fechaComDeslocamento, blocoDaSintetica, filhasDiretas, classificarHierarquia, papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete } from './lib/aritmetica.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -330,6 +330,7 @@ const FONTE_ARITMETICA = [
   `const mensagemDoBalancete = ${mensagemDoBalancete.toString()};`,
   `const blocosDeLinha = ${blocosDeLinha.toString()};`,
   `const linhasDaHierarquia = ${linhasDaHierarquia.toString()};`,
+  `const blocoDaSintetica = ${blocoDaSintetica.toString()};`,
   `const filhasDiretas = ${filhasDiretas.toString()};`,
   `const fechaComDeslocamento = ${fechaComDeslocamento.toString()};`,
   `const classificarHierarquia = ${classificarHierarquia.toString()};`,

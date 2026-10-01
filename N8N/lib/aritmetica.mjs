@@ -398,40 +398,70 @@ export function linhasDaHierarquia(campos) {
       continue;
     }
     anterior = bloco;
-    // SINTÉTICA = código COM ponto ("3.01.01") ou um dígito só no topo ("2", "3").
-    // Qualquer outro número sem ponto, de qualquer tamanho, é ANALÍTICA: o balanço
-    // real do Krauspenhar intercala códigos reduzidos de 4 dígitos ("8241 CAPITAL DE
-    // GIRO…"); contá-los como sintética cortava a busca de filhas em "2.01.01.01" e
-    // deixava "2.01.01.02 (-) JUROS" de fora — 3 de 10 não fechavam num documento
-    // CERTO (15.563.518,86 - 2.440.052,07 = 13.123.466,79).
+    // TIPOS (desenho de 01/10/2026, depois de TRÊS falsos positivos seguidos: o Balanço
+    // do Krauspenhar com códigos reduzidos de 4 dígitos, o aging do Canastra com
+    // "1 a 30 dias" e a DFC da Fort Lub com "4 - ACRESCIMO…", "5 - CAIXA… INÍCIO" e
+    // "6 - CAIXA… FINAL" adotados como filhas de "3.4 - Capital Social"). A guarda só
+    // AVALIA ESTRUTURA INEQUÍVOCA, e na dúvida se cala:
+    //  S = código com ponto ("3.01.01"), ou um dígito só QUE TEM extensão com ponto no
+    //      documento ("3" → "3.01");
+    //  A = 6 dígitos ("000880"), a analítica do plano reduzido;
+    //  F = um dígito sem extensão ("4 - …", "1 a 30 dias"): FRONTEIRA, encerra o bloco
+    //      anterior e não é filha de ninguém;
+    //  X = qualquer outra linha (1 a 5 dígitos sem ponto, 7+ dígitos, sem código): torna
+    //      NÃO AVALIÁVEL a sintética em cujo bloco cair. Só "TOTAL" sai da hierarquia.
+    // Perder detecção é o preço, aceito: falso positivo acusa documento CERTO.
     const cod = bloco.chave.split(' ')[0];
-    if (/^\d+\.\d+(\.\d+)*$/.test(cod) || (/^\d$/.test(cod) && topos.has(cod))) bloco.tipo = 'S';
-    else if (/^\d+$/.test(cod)) bloco.tipo = 'A';
-    else continue;
+    if (bloco.chave.toUpperCase() === 'TOTAL') continue;
     bloco.cod = cod;
+    if (/^\d+\.\d+(\.\d+)*$/.test(cod)) bloco.tipo = 'S';
+    else if (/^\d$/.test(cod)) bloco.tipo = topos.has(cod) ? 'S' : 'F';
+    else if (/^\d{6}$/.test(cod)) bloco.tipo = 'A';
+    else bloco.tipo = 'X';
     linhas.push(bloco);
   }
   return { linhas, repetidas };
 }
 
 /**
- * Posições das filhas DIRETAS da sintética `i`: as sintéticas que a estendem em um
- * nível e, enquanto não aparece sintética filha, as analíticas logo abaixo. Para
- * na primeira sintética que não a estende. AUTO-CONTIDA.
+ * Linhas do BLOCO da sintética `i`: da seguinte até a próxima linha com código que
+ * não a estende (sintética de outro ramo ou fronteira F). Analíticas (A) e linhas
+ * ambíguas (X) ficam dentro do bloco. AUTO-CONTIDA.
  */
-export function filhasDiretas(linhas, i) {
+export function blocoDaSintetica(linhas, i) {
   const pai = linhas[i].cod;
-  const filhas = [];
-  let temSinteticaFilha = false;
+  const bloco = [];
   for (let j = i + 1; j < linhas.length; j += 1) {
     const l = linhas[j];
-    if (l.tipo === 'S' && !l.cod.startsWith(pai + '.')) break;
-    if (l.tipo === 'S') {
-      temSinteticaFilha = true;
-      if (l.cod.split('.').length === pai.split('.').length + 1) filhas.push(j);
-    } else if (!temSinteticaFilha) {
-      filhas.push(j);
-    }
+    if (l.tipo === 'F' || (l.tipo === 'S' && !l.cod.startsWith(pai + '.'))) break;
+    bloco.push(j);
+  }
+  return bloco;
+}
+
+/**
+ * Posições das filhas DIRETAS da sintética `i`, ou null quando ela NÃO É AVALIÁVEL.
+ * Só se avalia estrutura inequívoca: todas as linhas do bloco têm de ser sintéticas
+ * que a estendem ou analíticas de 6 dígitos, e toda sintética mais funda que o
+ * filho direto precisa do seu pai imediato presente no bloco. Qualquer outra linha
+ * (X) ou nível pulado → null (nem fecha, nem não fecha). Filhas: as sintéticas um
+ * nível abaixo e as analíticas que aparecem antes de qualquer sintética filha.
+ * AUTO-CONTIDA.
+ */
+export function filhasDiretas(linhas, i) {
+  const bloco = blocoDaSintetica(linhas, i).map((j) => ({ j, l: linhas[j] }));
+  if (bloco.some(({ l }) => l.tipo === 'X')) return null;
+  const nivel = linhas[i].cod.split('.').length + 1;
+  const codigos = new Set(bloco.filter(({ l }) => l.tipo === 'S').map(({ l }) => l.cod));
+  const pulaNivel = bloco.some(({ l }) => l.tipo === 'S' && l.cod.split('.').length > nivel
+    && !codigos.has(l.cod.split('.').slice(0, -1).join('.')));
+  if (pulaNivel) return null;
+  const filhas = [];
+  let temSinteticaFilha = false;
+  for (const { j, l } of bloco) {
+    if (l.tipo === 'S') temSinteticaFilha = true;
+    if (l.tipo === 'S' && l.cod.split('.').length === nivel) filhas.push(j);
+    else if (l.tipo === 'A' && !temSinteticaFilha) filhas.push(j);
   }
   return filhas;
 }
@@ -460,9 +490,9 @@ export function fechaComDeslocamento(linhas, i, filhas, col, desloc) {
 export function classificarHierarquia(linhas, colunas) {
   const r = { avaliaveis: 0, fecham: 0, deslocam: 0, nao: 0, exemplo: null, exNao: null };
   for (let i = 0; i < linhas.length; i += 1) {
-    const filhas = linhas[i].tipo === 'S' ? filhasDiretas(linhas, i) : [];
+    const filhas = linhas[i].tipo === 'S' ? filhasDiretas(linhas, i) : null;
     for (const col of colunas) {
-      const gravado = filhas.length > 0 ? fechaComDeslocamento(linhas, i, filhas, col, 0) : null;
+      const gravado = filhas && filhas.length > 0 ? fechaComDeslocamento(linhas, i, filhas, col, 0) : null;
       if (gravado === null) continue;
       r.avaliaveis += 1;
       if (gravado) {
