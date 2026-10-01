@@ -156,6 +156,12 @@ export interface LinhaModelo {
    */
   sinalNormalizado?: boolean;
   /**
+   * Marcado por `contexto()`: os exercícios em que a prova de cabeçalho de grupo TIROU o valor
+   * desta linha da soma (ano -> motivo e efeito, em texto de nota). A célula fica em branco, e
+   * branco sem explicação é ausência apresentada como dado (regra 1).
+   */
+  semValorPorCabecalho?: Record<string, string>;
+  /**
    * A PROVENIÊNCIA DE CADA CÉLULA HISTÓRICA, por ano: arquivo, página, confiança e
    * aceite (`0125`).
    *
@@ -1177,14 +1183,29 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   // resíduo de 53.924.564,46 (2024) e 43.569.482,33 (2025), 43% do ativo, e `Working Capital`
   // sem linha de Estoques. Agora cada exercício histórico prova o seu e a linha perde SÓ o
   // valor daquele ano; sem excesso naquele ano, nada sai dele.
+  const chaveDaLinha = (l: LinhaModelo) => `${l.secao_canonica ?? ""}||${l.chave}`;
+  const tirarAno = (bloco: BlocoModelo, quais: (l: LinhaModelo) => string | null, anoS: string) => {
+    const lista = linhasPorBloco.get(bloco) ?? [];
+    linhasPorBloco.set(bloco, lista.flatMap((l) => {
+      const motivo = quais(l);
+      if (motivo === null) return [l];
+      const valores = Object.fromEntries(Object.entries(l.valores).filter(([a]) => a !== anoS));
+      if (Object.keys(valores).length === 0) return [];
+      return [{ ...l, valores, semValorPorCabecalho: { ...l.semValorPorCabecalho, [anoS]: motivo } }];
+    }));
+  };
+  // Linhas que a prova aritmética JÁ provou cabeçalho de grupo em algum exercício, por bloco, e
+  // os exercícios históricos sem total informado (sem âncora não há prova possível).
+  const provadas = new Map<BlocoModelo, Set<string>>();
+  const semAncora: Array<[BlocoModelo, string]> = [];
   for (const ano of [...ent.anosHistoricos].sort((a, b) => b - a)) {
     const anoS = String(ano);
     for (const [bloco, chaveAncora] of Object.entries(ANCORA_DO_BLOCO) as Array<[BlocoModelo, string]>) {
       const lista = linhasPorBloco.get(bloco);
       const ancora = ancoras.get(chaveAncora);
-      if (!lista || lista.length === 0 || !ancora) continue;
-      const informado = ancora.valores[anoS];
-      if (typeof informado !== "number" || informado === 0) continue;
+      if (!lista || lista.length === 0) continue;
+      const informado = ancora?.valores[anoS];
+      if (typeof informado !== "number" || informado === 0) { semAncora.push([bloco, anoS]); continue; }
       const valorDe = (l: LinhaModelo) => l.valores[anoS] ?? 0;
       let soma = lista.reduce((s, l) => s + valorDe(l), 0);
       // TOLERÂNCIA EM MÓDULO, e não `informado * 1.005`. O total informado pode
@@ -1196,6 +1217,7 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
       // quer dizer, e é o que ela passa a dizer.
       const tolerancia = Math.abs(informado) * 0.005;
       if (soma - informado <= tolerancia) continue;
+      const somaAntes = soma;
       const candidatos = lista
         .filter((l) => CABECALHOS_DE_GRUPO.has(chaveDeAncora(l.chave))
           || CABECALHOS_DE_GRUPO.has(chaveDeAncora(l.rotulo_norm)))
@@ -1220,14 +1242,40 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
         remover.add(c);
         soma = depois;
       }
+      // TUDO OU NADA. Tirar uma conta que só "aproxima" e deixa o excesso de pé é compensar o
+      // erro de OUTRA linha com uma conta de verdade: medido num arranjo em que um sintético de
+      // 50.000 fora da lista de nomes dobrava o circulante, a prova tirava "Clientes" (28.000,
+      // folha) e o modelo ficava 100.000 contra 78.000 informados — o erro trocado de lugar e
+      // com cara de tratado. Se a remoção não fecha o grupo no informado (dentro da tolerância),
+      // nada sai e o excesso fica à vista na linha de reconciliação.
+      if (remover.size > 0 && soma - informado > tolerancia) continue;
       if (remover.size > 0) {
-        linhasPorBloco.set(bloco, lista.flatMap((l) => {
-          if (!remover.has(l)) return [l];
-          const valores = Object.fromEntries(Object.entries(l.valores).filter(([a]) => a !== anoS));
-          return Object.keys(valores).length > 0 ? [{ ...l, valores }] : [];
-        }));
+        const nomes = new Set([...remover].map(chaveDaLinha));
+        if (!provadas.has(bloco)) provadas.set(bloco, new Set());
+        for (const n of nomes) provadas.get(bloco)!.add(n);
+        tirarAno(bloco, (l) => nomes.has(chaveDaLinha(l))
+          ? `Cabeçalho de grupo: em ${anoS} a soma das contas do bloco excedia o total informado `
+            + `no documento (${informado.toLocaleString("pt-BR")}) em ${(somaAntes - informado).toLocaleString("pt-BR")}, `
+            + `e este valor (${valorDe(l).toLocaleString("pt-BR")}) é o do grupo, não de uma conta. Quem carrega o `
+            + "saldo são as filhas. Efeito: o valor sai da soma do modelo neste exercício; deixá-lo dobraria o grupo."
+          : null, anoS);
       }
     }
+  }
+  // EXERCÍCIO SEM TOTAL INFORMADO: não há como provar, e somar de volta o grupo que a prova
+  // tirou noutro exercício dobraria o bloco calado (antes de 3f40571 a prova do último ano
+  // tirava a linha de todos os anos; aqui o ano sem âncora herda a decisão, e DIZ que herdou).
+  // Teto: se a conta for folha neste ano, ela sai por herança — por isso a nota da célula.
+  for (const [bloco, anoS] of semAncora) {
+    const nomes = provadas.get(bloco);
+    if (!nomes) continue;
+    tirarAno(bloco, (l) => nomes.has(chaveDaLinha(l)) && l.valores[anoS] !== undefined
+      ? `Cabeçalho de grupo por herança: o documento não informa o total do bloco em ${anoS}, então `
+        + "não há prova aritmética neste exercício; a linha foi provada cabeçalho de grupo em outro "
+        + "exercício (a soma das contas excedia o total informado) e seu valor "
+        + `(${(l.valores[anoS] ?? 0).toLocaleString("pt-BR")}) fica fora da soma. Efeito: se aqui ela for uma conta `
+        + "(e não o grupo), o bloco fica menor que o real por este valor."
+      : null, anoS);
   }
 
   // ---- normalização de sinal, bloco a bloco --------------------------------
@@ -1334,6 +1382,11 @@ function notaGrupoSemSaldo(p: PremissaModelo, gr: GrupoRateado, ultimoHist: numb
     + `saldo realizado em ${ultimoHist} para ratear o valor entre elas (soma ${gr.somaHist}). Esta conta `
     + `NÃO é projetada: fica em branco e os subtotais a leem como zero — ${efeito} `
     + "Para projetar, ligue a premissa a uma conta com saldo realizado.";
+}
+
+/** A nota da célula em branco cujo valor a prova de cabeçalho de grupo tirou (ver `contexto`). */
+function notaSemValor(l: LinhaModelo, ano: number): string | undefined {
+  return l.semValorPorCabecalho?.[String(ano)];
 }
 
 /** O valor da âncora do documento naquele ano, na escala do modelo. */
@@ -1755,7 +1808,11 @@ function abaPremissas(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
       g.linha(chaveLinha(b, l), { rotulo: l.chave, nota: (l.documentos ?? []).join(" · "), fmt: NUM });
       for (const ano of ctx.hist) {
         const e = valorNaEscala(l, ano, ctx.ent.unidade);
-        if (!e) continue;
+        if (!e) {
+          const n = notaSemValor(l, ano);
+          if (n) g.set(chaveLinha(b, l), ano, null, { fmt: NUM, fill: FILL_HIST, nota: n });
+          continue;
+        }
         g.set(chaveLinha(b, l), ano, e.valor, { fmt: NUM, fill: FILL_HIST, nota: e.nota });
       }
     }
@@ -3084,6 +3141,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
           // corrigindo — e o lado do ativo é o que tem conta redutora de verdade.
           if (e) g.set(ch, ano, pref === "wc_a" ? e.valor : Math.abs(e.valor),
             { fmt: NUM, fill: FILL_HIST, nota: e.nota, tipo: "calc" });
+          else if (notaSemValor(l, ano)) g.set(ch, ano, null, { fmt: NUM, fill: FILL_HIST, nota: notaSemValor(l, ano), tipo: "calc" });
           // Dias IMPLÍCITOS do histórico: saldo ÷ base × 360, com a guarda
           // `IF(base>0)` do Modelo Base (`P27`). É o número que o analista precisa
           // ver antes de escolher o dia projetado — sem ele, a premissa é palpite.
@@ -3374,6 +3432,7 @@ function abaImobilizado(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
       if (hist) {
         const e = valorNaEscala(l, ano, ctx.ent.unidade);
         if (e) g.set(chFa, ano, e.valor, { fmt: NUM, fill: FILL_HIST, nota: e.nota, tipo: "calc" });
+        else if (notaSemValor(l, ano)) g.set(chFa, ano, null, { fmt: NUM, fill: FILL_HIST, nota: notaSemValor(l, ano), tipo: "calc" });
         g.set(`${chFa}#dep`, ano, 0, { fmt: NUM, tipo: "calc" });
         g.set(chCx, ano, 0, { fmt: NUM, tipo: "calc", nota: "Capex histórico não é extraível do balanço (só a variação do saldo). Zero explícito." });
         continue;
@@ -3970,6 +4029,7 @@ function abaDivida(wb: ExcelJS.Workbook, ctx: Ctx, gAnual: Grade, gRec: Grade): 
       if (hist) {
         const e = valorNaEscala(l, ano, ctx.ent.unidade);
         if (e) g.set(`${ch}#fim`, ano, Math.abs(e.valor), { fmt: NUM, fill: FILL_HIST, nota: e.nota, tipo: "calc" });
+        else if (notaSemValor(l, ano)) g.set(`${ch}#fim`, ano, null, { fmt: NUM, fill: FILL_HIST, nota: notaSemValor(l, ano), tipo: "calc" });
         continue;
       }
       // ABERTURA: normalmente o fechamento do ano anterior. Quando a tranche não
@@ -4650,7 +4710,7 @@ function abaBalanco(
       const e = valorNaEscala(l, ano, ctx.ent.unidade);
       g.set(ch, ano, hist ? (e?.valor ?? 0) : `=${g.ref(ch, ant!)}`, {
         fmt: NUM, fill: hist ? FILL_HIST : undefined,
-        nota: hist ? e?.nota : "Conta não operacional mantida constante: sem premissa própria, "
+        nota: hist ? (e?.nota ?? notaSemValor(l, ano)) : "Conta não operacional mantida constante: sem premissa própria, "
           + "projetá-la por crescimento de receita seria inventar movimento.",
       });
     }
@@ -4686,7 +4746,7 @@ function abaBalanco(
       const ch = chaveLinha("pnc", l);
       const e = valorNaEscala(l, ano, ctx.ent.unidade);
       g.set(ch, ano, hist ? Math.abs(e?.valor ?? 0) : `=${g.ref(ch, ant!)}`,
-        { fmt: NUM, fill: hist ? FILL_HIST : undefined, nota: hist ? e?.nota : undefined });
+        { fmt: NUM, fill: hist ? FILL_HIST : undefined, nota: hist ? (e?.nota ?? notaSemValor(l, ano)) : undefined });
     }
     g.set("TRIB_PNC", ano, `=${g.externa("Tributos a Recolher", gTrib, "ESP_PNC", ano)}`, {
       fmt: NUM,
@@ -4701,7 +4761,7 @@ function abaBalanco(
       const ch = chaveLinha("pl", l);
       const e = valorNaEscala(l, ano, ctx.ent.unidade);
       g.set(ch, ano, hist ? (e?.valor ?? 0) : `=${g.ref(ch, ant!)}`,
-        { fmt: NUM, fill: hist ? FILL_HIST : undefined, nota: hist ? e?.nota : undefined });
+        { fmt: NUM, fill: hist ? FILL_HIST : undefined, nota: hist ? (e?.nota ?? notaSemValor(l, ano)) : undefined });
     }
     g.set("LUCROS_ACUM", ano, hist ? 0 : `=${g.ref("LUCROS_ACUM", ant!)}+${g.externa("Income Statement", gDRE, "NET_PROFIT", ano)}+${g.externa("Cash Flow", gCF, "DIVIDENDOS", ano)}`, {
       fmt: NUM,
@@ -5010,6 +5070,7 @@ function abaTributos(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
       if (hist) {
         const e = valorNaEscala(l, ano, ctx.ent.unidade);
         if (e) g.set(ch, ano, Math.abs(e.valor), { fmt: NUM, fill: FILL_HIST, nota: e.nota });
+        else if (notaSemValor(l, ano)) g.set(ch, ano, null, { fmt: NUM, fill: FILL_HIST, nota: notaSemValor(l, ano) });
         continue;
       }
       if (ehParcelamento(l.chave)) {

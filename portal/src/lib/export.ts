@@ -1160,12 +1160,16 @@ function detectarSubtotaisInformados(
 export function rotulosDeSubtotalInformado(
   camposPorAba: Map<string, Array<{ campo: CampoExtraido; colKey: string }>>,
   entidade: string | null,
+  /** O exercício do DOCUMENTO de onde veio o campo (`null` quando não se lê um ano só). Serve
+   * só à coluna de exercício ilegível: ver o fim da função. */
+  anoDoDocumento?: (campo: CampoExtraido) => string | null,
 ): string[] {
   const alvo = entidade ? normalizar(entidade) : null;
   const rotulos = new Set<string>();
-  // O rótulo que ALGUMA aba marcou como subtotal numa coluna de exercício ilegível, e os
-  // exercícios legíveis que o mesmo (seção, rótulo) tem em QUALQUER aba — ver o fim da função.
-  const ilegiveisMarcados = new Set<string>();
+  // O rótulo que ALGUMA aba marcou como subtotal numa coluna de exercício ilegível (com o ano
+  // do documento de cada coluna, quando se lê), e os exercícios legíveis que o mesmo
+  // (seção, rótulo) tem em QUALQUER aba — ver o fim da função.
+  const ilegiveisMarcados = new Map<string, Array<string | null>>();
   const anosLegiveis = new Map<string, Set<string>>();
   for (const [aba, itens] of camposPorAba) {
     if (!ESTRUTURA_POR_ABA.has(aba)) continue;
@@ -1225,6 +1229,7 @@ export function rotulosDeSubtotalInformado(
     // pegou. Uma coluna conta como marcada quando QUALQUER ocorrência dela foi.
     const porRotulo = new Map<string, Map<string, boolean>>();
     const fortePorRotulo = new Map<string, Set<string>>(); // colunas marcadas por (A)/(B)
+    const anoDocPorColuna = new Map<string, Map<string, string | null>>(); // k → coluna → ano do documento
     for (const { campo, colKey } of itens) {
       if (alvo !== null && normalizar(colKey.split(CHAVE_SEP)[0] ?? "") !== alvo) continue;
       if (typeof campo.valor_num !== "number") continue;
@@ -1232,6 +1237,13 @@ export function rotulosDeSubtotalInformado(
       if (!porRotulo.has(k)) porRotulo.set(k, new Map());
       const cols = porRotulo.get(k)!;
       cols.set(colKey, (cols.get(colKey) ?? false) || ids.has(campo.id));
+      if (anoDoDocumento) {
+        if (!anoDocPorColuna.has(k)) anoDocPorColuna.set(k, new Map());
+        const m = anoDocPorColuna.get(k)!;
+        const a = anoDoDocumento(campo);
+        // dois documentos com anos diferentes na mesma coluna: o ano deixa de ser derivável
+        m.set(colKey, m.has(colKey) && m.get(colKey) !== a ? null : a);
+      }
       if (idsFortes.has(campo.id)) {
         if (!fortePorRotulo.has(k)) fortePorRotulo.set(k, new Set());
         fortePorRotulo.get(k)!.add(colKey);
@@ -1259,28 +1271,42 @@ export function rotulosDeSubtotalInformado(
       const fortes = fortePorRotulo.get(k) ?? new Set<string>();
       const efetiva = (colKey: string) => fortes.has(colKey) || (todasMarcam && cols.get(colKey) === true);
       const anos = new Map<string, boolean[]>();
-      let ilegivel = false;
+      const anosDocIlegiveis: Array<string | null> = [];
       for (const colKey of cols.keys()) {
         const ano = anoDaColuna(colKey);
-        if (ano === null) { ilegivel = true; continue; }
+        if (ano === null) { anosDocIlegiveis.push(anoDocPorColuna.get(k)?.get(colKey) ?? null); continue; }
         if (!anos.has(ano)) anos.set(ano, []);
         anos.get(ano)!.push(efetiva(colKey));
       }
-      if (ilegivel) { if (todasMarcam) ilegiveisMarcados.add(k); continue; }
+      // SEM `continue`: as colunas LEGÍVEIS da mesma aba que tem uma ilegível continuam dando o
+      // veredito do seu próprio exercício. O `continue` que havia aqui descartava "2024" só
+      // porque "jan–jun/25" estava ao lado, e o cabeçalho de grupo declarado nas duas colunas
+      // voltava a somar com as filhas (medido: AC operacional 1.500 -> 2.000).
+      if (anosDocIlegiveis.length > 0 && todasMarcam) {
+        ilegiveisMarcados.set(k, [...(ilegiveisMarcados.get(k) ?? []), ...anosDocIlegiveis]);
+      }
       for (const [ano, marcas] of anos) if (marcas.every(Boolean)) rotulos.add(`${k}||${ano}`);
     }
   }
   // COLUNA DE EXERCÍCIO ILEGÍVEL: o veredito sem ano vale para TODOS os exercícios, então só
-  // pode sair quando nenhuma outra coluna do mesmo (seção, rótulo) — em QUALQUER aba — tem
-  // exercício legível. O laço acima julga uma aba por vez: o balancete (aba Combinado, período
-  // "jan–ago/26") declara "Estoques" agrupamento e, sendo a única coluna DAQUELA aba, "todas
-  // marcam"; o veredito sem ano tirava a conta também dos Balanços de 2024 e 2025 (aba Balanço),
-  // onde ela é folha. Medido no Krauspenhar (caso 33b58a89): resíduo de 53,92 mi (2024) e
-  // 43,57 mi (2025), 43% do ativo. Havendo exercício legível em outra aba, o ano do ilegível
-  // não se conhece: o rótulo NÃO sai da soma por aqui (teto: o agrupamento pode dobrar nesse
-  // exercício; a prova aritmética do modelo — total informado do grupo — tira o excesso, e o
-  // que ela não tirar aparece na linha de reconciliação, em vez de a conta sumir calada).
-  for (const k of ilegiveisMarcados) if (!anosLegiveis.has(k)) rotulos.add(k);
+  // pode sair quando todo exercício legível do mesmo (seção, rótulo) — em QUALQUER aba, a
+  // própria inclusive — já foi julgado subtotal. O laço acima julga uma aba por vez: o
+  // balancete (aba Combinado, período "jan–ago/26") declara "Estoques" agrupamento e, sendo a
+  // única coluna DAQUELA aba, "todas marcam"; o veredito sem ano tirava a conta também dos
+  // Balanços de 2024 e 2025 (aba Balanço), onde ela é folha. Medido no Krauspenhar (caso
+  // 33b58a89): resíduo de 53,92 mi (2024) e 43,57 mi (2025), 43% do ativo.
+  // Havendo exercício legível onde o rótulo é CONTA, o veredito sem ano não sai. Mas o ano do
+  // DOCUMENTO do balancete costuma ser legível (referência "2026" ainda que a coluna diga
+  // "jan–ago/26"): então o veredito sai SÓ para esse ano, a menos que ele mesmo seja um
+  // exercício legível em que o rótulo é conta (aí o balancete e o balanço disputam o ano e
+  // nada se decide por aqui). Sem ano derivável, o rótulo fica na soma e o excesso, se houver,
+  // tem de aparecer na reconciliação do modelo — nunca por uma conta vizinha sumir calada.
+  for (const [k, anosDoc] of ilegiveisMarcados) {
+    const legiveis = anosLegiveis.get(k) ?? new Set<string>();
+    const contaEmAlgumAno = (a: string) => legiveis.has(a) && !rotulos.has(`${k}||${a}`);
+    if (![...legiveis].some(contaEmAlgumAno)) { rotulos.add(k); continue; }
+    for (const a of anosDoc) if (a !== null && !contaEmAlgumAno(a)) rotulos.add(`${k}||${a}`);
+  }
   return [...rotulos];
 }
 
@@ -3357,7 +3383,13 @@ export function buildExportWorkbook({
       // sai 2x o documento (medido: 195.090 contra 95.780 no arquivo do v35).
       const entradaDoModelo: EntradaModeloInstitucional = {
         ...modeloInstitucional,
-        subtotaisInformados: rotulosDeSubtotalInformado(camposPorAba, modeloInstitucional.entidade),
+        subtotaisInformados: rotulosDeSubtotalInformado(
+          camposPorAba, modeloInstitucional.entidade,
+          (c) => {
+            const p = contextoPorVersao.get(c.documento_versao_id)?.periodo;
+            return p ? anoDaColuna(p) : null;
+          },
+        ),
       };
       // Os gráficos do `Output` não podem ser escritos pelo ExcelJS (ele não tem
       // API de gráfico). A especificação volta daqui e viaja PRESA AO WORKBOOK

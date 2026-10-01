@@ -8069,10 +8069,13 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
 // dos Balanços (folha `ativo_circulante`: 53.924.564,46 em 2024, 43.569.482,33 em 2025),
 // que não tinha linha no `Working Capital`.
 //
-// O ARRANJO é o de produção, não inventado: Balanço Centro Oeste 2024 (versão 1e096ac5),
+// O ARRANJO DOS DOCUMENTOS é o de produção: Balanço Centro Oeste 2024 (versão 1e096ac5),
 // Balanço 2025 (07f650d8) e Balancete jan–ago/26 COMBINADO (b3c179e1), em que "ESTOQUES" é
 // SINTÉTICO (ordem 22) sobre "ESTOQUE DA EMPRESA EM PODER DE TERCEIROS" (56), "MERCADORIA EM
-// CONSIGNAÇÃO"… Os VALORES do balancete e das contas vizinhas são de ilustração (os campos
+// CONSIGNAÇÃO"… O ARRANJO DO MODELO NÃO É: aqui 2026 está em `anosHistoricos` para que o
+// ano do balancete seja um exercício REALIZADO e a conta do Working Capital tenha onde ser
+// lida; no Krauspenhar real 2026 é PROJETADO (o balancete jan–ago/26 não fecha exercício).
+// A cobertura do balancete como ano histórico é o que (39g)–(39j) acrescentam. Os VALORES do balancete e das contas vizinhas são de ilustração (os campos
 // reais não se reproduzem sem o banco — regra 4); o que se afirma é o COMPORTAMENTO: o
 // resíduo de 2024/2025 é ~0, "Estoques" tem linha no `Working Capital` com os valores
 // realizados, e no ano do balancete o sintético NÃO soma junto com as filhas.
@@ -8169,6 +8172,167 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   checar(typeof est26 === "number" && Math.abs(est26) < 0.5,
     "(39f) 2026 (balancete): a linha 'Estoques' (sintético) não carrega valor — quem carrega são as filhas",
     JSON.stringify(est26));
+}
+
+// =============================================================================
+// (39g)–(39j) REVISÃO INDEPENDENTE DO (39f): quatro defeitos que a correção do Estoques deixou
+// (ou abriu). Cada bloco afirma COMPORTAMENTO do arquivo, não o mecanismo.
+// Os arranjos são de ilustração (regra 4: o banco real não se reproduz aqui).
+// =============================================================================
+{
+  const ENT = "REVISAO TESTE LTDA.";
+  const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const mk = (id: string, tipo: string, ref: string) => ({
+    id, tipo_taxonomia: tipo, entidade: { razao_social: ENT },
+    periodo: { tipo: "anual", referencia: ref }, documento_versao: [{ id: `v${id}`, nome_original: `${id}.pdf` }],
+  }) as DocumentoParaExport;
+  const c = (v: string, chave: string, secao: string, valor: number, ordem: number, per: string) =>
+    campo({ chave, secao, secao_canonica: "ativo_circulante", valor_num: valor, ordem, periodo_coluna: per,
+            documento_versao_id: v, unidade: "milhar" } as never);
+  const linhaA = (chave: string, valores: Record<string, number>, doc: string, papel: "conta" | "subtotal" = "conta") => ({
+    secao_canonica: "ativo_circulante", chave, rotulo_norm: norm(chave),
+    papel, unidade: "milhar", moeda: "BRL", documentos: [doc], valores,
+  });
+  const montar = (campos: CampoExtraido[], documentos: DocumentoParaExport[], linhas: ReturnType<typeof linhaA>[],
+                  anosHistoricos: number[], anosProjetados: number[]) => {
+    const entrada = {
+      caso: { nome: "Revisão do Estoques", produto: "reestruturacao" },
+      agora: new Date("2026-10-01T12:00:00Z"), entidade: ENT, setor: "comercio",
+      anosHistoricos, anosProjetados, stressPct: 0.2, caixaMinimo: 0, aliquotaTributos: 0.34,
+      linhas, premissas: [], vinculos: [], macro: [], unidade: "R$ mil",
+    };
+    const wb = buildExportWorkbook({
+      caso: entrada.caso, documentos, campos, agora: entrada.agora, modo: "completo",
+      modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+    const achar = (ws: ExcelJS.Worksheet, rot: string) => {
+      for (let r = 1; r <= ws.rowCount; r++) if (String(ws.getRow(r).getCell(3).value ?? "").trim() === rot) return r;
+      return 0;
+    };
+    const bs = wb.getWorksheet("Balance Sheet")!; esquecerMemoria(bs);
+    const wc = wb.getWorksheet("Working Capital")!; esquecerMemoria(wc);
+    const rRec = achar(bs, "reconciliação com o ativo circulante informado no documento");
+    const rAc = achar(bs, "Ativo circulante operacional");
+    const ler = (ws: ExcelJS.Worksheet, r: number, col: string) => (r > 0 ? avaliarCelula(ws, col, r) : null);
+    const nota = (ws: ExcelJS.Worksheet, r: number, col: string) =>
+      r > 0 ? JSON.stringify(ws.getRow(r).getCell(col).note ?? "") : "";
+    return { bs, wc, achar, rRec, rAc, ler, nota };
+  };
+  const perto = (v: unknown, esperado: number) => typeof v === "number" && Math.abs(v - esperado) < 0.5;
+
+  // ---- (39g) ALTO: coluna legível NA MESMA ABA de uma ilegível mantém o seu veredito ----------
+  // Aba "Balanço" com "2024" e "jan–jun/25" (ilegível). "Impostos e contribuições a recuperar"
+  // (500) é cabeçalho com filhas IRRF 300 + PIS 200 nas DUAS colunas. O `continue` do 3f40571
+  // descartava o veredito de 2024 por causa da coluna vizinha: AC operacional 1.500 -> 2.000
+  // (dupla contagem) e reconciliação 0 -> -500.
+  {
+    const H = "Impostos e contribuições a recuperar";
+    const campos = [
+      c("vG", "Clientes", "Ativo Circulante", 1000, 1, "2024"),
+      c("vG", H, "Ativo Circulante", 500, 2, "2024"),
+      c("vG", "IRRF a recuperar", H, 300, 3, "2024"),
+      c("vG", "PIS a recuperar", H, 200, 4, "2024"),
+      c("vG", "Clientes", "Ativo Circulante", 900, 1, "jan–jun/25"),
+      c("vG", H, "Ativo Circulante", 500, 2, "jan–jun/25"),
+      c("vG", "IRRF a recuperar", H, 300, 3, "jan–jun/25"),
+      c("vG", "PIS a recuperar", H, 200, 4, "jan–jun/25"),
+    ];
+    const documentos = [mk("G", "BALANCO", "2025")];
+    const m = montar(campos, documentos, [
+      linhaA("Ativo Circulante", { "2024": 1500 }, "BALANCO", "subtotal"),
+      linhaA("Clientes", { "2024": 1000 }, "BALANCO"),
+      linhaA(H, { "2024": 500 }, "BALANCO"),
+      linhaA("IRRF a recuperar", { "2024": 300 }, "BALANCO"),
+      linhaA("PIS a recuperar", { "2024": 200 }, "BALANCO"),
+    ], [2024], [2025, 2026]);
+    checar(m.rAc > 0 && m.rRec > 0, "(39g) o Balance Sheet tem o AC operacional e a reconciliação", `${m.rAc}/${m.rRec}`);
+    checar(perto(m.ler(m.bs, m.rAc, "E"), 1500),
+      "(39g) 2024: o cabeçalho declarado nas duas colunas da aba não soma com as filhas (AC operacional 1.500, não 2.000)",
+      JSON.stringify(m.ler(m.bs, m.rAc, "E")));
+    checar(perto(m.ler(m.bs, m.rRec, "E"), 0),
+      "(39g) 2024: a reconciliação do circulante é ~0 (não -500)", JSON.stringify(m.ler(m.bs, m.rRec, "E")));
+  }
+
+  // ---- (39h) ALTO: ano histórico SEM total informado herda a remoção do cabeçalho provado ----
+  // Sem `ordem` (nenhum detector estrutural). "Ativo Circulante" é informado só em 2025; em 2024
+  // o cabeçalho "Estoques" voltava a somar com as filhas e a reconciliação dizia "nada a
+  // reconciliar" — dupla contagem calada. Agora herda, e a célula diz que herdou (e o 2025,
+  // que foi PROVADO, diz o motivo: item 4).
+  {
+    // SEM `ordem` e SEM `periodo_coluna`: não há sequência impressa para os detectores lerem
+    const semOrdem = campo({ chave: "Outros", secao: "Ativo Circulante", secao_canonica: "ativo_circulante",
+                             valor_num: 300, documento_versao_id: "vH", unidade: "milhar" } as never);
+    const m = montar([semOrdem], [mk("H", "BALANCO", "2025")], [
+      // 2023 é o exercício em que "Estoques" é FOLHA (total informado 300 = 100 + 200, sem excesso):
+      // a linha precisa de um ano com valor para continuar existindo e poder carregar a nota
+      linhaA("Ativo Circulante", { "2023": 300, "2025": 900 }, "BALANCO", "subtotal"),
+      linhaA("Outros", { "2023": 100, "2024": 400, "2025": 300 }, "BALANCO"),
+      linhaA("Estoques", { "2023": 200, "2024": 500, "2025": 600 }, "BALANCO"),
+      linhaA("Matéria-prima", { "2024": 300, "2025": 350 }, "BALANCO"),
+      linhaA("Produtos acabados", { "2024": 200, "2025": 250 }, "BALANCO"),
+    ], [2023, 2024, 2025], [2026, 2027]);
+    checar(perto(m.ler(m.bs, m.rAc, "G"), 900), "(39h) 2025 (com total informado): AC operacional 900",
+      JSON.stringify(m.ler(m.bs, m.rAc, "G")));
+    checar(perto(m.ler(m.bs, m.rAc, "F"), 900),
+      "(39h) 2024 (sem total informado): o cabeçalho provado em 2025 não soma de volta (AC operacional 900, não 1.400)",
+      JSON.stringify(m.ler(m.bs, m.rAc, "F")));
+    // ---- (39j) MÉDIO, regra 1: a célula em branco que a prova deixou traz motivo E efeito ----
+    const rEst = m.achar(m.wc, "Estoques");
+    const n25 = m.nota(m.wc, rEst, "G"); const n24 = m.nota(m.wc, rEst, "F");
+    checar(rEst > 0 && /Cabeçalho de grupo/.test(n25) && /Efeito/.test(n25),
+      "(39j) 2025: o valor que a prova tirou deixa nota com o motivo e o efeito (não fica em branco calado)", n25);
+    checar(/herança/.test(n24) && /Efeito/.test(n24),
+      "(39j) 2024: o valor tirado por herança também diz que foi herdado e qual o efeito", n24);
+  }
+
+  // ---- (39i) MÉDIO: sintético fora da lista de nomes, balancete num ano HISTÓRICO -------------
+  // O arranjo do (39f) com "Estoque de mercadorias" (não está em CABECALHOS_DE_GRUPO) e o
+  // balancete "jan–dez/25" como exercício realizado. A prova só conhece a lista: somava o
+  // sintético (50.000) com as filhas e tirava "Clientes" (28.000, folha) para compensar —
+  // AC operacional 100.000 contra 78.000, reconciliação -22.000.
+  {
+    const E = "Estoque de mercadorias";
+    const ES24 = 53924.56446;
+    const T24 = 32730 + ES24;
+    const linhas = [
+      linhaA("Ativo Circulante", { "2024": T24, "2025": 78000 }, "BALANCO", "subtotal"),
+      linhaA("Clientes", { "2024": 32730, "2025": 28000 }, "BALANCO"),
+      linhaA(E, { "2024": ES24, "2025": 50000 }, "BALANCO"),
+      linhaA("ESTOQUE EM PODER DE TERCEIROS", { "2025": 30000 }, "COMBINADO"),
+      linhaA("MERCADORIA EM CONSIGNAÇÃO", { "2025": 20000 }, "COMBINADO"),
+    ];
+    const camposBase = [
+      c("vB24", "Clientes", "Ativo Circulante", 32730, 1, "2024"),
+      c("vB24", E, "Ativo Circulante", ES24, 5, "2024"),
+      c("vBC25", "CLIENTES", "Ativo Circulante", 28000, 20, "jan–dez/25"),
+      c("vBC25", E, "Ativo Circulante", 50000, 22, "jan–dez/25"),
+      c("vBC25", "ESTOQUE EM PODER DE TERCEIROS", E, 30000, 56, "jan–dez/25"),
+      c("vBC25", "MERCADORIA EM CONSIGNAÇÃO", E, 20000, 59, "jan–dez/25"),
+    ];
+    // (a) o documento do balancete diz o exercício ("2025"): o veredito sai SÓ para ele
+    const a = montar(camposBase, [mk("B24", "BALANCO", "2024"), mk("BC25", "COMBINADO", "2025")], linhas, [2024, 2025], [2026, 2027]);
+    const rWc = a.achar(a.wc, "Clientes");
+    checar(perto(a.ler(a.bs, a.rRec, "F"), 0),
+      "(39i) 2025 (balancete histórico): o sintético fora da lista não soma com as filhas (reconciliação ~0)",
+      JSON.stringify(a.ler(a.bs, a.rRec, "F")));
+    checar(perto(a.ler(a.wc, rWc, "F"), 28000),
+      "(39i) 2025: 'Clientes' (folha) continua no modelo — a prova não a tira para compensar o sintético",
+      JSON.stringify(a.ler(a.wc, rWc, "F")));
+    checar(perto(a.ler(a.bs, a.rRec, "E"), 0) && perto(a.ler(a.wc, a.achar(a.wc, E), "E"), ES24),
+      "(39i) 2024: a folha do Balanço segue intacta (reconciliação ~0 e a linha carrega os Estoques)",
+      `${JSON.stringify(a.ler(a.bs, a.rRec, "E"))} · ${JSON.stringify(a.ler(a.wc, a.achar(a.wc, E), "E"))}`);
+    // (b) o documento NÃO diz o ano (referência ilegível): não há como saber qual exercício o
+    // balancete cobre. O teto declarado: o sintético fica na soma, o excesso APARECE na
+    // reconciliação (-50.000) e nenhuma outra conta é removida.
+    const b = montar(camposBase, [mk("B24", "BALANCO", "2024"), mk("BC25", "COMBINADO", "jan–dez/25")], linhas, [2024, 2025], [2026, 2027]);
+    const rWcB = b.achar(b.wc, "Clientes");
+    checar(perto(b.ler(b.wc, rWcB, "F"), 28000),
+      "(39i) sem ano derivável: 'Clientes' (folha) NUNCA é removida para compensar o sintético",
+      JSON.stringify(b.ler(b.wc, rWcB, "F")));
+    const resB = b.ler(b.bs, b.rRec, "F");
+    checar(typeof resB === "number" && Math.abs(resB) > 1000,
+      "(39i) sem ano derivável: o excesso fica À VISTA na reconciliação (não some calado)", JSON.stringify(resB));
+  }
 }
 
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);
