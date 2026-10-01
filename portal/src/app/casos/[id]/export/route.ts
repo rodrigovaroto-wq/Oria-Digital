@@ -527,6 +527,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         serie: string; ano: number; valor: number; fonte: string; natureza: "taxa" | "nivel";
         /** meses que o REALIZADO cobre; < 12 não é taxa anual (o modelo recusa na aba Anual) */
         meses?: number;
+        /** estruturado: a aba Anual decide a fórmula do CDI por ele, nunca pelo texto de `fonte` */
+        origem: "focus" | "realizado";
       };
       const macroModelo: MacroDoModelo[] = [
         ...anuais.flatMap((a): MacroDoModelo[] => {
@@ -535,12 +537,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
             if (nivel === undefined) return [];
             return [{
               serie: a.serie, ano: a.ano, valor: nivel.valor, natureza: "nivel",
-              fonte: `realizado — fechamento de ${nivel.data}`,
+              fonte: `realizado — fechamento de ${nivel.data}`, origem: "realizado",
             }];
           }
           return [{
             serie: a.serie, ano: a.ano, valor: Number(a.retorno), natureza: "taxa",
-            fonte: `realizado (${a.meses} meses)`, meses: Number(a.meses),
+            fonte: `realizado (${a.meses} meses)`, meses: Number(a.meses), origem: "realizado",
           }];
         }),
         ...expectativas.map((e): MacroDoModelo => ({
@@ -549,7 +551,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           // período), e para IPCA/Selic/CDI em taxa — a natureza é da SÉRIE, então ela
           // vem da mesma classificação usada no realizado.
           natureza: naturezaDaSerie.get(e.serie) ?? "taxa",
-          fonte: `Focus, coleta ${e.coletado_em}`,
+          fonte: `Focus, coleta ${e.coletado_em}`, origem: "focus",
         })),
       ];
 

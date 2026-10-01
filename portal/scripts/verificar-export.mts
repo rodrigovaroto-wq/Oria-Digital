@@ -4956,15 +4956,15 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   // não é fixture inventada para provar o bug. Só os valores do Focus são ilustrativos.
   {
     const macro0 = [
-      { serie: "CDI", ano: 2024, valor: 10.888, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
-      { serie: "CDI", ano: 2025, valor: 14.333, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
-      { serie: "CDI", ano: 2026, valor: 9.713, fonte: "realizado (9 meses)", natureza: "taxa" as const, meses: 9 },
-      { serie: "SELIC", ano: 2024, valor: 10.888, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
-      { serie: "SELIC", ano: 2025, valor: 14.333, fonte: "realizado (12 meses)", natureza: "taxa" as const, meses: 12 },
-      { serie: "SELIC", ano: 2026, valor: 13.75, fonte: "Focus, coleta 2026-09-28", natureza: "taxa" as const },
-      { serie: "SELIC", ano: 2027, valor: 12.5, fonte: "Focus, coleta 2026-09-28", natureza: "taxa" as const },
-      { serie: "SELIC", ano: 2028, valor: 10.5, fonte: "Focus, coleta 2026-09-28", natureza: "taxa" as const },
-      { serie: "INPC", ano: 2026, valor: 3.1, fonte: "realizado (8 meses)", natureza: "taxa" as const, meses: 8 },
+      { serie: "CDI", ano: 2024, valor: 10.888, fonte: "realizado (12 meses)", origem: "realizado" as const, natureza: "taxa" as const, meses: 12 },
+      { serie: "CDI", ano: 2025, valor: 14.333, fonte: "realizado (12 meses)", origem: "realizado" as const, natureza: "taxa" as const, meses: 12 },
+      { serie: "CDI", ano: 2026, valor: 9.713, fonte: "realizado (9 meses)", origem: "realizado" as const, natureza: "taxa" as const, meses: 9 },
+      { serie: "SELIC", ano: 2024, valor: 10.888, fonte: "realizado (12 meses)", origem: "realizado" as const, natureza: "taxa" as const, meses: 12 },
+      { serie: "SELIC", ano: 2025, valor: 14.333, fonte: "realizado (12 meses)", origem: "realizado" as const, natureza: "taxa" as const, meses: 12 },
+      { serie: "SELIC", ano: 2026, valor: 13.75, fonte: "Focus, coleta 2026-09-28", origem: "focus" as const, natureza: "taxa" as const },
+      { serie: "SELIC", ano: 2027, valor: 12.5, fonte: "Focus, coleta 2026-09-28", origem: "focus" as const, natureza: "taxa" as const },
+      { serie: "SELIC", ano: 2028, valor: 10.5, fonte: "Focus, coleta 2026-09-28", origem: "focus" as const, natureza: "taxa" as const },
+      { serie: "INPC", ano: 2026, valor: 3.1, fonte: "realizado (8 meses)", origem: "realizado" as const, natureza: "taxa" as const, meses: 8 },
     ];
     const wb0 = buildExportWorkbook({
       caso: entradaModelo.caso, documentos: docsModelo, campos: camposModelo,
@@ -5051,6 +5051,63 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
         }
       }
     }
+
+    // 7. A DECISÃO É POR `origem`, NÃO PELO TEXTO DE `fonte` (comportamento): trocar o rótulo
+    //    da fonte não pode reverter o CDI para a cópia da meta; e um texto "Focus" sobre um
+    //    número de origem realizado não pode virar composição. Mede 2026 (9,713 + meta 13,75).
+    const cdi26De = (macro: unknown[]): unknown => {
+      const wb = buildExportWorkbook({
+        caso: entradaModelo.caso, documentos: docsModelo, campos: camposModelo,
+        agora: new Date("2026-08-05T12:00:00Z"), modo: "completo",
+        modeloInstitucional: { ...entradaModelo, macro } as unknown as
+          Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+      });
+      const ws = wb.getWorksheet("Anual")!;
+      let r = -1;
+      for (let i = 1; i <= ws.rowCount; i++) if (String(ws.getRow(i).getCell(3).value ?? "").trim() === "CDI (% a.a.)") r = i;
+      return r < 0 ? "sem linha CDI" : avaliarCelula(ws, COLS_ANO[iAnoDe(2026)], r);
+    };
+    const composto26 = ((1 + 9.713 / 100) * Math.pow(1 + 13.75 / 100, 3 / 12) - 1) * 100;
+    const renomeada = cdi26De(macro0.map((m) => m.origem === "focus" ? { ...m, fonte: "Mediana de mercado (BCB)" } : m));
+    checar(typeof renomeada === "number" && Math.abs(renomeada - composto26) < 1e-6,
+      "(0106j) trocar o TEXTO da fonte do Focus não muda o CDI de 2026 (a decisão é por `origem`)",
+      JSON.stringify(renomeada));
+    const rotuladaFocus = cdi26De(macro0.map((m) => m.origem === "focus" ? { ...m, origem: "realizado" as const } : m));
+    checar(typeof rotuladaFocus === "number" && Math.abs(rotuladaFocus - 13.75) < 1e-9,
+      "(0106j) Selic de origem REALIZADA (mesmo com texto \"Focus\") entra como igualdade, não como meta",
+      JSON.stringify(rotuladaFocus));
+
+    // 8. Primeiro ano projetado COM meta e SEM meta no ano anterior (nem realizado parcial
+    //    do CDI): a célula é a meta do próprio ano, por fórmula, e a nota diz o viés no
+    //    sentido certo — meta de fim de ano fica ABAIXO do acumulado num corte (SUBESTIMA).
+    const wb2 = buildExportWorkbook({
+      caso: entradaModelo.caso, documentos: docsModelo, campos: camposModelo,
+      agora: new Date("2026-08-05T12:00:00Z"), modo: "completo",
+      modeloInstitucional: { ...entradaModelo, macro: macro0.filter((m) => m.serie !== "SELIC" || m.ano === 2027) } as unknown as
+        Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+    const a2 = wb2.getWorksheet("Anual")!;
+    let rC2 = -1; let rS2 = -1;
+    for (let r = 1; r <= a2.rowCount; r++) {
+      const t = String(a2.getRow(r).getCell(3).value ?? "").trim();
+      if (t === "CDI (% a.a.)") rC2 = r;
+      if (t === "Selic acumulada (% a.a.)") rS2 = r;
+    }
+    const c27b = avaliarCelula(a2, COLS_ANO[iAnoDe(2027)], rC2);
+    checar(typeof c27b === "number" && Math.abs(c27b - 12.5) < 1e-9,
+      "(0106j) 2027 com meta e sem meta em 2026: o CDI é a meta do próprio ano (12,5)", JSON.stringify(c27b));
+    a2.getRow(rS2).getCell(COLS_ANO[iAnoDe(2027)]).value = 9;
+    esquecerMemoria(a2);
+    const c27c = avaliarCelula(a2, COLS_ANO[iAnoDe(2027)], rC2);
+    checar(typeof c27c === "number" && Math.abs(c27c - 9) < 1e-9,
+      "(0106j) …e mexer na Selic de 2027 move o CDI (fórmula, não valor)", JSON.stringify(c27c));
+    const n27b = String((a2.getRow(rC2).getCell(COLS_ANO[iAnoDe(2027)]).note as
+      { texts?: Array<{ text: string }> } | undefined)?.texts?.map((t) => t.text).join("") ?? "");
+    checar(/ABAIXO do acumulado num ciclo de corte \(SUBESTIMA o custo\)/.test(n27b) && /ACIMA num de alta/.test(n27b),
+      "(0106j) …e a nota do viés diz que a meta SUBESTIMA o custo num corte e superestima numa alta", n27b.slice(0, 160));
+    const c26b = a2.getRow(rC2).getCell(COLS_ANO[iAnoDe(2026)]).value;
+    checar(c26b === null || c26b === undefined,
+      "(0106j) 2026 com realizado parcial e SEM meta de Selic fica VAZIO (não inventa)", JSON.stringify(c26b));
 
     // 6. SEM Selic nem CDI para o ano: célula vazia e a nota da CURVA_CDI diz o EFEITO.
     const wb1 = buildExportWorkbook({

@@ -222,7 +222,19 @@ export interface EntradaModeloInstitucional {
    * Focus não tem (é projeção do ano inteiro). Ausente = tratado como ano completo, que é
    * o que as fixtures sem o campo sempre assumiram; a rota do export sempre o manda.
    */
-  macro: { serie: string; ano: number; valor: number; fonte: string; natureza?: "taxa" | "nivel"; meses?: number }[];
+  macro: {
+    serie: string; ano: number; valor: number; fonte: string; natureza?: "taxa" | "nivel"; meses?: number;
+    /**
+     * De onde o número vem, em campo ESTRUTURADO — `fonte` é só texto de exibição. "focus" =
+     * expectativa de mercado (para a Selic, a META de fim de ano); "realizado" = observação
+     * do BCB/IBGE. A aba Anual decide a fórmula do CDI por este campo: decidir pelo texto de
+     * `fonte` fazia a troca do rótulo na rota reverter o CDI para a cópia da meta, sem erro.
+     * AUSENTE = "realizado": as fixtures antigas sem o campo são realizado de 12 meses ou
+     * série de nível, e tratar um número de origem desconhecida como meta (compor/fazer média)
+     * inventaria uma aproximação; tratá-lo como realizado só mantém a igualdade medida.
+     */
+    origem?: "focus" | "realizado";
+  }[];
   /**
    * Rótulos normalizados que a detecção ESTRUTURAL do export (`export.ts`,
    * `detectarSubtotaisInformados` + `detectarSubtotaisPorOrdem`) reconheceu como
@@ -1378,9 +1390,9 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
       return i <= 0 ? String(ano) : `=${g.letraDoAno(ctx.anos[i - 1])}1+1`;
     }, "0");
 
-  const porSerieAno = new Map<string, { valor: number; fonte: string; natureza?: "taxa" | "nivel"; meses?: number }>();
+  const porSerieAno = new Map<string, { valor: number; fonte: string; natureza?: "taxa" | "nivel"; meses?: number; origem?: "focus" | "realizado" }>();
   for (const m of ctx.ent.macro) {
-    porSerieAno.set(`${m.serie}|${m.ano}`, { valor: m.valor, fonte: m.fonte, natureza: m.natureza, meses: m.meses });
+    porSerieAno.set(`${m.serie}|${m.ano}`, { valor: m.valor, fonte: m.fonte, natureza: m.natureza, meses: m.meses, origem: m.origem });
   }
   /** Realizado de menos de 12 meses numa série de TAXA: acumulado parcial, não taxa anual. */
   const parcial = (v: { natureza?: "taxa" | "nivel"; meses?: number } | undefined, codigo: string) =>
@@ -1448,7 +1460,7 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
       // Só a Selic REALIZADA de 12 meses entra como igualdade (a base medida acima).
       if (s.codigo === "CDI" && (!v || parcial(v, s.codigo))) {
         const selic = porSerieAno.get(`SELIC|${ano}`);
-        const ehMeta = (x: { fonte: string } | undefined) => x !== undefined && x.fonte.startsWith("Focus");
+        const ehMeta = (x: { origem?: "focus" | "realizado" } | undefined) => x?.origem === "focus";
         if (selic && !parcial(selic, "SELIC")) {
           const refSelic = g.ref("macro:SELIC", ano);
           const antAno = g.anoAnterior(ano);
@@ -1474,7 +1486,7 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
               + `trajetória linear da meta ao longo do ano. ${limite} Limite: curva não linear de juros desvia dela.`;
           } else {
             nota = `CDI de ${ano} = meta de Selic do fim de ${ano} (Focus, célula acima), sem meta do ano anterior `
-              + `para compor. ${limite} Limite: superestima o custo num ciclo de corte e subestima num de alta. `
+              + `para compor. ${limite} Limite: a meta de fim de ano fica ABAIXO do acumulado num ciclo de corte (SUBESTIMA o custo) e ACIMA num de alta (superestima). `
               + `Selic: ${selic.fonte}`;
           }
           g.set("macro:CDI", ano, formula, { fmt: NUM2, nota });
@@ -1503,7 +1515,7 @@ function abaAnual(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
       g.set(`macro:${s.codigo}`, ano, v.valor, {
         fmt: NUM2,
         nota: `Fonte: ${v.fonte}`
-          + (s.codigo === "SELIC" && v.fonte.startsWith("Focus")
+          + (s.codigo === "SELIC" && v.origem === "focus"
             ? ". ATENÇÃO: o valor projetado é a META de Selic no fim do ano (Focus), NÃO a taxa acumulada no ano "
               + "como o rótulo da linha sugere; o realizado é o acumulado."
             : ""),
@@ -3870,8 +3882,9 @@ function abaDivida(wb: ExcelJS.Workbook, ctx: Ctx, gAnual: Grade, gRec: Grade): 
           + "dívida também quando o mapa não traz juros — rever antes de comitê."
         : curva
         ? "Curva de referência da aba Anual, em pontos percentuais: CDI realizado de 12 meses nos anos "
-          + "fechados e, nos projetados, a Selic do Focus (o Focus NÃO publica CDI; ver a nota da célula "
-          + "na aba Anual) "
+          + "fechados e, nos projetados, uma APROXIMAÇÃO a partir das metas de Selic de fim de ano do Focus "
+          + "(realizado composto com a meta no ano corrente; média das metas de t-1 e t nos seguintes; o Focus "
+          + "NÃO publica CDI nem a taxa acumulada — ver a nota da célula na aba Anual) "
           + "— daí o /100. O N() trata ano sem publicação como zero em vez de propagar erro: é a "
           + "guarda que falta no Modelo Base, onde um 'nd' na série da Libor apagou o resultado de "
           + "11 anos de projeção."
