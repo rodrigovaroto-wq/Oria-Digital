@@ -903,3 +903,121 @@ test('hierarquia: código numérico sem ponto é ANALÍTICA, e ela não interrom
   const filhas = filhasDiretas(linhas, i).map((j) => linhas[j].cod);
   assert.ok(filhas.includes('2.01.01.01') && filhas.includes('2.01.01.02'), `filhas de 2.01.01: ${filhas}`);
 });
+
+// CONTROLE NEGATIVO REAL 2: "22_Aging_de_Contas_a_Receber_Canastra_Industria_2025.pdf"
+// (versão 1f1f8144, caso "Teste v41 - Grupo canastra", 91 campos como gravados em
+// produção). As chaves são "A vencer", "1 a 30 dias", "31 a 60 dias"... repetidas por
+// cliente. O documento está CERTO (2236+709+545+491+764+709 = 5454 = Total) e a regra
+// "um dígito é sintética de topo" fazia o "1" de "1 a 30 dias" virar sintética:
+// 13 de 13 "não fecham".
+const AGING_CANASTRA = [
+  ['A vencer', 2236.0],
+  ['1 a 30 dias', 709.0],
+  ['31 a 60 dias', 545.0],
+  ['61 a 90 dias', 491.0],
+  ['91 a 180 dias', 764.0],
+  ['Acima de 180 dias', 709.0],
+  ['Total', 5454.0],
+  ['A vencer', 1648.0],
+  ['1 a 30 dias', 522.0],
+  ['31 a 60 dias', 402.0],
+  ['61 a 90 dias', 362.0],
+  ['91 a 180 dias', 563.0],
+  ['Acima de 180 dias', 522.0],
+  ['Total', 4019.0],
+  ['A vencer', 1295.0],
+  ['1 a 30 dias', 411.0],
+  ['31 a 60 dias', 316.0],
+  ['61 a 90 dias', 284.0],
+  ['91 a 180 dias', 442.0],
+  ['Acima de 180 dias', 410.0],
+  ['Total', 3158.0],
+  ['A vencer', 1059.0],
+  ['1 a 30 dias', 336.0],
+  ['31 a 60 dias', 258.0],
+  ['61 a 90 dias', 233.0],
+  ['91 a 180 dias', 362.0],
+  ['Acima de 180 dias', 336.0],
+  ['Total', 2584.0],
+  ['A vencer', 941.0],
+  ['1 a 30 dias', 298.0],
+  ['31 a 60 dias', 230.0],
+  ['61 a 90 dias', 207.0],
+  ['91 a 180 dias', 321.0],
+  ['Acima de 180 dias', 299.0],
+  ['Total', 2296.0],
+  ['A vencer', 824.0],
+  ['1 a 30 dias', 261.0],
+  ['31 a 60 dias', 201.0],
+  ['61 a 90 dias', 181.0],
+  ['91 a 180 dias', 281.0],
+  ['Acima de 180 dias', 261.0],
+  ['Total', 2009.0],
+  ['A vencer', 706.0],
+  ['1 a 30 dias', 224.0],
+  ['31 a 60 dias', 172.0],
+  ['61 a 90 dias', 155.0],
+  ['91 a 180 dias', 241.0],
+  ['Acima de 180 dias', 224.0],
+  ['Total', 1722.0],
+  ['A vencer', 588.0],
+  ['1 a 30 dias', 187.0],
+  ['31 a 60 dias', 144.0],
+  ['61 a 90 dias', 129.0],
+  ['91 a 180 dias', 201.0],
+  ['Acima de 180 dias', 186.0],
+  ['Total', 1435.0],
+  ['A vencer', 471.0],
+  ['1 a 30 dias', 149.0],
+  ['31 a 60 dias', 115.0],
+  ['61 a 90 dias', 103.0],
+  ['91 a 180 dias', 161.0],
+  ['Acima de 180 dias', 149.0],
+  ['Total', 1148.0],
+  ['A vencer', 471.0],
+  ['1 a 30 dias', 149.0],
+  ['31 a 60 dias', 115.0],
+  ['61 a 90 dias', 103.0],
+  ['91 a 180 dias', 161.0],
+  ['Acima de 180 dias', 149.0],
+  ['Total', 1148.0],
+  ['A vencer', 353.0],
+  ['1 a 30 dias', 112.0],
+  ['31 a 60 dias', 86.0],
+  ['61 a 90 dias', 77.0],
+  ['91 a 180 dias', 121.0],
+  ['Acima de 180 dias', 112.0],
+  ['Total', 861.0],
+  ['A vencer', 1178.0],
+  ['1 a 30 dias', 373.0],
+  ['31 a 60 dias', 287.0],
+  ['61 a 90 dias', 258.0],
+  ['91 a 180 dias', 402.0],
+  ['Acima de 180 dias', 374.0],
+  ['Total', 2872.0],
+  ['A vencer', 11770.0],
+  ['1 a 30 dias', 3731.0],
+  ['31 a 60 dias', 2871.0],
+  ['61 a 90 dias', 2583.0],
+  ['91 a 180 dias', 4020.0],
+  ['Acima de 180 dias', 3731.0],
+  ['Total', 28706.0],
+];
+const camposDoAging = () => AGING_CANASTRA.map(([chave, v], i) => ({
+  ordem: i, chave, periodo_coluna: null, valor_num: v,
+}));
+
+test('hierarquia: o aging real ("1 a 30 dias") NÃO é plano de contas hierárquico e não é avaliado', () => {
+  assert.deepEqual(conferirHierarquiaDeCodigos(camposDoAging()), []);
+  const { linhas } = linhasDaHierarquia(camposDoAging());
+  assert.equal(classificarHierarquia(linhas, ['']).avaliaveis, 0);
+  assert.ok(!linhas.some((l) => l.tipo === 'S'), 'nenhuma linha do aging vira sintética');
+});
+
+test('hierarquia: um dígito só é sintética de topo SE o documento tem código com ponto que o estende', () => {
+  const tipos = (chaves) => linhasDaHierarquia(chaves.map((chave, i) => ({ ordem: i, chave, periodo_coluna: null, valor_num: 1 })))
+    .linhas.map((l) => `${l.cod}:${l.tipo}`);
+  assert.deepEqual(tipos(['2 PASSIVO', '2.01 CIRCULANTE', '8241 X']), ['2:S', '2.01:S', '8241:A']);
+  assert.deepEqual(tipos(['2 PASSIVO', '8241 X']), ['2:A', '8241:A'], 'sem código com ponto que o estenda, não é sintética');
+  assert.ok(!tipos(['1 a 30 dias', '31 a 60 dias']).includes('1:S'));
+});

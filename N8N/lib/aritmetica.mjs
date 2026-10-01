@@ -386,7 +386,13 @@ export function linhasDaHierarquia(campos) {
   const linhas = [];
   const repetidas = [];
   let anterior = null;
-  for (const bloco of blocosDeLinha(ordenados)) {
+  const blocos = blocosDeLinha(ordenados);
+  // UM DÍGITO SÓ É SINTÉTICA DE TOPO apenas se o documento tem um código COM PONTO que
+  // o estende ("3" → "3.01"). Sem isso o "1" de "1 a 30 dias" virava sintética e o
+  // aging CERTO do Canastra (2236+709+545+491+764+709 = 5454 = Total) ganhava
+  // `extracao_falhou` falsa: 13 de 13 "não fecham" (produção, versão 1f1f8144).
+  const topos = new Set(blocos.map((b) => /^\d+(\.\d+)+$/.test(b.chave.split(' ')[0]) ? b.chave.split(' ')[0].split('.')[0] : null));
+  for (const bloco of blocos) {
     if (anterior && anterior.chave === bloco.chave) {
       if (!repetidas.includes(bloco.chave)) repetidas.push(bloco.chave);
       continue;
@@ -399,7 +405,7 @@ export function linhasDaHierarquia(campos) {
     // deixava "2.01.01.02 (-) JUROS" de fora — 3 de 10 não fechavam num documento
     // CERTO (15.563.518,86 - 2.440.052,07 = 13.123.466,79).
     const cod = bloco.chave.split(' ')[0];
-    if (/^\d+\.\d+(\.\d+)*$/.test(cod) || /^\d$/.test(cod)) bloco.tipo = 'S';
+    if (/^\d+\.\d+(\.\d+)*$/.test(cod) || (/^\d$/.test(cod) && topos.has(cod))) bloco.tipo = 'S';
     else if (/^\d+$/.test(cod)) bloco.tipo = 'A';
     else continue;
     bloco.cod = cod;
