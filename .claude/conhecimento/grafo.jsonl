@@ -600,6 +600,7 @@
 {"k":"n","id":"migration:0196","t":"migration","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"o caixa que lia a dfc de outro ano"}
 {"k":"n","id":"migration:0197","t":"migration","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","txt":"o faturamento que nao via o mes na coluna"}
 {"k":"n","id":"migration:0198","t":"migration","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","txt":"a faixa de anos que perdia o ano do meio"}
+{"k":"n","id":"migration:0199","t":"migration","f":"Supabase/migrations/0199_os_campos_da_apresentacao.sql","txt":"os campos da apresentacao"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1494,7 +1495,7 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perguntas/page.tsx","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/app/casos/[id]/perguntas/page.tsx","l":18}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/revisao/actions.ts","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"portal/src/app/casos/[id]/revisao/actions.ts","l":6}
 {"k":"e","de":"arquivo:portal/src/components/excluir-mandato.tsx","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/components/excluir-mandato.tsx","l":12}
-{"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":33}
+{"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":34}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/export-modelagem.ts","l":97}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/lib/export-modelagem.ts","l":765}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"portal/src/lib/export.ts","l":691}

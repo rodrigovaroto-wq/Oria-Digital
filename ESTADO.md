@@ -8,6 +8,7 @@
 > CONFERIDO`, 42 nós; o `FINGERPRINT_EXTRACAO` mudou — reenviar caso já processado re-extrai tudo);
 > `fn_reconciliar_caso` rodado no Krauspenhar e no `72d9210a` (0 de 26 pendências decididas
 > tocadas). Detalhe no HANDOFF S104 §0b.
+> **Migration 0199 escrita, NÃO aplicada em produção** (`0199_os_campos_da_apresentacao.sql`: tabela `caso_apresentacao_campo`, os campos "[a preencher]" da apresentação). Quem responde é a sonda: `fn_instalacao_conferir()` where migration = '0199'.
 > O portal de produção é o `main` — os consertos do portal só chegam com o merge do #248.
 >
 > **O que o #248 corrige, medido no Excel real do Krauspenhar** (portal do branch servido contra
