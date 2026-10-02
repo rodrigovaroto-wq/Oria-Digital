@@ -49,6 +49,12 @@ export interface BaseCredito {
   periodos: PeriodoCredito[];
   documentos: DocumentoDaBase[];
   historico: HistoricoCredito;
+  /**
+   * Os campos "[a preencher]" que alguém já preencheu (`caso_apresentacao_campo`, 0199), por chave
+   * estável ("ii2.cartao1", "xvii.nota.rentabilidade"…). Ausente ou sem a chave = a lacuna continua
+   * "[a preencher]" — nunca um texto inventado no lugar.
+   */
+  campos?: Record<string, { valor: string; fonte: string | null }>;
 }
 
 /**

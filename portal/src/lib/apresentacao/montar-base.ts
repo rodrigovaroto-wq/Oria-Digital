@@ -22,6 +22,7 @@ export function anosDoPeriodo(formatado: string): number[] {
 export function montarBaseCredito(
   ent: EntradaModeloInstitucional,
   documentos: DocumentoParaExport[],
+  campos: Array<{ chave: string; valor: string; fonte: string | null }> = [],
 ): BaseCredito {
   const historico = historicoParaCredito(ent);
   const entidade = ent.entidade ?? ent.caso.nome;
@@ -47,5 +48,6 @@ export function montarBaseCredito(
     periodos: historico.anos.map((a) => naturezaDoAno(a, docs)),
     documentos: docs,
     historico,
+    campos: Object.fromEntries(campos.map((c) => [c.chave, { valor: c.valor, fonte: c.fonte }])),
   };
 }

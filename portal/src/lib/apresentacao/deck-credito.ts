@@ -54,6 +54,8 @@ export interface SaidaDeck {
   /** o que ficou "[a preencher]" e por quê — também vai para o slide de notas */
   aPreencher: string[];
   amarracoes: Amarracao[];
+  /** quantos campos preenchidos (0199) entraram — para a rota/verificador saberem que o canal funciona */
+  camposUsados?: number;
 }
 
 export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck {
@@ -89,9 +91,21 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     "YTD/LTM: só exercícios fechados entram; o balancete do ano corrente fica fora desta versão.",
   ];
 
+  // OS CAMPOS PREENCHIDOS (0199). A chave do slide sai do rótulo ("II.2 · Tendências" → "ii2"), e
+  // cada lacuna do slide é `<slide>.<sufixo>`. É o que permite preencher a apresentação por
+  // capítulo sem o gerador conhecer o texto — e sem nunca trocar "[a preencher]" por suposição.
+  const campos = base.campos ?? {};
+  let prefixo = "";
+  const chaveDoRotulo = (r: string) => r.split("·")[0].trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+  const ap = (sufixo: string) => campos[`${prefixo}.${sufixo}`]?.valor ?? AP;
+  const usados: string[] = [];
   let primeiro = true;
   /** Slide de conteúdo: cabeçalho, rodapé e, só no primeiro, o "CONFIDENCIAL · <MÊS> <ANO>". */
   const slide = (rotulo: string, titulo: string, fonte: string, subtitulo?: string): SlideOria => {
+    prefixo = chaveDoRotulo(rotulo);
+    if (titulo === AP) titulo = ap("titulo");
+    if (fonte === FONTE_AP) fonte = campos[`${prefixo}.fonte`] ? `Fonte: ${campos[`${prefixo}.fonte`].valor}.` : FONTE_AP;
+    for (const k of Object.keys(campos)) if (k.startsWith(`${prefixo}.`) && !usados.includes(k)) usados.push(k);
     const s = deck.novo();
     cabecalho(s, { rotulo, titulo, subtitulo,
       confidencial: primeiro ? `CONFIDENCIAL · ${MESES[agora.getMonth()].toUpperCase()} ${agora.getFullYear()}` : undefined });
@@ -175,9 +189,9 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   {
     const s = slide("I.1 · Panorama do setor macro", AP, FONTE_AP);
     ["Tamanho do setor", "Crescimento recente", "Juro de referência", "Crédito ao setor"].forEach((r, i) =>
-      kpi(s, GRADE.col4.x[i], GRADE.topo, GRADE.col4.w, { valor: AP, rotulo: r, explicacao: `fonte: ${AP}` }));
+      kpi(s, GRADE.col4.x[i], GRADE.topo, GRADE.col4.w, { valor: ap(`kpi${i + 1}`), rotulo: r, explicacao: `fonte: ${ap(`kpi${i + 1}.fonte`)}` }));
     blocoDeTexto(s, GRADE.x, 228, GRADE.w, "Contexto estrutural",
-      [["Demanda e ciclo", AP], ["Juros e crédito", AP], ["Regulação e câmbio", AP]], 62);
+      [["Demanda e ciclo", ap("contexto1")], ["Juros e crédito", ap("contexto2")], ["Regulação e câmbio", ap("contexto3")]], 62);
   }
 
   // ======================================================== II — mercado específico
@@ -191,7 +205,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   {
     const s = slide("II.2 · Tendências estruturais", AP, FONTE_AP);
     ["Regulação", "Tecnologia", "Consolidação", "Mercado global", "Importação e câmbio", "Crédito"].forEach((t, i) =>
-      cartao(s, GRADE.col3.x[i % 3], GRADE.topo + Math.floor(i / 3) * 175, GRADE.col3.w, 150, { numeral: i + 1, titulo: t, corpo: AP }));
+      cartao(s, GRADE.col3.x[i % 3], GRADE.topo + Math.floor(i / 3) * 175, GRADE.col3.w, 150, { numeral: i + 1, titulo: t, corpo: ap(`cartao${i + 1}`) }));
   }
   {
     // A ponte analítica para o mandato: a coluna da companhia SAI DO SISTEMA (prazos e margem).
@@ -223,7 +237,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   }
   {
     const s = slide("III.2 · Perfil dos sócios", AP, FONTE_AP);
-    [1, 2, 3].forEach((n, i) => cartao(s, GRADE.col3.x[i], GRADE.topo, GRADE.col3.w, 250, { titulo: `Sócio ${n}: ${AP}`, corpo: `Histórico, outras empresas e presença pública: ${AP}` }));
+    [1, 2, 3].forEach((n, i) => cartao(s, GRADE.col3.x[i], GRADE.topo, GRADE.col3.w, 250, { titulo: `Sócio ${n}: ${ap(`socio${n}.nome`)}`, corpo: `Histórico, outras empresas e presença pública: ${ap(`socio${n}`)}` }));
   }
   {
     const s = slide("III.3 · Ecossistema do grupo", AP, FONTE_AP);
@@ -234,7 +248,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   {
     const s = slide("III.4 · Avaliação de stakeholders", AP, FONTE_AP);
     ["Concentração de controle", "Força das garantias pessoais", "Alertas e pontos de atenção"].forEach((t, i) =>
-      cartao(s, GRADE.col3.x[i], GRADE.topo, GRADE.col3.w, 250, { numeral: i + 1, titulo: t, corpo: AP }));
+      cartao(s, GRADE.col3.x[i], GRADE.topo, GRADE.col3.w, 250, { numeral: i + 1, titulo: t, corpo: ap(`cartao${i + 1}`) }));
   }
 
   // ======================================================== IV — a empresa
@@ -259,8 +273,8 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   }
   {
     const s = slide("IV.4 · Localização", AP, FONTE_AP);
-    cartao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, 250, { titulo: "Vantagens", corpo: AP });
-    cartao(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, 250, { titulo: "Desvantagens", corpo: AP });
+    cartao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, 250, { titulo: "Vantagens", corpo: ap("vantagens") });
+    cartao(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, 250, { titulo: "Desvantagens", corpo: ap("desvantagens") });
   }
 
   // ======================================================== V — cadeia de valor
@@ -293,8 +307,8 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   }
   {
     const s = slide("V.4 · Diagnóstico integrado", AP, FONTE_AP);
-    cartao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, 260, { titulo: "O que funciona", corpo: AP });
-    cartao(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, 260, { titulo: "O que não funciona", corpo: AP });
+    cartao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, 260, { titulo: "O que funciona", corpo: ap("funciona") });
+    cartao(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, 260, { titulo: "O que não funciona", corpo: ap("naofunciona") });
   }
 
   // ======================================================== VI — competitivo
@@ -302,7 +316,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   {
     const s = slide("VI.1 · Concorrentes", AP, FONTE_AP);
     [0, 1, 2, 3].forEach((i) => cartao(s, GRADE.col2.x[i % 2], GRADE.topo + Math.floor(i / 2) * 180, GRADE.col2.w, 160,
-      { numeral: i + 1, titulo: `Concorrente: ${AP}`, corpo: `Localização e alcance, ponto forte e ponto fraco: ${AP}` }));
+      { numeral: i + 1, titulo: `Concorrente: ${ap(`concorrente${i + 1}.nome`)}`, corpo: `Localização e alcance, ponto forte e ponto fraco: ${ap(`concorrente${i + 1}`)}` }));
   }
   {
     const s = slide("VI.2 · Posicionamento competitivo", AP, FONTE_AP);
@@ -508,7 +522,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     const s = slide("XV.2 · Alavancas e ruptura", AP, FONTE_AP);
     ["Alongamento", "Redução de custo", "Conversão ou capitalização", "Desinvestimentos", "Giro de capital", "Deságio"].forEach((t, i) =>
       cartao(s, GRADE.col3.x[i % 3], GRADE.topo + Math.floor(i / 3) * 175, GRADE.col3.w, 150,
-        { numeral: i + 1, titulo: t, corpo: `Magnitude indicativa: ${AP}${t === "Deságio" ? " (só se o resto não fechar)" : ""}` }));
+        { numeral: i + 1, titulo: t, corpo: `Magnitude indicativa: ${ap(`alavanca${i + 1}`)}${t === "Deságio" ? " (só se o resto não fechar)" : ""}` }));
   }
 
   // ======================================== cap. 10 — garantias, scorecard, síntese
@@ -530,15 +544,16 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Eixo", w: 300 }, { titulo: "Peso", w: 80 }, { titulo: "Nota", w: 115 }, { titulo: "Justificativa", w: 342, algn: "l" }], [
       ["Produto, demanda e mercado", "15%"], ["Acionistas e gestão", "20%"], ["Acesso a crédito e passivo", "15%"],
       ["Rentabilidade", "15%"], ["Geração de caixa", "20%"], ["Solvência e estrutura de capital", "15%"],
-    ].map(([e, w]): LinhaTabela => ({ celulas: [e, w, AP, AP] })).concat([{ celulas: ["Nota final ponderada", "100%", "n/d", AP], destaque: true }]));
+    ].map(([e, w], i): LinhaTabela => ({ celulas: [e, w, ap(`nota${i + 1}`), ap(`justificativa${i + 1}`)] }))
+      .concat([{ celulas: ["Nota final ponderada", "100%", notaFinal(campos, prefixo), faixaDaNota(notaFinal(campos, prefixo))], destaque: true }]));
     s.texto(GRADE.x, 352, GRADE.w, 40, [p("Faixas: 6,5 ou mais, preventivo · de 4,5 a 6,4, estresse · abaixo de 4,5, crítico.", { entrelinha: 14.8 })], "t");
   }
   {
     const s = slide("XVIII · Síntese de crédito", mancheteExecutiva(I), fontes);
     const d = diagnostico(I, Iant, anterior, esc).map(([t, c]) => `${t}: ${c}`).join(" ");
     cartao(s, GRADE.col3.x[0], GRADE.topo, GRADE.col3.w, 280, { titulo: "Diagnóstico", corpo: d });
-    cartao(s, GRADE.col3.x[1], GRADE.topo, GRADE.col3.w, 280, { titulo: "Hipótese de solução", corpo: AP });
-    cartao(s, GRADE.col3.x[2], GRADE.topo, GRADE.col3.w, 280, { titulo: "Riscos e pontos de diligência", corpo: AP });
+    cartao(s, GRADE.col3.x[1], GRADE.topo, GRADE.col3.w, 280, { titulo: "Hipótese de solução", corpo: ap("hipotese") });
+    cartao(s, GRADE.col3.x[2], GRADE.topo, GRADE.col3.w, 280, { titulo: "Riscos e pontos de diligência", corpo: ap("riscos") });
   }
 
   // ======================================== cap. 11 — SWOT
@@ -546,7 +561,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   {
     const s = slide("VII · Análise SWOT", AP, FONTE_AP);
     ["Forças", "Fraquezas", "Oportunidades", "Ameaças"].forEach((t, i) =>
-      cartao(s, GRADE.col2.x[i % 2], GRADE.topo + Math.floor(i / 2) * 180, GRADE.col2.w, 160, { titulo: t, corpo: AP }));
+      cartao(s, GRADE.col2.x[i % 2], GRADE.topo + Math.floor(i / 2) * 180, GRADE.col2.w, 160, { titulo: t, corpo: ap(["forcas", "fraquezas", "oportunidades", "ameacas"][i]) }));
   }
 
   // ======================================== cap. 12 — fatores críticos e próximos passos
@@ -554,7 +569,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   {
     const s = slide("VIII.1 · Fatores críticos de sucesso", AP, FONTE_AP);
     [0, 1, 2, 3, 4].forEach((i) => cartao(s, GRADE.col3.x[i % 3], GRADE.topo + Math.floor(i / 3) * 175, GRADE.col3.w, 150,
-      { numeral: i + 1, titulo: AP, corpo: AP }));
+      { numeral: i + 1, titulo: ap(`fator${i + 1}.titulo`), corpo: ap(`fator${i + 1}`) }));
   }
   {
     const s = slide("VIII.2 · Próximos passos", AP, "Fonte: prazos a partir da assinatura do mandato (D+0); ilustrativo.");
@@ -566,11 +581,26 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   notasEAvisos(deck, slide, am, aPreencher, ind, anos);
 
   // ===================================================== contracapa
-  const contato = { nome: AP, telefone: AP, email: AP };
-  // Contatos da contracapa: todos "[a preencher]" por decisão do dono (02/10/2026).
-  contracapa(deck.novo(COR.fundoCapa), [contato, contato]);
+  // Contatos da contracapa: "[a preencher]" por decisão do dono (02/10/2026), até alguém gravar
+  // `contracapa.contato1.nome` etc.
+  const contato = (n: number) => ({ nome: campos[`contracapa.contato${n}.nome`]?.valor ?? AP,
+    telefone: campos[`contracapa.contato${n}.telefone`]?.valor ?? AP, email: campos[`contracapa.contato${n}.email`]?.valor ?? AP });
+  contracapa(deck.novo(COR.fundoCapa), [contato(1), contato(2)]);
 
-  return { deck, aPreencher, amarracoes: am };
+  return { deck, aPreencher, amarracoes: am, camposUsados: usados.length };
+}
+
+/** Nota final do scorecard: média ponderada pelos pesos do Prompt-Mestre, SÓ com as seis notas. */
+const PESOS_SCORECARD = [0.15, 0.2, 0.15, 0.15, 0.2, 0.15];
+function notaFinal(campos: Record<string, { valor: string }>, prefixo: string): string {
+  const notas = PESOS_SCORECARD.map((_, i) => Number((campos[`${prefixo}.nota${i + 1}`]?.valor ?? "").replace(",", ".")));
+  if (notas.some((n) => !Number.isFinite(n) || n < 1 || n > 10)) return "n/d";
+  return notas.reduce((t, n, i) => t + n * PESOS_SCORECARD[i], 0).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+function faixaDaNota(t: string): string {
+  if (t === "n/d") return AP;
+  const n = Number(t.replace(",", "."));
+  return n >= 6.5 ? "preventivo" : n >= 4.5 ? "estresse" : "crítico";
 }
 
 // -----------------------------------------------------------------------------

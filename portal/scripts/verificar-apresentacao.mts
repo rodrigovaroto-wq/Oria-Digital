@@ -319,6 +319,36 @@ console.log("--- 6. setores e formatos diferentes (testes com mandatos de outro 
     "(6e) amarração que não fecha aparece na faixa do sumário executivo, não só nas notas");
 }
 
+console.log("--- 7. os campos preenchidos (0199) substituem o \"[a preencher]\" — e só eles ---");
+{
+  const entrada = entradaModeloDaFixture(fixture, agora);
+  const wb = buildExportWorkbook({ caso: { nome: "Book Vertentes", produto: "reestruturacao" },
+    documentos: fixture.documentos, campos: fixture.campos, agora, modeloInstitucional: entrada });
+  const notas = ["7", "6", "5", "4", "5", "3"];
+  const base7 = montarBaseCredito(entradaDoModeloDoWorkbook(wb)!, fixture.documentos, [
+    { chave: "ii2.cartao1", valor: "Norma XYZ de 2026 muda o licenciamento", fonte: "analista" },
+    { chave: "contracapa.contato1.nome", valor: "Fulano de Tal", fonte: null },
+    ...notas.map((n, i) => ({ chave: `xvii.nota${i + 1}`, valor: n, fonte: "analista" })),
+  ]);
+  const zip = await JSZip.loadAsync(await construirDeckCredito(base7, agora).deck.gerar(agora));
+  const nomes = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
+  const sl = await Promise.all(nomes.map((n) => zip.file(n)!.async("string")));
+  const ii2 = textos(slideCom(sl, "II.2 · TENDÊNCIAS ESTRUTURAIS"));
+  ok(ii2.includes("Norma XYZ de 2026 muda o licenciamento") && ii2.filter((t) => t === "[a preencher]").length >= 5,
+    "(7a) o campo preenchido entra no cartão dele; os outros cartões do slide continuam \"[a preencher]\"");
+  ok(sl.some((x) => textos(x).includes("Fulano de Tal")), "(7b) contato preenchido entra na contracapa");
+  // 7·0,15 + 6·0,20 + 5·0,15 + 4·0,15 + 5·0,20 + 3·0,15 = 5,05 → "5,1" (estresse)
+  ok(JSON.stringify(linha(slideCom(sl, "XVII · SCORECARD DE RISCO ORIA"), "Nota final ponderada", 3)) === JSON.stringify(["100%", "5,1", "estresse"]),
+    "(7c) com as seis notas, a nota final é a média ponderada pelos pesos do Prompt-Mestre, com a faixa",
+    JSON.stringify(linha(slideCom(sl, "XVII · SCORECARD DE RISCO ORIA"), "Nota final ponderada", 3)));
+  const base5 = montarBaseCredito(entradaDoModeloDoWorkbook(wb)!, fixture.documentos,
+    notas.slice(0, 5).map((n, i) => ({ chave: `xvii.nota${i + 1}`, valor: n, fonte: "analista" })));
+  const z5 = await JSZip.loadAsync(await construirDeckCredito(base5, agora).deck.gerar(agora));
+  const s5 = await Promise.all(Object.keys(z5.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n)).map((n) => z5.file(n)!.async("string")));
+  ok(linha(slideCom(s5, "XVII · SCORECARD DE RISCO ORIA"), "Nota final ponderada", 2)[1] === "n/d",
+    "(7d) com uma nota faltando, a nota final é n/d — nunca a média das que existem (o prompt: nunca a nota final sem as notas por eixo)");
+}
+
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);
 if (falhas > 0) process.exit(1);
 console.log("APRESENTAÇÃO OK — número do documento, ausência dita, padrão visual varrido com controle positivo");

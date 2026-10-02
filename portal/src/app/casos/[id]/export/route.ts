@@ -613,9 +613,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         { status: 409 },
       );
     }
+    // Os campos "[a preencher]" já preenchidos (0199). Falha de leitura NÃO derruba o deck — banco
+    // sem a 0199, RLS —: ele sai com as lacunas como sempre saiu, e o motivo fica no log.
+    const camposRes = await supabase.from("caso_apresentacao_campo").select("chave, valor, fonte").eq("caso_id", id);
+    if (camposRes.error) console.error(`[export] campos da apresentação não lidos: ${camposRes.error.message}`, { caso_id: id });
+    const camposAp = (camposRes.data ?? []) as Array<{ chave: string; valor: string; fonte: string | null }>;
     let deck;
     try {
-      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos), new Date()));
+      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp), new Date()));
     } catch (e) {
       if (!(e instanceof SemDadoParaApresentar)) throw e;
       return NextResponse.json({ error: "A apresentação de crédito não foi gerada.", motivos: [e.message] }, { status: 409 });
