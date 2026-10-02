@@ -3414,6 +3414,10 @@ export function buildExportWorkbook({
       // até o pós-processamento do buffer — ver `finalizarBufferDoExport`.
       const graficos = construirModeloInstitucional(workbook, entradaDoModelo);
       (workbook as unknown as { __graficosDoModelo?: EspecGrafico[] }).__graficosDoModelo = graficos;
+      // A apresentação de crédito (`lib/apresentacao/`) lê o realizado desta MESMA entrada, já com
+      // os subtotais informados: sem eles o cabeçalho de grupo soma com as filhas — medido no book
+      // Vertentes, "Clientes" de 2024 saía 62.020 num ativo circulante de 67.878.
+      (workbook as unknown as { __entradaDoModelo?: EntradaModeloInstitucional }).__entradaDoModelo = entradaDoModelo;
     }
 
     // A Modelagem é a primeira aba: é por onde o arquivo deve abrir.
@@ -3585,6 +3589,11 @@ const NOTA_BOX_NOVA = "width:340pt;height:170pt";
  * eu media localmente eram DIFERENTES, e a diferença era invisível. Agora as duas
  * pontas chamam esta função, que é a única que sabe montar o entregável.
  */
+/** A entrada do modelo institucional COM os subtotais informados, se o workbook montou o modelo. */
+export function entradaDoModeloDoWorkbook(workbook: ExcelJS.Workbook): EntradaModeloInstitucional | undefined {
+  return (workbook as unknown as { __entradaDoModelo?: EntradaModeloInstitucional }).__entradaDoModelo;
+}
+
 export async function finalizarBufferDoExport(workbook: ExcelJS.Workbook): Promise<Buffer> {
   const graficos = (workbook as unknown as { __graficosDoModelo?: EspecGrafico[] }).__graficosDoModelo ?? [];
   const comNotas = await ampliarNotasNoBuffer(await workbook.xlsx.writeBuffer());

@@ -4,7 +4,7 @@ import { paginar } from "@/lib/supabase/paginar";
 import { veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import type { EntradaModeloInstitucional, LinhaModelo } from "@/lib/modelo-institucional";
 import {
-  buildExportWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, type ConfigModelagem,
+  buildExportWorkbook, entradaDoModeloDoWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, type ConfigModelagem,
   type DocumentoParaExport, type MacroAnual, type MacroExpectativa,
 } from "@/lib/export";
 import type { CampoExtraido } from "@/lib/types";
@@ -13,6 +13,8 @@ import {
   provenienciaPorLinha, provenienciaDaLinha,
   type LinhaParaCasar, type VinculoParaCasar,
 } from "@/lib/modelagem-linha";
+import { montarBaseCredito } from "@/lib/apresentacao/montar-base";
+import { construirDeckCredito } from "@/lib/apresentacao/deck-credito";
 
 // exceljs (usado em lib/export.ts) usa Buffer/streams do Node — precisa do
 // runtime Node, não Edge.
@@ -48,7 +50,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // conferência, disponível desde a ingestão. Sem o parâmetro sai o completo, com
   // a Modelagem. Valor desconhecido cai em "completo" em vez de erro: um link
   // datilografado errado não deve deixar o analista sem arquivo.
-  const modo = new URL(request.url).searchParams.get("modo") === "dados" ? "dados" : "completo";
+  const modoPedido = new URL(request.url).searchParams.get("modo");
+  const modo = modoPedido === "dados" ? "dados" : "completo";
+  // `?modo=apresentacao` é o COMPLETO com outra saída: a apresentação de crédito (.pptx) lê o mesmo
+  // realizado que o modelo institucional, então passa pelo mesmo Portão 2 e pela mesma leitura.
+  const apresentacao = modoPedido === "apresentacao";
   const supabase = await createClient();
 
   const [casoRes, documentosRes] = await Promise.all([
@@ -594,6 +600,29 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     caso, documentos, campos, macro, macroErro, causasDeFalha, modo, modelagemConfig,
     modeloInstitucional,
   });
+  if (apresentacao) {
+    const entradaDoModelo = entradaDoModeloDoWorkbook(workbook);
+    if (!entradaDoModelo) {
+      return NextResponse.json(
+        {
+          error: "A apresentação de crédito não foi gerada: este caso ainda não tem o modelo institucional montado.",
+          motivos: ["Falta a entidade modelada ou o último exercício real na tela de Modelagem — ou não há exercício com valor numérico."],
+          dica: "A apresentação lê o MESMO realizado do modelo. Sem a entidade, ela somaria o balanço de uma empresa do "
+            + "grupo com o de outra; sem o último exercício real, trataria balancete parcial como ano fechado.",
+        },
+        { status: 409 },
+      );
+    }
+    const { deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos), new Date());
+    const pptx = await deck.gerar();
+    const nomePptx = `${nomeArquivoSanitizado(caso.nome)}-apresentacao-credito-${new Date().toISOString().slice(0, 10)}.pptx`;
+    return new NextResponse(pptx as unknown as BodyInit, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "Content-Disposition": `attachment; filename="${nomePptx}"`,
+      },
+    });
+  }
   const buffer = await finalizarBufferDoExport(workbook);
   // O nome do arquivo DIZ qual dos dois é. Dois arquivos com o mesmo nome na
   // pasta de Downloads, um com modelo e outro sem, é confusão garantida — e a

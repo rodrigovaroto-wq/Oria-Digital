@@ -7248,3 +7248,104 @@ export function construirModeloInstitucional(
   // pós-processamento que já amplia a caixa das notas.
   return saidaOutput.graficos;
 }
+
+// -----------------------------------------------------------------------------
+// O REALIZADO PARA A APRESENTAÇÃO DE CRÉDITO (`lib/apresentacao/`).
+//
+// POR QUE AQUI, e não um segundo classificador lá. A apresentação mostra o MESMO realizado que este
+// modelo projeta, e "o que é caixa, dívida, cliente, estoque" já tem UMA resposta neste arquivo —
+// com cabeçalho de grupo tirado da soma por prova, subtotal informado fora, sinal normalizado por
+// bloco e escala convertida. Um segundo classificador divergiria sem erro nenhum (degrau 2 da
+// escada), e o deck passaria a dizer um caixa diferente do modelo que vai junto ao comitê.
+//
+// O QUE SAI, por exercício, e a regra que governa tudo: AUSÊNCIA É `null`, NUNCA ZERO. Ano sem
+// nenhuma linha que componha a grandeza devolve `null` e a origem diz por quê — a apresentação
+// imprime `n/d` e leva o motivo para a linha de fontes. Os totais preferem a ÂNCORA (o número que
+// o documento imprime); só sem ela a grandeza é a soma das contas classificadas, e a origem diz
+// qual das duas foi.
+// -----------------------------------------------------------------------------
+export type GrandezaCredito =
+  | "receita_liquida" | "lucro_bruto" | "ebit" | "depreciacao" | "lucro_liquido" | "custos"
+  | "ativo_total" | "ativo_circulante" | "passivo_circulante" | "passivo_nao_circulante" | "patrimonio_liquido"
+  | "caixa" | "clientes" | "estoques" | "fornecedores"
+  | "divida_bancos_cp" | "divida_bancos_lp" | "divida_outras_cp" | "divida_outras_lp";
+
+export interface ValorHistorico { v: number | null; origem: string }
+
+export interface HistoricoCredito {
+  unidade: string;
+  anos: number[];
+  grandezas: Record<GrandezaCredito, Record<number, ValorHistorico>>;
+}
+
+/** Mútuo, partes relacionadas, sócios, debêntures: as "outras dívidas" do X.2 do prompt. */
+const ehOutraDivida = (chave: string) =>
+  /\bm(ú|u)tuos?\b/i.test(chave) || /\bpartes? relacionadas?\b/i.test(chave)
+  || /\bs(ó|o)cios?\b/i.test(chave) || /\bdeb(ê|e)ntures?\b/i.test(chave)
+  || /\bintercompany\b/i.test(chave) || /\bcoligadas?\b/i.test(chave);
+
+export function historicoParaCredito(ent: EntradaModeloInstitucional): HistoricoCredito {
+  const ctx = contexto(ent);
+  const anos = ctx.hist;
+  const unidade = ent.unidade;
+  const doBloco = (b: BlocoModelo) => ctx.linhasPorBloco.get(b) ?? [];
+
+  const ancora = (chave: string, nome: string): Record<number, ValorHistorico> => {
+    const l = ctx.ancoras.get(chave);
+    return Object.fromEntries(anos.map((ano) => {
+      const r = l ? valorNaEscalaSemAviso(l, ano, unidade) : null;
+      return [ano, r
+        ? { v: r.valor, origem: `${nome} informado no documento ("${l!.chave}")` }
+        : { v: null, origem: `${nome}: o documento deste exercício não imprime o total, e ele não é somado de contas aqui` }];
+    }));
+  };
+  const soma = (linhas: LinhaModelo[], nome: string): Record<number, ValorHistorico> =>
+    Object.fromEntries(anos.map((ano) => {
+      const presentes = linhas.flatMap((l) => {
+        const r = valorNaEscalaSemAviso(l, ano, unidade);
+        return r ? [{ l, v: r.valor }] : [];
+      });
+      return [ano, presentes.length === 0
+        ? { v: null, origem: `${nome}: nenhuma conta classificada como tal neste exercício` }
+        : { v: presentes.reduce((t, x) => t + x.v, 0),
+            origem: `${nome}: soma de ${presentes.length} conta(s) — ${presentes.map((x) => x.l.chave).join(" · ")}` }];
+    }));
+
+  const ac = doBloco("ativo_circulante");
+  const pc = doBloco("passivo_circulante");
+  const pnc = doBloco("passivo_nao_circulante");
+  const dividaPC = pc.filter((l) => ehDividaFinanceira(l.chave));
+  const dividaPNC = pnc.filter((l) => ehDividaFinanceira(l.chave));
+  const custoESga = [...doBloco("custo"), ...doBloco("sga")];
+  // Mútuo não está em `PADROES_DIVIDA_FINANCEIRA` (o modelo o trata como giro), mas o X.2 do prompt
+  // o conta como "outra dívida": entra aqui pelo nome, e só aqui.
+  const ehOutraDividaDaLinha = (l: LinhaModelo) =>
+    ehOutraDivida(l.chave) && (ehDividaFinanceira(l.chave) || /\bm(ú|u)tuos?\b/i.test(l.chave));
+
+  return {
+    unidade, anos,
+    grandezas: {
+      receita_liquida: ancora("DOC_RECEITA_LIQUIDA", "Receita líquida"),
+      lucro_bruto: ancora("DOC_LUCRO_BRUTO", "Lucro bruto"),
+      ebit: ancora("DOC_EBIT", "EBIT"),
+      lucro_liquido: ancora("DOC_LUCRO_LIQUIDO", "Lucro líquido"),
+      // Mesmo filtro da DEPRECIACAO realizada do modelo (`construirModeloInstitucional`): a linha
+      // de custo/despesa cujo nome diz depreciação, já na convenção do modelo (magnitude positiva).
+      depreciacao: soma(custoESga.filter((l) => /deprecia|amortiza|exaust/i.test(l.chave)), "D&A"),
+      custos: soma(doBloco("custo"), "Custos"),
+      ativo_total: ancora("DOC_ATIVO", "Ativo total"),
+      ativo_circulante: ancora("DOC_AC", "Ativo circulante"),
+      passivo_circulante: ancora("DOC_PC", "Passivo circulante"),
+      passivo_nao_circulante: ancora("DOC_PNC", "Passivo não circulante"),
+      patrimonio_liquido: ancora("DOC_PL", "Patrimônio líquido"),
+      caixa: soma(ac.filter((l) => ehCaixa(l.chave)), "Caixa e aplicações"),
+      clientes: soma(ac.filter((l) => ehCliente(l.chave)), "Clientes"),
+      estoques: soma(ac.filter((l) => ehEstoque(l.chave)), "Estoques"),
+      fornecedores: soma(pc.filter((l) => ehFornecedor(l.chave) && !ehDividaFinanceira(l.chave)), "Fornecedores"),
+      divida_bancos_cp: soma(dividaPC.filter((l) => !ehOutraDivida(l.chave)), "Dívida bancária CP"),
+      divida_bancos_lp: soma(dividaPNC.filter((l) => !ehOutraDivida(l.chave)), "Dívida bancária LP"),
+      divida_outras_cp: soma(pc.filter(ehOutraDividaDaLinha), "Outras dívidas CP"),
+      divida_outras_lp: soma(pnc.filter(ehOutraDividaDaLinha), "Outras dívidas LP"),
+    },
+  };
+}
