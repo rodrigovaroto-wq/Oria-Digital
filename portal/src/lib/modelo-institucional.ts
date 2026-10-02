@@ -620,8 +620,18 @@ const FATOR_PARA_MILHAR: Record<string, number> = {
   milhao: 1000, milhoes: 1000, "milhão": 1000, "milhões": 1000,
 };
 
+/**
+ * A escala em que os valores do modelo FICAM: milhar quando a unidade do modelo diz "mil" (e não
+ * "milhão"), reais em qualquer outro caso — inclusive "milhao", que a rota repassa cru. É a regra de
+ * `fatorDeEscala`, exportada para a apresentação de crédito não ter uma segunda (ela tinha, e um
+ * caso em "milhao" saía um milhão de vezes maior no deck).
+ */
+export function escalaDoModelo(unidadeModelo: string): "milhar" | "reais" {
+  return /mil/i.test(unidadeModelo) && !/milh(a|ã)o/i.test(unidadeModelo) ? "milhar" : "reais";
+}
+
 function fatorDeEscala(unidadeLinha: string | null, unidadeModelo: string): number | null {
-  const alvo = /mil/i.test(unidadeModelo) && !/milh(a|ã)o/i.test(unidadeModelo) ? 1 : 0.001;
+  const alvo = escalaDoModelo(unidadeModelo) === "milhar" ? 1 : 0.001;
   if (!unidadeLinha) return null;
   const f = FATOR_PARA_MILHAR[unidadeLinha.toLowerCase().trim()];
   if (f === undefined) return null;
@@ -7260,12 +7270,15 @@ export function construirModeloInstitucional(
 //
 // O QUE SAI, por exercício, e a regra que governa tudo: AUSÊNCIA É `null`, NUNCA ZERO. Ano sem
 // nenhuma linha que componha a grandeza devolve `null` e a origem diz por quê — a apresentação
-// imprime `n/d` e leva o motivo para a linha de fontes. Os totais preferem a ÂNCORA (o número que
-// o documento imprime); só sem ela a grandeza é a soma das contas classificadas, e a origem diz
-// qual das duas foi.
+// imprime `n/d` e leva o motivo para a linha de fontes. Os TOTAIS (receita líquida, lucro bruto,
+// EBIT, lucro líquido, ativo, AC, PC, PNC, PL) são SÓ a âncora — o número que o documento imprime;
+// sem ela, `n/d`, porque somar contas para fabricar um total que o documento não imprime é a
+// dupla contagem que este arquivo passou dez sessões removendo. As contas de giro, caixa, dívida,
+// custos, SG&A e D&A são a soma das contas classificadas. As amarrações do deck confrontam as duas
+// pontas (lucro bruto da âncora × receita − custos; EBIT da âncora × lucro bruto − SG&A).
 // -----------------------------------------------------------------------------
 export type GrandezaCredito =
-  | "receita_liquida" | "lucro_bruto" | "ebit" | "depreciacao" | "lucro_liquido" | "custos"
+  | "receita_liquida" | "lucro_bruto" | "ebit" | "depreciacao" | "lucro_liquido" | "custos" | "sga"
   | "ativo_total" | "ativo_circulante" | "passivo_circulante" | "passivo_nao_circulante" | "patrimonio_liquido"
   | "caixa" | "clientes" | "estoques" | "fornecedores"
   | "divida_bancos_cp" | "divida_bancos_lp" | "divida_outras_cp" | "divida_outras_lp";
@@ -7274,7 +7287,11 @@ export interface ValorHistorico { v: number | null; origem: string }
 
 export interface HistoricoCredito {
   unidade: string;
+  /** a escala em que os valores ficaram (a de `fatorDeEscala`) */
+  escala: "milhar" | "reais";
   anos: number[];
+  /** linhas que entraram SEM conversão por unidade não reconhecida — o deck as declara */
+  avisosDeEscala: string[];
   grandezas: Record<GrandezaCredito, Record<number, ValorHistorico>>;
 }
 
@@ -7290,10 +7307,20 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
   const unidade = ent.unidade;
   const doBloco = (b: BlocoModelo) => ctx.linhasPorBloco.get(b) ?? [];
 
+  // UNIDADE NÃO RECONHECIDA: `valorNaEscalaSemAviso` deixa o valor SEM conversão e põe o
+  // "ATENÇÃO… mil vezes maior" só na nota da célula do xlsx. O deck não tem nota de célula, então o
+  // aviso vira lista explícita e vai para os pontos de atenção — descartá-lo calaria um erro de 1000x.
+  const avisosDeEscala = new Set<string>();
+  const anotar = (l: LinhaModelo) => {
+    if (fatorDeEscala(l.unidade, unidade) === null) {
+      avisosDeEscala.add(`"${l.chave}" (unidade "${l.unidade ?? "não informada"}")`);
+    }
+  };
   const ancora = (chave: string, nome: string): Record<number, ValorHistorico> => {
     const l = ctx.ancoras.get(chave);
     return Object.fromEntries(anos.map((ano) => {
       const r = l ? valorNaEscalaSemAviso(l, ano, unidade) : null;
+      if (r && l) anotar(l);
       return [ano, r
         ? { v: r.valor, origem: `${nome} informado no documento ("${l!.chave}")` }
         : { v: null, origem: `${nome}: o documento deste exercício não imprime o total, e ele não é somado de contas aqui` }];
@@ -7303,6 +7330,7 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
     Object.fromEntries(anos.map((ano) => {
       const presentes = linhas.flatMap((l) => {
         const r = valorNaEscalaSemAviso(l, ano, unidade);
+        if (r) anotar(l);
         return r ? [{ l, v: r.valor }] : [];
       });
       return [ano, presentes.length === 0
@@ -7322,9 +7350,7 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
   const ehOutraDividaDaLinha = (l: LinhaModelo) =>
     ehOutraDivida(l.chave) && (ehDividaFinanceira(l.chave) || /\bm(ú|u)tuos?\b/i.test(l.chave));
 
-  return {
-    unidade, anos,
-    grandezas: {
+  const grandezas: HistoricoCredito["grandezas"] = {
       receita_liquida: ancora("DOC_RECEITA_LIQUIDA", "Receita líquida"),
       lucro_bruto: ancora("DOC_LUCRO_BRUTO", "Lucro bruto"),
       ebit: ancora("DOC_EBIT", "EBIT"),
@@ -7333,6 +7359,7 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
       // de custo/despesa cujo nome diz depreciação, já na convenção do modelo (magnitude positiva).
       depreciacao: soma(custoESga.filter((l) => /deprecia|amortiza|exaust/i.test(l.chave)), "D&A"),
       custos: soma(doBloco("custo"), "Custos"),
+      sga: soma(doBloco("sga"), "Despesas operacionais (SG&A)"),
       ativo_total: ancora("DOC_ATIVO", "Ativo total"),
       ativo_circulante: ancora("DOC_AC", "Ativo circulante"),
       passivo_circulante: ancora("DOC_PC", "Passivo circulante"),
@@ -7346,6 +7373,8 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
       divida_bancos_lp: soma(dividaPNC.filter((l) => !ehOutraDivida(l.chave)), "Dívida bancária LP"),
       divida_outras_cp: soma(pc.filter(ehOutraDividaDaLinha), "Outras dívidas CP"),
       divida_outras_lp: soma(pnc.filter(ehOutraDividaDaLinha), "Outras dívidas LP"),
-    },
   };
+  // `avisosDeEscala` só está completo depois de TODAS as grandezas lidas — por isso o objeto acima
+  // é montado antes do retorno.
+  return { unidade, escala: escalaDoModelo(unidade), anos, avisosDeEscala: [...avisosDeEscala].sort(), grandezas };
 }

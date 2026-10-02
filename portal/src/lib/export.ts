@@ -3577,6 +3577,11 @@ export function buildExportWorkbook({
 const NOTA_BOX_ANTIGA = "width:97.8pt;height:59.1pt";
 const NOTA_BOX_NOVA = "width:340pt;height:170pt";
 
+/** A entrada do modelo institucional COM os subtotais informados, se o workbook montou o modelo. */
+export function entradaDoModeloDoWorkbook(workbook: ExcelJS.Workbook): EntradaModeloInstitucional | undefined {
+  return (workbook as unknown as { __entradaDoModelo?: EntradaModeloInstitucional }).__entradaDoModelo;
+}
+
 /**
  * O ÚNICO CAMINHO DE SAÍDA DO .XLSX ENTREGUE — e ele existe porque duas coisas
  * que o arquivo precisa ter não podem ser escritas pelo ExcelJS:
@@ -3589,11 +3594,6 @@ const NOTA_BOX_NOVA = "width:340pt;height:170pt";
  * eu media localmente eram DIFERENTES, e a diferença era invisível. Agora as duas
  * pontas chamam esta função, que é a única que sabe montar o entregável.
  */
-/** A entrada do modelo institucional COM os subtotais informados, se o workbook montou o modelo. */
-export function entradaDoModeloDoWorkbook(workbook: ExcelJS.Workbook): EntradaModeloInstitucional | undefined {
-  return (workbook as unknown as { __entradaDoModelo?: EntradaModeloInstitucional }).__entradaDoModelo;
-}
-
 export async function finalizarBufferDoExport(workbook: ExcelJS.Workbook): Promise<Buffer> {
   const graficos = (workbook as unknown as { __graficosDoModelo?: EspecGrafico[] }).__graficosDoModelo ?? [];
   const comNotas = await ampliarNotasNoBuffer(await workbook.xlsx.writeBuffer());

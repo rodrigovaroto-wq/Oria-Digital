@@ -27,6 +27,8 @@ import type { CampoExtraido } from "../src/lib/types.ts";
 import type { EntradaModeloInstitucional } from "../src/lib/modelo-institucional.ts";
 import { entradaModeloDaFixture } from "./lib/modelo-da-fixture.mts";
 import { montarBaseCredito } from "../src/lib/apresentacao/montar-base.ts";
+import { amarracoes, type BaseCredito } from "../src/lib/apresentacao/base-credito.ts";
+import type { GrandezaCredito, HistoricoCredito } from "../src/lib/modelo-institucional.ts";
 import { construirDeckCredito } from "../src/lib/apresentacao/deck-credito.ts";
 import { DeckOria, PALETA, FONTES_PERMITIDAS, p, tabela, COR } from "../src/lib/apresentacao/pptx-oria.ts";
 
@@ -183,6 +185,79 @@ console.log("--- 2. ausência e divergência aparecem como tal ---");
   const nota = slideCom(div.slides, "NOTAS E FONTES");
   ok(div.saida.amarracoes.some((a) => a.numero === 2 && a.ano === 2025 && a.veredito === "diverge") && nota.includes("NÃO FECHA"),
     "(2c) ativo ≠ passivo + PL: a amarração aparece como \"NÃO FECHA\" no slide de notas");
+}
+
+console.log("--- 5. o que a revisão independente achou (cada um reproduzido antes da correção) ---");
+{
+  // (5a) Caso com unidade dominante "milhao": o modelo converte tudo para REAIS (`fatorDeEscala`), e
+  // o deck tem de dividir por 1.000.000 — antes ele dividia por 1 e a receita saía 143.380.000.000,0.
+  const entrada = entradaModeloDaFixture(fixture, agora);
+  const { slides } = await deckDe({ ...entrada, unidade: "milhao" });
+  ok(JSON.stringify(linha(slideCom(slides, "X.1 · RESULTADO"), "Receita líquida", 2)) === JSON.stringify(["143,4", "106,6"]),
+    "(5a) unidade \"milhao\": a receita continua 143,4 / 106,6 em R$ MM",
+    JSON.stringify(linha(slideCom(slides, "X.1 · RESULTADO"), "Receita líquida", 2)));
+}
+/** Uma base à mão, de um ou dois exercícios — para os casos que o book Vertentes não tem. */
+function baseSintetica(valores: Partial<Record<GrandezaCredito, number[]>>): BaseCredito {
+  const anos = [2024, 2025];
+  const todas: GrandezaCredito[] = ["receita_liquida", "lucro_bruto", "ebit", "depreciacao", "lucro_liquido", "custos", "sga",
+    "ativo_total", "ativo_circulante", "passivo_circulante", "passivo_nao_circulante", "patrimonio_liquido", "caixa",
+    "clientes", "estoques", "fornecedores", "divida_bancos_cp", "divida_bancos_lp", "divida_outras_cp", "divida_outras_lp"];
+  const grandezas = Object.fromEntries(todas.map((k) => [k, Object.fromEntries(anos.map((a, i) => {
+    const v = valores[k]?.[i];
+    return [a, v === undefined ? { v: null, origem: `${k}: ausente` } : { v, origem: `${k} sintético` }];
+  }))])) as HistoricoCredito["grandezas"];
+  return {
+    cliente: "Sintético", entidade: "SINTÉTICA LTDA", unidade: "R$ mil",
+    periodos: anos.map((ano) => ({ ano, natureza: "B" as const, motivoNatureza: "sintético" })),
+    documentos: [], historico: { unidade: "R$ mil", escala: "milhar", anos, avisosDeEscala: [], grandezas },
+  };
+}
+async function slidesDe(b: BaseCredito) {
+  const zip = await JSZip.loadAsync(await construirDeckCredito(b, agora).deck.gerar(agora));
+  const nomes = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
+  return Promise.all(nomes.map((n) => zip.file(n)!.async("string")));
+}
+const executivo = (slides: string[]) => textos(slideCom(slides, "SUMÁRIO EXECUTIVO")).join(" | ");
+{
+  // DFL/EBITDA = 1,0x (dívida 20.000, caixa 10.000, EBITDA 10.000): ABAIXO da faixa, não "dentro".
+  const comum = { receita_liquida: [100000, 100000], ebit: [8000, 8000], depreciacao: [2000, 2000] };
+  const baixa = executivo(await slidesDe(baseSintetica({ ...comum, divida_bancos_cp: [20000, 20000], caixa: [10000, 10000] })));
+  ok(/abaixo da faixa/.test(baixa) && !/dentro da faixa|faixa-alvo:/.test(baixa),
+    "(5b) DFL/EBITDA de 1,0x sai \"abaixo da faixa\", nunca \"dentro da faixa\"", baixa.slice(0, 200));
+  const liquida = executivo(await slidesDe(baseSintetica({ ...comum, divida_bancos_cp: [5000, 5000], caixa: [20000, 20000] })));
+  ok(/Caixa supera a dívida/.test(liquida) && !/faixa-alvo/.test(liquida),
+    "(5c) com caixa líquido o slide não se contradiz com \"faixa-alvo\"", liquida.slice(0, 200));
+}
+{
+  // (5d) NCG negativa (clientes + estoques < fornecedores): a razão é n.s., não n/d.
+  const sl = await slidesDe(baseSintetica({ receita_liquida: [100000, 100000], custos: [80000, 80000],
+    clientes: [5000, 5000], estoques: [5000, 5000], fornecedores: [20000, 20000], divida_bancos_cp: [8000, 8000] }));
+  const xi = slideCom(sl, "XI.2 · NCG E PRAZOS");
+  ok(JSON.stringify(linha(xi, "Dívida bancária CP / NCG", 2)) === JSON.stringify(["n.s.", "n.s."]) && /não positiva/.test(textos(xi).join(" ")),
+    "(5d) NCG negativa: \"Dívida bancária CP / NCG\" é n.s. e a manchete diz NCG não positiva",
+    JSON.stringify(linha(xi, "Dívida bancária CP / NCG", 2)));
+}
+{
+  // (5e) amarração sem insumo não "fecha": base só com receita.
+  const am = amarracoes(baseSintetica({ receita_liquida: [100000, 100000] }));
+  const falsoOk = am.filter((a) => a.veredito === "ok" || a.veredito === "por_construcao");
+  ok(falsoOk.length === 0, "(5e) sem insumo, nenhuma amarração sai \"Fecha\" nem \"Por definição\"",
+    falsoOk.map((a) => `${a.numero}/${a.ano}`).join(", "));
+}
+{
+  // (5f) receita +30%, EBITDA +10%: "cresceu menos", não "piorou".
+  const sl = await slidesDe(baseSintetica({ receita_liquida: [100000, 130000], ebit: [8000, 8800], depreciacao: [2000, 2200] }));
+  const xii = textos(slideCom(sl, "XII · COMPARATIVO ENTRE EXERCÍCIOS")).join(" ");
+  ok(/cresceu menos que a receita/.test(xii) && !/piorou/.test(xii), "(5f) EBITDA +10% com receita +30%: \"cresceu menos\", não \"piorou\"");
+}
+{
+  // (5g) EBIT da âncora que já desconta o resultado financeiro (DRE no formato antigo): a cascata não
+  // o reproduz, e a amarração 10 tem de dizer "NÃO FECHA" — senão o EBITDA sai subestimado calado.
+  const am = amarracoes(baseSintetica({ receita_liquida: [100000, 100000], custos: [70000, 70000], lucro_bruto: [30000, 30000],
+    sga: [20000, 20000], ebit: [4000, 4000] }));
+  ok(am.filter((a) => a.numero === 10 && a.veredito === "diverge").length === 2,
+    "(5g) EBIT informado ≠ lucro bruto − despesas operacionais: a amarração 10 diverge");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

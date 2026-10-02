@@ -34,7 +34,12 @@ export interface PeriodoCredito {
   motivoNatureza: string;
 }
 
-export interface Valor { v: number | null; nota: string }
+/**
+ * `ns` = NÃO SIGNIFICATIVO: o documento trouxe os termos, mas a conta não tem leitura (denominador
+ * zero ou negativo, sinal trocado). É diferente de `n/d` (termo ausente) e o deck imprime os dois de
+ * forma distinta — NCG negativa não é "linha que o documento não traz".
+ */
+export interface Valor { v: number | null; nota: string; ns?: boolean }
 
 export interface BaseCredito {
   cliente: string;
@@ -69,8 +74,8 @@ export const TAG_NATUREZA: Record<Natureza, string> = { A: "(A)", R: "(R)", B: "
 export const LEGENDA_NATUREZA = "(A) auditada · (R) revisão limitada · (B) não auditada / balancete · (G) gerencial";
 
 /** O kicker direito dos slides financeiros: "[CLIENTE] · NÃO AUDITADO" / "· AUDITADO" / misto. */
-export function kickerDeNatureza(base: BaseCredito): string {
-  const ns = new Set(base.periodos.map((p) => p.natureza));
+export function kickerDeNatureza(base: BaseCredito, periodos: PeriodoCredito[] = base.periodos): string {
+  const ns = new Set(periodos.map((p) => p.natureza));
   const rotulo = ns.size === 1 && ns.has("A") ? "AUDITADO" : ns.has("A") ? "AUDITADO + NÃO AUDITADO" : "NÃO AUDITADO";
   return `${base.cliente} · ${rotulo}`;
 }
@@ -88,7 +93,7 @@ function razao(num: Valor, den: Valor, nome: string, fator = 1, exigePositivo = 
   if (num.v === null) return nd(`${nome}: n/d porque ${num.nota}`);
   if (den.v === null) return nd(`${nome}: n/d porque ${den.nota}`);
   if (den.v === 0 || (exigePositivo && den.v < 0)) {
-    return nd(`${nome}: n.s. — denominador ${den.v === 0 ? "zero" : "negativo"} (${den.nota})`);
+    return { v: null, ns: true, nota: `${nome}: n.s. — denominador ${den.v === 0 ? "zero" : "negativo"} (${den.nota})` };
   }
   return { v: (num.v / den.v) * fator, nota: `${nome} = ${num.nota} ÷ ${den.nota}` };
 }
@@ -208,88 +213,121 @@ export function variacao(de: number | null, para: number | null): { v: number | 
 // -----------------------------------------------------------------------------
 // Amarrações (seção "Amarrações obrigatórias antes de exportar o módulo")
 // -----------------------------------------------------------------------------
-export type Veredito = "ok" | "diverge" | "nao_conferivel";
+/**
+ * `ok`/`diverge` são CONFERÊNCIA: duas pontas independentes comparadas. `por_construcao` é
+ * DEFINIÇÃO (o deck calcula a grandeza assim, então ela "fecha" por tautologia) e é impressa como
+ * tal, nunca como "Fecha" — imprimir "Fecha" para uma definição dava ao slide de notas a cara de
+ * uma conferência que não aconteceu (regra 7). `nao_conferivel` = faltou insumo.
+ */
+export type Veredito = "ok" | "diverge" | "por_construcao" | "nao_conferivel";
 export interface Amarracao { numero: number; nome: string; ano: number | null; veredito: Veredito; detalhe: string }
 
-/** Folga de arredondamento: meia unidade por termo da série (o documento arredonda cada linha). */
-const FOLGA = 1;
+/** Folga de arredondamento por termo: o documento arredonda cada linha à unidade da série. */
+const FOLGA_POR_TERMO = 1;
+const fmtDif = (v: number, unidade: string) => `${v.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ${unidade}`;
 
-export function amarracoes(base: BaseCredito): Amarracao[] {
+export function amarracoes(base: BaseCredito, periodos: PeriodoCredito[] = base.periodos): Amarracao[] {
   const out: Amarracao[] = [];
-  for (const { ano } of base.periodos) {
-    // 2. Ativo = Passivo + PL — contra os totais que o próprio documento imprime.
-    const ativo = g(base, "ativo_total", ano);
-    const pc = g(base, "passivo_circulante", ano);
-    const pnc = g(base, "passivo_nao_circulante", ano);
-    const pl = g(base, "patrimonio_liquido", ano);
-    if (ativo.v === null || pc.v === null || pnc.v === null || pl.v === null) {
-      const falta = [["ativo total", ativo], ["passivo circulante", pc], ["passivo não circulante", pnc], ["PL", pl]]
-        .filter(([, x]) => (x as ValorHistorico).v === null).map(([n]) => n as string);
-      out.push({ numero: 2, nome: "Ativo = Passivo + PL", ano, veredito: "nao_conferivel",
-        detalhe: `o documento não imprime ${falta.join(", ")} — a identidade não pôde ser testada` });
-    } else {
-      const dif = ativo.v - (pc.v + pnc.v + pl.v);
-      out.push({ numero: 2, nome: "Ativo = Passivo + PL", ano, veredito: Math.abs(dif) <= FOLGA * 3 ? "ok" : "diverge",
-        detalhe: Math.abs(dif) <= FOLGA * 3 ? "fecha com os totais informados"
-          : `diferença de ${dif.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ${base.unidade} entre o ativo e passivo + PL informados` });
+  /** Conferência de duas pontas: `esquerda` contra a soma de `termos`, com folga por termo. */
+  const conferir = (numero: number, nome: string, ano: number, esquerda: [string, ValorHistorico],
+    termos: Array<[string, ValorHistorico, 1 | -1]>, okTxt: string) => {
+    const falta = [esquerda, ...termos].filter(([, x]) => x.v === null).map(([n]) => n);
+    if (falta.length) {
+      out.push({ numero, nome, ano, veredito: "nao_conferivel", detalhe: `falta ${falta.join(", ")} no documento` });
+      return;
     }
-    // 1. EBITDA = EBIT + D&A — o EBITDA daqui é construído assim; o que se confere é se HÁ D&A.
-    const d = g(base, "depreciacao", ano);
+    const dif = (esquerda[1].v as number) - termos.reduce((t, [, x, sinal]) => t + sinal * (x.v as number), 0);
+    const fecha = Math.abs(dif) <= FOLGA_POR_TERMO * (termos.length + 1);
+    out.push({ numero, nome, ano, veredito: fecha ? "ok" : "diverge",
+      detalhe: fecha ? okTxt : `diferença de ${fmtDif(dif, base.unidade)}` });
+  };
+  for (const { ano } of periodos) {
+    const G = (k: GrandezaCredito) => g(base, k, ano);
+    // 2. Ativo = Passivo + PL — contra os totais que o próprio documento imprime.
+    conferir(2, "Ativo = Passivo + PL", ano, ["ativo total", G("ativo_total")],
+      [["passivo circulante", G("passivo_circulante"), 1], ["passivo não circulante", G("passivo_nao_circulante"), 1],
+        ["PL", G("patrimonio_liquido"), 1]], "fecha com os totais informados");
+    // 9. Lucro bruto informado = receita líquida informada − custos somados das contas.
+    conferir(9, "Lucro bruto = receita − custos", ano, ["lucro bruto", G("lucro_bruto")],
+      [["receita líquida", G("receita_liquida"), 1], ["custos", G("custos"), -1]], "as contas de custo reproduzem o total");
+    // 10. EBIT informado = lucro bruto − SG&A. É o que pega o "resultado operacional" da DRE no
+    // formato antigo (já depois do resultado financeiro): o deck soma D&A a esse EBIT, e um EBIT
+    // que já desconta juro subestimaria o EBITDA e inflaria a alavancagem sem aviso nenhum.
+    conferir(10, "EBIT = lucro bruto − despesas operacionais", ano, ["EBIT", G("ebit")],
+      [["lucro bruto", G("lucro_bruto"), 1], ["despesas operacionais", G("sga"), -1]], "a cascata reproduz o EBIT informado");
+    // 1 e 5 são DEFINIÇÃO: dizem só se os insumos existem.
+    const d = G("depreciacao");
     out.push({ numero: 1, nome: "EBITDA = EBIT + D&A", ano,
-      veredito: d.v === null || g(base, "ebit", ano).v === null ? "nao_conferivel" : "ok",
+      veredito: d.v === null || G("ebit").v === null ? "nao_conferivel" : "por_construcao",
       detalhe: d.v === null ? "a DRE não traz D&A — EBITDA publicado como n/d"
-        : g(base, "ebit", ano).v === null ? "o documento não imprime o EBIT" : "por construção, com a D&A da DRE" });
-    // 5. CCL = AC − PC: por construção, desde que os dois totais existam.
-    const ac = g(base, "ativo_circulante", ano);
-    out.push({ numero: 5, nome: "CCL = AC − PC", ano, veredito: ac.v === null || pc.v === null ? "nao_conferivel" : "ok",
-      detalhe: ac.v === null || pc.v === null ? "o documento não imprime AC ou PC" : "por construção, com os totais informados" });
+        : G("ebit").v === null ? "o documento não imprime o EBIT" : "definição, com a D&A da DRE" });
+    const semCirc = G("ativo_circulante").v === null || G("passivo_circulante").v === null;
+    out.push({ numero: 5, nome: "CCL = AC − PC", ano, veredito: semCirc ? "nao_conferivel" : "por_construcao",
+      detalhe: semCirc ? "o documento não imprime AC ou PC" : "definição, com os totais informados" });
+    const ind = indicadores(base, ano);
+    out.push({ numero: 4, nome: "Dívida bruta = bancos + outras; DFL", ano,
+      veredito: ind.dfl.v === null ? "nao_conferivel" : "por_construcao",
+      detalhe: ind.dfl.v === null ? limpar(ind.dfl.nota) : "definição, das mesmas contas do balanço" });
+    const prazos = [ind.pmr, ind.pme, ind.pmp];
+    out.push({ numero: 6, nome: "Prazos reconciliam com saldos e receita/CMV", ano,
+      veredito: prazos.every((x) => x.v === null) ? "nao_conferivel" : "por_construcao",
+      detalhe: prazos.every((x) => x.v === null) ? "nenhum prazo calculável neste exercício"
+        : `definição, base de ${DIAS_DO_EXERCICIO} dias` });
   }
   // As que esta versão ainda não tem como rodar — DITAS, não omitidas.
   out.push({ numero: 3, nome: "Caixa final = inicial + variação", ano: null, veredito: "nao_conferivel",
     detalhe: "o fluxo de caixa (X.3) ainda não é gerado" });
-  out.push({ numero: 4, nome: "Dívida bruta = bancos + outras; DFL", ano: null, veredito: "ok",
-    detalhe: "por construção, das mesmas contas do balanço" });
-  out.push({ numero: 6, nome: "Prazos reconciliam com saldos e receita/CMV", ano: null, veredito: "ok",
-    detalhe: `por construção, base de ${DIAS_DO_EXERCICIO} dias` });
   out.push({ numero: 7, nome: "Abertura por credor = dívida do balanço", ano: null, veredito: "nao_conferivel",
     detalhe: "a dívida por credor (XIII) ainda não é gerada" });
   out.push({ numero: 8, nome: "Análise vertical soma 100% por bloco", ano: null, veredito: "nao_conferivel",
     detalhe: "a abertura com AV% (XI.1) ainda não é gerada" });
   return out.sort((a, b) => a.numero - b.numero || (a.ano ?? 0) - (b.ano ?? 0));
 }
+const limpar = (nota: string) => nota.replace(/^.*?n\/d (porque|—) /, "");
+
+// -----------------------------------------------------------------------------
+// Alavancagem contra o múltiplo-alvo do Cap. XV
+// -----------------------------------------------------------------------------
+/** Múltiplo-alvo de DFL/EBITDA do Cap. XV do prompt ("tipicamente 2,5x–3,5x"). */
+export const MULTIPLO_ALVO = { min: 2.5, max: 3.5 } as const;
+export type FaixaAlavancagem = "ebitda_nao_positivo" | "caixa_liquido" | "abaixo" | "faixa" | "acima" | "nd";
+/** UMA classificação para manchete, implicação e leitura — três testes soltos já se contradisseram
+ * no mesmo slide ("caixa supera a dívida" ao lado de "cabe na faixa-alvo"). */
+export function faixaDeAlavancagem(x: Indicadores): FaixaAlavancagem {
+  if (x.ebitda.v !== null && x.ebitda.v <= 0) return "ebitda_nao_positivo";
+  const m = x.dflEbitda.v;
+  if (m === null) return "nd";
+  if (m < 0) return "caixa_liquido";
+  if (m < MULTIPLO_ALVO.min) return "abaixo";
+  return m <= MULTIPLO_ALVO.max ? "faixa" : "acima";
+}
 
 // -----------------------------------------------------------------------------
 // Formatação (padrão do prompt: negativo entre parênteses, unidade no cabeçalho)
 // -----------------------------------------------------------------------------
-/** Fator do histórico para R$ MM, ou `null` se a unidade não é reconhecida (aí não se converte). */
-export function fatorParaMM(unidade: string): number | null {
-  const u = unidade.toLowerCase();
-  if (/mil/.test(u) && !/milh/.test(u)) return 1 / 1000;
-  if (/milh/.test(u)) return 1;
-  if (u.trim() === "r$" || /unidade|reais/.test(u)) return 1 / 1_000_000;
-  return null;
-}
+/** Fator do histórico para R$ MM, pela escala em que o MODELO deixou os valores (`escalaDoModelo`). */
+export const fatorParaMM = (escala: "milhar" | "reais"): number => (escala === "milhar" ? 1 / 1000 : 1 / 1_000_000);
 
 export interface Numero { t: string; negativo: boolean }
 const fmt = (v: number, casas: number) =>
   Math.abs(v).toLocaleString("pt-BR", { minimumFractionDigits: casas, maximumFractionDigits: casas });
 export const ND: Numero = { t: "n/d", negativo: false };
 
-export function fmtMM(x: Valor, unidade: string): Numero {
-  const f = fatorParaMM(unidade);
-  if (x.v === null || f === null) return ND;
-  const v = x.v * f;
+const NS: Numero = { t: "n.s.", negativo: false };
+export function fmtMM(x: Valor, escala: "milhar" | "reais"): Numero {
+  if (x.v === null) return x.ns ? NS : ND;
+  const v = x.v * fatorParaMM(escala);
   return { t: v < 0 ? `(${fmt(v, 1)})` : fmt(v, 1), negativo: v < 0 };
 }
-export function fmtPct(x: Valor | { v: number | null }, casas = 1): Numero {
-  if (x.v === null) return ND;
+export function fmtPct(x: Valor | { v: number | null; ns?: boolean }, casas = 1): Numero {
+  if (x.v === null) return x.ns ? NS : ND;
   return { t: x.v < 0 ? `(${fmt(x.v, casas)}%)` : `${fmt(x.v, casas)}%`, negativo: x.v < 0 };
 }
 export function fmtX(x: Valor): Numero {
-  if (x.v === null) return x.nota.includes("n.s.") ? { t: "n.s.", negativo: false } : ND;
+  if (x.v === null) return x.ns ? NS : ND;
   return { t: x.v < 0 ? `(${fmt(x.v, 1)}x)` : `${fmt(x.v, 1)}x`, negativo: x.v < 0 };
 }
 export function fmtDias(x: Valor): Numero {
-  if (x.v === null) return x.nota.includes("n.s.") ? { t: "n.s.", negativo: false } : ND;
+  if (x.v === null) return x.ns ? NS : ND;
   return { t: x.v < 0 ? `(${fmt(x.v, 0)})` : fmt(x.v, 0), negativo: x.v < 0 };
 }

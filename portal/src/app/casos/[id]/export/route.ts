@@ -606,7 +606,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       return NextResponse.json(
         {
           error: "A apresentação de crédito não foi gerada: este caso ainda não tem o modelo institucional montado.",
-          motivos: ["Falta a entidade modelada ou o último exercício real na tela de Modelagem — ou não há exercício com valor numérico."],
+          motivos: ["Falta a entidade modelada, o último exercício real ou os anos projetados na tela de Modelagem — ou não há exercício com valor numérico."],
           dica: "A apresentação lê o MESMO realizado do modelo. Sem a entidade, ela somaria o balanço de uma empresa do "
             + "grupo com o de outra; sem o último exercício real, trataria balancete parcial como ano fechado.",
         },

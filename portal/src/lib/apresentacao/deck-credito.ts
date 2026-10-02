@@ -23,21 +23,20 @@ import {
   type ColunaTabela, type LinhaTabela, type Paragrafo, type SlideOria, type Celula,
 } from "./pptx-oria";
 import {
-  LEGENDA_NATUREZA, TAG_NATUREZA, amarracoes, fmtDias, fmtMM, fmtPct, fmtX, indicadores, kickerDeNatureza,
+  LEGENDA_NATUREZA, MULTIPLO_ALVO, TAG_NATUREZA, amarracoes, faixaDeAlavancagem, fmtDias, fmtMM, fmtPct, fmtX, indicadores, kickerDeNatureza,
   variacao, type Amarracao, type BaseCredito, type Indicadores, type Numero, type Valor,
 } from "./base-credito";
 
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
   "outubro", "novembro", "dezembro"];
-/** Múltiplo-alvo de DFL/EBITDA do Cap. XV do prompt ("tipicamente 2,5x–3,5x"). */
-export const MULTIPLO_ALVO = { min: 2.5, max: 3.5 } as const;
+type Escala = "milhar" | "reais";
 /** Até 4 colunas de período por slide (Cap. X do prompt). */
 const MAX_PERIODOS = 4;
 
 const cel = (n: Numero, extra: Partial<Celula> = {}): Celula => ({ t: n.t, negativo: n.negativo, ...extra });
 /** Percentual em prosa: sinal explícito em vez de parênteses ("−91,7%"), que dentro de uma frase
  * entre parênteses viraria "((91,7%))". */
-const pctTexto = (v: number, casas = 1) => `${v < 0 ? "−" : ""}${fmtPct({ v: Math.abs(v) }, casas).t}`;
+const pctTexto = (v: number, casas = 1) => `${v < 0 ? "−" : "+"}${fmtPct({ v: Math.abs(v) }, casas).t}`;
 const mm1 = (v: number) => (v / 1).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
 export interface SaidaDeck {
@@ -60,10 +59,10 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   const anterior = anos.length >= 2 ? anos[anos.length - 2] : null;
   const I = ind.get(ultimo)!;
   const Iant = anterior !== null ? ind.get(anterior)! : null;
-  const kDir = kickerDeNatureza(base);
+  const kDir = kickerDeNatureza(base, periodos);
   const fontes = fontesFinanceiras(base, anos);
-  const am = amarracoes({ ...base, periodos });
-  const mm = (x: Valor) => fmtMM(x, base.unidade);
+  const am = amarracoes(base, periodos);
+  const mm = (x: Valor) => fmtMM(x, base.historico.escala);
   const colsPeriodo = (w: number): ColunaTabela[] => periodos.map((x) => ({ titulo: String(x.ano), tag: TAG_NATUREZA[x.natureza], w }));
   const unidadeCab = "R$ MM";
 
@@ -110,13 +109,13 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     chrome(s, { kickerEsq: "Sumário executivo", kickerDir: kDir, manchete: mancheteExecutiva(I), fontes });
     const varRec = Iant ? variacao(Iant.receita.v, I.receita.v) : { v: null, ns: false };
     const kpis = [
-      { valor: valorMM(I.receita, base.unidade), label: `Receita líquida ${ultimo}`,
+      { valor: valorMM(I.receita, base.historico.escala), label: `Receita líquida ${ultimo}`,
         descritor: anterior === null ? "exercício único no histórico" : varRec.ns ? `n.s. vs ${anterior}` : varRec.v === null ? `variação vs ${anterior}: n/d` : `${pctTexto(varRec.v)} vs ${anterior}` },
-      { valor: valorMM(I.ebitda, base.unidade), label: `EBITDA ${ultimo}`,
+      { valor: valorMM(I.ebitda, base.historico.escala), label: `EBITDA ${ultimo}`,
         descritor: I.margemEbitda.v === null ? "margem n/d" : `margem ${fmtPct(I.margemEbitda).t}` },
       { valor: fmtX(I.dflEbitda).t, label: "DFL / EBITDA",
         descritor: `alvo de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x (Cap. XV)`,
-        destaque: I.dflEbitda.v !== null && I.dflEbitda.v > MULTIPLO_ALVO.max },
+        destaque: faixaDeAlavancagem(I) === "acima" },
       { valor: fmtX(I.liquidezCorrente).t, label: "Liquidez corrente", descritor: `AC ÷ PC em ${ultimo}` },
     ];
     const wK = 2.6;
@@ -125,7 +124,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     const wP = (GRADE.util - GRADE.gapPainel) / 2;
     const yP = 3.15;
     card(s, GRADE.margem, yP, wP, GRADE.conteudoBase - yP, { rotulo: "Diagnóstico",
-      corpo: diagnostico(I, Iant, anterior, base.unidade).map((t) => p(t, { bullet: true })) });
+      corpo: diagnostico(I, Iant, anterior, base.historico.escala).map((t) => p(t, { bullet: true })) });
     card(s, GRADE.margem + wP + GRADE.gapPainel, yP, wP, GRADE.conteudoBase - yP, { rotulo: "Implicação para o mandato",
       destaque: true, corpo: implicacoes(I).map((t) => p(t, { bullet: true })) });
   }
@@ -136,7 +135,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   // ---- 5. IX — Base de informação (Layout H) ---------------------------------
   {
     const s = deck.novo();
-    const temAuditada = base.periodos.some((x) => x.natureza === "A");
+    const temAuditada = periodos.some((x) => x.natureza === "A");
     chrome(s, { kickerEsq: "IX · Base de informação", kickerDir: kDir,
       manchete: temAuditada ? "Há demonstração auditada na base; ela calibra as conclusões"
         : "Nenhuma demonstração auditada: as conclusões indicam direção",
@@ -187,7 +186,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
       L("Margem líquida", (x) => fmtPct(x.margemLiquida), { i: true }),
     ]);
     card(s, xLat, GRADE.conteudoTopo, wLat, GRADE.conteudoBase - GRADE.conteudoTopo, { rotulo: "Leitura", destaque: true,
-      corpo: leituraResultado(ind, anos, base.unidade).map((t) => p(t, { bullet: true })) });
+      corpo: leituraResultado(ind, anos, base.historico.escala).map((t) => p(t, { bullet: true })) });
   }
 
   // ---- 7. X.2 — Estrutura de capital e prazos (Layout I) ---------------------
@@ -218,7 +217,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     s.forma(GRADE.margem, y0 + 0.5 + 6 * 0.3, 3.1 + periodos.length * wPer, 4 * 0.3, undefined,
       { contorno: { cor: COR.laranja, pt: 1.25 } });
     card(s, xLat, GRADE.conteudoTopo, wLat, GRADE.conteudoBase - GRADE.conteudoTopo, { rotulo: "Leitura", destaque: true,
-      corpo: leituraEstrutura(I, ultimo, base.unidade).map((t) => p(t, { bullet: true })) });
+      corpo: leituraEstrutura(I, ultimo, base.historico.escala).map((t) => p(t, { bullet: true })) });
   }
 
   // ---- 8. Divisória 02 -------------------------------------------------------
@@ -229,7 +228,8 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     const s = deck.novo();
     const fin = I.ncgFinanciadaCP;
     chrome(s, { kickerEsq: "XI.2 · NCG e prazos", kickerDir: kDir,
-      manchete: fin.v === null ? `NCG de ${ultimo}: o financiamento por dívida de CP não pôde ser medido`
+      manchete: I.ncg.v !== null && I.ncg.v <= 0 ? `NCG de ${ultimo} não positiva: o giro se financia com fornecedores`
+        : fin.v === null ? `NCG de ${ultimo}: o financiamento por dívida de CP não pôde ser medido`
         : fin.v > 100 ? `Dívida bancária de CP equivale a ${fmtPct({ v: fin.v }, 0).t} da NCG de ${ultimo}`
         : `${fmtPct({ v: fin.v }, 0).t} da NCG de ${ultimo} está financiada por dívida bancária de CP`,
       fontes });
@@ -254,7 +254,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     ].map(L3));
     const xJ = GRADE.margem + 3.2 + anos3.length * 1.2 + 0.3;
     card(s, xJ, GRADE.conteudoTopo, GRADE.margem + GRADE.util - xJ, GRADE.conteudoBase - GRADE.conteudoTopo, {
-      rotulo: "A conta central da reestruturação", destaque: true, corpo: leituraNcg(I, ultimo, base.unidade).map((t) => p(t, { bullet: true })) });
+      rotulo: "A conta central da reestruturação", destaque: true, corpo: leituraNcg(I, ultimo, base.historico.escala).map((t) => p(t, { bullet: true })) });
   }
 
   // ---- 10. XII — Comparativo entre exercícios (Layout H) ---------------------
@@ -269,7 +269,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
       const a = f(Iant); const u = f(I);
       // Prazo compara em DIAS, não em %: "PMR +2,0%" esconde que são 2 dias de giro.
       if (fmtv === fmtDias) {
-        const d = a.v === null || u.v === null ? null : u.v - a.v;
+        const d = a.v === null || u.v === null ? null : Math.round(u.v) - Math.round(a.v);
         return { celulas: [{ t: rot, ...extra }, cel(fmtv(a), extra), cel(fmtv(u), extra),
           d === null ? "n/d" : { t: d < 0 ? `(${Math.abs(Math.round(d))} d)` : `+${Math.round(d)} d`, negativo: d < 0 }] };
       }
@@ -302,7 +302,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   }
 
   // ---- 11. Notas e fontes (Layout H) — amarrações e o que não foi gerado -----
-  notasEFontes(deck, base, am, naoGerado, ind, anos);
+  notasEFontes(deck, base, am, naoGerado, ind, anos, kDir);
 
   // ---- 12. Contracapa --------------------------------------------------------
   contracapa(deck.novo(COR.sage));
@@ -313,21 +313,24 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
 // -----------------------------------------------------------------------------
 // Manchetes e leituras — regras explícitas sobre o número
 // -----------------------------------------------------------------------------
-const valorMM = (x: Valor, unidade: string) => {
+const valorMM = (x: Valor, unidade: Escala) => {
   const n = fmtMM(x, unidade);
-  return n.t === "n/d" ? "n/d" : `R$ ${n.t} MM`;
+  return n.t === "n/d" || n.t === "n.s." ? n.t : `R$ ${n.t} MM`;
 };
 
 function mancheteExecutiva(I: Indicadores): string {
-  const m = I.dflEbitda;
-  if (I.ebitda.v !== null && I.ebitda.v <= 0) return "EBITDA não positivo: a dívida não tem geração que a sirva";
-  if (m.v === null) return "Alavancagem não mensurável com o que o documento informa";
-  if (m.v > MULTIPLO_ALVO.max) return `DFL/EBITDA de ${fmtX(m).t}, acima do teto de ${mm1(MULTIPLO_ALVO.max)}x sustentável`;
-  if (m.v < 0) return "Caixa supera a dívida: o tema é liquidez e rentabilidade, não solvência";
-  return `DFL/EBITDA de ${fmtX(m).t}, dentro da faixa de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x`;
+  const m = fmtX(I.dflEbitda).t;
+  switch (faixaDeAlavancagem(I)) {
+    case "ebitda_nao_positivo": return "EBITDA não positivo: a dívida não tem geração que a sirva";
+    case "nd": return "Alavancagem não mensurável com o que o documento informa";
+    case "caixa_liquido": return "Caixa supera a dívida: o tema é liquidez e rentabilidade, não solvência";
+    case "abaixo": return `DFL/EBITDA de ${m}, abaixo da faixa de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x`;
+    case "faixa": return `DFL/EBITDA de ${m}, dentro da faixa de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x`;
+    case "acima": return `DFL/EBITDA de ${m}, acima do teto de ${mm1(MULTIPLO_ALVO.max)}x sustentável`;
+  }
 }
 
-function diagnostico(I: Indicadores, Iant: Indicadores | null, anterior: number | null, unidade: string): string[] {
+function diagnostico(I: Indicadores, Iant: Indicadores | null, anterior: number | null, unidade: Escala): string[] {
   const out: string[] = [];
   if (Iant && anterior !== null) {
     const v = variacao(Iant.receita.v, I.receita.v);
@@ -345,16 +348,14 @@ function diagnostico(I: Indicadores, Iant: Indicadores | null, anterior: number 
 
 function implicacoes(I: Indicadores): string[] {
   const out: string[] = [];
-  const m = I.dflEbitda.v;
-  if (I.ebitda.v !== null && I.ebitda.v <= 0) {
-    out.push("Sem EBITDA positivo, qualquer alongamento só adia: o plano precisa começar pela operação.");
-  } else if (m !== null && m > MULTIPLO_ALVO.max) {
-    out.push(`Acima de ${mm1(MULTIPLO_ALVO.max)}x, alongar não basta: o dimensionamento do Cap. XV define o esforço.`);
-  } else if (m !== null) {
-    out.push("Alavancagem na faixa-alvo: o mandato tende a reperfilamento e otimização de capital.");
-  } else {
-    out.push("Alavancagem não mensurada: obter D&A e a abertura da dívida antes de dimensionar.");
-  }
+  out.push({
+    ebitda_nao_positivo: "Sem EBITDA positivo, qualquer alongamento só adia: o plano precisa começar pela operação.",
+    acima: `Acima de ${mm1(MULTIPLO_ALVO.max)}x, alongar não basta: o dimensionamento do Cap. XV define o esforço.`,
+    faixa: "Alavancagem na faixa-alvo: o mandato tende a reperfilamento e otimização de capital.",
+    abaixo: `Alavancagem abaixo de ${mm1(MULTIPLO_ALVO.min)}x: o tema é liquidez e prazo, não o tamanho da dívida.`,
+    caixa_liquido: "Caixa acima da dívida: o tema é rentabilidade e liquidez, não solvência.",
+    nd: "Alavancagem não mensurada: obter D&A e a abertura da dívida antes de dimensionar.",
+  }[faixaDeAlavancagem(I)]);
   if (I.liquidezCorrente.v !== null && I.liquidezCorrente.v < 1) {
     out.push(`Liquidez corrente de ${fmtX(I.liquidezCorrente).t}: o passivo de curto prazo excede o ativo circulante.`);
   }
@@ -377,7 +378,7 @@ function mancheteResultado(I: Indicadores, Iant: Indicadores | null, ultimo: num
   return I.margemEbitda.v === null ? `Resultado de ${ultimo}: EBITDA não mensurável pela DRE` : `Margem EBITDA de ${fmtPct(I.margemEbitda).t} em ${ultimo}`;
 }
 
-function leituraResultado(ind: Map<number, Indicadores>, anos: number[], unidade: string): string[] {
+function leituraResultado(ind: Map<number, Indicadores>, anos: number[], unidade: Escala): string[] {
   const u = ind.get(anos[anos.length - 1])!;
   const a = anos.length >= 2 ? ind.get(anos[anos.length - 2])! : null;
   const out: string[] = [];
@@ -399,25 +400,30 @@ function mancheteAlavancagem(I: Indicadores, ultimo: number): string {
   return `DFL/EBITDA de ${fmtX(I.dflEbitda).t} em ${ultimo}, com ciclo de ${fmtDias(I.ciclo).t} dias`;
 }
 
-function leituraEstrutura(I: Indicadores, ultimo: number, unidade: string): string[] {
+function leituraEstrutura(I: Indicadores, ultimo: number, unidade: Escala): string[] {
   const out: string[] = [];
-  if (I.dflEbitda.v !== null) {
-    out.push(I.dflEbitda.v > MULTIPLO_ALVO.max
-      ? `A ${fmtX(I.dflEbitda).t}, a dívida líquida excede o teto de ${mm1(MULTIPLO_ALVO.max)}x do EBITDA de ${ultimo}.`
-      : `A ${fmtX(I.dflEbitda).t}, a dívida líquida cabe na faixa-alvo de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x.`);
-  } else out.push("DFL/EBITDA n/d: a alavancagem não pode ser dimensionada com estes documentos.");
+  const m = fmtX(I.dflEbitda).t;
+  out.push({
+    acima: `A ${m}, a dívida líquida excede o teto de ${mm1(MULTIPLO_ALVO.max)}x do EBITDA de ${ultimo}.`,
+    faixa: `A ${m}, a dívida líquida cabe na faixa-alvo de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x.`,
+    abaixo: `A ${m}, a dívida líquida fica abaixo da faixa-alvo de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x.`,
+    caixa_liquido: `O caixa supera a dívida bruta em ${ultimo}: não há dívida líquida a dimensionar.`,
+    ebitda_nao_positivo: `EBITDA de ${ultimo} não positivo: DFL/EBITDA sem leitura (n.s.).`,
+    nd: "DFL/EBITDA n/d: a alavancagem não pode ser dimensionada com estes documentos.",
+  }[faixaDeAlavancagem(I)]);
   if (I.outras.v !== null && I.outras.v !== 0) out.push(`Outras dívidas (mútuos/partes relacionadas) de ${valorMM(I.outras, unidade)}: classe a tratar à parte.`);
   if (I.liquidezCorrente.v !== null) out.push(`Liquidez corrente de ${fmtX(I.liquidezCorrente).t}${I.liquidezCorrente.v < 1 ? ": curto prazo descoberto." : "."}`);
   if (I.ciclo.v !== null) out.push(`Ciclo de ${fmtDias(I.ciclo).t} dias: cada 10 dias equivalem a ${valorMM({ v: (I.receita.v ?? 0) * 10 / 360, nota: "" }, unidade)} de giro.`);
   return out.slice(0, 4);
 }
 
-function leituraNcg(I: Indicadores, ultimo: number, unidade: string): string[] {
+function leituraNcg(I: Indicadores, ultimo: number, unidade: Escala): string[] {
   const n = I.ncg;
   const f = I.ncgFinanciadaCP;
   const out: string[] = [];
   out.push(n.v === null ? `NCG de ${ultimo} n/d: ${n.nota.replace(/^NCG: n\/d porque /, "")}.` : `NCG de ${valorMM(n, unidade)} em ${ultimo}.`);
-  out.push(f.v === null ? `Financiamento da NCG por dívida de CP não mensurável (${limparMotivo(f.nota)}).`
+  out.push(n.v !== null && n.v <= 0 ? "Com NCG não positiva, a dívida bancária de CP não financia giro: financia outra coisa — identificar o quê."
+    : f.v === null ? `Financiamento da NCG por dívida de CP não mensurável (${limparMotivo(f.nota)}).`
     : f.v > 100 ? `A dívida bancária de CP é ${fmtPct({ v: f.v }, 0).t} da NCG: financia o giro e mais — tudo o que precisa ser alongado.`
     : `${fmtPct({ v: f.v }, 0).t} dela está financiada por dívida bancária de CP — é o que precisa ser alongado.`);
   if (I.ccl.v !== null) out.push(`CCL de ${valorMM(I.ccl, unidade)}${I.ccl.v < 0 ? ": o circulante não cobre o passivo de curto prazo." : "."}`);
@@ -438,7 +444,9 @@ function leituraComparativo(I: Indicadores, Iant: Indicadores, ultimo: number, a
   const r = variacao(Iant.receita.v, I.receita.v);
   const e = variacao(Iant.ebitda.v, I.ebitda.v);
   if (r.v !== null && e.v !== null) {
-    out.push(e.v < r.v ? `O EBITDA (${pctTexto(e.v)}) piorou mais que a receita (${pctTexto(r.v)}): perda de margem, não só de volume.`
+    out.push(e.v < r.v ? (e.v < 0
+      ? `O EBITDA (${pctTexto(e.v)}) piorou mais que a receita (${pctTexto(r.v)}): perda de margem, não só de volume.`
+      : `O EBITDA (${pctTexto(e.v)}) cresceu menos que a receita (${pctTexto(r.v)}): a margem encolheu.`)
       : `O EBITDA (${pctTexto(e.v)}) acompanhou ou superou a receita (${pctTexto(r.v)}).`);
   } else out.push(`Variação de receita ou EBITDA entre ${anterior} e ${ultimo} não mensurável (n/d ou n.s.).`);
   const d = variacao(Iant.dfl.v, I.dfl.v);
@@ -458,26 +466,27 @@ function pontosDeAtencao(base: BaseCredito, ind: Map<number, Indicadores>, am: A
   if (comOutras.length) out.push(`Dívida com mútuos ou partes relacionadas em ${comOutras.join(", ")}: verificar condições de mercado.`);
   const semDA = [...ind.entries()].filter(([, x]) => x.da.v === null).map(([a]) => a);
   if (semDA.length) out.push(`DRE sem D&A em ${semDA.join(", ")}: EBITDA não mensurável nesses exercícios.`);
+  const esc = base.historico.avisosDeEscala;
+  if (esc.length) out.push(`Unidade não reconhecida em ${esc.length} linha(s), sem conversão de escala (ex.: ${encurtar(esc[0], 50)}).`);
   if (out.length === 0) {
     out.push("Nenhum ponto detectado pelas regras automáticas desta versão — isso não atesta a qualidade contábil.");
   }
-  void base;
   return out.slice(0, 4);
 }
 
 function contarND(ind: Map<number, Indicadores>): number {
+  // Só AUSÊNCIA conta aqui: n.s. (denominador negativo) não é "falta de linha no documento".
   let n = 0;
-  for (const x of ind.values()) for (const v of Object.values(x) as Valor[]) if (v.v === null) n++;
+  for (const x of ind.values()) for (const v of Object.values(x) as Valor[]) if (v.v === null && !v.ns) n++;
   return n;
 }
 
 // -----------------------------------------------------------------------------
 // Notas e fontes
 // -----------------------------------------------------------------------------
-const ROTULO_VEREDITO = { ok: "Fecha", diverge: "NÃO FECHA", nao_conferivel: "Não conferível" } as const;
+const ROTULO_VEREDITO = { ok: "Fecha", diverge: "NÃO FECHA", por_construcao: "Por definição", nao_conferivel: "Não conferível" } as const;
 
-function notasEFontes(deck: DeckOria, base: BaseCredito, am: Amarracao[], naoGerado: string[], ind: Map<number, Indicadores>, anos: number[]) {
-  const kDir = kickerDeNatureza(base);
+function notasEFontes(deck: DeckOria, base: BaseCredito, am: Amarracao[], naoGerado: string[], ind: Map<number, Indicadores>, anos: number[], kDir: string) {
   const POR_SLIDE = 12;
   const paginas = Math.max(1, Math.ceil(am.length / POR_SLIDE));
   for (let pg = 0; pg < paginas; pg++) {
@@ -485,9 +494,11 @@ function notasEFontes(deck: DeckOria, base: BaseCredito, am: Amarracao[], naoGer
     const fatia = am.slice(pg * POR_SLIDE, (pg + 1) * POR_SLIDE);
     const nDiverge = am.filter((a) => a.veredito === "diverge").length;
     const nNao = am.filter((a) => a.veredito === "nao_conferivel").length;
+    const nOk = am.filter((a) => a.veredito === "ok").length;
     chrome(s, { kickerEsq: `Notas e fontes${paginas > 1 ? ` (${pg + 1}/${paginas})` : ""}`, kickerDir: kDir,
       manchete: nDiverge > 0 ? `${nDiverge} amarração(ões) não fecham — ler antes de usar os números`
-        : `Nenhuma amarração diverge; ${nNao} não puderam ser conferidas`,
+        : nOk === 0 ? `Nenhuma conferência pôde rodar; ${nNao} amarrações sem insumo`
+        : `${nOk} conferências fecham; ${nNao} não puderam ser conferidas`,
       fontes: `Amarrações do Prompt-Mestre Oria v3 · ${LEGENDA_NATUREZA}` });
     const y = tabela(s, GRADE.margem, GRADE.conteudoTopo, [
       { titulo: "Nº", w: 0.5, algn: "ctr" }, { titulo: "Amarração", w: 3.6, algn: "l" }, { titulo: "Ano", w: 0.8, algn: "ctr" },
@@ -495,7 +506,7 @@ function notasEFontes(deck: DeckOria, base: BaseCredito, am: Amarracao[], naoGer
     ], fatia.map((a) => ({
       tipo: a.veredito === "diverge" ? "destaque" as const : undefined,
       celulas: [String(a.numero), a.nome, a.ano === null ? "—" : String(a.ano),
-        { t: ROTULO_VEREDITO[a.veredito], negativo: a.veredito === "diverge", b: a.veredito !== "ok" }, encurtar(a.detalhe, 62)],
+        { t: ROTULO_VEREDITO[a.veredito], negativo: a.veredito === "diverge", b: a.veredito === "diverge" || a.veredito === "nao_conferivel" }, encurtar(a.detalhe, 62)],
     })));
     void y;
   }
@@ -503,12 +514,12 @@ function notasEFontes(deck: DeckOria, base: BaseCredito, am: Amarracao[], naoGer
   const s = deck.novo();
   chrome(s, { kickerEsq: "Notas e fontes · escopo desta versão", kickerDir: kDir,
     manchete: "O que esta versão não gera, e o motivo de cada n/d",
-    fontes: "n/d não é zero: é linha que o documento não traz. Definições: NCG = clientes + estoques − fornecedores; prazos em 360 dias." });
+    fontes: "n/d não é zero: é linha que o documento não traz; n.s. é conta sem leitura (base negativa). Definições: NCG = clientes + estoques − fornecedores; prazos em 360 dias." });
   const w = (GRADE.util - GRADE.gapPainel) / 2;
   card(s, GRADE.margem, GRADE.conteudoTopo, w, GRADE.conteudoBase - GRADE.conteudoTopo, { rotulo: "Capítulos não gerados", destaque: true,
     corpo: naoGerado.slice(0, 7).map((t) => p(encurtar(t, 150), { bullet: true, spcAft: 4 })) });
   const motivos = [...new Set(anos.flatMap((a) => (Object.entries(ind.get(a)!) as Array<[string, Valor]>)
-    .filter(([, v]) => v.v === null).map(([, v]) => limparMotivo(v.nota))))].slice(0, 7);
+    .filter(([, v]) => v.v === null).map(([, v]) => (v.ns ? v.nota : limparMotivo(v.nota)))))].slice(0, 7);
   card(s, GRADE.margem + w + GRADE.gapPainel, GRADE.conteudoTopo, w, GRADE.conteudoBase - GRADE.conteudoTopo, { rotulo: "Por que há n/d",
     corpo: (motivos.length ? motivos : ["Nenhum indicador saiu n/d nos exercícios apresentados."]).map((t) => p(encurtar(t, 150), { bullet: true, spcAft: 4 })) });
 }
