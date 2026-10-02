@@ -13,9 +13,9 @@
  *  2. AUSÊNCIA: DRE sem linha de depreciação faz o EBITDA sair `n/d`, nunca igual ao EBIT e nunca
  *     zero (regra 1). E a amarração que não fecha APARECE como "NÃO FECHA".
  *  3. PADRÃO VISUAL, por varredura do XML gerado: corpo ≥ 11 pt em todo run e `endParaRPr`, só
- *     Bodoni MT e Source Sans Pro, só cores da paleta (nenhum `000000`), EMU inteiro, nenhum
+ *     Verdana (Prompt Padrão Oria), só cores da paleta (nenhum `000000`), EMU inteiro, nenhum
  *     `p:style`, `<a:effectLst/>` em todo `spPr`, `<a:buNone/>` ou bullet em todo parágrafo,
- *     nenhum placeholder, manchete ≤ 75 caracteres, tag de natureza em toda coluna de período.
+ *     nenhum placeholder além de "[a preencher]", título ≤ 70 caracteres, tag de natureza em toda coluna de período.
  *  4. CONTROLE POSITIVO DAS VARREDURAS (`.claude/memory/verificador-sem-controle-positivo.md`): cada
  *     varredura do item 3 é rodada contra um XML com o defeito plantado, e TEM de acusar. Uma
  *     varredura que "não achou nada" só vale se provadamente acha o que procura.
@@ -72,9 +72,10 @@ function linha(xml: string, rotulo: string, n: number): string[] {
 
 // ---- As varreduras (item 3). Cada uma devolve a lista de violações. ----------------------------
 const varreduras: Record<string, (xml: string) => string[]> = {
-  "corpo ≥ 11 pt": (x) => [...x.matchAll(/<a:(?:rPr|endParaRPr|defRPr)[^>]*\ssz="(\d+)"/g)]
-    .filter((m) => Number(m[1]) < 1100).map((m) => `sz=${m[1]}`),
-  "só Bodoni MT e Source Sans Pro": (x) => [...x.matchAll(/<a:(?:latin|cs|ea|buFont) typeface="([^"]*)"/g)]
+  // 11 pt no corpo; abaixo disso só os dois tamanhos que o Prompt Padrão fixa no rodapé.
+  "corpo ≥ 11 pt (8,5 e 7,5 só no rodapé)": (x) => [...x.matchAll(/<a:(?:rPr|endParaRPr|defRPr)[^>]*\ssz="(\d+)"/g)]
+    .filter((m) => Number(m[1]) < 1100 && m[1] !== "850" && m[1] !== "750").map((m) => `sz=${m[1]}`),
+  "só Verdana": (x) => [...x.matchAll(/<a:(?:latin|cs|ea|buFont) typeface="([^"]*)"/g)]
     .filter((m) => !FONTES_PERMITIDAS.has(m[1])).map((m) => m[1]),
   "só cores da paleta": (x) => [...x.matchAll(/<a:srgbClr val="([0-9A-Fa-f]{6})"/g)]
     .filter((m) => !PALETA.has(m[1].toUpperCase())).map((m) => m[1]),
@@ -87,16 +88,18 @@ const varreduras: Record<string, (xml: string) => string[]> = {
     .filter((m) => !m[0].includes("<a:buNone/>") && !m[0].includes("<a:buChar")).map(() => "pPr sem bullet declarado"),
   "endParaRPr pt-BR em todo parágrafo": (x) => [...x.matchAll(/<a:p>[\s\S]*?<\/a:p>/g)]
     .filter((m) => !/<a:endParaRPr lang="pt-BR"/.test(m[0])).map(() => "parágrafo sem endParaRPr pt-BR"),
-  "nenhum placeholder": (x) => textos(x).filter((t) => /\[[^\]]*\]|⚠|CONFIRMAR|undefined|NaN|\bnull\b|Infinity/.test(t)),
-  "manchete ≤ 75 caracteres": (x) => [...x.matchAll(/<a:r><a:rPr[^>]*sz="2200"[^>]*>[\s\S]*?<a:latin typeface="Bodoni MT"\/>[\s\S]*?<a:t>([^<]*)<\/a:t>/g)]
-    .map((m) => m[1].replace(/&amp;/g, "&")).filter((t) => t.length > 75 && !/^\d{2}$/.test(t)),
+  // "[a preencher]" é a lacuna DECLARADA (Prompt Padrão, item 3); qualquer outro colchete é sobra.
+  "nenhum placeholder": (x) => textos(x).map((t) => t.replace(/\[a preencher\]/g, ""))
+    .filter((t) => /\[[^\]]*\]|⚠|CONFIRMAR|undefined|NaN|\bnull\b|Infinity/.test(t)),
+  "título ≤ 70 caracteres": (x) => [...x.matchAll(/<a:r><a:rPr[^>]*sz="2100"[^>]*>[\s\S]*?<a:t>([^<]*)<\/a:t>/g)]
+    .map((m) => m[1].replace(/&amp;/g, "&")).filter((t) => t.length > 70),
 };
 
 console.log("--- 4. controle positivo: cada varredura ACUSA o defeito plantado ---");
 {
   const plantado: Record<string, string> = {
-    "corpo ≥ 11 pt": `<a:rPr lang="pt-BR" sz="1000"/>`,
-    "só Bodoni MT e Source Sans Pro": `<a:latin typeface="Calibri"/>`,
+    "corpo ≥ 11 pt (8,5 e 7,5 só no rodapé)": `<a:rPr lang="pt-BR" sz="1000"/>`,
+    "só Verdana": `<a:latin typeface="Calibri"/>`,
     "só cores da paleta": `<a:srgbClr val="000000"/>`,
     "EMU inteiro": `<a:off x="12.5" y="0"/>`,
     "sem p:style (sem sombra herdada)": `<p:style></p:style>`,
@@ -104,20 +107,20 @@ console.log("--- 4. controle positivo: cada varredura ACUSA o defeito plantado -
     "buNone ou bullet em todo parágrafo": `<a:pPr algn="l"><a:lnSpc/></a:pPr>`,
     "endParaRPr pt-BR em todo parágrafo": `<a:p><a:r><a:t>x</a:t></a:r></a:p>`,
     "nenhum placeholder": `<a:t>[NOME_EMPRESA]</a:t>`,
-    "manchete ≤ 75 caracteres": `<a:r><a:rPr lang="pt-BR" sz="2200"><a:latin typeface="Bodoni MT"/></a:rPr><a:t>${"x".repeat(80)}</a:t></a:r>`,
+    "título ≤ 70 caracteres": `<a:r><a:rPr lang="pt-BR" sz="2100"><a:latin typeface="Verdana"/></a:rPr><a:t>${"x".repeat(80)}</a:t></a:r>`,
   };
   for (const [nome, f] of Object.entries(varreduras)) {
     ok(f(plantado[nome]).length > 0, `a varredura "${nome}" acusa o defeito plantado`);
   }
   let lancou = false;
-  try { p("corpo pequeno", { sz: 10 }); new DeckOria("x").novo().texto(0, 0, 1, 1, [p("x", { sz: 10 })]); } catch { lancou = true; }
+  try { const sl = new DeckOria("x").novo(); sl.texto(0, 0, 1, 1, [p("x", { sz: 10 })]); sl.xml(); } catch { lancou = true; }
   ok(lancou, "a biblioteca RECUSA corpo abaixo de 11 pt (o prompt: reduza o texto, nunca o corpo)");
   lancou = false;
   try {
-    tabela(new DeckOria("x").novo(), 0, 0, [{ titulo: "a", w: 1 }], Array.from({ length: 15 }, () => ({ celulas: ["x"] })));
+    tabela(new DeckOria("x").novo(), 0, 0, [{ titulo: "a", w: 1 }], Array.from({ length: 9 }, () => ({ celulas: ["x"] })));
   } catch { lancou = true; }
-  ok(lancou, "a biblioteca RECUSA tabela com mais de 14 linhas de corpo");
-  ok(PALETA.has(COR.laranja) && !PALETA.has("000000"), "a paleta é a do prompt e não contém preto puro");
+  ok(lancou, "a biblioteca RECUSA tabela com mais de 8 linhas");
+  ok(PALETA.has(COR.laranja) && PALETA.has(COR.eixo) && !PALETA.has("000000") && !PALETA.has("B6482F"), "a paleta é a do Prompt Padrão (com o 888888 do eixo, sem preto nem vermelho)");
 }
 
 console.log("--- 1. o deck mostra o número do documento (book Vertentes) ---");
@@ -126,18 +129,25 @@ const base = await deckDe(entradaModeloDaFixture(fixture, agora));
   const { slides, zip } = base;
   ok(slides.length >= 12, `o deck tem os slides do módulo (${slides.length})`);
   const x1 = slideCom(slides, "X.1 · RESULTADO");
-  ok(JSON.stringify(linha(x1, "Receita líquida", 2)) === JSON.stringify(["143,4", "106,6"]),
-    "(1a) X.1: receita líquida 143,4 / 106,6 — o total impresso na DRE", JSON.stringify(linha(x1, "Receita líquida", 2)));
-  const x2 = slideCom(slides, "X.2 · ESTRUTURA DE CAPITAL E PRAZOS");
+  const xii = slideCom(slides, "XII · COMPARATIVO ENTRE EXERCÍCIOS");
+  ok(JSON.stringify(linha(xii, "Receita líquida", 2)) === JSON.stringify(["143,4", "106,6"]),
+    "(1a) XII: receita líquida 143,4 / 106,6 — o total impresso na DRE", JSON.stringify(linha(xii, "Receita líquida", 2)));
+  const x2 = slideCom(slides, "X.2 · ESTRUTURA DE CAPITAL");
   ok(JSON.stringify(linha(x2, "Ativo total", 2)) === JSON.stringify(["121,2", "95,8"]),
     "(1b) X.2: ativo total 121,2 / 95,8 — o total impresso no balanço", JSON.stringify(linha(x2, "Ativo total", 2)));
-  const xi = slideCom(slides, "XI.2 · NCG E PRAZOS");
+  const xi = slideCom(slides, "XI · CAPITAL DE GIRO");
   ok(JSON.stringify(linha(xi, "Clientes", 2)) === JSON.stringify(["32,0", "24,3"]),
-    "(1c) XI.2: clientes SEM o cabeçalho de grupo \"Contas a Receber\" (32,0, não 62,0)", JSON.stringify(linha(xi, "Clientes", 2)));
+    "(1c) XI: clientes SEM o cabeçalho de grupo \"Contas a Receber\" (32,0, não 62,0)", JSON.stringify(linha(xi, "Clientes", 2)));
   ok(JSON.stringify(linha(x1, "Lucro líquido", 2)) === JSON.stringify(["(3,0)", "(17,9)"]),
     "(1d) X.1: prejuízo entre parênteses, como o prompt manda", JSON.stringify(linha(x1, "Lucro líquido", 2)));
-  ok(/<a:t>\(17,9\)<\/a:t>/.test(x1) && x1.includes(`val="${COR.negativoSobreVerde}"`),
-    "(1e) negativo na linha de total sai em FFC9B5 (B6482F não tem contraste sobre o verde-escuro)");
+  const graficos = await Promise.all(Object.keys(zip.files).filter((n) => /^ppt\/charts\/chart\d+\.xml$/.test(n))
+    .map((n) => zip.file(n)!.async("string")));
+  ok(graficos.some((g) => g.includes("<c:barChart>") && g.includes("<c:v>143.4</c:v>") && g.includes("<c:v>106.6</c:v>"))
+    && graficos.some((g) => g.includes("<c:doughnutChart>")),
+    "(1e) os gráficos são nativos: colunas de receita com os números do documento, e a rosca da dívida");
+  const vGraf = graficos.flatMap((g) => [...varreduras["corpo ≥ 11 pt (8,5 e 7,5 só no rodapé)"](g), ...varreduras["só cores da paleta"](g),
+    ...varreduras["só Verdana"](g), ...(g.includes("<c:majorGridlines") ? ["linha de grade"] : [])]);
+  ok(graficos.length > 0 && vGraf.length === 0, `gráficos: 11 pt, paleta, Verdana e sem linha de grade (${graficos.length})`, vGraf.slice(0, 3).join("; "));
 
   console.log("--- 3. padrão visual, varrendo o XML gerado ---");
   for (const [nome, f] of Object.entries(varreduras)) {
@@ -145,20 +155,18 @@ const base = await deckDe(entradaModeloDaFixture(fixture, agora));
     ok(v.length === 0, `todos os slides: ${nome}`, v.slice(0, 3).join("; "));
   }
   const tema = await zip.file("ppt/theme/theme1.xml")!.async("string");
-  ok(varreduras["só cores da paleta"](tema).length === 0 && varreduras["só Bodoni MT e Source Sans Pro"](tema.replace(/typeface=""/g, "")).length === 0,
-    "o tema também só tem paleta e as duas fontes");
-  const financeiros = slides.filter((x) => textos(x).some((t) => /NÃO AUDITADO|AUDITADO/.test(t)) && x.includes(">R$ MM<"));
-  const semTag = financeiros.filter((x) => {
-    const t = textos(x);
-    return t.some((s, i) => /^(19|20)\d{2}$/.test(s) && !/^\((A|R|B|G)\)$/.test(t[i + 1] ?? ""));
-  });
+  ok(varreduras["só cores da paleta"](tema).length === 0 && varreduras["só Verdana"](tema).length === 0,
+    "o tema também só tem paleta e Verdana");
+  // Cabeçalho de período é "2024 (B)": todo ano sozinho num cabeçalho de tabela financeira é falha.
+  const financeiros = slides.filter((x) => x.includes(">R$ mi<"));
+  const semTag = financeiros.filter((x) => textos(x).some((t) => /^(19|20)\d{2}$/.test(t)));
   ok(financeiros.length >= 4 && semTag.length === 0,
     `toda coluna de período carrega a tag de natureza (${financeiros.length} slides financeiros)`);
   const ct = await zip.file("[Content_Types].xml")!.async("string");
   ok(slides.every((_, i) => ct.includes(`/ppt/slides/slide${i + 1}.xml`)) && zip.file("ppt/media/logo-oria.png") !== null,
     "o pacote declara todo slide e leva o logo oficial");
   ok(base.saida.amarracoes.some((a) => a.veredito === "nao_conferivel")
-    && slideCom(slides, "NOTAS E FONTES").includes("Não conferível"),
+    && slideCom(slides, "NOTAS E AVISOS · AMARRAÇÕES").includes("Não conferível"),
     "amarração que não pôde rodar aparece como \"Não conferível\", não some da lista (regra 7)");
 }
 
@@ -172,7 +180,7 @@ console.log("--- 2. ausência e divergência aparecem como tal ---");
   const ebit = linha(x1, "EBIT", 2);
   ok(JSON.stringify(ebitda) === JSON.stringify(["n/d", "n/d"]),
     "(2a) DRE sem D&A: EBITDA sai n/d — nem zero, nem igual ao EBIT", `EBITDA ${JSON.stringify(ebitda)} · EBIT ${JSON.stringify(ebit)}`);
-  ok(textos(slideCom(slides, "POR QUE HÁ N/D")).some((t) => /depreciação/.test(t)),
+  ok(textos(slideCom(slides, "O que ficou a preencher e o motivo de cada n/d")).some((t) => /depreciação/.test(t)),
     "(2b) o slide de notas diz o motivo do n/d (a DRE não traz depreciação)");
 
   // Ativo informado adulterado em 2025: Ativo ≠ Passivo + PL tem de aparecer.
@@ -182,7 +190,7 @@ console.log("--- 2. ausência e divergência aparecem como tal ---");
       ? { ...l, valores: { ...l.valores, "2025": (l.valores["2025"] ?? 0) + 5000 } } : l),
   };
   const div = await deckDe(adulterada);
-  const nota = slideCom(div.slides, "NOTAS E FONTES");
+  const nota = div.slides.filter((x) => textos(x).some((t) => t.startsWith("NOTAS E AVISOS · AMARRAÇÕES"))).join("");
   ok(div.saida.amarracoes.some((a) => a.numero === 2 && a.ano === 2025 && a.veredito === "diverge") && nota.includes("NÃO FECHA"),
     "(2c) ativo ≠ passivo + PL: a amarração aparece como \"NÃO FECHA\" no slide de notas");
 }
@@ -193,9 +201,9 @@ console.log("--- 5. o que a revisão independente achou (cada um reproduzido ant
   // o deck tem de dividir por 1.000.000 — antes ele dividia por 1 e a receita saía 143.380.000.000,0.
   const entrada = entradaModeloDaFixture(fixture, agora);
   const { slides } = await deckDe({ ...entrada, unidade: "milhao" });
-  ok(JSON.stringify(linha(slideCom(slides, "X.1 · RESULTADO"), "Receita líquida", 2)) === JSON.stringify(["143,4", "106,6"]),
+  ok(JSON.stringify(linha(slideCom(slides, "XII · COMPARATIVO ENTRE EXERCÍCIOS"), "Receita líquida", 2)) === JSON.stringify(["143,4", "106,6"]),
     "(5a) unidade \"milhao\": a receita continua 143,4 / 106,6 em R$ MM",
-    JSON.stringify(linha(slideCom(slides, "X.1 · RESULTADO"), "Receita líquida", 2)));
+    JSON.stringify(linha(slideCom(slides, "XII · COMPARATIVO ENTRE EXERCÍCIOS"), "Receita líquida", 2)));
 }
 /** Uma base à mão, de um ou dois exercícios — para os casos que o book Vertentes não tem. */
 function baseSintetica(valores: Partial<Record<GrandezaCredito, number[]>>): BaseCredito {
@@ -233,7 +241,7 @@ const executivo = (slides: string[]) => textos(slideCom(slides, "SUMÁRIO EXECUT
   // (5d) NCG negativa (clientes + estoques < fornecedores): a razão é n.s., não n/d.
   const sl = await slidesDe(baseSintetica({ receita_liquida: [100000, 100000], custos: [80000, 80000],
     clientes: [5000, 5000], estoques: [5000, 5000], fornecedores: [20000, 20000], divida_bancos_cp: [8000, 8000] }));
-  const xi = slideCom(sl, "XI.2 · NCG E PRAZOS");
+  const xi = slideCom(sl, "XI · CAPITAL DE GIRO");
   ok(JSON.stringify(linha(xi, "Dívida bancária CP / NCG", 2)) === JSON.stringify(["n.s.", "n.s."]) && /não positiva/.test(textos(xi).join(" ")),
     "(5d) NCG negativa: \"Dívida bancária CP / NCG\" é n.s. e a manchete diz NCG não positiva",
     JSON.stringify(linha(xi, "Dívida bancária CP / NCG", 2)));

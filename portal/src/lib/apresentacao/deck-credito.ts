@@ -1,322 +1,597 @@
-// O MÓDULO DE CRÉDITO DA APRESENTAÇÃO INICIAL — FASE 4 do Prompt-Mestre Oria v3, versão de base.
+// A APRESENTAÇÃO INICIAL DE CRÉDITO — todos os capítulos do deck de referência (Centro Oeste,
+// out/2026) no padrão institucional do Teaser (Prompt Padrão Oria).
 //
-// O QUE ESTA VERSÃO GERA, e por que é só isto. O prompt tem duas metades de natureza diferente:
-//   • a que SAI DOS NÚMEROS — base de informação (IX), evolução (X.1, X.2), capital de giro
-//     (XI.2), comparativo (XII) e as amarrações. É o que o banco deste sistema tem, com
-//     proveniência, e é o que este arquivo gera inteiro, sem uma frase escrita à mão;
-//   • a que EXIGE JULGAMENTO OU INSUMO QUE O SISTEMA AINDA NÃO TEM — pesquisa de setor e
-//     societário (FASES 1–3), dívida por credor e muro de vencimentos (XIII, precisa do mapa da
-//     dívida estruturado), normalização do EBITDA (XIV, ajuste com confiança), dívida sustentável
-//     (XV), garantias (XVI), scorecard (XVII) e síntese (XVIII).
-// A segunda metade NÃO vira slide com espaço em branco nem nota fabricada: ela é listada no slide
-// "Notas e fontes" como não gerada, com o que falta para gerá-la. Um scorecard com nota inventada
-// teria a mesma cara de um scorecard calibrado (regra 7) — e o prompt diz "nunca apresente a nota
-// final sem as notas por eixo".
+// DUAS FONTES, cada uma com o seu papel (decisão do dono, 02/10/2026):
+//   • o deck do Centro Oeste é a referência de CONSTRUÇÃO: a ordem dos capítulos, quais slides
+//     existem, que tabela/gráfico cada um tem e o que ele conclui;
+//   • o Prompt Padrão é a referência de FORMATAÇÃO: componentes da seção 4.7, Verdana, grade em
+//     pt, rodapé, títulos que afirmam. Onde os dois discordam, vale o Prompt Padrão — com dois
+//     acréscimos que o dono pediu: as divisórias de capítulo e o sumário ficam, e o endividamento
+//     usa rosca.
 //
-// AS MANCHETES E IMPLICAÇÕES SÃO REGRAS, NÃO REDAÇÃO. O prompt pede manchete que é conclusão
-// ("47% da NCG está financiada por dívida bancária de curto prazo"). Aqui cada uma é escolhida por
-// um teste explícito sobre o número, e os limiares citados são os do próprio prompt (múltiplo-alvo
-// de 2,5x–3,5x no XV). Quando o número que a regra precisa é `n/d`, a manchete DIZ que não dá para
-// concluir — nunca escolhe a frase mais confortável.
+// O QUE É DO SISTEMA E O QUE É "[a preencher]". Os capítulos IX a XIII saem inteiros do realizado
+// extraído (o mesmo do modelo institucional). Os de pesquisa (I a VIII) e os de julgamento (XIV a
+// XVIII) saem com a ESTRUTURA do slide e o que o sistema já sabe (o ciclo financeiro na dinâmica
+// do segmento, o EBITDA reportado na normalização, os saldos do balanço nas garantias), e o resto
+// marcado "[a preencher]" — nunca texto inventado (regra 1 do projeto, item 3 do Prompt Padrão).
+// Número de tabela que falta é `n/d`, com o motivo nas notas; campo de texto é "[a preencher]".
+//
+// MANCHETES SÃO REGRAS SOBRE O NÚMERO, não redação: cada título é escolhido por um teste
+// explícito, com os limiares do próprio Prompt-Mestre (múltiplo-alvo de 2,5x a 3,5x).
 import {
-  DeckOria, COR, GRADE, capa, card, chrome, contracapa, divisoria, kpi, p, tabela,
+  A_PREENCHER, COR, DeckOria, GRADE, blocoDeTexto, campoValor, cabecalho, capa, cartao, contracapa, divisoria,
+  faixa, kpi, notas, p, rodape, tabela, tituloSecao,
   type ColunaTabela, type LinhaTabela, type Paragrafo, type SlideOria, type Celula,
 } from "./pptx-oria";
 import {
-  LEGENDA_NATUREZA, MULTIPLO_ALVO, TAG_NATUREZA, amarracoes, faixaDeAlavancagem, fmtDias, fmtMM, fmtPct, fmtX, indicadores, kickerDeNatureza,
-  variacao, type Amarracao, type BaseCredito, type Indicadores, type Numero, type Valor,
+  LEGENDA_NATUREZA, MULTIPLO_ALVO, TAG_NATUREZA, amarracoes, faixaDeAlavancagem, fatorParaMM, fmtDias, fmtMM, fmtPct, fmtX,
+  indicadores, variacao, type Amarracao, type BaseCredito, type Indicadores, type Numero, type PeriodoCredito, type Valor,
 } from "./base-credito";
 
+type Escala = "milhar" | "reais";
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
   "outubro", "novembro", "dezembro"];
-type Escala = "milhar" | "reais";
-/** Até 4 colunas de período por slide (Cap. X do prompt). */
+/** Até 4 colunas de período por slide (Cap. X do Prompt-Mestre). */
 const MAX_PERIODOS = 4;
+const AP = A_PREENCHER;
+const FONTE_AP = `Fonte: ${AP}.`;
 
-const cel = (n: Numero, extra: Partial<Celula> = {}): Celula => ({ t: n.t, negativo: n.negativo, ...extra });
-/** Percentual em prosa: sinal explícito em vez de parênteses ("−91,7%"), que dentro de uma frase
- * entre parênteses viraria "((91,7%))". */
 const pctTexto = (v: number, casas = 1) => `${v < 0 ? "−" : "+"}${fmtPct({ v: Math.abs(v) }, casas).t}`;
-const mm1 = (v: number) => (v / 1).toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const mm1 = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const cel = (n: Numero): Celula => ({ t: n.t });
 
 export interface SaidaDeck {
   deck: DeckOria;
-  /** o que NÃO foi gerado e por quê — também vai para o slide de notas */
-  naoGerado: string[];
+  /** o que ficou "[a preencher]" e por quê — também vai para o slide de notas */
+  aPreencher: string[];
   amarracoes: Amarracao[];
 }
 
 export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck {
-  const deck = new DeckOria(`${base.cliente} — Apresentação de crédito`);
+  const deck = new DeckOria(`${base.cliente} — Apresentação inicial`);
   const periodos = base.periodos.slice(-MAX_PERIODOS);
   if (periodos.length === 0) {
     throw new Error("apresentação de crédito: nenhum exercício fechado com valor — não há o que apresentar. "
       + "Confira o último exercício real na tela de Modelagem e a extração dos balanços.");
   }
+  const esc: Escala = base.historico.escala;
   const anos = periodos.map((x) => x.ano);
   const ind = new Map(anos.map((a) => [a, indicadores(base, a)]));
   const ultimo = anos[anos.length - 1];
   const anterior = anos.length >= 2 ? anos[anos.length - 2] : null;
   const I = ind.get(ultimo)!;
   const Iant = anterior !== null ? ind.get(anterior)! : null;
-  const kDir = kickerDeNatureza(base, periodos);
-  const fontes = fontesFinanceiras(base, anos);
+  const fontes = fontesFinanceiras(base, periodos);
   const am = amarracoes(base, periodos);
-  const mm = (x: Valor) => fmtMM(x, base.historico.escala);
-  const colsPeriodo = (w: number): ColunaTabela[] => periodos.map((x) => ({ titulo: String(x.ano), tag: TAG_NATUREZA[x.natureza], w }));
-  const unidadeCab = "R$ MM";
-
-  const naoGerado = [
-    "Caps. I–VIII (setor, societário, empresa, cadeia de valor, concorrência, SWOT): exigem a pesquisa das FASES 1–3",
-    "X.3 Fluxo de caixa reconstruído: a ponte entre dois balanços ainda não é montada",
-    "XI.1 Composição do CCL com AV%: a abertura conta a conta ainda não é publicada",
-    "XIII Endividamento por credor e muro de vencimentos: o mapa da dívida ainda não chega por operação",
-    "XIV–XVIII Normalização, dívida sustentável, garantias, scorecard e síntese: exigem julgamento do analista",
-    "YTD/LTM: só exercícios fechados entram; o balancete do ano corrente fica de fora desta versão",
+  const mm = (x: Valor) => fmtMM(x, esc);
+  const vmi = (x: Valor) => valorMi(x, esc);
+  const mes = `${MESES[agora.getMonth()]} de ${agora.getFullYear()}`;
+  const aPreencher = [
+    "Caps. I a VIII (setor, mercado, societário, empresa, cadeia de valor, concorrência): dependem da pesquisa das FASES 1 a 3.",
+    "XIII por credor e muro de vencimentos: o mapa da dívida ainda não chega estruturado por operação.",
+    "XIV a XVIII (ajustes do EBITDA, alavancas, realização das garantias, notas do scorecard): julgamento do analista.",
+    "YTD/LTM: só exercícios fechados entram; o balancete do ano corrente fica fora desta versão.",
   ];
 
-  // ---- 1. Capa ---------------------------------------------------------------
-  capa(deck.novo(COR.sage), {
-    kicker: "Apresentação inicial · Módulo de crédito",
-    titulo: "Levantamento e Diagnóstico",
-    subtitulo: "Financeiro e crédito",
-    meta: `${encurtar(`${base.cliente} — ${base.entidade}`, 60)}  ·  Confidencial  ·  ${capitalizar(MESES[agora.getMonth()])} de ${agora.getFullYear()}`,
+  let primeiro = true;
+  /** Slide de conteúdo: cabeçalho, rodapé e, só no primeiro, o "CONFIDENCIAL · <MÊS> <ANO>". */
+  const slide = (rotulo: string, titulo: string, fonte: string, subtitulo?: string): SlideOria => {
+    const s = deck.novo();
+    cabecalho(s, { rotulo, titulo, subtitulo,
+      confidencial: primeiro ? `CONFIDENCIAL · ${MESES[agora.getMonth()].toUpperCase()} ${agora.getFullYear()}` : undefined });
+    primeiro = false;
+    rodape(s, fonte);
+    return s;
+  };
+  const div = (numero: number, titulo: string, subtitulo: string) =>
+    divisoria(deck.novo(COR.fundoCapa), { numero, titulo, subtitulo });
+  const colsAnos = (w: number, ps: PeriodoCredito[] = periodos): ColunaTabela[] =>
+    ps.map((x) => ({ titulo: `${x.ano} ${TAG_NATUREZA[x.natureza]}`, w }));
+  /** Linha de tabela com um valor por período mostrado. */
+  const L = (rot: string, f: (x: Indicadores) => Numero, destaque = false, ps: PeriodoCredito[] = periodos): LinhaTabela =>
+    ({ celulas: [rot, ...ps.map((x) => cel(f(ind.get(x.ano)!)))], destaque });
+  const serie = (f: (x: Indicadores) => Valor) =>
+    anos.map((a) => { const v = f(ind.get(a)!).v; return v === null ? null : Math.round(v * fatorParaMM(esc) * 10) / 10; });
+
+  // ======================================================================== capa
+  capa(deck.novo(COR.fundoCapa), {
+    rotulo: "Apresentação inicial · Levantamento e diagnóstico",
+    titulo: encurtar(`${base.cliente}`, 40),
+    descritiva: encurtar(`${base.entidade} · exercícios ${anos[0]}${anos.length > 1 ? ` a ${ultimo}` : ""} · ${naturezaCurta(periodos)}`, 70),
+    apoio: `Material confidencial para diagnóstico financeiro e de crédito · ${capitalizar(mes)}`,
+    assinatura: "Oria Partners Capital Serviços",
   });
 
-  // ---- 2. Sumário ------------------------------------------------------------
-  const capitulos = [
-    ["Base de informação e evolução financeira", "Qualidade dos dados · resultado · estrutura de capital e prazos"],
-    ["Capital de giro e comparativo", "NCG e seu financiamento · exercícios homogêneos lado a lado"],
-    ["Notas e fontes", "Amarrações conferidas e o que esta versão ainda não gera"],
+  // ===================================================================== sumário
+  const CAPITULOS: Array<[string, string]> = [
+    ["Panorama do setor macro", "Volumes, juros e crédito do setor"],
+    ["Mercado específico", "Tamanho, tendências e dinâmica do modelo de negócio"],
+    ["Estrutura societária", "Quadro de sócios, ecossistema do grupo e stakeholders"],
+    ["A empresa", "Ficha institucional, portfólio, fornecedores e localização"],
+    ["Cadeia de valor", "Onde a companhia captura e perde margem"],
+    ["Cenário competitivo", "Concorrentes e posicionamento"],
+    ["Base de informação e evolução financeira", "Qualidade dos dados, resultado, estrutura de capital e prazos"],
+    ["Capital de giro e endividamento", "NCG, comparativo entre exercícios, dívida e vencimentos"],
+    ["EBITDA normalizado e dívida sustentável", "Qualidade do resultado e capacidade de pagamento"],
+    ["Garantias, scorecard e síntese de crédito", "Recuperação por classe, nota de risco e implicações"],
+    ["Análise SWOT", "Achados operacionais e financeiros integrados"],
+    ["Fatores críticos e próximos passos", "Condições de sucesso e agenda do mandato"],
   ];
   {
-    const s = deck.novo();
-    chrome(s, { kickerEsq: "Sumário", kickerDir: base.cliente, manchete: "Sumário",
-      fontes: "Módulo de crédito gerado a partir das demonstrações extraídas e conferidas no portal Oria." });
-    capitulos.forEach(([t, d], i) => {
-      const x = GRADE.margem + (i % 2) * (GRADE.util / 2 + 0.15);
-      const y = GRADE.conteudoTopo + 0.2 + Math.floor(i / 2) * 1.0;
-      s.texto(x, y, 0.8, 0.6, [p(String(i + 1).padStart(2, "0"), { serifa: true, sz: 22, cor: COR.laranja })], "t");
-      s.texto(x + 0.8, y, GRADE.util / 2 - 1.0, 0.3, [p(t, { b: true, sz: 13, cor: COR.grafite })], "t");
-      s.texto(x + 0.8, y + 0.34, GRADE.util / 2 - 1.0, 0.5, [p(d)], "t");
-      s.fio(x, y + 0.85, GRADE.util / 2 - 0.15, 0);
+    const s = slide("Sumário", "Doze capítulos, do setor à síntese de crédito", fontes);
+    CAPITULOS.forEach(([t, d], i) => {
+      const x = GRADE.col2.x[i % 2];
+      const y = GRADE.topo + Math.floor(i / 2) * 60;
+      s.texto(x, y, 34, 26, [p(String(i + 1).padStart(2, "0"), { sz: 21, cor: COR.laranja })], "t");
+      s.texto(x + 42, y + 2, GRADE.col2.w - 42, 16, [p(t, { sz: 12, b: true, cor: COR.texto })], "t");
+      s.texto(x + 42, y + 21, GRADE.col2.w - 42, 16, [p(d)], "t");
+      s.fio(x, y + 48, GRADE.col2.w, 0, COR.linha, 0.5);
     });
   }
 
-  // ---- 3. Sumário executivo (Layout B) ---------------------------------------
+  // ========================================================== sumário executivo
   {
-    const s = deck.novo();
-    chrome(s, { kickerEsq: "Sumário executivo", kickerDir: kDir, manchete: mancheteExecutiva(I), fontes });
+    const s = slide("Sumário executivo", mancheteExecutiva(I), fontes);
     const varRec = Iant ? variacao(Iant.receita.v, I.receita.v) : { v: null, ns: false };
     const kpis = [
-      { valor: valorMM(I.receita, base.historico.escala), label: `Receita líquida ${ultimo}`,
-        descritor: anterior === null ? "exercício único no histórico" : varRec.ns ? `n.s. vs ${anterior}` : varRec.v === null ? `variação vs ${anterior}: n/d` : `${pctTexto(varRec.v)} vs ${anterior}` },
-      { valor: valorMM(I.ebitda, base.historico.escala), label: `EBITDA ${ultimo}`,
-        descritor: I.margemEbitda.v === null ? "margem n/d" : `margem ${fmtPct(I.margemEbitda).t}` },
-      { valor: fmtX(I.dflEbitda).t, label: "DFL / EBITDA",
-        descritor: `alvo de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x (Cap. XV)`,
-        destaque: faixaDeAlavancagem(I) === "acima" },
-      { valor: fmtX(I.liquidezCorrente).t, label: "Liquidez corrente", descritor: `AC ÷ PC em ${ultimo}` },
+      { valor: vmi(I.receita), rotulo: `Receita líquida ${ultimo}`,
+        explicacao: anterior === null ? "exercício único no histórico" : varRec.ns ? `n.s. contra ${anterior}`
+          : varRec.v === null ? `variação contra ${anterior}: n/d` : `${pctTexto(varRec.v)} contra ${anterior}` },
+      { valor: vmi(I.ebitda), rotulo: `EBITDA ${ultimo}`,
+        explicacao: I.margemEbitda.v === null ? "margem n/d (ver notas)" : `margem de ${fmtPct(I.margemEbitda).t}, reportado` },
+      { valor: fmtX(I.dflEbitda).t, rotulo: "DFL / EBITDA",
+        explicacao: `múltiplo-alvo de ${mm1(MULTIPLO_ALVO.min)}x a ${mm1(MULTIPLO_ALVO.max)}x` },
+      { valor: fmtX(I.liquidezCorrente).t, rotulo: "Liquidez corrente", explicacao: `AC sobre PC, ${ultimo}` },
     ];
-    const wK = 2.6;
-    const gapK = (GRADE.util - 4 * wK) / 3;
-    kpis.forEach((k, i) => kpi(s, GRADE.margem + i * (wK + gapK), GRADE.conteudoTopo + 0.1, wK, k));
-    const wP = (GRADE.util - GRADE.gapPainel) / 2;
-    const yP = 3.15;
-    card(s, GRADE.margem, yP, wP, GRADE.conteudoBase - yP, { rotulo: "Diagnóstico",
-      corpo: diagnostico(I, Iant, anterior, base.historico.escala).map((t) => p(t, { bullet: true })) });
-    card(s, GRADE.margem + wP + GRADE.gapPainel, yP, wP, GRADE.conteudoBase - yP, { rotulo: "Implicação para o mandato",
-      destaque: true, corpo: implicacoes(I).map((t) => p(t, { bullet: true })) });
+    kpis.forEach((k, i) => kpi(s, GRADE.col4.x[i], GRADE.topo, GRADE.col4.w, k));
+    const d = diagnostico(I, Iant, anterior, esc);
+    d.slice(0, 3).forEach(([t, c], i) => cartao(s, GRADE.col3.x[i], 228, GRADE.col3.w, 150, { numeral: i + 1, titulo: t, corpo: c }));
+    faixa(s, 400, implicacaoPrincipal(I));
   }
 
-  // ---- 4. Divisória 01 -------------------------------------------------------
-  divisoria(deck.novo(COR.sage), { numero: 1, titulo: capitulos[0][0], subtitulo: capitulos[0][1] });
-
-  // ---- 5. IX — Base de informação (Layout H) ---------------------------------
+  // ============================================================ I — setor macro
+  div(1, CAPITULOS[0][0], CAPITULOS[0][1]);
   {
-    const s = deck.novo();
+    const s = slide("I.1 · Panorama do setor macro", AP, FONTE_AP);
+    ["Tamanho do setor", "Crescimento recente", "Juro de referência", "Crédito ao setor"].forEach((r, i) =>
+      kpi(s, GRADE.col4.x[i], GRADE.topo, GRADE.col4.w, { valor: AP, rotulo: r, explicacao: `fonte: ${AP}` }));
+    blocoDeTexto(s, GRADE.x, 228, GRADE.w, "Contexto estrutural",
+      [["Demanda e ciclo", AP], ["Juros e crédito", AP], ["Regulação e câmbio", AP]], 62);
+  }
+
+  // ======================================================== II — mercado específico
+  div(2, CAPITULOS[1][0], CAPITULOS[1][1]);
+  {
+    const s = slide("II.1 · Tamanho e crescimento", AP, FONTE_AP);
+    tituloSecao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, "Mercado do nicho (unidade a definir)");
+    cartao(s, GRADE.col2.x[0], GRADE.topo + 24, GRADE.col2.w, 230, { titulo: "Série histórica do mercado", corpo: `Gráfico de colunas: ${AP} (série e fonte da pesquisa).` });
+    blocoDeTexto(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, "Destaques", [[AP, AP], [AP, AP], [AP, AP], [AP, AP]], 62);
+  }
+  {
+    const s = slide("II.2 · Tendências estruturais", AP, FONTE_AP);
+    ["Regulação", "Tecnologia", "Consolidação", "Mercado global", "Importação e câmbio", "Crédito"].forEach((t, i) =>
+      cartao(s, GRADE.col3.x[i % 3], GRADE.topo + Math.floor(i / 3) * 175, GRADE.col3.w, 150, { numeral: i + 1, titulo: t, corpo: AP }));
+  }
+  {
+    // A ponte analítica para o mandato: a coluna da companhia SAI DO SISTEMA (prazos e margem).
+    const s = slide("II.3 · Dinâmica do modelo de negócio", mancheteCiclo(I, ultimo), fontes);
+    tabela(s, GRADE.x, GRADE.topo, [
+      { titulo: "Etapa", w: 170 }, { titulo: `Na companhia, ${ultimo}`, w: 200, algn: "r" },
+      { titulo: "Referência do segmento", w: 200, algn: "r" }, { titulo: "Leitura", w: 267, algn: "l" },
+    ], [
+      { celulas: ["Compra (PMP)", `${fmtDias(I.pmp).t} dias`, AP, AP] },
+      { celulas: ["Estoque (PME)", `${fmtDias(I.pme).t} dias`, AP, AP] },
+      { celulas: ["Venda (PMR)", `${fmtDias(I.pmr).t} dias`, AP, AP] },
+      { celulas: ["Margem bruta", fmtPct(margemBruta(I)).t, AP, AP] },
+      { celulas: ["Ciclo financeiro", `${fmtDias(I.ciclo).t} dias`, AP, AP], destaque: true },
+    ]);
+    faixa(s, 400, I.ciclo.v === null ? "O ciclo financeiro da companhia não é mensurável com os documentos recebidos."
+      : `Cada 10 dias de ciclo equivalem a ${valorMi({ v: (I.receita.v ?? 0) * 10 / 360, nota: "" }, esc)} de capital de giro (calculado pela Oria).`);
+  }
+
+  // ======================================================== III — societário
+  div(3, CAPITULOS[2][0], CAPITULOS[2][1]);
+  {
+    const s = slide("III.1 · Quadro societário", AP, FONTE_AP);
+    tabela(s, GRADE.x, GRADE.topo, [
+      { titulo: "Sócio", w: 220 }, { titulo: "Qualificação", w: 170, algn: "l" }, { titulo: "Entrada", w: 110, algn: "l" },
+      { titulo: "Participação", w: 110, algn: "r" }, { titulo: "Outras empresas", w: 227, algn: "l" },
+    ], [1, 2, 3].map(() => ({ celulas: [AP, AP, AP, AP, AP] })));
+    campoValor(s, GRADE.x, 250, GRADE.w, [["Razão social", base.entidade], ["CNPJ", AP], ["Fundação", AP],
+      ["Sede", AP], ["CNAE principal", AP], ["Capital social", AP]], { colValor: 150 });
+  }
+  {
+    const s = slide("III.2 · Perfil dos sócios", AP, FONTE_AP);
+    [1, 2, 3].forEach((n, i) => cartao(s, GRADE.col3.x[i], GRADE.topo, GRADE.col3.w, 250, { titulo: `Sócio ${n}: ${AP}`, corpo: `Histórico, outras empresas e presença pública: ${AP}` }));
+  }
+  {
+    const s = slide("III.3 · Ecossistema do grupo", AP, FONTE_AP);
+    faixa(s, GRADE.topo, `${base.entidade} · entidade central do perímetro analisado`, { h: 50 });
+    ["Empresa relacionada", "Empresa relacionada", "Contraparte relacionada"].forEach((t, i) =>
+      cartao(s, GRADE.col3.x[i], 185, GRADE.col3.w, 150, { numeral: i + 1, titulo: t, corpo: `Nome, CNPJ, vínculo e situação: ${AP}` }));
+  }
+  {
+    const s = slide("III.4 · Avaliação de stakeholders", AP, FONTE_AP);
+    ["Concentração de controle", "Força das garantias pessoais", "Alertas e pontos de atenção"].forEach((t, i) =>
+      cartao(s, GRADE.col3.x[i], GRADE.topo, GRADE.col3.w, 250, { numeral: i + 1, titulo: t, corpo: AP }));
+  }
+
+  // ======================================================== IV — a empresa
+  div(4, CAPITULOS[3][0], CAPITULOS[3][1]);
+  {
+    const s = slide("IV.1 · Ficha institucional", AP, FONTE_AP);
+    campoValor(s, GRADE.x, GRADE.topo, GRADE.w, [["Atividade", AP], ["CNAE principal", AP], ["Fundação", AP], ["Sede e filiais", AP],
+      ["Unidades", AP], ["Colaboradores", AP], ["Receita líquida", `${vmi(I.receita)} em ${ultimo}`], ["Marcas", AP], ["Site", AP]], { colValor: 160 });
+  }
+  {
+    const s = slide("IV.2 · Portfólio por linha", AP, `${fontes}`);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Linha (R$ mi)", w: 337 }, ...colsAnos(500 / periodos.length)],
+      [{ celulas: [`Linha 1: ${AP}`, ...periodos.map(() => AP)] }, { celulas: [`Linha 2: ${AP}`, ...periodos.map(() => AP)] },
+        { celulas: [`Linha 3: ${AP}`, ...periodos.map(() => AP)] }, L("Receita líquida total", (x) => mm(x.receita), true)]);
+  }
+  {
+    const s = slide("IV.3 · Fornecedores e exposição cambial", AP, FONTE_AP);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Fornecedor", w: 230 }, { titulo: "Produtos", w: 250, algn: "l" },
+      { titulo: "Peso", w: 110 }, { titulo: "Exposição cambial", w: 247, algn: "l" }], [1, 2, 3].map(() => ({ celulas: [AP, AP, AP, AP] })));
+    cartao(s, GRADE.x, 260, GRADE.w, 110, { titulo: "Fornecedores no balanço",
+      corpo: `Saldo de fornecedores em ${ultimo}: ${vmi(I.fornecedores)}; prazo médio de pagamento de ${fmtDias(I.pmp).t} dias (sistema).` });
+  }
+  {
+    const s = slide("IV.4 · Localização", AP, FONTE_AP);
+    cartao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, 250, { titulo: "Vantagens", corpo: AP });
+    cartao(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, 250, { titulo: "Desvantagens", corpo: AP });
+  }
+
+  // ======================================================== V — cadeia de valor
+  div(5, CAPITULOS[4][0], CAPITULOS[4][1]);
+  {
+    const s = slide("V.1 · Cadeia de valor", AP, FONTE_AP);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Elo", w: 200 }, { titulo: "Quem", w: 320, algn: "l" }, { titulo: "Onde a margem fica", w: 317, algn: "l" }],
+      ["Fornecedores", "Companhia", "Canais", "Cliente final"].map((e) => ({ celulas: [e, AP, AP] })));
+  }
+  {
+    const s = slide("V.2 · Onde a companhia captura margem", mancheteMargem(ind, anos), fontes);
+    tituloSecao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, "Lucro bruto e EBITDA (R$ mi)");
+    s.grafico(GRADE.col2.x[0], GRADE.topo + 22, GRADE.col2.w, 250, { tipo: "colunas", categorias: anos.map(String), series: [
+      { nome: "Lucro bruto", valores: serie((x) => x.lucroBruto), cor: COR.verde },
+      { nome: "EBITDA", valores: serie((x) => x.ebitda), cor: COR.laranja }] });
+    cartao(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, 140, { titulo: "Margem bruta total",
+      corpo: anos.map((a) => `${a}: ${fmtPct(margemBruta(ind.get(a)!)).t}`).join(" · ") });
+    cartao(s, GRADE.col2.x[1], GRADE.topo + 160, GRADE.col2.w, 120, { titulo: "Margem por linha de negócio", corpo: AP });
+  }
+  {
+    const s = slide("V.3 · Comparativo com benchmarks públicos", AP, fontes);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Indicador", w: 237 }, { titulo: "Benchmark 1", w: 200 }, { titulo: "Benchmark 2", w: 200 },
+      { titulo: `Companhia ${ultimo}`, w: 200 }], [
+      { celulas: ["Receita líquida", AP, AP, vmi(I.receita)] },
+      { celulas: ["Margem bruta", AP, AP, fmtPct(margemBruta(I)).t] },
+      { celulas: ["Margem EBITDA", AP, AP, fmtPct(I.margemEbitda).t] },
+      { celulas: ["Prazo de estoque", AP, AP, `${fmtDias(I.pme).t} dias`] },
+      { celulas: ["DFL / EBITDA", AP, AP, fmtX(I.dflEbitda).t] },
+    ]);
+  }
+  {
+    const s = slide("V.4 · Diagnóstico integrado", AP, FONTE_AP);
+    cartao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, 260, { titulo: "O que funciona", corpo: AP });
+    cartao(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, 260, { titulo: "O que não funciona", corpo: AP });
+  }
+
+  // ======================================================== VI — competitivo
+  div(6, CAPITULOS[5][0], CAPITULOS[5][1]);
+  {
+    const s = slide("VI.1 · Concorrentes", AP, FONTE_AP);
+    [0, 1, 2, 3].forEach((i) => cartao(s, GRADE.col2.x[i % 2], GRADE.topo + Math.floor(i / 2) * 180, GRADE.col2.w, 160,
+      { numeral: i + 1, titulo: `Concorrente: ${AP}`, corpo: `Localização e alcance, ponto forte e ponto fraco: ${AP}` }));
+  }
+  {
+    const s = slide("VI.2 · Posicionamento competitivo", AP, FONTE_AP);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Dimensão", w: 237 }, { titulo: "Companhia", w: 150, algn: "l" },
+      { titulo: "Concorrente 1", w: 150, algn: "l" }, { titulo: "Concorrente 2", w: 150, algn: "l" }, { titulo: "Concorrente 3", w: 150, algn: "l" }],
+    ["Marca", "Lojas na região", "Alcance geográfico", "Escala", "Ponto forte"].map((d) => ({ celulas: [d, AP, AP, AP, AP] })));
+  }
+
+  // ======================================== VII (cap. 07) — base de informação e evolução
+  div(7, CAPITULOS[6][0], CAPITULOS[6][1]);
+  {
     const temAuditada = periodos.some((x) => x.natureza === "A");
-    chrome(s, { kickerEsq: "IX · Base de informação", kickerDir: kDir,
-      manchete: temAuditada ? "Há demonstração auditada na base; ela calibra as conclusões"
-        : "Nenhuma demonstração auditada: as conclusões indicam direção",
-      fontes: `Fontes: documentos recebidos da companhia, extraídos no portal Oria. ${LEGENDA_NATUREZA}.` });
-    const docs = base.documentos.slice(0, 7);
-    const linhas: LinhaTabela[] = docs.map((d) => ({ celulas: [
-      d.periodo, d.tipo ? rotuloTipo(d.tipo) : "não classificado",
-      d.tipo === "DF_AUDITADA" ? "(A) auditada" : d.tipo === "BALANCETE" ? "(B) balancete" : "(B) sem parecer",
-      encurtar(d.arquivo ?? "—", 46),
-    ] }));
-    if (base.documentos.length > docs.length) {
-      linhas.push({ celulas: [`+ ${base.documentos.length - docs.length} documento(s)`, "ver aba Documentos do export", "", ""] });
-    }
-    const yFim = tabela(s, GRADE.margem, GRADE.conteudoTopo, [
-      { titulo: "Data-base", w: 2.0 }, { titulo: "Documento", w: 3.0, algn: "l" },
-      { titulo: "Natureza", w: 2.0, algn: "l" }, { titulo: "Arquivo", w: 4.63, algn: "l" },
-    ], linhas);
-    const yC = Math.min(yFim + 0.25, 4.3);
-    const wC = (GRADE.util - GRADE.gapPainel) / 2;
-    card(s, GRADE.margem, yC, wC, GRADE.conteudoBase - yC, { rotulo: "Limitações da análise", destaque: true, corpo: [
-      p("O parecer do auditor não é lido pelo sistema: opinião, ressalvas e ênfases precisam ser conferidas no documento.", { bullet: true }),
-      p(`Só exercícios fechados entram (${anos.join(", ")}); balancete do ano corrente fica fora desta versão.`, { bullet: true }),
-      p(contarND(ind) === 0 ? "Nenhum indicador saiu n/d nos exercícios apresentados."
-        : `${contarND(ind)} indicador(es) saíram n/d por falta de linha no documento; o motivo está nas notas.`, { bullet: true }),
-    ] });
-    card(s, GRADE.margem + wC + GRADE.gapPainel, yC, wC, GRADE.conteudoBase - yC, { rotulo: "Pontos de atenção contábil",
-      corpo: pontosDeAtencao(base, ind, am).map((t) => p(t, { bullet: true })) });
+    const s = slide("IX · Base de informação", temAuditada ? "Há demonstração auditada na base; ela calibra as conclusões"
+      : "Nenhuma demonstração auditada: as conclusões indicam direção", `Fonte: documentos recebidos da companhia. ${LEGENDA_NATUREZA}.`);
+    const docs = base.documentos.slice(0, 6);
+    const linhas = docs.map((d): [string, string] => [d.periodo,
+      `${d.tipo ? rotuloTipo(d.tipo) : "não classificado"} · ${d.tipo === "DF_AUDITADA" ? "(A) auditada" : d.tipo === "BALANCETE" ? "(B) balancete" : "(B) sem parecer"} · ${encurtar(d.arquivo ?? "sem arquivo", 34)}`]);
+    if (base.documentos.length > docs.length) linhas.push([`+ ${base.documentos.length - docs.length}`, "documento(s) na aba Documentos do export"]);
+    tituloSecao(s, GRADE.col2.x[0], GRADE.topo, 520, "Documentos financeiros recebidos");
+    campoValor(s, GRADE.col2.x[0], GRADE.topo + 22, 520, linhas.length ? linhas : [["n/d", "nenhum documento financeiro da entidade"]], { colValor: 110 });
+    const xL = 605;
+    cartao(s, xL, GRADE.topo, GRADE.fim - xL, 180, { titulo: "Limitações da análise",
+      corpo: `O parecer do auditor não é lido pelo sistema. Só exercícios fechados entram (${anos.join(", ")}). `
+        + (contarND(ind) === 0 ? "Nenhum indicador saiu n/d." : `${contarND(ind)} indicador(es) saíram n/d, com o motivo nas notas.`) });
+    cartao(s, xL, GRADE.topo + 195, GRADE.fim - xL, 180, { titulo: "Pontos de atenção contábil", corpo: pontosDeAtencao(base, ind, am).join(" ") });
   }
-
-  // ---- 6. X.1 — Resultado (Layout I) -----------------------------------------
-  // Layout I: a tabela ocupa ≈7,9 in; com poucos períodos a coluna alarga até 1,6 in, não mais.
-  const wPer = Math.min(1.6, 4.8 / periodos.length);
-  const xLat = GRADE.margem + 7.9 + 0.23;
-  const wLat = GRADE.margem + GRADE.util - xLat;
   {
-    const s = deck.novo();
-    chrome(s, { kickerEsq: "X.1 · Resultado", kickerDir: kDir, manchete: mancheteResultado(I, Iant, ultimo, anterior), fontes });
-    const L = (rot: string, f: (x: Indicadores) => Numero, extra: Partial<Celula> = {}, tipo?: LinhaTabela["tipo"]): LinhaTabela =>
-      ({ celulas: [{ t: rot, ...extra }, ...anos.map((a) => cel(f(ind.get(a)!), extra))], tipo });
-    tabela(s, GRADE.margem, GRADE.conteudoTopo, [{ titulo: unidadeCab, w: 3.1 }, ...colsPeriodo(wPer)], [
-      L("Receita líquida", (x) => mm(x.receita)),
+    const s = slide("X.1 · Resultado", mancheteResultado(I, Iant, ultimo, anterior), fontes);
+    tituloSecao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, "Receita líquida e EBITDA (R$ mi)");
+    s.grafico(GRADE.col2.x[0], GRADE.topo + 22, GRADE.col2.w, 270, { tipo: "colunas", categorias: anos.map(String), series: [
+      { nome: "Receita líquida", valores: serie((x) => x.receita), cor: COR.verde },
+      { nome: "EBITDA", valores: serie((x) => x.ebitda), cor: COR.laranja }] });
+    const wc = GRADE.col2.w;
+    const wa = Math.min(90, (wc - 150) / periodos.length);
+    tabela(s, GRADE.col2.x[1], GRADE.topo, [{ titulo: "R$ mi", w: wc - wa * periodos.length }, ...colsAnos(wa)], [
       L("Lucro bruto", (x) => mm(x.lucroBruto)),
-      L("EBITDA", (x) => mm(x.ebitda), { b: true }),
-      L("Margem EBITDA", (x) => fmtPct(x.margemEbitda), { i: true }),
+      L("EBITDA", (x) => mm(x.ebitda)),
+      L("Margem EBITDA", (x) => fmtPct(x.margemEbitda)),
       L("EBIT", (x) => mm(x.ebit)),
-      L("Margem EBIT", (x) => fmtPct(x.margemEbit), { i: true }),
-      L("Lucro líquido", (x) => mm(x.lucroLiquido), { b: true }, "total"),
-      L("Margem líquida", (x) => fmtPct(x.margemLiquida), { i: true }),
+      L("Margem EBIT", (x) => fmtPct(x.margemEbit)),
+      L("Lucro líquido", (x) => mm(x.lucroLiquido), true),
+      L("Margem líquida", (x) => fmtPct(x.margemLiquida)),
     ]);
-    card(s, xLat, GRADE.conteudoTopo, wLat, GRADE.conteudoBase - GRADE.conteudoTopo, { rotulo: "Leitura", destaque: true,
-      corpo: leituraResultado(ind, anos, base.historico.escala).map((t) => p(t, { bullet: true })) });
+    faixa(s, 410, leituraResultado(ind, anos, esc), { x: GRADE.col2.x[1], w: GRADE.col2.w, h: 70 });
   }
-
-  // ---- 7. X.2 — Estrutura de capital e prazos (Layout I) ---------------------
   {
-    const s = deck.novo();
-    chrome(s, { kickerEsq: "X.2 · Estrutura de capital e prazos", kickerDir: kDir, manchete: mancheteAlavancagem(I, ultimo),
-      fontes });
-    const L = (rot: string, f: (x: Indicadores) => Numero, extra: Partial<Celula> = {}, tipo?: LinhaTabela["tipo"]): LinhaTabela =>
-      ({ celulas: [{ t: rot, ...extra }, ...anos.map((a) => cel(f(ind.get(a)!), extra))], tipo });
-    const y0 = GRADE.conteudoTopo;
-    tabela(s, GRADE.margem, y0, [{ titulo: unidadeCab, w: 3.1 }, ...colsPeriodo(wPer)], [
+    const s = slide("X.2 · Estrutura de capital", mancheteAlavancagem(I, ultimo), fontes);
+    const wa = Math.min(120, 437 / periodos.length);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "R$ mi", w: 520 - wa * periodos.length }, ...colsAnos(wa)], [
       L("Patrimônio líquido", (x) => mm(x.pl)),
-      L("Dívida financeira bruta", (x) => mm(x.dividaBruta), { b: true }),
-      L("— Bancos", (x) => mm(x.bancos)),
-      L("— Outras dívidas", (x) => mm(x.outras)),
+      L("Dívida financeira bruta", (x) => mm(x.dividaBruta)),
+      L("Bancos", (x) => mm(x.bancos)),
+      L("Outras dívidas (mútuos, partes relacionadas)", (x) => mm(x.outras)),
       L("Caixa e aplicações", (x) => mm(x.caixa)),
+      L("Dívida financeira líquida", (x) => mm(x.dfl), true),
+      L("DFL / EBITDA", (x) => fmtX(x.dflEbitda)),
       L("Ativo total", (x) => mm(x.ativo)),
-      L("DFL/EBITDA", (x) => fmtX(x.dflEbitda), { b: true }),
-      L("DFL/EBITDA (ex-outras)", (x) => fmtX(x.dflEbitdaExOutras)),
-      L("Liquidez corrente", (x) => fmtX(x.liquidezCorrente)),
-      L("Alavancagem (ativo/PL)", (x) => fmtX(x.alavancagem)),
-      L("PME (dias)", (x) => fmtDias(x.pme)),
-      L("PMR (dias)", (x) => fmtDias(x.pmr)),
-      L("PMP (dias)", (x) => fmtDias(x.pmp)),
-      L("Ciclo financeiro (dias)", (x) => fmtDias(x.ciclo), { b: true }),
     ]);
-    // O contorno laranja de 1,25 pt agrupando DFL/EBITDA–Alavancagem (linhas 7 a 10).
-    s.forma(GRADE.margem, y0 + 0.5 + 6 * 0.3, 3.1 + periodos.length * wPer, 4 * 0.3, undefined,
-      { contorno: { cor: COR.laranja, pt: 1.25 } });
-    card(s, xLat, GRADE.conteudoTopo, wLat, GRADE.conteudoBase - GRADE.conteudoTopo, { rotulo: "Leitura", destaque: true,
-      corpo: leituraEstrutura(I, ultimo, base.historico.escala).map((t) => p(t, { bullet: true })) });
+    const xL = 605;
+    cartao(s, xL, GRADE.topo, GRADE.fim - xL, 190, { titulo: "Leitura", corpo: leituraEstrutura(I, ultimo, esc).join(" ") });
+    kpi(s, xL, GRADE.topo + 215, GRADE.fim - xL, { valor: fmtX(I.alavancagem).t, rotulo: "Ativo / PL", explicacao: `alavancagem patrimonial em ${ultimo}` });
   }
-
-  // ---- 8. Divisória 02 -------------------------------------------------------
-  divisoria(deck.novo(COR.sage), { numero: 2, titulo: capitulos[1][0], subtitulo: capitulos[1][1] });
-
-  // ---- 9. XI.2 — NCG e prazos (Layout J) -------------------------------------
   {
-    const s = deck.novo();
-    const fin = I.ncgFinanciadaCP;
-    chrome(s, { kickerEsq: "XI.2 · NCG e prazos", kickerDir: kDir,
-      manchete: I.ncg.v !== null && I.ncg.v <= 0 ? `NCG de ${ultimo} não positiva: o giro se financia com fornecedores`
-        : fin.v === null ? `NCG de ${ultimo}: o financiamento por dívida de CP não pôde ser medido`
-        : fin.v > 100 ? `Dívida bancária de CP equivale a ${fmtPct({ v: fin.v }, 0).t} da NCG de ${ultimo}`
-        : `${fmtPct({ v: fin.v }, 0).t} da NCG de ${ultimo} está financiada por dívida bancária de CP`,
-      fontes });
-    const L = (rot: string, f: (x: Indicadores) => Numero, extra: Partial<Celula> = {}, tipo?: LinhaTabela["tipo"]): LinhaTabela =>
-      ({ celulas: [{ t: rot, ...extra }, ...anos.map((a) => cel(f(ind.get(a)!), extra))], tipo });
-    const anos3 = periodos.slice(-3);
-    const colunas: ColunaTabela[] = [{ titulo: unidadeCab, w: 3.2 }, ...anos3.map((x) => ({ titulo: String(x.ano), tag: TAG_NATUREZA[x.natureza], w: 1.2 }))];
-    const L3 = (l: LinhaTabela): LinhaTabela => ({ ...l, celulas: [l.celulas[0], ...l.celulas.slice(1).slice(-anos3.length)] });
-    tabela(s, GRADE.margem, GRADE.conteudoTopo, colunas, [
-      L("CCL", (x) => mm(x.ccl)),
-      L("Clientes", (x) => mm(x.clientes)),
-      L("Estoques", (x) => mm(x.estoques)),
-      L("(−) Fornecedores", (x) => mm(x.fornecedores)),
-      L("NCG", (x) => mm(x.ncg), { b: true }, "total"),
-      L("Dívida bancária CP", (x) => mm(x.bancosCP)),
-      L("Dívida bancária CP / NCG", (x) => fmtPct(x.ncgFinanciadaCP, 0)),
-      L("PMR (dias)", (x) => fmtDias(x.pmr)),
-      L("PME (dias)", (x) => fmtDias(x.pme)),
-      L("PMP (dias)", (x) => fmtDias(x.pmp)),
-      L("Ciclo financeiro (dias)", (x) => fmtDias(x.ciclo), { b: true }),
-      L("Receita líquida", (x) => mm(x.receita)),
-    ].map(L3));
-    const xJ = GRADE.margem + 3.2 + anos3.length * 1.2 + 0.3;
-    card(s, xJ, GRADE.conteudoTopo, GRADE.margem + GRADE.util - xJ, GRADE.conteudoBase - GRADE.conteudoTopo, {
-      rotulo: "A conta central da reestruturação", destaque: true, corpo: leituraNcg(I, ultimo, base.historico.escala).map((t) => p(t, { bullet: true })) });
+    const s = slide("X.3 · Prazos e ciclo financeiro", mancheteCiclo(I, ultimo), `${fontes.replace(/\.$/, "")} · base de 360 dias.`);
+    tituloSecao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, "Prazos médios (dias)");
+    s.grafico(GRADE.col2.x[0], GRADE.topo + 22, GRADE.col2.w, 270, { tipo: "colunas", formato: "0", categorias: ["PMR", "PME", "PMP"],
+      series: [anterior, ultimo].filter((a): a is number => a !== null).map((a, k) => ({
+        nome: String(a), cor: k === 0 && anterior !== null ? COR.verde : COR.laranja,
+        valores: [ind.get(a)!.pmr, ind.get(a)!.pme, ind.get(a)!.pmp].map((v) => (v.v === null ? null : Math.round(v.v))) })) });
+    const wa = Math.min(90, (GRADE.col2.w - 150) / periodos.length);
+    tabela(s, GRADE.col2.x[1], GRADE.topo, [{ titulo: "Dias", w: GRADE.col2.w - wa * periodos.length }, ...colsAnos(wa)], [
+      L("Prazo de recebimento (PMR)", (x) => fmtDias(x.pmr)),
+      L("Prazo de estoque (PME)", (x) => fmtDias(x.pme)),
+      L("Prazo de pagamento (PMP)", (x) => fmtDias(x.pmp)),
+      L("Ciclo financeiro", (x) => fmtDias(x.ciclo), true),
+    ]);
   }
 
-  // ---- 10. XII — Comparativo entre exercícios (Layout H) ---------------------
+  // ======================================== cap. 08 — giro e endividamento
+  div(8, CAPITULOS[7][0], CAPITULOS[7][1]);
+  {
+    const fin = I.ncgFinanciadaCP;
+    const s = slide("XI · Capital de giro", I.ncg.v !== null && I.ncg.v <= 0 ? `NCG de ${ultimo} não positiva: o giro se financia com fornecedores`
+      : fin.v === null ? `NCG de ${ultimo}: o financiamento por dívida de CP não pôde ser medido`
+      : fin.v > 100 ? `Dívida bancária de CP equivale a ${fmtPct({ v: fin.v }, 0).t} da NCG de ${ultimo}`
+      : `${fmtPct({ v: fin.v }, 0).t} da NCG de ${ultimo} está financiada por dívida bancária de CP`,
+    `${fontes.replace(/\.$/, "")} · NCG = clientes + estoques − fornecedores.`);
+    const ps3 = periodos.slice(-3);
+    const wa = Math.min(110, 380 / ps3.length);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "R$ mi", w: 560 - wa * ps3.length }, ...colsAnos(wa, ps3)], [
+      L("Clientes", (x) => mm(x.clientes), false, ps3),
+      L("Estoques", (x) => mm(x.estoques), false, ps3),
+      L("(−) Fornecedores", (x) => mm(x.fornecedores), false, ps3),
+      L("Necessidade de capital de giro", (x) => mm(x.ncg), true, ps3),
+      L("Dívida bancária de curto prazo", (x) => mm(x.bancosCP), false, ps3),
+      L("Dívida bancária CP / NCG", (x) => fmtPct(x.ncgFinanciadaCP, 0), false, ps3),
+      L("Capital circulante líquido", (x) => mm(x.ccl), false, ps3),
+    ]);
+    const xK = 650;
+    kpi(s, xK, GRADE.topo, GRADE.fim - xK, { valor: vmi(I.ncg), rotulo: `NCG ${ultimo}`, explicacao: "clientes + estoques − fornecedores" });
+    kpi(s, xK, GRADE.topo + 115, GRADE.fim - xK, { valor: vmi(I.bancosCP), rotulo: "Dívida bancária CP", explicacao: `balanço de ${ultimo}` });
+    faixa(s, 400, leituraNcg(I, ultimo, esc));
+  }
   if (anterior !== null && Iant) {
-    const s = deck.novo();
-    chrome(s, { kickerEsq: "XII · Comparativo entre exercícios", kickerDir: kDir,
-      manchete: mancheteComparativo(I, Iant, ultimo, anterior),
-      fontes });
     const pa = periodos[periodos.length - 2];
     const pu = periodos[periodos.length - 1];
-    const V = (rot: string, f: (x: Indicadores) => Valor, fmtv: (x: Valor) => Numero, extra: Partial<Celula> = {}): LinhaTabela => {
+    const s = slide("XII · Comparativo entre exercícios", mancheteComparativo(I, Iant, ultimo, anterior),
+      `${fontes.replace(/\.$/, "")} · 12M × 12M; base negativa ou sinal trocado = n.s.`);
+    const V = (rot: string, f: (x: Indicadores) => Valor, fmtv: (x: Valor) => Numero, destaque = false): LinhaTabela => {
       const a = f(Iant); const u = f(I);
-      // Prazo compara em DIAS, não em %: "PMR +2,0%" esconde que são 2 dias de giro.
       if (fmtv === fmtDias) {
         const d = a.v === null || u.v === null ? null : Math.round(u.v) - Math.round(a.v);
-        return { celulas: [{ t: rot, ...extra }, cel(fmtv(a), extra), cel(fmtv(u), extra),
-          d === null ? "n/d" : { t: d < 0 ? `(${Math.abs(Math.round(d))} d)` : `+${Math.round(d)} d`, negativo: d < 0 }] };
+        return { celulas: [rot, fmtv(a).t, fmtv(u).t, d === null ? "n/d" : d < 0 ? `(${Math.abs(d)} d)` : `+${d} d`], destaque };
       }
       const vr = variacao(a.v, u.v);
-      return { celulas: [{ t: rot, ...extra }, cel(fmtv(a), extra), cel(fmtv(u), extra),
-        vr.ns ? "n.s." : vr.v === null ? "n/d" : cel(fmtPct({ v: vr.v }))] };
+      return { celulas: [rot, fmtv(a).t, fmtv(u).t, vr.ns ? "n.s." : vr.v === null ? "n/d" : fmtPct({ v: vr.v }).t], destaque };
     };
-    tabela(s, GRADE.margem, GRADE.conteudoTopo, [
-      { titulo: unidadeCab, w: 3.2 }, { titulo: String(pa.ano), tag: TAG_NATUREZA[pa.natureza], w: 1.3 },
-      { titulo: String(pu.ano), tag: TAG_NATUREZA[pu.natureza], w: 1.3 }, { titulo: "Var.", w: 1.2 },
-    ], [
-      V("Receita líquida", (x) => x.receita, mm),
-      V("Lucro bruto", (x) => x.lucroBruto, mm),
-      V("EBITDA", (x) => x.ebitda, mm, { b: true }),
-      V("EBIT", (x) => x.ebit, mm),
-      V("Lucro líquido", (x) => x.lucroLiquido, mm, { b: true }),
-      V("Dívida financeira bruta", (x) => x.dividaBruta, mm),
-      V("Caixa e aplicações", (x) => x.caixa, mm),
-      V("DFL", (x) => x.dfl, mm, { b: true }),
-      V("Patrimônio líquido", (x) => x.pl, mm),
-      V("PMR (dias)", (x) => x.pmr, fmtDias),
-      V("PME (dias)", (x) => x.pme, fmtDias),
-      V("PMP (dias)", (x) => x.pmp, fmtDias),
+    const cols: ColunaTabela[] = [{ titulo: "R$ mi", w: 230 }, { titulo: `${pa.ano} ${TAG_NATUREZA[pa.natureza]}`, w: 100 },
+      { titulo: `${pu.ano} ${TAG_NATUREZA[pu.natureza]}`, w: 100 }, { titulo: "Var.", w: 90 }];
+    tabela(s, GRADE.x, GRADE.topo, cols, [
+      V("Receita líquida", (x) => x.receita, mm), V("Lucro bruto", (x) => x.lucroBruto, mm),
+      V("EBITDA", (x) => x.ebitda, mm, true), V("EBIT", (x) => x.ebit, mm), V("Lucro líquido", (x) => x.lucroLiquido, mm),
+      V("Dívida financeira líquida", (x) => x.dfl, mm), V("Patrimônio líquido", (x) => x.pl, mm), V("Ciclo financeiro (dias)", (x) => x.ciclo, fmtDias),
     ]);
-    const xC = GRADE.margem + 7.0 + 0.3;
-    card(s, xC, GRADE.conteudoTopo, GRADE.margem + GRADE.util - xC, GRADE.conteudoBase - GRADE.conteudoTopo, {
-      rotulo: "Implicação", destaque: true, corpo: leituraComparativo(I, Iant, ultimo, anterior).map((t) => p(t, { bullet: true })) });
-  } else {
-    naoGerado.push("XII Comparativo entre exercícios: só há um exercício fechado no histórico");
+    const xL = 605;
+    cartao(s, xL, GRADE.topo, GRADE.fim - xL, 260, { titulo: "Leitura", corpo: leituraComparativo(I, Iant, ultimo, anterior).join(" ") });
+  }
+  {
+    // XIII.1 — o que o balanço já diz da dívida (prazo e natureza); por credor é do mapa da dívida.
+    const temDivida = I.dividaBruta.v !== null && I.dividaBruta.v > 0;
+    const s = slide("XIII.1 · Endividamento", temDivida ? `Dívida bruta de ${vmi(I.dividaBruta)} em ${ultimo}, ${pctCP(I)}`
+      : `Nenhuma dívida financeira classificada no balanço de ${ultimo}`, fontes);
+    if (temDivida) {
+      const cp = (I.bancosCP.v ?? 0) + (outrasCP(base, ultimo) ?? 0);
+      const lp = (I.dividaBruta.v ?? 0) - cp;
+      const w3 = GRADE.col3.w;
+      tituloSecao(s, GRADE.col3.x[0], GRADE.topo, w3, "Por prazo");
+      s.grafico(GRADE.col3.x[0], GRADE.topo + 22, w3, 230, { tipo: "rosca", categorias: ["Curto prazo", "Longo prazo"],
+        valores: [cp, lp].map((v) => Math.max(0, Math.round(v * fatorParaMM(esc) * 10) / 10)) });
+      tituloSecao(s, GRADE.col3.x[1], GRADE.topo, w3, "Por natureza");
+      s.grafico(GRADE.col3.x[1], GRADE.topo + 22, w3, 230, { tipo: "rosca", categorias: ["Bancos", "Outras dívidas"],
+        valores: [I.bancos.v ?? 0, I.outras.v ?? 0].map((v) => Math.max(0, Math.round(v * fatorParaMM(esc) * 10) / 10)) });
+      cartao(s, GRADE.col3.x[2], GRADE.topo, w3, 252, { titulo: "Saldo por credor",
+        corpo: `Barras por credor, do maior ao menor, e a estratégia de captação, hedge e limites: ${AP} (mapa da dívida por operação).` });
+    } else {
+      cartao(s, GRADE.x, GRADE.topo, GRADE.w, 120, { titulo: "Sem dívida no balanço", corpo: "O balanço não traz conta de empréstimo, financiamento ou mútuo classificada como dívida." });
+    }
+  }
+  {
+    const s = slide("XIII.2 · Posição operação a operação", AP, FONTE_AP);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Credor", w: 130 }, { titulo: "Modalidade", w: 100, algn: "l" }, { titulo: "Operação", w: 100, algn: "l" },
+      { titulo: "Saldo", w: 90 }, { titulo: "Vencimento", w: 100, algn: "l" }, { titulo: "Indexador", w: 107, algn: "l" },
+      { titulo: "Garantia", w: 110, algn: "l" }, { titulo: "Status", w: 100, algn: "l" }],
+    [1, 2, 3, 4].map(() => ({ celulas: [AP, AP, AP, AP, AP, AP, AP, AP] })));
+    tabela(s, GRADE.x, 290, [{ titulo: "Classe de credor", w: 437 }, { titulo: "Saldo (R$ mi)", w: 200 }, { titulo: "% do total", w: 200 }],
+      ["Garantia real", "Quirografário", "Partes relacionadas"].map((c): LinhaTabela => ({ celulas: [c, AP, AP] })).concat(
+        [{ celulas: ["Total (balanço)", vmi(I.dividaBruta), "100%"], destaque: true } as LinhaTabela]));
+  }
+  {
+    const s = slide("XIII.3 · Muro de vencimentos", AP, fontes);
+    kpi(s, GRADE.col4.x[0], GRADE.topo, GRADE.col4.w, { valor: vmi({ v: (I.bancosCP.v ?? null) === null ? null : (I.bancosCP.v ?? 0) + (outrasCP(base, ultimo) ?? 0), nota: "" }),
+      rotulo: "Vence em 12 meses", explicacao: `dívida de curto prazo no balanço de ${ultimo}` });
+    kpi(s, GRADE.col4.x[1], GRADE.topo, GRADE.col4.w, { valor: vmi(I.caixa), rotulo: "Caixa disponível", explicacao: `balanço de ${ultimo}` });
+    kpi(s, GRADE.col4.x[2], GRADE.topo, GRADE.col4.w, { valor: AP, rotulo: "Primeira ruptura", explicacao: "data do primeiro ponto de ruptura de caixa" });
+    cartao(s, GRADE.x, 228, GRADE.w, 150, { titulo: "Principal por trimestre, próximos 24 meses",
+      corpo: `Gráfico de colunas de amortização contratada e parcelas bullet: ${AP} (cronograma por operação).` });
   }
 
-  // ---- 11. Notas e fontes (Layout H) — amarrações e o que não foi gerado -----
-  notasEFontes(deck, base, am, naoGerado, ind, anos, kDir);
+  // ======================================== cap. 09 — EBITDA normalizado e dívida sustentável
+  div(9, CAPITULOS[8][0], CAPITULOS[8][1]);
+  {
+    const s = slide("XIV · Normalização do EBITDA", `EBITDA reportado de ${vmi(I.ebitda)} em ${ultimo}; normalização ${AP}`, fontes);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Ajuste", w: 300 }, { titulo: "R$ mi", w: 100 }, { titulo: "Confiança", w: 180, algn: "l" }], [
+      { celulas: ["EBITDA reportado", mm(I.ebitda).t, "verificado (sistema)"] },
+      { celulas: ["Eventos não recorrentes", AP, AP] },
+      { celulas: ["PDD e provisões atípicas", AP, AP] },
+      { celulas: ["Partes relacionadas fora de mercado", AP, AP] },
+      { celulas: ["Despesas capitalizadas e estoque obsoleto", AP, AP] },
+      { celulas: ["EBITDA normalizado", "n/d", AP], destaque: true },
+    ]);
+    cartao(s, 680, GRADE.topo, GRADE.fim - 680, 200, { titulo: "Regra", corpo: "Cada ajuste leva confiança: verificado, informado ou estimado pela Oria. O EBITDA normalizado é a única base dos capítulos de dívida sustentável e garantias." });
+  }
+  {
+    const s = slide("XV · Capacidade de pagamento", mancheteSustentavel(I, esc), `${fontes.replace(/\.$/, "")} · dívida suportada ilustrativa, sobre EBITDA reportado.`);
+    const suport = (m: number) => (I.ebitda.v === null || I.ebitda.v <= 0 ? "n/d" : valorMi({ v: I.ebitda.v * m, nota: "" }, esc));
+    tabela(s, GRADE.col2.x[0], GRADE.topo, [{ titulo: "Geração de caixa (R$ mi)", w: 194 }, { titulo: "Base", w: 105 }, { titulo: "Estresse", w: 105 }], [
+      { celulas: ["EBITDA (reportado)", mm(I.ebitda).t, AP] },
+      { celulas: ["(−) Capex de manutenção", AP, AP] },
+      { celulas: ["(−) IR caixa", AP, AP] },
+      { celulas: ["(−) Variação da NCG", deltaNcg(ind, anos, esc), AP] },
+      { celulas: ["Caixa livre", "n/d", "n/d"], destaque: true },
+    ]);
+    tabela(s, GRADE.col2.x[1], GRADE.topo, [{ titulo: "Dimensionamento (R$ mi)", w: 254 }, { titulo: "Valor", w: 150 }], [
+      { celulas: ["Dívida financeira líquida", mm(I.dfl).t] },
+      { celulas: ["Múltiplo-alvo", `${mm1(MULTIPLO_ALVO.min)}x a ${mm1(MULTIPLO_ALVO.max)}x`] },
+      { celulas: [`Dívida suportada a ${mm1(MULTIPLO_ALVO.min)}x`, suport(MULTIPLO_ALVO.min)] },
+      { celulas: [`Dívida suportada a ${mm1(MULTIPLO_ALVO.max)}x`, suport(MULTIPLO_ALVO.max)] },
+      { celulas: ["Gap de sustentabilidade", gap(I, esc)], destaque: true },
+    ]);
+    faixa(s, 400, "Ilustrativo: calculado pela Oria sobre o EBITDA reportado. O dimensionamento final usa o EBITDA normalizado do capítulo XIV.");
+  }
+  {
+    const s = slide("XV.2 · Alavancas e ruptura", AP, FONTE_AP);
+    ["Alongamento", "Redução de custo", "Conversão ou capitalização", "Desinvestimentos", "Giro de capital", "Deságio"].forEach((t, i) =>
+      cartao(s, GRADE.col3.x[i % 3], GRADE.topo + Math.floor(i / 3) * 175, GRADE.col3.w, 150,
+        { numeral: i + 1, titulo: t, corpo: `Magnitude indicativa: ${AP}${t === "Deságio" ? " (só se o resto não fechar)" : ""}` }));
+  }
 
-  // ---- 12. Contracapa --------------------------------------------------------
-  contracapa(deck.novo(COR.sage));
+  // ======================================== cap. 10 — garantias, scorecard, síntese
+  div(10, CAPITULOS[9][0], CAPITULOS[9][1]);
+  {
+    const s = slide("XVI · Garantias e recuperação esperada", AP, `${fontes.replace(/\.$/, "")} · realização a preencher (sem laudo).`);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: `Ativo (R$ mi, ${ultimo})`, w: 337 }, { titulo: "Contábil", w: 150 },
+      { titulo: "Realização (%)", w: 150 }, { titulo: "Valor estimado", w: 200 }], [
+      { celulas: ["Caixa e aplicações", mm(I.caixa).t, AP, AP] },
+      { celulas: ["Clientes", mm(I.clientes).t, AP, AP] },
+      { celulas: ["Estoques", mm(I.estoques).t, AP, AP] },
+      { celulas: ["Imobilizado e imóveis", AP, AP, AP] },
+      { celulas: ["Total", AP, AP, AP], destaque: true },
+    ]);
+    cartao(s, GRADE.x, 300, GRADE.w, 90, { titulo: "Recuperação por classe e aval dos sócios", corpo: `Continuidade e liquidação por classe de credor: ${AP}` });
+  }
+  {
+    const s = slide("XVII · Scorecard de risco Oria", AP, "Fonte: capítulos IX a XVI. Pesos do Prompt-Mestre Oria v3.");
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Eixo", w: 300 }, { titulo: "Peso", w: 80 }, { titulo: "Nota", w: 115 }, { titulo: "Justificativa", w: 342, algn: "l" }], [
+      ["Produto, demanda e mercado", "15%"], ["Acionistas e gestão", "20%"], ["Acesso a crédito e passivo", "15%"],
+      ["Rentabilidade", "15%"], ["Geração de caixa", "20%"], ["Solvência e estrutura de capital", "15%"],
+    ].map(([e, w]): LinhaTabela => ({ celulas: [e, w, AP, AP] })).concat([{ celulas: ["Nota final ponderada", "100%", "n/d", AP], destaque: true }]));
+    s.texto(GRADE.x, 352, GRADE.w, 40, [p("Faixas: 6,5 ou mais, preventivo · de 4,5 a 6,4, estresse · abaixo de 4,5, crítico.", { entrelinha: 14.8 })], "t");
+  }
+  {
+    const s = slide("XVIII · Síntese de crédito", mancheteExecutiva(I), fontes);
+    const d = diagnostico(I, Iant, anterior, esc).map(([t, c]) => `${t}: ${c}`).join(" ");
+    cartao(s, GRADE.col3.x[0], GRADE.topo, GRADE.col3.w, 280, { titulo: "Diagnóstico", corpo: d });
+    cartao(s, GRADE.col3.x[1], GRADE.topo, GRADE.col3.w, 280, { titulo: "Hipótese de solução", corpo: AP });
+    cartao(s, GRADE.col3.x[2], GRADE.topo, GRADE.col3.w, 280, { titulo: "Riscos e pontos de diligência", corpo: AP });
+  }
 
-  return { deck, naoGerado, amarracoes: am };
+  // ======================================== cap. 11 — SWOT
+  div(11, CAPITULOS[10][0], CAPITULOS[10][1]);
+  {
+    const s = slide("VII · Análise SWOT", AP, FONTE_AP);
+    ["Forças", "Fraquezas", "Oportunidades", "Ameaças"].forEach((t, i) =>
+      cartao(s, GRADE.col2.x[i % 2], GRADE.topo + Math.floor(i / 2) * 180, GRADE.col2.w, 160, { titulo: t, corpo: AP }));
+  }
+
+  // ======================================== cap. 12 — fatores críticos e próximos passos
+  div(12, CAPITULOS[11][0], CAPITULOS[11][1]);
+  {
+    const s = slide("VIII.1 · Fatores críticos de sucesso", AP, FONTE_AP);
+    [0, 1, 2, 3, 4].forEach((i) => cartao(s, GRADE.col3.x[i % 3], GRADE.topo + Math.floor(i / 3) * 175, GRADE.col3.w, 150,
+      { numeral: i + 1, titulo: AP, corpo: AP }));
+  }
+  {
+    const s = slide("VIII.2 · Próximos passos", AP, "Fonte: prazos a partir da assinatura do mandato (D+0); ilustrativo.");
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Marco", w: 120 }, { titulo: "Etapa", w: 260, algn: "l" }, { titulo: "Entregável", w: 457, algn: "l" }],
+      ["D+0", "D+15", "D+30", "D+45", "D+60", "D+120"].map((m) => ({ celulas: [m, AP, AP] })));
+  }
+
+  // ===================================================== notas e avisos
+  notasEAvisos(deck, slide, am, aPreencher, ind, anos);
+
+  // ===================================================== contracapa
+  const contato = { nome: AP, telefone: AP, email: AP };
+  contracapa(deck.novo(COR.fundoCapa), [
+    { ...contato, nome: "Enzo Pierobom", telefone: "11 99250-0682" },
+    { ...contato, nome: "Luis Felipe Farina", telefone: "11 96310-5011" },
+  ]);
+
+  return { deck, aPreencher, amarracoes: am };
 }
 
 // -----------------------------------------------------------------------------
-// Manchetes e leituras — regras explícitas sobre o número
+// Números e manchetes — regras explícitas sobre o número
 // -----------------------------------------------------------------------------
-const valorMM = (x: Valor, unidade: Escala) => {
-  const n = fmtMM(x, unidade);
-  return n.t === "n/d" || n.t === "n.s." ? n.t : `R$ ${n.t} MM`;
-};
+/** "R$ 15,0 mi" (Prompt Padrão, item 7). */
+export function valorMi(x: Valor, esc: Escala): string {
+  const n = fmtMM(x, esc);
+  return n.t === "n/d" || n.t === "n.s." ? n.t : `R$ ${n.t} mi`;
+}
+const margemBruta = (x: Indicadores): Valor => (x.lucroBruto.v === null || x.receita.v === null || x.receita.v <= 0
+  ? { v: null, nota: "margem bruta: n/d", ns: x.receita.v !== null && x.receita.v <= 0 }
+  : { v: (x.lucroBruto.v / x.receita.v) * 100, nota: "lucro bruto ÷ receita líquida" });
+const outrasCP = (base: BaseCredito, ano: number) => base.historico.grandezas.divida_outras_cp[ano]?.v ?? null;
+function pctCP(I: Indicadores): string {
+  if (I.dividaBruta.v === null || I.dividaBruta.v <= 0 || I.bancosCP.v === null) return "prazo n/d";
+  return `${fmtPct({ v: (I.bancosCP.v / I.dividaBruta.v) * 100 }, 0).t} bancária de curto prazo`;
+}
+function deltaNcg(ind: Map<number, Indicadores>, anos: number[], esc: Escala): string {
+  if (anos.length < 2) return "n/d";
+  const a = ind.get(anos[anos.length - 2])!.ncg.v;
+  const u = ind.get(anos[anos.length - 1])!.ncg.v;
+  return a === null || u === null ? "n/d" : fmtMM({ v: u - a, nota: "" }, esc).t;
+}
+function gap(I: Indicadores, esc: Escala): string {
+  if (I.dfl.v === null || I.ebitda.v === null || I.ebitda.v <= 0) return "n/d";
+  const g = I.dfl.v - I.ebitda.v * MULTIPLO_ALVO.max;
+  return g <= 0 ? "sem gap a 3,5x" : valorMi({ v: g, nota: "" }, esc);
+}
+function mancheteSustentavel(I: Indicadores, esc: Escala): string {
+  const g = gap(I, esc);
+  if (g === "n/d") return "Capacidade de pagamento não mensurável sem EBITDA positivo";
+  return g.startsWith("sem") ? `A dívida líquida cabe em ${mm1(MULTIPLO_ALVO.max)}x o EBITDA reportado`
+    : `Gap de ${g} acima de ${mm1(MULTIPLO_ALVO.max)}x o EBITDA reportado (ilustrativo)`;
+}
+
+function naturezaCurta(ps: PeriodoCredito[]): string {
+  const ns = new Set(ps.map((x) => x.natureza));
+  return ns.size === 1 && ns.has("A") ? "demonstrações auditadas" : ns.has("A") ? "auditadas e não auditadas" : "demonstrações não auditadas";
+}
 
 function mancheteExecutiva(I: Indicadores): string {
   const m = fmtX(I.dflEbitda).t;
@@ -324,46 +599,53 @@ function mancheteExecutiva(I: Indicadores): string {
     case "ebitda_nao_positivo": return "EBITDA não positivo: a dívida não tem geração que a sirva";
     case "nd": return "Alavancagem não mensurável com o que o documento informa";
     case "caixa_liquido": return "Caixa supera a dívida: o tema é liquidez e rentabilidade, não solvência";
-    case "abaixo": return `DFL/EBITDA de ${m}, abaixo da faixa de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x`;
-    case "faixa": return `DFL/EBITDA de ${m}, dentro da faixa de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x`;
+    case "abaixo": return `DFL/EBITDA de ${m}, abaixo da faixa de ${mm1(MULTIPLO_ALVO.min)}x a ${mm1(MULTIPLO_ALVO.max)}x`;
+    case "faixa": return `DFL/EBITDA de ${m}, dentro da faixa de ${mm1(MULTIPLO_ALVO.min)}x a ${mm1(MULTIPLO_ALVO.max)}x`;
     case "acima": return `DFL/EBITDA de ${m}, acima do teto de ${mm1(MULTIPLO_ALVO.max)}x sustentável`;
   }
 }
 
-function diagnostico(I: Indicadores, Iant: Indicadores | null, anterior: number | null, unidade: Escala): string[] {
-  const out: string[] = [];
-  if (Iant && anterior !== null) {
-    const v = variacao(Iant.receita.v, I.receita.v);
-    out.push(v.v === null ? `Receita líquida ${valorMM(I.receita, unidade)}; variação vs ${anterior} ${v.ns ? "n.s." : "n/d"}.`
-      : `Receita líquida de ${valorMM(I.receita, unidade)}, ${pctTexto(v.v)} vs ${anterior}.`);
-  } else out.push(`Receita líquida de ${valorMM(I.receita, unidade)}.`);
-  out.push(I.margemEbitda.v === null ? "Margem EBITDA n/d — ver notas para o termo que falta."
-    : `Margem EBITDA de ${fmtPct(I.margemEbitda).t}; margem líquida de ${fmtPct(I.margemLiquida).t}.`);
-  out.push(I.dividaBruta.v === null ? "Dívida financeira não identificada no balanço."
-    : `Dívida bruta de ${valorMM(I.dividaBruta, unidade)} contra caixa de ${valorMM(I.caixa, unidade)}.`);
-  out.push(I.ciclo.v === null ? "Ciclo financeiro n/d — falta saldo de giro ou custo na DRE."
-    : `Ciclo financeiro de ${fmtDias(I.ciclo).t} dias (PMR ${fmtDias(I.pmr).t} · PME ${fmtDias(I.pme).t} · PMP ${fmtDias(I.pmp).t}).`);
-  return out;
+/** Os três cartões do sumário: [título, corpo]. */
+function diagnostico(I: Indicadores, Iant: Indicadores | null, anterior: number | null, esc: Escala): Array<[string, string]> {
+  const v = Iant ? variacao(Iant.receita.v, I.receita.v) : { v: null, ns: false };
+  return [
+    ["Receita e margem", `Receita líquida de ${valorMi(I.receita, esc)}`
+      + (anterior !== null ? (v.v === null ? `, variação contra ${anterior} ${v.ns ? "n.s." : "n/d"}` : `, ${pctTexto(v.v)} contra ${anterior}`) : "")
+      + (I.margemEbitda.v === null ? "; margem EBITDA n/d." : `; margem EBITDA de ${fmtPct(I.margemEbitda).t}.`)],
+    ["Dívida e caixa", I.dividaBruta.v === null ? "Dívida financeira não identificada no balanço."
+      : `Dívida bruta de ${valorMi(I.dividaBruta, esc)} contra caixa de ${valorMi(I.caixa, esc)}; liquidez corrente de ${fmtX(I.liquidezCorrente).t}.`],
+    ["Capital de giro", I.ciclo.v === null ? "Ciclo financeiro n/d: falta saldo de giro ou custo na DRE."
+      : `Ciclo financeiro de ${fmtDias(I.ciclo).t} dias: PMR ${fmtDias(I.pmr).t}, PME ${fmtDias(I.pme).t} e PMP ${fmtDias(I.pmp).t}.`],
+  ];
 }
 
-function implicacoes(I: Indicadores): string[] {
-  const out: string[] = [];
-  out.push({
-    ebitda_nao_positivo: "Sem EBITDA positivo, qualquer alongamento só adia: o plano precisa começar pela operação.",
-    acima: `Acima de ${mm1(MULTIPLO_ALVO.max)}x, alongar não basta: o dimensionamento do Cap. XV define o esforço.`,
-    faixa: "Alavancagem na faixa-alvo: o mandato tende a reperfilamento e otimização de capital.",
+function implicacaoPrincipal(I: Indicadores): string {
+  return {
+    ebitda_nao_positivo: "Sem EBITDA positivo, qualquer alongamento só adia: o plano começa pela operação.",
+    acima: `Acima de ${mm1(MULTIPLO_ALVO.max)}x, alongar não basta: o dimensionamento do capítulo XV define o esforço.`,
+    faixa: "Alavancagem na faixa-alvo: o mandato tende a reperfilamento e otimização da estrutura de capital.",
     abaixo: `Alavancagem abaixo de ${mm1(MULTIPLO_ALVO.min)}x: o tema é liquidez e prazo, não o tamanho da dívida.`,
     caixa_liquido: "Caixa acima da dívida: o tema é rentabilidade e liquidez, não solvência.",
     nd: "Alavancagem não mensurada: obter D&A e a abertura da dívida antes de dimensionar.",
-  }[faixaDeAlavancagem(I)]);
-  if (I.liquidezCorrente.v !== null && I.liquidezCorrente.v < 1) {
-    out.push(`Liquidez corrente de ${fmtX(I.liquidezCorrente).t}: o passivo de curto prazo excede o ativo circulante.`);
+  }[faixaDeAlavancagem(I)];
+}
+
+function mancheteCiclo(I: Indicadores, ultimo: number): string {
+  return I.ciclo.v === null ? `Ciclo financeiro de ${ultimo} não mensurável pelos documentos`
+    : `Ciclo financeiro de ${fmtDias(I.ciclo).t} dias em ${ultimo}: PMR ${fmtDias(I.pmr).t}, PME ${fmtDias(I.pme).t}, PMP ${fmtDias(I.pmp).t}`;
+}
+
+function mancheteMargem(ind: Map<number, Indicadores>, anos: number[]): string {
+  const u = margemBruta(ind.get(anos[anos.length - 1])!);
+  if (u.v === null) return "Margem bruta não mensurável pelos documentos recebidos";
+  if (anos.length >= 2) {
+    const a = margemBruta(ind.get(anos[anos.length - 2])!);
+    if (a.v !== null) {
+      const d = u.v - a.v;
+      return `Margem bruta ${d < 0 ? "caiu" : "subiu"} de ${fmtPct(a).t} para ${fmtPct(u).t} entre ${anos[anos.length - 2]} e ${anos[anos.length - 1]}`;
+    }
   }
-  if (I.ciclo.v !== null && I.ciclo.v > 90) {
-    out.push(`Ciclo de ${fmtDias(I.ciclo).t} dias: o giro é alavanca de caixa antes de qualquer deságio.`);
-  }
-  out.push("Conclusões calibradas por documentos sem parecer lido pelo sistema; confirmar na diligência.");
-  return out.slice(0, 4);
+  return `Margem bruta de ${fmtPct(u).t} em ${anos[anos.length - 1]}`;
 }
 
 function mancheteResultado(I: Indicadores, Iant: Indicadores | null, ultimo: number, anterior: number | null): string {
@@ -373,70 +655,57 @@ function mancheteResultado(I: Indicadores, Iant: Indicadores | null, ultimo: num
     if (v.v !== null && v.v <= -20) return `EBITDA caiu ${fmtPct({ v: -v.v }, 0).t} entre ${anterior} e ${ultimo}`;
     if (v.v !== null && v.v >= 20) return `EBITDA cresceu ${fmtPct({ v: v.v }, 0).t} entre ${anterior} e ${ultimo}`;
     const r = variacao(Iant.receita.v, I.receita.v);
-    if (r.v !== null) return `Receita ${r.v < 0 ? "recuou" : "avançou"} ${fmtPct({ v: Math.abs(r.v) }, 0).t} em ${ultimo}, margem EBITDA ${I.margemEbitda.v === null ? "n/d" : fmtPct(I.margemEbitda).t}`;
+    if (r.v !== null) return `Receita ${r.v < 0 ? "recuou" : "avançou"} ${fmtPct({ v: Math.abs(r.v) }, 0).t} em ${ultimo}, margem EBITDA de ${fmtPct(I.margemEbitda).t}`;
   }
   return I.margemEbitda.v === null ? `Resultado de ${ultimo}: EBITDA não mensurável pela DRE` : `Margem EBITDA de ${fmtPct(I.margemEbitda).t} em ${ultimo}`;
 }
 
-function leituraResultado(ind: Map<number, Indicadores>, anos: number[], unidade: Escala): string[] {
+/** A faixa do X.1: uma frase, até 2 linhas na meia largura. */
+function leituraResultado(ind: Map<number, Indicadores>, anos: number[], esc: Escala): string {
   const u = ind.get(anos[anos.length - 1])!;
-  const a = anos.length >= 2 ? ind.get(anos[anos.length - 2])! : null;
-  const out: string[] = [];
-  if (a) {
-    const dr = u.receita.v !== null && a.receita.v !== null ? u.receita.v - a.receita.v : null;
-    out.push(dr === null ? "Variação da receita n/d." : `Receita ${dr < 0 ? "perdeu" : "ganhou"} ${valorMM({ v: Math.abs(dr), nota: "" }, unidade)} no último exercício.`);
-    const de = u.ebitda.v !== null && a.ebitda.v !== null ? u.ebitda.v - a.ebitda.v : null;
-    out.push(de === null ? "Variação do EBITDA n/d — ver notas." : `EBITDA ${de < 0 ? "recuou" : "avançou"} ${valorMM({ v: Math.abs(de), nota: "" }, unidade)}.`);
-  }
-  out.push(u.lucroLiquido.v === null ? "Lucro líquido n/d." : u.lucroLiquido.v < 0
-    ? `Prejuízo de ${valorMM({ v: -u.lucroLiquido.v, nota: "" }, unidade)}: o PL absorve a perda.`
-    : `Lucro líquido de ${valorMM(u.lucroLiquido, unidade)}.`);
-  if (u.da.v === null) out.push("A DRE não traz D&A: EBITDA publicado como n/d em vez de igualado ao EBIT.");
-  return out.slice(0, 4);
+  if (u.da.v === null) return "A DRE não traz D&A: o EBITDA sai n/d em vez de igualado ao EBIT.";
+  if (u.lucroLiquido.v !== null && u.lucroLiquido.v < 0) return `Prejuízo de ${valorMi({ v: -u.lucroLiquido.v, nota: "" }, esc)} em ${anos[anos.length - 1]}: o patrimônio líquido absorve a perda.`;
+  return u.lucroLiquido.v === null ? "Lucro líquido n/d no último exercício." : `Lucro líquido de ${valorMi(u.lucroLiquido, esc)} no último exercício.`;
 }
 
 function mancheteAlavancagem(I: Indicadores, ultimo: number): string {
-  if (I.dflEbitda.v === null) return I.dfl.v === null ? `Dívida líquida de ${ultimo} não mensurável pelo balanço` : `DFL/EBITDA de ${ultimo} sem referência: EBITDA ${I.ebitda.v === null ? "n/d" : "não positivo"}`;
-  return `DFL/EBITDA de ${fmtX(I.dflEbitda).t} em ${ultimo}, com ciclo de ${fmtDias(I.ciclo).t} dias`;
+  if (I.dflEbitda.v === null) return I.dfl.v === null ? `Dívida líquida de ${ultimo} não mensurável pelo balanço` : `DFL/EBITDA de ${ultimo} sem leitura: EBITDA ${I.ebitda.v === null ? "n/d" : "não positivo"}`;
+  return `DFL/EBITDA de ${fmtX(I.dflEbitda).t} em ${ultimo}, liquidez corrente de ${fmtX(I.liquidezCorrente).t}`;
 }
 
-function leituraEstrutura(I: Indicadores, ultimo: number, unidade: Escala): string[] {
+function leituraEstrutura(I: Indicadores, ultimo: number, esc: Escala): string[] {
   const out: string[] = [];
   const m = fmtX(I.dflEbitda).t;
   out.push({
     acima: `A ${m}, a dívida líquida excede o teto de ${mm1(MULTIPLO_ALVO.max)}x do EBITDA de ${ultimo}.`,
-    faixa: `A ${m}, a dívida líquida cabe na faixa-alvo de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x.`,
-    abaixo: `A ${m}, a dívida líquida fica abaixo da faixa-alvo de ${mm1(MULTIPLO_ALVO.min)}x–${mm1(MULTIPLO_ALVO.max)}x.`,
+    faixa: `A ${m}, a dívida líquida cabe na faixa-alvo de ${mm1(MULTIPLO_ALVO.min)}x a ${mm1(MULTIPLO_ALVO.max)}x.`,
+    abaixo: `A ${m}, a dívida líquida fica abaixo da faixa-alvo de ${mm1(MULTIPLO_ALVO.min)}x a ${mm1(MULTIPLO_ALVO.max)}x.`,
     caixa_liquido: `O caixa supera a dívida bruta em ${ultimo}: não há dívida líquida a dimensionar.`,
     ebitda_nao_positivo: `EBITDA de ${ultimo} não positivo: DFL/EBITDA sem leitura (n.s.).`,
     nd: "DFL/EBITDA n/d: a alavancagem não pode ser dimensionada com estes documentos.",
   }[faixaDeAlavancagem(I)]);
-  if (I.outras.v !== null && I.outras.v !== 0) out.push(`Outras dívidas (mútuos/partes relacionadas) de ${valorMM(I.outras, unidade)}: classe a tratar à parte.`);
-  if (I.liquidezCorrente.v !== null) out.push(`Liquidez corrente de ${fmtX(I.liquidezCorrente).t}${I.liquidezCorrente.v < 1 ? ": curto prazo descoberto." : "."}`);
-  if (I.ciclo.v !== null) out.push(`Ciclo de ${fmtDias(I.ciclo).t} dias: cada 10 dias equivalem a ${valorMM({ v: (I.receita.v ?? 0) * 10 / 360, nota: "" }, unidade)} de giro.`);
-  return out.slice(0, 4);
+  if (I.outras.v !== null && I.outras.v !== 0) out.push(`Outras dívidas (mútuos e partes relacionadas) de ${valorMi(I.outras, esc)} formam classe à parte.`);
+  if (I.liquidezCorrente.v !== null && I.liquidezCorrente.v < 1) out.push("O passivo de curto prazo excede o ativo circulante.");
+  return out.slice(0, 3);
 }
 
-function leituraNcg(I: Indicadores, ultimo: number, unidade: Escala): string[] {
+function leituraNcg(I: Indicadores, ultimo: number, esc: Escala): string {
   const n = I.ncg;
   const f = I.ncgFinanciadaCP;
-  const out: string[] = [];
-  out.push(n.v === null ? `NCG de ${ultimo} n/d: ${n.nota.replace(/^NCG: n\/d porque /, "")}.` : `NCG de ${valorMM(n, unidade)} em ${ultimo}.`);
-  out.push(n.v !== null && n.v <= 0 ? "Com NCG não positiva, a dívida bancária de CP não financia giro: financia outra coisa — identificar o quê."
-    : f.v === null ? `Financiamento da NCG por dívida de CP não mensurável (${limparMotivo(f.nota)}).`
-    : f.v > 100 ? `A dívida bancária de CP é ${fmtPct({ v: f.v }, 0).t} da NCG: financia o giro e mais — tudo o que precisa ser alongado.`
-    : `${fmtPct({ v: f.v }, 0).t} dela está financiada por dívida bancária de CP — é o que precisa ser alongado.`);
-  if (I.ccl.v !== null) out.push(`CCL de ${valorMM(I.ccl, unidade)}${I.ccl.v < 0 ? ": o circulante não cobre o passivo de curto prazo." : "."}`);
-  return out;
+  if (n.v === null) return `NCG de ${ultimo} n/d: ${limparMotivo(n.nota)}.`;
+  if (n.v <= 0) return "Com NCG não positiva, a dívida bancária de CP não financia giro: identificar o que ela financia.";
+  if (f.v === null) return `NCG de ${valorMi(n, esc)}; financiamento por dívida de CP não mensurável.`;
+  return f.v > 100 ? `A dívida bancária de CP é ${fmtPct({ v: f.v }, 0).t} da NCG: financia o giro e mais, e é o que precisa ser alongado.`
+    : `${fmtPct({ v: f.v }, 0).t} da NCG de ${valorMi(n, esc)} está financiada por dívida bancária de CP, que é o que precisa ser alongado.`;
 }
 
 function mancheteComparativo(I: Indicadores, Iant: Indicadores, ultimo: number, anterior: number): string {
   const r = variacao(Iant.receita.v, I.receita.v);
   const d = variacao(Iant.dfl.v, I.dfl.v);
   if (r.v !== null && d.v !== null) {
-    return `${ultimo} × ${anterior}: receita ${r.v >= 0 ? "+" : "−"}${fmtPct({ v: Math.abs(r.v) }, 0).t}, dívida líquida ${d.v >= 0 ? "+" : "−"}${fmtPct({ v: Math.abs(d.v) }, 0).t}`;
+    return `${ultimo} contra ${anterior}: receita ${pctTexto(r.v, 0)}, dívida líquida ${pctTexto(d.v, 0)}`;
   }
-  return `${ultimo} × ${anterior}: exercícios fechados lado a lado`;
+  return `${ultimo} contra ${anterior}: exercícios fechados lado a lado`;
 }
 
 function leituraComparativo(I: Indicadores, Iant: Indicadores, ultimo: number, anterior: number): string[] {
@@ -450,10 +719,10 @@ function leituraComparativo(I: Indicadores, Iant: Indicadores, ultimo: number, a
       : `O EBITDA (${pctTexto(e.v)}) acompanhou ou superou a receita (${pctTexto(r.v)}).`);
   } else out.push(`Variação de receita ou EBITDA entre ${anterior} e ${ultimo} não mensurável (n/d ou n.s.).`);
   const d = variacao(Iant.dfl.v, I.dfl.v);
-  if (d.v !== null) out.push(`Dívida líquida ${d.v >= 0 ? "subiu" : "caiu"} ${fmtPct({ v: Math.abs(d.v) }).t} no período.`);
+  if (d.v !== null) out.push(`A dívida líquida ${d.v >= 0 ? "subiu" : "caiu"} ${fmtPct({ v: Math.abs(d.v) }).t} no período.`);
   if (I.ciclo.v !== null && Iant.ciclo.v !== null) {
-    const dc = I.ciclo.v - Iant.ciclo.v;
-    out.push(`Ciclo financeiro ${dc >= 0 ? "alongou" : "encurtou"} ${Math.abs(Math.round(dc))} dias.`);
+    const dc = Math.round(I.ciclo.v) - Math.round(Iant.ciclo.v);
+    out.push(`O ciclo financeiro ${dc >= 0 ? "alongou" : "encurtou"} ${Math.abs(dc)} dias.`);
   }
   return out;
 }
@@ -466,12 +735,10 @@ function pontosDeAtencao(base: BaseCredito, ind: Map<number, Indicadores>, am: A
   if (comOutras.length) out.push(`Dívida com mútuos ou partes relacionadas em ${comOutras.join(", ")}: verificar condições de mercado.`);
   const semDA = [...ind.entries()].filter(([, x]) => x.da.v === null).map(([a]) => a);
   if (semDA.length) out.push(`DRE sem D&A em ${semDA.join(", ")}: EBITDA não mensurável nesses exercícios.`);
-  const esc = base.historico.avisosDeEscala;
-  if (esc.length) out.push(`Unidade não reconhecida em ${esc.length} linha(s), sem conversão de escala (ex.: ${encurtar(esc[0], 50)}).`);
-  if (out.length === 0) {
-    out.push("Nenhum ponto detectado pelas regras automáticas desta versão — isso não atesta a qualidade contábil.");
-  }
-  return out.slice(0, 4);
+  const escala = base.historico.avisosDeEscala;
+  if (escala.length) out.push(`Unidade não reconhecida em ${escala.length} linha(s), sem conversão de escala.`);
+  if (out.length === 0) out.push("Nenhum ponto detectado pelas regras automáticas, o que não atesta a qualidade contábil.");
+  return out.slice(0, 3);
 }
 
 function contarND(ind: Map<number, Indicadores>): number {
@@ -482,52 +749,47 @@ function contarND(ind: Map<number, Indicadores>): number {
 }
 
 // -----------------------------------------------------------------------------
-// Notas e fontes
+// Notas e avisos (componente I) — amarrações com veredito, o que ficou a preencher, os n/d
 // -----------------------------------------------------------------------------
 const ROTULO_VEREDITO = { ok: "Fecha", diverge: "NÃO FECHA", por_construcao: "Por definição", nao_conferivel: "Não conferível" } as const;
 
-function notasEFontes(deck: DeckOria, base: BaseCredito, am: Amarracao[], naoGerado: string[], ind: Map<number, Indicadores>, anos: number[], kDir: string) {
-  const POR_SLIDE = 12;
+function notasEAvisos(deck: DeckOria, slide: (r: string, t: string, f: string, sub?: string) => SlideOria,
+  am: Amarracao[], aPreencher: string[], ind: Map<number, Indicadores>, anos: number[]) {
+  const nDiverge = am.filter((a) => a.veredito === "diverge").length;
+  const nNao = am.filter((a) => a.veredito === "nao_conferivel").length;
+  const nOk = am.filter((a) => a.veredito === "ok").length;
+  const titulo = nDiverge > 0 ? `${nDiverge} amarração(ões) não fecham: ler antes de usar os números`
+    : nOk === 0 ? `Nenhuma conferência pôde rodar; ${nNao} amarrações sem insumo`
+    : `${nOk} conferências fecham; ${nNao} não puderam ser conferidas`;
+  const POR_SLIDE = 8;
   const paginas = Math.max(1, Math.ceil(am.length / POR_SLIDE));
   for (let pg = 0; pg < paginas; pg++) {
-    const s = deck.novo();
-    const fatia = am.slice(pg * POR_SLIDE, (pg + 1) * POR_SLIDE);
-    const nDiverge = am.filter((a) => a.veredito === "diverge").length;
-    const nNao = am.filter((a) => a.veredito === "nao_conferivel").length;
-    const nOk = am.filter((a) => a.veredito === "ok").length;
-    chrome(s, { kickerEsq: `Notas e fontes${paginas > 1 ? ` (${pg + 1}/${paginas})` : ""}`, kickerDir: kDir,
-      manchete: nDiverge > 0 ? `${nDiverge} amarração(ões) não fecham — ler antes de usar os números`
-        : nOk === 0 ? `Nenhuma conferência pôde rodar; ${nNao} amarrações sem insumo`
-        : `${nOk} conferências fecham; ${nNao} não puderam ser conferidas`,
-      fontes: `Amarrações do Prompt-Mestre Oria v3 · ${LEGENDA_NATUREZA}` });
-    const y = tabela(s, GRADE.margem, GRADE.conteudoTopo, [
-      { titulo: "Nº", w: 0.5, algn: "ctr" }, { titulo: "Amarração", w: 3.6, algn: "l" }, { titulo: "Ano", w: 0.8, algn: "ctr" },
-      { titulo: "Veredito", w: 1.5, algn: "l" }, { titulo: "Detalhe", w: 5.23, algn: "l" },
-    ], fatia.map((a) => ({
-      tipo: a.veredito === "diverge" ? "destaque" as const : undefined,
-      celulas: [String(a.numero), a.nome, a.ano === null ? "—" : String(a.ano),
-        { t: ROTULO_VEREDITO[a.veredito], negativo: a.veredito === "diverge", b: a.veredito === "diverge" || a.veredito === "nao_conferivel" }, encurtar(a.detalhe, 62)],
+    const s = slide(`Notas e avisos · amarrações${paginas > 1 ? ` (${pg + 1}/${paginas})` : ""}`, titulo,
+      `Fonte: amarrações do Prompt-Mestre Oria v3. ${LEGENDA_NATUREZA}.`);
+    tabela(s, GRADE.x, GRADE.topo, [
+      { titulo: "Nº", w: 40, algn: "ctr" }, { titulo: "Amarração", w: 290, algn: "l" }, { titulo: "Ano", w: 55, algn: "ctr" },
+      { titulo: "Veredito", w: 120, algn: "l" }, { titulo: "Detalhe", w: 332, algn: "l" },
+    ], am.slice(pg * POR_SLIDE, (pg + 1) * POR_SLIDE).map((a) => ({
+      destaque: a.veredito === "diverge",
+      celulas: [String(a.numero), a.nome, a.ano === null ? "—" : String(a.ano), ROTULO_VEREDITO[a.veredito], encurtar(a.detalhe, 48)],
     })));
-    void y;
   }
-  // O que esta versão NÃO gera — e as notas de n/d, que são o "motivo e efeito" de cada branco.
-  const s = deck.novo();
-  chrome(s, { kickerEsq: "Notas e fontes · escopo desta versão", kickerDir: kDir,
-    manchete: "O que esta versão não gera, e o motivo de cada n/d",
-    fontes: "n/d não é zero: é linha que o documento não traz; n.s. é conta sem leitura (base negativa). Definições: NCG = clientes + estoques − fornecedores; prazos em 360 dias." });
-  const w = (GRADE.util - GRADE.gapPainel) / 2;
-  card(s, GRADE.margem, GRADE.conteudoTopo, w, GRADE.conteudoBase - GRADE.conteudoTopo, { rotulo: "Capítulos não gerados", destaque: true,
-    corpo: naoGerado.slice(0, 7).map((t) => p(encurtar(t, 150), { bullet: true, spcAft: 4 })) });
-  const motivos = [...new Set(anos.flatMap((a) => (Object.entries(ind.get(a)!) as Array<[string, Valor]>)
-    .filter(([, v]) => v.v === null).map(([, v]) => (v.ns ? v.nota : limparMotivo(v.nota)))))].slice(0, 7);
-  card(s, GRADE.margem + w + GRADE.gapPainel, GRADE.conteudoTopo, w, GRADE.conteudoBase - GRADE.conteudoTopo, { rotulo: "Por que há n/d",
-    corpo: (motivos.length ? motivos : ["Nenhum indicador saiu n/d nos exercícios apresentados."]).map((t) => p(encurtar(t, 150), { bullet: true, spcAft: 4 })) });
+  void deck;
+  const s = slide("Notas e avisos", "O que ficou a preencher e o motivo de cada n/d", "Fonte: elaboração Oria a partir dos documentos recebidos.");
+  const motivos = [...new Set(anos.flatMap((a) => (Object.values(ind.get(a)!) as Valor[])
+    .filter((v) => v.v === null).map((v) => (v.ns ? v.nota : limparMotivo(v.nota)))))].slice(0, 2);
+  notas(s, GRADE.x, GRADE.topo, GRADE.w, 370, [
+    ...aPreencher.map((t, i) => ({ abertura: `Nota ${i + 1} — a preencher.`, texto: t })),
+    { abertura: `Nota ${aPreencher.length + 1} — n/d e n.s.`, texto: `n/d é linha que o documento não traz; n.s. é conta sem leitura (base negativa). ${motivos.length ? `Neste caso: ${motivos.map((m) => encurtar(m, 90)).join("; ")}.` : "Nenhum indicador saiu n/d."}` },
+    { abertura: `Nota ${aPreencher.length + 2} — definições.`, texto: "NCG = clientes + estoques − fornecedores; prazos em base de 360 dias; DFL = dívida bruta − caixa e aplicações." },
+    { abertura: "Aviso.", texto: "Material elaborado pela Oria Partners a partir de documentos fornecidos pela companhia, sem auditoria independente. Não constitui oferta nem recomendação." },
+  ]);
 }
 
 function limparMotivo(nota: string): string {
   // "Margem EBITDA: n/d porque EBITDA: n/d porque X" → a causa primeira, que é a que se conserta.
   const partes = nota.split(/n\/d porque |n\/d — /);
-  return partes[partes.length - 1].replace(/^[A-Za-zÀ-ú/ ()-]+: /, (m) => m).trim();
+  return partes[partes.length - 1].trim();
 }
 
 // -----------------------------------------------------------------------------
@@ -542,15 +804,16 @@ const rotuloTipo = (t: string) => ROTULO_TIPO[t] ?? t.toLowerCase().replace(/_/g
 const capitalizar = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export const encurtar = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`);
 
-/** A linha de fontes dos slides financeiros: ≤ ~140 caracteres (o prompt). */
-export function fontesFinanceiras(base: BaseCredito, anos: number[]): string {
+/** A nota de fonte dos slides financeiros: uma linha de 8,5 pt, com a natureza dos dados. */
+export function fontesFinanceiras(base: BaseCredito, periodos: PeriodoCredito[]): string {
+  const anos = periodos.map((x) => x.ano);
   const tipos = new Set(base.documentos.filter((d) => d.anos.some((a) => anos.includes(a))).map((d) => d.tipo ?? ""));
   const nomes = [tipos.has("DF_AUDITADA") && "DFs auditadas", tipos.has("BALANCO") && "balanços", tipos.has("DRE") && "DREs",
     tipos.has("COMBINADO") && "demonstrações", tipos.has("BALANCETE") && "balancetes"].filter(Boolean).join(", ");
-  const faixa = anos.length > 1 ? `${anos[0]}–${anos[anos.length - 1]}` : String(anos[0]);
-  const ns = new Set(base.periodos.filter((x) => anos.includes(x.ano)).map((x) => x.natureza));
+  const faixaAnos = anos.length > 1 ? `${anos[0]} a ${anos[anos.length - 1]}` : String(anos[0]);
+  const ns = new Set(periodos.map((x) => x.natureza));
   const legenda = [...ns].map((n) => n === "A" ? "(A) auditada" : n === "B" ? "(B) não auditada" : n === "R" ? "(R) revisão limitada" : "(G) gerencial").join(" · ");
-  return encurtar(`Fonte: ${nomes || "demonstrações"} ${faixa} da ${encurtar(base.entidade, 40).replace(/\.$/, "")}. Cálculos Oria. ${legenda}.`, 125);
+  return encurtar(`Fonte: ${nomes || "demonstrações"} ${faixaAnos} da ${encurtar(base.entidade, 40).replace(/\.$/, "")}. Cálculos Oria. ${legenda}.`, 150);
 }
 
 export type { Paragrafo, SlideOria };

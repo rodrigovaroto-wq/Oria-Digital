@@ -1,5 +1,12 @@
 # Apresentação de crédito — de onde ela vem e o que ela ainda não faz
 
+> **Hierarquia das fontes (decisão do dono, 02/10/2026):** `PROMPT_PADRAO_ORIA.md` (Teaser) é a
+> verdade da FORMATAÇÃO — Verdana, pt, componentes 4.7, rodapé 8,5/7,5 pt. O deck Centro Oeste é a
+> referência de CONSTRUÇÃO — todos os capítulos, tabelas e gráficos. Exceções pedidas pelo dono ao
+> Teaser: divisórias e sumário ficam; o endividamento usa rosca. Lacuna: `n/d` em número de tabela,
+> "[a preencher]" em texto. Assinatura da capa: "ORIA PARTNERS CAPITAL SERVIÇOS". O Prompt-Mestre v3
+> vale só para o CONTEÚDO do módulo de crédito (capítulos, amarrações, múltiplo-alvo, scorecard).
+
 **Fonte da especificação:** `PROMPT_MESTRE_ORIA_v3.md` (cópia literal do Prompt-Mestre Oria v3, out/2026).
 A referência visual foi o deck `CentroOeste_-_Apresentacao_Inicial_-_Oria_v1.pptx` (mandato real
 Krauspenhar). **O deck não está versionado aqui de propósito**: é documento confidencial de cliente.
