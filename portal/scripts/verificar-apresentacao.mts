@@ -349,6 +349,17 @@ console.log("--- 7. os campos preenchidos (0199) substituem o \"[a preencher]\" 
     "(7d) com uma nota faltando, a nota final é n/d — nunca a média das que existem (o prompt: nunca a nota final sem as notas por eixo)");
 }
 
+console.log("--- 8. holding só com balanço: o deck se adapta ---");
+{
+  // VERTENTES PARTICIPAÇÕES S.A. no book: só BALANÇO, nenhuma DRE. Antes, 75 n/d no deck.
+  const { slides } = await deckDe(entradaModeloDaFixture(fixture, agora, { entidade: "VERTENTES PARTICIPAÇÕES S.A." }));
+  const temX1 = slides.some((x) => textos(x).some((t) => t.startsWith("X.1 · RESULTADO")));
+  const notaOmitidos = slides.some((x) => textos(x).some((t) => /não tem DRE em nenhum exercício/.test(t)));
+  const x2 = slideCom(slides, "X.2 · ESTRUTURA DE CAPITAL");
+  ok(!temX1 && notaOmitidos && linha(x2, "Patrimônio líquido", 2).every((t) => /\d/.test(t)),
+    "(8a) sem DRE: X.1 e os capítulos de resultado saem, a nota diz quais e por quê, e o balanço continua");
+}
+
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);
 if (falhas > 0) process.exit(1);
 console.log("APRESENTAÇÃO OK — número do documento, ausência dita, padrão visual varrido com controle positivo");

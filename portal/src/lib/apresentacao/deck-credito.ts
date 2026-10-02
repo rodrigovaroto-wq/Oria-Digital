@@ -73,6 +73,11 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     .some((k) => base.historico.grandezas[k][ano]?.v != null));
   if (!temAlgum) throw new SemDadoParaApresentar(base.entidade);
   const esc: Escala = base.historico.escala;
+  // SEM DRE EM EXERCÍCIO ALGUM (holding, SPE, empresa que só mandou balanço): os capítulos que só
+  // existem com resultado — dinâmica do ciclo, margem, X.1, prazos, normalização, capacidade de
+  // pagamento — saem do deck, e a nota diz por quê. Medido nos mandatos locais: 9 de 14 entidades
+  // eram assim, com 40 a 77 n/d por deck, a maioria nesses seis slides.
+  const temDRE = periodos.some(({ ano }) => base.historico.grandezas.receita_liquida[ano]?.v != null);
   const anos = periodos.map((x) => x.ano);
   const ind = new Map(anos.map((a) => [a, indicadores(base, a)]));
   const ultimo = anos[anos.length - 1];
@@ -90,6 +95,9 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     "XIV a XVIII (ajustes do EBITDA, alavancas, realização das garantias, notas do scorecard): julgamento do analista.",
     "YTD/LTM: só exercícios fechados entram; o balancete do ano corrente fica fora desta versão.",
   ];
+  if (!temDRE) {
+    aPreencher.unshift("A entidade não tem DRE em nenhum exercício recebido: os slides II.3, V.2, X.1, X.3, XIV e XV foram omitidos.");
+  }
 
   // OS CAMPOS PREENCHIDOS (0199). A chave do slide sai do rótulo ("II.2 · Tendências" → "ii2"), e
   // cada lacuna do slide é `<slide>.<sufixo>`. É o que permite preencher a apresentação por
@@ -207,7 +215,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     ["Regulação", "Tecnologia", "Consolidação", "Mercado global", "Importação e câmbio", "Crédito"].forEach((t, i) =>
       cartao(s, GRADE.col3.x[i % 3], GRADE.topo + Math.floor(i / 3) * 175, GRADE.col3.w, 150, { numeral: i + 1, titulo: t, corpo: ap(`cartao${i + 1}`) }));
   }
-  {
+  if (temDRE) {
     // A ponte analítica para o mandato: a coluna da companhia SAI DO SISTEMA (prazos e margem).
     const s = slide("II.3 · Dinâmica do modelo de negócio", mancheteCiclo(I, ultimo), fontes);
     tabela(s, GRADE.x, GRADE.topo, [
@@ -284,7 +292,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Elo", w: 200 }, { titulo: "Quem", w: 320, algn: "l" }, { titulo: "Onde a margem fica", w: 317, algn: "l" }],
       ["Fornecedores", "Companhia", "Canais", "Cliente final"].map((e) => ({ celulas: [e, AP, AP] })));
   }
-  {
+  if (temDRE) {
     const s = slide("V.2 · Onde a companhia captura margem", mancheteMargem(ind, anos), fontes);
     tituloSecao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, "Lucro bruto e EBITDA (R$ mi)");
     s.grafico(GRADE.col2.x[0], GRADE.topo + 22, GRADE.col2.w, 250, { tipo: "colunas", categorias: anos.map(String), series: [
@@ -343,7 +351,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
         + (contarND(ind) === 0 ? "Nenhum indicador saiu n/d." : `${contarND(ind)} indicador(es) saíram n/d, com o motivo nas notas.`) });
     cartao(s, xL, GRADE.topo + 195, GRADE.fim - xL, 180, { titulo: "Pontos de atenção contábil", corpo: pontosDeAtencao(base, ind, am).join(" ") });
   }
-  {
+  if (temDRE) {
     const s = slide("X.1 · Resultado", mancheteResultado(I, Iant, ultimo, anterior), fontes);
     tituloSecao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, "Receita líquida e EBITDA (R$ mi)");
     s.grafico(GRADE.col2.x[0], GRADE.topo + 22, GRADE.col2.w, 270, { tipo: "colunas", categorias: anos.map(String), series: [
@@ -379,7 +387,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     cartao(s, xL, GRADE.topo, GRADE.fim - xL, 190, { titulo: "Leitura", corpo: leituraEstrutura(I, ultimo, esc).join(" ") });
     kpi(s, xL, GRADE.topo + 215, GRADE.fim - xL, { valor: fmtX(I.alavancagem).t, rotulo: "Ativo / PL", explicacao: `alavancagem patrimonial em ${ultimo}` });
   }
-  {
+  if (temDRE) {
     const s = slide("X.3 · Prazos e ciclo financeiro", mancheteCiclo(I, ultimo), `${fontes.replace(/\.$/, "")} · base de 360 dias.`);
     tituloSecao(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, "Prazos médios (dias)");
     s.grafico(GRADE.col2.x[0], GRADE.topo + 22, GRADE.col2.w, 270, { tipo: "colunas", formato: "0", categorias: ["PMR", "PME", "PMP"],
@@ -487,7 +495,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
 
   // ======================================== cap. 09 — EBITDA normalizado e dívida sustentável
   div(9, CAPITULOS[8][0], CAPITULOS[8][1]);
-  {
+  if (temDRE) {
     const s = slide("XIV · Normalização do EBITDA", `EBITDA reportado de ${vmi(I.ebitda)} em ${ultimo}; normalização ${AP}`, fontes);
     tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Ajuste", w: 300 }, { titulo: "R$ mi", w: 100 }, { titulo: "Confiança", w: 180, algn: "l" }], [
       { celulas: ["EBITDA reportado", mm(I.ebitda).t, "verificado (sistema)"] },
@@ -499,7 +507,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     ]);
     cartao(s, 680, GRADE.topo, GRADE.fim - 680, 200, { titulo: "Regra", corpo: "Cada ajuste leva confiança: verificado, informado ou estimado pela Oria. O EBITDA normalizado é a única base dos capítulos de dívida sustentável e garantias." });
   }
-  {
+  if (temDRE) {
     const s = slide("XV · Capacidade de pagamento", mancheteSustentavel(I, esc), `${fontes.replace(/\.$/, "")} · dívida suportada ilustrativa, sobre EBITDA reportado.`);
     const suport = (m: number) => (I.ebitda.v === null || I.ebitda.v <= 0 ? "n/d" : valorMi({ v: I.ebitda.v * m, nota: "" }, esc));
     tabela(s, GRADE.col2.x[0], GRADE.topo, [{ titulo: "Geração de caixa (R$ mi)", w: 194 }, { titulo: "Base", w: 105 }, { titulo: "Estresse", w: 105 }], [
