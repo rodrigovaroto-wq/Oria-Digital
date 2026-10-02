@@ -29,7 +29,8 @@ import { entradaModeloDaFixture } from "./lib/modelo-da-fixture.mts";
 import { montarBaseCredito } from "../src/lib/apresentacao/montar-base.ts";
 import { amarracoes, type BaseCredito } from "../src/lib/apresentacao/base-credito.ts";
 import type { GrandezaCredito, HistoricoCredito } from "../src/lib/modelo-institucional.ts";
-import { construirDeckCredito } from "../src/lib/apresentacao/deck-credito.ts";
+import { construirDeckCredito, SemDadoParaApresentar } from "../src/lib/apresentacao/deck-credito.ts";
+import type { LinhaModelo } from "../src/lib/modelo-institucional.ts";
 import { DeckOria, PALETA, FONTES_PERMITIDAS, p, tabela, COR } from "../src/lib/apresentacao/pptx-oria.ts";
 
 let falhas = 0;
@@ -266,6 +267,56 @@ const executivo = (slides: string[]) => textos(slideCom(slides, "SUMÁRIO EXECUT
     sga: [20000, 20000], ebit: [4000, 4000] }));
   ok(am.filter((a) => a.numero === 10 && a.veredito === "diverge").length === 2,
     "(5g) EBIT informado ≠ lucro bruto − despesas operacionais: a amarração 10 diverge");
+}
+
+console.log("--- 6. setores e formatos diferentes (testes com mandatos de outro perfil, 02/10/2026) ---");
+{
+  // Empresa de SERVIÇOS: DRE só com contas (sem "Receita líquida" nem "EBIT" impressos) e balanço
+  // sem estoque. É o formato de DRE de balancete; antes desta fatia o deck inteiro saía sem
+  // resultado, com todas as contas extraídas. Os números são sintéticos e só afirmam a aritmética.
+  const L = (secao: string, chave: string, v: Record<string, number>, papel: LinhaModelo["papel"] = "conta", doc = "DRE"): LinhaModelo =>
+    ({ secao_canonica: secao, chave, rotulo_norm: chave.toLowerCase(), papel, unidade: "milhar", moeda: "BRL", documentos: [doc], valores: v });
+  const balanco = [
+    L("ativo_circulante", "Caixa e bancos", { 2024: 5000, 2025: 3000 }, "conta", "BALANCO"),
+    L("ativo_circulante", "Clientes", { 2024: 20000, 2025: 22000 }, "conta", "BALANCO"),
+    L("ativo_circulante", "Total do ativo", { 2024: 55000, 2025: 54000 }, "subtotal", "BALANCO"),
+    L("passivo_circulante", "Fornecedores", { 2024: 8000, 2025: 9000 }, "conta", "BALANCO"),
+    L("patrimonio_liquido", "Patrimônio líquido", { 2024: 37000, 2025: 33000 }, "subtotal", "BALANCO"),
+  ];
+  const dre = [
+    L("receita_bruta", "Receita de prestação de serviços", { 2024: 100000, 2025: 110000 }),
+    L("receita_bruta", "ISS sobre serviços", { 2024: -5000, 2025: -5500 }),
+    L("custos", "Custo dos serviços prestados", { 2024: -60000, 2025: -66000 }),
+    L("despesas_operacionais", "Despesas administrativas", { 2024: -20000, 2025: -22000 }),
+    L("despesas_operacionais", "Depreciação e amortização", { 2024: -3000, 2025: -3000 }),
+  ];
+  const ent = (linhas: LinhaModelo[]) => ({
+    caso: { nome: "Serviços", produto: "reestruturacao" }, agora, entidade: "SERVIÇOS LTDA", setor: null,
+    anosHistoricos: [2024, 2025], anosProjetados: [2026], stressPct: 0.2, caixaMinimo: 0, aliquotaTributos: 0.34,
+    linhas, premissas: [], vinculos: [], macro: [], unidade: "R$ mil" }) as EntradaModeloInstitucional;
+  const b = montarBaseCredito(ent([...balanco, ...dre]), []);
+  const sl = await slidesDe(b);
+  ok(JSON.stringify(linha(slideCom(sl, "XII · COMPARATIVO ENTRE EXERCÍCIOS"), "Receita líquida", 2)) === JSON.stringify(["95,0", "104,5"])
+    && JSON.stringify(linha(slideCom(sl, "XII · COMPARATIVO ENTRE EXERCÍCIOS"), "EBIT", 2)) === JSON.stringify(["12,0", "13,5"]),
+  "(6a) DRE sem totais impressos: receita e EBIT saem da cascata (receita − ISS; − custo − despesas)",
+  JSON.stringify(linha(slideCom(sl, "XII · COMPARATIVO ENTRE EXERCÍCIOS"), "Receita líquida", 2)));
+  const am = amarracoes(b).filter((a) => a.numero === 9 || a.numero === 10);
+  ok(am.length > 0 && am.every((a) => a.veredito !== "ok"),
+    "(6b) total calculado não conta como conferência: as amarrações 9 e 10 não dizem \"Fecha\" contra si mesmas");
+  ok(textos(slideCom(sl, "X.3 · PRAZOS E CICLO FINANCEIRO")).some((t) => /balanço sem conta de estoque/.test(t)),
+    "(6c) balanço sem estoque: o título diz PMR e PMP e que não há estoque, em vez de \"não mensurável\"");
+  let recusou = false;
+  try { construirDeckCredito(montarBaseCredito(ent([L("passivo_circulante", "Fornecedores", { 2025: 1 }, "conta", "BALANCO")]), []), agora); }
+  catch (e) { recusou = e instanceof SemDadoParaApresentar; }
+  ok(recusou, "(6d) entidade sem receita, ativo nem PL (o \"GRUPO\" consolidado sem demonstração): o deck é RECUSADO, não sai vazio");
+}
+{
+  const entrada = entradaModeloDaFixture(fixture, agora);
+  const adulterada = { ...entrada, linhas: entrada.linhas.map((l) => /^total do ativo$/i.test(l.chave.trim()) || /^ativo total$/i.test(l.chave.trim())
+    ? { ...l, valores: { ...l.valores, "2025": (l.valores["2025"] ?? 0) + 5000 } } : l) };
+  const { slides } = await deckDe(adulterada);
+  ok(/amarração\(ões\) não fecham/.test(executivo(slides)),
+    "(6e) amarração que não fecha aparece na faixa do sumário executivo, não só nas notas");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

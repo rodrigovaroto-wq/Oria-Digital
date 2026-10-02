@@ -7283,7 +7283,8 @@ export type GrandezaCredito =
   | "caixa" | "clientes" | "estoques" | "fornecedores"
   | "divida_bancos_cp" | "divida_bancos_lp" | "divida_outras_cp" | "divida_outras_lp";
 
-export interface ValorHistorico { v: number | null; origem: string }
+/** `calculado`: o total NÃO vem impresso no documento — saiu da cascata das contas (ver abaixo). */
+export interface ValorHistorico { v: number | null; origem: string; calculado?: boolean }
 
 export interface HistoricoCredito {
   unidade: string;
@@ -7350,10 +7351,38 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
   const ehOutraDividaDaLinha = (l: LinhaModelo) =>
     ehOutraDivida(l.chave) && (ehDividaFinanceira(l.chave) || /\bm(ú|u)tuos?\b/i.test(l.chave));
 
+  // A DRE SEM TOTAIS IMPRESSOS. DRE de balancete e de empresa pequena costuma trazer só as contas
+  // (receita de serviços, ISS, custo, despesas), sem a linha "Receita líquida" nem "EBIT". Medido
+  // num caso de serviços sintético (02/10/2026): sem este passo, receita, EBIT e EBITDA saíam n/d e
+  // o deck inteiro ficava sem resultado, com TODAS as contas extraídas. A cascata aqui é a MESMA do
+  // modelo institucional (receita − deduções − custos − SG&A, blocos já com sinal normalizado), e
+  // só entra no exercício em que o documento não imprime o total; a origem diz "calculado", e as
+  // amarrações 9 e 10 deixam de contar como conferência nesses exercícios (as duas pontas seriam a
+  // mesma conta).
+  const somaBloco = (b: BlocoModelo) => soma(doBloco(b), b);
+  const receitaB = somaBloco("receita");
+  const deducaoB = somaBloco("deducao");
+  const custoB = soma(doBloco("custo"), "Custos");
+  const sgaB = soma(doBloco("sga"), "SG&A");
+  const comCascata = (base: Record<number, ValorHistorico>, nome: string,
+    conta: (ano: number) => number | null, formula: string): Record<number, ValorHistorico> =>
+    Object.fromEntries(anos.map((ano) => {
+      if (base[ano].v !== null) return [ano, base[ano]];
+      const v = conta(ano);
+      return [ano, v === null ? base[ano]
+        : { v, calculado: true, origem: `${nome} calculado pela Oria (${formula}): o documento não imprime o total` }];
+    }));
+  const vv = (r: Record<number, ValorHistorico>, ano: number) => r[ano]?.v ?? null;
+  const rl = comCascata(ancora("DOC_RECEITA_LIQUIDA", "Receita líquida"), "Receita líquida",
+    (a) => (vv(receitaB, a) === null ? null : (vv(receitaB, a) as number) - (vv(deducaoB, a) ?? 0)), "receita − deduções");
+  const lb = comCascata(ancora("DOC_LUCRO_BRUTO", "Lucro bruto"), "Lucro bruto",
+    (a) => (vv(rl, a) === null || vv(custoB, a) === null ? null : (vv(rl, a) as number) - (vv(custoB, a) as number)), "receita líquida − custos");
+  const ebit = comCascata(ancora("DOC_EBIT", "EBIT"), "EBIT",
+    (a) => (vv(lb, a) === null || vv(sgaB, a) === null ? null : (vv(lb, a) as number) - (vv(sgaB, a) as number)), "lucro bruto − despesas operacionais");
   const grandezas: HistoricoCredito["grandezas"] = {
-      receita_liquida: ancora("DOC_RECEITA_LIQUIDA", "Receita líquida"),
-      lucro_bruto: ancora("DOC_LUCRO_BRUTO", "Lucro bruto"),
-      ebit: ancora("DOC_EBIT", "EBIT"),
+      receita_liquida: rl,
+      lucro_bruto: lb,
+      ebit: ebit,
       lucro_liquido: ancora("DOC_LUCRO_LIQUIDO", "Lucro líquido"),
       // Mesmo filtro da DEPRECIACAO realizada do modelo (`construirModeloInstitucional`): a linha
       // de custo/despesa cujo nome diz depreciação, já na convenção do modelo (magnitude positiva).

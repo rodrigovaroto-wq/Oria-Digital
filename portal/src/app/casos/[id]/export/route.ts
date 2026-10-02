@@ -14,7 +14,7 @@ import {
   type LinhaParaCasar, type VinculoParaCasar,
 } from "@/lib/modelagem-linha";
 import { montarBaseCredito } from "@/lib/apresentacao/montar-base";
-import { construirDeckCredito } from "@/lib/apresentacao/deck-credito";
+import { construirDeckCredito, SemDadoParaApresentar } from "@/lib/apresentacao/deck-credito";
 
 // exceljs (usado em lib/export.ts) usa Buffer/streams do Node — precisa do
 // runtime Node, não Edge.
@@ -613,7 +613,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         { status: 409 },
       );
     }
-    const { deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos), new Date());
+    let deck;
+    try {
+      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos), new Date()));
+    } catch (e) {
+      if (!(e instanceof SemDadoParaApresentar)) throw e;
+      return NextResponse.json({ error: "A apresentação de crédito não foi gerada.", motivos: [e.message] }, { status: 409 });
+    }
     const pptx = await deck.gerar();
     const nomePptx = `${nomeArquivoSanitizado(caso.nome)}-apresentacao-credito-${new Date().toISOString().slice(0, 10)}.pptx`;
     return new NextResponse(pptx as unknown as BodyInit, {

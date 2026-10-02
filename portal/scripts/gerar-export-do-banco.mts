@@ -225,4 +225,17 @@ const saida = process.argv[3]
 const { writeFile } = await import("node:fs/promises");
 await writeFile(saida, await finalizarBufferDoExport(wb));
 console.log(`OK — escrito ${saida}`);
+// APRESENTACAO=<arquivo.pptx>: o deck de crédito pelo MESMO caminho da rota `?modo=apresentacao`
+// (entrada do modelo COM os subtotais informados → base → deck). É o que permite testar a
+// apresentação contra os mandatos do banco local sem subir o portal.
+if (process.env.APRESENTACAO) {
+  const { entradaDoModeloDoWorkbook } = await import("../src/lib/export.ts");
+  const { montarBaseCredito } = await import("../src/lib/apresentacao/montar-base.ts");
+  const { construirDeckCredito } = await import("../src/lib/apresentacao/deck-credito.ts");
+  const ent = entradaDoModeloDoWorkbook(wb);
+  if (!ent) throw new Error("o workbook não montou o modelo institucional: falta entidade ou último exercício real");
+  const { deck } = construirDeckCredito(montarBaseCredito(ent, documentos), new Date());
+  await writeFile(process.env.APRESENTACAO, await deck.gerar());
+  console.log(`OK — apresentação escrita em ${process.env.APRESENTACAO}`);
+}
 console.log(`abas: ${wb.worksheets.map((w) => w.name).join(" · ")}`);

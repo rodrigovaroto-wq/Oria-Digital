@@ -40,6 +40,15 @@ const pctTexto = (v: number, casas = 1) => `${v < 0 ? "−" : "+"}${fmtPct({ v: 
 const mm1 = (v: number) => v.toLocaleString("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const cel = (n: Numero): Celula => ({ t: n.t });
 
+/** Recusa conhecida: a rota a devolve como 409 com a mensagem, não como falha inesperada. */
+export class SemDadoParaApresentar extends Error {
+  constructor(entidade: string) {
+    super(`A entidade "${entidade}" não tem receita, ativo nem patrimônio líquido em nenhum exercício fechado `
+      + "— o deck sairia sem número nenhum. Confira a entidade escolhida na Modelagem (um \"GRUPO\" consolidado "
+      + "só existe se o documento combinado trouxer as demonstrações dele) e a extração dos balanços e DREs.");
+  }
+}
+
 export interface SaidaDeck {
   deck: DeckOria;
   /** o que ficou "[a preencher]" e por quê — também vai para o slide de notas */
@@ -54,6 +63,13 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     throw new Error("apresentação de crédito: nenhum exercício fechado com valor — não há o que apresentar. "
       + "Confira o último exercício real na tela de Modelagem e a extração dos balanços.");
   }
+  // DECK SEM NÚMERO NENHUM NÃO SAI. Medido nos mandatos locais (02/10/2026): escolher a entidade
+  // "GRUPO CANASTRA" — o consolidado que só existe como coluna de demonstração combinada — gerava 56
+  // slides com 134 n/d e nenhum número: um arquivo que abre e parece um resultado. Sem receita, ativo
+  // nem PL em exercício algum, a recusa diz o que fazer.
+  const temAlgum = periodos.some(({ ano }) => (["receita_liquida", "ativo_total", "patrimonio_liquido"] as const)
+    .some((k) => base.historico.grandezas[k][ano]?.v != null));
+  if (!temAlgum) throw new SemDadoParaApresentar(base.entidade);
   const esc: Escala = base.historico.escala;
   const anos = periodos.map((x) => x.ano);
   const ind = new Map(anos.map((a) => [a, indicadores(base, a)]));
@@ -146,7 +162,12 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     kpis.forEach((k, i) => kpi(s, GRADE.col4.x[i], GRADE.topo, GRADE.col4.w, k));
     const d = diagnostico(I, Iant, anterior, esc);
     d.slice(0, 3).forEach(([t, c], i) => cartao(s, GRADE.col3.x[i], 228, GRADE.col3.w, 150, { numeral: i + 1, titulo: t, corpo: c }));
-    faixa(s, 400, implicacaoPrincipal(I));
+    // Amarração que não fecha muda o peso de TODOS os números deste slide: o aviso vem na faixa, que
+    // é o que o leitor leva, e não só no slide de notas (medido na captura real v35: EBIT do
+    // documento 8.309 mil acima da cascata, e o sumário dizia "DFL/EBITDA de 12,3x" sem ressalva).
+    const nDiv = am.filter((a) => a.veredito === "diverge").length;
+    faixa(s, 400, nDiv > 0 ? `${nDiv} amarração(ões) não fecham (ver notas): ler os números com ressalva. ${implicacaoPrincipal(I)}`
+      : implicacaoPrincipal(I));
   }
 
   // ============================================================ I — setor macro
@@ -546,10 +567,8 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
 
   // ===================================================== contracapa
   const contato = { nome: AP, telefone: AP, email: AP };
-  contracapa(deck.novo(COR.fundoCapa), [
-    { ...contato, nome: "Enzo Pierobom", telefone: "11 99250-0682" },
-    { ...contato, nome: "Luis Felipe Farina", telefone: "11 96310-5011" },
-  ]);
+  // Contatos da contracapa: todos "[a preencher]" por decisão do dono (02/10/2026).
+  contracapa(deck.novo(COR.fundoCapa), [contato, contato]);
 
   return { deck, aPreencher, amarracoes: am };
 }
@@ -631,6 +650,12 @@ function implicacaoPrincipal(I: Indicadores): string {
 }
 
 function mancheteCiclo(I: Indicadores, ultimo: number): string {
+  // SEM ESTOQUE NO BALANÇO (serviços, holding operacional): o ciclo fica n/d — estoque ausente não
+  // vira zero —, mas o título diz o que SE mede, em vez de "não mensurável" para uma empresa cujos
+  // prazos de recebimento e pagamento estão no documento.
+  if (I.ciclo.v === null && I.pme.v === null && I.pmr.v !== null && I.pmp.v !== null) {
+    return `PMR de ${fmtDias(I.pmr).t} e PMP de ${fmtDias(I.pmp).t} dias em ${ultimo}; balanço sem conta de estoque`;
+  }
   return I.ciclo.v === null ? `Ciclo financeiro de ${ultimo} não mensurável pelos documentos`
     : `Ciclo financeiro de ${fmtDias(I.ciclo).t} dias em ${ultimo}: PMR ${fmtDias(I.pmr).t}, PME ${fmtDias(I.pme).t}, PMP ${fmtDias(I.pmp).t}`;
 }

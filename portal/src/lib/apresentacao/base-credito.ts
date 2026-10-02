@@ -236,6 +236,11 @@ export function amarracoes(base: BaseCredito, periodos: PeriodoCredito[] = base.
       out.push({ numero, nome, ano, veredito: "nao_conferivel", detalhe: `falta ${falta.join(", ")} no documento` });
       return;
     }
+    if (esquerda[1].calculado) {
+      // O total não veio impresso: ele SAIU desta mesma conta, então compará-la consigo é tautologia.
+      out.push({ numero, nome, ano, veredito: "por_construcao", detalhe: `${esquerda[0]} calculado pela Oria (o documento não imprime o total)` });
+      return;
+    }
     const dif = (esquerda[1].v as number) - termos.reduce((t, [, x, sinal]) => t + sinal * (x.v as number), 0);
     const fecha = Math.abs(dif) <= FOLGA_POR_TERMO * (termos.length + 1);
     out.push({ numero, nome, ano, veredito: fecha ? "ok" : "diverge",
