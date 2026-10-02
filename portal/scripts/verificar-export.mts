@@ -7051,6 +7051,19 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     "Leasing operacional a pagar",
     "Nota promissória comercial",
     "Cédula de crédito bancário",
+    // (39t) a tranche bancária que o balancete chama só de "capital de giro" + o credor
+    "CAPITAL DE GIRO BANCO ALFA - LP",
+    "Banco Alfa - capital de giro",
+    // credores com acento ou sigla (sem a flag `u` o \b não existia depois de "ú")
+    "Capital de giro Itaú - LP", "Capital de giro BB", "Capital de giro Caixa Econômica Federal",
+    "Capital de giro Banrisul - CP",
+    // grupo com UM item só, e esse item é dívida: o rótulo diz o que é (tirá-lo calava dívida e juro)
+    "Outras obrigações (financiamento BNDES)", "Outras contas a pagar: empréstimo Banco X",
+    // vários itens, todos dívida (credor ou linha de financiamento só pelo nome): não é misto
+    "Outras obrigações (BNDES, FINAME e capital de giro Banco X)",
+    "Outras obrigações: capital de giro Bradesco e Itaú",
+    // sem enumeração o próprio nome diz o que é: continua dívida
+    "Outras contas a pagar - empréstimo de sócios",
   ];
   // O CONTRAPONTO É OBRIGATÓRIO: sem ele um `() => true` passaria em tudo acima.
   const GIRO: string[] = [
@@ -7066,6 +7079,10 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     // financeiro por conta própria. Está escrito no vocabulário.
     "Risco sacado a pagar",
     "Confirming - fornecedores",
+    // (39s) grupo de obrigações que só CITA desconto de duplicatas entre outras contas
+    "Outras obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)",
+    // (39t) "capital de giro" sem credor no rótulo continua sem classificar como dívida
+    "Capital de giro",
   ];
   for (const r of DIVIDA) {
     checar(ehDividaFinanceira(r), `(37) "${r}" é dívida financeira (não gira contra receita)`);
@@ -8057,6 +8074,532 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     div.getRow(rClasseTranche).getCell(4).value = "Equity";
     for (const ws of todasAsAbas) esquecerMemoria(ws);
   }
+}
+
+// Montagem COMUM de (39f)–(39l): documento, campo, linha do modelo e busca de rótulo na coluna C.
+// Existia copiada em cada bloco; é a mesma mecânica e a mesma entidade por bloco.
+const arranjoDeCirculante = (ENT: string) => {
+  const mk = (id: string, tipo: string, ref: string) => ({
+    id, tipo_taxonomia: tipo, entidade: { razao_social: ENT },
+    periodo: { tipo: "anual", referencia: ref }, documento_versao: [{ id: `v${id}`, nome_original: `${id}.pdf` }],
+  }) as DocumentoParaExport;
+  const c = (v: string, chave: string, secao: string, valor: number | null, ordem: number, per: string,
+             canonica = "ativo_circulante") =>
+    campo({ chave, secao, secao_canonica: canonica, valor_num: valor, ordem, periodo_coluna: per,
+            documento_versao_id: v, unidade: "milhar" } as never);
+  const norm = (x: string) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const linhaA = (chave: string, valores: Record<string, number>, doc: string, papel: "conta" | "subtotal" = "conta",
+                  secao = "ativo_circulante") => ({
+    secao_canonica: secao, chave, rotulo_norm: norm(chave),
+    papel, unidade: "milhar", moeda: "BRL", documentos: [doc], valores,
+  });
+  const achar = (ws: ExcelJS.Worksheet, rot: string) => {
+    for (let r = 1; r <= ws.rowCount; r++) if (String(ws.getRow(r).getCell(3).value ?? "").trim() === rot) return r;
+    return 0;
+  };
+  return { mk, c, norm, linhaA, achar };
+};
+
+// =============================================================================
+// (39f) "ESTOQUES" É FOLHA NO BALANÇO E AGRUPAMENTO NO BALANCETE: UM DOCUMENTO NÃO APAGA A CONTA DO OUTRO.
+//
+// O DEFEITO, medido no Excel do mandato Krauspenhar (caso 33b58a89, 01/10/2026): a linha
+// "reconciliação com o ativo circulante informado no documento" do `Balance Sheet` saía
+// 53.924.564,46 (2024) e 43.569.482,33 (2025 em diante) — 43% do ativo — e a auditoria
+// reprovava "resíduo imaterial" em 14 células. O resíduo era EXATAMENTE a linha "Estoques"
+// dos Balanços (folha `ativo_circulante`: 53.924.564,46 em 2024, 43.569.482,33 em 2025),
+// que não tinha linha no `Working Capital`.
+//
+// O ARRANJO DOS DOCUMENTOS é o de produção: Balanço Centro Oeste 2024 (versão 1e096ac5),
+// Balanço 2025 (07f650d8) e Balancete jan–ago/26 COMBINADO (b3c179e1), em que "ESTOQUES" é
+// SINTÉTICO (ordem 22) sobre "ESTOQUE DA EMPRESA EM PODER DE TERCEIROS" (56), "MERCADORIA EM
+// CONSIGNAÇÃO"… O ARRANJO DO MODELO NÃO É: aqui 2026 está em `anosHistoricos` para que o
+// ano do balancete seja um exercício REALIZADO e a conta do Working Capital tenha onde ser
+// lida; no Krauspenhar real 2026 é PROJETADO (o balancete jan–ago/26 não fecha exercício).
+// A cobertura do balancete como ano histórico é o que (39g)–(39l) acrescentam. Os VALORES do
+// balancete e das contas vizinhas são de ilustração (os campos
+// reais não se reproduzem sem o banco — regra 4); o que se afirma é o COMPORTAMENTO: o
+// resíduo de 2024/2025 é ~0, "Estoques" tem linha no `Working Capital` com os valores
+// realizados, e no ano do balancete o sintético NÃO soma junto com as filhas.
+// =============================================================================
+{
+  const ENT = "KRAUSPENHAR TESTE LTDA.";
+  const { mk, c, linhaA, achar } = arranjoDeCirculante(ENT);
+  const ES24 = 53924.56446; const ES25 = 43569.48233;
+  const campos: CampoExtraido[] = [
+    // Balanços 2024 e 2025: "Estoques" é FOLHA (ordem 5), entre as outras contas do circulante
+    c("vB24", "Clientes", "Ativo Circulante", 32730, 1, "2024"),
+    c("vB24", "Adiantamentos a fornecedores", "Ativo Circulante", 2770, 2, "2024"),
+    c("vB24", "Outros créditos", "Ativo Circulante", 530, 3, "2024"),
+    c("vB24", "Despesas antecipadas", "Ativo Circulante", 30, 4, "2024"),
+    c("vB24", "Estoques", "Ativo Circulante", ES24, 5, "2024"),
+    c("vB25", "Clientes", "Ativo Circulante", 30000, 1, "2025"),
+    c("vB25", "Adiantamentos a fornecedores", "Ativo Circulante", 2500, 2, "2025"),
+    c("vB25", "Outros créditos", "Ativo Circulante", 600, 3, "2025"),
+    c("vB25", "Despesas antecipadas", "Ativo Circulante", 40, 4, "2025"),
+    c("vB25", "Estoques", "Ativo Circulante", ES25, 5, "2025"),
+    // Balancete 2026 (COMBINADO): "ESTOQUES" é SINTÉTICO (30.000 + 20.000) e as filhas trazem
+    // `secao` = "ESTOQUES"
+    c("vBC26", "CLIENTES", "Ativo Circulante", 28000, 20, "jan–ago/26"),
+    c("vBC26", "ESTOQUES", "Ativo Circulante", 50000, 22, "jan–ago/26"),
+    c("vBC26", "ESTOQUE DA EMPRESA EM PODER DE TERCEIROS", "ESTOQUES", 30000, 56, "jan–ago/26"),
+    c("vBC26", "MERCADORIA EM CONSIGNAÇÃO", "ESTOQUES", 20000, 59, "jan–ago/26"),
+  ];
+  const documentos = [mk("B24", "BALANCO", "2024"), mk("B25", "BALANCO", "2025"), mk("BC26", "COMBINADO", "2026")];
+  const T24 = 32730 + 2770 + 530 + 30 + ES24;
+  const T25 = 30000 + 2500 + 600 + 40 + ES25;
+  const T26 = 28000 + 50000;
+  const entrada = {
+    caso: { nome: "Estoques folha e agrupamento", produto: "reestruturacao" },
+    agora: new Date("2026-10-01T12:00:00Z"), entidade: ENT, setor: "comercio",
+    anosHistoricos: [2024, 2025, 2026], anosProjetados: [2027, 2028],
+    stressPct: 0.2, caixaMinimo: 0, aliquotaTributos: 0.34,
+    linhas: [
+      linhaA("Ativo Circulante", { "2024": T24, "2025": T25, "2026": T26 }, "BALANCO", "subtotal"),
+      linhaA("Clientes", { "2024": 32730, "2025": 30000, "2026": 28000 }, "BALANCO"),
+      linhaA("Adiantamentos a fornecedores", { "2024": 2770, "2025": 2500 }, "BALANCO"),
+      linhaA("Outros créditos", { "2024": 530, "2025": 600 }, "BALANCO"),
+      linhaA("Despesas antecipadas", { "2024": 30, "2025": 40 }, "BALANCO"),
+      // UMA linha lógica por rótulo (é assim que `fn_linhas_para_modelagem` agrega): folha em
+      // 2024/2025, sintético em 2026
+      linhaA("Estoques", { "2024": ES24, "2025": ES25, "2026": 50000 }, "BALANCO"),
+      linhaA("ESTOQUE DA EMPRESA EM PODER DE TERCEIROS", { "2026": 30000 }, "COMBINADO"),
+      linhaA("MERCADORIA EM CONSIGNAÇÃO", { "2026": 20000 }, "COMBINADO"),
+    ],
+    premissas: [], vinculos: [], macro: [], unidade: "R$ mil",
+  };
+  const wb = buildExportWorkbook({
+    caso: entrada.caso, documentos, campos, agora: entrada.agora, modo: "completo",
+    modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+  });
+  const bs = wb.getWorksheet("Balance Sheet")!; esquecerMemoria(bs);
+  const wc = wb.getWorksheet("Working Capital")!; esquecerMemoria(wc);
+  const rRec = achar(bs, "reconciliação com o ativo circulante informado no documento");
+  const rEst = achar(wc, "Estoques");
+  checar(rRec > 0 && rEst > 0, "(39f) o Balance Sheet tem a reconciliação do circulante e o Working Capital tem linha de Estoques",
+    `reconciliação: linha ${rRec} · Estoques: linha ${rEst}`);
+  // Linha ausente NÃO pula os asserts: cada um reprova por si (a contagem off/on fica honesta).
+  const lerWc = (col: string) => (rEst > 0 ? avaliarCelula(wc, col, rEst) : null);
+  const lerRec = (col: string) => (rRec > 0 ? avaliarCelula(bs, col, rRec) : null);
+  // colunas E,F,G = 2024, 2025, 2026
+  for (const [col, ano, esperado] of [["E", 2024, ES24], ["F", 2025, ES25]] as const) {
+    const res = lerRec(col);
+    checar(typeof res === "number" && Math.abs(res) < 0.5,
+      `(39f) ${ano}: "Estoques" é folha do Balanço e não vira resíduo (reconciliação ~0)`, JSON.stringify(res));
+    const est = lerWc(col);
+    checar(typeof est === "number" && Math.abs(est - esperado) < 0.5,
+      `(39f) ${ano}: o Working Capital carrega os Estoques realizados do Balanço`, `${JSON.stringify(est)} vs ${esperado}`);
+  }
+  // No ano do balancete o agrupamento e as filhas não somam juntos: o circulante do modelo
+  // fecha no informado (78.000), não em 128.000 (sintético + filhas).
+  const res26 = lerRec("G");
+  checar(typeof res26 === "number" && Math.abs(res26) < 0.5,
+    "(39f) 2026 (balancete): o sintético não soma junto com as filhas (reconciliação ~0, não 50.000)", JSON.stringify(res26));
+  const est26 = lerWc("G");
+  checar(typeof est26 === "number" && Math.abs(est26) < 0.5,
+    "(39f) 2026 (balancete): a linha 'Estoques' (sintético) não carrega valor — quem carrega são as filhas",
+    JSON.stringify(est26));
+}
+
+// =============================================================================
+// (39g)–(39j) REVISÃO INDEPENDENTE DO (39f): quatro defeitos que a correção do Estoques deixou
+// (ou abriu). Cada bloco afirma COMPORTAMENTO do arquivo, não o mecanismo.
+// Os arranjos são de ilustração (regra 4: o banco real não se reproduz aqui).
+// =============================================================================
+{
+  const ENT = "REVISAO TESTE LTDA.";
+  const { mk, c, linhaA, achar } = arranjoDeCirculante(ENT);
+  const montar = (campos: CampoExtraido[], documentos: DocumentoParaExport[], linhas: ReturnType<typeof linhaA>[],
+                  anosHistoricos: number[], anosProjetados: number[]) => {
+    const entrada = {
+      caso: { nome: "Revisão do Estoques", produto: "reestruturacao" },
+      agora: new Date("2026-10-01T12:00:00Z"), entidade: ENT, setor: "comercio",
+      anosHistoricos, anosProjetados, stressPct: 0.2, caixaMinimo: 0, aliquotaTributos: 0.34,
+      linhas, premissas: [], vinculos: [], macro: [], unidade: "R$ mil",
+    };
+    const wb = buildExportWorkbook({
+      caso: entrada.caso, documentos, campos, agora: entrada.agora, modo: "completo",
+      modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+    const bs = wb.getWorksheet("Balance Sheet")!; esquecerMemoria(bs);
+    const wc = wb.getWorksheet("Working Capital")!; esquecerMemoria(wc);
+    const rRec = achar(bs, "reconciliação com o ativo circulante informado no documento");
+    const rAc = achar(bs, "Ativo circulante operacional");
+    const ler = (ws: ExcelJS.Worksheet, r: number, col: string) => (r > 0 ? avaliarCelula(ws, col, r) : null);
+    const nota = (ws: ExcelJS.Worksheet, r: number, col: string) =>
+      r > 0 ? JSON.stringify(ws.getRow(r).getCell(col).note ?? "") : "";
+    return { bs, wc, achar, rRec, rAc, ler, nota };
+  };
+  // Documento SEM `ordem` nem `periodo_coluna` (nenhuma sequência impressa para os detectores
+  // lerem): um campo qualquer só para o modelo existir, e as linhas do modelo à mão.
+  const montarSemOrdem = (docId: string, ref: string, chave: string, secao: string, valor: number,
+                          linhas: ReturnType<typeof linhaA>[], hist: number[], proj: number[]) =>
+    montar([campo({ chave, secao: secao === "ativo_circulante" ? "Ativo Circulante" : "Passivo Não Circulante",
+                    secao_canonica: secao, valor_num: valor, documento_versao_id: `v${docId}`, unidade: "milhar" } as never)],
+           [mk(docId, "BALANCO", ref)], linhas, hist, proj);
+  const perto = (v: unknown, esperado: number) => typeof v === "number" && Math.abs(v - esperado) < 0.5;
+
+  // ---- (39g) ALTO: coluna legível NA MESMA ABA de uma ilegível mantém o seu veredito ----------
+  // Aba "Balanço" com "2024" e "jan–jun/25" (ilegível). "Impostos e contribuições a recuperar"
+  // (500) é cabeçalho com filhas IRRF 300 + PIS 200 nas DUAS colunas. O `continue` do 3f40571
+  // descartava o veredito de 2024 por causa da coluna vizinha: AC operacional 1.500 -> 2.000
+  // (dupla contagem) e reconciliação 0 -> -500.
+  {
+    const H = "Impostos e contribuições a recuperar";
+    const campos = [
+      c("vG", "Clientes", "Ativo Circulante", 1000, 1, "2024"),
+      c("vG", H, "Ativo Circulante", 500, 2, "2024"),
+      c("vG", "IRRF a recuperar", H, 300, 3, "2024"),
+      c("vG", "PIS a recuperar", H, 200, 4, "2024"),
+      c("vG", "Clientes", "Ativo Circulante", 900, 1, "jan–jun/25"),
+      c("vG", H, "Ativo Circulante", 500, 2, "jan–jun/25"),
+      c("vG", "IRRF a recuperar", H, 300, 3, "jan–jun/25"),
+      c("vG", "PIS a recuperar", H, 200, 4, "jan–jun/25"),
+    ];
+    const documentos = [mk("G", "BALANCO", "2025")];
+    const m = montar(campos, documentos, [
+      linhaA("Ativo Circulante", { "2024": 1500 }, "BALANCO", "subtotal"),
+      linhaA("Clientes", { "2024": 1000 }, "BALANCO"),
+      linhaA(H, { "2024": 500 }, "BALANCO"),
+      linhaA("IRRF a recuperar", { "2024": 300 }, "BALANCO"),
+      linhaA("PIS a recuperar", { "2024": 200 }, "BALANCO"),
+    ], [2024], [2025, 2026]);
+    checar(m.rAc > 0 && m.rRec > 0, "(39g) o Balance Sheet tem o AC operacional e a reconciliação", `${m.rAc}/${m.rRec}`);
+    checar(perto(m.ler(m.bs, m.rAc, "E"), 1500),
+      "(39g) 2024: o cabeçalho declarado nas duas colunas da aba não soma com as filhas (AC operacional 1.500, não 2.000)",
+      JSON.stringify(m.ler(m.bs, m.rAc, "E")));
+    checar(perto(m.ler(m.bs, m.rRec, "E"), 0),
+      "(39g) 2024: a reconciliação do circulante é ~0 (não -500)", JSON.stringify(m.ler(m.bs, m.rRec, "E")));
+  }
+
+  // ---- (39h) ALTO: ano histórico SEM total informado: o cabeçalho explicado pelas filhas não soma ----
+  // Sem `ordem` (nenhum detector estrutural). "Ativo Circulante" é informado só em 2025; em 2024
+  // o cabeçalho "Estoques" voltava a somar com as filhas e a reconciliação dizia "nada a
+  // reconciliar" — dupla contagem calada. Agora é a EXPLICAÇÃO DO PRÓPRIO ANO que decide: em 2024
+  // as filhas (300+200) somam os 500 do cabeçalho, ele sai, e a célula nomeia as filhas (item 4).
+  {
+    const m = montarSemOrdem("H", "2025", "Outros", "ativo_circulante", 300, [
+      // 2023 é o exercício em que "Estoques" é FOLHA (total informado 300 = 100 + 200, sem excesso):
+      // a linha precisa de um ano com valor para continuar existindo e poder carregar a nota
+      linhaA("Ativo Circulante", { "2023": 300, "2025": 900 }, "BALANCO", "subtotal"),
+      linhaA("Outros", { "2023": 100, "2024": 400, "2025": 300 }, "BALANCO"),
+      linhaA("Estoques", { "2023": 200, "2024": 500, "2025": 600 }, "BALANCO"),
+      linhaA("Matéria-prima", { "2024": 300, "2025": 350 }, "BALANCO"),
+      linhaA("Produtos acabados", { "2024": 200, "2025": 250 }, "BALANCO"),
+    ], [2023, 2024, 2025], [2026, 2027]);
+    checar(perto(m.ler(m.bs, m.rAc, "G"), 900), "(39h) 2025 (com total informado): AC operacional 900",
+      JSON.stringify(m.ler(m.bs, m.rAc, "G")));
+    checar(perto(m.ler(m.bs, m.rAc, "F"), 900),
+      "(39h) 2024 (sem total informado): o cabeçalho provado em 2025 não soma de volta (AC operacional 900, não 1.400)",
+      JSON.stringify(m.ler(m.bs, m.rAc, "F")));
+    // ---- (39j) MÉDIO, regra 1: a célula em branco que a prova deixou traz motivo E efeito ----
+    const rEst = m.achar(m.wc, "Estoques");
+    const n25 = m.nota(m.wc, rEst, "G"); const n24 = m.nota(m.wc, rEst, "F");
+    checar(rEst > 0 && /Cabeçalho de grupo/.test(n25) && /Efeito/.test(n25),
+      "(39j) 2025: o valor que a prova tirou deixa nota com o motivo e o efeito (não fica em branco calado)", n25);
+    checar(/Cabeçalho de grupo/.test(n24) && /Matéria-prima \+ Produtos acabados/.test(n24) && /Efeito/.test(n24),
+      "(39j) 2024: mesmo sem total informado, a nota nomeia as filhas que explicam o valor tirado e o efeito", n24);
+  }
+
+  // ---- (39i) MÉDIO: sintético fora da lista de nomes, balancete num ano HISTÓRICO -------------
+  // O arranjo do (39f) com "Estoque de mercadorias" (não está em CABECALHOS_DE_GRUPO) e o
+  // balancete "jan–dez/25" como exercício realizado. A prova só conhece a lista: somava o
+  // sintético (50.000) com as filhas e tirava "Clientes" (28.000, folha) para compensar —
+  // AC operacional 100.000 contra 78.000, reconciliação -22.000.
+  {
+    const E = "Estoque de mercadorias";
+    const ES24 = 53924.56446;
+    const T24 = 32730 + ES24;
+    const linhas = [
+      linhaA("Ativo Circulante", { "2024": T24, "2025": 78000 }, "BALANCO", "subtotal"),
+      linhaA("Clientes", { "2024": 32730, "2025": 28000 }, "BALANCO"),
+      linhaA(E, { "2024": ES24, "2025": 50000 }, "BALANCO"),
+      linhaA("ESTOQUE EM PODER DE TERCEIROS", { "2025": 30000 }, "COMBINADO"),
+      linhaA("MERCADORIA EM CONSIGNAÇÃO", { "2025": 20000 }, "COMBINADO"),
+    ];
+    const camposBase = [
+      c("vB24", "Clientes", "Ativo Circulante", 32730, 1, "2024"),
+      c("vB24", E, "Ativo Circulante", ES24, 5, "2024"),
+      c("vBC25", "CLIENTES", "Ativo Circulante", 28000, 20, "jan–dez/25"),
+      c("vBC25", E, "Ativo Circulante", 50000, 22, "jan–dez/25"),
+      c("vBC25", "ESTOQUE EM PODER DE TERCEIROS", E, 30000, 56, "jan–dez/25"),
+      c("vBC25", "MERCADORIA EM CONSIGNAÇÃO", E, 20000, 59, "jan–dez/25"),
+    ];
+    // (a) o documento do balancete diz o exercício ("2025"): o veredito sai SÓ para ele
+    const a = montar(camposBase, [mk("B24", "BALANCO", "2024"), mk("BC25", "COMBINADO", "2025")], linhas, [2024, 2025], [2026, 2027]);
+    const rWc = a.achar(a.wc, "Clientes");
+    checar(perto(a.ler(a.bs, a.rRec, "F"), 0),
+      "(39i) 2025 (balancete histórico): o sintético fora da lista não soma com as filhas (reconciliação ~0)",
+      JSON.stringify(a.ler(a.bs, a.rRec, "F")));
+    checar(perto(a.ler(a.wc, rWc, "F"), 28000),
+      "(39i) 2025: 'Clientes' (folha) continua no modelo — a prova não a tira para compensar o sintético",
+      JSON.stringify(a.ler(a.wc, rWc, "F")));
+    checar(perto(a.ler(a.bs, a.rRec, "E"), 0) && perto(a.ler(a.wc, a.achar(a.wc, E), "E"), ES24),
+      "(39i) 2024: a folha do Balanço segue intacta (reconciliação ~0 e a linha carrega os Estoques)",
+      `${JSON.stringify(a.ler(a.bs, a.rRec, "E"))} · ${JSON.stringify(a.ler(a.wc, a.achar(a.wc, E), "E"))}`);
+    // (b) o documento NÃO diz o ano (referência ilegível): não há como saber qual exercício o
+    // balancete cobre. O teto declarado: o sintético fica na soma, o excesso APARECE na
+    // reconciliação (-50.000) e nenhuma outra conta é removida.
+    const b = montar(camposBase, [mk("B24", "BALANCO", "2024"), mk("BC25", "COMBINADO", "jan–dez/25")], linhas, [2024, 2025], [2026, 2027]);
+    const rWcB = b.achar(b.wc, "Clientes");
+    checar(perto(b.ler(b.wc, rWcB, "F"), 28000),
+      "(39i) sem ano derivável: 'Clientes' (folha) NUNCA é removida para compensar o sintético",
+      JSON.stringify(b.ler(b.wc, rWcB, "F")));
+    const resB = b.ler(b.bs, b.rRec, "F");
+    checar(typeof resB === "number" && Math.abs(resB) > 1000,
+      "(39i) sem ano derivável: o excesso fica À VISTA na reconciliação (não some calado)", JSON.stringify(resB));
+  }
+  // ---- (39k) ALTO: sem filhas NAQUELE ano, a linha é folha e fica (nada se herda de outro ano) ----
+  // 2025: AC informado 1.600 = Clientes 1.000 + filhas 350+250 (Estoques 600 é o cabeçalho).
+  // 2024, sem total informado e SEM filha alguma: Estoques 500 é folha. A herança do 45c8df2 a
+  // tirava (AC 900, linha sumida, "nada a reconciliar"); o 3f40571 dava 1.400.
+  {
+    const m = montarSemOrdem("K", "2025", "Clientes", "ativo_circulante", 900, [
+      linhaA("Ativo Circulante", { "2025": 1600 }, "BALANCO", "subtotal"),
+      linhaA("Clientes", { "2024": 900, "2025": 1000 }, "BALANCO"),
+      linhaA("Estoques", { "2024": 500, "2025": 600 }, "BALANCO"),
+      linhaA("Matéria-prima", { "2025": 350 }, "BALANCO"),
+      linhaA("Produtos acabados", { "2025": 250 }, "BALANCO"),
+    ], [2024, 2025], [2026, 2027]);
+    const rEst = m.achar(m.wc, "Estoques");
+    checar(perto(m.ler(m.bs, m.rAc, "F"), 1600), "(39k) 2025: o cabeçalho explicado pelas filhas sai (AC operacional 1.600)",
+      JSON.stringify(m.ler(m.bs, m.rAc, "F")));
+    checar(perto(m.ler(m.bs, m.rAc, "E"), 1400),
+      "(39k) 2024 (sem filhas): 'Estoques' é folha e soma (AC operacional 1.400, não 900)", JSON.stringify(m.ler(m.bs, m.rAc, "E")));
+    checar(rEst > 0 && perto(m.ler(m.wc, rEst, "E"), 500),
+      "(39k) 2024: a linha Estoques continua no Working Capital com o saldo do Balanço", JSON.stringify(m.ler(m.wc, rEst, "E")));
+  }
+
+  // ---- (39l) MÉDIO: um segundo excesso no bloco não desliga a remoção do cabeçalho explicado ----
+  // PNC 2024 informado 34.000: Empréstimos 30.000, Provisões 4.000 (cabeçalho: filhas 1.500+2.500),
+  // outras exigibilidades 2.700 e 800. Provisões sai (explicada) e o resíduo é -3.500 (os 3.500 a
+  // mais que o documento não explica, e que ficam À VISTA); o tudo-ou-nada do 45c8df2 deixava
+  // Provisões e o resíduo ia a -7.500.
+  {
+    const P = "passivo_nao_circulante";
+    const m = montarSemOrdem("L", "2024", "Empréstimos bancários", P, 30000, [
+      linhaA("Passivo Não Circulante", { "2024": 34000 }, "BALANCO", "subtotal", P),
+      ...([["Empréstimos bancários", 30000], ["Provisões", 4000], ["Provisão cível", 1500],
+           ["Provisão trabalhista", 2500], ["Outras exigibilidades", 2700], ["Obrigações diversas", 800]] as const)
+        .map(([n, v]) => linhaA(n, { "2024": v }, "BALANCO", "conta", P)),
+    ], [2024], [2025, 2026]);
+    const rRecP = m.achar(m.bs, "reconciliação com o passivo não circulante informado no documento");
+    checar(rRecP > 0 && perto(m.ler(m.bs, rRecP, "E"), -3500),
+      "(39l) PNC 2024: Provisões (explicada por 1.500+2.500) sai mesmo com outro excesso no bloco: resíduo -3.500, não -7.500",
+      JSON.stringify(rRecP > 0 ? m.ler(m.bs, rRecP, "E") : "linha ausente"));
+  }
+
+  // ---- (39m) ALTO: bloco com ~17 contas e centavos: a busca de filhas não desiste calada ----
+  // Clientes 5.000, Estoques 600 (cabeçalho: filhas 350,25 + 249,75) e 15 contas com centavos. As
+  // somas distintas cresciam 2^n, a busca estourava o teto e o Estoques voltava a somar (25.819,30
+  // em vez de 25.219,30; sem total informado, a reconciliação nem acusava).
+  {
+    // 15 saldos IRREGULARES (sorteio fixo, semente 2): 30.872 somas distintas, acima do teto antigo de
+    // 20.000; só UM subconjunto soma 600 e 128 somam 5.000 (a coincidência de Clientes, que a
+    // unicidade impede de virar remoção).
+    const outras = [1106.03, 1097.83, 206.55, 234.87, 985.5, 885.97, 819.73, 458.14, 755.94, 756.8,
+                    731.2, 308.38, 580.67, 543.53, 873.01];
+    const base = 5000 + 350.25 + 249.75 + outras.reduce((t, v) => t + v, 0);
+    const m = montarSemOrdem("M", "2024", "Clientes", "ativo_circulante", 5000, [
+      linhaA("Clientes", { "2024": 5000 }, "BALANCO"),
+      linhaA("Estoques", { "2024": 600 }, "BALANCO"),
+      linhaA("Matéria-prima", { "2024": 350.25 }, "BALANCO"),
+      linhaA("Produtos acabados", { "2024": 249.75 }, "BALANCO"),
+      ...outras.map((v, i) => linhaA(`Conta diversa ${String(i).padStart(2, "0")}`, { "2024": v }, "BALANCO")),
+    ], [2024], [2025, 2026]);
+    checar(perto(m.ler(m.bs, m.rAc, "E"), base),
+      "(39m) 2024: com 15 contas de centavos no bloco, o cabeçalho explicado pelas filhas ainda sai da soma (e Clientes, coincidência, fica)",
+      `${JSON.stringify(m.ler(m.bs, m.rAc, "E"))} vs ${base}`);
+  }
+
+  // ---- (39n) MÉDIO: grupo cujas filhas também têm nome de grupo, mas são SUBGRUPOS dele ----
+  // Disponível 1.000 = Caixa e equivalentes 300 + Aplicações financeiras 700; Clientes 5.000;
+  // total informado 6.000. A guarda "filha não é nome de grupo" do eb3592f impedia a remoção:
+  // Caixa 2.000 e reconciliação -1.000. (O Vertentes — Clientes 26.000 = Caixa 8.000 + Estoques
+  // 18.000, irmãs por acaso — segue bloqueado pelo assert do modelo base.)
+  {
+    const m = montarSemOrdem("N", "2024", "Clientes", "ativo_circulante", 5000, [
+      linhaA("Ativo Circulante", { "2024": 6000 }, "BALANCO", "subtotal"),
+      linhaA("Disponível", { "2024": 1000 }, "BALANCO"),
+      linhaA("Caixa e equivalentes", { "2024": 300 }, "BALANCO"),
+      linhaA("Aplicações financeiras", { "2024": 700 }, "BALANCO"),
+      linhaA("Clientes", { "2024": 5000 }, "BALANCO"),
+    ], [2024], [2025, 2026]);
+    checar(perto(m.ler(m.bs, m.rRec, "E"), 0),
+      "(39n) 2024: Disponível (Caixa + Aplicações, subgrupos dele) sai da soma: reconciliação ~0, não -1.000",
+      JSON.stringify(m.ler(m.bs, m.rRec, "E")));
+  }
+
+  // ---- (39o) MÉDIO: subtotal arredondado em milhar (4.000 = 1.500 + 2.501) ----------------------
+  // A folga absoluta de ±0,5 reprovava a soma por 1 unidade de arredondamento do documento.
+  {
+    const P = "passivo_nao_circulante";
+    const m = montarSemOrdem("O", "2024", "Empréstimos bancários", P, 30000, [
+      linhaA("Passivo Não Circulante", { "2024": 34001 }, "BALANCO", "subtotal", P),
+      ...([["Empréstimos bancários", 30000], ["Provisões", 4000], ["Provisão cível", 1500],
+           ["Provisão trabalhista", 2501]] as const)
+        .map(([n, v]) => linhaA(n, { "2024": v }, "BALANCO", "conta", P)),
+    ], [2024], [2025, 2026]);
+    const rRecP = m.achar(m.bs, "reconciliação com o passivo não circulante informado no documento");
+    checar(rRecP > 0 && perto(m.ler(m.bs, rRecP, "E"), 0),
+      "(39o) PNC 2024: Provisões 4.000 = 1.500 + 2.501 (arredondamento do documento) sai da soma: reconciliação ~0, não -4.000",
+      JSON.stringify(rRecP > 0 ? m.ler(m.bs, rRecP, "E") : "linha ausente"));
+  }
+
+  // ---- (39p) MÉDIO: soma que só fecha com a folga e sem total informado: a linha fica, COM aviso ----
+  // O 39o sem "Passivo Não Circulante" informado: Provisões 4.000 = 1.500 + 2.501 só com a folga de
+  // arredondamento, nada corrobora a remoção. Ela fica na soma (o PNC dobra 4.000) — e a célula
+  // tem de DIZER que não foi verificada e o efeito, porque sem total não há reconciliação.
+  {
+    const P = "passivo_nao_circulante";
+    const m = montarSemOrdem("P", "2024", "Empréstimos bancários", P, 30000, ([
+      ["Empréstimos bancários", 30000], ["Provisões", 4000], ["Provisão cível", 1500], ["Provisão trabalhista", 2501],
+    ] as const).map(([n, v]) => linhaA(n, { "2024": v }, "BALANCO", "conta", P)), [2024], [2025, 2026]);
+    const nota = m.nota(m.bs, m.achar(m.bs, "Provisões"), "E");
+    checar(/NÃO verificado/.test(nota) && /Efeito/.test(nota) && /folga de arredondamento/.test(nota),
+      "(39p) 2024: Provisões que só fecha com a folga, sem total informado, fica na soma COM aviso (motivo e efeito)", nota);
+  }
+
+  // ---- (39q) BAIXO: "Outros créditos" é IRMÃ de Contas a receber, não filha ------------------
+  // Contas a receber 1.200 (folha), Outros créditos 700, Adiantamento a fornecedores 500: 700 + 500
+  // = 1.200 por acaso. A tabela de subgrupos listava "outros creditos" sob "contas a receber".
+  {
+    const m = montarSemOrdem("Q", "2024", "Contas a receber", "ativo_circulante", 1200, [
+      linhaA("Contas a receber", { "2024": 1200 }, "BALANCO"),
+      linhaA("Outros créditos", { "2024": 700 }, "BALANCO"),
+      linhaA("Adiantamento a fornecedores", { "2024": 500 }, "BALANCO"),
+    ], [2024], [2025, 2026]);
+    const rCr = m.achar(m.wc, "Contas a receber");
+    checar(rCr > 0 && perto(m.ler(m.wc, rCr, "E"), 1200),
+      "(39q) 2024: 'Contas a receber' (folha) fica no modelo — Outros créditos + Adiantamento somam 1.200 por acaso",
+      JSON.stringify(rCr > 0 ? m.ler(m.wc, rCr, "E") : "linha ausente"));
+  }
+
+  // ===========================================================================
+  // (39r)-(39t) KRAUSPENHAR (caso 33b58a89, 01/10/2026): TRÊS DEFEITOS NA CADEIA DA DÍVIDA.
+  // O arranjo dos Balanços é o de produção (2024 versão 1e096ac5, 2025 versão 07f650d8): o PNC
+  // tem UMA conta, ordem 22 "Empréstimos e financiamentos - longo prazo" (4.183.333,35 e
+  // 9.535.722,84), e logo abaixo, ordem 23, "Passivo Não Circulante" com o MESMO valor. O que
+  // NÃO se reproduz de fora do banco (regra 4): as demais linhas do Balanço real; só o Ativo Não
+  // Circulante (valores medidos) entra, como 3a linha do grupo sem seção. Afirma-se o COMPORTAMENTO: com a conta única e o
+  // total da seção na sequência, a conta é folha.
+  // O balancete (COMBINADO, jan-ago/26) tem o sintético "EMPRESTIMOS E FINANCIAMENTOS LONGO
+  // PRAZO" sobre as tranches "CAPITAL DE GIRO BANCO … - LP"; aqui 2026 é histórico, para a
+  // regra "o sintético não soma junto com as tranches no próprio ano" ter onde ser lida.
+  // ===========================================================================
+  {
+    const EMP = "Empréstimos e financiamentos - longo prazo";
+    const PNC = "Passivo Não Circulante";
+    const P = "passivo_nao_circulante";
+    const L24 = 4183333.35; const L25 = 9535722.84;
+    const CP24 = 15985290.43; const CP25 = 12000000;
+    const OUT24 = 4664446.92; const OUT25 = 4871633.53;
+    const OUTROS = "Outras obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)";
+    const SINT = "EMPRESTIMOS E FINANCIAMENTOS LONGO PRAZO";
+    // grupo MISTO no PNC (mesma regra do Working Capital): fica no balanço como conta constante e
+    // TEM de levar a nota, senão dívida e juro ficam subestimados calados
+    const MISTO = "Outras obrigações (dividendos a pagar e desconto de duplicatas)"; const MISTO24 = 100000;
+    const TR_A = "CAPITAL DE GIRO BANCO ALFA - LP"; const TR_B = "CAPITAL DE GIRO BANCO BETA - LP";
+    const { mk, c, linhaA } = arranjoDeCirculante("KRAUSPENHAR DIVIDA LTDA.");
+    // FORMATO REAL (medido no export do caso): o total "Passivo Não Circulante" e a conta chegam
+    // com `secao` NULA, e a conta traz só `secao_canonica`. O grupo do detector por ordem é
+    // (versão × coluna × secao): `secao` nula junta todas as linhas sem seção do documento, então
+    // "Ativo Não Circulante" (ordem 13) é a terceira linha do grupo — não há linha inventada.
+    const semSecao = (v: string, chave: string, valor: number | null, ordem: number, per: string, canon: string | null) =>
+      campo({ chave, secao: null, secao_canonica: canon, valor_num: valor, ordem, periodo_coluna: per,
+              documento_versao_id: v, unidade: "milhar" } as never);
+    const campos = [
+      semSecao("vB24", "Ativo Não Circulante", 25822691.85, 13, "2024", "ativo_nao_circulante"),
+      semSecao("vB24", EMP, L24, 22, "2024", P),
+      semSecao("vB24", PNC, L24, 23, "2024", null),
+      semSecao("vB25", "Ativo Não Circulante", 29494095.41, 13, "2025", "ativo_nao_circulante"),
+      semSecao("vB25", EMP, L25, 22, "2025", P),
+      semSecao("vB25", PNC, L25, 23, "2025", null),
+      c("vBC26", SINT, PNC, 3000000, 5, "01/01/2026 a 31/08/2026", P),
+      c("vBC26", TR_A, SINT, 1000000, 6, "01/01/2026 a 31/08/2026", P),
+      c("vBC26", TR_B, SINT, 2000000, 7, "01/01/2026 a 31/08/2026", P),
+    ];
+    const entrada = {
+      caso: { nome: "Krauspenhar dívida", produto: "reestruturacao" },
+      agora: new Date("2026-10-01T12:00:00Z"), entidade: "KRAUSPENHAR DIVIDA LTDA.", setor: "comercio",
+      anosHistoricos: [2024, 2025, 2026], anosProjetados: [2027, 2028],
+      stressPct: 0.2, caixaMinimo: 0, aliquotaTributos: 0.34,
+      linhas: [
+        linhaA("Passivo Circulante", { "2024": CP24 + OUT24, "2025": CP25 + OUT25 }, "BALANCO", "subtotal", "passivo_circulante"),
+        linhaA("Empréstimos e financiamentos - curto prazo", { "2024": CP24, "2025": CP25 }, "BALANCO", "conta", "passivo_circulante"),
+        linhaA(OUTROS, { "2024": OUT24, "2025": OUT25 }, "BALANCO", "conta", "passivo_circulante"),
+        linhaA(PNC, { "2024": L24 + MISTO24, "2025": L25, "2026": 3000000 }, "BALANCO", "subtotal", P),
+        linhaA(MISTO, { "2024": MISTO24 }, "BALANCO", "conta", P),
+        linhaA(EMP, { "2024": L24, "2025": L25 }, "BALANCO", "conta", P),
+        linhaA(SINT, { "2026": 3000000 }, "COMBINADO", "conta", P),
+        linhaA(TR_A, { "2026": 1000000 }, "COMBINADO", "conta", P),
+        linhaA(TR_B, { "2026": 2000000 }, "COMBINADO", "conta", P),
+      ],
+      premissas: [], vinculos: [], macro: [], unidade: "R$ mil",
+    };
+    const wb = buildExportWorkbook({
+      caso: entrada.caso, documentos: [mk("B24", "BALANCO", "2024"), mk("B25", "BALANCO", "2025"), mk("BC26", "COMBINADO", "2026")],
+      campos, agora: entrada.agora, modo: "completo",
+      modeloInstitucional: entrada as unknown as Parameters<typeof buildExportWorkbook>[0]["modeloInstitucional"],
+    });
+    const bs = wb.getWorksheet("Balance Sheet")!; esquecerMemoria(bs);
+    const wc = wb.getWorksheet("Working Capital")!; esquecerMemoria(wc);
+    const sd = wb.getWorksheet("ST Inv. & Debt")!; esquecerMemoria(sd);
+    const rLP = achar(bs, "Dívida de longo prazo");
+    const rRecPnc = achar(bs, "reconciliação com o passivo não circulante informado no documento");
+    const rCpSd = achar(sd, "Dívida de curto prazo (fim do período)");
+    const lerCel = (ws: ExcelJS.Worksheet, r: number, col: string) => (r > 0 ? avaliarCelula(ws, col, r) : null);
+    checar(rLP > 0 && rRecPnc > 0 && rCpSd > 0, "(39r) as linhas lidas existem no arquivo",
+      `LP=${rLP} reconciliação PNC=${rRecPnc} CP(ST)=${rCpSd}`);
+
+    // (39r) DEFEITO 1: conta única que iguala o total da seção não é subtotal dele.
+    for (const [col, ano, esperado] of [["E", 2024, L24], ["F", 2025, L25]] as const) {
+      const lp = lerCel(bs, rLP, col);
+      checar(perto(lp, esperado),
+        `(39r) ${ano}: a Dívida de longo prazo do Balance Sheet é o empréstimo do Balanço (conta única do PNC), não zero`,
+        `${JSON.stringify(lp)} vs ${esperado}`);
+      const res = lerCel(bs, rRecPnc, col);
+      checar(perto(res, 0),
+        `(39r) ${ano}: o PNC fecha no informado — o empréstimo não vira resíduo de reconciliação`, JSON.stringify(res));
+    }
+    // …e a regra que não pode se perder: no ano do balancete o sintético não soma com as tranches.
+    // A tranche só é dívida com o (39t); o que o (39r) afirma é o PNC de 2026 fechar nos 3.000.000
+    // do informado (3.000.000 = tranches; somar o sintético daria 6.000.000).
+    checar(perto(lerCel(bs, rRecPnc, "G"), 0),
+      "(39r) 2026 (balancete): o sintético não soma junto com as tranches (reconciliação do PNC ~0, não 3.000.000)",
+      JSON.stringify(lerCel(bs, rRecPnc, "G")));
+
+    // (39s) DEFEITO 2: o grupo de obrigações que só cita "desconto de duplicatas" não é dívida.
+    for (const [col, ano, esperado] of [["E", 2024, CP24], ["F", 2025, CP25]] as const) {
+      const cp = lerCel(sd, rCpSd, col);
+      checar(perto(cp, esperado),
+        `(39s) ${ano}: a Dívida de curto prazo é só o empréstimo (adiantamento de cliente e JCP não recebem juro de dívida)`,
+        `${JSON.stringify(cp)} vs ${esperado}`);
+    }
+    const rOut = achar(wc, OUTROS);
+    checar(rOut > 0 && perto(lerCel(wc, rOut, "E"), OUT24),
+      "(39s) 2024: 'Outras obrigações (…)' fica no Working Capital com o saldo do Balanço", JSON.stringify(lerCel(wc, rOut, "E")));
+    const notaOut = rOut > 0 ? JSON.stringify(wc.getRow(rOut).getCell(3).note ?? "") : "";
+    checar(/duplicata/i.test(notaOut) && /n(ã|a)o recebe juro/i.test(notaOut) && /SUBESTIMAD/.test(notaOut),
+      "(39s) …e a célula diz o motivo (o documento não separa a duplicata descontada) e o efeito (sem juro, dívida subestimada)", notaOut);
+
+    const rMisto = achar(bs, MISTO);
+    const notaMisto = rMisto > 0 ? JSON.stringify(bs.getRow(rMisto).getCell(3).note ?? "") : "";
+    checar(rMisto > 0 && perto(lerCel(bs, rMisto, "E"), MISTO24) && perto(lerCel(bs, rRecPnc, "E"), 0),
+      "(39s) PNC 2024: o grupo misto fica no Balance Sheet como conta constante e o PNC segue fechando",
+      `${JSON.stringify(rMisto > 0 ? lerCel(bs, rMisto, "E") : "linha ausente")} · ${JSON.stringify(lerCel(bs, rRecPnc, "E"))}`);
+    checar(/duplicata/i.test(notaMisto) && /n(ã|a)o recebe juro/i.test(notaMisto) && /SUBESTIMAD/.test(notaMisto),
+      "(39s) …e a linha do PNC leva a nota (motivo e efeito), não cai calada fora da dívida", notaMisto);
+
+    // (39t) DEFEITO 3: tranche "CAPITAL DE GIRO BANCO …" é dívida. Só 2026 tem valor (balancete),
+    // então o efeito nas colunas históricas de 2024/2025 do Krauspenhar é NULO; a asserção é no ano
+    // do balancete, onde o sintético (excluído) e as tranches (agora dívida) somam 3.000.000.
+    const lp26 = lerCel(bs, rLP, "G");
+    checar(perto(lp26, 3000000),
+      "(39t) 2026 (balancete): as tranches 'CAPITAL DE GIRO BANCO …' são a dívida de longo prazo (3.000.000, não 0 nem 6.000.000)",
+      JSON.stringify(lp26));
+  }
+
 }
 
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);

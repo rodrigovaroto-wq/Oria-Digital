@@ -285,7 +285,10 @@ const connections = {
 posicionar(nodes, connections);
 
 const workflow = {
-  name: 'Oria — Índices Macroeconômicos (BCB/SGS + Focus + IBGE)',
+  // O nome publicado (medido em 01/10/2026; ver build-workflow-erros.mjs): o
+  // dono renomeou no editor, e sem este alinhamento o conferidor não achava o
+  // arquivo e a republicação desfaria o nome.
+  name: 'Oria SARF — Índices Macroeconômicos',
   nodes, connections, settings: { executionOrder: 'v1' },
   meta: {
     note: 'Gerado por N8N/build-workflow-macro.mjs. Coleta mensal de IPCA/IGP-M/INPC/Selic/CDI/câmbio '

@@ -44,3 +44,9 @@ sem bloqueio em qualquer modo.
 VERSIONADO (commit 3b9292e), que liberava o MCP do Supabase para todo clone. Ele saiu do git (PR
 #244, fatia B1): num clone novo, ou depois do `pull` que o remove, as consultas do MCP voltam a pedir
 confirmação até o dono recriar o arquivo NA PRÓPRIA MÁQUINA.
+
+**Atualização 01/10/2026 (sessão 104, tarde):** com o pedido EXPLÍCITO do dono no chat ("adicione você
+as migrations que estão faltando em produção"), o modo automático ACEITOU as três chamadas da API de
+gerenciamento (0196–0198) e a republicação do n8n. No mesmo dia, sem esse pedido, recusou a 0196
+("Production Deploy"). E um subagente teve uma LEITURA de produção negada ("Production Reads") — o
+que vale para a sessão principal não vale automaticamente para o agente despachado.

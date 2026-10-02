@@ -156,6 +156,15 @@ export interface LinhaModelo {
    */
   sinalNormalizado?: boolean;
   /**
+   * Marcado por `contexto()`: os exercícios em que a prova de cabeçalho de grupo TIROU o valor
+   * desta linha da soma (ano -> motivo e efeito, em texto de nota). A célula fica em branco, e
+   * branco sem explicação é ausência apresentada como dado (regra 1).
+   */
+  semValorPorCabecalho?: Record<string, string>;
+  /** Marcado por `contexto()`: exercícios em que a busca de filhas desistiu (teto) e a linha FICOU
+   * na soma sem ter sido verificada (ano -> aviso com o efeito). Vai no fim da nota da célula. */
+  avisoDeCabecalho?: Record<string, string>;
+  /**
    * A PROVENIÊNCIA DE CADA CÉLULA HISTÓRICA, por ano: arquivo, página, confiança e
    * aceite (`0125`).
    *
@@ -660,6 +669,13 @@ function frasesDeProveniencia(l: LinhaModelo, ano: number): string {
 /** Valor histórico já na escala do modelo, com o aviso quando houve conversão. */
 function valorNaEscala(l: LinhaModelo, ano: number, unidadeModelo: string):
   { valor: number; nota: string } | null {
+  const r = valorNaEscalaSemAviso(l, ano, unidadeModelo);
+  const aviso = l.avisoDeCabecalho?.[String(ano)];
+  return r && aviso ? { ...r, nota: `${r.nota}\n\n${aviso}` } : r;
+}
+
+function valorNaEscalaSemAviso(l: LinhaModelo, ano: number, unidadeModelo: string):
+  { valor: number; nota: string } | null {
   const bruto = l.valores[String(ano)];
   if (bruto === undefined) return null;
   const f = fatorDeEscala(l.unidade, unidadeModelo);
@@ -818,8 +834,68 @@ const PADROES_DIVIDA_FINANCEIRA = [
   /antecipa(ç|c)(ã|a)o de receb(í|i)veis/i,
   /adiantamento de contrato de c(â|a)mbio/i, /\bACC\b/, /\bACE\b/,
 ];
+// TRANCHE BANCÁRIA CHAMADA SÓ DE "CAPITAL DE GIRO". Nenhum dos padrões acima a pega: o rótulo
+// do balancete é "CAPITAL DE GIRO BANCO X - CP/LP", sem "empréstimo" nem "financiamento", e
+// "capital de giro" sozinho também nomeia a NCG (ativo) e linhas que não são dívida. Por isso o
+// padrão EXIGE o nome de uma instituição financeira no mesmo rótulo (lookahead, qualquer ordem):
+// "Banco Alfa - capital de giro" e "CAPITAL DE GIRO BANCO X - LP" entram; "Capital de giro" e
+// "Capital de giro - longo prazo" (sem credor no rótulo) continuam fora, como estavam.
+// Sem a flag `u` o `\b` não existe entre "ú" e o espaço ("Itaú - LP" não casava): as bordas são
+// "não-letra" por propriedade Unicode. "caixa" sozinho fica fora (é também o caixa da empresa):
+// só "Caixa Econômica".
+// A lista de credores é UMA só: serve ao capital de giro e a `itemDeGrupoEhDivida`.
+const CREDORES = String.raw`banco|bco|bradesco|ita[úu]|santander|sicredi|sicoob|safra|bndes|daycoval|bb|`
+  + String.raw`caixa econ[ôo]mica|banrisul|brb`;
+const CAPITAL_DE_GIRO_BANCARIO = new RegExp(
+  String.raw`^(?=.*(?<![\p{L}\d])capital de giro(?![\p{L}\d]))`
+  + String.raw`(?=.*(?<![\p{L}\d])(?:${CREDORES})(?![\p{L}\d]))`, "iu");
+// Item de enumeração que é só o NOME do credor ou da linha de financiamento ("BNDES", "FINAME",
+// "Itaú") não casa nenhum padrão de dívida, mas é dívida: sem isto "Outras obrigações (BNDES,
+// FINAME e capital de giro Banco X)" virava grupo misto e o saldo todo saía da dívida.
+const ITEM_DE_CREDOR = new RegExp(String.raw`(?<![\p{L}\d])(?:${CREDORES}|finame)(?![\p{L}\d])`, "iu");
+
+// UM GRUPO DE OBRIGAÇÕES QUE APENAS CITA UM INSTRUMENTO DE DÍVIDA NÃO É DÍVIDA.
+//
+// O DEFEITO (Krauspenhar, caso 33b58a89): "Outras obrigações (adiantamentos de clientes, JCP a
+// pagar e desconto de duplicatas)" casava /desconto de duplicatas?/ e entrava INTEIRA como dívida
+// bancária: a "Dívida de curto prazo" de 2024 saía 20,65 mi onde a dívida medida é 15,99 mi — os
+// 4,66 mi de adiantamento de cliente e JCP a pagar recebiam juro de empréstimo. O rótulo é o NOME
+// DE UM GRUPO ("outras obrigações", "outras contas a pagar"…) seguido da ENUMERAÇÃO do que há
+// dentro: citar "desconto de duplicatas" ali diz que o grupo PODE conter duplicata descontada, não
+// que o saldo todo seja. O documento não separa os valores, então a escolha conservadora é não
+// cobrar juro (fica no giro, ou no PNC como conta constante, SEMPRE com nota — ver
+// `NOTA_GRUPO_MISTO`).
+//
+// SÓ É GRUPO MISTO QUEM TEM ENUMERAÇÃO DE FATO e um item que NÃO é dívida: dois ou mais itens
+// (vírgula, ";" ou " e ") com pelo menos um instrumento de dívida E pelo menos um que não é.
+// "Outras obrigações (financiamento BNDES)" e "Outras contas a pagar: empréstimo Banco X" têm um
+// item só, e esse item é dívida: continuam dívida (tirá-los calava dívida e juro). Rótulo SEM
+// enumeração ("Outras contas a pagar - empréstimo de sócios") também continua dívida.
+const CABECA_DE_GRUPO =
+  /^\s*(?:outras?|demais|diversas?)\s+(?:obriga(?:ç|c)(?:õ|o)es|contas? a pagar|passivos?|d(?:é|e)bitos|valores a pagar)\b[^(:]*[(:]/i;
+
+const citaInstrumentoDeDivida = (chave: string) =>
+  PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave)) || CAPITAL_DE_GIRO_BANCARIO.test(chave);
+
+/** O grupo que mistura instrumento de dívida com contas que não são dívida, sem separar valores. */
+export const grupoDeObrigacoesQueCitaDivida = (chave: string) => {
+  const cabeca = CABECA_DE_GRUPO.exec(chave);
+  if (!cabeca) return false;
+  const itens = chave.slice(cabeca[0].length).split(/\s*(?:,|;|\s+e\s+)\s*/).map((i) => i.trim()).filter(Boolean);
+  const ehDivida = (i: string) => citaInstrumentoDeDivida(i) || ITEM_DE_CREDOR.test(i);
+  return itens.length >= 2 && itens.some(ehDivida) && itens.some((i) => !ehDivida(i));
+};
+
 export const ehDividaFinanceira = (chave: string) =>
-  PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave));
+  citaInstrumentoDeDivida(chave) && !grupoDeObrigacoesQueCitaDivida(chave);
+
+/** A nota (regra 1: motivo e efeito) de quem fica de fora da dívida por ser grupo misto. */
+export const NOTA_GRUPO_MISTO =
+  "Este grupo cita um instrumento de dívida (ex.: desconto de duplicatas) junto com contas "
+  + "que não são dívida, e o documento não separa os valores. O saldo todo foi tratado como conta "
+  + "operacional: não recebe juro nem amortização de dívida. Se parte dele for dívida bancária, "
+  + "o custo financeiro e a dívida estão SUBESTIMADOS por essa parcela — confirme com a empresa "
+  + "a composição do grupo.";
 
 // AS TRÊS CONTAS DO CICLO DE CAIXA, isoladas por nome.
 //
@@ -1134,19 +1210,24 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
   // 67.878 informados, e a linha de reconciliação absorvia 99 mil, ou seja, mais
   // do que o próprio grupo.
   //
-  // A REGRA AQUI EXIGE PROVA ARITMÉTICA, e é isso que a torna segura:
+  // O PRINCÍPIO ÚNICO (redesenho depois de três remendos seguidos na mesma lógica —
+  // 3f40571, 45c8df2 e o que viria): uma linha só deixa de somar NUM EXERCÍCIO quando, NAQUELE
+  // exercício, outras contas do mesmo bloco a EXPLICAM — duas ou mais delas somam o valor dela
+  // (dentro da folga de arredondamento da série). Sem filhas que a expliquem, ela é conta-folha naquele exercício e fica.
   //
   //   1. o rótulo tem de ser EXATAMENTE um nome de grupo (lista fechada abaixo) —
   //      "Estoques" entra, "Estoques de matéria-prima" não;
-  //   2. o documento tem de informar o total DAQUELE grupo (a âncora DOC_*);
-  //   3. a soma das contas extraídas tem de EXCEDER esse total — sem excesso não
-  //      há dupla contagem para explicar, e nada é removido;
-  //   4. remover a linha tem de APROXIMAR a soma do informado, nunca ultrapassá-lo.
+  //   2. a explicação é DO EXERCÍCIO: as filhas presentes em Y somam o valor dela em Y. Um
+  //      exercício em que ela não tem filhas (o Balanço de 2024, sem abertura) a mantém, mesmo
+  //      que noutro exercício ela seja cabeçalho — por isso nada é herdado de outro ano;
+  //   3. o TOTAL INFORMADO (âncora DOC_*) não decide remoção: serve à linha de reconciliação,
+  //      que mostra o resíduo. Decidir por ele criava dois erros medidos: tirar conta de
+  //      verdade para "aproximar" um total (Clientes 28.000 no 39i; Fornecedores/Empréstimos no
+  //      0113) e deixar de tirar o cabeçalho certo porque o bloco tinha OUTRO excesso (PNC do
+  //      0113, reconciliação −7.500 em vez de −3.500).
   //
-  // Com isso, o documento simples — que imprime "Estoques" como conta-folha, sem
-  // abertura — nunca perde a conta: lá a soma não excede o informado, e a
-  // condição 3 já barra. A remoção é do MODELO; a linha continua no arquivo, na
-  // aba de dados, com o valor que a extração trouxe.
+  // A remoção é do MODELO; a linha continua no arquivo, na aba de dados, com o valor que a
+  // extração trouxe.
   const CABECALHOS_DE_GRUPO = new Set([
     // ativo circulante
     "disponivel", "disponibilidades", "caixa e equivalentes", "caixa e equivalentes de caixa",
@@ -1165,35 +1246,127 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     "capital social", "reservas", "reservas de lucros", "reservas de capital",
     "ajustes de avaliacao patrimonial",
   ]);
+  // SUBGRUPOS CONHECIDOS: um nome de grupo só conta como FILHA de outro se está aqui sob ele. Dois
+  // nomes de grupo quaisquer são IRMÃOS (Vertentes: "Clientes" 26.000 = "Caixa" 8.000 +
+  // "Estoques" 18.000 por acaso), e só a hierarquia que o balanço brasileiro de fato imprime
+  // separa uma coisa da outra. Teto: sob um cabeçalho fora desta tabela, filha com nome de grupo
+  // não o explica; o cabeçalho fica na soma e o excesso aparece na reconciliação.
+  const SUBGRUPOS: Record<string, string[]> = {
+    "disponivel": ["caixa e equivalentes", "caixa e equivalentes de caixa", "aplicacoes financeiras", "titulos e valores mobiliarios"],
+    "disponibilidades": ["caixa e equivalentes", "caixa e equivalentes de caixa", "aplicacoes financeiras", "titulos e valores mobiliarios"],
+    "contas a receber": ["clientes"],
+    "reservas": ["reservas de lucros", "reservas de capital"],
+    "obrigacoes tributarias": ["tributos a recolher", "impostos a recolher"],
+    "obrigacoes fiscais": ["tributos a recolher", "impostos a recolher"],
+    "emprestimos e financiamentos": ["financiamentos"],
+    "ativo permanente": ["investimentos", "imobilizado", "intangivel"],
+  };
   const ANCORA_DO_BLOCO: Partial<Record<BlocoModelo, string>> = {
     ativo_circulante: "DOC_AC", ativo_nao_circulante: "DOC_ANC",
     passivo_circulante: "DOC_PC", passivo_nao_circulante: "DOC_PNC",
     patrimonio_liquido: "DOC_PL",
   };
-  const anoBase = [...ent.anosHistoricos].sort((a, b) => b - a)[0];
-  if (anoBase !== undefined) {
-    for (const [bloco, chaveAncora] of Object.entries(ANCORA_DO_BLOCO) as Array<[BlocoModelo, string]>) {
+  // A REMOÇÃO É POR EXERCÍCIO e a linha perde SÓ o valor daquele ano. Antes (até 3f40571) a
+  // prova rodava no último exercício e tirava a LINHA INTEIRA: "Estoques" é cabeçalho sintético
+  // no balancete de 2026 e FOLHA nos Balanços de 2024 e 2025 — a conta sumia dos três.
+  // Medido no Krauspenhar (caso 33b58a89): resíduo de 53.924.564,46 (2024) e 43.569.482,33
+  // (2025), 43% do ativo.
+  const tirarAno = (bloco: BlocoModelo, motivos: Map<LinhaModelo, string>, anoS: string) => {
+    const lista = linhasPorBloco.get(bloco) ?? [];
+    linhasPorBloco.set(bloco, lista.flatMap((l) => {
+      const motivo = motivos.get(l);
+      if (motivo === undefined) return [l];
+      const valores = Object.fromEntries(Object.entries(l.valores).filter(([a]) => a !== anoS));
+      if (Object.keys(valores).length === 0) return [];
+      return [{ ...l, valores, semValorPorCabecalho: { ...l.semValorPorCabecalho, [anoS]: motivo } }];
+    }));
+  };
+  /**
+   * As contas de `pool` (duas ou mais) cujos valores somam `alvo`, com o NÚMERO DE SUBCONJUNTOS
+   * que o fazem (`vias`) — ou `null` (nenhuma soma) ou `"teto"` (a busca desistiu). Soma de subconjuntos por programação dinâmica sobre centavos, PODADA:
+   * um estado que, somando tudo o que resta com o sinal certo, não alcança mais a janela do
+   * alvo morre — com saldos do mesmo sinal as somas ficam em [0, alvo]. Sem a poda as somas
+   * distintas crescem 2^n e ~15 contas com centavos estouravam o teto antigo (medido: 32
+   * desistências no corpus, Vertentes PC com 20–21 contas, e um circulante de 17 contas que
+   * somava 600 a mais, calado). O teto restante (200.000 estados) só vale para blocos de dezenas
+   * de contas com sinais mistos e grandes.
+   *
+   * UNICIDADE. Com muitas contas, ALGUM subconjunto soma qualquer valor por acaso (15 contas de
+   * ~500 em milhar: dezenas de acertos para 5.000 ±2). Uma estrutura de verdade é uma só: com
+   * mais de uma via, só se remove se o TOTAL INFORMADO corrobora (o bloco sem a linha fecha nele,
+   * ver o chamador); senão a linha fica e o aviso diz que a explicação é ambígua.
+   *
+   * FOLGA. Em série declarada em mil ou maior o subtotal vem arredondado (Provisões 4.000 =
+   * 1.500 + 2.501): a folga é 0,5 por conta somada, com teto de 2 — mas uma soma que só fecha
+   * COM a folga (`exatas` = 0) nunca remove sozinha: precisa do total informado (ver o
+   * chamador). Medido: com folga livre, "Adiantamentos de clientes" 2.072, uma FOLHA do PC 2024
+   * do Vertentes, saía por coincidência (1.218 + 68 + 787 = 2.073) em 8 execuções da suíte.
+   * Em reais, ±0,5 fixo.
+   */
+  const filhasQueSomam = (alvo: number, bruto: Array<{ l: LinhaModelo; v: number }>, arredondada: boolean):
+    { filhas: LinhaModelo[]; vias: number; exatas: number } | null | "teto" => {
+    const TETO = 200000;
+    const pool = [...bruto].sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+    const vC = pool.map((x) => Math.round(x.v * 100));
+    const pos: number[] = new Array(pool.length + 1).fill(0);
+    const neg: number[] = new Array(pool.length + 1).fill(0);
+    for (let i = pool.length - 1; i >= 0; i--) {
+      pos[i] = pos[i + 1] + Math.max(vC[i], 0);
+      neg[i] = neg[i + 1] + Math.min(vC[i], 0);
+    }
+    const alvoC = Math.round(alvo * 100);
+    const janela = arredondada ? 200 : 50;
+    const folgaC = (k: number) => (arredondada ? Math.min(50 * (k + 1), 200) : 50);
+    const viva = (soma: number, i: number) => soma + pos[i] >= alvoC - janela && soma + neg[i] <= alvoC + janela;
+    // `vias` por TAMANHO do subconjunto: a folga depende de quantas contas somam, e contar tudo
+    // junto aceitava subconjuntos fora da folga deles (alvo 33 em 9 contas: 19 vias contra 16).
+    type Estado = { idx: number[]; vias: Map<number, number> };
+    let estados = new Map<number, Estado>([[0, { idx: [], vias: new Map([[0, 1]]) }]]);
+    for (let i = 0; i < pool.length; i++) {
+      const novos = new Map<number, Estado>();
+      const somar = (soma: number, idx: number[], vias: Map<number, number>, deslocar: number) => {
+        let atual = novos.get(soma);
+        if (!atual) { atual = { idx, vias: new Map() }; novos.set(soma, atual); }
+        else if (idx.length > atual.idx.length) atual.idx = idx;
+        for (const [k, n] of vias) atual.vias.set(k + deslocar, (atual.vias.get(k + deslocar) ?? 0) + n);
+      };
+      for (const [soma, { idx, vias }] of estados) {
+        if (viva(soma, i + 1)) somar(soma, idx, vias, 0);
+        const ns = soma + vC[i];
+        if (viva(ns, i + 1)) somar(ns, [...idx, i], vias, 1);
+      }
+      estados = novos;
+      if (estados.size > TETO) return "teto";
+    }
+    // Teto declarado: o `idx` guardado é o do subconjunto MAIS LONGO da soma. Se só ele estiver
+    // fora da folga e um menor estiver dentro, as `vias` contam o menor mas não há como removê-lo
+    // (devolve `null`: a linha fica, o lado conservador).
+    let vias = 0; let exatas = 0;
+    let idxExato: number[] | null = null; let idxFolgado: number[] | null = null;
+    for (const [soma, e] of estados) {
+      const dentro = [...e.vias].filter(([k]) => k >= 1 && Math.abs(soma - alvoC) <= folgaC(k));
+      if (dentro.length === 0) continue;
+      const n = dentro.reduce((t, [, c]) => t + c, 0);
+      vias += n;
+      const valido = e.idx.length >= 2 && Math.abs(soma - alvoC) <= folgaC(e.idx.length);
+      if (Math.abs(soma - alvoC) <= 50) { exatas += n; if (valido) idxExato = e.idx; }
+      else if (valido) idxFolgado = e.idx;
+    }
+    const idxAchado = idxExato ?? idxFolgado;
+    return idxAchado ? { filhas: idxAchado.map((j) => pool[j].l), vias, exatas } : null;
+  };
+  for (const ano of [...ent.anosHistoricos].sort((a, b) => b - a)) {
+    const anoS = String(ano);
+    for (const bloco of Object.keys(ANCORA_DO_BLOCO) as BlocoModelo[]) {
       const lista = linhasPorBloco.get(bloco);
-      const ancora = ancoras.get(chaveAncora);
-      if (!lista || lista.length === 0 || !ancora) continue;
-      const informado = ancora.valores[String(anoBase)];
-      if (typeof informado !== "number" || informado === 0) continue;
-      const valorDe = (l: LinhaModelo) => l.valores[String(anoBase)] ?? 0;
-      let soma = lista.reduce((s, l) => s + valorDe(l), 0);
-      // TOLERÂNCIA EM MÓDULO, e não `informado * 1.005`. O total informado pode
-      // ser NEGATIVO — patrimônio líquido a descoberto é o caso normal num
-      // mandato de reestruturação (a Canastra Indústria do book tem PL −4.221) —
-      // e multiplicar um número negativo por 1,005 afrouxa o limiar para o lado
-      // errado. Nos cenários que medi as duas formas decidem igual (a segunda
-      // guarda segura o caso), mas "meio por cento do tamanho" é o que a regra
-      // quer dizer, e é o que ela passa a dizer.
-      const tolerancia = Math.abs(informado) * 0.005;
-      if (soma - informado <= tolerancia) continue;
+      if (!lista || lista.length === 0) continue;
+      const valorDe = (l: LinhaModelo) => l.valores[anoS] ?? 0;
       const candidatos = lista
         .filter((l) => CABECALHOS_DE_GRUPO.has(chaveDeAncora(l.chave))
           || CABECALHOS_DE_GRUPO.has(chaveDeAncora(l.rotulo_norm)))
         .sort((a, b) => Math.abs(valorDe(b)) - Math.abs(valorDe(a)));
-      const remover = new Set<LinhaModelo>();
+      const removidas = new Map<LinhaModelo, string>();
+      const avisos = new Map<LinhaModelo, string>();
       for (const c of candidatos) {
         const v = valorDe(c);
         if (v === 0) continue;
@@ -1205,16 +1378,50 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
         // um cabeçalho de grupo é a SOMA de vários componentes, e coincidir no
         // centavo com um deles é assinatura de transposição, não de agrupamento.
         if (lista.some((o) => o !== c && Math.abs(valorDe(o) - v) < 0.5)) continue;
-        const depois = soma - v;
-        // Só remove o que APROXIMA do informado sem passar do ponto — as duas
-        // comparações em MÓDULO, pelo mesmo motivo da tolerância acima.
-        if (depois - informado < -tolerancia) continue;
-        if (Math.abs(depois - informado) >= Math.abs(soma - informado)) continue;
-        remover.add(c);
-        soma = depois;
+        // FILHA COM NOME DE GRUPO só se for SUBGRUPO CONHECIDO deste candidato (ver SUBGRUPOS):
+        // sem isso a aritmética casa por acaso entre irmãs — no Vertentes "Clientes" 26.000 =
+        // "Caixa e equivalentes de caixa" 8.000 + "Estoques" 18.000, e a conta de verdade saía do
+        // circulante (17 remoções erradas na suíte). Disponível = Caixa + Aplicações, Reservas =
+        // Reservas de lucros + Reservas de capital, Contas a receber = Clientes + Outros créditos
+        // continuam sendo explicados.
+        const nomesDe = (o: LinhaModelo) => [chaveDeAncora(o.chave), chaveDeAncora(o.rotulo_norm)];
+        const subDoCandidato = new Set(nomesDe(c).flatMap((n) => SUBGRUPOS[n] ?? []));
+        const ehIrma = (o: LinhaModelo) => nomesDe(o).some((n) => CABECALHOS_DE_GRUPO.has(n))
+          && !nomesDe(o).some((n) => subDoCandidato.has(n));
+        const pool = lista
+          .filter((o) => o !== c && !removidas.has(o) && valorDe(o) !== 0 && !ehIrma(o))
+          .map((o) => ({ l: o, v: valorDe(o) }));
+        const filhas = filhasQueSomam(v, pool, /mil|milh/i.test(c.unidade ?? "") && !/^unidade/i.test(c.unidade ?? ""));
+        const informado = ancoras.get(ANCORA_DO_BLOCO[bloco]!)?.valores[anoS];
+        const somaDoBloco = lista.reduce((t, o) => t + (removidas.has(o) ? 0 : valorDe(o)), 0);
+        const corroborado = typeof informado === "number" && informado !== 0
+          && Math.abs(somaDoBloco - v - informado) <= Math.abs(informado) * 0.005;
+        const precisaCorroborar = filhas !== null && filhas !== "teto" && (filhas.vias > 1 || filhas.exatas === 0);
+        if (filhas === "teto" || (precisaCorroborar && !corroborado)) {
+          const alvoTxt = v.toLocaleString("pt-BR");
+          avisos.set(c, `Cabeçalho de grupo NÃO verificado em ${anoS}: `
+            + (filhas === "teto"
+              ? `a busca de contas que somem ${alvoTxt} desistiu por excesso de combinações. `
+              : filhas.vias > 1
+                ? `mais de um conjunto de contas do bloco soma ${alvoTxt} (coincidência, não estrutura) e o total informado não corrobora a remoção. `
+                : `um conjunto de contas soma ${alvoTxt} só com a folga de arredondamento da série e o total informado não corrobora a remoção — a linha pode estar somando com as filhas. `)
+            + "Efeito: a linha ficou na soma do modelo; se for o total de um grupo, o bloco está dobrado "
+            + "por este valor — confira a linha de reconciliação.");
+          continue;
+        }
+        if (!filhas) continue;
+        const filhasLinhas = filhas.filhas;
+        const soma = filhasLinhas.reduce((t, f) => t + valorDe(f), 0);
+        removidas.set(c, `Cabeçalho de grupo: em ${anoS}, ${filhasLinhas.map((f) => f.chave).join(" + ")} somam `
+          + `${soma.toLocaleString("pt-BR")}, o valor desta linha (${v.toLocaleString("pt-BR")}) — ela é o `
+          + "total do grupo, não uma conta, e quem carrega o saldo são as filhas. Efeito: o valor sai da soma do "
+          + "modelo neste exercício; mantê-lo dobraria o grupo."
+          + (typeof informado === "number" ? ` Total do bloco informado no documento: ${informado.toLocaleString("pt-BR")}.` : ""));
       }
-      if (remover.size > 0) {
-        linhasPorBloco.set(bloco, lista.filter((l) => !remover.has(l)));
+      if (removidas.size > 0) tirarAno(bloco, removidas, anoS);
+      if (avisos.size > 0) {
+        linhasPorBloco.set(bloco, (linhasPorBloco.get(bloco) ?? []).map((l) => avisos.has(l)
+          ? { ...l, avisoDeCabecalho: { ...l.avisoDeCabecalho, [anoS]: avisos.get(l)! } } : l));
       }
     }
   }
@@ -1323,6 +1530,11 @@ function notaGrupoSemSaldo(p: PremissaModelo, gr: GrupoRateado, ultimoHist: numb
     + `saldo realizado em ${ultimoHist} para ratear o valor entre elas (soma ${gr.somaHist}). Esta conta `
     + `NÃO é projetada: fica em branco e os subtotais a leem como zero — ${efeito} `
     + "Para projetar, ligue a premissa a uma conta com saldo realizado.";
+}
+
+/** A nota da célula em branco cujo valor a prova de cabeçalho de grupo tirou (ver `contexto`). */
+function notaSemValor(l: LinhaModelo, ano: number): string | undefined {
+  return l.semValorPorCabecalho?.[String(ano)];
 }
 
 /** O valor da âncora do documento naquele ano, na escala do modelo. */
@@ -1744,7 +1956,11 @@ function abaPremissas(wb: ExcelJS.Workbook, ctx: Ctx): Grade {
       g.linha(chaveLinha(b, l), { rotulo: l.chave, nota: (l.documentos ?? []).join(" · "), fmt: NUM });
       for (const ano of ctx.hist) {
         const e = valorNaEscala(l, ano, ctx.ent.unidade);
-        if (!e) continue;
+        if (!e) {
+          const n = notaSemValor(l, ano);
+          if (n) g.set(chaveLinha(b, l), ano, null, { fmt: NUM, fill: FILL_HIST, nota: n });
+          continue;
+        }
         g.set(chaveLinha(b, l), ano, e.valor, { fmt: NUM, fill: FILL_HIST, nota: e.nota });
       }
     }
@@ -2973,7 +3189,10 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   g.linha(null, { rotulo: "PASSIVO CIRCULANTE OPERACIONAL", bloco: true });
   for (const l of passivos) {
     const ch = chaveLinha("wc_p", l);
-    g.linha(ch, { rotulo: l.chave, fmt: NUM });
+    const rLinhaPassivo = g.linha(ch, { rotulo: l.chave, fmt: NUM });
+    if (grupoDeObrigacoesQueCitaDivida(l.chave)) {
+      g.celula(rLinhaPassivo, COL_ROTULO).note = comoNota(NOTA_GRUPO_MISTO);
+    }
     linhasDoGrupo(ch);
     g.linha(`${ch}#dias`, { rotulo: "    dias de giro (base)", fmt: NUM2 });
     g.linha(`${ch}#diasStr`, { rotulo: "    dias de giro (stress)", fmt: NUM2 });
@@ -3073,6 +3292,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
           // corrigindo — e o lado do ativo é o que tem conta redutora de verdade.
           if (e) g.set(ch, ano, pref === "wc_a" ? e.valor : Math.abs(e.valor),
             { fmt: NUM, fill: FILL_HIST, nota: e.nota, tipo: "calc" });
+          else if (notaSemValor(l, ano)) g.set(ch, ano, null, { fmt: NUM, fill: FILL_HIST, nota: notaSemValor(l, ano), tipo: "calc" });
           // Dias IMPLÍCITOS do histórico: saldo ÷ base × 360, com a guarda
           // `IF(base>0)` do Modelo Base (`P27`). É o número que o analista precisa
           // ver antes de escolher o dia projetado — sem ele, a premissa é palpite.
@@ -3363,6 +3583,7 @@ function abaImobilizado(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
       if (hist) {
         const e = valorNaEscala(l, ano, ctx.ent.unidade);
         if (e) g.set(chFa, ano, e.valor, { fmt: NUM, fill: FILL_HIST, nota: e.nota, tipo: "calc" });
+        else if (notaSemValor(l, ano)) g.set(chFa, ano, null, { fmt: NUM, fill: FILL_HIST, nota: notaSemValor(l, ano), tipo: "calc" });
         g.set(`${chFa}#dep`, ano, 0, { fmt: NUM, tipo: "calc" });
         g.set(chCx, ano, 0, { fmt: NUM, tipo: "calc", nota: "Capex histórico não é extraível do balanço (só a variação do saldo). Zero explícito." });
         continue;
@@ -3959,6 +4180,7 @@ function abaDivida(wb: ExcelJS.Workbook, ctx: Ctx, gAnual: Grade, gRec: Grade): 
       if (hist) {
         const e = valorNaEscala(l, ano, ctx.ent.unidade);
         if (e) g.set(`${ch}#fim`, ano, Math.abs(e.valor), { fmt: NUM, fill: FILL_HIST, nota: e.nota, tipo: "calc" });
+        else if (notaSemValor(l, ano)) g.set(`${ch}#fim`, ano, null, { fmt: NUM, fill: FILL_HIST, nota: notaSemValor(l, ano), tipo: "calc" });
         continue;
       }
       // ABERTURA: normalmente o fechamento do ano anterior. Quando a tranche não
@@ -4582,7 +4804,10 @@ function abaBalanco(
   g.pular();
   g.linha("DIVIDA_LP", { rotulo: "Dívida de longo prazo", fmt: NUM });
   g.linha("TRIB_PNC", { rotulo: "Tributos a recolher e parcelamentos (longo prazo)", fmt: NUM });
-  for (const l of pnc) g.linha(chaveLinha("pnc", l), { rotulo: l.chave, fmt: NUM });
+  for (const l of pnc) {
+    const rPnc = g.linha(chaveLinha("pnc", l), { rotulo: l.chave, fmt: NUM });
+    if (grupoDeObrigacoesQueCitaDivida(l.chave)) g.celula(rPnc, COL_ROTULO).note = comoNota(NOTA_GRUPO_MISTO);
+  }
   linhaReconc(rPNC, "passivo não circulante");
   g.linha("PNC", { rotulo: "PASSIVO NÃO CIRCULANTE", negrito: true, topo: true, fmt: NUM });
   g.pular();
@@ -4639,7 +4864,7 @@ function abaBalanco(
       const e = valorNaEscala(l, ano, ctx.ent.unidade);
       g.set(ch, ano, hist ? (e?.valor ?? 0) : `=${g.ref(ch, ant!)}`, {
         fmt: NUM, fill: hist ? FILL_HIST : undefined,
-        nota: hist ? e?.nota : "Conta não operacional mantida constante: sem premissa própria, "
+        nota: hist ? (e?.nota ?? notaSemValor(l, ano)) : "Conta não operacional mantida constante: sem premissa própria, "
           + "projetá-la por crescimento de receita seria inventar movimento.",
       });
     }
@@ -4675,7 +4900,7 @@ function abaBalanco(
       const ch = chaveLinha("pnc", l);
       const e = valorNaEscala(l, ano, ctx.ent.unidade);
       g.set(ch, ano, hist ? Math.abs(e?.valor ?? 0) : `=${g.ref(ch, ant!)}`,
-        { fmt: NUM, fill: hist ? FILL_HIST : undefined, nota: hist ? e?.nota : undefined });
+        { fmt: NUM, fill: hist ? FILL_HIST : undefined, nota: hist ? (e?.nota ?? notaSemValor(l, ano)) : undefined });
     }
     g.set("TRIB_PNC", ano, `=${g.externa("Tributos a Recolher", gTrib, "ESP_PNC", ano)}`, {
       fmt: NUM,
@@ -4690,7 +4915,7 @@ function abaBalanco(
       const ch = chaveLinha("pl", l);
       const e = valorNaEscala(l, ano, ctx.ent.unidade);
       g.set(ch, ano, hist ? (e?.valor ?? 0) : `=${g.ref(ch, ant!)}`,
-        { fmt: NUM, fill: hist ? FILL_HIST : undefined, nota: hist ? e?.nota : undefined });
+        { fmt: NUM, fill: hist ? FILL_HIST : undefined, nota: hist ? (e?.nota ?? notaSemValor(l, ano)) : undefined });
     }
     g.set("LUCROS_ACUM", ano, hist ? 0 : `=${g.ref("LUCROS_ACUM", ant!)}+${g.externa("Income Statement", gDRE, "NET_PROFIT", ano)}+${g.externa("Cash Flow", gCF, "DIVIDENDOS", ano)}`, {
       fmt: NUM,
@@ -4999,6 +5224,7 @@ function abaTributos(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
       if (hist) {
         const e = valorNaEscala(l, ano, ctx.ent.unidade);
         if (e) g.set(ch, ano, Math.abs(e.valor), { fmt: NUM, fill: FILL_HIST, nota: e.nota });
+        else if (notaSemValor(l, ano)) g.set(ch, ano, null, { fmt: NUM, fill: FILL_HIST, nota: notaSemValor(l, ano) });
         continue;
       }
       if (ehParcelamento(l.chave)) {

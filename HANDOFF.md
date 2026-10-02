@@ -12,6 +12,52 @@ só como referência — não precisa ler tudo pra continuar, comece por aqui.
 > a 0196 ("Production Deploy") — exatamente o que `.claude/memory/auto-mode-recusa-migration-producao.md`
 > prevê. Ver §4.
 
+### 0b. Produção atualizada em 01/10 (tarde) — o dono pediu no chat, e o modo automático aceitou
+
+- **Supabase `0195` → `0198`.** Antes: os corpos das 5 funções que 0196–0198 reemitem
+  (`fn_reconciliar_caixa_bp_fluxo`, `…_despfin_dre_vs_divida`, `…_receita_dre_vs_faturamento`,
+  `fn_somar_faturamento_ano`, `fn_anos_periodo`) comparados por md5 (sem CRLF) com um banco local
+  montado até a 0195: idênticos. Depois: idênticos ao repositório completo; sonda 181/0 ausentes.
+- **n8n:** ingestão `na1AEv3m8fjDXlwM` republicada do `main` 36e2aac — 42 nós conferidos.
+  `FINGERPRINT_EXTRACAO` `6f5a9374a9d2b1ae` → `7e7549834ed4eb3f` (prompts do `8d1235e`): reenviar
+  um caso já processado RE-EXTRAI cada documento (cota RPD). `erros` republicado do PR #249 com o
+  nome publicado; `macro` e `diagnostico` batem nó a nó.
+- **`fn_reconciliar_caso`** (antes, conferido que `fn_registrar_reconciliacao` só toca motivo
+  `reconciliacao:*` e que nenhuma pendência DECIDIDA nos dois casos tem esse motivo; retrato
+  antes/depois: 0 de 26 decididas/resolvidas alteradas):
+  - `72d9210a`: caixa BP×DFC 2/2 ok e receita DRE×faturamento 2/2 ok — as duas divergências falsas
+    que a 0196/0197 corrigem foram resolvidas pelo sistema.
+  - Krauspenhar: 2 precondições de ativo×passivo+PL resolvidas; 2 pendências NOVAS e reais —
+    "Venda de peças e lubrificantes" 2026: DRE +24,22 mi × COMBINADO −24,67 mi (sinal invertido;
+    DRE vence por autoridade) e o Mapa de Dívida 2025 sem coluna de juros.
+- **PR #249:** `2ae4589` (nomes `erros`/`macro` = publicados, item m) e `3f40571` (Estoques
+  apagados pelo sintético do balancete, item l: reconciliação do AC 53,92/43,57 mi → 0). A revisão
+  do `3f40571` achou dupla contagem calada em arranjos plausíveis; dois remendos (`45c8df2`) e a
+  regra de três levaram ao REDESENHO `eb3592f`: num exercício, uma linha de CABECALHOS_DE_GRUPO só
+  deixa de somar quando outras contas do bloco presentes NAQUELE ano a explicam (soma de
+  subconjuntos; filha que é nome de grupo só se for SUBGRUPO conhecido); a âncora (total
+  informado) só corrobora e mostra resíduo. Ajustes `2bc1aa2` (poda pelo alvo, folga de
+  arredondamento em milhar, corroboração quando ambíguo) e `028d2f2` (aviso no ramo calado;
+  "Outros créditos" é irmã). Leitura final: nada sobreviveu; poda conferida contra força bruta
+  em 20.000 casos. Krauspenhar real: 0 células mudam desde o `3f40571`. Alarme conhecido e
+  aceito: "Adiantamentos de clientes" 2.072 do Vertentes recebe aviso "pode estar somando".
+  Teto declarado: bloco grande, sem total informado e com uma única via exata ainda pode remover
+  por coincidência (força bruta no Krauspenhar: nenhuma).
+- **Dívida de longo prazo do Krauspenhar — CORRIGIDA no PR #249 (`d7db504`)**, com a leitura de
+  produção liberada pelo dono. Três causas: (1) o PNC dos Balanços tem UMA conta, igual ao total
+  "Passivo Não Circulante" (que vem com secao/secao_canonica nulas), e `detectarSubtotaisPorOrdem`
+  a tomava por subtotal do próprio total — apagada em 2024 e 2025 (a hipótese anterior,
+  `blocoDaLinha`/MAPA_DIVIDA, estava ERRADA: o Mapa nem entra, `doMapa=0`); (2) "Outras
+  obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)" era dívida
+  bancária inteira (4,66 mi em 2024); (3) "CAPITAL DE GIRO BANCO X" não era dívida. No real:
+  Dívida LP 0/0 → 4,18/9,54 mi; CP 2024 20,65 → 15,99; resíduo do PNC → 0; despesa financeira
+  2026 2,39 → 3,01 mi (a mensagem do commit diz 1,75: era de um build intermediário);
+  **auditar-xlsx do Krauspenhar 11/11 pela primeira vez**. A primeira versão da causa 1 passava
+  no teste e falhava no real (o arranjo trazia a seção no total) — o (39r) foi refeito no
+  formato medido. Para o dono: com prazo implícito de 1,7 ano a dívida LP vence até 2027, e
+  CP + revolver sobe de 11,5 para 39,8 mi entre 2026 e 2030. Em aberto (decisão do dono):
+  "Capital de giro" SEM credor nos books Canastra/Vertentes segue como giro.
+
 ### 0. Estado de produção agora (medido só leitura, 30/09 ~22h40 UTC; reconferido 01/10 ~11h30 UTC)
 
 > Reconferência de 01/10: `instalacao_cobertura.ate_migration = '0195'`, 174/0 ausentes; n8n
