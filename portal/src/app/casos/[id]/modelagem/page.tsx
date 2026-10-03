@@ -480,6 +480,10 @@ export default async function ModelagemPage({
               {/* A APRESENTAÇÃO DE CRÉDITO (.pptx, módulo de crédito do Prompt-Mestre v3) só aparece
                   onde o export de modelagem aparece: ela lê o MESMO realizado do modelo e passa pelo
                   mesmo Portão 2 — oferecê-la com o portão fechado seria um botão que devolve 409. */}
+              <a href={`/casos/${id}/apresentacao`} className="btn-secundario"
+                title="Os campos que só o analista ou a pesquisa sabem (títulos, sócios, concorrentes, scorecard). Em branco, saem [a preencher].">
+                Campos da apresentação
+              </a>
               <a
                 href={`/casos/${id}/export?modo=apresentacao`}
                 className="btn-secundario"

@@ -31,6 +31,7 @@ import { amarracoes, type BaseCredito } from "../src/lib/apresentacao/base-credi
 import type { GrandezaCredito, HistoricoCredito } from "../src/lib/modelo-institucional.ts";
 import { construirDeckCredito, SemDadoParaApresentar } from "../src/lib/apresentacao/deck-credito.ts";
 import type { LinhaModelo } from "../src/lib/modelo-institucional.ts";
+import { CHAVES_APRESENTACAO } from "../src/lib/apresentacao/campos.ts";
 import { DeckOria, PALETA, FONTES_PERMITIDAS, p, tabela, COR } from "../src/lib/apresentacao/pptx-oria.ts";
 
 let falhas = 0;
@@ -358,6 +359,24 @@ console.log("--- 8. holding só com balanço: o deck se adapta ---");
   const x2 = slideCom(slides, "X.2 · ESTRUTURA DE CAPITAL");
   ok(!temX1 && notaOmitidos && linha(x2, "Patrimônio líquido", 2).every((t) => /\d/.test(t)),
     "(8a) sem DRE: X.1 e os capítulos de resultado saem, a nota diz quais e por quê, e o balanço continua");
+}
+
+console.log("--- 9. o catálogo da tela e o gerador falam das mesmas chaves ---");
+{
+  // Toda chave que a tela oferece, preenchida com um valor único, TEM de aparecer no deck. Uma chave
+  // que o gerador não lê seria um campo que o analista salva e que nunca chega ao slide.
+  const entrada = entradaModeloDaFixture(fixture, agora);
+  const wb = buildExportWorkbook({ caso: { nome: "Book Vertentes", produto: "reestruturacao" },
+    documentos: fixture.documentos, campos: fixture.campos, agora, modeloInstitucional: entrada });
+  const chaves = [...CHAVES_APRESENTACAO];
+  const valor = (i: number) => (chaves[i].includes(".nota") ? String(5 + (i % 3)) : `Q${String(i).padStart(3, "0")}Z`);
+  const base9 = montarBaseCredito(entradaDoModeloDoWorkbook(wb)!, fixture.documentos,
+    chaves.map((chave, i) => ({ chave, valor: valor(i), fonte: "analista" })));
+  const zip = await JSZip.loadAsync(await construirDeckCredito(base9, agora).deck.gerar(agora));
+  const tudo = (await Promise.all(Object.keys(zip.files).filter((x) => /^ppt\/slides\/slide\d+\.xml$/.test(x))
+    .map((x) => zip.file(x)!.async("string")))).map((x) => textos(x).join(" ")).join(" ");
+  const perdidas = chaves.filter((c, i) => !c.includes(".nota") && !tudo.includes(valor(i)));
+  ok(chaves.length > 50 && perdidas.length === 0, `(9a) as ${chaves.length} chaves do catálogo chegam ao deck`, perdidas.slice(0, 8).join(", "));
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

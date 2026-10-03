@@ -1478,7 +1478,7 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_vincular_linha_premissa","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":10}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":224}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":196}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_diagnostico_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":556}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_diagnostico_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":560}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":341}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":209}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":182}
