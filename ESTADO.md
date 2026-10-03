@@ -1,5 +1,12 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 105 (02–03/10/2026) — apresentação de crédito (.pptx)
+
+> **Migration 0199 escrita, NÃO aplicada em produção** (`0199_os_campos_da_apresentacao.sql`: tabela `caso_apresentacao_campo`, os 120 campos [a preencher] da apresentação). Quem responde é a sonda: `fn_instalacao_conferir()` where migration = '0199'.
+> **Tela `/casos/[id]/apresentacao` e rota de export `?modo=apresentacao` entregues.** Formatação = Prompt Padrão Oria (Teaser); construção = deck Centro Oeste com todos os capítulos. A verificação `portal/scripts/verificar-apresentacao.mts` retorna **58/58** no CI.
+> **Testada em 14 entidades de 3 mandatos locais** (Vertentes, Canastra, captura real v35): **12 geram com sucesso, 2 entidades "GRUPO" recusadas com 409**. Leitura de produção negada pela permissão da sessão — mandatos reais grandes (Krauspenhar `33b58a89`) **NÃO testados**.
+> **Pendente:** aplicar migration 0199, testar com produção (não-GRUPO), resumo multi-entidade para grupos, merge do branch sem PR aberto. Detalhes em `Arquitetura do Sistema/6 Referência/apresentacao-credito/ARQUITETURA.md` e `ANDAMENTO.md`.
+
 ## SESSÃO 104 (30/09/2026) — PR #248 (rascunho): o modelo que multiplicava por K, e a análise externa do Krauspenhar conferida
 
 > **Produção ATUALIZADA em 01/10 (tarde), a pedido do dono:** Supabase em `0198` (`0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql`; 0196, 0197 e 0198
