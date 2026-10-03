@@ -1,17 +1,18 @@
 "use client";
 
 import { useActionState } from "react";
-import { salvarCamposApresentacao, type ResultadoCampos } from "./actions";
+import type { ResultadoCampos } from "./actions";
 import type { CapituloApresentacao } from "@/lib/apresentacao/campos";
 
 /** Um capítulo do catálogo: cada campo com o valor gravado (ou vazio = "[a preencher]" no deck). */
-export function FormCapitulo({ casoId, capitulo, valores }: {
-  casoId: string; capitulo: CapituloApresentacao; valores: Record<string, string>;
+/** `acao` vem JÁ amarrada ao caso pela página (servidor): o argumento ligado lá vai cifrado. */
+export function FormCapitulo({ acao: salvar, capitulo, valores }: {
+  acao: (anterior: ResultadoCampos, form: FormData) => Promise<ResultadoCampos>;
+  capitulo: CapituloApresentacao; valores: Record<string, string>;
 }) {
-  const [resultado, acao, pendente] = useActionState<ResultadoCampos, FormData>(salvarCamposApresentacao, null);
+  const [resultado, acao, pendente] = useActionState<ResultadoCampos, FormData>(salvar, null);
   return (
     <form action={acao} className="carta space-y-3 p-5">
-      <input type="hidden" name="caso_id" value={casoId} />
       <h2 className="font-titulo text-lg font-medium text-tinta-900">{capitulo.titulo}</h2>
       {capitulo.campos.map((c) => (
         <label key={c.chave} className="block text-sm">

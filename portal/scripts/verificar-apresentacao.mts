@@ -306,6 +306,17 @@ console.log("--- 6. setores e formatos diferentes (testes com mandatos de outro 
     "(6b) total calculado não conta como conferência: as amarrações 9 e 10 não dizem \"Fecha\" contra si mesmas");
   ok(textos(slideCom(sl, "X.3 · PRAZOS E CICLO FINANCEIRO")).some((t) => /balanço sem conta de estoque/.test(t)),
     "(6c) balanço sem estoque: o título diz PMR e PMP e que não há estoque, em vez de \"não mensurável\"");
+  const semDed = montarBaseCredito(ent([...balanco, ...dre.filter((l) => !/ISS/.test(l.chave))]), []);
+  ok(semDed.historico.grandezas.receita_liquida[2025].v === null,
+    "(6f) sem dedução classificada, a receita bruta NÃO é publicada como líquida (n/d)");
+  ok(textos(slideCom(sl, "X.1 · RESULTADO")).some((t) => /calculados pela Oria \(sem total no documento\)/.test(t)),
+    "(6g) total calculado pela cascata vem marcado na nota de fonte do slide");
+  const holding = montarBaseCredito(ent([...balanco,
+    L("resultado_financeiro", "Resultado de equivalência patrimonial", { 2024: 900, 2025: 1200 }),
+    L("receita_bruta", "x", {}), L("custos", "Lucro líquido do exercício", { 2024: 900, 2025: 1200 }, "subtotal")]), []);
+  const slH = await slidesDe(holding);
+  ok(slH.some((x) => textos(x).some((t) => t.startsWith("X.1 · RESULTADO"))),
+    "(6h) holding com DRE de equivalência (lucro líquido, sem receita) mantém o capítulo de resultado");
   let recusou = false;
   try { construirDeckCredito(montarBaseCredito(ent([L("passivo_circulante", "Fornecedores", { 2025: 1 }, "conta", "BALANCO")]), []), agora); }
   catch (e) { recusou = e instanceof SemDadoParaApresentar; }

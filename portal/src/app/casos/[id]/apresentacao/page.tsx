@@ -2,6 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CAPITULOS_APRESENTACAO } from "@/lib/apresentacao/campos";
 import { FormCapitulo } from "./FormCapitulo";
+import { salvarCamposApresentacao } from "./actions";
 
 // A TELA DOS CAMPOS "[a preencher]" DA APRESENTAÇÃO DE CRÉDITO.
 //
@@ -17,6 +18,8 @@ export default async function ApresentacaoPage({ params }: { params: Promise<{ i
   ]);
   const valores = Object.fromEntries(((camposRes.data ?? []) as Array<{ chave: string; valor: string }>).map((c) => [c.chave, c.valor]));
   const preenchidos = Object.keys(valores).length;
+  // Amarrada AQUI, no servidor: o id do caso não passa pelo navegador como dado editável.
+  const salvar = salvarCamposApresentacao.bind(null, id);
   const total = CAPITULOS_APRESENTACAO.reduce((t, c) => t + c.campos.length, 0);
   return (
     <div className="space-y-6">
@@ -40,7 +43,7 @@ export default async function ApresentacaoPage({ params }: { params: Promise<{ i
           aplicada: o deck sai com todas as lacunas “[a preencher]”.
         </p>
       )}
-      {CAPITULOS_APRESENTACAO.map((cap) => <FormCapitulo key={cap.titulo} casoId={id} capitulo={cap} valores={valores} />)}
+      {CAPITULOS_APRESENTACAO.map((cap) => <FormCapitulo key={cap.titulo} acao={salvar} capitulo={cap} valores={valores} />)}
     </div>
   );
 }

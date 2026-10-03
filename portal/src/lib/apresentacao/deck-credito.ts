@@ -77,7 +77,10 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   // existem com resultado — dinâmica do ciclo, margem, X.1, prazos, normalização, capacidade de
   // pagamento — saem do deck, e a nota diz por quê. Medido nos mandatos locais: 9 de 14 entidades
   // eram assim, com 40 a 77 n/d por deck, a maioria nesses seis slides.
-  const temDRE = periodos.some(({ ano }) => base.historico.grandezas.receita_liquida[ano]?.v != null);
+  // Receita, EBIT OU lucro líquido: holding com DRE de equivalência patrimonial não tem receita e TEM
+  // DRE — tratá-la como "sem DRE" omitiria o resultado dela (achado da revisão de 03/10/2026).
+  const temDRE = periodos.some(({ ano }) => (["receita_liquida", "ebit", "lucro_liquido"] as const)
+    .some((k) => base.historico.grandezas[k][ano]?.v != null));
   const anos = periodos.map((x) => x.ano);
   const ind = new Map(anos.map((a) => [a, indicadores(base, a)]));
   const ultimo = anos[anos.length - 1];
@@ -105,15 +108,20 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   const campos = base.campos ?? {};
   let prefixo = "";
   const chaveDoRotulo = (r: string) => r.split("·")[0].trim().toLowerCase().replace(/[^a-z0-9]/g, "");
-  const ap = (sufixo: string) => campos[`${prefixo}.${sufixo}`]?.valor ?? AP;
+  // A chave depende do número do slide no rótulo: RENUMERAR um slide ("XV.2" → "XV.3") órfã os
+  // valores já gravados. Renumerar exige migrar as chaves em caso_apresentacao_campo.
   const usados: string[] = [];
+  const ap = (sufixo: string) => {
+    const c = campos[`${prefixo}.${sufixo}`];
+    if (c && !usados.includes(`${prefixo}.${sufixo}`)) usados.push(`${prefixo}.${sufixo}`);
+    return c?.valor ?? AP;
+  };
   let primeiro = true;
   /** Slide de conteúdo: cabeçalho, rodapé e, só no primeiro, o "CONFIDENCIAL · <MÊS> <ANO>". */
   const slide = (rotulo: string, titulo: string, fonte: string, subtitulo?: string): SlideOria => {
     prefixo = chaveDoRotulo(rotulo);
     if (titulo === AP) titulo = ap("titulo");
-    if (fonte === FONTE_AP) fonte = campos[`${prefixo}.fonte`] ? `Fonte: ${campos[`${prefixo}.fonte`].valor}.` : FONTE_AP;
-    for (const k of Object.keys(campos)) if (k.startsWith(`${prefixo}.`) && !usados.includes(k)) usados.push(k);
+    if (fonte === FONTE_AP) fonte = ap("fonte") === AP ? FONTE_AP : `Fonte: ${ap("fonte")}.`;
     const s = deck.novo();
     cabecalho(s, { rotulo, titulo, subtitulo,
       confidencial: primeiro ? `CONFIDENCIAL · ${MESES[agora.getMonth()].toUpperCase()} ${agora.getFullYear()}` : undefined });
@@ -876,7 +884,12 @@ export function fontesFinanceiras(base: BaseCredito, periodos: PeriodoCredito[])
   const faixaAnos = anos.length > 1 ? `${anos[0]} a ${anos[anos.length - 1]}` : String(anos[0]);
   const ns = new Set(periodos.map((x) => x.natureza));
   const legenda = [...ns].map((n) => n === "A" ? "(A) auditada" : n === "B" ? "(B) não auditada" : n === "R" ? "(R) revisão limitada" : "(G) gerencial").join(" · ");
-  return encurtar(`Fonte: ${nomes || "demonstrações"} ${faixaAnos} da ${encurtar(base.entidade, 40).replace(/\.$/, "")}. Cálculos Oria. ${legenda}.`, 150);
+  // Total que o documento NÃO imprime e saiu da cascata vai marcado em todo slide financeiro: o
+  // número na célula é o mesmo, mas quem lê precisa saber que ele foi derivado (revisão 03/10).
+  const calc = (["receita_liquida", "lucro_bruto", "ebit"] as const).filter((k) =>
+    anos.some((a) => base.historico.grandezas[k][a]?.calculado));
+  const marca = calc.length ? ` ${calc.map((k) => ({ receita_liquida: "receita", lucro_bruto: "lucro bruto", ebit: "EBIT" })[k]).join(", ")} calculados pela Oria (sem total no documento).` : "";
+  return encurtar(`Fonte: ${nomes || "demonstrações"} ${faixaAnos} da ${encurtar(base.entidade, 40).replace(/\.$/, "")}. Cálculos Oria.${marca} ${legenda}.`, 170);
 }
 
 export type { Paragrafo, SlideOria };

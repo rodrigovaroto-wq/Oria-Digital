@@ -12,9 +12,12 @@ import { CHAVES_APRESENTACAO } from "@/lib/apresentacao/campos";
 // O resultado volta como objeto, nunca como exceção nem redirect (mesmo padrão da Modelagem).
 export type ResultadoCampos = { tom: "ok" | "erro"; texto: string } | null;
 
-export async function salvarCamposApresentacao(_anterior: ResultadoCampos, form: FormData): Promise<ResultadoCampos> {
-  const casoId = String(form.get("caso_id") ?? "");
+// O `casoId` é AMARRADO no servidor (`.bind` na página), não lido de campo oculto: um POST com outro
+// uuid gravaria no caso alheio, e a RLS da 0199 (mesma de caso_premissa) não restringe por caso.
+export async function salvarCamposApresentacao(casoId: string, _anterior: ResultadoCampos, form: FormData): Promise<ResultadoCampos> {
   const supabase = await createClient();
+  const caso = await supabase.from("caso").select("id").eq("id", casoId).maybeSingle();
+  if (caso.error || !caso.data) return { tom: "erro", texto: "Caso não encontrado — nada foi salvo." };
   const { data: { user } } = await supabase.auth.getUser();
   const autor = user?.email ?? "portal:desconhecido";
   const preenchidos: Array<{ caso_id: string; chave: string; valor: string; fonte: string; preenchido_por: string; preenchido_em: string }> = [];
@@ -25,7 +28,7 @@ export async function salvarCamposApresentacao(_anterior: ResultadoCampos, form:
     if (!CHAVES_APRESENTACAO.has(chave)) return { tom: "erro", texto: `Chave desconhecida: ${chave}.` };
     const valor = String(v).trim();
     if (valor) {
-      preenchidos.push({ caso_id: casoId, chave, valor, fonte: String(form.get(`fonte:${chave}`) ?? "").trim() || "analista",
+      preenchidos.push({ caso_id: casoId, chave, valor, fonte: "tela de campos da apresentação",
         preenchido_por: autor, preenchido_em: new Date().toISOString() });
     } else vazios.push(chave);
   }

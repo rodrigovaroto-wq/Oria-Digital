@@ -7374,7 +7374,10 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
     }));
   const vv = (r: Record<number, ValorHistorico>, ano: number) => r[ano]?.v ?? null;
   const rl = comCascata(ancora("DOC_RECEITA_LIQUIDA", "Receita líquida"), "Receita líquida",
-    (a) => (vv(receitaB, a) === null ? null : (vv(receitaB, a) as number) - (vv(deducaoB, a) ?? 0)), "receita − deduções");
+    // SEM DEDUÇÃO CLASSIFICADA NAQUELE EXERCÍCIO, NÃO HÁ RECEITA LÍQUIDA: zerar a dedução publicaria a
+    // receita BRUTA como líquida e inflaria margem e capacidade de pagamento (achado da revisão de
+    // 03/10/2026). Custos e SG&A ausentes já davam null; a dedução agora segue a mesma regra.
+    (a) => (vv(receitaB, a) === null || vv(deducaoB, a) === null ? null : (vv(receitaB, a) as number) - (vv(deducaoB, a) as number)), "receita − deduções");
   const lb = comCascata(ancora("DOC_LUCRO_BRUTO", "Lucro bruto"), "Lucro bruto",
     (a) => (vv(rl, a) === null || vv(custoB, a) === null ? null : (vv(rl, a) as number) - (vv(custoB, a) as number)), "receita líquida − custos");
   const ebit = comCascata(ancora("DOC_EBIT", "EBIT"), "EBIT",
