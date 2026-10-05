@@ -48,7 +48,7 @@ import {
   ehFormatoDeTexto,
 } from '../lib/custo.mjs';
 import {
-  normalizarUnidade, normalizarMoeda, diagnosticarErroApi, achatarGrupos,
+  normalizarUnidade, normalizarMoeda, diagnosticarErroApi, decidirRepeticao, achatarGrupos,
   ehLinhaNaoMonetaria, escalaDeclaradaNaColuna, limparRotuloColado,
 } from '../lib/extract.mjs';
 import { ALIASES } from '../lib/taxonomia.mjs';
@@ -634,6 +634,15 @@ const TABELA = [
     [{ error: { message: 'rate limit', code: 'rate_limit_exceeded' } }],
     [{ choices: [{ finish_reason: 'length' }] }],
     [null], [{}],
+    // transitória x permanente e a espera que o provedor pede (repetição de bloco)
+    [{ error: { message: 'Rate limit reached. Please try again in 1m3.2s.', type: 'tokens', code: 'rate_limit_exceeded' } }],
+    [{ status: 503, message: 'upstream' }],
+    [{ error: { message: 'bad schema', type: 'invalid_request_error', code: 'invalid_schema' } }],
+    [{ error: { message: 'You exceeded your current quota', type: 'insufficient_quota' } }],
+  ] },
+  { nome: 'decidirRepeticao', lib: decidirRepeticao, casos: [
+    [{ transitoria: true, tentativa: 1 }], [{ transitoria: true, tentativa: 3, esperaSugeridaS: 200 }],
+    [{ transitoria: true, tentativa: 4 }], [{ transitoria: false, tentativa: 1 }], [{}], [undefined],
   ] },
   { nome: 'achatarGrupos', lib: achatarGrupos, casos: [
     [[]], [null],
