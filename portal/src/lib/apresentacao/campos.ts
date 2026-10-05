@@ -33,7 +33,8 @@ export const CAPITULOS_APRESENTACAO: CapituloApresentacao[] = [
     ...cab("iii1", "III.1"), ...cab("iii2", "III.2"),
     ...n(3).flatMap((i) => [{ chave: `iii2.socio${i}.nome`, rotulo: `Sócio ${i} — nome` },
       { chave: `iii2.socio${i}`, rotulo: `Sócio ${i} — histórico e outras empresas`, longo: true }]),
-    ...cab("iii3", "III.3"), ...cab("iii4", "III.4"),
+    { chave: "iii3.avais", rotulo: "Avais cruzados e mútuos entre as empresas do grupo" },
+    ...cab("iii4", "III.4"),
     ...n(3).map((i) => ({ chave: `iii4.cartao${i}`, rotulo: ["Concentração de controle", "Força das garantias pessoais", "Alertas e pontos de atenção"][i - 1], longo: true })),
   ] },
   { titulo: "IV · A empresa", campos: [
@@ -52,13 +53,25 @@ export const CAPITULOS_APRESENTACAO: CapituloApresentacao[] = [
       { chave: `vi1.concorrente${i}`, rotulo: `Concorrente ${i} — alcance, ponto forte e ponto fraco`, longo: true }]),
     ...cab("vi2", "VI.2"),
   ] },
-  { titulo: "XIII · Endividamento (por operação)", campos: [...cab("xiii2", "XIII.2"), ...cab("xiii3", "XIII.3", false)] },
+  // XIII: com mapa da dívida, credor, saldo, taxa e títulos saem do sistema; vencimento e garantia
+  // NÃO vêm no mapa e são do analista, pela ordem da operação no slide XIII.2 (maior saldo primeiro).
+  { titulo: "XIII · Endividamento", campos: [
+    ...n(12).flatMap((i) => [
+      { chave: `xiii2.op${i}.vencimento`, rotulo: `Operação ${i} (ordem do XIII.2) — vencimento` },
+      { chave: `xiii2.op${i}.garantia`, rotulo: `Operação ${i} — garantia` },
+    ]),
+    { chave: "xiii3.ruptura", rotulo: "Primeira ruptura de caixa (data)" },
+    { chave: "xiii3.cronograma", rotulo: "Cronograma de amortização dos próximos 24 meses", longo: true },
+  ] },
   { titulo: "XV.2 · Alavancas", campos: [
     ...cab("xv2", "XV.2"),
     ...n(6).map((i) => ({ chave: `xv2.alavanca${i}`, rotulo: `Magnitude — ${["alongamento", "redução de custo", "conversão ou capitalização", "desinvestimentos", "giro de capital", "deságio"][i - 1]}` })),
   ] },
   { titulo: "XVI e XVII · Garantias e scorecard", campos: [
-    ...cab("xvi", "XVI", false), ...cab("xvii", "XVII", false),
+    ...(["clientes", "estoques", "imobilizado"] as const).map((k) => ({ chave: `xvi.realizacao.${k}`,
+      rotulo: `Realização (%) — ${{ clientes: "recebíveis", estoques: "estoques", imobilizado: "imobilizado tangível" }[k]} (premissa Oria ou laudo)` })),
+    { chave: "xvi.recuperacao", rotulo: "Recuperação por classe e aval dos sócios", longo: true },
+    ...cab("xvii", "XVII", false),
     ...n(6).flatMap((i) => [
       { chave: `xvii.nota${i}`, rotulo: `Nota ${i} de 1,0 a 10,0 (${["produto, demanda e mercado", "acionistas e gestão", "acesso a crédito e passivo", "rentabilidade", "geração de caixa", "solvência e estrutura de capital"][i - 1]})` },
       { chave: `xvii.justificativa${i}`, rotulo: `Nota ${i} — justificativa` },

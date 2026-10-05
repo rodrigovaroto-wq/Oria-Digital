@@ -7300,7 +7300,18 @@ export type GrandezaCredito =
   | "receita_liquida" | "lucro_bruto" | "ebit" | "depreciacao" | "lucro_liquido" | "custos" | "sga"
   | "ativo_total" | "ativo_circulante" | "passivo_circulante" | "passivo_nao_circulante" | "patrimonio_liquido"
   | "caixa" | "clientes" | "estoques" | "fornecedores"
-  | "divida_bancos_cp" | "divida_bancos_lp" | "divida_outras_cp" | "divida_outras_lp";
+  | "divida_bancos_cp" | "divida_bancos_lp" | "divida_outras_cp" | "divida_outras_lp" | "imobilizado";
+
+/**
+ * Uma operação do MAPA DA DÍVIDA. O mapa chega como linhas "Credor — Modalidade — [Operação] —
+ * saldo devedor | juros do exercício" (medido nos books e no padrão do extrator), e é daí que sai a
+ * abertura por credor, a taxa implícita e o custo médio. Vencimento e garantia NÃO vêm no mapa:
+ * ficam como campos da apresentação ("[a preencher]").
+ */
+export interface OperacaoDivida {
+  credor: string; modalidade: string; operacao: string | null;
+  saldo: Record<number, number | null>; juros: Record<number, number | null>;
+}
 
 /** `calculado`: o total NÃO vem impresso no documento — saiu da cascata das contas (ver abaixo). */
 export interface ValorHistorico { v: number | null; origem: string; calculado?: boolean }
@@ -7312,6 +7323,9 @@ export interface HistoricoCredito {
   anos: number[];
   /** linhas que entraram SEM conversão por unidade não reconhecida — o deck as declara */
   avisosDeEscala: string[];
+  /** as operações do mapa da dívida (vazio sem `MAPA_DIVIDA`) e o TOTAL que o próprio mapa imprime */
+  operacoes: OperacaoDivida[];
+  totalDoMapa: Record<number, number | null>;
   grandezas: Record<GrandezaCredito, Record<number, ValorHistorico>>;
 }
 
@@ -7424,8 +7438,46 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
       divida_bancos_lp: soma(dividaPNC.filter((l) => !ehOutraDivida(l.chave)), "Dívida bancária LP"),
       divida_outras_cp: soma(pc.filter(ehOutraDividaDaLinha), "Outras dívidas CP"),
       divida_outras_lp: soma(pnc.filter(ehOutraDividaDaLinha), "Outras dívidas LP"),
+      // O MESMO filtro de imobilizado do `Fixed Assets & CAPEX`: é o ativo real (imóvel, máquina,
+      // veículo) que a garantia e a "dívida × ativos reais" do deck usam.
+      // Mas SÓ o tangível: o filtro do capex também pega "Títulos a receber - venda de imobilizado"
+      // (recebível) e marcas/software (intangível), medido no book Vertentes — nenhum dos dois é bem
+      // que se dá em garantia real.
+      imobilizado: soma(doBloco("ativo_nao_circulante").filter((l) => ehImobilizado(l.chave)
+        && !/\ba receber\b|marcas?|patentes?|software|licen(ç|c)|intang(í|i)vel/i.test(l.chave)), "Imobilizado tangível"),
   };
+  // O MAPA DA DÍVIDA, operação a operação. Lê `ent.linhas` (e não `linhasPorBloco`) porque a linha
+  // TOTAL do mapa é subtotal e sai da soma do modelo — e é ela que confere a abertura (amarração 7).
+  const operacoes = new Map<string, OperacaoDivida>();
+  const totalDoMapa: Record<number, number | null> = Object.fromEntries(anos.map((a) => [a, null]));
+  for (const l of ent.linhas) {
+    if (!(l.documentos ?? []).includes("MAPA_DIVIDA")) continue;
+    const partes = l.chave.split(/\s+[—–-]\s+/).map((x) => x.trim()).filter(Boolean);
+    const medida = (partes.at(-1) ?? "").toLowerCase();
+    // "(US$)" é o saldo em moeda de origem: o mesmo contrato tem a linha em reais ao lado.
+    if (/\(us\$|usd|eur\)/i.test(medida)) continue;
+    const ehSaldo = /saldo|principal/.test(medida);
+    const ehJuros = /juros/.test(medida);
+    if (!ehSaldo && !ehJuros) continue;
+    const valorDe = (ano: number) => valorNaEscalaSemAviso(l, ano, unidade)?.valor ?? null;
+    if (/^total\b/i.test(partes[0] ?? "")) {
+      if (ehSaldo) for (const a of anos) totalDoMapa[a] = valorDe(a);
+      continue;
+    }
+    if (partes.length < 3) continue;
+    const [credor, modalidade, ...resto] = partes.slice(0, -1);
+    const chave = [credor, modalidade, ...resto].join("|");
+    const op = operacoes.get(chave) ?? { credor, modalidade, operacao: resto.join(" — ") || null,
+      saldo: Object.fromEntries(anos.map((a) => [a, null])), juros: Object.fromEntries(anos.map((a) => [a, null])) };
+    for (const a of anos) {
+      const v = valorDe(a);
+      if (v !== null) (ehSaldo ? op.saldo : op.juros)[a] = Math.abs(v);
+    }
+    operacoes.set(chave, op);
+  }
   // `avisosDeEscala` só está completo depois de TODAS as grandezas lidas — por isso o objeto acima
   // é montado antes do retorno.
-  return { unidade, escala: escalaDoModelo(unidade), anos, avisosDeEscala: [...avisosDeEscala].sort((a, b) => a.localeCompare(b, "pt-BR")), grandezas };
+  return { unidade, escala: escalaDoModelo(unidade), anos,
+    avisosDeEscala: [...avisosDeEscala].sort((a, b) => a.localeCompare(b, "pt-BR")), grandezas,
+    operacoes: [...operacoes.values()], totalDoMapa };
 }

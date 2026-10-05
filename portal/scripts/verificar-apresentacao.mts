@@ -27,7 +27,7 @@ import type { CampoExtraido } from "../src/lib/types.ts";
 import type { EntradaModeloInstitucional } from "../src/lib/modelo-institucional.ts";
 import { entradaModeloDaFixture } from "./lib/modelo-da-fixture.mts";
 import { montarBaseCredito } from "../src/lib/apresentacao/montar-base.ts";
-import { amarracoes, type BaseCredito } from "../src/lib/apresentacao/base-credito.ts";
+import { amarracoes, dividaDoMapa, type BaseCredito } from "../src/lib/apresentacao/base-credito.ts";
 import type { GrandezaCredito, HistoricoCredito } from "../src/lib/modelo-institucional.ts";
 import { construirDeckCredito, SemDadoParaApresentar } from "../src/lib/apresentacao/deck-credito.ts";
 import type { LinhaModelo } from "../src/lib/modelo-institucional.ts";
@@ -212,7 +212,7 @@ function baseSintetica(valores: Partial<Record<GrandezaCredito, number[]>>): Bas
   const anos = [2024, 2025];
   const todas: GrandezaCredito[] = ["receita_liquida", "lucro_bruto", "ebit", "depreciacao", "lucro_liquido", "custos", "sga",
     "ativo_total", "ativo_circulante", "passivo_circulante", "passivo_nao_circulante", "patrimonio_liquido", "caixa",
-    "clientes", "estoques", "fornecedores", "divida_bancos_cp", "divida_bancos_lp", "divida_outras_cp", "divida_outras_lp"];
+    "clientes", "estoques", "fornecedores", "divida_bancos_cp", "divida_bancos_lp", "divida_outras_cp", "divida_outras_lp", "imobilizado"];
   const grandezas = Object.fromEntries(todas.map((k) => [k, Object.fromEntries(anos.map((a, i) => {
     const v = valores[k]?.[i];
     return [a, v === undefined ? { v: null, origem: `${k}: ausente` } : { v, origem: `${k} sintético` }];
@@ -220,7 +220,7 @@ function baseSintetica(valores: Partial<Record<GrandezaCredito, number[]>>): Bas
   return {
     cliente: "Sintético", entidade: "SINTÉTICA LTDA", unidade: "R$ mil",
     periodos: anos.map((ano) => ({ ano, natureza: "B" as const, motivoNatureza: "sintético" })),
-    documentos: [], historico: { unidade: "R$ mil", escala: "milhar", anos, avisosDeEscala: [], grandezas },
+    documentos: [], historico: { unidade: "R$ mil", escala: "milhar", anos, avisosDeEscala: [], grandezas, operacoes: [], totalDoMapa: {} },
   };
 }
 async function slidesDe(b: BaseCredito) {
@@ -387,14 +387,62 @@ console.log("--- 9. o catálogo da tela e o gerador falam das mesmas chaves ---"
   const wb = buildExportWorkbook({ caso: { nome: "Book Vertentes", produto: "reestruturacao" },
     documentos: fixture.documentos, campos: fixture.campos, agora, modeloInstitucional: entrada });
   const chaves = [...CHAVES_APRESENTACAO];
-  const valor = (i: number) => (chaves[i].includes(".nota") ? String(5 + (i % 3)) : `Q${String(i).padStart(3, "0")}Z`);
+  const numerica = (c: string) => c.includes(".nota") || c.includes(".realizacao.");
+  const valor = (i: number) => (numerica(chaves[i]) ? String(50 + (i % 3)) : `Q${String(i).padStart(3, "0")}Z`);
   const base9 = montarBaseCredito(entradaDoModeloDoWorkbook(wb)!, fixture.documentos,
-    chaves.map((chave, i) => ({ chave, valor: valor(i), fonte: "analista" })));
+    chaves.map((chave, i) => ({ chave, valor: valor(i), fonte: "analista" })),
+    { perimetro: [{ razaoSocial: "VERTENTES METALÚRGICA LTDA.", cnpj: null, papel: "operacional", documentos: 9, analisada: true },
+      { razaoSocial: "VERTENTES PARTICIPAÇÕES S.A.", cnpj: null, papel: "holding", documentos: 1, analisada: false }] });
   const zip = await JSZip.loadAsync(await construirDeckCredito(base9, agora).deck.gerar(agora));
   const tudo = (await Promise.all(Object.keys(zip.files).filter((x) => /^ppt\/slides\/slide\d+\.xml$/.test(x))
     .map((x) => zip.file(x)!.async("string")))).map((x) => textos(x).join(" ")).join(" ");
-  const perdidas = chaves.filter((c, i) => !c.includes(".nota") && !tudo.includes(valor(i)));
+  // Vencimento/garantia existem só para as operações que o mapa tem (9 no book Vertentes).
+  const nOps = dividaDoMapa(base9, [2024, 2025])?.operacoes.length ?? 0;
+  const perdidas = chaves.filter((c, i) => !numerica(c) && !tudo.includes(valor(i))
+    && !(/^xiii2\.op(\d+)\./.test(c) && Number(/^xiii2\.op(\d+)/.exec(c)![1]) > nOps));
   ok(chaves.length > 50 && perdidas.length === 0, `(9a) as ${chaves.length} chaves do catálogo chegam ao deck`, perdidas.slice(0, 8).join(", "));
+}
+
+console.log("--- 10. endividamento pelo mapa, ativos reais, o que faltou e o perímetro ---");
+{
+  const entrada = entradaModeloDaFixture(fixture, agora);
+  const wb = buildExportWorkbook({ caso: { nome: "Book Vertentes", produto: "reestruturacao" },
+    documentos: fixture.documentos, campos: fixture.campos, agora, modeloInstitucional: entrada });
+  const ent10 = entradaDoModeloDoWorkbook(wb)!;
+  const info = [{ codigo: "BALANCO", documento: "Balanço Patrimonial", status: "recebido" as const },
+    { codigo: "CONTRATO_SOCIAL", documento: "Contrato social", status: "faltante" as const },
+    { codigo: "DRE", documento: "DRE", status: "sem_conteudo" as const }];
+  const b10 = montarBaseCredito(ent10, fixture.documentos,
+    [{ chave: "xvi.realizacao.clientes", valor: "70", fonte: null }, { chave: "xvi.realizacao.estoques", valor: "50", fonte: null },
+      { chave: "xvi.realizacao.imobilizado", valor: "60", fonte: null }],
+    { informacao: info, perimetro: [{ razaoSocial: "VERTENTES METALÚRGICA LTDA.", cnpj: "00.000.000/0001-00", papel: "operacional", documentos: 7, analisada: true }] });
+  const sl = await slidesDe(b10);
+  const tx = (m: string) => textos(slideCom(sl, m)).join(" | ");
+  // Mapa do book: 9 operações, 7 credores, Banco Atlântico Sul 12.360 de 51.300 (24%), total 51,3.
+  ok(/7 credores; o maior, Banco Atlântico Sul, tem 24%/.test(tx("XIII.1 · ENDIVIDAMENTO")),
+    "(10a) XIII.1 abre por credor a partir do mapa da dívida (7 credores, o maior com 24%)", tx("XIII.1 · ENDIVIDAMENTO").slice(0, 160));
+  ok(/9 operações somam R\$ 51,3 mi/.test(tx("XIII.2 · POSIÇÃO OPERAÇÃO A OPERAÇÃO")) && /74,9%/.test(sl.map((x) => textos(x).join(" ")).join(" ")),
+    "(10b) XIII.2 lista as operações com a taxa implícita (antecipação: 4.630 ÷ 6.180 = 74,9%)");
+  const am10 = amarracoes(b10).filter((a) => a.numero === 7);
+  ok(am10.some((a) => a.nome.startsWith("Abertura por credor = total") && a.veredito === "ok")
+    && am10.some((a) => a.nome.startsWith("Mapa da dívida = dívida do balanço") && a.veredito === "diverge"),
+    "(10c) amarração 7: as operações fecham com o TOTAL do mapa, e o mapa (51,3) diverge do balanço (46,3) — dito, não calado");
+  // 24,3·0,7 + 7,2·0,5 + 92,8·0,6 = 17,0 + 3,6 + 55,7 = 76,3 (os contábeis do book em R$ mi, arredondados)
+  const xvi = tx("XVI · ATIVOS REAIS E GARANTIAS");
+  ok(/Ativos reais cobrem 2,7x a dívida bruta/.test(xvi) && /76,[23]/.test(xvi),
+    "(10d) XVI: cobertura contábil 2,7x e valor estimado SÓ com a realização informada", xvi.slice(0, 200));
+  const ix2 = tx("IX.2 · O QUE CHEGOU E O QUE FALTOU");
+  ok(/1 de 3 documentos obrigatórios chegaram; 2 pendentes/.test(ix2) && /não recebido/.test(ix2) && /chegou sem conteúdo extraído/.test(ix2),
+    "(10e) IX.2: o que chegou, o que faltou e o que chegou sem conteúdo", ix2.slice(0, 160));
+  const semInfo = await slidesDe(montarBaseCredito(ent10, fixture.documentos));
+  ok(/não lida nesta geração/.test(textos(slideCom(semInfo, "IX.2 · O QUE CHEGOU E O QUE FALTOU")).join(" ")),
+    "(10f) sem a lista do kit, o IX.2 diz que não leu — nunca \"nada faltou\"");
+  // Mapa de OUTRA entidade (o "GRUPO" no Canastra): dito, não somado nem calado.
+  const outra = { ...b10, historico: { ...b10.historico, operacoes: [], totalDoMapa: {} }, mapasDeOutrasEntidades: ["GRUPO X"] };
+  ok(/O mapa da dívida recebido é de GRUPO X, não desta entidade/.test(textos(slideCom(await slidesDe(outra), "XIII.1 · ENDIVIDAMENTO")).join(" ")),
+    "(10g) mapa da dívida de outra entidade do caso: o slide diz de quem é, em vez de \"nenhum mapa\"");
+  ok(/Perímetro de 1 empresa/.test(tx("III.3 · ECOSSISTEMA E PERÍMETRO")) && /00\.000\.000\/0001-00/.test(tx("III.3 · ECOSSISTEMA E PERÍMETRO")),
+    "(10h) III.3: o perímetro vem do cadastro de entidades do caso, com CNPJ");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

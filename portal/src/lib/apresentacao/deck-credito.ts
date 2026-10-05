@@ -25,7 +25,7 @@ import {
 } from "./pptx-oria";
 import {
   LEGENDA_NATUREZA, MULTIPLO_ALVO, TAG_NATUREZA, amarracoes, faixaDeAlavancagem, fatorParaMM, fmtDias, fmtMM, fmtPct, fmtX,
-  indicadores, variacao, type Amarracao, type BaseCredito, type Indicadores, type Numero, type PeriodoCredito, type Valor,
+  indicadores, variacao, dividaDoMapa, ativosReais, type Amarracao, type BaseCredito, type Indicadores, type Numero, type PeriodoCredito, type Valor,
 } from "./base-credito";
 
 type Escala = "milhar" | "reais";
@@ -83,6 +83,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     .some((k) => base.historico.grandezas[k][ano]?.v != null));
   const anos = periodos.map((x) => x.ano);
   const ind = new Map(anos.map((a) => [a, indicadores(base, a)]));
+  const mapa = dividaDoMapa(base, anos);
   const ultimo = anos[anos.length - 1];
   const anterior = anos.length >= 2 ? anos[anos.length - 2] : null;
   const I = ind.get(ultimo)!;
@@ -256,10 +257,24 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     [1, 2, 3].forEach((n, i) => cartao(s, GRADE.col3.x[i], GRADE.topo, GRADE.col3.w, 250, { titulo: `Sócio ${n}: ${ap(`socio${n}.nome`)}`, corpo: `Histórico, outras empresas e presença pública: ${ap(`socio${n}`)}` }));
   }
   {
-    const s = slide("III.3 · Ecossistema do grupo", AP, FONTE_AP);
-    faixa(s, GRADE.topo, `${base.entidade} · entidade central do perímetro analisado`, { h: 50 });
-    ["Empresa relacionada", "Empresa relacionada", "Contraparte relacionada"].forEach((t, i) =>
-      cartao(s, GRADE.col3.x[i], 185, GRADE.col3.w, 150, { numeral: i + 1, titulo: t, corpo: `Nome, CNPJ, vínculo e situação: ${AP}` }));
+    // III.3 — O PERÍMETRO: as empresas cadastradas no caso, quantos documentos cada uma tem e qual
+    // delas o deck analisa. Sem a lista (a rota não leu), o slide continua a preencher.
+    const per = base.perimetro ?? [];
+    const s = slide("III.3 · Ecossistema e perímetro", per.length
+      ? `Perímetro de ${per.length} ${per.length === 1 ? "empresa" : "empresas"}; esta análise cobre a destacada` : AP,
+      per.length ? "Fonte: cadastro de entidades do caso e documentos recebidos." : FONTE_AP);
+    if (per.length) {
+      tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Empresa", w: 330 }, { titulo: "CNPJ", w: 150, algn: "l" },
+        { titulo: "Papel no grupo", w: 140, algn: "l" }, { titulo: "Docs.", w: 70 }, { titulo: "Nesta análise", w: 147, algn: "l" }],
+      per.slice(0, 7).map((e): LinhaTabela => ({ destaque: e.analisada, celulas: [encurtar(e.razaoSocial, 40), e.cnpj ?? AP,
+        e.papel ?? AP, String(e.documentos), e.analisada ? "analisada" : ap(`considerar.${chaveDe(e.razaoSocial)}`)] })));
+      faixa(s, 400, per.length > 1 ? `Grupo com ${per.length} empresas: avais cruzados e mútuos exigem a análise das avalizadas (${ap("avais")}).`
+        : "Empresa única no caso: o perímetro é a própria entidade analisada.");
+    } else {
+      faixa(s, GRADE.topo, `${base.entidade} · entidade central do perímetro analisado`, { h: 50 });
+      ["Empresa relacionada", "Empresa relacionada", "Contraparte relacionada"].forEach((t, i2) =>
+        cartao(s, GRADE.col3.x[i2], 185, GRADE.col3.w, 150, { numeral: i2 + 1, titulo: t, corpo: `Nome, CNPJ, vínculo e situação: ${AP}` }));
+    }
   }
   {
     const s = slide("III.4 · Avaliação de stakeholders", AP, FONTE_AP);
@@ -358,6 +373,25 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
       corpo: `O parecer do auditor não é lido pelo sistema. Só exercícios fechados entram (${anos.join(", ")}). `
         + (contarND(ind) === 0 ? "Nenhum indicador saiu n/d." : `${contarND(ind)} indicador(es) saíram n/d, com o motivo nas notas.`) });
     cartao(s, xL, GRADE.topo + 195, GRADE.fim - xL, 180, { titulo: "Pontos de atenção contábil", corpo: pontosDeAtencao(base, ind, am).join(" ") });
+  }
+  {
+    // IX.2 — O QUE CHEGOU E O QUE FALTOU dos documentos obrigatórios, pela regra do kit básico.
+    const info = base.informacao;
+    const recebidos = (info ?? []).filter((d) => d.status === "recebido").length;
+    const faltam = (info ?? []).filter((d) => d.status !== "recebido");
+    const s = slide("IX.2 · O que chegou e o que faltou", !info ? "Lista de documentos obrigatórios não lida nesta geração"
+      : faltam.length === 0 ? `Os ${info.length} documentos obrigatórios chegaram com conteúdo`
+      : `${recebidos} de ${info.length} documentos obrigatórios chegaram; ${faltam.length} pendentes`,
+    "Fonte: kit básico do mandato e documentos recebidos no portal.");
+    if (info) {
+      const rot = { recebido: "recebido", sem_conteudo: "chegou sem conteúdo extraído", faltante: "não recebido" } as const;
+      const ordenada = [...faltam, ...info.filter((d) => d.status === "recebido")];
+      const meio = Math.ceil(Math.min(ordenada.length, 28) / 2);
+      campoValor(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, ordenada.slice(0, Math.min(meio, 14)).map((d) => [encurtar(d.documento, 34), rot[d.status]]), { colValor: 215 });
+      campoValor(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, ordenada.slice(meio, Math.min(meio * 2, 28)).map((d) => [encurtar(d.documento, 34), rot[d.status]]), { colValor: 215 });
+    } else {
+      cartao(s, GRADE.x, GRADE.topo, GRADE.w, 90, { titulo: "Kit básico", corpo: "A lista de documentos obrigatórios não foi lida nesta geração: confira a tela do caso." });
+    }
   }
   if (temDRE) {
     const s = slide("X.1 · Resultado", mancheteResultado(I, Iant, ultimo, anterior), fontes);
@@ -461,44 +495,78 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     cartao(s, xL, GRADE.topo, GRADE.fim - xL, 260, { titulo: "Leitura", corpo: leituraComparativo(I, Iant, ultimo, anterior).join(" ") });
   }
   {
-    // XIII.1 — o que o balanço já diz da dívida (prazo e natureza); por credor é do mapa da dívida.
+    // XIII.1 — POR CREDOR quando há mapa da dívida (o detalhe por contrato); senão, o que o balanço
+    // diz (prazo e natureza). Mapa e balanço nunca somados: são a mesma dívida vista de dois lados.
     const temDivida = I.dividaBruta.v !== null && I.dividaBruta.v > 0;
-    const s = slide("XIII.1 · Endividamento", temDivida ? `Dívida bruta de ${vmi(I.dividaBruta)} em ${ultimo}, ${pctCP(I)}`
-      : `Nenhuma dívida financeira classificada no balanço de ${ultimo}`, fontes);
-    if (temDivida) {
+    const w3 = GRADE.col3.w;
+    const rosca = (x: number, titulo: string, cats: string[], vals: number[]) => {
+      tituloSecao(s, x, GRADE.topo, w3, titulo);
+      s.grafico(x, GRADE.topo + 22, w3, 230, { tipo: "rosca", categorias: cats,
+        valores: vals.map((v) => Math.max(0, Math.round(v * fatorParaMM(esc) * 10) / 10)) });
+    };
+    const s = slide("XIII.1 · Endividamento", mapa
+      ? `${mapa.credores.length} credores; o maior, ${encurtar(mapa.credores[0].credor, 22)}, tem ${fmtPct({ v: mapa.credores[0].saldo / mapa.total * 100 }, 0).t}`
+      : temDivida ? `Dívida bruta de ${vmi(I.dividaBruta)} em ${ultimo}, ${pctCP(I)}`
+      : `Nenhuma dívida financeira classificada no balanço de ${ultimo}`,
+    mapa ? `${fontes.replace(/\.$/, "")} · mapa da dívida de ${mapa.ano}.` : fontes);
+    if (mapa) {
+      const top = mapa.credores.slice(0, 7);
+      tituloSecao(s, GRADE.col2.x[0], GRADE.topo, 520, `Saldo por credor, ${mapa.ano} (R$ mi)`);
+      s.grafico(GRADE.col2.x[0], GRADE.topo + 22, 520, 270, { tipo: "colunas", categorias: top.map((c) => encurtar(c.credor, 14)),
+        series: [{ nome: "Saldo", valores: top.map((c) => Math.round(c.saldo * fatorParaMM(esc) * 10) / 10), cor: COR.verde }] });
+      const mods = mapa.modalidades.slice(0, 4);
+      const resto = mapa.modalidades.slice(4).reduce((t, m) => t + m.saldo, 0);
+      const xR = 605;
+      tituloSecao(s, xR, GRADE.topo, GRADE.fim - xR, "Por modalidade");
+      s.grafico(xR, GRADE.topo + 22, GRADE.fim - xR, 270, { tipo: "rosca",
+        categorias: [...mods.map((m) => encurtar(m.modalidade, 18)), ...(resto > 0 ? ["Outras"] : [])],
+        valores: [...mods.map((m) => m.saldo), ...(resto > 0 ? [resto] : [])].map((v) => Math.round(v * fatorParaMM(esc) * 10) / 10) });
+      faixa(s, 410, `Custo médio implícito de ${mapa.custoMedio === null ? "n/d" : fmtPct({ v: mapa.custoMedio }).t} ao ano (juros do exercício ÷ saldo, calculado pela Oria).`);
+    } else if (temDivida) {
       const cp = (I.bancosCP.v ?? 0) + (outrasCP(base, ultimo) ?? 0);
-      const lp = (I.dividaBruta.v ?? 0) - cp;
-      const w3 = GRADE.col3.w;
-      tituloSecao(s, GRADE.col3.x[0], GRADE.topo, w3, "Por prazo");
-      s.grafico(GRADE.col3.x[0], GRADE.topo + 22, w3, 230, { tipo: "rosca", categorias: ["Curto prazo", "Longo prazo"],
-        valores: [cp, lp].map((v) => Math.max(0, Math.round(v * fatorParaMM(esc) * 10) / 10)) });
-      tituloSecao(s, GRADE.col3.x[1], GRADE.topo, w3, "Por natureza");
-      s.grafico(GRADE.col3.x[1], GRADE.topo + 22, w3, 230, { tipo: "rosca", categorias: ["Bancos", "Outras dívidas"],
-        valores: [I.bancos.v ?? 0, I.outras.v ?? 0].map((v) => Math.max(0, Math.round(v * fatorParaMM(esc) * 10) / 10)) });
+      rosca(GRADE.col3.x[0], "Por prazo", ["Curto prazo", "Longo prazo"], [cp, (I.dividaBruta.v ?? 0) - cp]);
+      rosca(GRADE.col3.x[1], "Por natureza", ["Bancos", "Outras dívidas"], [I.bancos.v ?? 0, I.outras.v ?? 0]);
       cartao(s, GRADE.col3.x[2], GRADE.topo, w3, 252, { titulo: "Saldo por credor",
-        corpo: `Barras por credor, do maior ao menor, e a estratégia de captação, hedge e limites: ${AP} (mapa da dívida por operação).` });
+        corpo: base.mapasDeOutrasEntidades?.length
+          ? `O mapa da dívida recebido é de ${base.mapasDeOutrasEntidades.join(", ")}, não desta entidade: a abertura por credor, a taxa e o custo médio dela dependem de um mapa próprio.`
+          : "Nenhum mapa da dívida entre os documentos recebidos: a abertura por credor, a taxa e o custo médio dependem dele." });
     } else {
       cartao(s, GRADE.x, GRADE.topo, GRADE.w, 120, { titulo: "Sem dívida no balanço", corpo: "O balanço não traz conta de empréstimo, financiamento ou mútuo classificada como dívida." });
     }
   }
   {
-    const s = slide("XIII.2 · Posição operação a operação", AP, FONTE_AP);
-    tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Credor", w: 130 }, { titulo: "Modalidade", w: 100, algn: "l" }, { titulo: "Operação", w: 100, algn: "l" },
-      { titulo: "Saldo", w: 90 }, { titulo: "Vencimento", w: 100, algn: "l" }, { titulo: "Indexador", w: 107, algn: "l" },
-      { titulo: "Garantia", w: 110, algn: "l" }, { titulo: "Status", w: 100, algn: "l" }],
-    [1, 2, 3, 4].map(() => ({ celulas: [AP, AP, AP, AP, AP, AP, AP, AP] })));
-    tabela(s, GRADE.x, 290, [{ titulo: "Classe de credor", w: 437 }, { titulo: "Saldo (R$ mi)", w: 200 }, { titulo: "% do total", w: 200 }],
-      ["Garantia real", "Quirografário", "Partes relacionadas"].map((c): LinhaTabela => ({ celulas: [c, AP, AP] })).concat(
-        [{ celulas: ["Total (balanço)", vmi(I.dividaBruta), "100%"], destaque: true } as LinhaTabela]));
+    // XIII.2 — operação a operação, 8 por slide. Vencimento e garantia NÃO vêm no mapa: são campos
+    // da apresentação, pela ordem da operação (`xiii2.op<n>.vencimento`).
+    const ops = mapa?.operacoes ?? [];
+    const POR = 8;
+    const paginas = Math.max(1, Math.ceil(ops.length / POR));
+    for (let pg = 0; pg < paginas; pg++) {
+      const s = slide(`XIII.2 · Posição operação a operação${paginas > 1 ? ` (${pg + 1}/${paginas})` : ""}`,
+        ops.length ? `${ops.length} operações somam ${valorMi({ v: mapa!.total, nota: "" }, esc)} no mapa de ${mapa!.ano}` : AP,
+        ops.length ? `${fontes.replace(/\.$/, "")} · taxa = juros do exercício ÷ saldo final (calculado pela Oria).` : FONTE_AP);
+      const linhas: LinhaTabela[] = ops.length
+        ? ops.slice(pg * POR, (pg + 1) * POR).map((o, k) => {
+          const n = pg * POR + k + 1;
+          return { celulas: [encurtar(o.credor, 22), encurtar(o.modalidade, 18), mm({ v: o.saldoAno, nota: "" }).t,
+            o.taxa === null ? "n/d" : fmtPct({ v: o.taxa }).t, ap(`op${n}.vencimento`), ap(`op${n}.garantia`)] };
+        })
+        : [1, 2, 3, 4].map(() => ({ celulas: [AP, AP, AP, AP, AP, AP] }));
+      tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Credor", w: 200 }, { titulo: "Modalidade", w: 160, algn: "l" },
+        { titulo: "Saldo (R$ mi)", w: 100 }, { titulo: "Taxa a.a.", w: 107 }, { titulo: "Vencimento", w: 130, algn: "l" },
+        { titulo: "Garantia", w: 140, algn: "l" }], linhas);
+    }
   }
   {
-    const s = slide("XIII.3 · Muro de vencimentos", AP, fontes);
+    const s = slide("XIII.3 · Muro de vencimentos", ap("titulo") === AP && mapa?.custoMedio != null
+      ? `Dívida de curto prazo de ${vmi({ v: (I.bancosCP.v ?? 0) + (outrasCP(base, ultimo) ?? 0), nota: "" })}, custo médio de ${fmtPct({ v: mapa.custoMedio }).t}` : AP, fontes);
     kpi(s, GRADE.col4.x[0], GRADE.topo, GRADE.col4.w, { valor: vmi({ v: (I.bancosCP.v ?? null) === null ? null : (I.bancosCP.v ?? 0) + (outrasCP(base, ultimo) ?? 0), nota: "" }),
       rotulo: "Vence em 12 meses", explicacao: `dívida de curto prazo no balanço de ${ultimo}` });
     kpi(s, GRADE.col4.x[1], GRADE.topo, GRADE.col4.w, { valor: vmi(I.caixa), rotulo: "Caixa disponível", explicacao: `balanço de ${ultimo}` });
-    kpi(s, GRADE.col4.x[2], GRADE.topo, GRADE.col4.w, { valor: AP, rotulo: "Primeira ruptura", explicacao: "data do primeiro ponto de ruptura de caixa" });
+    kpi(s, GRADE.col4.x[2], GRADE.topo, GRADE.col4.w, { valor: mapa?.custoMedio == null ? "n/d" : fmtPct({ v: mapa.custoMedio }).t,
+      rotulo: "Custo médio", explicacao: mapa ? "juros ÷ saldo do mapa, calculado pela Oria" : "sem mapa da dívida" });
+    kpi(s, GRADE.col4.x[3], GRADE.topo, GRADE.col4.w, { valor: ap("ruptura"), rotulo: "Primeira ruptura", explicacao: "data do primeiro ponto de ruptura de caixa" });
     cartao(s, GRADE.x, 228, GRADE.w, 150, { titulo: "Principal por trimestre, próximos 24 meses",
-      corpo: `Gráfico de colunas de amortização contratada e parcelas bullet: ${AP} (cronograma por operação).` });
+      corpo: `O mapa recebido traz saldo e juros, não o cronograma: ${ap("cronograma")}` });
   }
 
   // ======================================== cap. 09 — EBITDA normalizado e dívida sustentável
@@ -544,16 +612,26 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   // ======================================== cap. 10 — garantias, scorecard, síntese
   div(10, CAPITULOS[9][0], CAPITULOS[9][1]);
   {
-    const s = slide("XVI · Garantias e recuperação esperada", AP, `${fontes.replace(/\.$/, "")} · realização a preencher (sem laudo).`);
-    tabela(s, GRADE.x, GRADE.topo, [{ titulo: `Ativo (R$ mi, ${ultimo})`, w: 337 }, { titulo: "Contábil", w: 150 },
+    // XVI — ATIVOS REAIS × DÍVIDA. Contábil do balanço; realização (%) só a que o analista informar
+    // (`xvi.realizacao.*`): sem laudo, nenhum haircut é inventado.
+    const ativos = ativosReais(base, ultimo);
+    const contabil = ativos.reduce<number | null>((t, a) => (a.contabil === null ? t : (t ?? 0) + a.contabil), null);
+    const estimado = ativos.every((a) => a.estimado !== null) ? ativos.reduce((t, a) => t + (a.estimado as number), 0) : null;
+    const bruta = I.dividaBruta.v;
+    const cobertura = (v: number | null) => (v === null || bruta === null || bruta <= 0 ? "n/d" : `${mm1(v / bruta)}x`);
+    const s = slide("XVI · Ativos reais e garantias",
+      contabil === null || bruta === null || bruta <= 0 ? "Cobertura da dívida por ativos reais não mensurável"
+        : `Ativos reais cobrem ${cobertura(contabil)} a dívida bruta pelo valor contábil`,
+      `${fontes.replace(/\.$/, "")} · realização: ${estimado === null ? "a preencher (sem laudo)" : "informada pelo analista"}.`);
+    tabela(s, GRADE.x, GRADE.topo, [{ titulo: `Ativo real (R$ mi, ${ultimo})`, w: 337 }, { titulo: "Contábil", w: 150 },
       { titulo: "Realização (%)", w: 150 }, { titulo: "Valor estimado", w: 200 }], [
-      { celulas: ["Caixa e aplicações", mm(I.caixa).t, AP, AP] },
-      { celulas: ["Clientes", mm(I.clientes).t, AP, AP] },
-      { celulas: ["Estoques", mm(I.estoques).t, AP, AP] },
-      { celulas: ["Imobilizado e imóveis", AP, AP, AP] },
-      { celulas: ["Total", AP, AP, AP], destaque: true },
+      ...ativos.map((a): LinhaTabela => ({ celulas: [a.nome, mm({ v: a.contabil, nota: "" }).t,
+        a.realizacao === null ? AP : `${mm1(a.realizacao)}%`, a.estimado === null ? AP : mm({ v: a.estimado, nota: "" }).t] })),
+      { celulas: ["Total de ativos reais", mm({ v: contabil, nota: "" }).t, "", estimado === null ? AP : mm({ v: estimado, nota: "" }).t], destaque: true },
+      { celulas: ["Dívida financeira bruta", mm(I.dividaBruta).t, "", ""] },
+      { celulas: ["Cobertura (ativos ÷ dívida)", cobertura(contabil), "", estimado === null ? AP : cobertura(estimado)] },
     ]);
-    cartao(s, GRADE.x, 300, GRADE.w, 90, { titulo: "Recuperação por classe e aval dos sócios", corpo: `Continuidade e liquidação por classe de credor: ${AP}` });
+    cartao(s, GRADE.x, 340, GRADE.w, 70, { titulo: "Recuperação por classe e aval dos sócios", corpo: ap("recuperacao") });
   }
   {
     const s = slide("XVII · Scorecard de risco Oria", AP, "Fonte: capítulos IX a XVI. Pesos do Prompt-Mestre Oria v3.");
@@ -870,6 +948,8 @@ const ROTULO_TIPO: Record<string, string> = {
   COMBINADO: "Demonstrações combinadas", FLUXO_CAIXA: "Fluxo de caixa", DMPL: "DMPL", NOTAS_EXPL: "Notas explicativas",
   MAPA_DIVIDA: "Mapa da dívida", FATURAMENTO_24M: "Faturamento 24 meses",
 };
+/** Chave de campo a partir de um nome ("CANASTRA PARTICIPAÇÕES S.A." → "canastraparticipacoessa"). */
+const chaveDe = (nome: string) => nome.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 40);
 const rotuloTipo = (t: string) => ROTULO_TIPO[t] ?? t.toLowerCase().replace(/_/g, " ");
 const capitalizar = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 export const encurtar = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`);

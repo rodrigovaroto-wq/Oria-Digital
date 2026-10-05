@@ -13,7 +13,7 @@
 //     `nao_conferivel` com o motivo — e as três aparecem no slide de notas. Uma lista só com as que
 //     fecharam teria a mesma cara de "tudo amarrado" num caso em que metade não pôde ser conferida
 //     (regra 7).
-import type { GrandezaCredito, HistoricoCredito, ValorHistorico } from "../modelo-institucional";
+import type { GrandezaCredito, HistoricoCredito, OperacaoDivida, ValorHistorico } from "../modelo-institucional";
 
 /** `(A)` auditada · `(R)` revisão limitada · `(B)` não auditada/balancete · `(G)` gerencial. */
 export type Natureza = "A" | "R" | "B" | "G";
@@ -55,6 +55,16 @@ export interface BaseCredito {
    * "[a preencher]" — nunca um texto inventado no lugar.
    */
   campos?: Record<string, { valor: string; fonte: string | null }>;
+  /**
+   * O que chegou e o que faltou dos documentos obrigatórios (kit básico), com a MESMA regra da tela
+   * do caso (`itensDoKitBasicoAtendidos`, que pergunta ao banco pelo combinado estrutural). Ausente =
+   * a rota não leu; o slide diz isso em vez de afirmar que nada faltou.
+   */
+  informacao?: Array<{ codigo: string; documento: string; status: "recebido" | "sem_conteudo" | "faltante" }>;
+  /** As empresas cadastradas no caso — o perímetro — e qual delas o deck analisa. */
+  /** Entidades do caso cujo MAPA DA DÍVIDA chegou, quando não é a analisada (ex.: o do "GRUPO"). */
+  mapasDeOutrasEntidades?: string[];
+  perimetro?: Array<{ razaoSocial: string; cnpj: string | null; papel: string | null; documentos: number; analisada: boolean }>;
 }
 
 /**
@@ -288,8 +298,31 @@ export function amarracoes(base: BaseCredito, periodos: PeriodoCredito[] = base.
   // As que esta versão ainda não tem como rodar — DITAS, não omitidas.
   out.push({ numero: 3, nome: "Caixa final = inicial + variação", ano: null, veredito: "nao_conferivel",
     detalhe: "o fluxo de caixa (X.3) ainda não é gerado" });
-  out.push({ numero: 7, nome: "Abertura por credor = dívida do balanço", ano: null, veredito: "nao_conferivel",
-    detalhe: "a dívida por credor (XIII) ainda não é gerada" });
+  // 7. A abertura por credor contra o TOTAL do próprio mapa e contra a dívida do balanço. Divergência
+  // acima de 2% entre mapa e balanço é o que o Prompt-Mestre manda explicar (data-base diferente,
+  // juros a apropriar, mútuo de sócio que o balanço classifica fora da dívida bancária).
+  for (const { ano } of periodos) {
+    const ops = base.historico.operacoes.filter((o) => o.saldo[ano] != null);
+    if (ops.length === 0) continue;
+    const soma = ops.reduce((t, o) => t + (o.saldo[ano] as number), 0);
+    const total = base.historico.totalDoMapa[ano];
+    if (total != null) {
+      const fecha = Math.abs(soma - total) <= FOLGA_POR_TERMO * (ops.length + 1);
+      out.push({ numero: 7, nome: "Abertura por credor = total do mapa", ano, veredito: fecha ? "ok" : "diverge",
+        detalhe: fecha ? `${ops.length} operações somam o total impresso` : `diferença de ${fmtDif(soma - total, base.unidade)}` });
+    }
+    const bruta = indicadores(base, ano).dividaBruta.v;
+    if (bruta !== null && bruta > 0) {
+      const dif = (soma - bruta) / bruta;
+      out.push({ numero: 7, nome: "Mapa da dívida = dívida do balanço (±2%)", ano, veredito: Math.abs(dif) <= 0.02 ? "ok" : "diverge",
+        detalhe: Math.abs(dif) <= 0.02 ? "o mapa reproduz o balanço"
+          : `mapa ${dif > 0 ? "acima" : "abaixo"} do balanço em ${fmtDif(soma - bruta, base.unidade)}; explicar` });
+    }
+  }
+  if (!out.some((a) => a.numero === 7)) {
+    out.push({ numero: 7, nome: "Abertura por credor = dívida do balanço", ano: null, veredito: "nao_conferivel",
+      detalhe: "nenhum mapa da dívida entre os documentos recebidos" });
+  }
   out.push({ numero: 8, nome: "Análise vertical soma 100% por bloco", ano: null, veredito: "nao_conferivel",
     detalhe: "a abertura com AV% (XI.1) ainda não é gerada" });
   return out.sort((a, b) => a.numero - b.numero || (a.ano ?? 0) - (b.ano ?? 0));
@@ -341,4 +374,69 @@ export function fmtX(x: Valor): Numero {
 export function fmtDias(x: Valor): Numero {
   if (x.v === null) return x.ns ? NS : ND;
   return { t: x.v < 0 ? `(${fmt(x.v, 0)})` : fmt(x.v, 0), negativo: x.v < 0 };
+}
+
+// -----------------------------------------------------------------------------
+// O endividamento pelo MAPA DA DÍVIDA (XIII) e a cobertura por ativos reais (XVI)
+// -----------------------------------------------------------------------------
+export interface CredorAgregado { credor: string; saldo: number; juros: number | null }
+export interface DividaDoMapa {
+  ano: number;
+  operacoes: Array<OperacaoDivida & { saldoAno: number; jurosAno: number | null; taxa: number | null }>;
+  credores: CredorAgregado[];
+  modalidades: Array<{ modalidade: string; saldo: number }>;
+  total: number;
+  /** juros do exercício ÷ saldo final, ponderado — calculado pela Oria; n/d sem juros no mapa */
+  custoMedio: number | null;
+}
+
+/** O mapa do exercício mais recente que tem operação; `null` sem mapa da dívida. */
+export function dividaDoMapa(base: BaseCredito, anos: number[]): DividaDoMapa | null {
+  const ano = [...anos].reverse().find((a) => base.historico.operacoes.some((o) => o.saldo[a] != null));
+  if (ano === undefined) return null;
+  const ops = base.historico.operacoes.filter((o) => o.saldo[ano] != null).map((o) => {
+    const saldoAno = o.saldo[ano] as number;
+    const jurosAno = o.juros[ano] ?? null;
+    // TAXA IMPLÍCITA = juros do exercício ÷ saldo FINAL. É aproximação (o saldo médio não vem no
+    // mapa) e sai marcada como calculada; operação amortizada no ano sai com taxa superestimada.
+    return { ...o, saldoAno, jurosAno, taxa: jurosAno !== null && saldoAno > 0 ? (jurosAno / saldoAno) * 100 : null };
+  }).sort((a, b) => b.saldoAno - a.saldoAno);
+  const agrega = <K extends string>(chave: (o: (typeof ops)[number]) => K) => {
+    const m = new Map<K, { saldo: number; juros: number | null }>();
+    for (const o of ops) {
+      const k = chave(o);
+      const atual = m.get(k) ?? { saldo: 0, juros: 0 };
+      m.set(k, { saldo: atual.saldo + o.saldoAno, juros: atual.juros === null || o.jurosAno === null ? null : atual.juros + o.jurosAno });
+    }
+    return [...m.entries()].sort((a, b) => b[1].saldo - a[1].saldo);
+  };
+  const total = ops.reduce((t, o) => t + o.saldoAno, 0);
+  const comJuros = ops.filter((o) => o.jurosAno !== null);
+  const saldoComJuros = comJuros.reduce((t, o) => t + o.saldoAno, 0);
+  return {
+    ano, operacoes: ops, total,
+    credores: agrega((o) => o.credor).map(([credor, v]) => ({ credor, ...v })),
+    modalidades: agrega((o) => o.modalidade).map(([modalidade, v]) => ({ modalidade, saldo: v.saldo })),
+    custoMedio: saldoComJuros > 0 ? (comJuros.reduce((t, o) => t + (o.jurosAno as number), 0) / saldoComJuros) * 100 : null,
+  };
+}
+
+export interface AtivoReal { nome: string; contabil: number | null; realizacao: number | null; estimado: number | null }
+/**
+ * Os ativos reais possíveis de garantia — recebíveis, estoques e imobilizado tangível — e a
+ * realização (%) que o analista informou (`xvi.realizacao.*`). Sem realização, `estimado` é null:
+ * nenhum haircut é inventado (sem laudo, o Prompt-Mestre exige a premissa declarada).
+ */
+export function ativosReais(base: BaseCredito, ano: number): AtivoReal[] {
+  const I = indicadores(base, ano);
+  const real = (k: string) => {
+    const v = Number((base.campos?.[`xvi.realizacao.${k}`]?.valor ?? "").replace("%", "").replace(",", "."));
+    return Number.isFinite(v) && v > 0 && v <= 100 ? v : null;
+  };
+  return ([["Recebíveis (clientes)", "clientes", I.clientes.v], ["Estoques", "estoques", I.estoques.v],
+    ["Imobilizado tangível (imóveis, máquinas, veículos)", "imobilizado", base.historico.grandezas.imobilizado[ano]?.v ?? null]] as const)
+    .map(([nome, k, contabil]) => {
+      const r = real(k);
+      return { nome, contabil, realizacao: r, estimado: contabil !== null && r !== null ? contabil * r / 100 : null };
+    });
 }

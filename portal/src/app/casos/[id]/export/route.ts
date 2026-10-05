@@ -13,7 +13,8 @@ import {
   provenienciaPorLinha, provenienciaDaLinha,
   type LinhaParaCasar, type VinculoParaCasar,
 } from "@/lib/modelagem-linha";
-import { montarBaseCredito } from "@/lib/apresentacao/montar-base";
+import { informacaoDoKit, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
+import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
 import { construirDeckCredito, SemDadoParaApresentar } from "@/lib/apresentacao/deck-credito";
 
 // exceljs (usado em lib/export.ts) usa Buffer/streams do Node — precisa do
@@ -618,9 +619,31 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const camposRes = await supabase.from("caso_apresentacao_campo").select("chave, valor, fonte").eq("caso_id", id);
     if (camposRes.error) console.error(`[export] campos da apresentação não lidos: ${camposRes.error.message}`, { caso_id: id });
     const camposAp = (camposRes.data ?? []) as Array<{ chave: string; valor: string; fonte: string | null }>;
+    // O KIT BÁSICO e o PERÍMETRO (slides IX.2 e III.3). Leitura que falha deixa o slide dizendo que
+    // não leu — nunca "nada faltou" nem "empresa única" por omissão.
+    const [kitRes, checkRes, entRes] = await Promise.all([
+      supabase.from("taxonomia_tipo_documento").select("codigo, documento").eq("obrigatoriedade", "obrigatorio").order("codigo"),
+      supabase.from("checklist_item_status").select("tipo_taxonomia, status").eq("caso_id", id),
+      supabase.from("entidade").select("razao_social, cnpj, papel_no_grupo").eq("caso_id", id),
+    ]);
+    let informacao: ReturnType<typeof informacaoDoKit> | undefined;
+    if (!kitRes.error && kitRes.data) {
+      const kit = kitRes.data as Array<{ codigo: string; documento: string }>;
+      const atendidos = await itensDoKitBasicoAtendidos(kit, documentos.map((d) => ({ id: d.id, tipo_taxonomia: d.tipo_taxonomia })),
+        async (documentoId, tipo) => {
+          const r = await supabase.rpc("fn_documento_serve_como", { p_documento_id: documentoId, p_tipo_taxonomia: tipo });
+          return !r.error && r.data === true;
+        });
+      const semConteudo = new Set(((checkRes.data ?? []) as Array<{ tipo_taxonomia: string; status: string }>)
+        .filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia));
+      informacao = informacaoDoKit(kit, atendidos, semConteudo);
+    } else console.error(`[export] kit básico não lido: ${kitRes.error?.message}`, { caso_id: id });
+    const perimetro = entRes.error ? undefined : perimetroDoCaso(
+      (entRes.data ?? []) as Array<{ razao_social: string; cnpj: string | null; papel_no_grupo: string | null }>,
+      documentos, entradaDoModelo.entidade ?? "");
     let deck;
     try {
-      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp), new Date()));
+      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp, { informacao, perimetro }), new Date()));
     } catch (e) {
       if (!(e instanceof SemDadoParaApresentar)) throw e;
       return NextResponse.json({ error: "A apresentação de crédito não foi gerada.", motivos: [e.message] }, { status: 409 });

@@ -23,6 +23,7 @@ export function montarBaseCredito(
   ent: EntradaModeloInstitucional,
   documentos: DocumentoParaExport[],
   campos: Array<{ chave: string; valor: string; fonte: string | null }> = [],
+  extras: Pick<BaseCredito, "informacao" | "perimetro"> = {},
 ): BaseCredito {
   const historico = historicoParaCredito(ent);
   const entidade = ent.entidade ?? ent.caso.nome;
@@ -49,5 +50,46 @@ export function montarBaseCredito(
     documentos: docs,
     historico,
     campos: Object.fromEntries(campos.map((c) => [c.chave, { valor: c.valor, fonte: c.fonte }])),
+    // O mapa da dívida de OUTRA entidade do caso (no Canastra ele é do "GRUPO CANASTRA"): o deck da
+    // empresa analisada não o soma — seria dívida de outra pessoa jurídica —, mas tem de DIZER que
+    // ele existe, em vez de "nenhum mapa da dívida recebido" (medido nos mandatos locais, 05/10).
+    mapasDeOutrasEntidades: [...new Set(documentos.filter((d) => d.tipo_taxonomia === "MAPA_DIVIDA").map((d) =>
+      (Array.isArray(d.entidade) ? d.entidade[0] : d.entidade)?.razao_social ?? "sem entidade")
+      .filter((r) => { const n = norm(r); return !(n && (n.includes(alvo) || alvo.includes(n))); }))],
+    ...extras,
   };
+}
+
+/**
+ * O PERÍMETRO para o slide III.3: cada empresa cadastrada no caso, quantos documentos ela tem e se é
+ * a analisada. Mesmo casamento de nome do resto deste arquivo (um contido no outro).
+ */
+export function perimetroDoCaso(
+  entidades: Array<{ razao_social: string; cnpj: string | null; papel_no_grupo: string | null }>,
+  documentos: DocumentoParaExport[],
+  entidadeAnalisada: string,
+): NonNullable<BaseCredito["perimetro"]> {
+  const alvo = norm(entidadeAnalisada);
+  const docsDe = (nome: string) => documentos.filter((d) =>
+    norm((Array.isArray(d.entidade) ? d.entidade[0] : d.entidade)?.razao_social ?? "") === norm(nome)).length;
+  return entidades.map((e) => ({
+    razaoSocial: e.razao_social, cnpj: e.cnpj, papel: e.papel_no_grupo, documentos: docsDe(e.razao_social),
+    analisada: norm(e.razao_social) === alvo || (alvo.length > 0 && norm(e.razao_social).includes(alvo)),
+  })).sort((a, b) => Number(b.analisada) - Number(a.analisada) || b.documentos - a.documentos);
+}
+
+/**
+ * O QUE CHEGOU E O QUE FALTOU do kit básico. `atendidos` vem de `itensDoKitBasicoAtendidos` — a MESMA
+ * regra da tela do caso, que pergunta ao banco pelo combinado estrutural (0157); `semConteudo` vem do
+ * checklist (`recebido_nao_valido`): chegou e não rendeu linha nenhuma.
+ */
+export function informacaoDoKit(
+  kit: Array<{ codigo: string; documento: string }>,
+  atendidos: ReadonlySet<string>,
+  semConteudo: ReadonlySet<string>,
+): NonNullable<BaseCredito["informacao"]> {
+  return kit.map((k) => ({
+    codigo: k.codigo, documento: k.documento,
+    status: semConteudo.has(k.codigo) ? "sem_conteudo" as const : atendidos.has(k.codigo) ? "recebido" as const : "faltante" as const,
+  }));
 }

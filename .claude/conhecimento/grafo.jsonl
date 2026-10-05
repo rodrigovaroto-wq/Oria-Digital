@@ -1433,6 +1433,7 @@
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":661}
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":648}
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":750}
+{"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/gerar-export-do-banco.mts","l":240}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/gerar-export-do-banco.mts","l":170}
@@ -1466,11 +1467,12 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/actions.ts","rel":"CHAMA","pa":"fn:fn_registrar_transcricao_humana","f":"portal/src/app/casos/[id]/documentos/[docId]/actions.ts","l":101}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/page.tsx","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"portal/src/app/casos/[id]/documentos/[docId]/page.tsx","l":67}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/transcricao/route.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_transcrever","f":"portal/src/app/casos/[id]/documentos/[docId]/transcricao/route.ts","l":62}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/export/route.ts","l":318}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/app/casos/[id]/export/route.ts","l":200}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/export/route.ts","l":369}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/app/casos/[id]/export/route.ts","l":387}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/app/casos/[id]/export/route.ts","l":481}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/export/route.ts","l":319}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/app/casos/[id]/export/route.ts","l":634}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/app/casos/[id]/export/route.ts","l":201}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/export/route.ts","l":370}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/app/casos/[id]/export/route.ts","l":388}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/app/casos/[id]/export/route.ts","l":482}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":104}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":69}
@@ -1495,7 +1497,7 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perguntas/page.tsx","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/app/casos/[id]/perguntas/page.tsx","l":18}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/revisao/actions.ts","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"portal/src/app/casos/[id]/revisao/actions.ts","l":6}
 {"k":"e","de":"arquivo:portal/src/components/excluir-mandato.tsx","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/components/excluir-mandato.tsx","l":12}
-{"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":34}
+{"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":35}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/export-modelagem.ts","l":97}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/lib/export-modelagem.ts","l":765}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"portal/src/lib/export.ts","l":691}
