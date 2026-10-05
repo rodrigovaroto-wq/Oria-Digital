@@ -38,6 +38,22 @@ Vercel (`VERCEL_TOKEN`) antes de investigar o código.
 
 ### 2. Decisões do DONO em aberto (não decida sozinho)
 
+> **ATUALIZADO em 05/10/2026 (S105, PR [#251](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/251), mergeado):**
+> - **Item 1 DECIDIDO:** "Capital de giro" no passivo é dívida, com ou sem credor nomeado. Fundamento:
+>   CPC 00/39/48 (essência: obrigação contratual de entregar caixa a quem emprestou; no balanço
+>   brasileiro, "capital de giro" no passivo é o produto bancário). Prova no próprio book Canastra:
+>   "Capital de giro - longo prazo" (26.400 em 2023) está sob "Empréstimos e Financiamentos" e o mapa
+>   de dívida o lista como contrato do Banco Meridional. Todos os chamadores de `ehDividaFinanceira`
+>   só olham passivo e mapa. Exclusões: necessidade/variação do capital de giro, capital de giro
+>   líquido/próprio; o grupo misto segue misto, com nota. Commits `01430ea` e `9277bed`.
+> - **Item 2 DECIDIDO pelo item 1:** "Capital de giro Caixa" é dívida pelo produto; "caixa" sozinho
+>   continua fora de `CREDORES` (numa enumeração pode ser o disponível).
+> - **Item 6 / fatia h DECIDIDO:** o estoque (PME) gira contra CUSTO (`59ddcb8`). Efeito colateral
+>   conhecido: uma premissa única de dias ligada a todo o ativo vira dois grupos de base (receita para
+>   cliente, custo para estoque), com a nota de ATENÇÃO que já existia.
+> - Recomendação dada ao dono e ainda NÃO confirmada: item 3 (alarme do Vertentes) deve continuar;
+>   itens 4 e 5 são do mandato e da modelagem, não do código.
+
 1. **"Capital de giro" sem credor nomeado** (books Canastra/Vertentes): é dívida? Hoje só conta como
    dívida quando a linha cita banco ou linha de financiamento (`CAPITAL_DE_GIRO_BANCARIO`). Uma linha
    "Capital de giro" sem credor fica fora.
@@ -63,7 +79,7 @@ Continuam abertos:
 - e. Storage vazio com `origem_arquivo='supabase_storage'`.
 - f. xlsx: ler todas as abas.
 - g. Períodos "multi 02,25" lidos como {2002, 2025}.
-- h. PME: base de receita ou de custo (**decisão do dono**).
+- h. ~~PME: base de receita ou de custo~~ — **decidido 05/10: custo**, feito no #251.
 - i. Premissa por grupo de linhas.
 - j. Tolerância × escala em `fn_reconciliar_ativo_passivo_pl`.
 - k. Issues menores do Sonar.

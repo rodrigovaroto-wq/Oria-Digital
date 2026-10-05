@@ -1,5 +1,25 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 105 (05/10/2026) — PR #251 mergeado: três decisões do dono fechadas no export
+
+> **Produção conferida só leitura em 05/10:** Supabase em `0198`
+> (`0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql`, 181/0 ausentes); n8n de ingestão 42/42 nós e
+> de erros 3/3 iguais ao repositório; portal (Vercel) = `4b536bc`, o merge do #251. Nenhuma execução
+> da ingestão desde a republicação de 01/10: o próximo mandato é a prova de que o n8n grava no banco.
+>
+> **Decidido pelo dono e implementado (#251):**
+> 1. **Estoque (PME) gira contra CUSTO**, não receita (`59ddcb8`): `giraContraCusto` é o único ponto
+>    que escolhe a base; a sugestão do realizado é estoques ÷ custos × 360. 11 asserts reprovam sem.
+> 2. **"Capital de giro" no PASSIVO é dívida, com ou sem credor** (`01430ea`, `9277bed`): CPC 00/39/48;
+>    fora só os termos analíticos (necessidade/variação do capital de giro, capital de giro
+>    líquido/próprio). Canastra: CP 14.500/21.900 e LP 28.800/3.800 (2023/2025) entram na dívida.
+> 3. **"Capital de giro Caixa"**: resolvido pelo item 2 (a linha é dívida pelo produto); "caixa"
+>    sozinho segue fora de `CREDORES`.
+>
+> Em aberto: HANDOFF S105 §2 (itens 3–5) e §3. Novo: no Vertentes o custo projetado de 2026 (61.193) cai
+> muito abaixo do realizado de 2025 (101.300) com a receita subindo — não investigado. O §1 (book do
+> Krauspenhar baixado do portal publicado) segue por fazer: falta `PORTAL_EMAIL`/`PORTAL_SENHA`.
+
 ## SESSÃO 105 — comece pelo HANDOFF "▶ SESSÃO 105"
 
 > **A S104 está fechada.** PRs #248 e #249 mergeados no `main` (o merge do #249 é o `66ec163`, de
