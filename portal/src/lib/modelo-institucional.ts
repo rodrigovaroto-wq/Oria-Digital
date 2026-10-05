@@ -925,7 +925,7 @@ export const NOTA_GRUPO_MISTO =
 // "fornecedor" só diz EM PODER DE QUEM. Âncora no início (e não "contém") para não regredir
 // "Fornecedores de mercadorias" (passivo), que continua fornecedor.
 const abreComMercadoria = (chave: string) =>
-  /^[\s\d.()+\-–]*(estoques?|mercadorias?|produtos?|mat(é|e)ria.prima)\b/i.test(chave);
+  /^[\s\d.()+\-–]*(estoques?|mercadorias?|produtos?|mat[ée]ria.prima)\b/i.test(chave);
 
 // O espelho: rótulo que ABRE com fornecedor/cliente é a conta de terceiro ("Fornecedores de
 // mercadorias" é passivo; a palavra mercadoria só diz de quê).
@@ -936,13 +936,13 @@ export const ehEstoque = (chave: string) =>
   !abreComTerceiro(chave) && (
     /\bestoque/i.test(chave) || /\bmercadoria/i.test(chave)
     || /\bprodutos? (acabados?|em (elabora|processo))/i.test(chave)
-    || /\bmat(é|e)ria.prima/i.test(chave));
+    || /\bmat[ée]ria.prima/i.test(chave));
 
 export const ehCliente = (chave: string) =>
   !abreComMercadoria(chave) && (
     /\bclientes?\b/i.test(chave) || /\bcontas? a receber\b/i.test(chave)
     || /\bduplicatas? a receber\b/i.test(chave)
-    || /\bt(í|i)tulos? a receber\b/i.test(chave) || /\btitulos? a receber\b/i.test(chave));
+    || /\bt[íi]tulos? a receber\b/i.test(chave) || /\btitulos? a receber\b/i.test(chave));
 
 export const ehFornecedor = (chave: string) =>
   !abreComMercadoria(chave) && (
