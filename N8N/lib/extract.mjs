@@ -1172,11 +1172,16 @@ export function diagnosticarErroApi(erro) {
   // "in 1m3.2s", "in 250ms") e o Google em "Please retry in 24.5s". Em segundos,
   // arredondado para cima; null quando não diz.
   const esperaDoTexto = (t) => {
-    const m = /(?:try again|retry) in\s+(?:(\d+(?:\.\d+)?)m(?!s))?\s*(?:(\d+(?:\.\d+)?)(ms|s))?/i.exec(String(t || ''));
-    if (!m || (m[1] === undefined && m[2] === undefined)) return null;
-    const min = m[1] === undefined ? 0 : Number(m[1]);
-    const resto = m[2] === undefined ? 0 : (m[3].toLowerCase() === 'ms' ? Number(m[2]) / 1000 : Number(m[2]));
-    return Math.ceil(min * 60 + resto);
+    const trecho = /(?:try again|retry) in\s+([\d.ms]+)/i.exec(String(t || ''));
+    if (!trecho) return null;
+    const token = trecho[1].toLowerCase();
+    const minutos = /^(\d+(?:\.\d+)?)m(?!s)/.exec(token);
+    const depois = minutos ? token.slice(minutos[0].length) : token;
+    const unidade = /^(\d+(?:\.\d+)?)(ms|s)/.exec(depois);
+    if (!minutos && !unidade) return null;
+    let segundos = minutos ? Number(minutos[1]) * 60 : 0;
+    if (unidade) segundos += unidade[2] === 'ms' ? Number(unidade[1]) / 1000 : Number(unidade[1]);
+    return Math.ceil(segundos);
   };
   const esperaDoHeader = (v) => (v !== null && /^\d+(\.\d+)?$/.test(String(v)) ? Math.ceil(Number(v)) : esperaDoTexto(`retry in ${v}`));
   const esperaSugeridaS = (esperar !== null ? esperaDoHeader(esperar) : null)
