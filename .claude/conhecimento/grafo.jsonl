@@ -611,6 +611,9 @@
 {"k":"n","id":"no8n:Classificar Nome","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Classificar Nome code"}
 {"k":"n","id":"no8n:Conferir Fontes","t":"no8n","f":"N8N/workflow.macro.json","txt":"Conferir Fontes postgres"}
 {"k":"n","id":"no8n:Conferir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Conferir Lote postgres"}
+{"k":"n","id":"no8n:Esperar Retry 1","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Esperar Retry 1 code"}
+{"k":"n","id":"no8n:Esperar Retry 2","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Esperar Retry 2 code"}
+{"k":"n","id":"no8n:Esperar Retry 3","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Esperar Retry 3 code"}
 {"k":"n","id":"no8n:Extracao ja feita?","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Extracao ja feita? if"}
 {"k":"n","id":"no8n:Extrair Causa","t":"no8n","f":"N8N/workflow.erros.json","txt":"Extrair Causa code"}
 {"k":"n","id":"no8n:Extrair Texto","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Extrair Texto extractFromFile"}
@@ -623,6 +626,9 @@
 {"k":"n","id":"no8n:Gravar Índices","t":"no8n","f":"N8N/workflow.macro.json","txt":"Gravar Índices postgres"}
 {"k":"n","id":"no8n:IA (1 token)","t":"no8n","f":"N8N/workflow.diagnostico-ia.json","txt":"IA (1 token) httpRequest"}
 {"k":"n","id":"no8n:IA Classificar","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"IA Classificar httpRequest"}
+{"k":"n","id":"no8n:IA Extrair (tentativa 2)","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"IA Extrair (tentativa 2) httpRequest"}
+{"k":"n","id":"no8n:IA Extrair (tentativa 3)","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"IA Extrair (tentativa 3) httpRequest"}
+{"k":"n","id":"no8n:IA Extrair (tentativa 4)","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"IA Extrair (tentativa 4) httpRequest"}
 {"k":"n","id":"no8n:IA Extrair","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"IA Extrair httpRequest"}
 {"k":"n","id":"no8n:IBGE SIDRA (IPCA)","t":"no8n","f":"N8N/workflow.macro.json","txt":"IBGE SIDRA (IPCA) httpRequest"}
 {"k":"n","id":"no8n:Indicadores Focus","t":"no8n","f":"N8N/workflow.macro.json","txt":"Indicadores Focus code"}
@@ -631,6 +637,7 @@
 {"k":"n","id":"no8n:Juntar Extracao de Conteudo","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Juntar Extracao de Conteudo merge"}
 {"k":"n","id":"no8n:Juntar Extraidos","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Juntar Extraidos merge"}
 {"k":"n","id":"no8n:Juntar Ramos","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Juntar Ramos merge"}
+{"k":"n","id":"no8n:Juntar Tentativas","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Juntar Tentativas merge"}
 {"k":"n","id":"no8n:Listar Arquivos","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Listar Arquivos code"}
 {"k":"n","id":"no8n:Listar Modelos","t":"no8n","f":"N8N/workflow.diagnostico-ia.json","txt":"Listar Modelos httpRequest"}
 {"k":"n","id":"no8n:Lote cabe?","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Lote cabe? if"}
@@ -645,6 +652,9 @@
 {"k":"n","id":"no8n:Normalizar Observações","t":"no8n","f":"N8N/workflow.macro.json","txt":"Normalizar Observações code"}
 {"k":"n","id":"no8n:Orcamento do Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Orcamento do Lote code"}
 {"k":"n","id":"no8n:Parse Classif","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Parse Classif code"}
+{"k":"n","id":"no8n:Parse Extracao (tentativa 2)","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Parse Extracao (tentativa 2) code"}
+{"k":"n","id":"no8n:Parse Extracao (tentativa 3)","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Parse Extracao (tentativa 3) code"}
+{"k":"n","id":"no8n:Parse Extracao (tentativa 4)","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Parse Extracao (tentativa 4) code"}
 {"k":"n","id":"no8n:Parse Extracao","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Parse Extracao code"}
 {"k":"n","id":"no8n:Precisa Fallback?","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Precisa Fallback? if"}
 {"k":"n","id":"no8n:Preparar Conteudo","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Preparar Conteudo code"}
@@ -658,6 +668,9 @@
 {"k":"n","id":"no8n:Registrar Documento","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Registrar Documento postgres"}
 {"k":"n","id":"no8n:Registrar Falha","t":"no8n","f":"N8N/workflow.erros.json","txt":"Registrar Falha postgres"}
 {"k":"n","id":"no8n:Registrar Recusa","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Registrar Recusa postgres"}
+{"k":"n","id":"no8n:Repetir Extracao 1?","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Repetir Extracao 1? if"}
+{"k":"n","id":"no8n:Repetir Extracao 2?","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Repetir Extracao 2? if"}
+{"k":"n","id":"no8n:Repetir Extracao 3?","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Repetir Extracao 3? if"}
 {"k":"n","id":"no8n:Resumo de Custo","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Resumo de Custo code"}
 {"k":"n","id":"no8n:Rodar Diagnostico","t":"no8n","f":"N8N/workflow.diagnostico-ia.json","txt":"Rodar Diagnostico manualTrigger"}
 {"k":"n","id":"no8n:Roteador de Formato","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Roteador de Formato switch"}
@@ -794,6 +807,7 @@
 {"k":"n","id":"suite:N8N/test/merge.test.mjs","t":"suite","f":"N8N/test/merge.test.mjs","txt":"merge test mjs"}
 {"k":"n","id":"suite:N8N/test/preparar-republicacao.test.mjs","t":"suite","f":"N8N/test/preparar-republicacao.test.mjs","txt":"preparar republicacao test mjs"}
 {"k":"n","id":"suite:N8N/test/repetibilidade.test.mjs","t":"suite","f":"N8N/test/repetibilidade.test.mjs","txt":"repetibilidade test mjs"}
+{"k":"n","id":"suite:N8N/test/repeticao-de-bloco.test.mjs","t":"suite","f":"N8N/test/repeticao-de-bloco.test.mjs","txt":"repeticao de bloco test mjs"}
 {"k":"n","id":"suite:N8N/test/segunda-contagem.test.mjs","t":"suite","f":"N8N/test/segunda-contagem.test.mjs","txt":"segunda contagem test mjs"}
 {"k":"n","id":"suite:N8N/test/workflow-diagnostico-sim.test.mjs","t":"suite","f":"N8N/test/workflow-diagnostico-sim.test.mjs","txt":"workflow diagnostico sim test mjs"}
 {"k":"n","id":"suite:N8N/test/workflow-macro-sim.test.mjs","t":"suite","f":"N8N/test/workflow-macro-sim.test.mjs","txt":"workflow macro sim test mjs"}
@@ -814,22 +828,22 @@
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/build-workflow-macro.mjs","l":235}
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/build-workflow-macro.mjs","l":260}
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/build-workflow-macro.mjs","l":227}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/build-workflow.mjs","l":2657}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/build-workflow.mjs","l":2671}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"N8N/build-workflow.mjs","l":144}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/build-workflow.mjs","l":2471}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/build-workflow.mjs","l":1776}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/build-workflow.mjs","l":1776}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/build-workflow.mjs","l":2592}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/build-workflow.mjs","l":2180}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/build-workflow.mjs","l":1374}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/build-workflow.mjs","l":2526}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/build-workflow.mjs","l":2466}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/build-workflow.mjs","l":2289}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/build-workflow.mjs","l":1942}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/build-workflow.mjs","l":2631}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/build-workflow.mjs","l":2262}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/build-workflow.mjs","l":143}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/build-workflow.mjs","l":2757}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/build-workflow.mjs","l":2771}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"N8N/build-workflow.mjs","l":149}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/build-workflow.mjs","l":2556}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/build-workflow.mjs","l":1781}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/build-workflow.mjs","l":1781}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/build-workflow.mjs","l":2692}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/build-workflow.mjs","l":2234}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/build-workflow.mjs","l":1379}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/build-workflow.mjs","l":2626}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/build-workflow.mjs","l":2551}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/build-workflow.mjs","l":2374}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/build-workflow.mjs","l":1968}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/build-workflow.mjs","l":2731}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/build-workflow.mjs","l":2347}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/build-workflow.mjs","l":148}
 {"k":"e","de":"arquivo:N8N/gerar-seed-macro.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/gerar-seed-macro.mjs","l":57}
 {"k":"e","de":"arquivo:N8N/gerar-seed-macro.mjs","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"N8N/gerar-seed-macro.mjs","l":107}
 {"k":"e","de":"arquivo:N8N/gerar-seed-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/gerar-seed-macro.mjs","l":20}
@@ -866,32 +880,32 @@
 {"k":"e","de":"arquivo:N8N/test/workflow-macro-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/test/workflow-macro-sim.test.mjs","l":119}
 {"k":"e","de":"arquivo:N8N/test/workflow-macro-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/test/workflow-macro-sim.test.mjs","l":118}
 {"k":"e","de":"arquivo:N8N/test/workflow-macro-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/test/workflow-macro-sim.test.mjs","l":117}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/test/workflow-sim.test.mjs","l":2246}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/test/workflow-sim.test.mjs","l":1405}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/test/workflow-sim.test.mjs","l":1400}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/test/workflow-sim.test.mjs","l":715}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/test/workflow-sim.test.mjs","l":2250}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/test/workflow-sim.test.mjs","l":1407}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/test/workflow-sim.test.mjs","l":1402}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/test/workflow-sim.test.mjs","l":717}
 {"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/test/workflow-sim.test.mjs","l":619}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/test/workflow-sim.test.mjs","l":2259}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"N8N/test/workflow-sim.test.mjs","l":2468}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/test/workflow-sim.test.mjs","l":2936}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json","l":916}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/workflow.e1-ingestao.json","l":944}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/test/workflow-sim.test.mjs","l":2263}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"N8N/test/workflow-sim.test.mjs","l":2472}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/test/workflow-sim.test.mjs","l":2943}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json","l":1236}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/workflow.e1-ingestao.json","l":1264}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json","l":77}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json","l":77}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/workflow.e1-ingestao.json","l":574}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/workflow.e1-ingestao.json","l":747}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/workflow.e1-ingestao.json","l":747}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/workflow.e1-ingestao.json","l":846}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/workflow.e1-ingestao.json","l":818}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/workflow.e1-ingestao.json","l":1067}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/workflow.e1-ingestao.json","l":1067}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/workflow.e1-ingestao.json","l":1166}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/workflow.e1-ingestao.json","l":1138}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/workflow.e1-ingestao.json","l":660}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/workflow.e1-ingestao.json","l":790}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/workflow.e1-ingestao.json","l":1110}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/workflow.e1-ingestao.json","l":517}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/workflow.e1-ingestao.json","l":136}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/workflow.e1-ingestao.json","l":732}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/workflow.e1-ingestao.json","l":889}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/workflow.e1-ingestao.json","l":1209}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/workflow.e1-ingestao.json","l":36}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"N8N/workflow.e1-ingestao.json","l":517}
-{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_valor_conceito","f":"N8N/workflow.e1-ingestao.json","l":747}
+{"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_valor_conceito","f":"N8N/workflow.e1-ingestao.json","l":1067}
 {"k":"e","de":"arquivo:N8N/workflow.erros.json","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/workflow.erros.json","l":32}
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/workflow.macro.json","l":156}
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/workflow.macro.json","l":244}
@@ -2029,6 +2043,9 @@
 {"k":"e","de":"no8n:Orcamento do Lote","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Parse Classif","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Parse Classif","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"N8N/workflow.e1-ingestao.json"}
+{"k":"e","de":"no8n:Parse Extracao (tentativa 2)","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/workflow.e1-ingestao.json"}
+{"k":"e","de":"no8n:Parse Extracao (tentativa 3)","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/workflow.e1-ingestao.json"}
+{"k":"e","de":"no8n:Parse Extracao (tentativa 4)","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Parse Extracao","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Recompor Conteudo Extraido","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Recomputar Completude","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/workflow.e1-ingestao.json"}
