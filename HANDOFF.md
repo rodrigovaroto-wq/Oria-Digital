@@ -105,6 +105,62 @@ Ele passa no CI por isso, o que é a regra 7. Reproduz igual no `955ff77`, antes
 - **Até lá, no case real:** se o book tiver um Mapa de Dívida com linha "TOTAL" precedida de código,
   confira a dívida existente do export contra o total do mapa. Se ela vier em dobro, é este defeito.
 
+### 2c. Primeiro mandato real depois da republicação: "Fw Valtra" (05/10/2026)
+
+**Caso `03a66ab6-f0c1-45df-8c37-257c42298fc4`**, empresa MOTO AGRICOLA VOLKWEIS LTDA (concessionária
+Valtra, setor agro).
+
+**Ingestão.** A primeira execução (8432) foi cancelada à mão aos 47 s. A segunda (8433) rodou de
+13:17:57 a 13:36:25 UTC: `success`, 15 documentos, 12.476 linhas, US$ 1,10, cobertura 0,78,
+5 documentos com `extracao_falhou` e 39 pendências abertas que NÃO foram tratadas, a pedido do dono.
+**Isto prova que o n8n republicado em 01/10 grava no banco.**
+
+**Armadilha de monitoramento.** A listagem `GET /api/v1/executions` do n8n NÃO mostra execução em
+andamento. Use `?status=running`. Eu disse ao dono que o reenvio "não tinha chegado", e ele estava
+rodando havia 10 minutos.
+
+**Modelagem gravada no caso**, com permissão explícita do dono, autor `claude:s105 (a pedido do dono)`:
+- **Parâmetros:** entidade MOTO AGRICOLA VOLKWEIS LTDA, último real 2025, IPCA, agro, 5 anos.
+- **10 premissas:** IPCA (Focus); CRESC_NOMINAL 0/4/6/6/5; CUSTO_VARIAVEL 77,5; SGA_PCT 17,5→16;
+  PMR 40; PME 300→210 (sobre CMV); PMP 80; ALIQUOTA 34; TAXA_DIVIDA 18→14; CAPEX_PCT 1,5.
+- **Lote por seção** para receita, custos, despesas, impostos e resultado financeiro. **Por linha**
+  para cliente, estoque e fornecedor (classificadores do portal) e para o IMOBILIZADO (capex).
+- `fn_conferir_modelagem`: `pronto=true`, 672 vínculos, 0 órfãos.
+- **Defeito menor, aberto:** linhas "(-) MERCADORIA EM GARANTIA… (CLIENTE)" casam `ehCliente` E
+  `ehEstoque`, e ficaram em PME (o último vínculo vence).
+
+**O Portão 2 NÃO foi aprovado.** O botão de export do portal recusa (409). O Excel entregue ao dono
+saiu de `Arquitetura do Sistema/3 Estado e Execução/ferramentas/export-de-producao.mts`, uma réplica
+da rota `/casos/[id]/export` que lê produção pela API de gerenciamento (só SELECT) e pula só o Portão
+2. Ela foi validada no caso de teste `bb37f726`: `auditar-xlsx` 11/11. A ressalva é que a API devolve
+`numeric` como texto: o script converte as colunas numéricas, e sem isso as sugestões do realizado
+saem vazias.
+
+**DEFEITO GRAVE achado no caso: `fn_valores_por_ano` (0125) monta a série com o MAIOR |valor| entre
+todas as colunas do ano.** No Fw Valtra:
+- o **Débito** do balancete de jun/25 virou o "ATIVO" de 2025: 125,86 mi contra 38,48 mi no balanço
+  anual;
+- **"Saldo Inicial"/"Saldo anterior"** foram lidos como o ano do documento, quando são o ano
+  anterior: CLIENTES 2025 saiu com o valor de 2024, e a DRE 2023 pegou números de 2022;
+- linhas do **CONTRATO_SOCIAL** ("total - nº de quotas" = 15,5 mi) entraram no PL.
+
+O efeito foi um balanço que não fecha em ~90,5 mi de 2025 a 2030, com `auditar-xlsx` 8/11 (v1
+entregue ao dono). Com a consulta corrigida no script (`VALORES_CORRIGIDOS=1`), ficou 10/11: o
+balanço fecha nas 9 colunas (2022–2030) e o ativo total bate com o documento em todos os anos (v2
+entregue). Sobra um resíduo do AC de 3,75 mi em 2025 (9,7% do ativo), não aberto. **A correção
+definitiva é a migration 0199** (ver §2d).
+
+**Também medido:** `fn_linhas_do_realizado` (0150) devolveu, para este caso, só a entidade do DFC
+("Metodo Indireto Moto Agricola"), sem nenhuma linha do BALANCO/DRE. Por isso as sugestões do
+realizado saíram vazias na tela. As razões reais (2023/2024/2025) são:
+- receita líquida 42,14/41,86/38,68 mi;
+- CMV/RL 78,9/76,1/77,5%;
+- SG&A/RL 6,8*/14,1/17,9% (*2023 sem a linha de despesas administrativas);
+- PMR 35/45/40;
+- PME s/ CMV 133/212/317;
+- PMP 71/93/81;
+- dívida 0,69/4,28/10,38 mi.
+
 ### 3. Próximas fatias, pela ordem (o texto completo de cada uma está no S104 §5)
 
 Os itens **l** (resíduo do AC) e **m** (nomes dos workflows) foram **RESOLVIDOS** no #249.
