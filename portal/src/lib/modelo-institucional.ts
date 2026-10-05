@@ -915,19 +915,39 @@ export const NOTA_GRUPO_MISTO =
 // estoque e fornecedor" com a MESMA lista, senão o dia sugerido na tela não é o
 // dia que o modelo aplica, e a diferença aparece como saldo que não reproduz o
 // balanço de onde saiu.
-export const ehCliente = (chave: string) =>
-  /\bclientes?\b/i.test(chave) || /\bcontas? a receber\b/i.test(chave)
-  || /\bduplicatas? a receber\b/i.test(chave)
-  || /\bt(í|i)tulos? a receber\b/i.test(chave) || /\btitulos? a receber\b/i.test(chave);
+// EXCLUSIVIDADE: uma conta é no máximo UMA de {cliente, estoque, fornecedor}. Caso real (Fw Valtra,
+// concessionária): "(-) MERCADORIA EM GARANTIA/CONSERTO A DEVOLVER(CLIENTE)", "(-) ESTOQUE EM
+// DEMONSTRAÇÃO COM CLIENTES A RECEBER" e "(-) MERCADORIA EM GARANTIA/CONSERTO(FORNECEDOR)" casavam
+// ehCliente/ehFornecedor E ehEstoque (medido: 11 linhas ehCliente e 31 ehEstoque no ativo
+// circulante, sobrepostas nesses rótulos) — a mesma conta entrava em PMR e PME e o vínculo de
+// premissa ficava com quem gravou por último. Rótulo que ABRE com estoque/mercadoria/produto/
+// matéria-prima é mercadoria (em poder de terceiros ou não): é estoque, e a menção a "cliente" ou
+// "fornecedor" só diz EM PODER DE QUEM. Âncora no início (e não "contém") para não regredir
+// "Fornecedores de mercadorias" (passivo), que continua fornecedor.
+const abreComMercadoria = (chave: string) =>
+  /^[\s\d.()+\-–]*(estoques?|mercadorias?|produtos?|mat(é|e)ria.prima)\b/i.test(chave);
+
+// O espelho: rótulo que ABRE com fornecedor/cliente é a conta de terceiro ("Fornecedores de
+// mercadorias" é passivo; a palavra mercadoria só diz de quê).
+const abreComTerceiro = (chave: string) =>
+  /^[\s\d.()+\-–]*(fornecedor|cliente|duplicatas?|contas? a (pagar|receber))/i.test(chave);
 
 export const ehEstoque = (chave: string) =>
-  /\bestoque/i.test(chave) || /\bmercadoria/i.test(chave)
-  || /\bprodutos? (acabados?|em (elabora|processo))/i.test(chave)
-  || /\bmat(é|e)ria.prima/i.test(chave);
+  !abreComTerceiro(chave) && (
+    /\bestoque/i.test(chave) || /\bmercadoria/i.test(chave)
+    || /\bprodutos? (acabados?|em (elabora|processo))/i.test(chave)
+    || /\bmat(é|e)ria.prima/i.test(chave));
+
+export const ehCliente = (chave: string) =>
+  !abreComMercadoria(chave) && (
+    /\bclientes?\b/i.test(chave) || /\bcontas? a receber\b/i.test(chave)
+    || /\bduplicatas? a receber\b/i.test(chave)
+    || /\bt(í|i)tulos? a receber\b/i.test(chave) || /\btitulos? a receber\b/i.test(chave));
 
 export const ehFornecedor = (chave: string) =>
-  /\bfornecedor/i.test(chave) || /\bcontas? a pagar\b/i.test(chave)
-  || /\bduplicatas? a pagar\b/i.test(chave);
+  !abreComMercadoria(chave) && (
+    /\bfornecedor/i.test(chave) || /\bcontas? a pagar\b/i.test(chave)
+    || /\bduplicatas? a pagar\b/i.test(chave));
 
 // A BASE DO GIRO DE CADA CONTA, num ponto só: fornecedor (PMP) e ESTOQUE (PME) giram contra
 // CUSTO; cliente e o resto do ativo giram contra RECEITA LÍQUIDA. Decisão do dono em
