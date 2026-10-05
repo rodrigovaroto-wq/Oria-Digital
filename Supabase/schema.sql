@@ -5424,6 +5424,83 @@ $$;
 COMMENT ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid) IS '0182: agrupa as entidades do caso por CONTROLE COMUM, por FECHO TRANSITIVO — se A e B compartilham um controlador, e B e C compartilham outro, as três caem no mesmo grupo. `par_direto` (pares de um salto) é MATERIALIZED de propósito (evita reavaliação a cada iteração da recursão — mesma lição da 0152, ver comentário acima da função). `grupo_id` é o entidade_id alcançável de menor ordenação textual — representante arbitrário mas estável do componente conexo, não uma entidade "principal". Entidade sem controlador registrado não aparece na saída — ausência não afirma nada sobre grupo real algum (regra 7 do CLAUDE.md). A recursão termina pela DEDUPLICAÇÃO do `union` sobre um conjunto finito (entidade, alcançável) — sem contador de salto na tupla, que era justamente o que impedia a dedup de convergir na primeira versão (ver cabeçalho). É o consumidor mínimo que prova a fatia 1.7 do roadmap: "as 8 entidades do mandato real podem ser reconhecidas como um grupo".';
 
 --
+-- Name: fn_herdar_secao_pela_arvore(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid DEFAULT NULL::uuid, p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  c_rodadas constant int := 10;
+  v_ids     uuid[] := '{}';
+  v_novos   uuid[];
+  v_conf    int := 0;
+  v_lconf   int := 0;
+  v_i       int := 0;
+  v_linhas  int; v_versoes int; v_casos int;
+begin
+  loop
+    v_i := v_i + 1;
+    with e as materialized (
+      select ce.id, ce.documento_versao_id, d.caso_id,
+             nullif(btrim(ce.secao_canonica), '')          as sc,
+             fn_nome_de_secao_normalizado(ce.chave)          as nc,
+             fn_nome_de_secao_normalizado(ce.secao)          as ns,
+             (ce.origem_valor = 'extracao' and ce.revisado_por is null) as alvo
+        from campo_extraido ce
+        join documento_versao dv on dv.id = ce.documento_versao_id
+        join documento d on d.id = dv.documento_id
+       where d.tipo_taxonomia in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA', 'DRE')
+         and (p_documento_versao_id is null or ce.documento_versao_id = p_documento_versao_id)
+         and (p_caso_id is null or d.caso_id = p_caso_id)
+    ), fonte as materialized (
+      -- o PAI: a linha do documento cuja chave é o nome, e que tem seção
+      select documento_versao_id, nc as nome, sc from e
+       where sc is not null and nc is not null and not fn_nome_de_topo_ou_total(nc)
+      union
+      -- as IRMÃS: as outras linhas que estão sob a mesma seção bruta e têm seção
+      select documento_versao_id, ns, sc from e
+       where sc is not null and ns is not null and not fn_nome_de_topo_ou_total(ns)
+    ), unica as materialized (
+      select documento_versao_id, nome, min(sc) as sc, count(*) as n   -- (versão, nome, sc) já é distinto: n = nº de seções
+        from fonte group by 1, 2
+    ), upd as (
+      update campo_extraido ce
+         set secao_canonica = u.sc, secao_canonica_inferida = true
+        from e join unica u on u.documento_versao_id = e.documento_versao_id and u.nome = e.ns
+       where ce.id = e.id and e.alvo and e.sc is null and u.n = 1
+      returning ce.id
+    )
+    select (select coalesce(array_agg(id), '{}') from upd),
+           (select count(distinct (u.documento_versao_id, u.nome)) from unica u
+             where u.n > 1 and exists (select 1 from e where e.documento_versao_id = u.documento_versao_id
+                                         and e.ns = u.nome and e.alvo and e.sc is null)),
+           (select count(*) from e join unica u on u.documento_versao_id = e.documento_versao_id and u.nome = e.ns
+             where u.n > 1 and e.alvo and e.sc is null)
+      into v_novos, v_conf, v_lconf;
+
+    v_ids := v_ids || v_novos;
+    exit when coalesce(array_length(v_novos, 1), 0) = 0 or v_i >= c_rodadas;
+  end loop;
+
+  select count(*), count(distinct ce.documento_versao_id), count(distinct d.caso_id)
+    into v_linhas, v_versoes, v_casos
+    from campo_extraido ce
+    join documento_versao dv on dv.id = ce.documento_versao_id
+    join documento d on d.id = dv.documento_id
+   where ce.id = any (v_ids);
+
+  return jsonb_build_object('linhas', v_linhas, 'versoes', v_versoes, 'casos', v_casos,
+                            'conflitos', v_conf, 'linhas_em_conflito', v_lconf, 'rodadas', v_i);
+end $$;
+
+--
+-- Name: FUNCTION fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid) IS '0204: herda secao_canonica pela ÁRVORE do próprio documento. Para linha sem seção (extração, sem revisão humana) cuja seção bruta, normalizada, é a chave de outra linha da MESMA versão que tem seção (o pai) ou a seção bruta de outras que têm (as irmãs), herda — se todas concordam em UMA seção; conflito fica NULL e é contado. Recursivo (até 10 rodadas), nunca herda de/para topo ou total (ATIVO, TOTAL DO ATIVO…), só nos cinco tipos de demonstração. Marca secao_canonica_inferida. Idempotente. Devolve {linhas, versoes, casos, conflitos, linhas_em_conflito, rodadas}.';
+
+--
 -- Name: fn_indice_macro_anual(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6640,6 +6717,33 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_natureza_intragrupo(p_chave text, p_secao text) IS '0124: a natureza da linha intragrupo, para a MENSAGEM dizer onde procurar. Não é chave de pareamento — cada ponta da relação usa o vocabulário dela.';
+
+--
+-- Name: fn_nome_de_secao_normalizado(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_nome_de_secao_normalizado(p_texto text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select nullif(
+    regexp_replace(
+      regexp_replace(
+        regexp_replace(fn_normalizar_texto(fn_sem_codigo_de_conta(p_texto)), '^(\(\s*[-+=]\s*\)|[-+=])\s*', ''),
+        '^([0-9]+(\.[0-9]+)*|[ivx]+)\s*[-.)]\s*', ''),
+      '[\s:.;]+$', ''),
+    '')
+$_$;
+
+--
+-- Name: fn_nome_de_topo_ou_total(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_nome_de_topo_ou_total(p_nome text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select p_nome ~ '^(ativo|passivo|ativo e passivo|passivo e patrimonio liquido|circulante|nao circulante|balanco patrimonial|balancete analitico|balancete|resumo do balancete|eliminacoes do combinado|contas temporarias|nao classificavel|nao_classificavel|dre|demonstracao do resultado( do exercicio)?)$'
+      or p_nome ~ '(^| )(total|totais)( |$)'
+$_$;
 
 --
 -- Name: fn_nome_parece_ter_endereco_colado(text); Type: FUNCTION; Schema: public; Owner: -
@@ -10709,6 +10813,7 @@ declare
   v_tipo               text;
   v_secao              text;
   v_inferida           boolean;
+  v_herdadas           jsonb;
 begin
   -- 0203: o tipo do documento entra na inferência da seção (fn_secao_canonica_da_secao_bruta).
   select d.tipo_taxonomia into v_tipo
@@ -10769,6 +10874,17 @@ begin
       );
       v_count := v_count + 1;
     end loop;
+  end if;
+
+  -- 0204: a seção que nem a IA nem o nome da seção bruta deram, herdada da ÁRVORE DO PRÓPRIO DOCUMENTO. Precisa do
+  -- documento inteiro, por isso depois do laço de inserção e ANTES de tudo o que lê secao_canonica (guardas, completude,
+  -- classificação contábil). O n8n grava UMA vez por documento (nó "Gravar Campos (Sombra)", depois de "Juntar Blocos"),
+  -- então este é o ponto em que o documento está completo; se um dia a gravação for por bloco, a função é idempotente e
+  -- sobre a versão inteira, e a última chamada converge. Não muda a assinatura: sem reimportar workflow.
+  v_herdadas := fn_herdar_secao_pela_arvore(p_documento_versao_id);
+  if (v_herdadas->>'linhas')::int > 0 or (v_herdadas->>'conflitos')::int > 0 then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('sistema:n8n', 'secao_herdada_pela_arvore', 'documento_versao:'||p_documento_versao_id, v_herdadas);
   end if;
 
   insert into evento_auditoria (ator, acao, entidade_ref, depois)
@@ -10931,7 +11047,7 @@ $_$;
 -- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito.';
+COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore).';
 
 --
 -- Name: fn_registrar_classe_override(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -

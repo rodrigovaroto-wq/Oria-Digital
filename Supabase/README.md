@@ -844,6 +844,19 @@ supabase db execute --file Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0203' and not presente;                 -- ZERO linhas
 
+# A 0204 HERDA a secao_canonica pela ÁRVORE do próprio documento (fn_herdar_secao_pela_arvore): a linha sem seção cuja seção bruta é o NOME
+# de outra linha da mesma versão que tem seção (o pai pela chave, as irmãs pela seção bruta, só se concordam; conflito fica NULL e é contado;
+# nunca de/para ATIVO, TOTAL DO ATIVO…), recursivo até 10 rodadas. Roda na gravação (fn_registrar_campos_extraidos reemitida inteira; o n8n
+# NÃO muda) e nas linhas existentes. Defeito MEDIDO em produção depois da 0203 (Fw Valtra, BALANCO 2025): resíduo do ativo circulante 3.750.141
+# (9,7% do ativo) em 2025 e 2.422.985 em 2022. TEM BACKFILL (raise notice com linhas/versões/casos/conflitos; para MEDIR antes, cole o arquivo
+# dentro de begin; ... rollback;). DEPOIS DE APLICAR, nos casos tocados (o aviso diz quantos; o Fw Valtra é 03a66ab6):
+#   select fn_reconciliar_caso('<caso>'); select fn_recomputar_completude('<caso>');   -- o que fica GRAVADO só muda recomputado
+# Teste: Supabase/test/secao_herdada_pela_arvore.test.sql (37 asserts; 21 reprovam sem a 0204).
+supabase db execute --file Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0204' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

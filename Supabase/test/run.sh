@@ -428,6 +428,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/secao_inferida_da_secao_bruta.
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== a seção que o documento já dizia pela árvore (0204): herdada do pai e das irmãs, sem topo/total, conflito fica NULL"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/secao_herdada_pela_arvore.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

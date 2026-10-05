@@ -2,7 +2,12 @@
 
 ## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
 
-> **Migration mais nova: `0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql`.** Quando o LLM
+> **Migration mais nova: `0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
+> herda a seção do pai (a linha cuja chave é o nome da seção bruta dela) e das irmãs, desde que concordem.
+> Conflito fica NULL e é contado. A herança é recursiva e nunca vem de topo ou total. Ela fecha o
+> resíduo do AC do Fw Valtra: CAIXA MATRIZ, DUPLICATAS A RECEBER e OUTROS CRÉDITOS estavam fora da soma
+> (3,75 mi em 2025).
+> **`0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql`.** Quando o LLM
 > devolve `secao_canonica` nula, a seção bruta passa a decidir pelas regras determinísticas e
 > conservadoras: só os casos inequívocos ganham seção, e os ambíguos ficam NULL. A coluna
 > `secao_canonica_inferida` marca essas linhas. O backfill cobre as linhas existentes. Medido no
