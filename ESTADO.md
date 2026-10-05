@@ -20,6 +20,19 @@
 > muito abaixo do realizado de 2025 (101.300) com a receita subindo — não investigado. O §1 (book do
 > Krauspenhar baixado do portal publicado) segue por fazer: falta `PORTAL_EMAIL`/`PORTAL_SENHA`.
 
+> **ACHADO ABERTO (05/10, bateria local completa) — corrigir ANTES de confiar na dívida de um balancete
+> de ERP.** Toda a lista do CLAUDE.md passou, mas o arnês de variações acha 1 defeito e sai 0 (o CI não
+> reprova): na variante `codigo_contabil_no_rotulo`, a dívida vai de 11.114 a 0 na virada para o
+> projetado. É PRÉ-EXISTENTE: reproduz igual no `955ff77`. Causa medida pelo agente (parado a pedido
+> do dono, antes de validar): `fn_papel_linha` ancora "total" no INÍCIO do rótulo, e "2.3.71 TOTAL —
+> saldo devedor" vira `conta`. A linha de TOTAL do Mapa de Dívida entra como tranche e a dívida dobra:
+> 102.600 onde o documento diz 51.300; CP 2024 46.924 contra 23.462. O revolver engole a diferença e
+> zera. O patch proposto, NÃO validado, está em `Arquitetura do Sistema/3 Estado e Execução/patches/
+> s105-total-com-codigo-no-mapa-de-divida.patch`: o portal reclassifica como subtotal o TOTAL com código
+> na frente, e o arnês dá o mesmo código à mesma conta em todos os anos. A correção definitiva é no
+> banco: `fn_papel_linha` tirar o código antes de comparar, migration nova. Falta também fazer o arnês
+> REPROVAR quando acha (regra 7). Detalhe e roteiro: HANDOFF S105 §2b.
+
 ## SESSÃO 105 — comece pelo HANDOFF "▶ SESSÃO 105"
 
 > **A S104 está fechada.** PRs #248 e #249 mergeados no `main` (o merge do #249 é o `66ec163`, de

@@ -68,6 +68,43 @@ Vercel (`VERCEL_TOKEN`) antes de investigar o código.
    2026 e 2030. É premissa de modelagem, não defeito, mas o dono deve ver.
 6. Item h abaixo (PME sobre receita × sobre custo) é decisão de desenho.
 
+### 2b. Achado da bateria local de 05/10: TOTAL com código contábil vira tranche de dívida
+
+**O que rodou (05/10, `main` 4b536bc):** toda a lista do CLAUDE.md, e tudo verde. Entram nela os
+testes do n8n, dos hooks, do Supabase e do conhecimento; as 8 suítes `verificar-*`; o `run.sh`, o
+conferidor de chamadas e a sonda local (0 buracos); o E2E local; os medidores; os geradores, o
+conferidor SQL e as fixtures sem diff; o portal (tsc, eslint e `next build`).
+
+**O que NÃO rodou:** o mandato sintético pelo portal publicado e as sondas contra o banco de produção.
+O modo automático bloqueou as duas coisas. A senha do portal colada no chat é "Credential Leakage", e
+a leitura de produção já não estava liberada para este pedido. Para rodar, o dono põe `PORTAL_EMAIL` e
+`PORTAL_SENHA` nas variáveis do ambiente e abre sessão nova. **O dono deve trocar a senha que colou no
+chat em 05/10.**
+
+**O defeito.** O `Verificação/variacoes.mts` imprime `[codigo_contabil_no_rotulo] a dívida EVAPORA na
+virada para o projetado, de 11114 para 0 entre J e K, com amortização de apenas 0` e sai com exit 0.
+Ele passa no CI por isso, o que é a regra 7. Reproduz igual no `955ff77`, antes do #251.
+- **Causa** (medida pelo agente `portal-export`, parado a pedido do dono antes de validar):
+  `fn_papel_linha` ancora o prefixo `total|totais|subtotal|soma` no INÍCIO do rótulo. Com o código do
+  ERP na frente ("2.3.71 TOTAL — saldo devedor"), o papel sai `conta`, e a linha de TOTAL do Mapa de
+  Dívida vira uma tranche a mais. Tranches de 51.300 (o total) + 51.300 (as nove contas) dão 102.600.
+  A dívida de CP 2024 sai 46.924 contra 23.462. O saldo dobrado amortiza em 3 anos, o caixa não cobre,
+  o revolver absorve e zera na virada.
+- **Patch proposto, NÃO validado:** `Arquitetura do Sistema/3 Estado e Execução/patches/
+  s105-total-com-codigo-no-mapa-de-divida.patch`. Ele traz:
+  - `ehTotalComCodigoNaFrente` em `contexto()`, que rebaixa a `subtotal` a linha `conta` cujo rótulo,
+    sem o código, começa por total;
+  - o arnês dando o MESMO código à mesma conta em todos os anos. Antes o código vinha do índice da
+    linha, e a mesma conta ganhava um código por exercício, o que misturava duas causas.
+- **Para fechar:**
+  1. a correção definitiva é no BANCO, numa migration nova em que `fn_papel_linha` tira o código antes
+     de comparar. Ela serve a todos os chamadores, não só ao portal;
+  2. o arnês tem de REPROVAR quando acha;
+  3. regra 2: medir não vazio;
+  4. remedir o Krauspenhar, que tem códigos nos rótulos.
+- **Até lá, no case real:** se o book tiver um Mapa de Dívida com linha "TOTAL" precedida de código,
+  confira a dívida existente do export contra o total do mapa. Se ela vier em dobro, é este defeito.
+
 ### 3. Próximas fatias, pela ordem (o texto completo de cada uma está no S104 §5)
 
 Os itens **l** (resíduo do AC) e **m** (nomes dos workflows) foram **RESOLVIDOS** no #249.
