@@ -130,11 +130,14 @@ rodando havia 10 minutos.
   `ehEstoque`, e ficaram em PME (o último vínculo vence).
 
 **O Portão 2 NÃO foi aprovado.** O botão de export do portal recusa (409). O Excel entregue ao dono
-saiu de `Arquitetura do Sistema/3 Estado e Execução/ferramentas/export-de-producao.mts`, uma réplica
-da rota `/casos/[id]/export` que lê produção pela API de gerenciamento (só SELECT) e pula só o Portão
-2. Ela foi validada no caso de teste `bb37f726`: `auditar-xlsx` 11/11. A ressalva é que a API devolve
-`numeric` como texto: o script converte as colunas numéricas, e sem isso as sugestões do realizado
-saem vazias.
+saiu de um script avulso, que ficou fora do repositório: o Sonar reprovou o PR por ele. O script
+replicava a rota `/casos/[id]/export` passo a passo, ao estilo de `portal/scripts/gerar-export-do-banco.mts`.
+Ele lia produção pela API de gerenciamento (`POST /v1/projects/<ref>/database/query`, só SELECT),
+pulava só o Portão 2 e chamava o mesmo `buildExportWorkbook`. Foi validado no caso de teste
+`bb37f726`: `auditar-xlsx` 11/11. Duas armadilhas para quem refizer:
+- a API devolve `numeric` como TEXTO. Converta as colunas numéricas, senão `sugerirDoRealizado`
+  devolve tudo vazio;
+- `gerar-export-do-banco.mts` passa `macro: []`, e a rota usa o macro de verdade (CDI e IPCA).
 
 **DEFEITO GRAVE achado no caso: `fn_valores_por_ano` (0125) monta a série com o MAIOR |valor| entre
 todas as colunas do ano.** No Fw Valtra:
