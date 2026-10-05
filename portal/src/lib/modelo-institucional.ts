@@ -855,9 +855,8 @@ const CREDORES = String.raw`banco|bco|bradesco|ita[úu]|santander|sicredi|sicoob
   + String.raw`caixa econ[ôo]mica|banrisul|brb`;
 const CAPITAL_DE_GIRO_NO_PASSIVO =
   /(?<![\p{L}\d])capital de giro(?![\p{L}\d])/iu;
-const CAPITAL_DE_GIRO_ANALITICO = new RegExp(
-  String.raw`necessidades? (?:de|do) capital de giro|varia(?:ç|c)(?:ã|a)o[^()]*capital de giro`
-  + String.raw`|capital de giro (?:l(?:í|i)quido|pr(?:ó|o)prio)`, "iu");
+const CAPITAL_DE_GIRO_ANALITICO =
+  /necessidades? (?:de|do) capital de giro|varia[çc][ãa]o[^()]*capital de giro|capital de giro (?:l[íi]quido|pr[óo]prio)/iu;
 const ehCapitalDeGiroNoPassivo = (chave: string) =>
   CAPITAL_DE_GIRO_NO_PASSIVO.test(chave) && !CAPITAL_DE_GIRO_ANALITICO.test(chave);
 // Item de enumeração que é só o NOME do credor ou da linha de financiamento ("BNDES", "FINAME",
