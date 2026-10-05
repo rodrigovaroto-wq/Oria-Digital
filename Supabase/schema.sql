@@ -6677,9 +6677,12 @@ COMMENT ON FUNCTION public.fn_papel_do_rotulo_no_caso(p_caso_id uuid, p_rotulo_n
 CREATE FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text DEFAULT NULL::text, p_unidade text DEFAULT NULL::text) RETURNS text
     LANGUAGE sql IMMUTABLE
     AS $$
+  -- marca-0202
   with n as (
-    select fn_normalizar_texto(p_chave) as t,
-           fn_tokens_estruturais(p_chave) as toks
+    -- 0202: o CÓDIGO CONTÁBIL do ERP na frente do rótulo ("2.3.71 TOTAL — saldo devedor") não é
+    -- parte do nome: sem tirá-lo, o prefixo `total` não está mais no INÍCIO e o TOTAL vira conta.
+    select fn_normalizar_texto(fn_sem_codigo_de_conta(p_chave)) as t,
+           fn_tokens_estruturais(fn_sem_codigo_de_conta(p_chave)) as toks
   )
   select case
     -- ---- DERIVADO: indicador gerencial, não dinheiro ------------------------
@@ -6759,7 +6762,7 @@ $$;
 -- Name: FUNCTION fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text) IS 'Papel da linha na modelagem: conta | subtotal | derivado | serie_mensal. Lista FECHADA de padrões (não heurística de semelhança) porque errar para subtotal esconde conta de verdade e errar para conta deixa passar dupla contagem. 0102: tokeniza o rótulo uma vez e compara os nove grupos contra o resultado, em vez de nove chamadas a fn_rotulo_estrutural. 0116: cobre o topo da DRE e os totais da DVA, que só passam a chegar depois de o prompt exigir o total IMPRESSO como linha.';
+COMMENT ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text) IS 'Papel da linha na modelagem: conta | subtotal | derivado | serie_mensal. Lista FECHADA de padrões (não heurística de semelhança) porque errar para subtotal esconde conta de verdade e errar para conta deixa passar dupla contagem. 0102: tokeniza o rótulo uma vez e compara os nove grupos contra o resultado, em vez de nove chamadas a fn_rotulo_estrutural. 0116: cobre o topo da DRE e os totais da DVA, que só passam a chegar depois de o prompt exigir o total IMPRESSO como linha. 0202: o código contábil do ERP na frente do rótulo ("2.3.71 TOTAL") não conta — o papel é o do nome.';
 
 --
 -- Name: fn_papel_prioridade(text); Type: FUNCTION; Schema: public; Owner: -
@@ -12729,6 +12732,23 @@ $$;
 COMMENT ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) IS 'Esta seção canônica é de RESULTADO? Só nelas a pergunta "é recorrente?" faz sentido — conta de balanço não é recorrente nem não recorrente. Medido: rodar a classificação em tudo produziria 3.195 pedidos de revisão contra 527 linhas em que a pergunta cabe, e um analista que recebe 3.195 itens não revisa nenhum (é a lição do Sinal 1 refinado na 0022).';
 
 --
+-- Name: fn_sem_codigo_de_conta(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  -- A MESMA definição de `CODIGO_DE_CONTA_NO_INICIO` (portal/src/lib/modelo-institucional.ts).
+  select regexp_replace(coalesce(p_rotulo, ''), '^\s*\d+(?:\.\d+){2,}\s*[-–—.)]?\s*', '')
+$$;
+
+--
+-- Name: FUNCTION fn_sem_codigo_de_conta(p_rotulo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) IS 'Tira do INÍCIO do rótulo o código contábil do ERP ("2.3.71 TOTAL" -> "TOTAL"): três grupos numéricos ou mais separados por ponto, separador opcional. A mesma definição de CODIGO_DE_CONTA_NO_INICIO do portal (0202).';
+
+--
 -- Name: fn_soma_secao(uuid, text[], text, text, text[], text[]); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -18047,6 +18067,12 @@ GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO authenti
 --
 
 GRANT ALL ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_sem_codigo_de_conta(p_rotulo text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text); Type: ACL; Schema: public; Owner: -

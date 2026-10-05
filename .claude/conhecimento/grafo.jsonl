@@ -121,6 +121,7 @@
 {"k":"n","id":"arquivo:Supabase/test/operacao.test.sql","t":"arquivo","f":"Supabase/test/operacao.test.sql","txt":"operacao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_da_linha.test.sql","t":"arquivo","f":"Supabase/test/papel_da_linha.test.sql","txt":"papel_da_linha.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_por_secao.test.sql","t":"arquivo","f":"Supabase/test/papel_por_secao.test.sql","txt":"papel_por_secao.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","t":"arquivo","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","txt":"papel_total_com_codigo_contabil.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/passivo_bare_e_o_grupo.test.sql","t":"arquivo","f":"Supabase/test/passivo_bare_e_o_grupo.test.sql","txt":"passivo_bare_e_o_grupo.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/pendencia_decisao.test.sql","t":"arquivo","f":"Supabase/test/pendencia_decisao.test.sql","txt":"pendencia_decisao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/perguntas.test.sql","t":"arquivo","f":"Supabase/test/perguntas.test.sql","txt":"perguntas.test.sql"}
@@ -368,7 +369,7 @@
 {"k":"n","id":"fn:fn_operacao_resumo","t":"fn","f":"Supabase/migrations/0135_a_operacao_passa_a_ser_vista.sql","txt":"operacao resumo"}
 {"k":"n","id":"fn:fn_papel","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"papel"}
 {"k":"n","id":"fn:fn_papel_do_rotulo_no_caso","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"papel do rotulo no caso"}
-{"k":"n","id":"fn:fn_papel_linha","t":"fn","f":"Supabase/migrations/0116_total_impresso_e_linha.sql","txt":"papel linha"}
+{"k":"n","id":"fn:fn_papel_linha","t":"fn","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","txt":"papel linha"}
 {"k":"n","id":"fn:fn_papel_prioridade","t":"fn","f":"Supabase/migrations/0042_papel_da_linha.sql","txt":"papel prioridade"}
 {"k":"n","id":"fn:fn_pares_duplicados_do_caso","t":"fn","f":"Supabase/migrations/0144_duplicidade_e_entre_documentos.sql","txt":"pares duplicados do caso"}
 {"k":"n","id":"fn:fn_pendencia_cnpj_colide_balcao","t":"fn","f":"Supabase/migrations/0177_a_guarda_do_balcao_ia_so_num_sentido.sql","txt":"pendencia cnpj colide balcao"}
@@ -430,6 +431,7 @@
 {"k":"n","id":"fn:fn_saldo_mutuos_texto","t":"fn","f":"Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql","txt":"saldo mutuos texto"}
 {"k":"n","id":"fn:fn_sazonalidade_do_caso","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"sazonalidade do caso"}
 {"k":"n","id":"fn:fn_secao_e_de_resultado","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"secao e de resultado"}
+{"k":"n","id":"fn:fn_sem_codigo_de_conta","t":"fn","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","txt":"sem codigo de conta"}
 {"k":"n","id":"fn:fn_soma_secao","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"soma secao"}
 {"k":"n","id":"fn:fn_somar_conceito","t":"fn","f":"Supabase/migrations/0015_reconciliacao_classe_b.sql","txt":"somar conceito"}
 {"k":"n","id":"fn:fn_somar_faturamento_ano","t":"fn","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","txt":"somar faturamento ano"}
@@ -600,6 +602,7 @@
 {"k":"n","id":"migration:0196","t":"migration","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"o caixa que lia a dfc de outro ano"}
 {"k":"n","id":"migration:0197","t":"migration","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","txt":"o faturamento que nao via o mes na coluna"}
 {"k":"n","id":"migration:0198","t":"migration","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","txt":"a faixa de anos que perdia o ano do meio"}
+{"k":"n","id":"migration:0202","t":"migration","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","txt":"o total com codigo contabil que virava conta"}
 {"k":"n","id":"migration:0205","t":"migration","f":"Supabase/migrations/0205_os_campos_da_apresentacao.sql","txt":"os campos da apresentacao"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
@@ -1306,6 +1309,12 @@
 {"k":"e","de":"arquivo:Supabase/test/papel_por_secao.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/papel_por_secao.test.sql","l":45}
 {"k":"e","de":"arquivo:Supabase/test/papel_por_secao.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/papel_por_secao.test.sql","l":41}
 {"k":"e","de":"arquivo:Supabase/test/papel_por_secao.test.sql","rel":"CHAMA","pa":"fn:fn_vincular_linha_premissa","f":"Supabase/test/papel_por_secao.test.sql","l":101}
+{"k":"e","de":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","l":90}
+{"k":"e","de":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","l":24}
+{"k":"e","de":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","l":77}
+{"k":"e","de":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","l":75}
+{"k":"e","de":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_sem_codigo_de_conta","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","l":70}
+{"k":"e","de":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/passivo_bare_e_o_grupo.test.sql","rel":"CHAMA","pa":"fn:fn_exigencias_do_caso","f":"Supabase/test/passivo_bare_e_o_grupo.test.sql","l":168}
 {"k":"e","de":"arquivo:Supabase/test/passivo_bare_e_o_grupo.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"Supabase/test/passivo_bare_e_o_grupo.test.sql","l":73}
 {"k":"e","de":"arquivo:Supabase/test/passivo_bare_e_o_grupo.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/passivo_bare_e_o_grupo.test.sql","l":56}
@@ -1426,13 +1435,13 @@
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/run.mts","l":316}
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/run.mts","l":305}
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/run.mts","l":540}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":731}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":747}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":728}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":666}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":661}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":648}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":750}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":744}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":760}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":741}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":679}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":674}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":661}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":763}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/gerar-export-do-banco.mts","l":240}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
@@ -2006,6 +2015,8 @@
 {"k":"e","de":"migration:0196","rel":"CRIA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","l":819}
 {"k":"e","de":"migration:0197","rel":"CRIA","pa":"fn:fn_somar_faturamento_ano","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","l":69}
 {"k":"e","de":"migration:0198","rel":"CRIA","pa":"fn:fn_anos_periodo","f":"Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql","l":58}
+{"k":"e","de":"migration:0202","rel":"CRIA","pa":"fn:fn_papel_linha","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","l":69}
+{"k":"e","de":"migration:0202","rel":"CRIA","pa":"fn:fn_sem_codigo_de_conta","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","l":58}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

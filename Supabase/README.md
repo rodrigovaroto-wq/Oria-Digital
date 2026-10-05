@@ -786,6 +786,16 @@ supabase db execute --file Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0198' and not presente;                 -- ZERO linhas
 
+# A 0202 REEMITE fn_papel_linha (mesma assinatura): o código contábil do ERP na frente do rótulo ("2.3.71 TOTAL — saldo devedor")
+# escondia o prefixo total/subtotal/soma e os grupos estruturais, e a linha de TOTAL do Mapa de Dívida virava uma tranche a mais.
+# MEDIDO no arnês de variações (codigo_contabil_no_rotulo): dívida de 102.600 onde o documento diz 51.300; CP 2024 46.924 contra
+# 23.462. Nova função fn_sem_codigo_de_conta (a mesma definição de CODIGO_DE_CONTA_NO_INICIO do portal). Sem backfill: o papel é
+# calculado na leitura. Teste: Supabase/test/papel_total_com_codigo_contabil.test.sql (21 asserts; 13 reprovam sem a 0202).
+supabase db execute --file Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0202' and not presente;                 -- ZERO linhas
+
 # A 0205 CRIA caso_apresentacao_campo: onde moram os campos "[a preencher]" da apresentação de crédito
 # (chave estável por campo; valor em branco recusado por check — regra 1). Tabela nova e vazia, sem
 # backfill; RLS e grant ao authenticated no padrão de caso_premissa.

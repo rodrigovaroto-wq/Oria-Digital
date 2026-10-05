@@ -247,8 +247,21 @@ const VARIACOES: Variacao[] = [
     oque: "[PEGOU] rótulos do ERP com código na frente: \"1.1.01.002 Caixa e bancos\"",
     espera: "as âncoras casam mesmo com o código — sem isso não há reconciliação e o balanço "
       + "abria em −36.116",
-    transformar: (c) => clone(c).map((x, i) => ({
-      ...x, chave: `${1 + (i % 4)}.${1 + (i % 3)}.${String(i % 90).padStart(2, "0")} ${x.chave}` })),
+    // O CÓDIGO É DA CONTA, não da linha: a mesma conta tem o mesmo código em todas as colunas
+    // de período, como num balancete de ERP. Antes o código vinha do índice da linha, e a mesma
+    // conta ganhava um código por exercício — o modelo via contas diferentes, uma por ano, e o
+    // achado de dívida que sumia misturava duas causas (a conta partida e o TOTAL tratado como
+    // tranche). Só a segunda existe fora do arnês.
+    transformar: (c) => {
+      const codigo = new Map<string, string>();
+      return clone(c).map((x) => {
+        if (!codigo.has(x.chave)) {
+          const n = codigo.size;
+          codigo.set(x.chave, `${1 + (n % 4)}.${1 + (n % 3)}.${String(n % 90).padStart(2, "0")}`);
+        }
+        return { ...x, chave: `${codigo.get(x.chave)} ${x.chave}` };
+      });
+    },
   },
   {
     nome: "caracteres_de_controle",
