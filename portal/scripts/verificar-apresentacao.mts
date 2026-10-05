@@ -317,6 +317,13 @@ console.log("--- 6. setores e formatos diferentes (testes com mandatos de outro 
   const slH = await slidesDe(holding);
   ok(slH.some((x) => textos(x).some((t) => t.startsWith("X.1 · RESULTADO"))),
     "(6h) holding com DRE de equivalência (lucro líquido, sem receita) mantém o capítulo de resultado");
+  // #251 (decisão do dono): "capital de giro" no passivo é dívida financeira, com ou sem credor no
+  // rótulo. A apresentação herda pelo classificador único — e este assert prova que herdou.
+  const comCG = montarBaseCredito(ent([...balanco, ...dre,
+    L("passivo_circulante", "CAPITAL DE GIRO - CP", { 2024: 4000, 2025: 6000 }, "conta", "BALANCO")]), []);
+  ok(comCG.historico.grandezas.divida_bancos_cp[2025].v === 6000,
+    "(6i) \"CAPITAL DE GIRO - CP\" no passivo entra como dívida bancária de curto prazo (decisão do #251)",
+    String(comCG.historico.grandezas.divida_bancos_cp[2025].v));
   let recusou = false;
   try { construirDeckCredito(montarBaseCredito(ent([L("passivo_circulante", "Fornecedores", { 2025: 1 }, "conta", "BALANCO")]), []), agora); }
   catch (e) { recusou = e instanceof SemDadoParaApresentar; }
@@ -331,7 +338,7 @@ console.log("--- 6. setores e formatos diferentes (testes com mandatos de outro 
     "(6e) amarração que não fecha aparece na faixa do sumário executivo, não só nas notas");
 }
 
-console.log("--- 7. os campos preenchidos (0199) substituem o \"[a preencher]\" — e só eles ---");
+console.log("--- 7. os campos preenchidos (0201) substituem o \"[a preencher]\" — e só eles ---");
 {
   const entrada = entradaModeloDaFixture(fixture, agora);
   const wb = buildExportWorkbook({ caso: { nome: "Book Vertentes", produto: "reestruturacao" },

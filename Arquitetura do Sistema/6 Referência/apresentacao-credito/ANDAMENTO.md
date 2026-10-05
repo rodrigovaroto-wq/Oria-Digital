@@ -20,13 +20,13 @@ Atualizado em 02/10/2026, ~22h40 UTC. Retomada agendada para 03/10 00:42 UTC (`t
   contra uma cópia local do banco.
 
 - FEITO na retomada (03/10): tela de campos + catálogo (21ed84b), achados da revisão (01711b9), ESTADO/MAPA. `verificar-apresentacao` 58/58.
-- FEITO antes: 0199 `caso_apresentacao_campo` (b787d40, NÃO aplicada em produção), leitura na
+- FEITO antes: 0201 `caso_apresentacao_campo` (b787d40, NÃO aplicada em produção), leitura na
   rota e chaves no gerador (6126b71), capítulos de resultado omitidos sem DRE (31b9d56).
   `verificar-apresentacao` 54/54.
 
 ## Próximo (em ordem)
 
-1. Aplicar a 0199 em produção (à mão: `supabase db execute --file Supabase/migrations/0199_os_campos_da_apresentacao.sql`).
+1. Aplicar a 0201 em produção (à mão: `supabase db execute --file Supabase/migrations/0201_os_campos_da_apresentacao.sql`).
 2. Testar com os mandatos de produção (leitura negada nesta sessão).
 3. Resumo multi-entidade para grupos com avais cruzados.
 4. Atualizar ESTADO.md e MAPA_DE_EXECUCAO.md (agente `estado-e-handoff`).

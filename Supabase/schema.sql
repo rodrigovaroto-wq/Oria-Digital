@@ -14165,7 +14165,7 @@ CREATE TABLE public.caso_apresentacao_campo (
 -- Name: TABLE caso_apresentacao_campo; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.caso_apresentacao_campo IS 'Valor dos campos "[a preencher]" da apresentação de crédito, por caso e chave estável. Ausência de linha = o deck escreve "[a preencher]"; valor em branco é recusado (regra 1: vazio não é valor). 0199.';
+COMMENT ON TABLE public.caso_apresentacao_campo IS 'Valor dos campos "[a preencher]" da apresentação de crédito, por caso e chave estável. Ausência de linha = o deck escreve "[a preencher]"; valor em branco é recusado (regra 1: vazio não é valor). 0201.';
 
 --
 -- Name: COLUMN caso_apresentacao_campo.chave; Type: COMMENT; Schema: public; Owner: -

@@ -53,7 +53,7 @@ import { classificarConta } from "../src/lib/statement-templates.ts";
 import {
   casarVinculosComLinhas, chaveDaLinha, serieDaLinha, seriesPorLinha, vinculoPorLinha,
 } from "../src/lib/modelagem-linha.ts";
-import { ABAS_MODELO as ABAS_DO_MODELO, ehDividaFinanceira } from "../src/lib/modelo-institucional.ts";
+import { ABAS_MODELO as ABAS_DO_MODELO, ehDividaFinanceira, grupoDeObrigacoesQueCitaDivida } from "../src/lib/modelo-institucional.ts";
 import { auditarWorkbook } from "./auditar-xlsx.mts";
 import {
   humanizar, partesDaDescricao, rotuloDaPendencia, rotuloDaSecao, rotulosCitados, semALista, suavizarMensagem,
@@ -6023,7 +6023,7 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     // giro é em português. Buscar pelo texto errado devolve null e o assert
     // "passaria" comparando Infinity com Infinity — por isso o valor é conferido.
     const recLiq = Number(v(out, linhaPorRotulo(out, "Net Revenues"), ano));
-    const cogs = Math.abs(Number(v(wc, linhaPorRotulo(wc, "Custos (base dos dias de giro do passivo de fornecedor)"), ano)));
+    const cogs = Math.abs(Number(v(wc, linhaPorRotulo(wc, "Custos (base dos dias de giro de estoque e de fornecedor)"), ano)));
 
     checar(Math.abs(pmr - clientes / recLiq * 360) < 0.01,
       "(0116) o PMR é clientes ÷ receita líquida × 360", `${pmr} vs ${clientes / recLiq * 360}`);
@@ -7064,6 +7064,11 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     "Outras obrigações: capital de giro Bradesco e Itaú",
     // sem enumeração o próprio nome diz o que é: continua dívida
     "Outras contas a pagar - empréstimo de sócios",
+    // (39t) DECISÃO DO DONO, 05/10/2026: "capital de giro" no passivo é dívida SEM credor no
+    // rótulo (CPC 00/39/48; no Canastra "Capital de giro - longo prazo" 26.400 em 2023 está sob
+    // "Empréstimos e Financiamentos"). Rótulos literais de dados.py do book Canastra:
+    "Capital de giro", "Capital de giro - longo prazo", "Capital de giro - instituições financeiras",
+    "Capital de giro Caixa",
   ];
   // O CONTRAPONTO É OBRIGATÓRIO: sem ele um `() => true` passaria em tudo acima.
   const GIRO: string[] = [
@@ -7081,8 +7086,13 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     "Confirming - fornecedores",
     // (39s) grupo de obrigações que só CITA desconto de duplicatas entre outras contas
     "Outras obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)",
-    // (39t) "capital de giro" sem credor no rótulo continua sem classificar como dívida
-    "Capital de giro",
+    // (39t) termos ANALÍTICOS que citam "capital de giro" e não são conta de dívida
+    "Necessidade de capital de giro", "Necessidades de capital de giro",
+    "Variação da necessidade de capital de giro", "Variação do capital de giro",
+    "Capital de giro líquido", "Capital de giro próprio", "Capital circulante líquido",
+    // (39t) grupo MISTO: cita capital de giro (dívida) junto com adiantamento de cliente (não é).
+    // Segue grupo misto, com nota, e não vira dívida inteira.
+    "Outras obrigações (adiantamentos de clientes e capital de giro)",
   ];
   for (const r of DIVIDA) {
     checar(ehDividaFinanceira(r), `(37) "${r}" é dívida financeira (não gira contra receita)`);
@@ -7090,6 +7100,8 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   for (const r of GIRO) {
     checar(!ehDividaFinanceira(r), `(37) "${r}" continua sendo giro operacional`);
   }
+  checar(grupoDeObrigacoesQueCitaDivida("Outras obrigações (adiantamentos de clientes e capital de giro)"),
+    "(39t) …e o grupo que cita capital de giro com adiantamento de cliente é reconhecido como grupo MISTO (recebe NOTA_GRUPO_MISTO)");
 }
 
 // =============================================================================
@@ -7214,9 +7226,15 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
       // <= 60 e não == 60: a redutora "(-) Perdas estimadas..." não é ligada à premissa
       // (fica nos −13 dias que o realizado dela implica) e puxa o agregado para 47. O
       // exato de "grupo = dias/360 × base" está no bloco (39c) abaixo, com fixture própria.
-      checar(diasAtivo.every((v) => typeof v === "number" && v > 0 && v <= 60.5),
-        "(39a) premissa de 60 dias ligada a TODAS as contas do ativo projeta NO MÁXIMO 60 dias de "
-        + "receita, não 60 × N contas (era 767)",
+      //
+      // Desde 05/10/2026 o estoque gira contra CUSTO e o resto do ativo contra RECEITA: a
+      // mesma premissa ligada a tudo vira DOIS grupos de bases diferentes (cada um projeta os
+      // dias inteiros, com a nota ATENÇÃO — ver (39e)). Teto: 60 dias de receita + 60 dias de
+      // custo, e 60 dias de custo valem menos que 60 de receita. Medido no Vertentes: 79,8
+      // (era 47 com tudo contra receita). O defeito que o teto guarda era 767 (60 × N contas).
+      checar(diasAtivo.every((v) => typeof v === "number" && v > 0 && v <= 120.5),
+        "(39a) premissa de 60 dias ligada a TODAS as contas do ativo projeta no máximo UM grupo por "
+        + "base (receita, custo), não 60 × N contas (era 767)",
         `ativo de giro projetado (dias): ${diasAtivo.map((v) => typeof v === "number" ? v.toFixed(1) : String(v)).join(" · ")}`);
       let pior = 0;
       for (const c of ["G", "H", "I", "J", "K"]) {
@@ -7375,18 +7393,39 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
       `(39c) ${ano}: a MESMA taxa ligada a 4 contas dá taxa × receita líquida UMA vez (não 4×)`,
       `${c4} vs ${pctCusto * rl}`);
     // ---- GIRO: dias/360 × base
-    const nr1 = num(avaliarCelula(L1.wc, COLS_K[ano], achaExato(L1.wc, "Receita líquida (base dos dias de giro do ativo)")));
+    const nr1 = num(avaliarCelula(L1.wc, COLS_K[ano], achaExato(L1.wc, "Receita líquida (base dos dias de giro de clientes e demais ativos)")));
+    // ESTOQUE GIRA CONTRA CUSTO (decisão do dono, 05/10/2026): a base é a linha de custos do
+    // Working Capital, não a receita líquida. `nr1` segue valendo para clientes e demais ativos.
+    const cg = num(avaliarCelula(L1.wc, COLS_K[ano], achaExato(L1.wc, "Custos (base dos dias de giro de estoque e de fornecedor)")));
+    checar(cg > 0 && Math.abs(cg - c1) < 0.5 && Math.abs(cg - nr1) > 1,
+      `(39c) ${ano}: a base do estoque (custos) existe, é o CUSTO da aba de receita e difere da receita líquida`,
+      `custos ${cg} · custo da aba ${c1} · receita líquida ${nr1}`);
     const e1 = somaDe(L1.wc, L1.est, ano); const e4 = somaDe(L4.wc, L4.est, ano);
-    checar(Math.abs(e1 - dias / 360 * nr1) < 0.5,
-      `(39c) ${ano}: estoque ligado a 1 conta = dias/360 × receita líquida`, `${e1} vs ${dias / 360 * nr1}`);
-    checar(Math.abs(e4 - dias / 360 * nr1) < 0.5,
-      `(39c) ${ano}: os MESMOS dias ligados a 4 contas de estoque dão dias/360 × receita UMA vez (não 4×)`,
-      `${e4} vs ${dias / 360 * nr1}`);
+    checar(Math.abs(e1 - dias / 360 * cg) < 0.5,
+      `(39c) ${ano}: estoque ligado a 1 conta = dias/360 × CUSTOS do mesmo exercício`, `${e1} vs ${dias / 360 * cg}`);
+    checar(Math.abs(e4 - dias / 360 * cg) < 0.5,
+      `(39c) ${ano}: os MESMOS dias ligados a 4 contas de estoque dão dias/360 × custos UMA vez (não 4×)`,
+      `${e4} vs ${dias / 360 * cg}`);
     // ---- CAPEX: taxa × base
     const x1 = somaDe(L1.wf, L1.imo, ano); const x3 = somaDe(L4.wf, L4.imo, ano);
     checar(Math.abs(x1 - 0.03 * rl) < 0.5 && Math.abs(x3 - 0.03 * rl) < 0.5,
       `(39c) ${ano}: a mesma taxa de capex em 1 classe ou em 3 dá taxa × receita líquida UMA vez`,
       `1 classe ${x1} · 3 classes ${x3} · esperado ${0.03 * rl}`);
+  }
+  // ---- DIAS HISTÓRICOS na MESMA base: dias implícitos × custos/360 devolve o saldo realizado.
+  // Se o histórico medisse contra receita e a projeção contra custo, o 1º ano projetado saltaria.
+  {
+    const rE = achaExato(L1.wc, "Estoques");
+    let rD = -1;
+    for (let i = rE + 1; i <= L1.wc.rowCount; i++) {
+      if (rotDe(L1.wc, i) === "    dias de giro (base)") { rD = i; break; }
+    }
+    const diasH = num(avaliarCelula(L1.wc, "F", rD));
+    const cgH = num(avaliarCelula(L1.wc, "F", achaExato(L1.wc, "Custos (base dos dias de giro de estoque e de fornecedor)")));
+    const saldoH = num(avaliarCelula(L1.wc, "F", rE));
+    checar(rD > 0 && saldoH === 10000 && cgH > 0 && Math.abs(diasH / 360 * cgH - saldoH) < 0.5,
+      "(39c) os dias HISTÓRICOS do estoque são medidos contra custos: dias × custos/360 = saldo realizado",
+      `dias ${diasH} · custos ${cgH} · saldo ${saldoH}`);
   }
   // ---- cada conta leva a PARCELA HISTÓRICA dela (estoque 40/30/20/10%)
   {
@@ -7641,7 +7680,7 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
       nAtivo.slice(-260));
     checar(/ATENÇÃO/.test(nota("Obrigações trabalhistas")),
       "(39e) …e a conta do PASSIVO recebe o mesmo aviso");
-    const nRec = Number(avaliarCelula(wc, "G", acha(wc, "Receita líquida (base dos dias de giro do ativo)")));
+    const nRec = Number(avaliarCelula(wc, "G", acha(wc, "Receita líquida (base dos dias de giro de clientes e demais ativos)")));
     const gAtivo = soma(wc, ["Conta a receber A", "Conta a receber B"], "G");
     checar(Math.abs(gAtivo - 90 / 360 * nRec) < 0.5,
       "(39e) …cada grupo projeta os dias inteiros: o do ativo soma dias/360 × receita (não rateia contra o passivo)",

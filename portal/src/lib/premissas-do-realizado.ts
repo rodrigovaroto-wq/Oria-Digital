@@ -212,12 +212,13 @@ function razoesDeUmExercicio(linhas: LinhaRealizada[]): PremissaSugerida[] {
       "SG&A ÷ receita líquida", sga, receitaLiquida),
     razao("PMR", "Prazo médio de recebimento", "dias",
       "clientes ÷ receita líquida × 360", clientes, receitaLiquida, 360),
-    // ESTOQUE GIRA CONTRA RECEITA LÍQUIDA e não contra custo, e isso contraria o
-    // PME de manual de propósito: é a base que o `Working Capital` aplica ao
-    // projetar a conta (só fornecedor gira contra custo). Medir contra custo aqui
-    // faria o dia sugerido não reproduzir o saldo de onde ele saiu.
+    // ESTOQUE GIRA CONTRA CUSTO (PME de manual) desde 05/10/2026, decisão do dono. Antes girava
+    // contra receita líquida para reproduzir o `Working Capital`; agora o modelo projeta o
+    // saldo por `dias/360 × CUSTOS` (`giraContraCusto`) e a aba Output já media CC_PME contra
+    // COGS desde a 0116 — projeção e indicador discordavam. A base aqui TEM de ser a do modelo,
+    // senão o dia sugerido não reproduz o saldo de onde saiu.
     razao("PME", "Prazo médio de estoque", "dias",
-      "estoques ÷ receita líquida × 360", estoques, receitaLiquida, 360),
+      "estoques ÷ custos × 360", estoques, custos, 360),
     razao("PMP", "Prazo médio de pagamento", "dias",
       "fornecedores ÷ custos × 360", fornecedores, custos, 360),
     // ALÍQUOTA COM PREJUÍZO NÃO É ALÍQUOTA NEGATIVA. Este produto atende mandato

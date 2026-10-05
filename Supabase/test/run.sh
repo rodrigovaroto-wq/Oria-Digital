@@ -533,7 +533,7 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/desativar_premissa.test.sql 2>
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
-echo "== testes dos campos da apresentação (0199: valor em branco não é valor)"
+echo "== testes dos campos da apresentação (0201: valor em branco não é valor)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/apresentacao_campo.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 

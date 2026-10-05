@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { CHAVES_APRESENTACAO } from "@/lib/apresentacao/campos";
 
-// GRAVA UM CAPÍTULO DE CAMPOS DA APRESENTAÇÃO (`caso_apresentacao_campo`, 0199).
+// GRAVA UM CAPÍTULO DE CAMPOS DA APRESENTAÇÃO (`caso_apresentacao_campo`, 0201).
 //
 // Só chaves do catálogo são aceitas: uma chave fora dele seria gravada e nunca lida pelo gerador
 // (o assert 9a prova que o catálogo inteiro chega ao deck). Campo deixado VAZIO apaga a linha — o
@@ -13,7 +13,7 @@ import { CHAVES_APRESENTACAO } from "@/lib/apresentacao/campos";
 export type ResultadoCampos = { tom: "ok" | "erro"; texto: string } | null;
 
 // O `casoId` é AMARRADO no servidor (`.bind` na página), não lido de campo oculto: um POST com outro
-// uuid gravaria no caso alheio, e a RLS da 0199 (mesma de caso_premissa) não restringe por caso.
+// uuid gravaria no caso alheio, e a RLS da 0201 (mesma de caso_premissa) não restringe por caso.
 export async function salvarCamposApresentacao(casoId: string, _anterior: ResultadoCampos, form: FormData): Promise<ResultadoCampos> {
   const supabase = await createClient();
   const caso = await supabase.from("caso").select("id").eq("id", casoId).maybeSingle();
@@ -34,7 +34,7 @@ export async function salvarCamposApresentacao(casoId: string, _anterior: Result
   }
   if (preenchidos.length) {
     const { error } = await supabase.from("caso_apresentacao_campo").upsert(preenchidos, { onConflict: "caso_id,chave" });
-    if (error) return { tom: "erro", texto: `Não foi possível salvar: ${error.message}. Se a tabela não existe, a migration 0199 ainda não foi aplicada.` };
+    if (error) return { tom: "erro", texto: `Não foi possível salvar: ${error.message}. Se a tabela não existe, a migration 0201 ainda não foi aplicada.` };
   }
   if (vazios.length) {
     const { error } = await supabase.from("caso_apresentacao_campo").delete().eq("caso_id", casoId).in("chave", vazios);

@@ -54,7 +54,7 @@ export interface SaidaDeck {
   /** o que ficou "[a preencher]" e por quê — também vai para o slide de notas */
   aPreencher: string[];
   amarracoes: Amarracao[];
-  /** quantos campos preenchidos (0199) entraram — para a rota/verificador saberem que o canal funciona */
+  /** quantos campos preenchidos (0201) entraram — para a rota/verificador saberem que o canal funciona */
   camposUsados?: number;
 }
 
@@ -102,7 +102,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     aPreencher.unshift("A entidade não tem DRE em nenhum exercício recebido: os slides II.3, V.2, X.1, X.3, XIV e XV foram omitidos.");
   }
 
-  // OS CAMPOS PREENCHIDOS (0199). A chave do slide sai do rótulo ("II.2 · Tendências" → "ii2"), e
+  // OS CAMPOS PREENCHIDOS (0201). A chave do slide sai do rótulo ("II.2 · Tendências" → "ii2"), e
   // cada lacuna do slide é `<slide>.<sufixo>`. É o que permite preencher a apresentação por
   // capítulo sem o gerador conhecer o texto — e sem nunca trocar "[a preencher]" por suposição.
   const campos = base.campos ?? {};
