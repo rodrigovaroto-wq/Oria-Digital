@@ -9,7 +9,7 @@ import { salvarCamposApresentacao } from "./actions";
 // Os números do deck vêm do realizado (Modelagem); aqui fica o que só o analista ou a pesquisa
 // sabem — títulos dos slides de pesquisa, tendências, sócios, concorrentes, notas do scorecard,
 // contatos. Campo em branco continua "[a preencher]" no deck: nada é inventado no lugar.
-export default async function ApresentacaoPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ApresentacaoPage({ params }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
   const supabase = await createClient();
   const [casoRes, camposRes] = await Promise.all([
@@ -38,10 +38,10 @@ export default async function ApresentacaoPage({ params }: { params: Promise<{ i
         </div>
       </div>
       {camposRes.error && (
-        <p role="status" className="carta p-4 text-sm text-alerta-900">
+        <output className="carta block p-4 text-sm text-alerta-900">
           Não foi possível ler os campos ({camposRes.error.message}). Se a tabela não existe, a migration 0201 ainda não foi
           aplicada: o deck sai com todas as lacunas “[a preencher]”.
-        </p>
+        </output>
       )}
       {CAPITULOS_APRESENTACAO.map((cap) => <FormCapitulo key={cap.titulo} acao={salvar} capitulo={cap} valores={valores} />)}
     </div>

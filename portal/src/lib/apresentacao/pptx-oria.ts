@@ -315,7 +315,7 @@ export function cartao(s: SlideOria, x: number, y: number, w: number, h: number,
   s.forma(x, y, 4.3, h, COR.laranja);
   const dx = x + 20;
   const dw = w - 34;
-  let ty = y + 12;
+  let ty: number;
   if (c.numeral !== undefined) {
     s.texto(dx, y + 12, dw, 26, [p(String(c.numeral).padStart(2, "0"), { sz: 21, cor: COR.laranja })], "t");
     ty = y + 37;

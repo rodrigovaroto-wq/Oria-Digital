@@ -16,7 +16,7 @@ const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCa
 
 /** Exercícios citados no período já formatado ("2024 e 2025", "12 meses/2025", "31/12/2024"). */
 export function anosDoPeriodo(formatado: string): number[] {
-  return [...new Set([...formatado.matchAll(/\b((?:19|20)\d{2})\b/g)].map((m) => Number(m[1])))].sort();
+  return [...new Set([...formatado.matchAll(/\b((?:19|20)\d{2})\b/g)].map((m) => Number(m[1])))].sort((a, b) => a - b);
 }
 
 export function montarBaseCredito(

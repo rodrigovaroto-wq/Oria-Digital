@@ -26,7 +26,8 @@ export async function salvarCamposApresentacao(casoId: string, _anterior: Result
     if (!k.startsWith("campo:")) continue;
     const chave = k.slice("campo:".length);
     if (!CHAVES_APRESENTACAO.has(chave)) return { tom: "erro", texto: `Chave desconhecida: ${chave}.` };
-    const valor = String(v).trim();
+    if (typeof v !== "string") return { tom: "erro", texto: `O campo ${chave} não veio como texto.` };
+    const valor = v.trim();
     if (valor) {
       preenchidos.push({ caso_id: casoId, chave, valor, fonte: "tela de campos da apresentação",
         preenchido_por: autor, preenchido_em: new Date().toISOString() });

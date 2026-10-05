@@ -6,10 +6,10 @@ import type { CapituloApresentacao } from "@/lib/apresentacao/campos";
 
 /** Um capítulo do catálogo: cada campo com o valor gravado (ou vazio = "[a preencher]" no deck). */
 /** `acao` vem JÁ amarrada ao caso pela página (servidor): o argumento ligado lá vai cifrado. */
-export function FormCapitulo({ acao: salvar, capitulo, valores }: {
+export function FormCapitulo({ acao: salvar, capitulo, valores }: Readonly<{
   acao: (anterior: ResultadoCampos, form: FormData) => Promise<ResultadoCampos>;
   capitulo: CapituloApresentacao; valores: Record<string, string>;
-}) {
+}>) {
   const [resultado, acao, pendente] = useActionState<ResultadoCampos, FormData>(salvar, null);
   return (
     <form action={acao} className="carta space-y-3 p-5">
@@ -29,7 +29,7 @@ export function FormCapitulo({ acao: salvar, capitulo, valores }: {
       <div className="flex items-center gap-3">
         <button type="submit" className="btn-primario" disabled={pendente}>{pendente ? "Salvando…" : "Salvar capítulo"}</button>
         {resultado && (
-          <p role="status" className={resultado.tom === "ok" ? "text-sm text-tinta-600" : "text-sm text-alerta-900"}>{resultado.texto}</p>
+          <output className={resultado.tom === "ok" ? "text-sm text-tinta-600" : "text-sm text-alerta-900"}>{resultado.texto}</output>
         )}
       </div>
     </form>

@@ -7427,5 +7427,5 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
   };
   // `avisosDeEscala` só está completo depois de TODAS as grandezas lidas — por isso o objeto acima
   // é montado antes do retorno.
-  return { unidade, escala: escalaDoModelo(unidade), anos, avisosDeEscala: [...avisosDeEscala].sort(), grandezas };
+  return { unidade, escala: escalaDoModelo(unidade), anos, avisosDeEscala: [...avisosDeEscala].sort((a, b) => a.localeCompare(b, "pt-BR")), grandezas };
 }

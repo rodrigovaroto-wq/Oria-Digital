@@ -594,7 +594,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   }
 
   // ===================================================== notas e avisos
-  notasEAvisos(deck, slide, am, aPreencher, ind, anos);
+  notasEAvisos(slide, am, aPreencher, ind, anos);
 
   // ===================================================== contracapa
   // Contatos da contracapa: "[a preencher]" por decisão do dono (02/10/2026), até alguém gravar
@@ -824,7 +824,7 @@ function contarND(ind: Map<number, Indicadores>): number {
 // -----------------------------------------------------------------------------
 const ROTULO_VEREDITO = { ok: "Fecha", diverge: "NÃO FECHA", por_construcao: "Por definição", nao_conferivel: "Não conferível" } as const;
 
-function notasEAvisos(deck: DeckOria, slide: (r: string, t: string, f: string, sub?: string) => SlideOria,
+function notasEAvisos(slide: (r: string, t: string, f: string, sub?: string) => SlideOria,
   am: Amarracao[], aPreencher: string[], ind: Map<number, Indicadores>, anos: number[]) {
   const nDiverge = am.filter((a) => a.veredito === "diverge").length;
   const nNao = am.filter((a) => a.veredito === "nao_conferivel").length;
@@ -845,7 +845,6 @@ function notasEAvisos(deck: DeckOria, slide: (r: string, t: string, f: string, s
       celulas: [String(a.numero), a.nome, a.ano === null ? "—" : String(a.ano), ROTULO_VEREDITO[a.veredito], encurtar(a.detalhe, 48)],
     })));
   }
-  void deck;
   const s = slide("Notas e avisos", "O que ficou a preencher e o motivo de cada n/d", "Fonte: elaboração Oria a partir dos documentos recebidos.");
   const motivos = [...new Set(anos.flatMap((a) => (Object.values(ind.get(a)!) as Valor[])
     .filter((v) => v.v === null).map((v) => (v.ns ? v.nota : limparMotivo(v.nota)))))].slice(0, 2);
