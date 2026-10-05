@@ -810,6 +810,19 @@ supabase db execute --file Supabase/migrations/0200_o_balancete_semestral_que_en
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0200' and not presente;                 -- ZERO linhas
 
+# A 0201 ENSINA fn_linhas_do_realizado A LER "Saldo Final"/"Saldo atual"/"Saldo Inicial"/"Saldo anterior". A 0150 só achava
+# exercício com ANO NO TEXTO da coluna; o documento anual do Fw Valtra (BALANCO e DRE ref "2025") rotula as colunas sem ano, e
+# o documento INTEIRO ficava fora: a função devolvia só as linhas do DFC e a tela de modelagem mostrava TODAS as sugestões do
+# realizado vazias (CUSTO_VARIAVEL, SGA_PCT, PMR, PME, PMP, ALIQUOTA, PARCELA_ONEROSA, TAXA_DIVIDA). MEDIDO EM PRODUÇÃO (05/10/2026).
+# A conta de classificar coluna/período sai de fn_valores_por_ano para cinco funções puras que as DUAS chamam (fn_coluna_e_abertura,
+# fn_coluna_e_movimento, fn_coluna_e_saldo, fn_periodo_e_parcial, fn_familia_da_secao); fn_valores_por_ano é reemitida com o mesmo
+# comportamento. O requisito da 0199 no catálogo é REAPONTADO para fn_coluna_e_abertura (mesmo marcador).
+# Sem backfill: a tela muda no próximo carregamento. Teste: Supabase/test/realizado_le_saldo_final_e_atual.test.sql (27 asserts; 18 reprovam sem a 0201).
+supabase db execute --file Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration in ('0199', '0201') and not presente;      -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

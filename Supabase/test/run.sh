@@ -413,6 +413,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/serie_por_ano_balancete_sob_ba
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o realizado que não lia Saldo Final nem Saldo atual (0201): BALANCO/DRE anuais entram, mesma conta da série"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/realizado_le_saldo_final_e_atual.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
