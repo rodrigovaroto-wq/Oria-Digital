@@ -13,8 +13,9 @@ import {
   provenienciaPorLinha, provenienciaDaLinha,
   type LinhaParaCasar, type VinculoParaCasar,
 } from "@/lib/modelagem-linha";
-import { informacaoDoKit, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
+import { correnteDoBalancete, informacaoDoKit, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
 import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
+import { projecaoDoModelo } from "@/lib/apresentacao/projecao";
 import { construirDeckCredito, SemDadoParaApresentar } from "@/lib/apresentacao/deck-credito";
 
 // exceljs (usado em lib/export.ts) usa Buffer/streams do Node — precisa do
@@ -315,6 +316,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // impasse de precisar da aprovação para poder conferir.
   let modelagemConfig: ConfigModelagem | undefined;
   let modeloInstitucional: EntradaModeloInstitucional | undefined;
+  // O ANO CORRENTE (balancete), para o "resultado atual" da apresentação: o modelo projeta a partir do
+  // último exercício FECHADO e descarta o ano em curso; a apresentação o mostra à parte, como parcial.
+  let linhasDoAnoCorrente: { ano: number; linhas: LinhaModelo[] } | null = null;
   if (modo === "completo") {
     const portao = await supabase.rpc("fn_avaliar_portao2", { p_caso_id: id });
     const { estado, portao: aval } = veredictoDoPortao(portao);
@@ -506,6 +510,13 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // a mesma identidade do banco. Ver `seriesPorLinha`: indexar só pelo
       // rótulo fazia a linha de uma seção receber os números da outra.
       const series = seriesPorLinha(valores, anosHistoricos);
+      const anoCorrente = Math.max(...valores.map((v) => v.ano));
+      if (Number.isFinite(anoCorrente) && anoCorrente > ultimoReal) {
+        const seriesC = seriesPorLinha(valores, [anoCorrente]);
+        linhasDoAnoCorrente = { ano: anoCorrente, linhas: ((linhasRes.data ?? []) as unknown as LinhaModelo[]).map((l) => ({
+          secao_canonica: l.secao_canonica, chave: l.chave, rotulo_norm: l.rotulo_norm, papel: l.papel, unidade: l.unidade,
+          moeda: l.moeda, documentos: l.documentos, valores: serieDaLinha(seriesC, l.secao_canonica, l.rotulo_norm) })) };
+      }
       // A PROVENIÊNCIA POR (LINHA, ANO) — mesma identidade, mesma consulta (0125).
       // Ela vai para a nota de TODA célula histórica do modelo, não só da
       // `Premissas`: `valorNaEscala` é o caminho único por onde valor de documento
@@ -643,7 +654,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       documentos, entradaDoModelo.entidade ?? "");
     let deck;
     try {
-      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp, { informacao, perimetro }), new Date()));
+      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp, { informacao, perimetro, projecao: projecaoDoModelo(workbook, entradaDoModelo),
+        corrente: linhasDoAnoCorrente ? correnteDoBalancete(entradaDoModelo, linhasDoAnoCorrente.linhas, linhasDoAnoCorrente.ano, documentos) : null }), new Date()));
     } catch (e) {
       if (!(e instanceof SemDadoParaApresentar)) throw e;
       return NextResponse.json({ error: "A apresentação de crédito não foi gerada.", motivos: [e.message] }, { status: 409 });

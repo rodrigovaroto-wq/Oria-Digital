@@ -13,6 +13,7 @@
 //     `nao_conferivel` com o motivo — e as três aparecem no slide de notas. Uma lista só com as que
 //     fecharam teria a mesma cara de "tudo amarrado" num caso em que metade não pôde ser conferida
 //     (regra 7).
+import type { ProjecaoDoModelo } from "./projecao";
 import type { GrandezaCredito, HistoricoCredito, OperacaoDivida, ValorHistorico } from "../modelo-institucional";
 
 /** `(A)` auditada · `(R)` revisão limitada · `(B)` não auditada/balancete · `(G)` gerencial. */
@@ -62,6 +63,14 @@ export interface BaseCredito {
    */
   informacao?: Array<{ codigo: string; documento: string; status: "recebido" | "sem_conteudo" | "faltante" }>;
   /** As empresas cadastradas no caso — o perímetro — e qual delas o deck analisa. */
+  /**
+   * O ANO EM CURSO (balancete): o mesmo realizado, classificado pelo mesmo `historicoParaCredito`, para
+   * o exercício posterior ao último fechado. `meses` = quantos meses o balancete cobre (n/d quando o
+   * período do documento não diz) — resultado parcial nunca é comparado com exercício cheio.
+   */
+  corrente?: { ano: number; meses: number | null; historico: HistoricoCredito } | null;
+  /** A DRE projetada que o modelo institucional calcula (`projecao.ts`), com a cobertura de premissas. */
+  projecao?: ProjecaoDoModelo | null;
   /** Entidades do caso cujo MAPA DA DÍVIDA chegou, quando não é a analisada (ex.: o do "GRUPO"). */
   mapasDeOutrasEntidades?: string[];
   perimetro?: Array<{ razaoSocial: string; cnpj: string | null; papel: string | null; documentos: number; analisada: boolean }>;

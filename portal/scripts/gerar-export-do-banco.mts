@@ -248,6 +248,7 @@ if (process.env.APRESENTACAO) {
   const { deck } = construirDeckCredito(montarBaseCredito(ent, documentos, [], {
     informacao: informacaoDoKit(kit, atendidos, semConteudo),
     perimetro: perimetroDoCaso(entidades, documentos, ent.entidade ?? ""),
+    projecao: (await import("../src/lib/apresentacao/projecao.ts")).projecaoDoModelo(wb, ent),
   }), new Date());
   await writeFile(process.env.APRESENTACAO, await deck.gerar());
   console.log(`OK — apresentação escrita em ${process.env.APRESENTACAO}`);

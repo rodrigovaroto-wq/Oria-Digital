@@ -27,6 +27,7 @@ import {
   LEGENDA_NATUREZA, MULTIPLO_ALVO, TAG_NATUREZA, amarracoes, faixaDeAlavancagem, fatorParaMM, fmtDias, fmtMM, fmtPct, fmtX,
   indicadores, variacao, dividaDoMapa, ativosReais, type Amarracao, type BaseCredito, type Indicadores, type Numero, type PeriodoCredito, type Valor,
 } from "./base-credito";
+import { COBERTURA_MINIMA, SALTO_DE_MARGEM_PP } from "./projecao";
 
 type Escala = "milhar" | "reais";
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
@@ -95,9 +96,9 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   const mes = `${MESES[agora.getMonth()]} de ${agora.getFullYear()}`;
   const aPreencher = [
     "Caps. I a VIII (setor, mercado, societário, empresa, cadeia de valor, concorrência): dependem da pesquisa das FASES 1 a 3.",
-    "XIII por credor e muro de vencimentos: o mapa da dívida ainda não chega estruturado por operação.",
+    "XIII.2: vencimento e garantia por operação vêm da tela da apresentação (o mapa extraído traz saldo e juros).",
     "XIV a XVIII (ajustes do EBITDA, alavancas, realização das garantias, notas do scorecard): julgamento do analista.",
-    "YTD/LTM: só exercícios fechados entram; o balancete do ano corrente fica fora desta versão.",
+    "LTM: o ano corrente entra como coluna parcial no X.1 (balancete), sem anualizar.",
   ];
   if (!temDRE) {
     aPreencher.unshift("A entidade não tem DRE em nenhum exercício recebido: os slides II.3, V.2, X.1, X.3, XIV e XV foram omitidos.");
@@ -400,15 +401,25 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
       { nome: "Receita líquida", valores: serie((x) => x.receita), cor: COR.verde },
       { nome: "EBITDA", valores: serie((x) => x.ebitda), cor: COR.laranja }] });
     const wc = GRADE.col2.w;
-    const wa = Math.min(90, (wc - 150) / periodos.length);
-    tabela(s, GRADE.col2.x[1], GRADE.topo, [{ titulo: "R$ mi", w: wc - wa * periodos.length }, ...colsAnos(wa)], [
-      L("Lucro bruto", (x) => mm(x.lucroBruto)),
-      L("EBITDA", (x) => mm(x.ebitda)),
-      L("Margem EBITDA", (x) => fmtPct(x.margemEbitda)),
-      L("EBIT", (x) => mm(x.ebit)),
-      L("Margem EBIT", (x) => fmtPct(x.margemEbit)),
-      L("Lucro líquido", (x) => mm(x.lucroLiquido), true),
-      L("Margem líquida", (x) => fmtPct(x.margemLiquida)),
+    // RESULTADO ATUAL: o ano em curso (balancete) entra como coluna À PARTE, marcada parcial. Ele não
+    // vai ao gráfico: barra de 8 meses ao lado de exercício cheio lê como queda que não houve.
+    const cor = base.corrente;
+    const Icor = cor ? indicadores({ ...base, historico: cor.historico }, cor.ano) : null;
+    const nCols = periodos.length + (Icor ? 1 : 0);
+    const wa = Math.min(90, (wc - 130) / nCols);
+    const colCor: ColunaTabela[] = cor ? [{ titulo: `${cor.meses ? `${cor.meses}M` : "parc."}/${cor.ano} (B)`, w: wa }] : [];
+    const LX = (rot: string, f: (x: Indicadores) => Numero, destaque = false): LinhaTabela => {
+      const l = L(rot, f, destaque);
+      return Icor ? { ...l, celulas: [...l.celulas, cel(f(Icor))] } : l;
+    };
+    tabela(s, GRADE.col2.x[1], GRADE.topo, [{ titulo: "R$ mi", w: wc - wa * nCols }, ...colsAnos(wa), ...colCor], [
+      LX("Receita líquida", (x) => mm(x.receita)),
+      LX("EBITDA", (x) => mm(x.ebitda)),
+      LX("Margem EBITDA", (x) => fmtPct(x.margemEbitda)),
+      LX("EBIT", (x) => mm(x.ebit)),
+      LX("Margem EBIT", (x) => fmtPct(x.margemEbit)),
+      LX("Lucro líquido", (x) => mm(x.lucroLiquido), true),
+      LX("Margem líquida", (x) => fmtPct(x.margemLiquida)),
     ]);
     faixa(s, 410, leituraResultado(ind, anos, esc), { x: GRADE.col2.x[1], w: GRADE.col2.w, h: 70 });
   }
@@ -443,6 +454,45 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
       L("Prazo de pagamento (PMP)", (x) => fmtDias(x.pmp)),
       L("Ciclo financeiro", (x) => fmtDias(x.ciclo), true),
     ]);
+  }
+
+  if (temDRE) {
+    // X.4 — RESULTADO FUTURO: a DRE projetada do modelo institucional (premissas da Modelagem). Só com
+    // cobertura por valor ≥ 95% — abaixo disso o modelo zera as contas sem premissa e a projeção
+    // mente (ver `projecao.ts`). Não é normalizada: a normalização é o capítulo XIV.
+    const pj = base.projecao;
+    const ok = pj && pj.cobertura !== null && pj.cobertura >= COBERTURA_MINIMA && pj.anos.length > 0;
+    const pctCob = pj?.cobertura == null ? "n/d" : fmtPct({ v: pj.cobertura * 100 }, 0).t;
+    const ultP = pj ? pj.anos.length - 1 : -1;
+    const ebUlt = ok ? pj.ebitda[ultP] : null;
+    const rUlt = ok ? pj.receita[ultP] : null;
+    const mReal = I.margemEbitda.v;
+    const mProj = ok && pj.ebitda[0] != null && pj.receita[0] ? pj.ebitda[0] / pj.receita[0] * 100 : null;
+    const salto = mReal !== null && mProj !== null && Math.abs(mProj - mReal) > SALTO_DE_MARGEM_PP;
+    const s = slide("X.4 · Resultado projetado", !pj ? "Resultado projetado não disponível nesta geração"
+      : !ok ? `Projeção não apresentada: só ${pctCob} do resultado tem premissa`
+      : salto ? `Premissas levam a margem EBITDA de ${fmtPct({ v: mReal }).t} para ${fmtPct({ v: mProj }).t} em ${pj.anos[0]}`
+      : `EBITDA projetado de ${valorMi({ v: ebUlt, nota: "" }, esc)} em ${pj.anos[ultP]}, margem de ${ebUlt != null && rUlt ? fmtPct({ v: ebUlt / rUlt * 100 }).t : "n/d"}`,
+    ok ? `Fonte: modelo institucional (premissas da Modelagem, cenário ativo); cobertura de premissas ${pctCob}. Projeção, não normalizada.`
+      : "Fonte: modelo institucional e premissas da Modelagem.");
+    if (ok) {
+      const cats = [...anos.map(String), ...pj.anos.map((a) => `${a}P`)];
+      const mi = (v: number | null) => (v === null ? null : Math.round(v * fatorParaMM(esc) * 10) / 10);
+      tituloSecao(s, GRADE.col2.x[0], GRADE.topo, 520, "Receita líquida e EBITDA, realizado e projetado (R$ mi)");
+      s.grafico(GRADE.col2.x[0], GRADE.topo + 22, 520, 270, { tipo: "colunas", categorias: cats, series: [
+        { nome: "Receita líquida", valores: [...serie((x) => x.receita), ...pj.receita.map(mi)], cor: COR.verde },
+        { nome: "EBITDA", valores: [...serie((x) => x.ebitda), ...pj.ebitda.map(mi)], cor: COR.laranja }] });
+      const xR = 605;
+      cartao(s, xR, GRADE.topo, GRADE.fim - xR, 200, { titulo: salto ? "Revisar premissas" : "Leitura", corpo: salto
+        ? `O salto de ${fmtPct({ v: Math.abs(mProj! - mReal!) }).t.replace("%", " p.p.")} entre ${ultimo} e ${pj.anos[0]} vem das premissas, não do realizado. `
+          + "Antes de apresentar, confira custo e despesas na Modelagem contra a margem histórica."
+        : `Projeção do modelo com as premissas da Modelagem `
+        + `(${pctCob} do resultado coberto). Os anos marcados "P" são projetados; a normalização do EBITDA é o capítulo XIV.` });
+    } else {
+      cartao(s, GRADE.x, GRADE.topo, GRADE.w, 120, { titulo: "O que falta para projetar",
+        corpo: !pj ? "O modelo institucional não foi montado nesta geração."
+          : `O modelo não projeta conta sem premissa (ela vale zero no futuro). Hoje ${pctCob} do valor de receita, deduções, custos e despesas tem premissa; a projeção aparece a partir de ${fmtPct({ v: COBERTURA_MINIMA * 100 }, 0).t}. Complete os vínculos na tela de Modelagem.` });
+    }
   }
 
   // ======================================== cap. 08 — giro e endividamento

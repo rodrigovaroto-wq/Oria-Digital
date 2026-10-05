@@ -26,11 +26,12 @@ import { buildExportWorkbook, entradaDoModeloDoWorkbook, type DocumentoParaExpor
 import type { CampoExtraido } from "../src/lib/types.ts";
 import type { EntradaModeloInstitucional } from "../src/lib/modelo-institucional.ts";
 import { entradaModeloDaFixture } from "./lib/modelo-da-fixture.mts";
-import { montarBaseCredito } from "../src/lib/apresentacao/montar-base.ts";
+import { montarBaseCredito, correnteDoBalancete } from "../src/lib/apresentacao/montar-base.ts";
 import { amarracoes, dividaDoMapa, type BaseCredito } from "../src/lib/apresentacao/base-credito.ts";
 import type { GrandezaCredito, HistoricoCredito } from "../src/lib/modelo-institucional.ts";
 import { construirDeckCredito, SemDadoParaApresentar } from "../src/lib/apresentacao/deck-credito.ts";
 import type { LinhaModelo } from "../src/lib/modelo-institucional.ts";
+import { projecaoDoModelo } from "../src/lib/apresentacao/projecao.ts";
 import { CHAVES_APRESENTACAO } from "../src/lib/apresentacao/campos.ts";
 import { DeckOria, PALETA, FONTES_PERMITIDAS, p, tabela, COR } from "../src/lib/apresentacao/pptx-oria.ts";
 
@@ -443,6 +444,37 @@ console.log("--- 10. endividamento pelo mapa, ativos reais, o que faltou e o per
     "(10g) mapa da dívida de outra entidade do caso: o slide diz de quem é, em vez de \"nenhum mapa\"");
   ok(/Perímetro de 1 empresa/.test(tx("III.3 · ECOSSISTEMA E PERÍMETRO")) && /00\.000\.000\/0001-00/.test(tx("III.3 · ECOSSISTEMA E PERÍMETRO")),
     "(10h) III.3: o perímetro vem do cadastro de entidades do caso, com CNPJ");
+}
+
+console.log("--- 11. resultado futuro (projeção guardada pela cobertura) e atual (balancete) ---");
+{
+  const entrada = entradaModeloDaFixture(fixture, agora);
+  const wb = buildExportWorkbook({ caso: { nome: "Book Vertentes", produto: "reestruturacao" },
+    documentos: fixture.documentos, campos: fixture.campos, agora, modeloInstitucional: entrada });
+  const ent11 = entradaDoModeloDoWorkbook(wb)!;
+  const pj = projecaoDoModelo(wb, ent11);
+  const x4De = async (e: EntradaModeloInstitucional, p: typeof pj) =>
+    textos(slideCom(await slidesDe(montarBaseCredito(e, fixture.documentos, [], { projecao: p })), "X.4 · RESULTADO PROJETADO")).join(" ");
+  // Sem vínculo nos custos, o modelo os zera no futuro: a cobertura cai e o X.4 não projeta.
+  const semCusto = { ...ent11, vinculos: ent11.vinculos.filter((v) => v.premissa_codigo !== "CUSTO_VARIAVEL") };
+  const x4a = await x4De(semCusto, projecaoDoModelo(wb, semCusto));
+  ok(/Projeção não apresentada: só \d+% do resultado tem premissa/.test(x4a) && !/EBITDA projetado de/.test(x4a),
+    "(11a) custos sem premissa: o X.4 diz que não projeta, em vez de publicar custo zero", x4a.slice(0, 160));
+  // O book, 100% vinculado, com "custo variável 60%": margem 0,9% → 48,6% (medido 05/10/2026).
+  const x4b = await x4De(ent11, pj);
+  ok(pj?.cobertura === 1 && /Premissas levam a margem EBITDA de 0,9% para 48,6% em 2026/.test(x4b) && /Revisar premissas/.test(x4b),
+    "(11b) premissa incoerente com o histórico: o X.4 diz o salto de margem em vez de manchetear o EBITDA", x4b.slice(0, 200));
+  // Mesma projeção com EBITDA na margem histórica (~1%): publica.
+  const coerente = { ...pj!, ebitda: pj!.receita.map((r) => (r === null ? null : r * 0.01)) };
+  const x4c = await x4De(ent11, coerente);
+  ok(/EBITDA projetado de/.test(x4c) && !/Revisar premissas/.test(x4c), "(11c) premissa coerente: o X.4 publica o EBITDA projetado", x4c.slice(0, 160));
+  // Ano corrente: as linhas de 2025 reapresentadas como 2026, com balancete "8M26" → coluna parcial.
+  const linhas26 = ent11.linhas.map((l) => ({ ...l, valores: { "2026": l.valores["2025"] } }));
+  const docs26 = [...fixture.documentos, { ...fixture.documentos[0], tipo_taxonomia: "BALANCETE",
+    periodo: { tipo: "ano_fiscal", referencia: "8M26" } } as unknown as DocumentoParaExport];
+  const cor = correnteDoBalancete(ent11, linhas26, 2026, docs26);
+  const x1 = textos(slideCom(await slidesDe(montarBaseCredito(ent11, fixture.documentos, [], { corrente: cor })), "X.1 · RESULTADO")).join(" | ");
+  ok(cor?.meses === 8 && /8M\/2026 \(B\)/.test(x1), "(11d) o ano corrente entra no X.1 como coluna parcial \"8M/2026 (B)\"", x1.slice(0, 200));
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

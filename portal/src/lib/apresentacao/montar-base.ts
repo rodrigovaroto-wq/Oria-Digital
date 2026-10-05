@@ -5,7 +5,7 @@
 // Portão 2. Duas leituras do mesmo caso podem discordar em silêncio (uma paginada, outra não; uma
 // com a 0125, outra sem); uma leitura só não tem com quem discordar.
 import { formatarPeriodo, type DocumentoParaExport } from "../export";
-import { historicoParaCredito, type EntradaModeloInstitucional } from "../modelo-institucional";
+import { historicoParaCredito, type EntradaModeloInstitucional, type LinhaModelo } from "../modelo-institucional";
 import { naturezaDoAno, type BaseCredito, type DocumentoDaBase } from "./base-credito";
 
 /** Os tipos que trazem demonstração — os outros (contrato social, certidões…) não entram no IX. */
@@ -23,7 +23,7 @@ export function montarBaseCredito(
   ent: EntradaModeloInstitucional,
   documentos: DocumentoParaExport[],
   campos: Array<{ chave: string; valor: string; fonte: string | null }> = [],
-  extras: Pick<BaseCredito, "informacao" | "perimetro"> = {},
+  extras: Pick<BaseCredito, "informacao" | "perimetro" | "projecao" | "corrente"> = {},
 ): BaseCredito {
   const historico = historicoParaCredito(ent);
   const entidade = ent.entidade ?? ent.caso.nome;
@@ -92,4 +92,28 @@ export function informacaoDoKit(
     codigo: k.codigo, documento: k.documento,
     status: semConteudo.has(k.codigo) ? "sem_conteudo" as const : atendidos.has(k.codigo) ? "recebido" as const : "faltante" as const,
   }));
+}
+
+const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+/**
+ * O "resultado atual": o ano em curso pelo MESMO classificador do realizado. Os meses saem do período
+ * do balancete daquele ano ("8 meses/2026", "ago/2026"); sem período legível, `meses` é null e o deck
+ * diz "parcial" em vez de supor o mês.
+ */
+export function correnteDoBalancete(
+  ent: EntradaModeloInstitucional, linhas: LinhaModelo[], ano: number, documentos: DocumentoParaExport[],
+): NonNullable<BaseCredito["corrente"]> | null {
+  if (!linhas.some((l) => l.valores[String(ano)] !== undefined)) return null;
+  let meses: number | null = null;
+  for (const d of documentos) {
+    if (d.tipo_taxonomia !== "BALANCETE" && d.tipo_taxonomia !== "DRE") continue;
+    const per = Array.isArray(d.periodo) ? d.periodo[0] : d.periodo;
+    const f = formatarPeriodo(per?.tipo ?? null, per?.referencia ?? null).toLowerCase();
+    if (!f.includes(String(ano))) continue;
+    const m = /(\d{1,2}) meses/.exec(f) ?? null;
+    const mn = MESES_ABREV.findIndex((x) => f.startsWith(x) || f.includes(`/${x}`));
+    const n = m ? Number(m[1]) : mn >= 0 ? mn + 1 : /^\d{2}\/(\d{2})\/\d{4}$/.test(f) ? Number(f.slice(3, 5)) : null;
+    if (n !== null && n >= 1 && n <= 12) meses = Math.max(meses ?? 0, n);
+  }
+  return { ano, meses, historico: historicoParaCredito({ ...ent, anosHistoricos: [ano], linhas }) };
 }
