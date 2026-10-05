@@ -139,6 +139,7 @@
 {"k":"n","id":"arquivo:Supabase/test/run.sh","t":"arquivo","f":"Supabase/test/run.sh","txt":"run.sh"}
 {"k":"n","id":"arquivo:Supabase/test/sazonalidade_pronto.test.sql","t":"arquivo","f":"Supabase/test/sazonalidade_pronto.test.sql","txt":"sazonalidade_pronto.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/secao_fecha.test.sql","t":"arquivo","f":"Supabase/test/secao_fecha.test.sql","txt":"secao_fecha.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","t":"arquivo","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","txt":"secao_herdada_pela_arvore.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","t":"arquivo","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","txt":"secao_inferida_da_secao_bruta.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/seed_macro.test.sql","t":"arquivo","f":"Supabase/test/seed_macro.test.sql","txt":"seed_macro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql","t":"arquivo","f":"Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql","txt":"serie_por_ano_balancete_sob_balanco_anual.test.sql"}
@@ -347,6 +348,7 @@
 {"k":"n","id":"fn:fn_golden_rotular_campos","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden rotular campos"}
 {"k":"n","id":"fn:fn_golden_suficiente","t":"fn","f":"Supabase/migrations/0126_golden_set.sql","txt":"golden suficiente"}
 {"k":"n","id":"fn:fn_grupo_por_controle_comum","t":"fn","f":"Supabase/migrations/0182_o_grupo_horizontal_que_a_controladora_nao_alcancava.sql","txt":"grupo por controle comum"}
+{"k":"n","id":"fn:fn_herdar_secao_pela_arvore","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"herdar secao pela arvore"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
 {"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0189_o_gatilho_que_a_sonda_nao_via.sql","txt":"instalacao conferir"}
@@ -370,6 +372,8 @@
 {"k":"n","id":"fn:fn_mudar_dial","t":"fn","f":"Supabase/migrations/0139_reafirmar_nao_apaga_medicao.sql","txt":"mudar dial"}
 {"k":"n","id":"fn:fn_mutuo_com_socio","t":"fn","f":"Supabase/migrations/0123_mutuos_a_natureza_fora_da_linha.sql","txt":"mutuo com socio"}
 {"k":"n","id":"fn:fn_natureza_intragrupo","t":"fn","f":"Supabase/migrations/0124_intragrupo_que_nao_e_mutuo.sql","txt":"natureza intragrupo"}
+{"k":"n","id":"fn:fn_nome_de_secao_normalizado","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"nome de secao normalizado"}
+{"k":"n","id":"fn:fn_nome_de_topo_ou_total","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"nome de topo ou total"}
 {"k":"n","id":"fn:fn_nome_parece_ter_endereco_colado","t":"fn","f":"Supabase/migrations/0171_o_cnpj_tambem_renomeia.sql","txt":"nome parece ter endereco colado"}
 {"k":"n","id":"fn:fn_nome_tem_sufixo_societario","t":"fn","f":"Supabase/migrations/0171_o_cnpj_tambem_renomeia.sql","txt":"nome tem sufixo societario"}
 {"k":"n","id":"fn:fn_normalizar_texto","t":"fn","f":"Supabase/migrations/0009_reconciliacao_e3.sql","txt":"normalizar texto"}
@@ -415,7 +419,7 @@
 {"k":"n","id":"fn:fn_reconciliar_versoes_do_periodo","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"reconciliar versoes do periodo"}
 {"k":"n","id":"fn:fn_reconferir_caso","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"reconferir caso"}
 {"k":"n","id":"fn:fn_reescrever_recado_linha_exigida","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"reescrever recado linha exigida"}
-{"k":"n","id":"fn:fn_registrar_campos_extraidos","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"registrar campos extraidos"}
+{"k":"n","id":"fn:fn_registrar_campos_extraidos","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"registrar campos extraidos"}
 {"k":"n","id":"fn:fn_registrar_classe_override","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"registrar classe override"}
 {"k":"n","id":"fn:fn_registrar_diagnostico","t":"fn","f":"Supabase/migrations/0177_a_guarda_do_balcao_ia_so_num_sentido.sql","txt":"registrar diagnostico"}
 {"k":"n","id":"fn:fn_registrar_documento","t":"fn","f":"Supabase/migrations/0170_o_cnpj_atravessa_a_porta_de_entrada.sql","txt":"registrar documento"}
@@ -617,6 +621,7 @@
 {"k":"n","id":"migration:0201","t":"migration","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"o realizado que nao lia saldo final e saldo atual"}
 {"k":"n","id":"migration:0202","t":"migration","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","txt":"o total com codigo contabil que virava conta"}
 {"k":"n","id":"migration:0203","t":"migration","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"a secao que a ia nao deu e a linha que sumia"}
+{"k":"n","id":"migration:0204","t":"migration","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"a secao que o documento ja dizia pela arvore"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1441,6 +1446,16 @@
 {"k":"e","de":"arquivo:Supabase/test/secao_fecha.test.sql","rel":"CHAMA","pa":"fn:fn_normalizar_texto","f":"Supabase/test/secao_fecha.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/secao_fecha.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"Supabase/test/secao_fecha.test.sql","l":478}
 {"k":"e","de":"arquivo:Supabase/test/secao_fecha.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"Supabase/test/secao_fecha.test.sql","l":28}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_herdar_secao_pela_arvore","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":33}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":71}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":165}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_nome_de_secao_normalizado","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":82}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_nome_de_topo_ou_total","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":86}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_normalizar_texto","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":72}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":93}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":95}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":94}
+{"k":"e","de":"arquivo:Supabase/test/secao_herdada_pela_arvore.test.sql","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Supabase/test/secao_herdada_pela_arvore.test.sql","l":162}
 {"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_inferir_secao_canonica_das_linhas","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":230}
 {"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":58}
 {"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":178}
@@ -2080,6 +2095,10 @@
 {"k":"e","de":"migration:0203","rel":"CRIA","pa":"fn:fn_inferir_secao_canonica_das_linhas","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","l":447}
 {"k":"e","de":"migration:0203","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","l":189}
 {"k":"e","de":"migration:0203","rel":"CRIA","pa":"fn:fn_secao_canonica_da_secao_bruta","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","l":104}
+{"k":"e","de":"migration:0204","rel":"CRIA","pa":"fn:fn_herdar_secao_pela_arvore","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","l":114}
+{"k":"e","de":"migration:0204","rel":"CRIA","pa":"fn:fn_nome_de_secao_normalizado","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","l":87}
+{"k":"e","de":"migration:0204","rel":"CRIA","pa":"fn:fn_nome_de_topo_ou_total","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","l":101}
+{"k":"e","de":"migration:0204","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","l":188}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
