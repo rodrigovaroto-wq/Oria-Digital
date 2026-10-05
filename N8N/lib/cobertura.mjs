@@ -174,30 +174,34 @@ export function juntarFragmentosComOrigem(texto) {
   let emenda = '';
   let quantos = 0;
   let deEmenda = 0;
+  // Fecha a emenda em aberto (se houver) e zera o acumulador — um lugar só.
+  const descarregar = (linhaQueFecha, i) => {
+    if (linhaQueFecha === null) {
+      if (emenda.length > 0) saida.push({ texto: emenda, de: deEmenda, n: quantos });
+    } else {
+      saida.push({ texto: emenda + linhaQueFecha, de: quantos > 0 ? deEmenda : i, n: quantos + 1 });
+    }
+    emenda = '';
+    quantos = 0;
+  };
   for (let i = 0; i < cruas.length; i += 1) {
     const bruta = cruas[i];
     // Linha em branco NÃO emenda e não some: ela separa bloco. Emendar através
     // dela colaria o rodapé de uma página no cabeçalho da seguinte; engoli-la
     // mudaria o texto para quem só passa por aqui.
     if (bruta.trim().length === 0) {
-      if (emenda.length > 0) saida.push({ texto: emenda, de: deEmenda, n: quantos });
+      descarregar(null, i);
       saida.push({ texto: bruta, de: i, n: 1 });
-      emenda = '';
-      quantos = 0;
-      continue;
-    }
-    // O espaço no fim é a marca do fragmento que NÃO fecha a linha visual.
-    if (/[ \t]$/.test(bruta) && quantos < MAX_FRAGMENTOS) {
+    } else if (/[ \t]$/.test(bruta) && quantos < MAX_FRAGMENTOS) {
+      // O espaço no fim é a marca do fragmento que NÃO fecha a linha visual.
       if (quantos === 0) deEmenda = i;
       emenda += bruta;
       quantos += 1;
-      continue;
+    } else {
+      descarregar(bruta, i);
     }
-    saida.push({ texto: emenda + bruta, de: quantos > 0 ? deEmenda : i, n: quantos + 1 });
-    emenda = '';
-    quantos = 0;
   }
-  if (emenda.length > 0) saida.push({ texto: emenda, de: deEmenda, n: quantos });
+  descarregar(null, cruas.length);
   return saida;
 }
 
@@ -506,7 +510,7 @@ export function contasComOrigem(texto) {
  * linhas de uma fatia fecha EXATO nos balanços e DRE, e erra feio onde a tabela é
  * larga — livro razão 256 contra 99 (a fatia já perdeu o espaço do fim que marca o
  * fragmento), balancete 2 contra 78 (as linhas sem dígito, que são o rótulo,
- * saíram da lista). Um denominador 2,6 vezes maior refaria TODO bloco perfeito do
+ * saíram da lista). Um denominador 2,6 vezes maior refaria cada bloco perfeito do
  * livro razão. Aqui a contagem é feita UMA vez, sobre o texto inteiro e com a
  * mesma emenda do documento, e cada conta é creditada à primeira linha COM DÍGITO
  * do seu grupo de fragmentos — então a soma dos blocos é, por construção, a
@@ -1023,7 +1027,7 @@ export function linhasDaPassada(campos) {
  * continua sendo falha. Auto-contida (usa `avaliarCobertura`, embutida antes).
  */
 export function decidirSegundaPassada({
-  linhas, esperadas, tentativa = 1, maxTentativas = 4, temDadoFinanceiro = null, jaRefeita = false,
+  linhas, esperadas, tentativa = 1, maxTentativas = 4, temDadoFinanceiro, jaRefeita = false,
 } = {}) {
   const nada = { abaixo: false, refazer: false, razao: null, esperadas: null, porque: null };
   if (linhas === null || linhas === undefined || !Number.isFinite(Number(linhas))) return nada;
@@ -1032,12 +1036,14 @@ export function decidirSegundaPassada({
   if (Number(linhas) === 0 && temDadoFinanceiro === false) return nada;
   const sobra = Number(tentativa) < Number(maxTentativas);
   const refazer = !jaRefeita && sobra;
+  let porque = null;
+  if (!refazer) porque = jaRefeita ? 'ja-refeita' : 'sem-tentativa';
   return {
     abaixo: true,
     refazer,
     razao: cob.razao,
     esperadas: cob.esperadas,
-    porque: refazer ? null : (jaRefeita ? 'ja-refeita' : 'sem-tentativa'),
+    porque,
   };
 }
 
@@ -1058,7 +1064,7 @@ export function melhorPassada(linhasDaPrimeira, linhasDaSegunda) {
  * ASCII de propósito (vai dentro de um template literal do gerador).
  */
 export function instrucaoDeSegundaPassada({ linhas, esperadas, blocos = 1 }) {
-  const e = Number(esperadas) > 0 ? Number(esperadas) : 0;
+  const e = Math.max(Number(esperadas) || 0, 0);
   const pct = e > 0 ? Math.round((100 * Number(linhas)) / e) : 0;
   const onde = blocos > 1 ? 'deste bloco' : 'deste documento';
   return ' ATENCAO -- SEGUNDA PASSADA POR COBERTURA: a leitura anterior ' + onde + ' devolveu '
