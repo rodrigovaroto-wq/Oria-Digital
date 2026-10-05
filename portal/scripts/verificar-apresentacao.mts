@@ -477,6 +477,59 @@ console.log("--- 11. resultado futuro (projeção guardada pela cobertura) e atu
   ok(cor?.meses === 8 && /8M\/2026 \(B\)/.test(x1), "(11d) o ano corrente entra no X.1 como coluna parcial \"8M/2026 (B)\"", x1.slice(0, 200));
 }
 
+console.log("--- 12. o mapa da dívida MATRICIAL (forma de produção, 0145) com taxa, vencimento e garantia ---");
+{
+  // A tabela do PDF do book (render.py: Credor | Modalidade | Saldo devedor (R$) | Taxa | Vencimento
+  // | Garantia | Juros do exercício (R$)), na forma em que a extração de produção a grava: a chave é a
+  // linha, o conceito mora na coluna (0145). Os contratos são os de `demonstracoes.py`, com o ajuste
+  // de juros do 4º que amarra a DRE — só saldo e textos são afirmados aqui.
+  const contratos: Array<[string, string, number, string, string, string, number]> = [
+    ["Banco Meridional S.A.", "Capital de giro", 9420, "CDI + 6,80% a.a.", "15/03/2026", "Recebíveis + aval dos sócios", 2180],
+    ["Banco Meridional S.A.", "Conta garantida", 2380, "CDI + 9,20% a.a.", "Rotativo", "Aval dos sócios", 640],
+    ["Banco Atlântico Sul", "Capital de giro", 6180, "CDI + 7,40% a.a.", "20/08/2026", "Alienação fiduciária de máquinas", 1490],
+    ["Banco Atlântico Sul", "Antecipação de recebíveis", 6180, "2,45% a.m.", "Rotativo", "Duplicatas cedidas", 4630],
+    ["BNDES / FINAME (agente: Banco Meridional)", "Financiamento de máquinas", 9080, "TLP + 4,10% a.a.", "10/07/2029", "Alienação fiduciária dos bens financiados", 1080],
+    ["Cooperativa de Crédito Vale", "Capital de giro", 3140, "1,95% a.m.", "05/02/2026", "Aval dos sócios", 820],
+    ["Fomento Mercantil Paulista Ltda.", "Factoring", 2440, "3,10% a.m.", "Rotativo", "Duplicatas cedidas com coobrigação", 1180],
+    ["Arrendadora Sigma", "Arrendamento mercantil (CPC 06)", 2680, "CDI + 8,00% a.a.", "30/11/2027", "Bem arrendado", 380],
+    ["Sócios pessoas físicas", "Empréstimo subordinado", 9800, "Sem remuneração", "Sem vencimento definido", "Sem garantia", 0],
+  ];
+  const VER = "55555555-0000-0000-0000-000000000011";
+  const outros = fixture.campos.filter((c) => c.documento_versao_id !== VER);
+  const modelo = fixture.campos.find((c) => c.documento_versao_id === VER)!;
+  let ordem = 0;
+  const campo = (chave: string, coluna: string, num: number | null, texto: string | null): CampoExtraido =>
+    ({ ...modelo, id: `m-${ordem}`, ordem: ordem++, chave, periodo_coluna: coluna, valor_num: num, valor_texto: texto,
+      unidade: num === null ? null : "unidade" });
+  // Forma A: chave = credor, modalidade numa coluna de texto (o mesmo credor em duas linhas).
+  const formaA = contratos.flatMap(([cr, mod, saldo, taxa, venc, gar, juros]) => [
+    campo(cr, "Modalidade", null, mod), campo(cr, "Saldo devedor (R$)", saldo * 1000, null), campo(cr, "Taxa", null, taxa),
+    campo(cr, "Vencimento", null, venc), campo(cr, "Garantia", null, gar), campo(cr, "Juros do exercício (R$)", juros * 1000, null)]);
+  // Forma B: chave = "Credor - Modalidade" (o exemplo literal da 0145), sem coluna de modalidade.
+  const formaB = contratos.flatMap(([cr, mod, saldo, taxa, venc, gar, juros]) => [
+    campo(`${cr} - ${mod}`, "Saldo devedor (R$)", saldo * 1000, null), campo(`${cr} - ${mod}`, "Taxa", null, taxa),
+    campo(`${cr} - ${mod}`, "Vencimento", null, venc), campo(`${cr} - ${mod}`, "Garantia", null, gar),
+    campo(`${cr} - ${mod}`, "Juros do exercício (R$)", juros * 1000, null)]);
+  const entrada = entradaModeloDaFixture(fixture, agora);
+  const wb = buildExportWorkbook({ caso: { nome: "Book Vertentes", produto: "reestruturacao" },
+    documentos: fixture.documentos, campos: fixture.campos, agora, modeloInstitucional: entrada });
+  const ent12 = entradaDoModeloDoWorkbook(wb)!;
+  for (const [nome, forma] of [["A (credor + coluna de modalidade)", formaA], ["B (\"Credor - Modalidade\")", formaB]] as const) {
+    const b = montarBaseCredito(ent12, fixture.documentos, [], {}, [...outros, ...forma]);
+    const m = dividaDoMapa(b, [2024, 2025]);
+    ok(m?.operacoes.length === 9 && Math.round(m.total / 100) === 513 && m.credores.length === 7,
+      `(12a) forma ${nome}: 9 operações, 7 credores, saldo 51,3 mi`, `${m?.operacoes.length} ops, total ${m?.total}`);
+    const sl = await slidesDe(b);
+    if (process.env.SALVAR_DECK) (await import("node:fs")).writeFileSync(`${process.env.SALVAR_DECK}-${nome[0]}.pptx`, await construirDeckCredito(b, agora).deck.gerar(agora));
+    const xiii2 = sl.filter((x) => textos(x).some((t) => t.startsWith("XIII.2"))).map((x) => textos(x).join(" | ")).join(" | ");
+    ok(/CDI \+ 6,80% a\.a\./.test(xiii2) && /15\/03\/2026/.test(xiii2) && /Aval dos sócios/.test(xiii2) && !/\[a preencher\]/.test(xiii2.split("Garantia")[1] ?? ""),
+      `(12b) forma ${nome}: XIII.2 mostra a taxa contratual, o vencimento e a garantia DO MAPA`, xiii2.slice(0, 240));
+    const xiii3 = textos(slideCom(sl, "XIII.3 · MURO DE VENCIMENTOS")).join(" ");
+    ok(/5 de 9 operações têm vencimento impresso/.test(xiii3),
+      `(12c) forma ${nome}: XIII.3 monta o muro pelo vencimento (rotativo e sem prazo à parte)`, xiii3.slice(0, 200));
+  }
+}
+
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);
 if (falhas > 0) process.exit(1);
 console.log("APRESENTAÇÃO OK — número do documento, ausência dita, padrão visual varrido com controle positivo");

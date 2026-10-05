@@ -28,6 +28,7 @@ import {
   indicadores, variacao, dividaDoMapa, ativosReais, type Amarracao, type BaseCredito, type Indicadores, type Numero, type PeriodoCredito, type Valor,
 } from "./base-credito";
 import { COBERTURA_MINIMA, SALTO_DE_MARGEM_PP } from "./projecao";
+import { anoDoVencimento } from "../mapa-da-divida";
 
 type Escala = "milhar" | "reais";
 const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro",
@@ -96,7 +97,7 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   const mes = `${MESES[agora.getMonth()]} de ${agora.getFullYear()}`;
   const aPreencher = [
     "Caps. I a VIII (setor, mercado, societário, empresa, cadeia de valor, concorrência): dependem da pesquisa das FASES 1 a 3.",
-    "XIII.2: vencimento e garantia por operação vêm da tela da apresentação (o mapa extraído traz saldo e juros).",
+    "XIII.2: vencimento e garantia que o mapa não imprime ficam para a tela da apresentação.",
     "XIV a XVIII (ajustes do EBITDA, alavancas, realização das garantias, notas do scorecard): julgamento do analista.",
     "LTM: o ano corrente entra como coluna parcial no X.1 (balancete), sem anualizar.",
   ];
@@ -585,38 +586,62 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     }
   }
   {
-    // XIII.2 — operação a operação, 8 por slide. Vencimento e garantia NÃO vêm no mapa: são campos
-    // da apresentação, pela ordem da operação (`xiii2.op<n>.vencimento`).
+    // XIII.2 — operação a operação, 8 por slide. Taxa, vencimento e garantia vêm do MAPA quando ele
+    // os imprime (`mapa-da-divida.ts`); o que ele não imprime é campo da apresentação, pela ordem da
+    // operação (`xiii2.op<n>.vencimento`). A taxa contratual tem precedência sobre a implícita, e a
+    // implícita sai marcada com "*".
     const ops = mapa?.operacoes ?? [];
     const POR = 8;
     const paginas = Math.max(1, Math.ceil(ops.length / POR));
     for (let pg = 0; pg < paginas; pg++) {
       const s = slide(`XIII.2 · Posição operação a operação${paginas > 1 ? ` (${pg + 1}/${paginas})` : ""}`,
         ops.length ? `${ops.length} operações somam ${valorMi({ v: mapa!.total, nota: "" }, esc)} no mapa de ${mapa!.ano}` : AP,
-        ops.length ? `${fontes.replace(/\.$/, "")} · taxa = juros do exercício ÷ saldo final (calculado pela Oria).` : FONTE_AP);
+        ops.length ? `${fontes.replace(/\.$/, "")} · taxa contratual do mapa; * implícita = juros do exercício ÷ saldo final (calculado pela Oria).` : FONTE_AP);
       const linhas: LinhaTabela[] = ops.length
         ? ops.slice(pg * POR, (pg + 1) * POR).map((o, k) => {
           const n = pg * POR + k + 1;
           return { celulas: [encurtar(o.credor, 22), encurtar(o.modalidade, 18), mm({ v: o.saldoAno, nota: "" }).t,
-            o.taxa === null ? "n/d" : fmtPct({ v: o.taxa }).t, ap(`op${n}.vencimento`), ap(`op${n}.garantia`)] };
+            o.taxaContratual ? encurtar(o.taxaContratual, 16) : o.taxa === null ? "n/d" : `${fmtPct({ v: o.taxa }).t}*`,
+            o.vencimento ? encurtar(o.vencimento, 18) : ap(`op${n}.vencimento`), o.garantia ? encurtar(o.garantia, 20) : ap(`op${n}.garantia`)] };
         })
         : [1, 2, 3, 4].map(() => ({ celulas: [AP, AP, AP, AP, AP, AP] }));
-      tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Credor", w: 200 }, { titulo: "Modalidade", w: 160, algn: "l" },
-        { titulo: "Saldo (R$ mi)", w: 100 }, { titulo: "Taxa a.a.", w: 107 }, { titulo: "Vencimento", w: 130, algn: "l" },
-        { titulo: "Garantia", w: 140, algn: "l" }], linhas);
+      tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Credor", w: 180 }, { titulo: "Modalidade", w: 150, algn: "l" },
+        { titulo: "Saldo (R$ mi)", w: 90 }, { titulo: "Taxa", w: 147 }, { titulo: "Vencimento", w: 120, algn: "l" },
+        { titulo: "Garantia", w: 150, algn: "l" }], linhas);
     }
   }
   {
     const s = slide("XIII.3 · Muro de vencimentos", ap("titulo") === AP && mapa?.custoMedio != null
-      ? `Dívida de curto prazo de ${vmi({ v: (I.bancosCP.v ?? 0) + (outrasCP(base, ultimo) ?? 0), nota: "" })}, custo médio de ${fmtPct({ v: mapa.custoMedio }).t}` : AP, fontes);
+      ? `Dívida de curto prazo de ${vmi({ v: (I.bancosCP.v ?? 0) + (outrasCP(base, ultimo) ?? 0), nota: "" })}, custo médio de ${fmtPct({ v: mapa.custoMedio }).t}` : AP,
+    mapa ? `${fontes.replace(/\.$/, "")} · vencimentos do mapa da dívida de ${mapa.ano}.` : fontes);
     kpi(s, GRADE.col4.x[0], GRADE.topo, GRADE.col4.w, { valor: vmi({ v: (I.bancosCP.v ?? null) === null ? null : (I.bancosCP.v ?? 0) + (outrasCP(base, ultimo) ?? 0), nota: "" }),
       rotulo: "Vence em 12 meses", explicacao: `dívida de curto prazo no balanço de ${ultimo}` });
     kpi(s, GRADE.col4.x[1], GRADE.topo, GRADE.col4.w, { valor: vmi(I.caixa), rotulo: "Caixa disponível", explicacao: `balanço de ${ultimo}` });
     kpi(s, GRADE.col4.x[2], GRADE.topo, GRADE.col4.w, { valor: mapa?.custoMedio == null ? "n/d" : fmtPct({ v: mapa.custoMedio }).t,
       rotulo: "Custo médio", explicacao: mapa ? "juros ÷ saldo do mapa, calculado pela Oria" : "sem mapa da dívida" });
     kpi(s, GRADE.col4.x[3], GRADE.topo, GRADE.col4.w, { valor: ap("ruptura"), rotulo: "Primeira ruptura", explicacao: "data do primeiro ponto de ruptura de caixa" });
-    cartao(s, GRADE.x, 228, GRADE.w, 150, { titulo: "Principal por trimestre, próximos 24 meses",
-      corpo: `O mapa recebido traz saldo e juros, não o cronograma: ${ap("cronograma")}` });
+    // O MURO, pelo vencimento que o mapa imprime: saldo por ano de vencimento final (não é o
+    // cronograma de amortização — o mapa não traz parcelas —, e a fonte diz isso). "Rotativo" e
+    // "sem vencimento definido" vão para uma coluna própria: somá-los a um ano seria inventar prazo.
+    const comVenc = (mapa?.operacoes ?? []).filter((o) => anoDoVencimento(o.vencimento) !== null);
+    if (mapa && comVenc.length > 0) {
+      const porAno = new Map<string, number>();
+      for (const o of mapa.operacoes) {
+        const a = anoDoVencimento(o.vencimento);
+        const k = a === null ? "Sem prazo" : a <= mapa.ano ? `Vencido/${mapa.ano}` : a >= mapa.ano + 5 ? `${mapa.ano + 5}+` : String(a);
+        porAno.set(k, (porAno.get(k) ?? 0) + o.saldoAno);
+      }
+      const ordem = (k: string) => (k.startsWith("Vencido") ? 0 : k === "Sem prazo" ? 9999 : Number.parseInt(k, 10));
+      const cats = [...porAno.keys()].sort((x, y) => ordem(x) - ordem(y));
+      tituloSecao(s, GRADE.x, 228, 520, `Saldo por ano de vencimento final, mapa de ${mapa.ano} (R$ mi)`);
+      s.grafico(GRADE.x, 250, 520, 200, { tipo: "colunas", categorias: cats,
+        series: [{ nome: "Saldo", valores: cats.map((k) => Math.round((porAno.get(k) ?? 0) * fatorParaMM(esc) * 10) / 10), cor: COR.verde }] });
+      cartao(s, 605, 228, GRADE.fim - 605, 150, { titulo: "Leitura",
+        corpo: `${comVenc.length} de ${mapa.operacoes.length} operações têm vencimento impresso no mapa. Ano de vencimento FINAL, não cronograma de parcelas: ${ap("cronograma")}` });
+    } else {
+      cartao(s, GRADE.x, 228, GRADE.w, 150, { titulo: "Principal por trimestre, próximos 24 meses",
+        corpo: `O mapa recebido não imprime vencimento por operação: ${ap("cronograma")}` });
+    }
   }
 
   // ======================================== cap. 09 — EBITDA normalizado e dívida sustentável

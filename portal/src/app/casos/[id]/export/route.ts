@@ -655,7 +655,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     let deck;
     try {
       ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp, { informacao, perimetro, projecao: projecaoDoModelo(workbook, entradaDoModelo),
-        corrente: linhasDoAnoCorrente ? correnteDoBalancete(entradaDoModelo, linhasDoAnoCorrente.linhas, linhasDoAnoCorrente.ano, documentos) : null }), new Date()));
+        corrente: linhasDoAnoCorrente ? correnteDoBalancete(entradaDoModelo, linhasDoAnoCorrente.linhas, linhasDoAnoCorrente.ano, documentos) : null }, campos), new Date()));
     } catch (e) {
       if (!(e instanceof SemDadoParaApresentar)) throw e;
       return NextResponse.json({ error: "A apresentação de crédito não foi gerada.", motivos: [e.message] }, { status: 409 });

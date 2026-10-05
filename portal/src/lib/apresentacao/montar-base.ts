@@ -4,8 +4,10 @@
 // que o modo completo do export monta — mesma entidade modelada, mesmo último exercício real, mesmo
 // Portão 2. Duas leituras do mesmo caso podem discordar em silêncio (uma paginada, outra não; uma
 // com a 0125, outra sem); uma leitura só não tem com quem discordar.
-import { formatarPeriodo, type DocumentoParaExport } from "../export";
-import { historicoParaCredito, type EntradaModeloInstitucional, type LinhaModelo } from "../modelo-institucional";
+import { formatarPeriodo, versoesVigentes, type DocumentoParaExport } from "../export";
+import { fatorDeEscala, historicoParaCredito, type EntradaModeloInstitucional, type LinhaModelo } from "../modelo-institucional";
+import { lerMapaDaDivida, medidaDoRotulo, type LinhaDoMapa } from "../mapa-da-divida";
+import type { CampoExtraido } from "../types";
 import { naturezaDoAno, type BaseCredito, type DocumentoDaBase } from "./base-credito";
 
 /** Os tipos que trazem demonstração — os outros (contrato social, certidões…) não entram no IX. */
@@ -24,8 +26,16 @@ export function montarBaseCredito(
   documentos: DocumentoParaExport[],
   campos: Array<{ chave: string; valor: string; fonte: string | null }> = [],
   extras: Pick<BaseCredito, "informacao" | "perimetro" | "projecao" | "corrente"> = {},
+  camposExtraidos: CampoExtraido[] = [],
 ): BaseCredito {
   const historico = historicoParaCredito(ent);
+  // O mapa pelos CAMPOS EXTRAÍDOS manda quando rende operação: ele lê a forma matricial de produção
+  // e as colunas de texto (taxa, vencimento, garantia), que o modelo — só número — não carrega.
+  const doCampo = mapaDosCampos(camposExtraidos, documentos, ent.entidade ?? ent.caso.nome, ent.unidade, historico.anos);
+  if (doCampo.operacoes.length > 0) {
+    historico.operacoes = doCampo.operacoes;
+    if (Object.values(doCampo.totalDoMapa).some((v) => v !== null)) historico.totalDoMapa = doCampo.totalDoMapa;
+  }
   const entidade = ent.entidade ?? ent.caso.nome;
   const alvo = norm(entidade);
   const docs: DocumentoDaBase[] = documentos.flatMap((d) => {
@@ -116,4 +126,49 @@ export function correnteDoBalancete(
     if (n !== null && n >= 1 && n <= 12) meses = Math.max(meses ?? 0, n);
   }
   return { ano, meses, historico: historicoParaCredito({ ...ent, anosHistoricos: [ano], linhas }) };
+}
+
+/**
+ * O mapa da dívida lido dos CAMPOS EXTRAÍDOS da entidade analisada (versão vigente, a mesma regra do
+ * export). A coluna que é período ("2025") é a forma achatada; a coluna que é medida ("Saldo
+ * devedor", "Vencimento") é a matricial, e o ano dela é o do PERÍODO DO DOCUMENTO — o mapa é retrato
+ * de uma data (0191). Mapa sem período legível fica fora: pôr os saldos num ano chutado seria
+ * apresentar a dívida de uma data como se fosse de outra.
+ */
+export function mapaDosCampos(
+  campos: CampoExtraido[], documentos: DocumentoParaExport[], entidade: string, unidadeModelo: string, anos: number[],
+): ReturnType<typeof lerMapaDaDivida> {
+  const alvo = norm(entidade);
+  const vigentes = versoesVigentes(documentos, campos);
+  const linhas: LinhaDoMapa[] = [];
+  for (const d of documentos) {
+    if (d.tipo_taxonomia !== "MAPA_DIVIDA") continue;
+    const r = norm((Array.isArray(d.entidade) ? d.entidade[0] : d.entidade)?.razao_social ?? "");
+    if (!r || !(r.includes(alvo) || alvo.includes(r))) continue;
+    const per = Array.isArray(d.periodo) ? d.periodo[0] : d.periodo;
+    const anoDoDoc = anosDoPeriodo(formatarPeriodo(per?.tipo ?? null, per?.referencia ?? null)).at(-1) ?? null;
+    const ids = new Set((d.documento_versao ?? []).map((v) => v.id).filter((id) => vigentes.has(id)));
+    const doDoc = campos.filter((c) => ids.has(c.documento_versao_id))
+      .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
+    // A linha impressa: na forma matricial os campos de uma linha vêm seguidos, um por coluna; muda
+    // de linha quando a chave muda ou uma coluna se repete.
+    let linha = 0;
+    let chaveAnt: string | null = null;
+    const vistas = new Set<string>();
+    for (const c of doDoc) {
+      const anoCol = c.periodo_coluna ? anosDoPeriodo(formatarPeriodo(null, c.periodo_coluna)) : [];
+      const ehMedida = c.periodo_coluna !== null && anoCol.length === 0 && medidaDoRotulo(c.periodo_coluna) !== null;
+      const ano = ehMedida || !c.periodo_coluna ? anoDoDoc : anoCol.at(-1) ?? null;
+      if (ano === null) continue;
+      if (ehMedida) {
+        if (c.chave !== chaveAnt || vistas.has(c.periodo_coluna!)) { linha += 1; vistas.clear(); }
+        vistas.add(c.periodo_coluna!);
+        chaveAnt = c.chave;
+      }
+      const f = fatorDeEscala(c.unidade, unidadeModelo) ?? 1;
+      linhas.push({ chave: c.chave, coluna: ehMedida ? c.periodo_coluna : null, ano, linha: ehMedida ? linha : undefined,
+        num: c.valor_num === null ? null : c.valor_num * f, texto: c.valor_texto });
+    }
+  }
+  return lerMapaDaDivida(linhas, anos);
 }

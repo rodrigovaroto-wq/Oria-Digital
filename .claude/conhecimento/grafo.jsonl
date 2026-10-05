@@ -846,8 +846,8 @@
 {"k":"e","de":"arquivo:N8N/lib/cobertura.mjs","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/lib/cobertura.mjs","l":373}
 {"k":"e","de":"arquivo:N8N/lib/completude.mjs","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"N8N/lib/completude.mjs","l":35}
 {"k":"e","de":"arquivo:N8N/lib/completude.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/lib/completude.mjs","l":39}
-{"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_anos_texto","f":"N8N/lib/extract.mjs","l":662}
-{"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/lib/extract.mjs","l":781}
+{"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_anos_texto","f":"N8N/lib/extract.mjs","l":666}
+{"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/lib/extract.mjs","l":785}
 {"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/lib/extract.mjs","l":30}
 {"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/lib/extract.mjs","l":83}
 {"k":"e","de":"arquivo:N8N/lib/merge.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/lib/merge.mjs","l":54}
@@ -1497,7 +1497,7 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perguntas/page.tsx","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/app/casos/[id]/perguntas/page.tsx","l":18}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/revisao/actions.ts","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"portal/src/app/casos/[id]/revisao/actions.ts","l":6}
 {"k":"e","de":"arquivo:portal/src/components/excluir-mandato.tsx","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/components/excluir-mandato.tsx","l":12}
-{"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":35}
+{"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":45}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/export-modelagem.ts","l":97}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/lib/export-modelagem.ts","l":765}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"portal/src/lib/export.ts","l":691}
@@ -1512,10 +1512,10 @@
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":75}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelagem-linha.ts","l":107}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/modelo-institucional.ts","l":230}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelo-institucional.ts","l":25}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/src/lib/modelo-institucional.ts","l":252}
-{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelo-institucional.ts","l":6994}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/modelo-institucional.ts","l":231}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelo-institucional.ts","l":26}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/src/lib/modelo-institucional.ts","l":253}
+{"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelo-institucional.ts","l":6995}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"portal/src/lib/perguntas.ts","l":30}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/lib/perguntas.ts","l":3}
 {"k":"e","de":"arquivo:portal/src/lib/premissas-do-realizado.ts","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"portal/src/lib/premissas-do-realizado.ts","l":40}

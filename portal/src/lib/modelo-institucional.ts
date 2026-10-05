@@ -7,6 +7,7 @@ import {
 } from "./oria-marca";
 import { normalizar } from "./statement-templates";
 import type { EspecGrafico } from "./xlsx-graficos";
+import { lerMapaDaDivida, type OperacaoDivida } from "./mapa-da-divida";
 
 // =============================================================================
 // O MODELO INSTITUCIONAL — reconstrução do "Modelo Base" do dono, integrada aos
@@ -630,7 +631,7 @@ export function escalaDoModelo(unidadeModelo: string): "milhar" | "reais" {
   return /mil/i.test(unidadeModelo) && !/milh(a|ã)o/i.test(unidadeModelo) ? "milhar" : "reais";
 }
 
-function fatorDeEscala(unidadeLinha: string | null, unidadeModelo: string): number | null {
+export function fatorDeEscala(unidadeLinha: string | null, unidadeModelo: string): number | null {
   const alvo = escalaDoModelo(unidadeModelo) === "milhar" ? 1 : 0.001;
   if (!unidadeLinha) return null;
   const f = FATOR_PARA_MILHAR[unidadeLinha.toLowerCase().trim()];
@@ -7302,17 +7303,9 @@ export type GrandezaCredito =
   | "caixa" | "clientes" | "estoques" | "fornecedores"
   | "divida_bancos_cp" | "divida_bancos_lp" | "divida_outras_cp" | "divida_outras_lp" | "imobilizado";
 
-/**
- * Uma operação do MAPA DA DÍVIDA. O mapa chega como linhas "Credor — Modalidade — [Operação] —
- * saldo devedor | juros do exercício" (medido nos books e no padrão do extrator), e é daí que sai a
- * abertura por credor, a taxa implícita e o custo médio. Vencimento e garantia NÃO vêm no mapa:
- * ficam como campos da apresentação ("[a preencher]").
- */
-export interface OperacaoDivida {
-  credor: string; modalidade: string; operacao: string | null;
-  saldo: Record<number, number | null>; juros: Record<number, number | null>;
-}
-
+// A operação do mapa da dívida e a leitura dela moram em `mapa-da-divida.ts` (uma regra para as
+// formas achatada e matricial); re-exportada aqui para quem já a importava deste arquivo.
+export type { OperacaoDivida } from "./mapa-da-divida";
 /** `calculado`: o total NÃO vem impresso no documento — saiu da cascata das contas (ver abaixo). */
 export interface ValorHistorico { v: number | null; origem: string; calculado?: boolean }
 
@@ -7448,36 +7441,15 @@ export function historicoParaCredito(ent: EntradaModeloInstitucional): Historico
   };
   // O MAPA DA DÍVIDA, operação a operação. Lê `ent.linhas` (e não `linhasPorBloco`) porque a linha
   // TOTAL do mapa é subtotal e sai da soma do modelo — e é ela que confere a abertura (amarração 7).
-  const operacoes = new Map<string, OperacaoDivida>();
-  const totalDoMapa: Record<number, number | null> = Object.fromEntries(anos.map((a) => [a, null]));
-  for (const l of ent.linhas) {
-    if (!(l.documentos ?? []).includes("MAPA_DIVIDA")) continue;
-    const partes = l.chave.split(/\s+[—–-]\s+/).map((x) => x.trim()).filter(Boolean);
-    const medida = (partes.at(-1) ?? "").toLowerCase();
-    // "(US$)" é o saldo em moeda de origem: o mesmo contrato tem a linha em reais ao lado.
-    if (/\(us\$|usd|eur\)/i.test(medida)) continue;
-    const ehSaldo = /saldo|principal/.test(medida);
-    const ehJuros = /juros/.test(medida);
-    if (!ehSaldo && !ehJuros) continue;
-    const valorDe = (ano: number) => valorNaEscalaSemAviso(l, ano, unidade)?.valor ?? null;
-    if (/^total\b/i.test(partes[0] ?? "")) {
-      if (ehSaldo) for (const a of anos) totalDoMapa[a] = valorDe(a);
-      continue;
-    }
-    if (partes.length < 3) continue;
-    const [credor, modalidade, ...resto] = partes.slice(0, -1);
-    const chave = [credor, modalidade, ...resto].join("|");
-    const op = operacoes.get(chave) ?? { credor, modalidade, operacao: resto.join(" — ") || null,
-      saldo: Object.fromEntries(anos.map((a) => [a, null])), juros: Object.fromEntries(anos.map((a) => [a, null])) };
-    for (const a of anos) {
-      const v = valorDe(a);
-      if (v !== null) (ehSaldo ? op.saldo : op.juros)[a] = Math.abs(v);
-    }
-    operacoes.set(chave, op);
-  }
+  // Aqui o mapa chega na forma ACHATADA (o modelo só carrega número); a forma matricial e as colunas
+  // de texto vêm dos campos extraídos, em `montarBaseCredito` — a regra das duas é a mesma.
+  const { operacoes, totalDoMapa } = lerMapaDaDivida(ent.linhas
+    .filter((l) => (l.documentos ?? []).includes("MAPA_DIVIDA"))
+    .flatMap((l) => anos.map((ano) => ({ chave: l.chave, coluna: null, ano, texto: null,
+      num: valorNaEscalaSemAviso(l, ano, unidade)?.valor ?? null }))), anos);
   // `avisosDeEscala` só está completo depois de TODAS as grandezas lidas — por isso o objeto acima
   // é montado antes do retorno.
   return { unidade, escala: escalaDoModelo(unidade), anos,
     avisosDeEscala: [...avisosDeEscala].sort((a, b) => a.localeCompare(b, "pt-BR")), grandezas,
-    operacoes: [...operacoes.values()], totalDoMapa };
+    operacoes, totalDoMapa };
 }
