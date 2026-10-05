@@ -2,7 +2,13 @@
 
 ## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
 
-> **Migration mais nova: `0202_o_total_com_codigo_contabil_que_virava_conta.sql`.** O TOTAL com código
+> **Migration mais nova: `0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql`.** Quando o LLM
+> devolve `secao_canonica` nula, a seção bruta passa a decidir pelas regras determinísticas e
+> conservadoras: só os casos inequívocos ganham seção, e os ambíguos ficam NULL. A coluna
+> `secao_canonica_inferida` marca essas linhas. O backfill cobre as linhas existentes. Medido no
+> Fw Valtra: a DRE 2025 tinha 136 de 724 linhas sem seção, e a receita do realizado saía 235.650 em
+> vez de ~43,85 mi. Depois de aplicar, rodar `fn_reconciliar_caso` nos casos tocados.
+> **`0202_o_total_com_codigo_contabil_que_virava_conta.sql`.** O TOTAL com código
 > contábil na frente ("2.3.71 TOTAL") deixava de ser subtotal e dobrava a dívida do mapa (102.600 contra
 > 51.300 no arnês). Com a correção, o arnês de variações vai de 1 achado para 0.
 > **`0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql`:** as sugestões do realizado passam a ler

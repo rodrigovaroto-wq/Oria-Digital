@@ -833,6 +833,17 @@ supabase db execute --file Supabase/migrations/0202_o_total_com_codigo_contabil_
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0202' and not presente;                 -- ZERO linhas
 
+# A 0203 INFERE a secao_canonica da seção bruta quando a IA não deu (fn_secao_canonica_da_secao_bruta, conservadora: o ambíguo fica NULL),
+# na gravação (fn_registrar_campos_extraidos reemitida inteira) e nas linhas existentes (fn_inferir_secao_canonica_das_linhas), e marca
+# campo_extraido.secao_canonica_inferida. Defeito MEDIDO em produção (Fw Valtra, DRE 2025): 136 de 724 linhas sem seção; receita bruta do
+# realizado 235.650 em vez de ~43,85 mi. TEM BACKFILL (raise notice com linhas/versões/casos). DEPOIS DE APLICAR, nos casos tocados:
+#   select fn_reconciliar_caso('<caso>'); select fn_recomputar_completude('<caso>');   -- o que fica GRAVADO só muda recomputado
+# Teste: Supabase/test/secao_inferida_da_secao_bruta.test.sql (71 asserts; 38 reprovam sem a 0203).
+supabase db execute --file Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0203' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

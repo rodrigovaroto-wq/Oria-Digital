@@ -5497,6 +5497,44 @@ $$;
 COMMENT ON FUNCTION public.fn_indice_macro_anual(p_desde_ano integer) IS 'Retorno acumulado por ano-calendário. Série de TAXA acumula por composição; série de NÍVEL varia entre FECHAMENTOS (dez do ano anterior → dez do ano), e o primeiro ano da série sai com retorno NULL por não ter base. `meses` revela ano incompleto — incluí-lo numa média de 3/5/10 anos como ano cheio distorce a média.';
 
 --
+-- Name: fn_inferir_secao_canonica_das_linhas(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_linhas int; v_versoes int; v_casos int;
+begin
+  with upd as (
+    update campo_extraido ce
+       set secao_canonica = x.s,
+           secao_canonica_inferida = true
+      from (select ce2.id, d.caso_id,
+                   fn_secao_canonica_da_secao_bruta(ce2.secao, d.tipo_taxonomia) as s
+              from campo_extraido ce2
+              join documento_versao dv on dv.id = ce2.documento_versao_id
+              join documento d on d.id = dv.documento_id
+             where nullif(btrim(ce2.secao_canonica), '') is null
+               and ce2.secao is not null
+               and ce2.origem_valor = 'extracao'
+               and ce2.revisado_por is null
+               and (p_caso_id is null or d.caso_id = p_caso_id)) x
+     where ce.id = x.id and x.s is not null
+    returning ce.documento_versao_id, x.caso_id
+  )
+  select count(*), count(distinct documento_versao_id), count(distinct caso_id)
+    into v_linhas, v_versoes, v_casos from upd;
+  return jsonb_build_object('linhas', v_linhas, 'versoes', v_versoes, 'casos', v_casos);
+end $$;
+
+--
+-- Name: FUNCTION fn_inferir_secao_canonica_das_linhas(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid) IS '0203: backfill de secao_canonica nas linhas extraídas que a IA deixou sem seção, a partir da seção bruta (fn_secao_canonica_da_secao_bruta). Marca secao_canonica_inferida. Ignora linha revisada ou transcrita por humano. Idempotente. NÃO recomputa reconciliação nem completude: depois dela, rodar fn_reconciliar_caso e fn_recomputar_completude nos casos afetados.';
+
+--
 -- Name: fn_instalacao_conferir(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -10668,7 +10706,15 @@ declare
   v_auto_permitido     boolean;
   v_n_excluidas        int := 0;
   v_g                  jsonb;
+  v_tipo               text;
+  v_secao              text;
+  v_inferida           boolean;
 begin
+  -- 0203: o tipo do documento entra na inferência da seção (fn_secao_canonica_da_secao_bruta).
+  select d.tipo_taxonomia into v_tipo
+  from documento_versao dv join documento d on d.id = dv.documento_id
+  where dv.id = p_documento_versao_id;
+
   select ea.nivel_atual, ea.limiar_auto_clear into v_nivel_dial, v_limiar
   from estagio_autonomia ea where ea.estagio = 'extracao_linhas_financeiras';
   v_auto_permitido := v_nivel_dial in ('N2', 'N3') and v_limiar is not null;
@@ -10679,6 +10725,16 @@ begin
       v_valor := case when (v_item->>'valor_num') ~ '^-?\d+(\.\d+)?$' then (v_item->>'valor_num')::numeric else null end;
       v_confianca := case when (v_item->>'confianca') ~ '^-?\d+(\.\d+)?$' then (v_item->>'confianca')::numeric else null end;
 
+      -- 0203: a IA devolve `secao_canonica` nula em parte das linhas (medido em produção em 05/10/2026: 136 de
+      -- 724 numa DRE) e a linha some de receita/custo/giro. Só quando a IA NÃO deu (nulo ou em branco) a seção
+      -- é inferida do texto da seção bruta; o que veio NUNCA é sobrescrito. A linha diz que foi inferida.
+      v_secao := v_item->>'secao_canonica';
+      v_inferida := false;
+      if nullif(btrim(v_secao), '') is null then
+        v_secao := fn_secao_canonica_da_secao_bruta(v_item->>'secao', v_tipo);
+        v_inferida := v_secao is not null;
+      end if;
+
       v_status_aceite := 'pendente';
       v_aceito_por := null;
       v_aceito_em := null;
@@ -10688,7 +10744,7 @@ begin
 
       insert into campo_extraido
         (documento_versao_id, chave, valor_texto, valor_num, unidade, moeda, confianca,
-         origem_pagina, origem_linha, ordem, nivel_autonomia, secao, secao_canonica, entidade_coluna, periodo_coluna,
+         origem_pagina, origem_linha, ordem, nivel_autonomia, secao, secao_canonica, secao_canonica_inferida, entidade_coluna, periodo_coluna,
          status_aceite, aceito_por, aceito_em)
       values (
         p_documento_versao_id,
@@ -10703,7 +10759,8 @@ begin
         case when (v_item->>'ordem') ~ '^\d+$' then (v_item->>'ordem')::int else null end,
         p_nivel,
         v_item->>'secao',
-        v_item->>'secao_canonica',
+        v_secao,
+        v_inferida,
         v_item->>'entidade_coluna',
         v_item->>'periodo_coluna',
         v_status_aceite,
@@ -10874,7 +10931,7 @@ $_$;
 -- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração.';
+COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito.';
 
 --
 -- Name: fn_registrar_classe_override(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -12844,6 +12901,97 @@ $$;
 COMMENT ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) IS 'Curva de sazonalidade DERIVADA do faturamento mensal do caso (0040), 12 meses ou nada. 0102: só a versão vigente do documento de faturamento — versão superada faria o mesmo mês entrar duas vezes e deslocaria a curva que reparte o valor anual no Excel.';
 
 --
+-- Name: fn_secao_canonica_da_secao_bruta(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) RETURNS text
+    LANGUAGE plpgsql IMMUTABLE
+    AS $_$
+declare
+  n       text;
+  v_patr  boolean := p_tipo_documento in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA');
+  v_res   boolean := p_tipo_documento in ('DRE', 'DF_AUDITADA', 'BALANCETE', 'COMBINADO');
+  v_dre   boolean := p_tipo_documento in ('DRE', 'DF_AUDITADA');
+  v_lp    boolean;
+begin
+  -- Fora dos cinco tipos de demonstração a seção bruta tem outro significado (DMPL, DVA, fluxo, mapa de
+  -- dívida, faturamento…): quem decide é a IA, e a função não opina.
+  if p_secao is null or not (v_patr or v_res) then
+    return null;
+  end if;
+
+  n := fn_normalizar_texto(p_secao);
+  -- tira o marcador de sinal e a numeração do cabeçalho: "(-) Deduções", "= Receita", "1.1 Ativo circulante", "II - Passivo"
+  n := regexp_replace(n, '^(\(\s*[-+=]\s*\)|[-+=])\s*', '');
+  n := regexp_replace(n, '^([0-9]+(\.[0-9]+)*|[ivx]+)\s*[-.)]\s*', '');
+  n := regexp_replace(n, '[\s:.;]+$', '');
+  if n = '' then
+    return null;
+  end if;
+
+  -- "longo prazo" / "não circulante" / "LP" no texto: o lado do prazo é explícito
+  v_lp := n ~ '(longo prazo|nao circulante|\mlp\M)';
+
+  -- ---- PATRIMONIAL ---------------------------------------------------------
+  -- O LADO (ativo × passivo) tem de estar NO TEXTO. "CIRCULANTE", "NÃO CIRCULANTE", "ATIVO", "PASSIVO",
+  -- "TOTAL DO ATIVO", "PASSIVO E PATRIMÔNIO LÍQUIDO" não dizem a seção — ficam NULL (abaixo).
+  if v_patr then
+    if n ~ '^(ativo (nao circulante|permanente|realizavel a longo prazo)|nao circulante ativo|realizavel a longo prazo|ativo realizavel a longo prazo|imobilizado|ativo imobilizado|intangivel|ativo intangivel|investimentos|direito de uso)$' then
+      return 'ativo_nao_circulante';
+    end if;
+    if n ~ '^(passivo (nao circulante|exigivel a longo prazo|de longo prazo)|nao circulante passivo|exigivel a longo prazo)$'
+       or (v_lp and n ~ '^(emprestimos|financiamentos|obrigacoes|contas a pagar|fornecedores)') then
+      return 'passivo_nao_circulante';
+    end if;
+    if n ~ '^(ativo circulante|circulante ativo|disponivel|disponibilidades|caixa e equivalentes( de caixa)?|bancos( conta movimento)?|aplicacoes financeiras)$' then
+      return 'ativo_circulante';
+    end if;
+    if n ~ '^(passivo circulante|circulante passivo|contas a pagar|fornecedores)$'
+       or n ~ '^obrigacoes( (com o pessoal|com pessoal|trabalhistas|sociais|fiscais|tributarias|previdenciarias)( e (trabalhistas|sociais|fiscais|tributarias|previdenciarias))*)?$'
+       or n ~ '^(emprestimos e financiamentos|emprestimos|financiamentos)( -| /)? (de |a )?(curto prazo|cp)$' then
+      return 'passivo_circulante';
+    end if;
+    if n = 'patrimonio liquido' then
+      return 'patrimonio_liquido';
+    end if;
+  end if;
+
+  -- ---- RESULTADO -----------------------------------------------------------
+  -- Âncora nas duas pontas, sempre: "despesas antecipadas" (ativo), "receitas diferidas" (passivo),
+  -- "impostos a recolher" (passivo) e "provisão para IR" no balancete NÃO podem cair aqui por conterem
+  -- uma palavra de resultado.
+  if v_res then
+    if n ~ '^((resultado|receitas?|despesas?)( e (receitas?|despesas?))? financeir[oa]s?( liquid[oa]s?)?)$' then
+      return 'resultado_financeiro';
+    end if;
+    if v_dre and n ~ '^(imposto de renda( e contribuicao social)?( sobre o lucro)?|contribuicao social( sobre o lucro)?|irpj( e csll)?|csll|tributos sobre o lucro|impostos sobre o lucro|provisao para (imposto de renda|irpj)( e contribuicao social| e csll)?)$' then
+      return 'impostos_lucro';
+    end if;
+    if v_dre and n ~ '^deducoes( da receita( bruta)?| de vendas| e abatimentos)?$' then
+      return 'receita_bruta';
+    end if;
+    if n ~ '^(receitas?( operacionais?)?( brutas?)?|receitas? brutas? operacionais?|receitas? (de )?(vendas?|servicos|vendas e servicos|vendas de mercadorias)|faturamento( bruto)?|vendas( brutas)?( de (produtos|mercadorias|servicos|produtos e servicos|mercadorias e servicos|produtos, mercadorias e servicos))?)$' then
+      return 'receita_bruta';
+    end if;
+    if n ~ '^(cmv|cpv|csp|custos?( operacionais?)?|custos? d[aeo]s? (vendas|produtos vendidos|mercadorias vendidas|servicos prestados|produtos e servicos|produtos|mercadorias|servicos)( vendid[oa]s| prestad[oa]s)?)$' then
+      return 'custos';
+    end if;
+    if n ~ '^despesas (operacionais|administrativas|gerais|comerciais|com vendas|de vendas|com pessoal|gerais e administrativas|administrativas e gerais|administrativas e comerciais|com vendas e administrativas)$' then
+      return 'despesas_operacionais';
+    end if;
+  end if;
+
+  -- NULL de propósito (cada um é "procurei e não é inequívoco", não "esqueci"): ver o cabeçalho da 0203.
+  return null;
+end $_$;
+
+--
+-- Name: FUNCTION fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) IS '0203: seção canônica inferida do texto da seção BRUTA (campo_extraido.secao) quando a IA não deu secao_canonica. Pura e conservadora: casa o texto INTEIRO (âncora nas duas pontas) e só nos cinco tipos de demonstração (BALANCO, BALANCETE, COMBINADO, DF_AUDITADA, DRE). Ambíguo -> NULL: ATIVO/PASSIVO sozinhos, TOTAL DO ATIVO, PASSIVO E PL, TOTAL(IS), LUCRO BRUTO, RESULTADO (menos o financeiro), RECEITA LÍQUIDA, Eliminações do combinado, Balancete Analítico, RESUMO DO BALANCETE, CIRCULANTE sem lado, PROVISÕES, EMPRÉSTIMOS E FINANCIAMENTOS sem prazo, NAO_CLASSIFICAVEL, CONTAS DE RESULTADO - RECEITAS.';
+
+--
 -- Name: fn_secao_e_de_resultado(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -13681,6 +13829,7 @@ CREATE TABLE public.campo_extraido (
     ordem integer,
     moeda text,
     origem_valor text DEFAULT 'extracao'::text NOT NULL,
+    secao_canonica_inferida boolean DEFAULT false NOT NULL,
     CONSTRAINT campo_extraido_origem_valor_check CHECK ((origem_valor = ANY (ARRAY['extracao'::text, 'transcricao_humana'::text]))),
     CONSTRAINT campo_extraido_status_aceite_check CHECK ((status_aceite = ANY (ARRAY['pendente'::text, 'aceito'::text, 'com_ressalva'::text])))
 );
@@ -13732,6 +13881,12 @@ COMMENT ON COLUMN public.campo_extraido.moeda IS 'Moeda ISO da linha (BRL/USD/EU
 --
 
 COMMENT ON COLUMN public.campo_extraido.origem_valor IS 'De onde veio o número: extracao (a IA leu o arquivo) ou transcricao_humana (uma pessoa digitou, porque o arquivo não se lê — fechamento #2 do Arquitetura do Sistema/1 Visão e Doutrina/01). Existe porque sem ela a primeira transcrição contaminaria fn_golden_campos: linha digitada por humano bate com o rótulo do golden set quase sempre, e o acerto sairia creditado à EXTRAÇÃO. Default extracao: nenhuma linha existente muda de significado.';
+
+--
+-- Name: COLUMN campo_extraido.secao_canonica_inferida; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.campo_extraido.secao_canonica_inferida IS '0203: true = a secao_canonica NÃO veio da IA; foi inferida do texto da seção bruta (campo_extraido.secao) por fn_secao_canonica_da_secao_bruta, na gravação ou no backfill. false = a IA deu (ou a linha segue sem seção). A inferência é conservadora e determinística; o que ela não reconhece fica NULL.';
 
 --
 -- Name: fn_valor_conceito(uuid, text[], text[]); Type: FUNCTION; Schema: public; Owner: -
@@ -18176,6 +18331,12 @@ GRANT ALL ON FUNCTION public.fn_saldo_mutuos_texto(p_caso_id uuid) TO authentica
 --
 
 GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_secao_e_de_resultado(p_secao text); Type: ACL; Schema: public; Owner: -

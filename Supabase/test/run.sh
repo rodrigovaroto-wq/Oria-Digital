@@ -423,6 +423,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/papel_total_com_codigo_contabi
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== a seção que a IA não deu e a linha que sumia do realizado (0203): inferida da seção bruta, marcada, sem sobrescrever"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/secao_inferida_da_secao_bruta.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
