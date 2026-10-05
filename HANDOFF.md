@@ -164,6 +164,42 @@ realizado saíram vazias na tela. As razões reais (2023/2024/2025) são:
 - PMP 71/93/81;
 - dívida 0,69/4,28/10,38 mi.
 
+**Atualização (05/10, depois de `d5f435c`):** as sugestões da tela agora saem de
+`agregadosDoRealizado`, as mesmas somas do export. Contra produção (2022–2025) deram:
+- PME 110/130/207/345;
+- CUSTO 74,9%;
+- SG&A 10,8%;
+- PMR 30;
+- PMP 70;
+- TAXA_DIVIDA 18,0%. A taxa usa só 2024–25: 2022 ficou fora por despesa > dívida do fechamento, e 2023 por dívida < 1% do ativo.
+
+**O resíduo do AC, diagnosticado e NÃO corrigido.** Os 3,75 mi de 2025 são exatamente
+"ESTOQUE EM DEMONSTRAÇÃO COM CLIENTES" (3.746.140,33). No Balanço 2025 ela é CONTA, anulada pela
+redutora "(-) … A RECEBER" logo abaixo. O balancete 1º sem/2026 a imprime como AGRUPAMENTO
+(`secao` das filhas = o nome dela). `rotulosDeSubtotalInformado` dá o veredito SEM ANO para o
+balancete, cujas colunas são ilegíveis. O Balanço não tem como contestar: as colunas dele são
+"Saldo Inicial/Saldo Final", sem ano, e os Balanços de 2022–2025 DIVIDEM a mesma coluna. Por
+isso `anoDocPorColuna` colapsa em nulo e o Balanço não contribui exercício nenhum. A conta sai
+da soma em todos os anos e só a redutora fica.
+
+Foram três tentativas na mesma lógica, todas revertidas: pela regra, a quarta não se tenta, e o
+que se questiona é a arquitetura. Os números do `auditar-xlsx` (resíduos > 5%) partiam de 15:
+1. **Ano do documento quando uma coluna ilegível não é marcada.** Os resíduos foram a 8: o AC de
+   2025 zerou, mas voltou "IMÓVEIS". Ela é cabeçalho de verdade no Balanço 2024 (3.442.426,91 =
+   terrenos + edifícios + benfeitorias), mas a IA achatou tudo na seção IMOBILIZADO, e quem a
+   tirava era o veredito do balancete, por acaso. O ANC ficou 1,8 mi ACIMA.
+2. **Mais o simétrico, subtotal por documento.** Foram 13 resíduos, e o PL ficou em 78%: o detector
+   por ordem é sinal de coincidência e não serve campo a campo.
+3. **Só coluna de fechamento, campo a campo.** Foram 29 resíduos: cabeçalhos que o detector perde
+   num documento voltam como conta.
+
+**A correção é de origem, não de export:** a coluna precisa carregar o exercício. Para isso, a
+extração (ou `fn_registrar_campos_extraidos`) grava "Saldo Final" como o exercício do documento
+e "Saldo Inicial" como o anterior. A 0201 já faz isso em `fn_valores_por_ano`, mas o export lê
+`periodo_coluna` cru. Com o ano na coluna, o veredito por exercício que já existe resolve os
+dois casos, sem heurística nova. Isso entra na fatia "classificação de coluna na extração", já
+listada abaixo.
+
 ### 3. Próximas fatias, pela ordem (o texto completo de cada uma está no S104 §5)
 
 Os itens **l** (resíduo do AC) e **m** (nomes dos workflows) foram **RESOLVIDOS** no #249.
