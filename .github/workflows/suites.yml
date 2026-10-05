@@ -23,10 +23,10 @@
 #   • tsc/eslint/build  o portal tem de continuar compilando.
 #
 # EM PARALELO, desde 01/10/2026 (S104). Eram 34 passos num job só, em série
-# (8,5 min no run de 30/09 23:06–23:15). Agora são seis jobs independentes, cada
-# um no seu runner, rodando ao mesmo tempo — n8n-e-derivados, portal, banco, e2e,
-# variacoes, build — e um agregador `suites` que só fica verde se os seis
-# ficaram. Os COMANDOS são os mesmos, letra por letra (o espelho com o CLAUDE.md
+# (8,5 min no run de 30/09 23:06–23:15). Agora são cinco jobs independentes, cada
+# um no seu runner, rodando ao mesmo tempo — n8n-e-derivados, portal (com o build
+# no fim desde 05/10), banco, e2e, variacoes — e um agregador `suites` que só fica
+# verde se os cinco ficaram. Os COMANDOS são os mesmos, letra por letra (o espelho com o CLAUDE.md
 # confere); só a distribuição mudou. Cada job traz o próprio preparo (npm ci,
 # psql, book gerado) porque runners não compartilham disco. Dentro de cada job,
 # `node --test` já roda os arquivos em paralelo (padrão do Node 22: núcleos − 1).
@@ -433,6 +433,19 @@ jobs:
         # quando o banco não tem a 0158, que é estado normal aqui.
         run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-modelagem-cobertura.mts
 
+      # O BUILD MORA AQUI desde 05/10/2026; era um job próprio. O trabalho dele são 26 s de
+      # `next build` sobre o MESMO `npm ci` deste job, e como job separado pagava outra espera de
+      # runner. Com três PRs abertos, cada um com seis jobs, o GitHub cancelou job sem nenhum passo
+      # executado depois de exatos 15 minutos na fila: no #252 (execução 1299, 3c482f7), portal e
+      # variacoes nas duas tentativas, e build na primeira, enquanto todo job que rodou passou.
+      # Menos jobs por execução é menos chance de um ficar sem runner. O comando é o mesmo.
+      - name: Build do portal
+        # O binário do lock, pelo mesmo motivo do passo de lint e tipos: `npx next`
+        # sem versão baixaria o Next publicado no dia, e não o `next` que o
+        # `package-lock.json` fixa e que o portal em produção usa.
+        working-directory: portal
+        run: ./node_modules/.bin/next build
+
   banco:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -670,30 +683,7 @@ jobs:
         # o jeito mais bobo de deixar um portão vermelho.
         run: ./portal/node_modules/.bin/tsx Verificação/variacoes.mts
 
-  build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: portal/package-lock.json
-      # Mesmo comando (e mesmo porquê do --ignore-scripts) do job .
-      - name: Instalar dependências do portal para este job
-        working-directory: portal
-        run: npm ci --ignore-scripts
-      - name: Build do portal
-        # O binário do lock, pelo mesmo motivo do passo de lint e tipos: `npx next`
-        # sem versão baixaria o Next publicado no dia, e não o `next` que o
-        # `package-lock.json` fixa e que o portal em produção usa.
-        working-directory: portal
-        run: ./node_modules/.bin/next build
-
-  # O AGREGADOR. Os seis jobs acima rodam EM PARALELO, cada um num runner próprio
+  # O AGREGADOR. Os cinco jobs acima rodam EM PARALELO, cada um num runner próprio
   # (antes era um job só, em série: 8,5 min medidos no run de 30/09 23:06–23:15).
   # Este job existe para que a checagem continue se chamando `suites` — o nome que o PR e a proteção da
   # branch esperam — e para que ela só fique verde se TODOS ficaram. Com
@@ -701,7 +691,7 @@ jobs:
   # Sem isso, um job cancelado ou pulado passaria por "não falhou".
   suites:
     if: always()
-    needs: [n8n-e-derivados, portal, banco, e2e, variacoes, build]
+    needs: [n8n-e-derivados, portal, banco, e2e, variacoes]
     runs-on: ubuntu-latest
     steps:
       - name: Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)
