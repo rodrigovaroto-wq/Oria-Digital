@@ -1,7 +1,4 @@
-import {
-  blocoDaLinha, ehCliente, ehEstoque, ehFornecedor, ehDividaFinanceira,
-  ehDespesaFinanceira, type LinhaModelo,
-} from "./modelo-institucional";
+import type { AgregadosDoExercicio, BolsaDoExercicio } from "./modelo-institucional";
 
 // SUGERIR A PREMISSA A PARTIR DO QUE A EMPRESA JÁ FEZ.
 //
@@ -32,35 +29,12 @@ import {
 // é o tamanho do custo contra a receita, e o sinal é convenção de partida dobrada,
 // não informação econômica.
 //
-// SUBTOTAL NÃO ENTRA EM SOMA. Somar "Total do Ativo Circulante" junto das contas
-// dele conta tudo duas vezes. Só `papel = 'conta'` soma; o subtotal impresso serve
-// para conferir, e quem confere é a reconciliação.
-
-/**
- * Uma linha do caso NUM EXERCÍCIO — o que `fn_linhas_do_realizado` (0150) devolve.
- *
- * O `exercicio` é a mudança que permite a média: antes isto recebia um número
- * por rótulo, "a ocorrência de maior módulo" (0042), que numa empresa que encolhe
- * é o ano mais ANTIGO — e a razão calculada dele descrevia um regime que já
- * passou. A `0150` também é quem tira daqui a abertura analítica, o combinado e
- * as outras entidades; este arquivo confia nisso e não refaz o filtro.
- */
-export interface LinhaRealizada {
-  secao_canonica: string | null;
-  chave: string;
-  rotulo_norm: string;
-  papel: "conta" | "subtotal" | "derivado" | "serie_mensal";
-  exercicio?: number;
-  valor?: number;
-  documentos: string[] | null;
-  /**
-   * COMPATIBILIDADE COM A CHAMADA ANTIGA. A tela passava `valor_ultimo` sem
-   * exercício; enquanto ela não migrar, uma linha sem `exercicio` é tratada como
-   * um exercício único e anônimo — o comportamento de antes, declarado em vez de
-   * suposto.
-   */
-  valor_ultimo?: number;
-}
+// DE ONDE SAEM OS NÚMEROS. Das MESMAS agregações históricas que o modelo e o export calculam
+// (`agregadosDoRealizado`, em `modelo-institucional.ts`): subtotal e cabeçalho de grupo fora da
+// soma pela ORDEM impressa do documento, sinal de despesa normalizado, escala única. Este
+// arquivo não classifica linha nenhuma — só divide. A versão anterior somava as linhas por
+// seção e não enxergava a hierarquia (total do grupo + filhas + netos): medido em produção
+// (Fw Valtra, 2025) deu PMR 120 dias onde o documento dá ~40 e SG&A 34,9% onde dá 17,9%.
 
 export interface PremissaSugerida {
   codigo: string;
@@ -86,33 +60,9 @@ export interface PremissaSugerida {
   porQueNao: string | null;
 }
 
-type Bolsa = { rotulo: string; valor: number; n: number };
+type Bolsa = BolsaDoExercicio & { rotulo: string };
 
-/** O valor da linha, aceitando a forma antiga (`valor_ultimo`) enquanto ela existir. */
-const valorDa = (l: LinhaRealizada): number =>
-  Number.isFinite(l.valor) ? Number(l.valor) : Number(l.valor_ultimo ?? 0);
-
-/** Soma as contas (nunca subtotais) que casam com o filtro, em magnitude. */
-function somar(linhas: LinhaRealizada[], rotulo: string, filtro: (l: LinhaRealizada) => boolean): Bolsa {
-  const escolhidas = linhas.filter((l) => l.papel === "conta" && filtro(l));
-  return {
-    rotulo,
-    valor: escolhidas.reduce((s, l) => s + Math.abs(valorDa(l)), 0),
-    n: escolhidas.length,
-  };
-}
-
-/** `blocoDaLinha` pede um `LinhaModelo`; a tela tem menos campos, e só estes importam. */
-const comoModelo = (l: LinhaRealizada): LinhaModelo => ({
-  secao_canonica: l.secao_canonica,
-  chave: l.chave,
-  rotulo_norm: l.rotulo_norm,
-  papel: l.papel,
-  unidade: null,
-  moeda: null,
-  documentos: l.documentos,
-  valores: {},
-});
+const bolsa = (rotulo: string, b: BolsaDoExercicio): Bolsa => ({ rotulo, ...b });
 
 function razao(
   codigo: string, nome: string, unidade: "%" | "dias", conta: string,
@@ -124,6 +74,13 @@ function razao(
    * ausência dela — ela entra no modelo e projeta o contrário do que aconteceu.
    */
   basePositivaPorque?: string,
+  /**
+   * Guarda de MATERIALIDADE do denominador: quando a base é minúscula contra a régua (dívida
+   * contra o ativo), a razão explode e vira premissa — medido em produção (Fw Valtra, 2023):
+   * despesa financeira 331.329 sobre dívida ~0 devolveu taxa de 8.283.320%. Base imaterial sai
+   * sem valor, com o motivo e o efeito.
+   */
+  imaterial?: string | null,
 ): PremissaSugerida {
   const base: PremissaSugerida = {
     codigo, nome, unidade, conta, valor: null, porQueNao: null,
@@ -136,6 +93,7 @@ function razao(
   if (den.n === 0 || den.valor === 0) {
     return { ...base, porQueNao: `o caso não tem ${den.rotulo} com valor, e é a base desta conta` };
   }
+  if (imaterial) return { ...base, porQueNao: imaterial };
   if (basePositivaPorque !== undefined && den.valor < 0) {
     return { ...base, porQueNao: basePositivaPorque };
   }
@@ -149,61 +107,67 @@ function razao(
  * As oito razões de UM exercício. É o miolo; quem faz a média é
  * `sugerirDoRealizado`, abaixo.
  */
-function razoesDeUmExercicio(linhas: LinhaRealizada[]): PremissaSugerida[] {
-  const bloco = new Map<string, LinhaRealizada[]>();
-  for (const l of linhas) {
-    const b = blocoDaLinha(comoModelo(l));
-    const lista = bloco.get(b) ?? [];
-    lista.push(l);
-    bloco.set(b, lista);
-  }
-  const de = (b: string) => bloco.get(b) ?? [];
-
+function razoesDeUmExercicio(a: AgregadosDoExercicio | null): PremissaSugerida[] {
+  const zero: BolsaDoExercicio = { valor: 0, n: 0 };
+  const g = a ?? {
+    receitaBruta: zero, deducoes: zero, custos: zero, sga: zero, tributos: zero,
+    despesaFinanceira: zero, financeiroComSinal: 0, clientes: zero, estoques: zero,
+    fornecedores: zero, divida: zero, passivoTotal: zero, ativoTotal: zero,
+  };
   // A CASCATA DO REALIZADO. Receita líquida é bruta menos deduções, como no
   // modelo — e não a linha "Receita Líquida" impressa, que pode não existir no
   // documento e, quando existe, é subtotal (não soma).
-  const receitaBruta = somar(de("receita"), "receita bruta", () => true);
-  const deducoes = somar(de("deducao"), "deduções da receita", () => true);
+  const receitaBruta = bolsa("receita bruta", g.receitaBruta);
   const receitaLiquida: Bolsa = {
     rotulo: "receita líquida",
-    valor: receitaBruta.valor - deducoes.valor,
-    n: receitaBruta.n,
+    valor: g.receitaBruta.valor - g.deducoes.valor,
+    n: g.receitaBruta.n,
   };
-  const custos = somar(de("custo"), "custos", () => true);
-  const sga = somar(de("sga"), "SG&A", () => true);
-  const tributos = somar(de("tributos"), "tributos sobre o lucro", () => true);
+  const custos = bolsa("custos", g.custos);
+  const sga = bolsa("SG&A", g.sga);
+  const tributos = bolsa("tributos sobre o lucro", g.tributos);
   // A TAXA DA DÍVIDA SE MEDE COM O QUE A DÍVIDA CUSTA, e o bloco
   // `resultado_financeiro` tem as DUAS pontas: o juro pago e o rendimento da
-  // aplicação. Somar as duas em magnitude — que era o que estava aqui — INFLA a
-  // taxa pelo rendimento. Medido: despesa 9.000 e receita 1.500 sobre dívida de
-  // 30.000 devolviam 35% onde o custo é 30%. Cinco pontos de custo de dívida,
-  // entrando no modelo como premissa.
-  const despesaFinanceira = somar(de("resultado_financeiro"), "despesa financeira",
-    (l) => ehDespesaFinanceira(l.chave));
+  // aplicação. Somar as duas em magnitude INFLA a taxa pelo rendimento. Medido:
+  // despesa 9.000 e receita 1.500 sobre dívida de 30.000 devolviam 35% onde o
+  // custo é 30%. Cinco pontos de custo de dívida, entrando no modelo como
+  // premissa. Por isso `despesaFinanceira` já vem só da despesa.
+  const despesaFinanceira = bolsa("despesa financeira", g.despesaFinanceira);
 
   // O resultado antes dos tributos, pela mesma cascata: RL − custos − SG&A ± financeiro.
-  // O sinal do financeiro volta a importar aqui, então ele é lido da linha e não da
-  // magnitude.
-  const financeiroComSinal = de("resultado_financeiro")
-    .filter((l) => l.papel === "conta")
-    .reduce((s, l) => s + valorDa(l), 0);
+  // O sinal do financeiro volta a importar aqui, então ele vem COM sinal.
   const lair: Bolsa = {
     rotulo: "resultado antes dos tributos",
-    valor: receitaLiquida.valor - custos.valor - sga.valor + financeiroComSinal,
+    valor: receitaLiquida.valor - custos.valor - sga.valor + g.financeiroComSinal,
     n: receitaBruta.n > 0 ? 1 : 0,
   };
 
-  const clientes = somar(de("ativo_circulante"), "clientes", (l) => ehCliente(l.chave));
-  const estoques = somar(de("ativo_circulante"), "estoques", (l) => ehEstoque(l.chave));
-  const fornecedores = somar(de("passivo_circulante"), "fornecedores", (l) => ehFornecedor(l.chave));
-
+  const clientes = bolsa("clientes", g.clientes);
+  const estoques = bolsa("estoques", g.estoques);
+  const fornecedores = bolsa("fornecedores", g.fornecedores);
   // A DÍVIDA ONEROSA atravessa os dois passivos e o mapa de dívida, e é o mesmo
-  // `ehDividaFinanceira` que a aba de dívida usa para não deixar empréstimo virar
-  // giro.
-  const passivosTodos = [...de("passivo_circulante"), ...de("passivo_nao_circulante")];
-  const divida = somar([...passivosTodos, ...de("divida")], "dívida financeira",
-    (l) => ehDividaFinanceira(l.chave) || l.documentos?.includes("MAPA_DIVIDA") === true);
-  const passivoTotal = somar(passivosTodos, "passivo total", () => true);
+  // `ehDividaFinanceira` que a aba de dívida usa para não deixar empréstimo virar giro.
+  const divida = bolsa("dívida financeira", g.divida);
+  const passivoTotal = bolsa("passivo total", g.passivoTotal);
+  // MATERIALIDADE DA DÍVIDA: abaixo de 1% do ativo total ela não sustenta uma taxa. A régua só
+  // vale quando há ativo para comparar — sem ele não se sabe se é imaterial, e ausência de régua
+  // não é imaterialidade.
+  const dividaImaterial = divida.n > 0 && g.ativoTotal.valor > 0 && divida.valor < g.ativoTotal.valor * 0.01
+    ? `a dívida financeira deste exercício (${divida.valor.toLocaleString("pt-BR")}) é menor que 1% do ativo `
+      + `(${g.ativoTotal.valor.toLocaleString("pt-BR")}): dividir a despesa financeira por ela produz uma taxa `
+      + "sem sentido. Efeito: o exercício fica FORA da média da taxa; se nenhum exercício tiver dívida "
+      + "material, digite a taxa que o caso vai usar"
+    // TAXA ACIMA DE 100% A.A. NÃO É TAXA DA DÍVIDA, é estoque contra fluxo descasado: a despesa
+    // do ano veio de dívida que não sobreviveu até o fechamento, ou carrega encargo que não é
+    // juro. Medido em produção (Fw Valtra, 2022): despesa 356.567 sobre dívida de fechamento
+    // 208.264 (1,44% do ativo, logo ACIMA da régua de 1%) deu 171% e puxou a média de três
+    // exercícios de 18% para 69%.
+    : divida.n > 0 && divida.valor > 0 && despesaFinanceira.n > 0 && despesaFinanceira.valor > divida.valor
+    ? `a despesa financeira deste exercício (${despesaFinanceira.valor.toLocaleString("pt-BR")}) é maior que `
+      + `a dívida financeira do fechamento (${divida.valor.toLocaleString("pt-BR")}): a taxa passaria de 100% `
+      + "ao ano, o que diz que a dívida do ano não é a do fechamento, não qual é o juro. Efeito: o "
+      + "exercício fica FORA da média da taxa; se nenhum exercício sobrar, digite a taxa que o caso vai usar"
+    : null;
 
   return [
     razao("CUSTO_VARIAVEL", "Custo variável (% da receita)", "%",
@@ -236,7 +200,7 @@ function razoesDeUmExercicio(linhas: LinhaRealizada[]): PremissaSugerida[] {
     razao("PARCELA_ONEROSA", "Parcela onerosa do passivo", "%",
       "dívida financeira ÷ passivo total", divida, passivoTotal),
     razao("TAXA_DIVIDA", "Taxa média da dívida", "%",
-      "despesa financeira ÷ dívida financeira", despesaFinanceira, divida),
+      "despesa financeira ÷ dívida financeira", despesaFinanceira, divida, 1, undefined, dividaImaterial),
   ];
 }
 
@@ -283,21 +247,22 @@ export function valorParaGravar(p: Pick<PremissaSugerida, "valor" | "unidade">):
   return p.valor;
 }
 
-export function sugerirDoRealizado(linhas: LinhaRealizada[]): PremissaSugerida[] {
-  const porExercicio = new Map<number, LinhaRealizada[]>();
-  for (const l of linhas) {
-    // Linha sem exercício (a forma antiga) cai num balde só, e aí a "média" é o
-    // valor único — o comportamento de antes, sem fingir uma série que não há.
-    const ano = Number.isFinite(l.exercicio) ? Number(l.exercicio) : 0;
-    const lista = porExercicio.get(ano) ?? [];
-    lista.push(l);
-    porExercicio.set(ano, lista);
+export function sugerirDoRealizado(
+  agregados: AgregadosDoExercicio[],
+  /**
+   * Quando NÃO há de onde calcular (sem entidade modelada, por exemplo), o motivo — que
+   * substitui o genérico "o caso não tem nenhuma linha de …". Ausência de base e ausência de
+   * conta não são a mesma afirmação.
+   */
+  motivoSemBase?: string,
+): PremissaSugerida[] {
+  const anos = [...agregados].sort((a, b) => a.ano - b.ano);
+  if (anos.length === 0) {
+    const vazias = razoesDeUmExercicio(null);
+    return motivoSemBase ? vazias.map((p) => ({ ...p, porQueNao: motivoSemBase })) : vazias;
   }
 
-  const anos = [...porExercicio.keys()].sort((a, b) => a - b);
-  if (anos.length === 0) return razoesDeUmExercicio([]);
-
-  const porAno = anos.map((ano) => ({ ano, razoes: razoesDeUmExercicio(porExercicio.get(ano)!) }));
+  const porAno = anos.map((a) => ({ ano: a.ano, razoes: razoesDeUmExercicio(a) }));
   const modelo = porAno[porAno.length - 1].razoes;
 
   return modelo.map((ref, i) => {

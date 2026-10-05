@@ -1,3 +1,5 @@
+import type { LinhaModelo } from "./modelo-institucional";
+
 // A IDENTIDADE DE UMA LINHA DE MODELAGEM — e por que ela não é só o rótulo.
 //
 // O DEFEITO QUE ISTO CORRIGE (relatado pelo dono no teste da tela): ele escolhia
@@ -232,3 +234,48 @@ export function provenienciaDaLinha(
 ): Record<string, ProvenienciaCelula> {
   return mapa.get(chaveDaLinha(secaoCanonica, rotuloNorm)) ?? {};
 }
+
+/**
+ * O HISTÓRICO DO MODELO: as linhas do caso com a série de cada uma, os exercícios que contam e
+ * a unidade — o miolo que o export e a tela de Modelagem compartilham.
+ *
+ * Existe para que as sugestões do realizado saiam do MESMO caminho de dados do arquivo que vai
+ * a comitê. Antes, a tela somava `fn_linhas_do_realizado` por seção e errava em silêncio onde o
+ * documento imprime o total do grupo ao lado das filhas (Fw Valtra, 2025: PMR 120 dias contra
+ * ~40 do documento). Duas leituras do mesmo histórico divergem sem erro nenhum.
+ *
+ * Só exercícios ATÉ `ultimoReal` são histórico: um balancete do ano corrente não é exercício
+ * fechado (ver `seriesPorLinha`).
+ */
+export function historicoDoModelo(
+  linhasDoBanco: Array<{
+    secao_canonica: string | null; chave: string; rotulo_norm: string;
+    papel: LinhaModelo["papel"]; unidade: string | null; moeda: string | null;
+    documentos: string[] | null;
+  }>,
+  valores: ValorPorAno[],
+  ultimoReal: number,
+): { linhas: LinhaModelo[]; anosHistoricos: number[]; unidade: string } {
+  const anosHistoricos = [...new Set(valores.map((v) => v.ano))]
+    .filter((a) => a <= ultimoReal).sort((a, b) => a - b);
+  const series = seriesPorLinha(valores, anosHistoricos);
+  const proveniencias = provenienciaPorLinha(valores, anosHistoricos);
+  const linhas: LinhaModelo[] = linhasDoBanco.map((l) => ({
+    secao_canonica: l.secao_canonica, chave: l.chave, rotulo_norm: l.rotulo_norm,
+    papel: l.papel, unidade: l.unidade, moeda: l.moeda, documentos: l.documentos,
+    valores: serieDaLinha(series, l.secao_canonica, l.rotulo_norm),
+    proveniencia: provenienciaDaLinha(proveniencias, l.secao_canonica, l.rotulo_norm),
+  }));
+  // Unidade dominante: a das linhas, não um palpite. Se o caso mistura milhar e unidade, a
+  // dominante entra no cabeçalho e a divergência aparece por linha.
+  const contagemUnidade = new Map<string, number>();
+  for (const l of linhas) {
+    if (!l.unidade) continue;
+    contagemUnidade.set(l.unidade, (contagemUnidade.get(l.unidade) ?? 0) + 1);
+  }
+  const dominante = [...contagemUnidade.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const unidade = dominante === "milhar" ? "R$ mil"
+    : dominante === "unidade" ? "R$" : (dominante ?? "R$");
+  return { linhas, anosHistoricos, unidade };
+}
+
