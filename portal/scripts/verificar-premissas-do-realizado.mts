@@ -97,8 +97,8 @@ console.log("1. o caso completo responde as oito, e cada conta bate");
   ok(perto(achar(s, "SGA_PCT").valor, 0.15), "SGA_PCT = 0,15", String(achar(s, "SGA_PCT").valor));
   // clientes 200 ÷ RL 1000 × 360
   ok(perto(achar(s, "PMR").valor, 72), "PMR = 72 dias", String(achar(s, "PMR").valor));
-  // estoques 100 ÷ RL 1000 × 360
-  ok(perto(achar(s, "PME").valor, 36), "PME = 36 dias", String(achar(s, "PME").valor));
+  // estoques 100 ÷ CUSTOS 600 × 360 = 60 (contra a receita líquida seria 36)
+  ok(perto(achar(s, "PME").valor, 60), "PME = 60 dias", String(achar(s, "PME").valor));
   // fornecedores 150 ÷ CUSTOS 600 × 360
   ok(perto(achar(s, "PMP").valor, 90), "PMP = 90 dias", String(achar(s, "PMP").valor));
   // tributos 40 ÷ LAIR (1000 − 600 − 150 − 50 = 200)
@@ -119,9 +119,14 @@ console.log("2. a base de cada giro é a que o modelo aplica");
   ok(achar(s, "PMP").conta.includes("custos"), "PMP declara custos como base",
      achar(s, "PMP").conta);
   ok(!perto(achar(s, "PMP").valor, 54), "e NÃO usa receita líquida, que daria 54");
-  ok(achar(s, "PME").conta.includes("receita líquida"),
-     "PME declara receita líquida como base, que é a que o Working Capital aplica ao estoque",
+  ok(achar(s, "PME").conta.includes("custos") && !achar(s, "PME").conta.includes("receita"),
+     "PME declara custos como base (decisão do dono, 05/10/2026), a que o Working Capital aplica ao estoque",
      achar(s, "PME").conta);
+  ok(!perto(achar(s, "PME").valor, 36), "e NÃO usa receita líquida, que daria 36");
+  // COMPORTAMENTO: o dia sugerido reproduz o saldo de onde saiu quando aplicado como o modelo
+  // aplica (dias/360 × CUSTOS). Estoques 100, custos 600.
+  ok(perto(achar(s, "PME").valor! / 360 * 600, 100),
+     "PME/360 × custos devolve o saldo de estoque realizado (100)");
 }
 
 console.log("3. zero não é resposta");

@@ -834,21 +834,31 @@ const PADROES_DIVIDA_FINANCEIRA = [
   /antecipa(ç|c)(ã|a)o de receb(í|i)veis/i,
   /adiantamento de contrato de c(â|a)mbio/i, /\bACC\b/, /\bACE\b/,
 ];
-// TRANCHE BANCÁRIA CHAMADA SÓ DE "CAPITAL DE GIRO". Nenhum dos padrões acima a pega: o rótulo
-// do balancete é "CAPITAL DE GIRO BANCO X - CP/LP", sem "empréstimo" nem "financiamento", e
-// "capital de giro" sozinho também nomeia a NCG (ativo) e linhas que não são dívida. Por isso o
-// padrão EXIGE o nome de uma instituição financeira no mesmo rótulo (lookahead, qualquer ordem):
-// "Banco Alfa - capital de giro" e "CAPITAL DE GIRO BANCO X - LP" entram; "Capital de giro" e
-// "Capital de giro - longo prazo" (sem credor no rótulo) continuam fora, como estavam.
-// Sem a flag `u` o `\b` não existe entre "ú" e o espaço ("Itaú - LP" não casava): as bordas são
-// "não-letra" por propriedade Unicode. "caixa" sozinho fica fora (é também o caixa da empresa):
-// só "Caixa Econômica".
-// A lista de credores é UMA só: serve ao capital de giro e a `itemDeGrupoEhDivida`.
+// "CAPITAL DE GIRO" NUM RÓTULO DE PASSIVO É DÍVIDA FINANCEIRA, COM OU SEM CREDOR NOMEADO.
+// Decisão do dono em 05/10/2026. Fundamento: CPC 00/39/48 (a essência é obrigação contratual de
+// entregar caixa a quem emprestou) e o uso do balanço brasileiro, em que "capital de giro" no
+// passivo é o produto bancário. Medido no book Canastra: "Capital de giro - longo prazo"
+// (26.400 em 2023), "Capital de giro" e "Capital de giro - instituições financeiras" estão sob o
+// cabeçalho "Empréstimos e Financiamentos" e o mapa de dívida os lista como contratos bancários —
+// e a versão anterior deste padrão (que exigia o nome do banco no rótulo) os deixava FORA da
+// dívida e sem juro: dívida e despesa financeira subestimadas, em silêncio.
+// A premissa antiga ("capital de giro sozinho também nomeia a NCG, do ativo") não se aplica: todo
+// chamador de `ehDividaFinanceira` olha só linha de passivo ou do mapa de dívida; ativo nunca.
+// O que NÃO é conta fica fora, porque é termo analítico: "necessidade(s) de capital de giro",
+// "variação do/da (necessidade de) capital de giro", "capital de giro líquido/próprio" (e
+// "capital circulante líquido", que nem contém a expressão). Um grupo misto que cita capital de
+// giro junto com o que não é dívida segue grupo misto (`grupoDeObrigacoesQueCitaDivida`).
+// Sem a flag `u` o `\b` não existe entre "ú" e o espaço: as bordas são "não-letra" por propriedade
+// Unicode. A lista de credores NÃO entra aqui: serve só a `itemDeGrupoEhDivida` ("caixa" sozinho
+// fica fora dela, por ser também o caixa da empresa).
 const CREDORES = String.raw`banco|bco|bradesco|ita[úu]|santander|sicredi|sicoob|safra|bndes|daycoval|bb|`
   + String.raw`caixa econ[ôo]mica|banrisul|brb`;
-const CAPITAL_DE_GIRO_BANCARIO = new RegExp(
-  String.raw`^(?=.*(?<![\p{L}\d])capital de giro(?![\p{L}\d]))`
-  + String.raw`(?=.*(?<![\p{L}\d])(?:${CREDORES})(?![\p{L}\d]))`, "iu");
+const CAPITAL_DE_GIRO_NO_PASSIVO =
+  /(?<![\p{L}\d])capital de giro(?![\p{L}\d])/iu;
+const CAPITAL_DE_GIRO_ANALITICO =
+  /necessidades? (?:de|do) capital de giro|varia[çc][ãa]o[^()]*capital de giro|capital de giro (?:l[íi]quido|pr[óo]prio)/iu;
+const ehCapitalDeGiroNoPassivo = (chave: string) =>
+  CAPITAL_DE_GIRO_NO_PASSIVO.test(chave) && !CAPITAL_DE_GIRO_ANALITICO.test(chave);
 // Item de enumeração que é só o NOME do credor ou da linha de financiamento ("BNDES", "FINAME",
 // "Itaú") não casa nenhum padrão de dívida, mas é dívida: sem isto "Outras obrigações (BNDES,
 // FINAME e capital de giro Banco X)" virava grupo misto e o saldo todo saía da dívida.
@@ -875,7 +885,7 @@ const CABECA_DE_GRUPO =
   /^\s*(?:outras?|demais|diversas?)\s+(?:obriga(?:ç|c)(?:õ|o)es|contas? a pagar|passivos?|d(?:é|e)bitos|valores a pagar)\b[^(:]*[(:]/i;
 
 const citaInstrumentoDeDivida = (chave: string) =>
-  PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave)) || CAPITAL_DE_GIRO_BANCARIO.test(chave);
+  PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave)) || ehCapitalDeGiroNoPassivo(chave);
 
 /** O grupo que mistura instrumento de dívida com contas que não são dívida, sem separar valores. */
 export const grupoDeObrigacoesQueCitaDivida = (chave: string) => {
@@ -918,6 +928,15 @@ export const ehEstoque = (chave: string) =>
 export const ehFornecedor = (chave: string) =>
   /\bfornecedor/i.test(chave) || /\bcontas? a pagar\b/i.test(chave)
   || /\bduplicatas? a pagar\b/i.test(chave);
+
+// A BASE DO GIRO DE CADA CONTA, num ponto só: fornecedor (PMP) e ESTOQUE (PME) giram contra
+// CUSTO; cliente e o resto do ativo giram contra RECEITA LÍQUIDA. Decisão do dono em
+// 05/10/2026 (prática de FP&A; a aba Output já media CC_PME contra COGS desde a 0116, então a
+// projeção e o indicador discordavam). `nomeBase`, `baseDe` e a sombra por cenário leem esta
+// função — se uma delas escolhesse sozinha, os dias do realizado e o saldo projetado
+// deixariam de usar o mesmo denominador e o 1º ano projetado saltaria.
+export const giraContraCusto = (pref: "wc_a" | "wc_p", chave: string) =>
+  pref === "wc_p" ? ehFornecedor(chave) : ehEstoque(chave);
 
 // LUCROS RETIDOS, dentro do patrimônio líquido. Existe para o X2 do Altman, e é
 // lista fechada pelo mesmo motivo dos outros: `reserva de capital` e `ajuste de
@@ -3103,8 +3122,8 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
     { chave: "ESP_VAR_NCG", rotulo: "Variação da NCG (para o Cash Flow)" },
   ]);
   g.espelho("INCOME STATEMENT ACCOUNTS", [
-    { chave: "NET_REV", rotulo: "Receita líquida (base dos dias de giro do ativo)" },
-    { chave: "BASE_COGS", rotulo: "Custos (base dos dias de giro do passivo de fornecedor)" },
+    { chave: "NET_REV", rotulo: "Receita líquida (base dos dias de giro de clientes e demais ativos)" },
+    { chave: "BASE_COGS", rotulo: "Custos (base dos dias de giro de estoque e de fornecedor)" },
   ]);
 
   const fora = [...caixaFora, ...dividaFora, ...tributoFora];
@@ -3125,7 +3144,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   // A base de cada conta (ver o comentário longo mais abaixo). Sobe para cá porque o
   // GRUPO de uma premissa compartilhada só vale entre contas de MESMA base.
   const nomeBase = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
-    pref === "wc_p" && ehFornecedor(l.chave) ? "custos" : "receita líquida";
+    giraContraCusto(pref, l.chave) ? "custos" : "receita líquida";
   // `dias_de_giro` ligada a K contas é prazo do GRUPO (ver `gruposRateados`): o
   // grupo vale `dias/360 × base` e cada conta recebe a parcela histórica dela.
   const saldoGiro = (pref: "wc_a" | "wc_p") => (l: LinhaModelo) => {
@@ -3138,8 +3157,8 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
     ...gruposRateados(ctx, passivos, (l) => chaveLinha("wc_p", l), "dias_de_giro", saldoGiro("wc_p"),
       (a, b) => nomeBase("wc_p", a) === nomeBase("wc_p", b)),
   ]);
-  // O MESMO CÓDIGO EM BASES DIFERENTES (ativo × passivo, fornecedor contra custo × resto contra
-  // receita): somar os grupos não tem sentido e rateá-los entre si seria regra inventada. Ficam
+  // O MESMO CÓDIGO EM BASES DIFERENTES (ativo × passivo, fornecedor e estoque contra custo × resto
+  // contra receita): somar os grupos não tem sentido e rateá-los entre si seria regra inventada. Ficam
   // separados e CADA UM projeta os dias inteiros — então o agregado leva N× a premissa. Isso é
   // dito na célula, com motivo e efeito (regra 1), em vez de passar calado (em produção: PMR em
   // 16 contas do ativo + 2 do passivo; PMP em 5 do ativo + 59 do passivo).
@@ -3254,10 +3273,10 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   // receita/custo — no caso da referência, ~1,27×. É defeito, não convenção.
   //
   // Aqui a base é a MESMA nas duas pontas, e é a base contábil correta de cada
-  // conta: fornecedor gira contra CUSTO (é o PMP de manual), o resto gira contra
-  // RECEITA LÍQUIDA.
+  // conta: fornecedor gira contra CUSTO (é o PMP de manual), ESTOQUE também (PME de manual,
+  // desde 05/10/2026), o resto gira contra RECEITA LÍQUIDA.
   const baseDe = (pref: "wc_a" | "wc_p", l: LinhaModelo, ano: number) =>
-    pref === "wc_p" && ehFornecedor(l.chave) ? g.ref("BASE_COGS", ano) : g.ref("NET_REV", ano);
+    giraContraCusto(pref, l.chave) ? g.ref("BASE_COGS", ano) : g.ref("NET_REV", ano);
 
   for (const ano of ctx.anos) {
     const hist = !g.ehProjetado(ano);
@@ -3358,7 +3377,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
         // receita/custo daquele cenário — a sombra de `RECEITA_LIQUIDA`/`CUSTOS`
         // que a aba de receita já publica (`#v_${suf}`, sessão 54). É o mesmo
         // desenho do `CHECK_SOMBRA`: fórmula idêntica, insumo trocado.
-        const baseFonte = pref === "wc_p" && ehFornecedor(l.chave) ? "CUSTOS" : "RECEITA_LIQUIDA";
+        const baseFonte = giraContraCusto(pref, l.chave) ? "CUSTOS" : "RECEITA_LIQUIDA";
         for (const [suf] of CENARIOS_SUF) {
           const diasSuf = suf === "str" ? `${ch}#diasStr` : `${ch}#dias`;
           const baseSombra = g.externa("Revenues, COGS & SG&A", gRec, `${baseFonte}#v_${suf}`, ano);
