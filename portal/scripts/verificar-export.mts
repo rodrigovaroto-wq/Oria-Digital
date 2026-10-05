@@ -53,7 +53,7 @@ import { classificarConta } from "../src/lib/statement-templates.ts";
 import {
   casarVinculosComLinhas, chaveDaLinha, serieDaLinha, seriesPorLinha, vinculoPorLinha,
 } from "../src/lib/modelagem-linha.ts";
-import { ABAS_MODELO as ABAS_DO_MODELO, ehDividaFinanceira } from "../src/lib/modelo-institucional.ts";
+import { ABAS_MODELO as ABAS_DO_MODELO, ehDividaFinanceira, grupoDeObrigacoesQueCitaDivida } from "../src/lib/modelo-institucional.ts";
 import { auditarWorkbook } from "./auditar-xlsx.mts";
 import {
   humanizar, partesDaDescricao, rotuloDaPendencia, rotuloDaSecao, rotulosCitados, semALista, suavizarMensagem,
@@ -7064,6 +7064,11 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     "Outras obrigações: capital de giro Bradesco e Itaú",
     // sem enumeração o próprio nome diz o que é: continua dívida
     "Outras contas a pagar - empréstimo de sócios",
+    // (39t) DECISÃO DO DONO, 05/10/2026: "capital de giro" no passivo é dívida SEM credor no
+    // rótulo (CPC 00/39/48; no Canastra "Capital de giro - longo prazo" 26.400 em 2023 está sob
+    // "Empréstimos e Financiamentos"). Rótulos literais de dados.py do book Canastra:
+    "Capital de giro", "Capital de giro - longo prazo", "Capital de giro - instituições financeiras",
+    "Capital de giro Caixa",
   ];
   // O CONTRAPONTO É OBRIGATÓRIO: sem ele um `() => true` passaria em tudo acima.
   const GIRO: string[] = [
@@ -7081,8 +7086,13 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     "Confirming - fornecedores",
     // (39s) grupo de obrigações que só CITA desconto de duplicatas entre outras contas
     "Outras obrigações (adiantamentos de clientes, JCP a pagar e desconto de duplicatas)",
-    // (39t) "capital de giro" sem credor no rótulo continua sem classificar como dívida
-    "Capital de giro",
+    // (39t) termos ANALÍTICOS que citam "capital de giro" e não são conta de dívida
+    "Necessidade de capital de giro", "Necessidades de capital de giro",
+    "Variação da necessidade de capital de giro", "Variação do capital de giro",
+    "Capital de giro líquido", "Capital de giro próprio", "Capital circulante líquido",
+    // (39t) grupo MISTO: cita capital de giro (dívida) junto com adiantamento de cliente (não é).
+    // Segue grupo misto, com nota, e não vira dívida inteira.
+    "Outras obrigações (adiantamentos de clientes e capital de giro)",
   ];
   for (const r of DIVIDA) {
     checar(ehDividaFinanceira(r), `(37) "${r}" é dívida financeira (não gira contra receita)`);
@@ -7090,6 +7100,8 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   for (const r of GIRO) {
     checar(!ehDividaFinanceira(r), `(37) "${r}" continua sendo giro operacional`);
   }
+  checar(grupoDeObrigacoesQueCitaDivida("Outras obrigações (adiantamentos de clientes e capital de giro)"),
+    "(39t) …e o grupo que cita capital de giro com adiantamento de cliente é reconhecido como grupo MISTO (recebe NOTA_GRUPO_MISTO)");
 }
 
 // =============================================================================

@@ -834,21 +834,32 @@ const PADROES_DIVIDA_FINANCEIRA = [
   /antecipa(ç|c)(ã|a)o de receb(í|i)veis/i,
   /adiantamento de contrato de c(â|a)mbio/i, /\bACC\b/, /\bACE\b/,
 ];
-// TRANCHE BANCÁRIA CHAMADA SÓ DE "CAPITAL DE GIRO". Nenhum dos padrões acima a pega: o rótulo
-// do balancete é "CAPITAL DE GIRO BANCO X - CP/LP", sem "empréstimo" nem "financiamento", e
-// "capital de giro" sozinho também nomeia a NCG (ativo) e linhas que não são dívida. Por isso o
-// padrão EXIGE o nome de uma instituição financeira no mesmo rótulo (lookahead, qualquer ordem):
-// "Banco Alfa - capital de giro" e "CAPITAL DE GIRO BANCO X - LP" entram; "Capital de giro" e
-// "Capital de giro - longo prazo" (sem credor no rótulo) continuam fora, como estavam.
-// Sem a flag `u` o `\b` não existe entre "ú" e o espaço ("Itaú - LP" não casava): as bordas são
-// "não-letra" por propriedade Unicode. "caixa" sozinho fica fora (é também o caixa da empresa):
-// só "Caixa Econômica".
-// A lista de credores é UMA só: serve ao capital de giro e a `itemDeGrupoEhDivida`.
+// "CAPITAL DE GIRO" NUM RÓTULO DE PASSIVO É DÍVIDA FINANCEIRA, COM OU SEM CREDOR NOMEADO.
+// Decisão do dono em 05/10/2026. Fundamento: CPC 00/39/48 (a essência é obrigação contratual de
+// entregar caixa a quem emprestou) e o uso do balanço brasileiro, em que "capital de giro" no
+// passivo é o produto bancário. Medido no book Canastra: "Capital de giro - longo prazo"
+// (26.400 em 2023), "Capital de giro" e "Capital de giro - instituições financeiras" estão sob o
+// cabeçalho "Empréstimos e Financiamentos" e o mapa de dívida os lista como contratos bancários —
+// e a versão anterior deste padrão (que exigia o nome do banco no rótulo) os deixava FORA da
+// dívida e sem juro: dívida e despesa financeira subestimadas, em silêncio.
+// A premissa antiga ("capital de giro sozinho também nomeia a NCG, do ativo") não se aplica: todo
+// chamador de `ehDividaFinanceira` olha só linha de passivo ou do mapa de dívida; ativo nunca.
+// O que NÃO é conta fica fora, porque é termo analítico: "necessidade(s) de capital de giro",
+// "variação do/da (necessidade de) capital de giro", "capital de giro líquido/próprio" (e
+// "capital circulante líquido", que nem contém a expressão). Um grupo misto que cita capital de
+// giro junto com o que não é dívida segue grupo misto (`grupoDeObrigacoesQueCitaDivida`).
+// Sem a flag `u` o `\b` não existe entre "ú" e o espaço: as bordas são "não-letra" por propriedade
+// Unicode. A lista de credores NÃO entra aqui: serve só a `itemDeGrupoEhDivida` ("caixa" sozinho
+// fica fora dela, por ser também o caixa da empresa).
 const CREDORES = String.raw`banco|bco|bradesco|ita[úu]|santander|sicredi|sicoob|safra|bndes|daycoval|bb|`
   + String.raw`caixa econ[ôo]mica|banrisul|brb`;
-const CAPITAL_DE_GIRO_BANCARIO = new RegExp(
-  String.raw`^(?=.*(?<![\p{L}\d])capital de giro(?![\p{L}\d]))`
-  + String.raw`(?=.*(?<![\p{L}\d])(?:${CREDORES})(?![\p{L}\d]))`, "iu");
+const CAPITAL_DE_GIRO_NO_PASSIVO =
+  /(?<![\p{L}\d])capital de giro(?![\p{L}\d])/iu;
+const CAPITAL_DE_GIRO_ANALITICO = new RegExp(
+  String.raw`necessidades? (?:de|do) capital de giro|varia(?:ç|c)(?:ã|a)o[^()]*capital de giro`
+  + String.raw`|capital de giro (?:l(?:í|i)quido|pr(?:ó|o)prio)`, "iu");
+const ehCapitalDeGiroNoPassivo = (chave: string) =>
+  CAPITAL_DE_GIRO_NO_PASSIVO.test(chave) && !CAPITAL_DE_GIRO_ANALITICO.test(chave);
 // Item de enumeração que é só o NOME do credor ou da linha de financiamento ("BNDES", "FINAME",
 // "Itaú") não casa nenhum padrão de dívida, mas é dívida: sem isto "Outras obrigações (BNDES,
 // FINAME e capital de giro Banco X)" virava grupo misto e o saldo todo saía da dívida.
@@ -875,7 +886,7 @@ const CABECA_DE_GRUPO =
   /^\s*(?:outras?|demais|diversas?)\s+(?:obriga(?:ç|c)(?:õ|o)es|contas? a pagar|passivos?|d(?:é|e)bitos|valores a pagar)\b[^(:]*[(:]/i;
 
 const citaInstrumentoDeDivida = (chave: string) =>
-  PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave)) || CAPITAL_DE_GIRO_BANCARIO.test(chave);
+  PADROES_DIVIDA_FINANCEIRA.some((re) => re.test(chave)) || ehCapitalDeGiroNoPassivo(chave);
 
 /** O grupo que mistura instrumento de dívida com contas que não são dívida, sem separar valores. */
 export const grupoDeObrigacoesQueCitaDivida = (chave: string) => {
