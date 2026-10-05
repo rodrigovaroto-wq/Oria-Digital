@@ -4,7 +4,7 @@ import { paginar } from "@/lib/supabase/paginar";
 import { veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import type { EntradaModeloInstitucional, LinhaModelo } from "@/lib/modelo-institucional";
 import {
-  buildExportWorkbook, entradaDoModeloDoWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, type ConfigModelagem,
+  buildExportWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, type ConfigModelagem,
   type DocumentoParaExport, type MacroAnual, type MacroExpectativa,
 } from "@/lib/export";
 import type { CampoExtraido } from "@/lib/types";
@@ -13,7 +13,10 @@ import {
   provenienciaPorLinha, provenienciaDaLinha,
   type LinhaParaCasar, type VinculoParaCasar,
 } from "@/lib/modelagem-linha";
-import { correnteDoBalancete, informacaoDoKit, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
+// A apresentação de crédito importa em linhas PRÓPRIAS (e não acrescentando nomes às listas de cima):
+// outro PR que mexa nas listas de import desta rota não colide com estas linhas.
+import { entradaDoModeloDoWorkbook } from "@/lib/export";
+import { correnteDoBalancete, informacaoDoKit, linhasDoAnoCorrenteDe, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
 import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
 import { projecaoDoModelo } from "@/lib/apresentacao/projecao";
 import { construirDeckCredito, SemDadoParaApresentar } from "@/lib/apresentacao/deck-credito";
@@ -510,13 +513,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // a mesma identidade do banco. Ver `seriesPorLinha`: indexar só pelo
       // rótulo fazia a linha de uma seção receber os números da outra.
       const series = seriesPorLinha(valores, anosHistoricos);
-      const anoCorrente = Math.max(...valores.map((v) => v.ano));
-      if (Number.isFinite(anoCorrente) && anoCorrente > ultimoReal) {
-        const seriesC = seriesPorLinha(valores, [anoCorrente]);
-        linhasDoAnoCorrente = { ano: anoCorrente, linhas: ((linhasRes.data ?? []) as unknown as LinhaModelo[]).map((l) => ({
-          secao_canonica: l.secao_canonica, chave: l.chave, rotulo_norm: l.rotulo_norm, papel: l.papel, unidade: l.unidade,
-          moeda: l.moeda, documentos: l.documentos, valores: serieDaLinha(seriesC, l.secao_canonica, l.rotulo_norm) })) };
-      }
       // A PROVENIÊNCIA POR (LINHA, ANO) — mesma identidade, mesma consulta (0125).
       // Ela vai para a nota de TODA célula histórica do modelo, não só da
       // `Premissas`: `valorNaEscala` é o caminho único por onde valor de documento
@@ -548,6 +544,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         /** estruturado: a aba Anual decide a fórmula do CDI por ele, nunca pelo texto de `fonte` */
         origem: "focus" | "realizado";
       };
+      // O ano em curso para a apresentação (fica AQUI, longe da leitura do histórico logo acima, para
+      // que mudanças naquela leitura não colidam com esta linha).
+      linhasDoAnoCorrente = linhasDoAnoCorrenteDe((linhasRes.data ?? []) as unknown as LinhaModelo[], valores, ultimoReal);
       const macroModelo: MacroDoModelo[] = [
         ...anuais.flatMap((a): MacroDoModelo[] => {
           if (a.natureza === "nivel") {
@@ -625,8 +624,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         { status: 409 },
       );
     }
-    // Os campos "[a preencher]" já preenchidos (0201). Falha de leitura NÃO derruba o deck — banco
-    // sem a 0201, RLS —: ele sai com as lacunas como sempre saiu, e o motivo fica no log.
+    // Os campos "[a preencher]" já preenchidos (0205). Falha de leitura NÃO derruba o deck — banco
+    // sem a 0205, RLS —: ele sai com as lacunas como sempre saiu, e o motivo fica no log.
     const camposRes = await supabase.from("caso_apresentacao_campo").select("chave, valor, fonte").eq("caso_id", id);
     if (camposRes.error) console.error(`[export] campos da apresentação não lidos: ${camposRes.error.message}`, { caso_id: id });
     const camposAp = (camposRes.data ?? []) as Array<{ chave: string; valor: string; fonte: string | null }>;

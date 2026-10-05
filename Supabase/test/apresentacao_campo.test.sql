@@ -1,4 +1,4 @@
--- Testes de `caso_apresentacao_campo` (Supabase/migrations/0201).
+-- Testes de `caso_apresentacao_campo` (Supabase/migrations/0205).
 -- Travam: valor vazio/em branco é recusado (regra 1), chave fora do formato é recusada,
 -- a PK (caso, chave) não duplica, o authenticated lê e escreve, e apagar o caso leva os campos.
 \set ON_ERROR_STOP on

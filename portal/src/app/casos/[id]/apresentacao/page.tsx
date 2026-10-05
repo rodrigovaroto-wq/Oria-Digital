@@ -39,7 +39,7 @@ export default async function ApresentacaoPage({ params }: Readonly<{ params: Pr
       </div>
       {camposRes.error && (
         <output className="carta block p-4 text-sm text-alerta-900">
-          Não foi possível ler os campos ({camposRes.error.message}). Se a tabela não existe, a migration 0201 ainda não foi
+          Não foi possível ler os campos ({camposRes.error.message}). Se a tabela não existe, a migration 0205 ainda não foi
           aplicada: o deck sai com todas as lacunas “[a preencher]”.
         </output>
       )}

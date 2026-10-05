@@ -8,6 +8,7 @@ import { formatarPeriodo, versoesVigentes, type DocumentoParaExport } from "../e
 import { fatorDeEscala, historicoParaCredito, type EntradaModeloInstitucional, type LinhaModelo } from "../modelo-institucional";
 import { lerMapaDaDivida, medidaDoRotulo, type LinhaDoMapa } from "../mapa-da-divida";
 import type { CampoExtraido } from "../types";
+import { seriesPorLinha, serieDaLinha } from "../modelagem-linha";
 import { naturezaDoAno, type BaseCredito, type DocumentoDaBase } from "./base-credito";
 
 /** Os tipos que trazem demonstração — os outros (contrato social, certidões…) não entram no IX. */
@@ -171,4 +172,19 @@ export function mapaDosCampos(
     }
   }
   return lerMapaDaDivida(linhas, anos);
+}
+
+/**
+ * As linhas do ANO EM CURSO (o maior ano lido, quando passa do último exercício fechado), pela mesma
+ * série por (seção, rótulo) do histórico. `null` quando não há ano além do último real.
+ */
+export function linhasDoAnoCorrenteDe(
+  linhas: LinhaModelo[], valores: Parameters<typeof seriesPorLinha>[0], ultimoReal: number,
+): { ano: number; linhas: LinhaModelo[] } | null {
+  const ano = Math.max(...valores.map((v) => v.ano));
+  if (!Number.isFinite(ano) || ano <= ultimoReal) return null;
+  const series = seriesPorLinha(valores, [ano]);
+  return { ano, linhas: linhas.map((l) => ({ secao_canonica: l.secao_canonica, chave: l.chave, rotulo_norm: l.rotulo_norm,
+    papel: l.papel, unidade: l.unidade, moeda: l.moeda, documentos: l.documentos,
+    valores: serieDaLinha(series, l.secao_canonica, l.rotulo_norm) })) };
 }

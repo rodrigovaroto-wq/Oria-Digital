@@ -786,14 +786,14 @@ supabase db execute --file Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0198' and not presente;                 -- ZERO linhas
 
-# A 0201 CRIA caso_apresentacao_campo: onde moram os campos "[a preencher]" da apresentação de crédito
+# A 0205 CRIA caso_apresentacao_campo: onde moram os campos "[a preencher]" da apresentação de crédito
 # (chave estável por campo; valor em branco recusado por check — regra 1). Tabela nova e vazia, sem
 # backfill; RLS e grant ao authenticated no padrão de caso_premissa.
 # Teste: Supabase/test/apresentacao_campo.test.sql.
-supabase db execute --file Supabase/migrations/0201_os_campos_da_apresentacao.sql
+supabase db execute --file Supabase/migrations/0205_os_campos_da_apresentacao.sql
 # DEPOIS DE APLICAR, confira o catálogo:
 #   select chave, presente, detalhe from fn_instalacao_conferir()
-#    where migration = '0201' and not presente;                 -- ZERO linhas
+#    where migration = '0205' and not presente;                 -- ZERO linhas
 
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.

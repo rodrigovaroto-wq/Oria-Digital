@@ -339,7 +339,7 @@ console.log("--- 6. setores e formatos diferentes (testes com mandatos de outro 
     "(6e) amarração que não fecha aparece na faixa do sumário executivo, não só nas notas");
 }
 
-console.log("--- 7. os campos preenchidos (0201) substituem o \"[a preencher]\" — e só eles ---");
+console.log("--- 7. os campos preenchidos (0205) substituem o \"[a preencher]\" — e só eles ---");
 {
   const entrada = entradaModeloDaFixture(fixture, agora);
   const wb = buildExportWorkbook({ caso: { nome: "Book Vertentes", produto: "reestruturacao" },

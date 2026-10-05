@@ -69,6 +69,7 @@ node --test 'N8N/test/*.test.mjs'
 node --test '.claude/hooks/test/*.test.mjs'   # os hooks do agente também têm suíte, e ela é portão
 node --test 'Supabase/test/*.test.mjs'       # a tradução de "não perguntei a produção" em veredito
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-export.mts
+./portal/node_modules/.bin/tsx portal/scripts/verificar-apresentacao.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-transcricao.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-mensagem-de-falha.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-premissas-do-realizado.mts
@@ -76,7 +77,6 @@ node --test 'Supabase/test/*.test.mjs'       # a tradução de "não perguntei a
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-modelagem-cobertura.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-limite-de-envio.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-linhas-por-versao.mts
-./portal/node_modules/.bin/tsx portal/scripts/verificar-apresentacao.mts
 node --test '.claude/conhecimento/test/*.test.mjs'  # ANTES de indexar: o grafo COMMITADO não pode
                                                    # citar arquivo que o git ignora (depois do
                                                    # indexar essa pergunta é verdadeira por construção)
