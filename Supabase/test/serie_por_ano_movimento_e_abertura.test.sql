@@ -32,6 +32,10 @@
 --
 -- NÃO PARA NO PRIMEIRO ERRO: anota e segue, e o bloco final reprova com a CONTAGEM (regra 2).
 --
+-- 0200: 3 asserts mudaram (CAIXA GERAL 2024/2025 agora ausentes, n_ocorrencias do ATIVO 2025 = 1): o
+-- balancete parcial não contribui para ano que tem balanço anual; "parcial entra quando é a única fonte"
+-- passou para serie_por_ano_balancete_sob_balanco_anual.test.sql. A chave "anual antes de parcial" da
+-- ordenação foi retirada (morta sob a 0200), então a mutação isolada dela deixou de existir.
 -- MEDIÇÃO (regra 2): com o corpo da 0125 de volta, 19 dos 21 asserts reprovam; os 2 verdes são controles.
 -- Sem a chave de fechamento-antes-de-abertura reprova 1; sem a de anual-antes-de-parcial, 5.
 
@@ -179,12 +183,15 @@ begin
   select arquivo into v_txt from fn_valores_por_ano(v_caso, c) where rotulo_norm = fn_normalizar_texto('ATIVO') and ano = 2024;
   perform pg_temp.teste_assert_0199(v_txt = 'balanco_2025.pdf',
     'ATIVO 2024 (abertura): a do BALANCO anual vence a do balancete, a mesma 40.100.000 em duas fontes', coalesce(v_txt, '(nulo)'));
+  -- 0200: a conta SÓ do balancete NÃO entra nos anos que têm balanço anual da mesma família (2024 e 2025
+  -- têm BALANCO): a decisão é do ano, não do rótulo. Que o parcial ENTRA quando é a única fonte do ano
+  -- é medido em serie_por_ano_balancete_sob_balanco_anual.test.sql (ano 2026, sem balanço anual).
   v_num := pg_temp.v0199(v_caso, 'CAIXA GERAL', 2025);
-  perform pg_temp.teste_assert_0199(v_num = 1200000,
-    'conta SÓ do balancete: 2025 = o Saldo Atual (1.200.000) — o parcial entra por ser a única fonte, mas sem o Débito (9.000.000)', format('%s', v_num));
+  perform pg_temp.teste_assert_0199(v_num is null,
+    'conta SÓ do balancete: 2025 tem balanço anual, então ela fica fora (nem o Saldo Atual 1.200.000 nem o Débito 9.000.000)', format('%s', v_num));
   v_num := pg_temp.v0199(v_caso, 'CAIXA GERAL', 2024);
-  perform pg_temp.teste_assert_0199(v_num = 1000000,
-    'e o Saldo Anterior do balancete é o 2024 dela (1.000.000)', format('%s', v_num));
+  perform pg_temp.teste_assert_0199(v_num is null,
+    'e o Saldo Anterior do balancete (2024) também: 2024 tem balanço anual (a abertura do BALANCO 2025)', format('%s', v_num));
 
   raise notice '--- 5. CONTRATO_SOCIAL não entra na série ---';
   select count(*) into v_n from fn_valores_por_ano(v_caso, c) where arquivo = 'contrato_social.pdf';
@@ -202,8 +209,8 @@ begin
 
   raise notice '--- 7. a proveniência segue sendo a da célula, e n_ocorrencias conta as elegíveis ---';
   select n_ocorrencias into v_n from fn_valores_por_ano(v_caso, c) where rotulo_norm = fn_normalizar_texto('ATIVO') and ano = 2025;
-  perform pg_temp.teste_assert_0199(v_n = 2,
-    'ATIVO 2025 tem 2 ocorrências elegíveis (Saldo Final e Saldo Atual); Débito, Crédito e as aberturas não contam', format('%s', v_n));
+  perform pg_temp.teste_assert_0199(v_n = 1,
+    'ATIVO 2025 tem 1 ocorrência elegível (o Saldo Final do BALANCO); Débito, Crédito, as aberturas e (0200) o Saldo Atual do balancete parcial não contam', format('%s', v_n));
   select origem_pagina into v_n from fn_valores_por_ano(v_caso, c) where rotulo_norm = fn_normalizar_texto('CLIENTES') and ano = 2025;
   perform pg_temp.teste_assert_0199(v_n = 2,
     'CLIENTES 2025: a página é a da ocorrência que deu o valor (balanço p.2)', format('%s', v_n));

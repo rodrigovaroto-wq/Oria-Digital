@@ -13766,6 +13766,7 @@ CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAUL
     LANGUAGE sql STABLE
     AS $_$
   -- marca-0125
+  -- marca-0200
   with ocorrencias as materialized (
     select
       fn_normalizar_texto(ce.chave) as rotulo_norm,
@@ -13787,6 +13788,17 @@ CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAUL
             or (coalesce(p.referencia, '') ~* '\d{1,2}/\d{1,2}/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*\d{1,2}/\d{1,2}/(19|20)\d{2}'
                 and coalesce(p.referencia, '') !~ '^\s*0?1/0?1/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*31/12/(19|20)\d{2}\s*$')
            )) as parcial,
+      -- 0200: a FAMÍLIA da demonstração e a ENTIDADE, para decidir o parcial por ano e não por rótulo.
+      case when ce.secao_canonica ~ '^(ativo|passivo)(_|$)' or ce.secao_canonica = 'patrimonio_liquido'
+                then 'patrimonial'
+           when ce.secao_canonica in ('receita_bruta', 'custos', 'despesas_operacionais',
+                                      'resultado_financeiro', 'impostos_lucro')
+                then 'resultado'
+           when ce.secao_canonica ~ '^atividades_' then 'fluxo'
+           else coalesce(ce.secao_canonica, '')   -- NULL, dmpl, dva, NAO_CLASSIFICAVEL: família própria
+      end as familia,
+      case when p_entidade is not null then ''   -- a consulta já é de UMA entidade
+           else fn_normalizar_texto(coalesce(ce.entidade_coluna, e.razao_social, '')) end as entidade_chave,
       ce.valor_num as valor,
       dv.nome_original as arquivo,
       ce.origem_pagina,
@@ -13810,6 +13822,16 @@ CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAUL
       -- 0199 (a): movimento do período (Débito/Crédito) nunca é saldo.
       and coalesce(ce.periodo_coluna, '') !~* '^\s*(d[ée]bito|cr[ée]dito)s?\s*$'
   ),
+  -- 0200: a decisão "parcial entra se for a única fonte" é do ANO (da entidade e da família da
+  -- demonstração), não do rótulo. Um balancete semestral traz centenas de contas analíticas que o
+  -- balanço anual (sintético) não tem; para cada rótulo o balancete era a "única fonte" e entrava
+  -- POR CIMA das contas do balanço do mesmo ano.
+  elegiveis as (
+    select o.*,
+           bool_or(not coalesce(o.parcial, false)) over (partition by o.entidade_chave, o.familia, o.ano) as ano_tem_anual
+    from ocorrencias o
+    where o.ano is not null
+  ),
   escolhido as (
     select
       o.rotulo_norm, o.secao_canonica, o.ano, o.valor,
@@ -13818,8 +13840,7 @@ CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAUL
       o.arquivo, o.origem_pagina, o.confianca, o.status_aceite, o.aceito_por,
       row_number() over (
         partition by o.rotulo_norm, o.secao_canonica, o.ano
-        order by o.parcial,            -- (c) anual antes de parcial
-                 o.abertura,           -- (b) fechamento antes de abertura
+        order by o.abertura,           -- (b) fechamento antes de abertura
                  abs(o.valor) desc,    -- maior módulo COM SINAL, a regra da 0042
                  o.valor desc,         -- (e) empate de módulo com sinais opostos: o positivo
                  o.confianca desc nulls last,
@@ -13827,8 +13848,9 @@ CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAUL
                  o.arquivo,
                  o.ordem
       ) as rn
-    from ocorrencias o
-    where o.ano is not null
+    from elegiveis o
+    -- 0200: parcial só vale num ano em que a família não tem NENHUMA ocorrência anual
+    where not (coalesce(o.parcial, false) and o.ano_tem_anual)
   )
   select rotulo_norm, secao_canonica, ano, valor, n_ocorrencias,
          arquivo, origem_pagina, confianca, status_aceite, aceito_por
@@ -13841,7 +13863,7 @@ $_$;
 -- Name: FUNCTION fn_valores_por_ano(p_caso_id uuid, p_entidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) IS 'Série histórica por (rótulo, seção, ano), só da versão vigente (0102), com a proveniência DA CÉLULA (0125). 0199: coluna de movimento (Débito/Crédito) nunca é saldo; "Saldo Inicial"/"Saldo Anterior" é o fechamento do ano ANTERIOR e perde para o fechamento do mesmo ano; período anual vence balancete/período parcial (que só entra na falta do anual); tipo de categoria Societário/Legal e Garantias/Sócios não entra. Dentro da camada, maior módulo com sinal (0042); desempate determinístico.';
+COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) IS 'Série histórica por (rótulo, seção, ano), só da versão vigente (0102), com a proveniência DA CÉLULA (0125). 0199: coluna de movimento (Débito/Crédito) nunca é saldo; "Saldo Inicial"/"Saldo Anterior" é o fechamento do ano ANTERIOR e perde para o fechamento do mesmo ano; tipo de categoria Societário/Legal e Garantias/Sócios não entra. 0200: ocorrência de período PARCIAL (balancete, mês, trimestre, intervalo) só entra num ano em que a entidade não tem NENHUMA ocorrência anual da mesma família (patrimonial / resultado / fluxo / seção própria) — decisão do ANO, não do rótulo. Dentro da camada, maior módulo com sinal (0042); desempate determinístico.';
 
 --
 -- Name: fn_veredito_producao(text, uuid); Type: FUNCTION; Schema: public; Owner: -

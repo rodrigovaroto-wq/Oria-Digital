@@ -2,7 +2,14 @@
 
 ## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
 
-> **Migration mais nova: `0199_a_serie_por_ano_que_lia_movimento_e_abertura_como_saldo.sql`.**
+> **Migration mais nova: `0200_o_balancete_semestral_que_entrava_por_cima_do_balanco_anual.sql`**.
+> A `0199` (aplicada em produção em 05/10, 182/0 na sonda) decidia "parcial entra se é a única fonte"
+> POR RÓTULO, e as contas analíticas do balancete semestral entravam por cima do balanço anual. O
+> resíduo do AC no Fw Valtra foi a −36 mi (2024) e −47 mi (2025). A 0200 decide por ano e família de
+> demonstração: com balanço anual no ano, o balancete parcial não contribui. Teste com 17 asserts;
+> 6 reprovam com o filtro desligado e 10 com a regra ao contrário.
+>
+> **Anterior: `0199_a_serie_por_ano_que_lia_movimento_e_abertura_como_saldo.sql`.**
 > `fn_valores_por_ano` montava a série (rótulo, seção, ano) com o MAIOR |valor| entre todas as
 > colunas e documentos do ano. No caso real Fw Valtra (`03a66ab6`, MOTO AGRICOLA VOLKWEIS LTDA):
 > - o Débito do balancete semestral virou o ATIVO de 2025: 125,86 mi contra 38,48 mi no balanço;

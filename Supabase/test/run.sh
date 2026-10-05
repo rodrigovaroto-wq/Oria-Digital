@@ -408,6 +408,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/serie_por_ano_movimento_e_aber
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o balancete semestral que entrava por cima do balanço anual (0200): parcial só no ano sem anual da família"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

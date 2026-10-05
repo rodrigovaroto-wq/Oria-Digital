@@ -797,6 +797,19 @@ supabase db execute --file Supabase/migrations/0199_a_serie_por_ano_que_lia_movi
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0199' and not presente;                 -- ZERO linhas
 
+# A 0200 REEMITE fn_valores_por_ano (mesma assinatura): a 0199 decidia "o parcial entra se for a única fonte"
+# POR RÓTULO, e as centenas de contas analíticas do BALANCETE semestral (código no rótulo) não existem no
+# BALANCO anual — para cada uma o balancete era a "única fonte" e entrava POR CIMA do balanço do mesmo ano.
+# MEDIDO EM PRODUÇÃO (05/10/2026, depois da 0199, Fw Valtra 03a66ab6): resíduo do ATIVO CIRCULANTE de
+# -36.014.142 (2024) e -46.902.843 (2025). Agora a decisão é do ANO: parcial só entra se a entidade não tem
+# ocorrência ANUAL da mesma família (patrimonial / resultado / fluxo / seção própria) naquele ano.
+# Sem backfill: o modelo muda no PRÓXIMO export de cada caso.
+# Teste: Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql (17 asserts; 6 reprovam sem a 0200, 10 com a regra ao contrário).
+supabase db execute --file Supabase/migrations/0200_o_balancete_semestral_que_entrava_por_cima_do_balanco_anual.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0200' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
