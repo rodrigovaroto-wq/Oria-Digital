@@ -38,6 +38,8 @@ import { parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAno
 import {
   avaliarCobertura, celulasDaLinha, celulasEstimadas, linhasComNumero, linhasDeConta,
   juntarFragmentosDeLinha, ehLinhaSemValor, ehLinhaDeConta,
+  juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
+  linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
   planejarFatias, instrucaoDaFatia, juntarBlocos, camadaDeTextoDoPdf, fracaoDePalavrasDobradas,
 } from '../lib/cobertura.mjs';
 import {
@@ -410,6 +412,35 @@ const TABELA = [
     ['Banco Meridional S.A. Capital de giro CG-2021-884.117 \n15/03/2026 CDI + 4,80% a.a. 10.412.600,00 '],
     ['ATIVO 137.624 163.941\nAtivo Circulante 44.022'],
     ['a 1 \n\nb 2'], ['a 1 \nb 2 \nc 3 \nd 4 \ne 5 \nf 6'], [''], [null],
+  ] },
+  // As três da contagem POR BLOCO e as quatro da segunda passada: o que o Parse e o
+  // Fatiar RODAM tem de decidir igual ao que `cobertura-por-bloco.test.mjs` prova.
+  { nome: 'juntarFragmentosComOrigem', lib: juntarFragmentosComOrigem, casos: [
+    ['01/12/2025 LC-2025-4000 \nNF 010000 - Papéis e Celulose Aracati S.A. \n- 150 16.839 C\nTotal 5'],
+    ['a 1 \n\nb 2'], ['a 1 \nb 2 \nc 3 \nd 4 \ne 5 \nf 6'], [''], [null],
+  ] },
+  { nome: 'contasComOrigem', lib: contasComOrigem, casos: [
+    ['Caixa 1.000\nCNPJ 12.345.678/0001-99\nEstoques 2.500\nPágina 1'],
+    ['01/12/2025 LC-2025-4000 \nNF 010000 - Papéis e Celulose Aracati S.A. \n- 150 16.839 C\nSaldo 9.999'],
+    ['Nota — texto que quebra \ncom 35% na continuação.\nCaixa 10'], [''], [null],
+  ] },
+  { nome: 'contasPorLinhaComNumero', lib: contasPorLinhaComNumero, casos: [
+    ['Caixa 1.000\nCNPJ 12.345.678/0001-99\nEstoques 2.500\nPágina 1'],
+    ['01/12/2025 LC-2025-4000 \nNF 010000 - Papéis e Celulose Aracati S.A. \n- 150 16.839 C\nSaldo 9.999'],
+    ['Ativo\nCaixa 10\n\nBancos 20'], [''], [null],
+  ] },
+  { nome: 'linhasDaPassada', lib: linhasDaPassada, casos: [
+    [[{ linha_origem: 0 }, { linha_origem: 0 }, { linha_origem: 3 }]], [[{ chave: 'plano' }]], [[]], [null],
+  ] },
+  { nome: 'decidirSegundaPassada', lib: decidirSegundaPassada, casos: [
+    [{ linhas: 59, esperadas: 101, tentativa: 1 }], [{ linhas: 101, esperadas: 101, tentativa: 1 }],
+    [{ linhas: 59, esperadas: 101, tentativa: 4 }], [{ linhas: 59, esperadas: 101, tentativa: 2, jaRefeita: true }],
+    [{ linhas: 0, esperadas: 101, tentativa: 1, temDadoFinanceiro: false }], [{ linhas: 0, esperadas: 101, tentativa: 1 }],
+    [{ linhas: 5, esperadas: 10, tentativa: 1 }], [{ linhas: null, esperadas: 101 }], [{}], [undefined],
+  ] },
+  { nome: 'melhorPassada', lib: melhorPassada, casos: [[59, 80], [80, 59], [59, 59], [59, 0], [null, 3], [3, null]] },
+  { nome: 'instrucaoDeSegundaPassada', lib: instrucaoDeSegundaPassada, casos: [
+    [{ linhas: 59, esperadas: 101, blocos: 1 }], [{ linhas: 30, esperadas: 80, blocos: 3 }], [{ linhas: 0, esperadas: 0 }],
   ] },
   { nome: 'ehLinhaDeConta', lib: ehLinhaDeConta, casos: [
     ['Ativo Circulante 44.022 68.103'], ['1.1.01.002 181 D'], ['ATIVO CIRCULANTE'],

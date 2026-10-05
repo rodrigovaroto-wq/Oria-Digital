@@ -153,34 +153,52 @@ export const MINIMO_PARA_AVALIAR = 20;
  * `17_Livro_Razao` foi fatiado em 4 blocos e os 4 chegaram.
  */
 export function juntarFragmentosDeLinha(texto) {
-  if (typeof texto !== 'string' || texto.length === 0) return '';
+  return juntarFragmentosComOrigem(texto).map((g) => g.texto).join('\n');
+}
+
+/**
+ * A MESMA emenda de `juntarFragmentosDeLinha`, devolvendo de ONDE cada linha
+ * emendada veio: `de` é o índice (no texto cru, linha a linha) do primeiro
+ * fragmento e `n`, quantos fragmentos entraram. `juntarFragmentosDeLinha` é só
+ * isto com `texto` juntado por `\n` — UMA implementação da emenda, de propósito:
+ * a contagem de contas POR BLOCO (`contasPorLinhaComNumero`) precisa da mesma
+ * emenda da contagem do documento, e duas cópias dela divergem sem erro nenhum.
+ *
+ * AUTO-CONTIDA (nós Code a embutem por `toString()`).
+ */
+export function juntarFragmentosComOrigem(texto) {
+  if (typeof texto !== 'string' || texto.length === 0) return [];
   const MAX_FRAGMENTOS = 4;
   const saida = [];
+  const cruas = texto.split('\n');
   let emenda = '';
   let quantos = 0;
-  for (const bruta of texto.split('\n')) {
+  let deEmenda = 0;
+  for (let i = 0; i < cruas.length; i += 1) {
+    const bruta = cruas[i];
     // Linha em branco NÃO emenda e não some: ela separa bloco. Emendar através
     // dela colaria o rodapé de uma página no cabeçalho da seguinte; engoli-la
     // mudaria o texto para quem só passa por aqui.
     if (bruta.trim().length === 0) {
-      if (emenda.length > 0) saida.push(emenda);
-      saida.push(bruta);
+      if (emenda.length > 0) saida.push({ texto: emenda, de: deEmenda, n: quantos });
+      saida.push({ texto: bruta, de: i, n: 1 });
       emenda = '';
       quantos = 0;
       continue;
     }
     // O espaço no fim é a marca do fragmento que NÃO fecha a linha visual.
     if (/[ \t]$/.test(bruta) && quantos < MAX_FRAGMENTOS) {
+      if (quantos === 0) deEmenda = i;
       emenda += bruta;
       quantos += 1;
       continue;
     }
-    saida.push(emenda + bruta);
+    saida.push({ texto: emenda + bruta, de: quantos > 0 ? deEmenda : i, n: quantos + 1 });
     emenda = '';
     quantos = 0;
   }
-  if (emenda.length > 0) saida.push(emenda);
-  return saida.join('\n');
+  if (emenda.length > 0) saida.push({ texto: emenda, de: deEmenda, n: quantos });
+  return saida;
 }
 
 /**
@@ -439,10 +457,22 @@ export function ehLinhaDeConta(linha) {
 }
 
 export function linhasDeConta(texto) {
+  return contasComOrigem(texto).map((c) => c.linha);
+}
+
+/**
+ * O corpo de `linhasDeConta`, devolvendo também de onde cada conta veio (`de` e
+ * `n`, como em `juntarFragmentosComOrigem`). Existe para uma pergunta só: a
+ * contagem POR BLOCO. `linhasDeConta` é `contasComOrigem(...).map(linha)` — a
+ * regra de "o que é conta" mora aqui e em `ehLinhaDeConta`, em lugar nenhum mais.
+ *
+ * AUTO-CONTIDA (nós Code a embutem por `toString()`).
+ */
+export function contasComOrigem(texto) {
   if (typeof texto !== 'string' || texto.length === 0) return [];
   // O texto chega FRAGMENTADO em documento de tabela larga — ver
   // `juntarFragmentosDeLinha`, que tem os 258 contra 99 que motivaram isto.
-  const normalizado = juntarFragmentosDeLinha(texto);
+  const grupos = juntarFragmentosComOrigem(texto);
   // A NOTA DE RODAPÉ QUEBRA EM DUAS LINHAS, e só a primeira dizia "Nota —".
   // Medido no `13_Balanco_COMBINADO`: o ruído cortava a primeira e contava
   // "aos 35% do capital da CN Transportes ... detidos por terceiros." como conta.
@@ -457,14 +487,56 @@ export function linhasDeConta(texto) {
   const prosa = /^(nota|obs)\b|^\(?valores expressos|^exerc[íi]cios? encerrados?/i;
   let anteriorEraProsa = false;
   const out = [];
-  for (const bruta of normalizado.split('\n')) {
-    const linha = bruta.trim();
+  for (const g of grupos) {
+    const linha = g.texto.trim();
     if (linha.length === 0) { anteriorEraProsa = false; continue; }
     if (anteriorEraProsa && /^[a-zà-ú]/.test(linha)) continue;
     anteriorEraProsa = prosa.test(linha);
-    if (ehLinhaDeConta(linha)) out.push(linha);
+    if (ehLinhaDeConta(linha)) out.push({ linha, de: g.de, n: g.n });
   }
   return out;
+}
+
+/**
+ * Quantas CONTAS cada linha de `linhasComNumero(texto)` carrega — o denominador
+ * da cobertura POR BLOCO.
+ *
+ * POR QUE NÃO BASTA RECONTAR A FATIA. Medido nos 20 documentos de produção
+ * (`N8N/test/segunda-passada-por-cobertura.test.mjs`): recontar `linhasDeConta` sobre as
+ * linhas de uma fatia fecha EXATO nos balanços e DRE, e erra feio onde a tabela é
+ * larga — livro razão 256 contra 99 (a fatia já perdeu o espaço do fim que marca o
+ * fragmento), balancete 2 contra 78 (as linhas sem dígito, que são o rótulo,
+ * saíram da lista). Um denominador 2,6 vezes maior refaria TODO bloco perfeito do
+ * livro razão. Aqui a contagem é feita UMA vez, sobre o texto inteiro e com a
+ * mesma emenda do documento, e cada conta é creditada à primeira linha COM DÍGITO
+ * do seu grupo de fragmentos — então a soma dos blocos é, por construção, a
+ * contagem do documento.
+ *
+ * Devolve `null` (não medível) se alguma conta não achar linha com dígito onde
+ * pousar — nunca um vetor que não some. Cada posição do vetor casa com a mesma
+ * posição de `linhasComNumero(texto)`.
+ *
+ * AUTO-CONTIDA (nós Code a embutem por `toString()`).
+ */
+export function contasPorLinhaComNumero(texto) {
+  if (typeof texto !== 'string' || texto.length === 0) return [];
+  const cruas = texto.split('\n');
+  const posicao = new Map();
+  for (let i = 0; i < cruas.length; i += 1) {
+    const l = cruas[i].trim();
+    if (l.length === 0 || !/\d/.test(l)) continue;
+    posicao.set(i, posicao.size);
+  }
+  const porLinha = new Array(posicao.size).fill(0);
+  for (const c of contasComOrigem(texto)) {
+    let alvo = null;
+    for (let k = c.de; k < c.de + c.n; k += 1) {
+      if (posicao.has(k)) { alvo = posicao.get(k); break; }
+    }
+    if (alvo === null) return null;
+    porLinha[alvo] += 1;
+  }
+  return porLinha;
 }
 
 /**
@@ -889,6 +961,113 @@ export function avaliarCobertura({ extraidas, esperadas, limiar = LIMIAR_COBERTU
       + `cima em cerca de 3% (costuma contar o cabeçalho de colunas como linha), o que já está `
       + `descontado na folga do limiar.`,
   };
+}
+
+// ===========================================================================
+// SEGUNDA PASSADA POR COBERTURA — o bloco que volta pela metade é refeito UMA vez.
+// ===========================================================================
+//
+// O DEFEITO. Caso real Fw Valtra: "36 ALTERAÇÃO E CONSOLIDAÇÃO CONTRATUAL - MOTO
+// AGRICOLA.pdf" saiu com "59 linha(s) devolvida(s) para um documento com 101
+// linha(s) de conta no texto (58% de cobertura)". A guarda de cobertura (acima) já
+// tornava isso VISÍVEL; ela nunca o corrigia, e a correção possível custa uma
+// chamada. O modelo, sem `temperature` (família GPT-5 recusa), não é determinístico:
+// a mesma pergunta dita de novo, agora com o número que faltou, tem chance real de
+// vir completa — e o pior caso é pagar uma chamada e ficar com a primeira.
+//
+// O QUE ISTO NÃO FAZ. Não SOMA as duas respostas: as duas descrevem as MESMAS
+// linhas, e somar duplicaria cada conta que as duas acharam — o erro que o
+// invariante "uma conta, um lugar" persegue. Fica a que devolveu MAIS linhas
+// (`melhorPassada`), e a empate fica a primeira, que já estava paga e já passou
+// por tudo o que o fluxo faz com ela.
+//
+// O LIMIAR É O DO DOCUMENTO (`LIMIAR_COBERTURA`), de propósito um número só: "o
+// bloco que, sozinho, abriria a pendência de cobertura". A régua que o sustenta
+// está medida em `medir-regua-cobertura.mjs` — exata (erro 0,0%) nos 20 documentos
+// capturados de produção, extração perfeita a 100%. Errar para refazer à toa custa
+// uma chamada e nenhum dado (fica a melhor); errar para NÃO refazer deixa a falha
+// onde estava. Por bloco a soma dos denominadores fecha com a do documento por
+// construção (`contasPorLinhaComNumero`); o que não dá para medir sem chamar o
+// modelo é o quanto ele respeita as âncoras de corte, e é por isso que o mínimo
+// para avaliar (`MINIMO_PARA_AVALIAR`) vale por bloco também.
+
+/**
+ * Quantas LINHAS do documento uma passada devolveu — a unidade da cobertura.
+ * `null` quando a resposta veio no formato plano antigo (sem `linha_origem`):
+ * aí não há como medir, e quem chama não refaz nem acusa. Auto-contida.
+ */
+export function linhasDaPassada(campos) {
+  const vistas = new Set();
+  let semOrigem = false;
+  for (const c of Array.isArray(campos) ? campos : []) {
+    if (c && Number.isInteger(c.linha_origem)) vistas.add(c.linha_origem);
+    else semOrigem = true;
+  }
+  return vistas.size === 0 && semOrigem ? null : vistas.size;
+}
+
+/**
+ * O bloco deve ser refeito? `linhas` = linhas devolvidas por ele; `esperadas` =
+ * contas do TEXTO naquela faixa (`contas_do_bloco`). Devolve sempre o veredito
+ * inteiro, porque o `Parse Extracao` precisa dos dois: refazer ou, se não puder,
+ * DIZER por que não (`porque`) — bloco abaixo do limiar que não foi refeito sem
+ * explicação é o silêncio que a regra 1 proíbe.
+ *
+ *   abaixo  — a cobertura do bloco é medível e está abaixo do limiar.
+ *   refazer — abaixo, ainda não foi refeito e sobra tentativa no teto do bloco.
+ *   porque  — 'ja-refeita' | 'sem-tentativa' | null.
+ *
+ * Mesma exceção da guarda do documento (a `0111`): zero linhas devolvidas por um
+ * documento que o modelo declarou SEM dado financeiro (certidão, organograma) não
+ * é falha, e refazê-lo seria pagar por nada. Zero linhas SEM essa declaração
+ * continua sendo falha. Auto-contida (usa `avaliarCobertura`, embutida antes).
+ */
+export function decidirSegundaPassada({
+  linhas, esperadas, tentativa = 1, maxTentativas = 4, temDadoFinanceiro = null, jaRefeita = false,
+} = {}) {
+  const nada = { abaixo: false, refazer: false, razao: null, esperadas: null, porque: null };
+  if (linhas === null || linhas === undefined || !Number.isFinite(Number(linhas))) return nada;
+  const cob = avaliarCobertura({ extraidas: Number(linhas), esperadas });
+  if (cob === null) return nada;
+  if (Number(linhas) === 0 && temDadoFinanceiro === false) return nada;
+  const sobra = Number(tentativa) < Number(maxTentativas);
+  const refazer = !jaRefeita && sobra;
+  return {
+    abaixo: true,
+    refazer,
+    razao: cob.razao,
+    esperadas: cob.esperadas,
+    porque: refazer ? null : (jaRefeita ? 'ja-refeita' : 'sem-tentativa'),
+  };
+}
+
+/** Qual das duas passadas fica: a que devolveu MAIS linhas; empate, a primeira. */
+export function melhorPassada(linhasDaPrimeira, linhasDaSegunda) {
+  const a = Number.isFinite(Number(linhasDaPrimeira)) ? Number(linhasDaPrimeira) : 0;
+  const b = Number.isFinite(Number(linhasDaSegunda)) ? Number(linhasDaSegunda) : 0;
+  return b > a ? 'segunda' : 'primeira';
+}
+
+/**
+ * A instrução da segunda passada, na mensagem de USER (nunca no prompt de
+ * sistema: o prefixo tem de continuar idêntico para o cache de prefixo valer). Dá
+ * ao modelo o NÚMERO — quantas linhas ele devolveu e quantas o texto tem — porque
+ * "seja completo" sem número é o pedido que a primeira chamada já recebeu. E diz
+ * que a resposta SUBSTITUI a anterior: se ele devolvesse só as linhas que faltaram,
+ * `melhorPassada` ficaria com a primeira e o trabalho se perderia.
+ * ASCII de propósito (vai dentro de um template literal do gerador).
+ */
+export function instrucaoDeSegundaPassada({ linhas, esperadas, blocos = 1 }) {
+  const e = Number(esperadas) > 0 ? Number(esperadas) : 0;
+  const pct = e > 0 ? Math.round((100 * Number(linhas)) / e) : 0;
+  const onde = blocos > 1 ? 'deste bloco' : 'deste documento';
+  return ' ATENCAO -- SEGUNDA PASSADA POR COBERTURA: a leitura anterior ' + onde + ' devolveu '
+    + Number(linhas) + ' linha(s) para cerca de ' + e + ' linhas de conta que o texto do PDF contem ('
+    + pct + '%), ou seja, deixou linhas para tras. Releia ' + (blocos > 1 ? 'a faixa deste bloco' : 'o documento')
+    + ' e devolva TODAS as linhas que tem rotulo e valor, uma a uma, na ordem de leitura, sem pular, '
+    + 'sem resumir e sem agrupar; subtotais e totais impressos tambem sao linhas. Nao omita uma linha '
+    + 'por ela parecer repetida (o mesmo rotulo ocorre em lancamentos diferentes). Esta resposta '
+    + 'SUBSTITUI a anterior em vez de complementa-la: devolva a faixa completa, nao so o que faltou.';
 }
 
 // ===========================================================================
