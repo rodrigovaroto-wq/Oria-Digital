@@ -1,7 +1,8 @@
 # 11 — Análise de crédito pela ótica da assessoria: Etapas 1 a 4
 
 **Data:** 05/10/2026 · **Base:** `main` em `4b536bc` · **Natureza:** especificação. Nada aqui está
-implementado; o que já existe está apontado com o arquivo que o prova.
+implementado; o que já existe está apontado com o arquivo que o prova. **Decisões do dono de
+05/10/2026 incorporadas (§7):** D1, D3, D4, D7 e D8 decididas; D5, D6 e D9 em aberto.
 
 **Origem, em ordem de autoridade:**
 
@@ -64,8 +65,7 @@ credibilidade ao mandato inteiro.
 EFD-Contribuições). **CAP** = contas a pagar (aging de fornecedores). **CAR** = contas a receber
 (aging de clientes). **Extratos bancários incluem OFX como formato de primeira classe**, por
 pedido expresso do dono na mesma conversa ("adicione OFX tbm"), ao lado do PDF e do CSV do
-internet banking. Ver §4.6.1. Se a leitura estiver errada, o §4 inteiro muda: **conferir com o
-dono antes de construir.**
+internet banking. Ver §4.6.1. **Leitura confirmada pelo dono em 05/10/2026 (D1).**
 
 ### As notas numeradas, e onde cada uma vive neste documento
 
@@ -245,12 +245,12 @@ pô-lo. Proposta: **tipo novo `ESTUDO_SETORIAL`** (complementar, escopo `caso`) 
 ao cliente** com gatilho `sempre` no banco de perguntas (`0120`): *"Que estudos, relatórios ou
 apresentações sobre o seu setor a empresa tem?"*, com motivo, risco e impacto.
 
-> **Decisão do dono:** o roadmap (§9, item 13) desaconselha tipo novo antes de a F2 dar
-> consumidor aos existentes. A F2 está com D6 verde em produção desde 22/09, então a restrição
-> formal caiu. Mas `ESTUDO_SETORIAL` nasceria `sem_consumidor`, porque estudo setorial não tem
-> linha financeira a extrair. A alternativa é o analista anexar o material ao caso fora da
-> taxonomia. **Recomendação:** tipo novo **com** consumidor declarado: o leitor de fatos (§3.4)
-> extrai dele afirmações com trecho e página, e isso é o consumidor.
+> **DECIDIDO pelo dono em 05/10/2026 (D4): o tipo `ESTUDO_SETORIAL` será criado.** O roadmap
+> (§9, item 13) desaconselhava tipo novo antes de a F2 dar consumidor aos existentes; a F2 está
+> com D6 verde em produção desde 22/09, então a restrição formal caiu. A condição para não abrir
+> um 28º tipo mudo: o tipo nasce **com consumidor declarado** em `taxonomia_tipo_cobertura`. O
+> leitor de fatos (§3.4) extrai do estudo afirmações com trecho e página, e é esse o consumidor.
+> Sem ele, o tipo entra como `sem_consumidor` com motivo e efeito (`0187`), nunca em silêncio.
 
 ### 2.3 Indicadores do setor: onde buscar e quais (N5)
 
@@ -455,10 +455,11 @@ holdings), administradores estatutários e procuradores relevantes.
    pendência (é o "Contingências vs certidões" da Classe C da `04_RECONCILIACAO`). Ação
    trabalhista em massa e ação do MP pesam mais que o valor da causa.
 
-**LGPD.** Processo criminal e dado de sócio PF são dados pessoais, e o criminal tende a sensível. A
-base legal (legítimo interesse ou execução de contrato com o cliente), a retenção e quem vê
-precisam entrar no `10_DADOS_RETENCAO_E_LGPD.md` **antes** de o sistema guardar isso.
-`DOCS_SOCIOS` já é `pii_sensivel`; as certidões de PF devem herdar a mesma classe.
+**LGPD e confidencialidade — DECIDIDO pelo dono em 05/10/2026 (D7).** Todo mandato tem NDA
+assinado. O dado fica num banco **extremamente seguro e privado, sem possibilidade de vazamento**.
+É o requisito. O que ele exige do sistema está no §7.1, porque **hoje o sistema não o cumpre**:
+qualquer usuário autenticado lê todos os mandatos (`10_DADOS_RETENCAO_E_LGPD.md` §4).
+`DOCS_SOCIOS` já é `pii_sensivel`, e as certidões de PF herdam a mesma classe.
 
 ### 3.6 Regras
 
@@ -774,9 +775,27 @@ banco não traz `FITID`). É mais fino que página e mais estável que número d
 - **Escala:** o leitor não pode carregar 150 mil lançamentos na memória de um nó Code (ficha
   `stack-overflow-push-arr-node22-limite-empirico`; a S103 já perdeu uma planilha grande na pilha
   do Merge). Leitura em fluxo, gravação em lote.
-- **PII:** extrato tem CPF de empregado, sócio e terceiros, e folha tem salário. A classe LGPD de
-  `EXTRATO_BANCARIO` e `HEADCOUNT` precisa ser revista no `10_DADOS_RETENCAO_E_LGPD.md` antes da
-  primeira gravação.
+- **PII:** extrato tem CPF de empregado, sócio e terceiros, e folha tem salário. `EXTRATO_BANCARIO`
+  sobe para `pii_sensivel`, e nenhum lançamento é gravado antes do requisito de segurança do §7.1
+  (D7).
+- **Opcional, mas usado de forma ativa e clara (D3, decidido em 05/10/2026).** SPED, CAP, CAR e
+  extrato **não são obrigatórios**: não entram no Kit Básico e a ausência deles não trava o
+  mandato. Isso não os torna passivos. O sistema tem três obrigações quando eles vierem e uma
+  quando não vierem:
+  1. **Identificar pelo conteúdo, não pelo nome.** SPED começa com `|0000|` e traz o tipo de
+     escrituração no próprio registro; OFX declara o cabeçalho (`OFXHEADER`); CNAB tem leiaute
+     posicional reconhecível. Um arquivo `relatorio_final.txt` que é uma ECD é tratado como ECD. O
+     roteador de formato (parte 1.4 de `COMO_O_SISTEMA_FUNCIONA.md`) ganha esses reconhecedores
+     antes da classificação pelo nome.
+  2. **Usar sem o analista pedir.** Chegou ECD, as reconciliações S1 e S2 rodam sozinhas. Chegou
+     OFX, a conciliação de saldo roda. Chegou aging, o total × BP roda.
+  3. **Mostrar o uso de forma explícita.** O dossiê e a tela do caso trazem um quadro **"Trilha
+     transacional"** por entidade e período, com três estados: *usado* (quantas linhas, quais
+     reconciliações rodaram e o resultado), *recebido e não lido* (com o motivo) e *não recebido*.
+     Cada número do dossiê que foi confirmado ou contradito pela trilha carrega essa marca.
+  4. **Quando não vier:** a ausência aparece como **nota com o efeito**, não como pendência
+     bloqueante. Exemplo: "sem SPED: receita conferida só contra o que o cliente declarou". É a
+     regra 1 aplicada a um insumo opcional: o banco precisa saber o que **não** foi conferido.
 
 ### 4.9 Estado e encaixe
 
@@ -829,20 +848,28 @@ sete regras do `CLAUDE.md`: invariante medido não-vazio, uma fatia por commit, 
 
 | # | Fatia | Fase | Depende de | Pronto quando | Sinal de que rodou |
 |---|---|---|---|---|---|
+| **T0** | **Requisito de segurança da D7** (§7.1): segregação por mandato, leitura por papel, registro de leitura, retenção | F17, **antecipada** | — | usuário do mandato A recebe 0 linhas do mandato B em toda tabela da trilha; leitura de extrato gera evento | teste de RLS com dois usuários e dois casos, medido não-vazio (desligar a policy reprova) |
 | **T1** | Leitor de **ECD** (`0000`, `I050`, `I051`, `I155`, `J100`, `J150`) + reconciliações S1 e S2 | F2 | — | ECD do book reconcilia com o BALANCETE e a DRE do mesmo book; ECD alterada em 1 conta reprova | linhas lidas por registro == `9999` declarado |
-| **T2** | Leitor de **extrato OFX** (1.x SGML e 2.x XML, charset declarado, `FITID`, `LEDGERBAL`, cartão via `CCSTMTRS`) + CSV + conciliação de saldo × caixa do BP + cobertura de contas | F2 | — | `book-distress` exportado também em OFX: 12 meses, 676 = caixa do BP; remover um mês reprova como "mês ausente", não como saldo zero; o mesmo período em dois arquivos não dobra o caixa (`FITID`); um lançamento apagado do OFX reprova no saldo amarrado | Σ`TRNAMT` + saldo inicial == `LEDGERBAL`, por arquivo; meses lidos × meses esperados, por conta |
+| **T2** | Leitor de **extrato OFX** (1.x SGML e 2.x XML, charset declarado, `FITID`, `LEDGERBAL`, cartão via `CCSTMTRS`) + CSV + conciliação de saldo × caixa do BP + cobertura de contas | F2 | **T0** | `book-distress` exportado também em OFX: 12 meses, 676 = caixa do BP; remover um mês reprova como "mês ausente", não como saldo zero; o mesmo período em dois arquivos não dobra o caixa (`FITID`); um lançamento apagado do OFX reprova no saldo amarrado | Σ`TRNAMT` + saldo inicial == `LEDGERBAL`, por arquivo; meses lidos × meses esperados, por conta |
 | **T3** | Leitor de **CAP/CAR** + total × BP + aging por faixa + concentração | F2 | — | `book-distress`: 14.900 = fornecedores do BP | títulos lidos × linhas do arquivo |
 | **T4** | Leitor de **EFD ICMS/IPI** (`0150`, `0200`, `C100`, `C170`, `C190`, `H010`) + S3, S4 + cadeia de suprimentos + câmbio por CFOP | F2 | T1 (data-base) | book com EFD sintética: os 20 maiores fornecedores conferem com o CAP | idem T1 |
 | **T5** | Leitor de **ECF** (`Y540`, `Y600`, `L300`) + mix por CNAE + sócios | F2 | T1 | Y540 soma a receita da `L300` | idem T1 |
 | **T6** | `consulta_externa` + Receita CNPJ (QSA, CNAE) + CEIS/CNEP + IBAMA + consumidor.gov + PGFN + lista do MTE | lateral | — | consulta vazia aparece como `nada_encontrado` com data; API derrubada aparece como `falhou` | uma linha por (entidade × fonte) por rodada, inclusive vazia |
 | **T7** | Crédito dos 20 maiores fornecedores e clientes (T4/T3 × T6) | lateral | T3, T4, T6 | fornecedor em RJ no book aparece marcado | idem T6 |
 | **T8** | Catálogo de fontes setoriais por divisão CNAE + seed + pergunta "material setorial" | lateral | T5 (segmento faturado) | caso do book mostra as fontes da sua divisão | — |
-| **T9** | Certidões e contingências: leitura + reconciliação processo × provisão | F2 | T6 | processo da certidão ausente das contingências abre pendência | certidões lidas × pessoas da lista |
+| **T9** | Certidões e contingências: leitura + reconciliação processo × provisão | F2 | T6, **T0** | processo da certidão ausente das contingências abre pendência | certidões lidas × pessoas da lista |
 | **T10** | Leitor de fatos sobre notícias e material externo (tipos de fato novos) | estende `0148` | T6 | fato sem trecho literal é recusado (como hoje) | — |
+| **T11** | Medição do `I051` (D8): em ECDs reais, % de contas analíticas com mapeamento referencial e % que o analista confirma | entrada da F4 | T1 + **ECDs reais do dono** | número publicado por ECD, com a amostra | contas lidas × contas com `I051` |
 | — | Indicadores projetados, cenários, 13 semanas projetado, rating sombra | F7 · F8 · F10 · F11 | DATA GATE | — | — |
 
-**Uma onda paralela possível**, pelo critério de `5 Prompts/03-onda-paralela.md`: **T1 ∥ T2 ∥ T3 ∥
-T6**. São quatro leitores com arquivos e tabelas disjuntos e sem dependência entre si. Conferir a
+**T0 vem antes de T2 e de T9**, que gravam extrato e certidão de PF. T1, T3 e T6 não gravam PII
+sensível e podem começar antes.
+
+**Uma onda paralela possível**, pelo critério de `5 Prompts/03-onda-paralela.md`: **T0 ∥ T1 ∥ T3 ∥
+T6**. São quatro frentes com arquivos e tabelas disjuntos e sem dependência entre si. A T2 entra
+na onda seguinte, porque depende da T0. Se a T0 aplicar RLS às tabelas que T1, T3 e T6 criam,
+deixa de ser disjunta delas: nesse caso as policies dessas tabelas nascem dentro de cada fatia, e
+a T0 cobre só as tabelas que já existem. Conferir a
 disjunção antes de despachar: se dois deles tocarem o roteador de formato do n8n na mesma onda, os
 conjuntos deixam de ser disjuntos.
 
@@ -855,19 +882,58 @@ conjuntos deixam de ser disjuntos.
 
 ---
 
-## §7 — Decisões do dono que este documento não toma
+## §7 — Decisões do dono
 
-| # | Decisão | Por que importa | Recomendação |
+**Respostas do dono em 05/10/2026.** As decisões tomadas valem como requisito. As abertas ficam
+abertas, sem recomendação transformada em decisão.
+
+| # | Decisão | Estado | O que fica valendo |
 |---|---|---|---|
-| D1 | Confirmar a leitura de "Expedes fiscais" = SPEDs (ECD, ECF, EFD) e CAP/CAR = aging | O §4 inteiro depende disso | — |
-| D2 | Trilha transacional **determinística** separada da extração por IA | É a mudança de arquitetura que N10 exige | **Sim**, pelo §4.1 |
-| D3 | Os quatro tipos sobem de complementar para **exigidos** no mandato de crédito? | Hoje são complementares (decisão de 21/09). Exigir muda o Kit Básico de todo caso | Exigido **por tipo de mandato**: em reestruturação com banco, sim; em M&A, conforme o escopo |
-| D4 | Tipo novo `ESTUDO_SETORIAL` | §2.2 | Sim, com o leitor de fatos como consumidor |
-| D5 | Provedor comercial de processos (descoberta por CPF/CNPJ) | O DataJud não busca por documento | Avaliar custo × volume de mandatos; até lá, certidões |
-| D6 | Open Finance para extratos | Elimina formato e arquivo grande | Depois de T2 provar o valor com arquivo |
-| D7 | Base legal LGPD para processos e certidões de sócios PF e para extrato | Bloqueia T2 e T9 | Registrar no `10_DADOS_RETENCAO_E_LGPD` antes da primeira gravação |
-| D8 | Medir o `I051` em ECDs reais | Pode encurtar a F4, que é o caminho crítico | Sim: é barato e informa a maior intervenção do roadmap |
-| D9 | Reclame Aqui e redes: manual, licença ou fora | Sem API pública | Manual, com registro em `consulta_externa` |
+| D1 | "Expedes fiscais" = SPEDs; CAP/CAR = contas a pagar e a receber | ✅ **decidido** | A leitura do §0 está confirmada |
+| D2 | Trilha transacional **determinística** separada da extração por IA | ⚪ não perguntada à parte | Segue como proposta do §4.1. A D3 a pressupõe: só um leitor determinístico identifica o arquivo pelo conteúdo |
+| D3 | Os quatro tipos são obrigatórios? | ✅ **decidido: não são obrigatórios**, mas o sistema **identifica quando vierem e os usa de forma ativa e clara** | §4.8: identificação pelo conteúdo, uso automático, quadro "Trilha transacional", ausência como nota com efeito e nunca como pendência bloqueante |
+| D4 | Tipo novo `ESTUDO_SETORIAL` | ✅ **decidido: criar** | §2.2: nasce com consumidor declarado (leitor de fatos) |
+| D5 | Provedor comercial de processos | ⚪ **em aberto**: "vamos pensar juntos" | Até lá, certidões (§3.5) |
+| D6 | Open Finance para extratos | ⚪ **em aberto**: "vamos pensar juntos" | Até lá, arquivo (OFX primeiro) |
+| D7 | Segurança e base legal do dado sensível | ✅ **decidido: NDA em todo mandato; banco extremamente seguro e privado, sem possibilidade de vazamento** | §7.1: o que isso exige, e a constatação de que hoje não está cumprido |
+| D8 | Medir o `I051` em ECDs reais | ✅ **decidido: medir** | Fatia T11. **Precisa de ECDs reais**, que só o dono fornece (pelo menos três, de mandatos diferentes) |
+| D9 | Reclame Aqui e redes sociais | ⚪ **em aberto**: "analisar e pensar como utilizar" | O §3.4 mantém a dimensão, e ela aparece como "não pesquisada" (R7) até haver decisão |
+
+### 7.1 O que a D7 exige do sistema, e o que existe hoje
+
+A decisão é clara: **o dado fica num banco seguro e privado, sem possibilidade de vazamento**. O
+repositório mede que hoje isso **não** é verdade, e a diferença precisa ser dita antes de o
+primeiro extrato ser gravado, não depois.
+
+| Requisito da D7 | Estado hoje, medido | Fonte |
+|---|---|---|
+| Quem não trabalha no mandato não vê o mandato | 🔴 **qualquer usuário autenticado lê todos os mandatos.** A policy de leitura é "autenticado pode tudo" desde a `0003` | `10_DADOS_RETENCAO_E_LGPD.md` §4 |
+| Leitura controlada por papel | 🔴 o papel (`0107`) controla a escrita do Portão 2, não a leitura | idem |
+| Saber quem leu o quê | 🔴 a trilha registra o que foi **decidido**, não o que foi **lido** | idem |
+| Onde o dado fica, retenção e destruição ao fim do mandato | 🟠 **[A CONFIRMAR]** no próprio documento: região, retenção do arquivo e do dado extraído, obrigação de destruição | idem, §1–§2 |
+| Arquivo original durante o processamento | 🟠 passa pelo n8n; a retenção dos logs de execução está **[A CONFIRMAR]** | idem, §5 |
+
+**Consequência para o roadmap.** O `ARQUITETURA_ALVO_E_ROADMAP.md` (§9, item 8) adiou
+"multi-tenancy / RLS por caso" porque "não bloqueia o caminho crítico". **Com a D7 e com a
+trilha transacional, passa a bloquear**: extrato, certidão de sócio PF e folha não podem ser
+gravados num banco em que todo usuário lê todo mandato. Por isso existe a fatia **T0**, que
+antecipa da F17 o mínimo para a trilha:
+
+1. **segregação por mandato:** RLS por `caso_id` em toda tabela nova da trilha, e nas antigas
+   que guardam dado do cliente;
+2. **leitura por papel:** o analista vê os mandatos a que foi atribuído, e o sênior os que
+   supervisiona;
+3. **registro de leitura** das tabelas sensíveis (extrato, certidões, documentos dos sócios) em
+   `evento_auditoria`;
+4. **resposta aos [A CONFIRMAR]** do documento 10 (região, backup, retenção, destruição). É uma
+   hora do dono com o console do Supabase aberto, não engenharia.
+
+**Uma observação sobre o NDA, para registro, sem mudar a decisão.** O NDA cobre a
+confidencialidade entre a Oria e o cliente. O extrato e as certidões trazem dados de **terceiros
+que não assinaram o NDA**: empregados, sócios PF, fornecedores PF. Para esses titulares a LGPD
+continua se aplicando. A base legal mais provável é a execução do contrato com o cliente ou o
+legítimo interesse, e isso pede **uma linha** no documento 10, não uma mudança de rumo. Quem
+confirma a redação é o jurídico da Oria.
 
 ---
 

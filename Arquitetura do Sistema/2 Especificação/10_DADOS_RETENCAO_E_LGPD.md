@@ -139,6 +139,15 @@ O que falta, em ordem de quem destrava o quê:
 2. **Papel na leitura**, não só na escrita.
 3. **Registro de acesso** — hoje a trilha registra o que foi *decidido*, não o que foi *lido*.
 
+> **DECISÃO DO DONO em 05/10/2026 (D7 da `11_ANALISE_DE_CREDITO_ASSESSORIA.md`):** todo mandato
+> tem NDA assinado, e o dado fica num banco **extremamente seguro e privado, sem possibilidade de
+> vazamento**. Isso torna os três itens acima **pré-requisito** da trilha transacional (extrato,
+> certidões de sócio PF, folha). Eles passam a ser a fatia **T0** daquela especificação, antecipada
+> da F17, e deixam de ser apenas "o que falta". Nenhum lançamento bancário nem certidão de PF é
+> gravado antes da T0. O NDA cobre a relação Oria–cliente; os terceiros que aparecem no extrato
+> (empregados, sócios PF, fornecedores PF) seguem sob a LGPD, e a base legal precisa de uma linha
+> aqui, a confirmar pelo jurídico.
+
 > **`fn_papel` não é auto-atribuível**, e isso já está travado por teste desde a `0107`: um controle
 > que o próprio usuário se concede não é controle. A promoção a `senior` é por migration.
 
