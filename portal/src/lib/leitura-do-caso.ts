@@ -92,12 +92,14 @@ export async function lerRealizadoDoCaso(
     return { docs, campos: await lerCamposDasVersoes(supabase, ids) };
   };
   const [{ docs, campos }, valores] = await Promise.all([lerCampos(), lerValoresPorAno(supabase, casoId, entidade)]);
-  const problema =
-    docs.error ? `documentos: ${docs.error.message}`
-    : campos?.error ? `linhas extraídas: ${campos.error.message}`
-    : valores.error ? `valores por ano (fn_valores_por_ano): ${valores.error.message}`
-    : docs.truncado || campos?.truncado || valores.truncado ? "a leitura bateu o teto de segurança e foi cortada"
-    : null;
+  // A primeira consulta que falhou, nesta ordem; depois o corte pelo teto.
+  const falhas: Array<[unknown, string]> = [
+    [docs.error, `documentos: ${docs.error?.message}`],
+    [campos?.error, `linhas extraídas: ${campos?.error?.message}`],
+    [valores.error, `valores por ano (fn_valores_por_ano): ${valores.error?.message}`],
+    [docs.truncado || campos?.truncado || valores.truncado, "a leitura bateu o teto de segurança e foi cortada"],
+  ];
+  const problema = falhas.find(([houve]) => houve)?.[1] ?? null;
   return { documentos: docs.data, campos: campos?.data ?? [], valores: valores.data, problema };
 }
 

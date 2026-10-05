@@ -359,14 +359,15 @@ export default async function ModelagemPage({
   // O resumo "sem base" abaixo diz POR QUE as oito não saíram, em vez de listá-las como se o
   // caso não tivesse a conta (regra 1).
   const entidadeModelada = parametros?.entidade?.trim() || null;
-  const motivoSemBase = !entidadeModelada || !parametros?.ultimo_exercicio_real
-    ? "defina a entidade modelada e o último exercício real no passo 1 e salve: as sugestões saem "
+  let motivoSemBase: string | undefined;
+  if (!entidadeModelada || !parametros?.ultimo_exercicio_real) {
+    motivoSemBase = "defina a entidade modelada e o último exercício real no passo 1 e salve: as sugestões saem "
       + "do mesmo histórico que o arquivo exportado usa, e sem os dois não há de onde somar. "
-      + "Efeito: nenhuma das oito premissas é sugerida."
-    : realizadoLido?.problema
-      ? `a leitura do realizado falhou (${realizadoLido.problema}). Efeito: nenhuma das oito `
-        + "premissas é sugerida — não é um caso sem essas contas."
-      : undefined;
+      + "Efeito: nenhuma das oito premissas é sugerida.";
+  } else if (realizadoLido?.problema) {
+    motivoSemBase = `a leitura do realizado falhou (${realizadoLido.problema}). Efeito: nenhuma das oito `
+      + "premissas é sugerida — não é um caso sem essas contas.";
+  }
   const sugestoes = motivoSemBase || !realizadoLido || !entidadeModelada || !parametros?.ultimo_exercicio_real
     ? sugerirDoRealizado([], motivoSemBase)
     : sugerirDoRealizado(agregadosDoRealizado(entradaDoRealizado(

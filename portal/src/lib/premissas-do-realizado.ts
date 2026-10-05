@@ -152,22 +152,26 @@ function razoesDeUmExercicio(a: AgregadosDoExercicio | null): PremissaSugerida[]
   // MATERIALIDADE DA DÍVIDA: abaixo de 1% do ativo total ela não sustenta uma taxa. A régua só
   // vale quando há ativo para comparar — sem ele não se sabe se é imaterial, e ausência de régua
   // não é imaterialidade.
-  const dividaImaterial = divida.n > 0 && g.ativoTotal.valor > 0 && divida.valor < g.ativoTotal.valor * 0.01
-    ? `a dívida financeira deste exercício (${divida.valor.toLocaleString("pt-BR")}) é menor que 1% do ativo `
-      + `(${g.ativoTotal.valor.toLocaleString("pt-BR")}): dividir a despesa financeira por ela produz uma taxa `
-      + "sem sentido. Efeito: o exercício fica FORA da média da taxa; se nenhum exercício tiver dívida "
-      + "material, digite a taxa que o caso vai usar"
+  const motivoSemTaxa = (): string | null => {
+    if (divida.n > 0 && g.ativoTotal.valor > 0 && divida.valor < g.ativoTotal.valor * 0.01) {
+      return `a dívida financeira deste exercício (${divida.valor.toLocaleString("pt-BR")}) é menor que 1% do ativo `
+        + `(${g.ativoTotal.valor.toLocaleString("pt-BR")}): dividir a despesa financeira por ela produz uma taxa `
+        + "sem sentido. Efeito: o exercício fica FORA da média da taxa; se nenhum exercício tiver dívida "
+        + "material, digite a taxa que o caso vai usar";
+    }
     // TAXA ACIMA DE 100% A.A. NÃO É TAXA DA DÍVIDA, é estoque contra fluxo descasado: a despesa
     // do ano veio de dívida que não sobreviveu até o fechamento, ou carrega encargo que não é
     // juro. Medido em produção (Fw Valtra, 2022): despesa 356.567 sobre dívida de fechamento
     // 208.264 (1,44% do ativo, logo ACIMA da régua de 1%) deu 171% e puxou a média de três
     // exercícios de 18% para 69%.
-    : divida.n > 0 && divida.valor > 0 && despesaFinanceira.n > 0 && despesaFinanceira.valor > divida.valor
-    ? `a despesa financeira deste exercício (${despesaFinanceira.valor.toLocaleString("pt-BR")}) é maior que `
-      + `a dívida financeira do fechamento (${divida.valor.toLocaleString("pt-BR")}): a taxa passaria de 100% `
-      + "ao ano, o que diz que a dívida do ano não é a do fechamento, não qual é o juro. Efeito: o "
-      + "exercício fica FORA da média da taxa; se nenhum exercício sobrar, digite a taxa que o caso vai usar"
-    : null;
+    if (divida.n > 0 && divida.valor > 0 && despesaFinanceira.n > 0 && despesaFinanceira.valor > divida.valor) {
+      return `a despesa financeira deste exercício (${despesaFinanceira.valor.toLocaleString("pt-BR")}) é maior que `
+        + `a dívida financeira do fechamento (${divida.valor.toLocaleString("pt-BR")}): a taxa passaria de 100% `
+        + "ao ano, o que diz que a dívida do ano não é a do fechamento, não qual é o juro. Efeito: o "
+        + "exercício fica FORA da média da taxa; se nenhum exercício sobrar, digite a taxa que o caso vai usar";
+    }
+    return null;
+  };
 
   return [
     razao("CUSTO_VARIAVEL", "Custo variável (% da receita)", "%",
@@ -200,7 +204,7 @@ function razoesDeUmExercicio(a: AgregadosDoExercicio | null): PremissaSugerida[]
     razao("PARCELA_ONEROSA", "Parcela onerosa do passivo", "%",
       "dívida financeira ÷ passivo total", divida, passivoTotal),
     razao("TAXA_DIVIDA", "Taxa média da dívida", "%",
-      "despesa financeira ÷ dívida financeira", despesaFinanceira, divida, 1, undefined, dividaImaterial),
+      "despesa financeira ÷ dívida financeira", despesaFinanceira, divida, 1, undefined, motivoSemTaxa()),
   ];
 }
 

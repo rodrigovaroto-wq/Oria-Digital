@@ -67,7 +67,7 @@ function sugerir(linhas: LinhaRealizada[]) {
   }
   const ent: EntradaModeloInstitucional = {
     caso: { nome: "t", produto: "t" }, agora: new Date(0), entidade: "T", setor: null,
-    anosHistoricos: [...new Set(linhas.map((l) => l.exercicio ?? 2025))].sort(),
+    anosHistoricos: [...new Set(linhas.map((l) => l.exercicio ?? 2025))].sort((a, b) => a - b),
     anosProjetados: [], stressPct: 0, caixaMinimo: 0, aliquotaTributos: 0,
     linhas: [...porLinha.values()], premissas: [], vinculos: [], macro: [], unidade: "R$",
   };
@@ -568,7 +568,7 @@ console.log("13. a subseção ESTOQUE dá a natureza aos itens, e o PME fecha co
     const linhasDoBanco: Parameters<typeof entradaDoRealizado>[2] = [];
     const valores: Parameters<typeof entradaDoRealizado>[3]["valores"] = [];
     let n = 0;
-    const adiciona = (aba: string, ano: number, V: string, ordem: number, secao: string, canonica: string,
+    const adiciona = (aba: string, ano: number, V: string, [ordem, secao, canonica]: [number, string, string],
                       chave: string, v: number) => {
       campos.push({
         id: `n${n++}`, documento_versao_id: V, secao, secao_canonica: canonica, entidade_coluna: null,
@@ -589,13 +589,13 @@ console.log("13. a subseção ESTOQUE dá a natureza aos itens, e o PME fecha co
         documentos.push({ id: `dn-${aba}-${ano}`, tipo_taxonomia: aba, entidade: { razao_social: "Empresa Teste" },
           periodo: { tipo: "anual", referencia: String(ano) }, documento_versao: [{ id: V, nome_original: `${aba}${ano}.pdf` }] });
       }
-      adiciona("DRE", ano, `n-DRE-${ano}`, 0, "Custos", "custos", "CUSTO DAS MERCADORIAS VENDIDAS", CMV[ano]);
+      adiciona("DRE", ano, `n-DRE-${ano}`, [0, "Custos", "custos"], "CUSTO DAS MERCADORIAS VENDIDAS", CMV[ano]);
       const itens = [0.6, 0.3, 0.1].map((f) => Math.round(ESTOQUE[ano] * f * 100) / 100);
       itens[2] = Math.round((ESTOQUE[ano] - itens[0] - itens[1]) * 100) / 100;
       // cabeçalho com o total, depois os itens — todos na subseção bruta "ESTOQUE"
-      adiciona("BALANCO", ano, `n-BALANCO-${ano}`, 0, "ESTOQUE", "ativo_circulante", "ESTOQUE", ESTOQUE[ano]);
+      adiciona("BALANCO", ano, `n-BALANCO-${ano}`, [0, "ESTOQUE", "ativo_circulante"], "ESTOQUE", ESTOQUE[ano]);
       ["TRATORES NOVOS", "IMPLEMENTOS", "PECAS DE REPOSICAO"].forEach((nome, i) =>
-        adiciona("BALANCO", ano, `n-BALANCO-${ano}`, i + 1, "ESTOQUE", "ativo_circulante", nome, itens[i]));
+        adiciona("BALANCO", ano, `n-BALANCO-${ano}`, [i + 1, "ESTOQUE", "ativo_circulante"], nome, itens[i]));
     }
     return { documentos, campos, linhasDoBanco, valores };
   };
@@ -615,7 +615,7 @@ console.log("13. a subseção ESTOQUE dá a natureza aos itens, e o PME fecha co
     rotulo_norm: "clientes a receber de terceiros", papel: "conta", unidade: "unidade", moeda: null, documentos: ["BALANCO"] });
   m2.valores.push({ rotulo_norm: "clientes a receber de terceiros", secao_canonica: "ativo_circulante", ano: 2025,
     valor: 1000, arquivo: null, origem_pagina: 1, confianca: 1, status_aceite: "aceito", aceito_por: "t" });
-  m2.campos.push({ ...m2.campos[m2.campos.length - 1], id: "x-cli", chave: "CLIENTES A RECEBER DE TERCEIROS",
+  m2.campos.push({ ...m2.campos.at(-1), id: "x-cli", chave: "CLIENTES A RECEBER DE TERCEIROS",
     valor_num: 1000, ordem: 9 } as CampoExtraido);
   const ag2 = agregadosDoRealizado(entradaDoRealizado("Empresa Teste", 2025, m2.linhasDoBanco, m2)).find((a) => a.ano === 2025)!;
   ok(Math.abs(ag2.estoques.valor - ESTOQUE[2025]) < 0.01 && ag2.clientes.valor === 1000,

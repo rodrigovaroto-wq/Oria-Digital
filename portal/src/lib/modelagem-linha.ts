@@ -274,8 +274,8 @@ export function historicoDoModelo(
     contagemUnidade.set(l.unidade, (contagemUnidade.get(l.unidade) ?? 0) + 1);
   }
   const dominante = [...contagemUnidade.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  const unidade = dominante === "milhar" ? "R$ mil"
-    : dominante === "unidade" ? "R$" : (dominante ?? "R$");
+  const ROTULO_DA_UNIDADE: Record<string, string> = { milhar: "R$ mil", unidade: "R$" };
+  const unidade = ROTULO_DA_UNIDADE[dominante ?? "unidade"] ?? dominante ?? "R$";
   return { linhas, anosHistoricos, unidade };
 }
 
