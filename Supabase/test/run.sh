@@ -418,6 +418,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/realizado_le_saldo_final_e_atu
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== o total com código contábil que virava conta (0202): o papel é o do nome, não o do código do ERP"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/papel_total_com_codigo_contabil.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

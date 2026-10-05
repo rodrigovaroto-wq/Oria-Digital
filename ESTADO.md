@@ -2,7 +2,14 @@
 
 ## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
 
-> **Migration mais nova: `0200_o_balancete_semestral_que_entrava_por_cima_do_balanco_anual.sql`**.
+> **Migration mais nova: `0202_o_total_com_codigo_contabil_que_virava_conta.sql`.** O TOTAL com código
+> contábil na frente ("2.3.71 TOTAL") deixava de ser subtotal e dobrava a dívida do mapa (102.600 contra
+> 51.300 no arnês). Com a correção, o arnês de variações vai de 1 achado para 0.
+> **`0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql`:** as sugestões do realizado passam a ler
+> "Saldo Final/atual". Era isso que deixava a tela de modelagem do Fw Valtra sem nenhuma sugestão.
+> Detalhe no commit.
+>
+> **`0200_o_balancete_semestral_que_entrava_por_cima_do_balanco_anual.sql`** (aplicada em produção).
 > A `0199` (aplicada em produção em 05/10, 182/0 na sonda) decidia "parcial entra se é a única fonte"
 > POR RÓTULO, e as contas analíticas do balancete semestral entravam por cima do balanço anual. O
 > resíduo do AC no Fw Valtra foi a −36 mi (2024) e −47 mi (2025). A 0200 decide por ano e família de

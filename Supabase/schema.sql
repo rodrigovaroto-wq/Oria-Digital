@@ -1352,6 +1352,54 @@ $_$;
 COMMENT ON FUNCTION public.fn_coluna_de_dimensao(p_coluna text) IS 'A coluna ROTULA a linha (exercício, quantidade, natureza, %) em vez de medi-la em dinheiro. Nasceu do falso positivo da v47: a guarda de padrão suspeito acusou o ano 2023 repetido na coluna "Exercício" como alucinação (0140).';
 
 --
+-- Name: fn_coluna_e_abertura(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_coluna_e_abertura(p_coluna text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select coalesce(p_coluna, '') ~* '^\s*saldo\s+(inicial|anterior)\s*$'
+$_$;
+
+--
+-- Name: FUNCTION fn_coluna_e_abertura(p_coluna text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) IS '"Saldo Inicial"/"Saldo anterior": o fechamento do ano ANTERIOR ao do documento (0199 b). Conta única de fn_valores_por_ano e fn_linhas_do_realizado (0201).';
+
+--
+-- Name: fn_coluna_e_movimento(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_coluna_e_movimento(p_coluna text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select coalesce(p_coluna, '') ~* '^\s*(d[ée]bito|cr[ée]dito)s?\s*$'
+$_$;
+
+--
+-- Name: FUNCTION fn_coluna_e_movimento(p_coluna text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) IS '"Débito"/"Crédito": movimento do período, nunca saldo (0199 a). Conta única de fn_valores_por_ano e fn_linhas_do_realizado (0201).';
+
+--
+-- Name: fn_coluna_e_saldo(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_coluna_e_saldo(p_coluna text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select coalesce(p_coluna, '') ~* '^\s*saldo\s+(final|atual|inicial|anterior)\s*$'
+$_$;
+
+--
+-- Name: FUNCTION fn_coluna_e_saldo(p_coluna text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) IS 'Coluna que NOMEIA um saldo sem trazer ano (final, atual, inicial, anterior): o ano vem da referência do documento (0201). "Saldo", "Valor" e "Ticket médio" não são — continuam sem exercício.';
+
+--
 -- Name: fn_coluna_entidade(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3803,6 +3851,29 @@ CREATE FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp wit
 $$;
 
 --
+-- Name: fn_familia_da_secao(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_familia_da_secao(p_secao text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select case when p_secao ~ '^(ativo|passivo)(_|$)' or p_secao = 'patrimonio_liquido'
+                   then 'patrimonial'
+              when p_secao in ('receita_bruta', 'custos', 'despesas_operacionais',
+                               'resultado_financeiro', 'impostos_lucro')
+                   then 'resultado'
+              when p_secao ~ '^atividades_' then 'fluxo'
+              else coalesce(p_secao, '')   -- NULL, dmpl, dva, NAO_CLASSIFICAVEL: família própria
+         end
+$_$;
+
+--
+-- Name: FUNCTION fn_familia_da_secao(p_secao text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_familia_da_secao(p_secao text) IS 'Família da demonstração pela seção canônica: patrimonial, resultado, fluxo ou a própria seção (0200). Conta única (0201).';
+
+--
 -- Name: fn_fator_escala(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5727,12 +5798,13 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
     AS $$
   -- marca-0150
   -- marca-0151
+  -- marca-0201
   --
   -- A MARCA FICA, e o motivo é o mesmo da 0102: a sonda de instalação confere se
   -- a correção está APLICADA NO BANCO procurando `0150` no corpo desta função —
   -- é o que separa "mergeado" de "aplicado". Uma reemissão futura mantém a
   -- marca; trocá-la apagaria a resposta da pergunta que ela faz.
-  with bruto as (
+  with bruto as materialized (
     select
       ce.secao_canonica,
       ce.chave,
@@ -5744,7 +5816,18 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
                            where ce2.documento_versao_id = ce.documento_versao_id
                              and ce2.entidade_coluna is not null) > 1
                     then null else e.razao_social end) as entidade,
-      fn_exercicio_da_coluna(ce.periodo_coluna) as exercicio,
+      -- 0201: a coluna que NOMEIA um saldo ("Saldo Final", "Saldo atual", "Saldo Inicial", "Saldo
+      -- anterior") não traz ano e herda o da referência do documento; a de ABERTURA é o ano - 1.
+      -- Coluna com ano no texto segue lendo o texto; coluna sem ano e sem nome de saldo ("Saldo",
+      -- "Valor", "Ticket médio") segue SEM exercício — e portanto fora (0150).
+      case when fn_coluna_e_saldo(ce.periodo_coluna)
+           then fn_ano_da_coluna(ce.periodo_coluna, p.referencia)
+                - (case when fn_coluna_e_abertura(ce.periodo_coluna) then 1 else 0 end)
+           else fn_exercicio_da_coluna(ce.periodo_coluna)
+      end as exercicio,
+      fn_coluna_e_abertura(ce.periodo_coluna) as abertura,
+      fn_periodo_e_parcial(ce.periodo_coluna, d.tipo_taxonomia, p.tipo, p.referencia) as parcial,
+      fn_familia_da_secao(ce.secao_canonica) as familia,
       ce.valor_num,
       ce.unidade,
       d.tipo_taxonomia,
@@ -5753,6 +5836,7 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
     from campo_extraido ce
     join documento_versao dv on dv.id = ce.documento_versao_id
     join documento d on d.id = dv.documento_id
+    left join periodo p on p.id = d.periodo_id
     left join entidade e on e.id = d.entidade_id
     left join taxonomia_tipo_documento t on t.codigo = d.tipo_taxonomia
     cross join lateral fn_autoridade_do_documento(d.id) aut
@@ -5763,25 +5847,42 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
       -- entra somando: o padrão seguro é o de sempre, e o catálogo é quem
       -- declara a exceção.
       and coalesce(t.abertura_analitica, false) = false
-      and fn_exercicio_da_coluna(ce.periodo_coluna) is not null
+      -- 0201 (d): a mesma exclusão da série por ano. (O movimento, 0199 a, não precisa de filtro AQUI:
+      -- "Débito"/"Crédito" não trazem ano nem nome de saldo, então `exercicio` já é NULL e a linha
+      -- cai em `filtrado`. MEDIDO: tirar o filtro explícito não reprova nenhum assert, por isso ele
+      -- não foi escrito — código sem efeito medível é o que a regra 2 proíbe.)
+      and coalesce(t.categoria, '') not in ('Societário/Legal', 'Garantias/Sócios')
   ),
   filtrado as (
-    select * from bruto
-    where p_entidade is null
-       or fn_normalizar_texto(entidade) = fn_normalizar_texto(p_entidade)
+    select b.*,
+           fn_normalizar_texto(coalesce(b.entidade, '')) as entidade_chave
+    from bruto b
+    where b.exercicio is not null
+      and (p_entidade is null
+           or fn_normalizar_texto(b.entidade) = fn_normalizar_texto(p_entidade))
+  ),
+  -- 0201 (c'): o período PARCIAL só entra no exercício em que a entidade não tem anual da mesma
+  -- família — a decisão é do ANO, como na 0200.
+  elegivel as (
+    select f.*,
+           bool_or(not coalesce(f.parcial, false))
+             over (partition by f.entidade_chave, f.familia, f.exercicio) as ano_tem_anual
+    from filtrado f
   ),
   papel_do_rotulo as (
     select distinct chave, tipo_taxonomia, unidade,
            fn_papel_linha(chave, tipo_taxonomia, unidade) as papel
-    from (select distinct chave, tipo_taxonomia, unidade from filtrado) d
+    from (select distinct chave, tipo_taxonomia, unidade from elegivel
+           where not (coalesce(parcial, false) and ano_tem_anual)) d
   ),
   com_papel as (
     select f.*, p.papel
-    from filtrado f
+    from elegivel f
     join papel_do_rotulo p
       on p.chave = f.chave
      and p.tipo_taxonomia is not distinct from f.tipo_taxonomia
      and p.unidade is not distinct from f.unidade
+    where not (coalesce(f.parcial, false) and f.ano_tem_anual)
   ),
   agrupado as (
     select
@@ -5790,6 +5891,9 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
       (array_agg(c.chave order by length(c.chave)))[1] as chave,
       max(c.entidade) as entidade,
       c.exercicio,
+      -- 0201: o FECHAMENTO vence a abertura do mesmo exercício (a abertura é o eco dele no ano
+      -- seguinte), antes da autoridade e do módulo.
+      --
       -- 0151: O DESEMPATE ENTRE DOCUMENTOS, QUE ERA SILENCIOSO.
       --
       -- Dentro do MESMO exercício, a mesma conta pode vir de dois documentos (o
@@ -5804,7 +5908,7 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
       -- regra silenciosa por outra — e quem avisa que houve empate é
       -- `fn_reconciliar_versoes_do_periodo`, com o número perdedor à vista.
       (array_agg(c.valor_num
-                 order by c.autoridade desc, abs(c.valor_num) desc nulls last))[1] as valor,
+                 order by c.abertura, c.autoridade desc, abs(c.valor_num) desc nulls last))[1] as valor,
       (array_agg(c.papel order by fn_papel_prioridade(c.papel)))[1] as papel,
       array_agg(distinct c.tipo_taxonomia) as documentos,
       -- Quantos documentos DISTINTOS trouxeram esta linha neste exercício: é o
@@ -5873,7 +5977,7 @@ $$;
 -- Name: FUNCTION fn_linhas_do_realizado(p_caso_id uuid, p_entidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text) IS 'As linhas do caso POR EXERCÍCIO, de uma entidade, sem o que não se soma (0150): fora a abertura analítica (balancete, aging, estoque, extrato — elas reabrem contas que a demonstração já declara), fora o combinado (soma das empresas), fora a coluna que não nomeia exercício, e com o total que veio acompanhado das próprias componentes marcado `subtotal`. Desde a 0151, quando dois documentos do mesmo exercício discordam sobre a mesma conta, quem decide é a AUTORIDADE DOCUMENTAL — o maior módulo da 0042 fica como último recurso, para o empate. É a base das premissas do realizado e da média histórica; a LISTA da tela continua saindo de fn_linhas_para_modelagem, que agrupa por rótulo e não por exercício.';
+COMMENT ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text) IS 'As linhas do caso POR EXERCÍCIO, de uma entidade, sem o que não se soma (0150): fora a abertura analítica (balancete, aging, estoque, extrato — elas reabrem contas que a demonstração já declara), fora o combinado (soma das empresas), fora a coluna que não nomeia exercício, e com o total que veio acompanhado das próprias componentes marcado `subtotal`. 0201: lê também o documento anual de "Saldo Final"/"Saldo atual" (ano da referência) e "Saldo Inicial"/"Saldo anterior" (ano - 1, atrás do fechamento), sem movimento, sem Societário/Legal, e com o período parcial só no exercício sem anual da mesma família — as mesmas contas de fn_valores_por_ano. É a base das premissas do realizado e da média histórica; a LISTA da tela continua saindo de fn_linhas_para_modelagem, que agrupa por rótulo.';
 
 --
 -- Name: fn_linhas_do_tipo(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -6677,9 +6781,12 @@ COMMENT ON FUNCTION public.fn_papel_do_rotulo_no_caso(p_caso_id uuid, p_rotulo_n
 CREATE FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text DEFAULT NULL::text, p_unidade text DEFAULT NULL::text) RETURNS text
     LANGUAGE sql IMMUTABLE
     AS $$
+  -- marca-0202
   with n as (
-    select fn_normalizar_texto(p_chave) as t,
-           fn_tokens_estruturais(p_chave) as toks
+    -- 0202: o CÓDIGO CONTÁBIL do ERP na frente do rótulo ("2.3.71 TOTAL — saldo devedor") não é
+    -- parte do nome: sem tirá-lo, o prefixo `total` não está mais no INÍCIO e o TOTAL vira conta.
+    select fn_normalizar_texto(fn_sem_codigo_de_conta(p_chave)) as t,
+           fn_tokens_estruturais(fn_sem_codigo_de_conta(p_chave)) as toks
   )
   select case
     -- ---- DERIVADO: indicador gerencial, não dinheiro ------------------------
@@ -6759,7 +6866,7 @@ $$;
 -- Name: FUNCTION fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text) IS 'Papel da linha na modelagem: conta | subtotal | derivado | serie_mensal. Lista FECHADA de padrões (não heurística de semelhança) porque errar para subtotal esconde conta de verdade e errar para conta deixa passar dupla contagem. 0102: tokeniza o rótulo uma vez e compara os nove grupos contra o resultado, em vez de nove chamadas a fn_rotulo_estrutural. 0116: cobre o topo da DRE e os totais da DVA, que só passam a chegar depois de o prompt exigir o total IMPRESSO como linha.';
+COMMENT ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text) IS 'Papel da linha na modelagem: conta | subtotal | derivado | serie_mensal. Lista FECHADA de padrões (não heurística de semelhança) porque errar para subtotal esconde conta de verdade e errar para conta deixa passar dupla contagem. 0102: tokeniza o rótulo uma vez e compara os nove grupos contra o resultado, em vez de nove chamadas a fn_rotulo_estrutural. 0116: cobre o topo da DRE e os totais da DVA, que só passam a chegar depois de o prompt exigir o total IMPRESSO como linha. 0202: o código contábil do ERP na frente do rótulo ("2.3.71 TOTAL") não conta — o papel é o do nome.';
 
 --
 -- Name: fn_papel_prioridade(text); Type: FUNCTION; Schema: public; Owner: -
@@ -7414,6 +7521,31 @@ begin
   return r;                                                             -- texto livre normalizado
 end;
 $_$;
+
+--
+-- Name: fn_periodo_e_parcial(text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select (coalesce(p_coluna, '') !~ '(31/12|12/31|-12-31)'
+       and (   p_tipo_documento = 'BALANCETE'
+            or p_periodo_tipo in ('mes', 'trimestre')
+            or (p_periodo_tipo = 'data-base' and coalesce(p_referencia, '') !~ '(31/12|12/31|-12-31)')
+            or coalesce(p_referencia, '') ~* '^\s*[1-4]\s*t\s*\d{2,4}\s*$'
+            or coalesce(p_referencia, '') ~ '^\s*(0?[1-9]|1[01])/(19|20)\d{2}\s*$'
+            or coalesce(p_referencia, '') ~ '^\s*(19|20)\d{2}-(0[1-9]|1[01])\s*$'
+            or (coalesce(p_referencia, '') ~* '\d{1,2}/\d{1,2}/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*\d{1,2}/\d{1,2}/(19|20)\d{2}'
+                and coalesce(p_referencia, '') !~ '^\s*0?1/0?1/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*31/12/(19|20)\d{2}\s*$')
+           ))
+$_$;
+
+--
+-- Name: FUNCTION fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) IS 'Ocorrência de período PARCIAL (balancete, mês, trimestre, intervalo que não é o ano, data-base que não é 31/12) — só entra no ano em que a entidade não tem anual da mesma família (0199 c, 0200). Conta única (0201).';
 
 --
 -- Name: fn_periodo_por_extenso(text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -12729,6 +12861,23 @@ $$;
 COMMENT ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) IS 'Esta seção canônica é de RESULTADO? Só nelas a pergunta "é recorrente?" faz sentido — conta de balanço não é recorrente nem não recorrente. Medido: rodar a classificação em tudo produziria 3.195 pedidos de revisão contra 527 linhas em que a pergunta cabe, e um analista que recebe 3.195 itens não revisa nenhum (é a lição do Sinal 1 refinado na 0022).';
 
 --
+-- Name: fn_sem_codigo_de_conta(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  -- A MESMA definição de `CODIGO_DE_CONTA_NO_INICIO` (portal/src/lib/modelo-institucional.ts).
+  select regexp_replace(coalesce(p_rotulo, ''), '^\s*\d+(?:\.\d+){2,}\s*[-–—.)]?\s*', '')
+$$;
+
+--
+-- Name: FUNCTION fn_sem_codigo_de_conta(p_rotulo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) IS 'Tira do INÍCIO do rótulo o código contábil do ERP ("2.3.71 TOTAL" -> "TOTAL"): três grupos numéricos ou mais separados por ponto, separador opcional. A mesma definição de CODIGO_DE_CONTA_NO_INICIO do portal (0202).';
+
+--
 -- Name: fn_soma_secao(uuid, text[], text, text, text[], text[]); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -13764,39 +13913,22 @@ COMMENT ON FUNCTION public.fn_valor_pt_br(p_valor numeric, p_unidade text) IS 'V
 
 CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAULT NULL::text) RETURNS TABLE(rotulo_norm text, secao_canonica text, ano integer, valor numeric, n_ocorrencias bigint, arquivo text, origem_pagina integer, confianca numeric, status_aceite text, aceito_por text)
     LANGUAGE sql STABLE
-    AS $_$
+    AS $$
   -- marca-0125
   -- marca-0200
+  -- marca-0201
   with ocorrencias as materialized (
     select
       fn_normalizar_texto(ce.chave) as rotulo_norm,
       ce.secao_canonica,
       -- 0199 (b): a coluna de ABERTURA é o fechamento do ano ANTERIOR ao do documento.
       fn_ano_da_coluna(ce.periodo_coluna, p.referencia)
-        - (case when coalesce(ce.periodo_coluna, '') ~* '^\s*saldo\s+(inicial|anterior)\s*$'
-                then 1 else 0 end) as ano,
-      (coalesce(ce.periodo_coluna, '') ~* '^\s*saldo\s+(inicial|anterior)\s*$') as abertura,
+        - (case when fn_coluna_e_abertura(ce.periodo_coluna) then 1 else 0 end) as ano,
+      fn_coluna_e_abertura(ce.periodo_coluna) as abertura,
       -- 0199 (c): o saldo de um documento de período PARCIAL só vale na falta do anual.
-      -- Uma coluna que traz 31/12 explícito é fim de ano mesmo num documento parcial.
-      (coalesce(ce.periodo_coluna, '') !~ '(31/12|12/31|-12-31)'
-       and (   d.tipo_taxonomia = 'BALANCETE'
-            or p.tipo in ('mes', 'trimestre')
-            or (p.tipo = 'data-base' and coalesce(p.referencia, '') !~ '(31/12|12/31|-12-31)')
-            or coalesce(p.referencia, '') ~* '^\s*[1-4]\s*t\s*\d{2,4}\s*$'
-            or coalesce(p.referencia, '') ~ '^\s*(0?[1-9]|1[01])/(19|20)\d{2}\s*$'
-            or coalesce(p.referencia, '') ~ '^\s*(19|20)\d{2}-(0[1-9]|1[01])\s*$'
-            or (coalesce(p.referencia, '') ~* '\d{1,2}/\d{1,2}/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*\d{1,2}/\d{1,2}/(19|20)\d{2}'
-                and coalesce(p.referencia, '') !~ '^\s*0?1/0?1/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*31/12/(19|20)\d{2}\s*$')
-           )) as parcial,
+      fn_periodo_e_parcial(ce.periodo_coluna, d.tipo_taxonomia, p.tipo, p.referencia) as parcial,
       -- 0200: a FAMÍLIA da demonstração e a ENTIDADE, para decidir o parcial por ano e não por rótulo.
-      case when ce.secao_canonica ~ '^(ativo|passivo)(_|$)' or ce.secao_canonica = 'patrimonio_liquido'
-                then 'patrimonial'
-           when ce.secao_canonica in ('receita_bruta', 'custos', 'despesas_operacionais',
-                                      'resultado_financeiro', 'impostos_lucro')
-                then 'resultado'
-           when ce.secao_canonica ~ '^atividades_' then 'fluxo'
-           else coalesce(ce.secao_canonica, '')   -- NULL, dmpl, dva, NAO_CLASSIFICAVEL: família própria
-      end as familia,
+      fn_familia_da_secao(ce.secao_canonica) as familia,
       case when p_entidade is not null then ''   -- a consulta já é de UMA entidade
            else fn_normalizar_texto(coalesce(ce.entidade_coluna, e.razao_social, '')) end as entidade_chave,
       ce.valor_num as valor,
@@ -13820,7 +13952,7 @@ CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAUL
       -- 0199 (d): documento que não é demonstração não tem saldo (quotas, % de participação).
       and coalesce(t.categoria, '') not in ('Societário/Legal', 'Garantias/Sócios')
       -- 0199 (a): movimento do período (Débito/Crédito) nunca é saldo.
-      and coalesce(ce.periodo_coluna, '') !~* '^\s*(d[ée]bito|cr[ée]dito)s?\s*$'
+      and not fn_coluna_e_movimento(ce.periodo_coluna)
   ),
   -- 0200: a decisão "parcial entra se for a única fonte" é do ANO (da entidade e da família da
   -- demonstração), não do rótulo. Um balancete semestral traz centenas de contas analíticas que o
@@ -13857,13 +13989,13 @@ CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAUL
   from escolhido
   where rn = 1
   order by rotulo_norm, ano;
-$_$;
+$$;
 
 --
 -- Name: FUNCTION fn_valores_por_ano(p_caso_id uuid, p_entidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) IS 'Série histórica por (rótulo, seção, ano), só da versão vigente (0102), com a proveniência DA CÉLULA (0125). 0199: coluna de movimento (Débito/Crédito) nunca é saldo; "Saldo Inicial"/"Saldo Anterior" é o fechamento do ano ANTERIOR e perde para o fechamento do mesmo ano; tipo de categoria Societário/Legal e Garantias/Sócios não entra. 0200: ocorrência de período PARCIAL (balancete, mês, trimestre, intervalo) só entra num ano em que a entidade não tem NENHUMA ocorrência anual da mesma família (patrimonial / resultado / fluxo / seção própria) — decisão do ANO, não do rótulo. Dentro da camada, maior módulo com sinal (0042); desempate determinístico.';
+COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) IS 'Série histórica por (rótulo, seção, ano), só da versão vigente (0102), com a proveniência DA CÉLULA (0125). 0199: coluna de movimento (Débito/Crédito) nunca é saldo; "Saldo Inicial"/"Saldo Anterior" é o fechamento do ano ANTERIOR e perde para o fechamento do mesmo ano; tipo de categoria Societário/Legal e Garantias/Sócios não entra. 0200: ocorrência de período PARCIAL (balancete, mês, trimestre, intervalo) só entra num ano em que a entidade não tem NENHUMA ocorrência anual da mesma família (patrimonial / resultado / fluxo / seção própria) — decisão do ANO, não do rótulo. 0201: a classificação da coluna e do período vem das funções puras fn_coluna_e_*, fn_periodo_e_parcial e fn_familia_da_secao, as MESMAS de fn_linhas_do_realizado. Dentro da camada, maior módulo com sinal (0042); desempate determinístico.';
 
 --
 -- Name: fn_veredito_producao(text, uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17273,6 +17405,24 @@ GRANT ALL ON FUNCTION public.fn_cnpj_canonico(p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_cobertura_de_tipos() TO authenticated;
 
 --
+-- Name: FUNCTION fn_coluna_e_abertura(p_coluna text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_coluna_e_movimento(p_coluna text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_coluna_e_saldo(p_coluna text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) TO authenticated;
+
+--
 -- Name: FUNCTION fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer); Type: ACL; Schema: public; Owner: -
 --
 
@@ -17499,6 +17649,12 @@ GRANT ALL ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) TO authentica
 --
 
 GRANT ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) TO authenticated;
+
+--
+-- Name: FUNCTION fn_familia_da_secao(p_secao text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_fatos_do_caso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -17797,6 +17953,12 @@ GRANT ALL ON TABLE public.entidade TO service_role;
 GRANT ALL ON FUNCTION public.fn_perimetro_vigente(p_caso_id uuid, p_escopo text, p_data date) TO authenticated;
 
 --
+-- Name: FUNCTION fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) TO authenticated;
+
+--
 -- Name: FUNCTION fn_periodo_por_extenso(p_tipo text, p_referencia text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -18020,6 +18182,12 @@ GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO authenti
 --
 
 GRANT ALL ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_sem_codigo_de_conta(p_rotulo text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text); Type: ACL; Schema: public; Owner: -
