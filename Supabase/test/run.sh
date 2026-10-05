@@ -149,6 +149,18 @@ if ! grep -qF "$ultima" ESTADO.md; then
   echo "   Atualize o ESTADO.md — ele é o que alguém lê para saber onde o projeto está."
   exit 1
 fi
+# E A DECLARAÇÃO NÃO PODE MENTIR. O `grep` acima passa com o nome em QUALQUER lugar do arquivo — e
+# dois PRs com migration abertos ao mesmo tempo produzem exatamente o caso que ele não vê: medido no
+# merge simulado do #252 (0199–0204) com o #253 (0205) em 05/10/2026, o topo dizia "Migration mais
+# nova: 0204" e o portão passava porque a seção do #253, mais abaixo, citava a 0205. Toda linha que
+# DECLARA a mais nova tem de citar a de verdade; arquivo sem declaração fica só com o grep acima.
+declaradas=$(grep -n "Migration mais nova" ESTADO.md | grep -vF "$ultima" || true)
+if [ -n "$declaradas" ]; then
+  echo "FALHOU: o ESTADO.md declara como mais nova uma migration que não é a $ultima:"
+  echo "$declaradas" | cut -c1-160 | sed 's/^/   /'
+  echo "   Depois de um merge de dois PRs com migration, o topo tem de passar a citar a $ultima."
+  exit 1
+fi
 echo "   $ultima"
 
 # A 0163 nasceu porque a 0161/0162 patchavam fn_registrar_diagnostico por

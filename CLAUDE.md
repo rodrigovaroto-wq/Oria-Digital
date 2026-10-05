@@ -145,6 +145,16 @@ cd portal && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/eslint . \
 > ninguém lembrar: `node .claude/verificar-espelho-claude-md.mjs` roda no CI e reprova a
 > divergência dos dois lados, inclusive arquivo citado que não existe mais.
 
+**Conflito de merge em arquivo DERIVADO nunca se resolve à mão.** `grafo.jsonl`, os quatro
+`N8N/workflow*.json`, `Supabase/conferir/conferir_chamadas.sql`, `Supabase/schema.sql` e as
+fixtures do book conflitam em TODO par de PRs abertos juntos (medido em 05/10/2026: #252 × #253,
+três conflitos, dois deles derivados). A regra é pegar qualquer um dos dois lados e REGERAR com os
+comandos acima, nesta ordem: geradores do n8n → conferidor SQL → `run.sh` (reescreve o
+`schema.sql`) → teste do conhecimento → `indexar.mjs` por último, porque ele indexa todos os
+outros. E dois PRs com migration: o topo do `ESTADO.md` passa a citar a de número maior. Desde
+05/10 o `run.sh` reprova a declaração velha, que antes passava se o nome aparecesse em qualquer
+linha.
+
 `npx` **não** serve no lugar de `./portal/node_modules/.bin/<bin>` — para o `tsx`, o `tsc`, o
 `eslint` ou o `next`: sem o binário do lock, o npx baixa a última versão publicada no dia. Esta
 regra existia aqui desde sempre e o CI a desobedecia em três linhas até 01/09 (era o que o Sonar
