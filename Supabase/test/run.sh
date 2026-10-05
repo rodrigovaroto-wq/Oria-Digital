@@ -403,6 +403,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/faixa_de_anos_do_periodo.test.
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== a série por ano que lia movimento e abertura como saldo (0199): Débito, Saldo Inicial, balancete, contrato social"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/serie_por_ano_movimento_e_abertura.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== ingestão sobre o book CANASTRA (o difícil: 15 armadilhas, 3 exercícios, 6 empresas)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/canastra.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

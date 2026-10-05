@@ -13764,73 +13764,84 @@ COMMENT ON FUNCTION public.fn_valor_pt_br(p_valor numeric, p_unidade text) IS 'V
 
 CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAULT NULL::text) RETURNS TABLE(rotulo_norm text, secao_canonica text, ano integer, valor numeric, n_ocorrencias bigint, arquivo text, origem_pagina integer, confianca numeric, status_aceite text, aceito_por text)
     LANGUAGE sql STABLE
-    AS $$
+    AS $_$
   -- marca-0125
-  with ocorrencias as (
+  with ocorrencias as materialized (
     select
       fn_normalizar_texto(ce.chave) as rotulo_norm,
       ce.secao_canonica,
-      fn_ano_da_coluna(ce.periodo_coluna, p.referencia) as ano,
+      -- 0199 (b): a coluna de ABERTURA é o fechamento do ano ANTERIOR ao do documento.
+      fn_ano_da_coluna(ce.periodo_coluna, p.referencia)
+        - (case when coalesce(ce.periodo_coluna, '') ~* '^\s*saldo\s+(inicial|anterior)\s*$'
+                then 1 else 0 end) as ano,
+      (coalesce(ce.periodo_coluna, '') ~* '^\s*saldo\s+(inicial|anterior)\s*$') as abertura,
+      -- 0199 (c): o saldo de um documento de período PARCIAL só vale na falta do anual.
+      -- Uma coluna que traz 31/12 explícito é fim de ano mesmo num documento parcial.
+      (coalesce(ce.periodo_coluna, '') !~ '(31/12|12/31|-12-31)'
+       and (   d.tipo_taxonomia = 'BALANCETE'
+            or p.tipo in ('mes', 'trimestre')
+            or (p.tipo = 'data-base' and coalesce(p.referencia, '') !~ '(31/12|12/31|-12-31)')
+            or coalesce(p.referencia, '') ~* '^\s*[1-4]\s*t\s*\d{2,4}\s*$'
+            or coalesce(p.referencia, '') ~ '^\s*(0?[1-9]|1[01])/(19|20)\d{2}\s*$'
+            or coalesce(p.referencia, '') ~ '^\s*(19|20)\d{2}-(0[1-9]|1[01])\s*$'
+            or (coalesce(p.referencia, '') ~* '\d{1,2}/\d{1,2}/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*\d{1,2}/\d{1,2}/(19|20)\d{2}'
+                and coalesce(p.referencia, '') !~ '^\s*0?1/0?1/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*31/12/(19|20)\d{2}\s*$')
+           )) as parcial,
       ce.valor_num as valor,
       dv.nome_original as arquivo,
       ce.origem_pagina,
       ce.confianca,
       ce.status_aceite,
-      ce.aceito_por
+      ce.aceito_por,
+      ce.ordem
     from campo_extraido ce
     join documento_versao dv on dv.id = ce.documento_versao_id
     join documento d on d.id = dv.documento_id
     left join periodo p on p.id = d.periodo_id
     left join entidade e on e.id = d.entidade_id
+    left join taxonomia_tipo_documento t on t.codigo = d.tipo_taxonomia
     where d.caso_id = p_caso_id
       and ce.valor_num is not null
       and (p_entidade is null
            or fn_mesma_entidade(coalesce(ce.entidade_coluna, e.razao_social, ''), p_entidade))
       and dv.id = fn_versao_com_extracao(d.id)
+      -- 0199 (d): documento que não é demonstração não tem saldo (quotas, % de participação).
+      and coalesce(t.categoria, '') not in ('Societário/Legal', 'Garantias/Sócios')
+      -- 0199 (a): movimento do período (Débito/Crédito) nunca é saldo.
+      and coalesce(ce.periodo_coluna, '') !~* '^\s*(d[ée]bito|cr[ée]dito)s?\s*$'
   ),
-  agrupado as (
-    select o.rotulo_norm, o.secao_canonica, o.ano,
-           -- Maior módulo COM SINAL, igual à 0042. Duas grafias da mesma conta no
-           -- mesmo exercício não somam: representam o mesmo saldo.
-           --
-           -- NÃO REESCREVER esta expressão. Ver o cabeçalho: em empate de módulo
-           -- com sinais opostos, outra forma de "maior módulo" pode escolher outro
-           -- valor, e isso é número de modelo mudando de graça.
-           (array_agg(o.valor order by abs(o.valor) desc))[1] as valor,
-           count(*) as n_ocorrencias
+  escolhido as (
+    select
+      o.rotulo_norm, o.secao_canonica, o.ano, o.valor,
+      -- quantas ocorrências elegíveis o (rótulo, seção, ano) tem, incluindo as que perderam
+      count(*) over (partition by o.rotulo_norm, o.secao_canonica, o.ano) as n_ocorrencias,
+      o.arquivo, o.origem_pagina, o.confianca, o.status_aceite, o.aceito_por,
+      row_number() over (
+        partition by o.rotulo_norm, o.secao_canonica, o.ano
+        order by o.parcial,            -- (c) anual antes de parcial
+                 o.abertura,           -- (b) fechamento antes de abertura
+                 abs(o.valor) desc,    -- maior módulo COM SINAL, a regra da 0042
+                 o.valor desc,         -- (e) empate de módulo com sinais opostos: o positivo
+                 o.confianca desc nulls last,
+                 o.origem_pagina asc nulls last,
+                 o.arquivo,
+                 o.ordem
+      ) as rn
     from ocorrencias o
     where o.ano is not null
-    group by o.rotulo_norm, o.secao_canonica, o.ano
-  ),
-  -- A PROVENIÊNCIA DA OCORRÊNCIA QUE DEU O VALOR, e não de uma qualquer do grupo.
-  -- O desempate entre ocorrências de valor idêntico é declarado, para a nota não
-  -- mudar de conteúdo entre duas execuções sobre o mesmo dado: maior confiança
-  -- primeiro (é a que o sistema considera mais confiável), depois a página mais
-  -- baixa (é onde um humano procuraria primeiro).
-  com_proveniencia as (
-    select distinct on (a.rotulo_norm, a.secao_canonica, a.ano)
-           a.rotulo_norm, a.secao_canonica, a.ano, a.valor, a.n_ocorrencias,
-           o.arquivo, o.origem_pagina, o.confianca, o.status_aceite, o.aceito_por
-    from agrupado a
-    left join ocorrencias o
-      on o.rotulo_norm = a.rotulo_norm
-     and o.secao_canonica is not distinct from a.secao_canonica
-     and o.ano = a.ano
-     and o.valor = a.valor
-    order by a.rotulo_norm, a.secao_canonica, a.ano,
-             o.confianca desc nulls last, o.origem_pagina asc nulls last, o.arquivo
   )
   select rotulo_norm, secao_canonica, ano, valor, n_ocorrencias,
          arquivo, origem_pagina, confianca, status_aceite, aceito_por
-  from com_proveniencia
+  from escolhido
+  where rn = 1
   order by rotulo_norm, ano;
-$$;
+$_$;
 
 --
 -- Name: FUNCTION fn_valores_por_ano(p_caso_id uuid, p_entidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) IS 'Série histórica por (rótulo, seção, ano) — valor de maior módulo com sinal (0042), só da versão vigente (0102). 0125: acrescenta a proveniência DA CÉLULA (arquivo, página, confiança, aceite), da ocorrência que produziu aquele valor naquele ano — nunca a de outro exercício.';
+COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) IS 'Série histórica por (rótulo, seção, ano), só da versão vigente (0102), com a proveniência DA CÉLULA (0125). 0199: coluna de movimento (Débito/Crédito) nunca é saldo; "Saldo Inicial"/"Saldo Anterior" é o fechamento do ano ANTERIOR e perde para o fechamento do mesmo ano; período anual vence balancete/período parcial (que só entra na falta do anual); tipo de categoria Societário/Legal e Garantias/Sócios não entra. Dentro da camada, maior módulo com sinal (0042); desempate determinístico.';
 
 --
 -- Name: fn_veredito_producao(text, uuid); Type: FUNCTION; Schema: public; Owner: -

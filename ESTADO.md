@@ -1,5 +1,20 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
+
+> **Migration mais nova: `0199_a_serie_por_ano_que_lia_movimento_e_abertura_como_saldo.sql`.**
+> `fn_valores_por_ano` montava a série (rótulo, seção, ano) com o MAIOR |valor| entre todas as
+> colunas e documentos do ano. No caso real Fw Valtra (`03a66ab6`, MOTO AGRICOLA VOLKWEIS LTDA):
+> - o Débito do balancete semestral virou o ATIVO de 2025: 125,86 mi contra 38,48 mi no balanço;
+> - Saldo Inicial/anterior era lido como o ano corrente;
+> - linhas do contrato social entravam no PL.
+>
+> O balanço não fechava em ~90,5 mi. Agora movimento fica fora, abertura vale para ano−1, o anual
+> vence o parcial e os tipos Societário/Garantias ficam fora. Teste com 21 asserts: 19 reprovam com a
+> correção desligada. A ingestão do caso (execução 8433) provou que o n8n republicado grava no banco.
+> A modelagem foi entregue ao dono (v2: `auditar-xlsx` 10/11, balanço fecha nas 9 colunas).
+> Detalhe: HANDOFF S105 §2c.
+
 ## SESSÃO 105 (05/10/2026) — PR #251 mergeado: três decisões do dono fechadas no export
 
 > **Produção conferida só leitura em 05/10:** Supabase em `0198`

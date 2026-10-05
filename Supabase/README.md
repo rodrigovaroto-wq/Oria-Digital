@@ -786,6 +786,17 @@ supabase db execute --file Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0198' and not presente;                 -- ZERO linhas
 
+# A 0199 REEMITE fn_valores_por_ano (mesma assinatura): a série por ano lia "Débito"/"Crédito" do balancete
+# como saldo, "Saldo Inicial"/"Saldo anterior" como o ano do documento, o saldo de 30/06 como o de 31/12 e o
+# CONTRATO_SOCIAL como PL. MEDIDO EM PRODUÇÃO (05/10/2026, só-leitura, Fw Valtra 03a66ab6): ATIVO 2025 =
+# 125.859.727,84 (Débito) onde o balanço diz 38.483.404,04; o balanço do modelo não fechava em ~90,5 mi.
+# Sem backfill: o modelo muda no PRÓXIMO export de cada caso. fn_ano_da_coluna e fn_linhas_do_realizado NÃO mudam.
+# Teste: Supabase/test/serie_por_ano_movimento_e_abertura.test.sql (21 asserts; 19 reprovam sem a 0199).
+supabase db execute --file Supabase/migrations/0199_a_serie_por_ano_que_lia_movimento_e_abertura_como_saldo.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0199' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
