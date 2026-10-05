@@ -860,7 +860,7 @@
 {"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/lib/classifier.mjs","l":40}
 {"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/lib/classifier.mjs","l":184}
 {"k":"e","de":"arquivo:N8N/lib/classifier.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/lib/classifier.mjs","l":19}
-{"k":"e","de":"arquivo:N8N/lib/cobertura.mjs","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/lib/cobertura.mjs","l":391}
+{"k":"e","de":"arquivo:N8N/lib/cobertura.mjs","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/lib/cobertura.mjs","l":395}
 {"k":"e","de":"arquivo:N8N/lib/completude.mjs","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"N8N/lib/completude.mjs","l":35}
 {"k":"e","de":"arquivo:N8N/lib/completude.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/lib/completude.mjs","l":39}
 {"k":"e","de":"arquivo:N8N/lib/extract.mjs","rel":"CHAMA","pa":"fn:fn_anos_texto","f":"N8N/lib/extract.mjs","l":662}
