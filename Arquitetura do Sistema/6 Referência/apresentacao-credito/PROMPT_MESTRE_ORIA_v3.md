@@ -1,8 +1,17 @@
 ﻿# PROMPT-MESTRE ORIA PARTNERS — ANÁLISE AUTOMATIZADA DE NOVOS CLIENTES
-### Versão 3.0 · Substitui a v2.0 · Outubro de 2026
+### Versão 3.1 · Substitui a v3.0 · Outubro de 2026
 ### Uso: copiar tudo abaixo de "INÍCIO DO PROMPT", preencher o bloco de variáveis, anexar o deck de referência de layout e enviar ao Claude
 
 ---
+
+## O QUE MUDOU NA v3.1 (05/10/2026)
+Itens que a análise de crédito exige e a v3.0 não pedia explicitamente:
+- **Perímetro e mapa acionário** (Cap. III): quais empresas entram na análise, com CNPJ e papel, e por quê as outras ficam fora.
+- **O que chegou e o que faltou** (Cap. IX): o kit básico item a item — recebido, faltante, recebido sem conteúdo.
+- **Resultado atual e futuro** (Cap. X): o ano em curso como coluna parcial (balancete) e a DRE projetada, com as guardas de publicação.
+- **Comparativo com a média do setor** (Cap. X/XII): margem, alavancagem e prazos contra a mediana do setor, com a fonte.
+- **Custo médio da dívida e taxas por operação** (Cap. XIII).
+- **Dívida × ativos reais** (Cap. XVI): recebíveis + estoques + imóveis/imobilizado, contábil e realizável, contra a dívida bruta.
 
 ## O QUE MUDOU EM RELAÇÃO À v2.0
 
@@ -163,6 +172,7 @@ Use busca na web de forma extensiva. Não invente dados: todo número precisa de
 - perfis individuais dos sócios (Layout E);
 - ecossistema do grupo (entidade central em verde-escuro + até 5 cards satélites ligados por conectores);
 - **avaliação de stakeholders**, com 3 cards: Concentração de Controle · Força das Garantias Pessoais · Alertas e Pontos de Atenção.
+- **perímetro da análise e mapa acionário** (v3.1): tabela `Empresa | CNPJ | Papel no grupo | Documentos recebidos | Na análise?` + organograma de participações (% do capital). Diga por que cada empresa fora do perímetro ficou fora (sem documento, não operacional, fora do aval) e quem avaliza quem. Dívida de uma empresa nunca é somada à de outra sem consolidação explícita.
 
 **Cap. IV — A Empresa** (4 slides):
 - ficha institucional (grade 3 × 3);
@@ -224,6 +234,8 @@ Use busca na web de forma extensiva. Não invente dados: todo número precisa de
   - PDD subdimensionada;
   - descontos comerciais lançados no financeiro.
 
+- **"O que chegou e o que faltou"** (v3.1, slide próprio IX.2): o kit básico item a item — `Documento | Status (recebido · não recebido · chegou sem conteúdo extraído)` — com a contagem na manchete ("9 de 12 documentos obrigatórios chegaram"). Sem a lista do kit, diga que ela não foi lida; nunca conclua "nada faltou".
+
 ### Cap. X — Evolução dos Dados Financeiros (3 slides por entidade relevante)
 Até 4 colunas de período por slide (ex.: 2024 · 2025 · YTD · LTM). Margens em itálico, e EBITDA, Lucro Líquido e Ciclo Financeiro em negrito.
 
@@ -238,6 +250,9 @@ Até 4 colunas de período por slide (ex.: 2024 · 2025 · YTD · LTM). Margens 
   - Com 22 linhas, este bloco **sempre ocupa 2 slides**: do EBIT ao Cash Flow Livre (1/2) e dos Dividendos ao Caixa Final (2/2). Repita EBITDA e Cash Flow Livre no topo do slide 2/2 como referência.
 - **Uma DRE por natureza com análise vertical** (receita, custos, lucro bruto, pessoal, administrativas, tributárias, depreciação, outras receitas, EBIT, resultado financeiro, lucro líquido) pode substituir X.1 quando a qualidade do resultado for o achado central.
 - Grupos com avais cruzados **exigem** a série X.1–X.3 por entidade avalizada.
+- **Resultado atual** (v3.1): o ano em curso entra no X.1 como coluna parcial `8M/2026 (B)`, a partir do balancete, **sem anualizar** e fora do gráfico (barra de 8 meses ao lado de ano cheio lê como queda). Sem mês legível no período, escreva "parcial", nunca suponha o mês.
+- **X.4 — Resultado futuro** (v3.1): Receita e EBITDA realizados + projetados (anos marcados "P") a partir das premissas da Modelagem. Duas guardas antes de publicar: (1) premissas cobrindo ≥ 95% do VALOR de receita, deduções, custos e despesas — conta sem premissa vale zero no futuro; (2) se a margem EBITDA do 1º ano projetado se afastar mais de 10 p.p. da última realizada, a manchete diz o salto e o card manda revisar as premissas. Projeção não é normalização (essa é o Cap. XIV).
+- **Comparativo com a média do setor** (v3.1): margem EBITDA, margem líquida, DFL/EBITDA, liquidez corrente e ciclo financeiro contra a mediana do setor (CNAE/segmento), em coluna própria `Setor (fonte, ano)`. Sem fonte setorial citável, a coluna fica `n/d` com nota — nunca um número "de mercado" sem origem.
 
 ### Cap. XI — Abertura do Capital Circulante Líquido (2 slides)
 - **XI.1 — Composição** (Layout H, colunas por data-base com AV% ao lado de cada valor):
@@ -263,6 +278,7 @@ Até 4 colunas de período por slide (ex.: 2024 · 2025 · YTD · LTM). Margens 
 - **XIII.2 — Posição operação a operação** (Layout H, **até 12 operações por slide**, paginar se necessário):
   - Colunas: `Credor | Modalidade | Operação | Saldo | Vencimento | Indexador | Garantia | Status`.
   - Num slide próprio ou na lateral: a classificação por classe — garantia real, quirografário, trabalhista, fiscal, intercompany/partes relacionadas —, com subtotal e percentual.
+- **Custo médio e taxas** (v3.1): na XIII.2, a coluna `Taxa` (contratual; sem ela, a implícita `juros do exercício ÷ saldo`, declarada como implícita) e, na XIII.1, o **custo médio ponderado da dívida** (juros totais ÷ saldo total do mapa) contra o CDI do período. Taxa implícita acima de 50% a.a. indica saldo amortizado no ano ou operação de desconto — diga isso, não publique como taxa.
 - **XIII.3 — Muro de vencimentos:**
   - Barras empilhadas por trimestre nos próximos 24 meses (amortização contratada × parcelas bullet), com até 3 KPIs laterais.
   - Identifique o **primeiro ponto de ruptura de caixa** e sua data.
@@ -290,6 +306,7 @@ Até 4 colunas de período por slide (ex.: 2024 · 2025 · YTD · LTM). Margens 
 - **Tabela de recuperação por classe** nos cenários continuidade × liquidação.
 - **Card de síntese,** com a exposição pessoal dos sócios via aval.
 - Sem laudo de avaliação, declare os haircuts como "premissa Oria" na linha de fontes.
+- **Dívida × ativos reais** (v3.1): `Recebíveis + Estoques + Imóveis/imobilizado tangível` (excluir intangível, marcas, software e créditos com partes relacionadas), em valor contábil e realizável, contra a dívida bruta → cobertura em "x" na manchete. Sem percentual de realização informado, mostre só o contábil e deixe o realizável `n/d` — nunca aplique haircut silencioso.
 
 ### Cap. XVII — Scorecard de Risco Oria (1 slide)
 **Layout M:** seis faixas, cada uma com o nome do eixo, o peso, a nota de 1,0 a 10,0 num círculo e uma justificativa de 1–2 frases. O círculo é laranja `F04600` se a nota for ≥ 4,5 e `B6482F` se for < 4,5. Um card verde-escuro lateral traz a nota final ponderada (Bodoni 44) e a faixa.
