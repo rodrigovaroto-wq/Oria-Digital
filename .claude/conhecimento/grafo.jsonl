@@ -139,6 +139,7 @@
 {"k":"n","id":"arquivo:Supabase/test/run.sh","t":"arquivo","f":"Supabase/test/run.sh","txt":"run.sh"}
 {"k":"n","id":"arquivo:Supabase/test/sazonalidade_pronto.test.sql","t":"arquivo","f":"Supabase/test/sazonalidade_pronto.test.sql","txt":"sazonalidade_pronto.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/secao_fecha.test.sql","t":"arquivo","f":"Supabase/test/secao_fecha.test.sql","txt":"secao_fecha.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","t":"arquivo","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","txt":"secao_inferida_da_secao_bruta.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/seed_macro.test.sql","t":"arquivo","f":"Supabase/test/seed_macro.test.sql","txt":"seed_macro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql","t":"arquivo","f":"Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql","txt":"serie_por_ano_balancete_sob_balanco_anual.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/serie_por_ano_movimento_e_abertura.test.sql","t":"arquivo","f":"Supabase/test/serie_por_ano_movimento_e_abertura.test.sql","txt":"serie_por_ano_movimento_e_abertura.test.sql"}
@@ -347,6 +348,7 @@
 {"k":"n","id":"fn:fn_golden_suficiente","t":"fn","f":"Supabase/migrations/0126_golden_set.sql","txt":"golden suficiente"}
 {"k":"n","id":"fn:fn_grupo_por_controle_comum","t":"fn","f":"Supabase/migrations/0182_o_grupo_horizontal_que_a_controladora_nao_alcancava.sql","txt":"grupo por controle comum"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
+{"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
 {"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0189_o_gatilho_que_a_sonda_nao_via.sql","txt":"instalacao conferir"}
 {"k":"n","id":"fn:fn_instalacao_resumo","t":"fn","f":"Supabase/migrations/0131_instalacao_que_se_declara.sql","txt":"instalacao resumo"}
 {"k":"n","id":"fn:fn_lado_do_mutuo","t":"fn","f":"Supabase/migrations/0117_reconciliar_mutuos.sql","txt":"lado do mutuo"}
@@ -413,7 +415,7 @@
 {"k":"n","id":"fn:fn_reconciliar_versoes_do_periodo","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"reconciliar versoes do periodo"}
 {"k":"n","id":"fn:fn_reconferir_caso","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"reconferir caso"}
 {"k":"n","id":"fn:fn_reescrever_recado_linha_exigida","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"reescrever recado linha exigida"}
-{"k":"n","id":"fn:fn_registrar_campos_extraidos","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"registrar campos extraidos"}
+{"k":"n","id":"fn:fn_registrar_campos_extraidos","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"registrar campos extraidos"}
 {"k":"n","id":"fn:fn_registrar_classe_override","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"registrar classe override"}
 {"k":"n","id":"fn:fn_registrar_diagnostico","t":"fn","f":"Supabase/migrations/0177_a_guarda_do_balcao_ia_so_num_sentido.sql","txt":"registrar diagnostico"}
 {"k":"n","id":"fn:fn_registrar_documento","t":"fn","f":"Supabase/migrations/0170_o_cnpj_atravessa_a_porta_de_entrada.sql","txt":"registrar documento"}
@@ -437,6 +439,7 @@
 {"k":"n","id":"fn:fn_saldo_mutuos_linhas","t":"fn","f":"Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql","txt":"saldo mutuos linhas"}
 {"k":"n","id":"fn:fn_saldo_mutuos_texto","t":"fn","f":"Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql","txt":"saldo mutuos texto"}
 {"k":"n","id":"fn:fn_sazonalidade_do_caso","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"sazonalidade do caso"}
+{"k":"n","id":"fn:fn_secao_canonica_da_secao_bruta","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"secao canonica da secao bruta"}
 {"k":"n","id":"fn:fn_secao_e_de_resultado","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"secao e de resultado"}
 {"k":"n","id":"fn:fn_sem_codigo_de_conta","t":"fn","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","txt":"sem codigo de conta"}
 {"k":"n","id":"fn:fn_soma_secao","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"soma secao"}
@@ -613,6 +616,7 @@
 {"k":"n","id":"migration:0200","t":"migration","f":"Supabase/migrations/0200_o_balancete_semestral_que_entrava_por_cima_do_balanco_anual.sql","txt":"o balancete semestral que entrava por cima do balanco anual"}
 {"k":"n","id":"migration:0201","t":"migration","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"o realizado que nao lia saldo final e saldo atual"}
 {"k":"n","id":"migration:0202","t":"migration","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","txt":"o total com codigo contabil que virava conta"}
+{"k":"n","id":"migration:0203","t":"migration","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"a secao que a ia nao deu e a linha que sumia"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1437,6 +1441,15 @@
 {"k":"e","de":"arquivo:Supabase/test/secao_fecha.test.sql","rel":"CHAMA","pa":"fn:fn_normalizar_texto","f":"Supabase/test/secao_fecha.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/secao_fecha.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"Supabase/test/secao_fecha.test.sql","l":478}
 {"k":"e","de":"arquivo:Supabase/test/secao_fecha.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"Supabase/test/secao_fecha.test.sql","l":28}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_inferir_secao_canonica_das_linhas","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":230}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_do_realizado","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":58}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":178}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_normalizar_texto","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":59}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":131}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":128}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_secao_canonica_da_secao_bruta","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":19}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":125}
+{"k":"e","de":"arquivo:Supabase/test/secao_inferida_da_secao_bruta.test.sql","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Supabase/test/secao_inferida_da_secao_bruta.test.sql","l":175}
 {"k":"e","de":"arquivo:Supabase/test/seed_macro.test.sql","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"Supabase/test/seed_macro.test.sql","l":56}
 {"k":"e","de":"arquivo:Supabase/test/seed_macro.test.sql","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"Supabase/test/seed_macro.test.sql","l":63}
 {"k":"e","de":"arquivo:Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql","rel":"CHAMA","pa":"fn:fn_normalizar_texto","f":"Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql","l":52}
@@ -2064,6 +2077,9 @@
 {"k":"e","de":"migration:0201","rel":"CRIA","pa":"fn:fn_valores_por_ano","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","l":149}
 {"k":"e","de":"migration:0202","rel":"CRIA","pa":"fn:fn_papel_linha","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","l":69}
 {"k":"e","de":"migration:0202","rel":"CRIA","pa":"fn:fn_sem_codigo_de_conta","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","l":58}
+{"k":"e","de":"migration:0203","rel":"CRIA","pa":"fn:fn_inferir_secao_canonica_das_linhas","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","l":447}
+{"k":"e","de":"migration:0203","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","l":189}
+{"k":"e","de":"migration:0203","rel":"CRIA","pa":"fn:fn_secao_canonica_da_secao_bruta","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","l":104}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
