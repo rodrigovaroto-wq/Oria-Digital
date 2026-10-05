@@ -1,5 +1,15 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 105 — comece pelo HANDOFF "▶ SESSÃO 105"
+
+> **A S104 está fechada.** PRs #248 e #249 mergeados no `main` (o merge do #249 é o `66ec163`, de
+> 02/10). Produção: Supabase em `0198` (`0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql`, 181/0
+> ausentes), n8n de ingestão republicado e conferido, reconciliação feita no Krauspenhar e no caso de
+> teste. O portal é o `main`, então os consertos do export (AC conciliado, dívida de LP 4,18/9,54 mi,
+> `auditar-xlsx` 11/11 no Krauspenhar) chegam no deploy do main. **Primeiro passo:** conferir esses
+> números no portal publicado (HANDOFF S105 §1). Decisões do dono em aberto e próximas fatias: HANDOFF
+> S105 §2–§3.
+
 ## SESSÃO 104 (30/09/2026) — PR #248 (rascunho): o modelo que multiplicava por K, e a análise externa do Krauspenhar conferida
 
 > **Produção ATUALIZADA em 01/10 (tarde), a pedido do dono:** Supabase em `0198` (`0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql`; 0196, 0197 e 0198
