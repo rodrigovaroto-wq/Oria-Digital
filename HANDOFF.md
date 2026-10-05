@@ -4,6 +4,97 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
+## ▶ SESSÃO 105 — COMECE AQUI (passagem escrita em 05/10/2026, fim da S104)
+
+A S104 fechou em dois PRs, os dois **mergeados no `main`**: [#248](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/248)
+e [#249](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/249) (02/10, 17h18 UTC; o merge é o `66ec163`). O detalhe
+continua no bloco S104, logo abaixo, e não precisa ser relido inteiro. Este bloco é o resumo do que
+vale agora.
+
+### 0. Estado de produção (medido só leitura em 01–02/10)
+
+| Peça | Estado | Como reconferir |
+|---|---|---|
+| Supabase | migration `0198` (`0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql`), `fn_instalacao_conferir` com 181 requisitos e 0 ausentes | `select chave from fn_instalacao_conferir() where not presente;` (resultado vazio) |
+| n8n de ingestão (`na1AEv3m8fjDXlwM`) | republicado e conferido (42 nós). O `FINGERPRINT_EXTRACAO` passou a `7e7549834ed4eb3f`, então **reenviar um caso já processado re-extrai tudo** | `N8N/republicar.sh` com `--so-conferir`, ou o teste `conferir-publicado` |
+| n8n de erros e macro | os nomes no repositório agora SÃO os publicados ("Oria SARF — Reportar Erros" / "Oria SARF — Índices Macroeconômicos", `2ae4589`). O conteúdo bate | o mesmo |
+| Portal (Vercel) | é o `main`. Com o #249 mergeado, os consertos do export chegam **no deploy do main** | ver §1 |
+| Reconciliação | `fn_reconciliar_caso` rodou no Krauspenhar (`33b58a89`) e no caso de teste (`72d9210a`). Nenhuma das 26 pendências decididas foi tocada | — |
+
+### 1. Primeira coisa a fazer: conferir o export no portal PUBLICADO (só leitura)
+
+Baixe o book do Krauspenhar pelo portal de produção, por Playwright. O roteiro está no §5 da S103, e
+o login vem só por variável de ambiente (`PORTAL_EMAIL`/`PORTAL_SENHA`). Depois recalcule (`pip
+install formulas openpyxl`) e rode `portal/scripts/auditar-xlsx.mts`. Tem de dar:
+- `auditar-xlsx` **11/11**;
+- ativo circulante conciliado. Estoques 53,92 mi (2024) e 43,57 mi (2025) dentro da soma; o resíduo
+  do AC, que era 43% do ativo (antigo item l), sumiu;
+- dívida de LP 4,18 / 9,54 mi (antes era zero); dívida de CP 2024 de 15,99 mi;
+- despesa financeira 2026 de 3,01 mi (era 2,39 mi);
+- juros do revolver entre 2,83 e 4,26 mi/ano a partir de 2027. O CDI projetado não zera mais.
+
+Se algum número sair diferente, o deploy não é o `66ec163` ou houve regressão. Confira o deploy na
+Vercel (`VERCEL_TOKEN`) antes de investigar o código.
+
+### 2. Decisões do DONO em aberto (não decida sozinho)
+
+1. **"Capital de giro" sem credor nomeado** (books Canastra/Vertentes): é dívida? Hoje só conta como
+   dívida quando a linha cita banco ou linha de financiamento (`CAPITAL_DE_GIRO_BANCARIO`). Uma linha
+   "Capital de giro" sem credor fica fora.
+2. **"Capital de giro Caixa"** sem a palavra "Econômica": não é reconhecido como credor.
+3. **"Adiantamentos de clientes" 2.072 no Vertentes**: o alarme de grupo misto foi aceito como está.
+   Confirmar se o alarme deve continuar.
+4. **Krauspenhar, pendências reais novas abertas pela reconciliação** (são do mandato, não do código):
+   - "Venda de peças e lubrificantes" 2026: a DRE diz +24,22 mi e o COMBINADO diz −24,67 mi (sinal
+     invertido na fonte);
+   - Mapa de Dívida 2025 sem juros.
+5. **Prazo implícito da dívida no Krauspenhar** (1,7 ano): CP + revolver vai de 11,5 para 39,8 mi entre
+   2026 e 2030. É premissa de modelagem, não defeito, mas o dono deve ver.
+6. Item h abaixo (PME sobre receita × sobre custo) é decisão de desenho.
+
+### 3. Próximas fatias, pela ordem (o texto completo de cada uma está no S104 §5)
+
+Os itens **l** (resíduo do AC) e **m** (nomes dos workflows) foram **RESOLVIDOS** no #249.
+Continuam abertos:
+- a. Causa do deslocamento rótulo↔valor. **Precisa do PDF do dono**, porque o Storage está vazio.
+- b. Controle negativo real da guarda de hierarquia.
+- c. Resíduo de receita fora das sombras e dos dias de giro.
+- d. Subtotal codificado entrando como conta (`fn_papel_linha`).
+- e. Storage vazio com `origem_arquivo='supabase_storage'`.
+- f. xlsx: ler todas as abas.
+- g. Períodos "multi 02,25" lidos como {2002, 2025}.
+- h. PME: base de receita ou de custo (**decisão do dono**).
+- i. Premissa por grupo de linhas.
+- j. Tolerância × escala em `fn_reconciliar_ativo_passivo_pl`.
+- k. Issues menores do Sonar.
+
+Um mandato novo enviado pelo portal continua sendo a única prova de que o n8n republicado alcança o
+banco. O `72d9210a` é o caso de TESTE: escrita só nele.
+
+### 4. Armadilhas aprendidas no fim da S104 (somam-se às do S104 §6)
+
+- **O total de seção pode vir SEM seção.** No Krauspenhar, o "Passivo Não Circulante" vem com
+  `secao`/`secao_canonica` nulas, no mesmo grupo sem seção do "Ativo Não Circulante". A primeira
+  correção da dívida de LP passou no teste sintético e falhou no real. **Teste com o formato real**
+  (instrumentar uma cópia descartável), nunca com o arranjo que a hipótese supõe.
+- **O grafo não pode ser regerado enquanto um agente edita a árvore.** Regere numa worktree limpa no
+  HEAD (`git worktree add --detach`), copie o `grafo.jsonl` e comite.
+- **O ESTADO.md tem de citar o nome do arquivo da migration mais nova.** Reescrever o topo e perder a
+  citação reprova o job `banco` (`becab38`).
+- **O classificador do modo automático nega a leitura de produção a SUBAGENTE** ("Production Reads").
+  Não contorne. A sessão principal pergunta ao dono, que já liberou uma vez nesta sessão. A liberação
+  vale para o pedido em que foi dada, não para os seguintes.
+- **Com pedido explícito do dono no chat**, o modo automático aceitou aplicar as migrations e
+  republicar o n8n (`.claude/memory/auto-mode-recusa-migration-producao.md`).
+- **O Sonar cobra S1244** (igualdade de float sem tolerância) e um teto de 3% de duplicação nas linhas
+  novas. Use helpers nas suítes de verificação.
+- **O container não tem `rsync`**: use `cp -r`.
+- **O ramo `claude/compassionate-cray-gk5ade` é reaproveitado.** Depois de um merge, recomece de
+  `origin/main` (`git checkout -B claude/compassionate-cray-gk5ade origin/main`). Nunca empilhe sobre
+  o histórico já mergeado.
+
+---
+
 ## ▶ SESSÃO 104 (30/09/2026) — PR [#248](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/248) (rascunho) · branch `claude/compassionate-cray-gk5ade`
 
 > O PR #247 (fase 2 da S103) já estava MERGEADO no início desta sessão (8c0821d). Esta sessão:
