@@ -225,4 +225,32 @@ const saida = process.argv[3]
 const { writeFile } = await import("node:fs/promises");
 await writeFile(saida, await finalizarBufferDoExport(wb));
 console.log(`OK — escrito ${saida}`);
+// APRESENTACAO=<arquivo.pptx>: o deck de crédito pelo MESMO caminho da rota `?modo=apresentacao`
+// (entrada do modelo COM os subtotais informados → base → deck). É o que permite testar a
+// apresentação contra os mandatos do banco local sem subir o portal.
+if (process.env.APRESENTACAO) {
+  const { entradaDoModeloDoWorkbook } = await import("../src/lib/export.ts");
+  const { montarBaseCredito } = await import("../src/lib/apresentacao/montar-base.ts");
+  const { construirDeckCredito } = await import("../src/lib/apresentacao/deck-credito.ts");
+  const ent = entradaDoModeloDoWorkbook(wb);
+  if (!ent) throw new Error("o workbook não montou o modelo institucional: falta entidade ou último exercício real");
+  const { informacaoDoKit, perimetroDoCaso } = await import("../src/lib/apresentacao/montar-base.ts");
+  const kit = q<{ codigo: string; documento: string }>(
+    "select codigo, documento from taxonomia_tipo_documento where obrigatoriedade = 'obrigatorio' order by codigo");
+  // Mesma pergunta da rota ao banco (fn_documento_serve_como), aqui em SQL direto.
+  const atendidos = new Set(q<{ codigo: string }>(`select t.codigo from taxonomia_tipo_documento t
+    where t.obrigatoriedade = 'obrigatorio' and exists (select 1 from documento d where d.caso_id = '${CASO}'
+      and (d.tipo_taxonomia = t.codigo or fn_documento_serve_como(d.id, t.codigo)))`).map((r) => r.codigo));
+  const semConteudo = new Set(q<{ tipo_taxonomia: string }>(`select tipo_taxonomia from checklist_item_status
+    where caso_id = '${CASO}' and status = 'recebido_nao_valido'`).map((r) => r.tipo_taxonomia));
+  const entidades = q<{ razao_social: string; cnpj: string | null; papel_no_grupo: string | null }>(
+    `select razao_social, cnpj, papel_no_grupo from entidade where caso_id = '${CASO}'`);
+  const { deck } = construirDeckCredito(montarBaseCredito(ent, documentos, [], {
+    informacao: informacaoDoKit(kit, atendidos, semConteudo),
+    perimetro: perimetroDoCaso(entidades, documentos, ent.entidade ?? ""),
+    projecao: (await import("../src/lib/apresentacao/projecao.ts")).projecaoDoModelo(wb, ent),
+  }, campos), new Date());
+  await writeFile(process.env.APRESENTACAO, await deck.gerar());
+  console.log(`OK — apresentação escrita em ${process.env.APRESENTACAO}`);
+}
 console.log(`abas: ${wb.worksheets.map((w) => w.name).join(" · ")}`);

@@ -857,6 +857,15 @@ supabase db execute --file Supabase/migrations/0204_a_secao_que_o_documento_ja_d
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0204' and not presente;                 -- ZERO linhas
 
+# A 0205 CRIA caso_apresentacao_campo: onde moram os campos "[a preencher]" da apresentação de crédito
+# (chave estável por campo; valor em branco recusado por check — regra 1). Tabela nova e vazia, sem
+# backfill; RLS e grant ao authenticated no padrão de caso_premissa.
+# Teste: Supabase/test/apresentacao_campo.test.sql.
+supabase db execute --file Supabase/migrations/0205_os_campos_da_apresentacao.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0205' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

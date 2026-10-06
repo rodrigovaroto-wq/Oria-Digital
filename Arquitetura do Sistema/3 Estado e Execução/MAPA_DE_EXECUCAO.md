@@ -41,7 +41,7 @@ de pendências do `ESTADO.md` já disse uma vez que o Modo A não existia depois
 | **B1** | **A rodada real do book** num mandato novo + aceite | 🟠 **a rodada ACONTECEU em 02/09** (lote `7377`, 38/38, cobertura 0,987, nenhum nó morto); falta o **aceite** | **dono** (~20 min) | B2 inteiro |
 | **B2** | Recalibrar cobertura, conferir fatiamento e subtotais | ⚪ não começou | engenharia, **depois** de B1 | a confiança nos números |
 | **B3** | **A autonomia sem rotulagem manual** — decisão em aberto | 🟠 contradição viva | **dono decide** | a F4 do `Arquitetura do Sistema/1 Visão e Doutrina/03` |
-| **B4** | Dívidas do output (alavancas, três cenários completos, 25 perguntas) | 🟠 dimensionadas | dono prioriza | o valor no comitê |
+| **B4** | Dívidas do output (alavancas, três cenários completos, 25 perguntas; apresentação de crédito) | 🟠 apresentação implementada, 0205 não aplicada | dono (aplicar 0205) | o valor no comitê |
 | **B5** | Eficiência — o que sobrou depois da passada da sessão 54 | 🟢 quase fechada | engenharia | nada crítico |
 | **B6** | **Operação** — proteção do `main`, ~~observabilidade~~, ~~backup~~ | 🟠 **B6.2 e B6.3 fechadas em 21/08**; sobra o `main` | dono | a segurança do processo |
 | **B7** | Bloqueados por dado que não temos | ⚫ espera | terceiros | nada — são espera |
@@ -348,6 +348,12 @@ que o primeiro comitê vai fazer.
 | c | **Rateio de despesa intragrupo que não deixa saldo no balanço** — não há espelho para conferir | limite conhecido da `0124`, sem solução barata |
 | d | **Mútuo com sócio** — o par é o contrato com o quotista, que ninguém cruza hoje | limite conhecido da `0123` |
 | e | ~~**"Sugerir do realizado"**~~ | **FEITO em 21/08.** As oito saem do próprio balanço e DRE do caso, gravadas com `origem = 'historico'`. `portal/src/lib/premissas-do-realizado.ts`, 25 asserts em `verificar-premissas-do-realizado.mts`, no CI. Duas regras sustentam: **zero não é resposta** (sem a conta, sai o motivo e não um número) e **a base de cada razão é a que o modelo aplica ao projetar** — fornecedor contra custos, o resto contra receita líquida —, senão o dia sugerido não reproduz o saldo de onde saiu |
+
+### B4.5 — A apresentação de crédito (.pptx) · **IMPLEMENTADA em 02–03/10, NÃO APLICADA EM PRODUÇÃO**
+
+> **O que entrou:** terceira saída da rota de export (`?modo=apresentacao`); 120 campos estruturados em `caso_apresentacao_campo` (migration 0205); tela `/casos/[id]/apresentacao` no portal; deck Centro Oeste com todos os capítulos; formatação Prompt Padrão Oria (Teaser). Testada em 14 entidades de 3 mandatos locais (Vertentes, Canastra, v35): 12 geram com sucesso, 2 entidades tipo "GRUPO" recusadas com 409. Mandatos reais grandes não testados (Krauspenhar `33b58a89`). **O que falta:** aplicar migration 0205 em produção, testar com dados reais (casos não-GRUPO), resumo multi-entidade para grupos, merge do branch (sem PR aberto).
+
+**Critério de pronto:** 0205 aplicada em produção e conferida pela sonda, apresentação gerada e endereçável a partir da tela de casos, casos reais grandes (Krauspenhar) com geração bem-sucedida, resumo multi-entidade testado.
 
 ---
 

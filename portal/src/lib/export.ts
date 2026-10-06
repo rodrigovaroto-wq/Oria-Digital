@@ -3501,6 +3501,10 @@ export function buildExportWorkbook({
       // até o pós-processamento do buffer — ver `finalizarBufferDoExport`.
       const graficos = construirModeloInstitucional(workbook, entradaDoModelo);
       (workbook as unknown as { __graficosDoModelo?: EspecGrafico[] }).__graficosDoModelo = graficos;
+      // A apresentação de crédito (`lib/apresentacao/`) lê o realizado desta MESMA entrada, já com
+      // os subtotais informados: sem eles o cabeçalho de grupo soma com as filhas — medido no book
+      // Vertentes, "Clientes" de 2024 saía 62.020 num ativo circulante de 67.878.
+      (workbook as unknown as { __entradaDoModelo?: EntradaModeloInstitucional }).__entradaDoModelo = entradaDoModelo;
     }
 
     // A Modelagem é a primeira aba: é por onde o arquivo deve abrir.
@@ -3659,6 +3663,11 @@ export function buildExportWorkbook({
 // já é idêntico em todas — troca segura por string).
 const NOTA_BOX_ANTIGA = "width:97.8pt;height:59.1pt";
 const NOTA_BOX_NOVA = "width:340pt;height:170pt";
+
+/** A entrada do modelo institucional COM os subtotais informados, se o workbook montou o modelo. */
+export function entradaDoModeloDoWorkbook(workbook: ExcelJS.Workbook): EntradaModeloInstitucional | undefined {
+  return (workbook as unknown as { __entradaDoModelo?: EntradaModeloInstitucional }).__entradaDoModelo;
+}
 
 /**
  * O ÚNICO CAMINHO DE SAÍDA DO .XLSX ENTREGUE — e ele existe porque duas coisas

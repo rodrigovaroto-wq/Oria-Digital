@@ -575,6 +575,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/desativar_premissa.test.sql 2>
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== testes dos campos da apresentação (0205: valor em branco não é valor)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/apresentacao_campo.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== testes do papel da linha (0042: subtotal/serie mensal/derivado não se projetam)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/papel_da_linha.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

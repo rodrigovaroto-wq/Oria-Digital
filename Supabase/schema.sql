@@ -14582,6 +14582,40 @@ CREATE TABLE public.caso (
 COMMENT ON COLUMN public.caso.fechado_em IS 'Quando o mandato saiu da mesa. NULL = ativo. Não é status de trabalho (esse é `status`, Arquitetura do Sistema/2 Especificação/f0/04): é a resposta a "ainda estamos nisso?". Fechar preserva tudo — para apagar existe fn_excluir_caso.';
 
 --
+-- Name: caso_apresentacao_campo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.caso_apresentacao_campo (
+    caso_id uuid NOT NULL,
+    chave text NOT NULL,
+    valor text NOT NULL,
+    fonte text,
+    preenchido_por text,
+    preenchido_em timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT caso_apresentacao_campo_chave_check CHECK ((chave ~ '^[a-z0-9]+(\.[a-z0-9_]+)+$'::text)),
+    CONSTRAINT caso_apresentacao_campo_valor_check CHECK ((length(btrim(valor, ' 	
+'::text)) > 0))
+);
+
+--
+-- Name: TABLE caso_apresentacao_campo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.caso_apresentacao_campo IS 'Valor dos campos "[a preencher]" da apresentação de crédito, por caso e chave estável. Ausência de linha = o deck escreve "[a preencher]"; valor em branco é recusado (regra 1: vazio não é valor). 0205.';
+
+--
+-- Name: COLUMN caso_apresentacao_campo.chave; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.caso_apresentacao_campo.chave IS 'Capítulo.grupo.campo em minúsculas, ex.: xiv.ajuste.nao_recorrentes. Formato travado por check para que typo não vire campo órfão.';
+
+--
+-- Name: COLUMN caso_apresentacao_campo.fonte; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.caso_apresentacao_campo.fonte IS 'De onde veio o valor (documento, URL, "analista"). Vai para a nota de fonte do slide.';
+
+--
 -- Name: caso_linha_premissa; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -15891,6 +15925,13 @@ ALTER TABLE ONLY public.campo_extraido
     ADD CONSTRAINT campo_extraido_pkey PRIMARY KEY (id);
 
 --
+-- Name: caso_apresentacao_campo caso_apresentacao_campo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.caso_apresentacao_campo
+    ADD CONSTRAINT caso_apresentacao_campo_pkey PRIMARY KEY (caso_id, chave);
+
+--
 -- Name: caso_linha_premissa caso_linha_premissa_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -16610,6 +16651,13 @@ ALTER TABLE ONLY public.campo_extraido
     ADD CONSTRAINT campo_extraido_documento_versao_id_fkey FOREIGN KEY (documento_versao_id) REFERENCES public.documento_versao(id) ON DELETE CASCADE;
 
 --
+-- Name: caso_apresentacao_campo caso_apresentacao_campo_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.caso_apresentacao_campo
+    ADD CONSTRAINT caso_apresentacao_campo_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
 -- Name: caso_linha_premissa caso_linha_premissa_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -17054,6 +17102,18 @@ CREATE POLICY campo_extraido_authenticated_all ON public.campo_extraido TO authe
 --
 
 ALTER TABLE public.caso ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: caso_apresentacao_campo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.caso_apresentacao_campo ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: caso_apresentacao_campo caso_apresentacao_campo_authenticated_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_apresentacao_campo_authenticated_all ON public.caso_apresentacao_campo TO authenticated USING (true) WITH CHECK (true);
 
 --
 -- Name: caso caso_authenticated_all; Type: POLICY; Schema: public; Owner: -
@@ -18569,6 +18629,14 @@ GRANT ALL ON TABLE public.campo_classe_sugerida TO service_role;
 GRANT ALL ON TABLE public.caso TO anon;
 GRANT ALL ON TABLE public.caso TO authenticated;
 GRANT ALL ON TABLE public.caso TO service_role;
+
+--
+-- Name: TABLE caso_apresentacao_campo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.caso_apresentacao_campo TO anon;
+GRANT ALL ON TABLE public.caso_apresentacao_campo TO authenticated;
+GRANT ALL ON TABLE public.caso_apresentacao_campo TO service_role;
 
 --
 -- Name: TABLE caso_linha_premissa; Type: ACL; Schema: public; Owner: -

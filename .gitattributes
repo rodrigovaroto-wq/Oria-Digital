@@ -1,0 +1,6 @@
+# Supabase/README.md é um LOG SÓ DE ACRÉSCIMO: cada PR com migration acrescenta o seu bloco
+# "supabase db execute --file ..." no FIM. Dois PRs abertos ao mesmo tempo (#252 e #253, 05/10/2026)
+# colidiam sempre nesse ponto, sem conflito de conteúdo nenhum. `union` mantém os dois blocos num
+# merge local (o botão de merge do GitHub pode ignorar este atributo — aí o conflito continua
+# trivial: manter os dois blocos, em ordem de número).
+Supabase/README.md merge=union

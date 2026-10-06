@@ -354,6 +354,15 @@ jobs:
         # depender do que estiver publicado no dia.
         run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-export.mts
 
+      - name: Suíte da apresentação de crédito (o .pptx mostra o número do documento, no padrão Oria)
+        # O deck do módulo de crédito (Prompt-Mestre v3, FASE 4) sai do mesmo realizado do modelo.
+        # Prova: os totais do book Vertentes no deck são os impressos no documento; Clientes sem o
+        # cabeçalho de grupo; DRE sem D&A dá EBITDA n/d; amarração que não fecha aparece. E varre o
+        # XML (11 pt, paleta, fontes, EMU inteiro, sem sombra) com controle positivo por varredura.
+        # Medido com a correção desligada: sem os subtotais informados reprova 1; EBITDA = EBIT
+        # sem D&A reprova 2; amarração do balanço sempre "ok" reprova 1.
+        run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-apresentacao.mts
+
       - name: Suíte da planilha de transcrição (ida e volta do formato)
         # A planilha da 0129 grava linha ACEITA, com autor e sem guarda nenhuma —
         # então um erro de leitura aqui não gera pendência: gera um número errado

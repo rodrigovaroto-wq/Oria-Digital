@@ -12,6 +12,13 @@ import {
   casarVinculosComLinhas, historicoDoModelo,
   type LinhaParaCasar, type VinculoParaCasar,
 } from "@/lib/modelagem-linha";
+// A apresentação de crédito importa em linhas PRÓPRIAS (e não acrescentando nomes às listas de cima):
+// outro PR que mexa nas listas de import desta rota não colide com estas linhas.
+import { entradaDoModeloDoWorkbook } from "@/lib/export";
+import { correnteDoBalancete, informacaoDoKit, linhasDoAnoCorrenteDe, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
+import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
+import { projecaoDoModelo } from "@/lib/apresentacao/projecao";
+import { construirDeckCredito, SemDadoParaApresentar } from "@/lib/apresentacao/deck-credito";
 
 // exceljs (usado em lib/export.ts) usa Buffer/streams do Node — precisa do
 // runtime Node, não Edge.
@@ -47,7 +54,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // conferência, disponível desde a ingestão. Sem o parâmetro sai o completo, com
   // a Modelagem. Valor desconhecido cai em "completo" em vez de erro: um link
   // datilografado errado não deve deixar o analista sem arquivo.
-  const modo = new URL(request.url).searchParams.get("modo") === "dados" ? "dados" : "completo";
+  const modoPedido = new URL(request.url).searchParams.get("modo");
+  const modo = modoPedido === "dados" ? "dados" : "completo";
+  // `?modo=apresentacao` é o COMPLETO com outra saída: a apresentação de crédito (.pptx) lê o mesmo
+  // realizado que o modelo institucional, então passa pelo mesmo Portão 2 e pela mesma leitura.
+  const apresentacao = modoPedido === "apresentacao";
   const supabase = await createClient();
 
   const [casoRes, documentosRes] = await Promise.all([
@@ -268,6 +279,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // impasse de precisar da aprovação para poder conferir.
   let modelagemConfig: ConfigModelagem | undefined;
   let modeloInstitucional: EntradaModeloInstitucional | undefined;
+  // O ANO CORRENTE (balancete), para o "resultado atual" da apresentação: o modelo projeta a partir do
+  // último exercício FECHADO e descarta o ano em curso; a apresentação o mostra à parte, como parcial.
+  let linhasDoAnoCorrente: { ano: number; linhas: LinhaModelo[] } | null = null;
   if (modo === "completo") {
     const portao = await supabase.rpc("fn_avaliar_portao2", { p_caso_id: id });
     const { estado, portao: aval } = veredictoDoPortao(portao);
@@ -461,6 +475,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         /** estruturado: a aba Anual decide a fórmula do CDI por ele, nunca pelo texto de `fonte` */
         origem: "focus" | "realizado";
       };
+      // O ano em curso para a apresentação (fica AQUI, longe da leitura do histórico logo acima, para
+      // que mudanças naquela leitura não colidam com esta linha).
+      linhasDoAnoCorrente = linhasDoAnoCorrenteDe((linhasRes.data ?? []) as unknown as LinhaModelo[], valores, ultimoReal);
       const macroModelo: MacroDoModelo[] = [
         ...anuais.flatMap((a): MacroDoModelo[] => {
           if (a.natureza === "nivel") {
@@ -514,6 +531,63 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     caso, documentos, campos, macro, macroErro, causasDeFalha, modo, modelagemConfig,
     modeloInstitucional,
   });
+  if (apresentacao) {
+    const entradaDoModelo = entradaDoModeloDoWorkbook(workbook);
+    if (!entradaDoModelo) {
+      return NextResponse.json(
+        {
+          error: "A apresentação de crédito não foi gerada: este caso ainda não tem o modelo institucional montado.",
+          motivos: ["Falta a entidade modelada, o último exercício real ou os anos projetados na tela de Modelagem — ou não há exercício com valor numérico."],
+          dica: "A apresentação lê o MESMO realizado do modelo. Sem a entidade, ela somaria o balanço de uma empresa do "
+            + "grupo com o de outra; sem o último exercício real, trataria balancete parcial como ano fechado.",
+        },
+        { status: 409 },
+      );
+    }
+    // Os campos "[a preencher]" já preenchidos (0205). Falha de leitura NÃO derruba o deck — banco
+    // sem a 0205, RLS —: ele sai com as lacunas como sempre saiu, e o motivo fica no log.
+    const camposRes = await supabase.from("caso_apresentacao_campo").select("chave, valor, fonte").eq("caso_id", id);
+    if (camposRes.error) console.error(`[export] campos da apresentação não lidos: ${camposRes.error.message}`, { caso_id: id });
+    const camposAp = (camposRes.data ?? []) as Array<{ chave: string; valor: string; fonte: string | null }>;
+    // O KIT BÁSICO e o PERÍMETRO (slides IX.2 e III.3). Leitura que falha deixa o slide dizendo que
+    // não leu — nunca "nada faltou" nem "empresa única" por omissão.
+    const [kitRes, checkRes, entRes] = await Promise.all([
+      supabase.from("taxonomia_tipo_documento").select("codigo, documento").eq("obrigatoriedade", "obrigatorio").order("codigo"),
+      supabase.from("checklist_item_status").select("tipo_taxonomia, status").eq("caso_id", id),
+      supabase.from("entidade").select("razao_social, cnpj, papel_no_grupo").eq("caso_id", id),
+    ]);
+    let informacao: ReturnType<typeof informacaoDoKit> | undefined;
+    if (!kitRes.error && kitRes.data) {
+      const kit = kitRes.data as Array<{ codigo: string; documento: string }>;
+      const atendidos = await itensDoKitBasicoAtendidos(kit, documentos.map((d) => ({ id: d.id, tipo_taxonomia: d.tipo_taxonomia })),
+        async (documentoId, tipo) => {
+          const r = await supabase.rpc("fn_documento_serve_como", { p_documento_id: documentoId, p_tipo_taxonomia: tipo });
+          return !r.error && r.data === true;
+        });
+      const semConteudo = new Set(((checkRes.data ?? []) as Array<{ tipo_taxonomia: string; status: string }>)
+        .filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia));
+      informacao = informacaoDoKit(kit, atendidos, semConteudo);
+    } else console.error(`[export] kit básico não lido: ${kitRes.error?.message}`, { caso_id: id });
+    const perimetro = entRes.error ? undefined : perimetroDoCaso(
+      (entRes.data ?? []) as Array<{ razao_social: string; cnpj: string | null; papel_no_grupo: string | null }>,
+      documentos, entradaDoModelo.entidade ?? "");
+    let deck;
+    try {
+      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp, { informacao, perimetro, projecao: projecaoDoModelo(workbook, entradaDoModelo),
+        corrente: linhasDoAnoCorrente ? correnteDoBalancete(entradaDoModelo, linhasDoAnoCorrente.linhas, linhasDoAnoCorrente.ano, documentos) : null }, campos), new Date()));
+    } catch (e) {
+      if (!(e instanceof SemDadoParaApresentar)) throw e;
+      return NextResponse.json({ error: "A apresentação de crédito não foi gerada.", motivos: [e.message] }, { status: 409 });
+    }
+    const pptx = await deck.gerar();
+    const nomePptx = `${nomeArquivoSanitizado(caso.nome)}-apresentacao-credito-${new Date().toISOString().slice(0, 10)}.pptx`;
+    return new NextResponse(pptx as unknown as BodyInit, {
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "Content-Disposition": `attachment; filename="${nomePptx}"`,
+      },
+    });
+  }
   const buffer = await finalizarBufferDoExport(workbook);
   // O nome do arquivo DIZ qual dos dois é. Dois arquivos com o mesmo nome na
   // pasta de Downloads, um com modelo e outro sem, é confusão garantida — e a

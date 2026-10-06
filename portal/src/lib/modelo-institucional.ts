@@ -7,6 +7,7 @@ import {
 } from "./oria-marca";
 import { normalizar } from "./statement-templates";
 import type { EspecGrafico } from "./xlsx-graficos";
+import { lerMapaDaDivida, type OperacaoDivida } from "./mapa-da-divida";
 
 // =============================================================================
 // O MODELO INSTITUCIONAL — reconstrução do "Modelo Base" do dono, integrada aos
@@ -633,8 +634,18 @@ const FATOR_PARA_MILHAR: Record<string, number> = {
   milhao: 1000, milhoes: 1000, "milhão": 1000, "milhões": 1000,
 };
 
-function fatorDeEscala(unidadeLinha: string | null, unidadeModelo: string): number | null {
-  const alvo = /mil/i.test(unidadeModelo) && !/milh(a|ã)o/i.test(unidadeModelo) ? 1 : 0.001;
+/**
+ * A escala em que os valores do modelo FICAM: milhar quando a unidade do modelo diz "mil" (e não
+ * "milhão"), reais em qualquer outro caso — inclusive "milhao", que a rota repassa cru. É a regra de
+ * `fatorDeEscala`, exportada para a apresentação de crédito não ter uma segunda (ela tinha, e um
+ * caso em "milhao" saía um milhão de vezes maior no deck).
+ */
+export function escalaDoModelo(unidadeModelo: string): "milhar" | "reais" {
+  return /mil/i.test(unidadeModelo) && !/milh(a|ã)o/i.test(unidadeModelo) ? "milhar" : "reais";
+}
+
+export function fatorDeEscala(unidadeLinha: string | null, unidadeModelo: string): number | null {
+  const alvo = escalaDoModelo(unidadeModelo) === "milhar" ? 1 : 0.001;
   if (!unidadeLinha) return null;
   const f = FATOR_PARA_MILHAR[unidadeLinha.toLowerCase().trim()];
   if (f === undefined) return null;
@@ -7428,4 +7439,179 @@ export function construirModeloInstitucional(
   // injetada no .xlsx já gerado por `injetarGraficosNoBuffer`, no mesmo
   // pós-processamento que já amplia a caixa das notas.
   return saidaOutput.graficos;
+}
+
+// -----------------------------------------------------------------------------
+// O REALIZADO PARA A APRESENTAÇÃO DE CRÉDITO (`lib/apresentacao/`).
+//
+// POR QUE AQUI, e não um segundo classificador lá. A apresentação mostra o MESMO realizado que este
+// modelo projeta, e "o que é caixa, dívida, cliente, estoque" já tem UMA resposta neste arquivo —
+// com cabeçalho de grupo tirado da soma por prova, subtotal informado fora, sinal normalizado por
+// bloco e escala convertida. Um segundo classificador divergiria sem erro nenhum (degrau 2 da
+// escada), e o deck passaria a dizer um caixa diferente do modelo que vai junto ao comitê.
+//
+// O QUE SAI, por exercício, e a regra que governa tudo: AUSÊNCIA É `null`, NUNCA ZERO. Ano sem
+// nenhuma linha que componha a grandeza devolve `null` e a origem diz por quê — a apresentação
+// imprime `n/d` e leva o motivo para a linha de fontes. Os TOTAIS (receita líquida, lucro bruto,
+// EBIT, lucro líquido, ativo, AC, PC, PNC, PL) são SÓ a âncora — o número que o documento imprime;
+// sem ela, `n/d`, porque somar contas para fabricar um total que o documento não imprime é a
+// dupla contagem que este arquivo passou dez sessões removendo. As contas de giro, caixa, dívida,
+// custos, SG&A e D&A são a soma das contas classificadas. As amarrações do deck confrontam as duas
+// pontas (lucro bruto da âncora × receita − custos; EBIT da âncora × lucro bruto − SG&A).
+// -----------------------------------------------------------------------------
+export type GrandezaCredito =
+  | "receita_liquida" | "lucro_bruto" | "ebit" | "depreciacao" | "lucro_liquido" | "custos" | "sga"
+  | "ativo_total" | "ativo_circulante" | "passivo_circulante" | "passivo_nao_circulante" | "patrimonio_liquido"
+  | "caixa" | "clientes" | "estoques" | "fornecedores"
+  | "divida_bancos_cp" | "divida_bancos_lp" | "divida_outras_cp" | "divida_outras_lp" | "imobilizado";
+
+// A operação do mapa da dívida e a leitura dela moram em `mapa-da-divida.ts` (uma regra para as
+// formas achatada e matricial); re-exportada aqui para quem já a importava deste arquivo.
+export type { OperacaoDivida } from "./mapa-da-divida";
+/** `calculado`: o total NÃO vem impresso no documento — saiu da cascata das contas (ver abaixo). */
+export interface ValorHistorico { v: number | null; origem: string; calculado?: boolean }
+
+export interface HistoricoCredito {
+  unidade: string;
+  /** a escala em que os valores ficaram (a de `fatorDeEscala`) */
+  escala: "milhar" | "reais";
+  anos: number[];
+  /** linhas que entraram SEM conversão por unidade não reconhecida — o deck as declara */
+  avisosDeEscala: string[];
+  /** as operações do mapa da dívida (vazio sem `MAPA_DIVIDA`) e o TOTAL que o próprio mapa imprime */
+  operacoes: OperacaoDivida[];
+  totalDoMapa: Record<number, number | null>;
+  grandezas: Record<GrandezaCredito, Record<number, ValorHistorico>>;
+}
+
+/** Mútuo, partes relacionadas, sócios, debêntures: as "outras dívidas" do X.2 do prompt. */
+const ehOutraDivida = (chave: string) =>
+  /\bm(ú|u)tuos?\b/i.test(chave) || /\bpartes? relacionadas?\b/i.test(chave)
+  || /\bs(ó|o)cios?\b/i.test(chave) || /\bdeb(ê|e)ntures?\b/i.test(chave)
+  || /\bintercompany\b/i.test(chave) || /\bcoligadas?\b/i.test(chave);
+
+export function historicoParaCredito(ent: EntradaModeloInstitucional): HistoricoCredito {
+  const ctx = contexto(ent);
+  const anos = ctx.hist;
+  const unidade = ent.unidade;
+  const doBloco = (b: BlocoModelo) => ctx.linhasPorBloco.get(b) ?? [];
+
+  // UNIDADE NÃO RECONHECIDA: `valorNaEscalaSemAviso` deixa o valor SEM conversão e põe o
+  // "ATENÇÃO… mil vezes maior" só na nota da célula do xlsx. O deck não tem nota de célula, então o
+  // aviso vira lista explícita e vai para os pontos de atenção — descartá-lo calaria um erro de 1000x.
+  const avisosDeEscala = new Set<string>();
+  const anotar = (l: LinhaModelo) => {
+    if (fatorDeEscala(l.unidade, unidade) === null) {
+      avisosDeEscala.add(`"${l.chave}" (unidade "${l.unidade ?? "não informada"}")`);
+    }
+  };
+  const ancora = (chave: string, nome: string): Record<number, ValorHistorico> => {
+    const l = ctx.ancoras.get(chave);
+    return Object.fromEntries(anos.map((ano) => {
+      const r = l ? valorNaEscalaSemAviso(l, ano, unidade) : null;
+      if (r && l) anotar(l);
+      return [ano, r
+        ? { v: r.valor, origem: `${nome} informado no documento ("${l!.chave}")` }
+        : { v: null, origem: `${nome}: o documento deste exercício não imprime o total, e ele não é somado de contas aqui` }];
+    }));
+  };
+  const soma = (linhas: LinhaModelo[], nome: string): Record<number, ValorHistorico> =>
+    Object.fromEntries(anos.map((ano) => {
+      const presentes = linhas.flatMap((l) => {
+        const r = valorNaEscalaSemAviso(l, ano, unidade);
+        if (r) anotar(l);
+        return r ? [{ l, v: r.valor }] : [];
+      });
+      return [ano, presentes.length === 0
+        ? { v: null, origem: `${nome}: nenhuma conta classificada como tal neste exercício` }
+        : { v: presentes.reduce((t, x) => t + x.v, 0),
+            origem: `${nome}: soma de ${presentes.length} conta(s) — ${presentes.map((x) => x.l.chave).join(" · ")}` }];
+    }));
+
+  const ac = doBloco("ativo_circulante");
+  const pc = doBloco("passivo_circulante");
+  const pnc = doBloco("passivo_nao_circulante");
+  const dividaPC = pc.filter((l) => ehDividaFinanceira(l.chave));
+  const dividaPNC = pnc.filter((l) => ehDividaFinanceira(l.chave));
+  const custoESga = [...doBloco("custo"), ...doBloco("sga")];
+  // Mútuo não está em `PADROES_DIVIDA_FINANCEIRA` (o modelo o trata como giro), mas o X.2 do prompt
+  // o conta como "outra dívida": entra aqui pelo nome, e só aqui.
+  const ehOutraDividaDaLinha = (l: LinhaModelo) =>
+    ehOutraDivida(l.chave) && (ehDividaFinanceira(l.chave) || /\bm(ú|u)tuos?\b/i.test(l.chave));
+
+  // A DRE SEM TOTAIS IMPRESSOS. DRE de balancete e de empresa pequena costuma trazer só as contas
+  // (receita de serviços, ISS, custo, despesas), sem a linha "Receita líquida" nem "EBIT". Medido
+  // num caso de serviços sintético (02/10/2026): sem este passo, receita, EBIT e EBITDA saíam n/d e
+  // o deck inteiro ficava sem resultado, com TODAS as contas extraídas. A cascata aqui é a MESMA do
+  // modelo institucional (receita − deduções − custos − SG&A, blocos já com sinal normalizado), e
+  // só entra no exercício em que o documento não imprime o total; a origem diz "calculado", e as
+  // amarrações 9 e 10 deixam de contar como conferência nesses exercícios (as duas pontas seriam a
+  // mesma conta).
+  const somaBloco = (b: BlocoModelo) => soma(doBloco(b), b);
+  const receitaB = somaBloco("receita");
+  const deducaoB = somaBloco("deducao");
+  const custoB = soma(doBloco("custo"), "Custos");
+  const sgaB = soma(doBloco("sga"), "SG&A");
+  const comCascata = (base: Record<number, ValorHistorico>, nome: string,
+    conta: (ano: number) => number | null, formula: string): Record<number, ValorHistorico> =>
+    Object.fromEntries(anos.map((ano) => {
+      if (base[ano].v !== null) return [ano, base[ano]];
+      const v = conta(ano);
+      return [ano, v === null ? base[ano]
+        : { v, calculado: true, origem: `${nome} calculado pela Oria (${formula}): o documento não imprime o total` }];
+    }));
+  const vv = (r: Record<number, ValorHistorico>, ano: number) => r[ano]?.v ?? null;
+  const rl = comCascata(ancora("DOC_RECEITA_LIQUIDA", "Receita líquida"), "Receita líquida",
+    // SEM DEDUÇÃO CLASSIFICADA NAQUELE EXERCÍCIO, NÃO HÁ RECEITA LÍQUIDA: zerar a dedução publicaria a
+    // receita BRUTA como líquida e inflaria margem e capacidade de pagamento (achado da revisão de
+    // 03/10/2026). Custos e SG&A ausentes já davam null; a dedução agora segue a mesma regra.
+    (a) => (vv(receitaB, a) === null || vv(deducaoB, a) === null ? null : (vv(receitaB, a) as number) - (vv(deducaoB, a) as number)), "receita − deduções");
+  const lb = comCascata(ancora("DOC_LUCRO_BRUTO", "Lucro bruto"), "Lucro bruto",
+    (a) => (vv(rl, a) === null || vv(custoB, a) === null ? null : (vv(rl, a) as number) - (vv(custoB, a) as number)), "receita líquida − custos");
+  const ebit = comCascata(ancora("DOC_EBIT", "EBIT"), "EBIT",
+    (a) => (vv(lb, a) === null || vv(sgaB, a) === null ? null : (vv(lb, a) as number) - (vv(sgaB, a) as number)), "lucro bruto − despesas operacionais");
+  const grandezas: HistoricoCredito["grandezas"] = {
+      receita_liquida: rl,
+      lucro_bruto: lb,
+      ebit: ebit,
+      lucro_liquido: ancora("DOC_LUCRO_LIQUIDO", "Lucro líquido"),
+      // Mesmo filtro da DEPRECIACAO realizada do modelo (`construirModeloInstitucional`): a linha
+      // de custo/despesa cujo nome diz depreciação, já na convenção do modelo (magnitude positiva).
+      depreciacao: soma(custoESga.filter((l) => /deprecia|amortiza|exaust/i.test(l.chave)), "D&A"),
+      custos: soma(doBloco("custo"), "Custos"),
+      sga: soma(doBloco("sga"), "Despesas operacionais (SG&A)"),
+      ativo_total: ancora("DOC_ATIVO", "Ativo total"),
+      ativo_circulante: ancora("DOC_AC", "Ativo circulante"),
+      passivo_circulante: ancora("DOC_PC", "Passivo circulante"),
+      passivo_nao_circulante: ancora("DOC_PNC", "Passivo não circulante"),
+      patrimonio_liquido: ancora("DOC_PL", "Patrimônio líquido"),
+      caixa: soma(ac.filter((l) => ehCaixa(l.chave)), "Caixa e aplicações"),
+      clientes: soma(ac.filter((l) => ehCliente(l.chave)), "Clientes"),
+      estoques: soma(ac.filter((l) => ehEstoque(l.chave)), "Estoques"),
+      fornecedores: soma(pc.filter((l) => ehFornecedor(l.chave) && !ehDividaFinanceira(l.chave)), "Fornecedores"),
+      divida_bancos_cp: soma(dividaPC.filter((l) => !ehOutraDivida(l.chave)), "Dívida bancária CP"),
+      divida_bancos_lp: soma(dividaPNC.filter((l) => !ehOutraDivida(l.chave)), "Dívida bancária LP"),
+      divida_outras_cp: soma(pc.filter(ehOutraDividaDaLinha), "Outras dívidas CP"),
+      divida_outras_lp: soma(pnc.filter(ehOutraDividaDaLinha), "Outras dívidas LP"),
+      // O MESMO filtro de imobilizado do `Fixed Assets & CAPEX`: é o ativo real (imóvel, máquina,
+      // veículo) que a garantia e a "dívida × ativos reais" do deck usam.
+      // Mas SÓ o tangível: o filtro do capex também pega "Títulos a receber - venda de imobilizado"
+      // (recebível) e marcas/software (intangível), medido no book Vertentes — nenhum dos dois é bem
+      // que se dá em garantia real.
+      imobilizado: soma(doBloco("ativo_nao_circulante").filter((l) => ehImobilizado(l.chave)
+        && !/\ba receber\b|marcas?|patentes?|software|licen(ç|c)|intang(í|i)vel/i.test(l.chave)), "Imobilizado tangível"),
+  };
+  // O MAPA DA DÍVIDA, operação a operação. Lê `ent.linhas` (e não `linhasPorBloco`) porque a linha
+  // TOTAL do mapa é subtotal e sai da soma do modelo — e é ela que confere a abertura (amarração 7).
+  // Aqui o mapa chega na forma ACHATADA (o modelo só carrega número); a forma matricial e as colunas
+  // de texto vêm dos campos extraídos, em `montarBaseCredito` — a regra das duas é a mesma.
+  const { operacoes, totalDoMapa } = lerMapaDaDivida(ent.linhas
+    .filter((l) => (l.documentos ?? []).includes("MAPA_DIVIDA"))
+    .flatMap((l) => anos.map((ano) => ({ chave: l.chave, coluna: null, ano, texto: null,
+      num: valorNaEscalaSemAviso(l, ano, unidade)?.valor ?? null }))), anos);
+  // `avisosDeEscala` só está completo depois de TODAS as grandezas lidas — por isso o objeto acima
+  // é montado antes do retorno.
+  return { unidade, escala: escalaDoModelo(unidade), anos,
+    avisosDeEscala: [...avisosDeEscala].sort((a, b) => a.localeCompare(b, "pt-BR")), grandezas,
+    operacoes, totalDoMapa };
 }

@@ -495,13 +495,29 @@ export default async function ModelagemPage({
               Exportar modelagem — decidir pendências antes
             </Link>
           ) : (
-            <a
-              href={`/casos/${id}/export`}
-              className="btn-primario"
-              title="As 14 abas do modelo institucional, projetadas e editáveis dentro do Excel, mais a Modelagem e os índices macro. Sem as abas de dado cru."
-            >
-              Exportar modelagem
-            </a>
+            <>
+              {/* A APRESENTAÇÃO DE CRÉDITO (.pptx, módulo de crédito do Prompt-Mestre v3) só aparece
+                  onde o export de modelagem aparece: ela lê o MESMO realizado do modelo e passa pelo
+                  mesmo Portão 2 — oferecê-la com o portão fechado seria um botão que devolve 409. */}
+              <a href={`/casos/${id}/apresentacao`} className="btn-secundario"
+                title="Os campos que só o analista ou a pesquisa sabem (títulos, sócios, concorrentes, scorecard). Em branco, saem [a preencher].">
+                Campos da apresentação
+              </a>
+              <a
+                href={`/casos/${id}/export?modo=apresentacao`}
+                className="btn-secundario"
+                title="O módulo de crédito em PowerPoint, no padrão visual Oria: base de informação, evolução financeira, capital de giro, comparativo e amarrações. Gerado do mesmo realizado do modelo."
+              >
+                Gerar apresentação de crédito
+              </a>
+              <a
+                href={`/casos/${id}/export`}
+                className="btn-primario"
+                title="As 14 abas do modelo institucional, projetadas e editáveis dentro do Excel, mais a Modelagem e os índices macro. Sem as abas de dado cru."
+              >
+                Exportar modelagem
+              </a>
+            </>
           )}
         </div>
       </div>
