@@ -39,7 +39,17 @@
 name: suítes
 
 on:
+  # PUSH SÓ NO `main`. Com `push:` aberto, todo push numa branch de PR disparava DUAS execuções
+  # completas: a de `push` (grupo `refs/heads/<branch>`) e a de `pull_request` (grupo
+  # `refs/pull/N/merge`). Os grupos são diferentes, então o `cancel-in-progress` lá embaixo não
+  # cancelava nenhuma das duas — 12 jobs por push em vez de 6, competindo pelos mesmos runners.
+  # Medido no #252 em 05/10/2026: com o #253 aberto ao mesmo tempo, a fila ficou cheia e o e2e e o
+  # n8n-e-derivados da execução 1294 foram CANCELADOS depois de exatos 15 minutos sem runner
+  # (criados 20:15:35, cancelados 20:30:37, nenhum passo executado). O agregador ficou vermelho
+  # com os quatro jobs que rodaram verdes. A branch de PR continua coberta pelo `pull_request`, e
+  # a branch sem PR pelo `workflow_dispatch`.
   push:
+    branches: [main]
   pull_request:
   # DISPARO MANUAL — para reconferir um commit que ficou SEM execução.
   #
