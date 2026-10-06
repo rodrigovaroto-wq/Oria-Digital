@@ -6,6 +6,8 @@ import { SecaoLinhas } from "./SecaoLinhas";
 import { FormParametros, FormPremissa } from "./FormsTopo";
 import { SugestoesDoRealizado } from "./SugestoesDoRealizado";
 import { sugerirDoRealizado } from "@/lib/premissas-do-realizado";
+import { agregadosDoRealizado } from "@/lib/modelo-institucional";
+import { entradaDoRealizado, lerRealizadoDoCaso } from "@/lib/leitura-do-caso";
 import { chaveDaLinha, vinculoPorLinha } from "@/lib/modelagem-linha";
 import { portaoFechado, portaoNaoConferido, textoChipModelagem, textoTituloConferenciaModelagem, veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import { humanizar, rotuloDaSecao } from "@/lib/rotulos";
@@ -177,7 +179,7 @@ export default async function ModelagemPage({
   const [
     [sugeridasRes, msSugeridas], [ativasRes, msAtivas], [vinculosRes, msVinculos],
     [confRes, msConf], [camposRes, msCampos], [sazRes, msSaz], [docsRes, msDocs],
-    [portaoRes, msPortao],
+    [portaoRes, msPortao], [realizadoLido, msRealizado],
   ] = await Promise.all([
     medir(supabase.rpc("fn_premissas_sugeridas", { p_setor: parametros?.setor ?? null })),
     medir(supabase.from("caso_premissa").select("premissa_codigo, valores, origem")
@@ -222,6 +224,11 @@ export default async function ModelagemPage({
     // o export de modelagem. Sem ela a tela dizia "pronto" e o clique devolvia
     // 409 (ver `PortaoDoExport` em lib/modelagem-cobertura.ts).
     medir(supabase.rpc("fn_avaliar_portao2", { p_caso_id: id })),
+    // O REALIZADO, lido pelas MESMAS funções do export (ver `leitura-do-caso.ts`) — só quando a
+    // entidade modelada está definida, que é a pergunta que o modelo faz antes de somar.
+    medir(parametros?.entidade?.trim()
+      ? lerRealizadoDoCaso(supabase, id, parametros.entidade.trim())
+      : Promise.resolve(null)),
   ]);
 
   // ---------------------------------------------------------------------------
@@ -251,6 +258,9 @@ export default async function ModelagemPage({
     ["curva de sazonalidade (fn_sazonalidade_do_caso)", sazRes.error, msSaz],
     ["documentos do caso", docsRes.error, msDocs],
     ["Portão 2 (fn_avaliar_portao2)", portaoRes.error, msPortao],
+    // `problema` é a primeira falha da leitura do realizado (documentos, linhas ou valores).
+    ["realizado do caso (documentos, linhas e valores por ano)",
+      realizadoLido?.problema ? { message: realizadoLido.problema } : null, msRealizado],
   ] as const);
 
   // O tempo entra na linha da falha. Num cancelamento por tempo ele é o TETO do
@@ -338,22 +348,31 @@ export default async function ModelagemPage({
   // 3 lista, com os mesmos classificadores que o modelo usa para projetar — a
   // ponta que mede e a ponta que aplica precisam concordar sobre o que é cliente,
   // estoque e fornecedor, senão o dia sugerido não reproduz o saldo de onde saiu.
-  // AS OITO SAEM DE `fn_linhas_do_realizado` (0150), NÃO DA LISTA DA TELA.
+  // AS OITO SAEM DAS MESMAS AGREGAÇÕES HISTÓRICAS DO EXPORT, NÃO DE UMA SOMA POR SEÇÃO.
   //
-  // A lista (`camposRes`) agrupa por rótulo, traz UM número por linha e não
-  // filtra entidade — ela existe para o analista escolher premissa, e serve bem
-  // para isso. Somar as razões a partir dela foi o que gravou, no Canastra,
-  // `PMR = 348,6 dias` e `CUSTO_VARIAVEL = 287,7% da receita`: entrava a abertura
-  // analítica por cima da conta que ela abre, o total da DRE junto das próprias
-  // componentes, e as oito empresas do grupo num modelo que projeta uma.
-  //
-  // A função nova responde a outra pergunta — "quanto esta empresa, neste
-  // exercício, teve de cada coisa" — e é ela que a média histórica precisa.
-  const realizadoRes = await medir(supabase.rpc("fn_linhas_do_realizado", {
-    p_caso_id: id,
-    p_entidade: parametros?.entidade ?? null,
-  }));
-  const sugestoes = sugerirDoRealizado((realizadoRes[0].data ?? []) as Parameters<typeof sugerirDoRealizado>[0]);
+  // O caminho anterior (`fn_linhas_do_realizado` somada por seção) não enxerga a hierarquia da
+  // demonstração: o documento imprime o total do grupo e as filhas (e os netos) na mesma seção,
+  // e só a ORDEM impressa separa as duas coisas. Medido em produção (Fw Valtra, 2025): PMR de
+  // 120 dias onde o documento dá ~40, SG&A de 34,9% onde dá 17,9% — e ~4 minutos por carregamento.
+  // Agora a entrada é a do modelo institucional (campos com ordem → subtotais por ordem →
+  // `fn_valores_por_ano`) e a soma é `agregadosDoRealizado`, a que as abas do modelo usam.
+  // O resumo "sem base" abaixo diz POR QUE as oito não saíram, em vez de listá-las como se o
+  // caso não tivesse a conta (regra 1).
+  const entidadeModelada = parametros?.entidade?.trim() || null;
+  let motivoSemBase: string | undefined;
+  if (!entidadeModelada || !parametros?.ultimo_exercicio_real) {
+    motivoSemBase = "defina a entidade modelada e o último exercício real no passo 1 e salve: as sugestões saem "
+      + "do mesmo histórico que o arquivo exportado usa, e sem os dois não há de onde somar. "
+      + "Efeito: nenhuma das oito premissas é sugerida.";
+  } else if (realizadoLido?.problema) {
+    motivoSemBase = `a leitura do realizado falhou (${realizadoLido.problema}). Efeito: nenhuma das oito `
+      + "premissas é sugerida — não é um caso sem essas contas.";
+  }
+  const sugestoes = motivoSemBase || !realizadoLido || !entidadeModelada || !parametros?.ultimo_exercicio_real
+    ? sugerirDoRealizado([], motivoSemBase)
+    : sugerirDoRealizado(agregadosDoRealizado(entradaDoRealizado(
+        entidadeModelada, parametros.ultimo_exercicio_real,
+        camposRes.data as unknown as Parameters<typeof entradaDoRealizado>[2], realizadoLido)));
 
   // Linhas do caso agrupadas por seção canônica — é a unidade do aplicar-em-lote.
   // A função já devolve UMA linha por (seção, rótulo normalizado): o agrupamento

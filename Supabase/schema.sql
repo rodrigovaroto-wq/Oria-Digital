@@ -1352,6 +1352,54 @@ $_$;
 COMMENT ON FUNCTION public.fn_coluna_de_dimensao(p_coluna text) IS 'A coluna ROTULA a linha (exercício, quantidade, natureza, %) em vez de medi-la em dinheiro. Nasceu do falso positivo da v47: a guarda de padrão suspeito acusou o ano 2023 repetido na coluna "Exercício" como alucinação (0140).';
 
 --
+-- Name: fn_coluna_e_abertura(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_coluna_e_abertura(p_coluna text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select coalesce(p_coluna, '') ~* '^\s*saldo\s+(inicial|anterior)\s*$'
+$_$;
+
+--
+-- Name: FUNCTION fn_coluna_e_abertura(p_coluna text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) IS '"Saldo Inicial"/"Saldo anterior": o fechamento do ano ANTERIOR ao do documento (0199 b). Conta única de fn_valores_por_ano e fn_linhas_do_realizado (0201).';
+
+--
+-- Name: fn_coluna_e_movimento(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_coluna_e_movimento(p_coluna text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select coalesce(p_coluna, '') ~* '^\s*(d[ée]bito|cr[ée]dito)s?\s*$'
+$_$;
+
+--
+-- Name: FUNCTION fn_coluna_e_movimento(p_coluna text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) IS '"Débito"/"Crédito": movimento do período, nunca saldo (0199 a). Conta única de fn_valores_por_ano e fn_linhas_do_realizado (0201).';
+
+--
+-- Name: fn_coluna_e_saldo(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_coluna_e_saldo(p_coluna text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select coalesce(p_coluna, '') ~* '^\s*saldo\s+(final|atual|inicial|anterior)\s*$'
+$_$;
+
+--
+-- Name: FUNCTION fn_coluna_e_saldo(p_coluna text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) IS 'Coluna que NOMEIA um saldo sem trazer ano (final, atual, inicial, anterior): o ano vem da referência do documento (0201). "Saldo", "Valor" e "Ticket médio" não são — continuam sem exercício.';
+
+--
 -- Name: fn_coluna_entidade(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -3803,6 +3851,29 @@ CREATE FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp wit
 $$;
 
 --
+-- Name: fn_familia_da_secao(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_familia_da_secao(p_secao text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select case when p_secao ~ '^(ativo|passivo)(_|$)' or p_secao = 'patrimonio_liquido'
+                   then 'patrimonial'
+              when p_secao in ('receita_bruta', 'custos', 'despesas_operacionais',
+                               'resultado_financeiro', 'impostos_lucro')
+                   then 'resultado'
+              when p_secao ~ '^atividades_' then 'fluxo'
+              else coalesce(p_secao, '')   -- NULL, dmpl, dva, NAO_CLASSIFICAVEL: família própria
+         end
+$_$;
+
+--
+-- Name: FUNCTION fn_familia_da_secao(p_secao text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_familia_da_secao(p_secao text) IS 'Família da demonstração pela seção canônica: patrimonial, resultado, fluxo ou a própria seção (0200). Conta única (0201).';
+
+--
 -- Name: fn_fator_escala(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5353,6 +5424,83 @@ $$;
 COMMENT ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid) IS '0182: agrupa as entidades do caso por CONTROLE COMUM, por FECHO TRANSITIVO — se A e B compartilham um controlador, e B e C compartilham outro, as três caem no mesmo grupo. `par_direto` (pares de um salto) é MATERIALIZED de propósito (evita reavaliação a cada iteração da recursão — mesma lição da 0152, ver comentário acima da função). `grupo_id` é o entidade_id alcançável de menor ordenação textual — representante arbitrário mas estável do componente conexo, não uma entidade "principal". Entidade sem controlador registrado não aparece na saída — ausência não afirma nada sobre grupo real algum (regra 7 do CLAUDE.md). A recursão termina pela DEDUPLICAÇÃO do `union` sobre um conjunto finito (entidade, alcançável) — sem contador de salto na tupla, que era justamente o que impedia a dedup de convergir na primeira versão (ver cabeçalho). É o consumidor mínimo que prova a fatia 1.7 do roadmap: "as 8 entidades do mandato real podem ser reconhecidas como um grupo".';
 
 --
+-- Name: fn_herdar_secao_pela_arvore(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid DEFAULT NULL::uuid, p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  c_rodadas constant int := 10;
+  v_ids     uuid[] := '{}';
+  v_novos   uuid[];
+  v_conf    int := 0;
+  v_lconf   int := 0;
+  v_i       int := 0;
+  v_linhas  int; v_versoes int; v_casos int;
+begin
+  loop
+    v_i := v_i + 1;
+    with e as materialized (
+      select ce.id, ce.documento_versao_id, d.caso_id,
+             nullif(btrim(ce.secao_canonica), '')          as sc,
+             fn_nome_de_secao_normalizado(ce.chave)          as nc,
+             fn_nome_de_secao_normalizado(ce.secao)          as ns,
+             (ce.origem_valor = 'extracao' and ce.revisado_por is null) as alvo
+        from campo_extraido ce
+        join documento_versao dv on dv.id = ce.documento_versao_id
+        join documento d on d.id = dv.documento_id
+       where d.tipo_taxonomia in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA', 'DRE')
+         and (p_documento_versao_id is null or ce.documento_versao_id = p_documento_versao_id)
+         and (p_caso_id is null or d.caso_id = p_caso_id)
+    ), fonte as materialized (
+      -- o PAI: a linha do documento cuja chave é o nome, e que tem seção
+      select documento_versao_id, nc as nome, sc from e
+       where sc is not null and nc is not null and not fn_nome_de_topo_ou_total(nc)
+      union
+      -- as IRMÃS: as outras linhas que estão sob a mesma seção bruta e têm seção
+      select documento_versao_id, ns, sc from e
+       where sc is not null and ns is not null and not fn_nome_de_topo_ou_total(ns)
+    ), unica as materialized (
+      select documento_versao_id, nome, min(sc) as sc, count(*) as n   -- (versão, nome, sc) já é distinto: n = nº de seções
+        from fonte group by 1, 2
+    ), upd as (
+      update campo_extraido ce
+         set secao_canonica = u.sc, secao_canonica_inferida = true
+        from e join unica u on u.documento_versao_id = e.documento_versao_id and u.nome = e.ns
+       where ce.id = e.id and e.alvo and e.sc is null and u.n = 1
+      returning ce.id
+    )
+    select (select coalesce(array_agg(id), '{}') from upd),
+           (select count(distinct (u.documento_versao_id, u.nome)) from unica u
+             where u.n > 1 and exists (select 1 from e where e.documento_versao_id = u.documento_versao_id
+                                         and e.ns = u.nome and e.alvo and e.sc is null)),
+           (select count(*) from e join unica u on u.documento_versao_id = e.documento_versao_id and u.nome = e.ns
+             where u.n > 1 and e.alvo and e.sc is null)
+      into v_novos, v_conf, v_lconf;
+
+    v_ids := v_ids || v_novos;
+    exit when coalesce(array_length(v_novos, 1), 0) = 0 or v_i >= c_rodadas;
+  end loop;
+
+  select count(*), count(distinct ce.documento_versao_id), count(distinct d.caso_id)
+    into v_linhas, v_versoes, v_casos
+    from campo_extraido ce
+    join documento_versao dv on dv.id = ce.documento_versao_id
+    join documento d on d.id = dv.documento_id
+   where ce.id = any (v_ids);
+
+  return jsonb_build_object('linhas', v_linhas, 'versoes', v_versoes, 'casos', v_casos,
+                            'conflitos', v_conf, 'linhas_em_conflito', v_lconf, 'rodadas', v_i);
+end $$;
+
+--
+-- Name: FUNCTION fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid) IS '0204: herda secao_canonica pela ÁRVORE do próprio documento. Para linha sem seção (extração, sem revisão humana) cuja seção bruta, normalizada, é a chave de outra linha da MESMA versão que tem seção (o pai) ou a seção bruta de outras que têm (as irmãs), herda — se todas concordam em UMA seção; conflito fica NULL e é contado. Recursivo (até 10 rodadas), nunca herda de/para topo ou total (ATIVO, TOTAL DO ATIVO…), só nos cinco tipos de demonstração. Marca secao_canonica_inferida. Idempotente. Devolve {linhas, versoes, casos, conflitos, linhas_em_conflito, rodadas}.';
+
+--
 -- Name: fn_indice_macro_anual(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5424,6 +5572,44 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_indice_macro_anual(p_desde_ano integer) IS 'Retorno acumulado por ano-calendário. Série de TAXA acumula por composição; série de NÍVEL varia entre FECHAMENTOS (dez do ano anterior → dez do ano), e o primeiro ano da série sai com retorno NULL por não ter base. `meses` revela ano incompleto — incluí-lo numa média de 3/5/10 anos como ano cheio distorce a média.';
+
+--
+-- Name: fn_inferir_secao_canonica_das_linhas(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_linhas int; v_versoes int; v_casos int;
+begin
+  with upd as (
+    update campo_extraido ce
+       set secao_canonica = x.s,
+           secao_canonica_inferida = true
+      from (select ce2.id, d.caso_id,
+                   fn_secao_canonica_da_secao_bruta(ce2.secao, d.tipo_taxonomia) as s
+              from campo_extraido ce2
+              join documento_versao dv on dv.id = ce2.documento_versao_id
+              join documento d on d.id = dv.documento_id
+             where nullif(btrim(ce2.secao_canonica), '') is null
+               and ce2.secao is not null
+               and ce2.origem_valor = 'extracao'
+               and ce2.revisado_por is null
+               and (p_caso_id is null or d.caso_id = p_caso_id)) x
+     where ce.id = x.id and x.s is not null
+    returning ce.documento_versao_id, x.caso_id
+  )
+  select count(*), count(distinct documento_versao_id), count(distinct caso_id)
+    into v_linhas, v_versoes, v_casos from upd;
+  return jsonb_build_object('linhas', v_linhas, 'versoes', v_versoes, 'casos', v_casos);
+end $$;
+
+--
+-- Name: FUNCTION fn_inferir_secao_canonica_das_linhas(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid) IS '0203: backfill de secao_canonica nas linhas extraídas que a IA deixou sem seção, a partir da seção bruta (fn_secao_canonica_da_secao_bruta). Marca secao_canonica_inferida. Ignora linha revisada ou transcrita por humano. Idempotente. NÃO recomputa reconciliação nem completude: depois dela, rodar fn_reconciliar_caso e fn_recomputar_completude nos casos afetados.';
 
 --
 -- Name: fn_instalacao_conferir(); Type: FUNCTION; Schema: public; Owner: -
@@ -5727,12 +5913,13 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
     AS $$
   -- marca-0150
   -- marca-0151
+  -- marca-0201
   --
   -- A MARCA FICA, e o motivo é o mesmo da 0102: a sonda de instalação confere se
   -- a correção está APLICADA NO BANCO procurando `0150` no corpo desta função —
   -- é o que separa "mergeado" de "aplicado". Uma reemissão futura mantém a
   -- marca; trocá-la apagaria a resposta da pergunta que ela faz.
-  with bruto as (
+  with bruto as materialized (
     select
       ce.secao_canonica,
       ce.chave,
@@ -5744,7 +5931,18 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
                            where ce2.documento_versao_id = ce.documento_versao_id
                              and ce2.entidade_coluna is not null) > 1
                     then null else e.razao_social end) as entidade,
-      fn_exercicio_da_coluna(ce.periodo_coluna) as exercicio,
+      -- 0201: a coluna que NOMEIA um saldo ("Saldo Final", "Saldo atual", "Saldo Inicial", "Saldo
+      -- anterior") não traz ano e herda o da referência do documento; a de ABERTURA é o ano - 1.
+      -- Coluna com ano no texto segue lendo o texto; coluna sem ano e sem nome de saldo ("Saldo",
+      -- "Valor", "Ticket médio") segue SEM exercício — e portanto fora (0150).
+      case when fn_coluna_e_saldo(ce.periodo_coluna)
+           then fn_ano_da_coluna(ce.periodo_coluna, p.referencia)
+                - (case when fn_coluna_e_abertura(ce.periodo_coluna) then 1 else 0 end)
+           else fn_exercicio_da_coluna(ce.periodo_coluna)
+      end as exercicio,
+      fn_coluna_e_abertura(ce.periodo_coluna) as abertura,
+      fn_periodo_e_parcial(ce.periodo_coluna, d.tipo_taxonomia, p.tipo, p.referencia) as parcial,
+      fn_familia_da_secao(ce.secao_canonica) as familia,
       ce.valor_num,
       ce.unidade,
       d.tipo_taxonomia,
@@ -5753,6 +5951,7 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
     from campo_extraido ce
     join documento_versao dv on dv.id = ce.documento_versao_id
     join documento d on d.id = dv.documento_id
+    left join periodo p on p.id = d.periodo_id
     left join entidade e on e.id = d.entidade_id
     left join taxonomia_tipo_documento t on t.codigo = d.tipo_taxonomia
     cross join lateral fn_autoridade_do_documento(d.id) aut
@@ -5763,25 +5962,42 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
       -- entra somando: o padrão seguro é o de sempre, e o catálogo é quem
       -- declara a exceção.
       and coalesce(t.abertura_analitica, false) = false
-      and fn_exercicio_da_coluna(ce.periodo_coluna) is not null
+      -- 0201 (d): a mesma exclusão da série por ano. (O movimento, 0199 a, não precisa de filtro AQUI:
+      -- "Débito"/"Crédito" não trazem ano nem nome de saldo, então `exercicio` já é NULL e a linha
+      -- cai em `filtrado`. MEDIDO: tirar o filtro explícito não reprova nenhum assert, por isso ele
+      -- não foi escrito — código sem efeito medível é o que a regra 2 proíbe.)
+      and coalesce(t.categoria, '') not in ('Societário/Legal', 'Garantias/Sócios')
   ),
   filtrado as (
-    select * from bruto
-    where p_entidade is null
-       or fn_normalizar_texto(entidade) = fn_normalizar_texto(p_entidade)
+    select b.*,
+           fn_normalizar_texto(coalesce(b.entidade, '')) as entidade_chave
+    from bruto b
+    where b.exercicio is not null
+      and (p_entidade is null
+           or fn_normalizar_texto(b.entidade) = fn_normalizar_texto(p_entidade))
+  ),
+  -- 0201 (c'): o período PARCIAL só entra no exercício em que a entidade não tem anual da mesma
+  -- família — a decisão é do ANO, como na 0200.
+  elegivel as (
+    select f.*,
+           bool_or(not coalesce(f.parcial, false))
+             over (partition by f.entidade_chave, f.familia, f.exercicio) as ano_tem_anual
+    from filtrado f
   ),
   papel_do_rotulo as (
     select distinct chave, tipo_taxonomia, unidade,
            fn_papel_linha(chave, tipo_taxonomia, unidade) as papel
-    from (select distinct chave, tipo_taxonomia, unidade from filtrado) d
+    from (select distinct chave, tipo_taxonomia, unidade from elegivel
+           where not (coalesce(parcial, false) and ano_tem_anual)) d
   ),
   com_papel as (
     select f.*, p.papel
-    from filtrado f
+    from elegivel f
     join papel_do_rotulo p
       on p.chave = f.chave
      and p.tipo_taxonomia is not distinct from f.tipo_taxonomia
      and p.unidade is not distinct from f.unidade
+    where not (coalesce(f.parcial, false) and f.ano_tem_anual)
   ),
   agrupado as (
     select
@@ -5790,6 +6006,9 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
       (array_agg(c.chave order by length(c.chave)))[1] as chave,
       max(c.entidade) as entidade,
       c.exercicio,
+      -- 0201: o FECHAMENTO vence a abertura do mesmo exercício (a abertura é o eco dele no ano
+      -- seguinte), antes da autoridade e do módulo.
+      --
       -- 0151: O DESEMPATE ENTRE DOCUMENTOS, QUE ERA SILENCIOSO.
       --
       -- Dentro do MESMO exercício, a mesma conta pode vir de dois documentos (o
@@ -5804,7 +6023,7 @@ CREATE FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text DE
       -- regra silenciosa por outra — e quem avisa que houve empate é
       -- `fn_reconciliar_versoes_do_periodo`, com o número perdedor à vista.
       (array_agg(c.valor_num
-                 order by c.autoridade desc, abs(c.valor_num) desc nulls last))[1] as valor,
+                 order by c.abertura, c.autoridade desc, abs(c.valor_num) desc nulls last))[1] as valor,
       (array_agg(c.papel order by fn_papel_prioridade(c.papel)))[1] as papel,
       array_agg(distinct c.tipo_taxonomia) as documentos,
       -- Quantos documentos DISTINTOS trouxeram esta linha neste exercício: é o
@@ -5873,7 +6092,7 @@ $$;
 -- Name: FUNCTION fn_linhas_do_realizado(p_caso_id uuid, p_entidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text) IS 'As linhas do caso POR EXERCÍCIO, de uma entidade, sem o que não se soma (0150): fora a abertura analítica (balancete, aging, estoque, extrato — elas reabrem contas que a demonstração já declara), fora o combinado (soma das empresas), fora a coluna que não nomeia exercício, e com o total que veio acompanhado das próprias componentes marcado `subtotal`. Desde a 0151, quando dois documentos do mesmo exercício discordam sobre a mesma conta, quem decide é a AUTORIDADE DOCUMENTAL — o maior módulo da 0042 fica como último recurso, para o empate. É a base das premissas do realizado e da média histórica; a LISTA da tela continua saindo de fn_linhas_para_modelagem, que agrupa por rótulo e não por exercício.';
+COMMENT ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text) IS 'As linhas do caso POR EXERCÍCIO, de uma entidade, sem o que não se soma (0150): fora a abertura analítica (balancete, aging, estoque, extrato — elas reabrem contas que a demonstração já declara), fora o combinado (soma das empresas), fora a coluna que não nomeia exercício, e com o total que veio acompanhado das próprias componentes marcado `subtotal`. 0201: lê também o documento anual de "Saldo Final"/"Saldo atual" (ano da referência) e "Saldo Inicial"/"Saldo anterior" (ano - 1, atrás do fechamento), sem movimento, sem Societário/Legal, e com o período parcial só no exercício sem anual da mesma família — as mesmas contas de fn_valores_por_ano. É a base das premissas do realizado e da média histórica; a LISTA da tela continua saindo de fn_linhas_para_modelagem, que agrupa por rótulo.';
 
 --
 -- Name: fn_linhas_do_tipo(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -6498,6 +6717,33 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_natureza_intragrupo(p_chave text, p_secao text) IS '0124: a natureza da linha intragrupo, para a MENSAGEM dizer onde procurar. Não é chave de pareamento — cada ponta da relação usa o vocabulário dela.';
+
+--
+-- Name: fn_nome_de_secao_normalizado(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_nome_de_secao_normalizado(p_texto text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select nullif(
+    regexp_replace(
+      regexp_replace(
+        regexp_replace(fn_normalizar_texto(fn_sem_codigo_de_conta(p_texto)), '^(\(\s*[-+=]\s*\)|[-+=])\s*', ''),
+        '^([0-9]+(\.[0-9]+)*|[ivx]+)\s*[-.)]\s*', ''),
+      '[\s:.;]+$', ''),
+    '')
+$_$;
+
+--
+-- Name: fn_nome_de_topo_ou_total(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_nome_de_topo_ou_total(p_nome text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select p_nome ~ '^(ativo|passivo|ativo e passivo|passivo e patrimonio liquido|circulante|nao circulante|balanco patrimonial|balancete analitico|balancete|resumo do balancete|eliminacoes do combinado|contas temporarias|nao classificavel|nao_classificavel|dre|demonstracao do resultado( do exercicio)?)$'
+      or p_nome ~ '(^| )(total|totais)( |$)'
+$_$;
 
 --
 -- Name: fn_nome_parece_ter_endereco_colado(text); Type: FUNCTION; Schema: public; Owner: -
@@ -7417,6 +7663,31 @@ begin
   return r;                                                             -- texto livre normalizado
 end;
 $_$;
+
+--
+-- Name: fn_periodo_e_parcial(text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $_$
+  select (coalesce(p_coluna, '') !~ '(31/12|12/31|-12-31)'
+       and (   p_tipo_documento = 'BALANCETE'
+            or p_periodo_tipo in ('mes', 'trimestre')
+            or (p_periodo_tipo = 'data-base' and coalesce(p_referencia, '') !~ '(31/12|12/31|-12-31)')
+            or coalesce(p_referencia, '') ~* '^\s*[1-4]\s*t\s*\d{2,4}\s*$'
+            or coalesce(p_referencia, '') ~ '^\s*(0?[1-9]|1[01])/(19|20)\d{2}\s*$'
+            or coalesce(p_referencia, '') ~ '^\s*(19|20)\d{2}-(0[1-9]|1[01])\s*$'
+            or (coalesce(p_referencia, '') ~* '\d{1,2}/\d{1,2}/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*\d{1,2}/\d{1,2}/(19|20)\d{2}'
+                and coalesce(p_referencia, '') !~ '^\s*0?1/0?1/(19|20)\d{2}\s*(-|–|—|a|à|até|ate)\s*31/12/(19|20)\d{2}\s*$')
+           ))
+$_$;
+
+--
+-- Name: FUNCTION fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) IS 'Ocorrência de período PARCIAL (balancete, mês, trimestre, intervalo que não é o ano, data-base que não é 31/12) — só entra no ano em que a entidade não tem anual da mesma família (0199 c, 0200). Conta única (0201).';
 
 --
 -- Name: fn_periodo_por_extenso(text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -10539,7 +10810,16 @@ declare
   v_auto_permitido     boolean;
   v_n_excluidas        int := 0;
   v_g                  jsonb;
+  v_tipo               text;
+  v_secao              text;
+  v_inferida           boolean;
+  v_herdadas           jsonb;
 begin
+  -- 0203: o tipo do documento entra na inferência da seção (fn_secao_canonica_da_secao_bruta).
+  select d.tipo_taxonomia into v_tipo
+  from documento_versao dv join documento d on d.id = dv.documento_id
+  where dv.id = p_documento_versao_id;
+
   select ea.nivel_atual, ea.limiar_auto_clear into v_nivel_dial, v_limiar
   from estagio_autonomia ea where ea.estagio = 'extracao_linhas_financeiras';
   v_auto_permitido := v_nivel_dial in ('N2', 'N3') and v_limiar is not null;
@@ -10550,6 +10830,16 @@ begin
       v_valor := case when (v_item->>'valor_num') ~ '^-?\d+(\.\d+)?$' then (v_item->>'valor_num')::numeric else null end;
       v_confianca := case when (v_item->>'confianca') ~ '^-?\d+(\.\d+)?$' then (v_item->>'confianca')::numeric else null end;
 
+      -- 0203: a IA devolve `secao_canonica` nula em parte das linhas (medido em produção em 05/10/2026: 136 de
+      -- 724 numa DRE) e a linha some de receita/custo/giro. Só quando a IA NÃO deu (nulo ou em branco) a seção
+      -- é inferida do texto da seção bruta; o que veio NUNCA é sobrescrito. A linha diz que foi inferida.
+      v_secao := v_item->>'secao_canonica';
+      v_inferida := false;
+      if nullif(btrim(v_secao), '') is null then
+        v_secao := fn_secao_canonica_da_secao_bruta(v_item->>'secao', v_tipo);
+        v_inferida := v_secao is not null;
+      end if;
+
       v_status_aceite := 'pendente';
       v_aceito_por := null;
       v_aceito_em := null;
@@ -10559,7 +10849,7 @@ begin
 
       insert into campo_extraido
         (documento_versao_id, chave, valor_texto, valor_num, unidade, moeda, confianca,
-         origem_pagina, origem_linha, ordem, nivel_autonomia, secao, secao_canonica, entidade_coluna, periodo_coluna,
+         origem_pagina, origem_linha, ordem, nivel_autonomia, secao, secao_canonica, secao_canonica_inferida, entidade_coluna, periodo_coluna,
          status_aceite, aceito_por, aceito_em)
       values (
         p_documento_versao_id,
@@ -10574,7 +10864,8 @@ begin
         case when (v_item->>'ordem') ~ '^\d+$' then (v_item->>'ordem')::int else null end,
         p_nivel,
         v_item->>'secao',
-        v_item->>'secao_canonica',
+        v_secao,
+        v_inferida,
         v_item->>'entidade_coluna',
         v_item->>'periodo_coluna',
         v_status_aceite,
@@ -10583,6 +10874,17 @@ begin
       );
       v_count := v_count + 1;
     end loop;
+  end if;
+
+  -- 0204: a seção que nem a IA nem o nome da seção bruta deram, herdada da ÁRVORE DO PRÓPRIO DOCUMENTO. Precisa do
+  -- documento inteiro, por isso depois do laço de inserção e ANTES de tudo o que lê secao_canonica (guardas, completude,
+  -- classificação contábil). O n8n grava UMA vez por documento (nó "Gravar Campos (Sombra)", depois de "Juntar Blocos"),
+  -- então este é o ponto em que o documento está completo; se um dia a gravação for por bloco, a função é idempotente e
+  -- sobre a versão inteira, e a última chamada converge. Não muda a assinatura: sem reimportar workflow.
+  v_herdadas := fn_herdar_secao_pela_arvore(p_documento_versao_id);
+  if (v_herdadas->>'linhas')::int > 0 or (v_herdadas->>'conflitos')::int > 0 then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('sistema:n8n', 'secao_herdada_pela_arvore', 'documento_versao:'||p_documento_versao_id, v_herdadas);
   end if;
 
   insert into evento_auditoria (ator, acao, entidade_ref, depois)
@@ -10745,7 +11047,7 @@ $_$;
 -- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração.';
+COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore).';
 
 --
 -- Name: fn_registrar_classe_override(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -12715,6 +13017,97 @@ $$;
 COMMENT ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) IS 'Curva de sazonalidade DERIVADA do faturamento mensal do caso (0040), 12 meses ou nada. 0102: só a versão vigente do documento de faturamento — versão superada faria o mesmo mês entrar duas vezes e deslocaria a curva que reparte o valor anual no Excel.';
 
 --
+-- Name: fn_secao_canonica_da_secao_bruta(text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) RETURNS text
+    LANGUAGE plpgsql IMMUTABLE
+    AS $_$
+declare
+  n       text;
+  v_patr  boolean := p_tipo_documento in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DF_AUDITADA');
+  v_res   boolean := p_tipo_documento in ('DRE', 'DF_AUDITADA', 'BALANCETE', 'COMBINADO');
+  v_dre   boolean := p_tipo_documento in ('DRE', 'DF_AUDITADA');
+  v_lp    boolean;
+begin
+  -- Fora dos cinco tipos de demonstração a seção bruta tem outro significado (DMPL, DVA, fluxo, mapa de
+  -- dívida, faturamento…): quem decide é a IA, e a função não opina.
+  if p_secao is null or not (v_patr or v_res) then
+    return null;
+  end if;
+
+  n := fn_normalizar_texto(p_secao);
+  -- tira o marcador de sinal e a numeração do cabeçalho: "(-) Deduções", "= Receita", "1.1 Ativo circulante", "II - Passivo"
+  n := regexp_replace(n, '^(\(\s*[-+=]\s*\)|[-+=])\s*', '');
+  n := regexp_replace(n, '^([0-9]+(\.[0-9]+)*|[ivx]+)\s*[-.)]\s*', '');
+  n := regexp_replace(n, '[\s:.;]+$', '');
+  if n = '' then
+    return null;
+  end if;
+
+  -- "longo prazo" / "não circulante" / "LP" no texto: o lado do prazo é explícito
+  v_lp := n ~ '(longo prazo|nao circulante|\mlp\M)';
+
+  -- ---- PATRIMONIAL ---------------------------------------------------------
+  -- O LADO (ativo × passivo) tem de estar NO TEXTO. "CIRCULANTE", "NÃO CIRCULANTE", "ATIVO", "PASSIVO",
+  -- "TOTAL DO ATIVO", "PASSIVO E PATRIMÔNIO LÍQUIDO" não dizem a seção — ficam NULL (abaixo).
+  if v_patr then
+    if n ~ '^(ativo (nao circulante|permanente|realizavel a longo prazo)|nao circulante ativo|realizavel a longo prazo|ativo realizavel a longo prazo|imobilizado|ativo imobilizado|intangivel|ativo intangivel|investimentos|direito de uso)$' then
+      return 'ativo_nao_circulante';
+    end if;
+    if n ~ '^(passivo (nao circulante|exigivel a longo prazo|de longo prazo)|nao circulante passivo|exigivel a longo prazo)$'
+       or (v_lp and n ~ '^(emprestimos|financiamentos|obrigacoes|contas a pagar|fornecedores)') then
+      return 'passivo_nao_circulante';
+    end if;
+    if n ~ '^(ativo circulante|circulante ativo|disponivel|disponibilidades|caixa e equivalentes( de caixa)?|bancos( conta movimento)?|aplicacoes financeiras)$' then
+      return 'ativo_circulante';
+    end if;
+    if n ~ '^(passivo circulante|circulante passivo|contas a pagar|fornecedores)$'
+       or n ~ '^obrigacoes( (com o pessoal|com pessoal|trabalhistas|sociais|fiscais|tributarias|previdenciarias)( e (trabalhistas|sociais|fiscais|tributarias|previdenciarias))*)?$'
+       or n ~ '^(emprestimos e financiamentos|emprestimos|financiamentos)( -| /)? (de |a )?(curto prazo|cp)$' then
+      return 'passivo_circulante';
+    end if;
+    if n = 'patrimonio liquido' then
+      return 'patrimonio_liquido';
+    end if;
+  end if;
+
+  -- ---- RESULTADO -----------------------------------------------------------
+  -- Âncora nas duas pontas, sempre: "despesas antecipadas" (ativo), "receitas diferidas" (passivo),
+  -- "impostos a recolher" (passivo) e "provisão para IR" no balancete NÃO podem cair aqui por conterem
+  -- uma palavra de resultado.
+  if v_res then
+    if n ~ '^((resultado|receitas?|despesas?)( e (receitas?|despesas?))? financeir[oa]s?( liquid[oa]s?)?)$' then
+      return 'resultado_financeiro';
+    end if;
+    if v_dre and n ~ '^(imposto de renda( e contribuicao social)?( sobre o lucro)?|contribuicao social( sobre o lucro)?|irpj( e csll)?|csll|tributos sobre o lucro|impostos sobre o lucro|provisao para (imposto de renda|irpj)( e contribuicao social| e csll)?)$' then
+      return 'impostos_lucro';
+    end if;
+    if v_dre and n ~ '^deducoes( da receita( bruta)?| de vendas| e abatimentos)?$' then
+      return 'receita_bruta';
+    end if;
+    if n ~ '^(receitas?( operacionais?)?( brutas?)?|receitas? brutas? operacionais?|receitas? (de )?(vendas?|servicos|vendas e servicos|vendas de mercadorias)|faturamento( bruto)?|vendas( brutas)?( de (produtos|mercadorias|servicos|produtos e servicos|mercadorias e servicos|produtos, mercadorias e servicos))?)$' then
+      return 'receita_bruta';
+    end if;
+    if n ~ '^(cmv|cpv|csp|custos?( operacionais?)?|custos? d[aeo]s? (vendas|produtos vendidos|mercadorias vendidas|servicos prestados|produtos e servicos|produtos|mercadorias|servicos)( vendid[oa]s| prestad[oa]s)?)$' then
+      return 'custos';
+    end if;
+    if n ~ '^despesas (operacionais|administrativas|gerais|comerciais|com vendas|de vendas|com pessoal|gerais e administrativas|administrativas e gerais|administrativas e comerciais|com vendas e administrativas)$' then
+      return 'despesas_operacionais';
+    end if;
+  end if;
+
+  -- NULL de propósito (cada um é "procurei e não é inequívoco", não "esqueci"): ver o cabeçalho da 0203.
+  return null;
+end $_$;
+
+--
+-- Name: FUNCTION fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) IS '0203: seção canônica inferida do texto da seção BRUTA (campo_extraido.secao) quando a IA não deu secao_canonica. Pura e conservadora: casa o texto INTEIRO (âncora nas duas pontas) e só nos cinco tipos de demonstração (BALANCO, BALANCETE, COMBINADO, DF_AUDITADA, DRE). Ambíguo -> NULL: ATIVO/PASSIVO sozinhos, TOTAL DO ATIVO, PASSIVO E PL, TOTAL(IS), LUCRO BRUTO, RESULTADO (menos o financeiro), RECEITA LÍQUIDA, Eliminações do combinado, Balancete Analítico, RESUMO DO BALANCETE, CIRCULANTE sem lado, PROVISÕES, EMPRÉSTIMOS E FINANCIAMENTOS sem prazo, NAO_CLASSIFICAVEL, CONTAS DE RESULTADO - RECEITAS.';
+
+--
 -- Name: fn_secao_e_de_resultado(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -13552,6 +13945,7 @@ CREATE TABLE public.campo_extraido (
     ordem integer,
     moeda text,
     origem_valor text DEFAULT 'extracao'::text NOT NULL,
+    secao_canonica_inferida boolean DEFAULT false NOT NULL,
     CONSTRAINT campo_extraido_origem_valor_check CHECK ((origem_valor = ANY (ARRAY['extracao'::text, 'transcricao_humana'::text]))),
     CONSTRAINT campo_extraido_status_aceite_check CHECK ((status_aceite = ANY (ARRAY['pendente'::text, 'aceito'::text, 'com_ressalva'::text])))
 );
@@ -13603,6 +13997,12 @@ COMMENT ON COLUMN public.campo_extraido.moeda IS 'Moeda ISO da linha (BRL/USD/EU
 --
 
 COMMENT ON COLUMN public.campo_extraido.origem_valor IS 'De onde veio o número: extracao (a IA leu o arquivo) ou transcricao_humana (uma pessoa digitou, porque o arquivo não se lê — fechamento #2 do Arquitetura do Sistema/1 Visão e Doutrina/01). Existe porque sem ela a primeira transcrição contaminaria fn_golden_campos: linha digitada por humano bate com o rótulo do golden set quase sempre, e o acerto sairia creditado à EXTRAÇÃO. Default extracao: nenhuma linha existente muda de significado.';
+
+--
+-- Name: COLUMN campo_extraido.secao_canonica_inferida; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.campo_extraido.secao_canonica_inferida IS '0203: true = a secao_canonica NÃO veio da IA; foi inferida do texto da seção bruta (campo_extraido.secao) por fn_secao_canonica_da_secao_bruta, na gravação ou no backfill. false = a IA deu (ou a linha segue sem seção). A inferência é conservadora e determinística; o que ela não reconhece fica NULL.';
 
 --
 -- Name: fn_valor_conceito(uuid, text[], text[]); Type: FUNCTION; Schema: public; Owner: -
@@ -13786,63 +14186,79 @@ CREATE FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text DEFAUL
     LANGUAGE sql STABLE
     AS $$
   -- marca-0125
-  with ocorrencias as (
+  -- marca-0200
+  -- marca-0201
+  with ocorrencias as materialized (
     select
       fn_normalizar_texto(ce.chave) as rotulo_norm,
       ce.secao_canonica,
-      fn_ano_da_coluna(ce.periodo_coluna, p.referencia) as ano,
+      -- 0199 (b): a coluna de ABERTURA é o fechamento do ano ANTERIOR ao do documento.
+      fn_ano_da_coluna(ce.periodo_coluna, p.referencia)
+        - (case when fn_coluna_e_abertura(ce.periodo_coluna) then 1 else 0 end) as ano,
+      fn_coluna_e_abertura(ce.periodo_coluna) as abertura,
+      -- 0199 (c): o saldo de um documento de período PARCIAL só vale na falta do anual.
+      fn_periodo_e_parcial(ce.periodo_coluna, d.tipo_taxonomia, p.tipo, p.referencia) as parcial,
+      -- 0200: a FAMÍLIA da demonstração e a ENTIDADE, para decidir o parcial por ano e não por rótulo.
+      fn_familia_da_secao(ce.secao_canonica) as familia,
+      case when p_entidade is not null then ''   -- a consulta já é de UMA entidade
+           else fn_normalizar_texto(coalesce(ce.entidade_coluna, e.razao_social, '')) end as entidade_chave,
       ce.valor_num as valor,
       dv.nome_original as arquivo,
       ce.origem_pagina,
       ce.confianca,
       ce.status_aceite,
-      ce.aceito_por
+      ce.aceito_por,
+      ce.ordem
     from campo_extraido ce
     join documento_versao dv on dv.id = ce.documento_versao_id
     join documento d on d.id = dv.documento_id
     left join periodo p on p.id = d.periodo_id
     left join entidade e on e.id = d.entidade_id
+    left join taxonomia_tipo_documento t on t.codigo = d.tipo_taxonomia
     where d.caso_id = p_caso_id
       and ce.valor_num is not null
       and (p_entidade is null
            or fn_mesma_entidade(coalesce(ce.entidade_coluna, e.razao_social, ''), p_entidade))
       and dv.id = fn_versao_com_extracao(d.id)
+      -- 0199 (d): documento que não é demonstração não tem saldo (quotas, % de participação).
+      and coalesce(t.categoria, '') not in ('Societário/Legal', 'Garantias/Sócios')
+      -- 0199 (a): movimento do período (Débito/Crédito) nunca é saldo.
+      and not fn_coluna_e_movimento(ce.periodo_coluna)
   ),
-  agrupado as (
-    select o.rotulo_norm, o.secao_canonica, o.ano,
-           -- Maior módulo COM SINAL, igual à 0042. Duas grafias da mesma conta no
-           -- mesmo exercício não somam: representam o mesmo saldo.
-           --
-           -- NÃO REESCREVER esta expressão. Ver o cabeçalho: em empate de módulo
-           -- com sinais opostos, outra forma de "maior módulo" pode escolher outro
-           -- valor, e isso é número de modelo mudando de graça.
-           (array_agg(o.valor order by abs(o.valor) desc))[1] as valor,
-           count(*) as n_ocorrencias
+  -- 0200: a decisão "parcial entra se for a única fonte" é do ANO (da entidade e da família da
+  -- demonstração), não do rótulo. Um balancete semestral traz centenas de contas analíticas que o
+  -- balanço anual (sintético) não tem; para cada rótulo o balancete era a "única fonte" e entrava
+  -- POR CIMA das contas do balanço do mesmo ano.
+  elegiveis as (
+    select o.*,
+           bool_or(not coalesce(o.parcial, false)) over (partition by o.entidade_chave, o.familia, o.ano) as ano_tem_anual
     from ocorrencias o
     where o.ano is not null
-    group by o.rotulo_norm, o.secao_canonica, o.ano
   ),
-  -- A PROVENIÊNCIA DA OCORRÊNCIA QUE DEU O VALOR, e não de uma qualquer do grupo.
-  -- O desempate entre ocorrências de valor idêntico é declarado, para a nota não
-  -- mudar de conteúdo entre duas execuções sobre o mesmo dado: maior confiança
-  -- primeiro (é a que o sistema considera mais confiável), depois a página mais
-  -- baixa (é onde um humano procuraria primeiro).
-  com_proveniencia as (
-    select distinct on (a.rotulo_norm, a.secao_canonica, a.ano)
-           a.rotulo_norm, a.secao_canonica, a.ano, a.valor, a.n_ocorrencias,
-           o.arquivo, o.origem_pagina, o.confianca, o.status_aceite, o.aceito_por
-    from agrupado a
-    left join ocorrencias o
-      on o.rotulo_norm = a.rotulo_norm
-     and o.secao_canonica is not distinct from a.secao_canonica
-     and o.ano = a.ano
-     and o.valor = a.valor
-    order by a.rotulo_norm, a.secao_canonica, a.ano,
-             o.confianca desc nulls last, o.origem_pagina asc nulls last, o.arquivo
+  escolhido as (
+    select
+      o.rotulo_norm, o.secao_canonica, o.ano, o.valor,
+      -- quantas ocorrências elegíveis o (rótulo, seção, ano) tem, incluindo as que perderam
+      count(*) over (partition by o.rotulo_norm, o.secao_canonica, o.ano) as n_ocorrencias,
+      o.arquivo, o.origem_pagina, o.confianca, o.status_aceite, o.aceito_por,
+      row_number() over (
+        partition by o.rotulo_norm, o.secao_canonica, o.ano
+        order by o.abertura,           -- (b) fechamento antes de abertura
+                 abs(o.valor) desc,    -- maior módulo COM SINAL, a regra da 0042
+                 o.valor desc,         -- (e) empate de módulo com sinais opostos: o positivo
+                 o.confianca desc nulls last,
+                 o.origem_pagina asc nulls last,
+                 o.arquivo,
+                 o.ordem
+      ) as rn
+    from elegiveis o
+    -- 0200: parcial só vale num ano em que a família não tem NENHUMA ocorrência anual
+    where not (coalesce(o.parcial, false) and o.ano_tem_anual)
   )
   select rotulo_norm, secao_canonica, ano, valor, n_ocorrencias,
          arquivo, origem_pagina, confianca, status_aceite, aceito_por
-  from com_proveniencia
+  from escolhido
+  where rn = 1
   order by rotulo_norm, ano;
 $$;
 
@@ -13850,7 +14266,7 @@ $$;
 -- Name: FUNCTION fn_valores_por_ano(p_caso_id uuid, p_entidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) IS 'Série histórica por (rótulo, seção, ano) — valor de maior módulo com sinal (0042), só da versão vigente (0102). 0125: acrescenta a proveniência DA CÉLULA (arquivo, página, confiança, aceite), da ocorrência que produziu aquele valor naquele ano — nunca a de outro exercício.';
+COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) IS 'Série histórica por (rótulo, seção, ano), só da versão vigente (0102), com a proveniência DA CÉLULA (0125). 0199: coluna de movimento (Débito/Crédito) nunca é saldo; "Saldo Inicial"/"Saldo Anterior" é o fechamento do ano ANTERIOR e perde para o fechamento do mesmo ano; tipo de categoria Societário/Legal e Garantias/Sócios não entra. 0200: ocorrência de período PARCIAL (balancete, mês, trimestre, intervalo) só entra num ano em que a entidade não tem NENHUMA ocorrência anual da mesma família (patrimonial / resultado / fluxo / seção própria) — decisão do ANO, não do rótulo. 0201: a classificação da coluna e do período vem das funções puras fn_coluna_e_*, fn_periodo_e_parcial e fn_familia_da_secao, as MESMAS de fn_linhas_do_realizado. Dentro da camada, maior módulo com sinal (0042); desempate determinístico.';
 
 --
 -- Name: fn_veredito_producao(text, uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17320,6 +17736,24 @@ GRANT ALL ON FUNCTION public.fn_cnpj_canonico(p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_cobertura_de_tipos() TO authenticated;
 
 --
+-- Name: FUNCTION fn_coluna_e_abertura(p_coluna text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_coluna_e_movimento(p_coluna text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_coluna_e_saldo(p_coluna text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) TO authenticated;
+
+--
 -- Name: FUNCTION fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer); Type: ACL; Schema: public; Owner: -
 --
 
@@ -17546,6 +17980,12 @@ GRANT ALL ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) TO authentica
 --
 
 GRANT ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) TO authenticated;
+
+--
+-- Name: FUNCTION fn_familia_da_secao(p_secao text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_fatos_do_caso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -17844,6 +18284,12 @@ GRANT ALL ON TABLE public.entidade TO service_role;
 GRANT ALL ON FUNCTION public.fn_perimetro_vigente(p_caso_id uuid, p_escopo text, p_data date) TO authenticated;
 
 --
+-- Name: FUNCTION fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) TO authenticated;
+
+--
 -- Name: FUNCTION fn_periodo_por_extenso(p_tipo text, p_referencia text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -18061,6 +18507,12 @@ GRANT ALL ON FUNCTION public.fn_saldo_mutuos_texto(p_caso_id uuid) TO authentica
 --
 
 GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_secao_e_de_resultado(p_secao text); Type: ACL; Schema: public; Owner: -

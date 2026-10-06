@@ -29,7 +29,8 @@ import {
 } from "./export-modelagem";
 import { injetarGraficosNoBuffer, type EspecGrafico } from "./xlsx-graficos";
 import {
-  ABAS_MODELO, construirModeloInstitucional, type EntradaModeloInstitucional,
+  ABAS_MODELO, construirModeloInstitucional, naturezaDaSubsecao, type EntradaModeloInstitucional,
+  type NaturezaDeCiclo,
 } from "./modelo-institucional";
 // Reexportados para o `route.ts` seguir importando tudo de "@/lib/export": o
 // corte da sessão 20 é interno ao lib, e não é motivo para mexer no chamador.
@@ -118,11 +119,11 @@ export function formatarPeriodo(tipo: string | null, referencia: string | null):
   if (/^\d{2}\/\d{2}\/\d{2,4}$/.test(ref)) return ref;
 
   // Mês por nome/abreviação + ano: "jan/25", "dez-24", "fevereiro/2025"
-  const mesNome = low.match(/^([a-zç]{3,9})[/\-. ](\d{2,4})$/);
+  const mesNome = /^([a-zç]{3,9})[/\-. ](\d{2,4})$/.exec(low);
   if (mesNome && MES_POR_NOME[mesNome[1]] != null) return mesAno(MES_POR_NOME[mesNome[1]], mesNome[2]);
 
   // MM/AAAA ou MM-AAAA (mês numérico + ano de 4 dígitos): "02/2025", "12/2025"
-  const mmAno = ref.match(/^(\d{1,2})[/-](\d{4})$/);
+  const mmAno = /^(\d{1,2})[/-](\d{4})$/.exec(ref);
   if (mmAno && Number(mmAno[1]) >= 1 && Number(mmAno[1]) <= 12) return mesAno(Number(mmAno[1]), mmAno[2]);
 
   if (t === "data-base") return formatarDataBR(ref);
@@ -2749,61 +2750,23 @@ function construirAbaDocumental(workbook: ExcelJS.Workbook, nomeAba: string, reg
   }
 }
 
-export function buildExportWorkbook({
-  caso,
-  documentos,
-  campos: camposDeTodasAsVersoes,
-  macro,
-  macroErro,
-  causasDeFalha,
-  agora = new Date(),
-  // MODO DO EXPORT (decisão do dono): "dados" entrega só as abas de dado — é o
-  // insumo de conferência da ingestão, e existe desde a ingestão, mesmo com
-  // pendência aberta. "completo" acrescenta a Modelagem projetada.
-  //
-  // Por que um parâmetro e não dois construtores: as abas de dado têm de ser
-  // BIT A BIT as mesmas nos dois arquivos. Dois caminhos de construção divergem
-  // — e a divergência apareceria como "o número do completo não bate com o de
-  // dados", que é a pior conversa possível com um analista.
-  modo = "completo",
-  // Fase 7.4 — a configuração de modelagem do caso (0038/0039), vinda do portal.
-  // Ausente = arquivo como sempre saiu: só o esqueleto agregado. É o fallback de
-  // todo caso que ainda não passou pela seção Modelagem, e é o que garante que
-  // esta fase não tire modelo de ninguém.
-  modelagemConfig,
-  // Fase 9 — o MODELO INSTITUCIONAL (14 abas), reconstruído do "Modelo Base" do
-  // dono. Ausente = arquivo como antes; presente = as 14 abas entram no modo
-  // completo.
-  //
-  // Por que conviver com a aba `Modelagem` agregada em vez de substituí-la já: a
-  // agregada é o único caminho com validação ao vivo até aqui, e trocar os dois no
-  // mesmo passo tiraria a referência de comparação exatamente na rodada em que ela
-  // é mais necessária. A remoção é decisão do dono, depois de comparar os dois.
-  modeloInstitucional,
-}: {
-  caso: { nome: string; produto: string };
-  documentos: DocumentoParaExport[];
-  campos: CampoExtraido[];
-  // Índices macro (Supabase/migrations/0025). Opcional: sem eles o export sai como
-  // sempre saiu, só sem a aba Macro e com as premissas macro zeradas.
-  macro?: MacroParaExport;
-  // Mensagem da consulta/RPC que FALHOU ao buscar macro (permissão, RLS, rede) —
-  // distinta de "consultou e não achou nada". Confundir as duas é o próprio
-  // defeito que motivou este parâmetro (0028): a base tinha dado, a consulta do
-  // portal falhava por autorização, e a aba saía dizendo "sem dado coletado"
-  // como se a coleta nunca tivesse rodado. Ver `route.ts` (chamador).
-  macroErro?: string;
-  // Causas DISTINTAS das falhas de extração abertas no caso (texto das pendências
-  // `extracao_falhou`). Listar o arquivo que falhou sem dizer POR QUE deixa o
-  // dono com meia informação: no v30 os 14 nomes estavam no Resumo e a causa
-  // ficava só na fila de revisão, em outra tela.
-  causasDeFalha?: string[];
-  agora?: Date;
-  modo?: "dados" | "completo";
-  modelagemConfig?: ConfigModelagem;
-  modeloInstitucional?: EntradaModeloInstitucional;
-}): ExcelJS.Workbook {
-
+/**
+ * O ROTEAMENTO DAS LINHAS EXTRAÍDAS PARA AS ABAS — o passo que o export e a tela de Modelagem
+ * têm de compartilhar. Versão vigente, escala única, entidade consolidada, aba por linha e
+ * coluna por (entidade × período): é daqui que sai o `camposPorAba` sobre o qual a detecção de
+ * subtotal (`rotulosDeSubtotalInformado`) decide o que é conta e o que é total de grupo.
+ *
+ * POR QUE ISTO SAIU DE DENTRO DE `buildExportWorkbook`. As sugestões do realizado da tela de
+ * Modelagem somavam as linhas do banco por seção e não tinham como saber a hierarquia: a DRE e o
+ * balanço do documento trazem o total do grupo e as filhas na mesma seção, e só a ORDEM impressa
+ * (campo.ordem) separa uma coisa da outra. Medido em produção (Fw Valtra, 2025): PMR 120 dias
+ * onde o documento dá ~40, SG&A 34,9% onde dá 17,9%. Duas implementações da mesma classificação
+ * divergem sem erro nenhum; agora há UMA, e o export e a tela a chamam.
+ */
+export function rotearCamposPorAba(
+  documentos: DocumentoParaExport[],
+  camposDeTodasAsVersoes: CampoExtraido[],
+) {
   // Mapa documento_versao_id → contexto (entidade/período/tipo/arquivo) —
   // permite juntar campo_extraido (que só sabe a versão) com o resto. Só as
   // versões VIGENTES entram: reextração substitui, não acumula (ver
@@ -3034,6 +2997,136 @@ export function buildExportWorkbook({
       });
     }
   }
+
+  return {
+    vigentes, contextoPorVersao, camposDeVersaoSubstituida, escala, campos,
+    colunasPorAba, camposPorAba, linhasSimplesPorAba, registrosPorAba,
+  };
+}
+
+/**
+ * O que a ESTRUTURA do documento diz sobre as contas, para a ENTIDADE dada — o mesmo veredito que
+ * o export injeta no modelo institucional: os subtotais (`subtotaisInformados`) e a natureza que a
+ * subseção bruta dá à conta (`naturezaPorLinha`, ver `naturezaDaSubsecao`).
+ */
+export function estruturaDoCaso(
+  documentos: DocumentoParaExport[],
+  campos: CampoExtraido[],
+  entidade: string | null,
+): Pick<EntradaModeloInstitucional, "subtotaisInformados" | "naturezaPorLinha"> {
+  return estruturaDoRoteamento(rotearCamposPorAba(documentos, campos), entidade);
+}
+
+function estruturaDoRoteamento(
+  r: Pick<ReturnType<typeof rotearCamposPorAba>, "camposPorAba" | "contextoPorVersao">,
+  entidade: string | null,
+): Pick<EntradaModeloInstitucional, "subtotaisInformados" | "naturezaPorLinha"> {
+  return {
+    subtotaisInformados: subtotaisDoRoteamento(r, entidade),
+    naturezaPorLinha: naturezasDasSubsecoes(r.camposPorAba, entidade),
+  };
+}
+
+/**
+ * A natureza (estoque, cliente, fornecedor, dívida) que a SUBSEÇÃO bruta dá a cada conta, por
+ * (seção canônica, rótulo). Conta cujas ocorrências discordam entre si (subseções com naturezas
+ * diferentes em documentos ou exercícios diferentes) não herda nada: herdar a de uma delas seria
+ * escolher no escuro. A decisão de usar ou não (o rótulo manda) é de `contexto()`.
+ */
+function naturezasDasSubsecoes(
+  camposPorAba: Map<string, Array<{ campo: CampoExtraido; colKey: string }>>,
+  entidade: string | null,
+): Record<string, NaturezaDeCiclo> {
+  const alvo = entidade ? normalizar(entidade) : null;
+  const achadas = new Map<string, NaturezaDeCiclo | null>();
+  for (const [aba, itens] of camposPorAba) {
+    if (!ESTRUTURA_POR_ABA.has(aba)) continue;
+    for (const { campo, colKey } of itens) {
+      if (alvo !== null && normalizar(colKey.split(CHAVE_SEP)[0] ?? "") !== alvo) continue;
+      if (typeof campo.valor_num !== "number") continue;
+      const k = `${normalizar(campo.secao_canonica ?? "")}||${normalizar(campo.chave)}`;
+      const n = naturezaDaSubsecao(campo.secao);
+      achadas.set(k, achadas.has(k) && achadas.get(k) !== n ? null : n);
+    }
+  }
+  const out: Record<string, NaturezaDeCiclo> = {};
+  for (const [k, n] of achadas) if (n) out[k] = n;
+  return out;
+}
+
+function subtotaisDoRoteamento(
+  r: Pick<ReturnType<typeof rotearCamposPorAba>, "camposPorAba" | "contextoPorVersao">,
+  entidade: string | null,
+): string[] {
+  return rotulosDeSubtotalInformado(
+    r.camposPorAba, entidade,
+    (c) => {
+      const p = r.contextoPorVersao.get(c.documento_versao_id)?.periodo;
+      return p ? anoDaColuna(p) : null;
+    },
+  );
+}
+
+
+export function buildExportWorkbook({
+  caso,
+  documentos,
+  campos: camposDeTodasAsVersoes,
+  macro,
+  macroErro,
+  causasDeFalha,
+  agora = new Date(),
+  // MODO DO EXPORT (decisão do dono): "dados" entrega só as abas de dado — é o
+  // insumo de conferência da ingestão, e existe desde a ingestão, mesmo com
+  // pendência aberta. "completo" acrescenta a Modelagem projetada.
+  //
+  // Por que um parâmetro e não dois construtores: as abas de dado têm de ser
+  // BIT A BIT as mesmas nos dois arquivos. Dois caminhos de construção divergem
+  // — e a divergência apareceria como "o número do completo não bate com o de
+  // dados", que é a pior conversa possível com um analista.
+  modo = "completo",
+  // Fase 7.4 — a configuração de modelagem do caso (0038/0039), vinda do portal.
+  // Ausente = arquivo como sempre saiu: só o esqueleto agregado. É o fallback de
+  // todo caso que ainda não passou pela seção Modelagem, e é o que garante que
+  // esta fase não tire modelo de ninguém.
+  modelagemConfig,
+  // Fase 9 — o MODELO INSTITUCIONAL (14 abas), reconstruído do "Modelo Base" do
+  // dono. Ausente = arquivo como antes; presente = as 14 abas entram no modo
+  // completo.
+  //
+  // Por que conviver com a aba `Modelagem` agregada em vez de substituí-la já: a
+  // agregada é o único caminho com validação ao vivo até aqui, e trocar os dois no
+  // mesmo passo tiraria a referência de comparação exatamente na rodada em que ela
+  // é mais necessária. A remoção é decisão do dono, depois de comparar os dois.
+  modeloInstitucional,
+}: {
+  caso: { nome: string; produto: string };
+  documentos: DocumentoParaExport[];
+  campos: CampoExtraido[];
+  // Índices macro (Supabase/migrations/0025). Opcional: sem eles o export sai como
+  // sempre saiu, só sem a aba Macro e com as premissas macro zeradas.
+  macro?: MacroParaExport;
+  // Mensagem da consulta/RPC que FALHOU ao buscar macro (permissão, RLS, rede) —
+  // distinta de "consultou e não achou nada". Confundir as duas é o próprio
+  // defeito que motivou este parâmetro (0028): a base tinha dado, a consulta do
+  // portal falhava por autorização, e a aba saía dizendo "sem dado coletado"
+  // como se a coleta nunca tivesse rodado. Ver `route.ts` (chamador).
+  macroErro?: string;
+  // Causas DISTINTAS das falhas de extração abertas no caso (texto das pendências
+  // `extracao_falhou`). Listar o arquivo que falhou sem dizer POR QUE deixa o
+  // dono com meia informação: no v30 os 14 nomes estavam no Resumo e a causa
+  // ficava só na fila de revisão, em outra tela.
+  causasDeFalha?: string[];
+  agora?: Date;
+  modo?: "dados" | "completo";
+  modelagemConfig?: ConfigModelagem;
+  modeloInstitucional?: EntradaModeloInstitucional;
+}): ExcelJS.Workbook {
+
+  const {
+    vigentes, contextoPorVersao, camposDeVersaoSubstituida, escala, campos,
+    colunasPorAba, camposPorAba, linhasSimplesPorAba, registrosPorAba,
+  } = rotearCamposPorAba(documentos, camposDeTodasAsVersoes);
 
   const workbook = new ExcelJS.Workbook();
   // RECALCULAR AO ABRIR — para o arquivo INTEIRO, e não só quando há modelo.
@@ -3401,13 +3494,7 @@ export function buildExportWorkbook({
       // sai 2x o documento (medido: 195.090 contra 95.780 no arquivo do v35).
       const entradaDoModelo: EntradaModeloInstitucional = {
         ...modeloInstitucional,
-        subtotaisInformados: rotulosDeSubtotalInformado(
-          camposPorAba, modeloInstitucional.entidade,
-          (c) => {
-            const p = contextoPorVersao.get(c.documento_versao_id)?.periodo;
-            return p ? anoDaColuna(p) : null;
-          },
-        ),
+        ...estruturaDoRoteamento({ camposPorAba, contextoPorVersao }, modeloInstitucional.entidade),
       };
       // Os gráficos do `Output` não podem ser escritos pelo ExcelJS (ele não tem
       // API de gráfico). A especificação volta daqui e viaja PRESA AO WORKBOOK

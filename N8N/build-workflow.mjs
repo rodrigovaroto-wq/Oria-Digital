@@ -30,7 +30,7 @@ import {
   capacidadesDoModelo, CAPACIDADES_POR_MODELO, CAPACIDADES_PADRAO,
 } from './lib/provedor.mjs';
 import { createHash } from 'node:crypto';
-import { SYSTEM_PROMPT, diagnosticarErroApi, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, normalizarMoeda, extractionSchema, achatarGrupos, limparRotuloColado, ehLinhaNaoMonetaria, escalaDeclaradaNaColuna } from './lib/extract.mjs';
+import { SYSTEM_PROMPT, diagnosticarErroApi, decidirRepeticao, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, normalizarMoeda, extractionSchema, achatarGrupos, limparRotuloColado, ehLinhaNaoMonetaria, escalaDeclaradaNaColuna } from './lib/extract.mjs';
 import { ALIASES } from './lib/taxonomia.mjs';
 import { classifyByFilename, parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAnos, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
 import { normalize } from './lib/normalize.mjs';
@@ -47,6 +47,8 @@ import {
 } from './lib/spreadsheet.mjs';
 import {
   linhasComNumero, linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
+  juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
+  linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
   camadaDeTextoDoPdf, CARACTERES_MINIMOS_POR_PAGINA, MINIMO_LINHAS_COM_NUMERO_PDF,
   fracaoDePalavrasDobradas, MAX_FRACAO_PALAVRAS_DOBRADAS,
   celulasDaLinha, celulasEstimadas,
@@ -117,6 +119,11 @@ const SCHEMA_EXTRACAO = JSON.stringify(extractionSchema());
 // já divergiu duas vezes). A função é auto-contida justamente para o toString()
 // bastar; `workflow-sim.test.mjs` confere que o nó carrega este mesmo código.
 const FONTE_DIAGNOSTICO_ERRO = `const diagnosticarErroApi = ${diagnosticarErroApi.toString()};`;
+// `decidirRepeticao` idem: o teto de tentativas e as esperas moram numa função só,
+// embutida no Parse (que decide repetir) e lida aqui (que decide QUANTOS estágios
+// de repetição o grafo tem). Duas fontes do mesmo teto divergem sem erro nenhum.
+const FONTE_DECIDIR_REPETICAO = `const decidirRepeticao = ${decidirRepeticao.toString()};`;
+const TENTATIVAS_MAX_EXTRACAO = decidirRepeticao().maxTentativas;
 
 // `parseEntidade` idem — embutida do fonte, não espelhada à mão. Ela é a correção
 // do achado do "teste v31" (entidade "—" nos 14 documentos porque o nome do
@@ -291,10 +298,15 @@ const FONTE_COBERTURA = [
   `const linhasComNumero = ${linhasComNumero.toString()};`,
   // ANTES de `linhasDeConta`, que a chama: no Code do n8n não há hoisting de
   // `const`, e a ordem aqui é a ordem do arquivo que roda.
+  // A emenda COM origem vem ANTES da que a usa, e `contasComOrigem` antes de
+  // `linhasDeConta` e de `contasPorLinhaComNumero`: sem hoisting de `const`.
+  `const juntarFragmentosComOrigem = ${juntarFragmentosComOrigem.toString()};`,
   `const juntarFragmentosDeLinha = ${juntarFragmentosDeLinha.toString()};`,
   `const ehLinhaSemValor = ${ehLinhaSemValor.toString()};`,
   `const ehLinhaDeConta = ${ehLinhaDeConta.toString()};`,
+  `const contasComOrigem = ${contasComOrigem.toString()};`,
   `const linhasDeConta = ${linhasDeConta.toString()};`,
+  `const contasPorLinhaComNumero = ${contasPorLinhaComNumero.toString()};`,
   `const celulasDaLinha = ${celulasDaLinha.toString()};`,
   `const celulasEstimadas = ${celulasEstimadas.toString()};`,
   `const planejarFatias = ${planejarFatias.toString()};`,
@@ -312,6 +324,20 @@ const FONTE_COBERTURA = [
   // nesta sessão.
   `const fracaoDePalavrasDobradas = ${fracaoDePalavrasDobradas.toString()};`,
   `const camadaDeTextoDoPdf = ${camadaDeTextoDoPdf.toString()};`,
+].join('\n');
+
+// A SEGUNDA PASSADA POR COBERTURA (lib/cobertura.mjs), só o que o `Parse Extracao`
+// precisa: decide, escolhe a melhor das duas e escreve a instrução. NÃO leva a
+// régua inteira (`FONTE_COBERTURA`) — o Parse existe em quatro cópias, e a régua
+// pesa dezenas de KB cada.
+const FONTE_SEGUNDA_PASSADA = [
+  `const LIMIAR_COBERTURA = ${LIMIAR_COBERTURA};`,
+  `const MINIMO_PARA_AVALIAR = ${MINIMO_PARA_AVALIAR};`,
+  `const avaliarCobertura = ${avaliarCobertura.toString()};`,
+  `const linhasDaPassada = ${linhasDaPassada.toString()};`,
+  `const decidirSegundaPassada = ${decidirSegundaPassada.toString()};`,
+  `const melhorPassada = ${melhorPassada.toString()};`,
+  `const instrucaoDeSegundaPassada = ${instrucaoDeSegundaPassada.toString()};`,
 ].join('\n');
 
 // AS DUAS IDENTIDADES ARITMÉTICAS (lib/aritmetica.mjs), embutidas do fonte
@@ -1556,6 +1582,13 @@ return {json:{...item,
   //     distintas que a extracao grava. Medido no 02_DRE: 46 contra 39.
   celulas_no_documento: temTexto?linhasDoTexto.length:null,
   contas_no_documento: temTexto?linhasDeConta(textoPdf).length:null,
+  // As MESMAS contas, repartidas pelas linhas de \`linhas_do_texto\` (a soma e'
+  // \`contas_no_documento\`). E' o denominador da cobertura POR BLOCO: o
+  // \`Fatiar Extracao\` soma a fatia de cada bloco. Recontar a fatia no
+  // \`Fatiar\` daria 256 contra 99 no livro razao -- ver \`contasPorLinhaComNumero\`.
+  // \`null\` quando alguma conta nao achou linha com digito: bloco sem medida
+  // declarada, nunca vetor que nao soma.
+  contas_por_linha: temTexto?contasPorLinhaComNumero(textoPdf):null,
   linhas_do_texto: temTexto?linhasDoTexto:null,
   // A TERCEIRA regua, e e' ela que decide o FATIAMENTO e o custo de SAIDA:
   // celulas de valor estimadas do proprio texto. \`colunas_estimadas\` sai da
@@ -1635,7 +1668,12 @@ for(let idx=0; idx<entradas.length; idx+=1){
     // conteudo passou a viajar com o item (para nao depender de pareamento), o
     // base64 do PDF esta no json -- e ele ja' foi copiado para dentro do \`corpo\`.
     // Levar as duas copias por todo o resto do grafo dobraria a memoria do lote.
-    const {linhas_do_texto:_l, ia_body:_b, content_part:_cp, ...resto}=j;
+    const {linhas_do_texto:_l, contas_por_linha:_cpl, ia_body:_b, content_part:_cp, ...resto}=j;
+    // CONTAS DO TEXTO NESTA FAIXA, para a segunda passada por cobertura do
+    // \`Parse Extracao\`. \`null\` = nao medivel (sem texto, ou vetor que nao casa com
+    // as linhas): sem denominador o bloco nao e' avaliado -- nunca um zero de mentira.
+    const contasDoBloco=(Array.isArray(j.contas_por_linha)&&j.contas_por_linha.length===linhas.length&&linhas.length>0)
+      ?j.contas_por_linha.slice(f.de,f.ate+1).reduce((a,b)=>a+(Number(b)||0),0):null;
     // \`pairedItem\` E' OBRIGATORIO num no' que muda a quantidade de itens. Sem
     // ele o n8n perde a cadeia e toda referencia a OUTRO no' por \`.item\` rio
     // abaixo volta undefined -- os nos Postgres recebem "undefined" em Query
@@ -1647,7 +1685,7 @@ for(let idx=0; idx<entradas.length; idx+=1){
     // \`planejarFatias\` chegando a quem le a execucao: linha que sozinha nao cabe
     // no teto nao tem corte mais fino, e o caso nao pode ficar em silencio.
     saida.push({json:{...resto, ia_body:corpo, bloco:f.bloco, blocos:f.blocos,
-      celulas_do_bloco:f.celulas, linhas_do_bloco:f.linhas??null,
+      celulas_do_bloco:f.celulas, linhas_do_bloco:f.linhas??null, contas_do_bloco:contasDoBloco,
       bloco_de:f.de, bloco_ate:f.ate, bloco_acima_do_teto:!!f.acimaDoTeto}, pairedItem:{item:idx}});
   }
 }
@@ -1828,6 +1866,9 @@ for(const [chave, blocos] of porDocumento){
     diagnostico:base.diagnostico?{...base.diagnostico, fatos:r.fatos}:null,
     falha_motivo:motivos.length>0?motivos.join(' | '):null,
     blocos:r.blocos,
+    // Quantos blocos precisaram de SEGUNDA passada por cobertura (so' instrumenta; ver
+    // \`Parse Extracao\`). Sem isto a rodada real nao diz quanto a cota gastou nisso.
+    blocos_refeitos:blocos.filter(b=>b.passadas>1).length,
     // O plano viaja junto do recebido ate o banco. Sem ele, \`documentos_fatiados\`
     // do painel do lote conta o que chegou e chama isso de fatiamento -- que e o
     // mesmo defeito da pendencia, um nivel acima.
@@ -1855,16 +1896,28 @@ return saida;
 // chamada errou, veio truncada (finish_reason 'length') ou o JSON é inválido.
 // Sem isso, uma falha silenciosa grava 0 campos e ninguém fica sabendo
 // (achado em produção, sessão 7 cont.⁷ — "teste v14").
-const CODE_PARSE_EXTRACAO = `
+//
+// REPETIÇÃO DE BLOCO POR FALHA TRANSITÓRIA (05/10/2026, execução 8433, Fw Valtra).
+// Este mesmo código roda em CADA estágio de tentativa (`codeParseExtracao(k)`):
+// o estágio 1 lê o contexto do `Fatiar Extracao`; os seguintes, do `Esperar Retry`
+// que os alimentou. Falha TRANSITÓRIA com tentativa sobrando devolve o item do
+// bloco marcado `repetir:true` (o IF seguinte o manda esperar e chamar de novo);
+// o que sobra é permanente, ou transitório de teto esgotado, e segue para o
+// `Juntar Blocos` com `falha_motivo` dizendo quantas tentativas foram feitas.
+const codeParseExtracao = (estagio, refCtx) => `
 ${FONTE_DIAGNOSTICO_ERRO}
+${FONTE_DECIDIR_REPETICAO}
+${FONTE_SEGUNDA_PASSADA}
 ${FONTE_CUSTO_CHAMADA}
 ${FONTE_PROVEDOR}
+const TENTATIVA=${estagio};
 // O contexto vem do FATIAMENTO, nao mais do \`Montar Req Extracao\`: e' ele que
 // sabe qual bloco este item e', e um item por bloco significa que o pareamento
 // com o no' anterior a ele deixou de ser 1:1. O fallback existe para o caso de
 // alguem religar o grafo sem o fatiamento.
 let ctx=null;
-try{ ctx=$('Fatiar Extracao').item.json; }catch(e){ ctx=null; }
+try{ ctx=$('${refCtx}').item.json; }catch(e){ ctx=null; }
+if(!ctx&&TENTATIVA>1){ try{ ctx=$('Fatiar Extracao').item.json; }catch(e){ ctx=null; } }
 if(!ctx){ try{ ctx=$('Montar Req Extracao').item.json; }catch(e){ ctx=null; } }
 // NENHUMA das duas leituras pode DERRUBAR o item: se o pareamento se perder, o
 // que se perde e' o contexto, e perder contexto tem de virar falha declarada --
@@ -1878,17 +1931,27 @@ const resp=$json;
 const cortado=cortadoPorLimite(PROVEDOR,resp);
 const content=conteudoDaResposta(PROVEDOR,resp);
 let p={}; let falhaMotivo=null;
+let transitoria=false; let esperaSugerida=null; let respostaLida=false;
 if(resp?.error){
-  falhaMotivo=diagnosticarErroApi(resp.error).motivo;
+  const dg=diagnosticarErroApi(resp.error);
+  falhaMotivo=dg.motivo; transitoria=dg.transitoria; esperaSugerida=dg.esperaSugeridaS;
 }else if(!content){
   falhaMotivo='Resposta do provedor de IA ('+PROVEDOR.rotulo+') sem conteudo (falha de rede/API).';
+  transitoria=true;
 }else{
-  try{p=typeof content==='string'?JSON.parse(content):content;}catch(e){
+  try{p=typeof content==='string'?JSON.parse(content):content; respostaLida=true;}catch(e){
     falhaMotivo=cortado
       ?'Resposta do provedor de IA truncada por limite de tokens de saida -- o JSON ficou incompleto e nao pode ser interpretado. Documento provavelmente grande/denso demais (muitas contas/entidades) para uma unica chamada.'
       :'Resposta do provedor de IA nao veio em JSON valido.';
     p={};
   }
+}
+// REPETIR OU DESISTIR. So' repete o que pode dar certo na segunda vez (transitorio)
+// E o que da' para refazer (o corpo da chamada viaja no ctx; sem ele o proximo
+// estagio mandaria \`undefined\` ao provedor, entao e' falha declarada e nao repeticao).
+const dec=decidirRepeticao({transitoria, tentativa:TENTATIVA, esperaSugeridaS:esperaSugerida});
+if(dec.repetir&&ctx.ia_body){
+  return {json:{...ctx, repetir:true, tentativa:TENTATIVA, espera_s:dec.esperaS, ultima_falha:falhaMotivo}};
 }
 if(!falhaMotivo&&cortado){
   falhaMotivo='Resposta do provedor de IA atingiu o limite de tokens de saida; o JSON veio valido, mas o conteudo pode estar incompleto (faltando linhas do fim do documento).';
@@ -1908,7 +1971,7 @@ ${FONTE_ACHATAR_GRUPOS}
 // vem EMBUTIDO da fonte, nao copiado: se este no' e a lib discordarem sobre como
 // associar valor a coluna, o banco recebe o numero de 2024 no lugar do de 2025.
 const ach=achatarGrupos(p.grupos);
-const campos=ach.linhas.length>0||Array.isArray(p.grupos)
+let campos=ach.linhas.length>0||Array.isArray(p.grupos)
   ? ach.linhas.map((l,i)=>({ordem:i, ...l, unidade:naoMonet(l.chave,l.valor_texto,l.periodo_coluna)?null:(escalaCol(l.periodo_coluna)??unidade), moeda:naoMonet(l.chave,l.valor_texto,l.periodo_coluna)?null:moedaDoc}))
   // FORMATO PLANO ANTIGO -- o caminho de um workflow importado velho responder
   // no formato de julho. Em 12/08/2026 o n8n do dono rodou dias assim, e "zero
@@ -1956,15 +2019,107 @@ const diagnostico={
 // e trocar estimativa por medição é o único jeito honesto de apertar o teto.
 const uso=usoDaChamada(PROVEDOR,resp);
 const custo_usd=custoDaChamada(uso, '${MODEL_EXTRACAO}');
+// A SEGUNDA PASSADA POR COBERTURA (05/10/2026, Fw Valtra: "36 ALTERACAO E
+// CONSOLIDACAO CONTRATUAL" voltou com 59 linhas para 101 no texto, 58%). O bloco que
+// volta ABAIXO do limiar de cobertura e' refeito UMA vez, com a instrucao reforcada
+// (\`instrucaoDeSegundaPassada\`: o numero que faltou, e que a resposta SUBSTITUI a
+// anterior), antes de a falha ser declarada. Fica a passada com MAIS linhas e as duas
+// NUNCA se somam -- descrevem as mesmas linhas, e somar duplicaria cada conta que as
+// duas acharam. A primeira viaja dentro do item (\`passada_anterior\`) ate' o estagio
+// seguinte, que e' quem escolhe; por isso o teto de 4 chamadas por bloco e' UM SO' para
+// falha transitoria e cobertura juntas -- a cota do dia (RPD 500) nao cresce alem de
+// 4 por bloco, e o estagio de repetição e' o mesmo da fatia 1.
+const ant=ctx.passada_anterior||null;
+const esperadasBloco=(ctx.contas_do_bloco!==null&&ctx.contas_do_bloco!==undefined&&Number.isFinite(Number(ctx.contas_do_bloco)))?Number(ctx.contas_do_bloco):null;
+const tokensDestaChamada=uso?{entrada:uso.prompt_tokens??null, saida:uso.completion_tokens??null, cache:uso.prompt_tokens_details?.cached_tokens??0}:null;
+const esta={campos, diagnostico, falha:falhaMotivo, linhas:linhasDaPassada(campos), custo_usd, tokens:tokensDestaChamada};
+const razaoDe=(n)=>(esperadasBloco>0&&n!==null)?Number((n/esperadasBloco).toFixed(3)):null;
+const pctDe=(r)=>(r===null?'?':Math.round(r*100)+'%');
+let final=esta; let passadas=1; let notaCobertura=null;
+// So' avalia cobertura quando a resposta foi LIDA e nao veio cortada por limite (o
+// truncamento ja' tem motivo proprio, e refaze-lo cortaria igual), ou quando esta e' a
+// segunda passada (que tem de escolher entre duas respostas, lida a segunda ou nao).
+if(ant||(respostaLida&&!cortado)){
+  if(ant){
+    passadas=2;
+    final=melhorPassada(ant.linhas, esta.linhas)==='segunda'?esta:ant;
+  }
+  const dec2=decidirSegundaPassada({linhas:final.linhas, esperadas:esperadasBloco, tentativa:TENTATIVA, maxTentativas:dec.maxTentativas, temDadoFinanceiro:final.diagnostico?.tem_dado_financeiro??null, jaRefeita:!!ant});
+  if(!ant&&dec2.refazer&&ctx.ia_body){
+    const corpo2=JSON.parse(JSON.stringify(ctx.ia_body));
+    acrescentarInstrucao(PROVEDOR,corpo2,instrucaoDeSegundaPassada({linhas:esta.linhas, esperadas:esperadasBloco, blocos:ctx.blocos??1}));
+    // Espera ZERO: nao e' limite de cadencia, e a cadencia do no' HTTP (lote de 1,
+    // intervalo fixo) ja' separa as chamadas. Se o provedor responder 429, o Parse
+    // seguinte trata como qualquer transitoria, com a propria espera.
+    return {json:{...ctx, ia_body:corpo2, repetir:true, tentativa:TENTATIVA, espera_s:0, ultima_falha:null, motivo_repeticao:'cobertura',
+      passada_anterior:{campos, diagnostico, falha:falhaMotivo, linhas:esta.linhas, razao:razaoDe(esta.linhas), custo_usd, tokens:tokensDestaChamada}}};
+  }
+  if(dec2.abaixo){
+    const rFinal=razaoDe(final.linhas);
+    if(ant){
+      notaCobertura='Cobertura do bloco '+(ctx.bloco??1)+' de '+(ctx.blocos??1)+' abaixo do minimo de '+Math.round(LIMIAR_COBERTURA*100)+'% mesmo apos 2 tentativas: a 1a devolveu '+ant.linhas+' de ~'+esperadasBloco+' linha(s) de conta ('+pctDe(ant.razao)+') e a 2a, '
+        +(esta.falha&&esta.linhas===0?'FALHOU ('+esta.falha+')':esta.linhas+' ('+pctDe(razaoDe(esta.linhas))+')')
+        +'; ficou a de mais linhas, '+final.linhas+' ('+pctDe(rFinal)+'). As duas respostas NAO se somam (duplicaria linha): o que falta continua faltando no banco.';
+    }else{
+      const porque=!ctx.ia_body?'o corpo da chamada nao viajou no contexto'
+        :(dec2.porque==='sem-tentativa'?'o teto de '+dec.maxTentativas+' chamadas por bloco ja foi consumido por falha transitoria':'sem motivo declarado');
+      notaCobertura='Cobertura do bloco '+(ctx.bloco??1)+' de '+(ctx.blocos??1)+' abaixo do minimo de '+Math.round(LIMIAR_COBERTURA*100)+'% ('+final.linhas+' de ~'+esperadasBloco+' linha(s) de conta, '+pctDe(rFinal)+') e a segunda passada NAO foi feita: '+porque+'.';
+    }
+  }
+}
+campos=final.campos;
+const diagnosticoFinal=final.diagnostico;
+// O CUSTO E' O DAS DUAS CHAMADAS, ganhe a que ganhar: a segunda passada e' paga mesmo
+// quando a primeira fica.
+const custoTotal=(ant&&typeof ant.custo_usd==='number'?ant.custo_usd:0)+(typeof custo_usd==='number'?custo_usd:0);
+const tokensTotais=ant&&ant.tokens&&tokensDestaChamada
+  ?{entrada:(ant.tokens.entrada||0)+(tokensDestaChamada.entrada||0), saida:(ant.tokens.saida||0)+(tokensDestaChamada.saida||0), cache:(ant.tokens.cache||0)+(tokensDestaChamada.cache||0)}
+  :(tokensDestaChamada||(ant?ant.tokens:null));
+// O motivo e' o da passada que FICOU (problemas de alinhamento da primeira nao somem se
+// ela ganhou), e a segunda que falhou nao pode ficar muda atras de uma primeira boa.
+falhaMotivo=final.falha;
+if(ant&&final===ant&&esta.falha) falhaMotivo=[falhaMotivo,'segunda passada por cobertura falhou: '+esta.falha].filter(Boolean).join(' | ');
+if(notaCobertura) falhaMotivo=falhaMotivo?falhaMotivo+' | '+notaCobertura:notaCobertura;
 // O aviso do preparo SOMA-SE ao motivo da chamada em vez de competir com ele:
 // planilha cortada E resposta truncada cabem no mesmo documento, e esconder um
 // dos dois e' a falha que esta mudanca fecha.
-const falhaFinal=[avisoConteudo,falhaMotivo].filter(Boolean).join(' | ')||null;
+// QUANTAS TENTATIVAS ESTA FALHA JA' TEVE. Sem isto a pendencia de um bloco que
+// foi chamado 4 vezes e a de um chamado uma so' sao identicas, e quem le acha que
+// bastava repetir (ou que ja' repetiram, quando nao repetiram).
+const esperaTotal=Number(ctx.espera_total_s)||0;
+const notaTentativas=(falhaMotivo&&TENTATIVA>1)
+  ?'[Bloco chamado '+TENTATIVA+' vez(es), esperas somadas '+esperaTotal+'s'+(dec.esgotou?'; teto de '+dec.maxTentativas+' tentativas ESGOTADO, a falha era transitoria e persistiu':'')+']'
+  :null;
+const falhaFinal=[avisoConteudo,falhaMotivo,notaTentativas].filter(Boolean).join(' | ')||null;
 // \`bloco\`/\`blocos\`/\`celulas_no_documento\`/\`contas_no_documento\` viajam para o
 // \`Juntar Blocos\`: sem
 // eles a juncao nao sabe a ordem dos pedacos nem tem regua para a cobertura.
-return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico, falha_motivo:falhaFinal, custo_usd, tokens:uso?{entrada:uso.prompt_tokens??null, saida:uso.completion_tokens??null, cache:uso.prompt_tokens_details?.cached_tokens??0}:null}};
+// \`passadas\` e as duas coberturas do bloco so' instrumentam a execucao (nao tocam o
+// Postgres): e' por elas que se mede, na primeira rodada real, quanto a segunda
+// passada recupera -- coisa que nenhum teste sem chamar o modelo consegue dizer.
+return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais}};
 `.trim();
+const CODE_PARSE_EXTRACAO = codeParseExtracao(1, 'Fatiar Extracao');
+
+// O ESTAGIO DE ESPERA entre duas tentativas. Um nó para TODOS os blocos que
+// falharam no estágio anterior: espera UMA vez (o maior pedido entre eles, já
+// limitado a 60 s por `decidirRepeticao`) em vez de uma vez por bloco, e devolve os
+// itens intactos com `tentativa` pronta para o Parse seguinte e a espera somada.
+// `setTimeout` é global no sandbox do Code node; se um dia não for, a repetição
+// acontece SEM espera e `espera_total_s` diz 0 — a pendência conta a verdade em vez
+// de afirmar uma espera que não houve.
+const CODE_ESPERAR_RETRY = `
+const itens=$input.all();
+let espera=0;
+for(const it of itens){ espera=Math.max(espera, Number(it.json?.espera_s)||0); }
+let esperou=0;
+if(espera>0&&typeof setTimeout==='function'){
+  await new Promise((resolve)=>setTimeout(resolve, espera*1000));
+  esperou=espera;
+}
+return itens.map((it,i)=>({json:{...it.json, repetir:false, espera_s:0, espera_total_s:(Number(it.json?.espera_total_s)||0)+esperou}, pairedItem:{item:i}}));
+`.trim();
+
 
 const PG_CRED = { postgres: { id: 'REPLACE', name: 'Supabase Postgres (Session Pooler)' } };
 // `position` NÃO entra aqui: quem posiciona é `posicionar()` (N8N/layout.mjs), a
@@ -2241,6 +2396,37 @@ const condFormato = (formato) => ({
   conditions: [{ leftValue: '={{ $json.formato_detectado }}', rightValue: formato, operator: { type: 'string', operation: 'equals' } }],
 });
 
+// Estágio k (k = 1..N-1) repete o que o Parse da tentativa k deixou marcado:
+//   IF `Repetir Extracao k?` --true--> `Esperar Retry k` -> `IA Extrair (tentativa k+1)`
+//   -> `Parse Extracao (tentativa k+1)`. O IF `false` vai direto ao `Juntar Tentativas`.
+const estagiosDeRepeticao = Array.from({ length: TENTATIVAS_MAX_EXTRACAO - 1 }, (_, i) => {
+  const k = i + 1;
+  const proxima = k + 1;
+  const nomeIf = `Repetir Extracao ${k}?`;
+  const nomeEsperar = `Esperar Retry ${k}`;
+  const nomeIA = `IA Extrair (tentativa ${proxima})`;
+  const nomeParse = `Parse Extracao (tentativa ${proxima})`;
+  return {
+    k, nomeIf, nomeEsperar, nomeIA, nomeParse,
+    nos: [
+      node(nomeIf, 'n8n-nodes-base.if', 2, {
+        conditions: { options: { caseSensitive: true, typeValidation: 'strict' }, combinator: 'and', conditions: [
+          { leftValue: '={{ $json.repetir }}', rightValue: true, operator: { type: 'boolean', operation: 'true', singleValue: true } },
+        ] },
+      }),
+      node(nomeEsperar, 'n8n-nodes-base.code', 2, { mode: 'runOnceForAllItems', jsCode: CODE_ESPERAR_RETRY }, CODE_CONTINUA),
+      node(nomeIA, 'n8n-nodes-base.httpRequest', 4.2, {
+        method: 'POST', url: urlDaChamada(PROV, MODEL_EXTRACAO),
+        authentication: 'genericCredentialType',
+        genericAuthType: 'httpHeaderAuth',
+        sendBody: true, specifyBody: 'json', jsonBody: '={{ JSON.stringify($json.ia_body) }}',
+        options: IA_BATCHING_EXTRACAO,
+      }, { onError: 'continueRegularOutput', retryOnFail: true, credentials: { httpHeaderAuth: { id: 'REPLACE', name: PROV.credencial } } }),
+      node(nomeParse, 'n8n-nodes-base.code', 2, { mode: 'runOnceForEachItem', jsCode: codeParseExtracao(proxima, nomeEsperar) }, CODE_CONTINUA),
+    ],
+  };
+});
+
 const nodes = [
   node('Intake (Form)', 'n8n-nodes-base.formTrigger', 2, {
     formTitle: 'Intake Oria — Reestruturação',
@@ -2513,6 +2699,21 @@ const nodes = [
 
   node('Parse Extracao', 'n8n-nodes-base.code', 2, { mode: 'runOnceForEachItem', jsCode: CODE_PARSE_EXTRACAO }, CODE_CONTINUA),
 
+  // OS ESTÁGIOS DE REPETIÇÃO (`TENTATIVAS_MAX_EXTRACAO - 1` deles), DESENROLADOS e
+  // não em laço, por uma razão do motor e não de gosto: com um laço de volta ao
+  // `IA Extrair`, o `Juntar Blocos` (runOnceForAllItems) rodaria uma vez com os
+  // blocos que deram certo e outra com os repetidos — o documento sairia duas vezes,
+  // a primeira incompleta, e o banco gravaria as duas. Desenrolado, TODOS os
+  // caminhos convergem no `Juntar Tentativas` (Merge, a mesma resposta que o
+  // projeto já deu a `Juntar Ramos` e `Juntar Extraidos`) e o Juntar Blocos roda UMA
+  // vez. Estágio sem bloco a repetir não executa: lote sem falha transitória não
+  // gasta um nó nem um segundo a mais.
+  ...estagiosDeRepeticao.flatMap((e) => e.nos),
+
+  node('Juntar Tentativas', 'n8n-nodes-base.merge', 3, {
+    mode: 'append', numberInputs: TENTATIVAS_MAX_EXTRACAO,
+  }),
+
   // CAMADA 3 — junta os blocos de volta em UM item por documento e confere a
   // cobertura. Daqui para a frente o grafo é idêntico ao de sempre: um item por
   // documento, com `campos` e `falha_motivo`.
@@ -2776,7 +2977,23 @@ const connections = {
   'Montar Req Extracao': { main: [[{ node: 'Fatiar Extracao', type: 'main', index: 0 }]] },
   'Fatiar Extracao': { main: [[{ node: 'IA Extrair', type: 'main', index: 0 }]] },
   'IA Extrair': { main: [[{ node: 'Parse Extracao', type: 'main', index: 0 }]] },
-  'Parse Extracao': { main: [[{ node: 'Juntar Blocos', type: 'main', index: 0 }]] },
+  // `Parse Extracao` -> IF do 1º estágio -> (false) Juntar Tentativas | (true) espera e repete.
+  // O último estágio não tem IF: o que sobra dele é definitivo e vai direto ao Merge.
+  ...Object.fromEntries(estagiosDeRepeticao.flatMap((e, i) => {
+    const ultimo = i === estagiosDeRepeticao.length - 1;
+    const origem = i === 0 ? 'Parse Extracao' : estagiosDeRepeticao[i - 1].nomeParse;
+    return [
+      [origem, { main: [[{ node: e.nomeIf, type: 'main', index: 0 }]] }],
+      [e.nomeIf, { main: [
+        [{ node: e.nomeEsperar, type: 'main', index: 0 }],                 // true  -> espera e repete
+        [{ node: 'Juntar Tentativas', type: 'main', index: i }],           // false -> definitivo
+      ] }],
+      [e.nomeEsperar, { main: [[{ node: e.nomeIA, type: 'main', index: 0 }]] }],
+      [e.nomeIA, { main: [[{ node: e.nomeParse, type: 'main', index: 0 }]] }],
+      ...(ultimo ? [[e.nomeParse, { main: [[{ node: 'Juntar Tentativas', type: 'main', index: i + 1 }]] }]] : []),
+    ];
+  })),
+  'Juntar Tentativas': { main: [[{ node: 'Juntar Blocos', type: 'main', index: 0 }]] },
   'Juntar Blocos': { main: [[{ node: 'Gravar Campos (Sombra)', type: 'main', index: 0 }]] },
   'Gravar Campos (Sombra)': { main: [[{ node: 'Registrar Diagnostico', type: 'main', index: 0 }]] },
   'Registrar Diagnostico': { main: [[{ node: 'Juntar Extraidos', type: 'main', index: 0 }]] },
