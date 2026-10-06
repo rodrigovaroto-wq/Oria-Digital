@@ -1,0 +1,74 @@
+diff --git "a/Verifica\303\247\303\243o/variacoes.mts" "b/Verifica\303\247\303\243o/variacoes.mts"
+index bf88976..f7fb56b 100644
+--- "a/Verifica\303\247\303\243o/variacoes.mts"
++++ "b/Verifica\303\247\303\243o/variacoes.mts"
+@@ -247,8 +247,21 @@ const VARIACOES: Variacao[] = [
+     oque: "[PEGOU] rótulos do ERP com código na frente: \"1.1.01.002 Caixa e bancos\"",
+     espera: "as âncoras casam mesmo com o código — sem isso não há reconciliação e o balanço "
+       + "abria em −36.116",
+-    transformar: (c) => clone(c).map((x, i) => ({
+-      ...x, chave: `${1 + (i % 4)}.${1 + (i % 3)}.${String(i % 90).padStart(2, "0")} ${x.chave}` })),
++    // O CÓDIGO É DA CONTA, não da linha: a mesma conta tem o mesmo código em todas as colunas
++    // de período, como num balancete de ERP. Antes o código vinha do índice da linha, e a mesma
++    // conta ganhava um código por exercício — o modelo via contas diferentes, uma por ano, e o
++    // achado de dívida que sumia misturava duas causas (a conta partida e o TOTAL tratado como
++    // tranche). Só a segunda existe fora do arnês.
++    transformar: (c) => {
++      const codigo = new Map<string, string>();
++      return clone(c).map((x) => {
++        if (!codigo.has(x.chave)) {
++          const n = codigo.size;
++          codigo.set(x.chave, `${1 + (n % 4)}.${1 + (n % 3)}.${String(n % 90).padStart(2, "0")}`);
++        }
++        return { ...x, chave: `${codigo.get(x.chave)} ${x.chave}` };
++      });
++    },
+   },
+   {
+     nome: "caracteres_de_controle",
+diff --git a/portal/src/lib/modelo-institucional.ts b/portal/src/lib/modelo-institucional.ts
+index 68a91ba..e3000d4 100644
+--- a/portal/src/lib/modelo-institucional.ts
++++ b/portal/src/lib/modelo-institucional.ts
+@@ -1031,6 +1031,25 @@ const chaveDeAncora = (s: string) =>
+   normalizar(String(s ?? "").replace(CODIGO_DE_CONTA_NO_INICIO, ""))
+     .replace(/[()[\].,;:/–—-]+/g, " ").replace(/\s+/g, " ").trim();
+ 
++// "TOTAL" COM CÓDIGO NA FRENTE É SUBTOTAL — e o banco não o enxerga assim.
++//
++// O DEFEITO (arnês de variações, variante `codigo_contabil_no_rotulo`): `fn_papel_linha` ancora o
++// prefixo "total" no INÍCIO do rótulo, e "2.3.71 TOTAL — saldo devedor" começa por "2.3.71". Papel
++// `conta`, portanto: a linha de TOTAL do mapa de dívida virou uma tranche a mais. Medido: tranches
++// 51.300 (o total) + 51.300 (as nove contas) = 102.600 de dívida existente onde o documento diz
++// 51.300; a dívida de curto prazo de 2024 saiu 46.924 contra 23.462 sem o código. O saldo dobrado
++// era amortizado em 3 anos, o caixa não cobria, o revolver engolia a diferença e voltava a 0 na
++// virada ("a dívida evapora: de 11.114 para 0 entre J e K, amortização 0"). Balancete de ERP traz
++// o código em quase toda linha, inclusive no TOTAL.
++//
++// A regra é a MESMA da (a) de `fn_papel_linha` (prefixo total|totais|subtotal|soma), aplicada ao
++// rótulo SEM o código, e só quando há código — sem ele o banco já decide e esta função não
++// discorda dele. A correção definitiva é a do banco (a função SQL tirar o código antes de
++// comparar); até lá, o portal não pode somar um total como se fosse conta.
++const TOTAL_NO_INICIO = /^(?:total|totais|subtotal|soma)(?: |$)/;
++export const ehTotalComCodigoNaFrente = (chave: string) =>
++  CODIGO_DE_CONTA_NO_INICIO.test(String(chave ?? "")) && TOTAL_NO_INICIO.test(chaveDeAncora(chave));
++
+ // AS ÂNCORAS DO DOCUMENTO — o que permite PROVAR que o modelo não mente.
+ //
+ // As linhas de resultado da DRE e os totais do balanço chegam com
+@@ -1107,7 +1126,14 @@ interface Ctx {
+   ancoras: Map<string, LinhaModelo>;
+ }
+ 
+-function contexto(ent: EntradaModeloInstitucional): Ctx {
++function contexto(entrada: EntradaModeloInstitucional): Ctx {
++  // Único ponto por onde as linhas entram no modelo (`ent.linhas` só é lido aqui): o papel
++  // devolvido pelo banco é corrigido ANTES de virar âncora ou conta — ver `ehTotalComCodigoNaFrente`.
++  const ent: EntradaModeloInstitucional = {
++    ...entrada,
++    linhas: entrada.linhas.map((l) =>
++      l.papel === "conta" && ehTotalComCodigoNaFrente(l.chave) ? { ...l, papel: "subtotal" as const } : l),
++  };
+   const premissaPorCodigo = new Map(ent.premissas.map((p) => [p.codigo, p]));
+   const premissaPorLinha = new Map<string, PremissaModelo>();
+   for (const v of ent.vinculos) {

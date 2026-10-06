@@ -786,6 +786,77 @@ supabase db execute --file Supabase/migrations/0198_a_faixa_de_anos_que_perdia_o
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0198' and not presente;                 -- ZERO linhas
 
+# A 0199 REEMITE fn_valores_por_ano (mesma assinatura): a série por ano lia "Débito"/"Crédito" do balancete
+# como saldo, "Saldo Inicial"/"Saldo anterior" como o ano do documento, o saldo de 30/06 como o de 31/12 e o
+# CONTRATO_SOCIAL como PL. MEDIDO EM PRODUÇÃO (05/10/2026, só-leitura, Fw Valtra 03a66ab6): ATIVO 2025 =
+# 125.859.727,84 (Débito) onde o balanço diz 38.483.404,04; o balanço do modelo não fechava em ~90,5 mi.
+# Sem backfill: o modelo muda no PRÓXIMO export de cada caso. fn_ano_da_coluna e fn_linhas_do_realizado NÃO mudam.
+# Teste: Supabase/test/serie_por_ano_movimento_e_abertura.test.sql (21 asserts; 19 reprovam sem a 0199).
+supabase db execute --file Supabase/migrations/0199_a_serie_por_ano_que_lia_movimento_e_abertura_como_saldo.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0199' and not presente;                 -- ZERO linhas
+
+# A 0200 REEMITE fn_valores_por_ano (mesma assinatura): a 0199 decidia "o parcial entra se for a única fonte"
+# POR RÓTULO, e as centenas de contas analíticas do BALANCETE semestral (código no rótulo) não existem no
+# BALANCO anual — para cada uma o balancete era a "única fonte" e entrava POR CIMA do balanço do mesmo ano.
+# MEDIDO EM PRODUÇÃO (05/10/2026, depois da 0199, Fw Valtra 03a66ab6): resíduo do ATIVO CIRCULANTE de
+# -36.014.142 (2024) e -46.902.843 (2025). Agora a decisão é do ANO: parcial só entra se a entidade não tem
+# ocorrência ANUAL da mesma família (patrimonial / resultado / fluxo / seção própria) naquele ano.
+# Sem backfill: o modelo muda no PRÓXIMO export de cada caso.
+# Teste: Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql (17 asserts; 6 reprovam sem a 0200, 10 com a regra ao contrário).
+supabase db execute --file Supabase/migrations/0200_o_balancete_semestral_que_entrava_por_cima_do_balanco_anual.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0200' and not presente;                 -- ZERO linhas
+
+# A 0201 ENSINA fn_linhas_do_realizado A LER "Saldo Final"/"Saldo atual"/"Saldo Inicial"/"Saldo anterior". A 0150 só achava
+# exercício com ANO NO TEXTO da coluna; o documento anual do Fw Valtra (BALANCO e DRE ref "2025") rotula as colunas sem ano, e
+# o documento INTEIRO ficava fora: a função devolvia só as linhas do DFC e a tela de modelagem mostrava TODAS as sugestões do
+# realizado vazias (CUSTO_VARIAVEL, SGA_PCT, PMR, PME, PMP, ALIQUOTA, PARCELA_ONEROSA, TAXA_DIVIDA). MEDIDO EM PRODUÇÃO (05/10/2026).
+# A conta de classificar coluna/período sai de fn_valores_por_ano para cinco funções puras que as DUAS chamam (fn_coluna_e_abertura,
+# fn_coluna_e_movimento, fn_coluna_e_saldo, fn_periodo_e_parcial, fn_familia_da_secao); fn_valores_por_ano é reemitida com o mesmo
+# comportamento. O requisito da 0199 no catálogo é REAPONTADO para fn_coluna_e_abertura (mesmo marcador).
+# Sem backfill: a tela muda no próximo carregamento. Teste: Supabase/test/realizado_le_saldo_final_e_atual.test.sql (27 asserts; 18 reprovam sem a 0201).
+supabase db execute --file Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration in ('0199', '0201') and not presente;      -- ZERO linhas
+
+# A 0202 REEMITE fn_papel_linha (mesma assinatura): o código contábil do ERP na frente do rótulo ("2.3.71 TOTAL — saldo devedor")
+# escondia o prefixo total/subtotal/soma e os grupos estruturais, e a linha de TOTAL do Mapa de Dívida virava uma tranche a mais.
+# MEDIDO no arnês de variações (codigo_contabil_no_rotulo): dívida de 102.600 onde o documento diz 51.300; CP 2024 46.924 contra
+# 23.462. Nova função fn_sem_codigo_de_conta (a mesma definição de CODIGO_DE_CONTA_NO_INICIO do portal). Sem backfill: o papel é
+# calculado na leitura. Teste: Supabase/test/papel_total_com_codigo_contabil.test.sql (21 asserts; 13 reprovam sem a 0202).
+supabase db execute --file Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0202' and not presente;                 -- ZERO linhas
+
+# A 0203 INFERE a secao_canonica da seção bruta quando a IA não deu (fn_secao_canonica_da_secao_bruta, conservadora: o ambíguo fica NULL),
+# na gravação (fn_registrar_campos_extraidos reemitida inteira) e nas linhas existentes (fn_inferir_secao_canonica_das_linhas), e marca
+# campo_extraido.secao_canonica_inferida. Defeito MEDIDO em produção (Fw Valtra, DRE 2025): 136 de 724 linhas sem seção; receita bruta do
+# realizado 235.650 em vez de ~43,85 mi. TEM BACKFILL (raise notice com linhas/versões/casos). DEPOIS DE APLICAR, nos casos tocados:
+#   select fn_reconciliar_caso('<caso>'); select fn_recomputar_completude('<caso>');   -- o que fica GRAVADO só muda recomputado
+# Teste: Supabase/test/secao_inferida_da_secao_bruta.test.sql (71 asserts; 38 reprovam sem a 0203).
+supabase db execute --file Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0203' and not presente;                 -- ZERO linhas
+
+# A 0204 HERDA a secao_canonica pela ÁRVORE do próprio documento (fn_herdar_secao_pela_arvore): a linha sem seção cuja seção bruta é o NOME
+# de outra linha da mesma versão que tem seção (o pai pela chave, as irmãs pela seção bruta, só se concordam; conflito fica NULL e é contado;
+# nunca de/para ATIVO, TOTAL DO ATIVO…), recursivo até 10 rodadas. Roda na gravação (fn_registrar_campos_extraidos reemitida inteira; o n8n
+# NÃO muda) e nas linhas existentes. Defeito MEDIDO em produção depois da 0203 (Fw Valtra, BALANCO 2025): resíduo do ativo circulante 3.750.141
+# (9,7% do ativo) em 2025 e 2.422.985 em 2022. TEM BACKFILL (raise notice com linhas/versões/casos/conflitos; para MEDIR antes, cole o arquivo
+# dentro de begin; ... rollback;). DEPOIS DE APLICAR, nos casos tocados (o aviso diz quantos; o Fw Valtra é 03a66ab6):
+#   select fn_reconciliar_caso('<caso>'); select fn_recomputar_completude('<caso>');   -- o que fica GRAVADO só muda recomputado
+# Teste: Supabase/test/secao_herdada_pela_arvore.test.sql (37 asserts; 21 reprovam sem a 0204).
+supabase db execute --file Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0204' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

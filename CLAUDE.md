@@ -76,6 +76,7 @@ node --test 'Supabase/test/*.test.mjs'       # a tradução de "não perguntei a
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-modelagem-cobertura.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-limite-de-envio.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-linhas-por-versao.mts
+./portal/node_modules/.bin/tsx portal/scripts/verificar-exclusividade-ciclo.mts
 node --test '.claude/conhecimento/test/*.test.mjs'  # ANTES de indexar: o grafo COMMITADO não pode
                                                    # citar arquivo que o git ignora (depois do
                                                    # indexar essa pergunta é verdadeira por construção)
@@ -143,6 +144,16 @@ cd portal && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/eslint . \
 > ao CI acrescenta a linha aqui na mesma passada**, e desde 16/09/2026 isso não depende mais de
 > ninguém lembrar: `node .claude/verificar-espelho-claude-md.mjs` roda no CI e reprova a
 > divergência dos dois lados, inclusive arquivo citado que não existe mais.
+
+**Conflito de merge em arquivo DERIVADO nunca se resolve à mão.** `grafo.jsonl`, os quatro
+`N8N/workflow*.json`, `Supabase/conferir/conferir_chamadas.sql`, `Supabase/schema.sql` e as
+fixtures do book conflitam em TODO par de PRs abertos juntos (medido em 05/10/2026: #252 × #253,
+três conflitos, dois deles derivados). A regra é pegar qualquer um dos dois lados e REGERAR com os
+comandos acima, nesta ordem: geradores do n8n → conferidor SQL → `run.sh` (reescreve o
+`schema.sql`) → teste do conhecimento → `indexar.mjs` por último, porque ele indexa todos os
+outros. E dois PRs com migration: o topo do `ESTADO.md` passa a citar a de número maior. Desde
+05/10 o `run.sh` reprova a declaração velha, que antes passava se o nome aparecesse em qualquer
+linha.
 
 `npx` **não** serve no lugar de `./portal/node_modules/.bin/<bin>` — para o `tsx`, o `tsc`, o
 `eslint` ou o `next`: sem o binário do lock, o npx baixa a última versão publicada no dia. Esta

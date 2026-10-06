@@ -38,6 +38,22 @@ Vercel (`VERCEL_TOKEN`) antes de investigar o código.
 
 ### 2. Decisões do DONO em aberto (não decida sozinho)
 
+> **ATUALIZADO em 05/10/2026 (S105, PR [#251](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/251), mergeado):**
+> - **Item 1 DECIDIDO:** "Capital de giro" no passivo é dívida, com ou sem credor nomeado. Fundamento:
+>   CPC 00/39/48 (essência: obrigação contratual de entregar caixa a quem emprestou; no balanço
+>   brasileiro, "capital de giro" no passivo é o produto bancário). Prova no próprio book Canastra:
+>   "Capital de giro - longo prazo" (26.400 em 2023) está sob "Empréstimos e Financiamentos" e o mapa
+>   de dívida o lista como contrato do Banco Meridional. Todos os chamadores de `ehDividaFinanceira`
+>   só olham passivo e mapa. Exclusões: necessidade/variação do capital de giro, capital de giro
+>   líquido/próprio; o grupo misto segue misto, com nota. Commits `01430ea` e `9277bed`.
+> - **Item 2 DECIDIDO pelo item 1:** "Capital de giro Caixa" é dívida pelo produto; "caixa" sozinho
+>   continua fora de `CREDORES` (numa enumeração pode ser o disponível).
+> - **Item 6 / fatia h DECIDIDO:** o estoque (PME) gira contra CUSTO (`59ddcb8`). Efeito colateral
+>   conhecido: uma premissa única de dias ligada a todo o ativo vira dois grupos de base (receita para
+>   cliente, custo para estoque), com a nota de ATENÇÃO que já existia.
+> - Recomendação dada ao dono e ainda NÃO confirmada: item 3 (alarme do Vertentes) deve continuar;
+>   itens 4 e 5 são do mandato e da modelagem, não do código.
+
 1. **"Capital de giro" sem credor nomeado** (books Canastra/Vertentes): é dívida? Hoje só conta como
    dívida quando a linha cita banco ou linha de financiamento (`CAPITAL_DE_GIRO_BANCARIO`). Uma linha
    "Capital de giro" sem credor fica fora.
@@ -52,6 +68,138 @@ Vercel (`VERCEL_TOKEN`) antes de investigar o código.
    2026 e 2030. É premissa de modelagem, não defeito, mas o dono deve ver.
 6. Item h abaixo (PME sobre receita × sobre custo) é decisão de desenho.
 
+### 2b. Achado da bateria local de 05/10: TOTAL com código contábil vira tranche de dívida
+
+**O que rodou (05/10, `main` 4b536bc):** toda a lista do CLAUDE.md, e tudo verde. Entram nela os
+testes do n8n, dos hooks, do Supabase e do conhecimento; as 8 suítes `verificar-*`; o `run.sh`, o
+conferidor de chamadas e a sonda local (0 buracos); o E2E local; os medidores; os geradores, o
+conferidor SQL e as fixtures sem diff; o portal (tsc, eslint e `next build`).
+
+**O que NÃO rodou:** o mandato sintético pelo portal publicado e as sondas contra o banco de produção.
+O modo automático bloqueou as duas coisas. A senha do portal colada no chat é "Credential Leakage", e
+a leitura de produção já não estava liberada para este pedido. Para rodar, o dono põe `PORTAL_EMAIL` e
+`PORTAL_SENHA` nas variáveis do ambiente e abre sessão nova. **O dono deve trocar a senha que colou no
+chat em 05/10.**
+
+**O defeito.** O `Verificação/variacoes.mts` imprime `[codigo_contabil_no_rotulo] a dívida EVAPORA na
+virada para o projetado, de 11114 para 0 entre J e K, com amortização de apenas 0` e sai com exit 0.
+Ele passa no CI por isso, o que é a regra 7. Reproduz igual no `955ff77`, antes do #251.
+- **Causa** (medida pelo agente `portal-export`, parado a pedido do dono antes de validar):
+  `fn_papel_linha` ancora o prefixo `total|totais|subtotal|soma` no INÍCIO do rótulo. Com o código do
+  ERP na frente ("2.3.71 TOTAL — saldo devedor"), o papel sai `conta`, e a linha de TOTAL do Mapa de
+  Dívida vira uma tranche a mais. Tranches de 51.300 (o total) + 51.300 (as nove contas) dão 102.600.
+  A dívida de CP 2024 sai 46.924 contra 23.462. O saldo dobrado amortiza em 3 anos, o caixa não cobre,
+  o revolver absorve e zera na virada.
+- **Patch proposto, NÃO validado:** `Arquitetura do Sistema/3 Estado e Execução/patches/
+  s105-total-com-codigo-no-mapa-de-divida.patch`. Ele traz:
+  - `ehTotalComCodigoNaFrente` em `contexto()`, que rebaixa a `subtotal` a linha `conta` cujo rótulo,
+    sem o código, começa por total;
+  - o arnês dando o MESMO código à mesma conta em todos os anos. Antes o código vinha do índice da
+    linha, e a mesma conta ganhava um código por exercício, o que misturava duas causas.
+- **Para fechar:**
+  1. a correção definitiva é no BANCO, numa migration nova em que `fn_papel_linha` tira o código antes
+     de comparar. Ela serve a todos os chamadores, não só ao portal;
+  2. o arnês tem de REPROVAR quando acha;
+  3. regra 2: medir não vazio;
+  4. remedir o Krauspenhar, que tem códigos nos rótulos.
+- **Até lá, no case real:** se o book tiver um Mapa de Dívida com linha "TOTAL" precedida de código,
+  confira a dívida existente do export contra o total do mapa. Se ela vier em dobro, é este defeito.
+
+### 2c. Primeiro mandato real depois da republicação: "Fw Valtra" (05/10/2026)
+
+**Caso `03a66ab6-f0c1-45df-8c37-257c42298fc4`**, empresa MOTO AGRICOLA VOLKWEIS LTDA (concessionária
+Valtra, setor agro).
+
+**Ingestão.** A primeira execução (8432) foi cancelada à mão aos 47 s. A segunda (8433) rodou de
+13:17:57 a 13:36:25 UTC: `success`, 15 documentos, 12.476 linhas, US$ 1,10, cobertura 0,78,
+5 documentos com `extracao_falhou` e 39 pendências abertas que NÃO foram tratadas, a pedido do dono.
+**Isto prova que o n8n republicado em 01/10 grava no banco.**
+
+**Armadilha de monitoramento.** A listagem `GET /api/v1/executions` do n8n NÃO mostra execução em
+andamento. Use `?status=running`. Eu disse ao dono que o reenvio "não tinha chegado", e ele estava
+rodando havia 10 minutos.
+
+**Modelagem gravada no caso**, com permissão explícita do dono, autor `claude:s105 (a pedido do dono)`:
+- **Parâmetros:** entidade MOTO AGRICOLA VOLKWEIS LTDA, último real 2025, IPCA, agro, 5 anos.
+- **10 premissas:** IPCA (Focus); CRESC_NOMINAL 0/4/6/6/5; CUSTO_VARIAVEL 77,5; SGA_PCT 17,5→16;
+  PMR 40; PME 300→210 (sobre CMV); PMP 80; ALIQUOTA 34; TAXA_DIVIDA 18→14; CAPEX_PCT 1,5.
+- **Lote por seção** para receita, custos, despesas, impostos e resultado financeiro. **Por linha**
+  para cliente, estoque e fornecedor (classificadores do portal) e para o IMOBILIZADO (capex).
+- `fn_conferir_modelagem`: `pronto=true`, 672 vínculos, 0 órfãos.
+- **Defeito menor, aberto:** linhas "(-) MERCADORIA EM GARANTIA… (CLIENTE)" casam `ehCliente` E
+  `ehEstoque`, e ficaram em PME (o último vínculo vence).
+
+**O Portão 2 NÃO foi aprovado.** O botão de export do portal recusa (409). O Excel entregue ao dono
+saiu de um script avulso, que ficou fora do repositório: o Sonar reprovou o PR por ele. O script
+replicava a rota `/casos/[id]/export` passo a passo, ao estilo de `portal/scripts/gerar-export-do-banco.mts`.
+Ele lia produção pela API de gerenciamento (`POST /v1/projects/<ref>/database/query`, só SELECT),
+pulava só o Portão 2 e chamava o mesmo `buildExportWorkbook`. Foi validado no caso de teste
+`bb37f726`: `auditar-xlsx` 11/11. Duas armadilhas para quem refizer:
+- a API devolve `numeric` como TEXTO. Converta as colunas numéricas, senão `sugerirDoRealizado`
+  devolve tudo vazio;
+- `gerar-export-do-banco.mts` passa `macro: []`, e a rota usa o macro de verdade (CDI e IPCA).
+
+**DEFEITO GRAVE achado no caso: `fn_valores_por_ano` (0125) monta a série com o MAIOR |valor| entre
+todas as colunas do ano.** No Fw Valtra:
+- o **Débito** do balancete de jun/25 virou o "ATIVO" de 2025: 125,86 mi contra 38,48 mi no balanço
+  anual;
+- **"Saldo Inicial"/"Saldo anterior"** foram lidos como o ano do documento, quando são o ano
+  anterior: CLIENTES 2025 saiu com o valor de 2024, e a DRE 2023 pegou números de 2022;
+- linhas do **CONTRATO_SOCIAL** ("total - nº de quotas" = 15,5 mi) entraram no PL.
+
+O efeito foi um balanço que não fecha em ~90,5 mi de 2025 a 2030, com `auditar-xlsx` 8/11 (v1
+entregue ao dono). Com a consulta corrigida no script (`VALORES_CORRIGIDOS=1`), ficou 10/11: o
+balanço fecha nas 9 colunas (2022–2030) e o ativo total bate com o documento em todos os anos (v2
+entregue). Sobra um resíduo do AC de 3,75 mi em 2025 (9,7% do ativo), não aberto. **A correção
+definitiva é a migration 0199** (ver §2d).
+
+**Também medido:** `fn_linhas_do_realizado` (0150) devolveu, para este caso, só a entidade do DFC
+("Metodo Indireto Moto Agricola"), sem nenhuma linha do BALANCO/DRE. Por isso as sugestões do
+realizado saíram vazias na tela. As razões reais (2023/2024/2025) são:
+- receita líquida 42,14/41,86/38,68 mi;
+- CMV/RL 78,9/76,1/77,5%;
+- SG&A/RL 6,8*/14,1/17,9% (*2023 sem a linha de despesas administrativas);
+- PMR 35/45/40;
+- PME s/ CMV 133/212/317;
+- PMP 71/93/81;
+- dívida 0,69/4,28/10,38 mi.
+
+**Atualização (05/10, depois de `d5f435c`):** as sugestões da tela agora saem de
+`agregadosDoRealizado`, as mesmas somas do export. Contra produção (2022–2025) deram:
+- PME 110/130/207/345;
+- CUSTO 74,9%;
+- SG&A 10,8%;
+- PMR 30;
+- PMP 70;
+- TAXA_DIVIDA 18,0%. A taxa usa só 2024–25: 2022 ficou fora por despesa > dívida do fechamento, e 2023 por dívida < 1% do ativo.
+
+**O resíduo do AC, diagnosticado e NÃO corrigido.** Os 3,75 mi de 2025 são exatamente
+"ESTOQUE EM DEMONSTRAÇÃO COM CLIENTES" (3.746.140,33). No Balanço 2025 ela é CONTA, anulada pela
+redutora "(-) … A RECEBER" logo abaixo. O balancete 1º sem/2026 a imprime como AGRUPAMENTO
+(`secao` das filhas = o nome dela). `rotulosDeSubtotalInformado` dá o veredito SEM ANO para o
+balancete, cujas colunas são ilegíveis. O Balanço não tem como contestar: as colunas dele são
+"Saldo Inicial/Saldo Final", sem ano, e os Balanços de 2022–2025 DIVIDEM a mesma coluna. Por
+isso `anoDocPorColuna` colapsa em nulo e o Balanço não contribui exercício nenhum. A conta sai
+da soma em todos os anos e só a redutora fica.
+
+Foram três tentativas na mesma lógica, todas revertidas: pela regra, a quarta não se tenta, e o
+que se questiona é a arquitetura. Os números do `auditar-xlsx` (resíduos > 5%) partiam de 15:
+1. **Ano do documento quando uma coluna ilegível não é marcada.** Os resíduos foram a 8: o AC de
+   2025 zerou, mas voltou "IMÓVEIS". Ela é cabeçalho de verdade no Balanço 2024 (3.442.426,91 =
+   terrenos + edifícios + benfeitorias), mas a IA achatou tudo na seção IMOBILIZADO, e quem a
+   tirava era o veredito do balancete, por acaso. O ANC ficou 1,8 mi ACIMA.
+2. **Mais o simétrico, subtotal por documento.** Foram 13 resíduos, e o PL ficou em 78%: o detector
+   por ordem é sinal de coincidência e não serve campo a campo.
+3. **Só coluna de fechamento, campo a campo.** Foram 29 resíduos: cabeçalhos que o detector perde
+   num documento voltam como conta.
+
+**A correção é de origem, não de export:** a coluna precisa carregar o exercício. Para isso, a
+extração (ou `fn_registrar_campos_extraidos`) grava "Saldo Final" como o exercício do documento
+e "Saldo Inicial" como o anterior. A 0201 já faz isso em `fn_valores_por_ano`, mas o export lê
+`periodo_coluna` cru. Com o ano na coluna, o veredito por exercício que já existe resolve os
+dois casos, sem heurística nova. Isso entra na fatia "classificação de coluna na extração", já
+listada abaixo.
+
 ### 3. Próximas fatias, pela ordem (o texto completo de cada uma está no S104 §5)
 
 Os itens **l** (resíduo do AC) e **m** (nomes dos workflows) foram **RESOLVIDOS** no #249.
@@ -63,7 +211,7 @@ Continuam abertos:
 - e. Storage vazio com `origem_arquivo='supabase_storage'`.
 - f. xlsx: ler todas as abas.
 - g. Períodos "multi 02,25" lidos como {2002, 2025}.
-- h. PME: base de receita ou de custo (**decisão do dono**).
+- h. ~~PME: base de receita ou de custo~~ — **decidido 05/10: custo**, feito no #251.
 - i. Premissa por grupo de linhas.
 - j. Tolerância × escala em `fn_reconciliar_ativo_passivo_pl`.
 - k. Issues menores do Sonar.

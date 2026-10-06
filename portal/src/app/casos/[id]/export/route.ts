@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
+import { lerCamposDasVersoes, lerDocumentosDoCaso, lerValoresPorAno } from "@/lib/leitura-do-caso";
 import { veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import type { EntradaModeloInstitucional, LinhaModelo } from "@/lib/modelo-institucional";
 import {
   buildExportWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, type ConfigModelagem,
-  type DocumentoParaExport, type MacroAnual, type MacroExpectativa,
+  type MacroAnual, type MacroExpectativa,
 } from "@/lib/export";
-import type { CampoExtraido } from "@/lib/types";
 import {
-  casarVinculosComLinhas, seriesPorLinha, serieDaLinha,
-  provenienciaPorLinha, provenienciaDaLinha,
+  casarVinculosComLinhas, historicoDoModelo,
   type LinhaParaCasar, type VinculoParaCasar,
 } from "@/lib/modelagem-linha";
 
@@ -53,22 +52,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const [casoRes, documentosRes] = await Promise.all([
     supabase.from("caso").select("id, nome, produto").eq("id", id).single(),
-    paginar<DocumentoParaExport>((de, ate) =>
-      supabase
-        .from("documento")
-        .select(
-          // `n_versao` é o que permite ao export saber qual extração é a VIGENTE
-          // quando o mesmo arquivo foi reextraído (Supabase/migrations/0026 registra a
-          // reextração como versão nova do mesmo documento) — sem ela, as duas
-          // extrações entrariam juntas e a soma da seção contaria as duas.
-          `id, tipo_taxonomia,
-           entidade:entidade_id(razao_social), periodo:periodo_id(tipo, referencia),
-           documento_versao(id, nome_original, n_versao)`,
-        )
-        .eq("caso_id", id)
-        .order("id", { ascending: true })
-        .range(de, ate),
-    ),
+    lerDocumentosDoCaso(supabase, id),
   ]);
 
   if (casoRes.error || !casoRes.data) {
@@ -111,31 +95,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   //
   // Não dá para trocar por `count` como se fez com o indicador do painel: aqui
   // as LINHAS são o produto. Então lê de mil em mil, na mesma ordem.
-  const camposRes = versaoIds.length
-    ? await paginar<CampoExtraido>((de, ate) =>
-        supabase
-          .from("campo_extraido")
-          .select(
-            "id, documento_versao_id, secao, secao_canonica, entidade_coluna, periodo_coluna, chave, valor_texto, valor_num, unidade, confianca, origem_pagina, ordem, status_aceite, aceito_por, aceito_em",
-          )
-          .in("documento_versao_id", versaoIds)
-          // ORDEM DO DOCUMENTO (Supabase/migrations/0027). Sem isto o PostgREST devolve
-          // as linhas em ordem arbitrária, e a detecção de "subtotal impresso
-          // acima dos seus componentes" — que é o que conserta o Ativo Circulante
-          // da VT Logística (7.254 onde o documento diz 3.961) — não tem sinal
-          // nenhum para trabalhar. `nullsFirst: false` mantém a extração ANTIGA
-          // (ordem nula) no fim, sem embaralhar o que tem ordem.
-          //
-          // A ordem também é o que torna a paginação CORRETA: sem ordem total e
-          // estável, duas páginas podem repetir e omitir a mesma linha. `id`
-          // fecha o desempate — `documento_versao_id` e `ordem` empatam entre si
-          // na extração antiga, que não tem ordem.
-          .order("documento_versao_id", { ascending: true })
-          .order("ordem", { ascending: true, nullsFirst: false })
-          .order("id", { ascending: true })
-          .range(de, ate),
-      )
-    : { data: [] as CampoExtraido[], error: null, truncado: false };
+  const camposRes = await lerCamposDasVersoes(supabase, versaoIds);
 
   if (camposRes.error) {
     console.error(`[export] consulta de campos extraídos falhou: ${camposRes.error.message}`, { caso_id: id });
@@ -464,19 +424,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       // porque o mesmo rótulo existe em seções diferentes (`Empréstimos e
       // Financiamentos` no circulante e no não circulante), e é o trio que a
       // função agrupa — ou seja, o que torna a ordem TOTAL.
-      const valoresRes = await paginar<{
-        rotulo_norm: string; secao_canonica: string | null; ano: number; valor: number;
-        // 0125: a proveniência DA CÉLULA vem na mesma consulta. Uma segunda ida ao
-        // banco para buscá-la seria pagar de novo pela linha que já está na mão — e
-        // abriria a chance de as duas discordarem entre si.
-        arquivo: string | null; origem_pagina: number | null; confianca: number | null;
-        status_aceite: string | null; aceito_por: string | null;
-      }>((de, ate) =>
-        supabase.rpc("fn_valores_por_ano", { p_caso_id: id, p_entidade: entidadeModelada })
-          .order("rotulo_norm", { ascending: true })
-          .order("ano", { ascending: true })
-          .order("secao_canonica", { ascending: true, nullsFirst: true })
-          .range(de, ate));
+      // 0125: a proveniência DA CÉLULA vem na mesma consulta (ver `lerValoresPorAno`).
+      const valoresRes = await lerValoresPorAno(supabase, id, entidadeModelada);
       // ERRO DE CONSULTA AQUI NÃO ERA LOGADO EM LUGAR NENHUM — ao contrário de
       // TODA outra consulta desta rota. `paginar` engole o `.error` e devolve
       // `data: []`, então uma falha em `fn_valores_por_ano` (RLS, função ausente
@@ -487,35 +436,17 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         console.error(`[export] consulta de valores por ano falhou: ${valoresRes.error.message}`, { caso_id: id });
       }
       const valores = valoresRes.data;
-      // Só exercícios ATÉ o último realizado entram como histórico: um balancete
-      // do ano corrente não é exercício fechado, e tratá-lo como tal faria a
-      // projeção partir de meio ano.
-      const anosHistoricos = [...new Set(valores.map((v) => v.ano))]
-        .filter((a) => a <= ultimoReal).sort((a, b) => a - b);
+      // O histórico (exercícios até o último real, série e proveniência por linha, unidade
+      // dominante) sai de `historicoDoModelo` — a MESMA função que a tela de Modelagem usa
+      // para sugerir as premissas do realizado. Ver a nota dela.
+      const historico = historicoDoModelo(
+        (linhasRes.data ?? []) as unknown as Parameters<typeof historicoDoModelo>[0],
+        valores, ultimoReal,
+      );
+      const { anosHistoricos } = historico;
       const nProj = par?.anos_projetados ?? 5;
       const anosProjetados = Array.from({ length: nProj }, (_, i) => ultimoReal + 1 + i);
-
-      // A série histórica de cada conta vem indexada pelo PAR (seção, rótulo) —
-      // a mesma identidade do banco. Ver `seriesPorLinha`: indexar só pelo
-      // rótulo fazia a linha de uma seção receber os números da outra.
-      const series = seriesPorLinha(valores, anosHistoricos);
-      // A PROVENIÊNCIA POR (LINHA, ANO) — mesma identidade, mesma consulta (0125).
-      // Ela vai para a nota de TODA célula histórica do modelo, não só da
-      // `Premissas`: `valorNaEscala` é o caminho único por onde valor de documento
-      // entra no arquivo, então melhorar a nota lá melhora as catorze abas de uma
-      // vez. O §2.3 do diagnóstico pedia a `Premissas`; sair pelo caminho comum
-      // custa o mesmo e não deixa aba de segunda classe.
-      const proveniencias = provenienciaPorLinha(valores, anosHistoricos);
-      const linhasModelo: LinhaModelo[] = ((linhasRes.data ?? []) as unknown as Array<{
-        secao_canonica: string | null; chave: string; rotulo_norm: string;
-        papel: LinhaModelo["papel"]; unidade: string | null; moeda: string | null;
-        documentos: string[] | null;
-      }>).map((l) => ({
-        secao_canonica: l.secao_canonica, chave: l.chave, rotulo_norm: l.rotulo_norm,
-        papel: l.papel, unidade: l.unidade, moeda: l.moeda, documentos: l.documentos,
-        valores: serieDaLinha(series, l.secao_canonica, l.rotulo_norm),
-        proveniencia: provenienciaDaLinha(proveniencias, l.secao_canonica, l.rotulo_norm),
-      }));
+      const linhasModelo: LinhaModelo[] = historico.linhas;
 
       // A base macro do modelo: realizado + Focus, com a fonte de cada célula.
       //
@@ -555,16 +486,6 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         })),
       ];
 
-      // Unidade dominante: a das linhas, não um palpite. Se o caso mistura milhar
-      // e unidade, a dominante entra no cabeçalho e a divergência aparece por
-      // linha (cada célula histórica leva a sua unidade em nota).
-      const contagemUnidade = new Map<string, number>();
-      for (const l of linhasModelo) {
-        if (!l.unidade) continue;
-        contagemUnidade.set(l.unidade, (contagemUnidade.get(l.unidade) ?? 0) + 1);
-      }
-      const unidadeDominante = [...contagemUnidade.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-
       modeloInstitucional = {
         caso: { nome: caso.nome, produto: caso.produto },
         agora: new Date(),
@@ -584,8 +505,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
           sazonalidade_codigo: v.sazonalidade_codigo,
         })),
         macro: macroModelo,
-        unidade: unidadeDominante === "milhar" ? "R$ mil"
-          : unidadeDominante === "unidade" ? "R$" : (unidadeDominante ?? "R$"),
+        unidade: historico.unidade,
       };
     }
   }

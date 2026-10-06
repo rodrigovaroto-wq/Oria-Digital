@@ -149,6 +149,18 @@ if ! grep -qF "$ultima" ESTADO.md; then
   echo "   Atualize o ESTADO.md — ele é o que alguém lê para saber onde o projeto está."
   exit 1
 fi
+# E A DECLARAÇÃO NÃO PODE MENTIR. O `grep` acima passa com o nome em QUALQUER lugar do arquivo — e
+# dois PRs com migration abertos ao mesmo tempo produzem exatamente o caso que ele não vê: medido no
+# merge simulado do #252 (0199–0204) com o #253 (0205) em 05/10/2026, o topo dizia "Migration mais
+# nova: 0204" e o portão passava porque a seção do #253, mais abaixo, citava a 0205. Toda linha que
+# DECLARA a mais nova tem de citar a de verdade; arquivo sem declaração fica só com o grep acima.
+declaradas=$(grep -n "Migration mais nova" ESTADO.md | grep -vF "$ultima" || true)
+if [ -n "$declaradas" ]; then
+  echo "FALHOU: o ESTADO.md declara como mais nova uma migration que não é a $ultima:"
+  echo "$declaradas" | cut -c1-160 | sed 's/^/   /'
+  echo "   Depois de um merge de dois PRs com migration, o topo tem de passar a citar a $ultima."
+  exit 1
+fi
 echo "   $ultima"
 
 # A 0163 nasceu porque a 0161/0162 patchavam fn_registrar_diagnostico por
@@ -400,6 +412,36 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/faturamento_mes_na_coluna.test
 echo
 echo "== a faixa de anos que perdia o ano do meio (0198): multi 2024-2026"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/faixa_de_anos_do_periodo.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== a série por ano que lia movimento e abertura como saldo (0199): Débito, Saldo Inicial, balancete, contrato social"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/serie_por_ano_movimento_e_abertura.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== o balancete semestral que entrava por cima do balanço anual (0200): parcial só no ano sem anual da família"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/serie_por_ano_balancete_sob_balanco_anual.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== o realizado que não lia Saldo Final nem Saldo atual (0201): BALANCO/DRE anuais entram, mesma conta da série"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/realizado_le_saldo_final_e_atual.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== o total com código contábil que virava conta (0202): o papel é o do nome, não o do código do ERP"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/papel_total_com_codigo_contabil.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== a seção que a IA não deu e a linha que sumia do realizado (0203): inferida da seção bruta, marcada, sem sobrescrever"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/secao_inferida_da_secao_bruta.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== a seção que o documento já dizia pela árvore (0204): herdada do pai e das irmãs, sem topo/total, conflito fica NULL"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/secao_herdada_pela_arvore.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo

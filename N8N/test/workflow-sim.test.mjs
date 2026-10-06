@@ -707,7 +707,9 @@ test('Parse Extracao: resposta truncada (finish_reason=length, JSON incompleto) 
 test('Parse Extracao: erro da API OpenAI vira falha_motivo (não silencioso)', async () => {
   const req = { json: { documento_versao_id: 'ver-4', tipo: 'BALANCO', ia_body: {} } };
   const respostaOpenAI = { json: { error: { message: 'Rate limit reached', code: 'rate_limit_exceeded' } } };
-  const parsed = await run('Parse Extracao', { item: respostaOpenAI, refs: { 'Montar Req Extracao': req } });
+  // Estágio TERMINAL: nas tentativas anteriores o 429 de cadência é repetido, e só
+  // ao esgotar o teto o motivo vira pendência (ver os testes de repetição).
+  const parsed = await run('Parse Extracao (tentativa 4)', { item: respostaOpenAI, refs: { 'Esperar Retry 3': req } });
   assert.equal(parsed.json.campos.length, 0);
   assert.match(parsed.json.falha_motivo, /Rate limit reached/);
 });
@@ -1528,7 +1530,9 @@ test('Modos e referências: cada node Code no modo certo; toda $(ref) existe no 
       // de `Medir Documento` — o mesmo motivo de `Juntar Blocos`, um nível acima.
       if (['Listar Arquivos', 'Orcamento do Lote', 'Abortar Lote', 'Resumo de Custo',
         'Fatiar Extracao', 'Juntar Blocos', 'Recompor Contexto',
-        'Recompor Conteudo Extraido', 'Agrupar Linhas XLSX', 'Agrupar Linhas XLS'].includes(n.name)) {
+        'Recompor Conteudo Extraido', 'Agrupar Linhas XLSX', 'Agrupar Linhas XLS'].includes(n.name)
+        // A espera entre tentativas é UMA para todos os blocos que falharam.
+        || /^Esperar Retry \d+$/.test(n.name)) {
         assert.equal(n.parameters.mode, 'runOnceForAllItems', `${n.name} enxerga o lote inteiro`);
       } else {
         assert.equal(n.parameters.mode, 'runOnceForEachItem', `${n.name} é transformação 1:1`);
@@ -1568,13 +1572,13 @@ test('os nós de parse carregam o MESMO diagnosticarErroApi de lib/extract.mjs',
 test('Parse Extracao: 429 sem corpo vira causa nomeada; quota diz que espaçar não resolve', async () => {
   const req = { json: { documento_versao_id: 'ver-9', tipo: 'BALANCO', ia_body: {} } };
   const soDica = { json: { error: { message: "Try spacing your requests out using the batching settings under 'Options'" } } };
-  const p1 = await run('Parse Extracao', { item: soDica, refs: { 'Montar Req Extracao': req } });
+  const p1 = await run('Parse Extracao (tentativa 4)', { item: soDica, refs: { 'Esperar Retry 3': req } });
   assert.equal(p1.json.campos.length, 0);
   assert.match(p1.json.falha_motivo, /HTTP 429/);
   assert.match(p1.json.falha_motivo, /não disse QUAL/, 'não afirma cadência sem evidência');
 
   const comQuota = { json: { error: { httpCode: '429', cause: { error: { type: 'insufficient_quota', message: 'You exceeded your current quota' } } } } };
-  const p2 = await run('Parse Extracao', { item: comQuota, refs: { 'Montar Req Extracao': req } });
+  const p2 = await run('Parse Extracao', { item: comQuota, refs: { 'Fatiar Extracao': req } });
   assert.match(p2.json.falha_motivo, /SEM CRÉDITO OU SEM COBRANÇA ATIVA/);
   assert.match(p2.json.falha_motivo, /NÃO resolve/, 'diz explicitamente o que não resolve');
   assert.match(p2.json.falha_motivo, /insufficient_quota/, 'o detalhe técnico vai junto');
@@ -2857,7 +2861,10 @@ test('6164: os nós Postgres depois do fatiamento leem do PRÓPRIO item', () => 
 test('Topologia das três camadas: fan-out e volta, com o resto do grafo intacto', () => {
   assert.deepEqual(wf.connections['Montar Req Extracao'].main[0].map((c) => c.node), ['Fatiar Extracao']);
   assert.deepEqual(wf.connections['Fatiar Extracao'].main[0].map((c) => c.node), ['IA Extrair']);
-  assert.deepEqual(wf.connections['Parse Extracao'].main[0].map((c) => c.node), ['Juntar Blocos']);
+  // O Parse não vai mais direto ao Juntar Blocos: passa pelos estágios de repetição
+  // e TODOS os caminhos convergem num Merge que alimenta o Juntar UMA vez.
+  assert.deepEqual(wf.connections['Parse Extracao'].main[0].map((c) => c.node), ['Repetir Extracao 1?']);
+  assert.deepEqual(wf.connections['Juntar Tentativas'].main[0].map((c) => c.node), ['Juntar Blocos']);
   // O ponto do desenho: de `Gravar Campos` em diante nada muda. O contrato do
   // banco (um item por documento, com `campos` e `falha_motivo`) é o mesmo.
   assert.deepEqual(wf.connections['Juntar Blocos'].main[0].map((c) => c.node), ['Gravar Campos (Sombra)']);

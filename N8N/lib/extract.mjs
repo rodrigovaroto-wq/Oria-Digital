@@ -1144,13 +1144,93 @@ export function diagnosticarErroApi(erro) {
       ? `n8n="${String(mensagemBruta).slice(0, 200)}"` : null,
   ].filter(Boolean).join(' ');
 
+  // TRANSITÓRIA = repetir a MESMA chamada, depois de esperar, pode dar certo.
+  // Execução 8433 (Fw Valtra, 05/10/2026): de 5 pendências `extracao_falhou`, 3 eram
+  // desta natureza (2 de `limite_cadencia`, 1 de resposta vazia) e cada uma deixou
+  // um documento incompleto no banco (2.541, 2.040 e 798 pares gravados) porque o
+  // bloco foi chamado UMA vez só. Transitório: cadência por minuto, 429 sem causa
+  // reconhecível (pode ser cadência; esgotar o teto de tentativas custa ~150 s, e
+  // dar o bloco por perdido custa o documento), 408/5xx, e erro SEM status (queda
+  // de rede). Permanente: crédito, cota do DIA, teto de gasto, chave, modelo e
+  // qualquer outro 4xx (400 = pedido recusado; repetir manda o mesmo pedido).
+  const CAUSAS_TRANSITORIAS = ['limite_cadencia', 'limite_indeterminado'];
+  // `neverError` entrega o corpo de um 400 SEM status em campo nenhum (só
+  // `{error:{type:'invalid_request_error',...}}`), então "sem status" sozinho não
+  // quer dizer rede: só vale quando também não há `type`/`code` do provedor.
+  // Assinaturas de servidor/rede cobrem o corpo de 5xx que também chega sem status.
+  const assinaturaDeServidorOuRede = tem('server_error', 'overloaded', 'service unavailable',
+    'unavailable', 'internal error', 'deadline_exceeded', 'timed out', 'timeout', 'econnreset',
+    'etimedout', 'econnrefused', 'socket hang up', 'bad gateway', 'gateway time-out', 'enotfound');
+  const transitoria = CAUSAS_TRANSITORIAS.includes(causa)
+    || (causa === 'desconhecida'
+      && !(status >= 400 && status < 500 && status !== 408)
+      && (status === 408 || status >= 500 || assinaturaDeServidorOuRede
+        || (status === null && !tipo && !codigo)));
+  // QUANTO O PROVEDOR MANDA ESPERAR. O header (`retry-after`, em segundos) quase
+  // nunca chega com `neverError` (o corpo chega, os headers não — ver acima), mas a
+  // OpenAI escreve o mesmo número na mensagem ("Please try again in 6.8s",
+  // "in 1m3.2s", "in 250ms") e o Google em "Please retry in 24.5s". Em segundos,
+  // arredondado para cima; null quando não diz.
+  const esperaDoTexto = (t) => {
+    const trecho = /(?:try again|retry) in\s+([\d.ms]+)/i.exec(String(t || ''));
+    if (!trecho) return null;
+    const token = trecho[1].toLowerCase();
+    const minutos = /^(\d+(?:\.\d+)?)m(?!s)/.exec(token);
+    const depois = minutos ? token.slice(minutos[0].length) : token;
+    const unidade = /^(\d+(?:\.\d+)?)(ms|s)/.exec(depois);
+    if (!minutos && !unidade) return null;
+    let segundos = minutos ? Number(minutos[1]) * 60 : 0;
+    if (unidade) segundos += unidade[2] === 'ms' ? Number(unidade[1]) / 1000 : Number(unidade[1]);
+    return Math.ceil(segundos);
+  };
+  const esperaDoHeader = (v) => (v !== null && /^\d+(\.\d+)?$/.test(String(v)) ? Math.ceil(Number(v)) : esperaDoTexto(`retry in ${v}`));
+  const esperaSugeridaS = (esperar !== null ? esperaDoHeader(esperar) : null)
+    ?? esperaDoTexto(`${mensagemOpenAI ?? ''} ${mensagemBruta ?? ''}`);
+
   return {
     causa,
     status,
     tipo,
     codigo,
+    transitoria,
+    esperaSugeridaS,
     mensagem: mensagemOpenAI ?? mensagemBruta ?? null,
     motivo: detalhes ? `${motivo} [${detalhes}]` : motivo,
+  };
+}
+
+// O TETO DE TENTATIVAS POR BLOCO, e a conta que o sustenta. Auto-contida (o nó
+// Code embute o `toString()`), como `diagnosticarErroApi`.
+//
+//   4 tentativas = a original + 3 repetições, com espera ANTES de cada repetição
+//   de 30 s, 60 s e 60 s (150 s no pior bloco).
+//
+// Por que 60 s de teto por espera: o limite que mais aparece é o de TOKENS POR
+// MINUTO, e o balde se recompõe em 60 s — esperar menos que isso repete o 429 e
+// esperar mais não ganha nada. Também é o que mantém o `Esperar Retry` dentro do
+// tempo de uma tarefa do Code node (300 s por padrão no task runner).
+// O custo no relógio: cada estágio espera UMA vez para todos os blocos que falharam
+// nele (não uma por bloco) e depois refaz as chamadas na cadência normal da
+// extração. Execução 7851 (49 documentos) levou 1.237 s; um lote em que NENHUM bloco
+// falha não gasta um segundo a mais, e um em que todos falham o tempo todo ganha no
+// máximo 3 × (60 s + blocos × 6 s) — só quando o provedor está de fato fora.
+//
+// Devolve { repetir, esperaS, maxTentativas, esgotou }. `tentativa` é a que ACABOU
+// de falhar (1 = a original). `esgotou` = era transitória e não há mais tentativa:
+// é o único caso em que a pendência `extracao_falhou` por causa transitória é honesta.
+export function decidirRepeticao({ transitoria = false, tentativa = 1, esperaSugeridaS = null } = {}) {
+  const MAX_TENTATIVAS = 4;
+  const ESPERAS_S = [30, 60, 60];
+  const TETO_ESPERA_S = 60;
+  const n = Number.isInteger(tentativa) && tentativa >= 1 ? tentativa : 1;
+  const sobra = n < MAX_TENTATIVAS;
+  const piso = ESPERAS_S[Math.min(n, ESPERAS_S.length) - 1];
+  const pedida = Number.isFinite(esperaSugeridaS) && esperaSugeridaS > 0 ? esperaSugeridaS : 0;
+  return {
+    repetir: Boolean(transitoria) && sobra,
+    esperaS: Math.min(TETO_ESPERA_S, Math.max(piso, pedida)),
+    maxTentativas: MAX_TENTATIVAS,
+    esgotou: Boolean(transitoria) && !sobra,
   };
 }
 

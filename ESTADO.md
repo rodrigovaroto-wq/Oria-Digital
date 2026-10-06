@@ -1,5 +1,78 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
+
+> **Migration mais nova: `0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
+> herda a seção do pai (a linha cuja chave é o nome da seção bruta dela) e das irmãs, desde que concordem.
+> Conflito fica NULL e é contado. A herança é recursiva e nunca vem de topo ou total. Ela fecha o
+> resíduo do AC do Fw Valtra: CAIXA MATRIZ, DUPLICATAS A RECEBER e OUTROS CRÉDITOS estavam fora da soma
+> (3,75 mi em 2025).
+> **`0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql`.** Quando o LLM
+> devolve `secao_canonica` nula, a seção bruta passa a decidir pelas regras determinísticas e
+> conservadoras: só os casos inequívocos ganham seção, e os ambíguos ficam NULL. A coluna
+> `secao_canonica_inferida` marca essas linhas. O backfill cobre as linhas existentes. Medido no
+> Fw Valtra: a DRE 2025 tinha 136 de 724 linhas sem seção, e a receita do realizado saía 235.650 em
+> vez de ~43,85 mi. Depois de aplicar, rodar `fn_reconciliar_caso` nos casos tocados.
+> **`0202_o_total_com_codigo_contabil_que_virava_conta.sql`.** O TOTAL com código
+> contábil na frente ("2.3.71 TOTAL") deixava de ser subtotal e dobrava a dívida do mapa (102.600 contra
+> 51.300 no arnês). Com a correção, o arnês de variações vai de 1 achado para 0.
+> **`0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql`:** as sugestões do realizado passam a ler
+> "Saldo Final/atual". Era isso que deixava a tela de modelagem do Fw Valtra sem nenhuma sugestão.
+> Detalhe no commit.
+>
+> **`0200_o_balancete_semestral_que_entrava_por_cima_do_balanco_anual.sql`** (aplicada em produção).
+> A `0199` (aplicada em produção em 05/10, 182/0 na sonda) decidia "parcial entra se é a única fonte"
+> POR RÓTULO, e as contas analíticas do balancete semestral entravam por cima do balanço anual. O
+> resíduo do AC no Fw Valtra foi a −36 mi (2024) e −47 mi (2025). A 0200 decide por ano e família de
+> demonstração: com balanço anual no ano, o balancete parcial não contribui. Teste com 17 asserts;
+> 6 reprovam com o filtro desligado e 10 com a regra ao contrário.
+>
+> **Anterior: `0199_a_serie_por_ano_que_lia_movimento_e_abertura_como_saldo.sql`.**
+> `fn_valores_por_ano` montava a série (rótulo, seção, ano) com o MAIOR |valor| entre todas as
+> colunas e documentos do ano. No caso real Fw Valtra (`03a66ab6`, MOTO AGRICOLA VOLKWEIS LTDA):
+> - o Débito do balancete semestral virou o ATIVO de 2025: 125,86 mi contra 38,48 mi no balanço;
+> - Saldo Inicial/anterior era lido como o ano corrente;
+> - linhas do contrato social entravam no PL.
+>
+> O balanço não fechava em ~90,5 mi. Agora movimento fica fora, abertura vale para ano−1, o anual
+> vence o parcial e os tipos Societário/Garantias ficam fora. Teste com 21 asserts: 19 reprovam com a
+> correção desligada. A ingestão do caso (execução 8433) provou que o n8n republicado grava no banco.
+> A modelagem foi entregue ao dono (v2: `auditar-xlsx` 10/11, balanço fecha nas 9 colunas).
+> Detalhe: HANDOFF S105 §2c.
+
+## SESSÃO 105 (05/10/2026) — PR #251 mergeado: três decisões do dono fechadas no export
+
+> **Produção conferida só leitura em 05/10:** Supabase em `0198`
+> (`0198_a_faixa_de_anos_que_perdia_o_ano_do_meio.sql`, 181/0 ausentes); n8n de ingestão 42/42 nós e
+> de erros 3/3 iguais ao repositório; portal (Vercel) = `4b536bc`, o merge do #251. Nenhuma execução
+> da ingestão desde a republicação de 01/10: o próximo mandato é a prova de que o n8n grava no banco.
+>
+> **Decidido pelo dono e implementado (#251):**
+> 1. **Estoque (PME) gira contra CUSTO**, não receita (`59ddcb8`): `giraContraCusto` é o único ponto
+>    que escolhe a base; a sugestão do realizado é estoques ÷ custos × 360. 11 asserts reprovam sem.
+> 2. **"Capital de giro" no PASSIVO é dívida, com ou sem credor** (`01430ea`, `9277bed`): CPC 00/39/48;
+>    fora só os termos analíticos (necessidade/variação do capital de giro, capital de giro
+>    líquido/próprio). Canastra: CP 14.500/21.900 e LP 28.800/3.800 (2023/2025) entram na dívida.
+> 3. **"Capital de giro Caixa"**: resolvido pelo item 2 (a linha é dívida pelo produto); "caixa"
+>    sozinho segue fora de `CREDORES`.
+>
+> Em aberto: HANDOFF S105 §2 (itens 3–5) e §3. Novo: no Vertentes o custo projetado de 2026 (61.193) cai
+> muito abaixo do realizado de 2025 (101.300) com a receita subindo — não investigado. O §1 (book do
+> Krauspenhar baixado do portal publicado) segue por fazer: falta `PORTAL_EMAIL`/`PORTAL_SENHA`.
+
+> **ACHADO ABERTO (05/10, bateria local completa) — corrigir ANTES de confiar na dívida de um balancete
+> de ERP.** Toda a lista do CLAUDE.md passou, mas o arnês de variações acha 1 defeito e sai 0 (o CI não
+> reprova): na variante `codigo_contabil_no_rotulo`, a dívida vai de 11.114 a 0 na virada para o
+> projetado. É PRÉ-EXISTENTE: reproduz igual no `955ff77`. Causa medida pelo agente (parado a pedido
+> do dono, antes de validar): `fn_papel_linha` ancora "total" no INÍCIO do rótulo, e "2.3.71 TOTAL —
+> saldo devedor" vira `conta`. A linha de TOTAL do Mapa de Dívida entra como tranche e a dívida dobra:
+> 102.600 onde o documento diz 51.300; CP 2024 46.924 contra 23.462. O revolver engole a diferença e
+> zera. O patch proposto, NÃO validado, está em `Arquitetura do Sistema/3 Estado e Execução/patches/
+> s105-total-com-codigo-no-mapa-de-divida.patch`: o portal reclassifica como subtotal o TOTAL com código
+> na frente, e o arnês dá o mesmo código à mesma conta em todos os anos. A correção definitiva é no
+> banco: `fn_papel_linha` tirar o código antes de comparar, migration nova. Falta também fazer o arnês
+> REPROVAR quando acha (regra 7). Detalhe e roteiro: HANDOFF S105 §2b.
+
 ## SESSÃO 105 — comece pelo HANDOFF "▶ SESSÃO 105"
 
 > **A S104 está fechada.** PRs #248 e #249 mergeados no `main` (o merge do #249 é o `66ec163`, de

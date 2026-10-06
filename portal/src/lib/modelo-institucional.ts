@@ -147,6 +147,13 @@ export interface LinhaModelo {
   /** valor por ano, do histórico extraído */
   valores: Record<string, number>;
   /**
+   * A NATUREZA HERDADA DA SUBSEÇÃO do documento, marcada por `contexto()` — nunca por quem chama.
+   * Só existe quando o RÓTULO da conta não diz o que ela é (nenhum classificador de ciclo/dívida
+   * casa) e a subseção bruta em que o documento a imprime diz: "TRATORES NOVOS" dentro da
+   * subseção "ESTOQUE" é estoque. Ver `naturezaDaSubsecao`.
+   */
+  natureza?: NaturezaDeCiclo;
+  /**
    * Marcado por `contexto()`, NUNCA por quem chama: o bloco desta linha vinha do
    * documento na convenção "despesa negativa" e foi normalizado para a convenção
    * do modelo ("despesa positiva, subtraída na cascata"). Serve para a nota da
@@ -263,6 +270,12 @@ export interface EntradaModeloInstitucional {
    * marcadas como "↳ subtotal informado" e fora da soma.
    */
   subtotaisInformados?: string[];
+  /**
+   * `seção||rótulo` normalizados → natureza que a SUBSEÇÃO do documento dá à conta
+   * (`naturezaDaSubsecao`, calculada em `export.ts` sobre `campo.secao`). Só vale para a conta
+   * cujo rótulo não diz o que ela é; ver `LinhaModelo.natureza`.
+   */
+  naturezaPorLinha?: Record<string, NaturezaDeCiclo>;
   /** unidade dominante das linhas (milhar/unidade), para o cabeçalho das abas */
   unidade: string;
 }
@@ -915,19 +928,39 @@ export const NOTA_GRUPO_MISTO =
 // estoque e fornecedor" com a MESMA lista, senão o dia sugerido na tela não é o
 // dia que o modelo aplica, e a diferença aparece como saldo que não reproduz o
 // balanço de onde saiu.
-export const ehCliente = (chave: string) =>
-  /\bclientes?\b/i.test(chave) || /\bcontas? a receber\b/i.test(chave)
-  || /\bduplicatas? a receber\b/i.test(chave)
-  || /\bt(í|i)tulos? a receber\b/i.test(chave) || /\btitulos? a receber\b/i.test(chave);
+// EXCLUSIVIDADE: uma conta é no máximo UMA de {cliente, estoque, fornecedor}. Caso real (Fw Valtra,
+// concessionária): "(-) MERCADORIA EM GARANTIA/CONSERTO A DEVOLVER(CLIENTE)", "(-) ESTOQUE EM
+// DEMONSTRAÇÃO COM CLIENTES A RECEBER" e "(-) MERCADORIA EM GARANTIA/CONSERTO(FORNECEDOR)" casavam
+// ehCliente/ehFornecedor E ehEstoque (medido: 11 linhas ehCliente e 31 ehEstoque no ativo
+// circulante, sobrepostas nesses rótulos) — a mesma conta entrava em PMR e PME e o vínculo de
+// premissa ficava com quem gravou por último. Rótulo que ABRE com estoque/mercadoria/produto/
+// matéria-prima é mercadoria (em poder de terceiros ou não): é estoque, e a menção a "cliente" ou
+// "fornecedor" só diz EM PODER DE QUEM. Âncora no início (e não "contém") para não regredir
+// "Fornecedores de mercadorias" (passivo), que continua fornecedor.
+const abreComMercadoria = (chave: string) =>
+  /^[\s\d.()+\-–]*(estoques?|mercadorias?|produtos?|mat[ée]ria.prima)\b/i.test(chave);
+
+// O espelho: rótulo que ABRE com fornecedor/cliente é a conta de terceiro ("Fornecedores de
+// mercadorias" é passivo; a palavra mercadoria só diz de quê).
+const abreComTerceiro = (chave: string) =>
+  /^[\s\d.()+\-–]*(fornecedor|cliente|duplicatas?|contas? a (pagar|receber))/i.test(chave);
 
 export const ehEstoque = (chave: string) =>
-  /\bestoque/i.test(chave) || /\bmercadoria/i.test(chave)
-  || /\bprodutos? (acabados?|em (elabora|processo))/i.test(chave)
-  || /\bmat(é|e)ria.prima/i.test(chave);
+  !abreComTerceiro(chave) && (
+    /\bestoque/i.test(chave) || /\bmercadoria/i.test(chave)
+    || /\bprodutos? (acabados?|em (elabora|processo))/i.test(chave)
+    || /\bmat[ée]ria.prima/i.test(chave));
+
+export const ehCliente = (chave: string) =>
+  !abreComMercadoria(chave) && (
+    /\bclientes?\b/i.test(chave) || /\bcontas? a receber\b/i.test(chave)
+    || /\bduplicatas? a receber\b/i.test(chave)
+    || /\bt[íi]tulos? a receber\b/i.test(chave) || /\btitulos? a receber\b/i.test(chave));
 
 export const ehFornecedor = (chave: string) =>
-  /\bfornecedor/i.test(chave) || /\bcontas? a pagar\b/i.test(chave)
-  || /\bduplicatas? a pagar\b/i.test(chave);
+  !abreComMercadoria(chave) && (
+    /\bfornecedor/i.test(chave) || /\bcontas? a pagar\b/i.test(chave)
+    || /\bduplicatas? a pagar\b/i.test(chave));
 
 // A BASE DO GIRO DE CADA CONTA, num ponto só: fornecedor (PMP) e ESTOQUE (PME) giram contra
 // CUSTO; cliente e o resto do ativo giram contra RECEITA LÍQUIDA. Decisão do dono em
@@ -935,8 +968,43 @@ export const ehFornecedor = (chave: string) =>
 // projeção e o indicador discordavam). `nomeBase`, `baseDe` e a sombra por cenário leem esta
 // função — se uma delas escolhesse sozinha, os dias do realizado e o saldo projetado
 // deixariam de usar o mesmo denominador e o 1º ano projetado saltaria.
-export const giraContraCusto = (pref: "wc_a" | "wc_p", chave: string) =>
-  pref === "wc_p" ? ehFornecedor(chave) : ehEstoque(chave);
+export const giraContraCusto = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
+  pref === "wc_p" ? ehFornecedorL(l) : ehEstoqueL(l);
+
+// A NATUREZA HERDADA DA SUBSEÇÃO — o ponto único que o modelo e as sugestões do realizado leem.
+//
+// O DEFEITO (Fw Valtra, produção): o balanço imprime a subseção "ESTOQUE" com 59 contas cujos
+// rótulos são os ITENS ("TRATORES NOVOS", "IMPLEMENTOS"…), e "CLIENTES" com "DUPLICATAS A
+// RECEBER". Os classificadores acima olham só o rótulo da conta, então o estoque somado saiu
+// 0 / 445.866 / 3.840.309 onde o balanço diz 12.319.473,90 / 18.801.847,59 / 26.420.390,24, e o
+// cabeçalho "ESTOQUE" (com o total) saía como subtotal. O PME do modelo só se aplicava às linhas
+// que o rótulo reconhecia. A informação estava nos campos (`secao`), e agora chega aqui.
+//
+// REGRA: o rótulo manda. A subseção só decide quando NENHUM classificador de ciclo/dívida casa o
+// rótulo (uma conta "(-) ESTOQUE EM DEMONSTRAÇÃO COM CLIENTES" dentro de "CLIENTES" continua
+// estoque — exclusividade do ciclo). E a subseção tem de ser inequívoca: casar duas naturezas
+// ("Estoques e clientes") não decide nada.
+export type NaturezaDeCiclo = "estoque" | "cliente" | "fornecedor" | "divida";
+
+export function naturezaDaSubsecao(secao: string | null | undefined): NaturezaDeCiclo | null {
+  if (!secao) return null;
+  const achadas: NaturezaDeCiclo[] = [];
+  if (ehEstoque(secao)) achadas.push("estoque");
+  if (ehCliente(secao)) achadas.push("cliente");
+  if (ehFornecedor(secao)) achadas.push("fornecedor");
+  if (ehDividaFinanceira(secao)) achadas.push("divida");
+  return achadas.length === 1 ? achadas[0] : null;
+}
+
+const rotuloDizAlgumaNatureza = (chave: string) =>
+  ehEstoque(chave) || ehCliente(chave) || ehFornecedor(chave) || ehDividaFinanceira(chave);
+
+// Versões sobre a LINHA: a herdada vale só se a linha a trouxe (o rótulo não diz nada); senão, o rótulo.
+export const ehEstoqueL = (l: LinhaModelo) => l.natureza ? l.natureza === "estoque" : ehEstoque(l.chave);
+export const ehClienteL = (l: LinhaModelo) => l.natureza ? l.natureza === "cliente" : ehCliente(l.chave);
+export const ehFornecedorL = (l: LinhaModelo) => l.natureza ? l.natureza === "fornecedor" : ehFornecedor(l.chave);
+export const ehDividaFinanceiraL = (l: LinhaModelo) =>
+  l.natureza ? l.natureza === "divida" : ehDividaFinanceira(l.chave);
 
 // LUCROS RETIDOS, dentro do patrimônio líquido. Existe para o X2 do Altman, e é
 // lista fechada pelo mesmo motivo dos outros: `reserva de capital` e `ajuste de
@@ -1132,6 +1200,11 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     if (!subtotaisPorAno.has(k)) subtotaisPorAno.set(k, new Set());
     subtotaisPorAno.get(k)!.add(ano);
   }
+  const naturezaPorChave = new Map<string, NaturezaDeCiclo>();
+  for (const [r, n] of Object.entries(ent.naturezaPorLinha ?? {})) {
+    const [secao, rotulo] = r.split("||");
+    naturezaPorChave.set(`${chaveDeAncora(secao ?? "")}||${chaveDeAncora(rotulo ?? "")}`, n);
+  }
   const chavesDaLinha = (l: LinhaModelo) => {
     const secao = chaveDeAncora(l.secao_canonica ?? "");
     return [`${secao}||${chaveDeAncora(l.rotulo_norm)}`, `${secao}||${chaveDeAncora(l.chave)}`];
@@ -1206,8 +1279,12 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     // SUBTOTAL FORA DA SOMA. Ele continua no arquivo (a aba analítica o mostra
     // marcado) e continua servindo de âncora acima — só não entra como conta.
     if (ehSubtotalEstrutural(l)) continue;
-    const lSoma = semOsAnosDeSubtotal(l);
-    if (lSoma === null) continue;
+    const lSemSub = semOsAnosDeSubtotal(l);
+    if (lSemSub === null) continue;
+    const herdada = rotuloDizAlgumaNatureza(l.chave) || rotuloDizAlgumaNatureza(l.rotulo_norm)
+      ? undefined
+      : chavesDaLinha(l).map((k) => naturezaPorChave.get(k)).find((n) => n !== undefined);
+    const lSoma = herdada ? { ...lSemSub, natureza: herdada } : lSemSub;
     const b = blocoDaLinha(lSoma);
     if (!linhasPorBloco.has(b)) linhasPorBloco.set(b, []);
     linhasPorBloco.get(b)!.push(lSoma);
@@ -1478,6 +1555,91 @@ function contexto(ent: EntradaModeloInstitucional): Ctx {
     ultimoHist: hist[hist.length - 1] ?? proj[0] - 1,
     blocosInvertidos, ancoras,
   };
+}
+
+// =============================================================================
+// O REALIZADO AGREGADO — as somas históricas que o modelo usa, expostas a quem precisa delas
+// fora da planilha (as sugestões de premissa da tela de Modelagem).
+//
+// O DEFEITO QUE ISTO CORRIGE. As sugestões somavam `fn_linhas_do_realizado` por seção, e uma
+// soma por seção não conhece a hierarquia: a DRE e o balanço do documento trazem o total do
+// grupo e as filhas (e os netos) na mesma seção. Medido em produção (Fw Valtra, 2025): PMR de
+// 120 dias onde o documento dá ~40, SG&A de 34,9% onde dá 17,9%, e a chamada levou ~4 minutos.
+// A hierarquia só se resolve pela ordem impressa e pela prova aritmética que `contexto` já
+// faz para o export — então a soma sai DAQUI, de `linhasPorBloco`, e não de uma segunda
+// classificação. Uma implementação da mesma conta.
+// =============================================================================
+export interface BolsaDoExercicio {
+  valor: number;
+  /** quantas linhas com valor neste exercício compuseram a soma (0 = a conta não existe) */
+  n: number;
+}
+
+export interface AgregadosDoExercicio {
+  ano: number;
+  receitaBruta: BolsaDoExercicio;
+  deducoes: BolsaDoExercicio;
+  custos: BolsaDoExercicio;
+  sga: BolsaDoExercicio;
+  tributos: BolsaDoExercicio;
+  despesaFinanceira: BolsaDoExercicio;
+  /** o resultado financeiro COM sinal (despesa e rendimento), que entra no LAIR */
+  financeiroComSinal: number;
+  clientes: BolsaDoExercicio;
+  estoques: BolsaDoExercicio;
+  fornecedores: BolsaDoExercicio;
+  divida: BolsaDoExercicio;
+  passivoTotal: BolsaDoExercicio;
+  /** ativo circulante + não circulante: a régua de materialidade de dívida e despesa financeira */
+  ativoTotal: BolsaDoExercicio;
+}
+
+/**
+ * Os agregados de cada exercício histórico da entrada, na escala do modelo, sobre as MESMAS
+ * linhas que as abas do modelo somam (subtotal e cabeçalho de grupo já fora, sinal de despesa
+ * normalizado). Magnitude por linha: o sinal é convenção de partida dobrada do documento.
+ */
+export function agregadosDoRealizado(ent: EntradaModeloInstitucional): AgregadosDoExercicio[] {
+  const ctx = contexto(ent);
+  return ctx.hist.map((ano) => {
+    const somar = (
+      blocos: BlocoModelo[], filtro: (l: LinhaModelo) => boolean = () => true,
+    ): BolsaDoExercicio => {
+      let valor = 0; let n = 0;
+      for (const b of blocos) {
+        for (const l of ctx.linhasPorBloco.get(b) ?? []) {
+          if (!filtro(l)) continue;
+          const v = valorNaEscalaSemAviso(l, ano, ent.unidade);
+          if (v === null) continue;
+          valor += Math.abs(v.valor); n += 1;
+        }
+      }
+      return { valor, n };
+    };
+    let financeiroComSinal = 0;
+    for (const l of ctx.linhasPorBloco.get("resultado_financeiro") ?? []) {
+      const v = valorNaEscalaSemAviso(l, ano, ent.unidade);
+      if (v !== null) financeiroComSinal += v.valor;
+    }
+    const passivos: BlocoModelo[] = ["passivo_circulante", "passivo_nao_circulante"];
+    return {
+      ano,
+      receitaBruta: somar(["receita"]),
+      deducoes: somar(["deducao"]),
+      custos: somar(["custo"]),
+      sga: somar(["sga"]),
+      tributos: somar(["tributos"]),
+      despesaFinanceira: somar(["resultado_financeiro"], (l) => ehDespesaFinanceira(l.chave)),
+      financeiroComSinal,
+      clientes: somar(["ativo_circulante"], (l) => ehClienteL(l)),
+      estoques: somar(["ativo_circulante"], (l) => ehEstoqueL(l)),
+      fornecedores: somar(["passivo_circulante"], (l) => ehFornecedorL(l)),
+      divida: somar([...passivos, "divida"],
+        (l) => ehDividaFinanceiraL(l) || l.documentos?.includes("MAPA_DIVIDA") === true),
+      passivoTotal: somar(passivos),
+      ativoTotal: somar(["ativo_circulante", "ativo_nao_circulante"]),
+    };
+  });
 }
 
 // =============================================================================
@@ -3088,12 +3250,12 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   // O estoque é giro (fica aqui), mas é identificado à parte porque a LIQUIDEZ
   // SECA do Output precisa dele: num mandato de reestruturação o estoque é o
   // ativo circulante que menos vira caixa.
-  const estoques = ativos.filter((l) => ehEstoque(l.chave));
+  const estoques = ativos.filter((l) => ehEstoqueL(l));
   // CLIENTES, pela mesma razão e para o mesmo destino: o CICLO DE CAIXA do
   // `Output` precisa do recebível isolado. `Arquitetura do Sistema/2 Especificação/f0/08` lista PMR/PME/PMP como
   // faseados "até a extração isolar as linhas-conceito" — e o giro já as isola
   // aqui para aplicar dias, então o que faltava era publicar o espelho.
-  const clientes = ativos.filter((l) => ehCliente(l.chave));
+  const clientes = ativos.filter((l) => ehClienteL(l));
   // A dívida bancária de curto prazo também não é giro: ela vive no
   // `ST Inv. & Debt`. Deixá-la aqui faria o passivo operacional carregar dívida,
   // e a NCG passaria a "melhorar" quando a empresa se endivida mais.
@@ -3103,12 +3265,12 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   // é o contrário do que acontece. Quem o projeta é a aba `Tributos a Recolher`, e o
   // balanço lê o espelho dela.
   const passivos = (ctx.linhasPorBloco.get("passivo_circulante") ?? [])
-    .filter((l) => !ehDividaFinanceira(l.chave))
+    .filter((l) => !ehDividaFinanceiraL(l))
     .filter((l) => !ehTributoARecolher(l.chave));
   const tributoFora = (ctx.linhasPorBloco.get("passivo_circulante") ?? [])
     .filter((l) => ehTributoARecolher(l.chave));
   const dividaFora = (ctx.linhasPorBloco.get("passivo_circulante") ?? [])
-    .filter((l) => ehDividaFinanceira(l.chave));
+    .filter((l) => ehDividaFinanceiraL(l));
 
   // `P18` — o espelho: é DAQUI que o `Balance Sheet` e o `Cash Flow` leem.
   g.espelho("BALANCE SHEET ACCOUNTS", [
@@ -3144,7 +3306,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   // A base de cada conta (ver o comentário longo mais abaixo). Sobe para cá porque o
   // GRUPO de uma premissa compartilhada só vale entre contas de MESMA base.
   const nomeBase = (pref: "wc_a" | "wc_p", l: LinhaModelo) =>
-    giraContraCusto(pref, l.chave) ? "custos" : "receita líquida";
+    giraContraCusto(pref, l) ? "custos" : "receita líquida";
   // `dias_de_giro` ligada a K contas é prazo do GRUPO (ver `gruposRateados`): o
   // grupo vale `dias/360 × base` e cada conta recebe a parcela histórica dela.
   const saldoGiro = (pref: "wc_a" | "wc_p") => (l: LinhaModelo) => {
@@ -3276,7 +3438,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
   // conta: fornecedor gira contra CUSTO (é o PMP de manual), ESTOQUE também (PME de manual,
   // desde 05/10/2026), o resto gira contra RECEITA LÍQUIDA.
   const baseDe = (pref: "wc_a" | "wc_p", l: LinhaModelo, ano: number) =>
-    giraContraCusto(pref, l.chave) ? g.ref("BASE_COGS", ano) : g.ref("NET_REV", ano);
+    giraContraCusto(pref, l) ? g.ref("BASE_COGS", ano) : g.ref("NET_REV", ano);
 
   for (const ano of ctx.anos) {
     const hist = !g.ehProjetado(ano);
@@ -3377,7 +3539,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
         // receita/custo daquele cenário — a sombra de `RECEITA_LIQUIDA`/`CUSTOS`
         // que a aba de receita já publica (`#v_${suf}`, sessão 54). É o mesmo
         // desenho do `CHECK_SOMBRA`: fórmula idêntica, insumo trocado.
-        const baseFonte = giraContraCusto(pref, l.chave) ? "CUSTOS" : "RECEITA_LIQUIDA";
+        const baseFonte = giraContraCusto(pref, l) ? "CUSTOS" : "RECEITA_LIQUIDA";
         for (const [suf] of CENARIOS_SUF) {
           const diasSuf = suf === "str" ? `${ch}#diasStr` : `${ch}#dias`;
           const baseSombra = g.externa("Revenues, COGS & SG&A", gRec, `${baseFonte}#v_${suf}`, ano);
@@ -3478,7 +3640,7 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
     somaOuZero(g, "ESP_ESTOQUE", ano, estoques.map((l) => g.ref(chaveLinha("wc_a", l), ano)));
     somaOuZero(g, "ESP_CLIENTES", ano, clientes.map((l) => g.ref(chaveLinha("wc_a", l), ano)));
     somaOuZero(g, "ESP_FORNEC", ano,
-      passivos.filter((l) => ehFornecedor(l.chave)).map((l) => g.ref(chaveLinha("wc_p", l), ano)));
+      passivos.filter((l) => ehFornecedorL(l)).map((l) => g.ref(chaveLinha("wc_p", l), ano)));
     g.set("ESP_PC", ano, `=${g.ref("TOTAL_PC", ano)}`, { fmt: NUM, negrito: true });
     g.set("ESP_VAR_NCG", ano, `=${g.ref("VAR_NCG", ano)}`, { fmt: NUM });
   }
@@ -3729,7 +3891,7 @@ function abaDivida(wb: ExcelJS.Workbook, ctx: Ctx, gAnual: Grade, gRec: Grade): 
   const doBalanco = [
     ...(ctx.linhasPorBloco.get("passivo_circulante") ?? []),
     ...(ctx.linhasPorBloco.get("passivo_nao_circulante") ?? []),
-  ].filter((l) => ehDividaFinanceira(l.chave));
+  ].filter((l) => ehDividaFinanceiraL(l));
   const iProjDoAno = (ano: number) => ctx.anos.indexOf(ano) - ctx.hist.length;
   const dividas = doMapa.length > 0 ? doMapa : doBalanco;
 
@@ -3772,7 +3934,7 @@ function abaDivida(wb: ExcelJS.Workbook, ctx: Ctx, gAnual: Grade, gRec: Grade): 
   // existe para evitar. Sem base para medir, 30% declarado na nota.
   const somaBancaria = (bloco: BlocoModelo, ano: number) =>
     (ctx.linhasPorBloco.get(bloco) ?? [])
-      .filter((l) => ehDividaFinanceira(l.chave))
+      .filter((l) => ehDividaFinanceiraL(l))
       .reduce((acc, l) => acc + Math.abs(valorNaEscala(l, ano, ctx.ent.unidade)?.valor ?? 0), 0);
   const saldoCP = somaBancaria("passivo_circulante", ctx.ultimoHist);
   const saldoLP = somaBancaria("passivo_nao_circulante", ctx.ultimoHist);
@@ -4564,7 +4726,7 @@ function abaFluxo(
       .filter((l) => !ehImobilizado(l.chave) && !ehCaixa(l.chave))
       .map((l) => ({ l, pref: "wc_a" as const })),
     ...(ctx.linhasPorBloco.get("passivo_circulante") ?? [])
-      .filter((l) => !ehDividaFinanceira(l.chave))
+      .filter((l) => !ehDividaFinanceiraL(l))
       .map((l) => ({ l, pref: "wc_p" as const })),
   ];
   g.linha("VAR_NCG", { sinal: "+/-", rotulo: "Variação da necessidade de capital de giro", fmt: NUM });
@@ -4734,7 +4896,7 @@ function abaBalanco(
   // projetada pela aba de dívida e entra por `DIVIDA_LP`. Listá-la aqui também a
   // contaria duas vezes — o mesmo defeito que o giro tinha.
   const pnc = (ctx.linhasPorBloco.get("passivo_nao_circulante") ?? [])
-    .filter((l) => !ehDividaFinanceira(l.chave))
+    .filter((l) => !ehDividaFinanceiraL(l))
     // Tributo e parcelamento de longo prazo entram por `TRIB_PNC`, o espelho da aba que
     // conhece o cronograma. Listá-los aqui também os contaria duas vezes.
     .filter((l) => !ehTributoARecolher(l.chave));
