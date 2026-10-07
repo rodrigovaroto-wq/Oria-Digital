@@ -120,7 +120,10 @@ export function chaveDoOriginal(casoId, hash, nome) {
   const m = /\.([A-Za-z0-9]{1,8})$/.exec(n);
   const ext = m ? '.' + m[1].toLowerCase() : '';
   if (typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash)) return casoId + '/' + hash + ext;
-  const base = n.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[_.]+|_+$/g, '').slice(0, 120);
+  let base = n.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[_.]+/, '').slice(0, 120);
+  // O _ final sai em laço, não com o regex _+$ : ele volta a tentar a cada _ de uma
+  // sequência que não termina a string (custo quadrático, Sonar S8786 no #255).
+  while (base.endsWith('_')) base = base.slice(0, -1);
   return casoId + '/' + (base || 'sem_nome');
 }
