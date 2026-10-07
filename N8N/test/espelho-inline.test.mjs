@@ -28,7 +28,7 @@ import { readFileSync } from 'node:fs';
 import { normalize } from '../lib/normalize.mjs';
 import { mergeClassification } from '../lib/merge.mjs';
 import { spreadsheetToText, colunasDaPlanilha, avisoTruncamentoPlanilha } from '../lib/spreadsheet.mjs';
-import { sha256Hex } from '../lib/hash.mjs';
+import { sha256Hex, chaveDoOriginal } from '../lib/hash.mjs';
 import {
   byteEm, casaAssinatura, trechoLatin1, saborDoZip, abasDoXlsx, pareceTexto, contarFora,
   formaDoTexto, detectarFormato,
@@ -395,6 +395,12 @@ const TABELA = [
   ] },
   { nome: 'sha256Hex', lib: sha256Hex,
     casos: [[Buffer.from('abc')], [Buffer.from('')], [Buffer.from('Ação — çãé')]] },
+  { nome: 'chaveDoOriginal', lib: chaveDoOriginal, casos: [
+    ['c-1', 'a'.repeat(64), 'BALANÇO 2025.PDF'], ['c-1', 'a'.repeat(64), 'sem extensao'],
+    ['c-1', 'a'.repeat(64), 'arquivo.tar.gz'], ['c-1', 'a'.repeat(64), 'x.extensaomuitolonga'],
+    ['c-1', null, 'BALANÇO 2025 (final).pdf'], ['c-1', 'nao-e-hash', 'DRE — 12M25.xlsx'],
+    ['c-1', null, ''], ['c-1', null, null],
+  ] },
 
   { nome: 'linhasDeConta', lib: linhasDeConta, casos: [
     ['Caixa 1.000\nCNPJ 12.345.678/0001-99\nEstoques 2.500\nPágina 1'],

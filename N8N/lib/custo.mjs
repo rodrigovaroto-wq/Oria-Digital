@@ -766,8 +766,9 @@ export function orcamentoDoLote({
 //
 // O QUE NÃO MUDA: continua sendo ANTES de qualquer chamada de IA. Entre o
 // `Medir Documento` e a primeira chamada não há gasto nenhum — o `Extrair
-// Texto` é local e o `Upload Storage` é ramo lateral (e desligado). O teto
-// continua barrando de graça.
+// Texto` é local e o `Upload Storage` é ramo lateral (religado em 07/10/2026; é
+// chamada ao Storage, não à IA: zero no gasto e zero no RPD 500). O teto continua
+// barrando de graça.
 //
 // A CALIBRAÇÃO É A MESMA de `medir-custo-book.mjs`, e agora é literalmente o
 // mesmo código: aquele script tinha estas constantes copiadas, e o único jeito

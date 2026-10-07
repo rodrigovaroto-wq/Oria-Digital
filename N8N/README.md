@@ -301,12 +301,14 @@ rejeita antes de processar o upload. Adicionar um header `apikey` com a mesma se
 (já vem como campo no node, com placeholder para editar).
 
 **Erro `Converting circular structure to JSON` / `_httpMessage closes the circle` ao rodar o
-workflow inteiro (não ao testar node a node):** **não é bug nosso** — é um problema de longa
+workflow inteiro (não ao testar node a node):** **em 07/10/2026 NÃO reproduziu** num workflow
+descartável (ver "Upload Storage — religado"), mas o editor rodando o workflow inteiro não foi
+testado. Se voltar, **não é bug nosso** — é um problema de longa
 data do próprio node HTTP Request do N8N ao lidar com dados binários em certas configurações
 (GitHub `n8n-io/n8n#3089`, `#10096`). Confirmado via console do navegador: é o **editor do
 N8N** travando ao tentar serializar os dados de execução dos nodes HTTP, não uma falha de rede
 com o Supabase/OpenAI. Limpar o cache de execução e recarregar a página **não resolve** — é
-reproduzível. Ver seção "Upload Storage — pendência conhecida" abaixo.
+reproduzível quando acontece. Ver seção "Upload Storage — religado em 07/10/2026" abaixo.
 
 **Erro `401 - "Your authentication token is not from a valid issuer"` (`invalid_issuer`) nos
 nós `IA Classificar`/`IA Extrair`:** a credencial Header Auth selecionada no node não é
@@ -353,31 +355,55 @@ Code node, nunca ler o campo `.data` direto.
 confirmar que resolveu, a `justificativa` da IA deve passar a citar algo específico do conteúdo
 (cabeçalho, rótulos de linha, estrutura de colunas), não só repetir o nome do arquivo.
 
-## Upload Storage — pendência conhecida (node desabilitado)
+## Upload Storage — religado em 07/10/2026 (estava desabilitado desde 17/07)
 
-O node **`Upload Storage` vem desabilitado por padrão** neste workflow (2026-07-17) por causa
-do bug de plataforma acima. Como ele é um **ramo lateral** (nenhum outro node depende da sua
-saída — ver teste `workflow-sim.test.mjs`), desabilitá-lo **não afeta** classificação,
-extração, completude nem pendências — só significa que a cópia do arquivo não é enviada ao
-Supabase Storage por enquanto (os arquivos originais continuam disponíveis onde foram
-enviados no Form).
+O node **`Upload Storage`** guarda o ORIGINAL de cada documento no bucket privado `documentos`.
+Ele ficou desabilitado de 17/07 a 07/10 por causa do bug "Converting circular structure to JSON"
+(`n8n-io/n8n#3089`, `#10096`). O custo de ficar desligado: **o bucket de produção tinha ZERO
+objetos** enquanto `documento_versao.arquivo_ref` gravava `caso_id/nome_original` como se o arquivo
+estivesse lá, e foi impossível reextrair os mapas da dívida dos mandatos reais por falta de
+original para baixar.
 
-**Duas alternativas para resolver, fora do HTTP Request genérico do N8N:**
+**O que foi MEDIDO em 07/10/2026**, num workflow descartável (já apagado): webhook → Code (renomeia
+o binário para `data`, monta `caso_id`/`nome_original` como `Preparar Conteudo`) → HTTP Request 4.2
+com exatamente os parâmetros do node (POST, `binaryData`, campo `data`, `x-upsert: true`):
 
-1. **Community node `n8n-nodes-supabase`** — node dedicado com operação de upload para
-   Storage, usando a lib oficial do Supabase por baixo (evita o bug do HTTP Request com
-   binário). Instalar em **Settings → Community Nodes → Install → `n8n-nodes-supabase`**
-   (funciona em instâncias self-hosted, incluindo PikaPods, sem precisar de acesso ao
-   servidor). Depois de instalado, trocar o node `Upload Storage` por ele, apontando para o
-   mesmo bucket `documentos`.
-2. **Mover o upload para o portal Vercel** (fatia futura) — usar o SDK oficial do Supabase em
-   JavaScript (`@supabase/supabase-js`) direto no backend do portal, que não tem as
-   limitações do node HTTP Request do N8N. Fica natural já que o portal também vai lidar com
-   upload em lote na fatia seguinte.
+1. **O bug de julho NÃO reproduziu.** O node rodou com binário e a execução foi salva normalmente
+   (`saveDataSuccessExecution=all`). **NÃO foi testado:** o EDITOR rodando o workflow inteiro
+   manualmente — o sintoma de julho era no editor. Conferir isso depois da republicação (ver abaixo).
+2. **Defeito novo, e a causa da mudança de chave:** nome com acento (`sonda teste ç.pdf`) devolve
+   **HTTP 400 `InvalidKey`** do Storage, mesmo com `encodeURIComponent`. Nome ASCII (`sonda
+   teste.pdf`) devolve 200 (objeto de 193 bytes, `application/pdf`). Nomes reais têm acento
+   ("BALANÇO…").
+3. **Autenticação:** credencial `httpCustomAuth` com os DOIS cabeçalhos (`apikey` e
+   `Authorization: Bearer <service_role>`), restrita ao domínio do projeto. Funcionou. Sai do node o
+   `apikey` em texto (`COLE_A_SERVICE_ROLE_KEY_AQUI`).
 
-**Para reabilitar** depois de adotar uma das alternativas: em `build-workflow.mjs`, localizar
-o node `Upload Storage` e trocar/remover `disabled: true` (ou substituir o node inteiro pelo
-community node, se for esse o caminho).
+**A chave do objeto** é `<caso_id>/<sha256 do conteúdo><.ext>` (extensão do nome original, em
+minúsculas, só se for `[a-z0-9]{1,8}`), calculada UMA vez em `Preparar Conteudo`
+(`chaveDoOriginal`, `lib/hash.mjs`) no campo `arquivo_ref`. O `Upload Storage` (URL) e o
+`Registrar Documento` (parâmetro `arquivo_ref`) leem esse mesmo campo. É ASCII por construção, e é
+a identidade da 0026: com chave por NOME, um arquivo DIFERENTE de mesmo nome sobrescreveria o
+original anterior via `x-upsert`. Só se o hash vier nulo (os dois SHA-256 falhando; nunca medido) a
+chave cai no nome saneado, e então a chave volta a ser por nome. Nada no repositório lê o formato
+antigo de `arquivo_ref` (conferido: portal, Supabase e N8N); linhas já gravadas continuam com
+`caso_id/nome` e apontam para objeto que nunca existiu.
+
+**O ramo lateral não derruba a ingestão:** o node tem `onError: continueRegularOutput`. Falha de
+upload vira item de erro e a classificação/extração seguem. Para a falha não passar por sucesso, o
+**`Resumo de Custo`** passou a dizer `originais_guardados`, `originais_sem_guarda` e
+`originais_primeiro_erro` (e uma frase no `resumo`); `null` com o aviso "NENHUM original foi
+guardado" quando o node não produziu saída. Isso vive no painel da execução do n8n. **Persistir no
+banco (coluna em `lote_execucao`, preenchida por `fn_registrar_uso_lote`) pede migration e não foi
+feito.**
+
+**Cota:** zero chamadas de IA; o RPD 500 não muda. O upload sai de `Preparar Conteudo`, antes do
+guarda de orçamento, então um lote recusado pelo orçamento já deixou os originais no bucket.
+
+**Depois de republicar:** no editor, abrir o `Upload Storage` e conferir a credencial
+`Supabase Storage (service_role)` e que o node está LIGADO; rodar o workflow inteiro pelo editor
+(o ponto não testado) e conferir que o bucket `documentos` ganhou um objeto por documento, com
+nome `<caso_id>/<hash>.<ext>`.
 
 ## Republicar sem perder o comportamento — e conferir depois
 
@@ -515,18 +541,18 @@ for outra, o número a mexer é `tpm`/`rpm` em `N8N/lib/provedor.mjs` — não o
      **API** (`https://<ref>.supabase.co/storage/v1/object/documentos/...`), **não** a URL do
      painel (`https://supabase.com/dashboard/project/<ref>/...`, que é só para humanos no
      navegador). A ref aparece em ambas as URLs; confirme também em Settings → API → Project URL.
-  2. **Credencial:** Authentication já vem como *Generic → Header Auth*; criar credencial
-     **Header Auth NOVA** (não reaproveitar a do provedor de IA!) com Name=`Authorization`,
-     Value=`Bearer <service role key>` — pegue em Settings → API → `service_role` (a chave
-     secreta, não a `anon`).
-  3. **Header `apikey`:** o gateway do Supabase exige esse header **além** do `Authorization`
-     (a credencial só injeta um). No campo **Headers** do node, junto ao `x-upsert` já
-     presente, colar a **mesma service role key** no header `apikey` (o valor já vem com um
-     placeholder `COLE_A_SERVICE_ROLE_KEY_AQUI` para editar). Sem ele, a API responde `400
-     Bad Request` mesmo com URL e credencial corretas.
-- **Sem a credencial/URL do Upload**, o node falha (e para a execução — falha explícita de
-  propósito: linha no banco apontando para arquivo inexistente seria um "falso-limpo"). Para
-  um dry-run sem storage, **desative** o node Upload Storage.
+  2. **Credencial:** *Generic → Custom Auth* (`httpCustomAuth`), nome **`Supabase Storage
+     (service_role)`**, com os DOIS cabeçalhos num JSON: `apikey` e `Authorization: Bearer
+     <service role key>` (Settings → API → `service_role`, a chave secreta, não a `anon`),
+     restrita ao domínio `<ref>.supabase.co`. Não reaproveitar a credencial do provedor de IA.
+     Não há mais header `apikey` em texto no node. Na republicação o id real vem do workflow
+     publicado ou de `N8N_CRED_IDS` (`{"Supabase Storage (service_role)":"<id>"}`); nó LIGADO com
+     `REPLACE` continua barrado pelo `republicar.sh`.
+- **Sem a credencial/URL do Upload**, o node falha, mas **não derruba a ingestão**
+  (`onError: continueRegularOutput`): o `Resumo de Custo` acusa `originais_sem_guarda` e o
+  primeiro erro. Linha no banco apontando para arquivo inexistente seria um "falso-limpo", por isso
+  o sinal existe. Para um dry-run sem storage, **desative** o node Upload Storage (e o resumo dirá
+  que nenhum original foi guardado).
 - **Sem a credencial do provedor**, os nós de IA falham mas **não derrubam o workflow**
   (`onError: continue`): o parse produz confiança 0 → pendência de classificação / extração
   vazia (fail-safe coerente com a doutrina).
@@ -624,8 +650,8 @@ Os quatro itens do feedback original estão validados de ponta a ponta com docum
   → Classificar Nome → Preparar Conteudo → (fallback por conteúdo) → Registrar Documento →
   Recomputar Completude → Extração E2 → Gravar Campos — **todos passaram** com um caso real
   (arquivos com nome/acento reais, ex. "BALANÇO ACUMULADO 2025.pdf").
-- **Upload Storage: desabilitado** por um bug de plataforma do N8N (ver seção dedicada acima)
-  — pendência de arquitetura, não de lógica.
+- **Upload Storage: religado em 07/10/2026** (ver seção dedicada acima); o editor rodando o
+  workflow inteiro ainda não foi medido com ele ligado.
 - **Caminho determinístico (nome → registro → completude): completo, testado e validado ao
   vivo** — lógica com testes unitários, funções do banco exercitadas num Postgres real, e
   confirmado no N8N real.
@@ -680,7 +706,7 @@ N8N/
 
 ## Próximas fatias
 
-- **Resolver o Upload Storage** (community node `n8n-nodes-supabase` ou mover para o portal Vercel).
+- **Persistir a falha de upload** (coluna em `lote_execucao`, via migration) — hoje ela só aparece no `Resumo de Custo`.
 - **Confirmar o roteamento por formato ao vivo** (ver "Estado honesto" acima): subir 2+
   planilhas no mesmo lote no n8n do dono e checar no banco que cada uma virou o seu próprio
   documento.

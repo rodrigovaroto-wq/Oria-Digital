@@ -113,6 +113,32 @@ test('o relatório só aponta credencial REPLACE em nó LIGADO — o desligado n
   assert.equal(pend2[0].desabilitado, false, 'nó ligado com REPLACE é o que a trava do republicar.sh segura');
 });
 
+// O `Upload Storage` REAL, religado em 07/10/2026 (antes desabilitado desde 17/07).
+// A exceção do nó DESABILITADO deixou de se aplicar a ele: agora ele é LIGADO, e
+// ligado com `REPLACE` e sem id na instalação tem de continuar BARRADO — é a trava
+// que o republicar.sh segura. A credencial `Supabase Storage (service_role)` é nova
+// (httpCustomAuth): o vivo ainda não a conhece, então só o N8N_CRED_IDS a resolve.
+test('Upload Storage REAL, ligado: sem id na instalação o REPLACE aparece (trava); com N8N_CRED_IDS resolve', () => {
+  const repo = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'workflow.e1-ingestao.json'), 'utf8'));
+  const up = repo.nodes.find((n) => n.name === 'Upload Storage');
+  assert.equal(up.disabled, undefined, 'a premissa do teste: o nó está ligado no repositório');
+  const vivo = { name: repo.name, nodes: [{ id: 'no-up', name: 'Upload Storage', type: up.type,
+    typeVersion: up.typeVersion, parameters: {}, disabled: true }], connections: {}, settings: {} };
+
+  const semId = credenciaisPendentes(prepararRepublicacao(vivo, repo));
+  const pend = semId.find((p) => p.no === 'Upload Storage');
+  assert.ok(pend, 'nó LIGADO com credencial desconhecida tem de sair pendente — senão o REPLACE vai para produção calado');
+  assert.equal(pend.desabilitado, false);
+  assert.equal(pend.nome, 'Supabase Storage (service_role)');
+
+  const comId = prepararRepublicacao(vivo, repo,
+    { idsPorNome: { 'Supabase Storage (service_role)': 'Z8T67xTWMxinqxGx' } });
+  const no = comId.nodes.find((n) => n.name === 'Upload Storage');
+  assert.equal(no.credentials.httpCustomAuth.id, 'Z8T67xTWMxinqxGx');
+  assert.equal(no.disabled, undefined, 'a republicação não pode devolver o disabled que o vivo ainda tem');
+  assert.equal(no.onError, 'continueRegularOutput', 'o ramo lateral não derruba a ingestão');
+});
+
 // ---------------------------------------------------------------------------
 // IDs DE CREDENCIAL VINDOS DE FORA — o desbloqueio da action do GitHub.
 // ---------------------------------------------------------------------------
