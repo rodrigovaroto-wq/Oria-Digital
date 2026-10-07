@@ -392,13 +392,18 @@ antigo de `arquivo_ref` (conferido: portal, Supabase e N8N); linhas já gravadas
 **O ramo lateral não derruba a ingestão:** o node tem `onError: continueRegularOutput`. Falha de
 upload vira item de erro e a classificação/extração seguem. Para a falha não passar por sucesso, o
 **`Resumo de Custo`** passou a dizer `originais_guardados`, `originais_sem_guarda` e
-`originais_primeiro_erro` (e uma frase no `resumo`); `null` com o aviso "NENHUM original foi
-guardado" quando o node não produziu saída. Isso vive no painel da execução do n8n. **Persistir no
+`originais_primeiro_erro` (e uma frase no `resumo`). "Guardado" é só o item cuja `Key` do Storage
+é `documentos/<arquivo_ref de Preparar Conteudo>`: o item de entrada devolvido intacto quando o node
+falha inteiro (sem `error`) conta como SEM GUARDA. Como a ordem dos ramos não é garantida em
+`executionOrder: v1`, o resumo consulta `$('Upload Storage').isExecuted`: se o upload ainda não
+rodou, `originais_guardados` é `null` e o texto manda conferir o bucket (nunca "nenhum guardado"). Isso vive no painel da execução do n8n. **Persistir no
 banco (coluna em `lote_execucao`, preenchida por `fn_registrar_uso_lote`) pede migration e não foi
 feito.**
 
-**Cota:** zero chamadas de IA; o RPD 500 não muda. O upload sai de `Preparar Conteudo`, antes do
-guarda de orçamento, então um lote recusado pelo orçamento já deixou os originais no bucket.
+**Cota:** zero chamadas de IA; o RPD 500 não muda. O upload sai de `Preparar Conteudo`. NÃO foi
+medido se ele roda antes ou depois do guarda de orçamento: a evidência de 27/08 (`ESTADO.md`) sugere
+que o ramo irmão anda primeiro, e como o `Abortar Lote` lança, um lote recusado talvez nunca chegue
+a guardar original.
 
 **Depois de republicar:** no editor, abrir o `Upload Storage` e conferir a credencial
 `Supabase Storage (service_role)` e que o node está LIGADO; rodar o workflow inteiro pelo editor
@@ -551,8 +556,8 @@ for outra, o número a mexer é `tpm`/`rpm` em `N8N/lib/provedor.mjs` — não o
 - **Sem a credencial/URL do Upload**, o node falha, mas **não derruba a ingestão**
   (`onError: continueRegularOutput`): o `Resumo de Custo` acusa `originais_sem_guarda` e o
   primeiro erro. Linha no banco apontando para arquivo inexistente seria um "falso-limpo", por isso
-  o sinal existe. Para um dry-run sem storage, **desative** o node Upload Storage (e o resumo dirá
-  que nenhum original foi guardado).
+  o sinal existe. Para um dry-run sem storage, **desative** o node Upload Storage (e o resumo dirá que o upload
+  não rodou e que a conferência é o bucket).
 - **Sem a credencial do provedor**, os nós de IA falham mas **não derrubam o workflow**
   (`onError: continue`): o parse produz confiança 0 → pendência de classificação / extração
   vazia (fail-safe coerente com a doutrina).

@@ -175,12 +175,19 @@ async function run(name, { item, items, refs = {}, env = {}, itemIndex = 0, bina
     // outro nó — é assim que o `Resumo de Custo` soma o lote. Mock em array
     // significa "vários itens"; mock em objeto continua sendo um item só.
     const v = refs[ref];
+    // `{ naoExecutado: true }` simula um nó que AINDA NÃO RODOU: `isExecuted` é false
+    // e ler os itens lança, como no n8n.
+    if (v && v.naoExecutado) {
+      return { isExecuted: false, first: () => { throw new Error('nó não executado'); },
+        all: () => { throw new Error('nó não executado'); }, item: undefined };
+    }
     // `{ runs: [[...], [...]] }` simula um nó que EXECUTOU MAIS DE UMA VEZ — o que
     // acontece com toda a cadeia depois do IF `Precisa Fallback?`, porque o n8n
     // roda o grafo uma vez por ramo. `.all(branch, run)` estoura quando a
     // execução não existe, e é assim que o código sabe onde parar.
     if (v && !Array.isArray(v) && Array.isArray(v.runs)) {
       return {
+        isExecuted: true,
         first: () => v.runs[0][0],
         item: v.runs[0][itemIndex],
         all: (_b, run = 0) => {
@@ -191,6 +198,7 @@ async function run(name, { item, items, refs = {}, env = {}, itemIndex = 0, bina
     }
     const lista = Array.isArray(v) ? v : [v];
     return {
+      isExecuted: true,
       first: () => lista[0],
       item: Array.isArray(v) ? lista[itemIndex] : v,
       all: (_b, run = 0) => { if (run > 0) throw new Error(`execução ${run} não existe`); return lista; },
@@ -454,26 +462,44 @@ test('Upload Storage: ligado, com credencial httpCustomAuth e sem service_role e
 test('Resumo de Custo: o upload que falhou NÃO passa por lote em que tudo foi guardado', async () => {
   // O sinal positivo do ramo lateral (regra 7): sem ele, falha de upload e sucesso
   // têm a mesma aparência, porque o nó nunca lança.
-  const refs = (uploads) => ({
+  const prep = (r) => ({ json: { caso_id: 'c', arquivo_ref: r } });
+  const refs = (upload) => ({
     'Orcamento do Lote': { json: { orcamento_estimado_usd: 0.1, orcamento_versao: 'v' } },
     'Juntar Blocos': [{ json: { custo_usd: 0.01, campos: [] } }],
     'Parse Classif': [],
-    ...(uploads ? { 'Upload Storage': uploads } : {}),
+    'Preparar Conteudo': [prep('c/h1.pdf'), prep('c/h2.pdf')],
+    'Upload Storage': upload,
   });
-  const tudoBem = await run('Resumo de Custo', { items: [{ json: {} }], refs: refs([{ json: { Key: 'documentos/c/h.pdf' } }, { json: { Key: 'documentos/c/h2.pdf' } }]) });
+  const rodar = (upload) => run('Resumo de Custo', { items: [{ json: {} }], refs: refs(upload) });
+
+  const tudoBem = await rodar([{ json: { Key: 'documentos/c/h1.pdf' } }, { json: { Key: 'documentos/c/h2.pdf' } }]);
   assert.equal(tudoBem[0].json.originais_guardados, 2);
   assert.equal(tudoBem[0].json.originais_sem_guarda, 0);
 
-  const comFalha = await run('Resumo de Custo', { items: [{ json: {} }], refs: refs([{ json: { Key: 'ok' } }, { json: { error: { message: 'InvalidKey' } } }]) });
+  const comFalha = await rodar([{ json: { Key: 'documentos/c/h1.pdf' } }, { json: { error: { message: 'InvalidKey' } } }]);
   assert.equal(comFalha[0].json.originais_guardados, 1);
   assert.equal(comFalha[0].json.originais_sem_guarda, 1);
   assert.equal(comFalha[0].json.originais_primeiro_erro, 'InvalidKey');
   assert.match(comFalha[0].json.resumo, /1 SEM GUARDA.*InvalidKey/);
 
-  // NÓ QUE NÃO PRODUZIU SAÍDA: null e aviso, nunca "0 guardados, 0 falhas".
-  const semSaida = await run('Resumo de Custo', { items: [{ json: {} }], refs: refs(null) });
-  assert.equal(semSaida[0].json.originais_guardados, null);
-  assert.match(semSaida[0].json.resumo, /NENHUM original foi guardado/);
+  // O ITEM DE ENTRADA REPASSADO INTACTO (nó inteiro falhou, p.ex. credencial apagada):
+  // sem `error`, com caso_id/arquivo_ref. NÃO é guardado.
+  const repassado = await rodar([{ json: { caso_id: 'c', arquivo_ref: 'c/h1.pdf', nome_original: 'a.pdf' } }]);
+  assert.equal(repassado[0].json.originais_guardados, 0, 'item de entrada repassado não é original guardado');
+  assert.equal(repassado[0].json.originais_sem_guarda, 1);
+  // Key de outro objeto também não prova o NOSSO original.
+  const keyAlheia = await rodar([{ json: { Key: 'documentos/outro/x.pdf' } }]);
+  assert.equal(keyAlheia[0].json.originais_sem_guarda, 1);
+
+  // AINDA NÃO RODOU (executionOrder v1 não garante a ordem dos ramos): null e texto
+  // honesto — nunca "0 guardados" nem "nenhum guardado".
+  const antes = await rodar({ naoExecutado: true });
+  assert.equal(antes[0].json.originais_upload_executou, false);
+  assert.equal(antes[0].json.originais_guardados, null);
+  assert.equal(antes[0].json.originais_sem_guarda, null);
+  assert.match(antes[0].json.resumo, /ainda nao tinha rodado.*bucket/);
+  assert.doesNotMatch(antes[0].json.resumo, /NENHUM|SEM GUARDA|0 de/);
+  assert.equal(tudoBem[0].json.originais_upload_executou, true);
 });
 
 test('Ramo fallback: Montar Req → (HTTP substitui item) → Parse recompõe pelo contexto', async () => {

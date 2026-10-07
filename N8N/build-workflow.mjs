@@ -510,9 +510,10 @@ const FONTE_PROVEDOR = [
 // `Medir Documento` e a primeira chamada à OpenAI (`IA Classificar`) não há
 // gasto nenhum. O `Extrair Texto` é local, o `Upload Storage` é ramo lateral
 // (religado em 07/10/2026; fala com o Storage, não com a IA, então não entra no
-// gasto nem no RPD — e sai de `Preparar Conteudo`, ANTES deste guarda, de modo que um
-// lote recusado pelo orçamento já deixou os originais guardados), e nenhum documento
-// foi registrado — `Registrar Documento` vem
+// gasto nem no RPD — e sai de `Preparar Conteudo`; NÃO foi medido se ele roda antes ou depois deste
+// guarda: a evidência de 27/08 (ESTADO.md) sugere que o ramo irmão anda primeiro, e como
+// o `Abortar Lote` lança, um lote recusado talvez nunca chegue a guardar original), e
+// nenhum documento foi registrado — `Registrar Documento` vem
 // depois do `Juntar Ramos`. Barrar aqui continua custando zero.
 //
 // A ESTIMATIVA POR BYTE NÃO FOI EMBORA: ela é o caminho de quando o conteúdo não
@@ -669,24 +670,44 @@ const classificacoes = itensDe('Parse Classif');
 // OS ORIGINAIS FICARAM GUARDADOS? O \`Upload Storage\` e' ramo lateral com
 // onError=continueRegularOutput: ele NUNCA derruba o lote, e por isso uma falha dele
 // tem a mesma aparencia de um lote em que tudo foi guardado (regra 7). Este e' o
-// sinal positivo: sucesso e' o item SEM \`error\`; zero itens quer dizer que o no'
-// nao produziu saida (desligado, ou nao rodou) -- e isso sai como null, nunca como
-// zero guardados e zero falhas.
-const uploads = itensDe('Upload Storage');
+// sinal positivo, e ele tem DUAS armadilhas medidas na revisao de 07/10/2026:
+//
+// (1) SUCESSO NAO SE DEDUZ DA AUSENCIA DE ERRO. Com continueRegularOutput o n8n
+// devolve tambem o ITEM DE ENTRADA INTACTO quando o no' inteiro falha (credencial
+// apagada ou trocada, item sem binario) -- a mesma forma que o Recompor Conteudo
+// Extraido ja' conhece. Esse item nao tem \`error\` e traz caso_id/arquivo_ref. Por
+// isso so' conta como guardado o item cuja resposta traz a \`Key\` do Storage e essa
+// Key e' \`documentos/\` + um arquivo_ref que o Preparar Conteudo produziu neste lote.
+//
+// (2) A ORDEM DOS RAMOS NAO E' GARANTIDA. Em executionOrder v1 o upload pode rodar
+// DEPOIS deste resumo (ESTADO.md, 27/08: o ramo irmao gravou documentos antes de a
+// execucao morrer no Upload Storage). Zero itens aqui nao prova que nada foi
+// guardado. \`isExecuted\` decide: se o no' ainda nao rodou, o sinal e' null e o
+// texto manda conferir o bucket -- nunca "nenhum guardado" nem "0 falhas".
+let uploadExecutou = false;
+try { uploadExecutou = $('Upload Storage').isExecuted === true; } catch (err) { uploadExecutou = false; }
+const uploads = uploadExecutou ? itensDe('Upload Storage') : [];
+const esperados = new Set();
+try { for (const p of $('Preparar Conteudo').all()) { if (p?.json?.arquivo_ref) esperados.add('documentos/' + p.json.arquivo_ref); } } catch (err) { /* sem Preparar: cai na regra fraca abaixo */ }
 let guardados = 0, semGuarda = 0, primeiroErroUpload = null;
 for (const it of uploads) {
   const u = it?.json || {};
-  if (u.error) {
-    semGuarda += 1;
-    if (primeiroErroUpload === null) {
-      primeiroErroUpload = String(typeof u.error === 'object' ? (u.error.message || JSON.stringify(u.error)) : u.error).slice(0, 300);
-    }
-  } else guardados += 1;
+  const keyOk = typeof u.Key === 'string' && !u.error
+    && (esperados.size > 0 ? esperados.has(u.Key) : !('caso_id' in u) && !('arquivo_ref' in u));
+  if (keyOk) { guardados += 1; continue; }
+  semGuarda += 1;
+  if (primeiroErroUpload === null) {
+    primeiroErroUpload = u.error
+      ? String(typeof u.error === 'object' ? (u.error.message || JSON.stringify(u.error)) : u.error).slice(0, 300)
+      : 'resposta sem a Key do Storage (o no devolveu o item de entrada, ou uma Key inesperada)';
+  }
 }
-const textoOriginais = uploads.length === 0
-  ? '. ATENCAO: o Upload Storage nao produziu saida -- NENHUM original foi guardado'
-  : '. Originais guardados no Storage: ' + guardados + ' de ' + uploads.length
-    + (semGuarda > 0 ? ' (' + semGuarda + ' SEM GUARDA; primeiro erro: ' + primeiroErroUpload + ')' : '');
+const textoOriginais = !uploadExecutou
+  ? '. Originais: o Upload Storage ainda nao tinha rodado quando este resumo fechou -- a conferencia e o bucket'
+  : uploads.length === 0
+    ? '. Originais: o Upload Storage rodou mas nao devolveu itens -- a conferencia e o bucket'
+    : '. Originais guardados no Storage: ' + guardados + ' de ' + uploads.length
+      + (semGuarda > 0 ? ' (' + semGuarda + ' SEM GUARDA; primeiro erro: ' + primeiroErroUpload + ')' : '');
 
 let extracao = 0, entrada = 0, saida = 0, cache = 0, linhas = 0, comFalha = 0, semMedicao = 0;
 let celulas = 0, contas = 0, fatiados = 0;
@@ -732,6 +753,7 @@ return [{ json: {
       + fatiados + ' documento(s) precisaram de mais de uma chamada.' : ''),
   orcamento_versao: versao,
   documentos: extracoes.length,
+  originais_upload_executou: uploadExecutou,
   originais_guardados: uploads.length === 0 ? null : guardados,
   originais_sem_guarda: uploads.length === 0 ? null : semGuarda,
   originais_primeiro_erro: primeiroErroUpload,
@@ -2633,9 +2655,10 @@ const nodes = [
   // na republicação por nome / N8N_CRED_IDS).
   //
   // `onError: continueRegularOutput` É O QUE IMPEDE O RAMO LATERAL DE DERRUBAR A
-  // INGESTÃO: sem ele, um 4xx/5xx do Storage lança, e com executionOrder v1 a
-  // execução inteira morre antes de classificar/extrair (os dois ramos saem do mesmo
-  // output de Preparar Conteudo). Falha engolida em silêncio seria a regra 7, então o
+  // INGESTÃO: sem ele, um 4xx/5xx do Storage lança e a execução morre. Medido em
+  // 27/08 (ESTADO.md): a execução morreu no Upload Storage DEPOIS de o ramo irmão
+  // gravar documentos e extrações, e não fechou o lote (o portal acusa lote_nao_fechou)
+  // — não "antes de classificar/extrair"; a ordem dos dois ramos não é garantida. Falha engolida em silêncio seria a regra 7, então o
   // sinal positivo está no `Resumo de Custo`: quantos originais ficaram guardados e
   // quantos não (e quais). O sinal vive no painel da execução do n8n; persistir no
   // banco (coluna em lote_execucao) pede migration e ficou de fora de propósito.
