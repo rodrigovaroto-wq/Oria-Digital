@@ -361,6 +361,58 @@ As peças 1 a 3 não dependem de contrato novo. As 4 e 5 dependem das decisões 
 
 ---
 
+## §12 Pré-requisitos para o sistema buscar tudo sozinho
+
+Quatro grupos: o que a Oria monta uma vez, os contratos, o que cada cliente entrega no kickoff (a
+reunião de abertura do mandato) e o que continua humano por limite dos órgãos e dos bancos.
+
+### O que a Oria precisa ter (uma vez, e manter)
+
+| # | Pré-requisito | Para quê | Observação |
+|---|---|---|---|
+| P1 | **e-CNPJ A1 da Oria** (ICP-Brasil) | Identidade dos coletores como procuradores no e-CAC, Integra Contador e eSocial | Vence todo ano; vencido, o canal B inteiro para no mesmo dia. O painel (peça 6) deve avisar antes |
+| P2 | **Cofre de credenciais** (peça 4) | Guardar o A1 da Oria e, se D12.2, o dos clientes, com registro de cada uso | O A1 do cliente é a chave fiscal da empresa dele |
+| P3 | **Pacote jurídico e LGPD** | Termo de autorização, cláusula no contrato do mandato, RIPD, política de retenção (`10_DADOS_RETENCAO_E_LGPD.md`) | Base legal da coleta; eSocial traz salário e CPF, extrato traz terceiros |
+| P4 | **Responsável pelas credenciais** | Renovar, revogar ao fim do mandato, auditar | Sem dono, a autorização sobrevive ao caso |
+| P5 | **Infraestrutura dos coletores** (peça 5) | Agendamento e chamadas com certificado na conexão (Distribuição DF-e, eSocial) | Com D12.5, também uma máquina dedicada ao ReceitaNet BX (desktop) |
+| P6 | **Armazenamento** (peça 2) | XML e SPED de vários anos somam GB por cliente | Envio direto ao Storage; a borda da Vercel recusa ~4,5 MB |
+
+### Contratos com fornecedores
+
+| Fornecedor | Destrava | Sem ele | Decisão |
+|---|---|---|---|
+| SERPRO, Integra Contador (por consulta) | Situação fiscal, DCTFWeb, parcelamentos, Caixa Postal automáticos | e-CAC manual | D12.3 |
+| Agregador de Open Finance (por conexão) | Extrato diário de todos os bancos | OFX manual | D12.4 |
+| Chave da API do Portal da Transparência (gratuita) | CEIS, CNEP, CEPIM | — | — |
+| *(opcional)* Provedor de consulta processual | Descoberta de processos por CPF/CNPJ | DataJud só por número conhecido | Espec. 11 §3.5 |
+
+### O que cada cliente entrega no kickoff
+
+| # | Item | Detalhe |
+|---|---|---|
+| K1 | Procuração eletrônica no e-CAC para o CNPJ da Oria | Uma por CNPJ do grupo (e-CNPJ do cliente ou gov.br do representante) |
+| K2 | Consentimento de Open Finance | Um por banco, pelo representante legal |
+| K3 | A1 do cliente e senha | Só com D12.2; destrava as NF-e recebidas automáticas |
+| K4 | Termo de autorização e tratamento de dados | Modelo de P3 |
+| K5 | Contatos do contador e do departamento pessoal | Destino do pedido do canal C (peça 1) |
+| K6 | Lista de bancos, ERP e sistema de folha | De onde sai o CNAB e o eSocial |
+
+### O que continua dependendo de alguém
+
+| Fonte | Por que não é automática | Quem age |
+|---|---|---|
+| NF-e emitidas, CNAB de cobrança e pagamentos, CAP e CAR | Ficam no ERP do cliente | Contador ou financeiro, pelo link |
+| eSocial e FGTS Digital | **[A CONFIRMAR]** acesso do procurador | Departamento pessoal |
+| Registrato (SCR) | Só o titular baixa, pelo gov.br | Sócio |
+| B/L, AWB, CRT | PDF do armador ou agente de carga | Despachante |
+| ECD e EFDs | Sem API; só RPA no ReceitaNet BX | Robô (D12.5) ou contador |
+
+O sistema não elimina esse trabalho, mas o barateia: o pedido sai pronto, o envio é um link e o
+painel cobra o que falta todo mês. E cada um desses itens, enquanto não chega, aparece no painel
+com o efeito nomeado (regra 1), nunca como fonte "sem achados".
+
+---
+
 ## Decisões do dono em aberto
 
 | # | Decisão | Bloqueia |
