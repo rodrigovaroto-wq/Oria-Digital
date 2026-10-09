@@ -175,12 +175,19 @@ async function run(name, { item, items, refs = {}, env = {}, itemIndex = 0, bina
     // outro nó — é assim que o `Resumo de Custo` soma o lote. Mock em array
     // significa "vários itens"; mock em objeto continua sendo um item só.
     const v = refs[ref];
+    // `{ naoExecutado: true }` simula um nó que AINDA NÃO RODOU: `isExecuted` é false
+    // e ler os itens lança, como no n8n.
+    if (v && v.naoExecutado) {
+      return { isExecuted: false, first: () => { throw new Error('nó não executado'); },
+        all: () => { throw new Error('nó não executado'); }, item: undefined };
+    }
     // `{ runs: [[...], [...]] }` simula um nó que EXECUTOU MAIS DE UMA VEZ — o que
     // acontece com toda a cadeia depois do IF `Precisa Fallback?`, porque o n8n
     // roda o grafo uma vez por ramo. `.all(branch, run)` estoura quando a
     // execução não existe, e é assim que o código sabe onde parar.
     if (v && !Array.isArray(v) && Array.isArray(v.runs)) {
       return {
+        isExecuted: true,
         first: () => v.runs[0][0],
         item: v.runs[0][itemIndex],
         all: (_b, run = 0) => {
@@ -191,6 +198,7 @@ async function run(name, { item, items, refs = {}, env = {}, itemIndex = 0, bina
     }
     const lista = Array.isArray(v) ? v : [v];
     return {
+      isExecuted: true,
       first: () => lista[0],
       item: Array.isArray(v) ? lista[itemIndex] : v,
       all: (_b, run = 0) => { if (run > 0) throw new Error(`execução ${run} não existe`); return lista; },
@@ -389,20 +397,109 @@ test('Preparar Conteudo: com 2+ arquivos no MESMO lote, cada item lê o SEU PRÓ
   assert.notEqual(base64DaParte(item0.json.content_part), base64DaParte(item1.json.content_part));
 });
 
-test('Upload Storage: URL usa encodeURIComponent (nomes com espaço/acento)', () => {
-  assert.match(byName['Upload Storage'].parameters.url, /encodeURIComponent\(\$json\.nome_original\)/);
-  assert.equal(byName['Upload Storage'].parameters.inputDataFieldName, 'data');
-  // Gateway do Supabase exige o header 'apikey' além do Authorization (credencial) — sem ele, 400.
-  const headers = byName['Upload Storage'].parameters.headerParameters.parameters;
-  assert.ok(headers.some((h) => h.name === 'apikey'), 'falta o header apikey exigido pelo Supabase');
+// O ORIGINAL TEM DE FICAR GUARDADO, E `arquivo_ref` TEM DE APONTAR PARA ELE.
+//
+// Medido em producao em 07/10/2026 (requisicao identica a do `Upload Storage`): o
+// Storage devolve 400 InvalidKey para chave com acento — `sonda teste ç.pdf` — mesmo
+// com encodeURIComponent, e 200 para `sonda teste.pdf`. Nomes reais tem "BALANÇO".
+// Este teste afirma o COMPORTAMENTO: dado um nome com acento, (1) a chave que vai
+// na URL do upload e' so' ASCII imprimivel e sem caractere que o Storage recusa, e
+// (2) e' IDENTICA ao arquivo_ref que o Registrar Documento grava. Duas contas para a
+// mesma chave divergem sem erro nenhum — arquivo_ref apontando para objeto
+// inexistente era o estado de producao (bucket com zero objetos).
+const avaliarExpr = (expr, json) =>
+  new Function('$json', 'return (' + expr.replace(/^=\{\{/, '').replace(/\}\}$/, '') + ')')(json);
+
+const avaliarTemplate = (tpl, json) =>
+  tpl.slice(1).replace(/\{\{\s*(.*?)\s*\}\}/g, (_, e) => avaliarExpr('={{' + e + '}}', json));
+
+test('Upload Storage: nome com acento vira chave ASCII, e a URL e o arquivo_ref coincidem', async () => {
+  const conteudo = Buffer.from('%PDF-1.4 balanco com acento');
+  const nomes = ['BALANÇO PATRIMONIAL 2025 (versão final).PDF', 'DRE — 12M25.pdf', 'sem extensao'];
+  for (const nome of nomes) {
+    const item = {
+      json: { caso_id: 'c0a80101-0000-4000-8000-000000000001', nome_original: nome },
+      binary: { data: { fileName: nome, mimeType: 'application/pdf', data: conteudo.toString('base64') } },
+    };
+    const prep = await run('Preparar Conteudo', { item });
+    const url = avaliarTemplate(byName['Upload Storage'].parameters.url, prep.json);
+    const chave = url.split('/object/documentos/')[1];
+    assert.ok(chave, `a URL do upload tem o bucket e a chave: ${url}`);
+    assert.match(chave, /^[A-Za-z0-9._\/-]+$/, `chave só ASCII seguro (o Storage recusa o resto): ${chave}`);
+    const params = avaliarExpr(
+      wf.nodes.find((n) => n.name === 'Registrar Documento').parameters.options.queryReplacement, prep.json);
+    assert.equal(params[8], chave, 'o arquivo_ref gravado é a MESMA chave do objeto enviado');
+    assert.equal(params[9], nome, 'o nome original continua inteiro, com acento, na coluna própria');
+    // identidade da 0026: mesma chave para o mesmo conteúdo, qualquer que seja o nome
+    assert.ok(chave.includes(prep.json.hash), 'a chave carrega o hash do conteúdo');
+  }
+  // Mesmo nome, conteúdo DIFERENTE => chave diferente: com chave por nome o x-upsert
+  // sobrescreveria o original anterior (perda de dado).
+  const mk = (txt) => ({
+    json: { caso_id: 'c0a80101-0000-4000-8000-000000000001', nome_original: 'BALANÇO.pdf' },
+    binary: { data: { fileName: 'BALANÇO.pdf', mimeType: 'application/pdf', data: Buffer.from(txt).toString('base64') } },
+  });
+  const a = await run('Preparar Conteudo', { item: mk('%PDF-1.4 um') });
+  const b = await run('Preparar Conteudo', { item: mk('%PDF-1.4 outro') });
+  assert.notEqual(a.json.arquivo_ref, b.json.arquivo_ref, 'arquivos diferentes de mesmo nome não podem dividir a chave');
 });
 
-test('Upload Storage: desabilitado (bug de plataforma do HTTP Request + binário)', () => {
-  // n8n-io/n8n#3089, #10096: o node HTTP Request trava o editor com
-  // "Converting circular structure to JSON" ao lidar com dados binários em
-  // certas configs. Confirmado reproduzível no N8N real (não é bug nosso).
-  // Fica desabilitado até adotar uma alternativa (ver README).
-  assert.equal(byName['Upload Storage'].disabled, true, 'Upload Storage deve seguir desabilitado até resolver o bug de plataforma');
+test('Upload Storage: ligado, com credencial httpCustomAuth e sem service_role em texto', () => {
+  const n = byName['Upload Storage'];
+  assert.equal(n.disabled, undefined, 'religado em 07/10/2026 (o bug do binário não reproduziu — ver o gerador)');
+  assert.equal(n.parameters.inputDataFieldName, 'data');
+  assert.equal(n.parameters.genericAuthType, 'httpCustomAuth');
+  assert.equal(n.credentials.httpCustomAuth.name, 'Supabase Storage (service_role)');
+  assert.equal(n.credentials.httpCustomAuth.id, 'REPLACE', 'o id real da instalação não entra no repositório');
+  const headers = n.parameters.headerParameters.parameters;
+  assert.ok(!JSON.stringify(n).includes('COLE_A_SERVICE_ROLE_KEY_AQUI'), 'segredo/placeholder em texto no nó');
+  assert.ok(headers.some((h) => h.name === 'x-upsert'));
+  // O ramo lateral NÃO PODE derrubar a ingestão: sem onError o 4xx do Storage lançaria
+  // e a execução morreria antes de classificar (regra do c).
+  assert.equal(n.onError, 'continueRegularOutput');
+});
+
+test('Resumo de Custo: o upload que falhou NÃO passa por lote em que tudo foi guardado', async () => {
+  // O sinal positivo do ramo lateral (regra 7): sem ele, falha de upload e sucesso
+  // têm a mesma aparência, porque o nó nunca lança.
+  const prep = (r) => ({ json: { caso_id: 'c', arquivo_ref: r } });
+  const refs = (upload) => ({
+    'Orcamento do Lote': { json: { orcamento_estimado_usd: 0.1, orcamento_versao: 'v' } },
+    'Juntar Blocos': [{ json: { custo_usd: 0.01, campos: [] } }],
+    'Parse Classif': [],
+    'Preparar Conteudo': [prep('c/h1.pdf'), prep('c/h2.pdf')],
+    'Upload Storage': upload,
+  });
+  const rodar = (upload) => run('Resumo de Custo', { items: [{ json: {} }], refs: refs(upload) });
+
+  const tudoBem = await rodar([{ json: { Key: 'documentos/c/h1.pdf' } }, { json: { Key: 'documentos/c/h2.pdf' } }]);
+  assert.equal(tudoBem[0].json.originais_guardados, 2);
+  assert.equal(tudoBem[0].json.originais_sem_guarda, 0);
+
+  const comFalha = await rodar([{ json: { Key: 'documentos/c/h1.pdf' } }, { json: { error: { message: 'InvalidKey' } } }]);
+  assert.equal(comFalha[0].json.originais_guardados, 1);
+  assert.equal(comFalha[0].json.originais_sem_guarda, 1);
+  assert.equal(comFalha[0].json.originais_primeiro_erro, 'InvalidKey');
+  assert.match(comFalha[0].json.resumo, /1 SEM GUARDA.*InvalidKey/);
+
+  // O ITEM DE ENTRADA REPASSADO INTACTO (nó inteiro falhou, p.ex. credencial apagada):
+  // sem `error`, com caso_id/arquivo_ref. NÃO é guardado.
+  const repassado = await rodar([{ json: { caso_id: 'c', arquivo_ref: 'c/h1.pdf', nome_original: 'a.pdf' } }]);
+  assert.equal(repassado[0].json.originais_guardados, 0, 'item de entrada repassado não é original guardado');
+  assert.equal(repassado[0].json.originais_sem_guarda, 1);
+  // Key de outro objeto também não prova o NOSSO original.
+  const keyAlheia = await rodar([{ json: { Key: 'documentos/outro/x.pdf' } }]);
+  assert.equal(keyAlheia[0].json.originais_sem_guarda, 1);
+
+  // AINDA NÃO RODOU (executionOrder v1 não garante a ordem dos ramos): null e texto
+  // honesto — nunca "0 guardados" nem "nenhum guardado".
+  const antes = await rodar({ naoExecutado: true });
+  assert.equal(antes[0].json.originais_upload_executou, false);
+  assert.equal(antes[0].json.originais_guardados, null);
+  assert.equal(antes[0].json.originais_sem_guarda, null);
+  assert.match(antes[0].json.resumo, /ainda nao tinha rodado.*bucket/);
+  assert.doesNotMatch(antes[0].json.resumo, /NENHUM|SEM GUARDA|0 de/);
+  assert.equal(tudoBem[0].json.originais_upload_executou, true);
 });
 
 test('Ramo fallback: Montar Req → (HTTP substitui item) → Parse recompõe pelo contexto', async () => {
@@ -975,6 +1072,10 @@ test('Topologia: Upload é ramo lateral; o Roteador manda cada formato a UM extr
   const destinosDePreparar = wf.connections['Preparar Conteudo'].main[0].map((c) => c.node);
   assert.deepEqual(destinosDePreparar.sort(), ['Roteador de Formato', 'Upload Storage'].sort());
   assert.equal(wf.connections['Upload Storage'], undefined, 'Upload não alimenta nenhum node');
+  // O ramo lateral não pode derrubar a ingestão (regra do c): uma falha do Storage
+  // vira item de erro e a execução segue. É o que o onError garante; sem ele o 4xx
+  // lança e os dois ramos que saem de Preparar Conteudo morrem juntos.
+  assert.equal(byName['Upload Storage'].onError, 'continueRegularOutput');
 
   const roteador = wf.nodes.find((n) => n.name === 'Roteador de Formato');
   assert.ok(roteador, 'existe o nó que decide o formato ANTES de qualquer extrator');
@@ -1054,13 +1155,13 @@ test('Topologia: Upload é ramo lateral; o Roteador manda cada formato a UM extr
 // CÓDIGO REAL do nó, não uma descrição dele.
 // ---------------------------------------------------------------------------
 const ctxCsv = {
-  caso_id: 'caso-uuid-1', hash: 'hash-a-csv', nome_original: 'faturamento.csv',
+  caso_id: 'caso-uuid-1', hash: 'hash-a-csv', arquivo_ref: 'caso-uuid-1/hash-a-csv.csv', nome_original: 'faturamento.csv',
   content_mime: 'text/csv',
   content_part: { type: 'text', text: '(extracao de CSV pendente do no nativo Extrair CSV)' },
   aviso_conteudo: 'Arquivo CSV ainda nao foi extraido pelo no nativo (Extrair CSV).',
 };
 const ctxXlsx = {
-  caso_id: 'caso-uuid-1', hash: 'hash-b-xlsx', nome_original: 'balancete.xlsx',
+  caso_id: 'caso-uuid-1', hash: 'hash-b-xlsx', arquivo_ref: 'caso-uuid-1/hash-b-xlsx.xlsx', nome_original: 'balancete.xlsx',
   content_mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   content_part: { type: 'text', text: '(extracao de XLSX pendente do no nativo Extrair XLSX)' },
   aviso_conteudo: 'Arquivo .xlsx ainda nao foi extraido pelo no nativo (Extrair XLSX).',
@@ -1089,6 +1190,11 @@ test('Recompor Conteudo Extraido: linhas de DOIS documentos (CSV e XLSX) NUNCA s
   const doCsv = out.find((i) => i.json.hash === 'hash-a-csv');
   const doXlsx = out.find((i) => i.json.hash === 'hash-b-xlsx');
   assert.ok(doCsv && doXlsx, 'cada documento de origem aparece exatamente uma vez na saída');
+  // A CHAVE DO ORIGINAL ATRAVESSA O RECOMPOR: o `Registrar Documento` a le' do item
+  // que sai daqui, e se ela se perdesse o arquivo_ref gravado viraria o literal
+  // 'undefined' (o defeito dos onze dias do `documento_id`, em outro campo).
+  assert.equal(doCsv.json.arquivo_ref, 'caso-uuid-1/hash-a-csv.csv');
+  assert.equal(doXlsx.json.arquivo_ref, 'caso-uuid-1/hash-b-xlsx.xlsx');
 
   const textoCsv = textoDaParte(doCsv.json.content_part);
   assert.match(textoCsv, /Caixa/);
@@ -2477,6 +2583,7 @@ test('a corrente inteira preserva caso_id e binário até o Registrar Documento'
   assert.equal(params[9], '12M25 DRE (Assinado).pdf', 'nome_original sobrevive');
   assert.equal(params[4], 'DRE', 'a classificação sobrevive');
   assert.ok(typeof params[8] === 'string' && params[8].startsWith('caso-uuid-1/'), 'arquivo_ref montado');
+  assert.ok(!/undefined|null/.test(params[8]), 'arquivo_ref não pode virar o literal undefined/null');
   assert.equal(params[15], null,
     'sem chamada de conteúdo nesta corrente (só "Classificar Nome" rodou), o CNPJ chega null — '
     + 'nunca undefined, que o driver do Postgres trataria diferente');

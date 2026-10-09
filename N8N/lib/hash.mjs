@@ -95,3 +95,35 @@ export function sha256Hex(bytes) {
   for (let i = 0; i < 8; i++) hex += h[i].toString(16).padStart(8, '0');
   return hex;
 }
+
+// A CHAVE DO ORIGINAL NO STORAGE — e a mesma string vai para `arquivo_ref`.
+//
+// MEDIDO EM PRODUCAO (07/10/2026, workflow descartavel, requisicao identica a do
+// `Upload Storage`): o Storage recusa chave com caractere nao-ASCII mesmo com
+// encodeURIComponent — `sonda teste ç.pdf` deu HTTP 400 InvalidKey; `sonda
+// teste.pdf` deu 200 (193 bytes, application/pdf). Nome brasileiro tem acento
+// ("BALANÇO ..."), entao a chave por NOME falharia justamente nos documentos reais.
+//
+// Chave = caso_id/<sha256><.ext>: ASCII por construcao, e e a identidade da 0026
+// (mesmo caso + mesmo hash = mesmo documento). Com chave por NOME, um arquivo
+// DIFERENTE de mesmo nome sobrescreveria o original anterior via x-upsert
+// (perda de dado); por hash, o upsert so reescreve bytes identicos. A extensao
+// (minuscula, so se for [a-z0-9]{1,8}) existe para o objeto sair com o mimetype
+// certo ao ser baixado.
+//
+// SEM HASH (so acontece se o SHA-256 nativo E o de JS puro falharem — nunca
+// medido): cai no nome saneado (sem acento, so [A-Za-z0-9._-]). Ai a chave volta a
+// ser por nome e um arquivo diferente de mesmo nome sobrescreve o anterior; e a
+// unica troca que ainda guarda ALGUM original. Aceito por ser inalcancavel hoje.
+export function chaveDoOriginal(casoId, hash, nome) {
+  const n = String(nome == null ? '' : nome);
+  const m = /\.([A-Za-z0-9]{1,8})$/.exec(n);
+  const ext = m ? '.' + m[1].toLowerCase() : '';
+  if (typeof hash === 'string' && /^[0-9a-f]{64}$/.test(hash)) return casoId + '/' + hash + ext;
+  let base = n.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9._-]+/g, '_').replace(/^[_.]+/, '').slice(0, 120);
+  // O _ final sai em laço, não com o regex _+$ : ele volta a tentar a cada _ de uma
+  // sequência que não termina a string (custo quadrático, Sonar S8786 no #255).
+  while (base.endsWith('_')) base = base.slice(0, -1);
+  return casoId + '/' + (base || 'sem_nome');
+}

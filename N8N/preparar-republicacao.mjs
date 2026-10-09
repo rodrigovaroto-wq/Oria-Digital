@@ -204,6 +204,10 @@ export function prepararRepublicacao(vivo, repo, { idsPorNome = {} } = {}) {
     // com "Credential with ID REPLACE does not exist" — que foi exatamente o
     // erro do smoke test de 27/08.
     //
+    // (Desde 07/10/2026 o `Upload Storage` é LIGADO, então esta exceção não o
+    // alcança mais: ele cai no `REPLACE` e a trava do republicar.sh o segura até
+    // haver id — vivo, irmão ou N8N_CRED_IDS. Ela continua valendo para qualquer
+    // nó desabilitado que apareça no futuro.)
     // A EXCEÇÃO medida em 11/09/2026, no `Upload Storage`: nó DESABILITADO
     // sem id na instalação. Ele não executa — então a credencial some em vez
     // de ir REPLACE: nó desligado sem credencial não falha; nó desligado COM

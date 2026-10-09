@@ -36,7 +36,7 @@ import { classifyByFilename, parseTipo, parsePeriodo, periodoAcumuladoNoAno, per
 import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
 import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
-import { sha256Hex } from './lib/hash.mjs';
+import { sha256Hex, chaveDoOriginal } from './lib/hash.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
   pareceTexto, contarFora, formaDoTexto, detectarFormato, abasDoXlsx,
@@ -368,7 +368,8 @@ const FONTE_ARITMETICA = [
 // `crypto.subtle`, que o dono MEDIU vindo ausente no sandbox do n8n dele
 // (campo `hash` = null na saída de `Preparar Conteudo`, 2026-07-31); ver o
 // cabeçalho de lib/hash.mjs.
-const FONTE_SHA256 = `const sha256Hex = ${sha256Hex.toString()};`;
+const FONTE_SHA256 = `const sha256Hex = ${sha256Hex.toString()};
+const chaveDoOriginal = ${chaveDoOriginal.toString()};`;
 const FONTE_CUSTO_CHAMADA = `const PRECO_USD_POR_MILHAO = ${JSON.stringify(PRECO_USD_POR_MILHAO)};
 const custoDaChamada = ${custoDaChamada.toString()};`;
 
@@ -507,8 +508,12 @@ const FONTE_PROVEDOR = [
 //
 // E CONTINUA SENDO ANTES DE GASTAR, que é a propriedade inegociável: entre o
 // `Medir Documento` e a primeira chamada à OpenAI (`IA Classificar`) não há
-// gasto nenhum. O `Extrair Texto` é local, o `Upload Storage` é ramo lateral e
-// está desligado, e nenhum documento foi registrado — `Registrar Documento` vem
+// gasto nenhum. O `Extrair Texto` é local, o `Upload Storage` é ramo lateral
+// (religado em 07/10/2026; fala com o Storage, não com a IA, então não entra no
+// gasto nem no RPD — e sai de `Preparar Conteudo`; NÃO foi medido se ele roda antes ou depois deste
+// guarda: a evidência de 27/08 (ESTADO.md) sugere que o ramo irmão anda primeiro, e como
+// o `Abortar Lote` lança, um lote recusado talvez nunca chegue a guardar original), e
+// nenhum documento foi registrado — `Registrar Documento` vem
 // depois do `Juntar Ramos`. Barrar aqui continua custando zero.
 //
 // A ESTIMATIVA POR BYTE NÃO FOI EMBORA: ela é o caminho de quando o conteúdo não
@@ -662,6 +667,48 @@ const itensDe = (nome) => {
 const extracoes = itensDe('Juntar Blocos').length > 0 ? itensDe('Juntar Blocos') : itensDe('Parse Extracao');
 const classificacoes = itensDe('Parse Classif');
 
+// OS ORIGINAIS FICARAM GUARDADOS? O \`Upload Storage\` e' ramo lateral com
+// onError=continueRegularOutput: ele NUNCA derruba o lote, e por isso uma falha dele
+// tem a mesma aparencia de um lote em que tudo foi guardado (regra 7). Este e' o
+// sinal positivo, e ele tem DUAS armadilhas medidas na revisao de 07/10/2026:
+//
+// (1) SUCESSO NAO SE DEDUZ DA AUSENCIA DE ERRO. Com continueRegularOutput o n8n
+// devolve tambem o ITEM DE ENTRADA INTACTO quando o no' inteiro falha (credencial
+// apagada ou trocada, item sem binario) -- a mesma forma que o Recompor Conteudo
+// Extraido ja' conhece. Esse item nao tem \`error\` e traz caso_id/arquivo_ref. Por
+// isso so' conta como guardado o item cuja resposta traz a \`Key\` do Storage e essa
+// Key e' \`documentos/\` + um arquivo_ref que o Preparar Conteudo produziu neste lote.
+//
+// (2) A ORDEM DOS RAMOS NAO E' GARANTIDA. Em executionOrder v1 o upload pode rodar
+// DEPOIS deste resumo (ESTADO.md, 27/08: o ramo irmao gravou documentos antes de a
+// execucao morrer no Upload Storage). Zero itens aqui nao prova que nada foi
+// guardado. \`isExecuted\` decide: se o no' ainda nao rodou, o sinal e' null e o
+// texto manda conferir o bucket -- nunca "nenhum guardado" nem "0 falhas".
+let uploadExecutou = false;
+try { uploadExecutou = $('Upload Storage').isExecuted === true; } catch (err) { uploadExecutou = false; }
+const uploads = uploadExecutou ? itensDe('Upload Storage') : [];
+const esperados = new Set();
+try { for (const p of $('Preparar Conteudo').all()) { if (p?.json?.arquivo_ref) esperados.add('documentos/' + p.json.arquivo_ref); } } catch (err) { /* sem Preparar: cai na regra fraca abaixo */ }
+let guardados = 0, semGuarda = 0, primeiroErroUpload = null;
+for (const it of uploads) {
+  const u = it?.json || {};
+  const keyOk = typeof u.Key === 'string' && !u.error
+    && (esperados.size > 0 ? esperados.has(u.Key) : !('caso_id' in u) && !('arquivo_ref' in u));
+  if (keyOk) { guardados += 1; continue; }
+  semGuarda += 1;
+  if (primeiroErroUpload === null) {
+    primeiroErroUpload = u.error
+      ? String(typeof u.error === 'object' ? (u.error.message || JSON.stringify(u.error)) : u.error).slice(0, 300)
+      : 'resposta sem a Key do Storage (o no devolveu o item de entrada, ou uma Key inesperada)';
+  }
+}
+const textoOriginais = !uploadExecutou
+  ? '. Originais: o Upload Storage ainda nao tinha rodado quando este resumo fechou -- a conferencia e o bucket'
+  : uploads.length === 0
+    ? '. Originais: o Upload Storage rodou mas nao devolveu itens -- a conferencia e o bucket'
+    : '. Originais guardados no Storage: ' + guardados + ' de ' + uploads.length
+      + (semGuarda > 0 ? ' (' + semGuarda + ' SEM GUARDA; primeiro erro: ' + primeiroErroUpload + ')' : '');
+
 let extracao = 0, entrada = 0, saida = 0, cache = 0, linhas = 0, comFalha = 0, semMedicao = 0;
 let celulas = 0, contas = 0, fatiados = 0;
 for (const it of extracoes) {
@@ -699,12 +746,17 @@ return [{ json: {
   resumo: 'Custo REAL deste lote: US$ ' + total.toFixed(4) + ' em ' + extracoes.length + ' documento(s)'
     + ' (' + classificacoes.length + ' pagaram o PDF duas vezes)'
     + (estimado !== null ? '. O orçamento havia estimado US$ ' + Number(estimado).toFixed(2) : '')
+    + textoOriginais
     + '. Saída: ' + saida + ' tokens; entrada: ' + entrada + ' (' + cache + ' em cache).'
     + (celulas > 0 ? ' Cobertura: ' + contas + ' contas gravadas de ' + celulas + ' linhas de conta nos PDFs ('
       + (contas / celulas * 100).toFixed(0) + '%), em ' + linhas + ' pares conta-coluna. '
       + fatiados + ' documento(s) precisaram de mais de uma chamada.' : ''),
   orcamento_versao: versao,
   documentos: extracoes.length,
+  originais_upload_executou: uploadExecutou,
+  originais_guardados: uploads.length === 0 ? null : guardados,
+  originais_sem_guarda: uploads.length === 0 ? null : semGuarda,
+  originais_primeiro_erro: primeiroErroUpload,
   documentos_com_classificacao: classificacoes.length,
   custo_total_usd: arred(total),
   custo_extracao_usd: arred(extracao),
@@ -922,7 +974,13 @@ try{
 // resto do arquivo sumir sem pendencia. null fora de xlsx: ausencia, nao zero.
 let abasXlsx=null;
 if(formato==='xlsx'){ try{ abasXlsx=abasDoXlsx(buf); }catch(e){ abasXlsx=null; } }
-return {json:{...item, content_part: part, content_mime: mt, hash, aviso_conteudo: aviso, abas_xlsx: abasXlsx,
+// A CHAVE DO ORIGINAL NO STORAGE, calculada UMA vez e aqui, onde o hash nasce. O
+// \`Upload Storage\` (URL) e o \`Registrar Documento\` (arquivo_ref) leem este MESMO
+// campo: duas contas para a mesma chave divergem sem erro nenhum, e o resultado e'
+// arquivo_ref apontando para objeto que nao existe (o defeito de julho a outubro/2026,
+// com o bucket em ZERO objetos). Ver chaveDoOriginal em lib/hash.mjs.
+const arquivo_ref=chaveDoOriginal(item.caso_id,hash,item.nome_original);
+return {json:{...item, content_part: part, content_mime: mt, hash, arquivo_ref, aviso_conteudo: aviso, abas_xlsx: abasXlsx,
   // O QUE FOI MEDIDO viaja com o item: o roteador decide por
   // \`formato_detectado\`, e \`formato_confiavel\`/\`formato_evidencia\` deixam
   // quem le' distinguir medicao de suposicao (regra 1 do CLAUDE.md aplicada
@@ -2569,32 +2627,57 @@ const nodes = [
   node('Medir Documento', 'n8n-nodes-base.code', 2, { mode: 'runOnceForEachItem', jsCode: CODE_MEDIR_DOCUMENTO }, CODE_CONTINUA),
 
   // RAMO LATERAL: nada depende da saída deste node (HTTP substitui o item).
-  // ⚠️ DESABILITADO (2026-07-17): bug de longa data do node HTTP Request do
-  // N8N ao lidar com dados binários (GitHub n8n-io/n8n#3089, #10096) — trava
-  // o editor com "Converting circular structure to JSON" ao rodar o workflow
-  // inteiro (não é config nossa: URL/credencial/headers já testados corretos;
-  // limpar cache de execução não resolve, é reproduzível). Como este node é
-  // ramo lateral (não bloqueia classificação/extração/completude), fica
-  // desabilitado até trocarmos de abordagem — ver N8N/README.md
-  // "Upload Storage — pendência conhecida" para as alternativas (community
-  // node n8n-nodes-supabase, ou mover o upload para o portal Vercel).
-  // Reabilitar: trocar `disabled: true` por `disabled: false` (ou remover)
-  // depois de adotar uma das alternativas.
+  //
+  // RELIGADO EM 07/10/2026, desligado desde 17/07. O motivo do desligamento era o
+  // bug "Converting circular structure to JSON" do HTTP Request com binário
+  // (n8n-io/n8n#3089, #10096). MEDIDO em 07/10 num workflow descartável (já apagado):
+  // webhook -> Code (binário renomeado para data, caso_id/nome_original como em
+  // Preparar Conteudo) -> HTTP Request 4.2 com EXATAMENTE estes parâmetros — rodou com
+  // binário e a execução foi salva (saveDataSuccessExecution=all); o bug NÃO
+  // reproduziu. NÃO testado: o editor rodando o workflow inteiro manualmente (o
+  // sintoma de julho era no editor) — conferir depois da republicação.
+  //
+  // O custo de ficar desligado: o bucket `documentos` de produção tinha ZERO objetos
+  // enquanto `documento_versao.arquivo_ref` gravava caso_id/nome como se o arquivo
+  // estivesse lá (regra 1 e 7), e não foi possível reextrair os mapas da dívida dos
+  // mandatos reais por falta de original para baixar.
+  //
+  // A CHAVE vem de `$json.arquivo_ref` (calculado em Preparar Conteudo, o mesmo campo
+  // que o Registrar Documento grava) e NAO do nome: o Storage devolve 400 InvalidKey
+  // para não-ASCII mesmo com encodeURIComponent (medido: `sonda teste ç.pdf` 400,
+  // `sonda teste.pdf` 200, 193 bytes). Ver chaveDoOriginal em lib/hash.mjs. Por ser
+  // ASCII por construção (hex + [a-z0-9]), a URL não precisa de encodeURIComponent.
+  //
+  // AUTENTICAÇÃO: credencial `httpCustomAuth` com os DOIS cabeçalhos (apikey e
+  // Authorization: Bearer) restrita ao domínio do Supabase — medida funcionando em
+  // 07/10. Sai o `apikey: COLE_A_SERVICE_ROLE_KEY_AQUI` em texto no nó: era segredo
+  // colado em lugar de leitura. O id real NÃO entra no repositório (REPLACE, resolvido
+  // na republicação por nome / N8N_CRED_IDS).
+  //
+  // `onError: continueRegularOutput` É O QUE IMPEDE O RAMO LATERAL DE DERRUBAR A
+  // INGESTÃO: sem ele, um 4xx/5xx do Storage lança e a execução morre. Medido em
+  // 27/08 (ESTADO.md): a execução morreu no Upload Storage DEPOIS de o ramo irmão
+  // gravar documentos e extrações, e não fechou o lote (o portal acusa lote_nao_fechou)
+  // — não "antes de classificar/extrair"; a ordem dos dois ramos não é garantida. Falha engolida em silêncio seria a regra 7, então o
+  // sinal positivo está no `Resumo de Custo`: quantos originais ficaram guardados e
+  // quantos não (e quais). O sinal vive no painel da execução do n8n; persistir no
+  // banco (coluna em lote_execucao) pede migration e ficou de fora de propósito.
+  // SEM retryOnFail: com continueRegularOutput o nó nunca lança, e a suspeita registrada
+  // em `node()` é que o retry do n8n depende do lançamento.
+  //
+  // COTA: zero chamadas de IA. O RPD 500 é dos provedores de IA; o Storage não entra.
   node('Upload Storage', 'n8n-nodes-base.httpRequest', 4.2, {
     method: 'POST',
     // A REF DO PROJETO É DADO DE CONFIGURAÇÃO, NÃO SEGREDO: é a URL pública da
     // API do Supabase, a mesma que o portal usa em `NEXT_PUBLIC_SUPABASE_URL`.
-    // O que NUNCA entra aqui é a `service_role`, que segue como placeholder no
-    // header `apikey` e é colada no editor do n8n (ver N8N/README.md).
-    url: '=https://mrcabcaotblleojxnsxc.supabase.co/storage/v1/object/documentos/{{ $json.caso_id }}/{{ encodeURIComponent($json.nome_original) }}',
+    url: '=https://mrcabcaotblleojxnsxc.supabase.co/storage/v1/object/documentos/{{ $json.arquivo_ref }}',
     authentication: 'genericCredentialType',
-    genericAuthType: 'httpHeaderAuth',
+    genericAuthType: 'httpCustomAuth',
     sendHeaders: true, headerParameters: { parameters: [
       { name: 'x-upsert', value: 'true' },
-      { name: 'apikey', value: 'COLE_A_SERVICE_ROLE_KEY_AQUI' },
     ] },
     sendBody: true, contentType: 'binaryData', inputDataFieldName: 'data',
-  }, { credentials: { httpHeaderAuth: { id: 'REPLACE', name: 'Supabase Service (Header Auth)' } }, disabled: true }),
+  }, { credentials: { httpCustomAuth: { id: 'REPLACE', name: 'Supabase Storage (service_role)' } }, onError: 'continueRegularOutput' }),
 
   node('Precisa Fallback?', 'n8n-nodes-base.if', 2, {
     conditions: { options: { caseSensitive: true, typeValidation: 'strict' }, combinator: 'and', conditions: [
@@ -2650,7 +2733,7 @@ const nodes = [
   node('Registrar Documento', 'n8n-nodes-base.postgres', 2.5, {
     operation: 'executeQuery',
     query: 'select fn_registrar_documento($1::uuid,$2::text,$3::text,$4::text,$5::text,$6::numeric,$7::text,$8::origem_arquivo,$9::text,$10::text,$11::boolean,$12::text,$13::legibilidade, p_justificativa=>$14::text, p_fingerprint_extracao=>$15::text, p_cnpj=>$16::text) as r',
-    options: { ...PG_POR_ITEM, queryReplacement: `={{ [$json.caso_id, $json.entidade || null, $json.periodo_tipo || null, $json.periodo_ref || null, $json.tipo_taxonomia || null, $json.confianca, $json.fonte, 'supabase_storage', $json.caso_id + '/' + $json.nome_original, $json.nome_original, $json.assinado, $json.hash || null, 'ok', $json.justificativa || null, '${FINGERPRINT_EXTRACAO}', $json.cnpj || null] }}` },
+    options: { ...PG_POR_ITEM, queryReplacement: `={{ [$json.caso_id, $json.entidade || null, $json.periodo_tipo || null, $json.periodo_ref || null, $json.tipo_taxonomia || null, $json.confianca, $json.fonte, 'supabase_storage', $json.arquivo_ref, $json.nome_original, $json.assinado, $json.hash || null, 'ok', $json.justificativa || null, '${FINGERPRINT_EXTRACAO}', $json.cnpj || null] }}` },
   }, { credentials: PG_CRED, ...PG_RETRY }),
 
   node('Recomputar Completude', 'n8n-nodes-base.postgres', 2.5, {
