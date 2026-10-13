@@ -539,6 +539,9 @@ etapas em dois lugares é o defeito que este mapa já descreve. Elas moram em:
 | Ondas 1–5 | as 24 reconciliações (S, E, L, C) | engenharia, depois da F1 (e F4/F6 onde a tabela diz) |
 | Captação 4–6 | o caso que se abastece sozinho | engenharia, depois da etapa 2 |
 
+**Estado da etapa 0 em 13/10/2026:** 10 de 11 decisões tomadas. Falta a D12.3 (cotação do Integra
+Contador com o SERPRO), que não bloqueia a etapa 1 nem a onda 1. Os [A CONFIRMAR] sem responsável estão na G27.
+
 **Critério de pronto do B8:** as cinco ondas aceitas em 3 casos reais cada, e um mandato-piloto
 abastecido sem envio manual das fontes do canal B. Até lá, B8 **não** entra na definição de "projeto
 fechado" (§11): é o próximo produto, pelo mesmo critério que deixou B4.2, B4.3 e B7 fora dela.

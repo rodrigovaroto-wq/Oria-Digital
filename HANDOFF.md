@@ -4,6 +4,9 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
+> **▶ Ponto de entrada atual: SESSÃO 106 no topo do `ESTADO.md`** (09–13/10/2026): Especificação 12 e fase
+> F2T, só planejamento. Nenhuma migration nova (a mais nova segue `0205`). A seção abaixo é a S105, histórico.
+
 ## ▶ SESSÃO 105 — COMECE AQUI (passagem escrita em 05/10/2026, fim da S104)
 
 A S104 fechou em dois PRs, os dois **mergeados no `main`**: [#248](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/248)
