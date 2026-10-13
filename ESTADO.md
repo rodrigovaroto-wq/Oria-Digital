@@ -1,5 +1,39 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 107 (13/10/2026) — F2T etapa 1: o leitor de arquivos oficiais e a `0206`
+
+> **Migration nova: `0206_o_arquivo_oficial_lido_e_contado.sql` — escrita e testada, NÃO aplicada em produção.**
+> **O que o dono faz à mão:** aplicar a 0206 depois da 0205 e conferir
+> `select chave from fn_instalacao_conferir() where migration = '0206' and not presente;` (zero linhas).
+> Nada mais muda em produção: o n8n NÃO chama o leitor ainda, e `caso.trilha_transacional` nasce false.
+
+**Entregue:**
+- `Leitor/`: reconhece a família de cada arquivo (SPED nos 4 tipos, NF-e, CT-e, MDF-e, NFS-e, eSocial, Reinf,
+  CNAB 240/400/150, OFX e zip) e lê o envelope em fluxo, conferindo a contagem que o próprio arquivo declara
+  (9999 e 9900, trailer do CNAB, fechamento do XML e do OFX).
+- Cada leitura tem resultado `lido`, `falhou`, `controle_divergente` ou `versao_desconhecida`.
+- `Leitor/ler.mjs` (CLI) grava em `arquivo_oficial` e registra também o zip como contêiner.
+- Testes: 32 no leitor, com os 26 guardas medidos não-vazios, e 65 asserts na 0206, com cada regra medida.
+- A revisão independente achou 2 bloqueantes e 9 importantes, todos corrigidos antes do commit:
+  - a ECD da SCP substituía a da empresa;
+  - reler um arquivo não atualizava o banco.
+
+**Medido (repositório e banco de teste, não produção):**
+- Antes, um SPED enviado ao n8n seria decodificado como UTF-8 e mandado inteiro para a IA (`build-workflow.mjs`, nó Preparar Conteúdo).
+- Bateria completa do CI local: 37/37 antes das correções da revisão. Depois delas rodaram os portões tocados: `run.sh`, chamadas, sonda, Supabase, Leitor, n8n, espelho e comandos.
+
+**[A CONFIRMAR] antes da onda 1:**
+- As posições e versões do registro de leiautes (`Leitor/lib/leiautes.mjs`) foram escritas sem o Guia Prático aberto.
+- Os testes usam arquivos sintéticos.
+- A prova é o aceite com 3 ECDs reais.
+
+**Próximo passo — ligar ao sistema:**
+1. Decidir onde o leitor roda (P5).
+2. Acrescentar uma rota de leitura no n8n: quando a família for oficial e a trilha estiver ligada no caso, o arquivo vai ao leitor, e não à IA.
+3. Fazer o envio direto ao Storage (peça 2).
+
+Detalhe na descrição do PR desta sessão.
+
 ## SESSÃO 106 (09–13/10/2026) — Especificação 12 e fase F2T (planejamento, nada implementado)
 
 > **Nesta rodada não houve migration, workflow, deploy nem medição em produção.** Tudo é documento. A

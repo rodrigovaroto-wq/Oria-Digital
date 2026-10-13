@@ -4,6 +4,11 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
+> **▶ Ponto de entrada atual: SESSÃO 107 no topo do `ESTADO.md`** (13/10/2026).
+> - A F2T etapa 1 está feita: o leitor de arquivos oficiais e a migration `0206`, escrita e **não aplicada em produção**.
+> - O passo seguinte é ligar o leitor ao n8n. O caminho prático está na descrição do PR da S107.
+> - O bloco abaixo é a passagem da S106, e o passo 2 dele já foi feito.
+
 ## ▶ SESSÃO 107 — COMECE AQUI (passagem escrita em 13/10/2026, fim da S106)
 
 A S106 foi **só planejamento**. Não houve migration (a mais nova continua `0205`), workflow, deploy nem
