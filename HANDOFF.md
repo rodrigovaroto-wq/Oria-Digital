@@ -9,7 +9,7 @@ só como referência — não precisa ler tudo pra continuar, comece por aqui.
 A S108 mudou a rota da F2T: **o leitor roda no navegador do analista, e só o resumo vai ao banco**. Escreveu a `0207` (o resumo em partes). Detalhe e números: SESSÃO 108 do `ESTADO.md`. Não precisa reler a S107 nem a S108 inteiras.
 
 - **PR #257 (S107): MERGEADO** (API do GitHub, 13/10/2026 19:37 UTC).
-- **PR desta rodada (S108): NÃO CONFERIDO.** Ele ainda não existe no fim desta passagem; a sessão principal o abre, e o número entra aqui.
+- **PR desta rodada (S108): [#258](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/258)**, aberto em 13/10/2026. O CI e o Sonar ainda não tinham voltado na abertura.
 
 ### 0. Primeira coisa: o que o dono faz à mão
 

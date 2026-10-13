@@ -46,7 +46,7 @@ Medido no Chromium (commit `ca522ca`): ECD de 10.000.180 linhas (929 MB), contas
 - posições de `leiautes.mjs` e a lista de `resumo.mjs`: **[A CONFIRMAR]** contra o Guia Prático;
 - Supabase com corpo de RPC grande (as partes têm no máximo 5.000 itens).
 
-**PR:** o PR #257 (S107) está **mergeado** (API do GitHub, 13/10/2026 19:37 UTC). O PR desta rodada não foi aberto aqui: a sessão principal o abre.
+**PR:** o PR #257 (S107) está **mergeado** (API do GitHub, 13/10/2026 19:37 UTC). O PR desta rodada é o [#258](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/258), aberto em 13/10/2026.
 
 **Onda 1: BLOQUEADA.** Destrava com: (a) a F1 fechar (perímetro e CNPJ por entidade; o roadmap marca 55%); (b) 3 ECDs reais do dono para o aceite; (c) conferir `leiautes.mjs` e a lista de `resumo.mjs` contra o Guia Prático.
 
