@@ -423,7 +423,7 @@ sistema falha ou grava número errado; **desvia** = a execução muda de rota po
 
 | # | Lacuna | Gravidade | Como fecha |
 |---|---|---|---|
-| G1 | A 12 **não está no `MAPA_DE_EXECUCAO.md` nem no roadmap**. As ondas dependem de fases que ainda não fecharam: F1 (perímetro e CNPJ por entidade), F3 (esquema da linha: o F2.2 já registrou que taxa e vencimento "não têm onde gravar"), F4 (conta canônica, de que S2 e as reconciliações conta a conta dependem) e F6 (reconciliação sobre identidade). E o foco atual (`ESTADO.md`, sessão 105b) é a qualidade da extração em mandatos reais | desvia | Entrada no MAPA com a posição de cada onda na fila e o critério de pronto de cada uma. As reconciliações que esperam F4 ficam marcadas, e não são construídas antes dela |
+| G1 | A 12 **não está no `MAPA_DE_EXECUCAO.md` nem no roadmap**. As ondas dependem de fases que ainda não fecharam: F1 (perímetro e CNPJ por entidade), F3 (esquema da linha: o F2.2 já registrou que taxa e vencimento "não têm onde gravar"), F4 (conta canônica, de que S2 e as reconciliações conta a conta dependem) e F6 (reconciliação sobre identidade). E o foco atual (`ESTADO.md`, sessão 105b) é a qualidade da extração em mandatos reais | desvia | **FECHADA em 13/10/2026:** fase **F2T** no `ARQUITETURA_ALVO_E_ROADMAP.md` (etapas, dependências, paralelismo e critério de pronto) e linha B8 / §13 no `MAPA_DE_EXECUCAO.md` apontando para ela |
 | G2 | **Não existe regra de precedência.** Quando o SPED diverge do balanço enviado, qual número vai para o book e para o modelo? Sem regra, alguém decide no código, e o número do book muda sem ninguém ter decidido | **quebra** | D12.8. Proposta: nenhuma fonte substitui outra em silêncio. O book mostra o enviado, o fiscal e a divergência, e o analista escolhe, com registro de quem escolheu |
 | G3 | **Faltam tolerâncias.** Nenhuma reconciliação tem limite de materialidade. Arredondamento vira achado, e o achado real se perde no ruído | desvia | D12.11: tolerância absoluta e relativa por reconciliação, no padrão das existentes (`04_RECONCILIACAO.md`) |
 | G4 | **Falta a saída.** Não está dito onde S1–S7, E1–E5, L1–L6 e C1–C6 aparecem no book Excel, no portal e na apresentação de crédito | desvia | Especificar aba, bloco e endereço de célula por reconciliação, como o export já faz |
@@ -488,7 +488,7 @@ sistema falha ou grava número errado; **desvia** = a execução muda de rota po
 | D12.1 | A Oria aceita ser procuradora eletrônica dos clientes no e-CAC, com e-CNPJ próprio? | Canal B fiscal |
 | D12.2 | A Oria aceita custodiar o A1 do cliente? Se não, NF-e recebidas vêm pelo ERP | Distribuição DF-e |
 | D12.3 | Contratar o Integra Contador (SERPRO)? | Situação fiscal e DCTFWeb automáticas |
-| D12.4 | Qual agregador de Open Finance (custo, cobertura PJ, LGPD)? | Extrato automático |
+| D12.4 | Qual agregador de Open Finance (custo, cobertura PJ, LGPD)? **É a mesma decisão que a D6 da Espec. 11**: decidir uma vez, valer para as duas | Extrato automático |
 | D12.5 | RPA no ReceitaNet BX é aceitável, sabendo que quebra com a tela? | SPED automático |
 | D12.6 | Termo de autorização e tratamento de dados do kickoff (jurídico) | Peças 4 e 5 |
 | D12.7 | Política de dado pessoal do eSocial: até onde guardar o detalhe por empregado? | Onda 4 |

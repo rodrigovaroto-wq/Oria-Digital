@@ -491,6 +491,43 @@ F14→F16 · F15→F17 (contínua).
 *Entrega lateral barata: **Diagnóstico factual** — `documento_fato` já captura covenant rompido,
 continuidade operacional e ressalva. Expor numa tela custa pouco e não depende de nada adiante.*
 
+### F2T — TRILHA TRANSACIONAL E CAPTAÇÃO (Espec. 11 §4 + Espec. 12) · **PLANEJADA em 13/10/2026**
+
+**Por que não é a F2:** a F2 dá consumidor aos tipos que JÁ chegam pela extração por IA. A F2T é um
+segundo caminho de entrada, determinístico e sem IA, para arquivos de leiaute oficial (SPED,
+eSocial, XML fiscal e de transporte, CNAB, OFX), mais a captação automática deles. O escopo inteiro
+está em `Arquitetura do Sistema/2 Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md`. As lacunas
+citadas abaixo (G1–G27) são as do §13 dela.
+
+| | |
+|---|---|
+| **Objetivo** | Ler e usar todos os módulos e grupos de SPED, eSocial, logística e CNAB, mais o CNAE, com proveniência por arquivo e linha, e captar esses arquivos com o mínimo de ação humana |
+| **Estado** | ⚪ **só especificação.** Os tipos `SPED`, `EXTRATO_BANCARIO`, `AGING_AP` e `AGING_AR` existem, todos `sem_consumidor` (`0187`). O roteador `N8N/lib/formato.mjs` não reconhece nenhuma das famílias (G5). Zero SPED em produção |
+| **Gap** | Etapa 0 inteira: D12.1–D12.11 e os [A CONFIRMAR] da Espec. 12; D5 e D6 da Espec. 11 (a D6, Open Finance, é a mesma decisão que a D12.4) |
+| **Dep.** | Etapa 1 depende só da F0. As ondas dependem de **F1** (CNPJ por entidade e perímetro). As reconciliações conta a conta (S2, por exemplo) esperam **F4**. A eliminação intragrupo das notas (G11) espera **F6**. Ver a tabela de etapas |
+| **Agentes** | `migrations-postgres` (tabelas, tipos, reconciliações), `n8n-workflow` (roteador, coletores, republicação), `portal-export` (saída no book, envio direto ao Storage, painel), `suites-invariantes` (cada reconciliação medida não-vazia), `revisor-defeito-silencioso` (todo diff) |
+| **Testes** | Um gerador sintético por família, que fecha no BP (padrão `book-distress`), mais um portão no CI por onda. Amostras reais anonimizadas de 3 mandatos para o aceite (G15) |
+| **Risco** | **Médio.** É aditivo, mas o volume já derrubou o n8n uma vez (G6), e a captação mexe em credencial fiscal do cliente (G19–G21) · **Impacto** Alto: é o que a Espec. 11 chama de "o principal fator que muda a análise como um todo" · **Esforço** G |
+| **Saída** | Por onda: o leitor lê 100% dos registros do arquivo (contagem lida = controle do próprio arquivo); as reconciliações da onda rodam em 3 casos reais com toda divergência acima da tolerância explicada; o resultado aparece no book |
+| **Contribui para** | **DATA GATE** (F6): dá a fonte independente que confere o dado declarado |
+
+**As etapas, em ordem.** Uma etapa só começa com a anterior aceita.
+
+| Etapa | Escopo | Depende de | Pode rodar em paralelo com | Critério de pronto |
+|---|---|---|---|---|
+| **0 — Decisões e confirmações** | D12.1–D12.11; D5 e D6 da Espec. 11; cada [A CONFIRMAR] com quem verifica (G26, G27) | dono | qualquer fase | Toda decisão que bloqueia a etapa 1 e a onda 1 tem resposta escrita na Espec. 12 |
+| **1 — Fundação sem cliente** | Roteador reconhece as famílias e abre zip com limites (G5); leitor fora do grafo item a item do n8n, gravando em lote (G6, D12.9); registro de leiautes versionado (G7); particularidades de formato (G10); regras de período (G12), de precedência (G2) e de tolerância (G3); chave contra duplicidade e versão vigente (G9); desligável por caso (G25) | F0 · etapa 0 | **F1, F3, F3b** (arquivos disjuntos: `N8N/lib/formato.mjs` e o leitor novo) | Os geradores sintéticos de todas as famílias passam pelo roteador e pelo leitor com contagem = controle; arquivo de versão desconhecida reprova alto; todas as suítes existentes verdes |
+| **2 — Jurídico e segurança** | P3 (termo, RIPD, retenção), escopo só de consulta na procuração (G21), desenho do cofre e RLS (G19, G20) | etapa 0 | etapa 1 | Revisão jurídica assinada e revisão de segurança feita. **Nada é coletado antes** |
+| **Onda 1** | ECD + ECF + PGDAS-D/DEFIS (se D12.10) + CNAE da entidade; medir o `I051` em 3 ECDs reais; captação peças 1–3 | etapa 1 · **F1** | F3, F3b | S1, S6 e o segmento real (`Y540`) em 3 casos reais; S2 só depois da F4 |
+| **Onda 2** | OFX, CNAB `E`, CNAB de cobrança e pagamentos (240, 400, 150) | onda 1 | — | C1, C2, C3, C4 e C6 em 3 casos reais; caixa realizado mensal no book |
+| **Onda 3** | EFD ICMS/IPI, Contribuições, Reinf, XML de NF-e e NFS-e (regra da reforma tributária, G8) | onda 2 · **F6** para a eliminação intragrupo (G11) | — | S3, S4, S5 e S7 em 3 casos reais; nota intragrupo nunca somada como receita |
+| **Onda 4** | eSocial (todos os grupos), DCTFWeb, FGTS Digital | onda 3 · etapa 2 · D12.7 | — | E1 a E5 em 3 casos reais; nenhum CPF além do que a D12.7 permite |
+| **Onda 5** | CT-e, MDF-e, DU-E, DI/DUIMP, CE-Mercante, B/L, AWB, CRT | onda 3 (chave da NF-e) | onda 4 | L1 a L6 em 3 casos reais |
+| **Captação 4–6** | Cofre, coletores agendados, painel de cobertura (G17, G18, G22, G23) | etapa 2 · D12.1–D12.5 | ondas 2–5 | Cada coletor grava rodou/falhou/vazio/não configurado; um mandato-piloto abastecido sem envio manual das fontes do canal B |
+
+**O que a F2T NÃO faz:** não altera `campo_extraido` nem a extração por IA; não substitui em
+silêncio nenhum número do book (D12.8); não liga coleta automática antes da etapa 2.
+
 ### F3 — ESTABILIDADE E CONCORDÂNCIA DA EXTRAÇÃO
 
 | | |
@@ -680,6 +717,9 @@ paralelizável.
 - **F5** ∥ final de F4.
 - **F17** distribuída, sempre.
 - **Terceiro book (distress)** ∥ qualquer coisa.
+- **F2T etapa 1** (roteador e leitor novo) ∥ **F1 ∥ F3 ∥ F3b**: conjuntos disjuntos, desde que a
+  etapa 1 não toque o `SYSTEM_PROMPT` nem o schema da linha. **F2T etapas 0 e 2** (decisão,
+  jurídico) ∥ qualquer coisa.
 
 ### Paralelização PROIBIDA
 - **F4 com qualquer coisa que toque `campo_extraido` ou as reconciliações.** Arquivos não disjuntos;
@@ -689,6 +729,10 @@ paralelizável.
 - **F15 com F16.** PPT antes da camada de apresentação lê dados por conta própria e vira a segunda
   fonte. **É o erro mais provável do roadmap inteiro**, porque PPT é o que mais se quer ver.
 - **Qualquer fase com F0 aberta.**
+- **Uma onda da F2T que crie reconciliação junto com a F4.** As duas tocam as reconciliações. A
+  onda espera, ou a reconciliação dela fica por total, sem conta a conta.
+- **Coleta automática (F2T captação 4–6) antes da F2T etapa 2.** Credencial fiscal sem termo e sem
+  cofre é risco jurídico, não dívida técnica.
 
 ### MVP
 
