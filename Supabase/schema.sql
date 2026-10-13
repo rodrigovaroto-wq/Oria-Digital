@@ -12788,6 +12788,260 @@ $$;
 COMMENT ON FUNCTION public.fn_resolver_linha_exigida_superada(p_tipos text[], p_ator text) IS '0187: resolve as pendências linha_exigida_ausente ABERTAS dos tipos pedidos que o Portão 1 não abriria mais hoje (exigência inativa ou satisfeita, pelo critério de fn_exigencias_do_caso), com um evento_auditoria por pendência. Não toca aceita_com_ressalva, não roda o resto da completude. Ação de migration/service_role — sem grant para o portal.';
 
 --
+-- Name: fn_resumo_anexar(uuid, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_status text;
+  v_nr integer := 0;
+  v_ng integer := 0;
+begin
+  select resumo_status into v_status from arquivo_oficial where id = p_arquivo for update;
+  if not found then raise exception 'fn_resumo_anexar: o arquivo oficial % não existe', p_arquivo; end if;
+  if v_status is distinct from 'em_carga' then
+    raise exception 'fn_resumo_anexar: o resumo do arquivo % está "%", não "em_carga" — recusado, nada foi gravado (reabra com fn_resumo_iniciar)',
+      p_arquivo, coalesce(v_status, 'nunca iniciado');
+  end if;
+  p_registros := coalesce(p_registros, '[]'::jsonb);
+  p_grupos := coalesce(p_grupos, '[]'::jsonb);
+  if jsonb_typeof(p_registros) <> 'array' or jsonb_typeof(p_grupos) <> 'array' then
+    raise exception 'fn_resumo_anexar: registros e grupos têm de ser arrays';
+  end if;
+  if jsonb_array_length(p_registros) > 10000 or jsonb_array_length(p_grupos) > 10000 then
+    raise exception 'fn_resumo_anexar: parte grande demais (% registros, % grupos; teto 10000 de cada, o combinado é ~5000)',
+      jsonb_array_length(p_registros), jsonb_array_length(p_grupos);
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_registros) e
+              where jsonb_typeof(e) <> 'array' or jsonb_array_length(e) <> 2
+                 or jsonb_typeof(e->0) <> 'number' or jsonb_typeof(e->1) <> 'string') then
+    raise exception 'fn_resumo_anexar: cada registro tem de ser [linha, texto]';
+  end if;
+
+  insert into arquivo_oficial_registro (arquivo_oficial_id, linha, registro, conteudo)
+  select p_arquivo, (e->>0)::integer, split_part(e->>1, '|', 2), e->>1
+    from jsonb_array_elements(p_registros) e;
+  get diagnostics v_nr = row_count;
+
+  insert into arquivo_oficial_lancamento_mes
+    (arquivo_oficial_id, conta, mes, ind_lcto, debito, credito, partidas, partidas_sem_valor, primeira_linha)
+  select p_arquivo, g.conta,
+         case when g.mes is null then null else (g.mes || '-01')::date end,
+         g.ind_lcto, g.debito, g.credito, g.partidas, g.partidas_sem_valor, g.primeira_linha
+    from jsonb_to_recordset(p_grupos) as g(conta text, mes text, ind_lcto text, debito bigint, credito bigint,
+                                            partidas integer, partidas_sem_valor integer, primeira_linha integer);
+  get diagnostics v_ng = row_count;
+
+  return jsonb_build_object('registros', v_nr, 'grupos', v_ng);
+end $$;
+
+--
+-- Name: FUNCTION fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb) IS 'Anexa uma parte (até 10000 itens de cada) ao resumo em_carga: p_registros = [[linha,texto],...], p_grupos = objetos {conta,mes,ind_lcto,debito,credito,partidas,partidas_sem_valor,primeira_linha}. Linha repetida no mesmo arquivo é erro (pk). Só aceita com resumo_status = em_carga. Devolve {registros, grupos} inseridos. 0207.';
+
+--
+-- Name: fn_resumo_concluir(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_resumo_concluir(p_arquivo uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $_$
+declare
+  a        arquivo_oficial;
+  v_motivos text[] := '{}';
+  v_nr     integer;
+  v_ng     integer;
+  v_fora   integer;
+  v_div    text;
+  v_part   bigint;
+  v_i250   bigint;
+  v_i155   jsonb;
+  v_motivo text;
+begin
+  select * into a from arquivo_oficial where id = p_arquivo for update;
+  if not found then raise exception 'fn_resumo_concluir: o arquivo oficial % não existe', p_arquivo; end if;
+  if a.resumo_status in ('completo', 'recusado') then   -- idempotente: o navegador pode repetir depois de perder a resposta
+    return jsonb_build_object('resumo', a.resumo_status, 'motivo', a.resumo_motivo,
+      'registros', (select count(*) from arquivo_oficial_registro where arquivo_oficial_id = p_arquivo),
+      'grupos', (select count(*) from arquivo_oficial_lancamento_mes where arquivo_oficial_id = p_arquivo),
+      'i155_nao_fecham', (a.resumo_conferencia->'i155'->>'nao_fecham')::integer);
+  end if;
+  if a.resumo_status is distinct from 'em_carga' then
+    raise exception 'fn_resumo_concluir: o resumo do arquivo % está "%", não "em_carga"', p_arquivo, coalesce(a.resumo_status, 'nunca iniciado');
+  end if;
+
+  select count(*) into v_nr from arquivo_oficial_registro where arquivo_oficial_id = p_arquivo;
+  select count(*) into v_ng from arquivo_oficial_lancamento_mes where arquivo_oficial_id = p_arquivo;
+
+  -- (a) o que chegou é o que foi declarado.
+  if v_nr <> a.resumo_total_registros then
+    v_motivos := v_motivos || format('registros gravados %s, declarados %s', v_nr, a.resumo_total_registros);
+  end if;
+  if v_ng <> a.resumo_total_grupos then
+    v_motivos := v_motivos || format('grupos gravados %s, declarados %s', v_ng, a.resumo_total_grupos);
+  end if;
+
+  -- (b) linha de um arquivo de controle_lido linhas está entre 1 e controle_lido.
+  select (select count(*) from arquivo_oficial_registro
+           where arquivo_oficial_id = p_arquivo and (linha < 1 or linha > a.controle_lido))
+       + (select count(*) from arquivo_oficial_lancamento_mes
+           where arquivo_oficial_id = p_arquivo and primeira_linha is not null
+             and (primeira_linha < 1 or primeira_linha > a.controle_lido))
+    into v_fora;
+  if v_fora > 0 then
+    v_motivos := v_motivos || format('%s linha(s) fora de 1..%s (o arquivo tem %s linhas)', v_fora, a.controle_lido, a.controle_lido);
+  end if;
+
+  -- (c) cada tipo que aparece no resumo tem a contagem do envelope (já conferida contra o 9900).
+  select string_agg(format('%s: resumo %s, envelope %s', t.registro, t.n, coalesce(a.detalhe->'por_registro'->>t.registro, '0')), '; ' order by t.registro)
+    into v_div
+    from (select registro, count(*) n from arquivo_oficial_registro where arquivo_oficial_id = p_arquivo group by registro) t
+   where coalesce((a.detalhe->'por_registro'->>t.registro)::bigint, 0) <> t.n;
+  if v_div is not null then
+    v_motivos := v_motivos || ('contagem por registro diverge do envelope (' || v_div || ')');
+  end if;
+
+  -- (d) as partidas somadas nos grupos são as I250 do envelope; só a ECD tem grupos.
+  select coalesce(sum(partidas), 0) into v_part from arquivo_oficial_lancamento_mes where arquivo_oficial_id = p_arquivo;
+  if a.familia = 'sped' and a.subtipo = 'ECD' then
+    v_i250 := coalesce((a.detalhe->'por_registro'->>'I250')::bigint, 0);
+    if v_part <> v_i250 then
+      v_motivos := v_motivos || format('soma de partidas dos grupos %s, I250 do envelope %s', v_part, v_i250);
+    end if;
+  elsif v_ng > 0 then
+    v_motivos := v_motivos || format('%s grupo(s) de lançamento em arquivo %s/%s, que não os tem', v_ng, a.familia, a.subtipo);
+  end if;
+
+  if cardinality(v_motivos) > 0 then
+    v_motivo := array_to_string(v_motivos, ' | ');
+    delete from arquivo_oficial_registro where arquivo_oficial_id = p_arquivo;
+    delete from arquivo_oficial_lancamento_mes where arquivo_oficial_id = p_arquivo;
+    update arquivo_oficial set resumo_status = 'recusado', resumo_motivo = v_motivo where id = p_arquivo;
+    return jsonb_build_object('resumo', 'recusado', 'motivo', v_motivo, 'registros', 0, 'grupos', 0, 'i155_nao_fecham', null);
+  end if;
+
+  -- A aritmética do I155 é ACHADO e não recusa. |I155|COD_CTA|COD_CCUS|VL_SLD_INI|IND_DC_INI|VL_DEB|VL_CRED|VL_SLD_FIN|IND_DC_FIN|
+  -- (split_part: 3 = conta, 5 = saldo ini, 6 = D/C ini, 7 = débito, 8 = crédito, 9 = saldo fin, 10 = D/C fin).
+  with i as (
+    select linha, split_part(conteudo, '|', 3) conta,
+           split_part(conteudo, '|', 5) sini, split_part(conteudo, '|', 6) dcini,
+           split_part(conteudo, '|', 7) deb,  split_part(conteudo, '|', 8) cred,
+           split_part(conteudo, '|', 9) sfin, split_part(conteudo, '|', 10) dcfin
+      from arquivo_oficial_registro where arquivo_oficial_id = p_arquivo and registro = 'I155'
+  ), n as (
+    select linha, conta, dcini, dcfin,
+           (sini ~ '^[0-9]+(,[0-9]+)?$' or sini ~ '^[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?$')
+             and (deb ~ '^[0-9]+(,[0-9]+)?$' or deb ~ '^[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?$')
+             and (cred ~ '^[0-9]+(,[0-9]+)?$' or cred ~ '^[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?$')
+             and (sfin ~ '^[0-9]+(,[0-9]+)?$' or sfin ~ '^[0-9]{1,3}(\.[0-9]{3})+(,[0-9]+)?$')
+             and dcini in ('D', 'C') and dcfin in ('D', 'C') as legivel,
+           sini, deb, cred, sfin
+      from i
+  ), v as (
+    select linha, conta, legivel,
+           case when legivel then
+             (replace(replace(sini, '.', ''), ',', '.')::numeric * case dcini when 'D' then 1 else -1 end)
+             + replace(replace(deb, '.', ''), ',', '.')::numeric - replace(replace(cred, '.', ''), ',', '.')::numeric
+           end esperado,
+           case when legivel then replace(replace(sfin, '.', ''), ',', '.')::numeric * case dcfin when 'D' then 1 else -1 end end declarado
+      from n
+  )
+  select jsonb_build_object(
+           'total', count(*),
+           'ilegiveis', count(*) filter (where not legivel),
+           'nao_fecham', count(*) filter (where legivel and esperado <> declarado),
+           'amostra', coalesce((select jsonb_agg(jsonb_build_object('linha', linha, 'conta', conta, 'esperado', esperado, 'declarado', declarado) order by linha)
+                                  from (select * from v where legivel and esperado <> declarado order by linha limit 20) s), '[]'::jsonb))
+    into v_i155 from v;
+
+  update arquivo_oficial set resumo_status = 'completo', resumo_motivo = null,
+         resumo_conferencia = coalesce(resumo_conferencia, '{}'::jsonb) || jsonb_build_object('i155', v_i155)
+   where id = p_arquivo;
+  return jsonb_build_object('resumo', 'completo', 'registros', v_nr, 'grupos', v_ng,
+                            'i155_nao_fecham', (v_i155->>'nao_fecham')::integer);
+end $_$;
+
+--
+-- Name: FUNCTION fn_resumo_concluir(p_arquivo uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_resumo_concluir(p_arquivo uuid) IS 'A reconferência do servidor sobre o resumo carregado: gravado = declarado, linhas em 1..controle_lido, contagem por registro = detalhe.por_registro do envelope, soma de partidas = I250 (ECD). Falhou: recusado + linhas apagadas. Passou: completo, e conta (sem recusar) os I155 cuja aritmética saldo_ini + débito - crédito = saldo_fin não fecha, em resumo_conferencia->i155. Idempotente. 0207.';
+
+--
+-- Name: fn_resumo_iniciar(uuid, uuid, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $_$
+declare
+  v_reg  jsonb;
+  v_arq  arquivo_oficial;
+  v_ver  text;
+  v_totr integer;
+  v_totg integer;
+  v_motivo text;
+begin
+  if p_envelope is null or p_cabecalho is null then
+    raise exception 'fn_resumo_iniciar: envelope e cabeçalho do resumo são obrigatórios';
+  end if;
+  -- Antes de gravar QUALQUER coisa: um resumo de outro arquivo não pode ser pendurado neste envelope.
+  if p_cabecalho->>'hash_sha256' is distinct from p_envelope->>'hash_sha256' then
+    raise exception 'fn_resumo_iniciar: o hash do resumo (%) não é o do envelope (%) — resumo de outro arquivo, recusado',
+      p_cabecalho->>'hash_sha256', p_envelope->>'hash_sha256';
+  end if;
+
+  v_reg := fn_registrar_arquivo_oficial(p_caso, p_documento, p_envelope);   -- recusa a trilha desligada
+  select * into v_arq from arquivo_oficial where id = (v_reg->>'id')::uuid for update;
+  v_ver := coalesce(p_cabecalho->>'versao', '');
+  if v_ver = '' then
+    raise exception 'fn_resumo_iniciar: o cabeçalho não traz a versão do resumo';
+  end if;
+
+  if v_arq.resumo_status = 'completo' and v_arq.resumo_versao = v_ver then
+    return v_reg || jsonb_build_object('resumo', 'reenvio');
+  end if;
+
+  if v_arq.status <> 'lido' or nullif(p_cabecalho->>'ausente', '') is not null then
+    v_motivo := case when v_arq.status <> 'lido'
+      then 'arquivo não lido por inteiro (' || v_arq.status || '): sem resumo, para que nada parcial seja tomado pelo arquivo'
+           || coalesce(' — ' || nullif(p_cabecalho->>'ausente', ''), '')
+      else p_cabecalho->>'ausente' end;
+    delete from arquivo_oficial_registro where arquivo_oficial_id = v_arq.id;
+    delete from arquivo_oficial_lancamento_mes where arquivo_oficial_id = v_arq.id;
+    update arquivo_oficial set resumo_status = 'ausente', resumo_versao = v_ver, resumo_motivo = v_motivo,
+           resumo_conferencia = p_cabecalho->'conferencia', resumo_descartado = p_cabecalho->>'descartado',
+           resumo_total_registros = null, resumo_total_grupos = null
+     where id = v_arq.id;
+    return v_reg || jsonb_build_object('resumo', 'ausente', 'motivo', v_motivo);
+  end if;
+
+  if coalesce(p_cabecalho->>'total_registros', '') !~ '^[0-9]+$' or coalesce(p_cabecalho->>'total_grupos', '') !~ '^[0-9]+$' then
+    raise exception 'fn_resumo_iniciar: o cabeçalho não declara total_registros e total_grupos (inteiros >= 0); sem eles o servidor não tem contra o que conferir';
+  end if;
+  v_totr := (p_cabecalho->>'total_registros')::integer;
+  v_totg := (p_cabecalho->>'total_grupos')::integer;
+
+  delete from arquivo_oficial_registro where arquivo_oficial_id = v_arq.id;
+  delete from arquivo_oficial_lancamento_mes where arquivo_oficial_id = v_arq.id;
+  update arquivo_oficial set resumo_status = 'em_carga', resumo_versao = v_ver, resumo_motivo = null,
+         resumo_conferencia = p_cabecalho->'conferencia', resumo_descartado = p_cabecalho->>'descartado',
+         resumo_total_registros = v_totr, resumo_total_grupos = v_totg
+   where id = v_arq.id;
+  return v_reg || jsonb_build_object('resumo', 'em_carga');
+end $_$;
+
+--
+-- Name: FUNCTION fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb) IS 'Abre a carga do resumo de um arquivo oficial: registra o envelope (fn_registrar_arquivo_oficial, que recusa a trilha desligada), recusa resumo de outro hash, e devolve {id,status,vigente,resumo} com resumo = em_carga (mande as partes), ausente (nada a mandar) ou reenvio (já completo nesta versão). Apaga a carga anterior do mesmo arquivo. 0207.';
+
+--
 -- Name: fn_revisar_documento(uuid, text, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -13790,20 +14044,23 @@ $$;
 COMMENT ON FUNCTION public.fn_unidade_predominante(p_documento_versao_id uuid) IS 'Escala predominante (unidade) das linhas extraídas de uma versão de documento; null quando nenhuma linha declara escala.';
 
 --
--- Name: fn_upsert_caso(text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_upsert_caso(text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_upsert_caso(p_nome text) RETURNS uuid
+CREATE FUNCTION public.fn_upsert_caso(p_nome text, p_ator text DEFAULT 'sistema:n8n'::text) RETURNS uuid
     LANGUAGE plpgsql
     AS $$
 declare
   v_id uuid;
 begin
+  if p_ator not in ('sistema:n8n', 'portal:navegador') then
+    raise exception 'fn_upsert_caso: ator % fora da lista (sistema:n8n, portal:navegador)', p_ator;
+  end if;
   select id into v_id from caso where nome = p_nome limit 1;
   if v_id is null then
     insert into caso (nome) values (p_nome) returning id into v_id;
     insert into evento_auditoria (ator, acao, entidade_ref, depois)
-      values ('sistema:n8n', 'caso_criado', 'caso:'||v_id, jsonb_build_object('nome', p_nome));
+      values (p_ator, 'caso_criado', 'caso:'||v_id, jsonb_build_object('nome', p_nome));
   end if;
   return v_id;
 end;
@@ -14694,10 +14951,18 @@ CREATE TABLE public.arquivo_oficial (
     leitor_versao text NOT NULL,
     lido_em timestamp with time zone DEFAULT now() NOT NULL,
     seq bigint NOT NULL,
+    resumo_status text,
+    resumo_versao text,
+    resumo_motivo text,
+    resumo_conferencia jsonb,
+    resumo_descartado text,
+    resumo_total_registros integer,
+    resumo_total_grupos integer,
     CONSTRAINT arquivo_oficial_controle_tipo_check CHECK ((controle_tipo = ANY (ARRAY['contagem_declarada'::text, 'documento_unico'::text, 'sem_controle_no_formato'::text]))),
     CONSTRAINT arquivo_oficial_divergente_tem_as_duas CHECK (((status <> 'controle_divergente'::text) OR ((controle_declarado IS NOT NULL) AND (controle_lido IS NOT NULL) AND (controle_declarado <> controle_lido)))),
     CONSTRAINT arquivo_oficial_familia_check CHECK ((familia = ANY (ARRAY['sped'::text, 'nfe'::text, 'cte'::text, 'mdfe'::text, 'nfse'::text, 'esocial'::text, 'reinf'::text, 'cnab240'::text, 'cnab400'::text, 'cnab150'::text, 'ofx'::text, 'zip'::text]))),
     CONSTRAINT arquivo_oficial_lido_tem_contagem CHECK (((status <> 'lido'::text) OR ((controle_lido IS NOT NULL) AND ((controle_tipo <> 'contagem_declarada'::text) OR ((controle_declarado IS NOT NULL) AND (controle_declarado = controle_lido)))))),
+    CONSTRAINT arquivo_oficial_resumo_status_check CHECK ((resumo_status = ANY (ARRAY['em_carga'::text, 'completo'::text, 'ausente'::text, 'recusado'::text]))),
     CONSTRAINT arquivo_oficial_status_check CHECK ((status = ANY (ARRAY['lido'::text, 'controle_divergente'::text, 'versao_desconhecida'::text, 'familia_desconhecida'::text, 'falhou'::text]))),
     CONSTRAINT arquivo_oficial_vigente_so_se_lido CHECK (((NOT vigente) OR (status = 'lido'::text)))
 );
@@ -14727,10 +14992,73 @@ COMMENT ON COLUMN public.arquivo_oficial.controle_tipo IS 'Como o formato se aut
 COMMENT ON COLUMN public.arquivo_oficial.seq IS 'Ordem de registro. Desempata "o registrado por último vence" na versão vigente; lido_em não serve, pois duas linhas na mesma transação têm o mesmo now().';
 
 --
+-- Name: COLUMN arquivo_oficial.resumo_status; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.arquivo_oficial.resumo_status IS 'Estado do resumo enviado pelo navegador: em_carga (partes chegando), completo (o servidor reconferiu), ausente (não há resumo, e resumo_motivo diz por quê) ou recusado (incoerente, linhas apagadas). NULL = nunca tentado. 0207.';
+
+--
+-- Name: COLUMN arquivo_oficial.resumo_conferencia; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.arquivo_oficial.resumo_conferencia IS 'A conferência do leitor (i250_lidos, valores_invalidos, lançamentos desbalanceados...) mais a chave i155 que o SERVIDOR calcula no concluir: {total, nao_fecham, ilegiveis, amostra}. 0207.';
+
+--
+-- Name: COLUMN arquivo_oficial.resumo_descartado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.arquivo_oficial.resumo_descartado IS 'O que o resumo NÃO guarda, dito pelo próprio leitor (ex.: o lançamento individual I200/I250). 0207.';
+
+--
 -- Name: CONSTRAINT arquivo_oficial_lido_tem_contagem ON arquivo_oficial; Type: COMMENT; Schema: public; Owner: -
 --
 
 COMMENT ON CONSTRAINT arquivo_oficial_lido_tem_contagem ON public.arquivo_oficial IS 'Regra 7: "lido" nunca sem contagem. O is not null explícito evita o check que dá NULL e passa.';
+
+--
+-- Name: arquivo_oficial_lancamento_mes; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.arquivo_oficial_lancamento_mes (
+    arquivo_oficial_id uuid NOT NULL,
+    conta text NOT NULL,
+    mes date,
+    ind_lcto text,
+    debito bigint NOT NULL,
+    credito bigint NOT NULL,
+    partidas integer NOT NULL,
+    partidas_sem_valor integer NOT NULL,
+    primeira_linha integer
+);
+
+--
+-- Name: TABLE arquivo_oficial_lancamento_mes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.arquivo_oficial_lancamento_mes IS 'O I250 da ECD somado por (conta, mês, IND_LCTO), em centavos. mes NULL = partida sem I200 antes ou com data inválida: é DADO, a marca do problema, e não erro. partidas_sem_valor > 0 = o grupo é incompleto. 0207.';
+
+--
+-- Name: COLUMN arquivo_oficial_lancamento_mes.mes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.arquivo_oficial_lancamento_mes.mes IS 'Primeiro dia do mês; NULL = partida sem I200 ou data inválida.';
+
+--
+-- Name: arquivo_oficial_registro; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.arquivo_oficial_registro (
+    arquivo_oficial_id uuid NOT NULL,
+    linha integer NOT NULL,
+    registro text NOT NULL,
+    conteudo text NOT NULL
+);
+
+--
+-- Name: TABLE arquivo_oficial_registro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.arquivo_oficial_registro IS 'Os registros guardados NA ÍNTEGRA do resumo de um arquivo oficial, com o número da linha do arquivo (proveniência). registro é o código (split_part(conteudo,''|'',2)). Só existe para resumo em_carga ou completo. 0207.';
 
 --
 -- Name: arquivo_oficial_seq_seq; Type: SEQUENCE; Schema: public; Owner: -
@@ -16145,11 +16473,25 @@ ALTER TABLE ONLY public.arquivo_oficial
     ADD CONSTRAINT arquivo_oficial_caso_hash_uk UNIQUE (caso_id, hash_sha256);
 
 --
+-- Name: arquivo_oficial_lancamento_mes arquivo_oficial_lancamento_mes_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial_lancamento_mes
+    ADD CONSTRAINT arquivo_oficial_lancamento_mes_uk UNIQUE NULLS NOT DISTINCT (arquivo_oficial_id, conta, mes, ind_lcto);
+
+--
 -- Name: arquivo_oficial arquivo_oficial_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.arquivo_oficial
     ADD CONSTRAINT arquivo_oficial_pkey PRIMARY KEY (id);
+
+--
+-- Name: arquivo_oficial_registro arquivo_oficial_registro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial_registro
+    ADD CONSTRAINT arquivo_oficial_registro_pkey PRIMARY KEY (arquivo_oficial_id, linha);
 
 --
 -- Name: campo_classe_override campo_classe_override_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -16557,6 +16899,18 @@ ALTER TABLE ONLY public.taxonomia_tipo_documento
 CREATE INDEX arquivo_oficial_caso_idx ON public.arquivo_oficial USING btree (caso_id, familia);
 
 --
+-- Name: arquivo_oficial_lancamento_mes_arq_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX arquivo_oficial_lancamento_mes_arq_idx ON public.arquivo_oficial_lancamento_mes USING btree (arquivo_oficial_id);
+
+--
+-- Name: arquivo_oficial_registro_tipo_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX arquivo_oficial_registro_tipo_idx ON public.arquivo_oficial_registro USING btree (arquivo_oficial_id, registro);
+
+--
 -- Name: arquivo_oficial_uma_vigente_por_chave; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -16881,6 +17235,20 @@ ALTER TABLE ONLY public.arquivo_oficial
 
 ALTER TABLE ONLY public.arquivo_oficial
     ADD CONSTRAINT arquivo_oficial_documento_id_fkey FOREIGN KEY (documento_id) REFERENCES public.documento(id) ON DELETE SET NULL;
+
+--
+-- Name: arquivo_oficial_lancamento_mes arquivo_oficial_lancamento_mes_arquivo_oficial_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial_lancamento_mes
+    ADD CONSTRAINT arquivo_oficial_lancamento_mes_arquivo_oficial_id_fkey FOREIGN KEY (arquivo_oficial_id) REFERENCES public.arquivo_oficial(id) ON DELETE CASCADE;
+
+--
+-- Name: arquivo_oficial_registro arquivo_oficial_registro_arquivo_oficial_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial_registro
+    ADD CONSTRAINT arquivo_oficial_registro_arquivo_oficial_id_fkey FOREIGN KEY (arquivo_oficial_id) REFERENCES public.arquivo_oficial(id) ON DELETE CASCADE;
 
 --
 -- Name: arquivo_oficial arquivo_oficial_substituido_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -17341,6 +17709,30 @@ ALTER TABLE public.arquivo_oficial ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY arquivo_oficial_authenticated_all ON public.arquivo_oficial TO authenticated USING (true) WITH CHECK (true);
+
+--
+-- Name: arquivo_oficial_lancamento_mes; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.arquivo_oficial_lancamento_mes ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: arquivo_oficial_lancamento_mes arquivo_oficial_lancamento_mes_authenticated_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_lancamento_mes_authenticated_all ON public.arquivo_oficial_lancamento_mes TO authenticated USING (true) WITH CHECK (true);
+
+--
+-- Name: arquivo_oficial_registro; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.arquivo_oficial_registro ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: arquivo_oficial_registro arquivo_oficial_registro_authenticated_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_registro_authenticated_all ON public.arquivo_oficial_registro TO authenticated USING (true) WITH CHECK (true);
 
 --
 -- Name: campo_classe_override; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18760,6 +19152,24 @@ GRANT ALL ON FUNCTION public.fn_registrar_uso_lote(p_caso_id uuid, p_execucao_re
 REVOKE ALL ON FUNCTION public.fn_resolver_linha_exigida_superada(p_tipos text[], p_ator text) FROM PUBLIC;
 
 --
+-- Name: FUNCTION fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb) TO authenticated;
+
+--
+-- Name: FUNCTION fn_resumo_concluir(p_arquivo uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_resumo_concluir(p_arquivo uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb) TO authenticated;
+
+--
 -- Name: FUNCTION fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -18856,6 +19266,12 @@ GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO authenticate
 GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_upsert_caso(p_nome text, p_ator text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) TO authenticated;
+
+--
 -- Name: TABLE campo_extraido; Type: ACL; Schema: public; Owner: -
 --
 
@@ -18906,6 +19322,22 @@ GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_
 GRANT ALL ON TABLE public.arquivo_oficial TO anon;
 GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.arquivo_oficial TO authenticated;
 GRANT ALL ON TABLE public.arquivo_oficial TO service_role;
+
+--
+-- Name: TABLE arquivo_oficial_lancamento_mes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.arquivo_oficial_lancamento_mes TO anon;
+GRANT ALL ON TABLE public.arquivo_oficial_lancamento_mes TO authenticated;
+GRANT ALL ON TABLE public.arquivo_oficial_lancamento_mes TO service_role;
+
+--
+-- Name: TABLE arquivo_oficial_registro; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.arquivo_oficial_registro TO anon;
+GRANT ALL ON TABLE public.arquivo_oficial_registro TO authenticated;
+GRANT ALL ON TABLE public.arquivo_oficial_registro TO service_role;
 
 --
 -- Name: SEQUENCE arquivo_oficial_seq_seq; Type: ACL; Schema: public; Owner: -

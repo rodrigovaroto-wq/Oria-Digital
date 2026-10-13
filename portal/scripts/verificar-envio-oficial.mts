@@ -237,31 +237,14 @@ const concluirOk = (extra = {}) => ({ resumo: "completo", registros: 12001, grup
 }
 
 // ---------------------------------------------------------------------------
-// 5. O CASO_ID: reusa pelo nome, cria só se não existir
+// 5. O CASO_ID: pelo fn_upsert_caso (o do n8n), com o ator da tela
 // ---------------------------------------------------------------------------
-function clienteDeCasos(opts: { existente?: string; erroSelect?: string; erroInsert?: string; erroTrilha?: string }) {
+function clienteDeCasos(opts: { erro?: string; dado?: unknown }) {
   const log: string[] = [];
   const cliente = {
-    from(tabela: string) {
-      return {
-        select: () => ({
-          eq: (_c: string, nome: string) => ({
-            order: () => ({
-              limit: async () => {
-                log.push(`select caso nome=${nome}`);
-                return opts.erroSelect
-                  ? { data: null, error: { message: opts.erroSelect } }
-                  : { data: opts.existente ? [{ id: opts.existente }] : [], error: null };
-              },
-            }),
-          }),
-        }),
-        insert: (linha: Record<string, unknown>) => {
-          log.push(`insert ${tabela} ${JSON.stringify(linha)}`);
-          if (tabela === "evento_auditoria") return Promise.resolve({ error: opts.erroTrilha ? { message: opts.erroTrilha } : null });
-          return { select: () => ({ single: async () => (opts.erroInsert ? { data: null, error: { message: opts.erroInsert } } : { data: { id: "novo-id" }, error: null }) }) };
-        },
-      };
+    rpc: async (funcao: string, args: Record<string, unknown>) => {
+      log.push(`${funcao} ${JSON.stringify(args)}`);
+      return opts.erro ? { data: null, error: { message: opts.erro } } : { data: "dado" in opts ? opts.dado : "id-do-banco", error: null };
     },
   };
   return { cliente: cliente as unknown as Parameters<typeof obterCasoId>[0], log };
@@ -269,23 +252,18 @@ function clienteDeCasos(opts: { existente?: string; erroSelect?: string; erroIns
 {
   const a = clienteDeCasos({});
   const r1 = await obterCasoId(a.cliente, "AMO", "id-da-tela");
-  checar(r1.id === "id-da-tela" && !r1.criado && a.log.length === 0, "com casoId na tela o portal ainda consultou ou criou mandato");
-  const b = clienteDeCasos({ existente: "id-existente" });
+  checar(r1.id === "id-da-tela" && a.log.length === 0, "com casoId na tela o portal ainda chamou o banco");
+  // Sem casoId: a MESMA função do n8n, com o ator da tela (a trilha diz quem criou).
+  const b = clienteDeCasos({});
   const r2 = await obterCasoId(b.cliente, "AMO");
-  checar(r2.id === "id-existente" && !r2.criado && b.log.length === 1, `mandato existente foi duplicado: ${b.log.join(" / ")}`);
-  const c = clienteDeCasos({});
-  const r3 = await obterCasoId(c.cliente, "AMO");
-  checar(r3.id === "novo-id" && r3.criado && c.log.some((l) => l.startsWith("insert caso")) && c.log.some((l) => l.includes("evento_auditoria") && l.includes("caso_criado")),
-    `mandato novo não foi criado com o evento caso_criado: ${c.log.join(" / ")}`);
-  const d = clienteDeCasos({ erroTrilha: "sem permissão" });
-  const warn = console.warn; let avisou = false; console.warn = () => { avisou = true; };
-  const r4 = await obterCasoId(d.cliente, "AMO"); console.warn = warn;
-  checar(r4.criado && avisou, "falha na trilha do caso novo foi engolida sem aviso no console (ou bloqueou o envio)");
-  for (const [opts, trecho] of [[{ erroSelect: "RLS negou" }, "RLS negou"], [{ erroInsert: "violação" }, "violação"]] as const) {
-    let msg = "";
-    try { await obterCasoId(clienteDeCasos(opts).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
-    checar(msg.includes(trecho) && msg.includes("AMO"), `erro do banco ao resolver o mandato não sobe com a mensagem dele: "${msg}"`);
-  }
+  checar(r2.id === "id-do-banco" && b.log.length === 1 && b.log[0] === 'fn_upsert_caso {"p_nome":"AMO","p_ator":"portal:navegador"}',
+    `o mandato não foi resolvido pelo fn_upsert_caso com o ator da tela: ${b.log.join(" / ")}`);
+  let msg = "";
+  try { await obterCasoId(clienteDeCasos({ erro: "permission denied for function fn_upsert_caso" }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
+  checar(msg.includes("permission denied") && msg.includes("AMO"), `erro do banco ao resolver o mandato não sobe com a mensagem dele: "${msg}"`);
+  msg = "";
+  try { await obterCasoId(clienteDeCasos({ dado: null }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
+  checar(msg.includes("não devolveu o id"), `resposta sem id virou mandato: "${msg}"`);
 }
 
 // ---------------------------------------------------------------------------

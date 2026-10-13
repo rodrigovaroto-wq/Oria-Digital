@@ -192,56 +192,34 @@ export function fluxoComProgresso(
 // 4. O MANDATO (caso_id) PELO NAVEGADOR
 // ---------------------------------------------------------------------------
 
-type ClienteDoBanco = Pick<SupabaseClient, "from">;
+type ClienteDoBanco = Pick<SupabaseClient, "rpc">;
 
 /**
  * O `caso_id` do mandato. O formulário tem o NOME e, às vezes, o `casoId`.
  *
  * COM `casoId` (tela do mandato, nome travado) usa-se ele: é o id, e não há o que
- * resolver. SEM ele, procura-se o caso pelo nome EXATO — o mesmo critério do
- * `fn_upsert_caso` (0006) — e só se cria se não existir.
+ * resolver. SEM ele, `fn_upsert_caso` — a MESMA função do nó Upsert Caso do n8n,
+ * que reusa o caso pelo nome exato e só cria se não existir. A 0207 deu a ela o
+ * `grant execute` ao authenticated e o `p_ator`, para a trilha `caso_criado` dizer
+ * que foi a tela. Antes disso esta função repetia a regra em TypeScript (select e
+ * depois insert), e duas implementações da mesma regra divergem sem erro.
  *
- * POR QUE NÃO `rpc('fn_upsert_caso')`: nenhuma migration dá `grant execute` dela
- * ao `authenticated`, e a 0028 registra que em produção o Supabase revoga o
- * execute de PUBLIC em função nova (as únicas chamadas direto pelo portal têm
- * grant explícito). A tabela `caso`, ao contrário, tem a policy
- * `caso_authenticated_all` (0003) — o portal já a lê. A função continua sendo o
- * caminho do n8n (service_role); aqui o efeito é o mesmo: reuso por nome,
- * criação com o evento `caso_criado` na trilha.
- *
- * O QUE ISTO NÃO FECHA: `caso.nome` não é único, e o select-depois-insert é o
- * mesmo do `fn_upsert_caso` — duas abas criando o MESMO mandato novo no mesmo
- * instante criam dois. É por isso que, num lote misto, os oficiais rodam ANTES
- * do envio ao n8n: o n8n encontra o caso criado aqui, em vez de criar outro.
+ * O QUE ISTO NÃO FECHA: `caso.nome` não é único, e o select-depois-insert dentro da
+ * função não tem trava — duas abas criando o MESMO mandato novo no mesmo instante
+ * criam dois. É por isso que, num lote misto, os oficiais rodam ANTES do envio ao
+ * n8n: o n8n encontra o caso criado aqui, em vez de criar outro.
  */
 export async function obterCasoId(
   cliente: ClienteDoBanco,
   nome: string,
   casoId?: string,
-): Promise<{ id: string; criado: boolean }> {
-  if (casoId) return { id: casoId, criado: false };
-  const achou = await cliente.from("caso").select("id").eq("nome", nome)
-    .order("criado_em", { ascending: true }).limit(1);
-  if (achou.error) throw new Error(`Não foi possível consultar o mandato “${nome}”: ${achou.error.message}`);
-  const existente = achou.data?.[0]?.id;
-  if (typeof existente === "string") return { id: existente, criado: false };
-
-  const novo = await cliente.from("caso").insert({ nome }).select("id").single();
-  if (novo.error || typeof novo.data?.id !== "string") {
-    throw new Error(`Não foi possível criar o mandato “${nome}”: ${novo.error?.message ?? "o banco não devolveu o id"}`);
+): Promise<{ id: string }> {
+  if (casoId) return { id: casoId };
+  const { data, error } = await cliente.rpc("fn_upsert_caso", { p_nome: nome, p_ator: "portal:navegador" });
+  if (error || typeof data !== "string") {
+    throw new Error(`Não foi possível obter o mandato “${nome}”: ${error?.message ?? "o banco não devolveu o id"}`);
   }
-  const trilha = await cliente.from("evento_auditoria").insert({
-    ator: "portal:navegador",
-    acao: "caso_criado",
-    entidade_ref: `caso:${novo.data.id}`,
-    depois: { nome },
-  });
-  // O mandato já existe e o envio não depende da trilha: falhar aqui deixaria o
-  // analista sem poder enviar para um mandato que de fato foi criado. Mas não é
-  // silêncio: vai ao console, de onde quem investiga lê (mesmo critério de
-  // `upload-form.tsx` para a descoberta de campo).
-  if (trilha.error) console.warn(`[intake] mandato criado sem evento de auditoria: ${trilha.error.message}`);
-  return { id: novo.data.id, criado: true };
+  return { id: data };
 }
 
 // ---------------------------------------------------------------------------

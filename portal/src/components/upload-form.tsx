@@ -320,7 +320,7 @@ export default function UploadForm({
   // UM DE CADA VEZ porque cada leitura é CPU de uma thread (37,5 s para 10M de
   // linhas) e cada worker segura o seu heap: dois em paralelo disputam o mesmo
   // núcleo e dobram a memória sem terminar antes. O `caso_id` vem de
-  // `obterCasoId` (ver o porquê de não ser `fn_upsert_caso`).
+  // `obterCasoId` (o `fn_upsert_caso` do n8n, com o ator da tela).
   //
   // Devolve as chaves dos que ficaram SEM veredito do banco (falha de leitura,
   // de rede, exceção): eles continuam na lista para reenvio. Os que o banco

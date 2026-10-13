@@ -875,6 +875,15 @@ supabase db execute --file Supabase/migrations/0206_o_arquivo_oficial_lido_e_con
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0206' and not presente;                 -- ZERO linhas
 
+# A 0207 dá onde morar ao RESUMO do arquivo oficial (o SPED é lido no navegador e só o resumo vai ao banco):
+# arquivo_oficial_registro, arquivo_oficial_lancamento_mes, colunas resumo_* em arquivo_oficial e as três
+# funções fn_resumo_iniciar / fn_resumo_anexar / fn_resumo_concluir (carga em partes; o servidor reconfere).
+# Aplicar DEPOIS da 0206. Sem backfill. Teste: Supabase/test/resumo_oficial.test.sql.
+supabase db execute --file Supabase/migrations/0207_o_resumo_do_arquivo_oficial.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0207' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
