@@ -197,6 +197,20 @@ checar(recusa.includes(GIGANTE.nome),
 checar(!/\b(413|HTTP|multipart|Vercel|Serverless|n8n|CORS)\b/i.test(recusa),
   `a recusa por arquivo grande passou a citar ferramenta ou código de protocolo: "${recusa}"`);
 
+// O TETO É O DO N8N (15 MiB, medido em 13/10/2026): o n8n recusa o lote inteiro
+// com um arquivo acima dele, e o portal tem de dizer ANTES de o analista esperar
+// o upload. Era 200 MB — um PDF de 16 MiB subia inteiro para ser recusado do
+// outro lado, em silêncio (envio direto = resposta opaca). A igualdade com a
+// constante do n8n é afirmada em `verificar-envio-oficial.mts`.
+const NO_TETO = planejarEnvio([{ nome: "SCAN.pdf", bytes: 15 * MiB }], CAMPOS, MANDATO);
+const ACIMA = planejarEnvio([{ nome: "SCAN.pdf", bytes: 15 * MiB + 1 }, { nome: "DRE.pdf", bytes: 10 * KiB }], CAMPOS, MANDATO);
+checar(NO_TETO.acimaDoTetoPorArquivo.length === 0,
+  "um PDF de exatamente 15 MiB passou a ser recusado: o teto é o primeiro valor que NÃO passa, e o n8n aceita 15 MiB");
+checar(ACIMA.acimaDoTetoPorArquivo.length === 1 && ACIMA.acimaDoTetoPorArquivo[0].nome === "SCAN.pdf",
+  "um PDF de 15 MiB + 1 byte deixou de ser recusado antes de subir: o n8n o recusa depois do upload e a tela não diz nada");
+checar(planejarEnvio([{ nome: "SCAN.pdf", bytes: 16 * MiB }], CAMPOS, MANDATO).acimaDoTetoPorArquivo.length === 1,
+  "um PDF de 16 MiB sobe para o n8n, que recusa o lote inteiro (o teto do portal voltou a ser o antigo de 200 MB)");
+
 // O teto por arquivo não pode ser menor que o do proxy: seria um lote que não
 // cabe em lugar nenhum, recusado por um motivo que não é o verdadeiro.
 checar(TETO_POR_ARQUIVO_BYTES > TETO_DO_PROXY_BYTES,

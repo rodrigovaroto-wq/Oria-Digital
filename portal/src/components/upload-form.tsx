@@ -4,6 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { explicarFalha, explicarParada, explicarLoteVazio, type FalhaExplicada } from "@/lib/falha-em-portugues";
 import { ExcluirMandato } from "@/components/excluir-mandato";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import PainelOficiais from "@/components/painel-oficiais";
+import {
+  detectarPeloArquivo, separarOficiais, destinoDe, gravarResumo, obterCasoId, desfechoEncerra,
+  rotuloDaFamilia, type Deteccao, type ResultadoOficial, type ChamarRpc,
+} from "@/lib/envio-oficial";
+import { lerNoNavegador } from "@/lib/ler-no-navegador";
 import {
   estimativaEmMinutos, janelaPara, semPrimeiroSinalMs, semProgressoMs, proximoIntervalo,
   INTERVALO_ACOMPANHAMENTO_MS,
@@ -65,6 +72,38 @@ export default function UploadForm({
   // UM motivo: um mandato que terminou sem nada dentro tem de poder ser
   // descartado da própria tela que o acusa — ver o bloco de explicação.
   const [casoIdDoLote, setCasoIdDoLote] = useState<string | null>(null);
+  // O QUE O NAVEGADOR RECONHECEU PELOS BYTES (ver `lib/envio-oficial.ts`).
+  // `undefined` = ainda examinando; `null` = o arquivo não pôde ser examinado
+  // (segue o caminho de sempre, que dirá o que tiver a dizer).
+  const [deteccoes, setDeteccoes] = useState<Record<string, Deteccao | null>>({});
+  const promessasDeDeteccao = useRef(new Map<string, Promise<Deteccao | null>>());
+  // O RESULTADO DE CADA ARQUIVO LIDO NO PRÓPRIO COMPUTADOR, da fila ao veredito do banco.
+  const [oficiais, setOficiais] = useState<ResultadoOficial[]>([]);
+
+  const chaveDe = (f: File) => `${f.name}:${f.size}`;
+  // Uma detecção por arquivo, memorizada: a lista a pede ao escolher e o envio a
+  // pede de novo, e a segunda não pode reler os 64 KB nem correr contra a primeira.
+  function deteccaoDe(f: File): Promise<Deteccao | null> {
+    const chave = chaveDe(f);
+    let p = promessasDeDeteccao.current.get(chave);
+    if (!p) {
+      p = detectarPeloArquivo(f).catch(() => null);
+      promessasDeDeteccao.current.set(chave, p);
+    }
+    return p;
+  }
+  useEffect(() => {
+    let cancelado = false;
+    for (const f of arquivos) {
+      const chave = chaveDe(f);
+      deteccaoDe(f).then((d) => {
+        if (!cancelado) setDeteccoes((atuais) => (chave in atuais ? atuais : { ...atuais, [chave]: d }));
+      });
+    }
+    return () => { cancelado = true; };
+    // `deteccaoDe` só usa a ref: não precisa estar nas dependências.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arquivos]);
 
   // Acompanha silenciosamente, em segundo plano, até os arquivos enviados
   // estarem organizados — sem nomear nenhuma ferramenta ou etapa técnica.
@@ -276,6 +315,50 @@ export default function UploadForm({
     return { mandato: mandato.trim(), arquivos: aEnviar.length, desde };
   }
 
+  // A LEITURA E A GRAVAÇÃO DOS ARQUIVOS OFICIAIS, um de cada vez.
+  //
+  // UM DE CADA VEZ porque cada leitura é CPU de uma thread (37,5 s para 10M de
+  // linhas) e cada worker segura o seu heap: dois em paralelo disputam o mesmo
+  // núcleo e dobram a memória sem terminar antes. O `caso_id` vem de
+  // `obterCasoId` (ver o porquê de não ser `fn_upsert_caso`).
+  //
+  // Devolve as chaves dos que ficaram SEM veredito do banco (falha de leitura,
+  // de rede, exceção): eles continuam na lista para reenvio. Os que o banco
+  // respondeu (completo, recusado, ausente, reenvio) saem dela — a resposta está
+  // no painel, e mantê-los na lista faria o próximo "Enviar" reenviá-los.
+  async function processarOficiais(lista: File[], casoIdConhecido: string): Promise<Set<string>> {
+    const supabase = createClient();
+    const rpc: ChamarRpc = (funcao, args) => supabase.rpc(funcao, args);
+    const pendentes = new Set<string>();
+    const atualizar = (chave: string, mudanca: Partial<ResultadoOficial>) =>
+      setOficiais((rs) => rs.map((r) => (r.chave === chave ? { ...r, ...mudanca } : r)));
+
+    for (const f of lista) {
+      const chave = chaveDe(f);
+      const det = (await deteccaoDe(f)) as Deteccao;
+      atualizar(chave, { fase: "lendo", lidosBytes: 0, familia: det.familia ?? "", subtipo: det.subtipo });
+      let lido;
+      try {
+        lido = await lerNoNavegador(f, (lidos) => atualizar(chave, { lidosBytes: lidos }));
+      } catch (err) {
+        atualizar(chave, { fase: "fim", erroDeLeitura: (err as Error).message });
+        pendentes.add(chave);
+        continue;
+      }
+      if (!lido.envelope.familia || lido.envelope.familia === "zip") {
+        atualizar(chave, { fase: "fim", erroDeLeitura: "o leitor não reconheceu o arquivo como leiaute oficial" });
+        pendentes.add(chave);
+        continue;
+      }
+      atualizar(chave, { fase: "gravando", lidosBytes: f.size, envelope: lido.envelope, resumo: lido.resumo });
+      const desfecho = await gravarResumo(rpc, casoIdConhecido, lido.envelope, lido.resumo,
+        (gravacao) => atualizar(chave, { gravacao }));
+      atualizar(chave, { fase: "fim", desfecho });
+      if (!desfechoEncerra(desfecho)) pendentes.add(chave);
+    }
+    return pendentes;
+  }
+
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -315,6 +398,55 @@ export default function UploadForm({
     setVia("proxy");
     setEnviando(true);
     try {
+      // OS OFICIAIS SAEM DO LOTE ANTES DE QUALQUER COISA, e rodam ANTES do envio
+      // ao n8n. Pelos bytes (`detectarFamilia`), nunca pela extensão. O que sobra
+      // — PDF, imagem, planilha, zip, o que o navegador não conseguiu examinar —
+      // segue EXATAMENTE como sempre: `aoN8n` é o antigo `aEnviar`.
+      //
+      // ANTES e não depois: o caso é criado aqui (se o mandato for novo) e o n8n o
+      // encontra por nome. Na ordem inversa, os dois caminhos criariam o mesmo
+      // mandato em paralelo e o `caso.nome` não é único (ver `obterCasoId`).
+      const deteccaoDosArquivos = new Map<File, Deteccao | null>();
+      await Promise.all(aEnviar.map(async (f) => { deteccaoDosArquivos.set(f, await deteccaoDe(f)); }));
+      const { oficiais: aLerAqui, aoN8n } = separarOficiais(aEnviar, (f) => deteccaoDosArquivos.get(f));
+      // Os vazios já foram avisados acima e nunca ficam na lista (o envio de sempre também os limpava).
+      let restantes = arquivos.filter((a) => a.size > 0);
+      if (aLerAqui.length > 0) {
+        let caso;
+        try {
+          caso = await obterCasoId(createClient(), mandato.trim(), casoId);
+        } catch (err) {
+          // Antes de ler e de enviar QUALQUER coisa: nada saiu, e a mensagem é a do banco.
+          setErro((err as Error).message);
+          return;
+        }
+        const chavesLidas = new Set(aLerAqui.map(chaveDe));
+        setOficiais((rs) => [
+          ...rs.filter((r) => !chavesLidas.has(r.chave)),
+          ...aLerAqui.map((f): ResultadoOficial => {
+            const d = deteccaoDosArquivos.get(f) as Deteccao;
+            return {
+              chave: chaveDe(f), nome: f.name, bytes: f.size, familia: d.familia ?? "", subtipo: d.subtipo,
+              fase: "na_fila", lidosBytes: 0,
+            };
+          }),
+        ]);
+        const pendentes = await processarOficiais(aLerAqui, caso.id);
+        // Sai da lista quem o banco respondeu; fica quem precisa de reenvio.
+        restantes = restantes.filter((a) => !chavesLidas.has(chaveDe(a)) || pendentes.has(chaveDe(a)));
+        // Já aqui, e não só no fim: se o envio ao n8n falhar logo abaixo, o próximo
+        // "Enviar" não pode reenviar ao banco o que o banco já respondeu.
+        setArquivos(restantes);
+        if (casoId) router.refresh();
+        if (aoN8n.length === 0) {
+          // O aviso do arquivo vazio não pode morrer junto com a tela de sucesso, que aqui não existe.
+          setDescartados(vazios.length > 0
+            ? avisoDeArquivoVazio(vazios.map((a) => ({ nome: a.name, bytes: a.size })))
+            : null);
+          return;
+        }
+      }
+
       // O DESTINO VEM PRIMEIRO, e vem do servidor, nos DOIS caminhos. Ele
       // responde quatro coisas que a tela não pode adivinhar: se o upload está
       // configurado (503 com a frase de sempre), quais são os nomes REAIS dos
@@ -347,7 +479,7 @@ export default function UploadForm({
       }
 
       const plano = planejarEnvio(
-        aEnviar.map((a) => ({ nome: a.name, bytes: a.size })),
+        aoN8n.map((a) => ({ nome: a.name, bytes: a.size })),
         destino.campos,
         mandato.trim(),
       );
@@ -374,13 +506,13 @@ export default function UploadForm({
       setVia(plano.via);
 
       const enviado = plano.via === "proxy"
-        ? await enviarPeloPortal(aEnviar)
-        : await enviarDireto(destino, aEnviar);
+        ? await enviarPeloPortal(aoN8n)
+        : await enviarDireto(destino, aoN8n);
       if (!enviado) return;
 
       setPronto(false);
       setSucesso({ ...enviado, via: plano.via, origemIncerta });
-      setArquivos([]);
+      setArquivos(restantes.filter((a) => !aoN8n.includes(a)));
       // O DESCARTE É NOTICIADO, e fica visível junto do cartão de sucesso: quem
       // selecionou o arquivo vazio precisa saber que ele não está no mandato —
       // senão vai procurá-lo lá depois.
@@ -407,6 +539,16 @@ export default function UploadForm({
   // só se pedirem — o texto técnico. Ele continua ali porque sem ele quem for
   // ajudar começa perguntando "qual erro apareceu?"; mas fechado, porque quem
   // precisa dele não é quem está olhando a tela.
+  const painelOficiais = <PainelOficiais resultados={oficiais} />;
+  // O QUE VAI AO N8N, e o que o navegador lê. A tela decide pelos mesmos bytes que o envio.
+  const naTela = (f: File) => {
+    const d = deteccoes[chaveDe(f)];
+    return d === undefined ? "examinando" as const : destinoDe(d);
+  };
+
+  const arquivosOficiaisNaTela = arquivos.filter((a) => naTela(a) === "oficial");
+  const arquivosAoN8nNaTela = arquivos.filter((a) => a.size > 0 && naTela(a) !== "oficial");
+
   const explicacao: FalhaExplicada | null = falha
     ? explicarFalha(falha)
     : parada
@@ -427,6 +569,8 @@ export default function UploadForm({
           + `Envio: ${new Date(sucesso.desde).toLocaleString("pt-BR")}.`;
 
     return (
+      <>
+      {painelOficiais}
       <div className="rounded border border-risco-300 bg-risco-50 p-4 text-sm text-risco-900">
         <p className="text-xs font-semibold uppercase tracking-wide text-risco-700">
           O sistema parou por um problema técnico
@@ -458,7 +602,7 @@ export default function UploadForm({
             type="button"
             onClick={() => {
               setFalha(null); setParada(null); setLoteVazio(null); setSucesso(null);
-              setProgresso(null); setDemorou(false); setDescartados(null);
+              setProgresso(null); setDemorou(false); setDescartados(null); setOficiais([]);
             }}
             className="rounded bg-risco-700 px-3 py-1.5 text-xs font-medium text-papel hover:bg-risco-800"
           >
@@ -487,12 +631,14 @@ export default function UploadForm({
           )}
         </div>
       </div>
+      </>
     );
   }
 
   if (sucesso) {
     return (
       <>
+        {painelOficiais}
         <div className="rounded border border-ok-300 bg-ok-50 p-4 text-sm text-ok-900">
           <p className="font-medium">
             {sucesso.arquivos} arquivo(s) enviado(s) para o mandato “{sucesso.mandato}”.
@@ -585,6 +731,7 @@ export default function UploadForm({
                 setProgresso(null);
                 setDemorou(false);
                 setDescartados(null);
+                setOficiais([]);
               }}
               className="rounded border border-ok-300 px-3 py-1.5 text-xs font-medium text-ok-800 hover:bg-ok-100"
             >
@@ -702,6 +849,17 @@ export default function UploadForm({
             <li key={`${a.name}:${a.size}`} className="flex items-center justify-between px-3 py-2">
               <span className="truncate">
                 {a.name} <span className="text-tinta-400">({formatarBytes(a.size)})</span>
+                {naTela(a) === "oficial" && (
+                  <span className="ml-2 rounded bg-ok-50 px-1.5 py-0.5 text-xs text-ok-800">
+                    {rotuloDaFamilia(deteccoes[chaveDe(a)]!.familia ?? "", deteccoes[chaveDe(a)]!.subtipo)}
+                    {" · "}lido no seu computador; só o resumo é enviado
+                  </span>
+                )}
+                {naTela(a) === "zip" && (
+                  <span className="ml-2 rounded bg-tinta-100 px-1.5 py-0.5 text-xs text-tinta-600">
+                    arquivo compactado · segue pelo caminho de sempre (não é lido no seu computador)
+                  </span>
+                )}
               </span>
               <button
                 type="button"
@@ -724,7 +882,10 @@ export default function UploadForm({
       {/* O TAMANHO DO LOTE, NA TELA, ANTES DE ENVIAR.
           A lista mostrava o tamanho de cada arquivo e nunca o do conjunto — e o
           conjunto é o que decide se o envio cabe no encaminhamento ou tem de ir
-          direto. Num lote de 48, somar 48 números à mão não é opção. */}
+          direto. Num lote de 48, somar 48 números à mão não é opção.
+          SÓ CONTA O QUE SOBE: o arquivo oficial é lido aqui e só o resumo sai,
+          então o tamanho dele não entra no corpo do envio nem na estimativa de
+          leitura pela IA (que é por arquivo enviado ao processamento). */}
       {arquivos.length > 0 && (
         <p className="rounded border border-tinta-200 bg-tinta-50 px-3 py-2 text-sm text-tinta-600">
           <strong className="text-tinta-800">{arquivos.length}</strong>{" "}
@@ -733,21 +894,46 @@ export default function UploadForm({
           <strong className="text-tinta-800">
             {formatarBytes(arquivos.reduce((s, a) => s + a.size, 0))}
           </strong>{"."}
+          {arquivos.some((a) => naTela(a) === "oficial") && (
+            <>
+              {" "}Destes, <strong className="text-tinta-800">{arquivosOficiaisNaTela.length}</strong>{" "}
+              {arquivosOficiaisNaTela.length === 1 ? "é arquivo" : "são arquivos"} de leiaute oficial,
+              lido{arquivosOficiaisNaTela.length === 1 ? "" : "s"} no seu computador: só o resumo é
+              enviado, e eles não contam no tamanho nem no tempo do envio.
+            </>
+          )}
         </p>
       )}
 
-      {arquivos.length > 0 && (
+      {arquivosAoN8nNaTela.length > 0 && (
         <p className="rounded border border-tinta-200 bg-tinta-50 px-3 py-2 text-sm text-tinta-600">
           Tempo esperado de processamento:{" "}
           <strong className="text-tinta-800">
-            ~{estimativaEmMinutos(arquivos.length)}{" "}
-            {estimativaEmMinutos(arquivos.length) === 1 ? "minuto" : "minutos"}
+            ~{estimativaEmMinutos(arquivosAoN8nNaTela.length)}{" "}
+            {estimativaEmMinutos(arquivosAoN8nNaTela.length) === 1 ? "minuto" : "minutos"}
           </strong>{" "}
-          para {arquivos.length} {arquivos.length === 1 ? "arquivo" : "arquivos"}. Cada arquivo é
+          para {arquivosAoN8nNaTela.length} {arquivosAoN8nNaTela.length === 1 ? "arquivo" : "arquivos"}. Cada arquivo é
           lido separadamente pela IA, e as chamadas são espaçadas por exigência do limite de uso
           da conta. Depois que o envio terminar você pode fechar esta aba — o processamento continua
           sozinho.
         </p>
+      )}
+
+      {arquivosOficiaisNaTela.length > 0 && (
+        <p className="rounded border border-tinta-200 bg-tinta-50 px-3 py-2 text-sm text-tinta-600">
+          Os arquivos de leiaute oficial são lidos <strong className="text-tinta-800">no seu computador</strong>,
+          antes de qualquer envio, e só o resumo é gravado. Um arquivo grande pode levar alguns minutos
+          para ser lido (um SPED de 10 milhões de linhas levou cerca de 40 segundos num computador de
+          teste): <strong className="text-tinta-800">mantenha esta aba aberta</strong> até o fim — se ela
+          fechar, o arquivo fica sem gravar e é preciso reenviar. Um arquivo compactado (zip) não é lido
+          aqui: segue pelo caminho de sempre.
+        </p>
+      )}
+
+      <PainelOficiais resultados={oficiais} />
+
+      {descartados && (
+        <p className="rounded border border-alerta-300 bg-alerta-50 p-2 text-xs text-alerta-900">{descartados}</p>
       )}
 
       {erro && (
@@ -761,10 +947,10 @@ export default function UploadForm({
           inventa uma barra: diz o tamanho, diz que demora, e diz a única coisa
           que o analista pode fazer errado (fechar a aba ANTES de o envio
           terminar — depois dele, pode fechar à vontade). */}
-      {enviando && arquivos.length > 0 && (
+      {enviando && arquivosAoN8nNaTela.length > 0 && (
         <p className="rounded border border-tinta-200 bg-tinta-50 px-3 py-2 text-sm text-tinta-600">
-          Enviando {arquivos.length} {arquivos.length === 1 ? "arquivo" : "arquivos"} (
-          {formatarBytes(arquivos.reduce((s, a) => s + a.size, 0))})
+          Enviando {arquivosAoN8nNaTela.length} {arquivosAoN8nNaTela.length === 1 ? "arquivo" : "arquivos"} (
+          {formatarBytes(arquivosAoN8nNaTela.reduce((s, a) => s + a.size, 0))})
           {via === "direto" ? " direto para o processamento" : ""}. Numa conexão doméstica isso
           pode levar alguns minutos — mantenha esta aba aberta até o envio terminar. Depois disso
           ela pode ser fechada: o processamento continua sozinho.

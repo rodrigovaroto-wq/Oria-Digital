@@ -77,6 +77,7 @@ node --test 'Supabase/test/*.test.mjs'       # a tradução de "não perguntei a
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-kit-basico.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-modelagem-cobertura.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-limite-de-envio.mts
+./portal/node_modules/.bin/tsx portal/scripts/verificar-envio-oficial.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-linhas-por-versao.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-exclusividade-ciclo.mts
 node --test '.claude/conhecimento/test/*.test.mjs'  # ANTES de indexar: o grafo COMMITADO não pode

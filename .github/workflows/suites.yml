@@ -422,6 +422,18 @@ jobs:
         # em vez do corpo do multipart.
         run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-limite-de-envio.mts
 
+      - name: Suíte do envio oficial (SPED/CNAB/OFX/XML lidos no navegador, só o resumo gravado)
+        # 13/10/2026: o n8n gasta ~600 MB + ~50x o tamanho do arquivo e cai com 29 MB, então o
+        # arquivo de leiaute oficial deixou de ir a ele: o `Leitor/lib` o lê no navegador e o
+        # portal grava o resumo pelas funções da 0207. Este portão trava o que não dá erro nenhum
+        # quando quebra: oficial reconhecido pelos bytes e fora do lote do n8n (zip e PDF seguem),
+        # partição em chamadas de no máximo 5.000 itens sem perder nenhum, cabeçalho `ausente`
+        # sem inventar conferência, nenhuma falha de rede virando "concluído", e a ausência
+        # (contagem não declarada, I155 não informado) nunca apresentada como zero. Também afirma
+        # que o teto por arquivo do portal é o do n8n. Medido com cada guarda desligada: ver a
+        # mensagem do commit.
+        run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-envio-oficial.mts
+
       - name: Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)
         # A contagem "quantas linhas cada documento rendeu" morava em duas cópias,
         # e só uma paginava: o painel fazia uma consulta só, e o PostgREST corta
