@@ -300,7 +300,7 @@ autorização no kickoff e encaminha um pedido ao contador.
 | Canal | Como funciona | O que o cliente faz | Automação |
 |---|---|---|---|
 | **A. Dado público** | Consulta por CNPJ/CPF assim que o caso é criado | Nada | Total |
-| **B. Acesso delegado** | O cliente autoriza a Oria uma vez (procuração eletrônica no e-CAC, consentimento Open Finance, ou certificado A1 custodiado); coletores agendados buscam e repetem | Assina a autorização | Alta, depois da autorização |
+| **B. Acesso delegado** | O cliente nomeia a Oria procuradora eletrônica no e-CAC, **só para consulta** (D12.1). Coletores agendados buscam e repetem. Open Finance e custódia do A1 do cliente foram **recusados** (D12.4, D12.2) | Assina a procuração e o termo | Alta, depois da autorização |
 | **C. Pacote do contador e do ERP** | O sistema gera a lista exata por regime e período e um link de envio; o contador sobe um zip e o sistema classifica pelo conteúdo | Encaminha o pedido | Média: pedido e leitura automáticos, envio humano |
 
 | Fonte | Canal | Como, na prática | Alternativa | Atualização |
@@ -308,14 +308,14 @@ autorização no kickoff e encaminha um pedido ao contador.
 | Cadastro CNPJ, CNAE, QSA, porte, regime | A | Dados abertos do CNPJ (RFB), carga mensal | APIs comerciais de CNPJ | mensal |
 | IBAMA, CEIS/CNEP, PGFN, trabalho escravo | A | Dados abertos e API do Portal da Transparência (Espec. 11 §3.4) | — | mensal |
 | Processos (metadados) | A | API pública DataJud, por número de processo já conhecido | Provedor comercial para descoberta | semanal |
-| ECD, ECF | B | Procuração eletrônica no e-CAC + ReceitaNet BX | C: `.txt` e recibos do contador | anual |
-| EFD ICMS/IPI, Contribuições, Reinf | B | Idem. ReceitaNet BX é desktop, sem API: automatizar exige RPA, frágil. **[A CONFIRMAR]** quais módulos entrega a procurador | C: contador | mensal |
-| Situação fiscal, DCTFWeb, parcelamentos, Caixa Postal | B | API Integra Contador (SERPRO, paga, usa a procuração). **[A CONFIRMAR]** serviços e preço | e-CAC manual | mensal |
-| NF-e e CT-e **recebidas** | B | Web service de Distribuição DF-e com o A1 do cliente | C: ERP; plataformas de captura de XML | diária |
-| NF-e, NFS-e, CT-e **emitidas**, MDF-e | C | Export de XML do ERP | Distribuição DF-e no que couber | mensal |
+| ECD, ECF | B | Procuração eletrônica no e-CAC + **robô no ReceitaNet BX** (D12.5), com alerta de quebra; se falhar, o pedido cai para o contador | C: `.txt` e recibos do contador | anual |
+| EFD ICMS/IPI, Contribuições, Reinf | B | Idem, robô no ReceitaNet BX (D12.5). **[A CONFIRMAR]** quais módulos ele entrega a procurador | C: contador | mensal |
+| Situação fiscal, DCTFWeb, parcelamentos, Caixa Postal | B se D12.3 | API Integra Contador (SERPRO). **D12.3 aguarda cotação**: até lá, download manual no e-CAC com a procuração | e-CAC manual | mensal |
+| NF-e e CT-e **recebidas** | C | Export de XML do ERP. A Distribuição DF-e exigiria o A1 do cliente, e a custódia foi recusada (D12.2) | plataformas de captura de XML que o próprio cliente já use | mensal |
+| NF-e, NFS-e, CT-e **emitidas**, MDF-e | C | Export de XML do ERP | — | mensal |
 | eSocial | C | Export do sistema de folha | B: web service de download de eventos. **[A CONFIRMAR]** se procurador pode | mensal |
 | FGTS Digital | C | Extrato e guias pelo cliente | — | mensal |
-| Extrato bancário | B | **Open Finance** via agregador contratado; consentimento do representante da PJ | C: OFX | diária |
+| Extrato bancário | C | OFX do internet banking (primeira opção) ou CNAB `E`. Open Finance recusado (D12.4 = D6 da Espec. 11) | CSV ou PDF | mensal (semanal durante a RJ) |
 | CNAB cobrança e pagamentos | C | Pasta de retornos do ERP ou internet banking | B: VAN ou API de cobrança do banco | semanal |
 | Registrato (SCR) | C | O sócio baixa pelo gov.br; sem API para terceiros | — | mensal |
 | DU-E, DI/DUIMP, CE-Mercante | C | Despachante exporta do Portal Único Siscomex. **[A CONFIRMAR]** API com certificado | B, se a API servir | mensal |
@@ -353,11 +353,11 @@ de mandar arquivo, e durante a RJ o caixa de 13 semanas e o passivo fiscal se at
 | 1 | **Gerador de pedido por caso** | Do CNPJ, regime e período, gera a lista exata (quais SPEDs e anos, bancos, comex) como e-mail pronto com o link de envio | Pedido manual esquece itens; Simples não tem ECD — pedir gera ruído, não pedir sem dizer por quê gera ausência silenciosa |
 | 2 | **Envio direto ao Storage** | URL assinada do Supabase Storage, sem passar pela função da Vercel; aceita zip, `.txt`, `.xml`, `.ret`, `.ofx` | A borda da Vercel recusa ~4,5 MB por requisição antes de o código rodar (13/09/2026: 48 arquivos, ~50 MB; `teto-da-borda-recusa-antes-do-codigo`) |
 | 3 | **Consultas públicas automáticas** | Fluxo n8n ao criar o caso; grava em `consulta_externa` (Espec. 11 §5), **inclusive o vazio** | "Consultei e não achei" ≠ "não consultei" (regra 7) |
-| 4 | **Cofre de credenciais e autorizações** | Procuração, consentimento Open Finance, A1; validade, escopo, termo assinado, registro de cada uso | Sem ele o canal B não existe; o A1 é a chave fiscal da empresa |
-| 5 | **Coletores agendados** (canal B) | Fluxos n8n diários/mensais: Distribuição DF-e, Open Finance, Integra Contador e, se aprovado, ReceitaNet BX; cada coleta registra o que buscou e quantos itens vieram | Análise pontual vira monitoramento durante a RJ |
+| 4 | **Cofre de credenciais e autorizações** | O A1 da Oria e as procurações de cada cliente: validade, escopo, termo assinado, registro de cada uso (o A1 do cliente nunca entra, D12.2) | Sem ele o canal B não existe; o A1 é a chave fiscal da empresa |
+| 5 | **Coletores agendados** (canal B) | Fluxos n8n: robô no ReceitaNet BX (D12.5) e, se a cotação aprovar, Integra Contador (D12.3). Cada coleta registra o que buscou e quantos itens vieram | Análise pontual vira monitoramento durante a RJ |
 | 6 | **Painel de cobertura do caso** | Por fonte e mês: chegou, falta, venceu, efeito; reenvia o pedido | O analista deixa de caçar documento por e-mail |
 
-As peças 1 a 3 não dependem de contrato novo. As 4 e 5 dependem das decisões abaixo.
+As peças 1 a 3 não dependem de contrato novo. As 4 e 5 dependem da etapa 2 (jurídico e segurança) e, para o Integra, da D12.3.
 
 ---
 
@@ -371,10 +371,10 @@ reunião de abertura do mandato) e o que continua humano por limite dos órgãos
 | # | Pré-requisito | Para quê | Observação |
 |---|---|---|---|
 | P1 | **e-CNPJ A1 da Oria** (ICP-Brasil) | Identidade dos coletores como procuradores no e-CAC, Integra Contador e eSocial | Vence todo ano; vencido, o canal B inteiro para no mesmo dia. O painel (peça 6) deve avisar antes |
-| P2 | **Cofre de credenciais** (peça 4) | Guardar o A1 da Oria e, se D12.2, o dos clientes, com registro de cada uso | O A1 do cliente é a chave fiscal da empresa dele |
+| P2 | **Cofre de credenciais** (peça 4) | Guardar o A1 **da Oria** e as procurações. O A1 do cliente **nunca** é guardado (D12.2) | Escopo menor que o previsto: uma credencial da Oria, não uma por cliente |
 | P3 | **Pacote jurídico e LGPD** | Termo de autorização, cláusula no contrato do mandato, RIPD, política de retenção (`10_DADOS_RETENCAO_E_LGPD.md`) | Base legal da coleta; eSocial traz salário e CPF, extrato traz terceiros |
 | P4 | **Responsável pelas credenciais** | Renovar, revogar ao fim do mandato, auditar | Sem dono, a autorização sobrevive ao caso |
-| P5 | **Infraestrutura dos coletores** (peça 5) | Agendamento e chamadas com certificado na conexão (Distribuição DF-e, eSocial) | Com D12.5, também uma máquina dedicada ao ReceitaNet BX (desktop) |
+| P5 | **Infraestrutura** (peças 5 e leitor) | O serviço leitor próprio (D12.9), o agendamento dos coletores e **uma máquina dedicada ao robô do ReceitaNet BX** (D12.5), que é programa de desktop | O robô quebra quando a Receita muda a tela: o alerta e a queda para o contador são obrigatórios |
 | P6 | **Armazenamento** (peça 2) | XML e SPED de vários anos somam GB por cliente | Envio direto ao Storage; a borda da Vercel recusa ~4,5 MB |
 
 ### Contratos com fornecedores
@@ -382,7 +382,7 @@ reunião de abertura do mandato) e o que continua humano por limite dos órgãos
 | Fornecedor | Destrava | Sem ele | Decisão |
 |---|---|---|---|
 | SERPRO, Integra Contador (por consulta) | Situação fiscal, DCTFWeb, parcelamentos, Caixa Postal automáticos | e-CAC manual | D12.3 |
-| Agregador de Open Finance (por conexão) | Extrato diário de todos os bancos | OFX manual | D12.4 |
+| ~~Agregador de Open Finance~~ | **Recusado** (D12.4) | Extrato por OFX/CNAB | D12.4 |
 | Chave da API do Portal da Transparência (gratuita) | CEIS, CNEP, CEPIM | — | — |
 | *(opcional)* Provedor de consulta processual | Descoberta de processos por CPF/CNPJ | DataJud só por número conhecido | Espec. 11 §3.5 |
 
@@ -391,8 +391,8 @@ reunião de abertura do mandato) e o que continua humano por limite dos órgãos
 | # | Item | Detalhe |
 |---|---|---|
 | K1 | Procuração eletrônica no e-CAC para o CNPJ da Oria | Uma por CNPJ do grupo (e-CNPJ do cliente ou gov.br do representante) |
-| K2 | Consentimento de Open Finance | Um por banco, pelo representante legal |
-| K3 | A1 do cliente e senha | Só com D12.2; destrava as NF-e recebidas automáticas |
+| ~~K2~~ | ~~Consentimento de Open Finance~~ | Saiu com a D12.4 |
+| ~~K3~~ | ~~A1 do cliente~~ | Saiu com a D12.2 |
 | K4 | Termo de autorização e tratamento de dados | Modelo de P3 |
 | K5 | Contatos do contador e do departamento pessoal | Destino do pedido do canal C (peça 1) |
 | K6 | Lista de bancos, ERP e sistema de folha | De onde sai o CNAB e o eSocial |
@@ -440,8 +440,8 @@ sistema falha ou grava número errado; **desvia** = a execução muda de rota po
 | G10 | **Formatos internos.** O SPED vem em latin1, com decimal em vírgula e datas em `ddmmaaaa`. O CNAB tem decimais implícitos. O OFX 1.x é SGML | **quebra** (valor ×100 ou acento corrompido) | Um teste por particularidade, no gerador sintético |
 | G11 | **Identidade.** Há CNPJ raiz e filial (8 × 14 dígitos), NF-e entre CNPJs do mesmo grupo (precisa ser eliminada, como o `FAT_INTRAGRUPO`) e o mesmo CPF como sócio e como empregado | **quebra** (receita intragrupo vira receita) | Resolver pela F1 (perímetro). As notas entre entidades do perímetro são marcadas como intragrupo antes de qualquer soma |
 | G12 | **Período.** Competência × caixa × data de emissão, ano fiscal e o corte de cada fonte no período do book | desvia | Uma regra de período por família, escrita antes da onda 1 |
-| G13 | **Fontes fora do escopo sem que ninguém tenha decidido.** Simples Nacional (PGDAS-D, DEFIS, DAS: boa parte das PMEs em crise), NFS-e de município fora do padrão nacional, declarações estaduais de ICMS e contratos de câmbio | desvia | D12.10: incluir, ou excluir com a nota de efeito. Proposta: PGDAS-D e DEFIS na onda 1, porque sem eles uma empresa do Simples fica sem fonte fiscal nenhuma |
-| G14 | **Taxonomia.** Os tipos novos (eSocial, CT-e, comex, CNAB de cobrança e de pagamento, XML de NF-e, PGDAS) ainda não existem e precisam nascer **com consumidor** | degrada | Uma migration por onda, já com o consumidor. O portão `fn_cobertura_de_tipos` (`0187`) impede tipo sem leitor |
+| G13 | **Fontes fora do escopo sem que ninguém tenha decidido.** Simples Nacional (PGDAS-D, DEFIS, DAS: boa parte das PMEs em crise), NFS-e de município fora do padrão nacional, declarações estaduais de ICMS e contratos de câmbio | desvia | **FECHADA (D12.10, 13/10/2026):** entram NFS-e municipal (onda 3, por demanda) e câmbio (onda 5); Simples Nacional e declarações estaduais ficam fora, com a nota de efeito no caso |
+| G14 | **Taxonomia.** Os tipos novos (eSocial, CT-e, comex, CNAB de cobrança e de pagamento, XML de NF-e, NFS-e municipal, contrato de câmbio) ainda não existem e precisam nascer **com consumidor** | degrada | Uma migration por onda, já com o consumidor. O portão `fn_cobertura_de_tipos` (`0187`) impede tipo sem leitor |
 
 ### C. Qualidade e prova
 
@@ -450,7 +450,7 @@ sistema falha ou grava número errado; **desvia** = a execução muda de rota po
 | G15 | **Não há arquivo real** de SPED, eSocial, CNAB ou CT-e no repositório, e a regra 4 proíbe inventar fixture para provar bug de produção | desvia | Duas coisas: geradores sintéticos por família, que fecham no BP (padrão `book-distress`), para o CI; e amostras reais anonimizadas de 3 mandatos, com consentimento, para o aceite |
 | G16 | **Falta critério de pronto por onda.** "Ler ECD" não diz quando acabou | desvia | Exemplo para a onda 1: contagem lida = `9999` em 100% dos arquivos; S1 roda em 3 casos reais; toda divergência acima da tolerância explicada; cada reconciliação medida não-vazia (regra 2) |
 | G17 | **Coletor que falha parece coletor sem novidade** (regra 7) | **quebra** (silenciosa) | Cada execução de coletor grava um estado: rodou, falhou, voltou vazio ou não está configurado. O painel mostra o estado, e o vazio nunca se apresenta como "sem achados" |
-| G18 | **Operação dos coletores.** Limites de consumo (a Distribuição DF-e bloqueia o CNPJ por um tempo quando há consumo indevido), retentativas, prazos e alertas de certificado e de consentimento vencendo | degrada | Política de retentativa e de ritmo por fonte, além de alertas com antecedência |
+| G18 | **Operação dos coletores.** Limites de consumo e ritmo dos serviços da Receita, quebra do robô do ReceitaNet BX (D12.5), retentativas, prazos e alertas de certificado e de consentimento vencendo | degrada | Política de retentativa e de ritmo por fonte, além de alertas com antecedência |
 
 ### D. Segurança, jurídico, custo e pessoas
 
@@ -459,7 +459,7 @@ sistema falha ou grava número errado; **desvia** = a execução muda de rota po
 | G19 | **Modelo de segurança.** Onde o A1 fica de fato (cofre, nunca em texto no n8n), RLS nas tabelas novas, acesso por caso, revogação no fim do mandato e trilha de auditoria | **quebra** (risco jurídico) | Desenho de segurança e revisão de segurança antes da peça 4 |
 | G20 | **LGPD por categoria.** Falta definir a base legal de cada dado, a minimização, a retenção e o descarte no fim do mandato, os contratos de operador com o SERPRO e o agregador, e a transferência internacional (os PDFs vão à OpenAI, como já diz o `10_DADOS_RETENCAO_E_LGPD.md`) | **quebra** (risco jurídico) | RIPD e política escritos pelo jurídico **antes** da primeira coleta (P3) |
 | G21 | **Escopo da procuração.** A procuração eletrônica pode dar poder de agir, e não só de consultar | **quebra** (responsabilidade da Oria) | Pedir só os serviços de consulta. O termo diz que a Oria não transmite nem retifica nada |
-| G22 | **Custo por caso** sem modelo: consultas ao Integra, conexões Open Finance, GB de armazenamento, IA nos PDFs, infraestrutura | degrada | Estender o `medir-custo-book.mjs` com as fontes novas e fixar um teto de custo por caso |
+| G22 | **Custo por caso** sem modelo: consultas ao Integra (D12.3), máquina do robô (D12.5), serviço leitor (D12.9), GB de armazenamento, IA nos PDFs, infraestrutura | degrada | Estender o `medir-custo-book.mjs` com as fontes novas e fixar um teto de custo por caso |
 | G23 | **Pessoas e processo.** Falta definir quem opera o painel, o prazo de resposta, o roteiro de falhas (*runbook*), o roteiro do kickoff e os modelos de e-mail | desvia | Roteiro operacional escrito junto com a peça 6 |
 
 ### E. Execução
@@ -481,21 +481,27 @@ sistema falha ou grava número errado; **desvia** = a execução muda de rota po
 
 ---
 
-## Decisões do dono em aberto
+## Decisões do dono (13/10/2026)
 
-| # | Decisão | Bloqueia |
-|---|---|---|
-| D12.1 | A Oria aceita ser procuradora eletrônica dos clientes no e-CAC, com e-CNPJ próprio? | Canal B fiscal |
-| D12.2 | A Oria aceita custodiar o A1 do cliente? Se não, NF-e recebidas vêm pelo ERP | Distribuição DF-e |
-| D12.3 | Contratar o Integra Contador (SERPRO)? | Situação fiscal e DCTFWeb automáticas |
-| D12.4 | Qual agregador de Open Finance (custo, cobertura PJ, LGPD)? **É a mesma decisão que a D6 da Espec. 11**: decidir uma vez, valer para as duas | Extrato automático |
-| D12.5 | RPA no ReceitaNet BX é aceitável, sabendo que quebra com a tela? | SPED automático |
-| D12.6 | Termo de autorização e tratamento de dados do kickoff (jurídico) | Peças 4 e 5 |
-| D12.7 | Política de dado pessoal do eSocial: até onde guardar o detalhe por empregado? | Onda 4 |
-| D12.8 | Precedência entre fontes: quem vai ao book quando SPED e enviado divergem (G2) | Onda 1 |
-| D12.9 | Onde o leitor roda, fora do grafo item a item do n8n (G6) | Onda 1 |
-| D12.10 | Simples Nacional (PGDAS-D, DEFIS), NFS-e municipal, declarações estaduais, câmbio: dentro ou fora (G13) | Onda 1 |
-| D12.11 | Tolerâncias de materialidade por reconciliação (G3) | Onda 1 |
+10 de 11 decididas. A única aberta, D12.3, espera um número (cotação) e não bloqueia a etapa 1 nem a
+onda 1.
+
+| # | Decisão | Resposta | Consequência no plano |
+|---|---|---|---|
+| D12.1 | Oria procuradora eletrônica no e-CAC, com e-CNPJ próprio? | **Sim, só serviços de consulta** | Canal B fiscal existe. A procuração nunca inclui transmitir ou retificar (G21). Revogada ao fim do mandato (P4) |
+| D12.2 | Oria custodia o A1 do cliente? | **Não** | NF-e e CT-e recebidas vêm pelo ERP (canal C). Sai a Distribuição DF-e. O cofre guarda só o A1 da Oria (P2). K3 sai |
+| D12.3 | Contratar o Integra Contador? | ⚪ **Cotar antes** | Pedir ao SERPRO serviços e preço por consulta, estimar o custo por caso (G22) e decidir. Até lá, situação fiscal manual |
+| D12.4 = D6 da Espec. 11 | Agregador de Open Finance? | **Não. Só OFX/CNAB** | Extrato sempre por arquivo (canal C). O caixa de 13 semanas se atualiza quando o cliente manda o extrato, não sozinho. Sai K2 e o contrato |
+| D12.5 | Robô no ReceitaNet BX? | **Sim, com alerta de quebra** | Máquina dedicada (P5). Toda falha do robô aparece no painel e o pedido cai para o contador automaticamente (G17) |
+| D12.6 | Quem escreve o termo do kickoff? | **Jurídico interno da Oria** | A etapa 2 depende do jurídico interno. A engenharia entrega a lista do que é coletado, para quê, por quanto tempo e quem acessa |
+| D12.7 | Detalhe por empregado no eSocial? | **Agregado + detalhe só para rescisão e credores** | Totais mensais sempre. Detalhe por CPF só para o custo de rescisão e a classe I da lista de credores, apagado ao fim do mandato |
+| D12.8 | Quem vence quando SPED e enviado divergem? | **Os dois aparecem e o analista escolhe** | O book mostra enviado, fiscal e divergência. O modelo usa o enviado até a escolha, que fica registrada com autor e motivo. Nenhum número muda sozinho |
+| D12.9 | Onde roda o leitor? | **Serviço leitor próprio** (Node) | O n8n só avisa que o arquivo chegou. O leitor lê em fluxo, grava em lote (`COPY`) e devolve o resumo e as contagens. Um serviço a mais para hospedar (P5) |
+| D12.10 | Fontes fora do escopo? | **Entram: NFS-e municipal e contratos de câmbio. Ficam fora: Simples Nacional e declarações estaduais** | NFS-e municipal entra por demanda (o município do cliente), na onda 3. Câmbio entra na onda 5 (L3). **Efeito de deixar o Simples fora:** empresa do Simples fica sem fonte fiscal independente, e a receita é conferida só contra o que o cliente declarou. O sistema escreve essa nota no caso (regra 1) |
+| D12.11 | Tolerâncias | **Reusar a regra atual** | Bate se \|diferença\| ≤ max(R$ 100; 0,5% do valor), como `fn_reconciliar_*` na `0009`. Confronto por agregação ou período (Classe B: S3, L2, E1…) ganha a banda de materialidade da `04_RECONCILIACAO.md`, sempre com revisão humana na zona cinzenta |
+
+**Ainda abertas na Espec. 11 e tocando esta:** D5 (provedor comercial de processos) e D9 (Reclame
+Aqui e redes). Nenhuma bloqueia a F2T.
 
 ---
 
