@@ -35,7 +35,7 @@ import { ALIASES } from './lib/taxonomia.mjs';
 import { classifyByFilename, parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAnos, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
 import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
-import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
+import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, vereditoDeTamanhoPorArquivo, TETO_BYTES_POR_ARQUIVO, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
 import { sha256Hex, chaveDoOriginal } from './lib/hash.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
@@ -280,6 +280,7 @@ const FONTE_ORCAMENTO_LOTE = [
   `const orcamentoDoLotePorConteudo = ${orcamentoDoLotePorConteudo.toString()};`,
 ].join('\n');
 const FONTE_BYTES_BINARIO = `const bytesDoBinario = ${bytesDoBinario.toString()};`;
+const FONTE_TAMANHO_POR_ARQUIVO = `const TETO_BYTES_POR_ARQUIVO = ${TETO_BYTES_POR_ARQUIVO};\nconst vereditoDeTamanhoPorArquivo = ${vereditoDeTamanhoPorArquivo.toString()};`;
 
 // `achatarGrupos` idem — embutida do fonte. Ela é a tradução do formato agrupado
 // (o que cortou 63% da saída) para as linhas que o banco grava, e é o ÚNICO
@@ -788,6 +789,7 @@ return [{ json: {
 // para 'data' (o Upload Storage usa esse nome fixo).
 const CODE_LISTAR = `
 ${FONTE_BYTES_BINARIO}
+${FONTE_TAMANHO_POR_ARQUIVO}
 const caso_id = $('Upsert Caso (Postgres)').first().json.caso_id;
 // O LIMIAR DO DIAL VIAJA COM O ITEM, como o caso_id. Nulo quando o banco não tem
 // a linha do dial — e null cai na queda do classificador, nunca em zero (limiar
@@ -806,7 +808,19 @@ for (const key of Object.keys(bin)) {
 if (out.length === 0) {
   throw new Error('Nenhum arquivo recebido do formulario (binario vazio). Confira o campo "Arquivos" do Form.');
 }
-return out;
+// O TETO DE TAMANHO POR ARQUIVO, o primeiro guarda do lote e o unico que roda
+// ANTES de getBinaryDataBuffer (que o Preparar Conteudo chama em todo
+// arquivo). Medido 13/10/2026: a memoria do n8n sobe ~50x o tamanho do arquivo
+// (29 MB -> 2,0 GB, e o pod tem 2 GB; 355 MB derruba a instancia inteira). O
+// Orcamento do Lote nao serve para isto: ele roda DEPOIS do preparo, quando
+// o estrago ja foi feito. A recusa entra pelo MESMO caminho da do orcamento
+// (Tamanho cabe? -> Registrar Recusa -> Abortar Lote), que le
+// orcamento_mensagem; por isso o campo tem esse nome aqui.
+const tam = vereditoDeTamanhoPorArquivo({ arquivos: out.map((o) => ({ nome: o.json.nome_original, bytes: o.json.bytes })), teto: TETO_BYTES_POR_ARQUIVO });
+// Recusado, o lote vira UM item, como a saida do Orcamento do Lote: com um item
+// por arquivo, o Registrar Recusa gravaria a mesma falha N vezes.
+if (!tam.cabe) return [{ json: { caso_id, tamanho_cabe: false, orcamento_mensagem: tam.mensagem } }];
+return out.map((o) => ({ json: { ...o.json, tamanho_cabe: true }, binary: o.binary }));
 `.trim();
 
 // --- Code (EACH ITEM): classificação por nome = lib/classifier.mjs, embutida ---
@@ -2511,6 +2525,15 @@ const nodes = [
 
   node('Listar Arquivos', 'n8n-nodes-base.code', 2, { mode: 'runOnceForAllItems', jsCode: CODE_LISTAR }),
 
+  // O guarda de TAMANHO, antes de qualquer leitura de binario. A recusa vai pelo
+  // MESMO `Registrar Recusa` -> `Abortar Lote` da recusa do orcamento (dois
+  // caminhos de recusa e' ter um sem tela).
+  node('Tamanho cabe?', 'n8n-nodes-base.if', 2, {
+    conditions: { options: { caseSensitive: true, typeValidation: 'strict' }, combinator: 'and', conditions: [
+      { leftValue: '={{ $json.tamanho_cabe }}', rightValue: true, operator: { type: 'boolean', operation: 'true', singleValue: true } },
+    ] },
+  }),
+
   node('Classificar Nome', 'n8n-nodes-base.code', 2, { mode: 'runOnceForEachItem', jsCode: CODE_CLASSIFICAR }, CODE_CONTINUA),
 
   node('Orcamento do Lote', 'n8n-nodes-base.code', 2, { mode: 'runOnceForAllItems', jsCode: CODE_ORCAMENTO }),
@@ -2526,6 +2549,13 @@ const nodes = [
     conditions: { options: { caseSensitive: true, typeValidation: 'strict' }, combinator: 'and', conditions: [
       { leftValue: '={{ $json.orcamento_cabe }}', rightValue: true, operator: { type: 'boolean', operation: 'true', singleValue: true } },
     ] },
+  }),
+
+  // As DUAS recusas (tamanho e orcamento) convergem aqui por um Merge em `append`,
+  // nunca por duas conexoes cruas no mesmo input (a regra do Teste V45). Elas sao
+  // mutuamente exclusivas: o tamanho recusa ANTES de o orcamento existir.
+  node('Juntar Recusas', 'n8n-nodes-base.merge', 3, {
+    mode: 'append', numberInputs: 2,
   }),
 
   node('Registrar Recusa', 'n8n-nodes-base.postgres', 2.5, {
@@ -2960,7 +2990,12 @@ const nodes = [
 const connections = {
   'Intake (Form)': { main: [[{ node: 'Upsert Caso (Postgres)', type: 'main', index: 0 }]] },
   'Upsert Caso (Postgres)': { main: [[{ node: 'Listar Arquivos', type: 'main', index: 0 }]] },
-  'Listar Arquivos': { main: [[{ node: 'Classificar Nome', type: 'main', index: 0 }]] },
+  'Listar Arquivos': { main: [[{ node: 'Tamanho cabe?', type: 'main', index: 0 }]] },
+  'Tamanho cabe?': { main: [
+    [{ node: 'Classificar Nome', type: 'main', index: 0 }],     // true — segue
+    [{ node: 'Juntar Recusas', type: 'main', index: 0 }],       // false — grava e aborta (o MESMO caminho do orcamento)
+  ] },
+  'Juntar Recusas': { main: [[{ node: 'Registrar Recusa', type: 'main', index: 0 }]] },
   'Classificar Nome': { main: [[{ node: 'Preparar Conteudo', type: 'main', index: 0 }]] },
   'Registrar Recusa': { main: [[{ node: 'Abortar Lote', type: 'main', index: 0 }]] },
   // fan-out: upload (lateral) + roteador por formato (cadeia principal)
@@ -3036,7 +3071,7 @@ const connections = {
       { node: 'Abrir Lote', type: 'main', index: 0 },           // true — abre o lote (ramo terminal)
       { node: 'Precisa Fallback?', type: 'main', index: 0 },    // ...e o item SEGUE inteiro
     ],
-    [{ node: 'Registrar Recusa', type: 'main', index: 0 }],     // false — grava e aborta
+    [{ node: 'Juntar Recusas', type: 'main', index: 1 }],       // false — grava e aborta
   ] },
   // Os dois ramos entram em INPUTS DIFERENTES do Merge (0 e 1) — nunca mais duas
   // conexões cruas no mesmo input, que é o que comeu 19 documentos no V45.

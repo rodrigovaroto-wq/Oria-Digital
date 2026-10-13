@@ -14,7 +14,7 @@ import { codigosConhecidos } from '../lib/ia.mjs';
 import { SYSTEM_PROMPT, diagnosticarErroApi, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, extractionSchema, achatarGrupos } from '../lib/extract.mjs';
 import { ALIASES } from '../lib/taxonomia.mjs';
 import { parseEntidade, classifyByFilename } from '../lib/classifier.mjs';
-import { orcamentoDoLote, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, VERSAO_ORCAMENTO, PRECO_USD_POR_MILHAO, CUSTO_ESTIMADO_DOC_USD, TETO_EXECUCAO_USD, PAGINAS_MAX_MEDIDO, TOKENS_POR_PAGINA_IMAGEM } from '../lib/custo.mjs';
+import { orcamentoDoLote, vereditoDeTamanhoPorArquivo, TETO_BYTES_POR_ARQUIVO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, VERSAO_ORCAMENTO, PRECO_USD_POR_MILHAO, CUSTO_ESTIMADO_DOC_USD, TETO_EXECUCAO_USD, PAGINAS_MAX_MEDIDO, TOKENS_POR_PAGINA_IMAGEM } from '../lib/custo.mjs';
 
 // O PIOR CASO DE ENTRADA (tokens de imagem), a MESMA conta que
 // `build-workflow.mjs` usa para dimensionar a cadência (`ENTRADA_MAX_MEDIDA_TOKENS`).
@@ -1029,7 +1029,10 @@ test('Topologia: o teto de gasto fica entre a medição do documento e a primeir
     'o Abrir Lote é ramo TERMINAL — inline ele substituiria o item de todo documento');
   assert.equal(wf.nodes.find((n) => n.name === 'Abrir Lote').executeOnce, true,
     'a pergunta é do LOTE, não do documento — sem executeOnce ele abriria uma vez por item');
-  assert.deepEqual(wf.connections['Lote cabe?'].main[1].map((c) => c.node), ['Registrar Recusa']);
+  // Desde 13/10/2026 a recusa do orcamento entra no `Registrar Recusa` por um
+  // Merge (`Juntar Recusas`), junto com a do tamanho do arquivo: um caminho so.
+  assert.deepEqual(wf.connections['Lote cabe?'].main[1].map((c) => c.node), ['Juntar Recusas']);
+  assert.deepEqual(wf.connections['Juntar Recusas'].main[0].map((c) => c.node), ['Registrar Recusa']);
   // GRAVA e só então ABORTA: a ordem é o ponto. Abortar antes de gravar deixaria
   // o portal sem a causa, que é exatamente o defeito que este ramo corrige.
   assert.deepEqual(wf.connections['Registrar Recusa'].main[0].map((c) => c.node), ['Abortar Lote']);
@@ -3981,4 +3984,91 @@ test('xlsx de UMA aba não abre a pendência de abas', async () => {
     items: [{ json: { Conta: 'Banco A', Saldo: '1000' } }], refs: { 'Preparar Conteudo': [{ json: prep.json }] },
   });
   assert.equal(out[0].json.aviso_conteudo, null);
+});
+
+// ---------------------------------------------------------------------------
+// O TETO DE TAMANHO POR ARQUIVO (13/10/2026). Medido no n8n 2.30.7: a memoria
+// sobe ~50x o tamanho do arquivo (29 MB -> 2,0 GB; 355 MB derruba a instancia),
+// e o `Preparar Conteudo` le o binario inteiro. O guarda roda em `Listar
+// Arquivos`, antes de qualquer leitura, e recusa pelo MESMO caminho do orcamento.
+// ---------------------------------------------------------------------------
+const QUINZE_MIB = 15 * 1024 * 1024;
+const formComArquivos = (arqs) => ({
+  json: { 'Mandato (nome do caso)': 'Mandato Teste' },
+  binary: Object.fromEntries(arqs.map((a, i) => [`Arquivos_${i}`,
+    { fileName: a.nome, mimeType: 'application/octet-stream', id: `f${i}`, data: 'filesystem-v2', ...(a.bytes === null ? {} : { fileSize: a.bytes }) }])),
+});
+const listarComTamanhos = (arqs) => run('Listar Arquivos', {
+  item: UPSERT_ITEM, items: [UPSERT_ITEM], refs: { ...REFS_BASE, 'Intake (Form)': formComArquivos(arqs) },
+});
+
+test('Tamanho: 15 MiB + 1 byte recusa o LOTE inteiro e NOMEIA o arquivo, o tamanho e o teto', async () => {
+  const out = await listarComTamanhos([
+    { nome: 'balanco.pdf', bytes: 1024 },
+    { nome: 'ECD-2025.txt', bytes: QUINZE_MIB + 1 },
+  ]);
+  // UM item, como a saida do Orcamento do Lote: com um por arquivo, o Registrar
+  // Recusa gravaria a mesma falha N vezes.
+  assert.equal(out.length, 1);
+  assert.equal(out[0].json.caso_id, UPSERT_ITEM.json.caso_id);
+  assert.equal(out[0].binary, undefined, 'a recusa nao carrega binario adiante');
+  for (const it of out) {
+    assert.equal(it.json.tamanho_cabe, false, 'o lote e recusado inteiro, inclusive o arquivo pequeno');
+    assert.match(it.json.orcamento_mensagem, /ECD-2025\.txt/);
+    assert.match(it.json.orcamento_mensagem, /15\.728\.641 bytes/);
+    assert.match(it.json.orcamento_mensagem, /15\.728\.640 bytes/);
+    assert.match(it.json.orcamento_mensagem, /tela de\s+arquivos oficiais do portal/);
+    assert.match(it.json.orcamento_mensagem, /divida o arquivo/);
+    assert.doesNotMatch(it.json.orcamento_mensagem, /balanco\.pdf/, 'so o que passou do teto e nomeado');
+  }
+});
+
+test('Tamanho: 15 MiB EXATOS passam, sem mensagem', async () => {
+  const out = await listarComTamanhos([{ nome: 'ECD-2025.txt', bytes: QUINZE_MIB }]);
+  assert.equal(out[0].json.tamanho_cabe, true);
+  assert.equal(out[0].json.orcamento_mensagem, undefined);
+});
+
+test('Tamanho: arquivo de tamanho DESCONHECIDO (bytes null) NAO passa calado — e recusado dizendo que nao foi medido', async () => {
+  const out = await listarComTamanhos([{ nome: 'misterio.xml', bytes: null }, { nome: 'ok.pdf', bytes: 10 }]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].json.tamanho_cabe, false);
+  assert.match(out[0].json.orcamento_mensagem, /misterio\.xml/);
+  assert.match(out[0].json.orcamento_mensagem, /tamanho que o n8n nao informou/);
+  assert.match(out[0].json.orcamento_mensagem, /recusado por precaucao/);
+});
+
+test('Tamanho: a recusa sai pelo MESMO caminho do orcamento (Registrar Recusa -> Abortar Lote), e o Abortar lanca a mensagem', async () => {
+  const dest = (n, ramo) => (wf.connections[n].main[ramo] || []).map((c) => c.node);
+  assert.deepEqual(dest('Listar Arquivos', 0), ['Tamanho cabe?']);
+  assert.deepEqual(dest('Tamanho cabe?', 0), ['Classificar Nome']);
+  assert.deepEqual(dest('Tamanho cabe?', 1), ['Juntar Recusas']);
+  assert.deepEqual(dest('Lote cabe?', 1), ['Juntar Recusas']);
+  assert.deepEqual(dest('Juntar Recusas', 0), ['Registrar Recusa']);
+  assert.deepEqual(dest('Registrar Recusa', 0), ['Abortar Lote']);
+  const out = await listarComTamanhos([{ nome: 'ECD-2025.txt', bytes: QUINZE_MIB + 1 }]);
+  await assert.rejects(() => run('Abortar Lote', { item: out[0], items: out }), /ECD-2025\.txt/);
+});
+
+test('Tamanho: o Preparar Conteudo (getBinaryDataBuffer) so e alcancavel DEPOIS do guarda de tamanho', () => {
+  const alcanca = (semNo) => {
+    const visto = new Set(['Listar Arquivos']); const fila = ['Listar Arquivos'];
+    while (fila.length) {
+      const n = fila.shift();
+      for (const ramo of wf.connections[n]?.main || []) for (const c of ramo || []) {
+        if (c.node === semNo || visto.has(c.node)) continue;
+        visto.add(c.node); fila.push(c.node);
+      }
+    }
+    return visto;
+  };
+  assert.ok(alcanca(null).has('Preparar Conteudo'), 'premissa: o preparo e alcancavel');
+  assert.ok(!alcanca('Tamanho cabe?').has('Preparar Conteudo'),
+    'sem passar por `Tamanho cabe?`, nenhum caminho chega ao Preparar Conteudo');
+});
+
+test('Listar Arquivos carrega o MESMO vereditoDeTamanhoPorArquivo e o MESMO teto de lib/custo.mjs', () => {
+  assert.ok(code('Listar Arquivos').includes(vereditoDeTamanhoPorArquivo.toString()));
+  assert.ok(code('Listar Arquivos').includes(`const TETO_BYTES_POR_ARQUIVO = ${TETO_BYTES_POR_ARQUIVO};`));
+  assert.equal(TETO_BYTES_POR_ARQUIVO, 15 * 1024 * 1024);
 });

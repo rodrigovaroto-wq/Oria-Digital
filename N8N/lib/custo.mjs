@@ -616,6 +616,74 @@ export function bytesDoBinario(bin) {
   return null;
 }
 
+/**
+ * O TETO DE TAMANHO POR ARQUIVO, em bytes: 15 MiB.
+ *
+ * Medido em 13/10/2026 (n8n 2.30.7, o mesmo código de produção, `Leitor/medicao-n8n/`):
+ * o `Preparar Conteudo` chama `this.helpers.getBinaryDataBuffer`, e para o binário
+ * chegar ao task runner o n8n o serializa como objeto JS byte a byte. A memória
+ * total (principal + runner, RSS) fica em ~600 MB ociosos + ~50x o tamanho do
+ * arquivo: 11 MB -> 1,1 GB; 29 MB -> 2,0 GB; 58 MB -> 3,6 GB; 117 MB -> 7,7 GB;
+ * 355 MB -> `JavaScript heap out of memory` e cai a instância INTEIRA, com todas as
+ * execuções em curso. O PikaPods de produção tem 2 GB, então ~29 MB já o derrubam;
+ * 15 MiB (~1,4 GB medido) deixa folga para o resto do lote e para o que já roda.
+ * O portal aceita até 200 MB por arquivo no envio direto, e é por isso que o
+ * teto mora AQUI, no ponto que protege a instância, e não só lá.
+ */
+export const TETO_BYTES_POR_ARQUIVO = 15 * 1024 * 1024;
+
+/**
+ * O veredito de TAMANHO do lote: roda ANTES de qualquer `getBinaryDataBuffer`.
+ *
+ * `arquivos` e' `[{ nome, bytes }]`; `teto` e' OBRIGATORIO (sem padrao de
+ * proposito: o no passa `TETO_BYTES_POR_ARQUIVO` explicitamente, e um teto
+ * ausente que virasse "sem limite" seria o guarda desligado em silencio).
+ *
+ * `bytes` ausente/nao numerico NAO passa como se fosse pequeno (regra 1): o
+ * arquivo cujo tamanho o n8n nao deixou medir pode ser de 300 MB, e o preco de
+ * errar para o lado de ler e' a instancia inteira fora do ar -- nao ha reenvio
+ * barato depois disso. Ele e' recusado, com a mensagem dizendo que o tamanho nao
+ * foi medido (e nao que o arquivo e' grande).
+ *
+ * AUTO-CONTIDA: embutida num no Code por `toString()`, sem referenciar nada do
+ * modulo. Nao muda quantas chamadas de IA o lote faz: a cota do dia (RPD 500)
+ * fica como esta.
+ */
+export function vereditoDeTamanhoPorArquivo(entrada) {
+  const e = entrada || {};
+  const teto = Number(e.teto);
+  if (!Number.isFinite(teto) || teto <= 0) throw new Error('vereditoDeTamanhoPorArquivo: `teto` e obrigatorio e positivo.');
+  const arquivos = Array.isArray(e.arquivos) ? e.arquivos : [];
+  const milhar = (n) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  const mib = (n) => (n / 1048576).toFixed(2).replace('.', ',') + ' MiB';
+  const grandes = [];
+  const semMedida = [];
+  for (const a of arquivos) {
+    const nome = (a && a.nome) || '(sem nome)';
+    const b = a && a.bytes !== null && a.bytes !== undefined && a.bytes !== '' ? Number(a.bytes) : NaN;
+    if (!Number.isFinite(b) || b < 0) semMedida.push(nome);
+    else if (b > teto) grandes.push({ nome, bytes: b });
+  }
+  if (grandes.length === 0 && semMedida.length === 0) {
+    return { cabe: true, teto, grandes, semMedida, mensagem: null };
+  }
+  const linhas = [
+    ...grandes.map((g) => `"${g.nome}" tem ${mib(g.bytes)} (${milhar(g.bytes)} bytes)`),
+    ...semMedida.map((n) => `"${n}" tem tamanho que o n8n nao informou`),
+  ];
+  const mensagem = `[tamanho do arquivo] Lote recusado ANTES de ler qualquer arquivo: ${linhas.join('; ')}.`
+    + ` O teto e de ${mib(teto)} (${milhar(teto)} bytes) por arquivo.`
+    + ` Ler um arquivo grande aqui ocupa ~50x o tamanho dele em memoria (29 MB ja enchem os 2 GB da`
+    + ` instancia) e derruba o n8n INTEIRO, com todos os lotes em andamento.`
+    + (semMedida.length > 0 ? ` Arquivo sem tamanho medido e recusado por precaucao: nao da para afirmar que cabe.` : '')
+    + ` O lote inteiro foi recusado e os demais arquivos nao foram processados.`
+    + ` O QUE FAZER: arquivo OFICIAL (SPED, CNAB, OFX, XML fiscal) -> leia no navegador, pela tela de`
+    + ` arquivos oficiais do portal; PDF ou planilha grande -> divida o arquivo em partes menores.`
+    + ` Depois reenvie. Nada foi enviado ao provedor de IA e nenhum documento foi registrado, entao`
+    + ` reenviar nao duplica nem custa.`;
+  return { cabe: false, teto, grandes, semMedida, mensagem };
+}
+
 // Custo REAL de uma chamada, a partir do bloco `usage` da resposta.
 // Não estima nada: se o `usage` não vier, devolve null em vez de chutar — um
 // custo inventado num relatório de custo é pior que um campo vazio.

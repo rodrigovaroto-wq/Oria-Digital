@@ -7,7 +7,7 @@ toca:
   - Leitor/medicao-n8n/no-ler-fatia.js
   - Leitor/medicao-n8n/navegador-leitor.js
 ancora: N8N/build-workflow.mjs#getBinaryDataBuffer
-ancora_sha: 4a9a052af262
+ancora_sha: 967ae9fd3777
 substitui: []
 ---
 
@@ -40,6 +40,11 @@ leitor no navegador, File.stream, resumo, agregado, guardar no banco, Storage.
   - os registros-chave vão na íntegra e os 7,48M de `I250` são somados por conta e mês;
   - o resumo tem 3,4 MB (745 KB comprimido), contra 1,95 GB da carga bruta.
   - O custo: o lançamento individual não fica no banco.
+
+- **A barreira em produção (passo 4 da sessão 108): `TETO_BYTES_POR_ARQUIVO` = 15 MiB** (`N8N/lib/custo.mjs`).
+  - Medido na mesma sessão: a memória total do n8n é ~600 MB + ~50× o tamanho do arquivo (11 MB → 1,1 GB; 29 MB → 2,0 GB; 58 MB → 3,6 GB), e o pod tem 2 GB.
+  - O `Listar Arquivos` recusa o lote ANTES de qualquer `getBinaryDataBuffer`, pelo mesmo `Registrar Recusa → Abortar Lote` do orçamento (nó `Tamanho cabe?` + Merge `Juntar Recusas`).
+  - Tamanho desconhecido também é recusado.
 
 **Quem desmente isto:** rodar de novo `Leitor/medicao-n8n/` em outra versão do n8n. O
 comportamento do runner muda entre versões, e a âncora acima marca SUSPEITA quando o
