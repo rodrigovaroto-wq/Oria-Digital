@@ -8083,6 +8083,57 @@ end;
 $$;
 
 --
+-- Name: fn_recalcular_vigencia_arquivo_oficial(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_recalcular_vigencia_arquivo_oficial(p_caso uuid, p_chave text) RETURNS void
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_vigente uuid;
+  v_n_ret   int;
+begin
+  if p_chave is null then return; end if;   -- sem identidade, sem competição
+
+  -- 1) Zera o grupo ANTES de eleger (o índice único parcial é checado linha a linha) e limpa o motivo
+  --    de ambiguidade antigo, que pode já não valer.
+  update arquivo_oficial set vigente = false, substituido_por = null, detalhe = detalhe - 'vigencia'
+   where caso_id = p_caso and chave_natural = p_chave
+     and (vigente or substituido_por is not null or detalhe ? 'vigencia');
+
+  -- 2) Mais de uma retificadora lida e nenhuma cadeia: ausência visível, não palpite.
+  select count(*) into v_n_ret from arquivo_oficial
+   where caso_id = p_caso and chave_natural = p_chave and status = 'lido' and retificadora;
+  if v_n_ret > 1 then
+    update arquivo_oficial
+       set detalhe = detalhe || jsonb_build_object('vigencia',
+         'ambigua: ' || v_n_ret || ' retificadoras da mesma escrituração sem cadeia de recibo; escolha manual')
+     where caso_id = p_caso and chave_natural = p_chave and status = 'lido';
+    return;
+  end if;
+
+  -- 3) Retificadora vence original; entre originais, a registrada por último. Só status 'lido' concorre.
+  select id into v_vigente
+    from arquivo_oficial
+   where caso_id = p_caso and chave_natural = p_chave and status = 'lido'
+   order by retificadora desc, seq desc
+   limit 1;
+
+  if v_vigente is null then return; end if;   -- só há arquivo mal lido: fica sem vigente, de propósito
+
+  update arquivo_oficial set vigente = true where id = v_vigente;
+  -- 4) As outras lidas ficam como evidência, apontando para a vigente.
+  update arquivo_oficial set substituido_por = v_vigente
+   where caso_id = p_caso and chave_natural = p_chave and status = 'lido' and id <> v_vigente;
+end $$;
+
+--
+-- Name: FUNCTION fn_recalcular_vigencia_arquivo_oficial(p_caso uuid, p_chave text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_recalcular_vigencia_arquivo_oficial(p_caso uuid, p_chave text) IS 'Regra G9 de versão vigente por (caso, chave_natural): retificadora vence original, última registrada vence entre iguais; mais de uma retificadora lida = sem vigente + detalhe.vigencia. Interna de fn_registrar_arquivo_oficial. 0206.';
+
+--
 -- Name: fn_recomputar_completude(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -10783,6 +10834,104 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_reescrever_recado_linha_exigida(p_tipo text, p_conceito text) IS '0188: reescreve SÓ a descrição das pendências linha_exigida_ausente ABERTAS da exigência (tipo, conceito) cuja entidade tem alternativa em taxonomia_linha_alternativa — o texto que o próximo recompute escreveria. Não abre, não resolve, não toca em aceita_com_ressalva. Ação de migration/service_role — sem grant para o portal.';
+
+--
+-- Name: fn_registrar_arquivo_oficial(uuid, uuid, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_liga  boolean;
+  v_id    uuid;
+  v_antiga text;
+  v_atualizado boolean := false;
+  r       arquivo_oficial;   -- o envelope novo
+  e       arquivo_oficial;   -- a linha que já existia, se houver
+  v_fim   arquivo_oficial;
+begin
+  select trilha_transacional into v_liga from caso where id = p_caso;
+  if v_liga is null then
+    raise exception 'fn_registrar_arquivo_oficial: o caso % não existe', p_caso;
+  end if;
+  if not v_liga then
+    raise exception 'fn_registrar_arquivo_oficial: a trilha de arquivos oficiais está DESLIGADA no caso % — recusado, nada foi gravado. Para ligar: update caso set trilha_transacional = true where id = ''%''.', p_caso, p_caso;
+  end if;
+  if p_envelope is null or coalesce(p_envelope->>'hash_sha256', '') = '' then
+    raise exception 'fn_registrar_arquivo_oficial: o envelope não traz hash_sha256 — sem ele não há idempotência';
+  end if;
+
+  -- Quem decide id, vigente, substituido_por e seq é a regra, não o envelope: nem o INSERT nem o UPDATE
+  -- abaixo leem essas quatro de `r`, mesmo que o jsonb as traga.
+  r := jsonb_populate_record(null::arquivo_oficial, p_envelope);
+
+  -- Serializa o mesmo (caso, hash) e o mesmo (caso, chave): dois leitores concorrentes não se atropelam.
+  perform pg_advisory_xact_lock(hashtextextended(p_caso::text || '|' || r.hash_sha256, 0));
+  select * into e from arquivo_oficial where caso_id = p_caso and hash_sha256 = r.hash_sha256;
+  perform pg_advisory_xact_lock(hashtextextended(p_caso::text || '#' || coalesce(r.chave_natural, ''), 0));
+  if e.id is not null and e.chave_natural is distinct from r.chave_natural then
+    perform pg_advisory_xact_lock(hashtextextended(p_caso::text || '#' || coalesce(e.chave_natural, ''), 0));
+  end if;
+
+  if e.id is not null then
+    if e.status = 'lido' and e.leitor_versao = r.leitor_versao then
+      -- Reenvio puro: devolve o que existe (só completa o documento, se faltava).
+      if e.documento_id is null and p_documento is not null then
+        update arquivo_oficial set documento_id = p_documento where id = e.id;
+      end if;
+      v_id := e.id;
+    else
+      -- Releitura: o arquivo mal lido, ou lido por outro leitor, passa a valer o que o envelope novo diz.
+      update arquivo_oficial set
+        documento_id = coalesce(p_documento, documento_id), familia = r.familia, subtipo = r.subtipo,
+        versao_leiaute = r.versao_leiaute, cnpj = r.cnpj, periodo_ini = r.periodo_ini,
+        periodo_fim = r.periodo_fim, chave_natural = r.chave_natural,
+        retificadora = coalesce(r.retificadora, false), controle_tipo = r.controle_tipo,
+        controle_declarado = r.controle_declarado, controle_lido = r.controle_lido, status = r.status,
+        detalhe = coalesce(r.detalhe, '{}'::jsonb), leitor_versao = r.leitor_versao,
+        lido_em = coalesce(r.lido_em, now()),
+        vigente = false, substituido_por = null
+       where id = e.id;
+      v_id := e.id;
+      v_atualizado := true;
+      v_antiga := e.chave_natural;
+    end if;
+  else
+    insert into arquivo_oficial
+      (caso_id, documento_id, familia, subtipo, versao_leiaute, hash_sha256, cnpj, periodo_ini, periodo_fim,
+       chave_natural, retificadora, controle_tipo, controle_declarado, controle_lido, status, detalhe,
+       leitor_versao, lido_em)
+    values
+      (p_caso, p_documento, r.familia, r.subtipo, r.versao_leiaute, r.hash_sha256, r.cnpj, r.periodo_ini,
+       r.periodo_fim, r.chave_natural, coalesce(r.retificadora, false), r.controle_tipo, r.controle_declarado,
+       r.controle_lido, r.status, coalesce(r.detalhe, '{}'::jsonb), r.leitor_versao, coalesce(r.lido_em, now()))
+    returning id into v_id;
+    v_atualizado := false;
+  end if;
+
+  if not (e.id is not null and not v_atualizado) then
+    -- Linha nova ou atualizada: recalcula a chave nova e, se a linha mudou de chave, a antiga também.
+    if r.chave_natural is null then
+      update arquivo_oficial set vigente = true where id = v_id and status = 'lido';
+    else
+      perform fn_recalcular_vigencia_arquivo_oficial(p_caso, r.chave_natural);
+    end if;
+    if v_atualizado and v_antiga is not null and v_antiga is distinct from r.chave_natural then
+      perform fn_recalcular_vigencia_arquivo_oficial(p_caso, v_antiga);
+    end if;
+  end if;
+
+  select * into v_fim from arquivo_oficial where id = v_id;
+  return jsonb_build_object('id', v_fim.id, 'status', v_fim.status, 'vigente', v_fim.vigente,
+                            'atualizado', v_atualizado, 'vigencia', v_fim.detalhe->>'vigencia');
+end $$;
+
+--
+-- Name: FUNCTION fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb) IS 'Registra o envelope de um arquivo oficial lido e devolve jsonb {id, status, vigente, atualizado, vigencia}. Recusa com exceção se caso.trilha_transacional = false. Mesmo (caso, hash): lido com o mesmo leitor_versao é reenvio puro; status != lido ou outro leitor_versao ATUALIZA a linha e recalcula a vigência das chaves antiga e nova. Aplica a regra de versão vigente (G9). 0206.';
 
 --
 -- Name: fn_registrar_campos_extraidos(uuid, jsonb, public.nivel_autonomia, text, boolean); Type: FUNCTION; Schema: public; Owner: -
@@ -14519,6 +14668,84 @@ end;
 $$;
 
 --
+-- Name: arquivo_oficial; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.arquivo_oficial (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    caso_id uuid NOT NULL,
+    documento_id uuid,
+    familia text NOT NULL,
+    subtipo text,
+    versao_leiaute text,
+    hash_sha256 text NOT NULL,
+    cnpj text,
+    periodo_ini date,
+    periodo_fim date,
+    chave_natural text,
+    retificadora boolean DEFAULT false NOT NULL,
+    controle_tipo text NOT NULL,
+    controle_declarado bigint,
+    controle_lido bigint,
+    status text NOT NULL,
+    vigente boolean DEFAULT false NOT NULL,
+    substituido_por uuid,
+    detalhe jsonb DEFAULT '{}'::jsonb NOT NULL,
+    leitor_versao text NOT NULL,
+    lido_em timestamp with time zone DEFAULT now() NOT NULL,
+    seq bigint NOT NULL,
+    CONSTRAINT arquivo_oficial_controle_tipo_check CHECK ((controle_tipo = ANY (ARRAY['contagem_declarada'::text, 'documento_unico'::text, 'sem_controle_no_formato'::text]))),
+    CONSTRAINT arquivo_oficial_divergente_tem_as_duas CHECK (((status <> 'controle_divergente'::text) OR ((controle_declarado IS NOT NULL) AND (controle_lido IS NOT NULL) AND (controle_declarado <> controle_lido)))),
+    CONSTRAINT arquivo_oficial_familia_check CHECK ((familia = ANY (ARRAY['sped'::text, 'nfe'::text, 'cte'::text, 'mdfe'::text, 'nfse'::text, 'esocial'::text, 'reinf'::text, 'cnab240'::text, 'cnab400'::text, 'cnab150'::text, 'ofx'::text, 'zip'::text]))),
+    CONSTRAINT arquivo_oficial_lido_tem_contagem CHECK (((status <> 'lido'::text) OR ((controle_lido IS NOT NULL) AND ((controle_tipo <> 'contagem_declarada'::text) OR ((controle_declarado IS NOT NULL) AND (controle_declarado = controle_lido)))))),
+    CONSTRAINT arquivo_oficial_status_check CHECK ((status = ANY (ARRAY['lido'::text, 'controle_divergente'::text, 'versao_desconhecida'::text, 'familia_desconhecida'::text, 'falhou'::text]))),
+    CONSTRAINT arquivo_oficial_vigente_so_se_lido CHECK (((NOT vigente) OR (status = 'lido'::text)))
+);
+
+--
+-- Name: TABLE arquivo_oficial; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.arquivo_oficial IS 'Envelope de cada arquivo de leiaute oficial lido pelo serviço leitor (Espec. 12, D12.9): o que é, de quem, de quando, quantos registros declarava e quantos foram lidos. Idempotente por (caso, hash). Uma vigente por (caso, chave_natural), regra G9. 0206.';
+
+--
+-- Name: COLUMN arquivo_oficial.chave_natural; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.arquivo_oficial.chave_natural IS 'Identidade do CONTEÚDO, para a regra de versão vigente: sped cnpj|subtipo|ini|fim; nfe/cte/mdfe a chave de acesso (44 dígitos); esocial/reinf o Id do evento; ofx banco|conta|ini|fim; cnab o próprio hash.';
+
+--
+-- Name: COLUMN arquivo_oficial.controle_tipo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.arquivo_oficial.controle_tipo IS 'Como o formato se auto-confere: contagem_declarada (|9999|, rodapé CNAB, S-1299), documento_unico (um XML = um documento) ou sem_controle_no_formato.';
+
+--
+-- Name: COLUMN arquivo_oficial.seq; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.arquivo_oficial.seq IS 'Ordem de registro. Desempata "o registrado por último vence" na versão vigente; lido_em não serve, pois duas linhas na mesma transação têm o mesmo now().';
+
+--
+-- Name: CONSTRAINT arquivo_oficial_lido_tem_contagem ON arquivo_oficial; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT arquivo_oficial_lido_tem_contagem ON public.arquivo_oficial IS 'Regra 7: "lido" nunca sem contagem. O is not null explícito evita o check que dá NULL e passa.';
+
+--
+-- Name: arquivo_oficial_seq_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.arquivo_oficial ALTER COLUMN seq ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME public.arquivo_oficial_seq_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+--
 -- Name: campo_classe_override; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -14572,7 +14799,8 @@ CREATE TABLE public.caso (
     criado_em timestamp with time zone DEFAULT now() NOT NULL,
     fechado_em timestamp with time zone,
     fechado_por text,
-    motivo_fechamento text
+    motivo_fechamento text,
+    trilha_transacional boolean DEFAULT false NOT NULL
 );
 
 --
@@ -14580,6 +14808,12 @@ CREATE TABLE public.caso (
 --
 
 COMMENT ON COLUMN public.caso.fechado_em IS 'Quando o mandato saiu da mesa. NULL = ativo. Não é status de trabalho (esse é `status`, Arquitetura do Sistema/2 Especificação/f0/04): é a resposta a "ainda estamos nisso?". Fechar preserva tudo — para apagar existe fn_excluir_caso.';
+
+--
+-- Name: COLUMN caso.trilha_transacional; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.caso.trilha_transacional IS 'Liga/desliga por caso da trilha de arquivos oficiais (Espec. 12, G25). Default false: nada muda em produção até alguém ligar, e desligada fn_registrar_arquivo_oficial RECUSA com exceção (regra 7). 0206.';
 
 --
 -- Name: caso_apresentacao_campo; Type: TABLE; Schema: public; Owner: -
@@ -15904,6 +16138,20 @@ COMMENT ON COLUMN public.taxonomia_tipo_documento.abertura_analitica IS 'Este ti
 COMMENT ON COLUMN public.taxonomia_tipo_documento.autoridade IS 'Peso da EVIDÊNCIA deste tipo de documento quando dois documentos do mesmo período discordam sobre a mesma conta (0151). Maior vence, e o motivo vai por extenso na pendência. 0 = o catálogo não declarou autoridade para este tipo: ele não decide (dois zeros empatam e a decisão volta para o humano). Nada é apagado em nenhum caso — o perdedor é a evidência de que houve escolha.';
 
 --
+-- Name: arquivo_oficial arquivo_oficial_caso_hash_uk; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial
+    ADD CONSTRAINT arquivo_oficial_caso_hash_uk UNIQUE (caso_id, hash_sha256);
+
+--
+-- Name: arquivo_oficial arquivo_oficial_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial
+    ADD CONSTRAINT arquivo_oficial_pkey PRIMARY KEY (id);
+
+--
 -- Name: campo_classe_override campo_classe_override_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -16303,6 +16551,18 @@ ALTER TABLE ONLY public.taxonomia_tipo_documento
     ADD CONSTRAINT taxonomia_tipo_documento_pkey PRIMARY KEY (codigo);
 
 --
+-- Name: arquivo_oficial_caso_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX arquivo_oficial_caso_idx ON public.arquivo_oficial USING btree (caso_id, familia);
+
+--
+-- Name: arquivo_oficial_uma_vigente_por_chave; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX arquivo_oficial_uma_vigente_por_chave ON public.arquivo_oficial USING btree (caso_id, chave_natural) WHERE vigente;
+
+--
 -- Name: controlador_caso_documento_unico; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -16607,6 +16867,27 @@ CREATE TRIGGER trg_golden_rotulo_congelada BEFORE INSERT OR UPDATE ON public.gol
 --
 
 CREATE TRIGGER trg_instalacao_cobertura_nao_regride BEFORE UPDATE OF ate_migration ON public.instalacao_cobertura FOR EACH ROW EXECUTE FUNCTION public.fn_trg_instalacao_cobertura_nao_regride();
+
+--
+-- Name: arquivo_oficial arquivo_oficial_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial
+    ADD CONSTRAINT arquivo_oficial_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
+-- Name: arquivo_oficial arquivo_oficial_documento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial
+    ADD CONSTRAINT arquivo_oficial_documento_id_fkey FOREIGN KEY (documento_id) REFERENCES public.documento(id) ON DELETE SET NULL;
+
+--
+-- Name: arquivo_oficial arquivo_oficial_substituido_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.arquivo_oficial
+    ADD CONSTRAINT arquivo_oficial_substituido_por_fkey FOREIGN KEY (substituido_por) REFERENCES public.arquivo_oficial(id) ON DELETE SET NULL;
 
 --
 -- Name: campo_classe_override campo_classe_override_campo_extraido_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -17048,6 +17329,18 @@ ALTER TABLE ONLY public.taxonomia_linha_localizador
 
 ALTER TABLE ONLY public.taxonomia_tipo_cobertura
     ADD CONSTRAINT taxonomia_tipo_cobertura_tipo_taxonomia_fkey FOREIGN KEY (tipo_taxonomia) REFERENCES public.taxonomia_tipo_documento(codigo);
+
+--
+-- Name: arquivo_oficial; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.arquivo_oficial ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: arquivo_oficial arquivo_oficial_authenticated_all; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_authenticated_all ON public.arquivo_oficial TO authenticated USING (true) WITH CHECK (true);
 
 --
 -- Name: campo_classe_override; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18605,6 +18898,22 @@ GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO auth
 --
 
 GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text) TO authenticated;
+
+--
+-- Name: TABLE arquivo_oficial; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.arquivo_oficial TO anon;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.arquivo_oficial TO authenticated;
+GRANT ALL ON TABLE public.arquivo_oficial TO service_role;
+
+--
+-- Name: SEQUENCE arquivo_oficial_seq_seq; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON SEQUENCE public.arquivo_oficial_seq_seq TO anon;
+GRANT ALL ON SEQUENCE public.arquivo_oficial_seq_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.arquivo_oficial_seq_seq TO service_role;
 
 --
 -- Name: TABLE campo_classe_override; Type: ACL; Schema: public; Owner: -

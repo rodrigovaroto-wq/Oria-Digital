@@ -42,7 +42,7 @@ jurídico interno escreve o termo (D12.6, etapa 2). Pedir a cotação ao SERPRO 
 
 ## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
 
-> **Migration mais nova: `0205_os_campos_da_apresentacao.sql`** (os campos "[a preencher]" da apresentação de crédito, #253; aplicar DEPOIS da 0204). Antes dela, **`0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
+> **Migration mais nova: `0206_o_arquivo_oficial_lido_e_contado.sql`** (o envelope de cada arquivo oficial lido e a versão vigente, F2T etapa 1, sessão 107; aplicar DEPOIS da 0205). Antes dela, **`0205_os_campos_da_apresentacao.sql`** (os campos "[a preencher]" da apresentação de crédito, #253; aplicar DEPOIS da 0204). Antes dela, **`0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
 > herda a seção do pai (a linha cuja chave é o nome da seção bruta dela) e das irmãs, desde que concordem.
 > Conflito fica NULL e é contado. A herança é recursiva e nunca vem de topo ou total. Ela fecha o
 > resíduo do AC do Fw Valtra: CAIXA MATRIZ, DUPLICATAS A RECEBER e OUTROS CRÉDITOS estavam fora da soma

@@ -866,6 +866,15 @@ supabase db execute --file Supabase/migrations/0205_os_campos_da_apresentacao.sq
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0205' and not presente;                 -- ZERO linhas
 
+# A 0206 CRIA arquivo_oficial (o envelope de cada arquivo de leiaute oficial lido pelo serviço leitor:
+# declarado x lido, versão vigente — Espec. 12, F2T etapa 1), caso.trilha_transacional (default false:
+# nada muda até alguém ligar) e fn_registrar_arquivo_oficial (recusa a trilha desligada). Sem backfill.
+# Teste: Supabase/test/arquivo_oficial.test.sql.
+supabase db execute --file Supabase/migrations/0206_o_arquivo_oficial_lido_e_contado.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0206' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
