@@ -21,7 +21,7 @@ import { createReadStream } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { SPED, XML, CNAB, OFX, LEITOR_VERSAO } from './leiautes.mjs';
-import { dataDDMMAAAA, dataAAAAMMDD, cnpj, posicao } from './campos.mjs';
+import { dataDDMMAAAA, dataAAAAMMDD, cnpj, posicao, inteiro } from './campos.mjs';
 import { detectarFamilia } from './familia.mjs';
 
 function envelopeBase(familia, subtipo, hash) {
@@ -32,6 +32,20 @@ function envelopeBase(familia, subtipo, hash) {
     controle_declarado: null, controle_lido: null, status: 'falhou',
     detalhe: {}, leitor_versao: LEITOR_VERSAO,
   };
+}
+
+/** A mesma quebra de linha nos dois caminhos (memória e fluxo). O `readline` do
+ * fluxo quebra em \r\n, \n e \r solto; um `split('\n')` não quebraria no \r solto
+ * e o MESMO arquivo daria envelopes diferentes conforme viesse do disco ou de um zip. */
+export const QUEBRA = /\r\n|\n|\r/;
+
+/** Chave natural com um componente ausente junta arquivos diferentes na mesma
+ * vigência ("null|ECD|..." de duas empresas): não é aceita como lida. */
+function exigirChaveCompleta(env, partes, motivo) {
+  if (env.status === 'lido' && partes.some(p => p === null || p === undefined || p === '')) {
+    env.status = 'falhou';
+    env.detalhe.motivo = motivo;
+  }
 }
 
 /** Status a partir das contagens: a regra é a mesma para toda família que declara contagem. */
@@ -48,21 +62,24 @@ function statusPorContagem(env) {
 function leitorSped(env) {
   const porRegistro = {};
   const declaradoPorRegistro = {};
-  let total = 0, l0000 = null, versaoI010 = null, qtdLin = null, aposFim = 0, fechado = false;
+  let total = 0, l0000 = null, i010 = null, qtdLin = null, aposFim = 0, fechado = false, outroSped = false;
   return {
     linha(linha) {
-      if (fechado) { if (linha.trim() !== '') aposFim++; return; }
+      // Depois do 9999 só pode vir o bloco da assinatura digital (ECD assinada),
+      // que não é registro. Um NOVO |0000| ali é um segundo SPED concatenado, e
+      // aceitar o primeiro como "lido" esconderia o segundo inteiro.
+      if (fechado) { if (linha.trim() !== '') aposFim++; if (linha.startsWith('|0000|')) outroSped = true; return; }
       if (linha.trim() === '') return;
       total++;
       const c = linha.split('|');
       const reg = c[1];
       porRegistro[reg] = (porRegistro[reg] || 0) + 1;
       if (reg === '0000' && !l0000) l0000 = c;
-      else if (reg === 'I010') versaoI010 = c[SPED.ECD.versao.indice];
-      else if (reg === '9900') declaradoPorRegistro[c[2]] = Number(c[3]);
+      else if (reg === 'I010') i010 = c;
+      else if (reg === '9900') declaradoPorRegistro[c[2]] = inteiro(c[3]);
       // O 9999 fecha a escrituração. O que vem depois (a ECD assinada traz o bloco
       // da assinatura digital) não é registro e não entra na contagem.
-      else if (reg === '9999') { qtdLin = Number(c[2]); fechado = true; }
+      else if (reg === '9999') { qtdLin = inteiro(c[2]); fechado = true; }
     },
     fim() {
       const lay = SPED[env.subtipo];
@@ -71,12 +88,18 @@ function leitorSped(env) {
         env.detalhe.motivo = 'registro 0000 de leiaute SPED não reconhecido';
         return;
       }
-      env.versao_leiaute = lay.versao.registro === 'I010' ? versaoI010 ?? null : l0000[lay.versao.indice] ?? null;
+      env.versao_leiaute = lay.versao.registro === 'I010' ? (i010 ? i010[lay.versao.indice] ?? null : null) : l0000[lay.versao.indice] ?? null;
       env.cnpj = cnpj(l0000[lay.cnpj]);
       env.periodo_ini = dataDDMMAAAA(l0000[lay.dtIni]);
       env.periodo_fim = dataDDMMAAAA(l0000[lay.dtFim]);
       env.retificadora = lay.retificadora.valores.includes(l0000[lay.retificadora.indice]);
-      env.chave_natural = `${env.cnpj}|${env.subtipo}|${env.periodo_ini}|${env.periodo_fim}`;
+      // SCP e livro entram na identidade (ver leiautes.mjs). Ausentes são legítimos
+      // (a empresa não é SCP, o livro é o principal), e por isso viram '-', nunca null.
+      const scp = lay.scp ? (l0000[lay.scp] || '').trim() || '-' : '-';
+      const esc = lay.indEsc ? ((i010 && i010[lay.indEsc.indice]) || '').trim() || '-' : '-';
+      env.chave_natural = [env.cnpj, env.subtipo, env.periodo_ini, env.periodo_fim, scp, esc].join('|');
+      env.detalhe.cod_scp = scp === '-' ? null : scp;
+      env.detalhe.ind_esc = esc === '-' ? null : esc;
       // A razão social é o primeiro texto livre do arquivo, e é por ela que a
       // entidade do caso se confere (F1). Ela também é o que acusa uma decodificação
       // errada: o resto do envelope é número e não muda com a codificação.
@@ -98,6 +121,11 @@ function leitorSped(env) {
         env.status = 'falhou';
         env.detalhe.motivo = `o total do 9999 bate, mas a contagem por registro do 9900 não (${divergencias.length} registro(s)): arquivo editado à mão ou corrompido`;
       }
+      if (outroSped) {
+        env.status = 'falhou';
+        env.detalhe.motivo = 'há um segundo registro 0000 depois do 9999: dois SPEDs concatenados num arquivo só. Separe os arquivos';
+      }
+      exigirChaveCompleta(env, [env.cnpj, env.periodo_ini, env.periodo_fim], 'o 0000 não traz CNPJ e período válidos: sem eles a escrituração não tem identidade e poderia substituir a de outra empresa');
       if (env.versao_leiaute && !lay.versoes.includes(env.versao_leiaute)) {
         env.detalhe.motivo = `versão ${env.versao_leiaute} de ${env.subtipo} fora do registro de leiautes (conhecidas: ${lay.versoes.join(', ')})`;
         env.status = 'versao_desconhecida';
@@ -126,17 +154,19 @@ function leitorCnab(env, familia) {
       if ((familia === 'cnab240' && tipo === '9') || (familia === 'cnab400' && tipo === '9') || (familia === 'cnab150' && tipo === 'Z')) trailer = linha;
       // O CNAB 400 numera cada linha: um buraco na numeração é uma linha perdida
       // que a contagem total sozinha não acusa se outra sobrar no lugar.
-      if (familia === 'cnab400' && Number(posicao(linha, ...lay.sequencial)) !== total) quebraSequencia++;
+      if (familia === 'cnab400' && inteiro(posicao(linha, ...lay.sequencial)) !== total) quebraSequencia++;
     },
     fim() {
       env.chave_natural = env.hash_sha256;
       env.controle_lido = total;
       if (trailer) {
         env.controle_declarado = familia === 'cnab400'
-          ? Number(posicao(trailer, ...lay.sequencial))
-          : Number(posicao(trailer, ...lay.trailerQtdRegistros));
+          ? inteiro(posicao(trailer, ...lay.sequencial))
+          : inteiro(posicao(trailer, ...lay.trailerQtdRegistros));
       }
-      if (familia === 'cnab240' && header) env.cnpj = cnpj(posicao(header, ...lay.cnpjHeader));
+      // Posição 18 é o tipo de inscrição: 2 = CNPJ, 1 = CPF. Um CPF com zeros à
+      // esquerda tem 14 posições e passaria por CNPJ.
+      if (familia === 'cnab240' && header && posicao(header, 18, 18) === '2') env.cnpj = cnpj(posicao(header, ...lay.cnpjHeader));
       env.versao_leiaute = familia;
       const segs = Object.keys(porSegmento);
       env.subtipo = familia === 'cnab240'
@@ -155,7 +185,7 @@ function leitorCnab(env, familia) {
 
 // ---------------------------------------------------------------- OFX
 function leitorOfx(env) {
-  let transacoes = 0, versao = null, banco = null, conta = null, ini = null, fim = null, saldo = false, fechado = false;
+  let transacoes = 0, versao = null, banco = null, conta = null, ini = null, fim = null, saldo = false, fechado = false, cartao = false;
   const valor = (l, tag) => { const m = l.match(new RegExp(`<${tag}>\\s*([^<\\r\\n]+)`, 'i')); return m ? m[1].trim() : null; };
   return {
     linha(l) {
@@ -167,13 +197,16 @@ function leitorOfx(env) {
       ini = ini || valor(l, 'DTSTART');
       fim = fim || valor(l, 'DTEND');
       if (/<LEDGERBAL>/i.test(l)) saldo = true;
+      if (/<CCACCTFROM>/i.test(l)) cartao = true;
       if (/<\/OFX>/i.test(l)) fechado = true;
     },
     fim() {
       env.versao_leiaute = versao;
       env.periodo_ini = dataAAAAMMDD(ini);
       env.periodo_fim = dataAAAAMMDD(fim);
-      env.chave_natural = `${banco}|${conta}|${env.periodo_ini}|${env.periodo_fim}`;
+      // Extrato de cartão (CCACCTFROM) não tem BANKID: a conta do cartão é a identidade.
+      const instituicao = banco || (cartao ? 'cartao' : null);
+      env.chave_natural = [instituicao, conta, env.periodo_ini, env.periodo_fim].join('|');
       // O OFX não declara quantos lançamentos tem. O que ele tem é DTSTART–DTEND
       // e o saldo do banco, que a onda 2 usa para conciliar. Aqui: dizer que não há
       // contagem, e exigir que o arquivo feche (</OFX>), senão está truncado.
@@ -183,6 +216,7 @@ function leitorOfx(env) {
       if (!fechado) { env.status = 'falhou'; env.detalhe.motivo = 'o arquivo não fecha com </OFX>: truncado'; }
       else if (!OFX.versoes.includes(versao)) { env.status = 'versao_desconhecida'; env.detalhe.motivo = `versão OFX ${versao} fora do registro de leiautes`; }
       else env.status = 'lido';
+      exigirChaveCompleta(env, [instituicao, conta, env.periodo_ini, env.periodo_fim], 'o OFX não traz instituição, conta e período (DTSTART/DTEND): sem eles dois extratos diferentes se confundem');
     },
   };
 }
@@ -195,20 +229,27 @@ function lerXml(env, texto) {
   env.controle_tipo = 'documento_unico';
   const raiz = (texto.replace(/^﻿/, '').replace(/<\?xml[^>]*\?>/, '').match(/<([A-Za-z][\w:.-]*)/) || [])[1];
   const fechado = raiz ? new RegExp(`</${raiz}>\\s*$`).test(texto.trimEnd()) : false;
-  const tag = (nome, depoisDe) => {
-    const base = depoisDe ? texto.slice(Math.max(0, texto.indexOf(depoisDe))) : texto;
+  const tag = (nome, base = texto) => {
     const m = base.match(new RegExp(`<${nome}>([^<]+)</${nome}>`));
     return m ? m[1] : null;
   };
+  // O conteúdo de um bloco (<emit>…</emit>). Procurar o CNPJ "depois de <emit>"
+  // pegaria o do DESTINATÁRIO quando o emitente é pessoa física (produtor rural,
+  // que emite por CPF).
+  const bloco = (nome) => { const m = texto.match(new RegExp(`<${nome}>([\\s\\S]*?)</${nome}>`)); return m ? m[1] : null; };
   if (fam === 'esocial' || fam === 'reinf') {
     const ns = texto.match(fam === 'esocial' ? /\/evt\/evt\w+\/(v_S_\d\d_\d\d_\d\d)"/ : /\/schemas\/evt\w+\/(v\d+_\d+_\d+)"/);
     env.versao_leiaute = ns ? ns[1] : null;
     const id = texto.match(/<evt\w+[^>]*\bId="([^"]+)"/);
     env.chave_natural = id ? id[1] : null;
-    const insc = tag('nrInsc', fam === 'esocial' ? '<ideEmpregador>' : '<ideContri>');
+    const insc = tag('nrInsc', bloco(fam === 'esocial' ? 'ideEmpregador' : 'ideContri') || '');
     env.cnpj = insc && insc.length === 14 ? insc : null;
     const per = tag('perApur') || tag('perApuracao');
-    if (per && /^\d{4}-\d{2}$/.test(per)) { env.periodo_ini = `${per}-01`; env.periodo_fim = `${per}-01`; }
+    if (per && /^\d{4}-\d{2}$/.test(per)) {
+      const [a, m] = per.split('-').map(Number);
+      env.periodo_ini = `${per}-01`;
+      env.periodo_fim = new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10);   // último dia da competência
+    }
     env.detalhe = { raiz, raiz_cnpj: insc && insc.length === 8 ? insc : null };
   } else {
     const lay = XML[fam];
@@ -229,10 +270,12 @@ function lerXml(env, texto) {
       env.versao_leiaute = (attrs.match(/\bversao="([^"]+)"/) || [])[1] || null;
       const id = (attrs.match(/\bId="([^"]+)"/) || [])[1] || null;
       env.chave_natural = id ? id.replace(new RegExp(`^${lay.prefixoId}`), '') : null;
-      env.cnpj = tag('CNPJ', '<emit>') || tag('CNPJ', '<prest>') || tag('CNPJ');
+      const emit = bloco('emit') || bloco('prest') || '';
+      env.cnpj = tag('CNPJ', emit);
+      const cpfEmit = tag('CPF', emit);
       const emissao = tag('dhEmi') || tag('dhEmiss');
       if (emissao) { env.periodo_ini = emissao.slice(0, 10); env.periodo_fim = emissao.slice(0, 10); }
-      env.detalhe = { raiz, autorizado: /<cStat>100<\/cStat>/.test(texto) };
+      env.detalhe = { raiz, autorizado: /<cStat>100<\/cStat>/.test(texto), cpf_emitente: cpfEmit };
     }
   }
   env.controle_lido = 1;
@@ -266,7 +309,7 @@ export function lerEnvelopeDeBuffer(buf) {
   const env = envelopeBase(fam.familia, fam.subtipo, hash);
   const texto = buf.toString(codificacao(fam.familia, buf.subarray(0, 512).toString('latin1')));
   const leitor = leitorDeLinhas(env);
-  if (leitor) { for (const l of texto.split('\n')) leitor.linha(l.replace(/\r$/, '')); leitor.fim(); }
+  if (leitor) { for (const l of texto.split(QUEBRA)) leitor.linha(l); leitor.fim(); }
   else lerXml(env, texto);
   return env;
 }

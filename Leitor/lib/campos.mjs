@@ -56,6 +56,13 @@ export function posicao(linha, ini, fim) {
   return linha.slice(ini - 1, fim);
 }
 
+/** Contagem de um registro de controle: só dígitos. Campo vazio é AUSÊNCIA (null), nunca 0:
+ * `Number('')` dá 0, e um upload cortado logo depois de `|9999|` gravaria "declarado 0". */
+export function inteiro(texto) {
+  const t = String(texto ?? '').trim();
+  return /^\d+$/.test(t) ? Number(t) : null;
+}
+
 /** CNPJ só com dígitos e 14 posições, ou null. Não valida o dígito verificador: o arquivo oficial já foi validado pelo órgão. */
 export function cnpj(texto) {
   const t = String(texto ?? '').replace(/\D/g, '');

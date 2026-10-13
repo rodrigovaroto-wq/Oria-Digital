@@ -96,8 +96,10 @@ jobs:
         # O leitor de envelope de SPED, XML fiscal, eSocial, Reinf, CNAB e OFX. Ele roda FORA do
         # n8n (D12.9), mas mora neste job porque importa `N8N/lib/formato.mjs`: uma mudança no
         # detector de formato que quebre a família tem de reprovar aqui, na mesma execução.
-        # Cada correção dele foi desligada e medida (13/10/2026): roteador 10 testes, contagem 2,
-        # versão 1, latin1 1, zip-bomb 1, decimal 1, evento 1 — nenhuma passa vazia.
+        # Cada um dos 26 guardas dele foi desligado e medido (13/10/2026, 32 testes): nenhum passa
+        # vazio. Seis passavam vazios na primeira versão e foram achados pela revisão independente
+        # (fechamento no 9999, XML sem Id, tamanhos iguais e header de lote do CNAB, zip cifrado,
+        # tamanho mentiroso).
         run: node --test 'Leitor/test/*.test.mjs'
 
       - name: Suíte dos hooks do agente

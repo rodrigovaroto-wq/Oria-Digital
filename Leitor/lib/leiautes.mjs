@@ -28,6 +28,12 @@ export const SPED = {
     // (0 original, 1 substituta) diz se é retificadora.
     versao: { registro: 'I010', indice: 3 },
     retificadora: { indice: 14, valores: ['1'] },
+    // A IDENTIDADE da escrituração não é só CNPJ e período. A ECD de uma SCP traz no
+    // 0000 o CNPJ do sócio OSTENSIVO e o da SCP em COD_SCP: sem ele na chave, a ECD
+    // da SCP substituiria a da própria empresa. O livro auxiliar (I010.IND_ESC A/Z)
+    // convive com o principal (G/R/B) no mesmo período, idem.
+    scp: 18,
+    indEsc: { registro: 'I010', indice: 2 },
     versoes: ['9.00', '10.00'],
   },
   ECF: {
@@ -36,6 +42,7 @@ export const SPED = {
     versao: { registro: '0000', indice: 3 },
     cnpj: 4, nome: 5, dtIni: 10, dtFim: 11,
     retificadora: { indice: 12, valores: ['S', 'F'] },
+    scp: 15,
     versoes: ['0010', '0011'],
   },
   EFD_ICMS_IPI: {

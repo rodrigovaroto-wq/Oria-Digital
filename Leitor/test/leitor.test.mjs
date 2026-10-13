@@ -80,7 +80,7 @@ test('SPED inteiro: lido, com contagem declarada = lida, CNPJ, período e chave 
     assert.equal(e.cnpj, '11222333000181');
     assert.equal(e.periodo_ini, '2025-01-01');
     assert.equal(e.periodo_fim, '2025-12-31');
-    assert.equal(e.chave_natural, `11222333000181|${sub}|2025-01-01|2025-12-31`);
+    assert.equal(e.chave_natural, `11222333000181|${sub}|2025-01-01|2025-12-31|-|${sub === 'ECD' ? 'G' : '-'}`);
     assert.equal(e.retificadora, false);
   }
 });
@@ -247,4 +247,111 @@ test('arquivo em disco é lido em fluxo: 300 mil linhas, acima do teto de ~150 m
     // O caminho em fluxo e o caminho em memória dão o MESMO envelope, hash incluído.
     assert.deepEqual(emDisco, lerEnvelopeDeBuffer(buf));
   } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ---------------------------------------------------------------- achados da revisão independente (13/10/2026)
+test('SCP e livro auxiliar são escriturações diferentes: chave própria, nenhuma substitui a outra (G9)', () => {
+  const empresa = lerEnvelopeDeBuffer(gerarSped('ECD'));
+  const scp = lerEnvelopeDeBuffer(gerarSped('ECD', { scp: '99888777000166' }));
+  const auxiliar = lerEnvelopeDeBuffer(gerarSped('ECD', { indEsc: 'A' }));
+  assert.equal(scp.cnpj, empresa.cnpj);              // o 0000 da SCP traz o CNPJ do ostensivo
+  assert.equal(scp.detalhe.cod_scp, '99888777000166');
+  assert.notEqual(scp.chave_natural, empresa.chave_natural);
+  assert.notEqual(auxiliar.chave_natural, empresa.chave_natural);
+  assert.notEqual(lerEnvelopeDeBuffer(gerarSped('ECF', { scp: '99888777000166' })).chave_natural, lerEnvelopeDeBuffer(gerarSped('ECF')).chave_natural);
+});
+
+test('chave com componente ausente não é aceita como lida (juntaria arquivos diferentes)', () => {
+  // A ECD se reconhece pela marca LECD, então chega até a identidade e é recusada nela.
+  const semCnpj = lerEnvelopeDeBuffer(gerarSped('ECD', { cnpj: '' }));
+  assert.equal(semCnpj.status, 'falhou');
+  assert.match(semCnpj.detalhe.motivo, /identidade/);
+  // A EFD só se distingue PELO CNPJ no 0000: sem ele, nem chega a ser EFD, e também não é lida.
+  assert.notEqual(lerEnvelopeDeBuffer(gerarSped('EFD_ICMS_IPI', { cnpj: '' })).status, 'lido');
+  assert.equal(lerEnvelopeDeBuffer(gerarOfx({ semDatas: true })).status, 'falhou');
+  const cartao = lerEnvelopeDeBuffer(gerarOfx({ cartao: true }));
+  assert.equal(cartao.status, 'lido', cartao.detalhe.motivo);
+  assert.equal(cartao.chave_natural, 'cartao|4111-CARTAO|2025-01-01|2025-01-31');
+  const nfeSemId = lerEnvelopeDeBuffer(gerarXmlFiscal('nfe', { semId: true }));
+  assert.equal(nfeSemId.status, 'falhou');
+  assert.match(nfeSemId.detalhe.motivo, /identificador/);
+});
+
+test('depois do 9999: assinatura digital é aceita, um segundo SPED não', () => {
+  const assinado = Buffer.concat([gerarSped('ECD'), Buffer.from([0x30, 0x82, 0x0a, 0x0d, 0xff, 0x00, 0x41])]);
+  const a = lerEnvelopeDeBuffer(assinado);
+  assert.equal(a.status, 'lido', a.detalhe.motivo);
+  assert.ok(a.detalhe.linhas_apos_9999 >= 1);
+  const dois = lerEnvelopeDeBuffer(Buffer.concat([gerarSped('ECD'), gerarSped('ECD', { cnpj: '99888777000166' })]));
+  assert.equal(dois.status, 'falhou');
+  assert.match(dois.detalhe.motivo, /concatenados/);
+});
+
+test('contagem de controle vazia é ausência (null), nunca zero', () => {
+  const buf = Buffer.from(gerarSped('ECF').toString('latin1').replace(/\r\n\|9999\|\d+\|/, '\r\n|9999||'), 'latin1');
+  const e = lerEnvelopeDeBuffer(buf);
+  assert.equal(e.controle_declarado, null);
+  assert.equal(e.status, 'falhou');
+});
+
+test('memória e fluxo dão o MESMO envelope com LF, CRLF, CR solto e sem quebra final', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'leitor-q-'));
+  try {
+    for (const [nome, base] of [['sped', gerarSped('EFD_CONTRIBUICOES')], ['ofx', gerarOfx()]]) {
+      const txt = base.toString('latin1').replace(/\r\n/g, '\n');
+      const variantes = { lf: txt, crlf: txt.replace(/\n/g, '\r\n'), cr: txt.replace(/\n/g, '\r'), sem_final: txt.replace(/\n$/, '') };
+      for (const [v, conteudo] of Object.entries(variantes)) {
+        const buf = Buffer.from(conteudo, 'latin1');
+        const caminho = join(dir, `${nome}-${v}.txt`);
+        writeFileSync(caminho, buf);
+        const mem = lerEnvelopeDeBuffer(buf);
+        assert.equal(mem.status, 'lido', `${nome} ${v}: ${mem.detalhe.motivo}`);
+        assert.deepEqual(await lerEnvelopeDeArquivo(caminho), mem, `${nome} ${v}`);
+      }
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('relatório de largura fixa não vira CNAB (falso positivo tiraria o documento da IA)', () => {
+  const l150 = (t) => t.padEnd(150, ' ');
+  assert.equal(detectarFamilia(Buffer.from([l150('ADMINISTRATIVO RELATORIO DE VENDAS'), l150('ADMINISTRATIVO PAGINA 2')].join('\n'))).familia, null);
+  const l240 = (t) => t.padEnd(240, ' ');
+  // Passa em banco numérico, lote 0000 e tipo 0 na posição 8; só a segunda linha
+  // (que não é header de lote) separa o relatório de um CNAB.
+  assert.equal(detectarFamilia(Buffer.from([l240('12300000RELATORIO'), l240('12300000CONTINUA')].join('\n'))).familia, null);
+  // Linhas de tamanhos diferentes não são CNAB, mesmo com o header perfeito.
+  const cnab = gerarCnab240().toString('latin1').split('\r\n');
+  assert.equal(detectarFamilia(Buffer.from([cnab[0], cnab[1].slice(0, 239)].join('\r\n'), 'latin1')).familia, null);
+});
+
+test('CNAB 240 de pessoa física: o CPF não é gravado como CNPJ', () => {
+  const e = lerEnvelopeDeBuffer(gerarCnab240({ inscricaoCpf: true }));
+  assert.equal(e.status, 'lido', e.detalhe.motivo);
+  assert.equal(e.cnpj, null);
+});
+
+test('NF-e emitida por CPF (produtor rural): o CNPJ do destinatário NÃO vira o do emitente', () => {
+  const e = lerEnvelopeDeBuffer(gerarXmlFiscal('nfe', { emitenteCpf: true }));
+  assert.equal(e.cnpj, null);
+  assert.equal(e.detalhe.cpf_emitente, '12345678909');
+});
+
+test('eSocial: a competência vai do primeiro ao último dia do mês', () => {
+  const e = lerEnvelopeDeBuffer(gerarEvento('esocial'));
+  assert.equal(e.periodo_ini, '2025-09-01');
+  assert.equal(e.periodo_fim, '2025-09-30');
+});
+
+test('zip: tamanho mentiroso, entrada cifrada e entradas sobrepostas são recusados com motivo', async () => {
+  const nota = gerarXmlFiscal('nfe');
+  const mentiroso = abrirZip(await gerarZip([{ nome: 'grande.xml', buf: Buffer.alloc(20000, 0x20), mentirTamanho: true }]));
+  // O motivo prova que a descompressão PAROU no tamanho declarado, e não que
+  // inflou tudo e só depois comparou (o que custaria até 512 MB por entrada).
+  assert.match(mentiroso[0].recusado, /passa do tamanho declarado/);
+  const cifrado = abrirZip(await gerarZip([{ nome: 'senha.xml', buf: nota, cifrado: true }]));
+  assert.match(cifrado[0].recusado, /cifrada/);
+  const sobreposto = abrirZip(await gerarZip([{ nome: 'a.xml', buf: nota }], { sobrepor: true }));
+  assert.equal(sobreposto.length, 2);
+  assert.ok(sobreposto[0].buf);
+  assert.match(sobreposto[1].recusado, /sobreposto/);
 });

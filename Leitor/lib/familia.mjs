@@ -52,13 +52,18 @@ function familiaXml(texto) {
 
 /** CNAB pelo tamanho fixo da linha e pela marca do header; exige duas linhas do mesmo tamanho. */
 function familiaCnab(texto) {
-  const linhas = texto.split('\n', 3).map(l => l.replace(/\r$/, ''));
+  // Relatório de largura fixa (comum em ERP) também tem linhas do mesmo tamanho.
+  // Por isso cada leiaute exige MAIS de uma marca do header, e o 240 exige que a
+  // segunda linha seja header de lote: um falso positivo aqui tiraria um documento
+  // legítimo do caminho da IA.
+  const linhas = texto.split(/\r\n|\n|\r/, 3);
   if (linhas.length < 2) return null;
   const [a, b] = linhas;
   if (a.length !== b.length) return null;
-  if (a.length === 240 && a[7] === '0' && /^\d{3}$/.test(a.slice(0, 3))) return { familia: 'cnab240', evidencia: 'linhas de 240 posições, header de arquivo (tipo 0 na posição 8)' };
-  if (a.length === 400 && a[0] === '0' && /^[12]$/.test(a[1])) return { familia: 'cnab400', evidencia: 'linhas de 400 posições, header 0 com operação na posição 2' };
-  if (a.length === 150 && a[0] === 'A') return { familia: 'cnab150', evidencia: 'linhas de 150 posições, header A' };
+  const dig = (s) => /^\d+$/.test(s);
+  if (a.length === 240 && a[7] === '0' && dig(a.slice(0, 3)) && a.slice(3, 7) === '0000' && b[7] === '1' && b.slice(0, 3) === a.slice(0, 3)) return { familia: 'cnab240', evidencia: 'linhas de 240 posições, header de arquivo (lote 0000, tipo 0) seguido de header de lote do mesmo banco' };
+  if (a.length === 400 && a[0] === '0' && /^[12]$/.test(a[1]) && dig(a.slice(76, 79))) return { familia: 'cnab400', evidencia: 'linhas de 400 posições, header 0 com operação na posição 2 e banco em 77-79' };
+  if (a.length === 150 && a[0] === 'A' && /^[12]$/.test(a[1]) && dig(a.slice(42, 45))) return { familia: 'cnab150', evidencia: 'linhas de 150 posições, header A com remessa/retorno na posição 2 e banco em 43-45' };
   return null;
 }
 
