@@ -413,6 +413,74 @@ com o efeito nomeado (regra 1), nunca como fonte "sem achados".
 
 ---
 
+## §13 Pente fino: o que faltava para o plano não quebrar nem mudar de rota
+
+Revisão do §1 ao §12 contra o que o repositório tem hoje (09/10/2026). Gravidade: **quebra** = o
+sistema falha ou grava número errado; **desvia** = a execução muda de rota por falta de definição;
+**degrada** = funciona, com qualidade ou custo pior. Cada lacuna diz como ela se fecha.
+
+### A. Encaixe no projeto
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G1 | A 12 **não está no `MAPA_DE_EXECUCAO.md` nem no roadmap**. As ondas dependem de fases que ainda não fecharam: F1 (perímetro e CNPJ por entidade), F3 (esquema da linha: o F2.2 já registrou que taxa e vencimento "não têm onde gravar"), F4 (conta canônica, de que S2 e as reconciliações conta a conta dependem) e F6 (reconciliação sobre identidade). E o foco atual (`ESTADO.md`, sessão 105b) é a qualidade da extração em mandatos reais | desvia | Entrada no MAPA com a posição de cada onda na fila e o critério de pronto de cada uma. As reconciliações que esperam F4 ficam marcadas, e não são construídas antes dela |
+| G2 | **Não existe regra de precedência.** Quando o SPED diverge do balanço enviado, qual número vai para o book e para o modelo? Sem regra, alguém decide no código, e o número do book muda sem ninguém ter decidido | **quebra** | D12.8. Proposta: nenhuma fonte substitui outra em silêncio. O book mostra o enviado, o fiscal e a divergência, e o analista escolhe, com registro de quem escolheu |
+| G3 | **Faltam tolerâncias.** Nenhuma reconciliação tem limite de materialidade. Arredondamento vira achado, e o achado real se perde no ruído | desvia | D12.11: tolerância absoluta e relativa por reconciliação, no padrão das existentes (`04_RECONCILIACAO.md`) |
+| G4 | **Falta a saída.** Não está dito onde S1–S7, E1–E5, L1–L6 e C1–C6 aparecem no book Excel, no portal e na apresentação de crédito | desvia | Especificar aba, bloco e endereço de célula por reconciliação, como o export já faz |
+
+### B. Dados e arquivos
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G5 | **O roteador de hoje não reconhece nenhuma das famílias.** `N8N/lib/formato.mjs` reconhece PDF, imagem, texto e zip **só** como xlsx ou docx. Não reconhece SPED, XML fiscal, eSocial, CNAB nem OFX, e não abre um zip com vários arquivos | **quebra** | Assinaturas novas no mesmo contrato (decidir pelos bytes, dizer quando caiu no declarado), e descompactação com limites contra zip-bomb, zip aninhado e arquivo gigante |
+| G6 | **Volume acima do teto já medido.** O nó de merge do n8n estoura a pilha com ~125–150 mil itens (medido em 17/09/2026, roadmap §11). Um ano de XML, de EFD ou de extrato passa disso, e os extratos do AMO já ficaram de fora por esse motivo | **quebra** | D12.9: os leitores **não** rodam linha a linha no grafo do n8n. Proposta: um leitor que processa o arquivo em fluxo, grava em lote (`COPY`) no Postgres e devolve ao n8n só o resumo e as contagens |
+| G7 | **Os leiautes mudam de versão.** ECD e ECF mudam a cada ano (a versão vem no `0000`), o eSocial passou do S-1.2 para o S-1.3, o CNAB 400 muda por banco e a NFS-e por município | **quebra** | Um registro de leiautes versionado, com um teste por versão. Versão desconhecida é falha visível, nunca leitura "aproximada" |
+| G8 | **Reforma tributária.** A NF-e já traz campos de IBS/CBS em 2026, e a CBS substitui PIS/COFINS a partir de 2027. S5, S3 e a EFD-Contribuições mudam conforme o período. **[A CONFIRMAR]** o cronograma em vigor | desvia | As reconciliações tributárias decidem a regra pelo regime do período, e não por uma regra única |
+| G9 | **Retificação e duplicidade.** Existem ECD substituta, EFD retificadora, retificação e exclusão no eSocial (`S-3000`), NF-e cancelada ou corrigida (CC-e), CT-e cancelado, o mesmo retorno CNAB enviado duas vezes e OFX com períodos que se sobrepõem | **quebra** (conta em dobro) | Chave de deduplicação por família (chave da NF-e, recibo do eSocial, hash do arquivo, ID do lançamento OFX) e regra de "versão vigente". A vigente vence, e a substituída fica guardada como evidência |
+| G10 | **Formatos internos.** O SPED vem em latin1, com decimal em vírgula e datas em `ddmmaaaa`. O CNAB tem decimais implícitos. O OFX 1.x é SGML | **quebra** (valor ×100 ou acento corrompido) | Um teste por particularidade, no gerador sintético |
+| G11 | **Identidade.** Há CNPJ raiz e filial (8 × 14 dígitos), NF-e entre CNPJs do mesmo grupo (precisa ser eliminada, como o `FAT_INTRAGRUPO`) e o mesmo CPF como sócio e como empregado | **quebra** (receita intragrupo vira receita) | Resolver pela F1 (perímetro). As notas entre entidades do perímetro são marcadas como intragrupo antes de qualquer soma |
+| G12 | **Período.** Competência × caixa × data de emissão, ano fiscal e o corte de cada fonte no período do book | desvia | Uma regra de período por família, escrita antes da onda 1 |
+| G13 | **Fontes fora do escopo sem que ninguém tenha decidido.** Simples Nacional (PGDAS-D, DEFIS, DAS: boa parte das PMEs em crise), NFS-e de município fora do padrão nacional, declarações estaduais de ICMS e contratos de câmbio | desvia | D12.10: incluir, ou excluir com a nota de efeito. Proposta: PGDAS-D e DEFIS na onda 1, porque sem eles uma empresa do Simples fica sem fonte fiscal nenhuma |
+| G14 | **Taxonomia.** Os tipos novos (eSocial, CT-e, comex, CNAB de cobrança e de pagamento, XML de NF-e, PGDAS) ainda não existem e precisam nascer **com consumidor** | degrada | Uma migration por onda, já com o consumidor. O portão `fn_cobertura_de_tipos` (`0187`) impede tipo sem leitor |
+
+### C. Qualidade e prova
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G15 | **Não há arquivo real** de SPED, eSocial, CNAB ou CT-e no repositório, e a regra 4 proíbe inventar fixture para provar bug de produção | desvia | Duas coisas: geradores sintéticos por família, que fecham no BP (padrão `book-distress`), para o CI; e amostras reais anonimizadas de 3 mandatos, com consentimento, para o aceite |
+| G16 | **Falta critério de pronto por onda.** "Ler ECD" não diz quando acabou | desvia | Exemplo para a onda 1: contagem lida = `9999` em 100% dos arquivos; S1 roda em 3 casos reais; toda divergência acima da tolerância explicada; cada reconciliação medida não-vazia (regra 2) |
+| G17 | **Coletor que falha parece coletor sem novidade** (regra 7) | **quebra** (silenciosa) | Cada execução de coletor grava um estado: rodou, falhou, voltou vazio ou não está configurado. O painel mostra o estado, e o vazio nunca se apresenta como "sem achados" |
+| G18 | **Operação dos coletores.** Limites de consumo (a Distribuição DF-e bloqueia o CNPJ por um tempo quando há consumo indevido), retentativas, prazos e alertas de certificado e de consentimento vencendo | degrada | Política de retentativa e de ritmo por fonte, além de alertas com antecedência |
+
+### D. Segurança, jurídico, custo e pessoas
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G19 | **Modelo de segurança.** Onde o A1 fica de fato (cofre, nunca em texto no n8n), RLS nas tabelas novas, acesso por caso, revogação no fim do mandato e trilha de auditoria | **quebra** (risco jurídico) | Desenho de segurança e revisão de segurança antes da peça 4 |
+| G20 | **LGPD por categoria.** Falta definir a base legal de cada dado, a minimização, a retenção e o descarte no fim do mandato, os contratos de operador com o SERPRO e o agregador, e a transferência internacional (os PDFs vão à OpenAI, como já diz o `10_DADOS_RETENCAO_E_LGPD.md`) | **quebra** (risco jurídico) | RIPD e política escritos pelo jurídico **antes** da primeira coleta (P3) |
+| G21 | **Escopo da procuração.** A procuração eletrônica pode dar poder de agir, e não só de consultar | **quebra** (responsabilidade da Oria) | Pedir só os serviços de consulta. O termo diz que a Oria não transmite nem retifica nada |
+| G22 | **Custo por caso** sem modelo: consultas ao Integra, conexões Open Finance, GB de armazenamento, IA nos PDFs, infraestrutura | degrada | Estender o `medir-custo-book.mjs` com as fontes novas e fixar um teto de custo por caso |
+| G23 | **Pessoas e processo.** Falta definir quem opera o painel, o prazo de resposta, o roteiro de falhas (*runbook*), o roteiro do kickoff e os modelos de e-mail | desvia | Roteiro operacional escrito junto com a peça 6 |
+
+### E. Execução
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G24 | **Falta um piloto.** Generalizar sem passar um mandato real de ponta a ponta | desvia | Um mandato-piloto por onda, com o aceite do G16, antes de abrir para todos |
+| G25 | **Não quebrar o que funciona.** A trilha nova não pode alterar a ingestão atual | **quebra** | Só acréscimos: tabelas novas, `campo_extraido` intocado, trilha desligável por caso, todas as suítes verdes e republicação do n8n pelo caminho normal |
+| G26 | **Decisões abertas se acumulando.** D12.1–D12.7, as novas D12.8–D12.11, e D5, D6 e D9 da Espec. 11 | desvia | Cada decisão com dono e data. Nenhuma onda começa com decisão que a bloqueia em aberto |
+| G27 | **Os [A CONFIRMAR] sem responsável:** ReceitaNet BX para procurador, serviços do Integra, eSocial para procurador, API do Portal Único, cronograma da reforma | desvia | Cada um com quem verifica e como: SERPRO, Receita, homologação da SEFAZ com certificado de teste |
+
+### A ordem que não quebra
+
+1. **Decisões e confirmações:** D12.1–D12.11 e os [A CONFIRMAR] (G26, G27).
+2. **Fundação sem cliente:** G1 (MAPA), G2, G3, G12, a arquitetura do leitor (G6), o roteador (G5) e o registro de leiautes (G7, G10).
+3. **Jurídico e segurança:** P3, G19, G20, G21. Nada é coletado antes.
+4. **Ondas 1 a 5** (§8), cada uma com taxonomia (G14), gerador sintético (G15), deduplicação (G9), saída no book (G4), critério de pronto (G16) e piloto (G24).
+5. **Captação** (§11): peças 1–3 junto com a onda 1, e peças 4–6 depois do passo 3, com G17, G18, G22 e G23.
+
+---
+
 ## Decisões do dono em aberto
 
 | # | Decisão | Bloqueia |
@@ -424,6 +492,10 @@ com o efeito nomeado (regra 1), nunca como fonte "sem achados".
 | D12.5 | RPA no ReceitaNet BX é aceitável, sabendo que quebra com a tela? | SPED automático |
 | D12.6 | Termo de autorização e tratamento de dados do kickoff (jurídico) | Peças 4 e 5 |
 | D12.7 | Política de dado pessoal do eSocial: até onde guardar o detalhe por empregado? | Onda 4 |
+| D12.8 | Precedência entre fontes: quem vai ao book quando SPED e enviado divergem (G2) | Onda 1 |
+| D12.9 | Onde o leitor roda, fora do grafo item a item do n8n (G6) | Onda 1 |
+| D12.10 | Simples Nacional (PGDAS-D, DEFIS), NFS-e municipal, declarações estaduais, câmbio: dentro ou fora (G13) | Onda 1 |
+| D12.11 | Tolerâncias de materialidade por reconciliação (G3) | Onda 1 |
 
 ---
 
