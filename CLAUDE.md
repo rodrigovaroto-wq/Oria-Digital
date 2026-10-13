@@ -66,6 +66,7 @@ chmod a+w Supabase Supabase/schema.sql
 
 # suítes
 node --test 'N8N/test/*.test.mjs'
+node --test 'Leitor/test/*.test.mjs'          # o leitor de arquivos oficiais (F2T): SPED, XML fiscal, CNAB, OFX
 node --test '.claude/hooks/test/*.test.mjs'   # os hooks do agente também têm suíte, e ela é portão
 node --test 'Supabase/test/*.test.mjs'       # a tradução de "não perguntei a produção" em veredito
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-export.mts

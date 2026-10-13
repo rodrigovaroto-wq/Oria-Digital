@@ -276,6 +276,29 @@ A trilha é a da Espec. 11 §4.1, com o escopo ampliado. Cinco passos iguais par
 | `documento_comex` | DU-E, DI/DUIMP, CE-Mercante, B/L, AWB, CRT |
 | atributo da entidade | CNAE principal e secundários, porte, regime |
 
+### A fundação (F2T etapa 1, 13/10/2026): o que existe e as regras que ela fixa
+
+**Construído:**
+- `Leitor/lib/familia.mjs` reconhece a família pelos bytes e reaproveita o `detectarFormato`;
+- `Leitor/lib/envelope.mjs` lê o envelope em fluxo e confere a contagem declarada (G5, G6, regra 7);
+- `Leitor/lib/leiautes.mjs` é o registro de leiautes, e versão fora dele dá `versao_desconhecida` (G7);
+- `Leitor/lib/campos.mjs` cobre vírgula decimal, datas, decimais implícitos e contagem vazia como ausência (G10). A decodificação latin1 de SPED e CNAB é decidida em `envelope.mjs`;
+- `Leitor/lib/zip.mjs` abre o zip com limites (G5);
+- `Leitor/ler.mjs` é o CLI que grava em `arquivo_oficial` (migration `0206`). Ele registra também o próprio zip, com as entradas recusadas, e confere que o status gravado é o status lido. O banco aplica a deduplicação por hash, a releitura (status não lido ou versão do leitor diferente atualiza a linha), a versão vigente (G9) e o desligamento por caso (G25).
+
+O n8n **não chama** o leitor ainda: isso depende de onde o serviço vai morar (P5).
+
+**[A CONFIRMAR] antes da onda 1:** as posições e versões do registro de leiautes foram escritas sem o Guia Prático aberto, e os testes usam arquivos sintéticos gerados do mesmo registro. O aceite com 3 ECDs reais é a prova.
+
+**Regras que valem para todas as ondas (não viram código agora, porque nada ainda as consome):**
+
+| Regra | O que é | Quando vira código |
+|---|---|---|
+| **Período (G12)** | Cada família tem um período só. SPED: `DT_INI`–`DT_FIN` do 0000. NF-e, CT-e e MDF-e: data de emissão (`dhEmi`), e nunca a de entrada ou de pagamento. eSocial e Reinf: competência (`perApur`). OFX: `DTSTART`–`DTEND`, nunca as datas dos lançamentos (período sem lançamento dentro do intervalo é sem movimento; fora dele, sem extrato). CNAB: data de vencimento para o título e data de crédito para a liquidação. O período do book é o mês civil | O envelope já grava o período do arquivo. A atribuição de cada registro a um mês é de cada onda |
+| **Precedência (D12.8)** | Nenhuma fonte substitui outra em silêncio. O book mostra o número enviado, o fiscal e a divergência. O modelo usa o enviado até o analista escolher, e a escolha fica registrada com autor e motivo | Na onda 1, junto com a primeira reconciliação (S1): é ela que produz a primeira divergência a escolher. Construir antes seria andaime sem consumidor |
+| **Tolerância (D12.11)** | `max(R$ 100; 0,5% do valor)`, a mesma regra da `0009`. Classe B: banda de materialidade com revisão humana | Reusa a assinatura `p_tolerancia_abs` e `p_tolerancia_pct` de cada `fn_reconciliar_*`. Nada novo a construir |
+| **Versão vigente (G9)** | A identidade de uma escrituração SPED inclui SCP e livro (I010.IND_ESC), não só CNPJ e período. Retificadora vence original. Duas retificadoras sem cadeia de recibo deixam a chave **sem vigente**, com o motivo e escolha manual. Sem retificadora, vence a última registrada. Não lido nunca é vigente | **Código, só para SPED e reenvio do mesmo arquivo:** `fn_registrar_arquivo_oficial` (`0206`). **NÃO cobre ainda:** NF-e cancelada (o evento tem chave própria e não marca a nota, onda 3), retificação e exclusão do eSocial (S-1200 retificador e S-3000 têm Id próprio, onda 4), retorno CNAB baixado duas vezes (hash diferente, onda 2). Cada onda fecha a sua, porque é ela que lê o conteúdo |
+
 ### Ondas de leitura
 
 | Onda | Escopo | Destrava |

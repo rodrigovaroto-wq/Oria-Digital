@@ -1,5 +1,44 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 107 (13/10/2026) — F2T etapa 1: o leitor de arquivos oficiais e a `0206`
+
+> **Migration nova: `0206_o_arquivo_oficial_lido_e_contado.sql` — escrita e testada, NÃO aplicada em produção.**
+> **O que o dono faz à mão:** aplicar a 0206 depois da 0205 e conferir
+> `select chave from fn_instalacao_conferir() where migration = '0206' and not presente;` (zero linhas).
+> Nada mais muda em produção: o n8n NÃO chama o leitor ainda, e `caso.trilha_transacional` nasce false.
+
+**Entregue:**
+- `Leitor/`: reconhece a família de cada arquivo (SPED nos 4 tipos, NF-e, CT-e, MDF-e, NFS-e, eSocial, Reinf,
+  CNAB 240/400/150, OFX e zip) e lê o envelope em fluxo, conferindo a contagem que o próprio arquivo declara
+  (9999 e 9900, trailer do CNAB, fechamento do XML e do OFX).
+- Cada leitura tem resultado `lido`, `falhou`, `controle_divergente` ou `versao_desconhecida`.
+- `Leitor/ler.mjs` (CLI) grava em `arquivo_oficial` e registra também o zip como contêiner.
+- Testes: 32 no leitor, com os 26 guardas medidos não-vazios, e 65 asserts na 0206, com cada regra medida.
+- A revisão independente achou 2 bloqueantes e 9 importantes, todos corrigidos antes do commit:
+  - a ECD da SCP substituía a da empresa;
+  - reler um arquivo não atualizava o banco.
+
+**Medido (repositório e banco de teste, não produção):**
+- Antes, um SPED enviado ao n8n seria decodificado como UTF-8 e mandado inteiro para a IA (`build-workflow.mjs`, nó Preparar Conteúdo).
+- Bateria completa do CI local: 37/37 antes das correções da revisão. Depois delas rodaram os portões tocados: `run.sh`, chamadas, sonda, Supabase, Leitor, n8n, espelho e comandos.
+
+**[A CONFIRMAR] antes da onda 1:**
+- As posições e versões do registro de leiautes (`Leitor/lib/leiautes.mjs`) foram escritas sem o Guia Prático aberto.
+- Os testes usam arquivos sintéticos.
+- A prova é o aceite com 3 ECDs reais.
+
+**PR #257** aberto em 13/10/2026.
+- CI do GitHub: rodando na abertura do PR.
+- SonarCloud: reprovou por Reliability C e Security B, e as duas causas foram corrigidas.
+- A ficha `f2t-fontes-oficiais-e-captacao-espec12` foi atualizada, com prova em `Leitor/test/*.test.mjs` e âncora em `detectarFamilia`.
+
+**Próximo passo — ligar ao sistema:**
+1. Decidir onde o leitor roda (P5).
+2. Acrescentar uma rota de leitura no n8n: quando a família for oficial e a trilha estiver ligada no caso, o arquivo vai ao leitor, e não à IA.
+3. Fazer o envio direto ao Storage (peça 2).
+
+Detalhe na descrição do PR desta sessão.
+
 ## SESSÃO 106 (09–13/10/2026) — Especificação 12 e fase F2T (planejamento, nada implementado)
 
 > **Nesta rodada não houve migration, workflow, deploy nem medição em produção.** Tudo é documento. A
@@ -42,7 +81,7 @@ jurídico interno escreve o termo (D12.6, etapa 2). Pedir a cotação ao SERPRO 
 
 ## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
 
-> **Migration mais nova: `0205_os_campos_da_apresentacao.sql`** (os campos "[a preencher]" da apresentação de crédito, #253; aplicar DEPOIS da 0204). Antes dela, **`0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
+> **Migration mais nova: `0206_o_arquivo_oficial_lido_e_contado.sql`** (o envelope de cada arquivo oficial lido e a versão vigente, F2T etapa 1, sessão 107; aplicar DEPOIS da 0205). Antes dela, **`0205_os_campos_da_apresentacao.sql`** (os campos "[a preencher]" da apresentação de crédito, #253; aplicar DEPOIS da 0204). Antes dela, **`0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
 > herda a seção do pai (a linha cuja chave é o nome da seção bruta dela) e das irmãs, desde que concordem.
 > Conflito fica NULL e é contado. A herança é recursiva e nunca vem de topo ou total. Ela fecha o
 > resíduo do AC do Fw Valtra: CAIXA MATRIZ, DUPLICATAS A RECEBER e OUTROS CRÉDITOS estavam fora da soma
