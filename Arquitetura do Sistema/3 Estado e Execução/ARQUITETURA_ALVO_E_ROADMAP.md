@@ -491,7 +491,7 @@ F14→F16 · F15→F17 (contínua).
 *Entrega lateral barata: **Diagnóstico factual** — `documento_fato` já captura covenant rompido,
 continuidade operacional e ressalva. Expor numa tela custa pouco e não depende de nada adiante.*
 
-### F2T — TRILHA TRANSACIONAL E CAPTAÇÃO (Espec. 11 §4 + Espec. 12) · **PLANEJADA em 13/10/2026**
+### F2T — TRILHA TRANSACIONAL E CAPTAÇÃO (Espec. 11 §4 + Espec. 12) · **ETAPA 1 FEITA em 13/10/2026 (S107); ROTA MUDADA e ONDA 1 BLOQUEADA (S108)**
 
 **Por que não é a F2:** a F2 dá consumidor aos tipos que JÁ chegam pela extração por IA. A F2T é um
 segundo caminho de entrada, determinístico e sem IA, para arquivos de leiaute oficial (SPED,
@@ -502,7 +502,7 @@ citadas abaixo (G1–G27) são as do §13 dela.
 | | |
 |---|---|
 | **Objetivo** | Ler e usar todos os módulos e grupos de SPED, eSocial, logística e CNAB, mais o CNAE, com proveniência por arquivo e linha, e captar esses arquivos com o mínimo de ação humana |
-| **Estado** | 🟡 **Etapa 1 FEITA em 13/10/2026 (sessão 107, PR #257), sem ligação ao n8n.** O `Leitor/` reconhece as famílias (G5) e lê o envelope em fluxo (G6), com registro de leiautes (G7), formatos (G10) e zip com limites. A `0206` registra o envelope, a releitura e a versão vigente (G9) e liga/desliga por caso (G25); está **escrita e não aplicada em produção**. Testes: 32 do leitor e 65 asserts da `0206`, medidos não-vazios. **Falta da etapa 1:** hospedar o leitor (P5) e a rota no n8n (Preparar Conteúdo: família oficial + trilha ligada → leitor). Zero SPED em produção |
+| **Estado** | 🟡 **Etapa 1 FEITA no repositório (sessão 107, PR #257, mergeado).** **Rota mudada na S108 (13/10/2026):** o leitor roda **no navegador do analista**, com o mesmo `Leitor/lib` do CLI, e só o **resumo** vai ao banco (`0207`, em partes). O lançamento individual é descartado. Não há serviço a hospedar: P5 deixa de ser pré-requisito. Feito: `Leitor/` (famílias G5, envelope em fluxo G6, leiautes G7, formatos G10), `0206` (envelope, releitura, versão vigente G9, desligamento por caso G25) e `0207` (resumo). O n8n recusa arquivo acima de 15 MiB antes de ler, e o portal tira o oficial do lote. **Aplicação: `0206` aplicada pelo dono (NÃO CONFERIDA pela sonda); `0207` NÃO aplicada.** Testes: 47 do leitor, 92 do envio oficial e 58 asserts da `0207`, medidos não-vazios. **Onda 1: BLOQUEADA**, espera a F1, 3 ECDs reais e a conferência de `leiautes.mjs` e `resumo.mjs` contra o Guia Prático. Nada disso está em produção: o deploy do portal e a republicação são do dono |
 | **Gap** | Etapa 0 **quase fechada em 13/10/2026**: 10 de 11 decisões tomadas (tabela no fim da Espec. 12). Sobra a D12.3 (Integra Contador, aguarda cotação), que não bloqueia a etapa 1 nem a onda 1, e os [A CONFIRMAR]. Open Finance foi recusado (D12.4 = D6), e o extrato vem sempre por arquivo |
 | **Dep.** | Etapa 1 depende só da F0. As ondas dependem de **F1** (CNPJ por entidade e perímetro). As reconciliações conta a conta (S2, por exemplo) esperam **F4**. A eliminação intragrupo das notas (G11) espera **F6**. Ver a tabela de etapas |
 | **Agentes** | `migrations-postgres` (tabelas, tipos, reconciliações), `n8n-workflow` (roteador, coletores, republicação), `portal-export` (saída no book, envio direto ao Storage, painel), `suites-invariantes` (cada reconciliação medida não-vazia), `revisor-defeito-silencioso` (todo diff) |

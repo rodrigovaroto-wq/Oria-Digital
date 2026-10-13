@@ -1,7 +1,7 @@
 # Mapa de execução — daqui até o projeto fechado
 
 **Data:** 09/09/2026, sessão 81 · **Base conferida:** `main` em `668b6fe`, CI verde (PR #203).
-**Tocado em 13/10/2026:** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
+**Tocado em 13/10/2026 (S107 e S108):** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
 conferido em 09/09.
 **Última migration:** `0160` — ver `ESTADO.md`.
 
@@ -47,7 +47,7 @@ de pendências do `ESTADO.md` já disse uma vez que o Modo A não existia depois
 | **B5** | Eficiência — o que sobrou depois da passada da sessão 54 | 🟢 quase fechada | engenharia | nada crítico |
 | **B6** | **Operação** — proteção do `main`, ~~observabilidade~~, ~~backup~~ | 🟠 **B6.2 e B6.3 fechadas em 21/08**; sobra o `main` | dono | a segurança do processo |
 | **B7** | Bloqueados por dado que não temos | ⚫ espera | terceiros | nada — são espera |
-| **B8** | **Fontes oficiais e captação** (SPED, eSocial, logística, CNAB, CNAE) — Espec. 12, fase **F2T** do roadmap | ⚪ só especificação | **dono** (D12.1–D12.11) e depois engenharia | o dado independente que confere o declarado (DATA GATE) |
+| **B8** | **Fontes oficiais e captação** (SPED, eSocial, logística, CNAB, CNAE) — Espec. 12, fase **F2T** do roadmap | 🟡 etapa 1 no repo (S107, PR #257); leitor no navegador (S108); **onda 1 BLOQUEADA** | **dono** (3 ECDs reais; D12.3 para o Integra) e a **F1** | o dado independente que confere o declarado (DATA GATE) |
 
 **O caminho crítico encurtou: `B0` fechou em 20/08.** Sobra `B1 → B2` e, em paralelo, `B3` (decisão)
 e `B6` (higiene). **A rodada real aconteceu em 02/09** (sessão 79 do `ESTADO.md`) e não deixou erro
@@ -519,7 +519,7 @@ uma hora de execução**, não uma linha de código.
 
 ---
 
-## 13. B8 — Fontes oficiais e captação · **PLANEJADO em 13/10/2026**
+## 13. B8 — Fontes oficiais e captação · **ETAPA 1 FEITA em 13/10/2026; ONDA 1 BLOQUEADA**
 
 **O detalhe NÃO mora aqui.** Este arquivo é histórico desde 18/09 (nota do cabeçalho), e repetir as
 etapas em dois lugares é o defeito que este mapa já descreve. Elas moram em:
@@ -539,7 +539,9 @@ etapas em dois lugares é o defeito que este mapa já descreve. Elas moram em:
 | Ondas 1–5 | as 24 reconciliações (S, E, L, C) | engenharia, depois da F1 (e F4/F6 onde a tabela diz) |
 | Captação 4–6 | o caso que se abastece sozinho | engenharia, depois da etapa 2 |
 
-**Estado da etapa 1 em 13/10/2026 (sessão 107):** FEITA no repositório (leitor + `0206`, PR #257). Faltam hospedar o leitor e a rota no n8n. A `0206` não está aplicada em produção.
+**Estado da etapa 1 em 13/10/2026 (sessões 107 e 108):** FEITA no repositório (leitor + `0206` + `0207`; PR #257 mergeado). **Rota mudada na S108:** o leitor roda no navegador do analista e só o resumo vai ao banco. Não há serviço a hospedar. No n8n, feito o teto de 15 MiB antes da leitura. Falta a republicação (dono). A `0206` foi aplicada pelo dono, **NÃO CONFERIDA pela sonda**; a `0207` NÃO está aplicada.
+
+**Estado da onda 1 em 13/10/2026 (sessão 108): BLOQUEADA.** Espera a F1 (perímetro e CNPJ por entidade, 55%), 3 ECDs reais do dono e a conferência de `leiautes.mjs` e `resumo.mjs` contra o Guia Prático.
 
 **Estado da etapa 0 em 13/10/2026:** 10 de 11 decisões tomadas. Falta a D12.3 (cotação do Integra
 Contador com o SERPRO), que não bloqueia a etapa 1 nem a onda 1. Os [A CONFIRMAR] sem responsável estão na G27.

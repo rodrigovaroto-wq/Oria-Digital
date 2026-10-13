@@ -1,8 +1,63 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 108 (13/10/2026) — F2T etapa 1: o leitor passa ao navegador, e a `0207` (o resumo)
+
+> **Migration mais nova: `0207_o_resumo_do_arquivo_oficial.sql`** (aplicar DEPOIS da 0206). **NÃO aplicada em produção.**
+> **A `0206` foi aplicada pelo dono em 13/10/2026** (ele disse "Migration 206 foi aplicado"). **NÃO CONFERIDA pela sonda:** o dono não informou o resultado de `select chave from fn_instalacao_conferir() where migration = '0206' and not presente;`.
+> **O que o dono faz à mão, em ordem:**
+> 1. Conferir a `0206` pela sonda (zero linhas).
+> 2. Aplicar a `0207` e conferir `select chave from fn_instalacao_conferir() where migration = '0207' and not presente;` (zero linhas).
+> 3. Republicar o workflow de ingestão (Actions → "Republicar workflow no n8n", ou `N8N/republicar.sh`). Conferir no editor os nós `Tamanho cabe?` e `Juntar Recusas`, e fazer um envio real de teste.
+> 4. Fazer deploy do portal. Na Vercel, **"Include source files outside of the Root Directory" tem de estar ligado**: o `next.config` lê `../Leitor` e `../N8N`. **NÃO VERIFICADO** na Vercel.
+> 5. Ligar a trilha só no caso que for usar: `update caso set trilha_transacional = true where id = '...'`.
+
+**Mudança de rota (decisão do dono, 13/10/2026).** O leitor NÃO é mais um serviço próprio nem roda no n8n. Roda **no navegador do analista**, com o mesmo `Leitor/lib` do CLI. **Só o resumo vai ao banco. O lançamento individual é descartado.**
+
+Por que, medido (n8n 2.30.7 local, `Leitor/medicao-n8n/README.md`):
+- `getBinaryDataBuffer` serializa o binário byte a byte. Memória total (principal + runner): 11 MB → 1,1 GB; 29 MB → 2,0 GB; 58 MB → 3,6 GB; 117 MB → 7,7 GB.
+- 355 MB (3M de linhas) → "heap out of memory", e cai a instância inteira.
+- Fatias por Range com sub-workflow passaram 10M de linhas (222 s, ~950 MB). Esse caminho **não foi adotado**.
+- O PikaPods subiu para 2 GB (pelo dono). O PikaPods só roda os apps do catálogo, então o leitor não entraria lá como serviço próprio. Isso foi afirmado pela sessão e aceito pelo dono, mas NÃO CONFERIDO contra a documentação do PikaPods.
+- Banco: guardar o arquivo custaria ~2 GB por ECD de 10M de linhas. Supabase pago só como último recurso. O resumo mede 3,4 a 4,7 MB.
+
+Medido no Chromium (commit `ca522ca`): ECD de 10.000.180 linhas (929 MB), contas de 16 caracteres. Resultado igual ao CLI, hash = `sha256sum`, 37,5 s, 61 MB de pico de heap JS, resumo de 4,7 MB. O protótipo (`8312dc9`) deu 22,9 s e 59 MB.
+
+**Commits desta rodada (6, de `92be7b8` a `33b6236`):**
+- `4621c83` e `8312dc9`: as medições (n8n e navegador) acima.
+- `ca522ca` (passo 1): `Leitor/lib` sem `node:*`. `sha256.mjs` incremental (o hash é a identidade da 0206). `campos.mjs#latin1`: no navegador `latin1` é windows-1252 (0x96 vira "–"), e o SPED é ISO-8859-1. `lerEnvelopeDeFluxo`, `resumo.mjs` (ECD e ECF) e `arquivo.mjs` (só o CLI usa). A revisão independente achou 6 importantes, todos corrigidos. Leitor: 47/47.
+- `6f1e741` (passo 4): `TETO_BYTES_POR_ARQUIVO` = 15 MiB no `Listar Arquivos`, antes de qualquer leitura. Arquivo acima do teto recusa o lote inteiro, como um item só. Tamanho desconhecido também recusa. N8N: 676/676 (eram 669). **Exige republicação.**
+- `a20edaf` (passo 2): o portal reconhece o oficial pelos bytes (64 KB), tira do lote do n8n, lê num Web Worker e grava só o resumo. O teto de 15 MiB é importado de `N8N/lib/custo.mjs`. `verificar-envio-oficial.mts`: 92/0 (no CI).
+- `33b6236` (passo 3): migration `0207`. `fn_resumo_iniciar`, `fn_resumo_anexar` (partes de até 10.000 itens; a tela manda até 5.000) e `fn_resumo_concluir`. O concluir é a fronteira de confiança: reconfere totais, faixa de linha, contagem por registro e partidas × I250. Se falhou, recusa e apaga as linhas, para não sobrar resumo parcial. `fn_upsert_caso` foi recriada com `p_ator` (lista fechada) e grant ao `authenticated`. Regra 2: 58 asserts, cada guarda medida. Ponta a ponta sem mock contra o Postgres local: ECD de 299.980 linhas, 3.000 contas, 39.196 registros, 9.000 grupos, **12 chamadas em 1,6 s**.
+
+**Suítes remedidas nesta rodada (13/10/2026, branch `claude/execucao-plano-predefinido-9ur5s2`):**
+- `node --test 'Leitor/test/*.test.mjs'`: 47 de 47.
+- `node --test 'N8N/test/*.test.mjs'`: 676 de 676.
+- `node --test '.claude/conhecimento/test/*.test.mjs'`: 3 de 3.
+- `portal/scripts/verificar-envio-oficial.mts`: 92 verificações, 0 falhas.
+- `portal/scripts/verificar-limite-de-envio.mts`: 69 verificações, 0 falhas.
+- `Supabase/test/run.sh`: **exit 0**, 86 arquivos `.test.sql` na lista de execução, `TODOS OS TESTES PASSARAM` (o script não soma asserts; contagem NÃO remedida).
+- **NÃO remedido nesta rodada:** `tsc`, `eslint`, `next build`, `conferir-chamadas`, a sonda contra produção e `Verificação/run.mts`.
+
+**Não verificado (nada disso rodou em produção):**
+- nada rodou no n8n de produção nem na Vercel;
+- Safari e Firefox;
+- arquivo de 10M de linhas pela tela (só pelo script de medição);
+- ECD real: os testes usam arquivos sintéticos (regra 4);
+- posições de `leiautes.mjs` e a lista de `resumo.mjs`: **[A CONFIRMAR]** contra o Guia Prático;
+- Supabase com corpo de RPC grande (as partes têm no máximo 5.000 itens).
+
+**PR:** o PR #257 (S107) está **mergeado** (API do GitHub, 13/10/2026 19:37 UTC). O PR desta rodada não foi aberto aqui: a sessão principal o abre.
+
+**Onda 1: BLOQUEADA.** Destrava com: (a) a F1 fechar (perímetro e CNPJ por entidade; o roadmap marca 55%); (b) 3 ECDs reais do dono para o aceite; (c) conferir `leiautes.mjs` e a lista de `resumo.mjs` contra o Guia Prático.
+
+**Continuam pendentes do dono, sem mudança nesta rodada:** a cotação do SERPRO (D12.3), o termo jurídico (D12.6) e fechar o repositório público.
+
+---
+
 ## SESSÃO 107 (13/10/2026) — F2T etapa 1: o leitor de arquivos oficiais e a `0206`
 
-> **Migration nova: `0207_o_resumo_do_arquivo_oficial.sql` (o resumo do SPED em partes, aplicar DEPOIS da 0206) — escrita e testada, NÃO aplicada em produção.** Antes dela, **`0206_o_arquivo_oficial_lido_e_contado.sql`**, também NÃO aplicada.
+> **Migration nova: `0206_o_arquivo_oficial_lido_e_contado.sql` — escrita e testada, NÃO aplicada em produção.**
+> **Desde a S108, a mais nova é a `0207`, e a `0206` foi aplicada pelo dono (ver SESSÃO 108 acima).**
 > **O que o dono faz à mão:** aplicar a 0206 depois da 0205 e conferir
 > `select chave from fn_instalacao_conferir() where migration = '0206' and not presente;` (zero linhas).
 > Nada mais muda em produção: o n8n NÃO chama o leitor ainda, e `caso.trilha_transacional` nasce false.

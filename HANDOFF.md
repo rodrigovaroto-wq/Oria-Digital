@@ -4,62 +4,37 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 108 — COMECE AQUI (passagem escrita em 13/10/2026, fim da S107)
+## ▶ SESSÃO 109 — COMECE AQUI (passagem escrita em 13/10/2026, fim da S108)
 
-A S107 fez a **F2T etapa 1**: o leitor de arquivos oficiais e a migration `0206`. Tudo está no PR
-[#257](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/257). O detalhe e os números estão na
-SESSÃO 107 do `ESTADO.md` e na descrição do PR. Não precisa reler a S107 inteira.
+A S108 mudou a rota da F2T: **o leitor roda no navegador do analista, e só o resumo vai ao banco**. Escreveu a `0207` (o resumo em partes). Detalhe e números: SESSÃO 108 do `ESTADO.md`. Não precisa reler a S107 nem a S108 inteiras.
 
-### 0. Primeira coisa: o PR #257 e a `0206`
+- **PR #257 (S107): MERGEADO** (API do GitHub, 13/10/2026 19:37 UTC).
+- **PR desta rodada (S108): NÃO CONFERIDO.** Ele ainda não existe no fim desta passagem; a sessão principal o abre, e o número entra aqui.
 
-1. **O PR #257 está mergeado?** Se não está, conferir o CI e o gate do SonarCloud no head. Na última passada o Sonar
-   tinha reprovado por Reliability C e Security B; as causas foram corrigidas (commit "o gate do SonarCloud"), mas a
-   nova análise não tinha voltado. Os avisos de complexidade (S3776), ternário (S3358) e modernização (S77xx) ficam,
-   pela política do `SONARCLOUD.md`.
-2. **A `0206` NÃO está aplicada em produção.** Depois do merge, o dono aplica a 0206 (depois da 0205) e confere:
-   `select chave from fn_instalacao_conferir() where migration = '0206' and not presente;` (zero linhas).
-   Antes disso, nada do leitor grava em produção, e é assim que deve ser.
+### 0. Primeira coisa: o que o dono faz à mão
 
-### 1. O que existe e onde
+1. **Conferir a `0206`.** O dono disse que aplicou, mas a sonda **NÃO foi conferida**: `select chave from fn_instalacao_conferir() where migration = '0206' and not presente;` (zero linhas).
+2. **Aplicar a `0207`** e conferir `... where migration = '0207' and not presente;` (zero linhas). Ainda não aplicada.
+3. **Republicar o workflow de ingestão** (Actions → "Republicar workflow no n8n", ou `N8N/republicar.sh`). Conferir `Tamanho cabe?` e `Juntar Recusas`, e fazer um envio real de teste.
+4. **Deploy do portal**, com "Include source files outside of the Root Directory" ligado na Vercel.
+5. **Ligar a trilha** só no caso que for usar.
 
-| Peça | Onde | Estado |
-|---|---|---|
-| Leitor | `Leitor/lib/{familia,envelope,leiautes,campos,zip}.mjs` | Reconhece SPED (ECD, ECF, EFD ICMS/IPI, Contribuições), NF-e, CT-e, MDF-e, NFS-e, eSocial, Reinf, CNAB 240/400/150, OFX e zip. Lê o envelope em fluxo e confere a contagem declarada |
-| CLI | `node Leitor/ler.mjs [--caso <uuid>] <arquivos>` | Com `--caso` e `LEITOR_PSQL`, grava em `arquivo_oficial` e registra o zip como contêiner. Sai com 1 se algo não ficou `lido` |
-| Banco | `0206`: `arquivo_oficial`, `caso.trilha_transacional` (default false), `fn_registrar_arquivo_oficial` | Recusa a trilha desligada; idempotente por hash; trata a releitura; aplica a versão vigente |
-| Testes | `Leitor/test/leitor.test.mjs` (CI, job n8n-e-derivados) e `Supabase/test/arquivo_oficial.test.sql` | 32 testes com 26 guardas medidos não-vazios; 65 asserts |
-| Gerador sintético | `Dados de Teste/fontes-oficiais/gerar.mjs` | Uma função por família, com opções para quebrar o arquivo |
-| Ficha | `buscar.mjs "F2T"` | As armadilhas que a revisão achou (SCP, `\r` solto, contagem vazia, limites da vigência) |
+### 1. O que está bloqueado, e por quê
 
-### 2. O próximo passo: ligar o leitor ao sistema (o resto da etapa 1)
+- **Onda 1 (S1 e conteúdo da ECD/ECF): BLOQUEADA.** Destrava com: (a) a F1 fechar (perímetro e CNPJ por entidade; o roadmap marca 55%); (b) 3 ECDs reais do dono para o aceite; (c) conferir `Leitor/lib/leiautes.mjs` e a lista de `resumo.mjs` contra o Guia Prático (hoje [A CONFIRMAR]).
+- **Não há serviço para hospedar.** A pergunta "onde roda o leitor" (P5) foi respondida na S108: no navegador. Não reabrir sem medição nova.
 
-1. **Hospedar o leitor (P5)** é decisão do dono, e a pergunta está em aberto.
-   - Opções: o mesmo PikaPods do n8n ou outro servidor pequeno.
-   - O CLI vira serviço HTTP com uma rota: recebe o arquivo (ou o caminho no Storage) e o caso, e devolve os envelopes.
-2. **A rota no n8n**, no nó "Preparar Conteúdo" (`N8N/build-workflow.mjs`, perto de `detectarFormato`):
-   - **família oficial E `caso.trilha_transacional` ligada** → chama o leitor e NÃO manda para a IA;
-   - **caso contrário** → o caminho atual, sem mudar uma linha.
-   - O `Leitor/lib/familia.mjs` é o mesmo código que entra no nó. Ele precisa ser serializável por `toString()`, como o `formato.mjs`.
-   - Depois: gerar os workflows, `git diff --exit-code` e republicar.
-3. **Envio direto ao Storage** (peça 2 da Espec. 12 §11): a borda da Vercel recusa ~4,5 MB, e um zip de XML passa disso.
+### 2. Pendente do dono, sem mudança nesta rodada
 
-### 3. Depois disso: a onda 1
+- Cotação do SERPRO (D12.3).
+- Termo jurídico do kickoff (D12.6).
+- Fechar o repositório público (o dono disse que vai fechar; **NÃO CONFERIDO**).
 
-Ler o conteúdo da ECD (`I155` e `J100`/`J150`) e da ECF, e fazer a reconciliação S1 (DRE enviada × ECD × ECF). A regra
-de precedência (D12.8) vira código junto com a S1.
+---
 
-**[A CONFIRMAR] antes da onda 1:**
-- conferir as posições e versões de `Leitor/lib/leiautes.mjs` contra o Guia Prático;
-- o aceite é com **3 ECDs reais**, pedidas a um cliente.
+## SESSÃO 108 — passagem da S107 (histórico; o passo 1 dela foi feito na S108, com outra rota)
 
-### 4. O que é do dono
-
-- Aplicar a `0206`.
-- Decidir onde hospedar o leitor (P5).
-- D12.3: pedir a cotação do Integra Contador ao SERPRO.
-- Pedir ao jurídico interno o termo do kickoff (D12.6, etapa 2).
-- Conseguir 3 ECDs reais para o aceite da onda 1.
-- **Repositório público.** O dono abriu o repositório como público em 13/10 para o Actions rodar, e ele traz nomes e números de clientes reais no `ESTADO.md` e no `HANDOFF.md`. O dono disse que vai fechar. Conferir.
+A S108 fez o leitor e a `0207`, e trocou a rota: o leitor sai do n8n e vai ao navegador. Detalhe no `ESTADO.md`, SESSÃO 108.
 
 ## SESSÃO 107 — passagem da S106 (histórico; o passo 2 dela foi feito na S107)
 
