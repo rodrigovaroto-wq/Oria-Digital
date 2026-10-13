@@ -115,3 +115,58 @@ não dá para ver:
 `getBinaryDataBuffer` em todo arquivo. Um SPED de 3 milhões de linhas que chegue ao n8n por
 qualquer caminho que não seja o portal (o formulário do n8n direto, por exemplo) **derruba a
 instância**. A rota da F2T tem de decidir a família **antes** de pegar o binário.
+
+## A alternativa medida: ler no navegador e guardar só o que importa (13/10/2026, mesma sessão)
+
+O dono respondeu às condições acima: o PikaPods subiu para 2 GB. Pagar o Supabase para guardar o
+arquivo é o último recurso. E 2 GB de banco por ECD é demais: guardar a linha bruta não é
+necessário se o que as reconciliações usam for guardado.
+
+**O que as reconciliações usam (Espec. 12 §1).**
+- S1 usa o `J150` e o `L300`.
+- S2 usa o `I155` com o `I050`.
+- S5 usa o `E110`, o `M200` e o `M600`.
+- S6 usa o `M300`.
+- Nenhuma usa o lançamento um a um (`I200`/`I250`), que é ~75% das linhas de uma ECD.
+- O mesmo vale para o item de nota (`C170`) da EFD: a S3 usa o `C190`.
+
+**A medição.** O arquivo vem de `gerar-ecd-realista.mjs`, uma ECD de 10.000.180 linhas (929 MB) com
+a composição de uma real:
+- 2.000 contas;
+- 24.000 `I155`;
+- `J100` e `J150`;
+- 7,48M de `I250`.
+
+`navegador-leitor.js` roda num Chromium de verdade (`navegador-medir.mjs`, Playwright). Ele lê o
+`File` em fluxo, sem o arquivo sair da máquina, e:
+- calcula o SHA-256 incremental, **idêntico ao `sha256sum`**, que é a identidade da `0206`;
+- confere o 9999 e o 9900;
+- guarda os registros-chave na íntegra, com o número da linha;
+- soma os `I250` por conta e mês (débito, crédito, quantidade, primeira linha).
+
+| | 10M de linhas |
+|---|---|
+| Tempo | **22,9 s** |
+| Pico de memória do JS | **59 MB** (RSS do navegador inteiro: 529 MB) |
+| 9999 / 9900 | 10.000.180 = 10.000.180 / bate |
+| Registros-chave guardados na íntegra | 26.211 linhas |
+| `I250` somados | 7.480.476 (= `grep -c '^|I250|'`) em 18.000 grupos conta × mês |
+| **O que viaja e é gravado** | **3,4 MB** de JSON, **745 KB** comprimido. Contra 1,95 GB da carga bruta: ~570× menos |
+
+O que isso resolve:
+- **Não precisa de Storage**: o arquivo não sai do computador do analista.
+- **Não passa pela borda da Vercel**: 745 KB < 4,5 MB.
+- **Não passa pelo n8n**, então não derruba a instância.
+- **O banco guarda MB, e não GB.**
+- O CLI (`Leitor/ler.mjs`) continua sendo o caminho para a máquina do robô de captação (P5, D12.5).
+
+O que custa:
+1. **O lançamento individual não fica guardado.** Só a soma por conta e mês fica. Uma análise
+   futura que precise do lançamento (parte relacionada, lançamento manual no fechamento) exige
+   reenviar o arquivo. O hash prova que é o mesmo arquivo.
+2. **O resumo é calculado no navegador, então o servidor tem de reconferir o que dá para
+   reconferir** (fronteira de confiança). Exemplos:
+   - a soma das quantidades agregadas = a contagem do `I250` = o 9900 declarado;
+   - saldo inicial + débitos − créditos = saldo final em cada `I155`.
+3. **O arquivo é sintético** (regra 4): o tamanho do resumo de uma ECD real depende do número de
+   contas, e não do número de linhas.
