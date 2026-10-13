@@ -92,6 +92,14 @@ jobs:
       - name: Suíte n8n
         run: node --test 'N8N/test/*.test.mjs'
 
+      - name: Suíte do leitor de arquivos oficiais (F2T, Espec. 12)
+        # O leitor de envelope de SPED, XML fiscal, eSocial, Reinf, CNAB e OFX. Ele roda FORA do
+        # n8n (D12.9), mas mora neste job porque importa `N8N/lib/formato.mjs`: uma mudança no
+        # detector de formato que quebre a família tem de reprovar aqui, na mesma execução.
+        # Cada correção dele foi desligada e medida (13/10/2026): roteador 10 testes, contagem 2,
+        # versão 1, latin1 1, zip-bomb 1, decimal 1, evento 1 — nenhuma passa vazia.
+        run: node --test 'Leitor/test/*.test.mjs'
+
       - name: Suíte dos hooks do agente
         # A trava que impede o descarte de arquivo é a única trava DURA do repositório, e ela erra
         # de duas formas opostas: deixando passar o comando destrutivo (trabalho não commitado
