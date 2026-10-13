@@ -1,6 +1,8 @@
 # Mapa de execução — daqui até o projeto fechado
 
 **Data:** 09/09/2026, sessão 81 · **Base conferida:** `main` em `668b6fe`, CI verde (PR #203).
+**Tocado em 13/10/2026:** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
+conferido em 09/09.
 **Última migration:** `0160` — ver `ESTADO.md`.
 
 > **NOTA IMPORTANTE (18/09/2026):** Este arquivo é histórico. O roadmap detalhado e atual está em
@@ -45,6 +47,7 @@ de pendências do `ESTADO.md` já disse uma vez que o Modo A não existia depois
 | **B5** | Eficiência — o que sobrou depois da passada da sessão 54 | 🟢 quase fechada | engenharia | nada crítico |
 | **B6** | **Operação** — proteção do `main`, ~~observabilidade~~, ~~backup~~ | 🟠 **B6.2 e B6.3 fechadas em 21/08**; sobra o `main` | dono | a segurança do processo |
 | **B7** | Bloqueados por dado que não temos | ⚫ espera | terceiros | nada — são espera |
+| **B8** | **Fontes oficiais e captação** (SPED, eSocial, logística, CNAB, CNAE) — Espec. 12, fase **F2T** do roadmap | ⚪ só especificação | **dono** (D12.1–D12.11) e depois engenharia | o dado independente que confere o declarado (DATA GATE) |
 
 **O caminho crítico encurtou: `B0` fechou em 20/08.** Sobra `B1 → B2` e, em paralelo, `B3` (decisão)
 e `B6` (higiene). **A rodada real aconteceu em 02/09** (sessão 79 do `ESTADO.md`) e não deixou erro
@@ -513,3 +516,32 @@ como um roadmap deixa de orientar.
 **A primeira linha não é de engenharia** — e é por isso que este mapa começa por ela. O sistema tem
 **82 migrations aplicadas** (numeradas até a `0137`), seis suítes e CI verde. Com o B0 fechado, **o que falta para ele valer é
 uma hora de execução**, não uma linha de código.
+
+---
+
+## 13. B8 — Fontes oficiais e captação · **PLANEJADO em 13/10/2026**
+
+**O detalhe NÃO mora aqui.** Este arquivo é histórico desde 18/09 (nota do cabeçalho), e repetir as
+etapas em dois lugares é o defeito que este mapa já descreve. Elas moram em:
+
+- **o quê e por quê:** `Arquitetura do Sistema/2 Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md`
+  (§1–§12 o escopo, §13 as 27 lacunas G1–G27);
+- **em que ordem, com que dependência e quando acabou:** `ARQUITETURA_ALVO_E_ROADMAP.md`, fase
+  **F2T**, tabela de etapas.
+
+**O resumo, para quem só lê este mapa:**
+
+| Etapa | Destrava | Quem |
+|---|---|---|
+| 0 — Decisões D12.1–D12.11 e as [A CONFIRMAR] | todo o resto | **dono** |
+| 1 — Fundação sem cliente (roteador, leitor fora do n8n, leiautes, precedência, tolerância, duplicidade) | as ondas | engenharia, ∥ F1 |
+| 2 — Jurídico e segurança | qualquer coleta automática | dono + jurídico |
+| Ondas 1–5 | as 24 reconciliações (S, E, L, C) | engenharia, depois da F1 (e F4/F6 onde a tabela diz) |
+| Captação 4–6 | o caso que se abastece sozinho | engenharia, depois da etapa 2 |
+
+**Estado da etapa 0 em 13/10/2026:** 10 de 11 decisões tomadas. Falta a D12.3 (cotação do Integra
+Contador com o SERPRO), que não bloqueia a etapa 1 nem a onda 1. Os [A CONFIRMAR] sem responsável estão na G27.
+
+**Critério de pronto do B8:** as cinco ondas aceitas em 3 casos reais cada, e um mandato-piloto
+abastecido sem envio manual das fontes do canal B. Até lá, B8 **não** entra na definição de "projeto
+fechado" (§11): é o próximo produto, pelo mesmo critério que deixou B4.2, B4.3 e B7 fora dela.

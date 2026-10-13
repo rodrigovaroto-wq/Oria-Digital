@@ -2,7 +2,7 @@
 
 **Data:** 05/10/2026 · **Base:** `main` em `4b536bc` · **Natureza:** especificação. Nada aqui está
 implementado; o que já existe está apontado com o arquivo que o prova. **Decisões do dono de
-05/10/2026 incorporadas (§7):** D1, D3, D4, D7 e D8 decididas; D5, D6 e D9 em aberto.
+05/10/2026 incorporadas (§7):** D1, D3, D4, D7 e D8 decididas; D6 decidida em 13/10/2026 (ver a tabela); D5 e D9 em aberto.
 
 **Origem, em ordem de autoridade:**
 
@@ -894,7 +894,7 @@ abertas, sem recomendação transformada em decisão.
 | D3 | Os quatro tipos são obrigatórios? | ✅ **decidido: não são obrigatórios**, mas o sistema **identifica quando vierem e os usa de forma ativa e clara** | §4.8: identificação pelo conteúdo, uso automático, quadro "Trilha transacional", ausência como nota com efeito e nunca como pendência bloqueante |
 | D4 | Tipo novo `ESTUDO_SETORIAL` | ✅ **decidido: criar** | §2.2: nasce com consumidor declarado (leitor de fatos) |
 | D5 | Provedor comercial de processos | ⚪ **em aberto**: "vamos pensar juntos" | Até lá, certidões (§3.5) |
-| D6 | Open Finance para extratos | ⚪ **em aberto**: "vamos pensar juntos" | Até lá, arquivo (OFX primeiro) |
+| D6 | Open Finance para extratos | 🟢 **decidido em 13/10/2026: não.** Mesma decisão que a D12.4 da Espec. 12 | Extrato sempre por arquivo: OFX primeiro, CNAB `E` depois |
 | D7 | Segurança e base legal do dado sensível | ✅ **decidido: NDA em todo mandato; banco extremamente seguro e privado, sem possibilidade de vazamento** | §7.1: o que isso exige, e a constatação de que hoje não está cumprido |
 | D8 | Medir o `I051` em ECDs reais | ✅ **decidido: medir** | Fatia T11. **Precisa de ECDs reais**, que só o dono fornece (pelo menos três, de mandatos diferentes) |
 | D9 | Reclame Aqui e redes sociais | ⚪ **em aberto**: "analisar e pensar como utilizar" | O §3.4 mantém a dimensão, e ela aparece como "não pesquisada" (R7) até haver decisão |

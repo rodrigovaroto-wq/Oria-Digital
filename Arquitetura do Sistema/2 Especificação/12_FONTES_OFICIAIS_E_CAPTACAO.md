@@ -1,0 +1,517 @@
+# 12 — Fontes oficiais (SPED, eSocial, logística, CNAB, CNAE) e a captação automática
+
+**Data:** 09/10/2026 · **Base:** `8ae5c35` · **Natureza:** especificação. Nada aqui está
+implementado; o que já existe está apontado com o arquivo que o prova. Trechos marcados
+**[A CONFIRMAR]** dependem de verificação com o órgão ou o fornecedor antes de virar código.
+
+**Origem, em ordem de autoridade:**
+
+1. **O pedido do dono** (09/10/2026): o sistema deve **ler e usar todos os arquivos e grupos de
+   todas as categorias** (SPED, eSocial, conhecimento de transporte e de embarque, CNAB, CNAE),
+   interligados e voltados para a reestruturação, e a captação deve ser **automatizada ao máximo**.
+2. A **Especificação 11** (`11_ANALISE_DE_CREDITO_ASSESSORIA.md`), Etapa 4 (a trilha transacional) e
+   §5 (consulta externa como dado). Esta especificação **estende** a 11: amplia o escopo do §4 de
+   "SPED, CAP, CAR e extratos" para todas as famílias abaixo e acrescenta a captação (§9 a §11).
+3. O que o sistema já tem: os tipos `SPED`, `EXTRATO_BANCARIO`, `AGING_AP` e `AGING_AR` existem,
+   todos `sem_consumidor` (`Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql`);
+   o `book-distress` (`Dados de Teste/book-distress`) gera aging e extrato fechando no BP; o teto
+   de envio da borda (`.claude/memory/teto-da-borda-recusa-antes-do-codigo.md`).
+
+**Leitura adotada de um termo ambíguo.** A anotação manuscrita "notas de conte…", sobre
+logística, foi lida como **conhecimento de transporte** (CT-e) e **conhecimento de embarque**
+(B/L). Se for outro documento, o §3 muda; o resto não.
+
+---
+
+## Resumo
+
+**Decisão: o sistema lê e usa todos os arquivos das quatro famílias abaixo, sem exceção de
+módulo ou grupo.** Eles mudam a análise de "o que a empresa declara" para "o que ela entregou ao
+fisco, ao governo e ao banco". São arquivos de leiaute oficial: a leitura é **determinística, sem
+IA**, e cada número aponta para o arquivo e a linha de onde saiu.
+
+| Família | O que é | Quem gera | O que acrescenta à análise |
+|---|---|---|---|
+| **SPED** | Contabilidade e tributos entregues à Receita | Contador, via programas da RFB | Balancete mensal oficial, notas fiscais, impostos apurados, inventário, retiradas de sócios |
+| **eSocial** | Eventos trabalhistas e previdenciários | Departamento pessoal | Folha, funcionários, rescisões, FGTS, INSS, processos trabalhistas |
+| **Logística** (CT-e, MDF-e, conhecimento de embarque) | Documentos do transporte da mercadoria | Transportadora, armador, despachante | Frete real, rotas, comércio exterior, prova de que a venda saiu de fato |
+| **CNAB** (FEBRABAN) | Arquivos que a empresa troca com o banco | Banco e ERP | Extrato, boletos emitidos e pagos, pagamentos a fornecedores, débito automático |
+
+O **CNAE** (§5) não é arquivo: é o campo que liga a empresa ao setor e aparece em várias fontes.
+
+**Estado hoje.** `SPED` e `EXTRATO_BANCARIO` existem como tipo, mas nada os lê, e não há SPED em
+produção (`0187`). eSocial, CT-e, conhecimento de embarque, CNAB de cobrança e de pagamento e o
+CNAE da entidade **não existem** no sistema.
+
+**Regra que vale para todos (D3 da Espec. 11):** o documento é opcional, mas quando chega é
+usado. Quando falta, o sistema diz o efeito — "sem SPED, a receita foi conferida só contra o que o
+cliente declarou" (regra 1).
+
+---
+
+## §1 SPED: a versão da empresa que foi entregue ao fisco
+
+A escrituração é texto separado por `|`, que começa em `|0000|` (empresa e período) e termina em
+`|9999|` (total de linhas: o controle de leitura completa). Os documentos eletrônicos (NF-e, CT-e)
+são XML.
+
+### Todos os módulos
+
+| Módulo | Periodicidade | Registros-chave | O que o sistema usa |
+|---|---|---|---|
+| **ECD** (contábil) | anual | `I050` plano de contas · `I051` plano referencial da RFB · `I155` saldos mensais · `I200`/`I250` lançamentos · `J100` balanço · `J150` DRE | Balancete mensal oficial conta a conta; confronto com as demonstrações enviadas; o `I051` pode resolver a conta canônica (F4) |
+| **ECF** (IRPJ/CSLL) | anual | `L100` balanço · `L300` DRE · `M300` LALUR · `Y540` receita por atividade · `Y600` sócios e remuneração | DRE fiscal, lucro real × contábil, segmento faturado, retiradas de sócios |
+| **EFD ICMS/IPI** | mensal | `0150` participantes · `0200` itens · `C100`/`C170`/`C190` notas · `D100` fretes · `E110` apuração ICMS · `H010` inventário · bloco `K` produção e estoque | Receita por nota e CFOP, clientes e fornecedores reais, ICMS devido, estoque fiscal |
+| **EFD-Contribuições** | mensal | `A100` serviços · `C100`/`C180` vendas · `M200`/`M600` PIS e COFINS | Receita de serviço, PIS/COFINS devidos |
+| **EFD-Reinf** | mensal | série `R-2000` retenções e CPRB · série `R-4000` IR retido · `R-9001`/`R-9005` totalizadores | Tributos retidos na fonte; com o eSocial, forma a DCTFWeb |
+| **NF-e / NFC-e** (XML) | por nota | emitente, destinatário, itens, NCM, CFOP, valor, chave | Vendas e compras nota a nota, inclusive meses ainda não escriturados |
+| **NFS-e** (padrão nacional) | por nota | prestador, tomador, serviço, ISS | Receita de serviços |
+| **CT-e e MDF-e** | por documento | ver §3 | Frete e transporte |
+
+A e-Financeira também é SPED, mas quem a entrega são os bancos; a empresa não tem acesso. Fica fora.
+
+### Reconciliações que o SPED habilita
+
+S1 a S6 são as da Espec. 11 §4.2; S7 é nova.
+
+| # | Confronto | O que revela |
+|---|---|---|
+| S1 | DRE enviada × ECD `J150` × ECF `L300` | Demonstração gerencial diferente da transmitida. O achado mais importante possível |
+| S2 | Balancete enviado × ECD `I155`, conta a conta | Ajustes feitos depois da transmissão |
+| S3 | Receita da DRE × notas de saída (`C190`, NF-e) | Venda sem nota, ou nota sem receita |
+| S4 | Estoque do BP × inventário `H010` × bloco `K` | Estoque inflado: onde a perda se esconde em empresa em crise |
+| S5 | ICMS, PIS e COFINS a recolher × `E110`, `M200`, `M600` × `SITUACAO_FISCAL` | Imposto apurado e não pago, ou fora do passivo |
+| S6 | Lucro contábil × LALUR `M300` | Adições e exclusões relevantes |
+| S7 | Retenções da Reinf × passivo tributário | Imposto retido de terceiros e não repassado |
+
+**Limites.** O SPED mostra o declarado, não necessariamente a verdade. A ECD do ano corrente ainda
+não existe (a EFD mensal e o XML cobrem). Empresa do Simples tem pouco SPED: a ausência vira nota
+com efeito, nunca silêncio.
+
+---
+
+## §2 eSocial: a folha de pagamento oficial
+
+Cada fato trabalhista vira um evento XML. O sistema lê **todos os grupos**, mas grava **números
+agregados por padrão**: o XML individual traz CPF e salário, e o detalhe por pessoa só é guardado
+quando a análise precisa dele (custo de rescisão). Ver `10_DADOS_RETENCAO_E_LGPD.md`.
+
+| Grupo | Eventos | O que o sistema usa |
+|---|---|---|
+| **Tabelas** | `S-1000` empregador · `S-1005` estabelecimentos · `S-1010` rubricas · `S-1020` lotações · `S-1070` processos adm./judiciais | Perímetro (quais CNPJs empregam), dicionário das verbas, processos que suspendem tributo |
+| **Periódicos** | `S-1200` remuneração · `S-1210` pagamentos · `S-1260` produção rural · `S-1270` avulsos · `S-1280` desoneração · `S-1298` reabertura · `S-1299` fechamento | Folha bruta por mês, o que foi pago e quando, desoneração; `S-1298` mostra folha reaberta depois de fechada |
+| **Vínculos** | `S-2190` · `S-2200` admissão · `S-2205`/`S-2206` alterações · `S-2230` afastamento · `S-2231` cessão · `S-2298` reintegração · `S-2299` desligamento · `S-2300`/`S-2306`/`S-2399` sem vínculo | Headcount mês a mês, rotatividade, demissões em massa, tempo de casa e salário para o **custo de rescisão** |
+| **Saúde e segurança** | `S-2210` CAT · `S-2220` exames · `S-2221` toxicológico · `S-2240` agentes nocivos | Passivo potencial: acidentes, insalubridade, aposentadoria especial |
+| **Processos trabalhistas** | `S-2500` processo · `S-2501` tributos do processo | Acordos e condenações **declarados**, com valor |
+| **Totalizadores** | `S-5001`/`S-5011` contribuição previdenciária · `S-5002`/`S-5012` IRRF · `S-5003`/`S-5013` FGTS · `S-5501`/`S-5503` de processo | O número oficial do mês em uma linha: o ponto de partida |
+| **Exclusão** | `S-3000` · `S-3500` | Eventos apagados depois de transmitidos; muitos em folha antiga são alerta |
+
+Os eventos de regime próprio (`S-1202`, `S-1207`, `S-2400` a `S-2420`) só valem para órgão
+público; o leitor os reconhece, mas não aparecem em mandato privado. Vêm junto dois derivados: a
+**DCTFWeb** (débito previdenciário declarado × pago, montada de eSocial + Reinf) e o **FGTS Digital**.
+
+| # | Confronto | O que revela |
+|---|---|---|
+| E1 | Despesa de pessoal da DRE × `S-5011` + `S-1200` | Folha fora do resultado, ou despesa inflada |
+| E2 | INSS e IRRF descontados (`S-5011`, `S-5012`) × DCTFWeb paga × extrato | **Desconto do empregado não repassado**: passivo e crime de apropriação indébita para os sócios |
+| E3 | FGTS devido (`S-5013`) × FGTS Digital pago | FGTS atrasado: passivo e risco de rescisão indireta |
+| E4 | `S-2500` × provisões do BP × certidões | Passivo trabalhista sem provisão |
+| E5 | Headcount × receita | Produtividade e custo de um plano de reestruturação |
+
+---
+
+## §3 Logística: conhecimento de transporte e conhecimento de embarque
+
+"Conhecimento" é o documento que prova que a mercadoria foi entregue a um transportador. No
+Brasil é eletrônico (CT-e) e se liga à NF-e pela chave. No comércio exterior é o **conhecimento de
+embarque** (*bill of lading*). Para a análise, é a prova física de que venda e compra aconteceram.
+
+| Documento | Campos que o sistema lê | O que o sistema usa |
+|---|---|---|
+| **CT-e** (modelo 57) | remetente, destinatário, tomador, origem/destino, frete, peso, **chaves das NF-e transportadas** | Frete real por rota e cliente; prova de que a nota de venda saiu |
+| **CT-e OS** (modelo 67) | tomador, valor, percurso | Transporte de pessoas e valores |
+| **MDF-e** (modelo 58) | veículo, percurso, chaves dos documentos | Frota própria, viagens por mês, consistência do volume vendido |
+| **EFD `D100`/`D190`** | valor, CFOP, crédito de ICMS | Frete de compra e venda mês a mês, mesmo sem os XML |
+| **B/L marítimo** e **CE-Mercante** | embarcador, consignatário, porto, data de embarque, mercadoria, frete | Data real de exportação/importação, frete internacional, mercadoria em trânsito |
+| **AWB** (aéreo) · **CRT** (rodoviário internacional) · **TIF/DTA** (ferroviário) | os mesmos do B/L | Idem, por modal |
+| **DU-E** (exportação) | NF-e exportadas, valor, moeda, país, averbação | Receita de exportação comprovada; exposição cambial por moeda e país |
+| **DI / DUIMP** (importação) | fornecedor estrangeiro, NCM, valor aduaneiro, tributos, moeda | Compras importadas, dependência externa, passivo em moeda estrangeira |
+
+| # | Confronto | O que revela |
+|---|---|---|
+| L1 | NF-e de venda × CT-e/MDF-e que a transportou | **Venda sem transporte**: receita que pode não ter existido (vendas CIF ou frota própria) |
+| L2 | Frete da DRE × Σ CT-e × `D100` | Frete fora do custo, margem bruta superestimada |
+| L3 | Receita de exportação (CFOP `7xxx`) × DU-E averbada × câmbio no extrato | Exportação que não embarcou, ou ACC/ACE sem embarque |
+| L4 | Data do conhecimento de embarque × reconhecimento da receita | Receita antecipada no fechamento (corte) |
+| L5 | DI/DUIMP × estoque e fornecedores do BP | Mercadoria em trânsito sem registro, fornecedor externo fora do passivo |
+| L6 | Concentração de transportadores e rotas | Dependência operacional |
+
+O B/L e o AWB chegam em PDF: é o único item desta especificação lido por **IA**, conferido contra o
+CE-Mercante.
+
+---
+
+## §4 CNAB (FEBRABAN): os arquivos que a empresa troca com o banco
+
+Arquivo posicional (cada campo em colunas fixas). **Remessa**: empresa → banco. **Retorno**: banco
+→ empresa. Estrutura: cabeçalho → lotes → detalhes → rodapés com quantidade de registros e totais
+(o controle de leitura completa). **CNAB 240** é padronizado em segmentos; **CNAB 400** varia por
+banco; **CNAB 150** é o débito automático. O leitor tem um leiaute por versão e, no 400, por banco.
+
+| Serviço | Segmentos (240) | O que o sistema usa |
+|---|---|---|
+| Cobrança: remessa | `P` título · `Q` sacado · `R` desconto/multa/juros · `S` mensagens · `Y` complementos e Pix | Carteira de clientes título a título |
+| Cobrança: retorno | `T` situação · `U` valores pagos, juros, tarifas | **CAR real**: liquidações, atrasos, protestos, baixas, títulos **descontados ou cedidos** |
+| Pagamentos | `A`/`B` crédito em conta, TED, Pix · `C` · `J`/`J-52` boletos · `W` | **CAP real**: quem foi pago, quando, quanto; folha por crédito em conta |
+| Tributos | `O` com código de barras · `N` sem código (DARF, GPS, GARE, FGTS) | Imposto efetivamente pago |
+| Extrato para conciliação | `E` | Saldo e lançamentos por conta (como o OFX) |
+| Débito automático (CNAB 150) | autorização e débito | Recebimento recorrente e inadimplência |
+| Cobrança CNAB 400 | detalhe com código de ocorrência por banco | Idem cobrança 240, leiaute antigo |
+| Custódia de cheques | leiaute do banco | Recebível em cheque, inclusive em garantia |
+
+| # | Confronto | O que revela |
+|---|---|---|
+| C1 | Carteira de cobrança × CAR do BP | Recebível inflado ou baixado sem pagamento |
+| C2 | Carteira descontada/cedida × dívida declarada | **Antecipação de recebíveis**: dívida de curtíssimo prazo fora do `MAPA_DIVIDA` |
+| C3 | Vencimento × liquidação | DSO efetivo e inadimplência por cliente |
+| C4 | Pagamentos × CAP × vencimentos | DPO efetivo, fornecedor que deixou de ser pago |
+| C5 | Tributos pagos (`N`, `O`) × apurados (SPED, eSocial) | Imposto apurado e não pago |
+| C6 | Extrato (`E`) × caixa e bancos do BP | Conciliação de saldo por conta |
+
+Para extrato, o OFX (Espec. 11 §4.6.1) continua a primeira opção; o CNAB `E` é a segunda.
+
+---
+
+## §5 CNAE: o código que diz em que setor a empresa está
+
+Classificação oficial da atividade (IBGE). Hierarquia, com `1091-1/01` de exemplo:
+
+| Nível | Formato | Exemplo | Uso no sistema |
+|---|---|---|---|
+| Seção | letra (21) | `C` Indústrias de transformação | Visão do portfólio |
+| Divisão | 2 dígitos | `10` Produtos alimentícios | **Chave do setor**: benchmarks, fontes setoriais, pares |
+| Grupo | 3 dígitos | `109` | Pares mais próximos |
+| Classe | 4 + DV | `1091-1` | Estatísticas do IBGE (PIA, PAC, PAS) |
+| Subclasse | 7 dígitos | `1091-1/01` | Cadastro, tributação, enquadramento |
+
+Cada CNPJ tem um principal e vários secundários, por estabelecimento; o principal costuma estar
+desatualizado.
+
+| Fonte | Campo | O que diz |
+|---|---|---|
+| Cadastro CNPJ (dados abertos RFB) | principal e secundários | Setor **declarado** |
+| ECF `Y540` | receita por CNAE | Setor **faturado**, com peso. É o que vale |
+| eSocial `S-1005` | CNAE preponderante | Alíquota RAT/FAP, custo da folha |
+| NF-e / NFS-e | CNAE do emitente (quando informado) | Atividade de cada venda |
+| Novo CAGED | emprego por CNAE | Tendência do setor |
+
+Usos na reestruturação: segmento real × declarado; pares e benchmarks para o laudo e o plano;
+risco setorial (o problema é da empresa ou do setor?); enquadramento tributário (Simples,
+desoneração, ST, RAT) e o passivo de CNAE errado; o catálogo de fontes por divisão (Espec. 11
+§2.2). **No sistema:** atributo da entidade do perímetro (F1), vindo do cadastro e confrontado com
+o `Y540`. Hoje não existe no banco.
+
+---
+
+## §6 Como tudo se conecta
+
+```
+ ARQUIVOS DE LEIAUTE OFICIAL (sem IA)           TRILHA DETERMINÍSTICA
+ ┌──────────────────────────────┐               ┌────────────────────────────────────────┐
+ │ SPED  ECD·ECF·EFDs·Reinf·NF-e│               │ 1. Roteador de formato (pelo conteúdo) │
+ │ eSocial  todos os grupos     │──────────────►│ 2. Leitores determinísticos (+controle)│
+ │ Logística  CT-e·MDF-e·B/L·DU-E│              │ 3. Tabelas novas                       │
+ │ Banco  CNAB 240/400/150·OFX  │               │ 4. CHAVES COMUNS: CNPJ/CPF · chave NF-e│
+ │ Cadastro CNPJ e CNAE         │               │    · competência · conta · CNAE        │
+ └──────────────────────────────┘               │ 5. Reconciliação contra BP e DRE       │
+ ┌──────────────────────────────┐               └───────────────────▲───────┬────────────┘
+ │ Extração por IA (atual)      │───────────────────────────────────┘       │
+ │ PDF/xlsx → campo_extraido    │                                           ▼
+ └──────────────────────────────┘      Book Excel · Lista de credores · Caixa 13 semanas · Laudo
+```
+
+É nas chaves comuns que o fornecedor da EFD (`0150`) vira o mesmo do CNAB de pagamentos e da lista
+de credores, e o empregado do eSocial vira o credor trabalhista.
+
+---
+
+## §7 Cada fonte nas frentes da reestruturação
+
+| Frente | Pergunta | Fontes | Entrega |
+|---|---|---|---|
+| **Diagnóstico** | Os números são verdadeiros? | S1–S7 · E1 · L1 · C6 | Demonstrações conferidas contra fisco e banco |
+| **Caixa realizado e 13 semanas** | Quando o caixa acaba? | OFX/CNAB `E` · cobrança `T`/`U` · pagamentos `A`/`J` · folha `S-1210` · tributos `N`/`O` | Caixa efetivo mensal; entradas pelo vencimento dos títulos, saídas pelo CAP e pela folha |
+| **Lista de credores** (Lei 11.101, art. 51) | Quem, quanto, que classe? | I trabalhista: `S-2299`, `S-2500`, `S-5013` · II garantia real: contratos e garantias · III quirografários: CAP + EFD `0150` + CNAB pagamentos + DI/DUIMP · IV ME/EPP: porte no cadastro CNPJ | Relação nominal com CNPJ/CPF, valor, vencimento, classe e fonte por linha |
+| **Fora da recuperação** | O que não entra no plano? | Recebíveis cedidos (CNAB) · tributos (SPED, DCTFWeb, Reinf) | Cessão fiduciária e débito tributário separados |
+| **Passivo fiscal e transação** | Quanto se deve ao fisco, e quanto é crime? | `E110`, `M200`/`M600`, Reinf, DCTFWeb × pagos (CNAB `N`/`O`, extrato) | Débito apurado e não pago por tributo e competência; retenção não repassada em destaque |
+| **Plano e laudo** (art. 53) | Se sustenta depois do plano? | `Y540`, NF-e · frete (CT-e) · folha e rescisão (eSocial) · pares por CNAE | Base realizada do modelo e premissas contra o setor |
+| **Garantias e dinheiro novo** | O que está livre de ônus? | Carteira livre × cedida (CNAB) · `H010` · imobilizado (ECD) | Ativo livre para DIP ou nova linha |
+| **Sócios** | Saiu dinheiro na crise? | ECF `Y600` · extrato (CPFs dos sócios) · mútuos | Retiradas por período × início da crise |
+| **Risco setorial** | Empresa ou setor? | CNAE · Novo CAGED · estatísticas setoriais | Comparação com pares para a apresentação aos credores |
+
+A frente que mais ganha é a lista de credores: deixa de depender do que o cliente diz.
+
+---
+
+## §8 Arquitetura de leitura
+
+A trilha é a da Espec. 11 §4.1, com o escopo ampliado. Cinco passos iguais para todas as fontes:
+
+1. **Reconhecer pelo conteúdo**, não pelo nome: `|0000|` (SPED), namespace XML (eSocial, NF-e,
+   CT-e), linha de 240/400/150 posições com código do banco (CNAB), `OFXHEADER`.
+2. **Ler registro por registro com proveniência**: arquivo, linha, registro.
+3. **Conferir que leu tudo** (regra 7): `|9999|`, rodapés do CNAB, `S-1299`. Leitura incompleta é
+   falha visível, nunca dado parcial apresentado como completo.
+4. **Ligar pelas chaves comuns**: CNPJ/CPF, chave da NF-e, competência, conta contábil, CNAE.
+5. **Reconciliar contra BP e DRE**, com a divergência explicada ou a ausência com o efeito.
+
+`campo_extraido` não muda (roadmap §9, item 9). Tabelas propostas, ao lado:
+
+| Tabela | Recebe |
+|---|---|
+| `documento_fiscal_registro` | SPED (todos os módulos) e XML de NF-e, NFS-e, CT-e, MDF-e |
+| `evento_trabalhista` | eSocial, DCTFWeb, FGTS Digital (agregado por padrão) |
+| `lancamento_bancario` | OFX, CNAB `E`, CSV, PDF |
+| `titulo` | Cobrança e pagamentos (CNAB 240/400/150) e aging do ERP |
+| `documento_comex` | DU-E, DI/DUIMP, CE-Mercante, B/L, AWB, CRT |
+| atributo da entidade | CNAE principal e secundários, porte, regime |
+
+### Ondas de leitura
+
+| Onda | Escopo | Destrava |
+|---|---|---|
+| 1 | ECD + ECF; CNAE da entidade; medir o `I051` em 3 ECDs reais | S1, S2, S6; segmento real; hipótese da F4 |
+| 2 | OFX, CNAB `E`, CNAB cobrança e pagamentos (240, 400, 150) | Caixa realizado, 13 semanas, recebível cedido, DSO/DPO efetivos |
+| 3 | EFD ICMS/IPI, Contribuições, Reinf, XML NF-e/NFS-e | Receita nota a nota, passivo fiscal, retenções |
+| 4 | eSocial (todos os grupos), DCTFWeb, FGTS Digital | Classe I, encargos não recolhidos, custo de rescisão |
+| 5 | CT-e, MDF-e, DU-E, DI/DUIMP, CE-Mercante, B/L, AWB, CRT | Prova física de venda, frete, câmbio |
+
+Cada onda entra com book sintético fechando no BP e portão no CI, no padrão do `book-distress`, e
+cada reconciliação nova é medida não-vazia antes do commit (regra 2).
+
+---
+
+## §9 Captação: como pegar cada informação
+
+**Três canais, do mais automático ao mais manual.** Para cada fonte o sistema tenta o primeiro
+canal disponível e só cai para o seguinte quando ele falha. O cliente age duas vezes: assina a
+autorização no kickoff e encaminha um pedido ao contador.
+
+| Canal | Como funciona | O que o cliente faz | Automação |
+|---|---|---|---|
+| **A. Dado público** | Consulta por CNPJ/CPF assim que o caso é criado | Nada | Total |
+| **B. Acesso delegado** | O cliente nomeia a Oria procuradora eletrônica no e-CAC, **só para consulta** (D12.1). Coletores agendados buscam e repetem. Open Finance e custódia do A1 do cliente foram **recusados** (D12.4, D12.2) | Assina a procuração e o termo | Alta, depois da autorização |
+| **C. Pacote do contador e do ERP** | O sistema gera a lista exata por regime e período e um link de envio; o contador sobe um zip e o sistema classifica pelo conteúdo | Encaminha o pedido | Média: pedido e leitura automáticos, envio humano |
+
+| Fonte | Canal | Como, na prática | Alternativa | Atualização |
+|---|---|---|---|---|
+| Cadastro CNPJ, CNAE, QSA, porte, regime | A | Dados abertos do CNPJ (RFB), carga mensal | APIs comerciais de CNPJ | mensal |
+| IBAMA, CEIS/CNEP, PGFN, trabalho escravo | A | Dados abertos e API do Portal da Transparência (Espec. 11 §3.4) | — | mensal |
+| Processos (metadados) | A | API pública DataJud, por número de processo já conhecido | Provedor comercial para descoberta | semanal |
+| ECD, ECF | B | Procuração eletrônica no e-CAC + **robô no ReceitaNet BX** (D12.5), com alerta de quebra; se falhar, o pedido cai para o contador | C: `.txt` e recibos do contador | anual |
+| EFD ICMS/IPI, Contribuições, Reinf | B | Idem, robô no ReceitaNet BX (D12.5). **[A CONFIRMAR]** quais módulos ele entrega a procurador | C: contador | mensal |
+| Situação fiscal, DCTFWeb, parcelamentos, Caixa Postal | B se D12.3 | API Integra Contador (SERPRO). **D12.3 aguarda cotação**: até lá, download manual no e-CAC com a procuração | e-CAC manual | mensal |
+| NF-e e CT-e **recebidas** | C | Export de XML do ERP. A Distribuição DF-e exigiria o A1 do cliente, e a custódia foi recusada (D12.2) | plataformas de captura de XML que o próprio cliente já use | mensal |
+| NF-e, NFS-e, CT-e **emitidas**, MDF-e | C | Export de XML do ERP | — | mensal |
+| eSocial | C | Export do sistema de folha | B: web service de download de eventos. **[A CONFIRMAR]** se procurador pode | mensal |
+| FGTS Digital | C | Extrato e guias pelo cliente | — | mensal |
+| Extrato bancário | C | OFX do internet banking (primeira opção) ou CNAB `E`. Open Finance recusado (D12.4 = D6 da Espec. 11) | CSV ou PDF | mensal (semanal durante a RJ) |
+| CNAB cobrança e pagamentos | C | Pasta de retornos do ERP ou internet banking | B: VAN ou API de cobrança do banco | semanal |
+| Registrato (SCR) | C | O sócio baixa pelo gov.br; sem API para terceiros | — | mensal |
+| DU-E, DI/DUIMP, CE-Mercante | C | Despachante exporta do Portal Único Siscomex. **[A CONFIRMAR]** API com certificado | B, se a API servir | mensal |
+| B/L, AWB, CRT | C | PDF do armador, lido por IA, conferido contra o CE-Mercante | — | por embarque |
+| CAP e CAR (aging) | C | Relatório do ERP em xlsx/csv | — | semanal |
+
+**Por que o canal B primeiro:** com uma autorização, a Oria deixa de depender de o cliente lembrar
+de mandar arquivo, e durante a RJ o caixa de 13 semanas e o passivo fiscal se atualizam sozinhos.
+
+---
+
+## §10 Fluxo operacional do caso
+
+```
+                 Kickoff do caso (CNPJ, regime, período; cliente assina a autorização)
+                    │                       │                          │
+           A. Dado público        B. Acesso delegado         C. Pacote do contador  ◄──┐
+           (dia 0, ninguém age)   (coletores agendados)      (pedido gerado + link)    │
+                    └───────────────────────┼──────────────────────────┘               │
+                                 Entrada única no Storage                              │
+                                 (roteador pelo conteúdo)                              │
+                                            │                                          │
+                                 Trilha determinística (§8)                            │
+                                            │                                          │
+                                 Painel de cobertura ──── todo mês: pede de novo ──────┘
+                                 (chegou · falta · venceu · efeito)   o que falta ou venceu
+```
+
+---
+
+## §11 O que construir para receber tudo sozinho
+
+| # | Peça | O que faz | Por que |
+|---|---|---|---|
+| 1 | **Gerador de pedido por caso** | Do CNPJ, regime e período, gera a lista exata (quais SPEDs e anos, bancos, comex) como e-mail pronto com o link de envio | Pedido manual esquece itens; Simples não tem ECD — pedir gera ruído, não pedir sem dizer por quê gera ausência silenciosa |
+| 2 | **Envio direto ao Storage** | URL assinada do Supabase Storage, sem passar pela função da Vercel; aceita zip, `.txt`, `.xml`, `.ret`, `.ofx` | A borda da Vercel recusa ~4,5 MB por requisição antes de o código rodar (13/09/2026: 48 arquivos, ~50 MB; `teto-da-borda-recusa-antes-do-codigo`) |
+| 3 | **Consultas públicas automáticas** | Fluxo n8n ao criar o caso; grava em `consulta_externa` (Espec. 11 §5), **inclusive o vazio** | "Consultei e não achei" ≠ "não consultei" (regra 7) |
+| 4 | **Cofre de credenciais e autorizações** | O A1 da Oria e as procurações de cada cliente: validade, escopo, termo assinado, registro de cada uso (o A1 do cliente nunca entra, D12.2) | Sem ele o canal B não existe; o A1 é a chave fiscal da empresa |
+| 5 | **Coletores agendados** (canal B) | Fluxos n8n: robô no ReceitaNet BX (D12.5) e, se a cotação aprovar, Integra Contador (D12.3). Cada coleta registra o que buscou e quantos itens vieram | Análise pontual vira monitoramento durante a RJ |
+| 6 | **Painel de cobertura do caso** | Por fonte e mês: chegou, falta, venceu, efeito; reenvia o pedido | O analista deixa de caçar documento por e-mail |
+
+As peças 1 a 3 não dependem de contrato novo. As 4 e 5 dependem da etapa 2 (jurídico e segurança) e, para o Integra, da D12.3.
+
+---
+
+## §12 Pré-requisitos para o sistema buscar tudo sozinho
+
+Quatro grupos: o que a Oria monta uma vez, os contratos, o que cada cliente entrega no kickoff (a
+reunião de abertura do mandato) e o que continua humano por limite dos órgãos e dos bancos.
+
+### O que a Oria precisa ter (uma vez, e manter)
+
+| # | Pré-requisito | Para quê | Observação |
+|---|---|---|---|
+| P1 | **e-CNPJ A1 da Oria** (ICP-Brasil) | Identidade dos coletores como procuradores no e-CAC, Integra Contador e eSocial | Vence todo ano; vencido, o canal B inteiro para no mesmo dia. O painel (peça 6) deve avisar antes |
+| P2 | **Cofre de credenciais** (peça 4) | Guardar o A1 **da Oria** e as procurações. O A1 do cliente **nunca** é guardado (D12.2) | Escopo menor que o previsto: uma credencial da Oria, não uma por cliente |
+| P3 | **Pacote jurídico e LGPD** | Termo de autorização, cláusula no contrato do mandato, RIPD, política de retenção (`10_DADOS_RETENCAO_E_LGPD.md`) | Base legal da coleta; eSocial traz salário e CPF, extrato traz terceiros |
+| P4 | **Responsável pelas credenciais** | Renovar, revogar ao fim do mandato, auditar | Sem dono, a autorização sobrevive ao caso |
+| P5 | **Infraestrutura** (peças 5 e leitor) | O serviço leitor próprio (D12.9), o agendamento dos coletores e **uma máquina dedicada ao robô do ReceitaNet BX** (D12.5), que é programa de desktop | O robô quebra quando a Receita muda a tela: o alerta e a queda para o contador são obrigatórios |
+| P6 | **Armazenamento** (peça 2) | XML e SPED de vários anos somam GB por cliente | Envio direto ao Storage; a borda da Vercel recusa ~4,5 MB |
+
+### Contratos com fornecedores
+
+| Fornecedor | Destrava | Sem ele | Decisão |
+|---|---|---|---|
+| SERPRO, Integra Contador (por consulta) | Situação fiscal, DCTFWeb, parcelamentos, Caixa Postal automáticos | e-CAC manual | D12.3 |
+| ~~Agregador de Open Finance~~ | **Recusado** (D12.4) | Extrato por OFX/CNAB | D12.4 |
+| Chave da API do Portal da Transparência (gratuita) | CEIS, CNEP, CEPIM | — | — |
+| *(opcional)* Provedor de consulta processual | Descoberta de processos por CPF/CNPJ | DataJud só por número conhecido | Espec. 11 §3.5 |
+
+### O que cada cliente entrega no kickoff
+
+| # | Item | Detalhe |
+|---|---|---|
+| K1 | Procuração eletrônica no e-CAC para o CNPJ da Oria | Uma por CNPJ do grupo (e-CNPJ do cliente ou gov.br do representante) |
+| ~~K2~~ | ~~Consentimento de Open Finance~~ | Saiu com a D12.4 |
+| ~~K3~~ | ~~A1 do cliente~~ | Saiu com a D12.2 |
+| K4 | Termo de autorização e tratamento de dados | Modelo de P3 |
+| K5 | Contatos do contador e do departamento pessoal | Destino do pedido do canal C (peça 1) |
+| K6 | Lista de bancos, ERP e sistema de folha | De onde sai o CNAB e o eSocial |
+
+### O que continua dependendo de alguém
+
+| Fonte | Por que não é automática | Quem age |
+|---|---|---|
+| NF-e emitidas, CNAB de cobrança e pagamentos, CAP e CAR | Ficam no ERP do cliente | Contador ou financeiro, pelo link |
+| eSocial e FGTS Digital | **[A CONFIRMAR]** acesso do procurador | Departamento pessoal |
+| Registrato (SCR) | Só o titular baixa, pelo gov.br | Sócio |
+| B/L, AWB, CRT | PDF do armador ou agente de carga | Despachante |
+| ECD e EFDs | Sem API; só RPA no ReceitaNet BX | Robô (D12.5) ou contador |
+
+O sistema não elimina esse trabalho, mas o barateia: o pedido sai pronto, o envio é um link e o
+painel cobra o que falta todo mês. E cada um desses itens, enquanto não chega, aparece no painel
+com o efeito nomeado (regra 1), nunca como fonte "sem achados".
+
+---
+
+## §13 Pente fino: o que faltava para o plano não quebrar nem mudar de rota
+
+Revisão do §1 ao §12 contra o que o repositório tem hoje (09/10/2026). Gravidade: **quebra** = o
+sistema falha ou grava número errado; **desvia** = a execução muda de rota por falta de definição;
+**degrada** = funciona, com qualidade ou custo pior. Cada lacuna diz como ela se fecha.
+
+### A. Encaixe no projeto
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G1 | A 12 **não está no `MAPA_DE_EXECUCAO.md` nem no roadmap**. As ondas dependem de fases que ainda não fecharam: F1 (perímetro e CNPJ por entidade), F3 (esquema da linha: o F2.2 já registrou que taxa e vencimento "não têm onde gravar"), F4 (conta canônica, de que S2 e as reconciliações conta a conta dependem) e F6 (reconciliação sobre identidade). E o foco atual (`ESTADO.md`, sessão 105b) é a qualidade da extração em mandatos reais | desvia | **FECHADA em 13/10/2026:** fase **F2T** no `ARQUITETURA_ALVO_E_ROADMAP.md` (etapas, dependências, paralelismo e critério de pronto) e linha B8 / §13 no `MAPA_DE_EXECUCAO.md` apontando para ela |
+| G2 | **Não existe regra de precedência.** Quando o SPED diverge do balanço enviado, qual número vai para o book e para o modelo? Sem regra, alguém decide no código, e o número do book muda sem ninguém ter decidido | **quebra** | D12.8. Proposta: nenhuma fonte substitui outra em silêncio. O book mostra o enviado, o fiscal e a divergência, e o analista escolhe, com registro de quem escolheu |
+| G3 | **Faltam tolerâncias.** Nenhuma reconciliação tem limite de materialidade. Arredondamento vira achado, e o achado real se perde no ruído | desvia | D12.11: tolerância absoluta e relativa por reconciliação, no padrão das existentes (`04_RECONCILIACAO.md`) |
+| G4 | **Falta a saída.** Não está dito onde S1–S7, E1–E5, L1–L6 e C1–C6 aparecem no book Excel, no portal e na apresentação de crédito | desvia | Especificar aba, bloco e endereço de célula por reconciliação, como o export já faz |
+
+### B. Dados e arquivos
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G5 | **O roteador de hoje não reconhece nenhuma das famílias.** `N8N/lib/formato.mjs` (`detectarFormato`) reconhece pelos bytes PDF, imagem, xlsx, XML genérico (`<?xml`), HTML e texto delimitado (`;` `,` tab `|`). Mas não sabe a **família**: um SPED vira "texto com `|`", uma NF-e ou um evento do eSocial vira "xml", e CNAB e OFX viram texto. Zip que não é planilha sai `desconhecido`, então um zip com vários arquivos não abre | **quebra** | Assinaturas novas no mesmo contrato (decidir pelos bytes, dizer quando caiu no declarado), e descompactação com limites contra zip-bomb, zip aninhado e arquivo gigante |
+| G6 | **Volume acima do teto já medido.** O nó de merge do n8n estoura a pilha com ~125–150 mil itens (medido em 17/09/2026, roadmap §11). Um ano de XML, de EFD ou de extrato passa disso, e os extratos do AMO já ficaram de fora por esse motivo | **quebra** | D12.9: os leitores **não** rodam linha a linha no grafo do n8n. Proposta: um leitor que processa o arquivo em fluxo, grava em lote (`COPY`) no Postgres e devolve ao n8n só o resumo e as contagens |
+| G7 | **Os leiautes mudam de versão.** ECD e ECF mudam a cada ano (a versão vem no `0000`), o eSocial passou do S-1.2 para o S-1.3, o CNAB 400 muda por banco e a NFS-e por município | **quebra** | Um registro de leiautes versionado, com um teste por versão. Versão desconhecida é falha visível, nunca leitura "aproximada" |
+| G8 | **Reforma tributária.** A NF-e já traz campos de IBS/CBS em 2026, e a CBS substitui PIS/COFINS a partir de 2027. S5, S3 e a EFD-Contribuições mudam conforme o período. **[A CONFIRMAR]** o cronograma em vigor | desvia | As reconciliações tributárias decidem a regra pelo regime do período, e não por uma regra única |
+| G9 | **Retificação e duplicidade.** Existem ECD substituta, EFD retificadora, retificação e exclusão no eSocial (`S-3000`), NF-e cancelada ou corrigida (CC-e), CT-e cancelado, o mesmo retorno CNAB enviado duas vezes e OFX com períodos que se sobrepõem | **quebra** (conta em dobro) | Chave de deduplicação por família (chave da NF-e, recibo do eSocial, hash do arquivo, ID do lançamento OFX) e regra de "versão vigente". A vigente vence, e a substituída fica guardada como evidência |
+| G10 | **Formatos internos.** O SPED vem em latin1, com decimal em vírgula e datas em `ddmmaaaa`. O CNAB tem decimais implícitos. O OFX 1.x é SGML | **quebra** (valor ×100 ou acento corrompido) | Um teste por particularidade, no gerador sintético |
+| G11 | **Identidade.** Há CNPJ raiz e filial (8 × 14 dígitos), NF-e entre CNPJs do mesmo grupo (precisa ser eliminada, como o `FAT_INTRAGRUPO`) e o mesmo CPF como sócio e como empregado | **quebra** (receita intragrupo vira receita) | Resolver pela F1 (perímetro). As notas entre entidades do perímetro são marcadas como intragrupo antes de qualquer soma |
+| G12 | **Período.** Competência × caixa × data de emissão, ano fiscal e o corte de cada fonte no período do book | desvia | Uma regra de período por família, escrita antes da onda 1 |
+| G13 | **Fontes fora do escopo sem que ninguém tenha decidido.** Simples Nacional (PGDAS-D, DEFIS, DAS: boa parte das PMEs em crise), NFS-e de município fora do padrão nacional, declarações estaduais de ICMS e contratos de câmbio | desvia | **FECHADA (D12.10, 13/10/2026):** entram NFS-e municipal (onda 3, por demanda) e câmbio (onda 5); Simples Nacional e declarações estaduais ficam fora, com a nota de efeito no caso |
+| G14 | **Taxonomia.** Os tipos novos (eSocial, CT-e, comex, CNAB de cobrança e de pagamento, XML de NF-e, NFS-e municipal, contrato de câmbio) ainda não existem e precisam nascer **com consumidor** | degrada | Uma migration por onda, já com o consumidor. O portão `fn_cobertura_de_tipos` (`0187`) impede tipo sem leitor |
+
+### C. Qualidade e prova
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G15 | **Não há arquivo real** de SPED, eSocial, CNAB ou CT-e no repositório, e a regra 4 proíbe inventar fixture para provar bug de produção | desvia | Duas coisas: geradores sintéticos por família, que fecham no BP (padrão `book-distress`), para o CI; e amostras reais anonimizadas de 3 mandatos, com consentimento, para o aceite |
+| G16 | **Falta critério de pronto por onda.** "Ler ECD" não diz quando acabou | desvia | Exemplo para a onda 1: contagem lida = `9999` em 100% dos arquivos; S1 roda em 3 casos reais; toda divergência acima da tolerância explicada; cada reconciliação medida não-vazia (regra 2) |
+| G17 | **Coletor que falha parece coletor sem novidade** (regra 7) | **quebra** (silenciosa) | Cada execução de coletor grava um estado: rodou, falhou, voltou vazio ou não está configurado. O painel mostra o estado, e o vazio nunca se apresenta como "sem achados" |
+| G18 | **Operação dos coletores.** Limites de consumo e ritmo dos serviços da Receita, quebra do robô do ReceitaNet BX (D12.5), retentativas, prazos e alertas de certificado e de consentimento vencendo | degrada | Política de retentativa e de ritmo por fonte, além de alertas com antecedência |
+
+### D. Segurança, jurídico, custo e pessoas
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G19 | **Modelo de segurança.** Onde o A1 fica de fato (cofre, nunca em texto no n8n), RLS nas tabelas novas, acesso por caso, revogação no fim do mandato e trilha de auditoria | **quebra** (risco jurídico) | Desenho de segurança e revisão de segurança antes da peça 4 |
+| G20 | **LGPD por categoria.** Falta definir a base legal de cada dado, a minimização, a retenção e o descarte no fim do mandato, os contratos de operador com o SERPRO e o agregador, e a transferência internacional (os PDFs vão à OpenAI, como já diz o `10_DADOS_RETENCAO_E_LGPD.md`) | **quebra** (risco jurídico) | RIPD e política escritos pelo jurídico **antes** da primeira coleta (P3) |
+| G21 | **Escopo da procuração.** A procuração eletrônica pode dar poder de agir, e não só de consultar | **quebra** (responsabilidade da Oria) | Pedir só os serviços de consulta. O termo diz que a Oria não transmite nem retifica nada |
+| G22 | **Custo por caso** sem modelo: consultas ao Integra (D12.3), máquina do robô (D12.5), serviço leitor (D12.9), GB de armazenamento, IA nos PDFs, infraestrutura | degrada | Estender o `medir-custo-book.mjs` com as fontes novas e fixar um teto de custo por caso |
+| G23 | **Pessoas e processo.** Falta definir quem opera o painel, o prazo de resposta, o roteiro de falhas (*runbook*), o roteiro do kickoff e os modelos de e-mail | desvia | Roteiro operacional escrito junto com a peça 6 |
+
+### E. Execução
+
+| # | Lacuna | Gravidade | Como fecha |
+|---|---|---|---|
+| G24 | **Falta um piloto.** Generalizar sem passar um mandato real de ponta a ponta | desvia | Um mandato-piloto por onda, com o aceite do G16, antes de abrir para todos |
+| G25 | **Não quebrar o que funciona.** A trilha nova não pode alterar a ingestão atual | **quebra** | Só acréscimos: tabelas novas, `campo_extraido` intocado, trilha desligável por caso, todas as suítes verdes e republicação do n8n pelo caminho normal |
+| G26 | **Decisões abertas se acumulando.** D12.1–D12.7, as novas D12.8–D12.11, e D5, D6 e D9 da Espec. 11 | desvia | Cada decisão com dono e data. Nenhuma onda começa com decisão que a bloqueia em aberto |
+| G27 | **Os [A CONFIRMAR] sem responsável:** ReceitaNet BX para procurador, serviços do Integra, eSocial para procurador, API do Portal Único, cronograma da reforma | desvia | Cada um com quem verifica e como: SERPRO, Receita, homologação da SEFAZ com certificado de teste |
+
+### A ordem que não quebra
+
+1. **Decisões e confirmações:** D12.1–D12.11 e os [A CONFIRMAR] (G26, G27).
+2. **Fundação sem cliente:** G1 (MAPA), G2, G3, G12, a arquitetura do leitor (G6), o roteador (G5) e o registro de leiautes (G7, G10).
+3. **Jurídico e segurança:** P3, G19, G20, G21. Nada é coletado antes.
+4. **Ondas 1 a 5** (§8), cada uma com taxonomia (G14), gerador sintético (G15), deduplicação (G9), saída no book (G4), critério de pronto (G16) e piloto (G24).
+5. **Captação** (§11): peças 1–3 junto com a onda 1, e peças 4–6 depois do passo 3, com G17, G18, G22 e G23.
+
+---
+
+## Decisões do dono (13/10/2026)
+
+10 de 11 decididas. A única aberta, D12.3, espera um número (cotação) e não bloqueia a etapa 1 nem a
+onda 1.
+
+| # | Decisão | Resposta | Consequência no plano |
+|---|---|---|---|
+| D12.1 | Oria procuradora eletrônica no e-CAC, com e-CNPJ próprio? | **Sim, só serviços de consulta** | Canal B fiscal existe. A procuração nunca inclui transmitir ou retificar (G21). Revogada ao fim do mandato (P4) |
+| D12.2 | Oria custodia o A1 do cliente? | **Não** | NF-e e CT-e recebidas vêm pelo ERP (canal C). Sai a Distribuição DF-e. O cofre guarda só o A1 da Oria (P2). K3 sai |
+| D12.3 | Contratar o Integra Contador? | ⚪ **Cotar antes** | Pedir ao SERPRO serviços e preço por consulta, estimar o custo por caso (G22) e decidir. Até lá, situação fiscal manual |
+| D12.4 = D6 da Espec. 11 | Agregador de Open Finance? | **Não. Só OFX/CNAB** | Extrato sempre por arquivo (canal C). O caixa de 13 semanas se atualiza quando o cliente manda o extrato, não sozinho. Sai K2 e o contrato |
+| D12.5 | Robô no ReceitaNet BX? | **Sim, com alerta de quebra** | Máquina dedicada (P5). Toda falha do robô aparece no painel e o pedido cai para o contador automaticamente (G17) |
+| D12.6 | Quem escreve o termo do kickoff? | **Jurídico interno da Oria** | A etapa 2 depende do jurídico interno. A engenharia entrega a lista do que é coletado, para quê, por quanto tempo e quem acessa |
+| D12.7 | Detalhe por empregado no eSocial? | **Agregado + detalhe só para rescisão e credores** | Totais mensais sempre. Detalhe por CPF só para o custo de rescisão e a classe I da lista de credores, apagado ao fim do mandato |
+| D12.8 | Quem vence quando SPED e enviado divergem? | **Os dois aparecem e o analista escolhe** | O book mostra enviado, fiscal e divergência. O modelo usa o enviado até a escolha, que fica registrada com autor e motivo. Nenhum número muda sozinho |
+| D12.9 | Onde roda o leitor? | **Serviço leitor próprio** (Node) | O n8n só avisa que o arquivo chegou. O leitor lê em fluxo, grava em lote (`COPY`) e devolve o resumo e as contagens. Um serviço a mais para hospedar (P5) |
+| D12.10 | Fontes fora do escopo? | **Entram: NFS-e municipal e contratos de câmbio. Ficam fora: Simples Nacional e declarações estaduais** | NFS-e municipal entra por demanda (o município do cliente), na onda 3. Câmbio entra na onda 5 (L3). **Efeito de deixar o Simples fora:** empresa do Simples fica sem fonte fiscal independente, e a receita é conferida só contra o que o cliente declarou. O sistema escreve essa nota no caso (regra 1) |
+| D12.11 | Tolerâncias | **Reusar a regra atual** | Bate se \|diferença\| ≤ max(R$ 100; 0,5% do valor), como `fn_reconciliar_*` na `0009`. Confronto por agregação ou período (Classe B: S3, L2, E1…) ganha a banda de materialidade da `04_RECONCILIACAO.md`, sempre com revisão humana na zona cinzenta |
+
+**Ainda abertas na Espec. 11 e tocando esta:** D5 (provedor comercial de processos) e D9 (Reclame
+Aqui e redes). Nenhuma bloqueia a F2T.
+
+---
+
+## Estado e encaixe
+
+| Item | Estado hoje | Encaixe |
+|---|---|---|
+| Tipos `SPED`, `EXTRATO_BANCARIO`, `AGING_AP`, `AGING_AR` | 🟢 existem, `sem_consumidor` (`0187`) | — |
+| Tipos para eSocial, CT-e/MDF-e, comex, CNAB cobrança/pagamento | 🔴 | migration de taxonomia, por onda |
+| CNAE na entidade | 🔴 | F1 |
+| Leitores (todas as famílias) | 🔴 | F2, em ondas (§8) |
+| Reconciliações S1–S7, E1–E5, L1–L6, C1–C6 | 🔴 | F2/F6; as que dependem de conta canônica esperam F4 |
+| Captação (peças 1–6) | 🔴 | 1–3 já; 4–5 após D12.1–D12.6 |

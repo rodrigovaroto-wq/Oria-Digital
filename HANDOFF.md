@@ -4,6 +4,49 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
+## ▶ SESSÃO 107 — COMECE AQUI (passagem escrita em 13/10/2026, fim da S106)
+
+A S106 foi **só planejamento**. Não houve migration (a mais nova continua `0205`), workflow, deploy nem
+medição em produção. Ela fecha num PR da branch `claude/zealous-hopper-14zc5i` para o `main`. Detalhe:
+topo do `ESTADO.md`, seção SESSÃO 106. A S105, abaixo, é histórico, mas o §0 dela segue sendo o último
+estado de produção medido.
+
+### 0. O que a S106 deixou
+
+| Peça | Onde | Estado |
+|---|---|---|
+| Especificação 12: fontes oficiais (SPED, eSocial, logística, CNAB, CNAE) e captação | `Arquitetura do Sistema/2 Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md` | §1–§11 escopo, §12 pré-requisitos, §13 as 27 lacunas G1–G27, decisões no fim |
+| Fase **F2T** | `ARQUITETURA_ALVO_E_ROADMAP.md`, logo depois da F2 | Etapas 0–2, ondas 1–5, captação 4–6, cada uma com dependência e critério de pronto |
+| Decisões D12.1–D12.11 | fim da Espec. 12 | **10 de 11 tomadas em 13/10.** Aberta só a D12.3 (Integra Contador, aguarda cotação do SERPRO) |
+| Mapa | `MAPA_DE_EXECUCAO.md`, linha B8 e §13 | Aponta para a F2T, sem repetir as etapas |
+| Documento para o time | https://claude.ai/code/artifact/c60787ba-0860-4718-a42a-a65f9436b447 | Espelha a Espec. 12 em linguagem simples (14 seções). **Ele não é a fonte: a Espec. 12 é** |
+| Ficha | `.claude/conhecimento/fichas/f2t-fontes-oficiais-e-captacao-espec12.md` | `buscar.mjs "F2T"` (ou SPED, eSocial, CNAB, OFX) já acha |
+
+### 1. Primeira coisa a fazer: conferir a F0 (NÃO CONFERIDO na S106)
+
+A etapa 1 da F2T depende só da F0 fechada, e a S106 não conferiu isso. Leia o aceite da F0 no roadmap
+(`grep -n "Aceite da F0" "Arquitetura do Sistema/3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md"`).
+Se ela estiver aberta, a F2T espera.
+
+### 2. Depois: etapa 1 da F2T (fundação sem cliente)
+
+Na ordem da tabela da F2T: roteador reconhecer a **família** (G5: hoje `detectarFormato` diz "texto com
+`|`" para um SPED e "xml" para uma NF-e), leitor Node fora do n8n gravando por `COPY` (D12.9, G6), registro
+de leiautes versionado (G7), regras de precedência (D12.8), duplicidade e versão vigente (G9), período
+(G12) e tolerância (D12.11). Pode rodar em paralelo com F1, F3 e F3b, desde que não toque o
+`SYSTEM_PROMPT` nem o schema da linha. Agentes: `n8n-workflow` (roteador), `migrations-postgres`
+(tabelas), `suites-invariantes` (cada reconciliação medida não-vazia).
+
+### 3. O que é do dono, não da engenharia
+
+- D12.3: pedir ao SERPRO a cotação do Integra Contador.
+- D12.6: o jurídico interno escreve o termo do kickoff. **Nenhuma coleta automática antes dele** (etapa 2).
+- Os [A CONFIRMAR] da G27, que ainda não têm responsável: ReceitaNet BX para procurador, serviços do
+  Integra, eSocial para procurador, API do Portal Único, cronograma da reforma tributária.
+- Três decisões foram contra a recomendação e têm efeito escrito na Espec. 12: sem Open Finance (D12.4 =
+  D6 da Espec. 11), robô no ReceitaNet BX (D12.5) e Simples Nacional fora (D12.10). Se a carteira de
+  mandatos for de muitas empresas do Simples, rever a D12.10.
+
 ## ▶ SESSÃO 105 — COMECE AQUI (passagem escrita em 05/10/2026, fim da S104)
 
 A S104 fechou em dois PRs, os dois **mergeados no `main`**: [#248](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/248)

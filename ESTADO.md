@@ -1,5 +1,45 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 106 (09–13/10/2026) — Especificação 12 e fase F2T (planejamento, nada implementado)
+
+> **Nesta rodada não houve migration, workflow, deploy nem medição em produção.** Tudo é documento. A
+> migration mais nova continua **`0205_os_campos_da_apresentacao.sql`** (sessão 105b, abaixo). **O que o
+> dono faz à mão: nada a aplicar.** Os números de produção abaixo são os da 105b, **NÃO CONFERIDOS** nesta rodada.
+
+**Entregue (5 commits em `claude/zealous-hopper-14zc5i`, base `main` em `8ae5c35`):**
+- `Arquitetura do Sistema/2 Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md` (novo, 517 linhas): fontes
+  oficiais (SPED em todos os módulos, eSocial, CT-e, MDF-e, B/L, AWB, DU-E, DI/DUIMP, CE-Mercante, CNAB
+  240/400/150, CNAE); 24 reconciliações S1-S7, E1-E5, L1-L6, C1-C6; captação em três canais; pré-requisitos
+  (§12); pente fino (§13) com 27 lacunas G1-G27.
+- Fase **F2T** em `ARQUITETURA_ALVO_E_ROADMAP.md` (etapas 0-2, ondas 1-5, captação 4-6). O
+  `MAPA_DE_EXECUCAO.md` ganhou a linha B8 e a §13, que apontam para a F2T.
+- Decisões **D12.1-D12.11** (13/10/2026): **10 de 11 tomadas.** Três mudam o plano: D12.4 = D6 da Espec. 11
+  (sem Open Finance; extrato só OFX/CNAB), D12.5 (robô no ReceitaNet BX com alerta de quebra) e D12.10
+  (Simples Nacional e declarações estaduais fora).
+
+**Medido nesta rodada (no repositório, não em produção):**
+- `SPED`, `EXTRATO_BANCARIO`, `AGING_AP` e `AGING_AR` são `sem_consumidor` na `0187` (medido em 09/10).
+- `buscar.mjs` dá NADA ENCONTRADO para `esocial`, `cnae`, `ofx` e `cnab` (853 nós).
+- `detectarFormato` (`N8N/lib/formato.mjs`) reconhece pelos bytes: PDF, imagem, xlsx, XML (`<?xml`),
+  texto delimitado (`;` `,` tab `|`), HTML e zip. Zip que não é planilha vira `desconhecido`, então zip
+  com vários arquivos não abre. Não identifica família fiscal (SPED, NF-e, eSocial, CNAB, OFX).
+- **Correção feita na mesma rodada:** o commit `c0d54eb` dizia que o roteador reconhece "texto e zip SÓ
+  como xlsx/docx", o que estava errado. A G5 da Espec. 12 foi reescrita com a medição acima: o roteador
+  reconhece o formato, mas não a família fiscal. A mensagem do `c0d54eb` continua errada no histórico.
+
+**Em aberto:**
+- **D12.3** (Integra Contador): cotar antes, com o SERPRO (serviços e preço por consulta, G22). Não bloqueia
+  a etapa 1 nem a onda 1.
+- **[A CONFIRMAR] sem responsável (G27):** ReceitaNet BX para procurador, serviços do Integra, eSocial para
+  procurador, API do Portal Único com certificado, e cronograma da reforma tributária (G8).
+- **D5** (provedor de processos) e **D9** (Reclame Aqui e redes sociais) da Espec. 11: em aberto.
+- **NÃO CONFERIDO:** o status atual da F0, de que a etapa 1 da F2T depende. O mapa não traz esse status
+  no trecho lido.
+
+**Próximo passo:** a etapa 1 da F2T (fundação sem cliente: roteador, leitor fora do n8n, leiautes) pode
+começar, desde que a F0 esteja fechada (ver NÃO CONFERIDO). A única decisão aberta não a bloqueia. O
+jurídico interno escreve o termo (D12.6, etapa 2). Pedir a cotação ao SERPRO (D12.3).
+
 ## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
 
 > **Migration mais nova: `0205_os_campos_da_apresentacao.sql`** (os campos "[a preencher]" da apresentação de crédito, #253; aplicar DEPOIS da 0204). Antes dela, **`0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
