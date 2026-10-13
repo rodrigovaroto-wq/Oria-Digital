@@ -4,12 +4,64 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-> **▶ Ponto de entrada atual: SESSÃO 107 no topo do `ESTADO.md`** (13/10/2026).
-> - A F2T etapa 1 está feita: o leitor de arquivos oficiais e a migration `0206`, escrita e **não aplicada em produção**.
-> - O passo seguinte é ligar o leitor ao n8n. O caminho prático está na descrição do PR da S107.
-> - O bloco abaixo é a passagem da S106, e o passo 2 dele já foi feito.
+## ▶ SESSÃO 108 — COMECE AQUI (passagem escrita em 13/10/2026, fim da S107)
 
-## ▶ SESSÃO 107 — COMECE AQUI (passagem escrita em 13/10/2026, fim da S106)
+A S107 fez a **F2T etapa 1**: o leitor de arquivos oficiais e a migration `0206`. Tudo está no PR
+[#257](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/257). O detalhe e os números estão na
+SESSÃO 107 do `ESTADO.md` e na descrição do PR. Não precisa reler a S107 inteira.
+
+### 0. Primeira coisa: o PR #257 e a `0206`
+
+1. **O PR #257 está mergeado?** Se não está, conferir o CI e o gate do SonarCloud no head. Na última passada o Sonar
+   tinha reprovado por Reliability C e Security B; as causas foram corrigidas (commit "o gate do SonarCloud"), mas a
+   nova análise não tinha voltado. Os avisos de complexidade (S3776), ternário (S3358) e modernização (S77xx) ficam,
+   pela política do `SONARCLOUD.md`.
+2. **A `0206` NÃO está aplicada em produção.** Depois do merge, o dono aplica a 0206 (depois da 0205) e confere:
+   `select chave from fn_instalacao_conferir() where migration = '0206' and not presente;` (zero linhas).
+   Antes disso, nada do leitor grava em produção, e é assim que deve ser.
+
+### 1. O que existe e onde
+
+| Peça | Onde | Estado |
+|---|---|---|
+| Leitor | `Leitor/lib/{familia,envelope,leiautes,campos,zip}.mjs` | Reconhece SPED (ECD, ECF, EFD ICMS/IPI, Contribuições), NF-e, CT-e, MDF-e, NFS-e, eSocial, Reinf, CNAB 240/400/150, OFX e zip. Lê o envelope em fluxo e confere a contagem declarada |
+| CLI | `node Leitor/ler.mjs [--caso <uuid>] <arquivos>` | Com `--caso` e `LEITOR_PSQL`, grava em `arquivo_oficial` e registra o zip como contêiner. Sai com 1 se algo não ficou `lido` |
+| Banco | `0206`: `arquivo_oficial`, `caso.trilha_transacional` (default false), `fn_registrar_arquivo_oficial` | Recusa a trilha desligada; idempotente por hash; trata a releitura; aplica a versão vigente |
+| Testes | `Leitor/test/leitor.test.mjs` (CI, job n8n-e-derivados) e `Supabase/test/arquivo_oficial.test.sql` | 32 testes com 26 guardas medidos não-vazios; 65 asserts |
+| Gerador sintético | `Dados de Teste/fontes-oficiais/gerar.mjs` | Uma função por família, com opções para quebrar o arquivo |
+| Ficha | `buscar.mjs "F2T"` | As armadilhas que a revisão achou (SCP, `\r` solto, contagem vazia, limites da vigência) |
+
+### 2. O próximo passo: ligar o leitor ao sistema (o resto da etapa 1)
+
+1. **Hospedar o leitor (P5)** é decisão do dono, e a pergunta está em aberto.
+   - Opções: o mesmo PikaPods do n8n ou outro servidor pequeno.
+   - O CLI vira serviço HTTP com uma rota: recebe o arquivo (ou o caminho no Storage) e o caso, e devolve os envelopes.
+2. **A rota no n8n**, no nó "Preparar Conteúdo" (`N8N/build-workflow.mjs`, perto de `detectarFormato`):
+   - **família oficial E `caso.trilha_transacional` ligada** → chama o leitor e NÃO manda para a IA;
+   - **caso contrário** → o caminho atual, sem mudar uma linha.
+   - O `Leitor/lib/familia.mjs` é o mesmo código que entra no nó. Ele precisa ser serializável por `toString()`, como o `formato.mjs`.
+   - Depois: gerar os workflows, `git diff --exit-code` e republicar.
+3. **Envio direto ao Storage** (peça 2 da Espec. 12 §11): a borda da Vercel recusa ~4,5 MB, e um zip de XML passa disso.
+
+### 3. Depois disso: a onda 1
+
+Ler o conteúdo da ECD (`I155` e `J100`/`J150`) e da ECF, e fazer a reconciliação S1 (DRE enviada × ECD × ECF). A regra
+de precedência (D12.8) vira código junto com a S1.
+
+**[A CONFIRMAR] antes da onda 1:**
+- conferir as posições e versões de `Leitor/lib/leiautes.mjs` contra o Guia Prático;
+- o aceite é com **3 ECDs reais**, pedidas a um cliente.
+
+### 4. O que é do dono
+
+- Aplicar a `0206`.
+- Decidir onde hospedar o leitor (P5).
+- D12.3: pedir a cotação do Integra Contador ao SERPRO.
+- Pedir ao jurídico interno o termo do kickoff (D12.6, etapa 2).
+- Conseguir 3 ECDs reais para o aceite da onda 1.
+- **Repositório público.** O dono abriu o repositório como público em 13/10 para o Actions rodar, e ele traz nomes e números de clientes reais no `ESTADO.md` e no `HANDOFF.md`. O dono disse que vai fechar. Conferir.
+
+## SESSÃO 107 — passagem da S106 (histórico; o passo 2 dela foi feito na S107)
 
 A S106 foi **só planejamento**. Não houve migration (a mais nova continua `0205`), workflow, deploy nem
 medição em produção. Ela fecha num PR da branch `claude/zealous-hopper-14zc5i` para o `main`. Detalhe:

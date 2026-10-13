@@ -27,6 +27,11 @@
 - Os testes usam arquivos sintéticos.
 - A prova é o aceite com 3 ECDs reais.
 
+**PR #257** aberto em 13/10/2026.
+- CI do GitHub: rodando na abertura do PR.
+- SonarCloud: reprovou por Reliability C e Security B, e as duas causas foram corrigidas.
+- A ficha `f2t-fontes-oficiais-e-captacao-espec12` foi atualizada, com prova em `Leitor/test/*.test.mjs` e âncora em `detectarFamilia`.
+
 **Próximo passo — ligar ao sistema:**
 1. Decidir onde o leitor roda (P5).
 2. Acrescentar uma rota de leitura no n8n: quando a família for oficial e a trilha estiver ligada no caso, o arquivo vai ao leitor, e não à IA.
