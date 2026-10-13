@@ -64,15 +64,19 @@ export const SPED = {
 // XML: a versão vem do atributo `versao` do elemento de informação (NF-e, CT-e,
 // MDF-e, NFS-e) ou do NAMESPACE do evento (eSocial e Reinf versionam o schema no
 // próprio namespace, ex.: .../evtRemun/v_S_01_02_00).
+// Os namespaces abaixo são IDENTIFICADORES fixados pelos schemas oficiais, não endereços
+// que se acessam. Eles são `http://` por definição: com `https://`, nenhum XML real seria
+// reconhecido. Por isso cada linha leva NOSONAR (S5332), com este motivo.
+//
 // Os eventos (cancelamento, carta de correção, manifestação) têm schema e versão
 // PRÓPRIOS, diferentes da versão do documento: `versoesEvento`.
 export const XML = {
-  nfe:  { namespace: 'http://www.portalfiscal.inf.br/nfe',  elemento: 'infNFe', prefixoId: 'NFe',  versoes: ['4.00'], versoesEvento: ['1.00'] },
-  cte:  { namespace: 'http://www.portalfiscal.inf.br/cte',  elemento: 'infCte', prefixoId: 'CTe',  versoes: ['4.00'], versoesEvento: ['4.00'] },
-  mdfe: { namespace: 'http://www.portalfiscal.inf.br/mdfe', elemento: 'infMDFe', prefixoId: 'MDFe', versoes: ['3.00'], versoesEvento: ['3.00'] },
-  nfse: { namespace: 'http://www.sped.fazenda.gov.br/nfse', elemento: 'infNFSe', prefixoId: 'NFS',  versoes: ['1.00', '1.01'] },
-  esocial: { raizNamespace: 'http://www.esocial.gov.br/schema/evt/', versoes: ['v_S_01_02_00', 'v_S_01_03_00'] },
-  reinf:   { raizNamespace: 'http://www.reinf.esocial.gov.br/schemas/', versoes: ['v2_01_02'] },
+  nfe:  { namespace: 'http://www.portalfiscal.inf.br/nfe',  elemento: 'infNFe', prefixoId: 'NFe',  versoes: ['4.00'], versoesEvento: ['1.00'] }, // NOSONAR(S5332): namespace do schema oficial, não é conexão
+  cte:  { namespace: 'http://www.portalfiscal.inf.br/cte',  elemento: 'infCte', prefixoId: 'CTe',  versoes: ['4.00'], versoesEvento: ['4.00'] }, // NOSONAR(S5332): namespace do schema oficial, não é conexão
+  mdfe: { namespace: 'http://www.portalfiscal.inf.br/mdfe', elemento: 'infMDFe', prefixoId: 'MDFe', versoes: ['3.00'], versoesEvento: ['3.00'] }, // NOSONAR(S5332): namespace do schema oficial, não é conexão
+  nfse: { namespace: 'http://www.sped.fazenda.gov.br/nfse', elemento: 'infNFSe', prefixoId: 'NFS',  versoes: ['1.00', '1.01'] }, // NOSONAR(S5332): namespace do schema oficial, não é conexão
+  esocial: { raizNamespace: 'http://www.esocial.gov.br/schema/evt/', versoes: ['v_S_01_02_00', 'v_S_01_03_00'] }, // NOSONAR(S5332): namespace do schema oficial, não é conexão
+  reinf:   { raizNamespace: 'http://www.reinf.esocial.gov.br/schemas/', versoes: ['v2_01_02'] }, // NOSONAR(S5332): namespace do schema oficial, não é conexão
 };
 
 // CNAB: o tamanho da linha É a versão do leiaute (240, 400 ou 150 posições), e o

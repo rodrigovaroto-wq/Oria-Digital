@@ -52,7 +52,9 @@ function registrar(env) {
   const doc = documento ? `'${documento}'::uuid` : 'null';
   const sql = `select fn_registrar_arquivo_oficial('${caso}'::uuid, ${doc}, $${marca}$${json}$${marca}$::jsonb);`;
   if (!/^[0-9a-f-]{36}$/i.test(caso) || (documento && !/^[0-9a-f-]{36}$/i.test(documento))) throw new Error('--caso e --documento são uuids');
-  const r = spawnSync('sh', ['-c', `${psql} -X -q -A -t -v ON_ERROR_STOP=1 -f -`], { input: sql, encoding: 'utf8' });
+  // /bin/sh pelo caminho absoluto: o executável não depende do PATH de quem chama (S4036).
+  // O LEITOR_PSQL é um comando de shell DE PROPÓSITO, como o CONFERIR_PSQL dos outros scripts.
+  const r = spawnSync('/bin/sh', ['-c', `${psql} -X -q -A -t -v ON_ERROR_STOP=1 -f -`], { input: sql, encoding: 'utf8' });
   if (r.status !== 0) throw new Error((r.stderr || r.stdout).trim());
   // A função devolve o que FICOU gravado (id, status, vigente). O status gravado
   // tem de ser o que este leitor leu: um reenvio que o banco descartasse não pode

@@ -10,6 +10,11 @@
 // Determinísticos: mesma entrada, mesmos bytes. As opções `quebrar` produzem os
 // defeitos que o leitor tem de acusar, e cada uma corresponde a um teste.
 
+import { XML } from '../../Leitor/lib/leiautes.mjs';
+
+// `quebrar` é sempre string ('' = arquivo íntegro): com `null` como padrão o Sonar
+// conclui que `quebrar === 'truncar'` é sempre falso (S3403) e reprova o gate.
+
 const CNPJ = '11222333000181';
 // Acentuada de propósito: SPED e CNAB são latin1, e o teste confere que o nome
 // chega inteiro (decodificado como UTF-8, "AÇÚCAR" vira "A��CAR").
@@ -22,7 +27,7 @@ const num = (v, n) => pad(v, n, '0', true);
  * SPED sintético. subtipo: ECD | ECF | EFD_ICMS_IPI | EFD_CONTRIBUICOES.
  * opções: versao, retificadora, linhasDeMovimento, quebrar: 'truncar' | 'divergir_9999' | 'divergir_9900'
  */
-export function gerarSped(subtipo, { versao, retificadora = false, linhasDeMovimento = 10, quebrar = null, ini = '01012025', fim = '31122025', cnpj = CNPJ, scp = '', indEsc = 'G' } = {}) {
+export function gerarSped(subtipo, { versao, retificadora = false, linhasDeMovimento = 10, quebrar = '', ini = '01012025', fim = '31122025', cnpj = CNPJ, scp = '', indEsc = 'G' } = {}) {
   const l = [];
   // Campo a campo, na ordem do Guia Prático, para a posição de cada um ser legível.
   const linha = (campos) => '|' + campos.join('|') + '|';
@@ -49,7 +54,7 @@ export function gerarSped(subtipo, { versao, retificadora = false, linhasDeMovim
 }
 
 /** CNAB 240 sintético (cobrança: segmentos P/Q; extrato: E). quebrar: 'truncar' | 'divergir' | 'linha_curta' */
-export function gerarCnab240({ servico = 'cobranca', titulos = 3, quebrar = null, inscricaoCpf = false } = {}) {
+export function gerarCnab240({ servico = 'cobranca', titulos = 3, quebrar = '', inscricaoCpf = false } = {}) {
   const banco = '341';
   const linhas = [];
   let h = num(banco, 3) + '0000' + '0' + pad('', 9) + (inscricaoCpf ? '1' : '2') + num(inscricaoCpf ? '12345678909' : CNPJ, 14) + pad('', 20) + pad('', 20) + pad(NOME, 30) + pad('BANCO SINTETICO', 30) + pad('', 10) + '2' + '13102025' + '120000';
@@ -67,7 +72,7 @@ export function gerarCnab240({ servico = 'cobranca', titulos = 3, quebrar = null
 }
 
 /** CNAB 400 sintético (retorno de cobrança). quebrar: 'buraco_na_sequencia' | 'truncar' */
-export function gerarCnab400({ titulos = 3, quebrar = null } = {}) {
+export function gerarCnab400({ titulos = 3, quebrar = '' } = {}) {
   const linhas = [];
   const linha = (corpo, seq) => pad(corpo, 394) + num(seq, 6);
   linhas.push(linha('02RETORNO01COBRANCA       ' + pad(NOME, 30) + pad('', 20) + '341' + pad('BANCO SINTETICO', 15), 1));
@@ -79,7 +84,7 @@ export function gerarCnab400({ titulos = 3, quebrar = null } = {}) {
 }
 
 /** CNAB 150 sintético (débito automático). */
-export function gerarCnab150({ debitos = 3, quebrar = null } = {}) {
+export function gerarCnab150({ debitos = 3, quebrar = '' } = {}) {
   const linhas = [pad('A1' + pad('CONVENIO', 20) + pad(NOME, 20) + '341', 150)];
   for (let i = 0; i < debitos; i++) linhas.push(pad('E' + pad('CLIENTE ' + i, 25), 150));
   const total = linhas.length + 1;
@@ -88,7 +93,7 @@ export function gerarCnab150({ debitos = 3, quebrar = null } = {}) {
 }
 
 /** OFX sintético: 1.x (SGML, latin1) ou 2.x (XML). quebrar: 'truncar' */
-export function gerarOfx({ versao = '102', transacoes = 4, quebrar = null, cartao = false, semDatas = false } = {}) {
+export function gerarOfx({ versao = '102', transacoes = 4, quebrar = '', cartao = false, semDatas = false } = {}) {
   const trns = Array.from({ length: transacoes }, (_, i) => `<STMTTRN><TRNTYPE>DEBIT<DTPOSTED>2025010${(i % 9) + 1}<TRNAMT>-1${i}.50<FITID>SINT${i}<MEMO>PAGAMENTO FICTÍCIO ${i}</STMTTRN>`).join('\n');
   const corpo = `<OFX>\n<BANKMSGSRSV1><STMTTRNRS><STMTRS><CURDEF>BRL\n${cartao ? '<CCACCTFROM><ACCTID>4111-CARTAO</CCACCTFROM>' : '<BANKACCTFROM><BANKID>0341<ACCTID>12345-6<ACCTTYPE>CHECKING</BANKACCTFROM>'}\n<BANKTRANLIST>${semDatas ? '' : '<DTSTART>20250101<DTEND>20250131'}\n${trns}\n</BANKTRANLIST><LEDGERBAL><BALAMT>676.00<DTASOF>20250131</LEDGERBAL>\n</STMTRS></STMTTRNRS></BANKMSGSRSV1>\n</OFX>\n`;
   const cab = versao.startsWith('2')
@@ -102,8 +107,9 @@ export function gerarOfx({ versao = '102', transacoes = 4, quebrar = null, carta
 const CHAVE = '35251011222333000181550010000000011000000010';
 
 /** NF-e/CT-e/MDF-e/NFS-e sintéticos. tipo: nfe | cte | mdfe | nfse | evento_cancelamento. quebrar: 'truncar' */
-export function gerarXmlFiscal(tipo, { versao, quebrar = null, emitenteCpf = false, semId = false } = {}) {
-  const ns = { nfe: 'http://www.portalfiscal.inf.br/nfe', cte: 'http://www.portalfiscal.inf.br/cte', mdfe: 'http://www.portalfiscal.inf.br/mdfe', nfse: 'http://www.sped.fazenda.gov.br/nfse' };
+export function gerarXmlFiscal(tipo, { versao, quebrar = '', emitenteCpf = false, semId = false } = {}) {
+  // Os namespaces vêm do MESMO registro que o leitor usa (um lugar só para eles).
+  const ns = { nfe: XML.nfe.namespace, cte: XML.cte.namespace, mdfe: XML.mdfe.namespace, nfse: XML.nfse.namespace };
   let x;
   if (tipo === 'nfe') x = `<?xml version="1.0" encoding="UTF-8"?><nfeProc xmlns="${ns.nfe}" versao="4.00"><NFe><infNFe versao="${versao ?? '4.00'}"${semId ? '' : ` Id="NFe${CHAVE}"`}><ide><dhEmi>2025-10-01T10:00:00-03:00</dhEmi></ide><emit>${emitenteCpf ? '<CPF>12345678909</CPF>' : `<CNPJ>${CNPJ}</CNPJ>`}<xNome>${NOME}</xNome></emit><dest><CNPJ>99888777000166</CNPJ></dest></infNFe></NFe><protNFe><infProt><cStat>100</cStat></infProt></protNFe></nfeProc>`;
   if (tipo === 'evento_cancelamento') x = `<?xml version="1.0" encoding="UTF-8"?><procEventoNFe xmlns="${ns.nfe}" versao="1.00"><evento versao="1.00"><infEvento Id="ID110111${CHAVE}01"><CNPJ>${CNPJ}</CNPJ><chNFe>${CHAVE}</chNFe><tpEvento>110111</tpEvento><nSeqEvento>1</nSeqEvento></infEvento></evento></procEventoNFe>`;
@@ -115,9 +121,9 @@ export function gerarXmlFiscal(tipo, { versao, quebrar = null, emitenteCpf = fal
 }
 
 /** Evento eSocial ou Reinf sintético. */
-export function gerarEvento(familia, { evento = familia === 'esocial' ? 'evtRemun' : 'evtServTom', versao, quebrar = null } = {}) {
+export function gerarEvento(familia, { evento = familia === 'esocial' ? 'evtRemun' : 'evtServTom', versao, quebrar = '' } = {}) {
   const v = versao ?? (familia === 'esocial' ? 'v_S_01_03_00' : 'v2_01_02');
-  const ns = familia === 'esocial' ? `http://www.esocial.gov.br/schema/evt/${evento}/${v}` : `http://www.reinf.esocial.gov.br/schemas/${evento}/${v}`;
+  const ns = `${XML[familia].raizNamespace}${evento}/${v}`;
   const ide = familia === 'esocial' ? `<ideEmpregador><tpInsc>1</tpInsc><nrInsc>${CNPJ.slice(0, 8)}</nrInsc></ideEmpregador>` : `<ideContri><tpInsc>1</tpInsc><nrInsc>${CNPJ}</nrInsc></ideContri>`;
   const raiz = familia === 'esocial' ? 'eSocial' : 'Reinf';
   let x = `<?xml version="1.0" encoding="UTF-8"?><${raiz} xmlns="${ns}"><${evento} Id="ID1${CNPJ}20251013120000000${familia === 'esocial' ? '01' : '02'}"><ideEvento><perApur>2025-09</perApur></ideEvento>${ide}</${evento}></${raiz}>`;

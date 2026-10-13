@@ -68,7 +68,11 @@ function leitorSped(env) {
       // Depois do 9999 só pode vir o bloco da assinatura digital (ECD assinada),
       // que não é registro. Um NOVO |0000| ali é um segundo SPED concatenado, e
       // aceitar o primeiro como "lido" esconderia o segundo inteiro.
-      if (fechado) { if (linha.trim() !== '') aposFim++; if (linha.startsWith('|0000|')) outroSped = true; return; }
+      if (fechado) {
+        if (linha.trim() !== '') aposFim++;
+        if (linha.startsWith('|0000|')) outroSped = true;
+        return;
+      }
       if (linha.trim() === '') return;
       total++;
       const c = linha.split('|');
@@ -309,8 +313,12 @@ export function lerEnvelopeDeBuffer(buf) {
   const env = envelopeBase(fam.familia, fam.subtipo, hash);
   const texto = buf.toString(codificacao(fam.familia, buf.subarray(0, 512).toString('latin1')));
   const leitor = leitorDeLinhas(env);
-  if (leitor) { for (const l of texto.split(QUEBRA)) leitor.linha(l); leitor.fim(); }
-  else lerXml(env, texto);
+  if (leitor) {
+    for (const l of texto.split(QUEBRA)) leitor.linha(l);
+    leitor.fim();
+  } else {
+    lerXml(env, texto);
+  }
   return env;
 }
 
