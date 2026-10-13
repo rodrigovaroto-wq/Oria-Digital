@@ -539,6 +539,8 @@ etapas em dois lugares é o defeito que este mapa já descreve. Elas moram em:
 | Ondas 1–5 | as 24 reconciliações (S, E, L, C) | engenharia, depois da F1 (e F4/F6 onde a tabela diz) |
 | Captação 4–6 | o caso que se abastece sozinho | engenharia, depois da etapa 2 |
 
+**Estado da etapa 1 em 13/10/2026 (sessão 107):** FEITA no repositório (leitor + `0206`, PR #257). Faltam hospedar o leitor e a rota no n8n. A `0206` não está aplicada em produção.
+
 **Estado da etapa 0 em 13/10/2026:** 10 de 11 decisões tomadas. Falta a D12.3 (cotação do Integra
 Contador com o SERPRO), que não bloqueia a etapa 1 nem a onda 1. Os [A CONFIRMAR] sem responsável estão na G27.
 

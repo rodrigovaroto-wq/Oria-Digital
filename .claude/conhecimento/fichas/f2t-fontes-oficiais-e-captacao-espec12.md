@@ -5,8 +5,14 @@ toca:
   - Arquitetura do Sistema/2 Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md
   - Arquitetura do Sistema/3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md
   - N8N/lib/formato.mjs
-ancora: N8N/lib/formato.mjs#detectarFormato
-ancora_sha: 339d8072ad42
+  - Leitor/lib/familia.mjs
+  - Leitor/lib/envelope.mjs
+  - Leitor/lib/zip.mjs
+  - Leitor/ler.mjs
+  - Supabase/migrations/0206_o_arquivo_oficial_lido_e_contado.sql
+prova: Leitor/test/*.test.mjs
+ancora: Leitor/lib/familia.mjs#detectarFamilia
+ancora_sha: b57464b6cd39
 substitui: []
 ---
 
@@ -15,9 +21,26 @@ substitui: []
 Termos de busca: SPED, EFD, ECD, ECF, Reinf, eSocial, CT-e, MDF-e, CNAB, OFX, CNAE, F2T, captação,
 NF-e, NFS-e, Espec. 12.
 
-**Estado (13/10/2026): só planejamento.** Não há migration, workflow nem teste desta fase, e nada foi
-medido em produção. Por isso esta ficha não tem `prova`: não existe suíte que reprove a violação, e
-inventar uma seria a falsa afirmação que o `INSTRUCOES.md` proíbe.
+**Estado (13/10/2026, sessão 107): etapa 1 FEITA, sem ligação ao n8n.**
+- O leitor (`Leitor/`) reconhece a família e lê o envelope em fluxo, conferindo a contagem declarada.
+- O CLI (`Leitor/ler.mjs`) grava em `arquivo_oficial` (migration `0206`, escrita e **não aplicada em produção**).
+- Prova: `Leitor/test/leitor.test.mjs` (32 testes, 26 guardas medidos não-vazios) e `Supabase/test/arquivo_oficial.test.sql` (65 asserts).
+- O n8n ainda manda SPED e NF-e para a IA (nó Preparar Conteúdo, `buf.toString('utf-8')`). Ligar o leitor ao n8n é o próximo passo.
+
+## Armadilhas que a revisão independente achou (e que voltam em toda onda)
+
+- **Identidade de escrituração não é CNPJ + período.** A ECD da SCP traz no 0000 o CNPJ do sócio ostensivo
+  (COD_SCP no índice 18; na ECF, 15). O livro auxiliar (I010.IND_ESC A/Z) convive com o principal. Os dois
+  entram na chave natural, senão um substitui o outro na vigência.
+- **Memória e fluxo têm de quebrar linha igual** (`QUEBRA = /\r\n|\n|\r/`): o `readline` quebra em `\r`
+  solto e `split('\n')` não. Toda entrada de zip passa pelo caminho em memória.
+- **Contagem vazia é null, nunca 0** (`inteiro()` em `campos.mjs`): `Number('')` dá 0.
+- **A vigência cobre só SPED retificado e reenvio.** NF-e cancelada (evento com chave própria),
+  S-1200 retificador/S-3000 (Id próprio) e retorno CNAB duplicado (hash diferente) ficam para as ondas 3, 4 e 2.
+- **Releitura:** o mesmo hash com status não lido ou `leitor_versao` diferente ATUALIZA a linha. Ao mudar
+  um leiaute, suba `LEITOR_VERSAO` e releia.
+- **Sonar:** os namespaces `http://` dos schemas oficiais levam NOSONAR(S5332). Parâmetro de opção com
+  `null` como padrão vira "bug" S3403; use `''`.
 
 ## O que a F2T é, e por que não é a F2
 
@@ -36,9 +59,8 @@ no roadmap, fase F2T.
   `desconhecido` ("o pipeline não extrai este formato"), então zip com vários arquivos não abre.
   **O roteador reconhece a FORMA do arquivo, não a família fiscal**: SPED, NF-e, eSocial, CNAB e OFX não
   são identificados. Essa identificação é o que a F2T acrescenta.
-- Correção de texto pendente: o commit `c0d54eb` diz que o roteador reconhece "texto e zip SÓ como
-  xlsx/docx". Isso está errado (a medição acima é a correta). A G5 da Espec. 12 deve ser corrigida na
-  próxima rodada da especificação.
+- A mensagem do commit `c0d54eb` diz que o roteador reconhece "texto e zip SÓ como xlsx/docx". Está
+  errada: a medição acima é a correta. A G5 da Espec. 12 já foi corrigida (sessão 106).
 
 ## Decisões do dono (13/10/2026) que não se desfazem sem nova decisão
 
