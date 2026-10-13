@@ -170,3 +170,23 @@ O que custa:
    - saldo inicial + débitos − créditos = saldo final em cada `I155`.
 3. **O arquivo é sintético** (regra 4): o tamanho do resumo de uma ECD real depende do número de
    contas, e não do número de linhas.
+
+### O leitor do repositório no navegador (não o protótipo)
+
+O número acima (22,9 s, 59 MB) é do protótipo `navegador-leitor.js`. Depois disso, o próprio
+`Leitor/lib/envelope.mjs` passou a rodar no navegador (`lerEnvelopeDeFluxo` + `resumo.mjs`).
+`navegador-igual-ao-cli.mjs` serve o repositório por HTTP, importa o módulo num Chromium real,
+lê o arquivo com `File.stream()` e compara o resultado com o do CLI (`arquivo.mjs`):
+
+| Arquivo | Igual ao CLI | Hash = `sha256sum` | Tempo no navegador | Pico de heap JS | Resumo |
+|---|---|---|---|---|---|
+| ECD realista de 10.000.180 linhas (929 MB), contas de 16 caracteres | sim | sim | 37,5 s | **61 MB** | 18.000 grupos, 26.196 linhas na íntegra, 4,7 MB |
+| ECD com bytes 0x80–0x9F no nome (o "–" e o "€" do cp1252) | sim | sim | 0,07 s | — | — |
+
+As contas têm 16 caracteres de propósito. A partir de 13, o V8 guarda um recorte de string como
+referência à fatia de ~64 KB de onde ele veio. Por isso o `resumo.mjs` copia a conta e a linha
+que guarda, e o pico ficou igual ao do protótipo.
+
+O caminho de volta do cp1252 só roda no navegador, e por isso foi checado nos dois sentidos.
+Com `desfazerCp1252` desligado, o mesmo arquivo saiu "AÇÚCAR – €" no navegador, diferente do CLI,
+e o script terminou com 1.

@@ -12,7 +12,9 @@ const w = async (l) => {
   buf.push(l);
   if (buf.length === 10000) { const ok = out.write(buf.join('\r\n') + '\r\n'); buf = []; if (!ok) await new Promise(r => out.once('drain', r)); }
 };
-const conta = (i) => `1.${1 + (i % 4)}.${String(1 + (i % 9)).padStart(2, '0')}.${String(i).padStart(5, '0')}`;
+// 16 caracteres, como num plano real (`1.01.01.01.00001`): a partir de 13 o V8 guarda um
+// recorte de string como referência à fatia inteira, e é aí que a memória pode crescer.
+const conta = (i) => `1.0${1 + (i % 4)}.${String(1 + (i % 9)).padStart(2, '0')}.01.${String(i).padStart(5, '0')}`;
 const v = (x) => (x / 100).toFixed(2).replace('.', ',');
 const dd = (d, m) => `${String(d).padStart(2, '0')}${String(m).padStart(2, '0')}2025`;
 await w('|0000|LECD|01012025|31122025|AÇÚCAR SINTÉTICO LTDA (fictícia)|11222333000181|SP||3550308||0|0|0|0||0|0||N|N|0|0||');

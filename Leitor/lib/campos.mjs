@@ -68,3 +68,51 @@ export function cnpj(texto) {
   const t = String(texto ?? '').replace(/\D/g, '');
   return t.length === 14 ? t : null;
 }
+
+/**
+ * Bytes → texto em ISO-8859-1 (cada byte vira o caractere de mesmo código), igual no Node e no navegador.
+ *
+ * Por que não só `TextDecoder('latin1')`: pelo padrão WHATWG, "latin1" é apelido de
+ * windows-1252, e o navegador decodifica 0x80–0x9F como cp1252 (0x96 vira "–"),
+ * enquanto o Node devolve U+0096 para o mesmo byte. Medido em 13/10/2026: o mesmo
+ * SPED daria textos diferentes no CLI e no navegador. O Guia Prático do SPED fixa
+ * ISO-8859-1, que é o que o `Buffer.toString('latin1')` do CLI sempre fez.
+ *
+ * A volta é exata: os 27 caracteres próprios do cp1252 (todos acima de U+00FF) só
+ * aparecem no texto se vieram de um byte 0x80–0x9F, porque latin1 nunca produz
+ * caractere acima de U+00FF. Decodificar byte a byte em JS daria o mesmo resultado
+ * a 2,1 s por 100 MB. O `TextDecoder` nativo faz 100 MB em 33 ms se receber fatias de
+ * 64 KB, e em 1,6 s se receber os 100 MB de uma vez (medido no Node 22). Por isso a
+ * decodificação vai em fatias.
+ */
+const CP1252 = '\u20AC\u0081\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u008D\u017D\u008F'
+  + '\u0090\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u009D\u017E\u0178';
+const DE_CP1252 = new Map();
+for (let i = 0; i < 32; i++) if (CP1252.charCodeAt(i) > 0xff) DE_CP1252.set(CP1252[i], String.fromCharCode(0x80 + i));
+const RE_CP1252 = new RegExp(`[${[...DE_CP1252.keys()].join('')}]`, 'g');
+const DECODIFICADOR = new TextDecoder('latin1');
+export function latin1(bytes, ini = 0, fim = bytes.length) {
+  let s = '';
+  for (let i = ini; i < fim; i += 65536) s += DECODIFICADOR.decode(bytes.subarray(i, Math.min(i + 65536, fim)));
+  return desfazerCp1252(s);
+}
+
+/** Devolve os bytes 0x80–0x9F que um decodificador cp1252 trocou pelos caracteres dele.
+ * Separada para ser testável: no Node o `TextDecoder` nunca decodifica como cp1252,
+ * então este caminho só roda no navegador. */
+export function desfazerCp1252(s) {
+  RE_CP1252.lastIndex = 0;
+  return RE_CP1252.test(s) ? s.replace(RE_CP1252, (c) => DE_CP1252.get(c)) : s;
+}
+
+/** "1.234,56" → 123456 (centavos, inteiro), ou null. Mais de 2 casas decimais é null: somar
+ * em ponto flutuante milhões de lançamentos erra o centavo, e arredondar esconde o valor lido. */
+export function centavosBR(texto) {
+  if (decimalBR(texto) === null) return null;
+  const t = String(texto).trim().replace(/\./g, '');
+  const neg = t.startsWith('-');
+  const [i, d = ''] = (neg ? t.slice(1) : t).split(',');
+  if (d.length > 2) return null;
+  const v = Number(i) * 100 + Number(d.padEnd(2, '0'));
+  return neg ? -v : v;
+}

@@ -10,7 +10,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { decimalBR, dataDDMMAAAA, dataAAAAMMDD, valorImplicito } from '../lib/campos.mjs';
 import { detectarFamilia } from '../lib/familia.mjs';
-import { lerEnvelopeDeBuffer, lerEnvelopeDeArquivo } from '../lib/envelope.mjs';
+import { lerEnvelopeDeBuffer } from '../lib/envelope.mjs';
+import { lerEnvelopeDeArquivo } from '../lib/arquivo.mjs';
 import { abrirZip } from '../lib/zip.mjs';
 import { gerarSped, gerarCnab240, gerarCnab400, gerarCnab150, gerarOfx, gerarXmlFiscal, gerarEvento, gerarZip } from '../../Dados de Teste/fontes-oficiais/gerar.mjs';
 
