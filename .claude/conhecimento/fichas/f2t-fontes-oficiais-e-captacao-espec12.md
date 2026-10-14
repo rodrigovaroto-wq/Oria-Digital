@@ -12,7 +12,7 @@ toca:
   - Supabase/migrations/0206_o_arquivo_oficial_lido_e_contado.sql
 prova: Leitor/test/*.test.mjs
 ancora: Leitor/lib/familia.mjs#detectarFamilia
-ancora_sha: b57464b6cd39
+ancora_sha: b98051c598ec
 substitui: []
 ---
 
@@ -25,7 +25,15 @@ NF-e, NFS-e, Espec. 12.
 - O leitor (`Leitor/`) reconhece a família e lê o envelope em fluxo, conferindo a contagem declarada.
 - O CLI (`Leitor/ler.mjs`) grava em `arquivo_oficial` (migration `0206`, escrita e **não aplicada em produção**).
 - Prova: `Leitor/test/leitor.test.mjs` (32 testes, 26 guardas medidos não-vazios) e `Supabase/test/arquivo_oficial.test.sql` (65 asserts).
-- O n8n ainda manda SPED e NF-e para a IA (nó Preparar Conteúdo, `buf.toString('utf-8')`). Ligar o leitor ao n8n é o próximo passo.
+- O n8n ainda manda SPED e NF-e para a IA (nó Preparar Conteúdo, `buf.toString('utf-8')`).
+
+**Sessão 108 (13/10/2026): o leitor NÃO vai para o n8n. Ele roda no navegador do analista.**
+- Pelo n8n, um SPED de 3M de linhas derruba a instância (ficha `n8n-binario-grande-derruba-a-instancia`).
+- Decisão do dono: o arquivo é lido no navegador, e só o RESUMO sai da máquina (`Leitor/lib/resumo.mjs`).
+- O resumo da ECD guarda a íntegra dos registros pequenos e soma os I250 por conta, mês e IND_LCTO.
+- `envelope.mjs` é o mesmo código no navegador e no CLI (`arquivo.mjs` só abre o disco como fluxo), e não usa `node:*` nem `Buffer`.
+- Prova de igualdade num Chromium real: `Leitor/medicao-n8n/navegador-igual-ao-cli.mjs`.
+- **Latin1 ≠ `TextDecoder('latin1')` no navegador:** pelo WHATWG, ali é windows-1252, e o 0x96 vira "–". `campos.mjs#latin1` desfaz isso.
 
 ## Armadilhas que a revisão independente achou (e que voltam em toda onda)
 

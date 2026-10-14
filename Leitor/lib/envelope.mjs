@@ -8,21 +8,25 @@
 // Formato sem contagem declarada (OFX) é dito como tal: `sem_controle_no_formato`.
 //
 // A saída tem os nomes das colunas de `arquivo_oficial` (migration 0206), para o
-// CLI gravar sem tradução. Este arquivo NÃO lê o conteúdo registro a registro (os
-// lançamentos, as notas, a folha): isso é das ondas 1 a 5 da F2T.
+// CLI gravar sem tradução. O conteúdo registro a registro é do RESUMO
+// (`resumo.mjs`), pedido com `{ resumir: true }`; as famílias sem resumo ainda dizem
+// em que onda da F2T o conteúdo passa a ser lido.
 //
 // O leitor consome LINHAS, uma de cada vez, e guarda só contadores: a memória não
 // cresce com o tamanho do arquivo. É o oposto do merge do n8n, que estoura a pilha
-// com ~125–150 mil itens (roadmap, 17/09/2026, G6) — e é por isso que este leitor
-// roda fora do n8n (D12.9).
+// com ~125–150 mil itens (roadmap, 17/09/2026, G6).
+//
+// ESTE ARQUIVO RODA NO NAVEGADOR E NO NODE (sessão 108, 13/10/2026): o leitor passou
+// a rodar no navegador do analista, e o CLI usa o MESMO código (`arquivo.mjs` só
+// abre o arquivo do disco como fluxo). Por isso aqui não há `node:*` nem `Buffer`:
+// os bytes são Uint8Array, o hash é `sha256.mjs` e o latin1 é `campos.mjs#latin1`.
+// Duas implementações da mesma leitura divergiriam sem erro nenhum.
 
-import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
-import { open } from 'node:fs/promises';
-import { createInterface } from 'node:readline';
 import { SPED, XML, CNAB, OFX, LEITOR_VERSAO } from './leiautes.mjs';
-import { dataDDMMAAAA, dataAAAAMMDD, cnpj, posicao, inteiro } from './campos.mjs';
+import { dataDDMMAAAA, dataAAAAMMDD, cnpj, posicao, inteiro, latin1 } from './campos.mjs';
 import { detectarFamilia } from './familia.mjs';
+import { Sha256, sha256Hex } from './sha256.mjs';
+import { resumidorDe, resumoAusente, RESUMO_VERSAO } from './resumo.mjs';
 
 function envelopeBase(familia, subtipo, hash) {
   return {
@@ -305,51 +309,137 @@ function codificacao(familia, cabeca) {
   return 'utf8';
 }
 
-/** Envelope de um arquivo que já está em memória (testes, e cada entrada de um zip). */
-export function lerEnvelopeDeBuffer(buf) {
-  const fam = detectarFamilia(buf);
-  const hash = createHash('sha256').update(buf).digest('hex');
-  if (!fam.familia || fam.familia === 'zip') return { familia: fam.familia, evidencia: fam.evidencia, hash_sha256: hash };
-  const env = envelopeBase(fam.familia, fam.subtipo, hash);
-  const texto = buf.toString(codificacao(fam.familia, buf.subarray(0, 512).toString('latin1')));
+const CABECA = 65536;
+
+/**
+ * O processador de um arquivo oficial já reconhecido: recebe os bytes em fatias de
+ * qualquer tamanho e entrega as LINHAS, numeradas como num editor (a 1ª linha do
+ * arquivo é a 1), ao leitor do envelope e ao resumidor.
+ *
+ * XML é acumulado e lido inteiro: um XML oficial é UM documento (uma nota, um
+ * evento), de KBs. Teto conhecido: um XML de centenas de MB ficaria inteiro na
+ * memória. Não existe esse XML entre as famílias de hoje; se um lote de NF-e num
+ * XML só aparecer, é aqui que ele precisa de leitor em fluxo.
+ */
+function processador(fam, cabeca, resumir) {
+  const env = envelopeBase(fam.familia, fam.subtipo, null);
+  const latin = codificacao(fam.familia, latin1(cabeca, 0, Math.min(512, cabeca.length))) === 'latin1';
+  const utf8 = latin ? null : new TextDecoder('utf-8');
+  const texto = (b, ultimo) => (latin ? latin1(b) : utf8.decode(b, { stream: !ultimo }));
   const leitor = leitorDeLinhas(env);
-  if (leitor) {
-    for (const l of texto.split(QUEBRA)) leitor.linha(l);
-    leitor.fim();
-  } else {
-    lerXml(env, texto);
-  }
-  return env;
+  const resumidor = resumir && leitor ? resumidorDe(env.familia, env.subtipo) : null;
+  let resto = '', n = 0, xml = '';
+  const linha = (l) => { n++; leitor.linha(l); if (resumidor) resumidor.linha(n, l); };
+  return {
+    bytes(b) {
+      if (!leitor) { xml += texto(b, false); return; }
+      let t = resto + texto(b, false);
+      // Um \r no FIM da fatia pode ser a metade de um \r\n que termina na próxima.
+      // Quebrado aqui, viraria uma linha vazia a mais, e a numeração de todas as
+      // linhas seguintes (a proveniência do resumo) sairia deslocada em 1.
+      let cr = '';
+      if (t.endsWith('\r')) { cr = '\r'; t = t.slice(0, -1); }
+      const partes = t.split(QUEBRA);
+      resto = partes.pop() + cr;
+      for (const p of partes) linha(p);
+    },
+    fim(hash) {
+      env.hash_sha256 = hash;
+      if (!leitor) { lerXml(env, xml + texto(new Uint8Array(0), true)); return { env, resumo: null }; }
+      const t = resto + texto(new Uint8Array(0), true);
+      if (t !== '') for (const p of t.split(QUEBRA)) linha(p);
+      leitor.fim();
+      return { env, resumo: resumidor ? resumidor.fim() : null };
+    },
+  };
 }
 
 /**
- * Envelope de um arquivo em disco, lido em FLUXO: a memória não depende do tamanho.
- * XML é lido inteiro (um documento por arquivo, de KBs); zip devolve a família
- * 'zip' e quem chama abre com `zip.mjs`.
+ * O resultado entregue a quem chama: o envelope e, se pedido, o resumo (ou o motivo de não haver).
+ *
+ * O resumo vai para o banco NO LUGAR do arquivo, então ele só existe se o arquivo foi
+ * lido por inteiro. Medido pela revisão (13/10/2026): com dois SPEDs concatenados, o
+ * envelope saía `falhou` e o resumo somava os dois (débito 300000 onde o certo é
+ * 150000), com a conferência limpa; com a ECD truncada a 60%, idem. Separado do
+ * envelope, os dois pareciam resumos válidos.
+ *
+ * E a contagem do resumo é conferida contra a do envelope, que é outro laço sobre as
+ * mesmas linhas: cada registro guardado na íntegra e o I250 têm de bater um a um com
+ * o `por_registro` do envelope (que o 9900 do próprio arquivo já conferiu).
  */
-export async function lerEnvelopeDeArquivo(caminho) {
-  const fh = await open(caminho, 'r');
-  const { buffer, bytesRead } = await fh.read(Buffer.alloc(65536), 0, 65536, 0);
-  await fh.close();
-  const cabeca = buffer.subarray(0, bytesRead);
-  const fam = detectarFamilia(cabeca);
-  if (!fam.familia || fam.familia === 'zip' || !['sped', 'ofx', 'cnab240', 'cnab400', 'cnab150'].includes(fam.familia)) {
-    const { readFile } = await import('node:fs/promises');
-    if (fam.familia && fam.familia !== 'zip') return lerEnvelopeDeBuffer(await readFile(caminho));
-    const hash = createHash('sha256').update(await readFile(caminho)).digest('hex');
-    return { familia: fam.familia, evidencia: fam.evidencia, hash_sha256: hash };
+function resultado(env, resumo, resumir) {
+  if (!resumir) return env;
+  const base = { versao: RESUMO_VERSAO, hash_sha256: env.hash_sha256 ?? null, status_do_arquivo: env.status ?? null };
+  if (!env.status) {
+    return { envelope: env, resumo: { ...base, ausente: env.familia === 'zip' ? 'zip: o contêiner não tem resumo; cada arquivo de dentro é lido à parte' : 'não é arquivo de leiaute oficial: segue o caminho atual (extração)' } };
   }
-  const env = envelopeBase(fam.familia, fam.subtipo, null);
-  const leitor = leitorDeLinhas(env);
-  const h = createHash('sha256');
-  const fluxo = createReadStream(caminho);
-  fluxo.on('data', d => h.update(d));
-  const enc = codificacao(fam.familia, cabeca.subarray(0, 512).toString('latin1'));
-  const rl = createInterface({ input: createReadStream(caminho, { encoding: enc }), crlfDelay: Infinity });
-  for await (const l of rl) leitor.linha(l);
-  await new Promise((ok, erro) => { if (fluxo.readableEnded) ok(); else { fluxo.on('end', ok); fluxo.on('error', erro); } });
-  env.hash_sha256 = h.digest('hex');
-  leitor.fim();
-  if (env.familia.startsWith('cnab')) env.chave_natural = env.hash_sha256;
-  return env;
+  if (env.status !== 'lido') {
+    return { envelope: env, resumo: { ...base, ausente: `arquivo não lido por inteiro (${env.status}): ${env.detalhe.motivo || 'contagem divergente'}. Sem resumo, para que nada parcial vá ao banco como se fosse o arquivo` } };
+  }
+  if (!resumo) return { envelope: env, resumo: { ...base, ausente: resumoAusente(env.familia, env.subtipo) } };
+  const doEnvelope = env.detalhe.por_registro || {};
+  const divergentes = Object.entries(resumo.por_registro)
+    .filter(([reg, n]) => doEnvelope[reg] !== n)
+    .map(([reg, n]) => ({ registro: reg, resumo: n, envelope: doEnvelope[reg] ?? 0 }));
+  const { por_registro: _contado, ...conteudo } = resumo;
+  if (divergentes.length) {
+    return { envelope: env, resumo: { ...base, ausente: `o resumo e o envelope contaram registros diferentes (${JSON.stringify(divergentes.slice(0, 5))}): resumo recusado` } };
+  }
+  return { envelope: env, resumo: { ...base, ...conteudo } };
+}
+
+/**
+ * Envelope de um arquivo que já está em memória (testes, e cada entrada de um zip).
+ * Com `{ resumir: true }` devolve `{ envelope, resumo }`.
+ */
+export function lerEnvelopeDeBuffer(buf, { resumir = false } = {}) {
+  const fam = detectarFamilia(buf);
+  const hash = sha256Hex(buf);
+  if (!fam.familia || fam.familia === 'zip') return resultado({ familia: fam.familia, evidencia: fam.evidencia, hash_sha256: hash }, null, resumir);
+  const p = processador(fam, buf, resumir);
+  p.bytes(buf);
+  const { env, resumo } = p.fim(hash);
+  return resultado(env, resumo, resumir);
+}
+
+/**
+ * Envelope de um arquivo lido em FLUXO (`ReadableStream` de Uint8Array: o
+ * `File.stream()` do navegador ou o `openAsBlob(...).stream()` do Node). A memória não
+ * depende do tamanho (medição no Chromium em `Leitor/medicao-n8n/README.md`).
+ *
+ * Arquivo que não é oficial devolve `{familia: null, hash_sha256: null}` sem ler o
+ * resto: ele segue o caminho atual, e quem o envia calcula o próprio hash. (Pelo
+ * buffer, o mesmo arquivo sai COM hash: ali os bytes já estão inteiros na memória.) O zip é
+ * lido até o fim (o hash dele é a identidade do contêiner) e quem chama o abre.
+ */
+export async function lerEnvelopeDeFluxo(fluxo, { resumir = false } = {}) {
+  const leitorFluxo = fluxo.getReader();
+  const sha = new Sha256();
+  // A família sai dos primeiros 64 KB, que podem chegar em várias fatias.
+  const cabecaPartes = [];
+  let tamCabeca = 0, acabou = false;
+  while (tamCabeca < CABECA) {
+    const { done, value } = await leitorFluxo.read();
+    if (done) { acabou = true; break; }
+    cabecaPartes.push(value);
+    tamCabeca += value.length;
+  }
+  const cabeca = new Uint8Array(tamCabeca);
+  let o = 0;
+  for (const p of cabecaPartes) { cabeca.set(p, o); o += p.length; }
+  const fam = detectarFamilia(cabeca);
+  if (!fam.familia) { await leitorFluxo.cancel(); return resultado({ familia: null, evidencia: fam.evidencia, hash_sha256: null }, null, resumir); }
+  sha.update(cabeca);
+  const p = fam.familia === 'zip' ? null : processador(fam, cabeca, resumir);
+  if (p) p.bytes(cabeca);
+  while (!acabou) {
+    const { done, value } = await leitorFluxo.read();
+    if (done) break;
+    sha.update(value);
+    if (p) p.bytes(value);
+  }
+  const hash = sha.hex();
+  if (!p) return resultado({ familia: 'zip', evidencia: fam.evidencia, hash_sha256: hash }, null, resumir);
+  const { env, resumo } = p.fim(hash);
+  return resultado(env, resumo, resumir);
 }

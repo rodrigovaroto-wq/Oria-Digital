@@ -7,7 +7,7 @@ toca:
   - portal/src/components/upload-form.tsx
 prova: portal/scripts/verificar-limite-de-envio.mts
 ancora: portal/src/lib/limite-de-envio.ts#TETO_DA_FUNCTION_BYTES
-ancora_sha: de81135d61c3
+ancora_sha: f285efe531b1
 ---
 
 # O teto da hospedagem recusa ANTES de o código rodar

@@ -14,7 +14,7 @@
 
 import { detectarFormato } from '../../N8N/lib/formato.mjs';
 import { SPED, XML } from './leiautes.mjs';
-import { dataDDMMAAAA, cnpj } from './campos.mjs';
+import { dataDDMMAAAA, cnpj, latin1 } from './campos.mjs';
 
 const CABECA = 65536;
 
@@ -84,7 +84,10 @@ export function detectarFamilia(buf) {
   }
   // latin1 aqui é DE PROPÓSITO: SPED e CNAB são latin1, e para os marcadores ASCII
   // procurados abaixo (|0000|, namespaces, OFXHEADER) latin1 e UTF-8 coincidem.
-  const texto = buf.subarray(0, CABECA).toString('latin1').replace(/^﻿|^ï»¿/, '');
+  // `latin1()` e não `buf.toString('latin1')`: no navegador o arquivo é Uint8Array, e
+  // `Uint8Array.toString('latin1')` devolve "48,48,48,..." sem erro nenhum, ou seja,
+  // nenhum SPED seria reconhecido.
+  const texto = latin1(buf, 0, Math.min(CABECA, buf.length)).replace(/^\uFEFF|^ï»¿/, '');
   const inicio = texto.trimStart();
   if (inicio.startsWith('|0000|')) {
     const subtipo = subtipoSped(primeiraLinha(inicio));

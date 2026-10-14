@@ -278,6 +278,8 @@ A trilha é a da Espec. 11 §4.1, com o escopo ampliado. Cinco passos iguais par
 
 ### A fundação (F2T etapa 1, 13/10/2026): o que existe e as regras que ela fixa
 
+> **Nota de revisão (13/10/2026, S108).** O leitor **não é mais um serviço próprio nem roda no n8n**. Roda no **navegador do analista**, com o mesmo `Leitor/lib` do CLI. Motivo medido: o n8n gasta ~600 MB + ~50× o tamanho do arquivo (11 MB → 1,1 GB; 58 MB → 3,6 GB; 355 MB → heap out of memory, e cai a instância), e o PikaPods de 2 GB só roda apps do catálogo. **Só o resumo vai ao banco** (`0207`, em partes, reconferido pelo servidor). **O lançamento individual é descartado** (decisão do dono). O texto abaixo é a etapa 1 como foi escrita em 13/10 (sessão 107). Onde ele fala em serviço ou em n8n chamando o leitor, vale esta nota.
+
 **Construído:**
 - `Leitor/lib/familia.mjs` reconhece a família pelos bytes e reaproveita o `detectarFormato`;
 - `Leitor/lib/envelope.mjs` lê o envelope em fluxo e confere a contagem declarada (G5, G6, regra 7);
@@ -286,7 +288,7 @@ A trilha é a da Espec. 11 §4.1, com o escopo ampliado. Cinco passos iguais par
 - `Leitor/lib/zip.mjs` abre o zip com limites (G5);
 - `Leitor/ler.mjs` é o CLI que grava em `arquivo_oficial` (migration `0206`). Ele registra também o próprio zip, com as entradas recusadas, e confere que o status gravado é o status lido. O banco aplica a deduplicação por hash, a releitura (status não lido ou versão do leitor diferente atualiza a linha), a versão vigente (G9) e o desligamento por caso (G25).
 
-O n8n **não chama** o leitor ainda: isso depende de onde o serviço vai morar (P5).
+O n8n **não chama** o leitor, e não precisa chamar: o leitor roda no navegador (nota de 13/10/2026, no topo desta seção).
 
 **[A CONFIRMAR] antes da onda 1:** as posições e versões do registro de leiautes foram escritas sem o Guia Prático aberto, e os testes usam arquivos sintéticos gerados do mesmo registro. O aceite com 3 ECDs reais é a prova.
 
@@ -397,7 +399,7 @@ reunião de abertura do mandato) e o que continua humano por limite dos órgãos
 | P2 | **Cofre de credenciais** (peça 4) | Guardar o A1 **da Oria** e as procurações. O A1 do cliente **nunca** é guardado (D12.2) | Escopo menor que o previsto: uma credencial da Oria, não uma por cliente |
 | P3 | **Pacote jurídico e LGPD** | Termo de autorização, cláusula no contrato do mandato, RIPD, política de retenção (`10_DADOS_RETENCAO_E_LGPD.md`) | Base legal da coleta; eSocial traz salário e CPF, extrato traz terceiros |
 | P4 | **Responsável pelas credenciais** | Renovar, revogar ao fim do mandato, auditar | Sem dono, a autorização sobrevive ao caso |
-| P5 | **Infraestrutura** (peças 5 e leitor) | O serviço leitor próprio (D12.9), o agendamento dos coletores e **uma máquina dedicada ao robô do ReceitaNet BX** (D12.5), que é programa de desktop | O robô quebra quando a Receita muda a tela: o alerta e a queda para o contador são obrigatórios |
+| P5 | **Infraestrutura** (peças 5 e leitor) | O leitor não precisa de servidor (D12.9, revisada em 13/10/2026: roda no navegador), o agendamento dos coletores e **uma máquina dedicada ao robô do ReceitaNet BX** (D12.5), que é programa de desktop | O robô quebra quando a Receita muda a tela: o alerta e a queda para o contador são obrigatórios |
 | P6 | **Armazenamento** (peça 2) | XML e SPED de vários anos somam GB por cliente | Envio direto ao Storage; a borda da Vercel recusa ~4,5 MB |
 
 ### Contratos com fornecedores
@@ -456,7 +458,7 @@ sistema falha ou grava número errado; **desvia** = a execução muda de rota po
 | # | Lacuna | Gravidade | Como fecha |
 |---|---|---|---|
 | G5 | **O roteador de hoje não reconhece nenhuma das famílias.** `N8N/lib/formato.mjs` (`detectarFormato`) reconhece pelos bytes PDF, imagem, xlsx, XML genérico (`<?xml`), HTML e texto delimitado (`;` `,` tab `|`). Mas não sabe a **família**: um SPED vira "texto com `|`", uma NF-e ou um evento do eSocial vira "xml", e CNAB e OFX viram texto. Zip que não é planilha sai `desconhecido`, então um zip com vários arquivos não abre | **quebra** | Assinaturas novas no mesmo contrato (decidir pelos bytes, dizer quando caiu no declarado), e descompactação com limites contra zip-bomb, zip aninhado e arquivo gigante |
-| G6 | **Volume acima do teto já medido.** O nó de merge do n8n estoura a pilha com ~125–150 mil itens (medido em 17/09/2026, roadmap §11). Um ano de XML, de EFD ou de extrato passa disso, e os extratos do AMO já ficaram de fora por esse motivo | **quebra** | D12.9: os leitores **não** rodam linha a linha no grafo do n8n. Proposta: um leitor que processa o arquivo em fluxo, grava em lote (`COPY`) no Postgres e devolve ao n8n só o resumo e as contagens |
+| G6 | **Volume acima do teto já medido.** O nó de merge do n8n estoura a pilha com ~125–150 mil itens (medido em 17/09/2026, roadmap §11). Um ano de XML, de EFD ou de extrato passa disso, e os extratos do AMO já ficaram de fora por esse motivo | **quebra** | D12.9: os leitores **não** rodam linha a linha no grafo do n8n. Proposta: um leitor que processa o arquivo em fluxo, grava em lote (`COPY`) no Postgres e devolve ao n8n só o resumo e as contagens. **Superada em 13/10/2026: o leitor roda no navegador (D12.9 revisada).** |
 | G7 | **Os leiautes mudam de versão.** ECD e ECF mudam a cada ano (a versão vem no `0000`), o eSocial passou do S-1.2 para o S-1.3, o CNAB 400 muda por banco e a NFS-e por município | **quebra** | Um registro de leiautes versionado, com um teste por versão. Versão desconhecida é falha visível, nunca leitura "aproximada" |
 | G8 | **Reforma tributária.** A NF-e já traz campos de IBS/CBS em 2026, e a CBS substitui PIS/COFINS a partir de 2027. S5, S3 e a EFD-Contribuições mudam conforme o período. **[A CONFIRMAR]** o cronograma em vigor | desvia | As reconciliações tributárias decidem a regra pelo regime do período, e não por uma regra única |
 | G9 | **Retificação e duplicidade.** Existem ECD substituta, EFD retificadora, retificação e exclusão no eSocial (`S-3000`), NF-e cancelada ou corrigida (CC-e), CT-e cancelado, o mesmo retorno CNAB enviado duas vezes e OFX com períodos que se sobrepõem | **quebra** (conta em dobro) | Chave de deduplicação por família (chave da NF-e, recibo do eSocial, hash do arquivo, ID do lançamento OFX) e regra de "versão vigente". A vigente vence, e a substituída fica guardada como evidência |
@@ -482,7 +484,7 @@ sistema falha ou grava número errado; **desvia** = a execução muda de rota po
 | G19 | **Modelo de segurança.** Onde o A1 fica de fato (cofre, nunca em texto no n8n), RLS nas tabelas novas, acesso por caso, revogação no fim do mandato e trilha de auditoria | **quebra** (risco jurídico) | Desenho de segurança e revisão de segurança antes da peça 4 |
 | G20 | **LGPD por categoria.** Falta definir a base legal de cada dado, a minimização, a retenção e o descarte no fim do mandato, os contratos de operador com o SERPRO e o agregador, e a transferência internacional (os PDFs vão à OpenAI, como já diz o `10_DADOS_RETENCAO_E_LGPD.md`) | **quebra** (risco jurídico) | RIPD e política escritos pelo jurídico **antes** da primeira coleta (P3) |
 | G21 | **Escopo da procuração.** A procuração eletrônica pode dar poder de agir, e não só de consultar | **quebra** (responsabilidade da Oria) | Pedir só os serviços de consulta. O termo diz que a Oria não transmite nem retifica nada |
-| G22 | **Custo por caso** sem modelo: consultas ao Integra (D12.3), máquina do robô (D12.5), serviço leitor (D12.9), GB de armazenamento, IA nos PDFs, infraestrutura | degrada | Estender o `medir-custo-book.mjs` com as fontes novas e fixar um teto de custo por caso |
+| G22 | **Custo por caso** sem modelo: consultas ao Integra (D12.3), máquina do robô (D12.5), leitor no navegador (D12.9, revisada), GB de armazenamento, IA nos PDFs, infraestrutura | degrada | Estender o `medir-custo-book.mjs` com as fontes novas e fixar um teto de custo por caso |
 | G23 | **Pessoas e processo.** Falta definir quem opera o painel, o prazo de resposta, o roteiro de falhas (*runbook*), o roteiro do kickoff e os modelos de e-mail | desvia | Roteiro operacional escrito junto com a peça 6 |
 
 ### E. Execução
@@ -519,7 +521,7 @@ onda 1.
 | D12.6 | Quem escreve o termo do kickoff? | **Jurídico interno da Oria** | A etapa 2 depende do jurídico interno. A engenharia entrega a lista do que é coletado, para quê, por quanto tempo e quem acessa |
 | D12.7 | Detalhe por empregado no eSocial? | **Agregado + detalhe só para rescisão e credores** | Totais mensais sempre. Detalhe por CPF só para o custo de rescisão e a classe I da lista de credores, apagado ao fim do mandato |
 | D12.8 | Quem vence quando SPED e enviado divergem? | **Os dois aparecem e o analista escolhe** | O book mostra enviado, fiscal e divergência. O modelo usa o enviado até a escolha, que fica registrada com autor e motivo. Nenhum número muda sozinho |
-| D12.9 | Onde roda o leitor? | **Serviço leitor próprio** (Node) | O n8n só avisa que o arquivo chegou. O leitor lê em fluxo, grava em lote (`COPY`) e devolve o resumo e as contagens. Um serviço a mais para hospedar (P5) |
+| D12.9 | Onde roda o leitor? | **REVISADA em 13/10/2026 (S108): o leitor roda no navegador do analista.** Antes: serviço leitor próprio (Node). | Só o resumo vai ao banco, em partes (`0207`), e o servidor reconfere. **O lançamento individual é descartado** (decisão do dono). Motivo medido: o n8n estoura com 355 MB, e o PikaPods só roda apps do catálogo. Sem serviço a hospedar: P5 deixa de ser pré-requisito da etapa 1 |
 | D12.10 | Fontes fora do escopo? | **Entram: NFS-e municipal e contratos de câmbio. Ficam fora: Simples Nacional e declarações estaduais** | NFS-e municipal entra por demanda (o município do cliente), na onda 3. Câmbio entra na onda 5 (L3). **Efeito de deixar o Simples fora:** empresa do Simples fica sem fonte fiscal independente, e a receita é conferida só contra o que o cliente declarou. O sistema escreve essa nota no caso (regra 1) |
 | D12.11 | Tolerâncias | **Reusar a regra atual** | Bate se \|diferença\| ≤ max(R$ 100; 0,5% do valor), como `fn_reconciliar_*` na `0009`. Confronto por agregação ou período (Classe B: S3, L2, E1…) ganha a banda de materialidade da `04_RECONCILIACAO.md`, sempre com revisão humana na zona cinzenta |
 

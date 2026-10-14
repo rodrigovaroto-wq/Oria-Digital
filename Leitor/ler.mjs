@@ -19,7 +19,8 @@
 import { readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { basename } from 'node:path';
-import { lerEnvelopeDeArquivo, lerEnvelopeDeBuffer } from './lib/envelope.mjs';
+import { lerEnvelopeDeBuffer } from './lib/envelope.mjs';
+import { lerEnvelopeDeArquivo } from './lib/arquivo.mjs';
 import { entradasDoZip } from './lib/zip.mjs';
 import { createHash } from 'node:crypto';
 import { LEITOR_VERSAO } from './lib/leiautes.mjs';

@@ -159,3 +159,42 @@ export async function gerarZip(entradas, { deflate = true, sobrepor = false } = 
   fim.writeUInt32LE(0x06054b50, 0); fim.writeUInt16LE(nTotal, 8); fim.writeUInt16LE(nTotal, 10); fim.writeUInt32LE(cd.length, 12); fim.writeUInt32LE(off, 16);
   return Buffer.concat([...locais, cd, fim]);
 }
+
+/**
+ * ECD com CONTEÚDO para o resumo (sessão 108): plano de contas, saldos, DRE e
+ * lançamentos, com os defeitos que o resumo tem de acusar, cada um ligado por opção.
+ * Devolve `{ buf, linhas }`: as linhas (sem quebra) servem ao teste para conferir que
+ * o número de linha do resumo aponta para o texto certo.
+ * opções: desbalanceado (um lançamento com D ≠ C), valorInvalido ('1,234' num I250),
+ * partidaOrfa (um I250 antes de qualquer I200), crlf (quebra \r\n; senão \n),
+ * extras (quantos lançamentos de 1,00 a mais em março: com ~1.000 o arquivo passa
+ * dos 64 KB que o leitor em fluxo junta para reconhecer a família, e só depois disso
+ * uma fatia pequena chega a partir um \r\n ao meio).
+ */
+export function gerarEcdComLancamentos({ desbalanceado = false, valorInvalido = false, partidaOrfa = false, crlf = true, extras = 0 } = {}) {
+  const l = [];
+  l.push(`|0000|LECD|01012025|31122025|${NOME}|${CNPJ}|SP||3550308||0|0|0|0||0|0||N|N|0|0||`);
+  l.push('|0001|0|', '|I010|G|9.00|');
+  l.push('|I050|01012025|01|A|5|1.1.01|1.1|CAIXA (AÇÚCAR)|', '|I050|01012025|04|A|5|3.1.01|3.1|RECEITA DE VENDAS|');
+  l.push('|I150|01012025|31012025|', '|I155|1.1.01||0,00|D|1.500,00|0,00|1.500,00|D|', '|I155|3.1.01||0,00|C|0,00|1.500,00|1.500,00|C|');
+  if (partidaOrfa) l.push('|I250|1.1.01||1,00|D|||PARTIDA SEM I200||');
+  // Janeiro: venda de 1.500,00 em duas partidas de crédito.
+  l.push('|I200|1|15012025|1.500,00|N|', '|I250|1.1.01||1.500,00|D|||VENDA À VISTA||', '|I250|3.1.01||1.000,00|C|||VENDA||', '|I250|3.1.01||500,00|C|||VENDA||');
+  // Fevereiro: outra venda; desbalanceada se pedido (o crédito sai 10,00 menor).
+  l.push('|I200|2|10022025|200,00|N|', '|I250|1.1.01||200,00|D|||VENDA||', `|I250|3.1.01||${desbalanceado ? '190,00' : '200,00'}|C|||VENDA||`);
+  if (valorInvalido) l.push('|I200|3|11022025|1,00|N|', '|I250|1.1.01||1,234|D|||TRÊS CASAS||', '|I250|3.1.01||1,00|C|||X||');
+  for (let i = 0; i < extras; i++) l.push(`|I200|${100 + i}|05032025|1,00|N|`, '|I250|1.1.01||1,00|D|||EXTRA DE MARÇO||', '|I250|3.1.01||1,00|C|||EXTRA DE MARÇO||');
+  // Dezembro: uma venda normal e o encerramento da receita (IND_LCTO = E) na MESMA
+  // conta e mês. Somados juntos, a receita de dezembro sumiria do resumo.
+  l.push('|I200|8|20122025|100,00|N|', '|I250|1.1.01||100,00|D|||VENDA||', '|I250|3.1.01||100,00|C|||VENDA||');
+  l.push('|I200|9|31122025|1.800,00|E|', '|I250|3.1.01||1.800,00|D|||ENCERRAMENTO||', '|I250|1.1.01||1.800,00|C|||ENCERRAMENTO||');
+  l.push('|J005|01012025|31122025|1||', '|J150|1|1|T|1|RECEITA LÍQUIDA|1.700,00|C|0,00|C||', '|J900|TERMO|');
+  const regs = {};
+  for (const x of l) { const r = x.split('|')[1]; regs[r] = (regs[r] || 0) + 1; }
+  const bloco9 = Object.entries(regs).map(([r, n]) => `|9900|${r}|${n}|`);
+  bloco9.push(`|9900|9900|${bloco9.length + 2}|`, '|9900|9999|1|');
+  l.push(...bloco9);
+  l.push(`|9999|${l.length + 1}|`);
+  const q = crlf ? '\r\n' : '\n';
+  return { buf: Buffer.from(l.join(q) + q, 'latin1'), linhas: l };
+}

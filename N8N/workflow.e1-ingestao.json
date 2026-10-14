@@ -60,7 +60,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const bytesDoBinario = function bytesDoBinario(bin) {\n  if (!bin) return null;\n  if (Number.isFinite(Number(bin.fileSize))) return Number(bin.fileSize);\n  if (typeof bin.data === 'string' && !bin.id) {\n    // base64 → bytes, sem alocar o buffer inteiro só para medir.\n    const s = bin.data.length;\n    const pad = bin.data.endsWith('==') ? 2 : bin.data.endsWith('=') ? 1 : 0;\n    const n = Math.floor((s * 3) / 4) - pad;\n    if (n > 0) return n;\n  }\n  if (typeof bin.fileSize === 'string') {\n    const m = /^\\s*([\\d.,]+)\\s*([kmg]?b)\\s*$/i.exec(bin.fileSize);\n    if (m) {\n      const n = Number(m[1].replace(',', '.'));\n      const mult = { b: 1, kb: 1024, mb: 1024 * 1024, gb: 1024 * 1024 * 1024 }[m[2].toLowerCase()];\n      if (Number.isFinite(n) && mult) return Math.round(n * mult);\n    }\n  }\n  return null;\n};\nconst caso_id = $('Upsert Caso (Postgres)').first().json.caso_id;\n// O LIMIAR DO DIAL VIAJA COM O ITEM, como o caso_id. Nulo quando o banco não tem\n// a linha do dial — e null cai na queda do classificador, nunca em zero (limiar\n// zero faria todo documento passar sem a IA ler nenhum).\nconst limiar_classificacao = $('Upsert Caso (Postgres)').first().json.limiar_classificacao;\nconst form = $('Intake (Form)').first();\nconst bin = form.binary || {};\nconst out = [];\nfor (const key of Object.keys(bin)) {\n  // O TAMANHO VIAJA COM O ITEM. É o insumo do orçamento: sem ele o lote é\n  // estimado por um número plano que já recusou um lote de US$ 1,41 dizendo\n  // US$ 7,65. `null` quando o metadado não permite medir — e null cai no\n  // plano lá na frente, nunca em zero.\n  out.push({ json: { caso_id, limiar_classificacao, nome_original: bin[key].fileName || key, binary_key: 'data', bytes: bytesDoBinario(bin[key]) }, binary: { data: bin[key] } });\n}\nif (out.length === 0) {\n  throw new Error('Nenhum arquivo recebido do formulario (binario vazio). Confira o campo \"Arquivos\" do Form.');\n}\nreturn out;"
+        "jsCode": "const bytesDoBinario = function bytesDoBinario(bin) {\n  if (!bin) return null;\n  if (Number.isFinite(Number(bin.fileSize))) return Number(bin.fileSize);\n  if (typeof bin.data === 'string' && !bin.id) {\n    // base64 → bytes, sem alocar o buffer inteiro só para medir.\n    const s = bin.data.length;\n    const pad = bin.data.endsWith('==') ? 2 : bin.data.endsWith('=') ? 1 : 0;\n    const n = Math.floor((s * 3) / 4) - pad;\n    if (n > 0) return n;\n  }\n  if (typeof bin.fileSize === 'string') {\n    const m = /^\\s*([\\d.,]+)\\s*([kmg]?b)\\s*$/i.exec(bin.fileSize);\n    if (m) {\n      const n = Number(m[1].replace(',', '.'));\n      const mult = { b: 1, kb: 1024, mb: 1024 * 1024, gb: 1024 * 1024 * 1024 }[m[2].toLowerCase()];\n      if (Number.isFinite(n) && mult) return Math.round(n * mult);\n    }\n  }\n  return null;\n};\nconst TETO_BYTES_POR_ARQUIVO = 15728640;\nconst vereditoDeTamanhoPorArquivo = function vereditoDeTamanhoPorArquivo(entrada) {\n  const e = entrada || {};\n  const teto = Number(e.teto);\n  if (!Number.isFinite(teto) || teto <= 0) throw new Error('vereditoDeTamanhoPorArquivo: `teto` e obrigatorio e positivo.');\n  const arquivos = Array.isArray(e.arquivos) ? e.arquivos : [];\n  const milhar = (n) => String(Math.round(n)).replace(/\\B(?=(\\d{3})+(?!\\d))/g, '.');\n  const mib = (n) => (n / 1048576).toFixed(2).replace('.', ',') + ' MiB';\n  const grandes = [];\n  const semMedida = [];\n  for (const a of arquivos) {\n    const nome = (a && a.nome) || '(sem nome)';\n    const b = a && a.bytes !== null && a.bytes !== undefined && a.bytes !== '' ? Number(a.bytes) : NaN;\n    if (!Number.isFinite(b) || b < 0) semMedida.push(nome);\n    else if (b > teto) grandes.push({ nome, bytes: b });\n  }\n  if (grandes.length === 0 && semMedida.length === 0) {\n    return { cabe: true, teto, grandes, semMedida, mensagem: null };\n  }\n  const linhas = [\n    ...grandes.map((g) => `\"${g.nome}\" tem ${mib(g.bytes)} (${milhar(g.bytes)} bytes)`),\n    ...semMedida.map((n) => `\"${n}\" tem tamanho que o n8n nao informou`),\n  ];\n  const mensagem = `[tamanho do arquivo] Lote recusado ANTES de ler qualquer arquivo: ${linhas.join('; ')}.`\n    + ` O teto e de ${mib(teto)} (${milhar(teto)} bytes) por arquivo.`\n    + ` Ler um arquivo grande aqui ocupa ~50x o tamanho dele em memoria (29 MB ja enchem os 2 GB da`\n    + ` instancia) e derruba o n8n INTEIRO, com todos os lotes em andamento.`\n    + (semMedida.length > 0 ? ` Arquivo sem tamanho medido e recusado por precaucao: nao da para afirmar que cabe.` : '')\n    + ` O lote inteiro foi recusado e os demais arquivos nao foram processados.`\n    + ` O QUE FAZER: arquivo OFICIAL (SPED, CNAB, OFX, XML fiscal) -> leia no navegador, pela tela de`\n    + ` arquivos oficiais do portal; PDF ou planilha grande -> divida o arquivo em partes menores.`\n    + ` Depois reenvie. Nada foi enviado ao provedor de IA e nenhum documento foi registrado, entao`\n    + ` reenviar nao duplica nem custa.`;\n  return { cabe: false, teto, grandes, semMedida, mensagem };\n};\nconst caso_id = $('Upsert Caso (Postgres)').first().json.caso_id;\n// O LIMIAR DO DIAL VIAJA COM O ITEM, como o caso_id. Nulo quando o banco não tem\n// a linha do dial — e null cai na queda do classificador, nunca em zero (limiar\n// zero faria todo documento passar sem a IA ler nenhum).\nconst limiar_classificacao = $('Upsert Caso (Postgres)').first().json.limiar_classificacao;\nconst form = $('Intake (Form)').first();\nconst bin = form.binary || {};\nconst out = [];\nfor (const key of Object.keys(bin)) {\n  // O TAMANHO VIAJA COM O ITEM. É o insumo do orçamento: sem ele o lote é\n  // estimado por um número plano que já recusou um lote de US$ 1,41 dizendo\n  // US$ 7,65. `null` quando o metadado não permite medir — e null cai no\n  // plano lá na frente, nunca em zero.\n  out.push({ json: { caso_id, limiar_classificacao, nome_original: bin[key].fileName || key, binary_key: 'data', bytes: bytesDoBinario(bin[key]) }, binary: { data: bin[key] } });\n}\nif (out.length === 0) {\n  throw new Error('Nenhum arquivo recebido do formulario (binario vazio). Confira o campo \"Arquivos\" do Form.');\n}\n// O TETO DE TAMANHO POR ARQUIVO, o primeiro guarda do lote e o unico que roda\n// ANTES de getBinaryDataBuffer (que o Preparar Conteudo chama em todo\n// arquivo). Medido 13/10/2026: a memoria do n8n sobe ~50x o tamanho do arquivo\n// (29 MB -> 2,0 GB, e o pod tem 2 GB; 355 MB derruba a instancia inteira). O\n// Orcamento do Lote nao serve para isto: ele roda DEPOIS do preparo, quando\n// o estrago ja foi feito. A recusa entra pelo MESMO caminho da do orcamento\n// (Tamanho cabe? -> Registrar Recusa -> Abortar Lote), que le\n// orcamento_mensagem; por isso o campo tem esse nome aqui.\nconst tam = vereditoDeTamanhoPorArquivo({ arquivos: out.map((o) => ({ nome: o.json.nome_original, bytes: o.json.bytes })), teto: TETO_BYTES_POR_ARQUIVO });\n// Recusado, o lote vira UM item, como a saida do Orcamento do Lote: com um item\n// por arquivo, o Registrar Recusa gravaria a mesma falha N vezes.\nif (!tam.cabe) return [{ json: { caso_id, tamanho_cabe: false, orcamento_mensagem: tam.mensagem } }];\nreturn out.map((o) => ({ json: { ...o.json, tamanho_cabe: true }, binary: o.binary }));"
       },
       "id": "listar-arquivos",
       "name": "Listar Arquivos",
@@ -68,6 +68,36 @@
       "typeVersion": 2,
       "position": [
         520,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "leftValue": "={{ $json.tamanho_cabe }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ]
+        }
+      },
+      "id": "tamanho-cabe-",
+      "name": "Tamanho cabe?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        780,
         0
       ]
     },
@@ -81,8 +111,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        780,
-        0
+        1040,
+        180
       ],
       "onError": "continueRegularOutput"
     },
@@ -96,8 +126,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2860,
-        0
+        3120,
+        180
       ]
     },
     {
@@ -126,7 +156,21 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        3120,
+        3380,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 2
+      },
+      "id": "juntar-recusas",
+      "name": "Juntar Recusas",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        3640,
         0
       ]
     },
@@ -143,8 +187,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        3380,
-        360
+        3900,
+        0
       ],
       "credentials": {
         "postgres": {
@@ -167,8 +211,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3640,
-        360
+        4160,
+        0
       ]
     },
     {
@@ -184,8 +228,8 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
       "position": [
-        1560,
-        360
+        1820,
+        540
       ],
       "onError": "continueRegularOutput"
     },
@@ -199,8 +243,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1040,
-        0
+        1300,
+        180
       ],
       "onError": "continueRegularOutput"
     },
@@ -280,8 +324,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3,
       "position": [
-        1300,
-        0
+        1560,
+        180
       ]
     },
     {
@@ -294,8 +338,8 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
       "position": [
-        1560,
-        180
+        1820,
+        360
       ],
       "onError": "continueRegularOutput"
     },
@@ -309,8 +353,8 @@
       "type": "n8n-nodes-base.extractFromFile",
       "typeVersion": 1,
       "position": [
-        1560,
-        540
+        1820,
+        720
       ],
       "onError": "continueRegularOutput"
     },
@@ -324,8 +368,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1820,
-        180
+        2080,
+        360
       ]
     },
     {
@@ -338,8 +382,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1820,
-        540
+        2080,
+        720
       ]
     },
     {
@@ -352,8 +396,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        2080,
-        0
+        2340,
+        180
       ]
     },
     {
@@ -366,8 +410,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2340,
-        0
+        2600,
+        180
       ]
     },
     {
@@ -380,8 +424,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2600,
-        0
+        2860,
+        180
       ],
       "onError": "continueRegularOutput"
     },
@@ -409,8 +453,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1300,
-        180
+        1560,
+        360
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -446,8 +490,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        3380,
-        0
+        3640,
+        180
       ]
     },
     {
@@ -460,8 +504,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3640,
-        180
+        3900,
+        360
       ],
       "onError": "continueRegularOutput"
     },
@@ -493,8 +537,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3900,
-        180
+        4160,
+        360
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -517,8 +561,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4160,
-        180
+        4420,
+        360
       ],
       "onError": "continueRegularOutput"
     },
@@ -532,8 +576,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        4420,
-        0
+        4680,
+        180
       ]
     },
     {
@@ -550,8 +594,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        4680,
-        0
+        4940,
+        180
       ],
       "credentials": {
         "postgres": {
@@ -577,8 +621,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        4940,
-        180
+        5200,
+        360
       ],
       "credentials": {
         "postgres": {
@@ -601,8 +645,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4940,
-        0
+        5200,
+        180
       ],
       "onError": "continueRegularOutput"
     },
@@ -632,8 +676,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        5200,
-        0
+        5460,
+        180
       ]
     },
     {
@@ -646,8 +690,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        10660,
-        0
+        10920,
+        180
       ]
     },
     {
@@ -660,8 +704,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5460,
-        180
+        5720,
+        360
       ],
       "onError": "continueRegularOutput"
     },
@@ -675,8 +719,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5720,
-        180
+        5980,
+        360
       ],
       "onError": "continueRegularOutput"
     },
@@ -708,8 +752,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        5980,
-        180
+        6240,
+        360
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -732,8 +776,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        6240,
-        180
+        6500,
+        360
       ],
       "onError": "continueRegularOutput"
     },
@@ -763,8 +807,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        6500,
-        180
+        6760,
+        360
       ]
     },
     {
@@ -777,8 +821,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        6760,
-        360
+        7020,
+        540
       ],
       "onError": "continueRegularOutput"
     },
@@ -810,8 +854,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        7020,
-        360
+        7280,
+        540
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -834,8 +878,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        7280,
-        360
+        7540,
+        540
       ],
       "onError": "continueRegularOutput"
     },
@@ -865,8 +909,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        7540,
-        360
+        7800,
+        540
       ]
     },
     {
@@ -879,8 +923,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        7800,
-        360
+        8060,
+        540
       ],
       "onError": "continueRegularOutput"
     },
@@ -912,8 +956,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        8060,
-        360
+        8320,
+        540
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -936,8 +980,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8320,
-        360
+        8580,
+        540
       ],
       "onError": "continueRegularOutput"
     },
@@ -967,8 +1011,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        8580,
-        360
+        8840,
+        540
       ]
     },
     {
@@ -981,8 +1025,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        8840,
-        360
+        9100,
+        540
       ],
       "onError": "continueRegularOutput"
     },
@@ -1014,8 +1058,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        9100,
-        360
+        9360,
+        540
       ],
       "credentials": {
         "httpHeaderAuth": {
@@ -1038,8 +1082,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        9360,
-        360
+        9620,
+        540
       ],
       "onError": "continueRegularOutput"
     },
@@ -1053,8 +1097,8 @@
       "type": "n8n-nodes-base.merge",
       "typeVersion": 3,
       "position": [
-        9620,
-        180
+        9880,
+        360
       ]
     },
     {
@@ -1067,8 +1111,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        9880,
-        180
+        10140,
+        360
       ],
       "onError": "continueRegularOutput"
     },
@@ -1086,8 +1130,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        10140,
-        180
+        10400,
+        360
       ],
       "credentials": {
         "postgres": {
@@ -1114,8 +1158,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        10400,
-        180
+        10660,
+        360
       ],
       "credentials": {
         "postgres": {
@@ -1142,8 +1186,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        10920,
-        0
+        11180,
+        180
       ],
       "credentials": {
         "postgres": {
@@ -1169,8 +1213,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        11180,
-        0
+        11440,
+        180
       ],
       "credentials": {
         "postgres": {
@@ -1194,8 +1238,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        11440,
-        0
+        11700,
+        180
       ],
       "onError": "continueRegularOutput"
     },
@@ -1212,8 +1256,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        11700,
-        0
+        11960,
+        180
       ],
       "credentials": {
         "postgres": {
@@ -1239,8 +1283,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        3380,
-        180
+        3640,
+        360
       ],
       "credentials": {
         "postgres": {
@@ -1267,8 +1311,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        11960,
-        0
+        12220,
+        180
       ],
       "credentials": {
         "postgres": {
@@ -1309,7 +1353,36 @@
       "main": [
         [
           {
+            "node": "Tamanho cabe?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tamanho cabe?": {
+      "main": [
+        [
+          {
             "node": "Classificar Nome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Juntar Recusas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Juntar Recusas": {
+      "main": [
+        [
+          {
+            "node": "Registrar Recusa",
             "type": "main",
             "index": 0
           }
@@ -1501,9 +1574,9 @@
         ],
         [
           {
-            "node": "Registrar Recusa",
+            "node": "Juntar Recusas",
             "type": "main",
-            "index": 0
+            "index": 1
           }
         ]
       ]

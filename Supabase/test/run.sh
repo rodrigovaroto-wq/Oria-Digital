@@ -585,6 +585,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/arquivo_oficial.test.sql 2>&1 
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== testes do resumo do arquivo oficial (0207: carga em partes, reconferência do servidor, recusa que apaga)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/resumo_oficial.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== testes do papel da linha (0042: subtotal/serie mensal/derivado não se projetam)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/papel_da_linha.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'

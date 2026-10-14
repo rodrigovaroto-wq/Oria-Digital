@@ -68,6 +68,14 @@
 // em que ele erra. `portal/scripts/verificar-limite-de-envio.mts` chama estas
 // funções — as mesmas que a tela chama.
 
+// O TETO POR ARQUIVO VEM DO N8N, NÃO É REPETIDO AQUI (13/10/2026). Eram dois
+// números para a mesma fronteira — 200 MB aqui, 15 MiB lá — e o portal deixava
+// subir o que o n8n recusava depois, em silêncio (envio direto = resposta
+// opaca). Importar o valor de `N8N/lib/custo.mjs` faz os dois só poderem
+// concordar. A importação de fora de `portal/` é a mesma do leitor (ver
+// `next.config.ts`).
+import { TETO_BYTES_POR_ARQUIVO } from "../../../N8N/lib/custo.mjs";
+
 const KiB = 1024;
 const MiB = 1024 * KiB;
 
@@ -90,15 +98,23 @@ export const TETO_DA_FUNCTION_BYTES = Math.floor(4.5 * MiB);
 export const TETO_DO_PROXY_BYTES = TETO_DA_FUNCTION_BYTES - 512 * KiB;
 
 /**
- * O teto POR ARQUIVO do outro lado (n8n). Padrão do
- * `N8N_FORMDATA_FILE_SIZE_MAX`, em MB: 200 por arquivo.
+ * O teto POR ARQUIVO do outro lado (n8n): 15 MiB, o `TETO_BYTES_POR_ARQUIVO` de
+ * `N8N/lib/custo.mjs`, importado e não copiado.
  *
- * Ele está aqui para o caso que nenhuma das duas pontas explicaria bem: um
- * arquivo sozinho maior que isso é recusado pelo n8n DEPOIS de subir, e sob
- * envio direto a resposta é opaca (ver `upload-form.tsx`) — ou seja, viraria
- * silêncio. Dizer antes de subir é a única forma honesta.
+ * ERA 200 MB (o padrão do `N8N_FORMDATA_FILE_SIZE_MAX`) e isso estava errado
+ * para o que importa, que é a memória do n8n, não o limite do Form. Medido em
+ * 13/10/2026 (n8n 2.30.7): ~600 MB ociosos + ~50x o tamanho do arquivo —
+ * 11 MB = 1,1 GB, 29 MB = 2,0 GB, 117 MB = 7,7 GB. O pod de produção tem 2 GB,
+ * então 29 MB já o derrubam, e com ele todas as execuções em curso. O n8n
+ * passou a recusar o lote inteiro com um arquivo acima de 15 MiB (commit
+ * 6f1e741); este teto existe para o portal dizer ISSO antes de o analista
+ * esperar o upload, e não depois.
+ *
+ * Arquivo de leiaute oficial (SPED, CNAB, OFX, XML fiscal) NÃO passa por este
+ * teto: ele é lido no navegador e só o resumo sai (ver `envio-oficial.ts`), e é
+ * por isso que um SPED de centenas de MB continua sendo aceito pela tela.
  */
-export const TETO_POR_ARQUIVO_BYTES = 200 * MiB;
+export const TETO_POR_ARQUIVO_BYTES: number = TETO_BYTES_POR_ARQUIVO;
 
 /**
  * Sobrecarga de UMA parte do `multipart/form-data`, em bytes, sem o conteúdo.

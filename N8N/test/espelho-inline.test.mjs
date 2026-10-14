@@ -46,7 +46,7 @@ import {
   custoDaChamada, tokensDeSaida, bytesDoBinario, orcamentoDoLote,
   pesoDaChamadaDeClassificacao, custoEstimadoPorConteudo, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote,
   custoEstimadoPorTamanho, custoPorMbDeTextoUSD, estimativaDoDocumento,
-  vereditoDaCotaDiaria,
+  vereditoDaCotaDiaria, vereditoDeTamanhoPorArquivo,
   ehFormatoDeTexto,
 } from '../lib/custo.mjs';
 import {
@@ -586,6 +586,13 @@ const TABELA = [
   ] },
   { nome: 'bytesDoBinario', lib: bytesDoBinario,
     casos: [[{ fileSize: '1.2 MB' }], [{ data: 'YWJj' }], [null], [{}]] },
+  { nome: 'vereditoDeTamanhoPorArquivo', lib: vereditoDeTamanhoPorArquivo,
+    casos: [
+      [{ arquivos: [], teto: 100 }],
+      [{ arquivos: [{ nome: 'a.pdf', bytes: 100 }], teto: 100 }],
+      [{ arquivos: [{ nome: 'a.pdf', bytes: 101 }, { nome: 'b.txt', bytes: 5 }], teto: 100 }],
+      [{ arquivos: [{ nome: 'c.txt', bytes: null }], teto: 100 }],
+    ] },
   { nome: 'pesoDaChamadaDeClassificacao', lib: pesoDaChamadaDeClassificacao,
     casos: [[1_000_000], [0], [50_000_000]] },
   { nome: 'custoEstimadoPorConteudo', lib: custoEstimadoPorConteudo,
