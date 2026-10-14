@@ -3,8 +3,8 @@
 // Uso: node gerar-ecd-realista.mjs <milhões de linhas> <saída> [contas=2000]
 // O 9900 e o 9999 são coerentes: `Leitor/ler.mjs` tem de dar `lido`.
 import { createWriteStream } from 'node:fs';
-import { caminhoDaLinhaDeComando } from './caminho.mjs';
-const alvo = Math.round(Number(process.argv[2]) * 1e6), saida = caminhoDaLinhaDeComando(process.argv[3], 'arquivo de saída'), CONTAS = Number(process.argv[4] || 2000);
+import { nomeDaLinhaDeComando } from './caminho.mjs';
+const alvo = Math.round(Number(process.argv[2]) * 1e6), saida = nomeDaLinhaDeComando(process.argv[3], 'arquivo de saída'), CONTAS = Number(process.argv[4] || 2000);
 const out = createWriteStream(saida, { encoding: 'latin1' });
 const regs = {};
 let buf = [], total = 0;

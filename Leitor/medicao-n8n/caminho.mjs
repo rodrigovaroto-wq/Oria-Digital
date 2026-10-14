@@ -1,27 +1,26 @@
-// Os scripts de medição recebem caminhos pela linha de comando e servem arquivos
-// por HTTP. Nada aqui roda em produção, mas um caminho mal passado (um `..` a mais,
-// uma URL com `%2e%2e/`) leria ou escreveria fora de onde a medição mora. A regra
-// é a mesma nos dois lados: o caminho resolvido tem de ficar DENTRO de uma raiz
-// permitida, senão o script para com o motivo.
-import { resolve, sep } from 'node:path';
-import { tmpdir } from 'node:os';
-import { realpathSync } from 'node:fs';
+// Os scripts de medição recebem nomes pela linha de comando e servem arquivos por
+// HTTP. Nada aqui roda em produção, mas um caminho mal passado (um `..` a mais, uma
+// URL com `%2e%2e/`) leria ou escreveria fora de onde a medição mora. Por isso:
+//   - da linha de comando vem só um NOME (sem barra), e o arquivo fica no diretório
+//     de onde o script foi chamado;
+//   - por URL, só o que estiver dentro da pasta servida.
+import { basename, resolve, sep } from 'node:path';
 
-const dentro = (caminho, raiz) => caminho === raiz || caminho.startsWith(raiz + sep);
-
-/** Caminho da linha de comando: só dentro do diretório atual ou do temporário do sistema. */
-export function caminhoDaLinhaDeComando(arg, rotulo = 'caminho') {
-  if (typeof arg !== 'string' || arg === '') { console.error(`falta o ${rotulo}`); process.exit(2); }
-  const c = resolve(arg);
-  const raizes = [process.cwd(), realpathSync(tmpdir()), '/tmp'].map((r) => resolve(r));
-  if (!raizes.some((r) => dentro(c, r))) { console.error(`${rotulo} fora do diretório atual e do temporário: ${c}`); process.exit(2); }
-  return c;
+/** Nome de arquivo da linha de comando → caminho no diretório atual. Barra ou `..` encerram o script. */
+export function nomeDaLinhaDeComando(arg, rotulo = 'nome') {
+  const nome = basename(String(arg ?? ''));
+  if (nome === '' || nome !== arg || nome === '.' || nome === '..') {
+    console.error(`${rotulo}: passe só o nome do arquivo (sem pasta); ele é gravado no diretório atual (${process.cwd()})`);
+    process.exit(2);
+  }
+  return resolve(process.cwd(), nome);
 }
 
 /** Caminho pedido por URL a um servidor de arquivos: só dentro da pasta servida. Null = recusar. */
 export function caminhoDaUrl(raiz, url) {
   let pedido;
   try { pedido = decodeURIComponent(String(url).split('?')[0]); } catch { return null; }
-  const c = resolve(raiz, '.' + (pedido.startsWith('/') ? pedido : '/' + pedido));
-  return dentro(c, resolve(raiz)) ? c : null;
+  const base = resolve(raiz);
+  const c = resolve(base, '.' + (pedido.startsWith('/') ? pedido : '/' + pedido));
+  return c === base || c.startsWith(base + sep) ? c : null;
 }

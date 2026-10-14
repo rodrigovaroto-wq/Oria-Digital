@@ -1,9 +1,9 @@
 // ECD sintética com N linhas de I250 (lançamento), escrita em fluxo, com 9900/9999 coerentes.
-// Uso: node gerar-grande.mjs <milhoes> <saida>
+// Uso: node gerar-grande.mjs <milhoes> <nome do arquivo>  (gravado no diretório atual)
 import { createWriteStream } from 'node:fs';
-import { caminhoDaLinhaDeComando } from './caminho.mjs';
+import { nomeDaLinhaDeComando } from './caminho.mjs';
 import { gerarSped } from '../../Dados de Teste/fontes-oficiais/gerar.mjs';
-const n = Math.round(Number(process.argv[2]) * 1e6), saida = caminhoDaLinhaDeComando(process.argv[3], 'arquivo de saída');
+const n = Math.round(Number(process.argv[2]) * 1e6), saida = nomeDaLinhaDeComando(process.argv[3], 'arquivo de saída');
 const base = gerarSped('ECD', { linhasDeMovimento: 0 }).toString('latin1').split('\r\n').filter(Boolean);
 const cab = base.filter(l => !l.startsWith('|9')); // 0000, 0001, I010
 const out = createWriteStream(saida, { encoding: 'latin1' });

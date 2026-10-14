@@ -6,10 +6,11 @@
 const url = 'http://127.0.0.1:8099/' + $json.query.arq;
 const FATIA = Number($json.query.mb || 4) * 1048576;
 const t0 = Date.now();
-// O 9999 declarado mora num objeto: atribuído dentro de `linha()`, uma variável solta
-// parece ao analisador estático "sempre null" (Sonar S3403).
+// O 9999 declarado é atribuído dentro de `linha()`; o analisador estático não vê isso e
+// acusa a comparação de "sempre falsa" (Sonar S3403). Por isso `Object.is`, que para
+// números é o mesmo que `===`.
 const ctrl = { decl9999: null };
-let pos = 0, linhas = 0, resto = '', fatias = 0, total = null, amostra = null;
+let pos = 0, linhas = 0, resto = '', fatias = 0, total = Infinity, amostra = null;
 const regs = {};
 const linha = (l) => {
   if (l.endsWith('\r')) l = l.slice(0, -1);
@@ -19,7 +20,7 @@ const linha = (l) => {
   regs[reg] = (regs[reg] || 0) + 1;
   if (reg === '9999') ctrl.decl9999 = Number(l.split('|')[2]);
 };
-while (total === null || pos < total) {
+while (pos < total) {
   const r = await this.helpers.httpRequest({ url, headers: { Range: `bytes=${pos}-${pos + FATIA - 1}` }, returnFullResponse: true, encoding: 'arraybuffer', json: false });
   fatias++;
   total = Number(r.headers['content-range'].split('/')[1]);
@@ -33,4 +34,4 @@ while (total === null || pos < total) {
   pos += FATIA;
 }
 if (resto) linha(resto);
-return { json: { linhas, decl9999: ctrl.decl9999, bate9999: ctrl.decl9999 === linhas, fatias, amostra, ms: Date.now() - t0 } };
+return { json: { linhas, decl9999: ctrl.decl9999, bate9999: Object.is(ctrl.decl9999, linhas), fatias, amostra, ms: Date.now() - t0 } };

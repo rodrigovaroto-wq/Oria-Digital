@@ -1,6 +1,7 @@
 import http from 'node:http'; import fs from 'node:fs';
-import { caminhoDaLinhaDeComando, caminhoDaUrl } from './caminho.mjs';
-const dir = caminhoDaLinhaDeComando(process.argv[2], 'pasta servida');
+import { caminhoDaUrl } from './caminho.mjs';
+// Serve o diretório de onde foi chamado: rode-o DENTRO da pasta dos arquivos de teste.
+const dir = process.cwd();
 http.createServer((q, s) => {
   const f = caminhoDaUrl(dir, q.url);
   if (!f) { s.writeHead(403); return s.end(); }

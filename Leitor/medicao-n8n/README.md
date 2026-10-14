@@ -69,9 +69,10 @@ outro lado.
 
 ```bash
 npm install n8n@2.30.7                      # numa pasta fora do repositório
-node Leitor/medicao-n8n/gerar-grande.mjs 10 /tmp/ecd_10M.txt
-node Leitor/medicao-n8n/servir-range.mjs /tmp &          # o "Storage", porta 8099
-node Leitor/medicao-n8n/montar.mjs /tmp/wf              # os 4 workflows
+M=$PWD/Leitor/medicao-n8n; cd /tmp                       # os scripts gravam e servem o diretório atual
+node $M/gerar-grande.mjs 10 ecd_10M.txt
+node $M/servir-range.mjs &                               # o "Storage", porta 8099
+node $M/montar.mjs wf                                    # os 4 workflows
 # a tabela e a função da carga (ver no-ler-fatia.js): linha_sped + fn_carregar(bigint, text)
 n8n import:credentials ... ; n8n import:workflow --input=/tmp/wf/<id>.json ; n8n publish:workflow --id=<id>
 NODE_OPTIONS=--max-old-space-size=384 N8N_RUNNERS_MAX_OLD_SPACE_SIZE=192 n8n start

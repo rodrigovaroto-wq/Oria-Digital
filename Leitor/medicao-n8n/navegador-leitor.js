@@ -47,8 +47,9 @@ const centavos = (s) => { const [i, d = ''] = s.split(','); return Number(i) * 1
 async function lerSped(file) {
   const t0 = performance.now();
   const sha = new Sha256(), dec = new TextDecoder('latin1'), leitor = file.stream().getReader();
-  // O 9999 declarado mora num objeto: atribuído dentro de `processar()`, uma variável
-  // solta parece ao analisador estático "sempre null" (Sonar S3403).
+  // O 9999 declarado é atribuído dentro de `processar()`; o analisador estático não vê
+  // isso e acusa a comparação de "sempre falsa" (Sonar S3403). `Object.is` é o mesmo que
+  // `===` para números.
   const ctrl = { decl9999: null };
   let resto = '', linha = 0, mes = null;
   const contagem = {}, decl9900 = {}, guardadas = [], agregado = new Map();
@@ -83,7 +84,7 @@ async function lerSped(file) {
   processar(resto + dec.decode());
   const resumo = {
     hash_sha256: sha.hex(), bytes: file.size, linhas: linha, controle_declarado: ctrl.decl9999,
-    bate9999: ctrl.decl9999 === linha,
+    bate9999: Object.is(ctrl.decl9999, linha),
     bate9900: Object.entries(decl9900).every(([r, q]) => contagem[r] === q),
     contagem, guardadas,
     i250_por_conta_mes: Array.from(agregado, ([k, [deb, cred, n, primeira]]) => { const [conta, mes] = k.split('|'); return { conta, mes, deb, cred, n, primeira }; }),

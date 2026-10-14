@@ -5,7 +5,7 @@
 import http from 'node:http';
 import { createReadStream, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { caminhoDaLinhaDeComando, caminhoDaUrl } from './caminho.mjs';
+import { caminhoDaUrl } from './caminho.mjs';
 import { join, dirname, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -32,7 +32,7 @@ const pagina = await navegador.newPage();
 await pagina.goto(base + '/Leitor/medicao-n8n/README.md');
 await pagina.setContent('<input type="file" id="f">');
 let falhou = false;
-for (const arquivo of process.argv.slice(2).map((a) => caminhoDaLinhaDeComando(a, 'arquivo'))) {
+for (const arquivo of process.argv.slice(2)) {
   await pagina.setInputFiles('#f', arquivo);
   const cdp = await pagina.context().newCDPSession(pagina);
   await cdp.send('Performance.enable');
