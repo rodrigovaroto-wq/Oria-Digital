@@ -4,9 +4,9 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { caminhoDaLinhaDeComando } from './caminho.mjs';
 const aqui = dirname(fileURLToPath(import.meta.url));
-const saida = process.argv[2];
-if (!saida) { console.error('uso: node montar.mjs <pasta de saída>'); process.exit(2); }
+const saida = caminhoDaLinhaDeComando(process.argv[2], 'pasta de saída');
 mkdirSync(saida, { recursive: true });
 const ler = f => readFileSync(join(aqui, f), 'utf8');
 const pos = (i) => [i * 220, 0];

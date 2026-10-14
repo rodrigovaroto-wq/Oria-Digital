@@ -96,7 +96,8 @@ export default function UploadForm({
     let cancelado = false;
     for (const f of arquivos) {
       const chave = chaveDe(f);
-      deteccaoDe(f).then((d) => {
+      // `void`: `deteccaoDe` nunca rejeita (o `.catch(() => null)` acima vira "não examinado").
+      void deteccaoDe(f).then((d) => {
         if (!cancelado) setDeteccoes((atuais) => (chave in atuais ? atuais : { ...atuais, [chave]: d }));
       });
     }

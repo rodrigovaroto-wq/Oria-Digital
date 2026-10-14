@@ -19,7 +19,11 @@ const contexto = self as unknown as {
   onmessage: ((e: MessageEvent<MensagemParaOWorker>) => void) | null;
 };
 
-contexto.onmessage = async (e) => {
+// O handler é síncrono e a leitura, assíncrona: um `onmessage` async devolveria uma
+// Promise que o navegador descarta. Toda falha vira mensagem `erro` (o catch abaixo).
+contexto.onmessage = (e) => { void ler(e); };
+
+async function ler(e: MessageEvent<MensagemParaOWorker>) {
   try {
     let ultimo = 0;
     const fluxo = fluxoComProgresso(e.data.arquivo.stream(), (lidos) => {
@@ -33,4 +37,4 @@ contexto.onmessage = async (e) => {
   } catch (err) {
     contexto.postMessage({ tipo: "erro", mensagem: (err as Error).message });
   }
-};
+}

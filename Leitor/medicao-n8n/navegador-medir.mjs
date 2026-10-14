@@ -3,10 +3,14 @@
 // Uso: node navegador-medir.mjs <arquivo>   (playwright global, Chromium em /opt/pw-browsers)
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
-import { execSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { caminhoDaLinhaDeComando } from './caminho.mjs';
 const require = createRequire(import.meta.url);
-let pw; try { pw = require('playwright'); } catch { pw = require(execSync('npm root -g').toString().trim() + '/playwright'); }
-const arquivo = process.argv[2];
+// O playwright global mora em <prefixo do node>/lib/node_modules: achado pelo executável do
+// próprio node, e não por `npm root -g` (um comando resolvido pelo PATH).
+let pw; try { pw = require('playwright'); } catch { pw = require(join(dirname(dirname(process.execPath)), 'lib', 'node_modules', 'playwright')); }
+const arquivo = caminhoDaLinhaDeComando(process.argv[2], 'arquivo');
 const navegador = await pw.chromium.launch();
 const pagina = await navegador.newPage();
 await pagina.setContent('<input type="file" id="f">');
@@ -19,7 +23,15 @@ const amostrar = setInterval(async () => {
   try {
     const { metrics } = await cdp.send('Performance.getMetrics');
     picoHeap = Math.max(picoHeap, metrics.find(m => m.name === 'JSHeapUsedSize').value);
-    const rss = Number(execSync("ps -eo rss,args | grep -E '[c]hrom' | awk '{s+=$1} END{print s+0}'").toString());
+    // RSS dos processos do Chromium lido em /proc, e não por `ps` pelo PATH.
+    let rss = 0;
+    for (const pid of readdirSync('/proc').filter((p) => /^\d+$/.test(p))) {
+      try {
+        if (!/chrom/i.test(readFileSync(`/proc/${pid}/cmdline`, 'latin1'))) continue;
+        const m = /VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${pid}/status`, 'latin1'));
+        if (m) rss += Number(m[1]);
+      } catch { /* o processo terminou entre a lista e a leitura */ }
+    }
     picoRss = Math.max(picoRss, rss);
   } catch { /* fim da sessão */ }
 }, 500);

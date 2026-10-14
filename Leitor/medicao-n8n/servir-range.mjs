@@ -1,7 +1,9 @@
 import http from 'node:http'; import fs from 'node:fs';
-const dir = process.argv[2];
+import { caminhoDaLinhaDeComando, caminhoDaUrl } from './caminho.mjs';
+const dir = caminhoDaLinhaDeComando(process.argv[2], 'pasta servida');
 http.createServer((q, s) => {
-  const f = dir + '/' + decodeURIComponent(q.url.split('?')[0].slice(1));
+  const f = caminhoDaUrl(dir, q.url);
+  if (!f) { s.writeHead(403); return s.end(); }
   let st; try { st = fs.statSync(f); } catch { s.writeHead(404); return s.end(); }
   const m = /bytes=(\d+)-(\d*)/.exec(q.headers.range || '');
   if (!m) { s.writeHead(200, { 'content-length': st.size }); return fs.createReadStream(f).pipe(s); }

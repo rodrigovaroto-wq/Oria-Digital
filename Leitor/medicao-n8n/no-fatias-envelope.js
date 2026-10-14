@@ -6,7 +6,10 @@
 const url = 'http://127.0.0.1:8099/' + $json.query.arq;
 const FATIA = Number($json.query.mb || 4) * 1048576;
 const t0 = Date.now();
-let pos = 0, linhas = 0, resto = '', decl9999 = null, fatias = 0, total = null, amostra = null;
+// O 9999 declarado mora num objeto: atribuído dentro de `linha()`, uma variável solta
+// parece ao analisador estático "sempre null" (Sonar S3403).
+const ctrl = { decl9999: null };
+let pos = 0, linhas = 0, resto = '', fatias = 0, total = null, amostra = null;
 const regs = {};
 const linha = (l) => {
   if (l.endsWith('\r')) l = l.slice(0, -1);
@@ -14,7 +17,7 @@ const linha = (l) => {
   linhas++;
   const reg = l.slice(1, 5);
   regs[reg] = (regs[reg] || 0) + 1;
-  if (reg === '9999') decl9999 = Number(l.split('|')[2]);
+  if (reg === '9999') ctrl.decl9999 = Number(l.split('|')[2]);
 };
 while (total === null || pos < total) {
   const r = await this.helpers.httpRequest({ url, headers: { Range: `bytes=${pos}-${pos + FATIA - 1}` }, returnFullResponse: true, encoding: 'arraybuffer', json: false });
@@ -30,4 +33,4 @@ while (total === null || pos < total) {
   pos += FATIA;
 }
 if (resto) linha(resto);
-return { json: { linhas, decl9999, bate9999: decl9999 === linhas, fatias, amostra, ms: Date.now() - t0 } };
+return { json: { linhas, decl9999: ctrl.decl9999, bate9999: ctrl.decl9999 === linhas, fatias, amostra, ms: Date.now() - t0 } };

@@ -47,7 +47,10 @@ const centavos = (s) => { const [i, d = ''] = s.split(','); return Number(i) * 1
 async function lerSped(file) {
   const t0 = performance.now();
   const sha = new Sha256(), dec = new TextDecoder('latin1'), leitor = file.stream().getReader();
-  let resto = '', linha = 0, mes = null, decl9999 = null;
+  // O 9999 declarado mora num objeto: atribuído dentro de `processar()`, uma variável
+  // solta parece ao analisador estático "sempre null" (Sonar S3403).
+  const ctrl = { decl9999: null };
+  let resto = '', linha = 0, mes = null;
   const contagem = {}, decl9900 = {}, guardadas = [], agregado = new Map();
   const processar = (l) => {
     if (l.endsWith('\r')) l = l.slice(0, -1);
@@ -57,7 +60,7 @@ async function lerSped(file) {
     contagem[reg] = (contagem[reg] || 0) + 1;
     if (GUARDAR.has(reg)) {
       guardadas.push([linha, l]);
-      if (reg === '9999') decl9999 = Number(l.split('|')[2]);
+      if (reg === '9999') ctrl.decl9999 = Number(l.split('|')[2]);
       else if (reg === '9900') { const c = l.split('|'); decl9900[c[2]] = Number(c[3]); }
     } else if (reg === 'I200') {
       mes = l.split('|')[3].slice(2, 4);
@@ -79,8 +82,8 @@ async function lerSped(file) {
   }
   processar(resto + dec.decode());
   const resumo = {
-    hash_sha256: sha.hex(), bytes: file.size, linhas: linha, controle_declarado: decl9999,
-    bate9999: decl9999 === linha,
+    hash_sha256: sha.hex(), bytes: file.size, linhas: linha, controle_declarado: ctrl.decl9999,
+    bate9999: ctrl.decl9999 === linha,
     bate9900: Object.entries(decl9900).every(([r, q]) => contagem[r] === q),
     contagem, guardadas,
     i250_por_conta_mes: Array.from(agregado, ([k, [deb, cred, n, primeira]]) => { const [conta, mes] = k.split('|'); return { conta, mes, deb, cred, n, primeira }; }),
