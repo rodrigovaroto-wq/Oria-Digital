@@ -456,6 +456,11 @@ jobs:
         # correção, 5 dos 20 asserts reprovam.
         run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-exclusividade-ciclo.mts
 
+      - name: Suíte da tela do perímetro (toda chave de falta traduzida, a desconhecida aparece crua)
+        # A tela só traduz o vocabulário de `fn_perimetro_situacao` (0208); chave sem frase ou engolida
+        # faria a entidade parecer sem falta. Desligada a tradução, 7 dos 48 asserts reprovam (5 mutações).
+        run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-perimetro.mts
+
       - name: Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)
         # A 0158 endureceu o `pronto` e publicou a FRAÇÃO de contas com premissa,
         # mas um número no banco que a tela não mostra não corrige nada: o chip

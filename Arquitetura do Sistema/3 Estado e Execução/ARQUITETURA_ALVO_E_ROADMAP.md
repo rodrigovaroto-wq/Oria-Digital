@@ -454,7 +454,7 @@ F14→F16 · F15→F17 (contínua).
 | | |
 |---|---|
 | **Objetivo** | Entidade com identidade forte e perímetro explícito |
-| **Estado** | 🟡 55% — `entidade`+CNPJ, `fn_fundir_entidade`, `checklist_item_status` |
+| **Estado** | 🟡 55% (estimativa de 09/09, **não remedida** em 15/10) — `entidade`+CNPJ, `fn_fundir_entidade`, `checklist_item_status`. **S109 (15/10/2026): fatia 1.8 FEITA no repositório, NÃO aplicada** — 0208–0211 e a tela `/casos/[id]/perimetro`: as funções da F1 ganham chamador, e a escrita do perímetro ganha policy para `authenticated` (RLS). Ainda fecham a F1: aplicar as 0208–0211 (**sonda NÃO conferida**), declarar o perímetro pela tela, o aceite financeiro (**NÃO VERIFICADO** sem o COMBINADO do cliente) e a decisão 1.7 (controle familiar) |
 | **Gap** | participação societária, papel tipado, escopo de consolidação, FK preparada |
 | **Dep.** | F0 |
 | **Banco** | `entidade.participacao`, `papel_no_grupo` enum, `perimetro(caso, entidade, escopo, desde, ate)` |
@@ -502,7 +502,7 @@ citadas abaixo (G1–G27) são as do §13 dela.
 | | |
 |---|---|
 | **Objetivo** | Ler e usar todos os módulos e grupos de SPED, eSocial, logística e CNAB, mais o CNAE, com proveniência por arquivo e linha, e captar esses arquivos com o mínimo de ação humana |
-| **Estado** | 🟡 **Etapa 1 FEITA no repositório (sessão 107, PR #257, mergeado).** **Rota mudada na S108 (13/10/2026):** o leitor roda **no navegador do analista**, com o mesmo `Leitor/lib` do CLI, e só o **resumo** vai ao banco (`0207`, em partes). O lançamento individual é descartado. Não há serviço a hospedar: P5 deixa de ser pré-requisito. Feito: `Leitor/` (famílias G5, envelope em fluxo G6, leiautes G7, formatos G10), `0206` (envelope, releitura, versão vigente G9, desligamento por caso G25) e `0207` (resumo). O n8n recusa arquivo acima de 15 MiB antes de ler, e o portal tira o oficial do lote. **Aplicação: `0206` aplicada pelo dono (NÃO CONFERIDA pela sonda); `0207` NÃO aplicada.** Testes: 47 do leitor, 92 do envio oficial e 58 asserts da `0207`, medidos não-vazios. **Onda 1: BLOQUEADA**, espera a F1, 3 ECDs reais e a conferência de `leiautes.mjs` e `resumo.mjs` contra o Guia Prático. Nada disso está em produção: o deploy do portal e a republicação são do dono |
+| **Estado** | 🟡 **Etapa 1 FEITA no repositório (sessão 107, PR #257, mergeado).** **Rota mudada na S108 (13/10/2026):** o leitor roda **no navegador do analista**, com o mesmo `Leitor/lib` do CLI, e só o **resumo** vai ao banco (`0207`, em partes). O lançamento individual é descartado. Não há serviço a hospedar: P5 deixa de ser pré-requisito. **S109 (15/10/2026): o zip do contador abre no navegador** (`8148a3c`: `Leitor/lib/zip.mjs` sobre `Blob`, ZIP64, CRC e fluxo; medido no Chromium: 9,58 GB, 312 entradas, 95,2 s, heap do worker 45 MB) e o portal deixa de mandar zip ao n8n. **NÃO verificado em produção.** Feito: `Leitor/` (famílias G5, envelope em fluxo G6, leiautes G7, formatos G10), `0206` (envelope, releitura, versão vigente G9, desligamento por caso G25) e `0207` (resumo). O n8n recusa arquivo acima de 15 MiB antes de ler, e o portal tira o oficial do lote. **Aplicação: `0206` aplicada pelo dono (NÃO CONFERIDA pela sonda); `0207` NÃO aplicada.** Testes: 47 do leitor, 92 do envio oficial e 58 asserts da `0207`, medidos não-vazios. **Onda 1: BLOQUEADA**, espera a F1, 3 ECDs reais e a conferência de `leiautes.mjs` e `resumo.mjs` contra o Guia Prático. Nada disso está em produção: o deploy do portal e a republicação são do dono |
 | **Gap** | Etapa 0 **quase fechada em 13/10/2026**: 10 de 11 decisões tomadas (tabela no fim da Espec. 12). Sobra a D12.3 (Integra Contador, aguarda cotação), que não bloqueia a etapa 1 nem a onda 1, e os [A CONFIRMAR]. Open Finance foi recusado (D12.4 = D6), e o extrato vem sempre por arquivo |
 | **Dep.** | Etapa 1 depende só da F0. As ondas dependem de **F1** (CNPJ por entidade e perímetro). As reconciliações conta a conta (S2, por exemplo) esperam **F4**. A eliminação intragrupo das notas (G11) espera **F6**. Ver a tabela de etapas |
 | **Agentes** | `migrations-postgres` (tabelas, tipos, reconciliações), `n8n-workflow` (roteador, coletores, republicação), `portal-export` (saída no book, envio direto ao Storage, painel), `suites-invariantes` (cada reconciliação medida não-vazia), `revisor-defeito-silencioso` (todo diff) |
@@ -1245,6 +1245,21 @@ vieram com zero campos; DISTRIBUIDORAS PR/RS não têm contrato) e **uma decisã
 controle familiar conta como controle comum** — relevante na prática de grupo econômico, mas sem
 conceito correspondente no modelo (não há "bloco familiar"; `controlador` é uma pessoa). Se o dono
 decidir que conta, é uma fatia nova de modelo, não um cadastro.
+
+#### Fatia 1.8 — O caminho de escrita que ninguém chamava (15/10/2026, S109)
+**Defeito medido:** as funções da F1 (0178–0183) não tinham chamador fora de `Supabase/test`, e o
+perímetro só se declarava por SQL. Depois, medido com `set local role authenticated`: as tabelas
+`perimetro`, `controlador` e `entidade_controlador` só tinham policy de SELECT, então definir escopo
+e registrar controlador davam 42501. Os testes rodavam como superusuário e nunca viam isso (regra 7).
+**FEITO no repositório, NÃO aplicado:** `0208` (situação e veredito), `0209` (escopo idempotente e
+encerrar), `0210` (policies de escrita, sem DELETE), `0211` (fusão que leva o perímetro da absorvida),
+e a tela `/casos/[id]/perimetro`. Números e defeitos: `ESTADO.md`, SESSÃO 109, e a ficha
+`.claude/conhecimento/fichas/f1-perimetro-0208-0211-caminho-de-escrita.md`.
+**Não fecha a F1 sozinha.** O que ainda falta: aplicar as quatro migrations em ordem, com a sonda
+conferindo cada uma; declarar o perímetro do mandato AMO pela tela (papel, forma de controle, escopo,
+sócios) e resolver as 4 entidades fantasmas; o aceite financeiro, que segue **NÃO VERIFICADO** sem o
+COMBINADO do cliente; e a decisão 1.7 (controle familiar conta como controle comum?). Efeito dito e não
+corrigido: a fusão falha alto quando a absorvida é citada em `caso_pergunta` (FK `NO ACTION`).
 
 ### 12.3 O que a F1 NÃO faz, dito de propósito
 

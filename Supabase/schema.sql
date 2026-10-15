@@ -3997,6 +3997,16 @@ declare
   v_vinculos_de      jsonb;
   v_vinculos_movidos int := 0;
   v_descartados      jsonb := '[]'::jsonb;
+  -- 0211
+  v_papel_de         entidade_papel_no_grupo;
+  v_controladora_de  uuid;
+  v_pct_de           numeric;
+  r                  record;
+  v_s                record;
+  v_perim_movidos    int := 0;
+  v_perim_descartado jsonb := '[]'::jsonb;
+  v_controladas      jsonb;
+  v_n_controladas    int := 0;
 begin
   if p_de_id = p_para_id then
     raise exception 'fundir uma entidade nela mesma não faz sentido (%)', p_de_id;
@@ -4006,6 +4016,13 @@ begin
   select razao_social into v_para from entidade where id = p_para_id and caso_id = p_caso_id;
   if v_de is null or v_para is null then
     raise exception 'entidade não encontrada neste mandato (de=%, para=%)', p_de_id, p_para_id;
+  end if;
+
+  -- 0211: a sobrevivente controlada pela absorvida vira controlada por si mesma. Isso não tem leitura
+  -- automática (a forma declarada deixa de fazer sentido), então recusa em vez de adivinhar. Antes da 0211
+  -- era a FK entidade_controladora_id_fkey que recusava, com uma mensagem do Postgres.
+  if exists (select 1 from entidade where id = p_para_id and controladora_id = p_de_id) then
+    raise exception 'a entidade "%" é controlada por "%", que está sendo fundida nela: a participação passaria a ser dela com ela mesma. Remova a participação (fn_entidade_definir_participacao) e a forma de controle e refaça a fusão.', v_para, v_de;
   end if;
 
   update documento set entidade_id = p_para_id
@@ -4024,7 +4041,9 @@ begin
 
   -- 0183: o controle declarado de A. Sem isto, o `on delete cascade` de entidade_controlador o
   -- apagava junto com a linha (ver o item (10) da migration 0183).
-  select forma_de_controle into v_forma_de from entidade where id = p_de_id;
+  select forma_de_controle, papel_no_grupo, controladora_id, percentual_participacao
+    into v_forma_de, v_papel_de, v_controladora_de, v_pct_de
+    from entidade where id = p_de_id;
   select coalesce(jsonb_agg(jsonb_build_object('controlador_id', ec.controlador_id,
                                                'controlador', k.nome,
                                                'percentual', ec.percentual)
@@ -4039,6 +4058,41 @@ begin
   else
     v_descartados := v_vinculos_de;
   end if;
+
+  -- 0211: o perímetro da absorvida. `perimetro_entidade_id_fkey` é ON DELETE CASCADE: sem isto o
+  -- `delete from entidade` abaixo levava os escopos dela embora, sem evento. REGRA: cada intervalo da
+  -- absorvida passa para a sobrevivente, EXCETO o que se sobrepõe a um intervalo do MESMO escopo que ela já
+  -- tem (inclusive o vigente, que a unicidade perimetro_atual_unico de qualquer jeito não deixaria
+  -- duplicar). O que sobrepõe NÃO é fundido em um intervalo maior: isso inventaria um início que ninguém
+  -- declarou. Fica o da sobrevivente, o da absorvida vai para o evento (perimetro_descartado), com o
+  -- intervalo da sobrevivente que o cobriu, e o analista reabre o escopo com fn_perimetro_definir_escopo se
+  -- a data certa for outra.
+  for r in select id, escopo, desde, ate from perimetro
+            where caso_id = p_caso_id and entidade_id = p_de_id order by escopo, desde loop
+    select s.desde, s.ate into v_s from perimetro s
+     where s.caso_id = p_caso_id and s.entidade_id = p_para_id and s.escopo = r.escopo
+       and r.desde <= coalesce(s.ate, 'infinity'::date)
+       and coalesce(r.ate, 'infinity'::date) >= s.desde
+     limit 1;
+    if found then
+      v_perim_descartado := v_perim_descartado || jsonb_build_array(jsonb_build_object(
+        'escopo', r.escopo, 'desde', r.desde, 'ate', r.ate,
+        'motivo', 'sobrepõe um intervalo do mesmo escopo que a sobrevivente já tinha',
+        'sobrevivente_desde', v_s.desde, 'sobrevivente_ate', v_s.ate));
+    else
+      update perimetro set entidade_id = p_para_id where id = r.id;
+      v_perim_movidos := v_perim_movidos + 1;
+    end if;
+  end loop;
+
+  -- 0211: quem era controlada pela absorvida passa a ser controlada pela sobrevivente (a FK
+  -- entidade_controladora_id_fkey recusava a fusão inteira com uma mensagem do Postgres).
+  select coalesce(jsonb_agg(jsonb_build_object('entidade_id', e.id, 'razao_social', e.razao_social)
+                            order by e.razao_social), '[]'::jsonb), count(*)::int
+    into v_controladas, v_n_controladas
+    from entidade e where e.caso_id = p_caso_id and e.controladora_id = p_de_id;
+  update entidade set controladora_id = p_para_id
+   where caso_id = p_caso_id and controladora_id = p_de_id;
 
   -- A pendência de ambiguidade da entidade fundida está respondida.
   update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = p_por
@@ -4057,16 +4111,26 @@ begin
   values (p_por, 'entidade_fundida', 'entidade:' || p_para_id,
           jsonb_build_object('entidade_id', p_de_id, 'razao_social', v_de,
                              -- 0183
-                             'forma_de_controle', v_forma_de, 'vinculos', v_vinculos_de),
+                             'forma_de_controle', v_forma_de, 'vinculos', v_vinculos_de,
+                             -- 0211: o que a linha apagada declarava e a sobrevivente não herda
+                             'papel_no_grupo', v_papel_de, 'controladora_id', v_controladora_de,
+                             'percentual_participacao', v_pct_de),
           jsonb_build_object('entidade_id', p_para_id, 'razao_social', v_para,
                              'documentos_movidos', v_docs,
                              -- 0183
                              'vinculos_movidos', v_vinculos_movidos,
-                             'vinculos_descartados', v_descartados));
+                             'vinculos_descartados', v_descartados,
+                             -- 0211
+                             'perimetro_movido', v_perim_movidos,
+                             'perimetro_descartado', v_perim_descartado,
+                             'controladas_repontadas', v_controladas));
 
   return jsonb_build_object('fundida', v_de, 'em', v_para, 'documentos', v_docs,
                             'vinculos_movidos', v_vinculos_movidos,
-                            'vinculos_descartados', jsonb_array_length(v_descartados));
+                            'vinculos_descartados', jsonb_array_length(v_descartados),
+                            'perimetro_movido', v_perim_movidos,
+                            'perimetro_descartado', jsonb_array_length(v_perim_descartado),
+                            'controladas_repontadas', v_n_controladas);
 end;
 $$;
 
@@ -4074,7 +4138,7 @@ $$;
 -- Name: FUNCTION fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) IS 'Funde duas entidades que são a mesma empresa, levando junto documentos, checklist, pendências e reconciliações (0153). Nada some sem rastro: evento_auditoria guarda o nome que existia e quantos documentos mudaram de dono. 0183: leva também os vínculos de entidade_controlador quando a sobrevivente não tem nenhum (antes, o on delete cascade os apagava); se ela já tem, os da absorvida não são somados e vão para o evento como vinculos_descartados. Não herda forma_de_controle (registra no evento) e resolve as pendências de forma e de papel da absorvida.';
+COMMENT ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) IS 'Funde duas entidades que são a mesma empresa, levando junto documentos, checklist, pendências e reconciliações (0153). Nada some sem rastro: evento_auditoria guarda o nome que existia e quantos documentos mudaram de dono. 0183: leva também os vínculos de entidade_controlador quando a sobrevivente não tem nenhum (se já tem, os da absorvida vão para o evento como vinculos_descartados). Não herda forma_de_controle (registra no evento) e resolve as pendências de forma e de papel da absorvida. 0211: leva os intervalos de perimetro da absorvida, exceto os que se sobrepõem a um intervalo do mesmo escopo da sobrevivente (esses ficam no evento em perimetro_descartado); repõe como controladora da sobrevivente quem era controlado pela absorvida (controladas_repontadas); recusa em português se a sobrevivente era controlada pela absorvida; registra no evento o papel, a controladora e o percentual da absorvida.';
 
 --
 -- Name: fn_golden_abrir_rodada(text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -5692,6 +5756,20 @@ begin
            and a.attnum    > 0
            and not a.attisdropped);
 
+    elsif r.tipo = 'policy' then
+      -- 0210: policy de RLS é catalogada POR SI (objeto = 'tabela.nome_da_policy'). Nenhum outro tipo a
+      -- enxerga: a tabela existe, a função existe, e sem a policy o authenticated leva 42501 ao escrever.
+      v_alvo := to_regclass('public.' || split_part(r.objeto, '.', 1));
+      if v_alvo is null then
+        v_ok  := false;
+        v_det := 'a tabela nem existe';
+      else
+        v_ok := exists (select 1 from pg_policy p
+                         where p.polrelid = v_alvo and p.polname = split_part(r.objeto, '.', 2));
+        v_det := case when v_ok then 'policy presente'
+                      else 'a policy não existe na tabela (RLS ligada sem ela nega a operação ao authenticated)' end;
+      end if;
+
     elsif r.tipo = 'gatilho' then
       -- 0189: gatilho é catalogado POR SI, não pela função que ele chama.
       --
@@ -5785,7 +5863,7 @@ $$;
 -- Name: FUNCTION fn_instalacao_conferir(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada.';
+COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy.';
 
 --
 -- Name: fn_instalacao_resumo(); Type: FUNCTION; Schema: public; Owner: -
@@ -7491,6 +7569,8 @@ CREATE FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id
 declare
   v_caso_da_entidade uuid;
   v_novo_id          uuid;
+  v_vig_id           uuid;
+  v_vig_desde        date;
 begin
   if p_desde is null then
     raise exception 'p_desde não pode ser nulo — todo intervalo de perímetro tem início';
@@ -7504,10 +7584,22 @@ begin
     raise exception 'entidade % não pertence ao caso %', p_entidade_id, p_caso_id;
   end if;
 
-  -- A MUDANÇA de perímetro no meio do mandato: o intervalo anterior GANHA UM FIM, não é
-  -- sobrescrito. Sem esta linha, uma segunda chamada para o mesmo (caso, entidade, escopo)
-  -- violaria `perimetro_atual_unico` (dois "vigente" ao mesmo tempo) em vez de fechar o
-  -- primeiro — é esta a MEDIÇÃO NÃO-VAZIA do cabeçalho desta migration.
+  select id, desde into v_vig_id, v_vig_desde
+    from perimetro
+   where caso_id = p_caso_id and entidade_id = p_entidade_id and escopo = p_escopo
+     and ate is null;
+
+  if v_vig_id is not null then
+    if v_vig_desde = p_desde then
+      return v_vig_id;  -- já vigente desde esta data: nada a gravar (ver o cabeçalho)
+    end if;
+    if v_vig_desde > p_desde then
+      raise exception 'a entidade já está no escopo "%" desde %, depois de %: não dá para começar o escopo antes do intervalo vigente. Para mudar o início, encerre o escopo (fn_perimetro_encerrar_escopo) ou corrija o intervalo por SQL direto.',
+        p_escopo, v_vig_desde, p_desde;
+    end if;
+  end if;
+
+  -- A MUDANÇA de perímetro no meio do mandato: o intervalo anterior GANHA UM FIM, não é sobrescrito.
   update perimetro
      set ate = p_desde - 1
    where caso_id = p_caso_id and entidade_id = p_entidade_id and escopo = p_escopo
@@ -7529,7 +7621,215 @@ $$;
 -- Name: FUNCTION fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) IS '0180: o ÚNICO caminho de escrita de `perimetro` — chamado por um humano/analista (portal ou SQL direto; o portal não é escopo desta fatia). Fecha o intervalo aberto anterior do mesmo (caso, entidade, escopo) com `ate = p_desde - 1` em vez de sobrescrever — é a mudança de perímetro no meio do mandato que o roadmap cita (fatia 1.4). Grava evento_auditoria (ator = p_autor, nunca ''sistema:...''). NÃO deriva nada de entidade.papel_no_grupo (0179) — ligar as duas fatias é decisão de F4, fora do escopo desta migration.';
+COMMENT ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) IS '0180: o caminho de escrita que ABRE intervalo de `perimetro`; fecha o vigente anterior do mesmo (caso, entidade, escopo) com `ate = p_desde - 1` em vez de sobrescrever. 0209: confirmar o mesmo escopo com o MESMO desde é idempotente (devolve o id vigente, sem evento); p_desde ANTERIOR ao desde vigente é exceção em português (antes estourava o check perimetro_intervalo_valido). Grava evento_auditoria (ator = p_autor). Para TIRAR a entidade do escopo, fn_perimetro_encerrar_escopo.';
+
+--
+-- Name: fn_perimetro_encerrar_escopo(uuid, uuid, text, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) RETURNS uuid
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_id    uuid;
+  v_desde date;
+begin
+  if p_ate is null then
+    raise exception 'p_ate não pode ser nulo — informe o último dia em que a entidade ainda está no escopo';
+  end if;
+
+  select id, desde into v_id, v_desde
+    from perimetro
+   where caso_id = p_caso_id and entidade_id = p_entidade_id and escopo = p_escopo
+     and ate is null;
+
+  if v_id is null then
+    raise exception 'a entidade % não tem intervalo vigente no escopo "%" neste caso: nada a encerrar (ela já foi encerrada, ou o escopo tem outro nome)',
+      p_entidade_id, p_escopo;
+  end if;
+  if p_ate < v_desde then
+    raise exception 'o intervalo vigente no escopo "%" começou em %: não dá para encerrá-lo em % (antes do começo)',
+      p_escopo, v_desde, p_ate;
+  end if;
+
+  update perimetro set ate = p_ate where id = v_id;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values (p_autor, 'perimetro_escopo_encerrado', 'entidade:' || p_entidade_id,
+          jsonb_build_object('caso_id', p_caso_id, 'escopo', p_escopo, 'desde', v_desde, 'ate', p_ate));
+
+  return v_id;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) IS '0209: tira a entidade do escopo fechando o intervalo vigente com ate = p_ate (último dia DENTRO, inclusivo), sem abrir outro. Recusa, em português, p_ate antes do desde e a entidade sem intervalo vigente no escopo (um encerramento silencioso afirmaria uma remoção que não houve). Grava evento_auditoria perimetro_escopo_encerrado. Devolve o id do intervalo.';
+
+--
+-- Name: fn_perimetro_situacao(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_perimetro_situacao(p_caso_id uuid) RETURNS TABLE(entidade_id uuid, razao_social text, cnpj text, fantasma boolean, papel_no_grupo public.entidade_papel_no_grupo, forma_de_controle public.entidade_forma_de_controle, controladora_id uuid, percentual_participacao numeric, escopos_vigentes text[], controladores jsonb, pendencias_abertas text[], falta text[], pronta boolean)
+    LANGUAGE sql STABLE
+    AS $_$
+  with pend as materialized (
+    -- uma linha por (entidade, rótulo) das pendências de perímetro ABERTAS. A entidade vem da própria
+    -- pendência ou, nas entidade_incorreta que só citam o documento, da entidade onde o documento está.
+    select distinct
+           coalesce(p.entidade_id, d.entidade_id,
+                    case when p.motivo ~ '^contrato_social_ausente:[0-9a-f-]{36}$'
+                         then substr(p.motivo, 25)::uuid end) as entidade_id,
+           case
+             when p.tipo = 'entidade_incorreta' then
+               case when p.motivo is null or p.motivo like 'diagnostico:%' then 'entidade_incorreta'
+                    else split_part(p.motivo, ':', 1) end
+             when p.tipo = 'item_faltante' then 'contrato_social_ausente'
+             else p.tipo::text
+           end as rotulo
+      from pendencia p
+      left join documento d on d.id = p.documento_id
+     where p.caso_id = p_caso_id
+       and p.estado in ('aberta', 'em_correcao_interna', 'reenviada_ao_cliente')
+       and (p.tipo in ('papel_no_grupo_indefinido', 'forma_de_controle_indefinida', 'entidade_incorreta')
+            or (p.tipo = 'item_faltante' and p.motivo like 'contrato_social_ausente:%'))
+  ),
+  base as (
+    select e.id, e.razao_social, e.cnpj, e.papel_no_grupo, e.forma_de_controle,
+           e.controladora_id, e.percentual_participacao,
+           coalesce((select array_agg(distinct p.escopo order by p.escopo)
+                       from perimetro p
+                      where p.caso_id = p_caso_id and p.entidade_id = e.id
+                        and p.desde <= current_date
+                        and (p.ate is null or p.ate >= current_date)), '{}'::text[]) as escopos,
+           coalesce((select jsonb_agg(jsonb_build_object(
+                         'controlador_id', c.id, 'nome', c.nome, 'tipo_pessoa', c.tipo_pessoa,
+                         'documento', c.documento, 'percentual', ec.percentual)
+                       order by c.nome, c.id)
+                       from entidade_controlador ec
+                       join controlador c on c.id = ec.controlador_id
+                      where ec.caso_id = p_caso_id and ec.entidade_id = e.id), '[]'::jsonb) as ctrls,
+           (select count(*) from entidade_controlador ec
+             where ec.caso_id = p_caso_id and ec.entidade_id = e.id) as n_vinculos,
+           coalesce((select array_agg(pe.rotulo order by pe.rotulo)
+                       from pend pe where pe.entidade_id = e.id), '{}'::text[]) as rotulos
+      from entidade e
+     where e.caso_id = p_caso_id
+  ),
+  marcada as (
+    select b.*, 'entidade_nome_suspeito' = any (b.rotulos) as eh_fantasma
+      from base b
+  ),
+  faltas as (
+    select m.*,
+           case
+             when m.eh_fantasma then array['entidade_fantasma_pendente_de_revisao']
+             else
+               array_remove(array[
+                 case when m.papel_no_grupo is null then 'papel_no_grupo_indefinido' end,
+                 case when m.forma_de_controle = 'indefinido' then 'forma_de_controle_indefinida' end,
+                 case when m.forma_de_controle = 'controlada_por_entidade' and m.controladora_id is null
+                      then 'controlada_por_entidade_sem_controladora' end,
+                 case when m.forma_de_controle = 'controle_comum' and m.n_vinculos = 0
+                      then 'controle_comum_sem_vinculo' end,
+                 case when m.papel_no_grupo is not null and m.papel_no_grupo <> 'fora_do_perimetro'
+                           and cardinality(m.escopos) = 0
+                      then 'sem_escopo_vigente' end,
+                 case when m.papel_no_grupo = 'fora_do_perimetro' and cardinality(m.escopos) > 0
+                      then 'fora_do_perimetro_com_escopo_vigente' end
+               ], null)
+               || coalesce((select array_agg('pendencia_aberta:' || r order by r)
+                              from unnest(m.rotulos) r
+                             where not (r = 'papel_no_grupo_indefinido' and m.papel_no_grupo is null)
+                               and not (r = 'forma_de_controle_indefinida'
+                                        and m.forma_de_controle = 'indefinido')), '{}'::text[])
+           end as falta
+      from marcada m
+  )
+  select f.id, f.razao_social, f.cnpj, f.eh_fantasma, f.papel_no_grupo, f.forma_de_controle,
+         f.controladora_id, f.percentual_participacao, f.escopos, f.ctrls, f.rotulos, f.falta,
+         cardinality(f.falta) = 0
+    from faltas f
+   order by f.eh_fantasma, f.razao_social, f.id;
+$_$;
+
+--
+-- Name: FUNCTION fn_perimetro_situacao(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_perimetro_situacao(p_caso_id uuid) IS '0208: uma linha por entidade do caso com o que falta para o perímetro estar fechado, NOMEADO em `falta` (papel_no_grupo_indefinido, forma_de_controle_indefinida, controlada_por_entidade_sem_controladora, controle_comum_sem_vinculo, sem_escopo_vigente, fora_do_perimetro_com_escopo_vigente, pendencia_aberta:<tipo>, entidade_fantasma_pendente_de_revisao). pronta = falta vazia. A fantasma (0178: pendência entidade_nome_suspeito aberta) aparece com falta própria e não conta como entidade real. Escopo vigente = perimetro com desde <= hoje e ate nulo ou >= hoje. Somente leitura, security invoker. A tela consome esta função e NÃO repete a regra.';
+
+--
+-- Name: fn_perimetro_veredito(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) RETURNS TABLE(entidades integer, prontas integer, fantasmas integer, fechado boolean, fechado_motivo text, grupos jsonb, aceite_financeiro text, aceite_motivo text)
+    LANGUAGE sql STABLE
+    AS $$
+  with s as materialized (select * from fn_perimetro_situacao(p_caso_id)),
+  n as (
+    select count(*) filter (where not s.fantasma)::int as reais,
+           count(*) filter (where s.pronta and not s.fantasma)::int as prontas,
+           count(*) filter (where s.fantasma)::int as fantasmas
+      from s
+  ),
+  g as (
+    select coalesce(jsonb_agg(jsonb_build_object(
+             'grupo_id', t.grupo_id, 'quantas', t.quantas, 'entidades', t.membros)
+             order by t.grupo_id), '[]'::jsonb) as grupos
+      from (select x.grupo_id, count(*) as quantas,
+                   jsonb_agg(jsonb_build_object('entidade_id', x.entidade_id,
+                                                'razao_social', x.razao_social)
+                             order by x.razao_social, x.entidade_id) as membros
+              from fn_grupo_por_controle_comum(p_caso_id) x
+             group by x.grupo_id) t
+  ),
+  c as (
+    -- COMBINADO de verdade: rotulado COMBINADO e com VALOR em mais de uma coluna de entidade
+    -- (o critério de fn_documento_serve_como, 0157).
+    select count(*)::int as docs
+      from documento d
+     where d.caso_id = p_caso_id
+       and d.tipo_taxonomia = 'COMBINADO'
+       and (select count(distinct ce.entidade_coluna)
+              from campo_extraido ce
+             where ce.documento_versao_id = fn_versao_com_extracao(d.id)
+               and ce.valor_num is not null
+               and ce.entidade_coluna is not null) > 1
+  )
+  select n.reais, n.prontas, n.fantasmas,
+         (n.reais > 0 and n.prontas = n.reais and n.fantasmas = 0),
+         case
+           when n.reais = 0 and n.fantasmas = 0 then
+             'O caso não tem nenhuma entidade: zero entidades não é perímetro fechado, é perímetro que nunca foi montado (nenhum documento foi atribuído a uma empresa).'
+           when n.reais = 0 then
+             format('O caso só tem %s entidade(s) fantasma (nome de coluna, aba ou arquivo tratado como empresa) e nenhuma entidade real: não há perímetro a fechar.', n.fantasmas)
+           when n.fantasmas > 0 and n.prontas < n.reais then
+             format('%s de %s entidades reais ainda têm falta, e há %s entidade(s) fantasma sem revisão: os documentos delas ficam fora do book de qualquer empresa real até alguém fundir ou descartar.', n.reais - n.prontas, n.reais, n.fantasmas)
+           when n.fantasmas > 0 then
+             format('Todas as %s entidades reais estão prontas, mas há %s entidade(s) fantasma sem revisão: os documentos delas ficam fora do book de qualquer empresa real até alguém fundir ou descartar.', n.reais, n.fantasmas)
+           when n.prontas < n.reais then
+             format('%s de %s entidades ainda têm falta (veja fn_perimetro_situacao): enquanto isso o perímetro não afirma quem entra no combinado.', n.reais - n.prontas, n.reais)
+           else
+             format('As %s entidades têm papel, forma de controle e escopo coerentes e nenhuma pendência de perímetro aberta. Isto diz que o CADASTRO está completo, não que o perímetro bate com o combinado do cliente (ver aceite_financeiro).', n.reais)
+         end,
+         g.grupos,
+         case when c.docs > 0 then 'pendente_conferencia' else 'nao_verificado' end,
+         case when c.docs > 0 then
+           format('Existe(m) %s documento(s) COMBINADO com valor em mais de uma entidade, mas o sistema NÃO compara o perímetro com ele: a conferência é humana. Enquanto ninguém conferir, o perímetro pode incluir ou excluir uma empresa que o combinado do cliente trata diferente, e todo número consolidado a partir dele herda a diferença sem aviso.', c.docs)
+         else
+           'Não há documento COMBINADO do cliente com valor em mais de uma entidade neste caso, então o perímetro não foi comparado com nada. O efeito: o perímetro cadastrado pode incluir ou excluir uma empresa que o cliente trata diferente, e o combinado e a consolidação calculados a partir dele herdam a diferença sem aviso. Um grupo por controle comum frequentemente nunca preparou combinado; o aceite fica nao_verificado, não ok.'
+         end
+    from n, g, c;
+$$;
+
+--
+-- Name: FUNCTION fn_perimetro_veredito(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) IS '0208: o veredito do perímetro do caso numa linha: entidades (reais, sem as fantasmas), prontas, fantasmas, fechado (>0 reais, todas prontas, 0 fantasmas) e o motivo por extenso, grupos por controle comum (fn_grupo_por_controle_comum resumido) e o aceite financeiro, que NUNCA é ok: nao_verificado (sem combinado do cliente para comparar, com o efeito dito) ou pendente_conferencia (há combinado, a conferência é humana). Somente leitura, security invoker.';
 
 SET default_tablespace = '';
 
@@ -15795,7 +16095,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text])))
 );
 
 --
@@ -17891,6 +18191,12 @@ CREATE POLICY classe_contabil_catalogo_read ON public.classe_contabil_catalogo F
 ALTER TABLE public.controlador ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: controlador controlador_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY controlador_insert ON public.controlador FOR INSERT TO authenticated WITH CHECK (true);
+
+--
 -- Name: controlador controlador_read; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -17963,10 +18269,28 @@ CREATE POLICY entidade_authenticated_all ON public.entidade TO authenticated USI
 ALTER TABLE public.entidade_controlador ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: entidade_controlador entidade_controlador_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY entidade_controlador_insert ON public.entidade_controlador FOR INSERT TO authenticated WITH CHECK (true);
+
+--
 -- Name: entidade_controlador entidade_controlador_read; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY entidade_controlador_read ON public.entidade_controlador FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: entidade_controlador entidade_controlador_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY entidade_controlador_update ON public.entidade_controlador FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+--
+-- Name: POLICY entidade_controlador_update ON entidade_controlador; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON POLICY entidade_controlador_update ON public.entidade_controlador IS '0210: fn_entidade_definir_controlador (upsert) e a fusão de entidades movem o vínculo com UPDATE. Sem delete: ver o cabeçalho.';
 
 --
 -- Name: estagio_autonomia; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18203,10 +18527,28 @@ CREATE POLICY pergunta_catalogo_read ON public.pergunta_catalogo FOR SELECT TO a
 ALTER TABLE public.perimetro ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: perimetro perimetro_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY perimetro_insert ON public.perimetro FOR INSERT TO authenticated WITH CHECK (true);
+
+--
+-- Name: POLICY perimetro_insert ON perimetro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON POLICY perimetro_insert ON public.perimetro IS '0210: o authenticated abre intervalos de perímetro (fn_perimetro_definir_escopo é security invoker). Sem policy de delete e com revoke: o histórico não se apaga pelo portal.';
+
+--
 -- Name: perimetro perimetro_read; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY perimetro_read ON public.perimetro FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: perimetro perimetro_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY perimetro_update ON public.perimetro FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
 --
 -- Name: periodo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18955,6 +19297,24 @@ GRANT ALL ON FUNCTION public.fn_pendencia_entidade_ambigua(p_caso_id uuid, p_doc
 GRANT ALL ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_perimetro_situacao(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_perimetro_situacao(p_caso_id uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_perimetro_veredito(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) TO authenticated;
+
+--
 -- Name: TABLE entidade; Type: ACL; Schema: public; Owner: -
 --
 
@@ -19432,7 +19792,7 @@ GRANT ALL ON TABLE public.classe_contabil_catalogo TO service_role;
 --
 
 GRANT ALL ON TABLE public.controlador TO anon;
-GRANT ALL ON TABLE public.controlador TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.controlador TO authenticated;
 GRANT ALL ON TABLE public.controlador TO service_role;
 
 --
@@ -19472,7 +19832,7 @@ GRANT ALL ON TABLE public.documento_versao TO service_role;
 --
 
 GRANT ALL ON TABLE public.entidade_controlador TO anon;
-GRANT ALL ON TABLE public.entidade_controlador TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.entidade_controlador TO authenticated;
 GRANT ALL ON TABLE public.entidade_controlador TO service_role;
 
 --
@@ -19720,7 +20080,7 @@ GRANT ALL ON TABLE public.pergunta_catalogo TO service_role;
 --
 
 GRANT ALL ON TABLE public.perimetro TO anon;
-GRANT ALL ON TABLE public.perimetro TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.perimetro TO authenticated;
 GRANT ALL ON TABLE public.perimetro TO service_role;
 
 --

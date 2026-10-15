@@ -805,6 +805,26 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fusao_preserva_controle.test.s
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0208 — situação e veredito do perímetro (o que falta, em qual entidade; zero entidades não é fechado; aceite nunca ok por omissão)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/perimetro_situacao.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0209 — o escopo do perímetro: confirmar de novo é idempotente, encerrar tira a entidade do escopo"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/perimetro_encerrar.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0210 — a escrita da F1 COMO authenticated (RLS: policies de insert/update, sem delete) e a sonda que vê policy"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/f1_escrita_authenticated.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0211 — a fusão de entidades leva o perímetro da absorvida (e o que não leva fica no evento)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fusao_perimetro.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \

@@ -10,19 +10,20 @@
 // leitura que o serviço vai chamar; o que falta é só o transporte. Até lá, nada
 // em produção muda: o n8n continua sem chamar o leitor.
 //
-// Zip é aberto aqui (G5): cada arquivo de dentro vira um envelope, e cada entrada
-// recusada (zip-bomb, zip aninhado, cifrado) aparece na saída com o motivo.
+// Zip é aberto aqui (G5), por posição no disco e em fluxo (`lib/zip.mjs`, o MESMO código do
+// navegador): o pacote não vai inteiro para a memória, então passa de 3 GB. Cada arquivo de
+// dentro vira um envelope, e cada entrada recusada (zip-bomb, zip aninhado, cifrado, CRC,
+// tamanho declarado que mente) aparece na saída com o motivo.
 //
 // Sai com código 1 se algum arquivo não ficou `lido`: o chamador (o n8n, depois)
 // não pode tratar "rodou" como "leu tudo" (regra 7).
 
-import { readFile } from 'node:fs/promises';
+import { openAsBlob } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { basename } from 'node:path';
-import { lerEnvelopeDeBuffer } from './lib/envelope.mjs';
+import { lerEnvelopeDeFluxo } from './lib/envelope.mjs';
 import { lerEnvelopeDeArquivo } from './lib/arquivo.mjs';
-import { entradasDoZip } from './lib/zip.mjs';
-import { createHash } from 'node:crypto';
+import { entradasDoZip, motivoDoErro } from './lib/zip.mjs';
 import { LEITOR_VERSAO } from './lib/leiautes.mjs';
 
 const args = process.argv.slice(2);
@@ -96,21 +97,31 @@ for (const caminho of args) {
   // cifrada some do banco sem rastro (regra 7). Arquivo NÃO oficial dentro do zip
   // (um PDF de balanço) é contado como processado e listado: ele segue para o
   // caminho atual, a extração por IA.
-  const buf = await readFile(caminho);
+  // O zip NÃO vai para a memória: `entradasDoZip` lê o diretório e cada entrada por
+  // posição no disco (`openAsBlob`), e o hash do contêiner já veio do envelope acima
+  // (o fluxo do zip inteiro passou pelo sha256). Pacote de 3 GB abre com a memória
+  // de uma entrada em curso.
   let entradas = 0, processadas = 0;
   const recusadas = [], naoOficiais = [];
-  for (const e of entradasDoZip(buf)) {
+  for await (const e of entradasDoZip(await openAsBlob(caminho))) {
     entradas++;
     const origem = `${basename(caminho)}:${e.nome}`;
     if (e.recusado) { recusadas.push({ nome: e.nome, motivo: e.recusado }); processar({ origem, recusado: e.recusado }); continue; }
-    const env2 = lerEnvelopeDeBuffer(e.buf);
+    let env2;
+    try { env2 = await lerEnvelopeDeFluxo(e.fluxo()); }
+    catch (err) {
+      // O fluxo da entrada erra no tamanho declarado, no CRC e no deflate corrompido:
+      // a entrada vira recusada COM o motivo, e o resto do pacote segue.
+      const motivo = motivoDoErro(err);
+      recusadas.push({ nome: e.nome, motivo }); processar({ origem, recusado: motivo }); continue;
+    }
     processadas++;
     if (!env2.familia) naoOficiais.push(e.nome);
     processar({ origem, ...env2 });
   }
   processar({
     origem: basename(caminho), familia: 'zip', subtipo: null, versao_leiaute: null,
-    ...(() => { const h = createHash('sha256').update(buf).digest('hex'); return { hash_sha256: h, chave_natural: h }; })(),
+    hash_sha256: env.hash_sha256, chave_natural: env.hash_sha256,
     cnpj: null, periodo_ini: null, periodo_fim: null, retificadora: false, controle_tipo: 'contagem_declarada',
     controle_declarado: entradas, controle_lido: processadas,
     status: entradas === processadas ? 'lido' : 'controle_divergente',

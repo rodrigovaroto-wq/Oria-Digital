@@ -191,3 +191,24 @@ que guarda, e o pico ficou igual ao do protótipo.
 O caminho de volta do cp1252 só roda no navegador, e por isso foi checado nos dois sentidos.
 Com `desfazerCp1252` desligado, o mesmo arquivo saiu "AÇÚCAR – €" no navegador, diferente do CLI,
 e o script terminou com 1.
+
+### O zip de vários GB, aberto pelo worker do portal (sessão 109, 15/10/2026)
+
+`pacote-montar.py` monta o pacote sintético e `pacote-medir.mjs` empacota o `leitor-zip-worker.ts`
+do portal (esbuild do lock) e o roda num Chromium real, com o `File` de 9,58 GB do disco. O zip tem,
+nesta ordem, três PDFs "não oficiais" de preenchimento (3,5 GiB, 1 GiB e 4,2 GiB, sem compressão), duas
+ECDs de 10M de linhas (929 MB cada, deflate), 300 NF-e, OFX, CNAB, uma ECF, um xlsx, dois CSV e um
+`__MACOSX`. O preenchimento vem primeiro de propósito: as ECDs ficam além de 4 GiB (a posição de 32 bits
+estoura, ZIP64 de verdade) e o PDF de 4,2 GiB declara o tamanho no extra ZIP64.
+
+| Medida | Resultado |
+|---|---|
+| Tempo, do `abrir` ao `fim` | **95,2 s** (ECD 1: 41,9 s; ECD 2: 42,3 s; as 300 NF-e e o resto, ~11 s, com o "banco" de mentira) |
+| Pico de heap JS do worker | **45 MB** (CDP `Runtime.getHeapUsage` no alvo do worker) |
+| Pico de RSS de todos os processos do Chromium | 552 MB |
+| Hash das duas ECDs lidas de dentro do zip | = `sha256` do arquivo avulso |
+| Entradas | 312 = 305 oficiais lidas + 3 não oficiais que vão ao n8n + 2 de fora (> 15 MiB) + 1 ignorada (`__MACOSX`) + 1 recusada |
+| PDF de 4,2 GiB | recusado com "4509715660 bytes descompactados, acima do limite por entrada de 4294967296" (tamanho lido do extra ZIP64) |
+
+Não medido: Safari e Firefox; um zip real do contador (o gerador do Python não imita o que o Windows ou o
+macOS escrevem, só o formato); gravação no Supabase de verdade (o atraso é simulado).

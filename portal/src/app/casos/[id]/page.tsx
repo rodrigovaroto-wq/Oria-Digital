@@ -427,6 +427,13 @@ export default async function CasoDashboardPage({
               <span className="chip bg-tinta-100 text-tinta-600">{perguntasSugeridas}</span>
             )}
           </Link>
+          <Link
+            href={`/casos/${id}/perimetro`}
+            className="btn-secundario"
+            title="Quem entra no combinado, com que papel e controlado por quem."
+          >
+            Perímetro
+          </Link>
           {/* A ÚNICA AÇÃO PRIMÁRIA DA TELA. Ela era um botão azul-claro entre
               outros três de peso igual, e a tela não dizia para onde ir depois de
               conferir o que chegou. */}

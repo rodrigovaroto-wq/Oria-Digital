@@ -213,7 +213,7 @@ test('o zip do contador abre, e cada arquivo dentro vira um envelope', async () 
     { nome: 'retorno.ret', buf: gerarCnab400() },
   ]);
   assert.equal(detectarFamilia(zip).familia, 'zip');
-  const entradas = abrirZip(zip);
+  const entradas = await abrirZip(new Blob([zip]));
   assert.equal(entradas.length, 3);
   assert.deepEqual(entradas.map(e => lerEnvelopeDeBuffer(e.buf).familia), ['sped', 'nfe', 'cnab400']);
 });
@@ -226,13 +226,13 @@ test('zip: zip dentro de zip, zip-bomb e excesso de entradas são recusados COM 
     { nome: 'bomba.txt', buf: bomba },
     { nome: 'ok.xml', buf: gerarXmlFiscal('nfe') },
   ]);
-  const e = abrirZip(zip);
+  const e = await abrirZip(new Blob([zip]));
   assert.equal(e.length, 3);
   assert.match(e.find(x => x.nome === 'interno.zip').recusado, /zip dentro de zip/);
   assert.match(e.find(x => x.nome === 'bomba.txt').recusado, /zip-bomb/);
   assert.ok(e.find(x => x.nome === 'ok.xml').buf);
-  assert.match(abrirZip(zip, { entradas: 2, bytesPorEntrada: 1e9, bytesTotal: 1e12, razaoMaxima: 1e9 })[0].recusado, /limite de 2/);
-  assert.match(abrirZip(zip.subarray(0, 40))[0].recusado, /truncado/);
+  assert.match((await abrirZip(new Blob([zip]), { entradas: 2, bytesPorEntrada: 1e9, bytesTotal: 1e12, razaoMaxima: 1e9 }))[0].recusado, /limite de 2/);
+  assert.match((await abrirZip(new Blob([zip.subarray(0, 40)])))[0].recusado, /truncado/);
 });
 
 // ---------------------------------------------------------------- volume (G6)
@@ -345,13 +345,13 @@ test('eSocial: a competência vai do primeiro ao último dia do mês', () => {
 
 test('zip: tamanho mentiroso, entrada cifrada e entradas sobrepostas são recusados com motivo', async () => {
   const nota = gerarXmlFiscal('nfe');
-  const mentiroso = abrirZip(await gerarZip([{ nome: 'grande.xml', buf: Buffer.alloc(20000, 0x20), mentirTamanho: true }]));
+  const mentiroso = await abrirZip(new Blob([await gerarZip([{ nome: 'grande.xml', buf: Buffer.alloc(20000, 0x20), mentirTamanho: true }])]));
   // O motivo prova que a descompressão PAROU no tamanho declarado, e não que
   // inflou tudo e só depois comparou (o que custaria até 512 MB por entrada).
   assert.match(mentiroso[0].recusado, /passa do tamanho declarado/);
-  const cifrado = abrirZip(await gerarZip([{ nome: 'senha.xml', buf: nota, cifrado: true }]));
+  const cifrado = await abrirZip(new Blob([await gerarZip([{ nome: 'senha.xml', buf: nota, cifrado: true }])]));
   assert.match(cifrado[0].recusado, /cifrada/);
-  const sobreposto = abrirZip(await gerarZip([{ nome: 'a.xml', buf: nota }], { sobrepor: true }));
+  const sobreposto = await abrirZip(new Blob([await gerarZip([{ nome: 'a.xml', buf: nota }], { sobrepor: true })]));
   assert.equal(sobreposto.length, 2);
   assert.ok(sobreposto[0].buf);
   assert.match(sobreposto[1].recusado, /sobreposto/);

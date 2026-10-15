@@ -884,6 +884,41 @@ supabase db execute --file Supabase/migrations/0207_o_resumo_do_arquivo_oficial.
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0207' and not presente;                 -- ZERO linhas
 
+# A 0208 responde "o perímetro deste caso está fechado? se não, o que falta, em qual entidade?" (F1): duas
+# funções de LEITURA, fn_perimetro_situacao (uma linha por entidade, com `falta` nomeado) e
+# fn_perimetro_veredito (fechado, grupos e o aceite financeiro, que nunca é ok por omissão). Sem tabela nova,
+# sem backfill, security invoker. Teste: Supabase/test/perimetro_situacao.test.sql.
+supabase db execute --file Supabase/migrations/0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0208' and not presente;                 -- ZERO linhas
+
+# A 0209 conserta fn_perimetro_definir_escopo (confirmar o mesmo escopo de novo estourava o CHECK do intervalo) e
+# cria fn_perimetro_encerrar_escopo (o caminho para TIRAR a entidade de um escopo). Reemite a função inteira; sem
+# tabela nova, sem backfill. Aplicar DEPOIS da 0208. Teste: Supabase/test/perimetro_encerrar.test.sql.
+supabase db execute --file Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0209' and not presente;                 -- ZERO linhas
+
+# A 0210 dá ao authenticated INSERT/UPDATE (sem DELETE) em perimetro, controlador e entidade_controlador, que a F1
+# criou só com policy de leitura: sem ela fn_perimetro_definir_escopo e fn_controlador_registrar morrem em 42501 para o
+# portal. Também reemite fn_instalacao_conferir com o tipo novo `policy`. Sem backfill. Aplicar DEPOIS da 0209.
+# Teste: Supabase/test/f1_escrita_authenticated.test.sql.
+supabase db execute --file Supabase/migrations/0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0210' and not presente;                 -- ZERO linhas
+
+# A 0211 reemite fn_fundir_entidade: leva o perímetro da absorvida para a sobrevivente (o que sobrepõe um intervalo do
+# mesmo escopo fica no evento em perimetro_descartado, em vez de sumir pelo ON DELETE CASCADE), repõe as entidades
+# controladas pela absorvida e registra o papel/controladora/percentual dela. Sem tabela nova, sem backfill.
+# Aplicar DEPOIS da 0210. Teste: Supabase/test/fusao_perimetro.test.sql.
+supabase db execute --file Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0211' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

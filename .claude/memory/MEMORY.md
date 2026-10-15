@@ -111,3 +111,4 @@ Uma linha por entrada; teto mole de 130 linhas não vazias.
   documentos: um book por dia
 - [`MATERIALIZED` não é enfeite](materialized-nao-e-enfeite.md) — sem ele o Postgres inlina a CTE
   e o agrupamento que matava o cartesiano vira o cartesiano
+- [RLS só com SELECT passa em todo teste](rls-so-select-passa-no-superusuario.md) — superusuário ignora RLS: a escrita só falha no clique; teste como authenticated

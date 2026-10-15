@@ -16,6 +16,8 @@
 // as mesmas que a tela chama.
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { detectarFamilia } from "../../../Leitor/lib/familia.mjs";
+import { TETO_BYTES_POR_ARQUIVO } from "../../../N8N/lib/custo.mjs";
+import { formatarBytes } from "./limite-de-envio";
 
 /** Os primeiros bytes que bastam para reconhecer a família (`detectarFamilia`). */
 export const CABECA_BYTES = 65536;
@@ -37,7 +39,11 @@ export interface Deteccao {
   readonly subtipo: string | null;
 }
 
-/** Não oficial e zip seguem o caminho de sempre (n8n); só a família nomeada é lida aqui. */
+/**
+ * `oficial`: lido aqui e só o resumo sai. `zip`: ABERTO aqui (sessão 109) — cada
+ * entrada oficial é lida como um arquivo avulso e as demais seguem para o n8n quando
+ * cabem (ver a seção 7). `extracao`: o caminho de sempre.
+ */
 export type Destino = "oficial" | "zip" | "extracao";
 
 export function destinoDe(d: Deteccao | null | undefined): Destino {
@@ -57,20 +63,24 @@ export async function detectarPeloArquivo(arquivo: Blob): Promise<Deteccao> {
 }
 
 /**
- * Separa o lote: o que o navegador lê (`oficiais`) e o que segue EXATAMENTE como
- * antes para o n8n (`aoN8n`, na ordem original — o zip continua indo por aqui,
- * porque o conteúdo dele só se abre depois de lido por inteiro).
+ * Separa o lote em três: o que o navegador lê (`oficiais`), o que o navegador ABRE
+ * (`zips`: o zip deixou de ir ao n8n na sessão 109 — o n8n recusaria o lote inteiro
+ * por um arquivo acima de 15 MiB, e um pacote de 3 GB não cabe nele) e o que segue
+ * EXATAMENTE como antes para o n8n (`aoN8n`, na ordem original).
  */
 export function separarOficiais<T>(
   itens: readonly T[],
   deteccaoDe: (item: T) => Deteccao | null | undefined,
-): { oficiais: T[]; aoN8n: T[] } {
+): { oficiais: T[]; zips: T[]; aoN8n: T[] } {
   const oficiais: T[] = [];
+  const zips: T[] = [];
   const aoN8n: T[] = [];
   for (const item of itens) {
-    (destinoDe(deteccaoDe(item)) === "oficial" ? oficiais : aoN8n).push(item);
+    const d = destinoDe(deteccaoDe(item));
+    const lote = { oficial: oficiais, zip: zips, extracao: aoN8n }[d];
+    lote.push(item);
   }
-  return { oficiais, aoN8n };
+  return { oficiais, zips, aoN8n };
 }
 
 // ---------------------------------------------------------------------------
@@ -470,4 +480,128 @@ export function descreverDesfecho(d: DesfechoDoServidor): { tom: "ok" | "alerta"
  */
 export function desfechoEncerra(d: DesfechoDoServidor | undefined): boolean {
   return d !== undefined && d.tipo !== "falha";
+}
+
+// ---------------------------------------------------------------------------
+// 7. O ZIP ABERTO NO NAVEGADOR (sessão 109)
+// ---------------------------------------------------------------------------
+//
+// O pacote do dono passa de 3 GB. O zip é aberto por posição no worker
+// (`leitor-zip-worker.ts`, sobre `Leitor/lib/zip.mjs`), uma entrada de cada vez, e
+// cada entrada cai num de cinco destinos. NENHUM é "sumiu": toda entrada aparece na
+// tela com o destino e, quando não foi para o banco nem para o processamento, com o
+// motivo e o efeito (regras 1 e 7).
+
+/**
+ * Quanto de entrada NÃO oficial o navegador segura de uma vez para encaminhar ao n8n.
+ * Cada uma é inflada num `File` na memória até o envio (o envio ao n8n é um
+ * `multipart`, que precisa do arquivo inteiro). 256 MiB é uma escolha, não uma
+ * medida: cabe com folga numa aba (o leitor oficial mede 61 MB de heap) e é ~17
+ * arquivos no teto de 15 MiB — o que passa disso fica de fora, com a frase abaixo.
+ * [A CONFIRMAR] com o pacote real: se os relatórios não oficiais somarem mais,
+ * sobe-se este número ou o envio passa a ser em levas.
+ */
+export const ORCAMENTO_NAO_OFICIAL_BYTES = 256 * 1024 * 1024;
+
+/** O que o navegador faz com uma entrada que NÃO é de família oficial. */
+export type DestinoNaoOficial =
+  | { destino: "n8n" }
+  | { destino: "fora" | "ignorada"; motivo: string };
+
+// Lixo que o sistema do analista põe no zip: no n8n viraria documento que falha.
+const NOME_DE_SISTEMA = /(^|\/)(__MACOSX\/|\.DS_Store$|Thumbs\.db$|desktop\.ini$|~\$[^/]*$|\._[^/]*$)/i;
+
+/**
+ * Decide o destino de uma entrada não oficial. `usadoBytes` é o que as anteriores
+ * já ocuparam do orçamento. O motivo de "fora" diz o EFEITO: o arquivo não está no
+ * mandato, e o que fazer (a regra 1: ausência com nota).
+ */
+export function decidirNaoOficial(
+  nome: string,
+  bytes: number,
+  usadoBytes: number,
+  teto: number = TETO_BYTES_POR_ARQUIVO,
+  orcamento: number = ORCAMENTO_NAO_OFICIAL_BYTES,
+): DestinoNaoOficial {
+  if (NOME_DE_SISTEMA.test(nome)) {
+    return { destino: "ignorada", motivo: "arquivo de sistema (cópia de metadados do Windows/macOS), não é documento do mandato" };
+  }
+  if (bytes <= 0) {
+    return { destino: "ignorada", motivo: "arquivo vazio (0 byte): não há o que ler; se devia ter conteúdo, o zip foi gerado com ele ainda não baixado da nuvem" };
+  }
+  if (bytes > teto) {
+    return {
+      destino: "fora",
+      motivo: `${formatarBytes(bytes)}, acima de ${formatarBytes(teto)}, o máximo por arquivo no processamento: NÃO está no mandato. Extraia do zip e envie separado (planilha grande: divida em partes)`,
+    };
+  }
+  if (usadoBytes + bytes > orcamento) {
+    return {
+      destino: "fora",
+      motivo: `o conjunto de arquivos não oficiais deste zip passa de ${formatarBytes(orcamento)} e este não coube: NÃO está no mandato. Extraia do zip e envie separado`,
+    };
+  }
+  return { destino: "n8n" };
+}
+
+/**
+ * O nome com que a entrada vai ao n8n: o caminho dentro do zip, com "/" trocado,
+ * para dois `relatorio.xlsx` de pastas diferentes não colidirem nem perderem a
+ * pasta (que costuma dizer o que o arquivo é: "contas-a-pagar/2025/…"). "/" num
+ * nome de arquivo de `multipart` é cortado por alguns servidores.
+ */
+export function nomeParaN8n(zip: string, entrada: string): string {
+  return `${zip.replace(/\.zip$/i, "")} › ${entrada.replace(/\//g, " › ")}`;
+}
+
+/** Uma entrada do zip que NÃO foi lida como arquivo oficial. As oficiais vão em `ResultadoOficial`. */
+export interface EntradaDoZip {
+  chave: string;
+  zip: string;
+  nome: string;
+  /** `null` quando a entrada foi recusada antes de o tamanho valer (zip corrompido, por exemplo). */
+  bytes: number | null;
+  situacao: "ao_n8n" | "nao_enviada" | "ignorada" | "recusada" | "retida";
+  motivo?: string;
+}
+
+/** Onde o zip está: a barra da tela. */
+export interface ProgressoDoZip {
+  zip: string;
+  fase: "abrindo" | "lendo" | "fim" | "falhou";
+  /** A entrada em curso (1-based) e o número de registros do diretório (inclui pastas). */
+  indice: number;
+  total: number;
+  nome: string;
+  erro?: string;
+}
+
+export const rotuloDaEntrada = (e: EntradaDoZip): string => {
+  switch (e.situacao) {
+    case "ao_n8n": return "Enviada ao processamento (lida pela IA, como um arquivo avulso).";
+    case "nao_enviada": return `NÃO enviada: ${e.motivo ?? "sem motivo informado"}.`;
+    case "ignorada": return `Ignorada: ${e.motivo ?? "sem motivo informado"}.`;
+    case "recusada": return `RECUSADA: ${e.motivo ?? "sem motivo informado"}. Nada dela está no mandato.`;
+    case "retida": return `Retida, NÃO enviada: ${e.motivo ?? "o zip não foi concluído"}.`;
+  }
+};
+
+/**
+ * Os números do rodapé de um zip. Cada categoria só conta o que a lista TEM:
+ * `oficiais` e `lidas` vêm dos `ResultadoOficial` do zip, o resto das entradas.
+ */
+export function contarEntradasDoZip(
+  entradas: readonly EntradaDoZip[],
+  oficiais: readonly Pick<ResultadoOficial, "desfecho" | "erroDeLeitura">[],
+): { oficiais: number; oficiaisComResposta: number; aoN8n: number; naoEnviadas: number; recusadas: number; ignoradas: number; retidas: number } {
+  const n = (s: EntradaDoZip["situacao"]) => entradas.filter((e) => e.situacao === s).length;
+  return {
+    oficiais: oficiais.length,
+    oficiaisComResposta: oficiais.filter((o) => desfechoEncerra(o.desfecho)).length,
+    aoN8n: n("ao_n8n"),
+    naoEnviadas: n("nao_enviada"),
+    recusadas: n("recusada"),
+    ignoradas: n("ignorada"),
+    retidas: n("retida"),
+  };
 }
