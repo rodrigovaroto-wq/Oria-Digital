@@ -2,7 +2,7 @@
 
 ## SESSÃO 108 (13/10/2026) — F2T etapa 1: o leitor passa ao navegador, e a `0207` (o resumo)
 
-> **Migration mais nova: `0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql`** (aplicar DEPOIS da 0209; S109, abaixo). Antes dela, `0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql`, `0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql` e `0207_o_resumo_do_arquivo_oficial.sql` (aplicar DEPOIS da 0206). **NÃO aplicada em produção.**
+> **Migration mais nova: `0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql`** (aplicar DEPOIS da 0210; S109, abaixo). Antes dela, `0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql`, `0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql`, `0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql` e `0207_o_resumo_do_arquivo_oficial.sql` (aplicar DEPOIS da 0206). **NÃO aplicada em produção.**
 > **A `0206` foi aplicada pelo dono em 13/10/2026** (ele disse "Migration 206 foi aplicado"). **NÃO CONFERIDA pela sonda:** o dono não informou o resultado de `select chave from fn_instalacao_conferir() where migration = '0206' and not presente;`.
 > **O que o dono faz à mão, em ordem:**
 > 1. Conferir a `0206` pela sonda (zero linhas).
@@ -136,7 +136,7 @@ jurídico interno escreve o termo (D12.6, etapa 2). Pedir a cotação ao SERPRO 
 
 ## SESSÃO 105b (05/10/2026) — primeiro mandato real pós-republicação (Fw Valtra) e a `0199`
 
-> **Migration mais nova: `0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql`** (aplicar DEPOIS da 0209; S109, abaixo). Antes dela, `0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql`, `0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql` e `0207_o_resumo_do_arquivo_oficial.sql` (aplicar DEPOIS da 0206). Antes dela, **`0206_o_arquivo_oficial_lido_e_contado.sql`** (o envelope de cada arquivo oficial lido e a versão vigente, F2T etapa 1, sessão 107; aplicar DEPOIS da 0205). Antes dela, **`0205_os_campos_da_apresentacao.sql`** (os campos "[a preencher]" da apresentação de crédito, #253; aplicar DEPOIS da 0204). Antes dela, **`0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
+> **Migration mais nova: `0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql`** (aplicar DEPOIS da 0210; S109, abaixo). Antes dela, `0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql`, `0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql`, `0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql` e `0207_o_resumo_do_arquivo_oficial.sql` (aplicar DEPOIS da 0206). Antes dela, **`0206_o_arquivo_oficial_lido_e_contado.sql`** (o envelope de cada arquivo oficial lido e a versão vigente, F2T etapa 1, sessão 107; aplicar DEPOIS da 0205). Antes dela, **`0205_os_campos_da_apresentacao.sql`** (os campos "[a preencher]" da apresentação de crédito, #253; aplicar DEPOIS da 0204). Antes dela, **`0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql`.** A linha sem seção
 > herda a seção do pai (a linha cuja chave é o nome da seção bruta dela) e das irmãs, desde que concordem.
 > Conflito fica NULL e é contado. A herança é recursiva e nunca vem de topo ou total. Ela fecha o
 > resíduo do AC do Fw Valtra: CAIXA MATRIZ, DUPLICATAS A RECEBER e OUTROS CRÉDITOS estavam fora da soma

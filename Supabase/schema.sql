@@ -3997,6 +3997,16 @@ declare
   v_vinculos_de      jsonb;
   v_vinculos_movidos int := 0;
   v_descartados      jsonb := '[]'::jsonb;
+  -- 0211
+  v_papel_de         entidade_papel_no_grupo;
+  v_controladora_de  uuid;
+  v_pct_de           numeric;
+  r                  record;
+  v_s                record;
+  v_perim_movidos    int := 0;
+  v_perim_descartado jsonb := '[]'::jsonb;
+  v_controladas      jsonb;
+  v_n_controladas    int := 0;
 begin
   if p_de_id = p_para_id then
     raise exception 'fundir uma entidade nela mesma não faz sentido (%)', p_de_id;
@@ -4006,6 +4016,13 @@ begin
   select razao_social into v_para from entidade where id = p_para_id and caso_id = p_caso_id;
   if v_de is null or v_para is null then
     raise exception 'entidade não encontrada neste mandato (de=%, para=%)', p_de_id, p_para_id;
+  end if;
+
+  -- 0211: a sobrevivente controlada pela absorvida vira controlada por si mesma. Isso não tem leitura
+  -- automática (a forma declarada deixa de fazer sentido), então recusa em vez de adivinhar. Antes da 0211
+  -- era a FK entidade_controladora_id_fkey que recusava, com uma mensagem do Postgres.
+  if exists (select 1 from entidade where id = p_para_id and controladora_id = p_de_id) then
+    raise exception 'a entidade "%" é controlada por "%", que está sendo fundida nela: a participação passaria a ser dela com ela mesma. Remova a participação (fn_entidade_definir_participacao) e a forma de controle e refaça a fusão.', v_para, v_de;
   end if;
 
   update documento set entidade_id = p_para_id
@@ -4024,7 +4041,9 @@ begin
 
   -- 0183: o controle declarado de A. Sem isto, o `on delete cascade` de entidade_controlador o
   -- apagava junto com a linha (ver o item (10) da migration 0183).
-  select forma_de_controle into v_forma_de from entidade where id = p_de_id;
+  select forma_de_controle, papel_no_grupo, controladora_id, percentual_participacao
+    into v_forma_de, v_papel_de, v_controladora_de, v_pct_de
+    from entidade where id = p_de_id;
   select coalesce(jsonb_agg(jsonb_build_object('controlador_id', ec.controlador_id,
                                                'controlador', k.nome,
                                                'percentual', ec.percentual)
@@ -4039,6 +4058,41 @@ begin
   else
     v_descartados := v_vinculos_de;
   end if;
+
+  -- 0211: o perímetro da absorvida. `perimetro_entidade_id_fkey` é ON DELETE CASCADE: sem isto o
+  -- `delete from entidade` abaixo levava os escopos dela embora, sem evento. REGRA: cada intervalo da
+  -- absorvida passa para a sobrevivente, EXCETO o que se sobrepõe a um intervalo do MESMO escopo que ela já
+  -- tem (inclusive o vigente, que a unicidade perimetro_atual_unico de qualquer jeito não deixaria
+  -- duplicar). O que sobrepõe NÃO é fundido em um intervalo maior: isso inventaria um início que ninguém
+  -- declarou. Fica o da sobrevivente, o da absorvida vai para o evento (perimetro_descartado), com o
+  -- intervalo da sobrevivente que o cobriu, e o analista reabre o escopo com fn_perimetro_definir_escopo se
+  -- a data certa for outra.
+  for r in select id, escopo, desde, ate from perimetro
+            where caso_id = p_caso_id and entidade_id = p_de_id order by escopo, desde loop
+    select s.desde, s.ate into v_s from perimetro s
+     where s.caso_id = p_caso_id and s.entidade_id = p_para_id and s.escopo = r.escopo
+       and r.desde <= coalesce(s.ate, 'infinity'::date)
+       and coalesce(r.ate, 'infinity'::date) >= s.desde
+     limit 1;
+    if found then
+      v_perim_descartado := v_perim_descartado || jsonb_build_array(jsonb_build_object(
+        'escopo', r.escopo, 'desde', r.desde, 'ate', r.ate,
+        'motivo', 'sobrepõe um intervalo do mesmo escopo que a sobrevivente já tinha',
+        'sobrevivente_desde', v_s.desde, 'sobrevivente_ate', v_s.ate));
+    else
+      update perimetro set entidade_id = p_para_id where id = r.id;
+      v_perim_movidos := v_perim_movidos + 1;
+    end if;
+  end loop;
+
+  -- 0211: quem era controlada pela absorvida passa a ser controlada pela sobrevivente (a FK
+  -- entidade_controladora_id_fkey recusava a fusão inteira com uma mensagem do Postgres).
+  select coalesce(jsonb_agg(jsonb_build_object('entidade_id', e.id, 'razao_social', e.razao_social)
+                            order by e.razao_social), '[]'::jsonb), count(*)::int
+    into v_controladas, v_n_controladas
+    from entidade e where e.caso_id = p_caso_id and e.controladora_id = p_de_id;
+  update entidade set controladora_id = p_para_id
+   where caso_id = p_caso_id and controladora_id = p_de_id;
 
   -- A pendência de ambiguidade da entidade fundida está respondida.
   update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = p_por
@@ -4057,16 +4111,26 @@ begin
   values (p_por, 'entidade_fundida', 'entidade:' || p_para_id,
           jsonb_build_object('entidade_id', p_de_id, 'razao_social', v_de,
                              -- 0183
-                             'forma_de_controle', v_forma_de, 'vinculos', v_vinculos_de),
+                             'forma_de_controle', v_forma_de, 'vinculos', v_vinculos_de,
+                             -- 0211: o que a linha apagada declarava e a sobrevivente não herda
+                             'papel_no_grupo', v_papel_de, 'controladora_id', v_controladora_de,
+                             'percentual_participacao', v_pct_de),
           jsonb_build_object('entidade_id', p_para_id, 'razao_social', v_para,
                              'documentos_movidos', v_docs,
                              -- 0183
                              'vinculos_movidos', v_vinculos_movidos,
-                             'vinculos_descartados', v_descartados));
+                             'vinculos_descartados', v_descartados,
+                             -- 0211
+                             'perimetro_movido', v_perim_movidos,
+                             'perimetro_descartado', v_perim_descartado,
+                             'controladas_repontadas', v_controladas));
 
   return jsonb_build_object('fundida', v_de, 'em', v_para, 'documentos', v_docs,
                             'vinculos_movidos', v_vinculos_movidos,
-                            'vinculos_descartados', jsonb_array_length(v_descartados));
+                            'vinculos_descartados', jsonb_array_length(v_descartados),
+                            'perimetro_movido', v_perim_movidos,
+                            'perimetro_descartado', jsonb_array_length(v_perim_descartado),
+                            'controladas_repontadas', v_n_controladas);
 end;
 $$;
 
@@ -4074,7 +4138,7 @@ $$;
 -- Name: FUNCTION fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) IS 'Funde duas entidades que são a mesma empresa, levando junto documentos, checklist, pendências e reconciliações (0153). Nada some sem rastro: evento_auditoria guarda o nome que existia e quantos documentos mudaram de dono. 0183: leva também os vínculos de entidade_controlador quando a sobrevivente não tem nenhum (antes, o on delete cascade os apagava); se ela já tem, os da absorvida não são somados e vão para o evento como vinculos_descartados. Não herda forma_de_controle (registra no evento) e resolve as pendências de forma e de papel da absorvida.';
+COMMENT ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) IS 'Funde duas entidades que são a mesma empresa, levando junto documentos, checklist, pendências e reconciliações (0153). Nada some sem rastro: evento_auditoria guarda o nome que existia e quantos documentos mudaram de dono. 0183: leva também os vínculos de entidade_controlador quando a sobrevivente não tem nenhum (se já tem, os da absorvida vão para o evento como vinculos_descartados). Não herda forma_de_controle (registra no evento) e resolve as pendências de forma e de papel da absorvida. 0211: leva os intervalos de perimetro da absorvida, exceto os que se sobrepõem a um intervalo do mesmo escopo da sobrevivente (esses ficam no evento em perimetro_descartado); repõe como controladora da sobrevivente quem era controlado pela absorvida (controladas_repontadas); recusa em português se a sobrevivente era controlada pela absorvida; registra no evento o papel, a controladora e o percentual da absorvida.';
 
 --
 -- Name: fn_golden_abrir_rodada(text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -

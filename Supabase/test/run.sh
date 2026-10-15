@@ -820,6 +820,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/f1_escrita_authenticated.test.
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0211 — a fusão de entidades leva o perímetro da absorvida (e o que não leva fica no evento)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fusao_perimetro.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \

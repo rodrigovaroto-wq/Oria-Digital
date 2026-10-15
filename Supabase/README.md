@@ -910,6 +910,15 @@ supabase db execute --file Supabase/migrations/0210_a_escrita_do_perimetro_que_s
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0210' and not presente;                 -- ZERO linhas
 
+# A 0211 reemite fn_fundir_entidade: leva o perímetro da absorvida para a sobrevivente (o que sobrepõe um intervalo do
+# mesmo escopo fica no evento em perimetro_descartado, em vez de sumir pelo ON DELETE CASCADE), repõe as entidades
+# controladas pela absorvida e registra o papel/controladora/percentual dela. Sem tabela nova, sem backfill.
+# Aplicar DEPOIS da 0210. Teste: Supabase/test/fusao_perimetro.test.sql.
+supabase db execute --file Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0211' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
