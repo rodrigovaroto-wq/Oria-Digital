@@ -6,11 +6,13 @@ import { ExcluirMandato } from "@/components/excluir-mandato";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import PainelOficiais from "@/components/painel-oficiais";
+import PainelZip from "@/components/painel-zip";
 import {
   detectarPeloArquivo, separarOficiais, destinoDe, gravarResumo, obterCasoId, desfechoEncerra,
-  rotuloDaFamilia, type Deteccao, type ResultadoOficial, type ChamarRpc,
+  rotuloDaFamilia, type Deteccao, type ResultadoOficial, type ChamarRpc, type EntradaDoZip, type ProgressoDoZip,
 } from "@/lib/envio-oficial";
 import { lerNoNavegador } from "@/lib/ler-no-navegador";
+import { lerZipNoNavegador } from "@/lib/ler-zip-no-navegador";
 import {
   estimativaEmMinutos, janelaPara, semPrimeiroSinalMs, semProgressoMs, proximoIntervalo,
   INTERVALO_ACOMPANHAMENTO_MS,
@@ -79,6 +81,10 @@ export default function UploadForm({
   const promessasDeDeteccao = useRef(new Map<string, Promise<Deteccao | null>>());
   // O RESULTADO DE CADA ARQUIVO LIDO NO PRÓPRIO COMPUTADOR, da fila ao veredito do banco.
   const [oficiais, setOficiais] = useState<ResultadoOficial[]>([]);
+  // O PACOTE (zip) ABERTO NO COMPUTADOR: onde ele está, e cada entrada que NÃO foi lida
+  // como arquivo oficial (as oficiais entram em `oficiais`, acima).
+  const [progressoZip, setProgressoZip] = useState<ProgressoDoZip | null>(null);
+  const [entradasZip, setEntradasZip] = useState<EntradaDoZip[]>([]);
 
   const chaveDe = (f: File) => `${f.name}:${f.size}`;
   // Uma detecção por arquivo, memorizada: a lista a pede ao escolher e o envio a
@@ -360,6 +366,119 @@ export default function UploadForm({
     return pendentes;
   }
 
+  // O PACOTE (zip), ABERTO NO COMPUTADOR — sem ir ao n8n (sessão 109).
+  //
+  // O zip não é lido inteiro: o worker o abre por posição e entrega UMA entrada de cada
+  // vez. Cada entrada oficial é gravada como um arquivo avulso (`gravarResumo`, o MESMO
+  // caminho); as demais voltam como `File` quando cabem no processamento, e são
+  // listadas com o motivo quando não cabem.
+  //
+  // O QUE FAZ UM ZIP FICAR "PENDENTE" (continua na lista, para reenvio): o banco não
+  // respondeu a uma entrada oficial (falha de rede/exceção), ou o pacote nem abriu.
+  // Entrada recusada ou corrompida NÃO deixa o zip pendente — reenviar a recusaria de
+  // novo — e aparece na lista com o motivo.
+  //
+  // E UM ZIP PENDENTE NÃO ENCAMINHA NADA AO N8N: o reenvio recomeçaria o pacote e
+  // mandaria os mesmos arquivos comuns uma segunda vez. As entradas ficam "retidas",
+  // com a frase dizendo isso.
+  async function processarZip(
+    zip: File,
+    casoIdConhecido: string,
+  ): Promise<{ pendente: boolean; paraN8n: File[] }> {
+    const supabase = createClient();
+    const rpc: ChamarRpc = (funcao, args) => supabase.rpc(funcao, args);
+    const nomeZip = zip.name;
+    const chaveZip = chaveDe(zip);
+    const paraN8n: File[] = [];
+    let pendente = false;
+    let atual: string | null = null;
+    let seq = 0;
+    const atualizar = (chave: string, mudanca: Partial<ResultadoOficial>) =>
+      setOficiais((rs) => rs.map((r) => (r.chave === chave ? { ...r, ...mudanca } : r)));
+    const novaEntrada = (e: Omit<EntradaDoZip, "chave" | "zip">) =>
+      setEntradasZip((l) => [...l, { chave: `${chaveZip}::${seq++}`, zip: nomeZip, ...e }]);
+    const ir = (indice: number, total: number, nome: string) =>
+      setProgressoZip({ zip: nomeZip, fase: "lendo", indice, total, nome });
+
+    // Um reenvio do mesmo pacote começa do zero: o que ficou da tentativa anterior sai.
+    setEntradasZip((l) => l.filter((x) => x.zip !== nomeZip));
+    setOficiais((rs) => rs.filter((r) => !r.chave.startsWith(`${chaveZip}::`)));
+    setProgressoZip({ zip: nomeZip, fase: "abrindo", indice: 0, total: 0, nome: "" });
+    try {
+      await lerZipNoNavegador(zip, async (ev) => {
+        switch (ev.tipo) {
+          case "oficial_inicio": {
+            ir(ev.indice, ev.total, ev.nome);
+            atual = `${chaveZip}::${ev.nome}`;
+            const chave = atual;
+            setOficiais((rs) => [
+              ...rs.filter((r) => r.chave !== chave),
+              {
+                chave, nome: `${nomeZip} › ${ev.nome}`, bytes: ev.bytes, familia: ev.familia, subtipo: ev.subtipo,
+                fase: "lendo", lidosBytes: 0,
+              },
+            ]);
+            return;
+          }
+          case "progresso":
+            if (atual) atualizar(atual, { lidosBytes: ev.lidos });
+            return;
+          case "oficial": {
+            const chave = atual;
+            atual = null;
+            if (!chave) return;
+            if (!ev.envelope.familia || ev.envelope.familia === "zip") {
+              atualizar(chave, { fase: "fim", erroDeLeitura: "o leitor não reconheceu a entrada como leiaute oficial" });
+              return;
+            }
+            atualizar(chave, { fase: "gravando", envelope: ev.envelope, resumo: ev.resumo });
+            const desfecho = await gravarResumo(rpc, casoIdConhecido, ev.envelope, ev.resumo,
+              (gravacao) => atualizar(chave, { gravacao }));
+            atualizar(chave, { fase: "fim", desfecho });
+            if (!desfechoEncerra(desfecho)) pendente = true;
+            return;
+          }
+          case "nao_oficial":
+            ir(ev.indice, ev.total, ev.nome);
+            if (ev.arquivo) {
+              paraN8n.push(ev.arquivo);
+              novaEntrada({ nome: ev.nome, bytes: ev.bytes, situacao: "ao_n8n" });
+            } else {
+              novaEntrada({ nome: ev.nome, bytes: ev.bytes, situacao: ev.situacao ?? "nao_enviada", motivo: ev.motivo });
+            }
+            return;
+          case "recusada": {
+            if (ev.indice !== null && ev.total !== null) ir(ev.indice, ev.total, ev.nome);
+            // Falha ao ler uma entrada oficial já aberta: a linha dela no painel dos arquivos lidos diz o motivo.
+            if (atual && atual === `${chaveZip}::${ev.nome}`) {
+              atualizar(atual, { fase: "fim", erroDeLeitura: ev.motivo });
+              atual = null;
+            }
+            novaEntrada({ nome: ev.nome, bytes: null, situacao: "recusada", motivo: ev.motivo });
+            return;
+          }
+          case "fim":
+          case "erro":
+            return;
+        }
+      });
+      setProgressoZip((p) => (p
+        ? pendente
+          ? { ...p, fase: "falhou", erro: "um arquivo oficial do pacote não teve a resposta do banco (veja a lista de arquivos lidos)" }
+          : { ...p, fase: "fim" }
+        : p));
+    } catch (err) {
+      pendente = true;
+      setProgressoZip((p) => ({ zip: nomeZip, indice: p?.indice ?? 0, total: p?.total ?? 0, nome: p?.nome ?? "", fase: "falhou", erro: (err as Error).message }));
+    }
+    if (pendente) {
+      const motivo = "o pacote não foi concluído (um arquivo oficial não foi gravado, ou a leitura parou); reenvie o pacote — ele recomeça e os arquivos oficiais já gravados são reconhecidos como reenvio";
+      setEntradasZip((l) => l.map((x) => (x.zip === nomeZip && x.situacao === "ao_n8n" ? { ...x, situacao: "retida", motivo } : x)));
+      return { pendente: true, paraN8n: [] };
+    }
+    return { pendente: false, paraN8n };
+  }
+
   async function enviar(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
@@ -409,10 +528,12 @@ export default function UploadForm({
       // mandato em paralelo e o `caso.nome` não é único (ver `obterCasoId`).
       const deteccaoDosArquivos = new Map<File, Deteccao | null>();
       await Promise.all(aEnviar.map(async (f) => { deteccaoDosArquivos.set(f, await deteccaoDe(f)); }));
-      const { oficiais: aLerAqui, aoN8n } = separarOficiais(aEnviar, (f) => deteccaoDosArquivos.get(f));
+      const { oficiais: aLerAqui, zips, aoN8n: aoN8nDireto } = separarOficiais(aEnviar, (f) => deteccaoDosArquivos.get(f));
+      // O que vai ao n8n é o de sempre MAIS os arquivos comuns que couberem de dentro dos pacotes (zip).
+      let aoN8n = aoN8nDireto;
       // Os vazios já foram avisados acima e nunca ficam na lista (o envio de sempre também os limpava).
       let restantes = arquivos.filter((a) => a.size > 0);
-      if (aLerAqui.length > 0) {
+      if (aLerAqui.length > 0 || zips.length > 0) {
         let caso;
         try {
           caso = await obterCasoId(createClient(), mandato.trim(), casoId);
@@ -421,7 +542,7 @@ export default function UploadForm({
           setErro((err as Error).message);
           return;
         }
-        const chavesLidas = new Set(aLerAqui.map(chaveDe));
+        const chavesLidas = new Set([...aLerAqui, ...zips].map(chaveDe));
         setOficiais((rs) => [
           ...rs.filter((r) => !chavesLidas.has(r.chave)),
           ...aLerAqui.map((f): ResultadoOficial => {
@@ -433,6 +554,13 @@ export default function UploadForm({
           }),
         ]);
         const pendentes = await processarOficiais(aLerAqui, caso.id);
+        // Os pacotes DEPOIS dos avulsos, um de cada vez (cada um é CPU de uma thread e o heap do seu worker).
+        const doPacote: File[] = [];
+        for (const z of zips) {
+          const r = await processarZip(z, caso.id);
+          if (r.pendente) pendentes.add(chaveDe(z)); else doPacote.push(...r.paraN8n);
+        }
+        aoN8n = [...aoN8nDireto, ...doPacote];
         // Sai da lista quem o banco respondeu; fica quem precisa de reenvio.
         restantes = restantes.filter((a) => !chavesLidas.has(chaveDe(a)) || pendentes.has(chaveDe(a)));
         // Já aqui, e não só no fim: se o envio ao n8n falhar logo abaixo, o próximo
@@ -540,7 +668,12 @@ export default function UploadForm({
   // só se pedirem — o texto técnico. Ele continua ali porque sem ele quem for
   // ajudar começa perguntando "qual erro apareceu?"; mas fechado, porque quem
   // precisa dele não é quem está olhando a tela.
-  const painelOficiais = <PainelOficiais resultados={oficiais} />;
+  const painelOficiais = (
+    <>
+      <PainelOficiais resultados={oficiais} />
+      <PainelZip progresso={progressoZip} entradas={entradasZip} oficiais={oficiais} />
+    </>
+  );
   // O QUE VAI AO N8N, e o que o navegador lê. A tela decide pelos mesmos bytes que o envio.
   const naTela = (f: File) => {
     const d = deteccoes[chaveDe(f)];
@@ -548,7 +681,9 @@ export default function UploadForm({
   };
 
   const arquivosOficiaisNaTela = arquivos.filter((a) => naTela(a) === "oficial");
-  const arquivosAoN8nNaTela = arquivos.filter((a) => a.size > 0 && naTela(a) !== "oficial");
+  const arquivosZipNaTela = arquivos.filter((a) => a.size > 0 && naTela(a) === "zip");
+  // O pacote não conta aqui: o que sai dele ao processamento só se sabe depois de aberto.
+  const arquivosAoN8nNaTela = arquivos.filter((a) => a.size > 0 && naTela(a) !== "oficial" && naTela(a) !== "zip");
 
   const explicacao: FalhaExplicada | null = falha
     ? explicarFalha(falha)
@@ -858,7 +993,8 @@ export default function UploadForm({
                 )}
                 {naTela(a) === "zip" && (
                   <span className="ml-2 rounded bg-tinta-100 px-1.5 py-0.5 text-xs text-tinta-600">
-                    arquivo compactado · segue pelo caminho de sempre (não é lido no seu computador)
+                    pacote compactado · aberto no seu computador: os arquivos de leiaute oficial são lidos aqui
+                    (só o resumo é enviado) e os demais, de até 15 MiB, seguem para o processamento
                   </span>
                 )}
               </span>
@@ -920,18 +1056,26 @@ export default function UploadForm({
         </p>
       )}
 
-      {arquivosOficiaisNaTela.length > 0 && (
+      {(arquivosOficiaisNaTela.length > 0 || arquivosZipNaTela.length > 0) && (
         <p className="rounded border border-tinta-200 bg-tinta-50 px-3 py-2 text-sm text-tinta-600">
           Os arquivos de leiaute oficial são lidos <strong className="text-tinta-800">no seu computador</strong>,
           antes de qualquer envio, e só o resumo é gravado. Um arquivo grande pode levar alguns minutos
           para ser lido (um SPED de 10 milhões de linhas levou cerca de 40 segundos num computador de
           teste): <strong className="text-tinta-800">mantenha esta aba aberta</strong> até o fim — se ela
-          fechar, o arquivo fica sem gravar e é preciso reenviar. Um arquivo compactado (zip) não é lido
-          aqui: segue pelo caminho de sempre.
+          fechar, o arquivo fica sem gravar e é preciso reenviar.
+          {arquivosZipNaTela.length > 0 && (
+            <>
+              {" "}Um pacote compactado (zip) é aberto aqui, sem ir inteiro para lugar nenhum: cada arquivo
+              de leiaute oficial dentro dele é lido como se fosse avulso, e os demais seguem para o
+              processamento se tiverem até 15 MiB. <strong className="text-tinta-800">Um pacote de vários
+              gigabytes leva muitos minutos</strong>; a tela mostra a entrada em curso, e todo arquivo que
+              ficar de fora aparece na lista com o motivo.
+            </>
+          )}
         </p>
       )}
 
-      <PainelOficiais resultados={oficiais} />
+      {painelOficiais}
 
       {descartados && (
         <p className="rounded border border-alerta-300 bg-alerta-50 p-2 text-xs text-alerta-900">{descartados}</p>

@@ -132,32 +132,60 @@ export function gerarEvento(familia, { evento = familia === 'esocial' ? 'evtRemu
 }
 
 /** Zip "stored" (sem compressão) ou deflate, para testar a abertura e os limites. */
-/** opções por entrada: `mentirTamanho` (declara 1/10 do tamanho real), `cifrado` (bit de senha);
- *  `sobrepor`: o diretório central ganha uma 2ª entrada apontando para os dados da 1ª. */
-export async function gerarZip(entradas, { deflate = true, sobrepor = false } = {}) {
+/** opções por entrada: `mentirTamanho` (declara 1/10 do tamanho real), `cifrado` (bit de senha),
+ *  `crcErrado` (CRC-32 com 1 bit trocado), `metodo` (força o campo de método, p.ex. 12 = bzip2).
+ *  opções do zip: `sobrepor` (o diretório central ganha uma 2ª entrada apontando para os dados da 1ª),
+ *  `zip64` (tamanhos e posições no extra 0x0001, EOCD64 e localizador), `comentario` (do zip). */
+export async function gerarZip(entradas, { deflate = true, sobrepor = false, zip64 = false, comentario = '' } = {}) {
   const { deflateRawSync, crc32 } = await import('node:zlib');
   const locais = [], centrais = [];
   let off = 0;
-  for (const { nome, buf, mentirTamanho = false, cifrado = false } of entradas) {
+  for (const { nome, buf, mentirTamanho = false, cifrado = false, crcErrado = false, metodo } of entradas) {
     const n = Buffer.from(nome, 'utf8');
     const dados = deflate ? deflateRawSync(buf) : buf;
-    const crc = crc32(buf) >>> 0;
+    const crc = ((crc32(buf) >>> 0) ^ (crcErrado ? 1 : 0)) >>> 0;
+    const met = metodo ?? (deflate ? 8 : 0);
+    const declarado = mentirTamanho ? Math.ceil(buf.length / 10) : buf.length;
     const lh = Buffer.alloc(30);
-    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(20, 4); lh.writeUInt16LE(0x800, 6); lh.writeUInt16LE(deflate ? 8 : 0, 8);
+    lh.writeUInt32LE(0x04034b50, 0); lh.writeUInt16LE(zip64 ? 45 : 20, 4); lh.writeUInt16LE(0x800, 6); lh.writeUInt16LE(met, 8);
     lh.writeUInt32LE(crc, 14); lh.writeUInt32LE(dados.length, 18); lh.writeUInt32LE(buf.length, 22); lh.writeUInt16LE(n.length, 26);
+    // ZIP64 (opção): tamanhos e posição vão para o extra 0x0001 e o campo de 32 bits fica em 0xFFFFFFFF,
+    // como o Windows e o macOS fazem. O extra traz os três, nesta ordem: original, comprimido, posição.
+    const extra = Buffer.alloc(zip64 ? 28 : 0);
+    if (zip64) {
+      extra.writeUInt16LE(1, 0); extra.writeUInt16LE(24, 2);
+      extra.writeBigUInt64LE(BigInt(declarado), 4); extra.writeBigUInt64LE(BigInt(dados.length), 12); extra.writeBigUInt64LE(BigInt(off), 20);
+    }
     const ch = Buffer.alloc(46);
-    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(20, 4); ch.writeUInt16LE(20, 6); ch.writeUInt16LE(0x800, 8); ch.writeUInt16LE(deflate ? 8 : 0, 10);
-    ch.writeUInt32LE(crc, 16); ch.writeUInt32LE(dados.length, 20); ch.writeUInt32LE(mentirTamanho ? Math.ceil(buf.length / 10) : buf.length, 24); ch.writeUInt16LE(n.length, 28); ch.writeUInt32LE(off, 42);
+    ch.writeUInt32LE(0x02014b50, 0); ch.writeUInt16LE(zip64 ? 45 : 20, 4); ch.writeUInt16LE(zip64 ? 45 : 20, 6); ch.writeUInt16LE(0x800, 8); ch.writeUInt16LE(met, 10);
+    ch.writeUInt32LE(crc, 16);
+    ch.writeUInt32LE(zip64 ? 0xffffffff : dados.length, 20); ch.writeUInt32LE(zip64 ? 0xffffffff : declarado, 24);
+    ch.writeUInt16LE(n.length, 28); ch.writeUInt16LE(extra.length, 30); ch.writeUInt32LE(zip64 ? 0xffffffff : off, 42);
     if (cifrado) ch.writeUInt16LE(0x801, 8);
-    locais.push(lh, n, dados); centrais.push(ch, n);
+    locais.push(lh, n, dados); centrais.push(ch, n, extra);
     off += 30 + n.length + dados.length;
   }
-  if (sobrepor) { const copia = Buffer.from(centrais[0]); centrais.push(copia, Buffer.from(centrais[1])); }
-  const nTotal = centrais.length / 2;
+  // `sobrepor`: a entrada 0 ganha uma gêmea no diretório central, apontando para os mesmos dados.
+  if (sobrepor) centrais.push(Buffer.from(centrais[0]), centrais[1], centrais[2]);
+  const nTotal = centrais.length / 3;
   const cd = Buffer.concat(centrais);
+  const com = Buffer.from(comentario, 'latin1');
   const fim = Buffer.alloc(22);
-  fim.writeUInt32LE(0x06054b50, 0); fim.writeUInt16LE(nTotal, 8); fim.writeUInt16LE(nTotal, 10); fim.writeUInt32LE(cd.length, 12); fim.writeUInt32LE(off, 16);
-  return Buffer.concat([...locais, cd, fim]);
+  fim.writeUInt32LE(0x06054b50, 0); fim.writeUInt16LE(com.length, 20);
+  const pre = [];
+  if (zip64) {
+    const e64 = Buffer.alloc(56);
+    e64.writeUInt32LE(0x06064b50, 0); e64.writeBigUInt64LE(44n, 4); e64.writeUInt16LE(45, 12); e64.writeUInt16LE(45, 14);
+    e64.writeBigUInt64LE(BigInt(nTotal), 24); e64.writeBigUInt64LE(BigInt(nTotal), 32);
+    e64.writeBigUInt64LE(BigInt(cd.length), 40); e64.writeBigUInt64LE(BigInt(off), 48);
+    const loc = Buffer.alloc(20);
+    loc.writeUInt32LE(0x07064b50, 0); loc.writeBigUInt64LE(BigInt(off + cd.length), 8); loc.writeUInt32LE(1, 16);
+    pre.push(e64, loc);
+    fim.writeUInt16LE(0xffff, 8); fim.writeUInt16LE(0xffff, 10); fim.writeUInt32LE(0xffffffff, 12); fim.writeUInt32LE(0xffffffff, 16);
+  } else {
+    fim.writeUInt16LE(nTotal, 8); fim.writeUInt16LE(nTotal, 10); fim.writeUInt32LE(cd.length, 12); fim.writeUInt32LE(off, 16);
+  }
+  return Buffer.concat([...locais, cd, ...pre, fim, com]);
 }
 
 /**
