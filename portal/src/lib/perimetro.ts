@@ -93,3 +93,31 @@ export const ACEITE_ROTULO: Record<string, string> = {
 export function rotuloDoAceite(chave: string): string {
   return Object.hasOwn(ACEITE_ROTULO, chave) ? ACEITE_ROTULO[chave] : `Aceite sem tradução: ${chave}`;
 }
+
+// --- Família declarada (0212) ------------------------------------------------------------------
+// Parentesco só vale DECLARADO, com fonte: nunca inferido por sobrenome.
+export type Parentesco = "conjuge_companheiro" | "linha_reta_ate_2o_grau" | "irmao";
+
+export const PARENTESCOS: ReadonlyArray<{ valor: Parentesco; rotulo: string }> = [
+  { valor: "conjuge_companheiro", rotulo: "Cônjuge ou companheiro(a)" },
+  { valor: "linha_reta_ate_2o_grau", rotulo: "Linha reta até 2º grau (pais, filhos, avós, netos)" },
+  { valor: "irmao", rotulo: "Irmão(ã)" },
+];
+
+/** Parentesco desconhecido aparece cru (regra 7): nunca vira um rótulo vizinho nem some. */
+export function rotuloDoParentesco(chave: string): string {
+  const p = PARENTESCOS.find((x) => x.valor === chave);
+  return p ? p.rotulo : `Parentesco sem tradução: ${chave}`;
+}
+
+const MOTIVOS_DO_GRUPO: Record<string, string> = {
+  controlador_comum: "Por sócio em comum: as empresas têm ao menos um sócio/controlador em comum.",
+  vinculo_familiar: "Por vínculo familiar declarado: sem o parentesco abaixo estas empresas seriam grupos separados. O fecho é transitivo (A–B e B–C juntam A e C).",
+};
+export const MOTIVOS_DE_GRUPO = Object.keys(MOTIVOS_DO_GRUPO);
+
+/** Motivo de grupo desconhecido, ou ausente (banco sem a 0212), aparece dito e cru, nunca como "sócio em comum". */
+export function rotuloDoMotivoDoGrupo(chave: string | null | undefined): string {
+  if (chave === null || chave === undefined || chave === "") return "Motivo do grupo não informado pelo banco.";
+  return Object.hasOwn(MOTIVOS_DO_GRUPO, chave) ? MOTIVOS_DO_GRUPO[chave] : `Motivo do grupo sem tradução: ${chave}`;
+}

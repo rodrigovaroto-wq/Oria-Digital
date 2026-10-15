@@ -12,6 +12,7 @@
 //   7. as actions não usam service role e conferem que a entidade é do caso.
 import {
   CHAVES_DE_FALTA, TIPOS_DE_PENDENCIA, traduzirFalta, rotuloDoAceite, lerPercentual, formatarCnpj, tituloDoVeredito,
+  PARENTESCOS, rotuloDoParentesco, MOTIVOS_DE_GRUPO, rotuloDoMotivoDoGrupo,
 } from "../src/lib/perimetro.ts";
 import { readFileSync } from "node:fs";
 
@@ -87,6 +88,31 @@ checar((ACTIONS.match(/caso_id !== casoId/g) ?? []).length >= 2, "as actions nã
 const PAGINA = readFileSync(new URL("../src/app/casos/[id]/perimetro/page.tsx", import.meta.url), "utf8");
 checar(PAGINA.includes("aceite_motivo") && PAGINA.includes("aceite_financeiro") && !/aceite_financeiro\s*[=!]==?\s*["']nao_verificado/.test(PAGINA),
   "a tela esconde o aceite financeiro quando não verificado");
+
+// 8. família declarada (0212): os três parentescos do enum e os dois motivos de grupo, lidos da migration.
+const M212 = readFileSync(new URL("../../Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql", import.meta.url), "utf8");
+const ENUM212 = [...(M212.match(/create type controlador_parentesco as enum \(([^)]*)\)/)?.[1] ?? "").matchAll(/'([a-z_0-9]+)'/g)].map((m) => m[1]);
+checar(ENUM212.length === 3, `a leitura do enum controlador_parentesco achou ${ENUM212.length} valores, esperava 3`);
+const rotP = new Set<string>();
+for (const k of ENUM212) {
+  const r = rotuloDoParentesco(k);
+  checar(!r.includes("sem tradução") && !r.includes(k), `parentesco "${k}" sem rótulo próprio: ${r}`);
+  checar(PARENTESCOS.some((p) => p.valor === k), `o formulário não oferece o parentesco "${k}"`);
+  rotP.add(r);
+}
+checar(rotP.size === ENUM212.length, "dois parentescos diferentes têm o mesmo rótulo");
+checar(rotuloDoParentesco("tio").includes("tio"), "parentesco desconhecido sumiu em vez de aparecer cru");
+for (const k of ["controlador_comum", "vinculo_familiar"]) {
+  checar(MOTIVOS_DE_GRUPO.includes(k) && M212.includes(`'${k}'`), `motivo de grupo "${k}" fora do vocabulário da tela ou da migration`);
+}
+checar(rotuloDoMotivoDoGrupo("controlador_comum") !== rotuloDoMotivoDoGrupo("vinculo_familiar"), "os dois motivos de grupo têm a mesma frase");
+checar(/familiar/.test(rotuloDoMotivoDoGrupo("vinculo_familiar")) && !/familiar/.test(rotuloDoMotivoDoGrupo("controlador_comum")), "motivo familiar e motivo de sócio comum trocados");
+checar(rotuloDoMotivoDoGrupo("motivo_novo").includes("motivo_novo"), "motivo de grupo desconhecido sumiu em vez de aparecer cru");
+checar(rotuloDoMotivoDoGrupo(undefined) !== rotuloDoMotivoDoGrupo("controlador_comum") && /não informado/.test(rotuloDoMotivoDoGrupo(undefined)),
+  "grupo sem motivo (banco sem a 0212) foi apresentado como sócio em comum");
+const PAG = readFileSync(new URL("../src/app/casos/[id]/perimetro/page.tsx", import.meta.url), "utf8");
+checar(PAG.includes("vinculos") && PAG.includes("rotuloDoMotivoDoGrupo"), "a tela não mostra os vínculos e o motivo dos grupos");
+checar(/nunca por sobrenome/.test(readFileSync(new URL("../src/app/casos/[id]/perimetro/SecaoParentesco.tsx", import.meta.url), "utf8")), "a tela não diz que parentesco só vale declarado");
 
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);
