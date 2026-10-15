@@ -884,6 +884,15 @@ supabase db execute --file Supabase/migrations/0207_o_resumo_do_arquivo_oficial.
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0207' and not presente;                 -- ZERO linhas
 
+# A 0208 responde "o perímetro deste caso está fechado? se não, o que falta, em qual entidade?" (F1): duas
+# funções de LEITURA, fn_perimetro_situacao (uma linha por entidade, com `falta` nomeado) e
+# fn_perimetro_veredito (fechado, grupos e o aceite financeiro, que nunca é ok por omissão). Sem tabela nova,
+# sem backfill, security invoker. Teste: Supabase/test/perimetro_situacao.test.sql.
+supabase db execute --file Supabase/migrations/0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0208' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
