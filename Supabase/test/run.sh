@@ -810,6 +810,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/perimetro_situacao.test.sql 2>
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0209 — o escopo do perímetro: confirmar de novo é idempotente, encerrar tira a entidade do escopo"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/perimetro_encerrar.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \

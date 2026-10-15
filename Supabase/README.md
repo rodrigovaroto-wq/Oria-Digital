@@ -893,6 +893,14 @@ supabase db execute --file Supabase/migrations/0208_a_situacao_do_perimetro_que_
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0208' and not presente;                 -- ZERO linhas
 
+# A 0209 conserta fn_perimetro_definir_escopo (confirmar o mesmo escopo de novo estourava o CHECK do intervalo) e
+# cria fn_perimetro_encerrar_escopo (o caminho para TIRAR a entidade de um escopo). Reemite a função inteira; sem
+# tabela nova, sem backfill. Aplicar DEPOIS da 0208. Teste: Supabase/test/perimetro_encerrar.test.sql.
+supabase db execute --file Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0209' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

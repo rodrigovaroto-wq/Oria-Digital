@@ -7491,6 +7491,8 @@ CREATE FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id
 declare
   v_caso_da_entidade uuid;
   v_novo_id          uuid;
+  v_vig_id           uuid;
+  v_vig_desde        date;
 begin
   if p_desde is null then
     raise exception 'p_desde não pode ser nulo — todo intervalo de perímetro tem início';
@@ -7504,10 +7506,22 @@ begin
     raise exception 'entidade % não pertence ao caso %', p_entidade_id, p_caso_id;
   end if;
 
-  -- A MUDANÇA de perímetro no meio do mandato: o intervalo anterior GANHA UM FIM, não é
-  -- sobrescrito. Sem esta linha, uma segunda chamada para o mesmo (caso, entidade, escopo)
-  -- violaria `perimetro_atual_unico` (dois "vigente" ao mesmo tempo) em vez de fechar o
-  -- primeiro — é esta a MEDIÇÃO NÃO-VAZIA do cabeçalho desta migration.
+  select id, desde into v_vig_id, v_vig_desde
+    from perimetro
+   where caso_id = p_caso_id and entidade_id = p_entidade_id and escopo = p_escopo
+     and ate is null;
+
+  if v_vig_id is not null then
+    if v_vig_desde = p_desde then
+      return v_vig_id;  -- já vigente desde esta data: nada a gravar (ver o cabeçalho)
+    end if;
+    if v_vig_desde > p_desde then
+      raise exception 'a entidade já está no escopo "%" desde %, depois de %: não dá para começar o escopo antes do intervalo vigente. Para mudar o início, encerre o escopo (fn_perimetro_encerrar_escopo) ou corrija o intervalo por SQL direto.',
+        p_escopo, v_vig_desde, p_desde;
+    end if;
+  end if;
+
+  -- A MUDANÇA de perímetro no meio do mandato: o intervalo anterior GANHA UM FIM, não é sobrescrito.
   update perimetro
      set ate = p_desde - 1
    where caso_id = p_caso_id and entidade_id = p_entidade_id and escopo = p_escopo
@@ -7529,7 +7543,52 @@ $$;
 -- Name: FUNCTION fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) IS '0180: o ÚNICO caminho de escrita de `perimetro` — chamado por um humano/analista (portal ou SQL direto; o portal não é escopo desta fatia). Fecha o intervalo aberto anterior do mesmo (caso, entidade, escopo) com `ate = p_desde - 1` em vez de sobrescrever — é a mudança de perímetro no meio do mandato que o roadmap cita (fatia 1.4). Grava evento_auditoria (ator = p_autor, nunca ''sistema:...''). NÃO deriva nada de entidade.papel_no_grupo (0179) — ligar as duas fatias é decisão de F4, fora do escopo desta migration.';
+COMMENT ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) IS '0180: o caminho de escrita que ABRE intervalo de `perimetro`; fecha o vigente anterior do mesmo (caso, entidade, escopo) com `ate = p_desde - 1` em vez de sobrescrever. 0209: confirmar o mesmo escopo com o MESMO desde é idempotente (devolve o id vigente, sem evento); p_desde ANTERIOR ao desde vigente é exceção em português (antes estourava o check perimetro_intervalo_valido). Grava evento_auditoria (ator = p_autor). Para TIRAR a entidade do escopo, fn_perimetro_encerrar_escopo.';
+
+--
+-- Name: fn_perimetro_encerrar_escopo(uuid, uuid, text, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) RETURNS uuid
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_id    uuid;
+  v_desde date;
+begin
+  if p_ate is null then
+    raise exception 'p_ate não pode ser nulo — informe o último dia em que a entidade ainda está no escopo';
+  end if;
+
+  select id, desde into v_id, v_desde
+    from perimetro
+   where caso_id = p_caso_id and entidade_id = p_entidade_id and escopo = p_escopo
+     and ate is null;
+
+  if v_id is null then
+    raise exception 'a entidade % não tem intervalo vigente no escopo "%" neste caso: nada a encerrar (ela já foi encerrada, ou o escopo tem outro nome)',
+      p_entidade_id, p_escopo;
+  end if;
+  if p_ate < v_desde then
+    raise exception 'o intervalo vigente no escopo "%" começou em %: não dá para encerrá-lo em % (antes do começo)',
+      p_escopo, v_desde, p_ate;
+  end if;
+
+  update perimetro set ate = p_ate where id = v_id;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values (p_autor, 'perimetro_escopo_encerrado', 'entidade:' || p_entidade_id,
+          jsonb_build_object('caso_id', p_caso_id, 'escopo', p_escopo, 'desde', v_desde, 'ate', p_ate));
+
+  return v_id;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) IS '0209: tira a entidade do escopo fechando o intervalo vigente com ate = p_ate (último dia DENTRO, inclusivo), sem abrir outro. Recusa, em português, p_ate antes do desde e a entidade sem intervalo vigente no escopo (um encerramento silencioso afirmaria uma remoção que não houve). Grava evento_auditoria perimetro_escopo_encerrado. Devolve o id do intervalo.';
 
 --
 -- Name: fn_perimetro_situacao(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -19116,6 +19175,12 @@ GRANT ALL ON FUNCTION public.fn_pendencia_entidade_ambigua(p_caso_id uuid, p_doc
 --
 
 GRANT ALL ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_perimetro_situacao(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
