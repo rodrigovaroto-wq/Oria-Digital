@@ -31,7 +31,7 @@ async function rodar(
   const entidadeId = texto(form, "entidade_id");
   const dono = await supabase.from("entidade").select("caso_id").eq("id", entidadeId).maybeSingle();
   if (dono.error) return erro(`Não foi possível conferir a empresa: ${dono.error.message}`);
-  if (!dono.data || dono.data.caso_id !== casoId) return erro("Empresa não encontrada neste mandato — nada foi gravado.");
+  if (dono.data?.caso_id !== casoId) return erro("Empresa não encontrada neste mandato — nada foi gravado.");
   const { data: { user } } = await supabase.auth.getUser();
   const autor = user?.email ?? "portal:desconhecido";
   const pedido = chamar({ entidadeId, autor });
@@ -85,7 +85,7 @@ export async function registrarControlador(casoId: string, _a: ResultadoPerimetr
   const supabase = await createClient();
   const dono = await supabase.from("entidade").select("caso_id").eq("id", texto(form, "entidade_id")).maybeSingle();
   if (dono.error) return erro(`Não foi possível conferir a empresa: ${dono.error.message}`);
-  if (!dono.data || dono.data.caso_id !== casoId) return erro("Empresa não encontrada neste mandato — nada foi gravado.");
+  if (dono.data?.caso_id !== casoId) return erro("Empresa não encontrada neste mandato — nada foi gravado.");
   const { data: { user } } = await supabase.auth.getUser();
   const autor = user?.email ?? "portal:desconhecido";
   const novo = await supabase.rpc("fn_controlador_registrar", {

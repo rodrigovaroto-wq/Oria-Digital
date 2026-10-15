@@ -24,6 +24,11 @@ export function CartaoEntidade({ e, todas, existentes, hoje, acoes, casoId }: Re
   const combinado = e.escopos_vigentes.includes(ESCOPO_PADRAO);
   const outrosEscopos = e.escopos_vigentes.filter((s) => s !== ESCOPO_PADRAO);
   const ligados = new Set(e.controladores.map((c) => c.controlador_id));
+  // Três estados exclusivos, nesta ordem: a fantasma não é "pronta" nem "falta algo", é outra pergunta.
+  let estado = { classe: "bg-alerta-100 text-alerta-900", rotulo: "Falta algo" };
+  if (e.fantasma) estado = { classe: "bg-risco-100 text-risco-900", rotulo: "Entidade fantasma" };
+  else if (e.pronta) estado = { classe: "bg-ok-100 text-ok-900", rotulo: "Pronta" };
+
   return (
     <section className="carta space-y-4 p-5" aria-label={e.razao_social}>
       <header className="flex flex-wrap items-start justify-between gap-2">
@@ -31,9 +36,7 @@ export function CartaoEntidade({ e, todas, existentes, hoje, acoes, casoId }: Re
           <h3 className="font-titulo text-lg font-medium text-tinta-900">{e.razao_social}</h3>
           <p className="font-dado text-xs text-tinta-500">{formatarCnpj(e.cnpj)}</p>
         </div>
-        <span className={`chip ${e.fantasma ? "bg-risco-100 text-risco-900" : e.pronta ? "bg-ok-100 text-ok-900" : "bg-alerta-100 text-alerta-900"}`}>
-          {e.fantasma ? "Entidade fantasma" : e.pronta ? "Pronta" : "Falta algo"}
-        </span>
+        <span className={`chip ${estado.classe}`}>{estado.rotulo}</span>
       </header>
 
       {e.falta.length > 0 && (
