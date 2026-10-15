@@ -4,7 +4,19 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 109 — COMECE AQUI (passagem escrita em 13/10/2026, fim da S108)
+## ▶ SESSÃO 109 — COMECE AQUI (15/10/2026)
+
+Detalhe e números: `ESTADO.md`, SESSÃO 109 (o topo). Não precisa reler a S107 nem a S108.
+
+- **PR desta rodada: [#259](https://github.com/rodrigovaroto-wq/tratamento-dados-financeiros/pull/259)** (draft), branch `claude/beautiful-archimedes-ujy8dw`. Este cabeçalho é o único trecho que este HANDOFF atualiza por rodada.
+- **Migrations 0208, 0209, 0210 e 0211: escritas no repositório, NÃO aplicadas.** A sonda não as conferiu. A 0206 segue **NÃO CONFERIDA** pela sonda, e a 0207 segue por aplicar.
+- **Primeira coisa: o que o dono faz à mão.** É a lista em ordem do `ESTADO.md`, SESSÃO 109 (migrations, deploy do portal, declarar o perímetro na tela, envio do zip).
+- **Bloqueado:** onda 1 (espera a F1 fechar, 3 ECDs reais, e a conferência de `leiautes.mjs` e `resumo.mjs` contra o Guia Prático, hoje [A CONFIRMAR]).
+- **Pendente do dono, sem mudança:** cotação do SERPRO (D12.3), termo jurídico (D12.6), fechar o repositório público (**NÃO CONFERIDO**).
+
+---
+
+## PASSAGEM DA S108 (escrita em 13/10/2026; arquivo morto, a mais nova está acima)
 
 A S108 mudou a rota da F2T: **o leitor roda no navegador do analista, e só o resumo vai ao banco**. Escreveu a `0207` (o resumo em partes). Detalhe e números: SESSÃO 108 do `ESTADO.md`. Não precisa reler a S107 nem a S108 inteiras.
 

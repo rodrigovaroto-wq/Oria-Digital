@@ -1,7 +1,7 @@
 # Mapa de execução — daqui até o projeto fechado
 
 **Data:** 09/09/2026, sessão 81 · **Base conferida:** `main` em `668b6fe`, CI verde (PR #203).
-**Tocado em 13/10/2026 (S107 e S108):** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
+**Tocado em 15/10/2026 (S109):** só a linha B8 do quadro (zip no navegador). **Tocado em 13/10/2026 (S107 e S108):** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
 conferido em 09/09.
 **Última migration:** `0160` — ver `ESTADO.md`.
 
@@ -47,7 +47,7 @@ de pendências do `ESTADO.md` já disse uma vez que o Modo A não existia depois
 | **B5** | Eficiência — o que sobrou depois da passada da sessão 54 | 🟢 quase fechada | engenharia | nada crítico |
 | **B6** | **Operação** — proteção do `main`, ~~observabilidade~~, ~~backup~~ | 🟠 **B6.2 e B6.3 fechadas em 21/08**; sobra o `main` | dono | a segurança do processo |
 | **B7** | Bloqueados por dado que não temos | ⚫ espera | terceiros | nada — são espera |
-| **B8** | **Fontes oficiais e captação** (SPED, eSocial, logística, CNAB, CNAE) — Espec. 12, fase **F2T** do roadmap | 🟡 etapa 1 no repo (S107, PR #257); leitor no navegador (S108); **onda 1 BLOQUEADA** | **dono** (3 ECDs reais; D12.3 para o Integra) e a **F1** | o dado independente que confere o declarado (DATA GATE) |
+| **B8** | **Fontes oficiais e captação** (SPED, eSocial, logística, CNAB, CNAE) — Espec. 12, fase **F2T** do roadmap | 🟡 etapa 1 no repo (S107, PR #257); leitor no navegador (S108); zip no navegador (S109, NÃO verificado em produção); **onda 1 BLOQUEADA** | **dono** (3 ECDs reais; D12.3 para o Integra) e a **F1** | o dado independente que confere o declarado (DATA GATE) |
 
 **O caminho crítico encurtou: `B0` fechou em 20/08.** Sobra `B1 → B2` e, em paralelo, `B3` (decisão)
 e `B6` (higiene). **A rodada real aconteceu em 02/09** (sessão 79 do `ESTADO.md`) e não deixou erro

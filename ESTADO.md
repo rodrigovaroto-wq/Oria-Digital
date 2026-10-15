@@ -1,5 +1,37 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 109 (15/10/2026) — F1: fechar o perímetro (o caminho de escrita que ninguém chamava)
+
+> **Migration mais nova: `0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql`.** Ordem de aplicação: `0207` → `0208` → `0209` → `0210` → `0211`. **NENHUMA destas está aplicada em produção, e a sonda NÃO conferiu nenhuma delas.** A `0206` continua **NÃO CONFERIDA** pela sonda (S108).
+> **O que o dono faz à mão, em ordem:**
+> 1. Conferir a `0206` pela sonda (zero linhas) e aplicar a `0207` (pendente desde a S108); conferir `... where migration = '0207' and not presente;`.
+> 2. Aplicar `0208`, `0209`, `0210` e `0211`, **conferindo cada uma**: `select chave from fn_instalacao_conferir() where migration = '02xx' and not presente;` (zero linhas). **Antes da 0210 e da 0211, conferir que produção está na 0209/0210**: elas reemitem `fn_instalacao_conferir` e `fn_fundir_entidade`, e sessões paralelas já aplicaram fora de ordem (`.claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md`).
+> 3. Deploy do portal (Vercel). **"Include source files outside of the Root Directory" tem de estar ligado** — **NÃO VERIFICADO**.
+> 4. Abrir `/casos/<id>/perimetro` do mandato AMO e declarar papel, forma de controle, escopo `combinado` e sócios (os 4 contratos legíveis; ver `.claude/memory/grupo-por-controle-comum-sem-holding.md`). Resolver as 4 fantasmas (fundir ou descartar): elas **seguram o "fechado" por decisão desta rodada**.
+> 5. Decisões do dono abertas: (a) controle familiar conta como controle comum? (fatia 1.7); (b) pendência "aceita com ressalva" deve segurar o perímetro? (hoje não segura); (c) `caso_pergunta` na fusão (FK `NO ACTION`: a fusão falha alto).
+> 6. Enviar os arquivos. O zip de ~3 GB vai pelo portal depois do deploy: o zip abre no navegador e a aba precisa ficar aberta. Arquivo não oficial acima de 15 MiB dentro do zip fica de fora, e a tela diz para enviá-lo separado.
+
+**O que fechou (commits de `f2bf2be` a `247f84c`; `git show <sha>` para o detalhe):**
+- `6988625` **0208**: `fn_perimetro_situacao` e `fn_perimetro_veredito`. As funções da F1 (0178–0183) não tinham chamador fora de `Supabase/test`; agora há uma resposta única do banco para "o perímetro está fechado, e o que falta". 52 asserts; 9 reprovam com a pronta sempre verdadeira.
+- `6d5c342` **0209**: `fn_perimetro_definir_escopo` idempotente (antes estourava 23514 ao repetir) e `fn_perimetro_encerrar_escopo`. 28 asserts.
+- `9ee5424` **tela** `/casos/[id]/perimetro` e `portal/scripts/verificar-perimetro.mts` (48 verificações; no CI e no `CLAUDE.md`). **Não aberta em navegador nem contra Postgres.**
+- `d9a70eb` **0210**: RLS. `perimetro`, `controlador` e `entidade_controlador` só tinham policy de SELECT; como `authenticated`, definir escopo e registrar controlador davam 42501 (medido). Policies de INSERT/UPDATE e `revoke delete`. A sonda ganha o tipo `policy`. 20 asserts; 14 reprovam no estado anterior.
+- `843c1de` correção dos 4 achados do Sonar na tela (sem mudança de comportamento).
+- `fb3b769` **0211**: `fn_fundir_entidade` leva o perímetro da absorvida (antes o CASCADE apagava em silêncio) e repõe as controladas (antes a fusão inteira falhava com 23503). 20 asserts; 17 reprovam com o corpo da 0183. **NÃO corrigido, efeito dito:** `caso_pergunta` (FK `NO ACTION`) faz a fusão falhar alto; `caso_modelagem` e `caso_linha_premissa` guardam o nome, que fica órfão.
+- `8148a3c` **zip no navegador**: `Leitor/lib/zip.mjs` sobre `Blob` (ZIP64, CRC, fluxo); o portal deixa de mandar zip ao n8n. Medido no Chromium: 9,58 GB, 312 entradas, 95,2 s, heap do worker 45 MB.
+- `07e9e7e`, `f362035`, `247f84c`: grafo do conhecimento regerado a cada passo.
+
+**Suítes medidas nesta rodada (15/10/2026):** as cinco primeiras foram **reexecutadas fechando a rodada**; as demais vêm da rodada de implementação, relatadas no brief e não reexecutadas aqui.
+- Reexecutadas no fechamento: `.claude/conhecimento/test/*.test.mjs` 3/3; `Leitor/test/*.test.mjs` 65/65; `verificar-envio-oficial.mts` 153/0; `verificar-perimetro.mts` 48/0.
+- Da rodada de implementação (não reexecutadas aqui): `verificar-limite-de-envio.mts` 69/0; `N8N/test/*.test.mjs` 676/676; `Supabase/test/run.sh` com exit 0 em banco novo (o script não soma asserts); `tsc`, `eslint` e `next build` do portal limpos.
+- **NÃO remedidos:** `Verificação/run.mts`, `variacoes.mts`, `conferir-chamadas`, a sonda contra produção e os medidores (`medir-regua-cobertura`, `medir-custo-book`).
+
+**Não verificado:** deploy do portal; a tela em navegador; o zip de 3 GB no mandato real; a sonda sobre 0208–0211; a decisão 1.7 (controle familiar).
+
+**Estado da F1:** a fatia 1.8 ("o caminho de escrita que ninguém chamava") está **feita no repositório**, não aplicada. Ainda fecham a F1: aplicar as migrations, declarar o perímetro pela tela, o aceite financeiro (**NÃO VERIFICADO** sem o COMBINADO do cliente) e a decisão 1.7. O percentual 55% do cabeçalho da F1 **não foi remedido** nesta rodada.
+
+---
+
 ## SESSÃO 108 (13/10/2026) — F2T etapa 1: o leitor passa ao navegador, e a `0207` (o resumo)
 
 > **Migration mais nova: `0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql`** (aplicar DEPOIS da 0210; S109, abaixo). Antes dela, `0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql`, `0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql`, `0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql` e `0207_o_resumo_do_arquivo_oficial.sql` (aplicar DEPOIS da 0206). **NÃO aplicada em produção.**
