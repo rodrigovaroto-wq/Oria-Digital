@@ -110,6 +110,7 @@
 {"k":"n","id":"arquivo:Supabase/test/fixture_book_canastra.sql","t":"arquivo","f":"Supabase/test/fixture_book_canastra.sql","txt":"fixture_book_canastra.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fixture_modelagem_v35.sql","t":"arquivo","f":"Supabase/test/fixture_modelagem_v35.sql","txt":"fixture_modelagem_v35.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","t":"arquivo","f":"Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","txt":"entidade_incorreta_18-09-2026.json"}
+{"k":"n","id":"arquivo:Supabase/test/fusao_perimetro.test.sql","t":"arquivo","f":"Supabase/test/fusao_perimetro.test.sql","txt":"fusao_perimetro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fusao_preserva_controle.test.sql","t":"arquivo","f":"Supabase/test/fusao_preserva_controle.test.sql","txt":"fusao_preserva_controle.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/gerar_fixture.py","t":"arquivo","f":"Supabase/test/gerar_fixture.py","txt":"gerar_fixture.py"}
 {"k":"n","id":"arquivo:Supabase/test/golden.test.sql","t":"arquivo","f":"Supabase/test/golden.test.sql","txt":"golden.test.sql"}
@@ -352,7 +353,7 @@
 {"k":"n","id":"fn:fn_fator_escala","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"fator escala"}
 {"k":"n","id":"fn:fn_fatos_do_caso","t":"fn","f":"Supabase/migrations/0149_o_fato_material_endurecido.sql","txt":"fatos do caso"}
 {"k":"n","id":"fn:fn_fechar_caso","t":"fn","f":"Supabase/migrations/0114_mandato_fechado.sql","txt":"fechar caso"}
-{"k":"n","id":"fn:fn_fundir_entidade","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"fundir entidade"}
+{"k":"n","id":"fn:fn_fundir_entidade","t":"fn","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","txt":"fundir entidade"}
 {"k":"n","id":"fn:fn_golden_abrir_rodada","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden abrir rodada"}
 {"k":"n","id":"fn:fn_golden_campos","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"golden campos"}
 {"k":"n","id":"fn:fn_golden_candidatos","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden candidatos"}
@@ -661,6 +662,7 @@
 {"k":"n","id":"migration:0208","t":"migration","f":"Supabase/migrations/0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql","txt":"a situacao do perimetro que so o teste lia"}
 {"k":"n","id":"migration:0209","t":"migration","f":"Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql","txt":"o escopo que nao se confirmava nem se encerrava"}
 {"k":"n","id":"migration:0210","t":"migration","f":"Supabase/migrations/0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql","txt":"a escrita do perimetro que so o superusuario fazia"}
+{"k":"n","id":"migration:0211","t":"migration","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","txt":"a fusao que apagava o perimetro da absorvida"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1252,6 +1254,12 @@
 {"k":"e","de":"arquivo:Supabase/test/fixture_modelagem_v35.sql","rel":"CHAMA","pa":"fn:fn_rotulo_estrutural","f":"Supabase/test/fixture_modelagem_v35.sql","l":23}
 {"k":"e","de":"arquivo:Supabase/test/fixture_modelagem_v35.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/fixture_modelagem_v35.sql","l":317}
 {"k":"e","de":"arquivo:Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","rel":"CHAMA","pa":"fn:fn_fundir_entidade","f":"Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","l":1}
+{"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_papel_no_grupo","f":"Supabase/test/fusao_perimetro.test.sql","l":100}
+{"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_participacao","f":"Supabase/test/fusao_perimetro.test.sql","l":98}
+{"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_fundir_entidade","f":"Supabase/test/fusao_perimetro.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_perimetro_definir_escopo","f":"Supabase/test/fusao_perimetro.test.sql","l":62}
+{"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/fusao_perimetro.test.sql","l":41}
+{"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"Supabase/test/fusao_perimetro.test.sql","l":44}
 {"k":"e","de":"arquivo:Supabase/test/fusao_preserva_controle.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_registrar","f":"Supabase/test/fusao_preserva_controle.test.sql","l":60}
 {"k":"e","de":"arquivo:Supabase/test/fusao_preserva_controle.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_aprender_cnpj","f":"Supabase/test/fusao_preserva_controle.test.sql","l":10}
 {"k":"e","de":"arquivo:Supabase/test/fusao_preserva_controle.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_controlador","f":"Supabase/test/fusao_preserva_controle.test.sql","l":61}
@@ -2236,6 +2244,7 @@
 {"k":"e","de":"migration:0209","rel":"CRIA","pa":"fn:fn_perimetro_definir_escopo","f":"Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql","l":40}
 {"k":"e","de":"migration:0209","rel":"CRIA","pa":"fn:fn_perimetro_encerrar_escopo","f":"Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql","l":101}
 {"k":"e","de":"migration:0210","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql","l":92}
+{"k":"e","de":"migration:0211","rel":"CRIA","pa":"fn:fn_fundir_entidade","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","l":51}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
