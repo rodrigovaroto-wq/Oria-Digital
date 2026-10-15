@@ -77,7 +77,8 @@ export function separarOficiais<T>(
   const aoN8n: T[] = [];
   for (const item of itens) {
     const d = destinoDe(deteccaoDe(item));
-    (d === "oficial" ? oficiais : d === "zip" ? zips : aoN8n).push(item);
+    const lote = { oficial: oficiais, zip: zips, extracao: aoN8n }[d];
+    lote.push(item);
   }
   return { oficiais, zips, aoN8n };
 }

@@ -462,11 +462,10 @@ export default function UploadForm({
             return;
         }
       });
-      setProgressoZip((p) => (p
-        ? pendente
-          ? { ...p, fase: "falhou", erro: "um arquivo oficial do pacote não teve a resposta do banco (veja a lista de arquivos lidos)" }
-          : { ...p, fase: "fim" }
-        : p));
+      const fechado: Partial<ProgressoDoZip> = pendente
+        ? { fase: "falhou", erro: "um arquivo oficial do pacote não teve a resposta do banco (veja a lista de arquivos lidos)" }
+        : { fase: "fim" };
+      setProgressoZip((p) => (p ? { ...p, ...fechado } : p));
     } catch (err) {
       pendente = true;
       setProgressoZip((p) => ({ zip: nomeZip, indice: p?.indice ?? 0, total: p?.total ?? 0, nome: p?.nome ?? "", fase: "falhou", erro: (err as Error).message }));

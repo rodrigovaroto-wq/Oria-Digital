@@ -1,6 +1,7 @@
-"""Monta o zip sintético grande da medição (S109). Uso: python3 -I Leitor/medicao-n8n/pacote-montar.py <saida.zip> <ecd.txt> <pasta-de-amostras>
+"""Monta o zip sintético grande da medição (S109). Uso (na pasta de trabalho; só NOMES, sem barra, como os outros scripts desta pasta):
+  python3 -I <repo>/Leitor/medicao-n8n/pacote-montar.py <saida.zip> <ecd.txt>
 
-A pasta de amostras tem nfe.xml, extrato.ofx, retorno.ret e ecf.txt (os geradores de `Dados de Teste/fontes-oficiais/gerar.mjs`);
+A pasta de trabalho tem nfe.xml, extrato.ofx, retorno.ret e ecf.txt (os geradores de `Dados de Teste/fontes-oficiais/gerar.mjs`);
 a ECD vem de `Leitor/medicao-n8n/gerar-ecd-realista.mjs 10 <arquivo>`. Gasta ~9,6 GB de disco.
 
 Ordem de propósito: o preenchimento (PDF "não oficial" grande) vem PRIMEIRO, para que os SPEDs
@@ -10,7 +11,18 @@ com o tamanho lido do extra ZIP64).
 """
 import os, sys, zipfile, io, time
 
-saida, ecd, amostras = sys.argv[1], sys.argv[2], sys.argv[3]
+
+
+def nome_local(arg):
+    # Da linha de comando vem só um NOME (sem pasta): o arquivo é o do diretório atual.
+    if not arg or os.path.basename(arg) != arg or arg in ('.', '..'):
+        print('passe só o nome do arquivo (sem pasta); ele é lido/gravado no diretório atual', file=sys.stderr)
+        sys.exit(2)
+    return os.path.join(os.getcwd(), arg)
+
+
+saida, ecd = nome_local(sys.argv[1]), nome_local(sys.argv[2])
+
 GiB = 1 << 30
 bloco = b'%PDF-1.4\n' + os.urandom((1 << 20) - 9)
 
@@ -56,10 +68,10 @@ with zipfile.ZipFile(saida, 'w', allowZip64=True) as zf:
     arquivo(zf, 'sped/ecd-2025.txt', ecd)
     arquivo(zf, 'sped/ecd-2024.txt', ecd)
     for i in range(300):
-        bytes_(zf, f'xml/nfe-{i:04d}.xml', open(f'{amostras}/nfe.xml', 'rb').read())
-    bytes_(zf, 'bancos/extrato.ofx', open(f'{amostras}/extrato.ofx', 'rb').read())
-    bytes_(zf, 'bancos/retorno.ret', open(f'{amostras}/retorno.ret', 'rb').read())
-    bytes_(zf, 'sped/ecf-2025.txt', open(f'{amostras}/ecf.txt', 'rb').read())
+        bytes_(zf, f'xml/nfe-{i:04d}.xml', open(nome_local('nfe.xml'), 'rb').read())
+    bytes_(zf, 'bancos/extrato.ofx', open(nome_local('extrato.ofx'), 'rb').read())
+    bytes_(zf, 'bancos/retorno.ret', open(nome_local('retorno.ret'), 'rb').read())
+    bytes_(zf, 'sped/ecf-2025.txt', open(nome_local('ecf.txt'), 'rb').read())
     bytes_(zf, 'receber/contas-a-receber.xlsx', xlsx.getvalue())
     bytes_(zf, 'pagar/contas-a-pagar.csv', b'vencimento;fornecedor;valor\n01/11/2025;ACME;1.234,56\n')
     bytes_(zf, 'fornecedores/fornecedores.csv', b'cnpj;nome\n11222333000181;ACME\n')

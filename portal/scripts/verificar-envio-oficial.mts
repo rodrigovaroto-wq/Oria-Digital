@@ -370,7 +370,11 @@ checar(LIMITE.includes('from "../../../N8N/lib/custo.mjs"'), "o teto por arquivo
 // O QUE NÃO SE PROVA AQUI: o worker em si e a tela (sem navegador) — a guarda estrutural
 // da seção 9 e a medição num Chromium de verdade cobrem isso, declaradas no commit.
 const MiB = 1024 * 1024;
-const pseudoAleatorio = (n: number) => { const b = Buffer.alloc(n); for (let i = 0; i < n; i += 4) b.writeUInt32LE((Math.imul(i + 1, 2654435761)) >>> 0, i); return b; };
+const pseudoAleatorio = (n: number) => {
+  const b = Buffer.alloc(n);
+  for (let i = 0; i < n; i += 4) b.writeUInt32LE(Math.imul(i + 1, 2654435761) >>> 0, i);
+  return b;
+};
 const XLSX = await gerarZip([
   { nome: "[Content_Types].xml", buf: Buffer.from("<Types spreadsheetml/>") },
   { nome: "xl/workbook.xml", buf: Buffer.from("<workbook/>") },
@@ -403,7 +407,11 @@ const PACOTE = await gerarZip(ENTRADAS_DO_PACOTE);
     // O worker só segue depois do `continuar`: nenhum evento pode chegar enquanto o resumo anterior é gravado.
     if (ocupado) proximoAntesDoFim = true;
     eventos.push(e);
-    if (e.tipo === "oficial") { ocupado = true; await new Promise((r) => setTimeout(r, 40)); ocupado = false; }
+    if (e.tipo === "oficial") {
+      ocupado = true;
+      await new Promise((r) => setTimeout(r, 40));
+      ocupado = false;
+    }
   });
   const de = <T extends EventoDoZip["tipo"]>(t: T) => eventos.filter((e): e is Extract<EventoDoZip, { tipo: T }> => e.tipo === t);
   const nomeDe = (e: EventoDoZip) => ("nome" in e ? e.nome : "");
@@ -420,14 +428,14 @@ const PACOTE = await gerarZip(ENTRADAS_DO_PACOTE);
 
   // Oficiais: lidas como avulsas — o MESMO envelope e resumo que o arquivo solto dá.
   const oficiaisLidas = de("oficial");
-  checar(oficiaisLidas.map((o) => o.nome).sort().join("|") === "bancos/extrato.ofx|contabil/ecd-2025.txt",
+  checar(oficiaisLidas.map((o) => o.nome).sort((a, b) => a.localeCompare(b)).join("|") === "bancos/extrato.ofx|contabil/ecd-2025.txt",
     `as entradas oficiais lidas deveriam ser o ECD e o OFX: ${oficiaisLidas.map((o) => o.nome).join(", ")}`);
   const avulsa = lido(ECD_DO_PACOTE);
   const dentro = oficiaisLidas.find((o) => o.nome === "contabil/ecd-2025.txt");
   checar(!!dentro && dentro.envelope.hash_sha256 === avulsa.envelope.hash_sha256 && !!dentro.envelope.hash_sha256
     && JSON.stringify(dentro.resumo) === JSON.stringify(avulsa.resumo),
     "o ECD dentro do pacote deu envelope/resumo diferente do mesmo arquivo avulso (duas leituras da mesma coisa)");
-  checar(de("oficial_inicio").map((o) => o.nome).sort().join("|") === "bancos/extrato.ofx|contabil/ecd-2025.txt|ecd-corrompido.txt",
+  checar(de("oficial_inicio").map((o) => o.nome).sort((a, b) => a.localeCompare(b)).join("|") === "bancos/extrato.ofx|contabil/ecd-2025.txt|ecd-corrompido.txt",
     "o início de leitura oficial deveria ser avisado para o ECD, o OFX e o ECD corrompido (o corrompido é oficial até o CRC falhar)");
 
   // O ECD com CRC errado: reconhecido como oficial pela cabeça, MAS nada dele é gravado.
@@ -438,7 +446,7 @@ const PACOTE = await gerarZip(ENTRADAS_DO_PACOTE);
 
   // Não oficiais: as que cabem voltam como File, com o nome do pacote e o conteúdo exato.
   const comArquivo = de("nao_oficial").filter((e) => e.arquivo);
-  checar(comArquivo.map((e) => e.nome).sort().join("|") === "contas-a-receber.xlsx|fornecedores/fornecedores.csv",
+  checar(comArquivo.map((e) => e.nome).sort((a, b) => a.localeCompare(b)).join("|") === "contas-a-receber.xlsx|fornecedores/fornecedores.csv",
     `as não oficiais que cabem no n8n deveriam ser o xlsx e o csv: ${comArquivo.map((e) => e.nome).join(", ")}`);
   const csvF = comArquivo.find((e) => e.nome === "fornecedores/fornecedores.csv")?.arquivo;
   checar(csvF?.name === "pacote › fornecedores › fornecedores.csv" && Buffer.from(await csvF.arrayBuffer()).equals(CSV),

@@ -22,13 +22,18 @@ const COR = {
   erro: "border-risco-300 bg-risco-50 text-risco-900",
 } as const;
 
+const corDaEntrada = (e: EntradaDoZip): string => {
+  if (e.situacao === "ignorada") return "border-tinta-200 bg-tinta-50 text-tinta-700";
+  return e.situacao === "recusada" ? COR.erro : COR.alerta;
+};
+
 export default function PainelZip({
   progresso, entradas, oficiais,
-}: {
+}: Readonly<{
   progresso: ProgressoDoZip | null;
   entradas: readonly EntradaDoZip[];
   oficiais: readonly ResultadoOficial[];
-}) {
+}>) {
   if (!progresso && entradas.length === 0) return null;
   const oficiaisDoZip = progresso ? oficiais.filter((o) => o.nome.startsWith(`${progresso.zip} › `)) : [];
   const n = contarEntradasDoZip(entradas, oficiaisDoZip);
@@ -64,7 +69,7 @@ export default function PainelZip({
       {outras.length > 0 && (
         <ul className="mt-2 space-y-1">
           {outras.map((e) => (
-            <li key={e.chave} className={`rounded border p-2 text-xs ${e.situacao === "ignorada" ? "border-tinta-200 bg-tinta-50 text-tinta-700" : e.situacao === "recusada" ? COR.erro : COR.alerta}`}>
+            <li key={e.chave} className={`rounded border p-2 text-xs ${corDaEntrada(e)}`}>
               <span className="font-medium">{e.nome}</span>
               {e.bytes !== null && <span className="text-tinta-500"> ({formatarBytes(e.bytes)})</span>}
               {" — "}{rotuloDaEntrada(e)}

@@ -1,18 +1,18 @@
 // Mede o worker de zip DO PORTAL (o mesmo `leitor-zip-worker.ts`, empacotado com esbuild do
 // `portal/node_modules`) num Chromium de verdade, sobre um zip do disco: tempo, pico de heap JS do
 // WORKER (CDP `Runtime.getHeapUsage` no alvo do worker) e pico de RSS dos processos do navegador.
-// Uso: node Leitor/medicao-n8n/pacote-medir.mjs <zip> <ecd-de-referencia>
+// Uso (da pasta onde estão os dois arquivos; só NOMES, sem barra, como os outros scripts desta pasta):
+//   node <repo>/Leitor/medicao-n8n/pacote-medir.mjs <nome-do-zip> <nome-da-ecd-de-referencia>
 //   (o zip sai de `pacote-montar.py`; a ECD de referência dá o `sha256` que o hash lido tem de igualar)
 // Cada entrada oficial é "gravada" com um atraso proporcional ao resumo (2 s para ~4,7 MB, o que a
 // tela espera do banco): o worker só segue depois do `continuar`, como no portal.
 import { createRequire } from 'node:module';
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, writeFileSync, createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
 import { join, dirname } from 'node:path';
-
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
+import { nomeDaLinhaDeComando } from './caminho.mjs';
 const R = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SC = tmpdir();
 const require = createRequire(import.meta.url);
@@ -26,7 +26,7 @@ const out = await esbuild.build({ entryPoints: [`${SC}/entrada-worker.ts`], bund
 const codigo = out.outputFiles[0].text;
 console.log('worker empacotado:', Math.round(codigo.length / 1024), 'KB');
 
-const zip = process.argv[2], referencia = process.argv[3];
+const zip = nomeDaLinhaDeComando(process.argv[2], 'zip'), referencia = nomeDaLinhaDeComando(process.argv[3], 'ECD de referência');
 const sha = await new Promise((ok, erro) => { const h = createHash('sha256'); createReadStream(referencia).on('data', (d) => h.update(d)).on('end', () => ok(h.digest('hex'))).on('error', erro); });
 
 const navegador = await pw.chromium.launch({ args: ['--remote-debugging-port=9333'] });
@@ -36,8 +36,12 @@ await pagina.setInputFiles('#f', zip);
 
 let picoRss = 0, picoHeapWorker = 0;
 // O heap do WORKER: CDP cru no endpoint do navegador (o CDPSession do Playwright não fala com worker).
+// O endereço vem da resposta do navegador (entrada): só o CAMINHO é aproveitado, e só se tiver a forma
+// de um alvo de navegador; host e porta são os que NÓS abrimos (127.0.0.1:9333), nunca os da resposta.
 const { webSocketDebuggerUrl } = await (await fetch('http://127.0.0.1:9333/json/version')).json();
-const ws = new WebSocket(webSocketDebuggerUrl);
+const caminhoWs = new URL(webSocketDebuggerUrl).pathname;
+if (!/^\/devtools\/browser\/[0-9a-f-]+$/i.test(caminhoWs)) throw new Error(`endereço de depuração inesperado: ${caminhoWs}`);
+const ws = new WebSocket(`ws://127.0.0.1:9333${caminhoWs}`);
 await new Promise((ok) => ws.addEventListener('open', ok));
 let idMsg = 0; const pend = new Map(); const sessoes = new Set();
 ws.addEventListener('message', (e) => {
@@ -45,7 +49,7 @@ ws.addEventListener('message', (e) => {
   if (m.id && pend.has(m.id)) { pend.get(m.id)(m); pend.delete(m.id); }
   if (m.method === 'Target.attachedToTarget' && m.params.targetInfo.type === 'worker') sessoes.add(m.params.sessionId);
 });
-const cdp = (method, params = {}, sessionId) => new Promise((ok) => { const id = ++idMsg; pend.set(id, ok); ws.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) })); });
+const cdp = (method, params, sessionId) => new Promise((ok) => { const id = ++idMsg; pend.set(id, ok); ws.send(JSON.stringify({ id, method, params: params ?? {}, ...(sessionId ? { sessionId } : {}) })); });
 await cdp('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
 const alvos = (await cdp('Target.getTargets')).result.targetInfos.filter((t) => t.type === 'page');
 for (const a of alvos) await cdp('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, (await cdp('Target.attachToTarget', { targetId: a.targetId, flatten: true })).result.sessionId);

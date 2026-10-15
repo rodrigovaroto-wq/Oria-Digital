@@ -86,7 +86,7 @@ const TABELA_CRC = (() => {
 
 /** CRC-32 incremental: passe o retorno anterior como `crc` (começa em 0xffffffff; feche com `^ 0xffffffff`). */
 export function crc32Atualizar(crc, bytes) {
-  for (let i = 0; i < bytes.length; i++) crc = TABELA_CRC[(crc ^ bytes[i]) & 0xff] ^ (crc >>> 8);
+  for (const b of bytes) crc = TABELA_CRC[(crc ^ b) & 0xff] ^ (crc >>> 8);
   return crc;
 }
 
@@ -146,7 +146,7 @@ async function fimDoDiretorio(blob) {
     const lv = visao(loc);
     if (lv.getUint32(0, true) !== 0x07064b50) return { recusado: 'ZIP64 sem localizador: zip corrompido' };
     const pos64 = u64(lv, 8);
-    if (!(pos64 + 56 <= tam)) return { recusado: 'ZIP64: o registro de fim do diretório está fora do arquivo' };
+    if (pos64 + 56 > tam) return { recusado: 'ZIP64: o registro de fim do diretório está fora do arquivo' };
     const e64 = await bytes(blob, pos64, pos64 + 56);
     const ev = visao(e64);
     if (ev.getUint32(0, true) !== 0x06064b50) return { recusado: 'ZIP64: registro de fim do diretório inválido' };
@@ -214,7 +214,7 @@ export async function* entradasDoZip(blob, limites = LIMITES) {
   if (fim.recusado) { yield { nome: '(zip)', recusado: fim.recusado }; return; }
   if (fim.n > limites.entradas) { yield { nome: '(zip)', recusado: `${fim.n} entradas, acima do limite de ${limites.entradas}` }; return; }
   if (fim.tamanho > limites.bytesDiretorio) { yield { nome: '(zip)', recusado: `diretório central de ${fim.tamanho} bytes, acima do limite de ${limites.bytesDiretorio}` }; return; }
-  if (!(fim.inicio + fim.tamanho <= blob.size)) { yield { nome: '(zip)', recusado: 'diretório central fora do arquivo: zip truncado ou corrompido' }; return; }
+  if (fim.inicio + fim.tamanho > blob.size) { yield { nome: '(zip)', recusado: 'diretório central fora do arquivo: zip truncado ou corrompido' }; return; }
   const dir = await bytes(blob, fim.inicio, fim.inicio + fim.tamanho);
   const v = visao(dir);
   let p = 0, total = 0;
@@ -238,7 +238,12 @@ export async function* entradasDoZip(blob, limites = LIMITES) {
     if (tamOrig === 0xffffffff || tamComp === 0xffffffff || local === 0xffffffff) {
       const z = extraZip64(v, extraIni, nExtra);
       let q = z?.p ?? 0;
-      const ler = () => { if (!z || q + 8 > z.fim) return NaN; const x = u64(v, q); q += 8; return x; };
+      const ler = () => {
+        if (!z || q + 8 > z.fim) return Number.NaN;
+        const x = u64(v, q);
+        q += 8;
+        return x;
+      };
       if (tamOrig === 0xffffffff) tamOrig = ler();
       if (tamComp === 0xffffffff) tamComp = ler();
       if (local === 0xffffffff) local = ler();
@@ -253,13 +258,13 @@ export async function* entradasDoZip(blob, limites = LIMITES) {
     // que falha depois também gastou o que inflou.
     if (total + tamOrig > limites.bytesTotal) { yield { ...ref, recusado: `o pacote passa do limite total descompactado de ${limites.bytesTotal} bytes: envie em mais de um zip` }; continue; }
     total += tamOrig;
-    if (!(local + 30 <= blob.size)) { yield { ...ref, recusado: 'cabeçalho local fora do arquivo: zip truncado ou corrompido' }; continue; }
+    if (local + 30 > blob.size) { yield { ...ref, recusado: 'cabeçalho local fora do arquivo: zip truncado ou corrompido' }; continue; }
     const lh = await bytes(blob, local, local + 30);
     const lv = visao(lh);
     if (lv.getUint32(0, true) !== 0x04034b50) { yield { ...ref, recusado: 'cabeçalho local ausente: zip corrompido' }; continue; }
     const ini = local + 30 + lv.getUint16(26, true) + lv.getUint16(28, true);
     const fimDados = ini + tamComp;
-    if (!(fimDados <= blob.size)) { yield { ...ref, recusado: 'os dados da entrada passam do fim do arquivo: zip truncado' }; continue; }
+    if (fimDados > blob.size) { yield { ...ref, recusado: 'os dados da entrada passam do fim do arquivo: zip truncado' }; continue; }
     // Os trechos de dados já usados. O diretório central pode apontar VÁRIAS entradas
     // para o mesmo bloco comprimido (a "better zip bomb"): cada uma infla o mesmo
     // bloco de novo, e o total explode sem nenhum arquivo grande no pacote.
@@ -288,7 +293,11 @@ export async function abrirZip(blob, limites = LIMITES) {
     try {
       const partes = [];
       const r = e.fluxo().getReader();
-      for (;;) { const { done, value } = await r.read(); if (done) break; partes.push(value); }
+      for (;;) {
+        const { done, value } = await r.read();
+        if (done) break;
+        partes.push(value);
+      }
       saida.push({ nome: e.nome, buf: new Uint8Array(await new Blob(partes).arrayBuffer()) });
     } catch (err) { saida.push({ nome: e.nome, recusado: motivoDoErro(err) }); }
   }
