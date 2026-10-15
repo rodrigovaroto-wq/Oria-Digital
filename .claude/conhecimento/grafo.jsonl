@@ -88,6 +88,7 @@
 {"k":"n","id":"arquivo:Supabase/test/cobertura_de_tipos.test.sql","t":"arquivo","f":"Supabase/test/cobertura_de_tipos.test.sql","txt":"cobertura_de_tipos.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/completude_conteudo.test.sql","t":"arquivo","f":"Supabase/test/completude_conteudo.test.sql","txt":"completude_conteudo.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/conferir-chamadas.mjs","t":"arquivo","f":"Supabase/test/conferir-chamadas.mjs","txt":"conferir-chamadas.mjs"}
+{"k":"n","id":"arquivo:Supabase/test/controlador_familia.test.sql","t":"arquivo","f":"Supabase/test/controlador_familia.test.sql","txt":"controlador_familia.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/custo_do_lote.test.sql","t":"arquivo","f":"Supabase/test/custo_do_lote.test.sql","txt":"custo_do_lote.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/desativar_premissa.test.sql","t":"arquivo","f":"Supabase/test/desativar_premissa.test.sql","txt":"desativar_premissa.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/desempate.test.sql","t":"arquivo","f":"Supabase/test/desempate.test.sql","txt":"desempate.test.sql"}
@@ -114,6 +115,7 @@
 {"k":"n","id":"arquivo:Supabase/test/fixture_book_canastra.sql","t":"arquivo","f":"Supabase/test/fixture_book_canastra.sql","txt":"fixture_book_canastra.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fixture_modelagem_v35.sql","t":"arquivo","f":"Supabase/test/fixture_modelagem_v35.sql","txt":"fixture_modelagem_v35.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","t":"arquivo","f":"Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","txt":"entidade_incorreta_18-09-2026.json"}
+{"k":"n","id":"arquivo:Supabase/test/fusao_pergunta.test.sql","t":"arquivo","f":"Supabase/test/fusao_pergunta.test.sql","txt":"fusao_pergunta.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fusao_perimetro.test.sql","t":"arquivo","f":"Supabase/test/fusao_perimetro.test.sql","txt":"fusao_perimetro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fusao_preserva_controle.test.sql","t":"arquivo","f":"Supabase/test/fusao_preserva_controle.test.sql","txt":"fusao_preserva_controle.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/gerar_fixture.py","t":"arquivo","f":"Supabase/test/gerar_fixture.py","txt":"gerar_fixture.py"}
@@ -316,7 +318,9 @@
 {"k":"n","id":"fn:fn_conflitos_do_caso","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"conflitos do caso"}
 {"k":"n","id":"fn:fn_contas_repetindo_valor","t":"fn","f":"Supabase/migrations/0140_a_coluna_de_dimensao_nao_e_valor.sql","txt":"contas repetindo valor"}
 {"k":"n","id":"fn:fn_contraparte_intragrupo","t":"fn","f":"Supabase/migrations/0124_intragrupo_que_nao_e_mutuo.sql","txt":"contraparte intragrupo"}
+{"k":"n","id":"fn:fn_controlador_desvincular_familia","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"controlador desvincular familia"}
 {"k":"n","id":"fn:fn_controlador_registrar","t":"fn","f":"Supabase/migrations/0182_o_grupo_horizontal_que_a_controladora_nao_alcancava.sql","txt":"controlador registrar"}
+{"k":"n","id":"fn:fn_controlador_vincular_familia","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"controlador vincular familia"}
 {"k":"n","id":"fn:fn_decidir_pendencia","t":"fn","f":"Supabase/migrations/0109_pendencia_tres_botoes.sql","txt":"decidir pendencia"}
 {"k":"n","id":"fn:fn_definir_modelagem","t":"fn","f":"Supabase/migrations/0038_premissas_catalogo.sql","txt":"definir modelagem"}
 {"k":"n","id":"fn:fn_desativar_premissa","t":"fn","f":"Supabase/migrations/0104_desativar_premissa.sql","txt":"desativar premissa"}
@@ -359,7 +363,7 @@
 {"k":"n","id":"fn:fn_fator_escala","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"fator escala"}
 {"k":"n","id":"fn:fn_fatos_do_caso","t":"fn","f":"Supabase/migrations/0149_o_fato_material_endurecido.sql","txt":"fatos do caso"}
 {"k":"n","id":"fn:fn_fechar_caso","t":"fn","f":"Supabase/migrations/0114_mandato_fechado.sql","txt":"fechar caso"}
-{"k":"n","id":"fn:fn_fundir_entidade","t":"fn","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","txt":"fundir entidade"}
+{"k":"n","id":"fn:fn_fundir_entidade","t":"fn","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"fundir entidade"}
 {"k":"n","id":"fn:fn_golden_abrir_rodada","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden abrir rodada"}
 {"k":"n","id":"fn:fn_golden_campos","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"golden campos"}
 {"k":"n","id":"fn:fn_golden_candidatos","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden candidatos"}
@@ -379,7 +383,8 @@
 {"k":"n","id":"fn:fn_golden_rotular","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden rotular"}
 {"k":"n","id":"fn:fn_golden_rotular_campos","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden rotular campos"}
 {"k":"n","id":"fn:fn_golden_suficiente","t":"fn","f":"Supabase/migrations/0126_golden_set.sql","txt":"golden suficiente"}
-{"k":"n","id":"fn:fn_grupo_por_controle_comum","t":"fn","f":"Supabase/migrations/0182_o_grupo_horizontal_que_a_controladora_nao_alcancava.sql","txt":"grupo por controle comum"}
+{"k":"n","id":"fn:fn_grupo_por_controle_comum","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum"}
+{"k":"n","id":"fn:fn_grupo_por_controle_comum_motivo","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum motivo"}
 {"k":"n","id":"fn:fn_herdar_secao_pela_arvore","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"herdar secao pela arvore"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
@@ -425,7 +430,7 @@
 {"k":"n","id":"fn:fn_perimetro_definir_escopo","t":"fn","f":"Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql","txt":"perimetro definir escopo"}
 {"k":"n","id":"fn:fn_perimetro_encerrar_escopo","t":"fn","f":"Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql","txt":"perimetro encerrar escopo"}
 {"k":"n","id":"fn:fn_perimetro_situacao","t":"fn","f":"Supabase/migrations/0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql","txt":"perimetro situacao"}
-{"k":"n","id":"fn:fn_perimetro_veredito","t":"fn","f":"Supabase/migrations/0208_a_situacao_do_perimetro_que_so_o_teste_lia.sql","txt":"perimetro veredito"}
+{"k":"n","id":"fn:fn_perimetro_veredito","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"perimetro veredito"}
 {"k":"n","id":"fn:fn_perimetro_vigente","t":"fn","f":"Supabase/migrations/0180_o_perimetro_que_o_combinado_nao_tinha.sql","txt":"perimetro vigente"}
 {"k":"n","id":"fn:fn_periodo_canonico","t":"fn","f":"Supabase/migrations/0020_periodo_canonico.sql","txt":"periodo canonico"}
 {"k":"n","id":"fn:fn_periodo_e_parcial","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"periodo e parcial"}
@@ -496,6 +501,8 @@
 {"k":"n","id":"fn:fn_tokens_estruturais","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tokens estruturais"}
 {"k":"n","id":"fn:fn_tratar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"tratar pendencia"}
 {"k":"n","id":"fn:fn_trg_auto_promover_dial","t":"fn","f":"Supabase/migrations/0137_a_promocao_automatica_do_dial.sql","txt":"trg auto promover dial"}
+{"k":"n","id":"fn:fn_trg_caso_pergunta_so_reaponta","t":"fn","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"trg caso pergunta so reaponta"}
+{"k":"n","id":"fn:fn_trg_controlador_vinculo_valido","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"trg controlador vinculo valido"}
 {"k":"n","id":"fn:fn_trg_entidade_ambigua","t":"fn","f":"Supabase/migrations/0153_a_entidade_ambigua_nao_decide.sql","txt":"trg entidade ambigua"}
 {"k":"n","id":"fn:fn_trg_entidade_controlador_soma_maxima","t":"fn","f":"Supabase/migrations/0182_o_grupo_horizontal_que_a_controladora_nao_alcancava.sql","txt":"trg entidade controlador soma maxima"}
 {"k":"n","id":"fn:fn_trg_entidade_forma_de_controle_tem_vinculo","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"trg entidade forma de controle tem vinculo"}
@@ -669,6 +676,8 @@
 {"k":"n","id":"migration:0209","t":"migration","f":"Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql","txt":"o escopo que nao se confirmava nem se encerrava"}
 {"k":"n","id":"migration:0210","t":"migration","f":"Supabase/migrations/0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql","txt":"a escrita do perimetro que so o superusuario fazia"}
 {"k":"n","id":"migration:0211","t":"migration","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","txt":"a fusao que apagava o perimetro da absorvida"}
+{"k":"n","id":"migration:0212","t":"migration","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"o bloco familiar que o controle comum nao via"}
+{"k":"n","id":"migration:0213","t":"migration","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"a fusao que falhava na pergunta ja enviada"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1107,6 +1116,16 @@
 {"k":"e","de":"arquivo:Supabase/test/conferir-chamadas.mjs","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/conferir-chamadas.mjs","l":8}
 {"k":"e","de":"arquivo:Supabase/test/conferir-chamadas.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"Supabase/test/conferir-chamadas.mjs","l":12}
 {"k":"e","de":"arquivo:Supabase/test/conferir-chamadas.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"Supabase/test/conferir-chamadas.mjs","l":13}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_desvincular_familia","f":"Supabase/test/controlador_familia.test.sql","l":174}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_registrar","f":"Supabase/test/controlador_familia.test.sql","l":48}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_vincular_familia","f":"Supabase/test/controlador_familia.test.sql","l":74}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_controlador","f":"Supabase/test/controlador_familia.test.sql","l":53}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_grupo_por_controle_comum","f":"Supabase/test/controlador_familia.test.sql","l":61}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_grupo_por_controle_comum_motivo","f":"Supabase/test/controlador_familia.test.sql","l":68}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/controlador_familia.test.sql","l":206}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_perimetro_veredito","f":"Supabase/test/controlador_familia.test.sql","l":90}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/controlador_familia.test.sql","l":42}
+{"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"Supabase/test/controlador_familia.test.sql","l":44}
 {"k":"e","de":"arquivo:Supabase/test/custo_do_lote.test.sql","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"Supabase/test/custo_do_lote.test.sql","l":109}
 {"k":"e","de":"arquivo:Supabase/test/custo_do_lote.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"Supabase/test/custo_do_lote.test.sql","l":57}
 {"k":"e","de":"arquivo:Supabase/test/desativar_premissa.test.sql","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"Supabase/test/desativar_premissa.test.sql","l":72}
@@ -1260,6 +1279,14 @@
 {"k":"e","de":"arquivo:Supabase/test/fixture_modelagem_v35.sql","rel":"CHAMA","pa":"fn:fn_rotulo_estrutural","f":"Supabase/test/fixture_modelagem_v35.sql","l":23}
 {"k":"e","de":"arquivo:Supabase/test/fixture_modelagem_v35.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/fixture_modelagem_v35.sql","l":317}
 {"k":"e","de":"arquivo:Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","rel":"CHAMA","pa":"fn:fn_fundir_entidade","f":"Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","l":1}
+{"k":"e","de":"arquivo:Supabase/test/fusao_pergunta.test.sql","rel":"CHAMA","pa":"fn:fn_fundir_entidade","f":"Supabase/test/fusao_pergunta.test.sql","l":80}
+{"k":"e","de":"arquivo:Supabase/test/fusao_pergunta.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/fusao_pergunta.test.sql","l":154}
+{"k":"e","de":"arquivo:Supabase/test/fusao_pergunta.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/fusao_pergunta.test.sql","l":47}
+{"k":"e","de":"arquivo:Supabase/test/fusao_pergunta.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/fusao_pergunta.test.sql","l":44}
+{"k":"e","de":"arquivo:Supabase/test/fusao_pergunta.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"Supabase/test/fusao_pergunta.test.sql","l":66}
+{"k":"e","de":"arquivo:Supabase/test/fusao_pergunta.test.sql","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"Supabase/test/fusao_pergunta.test.sql","l":62}
+{"k":"e","de":"arquivo:Supabase/test/fusao_pergunta.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/fusao_pergunta.test.sql","l":40}
+{"k":"e","de":"arquivo:Supabase/test/fusao_pergunta.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"Supabase/test/fusao_pergunta.test.sql","l":128}
 {"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_papel_no_grupo","f":"Supabase/test/fusao_perimetro.test.sql","l":100}
 {"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_participacao","f":"Supabase/test/fusao_perimetro.test.sql","l":98}
 {"k":"e","de":"arquivo:Supabase/test/fusao_perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_fundir_entidade","f":"Supabase/test/fusao_perimetro.test.sql","l":8}
@@ -1437,14 +1464,14 @@
 {"k":"e","de":"arquivo:Supabase/test/pendencia_decisao.test.sql","rel":"CHAMA","pa":"fn:fn_ressalvar_pendencia","f":"Supabase/test/pendencia_decisao.test.sql","l":150}
 {"k":"e","de":"arquivo:Supabase/test/pendencia_decisao.test.sql","rel":"CHAMA","pa":"fn:fn_tratar_pendencia","f":"Supabase/test/pendencia_decisao.test.sql","l":150}
 {"k":"e","de":"arquivo:Supabase/test/pendencia_decisao.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/pendencia_decisao.test.sql","l":42}
-{"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_anos_texto","f":"Supabase/test/perguntas.test.sql","l":306}
-{"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_periodo_por_extenso","f":"Supabase/test/perguntas.test.sql","l":315}
+{"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_anos_texto","f":"Supabase/test/perguntas.test.sql","l":319}
+{"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_periodo_por_extenso","f":"Supabase/test/perguntas.test.sql","l":328}
 {"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/perguntas.test.sql","l":76}
 {"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/perguntas.test.sql","l":72}
 {"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"Supabase/test/perguntas.test.sql","l":176}
 {"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"Supabase/test/perguntas.test.sql","l":82}
 {"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/perguntas.test.sql","l":71}
-{"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_valor_pt_br","f":"Supabase/test/perguntas.test.sql","l":330}
+{"k":"e","de":"arquivo:Supabase/test/perguntas.test.sql","rel":"CHAMA","pa":"fn:fn_valor_pt_br","f":"Supabase/test/perguntas.test.sql","l":343}
 {"k":"e","de":"arquivo:Supabase/test/perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_perimetro_definir_escopo","f":"Supabase/test/perimetro.test.sql","l":13}
 {"k":"e","de":"arquivo:Supabase/test/perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_perimetro_vigente","f":"Supabase/test/perimetro.test.sql","l":25}
 {"k":"e","de":"arquivo:Supabase/test/perimetro.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/perimetro.test.sql","l":84}
@@ -2263,6 +2290,14 @@
 {"k":"e","de":"migration:0209","rel":"CRIA","pa":"fn:fn_perimetro_encerrar_escopo","f":"Supabase/migrations/0209_o_escopo_que_nao_se_confirmava_nem_se_encerrava.sql","l":101}
 {"k":"e","de":"migration:0210","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0210_a_escrita_do_perimetro_que_so_o_superusuario_fazia.sql","l":92}
 {"k":"e","de":"migration:0211","rel":"CRIA","pa":"fn:fn_fundir_entidade","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","l":51}
+{"k":"e","de":"migration:0212","rel":"CRIA","pa":"fn:fn_controlador_desvincular_familia","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","l":190}
+{"k":"e","de":"migration:0212","rel":"CRIA","pa":"fn:fn_controlador_vincular_familia","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","l":142}
+{"k":"e","de":"migration:0212","rel":"CRIA","pa":"fn:fn_grupo_por_controle_comum","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","l":234}
+{"k":"e","de":"migration:0212","rel":"CRIA","pa":"fn:fn_grupo_por_controle_comum_motivo","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","l":286}
+{"k":"e","de":"migration:0212","rel":"CRIA","pa":"fn:fn_perimetro_veredito","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","l":323}
+{"k":"e","de":"migration:0212","rel":"CRIA","pa":"fn:fn_trg_controlador_vinculo_valido","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","l":95}
+{"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_fundir_entidade","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":97}
+{"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_trg_caso_pergunta_so_reaponta","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":58}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
