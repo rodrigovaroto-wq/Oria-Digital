@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { FORMAS, PAPEIS, lerPercentual } from "@/lib/perimetro";
+import { FORMAS, PAPEIS, PARENTESCOS, lerPercentual } from "@/lib/perimetro";
 
 // AS ESCRITAS DO PERÍMETRO (0179–0183, 0209). Cada uma chama a função do banco e DEVOLVE o resultado
 // como objeto — nunca exceção nem redirect, para a mensagem do banco chegar ao analista (as exceções
@@ -17,6 +17,7 @@ export type ResultadoPerimetro = { tom: "ok" | "erro"; texto: string } | null;
 type Acao = (anterior: ResultadoPerimetro, form: FormData) => Promise<ResultadoPerimetro>;
 export type AcoesPerimetro = {
   papel: Acao; forma: Acao; participacao: Acao; controlador: Acao; vinculo: Acao; escopoDefinir: Acao; escopoEncerrar: Acao;
+  vincularFamilia: Acao; desvincularFamilia: Acao;
 };
 
 const erro = (texto: string): ResultadoPerimetro => ({ tom: "erro", texto });
@@ -131,4 +132,49 @@ export async function encerrarEscopo(casoId: string, _a: ResultadoPerimetro, for
     fn: "fn_perimetro_encerrar_escopo",
     args: { p_caso_id: casoId, p_entidade_id: entidadeId, p_escopo: escopo, p_ate: ate, p_autor: autor },
   }), `Escopo "${escopo}" encerrado em ${ate}.`);
+}
+
+// PARENTESCO ENTRE SÓCIOS (0212) — nível do caso, não da entidade. Só vale DECLARADO, com fonte; o banco
+// recusa PJ, auto-vínculo, outro caso, fonte vazia e outro parentesco para o par vigente, em português.
+async function autorDoCaso(casoId: string) {
+  const supabase = await createClient();
+  const caso = await supabase.from("caso").select("id").eq("id", casoId).maybeSingle();
+  const { data: { user } } = await supabase.auth.getUser();
+  return { supabase, existe: !!caso.data, autor: user?.email ?? "portal:desconhecido" };
+}
+
+export async function vincularFamilia(casoId: string, _a: ResultadoPerimetro, form: FormData) {
+  const a = texto(form, "controlador_a");
+  const b = texto(form, "controlador_b");
+  const parentesco = texto(form, "parentesco");
+  const fonte = texto(form, "fonte");
+  if (!a || !b) return erro("Escolha os dois sócios.");
+  if (a === b) return erro("Um sócio não tem vínculo familiar com ele mesmo.");
+  if (!PARENTESCOS.some((p) => p.valor === parentesco)) return erro("Escolha o parentesco da lista.");
+  if (!fonte) return erro("Informe a fonte (por exemplo, contrato social ou declaração do cliente): parentesco só vale declarado.");
+  const { supabase, existe, autor } = await autorDoCaso(casoId);
+  if (!existe) return erro("Caso não encontrado — nada foi gravado.");
+  const { error } = await supabase.rpc("fn_controlador_vincular_familia", {
+    p_caso_id: casoId, p_controlador_a: a, p_controlador_b: b, p_parentesco: parentesco, p_fonte: fonte, p_autor: autor,
+  });
+  if (error) return erro(error.message);
+  revalidatePath(`/casos/${casoId}/perimetro`);
+  return { tom: "ok", texto: "Vínculo familiar declarado. Os grupos do topo foram recalculados." } satisfies ResultadoPerimetro;
+}
+
+export async function desvincularFamilia(casoId: string, _a: ResultadoPerimetro, form: FormData) {
+  const vinculo = texto(form, "vinculo_id");
+  const motivo = texto(form, "motivo");
+  if (!vinculo) return erro("Vínculo não informado.");
+  if (!motivo) return erro("Informe o motivo: encerrar um vínculo muda os grupos do perímetro e o porquê fica no registro.");
+  const { supabase, existe, autor } = await autorDoCaso(casoId);
+  if (!existe) return erro("Caso não encontrado — nada foi gravado.");
+  // O vínculo vem do formulário: confere que é deste caso antes de encerrar.
+  const dono = await supabase.from("controlador_vinculo").select("caso_id").eq("id", vinculo).maybeSingle();
+  if (dono.error) return erro(`Não foi possível conferir o vínculo: ${dono.error.message}`);
+  if (!dono.data || dono.data.caso_id !== casoId) return erro("Vínculo não encontrado neste mandato — nada foi encerrado.");
+  const { error } = await supabase.rpc("fn_controlador_desvincular_familia", { p_vinculo_id: vinculo, p_motivo: motivo, p_autor: autor });
+  if (error) return erro(error.message);
+  revalidatePath(`/casos/${casoId}/perimetro`);
+  return { tom: "ok", texto: "Vínculo encerrado. Os grupos do topo foram recalculados." } satisfies ResultadoPerimetro;
 }

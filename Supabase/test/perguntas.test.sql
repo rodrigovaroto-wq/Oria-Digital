@@ -228,11 +228,24 @@ begin
   -- promete o que não cumpre. O par certo já existia ao lado, no
   -- `evento_auditoria` (0003): INSERT e SELECT, e nada mais — sem política para
   -- um comando, o RLS nega aquele comando.
+  -- 0213: a ÚNICA exceção é repontar entidade_id numa fusão de entidades (a ação já tomada acompanha a
+  -- sobrevivente). O invariante continua o mesmo, agora dito em COMPORTAMENTO: nenhuma política de DELETE ou
+  -- de ALL, a única de UPDATE é a restrita ao mesmo caso, e o authenticated só tem privilégio de UPDATE na
+  -- coluna entidade_id (texto, ação e autor não se reescrevem) e nenhum de DELETE.
   select count(*) into v_n from pg_policies
-   where tablename = 'caso_pergunta' and cmd in ('ALL', 'UPDATE', 'DELETE');
+   where tablename = 'caso_pergunta' and cmd in ('ALL', 'DELETE');
   perform teste_assert_pg(v_n = 0,
-    'caso_pergunta não tem política de UPDATE nem de DELETE — o histórico não se reescreve',
+    'caso_pergunta não tem política de DELETE nem de ALL — o histórico não se apaga',
     'achou ' || v_n || ' política(s) permissiva(s)');
+  select count(*) into v_n from pg_policies
+   where tablename = 'caso_pergunta' and cmd = 'UPDATE' and policyname <> 'caso_pergunta_reapontar';
+  perform teste_assert_pg(v_n = 0 and not has_column_privilege('authenticated', 'caso_pergunta', 'texto_enviado', 'UPDATE')
+      and not has_column_privilege('authenticated', 'caso_pergunta', 'acao', 'UPDATE')
+      and not has_column_privilege('authenticated', 'caso_pergunta', 'autor', 'UPDATE')
+      and has_column_privilege('authenticated', 'caso_pergunta', 'entidade_id', 'UPDATE')
+      and not has_table_privilege('authenticated', 'caso_pergunta', 'DELETE'),
+    '…e o authenticated só reescreve entidade_id (a fusão): nem texto, nem ação, nem autor, nem delete',
+    'achou ' || v_n || ' política(s) de UPDATE além da restrita');
   select count(*) into v_n from pg_policies
    where tablename = 'caso_pergunta' and cmd in ('SELECT', 'INSERT');
   perform teste_assert_pg(v_n = 2,
