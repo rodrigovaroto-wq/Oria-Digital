@@ -2,14 +2,15 @@
 
 ## SESSÃO 109 (15/10/2026) — F1: fechar o perímetro (o caminho de escrita que ninguém chamava)
 
-> **Migration mais nova: `0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql`.** Ordem de aplicação: `0207` → `0208` → `0209` → `0210` → `0211`. **NENHUMA destas está aplicada em produção, e a sonda NÃO conferiu nenhuma delas.** A `0206` continua **NÃO CONFERIDA** pela sonda (S108).
+> **Migration mais nova: `0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql`.** **APLICADAS EM PRODUÇÃO em 15/10/2026 pela sessão** (API de gerenciamento do Supabase, projeto `mrcabcaotblleojxnsxc`, uma chamada por migration, na ordem `0207` → `0208` → `0209` → `0210` → `0211`), **e CONFERIDAS pela sonda depois de cada uma**: 0207 8/8, 0208 4/4, 0209 2/2, 0210 3/3, 0211 1/1; `fn_instalacao_conferir()` inteira: **218/218 presentes, 0 ausentes**. `authenticated` em produção: INSERT sim, DELETE **não** nas três tabelas da 0210 (medido com `has_table_privilege`). A `0206` foi **conferida** pela sonda agendada de 15/10 (só a 0207 faltava).
+> **Portal: PR #259 mergeado (`44675ba`) e deploy de produção na Vercel READY** (`dpl_6hEVUtCaB3e9KFQb8aYgZ6cnUTNq`). O "Include source files outside of the Root Directory" está de fato funcionando: o build que lê `../Leitor` e `../N8N` ficou READY.
+> **n8n NÃO republicado:** o secret `N8N_API_KEY` do GitHub dá **401** (ensaio do `republicar.yml`, 15/10), e o ambiente da sessão tem a chave mas não o host (`N8N_URL` ausente; na Vercel o `N8N_INTAKE_FORM_URL` é *sensitive*, ilegível pela API). A S109 não mexeu no n8n; o pendente é o teto de 15 MiB da S108 (`6f1e741`), **NÃO CONFERIDO** se já está publicado.
 > **O que o dono faz à mão, em ordem:**
-> 1. Conferir a `0206` pela sonda (zero linhas) e aplicar a `0207` (pendente desde a S108); conferir `... where migration = '0207' and not presente;`.
-> 2. Aplicar `0208`, `0209`, `0210` e `0211`, **conferindo cada uma**: `select chave from fn_instalacao_conferir() where migration = '02xx' and not presente;` (zero linhas). **Antes da 0210 e da 0211, conferir que produção está na 0209/0210**: elas reemitem `fn_instalacao_conferir` e `fn_fundir_entidade`, e sessões paralelas já aplicaram fora de ordem (`.claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md`).
-> 3. Deploy do portal (Vercel). **"Include source files outside of the Root Directory" tem de estar ligado** — **NÃO VERIFICADO**.
-> 4. Abrir `/casos/<id>/perimetro` do mandato AMO e declarar papel, forma de controle, escopo `combinado` e sócios (os 4 contratos legíveis; ver `.claude/memory/grupo-por-controle-comum-sem-holding.md`). Resolver as 4 fantasmas (fundir ou descartar): elas **seguram o "fechado" por decisão desta rodada**.
-> 5. Decisões do dono abertas: (a) controle familiar conta como controle comum? (fatia 1.7); (b) pendência "aceita com ressalva" deve segurar o perímetro? (hoje não segura); (c) `caso_pergunta` na fusão (FK `NO ACTION`: a fusão falha alto).
-> 6. Enviar os arquivos. O zip de ~3 GB vai pelo portal depois do deploy: o zip abre no navegador e a aba precisa ficar aberta. Arquivo não oficial acima de 15 MiB dentro do zip fica de fora, e a tela diz para enviá-lo separado.
+> 1. ~~Aplicar 0207–0211~~ e ~~deploy do portal~~ — feitos pela sessão em 15/10 (acima).
+> 2. n8n: atualizar o secret `N8N_API_KEY` no GitHub (ou pôr `N8N_URL` no ambiente da sessão) e rodar "Republicar workflow no n8n" (ensaio, depois publicar).
+> 3. Abrir `/casos/<id>/perimetro` do mandato AMO e declarar papel, forma de controle, escopo `combinado` e sócios (os 4 contratos legíveis; ver `.claude/memory/grupo-por-controle-comum-sem-holding.md`). Resolver as 4 fantasmas (fundir ou descartar): elas **seguram o "fechado" por decisão desta rodada**.
+> 4. Decisões do dono abertas: (a) controle familiar conta como controle comum? (fatia 1.7); (b) pendência "aceita com ressalva" deve segurar o perímetro? (hoje não segura); (c) `caso_pergunta` na fusão (FK `NO ACTION`: a fusão falha alto).
+> 5. Enviar os arquivos. O zip de ~3 GB vai pelo portal (já no ar): o zip abre no navegador e a aba precisa ficar aberta. Arquivo não oficial acima de 15 MiB dentro do zip fica de fora, e a tela diz para enviá-lo separado.
 
 **O que fechou (commits de `f2bf2be` a `247f84c`; `git show <sha>` para o detalhe):**
 - `6988625` **0208**: `fn_perimetro_situacao` e `fn_perimetro_veredito`. As funções da F1 (0178–0183) não tinham chamador fora de `Supabase/test`; agora há uma resposta única do banco para "o perímetro está fechado, e o que falta". 52 asserts; 9 reprovam com a pronta sempre verdadeira.
@@ -26,9 +27,9 @@
 - Da rodada de implementação (não reexecutadas aqui): `verificar-limite-de-envio.mts` 69/0; `N8N/test/*.test.mjs` 676/676; `Supabase/test/run.sh` com exit 0 em banco novo (o script não soma asserts); `tsc`, `eslint` e `next build` do portal limpos.
 - **NÃO remedidos:** `Verificação/run.mts`, `variacoes.mts`, `conferir-chamadas`, a sonda contra produção e os medidores (`medir-regua-cobertura`, `medir-custo-book`).
 
-**Não verificado:** deploy do portal; a tela em navegador; o zip de 3 GB no mandato real; a sonda sobre 0208–0211; a decisão 1.7 (controle familiar).
+**Não verificado:** a tela em navegador (no ar, ninguém abriu); o zip de 3 GB no mandato real; a decisão 1.7 (controle familiar). Deploy e sonda sobre 0207–0211: **feitos e conferidos em 15/10** (topo).
 
-**Estado da F1:** a fatia 1.8 ("o caminho de escrita que ninguém chamava") está **feita no repositório**, não aplicada. Ainda fecham a F1: aplicar as migrations, declarar o perímetro pela tela, o aceite financeiro (**NÃO VERIFICADO** sem o COMBINADO do cliente) e a decisão 1.7. O percentual 55% do cabeçalho da F1 **não foi remedido** nesta rodada.
+**Estado da F1:** a fatia 1.8 ("o caminho de escrita que ninguém chamava") está **feita e em produção** (15/10). Ainda fecham a F1: declarar o perímetro pela tela, o aceite financeiro (**NÃO VERIFICADO** sem o COMBINADO do cliente) e a decisão 1.7. O percentual 55% do cabeçalho da F1 **não foi remedido** nesta rodada.
 
 ---
 
