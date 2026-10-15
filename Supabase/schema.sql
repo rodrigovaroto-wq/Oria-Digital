@@ -5692,6 +5692,20 @@ begin
            and a.attnum    > 0
            and not a.attisdropped);
 
+    elsif r.tipo = 'policy' then
+      -- 0210: policy de RLS é catalogada POR SI (objeto = 'tabela.nome_da_policy'). Nenhum outro tipo a
+      -- enxerga: a tabela existe, a função existe, e sem a policy o authenticated leva 42501 ao escrever.
+      v_alvo := to_regclass('public.' || split_part(r.objeto, '.', 1));
+      if v_alvo is null then
+        v_ok  := false;
+        v_det := 'a tabela nem existe';
+      else
+        v_ok := exists (select 1 from pg_policy p
+                         where p.polrelid = v_alvo and p.polname = split_part(r.objeto, '.', 2));
+        v_det := case when v_ok then 'policy presente'
+                      else 'a policy não existe na tabela (RLS ligada sem ela nega a operação ao authenticated)' end;
+      end if;
+
     elsif r.tipo = 'gatilho' then
       -- 0189: gatilho é catalogado POR SI, não pela função que ele chama.
       --
@@ -5785,7 +5799,7 @@ $$;
 -- Name: FUNCTION fn_instalacao_conferir(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada.';
+COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy.';
 
 --
 -- Name: fn_instalacao_resumo(); Type: FUNCTION; Schema: public; Owner: -
@@ -16017,7 +16031,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text])))
 );
 
 --
@@ -18113,6 +18127,12 @@ CREATE POLICY classe_contabil_catalogo_read ON public.classe_contabil_catalogo F
 ALTER TABLE public.controlador ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: controlador controlador_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY controlador_insert ON public.controlador FOR INSERT TO authenticated WITH CHECK (true);
+
+--
 -- Name: controlador controlador_read; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -18185,10 +18205,28 @@ CREATE POLICY entidade_authenticated_all ON public.entidade TO authenticated USI
 ALTER TABLE public.entidade_controlador ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: entidade_controlador entidade_controlador_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY entidade_controlador_insert ON public.entidade_controlador FOR INSERT TO authenticated WITH CHECK (true);
+
+--
 -- Name: entidade_controlador entidade_controlador_read; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY entidade_controlador_read ON public.entidade_controlador FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: entidade_controlador entidade_controlador_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY entidade_controlador_update ON public.entidade_controlador FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+
+--
+-- Name: POLICY entidade_controlador_update ON entidade_controlador; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON POLICY entidade_controlador_update ON public.entidade_controlador IS '0210: fn_entidade_definir_controlador (upsert) e a fusão de entidades movem o vínculo com UPDATE. Sem delete: ver o cabeçalho.';
 
 --
 -- Name: estagio_autonomia; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18425,10 +18463,28 @@ CREATE POLICY pergunta_catalogo_read ON public.pergunta_catalogo FOR SELECT TO a
 ALTER TABLE public.perimetro ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: perimetro perimetro_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY perimetro_insert ON public.perimetro FOR INSERT TO authenticated WITH CHECK (true);
+
+--
+-- Name: POLICY perimetro_insert ON perimetro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON POLICY perimetro_insert ON public.perimetro IS '0210: o authenticated abre intervalos de perímetro (fn_perimetro_definir_escopo é security invoker). Sem policy de delete e com revoke: o histórico não se apaga pelo portal.';
+
+--
 -- Name: perimetro perimetro_read; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY perimetro_read ON public.perimetro FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: perimetro perimetro_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY perimetro_update ON public.perimetro FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
 --
 -- Name: periodo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19672,7 +19728,7 @@ GRANT ALL ON TABLE public.classe_contabil_catalogo TO service_role;
 --
 
 GRANT ALL ON TABLE public.controlador TO anon;
-GRANT ALL ON TABLE public.controlador TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.controlador TO authenticated;
 GRANT ALL ON TABLE public.controlador TO service_role;
 
 --
@@ -19712,7 +19768,7 @@ GRANT ALL ON TABLE public.documento_versao TO service_role;
 --
 
 GRANT ALL ON TABLE public.entidade_controlador TO anon;
-GRANT ALL ON TABLE public.entidade_controlador TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.entidade_controlador TO authenticated;
 GRANT ALL ON TABLE public.entidade_controlador TO service_role;
 
 --
@@ -19960,7 +20016,7 @@ GRANT ALL ON TABLE public.pergunta_catalogo TO service_role;
 --
 
 GRANT ALL ON TABLE public.perimetro TO anon;
-GRANT ALL ON TABLE public.perimetro TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.perimetro TO authenticated;
 GRANT ALL ON TABLE public.perimetro TO service_role;
 
 --
