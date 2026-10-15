@@ -40,6 +40,22 @@ CREATE TYPE public.caso_status AS ENUM (
 );
 
 --
+-- Name: controlador_parentesco; Type: TYPE; Schema: public; Owner: -
+--
+
+CREATE TYPE public.controlador_parentesco AS ENUM (
+    'conjuge_companheiro',
+    'linha_reta_ate_2o_grau',
+    'irmao'
+);
+
+--
+-- Name: TYPE controlador_parentesco; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TYPE public.controlador_parentesco IS '0212: parentesco PRÓXIMO que une dois controladores pessoas físicas num bloco de controle (CPC 05 / IAS 24). conjuge_companheiro; linha_reta_ate_2o_grau (pai/mãe/filho, avô/neto); irmao. Tio, primo e cunhado ficam de fora, de propósito. Só vale DECLARADO, com fonte: nunca por sobrenome.';
+
+--
 -- Name: controlador_tipo_pessoa; Type: TYPE; Schema: public; Owner: -
 --
 
@@ -2135,6 +2151,49 @@ $$;
 COMMENT ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) IS '0124: a empresa DO CASO que o rótulo nomeia como contraparte (o sufixo depois do separador), ou null. É o que permite conferir intragrupo sem adivinhar qual conta casa com qual.';
 
 --
+-- Name: fn_controlador_desvincular_familia(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text) RETURNS uuid
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_v controlador_vinculo;
+begin
+  if p_autor is null or length(trim(p_autor)) = 0 then
+    raise exception 'p_autor não pode ser vazio';
+  end if;
+  if p_motivo is null or length(trim(p_motivo)) = 0 then
+    raise exception 'p_motivo não pode ser vazio: encerrar um vínculo muda os grupos do perímetro, e o porquê fica no registro';
+  end if;
+  select * into v_v from controlador_vinculo where id = p_vinculo_id;
+  if not found then
+    raise exception 'vínculo % não encontrado', p_vinculo_id;
+  end if;
+  if v_v.encerrado_em is not null then
+    raise exception 'o vínculo % já foi encerrado em % e não se encerra de novo', p_vinculo_id, v_v.encerrado_em;
+  end if;
+
+  update controlador_vinculo
+     set encerrado_em = now(), encerrado_por = trim(p_autor), motivo_encerramento = trim(p_motivo)
+   where id = p_vinculo_id;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values (p_autor, 'controlador_vinculo_encerrado', 'controlador:' || v_v.controlador_a,
+          jsonb_build_object('vinculo_id', p_vinculo_id, 'caso_id', v_v.caso_id,
+                             'controlador_a', v_v.controlador_a, 'controlador_b', v_v.controlador_b,
+                             'parentesco', v_v.parentesco, 'motivo', trim(p_motivo)));
+  return p_vinculo_id;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text) IS '0212: ENCERRA o vínculo familiar (não apaga: a linha é a evidência de quem declarou, com que fonte e quando). Motivo e autor obrigatórios. Vínculo inexistente ou já encerrado é recusado. Grava controlador_vinculo_encerrado. O grupo passa a ignorá-lo.';
+
+--
 -- Name: fn_controlador_registrar(uuid, text, text, public.controlador_tipo_pessoa, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2173,6 +2232,57 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_controlador_registrar(p_caso_id uuid, p_nome text, p_documento text, p_tipo_pessoa public.controlador_tipo_pessoa, p_autor text) IS '0182: o ÚNICO caminho de escrita de `controlador` — chamado por um humano/analista (portal ou SQL direto; o portal não é escopo desta fatia). Grava evento_auditoria (ator = p_autor, nunca ''sistema:...''). NADA é inferido de campo_extraido, nome ou CNPJ — a decisão de QUEM é controlador vem do contrato social na mão de quem chama.';
+
+--
+-- Name: fn_controlador_vincular_familia(uuid, uuid, uuid, public.controlador_parentesco, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) RETURNS uuid
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_a    uuid := least(p_controlador_a, p_controlador_b);
+  v_b    uuid := greatest(p_controlador_a, p_controlador_b);
+  v_viva controlador_vinculo;
+  v_id   uuid;
+begin
+  if p_autor is null or length(trim(p_autor)) = 0 then
+    raise exception 'p_autor não pode ser vazio: todo vínculo familiar tem quem o declarou';
+  end if;
+  if p_fonte is null or length(trim(p_fonte)) = 0 then
+    raise exception 'p_fonte não pode ser vazia: o parentesco só vale declarado, com a fonte (ex.: "contrato social", "declaração do cliente")';
+  end if;
+  if v_a = v_b then
+    raise exception 'um controlador não tem vínculo familiar com ele mesmo';
+  end if;
+
+  select * into v_viva from controlador_vinculo
+   where controlador_a = v_a and controlador_b = v_b and encerrado_em is null;
+  if found then
+    if v_viva.parentesco = p_parentesco then
+      return v_viva.id;  -- já vigente, mesmo parentesco: nada a gravar
+    end if;
+    raise exception 'o par já tem um vínculo vigente (%), e % é outro parentesco. Encerre o vigente (fn_controlador_desvincular_familia) e declare o novo, para o histórico dizer o que mudou.',
+      v_viva.parentesco, p_parentesco;
+  end if;
+
+  insert into controlador_vinculo (caso_id, controlador_a, controlador_b, parentesco, fonte, declarado_por)
+  values (p_caso_id, v_a, v_b, p_parentesco, trim(p_fonte), trim(p_autor))
+  returning id into v_id;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values (p_autor, 'controlador_vinculo_declarado', 'controlador:' || v_a,
+          jsonb_build_object('vinculo_id', v_id, 'caso_id', p_caso_id, 'controlador_a', v_a,
+                             'controlador_b', v_b, 'parentesco', p_parentesco, 'fonte', trim(p_fonte)));
+  return v_id;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) IS '0212: declara parentesco próximo entre dois controladores pessoas físicas do caso, COM fonte e autor. A ordem dos dois é indiferente (o par é simétrico). Idempotente para o mesmo par e parentesco vigentes (devolve o id, sem evento); outro parentesco para um par vigente é recusado (encerre antes). Pessoa jurídica, controlador de outro caso e auto-vínculo são recusados. Grava controlador_vinculo_declarado. Nunca infere por sobrenome.';
 
 --
 -- Name: fn_decidir_pendencia(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -4007,6 +4117,9 @@ declare
   v_perim_descartado jsonb := '[]'::jsonb;
   v_controladas      jsonb;
   v_n_controladas    int := 0;
+  -- 0213
+  v_perguntas        jsonb;
+  v_n_perguntas      int := 0;
 begin
   if p_de_id = p_para_id then
     raise exception 'fundir uma entidade nela mesma não faz sentido (%)', p_de_id;
@@ -4094,6 +4207,18 @@ begin
   update entidade set controladora_id = p_para_id
    where caso_id = p_caso_id and controladora_id = p_de_id;
 
+  -- 0213: as perguntas JÁ AGIDAS (enviada/descartada) sobre a absorvida passam a ser da sobrevivente. São ação
+  -- humana que aconteceu e é o que `ja_enviada` lê: sem isto a pergunta enviada sobre a absorvida voltaria a ser
+  -- sugerida para a sobrevivente, e `caso_pergunta_entidade_id_fkey` (NO ACTION) fazia a fusão INTEIRA falhar.
+  -- A SUGESTÃO não é carregada: é calculada ao vivo por fn_sugerir_perguntas e nunca é gravada.
+  select coalesce(jsonb_agg(jsonb_build_object('caso_pergunta_id', cp.id, 'codigo', cp.pergunta_codigo,
+                                               'acao', cp.acao, 'criado_em', cp.criado_em)
+                            order by cp.criado_em, cp.id), '[]'::jsonb), count(*)::int
+    into v_perguntas, v_n_perguntas
+    from caso_pergunta cp where cp.caso_id = p_caso_id and cp.entidade_id = p_de_id;
+  update caso_pergunta set entidade_id = p_para_id
+   where caso_id = p_caso_id and entidade_id = p_de_id;
+
   -- A pendência de ambiguidade da entidade fundida está respondida.
   update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = p_por
    where caso_id = p_caso_id and motivo = 'entidade_ambigua:' || p_de_id and estado <> 'resolvida';
@@ -4123,14 +4248,17 @@ begin
                              -- 0211
                              'perimetro_movido', v_perim_movidos,
                              'perimetro_descartado', v_perim_descartado,
-                             'controladas_repontadas', v_controladas));
+                             'controladas_repontadas', v_controladas,
+                             -- 0213
+                             'perguntas_repontadas', v_perguntas));
 
   return jsonb_build_object('fundida', v_de, 'em', v_para, 'documentos', v_docs,
                             'vinculos_movidos', v_vinculos_movidos,
                             'vinculos_descartados', jsonb_array_length(v_descartados),
                             'perimetro_movido', v_perim_movidos,
                             'perimetro_descartado', jsonb_array_length(v_perim_descartado),
-                            'controladas_repontadas', v_n_controladas);
+                            'controladas_repontadas', v_n_controladas,
+                            'perguntas_repontadas', v_n_perguntas);
 end;
 $$;
 
@@ -4138,7 +4266,7 @@ $$;
 -- Name: FUNCTION fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) IS 'Funde duas entidades que são a mesma empresa, levando junto documentos, checklist, pendências e reconciliações (0153). Nada some sem rastro: evento_auditoria guarda o nome que existia e quantos documentos mudaram de dono. 0183: leva também os vínculos de entidade_controlador quando a sobrevivente não tem nenhum (se já tem, os da absorvida vão para o evento como vinculos_descartados). Não herda forma_de_controle (registra no evento) e resolve as pendências de forma e de papel da absorvida. 0211: leva os intervalos de perimetro da absorvida, exceto os que se sobrepõem a um intervalo do mesmo escopo da sobrevivente (esses ficam no evento em perimetro_descartado); repõe como controladora da sobrevivente quem era controlado pela absorvida (controladas_repontadas); recusa em português se a sobrevivente era controlada pela absorvida; registra no evento o papel, a controladora e o percentual da absorvida.';
+COMMENT ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) IS 'Funde duas entidades que são a mesma empresa, levando junto documentos, checklist, pendências e reconciliações (0153). Nada some sem rastro: evento_auditoria guarda o nome que existia e quantos documentos mudaram de dono. 0183: leva os vínculos de entidade_controlador quando a sobrevivente não tem nenhum (senão vão para o evento como vinculos_descartados); não herda forma_de_controle e resolve as pendências de forma e de papel da absorvida. 0211: leva os intervalos de perimetro da absorvida, exceto os que se sobrepõem a um intervalo do mesmo escopo da sobrevivente (ficam no evento em perimetro_descartado); repõe como controladora da sobrevivente quem era controlado pela absorvida; recusa em português se a sobrevivente era controlada pela absorvida; registra papel, controladora e percentual da absorvida. 0213: leva as perguntas JÁ ENVIADAS ou descartadas (caso_pergunta) para a sobrevivente, listadas no evento em perguntas_repontadas; a sugestão não se carrega (é calculada ao vivo).';
 
 --
 -- Name: fn_golden_abrir_rodada(text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -5448,17 +5576,33 @@ $$;
 COMMENT ON FUNCTION public.fn_golden_suficiente(p_estagio text, p_rodada uuid) IS 'A pergunta do laço de calibração do Arquitetura do Sistema/2 Especificação/f0/06 ("concordância alta e estável?"), respondida em número. O TIPO MAIS FRACO governa: o dial é por estágio e o Arquitetura do Sistema/2 Especificação/f0/06 raciocina por tipo, e autonomia por (estágio x tipo) não existe no schema — enquanto não existir, a leitura conservadora é a única honesta. Rodada não congelada não autoriza nada. Métrica desconhecida RECUSA.';
 
 --
--- Name: fn_grupo_por_controle_comum(uuid); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_grupo_por_controle_comum(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid) RETURNS TABLE(entidade_id uuid, razao_social text, grupo_id uuid)
+CREATE FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean DEFAULT true) RETURNS TABLE(entidade_id uuid, razao_social text, grupo_id uuid)
     LANGUAGE sql STABLE
     AS $$
-  with recursive par_direto as materialized (
+  with recursive pares_ctrl as materialized (
+    -- o mesmo sócio (0182)...
+    select ec.controlador_id as x, ec.controlador_id as y
+      from entidade_controlador ec
+     where ec.caso_id = p_caso_id
+    union
+    -- ...ou sócios com parentesco próximo DECLARADO e vigente (0212), nos dois sentidos
+    select v.controlador_a, v.controlador_b
+      from controlador_vinculo v
+     where p_com_familia and v.caso_id = p_caso_id and v.encerrado_em is null
+    union
+    select v.controlador_b, v.controlador_a
+      from controlador_vinculo v
+     where p_com_familia and v.caso_id = p_caso_id and v.encerrado_em is null
+  ),
+  par_direto as materialized (
     select ec1.entidade_id as a, ec2.entidade_id as b
       from entidade_controlador ec1
+      join pares_ctrl p on p.x = ec1.controlador_id
       join entidade_controlador ec2
-        on ec2.controlador_id = ec1.controlador_id
+        on ec2.controlador_id = p.y
        and ec2.entidade_id <> ec1.entidade_id
      where ec1.caso_id = p_caso_id
   ),
@@ -5482,10 +5626,51 @@ CREATE FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid) RETURNS TABLE
 $$;
 
 --
--- Name: FUNCTION fn_grupo_por_controle_comum(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid) IS '0182: agrupa as entidades do caso por CONTROLE COMUM, por FECHO TRANSITIVO — se A e B compartilham um controlador, e B e C compartilham outro, as três caem no mesmo grupo. `par_direto` (pares de um salto) é MATERIALIZED de propósito (evita reavaliação a cada iteração da recursão — mesma lição da 0152, ver comentário acima da função). `grupo_id` é o entidade_id alcançável de menor ordenação textual — representante arbitrário mas estável do componente conexo, não uma entidade "principal". Entidade sem controlador registrado não aparece na saída — ausência não afirma nada sobre grupo real algum (regra 7 do CLAUDE.md). A recursão termina pela DEDUPLICAÇÃO do `union` sobre um conjunto finito (entidade, alcançável) — sem contador de salto na tupla, que era justamente o que impedia a dedup de convergir na primeira versão (ver cabeçalho). É o consumidor mínimo que prova a fatia 1.7 do roadmap: "as 8 entidades do mandato real podem ser reconhecidas como um grupo".';
+COMMENT ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean) IS '0182: agrupa as entidades do caso por CONTROLE COMUM, por FECHO TRANSITIVO. 0212: duas entidades também se ligam quando um sócio de uma é PARENTE PRÓXIMO DECLARADO e vigente (controlador_vinculo) de um sócio da outra; com p_com_familia = false devolve o grupo da 0182, só por sócio compartilhado (base de fn_grupo_por_controle_comum_motivo). A chamada de um argumento segue valendo (default true). `grupo_id` é o entidade_id alcançável de menor ordenação textual: representante estável, não uma entidade principal. Entidade sem controlador registrado não aparece (ausência não afirma nada, regra 7). A recursão termina pela deduplicação do union sobre um conjunto finito.';
+
+--
+-- Name: fn_grupo_por_controle_comum_motivo(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) RETURNS TABLE(grupo_id uuid, entidades integer, motivo text, vinculos jsonb)
+    LANGUAGE sql STABLE
+    AS $$
+  with g1 as materialized (select * from fn_grupo_por_controle_comum(p_caso_id, true)),
+  g0 as materialized (select * from fn_grupo_por_controle_comum(p_caso_id, false)),
+  por_grupo as (
+    select g1.grupo_id, count(*)::int as entidades, count(distinct g0.grupo_id)::int as grupos_sem_familia
+      from g1 join g0 on g0.entidade_id = g1.entidade_id
+     group by g1.grupo_id
+  )
+  select pg.grupo_id, pg.entidades,
+         case when pg.grupos_sem_familia > 1 then 'vinculo_familiar' else 'controlador_comum' end,
+         coalesce((
+           select jsonb_agg(jsonb_build_object(
+                    'vinculo_id', v.id, 'parentesco', v.parentesco, 'fonte', v.fonte,
+                    'declarado_por', v.declarado_por,
+                    'controlador_a', ca.nome, 'controlador_b', cb.nome)
+                  order by ca.nome, cb.nome, v.id)
+             from controlador_vinculo v
+             join controlador ca on ca.id = v.controlador_a
+             join controlador cb on cb.id = v.controlador_b
+            where v.caso_id = p_caso_id and v.encerrado_em is null
+              and exists (select 1 from g1 x join entidade_controlador ec on ec.entidade_id = x.entidade_id
+                           where x.grupo_id = pg.grupo_id and ec.controlador_id = v.controlador_a)
+              and exists (select 1 from g1 x join entidade_controlador ec on ec.entidade_id = x.entidade_id
+                           where x.grupo_id = pg.grupo_id and ec.controlador_id = v.controlador_b)
+         ), '[]'::jsonb)
+    from por_grupo pg
+   order by pg.grupo_id;
+$$;
+
+--
+-- Name: FUNCTION fn_grupo_por_controle_comum_motivo(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) IS '0212: por grupo de controle, POR QUE as entidades estão juntas. controlador_comum: ligam-se por sócio compartilhado (o grupo existiria sem nenhum vínculo familiar). vinculo_familiar: o grupo junta pelo menos dois grupos que, sem a família, seriam separados. `vinculos` traz os parentescos vigentes entre sócios do grupo, com fonte e quem declarou. Calcula g0 (sem família) e g1 (com) pela MESMA função, não por uma segunda recursão.';
 
 --
 -- Name: fn_herdar_secao_pela_arvore(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -7776,15 +7961,19 @@ CREATE FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) RETURNS TABLE(entid
       from s
   ),
   g as (
+    -- 0212: cada grupo diz POR QUE está junto (fn_grupo_por_controle_comum_motivo): controlador_comum
+    -- (compartilham sócio) ou vinculo_familiar (só a parentesco declarado os une), com os vínculos e a fonte.
     select coalesce(jsonb_agg(jsonb_build_object(
-             'grupo_id', t.grupo_id, 'quantas', t.quantas, 'entidades', t.membros)
+             'grupo_id', t.grupo_id, 'quantas', t.quantas, 'motivo', t.motivo,
+             'vinculos', t.vinculos, 'entidades', t.membros)
              order by t.grupo_id), '[]'::jsonb) as grupos
-      from (select x.grupo_id, count(*) as quantas,
-                   jsonb_agg(jsonb_build_object('entidade_id', x.entidade_id,
-                                                'razao_social', x.razao_social)
-                             order by x.razao_social, x.entidade_id) as membros
-              from fn_grupo_por_controle_comum(p_caso_id) x
-             group by x.grupo_id) t
+      from (select m.grupo_id, m.entidades as quantas, m.motivo, m.vinculos,
+                   (select jsonb_agg(jsonb_build_object('entidade_id', x.entidade_id,
+                                                        'razao_social', x.razao_social)
+                                     order by x.razao_social, x.entidade_id)
+                      from fn_grupo_por_controle_comum(p_caso_id) x
+                     where x.grupo_id = m.grupo_id) as membros
+              from fn_grupo_por_controle_comum_motivo(p_caso_id) m) t
   ),
   c as (
     -- COMBINADO de verdade: rotulado COMBINADO e com VALOR em mais de uma coluna de entidade
@@ -14206,6 +14395,84 @@ $$;
 COMMENT ON FUNCTION public.fn_trg_auto_promover_dial() IS 'Gatilho da promoção automática (0137): toda decisão humana nova pode ter completado o critério do veredito de produção. NUNCA derruba a transação de quem o disparou — falha vira NOTICE, porque o analista não pode perder a rejeição de uma pendência por causa do dial.';
 
 --
+-- Name: fn_trg_caso_pergunta_so_reaponta(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_caso_pergunta_so_reaponta() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  if tg_when = 'BEFORE' then
+    if (new.id, new.caso_id, new.pergunta_codigo, new.acao, new.texto_enviado, new.autor, new.criado_em)
+       is distinct from
+       (old.id, old.caso_id, old.pergunta_codigo, old.acao, old.texto_enviado, old.autor, old.criado_em) then
+      raise exception 'caso_pergunta é append-only: só entidade_id pode mudar, e só numa fusão de entidades. O que foi perguntado ao cliente não se reescreve.';
+    end if;
+    if old.entidade_id is null or new.entidade_id is null then
+      raise exception 'a pergunta % não pode ser repontada de ou para "nenhuma entidade": o reponte é de uma entidade para outra (fusão)', old.id;
+    end if;
+    return new;
+  end if;
+  -- AFTER UPDATE: o rastro
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values ('banco:' || session_user, 'caso_pergunta_reapontada', 'caso:' || new.caso_id,
+          jsonb_build_object('caso_pergunta_id', new.id, 'pergunta_codigo', new.pergunta_codigo,
+                             'acao', new.acao, 'de', old.entidade_id, 'para', new.entidade_id));
+  return new;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_trg_caso_pergunta_so_reaponta(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_trg_caso_pergunta_so_reaponta() IS '0213: a guarda de caso_pergunta (append-only): só entidade_id muda, nunca de ou para nulo, e cada reponte deixa o evento caso_pergunta_reapontada.';
+
+--
+-- Name: fn_trg_controlador_vinculo_valido(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_controlador_vinculo_valido() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_a record;
+  v_b record;
+begin
+  if tg_op = 'UPDATE' then
+    if old.encerrado_em is not null then
+      raise exception 'o vínculo % já foi encerrado em %: ele não se edita. Declare outro, se for o caso.', old.id, old.encerrado_em;
+    end if;
+    if (new.caso_id, new.controlador_a, new.controlador_b, new.parentesco, new.fonte, new.declarado_por, new.criado_em)
+       is distinct from
+       (old.caso_id, old.controlador_a, old.controlador_b, old.parentesco, old.fonte, old.declarado_por, old.criado_em) then
+      raise exception 'o vínculo % não se edita: o que foi declarado (par, parentesco, fonte, autor) fica como está. Encerre-o (fn_controlador_desvincular_familia) e declare outro.', old.id;
+    end if;
+    return new;
+  end if;
+
+  select tipo_pessoa, caso_id, nome into v_a from controlador where id = new.controlador_a;
+  select tipo_pessoa, caso_id, nome into v_b from controlador where id = new.controlador_b;
+  if v_a.tipo_pessoa is null or v_b.tipo_pessoa is null then
+    raise exception 'controlador não encontrado (a=%, b=%)', new.controlador_a, new.controlador_b;
+  end if;
+  if v_a.tipo_pessoa <> 'fisica' or v_b.tipo_pessoa <> 'fisica' then
+    raise exception 'parentesco só vale entre pessoas físicas, e "%" ou "%" é pessoa jurídica', v_a.nome, v_b.nome;
+  end if;
+  if v_a.caso_id <> new.caso_id or v_b.caso_id <> new.caso_id then
+    raise exception 'os dois controladores precisam ser do caso % (a vinculação não cruza casos)', new.caso_id;
+  end if;
+  return new;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_trg_controlador_vinculo_valido(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_trg_controlador_vinculo_valido() IS '0212: a guarda de controlador_vinculo, no banco e não só na função (a policy deixa o authenticated escrever a tabela direto): os dois controladores existem, são pessoas físicas e do caso do vínculo; e o que foi declarado não se edita, nem depois de encerrado.';
+
+--
 -- Name: fn_trg_entidade_ambigua(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -15529,7 +15796,7 @@ CREATE TABLE public.caso_pergunta (
 -- Name: TABLE caso_pergunta; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.caso_pergunta IS 'Ação HUMANA sobre uma pergunta sugerida: enviada (com o texto renderizado congelado) ou descartada. O sistema sugere, o humano decide (Arquitetura do Sistema/1 Visão e Doutrina/01); nenhum envio é automático — o canal continua sendo o analista (o botão da 0109 só rotula a pendência).';
+COMMENT ON TABLE public.caso_pergunta IS 'Ação HUMANA sobre uma pergunta sugerida: enviada (com o texto renderizado congelado) ou descartada. O sistema sugere, o humano decide (Arquitetura do Sistema/1 Visão e Doutrina/01); nenhum envio é automático. Append-only: o authenticated só lê e insere, e desde a 0213 só pode repontar entidade_id (fusão de entidades), nada mais. A SUGESTÃO nunca é gravada aqui; só a ação que já aconteceu.';
 
 --
 -- Name: caso_premissa; Type: TABLE; Schema: public; Owner: -
@@ -15605,6 +15872,34 @@ COMMENT ON TABLE public.controlador IS '0182 (fatia 1.7a do plano F1): a pessoa 
 --
 
 COMMENT ON COLUMN public.controlador.documento IS '0182: CPF ou CNPJ do controlador, texto livre e OPCIONAL — não há função de canonicalização de CPF neste repositório (só `fn_cnpj_canonico`, 0169, que é de CNPJ), e exigir o documento transformaria "sabemos que é sócio, mas não temos o CPF no contrato" (o estado normal aqui) em bloqueio. NULL é um documento não informado, distinto de um documento informado errado.';
+
+--
+-- Name: controlador_vinculo; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.controlador_vinculo (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    caso_id uuid NOT NULL,
+    controlador_a uuid NOT NULL,
+    controlador_b uuid NOT NULL,
+    parentesco public.controlador_parentesco NOT NULL,
+    fonte text NOT NULL,
+    declarado_por text NOT NULL,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    encerrado_em timestamp with time zone,
+    encerrado_por text,
+    motivo_encerramento text,
+    CONSTRAINT controlador_vinculo_autor CHECK ((length(TRIM(BOTH FROM declarado_por)) > 0)),
+    CONSTRAINT controlador_vinculo_encerramento CHECK ((((encerrado_em IS NULL) AND (encerrado_por IS NULL) AND (motivo_encerramento IS NULL)) OR ((encerrado_em IS NOT NULL) AND (length(TRIM(BOTH FROM COALESCE(encerrado_por, ''::text))) > 0) AND (length(TRIM(BOTH FROM COALESCE(motivo_encerramento, ''::text))) > 0)))),
+    CONSTRAINT controlador_vinculo_fonte CHECK ((length(TRIM(BOTH FROM fonte)) > 0)),
+    CONSTRAINT controlador_vinculo_ordem CHECK ((controlador_a < controlador_b))
+);
+
+--
+-- Name: TABLE controlador_vinculo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.controlador_vinculo IS '0212: parentesco próximo DECLARADO entre dois controladores pessoas físicas do mesmo caso (cônjuge/companheiro, linha reta até o 2º grau, irmão). Simétrico por construção: controlador_a é sempre a menor uuid, então o par não tem duas formas nem auto-vínculo. Só vale com fonte e autor, e nunca por sobrenome. Não se apaga nem se edita: encerra-se (encerrado_em, encerrado_por, motivo_encerramento), porque o vínculo muda a composição dos grupos do perímetro e o registro é a evidência. fn_grupo_por_controle_comum considera só os vigentes (encerrado_em nulo). Caminhos de escrita: fn_controlador_vincular_familia e fn_controlador_desvincular_familia.';
 
 --
 -- Name: decisao; Type: TABLE; Schema: public; Owner: -
@@ -16885,6 +17180,13 @@ ALTER TABLE ONLY public.controlador
     ADD CONSTRAINT controlador_pkey PRIMARY KEY (id);
 
 --
+-- Name: controlador_vinculo controlador_vinculo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.controlador_vinculo
+    ADD CONSTRAINT controlador_vinculo_pkey PRIMARY KEY (id);
+
+--
 -- Name: decisao decisao_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -17229,6 +17531,12 @@ CREATE UNIQUE INDEX controlador_caso_documento_unico ON public.controlador USING
 COMMENT ON INDEX public.controlador_caso_documento_unico IS '0182: o mesmo documento não pode virar dois controladores diferentes no mesmo caso — duplicaria a contagem da guarda de soma sem decisão nenhuma. Documento NULL não colide com nada (vários controladores sem documento informado são permitidos).';
 
 --
+-- Name: controlador_vinculo_vigente_unico; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX controlador_vinculo_vigente_unico ON public.controlador_vinculo USING btree (controlador_a, controlador_b) WHERE (encerrado_em IS NULL);
+
+--
 -- Name: documento_fato_versao_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -17317,6 +17625,12 @@ CREATE INDEX idx_checklist_caso ON public.checklist_item_status USING btree (cas
 --
 
 CREATE INDEX idx_controlador_caso ON public.controlador USING btree (caso_id);
+
+--
+-- Name: idx_controlador_vinculo_caso; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_controlador_vinculo_caso ON public.controlador_vinculo USING btree (caso_id);
 
 --
 -- Name: idx_decisao_caso; Type: INDEX; Schema: public; Owner: -
@@ -17473,6 +17787,24 @@ CREATE UNIQUE INDEX perimetro_atual_unico ON public.perimetro USING btree (caso_
 --
 
 CREATE TRIGGER trg_auto_promover_dial AFTER INSERT ON public.decisao FOR EACH ROW EXECUTE FUNCTION public.fn_trg_auto_promover_dial();
+
+--
+-- Name: caso_pergunta trg_caso_pergunta_reaponta_evento; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_pergunta_reaponta_evento AFTER UPDATE ON public.caso_pergunta FOR EACH ROW WHEN ((old.entidade_id IS DISTINCT FROM new.entidade_id)) EXECUTE FUNCTION public.fn_trg_caso_pergunta_so_reaponta();
+
+--
+-- Name: caso_pergunta trg_caso_pergunta_so_reaponta; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_pergunta_so_reaponta BEFORE UPDATE ON public.caso_pergunta FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_pergunta_so_reaponta();
+
+--
+-- Name: controlador_vinculo trg_controlador_vinculo_valido; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_controlador_vinculo_valido BEFORE INSERT OR UPDATE ON public.controlador_vinculo FOR EACH ROW EXECUTE FUNCTION public.fn_trg_controlador_vinculo_valido();
 
 --
 -- Name: documento trg_entidade_ambigua; Type: TRIGGER; Schema: public; Owner: -
@@ -17710,6 +18042,27 @@ ALTER TABLE ONLY public.checklist_item_status
 
 ALTER TABLE ONLY public.controlador
     ADD CONSTRAINT controlador_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
+-- Name: controlador_vinculo controlador_vinculo_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.controlador_vinculo
+    ADD CONSTRAINT controlador_vinculo_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
+-- Name: controlador_vinculo controlador_vinculo_controlador_a_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.controlador_vinculo
+    ADD CONSTRAINT controlador_vinculo_controlador_a_fkey FOREIGN KEY (controlador_a) REFERENCES public.controlador(id) ON DELETE CASCADE;
+
+--
+-- Name: controlador_vinculo controlador_vinculo_controlador_b_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.controlador_vinculo
+    ADD CONSTRAINT controlador_vinculo_controlador_b_fkey FOREIGN KEY (controlador_b) REFERENCES public.controlador(id) ON DELETE CASCADE;
 
 --
 -- Name: decisao decisao_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -18149,6 +18502,20 @@ CREATE POLICY caso_pergunta_insert ON public.caso_pergunta FOR INSERT TO authent
 CREATE POLICY caso_pergunta_read ON public.caso_pergunta FOR SELECT TO authenticated USING (true);
 
 --
+-- Name: caso_pergunta caso_pergunta_reapontar; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_pergunta_reapontar ON public.caso_pergunta FOR UPDATE TO authenticated USING (true) WITH CHECK (((entidade_id IS NOT NULL) AND (EXISTS ( SELECT 1
+   FROM public.entidade e
+  WHERE ((e.id = caso_pergunta.entidade_id) AND (e.caso_id = caso_pergunta.caso_id))))));
+
+--
+-- Name: POLICY caso_pergunta_reapontar ON caso_pergunta; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON POLICY caso_pergunta_reapontar ON public.caso_pergunta IS '0213: o authenticated só pode repontar a pergunta para uma entidade do MESMO caso (e o privilégio de coluna só deixa mexer em entidade_id). É o que a fusão de entidades faz com a ação já tomada.';
+
+--
 -- Name: caso_premissa; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -18201,6 +18568,30 @@ CREATE POLICY controlador_insert ON public.controlador FOR INSERT TO authenticat
 --
 
 CREATE POLICY controlador_read ON public.controlador FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: controlador_vinculo; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.controlador_vinculo ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: controlador_vinculo controlador_vinculo_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY controlador_vinculo_insert ON public.controlador_vinculo FOR INSERT TO authenticated WITH CHECK (true);
+
+--
+-- Name: controlador_vinculo controlador_vinculo_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY controlador_vinculo_read ON public.controlador_vinculo FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: controlador_vinculo controlador_vinculo_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY controlador_vinculo_update ON public.controlador_vinculo FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
 --
 -- Name: decisao; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18823,10 +19214,22 @@ GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uui
 GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO authenticated;
 
 --
+-- Name: FUNCTION fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text) TO authenticated;
+
+--
 -- Name: FUNCTION fn_controlador_registrar(p_caso_id uuid, p_nome text, p_documento text, p_tipo_pessoa public.controlador_tipo_pessoa, p_autor text); Type: ACL; Schema: public; Owner: -
 --
 
 GRANT ALL ON FUNCTION public.fn_controlador_registrar(p_caso_id uuid, p_nome text, p_documento text, p_tipo_pessoa public.controlador_tipo_pessoa, p_autor text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) TO authenticated;
 
 --
 -- Name: FUNCTION fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -19135,10 +19538,16 @@ GRANT ALL ON FUNCTION public.fn_golden_rotular_campos(p_rodada uuid, p_documento
 GRANT ALL ON FUNCTION public.fn_golden_suficiente(p_estagio text, p_rodada uuid) TO authenticated;
 
 --
--- Name: FUNCTION fn_grupo_por_controle_comum(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean) TO authenticated;
+
+--
+-- Name: FUNCTION fn_grupo_por_controle_comum_motivo(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) TO authenticated;
 
 --
 -- Name: FUNCTION fn_indice_macro_anual(p_desde_ano integer); Type: ACL; Schema: public; Owner: -
@@ -19760,8 +20169,14 @@ GRANT ALL ON TABLE public.caso_modelagem TO service_role;
 --
 
 GRANT ALL ON TABLE public.caso_pergunta TO anon;
-GRANT ALL ON TABLE public.caso_pergunta TO authenticated;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE ON TABLE public.caso_pergunta TO authenticated;
 GRANT ALL ON TABLE public.caso_pergunta TO service_role;
+
+--
+-- Name: COLUMN caso_pergunta.entidade_id; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT UPDATE(entidade_id) ON TABLE public.caso_pergunta TO authenticated;
 
 --
 -- Name: TABLE caso_premissa; Type: ACL; Schema: public; Owner: -
@@ -19794,6 +20209,14 @@ GRANT ALL ON TABLE public.classe_contabil_catalogo TO service_role;
 GRANT ALL ON TABLE public.controlador TO anon;
 GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.controlador TO authenticated;
 GRANT ALL ON TABLE public.controlador TO service_role;
+
+--
+-- Name: TABLE controlador_vinculo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT ALL ON TABLE public.controlador_vinculo TO anon;
+GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.controlador_vinculo TO authenticated;
+GRANT ALL ON TABLE public.controlador_vinculo TO service_role;
 
 --
 -- Name: TABLE decisao; Type: ACL; Schema: public; Owner: -

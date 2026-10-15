@@ -919,6 +919,25 @@ supabase db execute --file Supabase/migrations/0211_a_fusao_que_apagava_o_perime
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0211' and not presente;                 -- ZERO linhas
 
+# A 0212 faz o bloco familiar contar como controle comum, SÓ SE DECLARADO (decisão do dono, CPC 05 / IAS 24): tabela
+# controlador_vinculo (cônjuge, linha reta até o 2º grau, irmão; fonte e autor obrigatórios; encerra-se, não se apaga),
+# fn_controlador_vincular_familia, fn_controlador_desvincular_familia, fn_grupo_por_controle_comum_motivo, e reemite
+# fn_grupo_por_controle_comum (p_com_familia) e fn_perimetro_veredito (motivo e vínculos por grupo). Tabela nova, vazia;
+# sem backfill. Aplicar DEPOIS da 0211. Teste: Supabase/test/controlador_familia.test.sql.
+supabase db execute --file Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0212' and not presente;                 -- ZERO linhas
+
+# A 0213 faz a fusão de entidades levar as perguntas JÁ ENVIADAS ou descartadas (caso_pergunta) para a sobrevivente,
+# em vez de falhar na FK, e dá ao authenticated a escrita MÍNIMA nessa tabela append-only: UPDATE só da coluna
+# entidade_id (policy com check de mesmo caso, gatilho, revoke delete). Reemite fn_fundir_entidade. Sem backfill.
+# Aplicar DEPOIS da 0212. Teste: Supabase/test/fusao_pergunta.test.sql.
+supabase db execute --file Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0213' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
