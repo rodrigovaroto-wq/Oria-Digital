@@ -242,8 +242,10 @@ psql(`drop database if exists ${DB}`, "postgres");
 psql(`create database ${DB}`, "postgres");
 // Bootstrap do que o Supabase provê por padrão e as migrations assumem. É o MESMO
 // de `Supabase/test/run.sh` — inclusive `storage.buckets`, sem o qual a 0003 não aplica,
-// e o GRANT default de tabela, que a 0028 mostrou ser indispensável para um defeito
-// de AUTORIZAÇÃO ser sequer visível num teste local. Mantê-los idênticos importa:
+// e, até 20/10/2026, o GRANT default de tabela, que a 0028 mostrou ser indispensável para um defeito
+// de AUTORIZAÇÃO ser sequer visível num teste local. O default saiu junto com o de `Supabase/test/run.sh`: o
+// Supabase deixa de concedê-lo em 30/10/2026 e quem concede agora é a 0214 (e a migration de cada tabela).
+// Mantê-los idênticos importa:
 // dois bootstraps diferentes produziriam duas verdades diferentes sobre o schema.
 psql(`
   do $$ begin
@@ -257,8 +259,6 @@ psql(`
     bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security;
   grant usage on schema public to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;
 `);
 // A LISTA DAS MIGRATIONS SAI DO DISCO, E NÃO DE UM SHELL. Até aqui ela vinha de
 // `bash -c "ls Supabase/migrations/*.sql"`: o `bash` era resolvido pelo PATH

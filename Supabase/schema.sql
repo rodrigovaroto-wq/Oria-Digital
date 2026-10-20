@@ -5878,6 +5878,10 @@ declare
   v_src        text;
   v_tg_enabled "char";
   v_tg_fn      text;
+  v_role       text;
+  v_privs      text[];
+  v_kinds      "char"[];
+  v_lista      text;
 begin
   for r in select * from instalacao_requisito order by ordem, chave loop
     v_ok  := false;
@@ -6011,6 +6015,46 @@ begin
         end if;
       end if;
 
+    elsif r.tipo = 'privilegio' then
+      -- 0214: privilégio de TABELA/VIEW/SEQUENCE do schema public para um papel. `objeto` = 'papel:classe' (classe
+      -- tabelas | views | sequences) e `marcador` = os privilégios exigidos, separados por vírgula. Varre TODO o
+      -- schema, não uma lista: o defeito que isto pega é a tabela NOVA cuja migration esqueceu o GRANT (a partir
+      -- de 30/10/2026 o Supabase não concede mais nada por default privilege), e uma lista de nomes seria
+      -- exatamente a que ninguém atualiza. Objeto de extensão fica de fora (não é nosso). Revoke intencional
+      -- (delete do authenticated em arquivo_oficial etc.) não aparece aqui: só se exige o MÍNIMO por classe.
+      v_role  := split_part(r.objeto, ':', 1);
+      v_privs := string_to_array(r.marcador, ',');
+      v_kinds := case split_part(r.objeto, ':', 2)
+                   when 'tabelas'   then array['r', 'p']::"char"[]
+                   when 'views'     then array['v', 'm']::"char"[]
+                   when 'sequences' then array['S']::"char"[]
+                 end;
+      if v_kinds is null or v_privs is null then
+        v_ok  := false;
+        v_det := 'requisito mal declarado: objeto papel:(tabelas|views|sequences) e marcador com os privilégios';
+      elsif not exists (select 1 from pg_roles where rolname = v_role) then
+        v_ok  := false;
+        v_det := format('o papel %s nem existe', v_role);
+      else
+        select count(*), string_agg(x.relname, ', ' order by x.relname) filter (where x.rn <= 15)
+          into v_n, v_lista
+          from (select c.relname, row_number() over (order by c.relname) as rn
+                  from pg_class c
+                  join pg_namespace n on n.oid = c.relnamespace
+                 where n.nspname = 'public'
+                   and c.relkind = any (v_kinds)
+                   and not exists (select 1 from pg_depend d
+                                    where d.classid = 'pg_class'::regclass and d.objid = c.oid and d.deptype = 'e')
+                   and exists (select 1 from unnest(v_privs) p
+                                where not case when c.relkind = 'S'
+                                         then has_sequence_privilege(v_role, c.oid, p)
+                                         else has_table_privilege(v_role, c.oid, p) end)) x;
+        v_ok  := v_n = 0;
+        v_det := case when v_ok then format('nenhum objeto de public sem %s para %s', r.marcador, v_role)
+                      else format('%s objeto(s) de public SEM %s para %s: %s%s', v_n, r.marcador, v_role, v_lista,
+                                  case when v_n > 15 then ' ...' else '' end) end;
+      end if;
+
     elsif r.tipo in ('seed', 'comportamento') then
       -- A tabela pode não existir ainda: contar nela levantaria erro e derrubaria
       -- a sonda inteira, transformando "um requisito faltando" em "o painel não
@@ -6048,7 +6092,7 @@ $$;
 -- Name: FUNCTION fn_instalacao_conferir(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy.';
+COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026.';
 
 --
 -- Name: fn_instalacao_resumo(); Type: FUNCTION; Schema: public; Owner: -
@@ -16390,7 +16434,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text])))
 );
 
 --
@@ -19727,9 +19771,8 @@ GRANT ALL ON FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) TO authentica
 -- Name: TABLE entidade; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.entidade TO anon;
-GRANT ALL ON TABLE public.entidade TO authenticated;
-GRANT ALL ON TABLE public.entidade TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.entidade TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.entidade TO service_role;
 
 --
 -- Name: FUNCTION fn_perimetro_vigente(p_caso_id uuid, p_escopo text, p_data date); Type: ACL; Schema: public; Owner: -
@@ -19771,9 +19814,8 @@ GRANT ALL ON FUNCTION public.fn_premissa_valores_sugeridos(p_codigo text, p_ano_
 -- Name: TABLE premissa_catalogo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.premissa_catalogo TO anon;
-GRANT ALL ON TABLE public.premissa_catalogo TO authenticated;
-GRANT ALL ON TABLE public.premissa_catalogo TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.premissa_catalogo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.premissa_catalogo TO service_role;
 
 --
 -- Name: FUNCTION fn_premissas_sugeridas(p_setor text); Type: ACL; Schema: public; Owner: -
@@ -20044,9 +20086,8 @@ GRANT ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) TO authent
 -- Name: TABLE campo_extraido; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.campo_extraido TO anon;
-GRANT ALL ON TABLE public.campo_extraido TO authenticated;
-GRANT ALL ON TABLE public.campo_extraido TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.campo_extraido TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.campo_extraido TO service_role;
 
 --
 -- Name: FUNCTION fn_valor_estrutural_col(p_documento_versao_id uuid, p_tokens text[], p_entidade_coluna text, p_periodo_coluna text); Type: ACL; Schema: public; Owner: -
@@ -20088,89 +20129,78 @@ GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_
 -- Name: TABLE arquivo_oficial; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.arquivo_oficial TO anon;
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.arquivo_oficial TO authenticated;
-GRANT ALL ON TABLE public.arquivo_oficial TO service_role;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.arquivo_oficial TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.arquivo_oficial TO service_role;
 
 --
 -- Name: TABLE arquivo_oficial_lancamento_mes; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.arquivo_oficial_lancamento_mes TO anon;
-GRANT ALL ON TABLE public.arquivo_oficial_lancamento_mes TO authenticated;
-GRANT ALL ON TABLE public.arquivo_oficial_lancamento_mes TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.arquivo_oficial_lancamento_mes TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.arquivo_oficial_lancamento_mes TO service_role;
 
 --
 -- Name: TABLE arquivo_oficial_registro; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.arquivo_oficial_registro TO anon;
-GRANT ALL ON TABLE public.arquivo_oficial_registro TO authenticated;
-GRANT ALL ON TABLE public.arquivo_oficial_registro TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.arquivo_oficial_registro TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.arquivo_oficial_registro TO service_role;
 
 --
 -- Name: SEQUENCE arquivo_oficial_seq_seq; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON SEQUENCE public.arquivo_oficial_seq_seq TO anon;
-GRANT ALL ON SEQUENCE public.arquivo_oficial_seq_seq TO authenticated;
-GRANT ALL ON SEQUENCE public.arquivo_oficial_seq_seq TO service_role;
+GRANT SELECT,USAGE ON SEQUENCE public.arquivo_oficial_seq_seq TO authenticated;
+GRANT SELECT,USAGE ON SEQUENCE public.arquivo_oficial_seq_seq TO service_role;
 
 --
 -- Name: TABLE campo_classe_override; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.campo_classe_override TO anon;
-GRANT ALL ON TABLE public.campo_classe_override TO authenticated;
-GRANT ALL ON TABLE public.campo_classe_override TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.campo_classe_override TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.campo_classe_override TO service_role;
 
 --
 -- Name: TABLE campo_classe_sugerida; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.campo_classe_sugerida TO anon;
-GRANT ALL ON TABLE public.campo_classe_sugerida TO authenticated;
-GRANT ALL ON TABLE public.campo_classe_sugerida TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.campo_classe_sugerida TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.campo_classe_sugerida TO service_role;
 
 --
 -- Name: TABLE caso; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.caso TO anon;
-GRANT ALL ON TABLE public.caso TO authenticated;
-GRANT ALL ON TABLE public.caso TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso TO service_role;
 
 --
 -- Name: TABLE caso_apresentacao_campo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.caso_apresentacao_campo TO anon;
-GRANT ALL ON TABLE public.caso_apresentacao_campo TO authenticated;
-GRANT ALL ON TABLE public.caso_apresentacao_campo TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_apresentacao_campo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_apresentacao_campo TO service_role;
 
 --
 -- Name: TABLE caso_linha_premissa; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.caso_linha_premissa TO anon;
-GRANT ALL ON TABLE public.caso_linha_premissa TO authenticated;
-GRANT ALL ON TABLE public.caso_linha_premissa TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_linha_premissa TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_linha_premissa TO service_role;
 
 --
 -- Name: TABLE caso_modelagem; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.caso_modelagem TO anon;
-GRANT ALL ON TABLE public.caso_modelagem TO authenticated;
-GRANT ALL ON TABLE public.caso_modelagem TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_modelagem TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_modelagem TO service_role;
 
 --
 -- Name: TABLE caso_pergunta; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.caso_pergunta TO anon;
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE ON TABLE public.caso_pergunta TO authenticated;
-GRANT ALL ON TABLE public.caso_pergunta TO service_role;
+GRANT SELECT,INSERT ON TABLE public.caso_pergunta TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_pergunta TO service_role;
 
 --
 -- Name: COLUMN caso_pergunta.entidade_id; Type: ACL; Schema: public; Owner: -
@@ -20182,385 +20212,323 @@ GRANT UPDATE(entidade_id) ON TABLE public.caso_pergunta TO authenticated;
 -- Name: TABLE caso_premissa; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.caso_premissa TO anon;
-GRANT ALL ON TABLE public.caso_premissa TO authenticated;
-GRANT ALL ON TABLE public.caso_premissa TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_premissa TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_premissa TO service_role;
 
 --
 -- Name: TABLE checklist_item_status; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.checklist_item_status TO anon;
-GRANT ALL ON TABLE public.checklist_item_status TO authenticated;
-GRANT ALL ON TABLE public.checklist_item_status TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.checklist_item_status TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.checklist_item_status TO service_role;
 
 --
 -- Name: TABLE classe_contabil_catalogo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.classe_contabil_catalogo TO anon;
-GRANT ALL ON TABLE public.classe_contabil_catalogo TO authenticated;
-GRANT ALL ON TABLE public.classe_contabil_catalogo TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.classe_contabil_catalogo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.classe_contabil_catalogo TO service_role;
 
 --
 -- Name: TABLE controlador; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.controlador TO anon;
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.controlador TO authenticated;
-GRANT ALL ON TABLE public.controlador TO service_role;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.controlador TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.controlador TO service_role;
 
 --
 -- Name: TABLE controlador_vinculo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.controlador_vinculo TO anon;
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.controlador_vinculo TO authenticated;
-GRANT ALL ON TABLE public.controlador_vinculo TO service_role;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.controlador_vinculo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.controlador_vinculo TO service_role;
 
 --
 -- Name: TABLE decisao; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.decisao TO anon;
-GRANT ALL ON TABLE public.decisao TO authenticated;
-GRANT ALL ON TABLE public.decisao TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.decisao TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.decisao TO service_role;
 
 --
 -- Name: TABLE documento; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.documento TO anon;
-GRANT ALL ON TABLE public.documento TO authenticated;
-GRANT ALL ON TABLE public.documento TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.documento TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.documento TO service_role;
 
 --
 -- Name: TABLE documento_fato; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.documento_fato TO anon;
-GRANT ALL ON TABLE public.documento_fato TO authenticated;
-GRANT ALL ON TABLE public.documento_fato TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.documento_fato TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.documento_fato TO service_role;
 
 --
 -- Name: TABLE documento_versao; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.documento_versao TO anon;
-GRANT ALL ON TABLE public.documento_versao TO authenticated;
-GRANT ALL ON TABLE public.documento_versao TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.documento_versao TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.documento_versao TO service_role;
 
 --
 -- Name: TABLE entidade_controlador; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.entidade_controlador TO anon;
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.entidade_controlador TO authenticated;
-GRANT ALL ON TABLE public.entidade_controlador TO service_role;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.entidade_controlador TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.entidade_controlador TO service_role;
 
 --
 -- Name: TABLE estagio_autonomia; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.estagio_autonomia TO anon;
-GRANT ALL ON TABLE public.estagio_autonomia TO authenticated;
-GRANT ALL ON TABLE public.estagio_autonomia TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.estagio_autonomia TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.estagio_autonomia TO service_role;
 
 --
 -- Name: TABLE evento_auditoria; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.evento_auditoria TO anon;
-GRANT ALL ON TABLE public.evento_auditoria TO authenticated;
-GRANT ALL ON TABLE public.evento_auditoria TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.evento_auditoria TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.evento_auditoria TO service_role;
 
 --
 -- Name: TABLE execucao_falha; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.execucao_falha TO anon;
-GRANT ALL ON TABLE public.execucao_falha TO authenticated;
-GRANT ALL ON TABLE public.execucao_falha TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.execucao_falha TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.execucao_falha TO service_role;
 
 --
 -- Name: TABLE fato_tipo_catalogo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.fato_tipo_catalogo TO anon;
-GRANT ALL ON TABLE public.fato_tipo_catalogo TO authenticated;
-GRANT ALL ON TABLE public.fato_tipo_catalogo TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fato_tipo_catalogo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fato_tipo_catalogo TO service_role;
 
 --
 -- Name: TABLE golden_campo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.golden_campo TO anon;
-GRANT ALL ON TABLE public.golden_campo TO authenticated;
-GRANT ALL ON TABLE public.golden_campo TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_campo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_campo TO service_role;
 
 --
 -- Name: TABLE golden_criterio; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.golden_criterio TO anon;
-GRANT ALL ON TABLE public.golden_criterio TO authenticated;
-GRANT ALL ON TABLE public.golden_criterio TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_criterio TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_criterio TO service_role;
 
 --
 -- Name: TABLE golden_documento; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.golden_documento TO anon;
-GRANT ALL ON TABLE public.golden_documento TO authenticated;
-GRANT ALL ON TABLE public.golden_documento TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_documento TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_documento TO service_role;
 
 --
 -- Name: TABLE golden_rodada; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.golden_rodada TO anon;
-GRANT ALL ON TABLE public.golden_rodada TO authenticated;
-GRANT ALL ON TABLE public.golden_rodada TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_rodada TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_rodada TO service_role;
 
 --
 -- Name: TABLE golden_rotulo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.golden_rotulo TO anon;
-GRANT ALL ON TABLE public.golden_rotulo TO authenticated;
-GRANT ALL ON TABLE public.golden_rotulo TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_rotulo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.golden_rotulo TO service_role;
 
 --
 -- Name: TABLE indice_macro_expectativa; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.indice_macro_expectativa TO anon;
-GRANT ALL ON TABLE public.indice_macro_expectativa TO authenticated;
-GRANT ALL ON TABLE public.indice_macro_expectativa TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.indice_macro_expectativa TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.indice_macro_expectativa TO service_role;
 
 --
 -- Name: TABLE indice_macro_obs; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.indice_macro_obs TO anon;
-GRANT ALL ON TABLE public.indice_macro_obs TO authenticated;
-GRANT ALL ON TABLE public.indice_macro_obs TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.indice_macro_obs TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.indice_macro_obs TO service_role;
 
 --
 -- Name: TABLE indice_macro_serie; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.indice_macro_serie TO anon;
-GRANT ALL ON TABLE public.indice_macro_serie TO authenticated;
-GRANT ALL ON TABLE public.indice_macro_serie TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.indice_macro_serie TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.indice_macro_serie TO service_role;
 
 --
 -- Name: TABLE instalacao_cobertura; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_cobertura TO anon;
-GRANT ALL ON TABLE public.instalacao_cobertura TO authenticated;
-GRANT ALL ON TABLE public.instalacao_cobertura TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_cobertura TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_cobertura TO service_role;
 
 --
 -- Name: TABLE instalacao_requisito; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_requisito TO anon;
-GRANT ALL ON TABLE public.instalacao_requisito TO authenticated;
-GRANT ALL ON TABLE public.instalacao_requisito TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_requisito TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_requisito TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_cobertura_de_tipos; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_cobertura_de_tipos TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_cobertura_de_tipos TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_cobertura_de_tipos TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_cobertura_de_tipos TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_cobertura_de_tipos TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_combinado_estrutural; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_combinado_estrutural TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_combinado_estrutural TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_combinado_estrutural TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_combinado_estrutural TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_combinado_estrutural TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_entidade_balcao_ambiguo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO service_role;
 
 --
 -- Name: TABLE taxonomia_linha_exigida; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.taxonomia_linha_exigida TO anon;
-GRANT ALL ON TABLE public.taxonomia_linha_exigida TO authenticated;
-GRANT ALL ON TABLE public.taxonomia_linha_exigida TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_linha_exigida TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_linha_exigida TO service_role;
 
 --
 -- Name: TABLE taxonomia_linha_localizador; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.taxonomia_linha_localizador TO anon;
-GRANT ALL ON TABLE public.taxonomia_linha_localizador TO authenticated;
-GRANT ALL ON TABLE public.taxonomia_linha_localizador TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_linha_localizador TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_linha_localizador TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_exigencias_0187; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_exigencias_0187 TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_exigencias_0187 TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_exigencias_0187 TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0187 TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0187 TO service_role;
 
 --
 -- Name: TABLE taxonomia_linha_alternativa; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.taxonomia_linha_alternativa TO anon;
-GRANT ALL ON TABLE public.taxonomia_linha_alternativa TO authenticated;
-GRANT ALL ON TABLE public.taxonomia_linha_alternativa TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_linha_alternativa TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_linha_alternativa TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_exigencias_0188; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_exigencias_0188 TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_exigencias_0188 TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_exigencias_0188 TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_modelagem_pronta; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_modelagem_pronta TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_modelagem_pronta TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_modelagem_pronta TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_modelagem_pronta TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_modelagem_pronta TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_modelagem_versao_vigente; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_modelagem_versao_vigente TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_modelagem_versao_vigente TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_modelagem_versao_vigente TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_modelagem_versao_vigente TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_modelagem_versao_vigente TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_passivo_bare; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_passivo_bare TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_passivo_bare TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_passivo_bare TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_passivo_bare TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_passivo_bare TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_rotulo_contraditorio; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_rotulo_contraditorio TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_rotulo_contraditorio TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_rotulo_contraditorio TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_rotulo_contraditorio TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_rotulo_contraditorio TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_saldo_mutuos; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.instalacao_sonda_saldo_mutuos TO anon;
-GRANT ALL ON TABLE public.instalacao_sonda_saldo_mutuos TO authenticated;
-GRANT ALL ON TABLE public.instalacao_sonda_saldo_mutuos TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_saldo_mutuos TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_saldo_mutuos TO service_role;
 
 --
 -- Name: TABLE lote_execucao; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.lote_execucao TO anon;
-GRANT ALL ON TABLE public.lote_execucao TO authenticated;
-GRANT ALL ON TABLE public.lote_execucao TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.lote_execucao TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.lote_execucao TO service_role;
 
 --
 -- Name: TABLE pendencia; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.pendencia TO anon;
-GRANT ALL ON TABLE public.pendencia TO authenticated;
-GRANT ALL ON TABLE public.pendencia TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pendencia TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pendencia TO service_role;
 
 --
 -- Name: TABLE pergunta_catalogo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.pergunta_catalogo TO anon;
-GRANT ALL ON TABLE public.pergunta_catalogo TO authenticated;
-GRANT ALL ON TABLE public.pergunta_catalogo TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pergunta_catalogo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.pergunta_catalogo TO service_role;
 
 --
 -- Name: TABLE perimetro; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.perimetro TO anon;
-GRANT SELECT,INSERT,REFERENCES,TRIGGER,TRUNCATE,UPDATE ON TABLE public.perimetro TO authenticated;
-GRANT ALL ON TABLE public.perimetro TO service_role;
+GRANT SELECT,INSERT,UPDATE ON TABLE public.perimetro TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.perimetro TO service_role;
 
 --
 -- Name: TABLE periodo; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.periodo TO anon;
-GRANT ALL ON TABLE public.periodo TO authenticated;
-GRANT ALL ON TABLE public.periodo TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.periodo TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.periodo TO service_role;
 
 --
 -- Name: TABLE reconciliacao; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.reconciliacao TO anon;
-GRANT ALL ON TABLE public.reconciliacao TO authenticated;
-GRANT ALL ON TABLE public.reconciliacao TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.reconciliacao TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.reconciliacao TO service_role;
 
 --
 -- Name: TABLE rubrica_classe; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.rubrica_classe TO anon;
-GRANT ALL ON TABLE public.rubrica_classe TO authenticated;
-GRANT ALL ON TABLE public.rubrica_classe TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.rubrica_classe TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.rubrica_classe TO service_role;
 
 --
 -- Name: TABLE taxonomia_tipo_cobertura; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.taxonomia_tipo_cobertura TO anon;
-GRANT ALL ON TABLE public.taxonomia_tipo_cobertura TO authenticated;
-GRANT ALL ON TABLE public.taxonomia_tipo_cobertura TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_cobertura TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_cobertura TO service_role;
 
 --
 -- Name: TABLE taxonomia_tipo_documento; Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON TABLE public.taxonomia_tipo_documento TO anon;
-GRANT ALL ON TABLE public.taxonomia_tipo_documento TO authenticated;
-GRANT ALL ON TABLE public.taxonomia_tipo_documento TO service_role;
-
---
--- Name: DEFAULT PRIVILEGES FOR SEQUENCES; Type: DEFAULT ACL; Schema: public; Owner: -
---
-
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO anon;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO authenticated;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON SEQUENCES TO service_role;
-
---
--- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: public; Owner: -
---
-
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO anon;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO authenticated;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public GRANT ALL ON TABLES TO service_role;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_documento TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_documento TO service_role;
 
 --
 --

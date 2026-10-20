@@ -52,6 +52,11 @@ create policy indice_macro_obs_read on indice_macro_obs
 create policy indice_macro_expectativa_read on indice_macro_expectativa
   for select to authenticated using (true);
 
+-- ACRESCENTADO NA 0214 (replay sem o default privilege do Supabase, a partir de 30/10/2026): a verificação
+-- embutida abaixo roda como authenticated e, sem GRANT de tabela, morre em 42501 e aborta o replay INTEIRO
+-- na 0028 (medido em 20/10/2026). Em produção a linha é no-op: o default privilege antigo já concedeu.
+grant select on indice_macro_serie, indice_macro_obs, indice_macro_expectativa to authenticated;
+
 grant execute on function fn_indice_macro_anual(int) to authenticated;
 
 -- -----------------------------------------------------------------------------

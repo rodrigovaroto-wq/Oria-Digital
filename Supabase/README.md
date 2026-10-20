@@ -25,6 +25,27 @@ a mentir em silêncio. `Supabase/test/run.sh` reprova prefixo duplicado antes de
 coisa, então a colisão morre no PR e não no banco; a faixa é o que evita chegar até lá. Quem
 aplica migration em produção é só o dono (ver `CLAUDE.md`).
 
+## Convenção de migration — toda tabela concede o próprio acesso (0214)
+
+A partir de **30/10/2026** o Supabase não concede mais, por default privilege, SELECT/INSERT/UPDATE/DELETE em
+tabela nova de `public` a `anon`/`authenticated`/`service_role`. Vale para projeto novo, preview branch e
+`supabase db reset`; tabela já existente mantém o que tem. **Toda migration que cria tabela, view ou sequence concede,
+NA MESMA migration**, o que o portal e o `service_role` usam, junto de `enable row level security` e das policies:
+
+```sql
+grant select, insert, update, delete on minha_tabela to authenticated, service_role;  -- só o que o portal usa; sem DELETE se for append-only
+grant select on minha_view to authenticated, service_role;
+grant usage on sequence minha_seq to authenticated, service_role;                       -- se um insert do portal a usa
+revoke delete on minha_tabela from authenticated;                                       -- revoke intencional: DEPOIS do grant, e liste-o na 0214 e em grant_de_tabela.test.sql
+```
+
+Nada vai para `anon` (o portal só usa a chave anon para abrir a sessão). O que garante a convenção é a sonda: o tipo
+`privilegio` de `fn_instalacao_conferir` (0214) aponta como buraco toda tabela/view/sequence de `public` sem o mínimo
+para `authenticated` e `service_role`. Quem reprova no CI é o `instalacao.test.sql` (dentro do `run.sh`: um banco
+recém-migrado só pode estar sem o requisito do n8n) e, contra produção, o `sonda-producao.mjs` agendado; o `--so-buraco`
+NÃO vê isto (ele só mede migration declarada que não deixou rastro). O `run.sh` não simula mais o default antigo,
+então a omissão aparece no replay.
+
 ## Migrations (aplicar nesta ordem)
 
 | Arquivo | O que faz |
@@ -937,6 +958,16 @@ supabase db execute --file Supabase/migrations/0213_a_fusao_que_falhava_na_pergu
 # DEPOIS DE APLICAR, confira o catálogo:
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0213' and not presente;                 -- ZERO linhas
+
+# A 0214 concede explicitamente (authenticated e service_role) o acesso às tabelas, views e sequences de public — o que o
+# Supabase deixa de dar por default em 30/10/2026 — REAPLICANDO os revokes intencionais (delete em arquivo_oficial,
+# perimetro, controlador, entidade_controlador, controlador_vinculo, caso_pergunta; update em caso_pergunta fora de
+# entidade_id), e acrescenta à sonda o tipo `privilegio` (6 requisitos). NO-OP em produção (os grants já existem lá).
+# Aplicar DEPOIS da 0213. Teste: Supabase/test/grant_de_tabela.test.sql.
+supabase db execute --file Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0214' and not presente;                 -- ZERO linhas
 
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
