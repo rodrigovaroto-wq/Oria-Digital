@@ -2,9 +2,9 @@
 
 ## SESSÃO 110 (20/10/2026) — o GRANT que o Supabase deixa de dar em 30/10/2026
 
-> **Migration mais nova: `0214_o_grant_que_o_supabase_deixou_de_dar.sql`** (ESCRITA, NÃO aplicada; no-op em produção, onde os grants já existem; a sonda passa a ter 6 requisitos `privilegio` que dão ZERO buracos lá se os grants estão como o dono diz).
+> **Migration mais nova: `0214_o_grant_que_o_supabase_deixou_de_dar.sql`** (**APLICADA EM PRODUÇÃO em 20/10/2026** pela sessão, API de gerenciamento, uma chamada, resposta `[]`). Antes de aplicar, medido em produção: cobertura em `0213`, `fn_instalacao_conferir()` com 0 ausentes, corpo da função de produção = o da 0214 menos o ramo `privilegio` (diff só de acréscimos), e os privilégios que faltavam a authenticated/service_role eram EXATAMENTE os 7 revokes intencionais. Depois: os mesmos 7 (estado idêntico, `update (entidade_id)` em `caso_pergunta` mantido), cobertura `0214`, 0 ausentes, os 6 requisitos `privilegio` presentes, e o workflow `sonda-producao.yml` (run 44) verde.
 > **O defeito:** a partir de 30/10/2026 tabela nova em `public` não recebe mais GRANT automático (anon/authenticated/service_role) — vale para projeto novo, preview branch e `supabase db reset`. O `run.sh` simulava o default antigo, então o CI ficaria verde com produção quebrando na primeira tabela nova (regra 7). Detalhe, mecanismo dos revokes e medições: cabeçalho da `0214` e `.claude/conhecimento/fichas/grant-de-tabela-nao-vem-mais-do-supabase.md`.
-> **O que o dono faz à mão:** aplicar a `0214` (pela API de gerenciamento, como as anteriores) e rodar a sonda contra produção — o ramo `privilegio` só existe depois dela. Tabela nova criada ANTES de 30/10 ainda ganha grant por default; depois, só pela migration que a cria (convenção em `Supabase/README.md`).
+> **O que falta:** nada no banco. Tabela nova criada a partir de 30/10/2026 só tem acesso se a própria migration conceder (convenção em `Supabase/README.md`); a sonda agendada acusa a que esquecer.
 
 ## SESSÃO 109 (15/10/2026) — F1: fechar o perímetro (o caminho de escrita que ninguém chamava)
 
