@@ -27,13 +27,21 @@ psql -q -d "$DB" -c "
     bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security;" >/dev/null
 
-# Supabase configura isto UMA VEZ, na criação do projeto — e nenhuma migration
-# deste repositório faz GRANT de tabela (nem precisa) porque conta com isso.
-# É por isso que um defeito de AUTORIZAÇÃO nunca tinha sido pego por teste
-# nenhum aqui: sem replicar este passo, `set role authenticated` falharia para
-# QUALQUER tabela, não só a que tem o bug — o teste acusaria falso positivo em
-# geral, então ninguém testava como authenticated. Achado real:
-# Supabase/migrations/0028 (índices macro sem RLS nem grant).
+# O SUPABASE NOVO NÃO CONCEDE MAIS NADA POR DEFAULT PRIVILEGE (20/10/2026). Até 29/10/2026 o projeto trazia
+# `alter default privileges in schema public grant all on tables/sequences to anon, authenticated, service_role`, e este
+# script SIMULAVA isso — "nenhuma migration faz GRANT de tabela porque conta com isso". A partir de 30/10/2026 tabela
+# criada em `public` nasce SEM grant (projeto novo, preview branch, `supabase db reset`; as existentes mantêm o que
+# têm). Medido aqui: 51 `create table` nas migrations, 39 sem nenhum GRANT — a mais recente, `controlador_vinculo`
+# (0212), entre elas. Com a simulação mantida o CI continuaria verde depois de 30/10 enquanto a primeira tabela nova
+# nascia em produção sem acesso ("permission denied" no portal): estágio que não rodou com cara de estágio que rodou
+# (regra 7). Por isso o replay aqui é o do Supabase NOVO: só `usage` no schema, nenhum default privilege. Medido ao
+# remover a simulação: o replay morria na 0028 (a verificação embutida roda como authenticated) e, consertada ela, o
+# `resumo_oficial.test.sql` caía em "permission denied for table caso". Quem concede agora é a `0214` (as tabelas que
+# existem até ali, preservando os revokes intencionais) e, daí em diante, a própria migration que cria a tabela
+# (convenção em `Supabase/README.md`); quem cobra é a sonda (`tipo = privilegio`, 0214), via `instalacao.test.sql`.
+# O mesmo vale para o achado original deste bloco — Supabase/migrations/0028 (índices macro sem RLS nem grant): um
+# defeito de AUTORIZAÇÃO só aparece num teste que roda como `authenticated`, e sem grant `set role authenticated`
+# falha para QUALQUER tabela; por isso o que se mede é o grant concedido, não a ausência dele.
 #
 # Função é DIFERENTE de tabela, e não replicamos o lado de função aqui — de
 # propósito, depois de medir. Em produção o Supabase impede EXECUTE público em
@@ -52,9 +60,7 @@ psql -q -d "$DB" -c "
 # ausência deles quebraria (o teste da 0028 exercita a chamada como smoke test,
 # não como negativo).
 psql -q -d "$DB" -c "
-  grant usage on schema public to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-  alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;"
+  grant usage on schema public to anon, authenticated, service_role;"
 
 # Duas migrations com o MESMO prefixo não geram conflito de merge — o git aceita
 # `0035_a.sql` e `0035_b.sql` de branches diferentes sem uma palavra, e o laço
@@ -817,6 +823,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/perimetro_encerrar.test.sql 2>
 echo
 echo "== 0210 — a escrita da F1 COMO authenticated (RLS: policies de insert/update, sem delete) e a sonda que vê policy"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/f1_escrita_authenticated.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0214 — o acesso às tabelas é concedido por migration (sem default privilege do Supabase) e a sonda cobra o grant esquecido"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/grant_de_tabela.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo

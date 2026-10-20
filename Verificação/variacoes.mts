@@ -153,9 +153,7 @@ function garantirMolde() {
         create table if not exists storage.objects(id uuid default gen_random_uuid() primary key,
           bucket_id text, name text, owner uuid);
         alter table storage.objects enable row level security;
-        grant usage on schema public to anon, authenticated, service_role;
-        alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
-        alter default privileges in schema public grant all on sequences to anon, authenticated, service_role;`, MOLDE);
+        grant usage on schema public to anon, authenticated, service_role;`, MOLDE);
   // A LISTA DAS MIGRATIONS SAI DO DISCO, E NÃO DE UM SHELL. Até aqui ela vinha de
   // `bash -c "ls Supabase/migrations/*.sql"`: o `bash` era resolvido pelo PATH
   // herdado do processo, então um executável com esse nome num diretório gravável
