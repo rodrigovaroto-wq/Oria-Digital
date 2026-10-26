@@ -893,8 +893,8 @@ abertas, sem recomendação transformada em decisão.
 | D2 | Trilha transacional **determinística** separada da extração por IA | ⚪ não perguntada à parte | Segue como proposta do §4.1. A D3 a pressupõe: só um leitor determinístico identifica o arquivo pelo conteúdo |
 | D3 | Os quatro tipos são obrigatórios? | ✅ **decidido: não são obrigatórios**, mas o sistema **identifica quando vierem e os usa de forma ativa e clara** | §4.8: identificação pelo conteúdo, uso automático, quadro "Trilha transacional", ausência como nota com efeito e nunca como pendência bloqueante |
 | D4 | Tipo novo `ESTUDO_SETORIAL` | ✅ **decidido: criar** | §2.2: nasce com consumidor declarado (leitor de fatos) |
-| D5 | Provedor comercial de processos | ⚪ **em aberto**: "vamos pensar juntos" | Até lá, certidões (§3.5) |
-| D6 | Open Finance para extratos | 🟢 **decidido em 13/10/2026: não.** Mesma decisão que a D12.4 da Espec. 12 | Extrato sempre por arquivo: OFX primeiro, CNAB `E` depois |
+| D5 | Provedor comercial de processos | 🟡 **em pesquisa desde 26/10/2026** (D13.3 da Espec. 13): Exato Digital × API processual, medido no mandato AMO | Até lá, certidões (§3.5) |
+| D6 | Open Finance para extratos | 🔁 **REVISTA em 26/10/2026: reabre** (D13.1 da Espec. 13). Antes, em 13/10/2026: não | OFX e CNAB `E` continuam; o Open Finance entra como fonte a mais quando houver consentimento (Espec. 13, Etapa 7) |
 | D7 | Segurança e base legal do dado sensível | ✅ **decidido: NDA em todo mandato; banco extremamente seguro e privado, sem possibilidade de vazamento** | §7.1: o que isso exige, e a constatação de que hoje não está cumprido |
 | D8 | Medir o `I051` em ECDs reais | ✅ **decidido: medir** | Fatia T11. **Precisa de ECDs reais**, que só o dono fornece (pelo menos três, de mandatos diferentes) |
 | D9 | Reclame Aqui e redes sociais | ⚪ **em aberto**: "analisar e pensar como utilizar" | O §3.4 mantém a dimensão, e ela aparece como "não pesquisada" (R7) até haver decisão |
