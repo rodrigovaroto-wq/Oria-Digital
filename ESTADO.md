@@ -8,6 +8,47 @@
 > **O que o dono faz à mão, quando for aplicar, NESTA ORDEM:** aplicar a 0215; **tornar-se administrador ANTES da 0216** (`select fn_administrador_definir('<seu e-mail>', true);` no SQL Editor); aplicar a 0216; conferir `where migration in ('0215','0216') and not presente` (0 linhas); contar os mandatos sem membro (`select count(*) from caso c where not exists (select 1 from caso_membro m where m.caso_id = c.id)`) e atribuí-los. Detalhe da 0215: conferir `select * from fn_instalacao_conferir() where migration = '0215' and not presente` (0 linhas); conferir o backfill com `select count(*) from caso_membro where por = 'migracao:0215'` (= usuários × casos); e tornar-se administrador com `select fn_administrador_definir('<seu e-mail>', true);` no SQL Editor.
 > **Medido (0215):** `run.sh` exit 0, 2.330 `ok` (2.275 antes; +55 do `caso_membro.test.sql`), sonda 257/258 no banco de teste (só `custo_gravado_pelo_n8n`, comportamento que todo banco vazio tem). Regra 2: 12 desligamentos, de 1 a 13 asserts reprovando cada um (tabela no cabeçalho da 0215).
 
+### PAUSADA a pedido do dono (27/10/2026) — onde retomar
+
+**⚠️ NÃO aplicar a 0215 nem a 0216 em produção.** As duas revisões independentes acharam defeitos que ainda não foram corrigidos (lista abaixo). As duas estão no branch e passam nas suítes, mas "passa na suíte" aqui não é "pode aplicar".
+
+**FINALIZADO (comitado em `claude/serene-bell-atgog2`, PR #264):**
+- Espec. 13 + anexos 13A (plano por dependência), 13B (RFP pronto para envio), 13C (roteiro do piloto) e a planilha verificada `13_anexos/Plano_de_Captacao_v3.xlsx`.
+- `0215` (membros e administradores) e `0216` (policies por mandato), cada uma com a medição no commit. Stub de `auth` nos TRÊS bootstraps (`run.sh`, `Verificação/run.mts`, `Verificação/variacoes.mts`).
+- Medido no HEAD `dfcd490`: run.sh exit 0, 2.386 ok; sonda 321/322; e2e 46/0; variacoes 0 achados; Supabase node 40/0; conferir-chamadas OK.
+
+**FICOU NO MEIO (branch `wip/0215-0216-correcoes-da-revisao`, commit WIP, NÃO medido, NÃO mergear às cegas):** um agente estava corrigindo a 0215/0216 com os achados abaixo e foi interrompido. O WIP mexe em 0215, 0216, `caso_membro.test.sql`, `rls_por_mandato.test.sql`, `instalacao.test.sql`, `run.sh` e nos dois bootstraps `.mts` (+2.067/−298). Retomar: fazer checkout do WIP, ler o diff, rodar `run.sh` e decidir item a item o que está pronto; ou descartar e refazer a partir da lista.
+
+**A FAZER, em ordem (cada item com assert medido não-vazio):**
+1. **Correções da revisão da 0215:**
+   - (a) revokes explícitos em `administrador`/`caso_membro` (em produção o default privilege ainda dá ALL até 30/10) + sonda que exige RLS LIGADA (`relrowsecurity`) nas tabelas restritas + teste que concede grant e exige 42501 da RLS;
+   - (b) requisito da sonda "existe administrador" + backfill que confere a contagem e falha;
+   - (c) backfill só de usuários ativos (confirmado, não banido, não apagado, não anônimo), com essas colunas no stub dos três bootstraps;
+   - (d) efeito escrito: quem entra depois da 0215 não vê mandato antigo até ser atribuído;
+   - (e) sonda `execucao` com marcador nulo some de `where not presente` (guarda + `coalesce(v_ok,false)`);
+   - (f) "porque" falso de `exec_definir_admin_authenticated`;
+   - (g) `fn_administrador_definir` com `into strict` e `p_ativo` nulo recusado;
+   - (h) desligamentos que faltaram medir.
+2. **Correções da revisão da 0216:**
+   - (a) **CRÍTICO:** a promoção automática do dial (`trg_auto_promover_dial` → `fn_dial_auto_promover` → `fn_veredito_producao`, todos invoker) passa a usar só o recorte de quem dispara e muda o estágio para todos — tornar o cálculo global;
+   - (b) `/autonomia` com métricas do recorte do leitor (`fn_golden_cobertura`, `fn_classe_contabil_concordancia`);
+   - (c) `execucao_falha` com `caso_id` nulo some para todos e `/api/intake/status` volta ao "aguarde" eterno (0108);
+   - (d) desvio de ingestão: `caso_insert with check (true)` deixa não membro criar/renomear caso com nome de mandato alheio;
+   - (e) a guarda de administrador passa na ordem normal (0215 dá membro a todos): recusar com `administrador` vazia sempre que houver usuário;
+   - (f) `fn_caso_id_do_nome` é oráculo de nomes de mandato para qualquer logado;
+   - (g) `campo_classe_*` com `in (select id from campo_extraido)` degrada acima de ~150–300 mil linhas: trocar por `exists` por PK e medir com 500 mil;
+   - (h) `golden_criterio`, `estagio_autonomia`, `premissa_catalogo`, `golden_rodada` com escrita livre para authenticated;
+   - (i) contagem de policies divergente (47 × 46+bucket).
+3. **Portal — BLOQUEANTE para aplicar a 0216:** todo lote do intake chama `obterCasoId`/`fn_upsert_caso` antes de enviar ao n8n (hoje só lote com oficial/zip). Sem isso, lote só de PDF de não membro grava em mandato alheio e o mandato novo some para quem o criou.
+4. **Portal (pedido do dono):** tela de membros (administrador); lista "meus mandatos × todos"; pré-mandato × mandato; navegação por etapas dentro do mandato (Visão geral, Documentos, Perímetro, Pendências, Perguntas, Consultas externas, Modelagem, Apresentação). Levantamento feito: `/casos/[id]/page.tsx` (846 linhas) concentra tudo; `/casos/todos` sem segmentação.
+5. `0217`: `consulta_externa`, `fato_externo`, `autorizacao` (Espec. 11 §5 + Espec. 13 §3), RLS de nascença, PF só com autorização.
+6. `0218`: `caso.momento` (pré-mandato × mandato).
+7. Resto do nível 0 do anexo 13A: coletores públicos (0.4–0.6), formulários do analista (0.7), cálculos (0.8), ferramental do piloto (0.9).
+8. `/revisar` e `/fechar` da rodada; ficha de conhecimento da T0.
+
+**O que o dono faz à mão (quando 1–3 estiverem prontos):** aplicar a 0215; `select fn_administrador_definir('<e-mail>', true);`; aplicar a 0216; conferir a sonda e os mandatos sem membro. Fora do código: enviar o RFP (13B), comprar o e-CNPJ da Oria, autorização dos sócios do AMO para o piloto.
+
+
 ## SESSÃO 110 (20/10/2026) — o GRANT que o Supabase deixa de dar em 30/10/2026
 
 > **Migration mais nova: `0216_a_leitura_que_so_o_membro_faz.sql`** (S111, no topo, NÃO aplicada). **A desta sessão, `0214_o_grant_que_o_supabase_deixou_de_dar.sql`, foi APLICADA EM PRODUÇÃO em 20/10/2026** pela sessão, API de gerenciamento, uma chamada, resposta `[]`). Antes de aplicar, medido em produção: cobertura em `0213`, `fn_instalacao_conferir()` com 0 ausentes, corpo da função de produção = o da 0214 menos o ramo `privilegio` (diff só de acréscimos), e os privilégios que faltavam a authenticated/service_role eram EXATAMENTE os 7 revokes intencionais. Depois: os mesmos 7 (estado idêntico, `update (entidade_id)` em `caso_pergunta` mantido), cobertura `0214`, 0 ausentes, os 6 requisitos `privilegio` presentes, e o workflow `sonda-producao.yml` (run 44) verde.
