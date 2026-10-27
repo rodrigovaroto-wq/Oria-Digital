@@ -270,6 +270,15 @@ cor de borda.
 Barra lateral retrátil sobre `tinta-50`, item em `tinta-700`, item ativo com o
 acento. Estado (recolhida, seção aberta) mora no navegador.
 
+Desde o redesenho (27/10/2026, `REDESENHO_DO_PORTAL.md`): ícones de traço
+próprios no lugar de caracteres soltos; recolhida, a barra vira trilho de
+ícones com o nome em `aria-label`; os mandatos da barra são só os recentes.
+Dentro do mandato, abas fixas sublinhadas pelo acento, com régua de etapas
+(Recebimento → Conferência → Modelagem → Entrega) no cabeçalho.
+
+A imagem de fundo da marca (em produção pelo dono) só entra na faixa de
+saudação do Início e no login — **nunca atrás de tabela ou de número**.
+
 ### Superfícies do navegador
 
 Seleção em `acento-100`, cursor em `acento-600`, marcador de lista em
