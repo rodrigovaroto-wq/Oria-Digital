@@ -3,6 +3,8 @@ import { paginar } from "@/lib/supabase/paginar";
 import { PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS, type TaxonomiaTipoDocumento } from "@/lib/types";
 import { formatarTipoTaxonomia } from "@/lib/export";
 import { revisarDocumento } from "./actions";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
+
 
 const PENDENCIA_TIPO_LABEL: Record<string, string> = {
   classificacao_pendente: "classificação incerta",
@@ -79,9 +81,13 @@ export default async function FilaRevisaoPage({
       </div>
 
       {pendenciasRes.error && (
-        <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
-          Não foi possível carregar a fila: {pendenciasRes.error.message}
-        </p>
+        <div className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
+          Não foi possível carregar a fila de revisão. Tente de novo em instantes; se persistir,
+          avise o administrador do sistema.
+          <DetalhesTecnicos>
+            <p>{pendenciasRes.error.message}</p>
+          </DetalhesTecnicos>
+        </div>
       )}
 
       {pendencias.length === 0 && !pendenciasRes.error && (
@@ -108,7 +114,11 @@ export default async function FilaRevisaoPage({
                     {PENDENCIA_TIPO_LABEL[p.tipo] ?? p.tipo}
                   </span>
                 </p>
-                <p className="mt-1 text-xs text-tinta-500">{p.descricao}</p>
+                {p.descricao && (
+                  <DetalhesTecnicos className="mt-1 text-tinta-500">
+                    <p>{p.descricao}</p>
+                  </DetalhesTecnicos>
+                )}
               </div>
 
               <form action={revisarAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -124,7 +134,7 @@ export default async function FilaRevisaoPage({
                     <option value="">— sem tipo —</option>
                     {taxonomia.map((t) => (
                       <option key={t.codigo} value={t.codigo}>
-                        {t.documento} ({t.codigo})
+                        {t.documento}
                       </option>
                     ))}
                   </select>
@@ -150,8 +160,8 @@ export default async function FilaRevisaoPage({
                   >
                     <option value="anual">anual</option>
                     <option value="trimestre">trimestre</option>
-                    <option value="multi">multi</option>
-                    <option value="data-base">data-base</option>
+                    <option value="multi">vários períodos</option>
+                    <option value="data-base">posição numa data</option>
                     <option value="outro">outro</option>
                   </select>
                 </div>

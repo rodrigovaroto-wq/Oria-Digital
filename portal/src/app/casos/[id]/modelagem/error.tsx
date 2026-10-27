@@ -32,7 +32,7 @@ export default function ErroModelagem({
   return (
     <PainelDeErro
       titulo="A Modelagem não carregou ou falhou ao processar esta ação"
-      orientacao="O que já estava salvo continua salvo. Tente de novo — se repetir, é falha do servidor ou uma migration ainda não aplicada no banco."
+      orientacao="O que já estava salvo continua salvo. Tente de novo — se repetir, avise o administrador do sistema."
       error={error} reset={reset}
       voltarHref={`/casos/${id}`} voltarRotulo="Voltar à Visão geral"
     />

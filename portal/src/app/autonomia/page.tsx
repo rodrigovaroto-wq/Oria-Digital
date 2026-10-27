@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
+import { formatarTipoTaxonomia } from "@/lib/export";
 
 // Painel de autonomia — SOMENTE LEITURA.
 //
@@ -159,23 +161,57 @@ export default async function AutonomiaPage() {
   const cc = ccBruto as ConcordanciaCC | null;
 
   const declarados = linhas.filter((d) => d.base_do_nivel === "declarada");
+  const autonomas = linhas.filter(
+    (d) => (d.nivel_atual === "N2" || d.nivel_atual === "N3") && d.limiar_auto_clear !== null,
+  ).length;
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold">Qualidade da automação</h1>
-        <p className="mt-1 text-sm text-tinta-600">
-          O estado declarado do sistema: em que nível cada estágio opera hoje, e até onde a
-          doutrina permite que ele suba. Esta tela só lê — mudar o dial é ação do dono, por{" "}
-          <code className="rounded bg-tinta-100 px-1 text-xs">fn_mudar_dial</code>, que grava
-          autor e motivo.
+        <h1 className="text-lg font-semibold text-tinta-900">Qualidade da automação</h1>
+        <p className="mt-1 text-sm text-tinta-500">
+          Em que etapas o sistema já decide sozinho e em quais uma pessoa ainda revisa tudo.
+          Esta tela só mostra: mudar o nível é ação do administrador do sistema.
         </p>
+        {/* O RESUMO É CONTA DOS DADOS QUE A PÁGINA JÁ LEU, nunca número inventado.
+            "Decide sozinho" = nível N2/N3 COM limiar de auto-aceite: estágio em N2
+            sem limiar não auto-aceita nada (ver a coluna do limiar), então contá-lo
+            seria afirmar autonomia que não existe. Sem a leitura (erro ou zero
+            linhas), a frase NÃO leva número: ausência não vira "0 de 0". */}
+        {erroDial || linhas.length === 0 ? (
+          <p className="mt-2 text-sm font-medium text-alerta-900">
+            Não foi possível ler o nível de automação das etapas agora, então esta tela não afirma
+            quantas decidem sozinhas.
+          </p>
+        ) : (
+          <p className="mt-2 text-sm font-medium text-tinta-900">
+            Em {autonomas} de {linhas.length} {linhas.length === 1 ? "etapa" : "etapas"} o sistema
+            decide sozinho o que tem alta confiança; nas outras, uma pessoa revisa tudo.
+            {declarados.length > 0 && (
+              <span className="font-normal text-alerta-900">
+                {" "}Em {declarados.length}, esse nível é
+                decisão de produto, ainda sem concordância medida (abaixo).
+              </span>
+            )}
+          </p>
+        )}
+        <DetalhesTecnicos prosa>
+          <p>
+            Mudar o nível é feito por fn_mudar_dial, que grava autor e motivo. A doutrina está em
+            Arquitetura do Sistema/1 Visão e Doutrina/01 (níveis N0 a N3, teto por natureza do
+            estágio) e em Arquitetura do Sistema/2 Especificação/f0/06 (golden set) e /05
+            (classificação contábil).
+          </p>
+        </DetalhesTecnicos>
       </div>
 
       {erroDial && (
-        <p className="rounded border border-risco-300 bg-risco-50 p-3 text-sm text-risco-700">
-          Erro ao ler o dial: {erroDial.message}
-        </p>
+        <div className="rounded border border-risco-300 bg-risco-50 p-3 text-sm text-risco-700">
+          <p>Não foi possível ler os níveis de automação. Avise o administrador do sistema.</p>
+          <DetalhesTecnicos>
+            <p>{erroDial.message}</p>
+          </DetalhesTecnicos>
+        </div>
       )}
 
       <div className="overflow-x-auto rounded border border-tinta-200 bg-folha">
@@ -199,8 +235,7 @@ export default async function AutonomiaPage() {
               return (
                 <tr key={d.estagio} className="align-top">
                   <td className="px-4 py-3">
-                    <p className="font-medium">{NOME_ESTAGIO[d.estagio] ?? d.estagio}</p>
-                    <p className="font-mono text-xs text-tinta-400">{d.estagio}</p>
+                    <p className="font-medium" title={d.estagio}>{NOME_ESTAGIO[d.estagio] ?? d.estagio}</p>
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded bg-tinta-900 px-1.5 py-0.5 text-xs font-semibold text-papel">
@@ -216,8 +251,8 @@ export default async function AutonomiaPage() {
                     {noTeto && <span className="ml-1 text-tinta-400">(no teto)</span>}
                     {nuncaAutonomo && (
                       <p className="mt-1 text-tinta-500">
-                        Arquitetura do Sistema/1 Visão e Doutrina/01: nunca autônomo — o teto é por natureza do estágio e nenhuma
-                        chamada o sobrepõe.
+                        Por decisão de doutrina, nunca autônomo — o teto é por natureza da etapa e nada
+                        o sobrepõe.
                       </p>
                     )}
                   </td>
@@ -319,6 +354,13 @@ export default async function AutonomiaPage() {
             ))}
           </ul>
           <p className="mt-1">
+            Estão nesse nível por decisão de produto, não por concordância medida. Quando houver
+            base de comparação, a medição confirma ou derruba estes níveis. Subir sem medir exige
+            um motivo assumido por escrito, que aparece na trilha abaixo como{" "}
+            <em>sem medição</em>.
+          </p>
+          <DetalhesTecnicos prosa>
+          <p>
             Estão nesse nível por decisão de produto, não por concordância medida:{" "}
             <code>Arquitetura do Sistema/1 Visão e Doutrina/01</code> exige comparação contra um golden set para subir dial de estágio
             interpretativo. Desde a <code>0126</code> subir sem isso continua possível, mas exige
@@ -326,7 +368,7 @@ export default async function AutonomiaPage() {
             <em>sem medição</em>. Quando houver golden set, a medição confirma ou derruba estes
             níveis.
           </p>
-          <p className="mt-1">
+          <p>
             Desde a <code>0137</code> essa subida acontece <strong>sozinha</strong>: alcançado o
             critério, o estágio vai a N2 no instante em que a nota que o completou é registrada,
             com ator <code>sistema:auto_dial</code> na trilha e a medição que autorizou anexada. Ela
@@ -335,7 +377,7 @@ export default async function AutonomiaPage() {
             na hora e só volta por decisão explícita: o freio não pode ser desfeito pela máquina no
             veredito seguinte.
           </p>
-          <p className="mt-1">
+          <p>
             Desde a <code>0136</code> existe um terceiro caminho, e ele não depende de rotulagem:
             o veredito que o trabalho normal já produz. Cada vez que alguém confirma ou corrige o
             tipo de um documento na revisão, isso é um rótulo. O dial aceita esse número como base
@@ -344,12 +386,13 @@ export default async function AutonomiaPage() {
             formalidade: quem julga na revisão vê o palpite da máquina antes de decidir, então o
             viés de confirmação empurra o número para cima e o que se mede é um piso.
           </p>
-          <p className="mt-1">
+          <p>
             A medição que já é possível hoje roda contra o book sintético (
             <code>portal/scripts/medir-auto-aceite.mts</code>) e vale como piso, não como
             equivalente: o book é o melhor caso — PDF gerado, texto limpo, layout conhecido. Por
             isso rodada de golden set com <code>origem = sintetico</code> não autoriza subida.
           </p>
+          </DetalhesTecnicos>
         </div>
       )}
 
@@ -357,9 +400,9 @@ export default async function AutonomiaPage() {
           "o golden set ainda não existe" é uma frase que ninguém consegue conferir
           — e continuaria sendo verdade no texto muito depois de deixar de ser. */}
       <div>
-        <h2 className="text-sm font-semibold">Golden set</h2>
+        <h2 className="text-sm font-semibold">Conjunto de referência (golden set)</h2>
         <p className="mt-1 text-xs text-tinta-500">
-          <code>Arquitetura do Sistema/2 Especificação/f0/06</code>: ~{cobertura[0]?.n_minimo ?? 20} documentos rotulados por tipo core,
+          Cerca de {cobertura[0]?.n_minimo ?? 20} documentos rotulados por tipo principal,
           estratificados por qualidade de captura. Só rodada <strong>congelada</strong> e de{" "}
           <strong>origem real</strong> autoriza subir dial — rotular um book cujo gabarito já se
           conhece mede o instrumento, não o modelo.
@@ -384,12 +427,18 @@ export default async function AutonomiaPage() {
         </p>
 
         {listaRodadas.length === 0 ? (
-          <p className="mt-2 text-sm text-tinta-500">
-            Nenhuma rodada de calibração registrada. O protocolo está fechado como v1 desde
-            14/07/2026, o esquema existe desde a <code>0126</code> e a <code>0130</code> abriu o
-            caminho de escrita — o que falta agora é a rotulagem em si, que é trabalho de mesa
-            sobre documento real de cliente.
-          </p>
+          <div className="mt-2 text-sm text-tinta-500">
+            <p>
+              Nenhuma rodada de calibração registrada. O que falta é a rotulagem em si, que é
+              trabalho de mesa sobre documento real de cliente.
+            </p>
+            <DetalhesTecnicos prosa>
+              <p>
+                O protocolo está fechado como v1 desde 14/07/2026, o esquema existe desde a
+                migration 0126 e a 0130 abriu o caminho de escrita.
+              </p>
+            </DetalhesTecnicos>
+          </div>
         ) : (
           <ul className="mt-2 divide-y divide-tinta-200 rounded border border-tinta-200 bg-folha text-sm">
             {listaRodadas.map((r) => (
@@ -418,8 +467,8 @@ export default async function AutonomiaPage() {
             <table className="w-full text-sm">
               <caption className="px-4 pt-2 text-left text-xs text-tinta-500">
                 Cobertura de <strong>{rodadaVigente.nome}</strong>, por tipo do Kit Básico. O tipo
-                mais fraco governa: o dial é por estágio e o <code>Arquitetura do Sistema/2 Especificação/f0/06</code> raciocina por
-                tipo, então um tipo fraco sobe autonomia sobre ele também.
+                mais fraco governa: o nível é por etapa e a doutrina raciocina por tipo, então um
+                tipo fraco segura a autonomia dos demais.
               </caption>
               <thead className="bg-tinta-50 text-left text-xs uppercase text-tinta-500">
                 <tr>
@@ -433,10 +482,10 @@ export default async function AutonomiaPage() {
                 {cobertura.map((c) => (
                   <tr key={c.tipo}>
                     <td className="px-4 py-2">
-                      <p className="font-mono text-xs">{c.tipo}</p>
+                      <p className="text-xs font-medium" title={c.tipo}>{formatarTipoTaxonomia(c.tipo)}</p>
                       {/* A granularidade explica a demora em vez de deixá-la
                           parecer negligência: tipo por CASO rende ~1 por mandato,
-                          e o Arquitetura do Sistema/2 Especificação/f0/06 diz que ficar mais tempo em N0/N1 é esperado. */}
+                          e a doutrina diz que ficar mais tempo em N0/N1 é esperado. */}
                       {(c.granularidade === "caso" || c.granularidade === "periodo") && (
                         <p className="text-xs text-tinta-500">
                           ~1 por mandato: juntar {c.n_minimo} demora, e é esperado
@@ -473,8 +522,8 @@ export default async function AutonomiaPage() {
           <p className="mt-1 text-xs text-tinta-500">
             O único estágio cuja concordância humano-máquina já dá para medir sem golden set: o
             rótulo é o <strong>override</strong> que o analista registra na linha, e cada
-            discordância é um ponto de calibração. <code>Arquitetura do Sistema/2 Especificação/05</code>: onde humanos discordam
-            sistematicamente, ajusta-se a <strong>regra</strong> — não se sobe o dial.
+            discordância é um ponto de calibração. Onde humanos discordam
+            sistematicamente, ajusta-se a <strong>regra</strong> — não se sobe o nível.
           </p>
 
           {cc.com_veredito_humano === 0 ? (
@@ -554,7 +603,7 @@ export default async function AutonomiaPage() {
       <div>
         <h2 className="text-sm font-semibold">Mudanças de dial</h2>
         <p className="mt-1 text-xs text-tinta-500">
-          Arquitetura do Sistema/1 Visão e Doutrina/01: toda mudança de nível é decisão versionada e reversível. Tentativa recusada
+          Toda mudança de nível é decisão registrada e reversível. Tentativa recusada
           também fica — passar do teto é justamente o que a trilha precisa guardar.
         </p>
         {trilha.length === 0 ? (
@@ -579,7 +628,7 @@ export default async function AutonomiaPage() {
                         ? "sem medição"
                         : "aplicada"}
                   </span>
-                  <span className="font-mono text-xs">{e.entidade_ref}</span>
+                  <span className="text-xs font-medium" title={e.entidade_ref}>{NOME_ESTAGIO[e.entidade_ref] ?? e.entidade_ref}</span>
                   <span className="text-xs text-tinta-500">
                     {e.ator} · {dataHora(e.criado_em)}
                   </span>

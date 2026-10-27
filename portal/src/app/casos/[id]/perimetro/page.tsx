@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { CartaoEntidade, type EntidadeSituacao } from "./CartaoEntidade";
 import {
   confirmarEscopo, definirForma, definirPapel, definirParticipacao, encerrarEscopo,
@@ -64,8 +65,14 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
 
       {falhaLeitura && (
         <output className="carta block p-4 text-sm text-risco-800">
-          Não foi possível ler o grupo econômico ({falhaLeitura.message}). Se a função não existe, a migration 0208 ainda não foi
-          aplicada: a tela não mostra o grupo econômico como fechado nem como aberto, ela não sabe.
+          <p>
+            Não foi possível ler o grupo econômico. A tela não o mostra como fechado nem como aberto,
+            porque não sabe. Avise o administrador do sistema.
+          </p>
+          <DetalhesTecnicos>
+            <p>{falhaLeitura.message}</p>
+            <p>Se a função não existe, a migration 0208 ainda não foi aplicada.</p>
+          </DetalhesTecnicos>
         </output>
       )}
 
@@ -110,8 +117,14 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
 
       {falhaVinculos && (
         <output className="carta block p-4 text-sm text-risco-800">
-          Não foi possível ler os vínculos familiares ({falhaVinculos.message}). Se a tabela não existe, a migration 0212 ainda não
-          foi aplicada: a lista abaixo NÃO afirma que não há parentesco declarado.
+          <p>
+            Não foi possível ler os vínculos familiares. A lista abaixo NÃO afirma que não há
+            parentesco declarado. Avise o administrador do sistema.
+          </p>
+          <DetalhesTecnicos>
+            <p>{falhaVinculos.message}</p>
+            <p>Se a tabela não existe, a migration 0212 ainda não foi aplicada.</p>
+          </DetalhesTecnicos>
         </output>
       )}
       <SecaoParentesco socios={socios} vinculos={vinculos} vincular={acoes.vincularFamilia} desvincular={acoes.desvincularFamilia} />

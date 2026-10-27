@@ -28,6 +28,13 @@ function agruparPorSecao(campos: CampoExtraido[]) {
   return grupos;
 }
 
+// O estado de legibilidade que o analista lê: o valor cru do banco ("degradado") é
+// enum, não frase. Valor desconhecido não some — cai numa frase que diz que há algo.
+const ROTULO_LEGIBILIDADE: Record<string, string> = {
+  degradado: "Qualidade do arquivo degradada",
+  ilegivel: "Arquivo ilegível",
+};
+
 export default async function PlanilhaDocumentoPage({
   params,
 }: {
@@ -167,7 +174,7 @@ export default async function PlanilhaDocumentoPage({
 
       {versao?.legibilidade && versao.legibilidade !== "ok" && (
         <div className="rounded border border-risco-300 bg-risco-50 p-3 text-sm text-risco-800">
-          <strong className="uppercase">{versao.legibilidade}</strong>
+          <strong>{ROTULO_LEGIBILIDADE[versao.legibilidade] ?? "Qualidade do arquivo fora do esperado"}</strong>
           {versao.nota_legibilidade ? ` — ${versao.nota_legibilidade}` : ""}
         </div>
       )}
@@ -251,10 +258,10 @@ export default async function PlanilhaDocumentoPage({
           <div className="rounded border border-alerta-300 bg-alerta-50 p-3 text-sm text-alerta-900">
             <p className="font-medium">Nenhuma linha foi extraída deste documento.</p>
             <p className="mt-1">
-              Se a extração já rodou, isto não é fila: não há nada deste arquivo no banco, e a parte
-              dele no book sai vazia. Causas comuns — formato que o pipeline ainda não converte
-              (.xlsx/.docx), arquivo ilegível, ou chamada de extração que falhou. Veja a pendência
-              de extração deste documento e reenvie o arquivo. Não há o que aceitar aqui: aceitar
+              Se a leitura já terminou, isto não é fila: nada deste arquivo foi aproveitado, e a parte
+              dele no arquivo exportado sai vazia. Causas comuns — formato que o sistema ainda não
+              lê (planilha ou documento de texto), arquivo ilegível, ou leitura que falhou. Veja a
+              pendência deste documento e reenvie o arquivo. Não há o que aceitar aqui: aceitar
               gravaria uma aprovação formal de nada.
             </p>
           </div>
@@ -263,7 +270,7 @@ export default async function PlanilhaDocumentoPage({
             {[...grupos.entries()].map(([secao, linhas]) => (
               <div key={secao} className="overflow-x-auto rounded border border-tinta-200 bg-folha">
                 <p className="border-b border-tinta-200 bg-tinta-50 px-3 py-1.5 text-xs font-semibold uppercase text-tinta-600">
-                  {secao}
+                  {secao === "(sem seção)" ? "Sem seção identificada" : secao}
                 </p>
                 <table className="w-full text-left text-sm">
                   <thead className="text-xs uppercase text-tinta-500">

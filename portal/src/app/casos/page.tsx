@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
@@ -312,7 +313,7 @@ export default async function PainelPage() {
 
   // A causa do traço, escrita uma vez e usada nos três indicadores.
   const semMedicao = usoErro
-    ? "medição indisponível neste banco"
+    ? "medição indisponível agora"
     : "nenhum documento processado ainda";
 
   const dinheiro = (v: number) =>
@@ -370,9 +371,12 @@ export default async function PainelPage() {
       </div>
 
       {casosRes.error && (
-        <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
-          Não foi possível carregar o painel. {casosRes.error.message}
-        </p>
+        <div className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
+          <p>Não foi possível carregar o Início. Recarregue a página; se continuar, avise o administrador do sistema.</p>
+          <DetalhesTecnicos>
+            <p>{casosRes.error.message}</p>
+          </DetalhesTecnicos>
+        </div>
       )}
 
       {/* Oito indicadores em duas fileiras de quatro. A grade separa com `gap-px`
@@ -459,10 +463,13 @@ export default async function PainelPage() {
           uma página que falha no meio da contagem por documento acende o mesmo
           aviso — contagem parcial não pode aparecer como contagem. */}
       {(casosRes.truncado || documentosRes.truncado || pendenciasRes.truncado || linhasIncompletas) && (
-        <p className="carta border-alerta-200 bg-alerta-50 px-4 py-3 text-xs text-alerta-900">
-          Parte das leituras acima não terminou: ou uma lista passou do teto de 500 mil registros,
-          ou uma página falhou no meio. Os números descrevem parte da carteira, não a carteira inteira.
-        </p>
+        <div className="carta border-alerta-200 bg-alerta-50 px-4 py-3 text-xs text-alerta-900">
+          Parte das leituras acima não terminou. Os números descrevem parte da carteira, não a
+          carteira inteira. Recarregue a página; se continuar, avise o administrador do sistema.
+          <DetalhesTecnicos>
+            <p>Ou uma lista passou do teto de 500 mil registros, ou uma página falhou no meio da leitura.</p>
+          </DetalhesTecnicos>
+        </div>
       )}
 
       {ativos.length === 0 ? (

@@ -88,7 +88,7 @@ export function CartaoPergunta({
             type="submit"
             title={
               "Registra que esta pergunta foi enviada ao cliente, com o texto exato acima. "
-              + "O registro é append-only: não há como apagá-lo, e enviar de novo vira outra linha."
+              + "O registro não pode ser apagado, e enviar de novo cria outro registro."
             }
             className="rounded-md border border-ok-200 bg-ok-50 px-2.5 py-1.5 text-xs
                        font-semibold text-ok-800 transition-colors hover:bg-ok-100"

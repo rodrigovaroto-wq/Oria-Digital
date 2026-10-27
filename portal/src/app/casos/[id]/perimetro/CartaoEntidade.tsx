@@ -76,7 +76,7 @@ export function CartaoEntidade({ e, todas, existentes, hoje, acoes, casoId }: Re
               {e.escopos_vigentes.length === 0
                 ? "Sem escopo vigente: o sistema não afirma que esta empresa entra no combinado."
                 : `Vigente: ${e.escopos_vigentes.join(", ")}.`}
-              {outrosEscopos.length > 0 && " (Escopos além de “combinado” são texto livre no banco.)"}
+              {outrosEscopos.length > 0 && " (Há também escopos diferentes de “combinado”, informados à mão.)"}
             </p>
             {combinado ? (
               <Formulario acao={acoes.escopoEncerrar} entidadeId={e.entidade_id} botao="Tirar do combinado">

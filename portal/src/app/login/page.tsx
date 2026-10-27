@@ -1,6 +1,8 @@
 import { hasEnvVars } from "@/lib/supabase/env";
 import { MarcaOria } from "@/components/marca-oria";
 import { login } from "./actions";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
+import { mensagemDeLogin } from "@/lib/mensagem-de-login";
 
 export default async function LoginPage({
   searchParams,
@@ -24,13 +26,21 @@ export default async function LoginPage({
         </div>
 
         {!hasEnvVars && (
-          <p className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-800">
-            Variáveis de ambiente do Supabase não configuradas — ver <code>portal/README.md</code>.
-          </p>
+          <div className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-800">
+            <p>O acesso ao sistema não está configurado neste ambiente. Avise o administrador.</p>
+            <DetalhesTecnicos>
+              <p>Variáveis de ambiente do Supabase não configuradas — ver portal/README.md.</p>
+            </DetalhesTecnicos>
+          </div>
         )}
 
         {error && (
-          <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">{error}</p>
+          <div className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
+            <p>{mensagemDeLogin(error)}</p>
+            <DetalhesTecnicos>
+              <p>{error}</p>
+            </DetalhesTecnicos>
+          </div>
         )}
 
         <form action={login} className="carta space-y-4 p-6">

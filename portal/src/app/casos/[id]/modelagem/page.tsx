@@ -11,6 +11,7 @@ import { entradaDoRealizado, lerRealizadoDoCaso } from "@/lib/leitura-do-caso";
 import { chaveDaLinha, vinculoPorLinha } from "@/lib/modelagem-linha";
 import { portaoFechado, portaoNaoConferido, textoChipModelagem, textoTituloConferenciaModelagem, veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import { humanizar, rotuloDaSecao } from "@/lib/rotulos";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 
 // A seção MODELAGEM do mandato (pedido do dono, Fase 7.3; revisada na Fase 8
 // depois da rodada real do Teste v35).
@@ -268,6 +269,11 @@ export default async function ModelagemPage({
   const falhas = chamadas
     .filter(([, e]) => e)
     .map(([nome, e, ms]) => `${nome}: ${e!.message} [${ms} ms]`);
+  // O NOME QUE O ANALISTA LÊ: o mesmo `nome` sem o "(fn_x)" — a função fica em
+  // "Detalhes técnicos", onde o dono a usa para diagnosticar.
+  const falhasEmPortugues = chamadas
+    .filter(([, e]) => e)
+    .map(([nome]) => nome.replace(/ \(.*\)$/, ""));
 
   // E os tempos de QUEM DEU CERTO também, porque é a linha de base que dá sentido
   // ao número da falha: se as cinco chamadas leves voltam em 80 ms e as duas
@@ -549,45 +555,53 @@ export default async function ModelagemPage({
       {falhas.length > 0 && (
         <section className="rounded-lg border border-risco-300 bg-risco-50 p-3 text-sm text-risco-900">
           <p className="font-semibold">
-            {falhas.length} consulta(s) ao banco FALHARAM — o que está faltando nesta tela é efeito
-            disso, não é o caso estar vazio.
+            {falhas.length === 1
+              ? "Uma leitura de dados falhou"
+              : `${falhas.length} leituras de dados falharam`}
+            {" "}— o que está faltando nesta tela é efeito disso, não é o mandato estar vazio.
           </p>
-          <ul className="mt-1 list-disc pl-5 text-xs">
-            {falhas.map((f) => <li key={f} className="font-mono">{f}</li>)}
-          </ul>
-          {/* A ORIENTAÇÃO SEGUE O ERRO, não o palpite mais comum.
+          <p className="mt-1 text-xs">Não carregou: {falhasEmPortugues.join("; ")}.</p>
+          <p className="mt-2 text-xs">
+            {falhas.some((f) => /statement timeout|canceling statement/i.test(f))
+              ? "A leitura demorou demais e foi cancelada. Tente de novo em instantes; se repetir, avise o administrador do sistema."
+              : "Recarregue a página; se a falha continuar, avise o administrador do sistema."}
+          </p>
+          <DetalhesTecnicos className="mt-3">
+            <ul className="list-disc pl-5">
+              {falhas.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+            {/* A ORIENTAÇÃO SEGUE O ERRO, não o palpite mais comum.
 
-              Esta caixa nasceu (PR #89) dando SEMPRE o conselho do cache de schema do
-              PostgREST — que é o certo para "function not found" e o ERRADO para
-              consulta cancelada. E foi com um `statement timeout` na tela que o
-              conselho apareceu em produção: mandava recarregar o cache de schema
-              quando a função existia, era encontrada, e só não tinha terminado em 8 s.
-              Orientação errada num painel de diagnóstico é pior que orientação
-              nenhuma: manda o analista consertar o que não está quebrado e confirma
-              a impressão de que o PR não funcionou. */}
-          {falhas.some((f) => /statement timeout|canceling statement/i.test(f)) ? (
-            <p className="mt-2 text-xs">
-              <strong>A consulta foi CANCELADA por tempo</strong> (o Supabase corta em 8 s), não é
-              função faltando nem caso vazio — recarregar o cache de schema não resolve isto. Se as
-              migrations <code className="font-mono">0101</code> e <code className="font-mono">0102</code>{" "}
-              ainda não foram aplicadas neste banco, é isso: elas existirem no GitHub não as coloca
-              no Supabase. Para confirmar sem adivinhar, rode no SQL Editor{" "}
-              <code className="font-mono">select jsonb_pretty(fn_diagnostico_modelagem(&apos;{id}&apos;));</code>{" "}
-              e olhe <code className="font-mono">correcoes_instaladas</code>. O diagnóstico completo
-              de ambiente está em <code className="font-mono">Supabase/diagnostico_modelagem.sql</code>.
-            </p>
-          ) : (
-            <p className="mt-2 text-xs">
-              Se isto começou logo depois de aplicar uma migration, é quase certo que seja o cache de
-              schema do PostgREST: rode <code className="font-mono">notify pgrst, &apos;reload schema&apos;;</code>{" "}
-              no SQL Editor do Supabase e recarregue. Função recém-criada só existe para a API depois
-              disso.
-            </p>
-          )}
-          {/* A linha de base: o tempo das SETE chamadas, inclusive as que deram
-              certo. É o que separa "duas funções não couberam" de "a instância
-              inteira está lenta" — e a segunda não se resolve com SQL. */}
-          <p className="mt-2 font-mono text-[10px] text-risco-800">{tempos}</p>
+                Esta caixa nasceu (PR #89) dando SEMPRE o conselho do cache de schema do
+                PostgREST — que é o certo para "function not found" e o ERRADO para
+                consulta cancelada. E foi com um `statement timeout` na tela que o
+                conselho apareceu em produção: mandava recarregar o cache de schema
+                quando a função existia, era encontrada, e só não tinha terminado em 8 s.
+                Orientação errada num painel de diagnóstico é pior que orientação
+                nenhuma: manda o analista consertar o que não está quebrado e confirma
+                a impressão de que o PR não funcionou. */}
+            {falhas.some((f) => /statement timeout|canceling statement/i.test(f)) ? (
+              <p className="pt-1">
+                A consulta foi CANCELADA por tempo (o Supabase corta em 8 s), não é função faltando
+                nem caso vazio — recarregar o cache de schema não resolve isto. Se as migrations
+                0101 e 0102 ainda não foram aplicadas neste banco, é isso: elas existirem no GitHub
+                não as coloca no Supabase. Para confirmar sem adivinhar, rode no SQL Editor{" "}
+                select jsonb_pretty(fn_diagnostico_modelagem(&apos;{id}&apos;)); e olhe
+                correcoes_instaladas. O diagnóstico completo de ambiente está em
+                Supabase/diagnostico_modelagem.sql.
+              </p>
+            ) : (
+              <p className="pt-1">
+                Se isto começou logo depois de aplicar uma migration, é quase certo que seja o cache
+                de schema do PostgREST: rode notify pgrst, &apos;reload schema&apos;; no SQL Editor
+                do Supabase e recarregue. Função recém-criada só existe para a API depois disso.
+              </p>
+            )}
+            {/* A linha de base: o tempo das SETE chamadas, inclusive as que deram
+                certo. É o que separa "duas funções não couberam" de "a instância
+                inteira está lenta" — e a segunda não se resolve com SQL. */}
+            <p className="pt-1 text-[10px]">{tempos}</p>
+          </DetalhesTecnicos>
         </section>
       )}
 
@@ -629,7 +643,8 @@ export default async function ModelagemPage({
             <li>{conf.premissas_ativas} premissa(s) ativa(s) neste caso.</li>
             {conf.premissas_sem_valor?.length > 0 && (
               <li className="text-alerta-900">
-                <strong>Sem valor preenchido:</strong> {conf.premissas_sem_valor.join(", ")} — premissa
+                <strong>Sem valor preenchido:</strong>{" "}
+                {conf.premissas_sem_valor.map((c) => nomeDaPremissa.get(c) ?? c).join(", ")} — premissa
                 ativa sem valor projetaria com zero, então ela impede o &quot;pronto&quot;. Premissa
                 macro puxa o Focus sozinha ao ser ativada sem valor; se ficou vazia, é porque o Focus
                 não publica expectativa para esses anos.
@@ -694,8 +709,11 @@ export default async function ModelagemPage({
               name="indice_macro" defaultValue={parametros?.indice_macro ?? "IPCA"}
               className="mt-1 w-full rounded border border-tinta-200 px-2 py-1"
             >
-              {["IPCA", "IGPM", "INCC", "SELIC", "CAMBIO_USD", "PIB"].map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {([
+                ["IPCA", "IPCA"], ["IGPM", "IGP-M"], ["INCC", "INCC"], ["SELIC", "Selic"],
+                ["CAMBIO_USD", "Câmbio (R$/US$)"], ["PIB", "PIB"],
+              ] as const).map(([v, rotulo]) => (
+                <option key={v} value={v}>{rotulo}</option>
               ))}
             </select>
           </label>
