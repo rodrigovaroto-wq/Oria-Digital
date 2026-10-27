@@ -1,10 +1,18 @@
 "use client";
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import type { CasoStatus } from "@/lib/types";
+import {
+  IconeExpandir,
+  IconeInicio,
+  IconeMais,
+  IconeMandatos,
+  IconeQualidade,
+  IconeRecolher,
+} from "@/components/icones";
 
 // A NAVEGAÇÃO DO PRODUTO.
 //
@@ -12,14 +20,18 @@ import type { CasoStatus } from "@/lib/types";
 // clicando. Com um mandato só isso passa; com dez, cada troca de caso custa duas
 // telas (voltar à lista, procurar, entrar).
 //
-// AS DUAS SEÇÕES NÃO SÃO SIMÉTRICAS, e é de propósito. "Novo mandato" é uma AÇÃO
-// — não tem filho, não abre, e fica no topo porque é o começo de tudo.
-// "Mandatos" é um LUGAR — abre e mostra o que está na mesa agora. Dar a mesma
-// aparência às duas faria a ação parecer uma pasta vazia.
+// A ORDEM, DE CIMA PARA BAIXO: a AÇÃO ("Novo mandato", o único botão escuro),
+// dois LUGARES fixos (Início, Mandatos), os RECENTES, e a ADMINISTRAÇÃO. Ação
+// não tem filho e não abre; dar a ela a mesma aparência dos lugares a faria
+// parecer uma pasta vazia.
 //
-// SÓ OS ATIVOS ENTRAM NA LISTA da barra. Mandato fechado (0114) continua
-// acessível pela lista completa; o que a barra responde é "no que estou
-// trabalhando", e mandato fechado não é resposta para isso.
+// RECENTES, NO MÁXIMO 5. A barra respondia "no que estou trabalhando" com até 30
+// mandatos — uma segunda lista completa, que rolava, ao lado da lista de
+// verdade (`/casos/todos`). Cinco cabem na altura de qualquer tela sem rolar, e
+// a ordem é a do uso: os que a pessoa abriu por último. Sobra de vaga é preenchida
+// pelos mais novos, para quem nunca visitou nada (primeiro acesso, outro
+// navegador) não ver uma seção vazia. Só ATIVOS entram: o servidor já filtra
+// `fechado_em is null` (0114), e mandato fechado continua na lista completa.
 
 export interface MandatoNaBarra {
   id: string;
@@ -28,11 +40,16 @@ export interface MandatoNaBarra {
 }
 
 const CHAVE_RECOLHIDA = "oria.barra.recolhida";
-const CHAVE_ABERTA = "oria.barra.mandatos.aberta";
+const CHAVE_VISITADOS = "oria.mandatos.visitados";
 const EVENTO = "oria:preferencia";
+const MAX_RECENTES = 5;
+// O histórico guarda mais do que se mostra: um mandato visitado e depois
+// fechado deixa de aparecer, e sem folga a lista ficaria menor que 5 só porque
+// os fechados ocuparam as vagas. 20 ids são ~800 bytes.
+const MAX_VISITADOS = 20;
 
 /**
- * Preferência de interface guardada no navegador.
+ * Valor de texto guardado no navegador, lido como estado externo.
  *
  * POR QUE `useSyncExternalStore` E NÃO `useState` + `useEffect`: o
  * `localStorage` é um estado que vive FORA do React, e copiá-lo para dentro num
@@ -42,9 +59,11 @@ const EVENTO = "oria:preferencia";
  * ele também é o que a regra `react-hooks/set-state-in-effect` cobra.
  *
  * `getServerSnapshot` devolve o padrão porque no servidor não existe navegador —
- * e é ele que evita erro de hidratação.
+ * e é ele que evita erro de hidratação. O snapshot é uma STRING (não um array
+ * já interpretado): `useSyncExternalStore` compara por `Object.is`, e um array
+ * novo a cada leitura faria o React re-renderizar sem parar.
  */
-function usePreferencia(chave: string, padrao: boolean) {
+function useArmazenado(chave: string, padrao: string) {
   const assinar = useCallback((avisar: () => void) => {
     // `storage` cobre a mesma preferência mudada em OUTRA aba; o evento próprio
     // cobre esta aba, porque `storage` não dispara para quem escreveu.
@@ -55,174 +74,252 @@ function usePreferencia(chave: string, padrao: boolean) {
       window.removeEventListener(EVENTO, avisar);
     };
   }, []);
-  const padraoStr = padrao ? "1" : "0";
   const valor = useSyncExternalStore(
     assinar,
-    () => window.localStorage.getItem(chave) ?? padraoStr,
-    () => padraoStr,
+    () => {
+      try {
+        return window.localStorage.getItem(chave) ?? padrao;
+      } catch {
+        // Armazenamento bloqueado (janela privada, política do navegador): a
+        // barra funciona sem lembrar, em vez de derrubar a tela inteira.
+        return padrao;
+      }
+    },
+    () => padrao,
   );
-  const definir = (v: boolean) => {
-    window.localStorage.setItem(chave, v ? "1" : "0");
+  const definir = (v: string) => {
+    try {
+      window.localStorage.setItem(chave, v);
+    } catch {
+      /* sem armazenamento, a preferência vale só até recarregar */
+    }
     window.dispatchEvent(new Event(EVENTO));
   };
-  return [valor === "1", definir] as const;
+  return [valor, definir] as const;
 }
+
+function lerIds(bruto: string): string[] {
+  try {
+    const v: unknown = JSON.parse(bruto);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Mandatos mostrados em "Recentes": visitados (mais recente primeiro) e ativos, completados pelos mais novos. */
+export function escolherRecentes(
+  mandatos: MandatoNaBarra[],
+  visitados: string[],
+  max = MAX_RECENTES,
+): MandatoNaBarra[] {
+  const porId = new Map(mandatos.map((m) => [m.id, m]));
+  const escolhidos: MandatoNaBarra[] = [];
+  const usados = new Set<string>();
+  for (const id of visitados) {
+    const m = porId.get(id);
+    if (m && !usados.has(id) && escolhidos.length < max) {
+      escolhidos.push(m);
+      usados.add(id);
+    }
+  }
+  // `mandatos` já chega do mais novo para o mais antigo (o servidor ordena por `criado_em`).
+  for (const m of mandatos) {
+    if (escolhidos.length >= max) break;
+    if (!usados.has(m.id)) escolhidos.push(m);
+  }
+  return escolhidos;
+}
+
+const ID_DO_CASO = /^\/casos\/([0-9a-f-]{36})(?:\/|$)/i;
+
+const ITEM_BASE = "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors";
+const ITEM_ATIVO = "bg-acento-50 text-acento-700";
+const ITEM_INATIVO = "text-tinta-700 hover:bg-tinta-50 hover:text-tinta-900";
+// No trilho o item é só o ícone: quadrado de 40px, centrado.
+const TRILHO_BASE = "flex h-10 w-10 items-center justify-center rounded-md transition-colors";
 
 export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   const caminho = usePathname();
-  const [recolhida, definirRecolhida] = usePreferencia(CHAVE_RECOLHIDA, false);
-  const [mandatosAbertos, definirMandatosAbertos] = usePreferencia(CHAVE_ABERTA, true);
+  const [recolhidaStr, definirRecolhida] = useArmazenado(CHAVE_RECOLHIDA, "0");
+  const recolhida = recolhidaStr === "1";
+  const [visitadosStr, definirVisitados] = useArmazenado(CHAVE_VISITADOS, "[]");
 
-  const alternarBarra = () => definirRecolhida(!recolhida);
-  const alternarMandatos = () => definirMandatosAbertos(!mandatosAbertos);
+  // REGISTRA A VISITA. É um efeito porque escreve FORA do React (localStorage) —
+  // não há `setState` aqui, só o `dispatchEvent` que o `useSyncExternalStore` já
+  // escuta. Só grava se o id mudou de posição: sem esse teste, cada render
+  // reescreveria o mesmo valor e disparava o evento de novo.
+  const idAtual = ID_DO_CASO.exec(caminho)?.[1]?.toLowerCase() ?? null;
+  useEffect(() => {
+    if (!idAtual) return;
+    const atuais = lerIds(visitadosStr);
+    if (atuais[0] === idAtual) return;
+    definirVisitados(
+      JSON.stringify([idAtual, ...atuais.filter((x) => x !== idAtual)].slice(0, MAX_VISITADOS)),
+    );
+    // `definirVisitados` é recriada a cada render e só escreve no navegador.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idAtual, visitadosStr]);
 
-  // AS TRÊS PERGUNTAS QUE A BARRA RESPONDE, e elas mudaram de endereço em 18/08:
-  // `/casos` é o PAINEL (o que precisa de mim hoje) e `/casos/todos` é a lista
+  const recentes = useMemo(
+    () => escolherRecentes(mandatos, lerIds(visitadosStr)),
+    [mandatos, visitadosStr],
+  );
+
+  // AS PERGUNTAS QUE A BARRA RESPONDE, e elas mudaram de endereço em 18/08:
+  // `/casos` é o INÍCIO (o que precisa de mim hoje) e `/casos/todos` é a lista
   // completa. Antes eram a mesma URL, e a barra repetia a tela inteira.
-  const noPainel = caminho === "/casos";
+  const noInicio = caminho === "/casos";
   const naLista = caminho === "/casos/todos";
   const naCriacao = caminho === "/casos/novo";
-  const emMandatos = naLista || (caminho.startsWith("/casos/") && !naCriacao && !noPainel);
+  const naQualidade = caminho === "/autonomia";
 
   // ABRIR UM MANDATO É TELA CHEIA. A barra existe para trocar de caso, e nesse
   // momento não há caso para trocar — ela só roubaria largura de um formulário
   // que ganha em respirar. É a mesma razão de um checkout não ter menu.
   if (naCriacao) return null;
 
-  if (recolhida) {
-    // RECOLHIDA: sobra a aba de abrir, e só. Uma barra "de ícones" precisaria de
-    // ícones que digam o que a palavra diz — e ícone ambíguo em ferramenta de
-    // trabalho custa mais que os 220px que ele economiza.
-    return (
-      <aside className="shrink-0 border-r border-tinta-200 bg-folha">
+  const alternarBarra = () => definirRecolhida(recolhida ? "0" : "1");
+
+  // O TRILHO (~56px = 40px de alvo + 2×8px de respiro) serve a dois casos: a
+  // barra recolhida de propósito, e QUALQUER barra abaixo de 768px. Os 240px da
+  // barra aberta tomariam 64% de uma tela de 375px, e a navegação inferior de
+  // celular é uma fase posterior — até lá o trilho mantém o caminho para as
+  // quatro telas sem comer o conteúdo. Cada item leva `aria-label` e `title`
+  // com o NOME: ícone sozinho não é rótulo.
+  const trilho = (comBotao: boolean) => (
+    <nav
+      aria-label="Navegação principal"
+      className="sticky top-[57px] flex h-[calc(100vh-57px)] w-14 flex-col items-center gap-1 overflow-y-auto py-3"
+    >
+      {comBotao && (
         <button
           type="button"
           onClick={alternarBarra}
-          title="Mostrar o menu"
-          aria-label="Mostrar o menu"
+          title="Expandir o menu"
+          aria-label="Expandir o menu"
           aria-expanded={false}
-          className="sticky top-[57px] flex h-[calc(100vh-57px)] w-11 items-start justify-center
-                     pt-4 text-tinta-400 transition-colors hover:bg-tinta-50 hover:text-tinta-900"
+          className={`${TRILHO_BASE} mb-1 text-tinta-500 hover:bg-tinta-100 hover:text-tinta-900`}
         >
-          <span aria-hidden className="text-lg leading-none">
-            »
-          </span>
+          <IconeExpandir />
         </button>
-      </aside>
-    );
+      )}
+      <Link
+        href="/casos/novo"
+        title="Novo mandato"
+        aria-label="Novo mandato"
+        className={`${TRILHO_BASE} bg-tinta-900 text-papel hover:bg-tinta-800`}
+      >
+        <IconeMais />
+      </Link>
+      <Link
+        href="/casos"
+        title="Início"
+        aria-label="Início"
+        aria-current={noInicio ? "page" : undefined}
+        className={`${TRILHO_BASE} ${noInicio ? ITEM_ATIVO : ITEM_INATIVO}`}
+      >
+        <IconeInicio />
+      </Link>
+      <Link
+        href="/casos/todos"
+        title="Mandatos"
+        aria-label="Mandatos"
+        aria-current={naLista ? "page" : undefined}
+        className={`${TRILHO_BASE} ${naLista || idAtual ? ITEM_ATIVO : ITEM_INATIVO}`}
+      >
+        <IconeMandatos />
+      </Link>
+      <Link
+        href="/autonomia"
+        title="Qualidade da automação"
+        aria-label="Qualidade da automação"
+        aria-current={naQualidade ? "page" : undefined}
+        className={`${TRILHO_BASE} mt-auto ${naQualidade ? ITEM_ATIVO : ITEM_INATIVO}`}
+      >
+        <IconeQualidade />
+      </Link>
+    </nav>
+  );
+
+  if (recolhida) {
+    return <aside className="shrink-0 border-r border-tinta-200 bg-folha">{trilho(true)}</aside>;
   }
 
   return (
-    <aside
-      className="w-60 shrink-0 border-r border-tinta-200 bg-folha"
-    >
-      {/* A BARRA ROLA POR CONTA PRÓPRIA.
-          Antes o `nav` era sticky mas sem altura: com mais mandatos do que cabe
-          na tela, os últimos ficavam abaixo da dobra do elemento grudado e só
-          apareciam quando a PÁGINA terminava de rolar — ou seja, dependiam do
-          comprimento do conteúdo ao lado. Agora ela tem exatamente a altura da
-          viewport abaixo do cabeçalho (57px), e o que passa disso rola AQUI
-          dentro. O topo (Menu, Novo mandato, o próprio "Mandatos") fica parado:
-          quem rola procura um caso, não o botão de criar. */}
-      <nav className="sticky top-[57px] flex h-[calc(100vh-57px)] flex-col gap-1 overflow-hidden p-3">
-        <div className="mb-1 flex items-center justify-between px-1">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-tinta-400">
-            Menu
-          </span>
-          <button
-            type="button"
-            onClick={alternarBarra}
-            title="Esconder o menu"
-            aria-label="Esconder o menu"
-            aria-expanded
-            className="rounded px-1.5 py-0.5 text-tinta-400 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
-          >
-            <span aria-hidden className="text-sm leading-none">
-              «
+    <>
+      <aside className="shrink-0 border-r border-tinta-200 bg-folha md:hidden">{trilho(false)}</aside>
+      <aside className="hidden w-60 shrink-0 border-r border-tinta-200 bg-folha md:block">
+        {/* A BARRA TEM A ALTURA DA VIEWPORT abaixo do cabeçalho (57px) e o que
+            passa disso rola AQUI dentro, não com a página: o topo (a ação e os
+            lugares) fica parado, e a Administração fica ancorada embaixo. Com
+            no máximo 5 recentes quase nunca há rolagem, mas telas baixas
+            existem. */}
+        <nav
+          aria-label="Navegação principal"
+          className="sticky top-[57px] flex h-[calc(100vh-57px)] flex-col gap-1 overflow-y-auto p-3"
+        >
+          <div className="mb-1 flex items-center justify-between px-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-tinta-500">
+              Menu
             </span>
-          </button>
-        </div>
-
-        {/* O PAINEL — a primeira tela do dia. Fica acima da ação porque é para
-            onde se volta, não o que se faz: é o "início" desta ferramenta. */}
-        <Link
-          href="/casos"
-          className={`mb-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            noPainel
-              ? "bg-acento-50 text-acento-700"
-              : "text-tinta-700 hover:bg-tinta-50 hover:text-tinta-900"
-          }`}
-        >
-          <span aria-hidden className="text-base leading-none">
-            ◧
-          </span>
-          Painel
-        </Link>
-
-        {/* AÇÃO — fixa, sem filhos. */}
-        <Link
-          href="/casos/novo"
-          className={`flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-            naCriacao
-              ? "bg-acento-600 text-papel"
-              : "bg-tinta-900 text-papel hover:bg-tinta-800"
-          }`}
-        >
-          <span aria-hidden className="text-base leading-none">
-            +
-          </span>
-          Novo mandato
-        </Link>
-
-        {/* LUGAR — abre e mostra o que está na mesa. */}
-        <div className={`mt-2 flex min-h-0 flex-col ${mandatosAbertos ? "flex-1" : ""}`}>
-          <div
-            className={`flex items-center rounded-md ${
-              emMandatos && !naCriacao ? "bg-tinta-100" : ""
-            }`}
-          >
-            <Link
-              href="/casos/todos"
-              className={`flex-1 rounded-l-md px-3 py-2 text-sm font-medium transition-colors ${
-                naLista ? "text-tinta-900" : "text-tinta-700 hover:text-tinta-900"
-              }`}
-            >
-              Mandatos
-            </Link>
             <button
               type="button"
-              onClick={alternarMandatos}
-              aria-expanded={mandatosAbertos}
-              aria-label={mandatosAbertos ? "Recolher a lista de mandatos" : "Expandir a lista de mandatos"}
-              className="rounded-r-md px-2.5 py-2 text-tinta-400 transition-colors hover:text-tinta-900"
+              onClick={alternarBarra}
+              title="Recolher o menu"
+              aria-label="Recolher o menu"
+              aria-expanded
+              className="rounded p-1 text-tinta-500 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
             >
-              <span
-                aria-hidden
-                className={`block text-[10px] leading-none transition-transform ${
-                  mandatosAbertos ? "rotate-180" : ""
-                }`}
-              >
-                ▼
-              </span>
+              <IconeRecolher />
             </button>
           </div>
 
-          {mandatosAbertos && (
-            <ul
-              className="mt-1 min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain
-                         border-l border-tinta-200 pb-2 pl-2"
+          {/* AÇÃO — a única coisa escura da barra, e por isso a única que grita. */}
+          <Link
+            href="/casos/novo"
+            className={`${ITEM_BASE} bg-tinta-900 text-papel hover:bg-tinta-800`}
+          >
+            <IconeMais />
+            Novo mandato
+          </Link>
+
+          <div className="mt-2 flex flex-col gap-0.5">
+            <Link
+              href="/casos"
+              aria-current={noInicio ? "page" : undefined}
+              className={`${ITEM_BASE} ${noInicio ? ITEM_ATIVO : ITEM_INATIVO}`}
             >
-              {mandatos.length === 0 ? (
-                <li className="px-2 py-1.5 text-xs text-tinta-400">Nenhum mandato aberto</li>
-              ) : (
-                mandatos.map((m) => {
-                  const ativo = caminho.startsWith(`/casos/${m.id}`);
+              <IconeInicio />
+              Início
+            </Link>
+            <Link
+              href="/casos/todos"
+              aria-current={naLista ? "page" : undefined}
+              className={`${ITEM_BASE} ${naLista ? ITEM_ATIVO : ITEM_INATIVO}`}
+            >
+              <IconeMandatos />
+              Mandatos
+            </Link>
+          </div>
+
+          <div className="mt-3">
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-tinta-500">
+              Recentes
+            </p>
+            {recentes.length === 0 ? (
+              <p className="px-3 py-1.5 text-xs text-tinta-500">Nenhum mandato aberto</p>
+            ) : (
+              <ul className="space-y-0.5">
+                {recentes.map((m) => {
+                  const ativo = idAtual === m.id.toLowerCase();
                   return (
                     <li key={m.id}>
                       <Link
                         href={`/casos/${m.id}`}
                         title={`${m.nome} — ${CASO_STATUS_LABEL[m.status]}`}
-                        className={`flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors ${
+                        aria-current={ativo ? "page" : undefined}
+                        className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
                           ativo
                             ? "bg-acento-50 font-medium text-acento-700"
                             : "text-tinta-600 hover:bg-tinta-50 hover:text-tinta-900"
@@ -240,13 +337,26 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
                       </Link>
                     </li>
                   );
-                })
-              )}
-            </ul>
-          )}
-        </div>
+                })}
+              </ul>
+            )}
+          </div>
 
-      </nav>
-    </aside>
+          <div className="mt-auto border-t border-tinta-200 pt-3">
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-tinta-500">
+              Administração
+            </p>
+            <Link
+              href="/autonomia"
+              aria-current={naQualidade ? "page" : undefined}
+              className={`${ITEM_BASE} ${naQualidade ? ITEM_ATIVO : ITEM_INATIVO}`}
+            >
+              <IconeQualidade />
+              Qualidade da automação
+            </Link>
+          </div>
+        </nav>
+      </aside>
+    </>
   );
 }

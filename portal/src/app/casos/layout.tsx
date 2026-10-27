@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
 import { BarraLateral, type MandatoNaBarra } from "@/components/barra-lateral";
 import { MarcaOria } from "@/components/marca-oria";
+import { MenuConta } from "@/components/menu-conta";
+import { Trilha } from "@/components/trilha";
 
 // O CABEÇALHO É A ÚNICA COISA QUE APARECE EM TODAS AS TELAS, então ele é o que
 // diz se o produto é sério antes de qualquer dado carregar. O que mudou:
@@ -12,7 +14,11 @@ import { MarcaOria } from "@/components/marca-oria";
 //   • a largura foi de `max-w-5xl` (1024px) para `max-w-6xl`: as telas são
 //     TABELAS de oito colunas, e 1024px obrigava a rolar na horizontal num
 //     monitor de trabalho;
-//   • o e-mail e o "Sair" deixaram de ter o mesmo peso do link de navegação.
+//   • o e-mail e o "Sair" foram para um menu de conta (iniciais no cabeçalho), e
+//     o link "Autonomia" foi para a barra lateral, em "Administração";
+//   • entrou a trilha (onde estou), e o rodapé fixo saiu: o princípio "nada é
+//     fato até alguém aceitar" mora na tela de login, uma vez, e não em toda
+//     tela como um bloco de 53px que tirava altura útil de tabelas de oito colunas.
 export default async function CasosLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const [claimsRes, mandatosRes] = await Promise.all([
@@ -31,6 +37,8 @@ export default async function CasosLayout({ children }: { children: React.ReactN
     id: m.id, nome: m.nome, status: m.status,
   }));
 
+  const nomes = Object.fromEntries(mandatos.map((m) => [m.id, m.nome]));
+
   return (
     /* SEM `bg-tinta-50` AQUI, e não é descuido: o `body` já pinta essa mesma
        cor (ver `app/layout.tsx`). Repeti-la neste `div` criava uma camada
@@ -47,7 +55,7 @@ export default async function CasosLayout({ children }: { children: React.ReactN
               sobre ORIA sobre PARTNERS) e num cabeçalho de 57px cada palavra
               ficaria com 9px de altura — ilegível, e mal-educado com a marca.
               A lockup completa aparece no login, onde há altura para ela. */}
-          <Link href="/casos" className="flex items-center gap-2.5">
+          <Link href="/casos" className="flex shrink-0 items-center gap-2.5">
             <MarcaOria variante="sextante" className="h-8 w-8" />
             <span className="flex flex-col leading-tight">
               <span className="text-sm font-semibold tracking-wide text-tinta-900">ORIA</span>
@@ -60,27 +68,9 @@ export default async function CasosLayout({ children }: { children: React.ReactN
             </span>
           </Link>
 
-          <div className="flex items-center gap-4 text-sm">
-            {/* O dial é GLOBAL, não por mandato — por isso mora fora de /casos.
-                O link fica aqui porque o painel só serve para quem está usando o
-                portal e precisa saber com que autonomia o pipeline rodou. */}
-            <Link
-              href="/autonomia"
-              className="rounded-md px-2 py-1 text-tinta-600 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
-            >
-              Autonomia
-            </Link>
-            {email && (
-              <span className="hidden text-xs text-tinta-500 sm:inline" title={email}>
-                {email}
-              </span>
-            )}
-            <form action={logout}>
-              <button type="submit" className="btn-discreto">
-                Sair
-              </button>
-            </form>
-          </div>
+          <Trilha nomes={nomes} />
+
+          <MenuConta email={email} sair={logout} />
         </div>
       </header>
 
@@ -90,16 +80,6 @@ export default async function CasosLayout({ children }: { children: React.ReactN
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
       </div>
-
-      {/* O RODAPÉ EXISTE PARA DIZER UMA COISA SÓ, e ela é a mais importante do
-          produto: nada aqui é fato até um humano aceitar. Quem abre o portal
-          pela primeira vez precisa ler isso sem procurar. */}
-      <footer className="border-t border-tinta-200 bg-folha">
-        <div className="px-6 py-4 text-xs text-tinta-500">
-          Os dados desta tela são extraídos dos documentos enviados e conferidos automaticamente.
-          Linha marcada como pendente é sugestão a revisar. Nada é fato até alguém aceitar.
-        </div>
-      </footer>
     </div>
   );
 }

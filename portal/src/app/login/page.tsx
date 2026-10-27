@@ -68,6 +68,10 @@ export default async function LoginPage({
         <p className="text-center text-xs text-tinta-400">
           O acesso é criado pelo administrador da equipe.
         </p>
+        {/* O princípio do produto, dito uma vez e antes de qualquer dado. Ele
+            era um rodapé fixo em TODA tela do portal (53px de altura útil a cada
+            uma); aqui custa uma linha, numa tela que já tem altura sobrando. */}
+        <p className="text-center text-xs text-tinta-500">Nada aqui é fato até alguém aceitar.</p>
       </div>
     </div>
   );

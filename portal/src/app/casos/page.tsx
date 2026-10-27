@@ -10,7 +10,6 @@ import {
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import { rotuloDaPendencia, nomeDaChecagem, partesDaDescricao, suavizarMensagem } from "@/lib/rotulos";
 import { formatarTipoTaxonomia } from "@/lib/export";
-import { PainelIntro } from "@/components/painel-intro";
 import { CeuOria } from "@/components/ceu-oria";
 import { Surgir } from "@/components/surgir";
 
@@ -145,13 +144,6 @@ function Indicador({
 export default async function PainelPage() {
   const supabase = await createClient();
   const agora = new Date();
-
-  // QUEM ESTÁ LOGADO AGORA, e só isso: a abertura toca de novo quando este valor
-  // muda, que é o mesmo que dizer "alguém entrou". `session_id` é o campo certo
-  // porque ele nasce no login; `iat` cobre o token que não o traga, e "anon" é o
-  // caso em que não há sessão para comparar.
-  const claims = (await supabase.auth.getClaims()).data?.claims;
-  const sessao = String(claims?.session_id ?? claims?.iat ?? "anon");
 
   // `fechado_em` é filtrado em JavaScript, não no `where`: num banco sem a 0114
   // a coluna não existe, e o filtro derrubaria a tela inteira em vez de degradar.
@@ -365,11 +357,7 @@ export default async function PainelPage() {
 
   return (
     <div className="relative space-y-6">
-      {/* A abertura de ~3s, a cada carga do portal e a cada login, interrompível
-          por qualquer gesto. */}
-      <PainelIntro sessao={sessao} />
-
-      {/* O mesmo sextante da abertura, agora a 8% de opacidade. `fixed` e não
+      {/* O sextante a 8% de opacidade (a abertura de ~3s foi removida: 3s a cada login era custo fixo para quem usa o portal todo dia). `fixed` e não
           `absolute`, para ele ficar parado enquanto o conteúdo rola por cima. */}
       <CeuOria modo="fundo" className="pointer-events-none fixed inset-0 -z-10 h-full w-full" />
 
