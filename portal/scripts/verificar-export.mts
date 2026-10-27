@@ -8641,6 +8641,36 @@ const arranjoDeCirculante = (ENT: string) => {
 
 }
 
+// (40) A RECUSA DO EXPORT VIRA PÁGINA PARA PESSOA E CONTINUA JSON PARA PROGRAMA
+// (src/lib/recusa-do-export.ts). Os motivos vêm do banco — razão social e
+// mensagem do Postgres —, então o que importa é: (a) texto do banco nunca vira
+// marcação; (b) o status da recusa (409/503/500) sobrevive à troca de formato;
+// (c) quem não pede HTML recebe o JSON de sempre.
+{
+  const { recusar } = await import("../src/lib/recusa-do-export.ts");
+  const corpo = {
+    error: "Recusado <b>pelo</b> portão",
+    motivos: ["Empresa <script>alert(1)</script> & Cia"],
+    detalhe: "erro \"x\"",
+  };
+  const html = await recusar(
+    new Request("http://x/casos/1/export", { headers: { accept: "text/html,application/xhtml+xml" } }),
+    "1", corpo, { status: 409 },
+  );
+  const texto = await html.text();
+  checar(html.status === 409, "(40a) a página de recusa preserva o status 409", String(html.status));
+  checar((html.headers.get("content-type") ?? "").startsWith("text/html"),
+    "(40b) navegador recebe HTML", html.headers.get("content-type") ?? "");
+  checar(!texto.includes("<script>alert(1)") && texto.includes("&lt;script&gt;alert(1)&lt;/script&gt; &amp; Cia"),
+    "(40c) motivo vindo do banco sai escapado, nunca como marcação", texto.slice(0, 200));
+  checar(!texto.includes("<b>pelo</b>"), "(40d) a mensagem de erro também sai escapada", "");
+  const json = await recusar(new Request("http://x/casos/1/export", { headers: { accept: "*/*" } }),
+    "1", corpo, { status: 503 });
+  checar(json.status === 503 && (json.headers.get("content-type") ?? "").includes("application/json")
+    && (await json.json()).motivos?.[0] === corpo.motivos[0],
+    "(40e) programa (Accept */*) recebe o JSON de sempre, com o status original", String(json.status));
+}
+
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);
 for (const f of falhas) console.log("  FALHOU:", f);
 process.exit(falhas.length ? 1 : 0);

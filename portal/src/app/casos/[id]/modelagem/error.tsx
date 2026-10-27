@@ -1,5 +1,8 @@
 "use client";
 
+import { useParams } from "next/navigation";
+import { PainelDeErro } from "@/components/painel-de-erro";
+
 // FRONTEIRA DE ERRO DA TELA DE MODELAGEM.
 //
 // POR QUE ELA PRECISOU EXISTIR. Sem um `error.tsx` na rota, qualquer exceção
@@ -17,38 +20,21 @@
 //
 // Em produção o Next REDIGE a mensagem de erro do servidor: `error.message` vem
 // genérico e o que identifica a ocorrência é o `digest`. Por isso o digest é
-// mostrado — é o que permite achar a linha no log da Vercel.
-
+// mostrado (nos detalhes técnicos) — é o que permite achar a linha no log da
+// Vercel. O visual e o texto foram alinhados aos outros `error.tsx` (item 06).
 export default function ErroModelagem({
   error, reset,
 }: {
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const { id } = useParams<{ id: string }>();
   return (
-    <div className="mx-auto max-w-2xl p-6">
-      <div className="rounded border border-risco-300 bg-risco-50 p-4">
-        <h2 className="text-sm font-semibold text-risco-900">
-          A tela de Modelagem falhou ao processar esta ação
-        </h2>
-        <p className="mt-2 text-sm text-risco-900">
-          Nada foi perdido: o que já estava salvo continua salvo. Tente de novo — se repetir,
-          é falha do servidor ou uma migration que ainda não foi aplicada no banco.
-        </p>
-        {error.digest && (
-          <p className="mt-2 font-mono text-xs text-risco-800">
-            identificador da ocorrência: {error.digest}
-          </p>
-        )}
-        <div className="mt-3 flex gap-2">
-          <button
-            type="button" onClick={reset}
-            className="rounded bg-risco-700 px-3 py-1.5 text-sm font-medium text-papel hover:bg-risco-800"
-          >
-            Tentar de novo
-          </button>
-        </div>
-      </div>
-    </div>
+    <PainelDeErro
+      titulo="A Modelagem não carregou ou falhou ao processar esta ação"
+      orientacao="O que já estava salvo continua salvo. Tente de novo — se repetir, é falha do servidor ou uma migration ainda não aplicada no banco."
+      error={error} reset={reset}
+      voltarHref={`/casos/${id}`} voltarRotulo="Voltar à Visão geral"
+    />
   );
 }
