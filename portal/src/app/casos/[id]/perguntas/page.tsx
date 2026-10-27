@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
-import type { Caso } from "@/lib/types";
 import {
   PRIORIDADE,
   chaveDaSugestao,
@@ -95,7 +93,6 @@ export default async function PerguntasAoClientePage({
   if (casoRes.error || !casoRes.data) {
     notFound();
   }
-  const caso = casoRes.data as Pick<Caso, "id" | "nome" | "status">;
 
   const semMigration =
     pareceMigrationAusente(sugestoesRes.error?.message)
@@ -148,10 +145,7 @@ export default async function PerguntasAoClientePage({
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <Link href={`/casos/${id}`} className="text-sm text-tinta-500 hover:underline">
-            &larr; {caso.nome}
-          </Link>
-          <h1 className="mt-0.5 text-xl font-semibold text-tinta-900">Perguntas ao cliente</h1>
+          <h1 className="text-lg font-semibold text-tinta-900">Perguntas ao cliente</h1>
           {/* A FRASE MAIS IMPORTANTE DA TELA. Sem ela, uma lista de perguntas
               prontas com um botão verde parece uma caixa de saída — e a primeira
               coisa que alguém vai supor é que o sistema mandou. Ele não manda:
@@ -222,9 +216,6 @@ export default async function PerguntasAoClientePage({
                 + "empresa, ou contexto que vale para todo mandato com dado extraído. Enquanto "
                 + "este mandato não tiver linhas extraídas, não há o que perguntar."}
           </p>
-          <Link href={`/casos/${id}`} className="btn-secundario mt-4">
-            Voltar ao mandato
-          </Link>
         </div>
       )}
 

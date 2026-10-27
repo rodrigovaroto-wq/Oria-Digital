@@ -144,7 +144,6 @@ export default async function ModelagemPage({
 
   const casoRes = await supabase.from("caso").select("id, nome, produto, status").eq("id", id).single();
   if (casoRes.error || !casoRes.data) notFound();
-  const caso = casoRes.data;
 
   // Colunas nomeadas, nunca `*`: o tipo logo abaixo já declara exatamente o que
   // esta tela lê, e `*` traz também `atualizado_por`/`atualizado_em`, que ninguém
@@ -433,11 +432,8 @@ export default async function ModelagemPage({
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <Link href={`/casos/${id}`} className="text-sm text-tinta-500 hover:underline">
-            ← {caso.nome}
-          </Link>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl font-semibold text-tinta-900">Modelagem</h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-lg font-semibold text-tinta-900">Modelagem</h1>
             {conf && (
               <span className={`chip ${conf.pronto ? "bg-ok-100 text-ok-800" : "bg-alerta-100 text-alerta-900"}`}>
                 {/* 0158: "pronto" sozinho pintava o mesmo verde para 23 de 480

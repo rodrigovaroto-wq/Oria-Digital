@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
@@ -156,10 +155,7 @@ export default async function PlanilhaDocumentoPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link href={`/casos/${id}`} className="text-sm text-tinta-500 underline">
-          ← Voltar ao caso
-        </Link>
-        <h1 className="mt-2 font-dado text-base font-semibold break-all text-tinta-900">
+        <h1 className="font-dado text-lg font-semibold break-all text-tinta-900">
           {versao?.nome_original ?? "(sem nome)"}
         </h1>
         <p className="text-xs text-tinta-500">

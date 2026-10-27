@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CAPITULOS_APRESENTACAO } from "@/lib/apresentacao/campos";
 import { FormCapitulo } from "./FormCapitulo";
@@ -12,10 +11,7 @@ import { salvarCamposApresentacao } from "./actions";
 export default async function ApresentacaoPage({ params }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
   const supabase = await createClient();
-  const [casoRes, camposRes] = await Promise.all([
-    supabase.from("caso").select("nome").eq("id", id).single(),
-    supabase.from("caso_apresentacao_campo").select("chave, valor").eq("caso_id", id),
-  ]);
+  const camposRes = await supabase.from("caso_apresentacao_campo").select("chave, valor").eq("caso_id", id);
   const valores = Object.fromEntries(((camposRes.data ?? []) as Array<{ chave: string; valor: string }>).map((c) => [c.chave, c.valor]));
   const preenchidos = Object.keys(valores).length;
   // Amarrada AQUI, no servidor: o id do caso não passa pelo navegador como dado editável.
@@ -25,15 +21,12 @@ export default async function ApresentacaoPage({ params }: Readonly<{ params: Pr
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-titulo text-2xl font-medium tracking-tight text-tinta-900">
-            Apresentação de crédito{casoRes.data?.nome ? ` — ${casoRes.data.nome}` : ""}
-          </h1>
+          <h1 className="text-lg font-semibold text-tinta-900">Apresentação de crédito</h1>
           <p className="mt-0.5 text-sm text-tinta-500">
             {preenchidos} de {total} campos preenchidos. Os números vêm da Modelagem; em branco, o slide sai “[a preencher]”.
           </p>
         </div>
         <div className="flex gap-2">
-          <Link href={`/casos/${id}/modelagem`} className="btn-secundario">Voltar à modelagem</Link>
           <a href={`/casos/${id}/export?modo=apresentacao`} className="btn-primario">Gerar apresentação</a>
         </div>
       </div>

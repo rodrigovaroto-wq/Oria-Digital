@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS, type TaxonomiaTipoDocumento } from "@/lib/types";
@@ -71,13 +70,7 @@ export default async function FilaRevisaoPage({
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          href={`/casos/${id}`}
-          className="text-sm text-tinta-500 transition-colors hover:text-tinta-900"
-        >
-          ← Voltar ao mandato
-        </Link>
-        <h1 className="mt-2 text-xl font-semibold text-tinta-900">Revisão</h1>
+        <h1 className="text-lg font-semibold text-tinta-900">Revisão</h1>
         <p className="mt-1 max-w-2xl text-sm text-tinta-500">
           O sistema não teve certeza sobre o tipo, a empresa ou o período destes documentos.
           Confirme ou corrija — nada entra na base sem essa decisão, e a sugestão nunca decide
@@ -97,9 +90,6 @@ export default async function FilaRevisaoPage({
           <p className="mt-1 text-sm text-tinta-500">
             Todo documento deste mandato foi classificado com confiança suficiente.
           </p>
-          <Link href={`/casos/${id}`} className="btn-secundario mt-4">
-            Voltar ao mandato
-          </Link>
         </div>
       )}
 

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { CartaoEntidade, type EntidadeSituacao } from "./CartaoEntidade";
 import {
@@ -26,8 +25,7 @@ type Veredito = {
 export default async function PerimetroPage({ params }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
   const supabase = await createClient();
-  const [casoRes, vereditoRes, situacaoRes, controladoresRes, vinculosRes] = await Promise.all([
-    supabase.from("caso").select("nome").eq("id", id).single(),
+  const [vereditoRes, situacaoRes, controladoresRes, vinculosRes] = await Promise.all([
     supabase.rpc("fn_perimetro_veredito", { p_caso_id: id }),
     supabase.rpc("fn_perimetro_situacao", { p_caso_id: id }),
     supabase.from("controlador").select("id, nome, documento, tipo_pessoa").eq("caso_id", id).order("nome"),
@@ -59,12 +57,9 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-titulo text-2xl font-medium tracking-tight text-tinta-900">
-            Perímetro{casoRes.data?.nome ? ` — ${casoRes.data.nome}` : ""}
-          </h1>
+          <h1 className="text-lg font-semibold text-tinta-900">Perímetro</h1>
           <p className="mt-0.5 text-sm text-tinta-500">Quem entra no combinado, com que papel e controlado por quem.</p>
         </div>
-        <Link href={`/casos/${id}`} className="btn-secundario">Voltar ao mandato</Link>
       </div>
 
       {falhaLeitura && (

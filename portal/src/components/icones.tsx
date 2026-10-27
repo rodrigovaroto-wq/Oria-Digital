@@ -96,3 +96,17 @@ export const IconeConta = (p: Props) => (
     <path d="M5 19.5c.8-3.3 3.7-5 7-5s6.2 1.7 7 5" />
   </Base>
 );
+
+export const IconeCheck = (p: Props) => (
+  <Base {...p}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </Base>
+);
+
+export const IconeMais3Pontos = (p: Props) => (
+  <Base {...p}>
+    <circle cx="5.5" cy="12" r="1.1" fill="currentColor" />
+    <circle cx="12" cy="12" r="1.1" fill="currentColor" />
+    <circle cx="18.5" cy="12" r="1.1" fill="currentColor" />
+  </Base>
+);
