@@ -46,6 +46,7 @@ begin
     perform teste_assert_ac(false, 'mesma chave no mesmo caso é recusada');
   exception when unique_violation then perform teste_assert_ac(true, 'mesma chave no mesmo caso é recusada'); end;
 
+  perform teste_como_admin_0216();
   set local role authenticated;
   select count(*) into v_n from caso_apresentacao_campo where caso_id = v_caso;
   perform teste_assert_ac(v_n = 1, 'authenticated lê');
@@ -55,6 +56,7 @@ begin
     (select valor from caso_apresentacao_campo where caso_id = v_caso and chave = 'i.kpi.tamanho_setor') = 'R$ 41 bi',
     'authenticated escreve e atualiza');
   reset role;
+  perform teste_fim_admin_0216();
 
   delete from caso where id = v_caso;
   select count(*) into v_n from caso_apresentacao_campo where caso_id = v_caso;

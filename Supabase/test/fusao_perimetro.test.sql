@@ -131,11 +131,13 @@ begin
   insert into perimetro (caso_id, entidade_id, escopo, desde, ate) values (v_caso, v_para, 'combinado', d0 + 90, null);
   v_x := fn_upsert_entidade(v_caso, 'FILHA SEIS LTDA. (0211)');
   perform fn_entidade_definir_participacao(v_x, v_de, 50, 'teste@0211');
+  perform teste_como_admin_0216();
   set local role authenticated;
   v_err := null;
   begin v_ret := fn_fundir_entidade(v_caso, v_de, v_para, 'portal@0211');
   exception when others then v_err := sqlstate || ' ' || sqlerrm; end;
   reset role;
+  perform teste_fim_admin_0216();
   perform teste_assert_0211(v_err is null, 'fundir como authenticated, com perímetro e controlada, funciona', v_err);
   perform teste_assert_0211((v_ret->>'perimetro_movido')::int = 1 and (v_ret->>'perimetro_descartado')::int = 1
     and (select count(*) from perimetro where entidade_id = v_para) = 2,

@@ -360,6 +360,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/despfin_ano_par_do_mapa.test.s
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+# O SUPORTE DOS TESTES QUE RODAM COMO `authenticated` (0216): depois da restrição por mandato, `set role authenticated`
+# sem identidade lê zero linhas; os 12 testes que dependiam do `using (true)` chamam estas duas funções em par (ver o
+# cabeçalho de Supabase/test/suporte_authenticated.sql). Não é um teste: não tem assert, só funções.
+psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/suporte_authenticated.sql
+
 echo "== testes de reconciliação"
 # A ÁRVORE DA SEÇÃO VEM ANTES DA RECONCILIAÇÃO, E A ORDEM É OBRIGATÓRIA.
 # O bloco 6 do reconciliacao.test.sql renomeia TODA chave da versão ...0001 para
@@ -848,6 +853,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/grant_de_tabela.test.sql 2>&1 
 echo
 echo "== 0215 — o mandato só é visto por quem trabalha nele: membro + administrador, e a transição que não tira o acesso de ninguém"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/caso_membro.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0216 — a leitura que só o membro faz: RLS por mandato em toda tabela de dado do cliente, no storage e no rastro"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/rls_por_mandato.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo

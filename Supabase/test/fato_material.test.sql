@@ -378,15 +378,18 @@ begin
   -- porque o n8n conecta como dono, que ignora RLS: o canal dependia de um
   -- detalhe da credencial em vez de uma decisão.
   begin
+    perform teste_como_admin_0216();
     set local role authenticated;
     v_out := fn_registrar_fatos(v_v1, jsonb_build_array(jsonb_build_object(
       'tipo', 'covenant_rompido', 'trecho', c_covenant, 'pagina', 4)));
     reset role;
+    perform teste_fim_admin_0216();
     perform teste_assert_fato((v_out->>'gravados')::int = 1,
       'o papel `authenticated` GRAVA — a permissão da função e a política da tabela concordam',
       v_out::text);
   exception when others then
     reset role;
+    perform teste_fim_admin_0216();
     perform teste_assert_fato(false,
       'o papel `authenticated` GRAVA — a permissão da função e a política da tabela concordam',
       sqlerrm);

@@ -981,6 +981,19 @@ supabase db execute --file Supabase/migrations/0215_o_mandato_que_todo_usuario_l
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0215' and not presente;                 -- ZERO linhas
 
+# A 0216 liga a restrição por mandato (decisão D7): troca as policies `using (true)` das tabelas de dado do cliente por
+# policies que perguntam fn_meus_casos() (o caso, direto ou pelo pai), restringe o bucket `documentos` à pasta do
+# mandato, dá `caso_id` ao evento_auditoria (gatilho + backfill; sem caso: só o administrador lê) e reemite
+# fn_upsert_caso (o não membro que chama com o nome de um mandato existente leva 42501 em vez de criar um duplicado).
+# A MIGRATION SE RECUSA a aplicar se `administrador` estiver vazia e existir mandato sem nenhum membro (os que o n8n
+# criou depois da 0215 nascem sem membro e SUMIRIAM para todos): rode ANTES, uma vez, no SQL Editor,
+#   select fn_administrador_definir('<seu e-mail>', true);
+# Aplicar DEPOIS da 0215. Teste: Supabase/test/rls_por_mandato.test.sql.
+supabase db execute --file Supabase/migrations/0216_a_leitura_que_so_o_membro_faz.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0216' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

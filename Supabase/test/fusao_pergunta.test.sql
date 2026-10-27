@@ -75,11 +75,13 @@ begin
   select count(*) into v_n from caso_pergunta where caso_id = v_caso;
 
   raise notice '--- 1. fundir como authenticated ---';
+  perform teste_como_admin_0216();
   set local role authenticated;
   v_err := null;
   begin v_ret := fn_fundir_entidade(v_caso, v_abs, v_sob, 'portal@0213');
   exception when others then v_err := sqlstate || ' ' || sqlerrm; end;
   reset role;
+  perform teste_fim_admin_0216();
   perform teste_assert_0213(v_err is null, 'a fusão com perguntas já agidas FUNCIONA como authenticated (antes: 23503)', v_err);
   perform teste_assert_0213(not exists (select 1 from entidade where id = v_abs), 'a absorvida sumiu');
 
@@ -108,6 +110,7 @@ begin
   perform teste_assert_0213((v_ret->>'perguntas_repontadas')::int = 2, 'o retorno conta 2', v_ret::text);
 
   raise notice '--- 5. append-only para o resto, COMO authenticated ---';
+  perform teste_como_admin_0216();
   set local role authenticated;
   v_err := null; begin update caso_pergunta set texto_enviado = 'reescrito' where id = v_cp_enviada;
   exception when others then v_err := sqlstate; end;
@@ -122,10 +125,12 @@ begin
   exception when others then v_err := sqlstate; end;
   perform teste_assert_0213(v_err = '42501', 'não apaga (permission denied, não 0 linhas calado)', v_err);
   reset role;
+  perform teste_fim_admin_0216();
   v_err := null; begin update caso_pergunta set texto_enviado = 'reescrito pelo dono' where id = v_cp_enviada;
   exception when others then v_err := sqlerrm; end;
   perform teste_assert_0213(v_err like '%append-only%', 'nem o dono da tabela reescreve o texto (gatilho, além do privilégio)', v_err);
   v_alheia := fn_upsert_entidade(v_outro, 'ENTIDADE DE OUTRO CASO (0213)');
+  perform teste_como_admin_0216();
   set local role authenticated;
   v_err := null; begin update caso_pergunta set entidade_id = v_alheia where id = v_cp_enviada;
   exception when others then v_err := sqlstate; end;
@@ -134,15 +139,18 @@ begin
   exception when others then v_err := sqlstate; end;
   perform teste_assert_0213(v_err is not null, 'não repõe para nenhuma entidade', v_err);
   reset role;
+  perform teste_fim_admin_0216();
   perform teste_assert_0213(exists (select 1 from caso_pergunta where id = v_cp_enviada and entidade_id = v_sob
         and texto_enviado = v_texto and acao = 'enviada' and autor = 'analista@0213'),
     'e a linha continua exatamente como a fusão a deixou');
   insert into caso_pergunta (caso_id, pergunta_codigo, entidade_id, acao, autor)
     values (v_caso, '7.1', null, 'descartada', 'analista@0213') returning id into v_cp_descartada;
+  perform teste_como_admin_0216();
   set local role authenticated;
   v_err := null; begin update caso_pergunta set entidade_id = v_sob where id = v_cp_descartada;
   exception when others then v_err := sqlerrm; end;
   reset role;
+  perform teste_fim_admin_0216();
   perform teste_assert_0213(v_err like '%de ou para%', 'pergunta sem entidade (do caso inteiro) não é repontada para uma', v_err);
 
   raise notice '--- 6. o reponte direto deixa evento ---';
