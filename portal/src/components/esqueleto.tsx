@@ -2,11 +2,11 @@
 // `motion-safe:` (quem marcou prefers-reduced-motion vê o bloco parado, que é o
 // mesmo recado sem movimento). `role="status"` + "Carregando…" para leitor de
 // tela, porque a forma cinza não diz nada a quem não a vê.
-export function Bloco({ className = "" }: { className?: string }) {
+export function Bloco({ className = "" }: Readonly<{ className?: string }>) {
   return <div className={`rounded bg-tinta-100 motion-safe:animate-pulse ${className}`} />;
 }
 
-export function Esqueleto({ children }: { children: React.ReactNode }) {
+export function Esqueleto({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <div role="status" aria-live="polite" className="space-y-4">
       <span className="sr-only">Carregando…</span>
@@ -17,7 +17,7 @@ export function Esqueleto({ children }: { children: React.ReactNode }) {
 
 // Tabela genérica: cabeçalho + N linhas. Medido nas telas: lista de mandatos e
 // documentos são tabelas de 5 a 8 colunas — o esqueleto imita a massa, não o detalhe.
-export function EsqueletoTabela({ linhas = 6 }: { linhas?: number }) {
+export function EsqueletoTabela({ linhas = 6 }: Readonly<{ linhas?: number }>) {
   return (
     <div className="overflow-hidden rounded-md border border-tinta-200 bg-folha">
       <div className="border-b border-tinta-200 bg-tinta-50 p-3"><Bloco className="h-3 w-1/3" /></div>

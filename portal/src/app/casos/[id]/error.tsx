@@ -7,10 +7,10 @@ import { PainelDeErro } from "@/components/painel-de-erro";
 // cabeçalho e as abas continuam na tela e o analista troca de aba sem recarregar.
 export default function ErroDaTela({
   error, reset,
-}: {
+}: Readonly<{
   error: Error & { digest?: string };
   reset: () => void;
-}) {
+}>) {
   const { id } = useParams<{ id: string }>();
   return (
     <PainelDeErro

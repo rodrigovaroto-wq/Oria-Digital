@@ -44,6 +44,13 @@ export function paginaDeRecusa(id: string, corpo: CorpoDaRecusa): string {
   // `id` vem da URL: escapado também. O link vai à Visão geral, onde moram a
   // Revisão e o "Exportar dados" que não depende do portão.
   const volta = `/casos/${encodeURIComponent(id)}`;
+  // Os dois blocos opcionais são montados antes, e não como template dentro
+  // de template (Sonar S4624): a página fica legível e cada pedaço escapa uma vez.
+  const itens = motivos.map((m) => "<li>" + esc(m) + "</li>").join("");
+  const blocoMotivos = motivos.length ? "<p>O que impede:</p><ul>" + itens + "</ul>" : "";
+  const blocoTecnico = tecnico.length
+    ? "<details><summary>Detalhes técnicos</summary><pre>" + tecnico.map(esc).join("\n\n") + "</pre></details>"
+    : "";
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -64,10 +71,10 @@ export function paginaDeRecusa(id: string, corpo: CorpoDaRecusa): string {
 <body><main><div class="cartao" role="alert">
 <h1>O arquivo não foi gerado</h1>
 <p>${esc(corpo.error)}</p>
-${motivos.length ? `<p>O que impede:</p><ul>${motivos.map((m) => `<li>${esc(m)}</li>`).join("")}</ul>` : ""}
+${blocoMotivos}
 <p class="nota">Nenhum arquivo foi baixado. Resolva o que está acima na Visão geral do mandato e tente de novo.</p>
 <a class="btn" href="${esc(volta)}">Voltar à Visão geral do mandato</a>
-${tecnico.length ? `<details><summary>Detalhes técnicos</summary><pre>${tecnico.map(esc).join("\n\n")}</pre></details>` : ""}
+${blocoTecnico}
 </div></main></body></html>`;
 }
 

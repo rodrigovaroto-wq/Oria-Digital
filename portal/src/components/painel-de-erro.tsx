@@ -18,14 +18,14 @@ import Link from "next/link";
 // pode repetir algo que já tinha valido.
 export function PainelDeErro({
   titulo, orientacao, error, reset, voltarHref, voltarRotulo,
-}: {
+}: Readonly<{
   titulo: string;
   orientacao: string;
   error: Error & { digest?: string };
   reset: () => void;
   voltarHref: string;
   voltarRotulo: string;
-}) {
+}>) {
   return (
     <div className="mx-auto max-w-2xl py-6">
       <div role="alert" className="rounded-md border border-risco-300 bg-risco-50 p-5">

@@ -4,12 +4,12 @@ import Link from "next/link";
 // App Router não recebe props, então o texto específico vem de quem o chama.
 export function AvisoDeTela({
   titulo, children, href, rotulo,
-}: {
+}: Readonly<{
   titulo: string;
   children: React.ReactNode;
   href: string;
   rotulo: string;
-}) {
+}>) {
   return (
     <div className="mx-auto max-w-xl py-12 text-center">
       <p className="font-dado text-sm tabular-nums text-tinta-500">404</p>

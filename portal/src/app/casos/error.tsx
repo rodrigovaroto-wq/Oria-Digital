@@ -12,10 +12,10 @@ import { PainelDeErro } from "@/components/painel-de-erro";
 // erro padrão do Next.
 export default function ErroDeCasos({
   error, reset,
-}: {
+}: Readonly<{
   error: Error & { digest?: string };
   reset: () => void;
-}) {
+}>) {
   return (
     <PainelDeErro
       titulo="Não foi possível concluir esta ação"

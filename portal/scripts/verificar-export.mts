@@ -8654,7 +8654,7 @@ const arranjoDeCirculante = (ENT: string) => {
     detalhe: "erro \"x\"",
   };
   const html = await recusar(
-    new Request("http://x/casos/1/export", { headers: { accept: "text/html,application/xhtml+xml" } }),
+    new Request("https://x/casos/1/export", { headers: { accept: "text/html,application/xhtml+xml" } }),
     "1", corpo, { status: 409 },
   );
   const texto = await html.text();
@@ -8664,7 +8664,7 @@ const arranjoDeCirculante = (ENT: string) => {
   checar(!texto.includes("<script>alert(1)") && texto.includes("&lt;script&gt;alert(1)&lt;/script&gt; &amp; Cia"),
     "(40c) motivo vindo do banco sai escapado, nunca como marcação", texto.slice(0, 200));
   checar(!texto.includes("<b>pelo</b>"), "(40d) a mensagem de erro também sai escapada", "");
-  const json = await recusar(new Request("http://x/casos/1/export", { headers: { accept: "*/*" } }),
+  const json = await recusar(new Request("https://x/casos/1/export", { headers: { accept: "*/*" } }),
     "1", corpo, { status: 503 });
   checar(json.status === 503 && (json.headers.get("content-type") ?? "").includes("application/json")
     && (await json.json()).motivos?.[0] === corpo.motivos[0],
