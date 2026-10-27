@@ -969,6 +969,18 @@ supabase db execute --file Supabase/migrations/0214_o_grant_que_o_supabase_deixo
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0214' and not presente;                 -- ZERO linhas
 
+# A 0215 cria `administrador` e `caso_membro` (decisão D7: o mandato só é visto por quem trabalha nele): RLS própria,
+# fn_eh_admin/fn_eh_membro (SECURITY DEFINER, as que as policies da 0216 vão chamar), fn_membro_adicionar/remover,
+# fn_administrador_definir (SÓ postgres/service_role), o gatilho que faz o criador do caso virar membro, e a TRANSIÇÃO:
+# todo usuário de auth.users vira membro de todo caso existente (ninguém perde acesso no dia). Não toca policy de
+# tabela existente (0216) e NÃO torna ninguém administrador: o dono roda, uma vez, no SQL Editor,
+#   select fn_administrador_definir('<seu e-mail>', true);
+# Acrescenta à sonda o tipo `execucao` (EXECUTE de função por papel). Aplicar DEPOIS da 0214. Teste: Supabase/test/caso_membro.test.sql.
+supabase db execute --file Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql
+# DEPOIS DE APLICAR, confira o catálogo:
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0215' and not presente;                 -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

@@ -437,6 +437,43 @@ end;
 $$;
 
 --
+-- Name: fn_administrador_definir(text, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_administrador_definir(p_email text, p_ativo boolean) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_id uuid;
+  v_n  int;
+begin
+  select id into v_id from auth.users where lower(email) = lower(p_email);
+  if v_id is null then
+    raise exception 'fn_administrador_definir: nenhum usuário com o e-mail %', p_email using errcode = 'P0002';
+  end if;
+  if p_ativo then
+    insert into administrador (usuario_id, por) values (v_id, 'sql:' || current_user) on conflict do nothing;
+  else
+    delete from administrador where usuario_id = v_id;
+  end if;
+  get diagnostics v_n = row_count;
+  if v_n > 0 then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('sql:' || current_user,
+              case when p_ativo then 'administrador_definido' else 'administrador_removido' end,
+              'usuario:' || v_id, jsonb_build_object('ativo', p_ativo));
+  end if;
+  return v_n > 0;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_administrador_definir(p_email text, p_ativo boolean); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_administrador_definir(p_email text, p_ativo boolean) IS 'Torna (p_ativo) ou deixa de tornar o usuário de auth.users com este e-mail administrador. Devolve false se nada mudou. Só postgres/service_role: o authenticated NÃO a executa (a sonda cobra isso, tipo=execucao). 0215.';
+
+--
 -- Name: fn_ano4(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -967,6 +1004,30 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) IS 'Portão 2 (0109): elegível quando não há pendência BLOQUEANTE sem decisão. O teto de ressalvas e a lista fechada de Arquitetura do Sistema/2 Especificação/f0/04 deixaram de bloquear por decisão do dono — as contagens continuam publicadas como informação, e vão gravadas dentro da decisão de aprovação.';
+
+--
+-- Name: fn_caso_membro_backfill_0215(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_caso_membro_backfill_0215() RETURNS bigint
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_n bigint;
+begin
+  insert into caso_membro (caso_id, usuario_id, por)
+    select c.id, u.id, 'migracao:0215' from caso c cross join auth.users u
+    on conflict do nothing;
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_caso_membro_backfill_0215(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_caso_membro_backfill_0215() IS 'A transição da 0215: todo usuário de auth.users vira membro de todo caso existente (por = migracao:0215). Idempotente. Só postgres/service_role — chamá-la de novo concede tudo a todos.';
 
 --
 -- Name: fn_classe_contabil_concordancia(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -2950,6 +3011,42 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_documentos_nao_extraidos(p_caso_id uuid) IS 'Documentos do caso para os quais a extração NUNCA foi chamada (sem evento extracao_sombra em nenhuma versão). Zero linha com extração feita NÃO entra aqui — isso é 0111/0036.';
+
+--
+-- Name: fn_eh_admin(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_eh_admin() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select exists (select 1 from public.administrador where usuario_id = auth.uid());
+$$;
+
+--
+-- Name: FUNCTION fn_eh_admin(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_eh_admin() IS 'O usuário do jwt (auth.uid()) é administrador? SECURITY DEFINER para ler administrador sem recursão de RLS. auth.uid() nulo => false. 0215.';
+
+--
+-- Name: fn_eh_membro(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_eh_membro(p_caso uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select exists (select 1 from public.administrador where usuario_id = auth.uid())
+      or exists (select 1 from public.caso_membro
+                  where caso_id = p_caso and usuario_id = auth.uid());
+$$;
+
+--
+-- Name: FUNCTION fn_eh_membro(p_caso uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_eh_membro(p_caso uuid) IS 'O usuário do jwt (auth.uid()) trabalha neste mandato? Administrador é membro de todos. SECURITY DEFINER para ler caso_membro sem recursão de RLS. auth.uid() nulo => false. 0215.';
 
 --
 -- Name: fn_entidade_aprender_cnpj(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -6055,6 +6152,37 @@ begin
                                   case when v_n > 15 then ' ...' else '' end) end;
       end if;
 
+    elsif r.tipo = 'execucao' then
+      -- 0215: EXECUTE de função para um papel. `objeto` = 'papel:nome_da_funcao' (sem argumentos: o nome tem de ser
+      -- único) e `marcador` = 'sim' (o papel TEM de executar) ou 'nao' (NÃO pode). O 'nao' existe por
+      -- fn_administrador_definir: função em public nasce executável por PUBLIC no Postgres, e um revoke esquecido
+      -- deixa qualquer usuário logado se promover administrador — nenhum outro tipo vê isso, porque a função
+      -- existe e o corpo está certo. `has_function_privilege` enxerga a concessão a PUBLIC, que é a que importa.
+      v_role := split_part(r.objeto, ':', 1);
+      if r.marcador not in ('sim', 'nao') then
+        v_ok  := false;
+        v_det := 'requisito mal declarado: marcador tem de ser sim ou nao';
+      elsif not exists (select 1 from pg_roles where rolname = v_role) then
+        v_ok  := false;
+        v_det := format('o papel %s nem existe', v_role);
+      else
+        begin
+          v_proc := to_regproc('public.' || split_part(r.objeto, ':', 2));
+        exception when others then
+          v_proc := null;
+          v_det  := 'mais de uma assinatura com este nome — o requisito precisa de um nome único';
+        end;
+        if v_proc is null then
+          v_ok  := false;
+          v_det := coalesce(v_det, 'a função nem existe');
+        else
+          v_ok  := has_function_privilege(v_role, v_proc::oid, 'execute') = (r.marcador = 'sim');
+          v_det := case when v_ok then format('%s %s executa', v_role, case when r.marcador = 'sim' then 'pode' else 'NÃO pode' end)
+                        when r.marcador = 'sim' then format('%s NÃO executa a função (o portal leva "permission denied")', v_role)
+                        else format('%s EXECUTA a função e não podia (revoke esquecido)', v_role) end;
+        end if;
+      end if;
+
     elsif r.tipo in ('seed', 'comportamento') then
       -- A tabela pode não existir ainda: contar nela levantaria erro e derrubaria
       -- a sonda inteira, transformando "um requisito faltando" em "o painel não
@@ -6092,7 +6220,7 @@ $$;
 -- Name: FUNCTION fn_instalacao_conferir(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026.';
+COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0215 confere também EXECUÇÃO de função (tipo=execucao, objeto papel:funcao, marcador sim|nao): has_function_privilege, que enxerga o PUBLIC — é o que cobra o revoke de fn_administrador_definir.';
 
 --
 -- Name: fn_instalacao_resumo(); Type: FUNCTION; Schema: public; Owner: -
@@ -6602,6 +6730,71 @@ begin
   return jsonb_build_object('ok', found);
 end;
 $$;
+
+--
+-- Name: fn_membro_adicionar(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_membro_adicionar(p_caso uuid, p_usuario uuid) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_n int;
+begin
+  if not fn_eh_admin() then
+    raise exception 'fn_membro_adicionar: só o administrador atribui membros a um mandato' using errcode = '42501';
+  end if;
+  if p_caso is null or p_usuario is null then
+    raise exception 'fn_membro_adicionar: caso e usuário são obrigatórios' using errcode = '22004';
+  end if;
+  insert into caso_membro (caso_id, usuario_id, por)
+    values (p_caso, p_usuario, 'usuario:' || auth.uid())
+    on conflict do nothing;
+  get diagnostics v_n = row_count;
+  if v_n > 0 then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('usuario:' || auth.uid(), 'membro_adicionado', 'caso:' || p_caso,
+              jsonb_build_object('usuario_id', p_usuario));
+  end if;
+  return v_n > 0;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_membro_adicionar(p_caso uuid, p_usuario uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_membro_adicionar(p_caso uuid, p_usuario uuid) IS 'Só administrador. Torna o usuário membro do mandato; devolve false se já era (e então não grava evento). Caso ou usuário inexistente: 23503 da FK. 0215.';
+
+--
+-- Name: fn_membro_remover(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_membro_remover(p_caso uuid, p_usuario uuid) RETURNS boolean
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_n int;
+begin
+  if not fn_eh_admin() then
+    raise exception 'fn_membro_remover: só o administrador retira membros de um mandato' using errcode = '42501';
+  end if;
+  delete from caso_membro where caso_id = p_caso and usuario_id = p_usuario;
+  get diagnostics v_n = row_count;
+  if v_n > 0 then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('usuario:' || auth.uid(), 'membro_removido', 'caso:' || p_caso,
+              jsonb_build_object('usuario_id', p_usuario));
+  end if;
+  return v_n > 0;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_membro_remover(p_caso uuid, p_usuario uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_membro_remover(p_caso uuid, p_usuario uuid) IS 'Só administrador. Retira o usuário do mandato; devolve false se não era membro (e então não grava evento). 0215.';
 
 --
 -- Name: fn_mes_do_rotulo(text); Type: FUNCTION; Schema: public; Owner: -
@@ -14439,6 +14632,30 @@ $$;
 COMMENT ON FUNCTION public.fn_trg_auto_promover_dial() IS 'Gatilho da promoção automática (0137): toda decisão humana nova pode ter completado o critério do veredito de produção. NUNCA derruba a transação de quem o disparou — falha vira NOTICE, porque o analista não pode perder a rejeição de uma pendência por causa do dial.';
 
 --
+-- Name: fn_trg_caso_criador_membro(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_caso_criador_membro() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if auth.uid() is not null then
+    insert into public.caso_membro (caso_id, usuario_id, por)
+      select new.id, u.id, 'criador' from auth.users u where u.id = auth.uid()
+      on conflict do nothing;
+  end if;
+  return null;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_trg_caso_criador_membro(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_trg_caso_criador_membro() IS 'Gatilho de caso (AFTER INSERT): o usuário do jwt que cria o mandato vira membro dele. auth.uid() nulo (n8n/service_role) => nasce sem membro. SECURITY DEFINER pelo motivo no cabeçalho da 0215.';
+
+--
 -- Name: fn_trg_caso_pergunta_so_reaponta(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -15536,6 +15753,22 @@ end;
 $$;
 
 --
+-- Name: administrador; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.administrador (
+    usuario_id uuid NOT NULL,
+    desde timestamp with time zone DEFAULT now() NOT NULL,
+    por text NOT NULL
+);
+
+--
+-- Name: TABLE administrador; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.administrador IS 'Quem vê TODOS os mandatos e atribui membros (0215). Escrita só por fn_administrador_definir, que o authenticated não executa: o primeiro administrador nasce por SQL do dono. Vazia = ninguém é administrador (nada o promove sozinho).';
+
+--
 -- Name: arquivo_oficial; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -15803,6 +16036,23 @@ CREATE TABLE public.caso_linha_premissa (
     atualizado_por text,
     atualizado_em timestamp with time zone DEFAULT now() NOT NULL
 );
+
+--
+-- Name: caso_membro; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.caso_membro (
+    caso_id uuid NOT NULL,
+    usuario_id uuid NOT NULL,
+    desde timestamp with time zone DEFAULT now() NOT NULL,
+    por text NOT NULL
+);
+
+--
+-- Name: TABLE caso_membro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.caso_membro IS 'Quem trabalha no mandato (0215, decisão D7). `por` diz de onde veio a linha: usuario:<uuid> (administrador atribuiu), criador (gatilho de caso) ou migracao:0215 (a transição, todo usuário x todo caso).';
 
 --
 -- Name: caso_modelagem; Type: TABLE; Schema: public; Owner: -
@@ -16434,7 +16684,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'execucao'::text])))
 );
 
 --
@@ -17105,6 +17355,13 @@ COMMENT ON COLUMN public.taxonomia_tipo_documento.abertura_analitica IS 'Este ti
 COMMENT ON COLUMN public.taxonomia_tipo_documento.autoridade IS 'Peso da EVIDÊNCIA deste tipo de documento quando dois documentos do mesmo período discordam sobre a mesma conta (0151). Maior vence, e o motivo vai por extenso na pendência. 0 = o catálogo não declarou autoridade para este tipo: ele não decide (dois zeros empatam e a decisão volta para o humano). Nada é apagado em nenhum caso — o perdedor é a evidência de que houve escolha.';
 
 --
+-- Name: administrador administrador_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.administrador
+    ADD CONSTRAINT administrador_pkey PRIMARY KEY (usuario_id);
+
+--
 -- Name: arquivo_oficial arquivo_oficial_caso_hash_uk; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -17166,6 +17423,13 @@ ALTER TABLE ONLY public.caso_apresentacao_campo
 
 ALTER TABLE ONLY public.caso_linha_premissa
     ADD CONSTRAINT caso_linha_premissa_pkey PRIMARY KEY (id);
+
+--
+-- Name: caso_membro caso_membro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.caso_membro
+    ADD CONSTRAINT caso_membro_pkey PRIMARY KEY (caso_id, usuario_id);
 
 --
 -- Name: caso_modelagem caso_modelagem_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -17647,6 +17911,12 @@ CREATE INDEX idx_caso_linha_premissa_caso ON public.caso_linha_premissa USING bt
 CREATE UNIQUE INDEX idx_caso_linha_premissa_unica ON public.caso_linha_premissa USING btree (caso_id, rotulo_norm, COALESCE(entidade, ''::text), COALESCE(secao_canonica, ''::text));
 
 --
+-- Name: idx_caso_membro_usuario; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_caso_membro_usuario ON public.caso_membro USING btree (usuario_id);
+
+--
 -- Name: idx_caso_pergunta_caso_codigo; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -17833,6 +18103,12 @@ CREATE UNIQUE INDEX perimetro_atual_unico ON public.perimetro USING btree (caso_
 CREATE TRIGGER trg_auto_promover_dial AFTER INSERT ON public.decisao FOR EACH ROW EXECUTE FUNCTION public.fn_trg_auto_promover_dial();
 
 --
+-- Name: caso trg_caso_criador_membro; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_criador_membro AFTER INSERT ON public.caso FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_criador_membro();
+
+--
 -- Name: caso_pergunta trg_caso_pergunta_reaponta_evento; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -17897,6 +18173,13 @@ CREATE TRIGGER trg_golden_rotulo_congelada BEFORE INSERT OR UPDATE ON public.gol
 --
 
 CREATE TRIGGER trg_instalacao_cobertura_nao_regride BEFORE UPDATE OF ate_migration ON public.instalacao_cobertura FOR EACH ROW EXECUTE FUNCTION public.fn_trg_instalacao_cobertura_nao_regride();
+
+--
+-- Name: administrador administrador_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.administrador
+    ADD CONSTRAINT administrador_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 --
 -- Name: arquivo_oficial arquivo_oficial_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -18002,6 +18285,20 @@ ALTER TABLE ONLY public.caso_linha_premissa
 
 ALTER TABLE ONLY public.caso_linha_premissa
     ADD CONSTRAINT caso_linha_premissa_sazonalidade_codigo_fkey FOREIGN KEY (sazonalidade_codigo) REFERENCES public.premissa_catalogo(codigo);
+
+--
+-- Name: caso_membro caso_membro_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.caso_membro
+    ADD CONSTRAINT caso_membro_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
+-- Name: caso_membro caso_membro_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.caso_membro
+    ADD CONSTRAINT caso_membro_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 --
 -- Name: caso_modelagem caso_modelagem_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -18396,6 +18693,18 @@ ALTER TABLE ONLY public.taxonomia_tipo_cobertura
     ADD CONSTRAINT taxonomia_tipo_cobertura_tipo_taxonomia_fkey FOREIGN KEY (tipo_taxonomia) REFERENCES public.taxonomia_tipo_documento(codigo);
 
 --
+-- Name: administrador; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.administrador ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: administrador administrador_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY administrador_select ON public.administrador FOR SELECT TO authenticated USING (public.fn_eh_admin());
+
+--
 -- Name: arquivo_oficial; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -18514,6 +18823,30 @@ ALTER TABLE public.caso_linha_premissa ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY caso_linha_premissa_authenticated_all ON public.caso_linha_premissa TO authenticated USING (true) WITH CHECK (true);
+
+--
+-- Name: caso_membro; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.caso_membro ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: caso_membro caso_membro_delete; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_membro_delete ON public.caso_membro FOR DELETE TO authenticated USING (public.fn_eh_admin());
+
+--
+-- Name: caso_membro caso_membro_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_membro_insert ON public.caso_membro FOR INSERT TO authenticated WITH CHECK (public.fn_eh_admin());
+
+--
+-- Name: caso_membro caso_membro_select; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_membro_select ON public.caso_membro FOR SELECT TO authenticated USING (((usuario_id = auth.uid()) OR public.fn_eh_admin()));
 
 --
 -- Name: caso_modelagem; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19108,6 +19441,13 @@ GRANT USAGE ON SCHEMA public TO service_role;
 GRANT ALL ON FUNCTION public.fn_aceitar_extracao(p_documento_versao_id uuid, p_autor text, p_motivo text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_administrador_definir(p_email text, p_ativo boolean); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_administrador_definir(p_email text, p_ativo boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_administrador_definir(p_email text, p_ativo boolean) TO service_role;
+
+--
 -- Name: FUNCTION fn_ano_da_coluna(p_periodo_coluna text, p_referencia text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -19160,6 +19500,13 @@ GRANT ALL ON FUNCTION public.fn_avaliar_guardas_extracao(p_documento_versao_id u
 --
 
 GRANT ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_caso_membro_backfill_0215(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_caso_membro_backfill_0215() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_caso_membro_backfill_0215() TO service_role;
 
 --
 -- Name: FUNCTION fn_classe_contabil_concordancia(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -19352,6 +19699,22 @@ GRANT ALL ON FUNCTION public.fn_documento_serve_como(p_documento_id uuid, p_tipo
 --
 
 GRANT ALL ON FUNCTION public.fn_documentos_nao_extraidos(p_caso_id uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_eh_admin(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_eh_admin() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_eh_admin() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_eh_admin() TO service_role;
+
+--
+-- Name: FUNCTION fn_eh_membro(p_caso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_eh_membro(p_caso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_eh_membro(p_caso uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_eh_membro(p_caso uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_entidade_aprender_cnpj(p_entidade_id uuid, p_cnpj text); Type: ACL; Schema: public; Owner: -
@@ -19658,6 +20021,22 @@ GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO 
 --
 
 GRANT ALL ON FUNCTION public.fn_marcar_falha_vista(p_falha_id uuid, p_autor text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_membro_adicionar(p_caso uuid, p_usuario uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_membro_adicionar(p_caso uuid, p_usuario uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_membro_adicionar(p_caso uuid, p_usuario uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_membro_adicionar(p_caso uuid, p_usuario uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_membro_remover(p_caso uuid, p_usuario uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_membro_remover(p_caso uuid, p_usuario uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_membro_remover(p_caso uuid, p_usuario uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_membro_remover(p_caso uuid, p_usuario uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_mes_do_rotulo(p_chave text); Type: ACL; Schema: public; Owner: -
@@ -20077,6 +20456,12 @@ GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO authenticate
 GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_trg_caso_criador_membro(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_trg_caso_criador_membro() FROM PUBLIC;
+
+--
 -- Name: FUNCTION fn_upsert_caso(p_nome text, p_ator text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -20124,6 +20509,13 @@ GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO auth
 --
 
 GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text) TO authenticated;
+
+--
+-- Name: TABLE administrador; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.administrador TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.administrador TO service_role;
 
 --
 -- Name: TABLE arquivo_oficial; Type: ACL; Schema: public; Owner: -
@@ -20187,6 +20579,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_apresentacao_campo TO ser
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_linha_premissa TO authenticated;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_linha_premissa TO service_role;
+
+--
+-- Name: TABLE caso_membro; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE ON TABLE public.caso_membro TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.caso_membro TO service_role;
 
 --
 -- Name: TABLE caso_modelagem; Type: ACL; Schema: public; Owner: -

@@ -27,6 +27,21 @@ psql -q -d "$DB" -c "
     bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security;" >/dev/null
 
+# O SCHEMA `auth` DO SUPABASE, no mínimo que a 0215 usa (27/10/2026): `auth.users` (id, email) e `auth.uid()` lendo o
+# mesmo `request.jwt.claims` que o PostgREST preenche. Antes da 0215 nenhuma migration tocava `auth`, por isso o
+# replay local nunca o teve; sem ele `caso_membro` não cria a FK e nenhum teste consegue ser "um usuário" (o jwt de
+# `set local role authenticated`). O `service_role` lê `auth.users` como no Supabase (o `authenticated` NÃO: lá
+# também não lê). O Supabase real tem mais colunas em `auth.users`; só estas duas são usadas aqui.
+psql -q -d "$DB" -c "
+  create schema if not exists auth;
+  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text);
+  create or replace function auth.uid() returns uuid language sql stable as \$\$
+    select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
+                    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid \$\$;
+  grant usage on schema auth to authenticated, service_role;
+  grant execute on function auth.uid() to anon, authenticated, service_role;
+  grant select on auth.users to service_role;" >/dev/null
+
 # O SUPABASE NOVO NÃO CONCEDE MAIS NADA POR DEFAULT PRIVILEGE (20/10/2026). Até 29/10/2026 o projeto trazia
 # `alter default privileges in schema public grant all on tables/sequences to anon, authenticated, service_role`, e este
 # script SIMULAVA isso — "nenhuma migration faz GRANT de tabela porque conta com isso". A partir de 30/10/2026 tabela
@@ -828,6 +843,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/f1_escrita_authenticated.test.
 echo
 echo "== 0214 — o acesso às tabelas é concedido por migration (sem default privilege do Supabase) e a sonda cobra o grant esquecido"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/grant_de_tabela.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0215 — o mandato só é visto por quem trabalha nele: membro + administrador, e a transição que não tira o acesso de ninguém"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/caso_membro.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo

@@ -89,6 +89,7 @@
 {"k":"n","id":"arquivo:Supabase/test/caixa_dfc_de_um_ano.test.sql","t":"arquivo","f":"Supabase/test/caixa_dfc_de_um_ano.test.sql","txt":"caixa_dfc_de_um_ano.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/canastra.test.sql","t":"arquivo","f":"Supabase/test/canastra.test.sql","txt":"canastra.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/canonico.test.sql","t":"arquivo","f":"Supabase/test/canonico.test.sql","txt":"canonico.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/caso_membro.test.sql","t":"arquivo","f":"Supabase/test/caso_membro.test.sql","txt":"caso_membro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/classificacao_contabil.test.sql","t":"arquivo","f":"Supabase/test/classificacao_contabil.test.sql","txt":"classificacao_contabil.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/cnpj_identidade.test.sql","t":"arquivo","f":"Supabase/test/cnpj_identidade.test.sql","txt":"cnpj_identidade.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/cnpj_renomeia.test.sql","t":"arquivo","f":"Supabase/test/cnpj_renomeia.test.sql","txt":"cnpj_renomeia.test.sql"}
@@ -298,6 +299,7 @@
 {"k":"n","id":"ficha:verificador-sem-controle-positivo","t":"ficha","f":".claude/memory/verificador-sem-controle-positivo.md","txt":"um \"nenhum encontrado\" só vale se a mesma checagem PROVADAMENTE acha o que procura — cinco verificações do PR #238 responderam uma pergunta diferente da que foi feita, e três delas diziam \"tudo certo\" ","d":"um \"nenhum encontrado\" só vale se a mesma checagem PROVADAMENTE acha o que procura — cinco verificações do PR #238 responderam uma pergunta diferente da que foi feita, e três delas diziam \"tudo certo\"","kw":"medido sessões 2026 238 regra claude fala estágio pipeline esta mesma aplicada verificação sessão checagem consegue achar procura devolve exatamente resposta procurou achou cinco casos todos reais pegos porque alguém desconfiou respondeu verdade merge tree grep marcador conflito conflitos dito dono estado grafo jsonl formato saída atual tinha procurado lista funções minúsculo cruzada nenhuma colisão única linha maiúscula fn_upsert_entidade justamente mais arriscada nunca checada protocolo medição 0183 guarda desligada asserts reprovaram migration morreu antes teste rodou primeiro portão denominador pareando pelo citado 0179 diverge estava certa pareava arquivo errado assert próprio comentário cabeçalho citava padrão funcionou passou procedimento acreditar zero rodar contra caso algo controle positivo acha função própria migrations significar alguma coisa script aparece transformou falso contagem inválida commit 070b0c2 defeito real dele tempo parente próximo disco enquanto agente background ainda edita retrato existiu como final 0182 isso produziu três falhou eram restaurando depois conferir relatório deixado","tp":"doutrina"}
 {"k":"n","id":"fn:fn_abrir_lote_execucao","t":"fn","f":"Supabase/migrations/0156_o_lote_existe_antes_de_terminar.sql","txt":"abrir lote execucao"}
 {"k":"n","id":"fn:fn_aceitar_extracao","t":"fn","f":"Supabase/migrations/0036_completude_exige_conteudo.sql","txt":"aceitar extracao"}
+{"k":"n","id":"fn:fn_administrador_definir","t":"fn","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"administrador definir"}
 {"k":"n","id":"fn:fn_ano4","t":"fn","f":"Supabase/migrations/0020_periodo_canonico.sql","txt":"ano4"}
 {"k":"n","id":"fn:fn_ano_da_coluna","t":"fn","f":"Supabase/migrations/0044_valores_por_ano.sql","txt":"ano da coluna"}
 {"k":"n","id":"fn:fn_anos_alvo","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"anos alvo"}
@@ -310,6 +312,7 @@
 {"k":"n","id":"fn:fn_autoridade_do_documento","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"autoridade do documento"}
 {"k":"n","id":"fn:fn_avaliar_guardas_extracao","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"avaliar guardas extracao"}
 {"k":"n","id":"fn:fn_avaliar_portao2","t":"fn","f":"Supabase/migrations/0109_pendencia_tres_botoes.sql","txt":"avaliar portao2"}
+{"k":"n","id":"fn:fn_caso_membro_backfill_0215","t":"fn","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"caso membro backfill 0215"}
 {"k":"n","id":"fn:fn_classe_contabil_concordancia","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil concordancia"}
 {"k":"n","id":"fn:fn_classe_contabil_do_campo","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil do campo"}
 {"k":"n","id":"fn:fn_classe_contabil_sugerir","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil sugerir"}
@@ -350,6 +353,8 @@
 {"k":"n","id":"fn:fn_documento_preliminar","t":"fn","f":"Supabase/migrations/0151_o_desempate_entre_documentos.sql","txt":"documento preliminar"}
 {"k":"n","id":"fn:fn_documento_serve_como","t":"fn","f":"Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql","txt":"documento serve como"}
 {"k":"n","id":"fn:fn_documentos_nao_extraidos","t":"fn","f":"Supabase/migrations/0112_lote_conferido_documento_por_documento.sql","txt":"documentos nao extraidos"}
+{"k":"n","id":"fn:fn_eh_admin","t":"fn","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"eh admin"}
+{"k":"n","id":"fn:fn_eh_membro","t":"fn","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"eh membro"}
 {"k":"n","id":"fn:fn_entidade_aprender_cnpj","t":"fn","f":"Supabase/migrations/0177_a_guarda_do_balcao_ia_so_num_sentido.sql","txt":"entidade aprender cnpj"}
 {"k":"n","id":"fn:fn_entidade_cadeia_controladora","t":"fn","f":"Supabase/migrations/0181_o_controle_que_a_entidade_nunca_registrava.sql","txt":"entidade cadeia controladora"}
 {"k":"n","id":"fn:fn_entidade_canonica","t":"fn","f":"Supabase/migrations/0030_entidade_e_periodo_canonicos.sql","txt":"entidade canonica"}
@@ -399,7 +404,7 @@
 {"k":"n","id":"fn:fn_herdar_secao_pela_arvore","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"herdar secao pela arvore"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
-{"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","txt":"instalacao conferir"}
+{"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"instalacao conferir"}
 {"k":"n","id":"fn:fn_instalacao_resumo","t":"fn","f":"Supabase/migrations/0131_instalacao_que_se_declara.sql","txt":"instalacao resumo"}
 {"k":"n","id":"fn:fn_lado_do_mutuo","t":"fn","f":"Supabase/migrations/0117_reconciliar_mutuos.sql","txt":"lado do mutuo"}
 {"k":"n","id":"fn:fn_lado_intragrupo","t":"fn","f":"Supabase/migrations/0124_intragrupo_que_nao_e_mutuo.sql","txt":"lado intragrupo"}
@@ -409,6 +414,8 @@
 {"k":"n","id":"fn:fn_linhas_para_modelagem","t":"fn","f":"Supabase/migrations/0164_a_estimativa_que_o_filtro_opaco_escondia.sql","txt":"linhas para modelagem"}
 {"k":"n","id":"fn:fn_linhas_para_transcrever","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"linhas para transcrever"}
 {"k":"n","id":"fn:fn_marcar_falha_vista","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"marcar falha vista"}
+{"k":"n","id":"fn:fn_membro_adicionar","t":"fn","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"membro adicionar"}
+{"k":"n","id":"fn:fn_membro_remover","t":"fn","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"membro remover"}
 {"k":"n","id":"fn:fn_mes_do_rotulo","t":"fn","f":"Supabase/migrations/0042_papel_da_linha.sql","txt":"mes do rotulo"}
 {"k":"n","id":"fn:fn_mesma_entidade","t":"fn","f":"Supabase/migrations/0030_entidade_e_periodo_canonicos.sql","txt":"mesma entidade"}
 {"k":"n","id":"fn:fn_min_motivo_rejeicao","t":"fn","f":"Supabase/migrations/0106_rejeitar_pendencia.sql","txt":"min motivo rejeicao"}
@@ -512,6 +519,7 @@
 {"k":"n","id":"fn:fn_tokens_estruturais","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tokens estruturais"}
 {"k":"n","id":"fn:fn_tratar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"tratar pendencia"}
 {"k":"n","id":"fn:fn_trg_auto_promover_dial","t":"fn","f":"Supabase/migrations/0137_a_promocao_automatica_do_dial.sql","txt":"trg auto promover dial"}
+{"k":"n","id":"fn:fn_trg_caso_criador_membro","t":"fn","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"trg caso criador membro"}
 {"k":"n","id":"fn:fn_trg_caso_pergunta_so_reaponta","t":"fn","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"trg caso pergunta so reaponta"}
 {"k":"n","id":"fn:fn_trg_controlador_vinculo_valido","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"trg controlador vinculo valido"}
 {"k":"n","id":"fn:fn_trg_entidade_ambigua","t":"fn","f":"Supabase/migrations/0153_a_entidade_ambigua_nao_decide.sql","txt":"trg entidade ambigua"}
@@ -690,6 +698,7 @@
 {"k":"n","id":"migration:0212","t":"migration","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"o bloco familiar que o controle comum nao via"}
 {"k":"n","id":"migration:0213","t":"migration","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"a fusao que falhava na pergunta ja enviada"}
 {"k":"n","id":"migration:0214","t":"migration","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","txt":"o grant que o supabase deixou de dar"}
+{"k":"n","id":"migration:0215","t":"migration","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","txt":"o mandato que todo usuario lia"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1075,6 +1084,14 @@
 {"k":"e","de":"arquivo:Supabase/test/canonico.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/canonico.test.sql","l":177}
 {"k":"e","de":"arquivo:Supabase/test/canonico.test.sql","rel":"CHAMA","pa":"fn:fn_valor_conceito_col","f":"Supabase/test/canonico.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/canonico.test.sql","rel":"CHAMA","pa":"fn:fn_valor_conceito_secao","f":"Supabase/test/canonico.test.sql","l":135}
+{"k":"e","de":"arquivo:Supabase/test/caso_membro.test.sql","rel":"CHAMA","pa":"fn:fn_administrador_definir","f":"Supabase/test/caso_membro.test.sql","l":13}
+{"k":"e","de":"arquivo:Supabase/test/caso_membro.test.sql","rel":"CHAMA","pa":"fn:fn_caso_membro_backfill_0215","f":"Supabase/test/caso_membro.test.sql","l":73}
+{"k":"e","de":"arquivo:Supabase/test/caso_membro.test.sql","rel":"CHAMA","pa":"fn:fn_eh_admin","f":"Supabase/test/caso_membro.test.sql","l":119}
+{"k":"e","de":"arquivo:Supabase/test/caso_membro.test.sql","rel":"CHAMA","pa":"fn:fn_eh_membro","f":"Supabase/test/caso_membro.test.sql","l":38}
+{"k":"e","de":"arquivo:Supabase/test/caso_membro.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/caso_membro.test.sql","l":57}
+{"k":"e","de":"arquivo:Supabase/test/caso_membro.test.sql","rel":"CHAMA","pa":"fn:fn_membro_adicionar","f":"Supabase/test/caso_membro.test.sql","l":175}
+{"k":"e","de":"arquivo:Supabase/test/caso_membro.test.sql","rel":"CHAMA","pa":"fn:fn_membro_remover","f":"Supabase/test/caso_membro.test.sql","l":190}
+{"k":"e","de":"arquivo:Supabase/test/caso_membro.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/caso_membro.test.sql","l":65}
 {"k":"e","de":"arquivo:Supabase/test/classificacao_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_classe_contabil_concordancia","f":"Supabase/test/classificacao_contabil.test.sql","l":216}
 {"k":"e","de":"arquivo:Supabase/test/classificacao_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_classe_contabil_do_campo","f":"Supabase/test/classificacao_contabil.test.sql","l":9}
 {"k":"e","de":"arquivo:Supabase/test/classificacao_contabil.test.sql","rel":"CHAMA","pa":"fn:fn_classe_contabil_sugerir","f":"Supabase/test/classificacao_contabil.test.sql","l":66}
@@ -1637,19 +1654,19 @@
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Supabase/test/veredito_producao.test.sql","l":170}
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"Supabase/test/veredito_producao.test.sql","l":40}
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/veredito_producao.test.sql","l":83}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"Verificação/run.mts","l":530}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/run.mts","l":538}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/run.mts","l":318}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/run.mts","l":316}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/run.mts","l":305}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/run.mts","l":540}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":742}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":758}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":739}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":677}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":672}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":659}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":761}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"Verificação/run.mts","l":540}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/run.mts","l":548}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/run.mts","l":328}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/run.mts","l":326}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/run.mts","l":315}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/run.mts","l":550}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":752}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":768}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":749}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":687}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":682}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":669}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":771}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/gerar-export-do-banco.mts","l":240}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
@@ -2328,6 +2345,14 @@
 {"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_fundir_entidade","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":97}
 {"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_trg_caso_pergunta_so_reaponta","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":58}
 {"k":"e","de":"migration:0214","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","l":128}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_administrador_definir","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","l":213}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_caso_membro_backfill_0215","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","l":280}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_eh_admin","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","l":113}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_eh_membro","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","l":125}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","l":328}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_membro_adicionar","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","l":159}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_membro_remover","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","l":187}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_trg_caso_criador_membro","f":"Supabase/migrations/0215_o_mandato_que_todo_usuario_lia.sql","l":253}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

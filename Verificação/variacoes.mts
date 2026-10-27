@@ -137,6 +137,8 @@ function garantirMolde() {
   if (existe === "1") return;
   console.log(`   (molde ${MOLDE} não existe — aplicando as migrations uma vez)`);
   psql(`create database ${MOLDE}`, "postgres");
+  // E O SCHEMA `auth` (27/10/2026): a 0215 cria FK para `auth.users` e lê `auth.uid()`. É o mesmo mínimo que
+  // `Supabase/test/run.sh` monta, com o mesmo corpo — sem ele a 0215 morre em "schema auth does not exist".
   // OS PAPÉIS DO SUPABASE são criados AQUI, como o `Verificação/run.mts` faz. Até
   // 01/10/2026 este molde dependia de outro processo (o `Supabase/test/run.sh`) já
   // tê-los criado no mesmo cluster: funcionava porque o CI rodava tudo num job só,
@@ -153,6 +155,14 @@ function garantirMolde() {
         create table if not exists storage.objects(id uuid default gen_random_uuid() primary key,
           bucket_id text, name text, owner uuid);
         alter table storage.objects enable row level security;
+        create schema if not exists auth;
+        create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text);
+        create or replace function auth.uid() returns uuid language sql stable as $f$
+          select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
+                          (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid $f$;
+        grant usage on schema auth to authenticated, service_role;
+        grant execute on function auth.uid() to anon, authenticated, service_role;
+        grant select on auth.users to service_role;
         grant usage on schema public to anon, authenticated, service_role;`, MOLDE);
   // A LISTA DAS MIGRATIONS SAI DO DISCO, E NÃO DE UM SHELL. Até aqui ela vinha de
   // `bash -c "ls Supabase/migrations/*.sql"`: o `bash` era resolvido pelo PATH
