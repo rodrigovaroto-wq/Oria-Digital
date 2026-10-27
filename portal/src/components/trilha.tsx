@@ -15,7 +15,10 @@ interface Passo {
 }
 
 export function passosDaTrilha(caminho: string, nomes: Record<string, string>): Passo[] {
-  const limpo = caminho.length > 1 ? caminho.replace(/\/+$/, "") : caminho;
+  // Barra final removida em laço, não com `/\/+$/`: o Sonar (S8786) mede essa
+  // regex como retrocesso super-linear, e o caminho vem da URL do usuário.
+  let limpo = caminho;
+  while (limpo.length > 1 && limpo.endsWith("/")) limpo = limpo.slice(0, -1);
   if (limpo === "/casos") return [{ rotulo: "Início" }];
   if (limpo === "/casos/todos") return [{ rotulo: "Mandatos" }];
   if (limpo === "/casos/novo") return [{ rotulo: "Mandatos", href: "/casos/todos" }, { rotulo: "Novo mandato" }];
@@ -25,7 +28,7 @@ export function passosDaTrilha(caminho: string, nomes: Record<string, string>): 
   return [];
 }
 
-export function Trilha({ nomes }: { nomes: Record<string, string> }) {
+export function Trilha({ nomes }: Readonly<{ nomes: Record<string, string> }>) {
   const passos = passosDaTrilha(usePathname(), nomes);
   if (passos.length === 0) return null;
   return (
@@ -34,7 +37,7 @@ export function Trilha({ nomes }: { nomes: Record<string, string> }) {
         {passos.map((p, i) => {
           const ultimo = i === passos.length - 1;
           return (
-            <li key={i} className={`flex items-center gap-1.5 ${ultimo ? "min-w-0" : "shrink-0"}`}>
+            <li key={p.href ?? p.rotulo} className={`flex items-center gap-1.5 ${ultimo ? "min-w-0" : "shrink-0"}`}>
               {i > 0 && <span aria-hidden>›</span>}
               {p.href && !ultimo ? (
                 <Link href={p.href} className="rounded px-1 hover:text-tinta-900 hover:underline">

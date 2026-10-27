@@ -18,17 +18,17 @@ export function iniciaisDoEmail(email: string): string {
   const local = email.split("@")[0] ?? "";
   const partes = local.split(/[._\-+\s]+/).filter(Boolean);
   if (partes.length === 0) return "";
-  const letras = partes.length === 1 ? partes[0].slice(0, 1) : partes[0][0] + partes[partes.length - 1][0];
+  const letras = partes.length === 1 ? partes[0].slice(0, 1) : partes[0][0] + (partes.at(-1) ?? "")[0];
   return letras.toLocaleUpperCase("pt-BR");
 }
 
 export function MenuConta({
   email,
   sair,
-}: {
+}: Readonly<{
   email: string;
   sair: (formData: FormData) => void | Promise<void>;
-}) {
+}>) {
   const [aberto, setAberto] = useState(false);
   const raiz = useRef<HTMLDivElement>(null);
   const idMenu = useId();
