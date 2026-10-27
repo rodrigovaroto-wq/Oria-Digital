@@ -20,11 +20,11 @@ export function MenuDoMandato({
   casoId,
   nome,
   fechado,
-}: {
+}: Readonly<{
   casoId: string;
   nome: string;
   fechado: boolean;
-}) {
+}>) {
   const [aberto, setAberto] = useState(false);
   const raiz = useRef<HTMLDivElement>(null);
   const idMenu = useId();

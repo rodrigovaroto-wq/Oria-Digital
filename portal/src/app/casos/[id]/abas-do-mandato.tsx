@@ -23,7 +23,10 @@ export interface AbaDoMandato {
 // (documento e adicionar): quem está lendo um documento está "no mandato", e
 // sem isso nenhuma aba ficaria marcada.
 function ativa(caminho: string, base: string, sufixo: string): boolean {
-  const limpo = caminho.replace(/\/+$/, "");
+  // Barra final tirada em laço: a regex `/\/+$/` é retrocesso super-linear
+  // para o Sonar (S8786), e o caminho vem da URL.
+  let limpo = caminho;
+  while (limpo.endsWith("/")) limpo = limpo.slice(0, -1);
   if (sufixo === "") {
     return limpo === base || limpo.startsWith(`${base}/documentos`) || limpo === `${base}/adicionar`;
   }
@@ -31,7 +34,7 @@ function ativa(caminho: string, base: string, sufixo: string): boolean {
   return limpo === alvo || limpo.startsWith(`${alvo}/`);
 }
 
-export function AbasDoMandato({ casoId, abas }: { casoId: string; abas: AbaDoMandato[] }) {
+export function AbasDoMandato({ casoId, abas }: Readonly<{ casoId: string; abas: AbaDoMandato[] }>) {
   const caminho = usePathname();
   const base = `/casos/${casoId}`;
   return (

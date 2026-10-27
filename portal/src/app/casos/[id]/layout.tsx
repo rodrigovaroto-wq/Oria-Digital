@@ -24,10 +24,10 @@ import { MenuDoMandato } from "./menu-do-mandato";
 export default async function MandatoLayout({
   children,
   params,
-}: {
+}: Readonly<{
   children: React.ReactNode;
   params: Promise<{ id: string }>;
-}) {
+}>) {
   const { id } = await params;
   const supabase = await createClient();
 
@@ -106,17 +106,14 @@ export default async function MandatoLayout({
           {ETAPAS_DO_MANDATO.map((nome, i) => {
             const feita = i < etapa;
             const atual = i === etapa;
+            let tom = "bg-tinta-100 text-tinta-500";
+            if (atual) tom = "bg-acento-600 font-semibold text-papel";
+            else if (feita) tom = "bg-ok-100 text-ok-800";
             return (
               <li
                 key={nome}
                 aria-current={atual ? "step" : undefined}
-                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${
-                  atual
-                    ? "bg-acento-600 font-semibold text-papel"
-                    : feita
-                      ? "bg-ok-100 text-ok-800"
-                      : "bg-tinta-100 text-tinta-500"
-                }`}
+                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 ${tom}`}
               >
                 {feita && <IconeCheck tamanho={12} />}
                 <span>{nome}</span>
