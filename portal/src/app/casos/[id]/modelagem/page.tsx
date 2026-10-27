@@ -256,7 +256,7 @@ export default async function ModelagemPage({
     ["linhas do caso (fn_linhas_para_modelagem)", camposRes.error, msCampos],
     ["curva de sazonalidade (fn_sazonalidade_do_caso)", sazRes.error, msSaz],
     ["documentos do caso", docsRes.error, msDocs],
-    ["Portão 2 (fn_avaliar_portao2)", portaoRes.error, msPortao],
+    ["Aprovação do mandato (fn_avaliar_portao2)", portaoRes.error, msPortao],
     // `problema` é a primeira falha da leitura do realizado (documentos, linhas ou valores).
     ["realizado do caso (documentos, linhas e valores por ano)",
       realizadoLido?.problema ? { message: realizadoLido.problema } : null, msRealizado],
@@ -474,10 +474,10 @@ export default async function ModelagemPage({
           {portaoNaoConf ? (
             <div className="flex flex-col items-end gap-1">
               <button type="button" className="btn-primario" disabled>
-                Exportar modelagem — Portão 2 não conferido
+                Exportar modelagem — aprovação não conferida
               </button>
               <p role="status" className="max-w-xs text-right text-xs text-alerta-900">
-                Não foi possível conferir o Portão 2 (a consulta falhou ou não devolveu veredito); o
+                Não foi possível conferir a aprovação (a consulta falhou ou não devolveu veredito); o
                 export de modelagem fica desabilitado até a conferência responder. Recarregue a
                 página; se persistir, o motivo está na faixa de consultas com erro.
               </p>
@@ -486,7 +486,7 @@ export default async function ModelagemPage({
             <Link
               href={`/casos/${id}`}
               className="btn-primario"
-              title={`O export de modelagem está travado pelo Portão 2: ${(portao?.motivos ?? []).join("; ")}. Decida as pendências na tela do mandato.`}
+              title={`O export de modelagem está bloqueado até a aprovação do mandato: ${(portao?.motivos ?? []).join("; ")}. Decida as pendências na tela do mandato.`}
             >
               Exportar modelagem — decidir pendências antes
             </Link>

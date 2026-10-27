@@ -295,10 +295,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       console.error("[export] Portão 2 não conferido", { caso_id: id, erro: portao.error?.message ?? null });
       return recusar(request, id, 
         {
-          error: "O export COMPLETO foi recusado: não foi possível conferir o Portão 2.",
-          motivos: ["Não foi possível conferir o Portão 2; recarregue a página ou tente mais tarde."],
+          error: "O export COMPLETO foi recusado: não foi possível conferir a aprovação do mandato.",
+          motivos: ["Não foi possível conferir a aprovação do mandato; recarregue a página ou tente mais tarde."],
           dica: "Tente de novo em instantes. \"Exportar dados\" continua disponível para conferir a "
-            + "extração — esse modo não depende do portão. O completo carrega modelo projetado, e "
+            + "extração — esse modo não depende da aprovação. O completo carrega modelo projetado, e "
             + "projetar sem saber se a base foi aprovada daria aparência de resultado aprovado.",
         },
         { status: 503 },
@@ -307,9 +307,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     if (aval.elegivel === false) {
       return recusar(request, id, 
         {
-          error: "O export COMPLETO foi recusado: este caso não passou o Portão 2.",
+          error: "O export COMPLETO foi recusado: este caso ainda não foi aprovado.",
           motivos: aval.motivos ?? [],
-          dica: "Use \"Exportar dados\" para conferir a extração — esse modo não depende do portão. "
+          dica: "Use \"Exportar dados\" para conferir a extração — esse modo não depende da aprovação. "
             + "O completo carrega modelo projetado, e projetar sobre base não aprovada dá aparência "
             + "de resultado aprovado a número que ninguém aprovou.",
         },
@@ -631,7 +631,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     return recusar(request, id, 
       {
         error: "O export falhou de um jeito inesperado ao montar o arquivo — não é nenhuma das causas já "
-          + "conhecidas (RLS/GRANT, Portão 2, base vazia). O detalhe foi registrado no log do servidor.",
+          + "conhecidas (RLS/GRANT, aprovação pendente, base vazia). O detalhe foi registrado no log do servidor.",
         detalhe: erro.message,
       },
       { status: 500 },

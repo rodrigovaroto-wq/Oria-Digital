@@ -76,10 +76,10 @@ checar(formatarCnpj("123") === "123", "valor que não é CNPJ ganhou máscara in
 checar(formatarCnpj(null) === "CNPJ não informado" && formatarCnpj("") === "CNPJ não informado", "ausência de CNPJ não foi dita");
 
 // 6. veredito
-checar(tituloDoVeredito({ entidades: 8, prontas: 8, fechado: true }) === "Perímetro fechado", "fechado não foi dito fechado");
+checar(tituloDoVeredito({ entidades: 8, prontas: 8, fechado: true }) === "Grupo econômico fechado", "fechado não foi dito fechado");
 checar(tituloDoVeredito({ entidades: 8, prontas: 3, fechado: false }) === "Faltam 5 de 8 empresas", "contagem do que falta errada");
-checar(tituloDoVeredito({ entidades: 8, prontas: 8, fechado: false }) !== "Perímetro fechado", "o banco disse não fechado (fantasma) e a tela disse fechado");
-checar(tituloDoVeredito({ entidades: 0, prontas: 0, fechado: false }) === "Perímetro não montado", "caso sem entidade foi apresentado como 'Faltam 0 de 0'");
+checar(tituloDoVeredito({ entidades: 8, prontas: 8, fechado: false }) !== "Grupo econômico fechado", "o banco disse não fechado (fantasma) e a tela disse fechado");
+checar(tituloDoVeredito({ entidades: 0, prontas: 0, fechado: false }) === "Grupo econômico não montado", "caso sem entidade foi apresentado como 'Faltam 0 de 0'");
 
 // 7. as actions
 const ACTIONS = readFileSync(new URL("../src/app/casos/[id]/perimetro/actions.ts", import.meta.url), "utf8");

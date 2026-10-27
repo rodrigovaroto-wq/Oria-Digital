@@ -163,7 +163,7 @@ export default async function AutonomiaPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-lg font-semibold">Autonomia por estágio</h1>
+        <h1 className="text-lg font-semibold">Qualidade da automação</h1>
         <p className="mt-1 text-sm text-tinta-600">
           O estado declarado do sistema: em que nível cada estágio opera hoje, e até onde a
           doutrina permite que ele suba. Esta tela só lê — mudar o dial é ação do dono, por{" "}

@@ -41,7 +41,7 @@ export async function aprovarCaso(casoId: string, formData: FormData) {
   // por sucesso e a tela recarregaria como se o caso tivesse sido aprovado.
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (r?.recusado) {
-    throw new Error(r.motivo_recusa ?? "Aprovação recusada pelo Portão 2.");
+    throw new Error(r.motivo_recusa ?? "Aprovação recusada: o mandato ainda não cumpre as condições de aprovação.");
   }
 
   revalidatePath(`/casos/${casoId}`);

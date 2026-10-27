@@ -166,7 +166,7 @@ export async function desvincularFamilia(casoId: string, _a: ResultadoPerimetro,
   const vinculo = texto(form, "vinculo_id");
   const motivo = texto(form, "motivo");
   if (!vinculo) return erro("Vínculo não informado.");
-  if (!motivo) return erro("Informe o motivo: encerrar um vínculo muda os grupos do perímetro e o porquê fica no registro.");
+  if (!motivo) return erro("Informe o motivo: encerrar um vínculo muda os grupos do grupo econômico e o porquê fica no registro.");
   const { supabase, existe, autor } = await autorDoCaso(casoId);
   if (!existe) return erro("Caso não encontrado — nada foi gravado.");
   // O vínculo vem do formulário: confere que é deste caso antes de encerrar.

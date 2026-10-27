@@ -57,15 +57,15 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-tinta-900">Perímetro</h1>
+          <h1 className="text-lg font-semibold text-tinta-900">Grupo econômico</h1>
           <p className="mt-0.5 text-sm text-tinta-500">Quem entra no combinado, com que papel e controlado por quem.</p>
         </div>
       </div>
 
       {falhaLeitura && (
         <output className="carta block p-4 text-sm text-risco-800">
-          Não foi possível ler o perímetro ({falhaLeitura.message}). Se a função não existe, a migration 0208 ainda não foi
-          aplicada: a tela não mostra o perímetro como fechado nem como aberto, ela não sabe.
+          Não foi possível ler o grupo econômico ({falhaLeitura.message}). Se a função não existe, a migration 0208 ainda não foi
+          aplicada: a tela não mostra o grupo econômico como fechado nem como aberto, ela não sabe.
         </output>
       )}
 
@@ -75,7 +75,7 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
           <p className="text-sm text-tinta-700">{veredito.fechado_motivo}</p>
           {veredito.fantasmas > 0 && (
             <p className="text-sm text-risco-800">
-              {veredito.fantasmas} entidade(s) fantasma à parte, no fim da página: não contam como empresas.
+              {veredito.fantasmas} empresa(s) não identificada(s) à parte, no fim da página: não contam como empresas.
             </p>
           )}
           {veredito.grupos.length > 0 && (
@@ -122,7 +122,7 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
 
       {fantasmas.length > 0 && (
         <>
-          <h2 className="titulo-secao">Entidades fantasma ({fantasmas.length})</h2>
+          <h2 className="titulo-secao">Empresas não identificadas ({fantasmas.length})</h2>
           {fantasmas.map((e) => (
             <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
           ))}

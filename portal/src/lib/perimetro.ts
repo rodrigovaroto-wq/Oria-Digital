@@ -16,7 +16,7 @@ export const PAPEIS: ReadonlyArray<{ valor: PapelNoGrupo; rotulo: string }> = [
   { valor: "operacional", rotulo: "Operacional" },
   { valor: "veiculo", rotulo: "Veículo" },
   { valor: "coligada", rotulo: "Coligada" },
-  { valor: "fora_do_perimetro", rotulo: "Fora do perímetro" },
+  { valor: "fora_do_perimetro", rotulo: "Fora do grupo econômico" },
 ];
 
 export const FORMAS: ReadonlyArray<{ valor: FormaDeControle; rotulo: string }> = [
@@ -29,12 +29,12 @@ export const FORMAS: ReadonlyArray<{ valor: FormaDeControle; rotulo: string }> =
 export const ESCOPO_PADRAO = "combinado";
 
 const FALTAS: Record<string, string> = {
-  papel_no_grupo_indefinido: "Falta dizer o papel da empresa no grupo (holding, operacional, veículo, coligada ou fora do perímetro).",
+  papel_no_grupo_indefinido: "Falta dizer o papel da empresa no grupo (holding, operacional, veículo, coligada ou fora do grupo econômico).",
   forma_de_controle_indefinida: "Falta dizer como a empresa é controlada (por outra empresa do caso ou por controle comum).",
   controlada_por_entidade_sem_controladora: "Está marcada como controlada por outra empresa, mas a controladora não foi escolhida.",
   controle_comum_sem_vinculo: "Está marcada como controle comum, mas nenhum sócio/controlador foi registrado.",
-  sem_escopo_vigente: "Está no perímetro mas sem escopo vigente: o combinado não sabe se ela entra.",
-  fora_do_perimetro_com_escopo_vigente: "Está marcada como fora do perímetro, mas ainda tem escopo vigente: encerre o escopo ou mude o papel.",
+  sem_escopo_vigente: "Está no grupo econômico mas sem escopo vigente: o combinado não sabe se ela entra.",
+  fora_do_perimetro_com_escopo_vigente: "Está marcada como fora do grupo econômico, mas ainda tem escopo vigente: encerre o escopo ou mude o papel.",
   entidade_fantasma_pendente_de_revisao: "Nome que parece coluna, aba ou arquivo, não empresa: funda com a empresa real ou descarte.",
 };
 
@@ -53,7 +53,7 @@ export function traduzirFalta(chave: string): string {
   if (chave.startsWith(PREFIXO_PENDENCIA)) {
     const tipo = chave.slice(PREFIXO_PENDENCIA.length);
     if (Object.hasOwn(PENDENCIAS, tipo)) return PENDENCIAS[tipo];
-    return `Há pendência aberta de perímetro sem tradução (${chave}).`;
+    return `Há pendência aberta do grupo econômico sem tradução (${chave}).`;
   }
   return `Motivo sem tradução: ${chave}`;
 }
@@ -79,8 +79,8 @@ export function lerPercentual(texto: string | null | undefined): number | null {
 }
 
 export function tituloDoVeredito(v: { entidades: number; prontas: number; fechado: boolean }): string {
-  if (v.fechado) return "Perímetro fechado";
-  if (v.entidades === 0) return "Perímetro não montado";
+  if (v.fechado) return "Grupo econômico fechado";
+  if (v.entidades === 0) return "Grupo econômico não montado";
   return `Faltam ${v.entidades - v.prontas} de ${v.entidades} empresas`;
 }
 

@@ -144,10 +144,10 @@ console.log("--- 7. Portão 2 NÃO CONFERIDO (RPC falhou → null): nem 'pronto'
   const conf: ConferenciaModelagemCobertura = { pronto: true, fracao_linhas_com_premissa: 0.62 };
   const chip = textoChipModelagem(conf, null);
   const titulo = textoTituloConferenciaModelagem(conf, null);
-  ok(!/^pronto/i.test(chip) && /NÃO CONFERIDO/.test(chip),
+  ok(!/^pronto/i.test(chip) && /NÃO CONFERIDA/.test(chip),
     "chip com portão não conferido não começa por 'pronto' e diz que não foi conferido", chip);
   ok(!/%/.test(chip), "…e não mostra a fração 'X% das contas projetam' como se o export estivesse liberado", chip);
-  ok(!/Pronto para o export/.test(titulo) && /NÃO foi possível conferir o Portão 2/.test(titulo),
+  ok(!/Pronto para o export/.test(titulo) && /NÃO foi possível conferir a aprovação/.test(titulo),
     "título com portão não conferido diz que não foi possível conferir", titulo);
   ok(portaoNaoConferido(null) && !portaoNaoConferido(undefined)
     && !portaoNaoConferido({ elegivel: true }) && !portaoNaoConferido({ elegivel: false }),
@@ -180,7 +180,7 @@ console.log("--- 8. UMA regra para tela e rota (`veredictoDoPortao`): resposta d
     "fechado entrega só motivos textuais", JSON.stringify(f.portao));
   ok(veredictoDoPortao({ data: {} }).portao === null,
     "não conferido entrega `portao: null`, que a tela lê com `portaoNaoConferido`");
-  ok(textoChipModelagem({ pronto: true, fracao_linhas_com_premissa: 0.9 }, veredictoDoPortao({ data: {} }).portao).includes("NÃO CONFERIDO"),
+  ok(textoChipModelagem({ pronto: true, fracao_linhas_com_premissa: 0.9 }, veredictoDoPortao({ data: {} }).portao).includes("NÃO CONFERIDA"),
     "a tela, alimentada pela MESMA função, não diz 'pronto' diante de `{}`");
 }
 

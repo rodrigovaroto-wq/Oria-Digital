@@ -454,7 +454,6 @@ export default async function CasoDashboardPage({
                 {portao2.elegivel
                   ? "Pronto para aprovação"
                   : "Ainda não pode ser aprovado"}
-                <span className="ml-2 text-xs font-normal text-tinta-500">conferência final</span>
               </p>
               {!portao2.elegivel && portao2.motivos?.length > 0 && (
                 <ul className="mt-1.5 list-disc space-y-0.5 pl-5 text-tinta-700">
