@@ -87,11 +87,11 @@ kickoff, sem documento do cliente) do que só faz depois.
 | Cadastro CNPJ, QSA, CNAE, situação | Pré e pós | dado público (Receita, dados abertos) | APIs comerciais de CNPJ | 🔴 T6 |
 | Sanções e listas (CEIS/CNEP, PGFN, IBAMA, MTE) | Pré e pós | dado público (Portal da Transparência) | — | 🔴 T6 |
 | **Bureau de crédito** da empresa e dos sócios | **Pré** e pós | a escolher | Serasa Experian, Boa Vista (Equifax), Quod | 🔴 Etapa 5 |
-| **Processos** da empresa e dos sócios (descoberta) | Pré e pós | **Exato Digital** | Jusbrasil API, JUDIT, Escavador | 🔴 Etapa 4 |
+| **Processos** da empresa e dos sócios (descoberta) | Pré e pós | **Escavador** (agora) ou **JUDIT** (com volume) — revisto em 27/10 | Jusbrasil API, Exato Digital | 🔴 Etapa 4 |
 | Certidões (a prova oficial do processo) | Pós | o cliente, ou o próprio provedor de processos [A CONFIRMAR] | — | 🟡 tipo `CERTIDOES` existe, sem leitor (T9) |
 | **Indicadores de boleto, cartão e TED** | Pré (com autorização) e pós | **Núclea** | Quod (score combinado com a Núclea) | 🔴 Etapa 8 |
 | Agenda de recebíveis de cartão (cessão, gravame, antecipação) | Pós | Núclea ou outra registradora [A CONFIRMAR] | CERC, TAG, B3; export do portal da credenciadora | ⚪ depende de resposta (Etapa 8b) |
-| **Extrato e transações por Open Finance** | Pós | **Klavi** | Pluggy, Belvo | 🔴 Etapa 7 |
+| **Extrato e transações por Open Finance** | Pós | **Pluggy** ou **Belvo** — revisto em 27/10 | Klavi (foco em PF) | 🔴 Etapa 7 |
 | Extrato por arquivo (OFX, CNAB) | Pós | — (o cliente) | — | 🟡 F2T onda 2 |
 | SPED, eSocial, XML fiscal | Pós | — (procuração e contador) | SERPRO Integra Contador (D12.3) | 🟡 F2T |
 | Dataroom (o cliente sobe documentos) | Pós | SharePoint (já contratado, Opção B do `f0/02`) | — | 🟡 envio direto ao Storage (Espec. 12 §11, peça 2) |
@@ -333,7 +333,35 @@ recomendação transformada em decisão.
 | D13.3 | Provedor de processos (= D5 da Espec. 11) | 🟡 **em pesquisa**: "pesquisar a fundo e entender se vale a pena" | Etapa 4: o comparativo no mandato AMO decide, com número |
 | D13.4 | Bureau no pré-mandato | ✅ **decidido em 26/10/2026: precisamos** | Etapas 3, 5 e 6. Falta escolher o fornecedor (D13.6) e a autorização do jurídico |
 | D13.5 | Uso da Núclea | ✅ **decidido em 26/10/2026**: examinar liquidação de boletos e transações de Pix e cartão, cruzando com o OFX | **Ajustado pela pesquisa (§2.3):** Pix fora (não passa pela Núclea); boleto e cartão só agregados, por plausibilidade. A agenda de recebíveis depende de resposta (Etapa 8b) |
-| D13.6 | Qual agregador, qual bureau, qual provedor de processos | ⚪ **aberta** | Sai do RFP da Etapa 0 |
+| D13.6 | Qual agregador, qual bureau, qual provedor de processos | ⚪ **aberta** | Sai do RFP (`13_anexos/13B`) e do piloto (`13_anexos/13C`) |
+
+---
+
+## §8a — A verificação de 27/10/2026 e os anexos
+
+A tabela da §1 e a §2 foram escritas em 26/10 com pesquisa pública. Em 27/10 cada item virou uma
+linha de `13_anexos/Plano_de_Captacao_v3.xlsx` (179 linhas da planilha de dados do sistema) e 26
+afirmações foram conferidas na fonte (aba "Verificação"). O que mudou nesta especificação:
+
+- **Processos:** Escavador ou JUDIT antes da Exato. JUDIT publica R$ 6,00 por mil processos; o
+  Escavador cobra valor base por pessoa (tabela no painel); a Exato custa R$ 39,90 por relatório e
+  entrega menos estrutura por alvo.
+- **Open Finance PJ:** Pluggy ou Belvo antes da Klavi, que é desenhada para PF.
+- **Protestos:** pelo bureau. A consulta de protestos da Infosimples foi descontinuada quando a
+  central passou a exigir gov.br.
+- **Certidões:** pela Infosimples, que cobre 6 TRFs, CNDT, 23 dos 24 TRTs, 15 TJs + TJDFT, CND
+  estadual das 27 UFs e dezenas de prefeituras. Fora disso, pelo cliente.
+- **Situação fiscal:** SERPRO Integra Contador (SITFIS) com o e-CNPJ da Oria.
+- **INCC:** gratuito no SGS (192 = INCC-DI, 7456 = INCC-M, conferidos pelo acumulado de 2021).
+
+**Os anexos:**
+
+| Anexo | Conteúdo |
+|---|---|
+| `13_anexos/13A_PLANO_POR_DEPENDENCIA.md` | o plano de execução em seis níveis, do que só depende da engenharia ao que depende de regulador |
+| `13_anexos/13B_RFP_FORNECEDORES_DE_DADOS.md` | o pedido de proposta, pronto para envio, com o questionário por categoria |
+| `13_anexos/13C_ROTEIRO_DO_PILOTO.md` | o piloto no mandato AMO: amostra, gabarito, métricas, limiares e protocolo |
+| `13_anexos/Plano_de_Captacao_v3.xlsx` | as 179 linhas classificadas e a aba de verificação com fonte |
 
 ---
 

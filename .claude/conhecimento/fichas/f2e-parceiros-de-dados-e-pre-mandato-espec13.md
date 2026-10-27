@@ -5,13 +5,16 @@ toca:
   - Arquitetura do Sistema/2 Especificação/13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md
   - Arquitetura do Sistema/3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md
   - Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md
+  - Arquitetura do Sistema/2 Especificação/13_anexos/13A_PLANO_POR_DEPENDENCIA.md
+  - Arquitetura do Sistema/2 Especificação/13_anexos/13B_RFP_FORNECEDORES_DE_DADOS.md
+  - Arquitetura do Sistema/2 Especificação/13_anexos/13C_ROTEIRO_DO_PILOTO.md
 substitui: []
 ---
 
 # F2E — parceiros de dados (bureau, processos, Núclea, Open Finance) e o momento pré-mandato: Espec. 13
 
 Termos de busca: Núclea, CIP, Klavi, Clavi, Pluggy, Belvo, Open Finance, Exato Digital, Jusbrasil,
-JUDIT, bureau, biro, Serasa, Boa Vista, Quod, pré-mandato, prospecção, parceiros, recebíveis, boleto,
+JUDIT, Escavador, Infosimples, SERPRO, Integra Contador, RFP, piloto, bureau, biro, Serasa, Boa Vista, Quod, pré-mandato, prospecção, parceiros, recebíveis, boleto,
 Pix, F2E, Espec. 13, Obsidian.
 
 **Estado (26/10/2026): planejada, nada implementado.** O plano com artefatos por etapa é a §4 da
@@ -35,3 +38,14 @@ Espec. 13. A fase no roadmap é a F2E.
 - **O Obsidian como dataroom foi descartado (D13.2).** O dataroom é o SharePoint e o link de envio.
 - **Nenhum dado de PF antes da T0 e da autorização registrada.** Hoje todo usuário autenticado lê
   todo mandato.
+
+## Verificação de 27/10/2026 (a planilha `13_anexos/Plano_de_Captacao_v3.xlsx`, aba "Verificação")
+
+- **Código de série do SGS não se aceita de terceiro sem conferir.** Um site rotula a 7447 como
+  INCC-DI; o acumulado de 2021 (17,30%) mostra que é o IGP-10. Validados: 192 = INCC-DI (13,84%),
+  7456 = INCC-M (14,03%).
+- **Fornecedor de consulta oficial perde fonte sem avisar:** a consulta de protestos da Infosimples
+  foi descontinuada quando a central passou a exigir gov.br. Protestos vêm do bureau.
+- **O endereço dos dados abertos do CNPJ mudou** (o antigo dá 404) e a API do Comex Stat ficou fora
+  do ar em 27/10: coletor sem o estado `falhou` gravaria "sem dados".
+- **Preço "por pessoa" do Escavador (R$ 4,50) é exemplo do suporte**, não tabela.
