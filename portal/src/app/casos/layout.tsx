@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
 import { BarraLateral, type MandatoNaBarra } from "@/components/barra-lateral";
 import { FundoDaMarca } from "@/components/fundo-da-marca";
+import { BuscaGlobal } from "@/components/busca-global";
 import { MenuConta } from "@/components/menu-conta";
 import { Trilha } from "@/components/trilha";
 
@@ -56,7 +57,10 @@ export default async function CasosLayout({ children }: { children: React.ReactN
       <div className="flex min-w-0 flex-1 flex-col gap-3 p-3">
         <header className="vidro-casco sticky top-3 z-10 mx-auto flex w-full max-w-[75rem] items-center justify-between gap-4 rounded-2xl px-4 py-2">
           <Trilha nomes={nomes} />
-          <MenuConta email={email} sair={logout} />
+          <div className="flex shrink-0 items-center gap-1">
+            <BuscaGlobal />
+            <MenuConta email={email} sair={logout} />
+          </div>
         </header>
         <main className="vidro-folha mx-auto w-full max-w-[75rem] flex-1 rounded-2xl px-6 py-8">
           {children}

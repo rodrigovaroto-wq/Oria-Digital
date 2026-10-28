@@ -217,6 +217,7 @@
 {"k":"n","id":"arquivo:portal/src/components/excluir-mandato.tsx","t":"arquivo","f":"portal/src/components/excluir-mandato.tsx","txt":"excluir-mandato.tsx"}
 {"k":"n","id":"arquivo:portal/src/components/upload-form.tsx","t":"arquivo","f":"portal/src/components/upload-form.tsx","txt":"upload-form.tsx"}
 {"k":"n","id":"arquivo:portal/src/lib/apresentacao/montar-base.ts","t":"arquivo","f":"portal/src/lib/apresentacao/montar-base.ts","txt":"montar-base.ts"}
+{"k":"n","id":"arquivo:portal/src/lib/busca-global.ts","t":"arquivo","f":"portal/src/lib/busca-global.ts","txt":"busca-global.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/envio-oficial.ts","t":"arquivo","f":"portal/src/lib/envio-oficial.ts","txt":"envio-oficial.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/espera-do-lote.ts","t":"arquivo","f":"portal/src/lib/espera-do-lote.ts","txt":"espera-do-lote.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/export-modelagem.ts","t":"arquivo","f":"portal/src/lib/export-modelagem.ts","txt":"export-modelagem.ts"}
@@ -1664,12 +1665,12 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-envio-oficial.mts","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"portal/scripts/verificar-envio-oficial.mts","l":162}
 {"k":"e","de":"arquivo:portal/scripts/verificar-envio-oficial.mts","rel":"CHAMA","pa":"fn:fn_resumo_iniciar","f":"portal/scripts/verificar-envio-oficial.mts","l":162}
 {"k":"e","de":"arquivo:portal/scripts/verificar-envio-oficial.mts","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/scripts/verificar-envio-oficial.mts","l":249}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-export.mts","l":4130}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/scripts/verificar-export.mts","l":4402}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-export.mts","l":6519}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/scripts/verificar-export.mts","l":4314}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/scripts/verificar-export.mts","l":5911}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-export.mts","l":4099}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-export.mts","l":4179}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/scripts/verificar-export.mts","l":4451}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-export.mts","l":6568}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/scripts/verificar-export.mts","l":4363}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/scripts/verificar-export.mts","l":5960}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-export.mts","l":4148}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/scripts/verificar-kit-basico.mts","l":10}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/verificar-kit-basico.mts","l":8}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}
@@ -1739,6 +1740,7 @@
 {"k":"e","de":"arquivo:portal/src/components/excluir-mandato.tsx","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/components/excluir-mandato.tsx","l":13}
 {"k":"e","de":"arquivo:portal/src/components/upload-form.tsx","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/src/components/upload-form.tsx","l":330}
 {"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":46}
+{"k":"e","de":"arquivo:portal/src/lib/busca-global.ts","rel":"CHAMA","pa":"fn:fn_cnpj_canonico","f":"portal/src/lib/busca-global.ts","l":28}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_anexar","f":"portal/src/lib/envio-oficial.ts","l":26}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"portal/src/lib/envio-oficial.ts","l":338}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_iniciar","f":"portal/src/lib/envio-oficial.ts","l":117}

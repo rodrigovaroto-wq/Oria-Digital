@@ -59,6 +59,8 @@ import {
   humanizar, partesDaDescricao, rotuloDaPendencia, rotuloDaSecao, rotulosCitados, semALista, suavizarMensagem,
 } from "../src/lib/rotulos.ts";
 import { BOTOES_DECISAO, ROTULO_POR_ESTADO, rotuloDoEstado } from "../src/lib/pendencia.ts";
+import { acoesDoTermo, agruparResultados, digitosDoCnpj, padraoDoTermo, termoDaBusca } from "../src/lib/busca-global.ts";
+import { padraoDeBusca as padraoDaLista } from "../src/lib/painel.ts";
 
 let ok = 0;
 const falhas: string[] = [];
@@ -3481,6 +3483,53 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   for (let r = 1; r <= ws.rowCount; r++) rotulos.push(String(ws.getRow(r).getCell(1).value ?? ""));
   checar(rotulos.includes("Receita mercado interno") && rotulos.includes("Receita de exportação"),
     "(42) as duas linhas seguem visíveis — só o total foi omitido");
+}
+
+// ---- 42b: a busca global (⌘K) — termo, CNPJ por dígitos, escape e agrupamento ----
+{
+  checar(termoDaBusca("a") === null && termoDaBusca(" a ") === null && termoDaBusca(undefined) === null && termoDaBusca("  ") === null,
+    "(42b) menos de 2 caracteres NÃO gera termo (nenhuma requisição sai)", "");
+  checar(termoDaBusca("  ab ") === "ab" && termoDaBusca("x".repeat(200))!.length === 60,
+    "(42b) termo é aparado e limitado a 60 caracteres", String(termoDaBusca("x".repeat(200))?.length));
+  checar(digitosDoCnpj("12.345.678/0001-90") === "12345678000190" && digitosDoCnpj("1234") === "1234",
+    "(42b) CNPJ com pontuação casa por dígitos", String(digitosDoCnpj("12.345.678/0001-90")));
+  checar(digitosDoCnpj("Ana 22") === null && digitosDoCnpj("Ana 2") === null && digitosDoCnpj("Vertentes") === null && digitosDoCnpj("5") === null,
+    "(42b) termo com letra (ou 1 dígito) NUNCA vira busca por CNPJ", "");
+  checar(padraoDoTermo("a*b_%") === padraoDaLista("a*b_%") && padraoDoTermo("a*b") === "%a_b%" && padraoDoTermo("a_b") === "%a\\_b%",
+    "(42b) a busca global usa o MESMO escape da lista de Mandatos (* vira _, % _ \\ escapados)", padraoDoTermo("a*b_%"));
+  checar(acoesDoTermo(null).length === 3 && acoesDoTermo("novo").map((a) => a.rotulo).join() === "Novo mandato"
+    && acoesDoTermo("inicio").map((a) => a.rotulo).join() === "Início" && acoesDoTermo("zzz").length === 0,
+    "(42b) ações rápidas: sem termo todas; com termo casam sem acento e sem caixa", "");
+  const fatia = agruparResultados({
+    mandatos: [{ id: "m1", nome: "Vertentes", fechado_em: null }, { id: "m2", nome: "Antigo", fechado_em: "2026-01-01" }],
+    documentos: [
+      { documento_id: "d1", caso_id: "m1", nome_original: "dre.pdf", caso_nome: "Vertentes" },
+      { documento_id: "d1", caso_id: "m1", nome_original: "dre-v2.pdf", caso_nome: "Vertentes" },
+    ],
+    entidades: [
+      { id: "e1", caso_id: "m1", razao_social: "Alfa SA", cnpj: "12345678000190", caso_nome: "Vertentes" },
+      { id: "e1", caso_id: "m1", razao_social: "Alfa SA", cnpj: "12345678000190", caso_nome: "Vertentes" },
+    ],
+  });
+  const porChave = Object.fromEntries(fatia.map((r) => [r.chave, r]));
+  checar(porChave["mandato:m1"]?.href === "/casos/m1" && porChave["mandato:m1"]?.fechado === false
+    && porChave["mandato:m2"]?.fechado === true,
+    "(42b) mandato fechado é marcado e o ativo não", JSON.stringify(porChave["mandato:m2"]));
+  checar(fatia.filter((r) => r.grupo === "documentos").length === 1
+    && porChave["documento:d1"]?.href === "/casos/m1/documentos/d1" && porChave["documento:d1"]?.detalhe === "Vertentes",
+    "(42b) documento com duas versões casando entra UMA vez, com o nome do mandato", String(fatia.length));
+  checar(fatia.filter((r) => r.grupo === "entidades").length === 1
+    && porChave["entidade:e1"]?.href === "/casos/m1/perimetro"
+    && porChave["entidade:e1"]?.detalhe === "12.345.678/0001-90 · Vertentes",
+    "(42b) entidade (razão social ∪ CNPJ) sem duplicata, com CNPJ formatado e link para o Grupo econômico",
+    String(porChave["entidade:e1"]?.detalhe));
+  const muitos = agruparResultados({
+    mandatos: Array.from({ length: 9 }, (_, i) => ({ id: `m${i}`, nome: `M${i}`, fechado_em: null })),
+    documentos: [],
+    entidades: Array.from({ length: 9 }, (_, i) => ({ id: `e${i}`, caso_id: "m1", razao_social: `E${i}`, cnpj: null, caso_nome: null })),
+  });
+  checar(muitos.filter((r) => r.grupo === "mandatos").length === 6 && muitos.filter((r) => r.grupo === "entidades").length === 6,
+    "(42b) teto de 6 por grupo (a união razão social + CNPJ também respeita)", String(muitos.length));
 }
 
 // ---- 43: book de uma moeda só não ganha ruído ------------------------------
