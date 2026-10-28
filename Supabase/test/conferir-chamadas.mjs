@@ -317,7 +317,10 @@ function exigir(tipo, nome, onde) {
 // `Array.from` do portal têm argumento não-literal e nenhum casaria, mas o
 // portão não pode depender disso: exigir uma relação `public.abc` por causa de
 // um `Buffer.from("abc")` é acusar de mentira.
-const NAO_SAO_TABELAS = /(?:Array|Buffer|Object|Date|String|Number|Promise)$/;
+// `supabase.storage.from("documentos")` também não: é o BUCKET do Storage, não uma
+// relação do Postgres — a rota "Ver no original" (28/10/2026) fez o portão exigir
+// `public.documentos` e reprovar com o bucket existindo.
+const NAO_SAO_TABELAS = /(?:Array|Buffer|Object|Date|String|Number|Promise|storage)$/;
 
 function varrer(dir) {
   for (const entrada of readdirSync(dir)) {
