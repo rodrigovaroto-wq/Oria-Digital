@@ -82,10 +82,13 @@ export function PainelDocumento({
   const inativo = "rounded border border-tinta-100 px-2.5 py-1 text-xs font-medium text-tinta-300";
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex justify-end bg-tinta-900/40"
-      onClick={(e) => { if (e.target === e.currentTarget) fechar(); }}
-    >
+    <div className="fixed inset-0 z-50 flex justify-end bg-tinta-900/40">
+      {/* O fundo clicável é um botão nativo atrás do painel (fora da ordem de Tab), como na
+          busca ⌘K: um <div onClick> não é alcançável por teclado (Sonar S6848/S1082). */}
+      <button
+        type="button" aria-label="Fechar documento" tabIndex={-1} onClick={fechar}
+        className="absolute inset-0 h-full w-full cursor-default"
+      />
       <div
         ref={painel}
         tabIndex={-1}
@@ -93,7 +96,7 @@ export function PainelDocumento({
         aria-modal="true"
         aria-labelledby="titulo-documento"
         data-painel-documento=""
-        className="flex h-full w-[min(720px,100%)] flex-col border-l border-tinta-200 bg-folha shadow-xl focus:outline-none"
+        className="relative flex h-full w-[min(720px,100%)] flex-col border-l border-tinta-200 bg-folha shadow-xl focus:outline-none"
       >
         <div className="flex flex-wrap items-center gap-2 border-b border-tinta-200 bg-tinta-50 px-4 py-2.5">
           {docId && viz && (
