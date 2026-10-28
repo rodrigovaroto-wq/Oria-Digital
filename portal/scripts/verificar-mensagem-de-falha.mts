@@ -22,6 +22,9 @@ import {
   vereditoDoLote, carenciaDoFechamentoMs, estimativaEmMinutos,
 } from "../src/lib/espera-do-lote.ts";
 import { agregarCustos, somarCustos, formatarUsd, type LoteDeCusto } from "../src/lib/custos.ts";
+import {
+  agruparPorDia, categoriaDoTipo, chaveDoDia, cursorValido, funcaoAusente, rotuloDoTipo, textoDoAutor,
+} from "../src/lib/historico-do-mandato.ts";
 import { readFileSync } from "node:fs";
 
 let ok = 0;
@@ -491,6 +494,50 @@ const lc = (caso: string, dias: number, docs: number | null, custo: number | str
     "formatação de dólar: null tem de seguir null, e centavos pequenos precisam de 4 casas");
 }
 
+// ---------------------------------------------------------------------------
+// 6. O histórico do mandato (0215): palavra da tela sobre o que o banco devolve
+// ---------------------------------------------------------------------------
+//
+// Cada assert nasceu de uma forma de mentir: sumir com o tipo que o mapa não conhece, escrever
+// "Sistema" onde o banco só não sabe quem foi, e contar o dia em UTC (22h de SP já é o dia seguinte).
+checar(rotuloDoTipo("tipo_que_ainda_nao_existe") === "tipo_que_ainda_nao_existe",
+  "tipo desconhecido sumiu ou foi renomeado em vez de aparecer cru");
+checar(categoriaDoTipo("tipo_que_ainda_nao_existe") === "outros",
+  "tipo desconhecido não caiu em 'outros' (e sairia de todo filtro)");
+checar(rotuloDoTipo("documento_recebido") === "Documento recebido" && rotuloDoTipo("caso_fechado") === "Mandato fechado",
+  "rótulo humano de tipo conhecido errado");
+checar(categoriaDoTipo("pergunta_enviada") === "perguntas" && categoriaDoTipo("pergunta_descartada") === "perguntas"
+  && categoriaDoTipo("premissa_aplicada_em_lote") === "modelagem" && categoriaDoTipo("perimetro_alterado") === "grupo"
+  && categoriaDoTipo("pendencia_decidida") === "pendencias" && categoriaDoTipo("extracao_aceita") === "documentos"
+  && categoriaDoTipo("caso_aprovado") === "mandato",
+  "categoria de tipo conhecido errada");
+checar(textoDoAutor("pendencia_decidida", null) === "Sistema",
+  "autor nulo fora do recebimento deveria ser 'Sistema' (a 0215 anula sistema:* e n8n*)");
+checar(textoDoAutor("documento_recebido", null) !== "Sistema" && /não registrado/i.test(textoDoAutor("documento_recebido", null)),
+  "autor nulo no recebimento virou 'Sistema': a tabela não guarda quem enviou, o texto tem de dizer 'não registrado'");
+checar(textoDoAutor("pergunta_enviada", "ana@oria.com") === "ana@oria.com",
+  "autor gravado não foi mostrado como veio");
+checar(!/^portal:/.test(textoDoAutor("pergunta_enviada", "portal:desconhecido")),
+  "'portal:desconhecido' vazou cru para a tela");
+// 28/10/2026 01:30 UTC = 27/10 22:30 em São Paulo: o dia é 27, não 28.
+checar(chaveDoDia("2026-10-28T01:30:00.123456+00:00") === "2026-10-27",
+  "dia calculado em UTC: evento das 22h30 de SP foi para o dia seguinte");
+{
+  const dias = agruparPorDia([
+    { em: "2026-10-28T13:00:00+00:00", n: 1 }, { em: "2026-10-28T01:30:00+00:00", n: 2 },
+    { em: "2026-10-27T20:00:00+00:00", n: 3 }, { em: "2026-10-26T12:00:00+00:00", n: 4 },
+  ]);
+  checar(dias.length === 3 && dias[0].eventos.length === 1 && dias[1].eventos.length === 2 && dias[2].eventos.length === 1,
+    "agrupamento por dia (fuso de SP) errado: esperado 1 + 2 + 1 em três dias");
+  checar(dias.flatMap((d) => d.eventos.map((e) => e.n)).join() === "1,2,3,4",
+    "o agrupamento perdeu ou reordenou eventos");
+  checar(agruparPorDia([]).length === 0, "lista vazia deveria dar zero dias");
+}
+checar(funcaoAusente({ code: "42883" }) && funcaoAusente({ code: "PGRST202" }) && !funcaoAusente({ code: "57014" }) && !funcaoAusente(null),
+  "detecção de função ausente: 42883 e PGRST202 sim, qualquer outro erro não");
+checar(cursorValido("2026-10-28T13:00:00.123456+00:00") && !cursorValido("ontem") && !cursorValido("2026-10-28' or 1=1") && !cursorValido(undefined),
+  "cursor da URL: o formato do banco passa, lixo não");
+
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);
   for (const f of falhas) console.error(`  ✗ ${f}`);
@@ -502,4 +549,5 @@ console.log("MENSAGEM DE FALHA OK — toda causa real tem explicação própria,
 console.log("ESPERA DO LOTE OK — o silêncio da barreira e a janela cobrem o lote de 190");
 console.log("FIM DO LOTE OK — execução morta não vira sucesso, e fato conta como conteúdo");
 console.log("VEREDITO DO LOTE OK — pronto exige o lote FECHADO, com carência e sem acusar por \"não sei\"");
+console.log("HISTÓRICO OK — tipo desconhecido aparece cru, nulo no recebimento é \"não registrado\" e o dia é o de São Paulo");
 console.log("CUSTOS OK — custo ausente fica ausente, o total é piso declarado e o por-documento usa um só conjunto");

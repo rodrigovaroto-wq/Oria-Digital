@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { FecharMandato } from "@/components/fechar-mandato";
 import { ExcluirMandato } from "@/components/excluir-mandato";
@@ -76,6 +77,13 @@ export function MenuDoMandato({
         hidden={!aberto}
         className="absolute right-0 top-full z-20 mt-2 flex w-56 flex-col items-stretch gap-2 rounded-lg border border-tinta-200 bg-folha p-3 shadow-lg"
       >
+        <Link
+          href={`/casos/${casoId}/historico`}
+          onClick={() => setAberto(false)}
+          className="rounded-md px-3 py-2 text-sm text-tinta-800 hover:bg-tinta-50"
+        >
+          Histórico
+        </Link>
         <FecharMandato casoId={casoId} nome={nome} fechado={fechado} />
         <ExcluirMandato casoId={casoId} nome={nome} />
       </div>

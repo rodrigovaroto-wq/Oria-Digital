@@ -27,6 +27,15 @@ export function passosDaTrilha(caminho: string, nomes: Record<string, string>): 
   if (limpo === "/casos/novo") return [{ rotulo: "Mandatos", href: "/casos/todos" }, { rotulo: "Novo mandato" }];
   if (limpo === "/administracao") return [{ rotulo: "Administração" }, { rotulo: "Qualidade da automação" }];
   if (limpo === "/administracao/custos") return [{ rotulo: "Administração" }, { rotulo: "Custos" }];
+  // O Histórico não é aba: sem este passo a trilha acabaria no nome do mandato e a tela não diria onde está.
+  const h = /^\/casos\/([^/]+)\/historico$/.exec(limpo);
+  if (h) {
+    return [
+      { rotulo: "Mandatos", href: "/casos/todos" },
+      { rotulo: nomes[h[1]] ?? "Mandato", href: `/casos/${h[1]}` },
+      { rotulo: "Histórico" },
+    ];
+  }
   const m = /^\/casos\/([^/]+)/.exec(limpo);
   if (m) return [{ rotulo: "Mandatos", href: "/casos/todos" }, { rotulo: nomes[m[1]] ?? "Mandato" }];
   return [];

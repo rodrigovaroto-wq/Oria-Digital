@@ -205,6 +205,7 @@
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/transcricao/route.ts","t":"arquivo","f":"portal/src/app/casos/[id]/documentos/[docId]/transcricao/route.ts","txt":"route.ts"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/entregaveis/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/entregaveis/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/export/route.ts","t":"arquivo","f":"portal/src/app/casos/[id]/export/route.ts","txt":"route.ts"}
+{"k":"n","id":"arquivo:portal/src/app/casos/[id]/historico/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/historico/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/layout.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/layout.tsx","txt":"layout.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/modelagem/EditorLinhas.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/modelagem/EditorLinhas.tsx","txt":"EditorLinhas.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","t":"arquivo","f":"portal/src/app/casos/[id]/modelagem/actions.ts","txt":"actions.ts"}
@@ -229,6 +230,7 @@
 {"k":"n","id":"arquivo:portal/src/lib/espera-do-lote.ts","t":"arquivo","f":"portal/src/lib/espera-do-lote.ts","txt":"espera-do-lote.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/export-modelagem.ts","t":"arquivo","f":"portal/src/lib/export-modelagem.ts","txt":"export-modelagem.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/export.ts","t":"arquivo","f":"portal/src/lib/export.ts","txt":"export.ts"}
+{"k":"n","id":"arquivo:portal/src/lib/historico-do-mandato.ts","t":"arquivo","f":"portal/src/lib/historico-do-mandato.ts","txt":"historico-do-mandato.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/kit-basico.ts","t":"arquivo","f":"portal/src/lib/kit-basico.ts","txt":"kit-basico.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/leitura-do-caso.ts","t":"arquivo","f":"portal/src/lib/leitura-do-caso.ts","txt":"leitura-do-caso.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/limite-de-envio.ts","t":"arquivo","f":"portal/src/lib/limite-de-envio.ts","txt":"limite-de-envio.ts"}
@@ -1729,6 +1731,7 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/app/casos/[id]/export/route.ts","l":338}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/app/casos/[id]/export/route.ts","l":356}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/export/route.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/app/casos/[id]/export/route.ts","l":446}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/historico/page.tsx","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"portal/src/app/casos/[id]/historico/page.tsx","l":7}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/layout.tsx","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/app/casos/[id]/layout.tsx","l":73}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/EditorLinhas.tsx","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"portal/src/app/casos/[id]/modelagem/EditorLinhas.tsx","l":129}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/actions.ts","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"portal/src/app/casos/[id]/modelagem/actions.ts","l":9}
@@ -1784,6 +1787,7 @@
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/export.ts","l":1152}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_conceito","f":"portal/src/lib/export.ts","l":674}
 {"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"portal/src/lib/export.ts","l":693}
+{"k":"e","de":"arquivo:portal/src/lib/historico-do-mandato.ts","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"portal/src/lib/historico-do-mandato.ts","l":1}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/src/lib/kit-basico.ts","l":10}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/lib/kit-basico.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/src/lib/kit-basico.ts","l":6}
