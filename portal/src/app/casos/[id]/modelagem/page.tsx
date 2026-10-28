@@ -841,7 +841,7 @@ export default async function ModelagemPage({
                             placeholder={p.unidade ?? "valor"}
                             aria-label={`${p.nome} — ${ano}${p.unidade ? ` (${p.unidade})` : ""}`}
                             title={`${p.nome} — ${ano}${p.unidade ? ` (${p.unidade})` : ""}`}
-                            className="mt-0.5 w-16 rounded border border-tinta-200 px-1 py-0.5 text-right text-xs"
+                            className="valor-sensivel mt-0.5 w-16 rounded border border-tinta-200 px-1 py-0.5 text-right text-xs"
                           />
                         </label>
                       ))}

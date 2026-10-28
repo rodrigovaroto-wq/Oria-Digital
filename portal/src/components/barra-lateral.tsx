@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MarcaOria } from "@/components/marca-oria";
+import { BarraInferior } from "@/components/barra-inferior";
+import { idDoCaso } from "@/lib/casco";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import type { CasoStatus } from "@/lib/types";
 import {
@@ -139,8 +141,6 @@ export function escolherRecentes(
   return escolhidos;
 }
 
-const ID_DO_CASO = /^\/casos\/([0-9a-f-]{36})(?:\/|$)/i;
-
 const ITEM_BASE = "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors";
 // O ATIVO NO VIDRO: preenchimento claro a 10% e uma barra de 2px à esquerda em
 // terracota CLARO. O terracota de sempre (#b6482f) some sobre o casco escuro
@@ -167,7 +167,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   // não há `setState` aqui, só o `dispatchEvent` que o `useSyncExternalStore` já
   // escuta. Só grava se o id mudou de posição: sem esse teste, cada render
   // reescreveria o mesmo valor e disparava o evento de novo.
-  const idAtual = ID_DO_CASO.exec(caminho)?.[1]?.toLowerCase() ?? null;
+  const idAtual = idDoCaso(caminho);
   useEffect(() => {
     if (!idAtual) return;
     const atuais = lerIds(visitadosStr);
@@ -200,11 +200,12 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   const alternarBarra = () => definirRecolhida(recolhida ? "0" : "1");
 
   // O TRILHO (~56px = 40px de alvo + 2×8px de respiro) serve a dois casos: a
-  // barra recolhida de propósito, e QUALQUER barra abaixo de 768px. Os 240px da
-  // barra aberta tomariam 64% de uma tela de 375px, e a navegação inferior de
-  // celular é uma fase posterior — até lá o trilho mantém o caminho para as
-  // quatro telas sem comer o conteúdo. Cada item leva `aria-label` e `title`
-  // com o NOME: ícone sozinho não é rótulo.
+  // barra recolhida de propósito, e a barra abaixo de 768px (os 240px da aberta
+  // tomariam 64% de uma tela de 375px). ABAIXO DE 640px NENHUM DOS DOIS APARECE:
+  // a `BarraInferior` (Fase 4) assume a navegação do celular, e o trilho de 56px
+  // que sobraria ali comeria 15% de uma tela de 375px só para repetir os mesmos
+  // quatro destinos. Cada item leva `aria-label` e `title` com o NOME: ícone
+  // sozinho não é rótulo.
   const trilho = (comBotao: boolean) => (
     <nav
       aria-label="Navegação principal"
@@ -264,12 +265,18 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   );
 
   if (recolhida) {
-    return <aside className="shrink-0 py-3 pl-3">{trilho(true)}</aside>;
+    return (
+      <>
+        <aside className="hidden shrink-0 py-3 pl-3 sm:block">{trilho(true)}</aside>
+        <BarraInferior recentes={recentes} />
+      </>
+    );
   }
 
   return (
     <>
-      <aside className="shrink-0 py-3 pl-3 md:hidden">{trilho(false)}</aside>
+      <BarraInferior recentes={recentes} />
+      <aside className="hidden shrink-0 py-3 pl-3 sm:block md:hidden">{trilho(false)}</aside>
       <aside className="hidden w-[15.75rem] shrink-0 py-3 pl-3 md:block">
         {/* A BARRA TEM A ALTURA DA TELA menos os 12px de cima e de baixo, e o
             que passa disso rola AQUI dentro, não com a página: o topo (a marca,

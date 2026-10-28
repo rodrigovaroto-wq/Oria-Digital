@@ -9,6 +9,7 @@ import {
   type GrupoDeBusca, type ResultadoDeBusca,
 } from "@/lib/busca-global";
 import { interceptarNavegacao } from "@/lib/alteracoes-pendentes";
+import { EVENTO_ABRIR_BUSCA } from "@/lib/casco";
 
 // A BUSCA GLOBAL (⌘K / Ctrl+K) na barra de topo.
 //
@@ -70,6 +71,14 @@ export function BuscaGlobal() {
     document.addEventListener("keydown", aoTeclar);
     return () => document.removeEventListener("keydown", aoTeclar);
   }, [aberto, fechar]);
+
+  // A BARRA INFERIOR DO CELULAR abre a busca por evento (o gatilho dela mora em outro componente,
+  // e abaixo de 640px o botão deste cabeçalho some para a função não aparecer duas vezes).
+  useEffect(() => {
+    const abrir = () => setAberto(true);
+    window.addEventListener(EVENTO_ABRIR_BUSCA, abrir);
+    return () => window.removeEventListener(EVENTO_ABRIR_BUSCA, abrir);
+  }, []);
 
   // A BUSCA: debounce de 250ms e cancelamento da anterior. Sem termo válido (< 2
   // caracteres) NENHUMA requisição sai.
@@ -173,7 +182,7 @@ export function BuscaGlobal() {
         onClick={() => setAberto(true)}
         aria-haspopup="dialog"
         aria-keyshortcuts="Control+K Meta+K"
-        className="flex items-center gap-2 rounded-full py-1.5 pl-2.5 pr-2 text-sm text-vidro-suave transition-colors hover:bg-white/10 hover:text-vidro-texto"
+        className="hidden items-center gap-2 rounded-full py-1.5 pl-2.5 pr-2 text-sm text-vidro-suave sm:flex transition-colors hover:bg-white/10 hover:text-vidro-texto"
       >
         <IconeBusca tamanho={16} />
         <span>Buscar</span>

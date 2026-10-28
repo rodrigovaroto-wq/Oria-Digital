@@ -285,6 +285,23 @@ próprios no lugar de caracteres soltos; recolhida, a barra vira trilho de
 Dentro do mandato, abas fixas sublinhadas pelo acento, com régua de etapas
 (Recebimento → Conferência → Modelagem → Entrega) no cabeçalho.
 
+**Celular (< 640px, Fase 4):** a barra lateral e o trilho somem e entram cinco
+destinos numa **barra inferior** fixa e flutuante, no mesmo vidro do casco: Início ·
+Mandatos · Busca · Novo · Mais (`barra-inferior.tsx`). "Mais" abre uma folha por
+portal com os recentes e a Administração. Rótulos em `vidro-texto` (9,6:1), nunca
+`vidro-suave`, porque texto de 11px não tem folga em 4,71:1; o destino ativo leva
+barra de 2px terracota claro no topo, fundo +10% e `aria-current`. A barra respeita
+`env(safe-area-inset-bottom)` (`max` com 12px), e o conteúdo ganha o padding
+equivalente. As abas do mandato rolam na horizontal e centralizam a ativa.
+
+**Modo discrição:** botão com `aria-pressed` ao lado da busca; liga `data-discricao`
+no `<html>` (script inline no `<head>`, sem flash) e o CSS aplica `blur(6px)` em
+`.valor-sensivel`. Hover e foco **não** revelam — o objetivo é sigilo. O aviso
+"Modo discrição ligado" é texto no botão. Marca valor financeiro (colunas de valor,
+Modelagem, Custos), não contagens. **Limite:** é proteção visual; o texto segue no
+DOM (leitor de tela, Ctrl+F, copiar-tudo, Excel exportado não são cobertos — leitor
+de tela não é silenciado de propósito).
+
 ### Vidro e imagem de fundo
 
 **Esta seção substitui a regra anterior "a imagem nunca fica atrás de tabela ou

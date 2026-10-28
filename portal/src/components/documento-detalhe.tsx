@@ -320,7 +320,9 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
                             )}
                           </td>
                           <td className="px-3 py-1.5 text-right font-mono">
-                            {formatValor(linha.valor_num, linha.valor_texto, linha.unidade)}
+                            <span className="valor-sensivel">
+                              {formatValor(linha.valor_num, linha.valor_texto, linha.unidade)}
+                            </span>
                           </td>
                           <td className="px-3 py-1.5 text-tinta-500">
                             {linha.origem_pagina == null ? "—" : (

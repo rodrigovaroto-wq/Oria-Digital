@@ -245,7 +245,7 @@ export function SecaoLinhas({
                     </span>
                   </td>
                   <td className="px-2 py-1 text-right tabular-nums text-tinta-600">
-                    {fmt.format(l.valor_ultimo)}
+                    <span className="valor-sensivel">{fmt.format(l.valor_ultimo)}</span>
                     <span className="block text-[10px] text-tinta-500">{escala(l)}</span>
                   </td>
                   {l.papel === "conta" ? (

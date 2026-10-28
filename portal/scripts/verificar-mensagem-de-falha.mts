@@ -26,6 +26,10 @@ import {
   agruparPorDia, categoriaDoTipo, chaveDeCursorValida, chaveDoDia, cursorValido, funcaoAusente, hrefDosMaisAntigos,
   lerCursor, rotuloDoTipo, textoDoAutor,
 } from "../src/lib/historico-do-mandato.ts";
+import {
+  ATRIBUTO_DISCRICAO, CHAVE_DISCRICAO, SCRIPT_DISCRICAO_ANTES_DA_PINTURA, destinoAtivo, discricaoLigada,
+  gravarDiscricao, idDoCaso, lerDiscricao,
+} from "../src/lib/casco.ts";
 import { readFileSync } from "node:fs";
 
 let ok = 0;
@@ -601,6 +605,101 @@ checar(/salva/i.test(rotuloDoTipo("apresentacao_salva")) && !/preenchid/i.test(r
 checar(rotuloDoTipo("apresentacao_preenchida") === "apresentacao_preenchida" && categoriaDoTipo("apresentacao_preenchida") === "outros",
   "o nome antigo apresentacao_preenchida deveria cair cru em 'Outros', não ser rotulado como autoria");
 
+// ---------------------------------------------------------------------------
+// 7. CASCO — modo discrição e barra inferior do celular (Fase 4)
+// ---------------------------------------------------------------------------
+//
+// O defeito que esta seção impede é SILENCIOSO: o modo ligado e um número financeiro nítido na
+// tela, diante de terceiros. Ele nasce de três lados — a preferência que não liga (ou liga só
+// depois da pintura), o CSS que o hover/foco desfaz, e a tela nova que mostra valor sem marcar.
+// Não há DOM neste harness: a preferência e o script do <head> são EXECUTADOS; o CSS e as
+// marcações são conferidos no texto dos arquivos, e dizem isso.
+const armazemFalso = (inicial: Record<string, string> = {}) => {
+  const m = new Map(Object.entries(inicial));
+  return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v) };
+};
+const armazemQueRecusa = {
+  getItem: (): string | null => { throw new Error("SecurityError"); },
+  setItem: (): void => { throw new Error("QuotaExceededError"); },
+};
+checar(discricaoLigada("1") && !discricaoLigada(null) && !discricaoLigada(undefined) && !discricaoLigada("")
+  && !discricaoLigada("0") && !discricaoLigada("true"),
+  "só o texto '1' pode ligar o modo discrição; qualquer outra coisa (ausente, '0', 'true') = desligado");
+checar(!lerDiscricao(armazemFalso()) && lerDiscricao(armazemFalso({ [CHAVE_DISCRICAO]: "1" })),
+  "padrão tem de ser DESLIGADO e '1' guardado tem de ligar");
+checar(!lerDiscricao(armazemQueRecusa) && !lerDiscricao(null),
+  "armazenamento bloqueado ou ausente tem de dar 'desligado', sem exceção");
+{
+  const a = armazemFalso();
+  checar(gravarDiscricao(a, true) && lerDiscricao(a) && gravarDiscricao(a, false) && !lerDiscricao(a),
+    "gravar e reler a preferência não fecha o ciclo ligar → desligar");
+  checar(gravarDiscricao(armazemQueRecusa, true) === false && gravarDiscricao(null, true) === false,
+    "gravar em armazenamento que recusa tem de devolver false, não lançar");
+}
+// O script inline do <head>, EXECUTADO como está no HTML, contra um <html> e um localStorage falsos.
+const rodarScript = (ls: unknown) => {
+  const atributos = new Map<string, string>();
+  const doc = { documentElement: { setAttribute: (k: string, v: string) => void atributos.set(k, v) } };
+  let lancou = false;
+  try { new Function("localStorage", "document", SCRIPT_DISCRICAO_ANTES_DA_PINTURA)(ls, doc); } catch { lancou = true; }
+  return { ligou: atributos.has(ATRIBUTO_DISCRICAO), lancou };
+};
+checar(rodarScript(armazemFalso({ [CHAVE_DISCRICAO]: "1" })).ligou,
+  "o script do <head> não liga data-discricao com a preferência gravada: haveria flash de número nítido");
+checar(!rodarScript(armazemFalso({ [CHAVE_DISCRICAO]: "0" })).ligou && !rodarScript(armazemFalso()).ligou,
+  "o script do <head> ligou o modo sem preferência gravada");
+checar(!rodarScript(armazemQueRecusa).lancou && !rodarScript(armazemQueRecusa).ligou,
+  "armazenamento bloqueado derrubou o script do <head> ou ligou o modo");
+checar(ATRIBUTO_DISCRICAO === "data-discricao", "o atributo do <html> mudou de nome: o CSS e o script se desencontram");
+
+// CSS: o desfoque só existe com o modo ligado, e NADA o desfaz por hover ou foco (o objetivo é sigilo).
+const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8")
+  .replace(/\/\*[\s\S]*?\*\//g, ""); // sem comentários: o texto deles cita o seletor
+const regrasSensiveis = [...css.matchAll(/([^{}]*\.valor-sensivel[^{}]*)\{([^}]*)\}/g)];
+checar(regrasSensiveis.length >= 1 && regrasSensiveis.some((r) => /filter:\s*blur\(/.test(r[2])
+  && /html\[data-discricao\]\s+\.valor-sensivel/.test(r[1])),
+  "globals.css não tem a regra html[data-discricao] .valor-sensivel com filter: blur()");
+checar(regrasSensiveis.every((r) => /^\s*html\[data-discricao\]/.test(r[1].trim()) && !/:(hover|focus|active)/.test(r[1])
+  && !/filter:\s*none/.test(r[2])),
+  "uma regra de .valor-sensivel desfaz o desfoque (hover/foco/filter:none) ou borra com o modo desligado");
+
+// Marcações: toda tela que formata VALOR financeiro o embrulha em .valor-sensivel.
+const fonte = (c: string) => readFileSync(new URL(`../src/${c}`, import.meta.url), "utf8");
+const marcacoes: Array<[string, RegExp, string]> = [
+  ["components/documento-detalhe.tsx", /valor-sensivel[^>]*>\s*\{formatValor\(/, "coluna de valor do documento"],
+  ["app/casos/[id]/modelagem/SecaoLinhas.tsx", /valor-sensivel[^>]*>\{fmt\.format\(l\.valor_ultimo\)/, "valor das linhas da Modelagem"],
+  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", /valor-sensivel[^>]*>\{mostrado\}/, "premissa sugerida do realizado"],
+  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", /valor-sensivel[^>]*>\s*\(\{num\(/, "numerador e denominador da sugestão"],
+  ["app/casos/[id]/modelagem/page.tsx", /valor-sensivel[^"]*"[\s\S]{0,80}\/>|name=\{`valor_\$\{ano\}`\}[\s\S]{0,600}valor-sensivel/, "caixas de premissa por ano"],
+  ["app/administracao/custos/page.tsx", /valor-sensivel[^>]*>\{txt\}/, "custo em US$"],
+];
+for (const [arq, re, o_que] of marcacoes) {
+  checar(re.test(fonte(arq)), `${o_que} (${arq}) deixou de ser marcada com .valor-sensivel: o modo discrição não a borra`);
+}
+// A cola: o layout raiz injeta o script (não uma cópia) e tolera o atributo ligado antes da hidratação.
+const raiz = fonte("app/layout.tsx");
+checar(raiz.includes("SCRIPT_DISCRICAO_ANTES_DA_PINTURA") && raiz.includes("suppressHydrationWarning"),
+  "o layout raiz não injeta o script do modo discrição (flash) ou perdeu o suppressHydrationWarning");
+
+// Barra inferior: o destino ativo. Caminhos reais, com o UUID de um mandato.
+const UUID = "0b9f2c1e-5a4d-4c8e-9f3b-7d6a1e2c3b4a";
+const casosDestino: Array<[string, ReturnType<typeof destinoAtivo>]> = [
+  ["/casos", "inicio"], ["/casos/", "inicio"], ["/casos?x=1", "inicio"],
+  ["/casos/todos", "mandatos"], [`/casos/${UUID}`, "mandatos"], [`/casos/${UUID}/modelagem`, "mandatos"],
+  [`/casos/${UUID.toUpperCase()}/documentos/x`, "mandatos"],
+  ["/casos/novo", "novo"], ["/administracao", "mais"], ["/administracao/custos", "mais"],
+  ["/login", null], ["/", null], ["/casos/nao-e-uuid", null], ["/administracaox", null], ["/casos/todos/lixo", null],
+];
+for (const [c, esperado] of casosDestino) {
+  checar(destinoAtivo(c) === esperado, `destinoAtivo(${c}) = ${destinoAtivo(c)}, esperado ${esperado}`);
+}
+checar(idDoCaso(`/casos/${UUID.toUpperCase()}/x`) === UUID && idDoCaso("/casos/todos") === null,
+  "idDoCaso: o id vem em minúsculas e 'todos'/'novo' não são mandato");
+// Dentro do mandato as abas rolam na horizontal (celular): faixa com overflow e lista que não encolhe.
+const abas = fonte("app/casos/[id]/abas-do-mandato.tsx");
+checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) && abas.includes("whitespace-nowrap"),
+  "as abas do mandato perderam a rolagem horizontal (overflow-x-auto / min-w-max / whitespace-nowrap)");
+
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);
   for (const f of falhas) console.error(`  ✗ ${f}`);
@@ -613,4 +712,5 @@ console.log("ESPERA DO LOTE OK — o silêncio da barreira e a janela cobrem o l
 console.log("FIM DO LOTE OK — execução morta não vira sucesso, e fato conta como conteúdo");
 console.log("VEREDITO DO LOTE OK — pronto exige o lote FECHADO, com carência e sem acusar por \"não sei\"");
 console.log("HISTÓRICO OK — tipo desconhecido aparece cru, nulo no recebimento é \"não registrado\" e o dia é o de São Paulo");
+console.log("CASCO OK — o modo discrição liga antes da pintura, nada o desfaz por hover, e o destino ativo da barra inferior casa com a rota");
 console.log("CUSTOS OK — custo ausente fica ausente, o total é piso declarado e o por-documento usa um só conjunto");

@@ -504,3 +504,43 @@ body {
 @media (prefers-reduced-transparency: reduce) {
   .marca-neon { filter: none; }
 }
+
+/* =============================================================================
+   MODO DISCRIÇÃO (Fase 4, 28/10/2026). O botão da barra de topo liga
+   `data-discricao` no <html> (e um script inline do <head> o religa antes da
+   primeira pintura); este bloco borra o que as telas marcaram com
+   `.valor-sensivel` — número financeiro, premissa, custo.
+
+   O OBJETIVO É SIGILO, então NÃO HÁ REGRA DE :hover NEM DE :focus que desfaça o
+   desfoque: passar o mouse ou tabular até o número não o revela (desligar é só
+   pelo botão). 6px apagam o glifo de 12px a 16px; menos que isso ainda se lê.
+   `user-select: none` tira o número do arrastar-e-copiar casual.
+
+   LIMITE, DITO: é proteção VISUAL contra quem olha a tela. O texto continua no
+   DOM — leitor de tela, Ctrl+F, "selecionar tudo", ferramentas do navegador e o
+   Excel exportado não são cobertos (leitor de tela não foi silenciado de
+   propósito: quem o usa precisa do dado). A impressão herda o desfoque.
+   ============================================================================ */
+html[data-discricao] .valor-sensivel {
+  filter: blur(6px);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* O aviso "Modo discrição ligado" mora no botão e só aparece com o modo ligado.
+   Por CSS e não por estado do React: aparece junto com o desfoque, na mesma
+   pintura, sem esperar a hidratação. */
+.aviso-discricao-longo,
+.aviso-discricao-curto {
+  display: none;
+}
+@media (min-width: 640px) {
+  html[data-discricao] .aviso-discricao-longo {
+    display: inline;
+  }
+}
+@media (max-width: 639.98px) {
+  html[data-discricao] .aviso-discricao-curto {
+    display: inline;
+  }
+}

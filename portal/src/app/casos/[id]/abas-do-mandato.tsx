@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -38,8 +39,19 @@ function ativa(caminho: string, base: string, sufixo: string): boolean {
 export function AbasDoMandato({ casoId, abas }: Readonly<{ casoId: string; abas: AbaDoMandato[] }>) {
   const caminho = usePathname();
   const base = `/casos/${casoId}`;
+  // NO CELULAR as sete abas passam da largura (a faixa rola na horizontal) e a ativa pode estar
+  // fora da vista — por exemplo "Entregáveis", a última, ao chegar por um link. Centraliza a ativa
+  // dentro da PRÓPRIA faixa (`scrollTo` no contêiner, não `scrollIntoView`, que também rolaria a
+  // página). Em tela larga nada rola e a conta dá 0.
+  const faixa = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = faixa.current;
+    const atual = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (!nav || !atual) return;
+    nav.scrollTo({ left: atual.offsetLeft - (nav.clientWidth - atual.offsetWidth) / 2 });
+  }, [caminho]);
   return (
-    <nav aria-label="Seções do mandato" className="-mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+    <nav ref={faixa} aria-label="Seções do mandato" className="relative -mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
       <ul className="flex min-w-max gap-1 border-b border-tinta-200">
         {abas.map((a) => {
           const atual = ativa(caminho, base, a.sufixo);

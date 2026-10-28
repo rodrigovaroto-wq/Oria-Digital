@@ -117,3 +117,11 @@ export const IconeBusca = (p: Props) => (
     <path d="m16 16 4.5 4.5" />
   </Base>
 );
+
+export const IconeOlhoRiscado = (p: Props) => (
+  <Base {...p}>
+    <path d="M3 12s3.4-6 9-6 9 6 9 6-3.4 6-9 6-9-6-9-6z" />
+    <circle cx="12" cy="12" r="2.6" />
+    <path d="M4.5 4.5l15 15" />
+  </Base>
+);

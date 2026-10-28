@@ -58,17 +58,18 @@ function Sugestao({
 
       <span className="min-w-48 flex-1 font-medium text-tinta-800">{p.nome}</span>
 
-      <span className="w-24 text-right font-semibold tabular-nums text-tinta-900">{mostrado}</span>
+      <span className="valor-sensivel w-24 text-right font-semibold tabular-nums text-tinta-900">{mostrado}</span>
 
       {/* A CONTA, sempre. Sem ela o número é palpite com cara de medição. */}
       <span className="min-w-64 flex-1 text-tinta-500">
         {p.valor === null ? (
-          <em>{p.porQueNao}</em>
+          /* o motivo cita os valores medidos (ex.: dívida e ativo) */
+          <em className="valor-sensivel">{p.porQueNao}</em>
         ) : (
           <>
             {p.conta}
             {p.numerador && p.denominador && (
-              <span className="ml-1 tabular-nums text-tinta-400">
+              <span className="valor-sensivel ml-1 tabular-nums text-tinta-400">
                 ({num(p.numerador.valor)} ÷ {num(p.denominador.valor)})
               </span>
             )}

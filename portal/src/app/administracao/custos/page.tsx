@@ -25,7 +25,7 @@ function dataCurta(iso: string | null) {
 
 function Valor({ s, campo }: Readonly<{ s: SomaDeCusto; campo: "custoUsd" | "custoPorDocumentoUsd" }>) {
   const txt = formatarUsd(s[campo]);
-  if (txt) return <span className="tabular-nums">{txt}</span>;
+  if (txt) return <span className="valor-sensivel tabular-nums">{txt}</span>;
   // Ausência com o motivo, nunca "US$ 0,00".
   return (
     <span className="text-xs text-tinta-500">

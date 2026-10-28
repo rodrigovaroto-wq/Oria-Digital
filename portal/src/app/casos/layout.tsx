@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
 import { BarraLateral, type MandatoNaBarra } from "@/components/barra-lateral";
 import { FundoDaMarca } from "@/components/fundo-da-marca";
+import { BotaoDiscricao } from "@/components/botao-discricao";
 import { BuscaGlobal } from "@/components/busca-global";
 import { MenuConta } from "@/components/menu-conta";
 import { Trilha } from "@/components/trilha";
@@ -54,11 +55,14 @@ export default async function CasosLayout({ children }: { children: React.ReactN
     <div className="flex min-h-screen">
       <FundoDaMarca variante="app" />
       <BarraLateral mandatos={mandatos} />
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3">
+      {/* Abaixo de 640px a barra inferior (fixa: 4rem de altura + o respiro de baixo) cobriria o fim da
+            página: o padding inferior reserva exatamente o espaço dela. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 pb-[calc(4rem+max(0.75rem,env(safe-area-inset-bottom))+0.75rem)] sm:pb-3">
         <header className="vidro-casco sticky top-3 z-10 mx-auto flex w-full max-w-[75rem] items-center justify-between gap-4 rounded-2xl px-4 py-2">
           <Trilha nomes={nomes} />
           <div className="flex shrink-0 items-center gap-1">
             <BuscaGlobal />
+            <BotaoDiscricao />
             <MenuConta email={email} sair={logout} />
           </div>
         </header>
