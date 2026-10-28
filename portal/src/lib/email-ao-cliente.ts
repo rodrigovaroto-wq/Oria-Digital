@@ -28,6 +28,29 @@ function semPrefixoDaEmpresa(texto: string, entidade: string | null): string {
   return texto.startsWith(prefixo) ? texto.slice(prefixo.length) : texto;
 }
 
+/**
+ * O ITEM da pergunta no e-mail: o que `listaNumerada` escreve depois de "N. ". É o que se congela
+ * em `texto_enviado` (imutável, 0213) — o trecho que o cliente recebeu para AQUELA pergunta, e não
+ * o e-mail inteiro repetido em cada uma. A barra e o diálogo congelam este mesmo formato.
+ */
+export function textoDoItem(p: PerguntaParaEmail): string {
+  return semPrefixoDaEmpresa(p.pergunta, p.entidade).trim();
+}
+
+const colapsar = (t: string) => t.replace(/\s+/g, " ").trim();
+
+/**
+ * Das perguntas do lote, as que o analista TIROU do texto ao editar. Registrar "enviada" uma
+ * pergunta que não está no e-mail seria afirmar um envio que não houve (regra 1); a comparação
+ * ignora quebra de linha/espaço duplo, que editores de e-mail reformatam, e nada além disso.
+ */
+export function perguntasForaDoTexto<T extends PerguntaParaEmail>(
+  perguntas: readonly T[], textoEditado: string,
+): T[] {
+  const corpo = colapsar(textoEditado);
+  return perguntas.filter((p) => !corpo.includes(colapsar(textoDoItem(p))));
+}
+
 /** As perguntas numeradas e agrupadas por empresa, sem saudação nem assinatura (o "Copiar" da barra). */
 export function listaNumerada(perguntas: readonly PerguntaParaEmail[]): string {
   const ordenadas = [...perguntas].sort(
@@ -54,7 +77,7 @@ export function listaNumerada(perguntas: readonly PerguntaParaEmail[]): string {
     if (comTitulos) linhas.push(chave === "" ? `${SEM_EMPRESA}:` : `${chave}:`, "");
     for (const p of grupos.get(chave) ?? []) {
       n += 1;
-      linhas.push(`${n}. ${semPrefixoDaEmpresa(p.pergunta, p.entidade).trim()}`, "");
+      linhas.push(`${n}. ${textoDoItem(p)}`, "");
     }
   }
   return linhas.join("\n").trimEnd();
@@ -92,10 +115,25 @@ export function linkMailto(assunto: string, corpo: string): string | null {
   return url.length <= LIMITE_MAILTO ? url : null;
 }
 
-/** "N registradas; M falharam: …" — nunca diz que tudo deu certo se algo falhou. */
-export function resumoDoLote(registradas: number, falhas: readonly string[]): string {
-  if (falhas.length === 0) {
-    return `${registradas} ${registradas === 1 ? "registrada" : "registradas"} como ${registradas === 1 ? "enviada" : "enviadas"}.`;
+/**
+ * "N registradas; M falharam: …; K não registradas: …" — nunca diz que tudo deu certo se algo
+ * falhou ou ficou de fora. `foraDoTexto` são as que o analista tirou do e-mail editado.
+ */
+export function resumoDoLote(
+  registradas: number, falhas: readonly string[], foraDoTexto: readonly string[] = [],
+): string {
+  const reg = `${registradas} ${registradas === 1 ? "registrada" : "registradas"}`;
+  if (falhas.length === 0 && foraDoTexto.length === 0) {
+    return `${reg} como ${registradas === 1 ? "enviada" : "enviadas"}.`;
   }
-  return `${registradas} ${registradas === 1 ? "registrada" : "registradas"}; ${falhas.length} ${falhas.length === 1 ? "falhou" : "falharam"}: ${falhas.join(" | ")}`;
+  const partes = [reg];
+  if (falhas.length > 0) {
+    partes.push(`${falhas.length} ${falhas.length === 1 ? "falhou" : "falharam"}: ${falhas.join(" | ")}`);
+  }
+  if (foraDoTexto.length > 0) {
+    partes.push(
+      `${foraDoTexto.length} não ${foraDoTexto.length === 1 ? "registrada" : "registradas"} por ${foraDoTexto.length === 1 ? "não estar" : "não estarem"} mais no texto editado: ${foraDoTexto.join(" | ")}`,
+    );
+  }
+  return partes.join("; ");
 }

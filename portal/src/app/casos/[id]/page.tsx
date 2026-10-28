@@ -89,7 +89,7 @@ function FatoMaterial({ f, casoId }: Readonly<{ f: FatoDoCaso; casoId: string }>
       <p className="mt-1.5 text-xs text-tinta-500">{f.porque}</p>
       <p className="mt-1.5 text-xs">
         <a
-          href={hrefDoOriginal(casoId, f.documento_id, f.pagina)}
+          href={hrefDoOriginal(casoId, f.documento_id, f.pagina, f.documento_versao_id)}
           target="_blank"
           rel="noopener"
           title={rotuloDoLink(ehPdf(f.nome_documento, null), f.pagina)}

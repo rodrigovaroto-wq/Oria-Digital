@@ -24,7 +24,8 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
-  destinoDoOriginal, ehPdf, hrefDoOriginal, paginaValida, rotuloDoLink,
+  destinoDoOriginal, ehPdf, escolherVersaoDoOriginal, hrefDoOriginal, orientacaoDoMotivo,
+  paginaDeOriginalIndisponivel, paginaValida, rotuloDoLink,
 } from "../src/lib/original-do-documento";
 import { contarLinhasPorVersao } from "../src/lib/supabase/linhas-por-versao";
 
@@ -283,6 +284,32 @@ function lote(porVersao: Record<string, number>): Linha[] {
   checar(hrefDoOriginal("c1", "d 1", 4) === "/casos/c1/documentos/d%201/original?pagina=4"
     && hrefDoOriginal("c1", "d1") === "/casos/c1/documentos/d1/original",
     "(orig 8) href aponta para a rota, com a página só quando existe");
+  // ALTO 1: a versão citada pela tela viaja no link e manda sobre a função.
+  checar(hrefDoOriginal("c1", "d1", 4, "v 2") === "/casos/c1/documentos/d1/original?pagina=4&versao=v%202"
+    && hrefDoOriginal("c1", "d1", null, "v2") === "/casos/c1/documentos/d1/original?versao=v2",
+    "(orig 9) href leva a versão citada (com ou sem página)");
+  const V = (id: string, n: number) => ({ id, n_versao: n, nome_original: `${id}.pdf`, arquivo_ref: `k/${id}`, origem_arquivo: null });
+  const vs = [V("v1", 1), V("v2", 2), V("v3", 3)];
+  const idDe = (r: ReturnType<typeof escolherVersaoDoOriginal>) => ("versao" in r ? r.versao.id : `ERRO:${r.tipo}`);
+  checar(idDe(escolherVersaoDoOriginal(vs, "v1", "v3")) === "v1",
+    "(orig 10) versão pedida vence a vigente (o fato citou a v1, a função diz v3)");
+  checar(idDe(escolherVersaoDoOriginal(vs, "outro-doc", "v3")) === "ERRO:fora_do_caso",
+    "(orig 11) versão pedida que não é deste documento NÃO cai em outra");
+  checar(idDe(escolherVersaoDoOriginal(vs, null, "v2")) === "v2"
+    && idDe(escolherVersaoDoOriginal(vs, null, null)) === "v3"
+    && idDe(escolherVersaoDoOriginal([], null, null)) === "ERRO:sem_arquivo",
+    "(orig 12) sem pedido: vigente; função null → mais recente (a que o detalhe exibe); sem versão → erro");
+  // MÉDIO 4: reenviar só quando o arquivo não está guardado.
+  checar(/reenvie/.test(orientacaoDoMotivo("sem_arquivo").nota) && /reenvie/.test(orientacaoDoMotivo("nao_assinavel").nota),
+    "(orig 13) sem arquivo / não assinável → sugere reenvio");
+  for (const t of ["falha_tecnica", "fora_do_caso", "origem_externa"] as const) {
+    const o = orientacaoDoMotivo(t);
+    checar(!/reenvie|não encontrou o arquivo/i.test(o.corpo + o.nota), `(orig 14) ${t} NÃO sugere reenvio`);
+  }
+  checar(/Tente de novo/.test(orientacaoDoMotivo("falha_tecnica").nota)
+    && /Tente de novo/.test(paginaDeOriginalIndisponivel("/x", "boom", "falha_tecnica"))
+    && !/reenvie/.test(paginaDeOriginalIndisponivel("/x", "boom", "falha_tecnica")),
+    "(orig 15) falha técnica pede nova tentativa na página renderizada");
 }
 
 if (falhas.length > 0) {

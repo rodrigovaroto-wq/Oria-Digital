@@ -136,8 +136,32 @@ export function registrarEdicao(
 }
 
 /**
- * Descarta a edição que o servidor já alcançou (salvou) ou ultrapassou (a premissa foi removida
- * no passo 2): sem isso a edição velha, igual ao valor de antes, reapareceria como "não salva".
+ * O lote (aplicar a premissa em todas as contas da seção) como EDIÇÃO: cada conta recebe a
+ * premissa nova com a sazonalidade que estava visível, e só vira edição a que DIFERE do servidor
+ * — passa pela mesma igualdade de `registrarEdicao`. Gravar também as iguais as deixava como
+ * edição "morta": sem efeito na barra (a conta de pendências compara com o servidor), mas viva no
+ * estado até a próxima troca de props, e reaparecendo como "não salva" se o servidor mudasse.
+ */
+export function aplicarLoteNasEdicoes(
+  edicoes: EscolhasPorSecao, servidor: EscolhasPorSecao, visivel: EscolhasPorSecao,
+  secao: string, contas: ReadonlyArray<{ rotulo_norm: string }>, premissa: string,
+): EscolhasPorSecao {
+  const sec = { ...edicoes[secao] };
+  for (const c of contas) {
+    const nova: EscolhaLinha = {
+      premissa, sazonalidade: visivel[secao]?.[c.rotulo_norm]?.sazonalidade ?? "",
+    };
+    if (linhaSuja(nova, servidor[secao]?.[c.rotulo_norm])) sec[c.rotulo_norm] = nova;
+    else delete sec[c.rotulo_norm];
+  }
+  return { ...edicoes, [secao]: sec };
+}
+
+/**
+ * Remove as edições que JÁ SÃO IGUAIS ao servidor (ele salvou, o lote o igualou, ou a premissa foi
+ * removida no passo 2): sem isso a edição velha reapareceria como "não salva" quando o servidor
+ * mudasse de novo. O editor a chama na troca de `secoes` (poda persistente no estado) e a cada
+ * render (só para ler: o que é igual ao servidor nunca conta como edição).
  */
 export function podarEdicoes(
   edicoes: EscolhasPorSecao, servidor: EscolhasPorSecao,

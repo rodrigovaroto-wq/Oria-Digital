@@ -44,6 +44,7 @@ import {
   type ConferenciaModelagemCobertura,
 } from "../src/lib/modelagem-cobertura.ts";
 import {
+  aplicarLoteNasEdicoes,
   escolhasVisiveis,
   excecoesQueOLoteSubstitui,
   formDataDoLote,
@@ -297,6 +298,17 @@ console.log("--- 9. SALVAR TUDO (`modelagem-lote.ts`): só as linhas que mudaram
     && excecoesQueOLoteSubstitui(contasRec, { a: v("P5"), b: v("") }, gravado.receita, "P5") === 0
     && excecoesQueOLoteSubstitui(contasRec, gravado.receita, gravado.receita, "P5") === 0,
     "lote: conta o que seria substituído (escolha pendente ≠ lote); pendente igual ao lote e linha limpa não contam");
+  // MÉDIO 5: o lote só vira EDIÇÃO onde difere do servidor. gravado.receita: a=P1, b="" — aplicar P1
+  // em a e b deixa só b como edição; a, igual ao servidor, não entra.
+  const lotP1 = aplicarLoteNasEdicoes({}, gravado, escolhasVisiveis(gravado, {}), "receita", contasRec, "P1");
+  ok(Object.keys(lotP1.receita).join() === "b" && lotP1.receita.b.premissa === "P1",
+    "lote: conta que já tem a premissa no servidor NÃO vira edição", Object.keys(lotP1.receita).join());
+  const lotIgual = aplicarLoteNasEdicoes({ receita: { a: v("P9") } }, gravado, escolhasVisiveis(gravado, {}), "receita", [{ rotulo_norm: "a" }], "P1");
+  ok(Object.keys(lotIgual.receita).length === 0,
+    "lote que devolve a conta ao valor do servidor remove a edição que ela tinha");
+  const lotSaz = aplicarLoteNasEdicoes({ receita: { b: v("", "S1") } }, gravado, escolhasVisiveis(gravado, { receita: { b: v("", "S1") } }), "receita", [{ rotulo_norm: "b" }], "P5");
+  ok(lotSaz.receita.b.sazonalidade === "S1" && lotSaz.receita.b.premissa === "P5",
+    "lote preserva a sazonalidade visível da conta");
   ok(gravado.receita.a.premissa === "P1", "as funções não mutam o servidor anterior");
 }
 

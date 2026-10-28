@@ -178,7 +178,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
         </div>
         {versao && (
           <a
-            href={hrefDoOriginal(id, docId)}
+            href={hrefDoOriginal(id, docId, null, versao.id)}
             target="_blank"
             rel="noopener"
             title={rotuloDoLink(pdf, null)}
@@ -325,7 +325,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
                           <td className="px-3 py-1.5 text-tinta-500">
                             {linha.origem_pagina == null ? "—" : (
                               <a
-                                href={hrefDoOriginal(id, docId, linha.origem_pagina)}
+                                href={hrefDoOriginal(id, docId, linha.origem_pagina, linha.documento_versao_id)}
                                 target="_blank"
                                 rel="noopener"
                                 title={rotuloDoLink(pdf, linha.origem_pagina)}

@@ -121,7 +121,9 @@ export function BuscaGlobal() {
   useEffect(() => {
     if (!aberto) return;
     const aoTeclarNoPainel = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); fechar(); return; }
+      // stopImmediatePropagation: com um diálogo aberto por baixo (rascunho de e-mail), um Esc
+      // fecharia os dois; o diálogo também confere `[data-busca-global]` por causa da ordem dos ouvintes.
+      if (e.key === "Escape") { e.preventDefault(); e.stopImmediatePropagation(); fechar(); return; }
       if (e.key === "Tab") {
         const foc = Array.from(painel.current?.querySelectorAll<HTMLElement>(
           'input, button:not([disabled]):not([tabindex="-1"]), a[href]') ?? []);
@@ -189,6 +191,7 @@ export function BuscaGlobal() {
           />
           <div
             ref={painel}
+            data-busca-global
             role="dialog"
             aria-modal="true"
             aria-label="Busca global"

@@ -66,6 +66,10 @@ export default function UploadForm({
   // esperar tranquilo e achar que travou.
   const [progresso, setProgresso] = useState<{ processados: number; esperados: number } | null>(null);
   const [demorou, setDemorou] = useState(false);
+  // SESSÃO EXPIRADA durante o acompanhamento: `/api/intake/status` responde 401 (proxy.ts) e o
+  // poller só agia com `resp.ok`, então a tela ficava "aguardando" até o fim da janela (12–160 min)
+  // sem dizer que já não conseguia ver o andamento.
+  const [sessaoExpirou, setSessaoExpirou] = useState(false);
   // A PARADA SEM REGISTRO — o caso que a 0108 não alcança (ver SEM_PROGRESSO_MS).
   const [parada, setParada] = useState<{ processados: number; esperados: number } | null>(null);
   // O LOTE QUE TERMINOU VAZIO. Vem do status, e só existe depois de `pronto`.
@@ -115,7 +119,7 @@ export default function UploadForm({
   // Acompanha silenciosamente, em segundo plano, até os arquivos enviados
   // estarem organizados — sem nomear nenhuma ferramenta ou etapa técnica.
   useEffect(() => {
-    if (!sucesso || pronto || falha || parada) return;
+    if (!sucesso || pronto || falha || parada || sessaoExpirou) return;
     let cancelado = false;
     let intervalo = INTERVALO_ACOMPANHAMENTO_MS;
     let proximaEspera: ReturnType<typeof setTimeout> | undefined;
@@ -137,6 +141,12 @@ export default function UploadForm({
           esperados: String(sucesso.arquivos),
         });
         const resp = await fetch(`/api/intake/status?${params}`);
+        // 401 ENCERRA o acompanhamento: continuar perguntando só devolveria 401 de novo. O que se
+        // afirma é só o que se sabe — o envio já foi feito e a tela não enxerga mais o andamento.
+        if (!cancelado && resp.status === 401) {
+          setSessaoExpirou(true);
+          return;
+        }
         const json = await resp.json().catch(() => ({}));
         // A falha ENCERRA o acompanhamento. Continuar perguntando depois dela
         // seria manter a espera de pé sobre um processo que não vai voltar.
@@ -215,7 +225,7 @@ export default function UploadForm({
       // que o intervalo varia, `proximaEspera` é sempre o único pendente.
       clearTimeout(proximaEspera);
     };
-  }, [sucesso, pronto, falha, parada, casoId, router]);
+  }, [sucesso, pronto, falha, parada, sessaoExpirou, casoId, router]);
 
   function adicionarArquivos(lista: FileList | null) {
     if (!lista) return;
@@ -585,11 +595,11 @@ export default function UploadForm({
         setErro(destino.error ?? `Não foi possível preparar o envio (HTTP ${respDestino.status}).`);
         return;
       }
-      // RESPOSTA 200 QUE NÃO É O DESTINO. Sessão expirada: o `proxy.ts` manda
-      // para /login, o `fetch` segue o redirecionamento e entrega **HTML com
-      // status 200** — `respDestino.ok` é verdadeiro e não há destino nenhum
-      // dentro. Sem este guarda, o erro aparecia como um `TypeError` em inglês
-      // vindo lá de dentro da conta do tamanho.
+      // RESPOSTA 200 QUE NÃO É O DESTINO. Desde que o `proxy.ts` responde 401 JSON em /api/* (o
+      // 401 cai no `!respDestino.ok` acima, com a frase de sessão expirada em `error`), a sessão
+      // expirada não chega mais aqui como HTML 200. O guarda fica para o que ainda pode devolver 200
+      // sem destino (proxy/CDN no meio, resposta de outra origem): sem ele o erro aparecia como um
+      // `TypeError` em inglês vindo lá de dentro da conta do tamanho.
       if (typeof destino.url !== "string" || !destino.campos?.arquivos || !destino.campos?.mandato) {
         setErro("Sua sessão expirou ou o portal não respondeu. Atualize a página, entre de novo e reenvie — nada foi processado.");
         return;
@@ -737,7 +747,7 @@ export default function UploadForm({
             type="button"
             onClick={() => {
               setFalha(null); setParada(null); setLoteVazio(null); setSucesso(null);
-              setProgresso(null); setDemorou(false); setDescartados(null); setOficiais([]);
+              setProgresso(null); setDemorou(false); setSessaoExpirou(false); setDescartados(null); setOficiais([]);
             }}
             className="rounded bg-risco-700 px-3 py-1.5 text-xs font-medium text-papel hover:bg-risco-800"
           >
@@ -832,6 +842,12 @@ export default function UploadForm({
                 {progresso.processados} de {progresso.esperados} organizados
               </p>
             </div>
+          )}
+          {sessaoExpirou && (
+            <p role="alert" className="mt-2 rounded border border-alerta-300 bg-alerta-50 p-2 text-xs text-alerta-900">
+              Sua sessão expirou — entre de novo. O envio já foi feito; esta tela só deixou de
+              conseguir acompanhar o andamento. Depois de entrar, abra o mandato para ver o estado atual.
+            </p>
           )}
           {demorou && (
             <p className="mt-2 rounded border border-alerta-300 bg-alerta-50 p-2 text-xs text-alerta-900">

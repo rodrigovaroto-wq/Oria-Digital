@@ -32,9 +32,79 @@ export function rotuloDoLink(pdf: boolean, pagina: number | null): string {
   return pdf && pagina != null ? `abre na página ${pagina}` : "abre o arquivo";
 }
 
-export function hrefDoOriginal(casoId: string, docId: string, pagina?: number | null): string {
+/**
+ * `versao` é a versão que a TELA citou. Sem ela, a rota reescolhe (fn_versao_com_extracao) e pode
+ * abrir outro arquivo que o da página citada — fatos escolhem a versão por `fatos_avaliados_em`
+ * (0149) e o detalhe pela mais recente com linha (0102), regras que não coincidem sempre.
+ */
+export function hrefDoOriginal(
+  casoId: string, docId: string, pagina?: number | null, versao?: string | null,
+): string {
   const base = `/casos/${encodeURIComponent(casoId)}/documentos/${encodeURIComponent(docId)}/original`;
-  return pagina != null && pagina >= 1 ? `${base}?pagina=${pagina}` : base;
+  const q: string[] = [];
+  if (pagina != null && pagina >= 1) q.push(`pagina=${pagina}`);
+  if (versao) q.push(`versao=${encodeURIComponent(versao)}`);
+  return q.length ? `${base}?${q.join("&")}` : base;
+}
+
+export type VersaoDoOriginal = {
+  id: string; n_versao: number | null; nome_original: string | null;
+  arquivo_ref: string | null; origem_arquivo: string | null;
+};
+
+/**
+ * QUAL VERSÃO O LINK ABRE. `versaoPedida` (a que a tela citou) manda: se não pertence ao documento
+ * da URL, NÃO cai em outra — abriria um arquivo diferente do citado sem aviso (regra 1). Só sem o
+ * parâmetro vale a regra do detalhe (0102): a vigente da função; se ela devolve null (nenhuma
+ * versão tem linha), a mais recente — a mesma que o detalhe exibe nesse estado, então o botão do
+ * cabeçalho continua abrindo o que a tela mostra. `versoes` vem em qualquer ordem.
+ */
+export function escolherVersaoDoOriginal(
+  versoes: VersaoDoOriginal[], versaoPedida: string | null, vigenteId: string | null,
+): { versao: VersaoDoOriginal } | { motivo: string; tipo: TipoDeMotivo } {
+  const ordenadas = [...versoes].sort((a, b) => (b.n_versao ?? 0) - (a.n_versao ?? 0));
+  if (versaoPedida) {
+    const v = ordenadas.find((x) => x.id === versaoPedida);
+    return v
+      ? { versao: v }
+      : { motivo: "A versão citada na tela não pertence a este documento; por isso nenhum outro arquivo foi aberto no lugar dela.", tipo: "fora_do_caso" };
+  }
+  const v = ordenadas.find((x) => x.id === vigenteId) ?? ordenadas[0];
+  return v ? { versao: v } : { motivo: "O documento não tem versão registrada.", tipo: "sem_arquivo" };
+}
+
+/** Por que o original não abriu — decide se "reenvie o arquivo" é conselho honesto. */
+export type TipoDeMotivo =
+  | "sem_arquivo"      // sem arquivo_ref / sem versão: o arquivo não foi guardado
+  | "nao_assinavel"    // objeto não existe no bucket (defeito jul–out/2026)
+  | "origem_externa"   // arquivo fora do bucket do portal
+  | "fora_do_caso"     // docId/versão não pertence a este mandato/documento
+  | "falha_tecnica";   // leitura/assinatura falhou: nada diz que o arquivo sumiu
+
+/** Reenviar só resolve quando o arquivo não está guardado; falha técnica pede nova tentativa. */
+export function orientacaoDoMotivo(tipo: TipoDeMotivo): { corpo: string; nota: string } {
+  switch (tipo) {
+    case "falha_tecnica":
+      return {
+        corpo: "Não foi possível ler o arquivo agora. Isso não indica que ele tenha sumido, e não altera as linhas já extraídas.",
+        nota: "Tente de novo em instantes. Se persistir, avise o administrador do sistema e informe os detalhes técnicos abaixo.",
+      };
+    case "fora_do_caso":
+      return {
+        corpo: "O link aponta para um documento ou versão que não pertence a este mandato, então nenhum arquivo foi aberto. Isso não altera as linhas já extraídas.",
+        nota: "Volte à tela do documento e abra o original por lá.",
+      };
+    case "origem_externa":
+      return {
+        corpo: "Este arquivo está guardado fora do portal, e por isso não abre por aqui. Isso não altera as linhas já extraídas dele.",
+        nota: "Peça o arquivo ao administrador do sistema.",
+      };
+    default:
+      return {
+        corpo: "O sistema não encontrou o arquivo guardado para este documento. Isso não altera as linhas já extraídas dele; só impede conferi-las contra o original por aqui.",
+        nota: "Se precisar do arquivo, peça ao administrador do sistema ou reenvie-o ao mandato.",
+      };
+  }
 }
 
 function esc(s: string): string {
@@ -44,7 +114,10 @@ function esc(s: string): string {
 }
 
 /** Mesma superfície visual de `recusa-do-export.ts`; texto do banco/Storage entra escapado. */
-export function paginaDeOriginalIndisponivel(volta: string, motivoTecnico: string): string {
+export function paginaDeOriginalIndisponivel(
+  volta: string, motivoTecnico: string, tipo: TipoDeMotivo = "sem_arquivo",
+): string {
+  const o = orientacaoDoMotivo(tipo);
   return `<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -63,8 +136,8 @@ export function paginaDeOriginalIndisponivel(volta: string, motivoTecnico: strin
 </style></head>
 <body><main><div class="cartao" role="alert">
 <h1>O arquivo original deste documento não está disponível</h1>
-<p>O sistema não encontrou o arquivo guardado para este documento. Isso não altera as linhas já extraídas dele; só impede conferi-las contra o original por aqui.</p>
-<p class="nota">Se precisar do arquivo, peça ao administrador do sistema ou reenvie-o ao mandato.</p>
+<p>${esc(o.corpo)}</p>
+<p class="nota">${esc(o.nota)}</p>
 <a class="btn" href="${esc(volta)}">Voltar</a>
 <details><summary>Detalhes técnicos</summary><pre>${esc(motivoTecnico)}</pre></details>
 </div></main></body></html>`;

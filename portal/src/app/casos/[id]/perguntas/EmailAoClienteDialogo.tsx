@@ -22,14 +22,30 @@ export function EmailAoClienteDialogo({
   onRegistrar: (textoEnviado: string) => void;
 }>) {
   const montado = useSyncExternalStore(() => () => {}, () => true, () => false);
-  const [texto, setTexto] = useState(() => montarEmailAoCliente(perguntas, mandato));
+  const [textoInicial] = useState(() => montarEmailAoCliente(perguntas, mandato));
+  const [texto, setTexto] = useState(textoInicial);
+  // Quantas perguntas o rascunho foi montado com: depois de uma falha parcial `perguntas` encolhe
+  // (as registradas saem da lista) mas o texto editado continua listando todas.
+  const [nNoTexto] = useState(perguntas.length);
   const [longo, setLongo] = useState(false);
   const caixa = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   // O pai passa uma função nova a cada render; como dependência do efeito ela re-focaria o campo
   // a cada atualização (o registro em lote re-renderiza o pai), então vai por ref.
   const fecharRef = useRef(onFechar);
-  useEffect(() => { fecharRef.current = onFechar; });
+  // Fechar (Esc, fundo, ✕) joga fora o texto editado — e o analista pode ter gasto minutos nele.
+  // Só pergunta quando há edição; o fechamento por sucesso do registro vem do pai e não passa aqui.
+  const textoRef = useRef(texto);
+  useEffect(() => {
+    fecharRef.current = onFechar;
+    textoRef.current = texto;
+  });
+  const pedirFechar = () => {
+    if (textoRef.current === textoInicial) { fecharRef.current(); return; }
+    if (window.confirm("Descartar o texto editado do e-mail? Ele não será guardado.")) fecharRef.current();
+  };
+  const pedirFecharRef = useRef(pedirFechar);
+  useEffect(() => { pedirFecharRef.current = pedirFechar; });
 
   useEffect(() => {
     if (!montado) return;
@@ -38,9 +54,12 @@ export function EmailAoClienteDialogo({
     const rolagem = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const aoTeclar = (e: KeyboardEvent) => {
+      // Com a busca global (⌘K) aberta por cima, o teclado é dela: sem isto um Esc fechava os dois
+      // e o Tab daqui puxava o foco para fora da busca.
+      if (document.querySelector("[data-busca-global]")) return;
       if (e.key === "Escape") {
         e.preventDefault();
-        fecharRef.current();
+        pedirFecharRef.current();
       } else if (e.key === "Tab" && caixa.current) {
         const foc = Array.from(caixa.current.querySelectorAll<HTMLElement>(FOCAVEIS));
         if (foc.length === 0) return;
@@ -71,16 +90,19 @@ export function EmailAoClienteDialogo({
   };
 
   return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/40 p-4"
-      onClick={(e) => { if (e.target === e.currentTarget) onFechar(); }}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/40 p-4">
+      {/* O fundo clicável é um botão nativo atrás do painel (fora da ordem de Tab), como na busca
+          global; o clique passa pela mesma confirmação de descarte do Esc e do ✕. */}
+      <button
+        type="button" aria-label="Fechar e-mail" tabIndex={-1} onClick={pedirFechar}
+        className="absolute inset-0 h-full w-full cursor-default"
+      />
       <div
         ref={caixa}
         role="dialog"
         aria-modal="true"
         aria-labelledby="titulo-email-cliente"
-        className="flex max-h-full w-[min(720px,100%)] flex-col rounded-lg border border-tinta-200 bg-folha shadow-xl"
+        className="relative flex max-h-full w-[min(720px,100%)] flex-col rounded-lg border border-tinta-200 bg-folha shadow-xl"
       >
         <div className="flex items-start justify-between gap-3 border-b border-tinta-200 px-4 py-3">
           <div>
@@ -88,11 +110,12 @@ export function EmailAoClienteDialogo({
               E-mail ao cliente
             </h2>
             <p className="mt-0.5 text-xs text-tinta-500">
-              Rascunho com {perguntas.length} {perguntas.length === 1 ? "pergunta" : "perguntas"}. Edite
+              Rascunho com {nNoTexto} {nNoTexto === 1 ? "pergunta" : "perguntas"}
+              {perguntas.length < nNoTexto && ` (${perguntas.length} ainda sem registro de envio)`}. Edite
               à vontade. O sistema não envia nada: copie ou abra no seu e-mail, e depois registre o envio.
             </p>
           </div>
-          <button type="button" onClick={onFechar} aria-label="Fechar" className="btn-secundario">✕</button>
+          <button type="button" onClick={pedirFechar} aria-label="Fechar" className="btn-secundario">✕</button>
         </div>
         <div className="flex-1 overflow-y-auto px-4 py-3">
           <label htmlFor="texto-email-cliente" className="sr-only">Texto do e-mail</label>

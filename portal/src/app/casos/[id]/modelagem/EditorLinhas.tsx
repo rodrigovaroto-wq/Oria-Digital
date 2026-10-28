@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { salvarSecao } from "./actions";
@@ -12,7 +12,7 @@ import {
   EVENTO_CONFIRMAR_SAIDA, definirPendentes,
 } from "@/lib/alteracoes-pendentes";
 import {
-  escolhasVisiveis, formDataDoLote, lotesPendentes, podarEdicoes, registrarEdicao,
+  aplicarLoteNasEdicoes, escolhasVisiveis, formDataDoLote, lotesPendentes, podarEdicoes, registrarEdicao,
   resumirSalvamento, totalPendente,
   type EscolhaLinha, type EscolhasPorSecao, type ResultadoDaSecao, type ResumoDoSalvamento,
 } from "@/lib/modelagem-lote";
@@ -74,7 +74,8 @@ export function EditorLinhas({
     setVistas(secoes);
     setEdicoes((e) => podarEdicoes(e, gravadoAgora));
   }
-  const escolhasAgora = escolhasVisiveis(gravadoAgora, edicoes);
+  // Poda também a cada render: edição igual ao servidor nunca é edição (o lote pode igualá-lo).
+  const escolhasAgora = escolhasVisiveis(gravadoAgora, podarEdicoes(edicoes, gravadoAgora));
 
   const lotes = lotesPendentes(secoes, escolhasAgora, gravadoAgora);
   const total = totalPendente(lotes);
@@ -112,11 +113,28 @@ export function EditorLinhas({
     };
   }, [total]);
 
+  // O DIÁLOGO DE SAÍDA é modal: Esc fecha, Tab fica preso nele e o foco volta a quem o tinha
+  // (o link clicado ou o botão que pediu a saída) — sem isto o Tab escapava para a página atrás
+  // do fundo escurecido e, ao fechar, o foco caía no <body>.
+  const dialogoSaida = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (saida === null) return;
-    const aoTeclar = (e: KeyboardEvent) => { if (e.key === "Escape") setSaida(null); };
+    const anterior = document.activeElement as HTMLElement | null;
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setSaida(null); return; }
+      if (e.key !== "Tab" || !dialogoSaida.current) return;
+      const foc = Array.from(dialogoSaida.current.querySelectorAll<HTMLElement>("button:not([disabled])"));
+      if (foc.length === 0) return;
+      const i = foc.indexOf(document.activeElement as HTMLElement);
+      const prox = e.shiftKey ? (i <= 0 ? foc.length - 1 : i - 1) : (i === foc.length - 1 ? 0 : i + 1);
+      e.preventDefault();
+      foc[prox].focus();
+    };
     document.addEventListener("keydown", aoTeclar);
-    return () => document.removeEventListener("keydown", aoTeclar);
+    return () => {
+      document.removeEventListener("keydown", aoTeclar);
+      if (anterior?.isConnected) anterior.focus();
+    };
   }, [saida]);
 
   const mudar = (secao: string, rotulo: string, campo: "premissa" | "sazonalidade", valor: string) => {
@@ -133,15 +151,7 @@ export function EditorLinhas({
   const loteAplicado = (s: SecaoDoEditor, premissa: string) => {
     const contas = s.linhas.filter((l) => l.papel === "conta");
     setResumo(null);
-    setEdicoes((e) => ({
-      ...e,
-      [s.secao]: {
-        ...e[s.secao],
-        ...Object.fromEntries(contas.map((l) => [l.rotulo_norm, {
-          premissa, sazonalidade: escolhasAgora[s.secao]?.[l.rotulo_norm]?.sazonalidade ?? "",
-        }])),
-      },
-    }));
+    setEdicoes((e) => aplicarLoteNasEdicoes(e, gravadoAgora, escolhasAgora, s.secao, contas, premissa));
   };
 
   const salvarTudo = async () => {
@@ -179,6 +189,9 @@ export function EditorLinhas({
     const destino = saida;
     setSaida(null);
     definirPendentes(0);
+    // Link para a MESMA página não remonta o editor: sem limpar, as edições "descartadas"
+    // continuavam na tela e a barra reaparecia logo depois de "Sair sem salvar".
+    setEdicoes({});
     if (destino) router.push(destino);
   };
 
@@ -266,6 +279,7 @@ export function EditorLinhas({
       {saida !== null && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/50 p-4">
           <div
+            ref={dialogoSaida}
             role="alertdialog" aria-modal="true" aria-label="Alterações não salvas"
             className="w-full max-w-md rounded-lg border border-tinta-200 bg-folha p-4 text-sm shadow-xl"
           >

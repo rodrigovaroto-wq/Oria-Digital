@@ -47,7 +47,7 @@
 import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../src/lib/kit-basico.ts";
 import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
 import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
-import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
+import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
 
 let falhas = 0;
@@ -281,6 +281,21 @@ console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista fil
   const parcial = resumoDoLote(2, ["Q1: recusado"]);
   ok(parcial.startsWith("2 registradas; 1 falhou: Q1") && !parcial.includes("como enviadas"),
     "lote: falha parcial nunca diz que tudo deu certo", parcial);
+  // ALTO 2: o que se congela por pergunta é o ITEM dela, o mesmo que o e-mail escreve.
+  ok(textoDoItem(pergs[0]) === "Enviem o balanço de 2024." && textoDoItem(pergs[1]) === "Quais as garantias prestadas?",
+    "item: sem o prefixo 'Sobre a X: ' da 0120, e sem numeração nem título de grupo");
+  ok(pergs.every((p) => t.includes(textoDoItem(p)) && !textoDoItem(p).includes(t.slice(0, 20))),
+    "item: cada item aparece no e-mail e NUNCA é o e-mail inteiro");
+  ok(perguntasForaDoTexto(pergs, t).length === 0, "fora do texto: e-mail intacto → nenhuma ausente");
+  const editado = t.replace("Enviem a DRE.", "Enviem a DRE de 2023.").replace(/^\d+\. Quais as garantias prestadas\?\n\n/m, "");
+  ok(perguntasForaDoTexto(pergs, editado).map((p) => p.codigo).join(",") === "Q9,Q1",
+    "fora do texto: pergunta apagada E pergunta reescrita são apontadas; as intactas não",
+    perguntasForaDoTexto(pergs, editado).map((p) => p.codigo).join(","));
+  ok(perguntasForaDoTexto(pergs, t.replace("Enviem o balancete.", "Enviem o\n  balancete.")).length === 0,
+    "fora do texto: reformatar quebra de linha/espaço não conta como ausência");
+  const comAusente = resumoDoLote(2, [], ["Q9"]);
+  ok(comAusente.startsWith("2 registradas; 1 não registrada") && comAusente.includes("Q9") && !comAusente.includes("como enviadas"),
+    "lote: pergunta fora do texto editado nunca vira 'tudo certo'", comAusente);
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

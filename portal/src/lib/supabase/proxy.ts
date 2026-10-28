@@ -40,9 +40,10 @@ export async function updateSession(request: NextRequest) {
 
   // /api/* sem sessão responde 401 JSON, NÃO redireciona: o `fetch` do navegador seguia o
   // redirect para /login, recebia HTML com status 200 e `r.json()` estourava — a busca global
-  // mostrava falha genérica para sempre e o 401 da própria rota nunca era alcançado. Os clientes
-  // de /api/intake/* já tratam `!resp.ok` lendo `error` (upload-form.tsx), então o 401 chega a
-  // eles como mensagem; a rota continua protegida, só deixa de mentir com 200.
+  // mostrava falha genérica para sempre e o 401 da própria rota nunca era alcançado. Quem chama
+  // /api/* TEM de tratar o 401: o envio (`/api/intake`, `/destino`) lê `error` quando `!resp.ok`, e
+  // o acompanhamento (`/api/intake/status`) trata `resp.status === 401` à parte (antes só agia com
+  // `resp.ok` e ficava "aguardando" até o fim da janela). A rota continua protegida, só deixa de mentir com 200.
   if (!user && request.nextUrl.pathname.startsWith("/api/")) {
     return NextResponse.json(
       { erro: "Sessão expirada. Entre de novo.", error: "Sua sessão expirou. Atualize a página, entre de novo e reenvie — nada foi processado." },

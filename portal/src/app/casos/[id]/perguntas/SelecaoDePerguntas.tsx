@@ -7,9 +7,9 @@
 //
 // SÓ AS PENDENTES SÃO SELECIONÁVEIS (as já tratadas não têm caixa): registrar de novo uma
 // pergunta já enviada é decisão individual, no cartão. Default: nenhuma selecionada.
-import { createContext, useContext, useState, useTransition } from "react";
+import { createContext, useContext, useEffect, useRef, useState, useTransition } from "react";
 import { BotaoCopiar } from "@/components/botao-copiar";
-import { listaNumerada, resumoDoLote } from "@/lib/email-ao-cliente";
+import { listaNumerada, perguntasForaDoTexto, resumoDoLote, textoDoItem } from "@/lib/email-ao-cliente";
 import { EmailAoClienteDialogo } from "./EmailAoClienteDialogo";
 import { registrarAcaoSemExcecao } from "./actions";
 
@@ -66,11 +66,16 @@ export function ProvedorDeSelecao({
       return n;
     });
 
-  // SEQUENCIAL, uma chamada por pergunta, a MESMA ação dos cartões. `textoUnico` é o rascunho
-  // que o analista editou e enviou: quando existe, é o que a trilha congela (é o que o cliente
-  // recebeu); sem ele, cada pergunta congela o próprio texto, como no botão do cartão.
-  const registrar = (textoUnico?: string) => {
-    const alvo = escolhidas;
+  // SEQUENCIAL, uma chamada por pergunta, a MESMA ação dos cartões. O que se congela em
+  // `texto_enviado` (imutável, 0213) é o ITEM da pergunta (`textoDoItem`, o que o Copiar e o
+  // e-mail escrevem depois de "N. "), tanto na barra quanto no diálogo — e não o e-mail inteiro
+  // repetido em cada uma. Vindo do diálogo, só se registra a pergunta cujo item AINDA está no texto
+  // editado: tirá-la do e-mail e mesmo assim marcá-la "enviada" afirmaria um envio que não houve.
+  const registrar = (textoEditado?: string) => {
+    const foraDoTexto = textoEditado === undefined ? [] : perguntasForaDoTexto(escolhidas, textoEditado);
+    const fora = new Set(foraDoTexto.map((p) => p.chave));
+    const alvo = escolhidas.filter((p) => !fora.has(p.chave));
+    const nomeDe = (p: PendenteSelecionavel) => `${p.codigo}${p.entidade ? ` (${p.entidade})` : ""}`;
     iniciar(async () => {
       let ok = 0;
       const falhas: string[] = [];
@@ -80,28 +85,40 @@ export function ProvedorDeSelecao({
         fd.set("codigo", p.codigo);
         fd.set("entidade_id", p.entidade_id ?? "");
         fd.set("acao", "enviada");
-        fd.set("texto", textoUnico ?? p.pergunta);
+        fd.set("texto", textoDoItem(p));
         const r = await registrarAcaoSemExcecao(casoId, fd);
         if (r.ok) {
           ok += 1;
           registradas.add(p.chave);
         } else {
-          falhas.push(`${p.codigo}${p.entidade ? ` (${p.entidade})` : ""}: ${r.erro}`);
+          falhas.push(`${nomeDe(p)}: ${r.erro}`);
         }
       }
-      // As que falharam continuam marcadas, para tentar de novo sem remarcar.
+      // As que falharam (ou ficaram fora do texto) continuam marcadas, para tentar de novo sem remarcar.
       setMarcadas((m) => new Set([...m].filter((c) => !registradas.has(c))));
-      setAviso({ texto: resumoDoLote(ok, falhas), erro: falhas.length > 0 });
-      if (falhas.length === 0) setDialogo(false);
+      const sujo = falhas.length > 0 || foraDoTexto.length > 0;
+      setAviso({ texto: resumoDoLote(ok, falhas, foraDoTexto.map(nomeDe)), erro: sujo });
+      if (!sujo) setDialogo(false);
     });
   };
+
+  // FOCO. Ao registrar tudo, as perguntas saem de `pendentes`, o botão que abriu o diálogo some e
+  // o foco cairia no <body>. Devolve-o à barra (que fica, com o aviso) quando nada o tem.
+  const barra = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (dialogo || !aviso) return;
+    const a = document.activeElement;
+    if (!a || a === document.body) barra.current?.focus();
+  }, [dialogo, aviso]);
 
   return (
     <Selecao.Provider value={{ pendentes, marcadas: efetivas, alternar, definir }}>
       {children}
       {(escolhidas.length > 0 || aviso) && (
         <div
-          className="sticky bottom-3 z-10 rounded-lg border border-tinta-200 bg-folha p-3 shadow-lg"
+          ref={barra}
+          tabIndex={-1}
+          className="sticky bottom-3 z-10 rounded-lg border border-tinta-200 bg-folha p-3 shadow-lg outline-none"
           role="region"
           aria-label="Ações sobre as perguntas selecionadas"
         >

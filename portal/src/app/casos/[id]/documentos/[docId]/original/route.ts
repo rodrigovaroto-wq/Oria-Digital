@@ -1,7 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
-  destinoDoOriginal, ehPdf, paginaDeOriginalIndisponivel, paginaValida,
+  destinoDoOriginal, ehPdf, escolherVersaoDoOriginal, paginaDeOriginalIndisponivel, paginaValida,
+  type TipoDeMotivo, type VersaoDoOriginal,
 } from "@/lib/original-do-documento";
 
 // "Ver original": assina NO CLIQUE uma URL de 120 s do bucket privado `documentos` e redireciona.
@@ -14,8 +15,8 @@ export async function GET(
 ) {
   const { id, docId } = await params;
   const volta = `/casos/${encodeURIComponent(id)}/documentos/${encodeURIComponent(docId)}`;
-  const indisponivel = (motivo: string, status = 404) =>
-    new NextResponse(paginaDeOriginalIndisponivel(volta, motivo), {
+  const indisponivel = (motivo: string, tipo: TipoDeMotivo, status = 404) =>
+    new NextResponse(paginaDeOriginalIndisponivel(volta, motivo, tipo), {
       status,
       headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
     });
@@ -29,28 +30,30 @@ export async function GET(
     .eq("caso_id", id)
     .eq("id", docId)
     .maybeSingle();
-  if (docRes.error) return indisponivel(`Leitura do documento falhou: ${docRes.error.message}`, 500);
-  if (!docRes.data) return indisponivel("Documento não encontrado neste mandato.");
+  if (docRes.error) return indisponivel(`Leitura do documento falhou: ${docRes.error.message}`, "falha_tecnica", 500);
+  if (!docRes.data) return indisponivel("Documento não encontrado neste mandato.", "fora_do_caso");
 
-  type V = {
-    id: string; n_versao: number | null; nome_original: string | null;
-    arquivo_ref: string | null; origem_arquivo: string | null;
-  };
-  const versoes = [...((docRes.data.documento_versao as unknown as V[] | null) ?? [])]
-    .sort((a, b) => (b.n_versao ?? 0) - (a.n_versao ?? 0));
-  // Mesma versão que o detalhe mostra (0102): a mais recente COM linha; sem ela, a mais recente.
-  const vigenteRes = await supabase.rpc("fn_versao_com_extracao", { p_documento_id: docId });
-  // Falha da função NÃO cai na mais recente: abriria um arquivo diferente do que a tela mostra,
-  // e a página citada apontaria para outro documento sem aviso nenhum (regra 1).
-  if (vigenteRes.error) {
-    return indisponivel(`Escolha da versão falhou (fn_versao_com_extracao): ${vigenteRes.error.message}`, 500);
+  const versoes = (docRes.data.documento_versao as unknown as VersaoDoOriginal[] | null) ?? [];
+  // `?versao=` é a versão que a TELA citou (fatos e linhas do detalhe a passam): manda sobre a
+  // função. Só sem ele (botão do cabeçalho de link antigo) a função decide, e só então é chamada.
+  const pedida = req.nextUrl.searchParams.get("versao");
+  let vigenteId: string | null = null;
+  if (!pedida) {
+    const vigenteRes = await supabase.rpc("fn_versao_com_extracao", { p_documento_id: docId });
+    // Falha da função NÃO cai na mais recente: abriria um arquivo diferente do que a tela mostra,
+    // e a página citada apontaria para outro documento sem aviso nenhum (regra 1).
+    if (vigenteRes.error) {
+      return indisponivel(`Escolha da versão falhou (fn_versao_com_extracao): ${vigenteRes.error.message}`, "falha_tecnica", 500);
+    }
+    vigenteId = vigenteRes.data as string | null;
   }
-  const versao = versoes.find((v) => v.id === (vigenteRes.data as string | null)) ?? versoes[0];
+  const escolha = escolherVersaoDoOriginal(versoes, pedida, vigenteId);
+  if (!("versao" in escolha)) return indisponivel(escolha.motivo, escolha.tipo);
+  const versao = escolha.versao;
 
-  if (!versao) return indisponivel("O documento não tem versão registrada.");
-  if (!versao.arquivo_ref) return indisponivel("A versão do documento não tem referência de arquivo (arquivo_ref vazio).");
+  if (!versao.arquivo_ref) return indisponivel("A versão do documento não tem referência de arquivo (arquivo_ref vazio).", "sem_arquivo");
   if (versao.origem_arquivo && versao.origem_arquivo !== "supabase_storage") {
-    return indisponivel(`O arquivo está em "${versao.origem_arquivo}", fora do bucket do portal.`);
+    return indisponivel(`O arquivo está em "${versao.origem_arquivo}", fora do bucket do portal.`, "origem_externa");
   }
 
   const { data, error } = await supabase.storage
@@ -59,6 +62,7 @@ export async function GET(
   if (error || !data?.signedUrl) {
     return indisponivel(
       `Objeto "${versao.arquivo_ref}" não pôde ser assinado no bucket documentos: ${error?.message ?? "sem URL devolvida"}.`,
+      "nao_assinavel",
     );
   }
 
