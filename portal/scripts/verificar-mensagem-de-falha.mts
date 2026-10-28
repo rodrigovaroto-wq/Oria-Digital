@@ -23,7 +23,8 @@ import {
 } from "../src/lib/espera-do-lote.ts";
 import { agregarCustos, somarCustos, formatarUsd, motivoDaAusencia, type LoteDeCusto } from "../src/lib/custos.ts";
 import {
-  agruparPorDia, categoriaDoTipo, chaveDoDia, cursorValido, funcaoAusente, rotuloDoTipo, textoDoAutor,
+  agruparPorDia, categoriaDoTipo, chaveDeCursorValida, chaveDoDia, cursorValido, funcaoAusente, hrefDosMaisAntigos,
+  lerCursor, rotuloDoTipo, textoDoAutor,
 } from "../src/lib/historico-do-mandato.ts";
 import { readFileSync } from "node:fs";
 
@@ -549,6 +550,56 @@ checar(funcaoAusente({ code: "42883" }) && funcaoAusente({ code: "PGRST202" }) &
   "detecção de função ausente: 42883 e PGRST202 sim, qualquer outro erro não");
 checar(cursorValido("2026-10-28T13:00:00.123456+00:00") && !cursorValido("ontem") && !cursorValido("2026-10-28' or 1=1") && !cursorValido(undefined),
   "cursor da URL: o formato do banco passa, lixo não");
+
+// --- 0215 corrigida (1b25441): cursor composto, autor pela bandeira do banco, "salva" e não "preenchida" ---
+// O cursor é o `em` E a `chave` da última linha mostrada. Sem a chave, paginar só por instante perde o
+// segundo evento de um empate (a apresentação salva todos os campos com o mesmo `preenchido_em`).
+{
+  const EM = "2026-10-28T13:00:00.123456+00:00";
+  const lido = lerCursor(EM, "decisao:7f3a");
+  checar(lido.situacao === "pagina" && lido.antes === EM && lido.chave === "decisao:7f3a",
+    "cursor composto válido não foi lido com em e chave como vieram");
+  checar(lerCursor(undefined, undefined).situacao === "inicio", "sem cursor deveria ser a primeira página");
+  checar(lerCursor(EM, undefined).situacao === "recusado",
+    "cursor só com `em` (sem chave) foi aceito: paginaria por instante e perderia empate");
+  checar(lerCursor(undefined, "decisao:7f3a").situacao === "recusado", "chave sem `em` foi aceita");
+  checar(lerCursor(EM, "").situacao === "recusado" && lerCursor(EM, "   ").situacao === "recusado",
+    "chave vazia ou em branco foi aceita");
+  checar(lerCursor(EM, "x".repeat(301)).situacao === "recusado" && lerCursor(EM, "x".repeat(300)).situacao === "pagina",
+    "o teto de 300 caracteres da chave não vale");
+  checar(lerCursor(EM, "evento:1\n2").situacao === "recusado" && !chaveDeCursorValida("a\u0000b"),
+    "chave com caractere de controle foi aceita");
+  checar(lerCursor("ontem", "evento:1").situacao === "recusado", "`em` inválido com chave válida foi aceito");
+  // A chave real tem `:` e pode ter e-mail e espaço (`vinculo:<epoch>:<e-mail>`, `apresentacao:<campo>`).
+  checar(chaveDeCursorValida("vinculo:1761656400.123456:ana@oria.com") && chaveDeCursorValida("apresentacao:visão geral"),
+    "chave real com ':', '@' ou espaço foi recusada");
+  // O link volta com os microssegundos inteiros e a chave codificada, e é lido de volta igual.
+  const href = hrefDosMaisAntigos("c1", { em: EM, chave: "vinculo:1:ana@oria.com" });
+  const q = new URL(href, "http://x").searchParams;
+  const volta = lerCursor(q.get("antes") ?? undefined, q.get("chave") ?? undefined);
+  checar(volta.situacao === "pagina" && volta.antes === EM && volta.chave === "vinculo:1:ana@oria.com" && href.includes("&chave="),
+    "o link de 'Carregar mais antigos' não leva em e chave íntegros (microssegundos ou chave perdidos)");
+}
+// Autor: a bandeira do banco manda; o tipo é só rede.
+checar(/^Automático/.test(textoDoAutor("extracao_aceita", null, { automatico: true })),
+  "auto-aceite (autor nulo + automatico) não ganhou texto próprio");
+checar(textoDoAutor("extracao_aceita", null, { automatico: true }) !== "Sistema"
+  && textoDoAutor("extracao_aceita", null, {}) === "Sistema",
+  "auto-aceite virou 'Sistema' genérico, ou o nulo sem bandeira deixou de ser 'Sistema'");
+checar(/não registrado/i.test(textoDoAutor("qualquer_tipo", null, { autor_desconhecido: true })),
+  "autor_desconhecido não foi lido da referência (só o tipo valia)");
+checar(/não registrado/i.test(textoDoAutor("documento_recebido", null, null)) && /não registrado/i.test(textoDoAutor("documento_recebido", null, "lixo")),
+  "sem a bandeira, o fallback por tipo do recebimento sumiu");
+checar(textoDoAutor("extracao_aceita", "ana@oria.com", { automatico: true }) === "ana@oria.com",
+  "autor gravado perdeu para a bandeira: pessoa nomeada tem de aparecer");
+checar(textoDoAutor("extracao_aceita", null, { automatico: "true" }) === "Sistema",
+  "bandeira que não é o booleano true foi tratada como verdadeira");
+// Rótulo: "salva" (último salvamento), e o nome antigo não afirma autoria do conteúdo.
+checar(/salva/i.test(rotuloDoTipo("apresentacao_salva")) && !/preenchid/i.test(rotuloDoTipo("apresentacao_salva"))
+  && categoriaDoTipo("apresentacao_salva") === "modelagem",
+  "apresentacao_salva sem rótulo de salvamento ou fora de 'modelagem'");
+checar(rotuloDoTipo("apresentacao_preenchida") === "apresentacao_preenchida" && categoriaDoTipo("apresentacao_preenchida") === "outros",
+  "o nome antigo apresentacao_preenchida deveria cair cru em 'Outros', não ser rotulado como autoria");
 
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);

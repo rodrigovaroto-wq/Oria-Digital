@@ -46,14 +46,14 @@ export function LinhaDoTempo({ casoId, eventos }: Readonly<{ casoId: string; eve
             <section key={dia.chave} aria-label={dia.rotulo}>
               <h2 className="font-titulo text-base font-medium capitalize text-tinta-900">{dia.rotulo}</h2>
               <ol className="mt-3 divide-y divide-tinta-200 rounded-md border border-tinta-200 bg-folha">
-                {dia.eventos.map((e, i) => (
-                  <li key={`${e.em}-${e.tipo}-${i}`} className="flex gap-4 p-3 text-sm">
+                {dia.eventos.map((e) => (
+                  <li key={e.chave} className="flex gap-4 p-3 text-sm">
                     <time dateTime={e.em} className="w-12 shrink-0 tabular-nums text-tinta-600">{horaDoEvento(e.em)}</time>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-tinta-900">{rotuloDoTipo(e.tipo)}</p>
                       <p className="mt-0.5 break-words text-tinta-800">{e.resumo}</p>
                       <p className="mt-1 text-xs text-tinta-600">
-                        {textoDoAutor(e.tipo, e.autor)}
+                        {textoDoAutor(e.tipo, e.autor, e.referencia)}
                         {e.documento_id && (
                           <>
                             {" · "}

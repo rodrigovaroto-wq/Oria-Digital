@@ -1,33 +1,39 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
-import { cursorValido, funcaoAusente, type EventoDoHistorico } from "@/lib/historico-do-mandato";
+import { funcaoAusente, hrefDosMaisAntigos, lerCursor, type EventoDoHistorico } from "@/lib/historico-do-mandato";
 import { LinhaDoTempo } from "./linha-do-tempo";
 
 // O HISTÓRICO DO MANDATO (0215, `fn_historico_do_caso`): quem fez o quê e quando, do mais novo ao mais
 // velho. Não é aba: alcança-se pelo menu ⋯ do mandato.
 //
 // PÁGINA DE 100, PEDINDO 101. O 101º só existe para saber se há mais antigos: sem ele, uma página
-// cheia de exatamente 100 diria "carregar mais" para uma página vazia. O cursor é o `em` do último
-// mostrado, TEXTO como o banco devolveu (microssegundos incluídos — passar por Date os perderia e a
-// próxima página repetiria ou pularia o evento da borda). TETO CONHECIDO da 0215: dois eventos no
-// MESMO instante exato podem cair um em cada página e o segundo se perder.
+// cheia de exatamente 100 diria "carregar mais" para uma página vazia. O cursor é COMPOSTO: o `em` e a
+// `chave` da última linha mostrada. O `em` vai como TEXTO, como o banco devolveu (microssegundos
+// incluídos — passar por Date os perderia e o empate deixaria de ser igual); a `chave` desempata os
+// eventos do mesmo instante, e a ordem (em desc, chave desc) é total, então nenhum evento cai entre
+// duas páginas. Sem os dois, a página recusa em vez de paginar só por instante.
 const POR_PAGINA = 100;
 
 export default async function HistoricoDoMandatoPage({
   params, searchParams,
-}: Readonly<{ params: Promise<{ id: string }>; searchParams: Promise<{ antes?: string | string[] }> }>) {
+}: Readonly<{ params: Promise<{ id: string }>; searchParams: Promise<{ antes?: string | string[]; chave?: string | string[] }> }>) {
   const { id } = await params;
   const sp = await searchParams;
   const antesBruto = Array.isArray(sp.antes) ? sp.antes[0] : sp.antes;
-  const cursorRecusado = antesBruto !== undefined && !cursorValido(antesBruto);
+  const chaveBruta = Array.isArray(sp.chave) ? sp.chave[0] : sp.chave;
+  const cursor = lerCursor(antesBruto, chaveBruta);
+  const cursorRecusado = cursor.situacao === "recusado";
+  const paginando = cursor.situacao === "pagina";
 
   let eventos: EventoDoHistorico[] = [];
   let erro: { code?: string | null; message: string } | null = null;
   if (!cursorRecusado) {
     const supabase = await createClient();
     const { data, error } = await supabase.rpc("fn_historico_do_caso", {
-      p_caso_id: id, p_limite: POR_PAGINA + 1, p_antes: antesBruto ?? null,
+      p_caso_id: id, p_limite: POR_PAGINA + 1,
+      p_antes: cursor.situacao === "pagina" ? cursor.antes : null,
+      p_antes_chave: cursor.situacao === "pagina" ? cursor.chave : null,
     });
     if (error) erro = error;
     else eventos = (data ?? []) as EventoDoHistorico[];
@@ -35,7 +41,7 @@ export default async function HistoricoDoMandatoPage({
 
   const haMais = eventos.length > POR_PAGINA;
   const pagina = eventos.slice(0, POR_PAGINA);
-  const proximo = pagina.length > 0 ? pagina[pagina.length - 1].em : null;
+  const ultima = pagina.length > 0 ? pagina[pagina.length - 1] : null;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 py-2">
@@ -59,7 +65,7 @@ export default async function HistoricoDoMandatoPage({
 
       {cursorRecusado && (
         <div role="alert" className="rounded-md border border-risco-300 bg-risco-50 p-4 text-sm text-risco-900">
-          O ponto de partida pedido na página não é uma data válida, então nenhum evento foi lido.{" "}
+          O ponto de partida pedido na página não é válido (faltou a data ou o identificador do último evento, ou algum deles está malformado), então nenhum evento foi lido.{" "}
           <Link href={`/casos/${id}/historico`} className="underline">Voltar ao mais recente</Link>
         </div>
       )}
@@ -89,23 +95,23 @@ export default async function HistoricoDoMandatoPage({
 
       {!erro && !cursorRecusado && (
         <>
-          {antesBruto && (
+          {paginando && (
             <p className="text-sm">
               <Link href={`/casos/${id}/historico`} className="underline">← Voltar aos mais recentes</Link>
             </p>
           )}
           {pagina.length === 0 ? (
             <p className="text-sm text-tinta-700">
-              {antesBruto
+              {paginando
                 ? "Não há eventos mais antigos que este ponto."
                 : "Nenhum evento registrado para este mandato, dentro do que o histórico cobre (veja a nota acima)."}
             </p>
           ) : (
             <LinhaDoTempo casoId={id} eventos={pagina} />
           )}
-          {pagina.length > 0 && (haMais && proximo ? (
+          {pagina.length > 0 && (haMais && ultima ? (
             <p>
-              <Link href={`/casos/${id}/historico?antes=${encodeURIComponent(proximo)}`} className="btn-secundario">
+              <Link href={hrefDosMaisAntigos(id, ultima)} className="btn-secundario">
                 Carregar mais antigos
               </Link>
             </p>

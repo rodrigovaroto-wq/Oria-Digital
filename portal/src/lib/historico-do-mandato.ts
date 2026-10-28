@@ -16,6 +16,8 @@ export interface EventoDoHistorico {
   resumo: string;
   documento_id: string | null;
   referencia: unknown;
+  /** Identificador estável e ÚNICO do evento (`<origem>:<id>`): desempate da ordem e metade do cursor. */
+  chave: string;
 }
 
 export type CategoriaDoHistorico =
@@ -46,7 +48,12 @@ const TIPOS: Record<string, { rotulo: string; categoria: CategoriaDoHistorico }>
   premissa_aplicada_em_lote: { rotulo: "Premissa aplicada em lote", categoria: "modelagem" },
   premissa_vinculada_a_linha: { rotulo: "Premissa vinculada a linhas", categoria: "modelagem" },
   modelagem_definida: { rotulo: "Modelagem definida", categoria: "modelagem" },
-  apresentacao_preenchida: { rotulo: "Apresentação preenchida", categoria: "modelagem" },
+  // "Salva", não "preenchida": a tabela guarda só o ÚLTIMO SALVAMENTO de cada campo (a action regrava
+  // autor e instante de todos os campos a cada salvamento), então o autor é quem salvou por último,
+  // não quem escreveu o conteúdo. `apresentacao_preenchida` (nome antigo, da 0215 antes da correção) foi
+  // REMOVIDO do mapa de propósito: nada o emite mais, e o rótulo antigo afirmava autoria do conteúdo.
+  // Se alguma linha antiga ainda chegasse com ele, cairia em "Outros" com o nome cru (regra 1: aparece).
+  apresentacao_salva: { rotulo: "Apresentação salva (último salvamento do campo)", categoria: "modelagem" },
   caso_criado: { rotulo: "Mandato criado", categoria: "mandato" },
   caso_aprovado: { rotulo: "Mandato aprovado", categoria: "mandato" },
   caso_fechado: { rotulo: "Mandato fechado", categoria: "mandato" },
@@ -65,16 +72,31 @@ export function categoriaDoTipo(tipo: string): CategoriaDoHistorico {
   return TIPOS[tipo]?.categoria ?? "outros";
 }
 
+function bandeira(referencia: unknown, nome: "autor_desconhecido" | "automatico"): boolean {
+  return typeof referencia === "object" && referencia !== null
+    && (referencia as Record<string, unknown>)[nome] === true;
+}
+
 /**
  * QUEM FEZ. A 0215 devolve o autor como foi gravado e NULL quando o ator é `sistema:*` ou `n8n*`
- * ("a palavra é da tela"). Duas exceções que a tela precisa dizer com verdade:
- *  - `documento_recebido` com NULL: quem recebe é o n8n e a tabela `documento` não guarda quem
- *    enviou — NULL aqui é "não registrado", e escrever "Sistema" afirmaria que ninguém enviou.
- *  - `portal:desconhecido`: foi gravado quando a sessão não tinha e-mail; não é uma pessoa nomeada.
+ * ("a palavra é da tela"). O NULL tem TRÊS significados, e o banco diz qual em `referencia`:
+ *  - `autor_desconhecido = true` (documento_recebido): a tabela `documento` não guarda quem enviou —
+ *    "não registrado"; escrever "Sistema" afirmaria que ninguém enviou. Sem a bandeira, o tipo
+ *    `documento_recebido` continua valendo como rede (linha de função mais antiga ou `referencia` perdida).
+ *  - `automatico = true` (extracao_aceita por auto-aceite): quem aceitou foi o ajuste de rigor do
+ *    sistema, uma regra e não uma falha de registro. "Sistema" genérico esconderia que ninguém
+ *    revisou aquela extração; o texto cita o nome que a própria tela já usa ("ajuste de rigor").
+ *  - nenhum dos dois: o sistema agiu ("Sistema").
+ * `portal:desconhecido` foi gravado quando a sessão não tinha e-mail; não é uma pessoa nomeada.
+ * Autor gravado vence qualquer bandeira.
  */
-export function textoDoAutor(tipo: string, autor: string | null): string {
+export function textoDoAutor(tipo: string, autor: string | null, referencia?: unknown): string {
   if (autor === null || autor.trim() === "") {
-    return tipo === "documento_recebido" ? "Não registrado (quem enviou o documento não é guardado)" : "Sistema";
+    if (bandeira(referencia, "automatico")) return "Automático (ajuste de rigor do sistema, sem revisão de pessoa)";
+    if (bandeira(referencia, "autor_desconhecido") || tipo === "documento_recebido") {
+      return "Não registrado (quem enviou o documento não é guardado)";
+    }
+    return "Sistema";
   }
   if (autor === "portal:desconhecido") return "Não identificado (sessão sem e-mail)";
   return autor;
@@ -121,9 +143,40 @@ export function funcaoAusente(erro: { code?: string | null } | null | undefined)
   return erro?.code === "42883" || erro?.code === "PGRST202";
 }
 
-// O cursor vem da URL (fronteira de confiança) e vai para `p_antes`: só o formato ISO que o
-// próprio banco devolve em `em` passa; qualquer outra coisa é recusada, não "corrigida".
+// O cursor vem da URL (fronteira de confiança) e vai para `p_antes` e `p_antes_chave`: só o formato ISO
+// que o próprio banco devolve em `em` passa; qualquer outra coisa é recusada, não "corrigida".
 const ISO = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(\.\d{1,6})?(Z|[+-]\d{2}(:?\d{2})?)$/;
 export function cursorValido(antes: string | undefined): boolean {
   return antes !== undefined && ISO.test(antes) && !Number.isNaN(Date.parse(antes));
+}
+
+// `chave` = `<origem>:<id>`, mas parte dela vem de texto gravado (campo da apresentação, e-mail no
+// vínculo), então o formato não é fechado: exige não vazia, sem caractere de controle e no máximo 300
+// (maior chave medida na 0215: `vinculo:<epoch>:<e-mail>` e `apresentacao:<campo>`, bem abaixo disso).
+export const TAMANHO_MAXIMO_DA_CHAVE = 300;
+export function chaveDeCursorValida(chave: string | undefined): boolean {
+  return chave !== undefined && chave.trim() !== "" && chave.length <= TAMANHO_MAXIMO_DA_CHAVE && !/[\u0000-\u001f\u007f]/.test(chave);
+}
+
+export type CursorDoHistorico =
+  | { situacao: "inicio" }
+  | { situacao: "pagina"; antes: string; chave: string }
+  | { situacao: "recusado" };
+
+/**
+ * Lê o cursor composto da URL. Os DOIS ou nenhum: sem `chave` válida não se pagina só por `em` — o
+ * empate de instante é rotina (a apresentação salva todos os campos com o mesmo `preenchido_em`) e a
+ * página só por instante perderia o segundo evento do empate sem avisar. Um sem o outro é recusado.
+ */
+export function lerCursor(antes: string | undefined, chave: string | undefined): CursorDoHistorico {
+  if (antes === undefined && chave === undefined) return { situacao: "inicio" };
+  if (antes !== undefined && chave !== undefined && cursorValido(antes) && chaveDeCursorValida(chave)) {
+    return { situacao: "pagina", antes, chave };
+  }
+  return { situacao: "recusado" };
+}
+
+/** O link de "Carregar mais antigos": `em` e `chave` da última linha MOSTRADA, `em` como TEXTO do banco. */
+export function hrefDosMaisAntigos(casoId: string, ultima: Pick<EventoDoHistorico, "em" | "chave">): string {
+  return `/casos/${casoId}/historico?antes=${encodeURIComponent(ultima.em)}&chave=${encodeURIComponent(ultima.chave)}`;
 }
