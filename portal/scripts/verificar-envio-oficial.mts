@@ -29,7 +29,7 @@ import {
   CABECA_BYTES, MAX_ITENS_POR_CHAMADA, detectarPeloArquivo, separarOficiais, destinoDe, partirEmLotes,
   montarCabecalho, gravarResumo, obterCasoId, fluxoComProgresso, descreverContagem, descreverDesfecho,
   achadosDaConferencia, rotuloDoStatus, desfechoEncerra, decidirNaoOficial, nomeParaN8n, rotuloDaEntrada,
-  contarEntradasDoZip, ORCAMENTO_NAO_OFICIAL_BYTES,
+  contarEntradasDoZip, ORCAMENTO_NAO_OFICIAL_BYTES, MandatoSemAcessoError, mensagemMandatoSemAcesso,
   type ChamarRpc, type EnvelopeDoLeitor, type ResumoDoLeitor, type EntradaDoZip,
 } from "../src/lib/envio-oficial.ts";
 import { percorrerPacote, type EventoDoZip } from "../src/lib/pacote.ts";
@@ -248,12 +248,12 @@ const concluirOk = (extra = {}) => ({ resumo: "completo", registros: 12001, grup
 // ---------------------------------------------------------------------------
 // 5. O CASO_ID: pelo fn_upsert_caso (o do n8n), com o ator da tela
 // ---------------------------------------------------------------------------
-function clienteDeCasos(opts: { erro?: string; dado?: unknown }) {
+function clienteDeCasos(opts: { erro?: string; codigo?: string; dado?: unknown }) {
   const log: string[] = [];
   const cliente = {
     rpc: async (funcao: string, args: Record<string, unknown>) => {
       log.push(`${funcao} ${JSON.stringify(args)}`);
-      return opts.erro ? { data: null, error: { message: opts.erro } } : { data: "dado" in opts ? opts.dado : "id-do-banco", error: null };
+      return opts.erro ? { data: null, error: { message: opts.erro, ...(opts.codigo ? { code: opts.codigo } : {}) } } : { data: "dado" in opts ? opts.dado : "id-do-banco", error: null };
     },
   };
   return { cliente: cliente as unknown as Parameters<typeof obterCasoId>[0], log };
@@ -270,6 +270,18 @@ function clienteDeCasos(opts: { erro?: string; dado?: unknown }) {
   let msg = "";
   try { await obterCasoId(clienteDeCasos({ erro: "permission denied for function fn_upsert_caso" }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
   checar(msg.includes("permission denied") && msg.includes("AMO"), `erro do banco ao resolver o mandato não sobe com a mensagem dele: "${msg}"`);
+  // A RECUSA DA 0216 vira a frase humana, a mesma que o servidor devolve (403) e a tela mostra.
+  // O texto do banco é o que a 0216 levanta (42501); sem o código, ou com outro 42501, NÃO é esta causa.
+  const recusa = "o mandato existe e você não é membro; peça acesso ao administrador";
+  let erroRecusa: unknown = null;
+  try { await obterCasoId(clienteDeCasos({ erro: recusa, codigo: "42501" }).cliente, "AMO"); } catch (e) { erroRecusa = e; }
+  checar(erroRecusa instanceof MandatoSemAcessoError && (erroRecusa as Error).message === "O mandato «AMO» já existe e você não é membro dele. Peça acesso a um administrador.",
+    `a recusa 42501 da 0216 não virou a mensagem humana: "${(erroRecusa as Error | null)?.message}"`);
+  checar(mensagemMandatoSemAcesso("X") === "O mandato «X» já existe e você não é membro dele. Peça acesso a um administrador.", "a frase do mandato sem acesso mudou");
+  checar(!/42501|fn_upsert_caso|permission|peça acesso ao administrador;/.test((erroRecusa as Error | null)?.message ?? ""), "a mensagem do mandato sem acesso vazou termo técnico");
+  msg = "";
+  try { await obterCasoId(clienteDeCasos({ erro: "permission denied for function fn_upsert_caso", codigo: "42501" }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
+  checar(msg.includes("permission denied"), `um 42501 de OUTRA causa (sem grant) foi lido como "sem membro": "${msg}"`);
   msg = "";
   try { await obterCasoId(clienteDeCasos({ dado: null }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
   checar(msg.includes("não devolveu o id"), `resposta sem id virou mandato: "${msg}"`);
@@ -337,6 +349,24 @@ const WORKER = lerFonte("../src/lib/leitor-worker.ts");
 const LIMITE = lerFonte("../src/lib/limite-de-envio.ts");
 for (const chamada of ["separarOficiais(", "gravarResumo(", "lerNoNavegador(", "obterCasoId(", "detectarPeloArquivo("]) {
   checar(TELA.includes(chamada), `a tela de envio parou de chamar ${chamada}`);
+}
+// O MANDATO É GARANTIDO PARA TODO LOTE (0216): o lote só de PDF também passa por `obterCasoId`, ANTES de
+// qualquer envio. Estrutural porque o componente não roda aqui; a prova do comportamento é a recusa acima.
+{
+  const iCaso = TELA.indexOf("caso = await obterCasoId(");
+  const iOficiais = TELA.indexOf("if (aLerAqui.length > 0 || zips.length > 0)");
+  checar(iCaso > 0 && iOficiais > 0 && iCaso < iOficiais,
+    "o `obterCasoId` voltou para dentro do ramo dos oficiais/zip: o lote só de PDF volta a ir ao n8n sem garantir a pertinência ao mandato");
+  checar(iCaso < TELA.indexOf('fetch("/api/intake/destino")') && iCaso < TELA.indexOf("await enviarPeloPortal(") && iCaso < TELA.indexOf("await enviarDireto("),
+    "o mandato deixou de ser garantido ANTES do envio ao n8n (proxy ou direto)");
+  const trecho = TELA.slice(iCaso, iOficiais);
+  checar(/catch \(err\) \{[^}]*setErro\(\(err as Error\)\.message\);\s*return;/.test(trecho),
+    "a recusa do mandato deixou de mostrar a mensagem e PARAR o envio");
+  const ROTA = lerFonte("../src/app/api/intake/route.ts");
+  const iRota = ROTA.indexOf("await obterCasoId(");
+  checar(iRota > 0 && iRota < ROTA.indexOf("await descobrirNomesDeCampo(") && iRota < ROTA.indexOf("await fetch(url"),
+    "a rota /api/intake deixou de garantir a pertinência (com a sessão do usuário) ANTES de encaminhar ao n8n");
+  checar(/MandatoSemAcessoError[\s\S]{0,120}status: 403/.test(ROTA), "a rota /api/intake não devolve 403 com a frase humana ao não membro");
 }
 checar(TELA.indexOf("separarOficiais(") < TELA.indexOf("planejarEnvio(") && TELA.indexOf("processarOficiais(aLerAqui") < TELA.indexOf("planejarEnvio("),
   "o lote deixou de ser separado (e os oficiais lidos) ANTES de planejar o envio ao n8n");

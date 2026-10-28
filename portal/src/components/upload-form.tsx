@@ -532,15 +532,24 @@ export default function UploadForm({
       let aoN8n = aoN8nDireto;
       // Os vazios já foram avisados acima e nunca ficam na lista (o envio de sempre também os limpava).
       let restantes = arquivos.filter((a) => a.size > 0);
+      // O MANDATO É GARANTIDO PARA TODO LOTE, e antes de qualquer envio ao n8n ou ao Storage.
+      //
+      // Antes da 0216 isto só rodava com arquivo oficial ou zip; o lote só de PDF ia direto ao n8n,
+      // que faz o upsert como service_role, sem identidade. Com a leitura restrita ao membro isso
+      // deixou dois buracos: (a) quem NÃO é membro e digita o nome de um mandato existente gravava
+      // documento no mandato alheio e gastava extração, e a tela ficava em "aguarde" até 160 min
+      // porque o status não enxergava o caso; (b) mandato NOVO criado pelo n8n nascia sem membro e
+      // sumia para quem o criou. Chamar `fn_upsert_caso` AQUI, com a sessão do usuário, faz o
+      // criador virar membro e recusa o não membro (42501) antes de gastar extração.
+      let caso;
+      try {
+        caso = await obterCasoId(createClient(), mandato.trim(), casoId);
+      } catch (err) {
+        // Antes de ler e de enviar QUALQUER coisa: nada saiu.
+        setErro((err as Error).message);
+        return;
+      }
       if (aLerAqui.length > 0 || zips.length > 0) {
-        let caso;
-        try {
-          caso = await obterCasoId(createClient(), mandato.trim(), casoId);
-        } catch (err) {
-          // Antes de ler e de enviar QUALQUER coisa: nada saiu, e a mensagem é a do banco.
-          setErro((err as Error).message);
-          return;
-        }
         const chavesLidas = new Set([...aLerAqui, ...zips].map(chaveDe));
         setOficiais((rs) => [
           ...rs.filter((r) => !chavesLidas.has(r.chave)),

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { descobrirNomesDeCampo } from "@/lib/n8n-form";
+import { createClient } from "@/lib/supabase/server";
+import { obterCasoId, MandatoSemAcessoError } from "@/lib/envio-oficial";
 import { TETO_DA_FUNCTION_BYTES, TETO_DO_PROXY_BYTES, formatarBytes } from "@/lib/limite-de-envio";
 
 // ESTA ROTA SÓ EXISTE PARA O LOTE QUE CABE NELA.
@@ -93,6 +95,23 @@ export async function POST(request: Request) {
       },
       { status: 413 },
     );
+  }
+
+  // A PERTINÊNCIA AO MANDATO É GARANTIDA AQUI TAMBÉM, com a sessão de quem enviou (0216).
+  //
+  // O n8n faz o upsert do caso como service_role, sem identidade: sem esta chamada, quem não é
+  // membro de um mandato existente gravava documento nele só digitando o nome, e o mandato novo
+  // criado pelo n8n nascia sem membro. A tela já chama o mesmo `obterCasoId` antes de enviar, mas
+  // o servidor não pode confiar no cliente (uma aba de versão anterior, um POST direto): a
+  // recusa é a mesma e vem ANTES de encaminhar qualquer byte ao n8n. `fn_upsert_caso` é idempotente
+  // por nome, então a segunda chamada (a da tela já fez a primeira) só devolve o id.
+  try {
+    await obterCasoId(await createClient(), mandato);
+  } catch (e) {
+    if (e instanceof MandatoSemAcessoError) {
+      return NextResponse.json({ error: e.message }, { status: 403 });
+    }
+    return NextResponse.json({ error: `${(e as Error).message} Nada foi enviado ao processamento.` }, { status: 502 });
   }
 
   const campos = await descobrirNomesDeCampo(url);
