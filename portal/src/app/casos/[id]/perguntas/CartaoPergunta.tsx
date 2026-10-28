@@ -62,7 +62,7 @@ export function CartaoPergunta({
           <span className="chip bg-tinta-200 text-tinta-600">descartada</span>
         )}
         <span className="ml-auto text-xs text-tinta-400" title="código da pergunta no catálogo">
-          {p.codigo}
+          catálogo · {p.codigo}
         </span>
       </div>
 
@@ -86,10 +86,6 @@ export function CartaoPergunta({
           <input type="hidden" name="texto" value={p.pergunta} />
           <button
             type="submit"
-            title={
-              "Registra que esta pergunta foi enviada ao cliente, com o texto exato acima. "
-              + "O registro não pode ser apagado, e enviar de novo cria outro registro."
-            }
             className="rounded-md border border-ok-200 bg-ok-50 px-2.5 py-1.5 text-xs
                        font-semibold text-ok-800 transition-colors hover:bg-ok-100"
           >
@@ -104,10 +100,6 @@ export function CartaoPergunta({
           <input type="hidden" name="texto" value={p.pergunta} />
           <button
             type="submit"
-            title={
-              "Registra que esta pergunta NÃO será feita — a sugestão continua na lista, com o "
-              + "rótulo. Serve para dizer à equipe que alguém já olhou e decidiu não perguntar."
-            }
             className="rounded-md border border-tinta-200 bg-folha px-2.5 py-1.5 text-xs
                        font-medium text-tinta-600 transition-colors hover:bg-tinta-50"
           >
@@ -115,6 +107,21 @@ export function CartaoPergunta({
           </button>
         </form>
       </div>
+
+      {/* O QUE CADA BOTÃO FAZ. Estava só em title= (some no celular, passa
+          despercebido no desktop); quem decide precisa ler antes de clicar. */}
+      <ul className="mt-2 space-y-0.5 text-xs text-tinta-500">
+        <li>
+          <span className="font-medium text-tinta-700">{enviada ? "Registrar novo envio" : "Marcar como enviada"}:</span>{" "}
+          registra que esta pergunta foi enviada ao cliente, com o texto exato acima. O registro
+          não pode ser apagado, e enviar de novo cria outro registro.
+        </li>
+        <li>
+          <span className="font-medium text-tinta-700">Não vou perguntar:</span>{" "}
+          registra que esta pergunta NÃO será feita — a sugestão continua na lista, com o rótulo.
+          Serve para dizer à equipe que alguém já olhou e decidiu não perguntar.
+        </li>
+      </ul>
 
       {/* QUEM E QUANDO. Sem isto, "já enviada" não diz se foi hoje ou em março,
           nem por quem — e é a diferença entre cobrar o cliente e perguntar duas

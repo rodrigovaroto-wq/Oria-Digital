@@ -314,10 +314,14 @@ export default async function PlanilhaDocumentoPage({
                               className={`rounded px-1.5 py-0.5 text-xs font-medium uppercase ${
                                 aceito ? "bg-ok-100 text-ok-700" : "bg-alerta-100 text-alerta-700"
                               }`}
-                              title={aceito && linha.aceito_por ? `Aceito por ${linha.aceito_por}` : ""}
                             >
                               {aceito ? "aceito" : "pendente"}
                             </span>
+                            {aceito && linha.aceito_por && (
+                              <p className="mt-0.5 text-xs font-normal normal-case text-tinta-500">
+                                por {linha.aceito_por}
+                              </p>
+                            )}
                           </td>
                           <td className="px-3 py-1.5 align-top font-normal">
                             <ClasseContabil

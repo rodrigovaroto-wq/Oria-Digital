@@ -80,7 +80,6 @@ export function ClasseContabil({
         <>
           <span
             className="inline-block rounded border border-dashed border-tinta-300 px-1.5 py-0.5 text-xs text-tinta-600"
-            title={justificativa ?? undefined}
           >
             {nomeDe(sugestao)}
           </span>
@@ -88,6 +87,9 @@ export function ClasseContabil({
               única coisa distinguindo um palpite de uma decisão — e cor e traço
               não carregam significado sozinhos nesta casa. */}
           <p className="text-xs text-tinta-400">sugerido, não confirmado</p>
+          {justificativa && (
+            <p className="text-xs text-tinta-500">Regra: {justificativa}</p>
+          )}
         </>
       )}
 
