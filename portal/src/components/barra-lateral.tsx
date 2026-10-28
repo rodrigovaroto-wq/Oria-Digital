@@ -190,7 +190,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   const noInicio = caminho === "/casos";
   const naLista = caminho === "/casos/todos";
   const naCriacao = caminho === "/casos/novo";
-  const naQualidade = caminho === "/autonomia";
+  const naAdministracao = caminho === "/administracao" || caminho.startsWith("/administracao/");
 
   // ABRIR UM MANDATO É TELA CHEIA. A barra existe para trocar de caso, e nesse
   // momento não há caso para trocar — ela só roubaria largura de um formulário
@@ -252,11 +252,11 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
         <IconeMandatos />
       </Link>
       <Link
-        href="/autonomia"
-        title="Qualidade da automação"
-        aria-label="Qualidade da automação"
-        aria-current={naQualidade ? "page" : undefined}
-        className={`${TRILHO_BASE} mt-auto ${naQualidade ? ITEM_ATIVO : ITEM_INATIVO}`}
+        href="/administracao"
+        title="Administração"
+        aria-label="Administração"
+        aria-current={naAdministracao ? "page" : undefined}
+        className={`${TRILHO_BASE} mt-auto ${naAdministracao ? ITEM_ATIVO : ITEM_INATIVO}`}
       >
         <IconeQualidade />
       </Link>
@@ -374,12 +374,12 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
               Administração
             </p>
             <Link
-              href="/autonomia"
-              aria-current={naQualidade ? "page" : undefined}
-              className={`${ITEM_BASE} ${naQualidade ? ITEM_ATIVO : ITEM_INATIVO}`}
+              href="/administracao"
+              aria-current={naAdministracao ? "page" : undefined}
+              className={`${ITEM_BASE} ${naAdministracao ? ITEM_ATIVO : ITEM_INATIVO}`}
             >
               <IconeQualidade />
-              Qualidade da automação
+              Qualidade e custos
             </Link>
           </div>
         </nav>

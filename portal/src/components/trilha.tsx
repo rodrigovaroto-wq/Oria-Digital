@@ -25,7 +25,8 @@ export function passosDaTrilha(caminho: string, nomes: Record<string, string>): 
   if (limpo === "/casos") return [{ rotulo: "Início" }];
   if (limpo === "/casos/todos") return [{ rotulo: "Mandatos" }];
   if (limpo === "/casos/novo") return [{ rotulo: "Mandatos", href: "/casos/todos" }, { rotulo: "Novo mandato" }];
-  if (limpo === "/autonomia") return [{ rotulo: "Administração" }, { rotulo: "Qualidade da automação" }];
+  if (limpo === "/administracao") return [{ rotulo: "Administração" }, { rotulo: "Qualidade da automação" }];
+  if (limpo === "/administracao/custos") return [{ rotulo: "Administração" }, { rotulo: "Custos" }];
   const m = /^\/casos\/([^/]+)/.exec(limpo);
   if (m) return [{ rotulo: "Mandatos", href: "/casos/todos" }, { rotulo: nomes[m[1]] ?? "Mandato" }];
   return [];

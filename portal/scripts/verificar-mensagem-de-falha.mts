@@ -21,6 +21,7 @@ import {
   semPrimeiroSinalMs, janelaPara, semProgressoMs, SEGUNDOS_POR_DOCUMENTO,
   vereditoDoLote, carenciaDoFechamentoMs, estimativaEmMinutos,
 } from "../src/lib/espera-do-lote.ts";
+import { agregarCustos, somarCustos, formatarUsd, type LoteDeCusto } from "../src/lib/custos.ts";
 import { readFileSync } from "node:fs";
 
 let ok = 0;
@@ -451,6 +452,45 @@ checar(carenciaDoFechamentoMs(2) === 2 * 60 * 1000,
 checar(lote({ loteFechou: null }).estado === "pronto",
   "uma consulta que falhou passou a derrubar um lote que terminou de verdade");
 
+// ---------------------------------------------------------------------------
+// CUSTOS (aba da Administração) — o custo que falta não vira "US$ 0,00".
+// Os lotes abaixo são ARRANJO DE TESTE da regra (null não soma como zero), não
+// reprodução de um lote real: não afirmam nenhum valor de produção (regra 4).
+const AGORA_DOS_CUSTOS = new Date("2026-10-28T12:00:00Z");
+const lc = (caso: string, dias: number, docs: number | null, custo: number | string | null): LoteDeCusto => ({
+  caso_id: caso, documentos: docs, custo_total_usd: custo,
+  criado_em: new Date(AGORA_DOS_CUSTOS.getTime() - dias * 86_400_000).toISOString(),
+});
+{
+  // A tem um lote medido e um SEM custo; B só tem lote sem custo; C só tem lote fora do período.
+  const ag = agregarCustos([
+    lc("A", 1, 10, 0.5), lc("A", 2, 100, null), lc("B", 3, 5, null), lc("C", 60, 4, 2),
+  ], AGORA_DOS_CUSTOS, 30);
+  const A = ag.porMandato.find((m) => m.casoId === "A")!;
+  const B = ag.porMandato.find((m) => m.casoId === "B")!;
+  const C = ag.porMandato.find((m) => m.casoId === "C")!;
+  checar(A.periodo.custoUsd === 0.5 && A.periodo.semCusto === 1,
+    "o lote sem custo foi somado como zero (ou sumiu sem ser contado): o total deixou de ser piso declarado");
+  checar(A.periodo.custoPorDocumentoUsd === 0.05,
+    "o custo por documento dividiu pelos documentos do lote SEM custo (100) — numerador e denominador de conjuntos diferentes");
+  checar(B.periodo.custoUsd === null && B.periodo.custoPorDocumentoUsd === null,
+    "mandato só com lote sem custo mostrou número em vez de ausência");
+  checar(C.periodo.lotes === 0 && C.periodo.custoUsd === null && C.total.custoUsd === 2,
+    "lote fora da janela entrou no período, ou o total desde o início o perdeu");
+  checar(ag.porMandato[0].casoId === "A" && ag.porMandato[ag.porMandato.length - 1].casoId === "B",
+    "mandato sem custo medido subiu na ordenação, acima de um com custo");
+  checar(ag.periodo.custoUsd === 0.5 && ag.total.custoUsd === 2.5,
+    "a soma geral não bate com a soma dos mandatos (período 0,5 / total 2,5)");
+  checar(somarCustos([]).custoUsd === null && somarCustos([]).lotes === 0,
+    "conjunto vazio devolveu zero em vez de ausência");
+  checar(somarCustos([lc("A", 0, 3, "1.25")]).custoUsd === 1.25,
+    "numeric em texto (como o Postgres pode entregar) não foi lido como número");
+  checar(somarCustos([lc("A", 0, 3, "abc"), lc("A", 0, 3, -1)]).custoUsd === null,
+    "custo ilegível ou negativo foi aceito como valor");
+  checar(formatarUsd(null) === null && formatarUsd(0.0523) === "US$ 0,0523" && formatarUsd(12.3) === "US$ 12,30",
+    "formatação de dólar: null tem de seguir null, e centavos pequenos precisam de 4 casas");
+}
+
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);
   for (const f of falhas) console.error(`  ✗ ${f}`);
@@ -462,3 +502,4 @@ console.log("MENSAGEM DE FALHA OK — toda causa real tem explicação própria,
 console.log("ESPERA DO LOTE OK — o silêncio da barreira e a janela cobrem o lote de 190");
 console.log("FIM DO LOTE OK — execução morta não vira sucesso, e fato conta como conteúdo");
 console.log("VEREDITO DO LOTE OK — pronto exige o lote FECHADO, com carência e sem acusar por \"não sei\"");
+console.log("CUSTOS OK — custo ausente fica ausente, o total é piso declarado e o por-documento usa um só conjunto");

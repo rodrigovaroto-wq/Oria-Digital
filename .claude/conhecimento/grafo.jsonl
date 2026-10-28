@@ -193,9 +193,10 @@
 {"k":"n","id":"arquivo:portal/scripts/verificar-perimetro.mts","t":"arquivo","f":"portal/scripts/verificar-perimetro.mts","txt":"verificar-perimetro.mts"}
 {"k":"n","id":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","t":"arquivo","f":"portal/scripts/verificar-premissas-do-realizado.mts","txt":"verificar-premissas-do-realizado.mts"}
 {"k":"n","id":"arquivo:portal/scripts/verificar-transcricao.mts","t":"arquivo","f":"portal/scripts/verificar-transcricao.mts","txt":"verificar-transcricao.mts"}
+{"k":"n","id":"arquivo:portal/src/app/administracao/custos/page.tsx","t":"arquivo","f":"portal/src/app/administracao/custos/page.tsx","txt":"page.tsx"}
+{"k":"n","id":"arquivo:portal/src/app/administracao/page.tsx","t":"arquivo","f":"portal/src/app/administracao/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/api/intake/route.ts","t":"arquivo","f":"portal/src/app/api/intake/route.ts","txt":"route.ts"}
 {"k":"n","id":"arquivo:portal/src/app/api/intake/status/route.ts","t":"arquivo","f":"portal/src/app/api/intake/status/route.ts","txt":"route.ts"}
-{"k":"n","id":"arquivo:portal/src/app/autonomia/page.tsx","t":"arquivo","f":"portal/src/app/autonomia/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/actions.ts","t":"arquivo","f":"portal/src/app/casos/[id]/actions.ts","txt":"actions.ts"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/documentos/(lista)/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/documentos/(lista)/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/actions.ts","t":"arquivo","f":"portal/src/app/casos/[id]/documentos/[docId]/actions.ts","txt":"actions.ts"}
@@ -221,6 +222,7 @@
 {"k":"n","id":"arquivo:portal/src/components/upload-form.tsx","t":"arquivo","f":"portal/src/components/upload-form.tsx","txt":"upload-form.tsx"}
 {"k":"n","id":"arquivo:portal/src/lib/apresentacao/montar-base.ts","t":"arquivo","f":"portal/src/lib/apresentacao/montar-base.ts","txt":"montar-base.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/busca-global.ts","t":"arquivo","f":"portal/src/lib/busca-global.ts","txt":"busca-global.ts"}
+{"k":"n","id":"arquivo:portal/src/lib/custos.ts","t":"arquivo","f":"portal/src/lib/custos.ts","txt":"custos.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/email-ao-cliente.ts","t":"arquivo","f":"portal/src/lib/email-ao-cliente.ts","txt":"email-ao-cliente.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/envio-oficial.ts","t":"arquivo","f":"portal/src/lib/envio-oficial.ts","txt":"envio-oficial.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/espera-do-lote.ts","t":"arquivo","f":"portal/src/lib/espera-do-lote.ts","txt":"espera-do-lote.ts"}
@@ -1684,12 +1686,14 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-perimetro.mts","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/scripts/verificar-perimetro.mts","l":3}
 {"k":"e","de":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-premissas-do-realizado.mts","l":444}
 {"k":"e","de":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-premissas-do-realizado.mts","l":445}
+{"k":"e","de":"arquivo:portal/src/app/administracao/custos/page.tsx","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"portal/src/app/administracao/custos/page.tsx","l":186}
+{"k":"e","de":"arquivo:portal/src/app/administracao/custos/page.tsx","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"portal/src/app/administracao/custos/page.tsx","l":182}
+{"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_classe_contabil_concordancia","f":"portal/src/app/administracao/page.tsx","l":158}
+{"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_golden_cobertura","f":"portal/src/app/administracao/page.tsx","l":145}
+{"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"portal/src/app/administracao/page.tsx","l":18}
 {"k":"e","de":"arquivo:portal/src/app/api/intake/route.ts","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/src/app/api/intake/route.ts","l":23}
 {"k":"e","de":"arquivo:portal/src/app/api/intake/status/route.ts","rel":"CHAMA","pa":"fn:fn_falhas_abertas","f":"portal/src/app/api/intake/status/route.ts","l":77}
 {"k":"e","de":"arquivo:portal/src/app/api/intake/status/route.ts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"portal/src/app/api/intake/status/route.ts","l":12}
-{"k":"e","de":"arquivo:portal/src/app/autonomia/page.tsx","rel":"CHAMA","pa":"fn:fn_classe_contabil_concordancia","f":"portal/src/app/autonomia/page.tsx","l":158}
-{"k":"e","de":"arquivo:portal/src/app/autonomia/page.tsx","rel":"CHAMA","pa":"fn:fn_golden_cobertura","f":"portal/src/app/autonomia/page.tsx","l":145}
-{"k":"e","de":"arquivo:portal/src/app/autonomia/page.tsx","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"portal/src/app/autonomia/page.tsx","l":18}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/actions.ts","rel":"CHAMA","pa":"fn:fn_aprovar_caso","f":"portal/src/app/casos/[id]/actions.ts","l":8}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/actions.ts","rel":"CHAMA","pa":"fn:fn_decidir_pendencia","f":"portal/src/app/casos/[id]/actions.ts","l":51}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/actions.ts","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/app/casos/[id]/actions.ts","l":92}
@@ -1750,6 +1754,8 @@
 {"k":"e","de":"arquivo:portal/src/components/upload-form.tsx","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/src/components/upload-form.tsx","l":330}
 {"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":46}
 {"k":"e","de":"arquivo:portal/src/lib/busca-global.ts","rel":"CHAMA","pa":"fn:fn_cnpj_canonico","f":"portal/src/lib/busca-global.ts","l":35}
+{"k":"e","de":"arquivo:portal/src/lib/custos.ts","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"portal/src/lib/custos.ts","l":7}
+{"k":"e","de":"arquivo:portal/src/lib/custos.ts","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"portal/src/lib/custos.ts","l":4}
 {"k":"e","de":"arquivo:portal/src/lib/email-ao-cliente.ts","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/lib/email-ao-cliente.ts","l":12}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_anexar","f":"portal/src/lib/envio-oficial.ts","l":26}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"portal/src/lib/envio-oficial.ts","l":338}
