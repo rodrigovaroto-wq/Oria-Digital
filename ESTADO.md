@@ -8,46 +8,56 @@
 > **O que o dono faz à mão, quando for aplicar, NESTA ORDEM:** aplicar a 0215; **tornar-se administrador ANTES da 0216** (`select fn_administrador_definir('<seu e-mail>', true);` no SQL Editor); aplicar a 0216; conferir `where migration in ('0215','0216') and not presente` (0 linhas); contar os mandatos sem membro (`select count(*) from caso c where not exists (select 1 from caso_membro m where m.caso_id = c.id)`) e atribuí-los. Detalhe da 0215: conferir `select * from fn_instalacao_conferir() where migration = '0215' and not presente` (0 linhas); conferir o backfill com `select count(*) from caso_membro where por = 'migracao:0215'` (= usuários × casos); e tornar-se administrador com `select fn_administrador_definir('<seu e-mail>', true);` no SQL Editor.
 > **Medido (0215):** `run.sh` exit 0, 2.330 `ok` (2.275 antes; +55 do `caso_membro.test.sql`), sonda 257/258 no banco de teste (só `custo_gravado_pelo_n8n`, comportamento que todo banco vazio tem). Regra 2: 12 desligamentos, de 1 a 13 asserts reprovando cada um (tabela no cabeçalho da 0215).
 
-### PAUSADA a pedido do dono (27/10/2026) — onde retomar
+### PAUSADA de novo a pedido do dono (28/10/2026) — onde retomar
 
-**⚠️ NÃO aplicar a 0215 nem a 0216 em produção.** As duas revisões independentes acharam defeitos que ainda não foram corrigidos (lista abaixo). As duas estão no branch e passam nas suítes, mas "passa na suíte" aqui não é "pode aplicar".
+**NÃO aplicar a 0215 nem a 0216 em produção.** As correções das duas revisões independentes ainda não foram medidas nem comitadas (item 1 abaixo).
 
-**FINALIZADO (comitado em `claude/serene-bell-atgog2`, PR #264):**
-- Espec. 13 + anexos 13A (plano por dependência), 13B (RFP pronto para envio), 13C (roteiro do piloto) e a planilha verificada `13_anexos/Plano_de_Captacao_v3.xlsx`.
-- `0215` (membros e administradores) e `0216` (policies por mandato), cada uma com a medição no commit. Stub de `auth` nos TRÊS bootstraps (`run.sh`, `Verificação/run.mts`, `Verificação/variacoes.mts`).
-- Medido no HEAD `dfcd490`: run.sh exit 0, 2.386 ok; sonda 321/322; e2e 46/0; variacoes 0 achados; Supabase node 40/0; conferir-chamadas OK.
+**FINALIZADO (comitado e enviado em `claude/serene-bell-atgog2`, PR #264):**
+- Espec. 13 + anexos 13A (plano por dependência), 13B (RFP pronto para envio), 13C (roteiro do piloto), `13_anexos/Plano_de_Captacao_v3.xlsx`.
+- `0215` (membros e administradores) e `0216` (policies por mandato), versões ORIGINAIS, cada uma medida no seu commit (`35e163b`, `dfcd490`). Medido no `dfcd490`: run.sh exit 0, 2.386 ok; sonda 321/322; e2e 46/0; variacoes 0 achados.
+- `ceba350` **Portal: todo envio garante a pertinência** (o bloqueante da 0216): todo lote chama `obterCasoId`/`fn_upsert_caso` antes de sair; recusa 42501 vira frase humana; `/api/intake` repete a garantia no servidor. `verificar-envio-oficial.mts` 153 -> 162, regra 2 medida. **Não coberto:** POST manual direto ao Form público do n8n (exige o n8n validar a pertinência).
+- `9dc1c33` **Portal reorganizado:** barra de etapas em `/casos/[id]` (Consultas externas desabilitada até a 0217), "Meus mandatos x Todos" (Todos só administrador, mandato sem membro em destaque), tela `/casos/[id]/membros` (só administrador). Nova suíte `verificar-navegacao.mts` (51 asserts, no CI e no CLAUDE.md). **Não visto no navegador.**
 
-**FICOU NO MEIO (branch `wip/0215-0216-correcoes-da-revisao`, commit WIP, NÃO medido, NÃO mergear às cegas):** um agente estava corrigindo a 0215/0216 com os achados abaixo e foi interrompido. O WIP mexe em 0215, 0216, `caso_membro.test.sql`, `rls_por_mandato.test.sql`, `instalacao.test.sql`, `run.sh` e nos dois bootstraps `.mts` (+2.067/−298). Retomar: fazer checkout do WIP, ler o diff, rodar `run.sh` e decidir item a item o que está pronto; ou descartar e refazer a partir da lista.
+**EM ANDAMENTO, interrompido (NÃO medido, NÃO mergear às cegas):**
+- Branch `wip/0215-0216-correcoes-v2` (commit `9accdad`, base = HEAD de 28/10): as correções da 0215/0216 a partir das revisões. O código já toca quase todos os itens da lista abaixo; última medição conhecida, sobre o WIP v1: `run.sh` exit 0, 2.446 ok. **Faltava:** relatório item a item, a medição da regra 2 de cada correção, os itens 1b, 1d, 1f, 1h e 2i, e o desempenho com 500 mil linhas (2g). O arquivo `Supabase/test/_molde.sh` é do agente interrompido e não foi revisado.
+- O branch `wip/0215-0216-correcoes-da-revisao` (v1) está superado pelo v2.
 
-**A FAZER, em ordem (cada item com assert medido não-vazio):**
-1. **Correções da revisão da 0215:**
-   - (a) revokes explícitos em `administrador`/`caso_membro` (em produção o default privilege ainda dá ALL até 30/10) + sonda que exige RLS LIGADA (`relrowsecurity`) nas tabelas restritas + teste que concede grant e exige 42501 da RLS;
-   - (b) requisito da sonda "existe administrador" + backfill que confere a contagem e falha;
-   - (c) backfill só de usuários ativos (confirmado, não banido, não apagado, não anônimo), com essas colunas no stub dos três bootstraps;
-   - (d) efeito escrito: quem entra depois da 0215 não vê mandato antigo até ser atribuído;
-   - (e) sonda `execucao` com marcador nulo some de `where not presente` (guarda + `coalesce(v_ok,false)`);
-   - (f) "porque" falso de `exec_definir_admin_authenticated`;
-   - (g) `fn_administrador_definir` com `into strict` e `p_ativo` nulo recusado;
-   - (h) desligamentos que faltaram medir.
-2. **Correções da revisão da 0216:**
-   - (a) **CRÍTICO:** a promoção automática do dial (`trg_auto_promover_dial` → `fn_dial_auto_promover` → `fn_veredito_producao`, todos invoker) passa a usar só o recorte de quem dispara e muda o estágio para todos — tornar o cálculo global;
-   - (b) `/autonomia` com métricas do recorte do leitor (`fn_golden_cobertura`, `fn_classe_contabil_concordancia`);
-   - (c) `execucao_falha` com `caso_id` nulo some para todos e `/api/intake/status` volta ao "aguarde" eterno (0108);
-   - (d) desvio de ingestão: `caso_insert with check (true)` deixa não membro criar/renomear caso com nome de mandato alheio;
-   - (e) a guarda de administrador passa na ordem normal (0215 dá membro a todos): recusar com `administrador` vazia sempre que houver usuário;
-   - (f) `fn_caso_id_do_nome` é oráculo de nomes de mandato para qualquer logado;
-   - (g) `campo_classe_*` com `in (select id from campo_extraido)` degrada acima de ~150–300 mil linhas: trocar por `exists` por PK e medir com 500 mil;
-   - (h) `golden_criterio`, `estagio_autonomia`, `premissa_catalogo`, `golden_rodada` com escrita livre para authenticated;
-   - (i) contagem de policies divergente (47 × 46+bucket).
-3. **Portal — BLOQUEANTE para aplicar a 0216:** todo lote do intake chama `obterCasoId`/`fn_upsert_caso` antes de enviar ao n8n (hoje só lote com oficial/zip). Sem isso, lote só de PDF de não membro grava em mandato alheio e o mandato novo some para quem o criou.
-4. **Portal (pedido do dono):** tela de membros (administrador); lista "meus mandatos × todos"; pré-mandato × mandato; navegação por etapas dentro do mandato (Visão geral, Documentos, Perímetro, Pendências, Perguntas, Consultas externas, Modelagem, Apresentação). Levantamento feito: `/casos/[id]/page.tsx` (846 linhas) concentra tudo; `/casos/todos` sem segmentação.
-5. `0217`: `consulta_externa`, `fato_externo`, `autorizacao` (Espec. 11 §5 + Espec. 13 §3), RLS de nascença, PF só com autorização.
-6. `0218`: `caso.momento` (pré-mandato × mandato).
-7. Resto do nível 0 do anexo 13A: coletores públicos (0.4–0.6), formulários do analista (0.7), cálculos (0.8), ferramental do piloto (0.9).
-8. `/revisar` e `/fechar` da rodada; ficha de conhecimento da T0.
+**A FAZER, em ordem:**
+1. **Retomar o WIP v2:** trazer os arquivos com `git show wip/0215-0216-correcoes-v2:<arquivo> > <arquivo>` (o hook `proteger-descarte` bloqueia restaurar arquivo pelo checkout) e rodar `run.sh`. Depois conferir item a item, medir a regra 2 de cada correção, completar o que falta, rodar todos os portões e comitar. Lista:
+   - **Revisão da 0215:**
+     - (a) revokes explícitos e sonda de RLS ligada;
+     - (b) requisito "existe administrador" e backfill que confere a contagem;
+     - (c) backfill só de usuários ativos (stub de `auth.users` nos três bootstraps);
+     - (d) efeito escrito: quem entra depois da 0215 não vê mandato antigo;
+     - (e) sonda `execucao` com marcador nulo;
+     - (f) "porque" falso de `exec_definir_admin_authenticated`;
+     - (g) `fn_administrador_definir` com `into strict` e `p_ativo` nulo;
+     - (h) desligamentos que faltam medir.
+   - **Revisão da 0216:**
+     - (a) **CRÍTICO:** a promoção automática do dial sobre o recorte de quem dispara tem de virar cálculo global;
+     - (b) métricas de `/autonomia` por leitor;
+     - (c) `execucao_falha` com `caso_id` nulo some para todos;
+     - (d) não membro cria ou renomeia caso com nome alheio;
+     - (e) a guarda de administrador passa na ordem normal;
+     - (f) oráculo de nomes `fn_caso_id_do_nome`;
+     - (g) `exists` por PK em `campo_classe_*`, medido com 500 mil linhas;
+     - (h) escrita livre em `golden_criterio`, `estagio_autonomia`, `premissa_catalogo`, `golden_rodada`;
+     - (i) contagem de policies.
+2. **Revisão independente** (`revisor-defeito-silencioso`) dos dois commits de portal (`ceba350`, `9dc1c33`) e do commit das correções.
+3. **`fn_membros_do_caso`** (e-mail dos membros; `fn_membro_adicionar` aceitar e-mail): pendência da tela de membros.
+4. **`0217`:** `consulta_externa`, `fato_externo`, `autorizacao`. Depois, a etapa "Consultas externas" do portal.
+5. **`0218`:** `caso.momento` (pré-mandato). Depois, a segmentação pré-mandato x mandato no portal.
+6. **Resto do nível 0 do anexo 13A:** coletores públicos, formulários do analista, cálculos e ferramental do piloto.
+7. **`/revisar` e `/fechar` da rodada;** ficha de conhecimento da T0.
 
-**O que o dono faz à mão (quando 1–3 estiverem prontos):** aplicar a 0215; `select fn_administrador_definir('<e-mail>', true);`; aplicar a 0216; conferir a sonda e os mandatos sem membro. Fora do código: enviar o RFP (13B), comprar o e-CNPJ da Oria, autorização dos sócios do AMO para o piloto.
+**O que o dono faz à mão, quando o item 1 estiver pronto e comitado, nesta ordem:**
+1. aplicar a 0215;
+2. `select fn_administrador_definir('<e-mail>', true);`;
+3. aplicar a 0216;
+4. conferir a sonda e os mandatos sem membro;
+5. publicar o portal.
 
+**Fora do código:** enviar o RFP (13B), comprar o e-CNPJ da Oria, pedir a autorização dos sócios do AMO para o piloto.
 
 ## SESSÃO 110 (20/10/2026) — o GRANT que o Supabase deixa de dar em 30/10/2026
 
