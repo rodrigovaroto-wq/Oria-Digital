@@ -969,7 +969,7 @@ supabase db execute --file Supabase/migrations/0214_o_grant_que_o_supabase_deixo
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0214' and not presente;                 -- ZERO linhas
 
-# A 0215 cria fn_historico_do_caso(caso, limite, antes): a linha do tempo do mandato (quem fez o quê e quando, da mais nova
+# A 0215 cria fn_historico_do_caso(caso, limite, antes, antes_chave) (cursor composto: instante + chave): a linha do tempo do mandato (quem fez o quê e quando, da mais nova
 # para a mais velha) montada do que JÁ é gravado — documento recebido, aceite, revisão, classe, pendência, pergunta,
 # premissa, aprovação, fechamento, perímetro. Só leitura (security invoker), sem tabela nem backfill. NÃO inclui exportação
 # (não há log). Aplicar DEPOIS da 0214. Teste: Supabase/test/historico_do_caso.test.sql.

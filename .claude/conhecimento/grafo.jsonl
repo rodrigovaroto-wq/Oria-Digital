@@ -1357,13 +1357,15 @@
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Supabase/test/historico_do_caso.test.sql","l":9}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_decidir_pendencia","f":"Supabase/test/historico_do_caso.test.sql","l":9}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_desativar_premissa","f":"Supabase/test/historico_do_caso.test.sql","l":9}
-{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_papel_no_grupo","f":"Supabase/test/historico_do_caso.test.sql","l":83}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_papel_no_grupo","f":"Supabase/test/historico_do_caso.test.sql","l":89}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_fechar_caso","f":"Supabase/test/historico_do_caso.test.sql","l":10}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_fundir_entidade","f":"Supabase/test/historico_do_caso.test.sql","l":269}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"Supabase/test/historico_do_caso.test.sql","l":2}
-{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/historico_do_caso.test.sql","l":58}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/historico_do_caso.test.sql","l":64}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_classe_override","f":"Supabase/test/historico_do_caso.test.sql","l":8}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/historico_do_caso.test.sql","l":8}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"Supabase/test/historico_do_caso.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_transcricao_humana","f":"Supabase/test/historico_do_caso.test.sql","l":269}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"Supabase/test/historico_do_caso.test.sql","l":8}
 {"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/historico_do_caso.test.sql","l":8}
 {"k":"e","de":"arquivo:Supabase/test/instalacao.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/instalacao.test.sql","l":51}
@@ -2372,7 +2374,7 @@
 {"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_fundir_entidade","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":97}
 {"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_trg_caso_pergunta_so_reaponta","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":58}
 {"k":"e","de":"migration:0214","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","l":128}
-{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","l":90}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","l":125}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

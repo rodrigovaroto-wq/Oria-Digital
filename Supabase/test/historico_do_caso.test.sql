@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 0215 — O HISTÓRICO DO MANDATO (fn_historico_do_caso): quem fez o quê e quando, da mais nova para a mais velha
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 35 asserts; o número por guarda desligada está no cabeçalho de
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 49 asserts; o número por guarda desligada está no cabeçalho de
 -- Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql.
 --
 -- O ARRANJO É O DE PRODUÇÃO (regra 4): o caso é montado pelas MESMAS funções que o portal e o n8n chamam
@@ -20,7 +20,11 @@
 --   5. NADA de outro caso aparece (um segundo caso com documento, pergunta e premissa próprios), e nada de
 --      `decisao`/`evento_auditoria` que só repete outro evento (aceite, aprovação) nem tentativa recusada;
 --   6. caso sem evento nenhum, e caso que não existe, devolvem ZERO linhas — nunca erro;
---   7. `p_limite` é cortado em 1..1000, e a função funciona COMO authenticated (RLS, grant de função).
+--   7. `p_limite` é cortado em 1..1000, e a função funciona COMO authenticated (RLS, grant de função);
+--   8. (caso C, revisão independente) o aceite AUTOMÁTICO entra; a versão da transcrição não vira recebimento; o perímetro
+--      de entidade absorvida por fusão encadeada continua, pelo nome; o cursor composto não perde evento empatado; a
+--      apresentação diz "salva", não "preenchida"; o recebimento marca `autor_desconhecido`.
+-- Exceções declaradas à regra 4 no caso C: as duas entidades a fundir e os campos da apresentação nascem por INSERT.
 -- =============================================================================
 
 create or replace function teste_assert_0215(p_cond boolean, p_nome text, p_detalhe text default null)
@@ -45,6 +49,8 @@ declare
   v_p1 text[]; v_p2 text[]; v_p3 text[]; v_todos text[];
   v_h record;
   v_cursor timestamptz;
+  v_c uuid; v_doc_c uuid; v_doc_d uuid; v_ver_c uuid; v_e1 uuid; v_e2 uuid; v_ent_c uuid;
+  v_chv text; v_cur_em timestamptz; v_cur_ch text; v_pg text[]; v_pags text[]; v_inteira text[]; v_i int;
 begin
   v_a     := fn_upsert_caso('0215 — histórico A');
   v_b     := fn_upsert_caso('0215 — histórico B (outro mandato)');
@@ -144,7 +150,7 @@ begin
   select string_agg(tipo, ',' order by em desc) into v_tipos from fn_historico_do_caso(v_a);
   perform teste_assert_0215(v_tipos = 'caso_fechado,caso_aprovado,premissa_removida,premissa_ativada,premissa_ativada,'
                                     || 'pergunta_descartada,pergunta_enviada,pendencia_decidida,'
-                                    || 'premissa_vinculada_a_linha,classe_corrigida,apresentacao_preenchida,'
+                                    || 'premissa_vinculada_a_linha,classe_corrigida,apresentacao_salva,'
                                     || 'documento_revisado,perimetro_alterado,extracao_aceita,documento_recebido,caso_criado',
     'da mais nova para a mais velha, na ordem em que os atos aconteceram', v_tipos);
 
@@ -180,7 +186,7 @@ begin
                         and (select resumo from fn_historico_do_caso(v_a) where tipo = 'premissa_vinculada_a_linha') like '2 linha(s)%'
                         and (select autor from fn_historico_do_caso(v_a) where tipo = 'premissa_vinculada_a_linha') = 'ana@oria',
     'dois vínculos gravados no mesmo instante viram UMA linha do tempo: "2 linha(s)", com o autor');
-  perform teste_assert_0215((select autor from fn_historico_do_caso(v_a) where tipo = 'apresentacao_preenchida') = 'ana@oria'
+  perform teste_assert_0215((select autor from fn_historico_do_caso(v_a) where tipo = 'apresentacao_salva') = 'ana@oria'
                         and (select autor from fn_historico_do_caso(v_a) where tipo = 'perimetro_alterado') = 'ian@oria'
                         and (select resumo from fn_historico_do_caso(v_a) where tipo = 'perimetro_alterado') like '%ALFA SA%',
     'apresentação e perímetro trazem o autor, e o perímetro diz a entidade pelo nome');
@@ -255,7 +261,108 @@ begin
   reset role;
   perform teste_assert_0215(v_n = 16, 'como authenticated (RLS e grant de função) a lista é a mesma de 16 linhas', format('%s', v_n));
 
-  raise notice 'OK — fn_historico_do_caso: 16 eventos do caso A em ordem, sem vazar o B, sem erro no vazio';
+  -- ================================================================ caso C: os achados da revisão independente
+  -- Tudo aqui roda na MESMA transação, então todo evento do C tem o MESMO `now()`: é o empate extremo, de propósito (o
+  -- cursor só por instante perde evento exatamente aí). Exceções declaradas à regra 4: as duas entidades velhas e os três
+  -- campos da apresentação nascem por INSERT (é o que o portal faz com a apresentação; entidade fantasma é o que a fusão
+  -- recebe) — todo o resto sai das funções reais (fn_upsert_caso, fn_registrar_documento, fn_registrar_campos_extraidos
+  -- com o dial N2 real, fn_registrar_transcricao_humana, fn_entidade_definir_papel_no_grupo, fn_fundir_entidade).
+  raise notice '--- 8. os achados da revisão: auto-aceite, transcrição, entidade absorvida, empate de instante ---';
+  perform teste_assert_0215((select nivel_atual::text from estagio_autonomia where estagio = 'extracao_linhas_financeiras') = 'N2',
+    'arranjo: o dial da extração está em N2 (o auto-aceite só existe com ele)');
+  v_c := fn_upsert_caso('0215 — histórico C (revisão)');
+  v_r := fn_registrar_documento(v_c, 'GAMA SA', 'anual', '2025', 'BALANCO', 0.9, 'nome_arquivo',
+    'supabase_storage', 'bucket/bp-gama-0215.pdf', 'BP Gama 2025.pdf', true, 'HASH-GAMA-0215', 'ok');
+  v_doc_c := (v_r->>'documento_id')::uuid; v_ver_c := (v_r->>'documento_versao_id')::uuid;
+  perform fn_registrar_campos_extraidos(v_ver_c, '[
+    {"chave": "Caixa e equivalentes", "valor_num": "1200", "confianca": "0.98", "secao_canonica": "ativo_circulante"},
+    {"chave": "Adiantamentos diversos", "valor_num": "340", "confianca": "0.99", "secao_canonica": "ativo_circulante"}]'::jsonb, 'N2');
+  v_r := fn_registrar_documento(v_c, 'GAMA SA', 'anual', '2024', 'BALANCO', 0.9, 'nome_arquivo',
+    'supabase_storage', 'bucket/bp-gama-2024-0215.pdf', 'BP Gama 2024 (escaneado).pdf', true, 'HASH-GAMA24-0215', 'ok');
+  v_doc_d := (v_r->>'documento_id')::uuid;
+  v_r := fn_registrar_transcricao_humana(v_doc_d,
+    '[{"chave": "Caixa", "valor_num": "10"}, {"chave": "Estoques", "valor_num": "20"}]'::jsonb, 'ana@oria', 'arquivo escaneado');
+  perform teste_assert_0215(v_r->>'recusado' is null, 'arranjo: a transcrição é aceita pela função real', v_r::text);
+
+  select id into v_ent_c from entidade where caso_id = v_c limit 1;
+  insert into entidade (caso_id, razao_social) values (v_c, 'GAMA ANTIGA 1') returning id into v_e1;
+  insert into entidade (caso_id, razao_social) values (v_c, 'GAMA ANTIGA 2') returning id into v_e2;
+  perform fn_entidade_definir_papel_no_grupo(v_e1, 'operacional', 'ian@oria');
+  v_r := fn_fundir_entidade(v_c, v_e1, v_e2, 'ian@oria');   -- A em B
+  v_r := fn_fundir_entidade(v_c, v_e2, v_ent_c, 'ian@oria'); -- B em C: a cadeia tem dois degraus
+  perform teste_assert_0215(not exists (select 1 from entidade where id in (v_e1, v_e2)),
+    'arranjo: as duas entidades velhas foram APAGADAS pela fusão real (é o que torna o achado possível)');
+
+  insert into caso_apresentacao_campo (caso_id, chave, valor, fonte, preenchido_por)
+    values (v_c, 'capa.titulo', 'Projeto Gama', 'digitado', 'ana@oria'), (v_c, 'capa.data', '2026', 'digitado', 'ana@oria'),
+           (v_c, 'capa.subtitulo', 'Memorando', 'digitado', 'ana@oria');
+
+  -- ALTO 1: o aceite AUTOMÁTICO (só `decisao`, sem evento) aparece
+  perform teste_assert_0215((select count(*) from fn_historico_do_caso(v_c) where tipo = 'extracao_aceita') = 1
+                        and (select autor from fn_historico_do_caso(v_c) where tipo = 'extracao_aceita') is null
+                        and (select resumo from fn_historico_do_caso(v_c) where tipo = 'extracao_aceita') = 'Extração aceita automaticamente: 2 campo(s)'
+                        and (select referencia->>'automatico' from fn_historico_do_caso(v_c) where tipo = 'extracao_aceita') = 'true'
+                        and (select documento_id from fn_historico_do_caso(v_c) where tipo = 'extracao_aceita') = v_doc_c,
+    'a extração aceita AUTOMATICAMENTE (dial N2, só decisao) entra: autor nulo, "aceita automaticamente", 2 campos, com o documento',
+    (select resumo from fn_historico_do_caso(v_c) where tipo = 'extracao_aceita' limit 1));
+
+  -- ALTO 2: a versão que a transcrição cria não é um recebimento
+  perform teste_assert_0215((select count(*) from fn_historico_do_caso(v_c) where tipo = 'documento_recebido') = 2
+                        and not exists (select 1 from fn_historico_do_caso(v_c) where resumo like 'Nova versão%')
+                        and (select count(*) from fn_historico_do_caso(v_c) where tipo = 'transcricao_humana') = 1,
+    'a transcrição aparece UMA vez, como transcrição: os 2 arquivos recebidos são 2, e nenhuma "nova versão" inventada',
+    (select string_agg(resumo, ' | ') from fn_historico_do_caso(v_c) where tipo = 'documento_recebido'));
+
+  -- ALTO 3: o perímetro da entidade absorvida (dois degraus) aparece, com o nome
+  perform teste_assert_0215((select count(*) from fn_historico_do_caso(v_c)
+                              where tipo = 'perimetro_alterado' and resumo = 'Papel no grupo definido — GAMA ANTIGA 1') = 1,
+    'o evento de perímetro de uma entidade absorvida por fusão ENCADEADA (A em B, B em C) continua no histórico, pelo nome');
+  perform teste_assert_0215((select count(*) from fn_historico_do_caso(v_c) where tipo = 'perimetro_alterado'
+                              and resumo in ('Entidade "GAMA ANTIGA 1" fundida em "GAMA ANTIGA 2"',
+                                             'Entidade "GAMA ANTIGA 2" fundida em "GAMA SA"')) = 2
+                        and not exists (select 1 from fn_historico_do_caso(v_c) where resumo like '%(entidade removida)%'),
+    'as duas fusões dizem quem foi fundida em quem, e nenhum rótulo "(entidade removida)"',
+    (select string_agg(resumo, ' | ') from fn_historico_do_caso(v_c) where tipo = 'perimetro_alterado'));
+  perform teste_assert_0215(not exists (select 1 from fn_historico_do_caso(v_a) where resumo like '%GAMA%')
+                        and not exists (select 1 from fn_historico_do_caso(v_b) where resumo like '%GAMA%'),
+    'a descida pelas fusões não puxa nada para os outros casos');
+
+  -- MÉDIO 5 e 6
+  perform teste_assert_0215((select count(*) from fn_historico_do_caso(v_c) where tipo = 'apresentacao_salva'
+                                and resumo like 'Apresentação salva — último salvamento do campo%') = 3
+                        and not exists (select 1 from fn_historico_do_caso(v_c) where resumo ilike '%preenchid%'),
+    'a apresentação diz "salva — último salvamento do campo", nunca "preenchido" (o autor é quem salvou por último)');
+  perform teste_assert_0215((select count(*) from fn_historico_do_caso(v_c)
+                              where tipo = 'documento_recebido' and autor is null and referencia->>'autor_desconhecido' = 'true') = 2
+                        and not exists (select 1 from fn_historico_do_caso(v_c)
+                                         where tipo <> 'documento_recebido' and referencia ? 'autor_desconhecido'),
+    'o recebimento marca autor_desconhecido (NULL = "não sei"), e nenhum outro tipo carrega o campo');
+
+  -- MÉDIO 4: o cursor composto, com TODOS os eventos do caso C no mesmo instante
+  select count(*) into v_n from fn_historico_do_caso(v_c);
+  perform teste_assert_0215((select count(distinct em) from fn_historico_do_caso(v_c)) = 1 and v_n >= 9,
+    'arranjo do empate: todos os eventos do caso C estão no MESMO instante (senão o teste do cursor não mediria empate)',
+    format('%s eventos, %s instantes', v_n, (select count(distinct em) from fn_historico_do_caso(v_c))));
+  perform teste_assert_0215((select count(distinct chave) from fn_historico_do_caso(v_c)) = v_n
+                        and not exists (select 1 from fn_historico_do_caso(v_c) where chave is null or chave = ''),
+    'a chave é única e nunca vazia: uma por evento');
+  v_pags := '{}'; v_cur_em := null; v_cur_ch := null;
+  for v_i in 1..40 loop
+    select array_agg(h.chave order by h.em desc, h.chave collate "C" desc) into v_pg
+      from fn_historico_do_caso(v_c, 2, v_cur_em, v_cur_ch) h;
+    exit when v_pg is null;
+    v_pags := v_pags || v_pg;
+    select h.em, h.chave into v_cur_em, v_cur_ch
+      from fn_historico_do_caso(v_c, 2, v_cur_em, v_cur_ch) h order by h.em, h.chave collate "C" limit 1;
+  end loop;
+  select array_agg(h.chave order by h.em desc, h.chave collate "C" desc) into v_inteira from fn_historico_do_caso(v_c) h;
+  perform teste_assert_0215(cardinality(v_pags) = v_n and v_pags = v_inteira,
+    'páginas de 2 sobre eventos EMPATADOS no mesmo instante, juntas, são a lista inteira: sem repetir e sem pular',
+    format('%s paginadas de %s', cardinality(v_pags), v_n));
+  perform teste_assert_0215((select count(*) from fn_historico_do_caso(v_c, 200, (select max(em) from fn_historico_do_caso(v_c)))) = 0,
+    'sem p_antes_chave o cursor segue estrito no instante (compatível com quem só tem o instante)');
+
+  raise notice 'OK — fn_historico_do_caso: 16 eventos do caso A em ordem, sem vazar o B, sem erro no vazio; achados da revisão (caso C) medidos';
 end $$;
 
 delete from caso where nome like '0215 —%';

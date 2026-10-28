@@ -5750,13 +5750,29 @@ end $$;
 COMMENT ON FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid) IS '0204: herda secao_canonica pela ÁRVORE do próprio documento. Para linha sem seção (extração, sem revisão humana) cuja seção bruta, normalizada, é a chave de outra linha da MESMA versão que tem seção (o pai) ou a seção bruta de outras que têm (as irmãs), herda — se todas concordam em UMA seção; conflito fica NULL e é contado. Recursivo (até 10 rodadas), nunca herda de/para topo ou total (ATIVO, TOTAL DO ATIVO…), só nos cinco tipos de demonstração. Marca secao_canonica_inferida. Idempotente. Devolve {linhas, versoes, casos, conflitos, linhas_em_conflito, rodadas}.';
 
 --
--- Name: fn_historico_do_caso(uuid, integer, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_historico_do_caso(uuid, integer, timestamp with time zone, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEFAULT 200, p_antes timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS TABLE(em timestamp with time zone, tipo text, autor text, resumo text, documento_id uuid, referencia jsonb)
+CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEFAULT 200, p_antes timestamp with time zone DEFAULT NULL::timestamp with time zone, p_antes_chave text DEFAULT NULL::text) RETURNS TABLE(em timestamp with time zone, tipo text, autor text, resumo text, documento_id uuid, referencia jsonb, chave text)
     LANGUAGE sql STABLE
     AS $_$
-  with refs as materialized (
+  with recursive absorvidas(ref, absorvida) as (
+    -- 0215 (revisão): `fn_fundir_entidade` APAGA a entidade absorvida e grava `entidade_fundida` com `entidade_ref` =
+    -- a SOBREVIVENTE e o id da absorvida em `antes->>'entidade_id'` (medido no corpo da 0213). Os eventos de perímetro
+    -- da absorvida (`entidade:<id da absorvida>`) continuam em `evento_auditoria`, mas sem esta CTE nenhuma referência
+    -- do caso os alcançava. Recursiva porque a absorvida pode ter sido sobrevivente de uma fusão anterior (A em B, depois
+    -- B em C): a partir das entidades que EXISTEM, desce pelas fusões. `union` (não `all`) por causa de ciclo.
+    select a.entidade_ref, a.antes->>'entidade_id'
+      from entidade e
+      join evento_auditoria a on a.entidade_ref = 'entidade:' || e.id::text and a.acao = 'entidade_fundida'
+     where e.caso_id = p_caso_id
+    union
+    select a.entidade_ref, a.antes->>'entidade_id'
+      from absorvidas f
+      join evento_auditoria a on a.entidade_ref = 'entidade:' || f.absorvida and a.acao = 'entidade_fundida'
+     where f.absorvida is not null
+  ),
+  refs as materialized (
     select 'caso:' || p_caso_id::text as ref, null::uuid as documento_id
     union all
     select 'documento:' || d.id::text, d.id from documento d where d.caso_id = p_caso_id
@@ -5768,6 +5784,8 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
     select 'pendencia:' || p.id::text, p.documento_id from pendencia p where p.caso_id = p_caso_id
     union all
     select 'entidade:' || e.id::text, null::uuid from entidade e where e.caso_id = p_caso_id
+    union all
+    select 'entidade:' || f.absorvida, null::uuid from absorvidas f where f.absorvida is not null
   ),
   ev as materialized (
     select a.*, r.documento_id as doc_id
@@ -5786,16 +5804,38 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
                 then format('Nova versão (%s) do arquivo "%s" recebida', v.n_versao, coalesce(v.nome_original, '(sem nome)'))
                 else format('Arquivo "%s" recebido', coalesce(v.nome_original, '(sem nome)')) end as resumo,
            d.id as documento_id,
-           jsonb_build_object('documento_versao_id', v.id, 'n_versao', v.n_versao) as referencia
+           -- `autor_desconhecido`: a tabela `documento` não guarda quem enviou; autor NULL aqui é "não sei", e o NULL
+           -- dos eventos `sistema:*` é "foi o sistema". A tela distingue pelo campo, em vez de chamar tudo de "sistema".
+           jsonb_build_object('documento_versao_id', v.id, 'n_versao', v.n_versao, 'autor_desconhecido', true) as referencia,
+           'versao:' || v.id::text as chave
       from documento d join documento_versao v on v.documento_id = d.id
      where d.caso_id = p_caso_id
+       -- `fn_registrar_transcricao_humana` cria uma `documento_versao` NOVA copiando arquivo_ref/nome/hash: o arquivo não
+       -- chegou de novo, quem o digitou é o evento `transcricao_humana`. Sem este filtro cada transcrição virava também
+       -- um "Nova versão do arquivo recebida" que não aconteceu.
+       and not exists (select 1 from ev t where t.acao = 'transcricao_humana'
+                        and t.entidade_ref = 'documento_versao:' || v.id::text)
 
     union all
     select e.criado_em, 'extracao_aceita', e.ator,
            format('Extração aceita: %s campo(s)%s', coalesce(e.depois->>'n_campos_aceitos', '?'),
                   case when nullif(e.depois->>'motivo', '') is not null then ' — ' || (e.depois->>'motivo') else '' end),
-           e.doc_id, jsonb_build_object('documento_versao_id', substring(e.entidade_ref from 18))
+           e.doc_id, jsonb_build_object('documento_versao_id', substring(e.entidade_ref from 18)),
+           'evento:' || e.id::text
       from ev e where e.acao = 'extracao_aceita'
+
+    union all
+    -- ACEITE AUTOMÁTICO (dial N2/N3): `fn_registrar_campos_extraidos` grava SÓ a `decisao` (tipo aprovacao, autor
+    -- `sistema:auto_aceite`, sem a chave `portao` e sem `evento_auditoria 'extracao_aceita'`, que é do aceite humano).
+    -- Sem este ramo a extração aceita pelo sistema não entrava e o histórico sugeria que ninguém a aceitou.
+    select x.criado_em, 'extracao_aceita', x.autor,
+           format('Extração aceita automaticamente: %s campo(s)', coalesce(x.payload->>'n_auto_aceitos', '?')),
+           nullif(x.payload->>'documento_id', '')::uuid,
+           jsonb_build_object('documento_versao_id', x.payload->>'documento_versao_id', 'automatico', true,
+                              'n_excluidas_pelo_limiar', x.payload->'n_excluidas_pelo_limiar'),
+           'decisao:' || x.id::text
+      from decisao x
+     where x.caso_id = p_caso_id and x.tipo = 'aprovacao' and x.autor like 'sistema:auto_aceite%'
 
     union all
     select e.criado_em, 'documento_revisado', e.ator,
@@ -5807,14 +5847,16 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
                                        order by t.versao desc limit 1), e.depois->>'tipo', '(sem tipo)'))
                 else 'Classificação do documento confirmada' end
              || case when nullif(e.depois->>'motivo', '') is not null then ' — ' || (e.depois->>'motivo') else '' end,
-           e.doc_id, jsonb_build_object('tipo_de', e.antes->>'tipo', 'tipo_para', e.depois->>'tipo')
+           e.doc_id, jsonb_build_object('tipo_de', e.antes->>'tipo', 'tipo_para', e.depois->>'tipo'),
+           'evento:' || e.id::text
       from ev e where e.acao = 'documento_revisado'
 
     union all
     select e.criado_em, 'transcricao_humana', e.ator,
            format('Transcrição manual: %s linha(s) digitadas a partir de arquivo ilegível', coalesce(e.depois->>'linhas', '?')),
            coalesce(e.doc_id, nullif(e.depois->>'documento_id', '')::uuid),
-           jsonb_build_object('documento_versao_id', substring(e.entidade_ref from 18), 'n_versao', e.depois->'n_versao')
+           jsonb_build_object('documento_versao_id', substring(e.entidade_ref from 18), 'n_versao', e.depois->'n_versao'),
+           'evento:' || e.id::text
       from ev e where e.acao = 'transcricao_humana'
 
     union all
@@ -5823,7 +5865,8 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
                   coalesce((select k.nome from classe_contabil_catalogo k where k.codigo = o.classe_final), o.classe_final))
              || case when nullif(o.motivo, '') is not null then ' — ' || o.motivo else '' end,
            d.id, jsonb_build_object('campo_extraido_id', o.campo_extraido_id, 'classe_final', o.classe_final,
-                                    'sugestao_original', o.sugestao_original)
+                                    'sugestao_original', o.sugestao_original),
+           'override:' || o.id::text
       from documento d
       join documento_versao v on v.documento_id = d.id
       join campo_extraido c on c.documento_versao_id = v.id
@@ -5834,7 +5877,8 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
     select e.criado_em, 'pendencia_decidida', e.ator,
            format('Pendência "%s": %s', coalesce(p.descricao, '(sem descrição)'), coalesce(e.depois->>'rotulo', 'decidida'))
              || case when nullif(e.depois->>'motivo', '') is not null then ' — ' || (e.depois->>'motivo') else '' end,
-           p.documento_id, jsonb_build_object('pendencia_id', p.id, 'estado', e.depois->>'estado')
+           p.documento_id, jsonb_build_object('pendencia_id', p.id, 'estado', e.depois->>'estado'),
+           'evento:' || e.id::text
       from ev e join pendencia p on e.entidade_ref = 'pendencia:' || p.id::text
      where e.acao = 'pendencia_decidida'
 
@@ -5843,7 +5887,8 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
            format('Pergunta "%s" %s', coalesce(pc.titulo, q.pergunta_codigo),
                   case q.acao when 'enviada' then 'enviada ao cliente' else 'descartada' end),
            null::uuid, jsonb_build_object('caso_pergunta_id', q.id, 'pergunta_codigo', q.pergunta_codigo,
-                                          'entidade_id', q.entidade_id)
+                                          'entidade_id', q.entidade_id),
+           'pergunta:' || q.id::text
       from caso_pergunta q left join pergunta_catalogo pc on pc.codigo = q.pergunta_codigo
      where q.caso_id = p_caso_id
 
@@ -5852,14 +5897,15 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
            case when x.payload ? 'n_linhas' then 'premissa_aplicada_em_lote'
                 when (x.payload->>'ativo') = 'false' then 'premissa_removida'
                 else 'premissa_ativada' end,
-           x.autor, x.motivo, null::uuid, x.payload
+           x.autor, x.motivo, null::uuid, x.payload, 'decisao:' || x.id::text
       from decisao x
      where x.caso_id = p_caso_id and x.tipo = 'override' and x.payload ? 'premissa'
 
     union all
     select g.atualizado_em, 'premissa_vinculada_a_linha', g.atualizado_por,
            format('%s linha(s) do modelo vinculada(s) a premissa', count(*)),
-           null::uuid, jsonb_build_object('n_linhas', count(*), 'premissas', jsonb_agg(distinct g.premissa_codigo))
+           null::uuid, jsonb_build_object('n_linhas', count(*), 'premissas', jsonb_agg(distinct g.premissa_codigo)),
+           'vinculo:' || extract(epoch from g.atualizado_em)::text || ':' || coalesce(g.atualizado_por, '')
       from caso_linha_premissa g
      where g.caso_id = p_caso_id
        and g.premissa_codigo is not null
@@ -5872,20 +5918,24 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
     select e.criado_em, 'modelagem_definida', e.ator,
            format('Parâmetros da modelagem definidos (último exercício real %s, %s ano(s) projetados)',
                   coalesce(e.depois->>'ultimo_exercicio_real', 'não informado'), coalesce(e.depois->>'anos_projetados', '?')),
-           null::uuid, e.depois
+           null::uuid, e.depois, 'evento:' || e.id::text
       from ev e where e.acao = 'modelagem_parametros'
 
     union all
-    select c.preenchido_em, 'apresentacao_preenchida', c.preenchido_por,
-           'Dado da apresentação preenchido' || case when c.fonte is not null then ' (fonte: ' || c.fonte || ')' else '' end,
-           null::uuid, jsonb_build_object('chave', c.chave)
+    -- "SALVA", não "preenchida por": a action do portal regrava `preenchido_por/em` de TODOS os campos a cada salvamento,
+    -- então a coluna diz quem salvou por ÚLTIMO, não quem escreveu aquele valor. Um campo por linha, e o resumo diz
+    -- "último salvamento" para ninguém ler o autor como autoria do conteúdo.
+    select c.preenchido_em, 'apresentacao_salva', c.preenchido_por,
+           format('Apresentação salva — último salvamento do campo "%s"%s', c.chave,
+                  case when c.fonte is not null then ' (fonte: ' || c.fonte || ')' else '' end),
+           null::uuid, jsonb_build_object('chave', c.chave), 'apresentacao:' || c.chave
       from caso_apresentacao_campo c where c.caso_id = p_caso_id
 
     union all
     select x.criado_em, 'caso_aprovado', x.autor,
            'Caso aprovado no Portão 2' || case when nullif(x.motivo, '') is not null and x.motivo <> 'Portão 2: caso aprovado'
                                                then ' — ' || x.motivo else '' end,
-           null::uuid, jsonb_build_object('decisao_id', x.id)
+           null::uuid, jsonb_build_object('decisao_id', x.id), 'decisao:' || x.id::text
       from decisao x
      where x.caso_id = p_caso_id and x.tipo = 'aprovacao' and x.payload ? 'portao'
 
@@ -5899,12 +5949,15 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
              else format('Caso reconferido: %s pendência(s) aberta(s) antes, %s depois',
                          coalesce(e.antes->>'pendencias_abertas', '?'), coalesce(e.depois->>'pendencias_abertas', '?'))
            end,
-           null::uuid, '{}'::jsonb
+           null::uuid, '{}'::jsonb, 'evento:' || e.id::text
       from ev e where e.acao in ('caso_criado', 'caso_fechado', 'caso_reaberto', 'reconferir_caso')
 
     union all
     select e.criado_em, 'perimetro_alterado', e.ator,
-           format('%s — %s',
+           case when e.acao = 'entidade_fundida'
+                then format('Entidade "%s" fundida em "%s"', coalesce(e.antes->>'razao_social', '(sem nome)'),
+                            coalesce(e.depois->>'razao_social', '(sem nome)'))
+                else format('%s — %s',
                   case e.acao
                     when 'perimetro_escopo_definido'          then 'Escopo do perímetro definido'
                     when 'perimetro_escopo_encerrado'         then 'Escopo do perímetro encerrado'
@@ -5913,8 +5966,14 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
                     when 'entidade_controlador_definido'      then 'Controlador definido'
                     when 'entidade_participacao_definida'     then 'Participação societária definida'
                     else 'Entidades fundidas' end,
-                  coalesce(en.razao_social, '(entidade removida)')),
-           null::uuid, jsonb_build_object('acao', e.acao, 'entidade_id', substring(e.entidade_ref from 10))
+                  -- a entidade absorvida já não existe: o nome dela sobrou no evento da fusão (`antes->>'razao_social'`)
+                  coalesce(en.razao_social,
+                           (select f.antes->>'razao_social' from ev f
+                             where f.acao = 'entidade_fundida' and f.antes->>'entidade_id' = substring(e.entidade_ref from 10)
+                             limit 1),
+                           '(entidade removida)')) end,
+           null::uuid, jsonb_build_object('acao', e.acao, 'entidade_id', substring(e.entidade_ref from 10)),
+           'evento:' || e.id::text
       from ev e left join entidade en on e.entidade_ref = 'entidade:' || en.id::text
      where e.acao in ('perimetro_escopo_definido', 'perimetro_escopo_encerrado', 'entidade_papel_no_grupo_definido',
                       'entidade_forma_de_controle_definida', 'entidade_controlador_definido',
@@ -5922,19 +5981,23 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
   )
   select h.em, h.tipo,
          case when h.autor ~ '^(sistema|n8n)(:|$)' then null else h.autor end,
-         h.resumo, h.documento_id, h.referencia
+         h.resumo, h.documento_id, h.referencia, h.chave
     from eventos h
    where h.em is not null
-     and (p_antes is null or h.em < p_antes)
-   order by h.em desc, h.tipo, h.referencia::text
+     -- cursor composto: estritamente anterior em `em`, OU no mesmo instante com `chave` menor. Sem `p_antes_chave` o
+     -- comportamento é o de antes (estritamente anterior), para quem só tem o instante.
+     and (p_antes is null
+          or h.em < p_antes
+          or (p_antes_chave is not null and h.em = p_antes and h.chave collate "C" < p_antes_chave collate "C"))
+   order by h.em desc, h.chave collate "C" desc
    limit least(greatest(coalesce(p_limite, 200), 1), 1000)
 $_$;
 
 --
--- Name: FUNCTION fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone) IS '0215: linha do tempo do mandato (quem fez o quê e quando), da mais nova para a mais velha, montada do que já é gravado: documento recebido, extração aceita, documento revisado, transcrição, classe corrigida, pendência decidida, pergunta enviada/descartada, premissa ativada/removida/em lote/vinculada, modelagem, apresentação, caso criado/aprovado/fechado/reaberto/reconferido, perímetro. autor NULL = o sistema (sistema:* e n8n*). p_antes pagina (estritamente anterior); p_limite 1..1000. NÃO inclui exportações (não há log) nem mudança de dial (global). Somente leitura, security invoker.';
+COMMENT ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) IS '0215: linha do tempo do mandato (quem fez o quê e quando), da mais nova para a mais velha, montada do que já é gravado: documento recebido, extração aceita, documento revisado, transcrição, classe corrigida, pendência decidida, pergunta enviada/descartada, premissa ativada/removida/em lote/vinculada, modelagem, apresentação, caso criado/aprovado/fechado/reaberto/reconferido, perímetro. autor NULL = o sistema (sistema:* e n8n*). paginação por cursor composto (p_antes, p_antes_chave) sobre a ordem total (em desc, chave desc), `chave` = identificador estável e único do evento; p_limite 1..1000. O instante do cursor tem de ser passado com a precisão inteira que a função devolveu (microssegundos). NÃO inclui exportações (não há log) nem mudança de dial (global). Somente leitura, security invoker.';
 
 --
 -- Name: fn_indice_macro_anual(integer); Type: FUNCTION; Schema: public; Owner: -
@@ -19781,11 +19844,11 @@ GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_f
 GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) TO authenticated;
 
 --
--- Name: FUNCTION fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone) TO authenticated;
-GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone) TO service_role;
+GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) TO service_role;
 
 --
 -- Name: FUNCTION fn_indice_macro_anual(p_desde_ano integer); Type: ACL; Schema: public; Owner: -

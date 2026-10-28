@@ -2,7 +2,7 @@
 
 ## SESSÃO 111 (28/10/2026) — o histórico do mandato (portal, fase 3, item 24)
 
-> **Migration mais nova: `0215_o_historico_que_so_o_banco_sabia.sql`** (ESCRITA, NÃO aplicada; aplicar DEPOIS da 0214 e conferir `fn_instalacao_conferir()` com `migration = '0215'`). `fn_historico_do_caso(caso, limite, antes)`: linha do tempo (quem, o quê, quando) montada do que já é gravado; só leitura, security invoker. **Exportações não entram: não existe log.** Teste: `Supabase/test/historico_do_caso.test.sql`.
+> **Migration mais nova: `0215_o_historico_que_so_o_banco_sabia.sql`** (ESCRITA, NÃO aplicada; aplicar DEPOIS da 0214 e conferir `fn_instalacao_conferir()` com `migration = '0215'`). `fn_historico_do_caso(caso, limite, antes, antes_chave)`: linha do tempo (quem, o quê, quando) montada do que já é gravado, cursor composto (instante + `chave`), aceite automático e perímetro de entidade absorvida incluídos; só leitura, security invoker. Corrigida no próprio arquivo após revisão independente (49 asserts). **Exportações não entram: não existe log.** Teste: `Supabase/test/historico_do_caso.test.sql`.
 
 ## SESSÃO 110 (20/10/2026) — o GRANT que o Supabase deixa de dar em 30/10/2026
 
