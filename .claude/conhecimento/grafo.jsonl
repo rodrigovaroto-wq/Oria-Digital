@@ -1740,7 +1740,7 @@
 {"k":"e","de":"arquivo:portal/src/components/excluir-mandato.tsx","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/components/excluir-mandato.tsx","l":13}
 {"k":"e","de":"arquivo:portal/src/components/upload-form.tsx","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/src/components/upload-form.tsx","l":330}
 {"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":46}
-{"k":"e","de":"arquivo:portal/src/lib/busca-global.ts","rel":"CHAMA","pa":"fn:fn_cnpj_canonico","f":"portal/src/lib/busca-global.ts","l":28}
+{"k":"e","de":"arquivo:portal/src/lib/busca-global.ts","rel":"CHAMA","pa":"fn:fn_cnpj_canonico","f":"portal/src/lib/busca-global.ts","l":35}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_anexar","f":"portal/src/lib/envio-oficial.ts","l":26}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"portal/src/lib/envio-oficial.ts","l":338}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_iniciar","f":"portal/src/lib/envio-oficial.ts","l":117}
