@@ -256,7 +256,9 @@ function lote(porVersao: Record<string, number>): Linha[] {
     }
   }
   // controle positivo: o varredor ACHOU as leituras que se sabe existirem
-  checar(leituras >= 4, `o varredor achou só ${leituras} leitura(s) de campo_extraido — ele não está olhando onde devia`);
+  // Eram 4; o Início deixou de ler o COUNT total de linhas (indicador "linhas financeiras
+  // lidas" removido, REDESENHO item 8), então o piso conhecido passou a 3 (medido: 3).
+  checar(leituras >= 3, `o varredor achou só ${leituras} leitura(s) de campo_extraido — ele não está olhando onde devia`);
 }
 
 if (falhas.length > 0) {

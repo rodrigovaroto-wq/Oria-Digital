@@ -8671,6 +8671,40 @@ const arranjoDeCirculante = (ENT: string) => {
     "(40e) programa (Accept */*) recebe o JSON de sempre, com o status original", String(json.status));
 }
 
+// (41) O INÍCIO E A LISTA DE MANDATOS (src/lib/painel.ts): a fila "Precisa de você" e a busca.
+// A regra que importa: a contagem de cada filtro é a MESMA conta que a lista aplica, e a busca
+// não deixa "%" e "_" virarem curinga do LIKE.
+{
+  const { filtroDaFila, daFila, contarFila, verboDaPendencia, padraoDeBusca } = await import("../src/lib/painel.ts");
+  const fila = [
+    { tipo: "item_faltante", severidade: "bloqueante" },
+    { tipo: "classificacao_pendente", severidade: "bloqueante" },
+    { tipo: "classificacao_pendente", severidade: "importante" },
+    { tipo: "divergencia_reconciliacao", severidade: "importante" },
+    { tipo: "arquivo_ilegivel", severidade: "complementar" },
+  ];
+  const c = contarFila(fila);
+  checar(c.todas === 5 && c.travam === 2 && c.confirmar === 2,
+    "(41a) contagem de cada filtro da fila", JSON.stringify(c));
+  for (const f of ["todas", "travam", "confirmar"] as const) {
+    checar(fila.filter((p) => daFila(p, f)).length === c[f],
+      `(41b) a lista filtrada por "${f}" tem exatamente a contagem exibida`, f);
+  }
+  checar(filtroDaFila("lixo") === "todas" && filtroDaFila(undefined) === "todas" && filtroDaFila(["travam", "x"]) === "travam",
+    "(41c) filtro desconhecido cai em 'todas' (mostrar demais, nunca esconder)", "");
+  checar(verboDaPendencia("classificacao_pendente") === "Confirmar"
+    && verboDaPendencia("item_faltante") === "Pedir ao cliente"
+    && verboDaPendencia("arquivo_ilegivel") === "Pedir ao cliente"
+    && verboDaPendencia("divergencia_reconciliacao") === "Decidir"
+    && verboDaPendencia("tipo_que_nao_existe") === "Pedir ao cliente",
+    "(41d) o verbo do botão corresponde à gaveta de destino", "");
+  checar(padraoDeBusca("a_b%c\\d") === "%a\\_b\\%c\\\\d%",
+    "(41e) busca escapa _ % \\ (senão '_' casaria todo nome)", String(padraoDeBusca("a_b%c\\d")));
+  checar(padraoDeBusca("   ") === null && padraoDeBusca(undefined) === null && padraoDeBusca(["Vertentes", "x"]) === "%Vertentes%",
+    "(41f) busca vazia = sem filtro; array usa o primeiro", "");
+  checar(padraoDeBusca("x".repeat(500))!.length === 82, "(41g) busca limitada a 80 caracteres", "");
+}
+
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);
 for (const f of falhas) console.log("  FALHOU:", f);
 process.exit(falhas.length ? 1 : 0);
