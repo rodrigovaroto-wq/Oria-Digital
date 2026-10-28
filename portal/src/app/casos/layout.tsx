@@ -1,24 +1,31 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
 import { BarraLateral, type MandatoNaBarra } from "@/components/barra-lateral";
-import { MarcaOria } from "@/components/marca-oria";
+import { FundoDaMarca } from "@/components/fundo-da-marca";
 import { MenuConta } from "@/components/menu-conta";
 import { Trilha } from "@/components/trilha";
 
-// O CABEÇALHO É A ÚNICA COISA QUE APARECE EM TODAS AS TELAS, então ele é o que
-// diz se o produto é sério antes de qualquer dado carregar. O que mudou:
+// A MOLDURA DE TODAS AS TELAS AUTENTICADAS, no desenho "vidro" (28/10/2026).
 //
-//   • a marca virou marca — sigla em bloco grafite + nome, no lugar de uma
-//     linha de texto que se confundia com um link qualquer;
-//   • a largura foi de `max-w-5xl` (1024px) para `max-w-6xl`: as telas são
-//     TABELAS de oito colunas, e 1024px obrigava a rolar na horizontal num
-//     monitor de trabalho;
-//   • o e-mail e o "Sair" foram para um menu de conta (iniciais no cabeçalho), e
-//     o link "Autonomia" foi para a barra lateral, em "Administração";
-//   • entrou a trilha (onde estou), e o rodapé fixo saiu: o princípio "nada é
-//     fato até alguém aceitar" mora na tela de login, uma vez, e não em toda
-//     tela como um bloco de 53px que tirava altura útil de tabelas de oito colunas.
+// TRÊS CAMADAS, de trás para a frente:
+//   1. a imagem da marca, fixa em tela cheia (`FundoDaMarca`);
+//   2. o CASCO — barra lateral e barra de topo, vidro escuro suspenso a 12px das
+//      bordas, que só carregam navegação e texto claro;
+//   3. a FOLHA — UMA folha de vidro creme com todo o conteúdo. As 13 telas usam
+//      texto escuro desenhado para superfície creme; a folha mantém cada número
+//      sobre >= 92% de creme (o mesmo contraste de antes) e deixa a imagem
+//      aparecer ao redor e só de leve por baixo. O cabeçalho do mandato e as
+//      abas moram dentro dela, sem mudança.
+//
+// A barra de 57px de largura total SAIU: a marca foi para o topo da barra lateral
+// e a trilha e a conta para uma barra flutuante. Com isso não há mais deslocamento
+// de 57px a calcular — a barra lateral é `sticky top-3`, a de topo também.
+//
+// A largura útil continua a de antes: `max-w-6xl` (1152px) de conteúdo + 2×24px
+// de respiro da folha = 75rem de coluna. As telas são TABELAS de oito colunas, e
+// 1024px obrigava a rolar na horizontal num monitor de trabalho. O e-mail e o
+// "Sair" ficam no menu de conta; o princípio "nada é fato até alguém aceitar"
+// mora no login, uma vez, e não num rodapé fixo em toda tela.
 export default async function CasosLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const [claimsRes, mandatosRes] = await Promise.all([
@@ -40,44 +47,19 @@ export default async function CasosLayout({ children }: { children: React.ReactN
   const nomes = Object.fromEntries(mandatos.map((m) => [m.id, m.nome]));
 
   return (
-    /* SEM `bg-tinta-50` AQUI, e não é descuido: o `body` já pinta essa mesma
-       cor (ver `app/layout.tsx`). Repeti-la neste `div` criava uma camada
-       OPACA em cima do plano de fundo — e era ela que engolia a ilustração do
-       painel, que é um `fixed` em `-z-10`. Elemento em z negativo pinta acima
-       do fundo da raiz e ABAIXO de qualquer bloco do fluxo; com a cor no `div`,
-       o bloco do fluxo era a tela inteira. Tirando a cor daqui, a ilustração
-       aparece nos vãos e continua coberta por tudo o que tem fundo próprio: a
-       barra, o cabeçalho, o rodapé e as cartas. */
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b border-tinta-200 bg-folha/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
-          {/* NA BARRA, O SEXTANTE. A marca completa é empilhada (instrumento
-              sobre ORIA sobre PARTNERS) e num cabeçalho de 57px cada palavra
-              ficaria com 9px de altura — ilegível, e mal-educado com a marca.
-              A lockup completa aparece no login, onde há altura para ela. */}
-          <Link href="/casos" className="flex shrink-0 items-center gap-2.5">
-            <MarcaOria variante="sextante" className="h-8 w-8" />
-            <span className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold tracking-wide text-tinta-900">ORIA</span>
-              <span className="text-[10px] uppercase tracking-[0.2em] text-tinta-500">Partners</span>
-            </span>
-            <span className="hidden border-l border-tinta-200 pl-2.5 text-[11px] leading-tight text-tinta-500 lg:block">
-              Tratamento de
-              <br />
-              dados financeiros
-            </span>
-          </Link>
-
+    // SEM COR DE FUNDO NESTE `div`: a imagem é `fixed` em `-z-10` e um bloco
+    // opaco aqui a engoliria (elemento em z negativo pinta abaixo de qualquer
+    // bloco do fluxo). O que tem fundo é o casco e a folha, e só eles.
+    <div className="flex min-h-screen">
+      <FundoDaMarca variante="app" />
+      <BarraLateral mandatos={mandatos} />
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3">
+        <header className="vidro-casco sticky top-3 z-10 mx-auto flex w-full max-w-[75rem] items-center justify-between gap-4 rounded-2xl px-4 py-2">
           <Trilha nomes={nomes} />
-
           <MenuConta email={email} sair={logout} />
-        </div>
-      </header>
-
-      <div className="flex flex-1">
-        <BarraLateral mandatos={mandatos} />
-        <main className="min-w-0 flex-1 px-6 py-8">
-          <div className="mx-auto w-full max-w-6xl">{children}</div>
+        </header>
+        <main className="vidro-folha mx-auto w-full max-w-[75rem] flex-1 rounded-2xl px-6 py-8">
+          {children}
         </main>
       </div>
     </div>

@@ -57,7 +57,7 @@ export function MenuConta({
   }, [aberto]);
 
   return (
-    <div ref={raiz} className="relative">
+    <div ref={raiz} className="relative ml-auto">
       <button
         type="button"
         onClick={() => setAberto((v) => !v)}
@@ -66,9 +66,9 @@ export function MenuConta({
         aria-controls={idMenu}
         aria-label={email ? `Conta de ${email}` : "Conta"}
         title={email || "Conta"}
-        className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-tinta-500 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
+        className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-vidro-suave transition-colors hover:bg-white/10 hover:text-vidro-texto"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-tinta-900 text-[11px] font-semibold text-papel">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-vidro-texto text-[11px] font-semibold text-tinta-900">
           {iniciais || <IconeConta tamanho={16} />}
         </span>
         <IconeChevronBaixo tamanho={14} className={`transition-transform ${aberto ? "rotate-180" : ""}`} />
@@ -77,7 +77,10 @@ export function MenuConta({
       {aberto && (
         <div
           id={idMenu}
-          className="absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-tinta-200 bg-folha p-1.5 shadow-lg"
+          // O MENU CONTINUA CREME dentro do casco escuro: é texto de e-mail e uma
+          // ação destrutiva-adjacente ("Sair"), e legibilidade vale mais do que
+          // coerência de vidro. `vidro-claro` devolve o anel de foco escuro.
+          className="vidro-claro absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-tinta-200 bg-folha p-1.5 shadow-lg"
         >
           {email && (
             <p className="truncate px-2.5 py-2 text-xs text-tinta-500" title={email}>

@@ -57,6 +57,17 @@
   --color-papel: #f6f4ef;
   --color-folha: #fcfbf8;
 
+  /* --- vidro (decisão do dono, 28/10/2026) ---------------------------------
+     As cores de TEXTO e de realce sobre o casco escuro (barra lateral, barra
+     de topo, cartão do login). `vidro-suave` (#a39d92) é o piso do texto
+     secundário ali: ver a medição em DESIGN.md, "Vidro e imagem de fundo".
+     `fundo-reserva` é o que o `body` pinta ANTES da imagem chegar — creme
+     piscando e virando foto escura é pior do que escuro virando foto escura. */
+  --color-vidro-texto: #ece8df;
+  --color-vidro-suave: #a39d92;
+  --color-vidro-terracota: #e8937c;
+  --color-fundo-reserva: #0d0f13;
+
   /* --- tinta ---------------------------------------------------------------
      A rampa sai do `--foreground` do site (#11161D) e desce em direção ao
      papel, não em direção ao cinza: os passos claros carregam o amarelo da
@@ -168,6 +179,29 @@
      sujeira. */
   --sombra-carta: 0 1px 2px 0 rgb(17 22 29 / 0.05), 0 1px 3px 0 rgb(17 22 29 / 0.07);
   --sombra-topo: 0 1px 0 0 rgb(17 22 29 / 0.07);
+
+  /* O VIDRO, em um lugar só (regra 8 do pedido do dono): quem precisar de outra
+     opacidade muda aqui, e as três mídias de fallback ao fim do arquivo
+     redefinem estes mesmos valores — nenhum arquivo .tsx repete um rgba. */
+  /* 0,64 e não 0,58: com o pixel MAIS CLARO da foto (255,255,236) sob o véu
+     de 0,62, 0,58 dá 4,38:1 para `vidro-suave` (abaixo de AA); 0,64 dá 4,71:1. */
+  --vidro-casco-fundo: rgb(18 21 27 / 0.64);
+  --vidro-casco-denso: rgb(18 21 27 / 0.8);
+  --vidro-casco-borda: rgb(255 255 255 / 0.09);
+  --vidro-casco-filtro: blur(18px) saturate(140%);
+  /* 0,94 e não 0,92: medido, `tinta-500` sobre a folha a 0,92 com a foto PRETA
+     atrás dá 4,37:1 (abaixo de AA); a 0,94 dá 4,57:1. A foto é escura na
+     maior parte, então o pior caso é o caso comum. */
+  --vidro-folha-fundo: rgb(252 251 248 / 0.94);
+  --vidro-folha-borda: rgb(255 255 255 / 0.55);
+  --vidro-folha-filtro: blur(20px);
+  --vidro-sombra: 0 8px 32px 0 rgb(0 0 0 / 0.28);
+  /* O NEON DA PLACA. O sextante original é azul-marinho de traço escuro — igual
+     à placa da foto, onde o que o faz aparecer é a LUZ AZUL POR TRÁS. Um brilho
+     só de 6px quase sumia no vidro escuro; três camadas (núcleo, halo, aura)
+     reproduzem a luz de fundo da placa sem tocar na arte, que segue intacta. */
+  --marca-neon: drop-shadow(0 0 1.5px rgb(150 180 255 / 0.95))
+    drop-shadow(0 0 6px rgb(77 124 255 / 0.9)) drop-shadow(0 0 16px rgb(77 124 255 / 0.55));
 }
 
 html {
@@ -176,6 +210,9 @@ html {
 }
 
 body {
+  /* Escuro, não creme: o fundo da marca é uma foto escura e fica fixo atrás de
+     tudo (`FundoDaMarca`). Enquanto ela não chega, o que se vê é isto. */
+  background-color: var(--color-fundo-reserva);
   font-family: var(--font-texto);
   -webkit-font-smoothing: antialiased;
 }
@@ -359,4 +396,108 @@ body {
   .intro-sai {
     animation: none !important;
   }
+}
+
+/* =============================================================================
+   VIDRO E IMAGEM DE FUNDO (decisão do dono, 28/10/2026).
+
+   A imagem da marca cobre a tela inteira, fixa (`FundoDaMarca`). Sobre ela há
+   duas superfícies, e a regra que as separa é a de legibilidade:
+
+     • CASCO — vidro escuro (barra lateral, barra de topo, cartão do login). Só
+       carrega texto CLARO e rótulo curto. Pode ser translúcido, porque o pior
+       fundo possível por trás dele (o pixel mais claro da foto, sob o véu) dá
+       texto secundário acima de 4,5:1 — medição em DESIGN.md.
+     • FOLHA — vidro creme a 92% (a página inteira). As 13 telas usam texto
+       escuro desenhado para superfície creme; a folha mantém todo número sobre
+       >= 92% de creme (o mesmo contraste de hoje) e a foto aparece AO REDOR e
+       só de leve por baixo. Número nunca fica direto sobre a imagem.
+
+   Nada aqui usa `background-attachment: fixed` (quebrado no iOS): a imagem é um
+   elemento `fixed`, que o navegador compõe sem repintar a cada rolagem.
+   ============================================================================ */
+
+.vidro-casco {
+  background-color: var(--vidro-casco-fundo);
+  color: var(--color-vidro-texto);
+  border: 1px solid var(--vidro-casco-borda);
+  -webkit-backdrop-filter: var(--vidro-casco-filtro);
+  backdrop-filter: var(--vidro-casco-filtro);
+  box-shadow: var(--vidro-sombra);
+}
+
+/* O cartão do login: o véu ali vai de 0,15 a 0,70 e o cartão fica onde ele é
+   mais fraco em celular (~0,45), onde 0,64 deixaria `vidro-suave` em ~3,9:1 sobre
+   o pixel mais claro. 0,80 dá 4,89:1 nesse ponto. */
+.vidro-casco-denso {
+  background-color: var(--vidro-casco-denso);
+}
+
+.vidro-folha {
+  background-color: var(--vidro-folha-fundo);
+  border: 1px solid var(--vidro-folha-borda);
+  -webkit-backdrop-filter: var(--vidro-folha-filtro);
+  backdrop-filter: var(--vidro-folha-filtro);
+  box-shadow: var(--vidro-sombra);
+}
+
+/* O anel de foco padrão é terracota-600 (#b6482f), que sobre o casco escuro dá
+   ~2,6:1 e some. Sobre o vidro ele é o terracota CLARO (~7:1). O menu da conta
+   abre CREME dentro do casco, e nele o anel escuro volta (especificidade maior
+   que a do casco, de propósito). */
+.vidro-casco :where(a, button, input, select, textarea, summary):focus-visible {
+  outline-color: var(--color-vidro-terracota);
+}
+.vidro-casco .vidro-claro :where(a, button, input, select, textarea, summary):focus-visible {
+  outline-color: var(--color-acento-600);
+}
+
+/* Autopreenchimento do Chrome pinta o campo de amarelo-claro com texto escuro,
+   por cima do vidro: sem isto o e-mail salvo fica um retângulo claro em um
+   cartão escuro. */
+.vidro-casco input:-webkit-autofill {
+  -webkit-text-fill-color: var(--color-vidro-texto);
+  box-shadow: 0 0 0 1000px rgb(30 34 42) inset;
+  caret-color: var(--color-vidro-texto);
+}
+
+/* O véu sobre a imagem. App: escuro e quase uniforme, para o vidro ter fundo
+   previsível. Login: claro à esquerda — a placa "ORIA DIGITAL" é uma luz e tem
+   de ser lida — e escuro à direita, onde mora o cartão. */
+.fundo-veu-app {
+  background-image: linear-gradient(to bottom, rgb(10 12 16 / 0.62), rgb(10 12 16 / 0.78));
+}
+.fundo-veu-login {
+  background-image: linear-gradient(to right, rgb(10 12 16 / 0.15), rgb(10 12 16 / 0.7));
+}
+
+/* SEM `backdrop-filter` (navegador antigo): o vidro deixa de borrar o que está
+   atrás, e texto sobre foto nítida e translúcida perde legibilidade. Sobe a
+   opacidade para o texto não depender do que o filtro faria. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --vidro-casco-fundo: rgb(18 21 27 / 0.94);
+    --vidro-casco-denso: rgb(18 21 27 / 0.96);
+    --vidro-folha-fundo: rgb(252 251 248 / 0.98);
+  }
+}
+
+/* QUEM PEDIU MENOS TRANSPARÊNCIA ao sistema recebe superfícies SÓLIDAS: casco
+   #161a20, folha #fcfbf8 (a `folha` do tema), sem filtro e sem sombra difusa. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --vidro-casco-fundo: #161a20;
+    --vidro-casco-denso: #161a20;
+    --vidro-folha-fundo: #fcfbf8;
+    --vidro-casco-filtro: none;
+    --vidro-folha-filtro: none;
+  }
+}
+
+/* Sextante com a luz de fundo da placa "ORIA DIGITAL" (ver --marca-neon). */
+.marca-neon {
+  filter: var(--marca-neon);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .marca-neon { filter: none; }
 }

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { MarcaOria } from "@/components/marca-oria";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import type { CasoStatus } from "@/lib/types";
 import {
@@ -20,8 +21,8 @@ import {
 // clicando. Com um mandato só isso passa; com dez, cada troca de caso custa duas
 // telas (voltar à lista, procurar, entrar).
 //
-// A ORDEM, DE CIMA PARA BAIXO: a AÇÃO ("Novo mandato", o único botão escuro),
-// dois LUGARES fixos (Início, Mandatos), os RECENTES, e a ADMINISTRAÇÃO. Ação
+// A ORDEM, DE CIMA PARA BAIXO: a MARCA, a AÇÃO ("Novo mandato", o único botão
+// claro sobre o vidro escuro), dois LUGARES fixos (Início, Mandatos), os RECENTES, e a ADMINISTRAÇÃO. Ação
 // não tem filho e não abre; dar a ela a mesma aparência dos lugares a faria
 // parecer uma pasta vazia.
 //
@@ -32,6 +33,13 @@ import {
 // pelos mais novos, para quem nunca visitou nada (primeiro acesso, outro
 // navegador) não ver uma seção vazia. Só ATIVOS entram: o servidor já filtra
 // `fechado_em is null` (0114), e mandato fechado continua na lista completa.
+//
+// A BARRA FLUTUA (28/10/2026): solta das bordas (12px), cantos de 16px, vidro
+// escuro (`.vidro-casco`, em globals.css) sobre a imagem da marca. A marca mudou
+// do cabeçalho de 57px para o TOPO desta barra — e com o cabeçalho foram-se os
+// `top-[57px]` e `calc(100vh-57px)`: ela gruda a `top-3` e ocupa a altura da
+// tela menos os 12px de cima e de baixo. `dvh` e não `vh`: em celular, `100vh`
+// conta a área atrás da barra de endereço e o rodapé da barra ficaria cortado.
 
 export interface MandatoNaBarra {
   id: string;
@@ -134,10 +142,20 @@ export function escolherRecentes(
 const ID_DO_CASO = /^\/casos\/([0-9a-f-]{36})(?:\/|$)/i;
 
 const ITEM_BASE = "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors";
-const ITEM_ATIVO = "bg-acento-50 text-acento-700";
-const ITEM_INATIVO = "text-tinta-700 hover:bg-tinta-50 hover:text-tinta-900";
+// O ATIVO NO VIDRO: preenchimento claro a 10% e uma barra de 2px à esquerda em
+// terracota CLARO. O terracota de sempre (#b6482f) some sobre o casco escuro
+// (~2,6:1); o #e8937c passa de 7:1. É marca de "onde estou" — e o `aria-current`
+// continua dizendo isso a quem não vê cor.
+const ITEM_ATIVO = "bg-white/10 text-vidro-texto shadow-[inset_2px_0_0_var(--color-vidro-terracota)]";
+const ITEM_INATIVO = "text-vidro-texto hover:bg-white/[0.07]";
 // No trilho o item é só o ícone: quadrado de 40px, centrado.
 const TRILHO_BASE = "flex h-10 w-10 items-center justify-center rounded-md transition-colors";
+// O sextante é a arte ORIGINAL em azul; o brilho é só um `drop-shadow` de CSS,
+// que o destaca do vidro sem recolorir nem redesenhar nada.
+const MARCA_SEXTANTE = "marca-neon h-8 w-8 shrink-0";
+const ROTULO_SECAO = "text-[11px] font-semibold uppercase tracking-wider text-vidro-suave";
+// Mesma altura nas duas formas da barra (aberta e trilho), flutuando a 12px.
+const CASCA = "vidro-casco sticky top-3 h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl";
 
 export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   const caminho = usePathname();
@@ -190,8 +208,11 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   const trilho = (comBotao: boolean) => (
     <nav
       aria-label="Navegação principal"
-      className="sticky top-[57px] flex h-[calc(100vh-57px)] w-14 flex-col items-center gap-1 overflow-y-auto py-3"
+      className={`${CASCA} flex w-14 flex-col items-center gap-1 py-3`}
     >
+      <Link href="/casos" title="Oria Digital — início" aria-label="Oria Digital — início" className="mb-1 rounded-md">
+        <MarcaOria variante="sextante" alt="" className={MARCA_SEXTANTE} />
+      </Link>
       {comBotao && (
         <button
           type="button"
@@ -199,7 +220,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
           title="Expandir o menu"
           aria-label="Expandir o menu"
           aria-expanded={false}
-          className={`${TRILHO_BASE} mb-1 text-tinta-500 hover:bg-tinta-100 hover:text-tinta-900`}
+          className={`${TRILHO_BASE} mb-1 text-vidro-suave hover:bg-white/10 hover:text-vidro-texto`}
         >
           <IconeExpandir />
         </button>
@@ -208,7 +229,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
         href="/casos/novo"
         title="Novo mandato"
         aria-label="Novo mandato"
-        className={`${TRILHO_BASE} bg-tinta-900 text-papel hover:bg-tinta-800`}
+        className={`${TRILHO_BASE} bg-vidro-texto text-tinta-900 hover:bg-papel`}
       >
         <IconeMais />
       </Link>
@@ -243,42 +264,48 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   );
 
   if (recolhida) {
-    return <aside className="shrink-0 border-r border-tinta-200 bg-folha">{trilho(true)}</aside>;
+    return <aside className="shrink-0 py-3 pl-3">{trilho(true)}</aside>;
   }
 
   return (
     <>
-      <aside className="shrink-0 border-r border-tinta-200 bg-folha md:hidden">{trilho(false)}</aside>
-      <aside className="hidden w-60 shrink-0 border-r border-tinta-200 bg-folha md:block">
-        {/* A BARRA TEM A ALTURA DA VIEWPORT abaixo do cabeçalho (57px) e o que
-            passa disso rola AQUI dentro, não com a página: o topo (a ação e os
-            lugares) fica parado, e a Administração fica ancorada embaixo. Com
-            no máximo 5 recentes quase nunca há rolagem, mas telas baixas
-            existem. */}
-        <nav
-          aria-label="Navegação principal"
-          className="sticky top-[57px] flex h-[calc(100vh-57px)] flex-col gap-1 overflow-y-auto p-3"
-        >
-          <div className="mb-1 flex items-center justify-between px-1">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-tinta-500">
-              Menu
-            </span>
+      <aside className="shrink-0 py-3 pl-3 md:hidden">{trilho(false)}</aside>
+      <aside className="hidden w-[15.75rem] shrink-0 py-3 pl-3 md:block">
+        {/* A BARRA TEM A ALTURA DA TELA menos os 12px de cima e de baixo, e o
+            que passa disso rola AQUI dentro, não com a página: o topo (a marca,
+            a ação e os lugares) fica parado, e a Administração fica ancorada
+            embaixo. Com no máximo 5 recentes quase nunca há rolagem, mas telas
+            baixas existem. 15.75rem = os 240px de antes + os 12px de margem. */}
+        <nav aria-label="Navegação principal" className={`${CASCA} flex flex-col gap-1 p-3`}>
+          <div className="mb-1 flex items-center justify-between gap-2 px-1">
+            {/* A MARCA NO TOPO DA BARRA. O nome da placa do dono é "ORIA
+                DIGITAL"; o sextante é a arte original, sem recolorir. Texto de
+                verdade ao lado, então o `alt` da imagem fica vazio. */}
+            <Link href="/casos" className="flex min-w-0 items-center gap-2.5 rounded-md">
+              <MarcaOria variante="sextante" alt="" className={MARCA_SEXTANTE} />
+              <span className="flex flex-col leading-tight">
+                <span className="text-sm font-semibold uppercase tracking-wide text-vidro-texto">Oria</span>
+                <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-vidro-suave">Digital</span>
+              </span>
+            </Link>
             <button
               type="button"
               onClick={alternarBarra}
               title="Recolher o menu"
               aria-label="Recolher o menu"
               aria-expanded
-              className="rounded p-1 text-tinta-500 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
+              className="rounded p-1 text-vidro-suave transition-colors hover:bg-white/10 hover:text-vidro-texto"
             >
               <IconeRecolher />
             </button>
           </div>
 
-          {/* AÇÃO — a única coisa escura da barra, e por isso a única que grita. */}
+          {/* AÇÃO — a única coisa CLARA da barra (creme com texto escuro), e por
+              isso a única que grita. Era a única escura sobre a barra creme; o
+              vidro inverteu a polaridade e a regra continua a mesma. */}
           <Link
             href="/casos/novo"
-            className={`${ITEM_BASE} bg-tinta-900 text-papel hover:bg-tinta-800`}
+            className={`${ITEM_BASE} bg-vidro-texto text-tinta-900 hover:bg-papel`}
           >
             <IconeMais />
             Novo mandato
@@ -304,11 +331,11 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
           </div>
 
           <div className="mt-3">
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-tinta-500">
+            <p className={`px-3 pb-1 ${ROTULO_SECAO}`}>
               Recentes
             </p>
             {recentes.length === 0 ? (
-              <p className="px-3 py-1.5 text-xs text-tinta-500">Nenhum mandato aberto</p>
+              <p className="px-3 py-1.5 text-xs text-vidro-suave">Nenhum mandato aberto</p>
             ) : (
               <ul className="space-y-0.5">
                 {recentes.map((m) => {
@@ -321,8 +348,8 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
                         aria-current={ativo ? "page" : undefined}
                         className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
                           ativo
-                            ? "bg-acento-50 font-medium text-acento-700"
-                            : "text-tinta-600 hover:bg-tinta-50 hover:text-tinta-900"
+                            ? `${ITEM_ATIVO} font-medium`
+                            : ITEM_INATIVO
                         }`}
                       >
                         {/* O ponto de status É a cor do chip da lista: quem
@@ -342,8 +369,8 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
             )}
           </div>
 
-          <div className="mt-auto border-t border-tinta-200 pt-3">
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-tinta-500">
+          <div className="mt-auto border-t border-white/10 pt-3">
+            <p className={`px-3 pb-1 ${ROTULO_SECAO}`}>
               Administração
             </p>
             <Link

@@ -23,15 +23,19 @@
 export function MarcaOria({
   variante = "completa",
   className = "",
+  alt = "Oria Partners",
 }: {
   variante?: "completa" | "sextante";
   className?: string;
+  // `alt=""` quando a marca vem ao lado do próprio nome escrito: o leitor de
+  // tela diria "Oria Partners ORIA DIGITAL" para um link só.
+  alt?: string;
 }) {
   const arquivo = variante === "sextante" ? "/logo-oria-sextante.svg" : "/logo-oria.svg";
   return (
     <img
       src={arquivo}
-      alt="Oria Partners"
+      alt={alt}
       className={className}
       // A arte é quadrada nas duas variantes; declarar as proporções evita o
       // pulo de layout enquanto o arquivo carrega.

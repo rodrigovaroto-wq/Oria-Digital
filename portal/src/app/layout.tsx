@@ -43,7 +43,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       lang="pt-BR"
       className={`h-full ${texto.variable} ${titulo.variable} ${dado.variable}`}
     >
-      <body className="min-h-full bg-papel font-texto text-tinta-900 antialiased">{children}</body>
+      {/* `bg-fundo-reserva` e não `bg-papel`: o fundo da marca é uma foto escura
+          e fixa (`FundoDaMarca`); enquanto ela carrega, creme piscando e virando
+          escuro seria pior do que escuro virando foto. */}
+      <body className="min-h-full bg-fundo-reserva font-texto text-tinta-900 antialiased">{children}</body>
     </html>
   );
 }

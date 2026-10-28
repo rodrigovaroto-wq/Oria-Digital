@@ -11,7 +11,6 @@ import {
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import { rotuloDaPendencia, nomeDaChecagem, partesDaDescricao, suavizarMensagem } from "@/lib/rotulos";
 import { formatarTipoTaxonomia } from "@/lib/export";
-import { CeuOria } from "@/components/ceu-oria";
 import { Surgir } from "@/components/surgir";
 
 // O PAINEL: a primeira tela do dia, e ela responde o que precisa de mim agora.
@@ -358,10 +357,6 @@ export default async function PainelPage() {
 
   return (
     <div className="relative space-y-6">
-      {/* O sextante a 8% de opacidade (a abertura de ~3s foi removida: 3s a cada login era custo fixo para quem usa o portal todo dia). `fixed` e não
-          `absolute`, para ele ficar parado enquanto o conteúdo rola por cima. */}
-      <CeuOria modo="fundo" className="pointer-events-none fixed inset-0 -z-10 h-full w-full" />
-
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-tinta-900">{saudacao(agora)}</h1>

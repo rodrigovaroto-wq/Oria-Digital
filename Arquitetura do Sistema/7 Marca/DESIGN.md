@@ -200,7 +200,8 @@ repete no conteúdo.**
 
 ## Elevation & Depth
 
-Elevação mínima. O produto é dado; sombra demais compete com o número.
+Elevação mínima (o vidro do casco e da folha leva `--vidro-sombra`, difusa, só para
+destacar a superfície da imagem; dentro da folha vale a regra abaixo). O produto é dado; sombra demais compete com o número.
 
 ### Shadow Vocabulary
 
@@ -267,8 +268,16 @@ cor de borda.
 
 ### Navigation
 
-Barra lateral retrátil sobre `tinta-50`, item em `tinta-700`, item ativo com o
-acento. Estado (recolhida, seção aberta) mora no navegador.
+Barra lateral retrátil e **flutuante** (decisão do dono, 28/10/2026): solta a
+12px das bordas, `rounded-2xl`, `sticky top-3`, altura `100dvh - 24px`, em vidro
+escuro (ver *Vidro e imagem de fundo*). A marca mora no topo dela — o sextante
+original (sem recolorir; só um `drop-shadow` azul) e "ORIA / DIGITAL" em
+versalete. Item em `vidro-texto` (#ece8df), item ativo com preenchimento claro a
+10% e uma barra de 2px à esquerda em terracota claro (#e8937c); "Novo mandato" é
+o único botão claro (creme, texto escuro). Recolhida, vira trilho de ícones com o
+mesmo vidro. No lugar do cabeçalho de 57px há uma barra de topo flutuante, do
+mesmo vidro, com a trilha e o menu da conta. Estado (recolhida, seção aberta)
+mora no navegador.
 
 Desde o redesenho (27/10/2026, `REDESENHO_DO_PORTAL.md`): ícones de traço
 próprios no lugar de caracteres soltos; recolhida, a barra vira trilho de
@@ -276,8 +285,58 @@ próprios no lugar de caracteres soltos; recolhida, a barra vira trilho de
 Dentro do mandato, abas fixas sublinhadas pelo acento, com régua de etapas
 (Recebimento → Conferência → Modelagem → Entrega) no cabeçalho.
 
-A imagem de fundo da marca (em produção pelo dono) só entra na faixa de
-saudação do Início e no login — **nunca atrás de tabela ou de número**.
+### Vidro e imagem de fundo
+
+**Esta seção substitui a regra anterior "a imagem nunca fica atrás de tabela ou
+de número"** (decisão do dono, 28/10/2026). A regra nova:
+
+- **A imagem da marca cobre a tela inteira, fixa**, em toda tela autenticada e no
+  login (`FundoDaMarca`: `next/image` `fill`, `priority`, `fixed inset-0 -z-10`).
+  Nunca `background-attachment: fixed` (quebra no iOS). Dois arquivos estáticos
+  em `public/marca/` (960px, 94 KB; 1678px, 230 KB) escolhidos por um `loader`
+  próprio: celular baixa 59% menos. O `body` é `#0d0f13` até a imagem chegar.
+- **Véu sobre a imagem**: nas telas do app, `rgba(10,12,16,.62)` no topo a `.78`
+  embaixo; no login, `.15` à esquerda (a placa "ORIA DIGITAL" tem de ser lida) a
+  `.70` à direita.
+- **Casco (vidro escuro)** — barra lateral, barra de topo, cartão do login:
+  `rgba(18,21,27,.64)`, `blur(18px) saturate(140%)`, borda `rgba(255,255,255,.09)`,
+  texto `#ece8df`, secundário `#a39d92`. O cartão do login sobe para `.80`.
+- **Folha (vidro creme)** — **todo o conteúdo** de todas as telas, numa única
+  folha: `rgba(252,251,248,.94)`, `blur(20px)`, borda `rgba(255,255,255,.55)`.
+  As 13 telas usam texto escuro desenhado para superfície creme; a folha mantém
+  todo número sobre >= 94% de creme e a imagem aparece ao redor e só de leve por
+  baixo. **Número nunca fica diretamente sobre a imagem nem sobre o casco.**
+- **Fallbacks**: `prefers-reduced-transparency: reduce` → superfícies sólidas
+  (casco `#161a20`, folha `#fcfbf8`, sem filtro); sem `backdrop-filter` → casco
+  `.94` e folha `.98`. Os valores moram em `globals.css` (`--vidro-*`,
+  `.vidro-casco`, `.vidro-folha`), nunca repetidos em `.tsx`.
+- **Foco sobre o casco** é terracota claro `#e8937c` (o `#b6482f` dá ~2,6:1 ali);
+  o menu da conta continua creme e usa o anel escuro.
+
+**Medições (28/10/2026)**, contra o pior fundo possível — o pixel mais claro da
+foto (255,255,236) sob o véu de `.62` — e contra o mais escuro (preto):
+
+| Par | Razão |
+|---|---|
+| `#ece8df` sobre o casco, pior caso | 9,6:1 |
+| `#a39d92` sobre o casco, pior caso | 4,71:1 (com `.58` eram 4,38 — por isso `.64`) |
+| `#a39d92` sobre o casco, véu `.78` | 5,5:1 |
+| terracota `#e8937c` sobre o casco, pior caso | 5,4:1 |
+| `#ece8df` sobre o item ativo (+10% branco), pior caso | 7,1:1 |
+| `#a39d92` sobre o cartão do login (`.80`, véu `.45`, pixel mais claro) | 4,89:1 |
+| borda de campo `white/40` sobre o cartão do login | 3,47:1 |
+| `tinta-900` sobre a folha, pior caso | 14,8:1 |
+| `tinta-500` sobre a folha `.92`: sobre pixel claro / sobre preto | 4,69:1 / **4,37:1** |
+| `tinta-500` sobre a folha `.94`, sobre preto | 4,57:1 |
+
+Por isso a folha é `.94` e não `.92`: `tinta-500` valia 5,20:1 sobre a `folha`
+sólida e, a `.92`, caía abaixo de 4,5:1 onde a foto é preta — o caso comum, porque
+a foto é escura na maior parte.
+
+**O sextante sobre o casco** leva `.marca-neon` (três sombras azuis: núcleo, halo e
+aura). A arte original é azul-marinho de traço escuro, como a placa da foto, e
+quase sumia no vidro escuro com um brilho só; as sombras reproduzem a luz de
+fundo da placa sem tocar no arquivo.
 
 ### Superfícies do navegador
 

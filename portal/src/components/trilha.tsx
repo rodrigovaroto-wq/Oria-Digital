@@ -3,6 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// A TRILHA (breadcrumb), agora sobre o casco de vidro escuro da barra de topo:
+// o passo corrente em #ece8df e os anteriores em #a39d92 (medidos em DESIGN.md).
+//
 // A TRILHA (breadcrumb) diz ONDE a pessoa está, que o cabeçalho antigo nunca
 // disse: dentro de um mandato, a única pista era o título da página. O nome vem
 // da lista que o layout JÁ busca para a barra lateral — zero consulta nova. O
@@ -33,20 +36,20 @@ export function Trilha({ nomes }: Readonly<{ nomes: Record<string, string> }>) {
   if (passos.length === 0) return null;
   return (
     <nav aria-label="Você está em" className="min-w-0 flex-1">
-      <ol className="flex min-w-0 items-center gap-1.5 text-sm text-tinta-500">
+      <ol className="flex min-w-0 items-center gap-1.5 text-sm text-vidro-suave">
         {passos.map((p, i) => {
           const ultimo = i === passos.length - 1;
           return (
             <li key={p.href ?? p.rotulo} className={`flex items-center gap-1.5 ${ultimo ? "min-w-0" : "shrink-0"}`}>
               {i > 0 && <span aria-hidden>›</span>}
               {p.href && !ultimo ? (
-                <Link href={p.href} className="rounded px-1 hover:text-tinta-900 hover:underline">
+                <Link href={p.href} className="rounded px-1 hover:text-vidro-texto hover:underline">
                   {p.rotulo}
                 </Link>
               ) : (
                 <span
                   aria-current={ultimo ? "page" : undefined}
-                  className={ultimo ? "truncate font-medium text-tinta-900" : ""}
+                  className={ultimo ? "truncate font-medium text-vidro-texto" : ""}
                 >
                   {p.rotulo}
                 </span>
