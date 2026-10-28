@@ -27,14 +27,16 @@ psql -q -d "$DB" -c "
     bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security;" >/dev/null
 
-# O SCHEMA `auth` DO SUPABASE, no mínimo que a 0215 usa (27/10/2026): `auth.users` (id, email) e `auth.uid()` lendo o
+# O SCHEMA `auth` DO SUPABASE, no mínimo que a 0215 usa (27/10/2026): `auth.users` e `auth.uid()` lendo o
 # mesmo `request.jwt.claims` que o PostgREST preenche. Antes da 0215 nenhuma migration tocava `auth`, por isso o
 # replay local nunca o teve; sem ele `caso_membro` não cria a FK e nenhum teste consegue ser "um usuário" (o jwt de
 # `set local role authenticated`). O `service_role` lê `auth.users` como no Supabase (o `authenticated` NÃO: lá
-# também não lê). O Supabase real tem mais colunas em `auth.users`; só estas duas são usadas aqui.
+# também não lê). O Supabase real tem mais colunas em `auth.users`; aqui entram as que a 0215 lê: id, email e as quatro do predicado de
+# "usuário ativo" (email_confirmed_at, banned_until, deleted_at, is_anonymous — sem default em email_confirmed_at, como lá).
 psql -q -d "$DB" -c "
   create schema if not exists auth;
-  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text);
+  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text,
+    email_confirmed_at timestamptz, banned_until timestamptz, deleted_at timestamptz, is_anonymous boolean not null default false);
   create or replace function auth.uid() returns uuid language sql stable as \$\$
     select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
                     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid \$\$;

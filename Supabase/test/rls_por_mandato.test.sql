@@ -12,8 +12,11 @@
 -- globais é dado de cliente); (3) A escreve normalmente em X e não escreve em Y (insert, update, delete, evento
 -- forjado, objeto do bucket); (4) o evento sem mandato só o administrador lê, e o gatilho deriva o caso de cada forma
 -- de entidade_ref que existe no código; (5) o bucket `documentos` só abre a pasta do mandato; (6) fn_upsert_caso do
--- não membro recusa (42501) e NÃO cria o segundo caso; (7) a guarda da migration recusa administrador vazio com caso
--- órfão; (8) a sonda enxerga a policy que voltou a using (true).
+-- não membro recebe null (e um evento de rastro) e NÃO cria o segundo caso, e não cria nem renomeia por insert/update
+-- direto para um nome já usado; (7) a guarda da migration recusa administrador vazio com usuário ativo; (8) a sonda
+-- enxerga a policy que voltou a using (true), a RLS desligada e o definer que virou invoker; (9) o veredito global do
+-- dial não depende de quem dispara (analista com recorte alto NÃO promove), os agregados de /autonomia são iguais para
+-- todo leitor, a falha sem caso (caso_id nulo) chega a quem sobe o arquivo, e o dial/catálogos só o administrador escreve.
 --
 -- Montagem: usuários e dados como superusuário (auth.uid() nulo); os mandatos X e Y nascem por fn_upsert_caso COMO
 -- A e COMO B (o caminho real do portal). O "service_role" é o superusuário sem claims: no banco de teste o papel
@@ -47,7 +50,7 @@ $$;
 -- Os catálogos globais que o authenticated continua lendo.
 create or replace function teste_catalogos_0216() returns setof text language sql stable as $$
   select unnest(array['premissa_catalogo', 'classe_contabil_catalogo', 'rubrica_classe', 'fato_tipo_catalogo',
-    'pergunta_catalogo', 'golden_rodada', 'estagio_autonomia', 'instalacao_cobertura', 'instalacao_requisito',
+    'pergunta_catalogo', 'golden_rodada', 'golden_criterio', 'estagio_autonomia', 'instalacao_cobertura', 'instalacao_requisito',
     'taxonomia_tipo_documento', 'taxonomia_tipo_cobertura', 'taxonomia_linha_exigida', 'taxonomia_linha_alternativa',
     'taxonomia_linha_localizador', 'indice_macro_serie', 'indice_macro_obs', 'indice_macro_expectativa'])
 $$;
@@ -166,9 +169,23 @@ begin
   insert into golden_rotulo (rodada_id, documento_id, rotulador) values (p_rodada, v_doc, 'teste');
 end $$;
 
+-- N vereditos de revisão de documento no caso, `p_acertos` deles confirmando (a forma que fn_veredito_producao conta).
+create or replace function teste_decisoes_0216(p_caso uuid, p_n int, p_acertos int) returns void language plpgsql as $$
+declare i int;
+begin
+  for i in 1..p_n loop
+    insert into decisao (caso_id, tipo, autor, motivo, payload)
+    values (p_caso, (case when i <= p_acertos then 'aprovacao' else 'correcao_classificacao' end)::decisao_tipo,
+            'analista:t0216', 'veredito de teste 0216',
+            jsonb_build_object('documento_id', gen_random_uuid(), 'tipo_de', 'balanco_patrimonial',
+                               'tipo_para', case when i <= p_acertos then 'balanco_patrimonial' else 'balancete' end));
+  end loop;
+end $$;
+
 -- limpeza de rodada anterior (cascata leva caso_membro e o que pende do caso; o rastro é append-only e fica)
 delete from storage.objects where name like '0216a1%' or name like 'lixo0216/%' or name = 'raiz0216.pdf';
-delete from golden_rodada where nome = '0216 — rodada';
+delete from execucao_falha where caso_id is null and caso_nome like '0216 — %';
+delete from golden_rodada where nome like '0216 — %';
 delete from caso where nome like '0216 — %';
 delete from auth.users where email like '%@0216.teste';
 grant usage on schema storage to authenticated;
@@ -184,17 +201,25 @@ declare
   v_n bigint; v_m bigint; v_lista text; v_err text; v_b boolean;
   v_doc_y uuid; v_ver_x uuid; v_ver_y uuid; v_ent_y uuid; v_doc_x uuid; v_ent_x uuid;
   v_ev int; v_casos int; v_tag text; v_res jsonb; v_res2 jsonb;
+  v_m2 bigint; v_t text; v_nivel text; v_nivel2 text; v_tipo text; v_j1 jsonb; v_j2 jsonb; v_j3 jsonb;
 begin
   raise notice '--- 0. o catálogo da sonda tem os requisitos da 0216 e nenhum está ausente ---';
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0216';
-  perform teste_assert_0216(v_n = 64, 'a sonda tem os 64 requisitos da 0216', v_n::text);
-  select count(*) into v_n from fn_instalacao_conferir() where migration = '0216' and not presente;
-  perform teste_assert_0216(v_n = 0, 'nenhum requisito da 0216 ausente',
-    (select string_agg(chave || ': ' || detalhe, ' | ') from fn_instalacao_conferir() where migration = '0216' and not presente));
+  perform teste_assert_0216(v_n = 125, 'a sonda tem os 125 requisitos da 0216', v_n::text);
+  -- `administrador` está VAZIA neste ponto (nada a promoveu ainda): o requisito `primeiro_administrador` é o ÚNICO ausente
+  -- (como custo_gravado_pelo_n8n no replay: comportamento que nenhum CI satisfaz) — e é o sinal positivo da regra 7.
+  select string_agg(chave, ',' order by chave) into v_lista from fn_instalacao_conferir() where migration = '0216' and not presente;
+  perform teste_assert_0216(v_lista = 'primeiro_administrador',
+    'com administrador vazia a sonda acusa EXATAMENTE o primeiro_administrador e nenhum outro requisito da 0216', coalesce(v_lista, '<nenhum>'));
+  select count(*) into v_n from fn_instalacao_conferir() where presente is null;
+  perform teste_assert_0216(v_n = 0, 'nenhum requisito da sonda sai com presente NULL', v_n::text);
 
   raise notice '--- 1. montagem: A (membro de X), B (membro de Y), C (administrador), N (de nada) ---';
   insert into auth.users (id, email) values (ua, 'a@0216.teste'), (ub, 'b@0216.teste'), (uc, 'c@0216.teste'), (un, 'n@0216.teste');
   perform fn_administrador_definir('c@0216.teste', true);
+  select count(*) into v_n from fn_instalacao_conferir() where migration = '0216' and not presente;
+  perform teste_assert_0216(v_n = 0, 'com um administrador, nenhum requisito da 0216 está ausente (o sinal some quando o dono age)',
+    (select string_agg(chave || ': ' || detalhe, ' | ') from fn_instalacao_conferir() where migration = '0216' and not presente));
   perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
   set local role authenticated;
   v_x := fn_upsert_caso('0216 — X', 'portal:navegador');
@@ -253,6 +278,101 @@ begin
    where schemaname = 'public' and tablename in (select teste_tabelas_cliente_0216())
      and (with_check = 'true') and tablename <> 'caso';
   perform teste_assert_0216(v_lista is null, 'nenhuma policy de escrita de tabela de cliente é with check (true) (só o insert de caso)', v_lista);
+
+  raise notice '--- 3b. a sonda exige RLS LIGADA em TODA tabela de cliente (e no bucket e nos catálogos de escrita restrita) ---';
+  select string_agg(t, ' ') into v_lista from teste_tabelas_cliente_0216() t
+   where not exists (select 1 from instalacao_requisito q where q.tipo = 'rls' and q.objeto = t);
+  perform teste_assert_0216(v_lista is null, 'toda tabela de cliente do catálogo tem requisito rls na sonda (tabela nova sem ele reprova)', v_lista);
+  v_lista := '';
+  for v_t in select t from teste_tabelas_cliente_0216() t
+             union all select unnest(array['storage.objects', 'golden_criterio', 'estagio_autonomia', 'premissa_catalogo', 'golden_rodada'])
+  loop
+    v_err := null;
+    begin
+      execute format('alter table %s disable row level security', case when v_t like '%.%' then v_t else 'public.' || v_t end);
+      select string_agg(chave, ',' order by chave) into v_err from fn_instalacao_conferir() where tipo = 'rls' and not presente;
+      raise exception 'rollback_0216';
+    exception when others then if sqlerrm <> 'rollback_0216' then raise; end if; end;
+    if v_err is distinct from 'rls_' || replace(v_t, '.', '_') then v_lista := v_lista || v_t || '(' || coalesce(v_err, '-') || ') '; end if;
+  end loop;
+  perform teste_assert_0216(v_lista = '', 'desligar a RLS de QUALQUER tabela de cliente (e do bucket e dos catálogos de escrita restrita) a sonda acusa o requisito dela, e só ele', v_lista);
+  -- e é a brecha: com o GRANT que o default privilege dá, a RLS desligada abre o mandato alheio a quem não é membro
+  begin
+    alter table pendencia disable row level security;
+    perform set_config('request.jwt.claims', json_build_object('sub', un, 'role', 'authenticated')::text, true);
+    set local role authenticated;
+    select count(*) into v_n from pendencia;
+    reset role;
+    raise exception 'rollback_0216';
+  exception when others then if sqlerrm <> 'rollback_0216' then raise; end if; end;
+  perform teste_assert_0216(v_n > 0, 'controle: com a RLS de pendencia desligada, N (que não é membro de nada) lê pendência alheia — é isto que a sonda rls acusa', v_n::text);
+
+  raise notice '--- 3c. dial e catálogos: leitura livre, escrita só do administrador ---';
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_lista := '';
+  select count(*) into v_n from golden_criterio;
+  select count(*) into v_m from estagio_autonomia;
+  select count(*) into v_ev from premissa_catalogo;
+  select count(*) into v_casos from golden_rodada;
+  if v_n = 0 or v_m = 0 or v_ev = 0 or v_casos = 0 then v_lista := 'leitura vazia ' || v_n || '/' || v_m || '/' || v_ev || '/' || v_casos; end if;
+  update golden_criterio set concordancia_minima = 0;                               get diagnostics v_n = row_count;
+  delete from golden_criterio;                                                      get diagnostics v_m = row_count;
+  update estagio_autonomia set teto = 'N3' where estagio = 'classificacao_contabil'; get diagnostics v_ev = row_count;
+  update premissa_catalogo set nome = nome;                                         get diagnostics v_casos = row_count;
+  v_err := null;
+  begin insert into golden_rodada (nome, taxonomia_versao) values ('0216 — invasora', 1);
+  exception when others then v_err := sqlstate; end;
+  update golden_rodada set nome = nome;                                             get diagnostics v_m2 = row_count;
+  reset role;
+  perform teste_assert_0216(v_lista = '', 'A (qualquer usuário logado) LÊ golden_criterio, estagio_autonomia, premissa_catalogo e golden_rodada', v_lista);
+  perform teste_assert_0216(v_n = 0 and v_m = 0 and v_ev = 0 and v_casos = 0 and v_err = '42501' and v_m2 = 0,
+    'e NÃO escreve neles: update/delete em golden_criterio, update do teto, update em premissa_catalogo e golden_rodada alcançam 0 linhas e o insert leva 42501',
+    v_n || '/' || v_m || '/' || v_ev || '/' || v_casos || '/' || coalesce(v_err, '-') || '/' || v_m2);
+  perform teste_assert_0216((select concordancia_minima from golden_criterio where estagio = 'classificacao_doc_checklist') > 0
+    and (select teto from estagio_autonomia where estagio = 'classificacao_contabil') = 'N1'
+    and not exists (select 1 from golden_rodada where nome = '0216 — invasora'),
+    'e nada mudou: o limiar continua, o teto de classificacao_contabil continua N1 (doutrina), nenhuma rodada nasceu');
+  -- O USO LEGÍTIMO: as funções que abrem e congelam rodada (0130, INVOKER, EXECUTE para authenticated) são a única escrita
+  -- em golden_rodada que existe (grep portal/src e N8N: ninguém as chama; o golden set é conduzido pelo dono). Como
+  -- administrador elas seguem funcionando; como analista levam 42501 da RLS — não "abrem" uma rodada que não nasceu.
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_err := null;
+  begin perform fn_golden_abrir_rodada('0216 — rodada de A', 'a@0216.teste');
+  exception when others then v_err := sqlstate; end;
+  reset role;
+  perform teste_assert_0216(v_err = '42501' and not exists (select 1 from golden_rodada where nome = '0216 — rodada de A'),
+    'A (analista) chamando fn_golden_abrir_rodada leva 42501 e nenhuma rodada nasce', v_err);
+  perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_res := fn_golden_abrir_rodada('0216 — rodada de C', 'c@0216.teste');
+  reset role;
+  perform teste_assert_0216(exists (select 1 from golden_rodada where nome = '0216 — rodada de C'),
+    'C (administrador) abre rodada pela função normalmente (o uso legítimo não quebrou)', v_res::text);
+  perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  update golden_criterio set n_minimo_veredito = n_minimo_veredito;                   get diagnostics v_n = row_count;
+  update estagio_autonomia set atualizado_por = atualizado_por where estagio = 'classificacao_contabil'; get diagnostics v_m = row_count;
+  reset role;
+  perform teste_assert_0216(v_n >= 4 and v_m = 1, 'C, administrador, ESCREVE nos catálogos (golden_criterio e estagio_autonomia): o uso legítimo continua', v_n || '/' || v_m);
+  -- fn_mudar_dial é invoker: quem não é administrador NÃO "muda" o dial (a RLS recusa o UPDATE) — e a função não pode
+  -- gravar o evento de mudança nem devolver sucesso nesse caso.
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_err := null;
+  begin perform fn_mudar_dial('classificacao_contabil', 'N0', 'a@0216.teste', 'tentativa de A');
+  exception when others then v_err := sqlstate || ' ' || sqlerrm; end;
+  reset role;
+  perform teste_assert_0216(left(v_err, 5) = '42501' and v_err like '%só o administrador altera%'
+    and not exists (select 1 from evento_auditoria where acao = 'mudanca_dial' and ator = 'a@0216.teste'),
+    'A chamando fn_mudar_dial leva 42501 e NENHUM evento mudanca_dial é gravado (a trilha não afirma o que não aconteceu)', v_err);
+  perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_res := fn_mudar_dial('classificacao_contabil', 'N0', 'c@0216.teste', 'reafirmação do administrador');
+  reset role;
+  perform teste_assert_0216(coalesce((v_res->>'recusado')::boolean, false) = false and exists (select 1 from evento_auditoria where acao = 'mudanca_dial' and ator = 'c@0216.teste'),
+    'C, administrador, chama fn_mudar_dial normalmente (e a trilha registra)', v_res::text);
 
   raise notice '--- 4. os catálogos globais continuam legíveis ---';
   perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
@@ -492,14 +612,41 @@ begin
   select count(*) into v_casos from caso where nome = '0216 — Y';
   perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
   set local role authenticated;
-  v_err := null;
+  v_err := null; v_novo := gen_random_uuid();
   begin v_novo := fn_upsert_caso('0216 — Y', 'portal:navegador');
   exception when others then v_err := sqlstate || ' ' || sqlerrm; end;
   reset role;
   select count(*) into v_n from caso where nome = '0216 — Y';
-  perform teste_assert_0216(left(v_err, 5) = '42501' and v_err like '%existe e você não é membro%' and v_novo is null,
-    'A chamando com o nome de Y recebe 42501 com a mensagem do administrador', v_err);
+  -- A RECUSA NÃO É EXCEÇÃO: uma exceção desfaria a transação e, com ela, o evento que registra a tentativa.
+  perform teste_assert_0216(v_err is null and v_novo is null,
+    'A chamando com o nome de Y NÃO recebe id (null) e não leva exceção: a recusa não pode desfazer o próprio rastro', coalesce(v_err, v_novo::text, 'null'));
   perform teste_assert_0216(v_n = 1 and v_casos = 1, 'e NÃO se criou caso duplicado: continua UM caso chamado Y', v_casos || ' → ' || v_n);
+  select count(*) into v_n from evento_auditoria
+   where acao = 'caso_acesso_recusado' and ator = 'usuario:' || ua and entidade_ref = 'caso_nome:0216 — Y' and caso_id is null;
+  perform teste_assert_0216(v_n = 1, 'a recusa deixou UM evento caso_acesso_recusado, com o ator (usuario:<uuid>) e o nome pedido', v_n::text);
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  select count(*) into v_n from evento_auditoria where acao = 'caso_acesso_recusado';
+  reset role;
+  perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  select count(*) into v_m from evento_auditoria where acao = 'caso_acesso_recusado' and ator = 'usuario:' || ua;
+  reset role;
+  perform teste_assert_0216(v_n = 0 and v_m = 1, 'o rastro da recusa é do administrador: A não o lê, C lê', v_n || '/' || v_m);
+  -- O ORÁCULO DE NOMES: fn_caso_nome_existe não é executável pelo authenticated (em M&A o nome do alvo é informação privilegiada)
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_err := null;
+  begin perform fn_caso_nome_existe('0216 — Y');
+  exception when others then v_err := sqlstate || ' ' || sqlerrm; end;
+  reset role;
+  perform teste_assert_0216(left(v_err, 5) = '42501' and v_err like '%permission denied for function fn_caso_nome_existe%',
+    'A não consegue perguntar se um nome de mandato existe (fn_caso_nome_existe sem EXECUTE para o authenticated)', v_err);
+  -- e não resta, com outro nome, a pergunta que devolvia o ID do mandato (a primeira forma do oráculo, fn_caso_id_do_nome)
+  perform teste_assert_0216(to_regproc('fn_caso_id_do_nome') is null
+    or not (has_function_privilege('authenticated', to_regproc('fn_caso_id_do_nome')::oid, 'execute')
+         or has_function_privilege('anon', to_regproc('fn_caso_id_do_nome')::oid, 'execute')),
+    'nenhuma função devolve o id de um mandato pelo nome ao authenticated/anon (fn_caso_id_do_nome não existe ou não executa)');
   perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
   set local role authenticated;
   v_novo := fn_upsert_caso('0216 — A criou', 'portal:navegador');
@@ -552,27 +699,40 @@ begin
   reset role;
   perform teste_assert_0216(v_n = (select count(*) from caso_membro where usuario_id = ua), 'A, sem ser administrador, tem exatamente os casos de caso_membro', v_n::text);
 
-  raise notice '--- 16. a guarda da migration: administrador vazio + caso sem membro = recusa ---';
+  raise notice '--- 16. a guarda da migration: administrador vazia + usuário ativo = recusa ---';
+  -- A guarda anterior olhava "caso órfão" e não protegia nada na ordem normal (a 0215 dá todo caso a todo usuário ativo:
+  -- zero órfãos no dia). O que a 0216 estraga é "ninguém atribui nem vê": a conta é de USUÁRIOS ATIVOS.
   perform set_config('request.jwt.claims', '', true);
   perform fn_administrador_definir('c@0216.teste', false);
+  select count(*) into v_n from fn_usuarios_ativos();
+  v_err := null;
+  begin perform fn_0216_exige_administrador();
+  exception when others then v_err := sqlstate; end;
+  perform teste_assert_0216(v_n = 0 and v_err is null,
+    'sem administrador e SEM usuário ativo (o replay: usuários só de teste, nenhum confirmado) a guarda deixa passar', v_n || ' ativos, ' || coalesce(v_err, 'ok'));
+  update auth.users set email_confirmed_at = now() where id = ua;
   v_err := null;
   begin perform fn_0216_exige_administrador();
   exception when others then v_err := sqlstate || ' ' || sqlerrm; end;
   perform teste_assert_0216(left(v_err, 5) = '55000' and v_err like '%fn_administrador_definir%',
-    'sem administrador e com caso órfão a guarda levanta 55000 e manda rodar fn_administrador_definir', v_err);
-  begin
-    insert into caso_membro (caso_id, usuario_id, por) select id, ua, 'teste' from caso on conflict do nothing;
-    insert into caso (nome) values ('0216 — Sonda 0999 — x (fixture da instalação, não é mandato real)');  -- órfã, mas é fixture da sonda
-    v_err := null;
-    begin perform fn_0216_exige_administrador(); exception when others then v_err := sqlstate; end;
-    v_b := v_err is null;
-    raise exception 'rollback_0216';
-  exception when others then if sqlerrm <> 'rollback_0216' then raise; end if; end;
-  perform teste_assert_0216(v_b, 'sem administrador, com todo mandato real tendo membro e só uma fixture da sonda órfã (o replay), a guarda deixa passar');
+    'sem administrador e COM um usuário ativo a guarda levanta 55000 e manda rodar fn_administrador_definir', v_err);
+  -- mesmo com todo caso tendo membro (a ordem normal da 0215), a guarda recusa: não depende de órfão
+  insert into caso_membro (caso_id, usuario_id, por) select id, ua, 'teste16' from caso on conflict do nothing;
+  v_err := null;
+  begin perform fn_0216_exige_administrador();
+  exception when others then v_err := sqlstate; end;
+  perform teste_assert_0216(v_err = '55000', 'e recusa mesmo sem NENHUM caso órfão (a ordem normal: a 0215 deu todo caso a todo ativo)', v_err);
+  update auth.users set banned_until = now() + interval '1 day' where id = ua;
+  v_err := null;
+  begin perform fn_0216_exige_administrador(); exception when others then v_err := sqlstate; end;
+  perform teste_assert_0216(v_err is null, 'usuário banido não conta como ativo: a guarda deixa passar', v_err);
+  update auth.users set banned_until = null where id = ua;
   perform fn_administrador_definir('c@0216.teste', true);
   v_err := null;
   begin perform fn_0216_exige_administrador(); exception when others then v_err := sqlstate; end;
-  perform teste_assert_0216(v_err is null, 'com administrador a guarda deixa passar mesmo com caso órfão');
+  perform teste_assert_0216(v_err is null, 'com administrador a guarda deixa passar mesmo com usuário ativo');
+  update auth.users set email_confirmed_at = null where id = ua;
+  delete from caso_membro where por = 'teste16';      -- A volta a ser membro só do que era (os passos seguintes dependem disso)
 
   raise notice '--- 17. a sonda enxerga a policy que voltou a using (true) ---';
   begin
@@ -583,16 +743,200 @@ begin
   perform teste_assert_0216(v_n = 1, 'com documento_por_mandato em using (true) a sonda acusa o requisito (nome igual, regra errada)');
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0216' and not presente;
   perform teste_assert_0216(v_n = 0, 'desfeito, a sonda se cala', v_n::text);
+  -- o ALTER FUNCTION ... SECURITY DEFINER não muda uma letra do corpo: só o tipo `definer` o vê
+  begin
+    alter function fn_dial_auto_promover(text) security invoker;
+    select count(*) into v_n from fn_instalacao_conferir() where chave = 'definer_fn_dial_auto_promover' and not presente;
+    raise exception 'rollback_0216';
+  exception when others then if sqlerrm <> 'rollback_0216' then raise; end if; end;
+  perform teste_assert_0216(v_n = 1, 'fn_dial_auto_promover de volta a INVOKER: a sonda acusa o requisito definer');
+  begin
+    alter function fn_veredito_producao(text, uuid) reset search_path;
+    select count(*) into v_n from fn_instalacao_conferir() where chave = 'definer_fn_veredito_producao' and not presente;
+    raise exception 'rollback_0216';
+  exception when others then if sqlerrm <> 'rollback_0216' then raise; end if; end;
+  perform teste_assert_0216(v_n = 1, 'fn_veredito_producao definer SEM search_path fixo: a sonda acusa (definer sem search_path é sequestrável)');
+  begin
+    alter function fn_mudar_dial(text, nivel_autonomia, text, text, numeric, uuid, text, boolean) security definer;
+    select count(*) into v_n from fn_instalacao_conferir() where chave = 'invoker_fn_mudar_dial' and not presente;
+    raise exception 'rollback_0216';
+  exception when others then if sqlerrm <> 'rollback_0216' then raise; end if; end;
+  perform teste_assert_0216(v_n = 1, 'fn_mudar_dial virando SECURITY DEFINER (qualquer usuário mudaria o dial): a sonda acusa o requisito');
+
+  raise notice '--- 18. a promoção automática do dial NÃO depende de quem dispara (veredito GLOBAL, não o recorte do analista) ---';
+  -- ARRANJO. Tudo dentro de um sub-bloco que se desfaz (rollback_0216): apaga os vereditos de outros testes para o
+  -- número ser determinístico e não deixa rastro. Y (de B) tem 40 correções; X (de A) tem 30 confirmações a 100%.
+  -- O RECORTE de A (só X) alcança o critério (n 30, concordância 1,00); o GLOBAL (70 vereditos, 30 certos) não.
+  -- Antes da correção o veredito era calculado como A (invoker + RLS por mandato) e o gatilho de A promovia o dial de todos.
+  -- anon (a chave pública) NÃO executa as funções que esta migration tornou SECURITY DEFINER: definer executável por PUBLIC/anon
+  -- é o caminho clássico de escalada (e a guarda de p_caso_id deixa passar quem não tem identidade)
+  v_lista := '';
+  perform set_config('request.jwt.claims', '', true);
+  set local role anon;
+  begin perform fn_dial_auto_promover();
+  exception when others then v_lista := v_lista || case when sqlerrm like '%permission denied for function fn_dial_auto_promover%' then '' else 'dial:' || sqlerrm || ' ' end; end;
+  begin perform fn_veredito_producao('classificacao_doc_checklist', v_x);
+  exception when others then v_lista := v_lista || case when sqlerrm like '%permission denied for function fn_veredito_producao%' then '' else 'veredito:' || sqlerrm || ' ' end; end;
+  begin perform fn_falhas_abertas('0216 — X', now() - interval '1 hour');
+  exception when others then v_lista := v_lista || case when sqlerrm like '%permission denied for function fn_falhas_abertas%' then '' else 'falhas:' || sqlerrm || ' ' end; end;
+  begin perform fn_upsert_caso('0216 — anon');
+  exception when others then v_lista := v_lista || case when sqlerrm like '%permission denied for function fn_upsert_caso%' then '' else 'upsert:' || sqlerrm || ' ' end; end;
+  reset role;
+  perform teste_assert_0216(v_lista = '' and not exists (select 1 from caso where nome = '0216 — anon'),
+    'anon leva "permission denied for function" em fn_dial_auto_promover, fn_veredito_producao, fn_falhas_abertas e fn_upsert_caso (nenhum definer executável pela chave pública)', v_lista);
+  select nivel_atual::text into v_t from estagio_autonomia where estagio = 'classificacao_doc_checklist';
+  begin
+    update estagio_autonomia set nivel_atual = 'N1', base_do_nivel = 'nao_se_aplica', auto_promocao = true,
+           medicao_em = null, medicao_resumo = null where estagio = 'classificacao_doc_checklist';
+    delete from decisao where payload ? 'tipo_para';
+    set session_replication_role = replica;               -- sem o gatilho: semeia sem disparar a promoção
+    perform teste_decisoes_0216(v_x, 30, 30);
+    perform teste_decisoes_0216(v_y, 40, 0);
+    set session_replication_role = origin;
+    v_j1 := fn_veredito_producao('classificacao_doc_checklist');               -- o global, como o dono
+    v_j2 := fn_veredito_producao('classificacao_doc_checklist', v_x);           -- o recorte de X, como o dono
+    -- o MESMO global para quem não é dono: A (membro de X), B (de Y) e N (de nada)
+    perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+    set local role authenticated;
+    v_res := fn_veredito_producao('classificacao_doc_checklist');
+    v_err := null;
+    begin perform fn_veredito_producao('classificacao_doc_checklist', v_y);
+    exception when others then v_err := sqlstate; end;
+    reset role;
+    perform set_config('request.jwt.claims', json_build_object('sub', un, 'role', 'authenticated')::text, true);
+    set local role authenticated;
+    v_res2 := fn_veredito_producao('classificacao_doc_checklist');
+    reset role;
+    v_j3 := jsonb_build_object('a_n', (v_res->>'n')::int, 'n_n', (v_res2->>'n')::int, 'g_n', (v_j1->>'n')::int,
+                               'g_suf', v_j1->'suficiente', 'x_suf', v_j2->'suficiente', 'x_n', (v_j2->>'n')::int,
+                               'a_suf', v_res->'suficiente', 'err', v_err);
+    -- a nota de A em X, depois de o recorte dele bastar e o global não
+    perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+    set local role authenticated;
+    perform teste_decisoes_0216(v_x, 1, 1);
+    reset role;
+    select nivel_atual into v_nivel from estagio_autonomia where estagio = 'classificacao_doc_checklist';
+    -- CONTROLE POSITIVO: com o global suficiente (mais 800 confirmações em Y) a mesma nota de A PROMOVE pelo caminho
+    -- novo (definer) — sem isto "não promoveu" poderia ser "a promoção está quebrada".
+    perform set_config('request.jwt.claims', '', true);
+    set session_replication_role = replica;
+    perform teste_decisoes_0216(v_y, 800, 800);
+    set session_replication_role = origin;
+    v_tipo := (fn_veredito_producao('classificacao_doc_checklist')->>'suficiente');
+    perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+    set local role authenticated;
+    perform teste_decisoes_0216(v_x, 1, 1);
+    reset role;
+    select nivel_atual into v_nivel2 from estagio_autonomia where estagio = 'classificacao_doc_checklist';
+    raise exception 'rollback_0216';
+  exception when others then
+    set session_replication_role = origin;
+    if sqlerrm <> 'rollback_0216' then raise; end if;
+  end;
+  perform set_config('request.jwt.claims', '', true);
+  perform teste_assert_0216((v_j3->>'x_suf')::boolean and (v_j3->>'x_n')::int = 30 and not (v_j3->>'g_suf')::boolean and (v_j3->>'g_n')::int = 70,
+    'arranjo não vazio: o RECORTE de X basta (30 a 100%) e o GLOBAL (70 vereditos, 30 certos) não', v_j3::text);
+  perform teste_assert_0216((v_j3->>'a_n')::int = 70 and (v_j3->>'n_n')::int = 70 and not (v_j3->>'a_suf')::boolean,
+    'A (membro de X) e N (de nada) leem o MESMO veredito global que o dono: 70 vereditos, não o recorte', v_j3::text);
+  perform teste_assert_0216(v_j3->>'err' = '42501', 'mas A não pergunta o veredito do mandato Y por p_caso_id (42501): o definer não abre o número de outro mandato', v_j3::text);
+  perform teste_assert_0216(v_nivel = 'N1',
+    'o analista A, com um recorte de concordância alta (30 a 100%), NÃO promove o dial quando a global não basta', v_nivel);
+  perform teste_assert_0216(v_tipo = 'true' and v_nivel2 = 'N2',
+    'controle positivo: com o global suficiente a mesma nota de A promove o estágio a N2 (a promoção funciona, pelo caminho definer)', v_tipo || '/' || coalesce(v_nivel2, '-'));
+  perform teste_assert_0216((select nivel_atual::text from estagio_autonomia where estagio = 'classificacao_doc_checklist') = v_t,
+    'o sub-bloco se desfez: o dial voltou ao nível que tinha antes do arranjo', v_t);
+
+  raise notice '--- 19. /autonomia: os agregados globais são IGUAIS para todo leitor (só números) ---';
+  perform set_config('request.jwt.claims', '', true);
+  begin
+    select codigo into v_tipo from taxonomia_tipo_documento where obrigatoriedade = 'obrigatorio' and ativo order by codigo limit 1;
+    update golden_rotulo set tipo_correto = v_tipo where rodada_id = v_rod;
+    v_j1 := (select coalesce(jsonb_agg(to_jsonb(c) order by c.tipo), '[]') from fn_golden_cobertura(v_rod) c);
+    v_j2 := fn_classe_contabil_concordancia();
+    perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+    set local role authenticated;
+    v_res  := (select coalesce(jsonb_agg(to_jsonb(c) order by c.tipo), '[]') from fn_golden_cobertura(v_rod) c);
+    v_res2 := fn_classe_contabil_concordancia();
+    v_j3   := fn_classe_contabil_concordancia(v_x);
+    v_err := null;
+    reset role;
+    perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true);
+    set local role authenticated;
+    v_n := (fn_classe_contabil_concordancia(v_x)->>'com_veredito_humano')::int;      -- B pergunta o mandato de A
+    reset role;
+    perform teste_assert_0216((select sum((e->>'n_documentos')::int) from jsonb_array_elements(v_j1) e) >= 2,
+      'arranjo não vazio: a cobertura do golden set conta os documentos dos DOIS mandatos (X e Y)', v_j1::text);
+    perform teste_assert_0216(v_res = v_j1, 'A lê a MESMA cobertura do golden set que o dono (não só os documentos de X)', v_res::text || ' ≠ ' || v_j1::text);
+    perform teste_assert_0216((v_j2->>'com_veredito_humano')::int >= 2 and v_res2 = v_j2,
+      'A lê a MESMA concordância da classe contábil que o dono (global), não a do recorte dele', (v_res2->>'com_veredito_humano') || ' ≠ ' || (v_j2->>'com_veredito_humano'));
+    perform teste_assert_0216((v_j3->>'com_veredito_humano')::int = 1 and v_n = 0,
+      'com p_caso_id: A conta o próprio mandato (1) e B perguntando o mandato de A não conta nada (0)', (v_j3->>'com_veredito_humano') || '/' || v_n);
+    raise exception 'rollback_0216';
+  exception when others then if sqlerrm <> 'rollback_0216' then raise; end if; end;
+  perform set_config('request.jwt.claims', '', true);
+
+  raise notice '--- 20. falha de execução SEM caso (caso_id nulo): quem sobe o arquivo a lê pelo nome ---';
+  insert into execucao_falha (caso_id, caso_nome, etapa, mensagem) values (null, '0216 — Ainda Não Existe', 'extracao', 'falhou antes de o caso existir');
+  perform set_config('request.jwt.claims', json_build_object('sub', un, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  select count(*) into v_n from fn_falhas_abertas('0216 — ainda não existe ', now() - interval '1 hour');
+  select count(*) into v_m from execucao_falha where caso_id is null;
+  reset role;
+  perform teste_assert_0216(v_n = 1, 'N (sem mandato nenhum) recebe a falha de caso_id NULO pelo nome (o /api/intake/status sai do "aguarde" eterno)', v_n::text);
+  perform teste_assert_0216(v_m = 0, 'mas não LÊ a falha sem caso pela tabela (só o administrador)', v_m::text);
+  perform set_config('request.jwt.claims', json_build_object('sub', uc, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  select count(*) into v_n from execucao_falha where caso_id is null and caso_nome = '0216 — Ainda Não Existe';
+  reset role;
+  perform teste_assert_0216(v_n = 1, 'o administrador lê a falha sem caso pela tabela (NULL in (...) não a esconde dele)', v_n::text);
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  select count(*) into v_n from fn_falhas_abertas('0216 — X', now() - interval '1 hour');
+  reset role;
+  perform set_config('request.jwt.claims', json_build_object('sub', ub, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  select count(*) into v_m from fn_falhas_abertas('0216 — X', now() - interval '1 hour');
+  reset role;
+  perform teste_assert_0216(v_n >= 1 and v_m = 0, 'a falha de um mandato que existe só vai ao membro: A (de X) a recebe, B não', v_n || '/' || v_m);
+
+  raise notice '--- 21. o desvio de ingestão: o não membro não cria nem renomeia para um nome já usado ---';
+  perform set_config('request.jwt.claims', json_build_object('sub', ua, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+  v_lista := '';
+  begin insert into caso (nome) values ('0216 — Y');
+  exception when others then v_lista := v_lista || 'insert:' || sqlstate || ' '; end;
+  begin update caso set nome = '0216 — Y' where id = v_x;
+  exception when others then v_lista := v_lista || 'update:' || sqlstate || ' '; end;
+  update caso set nome = '0216 — X' where id = v_x;                      get diagnostics v_n = row_count;     -- mesmo nome: não conflita consigo
+  update caso set nome = '0216 — X renomeado' where id = v_x;            get diagnostics v_m = row_count;
+  insert into caso (nome) values ('0216 — nome livre de A');
+  reset role;
+  perform teste_assert_0216(v_lista = 'insert:23505 update:23505 ',
+    'A não insere caso com o nome de Y nem renomeia o PRÓPRIO caso para o nome de Y (23505), sem índice unique', v_lista);
+  select count(*) into v_ev from caso where nome = '0216 — Y';
+  perform teste_assert_0216(v_ev = 1 and (select nome from caso where id = v_x) = '0216 — X renomeado' and v_n = 1 and v_m = 1,
+    'e nada mudou: continua UM caso chamado Y; renomear para o mesmo nome e para um nome livre funciona', v_ev || '/' || v_n || '/' || v_m);
+  update caso set nome = '0216 — X' where id = v_x;
+  perform teste_assert_0216(exists (select 1 from caso c join caso_membro m on m.caso_id = c.id where c.nome = '0216 — nome livre de A' and m.usuario_id = ua),
+    'e o nome livre vira mandato de A (gatilho do criador)');
+  -- sem identidade (n8n, dono, testes de superusuário) o gatilho não age: duplicar por SQL continua possível, documentado
+  perform set_config('request.jwt.claims', '', true);
+  insert into caso (nome) values ('0216 — Y');
+  select count(*) into v_ev from caso where nome = '0216 — Y';
+  delete from caso where nome = '0216 — Y' and id <> v_y;
+  perform teste_assert_0216(v_ev = 2, 'sem identidade (superusuário/n8n) o gatilho não age: a duplicata por SQL entra (decisão do dono pendente: sem unique)', v_ev::text);
 
   -- limpeza
   delete from storage.objects where name like '0216a1%' or name like 'lixo0216/%' or name = 'raiz0216.pdf' or name like v_x || '/%' or name like v_y || '/%';
-  delete from golden_rodada where nome = '0216 — rodada';
+  delete from execucao_falha where caso_id is null and caso_nome like '0216 — %';
+  delete from golden_rodada where nome like '0216 — %';
   delete from caso where nome like '0216 — %';
   delete from auth.users where email like '%@0216.teste';
   select count(*) into v_n from caso_membro where usuario_id in (ua, ub, uc, un);
   perform teste_assert_0216(v_n = 0, 'a limpeza levou as pertinências junto (cascata)', v_n::text);
 end $$;
 
+drop function teste_decisoes_0216(uuid, int, int);
 drop function teste_infratores_0216(uuid);
 drop function teste_infratores_admin_0216();
 drop function teste_total_super_0216(text);

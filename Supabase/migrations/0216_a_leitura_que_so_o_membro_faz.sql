@@ -1,7 +1,9 @@
 -- =============================================================================
 -- 0216 — A LEITURA QUE SÓ O MEMBRO FAZ: a RLS por mandato em toda tabela de dado do cliente
--- (Troca 47 policies `using (true)` por policies que perguntam a pertinência da 0215, restringe o bucket `documentos`,
---  dá `caso_id` ao rastro de auditoria e reemite fn_upsert_caso e a sonda.)
+-- (Troca as 46 policies `using (true)` de dado do cliente por policies que perguntam a pertinência da 0215, restringe a
+--  escrita direta do dial e dos catálogos ao administrador e o bucket `documentos` ao mandato, dá `caso_id` ao rastro de
+--  auditoria e reemite fn_upsert_caso, o dial, os agregados de /autonomia, fn_falhas_abertas e a sonda. 51 `drop policy`
+--  e 58 `create policy`: 46 de dado do cliente em `public`, 4 de catálogo/dial e a do bucket.)
 --
 -- O DEFEITO. Decisão D7 (Espec. 11 §7.1): "o mandato só é visto por quem trabalha nele". Medido em 27/10/2026 no banco
 -- montado pelo run.sh na 0215: 49 tabelas, 65 policies de public, as de dado do cliente `using (true)` — todo usuário
@@ -9,17 +11,49 @@
 -- balanço e o contrato social de qualquer mandato). A 0215 criou a pertinência (caso_membro, administrador,
 -- fn_eh_membro) e NÃO tocou policy nenhuma; esta é a que liga.
 --
--- A CAUSA do defeito de partida: a `0003` deixou um TODO de membership que nunca veio. Dois efeitos que a RLS cria
--- e que esta migration trata (porque, sem tratar, ela introduz defeito novo):
+-- A CAUSA do defeito de partida: a `0003` deixou um TODO de membership que nunca veio. Efeitos que a RLS cria e que
+-- esta migration trata (porque, sem tratar, ela introduz defeito novo, calado):
 --   1. fn_upsert_caso procura o caso por NOME. Com RLS em `caso`, quem não é membro não enxerga o mandato existente e
 --      CRIAVA UM DUPLICADO com o mesmo nome. Chamadores (grep em 27/10/2026): o nó "Upsert Caso" do n8n
 --      (service_role, auth.uid() nulo), portal/src/lib/envio-oficial.ts#obterCasoId (authenticated) e ~70 chamadas em
 --      Supabase/test (superusuário). Todos passam pela MESMA função: corrigida nela, reemitida INTEIRA (memória
---      nunca-corrigir-funcao-por-replace).
+--      nunca-corrigir-funcao-por-replace). Ela agora é SECURITY DEFINER (ver 3) e a recusa do nome alheio devolve NULL
+--      e grava evento (uma exceção desfaria a transação e o rastro junto).
 --   2. `insert ... returning id` em `caso` checa a policy de SELECT na hora do insert, ANTES do gatilho AFTER INSERT da
 --      0215 dar a pertinência ao criador: com RLS de SELECT o authenticated levaria 42501 ao criar o próprio mandato.
---      Medido ao desligar a correção (tabela abaixo, "fn_upsert_caso com RETURNING"): o teste morre na montagem. O id é
---      gerado antes e o insert não tem RETURNING.
+--      O id é gerado antes e o insert não tem RETURNING. Desde que fn_upsert_caso virou DEFINER isto deixou de ser
+--      necessário (medido: com RETURNING de volta, 0 asserts reprovam — a função insere como o dono); fica como defesa,
+--      barata, para o dia em que alguém a devolver a INVOKER (a sonda, tipo=definer, acusa isso).
+--   3. O ORÁCULO DE NOMES. A versão anterior desta migration expunha fn_caso_id_do_nome (DEFINER, EXECUTE para o
+--      authenticated): qualquer usuário logado perguntava "existe o mandato 'Projeto X'?" e recebia o ID — em M&A o
+--      nome do alvo é informação privilegiada. Trocada por fn_caso_nome_existe, SEM EXECUTE para o authenticated; quem
+--      a chama é fn_upsert_caso (por isso definer) e o gatilho de nome único. fn_upsert_caso continua sendo, por
+--      natureza, um oráculo para quem a chama (null = nome alheio, id = próprio ou novo): o rastro
+--      (`caso_acesso_recusado`, ator + nome pedido, só o administrador o lê) é a contenção, não a cura.
+--   4. O DESVIO DE INGESTÃO. `caso_insert with check (true)` deixaria um não membro inserir direto
+--      caso(nome='Projeto Y') — ou renomear o PRÓPRIO caso para 'Projeto Y' — e o n8n (busca por nome, `limit 1` sem
+--      `order by`) poderia gravar os documentos de Y no caso dele. Gatilho trg_caso_nome_unico (BEFORE INSERT e UPDATE
+--      OF nome, 23505) recusa nome já usado — SEM índice unique (decisão do dono ainda não tomada) e só quando há
+--      identidade (auth.uid() não nulo): o n8n, o dono e os testes de superusuário não passam por ele.
+--   5. A PROMOÇÃO AUTOMÁTICA DO DIAL SOBRE UM RECORTE. trg_auto_promover_dial (AFTER INSERT em decisao) →
+--      fn_dial_auto_promover → fn_veredito_producao eram INVOKER: com a RLS o veredito GLOBAL passaria a ser calculado
+--      só sobre os mandatos de QUEM DISPARA (o analista pelo portal: fn_revisar_documento, fn_decidir_pendencia,
+--      fn_aceitar_extracao) e fn_mudar_dial muda o estágio para TODOS. Um analista com um recorte de concordância alta
+--      promoveria o dial de todos, sem erro. fn_dial_auto_promover e fn_veredito_producao viram SECURITY DEFINER
+--      (search_path fixo): o veredito global é o mesmo para todo chamador e a promoção independe de quem leu. Devolvem
+--      só números e nomes de rubrica do catálogo, nunca linha de cliente; fn_veredito_producao com p_caso_id exige ser
+--      membro. fn_mudar_dial continua INVOKER de propósito (definer deixaria qualquer usuário mudar o dial) e ganhou a
+--      guarda de "0 linhas atualizadas" (42501): sem ela, o não administrador "mudava" o dial — a RLS recusava o UPDATE
+--      calada, a função gravava o evento `mudanca_dial` e devolvia sucesso.
+--   6. /autonomia (portal/src/app/autonomia/page.tsx): fn_golden_cobertura e fn_classe_contabil_concordancia davam
+--      números do RECORTE do leitor sem aviso. Viram SECURITY DEFINER (só números); a segunda, com p_caso_id, só conta
+--      o mandato de quem é membro. golden_rodada segue legível a todos.
+--   7. execucao_falha.caso_id NULO (falha antes de o caso existir: Error Workflow, N8N/build-workflow-erros.mjs:40-46;
+--      nó "Registrar Recusa", N8N/build-workflow.mjs:2563). `NULL in (...)` nunca é verdadeiro: a falha sumia para todos,
+--      inclusive o administrador, e fn_falhas_abertas (invoker) voltava vazia — o /api/intake/status no "aguarde"
+--      eterno que a 0108 corrigiu. A policy ganhou `or (caso_id is null and fn_eh_admin())` e fn_falhas_abertas virou
+--      DEFINER: entrega a falha sem caso a quem a procura pelo NOME (é a única identidade que o intake tem) e a de caso
+--      existente só ao membro. Quem adivinha o nome lê as falhas sem caso dele: decisão consciente.
 --
 -- O QUE ENTRA.
 --   * fn_meus_casos() (SECURITY DEFINER, STABLE): os ids dos mandatos do usuário (todos, se administrador). Toda policy
@@ -28,15 +62,24 @@
 --     → documento; campo_extraido e documento_fato → documento_versao; campo_classe_* → campo_extraido;
 --     arquivo_oficial_registro/_lancamento_mes → arquivo_oficial; golden_documento/_campo/_rotulo → documento, que eles
 --     têm por documento_id). A RLS do pai se compõe até o caso. Caminhos CONFERIDOS em pg_constraint no banco montado;
---     `arquivo_oficial` e `documento` têm `caso_id` direto.
+--     `arquivo_oficial` e `documento` têm `caso_id` direto. campo_classe_* usam `exists (... where ce.id = campo_extraido_id)`
+--     (junção por PK), não `in (select id from campo_extraido)`: medido na tabela de DESEMPENHO.
 --   * `caso`: SELECT/UPDATE/DELETE só membro; INSERT segue aberto (é como o portal cria o mandato; o gatilho da 0215
---     torna o criador membro).
+--     torna o criador membro; o de nome único recusa nome ocupado).
 --   * Mesmo CONJUNTO de operações de antes: onde a policy era `for all` fica UMA `for all` (`<tabela>_por_mandato`;
 --     o que o privilégio revoga, como delete em arquivo_oficial (0210), continua revogado); onde era só
 --     select/insert/update (caso_pergunta, controlador, controlador_vinculo, entidade_controlador, perimetro,
 --     campo_classe_*, golden_*) ficam as mesmas operações, com os mesmos NOMES — e a de reapontar de caso_pergunta
 --     mantém a condição "mesma entidade, mesmo caso". O with check do UPDATE também exige o mandato: mover linha de X
 --     para Y leva 42501.
+--   * Dial e catálogos: estagio_autonomia, premissa_catalogo, golden_criterio e golden_rodada — leitura livre, ESCRITA SÓ
+--     DO ADMINISTRADOR (policy). Antes: estagio_autonomia e premissa_catalogo eram `for all using (true)` (qualquer usuário
+--     logado dava UPDATE no teto de autonomia sem passar por fn_mudar_dial — o teto é doutrina, só muda por migration),
+--     golden_rodada tinha insert/update livres e golden_criterio não tinha RLS com INSERT/UPDATE/DELETE para o
+--     authenticated (qualquer um baixava concordancia_minima). Quem escreve nelas (grep em 27/10/2026): portal/src só LÊ
+--     (autonomia/page.tsx, export/route.ts); o n8n lê estagio_autonomia pela chave de serviço; a escrita é de
+--     fn_mudar_dial (o administrador; a promoção automática passa por fn_dial_auto_promover, definer) e de
+--     migrations/testes (superusuário). Nenhum uso legítimo do authenticated comum encontrado.
 --   * storage.objects: `documentos_por_mandato` — só a pasta do caso (fn_caso_da_chave(name) in fn_meus_casos()). NÃO
 --     usa storage.foldername (o replay local não a tem) e o cast para uuid é seguro (uma chave de forma estranha dava
 --     erro na policy de SELECT e derrubava a listagem do bucket inteiro).
@@ -48,14 +91,30 @@
 --     `campo_extraido` sem id (backfills 0203/0204), documento_versao:null. Backfill do histórico pela MESMA função.
 --     Leitura: membro do caso_id; caso_id nulo, só administrador. Insert segue aberto, exceto com caso_id explícito
 --     de mandato alheio.
---   * Sonda: 64 requisitos (policy por mandato de cada tabela, as funções, os EXECUTE, a coluna, o gatilho, o corpo de
---     fn_upsert_caso). O ramo `policy` ganhou o MARCADOR (a expressão da policy tem de conter fn_meus_casos ou o pai) e
---     aceita `schema.tabela.policy` — sem isso a policy `using (true)` de mesmo nome passaria por "presente" — e a
---     policy do bucket (storage.objects). `instalacao_cobertura` vai a 0216.
+--   * Sonda: 125 requisitos (56 policy, 36 rls, 13 definer, 7 funcao, 5 execucao, 4 corpo, 2 gatilho, 1 coluna, 1
+--     comportamento) e o tipo NOVO `definer` (pg_proc.prosecdef; 'sim' exige também search_path fixo em proconfig, 'nao'
+--     exige INVOKER — o ALTER FUNCTION ... SECURITY DEFINER não muda uma letra do corpo, então o tipo `corpo` não o
+--     vê). `rls` e `execucao` são da 0215. O requisito `rls` cobre TODA tabela de cliente que esta migration restringe
+--     (a mesma lista que o teste tira do catálogo), o bucket (storage.objects) e os 4 catálogos de escrita restrita:
+--     policy em tabela com a RLS desligada é texto no catálogo que o Postgres não aplica, e no projeto existente o
+--     default privilege ainda concede ALL a anon/authenticated até 30/10/2026. O ramo `policy` ganhou o MARCADOR (a
+--     expressão da policy tem de conter fn_meus_casos, fn_eh_admin ou o pai) e aceita `schema.tabela.policy` — sem isso
+--     a policy `using (true)` de mesmo nome passaria por "presente" — e a policy do bucket (storage.objects).
+--     `instalacao_cobertura` vai a 0216.
+--   * Requisito `primeiro_administrador` (tipo comportamento, bloqueante): acusa `administrador` VAZIA — a 0216 esconde
+--     de todos o mandato sem membro. No replay fica ausente, como custo_gravado_pelo_n8n (instalacao.test.sql aceita os
+--     dois). Mora aqui e não na 0215 porque só a 0216 esconde mandato. É lido COMO O CHAMADOR: quem não é administrador
+--     enxerga a tabela vazia pela RLS, então a conferência vale para o dono/CI (postgres), não para o authenticated.
+--   * Os EXECUTE: as funções que esta migration tornou DEFINER (fn_veredito_producao, fn_classe_contabil_concordancia,
+--     fn_golden_cobertura, fn_dial_auto_promover, fn_falhas_abertas, fn_upsert_caso) perdem o EXECUTE de PUBLIC/anon e
+--     ficam com authenticated e service_role: definer executável pela chave pública é o clássico caminho de escalada, e
+--     a guarda de p_caso_id deixa passar quem não tem identidade (auth.uid() nulo = n8n/dono).
 --   * A GUARDA (sinal positivo, regra 7): a migration RECUSA aplicar (55000) se `administrador` está vazia e existe
---     mandato real sem nenhum membro — os que o n8n cria nascem sem membro e SUMIRIAM para todos, sem erro. No replay
---     não trava: as migrations rodam sem mandato real (só as 2 fixtures da sonda, 0162 e 0164, que a guarda ignora
---     pelo nome). Dentro de begin/commit: a recusa deixa o banco como estava.
+--     usuário ATIVO em auth.users (fn_usuarios_ativos, 0215): com a restrição ligada o mandato novo — o que o n8n cria
+--     nasce sem membro — sumiria para todos e ninguém o atribuiria, sem erro. A versão anterior olhava "caso sem
+--     membro" e NÃO PROTEGIA NADA na ordem normal (a 0215 dá todo caso a todo usuário ativo: zero órfãos no dia);
+--     medido: 2 asserts reprovam com ela de volta. No replay não trava (auth.users está vazia quando as migrations rodam; os
+--     usuários dos testes nascem depois). Dentro de begin/commit: a recusa deixa o banco como estava.
 --
 -- EFEITOS QUE O DONO PRECISA SABER (regra 1: o que some não some calado).
 --   a. Mandato criado pelo n8n (intake do portal) NASCE SEM MEMBRO: só o administrador o vê até alguém ser atribuído
@@ -65,17 +124,22 @@
 --      (portal/src/app/autonomia/page.tsx) deixa de listar o histórico de mudança de dial para quem não é administrador.
 --   c. `caso.nome` NÃO é único e fn_upsert_caso busca por `limit 1` sem `order by`: com nomes duplicados já existentes o
 --      n8n (vê todos) pega um qualquer e o authenticated pega um dos DELE. Não se cria unique aqui (decisão do dono).
---   d. O Supabase novo (30/10/2026) não concede EXECUTE/GRANT por default: as 4 funções novas chamadas pelas policies
---      têm `grant execute ... to authenticated` explícito; as de gatilho e a guarda, não.
+--   d. O Supabase novo (30/10/2026) não concede EXECUTE/GRANT por default: as funções novas chamadas pelas policies
+--      têm `grant execute ... to authenticated` explícito; as de gatilho, as de guarda e fn_caso_nome_existe, não.
 --   e. Os 12 testes que rodavam como authenticated SEM identidade dependiam do `using (true)`; passam a chamar
 --      teste_como_admin_0216()/teste_fim_admin_0216() em par (Supabase/test/suporte_authenticated.sql).
+--   f. fn_upsert_caso, chamada por um não membro com o nome de um mandato existente, devolve NULL (antes: 42501). O
+--      portal (obterCasoId) já trata `data` não-string como erro ("o banco não devolveu o id"): a mensagem é pobre e
+--      melhorá-la é da fatia de portal.
+--   g. Só o administrador altera o dial, o teto e os catálogos (golden_criterio, premissa_catalogo, golden_rodada,
+--      estagio_autonomia) pela tabela; fn_mudar_dial por quem não é administrador leva 42501.
 --
--- AINDA ABERTO (de propósito, com o porquê). Catálogos e globais seguem legíveis ao authenticated: taxonomia_* (5),
+-- AINDA ABERTO (de propósito, com o porquê). Catálogos e globais seguem LEGÍVEIS ao authenticated: taxonomia_* (5),
 -- premissa_catalogo, classe_contabil_catalogo, rubrica_classe, fato_tipo_catalogo, pergunta_catalogo, indice_macro_*
--- (3), instalacao_*, golden_rodada, golden_criterio, estagio_autonomia — não têm caso nem dado do cliente. ACHADO FORA
--- DE ESCOPO, não mexido: estagio_autonomia e premissa_catalogo têm policy `for all using (true)` para authenticated, ou
--- seja, qualquer usuário logado pode dar UPDATE direto no teto de autonomia sem passar por fn_mudar_dial; e
--- golden_rodada tem update livre. É decisão para outra fatia (o teto é doutrina e só deveria mudar por migration).
+-- (3), instalacao_*, golden_rodada, golden_criterio, estagio_autonomia — não têm caso nem dado do cliente.
+-- fn_golden_classe_a(p_caso_id nulo) segue INVOKER: chamada direta por um analista dá o número do recorte dele (a tela
+-- /autonomia e o veredito global não a chamam por ele). `caso_insert with check (true)` segue aberto (é como o portal
+-- cria o mandato). A premissa de que o nome do mandato é identidade segue sem unique no schema (decisão do dono).
 --
 -- DESEMPENHO (medido em 27/10/2026, banco com 53.893 campo_extraido, um caso com 50.000 deles, usuário membro desse
 -- caso, `explain analyze`, duas rodadas):
@@ -88,50 +152,91 @@
 --   reconciliacao 1 ms; evento_auditoria 2,8 ms. O que mata é a chamada POR LINHA: `in (select fn_meus_casos())` vira um
 --   hashed SubPlan executado UMA vez. fn_eh_membro continua existindo (é a pergunta de um caso só) e o teste afirma
 --   que as duas concordam.
+--   REVISÃO (campo_classe_*): com 500.003 campo_extraido (450.000 no caso X, 50.000 no Y), 40.000 campo_classe_sugerida,
+--   10.000 campo_classe_override e `set work_mem = '4MB'`, `explain analyze` (máquina com outra carga em paralelo):
+--     forma da policy de leitura                  count(sugerida)  count(override)  um campo_extraido_id
+--     `in (select id from campo_extraido)` (ERA)    305.802 ms      4.799 ms         254 ms   (membro de X; 1 rodada)
+--     `exists (... where ce.id = campo_extraido_id)` (ESTA), membro de X:  482-560 ms   95-121 ms   2,3 ms
+--     idem, administrador:                                                  485-559 ms   102 ms     2,7-2,9 ms
+--     idem, membro de Y (50.000 campos):                                    456-498 ms   94-100 ms   2,1-2,3 ms
+--   A forma antiga materializava o campo_extraido inteiro filtrado pela RLS (três níveis de pai) para cada consulta; com
+--   4 MB de work_mem isso foi para disco. A junção por PK volta a ser por linha de campo_classe_*.
 --
 -- O QUE FICA PARA O DONO, À MÃO NO SUPABASE: (1) ANTES de aplicar, no SQL Editor:
 --     select fn_administrador_definir('<seu e-mail>', true);
---   (a migration recusa sem isso se houver mandato real sem membro); (2) aplicar (Supabase/README.md); (3) conferir
---   `select chave, detalhe from fn_instalacao_conferir() where migration = '0216' and not presente;` — ZERO linhas;
---   (4) quantos mandatos reais ficaram sem membro: select count(*) from caso c where not exists (select 1 from
---   caso_membro m where m.caso_id = c.id); — o administrador os vê e os atribui. Migration escrita não é migration
---   aplicada: quem responde é a sonda, contra o banco em que se está conectado.
+--   (a migration recusa sem isso se houver usuário ativo); (2) aplicar (Supabase/README.md); (3) conferir
+--   `select chave, detalhe from fn_instalacao_conferir() where migration = '0216' and not presente;` — ZERO linhas (o
+--   `primeiro_administrador` some quando o passo 1 foi feito); (4) quantos mandatos reais ficaram sem membro:
+--   select count(*) from caso c where not exists (select 1 from caso_membro m where m.caso_id = c.id); — o administrador
+--   os vê e os atribui. Migration escrita não é migration aplicada: quem responde é a sonda, contra o banco em que se
+--   está conectado.
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2), medida em 27/10/2026 sobre
 -- Supabase/test/rls_por_mandato.test.sql, cópia do teste com o assert em `raise notice` (volta a `raise exception` no
--- arquivo commitado) sobre cópias do banco montado, UMA correção desligada por vez. Sem desligar nada: 0 dos 56 asserts
--- reprovam e os 54 aparecem no log. Com a correção desligada, reprovam (os marcados "aborta" morrem num erro de
+-- arquivo commitado) sobre cópias do banco montado, UMA correção desligada por vez. Sem desligar nada: 0 dos 94 asserts
+-- reprovam e os 94 aparecem no log. Com a correção desligada, reprovam (os marcados "aborta" morrem num erro de
 -- execução antes de chegar aos asserts seguintes — o teste reprova do mesmo jeito):
---     policy documento (direta) com using (true) .......................... 12 dos 56 asserts (aborta no 17º)
---     policy campo_extraido (indireta, 2 níveis) com using (true) ......... 8 dos 56 asserts
---     policy documento_versao (indireta, pai da cadeia) com using (true) .. 8 dos 56 asserts
---     policy caso_select com using (true) ................................. 5 dos 56 asserts (aborta no 29º)
---     policy caso_update com using (true) ................................. 3 dos 56 asserts
---     policy caso_delete com using (true) ................................. 3 dos 56 asserts
---     policy evento_auditoria_read com using (true) ....................... 10 dos 56 asserts
---     policy evento_auditoria_read lendo também o evento sem caso ......... 7 dos 56 asserts
---     policy evento_auditoria_insert com check (true) ..................... 4 dos 56 asserts
---     policy golden_campo_read com using (true) ........................... 6 dos 56 asserts
---     policy golden_documento_read com using (true) ....................... 6 dos 56 asserts
---     policy caso_pergunta_read com using (true) .......................... 6 dos 56 asserts
---     storage.objects de volta ao bucket inteiro .......................... 7 dos 56 asserts
---     gatilho trg_evento_caso_id desabilitado ............................. 9 dos 56 asserts
---     fn_caso_da_referencia devolvendo nulo ............................... 8 dos 56 asserts
---     fn_meus_casos devolvendo todos os casos ............................. 3 dos 56 asserts (aborta no 15º)
---     fn_upsert_caso sem a guarda de não membro ........................... 4 dos 56 asserts
---     fn_upsert_caso com insert ... returning (sem gerar o id antes) ...... 0 dos 56 asserts (aborta no 3º: 42501 na montagem)
---     fn_0216_exige_administrador sem o raise ............................. 1 dos 56 asserts
---     sonda sem o marcador/storage (a função da 0215) ..................... 3 dos 56 asserts
---     tabela de cliente NOVA com policy using (true) e sem dados .......... 3 dos 56 asserts
--- =============================================================================
+--     policy documento (direta) com using (true) .......................... 13 dos 94 asserts (aborta no 40º)
+--     policy campo_extraido (indireta, 2 níveis) com using (true) ......... 9 dos 94 asserts
+--     policy documento_versao (indireta, pai da cadeia) com using (true) .. 9 dos 94 asserts
+--     policy caso_select com using (true) ................................. 6 dos 94 asserts (aborta no 45º)
+--     policy caso_update com using (true) ................................. 4 dos 94 asserts
+--     policy caso_delete com using (true) ................................. 4 dos 94 asserts
+--     policy evento_auditoria_read com using (true) ....................... 11 dos 94 asserts
+--     policy evento_auditoria_read lendo também o evento sem caso ......... 7 dos 94 asserts
+--     policy evento_auditoria_insert com check (true) ..................... 5 dos 94 asserts
+--     policy golden_campo_read com using (true) ........................... 7 dos 94 asserts
+--     policy golden_documento_read com using (true) ....................... 7 dos 94 asserts
+--     policy caso_pergunta_read com using (true) .......................... 7 dos 94 asserts
+--     storage.objects de volta ao bucket inteiro .......................... 8 dos 94 asserts
+--     gatilho trg_evento_caso_id desabilitado ............................. 10 dos 94 asserts
+--     fn_caso_da_referencia devolvendo nulo ............................... 8 dos 94 asserts
+--     fn_meus_casos devolvendo todos os casos ............................. 3 dos 94 asserts (aborta no 29º)
+--     fn_upsert_caso sem a guarda de nome alheio .......................... 6 dos 94 asserts
+--     fn_upsert_caso com insert ... returning (sem gerar o id antes) ...... 0 dos 94 asserts (a função é DEFINER: o RETURNING
+--                                                                                  não toca a RLS; já não é defeito)
+--     fn_0216_exige_administrador sem o raise ............................. 2 dos 94 asserts
+--     sonda sem o marcador/storage no ramo policy ......................... 4 dos 94 asserts
+--     tabela de cliente NOVA com policy using (true) e sem dados .......... 5 dos 94 asserts
+--   Correções da revisão independente (27/10/2026):
+--     guarda de administrador na formulação ANTIGA (caso órfão) ........... 2 dos 94 asserts
+--     fn_caso_nome_existe com EXECUTE para authenticated (oráculo) ........ 4 dos 94 asserts
+--     fn_upsert_caso levantando 42501 em vez de devolver null + evento .... 3 dos 94 asserts
+--     fn_upsert_caso sem gravar o evento da recusa ........................ 2 dos 94 asserts
+--     gatilho trg_caso_nome_unico desabilitado ............................ 6 dos 94 asserts
+--     gatilho de nome único só em INSERT (sem o rename) ................... 3 dos 94 asserts
+--     gatilho de nome único só em UPDATE (sem o insert direto) ............ 1 dos 94 asserts
+--     execucao_falha_por_mandato sem o ramo de caso_id NULO ............... 4 dos 94 asserts
+--     fn_falhas_abertas de volta a INVOKER ................................ 4 dos 94 asserts
+--     fn_falhas_abertas sem o ramo de caso_id NULO ........................ 1 dos 94 asserts
+--     fn_dial_auto_promover de volta a INVOKER (o analista promove pelo
+--       recorte dele) ..................................................... 4 dos 94 asserts
+--     fn_veredito_producao sem a guarda de p_caso_id ...................... 4 dos 94 asserts
+--     fn_veredito_producao de volta a INVOKER ............................. 4 dos 94 asserts
+--     fn_classe_contabil_concordancia sem a guarda de p_caso_id ........... 4 dos 94 asserts
+--     fn_classe_contabil_concordancia de volta a INVOKER .................. 4 dos 94 asserts
+--     fn_golden_cobertura de volta a INVOKER .............................. 4 dos 94 asserts
+--     fn_mudar_dial sem a guarda de 0 linhas .............................. 1 dos 94 asserts
+--     estagio_autonomia_write com using (true) ............................ 6 dos 94 asserts
+--     premissa_catalogo_write com using (true) ............................ 4 dos 94 asserts
+--     golden_criterio sem RLS ............................................. 10 dos 94 asserts
+--     golden_criterio_write com using (true) .............................. 9 dos 94 asserts
+--     golden_rodada insert/update com true ................................ 5 dos 94 asserts
+--     revoke de PUBLIC/anon das funções definer removido .................. 1 dos 94 asserts
+--     sonda `definer` que devolve sempre presente ......................... 3 dos 94 asserts
+--     sonda `rls` que devolve sempre presente ............................. 1 dos 94 asserts
+--     requisito rls_pendencia removido do catálogo ........................ 1 dos 94 asserts
+--     requisito primeiro_administrador removido ........................... 1 dos 94 asserts
+--   (Medido sobre o banco "molde" = as migrations até a 0214 + 0215 + 0216 + suporte; neste molde o assert "A lê todo
+--   catálogo global" reprova SEMPRE — os seeds de indice_macro vêm de outro teste do run.sh — e foi descontado de todo
+--   número acima; no run.sh completo ele passa e o log mostra os 94 ok.)
 
 begin;
 
 -- -----------------------------------------------------------------------------
--- 1. O SINAL POSITIVO (regra 7): recusa aplicar com `administrador` vazia e caso sem nenhum membro. A função existe
---    para o teste a chamar sobre um arranjo montado; a migration a chama logo abaixo. No replay (run.sh, e2e) as
---    migrations rodam sobre banco SEM mandato real — as fixtures dos livros entram depois; só ficam as duas fixtures
---    da sonda, excluídas da conta pelo nome —, então a contagem dá zero e nada trava.
+-- 1. O SINAL POSITIVO (regra 7): recusa aplicar com `administrador` vazia e usuário ativo em auth.users. A função
+--    existe para o teste a chamar sobre um arranjo montado; a migration a chama logo abaixo. No replay as migrations
+--    rodam sobre auth.users vazia, então nada trava.
 --    O `begin`/`commit` desta migration faz a recusa deixar o banco como estava (psql -f sem ON_ERROR_STOP seguiria).
 -- -----------------------------------------------------------------------------
 create or replace function fn_0216_exige_administrador()
@@ -139,25 +244,27 @@ returns void
 language plpgsql
 as $$
 declare
-  v_orfaos bigint;
+  v_ativos bigint;
 begin
   if exists (select 1 from administrador) then
     return;
   end if;
-  -- Fora da conta ficam as fixtures da sonda (0162 e 0164: "fixture da instalação, não é mandato real"): nascem
-  -- sem membro em TODO replay — medido em 27/10/2026, 2 casos no banco montado só pelas migrations — e a guarda
-  -- travaria o run.sh e o Verificação/run.mts por causa deles.
-  select count(*) into v_orfaos from caso c
-   where c.nome not like '%fixture da instalação, não é mandato real%'
-     and not exists (select 1 from caso_membro m where m.caso_id = c.id);
-  if v_orfaos > 0 then
-    raise exception '0216 recusada: % mandato(s) sem nenhum membro (criados pelo n8n, sem identidade) e ninguém é administrador — com a restrição por mandato ligada eles sumiriam para todos, sem erro. Rode ANTES, no SQL Editor: select fn_administrador_definir(''<seu e-mail>'', true);', v_orfaos
+  -- A GUARDA ANTERIOR olhava "caso sem nenhum membro" e NÃO PROTEGIA NADA NA ORDEM NORMAL: a 0215 dá membro de todo
+  -- caso existente a todo usuário ativo, então no dia de aplicar não há órfão — e o mandato que o n8n cria DEPOIS
+  -- nasce sem membro e sem ninguém que o enxergue. O que a 0216 estraga é "ninguém atribui nem vê": sem
+  -- administrador, a restrição liga e ninguém tem como corrigi-la sem SQL. Por isso a conta é de USUÁRIOS ATIVOS
+  -- (fn_usuarios_ativos, 0215): havendo gente para quem o mandato vai sumir, recusa. No replay (run.sh, e2e) as
+  -- migrations rodam sobre auth.users VAZIA — os usuários dos testes nascem depois —, então a contagem dá zero e
+  -- nada trava (medido em 27/10/2026: 0 usuários no banco montado só pelas migrations).
+  select count(*) into v_ativos from fn_usuarios_ativos();
+  if v_ativos > 0 then
+    raise exception '0216 recusada: ninguém é administrador e há % usuário(s) ativo(s) — com a restrição por mandato ligada o mandato novo (o que o n8n cria nasce sem membro) sumiria para todos e ninguém o atribuiria, sem erro. Rode ANTES, no SQL Editor: select fn_administrador_definir(''<seu e-mail>'', true);', v_ativos
       using errcode = '55000';
   end if;
 end;
 $$;
 comment on function fn_0216_exige_administrador() is
-  'Guarda da 0216: levanta 55000 se administrador está vazia E existe caso sem membro. Só postgres/service_role. 0216.';
+  'Guarda da 0216: levanta 55000 se administrador está vazia E existe usuário ativo em auth.users (fn_usuarios_ativos). Só postgres/service_role. 0216.';
 revoke execute on function fn_0216_exige_administrador() from public, anon, authenticated;
 grant execute on function fn_0216_exige_administrador() to service_role;
 
@@ -185,20 +292,23 @@ $$;
 comment on function fn_meus_casos() is
   'Ids dos mandatos do usuário do jwt (todos, se administrador). Base de toda policy por mandato (caso_id in (select fn_meus_casos())). Concorda com fn_eh_membro. auth.uid() nulo => vazio. 0216.';
 
--- fn_caso_id_do_nome(): o id do caso com este nome INDEPENDENTE da RLS. Só existe para fn_upsert_caso distinguir "não
--- existe" de "existe e eu não o vejo". Devolve só o id (nome e id de mandato não são segredo que a RLS proteja: quem
--- decide o acesso é a pertinência, não o conhecimento do id).
-create or replace function fn_caso_id_do_nome(p_nome text)
-returns uuid
+-- fn_caso_nome_existe(): "já existe mandato com este nome?" INDEPENDENTE da RLS, e só para o banco usar por dentro:
+-- fn_upsert_caso (que distingue "não existe" de "existe e eu não o vejo") e o gatilho de nome único. SEM EXECUTE para o
+-- authenticated (revoke abaixo): exposta, ela seria um ORÁCULO DE NOMES — em M&A o nome do alvo é informação
+-- privilegiada, e perguntar "existe mandato 'Projeto X'?" para qualquer usuário logado é vazá-lo. A versão anterior
+-- (fn_caso_id_do_nome) devolvia o ID e tinha EXECUTE para o authenticated; foi trocada antes de qualquer aplicação.
+-- p_exceto: o próprio caso, no gatilho de rename (renomear para o nome que ele já tem não conflita consigo).
+create or replace function fn_caso_nome_existe(p_nome text, p_exceto uuid default null)
+returns boolean
 language sql
 stable
 security definer
 set search_path = public, pg_temp
 as $$
-  select id from public.caso where nome = p_nome limit 1;
+  select exists (select 1 from public.caso where nome = p_nome and (p_exceto is null or id <> p_exceto));
 $$;
-comment on function fn_caso_id_do_nome(text) is
-  'Id do caso com este nome, sem passar pela RLS (só devolve o id). Existe para fn_upsert_caso não criar duplicado quando o chamador não é membro. 0216.';
+comment on function fn_caso_nome_existe(text, uuid) is
+  'Existe mandato com este nome, sem passar pela RLS? Só para dentro do banco (fn_upsert_caso e o gatilho de nome único): o authenticated NÃO executa — seria oráculo de nomes. 0216.';
 
 -- fn_caso_da_chave(): o caso de um objeto do bucket `documentos`. A chave é <caso_id>/<hash><ext> (N8N/lib/hash.mjs
 -- #chaveDoOriginal). NÃO usa storage.foldername: o replay local (run.sh, Verificação) não tem essa função, e o cast
@@ -285,20 +395,33 @@ create trigger trg_evento_caso_id
 update evento_auditoria set caso_id = fn_caso_da_referencia(entidade_ref) where caso_id is null;
 
 -- -----------------------------------------------------------------------------
--- 4. fn_upsert_caso, REEMITIDA INTEIRA (a da 0207 + a guarda). Chamadores (grep em 27/10/2026): o nó "Upsert Caso" do
---    n8n (service_role, auth.uid() nulo: comportamento IDÊNTICO ao da 0207), portal/src/lib/envio-oficial.ts#obterCasoId
---    (authenticated, p_ator 'portal:navegador') e ~70 chamadas em Supabase/test/*.test.sql e fixtures (superusuário).
---    Dois efeitos da RLS que a guarda trata: (1) o não membro não enxergava o caso e CRIAVA UM DUPLICADO com o mesmo
---    nome — agora a busca visível falha, fn_caso_id_do_nome acha o existente e a função recusa com 42501; (2) `insert
---    ... returning` em caso com RLS de SELECT checa a policy ANTES do gatilho do criador (AFTER INSERT) dar a
---    pertinência: falharia com 42501. O id é gerado antes e não há RETURNING.
+-- 4. fn_upsert_caso, REEMITIDA INTEIRA (a da 0207 + a guarda), agora SECURITY DEFINER. Chamadores (grep em 27/10/2026): o
+--    nó "Upsert Caso" do n8n (service_role, auth.uid() nulo: comportamento IDÊNTICO ao da 0207),
+--    portal/src/lib/envio-oficial.ts#obterCasoId (authenticated, p_ator 'portal:navegador') e ~70 chamadas em
+--    Supabase/test/*.test.sql e fixtures (superusuário).
+--    Três efeitos da RLS que a função trata: (1) o não membro não enxergava o caso e CRIAVA UM DUPLICADO com o mesmo
+--    nome — agora a busca é pelos casos que ELE vê (fn_meus_casos) e, não achando, fn_caso_nome_existe diz que o nome é
+--    de um mandato alheio e a função NÃO cria; (2) `insert ... returning` em caso com RLS de SELECT checa a policy ANTES
+--    do gatilho do criador (AFTER INSERT) dar a pertinência: falharia com 42501 — o id é gerado antes e não há
+--    RETURNING; (3) fn_caso_nome_existe não é executável pelo authenticated (oráculo de nomes), então quem a chama é a
+--    própria fn_upsert_caso, que por isso roda como o dono (SECURITY DEFINER, search_path fixo): auth.uid() continua
+--    sendo o do jwt, e o que o chamador ENXERGA é decidido por fn_meus_casos, não pela RLS.
+--    A RECUSA DEVOLVE NULL E GRAVA EVENTO, em vez de levantar 42501 (como a versão anterior): uma exceção desfaz a
+--    transação, e com ela o evento — a tentativa de abrir o mandato alheio não deixaria rastro nenhum. O evento
+--    `caso_acesso_recusado` (ator usuario:<uuid>, entidade_ref caso_nome:<nome>, sem caso_id: só o administrador o lê)
+--    é o rastro. O portal (obterCasoId) já trata `data` não-string como erro ("o banco não devolveu o id"); a mensagem
+--    dele é pobre e melhorá-la é da fatia de portal. fn_upsert_caso continua sendo, por natureza, um oráculo de
+--    existência para quem a chama (devolver null no nome alheio e um id no próprio/novo diz que o nome existe): o rastro
+--    é a contenção, não a cura.
 --    `caso.nome` NÃO é único (schema.sql) e a busca é `limit 1` sem `order by`: com nomes duplicados já existentes, o
 --    n8n (service_role, vê todos) pega um qualquer e o authenticated pega um dos DELE. Não se cria unique aqui
---    (decisão do dono).
+--    (decisão do dono); o gatilho trg_caso_nome_unico (abaixo) só impede que o authenticated CRIE novos duplicados.
 -- -----------------------------------------------------------------------------
 create or replace function fn_upsert_caso(p_nome text, p_ator text default 'sistema:n8n')
 returns uuid
 language plpgsql
+security definer
+set search_path = public, pg_temp
 as $$
 declare
   v_id uuid;
@@ -306,11 +429,15 @@ begin
   if p_ator not in ('sistema:n8n', 'portal:navegador') then
     raise exception 'fn_upsert_caso: ator % fora da lista (sistema:n8n, portal:navegador)', p_ator;
   end if;
-  select id into v_id from caso where nome = p_nome limit 1;
+  select id into v_id from caso
+   where nome = p_nome and (auth.uid() is null or id in (select fn_meus_casos()))
+   limit 1;
   if v_id is null then
-    if auth.uid() is not null and fn_caso_id_do_nome(p_nome) is not null then
-      raise exception 'fn_upsert_caso: o mandato "%" existe e você não é membro; peça acesso ao administrador', p_nome
-        using errcode = '42501';
+    if auth.uid() is not null and fn_caso_nome_existe(p_nome, null) then
+      insert into evento_auditoria (ator, acao, entidade_ref, depois)
+        values ('usuario:' || auth.uid(), 'caso_acesso_recusado', 'caso_nome:' || p_nome,
+                jsonb_build_object('via', p_ator));
+      return null;
     end if;
     v_id := gen_random_uuid();
     insert into caso (id, nome) values (v_id, p_nome);
@@ -320,6 +447,35 @@ begin
   return v_id;
 end;
 $$;
+comment on function fn_upsert_caso(text, text) is
+  'Reusa o mandato pelo nome exato ENTRE OS QUE O CHAMADOR ENXERGA (fn_meus_casos; sem identidade — n8n — vê todos) ou cria. Nome de mandato alheio: NÃO cria duplicado, devolve NULL e grava caso_acesso_recusado (uma exceção desfaria o rastro). SECURITY DEFINER com search_path fixo. 0216 (sobre a 0207).';
+
+-- O GATILHO DE NOME ÚNICO PARA O AUTHENTICATED. `caso_insert with check (true)` deixa um não membro inserir direto
+-- caso(nome = 'Projeto Y') — ou renomear o PRÓPRIO caso para 'Projeto Y' — e o n8n (busca por nome, `limit 1` sem
+-- order by) pode então gravar os documentos de Y no caso dele. Sem índice unique (decisão do dono ainda não tomada):
+-- gatilho BEFORE INSERT / UPDATE OF nome, só quando há identidade (auth.uid() não nulo: o n8n, o dono e os testes de
+-- superusuário não passam por ele). SECURITY DEFINER para enxergar o nome alheio; um gatilho não exige EXECUTE do
+-- chamador. A mensagem é a mesma para qualquer nome ocupado (23505) — dizer "existe" já é o que a unicidade diz.
+create or replace function fn_trg_caso_nome_unico()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if auth.uid() is not null
+     and (tg_op = 'INSERT' or new.nome is distinct from old.nome)
+     and fn_caso_nome_existe(new.nome, case when tg_op = 'UPDATE' then new.id end) then
+    raise exception 'já existe um mandato com este nome; use outro ou peça acesso ao administrador' using errcode = '23505';
+  end if;
+  return new;
+end;
+$$;
+comment on function fn_trg_caso_nome_unico() is
+  'Gatilho de caso (BEFORE INSERT e UPDATE OF nome): com identidade (auth.uid() não nulo), recusa (23505) nome já usado por outro mandato. Sem unique no schema (decisão do dono pendente). 0216.';
+create trigger trg_caso_nome_unico
+  before insert or update of nome on caso
+  for each row execute function fn_trg_caso_nome_unico();
 
 -- -----------------------------------------------------------------------------
 -- 5. AS POLICIES. Cada `drop` tem de achar a policy que existe (sem `if exists`): policy que a migration não
@@ -376,9 +532,13 @@ create policy entidade_por_mandato on entidade for all to authenticated
   with check (caso_id in (select fn_meus_casos()));
 
 drop policy execucao_falha_authenticated_all on execucao_falha;
+-- `caso_id` NULO é falha de ANTES de o caso existir (Error Workflow, N8N/build-workflow-erros.mjs:40-46; nó "Registrar
+-- Recusa", N8N/build-workflow.mjs:2563): `NULL in (...)` nunca é verdadeiro, então sem o `or` ela sumia para todos,
+-- inclusive o administrador, e /api/intake/status voltava ao "aguarde" eterno que a 0108 corrigiu. Só o administrador a
+-- lê pela tabela; quem subiu o arquivo a lê por fn_falhas_abertas (abaixo), pelo NOME.
 create policy execucao_falha_por_mandato on execucao_falha for all to authenticated
-  using (caso_id in (select fn_meus_casos()))
-  with check (caso_id in (select fn_meus_casos()));
+  using (caso_id in (select fn_meus_casos()) or (caso_id is null and fn_eh_admin()))
+  with check (caso_id in (select fn_meus_casos()) or (caso_id is null and fn_eh_admin()));
 
 drop policy lote_execucao_authenticated_all on lote_execucao;
 create policy lote_execucao_por_mandato on lote_execucao for all to authenticated
@@ -478,16 +638,20 @@ create policy perimetro_update on perimetro for update to authenticated
   with check (caso_id in (select fn_meus_casos()));
 
 drop policy campo_classe_override_read on campo_classe_override;
-create policy campo_classe_override_read on campo_classe_override for select to authenticated using (campo_extraido_id in (select id from campo_extraido));
+create policy campo_classe_override_read on campo_classe_override for select to authenticated
+  using (exists (select 1 from campo_extraido ce where ce.id = campo_extraido_id));
 
 drop policy campo_classe_override_insert on campo_classe_override;
-create policy campo_classe_override_insert on campo_classe_override for insert to authenticated with check (campo_extraido_id in (select id from campo_extraido));
+create policy campo_classe_override_insert on campo_classe_override for insert to authenticated
+  with check (exists (select 1 from campo_extraido ce where ce.id = campo_extraido_id));
 
 drop policy campo_classe_sugerida_read on campo_classe_sugerida;
-create policy campo_classe_sugerida_read on campo_classe_sugerida for select to authenticated using (campo_extraido_id in (select id from campo_extraido));
+create policy campo_classe_sugerida_read on campo_classe_sugerida for select to authenticated
+  using (exists (select 1 from campo_extraido ce where ce.id = campo_extraido_id));
 
 drop policy campo_classe_sugerida_insert on campo_classe_sugerida;
-create policy campo_classe_sugerida_insert on campo_classe_sugerida for insert to authenticated with check (campo_extraido_id in (select id from campo_extraido));
+create policy campo_classe_sugerida_insert on campo_classe_sugerida for insert to authenticated
+  with check (exists (select 1 from campo_extraido ce where ce.id = campo_extraido_id));
 
 drop policy golden_documento_read on golden_documento;
 create policy golden_documento_read on golden_documento for select to authenticated using (documento_id in (select id from documento));
@@ -522,24 +686,486 @@ drop policy evento_auditoria_insert on evento_auditoria;
 create policy evento_auditoria_insert on evento_auditoria for insert to authenticated
   with check (caso_id is null or caso_id in (select fn_meus_casos()));
 
+-- Catálogos e dial: leitura livre, ESCRITA SÓ DO ADMINISTRADOR. Antes, `estagio_autonomia` e `premissa_catalogo` eram
+-- `for all using (true)` e `golden_rodada` tinha insert/update livres: qualquer usuário logado dava UPDATE no teto de
+-- autonomia sem passar por fn_mudar_dial (o teto é doutrina e só muda por migration). golden_criterio nem tinha RLS e
+-- o authenticated tinha INSERT/UPDATE/DELETE (qualquer um baixava concordancia_minima). Quem escreve nelas (grep em
+-- 27/10/2026): portal/src só LÊ (autonomia/page.tsx, export/route.ts); o n8n lê estagio_autonomia pela chave de serviço;
+-- a escrita é de fn_mudar_dial (invoker: o administrador pelo portal/SQL; a promoção automática passa por
+-- fn_dial_auto_promover, definer, abaixo) e de migrations/testes (superusuário). Nenhum uso legítimo do authenticated
+-- comum foi encontrado.
+drop policy estagio_autonomia_authenticated_all on estagio_autonomia;
+create policy estagio_autonomia_read on estagio_autonomia for select to authenticated using (true);
+create policy estagio_autonomia_write on estagio_autonomia for all to authenticated
+  using (fn_eh_admin()) with check (fn_eh_admin());
+
+drop policy premissa_catalogo_authenticated_all on premissa_catalogo;
+create policy premissa_catalogo_read on premissa_catalogo for select to authenticated using (true);
+create policy premissa_catalogo_write on premissa_catalogo for all to authenticated
+  using (fn_eh_admin()) with check (fn_eh_admin());
+
+drop policy golden_rodada_insert on golden_rodada;
+create policy golden_rodada_insert on golden_rodada for insert to authenticated with check (fn_eh_admin());
+drop policy golden_rodada_update on golden_rodada;
+create policy golden_rodada_update on golden_rodada for update to authenticated
+  using (fn_eh_admin()) with check (fn_eh_admin());
+
+alter table golden_criterio enable row level security;
+create policy golden_criterio_read on golden_criterio for select to authenticated using (true);
+create policy golden_criterio_write on golden_criterio for all to authenticated
+  using (fn_eh_admin()) with check (fn_eh_admin());
+
 drop policy documentos_authenticated_all on storage.objects;
 create policy documentos_por_mandato on storage.objects for all to authenticated
   using (bucket_id = 'documentos' and public.fn_caso_da_chave(name) in (select public.fn_meus_casos()))
   with check (bucket_id = 'documentos' and public.fn_caso_da_chave(name) in (select public.fn_meus_casos()));
 
 -- -----------------------------------------------------------------------------
+-- 5b. O DIAL, OS AGREGADOS GLOBAIS E AS FALHAS SEM CASO — o que a RLS por mandato quebraria em silêncio.
+--    (1) PROMOÇÃO AUTOMÁTICA. trg_auto_promover_dial (AFTER INSERT em decisao) -> fn_dial_auto_promover ->
+--    fn_veredito_producao são INVOKER: com a RLS o veredito GLOBAL passaria a ser calculado só sobre os mandatos de
+--    quem dispara (o analista, pelo portal: fn_revisar_documento, fn_decidir_pendencia, fn_aceitar_extracao) e
+--    fn_mudar_dial muda o estágio para TODOS. Um analista com um recorte de concordância alta promoveria o dial de
+--    todos, sem erro. Correção: fn_dial_auto_promover vira SECURITY DEFINER (o veredito global e a promoção rodam
+--    como o dono e não dependem de quem leu) e fn_veredito_producao também (o número global é o mesmo para todo
+--    chamador; p_caso_id exige ser membro). Ele devolve só NÚMEROS e nomes de rubrica do catálogo, nunca linha de
+--    cliente. fn_mudar_dial continua INVOKER de propósito (definer deixaria qualquer usuário mudar o dial; a sonda
+--    cobra isso, tipo=definer, marcador nao): quem a chama diretamente é o administrador.
+--    (2) /autonomia (portal/src/app/autonomia/page.tsx): fn_golden_cobertura e fn_classe_contabil_concordancia davam
+--    números do RECORTE do leitor sem aviso. Viram SECURITY DEFINER (só números) — o global é igual para todos; a
+--    segunda, com p_caso_id, só conta o mandato de quem é membro.
+--    (3) fn_falhas_abertas: ver o comentário na função.
+--    As funções abaixo são extraídas do banco montado (pg_get_functiondef) e reemitidas INTEIRAS, com as linhas novas
+--    marcadas "0216" — nunca replace de texto sobre o banco.
+-- -----------------------------------------------------------------------------
+alter function fn_dial_auto_promover(text) security definer set search_path = public, pg_temp;
+alter function fn_golden_cobertura(uuid, golden_origem) security definer set search_path = public, pg_temp;
+
+CREATE OR REPLACE FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ STABLE
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+declare
+  v_natureza  text;
+  v_crit      record;
+  v_n         int     := 0;
+  v_conc      numeric;
+  v_por_tipo  jsonb   := '[]'::jsonb;
+  v_fonte     text;
+  v_pior      jsonb;
+  v_falhas    text[]  := '{}';
+  v_delegado  jsonb;
+begin
+  -- 0216: a função é SECURITY DEFINER para o veredito GLOBAL (p_caso_id nulo) ser o mesmo para todo chamador — antes,
+  -- com a RLS por mandato, ele era calculado só sobre os mandatos de QUEM DISPARAVA, e fn_mudar_dial mudava o estágio
+  -- para TODOS com base nesse recorte. Com p_caso_id, só o membro (ou o administrador) pergunta: sem esta guarda o
+  -- definer abriria o número de qualquer mandato.
+  if p_caso_id is not null and auth.uid() is not null and not fn_eh_membro(p_caso_id) then
+    raise exception 'fn_veredito_producao: o mandato não existe ou você não é membro' using errcode = '42501';
+  end if;
+  select natureza into v_natureza from estagio_autonomia where estagio = p_estagio;
+  if v_natureza is null then
+    return jsonb_build_object(
+      'estagio', p_estagio, 'suficiente', false,
+      'motivo', format('Estágio "%s" não existe no dial.', p_estagio));
+  end if;
+
+  select n_minimo_veredito, concordancia_minima, metrica
+    into v_crit
+    from golden_criterio where estagio = p_estagio;
+
+  if v_crit is null then
+    return jsonb_build_object(
+      'estagio', p_estagio, 'suficiente', false,
+      'motivo', format('O estágio "%s" não tem linha em golden_criterio, então não há limiar '
+                       'contra o que comparar. Critério é dado (0126): acrescente a linha.',
+                       p_estagio));
+  end if;
+
+  if p_estagio = 'classificacao_doc_checklist' then
+    -- O VEREDITO É A REVISÃO DE DOCUMENTO. `fn_revisar_documento` grava
+    -- 'correcao_classificacao' quando o humano trocou o tipo e 'aprovacao' quando
+    -- não trocou, com `tipo_de`/`tipo_para` no payload. O payload é o filtro que
+    -- separa esta decisão das outras 'aprovacao' do sistema — a do auto-aceite,
+    -- por exemplo, que não é veredito sobre classificação nenhuma.
+    --
+    -- AUTOR HUMANO, e a exclusão é por prefixo 'sistema:' porque é assim que a
+    -- casa marca ator de máquina desde a 0019. Contar o auto-aceite aqui seria a
+    -- máquina se dando razão.
+    v_fonte := 'decisao (fn_revisar_documento): aprovacao = tipo confirmado, '
+               'correcao_classificacao = tipo trocado';
+    with v as (
+      select d.payload->>'tipo_de' as tipo_sugerido,
+             (d.tipo = 'aprovacao') as concordou
+        from decisao d
+       where d.payload ? 'tipo_para'
+         -- SEM PALPITE NÃO HÁ VEREDITO. Documento que chegou à revisão sem tipo
+         -- nenhum (`tipo_de` nulo) não tem com o que concordar: contar a correção
+         -- dele como erro da máquina puniria o classificador por uma resposta que
+         -- ele não deu. Achado no book, onde uma linha assim derrubava a
+         -- concordância de 1,00 para 0,83 sozinha.
+         and d.payload->>'tipo_de' is not null
+         and coalesce(d.autor, '') not like 'sistema:%'
+         and d.tipo in ('aprovacao', 'correcao_classificacao')
+         and (p_caso_id is null or d.caso_id = p_caso_id)
+    ), por_tipo as (
+      select tipo_sugerido,
+             count(*)::int as n,
+             count(*) filter (where concordou)::int as acertos,
+             round(count(*) filter (where concordou)::numeric / count(*), 4) as concordancia
+        from v group by tipo_sugerido
+    )
+    select coalesce(sum(n), 0)::int,
+           case when coalesce(sum(n), 0) = 0 then null
+                else round(sum(acertos)::numeric / sum(n), 4) end,
+           coalesce(jsonb_agg(jsonb_build_object(
+             'tipo', tipo_sugerido, 'n', n, 'acertos', acertos, 'concordancia', concordancia)
+             order by concordancia, tipo_sugerido), '[]'::jsonb)
+      into v_n, v_conc, v_por_tipo
+      from por_tipo;
+
+  elsif p_estagio = 'reconciliacao_classe_a' then
+    -- Já existia desde a 0126 e nunca esteve ligada ao dial. Delegar em vez de
+    -- reescrever: duas contagens da mesma quantidade divergem no dia em que
+    -- alguém corrigir uma só.
+    v_fonte := 'fn_golden_classe_a (0126): rejeitada = falso positivo do motor';
+    v_delegado := fn_golden_classe_a(p_caso_id);
+    v_n    := coalesce((v_delegado->>'com_veredito_humano')::int, 0);
+    v_conc := (v_delegado->>'nao_falso_positivo')::numeric;
+
+  elsif p_estagio = 'classificacao_contabil' then
+    -- A 0128 mede isto desde que existe. O teto deste estágio é N1, então o
+    -- número não sobe dial nenhum hoje; ele entra aqui para a tela de autonomia
+    -- poder mostrar medição onde existe, em vez de silêncio.
+    v_fonte := 'fn_classe_contabil_concordancia (0128): sugestão em sombra contra override humano';
+    v_delegado := fn_classe_contabil_concordancia(p_caso_id);
+    v_n    := coalesce((v_delegado->>'com_veredito_humano')::int, 0);
+    v_conc := (v_delegado->>'concordancia')::numeric;
+
+  else
+    return jsonb_build_object(
+      'estagio', p_estagio, 'suficiente', false, 'n', 0,
+      'metrica', v_crit.metrica,
+      'motivo', format('Não há veredito de produção para "%s". O trabalho normal não emite rótulo '
+                       'sobre este estágio: o analista não confirma nem corrige a saída dele numa '
+                       'tela, então não existe o que contar. Medir este estágio exige rotulagem, e '
+                       'é o caso que a saída C do B3 cobre.', p_estagio));
+  end if;
+
+  -- O TIPO MAIS FRACO, quando há tipo. Um tipo com N pequeno não reprova sozinho:
+  -- ele não tem massa para afirmar nada, e tratá-lo como reprovação faria o
+  -- estágio inteiro depender do tipo mais raro da mesa.
+  select jsonb_agg(t) filter (where (t->>'n')::int >= greatest(v_crit.n_minimo_veredito / 4, 5)
+                                and (t->>'concordancia')::numeric < v_crit.concordancia_minima)
+    into v_pior
+    from jsonb_array_elements(v_por_tipo) t;
+
+  if v_n < v_crit.n_minimo_veredito then
+    v_falhas := v_falhas || format('vereditos de produção: %s, mínimo %s',
+                                   v_n, v_crit.n_minimo_veredito);
+  end if;
+  if v_conc is null then
+    -- O `::text` NÃO é enfeite — ver o cabeçalho desta migration.
+    v_falhas := v_falhas || 'concordância: não medida (nenhum veredito com os dois lados)'::text;
+  elsif v_conc < v_crit.concordancia_minima then
+    v_falhas := v_falhas || format('concordância: %s, mínimo %s', v_conc, v_crit.concordancia_minima);
+  end if;
+  if v_pior is not null then
+    v_falhas := v_falhas || format('%s tipo(s) com massa e concordância abaixo do mínimo',
+                                   jsonb_array_length(v_pior));
+  end if;
+
+  return jsonb_build_object(
+    'estagio', p_estagio,
+    'suficiente', array_length(v_falhas, 1) is null,
+    'fonte', v_fonte,
+    'metrica', v_crit.metrica,
+    'n', v_n,
+    'n_minimo', v_crit.n_minimo_veredito,
+    'concordancia', v_conc,
+    'concordancia_minima', v_crit.concordancia_minima,
+    'por_tipo', v_por_tipo,
+    'tipos_abaixo_do_minimo', coalesce(v_pior, '[]'::jsonb),
+    'falhas', coalesce(to_jsonb(v_falhas), '[]'::jsonb),
+    'piso_enviesado', true,
+    'como_ler', 'Este número é um PISO, não um ground truth. O veredito vem do trabalho normal, e '
+                'quem o emite VÊ o palpite da máquina antes de decidir — o viés de confirmação '
+                'empurra a concordância para cima. Serve para dizer "a máquina acerta pelo menos '
+                'isto"; não substitui rotulagem cega no dia em que for preciso sustentar o número '
+                'para fora.');
+end;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid DEFAULT NULL::uuid)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+  with par as (
+    select s.classe_codigo as sugerida, o.classe_final as humana, s.rubrica_id
+    from campo_classe_sugerida s
+    join lateral (
+      select o.classe_final from campo_classe_override o
+      where o.campo_extraido_id = s.campo_extraido_id
+      order by o.criado_em desc, o.id desc limit 1
+    ) o on true
+    join campo_extraido ce on ce.id = s.campo_extraido_id
+    join documento_versao dv on dv.id = ce.documento_versao_id
+    join documento d on d.id = dv.documento_id
+    where (p_caso_id is null or (d.caso_id = p_caso_id and (auth.uid() is null or fn_eh_membro(p_caso_id))))
+      and s.criado_em = (select max(s2.criado_em) from campo_classe_sugerida s2
+                          where s2.campo_extraido_id = s.campo_extraido_id)
+  ),
+  sem_veredito as (
+    select count(*) as n
+    from campo_classe_sugerida s
+    join campo_extraido ce on ce.id = s.campo_extraido_id
+    join documento_versao dv on dv.id = ce.documento_versao_id
+    join documento d on d.id = dv.documento_id
+    where (p_caso_id is null or (d.caso_id = p_caso_id and (auth.uid() is null or fn_eh_membro(p_caso_id))))
+      and not exists (select 1 from campo_classe_override o
+                       where o.campo_extraido_id = s.campo_extraido_id)
+  )
+  select jsonb_build_object(
+    'com_veredito_humano', (select count(*) from par),
+    'concordaram', (select count(*) from par where sugerida = humana),
+    'concordancia', case when (select count(*) from par) = 0 then null
+                        else round((select count(*) from par where sugerida = humana)::numeric
+                                   / (select count(*) from par), 4) end,
+    'sem_veredito_humano', (select n from sem_veredito),
+    'rubricas_que_mais_erram', (
+      select coalesce(jsonb_agg(x order by x->>'erros' desc), '[]'::jsonb) from (
+        select jsonb_build_object(
+                 'padrao', rc.padrao, 'sugeria', rc.classe_codigo,
+                 'erros', count(*),
+                 'humano_disse', jsonb_agg(distinct par.humana)) as x
+        from par join rubrica_classe rc on rc.id = par.rubrica_id
+        where par.sugerida <> par.humana
+        group by rc.padrao, rc.classe_codigo
+        order by count(*) desc limit 10
+      ) t),
+    'como_ler', 'O denominador são as linhas com sugestao E override. Linha que ninguem olhou fica '
+                'FORA, contada a parte: "a maquina acertou" e "ninguem conferiu" sao estados '
+                'diferentes. E este numero NAO autoriza subir o dial por si: o teto de '
+                'classificacao_contabil e N1 para sempre (Arquitetura do Sistema/1 Visão e Doutrina/01).'
+  );
+$function$;
+
+CREATE OR REPLACE FUNCTION public.fn_mudar_dial(p_estagio text, p_nivel nivel_autonomia, p_autor text, p_motivo text DEFAULT NULL::text, p_limiar numeric DEFAULT NULL::numeric, p_rodada_golden uuid DEFAULT NULL::uuid, p_sem_medicao_porque text DEFAULT NULL::text, p_por_veredito boolean DEFAULT false)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+AS $function$
+declare
+  v_antes     jsonb;
+  v_teto      nivel_autonomia;
+  v_nivel_ant nivel_autonomia;
+  v_natureza  text;
+  v_sobe_para_autonomia boolean;
+  v_med       jsonb;
+  v_base      text;
+  v_resumo    jsonb;
+  v_freia     boolean;
+  v_linhas    int;
+  v_mede      boolean := false;   -- esta chamada produziu base MEDIDA nova?
+begin
+  select to_jsonb(ea), ea.teto, ea.nivel_atual, ea.natureza
+    into v_antes, v_teto, v_nivel_ant, v_natureza
+  from estagio_autonomia ea where ea.estagio = p_estagio;
+
+  if v_antes is null then
+    return jsonb_build_object('recusado', true,
+      'motivo_recusa', format('Estágio "%s" não existe no dial. Os estágios são semeados na 0002 '
+                              '(Arquitetura do Sistema/2 Especificação/f0/04) — estágio novo entra por migration, não por chamada.', p_estagio));
+  end if;
+
+  if p_nivel > v_teto then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values (p_autor, 'mudanca_dial_recusada', 'estagio:'||p_estagio,
+              jsonb_build_object('pedido', p_nivel, 'teto', v_teto, 'motivo_informado', p_motivo));
+    return jsonb_build_object('recusado', true,
+      'motivo_recusa', format('O estágio "%s" tem TETO %s e foi pedido %s. O teto é por natureza do '
+                              'estágio (Arquitetura do Sistema/1 Visão e Doutrina/01) e nenhuma chamada o sobrepõe — mudá-lo é decisão de '
+                              'doutrina, por migration.', p_estagio, v_teto, p_nivel));
+  end if;
+
+  v_sobe_para_autonomia := p_nivel > v_nivel_ant
+                           and p_nivel in ('N2', 'N3')
+                           and v_natureza = 'interpretativo';
+
+  v_base := case when p_nivel in ('N2','N3') and v_natureza = 'interpretativo'
+                 then 'declarada' else 'nao_se_aplica' end;
+
+  -- A TRAVA 2 (0137): descida feita por humano desliga a promoção automática.
+  v_freia := p_nivel < v_nivel_ant and coalesce(p_autor, '') not like 'sistema:%';
+
+  if v_sobe_para_autonomia then
+    if p_rodada_golden is not null then
+      v_med := fn_golden_suficiente(p_estagio, p_rodada_golden);
+      if not coalesce((v_med->>'suficiente')::boolean, false) then
+        insert into evento_auditoria (ator, acao, entidade_ref, depois)
+          values (p_autor, 'mudanca_dial_recusada', 'estagio:'||p_estagio,
+                  jsonb_build_object('pedido', p_nivel, 'de', v_nivel_ant,
+                                     'motivo_informado', p_motivo, 'medicao', v_med));
+        return jsonb_build_object('recusado', true, 'medicao', v_med,
+          'motivo_recusa', format('A concordância medida contra a rodada de golden set não basta '
+                                  'para subir "%s" de %s para %s. Arquitetura do Sistema/1 Visão e Doutrina/01, regra de ouro: nada de '
+                                  'subir dial de estágio interpretativo sem golden set e '
+                                  'concordância medida. O que faltou está em "medicao".',
+                                  p_estagio, v_nivel_ant, p_nivel));
+      end if;
+      v_base := 'medida';
+      v_resumo := v_med;
+      v_mede := true;
+
+    elsif p_por_veredito then
+      v_med := fn_veredito_producao(p_estagio);
+      if not coalesce((v_med->>'suficiente')::boolean, false) then
+        insert into evento_auditoria (ator, acao, entidade_ref, depois)
+          values (p_autor, 'mudanca_dial_recusada', 'estagio:'||p_estagio,
+                  jsonb_build_object('pedido', p_nivel, 'de', v_nivel_ant,
+                                     'motivo_informado', p_motivo, 'medicao', v_med));
+        return jsonb_build_object('recusado', true, 'medicao', v_med,
+          'motivo_recusa', format('O veredito de produção não basta para subir "%s" de %s para %s. '
+                                  'O que faltou está em "medicao"; a fonte do rótulo está em '
+                                  '"fonte". Lembrando que este caminho mede um PISO, e o piso ainda '
+                                  'não alcançou o critério.', p_estagio, v_nivel_ant, p_nivel));
+      end if;
+      v_base := 'medida_por_veredito';
+      v_resumo := v_med;
+      v_mede := true;
+
+    elsif p_sem_medicao_porque is null then
+      insert into evento_auditoria (ator, acao, entidade_ref, depois)
+        values (p_autor, 'mudanca_dial_recusada', 'estagio:'||p_estagio,
+                jsonb_build_object('pedido', p_nivel, 'de', v_nivel_ant,
+                                   'motivo_informado', p_motivo,
+                                   'porque', 'sem rodada de golden set, sem veredito e sem motivo declarado'));
+      return jsonb_build_object('recusado', true,
+        'motivo_recusa', format('Subir "%s" de %s para %s é entrar em auto-clear num estágio '
+                                'INTERPRETATIVO, e Arquitetura do Sistema/1 Visão e Doutrina/01 exige concordância medida para isso. '
+                                'Três caminhos: `p_rodada_golden` com uma rodada CONGELADA, '
+                                '`p_por_veredito` para medir pelo veredito de produção (0136, e o '
+                                'número é um piso enviesado), ou assumir a decisão em '
+                                '`p_sem_medicao_porque` — nesse caso a subida acontece, fica '
+                                'registrada como mudanca_dial_sem_medicao e o nível passa a valer '
+                                'como DECLARADO.', p_estagio, v_nivel_ant, p_nivel));
+    end if;
+  end if;
+
+  -- REAFIRMAR O NÍVEL QUE JÁ VALE NÃO PODE APAGAR A MEDIÇÃO QUE O AUTORIZOU.
+  --
+  -- `v_mede` é verdadeiro só quando ESTA chamada produziu base nova. Quando não
+  -- produziu — e o nível pedido é o que já está lá —, os três campos de medição
+  -- ficam como estavam. Sem isso, `fn_mudar_dial(estagio, <mesmo nível>)` trocava
+  -- `medida_por_veredito` por `declarada` e zerava `medicao_em`/`medicao_resumo`:
+  -- o sistema passava a subdeclarar a própria evidência, e a trilha do que
+  -- autorizou o nível sumia. Ver o cabeçalho desta migration.
+  update estagio_autonomia
+    set nivel_atual = p_nivel,
+        limiar_auto_clear = coalesce(p_limiar, limiar_auto_clear),
+        base_do_nivel = case when v_mede or p_nivel <> v_nivel_ant then v_base else base_do_nivel end,
+        medicao_rodada_id = case when v_mede then (case when v_base = 'medida' then p_rodada_golden else null end)
+                                 when p_nivel <> v_nivel_ant then null
+                                 else medicao_rodada_id end,
+        medicao_em        = case when v_mede then now()
+                                 when p_nivel <> v_nivel_ant then null
+                                 else medicao_em end,
+        medicao_resumo    = case when v_mede then v_resumo
+                                 when p_nivel <> v_nivel_ant then null
+                                 else medicao_resumo end,
+        -- O FREIO GRUDA. Uma vez desligada por descida humana, a promoção
+        -- automática só volta por `update` explícito: quem desconfiou é quem
+        -- decide voltar a confiar.
+        auto_promocao = case when v_freia then false else auto_promocao end,
+        atualizado_por = p_autor,
+        atualizado_em = now()
+  where estagio = p_estagio;
+  -- 0216: o estágio existe (checado acima); zero linhas aqui é a RLS recusando o UPDATE a quem não é administrador. Sem
+  -- esta guarda a função seguia, gravava o evento `mudanca_dial` e devolvia sucesso — um dial que "mudou" sem mudar,
+  -- e uma trilha que afirma o contrário do estado.
+  get diagnostics v_linhas = row_count;
+  if v_linhas = 0 then
+    raise exception 'fn_mudar_dial: sem permissão para alterar o dial (só o administrador altera estagio_autonomia)' using errcode = '42501';
+  end if;
+
+  if v_freia then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values (p_autor, 'auto_promocao_desligada', 'estagio:'||p_estagio,
+              jsonb_build_object('de', v_nivel_ant, 'para', p_nivel, 'motivo_informado', p_motivo,
+                                 'porque', 'descida feita por humano desliga a promoção automática '
+                                           '(0137); religar é update explícito'));
+  end if;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+    values (p_autor,
+            case when v_sobe_para_autonomia and p_rodada_golden is null and not p_por_veredito
+                 then 'mudanca_dial_sem_medicao' else 'mudanca_dial' end,
+            'estagio:'||p_estagio, v_antes,
+            (select to_jsonb(ea) from estagio_autonomia ea where ea.estagio = p_estagio)
+            || jsonb_build_object('motivo', p_motivo,
+                                  'sem_medicao_porque', p_sem_medicao_porque,
+                                  'medicao', v_resumo));
+
+  return fn_dial(p_estagio);
+end;
+$function$;
+
+create or replace function fn_falhas_abertas(p_caso_nome text, p_desde timestamptz)
+returns table(id uuid, etapa text, mensagem text, criado_em timestamptz)
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select f.id, f.etapa, f.mensagem, f.criado_em
+  from execucao_falha f
+  where f.visto_em is null
+    and f.criado_em >= p_desde
+    and (
+         -- falha de ANTES de o caso existir (caso_id nulo): quem a procura pelo NOME a recebe — é o que tira o
+         -- /api/intake/status do "aguarde" eterno (0108). Ninguém é membro de um caso que ainda não existe.
+         (f.caso_id is null and lower(f.caso_nome) = lower(trim(p_caso_nome)))
+         -- falha de caso que existe: só quem é membro dele (a RLS valia aqui quando a função era invoker)
+         or (f.caso_id in (select fn_meus_casos())
+             and (lower(f.caso_nome) = lower(trim(p_caso_nome))
+                  or f.caso_id in (select c.id from caso c where lower(c.nome) = lower(trim(p_caso_nome)))))
+        )
+  order by f.criado_em desc;
+$$;
+comment on function fn_falhas_abertas(text, timestamptz) is
+  'Falhas de execução ainda não vistas para este nome de mandato desde p_desde (0108). SECURITY DEFINER (0216): a falha de caso_id NULO (antes de o caso existir) é entregue a quem a procura pelo nome; a de caso existente, só ao membro. O nome é o que identifica o arquivo que o usuário acabou de subir: quem adivinha o nome lê as falhas sem caso dele — decisão consciente, o /api/intake/status não tem outra identidade.';
+
+-- -----------------------------------------------------------------------------
 -- 6. GRANTs (0214): nenhum objeto novo sem acesso. A coluna caso_id herda o do evento_auditoria. Função: o Postgres dá
 --    EXECUTE a PUBLIC por default, então o revoke vem primeiro. Gatilho não precisa de EXECUTE para o authenticated.
 -- -----------------------------------------------------------------------------
-revoke execute on function fn_meus_casos(), fn_caso_id_do_nome(text), fn_caso_da_chave(text),
-  fn_caso_da_referencia(text), fn_trg_evento_caso_id() from public, anon, authenticated;
-grant execute on function fn_meus_casos(), fn_caso_id_do_nome(text), fn_caso_da_chave(text),
-  fn_caso_da_referencia(text) to authenticated, service_role;
+revoke execute on function fn_meus_casos(), fn_caso_nome_existe(text, uuid), fn_caso_da_chave(text),
+  fn_caso_da_referencia(text), fn_trg_evento_caso_id(), fn_trg_caso_nome_unico() from public, anon, authenticated;
+grant execute on function fn_meus_casos(), fn_caso_da_chave(text), fn_caso_da_referencia(text) to authenticated, service_role;
+grant execute on function fn_caso_nome_existe(text, uuid) to service_role;
+-- As funções que esta migration tornou SECURITY DEFINER (ou criou como tal) NÃO ficam executáveis por PUBLIC/anon: definer
+-- executável pela chave pública é o clássico caminho de escalada, e a guarda de p_caso_id deixa passar quem não tem
+-- identidade (auth.uid() nulo = n8n/dono) — o anon não pode chegar nela. O authenticated e o service_role seguem com EXECUTE.
+revoke execute on function fn_veredito_producao(text, uuid), fn_classe_contabil_concordancia(uuid),
+  fn_golden_cobertura(uuid, golden_origem), fn_dial_auto_promover(text), fn_falhas_abertas(text, timestamptz),
+  fn_upsert_caso(text, text) from public, anon;
+grant execute on function fn_veredito_producao(text, uuid), fn_classe_contabil_concordancia(uuid),
+  fn_golden_cobertura(uuid, golden_origem), fn_dial_auto_promover(text), fn_falhas_abertas(text, timestamptz),
+  fn_upsert_caso(text, text) to authenticated, service_role;
 
 -- -----------------------------------------------------------------------------
--- 7. A SONDA. A função é a da 0215 INTEIRA (extraída do próprio arquivo, não replace de texto sobre o banco — memória
+-- 7. A SONDA. O tipo `definer` entra nesta migration (constraint abaixo). A função é a da 0215 INTEIRA (extraída do próprio arquivo, não replace de texto sobre o banco — memória
 --    nunca-corrigir-funcao-por-replace) com o ramo `policy` ampliado (schema.tabela.policy e marcador na expressão).
 -- -----------------------------------------------------------------------------
+alter table instalacao_requisito drop constraint if exists instalacao_requisito_tipo_check;
+alter table instalacao_requisito add constraint instalacao_requisito_tipo_check
+  check (tipo in ('tabela', 'coluna', 'funcao', 'seed', 'comportamento', 'corpo', 'gatilho', 'policy', 'privilegio', 'execucao', 'rls', 'definer'));
+
 CREATE OR REPLACE FUNCTION public.fn_instalacao_conferir()
  RETURNS TABLE(chave text, migration text, tipo text, objeto text, presente boolean, detalhe text, porque text, severidade text)
  LANGUAGE plpgsql
@@ -560,6 +1186,9 @@ declare
   v_privs      text[];
   v_kinds      "char"[];
   v_lista      text;
+  v_rls        boolean;
+  v_def        boolean;
+  v_sp         boolean;
   v_polnome    name;
   v_polexpr    text;
 begin
@@ -755,11 +1384,15 @@ begin
     elsif r.tipo = 'execucao' then
       -- 0215: EXECUTE de função para um papel. `objeto` = 'papel:nome_da_funcao' (sem argumentos: o nome tem de ser
       -- único) e `marcador` = 'sim' (o papel TEM de executar) ou 'nao' (NÃO pode). O 'nao' existe por
-      -- fn_administrador_definir: função em public nasce executável por PUBLIC no Postgres, e um revoke esquecido
-      -- deixa qualquer usuário logado se promover administrador — nenhum outro tipo vê isso, porque a função
-      -- existe e o corpo está certo. `has_function_privilege` enxerga a concessão a PUBLIC, que é a que importa.
+      -- fn_administrador_definir: função em public nasce executável por PUBLIC no Postgres, e o revoke esquecido
+      -- tira a primeira barreira de privilégio de promover administrador (DEFESA EM PROFUNDIDADE: hoje a função é
+      -- INVOKER e o authenticated levaria 42501 em auth.users e em administrador de qualquer jeito) — nenhum outro
+      -- tipo vê isso, porque a função existe e o corpo está certo. `has_function_privilege` enxerga a concessão a
+      -- PUBLIC, que é a que importa.
+      -- `marcador` NULO: `null not in (...)` é NULL, o `if` cai adiante e `... = (null = 'sim')` dá NULL — e
+      -- presente NULL some de `where not presente` (regra 7). Requisito sem marcador é requisito mal declarado.
       v_role := split_part(r.objeto, ':', 1);
-      if r.marcador not in ('sim', 'nao') then
+      if r.marcador is null or r.marcador not in ('sim', 'nao') then
         v_ok  := false;
         v_det := 'requisito mal declarado: marcador tem de ser sim ou nao';
       elsif not exists (select 1 from pg_roles where rolname = v_role) then
@@ -781,6 +1414,56 @@ begin
                         when r.marcador = 'sim' then format('%s NÃO executa a função (o portal leva "permission denied")', v_role)
                         else format('%s EXECUTA a função e não podia (revoke esquecido)', v_role) end;
         end if;
+      end if;
+
+    elsif r.tipo = 'definer' then
+      -- 0216: SECURITY DEFINER da função (pg_proc.prosecdef). `objeto` = nome da função (único) e `marcador` = 'sim'
+      -- (TEM de ser definer, E com search_path fixo em proconfig — definer sem search_path é sequestrável) ou 'nao'
+      -- (TEM de ser invoker). O 'sim' existe porque o veredito global do dial, os agregados de /autonomia e as falhas
+      -- sem caso só valem se NÃO dependem de quem lê (a RLS por mandato daria o número do recorte, calada); o 'nao'
+      -- existe por fn_mudar_dial: definer deixaria qualquer usuário mudar o dial. O tipo `corpo` não vê isso — ALTER
+      -- FUNCTION ... SECURITY DEFINER não muda uma letra do corpo.
+      if r.marcador is null or r.marcador not in ('sim', 'nao') then
+        v_ok  := false;
+        v_det := 'requisito mal declarado: marcador tem de ser sim ou nao';
+      else
+        begin
+          v_proc := to_regproc('public.' || r.objeto);
+        exception when others then
+          v_proc := null;
+          v_det  := 'mais de uma assinatura com este nome — o requisito precisa de um nome único';
+        end;
+        if v_proc is null then
+          v_ok  := false;
+          v_det := coalesce(v_det, 'a função nem existe');
+        else
+          select p.prosecdef, coalesce(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%'), false)
+            into v_def, v_sp from pg_proc p where p.oid = v_proc::oid;
+          v_ok  := case when r.marcador = 'sim' then v_def and v_sp else not v_def end;
+          v_det := case when v_ok then format('%s (%s)', case when v_def then 'SECURITY DEFINER' else 'INVOKER' end,
+                                              case when v_sp then 'search_path fixo' else 'sem search_path' end)
+                        when r.marcador = 'sim' then format('a função é %s%s: o resultado passa a depender de quem lê (RLS) ou fica sequestrável',
+                                                            case when v_def then 'DEFINER' else 'INVOKER' end,
+                                                            case when v_def and not v_sp then ' SEM search_path fixo' else '' end)
+                        else 'a função é SECURITY DEFINER e tinha de ser INVOKER (qualquer usuário a usaria com os poderes do dono)' end;
+        end if;
+      end if;
+
+    elsif r.tipo = 'rls' then
+      -- 0215: RLS LIGADA (pg_class.relrowsecurity). `objeto` = tabela de public, ou 'schema.tabela' (storage.objects).
+      -- A policy `por mandato` existe no catálogo mesmo com a RLS DESLIGADA e então NÃO vale: o `where` dela some, o
+      -- acesso passa a ser só o GRANT — e no projeto existente o default privilege ainda concede ALL a anon e
+      -- authenticated até 30/10/2026. O tipo `policy` não vê isso (a policy está lá); este vê. Tabela ausente é
+      -- `presente = false` com o detalhe, nunca exceção.
+      v_alvo := to_regclass(case when position('.' in r.objeto) > 0 then r.objeto else 'public.' || r.objeto end);
+      if v_alvo is null then
+        v_ok  := false;
+        v_det := 'a tabela nem existe';
+      else
+        select c.relrowsecurity into v_rls from pg_class c where c.oid = v_alvo;
+        v_ok  := coalesce(v_rls, false);
+        v_det := case when v_ok then 'RLS ligada'
+                      else 'RLS DESLIGADA: as policies existem no catálogo e o Postgres não as aplica — o acesso passa a ser só o GRANT' end;
       end if;
 
     elsif r.tipo in ('seed', 'comportamento') then
@@ -810,14 +1493,15 @@ begin
       end if;
     end if;
 
-    return query select r.chave, r.migration, r.tipo, r.objeto, v_ok, v_det,
+    -- Nenhum requisito pode sair NULL: `presente` NULL some de `where not presente`, que é como a sonda é lida.
+    return query select r.chave, r.migration, r.tipo, r.objeto, coalesce(v_ok, false), v_det,
                         r.porque, r.severidade;
   end loop;
 end;
 $function$;
 
 comment on function fn_instalacao_conferir() is
-  'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0215 confere também EXECUÇÃO de função (tipo=execucao, objeto papel:funcao, marcador sim|nao): has_function_privilege, que enxerga o PUBLIC — é o que cobra o revoke de fn_administrador_definir. Desde a 0216 o requisito de policy aceita `schema.tabela.policy` e um marcador que tem de constar na expressão da policy (é o que distingue a policy por mandato do using (true) de mesmo nome).';
+  'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0215 confere também EXECUÇÃO de função (tipo=execucao, objeto papel:funcao, marcador sim|nao): has_function_privilege, que enxerga o PUBLIC — é a primeira barreira de privilégio de fn_administrador_definir (defesa em profundidade). Desde a 0215 confere também RLS LIGADA (tipo=rls, objeto tabela ou schema.tabela): relrowsecurity — policy em tabela com a RLS desligada não vale. Desde a 0215 nenhum requisito sai com presente NULL (coalesce) e execucao sem marcador é requisito mal declarado. Desde a 0216 confere também SECURITY DEFINER (tipo=definer, marcador sim|nao; o sim exige search_path fixo). Desde a 0216 o requisito de policy aceita `schema.tabela.policy` e um marcador que tem de constar na expressão da policy (é o que distingue a policy por mandato do using (true) de mesmo nome).';
 
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
@@ -980,8 +1664,8 @@ insert into instalacao_requisito
   ('fn_meus_casos', '0216', 'funcao', 'fn_meus_casos', null, null,
    'Toda policy por mandato chama; sem ela (ou sem EXECUTE) o portal inteiro leva "permission denied" ou zero linhas.',
    'bloqueante', 993),
-  ('fn_caso_id_do_nome', '0216', 'funcao', 'fn_caso_id_do_nome', null, null,
-   'fn_upsert_caso a chama; sem ela o não membro volta a criar mandato duplicado (ou a função morre).',
+  ('fn_caso_nome_existe', '0216', 'funcao', 'fn_caso_nome_existe', null, null,
+   'fn_upsert_caso e o gatilho de nome único a chamam; sem ela o não membro volta a criar mandato duplicado (ou a função morre).',
    'bloqueante', 994),
   ('fn_caso_da_chave', '0216', 'funcao', 'fn_caso_da_chave', null, null,
    'A policy do bucket documentos chama; sem ela ninguém lê o arquivo original.',
@@ -998,9 +1682,6 @@ insert into instalacao_requisito
   ('exec_meus_casos_authenticated', '0216', 'execucao', 'authenticated:fn_meus_casos', 'sim', null,
    'authenticated não executa fn_meus_casos: a policy por mandato (ou fn_upsert_caso) leva "permission denied" e a tela quebra.',
    'bloqueante', 999),
-  ('exec_caso_id_do_nome_authenticated', '0216', 'execucao', 'authenticated:fn_caso_id_do_nome', 'sim', null,
-   'authenticated não executa fn_caso_id_do_nome: a policy por mandato (ou fn_upsert_caso) leva "permission denied" e a tela quebra.',
-   'bloqueante', 1000),
   ('exec_caso_da_chave_authenticated', '0216', 'execucao', 'authenticated:fn_caso_da_chave', 'sim', null,
    'authenticated não executa fn_caso_da_chave: a policy por mandato (ou fn_upsert_caso) leva "permission denied" e a tela quebra.',
    'bloqueante', 1001),
@@ -1010,9 +1691,195 @@ insert into instalacao_requisito
   ('exec_exige_admin_authenticated', '0216', 'execucao', 'authenticated:fn_0216_exige_administrador', 'nao', null,
    'authenticated executa a guarda da 0216 (inofensiva, mas não é do portal).',
    'informativo', 1003),
-  ('upsert_caso_guarda_membro', '0216', 'corpo', 'fn_upsert_caso', 'fn_caso_id_do_nome', null,
+  ('upsert_caso_guarda_membro', '0216', 'corpo', 'fn_upsert_caso', 'fn_caso_nome_existe', null,
    'fn_upsert_caso com o corpo ANTERIOR à 0216: o não membro cria mandato duplicado com o nome de um existente (a RLS esconde o original).',
-   'bloqueante', 1004)
+   'bloqueante', 1009),
+  ('mudar_dial_recusa_sem_permissao', '0216', 'corpo', 'fn_mudar_dial', 'v_linhas', null,
+   'fn_mudar_dial sem a guarda de linhas: quem não é administrador "muda" o dial (a RLS recusa o UPDATE), a função grava o evento e devolve sucesso — uma trilha que afirma o contrário do estado.',
+   'bloqueante', 1010),
+  ('veredito_producao_guarda_membro', '0216', 'corpo', 'fn_veredito_producao', 'fn_eh_membro', null,
+   'fn_veredito_producao com o corpo ANTERIOR à 0216: definer sem a guarda de p_caso_id abriria o número de qualquer mandato.',
+   'bloqueante', 1011),
+  ('classe_contabil_guarda_membro', '0216', 'corpo', 'fn_classe_contabil_concordancia', 'fn_eh_membro', null,
+   'fn_classe_contabil_concordancia com o corpo ANTERIOR à 0216: definer sem a guarda de p_caso_id abriria o número de qualquer mandato.',
+   'bloqueante', 1012),
+  ('primeiro_administrador', '0216', 'comportamento', 'administrador', null, 1,
+   'A tabela administrador está VAZIA: a 0216 esconde de todos os usuários o mandato sem membro (o que o n8n cria nasce sem membro) e ninguém tem como atribuí-lo ou vê-lo. Rode no SQL Editor: select fn_administrador_definir(''<e-mail do dono>'', true); — comportamento que nenhum CI satisfaz, como custo_gravado_pelo_n8n. Lida como o chamador: quem não é administrador enxerga a tabela vazia pela RLS, então a conferência vale para o dono/CI (postgres), não para o authenticated.',
+   'bloqueante', 1013),
+  ('mandato_estagio_autonomia_write', '0216', 'policy', 'estagio_autonomia.estagio_autonomia_write', 'fn_eh_admin', null,
+   'Sem a escrita restrita ao administrador em estagio_autonomia (policy estagio_autonomia_write voltada a true) todo usuário logado altera o dial/catálogo sem passar por fn_mudar_dial: o teto de autonomia é doutrina.',
+   'bloqueante', 1014),
+  ('mandato_premissa_catalogo_write', '0216', 'policy', 'premissa_catalogo.premissa_catalogo_write', 'fn_eh_admin', null,
+   'Sem a escrita restrita ao administrador em premissa_catalogo (policy premissa_catalogo_write voltada a true) todo usuário logado altera o dial/catálogo sem passar por fn_mudar_dial: o teto de autonomia é doutrina.',
+   'bloqueante', 1015),
+  ('mandato_golden_criterio_write', '0216', 'policy', 'golden_criterio.golden_criterio_write', 'fn_eh_admin', null,
+   'Sem a escrita restrita ao administrador em golden_criterio (policy golden_criterio_write voltada a true) todo usuário logado altera o dial/catálogo sem passar por fn_mudar_dial: o teto de autonomia é doutrina.',
+   'bloqueante', 1016),
+  ('mandato_golden_rodada_insert', '0216', 'policy', 'golden_rodada.golden_rodada_insert', 'fn_eh_admin', null,
+   'Sem a escrita restrita ao administrador em golden_rodada (policy golden_rodada_insert voltada a true) todo usuário logado altera o dial/catálogo sem passar por fn_mudar_dial: o teto de autonomia é doutrina.',
+   'bloqueante', 1017),
+  ('mandato_golden_rodada_update', '0216', 'policy', 'golden_rodada.golden_rodada_update', 'fn_eh_admin', null,
+   'Sem a escrita restrita ao administrador em golden_rodada (policy golden_rodada_update voltada a true) todo usuário logado altera o dial/catálogo sem passar por fn_mudar_dial: o teto de autonomia é doutrina.',
+   'bloqueante', 1018),
+  ('mandato_execucao_falha_sem_caso', '0216', 'policy', 'execucao_falha.execucao_falha_por_mandato', 'IS NULL', null,
+   'execucao_falha_por_mandato sem o ramo de caso_id NULO: a falha de antes de o caso existir some para todos e o /api/intake/status volta ao "aguarde" eterno (0108).',
+   'bloqueante', 1019),
+  ('rls_arquivo_oficial_lancamento_mes', '0216', 'rls', 'arquivo_oficial_lancamento_mes', null, null,
+   'RLS DESLIGADA em arquivo_oficial_lancamento_mes: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1020),
+  ('rls_arquivo_oficial_registro', '0216', 'rls', 'arquivo_oficial_registro', null, null,
+   'RLS DESLIGADA em arquivo_oficial_registro: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1021),
+  ('rls_arquivo_oficial', '0216', 'rls', 'arquivo_oficial', null, null,
+   'RLS DESLIGADA em arquivo_oficial: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1022),
+  ('rls_campo_classe_override', '0216', 'rls', 'campo_classe_override', null, null,
+   'RLS DESLIGADA em campo_classe_override: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1023),
+  ('rls_campo_classe_sugerida', '0216', 'rls', 'campo_classe_sugerida', null, null,
+   'RLS DESLIGADA em campo_classe_sugerida: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1024),
+  ('rls_campo_extraido', '0216', 'rls', 'campo_extraido', null, null,
+   'RLS DESLIGADA em campo_extraido: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1025),
+  ('rls_caso_apresentacao_campo', '0216', 'rls', 'caso_apresentacao_campo', null, null,
+   'RLS DESLIGADA em caso_apresentacao_campo: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1026),
+  ('rls_caso_linha_premissa', '0216', 'rls', 'caso_linha_premissa', null, null,
+   'RLS DESLIGADA em caso_linha_premissa: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1027),
+  ('rls_caso_modelagem', '0216', 'rls', 'caso_modelagem', null, null,
+   'RLS DESLIGADA em caso_modelagem: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1028),
+  ('rls_caso_pergunta', '0216', 'rls', 'caso_pergunta', null, null,
+   'RLS DESLIGADA em caso_pergunta: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1029),
+  ('rls_caso_premissa', '0216', 'rls', 'caso_premissa', null, null,
+   'RLS DESLIGADA em caso_premissa: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1030),
+  ('rls_caso', '0216', 'rls', 'caso', null, null,
+   'RLS DESLIGADA em caso: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1031),
+  ('rls_checklist_item_status', '0216', 'rls', 'checklist_item_status', null, null,
+   'RLS DESLIGADA em checklist_item_status: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1032),
+  ('rls_controlador_vinculo', '0216', 'rls', 'controlador_vinculo', null, null,
+   'RLS DESLIGADA em controlador_vinculo: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1033),
+  ('rls_controlador', '0216', 'rls', 'controlador', null, null,
+   'RLS DESLIGADA em controlador: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1034),
+  ('rls_decisao', '0216', 'rls', 'decisao', null, null,
+   'RLS DESLIGADA em decisao: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1035),
+  ('rls_documento_fato', '0216', 'rls', 'documento_fato', null, null,
+   'RLS DESLIGADA em documento_fato: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1036),
+  ('rls_documento_versao', '0216', 'rls', 'documento_versao', null, null,
+   'RLS DESLIGADA em documento_versao: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1037),
+  ('rls_documento', '0216', 'rls', 'documento', null, null,
+   'RLS DESLIGADA em documento: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1038),
+  ('rls_entidade_controlador', '0216', 'rls', 'entidade_controlador', null, null,
+   'RLS DESLIGADA em entidade_controlador: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1039),
+  ('rls_entidade', '0216', 'rls', 'entidade', null, null,
+   'RLS DESLIGADA em entidade: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1040),
+  ('rls_evento_auditoria', '0216', 'rls', 'evento_auditoria', null, null,
+   'RLS DESLIGADA em evento_auditoria: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1041),
+  ('rls_execucao_falha', '0216', 'rls', 'execucao_falha', null, null,
+   'RLS DESLIGADA em execucao_falha: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1042),
+  ('rls_golden_campo', '0216', 'rls', 'golden_campo', null, null,
+   'RLS DESLIGADA em golden_campo: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1043),
+  ('rls_golden_documento', '0216', 'rls', 'golden_documento', null, null,
+   'RLS DESLIGADA em golden_documento: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1044),
+  ('rls_golden_rotulo', '0216', 'rls', 'golden_rotulo', null, null,
+   'RLS DESLIGADA em golden_rotulo: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1045),
+  ('rls_lote_execucao', '0216', 'rls', 'lote_execucao', null, null,
+   'RLS DESLIGADA em lote_execucao: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1046),
+  ('rls_pendencia', '0216', 'rls', 'pendencia', null, null,
+   'RLS DESLIGADA em pendencia: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1047),
+  ('rls_perimetro', '0216', 'rls', 'perimetro', null, null,
+   'RLS DESLIGADA em perimetro: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1048),
+  ('rls_periodo', '0216', 'rls', 'periodo', null, null,
+   'RLS DESLIGADA em periodo: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1049),
+  ('rls_reconciliacao', '0216', 'rls', 'reconciliacao', null, null,
+   'RLS DESLIGADA em reconciliacao: a policy por mandato continua no catálogo e não vale — todo usuário logado com GRANT lê e grava o mandato alheio nesta tabela, calado.',
+   'bloqueante', 1050),
+  ('rls_storage_objects', '0216', 'rls', 'storage.objects', null, null,
+   'RLS DESLIGADA em storage.objects: a policy do bucket documentos não vale e todo usuário logado baixa o arquivo original de qualquer mandato.',
+   'bloqueante', 1051),
+  ('rls_golden_criterio', '0216', 'rls', 'golden_criterio', null, null,
+   'RLS DESLIGADA em golden_criterio: as policies de escrita só do administrador não valem e todo usuário logado altera o dial/catálogo direto.',
+   'bloqueante', 1052),
+  ('rls_estagio_autonomia', '0216', 'rls', 'estagio_autonomia', null, null,
+   'RLS DESLIGADA em estagio_autonomia: as policies de escrita só do administrador não valem e todo usuário logado altera o dial/catálogo direto.',
+   'bloqueante', 1053),
+  ('rls_premissa_catalogo', '0216', 'rls', 'premissa_catalogo', null, null,
+   'RLS DESLIGADA em premissa_catalogo: as policies de escrita só do administrador não valem e todo usuário logado altera o dial/catálogo direto.',
+   'bloqueante', 1054),
+  ('rls_golden_rodada', '0216', 'rls', 'golden_rodada', null, null,
+   'RLS DESLIGADA em golden_rodada: as policies de escrita só do administrador não valem e todo usuário logado altera o dial/catálogo direto.',
+   'bloqueante', 1055),
+  ('gatilho_caso_nome_unico', '0216', 'gatilho', 'caso.trg_caso_nome_unico', null, null,
+   'Sem o gatilho (ou desabilitado) o não membro cria um segundo mandato com o nome de um existente (insert direto ou rename) e o n8n, que acha o caso pelo nome, pode gravar os documentos de um no outro.',
+   'bloqueante', 1056),
+  ('fn_trg_caso_nome_unico', '0216', 'funcao', 'fn_trg_caso_nome_unico', null, null,
+   'O gatilho de nome único chama; sem ela todo insert/rename de caso por um usuário logado falha.',
+   'bloqueante', 1057),
+  ('exec_caso_nome_existe_authenticated', '0216', 'execucao', 'authenticated:fn_caso_nome_existe', 'nao', null,
+   'authenticated executa fn_caso_nome_existe: oráculo de nomes — qualquer usuário logado pergunta se existe mandato "Projeto X" (em M&A o nome do alvo é informação privilegiada).',
+   'bloqueante', 1058),
+  ('definer_fn_dial_auto_promover', '0216', 'definer', 'fn_dial_auto_promover', 'sim', null,
+   'fn_dial_auto_promover deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1059),
+  ('definer_fn_veredito_producao', '0216', 'definer', 'fn_veredito_producao', 'sim', null,
+   'fn_veredito_producao deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1060),
+  ('definer_fn_classe_contabil_concordancia', '0216', 'definer', 'fn_classe_contabil_concordancia', 'sim', null,
+   'fn_classe_contabil_concordancia deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1061),
+  ('definer_fn_golden_cobertura', '0216', 'definer', 'fn_golden_cobertura', 'sim', null,
+   'fn_golden_cobertura deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1062),
+  ('definer_fn_falhas_abertas', '0216', 'definer', 'fn_falhas_abertas', 'sim', null,
+   'fn_falhas_abertas deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1063),
+  ('definer_fn_upsert_caso', '0216', 'definer', 'fn_upsert_caso', 'sim', null,
+   'fn_upsert_caso deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1064),
+  ('definer_fn_trg_caso_nome_unico', '0216', 'definer', 'fn_trg_caso_nome_unico', 'sim', null,
+   'fn_trg_caso_nome_unico deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1065),
+  ('definer_fn_caso_nome_existe', '0216', 'definer', 'fn_caso_nome_existe', 'sim', null,
+   'fn_caso_nome_existe deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1066),
+  ('definer_fn_meus_casos', '0216', 'definer', 'fn_meus_casos', 'sim', null,
+   'fn_meus_casos deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1067),
+  ('definer_fn_eh_admin', '0216', 'definer', 'fn_eh_admin', 'sim', null,
+   'fn_eh_admin deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1068),
+  ('definer_fn_eh_membro', '0216', 'definer', 'fn_eh_membro', 'sim', null,
+   'fn_eh_membro deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1069),
+  ('definer_fn_trg_caso_criador_membro', '0216', 'definer', 'fn_trg_caso_criador_membro', 'sim', null,
+   'fn_trg_caso_criador_membro deixou de ser SECURITY DEFINER com search_path fixo: com a RLS por mandato o resultado passa a depender de quem lê (o dial/agregado/falha/pertinência errado, sem erro) ou a função fica sequestrável.',
+   'bloqueante', 1070),
+  ('invoker_fn_mudar_dial', '0216', 'definer', 'fn_mudar_dial', 'nao', null,
+   'fn_mudar_dial virou SECURITY DEFINER: qualquer usuário logado muda o dial com os poderes do dono (o teto é doutrina; a escrita direta é só do administrador).',
+   'bloqueante', 1071)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
@@ -1020,7 +1887,7 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = '0216', revisado_em = current_date,
-       observacao = 'A 0216 troca as policies using (true) das tabelas de dado do cliente por policies por mandato (caso_membro/administrador da 0215), restringe o bucket documentos, dá caso_id ao evento_auditoria (gatilho + backfill) e reemite fn_upsert_caso com a recusa ao não membro. A sonda ganha 64 requisitos e o ramo policy passa a conferir a EXPRESSÃO da policy (marcador) e policies de storage.'
+       observacao = 'A 0216 troca as policies using (true) das tabelas de dado do cliente por policies por mandato (caso_membro/administrador da 0215), restringe o bucket documentos, dá caso_id ao evento_auditoria (gatilho + backfill) e reemite fn_upsert_caso com a recusa ao não membro. A sonda ganha 125 requisitos (RLS ligada, definer/invoker, policies por mandato e de escrita restrita, o primeiro administrador), o tipo definer, e o ramo policy passa a conferir a EXPRESSÃO da policy (marcador) e policies de storage.'
  where id = true;
 
 commit;

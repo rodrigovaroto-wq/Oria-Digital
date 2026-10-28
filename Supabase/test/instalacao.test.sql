@@ -337,9 +337,12 @@ begin
   select string_agg(chave, ', ' order by chave) into v_ausentes
     from fn_instalacao_conferir() where not presente;
 
+  -- DOIS requisitos de COMPORTAMENTO que nenhum CI satisfaz: o do n8n (o workflow reimportado) e, desde a 0216, o do
+  -- PRIMEIRO ADMINISTRADOR (`administrador` vazia: o dono ainda não rodou fn_administrador_definir; sem isso a restrição
+  -- por mandato esconde de todos o mandato sem membro). Ficam AUSENTES no replay de propósito: são o sinal positivo.
   perform teste_assert_inst(
-    coalesce(v_ausentes, '') = 'custo_gravado_pelo_n8n',
-    'num banco recém-migrado falta EXATAMENTE o requisito de comportamento do n8n',
+    coalesce(v_ausentes, '') = 'custo_gravado_pelo_n8n, primeiro_administrador',
+    'num banco recém-migrado faltam EXATAMENTE os dois requisitos de comportamento: o do n8n e o do primeiro administrador',
     format('ausentes: %s', coalesce(v_ausentes, '<nenhum>')));
 
   raise notice 'instalacao OK — catálogo conferido contra a realidade; sonda sobrevive ao objeto ausente; resumo fecha com a listagem; seed vazio distinguido de tabela ausente';

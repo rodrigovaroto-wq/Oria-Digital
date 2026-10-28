@@ -311,19 +311,21 @@ CREATE FUNCTION public.fn_0216_exige_administrador() RETURNS void
     LANGUAGE plpgsql
     AS $$
 declare
-  v_orfaos bigint;
+  v_ativos bigint;
 begin
   if exists (select 1 from administrador) then
     return;
   end if;
-  -- Fora da conta ficam as fixtures da sonda (0162 e 0164: "fixture da instalação, não é mandato real"): nascem
-  -- sem membro em TODO replay — medido em 27/10/2026, 2 casos no banco montado só pelas migrations — e a guarda
-  -- travaria o run.sh e o Verificação/run.mts por causa deles.
-  select count(*) into v_orfaos from caso c
-   where c.nome not like '%fixture da instalação, não é mandato real%'
-     and not exists (select 1 from caso_membro m where m.caso_id = c.id);
-  if v_orfaos > 0 then
-    raise exception '0216 recusada: % mandato(s) sem nenhum membro (criados pelo n8n, sem identidade) e ninguém é administrador — com a restrição por mandato ligada eles sumiriam para todos, sem erro. Rode ANTES, no SQL Editor: select fn_administrador_definir(''<seu e-mail>'', true);', v_orfaos
+  -- A GUARDA ANTERIOR olhava "caso sem nenhum membro" e NÃO PROTEGIA NADA NA ORDEM NORMAL: a 0215 dá membro de todo
+  -- caso existente a todo usuário ativo, então no dia de aplicar não há órfão — e o mandato que o n8n cria DEPOIS
+  -- nasce sem membro e sem ninguém que o enxergue. O que a 0216 estraga é "ninguém atribui nem vê": sem
+  -- administrador, a restrição liga e ninguém tem como corrigi-la sem SQL. Por isso a conta é de USUÁRIOS ATIVOS
+  -- (fn_usuarios_ativos, 0215): havendo gente para quem o mandato vai sumir, recusa. No replay (run.sh, e2e) as
+  -- migrations rodam sobre auth.users VAZIA — os usuários dos testes nascem depois —, então a contagem dá zero e
+  -- nada trava (medido em 27/10/2026: 0 usuários no banco montado só pelas migrations).
+  select count(*) into v_ativos from fn_usuarios_ativos();
+  if v_ativos > 0 then
+    raise exception '0216 recusada: ninguém é administrador e há % usuário(s) ativo(s) — com a restrição por mandato ligada o mandato novo (o que o n8n cria nasce sem membro) sumiria para todos e ninguém o atribuiria, sem erro. Rode ANTES, no SQL Editor: select fn_administrador_definir(''<seu e-mail>'', true);', v_ativos
       using errcode = '55000';
   end if;
 end;
@@ -333,7 +335,7 @@ $$;
 -- Name: FUNCTION fn_0216_exige_administrador(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_0216_exige_administrador() IS 'Guarda da 0216: levanta 55000 se administrador está vazia E existe caso sem membro. Só postgres/service_role. 0216.';
+COMMENT ON FUNCTION public.fn_0216_exige_administrador() IS 'Guarda da 0216: levanta 55000 se administrador está vazia E existe usuário ativo em auth.users (fn_usuarios_ativos). Só postgres/service_role. 0216.';
 
 --
 -- Name: fn_abrir_lote_execucao(uuid, text, jsonb); Type: FUNCTION; Schema: public; Owner: -
@@ -478,11 +480,23 @@ CREATE FUNCTION public.fn_administrador_definir(p_email text, p_ativo boolean) R
 declare
   v_id uuid;
   v_n  int;
+  v_achados int;
 begin
-  select id into v_id from auth.users where lower(email) = lower(p_email);
-  if v_id is null then
-    raise exception 'fn_administrador_definir: nenhum usuário com o e-mail %', p_email using errcode = 'P0002';
+  -- `if p_ativo` com nulo cai no ramo de REMOVER (if null não é verdadeiro): um chamador que passa nulo
+  -- despromoveria sem querer. Recusa antes de olhar o e-mail.
+  if p_ativo is null then
+    raise exception 'fn_administrador_definir: p_ativo é obrigatório (true promove, false remove)' using errcode = '22004';
   end if;
+  -- No Supabase real o e-mail pode repetir (conta com senha e conta SSO do mesmo endereço): `select ... into` sem
+  -- strict pegaria uma ao acaso e promoveria quem não se queria. Conta primeiro e recusa o ambíguo.
+  select count(*) into v_achados from auth.users where lower(email) = lower(p_email);
+  if v_achados = 0 then
+    raise exception 'fn_administrador_definir: nenhum usuário com o e-mail %', p_email using errcode = 'P0002';
+  elsif v_achados > 1 then
+    raise exception 'fn_administrador_definir: % usuários com o e-mail % (conta com senha e SSO?); remova a duplicata antes ou insira o uuid em administrador à mão', v_achados, p_email
+      using errcode = '21000';
+  end if;
+  select id into v_id from auth.users where lower(email) = lower(p_email);
   if p_ativo then
     insert into administrador (usuario_id, por) values (v_id, 'sql:' || current_user) on conflict do nothing;
   else
@@ -503,7 +517,7 @@ $$;
 -- Name: FUNCTION fn_administrador_definir(p_email text, p_ativo boolean); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_administrador_definir(p_email text, p_ativo boolean) IS 'Torna (p_ativo) ou deixa de tornar o usuário de auth.users com este e-mail administrador. Devolve false se nada mudou. Só postgres/service_role: o authenticated NÃO a executa (a sonda cobra isso, tipo=execucao). 0215.';
+COMMENT ON FUNCTION public.fn_administrador_definir(p_email text, p_ativo boolean) IS 'Torna (p_ativo) ou deixa de tornar o usuário de auth.users com este e-mail administrador. Devolve false se nada mudou. p_ativo nulo: 22004; e-mail inexistente: P0002; e-mail em mais de um usuário: 21000. Só postgres/service_role: o authenticated NÃO a executa (a sonda cobra isso, tipo=execucao). 0215.';
 
 --
 -- Name: fn_ano4(text); Type: FUNCTION; Schema: public; Owner: -
@@ -1095,23 +1109,6 @@ $_$;
 COMMENT ON FUNCTION public.fn_caso_da_referencia(p_ref text) IS 'O caso de uma entidade_ref de evento_auditoria, pelo FK (nulo se a forma não tem caso). SECURITY INVOKER: a RLS vale e o não membro deriva nulo. 0216.';
 
 --
--- Name: fn_caso_id_do_nome(text); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.fn_caso_id_do_nome(p_nome text) RETURNS uuid
-    LANGUAGE sql STABLE SECURITY DEFINER
-    SET search_path TO 'public', 'pg_temp'
-    AS $$
-  select id from public.caso where nome = p_nome limit 1;
-$$;
-
---
--- Name: FUNCTION fn_caso_id_do_nome(p_nome text); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.fn_caso_id_do_nome(p_nome text) IS 'Id do caso com este nome, sem passar pela RLS (só devolve o id). Existe para fn_upsert_caso não criar duplicado quando o chamador não é membro. 0216.';
-
---
 -- Name: fn_caso_membro_backfill_0215(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1119,12 +1116,27 @@ CREATE FUNCTION public.fn_caso_membro_backfill_0215() RETURNS bigint
     LANGUAGE plpgsql
     AS $$
 declare
-  v_n bigint;
+  v_n        bigint;
+  v_esperado bigint;
 begin
-  insert into caso_membro (caso_id, usuario_id, por)
-    select c.id, u.id, 'migracao:0215' from caso c cross join auth.users u
-    on conflict do nothing;
-  get diagnostics v_n = row_count;
+  -- UM comando só: o CTE `elegiveis` (o predicado mora em fn_usuarios_ativos) serve ao insert e à conta do esperado; os `select` finais veem o snapshot de ANTES do insert, então `existentes` são os pares que já
+  -- estavam lá. esperado = elegíveis x casos - existentes.
+  with elegiveis as materialized (
+    select a as id from fn_usuarios_ativos() a
+  ), inseridos as (
+    insert into caso_membro (caso_id, usuario_id, por)
+      select c.id, e.id, 'migracao:0215' from caso c cross join elegiveis e
+      on conflict do nothing
+      returning 1
+  )
+  select (select count(*) from inseridos),
+         (select count(*) from elegiveis) * (select count(*) from caso)
+           - (select count(*) from caso_membro m join elegiveis e on e.id = m.usuario_id)
+    into v_n, v_esperado;
+  if v_n <> v_esperado then
+    raise exception 'fn_caso_membro_backfill_0215: inseriu % linha(s) e o esperado era % (usuários ativos x casos, menos o que já existia) — algo descartou linhas (gatilho? RLS?)', v_n, v_esperado
+      using errcode = '55000';
+  end if;
   return v_n;
 end;
 $$;
@@ -1133,14 +1145,32 @@ $$;
 -- Name: FUNCTION fn_caso_membro_backfill_0215(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_caso_membro_backfill_0215() IS 'A transição da 0215: todo usuário de auth.users vira membro de todo caso existente (por = migracao:0215). Idempotente. Só postgres/service_role — chamá-la de novo concede tudo a todos.';
+COMMENT ON FUNCTION public.fn_caso_membro_backfill_0215() IS 'A transição da 0215: todo usuário ATIVO de auth.users (e-mail confirmado, não banido, não apagado, não anônimo) vira membro de todo caso existente (por = migracao:0215). Idempotente. Confere o próprio resultado e levanta 55000 se o inserido difere de ativos x casos menos o que já existia. Só postgres/service_role — chamá-la de novo concede tudo a todos os ativos.';
+
+--
+-- Name: fn_caso_nome_existe(text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_caso_nome_existe(p_nome text, p_exceto uuid DEFAULT NULL::uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select exists (select 1 from public.caso where nome = p_nome and (p_exceto is null or id <> p_exceto));
+$$;
+
+--
+-- Name: FUNCTION fn_caso_nome_existe(p_nome text, p_exceto uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_caso_nome_existe(p_nome text, p_exceto uuid) IS 'Existe mandato com este nome, sem passar pela RLS? Só para dentro do banco (fn_upsert_caso e o gatilho de nome único): o authenticated NÃO executa — seria oráculo de nomes. 0216.';
 
 --
 -- Name: fn_classe_contabil_concordancia(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
 CREATE FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
   with par as (
     select s.classe_codigo as sugerida, o.classe_final as humana, s.rubrica_id
@@ -1153,7 +1183,7 @@ CREATE FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid DEFAULT NU
     join campo_extraido ce on ce.id = s.campo_extraido_id
     join documento_versao dv on dv.id = ce.documento_versao_id
     join documento d on d.id = dv.documento_id
-    where (p_caso_id is null or d.caso_id = p_caso_id)
+    where (p_caso_id is null or (d.caso_id = p_caso_id and (auth.uid() is null or fn_eh_membro(p_caso_id))))
       and s.criado_em = (select max(s2.criado_em) from campo_classe_sugerida s2
                           where s2.campo_extraido_id = s.campo_extraido_id)
   ),
@@ -1163,7 +1193,7 @@ CREATE FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid DEFAULT NU
     join campo_extraido ce on ce.id = s.campo_extraido_id
     join documento_versao dv on dv.id = ce.documento_versao_id
     join documento d on d.id = dv.documento_id
-    where (p_caso_id is null or d.caso_id = p_caso_id)
+    where (p_caso_id is null or (d.caso_id = p_caso_id and (auth.uid() is null or fn_eh_membro(p_caso_id))))
       and not exists (select 1 from campo_classe_override o
                        where o.campo_extraido_id = s.campo_extraido_id)
   )
@@ -2828,7 +2858,8 @@ $$;
 --
 
 CREATE FUNCTION public.fn_dial_auto_promover(p_estagio text DEFAULT NULL::text) RETURNS jsonb
-    LANGUAGE plpgsql
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 declare
   r         record;
@@ -4152,16 +4183,30 @@ COMMENT ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) IS 'Exigências
 --
 
 CREATE FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) RETURNS TABLE(id uuid, etapa text, mensagem text, criado_em timestamp with time zone)
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
   select f.id, f.etapa, f.mensagem, f.criado_em
   from execucao_falha f
   where f.visto_em is null
     and f.criado_em >= p_desde
-    and (lower(f.caso_nome) = lower(trim(p_caso_nome))
-         or f.caso_id in (select c.id from caso c where lower(c.nome) = lower(trim(p_caso_nome))))
+    and (
+         -- falha de ANTES de o caso existir (caso_id nulo): quem a procura pelo NOME a recebe — é o que tira o
+         -- /api/intake/status do "aguarde" eterno (0108). Ninguém é membro de um caso que ainda não existe.
+         (f.caso_id is null and lower(f.caso_nome) = lower(trim(p_caso_nome)))
+         -- falha de caso que existe: só quem é membro dele (a RLS valia aqui quando a função era invoker)
+         or (f.caso_id in (select fn_meus_casos())
+             and (lower(f.caso_nome) = lower(trim(p_caso_nome))
+                  or f.caso_id in (select c.id from caso c where lower(c.nome) = lower(trim(p_caso_nome)))))
+        )
   order by f.criado_em desc;
 $$;
+
+--
+-- Name: FUNCTION fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) IS 'Falhas de execução ainda não vistas para este nome de mandato desde p_desde (0108). SECURITY DEFINER (0216): a falha de caso_id NULO (antes de o caso existir) é entregue a quem a procura pelo nome; a de caso existente, só ao membro. O nome é o que identifica o arquivo que o usuário acabou de subir: quem adivinha o nome lê as falhas sem caso dele — decisão consciente, o /api/intake/status não tem outra identidade.';
 
 --
 -- Name: fn_familia_da_secao(text); Type: FUNCTION; Schema: public; Owner: -
@@ -4801,7 +4846,8 @@ COMMENT ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem publi
 --
 
 CREATE FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem DEFAULT 'real'::public.golden_origem) RETURNS TABLE(tipo text, granularidade public.granularidade, n_documentos integer, n_dois_rotuladores integer, estratos text[], n_minimo integer, atinge_minimo boolean)
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
   with alvo as (
     -- Um n_minimo por rodada: o critério é por ESTÁGIO, e a cobertura por tipo é
@@ -6085,6 +6131,9 @@ declare
   v_privs      text[];
   v_kinds      "char"[];
   v_lista      text;
+  v_rls        boolean;
+  v_def        boolean;
+  v_sp         boolean;
   v_polnome    name;
   v_polexpr    text;
 begin
@@ -6280,11 +6329,15 @@ begin
     elsif r.tipo = 'execucao' then
       -- 0215: EXECUTE de função para um papel. `objeto` = 'papel:nome_da_funcao' (sem argumentos: o nome tem de ser
       -- único) e `marcador` = 'sim' (o papel TEM de executar) ou 'nao' (NÃO pode). O 'nao' existe por
-      -- fn_administrador_definir: função em public nasce executável por PUBLIC no Postgres, e um revoke esquecido
-      -- deixa qualquer usuário logado se promover administrador — nenhum outro tipo vê isso, porque a função
-      -- existe e o corpo está certo. `has_function_privilege` enxerga a concessão a PUBLIC, que é a que importa.
+      -- fn_administrador_definir: função em public nasce executável por PUBLIC no Postgres, e o revoke esquecido
+      -- tira a primeira barreira de privilégio de promover administrador (DEFESA EM PROFUNDIDADE: hoje a função é
+      -- INVOKER e o authenticated levaria 42501 em auth.users e em administrador de qualquer jeito) — nenhum outro
+      -- tipo vê isso, porque a função existe e o corpo está certo. `has_function_privilege` enxerga a concessão a
+      -- PUBLIC, que é a que importa.
+      -- `marcador` NULO: `null not in (...)` é NULL, o `if` cai adiante e `... = (null = 'sim')` dá NULL — e
+      -- presente NULL some de `where not presente` (regra 7). Requisito sem marcador é requisito mal declarado.
       v_role := split_part(r.objeto, ':', 1);
-      if r.marcador not in ('sim', 'nao') then
+      if r.marcador is null or r.marcador not in ('sim', 'nao') then
         v_ok  := false;
         v_det := 'requisito mal declarado: marcador tem de ser sim ou nao';
       elsif not exists (select 1 from pg_roles where rolname = v_role) then
@@ -6306,6 +6359,56 @@ begin
                         when r.marcador = 'sim' then format('%s NÃO executa a função (o portal leva "permission denied")', v_role)
                         else format('%s EXECUTA a função e não podia (revoke esquecido)', v_role) end;
         end if;
+      end if;
+
+    elsif r.tipo = 'definer' then
+      -- 0216: SECURITY DEFINER da função (pg_proc.prosecdef). `objeto` = nome da função (único) e `marcador` = 'sim'
+      -- (TEM de ser definer, E com search_path fixo em proconfig — definer sem search_path é sequestrável) ou 'nao'
+      -- (TEM de ser invoker). O 'sim' existe porque o veredito global do dial, os agregados de /autonomia e as falhas
+      -- sem caso só valem se NÃO dependem de quem lê (a RLS por mandato daria o número do recorte, calada); o 'nao'
+      -- existe por fn_mudar_dial: definer deixaria qualquer usuário mudar o dial. O tipo `corpo` não vê isso — ALTER
+      -- FUNCTION ... SECURITY DEFINER não muda uma letra do corpo.
+      if r.marcador is null or r.marcador not in ('sim', 'nao') then
+        v_ok  := false;
+        v_det := 'requisito mal declarado: marcador tem de ser sim ou nao';
+      else
+        begin
+          v_proc := to_regproc('public.' || r.objeto);
+        exception when others then
+          v_proc := null;
+          v_det  := 'mais de uma assinatura com este nome — o requisito precisa de um nome único';
+        end;
+        if v_proc is null then
+          v_ok  := false;
+          v_det := coalesce(v_det, 'a função nem existe');
+        else
+          select p.prosecdef, coalesce(exists (select 1 from unnest(p.proconfig) c where c like 'search_path=%'), false)
+            into v_def, v_sp from pg_proc p where p.oid = v_proc::oid;
+          v_ok  := case when r.marcador = 'sim' then v_def and v_sp else not v_def end;
+          v_det := case when v_ok then format('%s (%s)', case when v_def then 'SECURITY DEFINER' else 'INVOKER' end,
+                                              case when v_sp then 'search_path fixo' else 'sem search_path' end)
+                        when r.marcador = 'sim' then format('a função é %s%s: o resultado passa a depender de quem lê (RLS) ou fica sequestrável',
+                                                            case when v_def then 'DEFINER' else 'INVOKER' end,
+                                                            case when v_def and not v_sp then ' SEM search_path fixo' else '' end)
+                        else 'a função é SECURITY DEFINER e tinha de ser INVOKER (qualquer usuário a usaria com os poderes do dono)' end;
+        end if;
+      end if;
+
+    elsif r.tipo = 'rls' then
+      -- 0215: RLS LIGADA (pg_class.relrowsecurity). `objeto` = tabela de public, ou 'schema.tabela' (storage.objects).
+      -- A policy `por mandato` existe no catálogo mesmo com a RLS DESLIGADA e então NÃO vale: o `where` dela some, o
+      -- acesso passa a ser só o GRANT — e no projeto existente o default privilege ainda concede ALL a anon e
+      -- authenticated até 30/10/2026. O tipo `policy` não vê isso (a policy está lá); este vê. Tabela ausente é
+      -- `presente = false` com o detalhe, nunca exceção.
+      v_alvo := to_regclass(case when position('.' in r.objeto) > 0 then r.objeto else 'public.' || r.objeto end);
+      if v_alvo is null then
+        v_ok  := false;
+        v_det := 'a tabela nem existe';
+      else
+        select c.relrowsecurity into v_rls from pg_class c where c.oid = v_alvo;
+        v_ok  := coalesce(v_rls, false);
+        v_det := case when v_ok then 'RLS ligada'
+                      else 'RLS DESLIGADA: as policies existem no catálogo e o Postgres não as aplica — o acesso passa a ser só o GRANT' end;
       end if;
 
     elsif r.tipo in ('seed', 'comportamento') then
@@ -6335,7 +6438,8 @@ begin
       end if;
     end if;
 
-    return query select r.chave, r.migration, r.tipo, r.objeto, v_ok, v_det,
+    -- Nenhum requisito pode sair NULL: `presente` NULL some de `where not presente`, que é como a sonda é lida.
+    return query select r.chave, r.migration, r.tipo, r.objeto, coalesce(v_ok, false), v_det,
                         r.porque, r.severidade;
   end loop;
 end;
@@ -6345,7 +6449,7 @@ $$;
 -- Name: FUNCTION fn_instalacao_conferir(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0215 confere também EXECUÇÃO de função (tipo=execucao, objeto papel:funcao, marcador sim|nao): has_function_privilege, que enxerga o PUBLIC — é o que cobra o revoke de fn_administrador_definir. Desde a 0216 o requisito de policy aceita `schema.tabela.policy` e um marcador que tem de constar na expressão da policy (é o que distingue a policy por mandato do using (true) de mesmo nome).';
+COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0215 confere também EXECUÇÃO de função (tipo=execucao, objeto papel:funcao, marcador sim|nao): has_function_privilege, que enxerga o PUBLIC — é a primeira barreira de privilégio de fn_administrador_definir (defesa em profundidade). Desde a 0215 confere também RLS LIGADA (tipo=rls, objeto tabela ou schema.tabela): relrowsecurity — policy em tabela com a RLS desligada não vale. Desde a 0215 nenhum requisito sai com presente NULL (coalesce) e execucao sem marcador é requisito mal declarado. Desde a 0216 confere também SECURITY DEFINER (tipo=definer, marcador sim|nao; o sim exige search_path fixo). Desde a 0216 o requisito de policy aceita `schema.tabela.policy` e um marcador que tem de constar na expressão da policy (é o que distingue a policy por mandato do using (true) de mesmo nome).';
 
 --
 -- Name: fn_instalacao_resumo(); Type: FUNCTION; Schema: public; Owner: -
@@ -7174,6 +7278,7 @@ declare
   v_base      text;
   v_resumo    jsonb;
   v_freia     boolean;
+  v_linhas    int;
   v_mede      boolean := false;   -- esta chamada produziu base MEDIDA nova?
 begin
   select to_jsonb(ea), ea.teto, ea.nivel_atual, ea.natureza
@@ -7288,6 +7393,13 @@ begin
         atualizado_por = p_autor,
         atualizado_em = now()
   where estagio = p_estagio;
+  -- 0216: o estágio existe (checado acima); zero linhas aqui é a RLS recusando o UPDATE a quem não é administrador. Sem
+  -- esta guarda a função seguia, gravava o evento `mudanca_dial` e devolvia sucesso — um dial que "mudou" sem mudar,
+  -- e uma trilha que afirma o contrário do estado.
+  get diagnostics v_linhas = row_count;
+  if v_linhas = 0 then
+    raise exception 'fn_mudar_dial: sem permissão para alterar o dial (só o administrador altera estagio_autonomia)' using errcode = '42501';
+  end if;
 
   if v_freia then
     insert into evento_auditoria (ator, acao, entidade_ref, depois)
@@ -14801,6 +14913,30 @@ $$;
 COMMENT ON FUNCTION public.fn_trg_caso_criador_membro() IS 'Gatilho de caso (AFTER INSERT): o usuário do jwt que cria o mandato vira membro dele. auth.uid() nulo (n8n/service_role) => nasce sem membro. SECURITY DEFINER pelo motivo no cabeçalho da 0215.';
 
 --
+-- Name: fn_trg_caso_nome_unico(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_caso_nome_unico() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if auth.uid() is not null
+     and (tg_op = 'INSERT' or new.nome is distinct from old.nome)
+     and fn_caso_nome_existe(new.nome, case when tg_op = 'UPDATE' then new.id end) then
+    raise exception 'já existe um mandato com este nome; use outro ou peça acesso ao administrador' using errcode = '23505';
+  end if;
+  return new;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_trg_caso_nome_unico(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_trg_caso_nome_unico() IS 'Gatilho de caso (BEFORE INSERT e UPDATE OF nome): com identidade (auth.uid() não nulo), recusa (23505) nome já usado por outro mandato. Sem unique no schema (decisão do dono pendente). 0216.';
+
+--
 -- Name: fn_trg_caso_pergunta_so_reaponta(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -15042,7 +15178,8 @@ COMMENT ON FUNCTION public.fn_unidade_predominante(p_documento_versao_id uuid) I
 --
 
 CREATE FUNCTION public.fn_upsert_caso(p_nome text, p_ator text DEFAULT 'sistema:n8n'::text) RETURNS uuid
-    LANGUAGE plpgsql
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 declare
   v_id uuid;
@@ -15050,11 +15187,15 @@ begin
   if p_ator not in ('sistema:n8n', 'portal:navegador') then
     raise exception 'fn_upsert_caso: ator % fora da lista (sistema:n8n, portal:navegador)', p_ator;
   end if;
-  select id into v_id from caso where nome = p_nome limit 1;
+  select id into v_id from caso
+   where nome = p_nome and (auth.uid() is null or id in (select fn_meus_casos()))
+   limit 1;
   if v_id is null then
-    if auth.uid() is not null and fn_caso_id_do_nome(p_nome) is not null then
-      raise exception 'fn_upsert_caso: o mandato "%" existe e você não é membro; peça acesso ao administrador', p_nome
-        using errcode = '42501';
+    if auth.uid() is not null and fn_caso_nome_existe(p_nome, null) then
+      insert into evento_auditoria (ator, acao, entidade_ref, depois)
+        values ('usuario:' || auth.uid(), 'caso_acesso_recusado', 'caso_nome:' || p_nome,
+                jsonb_build_object('via', p_ator));
+      return null;
     end if;
     v_id := gen_random_uuid();
     insert into caso (id, nome) values (v_id, p_nome);
@@ -15064,6 +15205,12 @@ begin
   return v_id;
 end;
 $$;
+
+--
+-- Name: FUNCTION fn_upsert_caso(p_nome text, p_ator text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) IS 'Reusa o mandato pelo nome exato ENTRE OS QUE O CHAMADOR ENXERGA (fn_meus_casos; sem identidade — n8n — vê todos) ou cria. Nome de mandato alheio: NÃO cria duplicado, devolve NULL e grava caso_acesso_recusado (uma exceção desfaria o rastro). SECURITY DEFINER com search_path fixo. 0216 (sobre a 0207).';
 
 --
 -- Name: fn_upsert_entidade(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -15322,6 +15469,26 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_upsert_periodo(p_caso_id uuid, p_tipo text, p_ref text) IS 'Acha ou cria o período casando pela forma canônica (0030). Impede que 2025 e 12M25 virem dois exercícios.';
+
+--
+-- Name: fn_usuarios_ativos(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_usuarios_ativos() RETURNS SETOF uuid
+    LANGUAGE sql STABLE
+    AS $$
+  select u.id from auth.users u
+   where u.email_confirmed_at is not null
+     and (u.banned_until is null or u.banned_until < now())
+     and u.deleted_at is null
+     and coalesce(u.is_anonymous, false) = false;
+$$;
+
+--
+-- Name: FUNCTION fn_usuarios_ativos(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_usuarios_ativos() IS 'Ids dos usuários ATIVOS de auth.users: e-mail confirmado, não banido (banned_until nulo ou vencido), não apagado (deleted_at) e não anônimo (is_anonymous). Base da transição da 0215 e da guarda da 0216. Só postgres/service_role. 0215.';
 
 --
 -- Name: campo_extraido; Type: TABLE; Schema: public; Owner: -
@@ -15678,7 +15845,8 @@ COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) I
 --
 
 CREATE FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
-    LANGUAGE plpgsql STABLE
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 declare
   v_natureza  text;
@@ -15691,6 +15859,13 @@ declare
   v_falhas    text[]  := '{}';
   v_delegado  jsonb;
 begin
+  -- 0216: a função é SECURITY DEFINER para o veredito GLOBAL (p_caso_id nulo) ser o mesmo para todo chamador — antes,
+  -- com a RLS por mandato, ele era calculado só sobre os mandatos de QUEM DISPARAVA, e fn_mudar_dial mudava o estágio
+  -- para TODOS com base nesse recorte. Com p_caso_id, só o membro (ou o administrador) pergunta: sem esta guarda o
+  -- definer abriria o número de qualquer mandato.
+  if p_caso_id is not null and auth.uid() is not null and not fn_eh_membro(p_caso_id) then
+    raise exception 'fn_veredito_producao: o mandato não existe ou você não é membro' using errcode = '42501';
+  end if;
   select natureza into v_natureza from estagio_autonomia where estagio = p_estagio;
   if v_natureza is null then
     return jsonb_build_object(
@@ -16223,7 +16398,7 @@ CREATE TABLE public.caso_membro (
 -- Name: TABLE caso_membro; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.caso_membro IS 'Quem trabalha no mandato (0215, decisão D7). `por` diz de onde veio a linha: usuario:<uuid> (administrador atribuiu), criador (gatilho de caso) ou migracao:0215 (a transição, todo usuário x todo caso).';
+COMMENT ON TABLE public.caso_membro IS 'Quem trabalha no mandato (0215, decisão D7). `por` diz de onde veio a linha: usuario:<uuid> (administrador atribuiu), criador (gatilho de caso) ou migracao:0215 (a transição, todo usuário ativo x todo caso).';
 
 --
 -- Name: caso_modelagem; Type: TABLE; Schema: public; Owner: -
@@ -16862,7 +17037,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'execucao'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'execucao'::text, 'rls'::text, 'definer'::text])))
 );
 
 --
@@ -18293,6 +18468,12 @@ CREATE TRIGGER trg_auto_promover_dial AFTER INSERT ON public.decisao FOR EACH RO
 CREATE TRIGGER trg_caso_criador_membro AFTER INSERT ON public.caso FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_criador_membro();
 
 --
+-- Name: caso trg_caso_nome_unico; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_nome_unico BEFORE INSERT OR UPDATE OF nome ON public.caso FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_nome_unico();
+
+--
 -- Name: caso_pergunta trg_caso_pergunta_reaponta_evento; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -18951,15 +19132,17 @@ ALTER TABLE public.campo_classe_override ENABLE ROW LEVEL SECURITY;
 -- Name: campo_classe_override campo_classe_override_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_classe_override_insert ON public.campo_classe_override FOR INSERT TO authenticated WITH CHECK ((campo_extraido_id IN ( SELECT campo_extraido.id
-   FROM public.campo_extraido)));
+CREATE POLICY campo_classe_override_insert ON public.campo_classe_override FOR INSERT TO authenticated WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.campo_extraido ce
+  WHERE (ce.id = campo_classe_override.campo_extraido_id))));
 
 --
 -- Name: campo_classe_override campo_classe_override_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_classe_override_read ON public.campo_classe_override FOR SELECT TO authenticated USING ((campo_extraido_id IN ( SELECT campo_extraido.id
-   FROM public.campo_extraido)));
+CREATE POLICY campo_classe_override_read ON public.campo_classe_override FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.campo_extraido ce
+  WHERE (ce.id = campo_classe_override.campo_extraido_id))));
 
 --
 -- Name: campo_classe_sugerida; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18971,15 +19154,17 @@ ALTER TABLE public.campo_classe_sugerida ENABLE ROW LEVEL SECURITY;
 -- Name: campo_classe_sugerida campo_classe_sugerida_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_classe_sugerida_insert ON public.campo_classe_sugerida FOR INSERT TO authenticated WITH CHECK ((campo_extraido_id IN ( SELECT campo_extraido.id
-   FROM public.campo_extraido)));
+CREATE POLICY campo_classe_sugerida_insert ON public.campo_classe_sugerida FOR INSERT TO authenticated WITH CHECK ((EXISTS ( SELECT 1
+   FROM public.campo_extraido ce
+  WHERE (ce.id = campo_classe_sugerida.campo_extraido_id))));
 
 --
 -- Name: campo_classe_sugerida campo_classe_sugerida_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_classe_sugerida_read ON public.campo_classe_sugerida FOR SELECT TO authenticated USING ((campo_extraido_id IN ( SELECT campo_extraido.id
-   FROM public.campo_extraido)));
+CREATE POLICY campo_classe_sugerida_read ON public.campo_classe_sugerida FOR SELECT TO authenticated USING ((EXISTS ( SELECT 1
+   FROM public.campo_extraido ce
+  WHERE (ce.id = campo_classe_sugerida.campo_extraido_id))));
 
 --
 -- Name: campo_extraido; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19284,10 +19469,16 @@ CREATE POLICY entidade_por_mandato ON public.entidade TO authenticated USING ((c
 ALTER TABLE public.estagio_autonomia ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: estagio_autonomia estagio_autonomia_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: estagio_autonomia estagio_autonomia_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY estagio_autonomia_authenticated_all ON public.estagio_autonomia TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY estagio_autonomia_read ON public.estagio_autonomia FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: estagio_autonomia estagio_autonomia_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY estagio_autonomia_write ON public.estagio_autonomia TO authenticated USING (public.fn_eh_admin()) WITH CHECK (public.fn_eh_admin());
 
 --
 -- Name: evento_auditoria; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19317,7 +19508,7 @@ ALTER TABLE public.execucao_falha ENABLE ROW LEVEL SECURITY;
 -- Name: execucao_falha execucao_falha_por_mandato; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY execucao_falha_por_mandato ON public.execucao_falha TO authenticated USING ((caso_id IN ( SELECT public.fn_meus_casos() AS fn_meus_casos))) WITH CHECK ((caso_id IN ( SELECT public.fn_meus_casos() AS fn_meus_casos)));
+CREATE POLICY execucao_falha_por_mandato ON public.execucao_falha TO authenticated USING (((caso_id IN ( SELECT public.fn_meus_casos() AS fn_meus_casos)) OR ((caso_id IS NULL) AND public.fn_eh_admin()))) WITH CHECK (((caso_id IN ( SELECT public.fn_meus_casos() AS fn_meus_casos)) OR ((caso_id IS NULL) AND public.fn_eh_admin())));
 
 --
 -- Name: fato_tipo_catalogo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19352,6 +19543,24 @@ CREATE POLICY golden_campo_read ON public.golden_campo FOR SELECT TO authenticat
    FROM public.documento)));
 
 --
+-- Name: golden_criterio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.golden_criterio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: golden_criterio golden_criterio_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY golden_criterio_read ON public.golden_criterio FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: golden_criterio golden_criterio_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY golden_criterio_write ON public.golden_criterio TO authenticated USING (public.fn_eh_admin()) WITH CHECK (public.fn_eh_admin());
+
+--
 -- Name: golden_documento; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -19381,7 +19590,7 @@ ALTER TABLE public.golden_rodada ENABLE ROW LEVEL SECURITY;
 -- Name: golden_rodada golden_rodada_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_rodada_insert ON public.golden_rodada FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY golden_rodada_insert ON public.golden_rodada FOR INSERT TO authenticated WITH CHECK (public.fn_eh_admin());
 
 --
 -- Name: golden_rodada golden_rodada_read; Type: POLICY; Schema: public; Owner: -
@@ -19393,7 +19602,7 @@ CREATE POLICY golden_rodada_read ON public.golden_rodada FOR SELECT TO authentic
 -- Name: golden_rodada golden_rodada_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_rodada_update ON public.golden_rodada FOR UPDATE TO authenticated USING (true);
+CREATE POLICY golden_rodada_update ON public.golden_rodada FOR UPDATE TO authenticated USING (public.fn_eh_admin()) WITH CHECK (public.fn_eh_admin());
 
 --
 -- Name: golden_rotulo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19554,10 +19763,16 @@ CREATE POLICY periodo_por_mandato ON public.periodo TO authenticated USING ((cas
 ALTER TABLE public.premissa_catalogo ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: premissa_catalogo premissa_catalogo_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: premissa_catalogo premissa_catalogo_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY premissa_catalogo_authenticated_all ON public.premissa_catalogo TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY premissa_catalogo_read ON public.premissa_catalogo FOR SELECT TO authenticated USING (true);
+
+--
+-- Name: premissa_catalogo premissa_catalogo_write; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY premissa_catalogo_write ON public.premissa_catalogo TO authenticated USING (public.fn_eh_admin()) WITH CHECK (public.fn_eh_admin());
 
 --
 -- Name: reconciliacao; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19742,14 +19957,6 @@ GRANT ALL ON FUNCTION public.fn_caso_da_referencia(p_ref text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_caso_da_referencia(p_ref text) TO service_role;
 
 --
--- Name: FUNCTION fn_caso_id_do_nome(p_nome text); Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON FUNCTION public.fn_caso_id_do_nome(p_nome text) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_caso_id_do_nome(p_nome text) TO authenticated;
-GRANT ALL ON FUNCTION public.fn_caso_id_do_nome(p_nome text) TO service_role;
-
---
 -- Name: FUNCTION fn_caso_membro_backfill_0215(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -19757,10 +19964,19 @@ REVOKE ALL ON FUNCTION public.fn_caso_membro_backfill_0215() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_caso_membro_backfill_0215() TO service_role;
 
 --
+-- Name: FUNCTION fn_caso_nome_existe(p_nome text, p_exceto uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_caso_nome_existe(p_nome text, p_exceto uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_caso_nome_existe(p_nome text, p_exceto uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_classe_contabil_concordancia(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_classe_contabil_do_campo(p_campo_extraido_id uuid); Type: ACL; Schema: public; Owner: -
@@ -19904,7 +20120,9 @@ GRANT ALL ON FUNCTION public.fn_dial(p_estagio text) TO authenticated;
 -- Name: FUNCTION fn_dial_auto_promover(p_estagio text); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_dial_auto_promover(p_estagio text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_dial_auto_promover(p_estagio text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_dial_auto_promover(p_estagio text) TO service_role;
 
 --
 -- Name: FUNCTION fn_dial_influencia(p_estagio text); Type: ACL; Schema: public; Owner: -
@@ -20064,7 +20282,9 @@ GRANT ALL ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) TO authentica
 -- Name: FUNCTION fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) TO service_role;
 
 --
 -- Name: FUNCTION fn_familia_da_secao(p_secao text); Type: ACL; Schema: public; Owner: -
@@ -20124,7 +20344,9 @@ GRANT ALL ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem pub
 -- Name: FUNCTION fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) TO service_role;
 
 --
 -- Name: FUNCTION fn_golden_congelar(p_rodada uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -20718,6 +20940,12 @@ GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO authenticate
 REVOKE ALL ON FUNCTION public.fn_trg_caso_criador_membro() FROM PUBLIC;
 
 --
+-- Name: FUNCTION fn_trg_caso_nome_unico(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_trg_caso_nome_unico() FROM PUBLIC;
+
+--
 -- Name: FUNCTION fn_trg_evento_caso_id(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -20727,7 +20955,16 @@ REVOKE ALL ON FUNCTION public.fn_trg_evento_caso_id() FROM PUBLIC;
 -- Name: FUNCTION fn_upsert_caso(p_nome text, p_ator text); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) TO service_role;
+
+--
+-- Name: FUNCTION fn_usuarios_ativos(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_usuarios_ativos() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_usuarios_ativos() TO service_role;
 
 --
 -- Name: TABLE campo_extraido; Type: ACL; Schema: public; Owner: -
@@ -20758,7 +20995,9 @@ GRANT ALL ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text)
 -- Name: FUNCTION fn_veredito_producao(p_estagio text, p_caso_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_versao_com_extracao(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
