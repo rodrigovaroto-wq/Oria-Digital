@@ -14,6 +14,7 @@ import {
   CHAVES_DE_FALTA, TIPOS_DE_PENDENCIA, traduzirFalta, rotuloDoAceite, lerPercentual, formatarCnpj, tituloDoVeredito,
   PARENTESCOS, rotuloDoParentesco, MOTIVOS_DE_GRUPO, rotuloDoMotivoDoGrupo,
 } from "../src/lib/perimetro.ts";
+import { montarOrganograma, rotuloDoPercentual, contarNoOrganograma, type EntradaOrg } from "../src/lib/perimetro-organograma.ts";
 import { readFileSync } from "node:fs";
 
 let ok = 0;
@@ -113,6 +114,62 @@ checar(rotuloDoMotivoDoGrupo(undefined) !== rotuloDoMotivoDoGrupo("controlador_c
 const PAG = readFileSync(new URL("../src/app/casos/[id]/perimetro/page.tsx", import.meta.url), "utf8");
 checar(PAG.includes("vinculos") && PAG.includes("rotuloDoMotivoDoGrupo"), "a tela não mostra os vínculos e o motivo dos grupos");
 checar(/nunca por sobrenome/.test(readFileSync(new URL("../src/app/casos/[id]/perimetro/SecaoParentesco.tsx", import.meta.url), "utf8")), "a tela não diz que parentesco só vale declarado");
+
+// 8. O ORGANOGRAMA (item 23): árvore pura sobre controladora_id + percentual. Cada item é uma forma de errar.
+const E = (id: string, o: Partial<EntradaOrg> = {}): EntradaOrg => ({
+  entidade_id: id, razao_social: `Empresa ${id}`, cnpj: null, fantasma: false, forma_de_controle: "indefinido",
+  controladora_id: null, percentual_participacao: null, ...o,
+});
+const tot = (es: EntradaOrg[]) => es.filter((e) => !e.fantasma).length;
+{
+  const es = [
+    E("H"), E("A", { controladora_id: "H", percentual_participacao: 60, forma_de_controle: "controlada_por_entidade" }),
+    E("B", { controladora_id: "A", percentual_participacao: 0, forma_de_controle: "controlada_por_entidade" }),
+    E("C", { controladora_id: "H", forma_de_controle: "controlada_por_entidade" }),
+    E("X"), E("K", { forma_de_controle: "controle_comum" }),
+    E("F", { fantasma: true }),
+  ];
+  const o = montarOrganograma(es);
+  checar(o.raizes.length === 1 && o.raizes[0].id === "H" && o.raizes[0].filhos.length === 2, "organograma: H deveria ser a única raiz com 2 controladas");
+  const A = o.raizes[0].filhos.find((f) => f.id === "A");
+  checar(A?.percentual === 60 && A.filhos[0]?.id === "B", "organograma: A com 60% e B abaixo dela");
+  checar(A?.filhos[0]?.percentual === 0, "organograma: 0% medido virou ausência");
+  checar(o.raizes[0].filhos.find((f) => f.id === "C")?.percentual === null, "organograma: % nulo virou número (0?) em vez de ausência");
+  checar(o.semVinculo.map((s) => s.id).join() === "X" && /não se sabe/.test(o.semVinculo[0].nota), "organograma: parentesco desconhecido não foi para 'sem vínculo' com nota");
+  checar(o.controleComum.map((s) => s.id).join() === "K", "organograma: controle comum declarado sumiu ou foi para sem vínculo");
+  checar(o.naoIdentificadas.length === 1 && o.naoIdentificadas[0].id === "F", "organograma: fantasma não ficou à parte");
+  checar(contarNoOrganograma(o) === tot(es), `organograma: ${contarNoOrganograma(o)} empresas visíveis de ${tot(es)} (alguma sumiu)`);
+  checar(rotuloDoPercentual(null) === "% não informado" && rotuloDoPercentual(undefined) === "% não informado" && rotuloDoPercentual(Number.NaN) === "% não informado",
+    "rótulo: percentual ausente não diz '% não informado'");
+  checar(rotuloDoPercentual(0) === "0%" && rotuloDoPercentual(12.5) === "12,5%", "rótulo: 0 medido ou decimal formatado errado");
+}
+{ // ciclo A<->B, com C pendurada em A: nada some, nada entra em laço, o aviso nomeia os membros
+  const es = [E("A", { controladora_id: "B" }), E("B", { controladora_id: "A" }), E("C", { controladora_id: "A", percentual_participacao: 10 })];
+  const o = montarOrganograma(es);
+  checar(o.ciclos.length === 1 && o.ciclos[0].membros.length === 2, "ciclo: não foi apontado como grupo próprio com 2 membros");
+  checar(o.raizes.length === 0 && o.semVinculo.length === 0, "ciclo: membros vazaram para raiz ou sem vínculo");
+  checar(contarNoOrganograma(o) === 3, "ciclo: alguma empresa do ciclo ou pendurada nele sumiu");
+  const prof = (n: { filhos: Array<{ filhos: unknown[] }> }): number => 1 + Math.max(0, ...n.filhos.map((f) => prof(f as never)));
+  checar(o.ciclos[0].raizes.every((r) => prof(r) <= 2), "ciclo: a árvore entrou em laço");
+  const auto = montarOrganograma([E("S", { controladora_id: "S" })]);
+  checar(auto.ciclos.length === 1 && contarNoOrganograma(auto) === 1, "ciclo: empresa que controla a si mesma sumiu ou virou raiz");
+}
+{ // controladora que é fantasma ou não existe: o vínculo é desconhecido, não "sem controladora"
+  const o = montarOrganograma([E("F", { fantasma: true }), E("A", { controladora_id: "F", percentual_participacao: 30 }), E("B", { controladora_id: "inexistente" })]);
+  checar(o.semVinculo.length === 2 && o.raizes.length === 0, "controladora fantasma/inexistente não foi para 'sem vínculo'");
+  checar(o.semVinculo.every((s) => /não identificada|não está no caso/.test(s.nota)), "nota da controladora inválida não diz o motivo");
+}
+{ // forma diz controlada, controladora não escolhida, mas ela controla outras: raiz COM aviso
+  const o = montarOrganograma([E("A", { forma_de_controle: "controlada_por_entidade" }), E("B", { controladora_id: "A" })]);
+  checar(o.raizes.length === 1 && /não foi escolhida/.test(o.raizes[0].nota ?? ""), "controlada sem controladora, mas controladora de outra, perdeu o aviso");
+  checar(montarOrganograma([]).raizes.length === 0 && contarNoOrganograma(montarOrganograma([])) === 0, "organograma vazio quebrou");
+}
+{ // regra 1 no desenho: a tela usa a árvore, diz o efeito e tem <ul> com rótulo
+  const ORG = readFileSync(new URL("../src/app/casos/[id]/perimetro/Organograma.tsx", import.meta.url), "utf8");
+  checar(/<ul\s+aria-label=/.test(ORG) && ORG.includes("Sem vínculo registrado") && ORG.includes("rotuloDoPercentual"), "tela do organograma sem <ul> rotulado, sem grupo 'Sem vínculo registrado' ou sem rótulo de %");
+  checar(ORG.includes("Controle circular"), "tela do organograma não diz o ciclo");
+  checar(PAG.includes("<Organograma"), "a página não monta o organograma");
+}
 
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);

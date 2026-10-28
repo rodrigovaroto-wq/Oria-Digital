@@ -5,6 +5,7 @@ import {
   confirmarEscopo, definirForma, definirPapel, definirParticipacao, encerrarEscopo,
   registrarControlador, vincularControlador, vincularFamilia, desvincularFamilia, type AcoesPerimetro,
 } from "./actions";
+import { Organograma } from "./Organograma";
 import { SecaoParentesco, type VinculoVigente } from "./SecaoParentesco";
 import { rotuloDoAceite, rotuloDoMotivoDoGrupo, rotuloDoParentesco, tituloDoVeredito } from "@/lib/perimetro";
 
@@ -114,6 +115,8 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
           </div>
         </section>
       )}
+
+      {!falhaLeitura && <Organograma entidades={situacao} />}
 
       {falhaVinculos && (
         <output className="carta block p-4 text-sm text-risco-800">
