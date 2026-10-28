@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
 import { BarraLateral, type MandatoNaBarra } from "@/components/barra-lateral";
 import { MarcaOria } from "@/components/marca-oria";
+import { mandatosMeus } from "@/lib/membros";
 
 // O CABEÇALHO É A ÚNICA COISA QUE APARECE EM TODAS AS TELAS, então ele é o que
 // diz se o produto é sério antes de qualquer dado carregar. O que mudou:
@@ -15,7 +16,7 @@ import { MarcaOria } from "@/components/marca-oria";
 //   • o e-mail e o "Sair" deixaram de ter o mesmo peso do link de navegação.
 export default async function CasosLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
-  const [claimsRes, mandatosRes] = await Promise.all([
+  const [claimsRes, mandatosRes, adminRes] = await Promise.all([
     supabase.auth.getClaims(),
     // SÓ OS ATIVOS na barra (0114): ela responde "no que estou trabalhando", e
     // mandato fechado não é resposta para isso — ele continua na lista completa.
@@ -25,11 +26,23 @@ export default async function CasosLayout({ children }: { children: React.ReactN
       .is("fechado_em", null)
       .order("criado_em", { ascending: false })
       .limit(30),
+    // `fn_eh_admin` falhando NÃO vira "é administrador" (0215): sem resposta, sem a seção "Todos".
+    supabase.rpc("fn_eh_admin"),
   ]);
   const email = (claimsRes.data?.claims?.email as string | undefined) ?? "";
-  const mandatos = ((mandatosRes.data as MandatoNaBarra[] | null) ?? []).map((m) => ({
-    id: m.id, nome: m.nome, status: m.status,
-  }));
+  const ehAdmin = adminRes.data === true;
+  // "MEUS MANDATOS" = as linhas de caso_membro do PRÓPRIO usuário. O filtro por `usuario_id` é
+  // obrigatório: o administrador lê todas as linhas (0215) e, sem ele, "meus" seria "todos". Erro de
+  // leitura (banco sem a 0215) deixa `meusIds` nulo e a barra mostra o que a RLS devolver, sem filtrar.
+  const usuarioId = claimsRes.data?.claims?.sub as string | undefined;
+  const membroRes = usuarioId
+    ? await supabase.from("caso_membro").select("caso_id").eq("usuario_id", usuarioId)
+    : null;
+  const meusIds = membroRes && !membroRes.error
+    ? new Set(((membroRes.data as Array<{ caso_id: string }> | null) ?? []).map((l) => l.caso_id))
+    : null;
+  const mandatos = mandatosMeus(((mandatosRes.data as MandatoNaBarra[] | null) ?? []), meusIds)
+    .map((m) => ({ id: m.id, nome: m.nome, status: m.status }));
 
   return (
     /* SEM `bg-tinta-50` AQUI, e não é descuido: o `body` já pinta essa mesma
@@ -85,7 +98,7 @@ export default async function CasosLayout({ children }: { children: React.ReactN
       </header>
 
       <div className="flex flex-1">
-        <BarraLateral mandatos={mandatos} />
+        <BarraLateral mandatos={mandatos} ehAdmin={ehAdmin} filtrada={meusIds !== null} />
         <main className="min-w-0 flex-1 px-6 py-8">
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>

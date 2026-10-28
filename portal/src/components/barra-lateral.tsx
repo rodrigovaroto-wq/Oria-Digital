@@ -68,7 +68,13 @@ function usePreferencia(chave: string, padrao: boolean) {
   return [valor === "1", definir] as const;
 }
 
-export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
+export function BarraLateral({ mandatos, ehAdmin, filtrada }: {
+  mandatos: MandatoNaBarra[];
+  /** Só o administrador tem a visão "Todos" (com contagem de membros e o mandato sem membro). */
+  ehAdmin: boolean;
+  /** true = a lista já é a dos mandatos do usuário (caso_membro); false = a leitura falhou e é o que a RLS devolveu. */
+  filtrada: boolean;
+}) {
   const caminho = usePathname();
   const [recolhida, definirRecolhida] = usePreferencia(CHAVE_RECOLHIDA, false);
   const [mandatosAbertos, definirMandatosAbertos] = usePreferencia(CHAVE_ABERTA, true);
@@ -187,7 +193,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
                 naLista ? "text-tinta-900" : "text-tinta-700 hover:text-tinta-900"
               }`}
             >
-              Mandatos
+              {filtrada ? "Meus mandatos" : "Mandatos"}
             </Link>
             <button
               type="button"
@@ -213,7 +219,9 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
                          border-l border-tinta-200 pb-2 pl-2"
             >
               {mandatos.length === 0 ? (
-                <li className="px-2 py-1.5 text-xs text-tinta-400">Nenhum mandato aberto</li>
+                <li className="px-2 py-1.5 text-xs text-tinta-400">
+                  {filtrada ? "Você não é membro de nenhum mandato aberto" : "Nenhum mandato aberto"}
+                </li>
               ) : (
                 mandatos.map((m) => {
                   const ativo = caminho.startsWith(`/casos/${m.id}`);
@@ -246,6 +254,16 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
           )}
         </div>
 
+        {/* "TODOS" É SÓ DO ADMINISTRADOR (0215): a lista completa com a contagem de membros e o
+            mandato sem membro, que só ele enxerga. Para os demais o link nem existe. */}
+        {ehAdmin && (
+          <Link
+            href="/casos/todos?visao=todos"
+            className="mt-1 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-tinta-700 transition-colors hover:bg-tinta-50 hover:text-tinta-900"
+          >
+            Todos os mandatos
+          </Link>
+        )}
       </nav>
     </aside>
   );

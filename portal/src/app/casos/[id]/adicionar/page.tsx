@@ -25,7 +25,8 @@ export default async function AdicionarArquivosPage({
         <h1 className="mt-2 text-lg font-semibold">Adicionar arquivos — {caso.nome}</h1>
         <p className="text-sm text-tinta-500">
           Os novos arquivos entram neste mesmo mandato e somam ao checklist, à exportação para Excel e
-          à checagem de dados já existentes.
+          à checagem de dados já existentes.{" "}
+          <Link href={`/casos/${id}#documentos`} className="underline">Ver os documentos já recebidos</Link>.
         </p>
       </div>
       <UploadForm mandatoInicial={caso.nome} travarMandato casoId={caso.id} />

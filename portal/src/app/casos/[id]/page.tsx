@@ -118,7 +118,7 @@ export default async function CasoDashboardPage({
   const supabase = await createClient();
 
   const [casoRes, kitBasicoRes, documentosRes, pendenciasRes, checklistRes, portao2Res,
-         perguntasRes, fatosRes] = await Promise.all([
+         fatosRes] = await Promise.all([
     supabase.from("caso").select("id, nome, produto, status, criado_em").eq("id", id).single(),
     supabase
       .from("taxonomia_tipo_documento")
@@ -174,16 +174,6 @@ export default async function CasoDashboardPage({
     // MESMA função que `fn_aprovar_caso` usa para decidir, e não uma segunda
     // implementação da regra aqui no portal.
     supabase.rpc("fn_avaliar_portao2", { p_caso_id: id }),
-    // QUANTAS PERGUNTAS ESTE MANDATO SUGERE (0120), só a contagem: `head` não
-    // traz linha nenhuma, então o teto de 1000 não entra na conversa e a tela
-    // do mandato não paga o preço de montar uma lista que mora em outra aba.
-    //
-    // A CHAMADA É TOLERANTE A ERRO de propósito. O dono aplica as migrations à
-    // mão (Supabase/README.md), então um banco sem a 0120 é estado normal, não
-    // defeito — e nesse banco esta linha responde "não achei a função". O botão
-    // continua na tela sem o número; o que não pode é a tela inteira do mandato
-    // cair por causa de um contador de outra aba.
-    supabase.rpc("fn_sugerir_perguntas", { p_caso_id: id }, { head: true, count: "exact" }),
     // O QUE OS DOCUMENTOS DIZEM EM TEXTO (0148). Covenant rompido, ressalva de
     // auditoria, continuidade operacional — os fatos que um comitê lê ANTES da
     // planilha, e que até a v48 não chegavam ao portal de forma nenhuma: as
@@ -263,11 +253,6 @@ export default async function CasoDashboardPage({
     // devolve o payload da 0037, e a tela tem de continuar funcionando.
     rejeitadas?: number; rejeitadas_nao_sobrepujaveis?: number;
   } | null;
-  // Nulo tem significado: OU a 0120 não está aplicada, OU o PostgREST não
-  // devolveu contagem. Nos dois casos o botão vai sem número — inventar zero
-  // diria "não há nada a perguntar", que é afirmação sobre o mandato, e não é
-  // isso que se sabe.
-  const perguntasSugeridas = perguntasRes.error ? null : perguntasRes.count ?? null;
   const checklist = (checklistRes.data as Array<{ tipo_taxonomia: string; status: string }> | null) ?? [];
   const tiposSemConteudo = new Set(
     checklist.filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia),
@@ -392,9 +377,10 @@ export default async function CasoDashboardPage({
           <p className="mt-0.5 text-sm text-tinta-500">{humanizar(caso.produto)}</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={`/casos/${id}/adicionar`} className="btn-secundario">
-            Adicionar arquivos
-          </Link>
+          {/* OS BOTÕES DE NAVEGAÇÃO (Adicionar arquivos, Perguntas, Perímetro, Ir para a modelagem)
+              SAÍRAM em 27/10/2026: a barra de etapas do layout (`layout.tsx`) leva a todas elas de
+              qualquer tela do mandato. O contador de perguntas sugeridas saiu junto — o layout não
+              reexecuta entre rotas, e um número que envelhece na primeira ação é pior que nenhum. */}
           {/* UM EXPORT SÓ NESTA TELA (decisão do dono, 07/08/2026). Esta é a tela de
               CONFERIR O QUE CHEGOU, e o único arquivo que faz sentido aqui é o dos
               dados — ele existe desde a ingestão, mesmo com pendência aberta. O
@@ -408,38 +394,6 @@ export default async function CasoDashboardPage({
           >
             Exportar dados
           </a>
-          {/* A ABA DAS PERGUNTAS AO CLIENTE (0120), que até aqui não tinha
-              entrada em tela nenhuma — o motor existia e ninguém no produto
-              chegava nele.
-
-              ELA FICA FORA desta tela, e não dentro da fila de pendências, por
-              decisão do dono (18/08/2026): o que está lá é decisão sobre
-              problema medido; o que está na aba é o que AINDA NÃO foi
-              perguntado a ninguém. O número no botão é a contagem de sugestões
-              — quando o banco ainda não tem a 0120, ele some e o botão fica. */}
-          <Link
-            href={`/casos/${id}/perguntas`}
-            className="btn-secundario"
-            title="As perguntas que o sistema sugere fazer ao cliente a partir do que a extração encontrou. Nada é enviado automaticamente."
-          >
-            Perguntas ao cliente
-            {perguntasSugeridas !== null && perguntasSugeridas > 0 && (
-              <span className="chip bg-tinta-100 text-tinta-600">{perguntasSugeridas}</span>
-            )}
-          </Link>
-          <Link
-            href={`/casos/${id}/perimetro`}
-            className="btn-secundario"
-            title="Quem entra no combinado, com que papel e controlado por quem."
-          >
-            Perímetro
-          </Link>
-          {/* A ÚNICA AÇÃO PRIMÁRIA DA TELA. Ela era um botão azul-claro entre
-              outros três de peso igual, e a tela não dizia para onde ir depois de
-              conferir o que chegou. */}
-          <Link href={`/casos/${id}/modelagem`} className="btn-primario">
-            Ir para a modelagem
-          </Link>
           {/* Excluir fica por ÚLTIMO e discreto: encontrável por quem procura,
               não esbarrável por quem não. */}
           <ExcluirMandato casoId={id} nome={caso.nome} />
@@ -630,7 +584,7 @@ export default async function CasoDashboardPage({
         </ul>
       </section>
 
-      <section>
+      <section id="documentos">
         <div className="mb-2 flex items-baseline justify-between gap-3">
           <h2 className="titulo-secao">Documentos</h2>
           <p className="text-xs text-tinta-500">

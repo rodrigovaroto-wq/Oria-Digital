@@ -6,6 +6,7 @@ import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import { humanizar } from "@/lib/rotulos";
 import { FecharMandato } from "@/components/fechar-mandato";
 import { ExcluirMandato } from "@/components/excluir-mandato";
+import { mandatosMeus, resumoDeMembros, situacaoDeMembros, visaoDaLista } from "@/lib/membros";
 
 // A LISTA COMPLETA DE MANDATOS — o destino do "Mandatos" da barra lateral.
 //
@@ -42,10 +43,24 @@ function dataCurta(iso: string | null | undefined): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export default async function CasosPage() {
+export default async function CasosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ visao?: string }>;
+}) {
   const supabase = await createClient();
+  const { visao: visaoPedida } = await searchParams;
 
-  const { data, error } = await paginar<Caso>((de, ate) =>
+  // DUAS VISÕES (27/10/2026, 0215/0216): "Meus mandatos" (onde sou membro) e "Todos" (só administrador,
+  // com a contagem de membros e o mandato sem membro — que só o administrador enxerga). O parâmetro
+  // `?visao=todos` de quem não é administrador é ignorado, e a aba nem aparece. A RLS da 0216 já limita a
+  // consulta abaixo aos mandatos do usuário; o filtro por caso_membro cobre o administrador.
+  const [adminRes, claimsRes] = await Promise.all([supabase.rpc("fn_eh_admin"), supabase.auth.getClaims()]);
+  const ehAdmin = adminRes.data === true;
+  const visao = visaoDaLista(visaoPedida, ehAdmin);
+  const usuarioId = claimsRes.data?.claims?.sub as string | undefined;
+
+  const { data: todosOsCasos, error } = await paginar<Caso>((de, ate) =>
     supabase
       .from("caso")
       .select("id, nome, produto, status, criado_em, fechado_em")
@@ -54,7 +69,27 @@ export default async function CasosPage() {
       .range(de, ate),
   );
 
-  const casos = data;
+  // Leitura de caso_membro com erro = pertinência NÃO conferida (banco sem a 0215): não filtra e não
+  // inventa contagem — a tela avisa, em vez de mostrar "0 membros" ou "meus" = "todos" calado.
+  const meusRes = usuarioId
+    ? await paginar<{ caso_id: string }>((de, ate) =>
+        supabase.from("caso_membro").select("caso_id, usuario_id").eq("usuario_id", usuarioId)
+          .order("caso_id", { ascending: true }).range(de, ate))
+    : null;
+  const meusIds = meusRes && !meusRes.error && !meusRes.truncado
+    ? new Set(meusRes.data.map((l) => l.caso_id))
+    : null;
+  const casosMeus = mandatosMeus(todosOsCasos, meusIds);
+  const casos = visao === "todos" ? todosOsCasos : casosMeus;
+
+  const membrosRes = visao === "todos" && todosOsCasos.length
+    ? await paginar<{ caso_id: string; usuario_id: string }>((de, ate) =>
+        supabase.from("caso_membro").select("caso_id, usuario_id")
+          .order("caso_id", { ascending: true }).order("usuario_id", { ascending: true }).range(de, ate))
+    : null;
+  const membros = visao === "todos"
+    ? resumoDeMembros(membrosRes && !membrosRes.error && !membrosRes.truncado ? membrosRes.data : null)
+    : null;
 
   // UMA consulta para todos os mandatos, não uma por linha: a lista com 30 casos
   // faria 90 idas ao banco, e a tela é a primeira que abre no dia.
@@ -115,10 +150,25 @@ export default async function CasosPage() {
     return partes.join(" · ");
   };
 
+  // SEM MEMBRO só se diz quando a contagem foi CONFERIDA e deu zero; sem conferência, a linha diz que
+  // não foi conferido — nunca "0 membros" (regra 1). O mandato sem membro só o administrador vê.
+  const chipDeMembros = (caso: Caso) => {
+    if (!membros) return null;
+    const { situacao, quantos } = situacaoDeMembros(membros, caso.id);
+    if (situacao === "nao_conferido")
+      return <span className="chip bg-alerta-100 text-alerta-800" title="A leitura de caso_membro não terminou; a contagem não é conhecida.">membros não conferidos</span>;
+    if (situacao === "sem_membro")
+      return <span className="chip bg-risco-100 text-risco-800" title="Ninguém trabalha neste mandato; só os administradores o enxergam.">sem membro</span>;
+    return <span className="chip bg-tinta-100 text-tinta-600">{quantos} {quantos === 1 ? "membro" : "membros"}</span>;
+  };
+  const semMembro = (caso: Caso) => membros !== null && situacaoDeMembros(membros, caso.id).situacao === "sem_membro";
+
   const Linha = ({ caso }: { caso: Caso }) => {
     const fechado = Boolean(caso.fechado_em);
     return (
-      <li className={`carta overflow-hidden ${fechado ? "opacity-75" : ""}`}>
+      <li className={`carta overflow-hidden ${fechado ? "opacity-75" : ""} ${
+        semMembro(caso) ? "border-risco-300 ring-1 ring-risco-200" : ""
+      }`}>
         <Link
           href={`/casos/${caso.id}`}
           className="flex items-start justify-between gap-4 px-4 py-3.5 transition-colors hover:bg-tinta-50"
@@ -132,6 +182,7 @@ export default async function CasosPage() {
           <div className="flex shrink-0 items-center gap-2">
             {/* DOIS RÓTULOS, e eles respondem perguntas diferentes: onde o
                 mandato está no trabalho, e se ele ainda está na mesa. */}
+            {chipDeMembros(caso)}
             <span className={`chip ${CASO_STATUS_COLOR[caso.status]}`}>
               {CASO_STATUS_LABEL[caso.status]}
             </span>
@@ -176,6 +227,35 @@ export default async function CasosPage() {
           </p>
         </div>
       </div>
+
+      {/* AS DUAS VISÕES. "Todos" só existe para administrador. */}
+      <nav aria-label="Visão da lista" className="flex gap-1 border-b border-tinta-200">
+        {([
+          ["meus", "Meus mandatos", "/casos/todos", meusIds ? casosMeus.length : null],
+          ...(ehAdmin ? [["todos", "Todos", "/casos/todos?visao=todos", todosOsCasos.length] as const] : []),
+        ] as const).map(([chave, rotulo, href, n]) => (
+          <Link key={chave} href={href} aria-current={visao === chave ? "page" : undefined}
+                className={`-mb-px border-b-2 px-3 py-2 text-sm ${
+                  visao === chave ? "border-acento-600 font-medium text-acento-700"
+                                  : "border-transparent text-tinta-600 hover:text-tinta-900"}`}>
+            {rotulo}{n !== null && <span className="ml-1.5 text-xs text-tinta-400">{n}</span>}
+          </Link>
+        ))}
+      </nav>
+
+      {visao === "meus" && meusIds === null && (
+        <p className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-900">
+          Não foi possível conferir em quais mandatos você é membro; a lista abaixo é a que o banco devolveu, sem filtro.
+        </p>
+      )}
+      {visao === "todos" && membros && membros.porCaso &&
+        casos.filter((c) => semMembro(c)).length > 0 && (
+        <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
+          <strong className="font-semibold">{casos.filter((c) => semMembro(c)).length}{" "}
+          {casos.filter((c) => semMembro(c)).length === 1 ? "mandato sem membro" : "mandatos sem membro"}</strong>
+          {" "}— só os administradores os enxergam. Abra o mandato e use a etapa Membros.
+        </p>
+      )}
 
       {error && (
         <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
