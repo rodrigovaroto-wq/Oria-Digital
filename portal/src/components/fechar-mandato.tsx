@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useState } from "react";
 import { fecharCaso, reabrirCaso } from "@/app/casos/[id]/actions";
 
@@ -61,7 +62,12 @@ export function FecharMandato({
         Fechar
       </button>
 
-      {aberto && (
+      {/* O DIÁLOGO VAI PARA O <body> (portal). Dentro da página ele herdava os
+          contêineres dela: uma linha semitransparente da tabela de Mandatos ou
+          qualquer ancestral com filtro o prendiam, e ele aparecia fora da tela ou
+          por baixo das linhas seguintes (revisão do PR #265). No <body>, `fixed`
+          volta a ser a janela. Só monta depois do clique, então `document` existe. */}
+      {aberto && createPortal(
         <div
           role="dialog"
           aria-modal
@@ -114,7 +120,7 @@ export function FecharMandato({
             </form>
           </div>
         </div>
-      )}
+        , document.body)}
     </>
   );
 }

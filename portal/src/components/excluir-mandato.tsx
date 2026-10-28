@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { excluirCaso } from "@/app/casos/[id]/actions";
 
@@ -55,7 +56,12 @@ export function ExcluirMandato({ casoId, nome }: { casoId: string; nome: string 
         Excluir
       </button>
 
-      {aberto && (
+      {/* O DIÁLOGO VAI PARA O <body> (portal). Dentro da página ele herdava os
+          contêineres dela: uma linha semitransparente da tabela de Mandatos ou
+          qualquer ancestral com filtro o prendiam, e ele aparecia fora da tela ou
+          por baixo das linhas seguintes (revisão do PR #265). No <body>, `fixed`
+          volta a ser a janela. Só monta depois do clique, então `document` existe. */}
+      {aberto && createPortal(
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/50 p-4"
           role="dialog"
@@ -115,7 +121,7 @@ export function ExcluirMandato({ casoId, nome }: { casoId: string; nome: string 
             </div>
           </div>
         </div>
-      )}
+        , document.body)}
     </>
   );
 }

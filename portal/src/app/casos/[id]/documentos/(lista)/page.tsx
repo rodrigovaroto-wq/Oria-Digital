@@ -107,7 +107,14 @@ export default async function DocumentosPage({
   const { porVersao: linhasPorVersao, incompleto: linhasIncompletas } = await contarLinhasPorVersao(supabase, versoes);
 
   // 0157: a mesma resposta do Portão 1 (`fn_documento_serve_como`), não uma regra própria da tela.
-  const kitAtendidos = await itensDoKitBasicoAtendidos(kitBasico, documentos, servicoDocumentoServeComo(supabase));
+  // Falha da pergunta ao banco = Kit não conferido: a grade NÃO desenha "não recebido"
+  // por cima de uma leitura que falhou (revisão do PR #265).
+  let kitAtendidos: Set<string> | null = null;
+  try {
+    kitAtendidos = await itensDoKitBasicoAtendidos(kitBasico, documentos, servicoDocumentoServeComo(supabase));
+  } catch {
+    kitAtendidos = null;
+  }
   const checklist = (checklistRes.data as Array<{ tipo_taxonomia: string; status: string }> | null) ?? [];
   const tiposSemConteudo = new Set(
     checklist.filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia),
@@ -188,6 +195,12 @@ export default async function DocumentosPage({
             os {kitBasico.length} documentos obrigatórios do mandato
           </p>
         </div>
+        {kitAtendidos === null ? (
+          <p className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-800">
+            Não foi possível conferir agora quais itens do Kit Básico já chegaram. Recarregue a
+            página; até lá, nada aqui deve ser lido como &quot;faltando&quot;.
+          </p>
+        ) : (
         <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {kitBasico.map((item) => {
             const semConteudo = tiposSemConteudo.has(item.codigo);
@@ -195,7 +208,7 @@ export default async function DocumentosPage({
             // linha. O documento que chegou vazio fica âmbar — não verde, porque
             // o book sai vazio nessa parte, e não "faltante", porque o arquivo
             // está lá e pedi-lo de novo ao cliente seria pedir o que ele mandou.
-            const presente = kitAtendidos.has(item.codigo) && !semConteudo;
+            const presente = (kitAtendidos?.has(item.codigo) ?? false) && !semConteudo;
             const cor = presente
               ? "border-ok-200 bg-ok-50/60"
               : semConteudo
@@ -223,6 +236,7 @@ export default async function DocumentosPage({
             );
           })}
         </ul>
+        )}
       </section>
 
 

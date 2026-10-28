@@ -179,7 +179,16 @@ console.log("--- 5. Próximo passo: prioridade, e leitura que falhou nunca vira 
   const k = passoDe({ kitFaltantes: 2, aprovavel: false, aprovado: false });
   ok(k.passo === "pedir" && k.href === "/perguntas" && k.titulo === "Pedir 2 documentos ao cliente",
     "Kit Básico incompleto manda pedir os documentos ao cliente", k.titulo);
-  ok(passoDe({ kitFaltantes: 1, aprovado: false }).titulo === "Pedir 1 documento ao cliente", "singular no kit");
+  ok(passoDe({ kitFaltantes: 1, aprovavel: false, aprovado: false }).titulo === "Pedir 1 documento ao cliente", "singular no kit");
+  // O kit só manda pedir ENQUANTO o portão não aceita o mandato: item faltante decidido
+  // ("prosseguir sem resolução") deixa kitFaltantes > 0 para sempre, e o banner não pode
+  // ficar preso em "pedir" (revisão do PR #265).
+  ok(passoDe({ kitFaltantes: 1, aprovavel: true, aprovado: false }).passo === "aprovar",
+    "kit com item faltante, mas o portão já aceita: o passo é aprovar, não pedir");
+  ok(passoDe({ kitFaltantes: 1 }).passo === "entregaveis",
+    "kit com item faltante num mandato aprovado e modelado: Entregáveis, não 'pedir' para sempre");
+  ok(passoDe({ kitFaltantes: 1, modeloMontado: false }).passo === "modelar",
+    "kit com item faltante num mandato aprovado sem modelo: Modelagem");
   const ap = passoDe({ aprovavel: true, aprovado: false });
   ok(ap.passo === "aprovar" && ap.href === "#aprovacao",
     "aprovável e ainda não aprovado: aprovar, ancorado no cartão de aprovação");
@@ -198,12 +207,15 @@ console.log("--- 5b. Próximo passo: leitura que falhou diz que não dá para de
 {
   const campos: Array<keyof EntradaProximoPasso> = ["bloqueantesAbertas", "revisoesAbertas", "kitFaltantes"];
   for (const c of campos) {
-    const p = passoDe({ [c]: null });
+    // Num caso ainda NÃO aprovável, onde cada uma dessas leituras ainda decide algo.
+    const p = passoDe({ [c]: null, aprovavel: false, aprovado: false });
     ok(p.passo === "indeterminado" && p.acao === null && p.href === null,
       `${c} ilegível (null) → "não dá para determinar", sem botão — nunca o próximo degrau`, p.titulo);
   }
   const ap = passoDe({ aprovavel: null, aprovado: false });
   ok(ap.passo === "indeterminado", "avaliação do portão que não respondeu NÃO vira 'aprovar'", ap.titulo);
+  ok(passoDe({ kitFaltantes: null }).passo === "entregaveis",
+    "kit ilegível num mandato JÁ aprovado não trava a resposta: o kit não decide mais nada ali");
   const m = passoDe({ modeloMontado: null });
   ok(m.passo === "indeterminado", "configuração do modelo ilegível NÃO vira 'Entregáveis'", m.titulo);
   ok(/não dá para determinar/i.test(passoDe({ bloqueantesAbertas: null }).titulo),

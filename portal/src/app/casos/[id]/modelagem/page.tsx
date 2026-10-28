@@ -472,7 +472,7 @@ export default async function ModelagemPage({
           {exportTravado && (
             <p className="text-xs text-alerta-900">
               O export de modelagem está bloqueado até a aprovação do mandato: {(portao?.motivos ?? []).join("; ")}.
-              Decida as pendências na tela do mandato.
+              Decida as pendências na aba Pendências.
             </p>
           )}
           <Link href={`/casos/${id}/entregaveis`} className="text-sm font-medium text-tinta-700 underline">

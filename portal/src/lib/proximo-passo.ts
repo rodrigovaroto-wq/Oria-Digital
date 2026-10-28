@@ -13,7 +13,8 @@
 //
 //   1. pendência aberta que TRAVA a aprovação   → /pendencias
 //   2. documento esperando confirmação          → /pendencias?filtro=confirmar
-//   3. Kit Básico incompleto                    → /perguntas (pedir ao cliente)
+//   3. Kit Básico incompleto, enquanto o portão
+//      ainda não aceita o mandato               → /perguntas (pedir ao cliente)
 //   4. ainda não aprovado, e pode ser           → âncora do cartão de aprovação
 //      ainda não aprovado, e não pode           → idem, o cartão lista o que falta
 //   5. aprovado, modelo ainda não montado       → /modelagem
@@ -81,8 +82,14 @@ export function proximoPasso(e: EntradaProximoPasso): ProximoPasso {
     };
   }
 
-  if (e.kitFaltantes === null) return naoDa("itens do Kit Básico");
-  if (e.kitFaltantes > 0) {
+  // KIT SÓ MANDA PEDIR ANTES DA APROVAÇÃO SER POSSÍVEL. Um item faltante pode ter sido
+  // decidido ("prosseguir sem resolução", "não procede" — o cliente não tem a DVA): o
+  // portão aceita, `kitFaltantes` nunca zera, e com o kit antes de tudo o banner ficava
+  // preso em "pedir" para sempre, inclusive depois de aprovado (revisão do PR #265).
+  // Aprovado, ou aprovável, o portão já disse que o kit como está basta.
+  const kitAindaDecide = !e.aprovado && e.aprovavel !== true;
+  if (kitAindaDecide && e.kitFaltantes === null) return naoDa("itens do Kit Básico");
+  if (kitAindaDecide && e.kitFaltantes !== null && e.kitFaltantes > 0) {
     return {
       passo: "pedir",
       titulo: `Pedir ${plural(e.kitFaltantes, "documento", "documentos")} ao cliente`,

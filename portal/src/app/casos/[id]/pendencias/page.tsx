@@ -117,11 +117,14 @@ export default async function PendenciasPage({
     .sort((a, b) => (ORDEM_SEVERIDADE[a.severidade] ?? 3) - (ORDEM_SEVERIDADE[b.severidade] ?? 3));
   const decididas = todas.filter((p) => !emAberto(p) && daGaveta(p));
 
-  // A taxonomia só é lida se há formulário de confirmação para desenhar.
-  // O formulário aparece SÓ para `estado = 'aberta'`: um documento já em correção interna
-  // ou devolvido ao cliente volta a ser cartão comum, com os três botões.
-  const comFormulario = (p: PendenciaDaLista) =>
-    categoriaDaPendencia(p.tipo) === "confirmar" && p.estado === "aberta" && p.documento !== null;
+  // DOCUMENTO A CONFIRMAR SÓ SE RESOLVE PELO FORMULÁRIO. `revisarDocumento`
+  // (fn_revisar_documento, 0018) é o único caminho que confirma tipo/empresa/período,
+  // e ele resolve a pendência em QUALQUER estado em aberto. Por isso o formulário vale
+  // para todo estado em aberto, e esse tipo NUNCA recebe os três botões de decisão: um
+  // clique em "Contatar o cliente" tirava a pendência de `aberta` e o formulário sumia
+  // para sempre, com o documento sem confirmação e sem erro nenhum (revisão do PR #265).
+  const ehConfirmar = (p: PendenciaDaLista) => categoriaDaPendencia(p.tipo) === "confirmar";
+  const comFormulario = (p: PendenciaDaLista) => ehConfirmar(p) && p.documento !== null;
   let taxonomia: TaxonomiaTipoDocumento[] = [];
   let taxonomiaFalhou = false;
   if (abertas.some(comFormulario)) {
@@ -139,6 +142,19 @@ export default async function PendenciasPage({
         key={p.id} casoId={id} p={p} doc={p.documento}
         nomeArquivo={nomeDoArquivo(p) ?? "(sem nome)"} taxonomia={taxonomia}
       />
+    ) : ehConfirmar(p) && emAberto(p) ? (
+      // Sem formulário desenhável (a lista de tipos não carregou, ou o documento não
+      // foi lido): o cartão DIZ isso e não oferece decisão — os três botões aqui
+      // descartariam a confirmação, que é o que o documento precisa.
+      <li key={p.id} className="carta border-alerta-200 p-4 text-sm">
+        <p className="font-medium text-tinta-900">{nomeDoArquivo(p) ?? "Documento a confirmar"}</p>
+        {p.descricao && <p className="mt-1 text-tinta-700">{p.descricao}</p>}
+        <p className="mt-2 text-alerta-800">
+          {taxonomiaFalhou
+            ? "Não foi possível carregar a lista de tipos de documento, então o formulário de confirmação não aparece agora. Recarregue a página."
+            : "O documento desta pendência não foi encontrado, então não há o que confirmar aqui. Avise o administrador do sistema."}
+        </p>
+      </li>
     ) : (
       <ItemPendencia
         key={p.id} p={p} casoId={id}

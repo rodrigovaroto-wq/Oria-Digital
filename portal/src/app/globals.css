@@ -194,7 +194,6 @@
      maior parte, então o pior caso é o caso comum. */
   --vidro-folha-fundo: rgb(252 251 248 / 0.94);
   --vidro-folha-borda: rgb(255 255 255 / 0.55);
-  --vidro-folha-filtro: blur(20px);
   --vidro-sombra: 0 8px 32px 0 rgb(0 0 0 / 0.28);
   /* O NEON DA PLACA. O sextante original é azul-marinho de traço escuro — igual
      à placa da foto, onde o que o faz aparecer é a LUZ AZUL POR TRÁS. Um brilho
@@ -433,11 +432,16 @@ body {
   background-color: var(--vidro-casco-denso);
 }
 
+/* A FOLHA NÃO TEM backdrop-filter, de propósito. Pela especificação (Filter
+   Effects), um backdrop-filter diferente de `none` vira BLOCO DE CONTENÇÃO dos
+   descendentes `position: fixed` — e os diálogos de Excluir/Fechar e o "Tudo
+   pronto" do envio moram dentro da folha: eles passavam a se centrar na altura
+   da folha (3000px numa lista longa), fora da tela (revisão do PR #265). A 94%
+   de opacidade o desfoque mal aparecia; a imagem continua ao redor e, de leve,
+   através. O casco mantém o filtro: nada `fixed` mora nele. */
 .vidro-folha {
   background-color: var(--vidro-folha-fundo);
   border: 1px solid var(--vidro-folha-borda);
-  -webkit-backdrop-filter: var(--vidro-folha-filtro);
-  backdrop-filter: var(--vidro-folha-filtro);
   box-shadow: var(--vidro-sombra);
 }
 
@@ -490,7 +494,6 @@ body {
     --vidro-casco-denso: #161a20;
     --vidro-folha-fundo: #fcfbf8;
     --vidro-casco-filtro: none;
-    --vidro-folha-filtro: none;
   }
 }
 

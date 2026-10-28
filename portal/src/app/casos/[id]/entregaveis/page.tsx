@@ -132,7 +132,10 @@ export default async function EntregaveisPage({ params }: Readonly<{ params: Pro
           oQueE="As 14 abas do modelo institucional, projetadas e editáveis em fórmula dentro do Excel, mais a Modelagem e os índices macro. Sem as abas de dado cru.">
           {estadoPortao === "aberto" && (
             <>
-              <p className="text-tinta-500">Aprovação do mandato concluída.</p>
+              {/* `elegivel` do portão, não o status: o mandato pode estar "Em revisão" e já
+                  liberar o modelo. Dizer "aprovação concluída" afirmava uma aprovação que
+                  não aconteceu (revisão do PR #265). */}
+              <p className="text-tinta-500">O mandato atende às condições de aprovação.</p>
               <a href={`/casos/${id}/export`} className="btn-primario">Baixar modelo</a>
             </>
           )}

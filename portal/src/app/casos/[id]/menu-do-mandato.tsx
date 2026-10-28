@@ -37,7 +37,9 @@ export function MenuDoMandato({
     if (!aberto) return;
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (raiz.current?.querySelector('[role="dialog"]')) return;
+      // Os diálogos de Fechar/Excluir agora vão para o <body> (portal): a busca é
+      // no documento, não dentro do menu, senão o Esc fecharia os dois de uma vez.
+      if (document.querySelector('[role="dialog"]')) return;
       setAberto(false);
       raiz.current?.querySelector<HTMLButtonElement>("button[aria-haspopup]")?.focus();
     };

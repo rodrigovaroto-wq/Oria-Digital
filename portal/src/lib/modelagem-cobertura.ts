@@ -128,7 +128,7 @@ export function textoTituloConferenciaModelagem(
   if (portaoFechado(portao)) {
     return "As premissas estão prontas, mas o export de modelagem está bloqueado até a aprovação do mandato: "
       + `${(portao!.motivos ?? []).join("; ") || "o caso ainda não pode ser aprovado"}. `
-      + "Decida as pendências na tela do mandato.";
+      + "Decida as pendências na aba Pendências.";
   }
   const pct = fracaoPctDe(conf);
   return pct !== null

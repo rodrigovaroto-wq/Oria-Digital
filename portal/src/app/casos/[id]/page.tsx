@@ -167,9 +167,15 @@ export default async function CasoDashboardPage({
 
   // 0157: o Kit Básico é perguntado ao banco (`fn_documento_serve_como`), não reimplementado
   // aqui — ver `lib/supabase/servico-serve-como.ts` e `verificar-kit-basico.mts`.
-  const kitAtendidos = await itensDoKitBasicoAtendidos(
-    kitBasico, documentos as Documento[], servicoDocumentoServeComo(supabase),
-  );
+  // Falha da pergunta ao banco = Kit NÃO LIDO (null), nunca "itens faltantes".
+  let kitAtendidos: Set<string> | null = null;
+  try {
+    kitAtendidos = await itensDoKitBasicoAtendidos(
+      kitBasico, documentos as Documento[], servicoDocumentoServeComo(supabase),
+    );
+  } catch {
+    kitAtendidos = null;
+  }
   // Os fatos materiais. `?? []` e não `!`: banco sem a 0148 devolve erro e `data` nulo, e a
   // tela tem de sair sem o bloco em vez de quebrar.
   const fatos = (fatosRes.data as FatoDoCaso[] | null) ?? [];
@@ -197,9 +203,9 @@ export default async function CasoDashboardPage({
   const nRevisoes = contagem(revisoesRes);
 
   const linhasTotais = [...linhasPorVersao.values()].reduce((a, b) => a + b, 0);
-  const kitLido = !kitBasicoRes.error && documentosLidos && !checklistRes.error;
+  const kitLido = !kitBasicoRes.error && documentosLidos && !checklistRes.error && kitAtendidos !== null;
   const kitPresentes = kitBasico.filter(
-    (i) => kitAtendidos.has(i.codigo) && !tiposSemConteudo.has(i.codigo),
+    (i) => (kitAtendidos?.has(i.codigo) ?? false) && !tiposSemConteudo.has(i.codigo),
   ).length;
   // Documento que chegou, foi classificado e não rendeu UMA linha. É o que o
   // `fn_conferir_lote` mede do lado do banco; aqui ele vira número de topo,

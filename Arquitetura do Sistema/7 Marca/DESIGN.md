@@ -302,10 +302,14 @@ de número"** (decisão do dono, 28/10/2026). A regra nova:
   `rgba(18,21,27,.64)`, `blur(18px) saturate(140%)`, borda `rgba(255,255,255,.09)`,
   texto `#ece8df`, secundário `#a39d92`. O cartão do login sobe para `.80`.
 - **Folha (vidro creme)** — **todo o conteúdo** de todas as telas, numa única
-  folha: `rgba(252,251,248,.94)`, `blur(20px)`, borda `rgba(255,255,255,.55)`.
+  folha: `rgba(252,251,248,.94)`, **sem** `backdrop-filter` (ver abaixo), borda `rgba(255,255,255,.55)`.
   As 13 telas usam texto escuro desenhado para superfície creme; a folha mantém
   todo número sobre >= 94% de creme e a imagem aparece ao redor e só de leve por
   baixo. **Número nunca fica diretamente sobre a imagem nem sobre o casco.**
+  A folha **não** leva `backdrop-filter`: pela especificação ele vira bloco de
+  contenção dos descendentes `fixed`, e os diálogos de Fechar/Excluir e o "Tudo
+  pronto" moram dentro dela (revisão do PR #265). Os diálogos de Fechar/Excluir
+  também vão para o `<body>` por portal, contra qualquer outro contêiner.
 - **Fallbacks**: `prefers-reduced-transparency: reduce` → superfícies sólidas
   (casco `#161a20`, folha `#fcfbf8`, sem filtro); sem `backdrop-filter` → casco
   `.94` e folha `.98`. Os valores moram em `globals.css` (`--vidro-*`,

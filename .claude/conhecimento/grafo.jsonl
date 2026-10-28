@@ -208,6 +208,7 @@
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/modelagem/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/pendencias/actions.ts","t":"arquivo","f":"portal/src/app/casos/[id]/pendencias/actions.ts","txt":"actions.ts"}
+{"k":"n","id":"arquivo:portal/src/app/casos/[id]/pendencias/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/pendencias/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/perguntas/actions.ts","t":"arquivo","f":"portal/src/app/casos/[id]/perguntas/actions.ts","txt":"actions.ts"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/perguntas/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/perguntas/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/perimetro/actions.ts","t":"arquivo","f":"portal/src/app/casos/[id]/perimetro/actions.ts","txt":"actions.ts"}
@@ -1714,10 +1715,11 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/modelagem/page.tsx","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/app/casos/[id]/modelagem/page.tsx","l":363}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_aprovar_caso","f":"portal/src/app/casos/[id]/page.tsx","l":139}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/page.tsx","l":141}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"portal/src/app/casos/[id]/page.tsx","l":205}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"portal/src/app/casos/[id]/page.tsx","l":211}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/app/casos/[id]/page.tsx","l":168}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/page.tsx","rel":"CHAMA","pa":"fn:fn_fatos_do_caso","f":"portal/src/app/casos/[id]/page.tsx","l":146}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/pendencias/actions.ts","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"portal/src/app/casos/[id]/pendencias/actions.ts","l":6}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/pendencias/page.tsx","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"portal/src/app/casos/[id]/pendencias/page.tsx","l":121}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perguntas/actions.ts","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"portal/src/app/casos/[id]/perguntas/actions.ts","l":6}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perguntas/page.tsx","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/app/casos/[id]/perguntas/page.tsx","l":17}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perimetro/actions.ts","rel":"CHAMA","pa":"fn:fn_controlador_desvincular_familia","f":"portal/src/app/casos/[id]/perimetro/actions.ts","l":176}
@@ -1731,7 +1733,7 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perimetro/actions.ts","rel":"CHAMA","pa":"fn:fn_perimetro_encerrar_escopo","f":"portal/src/app/casos/[id]/perimetro/actions.ts","l":132}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perimetro/page.tsx","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/src/app/casos/[id]/perimetro/page.tsx","l":13}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perimetro/page.tsx","rel":"CHAMA","pa":"fn:fn_perimetro_veredito","f":"portal/src/app/casos/[id]/perimetro/page.tsx","l":13}
-{"k":"e","de":"arquivo:portal/src/components/excluir-mandato.tsx","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/components/excluir-mandato.tsx","l":12}
+{"k":"e","de":"arquivo:portal/src/components/excluir-mandato.tsx","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/components/excluir-mandato.tsx","l":13}
 {"k":"e","de":"arquivo:portal/src/components/upload-form.tsx","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/src/components/upload-form.tsx","l":330}
 {"k":"e","de":"arquivo:portal/src/lib/apresentacao/montar-base.ts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/src/lib/apresentacao/montar-base.ts","l":46}
 {"k":"e","de":"arquivo:portal/src/lib/envio-oficial.ts","rel":"CHAMA","pa":"fn:fn_resumo_anexar","f":"portal/src/lib/envio-oficial.ts","l":26}
@@ -1763,7 +1765,7 @@
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/lib/perguntas.ts","l":3}
 {"k":"e","de":"arquivo:portal/src/lib/perimetro.ts","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/src/lib/perimetro.ts","l":3}
 {"k":"e","de":"arquivo:portal/src/lib/projetar-premissa.ts","rel":"CHAMA","pa":"fn:fn_premissa_valores_sugeridos","f":"portal/src/lib/projetar-premissa.ts","l":65}
-{"k":"e","de":"arquivo:portal/src/lib/proximo-passo.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/lib/proximo-passo.ts","l":28}
+{"k":"e","de":"arquivo:portal/src/lib/proximo-passo.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/lib/proximo-passo.ts","l":29}
 {"k":"e","de":"arquivo:portal/src/lib/rotulos.ts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/src/lib/rotulos.ts","l":221}
 {"k":"e","de":"arquivo:portal/src/lib/supabase/servico-serve-como.ts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/lib/supabase/servico-serve-como.ts","l":7}
 {"k":"e","de":"arquivo:portal/src/lib/transcricao.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_transcrever","f":"portal/src/lib/transcricao.ts","l":24}
