@@ -8698,6 +8698,20 @@ const arranjoDeCirculante = (ENT: string) => {
     && verboDaPendencia("divergencia_reconciliacao") === "Decidir"
     && verboDaPendencia("tipo_que_nao_existe") === "Pedir ao cliente",
     "(41d) o verbo do botão corresponde à gaveta de destino", "");
+  // Estado manda nos tipos de decisão; "confirmar" fica "Confirmar" em qualquer estado em aberto
+  // (a aba Pendências mostra o formulário assim). Sem estado vale o verbo do tipo.
+  checar(verboDaPendencia("item_faltante", "reenviada_ao_cliente") === "Aguardando o cliente"
+    && verboDaPendencia("arquivo_ilegivel", "reenviada_ao_cliente") === "Aguardando o cliente"
+    && verboDaPendencia("divergencia_reconciliacao", "em_correcao_interna") === "Em correção"
+    && verboDaPendencia("item_faltante", "em_correcao_interna") === "Em correção",
+    "(41h) pendência já contatada/em correção não oferece mais o verbo de quando estava aberta", "");
+  checar(verboDaPendencia("item_faltante", "aberta") === "Pedir ao cliente"
+    && verboDaPendencia("divergencia_reconciliacao", "aberta") === "Decidir"
+    && verboDaPendencia("classificacao_pendente", "reenviada_ao_cliente") === "Confirmar"
+    && verboDaPendencia("classificacao_pendente", "em_correcao_interna") === "Confirmar",
+    "(41i) aberta mantém o verbo do tipo; documento a confirmar segue 'Confirmar' em qualquer estado", "");
+  checar(padraoDeBusca("a*b") === "%a_b%" && !padraoDeBusca("*")!.includes("*") && padraoDeBusca("*") === "%_%",
+    "(41j) busca não deixa '*' virar curinga do PostgREST (que o troca por '%' e casaria tudo)", String(padraoDeBusca("*")));
   checar(padraoDeBusca("a_b%c\\d") === "%a\\_b\\%c\\\\d%",
     "(41e) busca escapa _ % \\ (senão '_' casaria todo nome)", String(padraoDeBusca("a_b%c\\d")));
   checar(padraoDeBusca("   ") === null && padraoDeBusca(undefined) === null && padraoDeBusca(["Vertentes", "x"]) === "%Vertentes%",

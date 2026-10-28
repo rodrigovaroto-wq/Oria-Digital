@@ -242,6 +242,12 @@ export default async function PainelPage({
   };
   const documentos = documentosRes.data;
   const pendencias = pendenciasRes.data;
+  // Falha de leitura NÃO é "nada em aberto": com `error`, `pendencias` é [] e tudo
+  // o que deriva dela (veredito, "travados", fila, chip "travado") diria que nada
+  // trava. Estas duas flags são a única fonte do "não sei" em toda a tela.
+  // `truncado` já tem o seu próprio aviso abaixo.
+  const pendenciasLidas = !pendenciasRes.error;
+  const documentosLidos = !documentosRes.error;
 
   // A contagem por documento serve só aos 10 itens visíveis em "O que chegou",
   // então a consulta é escopada a eles.
@@ -349,7 +355,10 @@ export default async function PainelPage({
   const resumo =
     ativos.length === 0
       ? "Nenhum mandato em andamento."
-      : bloqueantes === 0
+      : !pendenciasLidas
+        ? `${ativos.length} ${ativos.length === 1 ? "mandato em andamento" : "mandatos em andamento"}. ` +
+          "Não foi possível conferir as pendências agora; não dá para dizer o que trava a aprovação."
+        : bloqueantes === 0
         ? `${ativos.length} ${ativos.length === 1 ? "mandato em andamento" : "mandatos em andamento"}. Nada trava a aprovação.`
         : `${bloqueantes} ${bloqueantes === 1 ? "pendência trava" : "pendências travam"} ` +
           `${casosTravados === 1 ? "1 mandato" : `${casosTravados} mandatos`}.`;
@@ -383,12 +392,18 @@ export default async function PainelPage({
           <Indicador
             valor={numero(ativos.length)}
             rotulo={ativos.length === 1 ? "mandato em andamento" : "mandatos em andamento"}
-            detalhe={casosTravados > 0 ? `${casosTravados} travado${casosTravados === 1 ? "" : "s"}` : null}
+            detalhe={
+              !pendenciasLidas
+                ? "travados: não conferido agora"
+                : casosTravados > 0
+                  ? `${casosTravados} travado${casosTravados === 1 ? "" : "s"}`
+                  : null
+            }
             tom="alerta"
           />
           {/* Falha de leitura NÃO vira zero: sem a lista, traço com a causa. */}
           <Indicador
-            valor={pendenciasRes.error ? null : numero(bloqueantes)}
+            valor={pendenciasLidas ? numero(bloqueantes) : null}
             rotulo={bloqueantes === 1 ? "pendência que trava a aprovação" : "pendências que travam a aprovação"}
             detalhe={
               bloqueantes > 0
@@ -425,7 +440,11 @@ export default async function PainelPage({
                   (janelasLongas ? `, ${janelasLongas} fora da média` : "")
                 : null
             }
-            nota="nenhum mandato com documento registrado ainda"
+            nota={
+              documentosLidos
+                ? "nenhum mandato com documento registrado ainda"
+                : "leitura dos documentos indisponível agora"
+            }
           />
         </div>
       </Surgir>
@@ -435,6 +454,20 @@ export default async function PainelPage({
           mil registros por lista (o texto dizia 50 mil desde que o teto subiu). E
           uma página que falha no meio da contagem por documento acende o mesmo
           aviso — contagem parcial não pode aparecer como contagem. */}
+      {(!pendenciasLidas || !documentosLidos) && (
+        <div className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
+          <p>
+            {!pendenciasLidas && "A leitura das pendências falhou: a fila, o status “travado” e o veredito do topo não valem agora. "}
+            {!documentosLidos && "A leitura dos documentos falhou: o tempo médio e “O que chegou” não valem agora. "}
+            Recarregue a página; se continuar, avise o administrador do sistema.
+          </p>
+          <DetalhesTecnicos>
+            {pendenciasRes.error && <p>pendências: {pendenciasRes.error.message}</p>}
+            {documentosRes.error && <p>documentos: {documentosRes.error.message}</p>}
+          </DetalhesTecnicos>
+        </div>
+      )}
+
       {(casosRes.truncado || documentosRes.truncado || pendenciasRes.truncado || linhasIncompletas) && (
         <div className="carta border-alerta-200 bg-alerta-50 px-4 py-3 text-xs text-alerta-900">
           Parte das leituras acima não terminou. Os números descrevem parte da carteira, não a
@@ -463,13 +496,15 @@ export default async function PainelPage({
             <div className="mb-2 flex items-baseline justify-between gap-3">
               <h2 className="titulo-secao">Precisa de você</h2>
               <p className="text-xs text-tinta-500">
-                {pendencias.length === 0
-                  ? "nada em aberto"
-                  : `${fila.length} de ${filtradas.length}, as que travam primeiro`}
+                {!pendenciasLidas
+                  ? "não conferido agora"
+                  : pendencias.length === 0
+                    ? "nada em aberto"
+                    : `${fila.length} de ${filtradas.length}, as que travam primeiro`}
               </p>
             </div>
 
-            {pendencias.length > 0 && (
+            {pendenciasLidas && pendencias.length > 0 && (
               <nav aria-label="Filtrar a fila" className="mb-2 flex flex-wrap gap-1.5">
                 {FILTROS_DA_FILA.map((f) => {
                   const atual = f.chave === filtro;
@@ -491,7 +526,14 @@ export default async function PainelPage({
               </nav>
             )}
 
-            {pendencias.length === 0 ? (
+            {!pendenciasLidas ? (
+              <div className="rounded-lg border border-risco-200 bg-risco-50 px-5 py-10 text-center">
+                <p className="text-sm font-medium text-risco-900">Não foi possível conferir as pendências</p>
+                <p className="mt-1 text-sm text-risco-800">
+                  Não dá para dizer se há algo em aberto. Abra cada mandato, na aba Pendências, ou recarregue a página.
+                </p>
+              </div>
+            ) : pendencias.length === 0 ? (
               <div className="rounded-lg border border-ok-200 bg-ok-50 px-5 py-10 text-center">
                 <p className="text-sm font-medium text-ok-900">Nenhuma pendência em aberto</p>
                 <p className="mt-1 text-sm text-ok-800">
@@ -541,7 +583,7 @@ export default async function PainelPage({
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1.5">
                           <span className={`chip ${tom.chip}`}>{tom.rotulo}</span>
-                          <span className="btn-secundario !px-2.5 !py-1 !text-xs">{verboDaPendencia(p.tipo)}</span>
+                          <span className="btn-secundario !px-2.5 !py-1 !text-xs">{verboDaPendencia(p.tipo, p.estado)}</span>
                         </span>
                       </Link>
                     </li>
@@ -576,7 +618,9 @@ export default async function PainelPage({
 
             {recentes.length === 0 ? (
               <div className="carta px-4 py-10 text-center text-sm text-tinta-500">
-                Nenhum documento recebido ainda.
+                {documentosLidos
+                  ? "Nenhum documento recebido ainda."
+                  : "Não foi possível ler os documentos agora."}
               </div>
             ) : (
               <div className="carta overflow-hidden">
@@ -628,6 +672,12 @@ export default async function PainelPage({
                 <h2 className="titulo-secao">Seus mandatos</h2>
                 <p className="text-xs text-tinta-500">{ativos.length} em andamento</p>
               </div>
+              {!pendenciasLidas && (
+                <p className="mb-2 text-[11px] text-alerta-900">
+                  Não foi possível conferir quais mandatos estão travados; a lista segue a ordem de abertura,
+                  sem o status “travado”, e pode deixar de fora mandatos travados.
+                </p>
+              )}
               <ul className="carta divide-y divide-tinta-100 overflow-hidden">
                 {seusMandatos.map((c) => {
                   const quantas = travadasPorCaso.get(c.id) ?? 0;

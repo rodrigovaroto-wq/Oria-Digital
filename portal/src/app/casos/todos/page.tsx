@@ -167,7 +167,10 @@ export default async function CasosPage({
         </td>
         {/* O menu reusa o do cabeçalho do mandato: os diálogos de fechar/excluir
             moram dentro do painel escondido, que nunca é desmontado. */}
-        <td className="absolute right-2 top-2 z-10 md:static md:table-cell md:px-3 md:py-3 md:text-right">
+        {/* No celular cada td é `absolute z-10`, ou seja, um contexto de empilhamento
+            próprio: o menu aberto da linha N (z-20, dentro do td) ficava sob o "⋯" da
+            linha N+1. O td que contém o botão expandido sobe para z-30. */}
+        <td className="absolute right-2 top-2 z-10 has-[[aria-expanded=true]]:z-30 md:static md:table-cell md:px-3 md:py-3 md:text-right">
           <MenuDoMandato casoId={caso.id} nome={caso.nome} fechado={fechado} />
         </td>
       </tr>
