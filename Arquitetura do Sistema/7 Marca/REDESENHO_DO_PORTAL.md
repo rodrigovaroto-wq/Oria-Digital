@@ -50,7 +50,7 @@ O inventário das 13 telas (27/10/2026) mediu o problema, não o supôs:
 
 ## Estado da execução — 28/10/2026
 
-> Atualizado ao fechar a Fase 2. Tudo commitado e empurrado em
+> Atualizado ao fechar a Fase 3. Tudo commitado e empurrado em
 > `claude/friendly-lamport-22ctle`, PR #265 (rascunho). Cada fatia passou
 > `tsc`, `eslint`, `next build` e os 12 `verificar-*.mts`; as regras novas
 > têm invariante medido não-vazio (o número de asserts que reprovam está na
@@ -64,40 +64,37 @@ O inventário das 13 telas (27/10/2026) mediu o problema, não o supôs:
 | Decisões | `e4cade0` | PRODUCT/DESIGN/este arquivo; multiempresa e área do cliente arquivadas |
 | **Fase 1** | `bdbbb6f`..`b9c44b8`, `95a447e` | Casco (barra com ícones e recentes, trilha, menu de conta), abas fixas + régua + menu ⋯, loading/erro/não encontrado, recusa do export em página, renomes, jargão em "Detalhes técnicos"; 4 achados da revisão |
 | **Vidro** (dono, 28/10) | `ea05123`, `f42fc77`, `e813d53` | Foto "ORIA DIGITAL" na tela inteira, barra e topo suspensos em vidro escuro, conteúdo em folha creme a 94% **sem backdrop-filter** (ele prendia os diálogos `fixed`); diálogos por portal no `<body>`; contraste medido (DESIGN.md) |
-| **Fase 2** | `17b1116`, `e4baac2`, `f40e4b3`, `91cd0d5`, `25154ab`, `d8185d1`, `8350713`, `ff36ad6` | Entregáveis; Visão geral com Próximo passo + abas Documentos e Pendências; Início com 4 indicadores e fila filtrável; Mandatos em tabela; Modelagem com barra de salvar única; explicações visíveis; busca ⌘K; documento em painel lateral |
+| **Fase 2** | `17b1116`, `e4baac2`, `f40e4b3`, `91cd0d5`, `25154ab`, `d8185d1`, `8350713`, `ff36ad6`, `459f21a` | Entregáveis; Visão geral com Próximo passo + abas Documentos e Pendências; Início com 4 indicadores e fila filtrável; Mandatos em tabela; Modelagem com barra de salvar única; explicações visíveis; busca ⌘K; documento em painel lateral |
+| **Fase 3** | `805c759`, `53360e2`, `87b44fe`, `a2881c2`, `37b07c5`, `277b672`, `1b25441`, `24a8bf6`, `68dd476` | "Ver no original" (URL assinada no clique, na versão e página citadas); perguntas em lote com e-mail ao cliente; novo mandato em 2 passos; Grupo econômico em organograma; Administração (Qualidade da automação + Custos); Histórico do mandato (migration **0215** + tela pelo menu ⋯) |
+| Correções | `9339d71`, `81aca9c`, `4813605`, `0e0f8f2`, `71f8a63` | 6ª e 7ª revisões; Sonar de volta a Quality Gate passando; conferidor de chamadas reconhece o bucket do Storage |
 
-Três revisões independentes (`revisor-defeito-silencioso`) acharam e foram
-corrigidos 14 defeitos silenciosos até aqui; a quarta (Modelagem, Início,
-⌘K, explicações) está sendo corrigida — ver abaixo.
+Seis revisões independentes (`revisor-defeito-silencioso`) acharam e foram
+corrigidos mais de 40 defeitos silenciosos.
 
-### Em andamento
+### O dono faz à mão
 
-- Correções da 4ª revisão: Modelagem deriva o "gravado" do que o SERVIDOR
-  devolve (falha parcial + Descartar deixavam tela ≠ banco); ⌘K deduplica
-  antes do teto e diz quando há mais; sessão expirada dita como tal; aviso
-  ao sair da Modelagem com alterações; "aplicar em lote" confirma antes de
-  sobrescrever exceções; dois ajustes da paleta.
+- **Aplicar a migration 0215 em produção** (depois da 0214) e conferir
+  `select chave, presente, detalhe from fn_instalacao_conferir() where
+  migration = '0215' and not presente;` → zero linhas. Sem ela, a tela
+  Histórico diz que falta a atualização do banco (não quebra).
 
 ### Pendências pequenas (não bloqueiam)
 
 - Funções puras sem teste: `escolherRecentes`, `iniciaisDoEmail`,
   `passosDaTrilha`, `etapaDoMandato`, `mensagemDeLogin`.
-- Recentes reordenam uma vez após a hidratação (mesma contagem, sem salto).
 - "Tempo médio de ingestão" e não "até aprovar": `caso` não tem data de
-  aprovação — o indicador executivo pedido precisa dessa coluna (Fase 3/5).
-- Painel do documento: a atualização depois de aceitar/classificar/importar
-  e a interceptação no clique ainda não foram vistas em navegador.
-- ~30 observações menores do Sonar (estilo); Quality Gate passando.
+  aprovação — o indicador executivo pedido precisa dessa coluna.
+- Novo mandato sem "Produto" e "Responsável": `fn_upsert_caso` só grava o
+  nome, e responsável exige coluna nova.
+- `createSignedUrl` contra objeto inexistente não foi exercitado no Storage
+  real; se assinar sem erro, o clique cai num 404 do Storage.
+- Telas novas não vistas em navegador (preview Vercel).
+- ~88 observações menores do Sonar (estilo); Quality Gate passando.
 
 ### Ainda a fazer
 
-- **Fase 3 · O que vende** — Histórico do mandato (função de banco que junte
-  os eventos), "Ver no original" (CONFERIR antes se o arquivo original está
-  guardado no Storage), Grupo econômico em organograma, perguntas em lote
-  ("Gerar e-mail ao cliente"), novo mandato em 2 passos (responsável exige
-  coluna nova), Administração (Qualidade da automação + custos).
-- **Fase 4 · Acabamento** — modo discrição, avisos de processamento
-  concluído (tabela de avisos), celular com barra inferior, modo escuro.
+- **Fase 4 · Acabamento** — modo discrição e celular com barra inferior (em
+  andamento); avisos de processamento concluído; modo escuro.
 - **Fase 5 · Comercial** — papéis e RLS por caso no banco primeiro; equipe;
   recuperar senha, MFA, SSO.
 - Fechamento: `ESTADO.md` e ficha do conhecimento; tirar o PR de rascunho.
