@@ -11,6 +11,7 @@ import { formatarPeriodo, formatarTipoTaxonomia } from "@/lib/export";
 import { aceitarExtracao } from "@/app/casos/[id]/documentos/[docId]/actions";
 import { ClasseContabil } from "@/components/classe-contabil";
 import { TranscricaoHumana } from "@/components/transcricao-humana";
+import { ehPdf, hrefDoOriginal, rotuloDoLink } from "@/lib/original-do-documento";
 
 function formatValor(valorNum: number | null, valorTexto: string | null, unidade: string | null) {
   if (valorNum != null) {
@@ -159,17 +160,33 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
   const tudoAceito = campos.length > 0 && nAceitos === campos.length;
   const aceitarAction = versao ? aceitarExtracao.bind(null, id, docId) : null;
 
+  // Links para a ROTA, que assina no clique (sem URL assinada no render: egress e expiração).
+  const pdf = ehPdf(versao?.nome_original ?? null, null);
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 id="titulo-documento" className="font-dado text-lg font-semibold break-all text-tinta-900">
-          {versao?.nome_original ?? "(sem nome)"}
-        </h1>
-        <p className="text-xs text-tinta-500">
-          {formatarTipoTaxonomia(doc.tipo_taxonomia)}
-          {doc.entidade?.razao_social ? ` · ${doc.entidade.razao_social}` : ""}
-          {doc.periodo ? ` · ${formatarPeriodo(doc.periodo.tipo, doc.periodo.referencia)}` : ""}
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 id="titulo-documento" className="font-dado text-lg font-semibold break-all text-tinta-900">
+            {versao?.nome_original ?? "(sem nome)"}
+          </h1>
+          <p className="text-xs text-tinta-500">
+            {formatarTipoTaxonomia(doc.tipo_taxonomia)}
+            {doc.entidade?.razao_social ? ` · ${doc.entidade.razao_social}` : ""}
+            {doc.periodo ? ` · ${formatarPeriodo(doc.periodo.tipo, doc.periodo.referencia)}` : ""}
+          </p>
+        </div>
+        {versao && (
+          <a
+            href={hrefDoOriginal(id, docId)}
+            target="_blank"
+            rel="noopener"
+            title={rotuloDoLink(pdf, null)}
+            className="whitespace-nowrap rounded border border-tinta-300 px-3 py-1.5 text-sm font-medium text-tinta-800 hover:bg-tinta-50"
+          >
+            Ver original ↗
+          </a>
+        )}
       </div>
 
       {versao?.legibilidade && versao.legibilidade !== "ok" && (
@@ -305,7 +322,19 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
                           <td className="px-3 py-1.5 text-right font-mono">
                             {formatValor(linha.valor_num, linha.valor_texto, linha.unidade)}
                           </td>
-                          <td className="px-3 py-1.5 text-tinta-500">{linha.origem_pagina ?? "—"}</td>
+                          <td className="px-3 py-1.5 text-tinta-500">
+                            {linha.origem_pagina == null ? "—" : (
+                              <a
+                                href={hrefDoOriginal(id, docId, linha.origem_pagina)}
+                                target="_blank"
+                                rel="noopener"
+                                title={rotuloDoLink(pdf, linha.origem_pagina)}
+                                className="underline decoration-tinta-300 hover:text-tinta-900"
+                              >
+                                p. {linha.origem_pagina} ↗
+                              </a>
+                            )}
+                          </td>
                           <td className="px-3 py-1.5 text-tinta-500">
                             {linha.confianca != null ? `${Math.round(linha.confianca * 100)}%` : "—"}
                           </td>

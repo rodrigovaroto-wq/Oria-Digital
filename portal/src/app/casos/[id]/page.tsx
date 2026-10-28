@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
+import { ehPdf, hrefDoOriginal, rotuloDoLink } from "@/lib/original-do-documento";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
 import { servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
 import {
@@ -67,7 +68,7 @@ const TOM_FATO: Record<string, { caixa: string; chip: string }> = {
   informativo: { caixa: "border-tinta-200 bg-papel",      chip: "bg-tinta-100 text-tinta-700" },
 };
 
-function FatoMaterial({ f }: Readonly<{ f: FatoDoCaso }>) {
+function FatoMaterial({ f, casoId }: Readonly<{ f: FatoDoCaso; casoId: string }>) {
   const tom = TOM_FATO[f.severidade] ?? TOM_FATO.informativo;
   return (
     <li className={`rounded-lg border px-4 py-3 ${tom.caixa}`}>
@@ -86,6 +87,17 @@ function FatoMaterial({ f }: Readonly<{ f: FatoDoCaso }>) {
       </blockquote>
       {f.leitura && <p className="mt-1.5 text-sm text-tinta-700">{f.leitura}</p>}
       <p className="mt-1.5 text-xs text-tinta-500">{f.porque}</p>
+      <p className="mt-1.5 text-xs">
+        <a
+          href={hrefDoOriginal(casoId, f.documento_id, f.pagina)}
+          target="_blank"
+          rel="noopener"
+          title={rotuloDoLink(ehPdf(f.nome_documento, null), f.pagina)}
+          className="font-medium text-tinta-700 underline decoration-tinta-300 hover:text-tinta-900"
+        >
+          Ver no original ↗
+        </a>
+      </p>
     </li>
   );
 }
@@ -420,7 +432,7 @@ export default async function CasoDashboardPage({
             Cada item traz a frase do próprio documento, para conferir na página indicada.
           </p>
           <ul className="space-y-2">
-            {fatos.map((f) => <FatoMaterial key={f.fato_id} f={f} />)}
+            {fatos.map((f) => <FatoMaterial key={f.fato_id} f={f} casoId={id} />)}
           </ul>
         </section>
       )}

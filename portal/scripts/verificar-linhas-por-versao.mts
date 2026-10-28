@@ -23,6 +23,9 @@
 // regra 4 — o arranjo real é "mais linhas do que o teto", e é esse o arranjo).
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import {
+  destinoDoOriginal, ehPdf, hrefDoOriginal, paginaValida, rotuloDoLink,
+} from "../src/lib/original-do-documento";
 import { contarLinhasPorVersao } from "../src/lib/supabase/linhas-por-versao";
 
 let ok = 0;
@@ -259,6 +262,27 @@ function lote(porVersao: Record<string, number>): Linha[] {
   // Eram 4; o Início deixou de ler o COUNT total de linhas (indicador "linhas financeiras
   // lidas" removido, REDESENHO item 8), então o piso conhecido passou a 3 (medido: 3).
   checar(leituras >= 3, `o varredor achou só ${leituras} leitura(s) de campo_extraido — ele não está olhando onde devia`);
+}
+
+// ---- "Ver no original": âncora de página só para PDF; ?pagina só inteiro positivo ----------
+// (Carona nesta suíte por ser leitura de portal sem banco; a rota em si, que fala com o Storage,
+// não é exercitada aqui — só a decisão pura que ela toma.)
+{
+  const URL_ASSINADA = "https://x.supabase.co/storage/v1/object/sign/documentos/a.pdf?token=t";
+  checar(destinoDoOriginal(URL_ASSINADA, true, 7) === `${URL_ASSINADA}#page=7`, "(orig 1) PDF + página → #page=N");
+  checar(destinoDoOriginal(URL_ASSINADA, false, 7) === URL_ASSINADA, "(orig 2) não-PDF nunca leva âncora de página");
+  checar(destinoDoOriginal(URL_ASSINADA, true, null) === URL_ASSINADA, "(orig 3) PDF sem página → URL pura");
+  checar(paginaValida("12") === 12, "(orig 4) '12' é página 12");
+  for (const ruim of ["0", "-3", "1.5", "3abc", "", "1e3", " 4", "9999999", null, undefined]) {
+    checar(paginaValida(ruim as string | null) === null, `(orig 5) ${JSON.stringify(ruim)} NÃO é página`);
+  }
+  checar(ehPdf("Balanço 2024.PDF", null) && !ehPdf("dre.xlsx", "x/dre.pdf") && ehPdf(null, "k/a.pdf"),
+    "(orig 6) PDF decidido pelo nome original, com a chave como reserva");
+  checar(rotuloDoLink(true, 3) === "abre na página 3" && rotuloDoLink(false, 3) === "abre o arquivo",
+    "(orig 7) o rótulo só promete página quando ela será aplicada");
+  checar(hrefDoOriginal("c1", "d 1", 4) === "/casos/c1/documentos/d%201/original?pagina=4"
+    && hrefDoOriginal("c1", "d1") === "/casos/c1/documentos/d1/original",
+    "(orig 8) href aponta para a rota, com a página só quando existe");
 }
 
 if (falhas.length > 0) {
