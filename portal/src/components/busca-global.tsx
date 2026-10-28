@@ -1,12 +1,14 @@
 "use client";
 
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { IconeBusca } from "@/components/icones";
 import {
-  ROTULO_DO_GRUPO, acoesDoTermo, termoDaBusca, type ResultadoDeBusca,
+  ROTULO_DO_GRUPO, acoesDoTermo, termoDaBusca, LIMITE_POR_GRUPO,
+  type GrupoDeBusca, type ResultadoDeBusca,
 } from "@/lib/busca-global";
+import { interceptarNavegacao } from "@/lib/alteracoes-pendentes";
 
 // A BUSCA GLOBAL (⌘K / Ctrl+K) na barra de topo.
 //
@@ -24,7 +26,9 @@ import {
 // uma lista vazia — "Nada encontrado" afirmaria uma ausência que ninguém mediu.
 
 const ESPERA_MS = 250;
-type Resposta = { termo: string; resultados: ResultadoDeBusca[] } | { termo: string; erro: string };
+type Resposta =
+  | { termo: string; resultados: ResultadoDeBusca[]; truncados: GrupoDeBusca[] }
+  | { termo: string; erro: string; sessaoExpirada?: boolean };
 
 export function BuscaGlobal() {
   const router = useRouter();
@@ -46,18 +50,6 @@ export function BuscaGlobal() {
 
   const termo = termoDaBusca(q);
 
-  // ⌘K / Ctrl+K abre de qualquer tela (e fecha, se já aberto).
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setAberto((v) => !v);
-      }
-    };
-    document.addEventListener("keydown", aoTeclar);
-    return () => document.removeEventListener("keydown", aoTeclar);
-  }, []);
-
   const fechar = useCallback(() => {
     setAberto(false);
     setQ("");
@@ -65,6 +57,19 @@ export function BuscaGlobal() {
     setIndice(0);
     gatilho.current?.focus();
   }, []);
+
+  // ⌘K / Ctrl+K abre de qualquer tela (e fecha, se já aberto — por `fechar()`, que devolve o
+  // foco ao gatilho e limpa o termo e a resposta, como Esc).
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        if (aberto) fechar(); else setAberto(true);
+      }
+    };
+    document.addEventListener("keydown", aoTeclar);
+    return () => document.removeEventListener("keydown", aoTeclar);
+  }, [aberto, fechar]);
 
   // A BUSCA: debounce de 250ms e cancelamento da anterior. Sem termo válido (< 2
   // caracteres) NENHUMA requisição sai.
@@ -75,11 +80,15 @@ export function BuscaGlobal() {
       try {
         const r = await fetch(`/api/busca?q=${encodeURIComponent(termo)}`, { signal: ctl.signal });
         const j = (await r.json().catch(() => null)) as
-          | { resultados?: ResultadoDeBusca[]; erro?: string } | null;
-        if (!r.ok || !j || !Array.isArray(j.resultados)) {
+          | { resultados?: ResultadoDeBusca[]; truncados?: GrupoDeBusca[]; erro?: string } | null;
+        // Sessão expirada: 401 da rota, ou — se algum proxy ainda redirecionar — resposta que
+        // seguiu o redirect e não é JSON (HTML de /login com 200). Nunca "falha genérica".
+        if (r.status === 401 || r.redirected || (r.ok && !j)) {
+          setResposta({ termo, erro: "Sua sessão expirou — entre de novo.", sessaoExpirada: true });
+        } else if (!r.ok || !j || !Array.isArray(j.resultados)) {
           setResposta({ termo, erro: j?.erro ?? "A busca falhou. Tente de novo." });
         } else {
-          setResposta({ termo, resultados: j.resultados });
+          setResposta({ termo, resultados: j.resultados, truncados: j.truncados ?? [] });
         }
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
@@ -91,7 +100,9 @@ export function BuscaGlobal() {
 
   const respondeu = termo !== null && resposta !== null && resposta.termo === termo;
   const erro = respondeu && "erro" in resposta ? resposta.erro : null;
+  const sessaoExpirada = respondeu && "erro" in resposta && resposta.sessaoExpirada === true;
   const achados = respondeu && "resultados" in resposta ? resposta.resultados : [];
+  const truncados = respondeu && "truncados" in resposta ? resposta.truncados : [];
   const buscando = termo !== null && !respondeu;
   const itens = [...acoesDoTermo(termo), ...achados];
   const ativo = Math.min(indice, Math.max(itens.length - 1, 0));
@@ -99,30 +110,43 @@ export function BuscaGlobal() {
 
   const ir = (item: ResultadoDeBusca) => {
     fechar();
+    // Com alterações não salvas na tela (Modelagem), o editor pede confirmação em vez de sair.
+    if (interceptarNavegacao(item.href)) return;
     router.push(item.href);
   };
 
-  // Esc fecha; Tab é PRENDIDO no painel (o foco volta ao primeiro/último focável).
-  const aoTeclarNoPainel = (e: React.KeyboardEvent) => {
-    if (e.key === "Escape") { e.preventDefault(); fechar(); return; }
-    if (e.key === "Tab") {
-      const foc = Array.from(painel.current?.querySelectorAll<HTMLElement>("input, button:not([disabled])") ?? []);
-      if (foc.length === 0) return;
-      const i = foc.indexOf(document.activeElement as HTMLElement);
-      const prox = e.shiftKey ? (i <= 0 ? foc.length - 1 : i - 1) : (i === foc.length - 1 ? 0 : i + 1);
-      e.preventDefault();
-      foc[prox].focus();
-    }
-  };
+  // Esc fecha; Tab é PRENDIDO no painel (o foco volta ao primeiro/último focável). Ouvinte no
+  // documento, e não no `div role="dialog"` (elemento não-nativo com ouvinte): o foco vive no
+  // combobox, então o teclado sempre passa por aqui. Os botões de fundo/opção têm tabIndex -1.
+  useEffect(() => {
+    if (!aberto) return;
+    const aoTeclarNoPainel = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); fechar(); return; }
+      if (e.key === "Tab") {
+        const foc = Array.from(painel.current?.querySelectorAll<HTMLElement>(
+          'input, button:not([disabled]):not([tabindex="-1"]), a[href]') ?? []);
+        if (foc.length === 0) return;
+        const i = foc.indexOf(document.activeElement as HTMLElement);
+        const prox = e.shiftKey ? (i <= 0 ? foc.length - 1 : i - 1) : (i === foc.length - 1 ? 0 : i + 1);
+        e.preventDefault();
+        foc[prox].focus();
+      }
+    };
+    document.addEventListener("keydown", aoTeclarNoPainel);
+    return () => document.removeEventListener("keydown", aoTeclarNoPainel);
+  }, [aberto, fechar]);
 
   const aoTeclarNoCampo = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
       if (itens.length === 0) return;
       setIndice((ativo + (e.key === "ArrowDown" ? 1 : itens.length - 1)) % itens.length);
-    } else if (e.key === "Enter" && itens[ativo]) {
+    } else if (e.key === "Enter") {
       e.preventDefault();
-      ir(itens[ativo]);
+      // Busca em andamento: a lista ainda é só as ações rápidas, e Enter abriria a primeira
+      // delas no lugar do resultado que o analista está esperando.
+      if (buscando) return;
+      if (itens[ativo]) ir(itens[ativo]);
     }
   };
 
@@ -132,7 +156,12 @@ export function BuscaGlobal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ativo, aberto, itens.length]);
 
-  let ultimoGrupo: string | null = null;
+  let ultimoGrupo: GrupoDeBusca | null = null;
+  const avisoDeTeto = (g: GrupoDeBusca | null) => g !== null && truncados.includes(g) && (
+    <li key={`teto:${g}`} role="presentation" className="px-2.5 pb-1 text-[11px] text-alerta-900">
+      Mostrando {LIMITE_POR_GRUPO} em {ROTULO_DO_GRUPO[g]} — pode haver mais; refine a busca.
+    </li>
+  );
 
   return (
     <>
@@ -152,17 +181,18 @@ export function BuscaGlobal() {
       </button>
 
       {aberto && createPortal(
-        <div
-          className="fixed inset-0 z-50 flex items-start justify-center bg-tinta-900/50 p-4 pt-[12vh]"
-          onMouseDown={(e) => { if (e.target === e.currentTarget) fechar(); }}
-        >
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-tinta-900/50 p-4 pt-[12vh]">
+          {/* O fundo clicável é um botão nativo atrás do painel (fora da ordem de Tab). */}
+          <button
+            type="button" aria-label="Fechar busca" tabIndex={-1} onClick={fechar}
+            className="absolute inset-0 h-full w-full cursor-default"
+          />
           <div
             ref={painel}
             role="dialog"
             aria-modal="true"
             aria-label="Busca global"
-            onKeyDown={aoTeclarNoPainel}
-            className="flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-tinta-200 bg-folha shadow-xl"
+            className="relative flex max-h-[70vh] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-tinta-200 bg-folha shadow-xl"
           >
             <div className="flex items-center gap-2 border-b border-tinta-200 px-3">
               <IconeBusca tamanho={16} className="text-tinta-500" />
@@ -188,21 +218,26 @@ export function BuscaGlobal() {
             <ul id={idLista} role="listbox" aria-label="Resultados" className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {itens.map((item, i) => {
                 const cabecalho = item.grupo !== ultimoGrupo;
+                const aviso = cabecalho ? avisoDeTeto(ultimoGrupo) : null;
                 ultimoGrupo = item.grupo;
                 return (
-                  <li key={item.chave} role="presentation">
+                  <Fragment key={item.chave}>
+                  {aviso}
+                  <li role="presentation">
                     {cabecalho && (
                       <p className="px-2.5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-tinta-500">
                         {ROTULO_DO_GRUPO[item.grupo]}
                       </p>
                     )}
-                    <div
+                    <button
+                      type="button"
+                      tabIndex={-1}
                       id={idOpcao(i)}
                       role="option"
                       aria-selected={i === ativo}
                       onMouseMove={() => setIndice(i)}
                       onClick={() => ir(item)}
-                      className={`flex cursor-pointer items-baseline gap-2 rounded-md px-2.5 py-2 text-sm ${
+                      className={`flex w-full cursor-pointer items-baseline gap-2 rounded-md px-2.5 py-2 text-left text-sm ${
                         i === ativo ? "bg-tinta-100 text-tinta-900 outline outline-2 -outline-offset-2 outline-tinta-700" : "text-tinta-700"
                       }`}
                     >
@@ -211,10 +246,12 @@ export function BuscaGlobal() {
                         <span className="shrink-0 rounded border border-tinta-300 px-1.5 text-[11px] text-tinta-600">Fechado</span>
                       )}
                       {item.detalhe && <span className="ml-auto min-w-0 truncate text-xs text-tinta-500">{item.detalhe}</span>}
-                    </div>
+                    </button>
                   </li>
+                  </Fragment>
                 );
               })}
+              {avisoDeTeto(ultimoGrupo)}
             </ul>
 
             <div className="border-t border-tinta-200 px-3 py-2 text-xs text-tinta-600" aria-live="polite">
@@ -223,6 +260,11 @@ export function BuscaGlobal() {
               {erro !== null && (
                 <span role="alert" className="flex items-center justify-between gap-2 text-risco-700">
                   <span>{erro}</span>
+                  {sessaoExpirada ? (
+                    <a href="/login" className="rounded border border-risco-300 px-2 py-0.5 font-medium hover:bg-risco-50">
+                      Entrar de novo
+                    </a>
+                  ) : (
                   <button
                     type="button"
                     onClick={() => { setResposta(null); setTentativa((n) => n + 1); }}
@@ -230,10 +272,11 @@ export function BuscaGlobal() {
                   >
                     Tentar de novo
                   </button>
+                  )}
                 </span>
               )}
               {respondeu && erro === null && achados.length === 0 && `Nada encontrado para “${termo}”`}
-              {respondeu && erro === null && achados.length > 0 && `${achados.length} resultado${achados.length > 1 ? "s" : ""}`}
+              {respondeu && erro === null && achados.length > 0 && `${achados.length} resultado${achados.length > 1 ? "s" : ""}${truncados.length > 0 ? " — alguns grupos estão limitados" : ""}`}
             </div>
           </div>
         </div>,

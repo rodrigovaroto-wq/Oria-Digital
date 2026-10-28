@@ -10,6 +10,13 @@ import { padraoDeBusca } from "./painel";
 export const MIN_CARACTERES = 2;
 export const MAX_CARACTERES = 60;
 export const LIMITE_POR_GRUPO = 6;
+/**
+ * Quantas VERSÕES de documento a rota traz para depois reduzir a documentos distintos. O
+ * `limit` do banco é por linha de `documento_versao`, e um documento com 20 versões que casam
+ * o termo enchia o grupo sozinho ("1 resultado" com 20 casando). A janela é maior que o teto de
+ * propósito: a deduplicação por documento acontece DEPOIS dela, e janela cheia vira aviso.
+ */
+export const JANELA_DE_VERSOES = 30;
 
 /**
  * O termo que vale ser enviado: aparado, no máximo 60 caracteres, e NULO abaixo
@@ -72,6 +79,12 @@ export function acoesDoTermo(termo: string | null): ResultadoDeBusca[] {
   return ACOES_RAPIDAS.filter((a) => semAcento(a.rotulo).includes(t));
 }
 
+export type RespostaDaBusca = {
+  resultados: ResultadoDeBusca[];
+  /** grupos em que o teto foi atingido: a lista NÃO é exaustiva (regra 1: ausência não é dado) */
+  truncados: GrupoDeBusca[];
+};
+
 export type LinhasDaBusca = {
   mandatos: ReadonlyArray<{ id: string; nome: string; fechado_em: string | null }>;
   documentos: ReadonlyArray<{
@@ -89,40 +102,53 @@ export function cnpjFormatado(cnpj: string): string {
 }
 
 /**
- * As linhas do banco → a lista plana, na ordem em que aparece (mandatos,
- * documentos, entidades). Um documento com várias versões casando o nome entra UMA
- * vez (a chave é o documento, não a versão), e a mesma entidade idem. Documento sem
- * `nome_original` não chega aqui — o `ilike` já o excluiu —, mas se chegar, o rótulo
- * diz "(sem nome)" em vez de ficar em branco.
+ * As linhas do banco → a lista plana, na ordem em que aparece (mandatos, documentos,
+ * entidades), MAIS os grupos cujo teto foi atingido. A rota pede UMA linha além do teto
+ * (mandatos, entidades) e uma janela de versões (documentos); aqui o documento é deduplicado
+ * ANTES do corte, e o grupo é `truncado` quando sobrou resultado distinto além do teto OU
+ * quando a janela de versões veio cheia (pode haver mais documentos além dela). Um documento
+ * com várias versões casando entra UMA vez (a chave é o documento, não a versão), e a mesma
+ * entidade idem. Documento sem `nome_original` não chega aqui — o `ilike` já o excluiu —,
+ * mas se chegar, o rótulo diz "(sem nome)" em vez de ficar em branco.
  */
-export function agruparResultados(l: LinhasDaBusca): ResultadoDeBusca[] {
+export function agruparResultados(l: LinhasDaBusca): RespostaDaBusca {
   const out: ResultadoDeBusca[] = [];
+  const truncados: GrupoDeBusca[] = [];
   for (const m of l.mandatos.slice(0, LIMITE_POR_GRUPO)) {
     out.push({
       chave: `mandato:${m.id}`, grupo: "mandatos", rotulo: m.nome,
       fechado: m.fechado_em !== null, href: `/casos/${m.id}`,
     });
   }
+  if (l.mandatos.length > LIMITE_POR_GRUPO) truncados.push("mandatos");
+
   const vistosDoc = new Set<string>();
+  const docs: ResultadoDeBusca[] = [];
   for (const d of l.documentos) {
-    if (vistosDoc.has(d.documento_id) || vistosDoc.size >= LIMITE_POR_GRUPO) continue;
+    if (vistosDoc.has(d.documento_id)) continue;
     vistosDoc.add(d.documento_id);
-    out.push({
+    docs.push({
       chave: `documento:${d.documento_id}`, grupo: "documentos",
       rotulo: d.nome_original ?? "(sem nome)", detalhe: d.caso_nome ?? undefined,
       href: `/casos/${d.caso_id}/documentos/${d.documento_id}`,
     });
   }
+  out.push(...docs.slice(0, LIMITE_POR_GRUPO));
+  if (docs.length > LIMITE_POR_GRUPO || l.documentos.length >= JANELA_DE_VERSOES) truncados.push("documentos");
+
   const vistosEnt = new Set<string>();
+  const ents: ResultadoDeBusca[] = [];
   for (const e of l.entidades) {
-    // Razão social e CNPJ são duas consultas: a união passa de 6, e o teto é do grupo.
-    if (vistosEnt.has(e.id) || vistosEnt.size >= LIMITE_POR_GRUPO) continue;
+    if (vistosEnt.has(e.id)) continue;
     vistosEnt.add(e.id);
-    out.push({
+    ents.push({
       chave: `entidade:${e.id}`, grupo: "entidades", rotulo: e.razao_social,
       detalhe: [e.cnpj ? cnpjFormatado(e.cnpj) : null, e.caso_nome].filter(Boolean).join(" · ") || undefined,
       href: `/casos/${e.caso_id}/perimetro`,
     });
   }
-  return out;
+  // Razão social e CNPJ são duas consultas: a união passa de 6, e o teto é do grupo.
+  out.push(...ents.slice(0, LIMITE_POR_GRUPO));
+  if (ents.length > LIMITE_POR_GRUPO) truncados.push("entidades");
+  return { resultados: out, truncados };
 }

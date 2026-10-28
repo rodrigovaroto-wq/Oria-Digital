@@ -12,6 +12,7 @@
 //   • o resultado é HONESTO: se uma seção falhou, o resumo é de erro, diz quais salvaram e quais
 //     não, e a seção que falhou continua "não salva" — nunca "salvo" por contaminação das outras.
 //
+// (O "gravado" vem do servidor — ver `escolhasVisiveis` abaixo.)
 // O servidor não mudou: cada seção do lote vai à mesma ação `salvarSecao` (que chama
 // `fn_vincular_linha_premissa` por linha), com os mesmos campos `orig__i` de antes.
 
@@ -100,27 +101,72 @@ export function formDataDoLote(lote: LoteDaSecao): FormData {
   return fd;
 }
 
-/**
- * Passa a "gravado" SÓ as seções que o servidor confirmou, e com o que FOI ENVIADO (não com o
- * estado de agora: o analista pode ter editado durante o salvamento). Seção que falhou — ou que
- * salvou parte das linhas e recusou o resto — fica como estava e continua "não salva".
- */
-export function promoverGravado(
-  gravado: EscolhasPorSecao, lotesOk: LoteDaSecao[],
+// O "GRAVADO" É O QUE O SERVIDOR DEVOLVE, nunca o que foi enviado.
+//
+// ANTES: um `gravado` em estado de React era promovido com o que o lote ENVIOU, seção a seção,
+// só quando a seção inteira voltava `ok`. `salvarSecao` grava umas linhas e recusa outras e
+// devolve erro — então as linhas que o banco GRAVOU ficavam com o `gravado` antigo: "Descartar"
+// as devolvia ao valor velho na tela enquanto o banco (e o Excel) guardavam o novo, a barra
+// contava linha já gravada, e "Salvar tudo" a reenviava (trilha de decisão duplicada). E, como
+// o estado local vencia o que o servidor mandava, remover uma premissa no passo 2 deixava o vínculo
+// velho na tela como "salvo".
+//
+// AGORA: o estado local guarda só as EDIÇÕES do analista (`edicoes`), e tudo o mais lê do que o
+// servidor mandou (as props, renovadas pelo `revalidatePath`). Linha suja = a escolha visível
+// difere do que o servidor tem. Salvamento parcial deixa suja exatamente a linha recusada.
+
+/** O que a tela mostra: o servidor, com as edições do analista por cima. */
+export function escolhasVisiveis(
+  servidor: EscolhasPorSecao, edicoes: EscolhasPorSecao,
 ): EscolhasPorSecao {
-  const novo: EscolhasPorSecao = { ...gravado };
-  for (const lote of lotesOk) {
-    const sec = { ...novo[lote.secao] };
-    for (const l of lote.linhas) sec[l.rotulo_norm] = l.novo;
-    novo[lote.secao] = sec;
-  }
-  return novo;
+  return Object.fromEntries(Object.entries(servidor).map(
+    ([secao, linhas]) => [secao, { ...linhas, ...edicoes[secao] }],
+  ));
+}
+
+/** Registra uma edição; a que volta ao valor do servidor deixa de ser edição. */
+export function registrarEdicao(
+  edicoes: EscolhasPorSecao, servidor: EscolhasPorSecao, visivel: EscolhasPorSecao,
+  secao: string, rotulo: string, campo: keyof EscolhaLinha, valor: string,
+): EscolhasPorSecao {
+  const nova = { ...(visivel[secao]?.[rotulo] ?? VAZIA), [campo]: valor };
+  const sec = { ...edicoes[secao] };
+  if (linhaSuja(nova, servidor[secao]?.[rotulo])) sec[rotulo] = nova; else delete sec[rotulo];
+  return { ...edicoes, [secao]: sec };
+}
+
+/**
+ * Descarta a edição que o servidor já alcançou (salvou) ou ultrapassou (a premissa foi removida
+ * no passo 2): sem isso a edição velha, igual ao valor de antes, reapareceria como "não salva".
+ */
+export function podarEdicoes(
+  edicoes: EscolhasPorSecao, servidor: EscolhasPorSecao,
+): EscolhasPorSecao {
+  return Object.fromEntries(Object.entries(edicoes).map(([secao, linhas]) => [
+    secao, Object.fromEntries(Object.entries(linhas).filter(
+      ([rot, e]) => linhaSuja(e, servidor[secao]?.[rot]),
+    )),
+  ]));
+}
+
+/** Quantas contas da seção têm premissa por linha NÃO salva que o lote em lote sobrescreveria. */
+export function excecoesQueOLoteSubstitui(
+  contas: ReadonlyArray<{ rotulo_norm: string }>,
+  visivel: Record<string, EscolhaLinha> | undefined,
+  servidor: Record<string, EscolhaLinha> | undefined,
+  premissaDoLote: string,
+): number {
+  return contas.filter((l) => {
+    const e = visivel?.[l.rotulo_norm]?.premissa ?? "";
+    const g = servidor?.[l.rotulo_norm]?.premissa ?? "";
+    return e !== g && e !== premissaDoLote;
+  }).length;
 }
 
 export interface ResumoDoSalvamento {
   tom: "ok" | "erro";
   texto: string;
-  /** as seções cujo resultado foi `ok` — só elas viram "gravado" */
+  /** as seções cujo resultado foi `ok` (só o texto as usa; o "gravado" vem do servidor) */
   secoesOk: string[];
 }
 

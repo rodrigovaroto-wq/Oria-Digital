@@ -44,9 +44,12 @@ import {
   type ConferenciaModelagemCobertura,
 } from "../src/lib/modelagem-cobertura.ts";
 import {
+  escolhasVisiveis,
+  excecoesQueOLoteSubstitui,
   formDataDoLote,
   lotesPendentes,
-  promoverGravado,
+  podarEdicoes,
+  registrarEdicao,
   resumirSalvamento,
   totalPendente,
   type EscolhasPorSecao,
@@ -253,12 +256,48 @@ console.log("--- 9. SALVAR TUDO (`modelagem-lote.ts`): só as linhas que mudaram
   ok(nenhuma.tom === "erro" && /Nenhuma seção foi salva/.test(nenhuma.texto) && nenhuma.secoesOk.length === 0,
     "nenhuma salvou: diz isso", nenhuma.texto);
 
-  // O estado "gravado" depois da falha parcial: a seção que falhou CONTINUA suja.
-  const g2 = promoverGravado(gravado, lotes.filter((l) => parcial.secoesOk.includes(l.secao)));
-  const restante = lotesPendentes(secoes, esc, g2);
-  ok(restante.length === 1 && restante[0].secao === "custos" && totalPendente(restante) === 1,
-    "após falha parcial, só a seção que falhou continua pendente", restante.map((l) => l.secao).join());
-  ok(gravado.receita.a.premissa === "P1", "promover não muta o gravado anterior");
+  // O "GRAVADO" VEM DO SERVIDOR. O defeito: `salvarSecao` grava umas linhas e recusa outras; o
+  // `gravado` local só era promovido para seção inteira `ok`, então a linha que o banco GRAVOU
+  // seguia "suja" (e "Descartar" a devolvia ao valor velho). Não há fixture de produção: o
+  // arranjo abaixo é o contrato, escrito para a regra — a seção `receita` tinha a (gravada) e
+  // b (recusada); o servidor, após o `revalidatePath`, devolve a=P9 e b=""; a edição é a=P9, b=P7.
+  const servidorDepois: EscolhasPorSecao = structuredClone(gravado);
+  servidorDepois.receita.a = v("P9");     // o banco gravou
+  const edicoes: EscolhasPorSecao = { receita: { a: v("P9"), b: v("P7") } };  // b foi recusada
+  const aposRefresh = podarEdicoes(edicoes, servidorDepois);
+  const visivel = escolhasVisiveis(servidorDepois, aposRefresh);
+  const restante = lotesPendentes(secoes, visivel, servidorDepois);
+  ok(restante.length === 1 && restante[0].linhas.map((x) => x.rotulo_norm).join() === "b" && totalPendente(restante) === 1,
+    "salvamento parcial: só a linha RECUSADA continua pendente; a gravada na mesma seção fica limpa",
+    restante.flatMap((l) => l.linhas.map((x) => x.rotulo_norm)).join());
+  ok(restante[0].linhas[0].orig.premissa === "" && restante[0].linhas[0].novo.premissa === "P7",
+    "o reenvio leva a linha recusada contra o valor do SERVIDOR (nenhum reenvio da gravada)");
+  // Descartar: a tela volta ao que o servidor TEM (P9 gravado), não ao que havia antes (P1).
+  const descartado = escolhasVisiveis(servidorDepois, {});
+  ok(descartado.receita.a.premissa === "P9" && descartado.receita.b.premissa === "" &&
+    lotesPendentes(secoes, descartado, servidorDepois).length === 0,
+    "Descartar devolve ao valor do SERVIDOR (P9), não ao valor de antes do salvamento (P1)",
+    descartado.receita.a.premissa);
+  // Servidor mudou por fora (premissa removida no passo 2): a linha que o analista NÃO editou
+  // mostra o que o servidor tem agora. Antes, o estado local (fotografia do mount) vencia o
+  // servidor e o vínculo removido seguia na tela como "salvo".
+  const servidorSemP2: EscolhasPorSecao = structuredClone(gravado);
+  servidorSemP2.custos.d = v("", "S1");
+  const visSemP2 = escolhasVisiveis(servidorSemP2, podarEdicoes({}, servidorSemP2));
+  ok(visSemP2.custos.d.premissa === "" && lotesPendentes(secoes, visSemP2, servidorSemP2).length === 0,
+    "premissa removida no servidor: a tela mostra o que o servidor tem (sem vínculo fantasma 'salvo')",
+    visSemP2.custos.d.premissa);
+  // registrarEdicao: editar e devolver ao valor do servidor deixa de ser edição.
+  const e1 = registrarEdicao({}, gravado, escolhasVisiveis(gravado, {}), "receita", "a", "premissa", "P9");
+  ok(e1.receita.a.premissa === "P9" && Object.keys(registrarEdicao(e1, gravado, escolhasVisiveis(gravado, e1), "receita", "a", "premissa", "P1").receita).length === 0,
+    "editar e devolver ao valor do servidor remove a edição");
+  // "aplicar em lote" avisa quantas escolhas por linha NÃO salvas ele substituiria.
+  const contasRec = [{ rotulo_norm: "a" }, { rotulo_norm: "b" }];
+  ok(excecoesQueOLoteSubstitui(contasRec, { a: v("P9"), b: v("") }, gravado.receita, "P5") === 1
+    && excecoesQueOLoteSubstitui(contasRec, { a: v("P5"), b: v("") }, gravado.receita, "P5") === 0
+    && excecoesQueOLoteSubstitui(contasRec, gravado.receita, gravado.receita, "P5") === 0,
+    "lote: conta o que seria substituído (escolha pendente ≠ lote); pendente igual ao lote e linha limpa não contam");
+  ok(gravado.receita.a.premissa === "P1", "as funções não mutam o servidor anterior");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

@@ -59,7 +59,7 @@ import {
   humanizar, partesDaDescricao, rotuloDaPendencia, rotuloDaSecao, rotulosCitados, semALista, suavizarMensagem,
 } from "../src/lib/rotulos.ts";
 import { BOTOES_DECISAO, ROTULO_POR_ESTADO, rotuloDoEstado } from "../src/lib/pendencia.ts";
-import { acoesDoTermo, agruparResultados, digitosDoCnpj, padraoDoTermo, termoDaBusca } from "../src/lib/busca-global.ts";
+import { JANELA_DE_VERSOES, acoesDoTermo, agruparResultados, digitosDoCnpj, padraoDoTermo, termoDaBusca } from "../src/lib/busca-global.ts";
 import { padraoDeBusca as padraoDaLista } from "../src/lib/painel.ts";
 
 let ok = 0;
@@ -3500,7 +3500,7 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   checar(acoesDoTermo(null).length === 3 && acoesDoTermo("novo").map((a) => a.rotulo).join() === "Novo mandato"
     && acoesDoTermo("inicio").map((a) => a.rotulo).join() === "Início" && acoesDoTermo("zzz").length === 0,
     "(42b) ações rápidas: sem termo todas; com termo casam sem acento e sem caixa", "");
-  const fatia = agruparResultados({
+  const { resultados: fatia, truncados: truncadosFatia } = agruparResultados({
     mandatos: [{ id: "m1", nome: "Vertentes", fechado_em: null }, { id: "m2", nome: "Antigo", fechado_em: "2026-01-01" }],
     documentos: [
       { documento_id: "d1", caso_id: "m1", nome_original: "dre.pdf", caso_nome: "Vertentes" },
@@ -3523,13 +3523,42 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
     && porChave["entidade:e1"]?.detalhe === "12.345.678/0001-90 · Vertentes",
     "(42b) entidade (razão social ∪ CNPJ) sem duplicata, com CNPJ formatado e link para o Grupo econômico",
     String(porChave["entidade:e1"]?.detalhe));
-  const muitos = agruparResultados({
+  checar(truncadosFatia.length === 0, "(42b) abaixo do teto nenhum grupo é marcado como truncado", truncadosFatia.join());
+  const { resultados: muitos, truncados: truncMuitos } = agruparResultados({
     mandatos: Array.from({ length: 9 }, (_, i) => ({ id: `m${i}`, nome: `M${i}`, fechado_em: null })),
     documentos: [],
     entidades: Array.from({ length: 9 }, (_, i) => ({ id: `e${i}`, caso_id: "m1", razao_social: `E${i}`, cnpj: null, caso_nome: null })),
   });
+  checar(truncMuitos.join() === "mandatos,entidades", "(42b) teto atingido: mandatos e entidades dizem que a lista não é exaustiva", truncMuitos.join());
   checar(muitos.filter((r) => r.grupo === "mandatos").length === 6 && muitos.filter((r) => r.grupo === "entidades").length === 6,
     "(42b) teto de 6 por grupo (a união razão social + CNPJ também respeita)", String(muitos.length));
+  // O DEFEITO: o `limit(6)` era por linha de `documento_versao` e a deduplicação por documento
+  // vinha DEPOIS — um documento com 20 versões casando enchia o grupo ("1 resultado" com 7
+  // documentos casando). Arranjo escrito para a regra (não é fixture de produção): d0 com 20
+  // versões primeiro (as mais recentes), depois 7 outros documentos, dentro da janela de 30.
+  const versao = (doc: string, n: number) =>
+    ({ documento_id: doc, caso_id: "m1", nome_original: `${doc}-v${n}.pdf`, caso_nome: "Vertentes" });
+  const docsMuitasVersoes = [
+    ...Array.from({ length: 20 }, (_, n) => versao("d0", n)),
+    ...Array.from({ length: 7 }, (_, i) => versao(`x${i}`, 1)),
+  ];
+  const dedupe = agruparResultados({ mandatos: [], documentos: docsMuitasVersoes, entidades: [] });
+  checar(dedupe.resultados.filter((r) => r.grupo === "documentos").length === 6
+    && dedupe.resultados[0].chave === "documento:d0",
+    "(42b) dedupe ANTES do teto: 20 versões de um documento não consomem os 6 lugares do grupo",
+    String(dedupe.resultados.length));
+  checar(dedupe.truncados.join() === "documentos",
+    "(42b) 8 documentos distintos casam e só 6 aparecem: o grupo é marcado truncado", dedupe.truncados.join());
+  const umSo = agruparResultados({
+    mandatos: [], documentos: Array.from({ length: 20 }, (_, n) => versao("d0", n)), entidades: [],
+  });
+  checar(umSo.resultados.length === 1 && umSo.truncados.length === 0,
+    "(42b) um documento com 20 versões, janela não cheia: 1 resultado e SEM aviso de teto", String(umSo.resultados.length));
+  const janelaCheia = agruparResultados({
+    mandatos: [], documentos: Array.from({ length: JANELA_DE_VERSOES }, (_, n) => versao("d0", n)), entidades: [],
+  });
+  checar(janelaCheia.truncados.join() === "documentos",
+    "(42b) janela de versões cheia: pode haver mais documentos além dela — o grupo avisa", janelaCheia.truncados.join());
 }
 
 // ---- 43: book de uma moeda só não ganha ruído ------------------------------

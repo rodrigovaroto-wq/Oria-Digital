@@ -1,14 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
-  LIMITE_POR_GRUPO, agruparResultados, digitosDoCnpj, padraoDoTermo, termoDaBusca,
+  JANELA_DE_VERSOES, LIMITE_POR_GRUPO, agruparResultados, digitosDoCnpj, padraoDoTermo, termoDaBusca,
   type LinhasDaBusca,
 } from "@/lib/busca-global";
 
 // BUSCA GLOBAL (⌘K). Cliente autenticado do servidor: a RLS decide o que cada
 // pessoa vê, sem service role. Por tecla aceita (>= 2 caracteres, após o debounce
 // do cliente): 3 consultas com colunas nomeadas, filtro em ILIKE no Postgres e
-// `limit` 6 — (4 se o termo for CNPJ). Nada de polling.
+// `limit` de 6+1 (a linha extra só detecta que o teto foi atingido) — documentos: janela de
+// 30 versões, deduplicada por documento antes do corte de 6. Nada de polling.
 //
 // FALHA NUNCA VIRA LISTA VAZIA (regra 1): qualquer consulta com erro derruba a
 // resposta inteira em 500 com a mensagem, e a tela mostra o erro — não "Nada
@@ -36,17 +37,17 @@ export async function GET(req: NextRequest) {
 
   const [mandatos, documentos, entidadesNome, entidadesCnpj] = await Promise.all([
     supabase.from("caso").select("id, nome, fechado_em")
-      .ilike("nome", padrao).order("criado_em", { ascending: false }).limit(LIMITE_POR_GRUPO),
+      .ilike("nome", padrao).order("criado_em", { ascending: false }).limit(LIMITE_POR_GRUPO + 1),
     supabase.from("documento_versao")
       .select("documento_id, nome_original, documento!inner(caso_id, caso(nome))")
-      .ilike("nome_original", padrao).order("criada_em", { ascending: false }).limit(LIMITE_POR_GRUPO),
+      .ilike("nome_original", padrao).order("criada_em", { ascending: false }).limit(JANELA_DE_VERSOES),
     // Entidade por razão social; por CNPJ só quando o termo é número (os dígitos
     // não têm curinga a escapar). Termo numérico procura nas duas colunas.
     supabase.from("entidade").select("id, caso_id, razao_social, cnpj, caso(nome)")
-      .ilike("razao_social", padrao).limit(LIMITE_POR_GRUPO),
+      .ilike("razao_social", padrao).limit(LIMITE_POR_GRUPO + 1),
     digitos
       ? supabase.from("entidade").select("id, caso_id, razao_social, cnpj, caso(nome)")
-          .ilike("cnpj", `%${digitos}%`).limit(LIMITE_POR_GRUPO)
+          .ilike("cnpj", `%${digitos}%`).limit(LIMITE_POR_GRUPO + 1)
       : Promise.resolve({ data: [], error: null }),
   ]);
 
@@ -80,5 +81,5 @@ export async function GET(req: NextRequest) {
       }),
   };
 
-  return NextResponse.json({ resultados: agruparResultados(linhas) });
+  return NextResponse.json(agruparResultados(linhas));
 }

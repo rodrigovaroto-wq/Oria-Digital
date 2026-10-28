@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { aplicarEmLote, type Resultado } from "./actions";
-import { linhaSuja, type EscolhaLinha } from "@/lib/modelagem-lote";
+import { excecoesQueOLoteSubstitui, linhaSuja, type EscolhaLinha } from "@/lib/modelagem-lote";
 
 // A SEÇÃO 3 DA MODELAGEM, COM ESTADO PRÓPRIO — e por que ela precisou virar
 // componente de cliente.
@@ -129,15 +129,20 @@ export function SecaoLinhas({
   const semSecao = secao === "(sem seção canônica)";
   const contas = linhas.filter((l) => l.papel === "conta");
   const [premissaDoLote, setPremissaDoLote] = useState("");
+  const [confirmandoLote, setConfirmandoLote] = useState(false);
 
   const [rLote, actLote, aplicando] = useActionState(
     async (prev: Resultado, fd: FormData) => {
+      setConfirmandoLote(false);
       const r = await aplicarEmLote(casoId, prev, fd);
       if (r?.tom === "ok") onLoteAplicado(String(fd.get("premissa") ?? ""));
       return r;
     }, null as Resultado);
 
   const vazio: EscolhaLinha = { premissa: "", sazonalidade: "" };
+  // O lote grava a MESMA premissa em todas as contas: a escolha por linha ainda não salva que
+  // difere dela seria substituída em silêncio. Se há alguma, o analista confirma com o número.
+  const substituiria = excecoesQueOLoteSubstitui(contas, escolhas, gravado, premissaDoLote);
   const pendentes = contas.filter((l) => linhaSuja(escolhas[l.rotulo_norm], gravado[l.rotulo_norm])).length;
 
   return (
@@ -155,12 +160,17 @@ export function SecaoLinhas({
           <span className="chip bg-alerta-100 text-alerta-900">{pendentes} não salva(s)</span>
         )}
         {!semSecao && contas.length > 0 && (
-          <form action={actLote} className="flex items-center gap-1">
+          <form
+            action={actLote} className="flex items-center gap-1"
+            onSubmit={(ev) => {
+              if (substituiria > 0 && !confirmandoLote) { ev.preventDefault(); setConfirmandoLote(true); }
+            }}
+          >
             <input type="hidden" name="secao_canonica" value={secao} />
             <select
               name="premissa" required value={premissaDoLote}
               aria-label={`Aplicar em lote nesta seção (${rotulo})`}
-              onChange={(e) => setPremissaDoLote(e.target.value)}
+              onChange={(e) => { setPremissaDoLote(e.target.value); setConfirmandoLote(false); }}
               className="rounded border border-tinta-200 px-1 py-0.5 text-xs"
             >
               <option value="" disabled>aplicar em lote…</option>
@@ -170,8 +180,18 @@ export function SecaoLinhas({
               type="submit" disabled={aplicando}
               className="rounded border border-tinta-200 px-2 py-0.5 text-xs hover:bg-tinta-100 disabled:opacity-50"
             >
-              {aplicando ? "aplicando…" : `aplicar às ${contas.length} conta(s)`}
+              {aplicando ? "aplicando…"
+                : confirmandoLote ? `Confirmar: substituir ${substituiria} escolha(s) não salva(s) e aplicar`
+                : `aplicar às ${contas.length} conta(s)`}
             </button>
+            {confirmandoLote && (
+              <button
+                type="button" onClick={() => setConfirmandoLote(false)}
+                className="text-xs text-tinta-500 underline"
+              >
+                cancelar
+              </button>
+            )}
             <Aviso r={rLote} />
           </form>
         )}

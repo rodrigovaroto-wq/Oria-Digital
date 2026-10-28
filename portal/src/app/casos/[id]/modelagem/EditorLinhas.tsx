@@ -1,13 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { salvarSecao } from "./actions";
 import {
   Aviso, PAPEL_INFO, SecaoLinhas, SOBREPOSICAO_CURTO,
   type LinhaDaSecao, type OpcaoPremissa,
 } from "./SecaoLinhas";
 import {
-  formDataDoLote, lotesPendentes, promoverGravado, resumirSalvamento, totalPendente,
+  EVENTO_CONFIRMAR_SAIDA, definirPendentes,
+} from "@/lib/alteracoes-pendentes";
+import {
+  escolhasVisiveis, formDataDoLote, lotesPendentes, podarEdicoes, registrarEdicao,
+  resumirSalvamento, totalPendente,
   type EscolhaLinha, type EscolhasPorSecao, type ResultadoDaSecao, type ResumoDoSalvamento,
 } from "@/lib/modelagem-lote";
 
@@ -50,62 +56,90 @@ export function EditorLinhas({
   ativas: OpcaoPremissa[];
   sazonais: OpcaoPremissa[];
 }>) {
-  const [escolhas, setEscolhas] = useState<EscolhasPorSecao>(() => fotografia(secoes));
-  const [gravado, setGravado] = useState<EscolhasPorSecao>(() => fotografia(secoes));
+  const router = useRouter();
+  // SÓ as edições do analista vivem no estado. O "gravado" é o que o SERVIDOR mandou (as props,
+  // renovadas pelo `revalidatePath` de cada ação): ver `modelagem-lote.ts`. Linha que o estado
+  // não conhece (a busca por rótulo traz outro recorte) lê do servidor, nos dois lados.
+  const [edicoes, setEdicoes] = useState<EscolhasPorSecao>({});
+  const [vistas, setVistas] = useState(secoes);
   const [salvando, setSalvando] = useState(false);
   const [resumo, setResumo] = useState<ResumoDoSalvamento | null>(null);
   const [confirmaDescarte, setConfirmaDescarte] = useState(false);
+  const [saida, setSaida] = useState<string | null>(null);
 
-  // Linha que o estado ainda não conhece (a busca por rótulo traz outro recorte da lista) lê do
-  // que o servidor mandou, nos DOIS lados — assim não nasce "suja" nem aparece em branco.
-  const doServidor = fotografia(secoes);
-  const lado = (base: EscolhasPorSecao): EscolhasPorSecao =>
-    Object.fromEntries(secoes.map((s) => [s.secao, { ...doServidor[s.secao], ...base[s.secao] }]));
-  const escolhasAgora = lado(escolhas);
-  const gravadoAgora = lado(gravado);
+  const gravadoAgora = fotografia(secoes);
+  // Servidor mudou (salvou, ou a premissa foi removida no passo 2): a edição que ele alcançou
+  // ou ultrapassou deixa de existir — senão o valor velho voltaria como "não salvo".
+  if (vistas !== secoes) {
+    setVistas(secoes);
+    setEdicoes((e) => podarEdicoes(e, gravadoAgora));
+  }
+  const escolhasAgora = escolhasVisiveis(gravadoAgora, edicoes);
 
   const lotes = lotesPendentes(secoes, escolhasAgora, gravadoAgora);
   const total = totalPendente(lotes);
 
   // Sair da tela com escolha pendente é a maneira mais fácil de perder trabalho aqui.
+  // `beforeunload` cobre fechar/recarregar; a navegação do app (links, ⌘K) passa pela guarda
+  // abaixo, que abre o diálogo de confirmação.
   useEffect(() => {
+    definirPendentes(total);
     if (total === 0) return;
     const aviso = (ev: BeforeUnloadEvent) => { ev.preventDefault(); };
     window.addEventListener("beforeunload", aviso);
-    return () => window.removeEventListener("beforeunload", aviso);
+    return () => { window.removeEventListener("beforeunload", aviso); definirPendentes(0); };
   }, [total]);
+
+  useEffect(() => {
+    if (total === 0) return;
+    const aoClicar = (ev: MouseEvent) => {
+      if (ev.defaultPrevented || ev.button !== 0 || ev.metaKey || ev.ctrlKey || ev.shiftKey || ev.altKey) return;
+      const a = (ev.target as Element | null)?.closest?.("a[href]") as HTMLAnchorElement | null;
+      if (!a || (a.target && a.target !== "_self") || a.hasAttribute("download")) return;
+      const u = new URL(a.href, window.location.href);
+      if (u.origin !== window.location.origin) return;
+      if (u.pathname === window.location.pathname && u.search === window.location.search) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setSaida(u.pathname + u.search + u.hash);
+    };
+    const aoPedir = (ev: Event) => setSaida((ev as CustomEvent<{ href: string }>).detail.href);
+    document.addEventListener("click", aoClicar, true);
+    window.addEventListener(EVENTO_CONFIRMAR_SAIDA, aoPedir);
+    return () => {
+      document.removeEventListener("click", aoClicar, true);
+      window.removeEventListener(EVENTO_CONFIRMAR_SAIDA, aoPedir);
+    };
+  }, [total]);
+
+  useEffect(() => {
+    if (saida === null) return;
+    const aoTeclar = (e: KeyboardEvent) => { if (e.key === "Escape") setSaida(null); };
+    document.addEventListener("keydown", aoTeclar);
+    return () => document.removeEventListener("keydown", aoTeclar);
+  }, [saida]);
 
   const mudar = (secao: string, rotulo: string, campo: "premissa" | "sazonalidade", valor: string) => {
     setResumo(null);
     setConfirmaDescarte(false);
-    setEscolhas((e) => ({
-      ...e,
-      [secao]: { ...e[secao], [rotulo]: { ...escolhasAgora[secao]?.[rotulo], [campo]: valor } as EscolhaLinha },
-    }));
+    setEdicoes((e) => registrarEdicao(e, gravadoAgora, escolhasAgora, secao, rotulo, campo, valor));
   };
 
   // O LOTE (aplicar a todas as contas) é do BANCO e ele grava `sazonalidade = null` em cada conta
-  // (`fn_aplicar_premissa_em_lote` sem `p_sazonalidade`, 0100:222). A tela refletia o contrário:
-  // mantinha a sazonalidade escolhida e a marcava como "gravada". Agora o gravado é o que o banco
-  // ficou — premissa nova, sazonalidade vazia — e uma sazonalidade que estava na tela volta a
-  // aparecer como NÃO SALVA, que é o que ela é.
+  // (`fn_aplicar_premissa_em_lote` sem `p_sazonalidade`, 0100:222). O servidor devolve isso nas
+  // props (a ação revalida); aqui só se mantém a sazonalidade que o analista tinha na tela, que
+  // diante do banco passa a ser NÃO SALVA, que é o que ela é. Até a atualização chegar, a
+  // premissa nova já aparece, e a poda tira a edição quando o servidor a alcança.
   const loteAplicado = (s: SecaoDoEditor, premissa: string) => {
     const contas = s.linhas.filter((l) => l.papel === "conta");
     setResumo(null);
-    setEscolhas((e) => ({
+    setEdicoes((e) => ({
       ...e,
       [s.secao]: {
         ...e[s.secao],
         ...Object.fromEntries(contas.map((l) => [l.rotulo_norm, {
           premissa, sazonalidade: escolhasAgora[s.secao]?.[l.rotulo_norm]?.sazonalidade ?? "",
         }])),
-      },
-    }));
-    setGravado((g) => ({
-      ...g,
-      [s.secao]: {
-        ...g[s.secao],
-        ...Object.fromEntries(contas.map((l) => [l.rotulo_norm, { premissa, sazonalidade: "" }])),
       },
     }));
   };
@@ -127,19 +161,26 @@ export function EditorLinhas({
       feitos.push({ lote, r });
     }
     const res = resumirSalvamento(feitos);
-    setGravado((g) => promoverGravado(g, feitos.filter((f) => res.secoesOk.includes(f.lote.secao)).map((f) => f.lote)));
+    // Nada a "promover": a ação revalidou e as props trazem o que o banco TEM. Linha gravada em
+    // seção que falhou em outra linha fica limpa; só a recusada continua suja.
     setResumo(res);
     setSalvando(false);
   };
 
   const descartar = () => {
     if (!confirmaDescarte) { setConfirmaDescarte(true); return; }
-    setEscolhas(gravadoAgora);
+    setEdicoes({});   // sem edição, a tela mostra o que o SERVIDOR tem
     setConfirmaDescarte(false);
     setResumo(null);
   };
 
   const secoesComPendencia = lotes.length;
+  const sairAgora = () => {
+    const destino = saida;
+    setSaida(null);
+    definirPendentes(0);
+    if (destino) router.push(destino);
+  };
 
   return (
     <div>
@@ -220,6 +261,32 @@ export function EditorLinhas({
             </span>
           )}
         </div>
+      )}
+
+      {saida !== null && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/50 p-4">
+          <div
+            role="alertdialog" aria-modal="true" aria-label="Alterações não salvas"
+            className="w-full max-w-md rounded-lg border border-tinta-200 bg-folha p-4 text-sm shadow-xl"
+          >
+            <p className="font-medium text-tinta-900">
+              {total} {total === 1 ? "alteração não salva" : "alterações não salvas"} nesta tela.
+            </p>
+            <p className="mt-1 text-tinta-600">Se sair agora, elas se perdem — nada foi enviado ao banco.</p>
+            <div className="mt-3 flex justify-end gap-2">
+              <button type="button" autoFocus onClick={() => setSaida(null)} className="btn-primario">
+                Ficar e salvar
+              </button>
+              <button
+                type="button" onClick={sairAgora}
+                className="rounded border border-tinta-200 px-2 py-1 text-xs hover:bg-tinta-100"
+              >
+                Sair sem salvar
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
