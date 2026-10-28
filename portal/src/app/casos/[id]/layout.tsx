@@ -76,7 +76,10 @@ export default async function MandatoLayout({
     { rotulo: "Perguntas ao cliente", sufixo: "/perguntas", contagem: null },
     { rotulo: "Grupo econômico", sufixo: "/perimetro", contagem: null },
     { rotulo: "Modelagem", sufixo: "/modelagem", contagem: null },
-    { rotulo: "Apresentação", sufixo: "/apresentacao", contagem: null },
+    // Os três arquivos do mandato (base de dados, modelo, apresentação) moram aqui. Antes eram 6
+    // links em 3 telas (contados nos `href` do código anterior: 1 na visão geral, 4 na Modelagem
+    // — incluindo "Campos da apresentação" —, 1 na Apresentação), sem dizer qual estava liberado.
+    { rotulo: "Entregáveis", sufixo: "/entregaveis", contagem: null },
   ];
 
   const aberto = new Date(caso.criado_em).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });

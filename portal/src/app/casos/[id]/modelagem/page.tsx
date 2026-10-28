@@ -455,72 +455,29 @@ export default async function ModelagemPage({
             Escolha as premissas deste mandato e diga onde cada uma entra na projeção.
           </p>
         </div>
-        {/* OS DOIS EXPORTS, LADO A LADO (decisão do dono, 07/08/2026). Eram um só,
-            e o "completo" trazia as 12 abas de dado cru junto com o modelo — 29
-            abas para quem só queria o que vai a comitê. Agora são dois arquivos
-            com dois propósitos, e o nome de cada botão diz qual é o seu:
-            "modelagem" entrega as 14 abas do modelo; "dados financeiros" entrega
-            a conferência da ingestão, linha a linha. O de dados vem primeiro por
-            ser o que se usa ANTES de modelar. */}
-        {/* AS DUAS AÇÕES, COM PESOS DIFERENTES. Eram dois botões de peso igual, e
-            a tela não dizia qual é o produto DELA: o export de modelagem. O de
-            dados continua aqui (é o que se usa para conferir antes de modelar),
-            mas como ação secundária — a mesma hierarquia da tela do mandato. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <a
-            href={`/casos/${id}/export?modo=dados`}
-            className="btn-secundario"
-            title="As abas de dado, linha a linha, como saíram da extração. Serve para conferir contra os documentos — não projeta nada."
-          >
-            Exportar dados
-          </a>
-          {/* Com o Portão 2 fechado a rota recusa com 409 e o navegador mostraria
-              um JSON cru: o botão leva à tela do mandato, onde as pendências
-              bloqueantes se decidem, e diz por quê. */}
-          {portaoNaoConf ? (
-            <div className="flex flex-col items-end gap-1">
-              <button type="button" className="btn-primario" disabled>
-                Exportar modelagem — aprovação não conferida
-              </button>
-              <p role="status" className="max-w-xs text-right text-xs text-alerta-900">
-                Não foi possível conferir a aprovação (a consulta falhou ou não devolveu veredito); o
-                export de modelagem fica desabilitado até a conferência responder. Recarregue a
-                página; se persistir, o motivo está na faixa de consultas com erro.
-              </p>
-            </div>
-          ) : exportTravado ? (
-            <Link
-              href={`/casos/${id}`}
-              className="btn-primario"
-              title={`O export de modelagem está bloqueado até a aprovação do mandato: ${(portao?.motivos ?? []).join("; ")}. Decida as pendências na tela do mandato.`}
-            >
-              Exportar modelagem — decidir pendências antes
-            </Link>
-          ) : (
-            <>
-              {/* A APRESENTAÇÃO DE CRÉDITO (.pptx, módulo de crédito do Prompt-Mestre v3) só aparece
-                  onde o export de modelagem aparece: ela lê o MESMO realizado do modelo e passa pelo
-                  mesmo Portão 2 — oferecê-la com o portão fechado seria um botão que devolve 409. */}
-              <a href={`/casos/${id}/apresentacao`} className="btn-secundario"
-                title="Os campos que só o analista ou a pesquisa sabem (títulos, sócios, concorrentes, scorecard). Em branco, saem [a preencher].">
-                Campos da apresentação
-              </a>
-              <a
-                href={`/casos/${id}/export?modo=apresentacao`}
-                className="btn-secundario"
-                title="O módulo de crédito em PowerPoint, no padrão visual Oria: base de informação, evolução financeira, capital de giro, comparativo e amarrações. Gerado do mesmo realizado do modelo."
-              >
-                Gerar apresentação de crédito
-              </a>
-              <a
-                href={`/casos/${id}/export`}
-                className="btn-primario"
-                title="As 14 abas do modelo institucional, projetadas e editáveis dentro do Excel, mais a Modelagem e os índices macro. Sem as abas de dado cru."
-              >
-                Exportar modelagem
-              </a>
-            </>
+        {/* OS EXPORTS SAÍRAM DAQUI (fase 2, item 20). Eram até 4 variantes de botão ("Exportar dados",
+            "Exportar modelagem", "Campos da apresentação", "Gerar apresentação de crédito"), e cada
+            uma repetia a leitura do Portão 2. Agora os três arquivos moram em Entregáveis. O que
+            FICA aqui é o veredito, em palavras: o chip do título (`textoChipModelagem`) e a frase
+            abaixo dizem se o export está liberado, bloqueado (com os motivos) ou NÃO CONFERIDO —
+            sem isso a tela voltaria a dizer "pronto" sobre um export que devolve 409. */}
+        <div className="flex max-w-sm shrink-0 flex-col items-end gap-1 text-right">
+          {portaoNaoConf && (
+            <p role="status" className="text-xs text-alerta-900">
+              Não foi possível conferir a aprovação (a consulta falhou ou não devolveu veredito); o
+              export de modelagem fica retido até a conferência responder. Recarregue a página; se
+              persistir, o motivo está na faixa de consultas com erro.
+            </p>
           )}
+          {exportTravado && (
+            <p className="text-xs text-alerta-900">
+              O export de modelagem está bloqueado até a aprovação do mandato: {(portao?.motivos ?? []).join("; ")}.
+              Decida as pendências na tela do mandato.
+            </p>
+          )}
+          <Link href={`/casos/${id}/entregaveis`} className="text-sm font-medium text-tinta-700 underline">
+            Ver entregáveis →
+          </Link>
         </div>
       </div>
 

@@ -41,6 +41,9 @@ export async function salvarCamposApresentacao(casoId: string, _anterior: Result
     const { error } = await supabase.from("caso_apresentacao_campo").delete().eq("caso_id", casoId).in("chave", vazios);
     if (error) return { tom: "erro", texto: `Os campos preenchidos foram salvos, mas limpar os vazios falhou: ${error.message}.` };
   }
+  // A tela dos campos mora em Entregáveis desde a fase 2; `/apresentacao` só redireciona para lá,
+  // mas revalida as duas para o redirect não servir cache de antes da gravação.
+  revalidatePath(`/casos/${casoId}/entregaveis`);
   revalidatePath(`/casos/${casoId}/apresentacao`);
   return { tom: "ok", texto: `${preenchidos.length} campo(s) salvo(s); ${vazios.length} em branco ficam "[a preencher]".` };
 }

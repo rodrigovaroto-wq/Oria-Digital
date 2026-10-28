@@ -361,31 +361,11 @@ export default async function CasoDashboardPage({
 
   return (
     <div className="space-y-8">
-      {/* O CABEÇALHO, o status e as demais navegações (adicionar arquivos,
-          perguntas, grupo econômico, excluir) moraram aqui até virarem o layout
-          do mandato (`layout.tsx`). Ficam só estas duas ações, até a aba
-          Entregáveis existir.
-
-          UM EXPORT SÓ NESTA TELA (decisão do dono, 07/08/2026). Esta é a tela de
-          CONFERIR O QUE CHEGOU, e o único arquivo que faz sentido aqui é o dos
-          dados — ele existe desde a ingestão, mesmo com pendência aberta. O
-          export de modelagem mora na tela de Modelagem, junto das premissas que
-          ele usa: oferecê-lo aqui convidava a exportar o modelo antes de dizer
-          como cada conta projeta. */}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <a
-          href={`/casos/${id}/export?modo=dados`}
-          className="btn-secundario"
-          title="Todas as abas de dado, linha a linha, sem modelagem. Serve para conferir a extração contra os documentos."
-        >
-          Exportar dados
-        </a>
-        {/* A ÚNICA AÇÃO PRIMÁRIA DA TELA: a tela não dizia para onde ir depois
-            de conferir o que chegou. */}
-        <Link href={`/casos/${id}/modelagem`} className="btn-primario">
-          Ir para a modelagem
-        </Link>
-      </div>
+      {/* SEM AÇÕES NO TOPO (fase 2, item 20). Moravam aqui "Exportar dados" e "Ir para a modelagem".
+          O primeiro agora vive em Entregáveis, com o estado dos outros dois arquivos ao lado; o
+          segundo duplicava a aba Modelagem, que está a um clique na régua do mandato. Esta tela
+          segue sem botão primário próprio de propósito: as decisões dela (pendências, aprovação)
+          estão nas seções abaixo, e um segundo "próximo passo" competiria com elas. */}
 
       {/* O RESUMO QUE A TELA NÃO DAVA. Quem abre um mandato pergunta uma coisa:
           "posso confiar neste caso?". A resposta exigia rolar seis seções e
