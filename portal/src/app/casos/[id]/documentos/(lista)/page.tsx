@@ -8,6 +8,8 @@ import type { Documento, TaxonomiaTipoDocumento } from "@/lib/types";
 import { humanizar } from "@/lib/rotulos";
 import { formatarPeriodo, formatarTipoTaxonomia } from "@/lib/export";
 import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
+import { OrdemDosDocumentos } from "@/components/ordem-dos-documentos";
+import { LinhaDeDocumento } from "@/components/linha-de-documento";
 
 const LEGIBILIDADE_LABEL: Record<string, string> = {
   degradado: "qualidade degradada",
@@ -280,6 +282,9 @@ export default async function DocumentosPage({
           </div>
         ) : (
           <div className="carta overflow-x-auto">
+            {/* Os ids NA ORDEM EM QUE A TABELA OS MOSTRA (filtro e ordenação já aplicados): o
+                painel lateral do documento segue esta ordem no "← anterior / próximo →". */}
+            <OrdemDosDocumentos ids={visiveis.map((d) => d.id)} />
             <table className="w-full text-left text-sm">
               <thead className="border-b border-tinta-200 bg-tinta-50 text-[11px] uppercase tracking-wide text-tinta-500">
                 <tr>
@@ -307,7 +312,7 @@ export default async function DocumentosPage({
                     (n, v) => n + (linhasPorVersao.get(v.id) ?? 0), 0,
                   );
                   return (
-                    <tr key={doc.id} className="align-top transition-colors hover:bg-tinta-50">
+                    <LinhaDeDocumento key={doc.id} docId={doc.id} href={`${base}/${doc.id}`}>
                       <td className="max-w-[15rem] px-3 py-2.5">
                         <span
                           className="block truncate font-medium text-tinta-900"
@@ -360,13 +365,14 @@ export default async function DocumentosPage({
                       </td>
                       <td className="px-3 py-2.5 text-right whitespace-nowrap text-xs">
                         <Link
-                          href={`/casos/${id}/documentos/${doc.id}`}
+                          href={`${base}/${doc.id}`}
+                          prefetch={false}
                           className="font-medium text-acento-600 hover:text-acento-700 hover:underline"
                         >
                           abrir
                         </Link>
                       </td>
-                    </tr>
+                    </LinhaDeDocumento>
                   );
                 })}
               </tbody>

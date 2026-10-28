@@ -39,10 +39,14 @@
  *     para determinar" em vez de mandar aprovar; aprovado com modelo montado leva a
  *     Entregáveis. Mora neste script porque o CI já o roda — um script novo exigiria
  *     linha no `suites.yml` E no CLAUDE.md (o espelho reprova a divergência).
+ *  6. O "← anterior / próximo →" do painel de documento segue a ORDEM DA LISTA FILTRADA
+ *     (`lib/vizinhos-na-ordem.ts`), nunca gira nas pontas e nunca finge posição para um
+ *     documento que não está na ordem.
  */
 
 import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../src/lib/kit-basico.ts";
 import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
+import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
 
 let falhas = 0;
@@ -220,6 +224,28 @@ console.log("--- 5b. Próximo passo: leitura que falhou diz que não dá para de
   ok(m.passo === "indeterminado", "configuração do modelo ilegível NÃO vira 'Entregáveis'", m.titulo);
   ok(/não dá para determinar/i.test(passoDe({ bloqueantesAbertas: null }).titulo),
     "a frase diz com todas as letras que não dá para determinar");
+}
+
+console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista filtrada ---");
+{
+  // A ordem é a que a lista MOSTRA (aqui, um filtro que pulou "d2" e "d4"): o vizinho de "d3" é "d5",
+  // não o "d4" que o banco teria na ordem completa.
+  const filtrada = ["d1", "d3", "d5"];
+  const meio = vizinhosNaOrdem(filtrada, "d3");
+  ok(meio?.anterior === "d1" && meio?.proximo === "d5" && meio?.posicao === 2 && meio?.total === 3,
+    "no meio: anterior e próximo são os da lista FILTRADA, posição 2 de 3", JSON.stringify(meio));
+  const primeiro = vizinhosNaOrdem(filtrada, "d1");
+  ok(primeiro?.anterior === null && primeiro?.proximo === "d3" && primeiro?.posicao === 1,
+    "primeiro: sem anterior (não gira para o último)", JSON.stringify(primeiro));
+  const ultimo = vizinhosNaOrdem(filtrada, "d5");
+  ok(ultimo?.proximo === null && ultimo?.anterior === "d3" && ultimo?.posicao === 3,
+    "último: sem próximo (não gira para o primeiro)", JSON.stringify(ultimo));
+  ok(vizinhosNaOrdem(filtrada, "d2") === null,
+    "documento fora da ordem (saiu do filtro) → null, não 'primeiro' nem posição inventada");
+  ok(vizinhosNaOrdem([], "d1") === null, "ordem vazia → null");
+  const unico = vizinhosNaOrdem(["d1"], "d1");
+  ok(unico?.anterior === null && unico?.proximo === null && unico?.total === 1,
+    "lista de um documento: sem vizinhos, total 1");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

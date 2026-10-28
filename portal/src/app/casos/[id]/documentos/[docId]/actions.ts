@@ -195,6 +195,10 @@ export async function importarTranscricao(
   // A transcrição cria uma VERSÃO NOVA do documento (doutrina da 0026) e recomputa a
   // completude do caso — então as duas telas mudam, não só esta.
   revalidatePath(`/casos/${casoId}/documentos/${docId}`);
+  // A LISTA fica montada por baixo do painel e mostra "linhas" por documento: transcrever leva
+  // "nenhuma" a N (e tira o documento do filtro "sem linha"). Sem isto a lista atrás do painel
+  // continuaria dizendo "nenhuma" até o F5.
+  revalidatePath(`/casos/${casoId}/documentos`);
   revalidatePath(`/casos/${casoId}`);
 
   return {
