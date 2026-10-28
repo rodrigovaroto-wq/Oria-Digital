@@ -43,6 +43,15 @@ import {
   textoTituloConferenciaModelagem,
   type ConferenciaModelagemCobertura,
 } from "../src/lib/modelagem-cobertura.ts";
+import {
+  formDataDoLote,
+  lotesPendentes,
+  promoverGravado,
+  resumirSalvamento,
+  totalPendente,
+  type EscolhasPorSecao,
+  type SecaoEditavel,
+} from "../src/lib/modelagem-lote.ts";
 
 let falhas = 0;
 let passou = 0;
@@ -182,6 +191,74 @@ console.log("--- 8. UMA regra para tela e rota (`veredictoDoPortao`): resposta d
     "não conferido entrega `portao: null`, que a tela lê com `portaoNaoConferido`");
   ok(textoChipModelagem({ pronto: true, fracao_linhas_com_premissa: 0.9 }, veredictoDoPortao({ data: {} }).portao).includes("NÃO CONFERIDA"),
     "a tela, alimentada pela MESMA função, não diz 'pronto' diante de `{}`");
+}
+
+console.log("--- 9. SALVAR TUDO (`modelagem-lote.ts`): só as linhas que mudaram, e falha parcial honesta ---");
+{
+  // O defeito que isto previne: a seção 3 tinha um "salvar esta seção" por seção (8 a 12 no caso
+  // real). Com UMA barra, o risco passa a ser o lote levar linha intocada (reenviar "não
+  // projetar" grava uma decisão que ninguém tomou) ou o resumo dizer "salvo" com seção falha.
+  // Não há fixture de produção aqui: as seções abaixo são mínimas e escritas para a regra.
+  const linha = (rotulo: string, papel = "conta") =>
+    ({ rotulo_norm: rotulo, chave: rotulo.toUpperCase(), entidade: null, papel });
+  const secoes: SecaoEditavel[] = [
+    { secao: "receita", rotulo: "Receita", linhas: [linha("a"), linha("b"), linha("sub", "subtotal")] },
+    { secao: "custos", rotulo: "Custos", linhas: [linha("c"), linha("d")] },
+    { secao: "(sem seção canônica)", rotulo: "Sem seção", linhas: [linha("e")] },
+  ];
+  const v = (premissa: string, sazonalidade = "") => ({ premissa, sazonalidade });
+  const gravado: EscolhasPorSecao = {
+    receita: { a: v("P1"), b: v(""), sub: v("") },
+    custos: { c: v(""), d: v("P2", "S1") },
+    "(sem seção canônica)": { e: v("") },
+  };
+  const copia = (): EscolhasPorSecao => structuredClone(gravado);
+
+  const parado = lotesPendentes(secoes, copia(), gravado);
+  ok(parado.length === 0 && totalPendente(parado) === 0, "nada mudou: nenhum lote e nenhuma chamada");
+
+  const esc = copia();
+  esc.receita.a = v("P9");               // mudou
+  esc.custos.d = v("P2", "S2");          // só a sazonalidade mudou
+  esc.receita.sub = v("P1");             // subtotal não tem seletor: nunca entra
+  const lotes = lotesPendentes(secoes, esc, gravado);
+  ok(lotes.map((l) => l.secao).join() === "receita,custos", "seção sem mudança não gera lote", lotes.map((l) => l.secao).join());
+  ok(lotes.flatMap((l) => l.linhas.map((x) => x.rotulo_norm)).join() === "a,d",
+    "o lote leva EXATAMENTE as linhas que mudaram (b e c, intocadas, ficam fora)");
+  ok(totalPendente(lotes) === 2, "o contador da barra conta as linhas mudadas", String(totalPendente(lotes)));
+
+  const volta = copia();
+  volta.receita.a = v("P9");
+  volta.receita.a = v("P1");             // voltou ao original
+  ok(lotesPendentes(secoes, volta, gravado).length === 0,
+    "linha trocada e devolvida ao valor original NÃO é enviada");
+
+  const fd = formDataDoLote(lotes[0]);
+  ok(fd.get("rotulo__0") === "A" && fd.get("premissa__0") === "P9" && fd.get("orig__0") === "P1"
+    && !fd.has("rotulo__1"), "o FormData reindexa de 0 e leva só a linha mudada, com o original ao lado");
+  ok(formDataDoLote(lotesPendentes(secoes, { ...copia(), "(sem seção canônica)": { e: v("P3") } }, gravado)[0])
+    .get("secao_canonica") === "", "'(sem seção canônica)' vai ao banco como vazio (NULL)");
+
+  const r1 = { tom: "ok" as const, texto: "ok" };
+  const r2 = { tom: "erro" as const, texto: "recusado: premissa inativa" };
+  const parcial = resumirSalvamento([{ lote: lotes[0], r: r1 }, { lote: lotes[1], r: r2 }]);
+  ok(parcial.tom === "erro", "uma seção falhou: o resumo é de ERRO, nunca 'salvo'", parcial.texto);
+  ok(parcial.secoesOk.join() === "receita", "só a seção confirmada entra em secoesOk", parcial.secoesOk.join());
+  ok(parcial.texto.includes("Receita") && parcial.texto.includes("Custos")
+    && parcial.texto.includes("premissa inativa") && /NÃO salvas \(1 de 2/.test(parcial.texto),
+    "o texto diz quais salvaram, quais NÃO, e o motivo", parcial.texto);
+  const tudo = resumirSalvamento([{ lote: lotes[0], r: r1 }, { lote: lotes[1], r: r1 }]);
+  ok(tudo.tom === "ok" && tudo.secoesOk.length === 2, "todas confirmaram: aí sim é 'ok'", tudo.texto);
+  const nenhuma = resumirSalvamento([{ lote: lotes[0], r: r2 }]);
+  ok(nenhuma.tom === "erro" && /Nenhuma seção foi salva/.test(nenhuma.texto) && nenhuma.secoesOk.length === 0,
+    "nenhuma salvou: diz isso", nenhuma.texto);
+
+  // O estado "gravado" depois da falha parcial: a seção que falhou CONTINUA suja.
+  const g2 = promoverGravado(gravado, lotes.filter((l) => parcial.secoesOk.includes(l.secao)));
+  const restante = lotesPendentes(secoes, esc, g2);
+  ok(restante.length === 1 && restante[0].secao === "custos" && totalPendente(restante) === 1,
+    "após falha parcial, só a seção que falhou continua pendente", restante.map((l) => l.secao).join());
+  ok(gravado.receita.a.premissa === "P1", "promover não muta o gravado anterior");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

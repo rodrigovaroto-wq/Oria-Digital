@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
-import { SecaoLinhas } from "./SecaoLinhas";
+import { EditorLinhas } from "./EditorLinhas";
 import { FormParametros, FormPremissa } from "./FormsTopo";
 import { SugestoesDoRealizado } from "./SugestoesDoRealizado";
 import { sugerirDoRealizado } from "@/lib/premissas-do-realizado";
@@ -483,8 +483,16 @@ export default async function ModelagemPage({
 
       {/* A TRILHA DOS TRÊS PASSOS. Ela é navegação e estado ao mesmo tempo: leva
           direto à seção (a página é longa demais para rolagem cega) e diz o que
-          falta em cada uma sem obrigar a abrir. */}
-      <nav aria-label="Passos da modelagem" className="carta flex flex-wrap divide-x divide-tinta-100">
+          falta em cada uma sem obrigar a abrir.
+          GRUDA NO TOPO DA FOLHA (fase 2, item 21), abaixo da barra flutuante: ela é
+          `sticky top-3` com ~52px (py-2 + o botão da conta), então 4.75rem (76px) deixa
+          ~12px de folga. `z-20` fica acima do cabeçalho grudado das tabelas (z-10) e abaixo
+          dos diálogos. A folha NÃO tem `backdrop-filter`, então o sticky funciona (e
+          nada aqui pode ganhar um, porque os diálogos `fixed` moram dentro dela). */}
+      <nav
+        aria-label="Passos da modelagem"
+        className="carta sticky top-[4.75rem] z-20 flex flex-wrap divide-x divide-tinta-100"
+      >
         {passos.map((p, i) => (
           <a
             key={p.id}
@@ -629,7 +637,7 @@ export default async function ModelagemPage({
       )}
 
       {/* 1. PARÂMETROS — as três células que saíram do topo da aba Modelagem. */}
-      <section id="parametros" className="carta scroll-mt-20 p-4">
+      <section id="parametros" className="carta scroll-mt-36 p-4">
         <h2 className="titulo-secao">1 · Parâmetros do mandato</h2>
         {/* O TEXTO DE APOIO ENCOLHEU, e o que saiu dele não se perdeu: virou
             comentário. A tela tinha quatro parágrafos de explicação antes do
@@ -703,7 +711,7 @@ export default async function ModelagemPage({
       </section>
 
       {/* 2. PREMISSAS DO CASO */}
-      <section id="premissas" className="carta scroll-mt-20 p-4">
+      <section id="premissas" className="carta scroll-mt-36 p-4">
         <h2 className="titulo-secao">
           2 · Premissas deste caso
           {parametros?.setor && (
@@ -719,7 +727,9 @@ export default async function ModelagemPage({
             cabeçalho da seção já diz, com o nome do setor ao lado. */}
         <p className="mb-3 mt-1 text-xs text-tinta-500">
           Ano em branco fica <strong>em branco</strong>, não vira zero. Premissa{" "}
-          <strong>macro</strong> ativada sem valor puxa a expectativa do Focus que está no banco.
+          <strong>macro</strong> ativada sem valor puxa a expectativa do Focus que está no banco.{" "}
+          <strong>Remover</strong> desativa a premissa e desfaz os vínculos de linha que ela dirigia;
+          os valores digitados ficam guardados.
         </p>
 
         {/* A CURVA DE SAZONALIDADE não é digitada: ela é derivada do faturamento
@@ -792,7 +802,7 @@ export default async function ModelagemPage({
                   const ativa = ativasPorCodigo.get(p.codigo);
                   return (
                     <FormPremissa key={p.codigo} casoId={id} codigo={p.codigo} ativa={!!ativa}>
-                      <span className="min-w-56 flex-1" title={p.descricao ?? undefined}>
+                      <span className="min-w-56 flex-1">
                         {p.nome}
                         {p.unidade && <span className="ml-1 text-tinta-500">({p.unidade})</span>}
                         {p.setores.length > 0 && (
@@ -804,6 +814,12 @@ export default async function ModelagemPage({
                           <span className="ml-1 rounded bg-ok-100 px-1 text-[10px] text-ok-800">
                             Focus
                           </span>
+                        )}
+                        {/* A DESCRIÇÃO FICA ESCRITA sob o nome: ela só existia no `title`
+                            do nome, que não aparece no toque nem no teclado — e é ela que
+                            diz o que a premissa projeta, o que decide ativá-la. */}
+                        {p.descricao && (
+                          <span className="mt-0.5 block text-xs text-tinta-500">{p.descricao}</span>
                         )}
                       </span>
                       {/* O ANO FICA ESCRITO EM CIMA DA CAIXA, em preto.
@@ -823,6 +839,7 @@ export default async function ModelagemPage({
                             type="text" name={`valor_${ano}`}
                             defaultValue={ativa?.valores?.[String(ano)] ?? ""}
                             placeholder={p.unidade ?? "valor"}
+                            aria-label={`${p.nome} — ${ano}${p.unidade ? ` (${p.unidade})` : ""}`}
                             title={`${p.nome} — ${ano}${p.unidade ? ` (${p.unidade})` : ""}`}
                             className="mt-0.5 w-16 rounded border border-tinta-200 px-1 py-0.5 text-right text-xs"
                           />
@@ -838,7 +855,7 @@ export default async function ModelagemPage({
       </section>
 
       {/* 3. LINHAS × PREMISSAS */}
-      <section id="linhas" className="carta scroll-mt-20 p-4">
+      <section id="linhas" className="carta scroll-mt-36 p-4">
         <h2 className="titulo-secao">
           3 · Linhas × premissas
           <span className="ml-2 font-normal normal-case tracking-normal text-tinta-500">
@@ -878,19 +895,14 @@ export default async function ModelagemPage({
             {/* Ordena pelo NOME DA SEÇÃO. `sort()` sem comparador converte cada entrada
                 em texto — e a entrada é `[secao, linhas]`, então o critério incluía as
                 linhas estringadas ("[object Object],[object Object]…"). A ordem saía
-                certa por acidente do prefixo, não por decisão. */}
-            {[...linhasPorSecao.entries()]
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([secao, linhas]) => (
-              <SecaoLinhas
-                key={secao}
+                certa por acidente do prefixo, não por decisão.
+                UM EDITOR para todas as seções (um só salvar, ver `EditorLinhas.tsx`).
+                A CHAVE canônica continua sendo `secao` (é ela que vai ao banco); o que a
+                tela mostra é o rótulo em português. Misturar os dois foi o defeito:
+                `passivo_nao_circulante` num cabeçalho de seção. */}
+            {linhasPorSecao.size > 0 && (
+              <EditorLinhas
                 casoId={id}
-                secao={secao}
-                // A CHAVE canônica continua sendo `secao` (é ela que o formulário manda
-                // ao banco); o que a tela mostra é o rótulo em português. Misturar os
-                // dois foi o defeito: `passivo_nao_circulante` num cabeçalho de seção.
-                rotulo={rotuloDaSecao(secao === "(sem seção canônica)" ? null : secao)}
-                linhas={linhas}
                 ativas={ativas.map((a) => ({
                   codigo: a.premissa_codigo,
                   nome: nomeDaPremissa.get(a.premissa_codigo) ?? a.premissa_codigo,
@@ -899,14 +911,21 @@ export default async function ModelagemPage({
                   codigo: a.premissa_codigo,
                   nome: nomeDaPremissa.get(a.premissa_codigo) ?? a.premissa_codigo,
                 }))}
-                vinculos={Object.fromEntries(linhas.map((l) => [l.rotulo_norm, {
-                  premissa: vinculoDaLinha.get(chaveDaLinha(l.secao_canonica, l.rotulo_norm))
-                    ?.premissa_codigo ?? "",
-                  sazonalidade: vinculoDaLinha.get(chaveDaLinha(l.secao_canonica, l.rotulo_norm))
-                    ?.sazonalidade_codigo ?? "",
-                }]))}
+                secoes={[...linhasPorSecao.entries()]
+                  .sort(([x], [y]) => x.localeCompare(y))
+                  .map(([secao, linhas]) => ({
+                    secao,
+                    rotulo: rotuloDaSecao(secao === "(sem seção canônica)" ? null : secao),
+                    linhas,
+                    vinculos: Object.fromEntries(linhas.map((l) => [l.rotulo_norm, {
+                      premissa: vinculoDaLinha.get(chaveDaLinha(l.secao_canonica, l.rotulo_norm))
+                        ?.premissa_codigo ?? "",
+                      sazonalidade: vinculoDaLinha.get(chaveDaLinha(l.secao_canonica, l.rotulo_norm))
+                        ?.sazonalidade_codigo ?? "",
+                    }])),
+                  }))}
               />
-            ))}
+            )}
             {linhasPorSecao.size === 0 && (
               <p className="text-sm text-tinta-500">
                 {busca
