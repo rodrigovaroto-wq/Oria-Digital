@@ -31,6 +31,7 @@ export function CartaoConfirmarDocumento({
   taxonomia: TaxonomiaTipoDocumento[];
 }>) {
   const revisarAction = revisarDocumento.bind(null, casoId);
+  const idBase = `confirmar-${p.id}`;
   return (
     <li className="carta p-4">
       <div className="mb-3">
@@ -49,12 +50,16 @@ export function CartaoConfirmarDocumento({
         {p.descricao && <p className="mt-1 text-sm text-tinta-700">{p.descricao}</p>}
       </div>
 
+      {/* Cada rótulo aponta para o seu campo (Sonar S6853): o leitor de tela anuncia
+          "Tipo de documento" ao entrar no select. Vários cartões na mesma página, então
+          o id leva o da pendência. */}
       <form action={revisarAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input type="hidden" name="documento_id" value={doc.id} />
 
         <div>
-          <label className="block text-xs font-medium text-tinta-600">Tipo de documento</label>
+          <label htmlFor={`${idBase}-tipo`} className="block text-xs font-medium text-tinta-600">Tipo de documento</label>
           <select
+            id={`${idBase}-tipo`}
             name="novo_tipo_taxonomia"
             defaultValue={doc.tipo_taxonomia ?? ""}
             className="mt-1 w-full rounded-md border border-tinta-200 px-2.5 py-1.5 text-sm"
@@ -69,8 +74,9 @@ export function CartaoConfirmarDocumento({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-tinta-600">Entidade</label>
+          <label htmlFor={`${idBase}-entidade`} className="block text-xs font-medium text-tinta-600">Entidade</label>
           <input
+            id={`${idBase}-entidade`}
             type="text"
             name="nova_entidade_nome"
             defaultValue={doc.entidade?.razao_social ?? ""}
@@ -80,8 +86,9 @@ export function CartaoConfirmarDocumento({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-tinta-600">Período</label>
+          <label htmlFor={`${idBase}-periodo`} className="block text-xs font-medium text-tinta-600">Período</label>
           <select
+            id={`${idBase}-periodo`}
             name="novo_periodo_tipo"
             defaultValue={doc.periodo?.tipo ?? "anual"}
             className="mt-1 w-full rounded-md border border-tinta-200 px-2.5 py-1.5 text-sm"
@@ -95,8 +102,9 @@ export function CartaoConfirmarDocumento({
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-tinta-600">Referência do período</label>
+          <label htmlFor={`${idBase}-referencia`} className="block text-xs font-medium text-tinta-600">Referência do período</label>
           <input
+            id={`${idBase}-referencia`}
             type="text"
             name="novo_periodo_ref"
             defaultValue={doc.periodo?.referencia ?? ""}
@@ -106,8 +114,9 @@ export function CartaoConfirmarDocumento({
         </div>
 
         <div className="sm:col-span-2">
-          <label className="block text-xs font-medium text-tinta-600">Observação (opcional)</label>
+          <label htmlFor={`${idBase}-motivo`} className="block text-xs font-medium text-tinta-600">Observação (opcional)</label>
           <textarea
+            id={`${idBase}-motivo`}
             name="motivo"
             rows={2}
             placeholder="Por que confirmou ou corrigiu"

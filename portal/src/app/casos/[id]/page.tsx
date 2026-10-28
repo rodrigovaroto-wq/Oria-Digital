@@ -235,6 +235,17 @@ export default async function CasoDashboardPage({
   });
   const base = `/casos/${id}`;
 
+  // Leitura de bloqueantes que falhou é DITA, não some: `(null ?? 0) > 0` escondia a
+  // falha e o indicador parecia dizer "nenhuma trava" (regra 1).
+  let detalheDasPendencias: string | null = null;
+  if (nAbertas === null) detalheDasPendencias = "a leitura das pendências falhou";
+  else if (nBloqueantes === null) detalheDasPendencias = "não foi possível saber quantas travam a aprovação";
+  else if (nBloqueantes > 0) {
+    detalheDasPendencias = `${nBloqueantes} ${nBloqueantes === 1 ? "bloqueia" : "bloqueiam"} a aprovação`;
+  }
+  let detalheDoKit: string | null = "a leitura do kit falhou";
+  if (kitLido) detalheDoKit = kitPresentes === kitBasico.length ? "kit completo" : null;
+
   return (
     <div className="space-y-8">
       {/* O PRÓXIMO PASSO, uma frase e um botão, decidido por `lib/proximo-passo.ts` (a prioridade
@@ -279,18 +290,14 @@ export default async function CasoDashboardPage({
         <Indicador
           valor={kitLido ? `${kitPresentes}/${kitBasico.length}` : "—"}
           rotulo="itens do Kit Básico"
-          detalhe={kitLido ? (kitPresentes === kitBasico.length ? "kit completo" : null) : "a leitura do kit falhou"}
+          detalhe={detalheDoKit}
           tom={kitLido ? "bom" : "alerta"}
           href={`${base}/documentos`}
         />
         <Indicador
           valor={nAbertas ?? "—"}
           rotulo={nAbertas === 1 ? "pendência em aberto" : "pendências em aberto"}
-          detalhe={nAbertas === null
-            ? "a leitura das pendências falhou"
-            : (nBloqueantes ?? 0) > 0
-              ? `${nBloqueantes} ${nBloqueantes === 1 ? "bloqueia" : "bloqueiam"} a aprovação`
-              : null}
+          detalhe={detalheDasPendencias}
           tom="alerta"
           href={`${base}/pendencias`}
         />
@@ -389,7 +396,7 @@ export default async function CasoDashboardPage({
       ) : (
         // AVALIAÇÃO QUE NÃO RESPONDEU (regra 1). Antes o cartão simplesmente não aparecia, e a
         // ausência do cartão lê-se como "nada a aprovar" — a mesma aparência de um caso sem problema.
-        <div id="aprovacao" role="status" className="carta scroll-mt-24 p-4 text-sm text-alerta-900">
+        <div id="aprovacao" aria-live="polite" className="carta scroll-mt-24 p-4 text-sm text-alerta-900">
           <p className="font-semibold">Aprovação não conferida</p>
           <p className="mt-1 text-xs">
             A consulta que diz se o mandato pode ser aprovado não respondeu, então não dá para dizer

@@ -209,16 +209,7 @@ export default async function DocumentosPage({
             // o book sai vazio nessa parte, e não "faltante", porque o arquivo
             // está lá e pedi-lo de novo ao cliente seria pedir o que ele mandou.
             const presente = (kitAtendidos?.has(item.codigo) ?? false) && !semConteudo;
-            const cor = presente
-              ? "border-ok-200 bg-ok-50/60"
-              : semConteudo
-                ? "border-alerta-200 bg-alerta-50"
-                : "border-tinta-200 bg-folha";
-            const corTexto = presente
-              ? "text-ok-700"
-              : semConteudo
-                ? "text-alerta-800"
-                : "text-tinta-400";
+            const { cor, corTexto, rotulo } = estadoDoItemDoKit(presente, semConteudo);
             return (
               <li
                 key={item.codigo}
@@ -226,11 +217,7 @@ export default async function DocumentosPage({
               >
                 <span className="text-tinta-800">{item.documento}</span>
                 <span className={`shrink-0 text-xs font-medium ${corTexto}`}>
-                  {presente
-                    ? "✓ recebido"
-                    : semConteudo
-                      ? "chegou, sem dado extraído"
-                      : "não recebido"}
+                  {rotulo}
                 </span>
               </li>
             );
@@ -264,7 +251,7 @@ export default async function DocumentosPage({
                   aria-current={filtro === "tipo" && tipoPedido === t ? "page" : undefined}
                   className={chipFiltro(filtro === "tipo" && tipoPedido === t)}
                 >
-                  {t === SEM_TIPO ? "Sem tipo" : formatarTipoTaxonomia(t)} ({n})
+                  {rotuloDoTipo(t)} ({n})
                 </Link>
               ))}
           </div>
@@ -390,4 +377,18 @@ export default async function DocumentosPage({
 
     </div>
   );
+}
+
+// Os TRÊS estados de um item do Kit Básico (0036), fora do componente para a
+// página não acumular ternário aninhado (Sonar S3358/S3776).
+function estadoDoItemDoKit(presente: boolean, semConteudo: boolean) {
+  if (presente) return { cor: "border-ok-200 bg-ok-50/60", corTexto: "text-ok-700", rotulo: "✓ recebido" };
+  if (semConteudo) {
+    return { cor: "border-alerta-200 bg-alerta-50", corTexto: "text-alerta-800", rotulo: "chegou, sem dado extraído" };
+  }
+  return { cor: "border-tinta-200 bg-folha", corTexto: "text-tinta-400", rotulo: "não recebido" };
+}
+
+function rotuloDoTipo(t: string): string {
+  return t === SEM_TIPO ? "Sem tipo" : formatarTipoTaxonomia(t);
 }

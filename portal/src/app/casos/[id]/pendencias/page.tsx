@@ -134,7 +134,7 @@ export default async function PendenciasPage({
   }
 
   const nomeDoArquivo = (p: PendenciaDaLista) =>
-    (p.documento?.documento_versao ?? []).map((v) => v.nome_original).filter(Boolean).at(-1) ?? null;
+    (p.documento?.documento_versao ?? []).map((v) => v.nome_original).findLast(Boolean) ?? null;
 
   const cartao = (p: PendenciaDaLista) =>
     comFormulario(p) && !taxonomiaFalhou && p.documento ? (
