@@ -44,7 +44,8 @@ export async function aprovarCaso(casoId: string, formData: FormData) {
     throw new Error(r.motivo_recusa ?? "Aprovação recusada: o mandato ainda não cumpre as condições de aprovação.");
   }
 
-  revalidatePath(`/casos/${casoId}`);
+  // "layout": os números das abas moram no layout do mandato e `revalidatePath(<rota>)` sozinho não o refaz.
+  revalidatePath(`/casos/${casoId}`, "layout");
 }
 
 // Chama fn_decidir_pendencia (Supabase/migrations/0109) — os três botões da tela.
@@ -84,7 +85,8 @@ export async function decidirPendencia(
     throw new Error(r.motivo_recusa ?? "Decisão recusada.");
   }
 
-  revalidatePath(`/casos/${casoId}`);
+  // "layout": o número da aba Pendências vem do layout; sem isto ele seguiria com o valor de antes da decisão.
+  revalidatePath(`/casos/${casoId}`, "layout");
 }
 
 // Chama fn_excluir_caso (Supabase/migrations/0108) — o botão de excluir o mandato.

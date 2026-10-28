@@ -119,16 +119,19 @@ export function ItemPendencia({
           não fosse o caminho mais curto. Com três botões e nenhum campo, esse
           cuidado vira só atrito: a decisão agora É a interface. */}
       {casoId && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-folha/40 pt-2">
+        <div className="mt-2 flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-folha/40 pt-2">
+          {/* O EFEITO FICA À VISTA, embaixo de cada botão (fase 2). Ele morava só no
+              `title=`, que não existe no toque e some antes de ser lido: quem clicava
+              em "Prosseguir sem resolução" descobria o que tinha feito DEPOIS. */}
           {BOTOES_DECISAO.map((b) => (
-            <form key={b.decisao} action={decidirPendencia.bind(null, casoId, p.id, b.decisao)}>
+            <form key={b.decisao} action={decidirPendencia.bind(null, casoId, p.id, b.decisao)} className="max-w-[15rem]">
               <button
                 type="submit"
-                title={b.efeito}
                 className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors ${b.classe}`}
               >
                 {b.rotulo}
               </button>
+              <p className={`mt-1 text-xs leading-snug ${cores.fraco}`}>{b.efeito}</p>
             </form>
           ))}
           {/* A PONTE PARA A ABA DAS PERGUNTAS (0120), e só depois de "Contatar o

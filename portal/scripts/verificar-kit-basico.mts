@@ -34,9 +34,15 @@
  *  4. Um banco sem a 0157 (a função responde erro) faz a tela voltar ao
  *     comportamento de ANTES da 0157 — só o rótulo conta — nunca inventa
  *     "atendido" por conta própria.
+ *  5. O "Próximo passo" da Visão geral (`lib/proximo-passo.ts`) obedece à prioridade
+ *     e nunca chuta: pendência que trava vence tudo; leitura que falhou diz "não dá
+ *     para determinar" em vez de mandar aprovar; aprovado com modelo montado leva a
+ *     Entregáveis. Mora neste script porque o CI já o roda — um script novo exigiria
+ *     linha no `suites.yml` E no CLAUDE.md (o espelho reprova a divergência).
  */
 
 import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../src/lib/kit-basico.ts";
+import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
 
 let falhas = 0;
@@ -138,6 +144,70 @@ console.log("--- 4. banco sem a 0157 (RPC devolve erro, tratado como `false` por
   ok(!atendidos.has("COMBINADO"),
     "sem a 0157 aplicada, COMBINADO continua faltante — o mesmo comportamento de ANTES da migration, "
     + "nunca 'atendido' inventado pelo portal");
+}
+
+// Tudo "certo" por padrão; cada caso muda SÓ o que o caso afirma. O padrão é o caso aprovado
+// com modelo montado — o último degrau —, para que cada degrau acima seja provado por uma
+// entrada que o faria cair no de baixo se a prioridade estivesse errada.
+const limpo: EntradaProximoPasso = {
+  bloqueantesAbertas: 0, revisoesAbertas: 0, kitFaltantes: 0,
+  aprovavel: true, aprovado: true, modeloMontado: true,
+};
+const passoDe = (e: Partial<EntradaProximoPasso>) => proximoPasso({ ...limpo, ...e });
+
+console.log("--- 5. Próximo passo: prioridade, e leitura que falhou nunca vira um passo ---");
+{
+  // 5a. pendência que trava vence TUDO, inclusive o que também estaria pendente.
+  const tudoPendente = { revisoesAbertas: 3, kitFaltantes: 2, aprovavel: false, aprovado: false, modeloMontado: false };
+  const a = passoDe({ ...tudoPendente, bloqueantesAbertas: 2 });
+  ok(a.passo === "decidir" && a.href === "/pendencias",
+    "com pendência bloqueante aberta, o passo é decidir pendências, mesmo com revisão, kit e modelo pendentes");
+  ok(a.titulo === "Decidir 2 pendências que travam a aprovação", "o título diz quantas travam", a.titulo);
+  ok(passoDe({ bloqueantesAbertas: 1 }).titulo === "Decidir 1 pendência que trava a aprovação",
+    "singular quando é uma só");
+  // Mesmo aprovado: bloqueante nova reabre o trabalho de decidir.
+  ok(passoDe({ bloqueantesAbertas: 1, aprovado: true }).passo === "decidir",
+    "um caso já aprovado com pendência bloqueante nova volta a ser 'decidir'");
+  // Leitura posterior falha, mas a resposta já é conhecida: não se esconde um bloqueio atrás dela.
+  ok(passoDe({ bloqueantesAbertas: 2, revisoesAbertas: null, kitFaltantes: null, aprovavel: null, modeloMontado: null }).passo === "decidir",
+    "leitura que falhou DEPOIS do passo decisivo não esconde o bloqueio");
+
+  // 5b. a ordem dos degraus seguintes.
+  const r = passoDe({ revisoesAbertas: 4, kitFaltantes: 2, aprovavel: false, aprovado: false });
+  ok(r.passo === "confirmar" && r.href === "/pendencias?filtro=confirmar",
+    "sem bloqueio, documento a confirmar vem antes do Kit Básico");
+  const k = passoDe({ kitFaltantes: 2, aprovavel: false, aprovado: false });
+  ok(k.passo === "pedir" && k.href === "/perguntas" && k.titulo === "Pedir 2 documentos ao cliente",
+    "Kit Básico incompleto manda pedir os documentos ao cliente", k.titulo);
+  ok(passoDe({ kitFaltantes: 1, aprovado: false }).titulo === "Pedir 1 documento ao cliente", "singular no kit");
+  const ap = passoDe({ aprovavel: true, aprovado: false });
+  ok(ap.passo === "aprovar" && ap.href === "#aprovacao",
+    "aprovável e ainda não aprovado: aprovar, ancorado no cartão de aprovação");
+  const naoAp = passoDe({ aprovavel: false, aprovado: false });
+  ok(naoAp.passo === "ver_aprovacao", "portão fechado sem causa conhecida: não manda aprovar, manda ver os motivos");
+  ok(passoDe({ modeloMontado: false }).passo === "modelar" && passoDe({ modeloMontado: false }).href === "/modelagem",
+    "aprovado e modelo não montado: Modelagem");
+
+  // 5c. aprovado + modelo montado → Entregáveis.
+  const e = passoDe({});
+  ok(e.passo === "entregaveis" && e.href === "/entregaveis",
+    "aprovado com o modelo montado leva a Entregáveis");
+}
+
+console.log("--- 5b. Próximo passo: leitura que falhou diz que não dá para determinar ---");
+{
+  const campos: Array<keyof EntradaProximoPasso> = ["bloqueantesAbertas", "revisoesAbertas", "kitFaltantes"];
+  for (const c of campos) {
+    const p = passoDe({ [c]: null });
+    ok(p.passo === "indeterminado" && p.acao === null && p.href === null,
+      `${c} ilegível (null) → "não dá para determinar", sem botão — nunca o próximo degrau`, p.titulo);
+  }
+  const ap = passoDe({ aprovavel: null, aprovado: false });
+  ok(ap.passo === "indeterminado", "avaliação do portão que não respondeu NÃO vira 'aprovar'", ap.titulo);
+  const m = passoDe({ modeloMontado: null });
+  ok(m.passo === "indeterminado", "configuração do modelo ilegível NÃO vira 'Entregáveis'", m.titulo);
+  ok(/não dá para determinar/i.test(passoDe({ bloqueantesAbertas: null }).titulo),
+    "a frase diz com todas as letras que não dá para determinar");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

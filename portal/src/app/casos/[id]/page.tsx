@@ -3,57 +3,40 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
+import { servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
 import {
-  PENDENCIA_TIPOS_RECONCILIACAO,
   PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS,
-  PENDENCIA_TIPOS_QUALIDADE_EXTRACAO,
-  PENDENCIA_TIPO_ARQUIVO_ILEGIVEL,
   type Caso,
   type Documento,
   type FatoDoCaso,
-  type Pendencia,
   type TaxonomiaTipoDocumento,
 } from "@/lib/types";
 import { aprovarCaso } from "./actions";
-import { ItemPendencia } from "./Pendencia";
-import { humanizar, suavizarMensagem } from "@/lib/rotulos";
-import { formatarPeriodo, formatarTipoTaxonomia } from "@/lib/export";
-import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "@/lib/kit-basico";
-
-const LEGIBILIDADE_LABEL: Record<string, string> = {
-  degradado: "qualidade degradada",
-  ilegivel: "ilegível",
-};
-
-// A COLUNA "FONTE" FALAVA BANCO DE DADOS. Ela mostrava `nome_arquivo` e
-// `openai_conteudo` crus — vocabulário de quem escreveu o pipeline, não de quem
-// confere um mandato. O fato que importa para quem lê é OUTRO: o documento foi
-// reconhecido pelo nome do arquivo (barato, determinístico) ou foi preciso ler o
-// conteúdo com IA (mais caro, e é o caminho de quem manda "Doc1.pdf").
-const FONTE_LABEL: Record<string, string> = {
-  nome_arquivo: "nome do arquivo",
-  openai_conteudo: "leitura do conteúdo",
-  manual: "revisão humana",
-};
+import { suavizarMensagem } from "@/lib/rotulos";
+import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
+import { ESTADOS_EM_ABERTO } from "@/lib/pendencia";
+import { proximoPasso } from "@/lib/proximo-passo";
 
 // Um indicador do topo. Número grande, rótulo embaixo, e um detalhe opcional em
-// cor quando ele muda a leitura do número (ex.: "2 bloqueantes").
+// cor quando ele muda a leitura do número (ex.: "2 bloqueantes"). Cada um leva à aba
+// onde o número se explica (fase 2): um número sem para onde ir é só decoração.
 function Indicador({
-  valor, rotulo, detalhe, tom,
+  valor, rotulo, detalhe, tom, href,
 }: Readonly<{
   valor: string | number;
   rotulo: string;
   detalhe?: string | null;
   tom?: "neutro" | "alerta" | "bom";
+  href: string;
 }>) {
   const corDetalhe =
     tom === "alerta" ? "text-risco-700" : tom === "bom" ? "text-ok-700" : "text-tinta-500";
   return (
-    <div className="px-4 py-3">
+    <Link href={href} className="block px-4 py-3 transition-colors hover:bg-tinta-50">
       <p className="indicador-valor">{valor}</p>
       <p className="indicador-rotulo">{rotulo}</p>
       {detalhe && <p className={`mt-1 text-xs font-medium ${corDetalhe}`}>{detalhe}</p>}
-    </div>
+    </Link>
   );
 }
 
@@ -109,60 +92,44 @@ function FatoMaterial({ f }: Readonly<{ f: FatoDoCaso }>) {
 
 export default async function CasoDashboardPage({
   params,
-}: {
+}: Readonly<{
   params: Promise<{ id: string }>;
-}) {
+}>) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const [casoRes, kitBasicoRes, documentosRes, pendenciasRes, checklistRes, portao2Res,
-         fatosRes] = await Promise.all([
+  // PENDÊNCIA EM ABERTO = `ESTADOS_EM_ABERTO`, a mesma lista do layout e da aba Pendências.
+  // Três contagens `head: true` (só o número, nenhuma linha) no lugar da lista inteira: esta
+  // tela não mostra mais nenhuma pendência, só quantas e se travam. A decidida
+  // (aceita_com_ressalva, rejeitada) e a resolvida ficam de fora, como já ficavam.
+  const abertas = () =>
+    supabase.from("pendencia").select("id", { head: true, count: "exact" }).eq("caso_id", id).in("estado", [...ESTADOS_EM_ABERTO]);
+
+  const [casoRes, kitBasicoRes, documentosRes, abertasRes, bloqueantesRes, revisoesRes, checklistRes,
+         portao2Res, fatosRes, modeloRes] = await Promise.all([
     supabase.from("caso").select("id, nome, produto, status, criado_em").eq("id", id).single(),
     supabase
       .from("taxonomia_tipo_documento")
       .select("codigo, categoria, documento, obrigatoriedade")
       .eq("obrigatoriedade", "obrigatorio")
       .order("codigo"),
-    // AS LISTAS DESTA TELA SÃO PAGINADAS. O teto do PostgREST (`db-max-rows`,
-    // 1000 no Supabase) corta em silêncio, e aqui as linhas são o conteúdo: a
-    // tabela de documentos, a fila de pendências do mandato e a contagem de
-    // linhas por documento. Um mandato grande passava a mostrar só os mil
-    // primeiros de cada, sem nada na tela dizendo isso.
-    paginar<Documento>((de, ate) =>
+    // SÓ O QUE OS INDICADORES PRECISAM: o tipo (Kit Básico) e as versões (soma de linhas).
+    // A tabela de documentos mora na aba Documentos; ler resumo, entidade e período aqui
+    // seria egress sem nenhum leitor. PAGINADA: o teto do PostgREST corta em silêncio, e
+    // aqui as linhas são o conteúdo — a soma de linhas e o "documentos sem linha".
+    paginar<Pick<Documento, "id" | "tipo_taxonomia" | "documento_versao">>((de, ate) =>
       supabase
         .from("documento")
-        .select(
-          `id, tipo_taxonomia, status, confianca, fonte, justificativa, resumo, criado_em,
-           entidade:entidade_id(razao_social), periodo:periodo_id(tipo, referencia),
-           documento_versao(id, nome_original, legibilidade, nota_legibilidade)`,
-        )
+        .select("id, tipo_taxonomia, documento_versao(id)")
         .eq("caso_id", id)
-        .order("criado_em", { ascending: false })
         .order("id", { ascending: true })
         .range(de, ate),
     ),
-    paginar<Pendencia>((de, ate) =>
-      supabase
-        .from("pendencia")
-        .select("id, tipo, severidade, estado, descricao, documento_id, caso_id, criada_em")
-        .eq("caso_id", id)
-      // A PENDÊNCIA DECIDIDA CONTINUA NA TELA — e isto é o que faz os três
-      // botões (0109) terem sentido. Eles "adicionam um rótulo na pendência";
-      // se o item sumisse ao ser decidido, o rótulo não existiria para ninguém
-      // ver, e a única forma de saber o que foi decidido seria abrir o banco.
-      //
-      // Fica de fora só `resolvida`, que é do SISTEMA: o problema deixou de
-      // existir, não há decisão humana para exibir nem nada a reconsiderar.
-        .in("estado", ["aberta", "em_correcao_interna", "reenviada_ao_cliente",
-                       "aceita_com_ressalva", "rejeitada"])
-        .order("criada_em", { ascending: false })
-        .order("id", { ascending: true })
-        .range(de, ate),
-    ),
+    abertas(),
+    abertas().eq("severidade", "bloqueante"),
+    abertas().in("tipo", [...PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS]),
     // Supabase/migrations/0036 — o checklist é a fonte do TERCEIRO estado: um item pode
-    // ter documento e ainda assim não ter uma linha extraída
-    // (`recebido_nao_valido`). Antes o dashboard derivava "presente" só da
-    // existência do documento, e por isso ficava verde sobre um book vazio.
+    // ter documento e ainda assim não ter uma linha extraída (`recebido_nao_valido`).
     supabase
       .from("checklist_item_status")
       .select("tipo_taxonomia, status")
@@ -172,28 +139,14 @@ export default async function CasoDashboardPage({
     // MESMA função que `fn_aprovar_caso` usa para decidir, e não uma segunda
     // implementação da regra aqui no portal.
     supabase.rpc("fn_avaliar_portao2", { p_caso_id: id }),
-    // O QUE OS DOCUMENTOS DIZEM EM TEXTO (0148). Covenant rompido, ressalva de
-    // auditoria, continuidade operacional — os fatos que um comitê lê ANTES da
-    // planilha, e que até a v48 não chegavam ao portal de forma nenhuma: as
-    // Notas Explicativas e o Parecer entravam, eram classificados e ficavam
-    // mudos, porque não têm tabela e o sistema inteiro lê tabela.
-    //
-    // TOLERANTE A ERRO pela mesma razão da linha acima: o dono aplica as
+    // O QUE OS DOCUMENTOS DIZEM EM TEXTO (0148). TOLERANTE A ERRO: o dono aplica as
     // migrations à mão, então banco sem a 0148 é estado normal e não defeito. Aí
     // esta chamada responde "não achei a função", o bloco não aparece, e o resto
     // da tela do mandato continua de pé.
     supabase.rpc("fn_fatos_do_caso", { p_caso_id: id }),
+    // O modelo está montado? As mesmas três coisas sem as quais Entregáveis recusa a apresentação.
+    supabase.from("caso_modelagem").select("entidade, ultimo_exercicio_real, anos_projetados").eq("caso_id", id).maybeSingle(),
   ]);
-
-  // QUANTAS LINHAS CADA DOCUMENTO RENDEU. É o número que o dono procurava
-  // abrindo o export, e ele não existia em tela nenhuma: a tabela dizia que o
-  // documento chegou e foi classificado, não que ele TROUXE dado. Documento
-  // classificado com zero linha é o modo de falha mais caro deste sistema (19 de
-  // 35 numa rodada real), e agora ele aparece na coluna, em vermelho.
-  const versoes = documentosRes.data
-    .flatMap((d) => (d.documento_versao ?? []).map((v) => v.id))
-    .filter(Boolean);
-  const { porVersao: linhasPorVersao, incompleto: linhasIncompletas } = await contarLinhasPorVersao(supabase, versoes);
 
   if (casoRes.error || !casoRes.data) {
     notFound();
@@ -202,43 +155,24 @@ export default async function CasoDashboardPage({
   const caso = casoRes.data as Caso;
   const kitBasico = (kitBasicoRes.data as TaxonomiaTipoDocumento[] | null) ?? [];
   const documentos = documentosRes.data;
-  const pendencias = pendenciasRes.data;
+  // Lista de documentos lida por inteiro? Sem isso, nem a soma de linhas nem o Kit Básico são
+  // verdade (regra 1) — antes o erro era jogado fora e a tela mostrava "0 documentos".
+  const documentosLidos = !documentosRes.error && !documentosRes.truncado;
 
-  // 0157 (Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql):
-  // esta tela perguntava sozinha, comparando `tipo_taxonomia === codigo`, se
-  // um item do Kit Básico estava presente — a MESMA regra que
-  // `fn_recomputar_completude` passo (1) usava até a 0157 trocá-la, no banco,
-  // por `fn_documento_serve_como` (rótulo OU, só para COMBINADO, estrutura —
-  // `fn_documento_de_varias_empresas`, 0155). Com a implementação antiga
-  // ainda aqui, o lote 7377 media o Portão 1 aberto (a pendência
-  // `item_faltante: COMBINADO` resolvida) e, na mesma tela, a grade do Kit
-  // Básico desenhando COMBINADO em cinza — a MESMA verdade discordando de si
-  // mesma. `itensDoKitBasicoAtendidos` pergunta ao banco pelos itens que o
-  // rótulo não resolveu (`servicoDocumentoServeComo` abaixo); não reimplementa
-  // `fn_documento_de_varias_empresas` em TypeScript — isso seria trocar uma
-  // segunda regra por outra mais nova.
-  const servicoDocumentoServeComo: ServicoDocumentoServeComo = async (documentoId, tipoTaxonomia) => {
-    const { data, error } = await supabase.rpc("fn_documento_serve_como", {
-      p_documento_id: documentoId,
-      p_tipo_taxonomia: tipoTaxonomia,
-    });
-    // TOLERANTE A ERRO pela mesma razão de `fn_sugerir_perguntas`/`fn_fatos_do_caso`
-    // acima: o dono aplica migrations à mão, e um banco sem a 0157 é estado
-    // normal, não defeito. Sem a função, a resposta é a mesma de ANTES da
-    // 0157 — só o rótulo conta — e nunca "satisfeito" por invenção do portal.
-    if (error) return false;
-    return data === true;
-  };
-  const kitAtendidos = await itensDoKitBasicoAtendidos(kitBasico, documentos, servicoDocumentoServeComo);
-  // Chegou, mas não rendeu uma linha: nem verde nem faltante — é o
-  // `recebido_nao_valido` de `Arquitetura do Sistema/3 Estado e Execução/07`, e é bloqueante para o Portão 2.
-  // Os fatos materiais. `?? []` e não `!`: banco sem a 0148 devolve erro e
-  // `data` nulo, e a tela tem de sair sem o bloco em vez de quebrar.
+  // QUANTAS LINHAS CADA DOCUMENTO RENDEU — soma para o indicador e "documentos sem linha".
+  const versoes = documentos
+    .flatMap((d) => (d.documento_versao ?? []).map((v) => v.id))
+    .filter(Boolean);
+  const { porVersao: linhasPorVersao, incompleto: linhasIncompletas } = await contarLinhasPorVersao(supabase, versoes);
+
+  // 0157: o Kit Básico é perguntado ao banco (`fn_documento_serve_como`), não reimplementado
+  // aqui — ver `lib/supabase/servico-serve-como.ts` e `verificar-kit-basico.mts`.
+  const kitAtendidos = await itensDoKitBasicoAtendidos(
+    kitBasico, documentos as Documento[], servicoDocumentoServeComo(supabase),
+  );
+  // Os fatos materiais. `?? []` e não `!`: banco sem a 0148 devolve erro e `data` nulo, e a
+  // tela tem de sair sem o bloco em vez de quebrar.
   const fatos = (fatosRes.data as FatoDoCaso[] | null) ?? [];
-  // O MESMO filtro rodava duas vezes no JSX — uma para decidir a frase, outra
-  // para o número dela. `.some()` sozinho não resolveria: a contagem É o dado
-  // que a frase mostra, então o que sobrava era percorrer a lista duas vezes
-  // para responder a mesma pergunta.
   const fatosCriticos = fatos.filter((f) => f.severidade === "critico").length;
 
   const portao2 = portao2Res.data as {
@@ -255,72 +189,15 @@ export default async function CasoDashboardPage({
   const tiposSemConteudo = new Set(
     checklist.filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia),
   );
-  // DECIDIDA VAI PARA O FIM. Quem abre a tela quer ver o que falta decidir; o
-  // que já foi decidido continua visível (é onde o rótulo mora), mas embaixo.
-  const DECIDIDOS = new Set(["aceita_com_ressalva", "rejeitada"]);
-  const emAberto = (p: Pendencia) => !DECIDIDOS.has(p.estado);
-  const porDecidirPrimeiro = (a: Pendencia, b: Pendencia) =>
-    Number(!emAberto(a)) - Number(!emAberto(b));
 
-  const pendenciasRevisao = pendencias.filter((p) =>
-    (PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS as readonly string[]).includes(p.tipo),
-  );
-  const pendenciasReconciliacao = pendencias.filter((p) =>
-    (PENDENCIA_TIPOS_RECONCILIACAO as readonly string[]).includes(p.tipo),
-  );
-  const pendenciasArquivo = pendencias.filter((p) => p.tipo === PENDENCIA_TIPO_ARQUIVO_ILEGIVEL);
-  const pendenciasExtracao = pendencias.filter((p) =>
-    (PENDENCIA_TIPOS_QUALIDADE_EXTRACAO as readonly string[]).includes(p.tipo),
-  );
-
-  // O RESTO — e "o resto" era o BURACO desta tela.
-  //
-  // As quatro listas acima são por tipo, escolhidas a dedo. Toda pendência de
-  // tipo que não está em nenhuma delas simplesmente NÃO APARECIA — e as duas que
-  // caem aqui são as que mais bloqueiam: `item_faltante` (obrigatório do Kit
-  // Básico ausente, bloqueante, 0004/0036) e `item_sem_conteudo` (chegou e não
-  // rendeu uma linha — bloqueante NÃO-SOBREPUJÁVEL, 0036). O card do Portão 2
-  // dizia "2 pendência(s) BLOQUEANTE(s) em aberto" e não havia, na página
-  // inteira, uma linha que dissesse QUAIS.
-  //
-  // A grade do Kit Básico mostra o FATO ("faltante", "recebido, sem conteúdo
-  // extraído"), o que é fácil confundir com "então está mostrado". Não é a mesma
-  // coisa: a pendência é o objeto que bloqueia e sobre o qual se decide, e é ela
-  // que precisa estar na tela para poder ser rejeitada. Lista por COMPLEMENTO,
-  // não por enumeração: tipo novo nasce visível: o erro que se paga por esquecer
-  // de listar é o de mostrar demais, não o de esconder um bloqueio.
-  const TIPOS_COM_SECAO_PROPRIA = new Set<string>([
-    ...PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS,
-    ...PENDENCIA_TIPOS_RECONCILIACAO,
-    ...PENDENCIA_TIPOS_QUALIDADE_EXTRACAO,
-    PENDENCIA_TIPO_ARQUIVO_ILEGIVEL,
-  ]);
-  const pendenciasOutras = pendencias.filter((p) => !TIPOS_COM_SECAO_PROPRIA.has(p.tipo));
-
-  // O ARQUIVO DE CADA PENDÊNCIA. A mensagem diz o que está errado; sem o nome do
-  // arquivo, quem vai conferir tem de adivinhar em qual dos treze documentos olhar.
-  // A versão mais recente é a que vale — é ela que a extração usou.
-  // ORDEM DA TABELA: pelo NOME DO ARQUIVO, não pela hora do upload. O cliente
-  // manda o book numerado (`01_Balanco`, `02_DRE`, …) e procura por esse número;
-  // ordenar por `criado_em desc` embaralhava o book na tela e obrigava a varrer
-  // a lista inteira para achar um documento.
-  documentos.sort((a, b) => {
-    const na = (a.documento_versao ?? []).at(-1)?.nome_original ?? "";
-    const nb = (b.documento_versao ?? []).at(-1)?.nome_original ?? "";
-    return na.localeCompare(nb, "pt-BR", { numeric: true });
-  });
-
-  const arquivoDoDocumento = new Map<string, string>();
-  for (const d of documentos) {
-    const nome = (d.documento_versao ?? []).map((v) => v.nome_original).filter(Boolean).at(-1);
-    if (nome) arquivoDoDocumento.set(d.id, nome);
-  }
+  // Contagem que falhou sai como null — nunca 0 (regra 1).
+  const contagem = (r: { error: unknown; count: number | null }) => (r.error ? null : r.count);
+  const nAbertas = contagem(abertasRes);
+  const nBloqueantes = contagem(bloqueantesRes);
+  const nRevisoes = contagem(revisoesRes);
 
   const linhasTotais = [...linhasPorVersao.values()].reduce((a, b) => a + b, 0);
-  const bloqueantesAbertas = pendencias.filter(
-    (p) => emAberto(p) && p.severidade === "bloqueante",
-  ).length;
-  const abertas = pendencias.filter(emAberto).length;
+  const kitLido = !kitBasicoRes.error && documentosLidos && !checklistRes.error;
   const kitPresentes = kitBasico.filter(
     (i) => kitAtendidos.has(i.codigo) && !tiposSemConteudo.has(i.codigo),
   ).length;
@@ -330,98 +207,97 @@ export default async function CasoDashboardPage({
   const semLinha = documentos.filter(
     (d) => ((d.documento_versao ?? []).reduce((n, v) => n + (linhasPorVersao.get(v.id) ?? 0), 0)) === 0,
   ).length;
-  // Contagem parcial não é contagem (regra 1): com a leitura incompleta, a soma
-  // parcial NÃO aparece como total (o valor vira "—") e "sem nenhuma linha" não é
-  // dito — contaria documento cujas linhas estavam nas páginas que não vieram.
-  // A célula "linhas" de cada documento na tabela. Com a contagem incompleta, nem
-  // o número nem o "nenhuma" são verdade: as linhas podem estar nas páginas que
-  // não vieram.
-  const celulaDeLinhas = (linhas: number) => {
-    if (linhasIncompletas) {
-      return (
-        <span className="chip bg-alerta-100 text-alerta-800"
-              title="A leitura das linhas deste caso não terminou; a contagem não é conhecida.">
-          não conferido
-        </span>
-      );
-    }
-    if (linhas > 0) return <span className="tabular-nums text-tinta-900">{linhas.toLocaleString("pt-BR")}</span>;
-    return (
-      <span
-        className="chip bg-risco-100 text-risco-800"
-        title="O documento foi recebido e classificado, mas nenhuma linha financeira foi gravada."
-      >
-        nenhuma
-      </span>
-    );
-  };
+  // Contagem parcial não é contagem (regra 1): com a leitura incompleta, a soma parcial NÃO
+  // aparece como total (o valor vira "—") e "sem nenhuma linha" não é dito — contaria
+  // documento cujas linhas estavam nas páginas que não vieram.
+  const linhasConhecidas = documentosLidos && !linhasIncompletas;
   let detalheDasLinhas: string | null = null;
-  if (linhasIncompletas) detalheDasLinhas = "contagem incompleta — a leitura das linhas não terminou";
+  if (!documentosLidos) detalheDasLinhas = "a leitura dos documentos falhou";
+  else if (linhasIncompletas) detalheDasLinhas = "contagem incompleta — a leitura das linhas não terminou";
   else if (semLinha > 0) detalheDasLinhas = `${semLinha} ${semLinha === 1 ? "documento sem nenhuma linha" : "documentos sem nenhuma linha"}`;
+
+  const aprovado = caso.status === "aprovado" || caso.status === "pronto_para_base";
+  const modelo = modeloRes.data as { entidade: string | null; ultimo_exercicio_real: number | null; anos_projetados: number | null } | null;
+  const passo = proximoPasso({
+    bloqueantesAbertas: nBloqueantes,
+    revisoesAbertas: nRevisoes,
+    kitFaltantes: kitLido ? kitBasico.length - kitPresentes : null,
+    aprovavel: portao2 ? portao2.elegivel : null,
+    aprovado,
+    // Falta de configuração é uma resposta ("não montou"); erro de leitura é outra ("não sei").
+    modeloMontado: modeloRes.error ? null : Boolean(modelo?.entidade?.trim()) && modelo?.ultimo_exercicio_real != null && Boolean(modelo?.anos_projetados),
+  });
+  const base = `/casos/${id}`;
 
   return (
     <div className="space-y-8">
-      {/* SEM AÇÕES NO TOPO (fase 2, item 20). Moravam aqui "Exportar dados" e "Ir para a modelagem".
-          O primeiro agora vive em Entregáveis, com o estado dos outros dois arquivos ao lado; o
-          segundo duplicava a aba Modelagem, que está a um clique na régua do mandato. Esta tela
-          segue sem botão primário próprio de propósito: as decisões dela (pendências, aprovação)
-          estão nas seções abaixo, e um segundo "próximo passo" competiria com elas. */}
+      {/* O PRÓXIMO PASSO, uma frase e um botão, decidido por `lib/proximo-passo.ts` (a prioridade
+          está documentada lá). Substitui a faixa amarela "Revisar agora" e o empilhamento de
+          seções: o que estava na frente de quem abria o mandato era tudo ao mesmo tempo. Leitura
+          que falhou vira "não dá para determinar" — nunca um passo chutado. */}
+      <section
+        aria-label="Próximo passo"
+        className={`carta flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${passo.passo === "indeterminado" ? "border-alerta-200 bg-alerta-50" : ""}`}
+      >
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-wide text-tinta-500">Próximo passo</p>
+          <p className="mt-0.5 text-base font-semibold text-tinta-900">{passo.titulo}</p>
+          <p className="mt-0.5 max-w-2xl text-sm text-tinta-600">{passo.detalhe}</p>
+        </div>
+        {passo.acao && passo.href && (
+          <Link href={passo.href.startsWith("#") ? passo.href : `${base}${passo.href}`} className="btn-primario">
+            {passo.acao}
+          </Link>
+        )}
+      </section>
 
-      {/* O RESUMO QUE A TELA NÃO DAVA. Quem abre um mandato pergunta uma coisa:
-          "posso confiar neste caso?". A resposta exigia rolar seis seções e
-          somar de cabeça. Os quatro números abaixo respondem em um olhar, e o
-          terceiro — documentos sem uma linha extraída — é o que a rodada de
-          15/08 descobriu tarde: documento classificado, checklist verde, e nada
-          no banco. */}
+      {/* O RESUMO. Quem abre um mandato pergunta uma coisa: "posso confiar neste caso?". Os
+          quatro números respondem em um olhar, e o terceiro — documentos sem uma linha extraída —
+          é o que a rodada de 15/08 descobriu tarde: documento classificado, checklist verde, e
+          nada no banco. Cada um leva à aba onde se explica. */}
       <div className="carta grid grid-cols-2 divide-x divide-y divide-tinta-100 sm:grid-cols-4 sm:divide-y-0">
-        <Indicador valor={documentos.length} rotulo="documentos recebidos" />
         <Indicador
-          valor={linhasIncompletas ? "—" : linhasTotais.toLocaleString("pt-BR")}
+          valor={documentosLidos ? documentos.length : "—"}
+          rotulo="documentos recebidos"
+          detalhe={documentosLidos ? null : "a leitura dos documentos falhou"}
+          tom="alerta"
+          href={`${base}/documentos`}
+        />
+        <Indicador
+          valor={linhasConhecidas ? linhasTotais.toLocaleString("pt-BR") : "—"}
           rotulo="linhas financeiras extraídas"
           detalhe={detalheDasLinhas}
           tom="alerta"
+          href={linhasConhecidas && semLinha > 0 ? `${base}/documentos?filtro=sem-linha` : `${base}/documentos`}
         />
         <Indicador
-          valor={`${kitPresentes}/${kitBasico.length}`}
+          valor={kitLido ? `${kitPresentes}/${kitBasico.length}` : "—"}
           rotulo="itens do Kit Básico"
-          detalhe={kitPresentes === kitBasico.length ? "kit completo" : null}
-          tom="bom"
+          detalhe={kitLido ? (kitPresentes === kitBasico.length ? "kit completo" : null) : "a leitura do kit falhou"}
+          tom={kitLido ? "bom" : "alerta"}
+          href={`${base}/documentos`}
         />
         <Indicador
-          valor={abertas}
-          rotulo={abertas === 1 ? "pendência em aberto" : "pendências em aberto"}
-          detalhe={bloqueantesAbertas > 0
-            ? `${bloqueantesAbertas} ${bloqueantesAbertas === 1 ? "bloqueia" : "bloqueiam"} a aprovação`
-            : null}
+          valor={nAbertas ?? "—"}
+          rotulo={nAbertas === 1 ? "pendência em aberto" : "pendências em aberto"}
+          detalhe={nAbertas === null
+            ? "a leitura das pendências falhou"
+            : (nBloqueantes ?? 0) > 0
+              ? `${nBloqueantes} ${nBloqueantes === 1 ? "bloqueia" : "bloqueiam"} a aprovação`
+              : null}
           tom="alerta"
+          href={`${base}/pendencias`}
         />
       </div>
-
-      {pendenciasRevisao.filter(emAberto).length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-alerta-200 bg-alerta-50 px-4 py-3 text-sm">
-          <span className="text-alerta-900">
-            <strong className="font-semibold">
-              {pendenciasRevisao.filter(emAberto).length}{" "}
-              {pendenciasRevisao.filter(emAberto).length === 1 ? "documento" : "documentos"}
-            </strong>{" "}
-            com dúvida de classificação, entidade ou período — o sistema quer sua confirmação.
-          </span>
-          <Link
-            href={`/casos/${id}/revisao`}
-            className="rounded-md bg-alerta-800 px-3 py-1.5 text-xs font-semibold text-papel hover:bg-alerta-900"
-          >
-            Revisar agora
-          </Link>
-        </div>
-      )}
 
       {/* PORTÃO 2 (Supabase/migrations/0037) — a regra de Arquitetura do Sistema/2 Especificação/f0/04, visível.
           Antes desta tela não havia como saber se um caso podia ser aprovado:
           a regra não existia em código, e "não implementado" tem a mesma
           aparência de "sem pendência bloqueante" para quem olha o dashboard. */}
-      {portao2 && (
+      {portao2 ? (
         <div
-          className={`rounded-lg border p-4 text-sm ${
+          id="aprovacao"
+          className={`scroll-mt-24 rounded-lg border p-4 text-sm ${
             portao2.elegivel ? "border-ok-200 bg-ok-50" : "carta"
           }`}
         >
@@ -504,159 +380,17 @@ export default async function CasoDashboardPage({
             )}
           </div>
         </div>
+      ) : (
+        // AVALIAÇÃO QUE NÃO RESPONDEU (regra 1). Antes o cartão simplesmente não aparecia, e a
+        // ausência do cartão lê-se como "nada a aprovar" — a mesma aparência de um caso sem problema.
+        <div id="aprovacao" role="status" className="carta scroll-mt-24 p-4 text-sm text-alerta-900">
+          <p className="font-semibold">Aprovação não conferida</p>
+          <p className="mt-1 text-xs">
+            A consulta que diz se o mandato pode ser aprovado não respondeu, então não dá para dizer
+            se ele pode ou não. Recarregue a página; se persistir, avise o administrador do sistema.
+          </p>
+        </div>
       )}
-
-      <section>
-        <div className="mb-2 flex items-baseline justify-between gap-3">
-          <h2 className="titulo-secao">Kit Básico</h2>
-          <p className="text-xs text-tinta-500">
-            os {kitBasico.length} documentos obrigatórios do mandato
-          </p>
-        </div>
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {kitBasico.map((item) => {
-            const semConteudo = tiposSemConteudo.has(item.codigo);
-            // TRÊS estados, não dois (0036): verde só quando chegou E rendeu
-            // linha. O documento que chegou vazio fica âmbar — não verde, porque
-            // o book sai vazio nessa parte, e não "faltante", porque o arquivo
-            // está lá e pedi-lo de novo ao cliente seria pedir o que ele mandou.
-            const presente = kitAtendidos.has(item.codigo) && !semConteudo;
-            const cor = presente
-              ? "border-ok-200 bg-ok-50/60"
-              : semConteudo
-                ? "border-alerta-200 bg-alerta-50"
-                : "border-tinta-200 bg-folha";
-            const corTexto = presente
-              ? "text-ok-700"
-              : semConteudo
-                ? "text-alerta-800"
-                : "text-tinta-400";
-            return (
-              <li
-                key={item.codigo}
-                className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm ${cor}`}
-              >
-                <span className="text-tinta-800">{item.documento}</span>
-                <span className={`shrink-0 text-xs font-medium ${corTexto}`}>
-                  {presente
-                    ? "✓ recebido"
-                    : semConteudo
-                      ? "chegou, sem dado extraído"
-                      : "não recebido"}
-                </span>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      <section>
-        <div className="mb-2 flex items-baseline justify-between gap-3">
-          <h2 className="titulo-secao">Documentos</h2>
-          <p className="text-xs text-tinta-500">
-            {documentos.length} {documentos.length === 1 ? "arquivo recebido" : "arquivos recebidos"}
-          </p>
-        </div>
-        {documentos.length === 0 ? (
-          <div className="carta px-6 py-10 text-center text-sm text-tinta-500">
-            Nenhum documento recebido ainda.
-          </div>
-        ) : (
-          <div className="carta overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-tinta-200 bg-tinta-50 text-[11px] uppercase tracking-wide text-tinta-500">
-                <tr>
-                  <th className="px-3 py-2.5 font-semibold">Arquivo</th>
-                  <th className="px-3 py-2.5 font-semibold">Tipo</th>
-                  <th className="px-3 py-2.5 font-semibold">Entidade</th>
-                  <th className="px-3 py-2.5 font-semibold">Período</th>
-                  {/* A COLUNA QUE FALTAVA. Sem ela a tabela dizia que o arquivo
-                      chegou e foi entendido, nunca que ele TROUXE dado. */}
-                  <th className="px-3 py-2.5 text-right font-semibold">Linhas</th>
-                  {/* CONFIANÇA E ORIGEM NA MESMA COLUNA. Eram duas, e a tabela
-                      estourava a largura da tela — a coluna de ação saía cortada
-                      ("ve linha"), que é o tipo de defeito que só aparece
-                      olhando a página renderizada. São dois fatos sobre a mesma
-                      pergunta: o quanto o sistema confia, e por quê. */}
-                  <th className="px-3 py-2.5 font-semibold">Confiança</th>
-                  <th className="px-3 py-2.5"></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-tinta-100">
-                {documentos.map((doc) => {
-                  const versao = doc.documento_versao?.[0];
-                  const legibilidadeRuim = versao?.legibilidade && versao.legibilidade !== "ok";
-                  const linhas = (doc.documento_versao ?? []).reduce(
-                    (n, v) => n + (linhasPorVersao.get(v.id) ?? 0), 0,
-                  );
-                  return (
-                    <tr key={doc.id} className="align-top transition-colors hover:bg-tinta-50">
-                      <td className="max-w-[15rem] px-3 py-2.5">
-                        <span
-                          className="block truncate font-medium text-tinta-900"
-                          title={versao?.nome_original ?? ""}
-                        >
-                          {versao?.nome_original ?? "—"}
-                        </span>
-                        {legibilidadeRuim && (
-                          <span
-                            title={versao?.nota_legibilidade ?? ""}
-                            className="ml-2 chip bg-risco-100 text-risco-800"
-                          >
-                            {LEGIBILIDADE_LABEL[versao!.legibilidade!] ?? versao!.legibilidade}
-                          </span>
-                        )}
-                        {/* O RESUMO SAIU DA COLUNA PRÓPRIA e virou a segunda linha do
-                            arquivo: numa coluna estreita ele aparecia truncado em três
-                            palavras, o que é ruído com cara de informação. */}
-                        {doc.resumo && (
-                          <p className="mt-0.5 max-w-[15rem] truncate text-xs text-tinta-500" title={doc.resumo}>
-                            {doc.resumo}
-                          </p>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-tinta-700">
-                        {formatarTipoTaxonomia(doc.tipo_taxonomia)}
-                      </td>
-                      <td className="max-w-[10rem] truncate px-3 py-2.5 text-tinta-700"
-                          title={doc.entidade?.razao_social ?? ""}>
-                        {doc.entidade?.razao_social ?? "—"}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-tinta-700">
-                        {doc.periodo ? formatarPeriodo(doc.periodo.tipo, doc.periodo.referencia) : "—"}
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        {celulaDeLinhas(linhas)}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap">
-                        <span className="tabular-nums text-tinta-700">
-                          {doc.confianca != null ? `${Math.round(doc.confianca * 100)}%` : "—"}
-                        </span>
-                        {doc.fonte && (
-                          <span
-                            className="ml-1.5 hidden text-xs text-tinta-500 xl:inline"
-                            title={`Como o documento foi reconhecido: ${FONTE_LABEL[doc.fonte] ?? humanizar(doc.fonte)}`}
-                          >
-                            · {FONTE_LABEL[doc.fonte] ?? humanizar(doc.fonte)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-right whitespace-nowrap text-xs">
-                        <Link
-                          href={`/casos/${id}/documentos/${doc.id}`}
-                          className="font-medium text-acento-600 hover:text-acento-700 hover:underline"
-                        >
-                          abrir
-                        </Link>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
 
       {fatos.length > 0 && (
         <section>
@@ -674,90 +408,6 @@ export default async function CasoDashboardPage({
           </p>
           <ul className="space-y-2">
             {fatos.map((f) => <FatoMaterial key={f.fato_id} f={f} />)}
-          </ul>
-        </section>
-      )}
-
-      {pendenciasOutras.length > 0 && (
-        <section>
-          <div className="mb-2 flex items-baseline justify-between gap-3">
-            <h2 className="titulo-secao">O que falta chegar</h2>
-            <p className="text-xs text-tinta-500">{pendenciasOutras.length} em aberto</p>
-          </div>
-          <p className="mb-2.5 text-xs text-tinta-500">
-            Documento obrigatório ausente, ou que chegou sem nenhuma linha aproveitável. A grade do
-            Kit Básico mostra o mesmo fato; aqui cada item pode ser decidido.
-          </p>
-          <ul className="space-y-2">
-            {[...pendenciasOutras].sort(porDecidirPrimeiro).map((p) => (
-              <ItemPendencia
-                key={p.id} p={p} tom={p.severidade === "bloqueante" ? "red" : "amber"} casoId={id}
-                arquivo={p.documento_id ? arquivoDoDocumento.get(p.documento_id) ?? null : null}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <section>
-        <div className="mb-2 flex items-baseline justify-between gap-3">
-          {/* "Classe A/B" é vocabulário interno (Arquitetura do Sistema/2 Especificação/f0/04): A é o que se confere
-              dentro do próprio documento, B é entre documentos. Para quem lê a
-              tela o que importa é que são números que não fecham. */}
-          <h2 className="titulo-secao">Números que não fecham</h2>
-          <p className="text-xs text-tinta-500">
-            {pendenciasReconciliacao.length === 0
-              ? "conferências automáticas entre documentos"
-              : `${pendenciasReconciliacao.length} divergência(s)`}
-          </p>
-        </div>
-        {pendenciasReconciliacao.length === 0 ? (
-          <div className="carta px-4 py-6 text-sm text-tinta-500">
-            Nenhuma divergência encontrada — o balanço fecha, o caixa bate com o fluxo e não há
-            conta contada duas vezes.
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {[...pendenciasReconciliacao].sort(porDecidirPrimeiro).map((p) => (
-              <ItemPendencia
-                key={p.id} p={p} tom="amber" casoId={id}
-                arquivo={p.documento_id ? arquivoDoDocumento.get(p.documento_id) ?? null : null}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {pendenciasArquivo.length > 0 && (
-        <section>
-          <div className="mb-2 flex items-baseline justify-between gap-3">
-            <h2 className="titulo-secao">Arquivos ilegíveis</h2>
-            <p className="text-xs text-tinta-500">{pendenciasArquivo.length} arquivo(s)</p>
-          </div>
-          <ul className="space-y-2">
-            {[...pendenciasArquivo].sort(porDecidirPrimeiro).map((p) => (
-              <ItemPendencia
-                key={p.id} p={p} tom="red" casoId={id}
-                arquivo={p.documento_id ? arquivoDoDocumento.get(p.documento_id) ?? null : null}
-              />
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {pendenciasExtracao.length > 0 && (
-        <section>
-          <div className="mb-2 flex items-baseline justify-between gap-3">
-            <h2 className="titulo-secao">Extração incompleta</h2>
-            <p className="text-xs text-tinta-500">{pendenciasExtracao.length} documento(s)</p>
-          </div>
-          <ul className="space-y-2">
-            {[...pendenciasExtracao].sort(porDecidirPrimeiro).map((p) => (
-              <ItemPendencia
-                key={p.id} p={p} tom="red" casoId={id}
-                arquivo={p.documento_id ? arquivoDoDocumento.get(p.documento_id) ?? null : null}
-              />
-            ))}
           </ul>
         </section>
       )}

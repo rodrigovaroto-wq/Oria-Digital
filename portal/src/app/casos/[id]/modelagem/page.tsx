@@ -463,11 +463,11 @@ export default async function ModelagemPage({
             sem isso a tela voltaria a dizer "pronto" sobre um export que devolve 409. */}
         <div className="flex max-w-sm shrink-0 flex-col items-end gap-1 text-right">
           {portaoNaoConf && (
-            <p role="status" className="text-xs text-alerta-900">
+            <output className="block text-xs text-alerta-900">
               Não foi possível conferir a aprovação (a consulta falhou ou não devolveu veredito); o
               export de modelagem fica retido até a conferência responder. Recarregue a página; se
               persistir, o motivo está na faixa de consultas com erro.
-            </p>
+            </output>
           )}
           {exportTravado && (
             <p className="text-xs text-alerta-900">

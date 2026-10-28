@@ -56,8 +56,7 @@ function Motivos({ portao, id }: Readonly<{ portao: PortaoDoExport | null; id: s
       <p>Aguarda a aprovação do mandato{motivos.length ? ":" : "."}</p>
       {motivos.length > 0 && <ul className="list-disc space-y-0.5 pl-5">{motivos.map((m) => <li key={m}>{m}</li>)}</ul>}
       <p>
-        Decida as pendências na <Link href={`/casos/${id}/revisao`} className="underline">Revisão</Link> ou
-        na <Link href={`/casos/${id}`} className="underline">Visão geral</Link>.
+        Decida as pendências na aba <Link href={`/casos/${id}/pendencias`} className="underline">Pendências</Link>.
       </p>
     </div>
   );
@@ -65,12 +64,12 @@ function Motivos({ portao, id }: Readonly<{ portao: PortaoDoExport | null; id: s
 
 function NaoConferido({ id, o }: Readonly<{ id: string; o: string }>) {
   return (
-    <p role="status" className="text-alerta-900">
+    <output className="block text-alerta-900">
       Não foi possível conferir a aprovação do mandato (a consulta falhou ou não devolveu veredito),
       então o download {o} fica retido — liberar sem saber se a base foi aprovada daria aparência de
       resultado aprovado a número que ninguém aprovou. Recarregue a página; se persistir, avise o
       administrador. A <a href={`/casos/${id}/export?modo=dados`} className="underline">base de dados</a> segue disponível.
-    </p>
+    </output>
   );
 }
 
@@ -106,7 +105,9 @@ export default async function EntregaveisPage({ params }: Readonly<{ params: Pro
   const salvar = salvarCamposApresentacao.bind(null, id);
   const total = CAPITULOS_APRESENTACAO.reduce((t, c) => t + c.campos.length, 0);
 
-  const estadoModelo: Estado = estadoPortao === "aberto" ? "disponivel" : estadoPortao === "fechado" ? "bloqueado" : "nao_conferido";
+  let estadoModelo: Estado = "nao_conferido";
+  if (estadoPortao === "aberto") estadoModelo = "disponivel";
+  else if (estadoPortao === "fechado") estadoModelo = "bloqueado";
   let estadoApresentacao: Estado = estadoModelo;
   if (estadoPortao === "aberto" && !modeloLido) estadoApresentacao = "nao_conferido";
   else if (estadoPortao === "aberto" && faltaNoModelo.length > 0) estadoApresentacao = "bloqueado";
@@ -144,10 +145,10 @@ export default async function EntregaveisPage({ params }: Readonly<{ params: Pro
           {estadoPortao === "fechado" && <Motivos portao={portao} id={id} />}
           {estadoPortao === "nao_conferido" && <NaoConferido id={id} o="da apresentação" />}
           {estadoPortao === "aberto" && !modeloLido && (
-            <p role="status" className="text-alerta-900">
+            <output className="block text-alerta-900">
               Não foi possível ler a configuração do modelo, então o download fica retido até a leitura
               responder. Recarregue a página.
-            </p>
+            </output>
           )}
           {estadoPortao === "aberto" && modeloLido && faltaNoModelo.length > 0 && (
             <p className="text-alerta-900">

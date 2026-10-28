@@ -35,6 +35,7 @@ export async function revisarDocumento(casoId: string, formData: FormData) {
     throw new Error(`Falha ao revisar documento: ${error.message}`);
   }
 
-  revalidatePath(`/casos/${casoId}`);
-  revalidatePath(`/casos/${casoId}/revisao`);
+  // "layout": os números das abas (Pendências, Documentos) moram no layout do mandato, e
+  // `revalidatePath(<rota>)` sozinho não o refaz — a aba seguiria dizendo o número velho.
+  revalidatePath(`/casos/${casoId}`, "layout");
 }

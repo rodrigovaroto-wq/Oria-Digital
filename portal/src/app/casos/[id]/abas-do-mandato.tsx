@@ -19,16 +19,17 @@ export interface AbaDoMandato {
   contagem: number | null;
 }
 
-// A visão geral é dona também das sub-páginas que ainda não têm aba própria
-// (documento e adicionar): quem está lendo um documento está "no mandato", e
-// sem isso nenhuma aba ficaria marcada.
+// A Visão geral só é ativa na raiz e em /adicionar (sub-página sem aba própria: quem
+// está adicionando arquivos está "no mandato", e sem isso nenhuma aba ficaria marcada).
+// Documentos é ativa em /documentos e em /documentos/{docId}: o detalhe de um documento
+// pertence à aba da lista de onde se chegou nele.
 function ativa(caminho: string, base: string, sufixo: string): boolean {
   // Barra final tirada em laço: a regex `/\/+$/` é retrocesso super-linear
   // para o Sonar (S8786), e o caminho vem da URL.
   let limpo = caminho;
   while (limpo.endsWith("/")) limpo = limpo.slice(0, -1);
   if (sufixo === "") {
-    return limpo === base || limpo.startsWith(`${base}/documentos`) || limpo === `${base}/adicionar`;
+    return limpo === base || limpo === `${base}/adicionar`;
   }
   const alvo = `${base}${sufixo}`;
   return limpo === alvo || limpo.startsWith(`${alvo}/`);

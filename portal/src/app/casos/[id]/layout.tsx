@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS, type Caso } from "@/lib/types";
+import type { Caso } from "@/lib/types";
+import { ESTADOS_EM_ABERTO } from "@/lib/pendencia";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import { humanizar } from "@/lib/rotulos";
 import { ETAPAS_DO_MANDATO, etapaDoMandato } from "@/lib/etapa-do-mandato";
@@ -14,13 +15,13 @@ import { MenuDoMandato } from "./menu-do-mandato";
 // aqui moram o nome, o estado, a régua de etapas e a navegação.
 //
 // ESTE LAYOUT RODA EM TODA TROCA DE ABA, então as consultas são mínimas: colunas
-// nomeadas, e os três números (documentos, revisão, perguntas) são `head: true`
+// nomeadas, e os números (documentos, pendências) são `head: true`
 // — só a contagem, nenhuma linha (a cota de egress do Supabase é apertada, ver
 // PRODUCT.md). O layout não revalida ao navegar entre abas do mesmo segmento,
 // então o custo real é por visita ao mandato, não por clique.
 //
-// CONTAGEM QUE FALHA SAI SEM NÚMERO, nunca "0" (regra 1): "0 perguntas" diria
-// "não há o que perguntar", e o que se sabe é só que a consulta não respondeu.
+// CONTAGEM QUE FALHA SAI SEM NÚMERO, nunca "0" (regra 1): "0 pendências" diria
+// "não há o que decidir", e o que se sabe é só que a consulta não respondeu.
 export default async function MandatoLayout({
   children,
   params,
@@ -31,24 +32,21 @@ export default async function MandatoLayout({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [casoRes, documentosRes, revisaoRes] = await Promise.all([
+  const [casoRes, documentosRes, pendenciasRes] = await Promise.all([
     supabase.from("caso").select("id, nome, produto, status, criado_em, fechado_em").eq("id", id).single(),
     supabase.from("documento").select("id", { head: true, count: "exact" }).eq("caso_id", id),
-    // Pendência de diagnóstico revisável que ainda está na fila da tela de
-    // Revisão. O nome é "Revisão" e não
-    // "Pendências" porque só cobre revisão de documento — a aba de Pendências
-    // unificada ainda não existe, e um número parcial no lugar do total seria
-    // apresentar ausência como dado.
+    // O NÚMERO DA ABA PENDÊNCIAS = o que a aba lista em "Em aberto" por padrão (filtro "Todas"):
+    // estado em `ESTADOS_EM_ABERTO` (aberta, em_correcao_interna, reenviada_ao_cliente), de
+    // QUALQUER tipo — a página também não exclui nenhum. É a MESMA constante nos dois lados;
+    // se a página passar a esconder um tipo, este filtro tem de esconder o mesmo, senão a aba
+    // promete mais cartões do que abre. As decididas (aceita_com_ressalva, rejeitada) ficam em
+    // "Já decididas" e não entram no número, e `resolvida` é do sistema. Consulta que falha
+    // sai sem número, nunca "0".
     supabase
       .from("pendencia")
       .select("id", { head: true, count: "exact" })
       .eq("caso_id", id)
-      .in("tipo", PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS)
-      // O MESMO filtro da tela `/revisao` (`estado = 'aberta'`), e não o da
-      // faixa "Revisar agora" (que soma `em_correcao_interna` e
-      // `reenviada_ao_cliente`): o número da aba promete quantos cartões a aba
-      // mostra. Com o filtro da faixa, a aba diria "3" e a tela abriria com 1.
-      .eq("estado", "aberta"),
+      .in("estado", [...ESTADOS_EM_ABERTO]),
   ]);
 
   // NÃO ENCONTRADO ≠ NÃO CONSEGUI LER. `.single()` sem linha volta PGRST116:
@@ -67,7 +65,9 @@ export default async function MandatoLayout({
   const nDocumentos = documentosRes.error ? null : documentosRes.count;
   const abas: AbaDoMandato[] = [
     { rotulo: "Visão geral", sufixo: "", contagem: null },
-    { rotulo: "Revisão", sufixo: "/revisao", contagem: revisaoRes.error ? null : revisaoRes.count },
+    // O número é o de documentos lidos acima (a Visão geral e a aba usam a mesma contagem do caso).
+    { rotulo: "Documentos", sufixo: "/documentos", contagem: nDocumentos },
+    { rotulo: "Pendências", sufixo: "/pendencias", contagem: pendenciasRes.error ? null : pendenciasRes.count },
     // SEM NÚMERO, de propósito. A tela conta "perguntas a fazer" excluindo as
     // `ja_enviada` E as que têm ação registrada (enviada/descartada) em outra
     // tabela; a contagem crua de `fn_sugerir_perguntas` incluía as já tratadas

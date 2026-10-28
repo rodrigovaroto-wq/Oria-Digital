@@ -4,11 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
 import {
-  PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS,
   type Caso,
   type Pendencia,
 } from "@/lib/types";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
+import { categoriaDaPendencia } from "@/lib/pendencia";
 import { rotuloDaPendencia, nomeDaChecagem, partesDaDescricao, suavizarMensagem } from "@/lib/rotulos";
 import { formatarTipoTaxonomia } from "@/lib/export";
 import { Surgir } from "@/components/surgir";
@@ -42,8 +42,6 @@ const TOM_SEVERIDADE: Record<string, { ponto: string; chip: string; rotulo: stri
   importante: { ponto: "bg-alerta-500", chip: "bg-alerta-100 text-alerta-900", rotulo: "importante" },
   complementar: { ponto: "bg-tinta-400", chip: "bg-tinta-100 text-tinta-600", rotulo: "complementar" },
 };
-
-const REVISAVEIS = new Set<string>(PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS);
 
 const FUSO = "America/Sao_Paulo";
 
@@ -502,9 +500,10 @@ export default async function PainelPage() {
               <ul className="carta divide-y divide-tinta-100 overflow-hidden">
                 {fila.map((p) => {
                   const tom = TOM_SEVERIDADE[p.severidade] ?? TOM_SEVERIDADE.complementar;
-                  const destino = REVISAVEIS.has(p.tipo)
-                    ? `/casos/${p.caso_id}/revisao`
-                    : `/casos/${p.caso_id}`;
+                  // A fila leva à gaveta certa da aba Pendências: documento a confirmar abre o
+                  // formulário; o resto cai no filtro da própria espécie. (Antes o resto ia para a
+                  // Visão geral, que não lista mais pendência nenhuma.)
+                  const destino = `/casos/${p.caso_id}/pendencias?filtro=${categoriaDaPendencia(p.tipo)}`;
                   const resumoTexto = resumoDaPendencia(p.descricao);
                   return (
                     <li key={p.id}>
