@@ -48,28 +48,37 @@ O inventário das 13 telas (27/10/2026) mediu o problema, não o supôs:
 | **4 · Acabamento** | Imagem de fundo (do dono) no login e na faixa do Início; indicadores refinados; movimento; celular; modo discrição; avisos; modo escuro | 07, 11, 31, 32, 36–38 |
 | **5 · Comercial** | Papéis e acesso por mandato **no banco primeiro**; tela de equipe; recuperar senha, MFA, SSO Microsoft | 29, 30 |
 
-## Estado da execução — 28/10/2026
+## Estado da execução — 28/10/2026 (pausa pedida pelo dono)
 
-> Atualizado ao fechar a Fase 3. Tudo commitado e empurrado em
-> `claude/friendly-lamport-22ctle`, PR #265 (rascunho). Cada fatia passou
-> `tsc`, `eslint`, `next build` e os 12 `verificar-*.mts`; as regras novas
-> têm invariante medido não-vazio (o número de asserts que reprovam está na
-> mensagem de cada commit). **Nenhuma tela autenticada foi vista em navegador**
-> — o container não tem sessão Supabase; a conferência visual é no preview.
+> Execução PAUSADA a pedido do dono. Nada ficou pela metade: todo trabalho
+> está commitado e empurrado em `claude/friendly-lamport-22ctle`, PR #265
+> (rascunho), e nenhum agente está rodando. Cada fatia passou `tsc`,
+> `eslint`, `next build` e os 12 `verificar-*.mts`; as regras novas têm
+> invariante medido não-vazio (o número de asserts que reprovam está na
+> mensagem de cada commit). Seis revisões independentes acharam e foram
+> corrigidos mais de 40 defeitos silenciosos. Sonar: Quality Gate passando.
+> **Nenhuma tela autenticada foi vista em navegador** — o container não tem
+> sessão Supabase; a conferência visual é no preview da Vercel.
 
 ### Finalizado
 
 | Bloco | Commits | O quê |
 |---|---|---|
 | Decisões | `e4cade0` | PRODUCT/DESIGN/este arquivo; multiempresa e área do cliente arquivadas |
-| **Fase 1** | `bdbbb6f`..`b9c44b8`, `95a447e` | Casco (barra com ícones e recentes, trilha, menu de conta), abas fixas + régua + menu ⋯, loading/erro/não encontrado, recusa do export em página, renomes, jargão em "Detalhes técnicos"; 4 achados da revisão |
-| **Vidro** (dono, 28/10) | `ea05123`, `f42fc77`, `e813d53` | Foto "ORIA DIGITAL" na tela inteira, barra e topo suspensos em vidro escuro, conteúdo em folha creme a 94% **sem backdrop-filter** (ele prendia os diálogos `fixed`); diálogos por portal no `<body>`; contraste medido (DESIGN.md) |
-| **Fase 2** | `17b1116`, `e4baac2`, `f40e4b3`, `91cd0d5`, `25154ab`, `d8185d1`, `8350713`, `ff36ad6`, `459f21a` | Entregáveis; Visão geral com Próximo passo + abas Documentos e Pendências; Início com 4 indicadores e fila filtrável; Mandatos em tabela; Modelagem com barra de salvar única; explicações visíveis; busca ⌘K; documento em painel lateral |
-| **Fase 3** | `805c759`, `53360e2`, `87b44fe`, `a2881c2`, `37b07c5`, `277b672`, `1b25441`, `24a8bf6`, `68dd476` | "Ver no original" (URL assinada no clique, na versão e página citadas); perguntas em lote com e-mail ao cliente; novo mandato em 2 passos; Grupo econômico em organograma; Administração (Qualidade da automação + Custos); Histórico do mandato (migration **0215** + tela pelo menu ⋯) |
-| Correções | `9339d71`, `81aca9c`, `4813605`, `0e0f8f2`, `71f8a63` | 6ª e 7ª revisões; Sonar de volta a Quality Gate passando; conferidor de chamadas reconhece o bucket do Storage |
+| **Fase 1** | `bdbbb6f`..`b9c44b8`, `95a447e` | Casco (barra com ícones e recentes, trilha, menu de conta), abas fixas + régua + menu ⋯, loading/erro/não encontrado, recusa do export em página, renomes, jargão em "Detalhes técnicos" |
+| **Vidro** | `ea05123`, `f42fc77`, `e813d53` | Foto "ORIA DIGITAL" na tela inteira, barra e topo suspensos em vidro escuro, folha creme sem backdrop-filter; diálogos por portal; contraste medido |
+| **Fase 2** | `17b1116`, `e4baac2`, `f40e4b3`, `91cd0d5`, `25154ab`, `d8185d1`, `8350713`, `ff36ad6`, `459f21a` | Entregáveis; Visão geral com Próximo passo; Documentos com painel lateral; Pendências única; Início com 4 indicadores e fila; Mandatos em tabela; Modelagem com barra de salvar; explicações visíveis; busca ⌘K |
+| **Fase 3** | `805c759`, `53360e2`, `87b44fe`, `a2881c2`, `37b07c5`, `277b672`, `1b25441`, `24a8bf6`, `68dd476` | "Ver no original" (na versão e página citadas); perguntas em lote com e-mail ao cliente; novo mandato em 2 passos; Grupo econômico em organograma; Administração (Qualidade da automação + Custos); Histórico do mandato (migration **0215** + tela pelo menu ⋯, paginação por (em, chave)) |
+| **Fase 4 (parte)** | `bc0d1cf` | Modo discrição (borra valores financeiros; proteção só visual, limite declarado); celular com barra inferior (Início, Mandatos, Busca, Novo, Mais) |
+| Correções | `9339d71`, `81aca9c`, `4813605`, `0e0f8f2`, `71f8a63` | Achados das revisões; Sonar; conferidor de chamadas reconhece o bucket do Storage |
 
-Seis revisões independentes (`revisor-defeito-silencioso`) acharam e foram
-corrigidos mais de 40 defeitos silenciosos.
+### Em andamento
+
+Nada. No momento da pausa o CI de `cf1a67f` estava rodando e o de `bc0d1cf`
+começa com este envio; as rodadas anteriores só tiveram jobs CANCELADOS por
+envio seguido (nenhum teste reprovou — `banco`, `portal`, `n8n-e-derivados`
+e `e2e` passaram em `277b672`, `9339d71` e `81aca9c`). Conferir o CI do
+último commit ao retomar.
 
 ### O dono faz à mão
 
@@ -77,27 +86,40 @@ corrigidos mais de 40 defeitos silenciosos.
   `select chave, presente, detalhe from fn_instalacao_conferir() where
   migration = '0215' and not presente;` → zero linhas. Sem ela, a tela
   Histórico diz que falta a atualização do banco (não quebra).
+- Olhar o preview da Vercel nas telas novas (nenhuma foi vista em
+  navegador): Ver no original, Perguntas em lote, Novo mandato, Grupo
+  econômico, Administração/Custos, Histórico, modo discrição e o celular.
 
 ### Pendências pequenas (não bloqueiam)
 
 - Funções puras sem teste: `escolherRecentes`, `iniciaisDoEmail`,
   `passosDaTrilha`, `etapaDoMandato`, `mensagemDeLogin`.
 - "Tempo médio de ingestão" e não "até aprovar": `caso` não tem data de
-  aprovação — o indicador executivo pedido precisa dessa coluna.
+  aprovação — o indicador pedido precisa dessa coluna.
 - Novo mandato sem "Produto" e "Responsável": `fn_upsert_caso` só grava o
-  nome, e responsável exige coluna nova.
+  nome, e responsável exige coluna nova (migration).
 - `createSignedUrl` contra objeto inexistente não foi exercitado no Storage
   real; se assinar sem erro, o clique cai num 404 do Storage.
-- Telas novas não vistas em navegador (preview Vercel).
+- Modo discrição: indicadores do Início não marcados (são contagens); a
+  marca nas premissas da Modelagem não foi medida; `viewport-fit=cover` não
+  declarado (a margem do iPhone cai nos 12px de piso).
+- Ramo da 0215 que tira da vinculação as linhas do lote sem assert (0 de 49).
 - ~88 observações menores do Sonar (estilo); Quality Gate passando.
+- Revisão independente da fatia `bc0d1cf` (Fase 4) ainda não feita.
 
 ### Ainda a fazer
 
-- **Fase 4 · Acabamento** — modo discrição e celular com barra inferior (em
-  andamento); avisos de processamento concluído; modo escuro.
-- **Fase 5 · Comercial** — papéis e RLS por caso no banco primeiro; equipe;
-  recuperar senha, MFA, SSO.
-- Fechamento: `ESTADO.md` e ficha do conhecimento; tirar o PR de rascunho.
+1. **Revisar** `bc0d1cf` (revisor-defeito-silencioso) e corrigir o que achar.
+2. **Fase 4 · resto** — avisos de processamento concluído (proposta: ler
+   `lote_execucao` recém-concluído, "visto" por usuário; tabela de avisos só
+   se precisar de estado no servidor); modo escuro (tokens em `globals.css`
+   e DESIGN.md, contraste medido como no vidro).
+3. **Fase 5 · Comercial** — papéis e RLS por caso **no banco primeiro**
+   (hoje toda policy é `USING (true)` para authenticated); depois tela de
+   equipe; recuperar senha, MFA, SSO Microsoft. Precisa de decisão do dono
+   sobre os papéis (ex.: sócio, analista, leitura).
+4. **Fechamento** — `ESTADO.md` e ficha do conhecimento do redesenho; tirar
+   o PR #265 de rascunho; reduzir as observações de estilo do Sonar.
 
 ## Arquivado (decidido, não agendado)
 
