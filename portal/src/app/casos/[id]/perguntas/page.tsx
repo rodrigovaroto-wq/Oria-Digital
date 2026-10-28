@@ -10,6 +10,7 @@ import {
   type PerguntaSugerida,
 } from "@/lib/perguntas";
 import { CartaoPergunta } from "./CartaoPergunta";
+import { ProvedorDeSelecao, SelecionarTodas, type PendenteSelecionavel } from "./SelecaoDePerguntas";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 
 // A ABA DAS PERGUNTAS AO CLIENTE.
@@ -119,6 +120,14 @@ export default async function PerguntasAoClientePage({
     p.ja_enviada || (acoesPorChave.get(chaveDaSugestao(p.codigo, p.entidade_id))?.length ?? 0) > 0;
 
   const pendentes = sugestoes.filter((p) => !foiTratada(p));
+  const selecionaveis: PendenteSelecionavel[] = pendentes.map((p) => ({
+    chave: chaveDaSugestao(p.codigo, p.entidade_id),
+    codigo: p.codigo,
+    prioridade: p.prioridade,
+    entidade: p.entidade,
+    entidade_id: p.entidade_id,
+    pergunta: p.pergunta,
+  }));
   const enviadas = sugestoes.filter((p) => p.ja_enviada).length;
 
   // O QUE JÁ SE PERGUNTOU E NÃO É MAIS SUGERIDO. Uma pergunta some da lista
@@ -143,6 +152,7 @@ export default async function PerguntasAoClientePage({
   }));
 
   return (
+    <ProvedorDeSelecao casoId={id} mandato={casoRes.data.nome} pendentes={selecionaveis}>
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
@@ -230,12 +240,23 @@ export default async function PerguntasAoClientePage({
         </div>
       )}
 
+      {selecionaveis.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <SelecionarTodas rotulo="todas as pendentes" />
+          <span className="text-xs text-tinta-500">
+            Marque as perguntas que vão na mesma mensagem ao cliente; a barra de ações aparece
+            quando houver ao menos uma.
+          </span>
+        </div>
+      )}
+
       {porPrioridade.map(({ prioridade, itens }) => (
         <section key={prioridade}>
           <div className="mb-2 flex flex-wrap items-baseline justify-between gap-3">
             <h2 className="titulo-secao">
               Prioridade {prioridade} &middot; {rotuloDaPrioridade(prioridade)}
             </h2>
+            <SelecionarTodas prioridade={prioridade} rotulo="todas desta prioridade" />
             <p className="text-xs text-tinta-500">
               {PRIORIDADE[prioridade]?.explicacao ?? `${itens.length} pergunta(s)`}
             </p>
@@ -247,6 +268,7 @@ export default async function PerguntasAoClientePage({
                 casoId={id}
                 p={p}
                 acoes={acoesPorChave.get(chaveDaSugestao(p.codigo, p.entidade_id)) ?? []}
+                selecionavel={!foiTratada(p)}
               />
             ))}
           </ul>
@@ -314,5 +336,6 @@ export default async function PerguntasAoClientePage({
         </div>
       )}
     </div>
+    </ProvedorDeSelecao>
   );
 }

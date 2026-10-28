@@ -47,6 +47,7 @@
 import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../src/lib/kit-basico.ts";
 import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
 import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
+import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
 
 let falhas = 0;
@@ -246,6 +247,40 @@ console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista fil
   const unico = vizinhosNaOrdem(["d1"], "d1");
   ok(unico?.anterior === null && unico?.proximo === null && unico?.total === 1,
     "lista de um documento: sem vizinhos, total 1");
+}
+
+
+// 6. O E-MAIL AO CLIENTE (`lib/email-ao-cliente.ts`, perguntas em lote). Texto que sai da casa:
+//    só o texto da pergunta (nada interno), numeração contínua, empresas agrupadas, ordem estável
+//    e o lote nunca diz "tudo certo" quando algo falhou. Mora aqui porque o CI já roda este script.
+{
+  const P = (codigo: string, prioridade: number, entidade: string | null, pergunta: string): PerguntaParaEmail =>
+    ({ codigo, prioridade, entidade, pergunta, motivo: "MOTIVO-INTERNO", risco: "RISCO-INTERNO" } as PerguntaParaEmail);
+  const pergs = [
+    P("Q2", 2, "Beta Ltda", "Sobre a Beta Ltda: Enviem o balanço de 2024."),
+    P("Q9", 1, null, "Quais as garantias prestadas?"),
+    P("Q1", 1, "Alfa S.A.", "Sobre a Alfa S.A.: Enviem a DRE."),
+    P("Q3", 3, "Alfa S.A.", "Sobre a Alfa S.A.: Enviem o balancete."),
+  ];
+  const t = montarEmailAoCliente(pergs, "Projeto X");
+  ok(t.startsWith("Prezados,") && t.endsWith("[nome]"), "e-mail: saudação e assinatura-placeholder");
+  ok(!/MOTIVO-INTERNO|RISCO-INTERNO|Q1|Q9/.test(t), "e-mail: nenhum campo interno (código, motivo, risco) vaza");
+  const numeros = [...t.matchAll(/^(\d+)\. /gm)].map((m) => Number(m[1]));
+  ok(numeros.join(",") === "1,2,3,4", "e-mail: numeração contínua 1..N", numeros.join(","));
+  ok(t.indexOf("Perguntas gerais:") < t.indexOf("Alfa S.A.:") && t.indexOf("Alfa S.A.:") < t.indexOf("Beta Ltda:"),
+    "e-mail: sem empresa primeiro, depois empresas em ordem alfabética");
+  ok(!t.includes("Sobre a Alfa S.A.:"), "e-mail: prefixo da 0120 retirado sob o título da empresa");
+  ok(t.indexOf("Enviem a DRE") < t.indexOf("Enviem o balancete"), "e-mail: dentro da empresa, por prioridade");
+  ok(t === montarEmailAoCliente([...pergs].reverse(), "Projeto X"), "e-mail: independe da ordem de seleção");
+  ok(montarEmailAoCliente([], "Projeto X").includes("Prezados,"), "e-mail: lista vazia não quebra");
+  ok(!/Alfa S\.A\.:|Perguntas gerais:/.test(listaNumerada([P("Q1", 1, null, "Uma só."), P("Q2", 1, null, "Duas.")])),
+    "lista: sem empresa nenhuma, sem título de grupo");
+  ok(linkMailto(assuntoDoEmail("Projeto X"), "curto")?.startsWith("mailto:?subject=") === true, "mailto: texto curto abre");
+  ok(linkMailto("a", "x".repeat(3000)) === null, "mailto: texto longo devolve null (a tela manda usar Copiar)");
+  ok(resumoDoLote(3, []) === "3 registradas como enviadas.", "lote: tudo certo só quando nada falhou", resumoDoLote(3, []));
+  const parcial = resumoDoLote(2, ["Q1: recusado"]);
+  ok(parcial.startsWith("2 registradas; 1 falhou: Q1") && !parcial.includes("como enviadas"),
+    "lote: falha parcial nunca diz que tudo deu certo", parcial);
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

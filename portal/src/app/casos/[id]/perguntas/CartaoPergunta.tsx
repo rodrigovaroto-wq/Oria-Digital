@@ -11,6 +11,7 @@
 // banco. Só o copiar precisa do navegador, e é ele, sozinho, que é "use client".
 import { BotaoCopiar } from "@/components/botao-copiar";
 import {
+  chaveDaSugestao,
   chipDaPrioridade,
   dataCurta,
   motivoDoDisparo,
@@ -19,16 +20,20 @@ import {
   type PerguntaSugerida,
 } from "@/lib/perguntas";
 import { registrarAcaoDaPergunta } from "./actions";
+import { CaixaDeSelecao } from "./SelecaoDePerguntas";
 
 export function CartaoPergunta({
   casoId,
   p,
   acoes,
+  selecionavel = false,
 }: {
   casoId: string;
   p: PerguntaSugerida;
   /** o que já se registrou sobre ESTE par (pergunta, empresa), da mais recente à mais antiga */
   acoes: AcaoDePergunta[];
+  /** pendente: ganha a caixa de seleção do lote (as já tratadas se decidem uma a uma, aqui no cartão) */
+  selecionavel?: boolean;
 }) {
   const registrar = registrarAcaoDaPergunta.bind(null, casoId);
   const ultimoEnvio = acoes.find((a) => a.acao === "enviada");
@@ -45,6 +50,9 @@ export function CartaoPergunta({
   return (
     <li className={`carta p-4 ${enviada || descartadaAgora ? "opacity-90" : ""}`}>
       <div className="flex flex-wrap items-center gap-2">
+        {selecionavel && (
+          <CaixaDeSelecao chave={chaveDaSugestao(p.codigo, p.entidade_id)} titulo={p.titulo} />
+        )}
         <span className={`chip ${chipDaPrioridade(p.prioridade)}`}>
           {p.prioridade} · {rotuloDaPrioridade(p.prioridade)}
         </span>

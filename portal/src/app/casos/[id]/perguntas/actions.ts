@@ -55,3 +55,20 @@ export async function registrarAcaoDaPergunta(casoId: string, formData: FormData
 
   revalidatePath(`/casos/${casoId}/perguntas`);
 }
+
+// O MESMO REGISTRO, PARA O LOTE — e por que não é a função acima chamada direto do cliente.
+// Em produção o Next troca a mensagem de um erro lançado por uma server action por um texto
+// genérico e sem a recusa do banco; no lote o analista precisa saber QUAL pergunta falhou e
+// POR QUÊ. Então o lote chama esta, que devolve o motivo como dado, e a que lança segue a
+// mesma de antes (os formulários dos cartões não mudam).
+export async function registrarAcaoSemExcecao(
+  casoId: string,
+  formData: FormData,
+): Promise<{ ok: true } | { ok: false; erro: string }> {
+  try {
+    await registrarAcaoDaPergunta(casoId, formData);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, erro: e instanceof Error ? e.message : "falha desconhecida" };
+  }
+}
