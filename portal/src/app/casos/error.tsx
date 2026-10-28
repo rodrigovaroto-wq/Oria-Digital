@@ -9,7 +9,9 @@ import { PainelDeErro } from "@/components/painel-de-erro";
 // `error.tsx` embrulha a PÁGINA do segmento, nunca o layout do mesmo segmento;
 // por isso a recusa de Fechar/Excluir (Server Action que lança) chega neste
 // arquivo, com a barra e o cabeçalho do portal preservados, em vez da página de
-// erro padrão do Next.
+// erro padrão do Next. Ela também embrulha as PÁGINAS `/casos` e
+// `/casos/todos`, por isso o texto cobre os dois casos — tela que não carregou
+// e ação não confirmada (revisão do PR #265: o texto só falava de ação).
 export default function ErroDeCasos({
   error, reset,
 }: Readonly<{
@@ -18,8 +20,8 @@ export default function ErroDeCasos({
 }>) {
   return (
     <PainelDeErro
-      titulo="Não foi possível concluir esta ação"
-      orientacao="A ação não foi confirmada. Confira o estado do mandato na lista antes de repetir; se continuar falhando, envie o identificador dos detalhes técnicos a quem mantém o portal."
+      titulo="Algo não deu certo nesta tela"
+      orientacao="A tela não carregou, ou a última ação (fechar, reabrir ou excluir um mandato) não foi confirmada. Tente de novo; se você tinha acabado de fazer uma ação, confira o mandato antes de repeti-la. Se continuar falhando, envie o identificador dos detalhes técnicos a quem mantém o portal."
       error={error} reset={reset}
       voltarHref="/casos" voltarRotulo="Voltar ao início"
     />

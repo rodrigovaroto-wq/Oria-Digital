@@ -114,11 +114,13 @@ export default async function FilaRevisaoPage({
                     {PENDENCIA_TIPO_LABEL[p.tipo] ?? p.tipo}
                   </span>
                 </p>
-                {p.descricao && (
-                  <DetalhesTecnicos className="mt-1 text-tinta-500">
-                    <p>{p.descricao}</p>
-                  </DetalhesTecnicos>
-                )}
+                {/* O QUE O DIAGNÓSTICO ACHOU fica no CORPO, não em "Detalhes
+                    técnicos": em `tipo_incorreto`/`entidade_incorreta` a descrição
+                    é a única linha que diz "o conteúdo sugere X, o registro diz Y"
+                    — o rodapé e os selects mostram o valor REGISTRADO. Escondida,
+                    o analista confirmava justamente o valor que o diagnóstico
+                    apontou como errado (achado da revisão do PR #265). */}
+                {p.descricao && <p className="mt-1 text-sm text-tinta-700">{p.descricao}</p>}
               </div>
 
               <form action={revisarAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">

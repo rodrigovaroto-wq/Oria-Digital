@@ -31,7 +31,7 @@ export default async function MandatoLayout({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [casoRes, documentosRes, revisaoRes, perguntasRes] = await Promise.all([
+  const [casoRes, documentosRes, revisaoRes] = await Promise.all([
     supabase.from("caso").select("id, nome, produto, status, criado_em, fechado_em").eq("id", id).single(),
     supabase.from("documento").select("id", { head: true, count: "exact" }).eq("caso_id", id),
     // Pendência de diagnóstico revisável que ainda está na fila da tela de
@@ -49,11 +49,17 @@ export default async function MandatoLayout({
       // `reenviada_ao_cliente`): o número da aba promete quantos cartões a aba
       // mostra. Com o filtro da faixa, a aba diria "3" e a tela abriria com 1.
       .eq("estado", "aberta"),
-    // Tolerante a erro, igual à visão geral: banco sem a 0120 é estado normal.
-    supabase.rpc("fn_sugerir_perguntas", { p_caso_id: id }, { head: true, count: "exact" }),
   ]);
 
-  if (casoRes.error || !casoRes.data) notFound();
+  // NÃO ENCONTRADO ≠ NÃO CONSEGUI LER. `.single()` sem linha volta PGRST116:
+  // aí o mandato não existe (ou foi excluído) e `notFound()` diz isso. Qualquer
+  // outro erro (timeout, 5xx) LANÇA, e cai na fronteira de erro com "Tentar de
+  // novo" — antes, um timeout dizia "ele pode ter sido excluído" (revisão do
+  // PR #265: falha de leitura apresentada como ausência).
+  if (casoRes.error && casoRes.error.code !== "PGRST116") {
+    throw new Error(`Leitura do mandato falhou: ${casoRes.error.message}`);
+  }
+  if (!casoRes.data) notFound();
   const caso = casoRes.data as Caso;
   const fechado = Boolean(caso.fechado_em);
   const etapa = etapaDoMandato(caso.status);
@@ -62,7 +68,12 @@ export default async function MandatoLayout({
   const abas: AbaDoMandato[] = [
     { rotulo: "Visão geral", sufixo: "", contagem: null },
     { rotulo: "Revisão", sufixo: "/revisao", contagem: revisaoRes.error ? null : revisaoRes.count },
-    { rotulo: "Perguntas ao cliente", sufixo: "/perguntas", contagem: perguntasRes.error ? null : perguntasRes.count },
+    // SEM NÚMERO, de propósito. A tela conta "perguntas a fazer" excluindo as
+    // `ja_enviada` E as que têm ação registrada (enviada/descartada) em outra
+    // tabela; a contagem crua de `fn_sugerir_perguntas` incluía as já tratadas
+    // (7 na aba, "2 perguntas a fazer" na tela). Reproduzir a conta aqui seria
+    // ler a lista inteira a cada aba; um número que mente é pior que nenhum.
+    { rotulo: "Perguntas ao cliente", sufixo: "/perguntas", contagem: null },
     { rotulo: "Grupo econômico", sufixo: "/perimetro", contagem: null },
     { rotulo: "Modelagem", sufixo: "/modelagem", contagem: null },
     { rotulo: "Apresentação", sufixo: "/apresentacao", contagem: null },
