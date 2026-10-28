@@ -1,5 +1,6 @@
 import Link from "next/link";
-import UploadForm from "@/components/upload-form";
+import { NovoMandatoPasso1 } from "@/components/novo-mandato-passo1";
+import { TOTAL_DE_PASSOS, textoDoPasso } from "@/lib/passo-do-mandato";
 import { MarcaOria } from "@/components/marca-oria";
 
 // A TELA DE ABRIR MANDATO É A PRIMEIRA COISA QUE ALGUÉM FAZ NO PRODUTO, e ela
@@ -24,17 +25,19 @@ export default function NovoMandatoPage() {
           >
             ← Voltar aos mandatos
           </Link>
-          <h1 className="mt-3 font-titulo text-3xl font-medium tracking-tight text-tinta-900">
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-acento-700">
+            {textoDoPasso({ passo: 1, total: TOTAL_DE_PASSOS })} · Dados do mandato
+          </p>
+          <h1 className="mt-1 font-titulo text-3xl font-medium tracking-tight text-tinta-900">
             Novo mandato
           </h1>
           <p className="mt-1.5 max-w-lg text-sm text-tinta-600">
-            Suba os arquivos brutos como o cliente enviou — nomes bagunçados, PDF escaneado e
-            planilha exportada do ERP inclusive. Você pode enviar mais depois: use o mesmo nome de
-            mandato e tudo se acumula no mesmo checklist.
+            Dê um nome ao mandato. No próximo passo você sobe os arquivos brutos como o cliente enviou —
+            nomes bagunçados, PDF escaneado e planilha exportada do ERP inclusive — ou deixa para depois.
           </p>
 
           <div className="mt-6">
-            <UploadForm />
+            <NovoMandatoPasso1 />
           </div>
         </div>
 

@@ -32,6 +32,7 @@ import {
   contarEntradasDoZip, ORCAMENTO_NAO_OFICIAL_BYTES,
   type ChamarRpc, type EnvelopeDoLeitor, type ResumoDoLeitor, type EntradaDoZip,
 } from "../src/lib/envio-oficial.ts";
+import { cabecalhoDoPasso, hrefDoPasso2, textoDoPasso, validarNomeDoMandato } from "../src/lib/passo-do-mandato.ts";
 import { percorrerPacote, type EventoDoZip } from "../src/lib/pacote.ts";
 import { TETO_POR_ARQUIVO_BYTES } from "../src/lib/limite-de-envio.ts";
 import { lerEnvelopeDeBuffer, lerEnvelopeDeFluxo } from "../../Leitor/lib/envelope.mjs";
@@ -273,6 +274,33 @@ function clienteDeCasos(opts: { erro?: string; dado?: unknown }) {
   msg = "";
   try { await obterCasoId(clienteDeCasos({ dado: null }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
   checar(msg.includes("não devolveu o id"), `resposta sem id virou mandato: "${msg}"`);
+}
+
+// ---------------------------------------------------------------------------
+// 5b. NOVO MANDATO EM DOIS PASSOS — o passo 1 cria o caso e leva a /adicionar?passo=2
+// ---------------------------------------------------------------------------
+{
+  const c = cabecalhoDoPasso({ passo: "2" });
+  checar(c !== null && textoDoPasso(c) === "Passo 2 de 2" && c.rotulo === "Documentos" && !c.jaExistia, "?passo=2 não vira o cabeçalho 'Passo 2 de 2 / Documentos'");
+  checar(cabecalhoDoPasso({ passo: "2", existente: "1" })?.jaExistia === true, "?existente=1 não chega ao aviso de mandato que já existia");
+  // O parâmetro é apresentação: nada além de exatamente "2" mostra o cabeçalho.
+  for (const ruim of [undefined, "", "1", "3", "02", ["2", "2"]]) {
+    checar(cabecalhoDoPasso({ passo: ruim }) === null, `passo=${JSON.stringify(ruim)} mostrou cabeçalho de passo`);
+  }
+  checar(cabecalhoDoPasso({ existente: "1" }) === null, "existente=1 sozinho mostrou cabeçalho de passo");
+  const h = hrefDoPasso2("abc-123", false);
+  checar(h === "/casos/abc-123/adicionar?passo=2", `href do passo 2 errado: ${h}`);
+  checar(hrefDoPasso2("abc-123", true).endsWith("&existente=1"), "href do passo 2 perdeu o aviso de mandato existente");
+  // O que o href gera tem de ser lido de volta pelo cabeçalho (ida e volta).
+  const q = new URL(hrefDoPasso2("x", true), "http://l").searchParams;
+  checar(cabecalhoDoPasso({ passo: q.get("passo") ?? undefined, existente: q.get("existente") ?? undefined })?.jaExistia === true, "o href do passo 2 não é lido de volta pelo cabeçalho");
+  checar(!hrefDoPasso2("a/b?x", false).includes("a/b?x"), "id com caracter especial não foi escapado no href");
+  const v = validarNomeDoMandato("  AMO  ");
+  checar(v.ok && v.nome === "AMO", "o nome do mandato não foi aparado");
+  for (const vazio of ["", "   ", null, undefined, 3]) {
+    const r = validarNomeDoMandato(vazio);
+    checar(!r.ok && /nome do mandato/.test(r.motivo), `nome ${JSON.stringify(vazio)} passou como mandato válido`);
+  }
 }
 
 // ---------------------------------------------------------------------------
