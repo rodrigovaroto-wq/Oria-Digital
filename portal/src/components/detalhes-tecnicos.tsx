@@ -6,13 +6,13 @@
 // avisos que não são erro. Sem estado: serve a server e a client component.
 export function DetalhesTecnicos({
   children, className = "mt-2", prosa = false,
-}: {
+}: Readonly<{
   children: React.ReactNode;
   className?: string;
   // `prosa`: o recolhido guarda parágrafo explicativo (não SQL nem mensagem de banco),
   // e monoespaçado ele fica ilegível.
   prosa?: boolean;
-}) {
+}>) {
   return (
     <details className={`${className} text-xs`}>
       <summary className="cursor-pointer opacity-80">Detalhes técnicos</summary>
