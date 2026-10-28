@@ -846,6 +846,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fusao_pergunta.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0215 — o histórico do mandato (fn_historico_do_caso): quem fez o quê e quando, sem vazar outro caso"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/historico_do_caso.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \

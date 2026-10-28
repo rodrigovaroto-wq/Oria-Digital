@@ -125,6 +125,7 @@
 {"k":"n","id":"arquivo:Supabase/test/golden.test.sql","t":"arquivo","f":"Supabase/test/golden.test.sql","txt":"golden.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/golden_rotulagem.test.sql","t":"arquivo","f":"Supabase/test/golden_rotulagem.test.sql","txt":"golden_rotulagem.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/grant_de_tabela.test.sql","t":"arquivo","f":"Supabase/test/grant_de_tabela.test.sql","txt":"grant_de_tabela.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/historico_do_caso.test.sql","t":"arquivo","f":"Supabase/test/historico_do_caso.test.sql","txt":"historico_do_caso.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/instalacao.test.sql","t":"arquivo","f":"Supabase/test/instalacao.test.sql","txt":"instalacao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/instalacao_cobertura_nao_regride.test.sql","t":"arquivo","f":"Supabase/test/instalacao_cobertura_nao_regride.test.sql","txt":"instalacao_cobertura_nao_regride.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/intragrupo_le_o_ano_certo.test.sql","t":"arquivo","f":"Supabase/test/intragrupo_le_o_ano_certo.test.sql","txt":"intragrupo_le_o_ano_certo.test.sql"}
@@ -408,6 +409,7 @@
 {"k":"n","id":"fn:fn_grupo_por_controle_comum","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum"}
 {"k":"n","id":"fn:fn_grupo_por_controle_comum_motivo","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum motivo"}
 {"k":"n","id":"fn:fn_herdar_secao_pela_arvore","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"herdar secao pela arvore"}
+{"k":"n","id":"fn:fn_historico_do_caso","t":"fn","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","txt":"historico do caso"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
 {"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","txt":"instalacao conferir"}
@@ -701,6 +703,7 @@
 {"k":"n","id":"migration:0212","t":"migration","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"o bloco familiar que o controle comum nao via"}
 {"k":"n","id":"migration:0213","t":"migration","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"a fusao que falhava na pergunta ja enviada"}
 {"k":"n","id":"migration:0214","t":"migration","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","txt":"o grant que o supabase deixou de dar"}
+{"k":"n","id":"migration:0215","t":"migration","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","txt":"o historico que so o banco sabia"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1346,6 +1349,20 @@
 {"k":"e","de":"arquivo:Supabase/test/golden_rotulagem.test.sql","rel":"CHAMA","pa":"fn:fn_golden_rotular_campos","f":"Supabase/test/golden_rotulagem.test.sql","l":203}
 {"k":"e","de":"arquivo:Supabase/test/golden_rotulagem.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/golden_rotulagem.test.sql","l":82}
 {"k":"e","de":"arquivo:Supabase/test/grant_de_tabela.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/grant_de_tabela.test.sql","l":34}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/historico_do_caso.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_aprovar_caso","f":"Supabase/test/historico_do_caso.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Supabase/test/historico_do_caso.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_decidir_pendencia","f":"Supabase/test/historico_do_caso.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_desativar_premissa","f":"Supabase/test/historico_do_caso.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_entidade_definir_papel_no_grupo","f":"Supabase/test/historico_do_caso.test.sql","l":83}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_fechar_caso","f":"Supabase/test/historico_do_caso.test.sql","l":10}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"Supabase/test/historico_do_caso.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/historico_do_caso.test.sql","l":58}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_classe_override","f":"Supabase/test/historico_do_caso.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/historico_do_caso.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"Supabase/test/historico_do_caso.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"Supabase/test/historico_do_caso.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/historico_do_caso.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/historico_do_caso.test.sql","l":8}
 {"k":"e","de":"arquivo:Supabase/test/instalacao.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/instalacao.test.sql","l":51}
 {"k":"e","de":"arquivo:Supabase/test/instalacao.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_resumo","f":"Supabase/test/instalacao.test.sql","l":53}
 {"k":"e","de":"arquivo:Supabase/test/instalacao.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"Supabase/test/instalacao.test.sql","l":92}
@@ -2349,6 +2366,7 @@
 {"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_fundir_entidade","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":97}
 {"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_trg_caso_pergunta_so_reaponta","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":58}
 {"k":"e","de":"migration:0214","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","l":128}
+{"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","l":90}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
