@@ -157,11 +157,19 @@ const tot = (es: EntradaOrg[]) => es.filter((e) => !e.fantasma).length;
 { // controladora que é fantasma ou não existe: o vínculo é desconhecido, não "sem controladora"
   const o = montarOrganograma([E("F", { fantasma: true }), E("A", { controladora_id: "F", percentual_participacao: 30 }), E("B", { controladora_id: "inexistente" })]);
   checar(o.semVinculo.length === 2 && o.raizes.length === 0, "controladora fantasma/inexistente não foi para 'sem vínculo'");
-  checar(o.semVinculo.every((s) => /não identificada|não está no caso/.test(s.nota)), "nota da controladora inválida não diz o motivo");
+  checar(o.semVinculo.every((s) => /não é empresa identificada do caso/.test(s.nota)), "nota da controladora inválida não diz o motivo");
 }
-{ // forma diz controlada, controladora não escolhida, mas ela controla outras: raiz COM aviso
-  const o = montarOrganograma([E("A", { forma_de_controle: "controlada_por_entidade" }), E("B", { controladora_id: "A" })]);
-  checar(o.raizes.length === 1 && /não foi escolhida/.test(o.raizes[0].nota ?? ""), "controlada sem controladora, mas controladora de outra, perdeu o aviso");
+{ // ARRANJO QUE O BANCO ACEITA (entidade_forma_de_controle_coerente recusa controlada_por_entidade com controladora nula):
+  // a controladora é empresa NÃO identificada (fantasma), e A controla B. A é raiz COM aviso.
+  const o = montarOrganograma([E("F", { fantasma: true }), E("A", { forma_de_controle: "controlada_por_entidade", controladora_id: "F" }), E("B", { controladora_id: "A" })]);
+  checar(o.raizes.length === 1 && o.raizes[0].id === "A" && /não é empresa identificada do caso/.test(o.raizes[0].nota ?? ""), "controlada por controladora não identificada, mas controladora de outra, perdeu o aviso");
+  checar(!/não foi escolhida/.test(JSON.stringify(o)), "a nota falsa 'controladora não foi escolhida' voltou");
+}
+{ // forma indefinida no topo: não é "sem nota" — não se sabe se alguém de fora a controla
+  const o = montarOrganograma([E("H"), E("A", { controladora_id: "H" })]);
+  checar(o.raizes.length === 1 && /não se sabe se é controlada por alguém fora da lista/i.test(o.raizes[0].nota ?? ""), "controladora com forma indefinida apareceu no topo sem nota");
+  const c = montarOrganograma([E("H", { forma_de_controle: "controle_comum" }), E("A", { controladora_id: "H" })]);
+  checar(c.raizes.length === 1 && c.raizes[0].nota === undefined, "controladora de forma conhecida ganhou nota indevida");
   checar(montarOrganograma([]).raizes.length === 0 && contarNoOrganograma(montarOrganograma([])) === 0, "organograma vazio quebrou");
 }
 { // regra 1 no desenho: a tela usa a árvore, diz o efeito e tem <ul> com rótulo

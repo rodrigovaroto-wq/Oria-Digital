@@ -32,7 +32,7 @@ import {
   contarEntradasDoZip, ORCAMENTO_NAO_OFICIAL_BYTES,
   type ChamarRpc, type EnvelopeDoLeitor, type ResumoDoLeitor, type EntradaDoZip,
 } from "../src/lib/envio-oficial.ts";
-import { cabecalhoDoPasso, hrefDoPasso2, textoDoPasso, validarNomeDoMandato } from "../src/lib/passo-do-mandato.ts";
+import { avisoDoPasso, cabecalhoDoPasso, hrefDoPasso2, situacaoPrevia, textoDoPasso, validarNomeDoMandato } from "../src/lib/passo-do-mandato.ts";
 import { percorrerPacote, type EventoDoZip } from "../src/lib/pacote.ts";
 import { TETO_POR_ARQUIVO_BYTES } from "../src/lib/limite-de-envio.ts";
 import { lerEnvelopeDeBuffer, lerEnvelopeDeFluxo } from "../../Leitor/lib/envelope.mjs";
@@ -288,13 +288,26 @@ function clienteDeCasos(opts: { erro?: string; dado?: unknown }) {
     checar(cabecalhoDoPasso({ passo: ruim }) === null, `passo=${JSON.stringify(ruim)} mostrou cabeçalho de passo`);
   }
   checar(cabecalhoDoPasso({ existente: "1" }) === null, "existente=1 sozinho mostrou cabeçalho de passo");
-  const h = hrefDoPasso2("abc-123", false);
+  const h = hrefDoPasso2("abc-123", "novo");
   checar(h === "/casos/abc-123/adicionar?passo=2", `href do passo 2 errado: ${h}`);
-  checar(hrefDoPasso2("abc-123", true).endsWith("&existente=1"), "href do passo 2 perdeu o aviso de mandato existente");
+  checar(hrefDoPasso2("abc-123", "existia").endsWith("&existente=1"), "href do passo 2 perdeu o aviso de mandato existente");
   // O que o href gera tem de ser lido de volta pelo cabeçalho (ida e volta).
-  const q = new URL(hrefDoPasso2("x", true), "http://l").searchParams;
+  const q = new URL(hrefDoPasso2("x", "existia"), "https://l").searchParams;
   checar(cabecalhoDoPasso({ passo: q.get("passo") ?? undefined, existente: q.get("existente") ?? undefined })?.jaExistia === true, "o href do passo 2 não é lido de volta pelo cabeçalho");
-  checar(!hrefDoPasso2("a/b?x", false).includes("a/b?x"), "id com caracter especial não foi escapado no href");
+  checar(!hrefDoPasso2("a/b?x", "novo").includes("a/b?x"), "id com caracter especial não foi escapado no href");
+  // A consulta prévia por nome: erro NÃO é "não existia" (regra 1). Arranjo de teste da lógica pura.
+  checar(situacaoPrevia({ data: null, error: { message: "timeout" } }) === "nao_conferido", "erro da consulta prévia virou 'novo' em silêncio");
+  checar(situacaoPrevia({ data: null, error: null }) === "nao_conferido", "resposta sem dados e sem erro virou 'novo'");
+  checar(situacaoPrevia({ data: [], error: null }) === "novo", "consulta sem linha não é 'novo'");
+  checar(situacaoPrevia({ data: [{ fechado_em: null }], error: null }) === "existia", "caso aberto não é 'existia'");
+  checar(situacaoPrevia({ data: [{ fechado_em: "2026-10-01T00:00:00Z" }], error: null }) === "existia_fechado", "caso fechado não é 'existia_fechado'");
+  checar(/Não foi possível conferir se já havia um mandato com este nome/.test(avisoDoPasso("nao_conferido") ?? ""), "estado não conferido sem o aviso");
+  checar(/FECHADO/.test(avisoDoPasso("existia_fechado") ?? ""), "caso existente fechado não diz que está fechado");
+  checar(avisoDoPasso("novo") === null && /Já existia/.test(avisoDoPasso("existia") ?? ""), "aviso de 'novo' deveria ser nulo e o de 'existia' dizer que já existia");
+  for (const s of ["novo", "existia", "existia_fechado", "nao_conferido"] as const) {
+    const q = new URL(hrefDoPasso2("x", s), "https://l").searchParams;
+    checar(cabecalhoDoPasso({ passo: q.get("passo") ?? undefined, existente: q.get("existente") ?? undefined })?.situacao === s, `ida e volta do href perdeu a situação ${s}`);
+  }
   const v = validarNomeDoMandato("  AMO  ");
   checar(v.ok && v.nome === "AMO", "o nome do mandato não foi aparado");
   for (const vazio of ["", "   ", null, undefined, 3]) {

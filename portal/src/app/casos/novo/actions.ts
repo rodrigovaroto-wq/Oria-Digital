@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { hrefDoPasso2, validarNomeDoMandato } from "@/lib/passo-do-mandato";
+import { hrefDoPasso2, situacaoPrevia, validarNomeDoMandato } from "@/lib/passo-do-mandato";
 
 // PASSO 1 DO NOVO MANDATO: cria o caso e leva ao passo 2. A criação é a MESMA
 // chamada do upload (`obterCasoId` -> `fn_upsert_caso`, com o ator da tela): por
@@ -17,8 +17,9 @@ export async function criarMandato(_anterior: ResultadoDoPasso1, form: FormData)
   if (!v.ok) return { nome: bruto, erro: { titulo: "O mandato não foi criado.", explicacao: v.motivo } };
 
   const supabase = await createClient();
-  const { data: existente } = await supabase.from("caso").select("id").eq("nome", v.nome).limit(1);
-  const jaExistia = (existente?.length ?? 0) > 0;
+  // `error` NÃO é "não existia": vira "não conferido" e o passo 2 avisa (ver `situacaoPrevia`).
+  const previa = await supabase.from("caso").select("id, fechado_em").eq("nome", v.nome).limit(1);
+  const situacao = situacaoPrevia({ data: previa.data as Array<{ fechado_em: string | null }> | null, error: previa.error });
 
   const { data, error } = await supabase.rpc("fn_upsert_caso", { p_nome: v.nome, p_ator: "portal:navegador" });
   if (error || typeof data !== "string") {
@@ -33,5 +34,5 @@ export async function criarMandato(_anterior: ResultadoDoPasso1, form: FormData)
       },
     };
   }
-  redirect(hrefDoPasso2(data, jaExistia));
+  redirect(hrefDoPasso2(data, situacao));
 }

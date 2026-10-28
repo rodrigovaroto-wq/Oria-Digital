@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Caso } from "@/lib/types";
 import Link from "next/link";
 import UploadForm from "@/components/upload-form";
-import { cabecalhoDoPasso, textoDoPasso } from "@/lib/passo-do-mandato";
+import { avisoDoPasso, cabecalhoDoPasso, textoDoPasso } from "@/lib/passo-do-mandato";
 
 export default async function AdicionarArquivosPage({
   params,
@@ -33,9 +33,9 @@ export default async function AdicionarArquivosPage({
           Os novos arquivos entram neste mesmo mandato e somam ao checklist, à exportação para Excel e
           à checagem de dados já existentes.
         </p>
-        {passo?.jaExistia && (
+        {passo && avisoDoPasso(passo.situacao) && (
           <p role="status" className="mt-2 rounded-md bg-alerta-50 px-3 py-2 text-xs text-alerta-900">
-            Já existia um mandato com este nome: os arquivos entram nele, somando ao que já há — não foi criado um mandato novo.
+            {avisoDoPasso(passo.situacao)}
           </p>
         )}
       </div>

@@ -2,8 +2,11 @@
 //
 // NÃO recalcula regra de negócio: só arruma `controladora_id` + `percentual_participacao` em árvore. O que ela
 // garante é a regra 1 no desenho: parentesco DESCONHECIDO nunca vira "sem controladora" nem 0%.
-//   - controladora desconhecida (forma indefinida, controladora não escolhida, ou apontando para empresa não
-//     identificada/inexistente) -> grupo "Sem vínculo registrado", com a nota do efeito;
+//   - controladora desconhecida (forma indefinida, ou apontando para empresa não identificada/inexistente)
+//     -> grupo "Sem vínculo registrado", com a nota do efeito. (O banco — check
+//     `entidade_forma_de_controle_coerente` — recusa `controlada_por_entidade` com controladora nula, então
+//     "controladora não escolhida" não é um estado que chegue aqui.)
+//   - controladora no topo com forma `indefinido` -> raiz COM nota: não se sabe se alguém de fora da lista a controla;
 //   - % ausente (null) -> `percentual: null`, que a tela escreve "% não informado"; 0 medido continua 0;
 //   - ciclo (A controla B, B controla A, ou empresa que controla a si mesma) -> NÃO some e NÃO entra em laço:
 //     aparece num grupo próprio com o aviso. O dado tem uma só `controladora_id` por empresa, então "mais de
@@ -65,9 +68,13 @@ export function montarOrganograma(entradas: EntradaOrg[]): Organograma {
     id: e.entidade_id, razao_social: e.razao_social, cnpj: e.cnpj, percentual, ...(nota ? { nota } : {}),
     filhos: (filhosDe.get(e.entidade_id) ?? []).map((f) => no(f, f.percentual_participacao)),
   });
-  const notaDaForma = (e: EntradaOrg) =>
-    e.forma_de_controle === "controlada_por_entidade" && !paiDe(e) && filhosDe.has(e.entidade_id)
-      ? "Marcada como controlada por outra empresa, mas a controladora não foi escolhida." : undefined;
+  // Nota só de quem aparece no TOPO como controladora. A forma `controlada_por_entidade` exige controladora
+  // no banco, então o que chega aqui é controladora que não é empresa identificada do caso (fantasma/fora).
+  const notaDaForma = (e: EntradaOrg) => {
+    if (e.controladora_id && !paiDe(e)) return "A controladora indicada não é empresa identificada do caso: o vínculo acima desta empresa não pode ser desenhado.";
+    if (e.forma_de_controle === "indefinido") return "Não se sabe se é controlada por alguém fora da lista.";
+    return undefined;
+  };
 
   const out: Organograma = { raizes: [], controleComum: [], semVinculo: [], ciclos: [], naoIdentificadas: [] };
   for (const e of entradas.filter((x) => x.fantasma)) out.naoIdentificadas.push({ id: e.entidade_id, razao_social: e.razao_social });
@@ -78,8 +85,7 @@ export function montarOrganograma(entradas: EntradaOrg[]): Organograma {
     if (filhosDe.has(e.entidade_id)) { out.raizes.push(no(e, null, notaDaForma(e))); continue; }
     if (e.forma_de_controle === "controle_comum") { out.controleComum.push(no(e, null)); continue; }
     let nota = NOTA_SEM_VINCULO;
-    if (e.controladora_id) nota = "A controladora indicada é uma empresa não identificada ou não está no caso: o vínculo não pode ser desenhado.";
-    else if (e.forma_de_controle === "controlada_por_entidade") nota = "Marcada como controlada por outra empresa, mas a controladora não foi escolhida.";
+    if (e.controladora_id) nota = "A controladora indicada não é empresa identificada do caso: o vínculo não pode ser desenhado.";
     out.semVinculo.push({ id: e.entidade_id, razao_social: e.razao_social, cnpj: e.cnpj, nota });
   }
 

@@ -21,7 +21,7 @@ import {
   semPrimeiroSinalMs, janelaPara, semProgressoMs, SEGUNDOS_POR_DOCUMENTO,
   vereditoDoLote, carenciaDoFechamentoMs, estimativaEmMinutos,
 } from "../src/lib/espera-do-lote.ts";
-import { agregarCustos, somarCustos, formatarUsd, type LoteDeCusto } from "../src/lib/custos.ts";
+import { agregarCustos, somarCustos, formatarUsd, motivoDaAusencia, type LoteDeCusto } from "../src/lib/custos.ts";
 import {
   agruparPorDia, categoriaDoTipo, chaveDoDia, cursorValido, funcaoAusente, rotuloDoTipo, textoDoAutor,
 } from "../src/lib/historico-do-mandato.ts";
@@ -474,7 +474,7 @@ const lc = (caso: string, dias: number, docs: number | null, custo: number | str
   const C = ag.porMandato.find((m) => m.casoId === "C")!;
   checar(A.periodo.custoUsd === 0.5 && A.periodo.semCusto === 1,
     "o lote sem custo foi somado como zero (ou sumiu sem ser contado): o total deixou de ser piso declarado");
-  checar(A.periodo.custoPorDocumentoUsd === 0.05,
+  checar(Math.abs((A.periodo.custoPorDocumentoUsd ?? Number.NaN) - 0.05) < 1e-9,
     "o custo por documento dividiu pelos documentos do lote SEM custo (100) — numerador e denominador de conjuntos diferentes");
   checar(B.periodo.custoUsd === null && B.periodo.custoPorDocumentoUsd === null,
     "mandato só com lote sem custo mostrou número em vez de ausência");
@@ -490,6 +490,18 @@ const lc = (caso: string, dias: number, docs: number | null, custo: number | str
     "numeric em texto (como o Postgres pode entregar) não foi lido como número");
   checar(somarCustos([lc("A", 0, 3, "abc"), lc("A", 0, 3, -1)]).custoUsd === null,
     "custo ilegível ou negativo foi aceito como valor");
+  // Motivo próprio por causa da ausência (arranjo de teste da lógica, não lote real).
+  const sem = (ls: LoteDeCusto[]) => somarCustos(ls);
+  const mDoc = motivoDaAusencia(sem([lc("A", 0, null, 1), lc("A", 0, 0, 2)]), "custoPorDocumentoUsd") ?? "";
+  checar(/documentos processados não registrados/.test(mDoc) && !/custo não registrado/.test(mDoc),
+    "custo com documentos nulos/0 foi explicado como 'custo não registrado'");
+  checar(motivoDaAusencia(sem([lc("A", 0, 3, null)]), "custoPorDocumentoUsd") === "custo não registrado",
+    "lote sem custo perdeu o motivo 'custo não registrado'");
+  checar(/ilegível ou negativo/.test(motivoDaAusencia(sem([lc("A", 0, 3, -1)]), "custoUsd") ?? "")
+    && /ilegível ou negativo/.test(motivoDaAusencia(sem([lc("A", 0, 3, "abc")]), "custoPorDocumentoUsd") ?? ""),
+    "custo negativo/ilegível foi chamado de 'não registrado'");
+  checar(motivoDaAusencia(sem([]), "custoUsd") === "sem execução no período" && motivoDaAusencia(sem([lc("A", 0, 3, 1)]), "custoUsd") === null,
+    "motivo de conjunto vazio errado, ou motivo devolvido onde há valor");
   checar(formatarUsd(null) === null && formatarUsd(0.0523) === "US$ 0,0523" && formatarUsd(12.3) === "US$ 12,30",
     "formatação de dólar: null tem de seguir null, e centavos pequenos precisam de 4 casas");
 }

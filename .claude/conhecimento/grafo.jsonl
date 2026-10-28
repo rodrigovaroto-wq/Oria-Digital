@@ -1706,8 +1706,8 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-perimetro.mts","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/scripts/verificar-perimetro.mts","l":3}
 {"k":"e","de":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-premissas-do-realizado.mts","l":444}
 {"k":"e","de":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-premissas-do-realizado.mts","l":445}
-{"k":"e","de":"arquivo:portal/src/app/administracao/custos/page.tsx","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"portal/src/app/administracao/custos/page.tsx","l":186}
-{"k":"e","de":"arquivo:portal/src/app/administracao/custos/page.tsx","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"portal/src/app/administracao/custos/page.tsx","l":182}
+{"k":"e","de":"arquivo:portal/src/app/administracao/custos/page.tsx","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"portal/src/app/administracao/custos/page.tsx","l":195}
+{"k":"e","de":"arquivo:portal/src/app/administracao/custos/page.tsx","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"portal/src/app/administracao/custos/page.tsx","l":191}
 {"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_classe_contabil_concordancia","f":"portal/src/app/administracao/page.tsx","l":158}
 {"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_golden_cobertura","f":"portal/src/app/administracao/page.tsx","l":145}
 {"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"portal/src/app/administracao/page.tsx","l":18}
@@ -1806,7 +1806,7 @@
 {"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/src/lib/modelo-institucional.ts","l":260}
 {"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelo-institucional.ts","l":7157}
 {"k":"e","de":"arquivo:portal/src/lib/original-do-documento.ts","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"portal/src/lib/original-do-documento.ts","l":36}
-{"k":"e","de":"arquivo:portal/src/lib/passo-do-mandato.ts","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/src/lib/passo-do-mandato.ts","l":35}
+{"k":"e","de":"arquivo:portal/src/lib/passo-do-mandato.ts","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/src/lib/passo-do-mandato.ts","l":14}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"portal/src/lib/perguntas.ts","l":30}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_sugerir_perguntas","f":"portal/src/lib/perguntas.ts","l":3}
 {"k":"e","de":"arquivo:portal/src/lib/perimetro-organograma.ts","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/src/lib/perimetro-organograma.ts","l":1}

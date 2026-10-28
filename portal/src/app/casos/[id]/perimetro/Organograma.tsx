@@ -55,7 +55,7 @@ export function Organograma({ entidades }: Readonly<{ entidades: EntradaOrg[] }>
         </div>
       )}
       {o.ciclos.map((c) => (
-        <div key={c.membros.join("|")} role="alert" className="rounded border border-risco-200 bg-risco-50 p-3 text-sm text-risco-900">
+        <div key={c.membros.join("|")} role="status" className="rounded border border-risco-200 bg-risco-50 p-3 text-sm text-risco-900">
           <p className="font-medium">Controle circular: {c.membros.join(" → ")} → {c.membros[0]}.</p>
           <p>Uma empresa não pode controlar a si mesma por outra. Corrija a controladora nos cartões; até lá estas empresas não têm posição na árvore.</p>
           <ul className="mt-2 space-y-1">{c.raizes.map((r) => <Ramo key={r.id} n={r} raiz />)}</ul>

@@ -19,7 +19,6 @@ export function NovoMandatoPasso1() {
           name="mandato"
           type="text"
           required
-          autoFocus
           defaultValue={r?.nome ?? ""}
           placeholder="ex.: Reestruturação Grupo X"
           className="w-full rounded border border-tinta-200 px-3 py-2 text-sm"

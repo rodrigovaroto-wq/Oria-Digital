@@ -387,8 +387,8 @@ export default async function QualidadeDaAutomacaoPage() {
             viés de confirmação empurra o número para cima e o que se mede é um piso.
           </p>
           <p>
-            A medição que já é possível hoje roda contra o book sintético (
-            <code>portal/scripts/medir-auto-aceite.mts</code>) e vale como piso, não como
+            A medição que já é possível hoje roda contra o book sintético{" "}
+            (<code>portal/scripts/medir-auto-aceite.mts</code>) e vale como piso, não como
             equivalente: o book é o melhor caso — PDF gerado, texto limpo, layout conhecido. Por
             isso rodada de golden set com <code>origem = sintetico</code> não autoriza subida.
           </p>

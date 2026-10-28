@@ -2,7 +2,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
-import { agregarCustos, formatarUsd, type LoteDeCusto, type SomaDeCusto } from "@/lib/custos";
+import { agregarCustos, formatarUsd, motivoDaAusencia, type LoteDeCusto, type SomaDeCusto } from "@/lib/custos";
 
 // Custos — SOMENTE LEITURA. Por que o custo mora na Administração e não no Início:
 // não é argumento comercial, é controle de quem opera (decisão do dono, 28/10/2026).
@@ -29,7 +29,7 @@ function Valor({ s, campo }: Readonly<{ s: SomaDeCusto; campo: "custoUsd" | "cus
   // Ausência com o motivo, nunca "US$ 0,00".
   return (
     <span className="text-xs text-tinta-500">
-      {s.lotes === 0 ? "sem execução no período" : "custo não registrado"}
+      {motivoDaAusencia(s, campo)}
     </span>
   );
 }
@@ -154,7 +154,12 @@ export default async function CustosPage({
                         <span className="text-tinta-500">Mandato sem nome legível</span>
                       )}
                     </td>
-                    <td className="px-4 py-2"><Valor s={m.periodo} campo="custoUsd" /></td>
+                    <td className="px-4 py-2">
+                      <Valor s={m.periodo} campo="custoUsd" />
+                      {m.periodo.semCusto > 0 && m.periodo.custoUsd !== null && (
+                        <span className="ml-1 text-xs text-alerta-900">(piso)</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2"><Valor s={m.periodo} campo="custoPorDocumentoUsd" /></td>
                     <td className="px-4 py-2">
                       <Valor s={m.total} campo="custoUsd" />
@@ -170,8 +175,12 @@ export default async function CustosPage({
           </div>
 
           <p className="text-xs text-tinta-500">
-            Soma de todos os mandatos desde o início: <Valor s={t} campo="custoUsd" />
+            Soma dos mandatos existentes desde o início: <Valor s={t} campo="custoUsd" />
             {t.semCusto > 0 && ` (piso: ${t.semCusto} de ${t.lotes} execuções sem custo registrado)`}.
+          </p>
+          <p className="text-xs text-tinta-500">
+            Mandato excluído leva suas execuções junto (o registro de custo é apagado com ele): o gasto
+            de um mandato que já não existe não entra nesta soma e não pode ser recuperado por esta tela.
           </p>
         </>
       )}
