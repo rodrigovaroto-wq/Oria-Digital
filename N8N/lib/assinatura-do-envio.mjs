@@ -33,7 +33,13 @@ import { sha256Hex } from './hash.mjs';
  * mandato diferente do assinado.
  */
 export function normalizarMandato(nome) {
-  return String(nome == null ? '' : nome).replace(/^ +| +$/g, '').toLowerCase();
+  const t = String(nome == null ? '' : nome);
+  // Sem regex: `/^ +| +$/g` tem desempenho super-linear em texto longo de espaços (Sonar S8786).
+  let ini = 0;
+  let fim = t.length;
+  while (ini < fim && t[ini] === ' ') ini++;
+  while (fim > ini && t[fim - 1] === ' ') fim--;
+  return t.slice(ini, fim).toLowerCase();
 }
 
 /** A mensagem que o HMAC cobre. O portal e o n8n a montam por ESTA função. */
@@ -46,11 +52,9 @@ export function utf8Bytes(texto) {
   const s = String(texto);
   const out = [];
   for (let i = 0; i < s.length; i++) {
-    let c = s.charCodeAt(i);
-    if (c >= 0xd800 && c <= 0xdbff && i + 1 < s.length) {
-      const d = s.charCodeAt(i + 1);
-      if (d >= 0xdc00 && d <= 0xdfff) { c = 0x10000 + ((c - 0xd800) << 10) + (d - 0xdc00); i++; }
-    }
+    // `codePointAt` já junta o par substituto; surrogato solitário devolve o próprio valor (3 bytes), como antes.
+    const c = s.codePointAt(i);
+    if (c > 0xffff) i++;
     if (c < 0x80) out.push(c);
     else if (c < 0x800) out.push(0xc0 | (c >> 6), 0x80 | (c & 63));
     else if (c < 0x10000) out.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 63), 0x80 | (c & 63));
@@ -62,7 +66,7 @@ export function utf8Bytes(texto) {
 /** HMAC-SHA256 (RFC 2104) sobre o `sha256Hex` de JS puro. Devolve hexadecimal minúsculo. */
 export function hmacSha256Hex(chave, mensagem) {
   const BLOCO = 64;
-  const doHex = (h) => Uint8Array.from(h.match(/../g).map((x) => parseInt(x, 16)));
+  const doHex = (h) => Uint8Array.from(h.match(/../g).map((x) => Number.parseInt(x, 16)));
   let k = utf8Bytes(chave);
   if (k.length > BLOCO) k = doHex(sha256Hex(k));
   const ipad = new Uint8Array(BLOCO).fill(0x36);
@@ -87,7 +91,7 @@ export function iguaisEmTempoConstante(a, b) {
   const y = String(b == null ? '' : b);
   let diff = x.length ^ y.length;
   const n = Math.max(x.length, y.length);
-  for (let i = 0; i < n; i++) diff |= (x.charCodeAt(i) || 0) ^ (y.charCodeAt(i) || 0);
+  for (let i = 0; i < n; i++) diff |= (x.codePointAt(i) || 0) ^ (y.codePointAt(i) || 0);
   return diff === 0;
 }
 

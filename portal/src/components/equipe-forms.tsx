@@ -127,14 +127,14 @@ export function LiberarPorCodigo() {
   return (
     <form action={acao} className="flex flex-wrap items-end gap-2">
       <label className="flex flex-col gap-1 text-xs text-tinta-600">
-        Código do usuário (UUID)
+        <span>Código do usuário (UUID)</span>
         <input
           name="usuario_id" required spellCheck={false} autoComplete="off" placeholder="00000000-0000-0000-0000-000000000000"
           className={`${CAMPO} w-80 max-w-full font-dado`}
         />
       </label>
       <label className="flex flex-col gap-1 text-xs text-tinta-600">
-        Papel
+        <span>Papel</span>
         <select name="papel" defaultValue="leitura" className={CAMPO}>
           {PAPEIS.map((p) => <option key={p} value={p}>{ROTULO_DO_PAPEL[p]}</option>)}
         </select>

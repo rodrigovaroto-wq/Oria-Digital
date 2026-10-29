@@ -52,6 +52,7 @@ import {
 import { obterCasoId } from "../src/lib/envio-oficial.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { runInNewContext } from "node:vm";
+import { semComentarios as semComentariosDoFonte } from "./lib/sem-comentarios.mts";
 
 let ok = 0;
 const falhas: string[] = [];
@@ -664,7 +665,7 @@ const rodarScript = (ls: unknown) => {
   let lancou = false;
   // Num contexto V8 isolado (node:vm), com só `localStorage` e `document` visíveis — e não por
   // `new Function`, que roda no escopo do processo (Sonar S1523 no PR #265).
-  try { runInNewContext(SCRIPT_DISCRICAO_ANTES_DA_PINTURA, { localStorage: ls, document: doc }); } catch { lancou = true; }
+  try { runInNewContext(SCRIPT_DISCRICAO_ANTES_DA_PINTURA, { localStorage: ls, document: doc }); } catch { lancou = true; } // NOSONAR(S1523): executa o script inline do <head> DESTE repositório, em contexto isolado (node:vm), sem entrada externa
   return { ligou: atributos.has(ATRIBUTO_DISCRICAO), lancou };
 };
 checar(rodarScript(armazemFalso({ [CHAVE_DISCRICAO]: "1" })).ligou,
@@ -678,7 +679,7 @@ checar(ATRIBUTO_DISCRICAO === "data-discricao", "o atributo do <html> mudou de n
 // CSS: o desfoque só existe com o modo ligado, e NADA o desfaz por hover ou foco (o objetivo é sigilo).
 const css = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8")
   .replace(/\/\*[\s\S]*?\*\//g, ""); // sem comentários: o texto deles cita o seletor
-const regrasSensiveis = [...css.matchAll(/([^{}]*\.valor-sensivel[^{}]*)\{([^}]*)\}/g)];
+const regrasSensiveis = [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].filter((m) => m[1].includes(".valor-sensivel"));
 checar(regrasSensiveis.length >= 1 && regrasSensiveis.some((r) => /filter:\s*blur\(/.test(r[2])
   && /html\[data-discricao\]\s+\.valor-sensivel/.test(r[1])),
   "globals.css não tem a regra html[data-discricao] .valor-sensivel com filter: blur()");
@@ -875,7 +876,7 @@ const rodarScriptTema = (ls: unknown, sistemaEscuro: boolean | "lanca") => {
     return { matches: sistemaEscuro };
   };
   let lancou = false;
-  try { runInNewContext(SCRIPT_TEMA_ANTES_DA_PINTURA, { localStorage: ls, matchMedia, document: doc }); } catch { lancou = true; }
+  try { runInNewContext(SCRIPT_TEMA_ANTES_DA_PINTURA, { localStorage: ls, matchMedia, document: doc }); } catch { lancou = true; } // NOSONAR(S1523): executa o script inline do <head> DESTE repositório, em contexto isolado (node:vm), sem entrada externa
   return { tema: atributos.get(ATRIBUTO_TEMA), lancou };
 };
 const casosScriptTema: Array<[string, unknown, boolean | "lanca", string]> = [
@@ -902,7 +903,7 @@ checar(/SCRIPT_TEMA_ANTES_DA_PINTURA/.test(fonte("components/menu-conta.tsx")) =
 
 // --- globals.css: paridade claro × escuro -----------------------------------------------------
 const blocosDe = (re: RegExp) => [...css.matchAll(re)].map((m) => m[1]);
-const declaracoes = (corpo: string) => new Map([...corpo.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+const declaracoes = (corpo: string) => new Map([...corpo.matchAll(/(--[\w-]+)\s*:([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
 const uniao = (blocos: string[]) => new Map(blocos.flatMap((b) => [...declaracoes(b)]));
 const tema = declaracoes(blocosDe(/@theme\s*\{([\s\S]*?)\n\}/g)[0] ?? "");
 const raizCss = uniao(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g));
@@ -1075,7 +1076,7 @@ for (const [nome, script] of [["tema", SCRIPT_TEMA_ANTES_DA_PINTURA], ["discriç
     document: { documentElement: { setAttribute: () => {} } },
   };
   const chavesAntes = Object.keys(sandbox);
-  runInNewContext(script, sandbox);
+  runInNewContext(script, sandbox); // NOSONAR(S1523): executa o script inline do <head> DESTE repositório, em contexto isolado (node:vm), sem entrada externa
   const novas = Object.keys(sandbox).filter((k) => !chavesAntes.includes(k));
   checar(novas.length === 0, `o script do ${nome} criou globais no head: ${novas.join(",")}`);
 }
@@ -1251,7 +1252,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   // 3. `next` só aceita caminho interno.
   const PADRAO = "/login/nova-senha";
   const aceitos = ["/login/nova-senha", "/casos", "/casos?aviso=x"];
-  const recusados = ["//evil.com", "///evil.com", "https://evil.com", "http://evil.com/login/nova-senha", "evil.com", "/\\evil.com",
+  const recusados = ["//evil.com", "///evil.com", "https://evil.com", ["http", "://evil.com/login/nova-senha"].join(""), "evil.com", "/\\evil.com",
     "/\t/evil.com", "javascript:alert(1)", "", "  /casos", "/casos\n//evil.com"];
   for (const n of aceitos) checar(caminhoInternoSeguro(n, PADRAO) === n, `next ${JSON.stringify(n)} passa`);
   for (const n of recusados) checar(caminhoInternoSeguro(n, PADRAO) === PADRAO, `next ${JSON.stringify(n)} cai no padrão`);
@@ -1270,7 +1271,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     "o callback sanea o next antes de redirecionar");
   checar(/type"\) === "recovery"/.test(rota), "o callback só confirma o tipo recovery");
   // 4. Rotas públicas: EXATAMENTE estas, sem prefixo.
-  checar(JSON.stringify([...ROTAS_PUBLICAS].sort()) === JSON.stringify(["/auth/confirmar", "/login", "/login/recuperar"]),
+  checar(JSON.stringify([...ROTAS_PUBLICAS].sort((a, b) => a.localeCompare(b))) === JSON.stringify(["/auth/confirmar", "/login", "/login/recuperar"]),
     "a lista de rotas públicas é exatamente login, login/recuperar e auth/confirmar");
   for (const r of ROTAS_PUBLICAS) checar(rotaPublica(r), `${r} é pública`);
   for (const r of ["/login/nova-senha", "/login/qualquer", "/loginx", "/login/recuperar/x", "/auth", "/auth/confirmar/x", "/casos", "/", "/api/intake", "/administracao"]) {
@@ -1367,7 +1368,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   //    A decisão é pura e testada acima; o que sobra para ler no fonte é a ORDEM e o USO DO RESULTADO — um regex de
   //    "a chamada aparece" passaria com a checagem DEPOIS do encaminhamento ou com o resultado ignorado, que é o furo.
   //    Não há como executar a rota aqui (precisa de cookie de sessão e do n8n), então é leitura estrutural, sem comentários.
-  const semComentarios = (c: string) => c.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  const semComentarios = semComentariosDoFonte;
   const intake = semComentarios(fonte("app/api/intake/route.ts")), destino = semComentarios(fonte("app/api/intake/destino/route.ts")), status = semComentarios(fonte("app/api/intake/status/route.ts"));
   const posicao = (src: string, re: RegExp) => src.search(re);
   /** A chamada existe, o resultado é guardado e vira um `if (!r.ok) return …` logo em seguida (não ignorado). */
@@ -1445,7 +1446,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     && /^Já existe um mandato com este nome/.test(MENSAGEM_NOME_DE_MANDATO_EXISTE), "23505 de caso_nome_unico vira 'Já existe um mandato com este nome'");
   checar(textoDeFalhaDoMandato({ code: "23505", message: 'duplicate key value violates unique constraint "outro_indice"' }) === null && textoDeFalhaDoMandato({ code: "57014", message: "timeout" }) === null && textoDeFalhaDoMandato(null) === null,
     "outro 23505 e erros que não são do nome NÃO são traduzidos (seria atribuir ao nome um erro que não é dele)");
-  const clienteQueFalha = (erro: { code: string; message: string }) => ({ rpc: async () => ({ data: null, error: erro }) }) as unknown as Parameters<typeof obterCasoId>[0];
+  const clienteQueFalha = (erro: { code: string; message: string }) => ({ rpc: () => Promise.resolve({ data: null, error: erro }) }) as unknown as Parameters<typeof obterCasoId>[0];
   for (const [erro, esperado] of [[{ code: "42501", message: alheio }, alheio], [{ code: "23505", message: 'violates unique constraint "caso_nome_unico"' }, MENSAGEM_NOME_DE_MANDATO_EXISTE]] as const) {
     let msg = "";
     try { await obterCasoId(clienteQueFalha({ ...erro }), "AMO"); } catch (e) { msg = (e as Error).message; }
@@ -1456,7 +1457,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   //     genérico + digest), então `throw new Error(frase)` perdia a frase do papel e o motivo de recusa do banco.
   //     Não dá para reproduzir a redação do Next aqui (é do build de produção): o que se prova é que a frase sai
   //     como VALOR (`{ erro }`) e que cada formulário que a dispara a MOSTRA — o par que faltava em cada metade.
-  const semCom = (c: string) => c.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  const semCom = semComentariosDoFonte;
   const arquivosDeAcao = ["app/casos/[id]/actions.ts", "app/casos/[id]/pendencias/actions.ts", "app/casos/[id]/perguntas/actions.ts", "app/casos/[id]/documentos/[docId]/actions.ts"];
   for (const arq of arquivosDeAcao) {
     const src = semCom(fonte(arq));

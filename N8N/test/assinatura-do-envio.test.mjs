@@ -141,10 +141,10 @@ test('as mensagens de recusa dizem o que aconteceu e que nada foi gravado', () =
 test('comparação em tempo constante: o trabalho não depende de ONDE as duas strings divergem', () => {
   const a = 'a'.repeat(64);
   const contar = (x, y) => {
-    const orig = String.prototype.charCodeAt;
+    const orig = String.prototype.codePointAt;
     let n = 0;
-    String.prototype.charCodeAt = function (...args) { n += 1; return orig.apply(this, args); };
-    try { iguaisEmTempoConstante(x, y); } finally { String.prototype.charCodeAt = orig; }
+    String.prototype.codePointAt = function (...args) { n += 1; return orig.apply(this, args); };
+    try { iguaisEmTempoConstante(x, y); } finally { String.prototype.codePointAt = orig; }
     return n;
   };
   const noInicio = contar(a, 'b' + a.slice(1));

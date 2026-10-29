@@ -25,6 +25,7 @@
 // os mesmos que a suíte do Leitor usa, e o leitor que roda aqui é o MESMO que roda no
 // navegador. O banco é substituído por um `rpc` de mentira — o contrato (0207) é o
 // que se afirma, e o fluxo contra um Postgres com a 0207 é o `Supabase/test`.
+import { semComentarios } from "./lib/sem-comentarios.mts";
 import {
   CABECA_BYTES, MAX_ITENS_POR_CHAMADA, detectarPeloArquivo, separarOficiais, destinoDe, partirEmLotes,
   montarCabecalho, gravarResumo, obterCasoId, fluxoComProgresso, descreverContagem, descreverDesfecho,
@@ -633,7 +634,7 @@ for (const [motivo, bytes] of [
     "Form sem o campo do token deveria devolver null (e o chamador cai no fallback), não repetir o campo do mandato");
 
   // FIAÇÃO (estrutural, e declarada como tal): a ORDEM e o USO nas três pontas.
-  const sem = (c: string) => c.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  const sem = semComentarios;
   const rota = sem(lerFonte("../src/app/api/intake/route.ts")), destino = sem(lerFonte("../src/app/api/intake/destino/route.ts"));
   const pos = (src: string, re: RegExp) => src.search(re);
   const ordemOk = (src: string, marco: RegExp) => {
