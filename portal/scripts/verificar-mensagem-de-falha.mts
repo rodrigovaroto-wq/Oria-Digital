@@ -31,6 +31,7 @@ import {
   gravarDiscricao, idDoCaso, lerDiscricao,
 } from "../src/lib/casco.ts";
 import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 
 let ok = 0;
 const falhas: string[] = [];
@@ -579,7 +580,7 @@ checar(cursorValido("2026-10-28T13:00:00.123456+00:00") && !cursorValido("ontem"
     "chave real com ':', '@' ou espaço foi recusada");
   // O link volta com os microssegundos inteiros e a chave codificada, e é lido de volta igual.
   const href = hrefDosMaisAntigos("c1", { em: EM, chave: "vinculo:1:ana@oria.com" });
-  const q = new URL(href, "http://x").searchParams;
+  const q = new URL(href, "https://x").searchParams;
   const volta = lerCursor(q.get("antes") ?? undefined, q.get("chave") ?? undefined);
   checar(volta.situacao === "pagina" && volta.antes === EM && volta.chave === "vinculo:1:ana@oria.com" && href.includes("&chave="),
     "o link de 'Carregar mais antigos' não leva em e chave íntegros (microssegundos ou chave perdidos)");
@@ -641,7 +642,9 @@ const rodarScript = (ls: unknown) => {
   const atributos = new Map<string, string>();
   const doc = { documentElement: { setAttribute: (k: string, v: string) => void atributos.set(k, v) } };
   let lancou = false;
-  try { new Function("localStorage", "document", SCRIPT_DISCRICAO_ANTES_DA_PINTURA)(ls, doc); } catch { lancou = true; }
+  // Num contexto V8 isolado (node:vm), com só `localStorage` e `document` visíveis — e não por
+  // `new Function`, que roda no escopo do processo (Sonar S1523 no PR #265).
+  try { runInNewContext(SCRIPT_DISCRICAO_ANTES_DA_PINTURA, { localStorage: ls, document: doc }); } catch { lancou = true; }
   return { ligou: atributos.has(ATRIBUTO_DISCRICAO), lancou };
 };
 checar(rodarScript(armazemFalso({ [CHAVE_DISCRICAO]: "1" })).ligou,
