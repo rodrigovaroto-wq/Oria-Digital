@@ -28,12 +28,12 @@ import {
 } from "../src/lib/historico-do-mandato.ts";
 import {
   ATRIBUTO_DISCRICAO, ATRIBUTO_TEMA, CHAVE_DISCRICAO, CHAVE_TEMA, SCRIPT_DISCRICAO_ANTES_DA_PINTURA,
-  SCRIPT_TEMA_ANTES_DA_PINTURA, alvoDoRetornoDeFoco, ariaCurrentDoLink, aplicarTema, destinoAtivo, discricaoLigada, gravarDiscricao,
+  SCRIPT_TEMA_ANTES_DA_PINTURA, alvoDoRetornoDeFoco, armazem, ariaCurrentDoLink, aplicarTema, destinoAtivo, discricaoLigada, gravarDiscricao,
   gravarPreferenciaDeTema, idDoCaso, lerDiscricao, lerPreferenciaDeTema, preferenciaDeTema, temaEfetivo,
 } from "../src/lib/casco.ts";
 import {
-  CHAVE_AVISOS_VISTOS, TETO_DE_VISTOS, classificarLote, contarNaoVistos, gravarVistos, lerVistos, montarAvisos,
-  nomeDoSino, unirVistos, type LoteLido,
+  CHAVE_AVISOS_VISTOS, TETO_DE_VISTOS, TOLERANCIA_DO_RELOGIO_MS, classificarLote, pedeAtencao, vistosEfetivos, contarNaoVistos, gravarVistos, lerVistos, montarAvisos,
+  nomeDoSino, unirVistos, ROTULO_DO_TIPO, type LoteLido,
 } from "../src/lib/avisos-de-processamento.ts";
 import { campoCarregaValor, CHAVES_APRESENTACAO } from "../src/lib/apresentacao/campos.ts";
 import { readFileSync, readdirSync } from "node:fs";
@@ -956,6 +956,20 @@ checar(/@media \(prefers-reduced-transparency: reduce\)\s*\{\s*html\[data-tema="
     "véu de diálogo com bg-tinta-900/NN: no escuro ele clareia a tela inteira (use bg-fundo-reserva)");
   checar(lido.every(([, t]) => !/bg-vidro-texto[^"`]*\b(text-tinta-\d|hover:bg-papel)/.test(t)),
     "botão creme do casco com texto tinta/hover papel: no escuro vira texto claro sobre creme");
+  // ALTO 2: fundo de token que INVERTE (tinta-*, papel, folha) com texto fixo do casco (vidro-*) no
+  // MESMO className — o selo "Novo" (bg-tinta-900 text-vidro-texto) deu 1:1 no escuro. A tabela de
+  // contraste mede pares declarados; esta varredura pega o par que ninguém declarou.
+  const temFundoQueInverte = (t: string) => /(?:^|[\s"'`])(?:[\w-]+:)*bg-(?:tinta-\d+|papel|folha)(?![\w-])/.test(t);
+  const temTextoFixoDoCasco = (t: string) => /(?:^|[\s"'`])(?:[\w-]+:)*text-vidro-[\w-]+/.test(t);
+  const literais = (t: string) => t.match(/"[^"\n]*"|`[^`]*`/g) ?? [];
+  checar(temFundoQueInverte('"rounded bg-tinta-900 text-vidro-texto"') && temTextoFixoDoCasco('"rounded bg-tinta-900 text-vidro-texto"')
+    && !(temFundoQueInverte('"bg-papel text-tinta-900"') && temTextoFixoDoCasco('"bg-papel text-tinta-900"')),
+    "a varredura de fundo-que-inverte x texto-do-casco não reconhece o caso que ela existe para pegar");
+  const mistura = lido.flatMap(([f, t]) => literais(t).filter((l) => temFundoQueInverte(l) && temTextoFixoDoCasco(l)).map(() => f));
+  checar(mistura.length === 0, `fundo que inverte com texto fixo do casco no mesmo className (1:1 no escuro) em: ${mistura.join(", ")}`);
+  // MÉDIO 4: o acesso à PROPRIEDADE lança SecurityError com dados de site bloqueados; só `armazem()` o protege.
+  const diretos = lido.filter(([, t]) => /window\.localStorage/.test(t)).map(([f]) => f);
+  checar(diretos.length === 0, `.tsx com window.localStorage direto (lança SecurityError fora de try): ${diretos.join(", ")}`);
   checar(lido.every(([, t]) => !/\bbg-white(?![/\w-])/.test(t)), "bg-white em tela: no escuro vira bloco branco na folha");
 }
 
@@ -1024,6 +1038,34 @@ if (process.env.TABELA_DE_CONTRASTE) {
 }
 
 // Barra inferior: o destino ativo. Caminhos reais, com o UUID de um mandato.
+// `armazem()`: a propriedade lança (dados de site bloqueados) ou o `window` nem existe (servidor).
+{
+  const g = globalThis as Record<string, unknown>;
+  const antes = g.window;
+  const guardado = { getItem: () => "x" };
+  try {
+    delete g.window;
+    checar(armazem() === null, "armazem() sem window (servidor) = null, sem exceção");
+    g.window = { get localStorage() { throw new Error("SecurityError"); } };
+    checar(armazem() === null, "armazem() com a propriedade lançando = null");
+    g.window = { localStorage: guardado };
+    checar(armazem() === (guardado as unknown), "armazem() devolve o localStorage quando existe");
+  } finally {
+    if (antes === undefined) delete g.window; else g.window = antes;
+  }
+}
+// Os scripts do <head> não podem criar globais (`p`/`d` do tema viravam `window.p`/`window.d`).
+for (const [nome, script] of [["tema", SCRIPT_TEMA_ANTES_DA_PINTURA], ["discrição", SCRIPT_DISCRICAO_ANTES_DA_PINTURA]] as const) {
+  const sandbox: Record<string, unknown> = {
+    localStorage: { getItem: () => "escuro" }, matchMedia: () => ({ matches: true }),
+    document: { documentElement: { setAttribute: () => {} } },
+  };
+  const chavesAntes = Object.keys(sandbox);
+  runInNewContext(script, sandbox);
+  const novas = Object.keys(sandbox).filter((k) => !chavesAntes.includes(k));
+  checar(novas.length === 0, `o script do ${nome} criou globais no head: ${novas.join(",")}`);
+}
+
 const UUID = "0b9f2c1e-5a4d-4c8e-9f3b-7d6a1e2c3b4a";
 const casosDestino: Array<[string, ReturnType<typeof destinoAtivo>]> = [
   ["/casos", "inicio"], ["/casos/", "inicio"], ["/casos?x=1", "inicio"],
@@ -1047,7 +1089,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   const T0 = Date.parse("2026-10-29T12:00:00Z");
   const min = (m: number) => new Date(T0 - m * 60_000).toISOString();
   const lote = (o: Partial<LoteLido>): LoteLido => ({
-    id: "L1", caso_id: "C1", caso: { nome: "Mandato X" }, criado_em: min(60), fechado_em: null,
+    id: "L1", execucao_ref: "900", caso_id: "C1", caso: { nome: "Mandato X" }, criado_em: min(60), fechado_em: null,
     documentos: 10, documentos_planejados: 10, documentos_com_falha: 0, ...o,
   });
   checar(classificarLote(lote({ fechado_em: min(5) }), T0) === "concluido", "lote fechado sem falha = concluído");
@@ -1056,16 +1098,16 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   checar(classificarLote(lote({ fechado_em: min(5), documentos_com_falha: null }), T0) === "concluido",
     "falha nula (não medida) não inventa falha");
   checar(classificarLote(lote({ criado_em: min(3) }), T0) === null, "lote aberto dentro da janela está andando: não é aviso");
-  checar(classificarLote(lote({ criado_em: min(13 * 60) }), T0) === "parado", "lote de 10 docs aberto há 13h = parado");
+  checar(classificarLote(lote({ criado_em: min(13 * 60) }), T0) === "demorando", "lote de 10 docs aberto há 13h = demorando");
   checar(classificarLote(lote({ criado_em: min(60), documentos_planejados: 190 }), T0) === null,
-    "lote de 190 aberto há 1h NÃO é parado (a janela é a da tela de upload)");
+    "lote de 190 aberto há 1h NÃO é aviso (a janela é a da tela de upload)");
   checar(classificarLote(lote({ documentos_planejados: null, criado_em: min(13 * 60) }), T0) === "sem_confirmacao",
-    "plano desconhecido: a tela não afirma 'parado'");
+    "plano desconhecido: a tela não afirma 'demorando'");
   checar(classificarLote(lote({ criado_em: "lixo" }), T0) === "sem_confirmacao", "data ilegível não vira 'andando'");
   const avisos = montarAvisos(
     [lote({ id: "A", fechado_em: min(5) }), lote({ id: "B", criado_em: min(3) }), lote({ id: "P", criado_em: min(13 * 60) })],
-    [{ id: "F", caso_id: null, caso_nome: "Sem caso", etapa: "orcamento", criado_em: min(1) }], T0);
-  checar(avisos.length === 3 && !avisos.some((a) => a.chave.includes(":B:")), "em andamento fica fora; concluído, parado e falha entram");
+    [{ id: "F", caso_id: null, caso_nome: "Sem caso", etapa: "orcamento", mensagem: "Lote acima do teto", detalhe: null, criado_em: min(1) }], T0);
+  checar(avisos.length === 3 && !avisos.some((a) => a.chave.includes(":B:")), "em andamento fica fora; concluído, demorando e falha entram");
   checar(avisos[0].tipo === "falha" && avisos[0].casoId === null, "ordem: mais recente primeiro; falha sem caso não ganha link");
   checar(new Set(avisos.map((a) => a.chave)).size === 3, "chaves únicas");
   checar(montarAvisos(Array.from({ length: 30 }, (_, i) => lote({ id: `n${i}`, fechado_em: min(i) })), [], T0).length === 20, "teto de 20");
@@ -1073,7 +1115,59 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     "o join pode chegar como lista");
   const antes = montarAvisos([lote({ id: "Z", criado_em: min(13 * 60) })], [], T0)[0];
   const depois = montarAvisos([lote({ id: "Z", criado_em: min(13 * 60), fechado_em: min(1) })], [], T0)[0];
-  checar(antes.chave !== depois.chave, "o lote que estava parado e fechou é aviso NOVO (a chave leva o tipo)");
+  checar(antes.chave !== depois.chave, "o lote que estava demorando e fechou é aviso NOVO (a chave leva o tipo)");
+
+  // --- ALTO 1: nunca "parado"; relógio adiantado não vira aviso ---
+  {
+    const janela10 = janelaPara(10) / 60_000; // a MESMA janela que a tela de upload usa, em minutos
+    const comRelogioAdiantado = lote({ criado_em: min(janela10 + 2) });
+    checar(classificarLote(comRelogioAdiantado, T0) === null,
+      "lote 2 min além da janela, dentro da tolerância de relógio, NÃO vira aviso");
+    checar(classificarLote(lote({ criado_em: min(janela10 + TOLERANCIA_DO_RELOGIO_MS / 60_000 + 1) }), T0) === "demorando",
+      "além da janela + tolerância vira 'demorando'");
+    checar(!/parado/i.test(Object.values(ROTULO_DO_TIPO).join("|")), "nenhum rótulo afirma 'parado': lote_execucao não mede progresso");
+    checar(ROTULO_DO_TIPO.demorando.includes("sem confirmação de término"), "o rótulo diz o que NÃO se sabe");
+    checar(!pedeAtencao("demorando") && !pedeAtencao("sem_confirmacao") && pedeAtencao("falha") && pedeAtencao("concluido_com_nao_lidos"),
+      "demorando não leva 'Atenção' (empurraria reenvio); falha e não lidos levam");
+    const d = montarAvisos([lote({ criado_em: min(13 * 60) })], [], T0)[0];
+    checar(/n[ãa]o\s+afirma|Pode estar só lento/.test(d.detalhe ?? "") && !/parou|parado/i.test(d.detalhe ?? ""),
+      "o detalhe do 'demorando' admite que pode estar vivo e não diz 'parou'");
+  }
+  // --- ALTO 3: documento que nunca chegou à extração não é "concluído" liso ---
+  {
+    const fechado = lote({ id: "N1", fechado_em: min(5) });
+    checar(classificarLote(fechado, T0, 3) === "concluido_com_nao_lidos", "fechado + 3 pendências documento_nao_extraido não é 'concluído'");
+    checar(classificarLote(fechado, T0, 0) === "concluido", "sem pendência aberta segue 'concluído'");
+    const a = montarAvisos([fechado], [], T0, { C1: 3 })[0];
+    checar(a.tipo === "concluido_com_nao_lidos" && (a.detalhe ?? "").includes("3 documentos"), "o aviso traz a contagem");
+    const dois = montarAvisos([lote({ id: "velho", fechado_em: min(500) }), fechado], [], T0, { C1: 2 });
+    checar(dois.filter((x) => x.tipo === "concluido_com_nao_lidos").length === 1 && dois.some((x) => x.chave === "lote:velho:concluido"),
+      "a contagem do caso entra só no lote fechado mais recente");
+    const f2 = montarAvisos([lote({ id: "N2", fechado_em: min(5), documentos_com_falha: 1 })], [], T0, { C1: 2 })[0];
+    checar(f2.tipo === "concluido_com_falhas" && (f2.detalhe ?? "").includes("2 documentos registrados sem extração"), "falhas + não lidos: os dois aparecem");
+  }
+  // --- MÉDIO 5: recusa duplicada, mensagem real, falha mata o 'demorando', nome via join ---
+  {
+    const recusa = { id: "R", caso_id: "C1", caso_nome: "Digitado", etapa: "orcamento", mensagem: "Lote acima do teto de US$ 3", detalhe: null, criado_em: min(10) };
+    const erro = { id: "E", caso_id: "C1", caso_nome: "Digitado", etapa: "Abortar Lote", mensagem: "Lote acima do teto de US$ 3", detalhe: { execucao_id: "77" }, criado_em: min(10) };
+    const av = montarAvisos([], [recusa, erro], T0);
+    checar(av.length === 1 && av[0].tipo === "falha", "recusa + Error Workflow do mesmo acontecimento = UM aviso");
+    checar(av[0].detalhe === "Lote acima do teto de US$ 3" && !/abra o mandato para ver o que foi lido/.test(av[0].detalhe ?? ""),
+      "o aviso mostra a mensagem gravada, não um texto genérico que afirma o que foi lido");
+    checar(montarAvisos([], [recusa, { ...erro, mensagem: "Outra coisa" }], T0).length === 2, "mensagem diferente = acontecimento diferente");
+    checar(montarAvisos([], [recusa, { ...erro, criado_em: min(10 + 60) }], T0).length === 2, "mesma mensagem horas depois = outro acontecimento");
+    checar(montarAvisos([], [{ ...erro, id: "E1" }, { ...erro, id: "E2", mensagem: "x", criado_em: min(40) }], T0).length === 1,
+      "mesmo execucao_id deduplica mesmo com mensagem/hora diferentes");
+    checar(montarAvisos([], [{ ...erro, id: "E1", caso_id: null, caso_nome: null }, { ...erro, id: "E2", caso_id: null, caso_nome: null, detalhe: null }], T0).length === 2,
+      "falhas sem caso e sem execucao_id comum NÃO se fundem (não se sabe se são a mesma)");
+    const vivo = lote({ id: "V", execucao_ref: "77", criado_em: min(13 * 60) });
+    checar(montarAvisos([vivo], [erro], T0).every((x) => x.tipo === "falha"), "lote cuja execução já tem falha registrada não vira 'demorando'");
+    checar(montarAvisos([lote({ id: "V2", execucao_ref: "78", criado_em: min(13 * 60) })], [erro], T0).some((x) => x.tipo === "demorando"),
+      "falha de OUTRA execução não cala o 'demorando'");
+    checar(montarAvisos([], [{ ...erro, caso: { nome: "Nome do join" } }], T0)[0].casoNome === "Nome do join"
+      && montarAvisos([], [{ ...erro, caso: null }], T0)[0].casoNome === "Digitado", "nome: o do join, senão o digitado");
+    checar(montarAvisos([], [{ ...erro, mensagem: "  " }], T0)[0].detalhe?.includes("não deixou mensagem") === true, "mensagem vazia tem texto neutro");
+  }
 
   const mem = () => { const m = new Map<string, string>(); return { m, getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v); } }; };
   const a = mem();
@@ -1101,6 +1195,15 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   checar(!/select\(\s*["'`]\*/.test(comp), "o sino lê colunas nomeadas, nunca select *");
   checar(/fase === "ok" && naoVistos > 0/.test(comp) && /fase: "erro"/.test(comp), "o contador só aparece com leitura ok");
   checar(fonte("app/casos/layout.tsx").includes("<AvisosDeProcessamento />"), "o sino saiu do cabeçalho");
+  checar(/documento_nao_extraido/.test(comp) && /\.neq\("estado", "resolvida"\)/.test(comp) && /execucao_ref/.test(comp) && /mensagem, detalhe/.test(comp)
+    && /caso\(nome\)/.test(comp.slice(comp.indexOf('from("execucao_falha")'))), "o sino lê pendência não lida, execucao_ref, mensagem/detalhe e o join do caso da falha");
+  // --- MÉDIO 6: o visto recusado sobrevive ao recarregar de 60 s ---
+  checar(JSON.stringify(vistosEfetivos(["a"], ["b"])) === '["a","b"]' && JSON.stringify(vistosEfetivos([], ["b"])) === '["b"]',
+    "armazém + memória do que foi recusado");
+  checar(vistosEfetivos(null, []) === null && JSON.stringify(vistosEfetivos(null, ["b"])) === '["b"]',
+    "armazém indisponível sem memória = null; com memória vale a memória");
+  checar(JSON.stringify(vistosEfetivos(["a"], [])) === '["a"]', "sem memória, o armazém vale");
+  checar(/naoGravados/.test(comp) && /vistosEfetivos\(lerVistos\(armazem\(\)\), naoGravados\.current\)/.test(comp), "o carregar une armazém e memória");
 }
 
 if (falhas.length > 0) {
@@ -1118,4 +1221,4 @@ console.log("HISTÓRICO OK — tipo desconhecido aparece cru, nulo no recebiment
 console.log("CASCO OK — o modo discrição liga antes da pintura, nada o desfaz por hover, e o destino ativo da barra inferior casa com a rota");
 console.log("TEMA OK — a preferência resolve claro/escuro/sistema antes da pintura, toda cor do claro tem par no escuro e todo par medido passa AA");
 console.log("CUSTOS OK — custo ausente fica ausente, o total é piso declarado e o por-documento usa um só conjunto");
-console.log("AVISOS OK — lote parado/falho tem rótulo próprio, plano desconhecido não vira \"parado\", e visto indisponível não vira \"nada novo\"");
+console.log("AVISOS OK — lote demorando nunca vira \"parado\", falha duplicada vira um aviso, documento não lido não é \"concluído\", e visto indisponível não vira \"nada novo\"");

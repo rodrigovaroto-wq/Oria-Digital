@@ -3,7 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { IconeChevronBaixo, IconeConta, IconeSair } from "@/components/icones";
 import {
-  CONSULTA_TEMA_ESCURO, aplicarTema, gravarPreferenciaDeTema, lerPreferenciaDeTema,
+  CONSULTA_TEMA_ESCURO, CHAVE_TEMA, armazem, aplicarTema, gravarPreferenciaDeTema, lerPreferenciaDeTema,
   type PreferenciaDeTema,
 } from "@/lib/casco";
 
@@ -46,25 +46,37 @@ export function MenuConta({
   // A escolha guardada, lida uma vez. Só é DESENHADA com o menu aberto (depois da hidratação),
   // então ler o localStorage aqui não diverge do HTML do servidor; no servidor vale "sistema".
   const [tema, setTema] = useState<PreferenciaDeTema>(() =>
-    typeof window === "undefined" ? "sistema" : lerPreferenciaDeTema(window.localStorage));
+    typeof window === "undefined" ? "sistema" : lerPreferenciaDeTema(armazem()));
 
   useEffect(() => {
     // Em "Sistema" o tema segue o aparelho AO VIVO (o escuro ao anoitecer): este ouvinte vive
     // no menu, que está sempre montado, e não no seletor, que só existe com o menu aberto.
     const consulta = window.matchMedia(CONSULTA_TEMA_ESCURO);
     const aoMudar = () => {
-      if (lerPreferenciaDeTema(window.localStorage) === "sistema") {
+      if (lerPreferenciaDeTema(armazem()) === "sistema") {
         aplicarTema(document.documentElement, "sistema", consulta.matches);
       }
     };
     consulta.addEventListener("change", aoMudar);
-    return () => consulta.removeEventListener("change", aoMudar);
+    // Troca de tema em OUTRA aba: o `storage` só dispara nas outras abas, então esta aba segue a
+    // escolha feita lá (sem ele, duas abas abertas divergiam até recarregar).
+    const aoMudarEmOutraAba = (e: StorageEvent) => {
+      if (e.key !== CHAVE_TEMA && e.key !== null) return;
+      const pref = lerPreferenciaDeTema(armazem());
+      setTema(pref);
+      aplicarTema(document.documentElement, pref, consulta.matches);
+    };
+    window.addEventListener("storage", aoMudarEmOutraAba);
+    return () => {
+      consulta.removeEventListener("change", aoMudar);
+      window.removeEventListener("storage", aoMudarEmOutraAba);
+    };
   }, []);
 
   function escolherTema(preferencia: PreferenciaDeTema) {
     setTema(preferencia);
     // Se o navegador recusar a gravação, o tema vale até recarregar — o atributo é aplicado igual.
-    gravarPreferenciaDeTema(window.localStorage, preferencia);
+    gravarPreferenciaDeTema(armazem(), preferencia);
     aplicarTema(document.documentElement, preferencia, window.matchMedia(CONSULTA_TEMA_ESCURO).matches);
   }
 

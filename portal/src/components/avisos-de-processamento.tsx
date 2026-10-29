@@ -5,12 +5,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { IconeSino } from "@/components/icones";
 import { createClient } from "@/lib/supabase/client";
+import { armazem } from "@/lib/casco";
 import {
   JANELA_DOS_AVISOS_DIAS, TETO_DOS_AVISOS, contarNaoVistos, gravarVistos, lerVistos, montarAvisos,
-  nomeDoSino, pedeAtencao, unirVistos, type Aviso, type FalhaLida, type LoteLido,
+  nomeDoSino, pedeAtencao, unirVistos, vistosEfetivos, type Aviso, type FalhaLida, type LoteLido,
 } from "@/lib/avisos-de-processamento";
 
-// O SINO DA BARRA SUPERIOR — avisa que lote de ingestão terminou, falhou ou parou. Regras (que
+// O SINO DA BARRA SUPERIOR — avisa que lote de ingestão terminou, falhou ou está demorando. Regras (que
 // estado o banco permite afirmar, o que é "visto") em `lib/avisos-de-processamento.ts`.
 //
 // ONDE FICA NO CELULAR: no CABEÇALHO, não no "Mais". O contador só serve se for visto sem um
@@ -38,6 +39,9 @@ export function AvisosDeProcessamento() {
   const raiz = useRef<HTMLDivElement>(null);
   const painel = useRef<HTMLDivElement>(null);
   const emVoo = useRef(0);
+  // Chaves marcadas nesta página cuja gravação o navegador RECUSOU: o recarregar de 60 s relê o
+  // armazém, que não as tem, e sem esta memória o aviso voltava a "Novo" sozinho.
+  const naoGravados = useRef<string[]>([]);
   const [aberto, setAberto] = useState(false);
   const [estado, setEstado] = useState<Estado>({ fase: "carregando" });
   // `null` = o navegador não guarda o visto (janela privada): a tela diz, e todos contam como novos.
@@ -51,25 +55,34 @@ export function AvisosDeProcessamento() {
       const sb = createClient();
       const agora = Date.now();
       const desde = new Date(agora - JANELA_DOS_AVISOS_DIAS * DIA_MS).toISOString();
-      const [lotes, falhas] = await Promise.all([
+      const [lotes, falhas, naoLidas] = await Promise.all([
         sb.from("lote_execucao")
-          .select("id, caso_id, criado_em, fechado_em, documentos, documentos_planejados, documentos_com_falha, caso(nome)")
+          .select("id, execucao_ref, caso_id, criado_em, fechado_em, documentos, documentos_planejados, documentos_com_falha, caso(nome)")
           .gte("criado_em", desde).order("criado_em", { ascending: false }).limit(TETO_DOS_AVISOS),
         sb.from("execucao_falha")
-          .select("id, caso_id, caso_nome, etapa, criado_em")
+          .select("id, caso_id, caso_nome, etapa, mensagem, detalhe, criado_em, caso(nome)")
           .gte("criado_em", desde).order("criado_em", { ascending: false }).limit(TETO_DOS_AVISOS),
+        // Documento registrado cuja extração NUNCA foi chamada (0112): `documentos_com_falha` não o vê.
+        // Teto de 1000 linhas do PostgREST: acima disso a contagem por caso é piso, e o aviso diz "N".
+        sb.from("pendencia")
+          .select("caso_id")
+          .eq("tipo", "documento_nao_extraido").neq("estado", "resolvida").limit(1000),
       ]);
-      proximo = lotes.error || falhas.error
+      const naoLidosPorCaso: Record<string, number> = {};
+      for (const p of (naoLidas.data ?? []) as { caso_id: string }[]) naoLidosPorCaso[p.caso_id] = (naoLidosPorCaso[p.caso_id] ?? 0) + 1;
+      proximo = lotes.error || falhas.error || naoLidas.error
         ? { fase: "erro" }
         : {
             fase: "ok",
-            avisos: montarAvisos((lotes.data ?? []) as unknown as LoteLido[], (falhas.data ?? []) as FalhaLida[], agora),
+            avisos: montarAvisos(
+              (lotes.data ?? []) as unknown as LoteLido[], (falhas.data ?? []) as unknown as FalhaLida[], agora, naoLidosPorCaso,
+            ),
           };
     } catch {
       proximo = { fase: "erro" };
     }
     if (minha !== emVoo.current) return;
-    setVistos(lerVistos(window.localStorage));
+    setVistos(vistosEfetivos(lerVistos(armazem()), naoGravados.current));
     setEstado(proximo);
   }, []);
 
@@ -109,9 +122,11 @@ export function AvisosDeProcessamento() {
   const foiVisto = (a: Aviso) => vistos != null && vistos.includes(a.chave);
 
   const marcar = (chaves: string[]) => {
-    const lidos = lerVistos(window.localStorage);
+    const lidos = lerVistos(armazem());
     const novos = unirVistos(lidos ?? vistos ?? [], chaves);
-    setGravou(gravarVistos(window.localStorage, novos));
+    const gravado = gravarVistos(armazem(), novos);
+    naoGravados.current = gravado ? [] : unirVistos(naoGravados.current, chaves);
+    setGravou(gravado);
     setVistos(novos);
   };
 
@@ -179,7 +194,7 @@ export function AvisosDeProcessamento() {
           )}
           {estado.fase === "ok" && avisos.length === 0 && (
             <p className="px-2.5 py-3 text-sm text-tinta-600">
-              Nenhum lote terminou, falhou ou ficou parado nos últimos {JANELA_DOS_AVISOS_DIAS} dias.
+              Nenhum lote terminou, falhou ou está demorando nos últimos {JANELA_DOS_AVISOS_DIAS} dias.
             </p>
           )}
           {estado.fase === "ok" && avisos.length > 0 && (
@@ -189,7 +204,7 @@ export function AvisosDeProcessamento() {
                 const corpo = (
                   <>
                     <span className="flex items-center gap-2">
-                      {novo && <span className="rounded bg-tinta-900 px-1 text-[10px] font-semibold uppercase text-vidro-texto">Novo</span>}
+                      {novo && <span className="rounded bg-tinta-900 px-1 text-[10px] font-semibold uppercase text-papel">Novo</span>}
                       <span className={`text-sm ${novo ? "font-semibold" : "font-medium"} text-tinta-900`}>{a.rotulo}</span>
                       {pedeAtencao(a.tipo) && <span className="text-[11px] font-semibold uppercase text-tinta-700">Atenção</span>}
                     </span>
@@ -222,7 +237,7 @@ export function AvisosDeProcessamento() {
             Avisos marcados como vistos neste navegador. Em outro computador, ou com o histórico
             apagado, eles voltam como novos. Janela de {JANELA_DOS_AVISOS_DIAS} dias, até {TETO_DOS_AVISOS} avisos.
             {vistos == null && " Este navegador não permite guardar o que foi visto: todos contam como novos."}
-            {!gravou && vistos != null && " Não foi possível guardar o visto: vale só até recarregar a página."}
+            {!gravou && vistos != null && " Não foi possível guardar o visto: vale só enquanto esta página ficar aberta; ao recarregar, volta como novo."}
           </p>
         </div>
       )}

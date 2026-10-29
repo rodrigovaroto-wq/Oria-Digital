@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MarcaOria } from "@/components/marca-oria";
 import { BarraInferior } from "@/components/barra-inferior";
-import { idDoCaso } from "@/lib/casco";
+import { armazem, idDoCaso } from "@/lib/casco";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import type { CasoStatus } from "@/lib/types";
 import {
@@ -88,7 +88,7 @@ function useArmazenado(chave: string, padrao: string) {
     assinar,
     () => {
       try {
-        return window.localStorage.getItem(chave) ?? padrao;
+        return armazem()?.getItem(chave) ?? padrao;
       } catch {
         // Armazenamento bloqueado (janela privada, política do navegador): a
         // barra funciona sem lembrar, em vez de derrubar a tela inteira.
@@ -99,7 +99,7 @@ function useArmazenado(chave: string, padrao: string) {
   );
   const definir = (v: string) => {
     try {
-      window.localStorage.setItem(chave, v);
+      armazem()?.setItem(chave, v);
     } catch {
       /* sem armazenamento, a preferência vale só até recarregar */
     }

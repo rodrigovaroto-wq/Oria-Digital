@@ -4,6 +4,7 @@ import { useCallback, useSyncExternalStore } from "react";
 import { IconeOlhoRiscado } from "@/components/icones";
 import {
   ATRIBUTO_DISCRICAO,
+  armazem,
   CHAVE_DISCRICAO,
   gravarDiscricao,
   lerDiscricao,
@@ -42,7 +43,7 @@ export function BotaoDiscricao() {
   const assinar = useCallback((avisar: () => void) => {
     const aoMudarEmOutraAba = (e: StorageEvent) => {
       if (e.key !== CHAVE_DISCRICAO && e.key !== null) return;
-      aplicar(lerDiscricao(window.localStorage));
+      aplicar(lerDiscricao(armazem()));
       avisar();
     };
     window.addEventListener("storage", aoMudarEmOutraAba);
@@ -59,7 +60,7 @@ export function BotaoDiscricao() {
     aplicar(proxima);
     // Sem armazenamento (janela privada) o modo vale até recarregar — e o desfoque, o que
     // importa, já foi aplicado acima.
-    gravarDiscricao(window.localStorage, proxima);
+    gravarDiscricao(armazem(), proxima);
     window.dispatchEvent(new Event(EVENTO));
   };
 

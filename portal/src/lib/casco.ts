@@ -6,6 +6,20 @@
 // MODO DISCRIÇÃO — borra número financeiro para usar o portal com terceiros na sala.
 // ---------------------------------------------------------------------------
 
+/**
+ * O `localStorage` do navegador, ou `null` quando o acesso à PROPRIEDADE lança. Com os dados de site
+ * bloqueados o Chrome lança `SecurityError` já em `window.localStorage` — antes de qualquer
+ * `getItem` — e um `lerX(window.localStorage)` quebra no ARGUMENTO, fora do try da função que lê.
+ * Todo componente passa por aqui; `verificar-mensagem-de-falha.mts` reprova `.tsx` que acesse direto.
+ */
+export function armazem(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export const CHAVE_DISCRICAO = "oria.discricao";
 /** Atributo no `<html>`; o CSS (`globals.css`) borra `.valor-sensivel` quando ele existe. */
 export const ATRIBUTO_DISCRICAO = "data-discricao";
@@ -100,14 +114,15 @@ export function temaEfetivo(preferencia: PreferenciaDeTema, sistemaEscuro: boole
  * Script inline do `<head>` raiz: grava `data-tema` ANTES da primeira pintura (sem ele, quem usa o
  * escuro veria a folha creme piscar a cada carga). Os dois acessos — armazenamento e
  * `matchMedia` — têm try próprio: janela privada que bloqueia o localStorage não pode fazer o
- * aparelho em modo escuro cair no claro. Fica aqui para o teste executar EXATAMENTE a string do HTML.
+ * aparelho em modo escuro cair no claro. Em IIFE: sem ela `p` e `d` viravam globais da página.
+ * Fica aqui para o teste executar EXATAMENTE a string do HTML.
  */
 export const SCRIPT_TEMA_ANTES_DA_PINTURA =
-  `var p=null,d=false;` +
+  `(function(){var p=null,d=false;` +
   `try{p=localStorage.getItem(${JSON.stringify(CHAVE_TEMA)})}catch(e){}` +
   `try{d=matchMedia(${JSON.stringify(CONSULTA_TEMA_ESCURO)}).matches}catch(e){}` +
   `try{document.documentElement.setAttribute(${JSON.stringify(ATRIBUTO_TEMA)},` +
-  `p==="claro"||p==="escuro"?p:d?"escuro":"claro")}catch(e){}`;
+  `p==="claro"||p==="escuro"?p:d?"escuro":"claro")}catch(e){}})()`;
 
 /** Aplica o tema efetivo no <html> (cliente): a escolha no menu e a mudança do aparelho passam por aqui. */
 export function aplicarTema(
