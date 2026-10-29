@@ -4,6 +4,7 @@ import { login } from "./actions";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { mensagemDeLogin } from "@/lib/mensagem-de-login";
 import { FundoDaMarca } from "@/components/fundo-da-marca";
+import Link from "next/link";
 
 // Campo translúcido com texto claro. O contorno é `white/40` (3,47:1 sobre o
 // cartão, medido; o piso de borda de componente é 3:1); o foco vem do anel terracota
@@ -87,6 +88,9 @@ export default async function LoginPage({
               autoComplete="current-password"
               className={CAMPO}
             />
+            <Link href="/login/recuperar" className="mt-2 inline-block text-sm text-vidro-texto underline underline-offset-2 hover:text-vidro-papel">
+              Esqueci a senha
+            </Link>
           </div>
           {/* O botão é CREME com texto escuro: sobre o vidro escuro é a única
               coisa clara, e por isso a única ação. */}

@@ -36,6 +36,10 @@ import {
   nomeDoSino, unirVistos, ROTULO_DO_TIPO, type LoteLido,
 } from "../src/lib/avisos-de-processamento.ts";
 import { campoCarregaValor, CHAVES_APRESENTACAO } from "../src/lib/apresentacao/campos.ts";
+import {
+  ERRO_LINK, RESPOSTA_DO_PEDIDO, ROTAS_PUBLICAS, SENHA_MINIMA, caminhoInternoSeguro, mensagemDeRecuperacao,
+  montarRedirectTo, origemDaRequisicao, rotaPublica, validarNovaSenha,
+} from "../src/lib/recuperar-senha.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
@@ -1206,6 +1210,75 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   checar(/naoGravados/.test(comp) && /vistosEfetivos\(lerVistos\(armazem\(\)\), naoGravados\.current\)/.test(comp), "o carregar une armazém e memória");
 }
 
+// ---------------------------------------------------------------------------
+// RECUPERAR SENHA — a única tela pública que escreve algo
+// ---------------------------------------------------------------------------
+{
+  // 1. O e-mail não revela existência: a frase do pedido é uma só, e o texto que o Auth
+  //    daria para conta inexistente cai na genérica, nunca numa frase que distingue.
+  const REVELA = /n[ãa]o (h[áa]|existe|encontr|cadastr)|inexistente|desconhecid|n[ãa]o est[áa] cadastr/i;
+  for (const bruto of ["User not found", "Email not found", "user_not_found", "404 user_not_found Unable to find user"]) {
+    const r = mensagemDeRecuperacao(bruto);
+    checar(!REVELA.test(r.mensagem) && r.mensagem === mensagemDeRecuperacao("erro qualquer").mensagem,
+      `"${bruto}" não vira frase que distingue conta inexistente`);
+  }
+  checar(!REVELA.test(RESPOSTA_DO_PEDIDO) && /^Se houver uma conta com este e-mail, enviamos um link/.test(RESPOSTA_DO_PEDIDO),
+    "a resposta do pedido é condicional e não afirma que a conta existe");
+  const acao = fonte("app/login/recuperar/actions.ts");
+  checar(/redirect\("\/login\/recuperar\?enviado=1"\)/.test(acao) && !/user_not_found|not found/i.test(acao),
+    "a action só responde 'enviado' sem olhar se a conta existe");
+  // 2. Limite (429) manda aguardar; link vencido manda pedir outro; nada vira silêncio.
+  for (const bruto of ["429 over_email_send_rate_limit email rate limit exceeded", "For security purposes, you can only request this after 52 seconds"]) {
+    const r = mensagemDeRecuperacao(bruto);
+    checar(r.aguardar && /Aguarde/.test(r.mensagem), `"${bruto.slice(0, 30)}…" pede espera`);
+  }
+  for (const bruto of [ERRO_LINK, "otp_expired: Email link is invalid or has expired", "Auth session missing!"]) {
+    checar(/Peça um novo link/.test(mensagemDeRecuperacao(bruto).mensagem), `"${bruto.slice(0, 30)}" manda pedir novo link`);
+  }
+  checar(/diferente da atual/.test(mensagemDeRecuperacao("422 same_password New password should be different from the old password.").mensagem),
+    "mesma senha: frase própria (e não a de senha fraca)");
+  checar(mensagemDeRecuperacao("coisa nova do Auth").mensagem.length > 20, "erro desconhecido ainda é dito");
+  // 3. `next` só aceita caminho interno.
+  const PADRAO = "/login/nova-senha";
+  const aceitos = ["/login/nova-senha", "/casos", "/casos?aviso=x"];
+  const recusados = ["//evil.com", "///evil.com", "https://evil.com", "http://evil.com/login/nova-senha", "evil.com", "/\\evil.com",
+    "/\t/evil.com", "javascript:alert(1)", "", "  /casos", "/casos\n//evil.com"];
+  for (const n of aceitos) checar(caminhoInternoSeguro(n, PADRAO) === n, `next ${JSON.stringify(n)} passa`);
+  for (const n of recusados) checar(caminhoInternoSeguro(n, PADRAO) === PADRAO, `next ${JSON.stringify(n)} cai no padrão`);
+  checar(caminhoInternoSeguro(null, PADRAO) === PADRAO && caminhoInternoSeguro(undefined, PADRAO) === PADRAO, "next ausente cai no padrão");
+  checar(montarRedirectTo("https://x.app", "//evil.com") === "https://x.app/auth/confirmar?next=%2Flogin%2Fnova-senha",
+    "o redirectTo nunca carrega next externo");
+  checar(montarRedirectTo("https://x.app", "/login/nova-senha") === "https://x.app/auth/confirmar?next=%2Flogin%2Fnova-senha",
+    "o redirectTo padrão aponta ao callback com next=/login/nova-senha");
+  checar(origemDaRequisicao("https://x.app", "outro", null) === "https://x.app"
+    && origemDaRequisicao(null, "x.app", "https") === "https://x.app"
+    && origemDaRequisicao(null, "localhost:3000", null) === "http://localhost:3000"
+    && origemDaRequisicao("javascript:alert(1)", "bad host", null) === null,
+    "a origem vem do cabeçalho validado, ou é nula (nunca URL com host vazio)");
+  const rota = fonte("app/auth/confirmar/route.ts");
+  checar(/caminhoInternoSeguro\(q\.get\("next"\)/.test(rota) && /new URL\(destino, request\.nextUrl\.origin\)/.test(rota),
+    "o callback sanea o next antes de redirecionar");
+  checar(/type"\) === "recovery"/.test(rota), "o callback só confirma o tipo recovery");
+  // 4. Rotas públicas: EXATAMENTE estas, sem prefixo.
+  checar(JSON.stringify([...ROTAS_PUBLICAS].sort()) === JSON.stringify(["/auth/confirmar", "/login", "/login/recuperar"]),
+    "a lista de rotas públicas é exatamente login, login/recuperar e auth/confirmar");
+  for (const r of ROTAS_PUBLICAS) checar(rotaPublica(r), `${r} é pública`);
+  for (const r of ["/login/nova-senha", "/login/qualquer", "/loginx", "/login/recuperar/x", "/auth", "/auth/confirmar/x", "/casos", "/", "/api/intake", "/administracao"]) {
+    checar(!rotaPublica(r), `${r} exige sessão`);
+  }
+  checar(rotaPublica("/login/") && rotaPublica("/login/recuperar/"), "a barra final não muda a rota");
+  const px = fonte("lib/supabase/proxy.ts");
+  checar(/!rotaPublica\(request\.nextUrl\.pathname\)/.test(px) && !/startsWith\("\/login"\)/.test(px),
+    "o proxy usa a lista exata, não prefixo de /login");
+  // 5. A regra da senha.
+  checar(SENHA_MINIMA === 10, "mínimo de 10 caracteres");
+  checar(validarNovaSenha("123456789", "123456789") === "senha_curta" && validarNovaSenha("1234567890", "1234567890") === null
+    && validarNovaSenha("1234567890", "1234567891") === "senhas_diferentes" && validarNovaSenha("", "") === "senha_curta",
+    "9 caracteres reprova, 10 passa, confirmação diferente reprova");
+  const tela = fonte("app/login/nova-senha/page.tsx");
+  checar(/REGRA_DA_SENHA/.test(tela) && /minLength=\{SENHA_MINIMA\}/.test(tela), "a regra da senha está visível na tela e no campo");
+}
+
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);
   for (const f of falhas) console.error(`  ✗ ${f}`);
@@ -1221,4 +1294,5 @@ console.log("HISTÓRICO OK — tipo desconhecido aparece cru, nulo no recebiment
 console.log("CASCO OK — o modo discrição liga antes da pintura, nada o desfaz por hover, e o destino ativo da barra inferior casa com a rota");
 console.log("TEMA OK — a preferência resolve claro/escuro/sistema antes da pintura, toda cor do claro tem par no escuro e todo par medido passa AA");
 console.log("CUSTOS OK — custo ausente fica ausente, o total é piso declarado e o por-documento usa um só conjunto");
+console.log("RECUPERAR SENHA OK — o pedido não revela se a conta existe, next só aceita caminho interno e as rotas públicas são exatamente três");
 console.log("AVISOS OK — lote demorando nunca vira \"parado\", falha duplicada vira um aviso, documento não lido não é \"concluído\", e visto indisponível não vira \"nada novo\"");

@@ -154,9 +154,9 @@ function Indicador({
 export default async function PainelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fila?: string | string[]; ver?: string | string[] }>;
+  searchParams: Promise<{ fila?: string | string[]; ver?: string | string[]; aviso?: string }>;
 }) {
-  const { fila: filaBruta, ver: verBruto } = await searchParams;
+  const { fila: filaBruta, ver: verBruto, aviso } = await searchParams;
   const filtro = filtroDaFila(filaBruta);
   const verTudo = (Array.isArray(verBruto) ? verBruto[0] : verBruto) === "tudo";
   const supabase = await createClient();
@@ -367,6 +367,11 @@ export default async function PainelPage({
 
   return (
     <div className="relative space-y-6">
+      {aviso === "senha-atualizada" && (
+        <p role="status" className="rounded-lg bg-ok-100 p-3 text-sm text-ok-900">
+          Senha atualizada. Você já está dentro; use a nova senha no próximo acesso.
+        </p>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-tinta-900">{saudacao(agora)}</h1>

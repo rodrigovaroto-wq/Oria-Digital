@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { hasEnvVars } from "./env";
+import { rotaPublica } from "../recuperar-senha";
 
 // Renova a sessão a cada requisição e redireciona quem não está autenticado
 // para /login. Chamado pelo src/proxy.ts (Next.js 16 renomeou middleware →
@@ -51,7 +52,7 @@ export async function updateSession(request: NextRequest) {
     );
   }
 
-  if (!user && !request.nextUrl.pathname.startsWith("/login")) {
+  if (!user && !rotaPublica(request.nextUrl.pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
