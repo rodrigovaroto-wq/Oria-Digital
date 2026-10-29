@@ -27,14 +27,21 @@ export function FecharMandato({
 }) {
   const [aberto, setAberto] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  // A recusa do banco vem como valor da action (em produção o Next redige o texto de um erro lançado).
+  const [erro, setErro] = useState<string | null>(null);
 
   if (fechado) {
     return (
       <form
         action={async () => {
           setEnviando(true);
-          await reabrirCaso(casoId);
-          setEnviando(false);
+          setErro(null);
+          try {
+            const r = await reabrirCaso(casoId);
+            if (r?.erro) setErro(r.erro);
+          } finally {
+            setEnviando(false);
+          }
         }}
       >
         <button
@@ -46,6 +53,7 @@ export function FecharMandato({
         >
           {enviando ? "Reabrindo…" : "Reabrir"}
         </button>
+        {erro && <p role="alert" className="mt-1 max-w-xs text-xs font-medium text-risco-700">{erro}</p>}
       </form>
     );
   }
@@ -85,9 +93,14 @@ export function FecharMandato({
             <form
               action={async (formData: FormData) => {
                 setEnviando(true);
-                await fecharCaso(casoId, formData);
-                setEnviando(false);
-                setAberto(false);
+                setErro(null);
+                try {
+                  const r = await fecharCaso(casoId, formData);
+                  if (r?.erro) setErro(r.erro);
+                  else setAberto(false);
+                } finally {
+                  setEnviando(false);
+                }
               }}
               className="mt-4 space-y-3"
             >
@@ -104,6 +117,7 @@ export function FecharMandato({
                              placeholder:text-tinta-400"
                 />
               </div>
+              {erro && <p role="alert" className="text-xs font-medium text-risco-700">{erro}</p>}
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"

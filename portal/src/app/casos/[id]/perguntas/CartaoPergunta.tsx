@@ -20,6 +20,8 @@ import {
   type PerguntaSugerida,
 } from "@/lib/perguntas";
 import { registrarAcaoDaPergunta } from "./actions";
+import { FormDeAcao } from "@/components/form-de-acao";
+
 import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import { CaixaDeSelecao } from "./SelecaoDePerguntas";
 
@@ -92,7 +94,7 @@ export function CartaoPergunta({
         {/* REGISTRAR O ENVIO. O texto exato da tela vai no campo oculto: é ele
             que a 0120 congela, e é ele que responde "o que exatamente foi
             perguntado a este cliente?" seis meses depois. */}
-        <form action={registrar}>
+        <FormDeAcao action={registrar}>
           <input type="hidden" name="codigo" value={p.codigo} />
           <input type="hidden" name="entidade_id" value={p.entidade_id ?? ""} />
           <input type="hidden" name="acao" value="enviada" />
@@ -104,9 +106,9 @@ export function CartaoPergunta({
           >
             {enviada ? "Registrar novo envio" : "Marcar como enviada"}
           </button>
-        </form>
+        </FormDeAcao>
 
-        <form action={registrar}>
+        <FormDeAcao action={registrar}>
           <input type="hidden" name="codigo" value={p.codigo} />
           <input type="hidden" name="entidade_id" value={p.entidade_id ?? ""} />
           <input type="hidden" name="acao" value="descartada" />
@@ -118,7 +120,7 @@ export function CartaoPergunta({
           >
             Não vou perguntar
           </button>
-        </form>
+        </FormDeAcao>
         </ZonaDeEscrita>
       </div>
 

@@ -90,12 +90,16 @@ export async function GET(req: NextRequest) {
   // só é lido quando o resultado veio vazio (o caso comum não paga a ida ao banco): sem papel, é
   // recusa explícita; Analista e Leitura recebem a marca de que a busca cobriu só os alocados.
   let soAlocados = false;
+  // Papel NÃO conferido (a leitura falhou): o vazio pode ser o recorte do banco, e "nada encontrado" seria
+  // afirmar a mesa inteira. A tela escreve "nenhum resultado visível ao seu acesso".
+  let papelNaoConferido = false;
   if (resposta.resultados.length === 0) {
     const acesso = await lerAcesso();
     if (acesso.estado === "ok" && acesso.papel === null) {
       return NextResponse.json({ erro: MOTIVO_SEM_PAPEL }, { status: 403 });
     }
     soAlocados = acesso.estado === "ok" && escopoDaLista(acesso.papel) === "alocados";
+    papelNaoConferido = acesso.estado === "falha";
   }
-  return NextResponse.json({ ...resposta, soAlocados });
+  return NextResponse.json({ ...resposta, soAlocados, papelNaoConferido });
 }

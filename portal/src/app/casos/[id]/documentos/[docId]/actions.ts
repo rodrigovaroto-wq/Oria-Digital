@@ -3,14 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { lerPlanilhaTranscricao } from "@/lib/transcricao";
-import { textoDeFalhaDaAcao } from "@/lib/acesso";
+import { textoDeFalhaDaAcao, type ResultadoDaAcao } from "@/lib/acesso";
 
 // Chama fn_aceitar_extracao (Supabase/migrations/0011_aceite_export_e4.sql) — o
 // Portão 2 mínimo do E4 (Arquitetura do Sistema/2 Especificação/f0/07_output_spec.md): humano aceita TODAS as linhas
 // extraídas desta versão de documento de uma vez. Sem isso, nenhuma linha
 // entra no export como fato (fica "pendente" — anti-ancoragem). A lógica
 // (decisao + evento_auditoria) roda no Postgres, não aqui.
-export async function aceitarExtracao(casoId: string, docId: string, formData: FormData) {
+export async function aceitarExtracao(casoId: string, docId: string, formData: FormData): Promise<ResultadoDaAcao> {
   const supabase = await createClient();
 
   const documentoVersaoId = String(formData.get("documento_versao_id") || "");
@@ -26,9 +26,7 @@ export async function aceitarExtracao(casoId: string, docId: string, formData: F
     p_motivo: motivo,
   });
 
-  if (error) {
-    throw new Error(textoDeFalhaDaAcao("Falha ao aceitar extração", error));
-  }
+  if (error) return { erro: textoDeFalhaDaAcao("Falha ao aceitar extração", error) };
 
   // RECUSA (Supabase/migrations/0036): a função devolve `recusado: true` quando a versão
   // não tem NENHUMA linha extraída — aceitar ali gravaria uma aprovação formal de
@@ -42,7 +40,7 @@ export async function aceitarExtracao(casoId: string, docId: string, formData: F
   // nenhuma.
   const resultado = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (resultado?.recusado) {
-    throw new Error(resultado.motivo_recusa ?? "Aceite recusado: versão sem linhas extraídas.");
+    return { erro: resultado.motivo_recusa ?? "Aceite recusado: versão sem linhas extraídas." };
   }
 
   revalidatePath(`/casos/${casoId}/documentos/${docId}`);
@@ -65,7 +63,7 @@ export async function registrarClasseContabil(
   casoId: string,
   docId: string,
   formData: FormData,
-) {
+): Promise<ResultadoDaAcao> {
   const supabase = await createClient();
 
   const campoId = String(formData.get("campo_extraido_id") || "");
@@ -83,9 +81,7 @@ export async function registrarClasseContabil(
     p_motivo: motivo,
   });
 
-  if (error) {
-    throw new Error(textoDeFalhaDaAcao("Falha ao registrar a classe contábil", error));
-  }
+  if (error) return { erro: textoDeFalhaDaAcao("Falha ao registrar a classe contábil", error) };
 
   // RECUSA RETORNADA, não exceção — mesmo padrão do aceite acima, e ler este campo
   // é igualmente obrigatório. A 0128 recusa rótulo fora do catálogo (a taxonomia do
@@ -93,7 +89,7 @@ export async function registrarClasseContabil(
   // esta leitura a tela recarregaria como se a classificação tivesse sido gravada.
   const resultado = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (resultado?.recusado) {
-    throw new Error(resultado.motivo_recusa ?? "Classificação recusada.");
+    return { erro: resultado.motivo_recusa ?? "Classificação recusada." };
   }
 
   revalidatePath(`/casos/${casoId}/documentos/${docId}`);

@@ -28,7 +28,7 @@ import { alvoDoRetornoDeFoco, EVENTO_ABRIR_BUSCA } from "@/lib/casco";
 
 const ESPERA_MS = 250;
 type Resposta =
-  | { termo: string; resultados: ResultadoDeBusca[]; truncados: GrupoDeBusca[]; soAlocados: boolean }
+  | { termo: string; resultados: ResultadoDeBusca[]; truncados: GrupoDeBusca[]; soAlocados: boolean; papelNaoConferido: boolean }
   | { termo: string; erro: string; sessaoExpirada?: boolean };
 
 export function BuscaGlobal() {
@@ -103,7 +103,7 @@ export function BuscaGlobal() {
       try {
         const r = await fetch(`/api/busca?q=${encodeURIComponent(termo)}`, { signal: ctl.signal });
         const j = (await r.json().catch(() => null)) as
-          | { resultados?: ResultadoDeBusca[]; truncados?: GrupoDeBusca[]; soAlocados?: boolean; erro?: string } | null;
+          | { resultados?: ResultadoDeBusca[]; truncados?: GrupoDeBusca[]; soAlocados?: boolean; papelNaoConferido?: boolean; erro?: string } | null;
         // Sessão expirada: 401 da rota, ou — se algum proxy ainda redirecionar — resposta que
         // seguiu o redirect e não é JSON (HTML de /login com 200). Nunca "falha genérica".
         if (r.status === 401 || r.redirected || (r.ok && !j)) {
@@ -111,7 +111,7 @@ export function BuscaGlobal() {
         } else if (!r.ok || !j || !Array.isArray(j.resultados)) {
           setResposta({ termo, erro: j?.erro ?? "A busca falhou. Tente de novo." });
         } else {
-          setResposta({ termo, resultados: j.resultados, truncados: j.truncados ?? [], soAlocados: j.soAlocados === true });
+          setResposta({ termo, resultados: j.resultados, truncados: j.truncados ?? [], soAlocados: j.soAlocados === true, papelNaoConferido: j.papelNaoConferido === true });
         }
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
@@ -127,6 +127,7 @@ export function BuscaGlobal() {
   const achados = respondeu && "resultados" in resposta ? resposta.resultados : [];
   const truncados = respondeu && "truncados" in resposta ? resposta.truncados : [];
   const soAlocados = respondeu && "soAlocados" in resposta && resposta.soAlocados;
+  const papelNaoConferido = respondeu && "papelNaoConferido" in resposta && resposta.papelNaoConferido;
   const buscando = termo !== null && !respondeu;
   const itens = [...acoesDoTermo(termo), ...achados];
   const ativo = Math.min(indice, Math.max(itens.length - 1, 0));
@@ -302,7 +303,9 @@ export function BuscaGlobal() {
                   )}
                 </span>
               )}
-              {respondeu && erro === null && achados.length === 0 && `Nada encontrado para “${termo}”${soAlocados ? " nos mandatos em que você está alocado" : ""}`}
+              {respondeu && erro === null && achados.length === 0 && (papelNaoConferido
+                ? `Nenhum resultado visível ao seu acesso para “${termo}” — não foi possível conferir seu papel`
+                : `Nada encontrado para “${termo}”${soAlocados ? " nos mandatos em que você está alocado" : ""}`)}
               {respondeu && erro === null && achados.length > 0 && `${achados.length} resultado${achados.length > 1 ? "s" : ""}${truncados.length > 0 ? " — alguns grupos estão limitados" : ""}`}
             </div>
           </div>

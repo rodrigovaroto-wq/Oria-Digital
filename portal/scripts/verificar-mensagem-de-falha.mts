@@ -41,7 +41,7 @@ import {
   montarRedirectTo, origemDaRequisicao, rotaPublica, validarNovaSenha,
 } from "../src/lib/recuperar-senha.ts";
 import {
-  MENSAGEM_NOME_DE_MANDATO_EXISTE, MENSAGEM_NOME_DUPLICADO, MENSAGEM_SEM_ENVIO, MENSAGEM_SEM_PERMISSAO, MOTIVO_SEM_PAPEL, administracaoLiberada, decidirEnvioAoMandato,
+  MENSAGEM_NOME_DE_MANDATO_EXISTE, MENSAGEM_NOME_DUPLICADO, MENSAGEM_SEM_ENVIO, MENSAGEM_SEM_PERMISSAO, MOTIVO_SEM_PAPEL, AVISO_TOTAIS_RECORTADOS, MENSAGEM_NENHUM_VISIVEL, decidirAdministracao, decidirEnvioAoMandato, textoDeNenhumMandato,
   ehNegacaoDePermissao, escopoDaLista, interpretarPapel, permissoes, textoDeFalhaDaAcao, textoDeFalhaDoMandato, textoDeRecentesVazio,
   type AcessoLido,
 } from "../src/lib/acesso.ts";
@@ -1334,24 +1334,59 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   const envio = (a: AcessoLido, ach: { n: number; podeEscrever: boolean | null } | null) => decidirEnvioAoMandato(a, ach);
   checar(envio(ok_("leitura"), { n: 1, podeEscrever: false }).ok === false && (envio(ok_("leitura"), null) as { mensagem: string }).mensagem === MENSAGEM_SEM_ENVIO, "Leitura não envia arquivos");
   checar(!envio(semPapel, null).ok && (envio(semPapel, null) as { status: number }).status === 403, "sem papel não envia");
-  checar(envio(ok_("socio"), null).ok, "Sócio envia sem consulta de nome");
+  // Sócio escreve em TODOS os mandatos (0216): a decisão não pode depender do que a consulta do nome devolveu.
+  checar([null, { n: 0, podeEscrever: null }, { n: 1, podeEscrever: false }, { n: 1, podeEscrever: null }].every((ach) => envio(ok_("socio"), ach).ok),
+    "Sócio envia a qualquer mandato, qualquer que seja o resultado da consulta do nome");
   checar(envio(ok_("analista"), { n: 1, podeEscrever: true }).ok, "Analista alocado envia");
   checar(!envio(ok_("analista"), { n: 1, podeEscrever: false }).ok, "Analista não alocado não envia");
   checar(!envio(ok_("analista"), { n: 0, podeEscrever: null }).ok && (envio(ok_("analista"), { n: 0, podeEscrever: null }) as { status: number }).status === 403,
     "nome que o Analista não enxerga é recusado (a RLS não distingue 'não existe' de 'é de outra equipe')");
-  const dup = envio(ok_("analista"), { n: 2, podeEscrever: null }) as { status: number; mensagem: string };
-  checar(dup.status === 409 && dup.mensagem === MENSAGEM_NOME_DUPLICADO, "nome duplicado é erro explícito (409), não 'aguarde'");
+  // COM A 0216 (índice `caso_nome_unico`) DOIS MANDATOS DE MESMO NOME NÃO EXISTEM: este ramo é defesa em
+  // profundidade para um banco sem o índice. O que se afirma é COMPORTAMENTO — se a consulta devolver mais de um,
+  // o envio fecha (nunca escolhe um dos dois para receber os arquivos) e diz por quê —, não que duplicata ocorra.
+  const dup = envio(ok_("analista"), { n: 2, podeEscrever: true }) as { ok: boolean; status: number; mensagem: string };
+  checar(!dup.ok && dup.status === 409 && dup.mensagem === MENSAGEM_NOME_DUPLICADO,
+    "mais de um mandato de mesmo nome (banco sem o índice único): o envio fecha com 409, mesmo que o primeiro permita escrita");
   checar((envio(falhou, null) as { status: number }).status === 503 && (envio(ok_("analista"), null) as { status: number }).status === 503
     && (envio(ok_("analista"), { n: 1, podeEscrever: null }) as { status: number }).status === 503, "o envio FALHA FECHADO quando não consegue conferir");
-  // 6. (b) ADMINISTRAÇÃO: números somados de todos os mandatos só para Sócio.
-  checar(administracaoLiberada(ok_("socio")) && !administracaoLiberada(ok_("analista")) && !administracaoLiberada(ok_("leitura")) && !administracaoLiberada(semPapel)
-    && administracaoLiberada(falhou), "Administração: só Sócio (e abre se o papel não pôde ser lido)");
+  // 6. (b) ADMINISTRAÇÃO: números somados de todos os mandatos só para Sócio — e papel ilegível não abre calado.
+  checar(decidirAdministracao(ok_("socio")) === "liberada" && decidirAdministracao(ok_("analista")) === "fechada"
+    && decidirAdministracao(ok_("leitura")) === "fechada" && decidirAdministracao(semPapel) === "fechada", "Administração: só Sócio, quando o papel foi lido");
+  checar(decidirAdministracao(falhou, true) === "liberada" && decidirAdministracao(falhou, false) === "fechada",
+    "papel ilegível: a segunda pergunta (fn_eh_socio) decide — sim abre, não fecha");
+  checar(decidirAdministracao(falhou, null) === "liberada_sem_confirmar" && decidirAdministracao(falhou) === "liberada_sem_confirmar",
+    "papel E fn_eh_socio ilegíveis: abre, mas SINALIZA (nunca 'liberada' simples, que mostraria total recortado sem aviso)");
+  checar(/recortados ao seu acesso/.test(AVISO_TOTAIS_RECORTADOS) && /não foi possível confirmar seu papel/.test(AVISO_TOTAIS_RECORTADOS), "a faixa diz o efeito (total recortado) e o motivo (papel não confirmado)");
+  // 6b. Lista vazia com papel não conferido não afirma "nenhum" sobre a mesa inteira.
+  checar(textoDeNenhumMandato(null, "em andamento") === MENSAGEM_NENHUM_VISIVEL && /visível ao seu acesso/.test(MENSAGEM_NENHUM_VISIVEL)
+    && textoDeNenhumMandato("socio", "em andamento") === "Nenhum mandato em andamento"
+    && textoDeNenhumMandato("analista") === "Nenhum mandato alocado a você" && textoDeNenhumMandato("leitura", "aberto") === "Nenhum mandato aberto alocado a você",
+    "'nenhum mandato': fato só para o Sócio; papel não conferido diz 'visível ao seu acesso'");
+  checar(textoDeRecentesVazio(null, false) === MENSAGEM_NENHUM_VISIVEL, "barra: papel não conferido com lista vazia não diz 'Nenhum mandato aberto'");
   // 7. Fiação: o que a lógica pura decide TEM de ser o que as rotas e telas usam (a regra 3 só vale se o gatilho existir).
-  const intake = fonte("app/api/intake/route.ts"), destino = fonte("app/api/intake/destino/route.ts"), status = fonte("app/api/intake/status/route.ts");
-  checar(/conferirEnvioAoMandato\(mandato\)/.test(intake) && /permissao\.status/.test(intake), "POST /api/intake confere o papel antes de encaminhar");
-  checar(/conferirEnvioAoMandato/.test(destino) && /searchParams\.get\("mandato"\)/.test(destino), "a URL do Form do n8n só sai para quem pode enviar ao mandato");
-  checar(/\.limit\(2\)/.test(status) && !/maybeSingle/.test(status) && /MENSAGEM_NOME_DUPLICADO/.test(status), "o status não usa maybeSingle por nome (duplicata)");
-  checar(/administracaoLiberada\(acesso\)/.test(fonte("app/administracao/layout.tsx")), "o layout da Administração fecha para quem não é Sócio");
+  //    A decisão é pura e testada acima; o que sobra para ler no fonte é a ORDEM e o USO DO RESULTADO — um regex de
+  //    "a chamada aparece" passaria com a checagem DEPOIS do encaminhamento ou com o resultado ignorado, que é o furo.
+  //    Não há como executar a rota aqui (precisa de cookie de sessão e do n8n), então é leitura estrutural, sem comentários.
+  const semComentarios = (c: string) => c.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  const intake = semComentarios(fonte("app/api/intake/route.ts")), destino = semComentarios(fonte("app/api/intake/destino/route.ts")), status = semComentarios(fonte("app/api/intake/status/route.ts"));
+  const posicao = (src: string, re: RegExp) => src.search(re);
+  /** A chamada existe, o resultado é guardado e vira um `if (!r.ok) return …` logo em seguida (não ignorado). */
+  const resultadoBarra = (src: string, chamada: string) =>
+    new RegExp(`const\\s+(\\w+)\\s*=\\s*await\\s+${chamada}\\([^)]*\\);?\\s*if\\s*\\(\\s*!\\s*\\1\\.ok\\s*\\)\\s*return\\b`).test(src);
+  const iChecaIntake = posicao(intake, /conferirEnvioAoMandato\(/), iFetch = posicao(intake, /\bfetch\(/);
+  checar(iChecaIntake >= 0 && iFetch >= 0 && iChecaIntake < iFetch && resultadoBarra(intake, "conferirEnvioAoMandato"),
+    "POST /api/intake confere o papel ANTES do primeiro fetch ao n8n, e a recusa (`if (!r.ok) return`) usa o resultado");
+  const iChecaDestino = posicao(destino, /conferirEnvioAoMandato\(/), iUrl = posicao(destino, /process\.env\.N8N_INTAKE_FORM_URL/), iDescobre = posicao(destino, /descobrirNomesDeCampo\(/);
+  checar(iChecaDestino >= 0 && iUrl >= 0 && iDescobre >= 0 && iChecaDestino < iUrl && iChecaDestino < iDescobre && resultadoBarra(destino, "conferirEnvioAoMandato")
+    && /searchParams\.get\("mandato"\)/.test(destino),
+    "a URL do Form do n8n só é lida/devolvida DEPOIS da checagem (e a recusa usa o resultado): ela só sai para quem pode enviar ao mandato");
+  const iLimite = posicao(status, /\.limit\(2\)/), iDupl = iLimite < 0 ? -1 : status.indexOf("MENSAGEM_NOME_DUPLICADO", iLimite); // o 1º é o import
+  checar(iLimite >= 0 && iDupl > iLimite && !/\.(maybeSingle|single)\(\)/.test(status.slice(0, iDupl)) && /length\s*\?\?\s*0\)\s*>\s*1[\s\S]{0,120}status:\s*409/.test(status),
+    "o status lê o nome com limit(2) ANTES de decidir, e mais de um vira 409 com a frase — nunca maybeSingle por nome");
+  const layoutAdm = semComentarios(fonte("app/administracao/layout.tsx"));
+  const iFnSocio = posicao(layoutAdm, /fn_eh_socio/), iDecide = posicao(layoutAdm, /decidirAdministracao\(acesso,\s*ehSocio\)/), iFecha = posicao(layoutAdm, /decisao === "fechada"/);
+  checar(iFnSocio >= 0 && iDecide > iFnSocio && iFecha > iDecide && /decisao === "liberada_sem_confirmar"[\s\S]{0,200}AVISO_TOTAIS_RECORTADOS/.test(layoutAdm),
+    "o layout da Administração pergunta fn_eh_socio na falha, decide com o resultado, fecha por `fechada` e mostra a faixa quando não confirmou");
   checar(/mostrarAdministracao=\{/.test(fonte("app/casos/layout.tsx")), "a barra esconde o link da Administração");
   checar(/semPapel/.test(fonte("app/casos/layout.tsx")) && /AcessoNaoLiberado/.test(fonte("app/casos/layout.tsx")), "o casco troca TODA tela por 'acesso não liberado' (Início e Mandatos incluídos)");
   // 8. Equipe: o e-mail vem de fn_membros_da_equipe; sem ele, o código curto (nunca um nome chutado).
@@ -1417,6 +1452,48 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     checar(msg === esperado, `o envio de arquivos (obterCasoId) mostra a frase do nome de mandato (${erro.code}): "${msg}"`);
   }
   checar(/textoDeFalhaDoMandato\(error\)/.test(fonte("app/casos/novo/actions.ts")), "o passo 1 do novo mandato traduz 42501 do nome alheio e 23505");
+  // 10. A recusa chega à tela. Em PRODUÇÃO o Next redige a mensagem de um erro lançado por server action (texto
+  //     genérico + digest), então `throw new Error(frase)` perdia a frase do papel e o motivo de recusa do banco.
+  //     Não dá para reproduzir a redação do Next aqui (é do build de produção): o que se prova é que a frase sai
+  //     como VALOR (`{ erro }`) e que cada formulário que a dispara a MOSTRA — o par que faltava em cada metade.
+  const semCom = (c: string) => c.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  const arquivosDeAcao = ["app/casos/[id]/actions.ts", "app/casos/[id]/pendencias/actions.ts", "app/casos/[id]/perguntas/actions.ts", "app/casos/[id]/documentos/[docId]/actions.ts"];
+  for (const arq of arquivosDeAcao) {
+    const src = semCom(fonte(arq));
+    checar(!/throw new Error\(/.test(src) && /return \{ erro: /.test(src) && /Promise<ResultadoDaAcao>/.test(src),
+      `${arq}: nenhuma falha de ação sai por throw (o Next a redigiria); todas voltam como { erro }`);
+  }
+  checar(/textoDeFalhaDaAcao\([^)]*error\) \}/.test(semCom(fonte("app/casos/[id]/actions.ts"))) && (semCom(fonte("app/casos/[id]/actions.ts")).match(/return \{ erro: /g) ?? []).length === 10,
+    "as cinco ações do mandato devolvem { erro } nos DOIS caminhos de falha (erro do banco e recusa no payload)");
+  checar(/const r = await registrarAcaoDaPergunta\(casoId, formData\);\s*return r \? \{ ok: false, erro: r\.erro \} : \{ ok: true \}/.test(semCom(fonte("app/casos/[id]/perguntas/actions.ts"))),
+    "o lote de perguntas lê o { erro } devolvido (senão uma recusa viraria { ok: true })");
+  const chamadoresDeForm = ["app/casos/[id]/page.tsx", "app/casos/[id]/Pendencia.tsx", "app/casos/[id]/perguntas/CartaoPergunta.tsx", "app/casos/[id]/pendencias/FormConfirmarDocumento.tsx", "components/documento-detalhe.tsx"];
+  for (const arq of chamadoresDeForm) {
+    const src = semCom(fonte(arq));
+    checar(/<FormDeAcao\b/.test(src) && !/<form\b[^>]*action=\{(aprovarCaso|decidirPendencia|registrar|revisarAction|aceitarAction|aceitarExtracao|revisarDocumento)/.test(src),
+      `${arq}: o formulário da ação passa por FormDeAcao (um <form action={ação}> direto descartaria o { erro })`);
+  }
+  const formDeAcao = semCom(fonte("components/form-de-acao.tsx"));
+  checar(/useActionState/.test(formDeAcao) && /estado\?\.erro/.test(formDeAcao) && /role="alert"/.test(formDeAcao), "FormDeAcao escreve o { erro } devolvido, em região de alerta");
+  for (const [arq, chamada] of [["components/classe-contabil.tsx", "registrarClasseContabil"], ["components/fechar-mandato.tsx", "fecharCaso"], ["components/fechar-mandato.tsx", "reabrirCaso"], ["components/excluir-mandato.tsx", "excluirCaso"]] as const) {
+    const src = semCom(fonte(arq));
+    checar(new RegExp(`const r = await ${chamada}\\([^)]*\\);\\s*if \\(r\\?\\.erro\\) setErro\\(r\\.erro\\)`).test(src) && /role="alert"/.test(src),
+      `${arq}: ${chamada} tem o { erro } guardado e escrito na tela`);
+  }
+  // 12. Lista/busca vazia com papel NÃO conferido: o vazio pode ser o recorte do banco.
+  checar(/textoDeNenhumMandato\(perm\.papel, "em andamento"\)/.test(semCom(fonte("app/casos/page.tsx"))) && !/"Nenhum mandato em andamento"/.test(semCom(fonte("app/casos/page.tsx")))
+    && /textoDeNenhumMandato\(perm\.papel/.test(semCom(fonte("app/casos/todos/page.tsx"))) && !/"Nenhum mandato aberto\."/.test(semCom(fonte("app/casos/todos/page.tsx"))),
+    "Início e Mandatos: o 'nenhum' vem de textoDeNenhumMandato (papel não conferido não afirma a mesa inteira)");
+  const rotaBusca = semCom(fonte("app/api/busca/route.ts")), telaBusca = semCom(fonte("components/busca-global.tsx"));
+  checar(/papelNaoConferido = acesso\.estado === "falha"/.test(rotaBusca) && /\{ \.\.\.resposta, soAlocados, papelNaoConferido \}/.test(rotaBusca) && /papelNaoConferido\s*\?\s*`Nenhum resultado visível ao seu acesso/.test(telaBusca),
+    "a busca vazia com papel não conferido diz 'Nenhum resultado visível ao seu acesso', não 'Nada encontrado'");
+  // 11. Entregáveis: DELETE negado pela RLS não dá erro, afeta 0 linhas — contar o que foi apagado.
+  const entreg = semCom(fonte("app/casos/[id]/entregaveis/actions.ts"));
+  const iDel = entreg.search(/\.delete\(\)/);
+  checar(iDel >= 0 && /\.in\("chave", vazios\)\.select\("chave"\)/.test(entreg.slice(iDel)) && /apagados\?\.length \?\? 0\) < aApagar[\s\S]{0,260}MENSAGEM_SEM_PERMISSAO/.test(entreg),
+    "limpar campo vazio: o DELETE devolve as linhas apagadas e MENOS que as existentes vira a frase do papel (não 'salvo')");
+  checar(!/\.delete\(\)/.test(semCom(fonte("app/casos/[id]/modelagem/actions.ts"))) && !/\.(update|delete)\(/.test(semCom(fonte("app/casos/[id]/perimetro/actions.ts")) + semCom(fonte("app/administracao/equipe/actions.ts"))),
+    "varredura: as demais ações do portal escrevem por RPC (que levanta 42501), não por update/delete direto que a RLS poderia zerar calado");
 }
 
 if (falhas.length > 0) {

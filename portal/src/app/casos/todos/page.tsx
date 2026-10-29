@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { lerPermissoes } from "@/lib/supabase/acesso";
-import { escopoDaLista } from "@/lib/acesso";
+import { escopoDaLista, textoDeNenhumMandato } from "@/lib/acesso";
 import { paginar } from "@/lib/supabase/paginar";
 import type { Caso } from "@/lib/types";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
@@ -205,7 +205,7 @@ export default async function CasosPage({
           <h1 className="text-xl font-semibold text-tinta-900">Mandatos</h1>
           <p className="mt-0.5 text-sm text-tinta-500">
             {casos.length === 0 && !termo
-              ? (soAlocados ? "Nenhum mandato alocado a você." : "Nenhum mandato aberto.")
+              ? `${soAlocados ? textoDeNenhumMandato(perm.papel) : textoDeNenhumMandato(perm.papel, "aberto")}.`
               : termo
                 ? `${casos.length} ${casos.length === 1 ? "resultado" : "resultados"} para “${termo}”`
                 : soAlocados
@@ -245,7 +245,15 @@ export default async function CasosPage({
         </p>
       )}
 
-      {!error && casos.length === 0 && !termo && soAlocados ? (
+      {!error && casos.length === 0 && !termo && escopoDaLista(perm.papel) === "indefinido" ? (
+        <div className="carta flex flex-col items-center gap-3 px-6 py-12 text-center">
+          <p className="text-sm font-medium text-tinta-900">{textoDeNenhumMandato(perm.papel)}</p>
+          <p className="max-w-md text-sm text-tinta-500">
+            Não foi possível conferir o seu papel, então a lista pode estar recortada ao seu acesso: não dá
+            para dizer que não existe mandato. Recarregue a página.
+          </p>
+        </div>
+      ) : !error && casos.length === 0 && !termo && soAlocados ? (
         <div className="carta flex flex-col items-center gap-3 px-6 py-12 text-center">
           <p className="text-sm font-medium text-tinta-900">Você ainda não está alocado em nenhum mandato</p>
           <p className="max-w-md text-sm text-tinta-500">

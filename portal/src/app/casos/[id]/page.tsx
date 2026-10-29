@@ -15,6 +15,7 @@ import {
   type TaxonomiaTipoDocumento,
 } from "@/lib/types";
 import { aprovarCaso } from "./actions";
+import { FormDeAcao } from "@/components/form-de-acao";
 import { suavizarMensagem } from "@/lib/rotulos";
 import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
 import { ESTADOS_EM_ABERTO } from "@/lib/pendencia";
@@ -399,7 +400,7 @@ export default async function CasoDashboardPage({
               <p className="max-w-xs text-xs text-tinta-600">{perm.reservadoAoSocio.motivo}</p>
             )}
             {portao2.elegivel && caso.status !== "aprovado" && caso.status !== "pronto_para_base" && perm.reservadoAoSocio.pode && (
-              <form action={aprovarCaso.bind(null, id)} className="flex items-center gap-2">
+              <FormDeAcao action={aprovarCaso.bind(null, id)} className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   name="motivo"
@@ -411,7 +412,7 @@ export default async function CasoDashboardPage({
                 <button type="submit" className="btn-aprovar">
                   Aprovar mandato
                 </button>
-              </form>
+              </FormDeAcao>
             )}
           </div>
         </div>

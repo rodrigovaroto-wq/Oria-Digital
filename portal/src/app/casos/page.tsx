@@ -2,7 +2,7 @@ import Link from "next/link";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { createClient } from "@/lib/supabase/server";
 import { lerPermissoes } from "@/lib/supabase/acesso";
-import { escopoDaLista } from "@/lib/acesso";
+import { escopoDaLista, textoDeNenhumMandato } from "@/lib/acesso";
 import { paginar } from "@/lib/supabase/paginar";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
 import {
@@ -360,7 +360,7 @@ export default async function PainelPage({
   // A frase de abertura dá o veredito para quem não vai ler número nenhum.
   const resumo =
     ativos.length === 0
-      ? (soAlocados ? "Nenhum mandato em andamento alocado a você." : "Nenhum mandato em andamento.")
+      ? `${textoDeNenhumMandato(perm.papel, "em andamento")}.`
       : !pendenciasLidas
         ? `${ativos.length} ${ativos.length === 1 ? "mandato em andamento" : "mandatos em andamento"}. ` +
           "Não foi possível conferir as pendências agora; não dá para dizer o que trava a aprovação."
@@ -499,15 +499,21 @@ export default async function PainelPage({
            criar, que mora no menu. */
         <Surgir atraso={120} className="carta flex flex-col items-center gap-2 px-6 py-14 text-center">
           <p className="text-sm font-medium text-tinta-900">
-            {soAlocados ? "Nenhum mandato em andamento alocado a você" : "Nenhum mandato em andamento"}
+            {textoDeNenhumMandato(perm.papel, "em andamento")}
           </p>
+          {escopoDaLista(perm.papel) === "indefinido" && (
+            <p className="max-w-md text-sm text-tinta-500">
+              Não foi possível conferir o seu papel, então a lista pode estar recortada ao seu acesso: não dá
+              para dizer que não há mandato em andamento. Recarregue a página.
+            </p>
+          )}
           {soAlocados && (
             <p className="max-w-md text-sm text-tinta-500">
               Com o papel de {perm.papel === "leitura" ? "Leitura" : "Analista"} você só vê os mandatos em que um
               Sócio alocou você; peça a alocação a um Sócio.
             </p>
           )}
-          {!soAlocados || perm.criarMandato.pode ? (
+          {escopoDaLista(perm.papel) !== "indefinido" && (!soAlocados || perm.criarMandato.pode) ? (
           <p className="max-w-md text-sm text-tinta-500">
             Abra um em <strong className="font-medium text-tinta-700">Novo mandato</strong>, no menu
             à esquerda. Cada documento enviado é classificado e tem suas linhas financeiras lidas.

@@ -1,5 +1,7 @@
 import { formatarTipoTaxonomia } from "@/lib/export";
 import { revisarDocumento } from "./actions";
+import { FormDeAcao } from "@/components/form-de-acao";
+
 import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import type { TaxonomiaTipoDocumento } from "@/lib/types";
 
@@ -57,7 +59,7 @@ export function CartaoConfirmarDocumento({
           "Tipo de documento" ao entrar no select. Vários cartões na mesma página, então
           o id leva o da pendência. */}
       <ZonaDeEscrita pode={!somenteLeitura}>
-      <form action={revisarAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <FormDeAcao action={revisarAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input type="hidden" name="documento_id" value={doc.id} />
 
         <div>
@@ -139,7 +141,7 @@ export function CartaoConfirmarDocumento({
             Confirmar
           </button>
         </div>
-      </form>
+      </FormDeAcao>
       </ZonaDeEscrita>
     </li>
   );

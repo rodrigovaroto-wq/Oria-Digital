@@ -27,6 +27,7 @@ import { partesDaDescricao, rotuloDaPendencia, rotulosCitados, semALista, suaviz
 import { rotuloDeTipoConhecido } from "@/lib/export";
 import { BOTOES_DECISAO, ROTULO_POR_ESTADO, rotuloDoEstado } from "@/lib/pendencia";
 import { decidirPendencia } from "./actions";
+import { FormDeAcao } from "@/components/form-de-acao";
 
 export interface PendenciaNaTela {
   id: string;
@@ -124,7 +125,7 @@ export function ItemPendencia({
               `title=`, que não existe no toque e some antes de ser lido: quem clicava
               em "Prosseguir sem resolução" descobria o que tinha feito DEPOIS. */}
           {BOTOES_DECISAO.map((b) => (
-            <form key={b.decisao} action={decidirPendencia.bind(null, casoId, p.id, b.decisao)} className="max-w-[15rem]">
+            <FormDeAcao key={b.decisao} action={decidirPendencia.bind(null, casoId, p.id, b.decisao)} className="max-w-[15rem]">
               <button
                 type="submit"
                 className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors ${b.classe}`}
@@ -132,7 +133,7 @@ export function ItemPendencia({
                 {b.rotulo}
               </button>
               <p className={`mt-1 text-xs leading-snug ${cores.fraco}`}>{b.efeito}</p>
-            </form>
+            </FormDeAcao>
           ))}
           {/* A PONTE PARA A ABA DAS PERGUNTAS (0120), e só depois de "Contatar o
               Cliente" ter sido clicado.

@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import type { CampoExtraido, Documento } from "@/lib/types";
 import { formatarPeriodo, formatarTipoTaxonomia } from "@/lib/export";
+import { FormDeAcao } from "@/components/form-de-acao";
 import { aceitarExtracao } from "@/app/casos/[id]/documentos/[docId]/actions";
 import { ClasseContabil } from "@/components/classe-contabil";
 import { ZonaDeEscrita } from "@/components/acesso-na-tela";
@@ -252,7 +253,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
 
         {campos.length > 0 && !tudoAceito && aceitarAction && (
           <ZonaDeEscrita pode={escrever.pode} className="mb-4">
-          <form action={aceitarAction} className="flex items-center gap-3 rounded border border-alerta-200 bg-alerta-50 p-3">
+          <FormDeAcao action={aceitarAction} className="flex flex-wrap items-center gap-3 rounded border border-alerta-200 bg-alerta-50 p-3">
             <input type="hidden" name="documento_versao_id" value={versao!.id} />
             <input
               type="text"
@@ -266,7 +267,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
             >
               Aceitar estes dados para a base
             </button>
-          </form>
+          </FormDeAcao>
           </ZonaDeEscrita>
         )}
         {tudoAceito && (

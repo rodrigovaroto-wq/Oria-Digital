@@ -161,6 +161,13 @@ export function ehNegacaoDePermissao(erro: ErroDoBanco): boolean {
 }
 
 /**
+ * O que uma server action de clique devolve: `undefined` = feito, `{ erro }` = a frase para a tela. Valor,
+ * e não `throw`: em produção o Next redige a mensagem de um erro lançado por uma server action, e a frase
+ * do papel não chegava a quem clicou.
+ */
+export type ResultadoDaAcao = { erro: string } | undefined;
+
+/**
  * O texto de falha de uma ação. Recusa de permissão vira a frase do papel (sem o prefixo "Falha ao
  * …", que sugeriria defeito); qualquer outro erro continua com o prefixo e a mensagem técnica, como
  * antes — esta função NÃO engole erro, só traduz o que é uma resposta esperada do acesso por papel.
@@ -201,6 +208,22 @@ export function textoDeFalhaDoMandato(
   return null;
 }
 
+export const MENSAGEM_NENHUM_VISIVEL = "Nenhum mandato visível ao seu acesso";
+
+/**
+ * "Nenhum mandato …" em UMA frase para as três situações, sem afirmar o que não se mediu. `qualificador`
+ * é o que a tela já dizia ("em andamento", "aberto", ou vazio). Sócio: "nenhum" é fato sobre a mesa
+ * inteira. Analista/Leitura: "nenhum alocado a você" (a RLS devolve vazio, não erro). Papel NÃO CONFERIDO
+ * (falha de leitura, `escopoDaLista` = "indefinido"): a lista veio vazia pelo recorte do banco, e dizer
+ * "nenhum mandato" seria afirmar a mesa inteira — a frase passa a ser sobre o que o acesso mostra.
+ */
+export function textoDeNenhumMandato(papel: Papel | null, qualificador = ""): string {
+  const escopo = escopoDaLista(papel);
+  if (escopo === "indefinido") return MENSAGEM_NENHUM_VISIVEL;
+  const q = qualificador ? ` ${qualificador}` : "";
+  return escopo === "alocados" ? `Nenhum mandato${q} alocado a você` : `Nenhum mandato${q}`;
+}
+
 /**
  * O texto de "Recentes" quando a barra não tem mandato a mostrar. Três respostas diferentes para três
  * situações que a RLS por mandato torna distintas: a leitura FALHOU (não se sabe), o usuário só vê os
@@ -208,8 +231,7 @@ export function textoDeFalhaDoMandato(
  */
 export function textoDeRecentesVazio(papel: Papel | null, leituraFalhou: boolean): string {
   if (leituraFalhou) return "Não foi possível ler os mandatos";
-  if (escopoDaLista(papel) === "alocados") return "Nenhum mandato aberto alocado a você";
-  return "Nenhum mandato aberto";
+  return textoDeNenhumMandato(papel, "aberto");
 }
 
 // ---------------------------------------------------------------------------
@@ -260,7 +282,21 @@ export const MENSAGEM_NOME_DUPLICADO =
  * trilha do dial são somas e listas de TODOS os mandatos: quem só vê os alocados receberia números
  * parciais com cara de total (0216, "o que pode quebrar" nº 5). A área inteira é do Sócio.
  */
-export function administracaoLiberada(acesso: AcessoLido): boolean {
-  // Falha de leitura abre (o banco ainda recorta); só a resposta "não é Sócio" fecha.
-  return acesso.estado === "falha" || acesso.papel === "socio";
+export type DecisaoDaAdministracao = "liberada" | "fechada" | "liberada_sem_confirmar";
+
+export const AVISO_TOTAIS_RECORTADOS =
+  "Os totais podem estar recortados ao seu acesso — não foi possível confirmar seu papel.";
+
+/**
+ * Falha ao ler `fn_meu_papel` NÃO abre a área em silêncio: quem só vê os alocados receberia somas parciais
+ * com cara de total (regra 1). Com a falha se faz uma SEGUNDA pergunta, a `fn_eh_socio()` (`ehSocio`:
+ * true/false = respondeu; null/undefined = também falhou). Respondeu "sim" abre; respondeu "não" fecha; as
+ * duas falharam abre COM a faixa `AVISO_TOTAIS_RECORTADOS` — fechar por soluço de rede trancaria o Sócio
+ * fora do próprio portal, mas abrir sem dizer entregaria número recortado como o todo.
+ */
+export function decidirAdministracao(acesso: AcessoLido, ehSocio?: boolean | null): DecisaoDaAdministracao {
+  if (acesso.estado === "ok") return acesso.papel === "socio" ? "liberada" : "fechada";
+  if (ehSocio === true) return "liberada";
+  if (ehSocio === false) return "fechada";
+  return "liberada_sem_confirmar";
 }

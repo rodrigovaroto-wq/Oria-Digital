@@ -47,6 +47,8 @@ export function ClasseContabil({
 }) {
   const [aberto, setAberto] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  // A recusa do banco vem como valor da action (em produção o Next redige o texto de um erro lançado).
+  const [erro, setErro] = useState<string | null>(null);
 
   // A pergunta não se aplica a esta linha.
   if (!sugestao && !override) {
@@ -98,9 +100,11 @@ export function ClasseContabil({
           className="flex flex-wrap items-center gap-1 pt-1"
           action={async (formData) => {
             setEnviando(true);
+            setErro(null);
             try {
-              await registrarClasseContabil(casoId, docId, formData);
-              setAberto(false);
+              const r = await registrarClasseContabil(casoId, docId, formData);
+              if (r?.erro) setErro(r.erro);
+              else setAberto(false);
             } finally {
               setEnviando(false);
             }
@@ -145,6 +149,7 @@ export function ClasseContabil({
           >
             cancelar
           </button>
+          {erro && <span role="alert" className="w-full text-xs font-medium text-risco-700">{erro}</span>}
         </form>
       ) : (
         <button
