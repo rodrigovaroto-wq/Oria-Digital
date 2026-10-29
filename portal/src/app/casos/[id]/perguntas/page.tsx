@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
 import { paginar } from "@/lib/supabase/paginar";
 import {
   PRIORIDADE,
@@ -49,6 +50,7 @@ export default async function PerguntasAoClientePage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
 
   const [casoRes, sugestoesRes, acoesRes, catalogoRes] = await Promise.all([
     supabase.from("caso").select("id, nome, status").eq("id", id).single(),
@@ -129,6 +131,10 @@ export default async function PerguntasAoClientePage({
     pergunta: p.pergunta,
   }));
   const enviadas = sugestoes.filter((p) => p.ja_enviada).length;
+  // Papel sem escrita neste mandato: a tela mostra as perguntas e deixa copiá-las, mas não registra
+  // envio nem descarte, nem oferece a seleção em lote (cujo fim é registrar). Motivo: faixa do mandato.
+  const { escrever } = await permissoesDoMandato;
+  const selecionaveisAoPapel = escrever.pode ? selecionaveis : [];
 
   // O QUE JÁ SE PERGUNTOU E NÃO É MAIS SUGERIDO. Uma pergunta some da lista
   // quando o gatilho para de valer — e o caso mais comum é o melhor possível: o
@@ -152,7 +158,7 @@ export default async function PerguntasAoClientePage({
   }));
 
   return (
-    <ProvedorDeSelecao casoId={id} mandato={casoRes.data.nome} pendentes={selecionaveis}>
+    <ProvedorDeSelecao casoId={id} mandato={casoRes.data.nome} pendentes={selecionaveisAoPapel}>
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
@@ -240,7 +246,7 @@ export default async function PerguntasAoClientePage({
         </div>
       )}
 
-      {selecionaveis.length > 0 && (
+      {selecionaveisAoPapel.length > 0 && (
         <div className="flex flex-wrap items-center gap-3">
           <SelecionarTodas rotulo="todas as pendentes" />
           <span className="text-xs text-tinta-500">
@@ -268,7 +274,8 @@ export default async function PerguntasAoClientePage({
                 casoId={id}
                 p={p}
                 acoes={acoesPorChave.get(chaveDaSugestao(p.codigo, p.entidade_id)) ?? []}
-                selecionavel={!foiTratada(p)}
+                selecionavel={!foiTratada(p) && escrever.pode}
+                somenteLeitura={!escrever.pode}
               />
             ))}
           </ul>

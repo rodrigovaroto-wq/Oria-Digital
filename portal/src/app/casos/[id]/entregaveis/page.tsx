@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { CAPITULOS_APRESENTACAO } from "@/lib/apresentacao/campos";
 import { veredictoDoPortao, type PortaoDoExport } from "@/lib/modelagem-cobertura";
@@ -81,6 +83,7 @@ function NaoConferido({ id, o }: Readonly<{ id: string; o: string }>) {
 export default async function EntregaveisPage({ params }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
   const supabase = await createClient();
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
   const [camposRes, portaoRes, modeloRes] = await Promise.all([
     supabase.from("caso_apresentacao_campo").select("chave, valor").eq("caso_id", id),
     // A MESMA RPC e a MESMA leitura da Modelagem e da rota `/export`.
@@ -88,6 +91,9 @@ export default async function EntregaveisPage({ params }: Readonly<{ params: Pro
     // As três coisas sem as quais a rota recusa a apresentação com 409 (`entradaDoModeloDoWorkbook`).
     supabase.from("caso_modelagem").select("entidade, ultimo_exercicio_real, anos_projetados").eq("caso_id", id).maybeSingle(),
   ]);
+  // Baixar os arquivos é leitura e vale para todo papel; PREENCHER os campos é escrita (RLS de
+  // `caso_apresentacao_campo`), então os formulários ficam desabilitados para quem não escreve aqui.
+  const { escrever } = await permissoesDoMandato;
   const { estado: estadoPortao, portao } = veredictoDoPortao(portaoRes);
   // Falta de configuração é uma resposta ("não montou o modelo"); erro de leitura é outra ("não sei").
   const modeloLido = !modeloRes.error;
@@ -191,7 +197,11 @@ export default async function EntregaveisPage({ params }: Readonly<{ params: Pro
           </DetalhesTecnicos>
         </output>
       )}
-      {CAPITULOS_APRESENTACAO.map((cap) => <FormCapitulo key={cap.titulo} acao={salvar} capitulo={cap} valores={valores} />)}
+      {CAPITULOS_APRESENTACAO.map((cap) => (
+        <ZonaDeEscrita key={cap.titulo} pode={escrever.pode}>
+          <FormCapitulo acao={salvar} capitulo={cap} valores={valores} />
+        </ZonaDeEscrita>
+      ))}
       </section>
     </div>
   );

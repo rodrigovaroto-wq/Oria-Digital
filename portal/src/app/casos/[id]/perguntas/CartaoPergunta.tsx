@@ -20,6 +20,7 @@ import {
   type PerguntaSugerida,
 } from "@/lib/perguntas";
 import { registrarAcaoDaPergunta } from "./actions";
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import { CaixaDeSelecao } from "./SelecaoDePerguntas";
 
 export function CartaoPergunta({
@@ -27,6 +28,7 @@ export function CartaoPergunta({
   p,
   acoes,
   selecionavel = false,
+  somenteLeitura = false,
 }: {
   casoId: string;
   p: PerguntaSugerida;
@@ -34,6 +36,8 @@ export function CartaoPergunta({
   acoes: AcaoDePergunta[];
   /** pendente: ganha a caixa de seleção do lote (as já tratadas se decidem uma a uma, aqui no cartão) */
   selecionavel?: boolean;
+  /** Papel sem escrita neste mandato: os dois registros (enviada, descartada) ficam desabilitados; copiar continua. */
+  somenteLeitura?: boolean;
 }) {
   const registrar = registrarAcaoDaPergunta.bind(null, casoId);
   const ultimoEnvio = acoes.find((a) => a.acao === "enviada");
@@ -83,6 +87,7 @@ export function CartaoPergunta({
 
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <BotaoCopiar texto={p.pergunta} />
+        <ZonaDeEscrita pode={!somenteLeitura} className="flex flex-wrap items-center gap-2">
 
         {/* REGISTRAR O ENVIO. O texto exato da tela vai no campo oculto: é ele
             que a 0120 congela, e é ele que responde "o que exatamente foi
@@ -114,6 +119,7 @@ export function CartaoPergunta({
             Não vou perguntar
           </button>
         </form>
+        </ZonaDeEscrita>
       </div>
 
       {/* O QUE CADA BOTÃO FAZ. Estava só em title= (some no celular, passa

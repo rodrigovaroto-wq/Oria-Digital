@@ -1,5 +1,6 @@
 import { formatarTipoTaxonomia } from "@/lib/export";
 import { revisarDocumento } from "./actions";
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import type { TaxonomiaTipoDocumento } from "@/lib/types";
 
 // O CARTÃO DE CONFIRMAÇÃO DE DOCUMENTO — movido de `revisao/page.tsx` (a aba "Revisão"
@@ -22,13 +23,15 @@ export interface DocumentoParaConfirmar {
 }
 
 export function CartaoConfirmarDocumento({
-  casoId, p, doc, nomeArquivo, taxonomia,
+  casoId, p, doc, nomeArquivo, taxonomia, somenteLeitura = false,
 }: Readonly<{
   casoId: string;
   p: { id: string; tipo: string; descricao: string | null };
   doc: DocumentoParaConfirmar;
   nomeArquivo: string;
   taxonomia: TaxonomiaTipoDocumento[];
+  /** Papel sem escrita neste mandato: o formulário fica desabilitado (o motivo está na faixa do mandato). */
+  somenteLeitura?: boolean;
 }>) {
   const revisarAction = revisarDocumento.bind(null, casoId);
   const idBase = `confirmar-${p.id}`;
@@ -53,6 +56,7 @@ export function CartaoConfirmarDocumento({
       {/* Cada rótulo aponta para o seu campo (Sonar S6853): o leitor de tela anuncia
           "Tipo de documento" ao entrar no select. Vários cartões na mesma página, então
           o id leva o da pendência. */}
+      <ZonaDeEscrita pode={!somenteLeitura}>
       <form action={revisarAction} className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <input type="hidden" name="documento_id" value={doc.id} />
 
@@ -136,6 +140,7 @@ export function CartaoConfirmarDocumento({
           </button>
         </div>
       </form>
+      </ZonaDeEscrita>
     </li>
   );
 }

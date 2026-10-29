@@ -40,6 +40,12 @@ import {
   ERRO_LINK, RESPOSTA_DO_PEDIDO, ROTAS_PUBLICAS, SENHA_MINIMA, caminhoInternoSeguro, mensagemDeRecuperacao,
   montarRedirectTo, origemDaRequisicao, rotaPublica, validarNovaSenha,
 } from "../src/lib/recuperar-senha.ts";
+import {
+  MENSAGEM_NOME_DUPLICADO, MENSAGEM_SEM_ENVIO, MENSAGEM_SEM_PERMISSAO, MOTIVO_SEM_PAPEL, administracaoLiberada, decidirEnvioAoMandato,
+  ehNegacaoDePermissao, escopoDaLista, interpretarPapel, permissoes, textoDeFalhaDaAcao, textoDeRecentesVazio,
+  type AcessoLido,
+} from "../src/lib/acesso.ts";
+import { ehUuid, equipeDoMandato, linhasDaEquipe, pessoaDoUsuario } from "../src/lib/equipe.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
@@ -793,7 +799,7 @@ checar(ariaCurrentDoLink("/casos/todos", "/casos/todos", true) === "page"
 }
 {
   const lateral = fonte("components/barra-lateral.tsx");
-  checar(/if \(naCriacao\) return <BarraInferior recentes=\{recentes\} \/>;/.test(lateral) && !/if \(naCriacao\) return null/.test(lateral),
+  checar(/if \(naCriacao\) return <BarraInferior recentes=\{recentes\} podeCriar=\{podeCriar\} vazioDa=\{vazioDa\} mostrarAdministracao=\{mostrarAdministracao\} \/>;/.test(lateral) && !/if \(naCriacao\) return null/.test(lateral),
     "em /casos/novo a barra inferior some: o celular fica sem navegação nem busca");
   const inf = fonte("components/barra-inferior.tsx");
   checar(!/aria-current=\{[^}]*"page"/.test(inf) && (inf.match(/ariaCurrentDoLink\(/g) ?? []).length >= 3,
@@ -1279,6 +1285,89 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   checar(/REGRA_DA_SENHA/.test(tela) && /minLength=\{SENHA_MINIMA\}/.test(tela), "a regra da senha está visível na tela e no campo");
 }
 
+// ---------------------------------------------------------------------------
+// ACESSO POR PAPEL (Fase 5, parte de tela) — a tela só evita o clique inútil; o banco (0216) decide
+// ---------------------------------------------------------------------------
+{
+  const ok_ = (papel: "socio" | "analista" | "leitura" | null): AcessoLido => ({ estado: "ok", papel });
+  const falhou: AcessoLido = { estado: "falha", detalhe: "rede" };
+  // 1. fn_meu_papel: três estados distintos, e "sem papel" NÃO é falha nem o contrário.
+  checar(interpretarPapel({ data: "socio", error: null }).estado === "ok", "papel conhecido lê");
+  const semPapel = interpretarPapel({ data: null, error: null });
+  checar(semPapel.estado === "ok" && semPapel.papel === null, "null do banco é RESPOSTA (sem papel), não falha");
+  checar(interpretarPapel({ data: null, error: { message: "x" } }).estado === "falha", "erro de leitura é falha, não 'sem papel'");
+  checar(interpretarPapel({ data: "estagiario", error: null }).estado === "falha", "papel fora do vocabulário é falha (não tranca a pessoa fora)");
+  // 2. O que cada papel pode.
+  const socio = permissoes(ok_("socio"));
+  checar(socio.escrever.pode && socio.criarMandato.pode && socio.reservadoAoSocio.pode, "Sócio pode tudo");
+  const leitura = permissoes(ok_("leitura"));
+  checar(!leitura.escrever.pode && !leitura.criarMandato.pode && !leitura.reservadoAoSocio.pode, "Leitura não escreve, não cria, não aprova");
+  checar(/Leitura/.test(leitura.escrever.motivo ?? "") && /Leitura/.test(leitura.criarMandato.motivo ?? ""), "o motivo da Leitura nomeia o papel");
+  const analista = permissoes(ok_("analista"), true);
+  checar(analista.escrever.pode && analista.criarMandato.pode && !analista.reservadoAoSocio.pode, "Analista alocado escreve e cria, mas não aprova/fecha/exclui");
+  checar(/Analista/.test(analista.reservadoAoSocio.motivo ?? ""), "o motivo do reservado ao Sócio nomeia o papel");
+  const fora = permissoes(ok_("analista"), false);
+  checar(!fora.escrever.pode && /alocado/.test(fora.escrever.motivo ?? "") && fora.criarMandato.pode, "Analista NÃO alocado não escreve naquele mandato, mas cria o seu");
+  const incerto = permissoes(ok_("analista"), null);
+  checar(incerto.escrever.pode && !incerto.conferido, "alocação que não pôde ser lida: nada some, e a tela sabe que não conferiu");
+  const nada = permissoes(falhou);
+  checar(nada.escrever.pode && nada.reservadoAoSocio.pode && !nada.conferido && !nada.semPapel, "papel que não pôde ser lido NÃO tranca o Sócio fora");
+  const sem = permissoes(semPapel);
+  checar(sem.semPapel && !sem.escrever.pode && sem.escrever.motivo === MOTIVO_SEM_PAPEL, "sem papel: nada vale, e o motivo é o de acesso não liberado");
+  // 3. Listas vazias: o que a tela pode afirmar.
+  checar(escopoDaLista("socio") === "todos" && escopoDaLista("analista") === "alocados" && escopoDaLista("leitura") === "alocados" && escopoDaLista(null) === "indefinido",
+    "só o Sócio vê a mesa inteira");
+  checar(textoDeRecentesVazio("socio", false) === "Nenhum mandato aberto", "Sócio sem mandato: 'nenhum' é fato");
+  checar(/alocado a você/.test(textoDeRecentesVazio("analista", false)) && /alocado a você/.test(textoDeRecentesVazio("leitura", false)),
+    "Analista/Leitura sem mandato: 'nenhum alocado', não 'nenhum'");
+  checar(/Não foi possível/.test(textoDeRecentesVazio("socio", true)), "leitura falha da barra não vira 'nenhum mandato'");
+  // 4. 42501 -> frase do papel; o resto continua com o erro técnico.
+  checar(ehNegacaoDePermissao({ code: "42501" }) && !ehNegacaoDePermissao({ code: "23503" }) && !ehNegacaoDePermissao(null), "só o código 42501 é negação de permissão");
+  checar(textoDeFalhaDaAcao("Falha ao aprovar", { code: "42501", message: "new row violates row-level security policy" }) === MENSAGEM_SEM_PERMISSAO
+    && /^Seu papel não permite esta ação/.test(MENSAGEM_SEM_PERMISSAO), "42501 vira 'Seu papel não permite esta ação'");
+  checar(textoDeFalhaDaAcao("Falha ao aprovar", { code: "57014", message: "timeout" }) === "Falha ao aprovar: timeout", "erro que não é de permissão segue com o prefixo e o texto técnico");
+  // 5. (a) ENVIO DE ARQUIVOS: a escrita que o banco não vê (n8n usa conexão de serviço).
+  const envio = (a: AcessoLido, ach: { n: number; podeEscrever: boolean | null } | null) => decidirEnvioAoMandato(a, ach);
+  checar(envio(ok_("leitura"), { n: 1, podeEscrever: false }).ok === false && (envio(ok_("leitura"), null) as { mensagem: string }).mensagem === MENSAGEM_SEM_ENVIO, "Leitura não envia arquivos");
+  checar(!envio(semPapel, null).ok && (envio(semPapel, null) as { status: number }).status === 403, "sem papel não envia");
+  checar(envio(ok_("socio"), null).ok, "Sócio envia sem consulta de nome");
+  checar(envio(ok_("analista"), { n: 1, podeEscrever: true }).ok, "Analista alocado envia");
+  checar(!envio(ok_("analista"), { n: 1, podeEscrever: false }).ok, "Analista não alocado não envia");
+  checar(!envio(ok_("analista"), { n: 0, podeEscrever: null }).ok && (envio(ok_("analista"), { n: 0, podeEscrever: null }) as { status: number }).status === 403,
+    "nome que o Analista não enxerga é recusado (a RLS não distingue 'não existe' de 'é de outra equipe')");
+  const dup = envio(ok_("analista"), { n: 2, podeEscrever: null }) as { status: number; mensagem: string };
+  checar(dup.status === 409 && dup.mensagem === MENSAGEM_NOME_DUPLICADO, "nome duplicado é erro explícito (409), não 'aguarde'");
+  checar((envio(falhou, null) as { status: number }).status === 503 && (envio(ok_("analista"), null) as { status: number }).status === 503
+    && (envio(ok_("analista"), { n: 1, podeEscrever: null }) as { status: number }).status === 503, "o envio FALHA FECHADO quando não consegue conferir");
+  // 6. (b) ADMINISTRAÇÃO: números somados de todos os mandatos só para Sócio.
+  checar(administracaoLiberada(ok_("socio")) && !administracaoLiberada(ok_("analista")) && !administracaoLiberada(ok_("leitura")) && !administracaoLiberada(semPapel)
+    && administracaoLiberada(falhou), "Administração: só Sócio (e abre se o papel não pôde ser lido)");
+  // 7. Fiação: o que a lógica pura decide TEM de ser o que as rotas e telas usam (a regra 3 só vale se o gatilho existir).
+  const intake = fonte("app/api/intake/route.ts"), destino = fonte("app/api/intake/destino/route.ts"), status = fonte("app/api/intake/status/route.ts");
+  checar(/conferirEnvioAoMandato\(mandato\)/.test(intake) && /permissao\.status/.test(intake), "POST /api/intake confere o papel antes de encaminhar");
+  checar(/conferirEnvioAoMandato/.test(destino) && /searchParams\.get\("mandato"\)/.test(destino), "a URL do Form do n8n só sai para quem pode enviar ao mandato");
+  checar(/\.limit\(2\)/.test(status) && !/maybeSingle/.test(status) && /MENSAGEM_NOME_DUPLICADO/.test(status), "o status não usa maybeSingle por nome (duplicata)");
+  checar(/administracaoLiberada\(acesso\)/.test(fonte("app/administracao/layout.tsx")), "o layout da Administração fecha para quem não é Sócio");
+  checar(/mostrarAdministracao=\{/.test(fonte("app/casos/layout.tsx")), "a barra esconde o link da Administração");
+  checar(/semPapel/.test(fonte("app/casos/layout.tsx")) && /AcessoNaoLiberado/.test(fonte("app/casos/layout.tsx")), "o casco troca TODA tela por 'acesso não liberado' (Início e Mandatos incluídos)");
+  // 8. Equipe: só o e-mail de quem está logado é conhecido; o resto aparece como código curto.
+  const eu = { id: "11111111-1111-1111-1111-111111111111", email: "eu@oria.com" };
+  const outro = "22222222-2222-2222-2222-222222222222";
+  checar(pessoaDoUsuario(eu.id, eu).rotulo === "eu@oria.com" && pessoaDoUsuario(outro, eu).rotulo === "usuário 22222222" && !pessoaDoUsuario(outro, eu).temEmail,
+    "e-mail só do usuário logado; os demais pelo código curto, sem inventar nome");
+  checar(ehUuid(outro) && !ehUuid("abc") && !ehUuid("22222222-2222-2222-2222-22222222222g") && !ehUuid(null), "uuid é validado na fronteira");
+  const casos = [{ id: "c1", nome: "B", fechado_em: null }, { id: "c2", nome: "A", fechado_em: null }];
+  const linhas = linhasDaEquipe(
+    [{ usuario_id: outro, papel: "analista" }, { usuario_id: eu.id, papel: "socio" }],
+    [{ caso_id: "c1", usuario_id: outro }, { caso_id: "c9", usuario_id: outro }], casos, eu);
+  checar(linhas[0].papel === "socio" && linhas[0].unicoSocio && linhas[0].veTodos && linhas[0].alocaveis.length === 0, "Sócio primeiro, único Sócio marcado e sem alocação");
+  checar(linhas[1].alocados.length === 1 && linhas[1].alocadosNaoLidos === 1 && linhas[1].alocaveis.map((c) => c.id).join() === "c2",
+    "alocação de mandato não lido é CONTADA, e só se oferece o que falta");
+  const eq = equipeDoMandato([{ usuario_id: outro, papel: "leitura" }, { usuario_id: eu.id, papel: "socio" }, { usuario_id: "33333333-3333-3333-3333-333333333333", papel: "analista" }],
+    [{ caso_id: "c1", usuario_id: outro }, { caso_id: "c1", usuario_id: "44444444-4444-4444-4444-444444444444" }], eu);
+  checar(eq.alocados.length === 1 && eq.alocaveis.length === 1 && eq.semPapel === 1 && eq.socios === 1, "equipe do mandato: Sócio não entra, alocação sem papel é contada à parte");
+}
+
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);
   for (const f of falhas) console.error(`  ✗ ${f}`);
@@ -1295,4 +1384,5 @@ console.log("CASCO OK — o modo discrição liga antes da pintura, nada o desfa
 console.log("TEMA OK — a preferência resolve claro/escuro/sistema antes da pintura, toda cor do claro tem par no escuro e todo par medido passa AA");
 console.log("CUSTOS OK — custo ausente fica ausente, o total é piso declarado e o por-documento usa um só conjunto");
 console.log("RECUPERAR SENHA OK — o pedido não revela se a conta existe, next só aceita caminho interno e as rotas públicas são exatamente três");
+console.log("ACESSO OK — a tela só evita o clique inútil: sem papel nada vale, o envio e a Administração fecham para quem o banco não vê, e falha de leitura não tranca ninguém fora");
 console.log("AVISOS OK — lote demorando nunca vira \"parado\", falha duplicada vira um aviso, documento não lido não é \"concluído\", e visto indisponível não vira \"nada novo\"");

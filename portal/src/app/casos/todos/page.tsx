@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoes } from "@/lib/supabase/acesso";
+import { escopoDaLista } from "@/lib/acesso";
 import { paginar } from "@/lib/supabase/paginar";
 import type { Caso } from "@/lib/types";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
@@ -62,6 +64,10 @@ export default async function CasosPage({
   const termo = padrao === null ? "" : (Array.isArray(qBruto) ? qBruto[0] : qBruto)!.trim().slice(0, 80);
 
   const supabase = await createClient();
+  // O papel (memoizado na requisição) decide o que "nenhum mandato" quer dizer: a RLS devolve VAZIO,
+  // não erro, para quem não está alocado — e só o Sócio vê a mesa inteira.
+  const perm = await lerPermissoes();
+  const soAlocados = escopoDaLista(perm.papel) === "alocados";
 
   const { data, error } = await paginar<Caso>((de, ate) => {
     let q = supabase
@@ -171,7 +177,7 @@ export default async function CasosPage({
             próprio: o menu aberto da linha N (z-20, dentro do td) ficava sob o "⋯" da
             linha N+1. O td que contém o botão expandido sobe para z-30. */}
         <td className="absolute right-2 top-2 z-10 has-[[aria-expanded=true]]:z-30 md:static md:table-cell md:px-3 md:py-3 md:text-right">
-          <MenuDoMandato casoId={caso.id} nome={caso.nome} fechado={fechado} />
+          <MenuDoMandato casoId={caso.id} nome={caso.nome} fechado={fechado} reservado={perm.reservadoAoSocio} />
         </td>
       </tr>
     );
@@ -199,10 +205,12 @@ export default async function CasosPage({
           <h1 className="text-xl font-semibold text-tinta-900">Mandatos</h1>
           <p className="mt-0.5 text-sm text-tinta-500">
             {casos.length === 0 && !termo
-              ? "Nenhum mandato aberto."
+              ? (soAlocados ? "Nenhum mandato alocado a você." : "Nenhum mandato aberto.")
               : termo
                 ? `${casos.length} ${casos.length === 1 ? "resultado" : "resultados"} para “${termo}”`
-                : "O que existe, incluindo o que já saiu da mesa."}
+                : soAlocados
+                  ? "Os mandatos em que você está alocado, incluindo o que já saiu da mesa."
+                  : "O que existe, incluindo o que já saiu da mesa."}
           </p>
         </div>
         {/* GET puro: a busca é um link que se pode copiar. `aba` segue junto. */}
@@ -237,7 +245,16 @@ export default async function CasosPage({
         </p>
       )}
 
-      {!error && casos.length === 0 && !termo ? (
+      {!error && casos.length === 0 && !termo && soAlocados ? (
+        <div className="carta flex flex-col items-center gap-3 px-6 py-12 text-center">
+          <p className="text-sm font-medium text-tinta-900">Você ainda não está alocado em nenhum mandato</p>
+          <p className="max-w-md text-sm text-tinta-500">
+            Com o papel de {perm.papel === "leitura" ? "Leitura" : "Analista"} você só vê os mandatos em que um
+            Sócio alocou você — o que não aparece aqui pode existir. Peça a alocação a um Sócio
+            {perm.criarMandato.pode ? <>, ou abra um mandato seu em <strong className="font-medium text-tinta-700">Novo mandato</strong></> : ""}.
+          </p>
+        </div>
+      ) : !error && casos.length === 0 && !termo ? (
         <div className="carta flex flex-col items-center gap-3 px-6 py-12 text-center">
           <p className="text-sm font-medium text-tinta-900">Comece subindo os arquivos de um mandato</p>
           <p className="max-w-md text-sm text-tinta-500">

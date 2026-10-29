@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { DecisaoPendencia } from "@/lib/pendencia";
+import { textoDeFalhaDaAcao } from "@/lib/acesso";
 
 // Chama fn_aprovar_caso (Supabase/migrations/0037) — o Portão 2 POR CASO, que até a
 // 0037 não existia em código: `caso_status` tinha 'aprovado' e nada transicionava
@@ -29,7 +30,7 @@ export async function aprovarCaso(casoId: string, formData: FormData) {
   });
 
   if (error) {
-    throw new Error(`Falha ao aprovar o caso: ${error.message}`);
+    throw new Error(textoDeFalhaDaAcao("Falha ao aprovar o caso", error));
   }
 
   // RECUSA no payload, não como erro de Postgres — mesmo padrão da 0036, e pelo
@@ -75,7 +76,7 @@ export async function decidirPendencia(
   });
 
   if (error) {
-    throw new Error(`Falha ao registrar a decisão: ${error.message}`);
+    throw new Error(textoDeFalhaDaAcao("Falha ao registrar a decisão", error));
   }
   // RECUSA no payload, não como erro de Postgres — mesmo padrão da 0036/0037.
   // Ler este campo é obrigatório: sem isto, `error` nulo faria a recusa passar
@@ -108,7 +109,7 @@ export async function fecharCaso(casoId: string, formData?: FormData) {
     p_autor: user?.email ?? "portal:desconhecido",
     p_motivo: motivo,
   });
-  if (error) throw new Error(`Falha ao fechar o mandato: ${error.message}`);
+  if (error) throw new Error(textoDeFalhaDaAcao("Falha ao fechar o mandato", error));
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (r?.recusado) throw new Error(r.motivo_recusa ?? "Fechamento recusado.");
 
@@ -125,7 +126,7 @@ export async function reabrirCaso(casoId: string) {
     p_caso_id: casoId,
     p_autor: user?.email ?? "portal:desconhecido",
   });
-  if (error) throw new Error(`Falha ao reabrir o mandato: ${error.message}`);
+  if (error) throw new Error(textoDeFalhaDaAcao("Falha ao reabrir o mandato", error));
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (r?.recusado) throw new Error(r.motivo_recusa ?? "Reabertura recusada.");
 
@@ -147,7 +148,7 @@ export async function excluirCaso(casoId: string) {
   });
 
   if (error) {
-    throw new Error(`Falha ao excluir o mandato: ${error.message}`);
+    throw new Error(textoDeFalhaDaAcao("Falha ao excluir o mandato", error));
   }
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (r?.recusado) {

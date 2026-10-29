@@ -1,4 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { CartaoEntidade, type EntidadeSituacao } from "./CartaoEntidade";
 import {
@@ -27,6 +29,7 @@ type Veredito = {
 export default async function PerimetroPage({ params }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
   const supabase = await createClient();
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
   const [vereditoRes, situacaoRes, controladoresRes, vinculosRes] = await Promise.all([
     supabase.rpc("fn_perimetro_veredito", { p_caso_id: id }),
     supabase.rpc("fn_perimetro_situacao", { p_caso_id: id }),
@@ -43,6 +46,9 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
   const socios = controladores.filter((c) => c.tipo_pessoa === "fisica");
   const vinculos = (vinculosRes.data ?? []) as VinculoVigente[];
   const hoje = new Date().toISOString().slice(0, 10);
+  // Quem não escreve neste mandato lê o grupo econômico, mas os formulários (papel, forma, participação,
+  // controlador, parentesco, escopo) ficam desabilitados; o motivo está na faixa do mandato.
+  const { escrever } = await permissoesDoMandato;
   // Amarradas AQUI, no servidor: o id do caso não passa pelo navegador como dado editável.
   const acoes: AcoesPerimetro = {
     papel: definirPapel.bind(null, id), forma: definirForma.bind(null, id),
@@ -130,20 +136,22 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
           </DetalhesTecnicos>
         </output>
       )}
-      <SecaoParentesco socios={socios} vinculos={vinculos} vincular={acoes.vincularFamilia} desvincular={acoes.desvincularFamilia} />
+      <ZonaDeEscrita pode={escrever.pode} className="space-y-6">
+        <SecaoParentesco socios={socios} vinculos={vinculos} vincular={acoes.vincularFamilia} desvincular={acoes.desvincularFamilia} />
 
-      {reais.map((e) => (
-        <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
-      ))}
+        {reais.map((e) => (
+          <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
+        ))}
 
-      {fantasmas.length > 0 && (
-        <>
-          <h2 className="titulo-secao">Empresas não identificadas ({fantasmas.length})</h2>
-          {fantasmas.map((e) => (
-            <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
-          ))}
-        </>
-      )}
+        {fantasmas.length > 0 && (
+          <>
+            <h2 className="titulo-secao">Empresas não identificadas ({fantasmas.length})</h2>
+            {fantasmas.map((e) => (
+              <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
+            ))}
+          </>
+        )}
+      </ZonaDeEscrita>
     </div>
   );
 }

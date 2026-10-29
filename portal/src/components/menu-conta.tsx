@@ -34,9 +34,12 @@ export function iniciaisDoEmail(email: string): string {
 
 export function MenuConta({
   email,
+  papel,
   sair,
 }: Readonly<{
   email: string;
+  /** O papel já lido no servidor, por extenso; `null` = não foi possível conferir (a linha não aparece). */
+  papel: string | null;
   sair: (formData: FormData) => void | Promise<void>;
 }>) {
   const [aberto, setAberto] = useState(false);
@@ -134,6 +137,7 @@ export function MenuConta({
               {email}
             </p>
           )}
+          {papel && <p className="px-2.5 pb-2 text-xs font-medium text-tinta-700">Papel: {papel}</p>}
           <div className="border-t border-tinta-100 px-2.5 py-2">
             <p id={`${idMenu}-tema`} className="mb-1.5 text-xs text-tinta-500">Aparência</p>
             <div role="group" aria-labelledby={`${idMenu}-tema`} className="flex gap-1 rounded-md bg-tinta-50 p-0.5">

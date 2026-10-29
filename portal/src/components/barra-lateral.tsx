@@ -157,7 +157,18 @@ const ROTULO_SECAO = "text-[11px] font-semibold uppercase tracking-wider text-vi
 // Mesma altura nas duas formas da barra (aberta e trilho), flutuando a 12px.
 const CASCA = "vidro-casco sticky top-3 h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl";
 
-export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
+export function BarraLateral({
+  mandatos, podeCriar, motivoSemCriar, vazioDa, mostrarAdministracao,
+}: {
+  mandatos: MandatoNaBarra[];
+  /** Papel Leitura não abre mandato: o item sai do trilho e da barra inferior e, na barra aberta, fica com o motivo à vista. */
+  podeCriar: boolean;
+  motivoSemCriar: string | null;
+  /** O que dizer quando a lista de recentes está vazia, sem afirmar o que não se mediu (ver `escopoDaLista`). */
+  vazioDa: string;
+  /** A Administração soma TODOS os mandatos: é área de Sócio, e o link some para os outros papéis. */
+  mostrarAdministracao: boolean;
+}) {
   const caminho = usePathname();
   const [recolhidaStr, definirRecolhida] = useArmazenado(CHAVE_RECOLHIDA, "0");
   const recolhida = recolhidaStr === "1";
@@ -197,7 +208,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   // que ganha em respirar. É a mesma razão de um checkout não ter menu.
   // A BARRA INFERIOR FICA mesmo aqui: no celular /casos/novo ficava sem navegação nem busca (os
   // <aside> é que se anulam). Ela é `sm:hidden`, então no desktop continua tela cheia.
-  if (naCriacao) return <BarraInferior recentes={recentes} />;
+  if (naCriacao) return <BarraInferior recentes={recentes} podeCriar={podeCriar} vazioDa={vazioDa} mostrarAdministracao={mostrarAdministracao} />;
 
   const alternarBarra = () => definirRecolhida(recolhida ? "0" : "1");
 
@@ -228,14 +239,16 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
           <IconeExpandir />
         </button>
       )}
-      <Link
-        href="/casos/novo"
-        title="Novo mandato"
-        aria-label="Novo mandato"
-        className={`${TRILHO_BASE} bg-vidro-texto text-vidro-tinta hover:bg-vidro-papel`}
-      >
-        <IconeMais />
-      </Link>
+      {podeCriar && (
+        <Link
+          href="/casos/novo"
+          title="Novo mandato"
+          aria-label="Novo mandato"
+          className={`${TRILHO_BASE} bg-vidro-texto text-vidro-tinta hover:bg-vidro-papel`}
+        >
+          <IconeMais />
+        </Link>
+      )}
       <Link
         href="/casos"
         title="Início"
@@ -254,6 +267,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
       >
         <IconeMandatos />
       </Link>
+      {mostrarAdministracao && (
       <Link
         href="/administracao"
         title="Administração"
@@ -263,6 +277,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
       >
         <IconeQualidade />
       </Link>
+      )}
     </nav>
   );
 
@@ -270,14 +285,14 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
     return (
       <>
         <aside className="hidden shrink-0 py-3 pl-3 sm:block">{trilho(true)}</aside>
-        <BarraInferior recentes={recentes} />
+        <BarraInferior recentes={recentes} podeCriar={podeCriar} vazioDa={vazioDa} mostrarAdministracao={mostrarAdministracao} />
       </>
     );
   }
 
   return (
     <>
-      <BarraInferior recentes={recentes} />
+      <BarraInferior recentes={recentes} podeCriar={podeCriar} vazioDa={vazioDa} mostrarAdministracao={mostrarAdministracao} />
       <aside className="hidden shrink-0 py-3 pl-3 sm:block md:hidden">{trilho(false)}</aside>
       <aside className="hidden w-[15.75rem] shrink-0 py-3 pl-3 md:block">
         {/* A BARRA TEM A ALTURA DA TELA menos os 12px de cima e de baixo, e o
@@ -312,13 +327,18 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
           {/* AÇÃO — a única coisa CLARA da barra (creme com texto escuro), e por
               isso a única que grita. Era a única escura sobre a barra creme; o
               vidro inverteu a polaridade e a regra continua a mesma. */}
-          <Link
-            href="/casos/novo"
-            className={`${ITEM_BASE} bg-vidro-texto text-vidro-tinta hover:bg-vidro-papel`}
-          >
-            <IconeMais />
-            Novo mandato
-          </Link>
+          {podeCriar ? (
+            <Link
+              href="/casos/novo"
+              className={`${ITEM_BASE} bg-vidro-texto text-vidro-tinta hover:bg-vidro-papel`}
+            >
+              <IconeMais />
+              Novo mandato
+            </Link>
+          ) : (
+            // Sem o botão, o MOTIVO: quem procura "Novo mandato" e não acha lê por que (não é `title=`).
+            motivoSemCriar && <p className="px-3 py-1.5 text-xs text-vidro-suave">{motivoSemCriar}</p>
+          )}
 
           <div className="mt-2 flex flex-col gap-0.5">
             <Link
@@ -344,7 +364,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
               Recentes
             </p>
             {recentes.length === 0 ? (
-              <p className="px-3 py-1.5 text-xs text-vidro-suave">Nenhum mandato aberto</p>
+              <p className="px-3 py-1.5 text-xs text-vidro-suave">{vazioDa}</p>
             ) : (
               <ul className="space-y-0.5">
                 {recentes.map((m) => {
@@ -378,6 +398,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
             )}
           </div>
 
+          {mostrarAdministracao && (
           <div className="mt-auto border-t border-white/10 pt-3">
             <p className={`px-3 pb-1 ${ROTULO_SECAO}`}>
               Administração
@@ -391,6 +412,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
               Qualidade e custos
             </Link>
           </div>
+          )}
         </nav>
       </aside>
     </>

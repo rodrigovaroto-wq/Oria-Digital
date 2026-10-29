@@ -76,7 +76,7 @@ function Item({
   );
 }
 
-export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[] }>) {
+export function BarraInferior({ recentes, podeCriar, vazioDa, mostrarAdministracao }: Readonly<{ recentes: MandatoNaBarra[]; podeCriar: boolean; vazioDa: string; mostrarAdministracao: boolean }>) {
   const caminho = usePathname();
   const ativo = destinoAtivo(caminho);
   const idAtual = idDoCaso(caminho);
@@ -146,7 +146,9 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
         >
           <IconeBusca tamanho={20} />
         </Item>
-        <Item destino="novo" ativo={ativo} caminho={caminho} rotulo="Novo" href="/casos/novo"><IconeMais tamanho={20} /></Item>
+        {podeCriar && (
+          <Item destino="novo" ativo={ativo} caminho={caminho} rotulo="Novo" href="/casos/novo"><IconeMais tamanho={20} /></Item>
+        )}
         <button
           ref={gatilho}
           type="button"
@@ -175,7 +177,7 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
           >
             <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-vidro-suave">Recentes</p>
             {recentes.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-vidro-suave">Nenhum mandato aberto</p>
+              <p className="px-3 py-2 text-sm text-vidro-suave">{vazioDa}</p>
             ) : (
               <ul className="space-y-0.5">
                 {recentes.map((m) => (
@@ -196,6 +198,7 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
                 ))}
               </ul>
             )}
+            {mostrarAdministracao && (
             <div className="mt-2 border-t border-white/10 pt-2">
               <Link
                 href="/administracao"
@@ -209,6 +212,7 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
                 Qualidade e custos
               </Link>
             </div>
+            )}
           </div>
         </div>,
         document.body,

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoes } from "@/lib/supabase/acesso";
+import { escopoDaLista } from "@/lib/acesso";
 import { paginar } from "@/lib/supabase/paginar";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
 import {
@@ -161,6 +163,10 @@ export default async function PainelPage({
   const verTudo = (Array.isArray(verBruto) ? verBruto[0] : verBruto) === "tudo";
   const supabase = await createClient();
   const agora = new Date();
+  // Quem só vê os alocados (Analista, Leitura) recebe da RLS uma lista MENOR, não um erro: os
+  // números do Início valem para os mandatos dele, e "nenhum" vazio não é "a mesa está vazia".
+  const perm = await lerPermissoes();
+  const soAlocados = escopoDaLista(perm.papel) === "alocados";
 
   // `fechado_em` é filtrado em JavaScript, não no `where`: num banco sem a 0114
   // a coluna não existe, e o filtro derrubaria a tela inteira em vez de degradar.
@@ -354,7 +360,7 @@ export default async function PainelPage({
   // A frase de abertura dá o veredito para quem não vai ler número nenhum.
   const resumo =
     ativos.length === 0
-      ? "Nenhum mandato em andamento."
+      ? (soAlocados ? "Nenhum mandato em andamento alocado a você." : "Nenhum mandato em andamento.")
       : !pendenciasLidas
         ? `${ativos.length} ${ativos.length === 1 ? "mandato em andamento" : "mandatos em andamento"}. ` +
           "Não foi possível conferir as pendências agora; não dá para dizer o que trava a aprovação."
@@ -376,6 +382,11 @@ export default async function PainelPage({
         <div>
           <h1 className="text-xl font-semibold text-tinta-900">{saudacao(agora)}</h1>
           <p className="mt-0.5 text-sm text-tinta-500">{resumo}</p>
+          {soAlocados && (
+            <p className="mt-0.5 text-xs text-tinta-500">
+              Os números abaixo são dos mandatos em que você está alocado.
+            </p>
+          )}
         </div>
         <p className="text-xs capitalize text-tinta-400">{dataDeHoje}</p>
       </div>
@@ -487,12 +498,22 @@ export default async function PainelPage({
         /* Sem mandato o painel não inventa conteúdo, e não repete o botão de
            criar, que mora no menu. */
         <Surgir atraso={120} className="carta flex flex-col items-center gap-2 px-6 py-14 text-center">
-          <p className="text-sm font-medium text-tinta-900">Nenhum mandato em andamento</p>
+          <p className="text-sm font-medium text-tinta-900">
+            {soAlocados ? "Nenhum mandato em andamento alocado a você" : "Nenhum mandato em andamento"}
+          </p>
+          {soAlocados && (
+            <p className="max-w-md text-sm text-tinta-500">
+              Com o papel de {perm.papel === "leitura" ? "Leitura" : "Analista"} você só vê os mandatos em que um
+              Sócio alocou você; peça a alocação a um Sócio.
+            </p>
+          )}
+          {!soAlocados || perm.criarMandato.pode ? (
           <p className="max-w-md text-sm text-tinta-500">
             Abra um em <strong className="font-medium text-tinta-700">Novo mandato</strong>, no menu
             à esquerda. Cada documento enviado é classificado e tem suas linhas financeiras lidas.
             O que faltar ou não bater aparece aqui.
           </p>
+          ) : null}
         </Surgir>
       ) : (
         <div className="grid gap-5 lg:grid-cols-3">

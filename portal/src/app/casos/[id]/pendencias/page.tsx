@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
 import { paginar } from "@/lib/supabase/paginar";
 import type { TaxonomiaTipoDocumento } from "@/lib/types";
 import {
@@ -75,6 +76,10 @@ export default async function PendenciasPage({
   const filtro = FILTROS_PENDENCIA.find((f) => f.chave === pedido)?.chave ?? "todas";
 
   const supabase = await createClient();
+  // Quem não escreve neste mandato (Leitura; Analista não alocado) lê a fila, mas não decide: os três
+  // botões de cada pendência saem (o motivo está na faixa do mandato) e o formulário de confirmar
+  // documento fica desabilitado. O banco recusaria o clique com 42501 de qualquer modo.
+  const { escrever } = await lerPermissoesDoMandato(id);
 
   // Paginada: esta É a fila de trabalho, e o teto do PostgREST corta em silêncio — uma
   // fila truncada parece uma fila terminada. O nome do arquivo vem EMBUTIDO (uma ida só),
@@ -139,7 +144,7 @@ export default async function PendenciasPage({
   const cartao = (p: PendenciaDaLista) =>
     comFormulario(p) && !taxonomiaFalhou && p.documento ? (
       <CartaoConfirmarDocumento
-        key={p.id} casoId={id} p={p} doc={p.documento}
+        key={p.id} casoId={id} p={p} doc={p.documento} somenteLeitura={!escrever.pode}
         nomeArquivo={nomeDoArquivo(p) ?? "(sem nome)"} taxonomia={taxonomia}
       />
     ) : ehConfirmar(p) && emAberto(p) ? (
@@ -157,7 +162,7 @@ export default async function PendenciasPage({
       </li>
     ) : (
       <ItemPendencia
-        key={p.id} p={p} casoId={id}
+        key={p.id} p={p} casoId={escrever.pode ? id : undefined}
         tom={tomDoCartao(p)}
         arquivo={nomeDoArquivo(p)}
       />

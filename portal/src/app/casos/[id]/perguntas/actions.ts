@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { textoDeFalhaDaAcao } from "@/lib/acesso";
 
 // A AÇÃO HUMANA SOBRE UMA PERGUNTA SUGERIDA — `fn_registrar_pergunta_acao`
 // (Supabase/migrations/0120). O portal não decide nada aqui: ele encaminha o que o
@@ -41,7 +42,7 @@ export async function registrarAcaoDaPergunta(casoId: string, formData: FormData
   });
 
   if (error) {
-    throw new Error(`Falha ao registrar a pergunta: ${error.message}`);
+    throw new Error(textoDeFalhaDaAcao("Falha ao registrar a pergunta", error));
   }
 
   // RECUSA no payload, não como erro de Postgres — o padrão da casa (0036,

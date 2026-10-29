@@ -32,10 +32,13 @@ export default function UploadForm({
   mandatoInicial = "",
   travarMandato = false,
   casoId,
+  podeExcluir = true,
 }: {
   mandatoInicial?: string;
   travarMandato?: boolean;
   casoId?: string;
+  /** Excluir mandato é de Sócio (0216): para os outros papéis o botão do lote vazio não aparece. */
+  podeExcluir?: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -148,6 +151,12 @@ export default function UploadForm({
           return;
         }
         const json = await resp.json().catch(() => ({}));
+        // 409 = dois mandatos com o mesmo nome: o acompanhamento não sabe qual olhar e NÃO fica
+        // "aguardando" para sempre — encerra dizendo a causa (o envio já foi feito).
+        if (!cancelado && resp.status === 409 && typeof json.error === "string") {
+          setFalha({ etapa: "acompanhamento", mensagem: json.error });
+          return;
+        }
         // A falha ENCERRA o acompanhamento. Continuar perguntando depois dela
         // seria manter a espera de pé sobre um processo que não vai voltar.
         if (!cancelado && resp.ok && json.falha) {
@@ -589,7 +598,7 @@ export default function UploadForm({
       // responde quatro coisas que a tela não pode adivinhar: se o upload está
       // configurado (503 com a frase de sempre), quais são os nomes REAIS dos
       // campos do Form, DE ONDE eles vieram, e que horas são no servidor.
-      const respDestino = await fetch("/api/intake/destino");
+      const respDestino = await fetch(`/api/intake/destino?mandato=${encodeURIComponent(mandato.trim())}`);
       const destino = await respDestino.json().catch(() => ({}));
       if (!respDestino.ok) {
         setErro(destino.error ?? `Não foi possível preparar o envio (HTTP ${respDestino.status}).`);
@@ -771,7 +780,7 @@ export default function UploadForm({
               nem fato); um lote incompleto tem dado dentro, e apagá-lo perderia
               o que deu certo. A confirmação é a mesma do resto do portal. */}
           {loteVazio && !falha && !parada && loteVazio.comLinhas === 0 && loteVazio.comFatos === 0
-            && casoIdDoLote && (
+            && casoIdDoLote && podeExcluir && (
             <ExcluirMandato casoId={casoIdDoLote} nome={sucesso.mandato} />
           )}
         </div>

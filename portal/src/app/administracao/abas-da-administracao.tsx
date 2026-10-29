@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-// As duas abas da Administração. Mesmo desenho das abas do mandato
-// (`casos/[id]/abas-do-mandato.tsx`); aqui são duas fixas, sem contagem — um número
+// As abas da Administração (área inteira só para Sócio). Mesmo desenho das abas do mandato
+// (`casos/[id]/abas-do-mandato.tsx`); aqui são fixas, sem contagem — um número
 // numa aba de custo seria o primeiro "zero" que a tela poderia afirmar sem medir.
 const ABAS = [
   { rotulo: "Qualidade da automação", href: "/administracao" },
   { rotulo: "Custos", href: "/administracao/custos" },
+  { rotulo: "Equipe", href: "/administracao/equipe" },
 ] as const;
 
 export function AbasDaAdministracao() {

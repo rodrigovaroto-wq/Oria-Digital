@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { lerPlanilhaTranscricao } from "@/lib/transcricao";
+import { textoDeFalhaDaAcao } from "@/lib/acesso";
 
 // Chama fn_aceitar_extracao (Supabase/migrations/0011_aceite_export_e4.sql) — o
 // Portão 2 mínimo do E4 (Arquitetura do Sistema/2 Especificação/f0/07_output_spec.md): humano aceita TODAS as linhas
@@ -26,7 +27,7 @@ export async function aceitarExtracao(casoId: string, docId: string, formData: F
   });
 
   if (error) {
-    throw new Error(`Falha ao aceitar extração: ${error.message}`);
+    throw new Error(textoDeFalhaDaAcao("Falha ao aceitar extração", error));
   }
 
   // RECUSA (Supabase/migrations/0036): a função devolve `recusado: true` quando a versão
@@ -83,7 +84,7 @@ export async function registrarClasseContabil(
   });
 
   if (error) {
-    throw new Error(`Falha ao registrar a classe contábil: ${error.message}`);
+    throw new Error(textoDeFalhaDaAcao("Falha ao registrar a classe contábil", error));
   }
 
   // RECUSA RETORNADA, não exceção — mesmo padrão do aceite acima, e ler este campo
@@ -173,7 +174,7 @@ export async function importarTranscricao(
   });
 
   if (error) {
-    return { ok: false, erro: `Falha ao gravar a transcrição: ${error.message}` };
+    return { ok: false, erro: textoDeFalhaDaAcao("Falha ao gravar a transcrição", error) };
   }
 
   // RECUSA RETORNADA pelo banco — ler este campo é obrigatório, como nas duas ações

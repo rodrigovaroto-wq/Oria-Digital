@@ -10,6 +10,8 @@ import type { CampoExtraido, Documento } from "@/lib/types";
 import { formatarPeriodo, formatarTipoTaxonomia } from "@/lib/export";
 import { aceitarExtracao } from "@/app/casos/[id]/documentos/[docId]/actions";
 import { ClasseContabil } from "@/components/classe-contabil";
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
 import { TranscricaoHumana } from "@/components/transcricao-humana";
 import { ehPdf, hrefDoOriginal, rotuloDoLink } from "@/lib/original-do-documento";
 
@@ -43,6 +45,9 @@ const ROTULO_LEGIBILIDADE: Record<string, string> = {
 
 export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; docId: string }>) {
   const supabase = await createClient();
+  // Aceitar a extração, corrigir a classe contábil e transcrever são escritas: quem não escreve neste
+  // mandato (Leitura; Analista não alocado) as vê desabilitadas, com o motivo na faixa do mandato.
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
 
   const documentoRes = await supabase
     .from("documento")
@@ -58,6 +63,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
   if (documentoRes.error || !documentoRes.data) {
     notFound();
   }
+  const { escrever } = await permissoesDoMandato;
 
   const doc = documentoRes.data as unknown as Documento;
 
@@ -210,6 +216,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
             casoId={id}
             docId={docId}
             motivo={ilegivel ? "ilegivel" : "sem_linhas"}
+            somenteLeitura={!escrever.pode}
           />
         );
       })()}
@@ -244,7 +251,8 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
         </div>
 
         {campos.length > 0 && !tudoAceito && aceitarAction && (
-          <form action={aceitarAction} className="mb-4 flex items-center gap-3 rounded border border-alerta-200 bg-alerta-50 p-3">
+          <ZonaDeEscrita pode={escrever.pode} className="mb-4">
+          <form action={aceitarAction} className="flex items-center gap-3 rounded border border-alerta-200 bg-alerta-50 p-3">
             <input type="hidden" name="documento_versao_id" value={versao!.id} />
             <input
               type="text"
@@ -259,6 +267,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
               Aceitar estes dados para a base
             </button>
           </form>
+          </ZonaDeEscrita>
         )}
         {tudoAceito && (
           <p className="mb-4 rounded border border-ok-200 bg-ok-50 px-3 py-2 text-sm text-ok-800">
@@ -355,6 +364,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
                             )}
                           </td>
                           <td className="px-3 py-1.5 align-top font-normal">
+                            <ZonaDeEscrita pode={escrever.pode}>
                             <ClasseContabil
                               casoId={id}
                               docId={docId}
@@ -365,6 +375,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
                               override={overrideDe.get(linha.id)?.classe ?? null}
                               overridePor={overrideDe.get(linha.id)?.autor ?? null}
                             />
+                            </ZonaDeEscrita>
                           </td>
                         </tr>
                       );

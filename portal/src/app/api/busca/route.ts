@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { lerAcesso } from "@/lib/supabase/acesso";
+import { MOTIVO_SEM_PAPEL, escopoDaLista } from "@/lib/acesso";
 import {
   JANELA_DE_VERSOES, LIMITE_POR_GRUPO, agruparResultados, digitosDoCnpj, padraoDoTermo, termoDaBusca,
   type LinhasDaBusca,
@@ -81,5 +83,19 @@ export async function GET(req: NextRequest) {
       }),
   };
 
-  return NextResponse.json(agruparResultados(linhas));
+  const resposta = agruparResultados(linhas);
+
+  // LISTA VAZIA, TRÊS SIGNIFICADOS. Com a RLS por mandato (0216) o banco devolve VAZIO — não erro —
+  // para o que a pessoa não pode ver, então "Nada encontrado" só é verdade para quem vê tudo. O papel
+  // só é lido quando o resultado veio vazio (o caso comum não paga a ida ao banco): sem papel, é
+  // recusa explícita; Analista e Leitura recebem a marca de que a busca cobriu só os alocados.
+  let soAlocados = false;
+  if (resposta.resultados.length === 0) {
+    const acesso = await lerAcesso();
+    if (acesso.estado === "ok" && acesso.papel === null) {
+      return NextResponse.json({ erro: MOTIVO_SEM_PAPEL }, { status: 403 });
+    }
+    soAlocados = acesso.estado === "ok" && escopoDaLista(acesso.papel) === "alocados";
+  }
+  return NextResponse.json({ ...resposta, soAlocados });
 }

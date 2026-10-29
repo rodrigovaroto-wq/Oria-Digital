@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { FaixaDeAcesso } from "@/components/acesso-na-tela";
 import type { Caso } from "@/lib/types";
 import { ESTADOS_EM_ABERTO } from "@/lib/pendencia";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
@@ -32,7 +34,11 @@ export default async function MandatoLayout({
   const { id } = await params;
   const supabase = await createClient();
 
-  const [casoRes, documentosRes, pendenciasRes] = await Promise.all([
+  // O papel e, para o Analista, a alocação NESTE mandato: lidos uma vez e memoizados; as abas pedem
+  // `lerPermissoesDoMandato(id)` de novo e não vão ao banco. A faixa abaixo é o MOTIVO visível de
+  // tudo o que as abas desabilitam para quem não pode alterar o mandato.
+  const [perm, casoRes, documentosRes, pendenciasRes] = await Promise.all([
+    lerPermissoesDoMandato(id),
     supabase.from("caso").select("id, nome, produto, status, criado_em, fechado_em").eq("id", id).single(),
     supabase.from("documento").select("id", { head: true, count: "exact" }).eq("caso_id", id),
     // O NÚMERO DA ABA PENDÊNCIAS = o que a aba lista em "Em aberto" por padrão (filtro "Todas"):
@@ -105,10 +111,12 @@ export default async function MandatoLayout({
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Link href={`/casos/${id}/adicionar`} className="btn-secundario">
-              Adicionar arquivos
-            </Link>
-            <MenuDoMandato casoId={id} nome={caso.nome} fechado={fechado} />
+            {perm.escrever.pode && (
+              <Link href={`/casos/${id}/adicionar`} className="btn-secundario">
+                Adicionar arquivos
+              </Link>
+            )}
+            <MenuDoMandato casoId={id} nome={caso.nome} fechado={fechado} reservado={perm.reservadoAoSocio} />
           </div>
         </div>
 
@@ -138,6 +146,8 @@ export default async function MandatoLayout({
           })}
         </ol>
       </header>
+
+      <FaixaDeAcesso liberacao={perm.escrever} titulo="Somente consulta." />
 
       <AbasDoMandato casoId={id} abas={abas} />
 

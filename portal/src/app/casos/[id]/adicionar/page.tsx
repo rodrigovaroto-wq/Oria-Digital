@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { FaixaDeAcesso } from "@/components/acesso-na-tela";
 import type { Caso } from "@/lib/types";
 import Link from "next/link";
 import UploadForm from "@/components/upload-form";
@@ -15,10 +17,23 @@ export default async function AdicionarArquivosPage({
   const { id } = await params;
   const passo = cabecalhoDoPasso(await searchParams);
   const supabase = await createClient();
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
   const { data, error } = await supabase.from("caso").select("id, nome, produto, status, criado_em").eq("id", id).single();
 
   if (error || !data) notFound();
   const caso = data as Caso;
+  const perm = await permissoesDoMandato;
+  // Enviar arquivos é escrita (e o envio passa por fora do banco, ver `decidirEnvioAoMandato`): sem
+  // poder escrever aqui, a tela diz o motivo em vez de oferecer um formulário que a rota recusaria.
+  if (!perm.escrever.pode) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <h1 className="text-lg font-semibold text-tinta-900">Adicionar arquivos</h1>
+        <FaixaDeAcesso liberacao={perm.escrever} />
+        <Link href={`/casos/${caso.id}`} className="btn-secundario">Voltar à Visão geral</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -39,7 +54,7 @@ export default async function AdicionarArquivosPage({
           </p>
         )}
       </div>
-      <UploadForm mandatoInicial={caso.nome} travarMandato casoId={caso.id} />
+      <UploadForm mandatoInicial={caso.nome} travarMandato casoId={caso.id} podeExcluir={perm.reservadoAoSocio.pode} />
       {passo && (
         <p className="text-sm">
           <Link href={`/casos/${caso.id}`} className="text-tinta-500 underline hover:text-tinta-900">

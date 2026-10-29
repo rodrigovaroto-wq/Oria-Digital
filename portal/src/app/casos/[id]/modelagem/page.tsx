@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import { paginar } from "@/lib/supabase/paginar";
 import { EditorLinhas } from "./EditorLinhas";
 import { FormParametros, FormPremissa } from "./FormsTopo";
@@ -142,9 +144,14 @@ export default async function ModelagemPage({
   const { q } = await searchParams;
   const busca = (q ?? "").trim();
   const supabase = await createClient();
+  // Quem não escreve neste mandato (Leitura; Analista não alocado) vê a modelagem e baixa os arquivos,
+  // mas os parâmetros, as premissas e o editor de linhas ficam desabilitados — o salvar do banco
+  // devolveria 42501. O motivo está na faixa do mandato.
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
 
   const casoRes = await supabase.from("caso").select("id, nome, produto, status").eq("id", id).single();
   if (casoRes.error || !casoRes.data) notFound();
+  const { escrever } = await permissoesDoMandato;
 
   // Colunas nomeadas, nunca `*`: o tipo logo abaixo já declara exatamente o que
   // esta tela lê, e `*` traz também `atualizado_por`/`atualizado_em`, que ninguém
@@ -651,6 +658,7 @@ export default async function ModelagemPage({
           Entidade e último exercício vêm <strong>sugeridos</strong> pelos documentos deste caso —
           confira antes de salvar. O Excel sai parametrizado com o que estiver aqui.
         </p>
+        <ZonaDeEscrita pode={escrever.pode}>
         <FormParametros casoId={id}>
           <label className="text-sm">
             <span className="text-tinta-600">Entidade modelada</span>
@@ -708,6 +716,7 @@ export default async function ModelagemPage({
             </span>
           </label>
         </FormParametros>
+        </ZonaDeEscrita>
       </section>
 
       {/* 2. PREMISSAS DO CASO */}
@@ -784,6 +793,7 @@ export default async function ModelagemPage({
           <span aria-hidden className="invisible px-2 py-0.5 text-xs">Atualizar</span>
         </div>
 
+        <ZonaDeEscrita pode={escrever.pode}>
         <SugestoesDoRealizado
           casoId={id}
           anos={anos}
@@ -852,6 +862,7 @@ export default async function ModelagemPage({
             </div>
           ))}
         </div>
+        </ZonaDeEscrita>
       </section>
 
       {/* 3. LINHAS × PREMISSAS */}
@@ -901,6 +912,7 @@ export default async function ModelagemPage({
                 tela mostra é o rótulo em português. Misturar os dois foi o defeito:
                 `passivo_nao_circulante` num cabeçalho de seção. */}
             {linhasPorSecao.size > 0 && (
+              <ZonaDeEscrita pode={escrever.pode}>
               <EditorLinhas
                 casoId={id}
                 ativas={ativas.map((a) => ({
@@ -925,6 +937,7 @@ export default async function ModelagemPage({
                     }])),
                   }))}
               />
+              </ZonaDeEscrita>
             )}
             {linhasPorSecao.size === 0 && (
               <p className="text-sm text-tinta-500">

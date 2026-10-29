@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { EquipeDoMandato } from "@/components/equipe-do-mandato";
 import { paginar } from "@/lib/supabase/paginar";
 import { ehPdf, hrefDoOriginal, rotuloDoLink } from "@/lib/original-do-documento";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
@@ -109,6 +111,9 @@ export default async function CasoDashboardPage({
 }>) {
   const { id } = await params;
   const supabase = await createClient();
+  // O papel neste mandato (memoizado: o layout já o pediu). A promessa é criada AQUI e esperada depois
+  // das consultas, para a pergunta de acesso andar em paralelo com elas e não depois.
+  const permPromessa = lerPermissoesDoMandato(id);
 
   // PENDÊNCIA EM ABERTO = `ESTADOS_EM_ABERTO`, a mesma lista do layout e da aba Pendências.
   // Três contagens `head: true` (só o número, nenhuma linha) no lugar da lista inteira: esta
@@ -163,6 +168,7 @@ export default async function CasoDashboardPage({
   if (casoRes.error || !casoRes.data) {
     notFound();
   }
+  const perm = await permPromessa;
 
   const caso = casoRes.data as Caso;
   const kitBasico = (kitBasicoRes.data as TaxonomiaTipoDocumento[] | null) ?? [];
@@ -388,7 +394,11 @@ export default async function CasoDashboardPage({
                 </p>
               )}
             </div>
-            {portao2.elegivel && caso.status !== "aprovado" && caso.status !== "pronto_para_base" && (
+            {portao2.elegivel && caso.status !== "aprovado" && caso.status !== "pronto_para_base" && !perm.reservadoAoSocio.pode && (
+              // Aprovar é de Sócio (gatilho da 0216). O motivo toma o lugar do botão, à vista.
+              <p className="max-w-xs text-xs text-tinta-600">{perm.reservadoAoSocio.motivo}</p>
+            )}
+            {portao2.elegivel && caso.status !== "aprovado" && caso.status !== "pronto_para_base" && perm.reservadoAoSocio.pode && (
               <form action={aprovarCaso.bind(null, id)} className="flex items-center gap-2">
                 <input
                   type="text"
@@ -436,6 +446,8 @@ export default async function CasoDashboardPage({
           </ul>
         </section>
       )}
+
+      <EquipeDoMandato casoId={id} permissoes={perm} />
     </div>
   );
 }

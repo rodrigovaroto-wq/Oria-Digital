@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { FORMAS, PAPEIS, PARENTESCOS, lerPercentual } from "@/lib/perimetro";
+import { MENSAGEM_SEM_PERMISSAO, ehNegacaoDePermissao, textoDeFalhaDaAcao } from "@/lib/acesso";
 
 // AS ESCRITAS DO PERÍMETRO (0179–0183, 0209). Cada uma chama a função do banco e DEVOLVE o resultado
 // como objeto — nunca exceção nem redirect, para a mensagem do banco chegar ao analista (as exceções
@@ -31,7 +32,7 @@ async function rodar(
   const supabase = await createClient();
   const entidadeId = texto(form, "entidade_id");
   const dono = await supabase.from("entidade").select("caso_id").eq("id", entidadeId).maybeSingle();
-  if (dono.error) return erro(`Não foi possível conferir a empresa: ${dono.error.message}`);
+  if (dono.error) return erro(textoDeFalhaDaAcao("Não foi possível conferir a empresa", dono.error));
   if (dono.data?.caso_id !== casoId) return erro("Empresa não encontrada neste mandato — nada foi gravado.");
   const { data: { user } } = await supabase.auth.getUser();
   const autor = user?.email ?? "portal:desconhecido";
@@ -39,7 +40,7 @@ async function rodar(
   if (pedido && "tom" in pedido) return pedido;
   if (!pedido) return erro("Pedido inválido.");
   const { error } = await supabase.rpc(pedido.fn, pedido.args);
-  if (error) return erro(error.message);
+  if (error) return erro(textoDeFalhaDaAcao("Não foi possível gravar", error));
   revalidatePath(`/casos/${casoId}/perimetro`);
   return { tom: "ok", texto: sucesso };
 }
@@ -85,19 +86,19 @@ export async function registrarControlador(casoId: string, _a: ResultadoPerimetr
   if (Number.isNaN(pct)) return erro("Percentual inválido: use só número, por exemplo 51 ou 12,5.");
   const supabase = await createClient();
   const dono = await supabase.from("entidade").select("caso_id").eq("id", texto(form, "entidade_id")).maybeSingle();
-  if (dono.error) return erro(`Não foi possível conferir a empresa: ${dono.error.message}`);
+  if (dono.error) return erro(textoDeFalhaDaAcao("Não foi possível conferir a empresa", dono.error));
   if (dono.data?.caso_id !== casoId) return erro("Empresa não encontrada neste mandato — nada foi gravado.");
   const { data: { user } } = await supabase.auth.getUser();
   const autor = user?.email ?? "portal:desconhecido";
   const novo = await supabase.rpc("fn_controlador_registrar", {
     p_caso_id: casoId, p_nome: nome, p_documento: texto(form, "documento") || null, p_tipo_pessoa: tipo, p_autor: autor,
   });
-  if (novo.error) return erro(novo.error.message);
+  if (novo.error) return erro(textoDeFalhaDaAcao("Não foi possível registrar o controlador", novo.error));
   const liga = await supabase.rpc("fn_entidade_definir_controlador", {
     p_entidade_id: texto(form, "entidade_id"), p_controlador_id: novo.data, p_percentual: pct, p_autor: autor,
   });
   revalidatePath(`/casos/${casoId}/perimetro`);
-  if (liga.error) return erro(`O controlador "${nome}" foi registrado, mas o vínculo com a empresa falhou: ${liga.error.message}`);
+  if (liga.error) return erro(`O controlador "${nome}" foi registrado, mas o vínculo com a empresa falhou: ${ehNegacaoDePermissao(liga.error) ? MENSAGEM_SEM_PERMISSAO : liga.error.message}`);
   return { tom: "ok", texto: `${nome} registrado e vinculado.` } satisfies ResultadoPerimetro;
 }
 
@@ -157,7 +158,7 @@ export async function vincularFamilia(casoId: string, _a: ResultadoPerimetro, fo
   const { error } = await supabase.rpc("fn_controlador_vincular_familia", {
     p_caso_id: casoId, p_controlador_a: a, p_controlador_b: b, p_parentesco: parentesco, p_fonte: fonte, p_autor: autor,
   });
-  if (error) return erro(error.message);
+  if (error) return erro(textoDeFalhaDaAcao("Não foi possível gravar", error));
   revalidatePath(`/casos/${casoId}/perimetro`);
   return { tom: "ok", texto: "Vínculo familiar declarado. Os grupos do topo foram recalculados." } satisfies ResultadoPerimetro;
 }
@@ -171,10 +172,10 @@ export async function desvincularFamilia(casoId: string, _a: ResultadoPerimetro,
   if (!existe) return erro("Caso não encontrado — nada foi gravado.");
   // O vínculo vem do formulário: confere que é deste caso antes de encerrar.
   const dono = await supabase.from("controlador_vinculo").select("caso_id").eq("id", vinculo).maybeSingle();
-  if (dono.error) return erro(`Não foi possível conferir o vínculo: ${dono.error.message}`);
+  if (dono.error) return erro(textoDeFalhaDaAcao("Não foi possível conferir o vínculo", dono.error));
   if (!dono.data || dono.data.caso_id !== casoId) return erro("Vínculo não encontrado neste mandato — nada foi encerrado.");
   const { error } = await supabase.rpc("fn_controlador_desvincular_familia", { p_vinculo_id: vinculo, p_motivo: motivo, p_autor: autor });
-  if (error) return erro(error.message);
+  if (error) return erro(textoDeFalhaDaAcao("Não foi possível gravar", error));
   revalidatePath(`/casos/${casoId}/perimetro`);
   return { tom: "ok", texto: "Vínculo encerrado. Os grupos do topo foram recalculados." } satisfies ResultadoPerimetro;
 }

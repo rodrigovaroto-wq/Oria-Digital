@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { conferirEnvioAoMandato } from "@/lib/supabase/acesso";
 import { descobrirNomesDeCampo } from "@/lib/n8n-form";
 import { TETO_DA_FUNCTION_BYTES, TETO_DO_PROXY_BYTES, formatarBytes } from "@/lib/limite-de-envio";
 
@@ -69,6 +70,11 @@ export async function POST(request: Request) {
   if (arquivos.length === 0) {
     return NextResponse.json({ error: "Selecione ao menos um arquivo." }, { status: 400 });
   }
+
+  // O PAPEL, ANTES DE ENCAMINHAR. O n8n grava com a conexão de serviço e acha o mandato pelo nome:
+  // nenhuma RLS o barra, então a recusa tem de ser aqui (ver `decidirEnvioAoMandato`).
+  const permissao = await conferirEnvioAoMandato(mandato);
+  if (!permissao.ok) return NextResponse.json({ error: permissao.mensagem }, { status: permissao.status });
 
   // O LOTE GRANDE QUE CHEGOU AQUI MESMO ASSIM.
   //

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { textoDeFalhaDaAcao } from "@/lib/acesso";
 
 // Chama a RPC fn_revisar_documento (Supabase/migrations/0008_portal_revisao.sql) — o
 // humano confirma ou corrige a classificação sugerida (N1: anti-ancoragem,
@@ -32,7 +33,7 @@ export async function revisarDocumento(casoId: string, formData: FormData) {
   });
 
   if (error) {
-    throw new Error(`Falha ao revisar documento: ${error.message}`);
+    throw new Error(textoDeFalhaDaAcao("Falha ao revisar documento", error));
   }
 
   // "layout": os números das abas (Pendências, Documentos) moram no layout do mandato, e

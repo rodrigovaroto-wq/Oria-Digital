@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { FecharMandato } from "@/components/fechar-mandato";
 import { ExcluirMandato } from "@/components/excluir-mandato";
 import { IconeMais3Pontos } from "@/components/icones";
+import type { Liberacao } from "@/lib/acesso";
 
 // O MENU "⋯" DO MANDATO: fechar/reabrir e excluir saem do corpo da tela. Eram
 // botões soltos ao lado das ações de trabalho (e o fechar só existia na lista
@@ -21,10 +22,13 @@ export function MenuDoMandato({
   casoId,
   nome,
   fechado,
+  reservado,
 }: Readonly<{
   casoId: string;
   nome: string;
   fechado: boolean;
+  /** Fechar, reabrir e excluir são de Sócio (gatilho da 0216). Sem a liberação, o motivo toma o lugar dos botões. */
+  reservado: Liberacao;
 }>) {
   const [aberto, setAberto] = useState(false);
   const raiz = useRef<HTMLDivElement>(null);
@@ -84,8 +88,15 @@ export function MenuDoMandato({
         >
           Histórico
         </Link>
-        <FecharMandato casoId={casoId} nome={nome} fechado={fechado} />
-        <ExcluirMandato casoId={casoId} nome={nome} />
+        {reservado.pode ? (
+          <>
+            <FecharMandato casoId={casoId} nome={nome} fechado={fechado} />
+            <ExcluirMandato casoId={casoId} nome={nome} />
+          </>
+        ) : (
+          // O motivo À VISTA no lugar dos botões: quem abre o menu procurando "Fechar" lê por que não há.
+          <p className="px-3 py-2 text-xs leading-snug text-tinta-600">{reservado.motivo}</p>
+        )}
       </div>
     </div>
   );

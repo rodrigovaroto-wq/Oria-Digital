@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { descobrirNomesDeCampo } from "@/lib/n8n-form";
+import { conferirEnvioAoMandato } from "@/lib/supabase/acesso";
 
 // PARA ONDE O NAVEGADOR MANDA UM LOTE QUE NÃO CABE NA FUNCTION.
 //
@@ -34,6 +35,13 @@ export async function GET(request: Request) {
   if (new URL(request.url).searchParams.get("apenas") === "agora") {
     return NextResponse.json({ agora: new Date().toISOString() });
   }
+
+  // A URL do Form do n8n só sai para quem pode enviar a ESTE mandato (o envio direto do navegador
+  // contorna `/api/intake` e o banco não o vê). O nome vem do formulário: sem ele, não há o que conferir.
+  const mandato = (new URL(request.url).searchParams.get("mandato") ?? "").trim();
+  if (!mandato) return NextResponse.json({ error: "Informe o nome do mandato." }, { status: 400 });
+  const permissao = await conferirEnvioAoMandato(mandato);
+  if (!permissao.ok) return NextResponse.json({ error: permissao.mensagem }, { status: permissao.status });
 
   const url = process.env.N8N_INTAKE_FORM_URL;
   if (!url) {
