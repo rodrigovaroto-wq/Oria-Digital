@@ -33,7 +33,7 @@ psql -q -d "$DB" -c "
   -- 0216: o schema auth do Supabase (usuários e auth.uid()), no mínimo que as migrations e os testes usam. O
   -- auth.uid() é o do Supabase: lê o sub de request.jwt.claims, que o PostgREST preenche por requisição.
   create schema if not exists auth;
-  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text);
+  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text, created_at timestamptz not null default now());
   create or replace function auth.uid() returns uuid language sql stable as \$\$
     select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
                     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid \$\$;

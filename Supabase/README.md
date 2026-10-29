@@ -1009,6 +1009,16 @@ supabase db execute --file Supabase/migrations/0215_o_historico_que_so_o_banco_s
 # >>>   insert into membro (usuario_id, papel) select id, 'socio' from auth.users where email = '<sócio>';
 # >>> O n8n (Postgres nativo, role postgres) e a service_role ignoram RLS e seguem como antes; só o `authenticated` (o navegador
 # >>> do portal) muda. Aplicar DEPOIS da 0215 e ANTES de abrir o portal para mais alguém. Teste: Supabase/test/acesso_por_caso.test.sql.
+# >>> ANTES DE APLICAR, DUAS CONFERÊNCIAS (a migration aborta/avisa, mas é melhor saber antes):
+# >>>   1. NOMES DE MANDATO DUPLICADOS: a 0216 cria índice único em lower(btrim(caso.nome)) e ABORTA, listando as duplicatas, se houver.
+# >>>      select lower(btrim(nome)), count(*), array_agg(id) from caso group by 1 having count(*) > 1;   -- renomeie/funda antes
+# >>>   2. POLICIES DE storage.objects DE OUTRA ORIGEM: a migration só derruba as que o repositório criou no bucket `documentos`
+# >>>      (documentos_authenticated_all, da 0003). Se imprimir "WARNING: 0216: policy de storage.objects que NÃO é deste repositório
+# >>>      e foi mantida: <nome>" e ela cobrir o bucket documentos (ex.: criada no Dashboard com using (true)), ela ANULA a separação
+# >>>      por mandato do Storage: derrube-a (drop policy "<nome>" on storage.objects) e reaplique só o bloco `documentos_*` da seção 4.
+# >>> O bootstrap (promover todos de auth.users a Sócio) só roda com `membro` VAZIA: reaplicar a migration não promove ninguém.
+# >>> O n8n continua mandando o NOME do mandato (fn_upsert_caso); agora o nome casa ignorando caixa/espaços e é ÚNICO. Trocar por caso_id é outra rodada.
+# >>> Nova para a tela da equipe: fn_membros_da_equipe() — só Sócio — lista todos os usuários do Auth (inclusive sem papel).
 supabase db execute --file Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql
 # DEPOIS DE APLICAR, confira o catálogo (e que há >= 1 Sócio):
 #   select chave, presente, detalhe from fn_instalacao_conferir()

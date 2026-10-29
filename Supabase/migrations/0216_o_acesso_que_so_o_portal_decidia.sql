@@ -1,6 +1,7 @@
 -- =============================================================================
 -- 0216 — O ACESSO QUE SÓ O PORTAL DECIDIA: papéis Sócio · Analista · Leitura e RLS POR MANDATO, no banco (portal, Fase 5, parte 1)
--- (Cria 2 tabelas, 18 funções (mais 4 de gatilho), 5 gatilhos de guarda e TROCA toda policy `to authenticated` (65 em public + 1 em storage.objects,
+-- (Cria 2 tabelas, 21 funções (mais 5 de gatilho), 5 gatilhos de guarda + 19 de comando (DELETE da Leitura), 1 índice único (nome do mandato),
+--  REDEFINE fn_upsert_caso e TROCA toda policy `to authenticated` (65 em public + 1 em storage.objects,
 --  todas `using (true)`/`with check (true)` exceto `caso_pergunta_reapontar`) por policy por mandato. Muda o que o navegador do portal
 --  enxerga; NÃO muda o que o n8n e o SQL Editor fazem (ver "Quem escreve"). Backfill: o BOOTSTRAP abaixo.)
 --
@@ -13,6 +14,30 @@
 -- >>> fn_definir_papel(<uuid>, 'analista'|'leitura'|'socio') e, para Analista/Leitura, fn_alocar(<caso>, <uuid>).
 -- >>> A sonda tem o requisito `acesso_socio_seed` (>= 1 linha em `membro`): banco sem Sócio acusa bloqueante.
 -- >>> Quantos usuários o bootstrap alcança em PRODUÇÃO eu NÃO medi (sem conexão): `select count(*) from auth.users`.
+-- >>> O bootstrap SÓ roda com `membro` VAZIA (fn_acesso_bootstrap): reaplicar esta migration não promove ninguém. A primeira versão
+-- >>> promovia a Sócio, na reaplicação, todo usuário que a equipe já deixara sem papel (reproduzido pela revisão).
+-- >>> ESTA MIGRATION ABORTA se houver dois mandatos com o mesmo nome (sem caixa/espaço nas pontas): ela lista as duplicatas e para,
+-- >>> antes de mudar qualquer coisa. Confira ANTES: select lower(btrim(nome)), count(*) from caso group by 1 having count(*) > 1;
+--
+-- CORREÇÕES DA REVISÃO INDEPENDENTE (a migration ainda NÃO tinha sido aplicada: corrigida no próprio arquivo, sem 0217). Cada uma tem
+-- assert que reprova sem ela (números na seção de medição, abaixo):
+--   ALTO  1  gatilho de alocação do criador: `insert into caso (id, nome) values (<id alheio>, ...) on conflict do nothing` alocava o
+--            Analista em qualquer mandato (o BEFORE roda antes do conflito). Agora não aloca se o id/nome já é de um mandato. AFTER INSERT
+--            foi tentado e recusado: a policy de SELECT do `insert ... returning` roda antes dos gatilhos AFTER e o criador não veria o mandato.
+--   ALTO  2  nome de mandato único (índice em lower(btrim(nome))) + fn_upsert_caso recusa, com mensagem, o nome de um mandato que o
+--            usuário não lê (helper definer fn_caso_nome_ocupado: só existe/não existe). O n8n continua mandando NOME; trocar por
+--            caso_id é OUTRA rodada. Muda para o n8n: o nome agora casa ignorando caixa/espaços (antes: igualdade exata).
+--   ALTO  3  execucao_falha com caso_id nulo lê-se pelo NOME do mandato (policy própria); sem caso_id e sem nome só o Sócio.
+--   MÉDIO 4  bootstrap só com `membro` vazia.
+--   MÉDIO 5  evento sem mandato (membro:, estagio:, golden_rodada:) só o Sócio grava (antes: Sócio ou Analista); `campo_extraido:` passou
+--            a resolver para o mandato (é o que fn_registrar_classe_override grava).
+--   MÉDIO 7  (teste) as 22 RPCs de trabalho rodam como Analista alocada, Leitura e Analista de outro mandato.
+--   BAIXO 8  DELETE da Leitura (e de quem não tem papel) dá 42501 por gatilho de COMANDO (uma chamada por DELETE; o gatilho por linha
+--            foi descartado pelo custo que a seção de desempenho mediu), em 19 tabelas.
+--   BAIXO 9  só se derrubam as policies de storage.objects que ESTE repositório criou (documentos_authenticated_all da 0003 e as 4 daqui);
+--            as de outra origem ficam, com WARNING. Se o aviso aparecer e ela cobrir o bucket `documentos`: derrube-a à mão.
+--   BAIXO 10 lock consultivo (pg_advisory_xact_lock) no gatilho do último Sócio.
+--   NOVO     fn_membros_da_equipe() (só Sócio): todos os usuários do Auth com e-mail, papel (NULL = sem acesso) e alocações — a tela da equipe.
 --
 -- A DECISÃO DO DONO (29/10/2026):
 --   Sócio    tudo, em todos os mandatos: aprovar, fechar/reabrir/excluir mandato, mudar o dial, gerir equipe (papéis e alocações).
@@ -92,7 +117,7 @@
 -- ===== 4. AS POLICIES (resumo; o texto está nos laços abaixo) =====
 --   por tabela com caso: SELECT `sócio OR <caso> in fn_casos_legiveis()` (por join: em CASCATA, `fk in (select id from <pai>)`, que herda a
 --   policy do pai); INSERT with check de ESCREVER; UPDATE using de LER + with check de ESCREVER (a Leitura leva 42501, não "0 linhas" calado; e
---   ninguém move linha para mandato em que não escreve); DELETE using de ESCREVER (a Leitura apaga 0 linhas — o que existia: perimetro,
+--   ninguém move linha para mandato em que não escreve); DELETE using de ESCREVER (a Leitura leva 42501 pelo gatilho de comando da seção 4, e não "0 linhas" calado — o que existia: perimetro,
 --   controlador, caso_pergunta etc. seguem SEM as operações que a 0210/0212/0213 e a 0214 tiraram, e `reapontar` de caso_pergunta fica).
 --   `caso`: INSERT só Sócio ou Analista; SELECT inclui fn_alocado_agora (volatile, só para o `insert ... returning` do criador).
 --   evento_auditoria: SELECT por mandato do `entidade_ref`; INSERT exige poder escrever o mandato (ou ser Sócio/Analista se o evento não tem
@@ -109,9 +134,10 @@
 -- O QUE PODE QUEBRAR EM PRODUÇÃO AO APLICAR (e por quê)
 --   1. Se `auth.users` estiver VAZIO ou não tiver o Sócio certo, ninguém acessa nada (acesso_socio_seed acusa). Promova à mão (README).
 --   2. Quem hoje usa o portal e NÃO deveria ver tudo vira Sócio (bootstrap). É decisão do dono, não da migration; confira os usuários antes.
---   3. fn_upsert_caso procura o mandato por NOME sob RLS: um Analista que digita o nome de um mandato em que NÃO está alocado não o
---      encontra e CRIA outro de mesmo nome (não há UNIQUE em caso.nome; o Sócio passa a ver dois). Para a Leitura e quem não tem papel dá 42501.
---      A tela de upload (portal/src/components/upload-form.tsx) trata o erro como falha de criar mandato.
+--   3. fn_upsert_caso procura o mandato por NOME sob RLS: o Analista que digita o nome de um mandato em que NÃO está alocado agora leva
+--      42501 com "Já existe um mandato com este nome ao qual você não tem acesso" (antes criava o homônimo; agora o índice único também o
+--      impede). Para a Leitura e quem não tem papel dá 42501. A tela de upload (portal/src/components/upload-form.tsx) trata o erro como falha
+--      de criar mandato: mostrar a mensagem do banco é trabalho do portal. A aplicação ABORTA se já houver nomes duplicados em produção.
 --   4. Marcar falha de processamento como vista (execucao_falha.visto_em) é UPDATE: a Leitura leva 42501 e o sino de avisos mostra erro.
 --   5. /administracao lê estagio_autonomia (qualquer papel) mas os eventos `estagio:` e o golden set só o Sócio vê: o Analista vê o dial sem a
 --      trilha e a cobertura do golden zerada. fn_historico_do_caso do Analista perde os eventos de entidade ABSORVIDA por fusão (a entidade
@@ -129,14 +155,40 @@
 --   * O portal: nenhuma tela foi aberta nem o supabase-js exercitado; o que se provou é o banco com `request.jwt.claims` + `set local role
 --     authenticated`, que é o que o PostgREST faz, mas o PostgREST em si não rodou. Nenhum arquivo de portal/ foi tocado.
 --   * `evento_auditoria` e o Storage com volume; as policies de `storage.objects` só no stub do `run.sh` (tabela mínima).
---   * Concorrência: dois Sócios rebaixando-se ao mesmo tempo (o gatilho é por linha; sob READ COMMITTED a corrida entre dois UPDATE de
---     linhas distintas pode deixar zero Sócio). Improvável com um time de poucas pessoas; não medido.
+--   * Concorrência: a corrida de dois Sócios foi MEDIDA com duas sessões psql à mão (com o lock: o segundo recebe P0001 e fica 1 Sócio;
+--     sem o lock: 0 Sócio) e NÃO está na suíte (uma sessão só). Dois usuários criando o MESMO nome no mesmo instante: o que perde o índice
+--     único deixa a alocação órfã e a FK deferida derruba o COMMIT (23503) — falha, não acesso; não medido.
+--   * Produção: duplicatas de nome de mandato, usuários em auth.users e policies de storage de outra origem — nada consultado.
+--   * `created_at` de auth.users: o stub do harness ganhou a coluna (a do Supabase real a tem; não consultei produção).
+--   * Renomear o próprio mandato para um nome existente falha com 23505 (mensagem do índice, que mostra o nome tentado): revela que o nome
+--     existe. Aceito: o Analista que o digita já o conhece, e o dado do mandato não vaza.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/acesso_por_caso.test.sql — 99 chamadas de assert, 124 execuções (dois laços: 3 chamadas executadas 15 vezes na
--- seção 2, 1 chamada executada 14 vezes na seção 7), medidas em 29/10/2026 com `PGOPTIONS='-c acesso.medindo=on'` (o assert vira `raise warning` e CONTA; sem a variável
--- é `raise exception`, e o `run.sh` completo foi relido inteiro sem nenhum FALHOU) e a migration conferida como APLICADA em cada variante
--- (`instalacao_cobertura.ate_migration = 0216`, 23 requisitos da 0216 presentes). Controle intacto: 124 ok, 0 falhas. Cada guarda desligada
--- UMA por vez numa cópia do banco migrado (reprovações / 124 execuções; o último item de cada linha é a sonda quando ela também acusa):
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/acesso_por_caso.test.sql — 129 chamadas de assert, 217 execuções (três laços: 3 chamadas executadas
+-- 15 vezes na seção 2, 1 chamada executada 14 vezes na seção 7, e 3 chamadas na seção 4b executadas 22 vezes, uma por RPC), medidas em 29/10/2026 com
+-- `PGOPTIONS='-c acesso.medindo=on'` (o assert vira `raise warning` e CONTA; sem a variável é `raise exception`, e o `run.sh` completo foi
+-- relido inteiro sem nenhum FALHOU) e a migration conferida como APLICADA em cada variante. Controle intacto: 217 ok, 0 falhas.
+-- ESTA REVISÃO (cada correção desligada UMA vez numa cópia do banco já migrado; reprovações / 217 execuções):
+--   * ALTO 1  gatilho de alocação sem a checagem de id/nome existente: 5 (a alocação indevida, o Analista passando a ver o mandato e os
+--             documentos de A e, em cadeia, os dois asserts de fn_upsert_caso, que passam a ACHAR o mandato em vez de recusar)
+--   * ALTO 2  sem o índice único caso_nome_unico: 6 · fn_upsert_caso da 0207 (igualdade exata, sem recusa): 3 (inclui a sonda) ·
+--             só fn_caso_nome_ocupado sempre false: 1 (a mensagem; o 42501 vem então da RLS, sem dizer o motivo) · função da 0207 E sem
+--             o índice, que é o defeito reproduzido pela revisão: 8
+--   * ALTO 3  policies de execucao_falha como as do laço (só caso_id): 6
+--   * MÉDIO 4 bootstrap sem `where not exists (select 1 from membro)`: 2
+--   * MÉDIO 5 fn_pode_escrever_evento liberando também o Analista: 2 (a forja de mudanca_dial/papel_definido + a sonda) · fn_caso_do_evento sem
+--             o ramo campo_extraido: 2 (fn_registrar_classe_override passa a levar 42501 para a Analista)
+--   * MÉDIO 7 fn_casos_legiveis devolvendo todos os mandatos: 18 · fn_casos_escreviveis E fn_pode_escrever_caso sempre true: 35 (17 deles são
+--             as RPCs de Leitura; sozinha, fn_casos_escreviveis devolvendo todos reprova 12, porque quase toda RPC grava na trilha, que
+--             é decidida por fn_pode_escrever_caso)
+--   * BAIXO 8 sem os 19 gatilhos de comando (leitura_nao_apaga): 2 (o DELETE da Leitura volta a "0 linhas" calado + a sonda)
+--   * fn_membros_da_equipe sem fn_exige_socio: 6 (as quatro recusas — Analista, Leitura, sem papel e a outra Analista —, a sonda e a
+--             leitura do Sócio, que deixa de ver as alocações porque o corpo de teste desse desligamento as zerou)
+--   * BAIXO 9 e 10 NÃO estão na suíte (uma sessão só; o laço de storage roda na aplicação): medidos à mão em cópia do banco. Laço de storage da
+--             primeira versão sobre uma policy `externa_0216` de outra origem: ela foi derrubada (0 sobraram); o laço novo: 1 sobrou, com
+--             WARNING. Corrida de dois Sócios com duas sessões psql: sem o lock, 0 Sócio no fim; com o lock, o segundo recebe P0001 e fica 1.
+-- A medição da PRIMEIRA versão (99 chamadas, 124 execuções; os números abaixo são dessa versão e NÃO foram remedidos nesta revisão: os asserts
+-- acrescentados só podem aumentá-los) — cada guarda desligada UMA por vez numa cópia do banco migrado (reprovações / 124 execuções; o último item
+-- de cada linha é a sonda quando ela também acusa):
 --   * fn_pode_ler_caso (por linha) sempre true: 15 · fn_casos_legiveis (por conjunto) devolvendo todos os mandatos: 12 ·
 --     fn_casos_legiveis vazio (ninguém lê): 15 (positivos de controle)
 --   * fn_pode_escrever_caso sempre true: 5 · fn_casos_escreviveis devolvendo todos: 9
@@ -191,9 +243,25 @@ grant select, insert, update, delete on membro, alocacao to service_role;
 
 -- BOOTSTRAP. Sem ele ninguém acessa nada depois de aplicar. Todo usuário que existe em auth.users AGORA é o time atual da
 -- Oria e vira Sócio; quem for criado depois nasce SEM papel. Medido pela sonda/produção: ver cabeçalho.
-insert into membro (usuario_id, papel, criado_por)
-select u.id, 'socio', null from auth.users u
-on conflict (usuario_id) do nothing;
+-- SÓ SE `membro` ESTIVER VAZIA (a revisão reaplicou a migration no psql sem ON_ERROR_STOP: o `create table` falha, o script segue e
+-- este insert promovia a Sócio todo usuário que a equipe já tinha deixado SEM papel de propósito). Função, e não insert solto, para
+-- o teste poder chamá-la com `membro` povoada (deve promover 0) e vazia (deve promover todos): `service_role` e o SQL Editor a chamam.
+create function fn_acesso_bootstrap() returns integer
+language plpgsql set search_path = public, pg_temp as $$
+declare v_n integer;
+begin
+  insert into membro (usuario_id, papel, criado_por)
+  select u.id, 'socio', null from auth.users u
+   where not exists (select 1 from membro)
+  on conflict (usuario_id) do nothing;
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+revoke all on function fn_acesso_bootstrap() from public;
+grant execute on function fn_acesso_bootstrap() to service_role;
+comment on function fn_acesso_bootstrap() is
+  '0216: promove a Sócio todo usuário de auth.users, mas SÓ se `membro` estiver vazia (banco recém-migrado). Idempotente: com qualquer membro cadastrado devolve 0. Não é exposta ao authenticated.';
+select fn_acesso_bootstrap();
 
 -- =============================================================================
 -- 2. AS PERGUNTAS DE ACESSO — security definer (leem membro/alocacao sem recursão de RLS), stable, search_path fixo
@@ -318,17 +386,23 @@ begin
     when 'pendencia'        then (select x.caso_id from pendencia x where x.id = v_id)
     when 'reconciliacao'    then (select x.caso_id from reconciliacao x where x.id = v_id)
     when 'controlador'      then (select x.caso_id from controlador x where x.id = v_id)
+    -- fn_registrar_classe_override (0128) grava `campo_extraido:<id>`: é trilha legítima de Analista, e sem este ramo ela cairia
+    -- na regra "sem mandato só Sócio" abaixo e a função do portal passaria a falhar para ele.
+    when 'campo_extraido'   then (select fn_caso_da_versao(x.documento_versao_id) from campo_extraido x where x.id = v_id)
     else null end;
 end $$;
 
--- Quem pode ESCREVER um evento: o evento de um caso exige escrever nele; o que não resolve para caso (estagio:, ...)
--- exige Sócio ou Analista.
+-- Quem pode ESCREVER um evento: o evento de um caso exige escrever nele; o que não resolve para caso (estagio:, membro:,
+-- golden_rodada:, ou uma entidade que já não existe) é SÓ DO SÓCIO. A primeira versão liberava também o Analista, e ele forjava na
+-- trilha `mudanca_dial` e `papel_definido` (entidade_ref `estagio:<x>`, `membro:<uuid>`): a trilha é a prova de quem decidiu o quê.
+-- O que o Analista grava legitimamente tem mandato: `caso:`, `documento:`, `pendencia:`, `entidade:`, ... e `campo_extraido:` (resolvido
+-- acima). As funções de gestão (definer) e a conexão de serviço (n8n) gravam sem passar pela policy.
 create function fn_pode_escrever_evento(p_ref text) returns boolean
 language plpgsql stable security definer set search_path = public, pg_temp as $$
 declare v_caso uuid := fn_caso_do_evento(p_ref);
 begin
   if v_caso is not null then return fn_pode_escrever_caso(v_caso); end if;
-  return coalesce(fn_meu_papel() in ('socio', 'analista'), false);
+  return fn_eh_socio();
 end $$;
 
 -- A chave do original no Storage é `<caso_id>/<sha256>.<ext>` (N8N/lib/hash.mjs). Chave que não começa com uuid -> NULL.
@@ -383,11 +457,21 @@ create trigger trg_caso_reservado_ao_socio
   for each row execute function fn_trg_caso_reservado_ao_socio();
 
 -- O Analista que cria um mandato fica alocado nele. BEFORE INSERT + FK deferida: a policy de SELECT do `insert ... returning`
--- (fn_upsert_caso) roda ANTES de qualquer gatilho AFTER, e sem a alocação o Analista não enxergaria o mandato que acabou de criar.
+-- (fn_upsert_caso) roda ANTES de qualquer gatilho AFTER, e sem a alocação o Analista não enxergaria o mandato que acabou de criar
+-- (o AFTER INSERT foi tentado e medido: o INSERT ... RETURNING do Analista volta a levar "new row violates row-level security").
+--
+-- O DEFEITO QUE A REVISÃO ACHOU NA PRIMEIRA VERSÃO (reproduzido num banco local): o gatilho BEFORE dispara ANTES de o conflito ser
+-- conhecido. `insert into caso (id, nome) values ('<id alheio>', 'x') on conflict do nothing`, como Analista, não cria linha de caso
+-- (o id existe), mas o gatilho já gravara a alocação (a FK deferida é satisfeita pelo caso alheio): o Analista se alocava em qualquer
+-- mandato cujo id conhecesse, sem trilha. Agora o gatilho NÃO aloca quando o id ou o nome (a unicidade é case-insensitive, ver seção 3b)
+-- já pertence a um mandato — consulta feita como definer, que enxerga todos —, e a linha que o INSERT/ON CONFLICT vai descartar nunca
+-- deixa alocação. Resíduo conhecido: duas sessões criando o MESMO nome no mesmo instante; a que perde o índice único deixa a alocação
+-- órfã, e a FK deferida a derruba no COMMIT (23503): falha em vez de acesso. O id só é conhecido de quem o leu depois do commit.
 create function fn_trg_caso_aloca_criador() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 begin
-  if auth.uid() is not null and fn_meu_papel() = 'analista' then
+  if auth.uid() is not null and fn_meu_papel() = 'analista'
+     and not exists (select 1 from caso c where c.id = new.id or lower(btrim(c.nome)) = lower(btrim(new.nome))) then
     insert into alocacao (caso_id, usuario_id, criado_por) values (new.id, auth.uid(), auth.uid())
     on conflict do nothing;
   end if;
@@ -396,6 +480,68 @@ end $$;
 create trigger trg_caso_aloca_criador
   before insert on caso
   for each row execute function fn_trg_caso_aloca_criador();
+
+-- =============================================================================
+-- 3b. O NOME DO MANDATO É ÚNICO (case-insensitive, sem espaço nas pontas) — e fn_upsert_caso deixa de criar o homônimo
+-- =============================================================================
+-- O DEFEITO (revisão independente, reproduzido): fn_upsert_caso procura o mandato por NOME, e sob RLS o Analista não alocado em "Alfa"
+-- não o encontra e CRIA outro "Alfa". O n8n chama a mesma função como postgres (enxerga os dois) e o `limit 1` sem ordem roteava os PDFs
+-- para qualquer um. E o Analista podia renomear o próprio mandato para um nome existente e capturar os uploads. `caso.nome` nunca teve
+-- unicidade: o banco a garante agora. O n8n continua mandando NOME (trocar por caso_id é outra rodada; o formulário só conhece o nome).
+-- ANTES de criar o índice, a migration ABORTA listando as duplicatas: resolver (renomear/fundir) é decisão do dono, não da migration.
+do $$
+declare v_dup text;
+begin
+  select string_agg(format('"%s" x%s (ids: %s)', g.nome, g.n, g.ids), E'\n') into v_dup
+    from (select min(nome) as nome, count(*) as n, string_agg(id::text, ', ') as ids
+            from caso group by lower(btrim(nome)) having count(*) > 1) g;
+  if v_dup is not null then
+    raise exception E'0216 ABORTADA: há mandatos com o MESMO nome (ignorando caixa e espaço nas pontas). Renomeie ou funda antes de aplicar:\n%', v_dup
+      using errcode = '23505';
+  end if;
+end $$;
+create unique index caso_nome_unico on caso (lower(btrim(nome)));
+comment on index caso_nome_unico is
+  '0216: o nome do mandato é único ignorando caixa e espaços nas pontas. fn_upsert_caso e fn_falhas_abertas já casam por nome assim; sem a unicidade o Analista não alocado criava o homônimo e o n8n roteava para qualquer um.';
+
+-- Só responde existe/não existe (e só a quem pode criar mandato ou é conexão de serviço): o Analista que digita o nome de um mandato
+-- alheio recebe a recusa, não o id nem o conteúdo. Definer para enxergar os mandatos que a RLS lhe esconde.
+create function fn_caso_nome_ocupado(p_nome text) returns boolean
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  if not (fn_pode_criar_caso() or fn_conexao_de_servico()) then
+    raise exception 'Sem permissão para criar mandato (seu papel: %)', coalesce(fn_meu_papel(), 'nenhum') using errcode = '42501';
+  end if;
+  return exists (select 1 from caso c where lower(btrim(c.nome)) = lower(btrim(p_nome)));
+end $$;
+revoke all on function fn_caso_nome_ocupado(text) from public;
+grant execute on function fn_caso_nome_ocupado(text) to authenticated, service_role;
+
+-- A de 0207, com UM acréscimo: nome casado ignorando caixa/pontas (igual ao índice) e a recusa clara quando o nome é de um mandato que
+-- o usuário não lê. Continua invoker (a RLS vale na busca); a assinatura e o ator são os mesmos.
+create or replace function fn_upsert_caso(p_nome text, p_ator text default 'sistema:n8n')
+returns uuid
+language plpgsql
+as $$
+declare
+  v_id uuid;
+begin
+  if p_ator not in ('sistema:n8n', 'portal:navegador') then
+    raise exception 'fn_upsert_caso: ator % fora da lista (sistema:n8n, portal:navegador)', p_ator;
+  end if;
+  select id into v_id from caso where lower(btrim(nome)) = lower(btrim(p_nome)) limit 1;
+  if v_id is null then
+    if fn_caso_nome_ocupado(p_nome) then
+      raise exception 'Já existe um mandato com este nome ao qual você não tem acesso. Peça a um Sócio para alocá-lo, ou use outro nome.'
+        using errcode = '42501';
+    end if;
+    insert into caso (nome) values (btrim(p_nome)) returning id into v_id;
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values (p_ator, 'caso_criado', 'caso:'||v_id, jsonb_build_object('nome', btrim(p_nome)));
+  end if;
+  return v_id;
+end;
+$$;
 
 -- Estágios do dial e catálogo de premissas: globais, só Sócio escreve. O gatilho dá o ERRO (a policy daria 0 linhas calado;
 -- fn_mudar_dial registraria 'mudanca_dial' sem ter mudado nada).
@@ -417,6 +563,13 @@ create trigger trg_premissa_catalogo_so_socio
 create function fn_trg_membro_ultimo_socio() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 begin
+  if old.papel = 'socio' and (tg_op = 'DELETE' or new.papel <> 'socio') then
+    -- Serializa quem sai de Sócio. Sem isto, dois Sócios que se rebaixam ao MESMO tempo (READ COMMITTED, linhas distintas) veem
+    -- cada um "o outro ainda é Sócio" e o banco fica com zero (medido com duas sessões: ver cabeçalho). O lock é consultivo, e não
+    -- `lock table`, para não dar deadlock entre dois UPDATE que já seguram ROW EXCLUSIVE; a consulta abaixo roda DEPOIS dele e,
+    -- como a função é volatile, com snapshot novo: enxerga o commit do primeiro.
+    perform pg_advisory_xact_lock(hashtext('0216.membro_ultimo_socio'));
+  end if;
   if old.papel = 'socio' and (tg_op = 'DELETE' or new.papel <> 'socio')
      and not exists (select 1 from membro m where m.papel = 'socio' and m.usuario_id <> old.usuario_id) then
     raise exception 'Não dá para deixar o portal sem Sócio: % é o último. Promova outro Sócio antes.', old.usuario_id
@@ -434,11 +587,31 @@ create trigger trg_membro_ultimo_socio
 do $$
 declare p record;
 begin
+  -- public: toda policy `to authenticated` é nossa (as 65 foram criadas por migrations deste repositório).
   for p in select schemaname, tablename, policyname from pg_policies
-            where 'authenticated' = any (roles)
-              and (schemaname = 'public' or (schemaname = 'storage' and tablename = 'objects'))
+            where 'authenticated' = any (roles) and schemaname = 'public'
   loop
     execute format('drop policy %I on %I.%I', p.policyname, p.schemaname, p.tablename);
+  end loop;
+end $$;
+-- storage.objects é do Supabase e pode ter policy de OUTRA origem (o Dashboard, outro bucket): só se derruba o que ESTE repositório
+-- criou no bucket `documentos` (a 0003 e, na reaplicação, as quatro abaixo). A primeira versão derrubava toda policy de authenticated.
+drop policy if exists documentos_authenticated_all on storage.objects;
+drop policy if exists documentos_read   on storage.objects;
+drop policy if exists documentos_insert on storage.objects;
+drop policy if exists documentos_update on storage.objects;
+drop policy if exists documentos_delete on storage.objects;
+do $$
+declare p record;
+begin
+  -- O que sobrou em storage.objects para authenticated NÃO é nosso e NÃO foi tocado: se alguma cobrir o bucket `documentos`
+  -- (ex.: criada no Dashboard com `using (true)`), ela anula a separação por mandato — a lista vai no aviso (README: o que fazer).
+  for p in select policyname, cmd, qual from pg_policies
+            where schemaname = 'storage' and tablename = 'objects' and 'authenticated' = any (roles)
+              and policyname not in ('documentos_read', 'documentos_insert', 'documentos_update', 'documentos_delete')
+  loop
+    raise warning '0216: policy de storage.objects que NÃO é deste repositório e foi mantida: % (%) qual=%. Se ela cobre o bucket documentos, derrube-a à mão (Supabase/README.md).',
+      p.policyname, p.cmd, p.qual;
   end loop;
 end $$;
 
@@ -470,7 +643,7 @@ begin
       ('caso_linha_premissa',       'iud', 'caso_id'), ('caso_modelagem',          'iud', 'caso_id'),
       ('caso_premissa',             'iud', 'caso_id'), ('checklist_item_status',   'iud', 'caso_id'),
       ('decisao',                   'iud', 'caso_id'), ('documento',               'iud', 'caso_id'),
-      ('entidade',                  'iud', 'caso_id'), ('execucao_falha',          'iud', 'caso_id'),
+      ('entidade',                  'iud', 'caso_id'),   -- (execucao_falha tem policy própria, logo abaixo do laço)
       ('lote_execucao',             'iud', 'caso_id'), ('pendencia',               'iud', 'caso_id'),
       ('periodo',                   'iud', 'caso_id'), ('reconciliacao',           'iud', 'caso_id'),
       ('controlador',               'i',   'caso_id'), ('caso_pergunta',           'i',   'caso_id'),
@@ -517,6 +690,58 @@ begin
       execute format('create policy %I on %I for delete to authenticated using (%s)', t.tabela || '_delete', t.tabela, v_esc);
     end if;
   end loop;
+end $$;
+
+-- DELETE da Leitura (e de quem não tem papel): a policy de DELETE esconde a linha, e delete que não acha linha apaga 0 SEM ERRO — o
+-- portal diria "feito" a quem nada fez (o UPDATE e o INSERT já dão 42501). Gatilho de COMANDO (uma chamada por DELETE, não por linha:
+-- sem o custo por linha que a seção de desempenho recusou) que recusa quem não é Sócio, Analista nem conexão de serviço.
+create function fn_trg_so_quem_escreve_apaga() returns trigger
+language plpgsql set search_path = public, pg_temp as $$
+begin
+  if not (fn_conexao_de_servico() or coalesce(fn_meu_papel() in ('socio', 'analista'), false)) then
+    raise exception 'Apagar em % é reservado a Sócio e Analista (seu papel: %)', tg_table_name, coalesce(fn_meu_papel(), 'nenhum')
+      using errcode = '42501';
+  end if;
+  return null;
+end $$;
+do $$
+declare t text;
+begin
+  foreach t in array array['arquivo_oficial', 'caso_apresentacao_campo', 'caso_linha_premissa', 'caso_modelagem', 'caso_premissa',
+    'checklist_item_status', 'decisao', 'documento', 'entidade', 'execucao_falha', 'lote_execucao', 'pendencia', 'periodo',
+    'reconciliacao', 'documento_versao', 'campo_extraido', 'documento_fato', 'arquivo_oficial_lancamento_mes', 'arquivo_oficial_registro']
+  loop
+    execute format('create trigger trg_%s_leitura_nao_apaga before delete on %I for each statement execute function fn_trg_so_quem_escreve_apaga()', t, t);
+    -- a sonda exige que TODO gatilho do banco esteja catalogado (sonda_ve_gatilho.test.sql): um requisito por tabela
+    insert into instalacao_requisito (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem)
+    values ('acesso_gatilho_leitura_nao_apaga_' || t, '0216', 'gatilho', t || '.trg_' || t || '_leitura_nao_apaga', null, null,
+            'DELETE de Leitura (ou de quem não tem papel) em ' || t || ' dá 42501; sem o gatilho a policy esconde a linha e o DELETE apaga 0 sem erro, e o portal diz "feito" a quem nada fez.',
+            'importante', 960 + array_position(array['arquivo_oficial', 'caso_apresentacao_campo', 'caso_linha_premissa', 'caso_modelagem', 'caso_premissa',
+    'checklist_item_status', 'decisao', 'documento', 'entidade', 'execucao_falha', 'lote_execucao', 'pendencia', 'periodo',
+    'reconciliacao', 'documento_versao', 'campo_extraido', 'documento_fato', 'arquivo_oficial_lancamento_mes', 'arquivo_oficial_registro'], t))
+    on conflict (chave) do nothing;
+  end loop;
+end $$;
+
+-- execucao_falha: caso_id é NULL quando o pipeline morre antes de resolver o caso (N8N/build-workflow-erros.mjs grava só o NOME). A
+-- policy do laço escondia essa falha de Analista e Leitura, e fn_falhas_abertas e o sino de avisos voltavam a "aguarde" para sempre
+-- (o defeito que o modelo todo existe para evitar). Agora a falha sem caso_id é do mandato cujo NOME ela carrega, se o usuário lê (ou
+-- escreve, para marcar como vista/registrar) esse mandato — a subconsulta em `caso` herda a RLS. Falha sem caso_id E sem caso_nome
+-- (ou com nome que não é de mandato nenhum): SÓ O SÓCIO. Decisão pelo risco: a mensagem pode trazer nome de arquivo e trecho de documento
+-- de um mandato que o leitor não pode ver, e a tela só consulta por NOME (fn_falhas_abertas), então uma falha sem nome não aparece
+-- para ninguém além do Sócio de qualquer forma — não se perde nenhum "aguarde" que o portal teria resolvido.
+do $$
+declare
+  v_ler text := '(select fn_eh_socio()) or caso_id in (select c from fn_casos_legiveis() c)
+    or (caso_id is null and caso_nome is not null and lower(btrim(caso_nome)) in (select lower(btrim(x.nome)) from caso x))';
+  v_esc text := '(select fn_eh_socio()) or caso_id in (select c from fn_casos_escreviveis() c)
+    or (caso_id is null and caso_nome is not null and lower(btrim(caso_nome)) in
+        (select lower(btrim(x.nome)) from caso x where x.id in (select c from fn_casos_escreviveis() c)))';
+begin
+  execute format('create policy execucao_falha_read on execucao_falha for select to authenticated using (%s)', v_ler);
+  execute format('create policy execucao_falha_insert on execucao_falha for insert to authenticated with check (%s)', v_esc);
+  execute format('create policy execucao_falha_update on execucao_falha for update to authenticated using (%s) with check (%s)', v_ler, v_esc);
+  execute format('create policy execucao_falha_delete on execucao_falha for delete to authenticated using (%s)', v_esc);
 end $$;
 
 -- caso_pergunta: o único UPDATE é o do GRANT de coluna da 0213 (entidade_id), e a entidade tem de ser do MESMO caso.
@@ -681,6 +906,24 @@ begin
   return jsonb_build_object('alocado', false, 'mudou', true);
 end $$;
 
+-- A tela da equipe: TODOS os usuários do Auth, inclusive os sem papel (para o Sócio liberar acesso). Só o Sócio chama: o e-mail e a
+-- lista de quem tem acesso a quê são a equipe inteira. `alocacoes` = os mandatos em que a pessoa está alocada (vazio para Sócio).
+create function fn_membros_da_equipe()
+returns table (usuario_id uuid, email text, papel text, criado_em timestamptz, alocacoes uuid[])
+language plpgsql stable security definer set search_path = public, pg_temp as $$
+begin
+  perform fn_exige_socio('Ver a equipe');
+  return query
+    select u.id, u.email::text, m.papel, u.created_at,
+           coalesce((select array_agg(a.caso_id order by a.criado_em) from alocacao a where a.usuario_id = u.id), '{}'::uuid[])
+      from auth.users u left join membro m on m.usuario_id = u.id
+     order by u.email;
+end $$;
+revoke all on function fn_membros_da_equipe() from public;
+grant execute on function fn_membros_da_equipe() to authenticated, service_role;
+comment on function fn_membros_da_equipe() is
+  '0216: só Sócio (42501 para os demais). Todos os usuários de auth.users com e-mail, papel (NULL = sem acesso), data de criação e os mandatos em que estão alocados.';
+
 revoke all on function fn_definir_papel(uuid, text, text), fn_alocar(uuid, uuid), fn_desalocar(uuid, uuid) from public;
 grant execute on function fn_definir_papel(uuid, text, text), fn_alocar(uuid, uuid), fn_desalocar(uuid, uuid)
   to authenticated, service_role;
@@ -758,6 +1001,19 @@ insert into instalacao_requisito
    'bloqueante', 949),
   ('acesso_policy_evento_ler', '0216', 'policy', 'evento_auditoria.evento_auditoria_read', null, null,
    'A trilha lê por caso (prefixo da entidade_ref); sem caso, só Sócio.', 'bloqueante', 950),
+  ('acesso_fn_upsert_caso_recusa_homonimo', '0216', 'corpo', 'fn_upsert_caso', 'fn_caso_nome_ocupado', null,
+   'fn_upsert_caso sem a recusa: o Analista que digita o nome de um mandato alheio cria o homônimo e o n8n roteia PDFs para qualquer um dos dois (o índice único caso_nome_unico, que a sonda não enxerga, já o barraria no INSERT, mas sem a mensagem clara). Se reprova, uma migration posterior republicou a função da 0207.',
+   'bloqueante', 953),
+  ('acesso_fn_caso_nome_ocupado', '0216', 'funcao', 'fn_caso_nome_ocupado', null, null,
+   'Responde só existe/não existe para o nome de um mandato que a RLS esconde de quem vai criá-lo.', 'bloqueante', 954),
+  ('acesso_fn_membros_da_equipe', '0216', 'corpo', 'fn_membros_da_equipe', 'fn_exige_socio', null,
+   'A tela da equipe lista todos os usuários e e-mails: sem a guarda no corpo qualquer papel os leria.', 'bloqueante', 955),
+  ('acesso_fn_ultimo_socio_serializa', '0216', 'corpo', 'fn_trg_membro_ultimo_socio', 'pg_advisory_xact_lock', null,
+   'Sem o lock, dois Sócios que se rebaixam ao mesmo tempo deixam o banco com zero Sócio.', 'importante', 956),
+  ('acesso_fn_evento_so_socio_sem_mandato', '0216', 'corpo', 'fn_pode_escrever_evento', 'fn_eh_socio()', null,
+   'Evento sem mandato (membro:, estagio:, golden_rodada:) é só do Sócio; sem isto o Analista forja mudanca_dial e papel_definido na trilha.', 'bloqueante', 957),
+  ('acesso_policy_falha_ler', '0216', 'policy', 'execucao_falha.execucao_falha_read', null, null,
+   'Falha com caso_id nulo (pipeline morreu antes de resolver o caso) lê-se pelo NOME do mandato; sem a policy própria o sino volta a "aguarde" para Analista e Leitura.', 'bloqueante', 958),
   ('acesso_policy_membro_ler', '0216', 'policy', 'membro.membro_read', null, null,
    'Cada um lê o próprio papel; Sócio lê todos. Sem ela o portal não sabe qual é o papel de quem entrou.',
    'bloqueante', 951)

@@ -437,6 +437,30 @@ end;
 $$;
 
 --
+-- Name: fn_acesso_bootstrap(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_acesso_bootstrap() RETURNS integer
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare v_n integer;
+begin
+  insert into membro (usuario_id, papel, criado_por)
+  select u.id, 'socio', null from auth.users u
+   where not exists (select 1 from membro)
+  on conflict (usuario_id) do nothing;
+  get diagnostics v_n = row_count;
+  return v_n;
+end $$;
+
+--
+-- Name: FUNCTION fn_acesso_bootstrap(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_acesso_bootstrap() IS '0216: promove a Sócio todo usuário de auth.users, mas SÓ se `membro` estiver vazia (banco recém-migrado). Idempotente: com qualquer membro cadastrado devolve 0. Não é exposta ao authenticated.';
+
+--
 -- Name: fn_alocado_agora(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1064,8 +1088,26 @@ begin
     when 'pendencia'        then (select x.caso_id from pendencia x where x.id = v_id)
     when 'reconciliacao'    then (select x.caso_id from reconciliacao x where x.id = v_id)
     when 'controlador'      then (select x.caso_id from controlador x where x.id = v_id)
+    -- fn_registrar_classe_override (0128) grava `campo_extraido:<id>`: é trilha legítima de Analista, e sem este ramo ela cairia
+    -- na regra "sem mandato só Sócio" abaixo e a função do portal passaria a falhar para ele.
+    when 'campo_extraido'   then (select fn_caso_da_versao(x.documento_versao_id) from campo_extraido x where x.id = v_id)
     else null end;
 end $_$;
+
+--
+-- Name: fn_caso_nome_ocupado(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_caso_nome_ocupado(p_nome text) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if not (fn_pode_criar_caso() or fn_conexao_de_servico()) then
+    raise exception 'Sem permissão para criar mandato (seu papel: %)', coalesce(fn_meu_papel(), 'nenhum') using errcode = '42501';
+  end if;
+  return exists (select 1 from caso c where lower(btrim(c.nome)) = lower(btrim(p_nome)));
+end $$;
 
 --
 -- Name: fn_casos_escreviveis(); Type: FUNCTION; Schema: public; Owner: -
@@ -7091,6 +7133,29 @@ end;
 $$;
 
 --
+-- Name: fn_membros_da_equipe(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_membros_da_equipe() RETURNS TABLE(usuario_id uuid, email text, papel text, criado_em timestamp with time zone, alocacoes uuid[])
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  perform fn_exige_socio('Ver a equipe');
+  return query
+    select u.id, u.email::text, m.papel, u.created_at,
+           coalesce((select array_agg(a.caso_id order by a.criado_em) from alocacao a where a.usuario_id = u.id), '{}'::uuid[])
+      from auth.users u left join membro m on m.usuario_id = u.id
+     order by u.email;
+end $$;
+
+--
+-- Name: FUNCTION fn_membros_da_equipe(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_membros_da_equipe() IS '0216: só Sócio (42501 para os demais). Todos os usuários de auth.users com e-mail, papel (NULL = sem acesso), data de criação e os mandatos em que estão alocados.';
+
+--
 -- Name: fn_mes_do_rotulo(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -8887,7 +8952,7 @@ CREATE FUNCTION public.fn_pode_escrever_evento(p_ref text) RETURNS boolean
 declare v_caso uuid := fn_caso_do_evento(p_ref);
 begin
   if v_caso is not null then return fn_pode_escrever_caso(v_caso); end if;
-  return coalesce(fn_meu_papel() in ('socio', 'analista'), false);
+  return fn_eh_socio();
 end $$;
 
 --
@@ -15013,7 +15078,8 @@ CREATE FUNCTION public.fn_trg_caso_aloca_criador() RETURNS trigger
     SET search_path TO 'public', 'pg_temp'
     AS $$
 begin
-  if auth.uid() is not null and fn_meu_papel() = 'analista' then
+  if auth.uid() is not null and fn_meu_papel() = 'analista'
+     and not exists (select 1 from caso c where c.id = new.id or lower(btrim(c.nome)) = lower(btrim(new.nome))) then
     insert into alocacao (caso_id, usuario_id, criado_por) values (new.id, auth.uid(), auth.uid())
     on conflict do nothing;
   end if;
@@ -15249,12 +15315,35 @@ CREATE FUNCTION public.fn_trg_membro_ultimo_socio() RETURNS trigger
     SET search_path TO 'public', 'pg_temp'
     AS $$
 begin
+  if old.papel = 'socio' and (tg_op = 'DELETE' or new.papel <> 'socio') then
+    -- Serializa quem sai de Sócio. Sem isto, dois Sócios que se rebaixam ao MESMO tempo (READ COMMITTED, linhas distintas) veem
+    -- cada um "o outro ainda é Sócio" e o banco fica com zero (medido com duas sessões: ver cabeçalho). O lock é consultivo, e não
+    -- `lock table`, para não dar deadlock entre dois UPDATE que já seguram ROW EXCLUSIVE; a consulta abaixo roda DEPOIS dele e,
+    -- como a função é volatile, com snapshot novo: enxerga o commit do primeiro.
+    perform pg_advisory_xact_lock(hashtext('0216.membro_ultimo_socio'));
+  end if;
   if old.papel = 'socio' and (tg_op = 'DELETE' or new.papel <> 'socio')
      and not exists (select 1 from membro m where m.papel = 'socio' and m.usuario_id <> old.usuario_id) then
     raise exception 'Não dá para deixar o portal sem Sócio: % é o último. Promova outro Sócio antes.', old.usuario_id
       using errcode = 'P0001';
   end if;
   return case when tg_op = 'DELETE' then old else new end;
+end $$;
+
+--
+-- Name: fn_trg_so_quem_escreve_apaga(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_so_quem_escreve_apaga() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if not (fn_conexao_de_servico() or coalesce(fn_meu_papel() in ('socio', 'analista'), false)) then
+    raise exception 'Apagar em % é reservado a Sócio e Analista (seu papel: %)', tg_table_name, coalesce(fn_meu_papel(), 'nenhum')
+      using errcode = '42501';
+  end if;
+  return null;
 end $$;
 
 --
@@ -15306,11 +15395,15 @@ begin
   if p_ator not in ('sistema:n8n', 'portal:navegador') then
     raise exception 'fn_upsert_caso: ator % fora da lista (sistema:n8n, portal:navegador)', p_ator;
   end if;
-  select id into v_id from caso where nome = p_nome limit 1;
+  select id into v_id from caso where lower(btrim(nome)) = lower(btrim(p_nome)) limit 1;
   if v_id is null then
-    insert into caso (nome) values (p_nome) returning id into v_id;
+    if fn_caso_nome_ocupado(p_nome) then
+      raise exception 'Já existe um mandato com este nome ao qual você não tem acesso. Peça a um Sócio para alocá-lo, ou use outro nome.'
+        using errcode = '42501';
+    end if;
+    insert into caso (nome) values (btrim(p_nome)) returning id into v_id;
     insert into evento_auditoria (ator, acao, entidade_ref, depois)
-      values (p_ator, 'caso_criado', 'caso:'||v_id, jsonb_build_object('nome', p_nome));
+      values (p_ator, 'caso_criado', 'caso:'||v_id, jsonb_build_object('nome', btrim(p_nome)));
   end if;
   return v_id;
 end;
@@ -18257,6 +18350,18 @@ CREATE INDEX arquivo_oficial_registro_tipo_idx ON public.arquivo_oficial_registr
 CREATE UNIQUE INDEX arquivo_oficial_uma_vigente_por_chave ON public.arquivo_oficial USING btree (caso_id, chave_natural) WHERE vigente;
 
 --
+-- Name: caso_nome_unico; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX caso_nome_unico ON public.caso USING btree (lower(btrim(nome)));
+
+--
+-- Name: INDEX caso_nome_unico; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON INDEX public.caso_nome_unico IS '0216: o nome do mandato é único ignorando caixa e espaços nas pontas. fn_upsert_caso e fn_falhas_abertas já casam por nome assim; sem a unicidade o Analista não alocado criava o homônimo e o n8n roteava para qualquer um.';
+
+--
 -- Name: controlador_caso_documento_unico; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -18521,16 +18626,58 @@ CREATE UNIQUE INDEX idx_rubrica_classe_unica ON public.rubrica_classe USING btre
 CREATE UNIQUE INDEX perimetro_atual_unico ON public.perimetro USING btree (caso_id, entidade_id, escopo) WHERE (ate IS NULL);
 
 --
+-- Name: arquivo_oficial_lancamento_mes trg_arquivo_oficial_lancamento_mes_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_arquivo_oficial_lancamento_mes_leitura_nao_apaga BEFORE DELETE ON public.arquivo_oficial_lancamento_mes FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: arquivo_oficial trg_arquivo_oficial_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_arquivo_oficial_leitura_nao_apaga BEFORE DELETE ON public.arquivo_oficial FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: arquivo_oficial_registro trg_arquivo_oficial_registro_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_arquivo_oficial_registro_leitura_nao_apaga BEFORE DELETE ON public.arquivo_oficial_registro FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
 -- Name: decisao trg_auto_promover_dial; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_auto_promover_dial AFTER INSERT ON public.decisao FOR EACH ROW EXECUTE FUNCTION public.fn_trg_auto_promover_dial();
 
 --
+-- Name: campo_extraido trg_campo_extraido_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_campo_extraido_leitura_nao_apaga BEFORE DELETE ON public.campo_extraido FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
 -- Name: caso trg_caso_aloca_criador; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_caso_aloca_criador BEFORE INSERT ON public.caso FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_aloca_criador();
+
+--
+-- Name: caso_apresentacao_campo trg_caso_apresentacao_campo_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_apresentacao_campo_leitura_nao_apaga BEFORE DELETE ON public.caso_apresentacao_campo FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: caso_linha_premissa trg_caso_linha_premissa_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_linha_premissa_leitura_nao_apaga BEFORE DELETE ON public.caso_linha_premissa FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: caso_modelagem trg_caso_modelagem_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_modelagem_leitura_nao_apaga BEFORE DELETE ON public.caso_modelagem FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
 
 --
 -- Name: caso_pergunta trg_caso_pergunta_reaponta_evento; Type: TRIGGER; Schema: public; Owner: -
@@ -18545,16 +18692,52 @@ CREATE TRIGGER trg_caso_pergunta_reaponta_evento AFTER UPDATE ON public.caso_per
 CREATE TRIGGER trg_caso_pergunta_so_reaponta BEFORE UPDATE ON public.caso_pergunta FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_pergunta_so_reaponta();
 
 --
+-- Name: caso_premissa trg_caso_premissa_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_premissa_leitura_nao_apaga BEFORE DELETE ON public.caso_premissa FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
 -- Name: caso trg_caso_reservado_ao_socio; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_caso_reservado_ao_socio BEFORE DELETE OR UPDATE ON public.caso FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_reservado_ao_socio();
 
 --
+-- Name: checklist_item_status trg_checklist_item_status_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_checklist_item_status_leitura_nao_apaga BEFORE DELETE ON public.checklist_item_status FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
 -- Name: controlador_vinculo trg_controlador_vinculo_valido; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_controlador_vinculo_valido BEFORE INSERT OR UPDATE ON public.controlador_vinculo FOR EACH ROW EXECUTE FUNCTION public.fn_trg_controlador_vinculo_valido();
+
+--
+-- Name: decisao trg_decisao_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_decisao_leitura_nao_apaga BEFORE DELETE ON public.decisao FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: documento_fato trg_documento_fato_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_documento_fato_leitura_nao_apaga BEFORE DELETE ON public.documento_fato FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: documento trg_documento_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_documento_leitura_nao_apaga BEFORE DELETE ON public.documento FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: documento_versao trg_documento_versao_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_documento_versao_leitura_nao_apaga BEFORE DELETE ON public.documento_versao FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
 
 --
 -- Name: documento trg_entidade_ambigua; Type: TRIGGER; Schema: public; Owner: -
@@ -18575,10 +18758,22 @@ CREATE TRIGGER trg_entidade_controlador_soma_maxima AFTER INSERT OR UPDATE OF pe
 CREATE TRIGGER trg_entidade_forma_de_controle_tem_vinculo AFTER INSERT OR UPDATE OF forma_de_controle ON public.entidade FOR EACH ROW WHEN ((new.forma_de_controle = 'controle_comum'::public.entidade_forma_de_controle)) EXECUTE FUNCTION public.fn_trg_entidade_forma_de_controle_tem_vinculo();
 
 --
+-- Name: entidade trg_entidade_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_entidade_leitura_nao_apaga BEFORE DELETE ON public.entidade FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
 -- Name: estagio_autonomia trg_estagio_autonomia_so_socio; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_estagio_autonomia_so_socio BEFORE INSERT OR DELETE OR UPDATE ON public.estagio_autonomia FOR EACH ROW EXECUTE FUNCTION public.fn_trg_so_socio('Mudar o dial de autonomia');
+
+--
+-- Name: execucao_falha trg_execucao_falha_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_execucao_falha_leitura_nao_apaga BEFORE DELETE ON public.execucao_falha FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
 
 --
 -- Name: golden_campo trg_golden_campo_congelada; Type: TRIGGER; Schema: public; Owner: -
@@ -18611,16 +18806,40 @@ CREATE TRIGGER trg_golden_rotulo_congelada BEFORE INSERT OR UPDATE ON public.gol
 CREATE TRIGGER trg_instalacao_cobertura_nao_regride BEFORE UPDATE OF ate_migration ON public.instalacao_cobertura FOR EACH ROW EXECUTE FUNCTION public.fn_trg_instalacao_cobertura_nao_regride();
 
 --
+-- Name: lote_execucao trg_lote_execucao_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_lote_execucao_leitura_nao_apaga BEFORE DELETE ON public.lote_execucao FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
 -- Name: membro trg_membro_ultimo_socio; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_membro_ultimo_socio BEFORE DELETE OR UPDATE ON public.membro FOR EACH ROW EXECUTE FUNCTION public.fn_trg_membro_ultimo_socio();
 
 --
+-- Name: pendencia trg_pendencia_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_pendencia_leitura_nao_apaga BEFORE DELETE ON public.pendencia FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: periodo trg_periodo_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_periodo_leitura_nao_apaga BEFORE DELETE ON public.periodo FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
 -- Name: premissa_catalogo trg_premissa_catalogo_so_socio; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER trg_premissa_catalogo_so_socio BEFORE INSERT OR DELETE OR UPDATE ON public.premissa_catalogo FOR EACH ROW EXECUTE FUNCTION public.fn_trg_so_socio('Alterar o catálogo de premissas');
+
+--
+-- Name: reconciliacao trg_reconciliacao_leitura_nao_apaga; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_reconciliacao_leitura_nao_apaga BEFORE DELETE ON public.reconciliacao FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
 
 --
 -- Name: alocacao alocacao_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -19932,29 +20151,40 @@ ALTER TABLE public.execucao_falha ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY execucao_falha_delete ON public.execucao_falha FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
-   FROM public.fn_casos_escreviveis() c(c)))));
+   FROM public.fn_casos_escreviveis() c(c))) OR ((caso_id IS NULL) AND (caso_nome IS NOT NULL) AND (lower(btrim(caso_nome)) IN ( SELECT lower(btrim(x.nome)) AS lower
+   FROM public.caso x
+  WHERE (x.id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c))))))));
 
 --
 -- Name: execucao_falha execucao_falha_insert; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY execucao_falha_insert ON public.execucao_falha FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
-   FROM public.fn_casos_escreviveis() c(c)))));
+   FROM public.fn_casos_escreviveis() c(c))) OR ((caso_id IS NULL) AND (caso_nome IS NOT NULL) AND (lower(btrim(caso_nome)) IN ( SELECT lower(btrim(x.nome)) AS lower
+   FROM public.caso x
+  WHERE (x.id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c))))))));
 
 --
 -- Name: execucao_falha execucao_falha_read; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY execucao_falha_read ON public.execucao_falha FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
-   FROM public.fn_casos_legiveis() c(c)))));
+   FROM public.fn_casos_legiveis() c(c))) OR ((caso_id IS NULL) AND (caso_nome IS NOT NULL) AND (lower(btrim(caso_nome)) IN ( SELECT lower(btrim(x.nome)) AS lower
+   FROM public.caso x)))));
 
 --
 -- Name: execucao_falha execucao_falha_update; Type: POLICY; Schema: public; Owner: -
 --
 
 CREATE POLICY execucao_falha_update ON public.execucao_falha FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
-   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
-   FROM public.fn_casos_escreviveis() c(c)))));
+   FROM public.fn_casos_legiveis() c(c))) OR ((caso_id IS NULL) AND (caso_nome IS NOT NULL) AND (lower(btrim(caso_nome)) IN ( SELECT lower(btrim(x.nome)) AS lower
+   FROM public.caso x))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c))) OR ((caso_id IS NULL) AND (caso_nome IS NOT NULL) AND (lower(btrim(caso_nome)) IN ( SELECT lower(btrim(x.nome)) AS lower
+   FROM public.caso x
+  WHERE (x.id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c))))))));
 
 --
 -- Name: fato_tipo_catalogo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -20439,6 +20669,13 @@ GRANT USAGE ON SCHEMA public TO service_role;
 GRANT ALL ON FUNCTION public.fn_aceitar_extracao(p_documento_versao_id uuid, p_autor text, p_motivo text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_acesso_bootstrap(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_acesso_bootstrap() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_acesso_bootstrap() TO service_role;
+
+--
 -- Name: FUNCTION fn_alocado_agora(p_caso uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -20531,6 +20768,14 @@ GRANT ALL ON FUNCTION public.fn_caso_da_versao(p_versao uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_caso_do_evento(p_ref text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_caso_do_evento(p_ref text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_caso_do_evento(p_ref text) TO service_role;
+
+--
+-- Name: FUNCTION fn_caso_nome_ocupado(p_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_caso_nome_ocupado(p_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_caso_nome_ocupado(p_nome text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_caso_nome_ocupado(p_nome text) TO service_role;
 
 --
 -- Name: FUNCTION fn_casos_escreviveis(); Type: ACL; Schema: public; Owner: -
@@ -21092,6 +21337,14 @@ GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO 
 --
 
 GRANT ALL ON FUNCTION public.fn_marcar_falha_vista(p_falha_id uuid, p_autor text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_membros_da_equipe(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_membros_da_equipe() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_membros_da_equipe() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_membros_da_equipe() TO service_role;
 
 --
 -- Name: FUNCTION fn_mes_do_rotulo(p_chave text); Type: ACL; Schema: public; Owner: -
