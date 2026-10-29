@@ -39,6 +39,9 @@ import { lerEnvelopeDeBuffer, lerEnvelopeDeFluxo } from "../../Leitor/lib/envelo
 import {
   gerarSped, gerarCnab240, gerarOfx, gerarXmlFiscal, gerarEcdComLancamentos, gerarZip,
 } from "../../Dados de Teste/fontes-oficiais/gerar.mjs";
+import { assinarEnvio, MENSAGEM_ENVIO_DESLIGADO, VALIDADE_DO_TOKEN_S } from "../src/lib/assinatura-do-envio.ts";
+import { parseFormFieldNames } from "../src/lib/n8n-form.ts";
+import { verificarEnvio, veredictoDoEnvio } from "../../N8N/lib/assinatura-do-envio.mjs";
 import { readFileSync } from "node:fs";
 
 let ok = 0;
@@ -578,6 +581,73 @@ for (const [motivo, bytes] of [
   checar(/bytesPorEntrada: 4 \* GiB/.test(ZIP_FONTE) && /bytesTotal: 32 \* GiB/.test(ZIP_FONTE) && /razaoMaxima: 200/.test(ZIP_FONTE),
     "os limites do zip mudaram sem passar por esta suíte (4 GiB por entrada, 32 GiB no total, razão 200x)");
   checar(/37,5 s/.test(ZIP_FONTE) && /25 MB\/s/.test(ZIP_FONTE), "o comentário dos limites do zip perdeu a medição que os justifica (37,5 s, ~25 MB/s)");
+}
+
+
+// ---------------------------------------------------------------------------
+// 8. O TOKEN DO ENVIO: o Form do n8n é público, e só o portal sabe quem pode enviar a quê
+// ---------------------------------------------------------------------------
+// O defeito (revisão do PR #265): o portal conferia o papel, mas um POST direto ao Form contornava
+// o portal, e o n8n gravava em QUALQUER mandato pela conexão de serviço. O portal agora assina
+// HMAC(segredo, mandato|exp|usuario) e o n8n (N8N/lib/assinatura-do-envio.mjs) recusa o que não
+// bater — a suíte do n8n prova a recusa; aqui se prova que o que o PORTAL gera é o que o n8n ACEITA
+// (node:crypto de um lado, JS puro do outro) e que o portal nunca envia sem token.
+{
+  const SEGREDO = "segredo-do-vetor";
+  const USUARIO = "3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10";
+  const T0 = 1_700_000_000_000;
+  const emitido = assinarEnvio({ mandato: "Alfa", usuarioId: USUARIO, segredo: SEGREDO, agoraMs: T0 });
+  // VETOR FIXO, calculado fora do JS (Python hmac): se o portal e a lib do n8n mudassem a mensagem
+  // JUNTOS, os dois lados continuariam concordando e o token mudaria — este assert pega.
+  checar(emitido.ok && emitido.token === "v1.1700001800.3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10.1535774b8f7435e9c0c3d02a8a400fb2dc4902e41b9de6741555dcc23b66e97a",
+    "o token do portal para (Alfa, usuário, exp=T0+30min) deixou de ser o vetor fixo — a mensagem assinada mudou");
+  checar(VALIDADE_DO_TOKEN_S === 1800 && emitido.ok && emitido.exp === 1_700_001_800, "a validade do token não é mais de 30 min");
+  const token = emitido.ok ? emitido.token : "";
+  // O token que o portal gera é ACEITO pela implementação do n8n.
+  const aceita = (m: string, agoraMs: number, ...segredo: [(string | undefined)?]) =>
+    verificarEnvio({ token, mandato: m, segredo: segredo.length ? segredo[0] : SEGREDO, agoraMs });
+  checar(aceita("Alfa", T0).ok === true && (aceita("Alfa", T0) as { usuario_id?: string }).usuario_id === USUARIO,
+    "o token do portal NÃO é aceito pela lib do n8n — o envio legítimo seria recusado");
+  checar(aceita("  ALFA ", T0 + 1000).ok === true, "caixa/espaço nas pontas do mandato deveriam valer o mesmo mandato (índice caso_nome_unico)");
+  checar(aceita("Beta", T0).ok === false, "o token do Alfa foi aceito para o Beta — o defeito do PR #265");
+  checar(aceita("Alfa", T0 + (VALIDADE_DO_TOKEN_S + 1) * 1000).ok === false && aceita("Alfa", T0 + (VALIDADE_DO_TOKEN_S - 1) * 1000).ok === true,
+    "a validade do token não é de 30 min: expirado aceito, ou válido recusado");
+  checar(aceita("Alfa", T0, "outro-segredo").ok === false && aceita("Alfa", T0, undefined).ok === false && aceita("Alfa", T0, "").ok === false,
+    "token aceito com segredo errado/ausente no n8n");
+  checar(veredictoDoEnvio({ token, mandato: "Alfa", segredo: undefined, agoraMs: T0 }).autorizado === false,
+    "o n8n sem segredo deveria recusar tudo (fail closed)");
+
+  // SEM SEGREDO NO PORTAL: recusa clara, nunca token (e o envio nem começa).
+  for (const segredo of [undefined, "", "   "]) {
+    const r = assinarEnvio({ mandato: "Alfa", usuarioId: USUARIO, segredo, agoraMs: T0 });
+    checar(!r.ok && r.status === 503 && r.mensagem === MENSAGEM_ENVIO_DESLIGADO && /N8N_INTAKE_SEGREDO/.test(r.mensagem) && /Envio desligado/.test(r.mensagem),
+      `sem N8N_INTAKE_SEGREDO (${JSON.stringify(segredo)}) o portal deveria recusar com a frase do envio desligado`);
+  }
+
+  // O campo do token no HTML do Form (o 2º texto, depois do mandato), e o Form antigo cai no fallback.
+  const html = '<input type="text" name="field-0"><input type="file" name="field-1" multiple><input type="text" name="field-2"><input type="hidden" name="x">';
+  const campos = parseFormFieldNames(html);
+  checar(campos.textFieldName === "field-0" && campos.tokenFieldName === "field-2" && campos.fileFieldName === "field-1",
+    "a descoberta do campo do token (2º texto) falhou");
+  checar(parseFormFieldNames('<input type="text" name="field-0"><input type="file" name="field-1">').tokenFieldName === null,
+    "Form sem o campo do token deveria devolver null (e o chamador cai no fallback), não repetir o campo do mandato");
+
+  // FIAÇÃO (estrutural, e declarada como tal): a ORDEM e o USO nas três pontas.
+  const sem = (c: string) => c.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:"'`])\/\/.*$/gm, "$1");
+  const rota = sem(lerFonte("../src/app/api/intake/route.ts")), destino = sem(lerFonte("../src/app/api/intake/destino/route.ts"));
+  const pos = (src: string, re: RegExp) => src.search(re);
+  const ordemOk = (src: string, marco: RegExp) => {
+    const iPapel = pos(src, /conferirEnvioAoMandato\(/), iToken = pos(src, /emitirTokenDoEnvio\(/), iMarco = pos(src, marco);
+    return iPapel >= 0 && iToken > iPapel && iMarco > iToken
+      && /const\s+(\w+)\s*=\s*await\s+emitirTokenDoEnvio\([^)]*\);?\s*if\s*\(\s*!\s*\1\.ok\s*\)\s*return\b/.test(src);
+  };
+  checar(ordemOk(rota, /\bfetch\(/) && /fwd\.append\(campos\.token,\s*autorizacao\.token\)/.test(rota),
+    "POST /api/intake deve assinar DEPOIS do papel e ANTES do fetch ao n8n, recusar se não assinou e anexar o token ao multipart");
+  checar(ordemOk(destino, /process\.env\.N8N_INTAKE_FORM_URL/) && /token:\s*autorizacao\.token/.test(destino) && /campos\.token/.test(destino),
+    "/api/intake/destino deve assinar DEPOIS do papel e ANTES de ler/devolver a URL, e devolver o token e o nome do campo");
+  checar(/fd\.append\(destino\.campos\.token,\s*destino\.token\)/.test(TELA)
+    && /!destino\.campos\?\.token\s*\|\|\s*typeof destino\.token !== "string"/.test(TELA),
+    "o envio direto da tela deve mandar o token como campo do Form, e recusar um destino sem token");
 }
 
 if (falhas.length > 0) {

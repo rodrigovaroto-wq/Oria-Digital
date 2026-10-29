@@ -293,11 +293,13 @@ export default function UploadForm({
   }
 
   async function enviarDireto(
-    destino: { url: string; campos: { mandato: string; arquivos: string }; agora: string },
+    destino: { url: string; campos: { mandato: string; arquivos: string; token: string }; token: string; agora: string },
     aEnviar: File[],
   ): Promise<{ mandato: string; arquivos: number; desde: string } | null> {
     const fd = new FormData();
     fd.append(destino.campos.mandato, mandato.trim());
+    // O TOKEN que o servidor assinou para ESTE mandato (`/api/intake/destino`): sem ele o n8n recusa.
+    fd.append(destino.campos.token, destino.token);
     for (const a of aEnviar) fd.append(destino.campos.arquivos, a, a.name);
     try {
       // `no-cors` não é gambiarra nem afrouxamento: um POST `multipart/form-data`
@@ -609,7 +611,8 @@ export default function UploadForm({
       // expirada não chega mais aqui como HTML 200. O guarda fica para o que ainda pode devolver 200
       // sem destino (proxy/CDN no meio, resposta de outra origem): sem ele o erro aparecia como um
       // `TypeError` em inglês vindo lá de dentro da conta do tamanho.
-      if (typeof destino.url !== "string" || !destino.campos?.arquivos || !destino.campos?.mandato) {
+      if (typeof destino.url !== "string" || !destino.campos?.arquivos || !destino.campos?.mandato
+        || !destino.campos?.token || typeof destino.token !== "string" || !destino.token) {
         setErro("Sua sessão expirou ou o portal não respondeu. Atualize a página, entre de novo e reenvie — nada foi processado.");
         return;
       }

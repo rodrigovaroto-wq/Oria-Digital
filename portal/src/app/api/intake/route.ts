@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { conferirEnvioAoMandato } from "@/lib/supabase/acesso";
+import { conferirEnvioAoMandato, emitirTokenDoEnvio } from "@/lib/supabase/acesso";
 import { descobrirNomesDeCampo } from "@/lib/n8n-form";
 import { TETO_DA_FUNCTION_BYTES, TETO_DO_PROXY_BYTES, formatarBytes } from "@/lib/limite-de-envio";
 
@@ -75,6 +75,10 @@ export async function POST(request: Request) {
   // nenhuma RLS o barra, então a recusa tem de ser aqui (ver `decidirEnvioAoMandato`).
   const permissao = await conferirEnvioAoMandato(mandato);
   if (!permissao.ok) return NextResponse.json({ error: permissao.mensagem }, { status: permissao.status });
+  // E o TOKEN que o n8n exige (`assinatura-do-envio.ts`), só depois do papel. Sem o segredo
+  // configurado o envio é recusado aqui, com a frase clara, e nunca segue sem token.
+  const autorizacao = await emitirTokenDoEnvio(mandato);
+  if (!autorizacao.ok) return NextResponse.json({ error: autorizacao.mensagem }, { status: autorizacao.status });
 
   // O LOTE GRANDE QUE CHEGOU AQUI MESMO ASSIM.
   //
@@ -106,6 +110,7 @@ export async function POST(request: Request) {
   // Monta o multipart no formato do Form do N8N e encaminha.
   const fwd = new FormData();
   fwd.append(campos.mandato, mandato);
+  fwd.append(campos.token, autorizacao.token);
   for (const arquivo of arquivos) {
     fwd.append(campos.arquivos, arquivo, arquivo.name);
   }

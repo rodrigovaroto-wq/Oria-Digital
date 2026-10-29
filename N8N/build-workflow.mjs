@@ -37,6 +37,7 @@ import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
 import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, vereditoDeTamanhoPorArquivo, TETO_BYTES_POR_ARQUIVO, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
 import { sha256Hex, chaveDoOriginal } from './lib/hash.mjs';
+import { normalizarMandato, mensagemAssinada, utf8Bytes, hmacSha256Hex, iguaisEmTempoConstante, verificarEnvio, veredictoDoEnvio } from './lib/assinatura-do-envio.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
   pareceTexto, contarFora, formaDoTexto, detectarFormato, abasDoXlsx,
@@ -782,6 +783,36 @@ return [{ json: {
   documentos_com_falha: comFalha,
   documentos_sem_medicao: semMedicao,
 } }];
+`.trim();
+
+// --- Code (ALL ITEMS): a AUTORIZAÇÃO DO ENVIO, o primeiro nó depois do Form ---
+// O Form é público e a URL é a mesma para todo mandato: sem isto, quem tem a URL grava em
+// QUALQUER mandato pela conexão de serviço (BYPASSRLS). O portal assina
+// HMAC(segredo, mandato|exp|usuario) depois de conferir o papel; aqui se recalcula e se recusa. A
+// conta inteira mora em lib/assinatura-do-envio.mjs (JS puro: o Code node não expõe `crypto`), e o
+// teste executa ESTE jsCode com tokens assinados por `node:crypto`. Tem de vir ANTES do `Upsert
+// Caso`, que já é gravação (cria o mandato). Segredo ausente = recusa tudo (fail closed): `$env`
+// bloqueado lança, e o catch o trata como ausente; `$vars` é o plano B de quem tem Variables.
+const FONTE_ENVIO = [
+  `const sha256Hex = ${sha256Hex.toString()};`,
+  `const normalizarMandato = ${normalizarMandato.toString()};`,
+  `const mensagemAssinada = ${mensagemAssinada.toString()};`,
+  `const utf8Bytes = ${utf8Bytes.toString()};`,
+  `const hmacSha256Hex = ${hmacSha256Hex.toString()};`,
+  `const iguaisEmTempoConstante = ${iguaisEmTempoConstante.toString()};`,
+  `const verificarEnvio = ${verificarEnvio.toString()};`,
+  `const veredictoDoEnvio = ${veredictoDoEnvio.toString()};`,
+].join('\n');
+const CODE_CONFERIR_ENVIO = `
+${FONTE_ENVIO}
+const form = $input.first().json || {};
+let segredo = null;
+try { segredo = $env.N8N_INTAKE_SEGREDO || null; } catch (e) { segredo = null; }
+if (!segredo) { try { segredo = $vars.N8N_INTAKE_SEGREDO || null; } catch (e) { segredo = null; } }
+const v = veredictoDoEnvio({ token: form['Token do envio'], mandato: form['Mandato (nome do caso)'], segredo, agoraMs: Date.now() });
+// Um item só, com o MESMO formato da recusa de tamanho/orçamento (orcamento_mensagem é o campo que o
+// Abortar Lote lança). caso_id null: o caso não foi criado e NÃO vai ser.
+return [{ json: { envio_autorizado: v.autorizado, caso_id: null, etapa_recusa: 'envio', motivo_recusa: v.motivo, orcamento_mensagem: v.mensagem } }];
 `.trim();
 
 // --- Code (ALL ITEMS — fan-out): um item por arquivo enviado no Form ---
@@ -2506,6 +2537,18 @@ const nodes = [
     formFields: { values: [
       { fieldLabel: 'Mandato (nome do caso)', fieldType: 'text', requiredField: true },
       { fieldLabel: 'Arquivos', fieldType: 'file', multipleFiles: true, requiredField: true },
+      // O TOKEN QUE O PORTAL ASSINA (lib/assinatura-do-envio.mjs). Depois dos outros dois de propósito:
+      // o portal acha o campo do mandato como o PRIMEIRO texto do HTML (n8n-form.ts) e este o segue.
+      // Não é obrigatório no Form: quem o abre à mão é recusado pelo `Conferir Envio`, com a mensagem.
+      { fieldLabel: 'Token do envio', fieldType: 'text', requiredField: false },
+    ] },
+  }),
+
+  node('Conferir Envio', 'n8n-nodes-base.code', 2, { mode: 'runOnceForAllItems', jsCode: CODE_CONFERIR_ENVIO }),
+
+  node('Envio autorizado?', 'n8n-nodes-base.if', 2, {
+    conditions: { options: { caseSensitive: true, typeValidation: 'strict' }, combinator: 'and', conditions: [
+      { leftValue: '={{ $json.envio_autorizado }}', rightValue: true, operator: { type: 'boolean', operation: 'true', singleValue: true } },
     ] },
   }),
 
@@ -2555,13 +2598,13 @@ const nodes = [
   // nunca por duas conexoes cruas no mesmo input (a regra do Teste V45). Elas sao
   // mutuamente exclusivas: o tamanho recusa ANTES de o orcamento existir.
   node('Juntar Recusas', 'n8n-nodes-base.merge', 3, {
-    mode: 'append', numberInputs: 2,
+    mode: 'append', numberInputs: 3,
   }),
 
   node('Registrar Recusa', 'n8n-nodes-base.postgres', 2.5, {
     operation: 'executeQuery',
     query: 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r',
-    options: { queryReplacement: "={{ [$json.caso_id, $('Intake (Form)').first().json['Mandato (nome do caso)'], 'orcamento', $json.orcamento_mensagem] }}" },
+    options: { queryReplacement: "={{ [$json.caso_id, $('Intake (Form)').first().json['Mandato (nome do caso)'], $json.etapa_recusa || 'orcamento', $json.orcamento_mensagem] }}" },
   }, { credentials: PG_CRED, ...PG_RETRY }),
 
   node('Abortar Lote', 'n8n-nodes-base.code', 2, {
@@ -2988,7 +3031,12 @@ const nodes = [
 ];
 
 const connections = {
-  'Intake (Form)': { main: [[{ node: 'Upsert Caso (Postgres)', type: 'main', index: 0 }]] },
+  'Intake (Form)': { main: [[{ node: 'Conferir Envio', type: 'main', index: 0 }]] },
+  'Conferir Envio': { main: [[{ node: 'Envio autorizado?', type: 'main', index: 0 }]] },
+  'Envio autorizado?': { main: [
+    [{ node: 'Upsert Caso (Postgres)', type: 'main', index: 0 }],  // true — segue
+    [{ node: 'Juntar Recusas', type: 'main', index: 2 }],          // false — grava a recusa e aborta, ANTES de qualquer gravação
+  ] },
   'Upsert Caso (Postgres)': { main: [[{ node: 'Listar Arquivos', type: 'main', index: 0 }]] },
   'Listar Arquivos': { main: [[{ node: 'Tamanho cabe?', type: 'main', index: 0 }]] },
   'Tamanho cabe?': { main: [

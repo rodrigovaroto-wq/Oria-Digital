@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { createClient } from "./server";
+import { assinarEnvio } from "../assinatura-do-envio";
 import { decidirEnvioAoMandato, interpretarPapel, permissoes, type AcessoLido, type Permissoes } from "../acesso";
 
 // O PAPEL DE QUEM ESTÁ NA REQUISIÇÃO, lido UMA vez e entregue a todas as telas.
@@ -49,4 +50,20 @@ export async function conferirEnvioAoMandato(nome: string) {
   if (linhas.length !== 1) return decidirEnvioAoMandato(acesso, { n: linhas.length, podeEscrever: null });
   const r = await supabase.rpc("fn_pode_escrever_caso", { p_caso: linhas[0].id });
   return decidirEnvioAoMandato(acesso, { n: 1, podeEscrever: r.error || typeof r.data !== "boolean" ? null : r.data });
+}
+
+/**
+ * O TOKEN DO ENVIO, para quem JÁ passou por `conferirEnvioAoMandato` (as rotas chamam as duas, nesta
+ * ordem, e a suíte `verificar-envio-oficial.mts` reprova a ordem invertida): assinar sem o papel
+ * reabriria o Form público a quem o portal recusaria. Fica separada da conferência porque
+ * `verificar-mensagem-de-falha.mts` lê a ORDEM "papel antes do fetch/URL" nas rotas, e a conferência
+ * tem de continuar sendo a chamada que aquele teste vê. Segredo ausente = 503 "envio desligado".
+ */
+export async function emitirTokenDoEnvio(nome: string) {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data.user) {
+    return { ok: false as const, status: 503 as const, mensagem: "Não foi possível identificar o usuário para autorizar o envio. Entre de novo e tente outra vez." };
+  }
+  return assinarEnvio({ mandato: nome, usuarioId: data.user.id, segredo: process.env.N8N_INTAKE_SEGREDO });
 }
