@@ -63,7 +63,7 @@ export function ExcluirMandato({ casoId, nome }: { casoId: string; nome: string 
           volta a ser a janela. Só monta depois do clique, então `document` existe. */}
       {aberto && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-fundo-reserva/50 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-excluir"

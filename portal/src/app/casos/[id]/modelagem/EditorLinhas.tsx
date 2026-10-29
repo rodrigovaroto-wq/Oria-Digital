@@ -277,7 +277,7 @@ export function EditorLinhas({
       )}
 
       {saida !== null && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-fundo-reserva/50 p-4">
           <div
             ref={dialogoSaida}
             role="alertdialog" aria-modal="true" aria-label="Alterações não salvas"

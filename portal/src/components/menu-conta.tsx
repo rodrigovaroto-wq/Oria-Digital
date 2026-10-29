@@ -2,6 +2,16 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { IconeChevronBaixo, IconeConta, IconeSair } from "@/components/icones";
+import {
+  CONSULTA_TEMA_ESCURO, aplicarTema, gravarPreferenciaDeTema, lerPreferenciaDeTema,
+  type PreferenciaDeTema,
+} from "@/lib/casco";
+
+const OPCOES_DE_TEMA: ReadonlyArray<{ valor: PreferenciaDeTema; rotulo: string }> = [
+  { valor: "claro", rotulo: "Claro" },
+  { valor: "escuro", rotulo: "Escuro" },
+  { valor: "sistema", rotulo: "Sistema" },
+];
 
 // A CONTA NO CABEÇALHO. O e-mail inteiro e o "Sair" ficavam expostos em toda
 // tela, com o mesmo peso de um link de navegação, e o e-mail some abaixo de 640px
@@ -33,6 +43,30 @@ export function MenuConta({
   const raiz = useRef<HTMLDivElement>(null);
   const idMenu = useId();
   const iniciais = iniciaisDoEmail(email);
+  // A escolha guardada, lida uma vez. Só é DESENHADA com o menu aberto (depois da hidratação),
+  // então ler o localStorage aqui não diverge do HTML do servidor; no servidor vale "sistema".
+  const [tema, setTema] = useState<PreferenciaDeTema>(() =>
+    typeof window === "undefined" ? "sistema" : lerPreferenciaDeTema(window.localStorage));
+
+  useEffect(() => {
+    // Em "Sistema" o tema segue o aparelho AO VIVO (o escuro ao anoitecer): este ouvinte vive
+    // no menu, que está sempre montado, e não no seletor, que só existe com o menu aberto.
+    const consulta = window.matchMedia(CONSULTA_TEMA_ESCURO);
+    const aoMudar = () => {
+      if (lerPreferenciaDeTema(window.localStorage) === "sistema") {
+        aplicarTema(document.documentElement, "sistema", consulta.matches);
+      }
+    };
+    consulta.addEventListener("change", aoMudar);
+    return () => consulta.removeEventListener("change", aoMudar);
+  }, []);
+
+  function escolherTema(preferencia: PreferenciaDeTema) {
+    setTema(preferencia);
+    // Se o navegador recusar a gravação, o tema vale até recarregar — o atributo é aplicado igual.
+    gravarPreferenciaDeTema(window.localStorage, preferencia);
+    aplicarTema(document.documentElement, preferencia, window.matchMedia(CONSULTA_TEMA_ESCURO).matches);
+  }
 
   // FECHA COM ESC E COM CLIQUE FORA. Os dois ouvintes só existem enquanto o menu
   // está aberto — o resto do tempo a página não paga por eles. Esc devolve o foco
@@ -68,7 +102,7 @@ export function MenuConta({
         title={email || "Conta"}
         className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-vidro-suave transition-colors hover:bg-white/10 hover:text-vidro-texto"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-vidro-texto text-[11px] font-semibold text-tinta-900">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-vidro-texto text-[11px] font-semibold text-vidro-tinta">
           {iniciais || <IconeConta tamanho={16} />}
         </span>
         <IconeChevronBaixo tamanho={14} className={`transition-transform ${aberto ? "rotate-180" : ""}`} />
@@ -77,9 +111,10 @@ export function MenuConta({
       {aberto && (
         <div
           id={idMenu}
-          // O MENU CONTINUA CREME dentro do casco escuro: é texto de e-mail e uma
-          // ação destrutiva-adjacente ("Sair"), e legibilidade vale mais do que
-          // coerência de vidro. `vidro-claro` devolve o anel de foco escuro.
+          // O MENU É SUPERFÍCIE DE CONTEÚDO (`bg-folha`), não vidro: dentro do casco escuro ele é
+          // creme no tema claro e escuro no tema escuro, pelos tokens — é texto de e-mail e uma
+          // ação destrutiva-adjacente ("Sair"), e legibilidade vale mais do que coerência de
+          // vidro. `vidro-claro` devolve o anel de foco de conteúdo (acento-600 do tema).
           className="vidro-claro absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-tinta-200 bg-folha p-1.5 shadow-lg"
         >
           {email && (
@@ -87,7 +122,25 @@ export function MenuConta({
               {email}
             </p>
           )}
-          <form action={sair}>
+          <div className="border-t border-tinta-100 px-2.5 py-2">
+            <p id={`${idMenu}-tema`} className="mb-1.5 text-xs text-tinta-500">Aparência</p>
+            <div role="group" aria-labelledby={`${idMenu}-tema`} className="flex gap-1 rounded-md bg-tinta-50 p-0.5">
+              {OPCOES_DE_TEMA.map((o) => (
+                <button
+                  key={o.valor}
+                  type="button"
+                  aria-pressed={tema === o.valor}
+                  onClick={() => escolherTema(o.valor)}
+                  className={`flex-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                    tema === o.valor ? "bg-folha text-tinta-900 shadow-sm" : "text-tinta-600 hover:text-tinta-900"
+                  }`}
+                >
+                  {o.rotulo}
+                </button>
+              ))}
+            </div>
+          </div>
+          <form action={sair} className="border-t border-tinta-100 pt-1">
             <button
               type="submit"
               className="flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-sm font-medium text-tinta-700 transition-colors hover:bg-tinta-50 hover:text-tinta-900"

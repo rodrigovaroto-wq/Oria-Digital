@@ -49,6 +49,78 @@ export const SCRIPT_DISCRICAO_ANTES_DA_PINTURA =
   `document.documentElement.setAttribute(${JSON.stringify(ATRIBUTO_DISCRICAO)},"")}catch(e){}`;
 
 // ---------------------------------------------------------------------------
+// TEMA — Claro · Escuro · Sistema (Fase 4). O mesmo padrão do modo discrição: preferência no
+// localStorage, atributo no <html> ligado por script do <head> ANTES da pintura.
+// ---------------------------------------------------------------------------
+
+export const CHAVE_TEMA = "oria.tema";
+/** Atributo no `<html>`; o CSS (`globals.css`) redefine as cores em `html[data-tema="escuro"]`. */
+export const ATRIBUTO_TEMA = "data-tema";
+export const CONSULTA_TEMA_ESCURO = "(prefers-color-scheme: dark)";
+
+export type PreferenciaDeTema = "claro" | "escuro" | "sistema";
+export type TemaEfetivo = "claro" | "escuro";
+export const PREFERENCIAS_DE_TEMA: readonly PreferenciaDeTema[] = ["claro", "escuro", "sistema"];
+
+/** Só os três textos valem. Ausente, vazio ou lixo: "sistema" — o padrão é seguir o aparelho. */
+export function preferenciaDeTema(bruto: string | null | undefined): PreferenciaDeTema {
+  return bruto === "claro" || bruto === "escuro" ? bruto : "sistema";
+}
+
+/** Lê a preferência. Armazenamento bloqueado ou ausente = "sistema", nunca exceção. */
+export function lerPreferenciaDeTema(armazem: Pick<Storage, "getItem"> | null | undefined): PreferenciaDeTema {
+  try {
+    return preferenciaDeTema(armazem?.getItem(CHAVE_TEMA));
+  } catch {
+    return "sistema";
+  }
+}
+
+/** Grava a preferência; devolve `false` se o navegador recusou (vale só até recarregar). */
+export function gravarPreferenciaDeTema(
+  armazem: Pick<Storage, "setItem"> | null | undefined,
+  preferencia: PreferenciaDeTema,
+): boolean {
+  try {
+    if (!armazem) return false;
+    armazem.setItem(CHAVE_TEMA, preferencia);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** O tema que vale agora: a escolha explícita, ou o do aparelho quando a escolha é "sistema". */
+export function temaEfetivo(preferencia: PreferenciaDeTema, sistemaEscuro: boolean): TemaEfetivo {
+  if (preferencia === "sistema") return sistemaEscuro ? "escuro" : "claro";
+  return preferencia;
+}
+
+/**
+ * Script inline do `<head>` raiz: grava `data-tema` ANTES da primeira pintura (sem ele, quem usa o
+ * escuro veria a folha creme piscar a cada carga). Os dois acessos — armazenamento e
+ * `matchMedia` — têm try próprio: janela privada que bloqueia o localStorage não pode fazer o
+ * aparelho em modo escuro cair no claro. Fica aqui para o teste executar EXATAMENTE a string do HTML.
+ */
+export const SCRIPT_TEMA_ANTES_DA_PINTURA =
+  `var p=null,d=false;` +
+  `try{p=localStorage.getItem(${JSON.stringify(CHAVE_TEMA)})}catch(e){}` +
+  `try{d=matchMedia(${JSON.stringify(CONSULTA_TEMA_ESCURO)}).matches}catch(e){}` +
+  `try{document.documentElement.setAttribute(${JSON.stringify(ATRIBUTO_TEMA)},` +
+  `p==="claro"||p==="escuro"?p:d?"escuro":"claro")}catch(e){}`;
+
+/** Aplica o tema efetivo no <html> (cliente): a escolha no menu e a mudança do aparelho passam por aqui. */
+export function aplicarTema(
+  raiz: Pick<HTMLElement, "setAttribute">,
+  preferencia: PreferenciaDeTema,
+  sistemaEscuro: boolean,
+): TemaEfetivo {
+  const tema = temaEfetivo(preferencia, sistemaEscuro);
+  raiz.setAttribute(ATRIBUTO_TEMA, tema);
+  return tema;
+}
+
+// ---------------------------------------------------------------------------
 // BARRA INFERIOR DO CELULAR (< 640px)
 // ---------------------------------------------------------------------------
 

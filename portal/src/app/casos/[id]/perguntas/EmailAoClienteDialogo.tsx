@@ -90,7 +90,7 @@ export function EmailAoClienteDialogo({
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/40 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-fundo-reserva/40 p-4">
       {/* O fundo clicável é um botão nativo atrás do painel (fora da ordem de Tab), como na busca
           global; o clique passa pela mesma confirmação de descarte do Esc e do ✕. */}
       <button

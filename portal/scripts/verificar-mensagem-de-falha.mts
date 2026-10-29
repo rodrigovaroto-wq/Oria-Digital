@@ -27,14 +27,15 @@ import {
   lerCursor, rotuloDoTipo, textoDoAutor,
 } from "../src/lib/historico-do-mandato.ts";
 import {
-  ATRIBUTO_DISCRICAO, CHAVE_DISCRICAO, SCRIPT_DISCRICAO_ANTES_DA_PINTURA, destinoAtivo, discricaoLigada,
-  gravarDiscricao, idDoCaso, lerDiscricao,
+  ATRIBUTO_DISCRICAO, ATRIBUTO_TEMA, CHAVE_DISCRICAO, CHAVE_TEMA, SCRIPT_DISCRICAO_ANTES_DA_PINTURA,
+  SCRIPT_TEMA_ANTES_DA_PINTURA, aplicarTema, destinoAtivo, discricaoLigada, gravarDiscricao,
+  gravarPreferenciaDeTema, idDoCaso, lerDiscricao, lerPreferenciaDeTema, preferenciaDeTema, temaEfetivo,
 } from "../src/lib/casco.ts";
 import {
   CHAVE_AVISOS_VISTOS, TETO_DE_VISTOS, classificarLote, contarNaoVistos, gravarVistos, lerVistos, montarAvisos,
   nomeDoSino, unirVistos, type LoteLido,
 } from "../src/lib/avisos-de-processamento.ts";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
 let ok = 0;
@@ -688,6 +689,213 @@ const raiz = fonte("app/layout.tsx");
 checar(raiz.includes("SCRIPT_DISCRICAO_ANTES_DA_PINTURA") && raiz.includes("suppressHydrationWarning"),
   "o layout raiz não injeta o script do modo discrição (flash) ou perdeu o suppressHydrationWarning");
 
+// ---------------------------------------------------------------------------
+// MODO ESCURO — preferência, script do <head>, paridade dos tokens e contraste medido
+// ---------------------------------------------------------------------------
+//
+// O defeito silencioso daqui é DUPLO: (1) uma cor do claro que ficou sem par no escuro e continua
+// creme numa folha escura (ou escuro sobre escuro, ilegível); (2) um par texto/fundo do escuro que
+// reprova AA sem ninguém medir. Sem DOM neste harness: a preferência e o script do <head> são
+// EXECUTADOS; o CSS é lido como texto e os contrastes são CALCULADOS a partir dos valores que
+// estão nele (nunca de uma cópia no teste). Não prova a pintura real — isso é screenshot.
+checar(preferenciaDeTema("claro") === "claro" && preferenciaDeTema("escuro") === "escuro"
+  && preferenciaDeTema("sistema") === "sistema" && preferenciaDeTema(null) === "sistema"
+  && preferenciaDeTema(undefined) === "sistema" && preferenciaDeTema("") === "sistema"
+  && preferenciaDeTema("dark") === "sistema" && preferenciaDeTema("1") === "sistema",
+  "só 'claro' e 'escuro' valem; ausente, vazio ou lixo tem de dar 'sistema' (o padrão)");
+checar(lerPreferenciaDeTema(armazemFalso()) === "sistema" && lerPreferenciaDeTema(null) === "sistema"
+  && lerPreferenciaDeTema(armazemFalso({ [CHAVE_TEMA]: "escuro" })) === "escuro"
+  && lerPreferenciaDeTema(armazemQueRecusa) === "sistema",
+  "padrão 'sistema'; armazenamento bloqueado ou ausente dá 'sistema', sem exceção");
+{
+  const a = armazemFalso();
+  checar(gravarPreferenciaDeTema(a, "escuro") && lerPreferenciaDeTema(a) === "escuro"
+    && gravarPreferenciaDeTema(a, "claro") && lerPreferenciaDeTema(a) === "claro"
+    && gravarPreferenciaDeTema(a, "sistema") && lerPreferenciaDeTema(a) === "sistema",
+    "gravar e reler a preferência de tema não fecha o ciclo claro → escuro → sistema");
+  checar(gravarPreferenciaDeTema(armazemQueRecusa, "escuro") === false && gravarPreferenciaDeTema(null, "escuro") === false,
+    "gravar tema em armazenamento que recusa tem de devolver false, não lançar");
+}
+checar(temaEfetivo("claro", true) === "claro" && temaEfetivo("escuro", false) === "escuro"
+  && temaEfetivo("sistema", true) === "escuro" && temaEfetivo("sistema", false) === "claro",
+  "a escolha explícita vence o aparelho; 'sistema' segue o aparelho");
+{
+  const marcados = new Map<string, string>();
+  checar(aplicarTema({ setAttribute: (k, v) => void marcados.set(k, v) }, "sistema", true) === "escuro"
+    && marcados.get(ATRIBUTO_TEMA) === "escuro",
+    "aplicarTema não grava data-tema com o tema efetivo");
+}
+// O script do <head>, EXECUTADO como está no HTML, contra localStorage/matchMedia/<html> falsos.
+const rodarScriptTema = (ls: unknown, sistemaEscuro: boolean | "lanca") => {
+  const atributos = new Map<string, string>();
+  const doc = { documentElement: { setAttribute: (k: string, v: string) => void atributos.set(k, v) } };
+  const matchMedia = () => {
+    if (sistemaEscuro === "lanca") throw new Error("sem matchMedia");
+    return { matches: sistemaEscuro };
+  };
+  let lancou = false;
+  try { runInNewContext(SCRIPT_TEMA_ANTES_DA_PINTURA, { localStorage: ls, matchMedia, document: doc }); } catch { lancou = true; }
+  return { tema: atributos.get(ATRIBUTO_TEMA), lancou };
+};
+const casosScriptTema: Array<[string, unknown, boolean | "lanca", string]> = [
+  ["claro guardado vence o aparelho escuro", armazemFalso({ [CHAVE_TEMA]: "claro" }), true, "claro"],
+  ["escuro guardado vence o aparelho claro", armazemFalso({ [CHAVE_TEMA]: "escuro" }), false, "escuro"],
+  ["sem preferência + aparelho escuro", armazemFalso(), true, "escuro"],
+  ["sem preferência + aparelho claro", armazemFalso(), false, "claro"],
+  ["'sistema' guardado + aparelho escuro", armazemFalso({ [CHAVE_TEMA]: "sistema" }), true, "escuro"],
+  ["lixo guardado + aparelho escuro", armazemFalso({ [CHAVE_TEMA]: "dark" }), true, "escuro"],
+  // O caso que o try ÚNICO errava: janela privada bloqueia o localStorage e o aparelho é escuro.
+  ["localStorage bloqueado + aparelho escuro", armazemQueRecusa, true, "escuro"],
+  ["matchMedia ausente + nada guardado", armazemFalso(), "lanca", "claro"],
+];
+for (const [o_que, ls, sistema, esperado] of casosScriptTema) {
+  const r = rodarScriptTema(ls, sistema);
+  checar(!r.lancou && r.tema === esperado, `script do tema (${o_que}): esperado ${esperado}, saiu ${r.tema}${r.lancou ? " (lançou)" : ""}`);
+}
+checar(ATRIBUTO_TEMA === "data-tema" && CHAVE_TEMA === "oria.tema",
+  "o atributo ou a chave do tema mudou de nome: o CSS, o script e o menu se desencontram");
+checar(raiz.includes("SCRIPT_TEMA_ANTES_DA_PINTURA"), "o layout raiz não injeta o script do tema: flash de folha creme no escuro");
+checar(/SCRIPT_TEMA_ANTES_DA_PINTURA/.test(fonte("components/menu-conta.tsx")) === false
+  && fonte("components/menu-conta.tsx").includes("gravarPreferenciaDeTema") && fonte("components/menu-conta.tsx").includes("aria-pressed"),
+  "o menu da conta perdeu o seletor de tema (Claro · Escuro · Sistema)");
+
+// --- globals.css: paridade claro × escuro -----------------------------------------------------
+const blocosDe = (re: RegExp) => [...css.matchAll(re)].map((m) => m[1]);
+const declaracoes = (corpo: string) => new Map([...corpo.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+const uniao = (blocos: string[]) => new Map(blocos.flatMap((b) => [...declaracoes(b)]));
+const tema = declaracoes(blocosDe(/@theme\s*\{([\s\S]*?)\n\}/g)[0] ?? "");
+const raizCss = uniao(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g));
+const blocosEscuro = blocosDe(/html\[data-tema="escuro"\]\s*\{([^}]*)\}/g);
+// O 1º bloco é o principal; os seguintes são os fallbacks do vidro e NÃO podem mascarar o valor dele.
+const escuro = new Map([...blocosEscuro.slice(1).flatMap((b) => [...declaracoes(b)]), ...declaracoes(blocosEscuro[0] ?? "")]);
+const coresClaro = [...tema.keys()].filter((k) => k.startsWith("--color-"));
+const coresEscuro = [...escuro.keys()].filter((k) => k.startsWith("--color-"));
+// O casco NÃO acompanha o tema, de propósito: estas são as ÚNICAS cores sem par no escuro.
+const FIXAS_DO_CASCO = ["--color-fundo-reserva", "--color-vidro-papel", "--color-vidro-suave",
+  "--color-vidro-terracota", "--color-vidro-texto", "--color-vidro-tinta"];
+checar(coresClaro.length >= 60 && coresEscuro.length >= 60, `leitura do globals.css vazia (${coresClaro.length} claro / ${coresEscuro.length} escuro): o teste mediria nada`);
+checar(coresEscuro.every((k) => tema.has(k)),
+  `token redefinido no escuro que não existe no claro: ${coresEscuro.filter((k) => !tema.has(k)).join(", ")}`);
+{
+  const semPar = coresClaro.filter((k) => !escuro.has(k)).sort((a, b) => a.localeCompare(b));
+  checar(JSON.stringify(semPar) === JSON.stringify(FIXAS_DO_CASCO),
+    `cor do claro sem par no escuro (esqueceram): ${semPar.filter((k) => !FIXAS_DO_CASCO.includes(k)).join(", ") || "—"}; `
+    + `ou cor fixa do casco que ganhou par: ${FIXAS_DO_CASCO.filter((k) => !semPar.includes(k)).join(", ") || "—"}`);
+}
+checar([...escuro.keys()].filter((k) => !k.startsWith("--color-")).every((k) => raizCss.has(k)),
+  "variável não-cor redefinida no escuro que não existe em :root (vidro/sombra)");
+checar([...escuro.entries()].every(([k, v]) => !/^#(000|000000|fff|ffffff)$/i.test(v) || !k.startsWith("--color-")),
+  "o escuro usa preto ou branco puros: a paleta Oria não tem nenhum dos dois");
+checar([...escuro.entries()].filter(([k, v]) => k.startsWith("--color-") && !/^#[0-9a-f]{6}$/i.test(v)).length === 0,
+  "token de cor do escuro que não é #rrggbb: o contraste não é calculável");
+// IMPRESSÃO sempre no claro: todo `html[data-tema="escuro"]` está dentro de `@media not print { }`.
+{
+  const ini = css.indexOf("@media not print");
+  let fim = -1;
+  if (ini >= 0) {
+    let n = 0;
+    for (let i = css.indexOf("{", ini); i < css.length; i++) {
+      if (css[i] === "{") n++;
+      else if (css[i] === "}" && --n === 0) { fim = i; break; }
+    }
+  }
+  const posicoes = [...css.matchAll(/html\[data-tema="escuro"\]/g)].map((m) => m.index ?? -1);
+  checar(ini >= 0 && fim > ini && posicoes.length >= 3 && posicoes.every((p) => p > ini && p < fim),
+    "há regra html[data-tema=\"escuro\"] fora de @media not print: a impressão sairia escura");
+}
+// Os dois fallbacks do vidro (menos transparência / sem backdrop-filter) têm de ter par no escuro:
+// o seletor do escuro tem especificidade MAIOR que `:root` e, sem isto, ele os sobrescreve.
+checar(/@media \(prefers-reduced-transparency: reduce\)\s*\{\s*html\[data-tema="escuro"\]\s*\{[^}]*--vidro-folha-fundo:\s*#[0-9a-f]{6}/.test(css)
+  && /@supports not [^{]*\{\s*html\[data-tema="escuro"\]\s*\{[^}]*--vidro-folha-fundo:\s*rgb\([^)]*\/\s*0\.9[68]\)/.test(css),
+  "a folha escura perdeu o fallback sólido (reduced-transparency) ou o opaco (sem backdrop-filter)");
+// O casco fixa as rampas de aviso do cartão do login nos valores do claro.
+{
+  const pino = declaracoes(blocosDe(/(?:^|\n)\.vidro-casco\s*\{([^}]*)\}/g).find((b) => /(?:^|[\s;])--color-/.test(b)) ?? "");
+  checar(pino.size === 6 && [...pino].every(([k, v]) => tema.get(k) === v),
+    "o pino de cores do .vidro-casco divergiu do @theme: os avisos do login mudariam com o tema");
+}
+// Nada que fique sobre o casco, ou sirva de véu, segue a troca de tinta/papel.
+{
+  const todos: string[] = [];
+  const andar = (d: URL) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const u = new URL(e.name + (e.isDirectory() ? "/" : ""), d);
+      if (e.isDirectory()) andar(u); else if (/\.tsx$/.test(e.name)) todos.push(u.pathname);
+    }
+  };
+  andar(new URL("../src/", import.meta.url));
+  const lido = todos.map((f) => [f, readFileSync(f, "utf8")] as const);
+  checar(lido.length > 50 && lido.every(([, t]) => !/bg-tinta-900\/\d/.test(t)),
+    "véu de diálogo com bg-tinta-900/NN: no escuro ele clareia a tela inteira (use bg-fundo-reserva)");
+  checar(lido.every(([, t]) => !/bg-vidro-texto[^"`]*\b(text-tinta-\d|hover:bg-papel)/.test(t)),
+    "botão creme do casco com texto tinta/hover papel: no escuro vira texto claro sobre creme");
+  checar(lido.every(([, t]) => !/\bbg-white(?![/\w-])/.test(t)), "bg-white em tela: no escuro vira bloco branco na folha");
+}
+
+// --- contraste medido (WCAG 2.x) ---------------------------------------------------------------
+const rgbDe = (h: string): [number, number, number] => [1, 3, 5].map((i) => Number.parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
+const lum = ([r, g, b]: [number, number, number]) => {
+  const l = (c: number) => { const x = c / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; };
+  return 0.2126 * l(r) + 0.7152 * l(g) + 0.0722 * l(b);
+};
+const razao = (a: [number, number, number], b: [number, number, number]) => {
+  const [x, y] = [lum(a), lum(b)];
+  return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+};
+const corDe = (t: string): [number, number, number] => {
+  const v = escuro.get(`--color-${t}`);
+  if (!v) throw new Error(`token --color-${t} ausente do escuro`);
+  return rgbDe(v);
+};
+// A FOLHA NA PIOR HORA: 94% da folha escura sobre o pixel MAIS CLARO da foto (255,255,236) — é o
+// que clareia o fundo e derruba o contraste do texto claro (o mesmo critério da tabela do claro).
+const folhaVidro = /rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/.exec(escuro.get("--vidro-folha-fundo") ?? "");
+checar(folhaVidro !== null, "--vidro-folha-fundo do escuro não está em rgb(r g b / a): o pior caso não é calculável");
+const alfaFolha = Number(folhaVidro?.[4] ?? 1);
+const folhaNaPior = (folhaVidro
+  ? [1, 2, 3].map((i, k) => Math.round(alfaFolha * Number(folhaVidro[i]) + (1 - alfaFolha) * [255, 255, 236][k]))
+  : [255, 255, 255]) as [number, number, number];
+const fundoDe = (n: string) => (n === "folha-sobre-foto" ? folhaNaPior : corDe(n));
+type ParDeContraste = [fg: string, bg: string, minimo: number];
+const pares: ParDeContraste[] = [];
+const texto = (fg: string, bgs: string[], min = 4.5) => bgs.forEach((bg) => pares.push([fg, bg, min]));
+const SUPERFICIES = ["folha-sobre-foto", "folha", "papel"];
+texto("tinta-900", [...SUPERFICIES, "tinta-50", "tinta-100"]);            // texto primário
+texto("tinta-800", SUPERFICIES);
+texto("tinta-700", [...SUPERFICIES, "tinta-50"]);
+texto("tinta-600", [...SUPERFICIES, "tinta-50", "tinta-100", "tinta-200"]); // secundário, chips neutros
+texto("tinta-500", [...SUPERFICIES, "tinta-50", "tinta-100"]);              // placeholder e rótulo
+texto("tinta-400", ["folha-sobre-foto", "folha"], 3.6);                     // ícone/fio: o piso do claro (3,62)
+for (const f of ["risco", "alerta", "ok", "info", "serie"]) {
+  texto(`${f}-800`, [`${f}-50`, `${f}-100`]);                                // chip
+  texto(`${f}-900`, [`${f}-50`, `${f}-100`]);
+  texto(`${f}-700`, [`${f}-50`, "folha-sobre-foto", "folha"]);               // texto de estado sobre a folha
+  texto(`${f}-800`, ["folha-sobre-foto", "folha"]);
+  texto(`${f}-900`, ["folha-sobre-foto", "folha"]);
+}
+texto("tinta-700", ["tinta-100"]); texto("tinta-700", ["tinta-200"]);        // chip neutro e o hover dele
+texto("acento-700", [...SUPERFICIES, "acento-50", "acento-100"]);           // link e item ativo
+texto("acento-600", SUPERFICIES);                                            // link; e o anel de foco precisa de 3:1
+texto("tinta-900", ["acento-100"]);                                          // ::selection
+// botões: o texto é `papel` (escuro) sobre o preenchimento, que no escuro é o tom CLARO
+for (const bg of ["tinta-900", "tinta-800", "tinta-600", "ok-600", "ok-700", "ok-800", "risco-600", "risco-700", "risco-800", "acento-600"]) {
+  texto("papel", [bg]);
+}
+// o que o `:root` mantém igual no escuro: o casco, medido no claro com o pior caso (DESIGN.md) — aqui só se
+// confere que o terracota de foco do casco e o texto do botão creme dele seguem sendo ≥ 4,5:1 entre si.
+checar(pares.length >= 100, `só ${pares.length} pares de contraste medidos: o conjunto encolheu ou o parse falhou`);
+const medivel = ([fg, bg]: ParDeContraste) => [fg, bg].every((t) => t === "folha-sobre-foto" || escuro.has(`--color-${t}`));
+checar(pares.every(medivel), `par de contraste com token ausente do escuro: ${pares.filter((p) => !medivel(p)).map(([f, b]) => `${f}/${b}`).join(", ")}`);
+const reprovados = pares.filter(medivel).filter(([fg, bg, min]) => razao(corDe(fg), fundoDe(bg)) < min);
+checar(reprovados.length === 0,
+  `contraste abaixo do mínimo no escuro: ${reprovados.map(([fg, bg, min]) => `${fg} sobre ${bg} = ${razao(corDe(fg), fundoDe(bg)).toFixed(2)} (< ${min})`).join("; ")}`);
+checar(razao(rgbDe("#11161d"), rgbDe("#ece8df")) >= 4.5 && razao(rgbDe("#11161d"), rgbDe("#f6f4ef")) >= 4.5,
+  "texto do botão creme do casco (vidro-tinta sobre vidro-texto/vidro-papel) abaixo de 4,5:1");
+if (process.env.TABELA_DE_CONTRASTE) {
+  for (const [fg, bg, min] of pares) console.log(`${fg.padEnd(12)} sobre ${bg.padEnd(17)} ${razao(corDe(fg), fundoDe(bg)).toFixed(2)}  (mín ${min})`);
+  console.log("folha na pior hora:", folhaNaPior.join(","));
+}
+
 // Barra inferior: o destino ativo. Caminhos reais, com o UUID de um mandato.
 const UUID = "0b9f2c1e-5a4d-4c8e-9f3b-7d6a1e2c3b4a";
 const casosDestino: Array<[string, ReturnType<typeof destinoAtivo>]> = [
@@ -781,5 +989,6 @@ console.log("FIM DO LOTE OK — execução morta não vira sucesso, e fato conta
 console.log("VEREDITO DO LOTE OK — pronto exige o lote FECHADO, com carência e sem acusar por \"não sei\"");
 console.log("HISTÓRICO OK — tipo desconhecido aparece cru, nulo no recebimento é \"não registrado\" e o dia é o de São Paulo");
 console.log("CASCO OK — o modo discrição liga antes da pintura, nada o desfaz por hover, e o destino ativo da barra inferior casa com a rota");
+console.log("TEMA OK — a preferência resolve claro/escuro/sistema antes da pintura, toda cor do claro tem par no escuro e todo par medido passa AA");
 console.log("CUSTOS OK — custo ausente fica ausente, o total é piso declarado e o por-documento usa um só conjunto");
 console.log("AVISOS OK — lote parado/falho tem rótulo próprio, plano desconhecido não vira \"parado\", e visto indisponível não vira \"nada novo\"");

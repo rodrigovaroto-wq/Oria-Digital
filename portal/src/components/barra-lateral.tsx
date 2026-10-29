@@ -230,7 +230,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
         href="/casos/novo"
         title="Novo mandato"
         aria-label="Novo mandato"
-        className={`${TRILHO_BASE} bg-vidro-texto text-tinta-900 hover:bg-papel`}
+        className={`${TRILHO_BASE} bg-vidro-texto text-vidro-tinta hover:bg-vidro-papel`}
       >
         <IconeMais />
       </Link>
@@ -312,7 +312,7 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
               vidro inverteu a polaridade e a regra continua a mesma. */}
           <Link
             href="/casos/novo"
-            className={`${ITEM_BASE} bg-vidro-texto text-tinta-900 hover:bg-papel`}
+            className={`${ITEM_BASE} bg-vidro-texto text-vidro-tinta hover:bg-vidro-papel`}
           >
             <IconeMais />
             Novo mandato

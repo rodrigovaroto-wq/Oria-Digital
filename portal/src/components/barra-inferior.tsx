@@ -145,7 +145,7 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
       </nav>
 
       {aberta && createPortal(
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-tinta-900/60 sm:hidden">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-fundo-reserva/60 sm:hidden">
           <button
             type="button" aria-label="Fechar" tabIndex={-1} onClick={fechar}
             className="absolute inset-0 h-full w-full cursor-default"

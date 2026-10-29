@@ -141,7 +141,7 @@ export function AvisosDeProcessamento() {
         {estado.fase === "ok" && naoVistos > 0 && (
           <span
             aria-hidden
-            className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-vidro-texto px-1 text-[10px] font-semibold leading-none text-tinta-900"
+            className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-vidro-texto px-1 text-[10px] font-semibold leading-none text-vidro-tinta"
           >
             {naoVistos > 9 ? "9+" : naoVistos}
           </span>

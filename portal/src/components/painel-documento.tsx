@@ -82,7 +82,7 @@ export function PainelDocumento({
   const inativo = "rounded border border-tinta-100 px-2.5 py-1 text-xs font-medium text-tinta-300";
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex justify-end bg-tinta-900/40">
+    <div className="fixed inset-0 z-50 flex justify-end bg-fundo-reserva/40">
       {/* O fundo clicável é um botão nativo atrás do painel (fora da ordem de Tab), como na
           busca ⌘K: um <div onClick> não é alcançável por teclado (Sonar S6848/S1082). */}
       <button

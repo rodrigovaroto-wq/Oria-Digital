@@ -192,7 +192,7 @@ export function BuscaGlobal() {
       </button>
 
       {aberto && createPortal(
-        <div className="fixed inset-0 z-50 flex items-start justify-center bg-tinta-900/50 p-4 pt-[12vh]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-fundo-reserva/50 p-4 pt-[12vh]">
           {/* O fundo clicável é um botão nativo atrás do painel (fora da ordem de Tab). */}
           <button
             type="button" aria-label="Fechar busca" tabIndex={-1} onClick={fechar}

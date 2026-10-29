@@ -92,7 +92,7 @@ export default async function LoginPage({
               coisa clara, e por isso a única ação. */}
           <button
             type="submit"
-            className="inline-flex w-full items-center justify-center rounded-md bg-vidro-texto px-3 py-2 text-sm font-medium text-tinta-900 transition-colors hover:bg-papel"
+            className="inline-flex w-full items-center justify-center rounded-md bg-vidro-texto px-3 py-2 text-sm font-medium text-vidro-tinta transition-colors hover:bg-vidro-papel"
           >
             Entrar
           </button>

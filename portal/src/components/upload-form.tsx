@@ -899,7 +899,7 @@ export default function UploadForm({
             (falha, parada ou lote sem conteúdo), a explicação é a tela — e ela
             já é renderizada acima, antes de chegar aqui. */}
         {pronto && !explicacao && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/40 px-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-fundo-reserva/40 px-4">
             <div className="w-full max-w-sm rounded-lg bg-folha p-6 text-center shadow-xl">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-ok-100 text-2xl">
                 ✓

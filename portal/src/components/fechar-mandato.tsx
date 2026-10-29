@@ -72,7 +72,7 @@ export function FecharMandato({
           role="dialog"
           aria-modal
           aria-label="Fechar mandato"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-fundo-reserva/40 p-4"
         >
           <div className="w-full max-w-md rounded-xl border border-tinta-200 bg-folha p-5 shadow-xl">
             <h2 className="text-sm font-semibold text-tinta-900">Fechar “{nome}”?</h2>

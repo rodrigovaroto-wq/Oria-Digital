@@ -6,7 +6,7 @@ import { formatarCnpj } from "@/lib/perimetro";
 // celular (<640px) a mesma lista vira lista indentada. Sem dependência: HTML + Tailwind.
 function Cartao({ n, raiz }: Readonly<{ n: NoOrg; raiz?: boolean }>) {
   return (
-    <div className="inline-block rounded border border-tinta-200 bg-white px-3 py-2 text-left">
+    <div className="inline-block rounded border border-tinta-200 bg-folha px-3 py-2 text-left">
       <p className="text-sm font-medium text-tinta-900">{n.razao_social}</p>
       <p className="font-dado text-xs text-tinta-500">{formatarCnpj(n.cnpj)}</p>
       {!raiz && (
