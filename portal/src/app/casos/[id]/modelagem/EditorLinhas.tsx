@@ -235,7 +235,7 @@ export function EditorLinhas({
           é indistinguível de "não salvou"). `z-20`: acima do cabeçalho grudado das tabelas. */}
       {(total > 0 || resumo) && (
         <div
-          className="sticky bottom-3 z-20 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-alerta-300 bg-folha px-3 py-2 text-sm shadow-lg"
+          className="sticky bottom-[calc(var(--altura-barra-inferior)+0.75rem)] z-20 sm:bottom-3 mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-alerta-300 bg-folha px-3 py-2 text-sm shadow-lg"
         >
           {total > 0 && (
             <span className="font-medium text-alerta-900">

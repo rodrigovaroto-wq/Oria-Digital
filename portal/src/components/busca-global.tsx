@@ -9,7 +9,7 @@ import {
   type GrupoDeBusca, type ResultadoDeBusca,
 } from "@/lib/busca-global";
 import { interceptarNavegacao } from "@/lib/alteracoes-pendentes";
-import { EVENTO_ABRIR_BUSCA } from "@/lib/casco";
+import { alvoDoRetornoDeFoco, EVENTO_ABRIR_BUSCA } from "@/lib/casco";
 
 // A BUSCA GLOBAL (⌘K / Ctrl+K) na barra de topo.
 //
@@ -48,6 +48,9 @@ export function BuscaGlobal() {
   const gatilho = useRef<HTMLButtonElement>(null);
   const painel = useRef<HTMLDivElement>(null);
   const idLista = useId();
+  // QUEM ABRIU: o foco volta a ele ao fechar. Só o gatilho do cabeçalho não basta — abaixo de 640px
+  // ele está oculto e a busca abre pela barra inferior (ou por ⌘K, com o foco em qualquer lugar).
+  const origem = useRef<HTMLElement | null>(null);
 
   const termo = termoDaBusca(q);
 
@@ -56,7 +59,8 @@ export function BuscaGlobal() {
     setQ("");
     setResposta(null);
     setIndice(0);
-    gatilho.current?.focus();
+    alvoDoRetornoDeFoco(origem.current, document.body, gatilho.current)?.focus();
+    origem.current = null;
   }, []);
 
   // ⌘K / Ctrl+K abre de qualquer tela (e fecha, se já aberto — por `fechar()`, que devolve o
@@ -65,7 +69,11 @@ export function BuscaGlobal() {
     const aoTeclar = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        if (aberto) fechar(); else setAberto(true);
+        if (aberto) fechar();
+        else {
+          origem.current = document.activeElement as HTMLElement | null;
+          setAberto(true);
+        }
       }
     };
     document.addEventListener("keydown", aoTeclar);
@@ -75,7 +83,13 @@ export function BuscaGlobal() {
   // A BARRA INFERIOR DO CELULAR abre a busca por evento (o gatilho dela mora em outro componente,
   // e abaixo de 640px o botão deste cabeçalho some para a função não aparecer duas vezes).
   useEffect(() => {
-    const abrir = () => setAberto(true);
+    // O botão da barra inferior manda a si mesmo em `detail.origem`: no Safari do iOS um <button>
+    // não recebe foco ao toque, e `document.activeElement` seria o <body>.
+    const abrir = (e: Event) => {
+      origem.current = (e as CustomEvent<{ origem?: HTMLElement }>).detail?.origem
+        ?? (document.activeElement as HTMLElement | null);
+      setAberto(true);
+    };
     window.addEventListener(EVENTO_ABRIR_BUSCA, abrir);
     return () => window.removeEventListener(EVENTO_ABRIR_BUSCA, abrir);
   }, []);
@@ -179,7 +193,7 @@ export function BuscaGlobal() {
       <button
         ref={gatilho}
         type="button"
-        onClick={() => setAberto(true)}
+        onClick={(e) => { origem.current = e.currentTarget; setAberto(true); }}
         aria-haspopup="dialog"
         aria-keyshortcuts="Control+K Meta+K"
         className="hidden items-center gap-2 rounded-full py-1.5 pl-2.5 pr-2 text-sm text-vidro-suave sm:flex transition-colors hover:bg-white/10 hover:text-vidro-texto"

@@ -195,7 +195,9 @@ export function BarraLateral({ mandatos }: { mandatos: MandatoNaBarra[] }) {
   // ABRIR UM MANDATO É TELA CHEIA. A barra existe para trocar de caso, e nesse
   // momento não há caso para trocar — ela só roubaria largura de um formulário
   // que ganha em respirar. É a mesma razão de um checkout não ter menu.
-  if (naCriacao) return null;
+  // A BARRA INFERIOR FICA mesmo aqui: no celular /casos/novo ficava sem navegação nem busca (os
+  // <aside> é que se anulam). Ela é `sm:hidden`, então no desktop continua tela cheia.
+  if (naCriacao) return <BarraInferior recentes={recentes} />;
 
   const alternarBarra = () => definirRecolhida(recolhida ? "0" : "1");
 

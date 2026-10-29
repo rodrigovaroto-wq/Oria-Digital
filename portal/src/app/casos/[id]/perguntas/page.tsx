@@ -312,7 +312,7 @@ export default async function PerguntasAoClientePage({
                 {/* O TEXTO CONGELADO, quando houve envio. É a razão de a 0120
                     exigi-lo: o template muda, o que foi perguntado não. */}
                 {a.texto_enviado && (
-                  <p className="mt-1.5 whitespace-pre-wrap text-xs text-tinta-600">{a.texto_enviado}</p>
+                  <p className="valor-sensivel mt-1.5 whitespace-pre-wrap text-xs text-tinta-600">{a.texto_enviado}</p>
                 )}
               </li>
             ))}

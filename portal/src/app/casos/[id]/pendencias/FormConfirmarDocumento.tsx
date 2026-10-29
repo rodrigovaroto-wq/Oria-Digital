@@ -47,7 +47,7 @@ export function CartaoConfirmarDocumento({
             — o rodapé e os selects mostram o valor REGISTRADO. Escondida,
             o analista confirmava justamente o valor que o diagnóstico
             apontou como errado (achado da revisão do PR #265). */}
-        {p.descricao && <p className="mt-1 text-sm text-tinta-700">{p.descricao}</p>}
+        {p.descricao && <p className="valor-sensivel mt-1 text-sm text-tinta-700">{p.descricao}</p>}
       </div>
 
       {/* Cada rótulo aponta para o seu campo (Sonar S6853): o leitor de tela anuncia

@@ -217,7 +217,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
       {doc.resumo && (
         <div className="rounded border border-tinta-200 bg-tinta-50 p-3 text-sm text-tinta-600">
           <p className="mb-1 text-xs font-medium uppercase text-tinta-500">Resumo</p>
-          {doc.resumo}
+          <span className="valor-sensivel">{doc.resumo}</span>
         </div>
       )}
 

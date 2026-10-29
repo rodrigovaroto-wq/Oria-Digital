@@ -125,7 +125,7 @@ export function EmailAoClienteDialogo({
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
             rows={18}
-            className="w-full rounded-md border border-tinta-200 bg-folha p-3 font-mono text-sm text-tinta-900"
+            className="valor-sensivel w-full rounded-md border border-tinta-200 bg-folha p-3 font-mono text-sm text-tinta-900"
           />
           <p className="mt-1 text-xs text-tinta-500">
             Assunto: {assuntoDoEmail(mandato)}. Troque &ldquo;[nome]&rdquo; pela sua assinatura.

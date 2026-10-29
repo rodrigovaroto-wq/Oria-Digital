@@ -118,7 +118,7 @@ export function ProvedorDeSelecao({
         <div
           ref={barra}
           tabIndex={-1}
-          className="sticky bottom-3 z-10 rounded-lg border border-tinta-200 bg-folha p-3 shadow-lg outline-none"
+          className="sticky bottom-[calc(var(--altura-barra-inferior)+0.75rem)] z-10 sm:bottom-3 rounded-lg border border-tinta-200 bg-folha p-3 shadow-lg outline-none"
           role="region"
           aria-label="Ações sobre as perguntas selecionadas"
         >

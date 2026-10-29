@@ -151,3 +151,34 @@ export function destinoAtivo(caminho: string): DestinoDaBarra | null {
   if (limpo === "/administracao" || limpo.startsWith("/administracao/")) return "mais";
   return null;
 }
+
+const semBarraFinal = (c: string) => {
+  let l = c.split(/[?#]/)[0];
+  while (l.length > 1 && l.endsWith("/")) l = l.slice(0, -1);
+  return l.toLowerCase();
+};
+
+/**
+ * `aria-current` de um link da barra inferior. "page" só quando o caminho É o do link; estar
+ * numa subpágina dele (`/casos/{id}/pendencias` sobre o link do mandato, `/administracao/custos`
+ * sobre o da Administração) é "true" — "a seção atual", não "a página atual". Dizer "page" nos dois
+ * casos faz o leitor de tela anunciar "página atual" num link que levaria a OUTRA página.
+ * `ativo` falso = sem atributo.
+ */
+export function ariaCurrentDoLink(href: string, caminho: string, ativo: boolean): "page" | "true" | undefined {
+  if (!ativo) return undefined;
+  return semBarraFinal(href) === semBarraFinal(caminho) ? "page" : "true";
+}
+
+/**
+ * Para onde o foco volta ao FECHAR a busca. O gatilho do cabeçalho fica oculto abaixo de 640px
+ * (`hidden sm:flex`): quem abriu pela barra inferior, ao fechar, perdia o foco no `<body>`. Volta
+ * ao elemento que abriu, se ele ainda está na página e não é o `<body>`; senão, ao gatilho.
+ */
+export function alvoDoRetornoDeFoco<T extends { isConnected: boolean }>(
+  origem: T | null | undefined,
+  corpo: unknown,
+  gatilho: T | null | undefined,
+): T | null | undefined {
+  return origem && origem !== corpo && origem.isConnected ? origem : gatilho;
+}

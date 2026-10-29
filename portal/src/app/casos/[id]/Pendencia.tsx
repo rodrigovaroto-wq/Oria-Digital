@@ -85,13 +85,13 @@ export function ItemPendencia({
 
       {/* UM FATO POR LINHA, com travessão. A primeira parte é a frase principal e
           vem sem marcador; as demais são qualificações dela. */}
-      <p className="font-medium">{partes[0]}</p>
+      <p className="valor-sensivel font-medium">{partes[0]}</p>
       {partes.length > 1 && (
         <ul className="mt-1 space-y-0.5">
           {partes.slice(1).map((parte, i) => (
             <li key={i} className="flex gap-1.5">
               <span aria-hidden className={cores.fraco}>—</span>
-              <span>{parte}</span>
+              <span className="valor-sensivel">{parte}</span>
             </li>
           ))}
         </ul>

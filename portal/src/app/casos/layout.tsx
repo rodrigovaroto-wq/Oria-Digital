@@ -58,7 +58,7 @@ export default async function CasosLayout({ children }: { children: React.ReactN
       <BarraLateral mandatos={mandatos} />
       {/* Abaixo de 640px a barra inferior (fixa: 4rem de altura + o respiro de baixo) cobriria o fim da
             página: o padding inferior reserva exatamente o espaço dela. */}
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 pb-[calc(4rem+max(0.75rem,env(safe-area-inset-bottom))+0.75rem)] sm:pb-3">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 pb-[calc(var(--altura-barra-inferior)+0.75rem)] sm:pb-3">
         <header className="vidro-casco sticky top-3 z-10 mx-auto flex w-full max-w-[75rem] items-center justify-between gap-4 rounded-2xl px-4 py-2">
           <Trilha nomes={nomes} />
           <div className="flex shrink-0 items-center gap-1">

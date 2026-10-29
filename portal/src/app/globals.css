@@ -177,6 +177,14 @@
   --font-dado: var(--fonte-dado), ui-monospace, "SF Mono", "Cascadia Mono", monospace;
 }
 
+/* ALTURA QUE A BARRA INFERIOR DO CELULAR OCUPA (barra de 4rem + o respiro de baixo). Um lugar só:
+   o padding de `casos/layout.tsx` e as barras `sticky` de ação (EditorLinhas, SelecaoDePerguntas)
+   leem esta variável; sem ela, a barra sticky de `bottom-3` ficava ATRÁS da barra de navegação
+   no celular, com o botão de salvar coberto. Vale só abaixo de `sm` (a barra some a partir dele). */
+:root {
+  --altura-barra-inferior: calc(4rem + max(0.75rem, env(safe-area-inset-bottom)));
+}
+
 :root {
   /* Sombras curtas e de baixa opacidade: o produto é dado, não cartão de rede
      social. Elevação demais compete com o número. Agora tingidas da tinta
@@ -668,6 +676,14 @@ html[data-discricao] .valor-sensivel {
   filter: blur(6px);
   -webkit-user-select: none;
   user-select: none;
+}
+
+/* Campo EDITÁVEL marcado: `user-select: none` num <input>/<textarea> impede focar e
+   digitar no iOS Safari (o campo vira somente leitura de fato). Quem digita enxerga o
+   que digita desfocado do mesmo jeito; só o arrastar-e-copiar volta. */
+html[data-discricao] .valor-sensivel:is(input, textarea, select) {
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 /* O aviso "Modo discrição ligado" mora no botão e só aparece com o modo ligado.

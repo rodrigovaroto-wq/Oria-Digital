@@ -28,13 +28,14 @@ import {
 } from "../src/lib/historico-do-mandato.ts";
 import {
   ATRIBUTO_DISCRICAO, ATRIBUTO_TEMA, CHAVE_DISCRICAO, CHAVE_TEMA, SCRIPT_DISCRICAO_ANTES_DA_PINTURA,
-  SCRIPT_TEMA_ANTES_DA_PINTURA, aplicarTema, destinoAtivo, discricaoLigada, gravarDiscricao,
+  SCRIPT_TEMA_ANTES_DA_PINTURA, alvoDoRetornoDeFoco, ariaCurrentDoLink, aplicarTema, destinoAtivo, discricaoLigada, gravarDiscricao,
   gravarPreferenciaDeTema, idDoCaso, lerDiscricao, lerPreferenciaDeTema, preferenciaDeTema, temaEfetivo,
 } from "../src/lib/casco.ts";
 import {
   CHAVE_AVISOS_VISTOS, TETO_DE_VISTOS, classificarLote, contarNaoVistos, gravarVistos, lerVistos, montarAvisos,
   nomeDoSino, unirVistos, type LoteLido,
 } from "../src/lib/avisos-de-processamento.ts";
+import { campoCarregaValor, CHAVES_APRESENTACAO } from "../src/lib/apresentacao/campos.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
@@ -683,6 +684,132 @@ const marcacoes: Array<[string, RegExp, string]> = [
 ];
 for (const [arq, re, o_que] of marcacoes) {
   checar(re.test(fonte(arq)), `${o_que} (${arq}) deixou de ser marcada com .valor-sensivel: o modo discrição não a borra`);
+}
+
+// VARREDURA, e não só as seis marcações acima: "toda tela que formata valor" tem de ser verdade
+// para a tela que ninguém lembrou de listar. Percorre `src/**/*.tsx`; todo uso de um formatador de
+// número (`formatValor(`, `formatarUsd(`, `fmt.format(`, `Intl.NumberFormat`, `toLocaleString("pt-BR"`)
+// precisa ter `valor-sensivel` a até 600 caracteres, antes ou depois (o elemento ou o ancestral
+// próximo; o formatador pode ficar numa `const` acima do JSX). O que NÃO é valor monetário entra na
+// lista de exceções ABAIXO, uma a uma, com o motivo — e exceção que deixou de casar com o código
+// reprova, para a lista não virar depósito.
+const FORMATADORES = /formatValor\(|formatarUsd\(|\bfmt\.format\(|Intl\.NumberFormat|toLocaleString\(["']pt-BR["']/g;
+const EXCECOES_DE_FORMATADOR: ReadonlyArray<readonly [arquivo: string, trecho: string, motivo: string]> = [
+  ["components/upload-form.tsx", 'new Date(sucesso.desde).toLocaleString("pt-BR")', "data/hora do envio, não valor"],
+  ["components/painel-zip.tsx", "progresso.indice.toLocaleString", "contagem de entradas do ZIP, não valor"],
+  ["app/casos/[id]/page.tsx", 'linhasTotais.toLocaleString("pt-BR")', "contagem de linhas extraídas, não valor"],
+  ["app/casos/[id]/documentos/(lista)/page.tsx", 'linhas.toLocaleString("pt-BR")', "contagem de linhas do documento, não valor"],
+  ["app/casos/page.tsx", "const numero = (n: number) => n.toLocaleString", "contagens do painel (mandatos, pendências), não valor"],
+  ["app/administracao/page.tsx", 'new Date(iso).toLocaleString("pt-BR"', "data/hora, não valor"],
+  // DEFINIÇÕES de formatador (não são uso em JSX): o uso é varrido (`formatValor(` em
+  // documento-detalhe, `fmt.format(` em SecaoLinhas) ou, quando o resultado passa por uma variável
+  // (`mostrado`, `num(`), é garantido pelas marcações NOMEADAS acima (SugestoesDoRealizado).
+  ["components/documento-detalhe.tsx", "function formatValor(", "definição do formatador; o uso (linha da coluna de valor) é varrido"],
+  ["components/documento-detalhe.tsx", "valorNum.toLocaleString", "corpo do formatador; idem"],
+  ["app/casos/[id]/modelagem/SecaoLinhas.tsx", "const fmt = new Intl.NumberFormat", "definição; o uso `fmt.format(` é varrido"],
+  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", "p.valor.toLocaleString", "helper de `mostrado`; a marcação nomeada acima cobre o render"],
+  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", "(p.valor * 100).toLocaleString", "helper de `mostrado`; idem"],
+  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", "const num = (v: number)", "helper de numerador/denominador; marcação nomeada acima"],
+];
+const arquivosTsx = (readdirSync(new URL("../src", import.meta.url), { recursive: true }) as string[])
+  .map((a) => a.split("\\").join("/")).filter((a) => a.endsWith(".tsx"));
+let usosVarridos = 0;
+const excecoesUsadas = new Set<number>();
+for (const arq of arquivosTsx) {
+  const txt = fonte(arq);
+  for (const m of txt.matchAll(FORMATADORES)) {
+    const ini = m.index ?? 0;
+    const linha = txt.slice(txt.lastIndexOf("\n", ini) + 1, txt.indexOf("\n", ini));
+    const iExc = EXCECOES_DE_FORMATADOR.findIndex(([a, t]) => a === arq && linha.includes(t));
+    if (iExc >= 0) { excecoesUsadas.add(iExc); continue; }
+    usosVarridos += 1;
+    const janela = txt.slice(Math.max(0, ini - 600), ini + 600);
+    checar(janela.includes("valor-sensivel"),
+      `${arq}: usa ${m[0]} sem .valor-sensivel a 600 caracteres — o modo discrição deixaria o número nítido (se não é valor monetário, entre na lista de exceções com o motivo)`);
+  }
+}
+checar(usosVarridos >= 3, `a varredura de formatadores achou ${usosVarridos} usos fora das exceções (esperado ≥ 3: formatValor, fmt.format, formatarUsd): ela deixou de varrer`);
+EXCECOES_DE_FORMATADOR.forEach(([a, t], i) =>
+  checar(excecoesUsadas.has(i), `exceção de formatador sem correspondente no código (apodreceu): ${a} · ${t}`));
+
+// Textos que chegam PRONTOS do banco e carregam número sem passar por formatador nenhum — a
+// varredura acima não os vê. 0009: "Ativo Total (…) vs Passivo+PL (…): divergência de …".
+const textosDoBanco: Array<[string, RegExp, string]> = [
+  ["app/casos/[id]/Pendencia.tsx", /valor-sensivel[^>]*>\{partes\[0\]\}/, "frase principal da pendência"],
+  ["app/casos/[id]/Pendencia.tsx", /valor-sensivel[^>]*>\{parte\}/, "qualificações da pendência"],
+  ["app/casos/[id]/pendencias/page.tsx", /valor-sensivel[^>]*>\{p\.descricao\}/, "descrição no cartão de confirmar"],
+  ["app/casos/[id]/pendencias/FormConfirmarDocumento.tsx", /valor-sensivel[^>]*>\{p\.descricao\}/, "descrição no formulário de confirmar"],
+  ["app/casos/page.tsx", /valor-sensivel[^>]*>\{resumoTexto\}/, "resumo da pendência na fila do início"],
+  ["app/casos/[id]/page.tsx", /<blockquote className="valor-sensivel[^>]*>\s*“\{f\.trecho\}”/, "trecho do fato material"],
+  ["app/casos/[id]/page.tsx", /valor-sensivel[^>]*>\{f\.leitura\}/, "leitura do fato material"],
+  ["app/casos/[id]/historico/linha-do-tempo.tsx", /valor-sensivel[^>]*>\{e\.resumo\}/, "resumo do evento do histórico"],
+  ["app/casos/[id]/perguntas/CartaoPergunta.tsx", /valor-sensivel[^>]*whitespace-pre-wrap[^>]*>\s*\{p\.pergunta\}/, "texto da pergunta"],
+  ["app/casos/[id]/perguntas/CartaoPergunta.tsx", /valor-sensivel">\{p\.motivo\}[\s\S]*valor-sensivel">\{p\.risco\}[\s\S]*valor-sensivel">\{p\.impacto\}/, "motivo, risco e impacto da pergunta"],
+  ["app/casos/[id]/perguntas/page.tsx", /valor-sensivel[^>]*>\{a\.texto_enviado\}/, "texto já enviado ao cliente"],
+  ["app/casos/[id]/perguntas/EmailAoClienteDialogo.tsx", /<textarea[\s\S]{0,300}?valor-sensivel/, "texto editável do e-mail ao cliente"],
+  ["components/documento-detalhe.tsx", /valor-sensivel[^>]*>\{doc\.resumo\}/, "resumo do documento (detalhe)"],
+  ["app/casos/[id]/documentos/(lista)/page.tsx", /valor-sensivel[^>]*truncate[^>]*>\s*\{doc\.resumo\}/, "resumo do documento (lista)"],
+];
+for (const [arq, re, o_que] of textosDoBanco) {
+  checar(re.test(fonte(arq)), `${o_que} (${arq}) deixou de ser marcado com .valor-sensivel: texto do banco com número fica nítido no modo discrição`);
+}
+
+// Campos digitados da apresentação (FormCapitulo): a decisão é por CHAVE, função pura.
+// Valor/percentual/nota/cronograma/magnitude: borra. Fonte, justificativa e texto de julgamento: nítidos.
+for (const k of ["i1.kpi1", "i1.kpi4", "xv2.alavanca1", "xv2.titulo", "xvi.realizacao.clientes", "xvi.recuperacao",
+  "xiii3.cronograma", "xiii3.ruptura", "xvii.nota1", "xvii.nota6"]) {
+  checar(campoCarregaValor(k), `campo ${k} carrega número e tem de ser marcado .valor-sensivel`);
+}
+for (const k of ["i1.kpi1.fonte", "xvii.justificativa1", "i1.contexto1", "iii2.socio1", "xviii.hipotese", "xiii2.op1.vencimento"]) {
+  checar(!campoCarregaValor(k), `campo ${k} é texto/data e não deve ser borrado (o modo perderia o sentido)`);
+}
+checar([...CHAVES_APRESENTACAO].filter(campoCarregaValor).length >= 20,
+  "campoCarregaValor cobre menos de 20 chaves do catálogo: a regra deixou de casar com as chaves de `campos.ts`");
+checar(/campoCarregaValor\(c\.chave\)/.test(fonte("app/casos/[id]/entregaveis/FormCapitulo.tsx"))
+  && (fonte("app/casos/[id]/entregaveis/FormCapitulo.tsx").match(/ valor-sensivel/g) ?? []).length === 2,
+  "FormCapitulo não aplica .valor-sensivel ao <input> E ao <textarea> pelos campos de valor");
+// Campo editável marcado: user-select:none no iOS impede digitar.
+checar(regrasSensiveis.some((r) => /html\[data-discricao\]\s+\.valor-sensivel:is\(input,\s*textarea,\s*select\)/.test(r[1])
+  && /(?<!-webkit-)user-select:\s*auto/.test(r[2]) && /-webkit-user-select:\s*auto/.test(r[2])),
+  "globals.css não devolve user-select:auto a input/textarea/select marcados (no iOS o campo deixa de aceitar digitação)");
+
+// Barra inferior e busca: comportamento puro + estrutura da cola.
+checar(ariaCurrentDoLink("/casos/todos", "/casos/todos", true) === "page"
+  && ariaCurrentDoLink("/casos/todos/", "/casos/todos?q=a", true) === "page"
+  && ariaCurrentDoLink("/administracao", "/administracao/custos", true) === "true"
+  && ariaCurrentDoLink("/casos/ABC", "/casos/abc/pendencias", true) === "true"
+  && ariaCurrentDoLink("/casos/abc", "/casos/abc", true) === "page"
+  && ariaCurrentDoLink("/casos/todos", "/casos/todos", false) === undefined,
+  "aria-current: 'page' só quando o caminho é o do link; subpágina é 'true'; inativo é ausente");
+{
+  const corpo = { isConnected: true }; const gat = { isConnected: true }; const bt = { isConnected: true };
+  checar(alvoDoRetornoDeFoco(bt, corpo, gat) === bt && alvoDoRetornoDeFoco(corpo, corpo, gat) === gat
+    && alvoDoRetornoDeFoco(null, corpo, gat) === gat && alvoDoRetornoDeFoco({ isConnected: false }, corpo, gat) === gat,
+    "o foco da busca volta a quem abriu; <body>, ausente ou desmontado cai no gatilho do cabeçalho");
+}
+{
+  const lateral = fonte("components/barra-lateral.tsx");
+  checar(/if \(naCriacao\) return <BarraInferior recentes=\{recentes\} \/>;/.test(lateral) && !/if \(naCriacao\) return null/.test(lateral),
+    "em /casos/novo a barra inferior some: o celular fica sem navegação nem busca");
+  const inf = fonte("components/barra-inferior.tsx");
+  checar(!/aria-current=\{[^}]*"page"/.test(inf) && (inf.match(/ariaCurrentDoLink\(/g) ?? []).length >= 3,
+    "a barra inferior marca aria-current='page' sem passar por ariaCurrentDoLink");
+  checar((inf.match(/onClick=\{dispensar\}/g) ?? []).length === 2, "os links da folha 'Mais' não a fecham no clique");
+  checar(inf.includes("stopImmediatePropagation") && inf.includes('document.body.style.overflow = "hidden"')
+    && inf.includes("document.body.style.overflow = rolagem"),
+    "a folha 'Mais' não prende o Esc nem trava/restaura a rolagem do body");
+  checar(/detail: \{ origem: e\.currentTarget \}/.test(inf), "o botão Busca da barra inferior não informa quem abriu");
+  const busca = fonte("components/busca-global.tsx");
+  checar(/alvoDoRetornoDeFoco\(origem\.current/.test(busca) && /detail\?\.origem/.test(busca),
+    "a busca não devolve o foco a quem a abriu (pela barra inferior o gatilho do cabeçalho está oculto)");
+  const cssTodo = readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8");
+  checar(/--altura-barra-inferior:\s*calc\(/.test(cssTodo)
+    && fonte("app/casos/layout.tsx").includes("var(--altura-barra-inferior)")
+    && fonte("app/casos/[id]/modelagem/EditorLinhas.tsx").includes("bottom-[calc(var(--altura-barra-inferior)+0.75rem)]")
+    && fonte("app/casos/[id]/modelagem/EditorLinhas.tsx").includes("sm:bottom-3")
+    && fonte("app/casos/[id]/perguntas/SelecaoDePerguntas.tsx").includes("bottom-[calc(var(--altura-barra-inferior)+0.75rem)]")
+    && fonte("app/casos/[id]/perguntas/SelecaoDePerguntas.tsx").includes("sm:bottom-3"),
+    "as barras sticky de ação voltaram a ficar atrás da barra inferior no celular (variável --altura-barra-inferior)");
 }
 // A cola: o layout raiz injeta o script (não uma cópia) e tolera o atributo ligado antes da hidratação.
 const raiz = fonte("app/layout.tsx");

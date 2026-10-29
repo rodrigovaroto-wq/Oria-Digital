@@ -76,7 +76,7 @@ export function CartaoPergunta({
 
       {/* O TEXTO QUE VAI AO CLIENTE. Fundo próprio e `whitespace-pre-wrap`: é
           uma citação do que será enviado, não um parágrafo da interface. */}
-      <p className="mt-2.5 rounded-md border border-tinta-200 bg-tinta-50 px-3 py-2.5 text-sm
+      <p className="valor-sensivel mt-2.5 rounded-md border border-tinta-200 bg-tinta-50 px-3 py-2.5 text-sm
                     whitespace-pre-wrap text-tinta-900">
         {p.pergunta}
       </p>
@@ -164,15 +164,15 @@ export function CartaoPergunta({
           </p>
           <p>
             <span className="font-semibold text-tinta-800">Motivo: </span>
-            {p.motivo}
+            <span className="valor-sensivel">{p.motivo}</span>
           </p>
           <p>
             <span className="font-semibold text-tinta-800">Risco: </span>
-            {p.risco}
+            <span className="valor-sensivel">{p.risco}</span>
           </p>
           <p>
             <span className="font-semibold text-tinta-800">Impacto: </span>
-            {p.impacto}
+            <span className="valor-sensivel">{p.impacto}</span>
           </p>
           <p className="text-tinta-400">Fonte: {p.fonte}</p>
         </div>

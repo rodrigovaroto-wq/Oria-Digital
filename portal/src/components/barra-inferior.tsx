@@ -13,7 +13,7 @@ import {
   IconeQualidade,
 } from "@/components/icones";
 import { CASO_STATUS_COLOR, CASO_STATUS_LABEL } from "@/lib/status";
-import { destinoAtivo, EVENTO_ABRIR_BUSCA, idDoCaso, type DestinoDaBarra } from "@/lib/casco";
+import { ariaCurrentDoLink, destinoAtivo, EVENTO_ABRIR_BUSCA, idDoCaso, type DestinoDaBarra } from "@/lib/casco";
 import type { MandatoNaBarra } from "@/components/barra-lateral";
 
 // A BARRA INFERIOR DO CELULAR (< 640px) — a cena de uso 3 do PRODUCT.md ("consulta rápida no
@@ -41,21 +41,22 @@ const ITEM =
 const ATIVO = "bg-white/10 font-semibold shadow-[inset_0_2px_0_var(--color-vidro-terracota)]";
 
 function Item({
-  destino, ativo, rotulo, children, href, aoClicar, aberto,
+  destino, ativo, caminho, rotulo, children, href, aoClicar, aberto,
 }: Readonly<{
   destino: DestinoDaBarra | "busca";
   ativo: DestinoDaBarra | null;
+  caminho: string;
   rotulo: string;
   children: React.ReactNode;
   href?: string;
-  aoClicar?: () => void;
+  aoClicar?: (e: React.MouseEvent<HTMLButtonElement>) => void;
   aberto?: boolean;
 }>) {
   const marcado = destino !== "busca" && ativo === destino;
   const classe = `${ITEM} ${marcado ? ATIVO : ""}`;
   if (href) {
     return (
-      <Link href={href} aria-current={marcado ? "page" : undefined} className={classe}>
+      <Link href={href} aria-current={ariaCurrentDoLink(href, caminho, marcado)} className={classe}>
         {children}
         <span>{rotulo}</span>
       </Link>
@@ -91,15 +92,27 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
     gatilho.current?.focus();
   };
 
+  // Clicar num link da folha a fecha: se o destino é a página em que já se está, o caminho não
+  // muda e a folha ficaria aberta sobre a tela que o toque pretendia mostrar. Sem devolver o foco ao
+  // gatilho (a navegação leva o foco).
+  const dispensar = () => setAbertaEm(null);
+
   // Esc fecha; Tab fica preso na folha; o foco entra nela ao abrir.
   useEffect(() => {
     if (!aberta) return;
     const focaveis = () =>
       Array.from(folha.current?.querySelectorAll<HTMLElement>("a[href], button:not([disabled])") ?? []);
     focaveis()[0]?.focus();
+    // Rolagem do <body> travada com a folha aberta (como `painel-documento.tsx`): o toque no fundo
+    // escuro rolava a página por baixo.
+    const rolagem = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
+        // Só a folha fecha: sem isto o mesmo Esc chegava a outros ouvintes do document (a busca, um
+        // diálogo por baixo) e fechava duas camadas de uma vez.
+        e.stopImmediatePropagation();
         setAbertaEm(null);
         gatilho.current?.focus();
         return;
@@ -113,7 +126,10 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
       foc[prox].focus();
     };
     document.addEventListener("keydown", aoTeclar);
-    return () => document.removeEventListener("keydown", aoTeclar);
+    return () => {
+      document.removeEventListener("keydown", aoTeclar);
+      document.body.style.overflow = rolagem;
+    };
   }, [aberta]);
 
   return (
@@ -122,15 +138,15 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
         aria-label="Navegação principal"
         className="vidro-casco fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex items-stretch gap-1 rounded-2xl p-1 sm:hidden"
       >
-        <Item destino="inicio" ativo={ativo} rotulo="Início" href="/casos"><IconeInicio tamanho={20} /></Item>
-        <Item destino="mandatos" ativo={ativo} rotulo="Mandatos" href="/casos/todos"><IconeMandatos tamanho={20} /></Item>
+        <Item destino="inicio" ativo={ativo} caminho={caminho} rotulo="Início" href="/casos"><IconeInicio tamanho={20} /></Item>
+        <Item destino="mandatos" ativo={ativo} caminho={caminho} rotulo="Mandatos" href="/casos/todos"><IconeMandatos tamanho={20} /></Item>
         <Item
-          destino="busca" ativo={ativo} rotulo="Busca"
-          aoClicar={() => window.dispatchEvent(new Event(EVENTO_ABRIR_BUSCA))}
+          destino="busca" ativo={ativo} caminho={caminho} rotulo="Busca"
+          aoClicar={(e) => window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_BUSCA, { detail: { origem: e.currentTarget } }))}
         >
           <IconeBusca tamanho={20} />
         </Item>
-        <Item destino="novo" ativo={ativo} rotulo="Novo" href="/casos/novo"><IconeMais tamanho={20} /></Item>
+        <Item destino="novo" ativo={ativo} caminho={caminho} rotulo="Novo" href="/casos/novo"><IconeMais tamanho={20} /></Item>
         <button
           ref={gatilho}
           type="button"
@@ -166,7 +182,8 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
                   <li key={m.id}>
                     <Link
                       href={`/casos/${m.id}`}
-                      aria-current={idAtual === m.id.toLowerCase() ? "page" : undefined}
+                      onClick={dispensar}
+                      aria-current={ariaCurrentDoLink(`/casos/${m.id}`, caminho, idAtual === m.id.toLowerCase())}
                       className={`flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-vidro-texto hover:bg-white/[0.07] ${
                         idAtual === m.id.toLowerCase() ? "bg-white/10 font-medium" : ""
                       }`}
@@ -182,7 +199,8 @@ export function BarraInferior({ recentes }: Readonly<{ recentes: MandatoNaBarra[
             <div className="mt-2 border-t border-white/10 pt-2">
               <Link
                 href="/administracao"
-                aria-current={ativo === "mais" ? "page" : undefined}
+                onClick={dispensar}
+                aria-current={ariaCurrentDoLink("/administracao", caminho, ativo === "mais")}
                 className={`flex min-h-11 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-vidro-texto hover:bg-white/[0.07] ${
                   ativo === "mais" ? "bg-white/10" : ""
                 }`}

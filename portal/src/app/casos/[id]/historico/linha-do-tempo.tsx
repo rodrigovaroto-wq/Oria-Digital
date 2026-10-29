@@ -51,7 +51,7 @@ export function LinhaDoTempo({ casoId, eventos }: Readonly<{ casoId: string; eve
                     <time dateTime={e.em} className="w-12 shrink-0 tabular-nums text-tinta-600">{horaDoEvento(e.em)}</time>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-tinta-900">{rotuloDoTipo(e.tipo)}</p>
-                      <p className="mt-0.5 break-words text-tinta-800">{e.resumo}</p>
+                      <p className="valor-sensivel mt-0.5 break-words text-tinta-800">{e.resumo}</p>
                       <p className="mt-1 text-xs text-tinta-600">
                         {textoDoAutor(e.tipo, e.autor, e.referencia)}
                         {e.documento_id && (

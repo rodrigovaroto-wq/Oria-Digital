@@ -82,10 +82,10 @@ function FatoMaterial({ f, casoId }: Readonly<{ f: FatoDoCaso; casoId: string }>
       {/* A EVIDÊNCIA. Citação, e não parágrafo: a barra à esquerda diz, sem
           precisar de legenda, que aquelas palavras são do documento e não
           nossas. */}
-      <blockquote className="border-l-2 border-tinta-300 pl-3 text-sm italic text-tinta-800">
+      <blockquote className="valor-sensivel border-l-2 border-tinta-300 pl-3 text-sm italic text-tinta-800">
         “{f.trecho}”
       </blockquote>
-      {f.leitura && <p className="mt-1.5 text-sm text-tinta-700">{f.leitura}</p>}
+      {f.leitura && <p className="valor-sensivel mt-1.5 text-sm text-tinta-700">{f.leitura}</p>}
       <p className="mt-1.5 text-xs text-tinta-500">{f.porque}</p>
       <p className="mt-1.5 text-xs">
         <a

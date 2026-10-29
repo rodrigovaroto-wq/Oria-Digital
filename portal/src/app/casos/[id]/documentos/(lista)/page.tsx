@@ -332,7 +332,7 @@ export default async function DocumentosPage({
                             arquivo: numa coluna estreita ele aparecia truncado em três
                             palavras, o que é ruído com cara de informação. */}
                         {doc.resumo && (
-                          <p className="mt-0.5 max-w-[15rem] truncate text-xs text-tinta-500" title={doc.resumo}>
+                          <p className="valor-sensivel mt-0.5 max-w-[15rem] truncate text-xs text-tinta-500" title={doc.resumo}>
                             {doc.resumo}
                           </p>
                         )}

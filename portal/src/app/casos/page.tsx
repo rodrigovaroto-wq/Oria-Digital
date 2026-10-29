@@ -578,7 +578,7 @@ export default async function PainelPage({
                             </span>
                           </p>
                           {resumoTexto && (
-                            <p className="mt-0.5 line-clamp-2 text-xs text-tinta-600">{resumoTexto}</p>
+                            <p className="valor-sensivel mt-0.5 line-clamp-2 text-xs text-tinta-600">{resumoTexto}</p>
                           )}
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1.5">

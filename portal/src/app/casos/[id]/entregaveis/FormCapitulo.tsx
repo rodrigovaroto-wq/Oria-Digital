@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import type { ResultadoCampos } from "./actions";
-import type { CapituloApresentacao } from "@/lib/apresentacao/campos";
+import { campoCarregaValor, type CapituloApresentacao } from "@/lib/apresentacao/campos";
 
 /** Um capítulo do catálogo: cada campo com o valor gravado (ou vazio = "[a preencher]" no deck). */
 /** `acao` vem JÁ amarrada ao caso pela página (servidor): o argumento ligado lá vai cifrado. */
@@ -19,10 +19,10 @@ export function FormCapitulo({ acao: salvar, capitulo, valores }: Readonly<{
           <span className="text-tinta-600">{c.rotulo}</span>
           {c.longo ? (
             <textarea name={`campo:${c.chave}`} defaultValue={valores[c.chave] ?? ""} rows={3}
-              className="mt-1 w-full rounded border border-tinta-200 px-2 py-1" />
+              className={`mt-1 w-full rounded border border-tinta-200 px-2 py-1${campoCarregaValor(c.chave) ? " valor-sensivel" : ""}`} />
           ) : (
             <input name={`campo:${c.chave}`} defaultValue={valores[c.chave] ?? ""}
-              className="mt-1 w-full rounded border border-tinta-200 px-2 py-1" />
+              className={`mt-1 w-full rounded border border-tinta-200 px-2 py-1${campoCarregaValor(c.chave) ? " valor-sensivel" : ""}`} />
           )}
         </label>
       ))}

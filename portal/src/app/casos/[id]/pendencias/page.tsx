@@ -148,7 +148,7 @@ export default async function PendenciasPage({
       // descartariam a confirmação, que é o que o documento precisa.
       <li key={p.id} className="carta border-alerta-200 p-4 text-sm">
         <p className="font-medium text-tinta-900">{nomeDoArquivo(p) ?? "Documento a confirmar"}</p>
-        {p.descricao && <p className="mt-1 text-tinta-700">{p.descricao}</p>}
+        {p.descricao && <p className="valor-sensivel mt-1 text-tinta-700">{p.descricao}</p>}
         <p className="mt-2 text-alerta-800">
           {taxonomiaFalhou
             ? "Não foi possível carregar a lista de tipos de documento, então o formulário de confirmação não aparece agora. Recarregue a página."
