@@ -1,5 +1,34 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 113 (29/10/2026) — fechamento do redesenho do portal (fases 1 a 5)
+
+> **Migration mais nova: `0216_o_acesso_que_so_o_portal_decidia.sql`** (ESCRITA, NÃO aplicada em produção). O defeito que ela corrige: toda policy de `authenticated` era `using (true)` desde a `0003`, então qualquer usuário logado lia e escrevia TODOS os mandatos, e o portal só escondia o que não mostrava. A 0216 põe papéis Sócio · Analista · Leitura (`membro`), alocação por mandato (`alocacao`) e policy por mandato no banco. A rodada inteira está em `Arquitetura do Sistema/7 Marca/REDESENHO_DO_PORTAL.md`, em "O dono faz à mão".
+> **Estado:** fases 1 a 5 concluídas; nada em andamento. PR #265 (rascunho), branch `claude/friendly-lamport-22ctle`. Esta rodada fecha com um commit de documentação sobre `96df48d`. **Não foi empurrado** (sem push, por pedido do fluxo): o PR só enxerga este commit depois do push.
+> **O que o dono aplica, em ordem:** 0215 (conferir a sonda) → 0216 (antes, conferir nomes duplicados e `auth.users`: todo usuário vira Sócio; conferir a sonda com `migration='0216'`; conferir `rolbypassrls` de `postgres` e `service_role`) → segredo `N8N_INTAKE_SEGREDO` na Vercel e no n8n → deploy do portal → republicar o workflow de ingestão (conferir `multipleFiles` no campo "Arquivos") → configurar o Auth (Site URL, Redirect URLs `/auth/confirmar**`, modelo de recuperação) → olhar o preview da Vercel nas telas novas. Detalhe com comandos no REDESENHO.
+> **O que a SESSÃO 112 dizia faltar** (tela de equipe, esconder botões por papel) **foi feito**: `cf24d86`, `e6a6049`, `6e68c1e`. A S112 fica como histórico.
+
+**Suítes medidas NESTA rodada (29/10/2026, banco local PostgreSQL 16, árvore limpa em `96df48d`):**
+
+| Suíte | Resultado |
+|---|---|
+| `node --test 'N8N/test/*.test.mjs'` | 693 de 693 |
+| `node --test 'Leitor/test/*.test.mjs'` | 65 de 65 |
+| `node --test '.claude/hooks/test/*.test.mjs'` | 11 de 11 |
+| `node --test 'Supabase/test/*.test.mjs'` com `TESTE_PSQL` | 44 de 44 (sem o banco, 40 passam e 4 são pulados; o motivo é o `TESTE_PSQL` não definido) |
+| `Supabase/test/run.sh` (banco local) | exit 0, "TODOS OS TESTES PASSARAM". `acesso_por_caso.test.sql`: 217 asserts ok, 0 falhas. `schema.sql` regerado é idêntico ao commitado |
+| `Supabase/test/conferir-chamadas.mjs` (`CONFERIR_DB=tdf_test`) | CHAMADAS OK |
+| `Supabase/test/sonda-producao.mjs --so-buraco` (`tdf_test`) | sem buraco; 66 migrations no catálogo |
+| `verificar-*.mts` (12 do portal) | todos rc 0 (export 894/0, transcricao 35/0, perimetro OK, exclusividade-ciclo 20/20 e os demais OK) |
+| `Verificação/run.mts` (E2E) | 46 verificações OK / 0 falhas |
+| `Verificação/variacoes.mts` | 0 achados |
+| `tsc --noEmit`, `eslint .` (portal) | exit 0 |
+| `node .claude/verificar-comandos.mjs` | 6 citações, 13 agentes conhecidos |
+| `node --test '.claude/conhecimento/test/*.test.mjs'` | 3 de 3 |
+
+**NÃO remedido nesta rodada:** `next build` (nenhum arquivo de `portal/` mudou nesta fatia; a última medição é de cada commit); `N8N/medir-regua-cobertura.mjs` e `N8N/medir-custo-book.mjs` (precisam dos books gerados); a sonda contra **produção** (exige `SONDA_PSQL` de produção, sem conexão daqui); o Sonar.
+
+**Ambiente, para a próxima sessão:** o `variacoes.mts` exige `E2E_PSQL` (senão tenta o `psql` padrão e morre). Com o Postgres em `/tmp`, `E2E_PSQL="sudo -u postgres psql -h /tmp -p 5432"`. O `TESTE_PSQL` é a variável dos quatro testes que pulam (não o `CONFERIR_PSQL`).
+
 ## SESSÃO 112 (29/10/2026) — o acesso por mandato no banco (portal, fase 5, parte 1)
 
 > **Migration mais nova: `0216_o_acesso_que_so_o_portal_decidia.sql`** (ESCRITA, NÃO aplicada; aplicar DEPOIS da 0215 e conferir `fn_instalacao_conferir()` com `migration = '0216'`). Papéis Sócio · Analista · Leitura (`membro`), alocação por mandato (`alocacao`) e toda policy `using (true)` de `authenticated` trocada por policy por mandato. Sócio: tudo (aprovar, fechar, excluir mandato, dial, equipe); Analista: lê e escreve só onde está alocado; Leitura: só lê onde está alocada; sem papel: nada. Funções `fn_pode_*`/`fn_casos_*`, gestão `fn_definir_papel`/`fn_alocar`/`fn_desalocar` (só Sócio, com evento) e gatilhos de guarda (aprovar/fechar/excluir/dial reservados a Sócio; nunca zero Sócio). **BOOTSTRAP: a migration promove a Sócio TODOS os usuários que já existem em `auth.users` ao ser aplicada; usuário criado depois nasce sem papel e não vê nada** (README e cabeçalho da migration). **Corrigida no próprio arquivo após revisão independente (ainda NÃO aplicada; sem 0217):** ON CONFLICT que alocava o Analista em mandato alheio, nome de mandato único (índice + `fn_upsert_caso` recusa o homônimo; **a migration ABORTA se houver nomes duplicados em produção**), falha do pipeline sem `caso_id` lida pelo nome, bootstrap só com `membro` vazia, evento sem mandato só do Sócio, DELETE da Leitura dá 42501, só as policies de storage do repositório são derrubadas (confira os WARNING), lock no último Sócio e `fn_membros_da_equipe()` (só Sócio) para a tela da equipe. Teste `Supabase/test/acesso_por_caso.test.sql` (129 chamadas de assert, 217 execuções; cada correção medida desligada, números no cabeçalho da migration). Medido: `count(*)` de 198.543 campos como Analista caiu de 4.011 ms (função por linha) para 17 ms (SubPlan hash). O `run.sh` agora cria o stub `auth` e roda os testes antigos como um Sócio de teste (JWT no banco). **O que falta:** aplicar a 0216 em produção DEPOIS de conferir `auth.users`; a tela de equipe e esconder botões por papel no portal (Fase 5, parte 2 — nada em `portal/` foi tocado); conferir em produção que `postgres`/`service_role` têm BYPASSRLS (o n8n depende disso).

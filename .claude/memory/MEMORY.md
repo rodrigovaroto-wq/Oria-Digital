@@ -112,3 +112,10 @@ Uma linha por entrada; teto mole de 130 linhas não vazias.
 - [`MATERIALIZED` não é enfeite](materialized-nao-e-enfeite.md) — sem ele o Postgres inlina a CTE
   e o agrupamento que matava o cartesiano vira o cartesiano
 - [RLS só com SELECT passa em todo teste](rls-so-select-passa-no-superusuario.md) — superusuário ignora RLS: a escrita só falha no clique; teste como authenticated
+
+## Integração contínua e derivados
+
+- [Indexar o grafo lê o disco, não o commit](indexar-le-o-disco-nao-o-commit.md) — edição não commitada
+  de agente entra no grafo local e o CI reprova; gere num worktree limpo em HEAD (medido: igual ao commitado)
+- [CI com cancel-in-progress esconde o run antigo](ci-cancel-in-progress-esconde-o-run-antigo.md) — commit
+  intermediário "vermelho" costuma ser job CANCELADO por push seguinte; só o último commit tem suíte completa
