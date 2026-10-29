@@ -3,9 +3,12 @@ import { paginar } from "@/lib/supabase/paginar";
 import { lerAcesso } from "@/lib/supabase/acesso";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { EtiquetaDoPapel } from "@/components/acesso-na-tela";
-import { AlocarEmMandato, LiberarPorCodigo, MandatoAlocado, SeletorDePapel } from "@/components/equipe-forms";
-import { MOTIVO_SEM_PAPEL, O_QUE_O_PAPEL_FAZ, PAPEIS, ROTULO_DO_PAPEL, ehPapel } from "@/lib/acesso";
-import { linhasDaEquipe, type Alocacao, type CasoDaEquipe, type Membro } from "@/lib/equipe";
+import { AlocarEmMandato, LiberarMembro, LiberarPorCodigo, MandatoAlocado, SeletorDePapel } from "@/components/equipe-forms";
+import { MOTIVO_SEM_PAPEL, O_QUE_O_PAPEL_FAZ, PAPEIS, ROTULO_DO_PAPEL } from "@/lib/acesso";
+import {
+  MENSAGEM_FALTA_ATUALIZAR_O_BANCO, aguardandoLiberacao, linhasDaEquipe, textoDaFalhaDaEquipe, type CasoDaEquipe,
+} from "@/lib/equipe";
+import { lerEquipe } from "@/lib/supabase/equipe";
 
 // EQUIPE — quem tem papel e em quais mandatos está alocado. Só o Sócio gere (0216).
 //
@@ -15,11 +18,10 @@ import { linhasDaEquipe, type Alocacao, type CasoDaEquipe, type Membro } from "@
 // pareceria dizer que a equipe é uma pessoa só (regra 1). Quem chega ao endereço direto vê esta
 // explicação com o próprio papel, não uma lista truncada.
 //
-// O QUE FALTA NO BANCO, e a tela diz: `auth.users` não é legível pelo PostgREST e a 0216 não expõe o
-// e-mail. Sem uma função que o devolva (`fn_membros_da_equipe`, só Sócio), cada pessoa aparece pelo
-// código curto do usuário — só o seu próprio e-mail é conhecido, pela sessão. Quem existe no Auth e
-// ainda não tem papel NÃO aparece (não há linha em `membro`); o formulário "Liberar acesso" cobre isso
-// pelo código completo, que o Supabase mostra em Authentication › Users.
+// DE ONDE VEM O E-MAIL: `auth.users` não é legível pelo PostgREST, então a lista vem de
+// `fn_membros_da_equipe` (0216, só Sócio): todos os usuários do Auth, com e-mail e papel (nulo = ainda
+// não liberado → seção "Aguardando liberação"). Banco sem a função: a tela DIZ que falta a atualização
+// e segue no modo antigo (só quem tem papel, pelo código; formulário por UUID). Ver `lib/equipe.ts`.
 export const dynamic = "force-dynamic";
 
 export default async function EquipePage() {
@@ -39,26 +41,25 @@ export default async function EquipePage() {
   }
 
   const supabase = await createClient();
-  const [claimsRes, membrosRes, alocacoesRes, casosRes] = await Promise.all([
+  const [claimsRes, equipeRes, casosRes] = await Promise.all([
     supabase.auth.getClaims(),
-    supabase.from("membro").select("usuario_id, papel").order("criado_em", { ascending: true }),
-    paginar<Alocacao>((de, ate) =>
-      supabase.from("alocacao").select("caso_id, usuario_id")
-        .order("caso_id", { ascending: true }).order("usuario_id", { ascending: true }).range(de, ate)),
+    lerEquipe(supabase),
     paginar<CasoDaEquipe>((de, ate) =>
       supabase.from("caso").select("id, nome, fechado_em")
         .order("criado_em", { ascending: false }).order("id", { ascending: true }).range(de, ate)),
   ]);
 
   // Falha de leitura NÃO é "equipe vazia": sem esta tela dizer, "Sem membros" seria falso.
-  const falha = membrosRes.error ?? alocacoesRes.error ?? casosRes.error;
-  const incompleta = alocacoesRes.truncado || casosRes.truncado;
+  const falhaEquipe = equipeRes.estado === "falha" ? equipeRes : null;
+  const falha = falhaEquipe?.message ?? casosRes.error?.message ?? null;
+  const incompleta = casosRes.truncado || (equipeRes.estado === "ok" && equipeRes.incompleta);
   const claims = claimsRes.data?.claims;
   const eu = claims?.sub ? { id: claims.sub as string, email: (claims.email as string | undefined) ?? null } : null;
 
-  const membros = ((membrosRes.data as Array<{ usuario_id: string; papel: unknown }> | null) ?? [])
-    .filter((m): m is Membro => ehPapel(m.papel));
-  const linhas = falha ? [] : linhasDaEquipe(membros, alocacoesRes.data, casosRes.data, eu);
+  const modoAntigo = equipeRes.estado === "ok" && equipeRes.modo === "antigo";
+  const membros = equipeRes.estado === "ok" ? equipeRes.membros : [];
+  const linhas = falha ? [] : linhasDaEquipe(membros, casosRes.data, eu);
+  const aguardando = falha || modoAntigo ? [] : aguardandoLiberacao(membros, eu);
 
   return (
     <div className="space-y-6">
@@ -83,21 +84,21 @@ export default async function EquipePage() {
 
       {falha && (
         <div className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
-          <p>Não foi possível ler a equipe agora, então esta tela não afirma quem tem acesso. Recarregue a página; se continuar, avise o administrador do sistema.</p>
-          <DetalhesTecnicos><p>{falha.message}</p></DetalhesTecnicos>
+          <p>{falhaEquipe ? textoDaFalhaDaEquipe(falhaEquipe.code) : "Não foi possível ler os mandatos agora, então esta tela não afirma onde cada pessoa está alocada. Recarregue a página; se continuar, avise o administrador do sistema."}</p>
+          <DetalhesTecnicos><p>{falha}</p></DetalhesTecnicos>
         </div>
       )}
       {!falha && incompleta && (
         <p role="status" className="rounded-lg border border-alerta-200 bg-alerta-50 px-3 py-2 text-sm text-alerta-900">
-          Parte das alocações ou dos mandatos não terminou de ser lida: a lista abaixo pode estar incompleta.
+          Parte da equipe, das alocações ou dos mandatos não terminou de ser lida: a lista abaixo pode estar incompleta.
         </p>
       )}
 
-      <p role="note" className="rounded-lg border border-tinta-200 bg-tinta-50 px-3 py-2 text-xs text-tinta-700">
-        O portal ainda não consegue ler o e-mail das pessoas no banco: só o seu aparece. As demais
-        entram pelo código do usuário — compare com Authentication › Users no Supabase. Uma função do
-        banco (<code className="font-dado">fn_membros_da_equipe</code>) resolveria isso.
-      </p>
+      {modoAntigo && (
+        <p role="note" className="rounded-lg border border-alerta-200 bg-alerta-50 px-3 py-2 text-sm text-alerta-900">
+          {MENSAGEM_FALTA_ATUALIZAR_O_BANCO}
+        </p>
+      )}
 
       {!falha && (
         linhas.length === 0 ? (
@@ -152,15 +153,48 @@ export default async function EquipePage() {
         )
       )}
 
-      <section className="space-y-2">
-        <h2 className="titulo-secao">Liberar acesso a quem ainda não tem papel</h2>
-        <p className="max-w-3xl text-xs text-tinta-500">
-          Quem entrou depois da migration nasce sem papel e não vê nada. Essas pessoas não aparecem na
-          lista acima (o banco só mostra quem já tem papel). Cole o código do usuário
-          (Authentication › Users) e escolha o papel; Analista e Leitura ainda precisam ser alocados nos mandatos.
-        </p>
-        <LiberarPorCodigo />
-      </section>
+      {!falha && !modoAntigo && (
+        <section className="space-y-2" aria-label="Aguardando liberação">
+          <h2 className="titulo-secao">Aguardando liberação</h2>
+          <p className="max-w-3xl text-xs text-tinta-500">
+            Já entraram no portal e ainda não têm papel: não veem nada até um Sócio definir. Analista e
+            Leitura também precisam ser alocados nos mandatos, na lista acima.
+          </p>
+          {aguardando.length === 0 ? (
+            <p className="carta p-4 text-sm text-tinta-700">Ninguém aguardando: todos os usuários do portal já têm papel.</p>
+          ) : (
+            <ul className="carta divide-y divide-tinta-100">
+              {aguardando.map((p) => (
+                <li key={p.usuario_id} className="space-y-2 p-4">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-semibold text-tinta-900">{p.pessoa.rotulo}</span>
+                    {p.pessoa.voce && <span className="chip bg-ok-100 text-ok-800">você</span>}
+                    {!p.pessoa.temEmail && <span className="font-dado text-xs text-tinta-500">{p.usuario_id}</span>}
+                    {p.criado_em && <span className="text-xs text-tinta-500">entrou em {new Date(p.criado_em).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}</span>}
+                  </div>
+                  <LiberarMembro usuarioId={p.usuario_id} rotulo={p.pessoa.rotulo} />
+                  {p.alocacoesGuardadas > 0 && (
+                    <p className="text-xs text-alerta-900">
+                      {p.alocacoesGuardadas} {p.alocacoesGuardadas === 1 ? "alocação guardada" : "alocações guardadas"} de quando tinha papel: sem efeito até o papel voltar.
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {!falha && modoAntigo && (
+        <section className="space-y-2">
+          <h2 className="titulo-secao">Liberar acesso a quem ainda não tem papel</h2>
+          <p className="max-w-3xl text-xs text-tinta-500">
+            Sem a atualização do banco esta tela não lista quem espera liberação. Cole o código do usuário
+            (Authentication › Users) e escolha o papel; Analista e Leitura ainda precisam ser alocados nos mandatos.
+          </p>
+          <LiberarPorCodigo />
+        </section>
+      )}
     </div>
   );
 }

@@ -41,11 +41,15 @@ import {
   montarRedirectTo, origemDaRequisicao, rotaPublica, validarNovaSenha,
 } from "../src/lib/recuperar-senha.ts";
 import {
-  MENSAGEM_NOME_DUPLICADO, MENSAGEM_SEM_ENVIO, MENSAGEM_SEM_PERMISSAO, MOTIVO_SEM_PAPEL, administracaoLiberada, decidirEnvioAoMandato,
-  ehNegacaoDePermissao, escopoDaLista, interpretarPapel, permissoes, textoDeFalhaDaAcao, textoDeRecentesVazio,
+  MENSAGEM_NOME_DE_MANDATO_EXISTE, MENSAGEM_NOME_DUPLICADO, MENSAGEM_SEM_ENVIO, MENSAGEM_SEM_PERMISSAO, MOTIVO_SEM_PAPEL, administracaoLiberada, decidirEnvioAoMandato,
+  ehNegacaoDePermissao, escopoDaLista, interpretarPapel, permissoes, textoDeFalhaDaAcao, textoDeFalhaDoMandato, textoDeRecentesVazio,
   type AcessoLido,
 } from "../src/lib/acesso.ts";
-import { ehUuid, equipeDoMandato, linhasDaEquipe, pessoaDoUsuario } from "../src/lib/equipe.ts";
+import {
+  MENSAGEM_FALTA_ATUALIZAR_O_BANCO, aguardandoLiberacao, ehUuid, equipeDoMandato, interpretarMembros, linhasDaEquipe,
+  membrosDoModoAntigo, pessoaDoUsuario, textoDaFalhaDaEquipe, type MembroDaEquipe,
+} from "../src/lib/equipe.ts";
+import { obterCasoId } from "../src/lib/envio-oficial.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
@@ -1350,22 +1354,69 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   checar(/administracaoLiberada\(acesso\)/.test(fonte("app/administracao/layout.tsx")), "o layout da Administração fecha para quem não é Sócio");
   checar(/mostrarAdministracao=\{/.test(fonte("app/casos/layout.tsx")), "a barra esconde o link da Administração");
   checar(/semPapel/.test(fonte("app/casos/layout.tsx")) && /AcessoNaoLiberado/.test(fonte("app/casos/layout.tsx")), "o casco troca TODA tela por 'acesso não liberado' (Início e Mandatos incluídos)");
-  // 8. Equipe: só o e-mail de quem está logado é conhecido; o resto aparece como código curto.
+  // 8. Equipe: o e-mail vem de fn_membros_da_equipe; sem ele, o código curto (nunca um nome chutado).
   const eu = { id: "11111111-1111-1111-1111-111111111111", email: "eu@oria.com" };
   const outro = "22222222-2222-2222-2222-222222222222";
+  const novo = "33333333-3333-3333-3333-333333333333";
   checar(pessoaDoUsuario(eu.id, eu).rotulo === "eu@oria.com" && pessoaDoUsuario(outro, eu).rotulo === "usuário 22222222" && !pessoaDoUsuario(outro, eu).temEmail,
-    "e-mail só do usuário logado; os demais pelo código curto, sem inventar nome");
+    "sem e-mail do banco: só o do usuário logado; os demais pelo código curto, sem inventar nome");
+  checar(pessoaDoUsuario(outro, eu, "ana@oria.com").rotulo === "ana@oria.com" && pessoaDoUsuario(outro, eu, "ana@oria.com").temEmail,
+    "com e-mail do banco a pessoa aparece pelo e-mail, não por 'usuário abcd1234'");
   checar(ehUuid(outro) && !ehUuid("abc") && !ehUuid("22222222-2222-2222-2222-22222222222g") && !ehUuid(null), "uuid é validado na fronteira");
+  const m = (usuario_id: string, email: string | null, papel: MembroDaEquipe["papel"], alocacoes: string[] = [], criado_em: string | null = null): MembroDaEquipe =>
+    ({ usuario_id, email, papel, criado_em, alocacoes });
   const casos = [{ id: "c1", nome: "B", fechado_em: null }, { id: "c2", nome: "A", fechado_em: null }];
-  const linhas = linhasDaEquipe(
-    [{ usuario_id: outro, papel: "analista" }, { usuario_id: eu.id, papel: "socio" }],
-    [{ caso_id: "c1", usuario_id: outro }, { caso_id: "c9", usuario_id: outro }], casos, eu);
-  checar(linhas[0].papel === "socio" && linhas[0].unicoSocio && linhas[0].veTodos && linhas[0].alocaveis.length === 0, "Sócio primeiro, único Sócio marcado e sem alocação");
-  checar(linhas[1].alocados.length === 1 && linhas[1].alocadosNaoLidos === 1 && linhas[1].alocaveis.map((c) => c.id).join() === "c2",
-    "alocação de mandato não lido é CONTADA, e só se oferece o que falta");
-  const eq = equipeDoMandato([{ usuario_id: outro, papel: "leitura" }, { usuario_id: eu.id, papel: "socio" }, { usuario_id: "33333333-3333-3333-3333-333333333333", papel: "analista" }],
-    [{ caso_id: "c1", usuario_id: outro }, { caso_id: "c1", usuario_id: "44444444-4444-4444-4444-444444444444" }], eu);
-  checar(eq.alocados.length === 1 && eq.alocaveis.length === 1 && eq.semPapel === 1 && eq.socios === 1, "equipe do mandato: Sócio não entra, alocação sem papel é contada à parte");
+  const linhas = linhasDaEquipe([m(outro, "ana@oria.com", "analista", ["c1", "c9"]), m(eu.id, "eu@oria.com", "socio"), m(novo, "novo@oria.com", null)], casos, eu);
+  checar(linhas.length === 2 && linhas[0].papel === "socio" && linhas[0].unicoSocio && linhas[0].veTodos && linhas[0].alocaveis.length === 0, "Sócio primeiro, único Sócio marcado e sem alocação; quem não tem papel não entra na lista de membros");
+  checar(linhas[1].pessoa.rotulo === "ana@oria.com" && linhas[1].alocados.length === 1 && linhas[1].alocadosNaoLidos === 1 && linhas[1].alocaveis.map((c) => c.id).join() === "c2",
+    "a linha mostra o e-mail; alocação de mandato não lido é CONTADA, e só se oferece o que falta");
+  const aguard = aguardandoLiberacao([m(outro, "ana@oria.com", "analista"), m(novo, "novo@oria.com", null, ["c1"], "2026-10-29T10:00:00Z"), m("44444444-4444-4444-4444-444444444444", null, null, [], "2026-10-28T10:00:00Z")], eu);
+  checar(aguard.length === 2 && aguard[0].pessoa.rotulo === "novo@oria.com" && aguard[0].alocacoesGuardadas === 1 && aguard[1].pessoa.rotulo === "usuário 44444444",
+    "'Aguardando liberação' lista quem existe no Auth sem papel (e-mail, mais recente primeiro) e conta a alocação que não vale");
+  const eq = equipeDoMandato([m(outro, "ana@oria.com", "leitura", ["c1"]), m(eu.id, "eu@oria.com", "socio"), m(novo, "bia@oria.com", "analista"), m("44444444-4444-4444-4444-444444444444", "sem@oria.com", null, ["c1"])], "c1", eu);
+  checar(eq.alocados.length === 1 && eq.alocados[0].pessoa.rotulo === "ana@oria.com" && eq.alocaveis.length === 1 && eq.alocaveis[0].pessoa.rotulo === "bia@oria.com" && eq.semPapel === 1 && eq.socios === 1,
+    "equipe do mandato: e-mails nos alocados e no seletor, Sócio não entra, alocação sem papel é contada à parte");
+  // 8b. A leitura da função: ok / ausente / falha — e falha NUNCA vira equipe vazia (regra 1).
+  const linhaDoBanco = { usuario_id: outro, email: "ana@oria.com", papel: "analista", criado_em: "2026-10-01T00:00:00Z", alocacoes: ["c1"] };
+  const lida = interpretarMembros({ data: [linhaDoBanco, { ...linhaDoBanco, usuario_id: novo, papel: null, email: null, alocacoes: null }], error: null });
+  checar(lida.estado === "ok" && lida.membros.length === 2 && lida.ignorados === 0 && lida.membros[1].papel === null && lida.membros[1].email === null && lida.membros[1].alocacoes.length === 0,
+    "fn_membros_da_equipe: papel nulo é 'sem papel' (não descartado) e e-mail ausente fica nulo");
+  const ruim = interpretarMembros({ data: [linhaDoBanco, { ...linhaDoBanco, usuario_id: "x" }, { ...linhaDoBanco, usuario_id: novo, papel: "estagiario" }], error: null });
+  checar(ruim.estado === "ok" && ruim.membros.length === 1 && ruim.ignorados === 2, "linha com uuid ou papel inválido é CONTADA como ignorada, não sumida");
+  checar(interpretarMembros({ data: null, error: { code: "42883", message: "function fn_membros_da_equipe() does not exist" } }).estado === "ausente"
+    && interpretarMembros({ data: null, error: { code: "PGRST202", message: "Could not find the function" } }).estado === "ausente",
+    "função ausente (42883 / PGRST202) é 'ausente': a tela diz que falta a atualização do banco");
+  const f42501 = interpretarMembros({ data: null, error: { code: "42501", message: "Ver a equipe é reservado a Sócio" } });
+  const f57014 = interpretarMembros({ data: null, error: { code: "57014", message: "timeout" } });
+  checar(f42501.estado === "falha" && f57014.estado === "falha" && (f57014 as { message: string }).message === "timeout", "qualquer outro erro é FALHA com a mensagem técnica guardada, nunca 'ausente' nem lista vazia");
+  checar(interpretarMembros({ data: null, error: null }).estado === "falha" && interpretarMembros({ data: {}, error: null }).estado === "falha", "resposta que não é lista, sem erro, é falha — não 'equipe vazia'");
+  checar(/Sócio/.test(textoDaFalhaDaEquipe("42501")) && /Recarregue/.test(textoDaFalhaDaEquipe("57014")) && !/42501|57014/.test(textoDaFalhaDaEquipe("57014")), "texto humano da falha, sem código técnico");
+  checar(/0216/.test(MENSAGEM_FALTA_ATUALIZAR_O_BANCO) && /fn_membros_da_equipe/.test(MENSAGEM_FALTA_ATUALIZAR_O_BANCO) && /não lista quem ainda espera liberação/.test(MENSAGEM_FALTA_ATUALIZAR_O_BANCO),
+    "modo antigo: a mensagem diz que falta a atualização do banco e o EFEITO (não lista quem espera liberação)");
+  const antigo = membrosDoModoAntigo([{ usuario_id: outro, papel: "analista" }], [{ caso_id: "c1", usuario_id: outro }, { caso_id: "c1", usuario_id: novo }]);
+  const eqAntigo = equipeDoMandato(antigo, "c1", eu);
+  checar(antigo.every((x) => x.email === null) && eqAntigo.alocados.length === 1 && eqAntigo.alocados[0].pessoa.rotulo === "usuário 22222222" && eqAntigo.semPapel === 1,
+    "modo antigo: pelo código curto, e a alocação de quem não tem papel segue contada");
+  // 8c. Fiação: as telas usam a função, e a tela da equipe tem a seção e o aviso.
+  const pagEquipe = fonte("app/administracao/equipe/page.tsx"), loader = fonte("lib/supabase/equipe.ts");
+  checar(/fn_membros_da_equipe/.test(loader) && /lerEquipe\(supabase\)/.test(pagEquipe) && /lerEquipe\(supabase, casoId\)/.test(fonte("components/equipe-do-mandato.tsx")), "as duas telas leem a equipe por lerEquipe (fn_membros_da_equipe)");
+  checar(/Aguardando liberação/.test(pagEquipe) && /<LiberarMembro/.test(pagEquipe) && /MENSAGEM_FALTA_ATUALIZAR_O_BANCO/.test(pagEquipe) && /MENSAGEM_FALTA_ATUALIZAR_O_BANCO/.test(fonte("components/equipe-do-mandato.tsx")),
+    "a tela tem 'Aguardando liberação' com o botão de papel e avisa quando falta a atualização do banco");
+  // 9. Criar mandato: 42501 com o nome de mandato alheio e 23505 do índice caso_nome_unico têm frase própria.
+  const alheio = "Já existe um mandato com este nome ao qual você não tem acesso. Peça a um Sócio para alocá-lo, ou use outro nome.";
+  checar(textoDeFalhaDoMandato({ code: "42501", message: alheio }) === alheio, "42501 do nome alheio devolve a frase do banco INTEIRA (não 'Seu papel não permite')");
+  checar(textoDeFalhaDoMandato({ code: "42501", message: "Sem permissão para criar mandato (seu papel: leitura)" }) === MENSAGEM_SEM_PERMISSAO, "42501 de Leitura criando mandato continua sendo a frase do papel");
+  checar(textoDeFalhaDoMandato({ code: "23505", message: 'duplicate key value violates unique constraint "caso_nome_unico"' }) === MENSAGEM_NOME_DE_MANDATO_EXISTE
+    && /^Já existe um mandato com este nome/.test(MENSAGEM_NOME_DE_MANDATO_EXISTE), "23505 de caso_nome_unico vira 'Já existe um mandato com este nome'");
+  checar(textoDeFalhaDoMandato({ code: "23505", message: 'duplicate key value violates unique constraint "outro_indice"' }) === null && textoDeFalhaDoMandato({ code: "57014", message: "timeout" }) === null && textoDeFalhaDoMandato(null) === null,
+    "outro 23505 e erros que não são do nome NÃO são traduzidos (seria atribuir ao nome um erro que não é dele)");
+  const clienteQueFalha = (erro: { code: string; message: string }) => ({ rpc: async () => ({ data: null, error: erro }) }) as unknown as Parameters<typeof obterCasoId>[0];
+  for (const [erro, esperado] of [[{ code: "42501", message: alheio }, alheio], [{ code: "23505", message: 'violates unique constraint "caso_nome_unico"' }, MENSAGEM_NOME_DE_MANDATO_EXISTE]] as const) {
+    let msg = "";
+    try { await obterCasoId(clienteQueFalha({ ...erro }), "AMO"); } catch (e) { msg = (e as Error).message; }
+    checar(msg === esperado, `o envio de arquivos (obterCasoId) mostra a frase do nome de mandato (${erro.code}): "${msg}"`);
+  }
+  checar(/textoDeFalhaDoMandato\(error\)/.test(fonte("app/casos/novo/actions.ts")), "o passo 1 do novo mandato traduz 42501 do nome alheio e 23505");
 }
 
 if (falhas.length > 0) {

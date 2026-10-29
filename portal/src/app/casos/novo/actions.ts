@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { MENSAGEM_SEM_PERMISSAO, ehNegacaoDePermissao } from "@/lib/acesso";
+import { textoDeFalhaDoMandato } from "@/lib/acesso";
 import { hrefDoPasso2, situacaoPrevia, validarNomeDoMandato } from "@/lib/passo-do-mandato";
 
 // PASSO 1 DO NOVO MANDATO: cria o caso e leva ao passo 2. A criação é a MESMA
@@ -28,9 +28,9 @@ export async function criarMandato(_anterior: ResultadoDoPasso1, form: FormData)
       nome: bruto,
       erro: {
         titulo: "O mandato não foi criado.",
-        explicacao: ehNegacaoDePermissao(error)
-          ? MENSAGEM_SEM_PERMISSAO
-          : "O sistema não conseguiu registrar o mandato, então nada foi criado e nenhum arquivo foi enviado. "
+        // 42501 do nome alheio e 23505 do índice `caso_nome_unico` têm frase própria (ver `acesso.ts`).
+        explicacao: textoDeFalhaDoMandato(error)
+          ?? "O sistema não conseguiu registrar o mandato, então nada foi criado e nenhum arquivo foi enviado. "
           + "Tente de novo; se repetir, avise quem cuida do sistema com o nome do mandato e a hora.",
         tecnico: error?.message ?? "o banco não devolveu o id do mandato",
       },

@@ -170,6 +170,37 @@ export function textoDeFalhaDaAcao(prefixo: string, erro: NonNullable<ErroDoBanc
   return `${prefixo}: ${erro.message ?? "erro sem mensagem"}`;
 }
 
+/** O índice único `caso_nome_unico` (0216) barrou o nome: ele ignora caixa e espaços nas pontas. */
+export const MENSAGEM_NOME_DE_MANDATO_EXISTE =
+  "Já existe um mandato com este nome. Abra o mandato existente ou escolha outro nome.";
+
+/**
+ * A falha de CRIAR mandato (`fn_upsert_caso`), em português — ou `null` quando ela não é uma das duas
+ * respostas esperadas e quem chama segue com o texto que já tinha.
+ *
+ * Duas recusas distintas chegam aqui, e uma delas usa o MESMO código que a negação por papel:
+ *  - 42501 com "Já existe um mandato com este nome ao qual você não tem acesso…": o nome é de um
+ *    mandato que a RLS esconde de quem digitou. A frase do banco já diz o remédio (pedir alocação a
+ *    um Sócio ou usar outro nome) e é devolvida INTEIRA; trocá-la por "Seu papel não permite esta
+ *    ação" mandaria o Analista conferir o papel quando o problema é o nome.
+ *  - 42501 de qualquer outro texto (Leitura criando mandato, `fn_caso_nome_ocupado`): a frase do papel.
+ *  - 23505 de `caso_nome_unico`: duas abas criaram o mesmo nome no mesmo instante, e o índice barrou a
+ *    segunda no INSERT, sem a frase clara da função.
+ * Qualquer outro 23505 NÃO é traduzido: seria atribuir ao nome um erro que não é dele.
+ */
+export function textoDeFalhaDoMandato(
+  erro: { code?: string | null; message?: string | null; details?: string | null } | null | undefined,
+): string | null {
+  if (!erro) return null;
+  if (erro.code === "42501") {
+    return /^Já existe um mandato com este nome/.test(erro.message ?? "") ? (erro.message as string) : MENSAGEM_SEM_PERMISSAO;
+  }
+  if (erro.code === "23505" && /caso_nome_unico/.test(`${erro.message ?? ""} ${erro.details ?? ""}`)) {
+    return MENSAGEM_NOME_DE_MANDATO_EXISTE;
+  }
+  return null;
+}
+
 /**
  * O texto de "Recentes" quando a barra não tem mandato a mostrar. Três respostas diferentes para três
  * situações que a RLS por mandato torna distintas: a leitura FALHOU (não se sabe), o usuário só vê os

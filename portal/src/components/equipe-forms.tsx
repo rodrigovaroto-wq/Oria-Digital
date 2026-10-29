@@ -102,10 +102,25 @@ export function AlocarPessoa({
   );
 }
 
+/** Dá papel a UMA pessoa da lista "Aguardando liberação" (o id vai escondido: ninguém cola UUID). */
+export function LiberarMembro({ usuarioId, rotulo }: Readonly<{ usuarioId: string; rotulo: string }>) {
+  const [r, acao, pendente] = useActionState<ResultadoEquipe, FormData>(definirPapel, null);
+  return (
+    <form action={acao} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="usuario_id" value={usuarioId} />
+      <select name="papel" defaultValue="leitura" aria-label={`Papel de ${rotulo}`} className={CAMPO}>
+        {PAPEIS.map((p) => <option key={p} value={p}>{ROTULO_DO_PAPEL[p]}</option>)}
+      </select>
+      <button type="submit" className="btn-secundario" disabled={pendente}>{pendente ? "Liberando…" : "Definir papel"}</button>
+      <Resultado r={r} />
+    </form>
+  );
+}
+
 /**
- * Dá papel a quem existe no Auth e AINDA NÃO tem: o banco não lista essas pessoas (não há linha em
- * `membro` para ler, e `auth.users` não é legível), então o Sócio cola o código que o Supabase mostra
- * em Authentication › Users. Some quando existir `fn_membros_da_equipe` e a lista puder ser mostrada.
+ * Dá papel a quem existe no Auth e AINDA NÃO tem, pelo código completo (UUID de Authentication › Users).
+ * É o MODO ANTIGO: só aparece quando o banco não tem `fn_membros_da_equipe` e, portanto, a lista
+ * "Aguardando liberação" não pode ser mostrada. Com a função, `LiberarMembro` a substitui.
  */
 export function LiberarPorCodigo() {
   const [r, acao, pendente] = useActionState<ResultadoEquipe, FormData>(definirPapel, null);

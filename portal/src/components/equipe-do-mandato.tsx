@@ -1,14 +1,16 @@
 import { createClient } from "@/lib/supabase/server";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { AlocarPessoa, MandatoAlocado } from "@/components/equipe-forms";
-import { ROTULO_DO_PAPEL, ehPapel, type Permissoes } from "@/lib/acesso";
-import { equipeDoMandato, type Alocacao, type Membro } from "@/lib/equipe";
+import { ROTULO_DO_PAPEL, type Permissoes } from "@/lib/acesso";
+import { MENSAGEM_FALTA_ATUALIZAR_O_BANCO, equipeDoMandato, textoDaFalhaDaEquipe } from "@/lib/equipe";
+import { lerEquipe } from "@/lib/supabase/equipe";
 
 // EQUIPE DO MANDATO — quem trabalha aqui, na Visão geral. Quem vê a lista é o Sócio: para os demais
 // papéis a RLS devolve só a PRÓPRIA linha de `alocacao` (alocacao_read), e mostrar "1 pessoa alocada"
 // seria uma afirmação sobre a equipe que o banco não deixou ninguém medir. Eles recebem uma frase com
 // o próprio papel. Alocar e retirar passam pelas funções do banco (só Sócio); ver `equipe/actions.ts`.
-// E-mail: o banco não o expõe (ver `lib/equipe.ts`), então as pessoas aparecem pelo código curto.
+// E-mail: vem de `fn_membros_da_equipe` (0216). Sem ela a tela cai no modo antigo, diz que falta a
+// atualização do banco e mostra o código curto (ver `lib/equipe.ts`).
 export async function EquipeDoMandato({ casoId, permissoes }: Readonly<{ casoId: string; permissoes: Permissoes }>) {
   const titulo = <h2 className="titulo-secao">Equipe do mandato</h2>;
 
@@ -33,19 +35,14 @@ export async function EquipeDoMandato({ casoId, permissoes }: Readonly<{ casoId:
   }
 
   const supabase = await createClient();
-  const [claimsRes, membrosRes, alocacoesRes] = await Promise.all([
-    supabase.auth.getClaims(),
-    supabase.from("membro").select("usuario_id, papel"),
-    supabase.from("alocacao").select("caso_id, usuario_id").eq("caso_id", casoId),
-  ]);
-  const falha = membrosRes.error ?? alocacoesRes.error;
-  if (falha) {
+  const [claimsRes, lida] = await Promise.all([supabase.auth.getClaims(), lerEquipe(supabase, casoId)]);
+  if (lida.estado === "falha") {
     return (
       <section className="space-y-2" aria-label="Equipe do mandato">
         {titulo}
         <div className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
-          <p>Não foi possível ler a equipe deste mandato agora, então a tela não afirma quem está alocado.</p>
-          <DetalhesTecnicos><p>{falha.message}</p></DetalhesTecnicos>
+          <p>{textoDaFalhaDaEquipe(lida.code)} A equipe deste mandato não foi carregada, então a tela não afirma quem está alocado.</p>
+          <DetalhesTecnicos><p>{lida.message}</p></DetalhesTecnicos>
         </div>
       </section>
     );
@@ -53,9 +50,7 @@ export async function EquipeDoMandato({ casoId, permissoes }: Readonly<{ casoId:
 
   const claims = claimsRes.data?.claims;
   const eu = claims?.sub ? { id: claims.sub as string, email: (claims.email as string | undefined) ?? null } : null;
-  const membros = ((membrosRes.data as Array<{ usuario_id: string; papel: unknown }> | null) ?? [])
-    .filter((m): m is Membro => ehPapel(m.papel));
-  const equipe = equipeDoMandato(membros, (alocacoesRes.data as Alocacao[] | null) ?? [], eu);
+  const equipe = equipeDoMandato(lida.membros, casoId, eu);
 
   return (
     <section className="space-y-3" aria-label="Equipe do mandato">
@@ -89,10 +84,15 @@ export async function EquipeDoMandato({ casoId, permissoes }: Readonly<{ casoId:
         casoId={casoId}
         pessoas={equipe.alocaveis.map((p) => ({ usuario_id: p.usuario_id, rotulo: p.pessoa.rotulo, papel: p.papel }))}
       />
-      <p className="text-xs text-tinta-500">
-        Papéis e a visão de toda a equipe ficam em Administração › Equipe. O e-mail das pessoas ainda não
-        é lido do banco: aparece o código do usuário.
-      </p>
+      {lida.incompleta && (
+        <p role="status" className="text-xs text-alerta-900">
+          Parte da equipe não terminou de ser lida: a lista acima pode estar incompleta.
+        </p>
+      )}
+      {lida.modo === "antigo" && (
+        <p role="note" className="text-xs text-alerta-900">{MENSAGEM_FALTA_ATUALIZAR_O_BANCO}</p>
+      )}
+      <p className="text-xs text-tinta-500">Papéis e a visão de toda a equipe ficam em Administração › Equipe.</p>
     </section>
   );
 }
