@@ -46,6 +46,23 @@ recém-migrado só pode estar sem o requisito do n8n) e, contra produção, o `s
 NÃO vê isto (ele só mede migration declarada que não deixou rastro). O `run.sh` não simula mais o default antigo,
 então a omissão aparece no replay.
 
+## Convenção de migration — tabela com `caso_id` nasce com policy por mandato (0216)
+
+Desde a 0216 o `authenticated` só vê e escreve o mandato em que o papel dele permite (Sócio: todos; Analista: lê e escreve onde
+está alocado; Leitura: só lê onde está alocado; sem papel: nada). **Tabela nova com `caso_id` (ou que chegue a ele por FK)
+leva, na mesma migration, policies pelos conjuntos de acesso** — nunca `using (true)`:
+
+```sql
+create policy minha_read   on minha for select to authenticated using ((select fn_eh_socio()) or caso_id in (select c from fn_casos_legiveis() c));
+create policy minha_insert on minha for insert to authenticated with check ((select fn_eh_socio()) or caso_id in (select c from fn_casos_escreviveis() c));
+-- update: using (leitura) + with check (escrita)  — assim a Leitura leva 42501 e não "0 linhas" calado; delete: using (escrita)
+```
+
+Tabela global (catálogo) lê por `(select fn_tem_papel())`. Quem cobra é `Supabase/test/acesso_por_caso.test.sql` (seção 12: nenhuma
+policy `true`, toda tabela com `caso_id` lê pelos conjuntos, toda tabela de `public` tem RLS). **Operação reservada a Sócio**
+(aprovar, fechar, excluir mandato, dial, equipe) é guarda em GATILHO + `fn_exige_socio`, porque UPDATE/DELETE negado por policy afeta 0
+linhas sem erro. Conexão de serviço (n8n pelo Postgres nativo, SQL Editor, `service_role`) ignora RLS e passa por `fn_conexao_de_servico`.
+
 ## Migrations (aplicar nesta ordem)
 
 | Arquivo | O que faz |
@@ -977,6 +994,26 @@ supabase db execute --file Supabase/migrations/0215_o_historico_que_so_o_banco_s
 # DEPOIS DE APLICAR, confira o catálogo:
 #   select chave, presente, detalhe from fn_instalacao_conferir()
 #    where migration = '0215' and not presente;                 -- ZERO linhas
+
+# A 0216 cria o MODELO DE ACESSO NO BANCO: papéis Sócio · Analista · Leitura (tabela `membro`), alocação por mandato
+# (`alocacao`), funções fn_pode_ler_caso / fn_pode_escrever_caso / fn_eh_socio / fn_exige_socio, a gestão da equipe
+# (fn_definir_papel, fn_alocar, fn_desalocar — só Sócio, com evento_auditoria) e TROCA toda policy `using (true)` de
+# `authenticated` por policy por mandato. Sócio: tudo, inclusive aprovar/fechar/excluir mandato e gerir a equipe;
+# Analista: lê e escreve só nos mandatos em que está alocado; Leitura: só lê onde está alocado.
+#
+# >>> ATENÇÃO — BOOTSTRAP: A MIGRATION PROMOVE A SÓCIO **TODOS OS USUÁRIOS QUE JÁ EXISTEM EM auth.users NO MOMENTO DE APLICAR**
+# >>> (o time atual da Oria). Antes de aplicar, abra Authentication > Users no Supabase e remova ou desative quem NÃO deve
+# >>> ver tudo (convidado externo, conta de teste): quem estiver lá vira Sócio. USUÁRIO CRIADO DEPOIS NASCE SEM PAPEL e não vê
+# >>> NADA (nem o catálogo) até um Sócio chamar fn_definir_papel e fn_alocar. Sem nenhum usuário em auth.users, ninguém acessa
+# >>> nada: a sonda acusa `acesso_socio_seed`. Promover à mão:
+# >>>   insert into membro (usuario_id, papel) select id, 'socio' from auth.users where email = '<sócio>';
+# >>> O n8n (Postgres nativo, role postgres) e a service_role ignoram RLS e seguem como antes; só o `authenticated` (o navegador
+# >>> do portal) muda. Aplicar DEPOIS da 0215 e ANTES de abrir o portal para mais alguém. Teste: Supabase/test/acesso_por_caso.test.sql.
+supabase db execute --file Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql
+# DEPOIS DE APLICAR, confira o catálogo (e que há >= 1 Sócio):
+#   select chave, presente, detalhe from fn_instalacao_conferir()
+#    where migration = '0216' and not presente;                 -- ZERO linhas
+#   select u.email, m.papel from membro m join auth.users u on u.id = m.usuario_id;   -- quem entrou, e como
 
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.

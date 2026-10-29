@@ -437,6 +437,57 @@ end;
 $$;
 
 --
+-- Name: fn_alocado_agora(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_alocado_agora(p_caso uuid) RETURNS boolean
+    LANGUAGE sql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select exists (select 1 from membro m join alocacao a on a.usuario_id = m.usuario_id
+                  where m.usuario_id = auth.uid() and a.caso_id = p_caso)   -- com papel: alocação de quem perdeu o papel não vale
+$$;
+
+--
+-- Name: fn_alocar(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_alocar(p_caso uuid, p_usuario uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_papel text;
+  v_n int;
+begin
+  perform fn_exige_socio('Alocar na equipe do mandato');
+  if not exists (select 1 from caso where id = p_caso) then
+    raise exception 'Mandato % não existe', p_caso using errcode = '23503';
+  end if;
+  select papel into v_papel from membro where usuario_id = p_usuario;
+  if v_papel is null then
+    raise exception 'Usuário % não tem papel — defina um (fn_definir_papel) antes de alocar', p_usuario using errcode = 'P0001';
+  end if;
+  if v_papel = 'socio' then
+    raise exception 'Sócio já vê e escreve em todos os mandatos — alocação não se aplica' using errcode = 'P0001';
+  end if;
+  insert into alocacao (caso_id, usuario_id, criado_por) values (p_caso, p_usuario, auth.uid())
+  on conflict do nothing;
+  get diagnostics v_n = row_count;
+  if v_n = 0 then return jsonb_build_object('alocado', true, 'mudou', false); end if;
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values (coalesce('usuario:' || auth.uid()::text, 'sistema:sql'), 'alocado', 'caso:' || p_caso,
+          jsonb_build_object('usuario_id', p_usuario, 'papel', v_papel));
+  return jsonb_build_object('alocado', true, 'mudou', true);
+end $$;
+
+--
+-- Name: FUNCTION fn_alocar(p_caso uuid, p_usuario uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_alocar(p_caso uuid, p_usuario uuid) IS '0216: só Sócio. Aloca Analista ou Leitura num mandato. Idempotente. Grava evento_auditoria alocado (caso:<id>).';
+
+--
 -- Name: fn_ano4(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -967,6 +1018,85 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) IS 'Portão 2 (0109): elegível quando não há pendência BLOQUEANTE sem decisão. O teto de ressalvas e a lista fechada de Arquitetura do Sistema/2 Especificação/f0/04 deixaram de bloquear por decisão do dono — as contagens continuam publicadas como informação, e vão gravadas dentro da decisão de aprovação.';
+
+--
+-- Name: fn_caso_da_chave_do_storage(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_caso_da_chave_do_storage(p_nome text) RETURNS uuid
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+  select case when split_part(p_nome, '/', 1) ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              then split_part(p_nome, '/', 1)::uuid end
+$_$;
+
+--
+-- Name: fn_caso_da_versao(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_caso_da_versao(p_versao uuid) RETURNS uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select d.caso_id from documento_versao v join documento d on d.id = v.documento_id where v.id = p_versao
+$$;
+
+--
+-- Name: fn_caso_do_evento(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_caso_do_evento(p_ref text) RETURNS uuid
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+declare
+  v_tipo text := split_part(p_ref, ':', 1);
+  v_id   uuid;
+begin
+  if p_ref !~ '^[a-z_]+:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then return null; end if;
+  v_id := split_part(p_ref, ':', 2)::uuid;
+  return case v_tipo
+    when 'caso'             then (select c.id from caso c where c.id = v_id)
+    when 'documento'        then (select x.caso_id from documento x where x.id = v_id)
+    when 'documento_versao' then fn_caso_da_versao(v_id)
+    when 'entidade'         then (select x.caso_id from entidade x where x.id = v_id)
+    when 'pendencia'        then (select x.caso_id from pendencia x where x.id = v_id)
+    when 'reconciliacao'    then (select x.caso_id from reconciliacao x where x.id = v_id)
+    when 'controlador'      then (select x.caso_id from controlador x where x.id = v_id)
+    else null end;
+end $_$;
+
+--
+-- Name: fn_casos_escreviveis(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_casos_escreviveis() RETURNS SETOF uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select a.caso_id from alocacao a
+   where a.usuario_id = auth.uid()
+     and exists (select 1 from membro m where m.usuario_id = a.usuario_id and m.papel = 'analista')
+  union all
+  select c.id from caso c
+   where exists (select 1 from membro m where m.usuario_id = auth.uid() and m.papel = 'socio')
+$$;
+
+--
+-- Name: fn_casos_legiveis(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_casos_legiveis() RETURNS SETOF uuid
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select a.caso_id from alocacao a
+   where a.usuario_id = auth.uid() and exists (select 1 from membro m where m.usuario_id = a.usuario_id)
+  union all
+  select c.id from caso c
+   where exists (select 1 from membro m where m.usuario_id = auth.uid() and m.papel = 'socio')
+$$;
 
 --
 -- Name: fn_classe_contabil_concordancia(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -1521,6 +1651,17 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer) IS '(Revisão da 0157, achados A e B) Este par — tipo do documento-FONTE, quantas empresas têm VALOR extraído nas colunas (não só cabeçalho) — o torna apto a servir como o item COMBINADO do Kit Básico? Fonte precisa ser demonstração contábil PRIMÁRIA (DRE/BALANCO/FLUXO_CAIXA — DF_AUDITADA fica fora, decisão aberta do dono) E precisa haver mais de uma empresa com número de verdade. Função pura de propósito: a sonda de instalação a exercita por literais, sem fixture de documento (instalacao_sonda_combinado_estrutural) — um marcador textual não sobrevive a um "false and" que mate o predicado e deixe os comentários intactos; uma função executada, sim.';
+
+--
+-- Name: fn_conexao_de_servico(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_conexao_de_servico() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select auth.uid() is null and coalesce(current_setting('role', true), 'none') not in ('authenticated', 'anon')
+$$;
 
 --
 -- Name: fn_conferir_arvore(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -2414,6 +2555,77 @@ end;
 $$;
 
 --
+-- Name: fn_definir_papel(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_definir_papel(p_usuario uuid, p_papel text, p_motivo text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_antes text;
+  v_ator  text := coalesce('usuario:' || auth.uid()::text, 'sistema:sql');
+begin
+  perform fn_exige_socio('Gerir a equipe');
+  if p_papel is not null and p_papel not in ('socio', 'analista', 'leitura') then
+    raise exception 'Papel "%" não existe (socio, analista ou leitura; NULL retira o acesso)', p_papel using errcode = '22023';
+  end if;
+  if not exists (select 1 from auth.users u where u.id = p_usuario) then
+    raise exception 'Usuário % não existe no Supabase Auth — a pessoa precisa entrar uma vez (ou ser convidada) antes de receber papel', p_usuario
+      using errcode = '23503';
+  end if;
+  select papel into v_antes from membro where usuario_id = p_usuario;
+  if v_antes is not distinct from p_papel then
+    return jsonb_build_object('papel', p_papel, 'mudou', false);
+  end if;
+
+  if p_papel is null then
+    delete from membro where usuario_id = p_usuario;                  -- o gatilho recusa se for o último Sócio
+  else
+    insert into membro (usuario_id, papel, criado_por) values (p_usuario, p_papel, auth.uid())
+    on conflict (usuario_id) do update set papel = excluded.papel, criado_por = excluded.criado_por, criado_em = now();
+  end if;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+  values (v_ator, case when p_papel is null then 'papel_removido' else 'papel_definido' end, 'membro:' || p_usuario,
+          jsonb_build_object('papel', v_antes),
+          jsonb_build_object('papel', p_papel, 'motivo', nullif(btrim(p_motivo), '')));
+  return jsonb_build_object('papel', p_papel, 'papel_anterior', v_antes, 'mudou', true);
+end $$;
+
+--
+-- Name: FUNCTION fn_definir_papel(p_usuario uuid, p_papel text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_definir_papel(p_usuario uuid, p_papel text, p_motivo text) IS '0216: só Sócio. Define o papel de um usuário do Auth (socio|analista|leitura); NULL retira o acesso. Recusa deixar o portal sem Sócio. Grava evento_auditoria papel_definido/papel_removido (entidade_ref membro:<uuid>).';
+
+--
+-- Name: fn_desalocar(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_desalocar(p_caso uuid, p_usuario uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare v_n int;
+begin
+  perform fn_exige_socio('Retirar da equipe do mandato');
+  delete from alocacao where caso_id = p_caso and usuario_id = p_usuario;
+  get diagnostics v_n = row_count;
+  if v_n = 0 then return jsonb_build_object('alocado', false, 'mudou', false); end if;
+  insert into evento_auditoria (ator, acao, entidade_ref, antes)
+  values (coalesce('usuario:' || auth.uid()::text, 'sistema:sql'), 'desalocado', 'caso:' || p_caso,
+          jsonb_build_object('usuario_id', p_usuario));
+  return jsonb_build_object('alocado', false, 'mudou', true);
+end $$;
+
+--
+-- Name: FUNCTION fn_desalocar(p_caso uuid, p_usuario uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_desalocar(p_caso uuid, p_usuario uuid) IS '0216: só Sócio. Retira a alocação. Idempotente. Grava evento_auditoria desalocado (caso:<id>).';
+
+--
 -- Name: fn_desativar_premissa(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2950,6 +3162,17 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_documentos_nao_extraidos(p_caso_id uuid) IS 'Documentos do caso para os quais a extração NUNCA foi chamada (sem evento extracao_sombra em nenhuma versão). Zero linha com extração feita NÃO entra aqui — isso é 0111/0036.';
+
+--
+-- Name: fn_eh_socio(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_eh_socio() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select coalesce((select m.papel = 'socio' from membro m where m.usuario_id = auth.uid()), false)
+$$;
 
 --
 -- Name: fn_entidade_aprender_cnpj(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -3680,6 +3903,20 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_exercicio_da_coluna(p_coluna text) IS 'O exercício que o cabeçalho da coluna nomeia, ou NULL quando ele não nomeia exercício nenhum ("Saldo", "Crédito", "Ticket médio"). Ausência é ausência: coluna sem ano fica FORA da série histórica em vez de virar um ano inventado.';
+
+--
+-- Name: fn_exige_socio(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_exige_socio(p_acao text DEFAULT 'esta operação'::text) RETURNS void
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if fn_conexao_de_servico() or fn_eh_socio() then return; end if;
+  raise exception '% é reservado a Sócio (seu papel: %)', p_acao, coalesce(fn_meu_papel(), 'nenhum')
+    using errcode = '42501';
+end $$;
 
 --
 -- Name: fn_exigencias_do_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -6931,6 +7168,17 @@ $$;
 COMMENT ON FUNCTION public.fn_mesma_entidade(p_a text, p_b text) IS 'Dois nomes são a mesma entidade? Igualdade canônica ou tokens do nome curto como prefixo dos do longo, em ordem (mesmo critério de consolidarNomesDeEntidade no portal).';
 
 --
+-- Name: fn_meu_papel(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_meu_papel() RETURNS text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select m.papel from membro m where m.usuario_id = auth.uid()
+$$;
+
+--
 -- Name: fn_min_motivo_rejeicao(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -8599,6 +8847,63 @@ CREATE FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_t
       or cardinality(fn_anos_periodo(p_tipo_b, p_ref_b)) = 0 then true
     else fn_anos_periodo(p_tipo_a, p_ref_a) = fn_anos_periodo(p_tipo_b, p_ref_b)
   end;
+$$;
+
+--
+-- Name: fn_pode_criar_caso(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_pode_criar_caso() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select coalesce((select m.papel in ('socio', 'analista') from membro m where m.usuario_id = auth.uid()), false)
+$$;
+
+--
+-- Name: fn_pode_escrever_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_pode_escrever_caso(p_caso uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select exists (
+    select 1 from membro m
+     where m.usuario_id = auth.uid()
+       and (m.papel = 'socio'
+            or (m.papel = 'analista' and p_caso is not null
+                and exists (select 1 from alocacao a where a.caso_id = p_caso and a.usuario_id = m.usuario_id))))
+$$;
+
+--
+-- Name: fn_pode_escrever_evento(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_pode_escrever_evento(p_ref text) RETURNS boolean
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare v_caso uuid := fn_caso_do_evento(p_ref);
+begin
+  if v_caso is not null then return fn_pode_escrever_caso(v_caso); end if;
+  return coalesce(fn_meu_papel() in ('socio', 'analista'), false);
+end $$;
+
+--
+-- Name: fn_pode_ler_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_pode_ler_caso(p_caso uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select exists (
+    select 1 from membro m
+     where m.usuario_id = auth.uid()
+       and (m.papel = 'socio'
+            or (p_caso is not null
+                and exists (select 1 from alocacao a where a.caso_id = p_caso and a.usuario_id = m.usuario_id))))
 $$;
 
 --
@@ -14598,6 +14903,17 @@ $$;
 COMMENT ON FUNCTION public.fn_tem_palavra_longa(p_chave text) IS 'O rótulo tem ao menos uma palavra de 4+ letras? Metade da regra de fn_rotulo_contido: sem isto, "de" contido em qualquer coisa marcaria sobreposição em toda linha.';
 
 --
+-- Name: fn_tem_papel(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_tem_papel() RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select exists (select 1 from membro m where m.usuario_id = auth.uid())
+$$;
+
+--
 -- Name: fn_teto_ressalvas(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -14689,6 +15005,22 @@ $$;
 COMMENT ON FUNCTION public.fn_trg_auto_promover_dial() IS 'Gatilho da promoção automática (0137): toda decisão humana nova pode ter completado o critério do veredito de produção. NUNCA derruba a transação de quem o disparou — falha vira NOTICE, porque o analista não pode perder a rejeição de uma pendência por causa do dial.';
 
 --
+-- Name: fn_trg_caso_aloca_criador(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_caso_aloca_criador() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if auth.uid() is not null and fn_meu_papel() = 'analista' then
+    insert into alocacao (caso_id, usuario_id, criado_por) values (new.id, auth.uid(), auth.uid())
+    on conflict do nothing;
+  end if;
+  return new;
+end $$;
+
+--
 -- Name: fn_trg_caso_pergunta_so_reaponta(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -14721,6 +15053,33 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_trg_caso_pergunta_so_reaponta() IS '0213: a guarda de caso_pergunta (append-only): só entidade_id muda, nunca de ou para nulo, e cada reponte deixa o evento caso_pergunta_reapontada.';
+
+--
+-- Name: fn_trg_caso_reservado_ao_socio(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_caso_reservado_ao_socio() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if tg_op = 'DELETE' then
+    perform fn_exige_socio('Excluir mandato');
+    return old;
+  end if;
+  -- aprovar/desfazer aprovação (Portão 2) e fechar/reabrir. As demais transições (intake -> em_triagem -> ... -> em_revisao,
+  -- que fn_recomputar_completude faz a partir do trabalho do Analista) seguem livres.
+  if new.status is distinct from old.status
+     and (new.status in ('aprovado', 'pronto_para_base') or old.status in ('aprovado', 'pronto_para_base')) then
+    perform fn_exige_socio('Aprovar mandato');
+  end if;
+  if new.fechado_em is distinct from old.fechado_em
+     or new.fechado_por is distinct from old.fechado_por
+     or new.motivo_fechamento is distinct from old.motivo_fechamento then
+    perform fn_exige_socio('Fechar ou reabrir mandato');
+  end if;
+  return new;
+end $$;
 
 --
 -- Name: fn_trg_controlador_vinculo_valido(); Type: FUNCTION; Schema: public; Owner: -
@@ -14880,6 +15239,36 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_trg_instalacao_cobertura_nao_regride() IS '0183: o marcador de cobertura da sonda nunca regride. Motivo medido: a 0182, aplicada em produção DEPOIS da 0188 (sessões paralelas), escreveu ate_migration = ''0182'' por cima de ''0188'' — 39 migrations terminam com esse update incondicional, e a tabela aceitava o valor menor sem erro. Corrigido na tabela, não nas migrations.';
+
+--
+-- Name: fn_trg_membro_ultimo_socio(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_membro_ultimo_socio() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if old.papel = 'socio' and (tg_op = 'DELETE' or new.papel <> 'socio')
+     and not exists (select 1 from membro m where m.papel = 'socio' and m.usuario_id <> old.usuario_id) then
+    raise exception 'Não dá para deixar o portal sem Sócio: % é o último. Promova outro Sócio antes.', old.usuario_id
+      using errcode = 'P0001';
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end $$;
+
+--
+-- Name: fn_trg_so_socio(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_so_socio() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  perform fn_exige_socio(tg_argv[0]);
+  return case when tg_op = 'DELETE' then old else new end;
+end $$;
 
 --
 -- Name: fn_unidade_predominante(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -15784,6 +16173,23 @@ begin
   return jsonb_build_object('caso_id', p_caso_id, 'rotulo', v_rotulo_norm, 'premissa', p_premissa);
 end;
 $$;
+
+--
+-- Name: alocacao; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.alocacao (
+    caso_id uuid NOT NULL,
+    usuario_id uuid NOT NULL,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    criado_por uuid
+);
+
+--
+-- Name: TABLE alocacao; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.alocacao IS '0216: em quais mandatos um Analista (escreve) ou Leitura (só lê) está alocado. Sócio não precisa de linha: vê e escreve tudo. A escrita só passa por fn_alocar/fn_desalocar (security definer, só Sócio, com evento_auditoria) e, para o mandato que um Analista acabou de criar, pelo gatilho trg_caso_aloca_criador.';
 
 --
 -- Name: arquivo_oficial; Type: TABLE; Schema: public; Owner: -
@@ -17072,6 +17478,24 @@ COMMENT ON COLUMN public.lote_execucao.fechado_em IS 'Quando a cadeia chegou ao 
 COMMENT ON COLUMN public.lote_execucao.chamadas_planejadas IS 'Chamadas de IA que o Orcamento do Lote previu, contando os blocos do fatiamento. Comparada com o consumo real, é o que diz se o estimador acerta; sozinha, é o que diz quanto da cota do dia esta execução reservou antes de começar.';
 
 --
+-- Name: membro; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.membro (
+    usuario_id uuid NOT NULL,
+    papel text NOT NULL,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    criado_por uuid,
+    CONSTRAINT membro_papel_check CHECK ((papel = ANY (ARRAY['socio'::text, 'analista'::text, 'leitura'::text])))
+);
+
+--
+-- Name: TABLE membro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.membro IS '0216: o papel de cada usuário do portal (socio | analista | leitura). Usuário SEM linha aqui não vê nada. A escrita só passa por fn_definir_papel (security definer, só Sócio, com evento_auditoria); o authenticated tem só SELECT. O gatilho trg_membro_ultimo_socio impede ficar sem nenhum Sócio.';
+
+--
 -- Name: pendencia; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -17353,6 +17777,13 @@ COMMENT ON COLUMN public.taxonomia_tipo_documento.abertura_analitica IS 'Este ti
 --
 
 COMMENT ON COLUMN public.taxonomia_tipo_documento.autoridade IS 'Peso da EVIDÊNCIA deste tipo de documento quando dois documentos do mesmo período discordam sobre a mesma conta (0151). Maior vence, e o motivo vai por extenso na pendência. 0 = o catálogo não declarou autoridade para este tipo: ele não decide (dois zeros empatam e a decisão volta para o humano). Nada é apagado em nenhum caso — o perdedor é a evidência de que houve escolha.';
+
+--
+-- Name: alocacao alocacao_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alocacao
+    ADD CONSTRAINT alocacao_pkey PRIMARY KEY (caso_id, usuario_id);
 
 --
 -- Name: arquivo_oficial arquivo_oficial_caso_hash_uk; Type: CONSTRAINT; Schema: public; Owner: -
@@ -17677,6 +18108,13 @@ ALTER TABLE ONLY public.lote_execucao
     ADD CONSTRAINT lote_execucao_pkey PRIMARY KEY (id);
 
 --
+-- Name: membro membro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.membro
+    ADD CONSTRAINT membro_pkey PRIMARY KEY (usuario_id);
+
+--
 -- Name: pendencia pendencia_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -17787,6 +18225,12 @@ ALTER TABLE ONLY public.taxonomia_tipo_cobertura
 
 ALTER TABLE ONLY public.taxonomia_tipo_documento
     ADD CONSTRAINT taxonomia_tipo_documento_pkey PRIMARY KEY (codigo);
+
+--
+-- Name: alocacao_usuario_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX alocacao_usuario_idx ON public.alocacao USING btree (usuario_id);
 
 --
 -- Name: arquivo_oficial_caso_idx; Type: INDEX; Schema: public; Owner: -
@@ -18083,6 +18527,12 @@ CREATE UNIQUE INDEX perimetro_atual_unico ON public.perimetro USING btree (caso_
 CREATE TRIGGER trg_auto_promover_dial AFTER INSERT ON public.decisao FOR EACH ROW EXECUTE FUNCTION public.fn_trg_auto_promover_dial();
 
 --
+-- Name: caso trg_caso_aloca_criador; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_aloca_criador BEFORE INSERT ON public.caso FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_aloca_criador();
+
+--
 -- Name: caso_pergunta trg_caso_pergunta_reaponta_evento; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -18093,6 +18543,12 @@ CREATE TRIGGER trg_caso_pergunta_reaponta_evento AFTER UPDATE ON public.caso_per
 --
 
 CREATE TRIGGER trg_caso_pergunta_so_reaponta BEFORE UPDATE ON public.caso_pergunta FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_pergunta_so_reaponta();
+
+--
+-- Name: caso trg_caso_reservado_ao_socio; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_caso_reservado_ao_socio BEFORE DELETE OR UPDATE ON public.caso FOR EACH ROW EXECUTE FUNCTION public.fn_trg_caso_reservado_ao_socio();
 
 --
 -- Name: controlador_vinculo trg_controlador_vinculo_valido; Type: TRIGGER; Schema: public; Owner: -
@@ -18117,6 +18573,12 @@ CREATE TRIGGER trg_entidade_controlador_soma_maxima AFTER INSERT OR UPDATE OF pe
 --
 
 CREATE TRIGGER trg_entidade_forma_de_controle_tem_vinculo AFTER INSERT OR UPDATE OF forma_de_controle ON public.entidade FOR EACH ROW WHEN ((new.forma_de_controle = 'controle_comum'::public.entidade_forma_de_controle)) EXECUTE FUNCTION public.fn_trg_entidade_forma_de_controle_tem_vinculo();
+
+--
+-- Name: estagio_autonomia trg_estagio_autonomia_so_socio; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_estagio_autonomia_so_socio BEFORE INSERT OR DELETE OR UPDATE ON public.estagio_autonomia FOR EACH ROW EXECUTE FUNCTION public.fn_trg_so_socio('Mudar o dial de autonomia');
 
 --
 -- Name: golden_campo trg_golden_campo_congelada; Type: TRIGGER; Schema: public; Owner: -
@@ -18147,6 +18609,32 @@ CREATE TRIGGER trg_golden_rotulo_congelada BEFORE INSERT OR UPDATE ON public.gol
 --
 
 CREATE TRIGGER trg_instalacao_cobertura_nao_regride BEFORE UPDATE OF ate_migration ON public.instalacao_cobertura FOR EACH ROW EXECUTE FUNCTION public.fn_trg_instalacao_cobertura_nao_regride();
+
+--
+-- Name: membro trg_membro_ultimo_socio; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_membro_ultimo_socio BEFORE DELETE OR UPDATE ON public.membro FOR EACH ROW EXECUTE FUNCTION public.fn_trg_membro_ultimo_socio();
+
+--
+-- Name: premissa_catalogo trg_premissa_catalogo_so_socio; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_premissa_catalogo_so_socio BEFORE INSERT OR DELETE OR UPDATE ON public.premissa_catalogo FOR EACH ROW EXECUTE FUNCTION public.fn_trg_so_socio('Alterar o catálogo de premissas');
+
+--
+-- Name: alocacao alocacao_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alocacao
+    ADD CONSTRAINT alocacao_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED;
+
+--
+-- Name: alocacao alocacao_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.alocacao
+    ADD CONSTRAINT alocacao_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 
 --
 -- Name: arquivo_oficial arquivo_oficial_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -18520,6 +19008,13 @@ ALTER TABLE ONLY public.lote_execucao
     ADD CONSTRAINT lote_execucao_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
 
 --
+-- Name: membro membro_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.membro
+    ADD CONSTRAINT membro_usuario_id_fkey FOREIGN KEY (usuario_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+--
 -- Name: pendencia pendencia_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -18646,16 +19141,36 @@ ALTER TABLE ONLY public.taxonomia_tipo_cobertura
     ADD CONSTRAINT taxonomia_tipo_cobertura_tipo_taxonomia_fkey FOREIGN KEY (tipo_taxonomia) REFERENCES public.taxonomia_tipo_documento(codigo);
 
 --
+-- Name: alocacao; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.alocacao ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: alocacao alocacao_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY alocacao_read ON public.alocacao FOR SELECT TO authenticated USING (((usuario_id = auth.uid()) OR ( SELECT public.fn_eh_socio() AS fn_eh_socio)));
+
+--
 -- Name: arquivo_oficial; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.arquivo_oficial ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: arquivo_oficial arquivo_oficial_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: arquivo_oficial arquivo_oficial_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY arquivo_oficial_authenticated_all ON public.arquivo_oficial TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY arquivo_oficial_delete ON public.arquivo_oficial FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: arquivo_oficial arquivo_oficial_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_insert ON public.arquivo_oficial FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: arquivo_oficial_lancamento_mes; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18664,10 +19179,46 @@ CREATE POLICY arquivo_oficial_authenticated_all ON public.arquivo_oficial TO aut
 ALTER TABLE public.arquivo_oficial_lancamento_mes ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: arquivo_oficial_lancamento_mes arquivo_oficial_lancamento_mes_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: arquivo_oficial_lancamento_mes arquivo_oficial_lancamento_mes_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY arquivo_oficial_lancamento_mes_authenticated_all ON public.arquivo_oficial_lancamento_mes TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY arquivo_oficial_lancamento_mes_delete ON public.arquivo_oficial_lancamento_mes FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT a.id
+   FROM public.arquivo_oficial a
+  WHERE (a.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: arquivo_oficial_lancamento_mes arquivo_oficial_lancamento_mes_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_lancamento_mes_insert ON public.arquivo_oficial_lancamento_mes FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT a.id
+   FROM public.arquivo_oficial a
+  WHERE (a.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: arquivo_oficial_lancamento_mes arquivo_oficial_lancamento_mes_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_lancamento_mes_read ON public.arquivo_oficial_lancamento_mes FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT arquivo_oficial.id
+   FROM public.arquivo_oficial))));
+
+--
+-- Name: arquivo_oficial_lancamento_mes arquivo_oficial_lancamento_mes_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_lancamento_mes_update ON public.arquivo_oficial_lancamento_mes FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT arquivo_oficial.id
+   FROM public.arquivo_oficial)))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT a.id
+   FROM public.arquivo_oficial a
+  WHERE (a.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: arquivo_oficial arquivo_oficial_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_read ON public.arquivo_oficial FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: arquivo_oficial_registro; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18676,10 +19227,47 @@ CREATE POLICY arquivo_oficial_lancamento_mes_authenticated_all ON public.arquivo
 ALTER TABLE public.arquivo_oficial_registro ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: arquivo_oficial_registro arquivo_oficial_registro_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: arquivo_oficial_registro arquivo_oficial_registro_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY arquivo_oficial_registro_authenticated_all ON public.arquivo_oficial_registro TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY arquivo_oficial_registro_delete ON public.arquivo_oficial_registro FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT a.id
+   FROM public.arquivo_oficial a
+  WHERE (a.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: arquivo_oficial_registro arquivo_oficial_registro_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_registro_insert ON public.arquivo_oficial_registro FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT a.id
+   FROM public.arquivo_oficial a
+  WHERE (a.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: arquivo_oficial_registro arquivo_oficial_registro_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_registro_read ON public.arquivo_oficial_registro FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT arquivo_oficial.id
+   FROM public.arquivo_oficial))));
+
+--
+-- Name: arquivo_oficial_registro arquivo_oficial_registro_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_registro_update ON public.arquivo_oficial_registro FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT arquivo_oficial.id
+   FROM public.arquivo_oficial)))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (arquivo_oficial_id IN ( SELECT a.id
+   FROM public.arquivo_oficial a
+  WHERE (a.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: arquivo_oficial arquivo_oficial_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY arquivo_oficial_update ON public.arquivo_oficial FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: campo_classe_override; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18691,13 +19279,19 @@ ALTER TABLE public.campo_classe_override ENABLE ROW LEVEL SECURITY;
 -- Name: campo_classe_override campo_classe_override_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_classe_override_insert ON public.campo_classe_override FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY campo_classe_override_insert ON public.campo_classe_override FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (campo_extraido_id IN ( SELECT c.id
+   FROM ((public.campo_extraido c
+     JOIN public.documento_versao v ON ((v.id = c.documento_versao_id)))
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c_1.c
+           FROM public.fn_casos_escreviveis() c_1(c)))))));
 
 --
 -- Name: campo_classe_override campo_classe_override_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_classe_override_read ON public.campo_classe_override FOR SELECT TO authenticated USING (true);
+CREATE POLICY campo_classe_override_read ON public.campo_classe_override FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (campo_extraido_id IN ( SELECT campo_extraido.id
+   FROM public.campo_extraido))));
 
 --
 -- Name: campo_classe_sugerida; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18709,13 +19303,19 @@ ALTER TABLE public.campo_classe_sugerida ENABLE ROW LEVEL SECURITY;
 -- Name: campo_classe_sugerida campo_classe_sugerida_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_classe_sugerida_insert ON public.campo_classe_sugerida FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY campo_classe_sugerida_insert ON public.campo_classe_sugerida FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (campo_extraido_id IN ( SELECT c.id
+   FROM ((public.campo_extraido c
+     JOIN public.documento_versao v ON ((v.id = c.documento_versao_id)))
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c_1.c
+           FROM public.fn_casos_escreviveis() c_1(c)))))));
 
 --
 -- Name: campo_classe_sugerida campo_classe_sugerida_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_classe_sugerida_read ON public.campo_classe_sugerida FOR SELECT TO authenticated USING (true);
+CREATE POLICY campo_classe_sugerida_read ON public.campo_classe_sugerida FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (campo_extraido_id IN ( SELECT campo_extraido.id
+   FROM public.campo_extraido))));
 
 --
 -- Name: campo_extraido; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18724,10 +19324,42 @@ CREATE POLICY campo_classe_sugerida_read ON public.campo_classe_sugerida FOR SEL
 ALTER TABLE public.campo_extraido ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: campo_extraido campo_extraido_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: campo_extraido campo_extraido_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY campo_extraido_authenticated_all ON public.campo_extraido TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY campo_extraido_delete ON public.campo_extraido FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT v.id
+   FROM (public.documento_versao v
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: campo_extraido campo_extraido_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY campo_extraido_insert ON public.campo_extraido FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT v.id
+   FROM (public.documento_versao v
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: campo_extraido campo_extraido_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY campo_extraido_read ON public.campo_extraido FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT documento_versao.id
+   FROM public.documento_versao))));
+
+--
+-- Name: campo_extraido campo_extraido_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY campo_extraido_update ON public.campo_extraido FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT documento_versao.id
+   FROM public.documento_versao)))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT v.id
+   FROM (public.documento_versao v
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
 
 --
 -- Name: caso; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18742,16 +19374,45 @@ ALTER TABLE public.caso ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.caso_apresentacao_campo ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: caso_apresentacao_campo caso_apresentacao_campo_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: caso_apresentacao_campo caso_apresentacao_campo_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY caso_apresentacao_campo_authenticated_all ON public.caso_apresentacao_campo TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY caso_apresentacao_campo_delete ON public.caso_apresentacao_campo FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
--- Name: caso caso_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: caso_apresentacao_campo caso_apresentacao_campo_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY caso_authenticated_all ON public.caso TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY caso_apresentacao_campo_insert ON public.caso_apresentacao_campo FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso_apresentacao_campo caso_apresentacao_campo_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_apresentacao_campo_read ON public.caso_apresentacao_campo FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: caso_apresentacao_campo caso_apresentacao_campo_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_apresentacao_campo_update ON public.caso_apresentacao_campo FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso caso_delete; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_delete ON public.caso FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR public.fn_pode_ler_caso(id)));
+
+--
+-- Name: caso caso_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_insert ON public.caso FOR INSERT TO authenticated WITH CHECK (public.fn_pode_criar_caso());
 
 --
 -- Name: caso_linha_premissa; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18760,10 +19421,33 @@ CREATE POLICY caso_authenticated_all ON public.caso TO authenticated USING (true
 ALTER TABLE public.caso_linha_premissa ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: caso_linha_premissa caso_linha_premissa_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: caso_linha_premissa caso_linha_premissa_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY caso_linha_premissa_authenticated_all ON public.caso_linha_premissa TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY caso_linha_premissa_delete ON public.caso_linha_premissa FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso_linha_premissa caso_linha_premissa_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_linha_premissa_insert ON public.caso_linha_premissa FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso_linha_premissa caso_linha_premissa_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_linha_premissa_read ON public.caso_linha_premissa FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: caso_linha_premissa caso_linha_premissa_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_linha_premissa_update ON public.caso_linha_premissa FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: caso_modelagem; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18772,10 +19456,33 @@ CREATE POLICY caso_linha_premissa_authenticated_all ON public.caso_linha_premiss
 ALTER TABLE public.caso_modelagem ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: caso_modelagem caso_modelagem_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: caso_modelagem caso_modelagem_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY caso_modelagem_authenticated_all ON public.caso_modelagem TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY caso_modelagem_delete ON public.caso_modelagem FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso_modelagem caso_modelagem_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_modelagem_insert ON public.caso_modelagem FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso_modelagem caso_modelagem_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_modelagem_read ON public.caso_modelagem FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: caso_modelagem caso_modelagem_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_modelagem_update ON public.caso_modelagem FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: caso_pergunta; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18787,27 +19494,24 @@ ALTER TABLE public.caso_pergunta ENABLE ROW LEVEL SECURITY;
 -- Name: caso_pergunta caso_pergunta_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY caso_pergunta_insert ON public.caso_pergunta FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY caso_pergunta_insert ON public.caso_pergunta FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: caso_pergunta caso_pergunta_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY caso_pergunta_read ON public.caso_pergunta FOR SELECT TO authenticated USING (true);
+CREATE POLICY caso_pergunta_read ON public.caso_pergunta FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: caso_pergunta caso_pergunta_reapontar; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY caso_pergunta_reapontar ON public.caso_pergunta FOR UPDATE TO authenticated USING (true) WITH CHECK (((entidade_id IS NOT NULL) AND (EXISTS ( SELECT 1
+CREATE POLICY caso_pergunta_reapontar ON public.caso_pergunta FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK (((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR public.fn_pode_escrever_caso(caso_id)) AND (entidade_id IS NOT NULL) AND (EXISTS ( SELECT 1
    FROM public.entidade e
   WHERE ((e.id = caso_pergunta.entidade_id) AND (e.caso_id = caso_pergunta.caso_id))))));
-
---
--- Name: POLICY caso_pergunta_reapontar ON caso_pergunta; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON POLICY caso_pergunta_reapontar ON public.caso_pergunta IS '0213: o authenticated só pode repontar a pergunta para uma entidade do MESMO caso (e o privilégio de coluna só deixa mexer em entidade_id). É o que a fusão de entidades faz com a ação já tomada.';
 
 --
 -- Name: caso_premissa; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18816,10 +19520,45 @@ COMMENT ON POLICY caso_pergunta_reapontar ON public.caso_pergunta IS '0213: o au
 ALTER TABLE public.caso_premissa ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: caso_premissa caso_premissa_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: caso_premissa caso_premissa_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY caso_premissa_authenticated_all ON public.caso_premissa TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY caso_premissa_delete ON public.caso_premissa FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso_premissa caso_premissa_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_premissa_insert ON public.caso_premissa FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso_premissa caso_premissa_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_premissa_read ON public.caso_premissa FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: caso_premissa caso_premissa_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_premissa_update ON public.caso_premissa FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: caso caso_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_read ON public.caso FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR public.fn_pode_ler_caso(id) OR public.fn_alocado_agora(id)));
+
+--
+-- Name: caso caso_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY caso_update ON public.caso FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR public.fn_pode_ler_caso(id))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR public.fn_pode_escrever_caso(id)));
 
 --
 -- Name: checklist_item_status; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18828,10 +19567,33 @@ CREATE POLICY caso_premissa_authenticated_all ON public.caso_premissa TO authent
 ALTER TABLE public.checklist_item_status ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: checklist_item_status checklist_item_status_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: checklist_item_status checklist_item_status_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY checklist_item_status_authenticated_all ON public.checklist_item_status TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY checklist_item_status_delete ON public.checklist_item_status FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: checklist_item_status checklist_item_status_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY checklist_item_status_insert ON public.checklist_item_status FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: checklist_item_status checklist_item_status_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY checklist_item_status_read ON public.checklist_item_status FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: checklist_item_status checklist_item_status_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY checklist_item_status_update ON public.checklist_item_status FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: classe_contabil_catalogo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18843,7 +19605,7 @@ ALTER TABLE public.classe_contabil_catalogo ENABLE ROW LEVEL SECURITY;
 -- Name: classe_contabil_catalogo classe_contabil_catalogo_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY classe_contabil_catalogo_read ON public.classe_contabil_catalogo FOR SELECT TO authenticated USING (true);
+CREATE POLICY classe_contabil_catalogo_read ON public.classe_contabil_catalogo FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: controlador; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18855,13 +19617,15 @@ ALTER TABLE public.controlador ENABLE ROW LEVEL SECURITY;
 -- Name: controlador controlador_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY controlador_insert ON public.controlador FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY controlador_insert ON public.controlador FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: controlador controlador_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY controlador_read ON public.controlador FOR SELECT TO authenticated USING (true);
+CREATE POLICY controlador_read ON public.controlador FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: controlador_vinculo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18873,19 +19637,23 @@ ALTER TABLE public.controlador_vinculo ENABLE ROW LEVEL SECURITY;
 -- Name: controlador_vinculo controlador_vinculo_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY controlador_vinculo_insert ON public.controlador_vinculo FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY controlador_vinculo_insert ON public.controlador_vinculo FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: controlador_vinculo controlador_vinculo_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY controlador_vinculo_read ON public.controlador_vinculo FOR SELECT TO authenticated USING (true);
+CREATE POLICY controlador_vinculo_read ON public.controlador_vinculo FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: controlador_vinculo controlador_vinculo_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY controlador_vinculo_update ON public.controlador_vinculo FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY controlador_vinculo_update ON public.controlador_vinculo FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: decisao; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18894,10 +19662,33 @@ CREATE POLICY controlador_vinculo_update ON public.controlador_vinculo FOR UPDAT
 ALTER TABLE public.decisao ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: decisao decisao_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: decisao decisao_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY decisao_authenticated_all ON public.decisao TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY decisao_delete ON public.decisao FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: decisao decisao_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY decisao_insert ON public.decisao FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: decisao decisao_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY decisao_read ON public.decisao FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: decisao decisao_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY decisao_update ON public.decisao FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: documento; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18906,10 +19697,11 @@ CREATE POLICY decisao_authenticated_all ON public.decisao TO authenticated USING
 ALTER TABLE public.documento ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: documento documento_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: documento documento_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY documento_authenticated_all ON public.documento TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY documento_delete ON public.documento FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: documento_fato; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18918,10 +19710,64 @@ CREATE POLICY documento_authenticated_all ON public.documento TO authenticated U
 ALTER TABLE public.documento_fato ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: documento_fato documento_fato_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: documento_fato documento_fato_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY documento_fato_authenticated_all ON public.documento_fato TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY documento_fato_delete ON public.documento_fato FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT v.id
+   FROM (public.documento_versao v
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: documento_fato documento_fato_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_fato_insert ON public.documento_fato FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT v.id
+   FROM (public.documento_versao v
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: documento_fato documento_fato_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_fato_read ON public.documento_fato FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT documento_versao.id
+   FROM public.documento_versao))));
+
+--
+-- Name: documento_fato documento_fato_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_fato_update ON public.documento_fato FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT documento_versao.id
+   FROM public.documento_versao)))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT v.id
+   FROM (public.documento_versao v
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: documento documento_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_insert ON public.documento FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: documento documento_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_read ON public.documento FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: documento documento_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_update ON public.documento FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: documento_versao; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18930,22 +19776,45 @@ CREATE POLICY documento_fato_authenticated_all ON public.documento_fato TO authe
 ALTER TABLE public.documento_versao ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: documento_versao documento_versao_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: documento_versao documento_versao_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY documento_versao_authenticated_all ON public.documento_versao TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY documento_versao_delete ON public.documento_versao FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_id IN ( SELECT d.id
+   FROM public.documento d
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: documento_versao documento_versao_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_versao_insert ON public.documento_versao FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_id IN ( SELECT d.id
+   FROM public.documento d
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: documento_versao documento_versao_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_versao_read ON public.documento_versao FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_id IN ( SELECT documento.id
+   FROM public.documento))));
+
+--
+-- Name: documento_versao documento_versao_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY documento_versao_update ON public.documento_versao FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_id IN ( SELECT documento.id
+   FROM public.documento)))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_id IN ( SELECT d.id
+   FROM public.documento d
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
 
 --
 -- Name: entidade; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.entidade ENABLE ROW LEVEL SECURITY;
-
---
--- Name: entidade entidade_authenticated_all; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY entidade_authenticated_all ON public.entidade TO authenticated USING (true) WITH CHECK (true);
 
 --
 -- Name: entidade_controlador; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18957,25 +19826,52 @@ ALTER TABLE public.entidade_controlador ENABLE ROW LEVEL SECURITY;
 -- Name: entidade_controlador entidade_controlador_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY entidade_controlador_insert ON public.entidade_controlador FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY entidade_controlador_insert ON public.entidade_controlador FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: entidade_controlador entidade_controlador_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY entidade_controlador_read ON public.entidade_controlador FOR SELECT TO authenticated USING (true);
+CREATE POLICY entidade_controlador_read ON public.entidade_controlador FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: entidade_controlador entidade_controlador_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY entidade_controlador_update ON public.entidade_controlador FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY entidade_controlador_update ON public.entidade_controlador FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
--- Name: POLICY entidade_controlador_update ON entidade_controlador; Type: COMMENT; Schema: public; Owner: -
+-- Name: entidade entidade_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-COMMENT ON POLICY entidade_controlador_update ON public.entidade_controlador IS '0210: fn_entidade_definir_controlador (upsert) e a fusão de entidades movem o vínculo com UPDATE. Sem delete: ver o cabeçalho.';
+CREATE POLICY entidade_delete ON public.entidade FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: entidade entidade_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY entidade_insert ON public.entidade FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: entidade entidade_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY entidade_read ON public.entidade FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: entidade entidade_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY entidade_update ON public.entidade FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: estagio_autonomia; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18984,10 +19880,28 @@ COMMENT ON POLICY entidade_controlador_update ON public.entidade_controlador IS 
 ALTER TABLE public.estagio_autonomia ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: estagio_autonomia estagio_autonomia_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: estagio_autonomia estagio_autonomia_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY estagio_autonomia_authenticated_all ON public.estagio_autonomia TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY estagio_autonomia_delete ON public.estagio_autonomia FOR DELETE TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
+-- Name: estagio_autonomia estagio_autonomia_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY estagio_autonomia_insert ON public.estagio_autonomia FOR INSERT TO authenticated WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
+
+--
+-- Name: estagio_autonomia estagio_autonomia_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY estagio_autonomia_read ON public.estagio_autonomia FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
+-- Name: estagio_autonomia estagio_autonomia_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY estagio_autonomia_update ON public.estagio_autonomia FOR UPDATE TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel)) WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: evento_auditoria; Type: ROW SECURITY; Schema: public; Owner: -
@@ -18999,13 +19913,13 @@ ALTER TABLE public.evento_auditoria ENABLE ROW LEVEL SECURITY;
 -- Name: evento_auditoria evento_auditoria_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY evento_auditoria_insert ON public.evento_auditoria FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY evento_auditoria_insert ON public.evento_auditoria FOR INSERT TO authenticated WITH CHECK (public.fn_pode_escrever_evento(entidade_ref));
 
 --
 -- Name: evento_auditoria evento_auditoria_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY evento_auditoria_read ON public.evento_auditoria FOR SELECT TO authenticated USING (true);
+CREATE POLICY evento_auditoria_read ON public.evento_auditoria FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR public.fn_pode_ler_caso(public.fn_caso_do_evento(entidade_ref))));
 
 --
 -- Name: execucao_falha; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19014,10 +19928,33 @@ CREATE POLICY evento_auditoria_read ON public.evento_auditoria FOR SELECT TO aut
 ALTER TABLE public.execucao_falha ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: execucao_falha execucao_falha_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: execucao_falha execucao_falha_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY execucao_falha_authenticated_all ON public.execucao_falha TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY execucao_falha_delete ON public.execucao_falha FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: execucao_falha execucao_falha_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY execucao_falha_insert ON public.execucao_falha FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: execucao_falha execucao_falha_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY execucao_falha_read ON public.execucao_falha FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: execucao_falha execucao_falha_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY execucao_falha_update ON public.execucao_falha FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: fato_tipo_catalogo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19029,7 +19966,7 @@ ALTER TABLE public.fato_tipo_catalogo ENABLE ROW LEVEL SECURITY;
 -- Name: fato_tipo_catalogo fato_tipo_catalogo_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY fato_tipo_catalogo_read ON public.fato_tipo_catalogo FOR SELECT TO authenticated USING (true);
+CREATE POLICY fato_tipo_catalogo_read ON public.fato_tipo_catalogo FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: golden_campo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19041,13 +19978,37 @@ ALTER TABLE public.golden_campo ENABLE ROW LEVEL SECURITY;
 -- Name: golden_campo golden_campo_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_campo_insert ON public.golden_campo FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY golden_campo_insert ON public.golden_campo FOR INSERT TO authenticated WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: golden_campo golden_campo_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_campo_read ON public.golden_campo FOR SELECT TO authenticated USING (true);
+CREATE POLICY golden_campo_read ON public.golden_campo FOR SELECT TO authenticated USING (( SELECT public.fn_eh_socio() AS fn_eh_socio));
+
+--
+-- Name: golden_criterio; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.golden_criterio ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: golden_criterio golden_criterio_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY golden_criterio_insert ON public.golden_criterio FOR INSERT TO authenticated WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
+
+--
+-- Name: golden_criterio golden_criterio_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY golden_criterio_read ON public.golden_criterio FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
+-- Name: golden_criterio golden_criterio_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY golden_criterio_update ON public.golden_criterio FOR UPDATE TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel)) WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: golden_documento; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19059,13 +20020,13 @@ ALTER TABLE public.golden_documento ENABLE ROW LEVEL SECURITY;
 -- Name: golden_documento golden_documento_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_documento_insert ON public.golden_documento FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY golden_documento_insert ON public.golden_documento FOR INSERT TO authenticated WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: golden_documento golden_documento_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_documento_read ON public.golden_documento FOR SELECT TO authenticated USING (true);
+CREATE POLICY golden_documento_read ON public.golden_documento FOR SELECT TO authenticated USING (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: golden_rodada; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19077,19 +20038,19 @@ ALTER TABLE public.golden_rodada ENABLE ROW LEVEL SECURITY;
 -- Name: golden_rodada golden_rodada_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_rodada_insert ON public.golden_rodada FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY golden_rodada_insert ON public.golden_rodada FOR INSERT TO authenticated WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: golden_rodada golden_rodada_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_rodada_read ON public.golden_rodada FOR SELECT TO authenticated USING (true);
+CREATE POLICY golden_rodada_read ON public.golden_rodada FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: golden_rodada golden_rodada_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_rodada_update ON public.golden_rodada FOR UPDATE TO authenticated USING (true);
+CREATE POLICY golden_rodada_update ON public.golden_rodada FOR UPDATE TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel)) WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: golden_rotulo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19101,13 +20062,13 @@ ALTER TABLE public.golden_rotulo ENABLE ROW LEVEL SECURITY;
 -- Name: golden_rotulo golden_rotulo_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_rotulo_insert ON public.golden_rotulo FOR INSERT TO authenticated WITH CHECK (true);
+CREATE POLICY golden_rotulo_insert ON public.golden_rotulo FOR INSERT TO authenticated WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: golden_rotulo golden_rotulo_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY golden_rotulo_read ON public.golden_rotulo FOR SELECT TO authenticated USING (true);
+CREATE POLICY golden_rotulo_read ON public.golden_rotulo FOR SELECT TO authenticated USING (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: indice_macro_expectativa; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19119,7 +20080,7 @@ ALTER TABLE public.indice_macro_expectativa ENABLE ROW LEVEL SECURITY;
 -- Name: indice_macro_expectativa indice_macro_expectativa_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY indice_macro_expectativa_read ON public.indice_macro_expectativa FOR SELECT TO authenticated USING (true);
+CREATE POLICY indice_macro_expectativa_read ON public.indice_macro_expectativa FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: indice_macro_obs; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19131,7 +20092,7 @@ ALTER TABLE public.indice_macro_obs ENABLE ROW LEVEL SECURITY;
 -- Name: indice_macro_obs indice_macro_obs_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY indice_macro_obs_read ON public.indice_macro_obs FOR SELECT TO authenticated USING (true);
+CREATE POLICY indice_macro_obs_read ON public.indice_macro_obs FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: indice_macro_serie; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19143,7 +20104,7 @@ ALTER TABLE public.indice_macro_serie ENABLE ROW LEVEL SECURITY;
 -- Name: indice_macro_serie indice_macro_serie_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY indice_macro_serie_read ON public.indice_macro_serie FOR SELECT TO authenticated USING (true);
+CREATE POLICY indice_macro_serie_read ON public.indice_macro_serie FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: instalacao_cobertura; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19155,7 +20116,7 @@ ALTER TABLE public.instalacao_cobertura ENABLE ROW LEVEL SECURITY;
 -- Name: instalacao_cobertura instalacao_cobertura_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY instalacao_cobertura_read ON public.instalacao_cobertura FOR SELECT TO authenticated USING (true);
+CREATE POLICY instalacao_cobertura_read ON public.instalacao_cobertura FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: instalacao_requisito; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19167,7 +20128,7 @@ ALTER TABLE public.instalacao_requisito ENABLE ROW LEVEL SECURITY;
 -- Name: instalacao_requisito instalacao_requisito_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY instalacao_requisito_read ON public.instalacao_requisito FOR SELECT TO authenticated USING (true);
+CREATE POLICY instalacao_requisito_read ON public.instalacao_requisito FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: lote_execucao; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19176,10 +20137,45 @@ CREATE POLICY instalacao_requisito_read ON public.instalacao_requisito FOR SELEC
 ALTER TABLE public.lote_execucao ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: lote_execucao lote_execucao_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: lote_execucao lote_execucao_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY lote_execucao_authenticated_all ON public.lote_execucao TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY lote_execucao_delete ON public.lote_execucao FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: lote_execucao lote_execucao_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lote_execucao_insert ON public.lote_execucao FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: lote_execucao lote_execucao_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lote_execucao_read ON public.lote_execucao FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: lote_execucao lote_execucao_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY lote_execucao_update ON public.lote_execucao FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: membro; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.membro ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: membro membro_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY membro_read ON public.membro FOR SELECT TO authenticated USING (((usuario_id = auth.uid()) OR ( SELECT public.fn_eh_socio() AS fn_eh_socio)));
 
 --
 -- Name: pendencia; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19188,10 +20184,33 @@ CREATE POLICY lote_execucao_authenticated_all ON public.lote_execucao TO authent
 ALTER TABLE public.pendencia ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: pendencia pendencia_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: pendencia pendencia_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY pendencia_authenticated_all ON public.pendencia TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY pendencia_delete ON public.pendencia FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: pendencia pendencia_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY pendencia_insert ON public.pendencia FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: pendencia pendencia_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY pendencia_read ON public.pendencia FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: pendencia pendencia_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY pendencia_update ON public.pendencia FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: pergunta_catalogo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19203,7 +20222,7 @@ ALTER TABLE public.pergunta_catalogo ENABLE ROW LEVEL SECURITY;
 -- Name: pergunta_catalogo pergunta_catalogo_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY pergunta_catalogo_read ON public.pergunta_catalogo FOR SELECT TO authenticated USING (true);
+CREATE POLICY pergunta_catalogo_read ON public.pergunta_catalogo FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: perimetro; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19215,25 +20234,23 @@ ALTER TABLE public.perimetro ENABLE ROW LEVEL SECURITY;
 -- Name: perimetro perimetro_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY perimetro_insert ON public.perimetro FOR INSERT TO authenticated WITH CHECK (true);
-
---
--- Name: POLICY perimetro_insert ON perimetro; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON POLICY perimetro_insert ON public.perimetro IS '0210: o authenticated abre intervalos de perímetro (fn_perimetro_definir_escopo é security invoker). Sem policy de delete e com revoke: o histórico não se apaga pelo portal.';
+CREATE POLICY perimetro_insert ON public.perimetro FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: perimetro perimetro_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY perimetro_read ON public.perimetro FOR SELECT TO authenticated USING (true);
+CREATE POLICY perimetro_read ON public.perimetro FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: perimetro perimetro_update; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY perimetro_update ON public.perimetro FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY perimetro_update ON public.perimetro FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: periodo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19242,10 +20259,33 @@ CREATE POLICY perimetro_update ON public.perimetro FOR UPDATE TO authenticated U
 ALTER TABLE public.periodo ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: periodo periodo_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: periodo periodo_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY periodo_authenticated_all ON public.periodo TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY periodo_delete ON public.periodo FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: periodo periodo_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY periodo_insert ON public.periodo FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: periodo periodo_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY periodo_read ON public.periodo FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: periodo periodo_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY periodo_update ON public.periodo FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: premissa_catalogo; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19254,10 +20294,28 @@ CREATE POLICY periodo_authenticated_all ON public.periodo TO authenticated USING
 ALTER TABLE public.premissa_catalogo ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: premissa_catalogo premissa_catalogo_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: premissa_catalogo premissa_catalogo_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY premissa_catalogo_authenticated_all ON public.premissa_catalogo TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY premissa_catalogo_delete ON public.premissa_catalogo FOR DELETE TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
+-- Name: premissa_catalogo premissa_catalogo_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY premissa_catalogo_insert ON public.premissa_catalogo FOR INSERT TO authenticated WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
+
+--
+-- Name: premissa_catalogo premissa_catalogo_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY premissa_catalogo_read ON public.premissa_catalogo FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
+-- Name: premissa_catalogo premissa_catalogo_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY premissa_catalogo_update ON public.premissa_catalogo FOR UPDATE TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel)) WITH CHECK (( SELECT public.fn_eh_socio() AS fn_eh_socio));
 
 --
 -- Name: reconciliacao; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19266,10 +20324,33 @@ CREATE POLICY premissa_catalogo_authenticated_all ON public.premissa_catalogo TO
 ALTER TABLE public.reconciliacao ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: reconciliacao reconciliacao_authenticated_all; Type: POLICY; Schema: public; Owner: -
+-- Name: reconciliacao reconciliacao_delete; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY reconciliacao_authenticated_all ON public.reconciliacao TO authenticated USING (true) WITH CHECK (true);
+CREATE POLICY reconciliacao_delete ON public.reconciliacao FOR DELETE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: reconciliacao reconciliacao_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY reconciliacao_insert ON public.reconciliacao FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: reconciliacao reconciliacao_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY reconciliacao_read ON public.reconciliacao FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
+
+--
+-- Name: reconciliacao reconciliacao_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY reconciliacao_update ON public.reconciliacao FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_escreviveis() c(c)))));
 
 --
 -- Name: rubrica_classe; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19281,7 +20362,7 @@ ALTER TABLE public.rubrica_classe ENABLE ROW LEVEL SECURITY;
 -- Name: rubrica_classe rubrica_classe_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY rubrica_classe_read ON public.rubrica_classe FOR SELECT TO authenticated USING (true);
+CREATE POLICY rubrica_classe_read ON public.rubrica_classe FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: taxonomia_linha_alternativa; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19293,7 +20374,7 @@ ALTER TABLE public.taxonomia_linha_alternativa ENABLE ROW LEVEL SECURITY;
 -- Name: taxonomia_linha_alternativa taxonomia_linha_alternativa_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY taxonomia_linha_alternativa_read ON public.taxonomia_linha_alternativa FOR SELECT TO authenticated USING (true);
+CREATE POLICY taxonomia_linha_alternativa_read ON public.taxonomia_linha_alternativa FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: taxonomia_linha_exigida; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19305,7 +20386,7 @@ ALTER TABLE public.taxonomia_linha_exigida ENABLE ROW LEVEL SECURITY;
 -- Name: taxonomia_linha_exigida taxonomia_linha_exigida_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY taxonomia_linha_exigida_read ON public.taxonomia_linha_exigida FOR SELECT TO authenticated USING (true);
+CREATE POLICY taxonomia_linha_exigida_read ON public.taxonomia_linha_exigida FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: taxonomia_linha_localizador; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19317,13 +20398,7 @@ ALTER TABLE public.taxonomia_linha_localizador ENABLE ROW LEVEL SECURITY;
 -- Name: taxonomia_linha_localizador taxonomia_linha_localizador_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY taxonomia_linha_localizador_read ON public.taxonomia_linha_localizador FOR SELECT TO authenticated USING (true);
-
---
--- Name: taxonomia_tipo_documento taxonomia_read; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY taxonomia_read ON public.taxonomia_tipo_documento FOR SELECT TO authenticated USING (true);
+CREATE POLICY taxonomia_linha_localizador_read ON public.taxonomia_linha_localizador FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: taxonomia_tipo_cobertura; Type: ROW SECURITY; Schema: public; Owner: -
@@ -19335,13 +20410,19 @@ ALTER TABLE public.taxonomia_tipo_cobertura ENABLE ROW LEVEL SECURITY;
 -- Name: taxonomia_tipo_cobertura taxonomia_tipo_cobertura_read; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY taxonomia_tipo_cobertura_read ON public.taxonomia_tipo_cobertura FOR SELECT TO authenticated USING (true);
+CREATE POLICY taxonomia_tipo_cobertura_read ON public.taxonomia_tipo_cobertura FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: taxonomia_tipo_documento; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
 ALTER TABLE public.taxonomia_tipo_documento ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: taxonomia_tipo_documento taxonomia_tipo_documento_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY taxonomia_tipo_documento_read ON public.taxonomia_tipo_documento FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: SCHEMA public; Type: ACL; Schema: -; Owner: -
@@ -19356,6 +20437,22 @@ GRANT USAGE ON SCHEMA public TO service_role;
 --
 
 GRANT ALL ON FUNCTION public.fn_aceitar_extracao(p_documento_versao_id uuid, p_autor text, p_motivo text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_alocado_agora(p_caso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_alocado_agora(p_caso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_alocado_agora(p_caso uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_alocado_agora(p_caso uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_alocar(p_caso uuid, p_usuario uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_alocar(p_caso uuid, p_usuario uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_alocar(p_caso uuid, p_usuario uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_alocar(p_caso uuid, p_usuario uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_ano_da_coluna(p_periodo_coluna text, p_referencia text); Type: ACL; Schema: public; Owner: -
@@ -19410,6 +20507,46 @@ GRANT ALL ON FUNCTION public.fn_avaliar_guardas_extracao(p_documento_versao_id u
 --
 
 GRANT ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_caso_da_chave_do_storage(p_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_caso_da_chave_do_storage(p_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_caso_da_chave_do_storage(p_nome text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_caso_da_chave_do_storage(p_nome text) TO service_role;
+
+--
+-- Name: FUNCTION fn_caso_da_versao(p_versao uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_caso_da_versao(p_versao uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_caso_da_versao(p_versao uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_caso_da_versao(p_versao uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_caso_do_evento(p_ref text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_caso_do_evento(p_ref text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_caso_do_evento(p_ref text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_caso_do_evento(p_ref text) TO service_role;
+
+--
+-- Name: FUNCTION fn_casos_escreviveis(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_casos_escreviveis() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_casos_escreviveis() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_casos_escreviveis() TO service_role;
+
+--
+-- Name: FUNCTION fn_casos_legiveis(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_casos_legiveis() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_casos_legiveis() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_casos_legiveis() TO service_role;
 
 --
 -- Name: FUNCTION fn_classe_contabil_concordancia(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -19470,6 +20607,14 @@ GRANT ALL ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) TO authenticated;
 --
 
 GRANT ALL ON FUNCTION public.fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer) TO authenticated;
+
+--
+-- Name: FUNCTION fn_conexao_de_servico(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_conexao_de_servico() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_conexao_de_servico() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_conexao_de_servico() TO service_role;
 
 --
 -- Name: FUNCTION fn_conferir_arvore(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -19538,6 +20683,22 @@ GRANT ALL ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor t
 GRANT ALL ON FUNCTION public.fn_definir_modelagem(p_caso_id uuid, p_entidade text, p_ultimo_exercicio_real integer, p_indice_macro text, p_setor text, p_autor text, p_anos_projetados integer) TO authenticated;
 
 --
+-- Name: FUNCTION fn_definir_papel(p_usuario uuid, p_papel text, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_definir_papel(p_usuario uuid, p_papel text, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_definir_papel(p_usuario uuid, p_papel text, p_motivo text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_definir_papel(p_usuario uuid, p_papel text, p_motivo text) TO service_role;
+
+--
+-- Name: FUNCTION fn_desalocar(p_caso uuid, p_usuario uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_desalocar(p_caso uuid, p_usuario uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_desalocar(p_caso uuid, p_usuario uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_desalocar(p_caso uuid, p_usuario uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_desativar_premissa(p_caso_id uuid, p_codigo text, p_autor text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -19602,6 +20763,14 @@ GRANT ALL ON FUNCTION public.fn_documento_serve_como(p_documento_id uuid, p_tipo
 --
 
 GRANT ALL ON FUNCTION public.fn_documentos_nao_extraidos(p_caso_id uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_eh_socio(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_eh_socio() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_eh_socio() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_eh_socio() TO service_role;
 
 --
 -- Name: FUNCTION fn_entidade_aprender_cnpj(p_entidade_id uuid, p_cnpj text); Type: ACL; Schema: public; Owner: -
@@ -19692,6 +20861,14 @@ GRANT ALL ON FUNCTION public.fn_excluir_caso(p_caso_id uuid, p_autor text) TO au
 --
 
 GRANT ALL ON FUNCTION public.fn_exercicio_da_coluna(p_coluna text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_exige_socio(p_acao text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_exige_socio(p_acao text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_exige_socio(p_acao text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_exige_socio(p_acao text) TO service_role;
 
 --
 -- Name: FUNCTION fn_exigencias_do_caso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -19923,6 +21100,14 @@ GRANT ALL ON FUNCTION public.fn_marcar_falha_vista(p_falha_id uuid, p_autor text
 GRANT ALL ON FUNCTION public.fn_mes_do_rotulo(p_chave text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_meu_papel(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_meu_papel() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_meu_papel() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_meu_papel() TO service_role;
+
+--
 -- Name: FUNCTION fn_min_motivo_rejeicao(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -20054,6 +21239,38 @@ GRANT ALL ON FUNCTION public.fn_periodo_por_extenso(p_tipo text, p_referencia te
 --
 
 GRANT ALL ON FUNCTION public.fn_periodos_compativeis_array(p_caso_id uuid, p_periodo_id uuid) TO authenticated;
+
+--
+-- Name: FUNCTION fn_pode_criar_caso(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_pode_criar_caso() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_pode_criar_caso() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_pode_criar_caso() TO service_role;
+
+--
+-- Name: FUNCTION fn_pode_escrever_caso(p_caso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_pode_escrever_evento(p_ref text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_pode_escrever_evento(p_ref text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_pode_escrever_evento(p_ref text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_pode_escrever_evento(p_ref text) TO service_role;
+
+--
+-- Name: FUNCTION fn_pode_ler_caso(p_caso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_pode_ler_caso(p_caso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_pode_ler_caso(p_caso uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_pode_ler_caso(p_caso uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_pode_renomear_por_cnpj(p_atual text, p_novo text); Type: ACL; Schema: public; Owner: -
@@ -20316,6 +21533,14 @@ GRANT ALL ON FUNCTION public.fn_sugerir_perguntas(p_caso_id uuid) TO authenticat
 GRANT ALL ON FUNCTION public.fn_tem_palavra_longa(p_chave text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_tem_papel(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_tem_papel() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_tem_papel() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_tem_papel() TO service_role;
+
+--
 -- Name: FUNCTION fn_teto_ressalvas(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -20381,6 +21606,13 @@ GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO auth
 --
 
 GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text) TO authenticated;
+
+--
+-- Name: TABLE alocacao; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.alocacao TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.alocacao TO service_role;
 
 --
 -- Name: TABLE arquivo_oficial; Type: ACL; Schema: public; Owner: -
@@ -20730,6 +21962,13 @@ GRANT SELECT ON TABLE public.instalacao_sonda_saldo_mutuos TO service_role;
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.lote_execucao TO authenticated;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.lote_execucao TO service_role;
+
+--
+-- Name: TABLE membro; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.membro TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.membro TO service_role;
 
 --
 -- Name: TABLE pendencia; Type: ACL; Schema: public; Owner: -

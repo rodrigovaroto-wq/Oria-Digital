@@ -75,6 +75,7 @@
 {"k":"n","id":"arquivo:Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","t":"arquivo","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","txt":"0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","t":"arquivo","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","txt":"0214_o_grant_que_o_supabase_deixou_de_dar.sql"}
 {"k":"n","id":"arquivo:Supabase/schema.sql","t":"arquivo","f":"Supabase/schema.sql","txt":"schema.sql"}
+{"k":"n","id":"arquivo:Supabase/test/acesso_por_caso.test.sql","t":"arquivo","f":"Supabase/test/acesso_por_caso.test.sql","txt":"acesso_por_caso.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/alias_truncado.test.sql","t":"arquivo","f":"Supabase/test/alias_truncado.test.sql","txt":"alias_truncado.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/arquivo_oficial.test.sql","t":"arquivo","f":"Supabase/test/arquivo_oficial.test.sql","txt":"arquivo_oficial.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/auto_promocao_dial.test.sql","t":"arquivo","f":"Supabase/test/auto_promocao_dial.test.sql","txt":"auto_promocao_dial.test.sql"}
@@ -313,6 +314,8 @@
 {"k":"n","id":"ficha:verificador-sem-controle-positivo","t":"ficha","f":".claude/memory/verificador-sem-controle-positivo.md","txt":"um \"nenhum encontrado\" só vale se a mesma checagem PROVADAMENTE acha o que procura — cinco verificações do PR #238 responderam uma pergunta diferente da que foi feita, e três delas diziam \"tudo certo\" ","d":"um \"nenhum encontrado\" só vale se a mesma checagem PROVADAMENTE acha o que procura — cinco verificações do PR #238 responderam uma pergunta diferente da que foi feita, e três delas diziam \"tudo certo\"","kw":"medido sessões 2026 238 regra claude fala estágio pipeline esta mesma aplicada verificação sessão checagem consegue achar procura devolve exatamente resposta procurou achou cinco casos todos reais pegos porque alguém desconfiou respondeu verdade merge tree grep marcador conflito conflitos dito dono estado grafo jsonl formato saída atual tinha procurado lista funções minúsculo cruzada nenhuma colisão única linha maiúscula fn_upsert_entidade justamente mais arriscada nunca checada protocolo medição 0183 guarda desligada asserts reprovaram migration morreu antes teste rodou primeiro portão denominador pareando pelo citado 0179 diverge estava certa pareava arquivo errado assert próprio comentário cabeçalho citava padrão funcionou passou procedimento acreditar zero rodar contra caso algo controle positivo acha função própria migrations significar alguma coisa script aparece transformou falso contagem inválida commit 070b0c2 defeito real dele tempo parente próximo disco enquanto agente background ainda edita retrato existiu como final 0182 isso produziu três falhou eram restaurando depois conferir relatório deixado","tp":"doutrina"}
 {"k":"n","id":"fn:fn_abrir_lote_execucao","t":"fn","f":"Supabase/migrations/0156_o_lote_existe_antes_de_terminar.sql","txt":"abrir lote execucao"}
 {"k":"n","id":"fn:fn_aceitar_extracao","t":"fn","f":"Supabase/migrations/0036_completude_exige_conteudo.sql","txt":"aceitar extracao"}
+{"k":"n","id":"fn:fn_alocado_agora","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"alocado agora"}
+{"k":"n","id":"fn:fn_alocar","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"alocar"}
 {"k":"n","id":"fn:fn_ano4","t":"fn","f":"Supabase/migrations/0020_periodo_canonico.sql","txt":"ano4"}
 {"k":"n","id":"fn:fn_ano_da_coluna","t":"fn","f":"Supabase/migrations/0044_valores_por_ano.sql","txt":"ano da coluna"}
 {"k":"n","id":"fn:fn_anos_alvo","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"anos alvo"}
@@ -325,6 +328,11 @@
 {"k":"n","id":"fn:fn_autoridade_do_documento","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"autoridade do documento"}
 {"k":"n","id":"fn:fn_avaliar_guardas_extracao","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"avaliar guardas extracao"}
 {"k":"n","id":"fn:fn_avaliar_portao2","t":"fn","f":"Supabase/migrations/0109_pendencia_tres_botoes.sql","txt":"avaliar portao2"}
+{"k":"n","id":"fn:fn_caso_da_chave_do_storage","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"caso da chave do storage"}
+{"k":"n","id":"fn:fn_caso_da_versao","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"caso da versao"}
+{"k":"n","id":"fn:fn_caso_do_evento","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"caso do evento"}
+{"k":"n","id":"fn:fn_casos_escreviveis","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"casos escreviveis"}
+{"k":"n","id":"fn:fn_casos_legiveis","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"casos legiveis"}
 {"k":"n","id":"fn:fn_classe_contabil_concordancia","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil concordancia"}
 {"k":"n","id":"fn:fn_classe_contabil_do_campo","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil do campo"}
 {"k":"n","id":"fn:fn_classe_contabil_sugerir","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil sugerir"}
@@ -338,6 +346,7 @@
 {"k":"n","id":"fn:fn_coluna_entidade","t":"fn","f":"Supabase/migrations/0030_entidade_e_periodo_canonicos.sql","txt":"coluna entidade"}
 {"k":"n","id":"fn:fn_coluna_periodo_do_ano","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"coluna periodo do ano"}
 {"k":"n","id":"fn:fn_combinado_estrutural_apto","t":"fn","f":"Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql","txt":"combinado estrutural apto"}
+{"k":"n","id":"fn:fn_conexao_de_servico","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"conexao de servico"}
 {"k":"n","id":"fn:fn_conferir_arvore","t":"fn","f":"Supabase/migrations/0133_a_secao_que_nao_fecha.sql","txt":"conferir arvore"}
 {"k":"n","id":"fn:fn_conferir_lote","t":"fn","f":"Supabase/migrations/0112_lote_conferido_documento_por_documento.sql","txt":"conferir lote"}
 {"k":"n","id":"fn:fn_conferir_modelagem","t":"fn","f":"Supabase/migrations/0158_o_pronto_que_nao_provava_cobertura.sql","txt":"conferir modelagem"}
@@ -349,6 +358,8 @@
 {"k":"n","id":"fn:fn_controlador_vincular_familia","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"controlador vincular familia"}
 {"k":"n","id":"fn:fn_decidir_pendencia","t":"fn","f":"Supabase/migrations/0109_pendencia_tres_botoes.sql","txt":"decidir pendencia"}
 {"k":"n","id":"fn:fn_definir_modelagem","t":"fn","f":"Supabase/migrations/0038_premissas_catalogo.sql","txt":"definir modelagem"}
+{"k":"n","id":"fn:fn_definir_papel","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"definir papel"}
+{"k":"n","id":"fn:fn_desalocar","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"desalocar"}
 {"k":"n","id":"fn:fn_desativar_premissa","t":"fn","f":"Supabase/migrations/0104_desativar_premissa.sql","txt":"desativar premissa"}
 {"k":"n","id":"fn:fn_descricao_extracao_falhou","t":"fn","f":"Supabase/migrations/0154_a_pendencia_de_cobertura_diz_a_unidade.sql","txt":"descricao extracao falhou"}
 {"k":"n","id":"fn:fn_descricao_linha_exigida","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"descricao linha exigida"}
@@ -365,6 +376,7 @@
 {"k":"n","id":"fn:fn_documento_preliminar","t":"fn","f":"Supabase/migrations/0151_o_desempate_entre_documentos.sql","txt":"documento preliminar"}
 {"k":"n","id":"fn:fn_documento_serve_como","t":"fn","f":"Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql","txt":"documento serve como"}
 {"k":"n","id":"fn:fn_documentos_nao_extraidos","t":"fn","f":"Supabase/migrations/0112_lote_conferido_documento_por_documento.sql","txt":"documentos nao extraidos"}
+{"k":"n","id":"fn:fn_eh_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"eh socio"}
 {"k":"n","id":"fn:fn_entidade_aprender_cnpj","t":"fn","f":"Supabase/migrations/0177_a_guarda_do_balcao_ia_so_num_sentido.sql","txt":"entidade aprender cnpj"}
 {"k":"n","id":"fn:fn_entidade_cadeia_controladora","t":"fn","f":"Supabase/migrations/0181_o_controle_que_a_entidade_nunca_registrava.sql","txt":"entidade cadeia controladora"}
 {"k":"n","id":"fn:fn_entidade_canonica","t":"fn","f":"Supabase/migrations/0030_entidade_e_periodo_canonicos.sql","txt":"entidade canonica"}
@@ -383,6 +395,7 @@
 {"k":"n","id":"fn:fn_entidades_sao_um_grupo","t":"fn","f":"Supabase/migrations/0168_o_apelido_truncado_nao_e_ambiguidade.sql","txt":"entidades sao um grupo"}
 {"k":"n","id":"fn:fn_excluir_caso","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"excluir caso"}
 {"k":"n","id":"fn:fn_exercicio_da_coluna","t":"fn","f":"Supabase/migrations/0150_a_premissa_sai_do_realizado_certo.sql","txt":"exercicio da coluna"}
+{"k":"n","id":"fn:fn_exige_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"exige socio"}
 {"k":"n","id":"fn:fn_exigencias_do_caso","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"exigencias do caso"}
 {"k":"n","id":"fn:fn_falhas_abertas","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"falhas abertas"}
 {"k":"n","id":"fn:fn_familia_da_secao","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"familia da secao"}
@@ -427,6 +440,7 @@
 {"k":"n","id":"fn:fn_marcar_falha_vista","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"marcar falha vista"}
 {"k":"n","id":"fn:fn_mes_do_rotulo","t":"fn","f":"Supabase/migrations/0042_papel_da_linha.sql","txt":"mes do rotulo"}
 {"k":"n","id":"fn:fn_mesma_entidade","t":"fn","f":"Supabase/migrations/0030_entidade_e_periodo_canonicos.sql","txt":"mesma entidade"}
+{"k":"n","id":"fn:fn_meu_papel","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"meu papel"}
 {"k":"n","id":"fn:fn_min_motivo_rejeicao","t":"fn","f":"Supabase/migrations/0106_rejeitar_pendencia.sql","txt":"min motivo rejeicao"}
 {"k":"n","id":"fn:fn_modelagem_esta_pronta","t":"fn","f":"Supabase/migrations/0158_o_pronto_que_nao_provava_cobertura.sql","txt":"modelagem esta pronta"}
 {"k":"n","id":"fn:fn_motivo_do_lado","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"motivo do lado"}
@@ -465,6 +479,10 @@
 {"k":"n","id":"fn:fn_periodos_compativeis","t":"fn","f":"Supabase/migrations/0022_periodo_por_ano_e_guardas.sql","txt":"periodos compativeis"}
 {"k":"n","id":"fn:fn_periodos_compativeis_array","t":"fn","f":"Supabase/migrations/0152_a_reconciliacao_do_lote.sql","txt":"periodos compativeis array"}
 {"k":"n","id":"fn:fn_periodos_equivalentes","t":"fn","f":"Supabase/migrations/0022_periodo_por_ano_e_guardas.sql","txt":"periodos equivalentes"}
+{"k":"n","id":"fn:fn_pode_criar_caso","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"pode criar caso"}
+{"k":"n","id":"fn:fn_pode_escrever_caso","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"pode escrever caso"}
+{"k":"n","id":"fn:fn_pode_escrever_evento","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"pode escrever evento"}
+{"k":"n","id":"fn:fn_pode_ler_caso","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"pode ler caso"}
 {"k":"n","id":"fn:fn_pode_renomear_por_cnpj","t":"fn","f":"Supabase/migrations/0171_o_cnpj_tambem_renomeia.sql","txt":"pode renomear por cnpj"}
 {"k":"n","id":"fn:fn_premissa_valores_sugeridos","t":"fn","f":"Supabase/migrations/0042_papel_da_linha.sql","txt":"premissa valores sugeridos"}
 {"k":"n","id":"fn:fn_premissas_sugeridas","t":"fn","f":"Supabase/migrations/0038_premissas_catalogo.sql","txt":"premissas sugeridas"}
@@ -523,17 +541,22 @@
 {"k":"n","id":"fn:fn_somar_faturamento_ano","t":"fn","f":"Supabase/migrations/0197_o_faturamento_que_nao_via_o_mes_na_coluna.sql","txt":"somar faturamento ano"}
 {"k":"n","id":"fn:fn_sugerir_perguntas","t":"fn","f":"Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql","txt":"sugerir perguntas"}
 {"k":"n","id":"fn:fn_tem_palavra_longa","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tem palavra longa"}
+{"k":"n","id":"fn:fn_tem_papel","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"tem papel"}
 {"k":"n","id":"fn:fn_teto_ressalvas","t":"fn","f":"Supabase/migrations/0037_portao2.sql","txt":"teto ressalvas"}
 {"k":"n","id":"fn:fn_texto_nomeia_mutuo","t":"fn","f":"Supabase/migrations/0123_mutuos_a_natureza_fora_da_linha.sql","txt":"texto nomeia mutuo"}
 {"k":"n","id":"fn:fn_tokens_estruturais","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tokens estruturais"}
 {"k":"n","id":"fn:fn_tratar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"tratar pendencia"}
 {"k":"n","id":"fn:fn_trg_auto_promover_dial","t":"fn","f":"Supabase/migrations/0137_a_promocao_automatica_do_dial.sql","txt":"trg auto promover dial"}
+{"k":"n","id":"fn:fn_trg_caso_aloca_criador","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg caso aloca criador"}
 {"k":"n","id":"fn:fn_trg_caso_pergunta_so_reaponta","t":"fn","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"trg caso pergunta so reaponta"}
+{"k":"n","id":"fn:fn_trg_caso_reservado_ao_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg caso reservado ao socio"}
 {"k":"n","id":"fn:fn_trg_controlador_vinculo_valido","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"trg controlador vinculo valido"}
 {"k":"n","id":"fn:fn_trg_entidade_ambigua","t":"fn","f":"Supabase/migrations/0153_a_entidade_ambigua_nao_decide.sql","txt":"trg entidade ambigua"}
 {"k":"n","id":"fn:fn_trg_entidade_controlador_soma_maxima","t":"fn","f":"Supabase/migrations/0182_o_grupo_horizontal_que_a_controladora_nao_alcancava.sql","txt":"trg entidade controlador soma maxima"}
 {"k":"n","id":"fn:fn_trg_entidade_forma_de_controle_tem_vinculo","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"trg entidade forma de controle tem vinculo"}
 {"k":"n","id":"fn:fn_trg_instalacao_cobertura_nao_regride","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"trg instalacao cobertura nao regride"}
+{"k":"n","id":"fn:fn_trg_membro_ultimo_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg membro ultimo socio"}
+{"k":"n","id":"fn:fn_trg_so_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg so socio"}
 {"k":"n","id":"fn:fn_unidade_predominante","t":"fn","f":"Supabase/migrations/0021_classe_b_checagem_unidade.sql","txt":"unidade predominante"}
 {"k":"n","id":"fn:fn_upsert_caso","t":"fn","f":"Supabase/migrations/0207_o_resumo_do_arquivo_oficial.sql","txt":"upsert caso"}
 {"k":"n","id":"fn:fn_upsert_entidade","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"upsert entidade"}
@@ -707,6 +730,7 @@
 {"k":"n","id":"migration:0213","t":"migration","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"a fusao que falhava na pergunta ja enviada"}
 {"k":"n","id":"migration:0214","t":"migration","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","txt":"o grant que o supabase deixou de dar"}
 {"k":"n","id":"migration:0215","t":"migration","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","txt":"o historico que so o banco sabia"}
+{"k":"n","id":"migration:0216","t":"migration","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"o acesso que so o portal decidia"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1028,6 +1052,28 @@
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/workflow.macro.json","l":156}
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/workflow.macro.json","l":244}
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/workflow.macro.json","l":129}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/acesso_por_caso.test.sql","l":11}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_aprovar_caso","f":"Supabase/test/acesso_por_caso.test.sql","l":210}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_casos_escreviveis","f":"Supabase/test/acesso_por_caso.test.sql","l":368}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_casos_legiveis","f":"Supabase/test/acesso_por_caso.test.sql","l":367}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_conexao_de_servico","f":"Supabase/test/acesso_por_caso.test.sql","l":401}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_decidir_pendencia","f":"Supabase/test/acesso_por_caso.test.sql","l":200}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/acesso_por_caso.test.sql","l":11}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_desalocar","f":"Supabase/test/acesso_por_caso.test.sql","l":226}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"Supabase/test/acesso_por_caso.test.sql","l":215}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_exige_socio","f":"Supabase/test/acesso_por_caso.test.sql","l":342}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_fechar_caso","f":"Supabase/test/acesso_por_caso.test.sql","l":212}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/acesso_por_caso.test.sql","l":455}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"Supabase/test/acesso_por_caso.test.sql","l":152}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Supabase/test/acesso_por_caso.test.sql","l":221}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/acesso_por_caso.test.sql","l":368}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_pode_ler_caso","f":"Supabase/test/acesso_por_caso.test.sql","l":367}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_reabrir_caso","f":"Supabase/test/acesso_por_caso.test.sql","l":316}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/acesso_por_caso.test.sql","l":106}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/acesso_por_caso.test.sql","l":103}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"Supabase/test/acesso_por_caso.test.sql","l":118}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_tem_papel","f":"Supabase/test/acesso_por_caso.test.sql","l":329}
+{"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/acesso_por_caso.test.sql","l":96}
 {"k":"e","de":"arquivo:Supabase/test/alias_truncado.test.sql","rel":"CHAMA","pa":"fn:fn_entidades_sao_um_grupo","f":"Supabase/test/alias_truncado.test.sql","l":23}
 {"k":"e","de":"arquivo:Supabase/test/alias_truncado.test.sql","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"Supabase/test/alias_truncado.test.sql","l":80}
 {"k":"e","de":"arquivo:Supabase/test/alias_truncado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/alias_truncado.test.sql","l":45}
@@ -1670,19 +1716,19 @@
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Supabase/test/veredito_producao.test.sql","l":170}
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"Supabase/test/veredito_producao.test.sql","l":40}
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/veredito_producao.test.sql","l":83}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"Verificação/run.mts","l":530}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/run.mts","l":538}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/run.mts","l":318}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/run.mts","l":316}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/run.mts","l":305}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/run.mts","l":540}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":742}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":758}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":739}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":677}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":672}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":659}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":761}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"Verificação/run.mts","l":536}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/run.mts","l":544}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/run.mts","l":324}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/run.mts","l":322}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/run.mts","l":311}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/run.mts","l":546}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":748}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":764}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":745}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":683}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":678}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":665}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":767}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/gerar-export-do-banco.mts","l":240}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
@@ -2375,6 +2421,28 @@
 {"k":"e","de":"migration:0213","rel":"CRIA","pa":"fn:fn_trg_caso_pergunta_so_reaponta","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","l":58}
 {"k":"e","de":"migration:0214","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","l":128}
 {"k":"e","de":"migration:0215","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","l":125}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_alocado_agora","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":267}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_alocar","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":643}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_caso_da_chave_do_storage","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":335}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_caso_da_versao","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":298}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_caso_do_evento","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":305}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_casos_escreviveis","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":252}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_casos_legiveis","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":243}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_conexao_de_servico","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":283}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_definir_papel","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":610}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_desalocar","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":670}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_eh_socio","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":206}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_exige_socio","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":288}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_meu_papel","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":201}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_pode_criar_caso","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":274}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":228}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_pode_escrever_evento","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":326}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_pode_ler_caso","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":217}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_tem_papel","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":211}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_trg_caso_aloca_criador","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":387}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_trg_caso_reservado_ao_socio","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":361}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_trg_membro_ultimo_socio","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":417}
+{"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":402}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

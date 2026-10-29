@@ -153,6 +153,12 @@ function garantirMolde() {
         create table if not exists storage.objects(id uuid default gen_random_uuid() primary key,
           bucket_id text, name text, owner uuid);
         alter table storage.objects enable row level security;
+        create schema if not exists auth;
+        create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text);
+        create or replace function auth.uid() returns uuid language sql stable as $fn$
+          select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
+                          (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid $fn$;
+        grant usage on schema auth to anon, authenticated, service_role;
         grant usage on schema public to anon, authenticated, service_role;`, MOLDE);
   // A LISTA DAS MIGRATIONS SAI DO DISCO, E NÃO DE UM SHELL. Até aqui ela vinha de
   // `bash -c "ls Supabase/migrations/*.sql"`: o `bash` era resolvido pelo PATH
