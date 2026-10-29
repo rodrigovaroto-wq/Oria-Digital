@@ -30,6 +30,10 @@ import {
   ATRIBUTO_DISCRICAO, CHAVE_DISCRICAO, SCRIPT_DISCRICAO_ANTES_DA_PINTURA, destinoAtivo, discricaoLigada,
   gravarDiscricao, idDoCaso, lerDiscricao,
 } from "../src/lib/casco.ts";
+import {
+  CHAVE_AVISOS_VISTOS, TETO_DE_VISTOS, classificarLote, contarNaoVistos, gravarVistos, lerVistos, montarAvisos,
+  nomeDoSino, unirVistos, type LoteLido,
+} from "../src/lib/avisos-de-processamento.ts";
 import { readFileSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 
@@ -703,6 +707,67 @@ const abas = fonte("app/casos/[id]/abas-do-mandato.tsx");
 checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) && abas.includes("whitespace-nowrap"),
   "as abas do mandato perderam a rolagem horizontal (overflow-x-auto / min-w-max / whitespace-nowrap)");
 
+// AVISOS DE PROCESSAMENTO (sino) — o que a tela pode afirmar do estado do lote, e o "visto" por navegador.
+{
+  const T0 = Date.parse("2026-10-29T12:00:00Z");
+  const min = (m: number) => new Date(T0 - m * 60_000).toISOString();
+  const lote = (o: Partial<LoteLido>): LoteLido => ({
+    id: "L1", caso_id: "C1", caso: { nome: "Mandato X" }, criado_em: min(60), fechado_em: null,
+    documentos: 10, documentos_planejados: 10, documentos_com_falha: 0, ...o,
+  });
+  checar(classificarLote(lote({ fechado_em: min(5) }), T0) === "concluido", "lote fechado sem falha = concluído");
+  checar(classificarLote(lote({ fechado_em: min(5), documentos_com_falha: 2 }), T0) === "concluido_com_falhas",
+    "lote fechado com documento falho NÃO pode ser 'concluído' liso");
+  checar(classificarLote(lote({ fechado_em: min(5), documentos_com_falha: null }), T0) === "concluido",
+    "falha nula (não medida) não inventa falha");
+  checar(classificarLote(lote({ criado_em: min(3) }), T0) === null, "lote aberto dentro da janela está andando: não é aviso");
+  checar(classificarLote(lote({ criado_em: min(13 * 60) }), T0) === "parado", "lote de 10 docs aberto há 13h = parado");
+  checar(classificarLote(lote({ criado_em: min(60), documentos_planejados: 190 }), T0) === null,
+    "lote de 190 aberto há 1h NÃO é parado (a janela é a da tela de upload)");
+  checar(classificarLote(lote({ documentos_planejados: null, criado_em: min(13 * 60) }), T0) === "sem_confirmacao",
+    "plano desconhecido: a tela não afirma 'parado'");
+  checar(classificarLote(lote({ criado_em: "lixo" }), T0) === "sem_confirmacao", "data ilegível não vira 'andando'");
+  const avisos = montarAvisos(
+    [lote({ id: "A", fechado_em: min(5) }), lote({ id: "B", criado_em: min(3) }), lote({ id: "P", criado_em: min(13 * 60) })],
+    [{ id: "F", caso_id: null, caso_nome: "Sem caso", etapa: "orcamento", criado_em: min(1) }], T0);
+  checar(avisos.length === 3 && !avisos.some((a) => a.chave.includes(":B:")), "em andamento fica fora; concluído, parado e falha entram");
+  checar(avisos[0].tipo === "falha" && avisos[0].casoId === null, "ordem: mais recente primeiro; falha sem caso não ganha link");
+  checar(new Set(avisos.map((a) => a.chave)).size === 3, "chaves únicas");
+  checar(montarAvisos(Array.from({ length: 30 }, (_, i) => lote({ id: `n${i}`, fechado_em: min(i) })), [], T0).length === 20, "teto de 20");
+  checar(montarAvisos([lote({ caso: [{ nome: "Via array" }], fechado_em: min(1) })], [], T0)[0].casoNome === "Via array",
+    "o join pode chegar como lista");
+  const antes = montarAvisos([lote({ id: "Z", criado_em: min(13 * 60) })], [], T0)[0];
+  const depois = montarAvisos([lote({ id: "Z", criado_em: min(13 * 60), fechado_em: min(1) })], [], T0)[0];
+  checar(antes.chave !== depois.chave, "o lote que estava parado e fechou é aviso NOVO (a chave leva o tipo)");
+
+  const mem = () => { const m = new Map<string, string>(); return { m, getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v); } }; };
+  const a = mem();
+  checar(JSON.stringify(lerVistos(a)) === "[]", "armazém vazio = nenhum visto");
+  checar(gravarVistos(a, unirVistos([], ["x", "y"])) && JSON.stringify(lerVistos(a)) === '["x","y"]', "grava e lê de volta");
+  checar(contarNaoVistos(avisos, lerVistos(a)) === 3, "nenhuma chave vista: todos contam");
+  checar(contarNaoVistos(avisos, [avisos[0].chave]) === 2, "visto desconta");
+  checar(contarNaoVistos(avisos, avisos.map((x) => x.chave)) === 0, "tudo visto = zero");
+  checar(lerVistos(null) === null && lerVistos({ getItem: () => { throw new Error("bloqueado"); } }) === null,
+    "armazenamento indisponível é NULL (não sei), nunca lista vazia");
+  checar(contarNaoVistos(avisos, null) === 3, "sem poder guardar o visto, todos contam como novos");
+  checar(JSON.stringify(lerVistos({ getItem: () => "{lixo" })) === "[]" && JSON.stringify(lerVistos({ getItem: () => '{"a":1}' })) === "[]",
+    "conteúdo corrompido reaparece como novo, sem exceção");
+  checar(gravarVistos({ setItem: () => { throw new Error("cheio"); } }, ["a"]) === false && gravarVistos(null, ["a"]) === false,
+    "gravação recusada devolve false");
+  const muitos = unirVistos(Array.from({ length: TETO_DE_VISTOS }, (_, i) => `k${i}`), ["novo", "k5"]);
+  checar(muitos.length === TETO_DE_VISTOS && muitos.includes("novo") && !muitos.includes("k0") && muitos.filter((c) => c === "k5").length === 1,
+    "o visto tem teto, descarta o mais antigo e não duplica");
+  checar(CHAVE_AVISOS_VISTOS === "oria.avisos-vistos", "chave do visto estável");
+  checar(!nomeDoSino("erro", 3).includes("3") && nomeDoSino("erro", 3).includes("não foi possível"),
+    "sino com falha de leitura NÃO leva número no nome");
+  checar(nomeDoSino("ok", 3).includes("3") && !/\d/.test(nomeDoSino("ok", 0)) && !/\d/.test(nomeDoSino("carregando", 5)),
+    "o número entra no nome só com leitura ok e > 0");
+  const comp = fonte("components/avisos-de-processamento.tsx");
+  checar(!/select\(\s*["'`]\*/.test(comp), "o sino lê colunas nomeadas, nunca select *");
+  checar(/fase === "ok" && naoVistos > 0/.test(comp) && /fase: "erro"/.test(comp), "o contador só aparece com leitura ok");
+  checar(fonte("app/casos/layout.tsx").includes("<AvisosDeProcessamento />"), "o sino saiu do cabeçalho");
+}
+
 if (falhas.length > 0) {
   console.error(`\n${falhas.length} falha(s):`);
   for (const f of falhas) console.error(`  ✗ ${f}`);
@@ -717,3 +782,4 @@ console.log("VEREDITO DO LOTE OK — pronto exige o lote FECHADO, com carência 
 console.log("HISTÓRICO OK — tipo desconhecido aparece cru, nulo no recebimento é \"não registrado\" e o dia é o de São Paulo");
 console.log("CASCO OK — o modo discrição liga antes da pintura, nada o desfaz por hover, e o destino ativo da barra inferior casa com a rota");
 console.log("CUSTOS OK — custo ausente fica ausente, o total é piso declarado e o por-documento usa um só conjunto");
+console.log("AVISOS OK — lote parado/falho tem rótulo próprio, plano desconhecido não vira \"parado\", e visto indisponível não vira \"nada novo\"");

@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logout } from "@/app/login/actions";
 import { BarraLateral, type MandatoNaBarra } from "@/components/barra-lateral";
 import { FundoDaMarca } from "@/components/fundo-da-marca";
+import { AvisosDeProcessamento } from "@/components/avisos-de-processamento";
 import { BotaoDiscricao } from "@/components/botao-discricao";
 import { BuscaGlobal } from "@/components/busca-global";
 import { MenuConta } from "@/components/menu-conta";
@@ -62,6 +63,7 @@ export default async function CasosLayout({ children }: { children: React.ReactN
           <Trilha nomes={nomes} />
           <div className="flex shrink-0 items-center gap-1">
             <BuscaGlobal />
+            <AvisosDeProcessamento />
             <BotaoDiscricao />
             <MenuConta email={email} sair={logout} />
           </div>
