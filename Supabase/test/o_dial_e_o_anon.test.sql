@@ -1,8 +1,8 @@
 -- =============================================================================
 -- 0218 — O DIAL QUE SÓ MEDIA O RECORTE DE QUEM DISPARAVA, e o `anon` que tinha privilégio demais
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 70 chamadas de assert, 83 execuções (uma chamada roda 14 vezes, na seção 9) — o número por correção desligada está no cabeçalho de
--- Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql ("MEDIÇÃO NÃO-VAZIA"). Controle intacto: 83 ok, 0 falhas.
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 75 chamadas de assert, 88 execuções (uma chamada roda 14 vezes, na seção 9) — o número por correção desligada está no cabeçalho de
+-- Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql ("MEDIÇÃO NÃO-VAZIA"). Controle intacto: 88 ok, 0 falhas.
 --
 -- COMO RODA. Uma transação só (`begin` ... `rollback`): o teste apaga todas as decisões para controlar o denominador do veredito global,
 -- concede privilégios a `anon` para simular o banco de produção ANTES da 0218 e reaplica a migration por cima (`\i`) — nada disso pode
@@ -312,6 +312,10 @@ end $$;
 -- PARTE 2 — O ANON: o que produção tinha ANTES, a migration reaplicada, e o que sobra
 -- =============================================================================
 -- O que authenticated e service_role podem EXECUTAR e LER agora (antes de qualquer simulação): a migration não pode mexer nisto.
+-- O papel somente-leitura do Supabase (existe em produção; aqui é criado e some no rollback): chega às funções por PUBLIC.
+do $$ begin
+  if not exists (select 1 from pg_roles where rolname = 'supabase_read_only_user') then create role supabase_read_only_user nologin; end if;
+end $$;
 create temp table snap_0218 as
   select p.oid as fn, has_function_privilege('authenticated', p.oid, 'execute') as auth, has_function_privilege('service_role', p.oid, 'execute') as srv
     from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -361,6 +365,11 @@ begin
   perform teste_assert_0218((select count(*) from fn_instalacao_conferir() where chave like 'anon_sem_%' and not presente) = 4,
     'a sonda ACUSA os 4 requisitos de anon no banco de antes (tabelas, views, sequences, funções)');
 end $$;
+
+create temp table snap_ro_0218 as
+  select p.oid as fn, has_function_privilege('supabase_read_only_user', p.oid, 'execute') as ro
+    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e');
 
 -- A MIGRATION, reaplicada por cima do que produção tinha antes.
 \i :arq0218
@@ -412,6 +421,39 @@ begin
     'os privilégios de authenticated e service_role em tabela e view são os mesmos de antes (e o retrato tem mais de 40 relações)');
   perform teste_assert_0218((select count(*) from fn_instalacao_conferir() where tipo = 'privilegio' and not presente) = 0,
     'os 6 requisitos de privilégio mínimo da 0214 (authenticated e service_role) seguem presentes');
+
+  raise notice '--- 8b. o que a 0217 (o segredo do envio, já em produção) tinha de ficar intacto ---';
+  -- O n8n chama fn_conferir_envio pela conexão de serviço (postgres, dono) e o portal chama fn_segredo_do_vault_presente pela sonda como authenticated: o laço
+  -- de revoke de anon acima passa por AS DUAS e não pode tirar nem dar EXECUTE a ninguém além de anon/PUBLIC.
+  perform teste_assert_0218(has_function_privilege('service_role', 'fn_conferir_envio(text,text,timestamptz)', 'execute')
+                            and has_function_privilege('postgres', 'fn_conferir_envio(text,text,timestamptz)', 'execute')
+                            and not has_function_privilege('authenticated', 'fn_conferir_envio(text,text,timestamptz)', 'execute')
+                            and not has_function_privilege('anon', 'fn_conferir_envio(text,text,timestamptz)', 'execute'),
+    'fn_conferir_envio (0217): service_role e postgres executam; authenticated e anon NÃO — o laço de revoke da 0218 não mexeu nisso');
+  perform teste_assert_0218(has_function_privilege('authenticated', 'fn_segredo_do_vault_presente(text)', 'execute')
+                            and has_function_privilege('service_role', 'fn_segredo_do_vault_presente(text)', 'execute')
+                            and not has_function_privilege('anon', 'fn_segredo_do_vault_presente(text)', 'execute'),
+    'fn_segredo_do_vault_presente (0217): authenticated e service_role executam (a sonda do portal), anon não');
+  -- fn_exige_metrica fica de fora: é a guarda INTERNA das métricas e a própria migration a fecha a PUBLIC (só authenticated e service_role a chamam, por dentro de funções definer).
+  perform teste_assert_0218((select count(*) from snap_ro_0218 where ro) > 50
+                            and (select count(*) from snap_ro_0218 s where s.fn <> 'fn_exige_metrica(uuid)'::regprocedure and has_function_privilege('supabase_read_only_user', s.fn, 'execute') is distinct from s.ro) = 0
+                            and has_function_privilege('supabase_read_only_user', 'fn_instalacao_conferir()', 'execute')
+                            and not has_function_privilege('supabase_read_only_user', 'fn_conferir_envio(text,text,timestamptz)', 'execute'),
+    'o papel somente-leitura (a sonda agendada) mantém o EXECUTE que tinha por PUBLIC, inclusive fn_instalacao_conferir; o que nunca teve por PUBLIC (fn_conferir_envio, da 0217) segue negado',
+    format('retrato com EXECUTE: %s; divergentes depois: %s; sonda: %s; fn_conferir_envio: %s', (select count(*) from snap_ro_0218 where ro),
+           (select string_agg(s.fn::regprocedure::text, ', ') from snap_ro_0218 s where s.fn <> 'fn_exige_metrica(uuid)'::regprocedure and has_function_privilege('supabase_read_only_user', s.fn, 'execute') is distinct from s.ro),
+           has_function_privilege('supabase_read_only_user', 'fn_instalacao_conferir()', 'execute'),
+           has_function_privilege('supabase_read_only_user', 'fn_conferir_envio(text,text,timestamptz)', 'execute')));
+  -- A reemissão de fn_instalacao_conferir da 0218 parte do corpo da 0217. Se partir do da 0216, o ramo `segredo` some e o requisito
+  -- envio_segredo_no_vault não é mais conferido (regra 7). O banco de teste traz o segredo no stub do Vault (run.sh).
+  perform teste_assert_0218((select presente and detalhe like 'segredo presente%' from fn_instalacao_conferir() where chave = 'envio_segredo_no_vault'),
+    'a sonda ainda CONFERE o segredo do Vault (ramo `segredo` da 0217 preservado): com o segredo no Vault, envio_segredo_no_vault está presente',
+    (select presente::text || ' / ' || coalesce(detalhe, 'detalhe nulo') from fn_instalacao_conferir() where chave = 'envio_segredo_no_vault'));
+  delete from vault.secrets where name = 'n8n_intake_segredo';
+  perform teste_assert_0218((select not presente and detalhe like 'o Vault não tem%' from fn_instalacao_conferir() where chave = 'envio_segredo_no_vault'),
+    'sem o segredo no Vault, envio_segredo_no_vault fica AUSENTE e diz o motivo (a sonda o lê de verdade; não é um valor fixo)',
+    (select presente::text || ' / ' || coalesce(detalhe, 'detalhe nulo') from fn_instalacao_conferir() where chave = 'envio_segredo_no_vault'));
+  insert into vault.secrets(name, description, secret) values ('n8n_intake_segredo', 'stub local', 'segredo-de-teste-do-run-sh');
 
   raise notice '--- 9. o que anon tentava ---';
   -- Cada comando roda COMO anon, com o JWT LIMPO (o banco de teste guarda o de um Sócio em pg_db_role_setting).

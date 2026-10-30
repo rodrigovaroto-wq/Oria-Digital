@@ -60,10 +60,10 @@
 -- STORAGE: não tocado. O bucket `documentos` é privado e as policies da 0216 exigem authenticated; dono do schema é supabase_storage_admin.
 -- supabase_migrations.schema_migrations: nada inserido (as migrations recentes foram aplicadas pela API e não estão registradas lá).
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/o_dial_e_o_anon.test.sql — 70 chamadas de assert, 83 execuções (uma chamada roda 14 vezes, na seção 9), medidas em
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/o_dial_e_o_anon.test.sql — 75 chamadas de assert, 88 execuções (uma chamada roda 14 vezes, na seção 9), medidas em
 -- 30/10/2026 com `PGOPTIONS='-c dial.medindo=on'` (o assert vira `raise warning` e CONTA; sem a variável é `raise exception`; o `run.sh` completo foi rodado
 -- sem ela, exit 0, e o log relido inteiro sem nenhum FALHOU) e a migration conferida como APLICADA em cada variante (rc 0 na aplicação e 83 execuções no fim).
--- Controle intacto: 83 ok, 0 falhas. Cada correção desligada UMA vez, num banco que parte da 0216 (reprovações / 83 execuções):
+-- Controle intacto: 88 ok, 0 falhas. Cada correção desligada UMA vez, num banco que parte da 0216 (reprovações / 88 execuções):
 --   * O ESTADO ANTES (banco na 0216, sem a 0218; a migration só é aplicada no `\i` do meio): 17 — o dial não sobe por decisão de Analista (3: nível, base e trilha) e a
 --     Analista recebe veredito global diferente do Sócio (1), as três métricas da /autonomia (classe contábil, classe A, cobertura) devolvem o recorte dela (3), mandato
 --     alheio (3) e usuário sem papel (4) leem, fn_dial_auto_promover aberta ao authenticated (1), a sonda ainda sem os 4 requisitos de anon (1) e o EXECUTE de authenticated
@@ -87,6 +87,16 @@
 --   * anon: sem o `revoke all` de tabelas e sequences: 12 · funções só com `revoke ... from anon` (PUBLIC fica): 13 · sem o laço de funções: 13 · laço sem repor o
 --     EXECUTE de authenticated/service_role (depois de simular o estado de produção, EXECUTE só por PUBLIC): 3 (o retrato de antes e o EXECUTE dos dois papéis) · sem
 --     revogar o default privilege: 4 · ramo `sem_privilegio` da sonda cego (marcador vazio): 7.
+--   * REVISÃO SOBRE O MAIN COM A 0217 (a migration do segredo do envio, já aplicada em produção em 30/10/2026; a nossa passou de 0217 para 0218). +5 chamadas de assert (70 -> 75) e +5
+--     execuções (83 -> 88); controle 88 ok, 0 falhas, `run.sh` exit 0 sem a variável, log relido atrás de FALHOU. Medidas com o banco já migrado e a variante reaplicada por `\i`
+--     (`-v arq0218=<arquivo>`), reprovações / 88: (a) a reemissão de fn_instalacao_conferir SEM o ramo `segredo` (o corpo da 0216, o defeito que esta revisão corrigiu): 2 — com o segredo
+--     no Vault o requisito deixa de sair presente, e o motivo some. Com o banco CONSTRUÍDO a partir dessa variante o `run.sh` nem chega aqui: para em instalacao.test.sql ("falta EXATAMENTE
+--     o requisito de comportamento do n8n — ausentes: custo_gravado_pelo_n8n, envio_segredo_no_vault"), que já pegava; (b) o ramo `segredo` cego (v_ok sempre verdadeiro): 1 (o segredo
+--     tirado do Vault não é mais acusado), e conferir_envio.test.sql, da 0217, também o pega; (c) o laço de revoke de anon sem repor o EXECUTE de authenticated/service_role: 3 (os dois
+--     retratos de antes e o EXECUTE de authenticated em fn_segredo_do_vault_presente, que é novo); (d) ramo `sem_privilegio` cego: 6 com a variante só reaplicada, 7 com o banco inteiro
+--     construído com ela (cai também o controle "a sonda ACUSA os 4 requisitos de anon no banco de antes"); (e) o laço SEM repor o EXECUTE do papel somente-leitura `supabase_read_only_user` (a reposição é desta revisão: tirar PUBLIC lhe tiraria fn_instalacao_conferir, e a sonda agendada, se usa esse papel, falharia no banco inteiro; o teste cria o papel no rollback): 1. O assert de EXECUTE em fn_conferir_envio NÃO reprovou em nenhuma variante: o
+--     EXECUTE de service_role e postgres nessa função vem de grant direto da 0217, que o laço (só revoga de public e anon) não toca; ele protege uma edição futura do laço e NÃO foi
+--     medido não-vazio — declarado para não ser lido como cobertura.
 -- As variantes foram geradas por substituição de texto sobre este arquivo e aplicadas numa cópia do banco na 0216 (21 desligamentos + o ANTES).
 -- Limite do teste: simula o estado ANTES com `grant ... to anon` e reaplica o arquivo da migration (`\i`) dentro de uma transação que volta; NÃO reproduz o dono
 -- `supabase_admin` nem as ACLs de coluna de produção. O arquivo reaplicado pode ser trocado por `-v arq0218=<arquivo>` (é como se mediu cada variante).
@@ -618,6 +628,8 @@ declare
   v_f      record;
   v_auth   boolean;
   v_srv    boolean;
+  v_ro     boolean;
+  v_tem_ro boolean := exists (select 1 from pg_roles where rolname = 'supabase_read_only_user');
   v_t0 int; v_s0 int; v_f0 int;   -- ANTES
   v_t1 int; v_s1 int; v_f1 int;   -- DEPOIS
 begin
@@ -656,9 +668,14 @@ begin
   loop
     v_auth := has_function_privilege('authenticated', v_f.oid, 'execute');
     v_srv  := has_function_privilege('service_role',  v_f.oid, 'execute');
+    v_ro   := v_tem_ro and has_function_privilege('supabase_read_only_user', v_f.oid, 'execute');
     execute format('revoke all on %s %s from public, anon', v_f.classe, v_f.assinatura);
     if v_auth then execute format('grant execute on %s %s to authenticated', v_f.classe, v_f.assinatura); end if;
     if v_srv  then execute format('grant execute on %s %s to service_role',  v_f.classe, v_f.assinatura); end if;
+    -- O papel somente-leitura do Supabase (o da sonda agendada, se SONDA_DB_URL o usa) também chega à função por PUBLIC. Tirar PUBLIC sem repor
+    -- lhe tiraria o EXECUTE de fn_instalacao_conferir() e de toda leitura: a sonda agendada falharia com "permission denied" no banco inteiro, não
+    -- só no requisito do segredo (que já é negado a ele desde a 0217, que revogou PUBLIC de fn_segredo_do_vault_presente). Repõe só o que ele TINHA.
+    if v_ro   then execute format('grant execute on %s %s to supabase_read_only_user', v_f.classe, v_f.assinatura); end if;
   end loop;
 
   -- 4b. Os objetos FUTUROS. `alter default privileges` vale por papel DONO. Em produção dois donos dão ALL a anon em public (medido em
@@ -706,9 +723,12 @@ end $$;
 -- =============================================================================
 alter table instalacao_requisito drop constraint if exists instalacao_requisito_tipo_check;
 alter table instalacao_requisito add constraint instalacao_requisito_tipo_check
-  check (tipo in ('tabela', 'coluna', 'funcao', 'seed', 'comportamento', 'corpo', 'gatilho', 'policy', 'privilegio', 'sem_privilegio'));
+  check (tipo in ('tabela', 'coluna', 'funcao', 'seed', 'comportamento', 'corpo', 'gatilho', 'policy', 'privilegio', 'segredo', 'sem_privilegio'));
 
--- fn_instalacao_conferir: a da 0214 INTEIRA, com UM ramo novo (`sem_privilegio`) e a variável v_classe. Nada mais mudou.
+-- fn_instalacao_conferir: a da 0217 INTEIRA (a que a produção tem desde 30/10/2026, com o ramo `segredo`), com UM ramo novo (`sem_privilegio`) e a variável
+-- v_classe. Nada mais mudou. NÃO partir da 0216/0214: a 0217 já foi aplicada, e reemitir a função de antes APAGARIA o ramo `segredo` e a sonda deixaria de
+-- conferir o segredo do Vault: o requisito envio_segredo_no_vault cairia em nenhum ramo e sairia ausente com `detalhe` nulo para sempre, sem dizer por quê
+-- (e a constraint de tipo, sem 'segredo', recusaria a linha que já existe). O teste (seção do `segredo`) reprova se o ramo sumir.
 CREATE OR REPLACE FUNCTION public.fn_instalacao_conferir()
  RETURNS TABLE(chave text, migration text, tipo text, objeto text, presente boolean, detalhe text, porque text, severidade text)
  LANGUAGE plpgsql
@@ -959,6 +979,20 @@ begin
                                   case when v_n > 15 then ' ...' else '' end) end;
       end if;
 
+    elsif r.tipo = 'segredo' then
+      -- 0217: segredo do Vault do Supabase (objeto = o NOME do segredo; o valor nunca é lido aqui). A sonda roda como o
+      -- chamador (o portal é `authenticated`, que não lê o Vault), então a pergunta "existe e não está vazio?" passa por
+      -- uma função SECURITY DEFINER que só devolve boolean. Falha ao perguntar (Vault ausente, sem permissão) é
+      -- `presente = false` com o motivo, nunca uma exceção que derrube a sonda inteira.
+      begin
+        v_ok  := coalesce(fn_segredo_do_vault_presente(r.objeto), false);
+        v_det := case when v_ok then 'segredo presente no Vault (valor não lido)'
+                      else 'o Vault não tem este segredo, ou ele está vazio' end;
+      exception when others then
+        v_ok  := false;
+        v_det := 'não foi possível consultar o Vault: ' || sqlerrm;
+      end;
+
     elsif r.tipo in ('seed', 'comportamento') then
       -- A tabela pode não existir ainda: contar nela levantaria erro e derrubaria
       -- a sonda inteira, transformando "um requisito faltando" em "o painel não
@@ -993,7 +1027,7 @@ end;
 $function$;
 
 comment on function fn_instalacao_conferir() is
-  'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0218 confere também a AUSÊNCIA de privilégio (tipo=sem_privilegio, objeto papel:classe com classe tabelas|views|sequences|funcoes, marcador = privilégios proibidos): todo objeto de public com privilégio para anon é buraco (função herda EXECUTE de PUBLIC; privilégio de coluna conta; função de extensão e teste_* ficam de fora).';
+  'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0217 confere SEGREDO do Vault (tipo=segredo, objeto = nome do segredo): existe e não está vazio, sem ler o valor. Desde a 0218 confere também a AUSÊNCIA de privilégio (tipo=sem_privilegio, objeto papel:classe com classe tabelas|views|sequences|funcoes, marcador = privilégios proibidos): todo objeto de public com privilégio para anon é buraco (função herda EXECUTE de PUBLIC; privilégio de coluna conta; função de extensão e teste_* ficam de fora).';
 
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
