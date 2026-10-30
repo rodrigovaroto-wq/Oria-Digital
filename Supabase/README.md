@@ -39,7 +39,7 @@ grant usage on sequence minha_seq to authenticated, service_role;               
 revoke delete on minha_tabela from authenticated;                                       -- revoke intencional: DEPOIS do grant, e liste-o na 0214 e em grant_de_tabela.test.sql
 ```
 
-Nada vai para `anon` (o portal só usa a chave anon para abrir a sessão). Desde a 0217 isso é cobrado: função nova faz `revoke all on function f(args) from public;` e concede a `authenticated, service_role` o que o portal usa (o EXECUTE de PUBLIC chega a `anon`); a sonda `anon_sem_funcoes` reprova no `run.sh` a que esquecer. O que garante a convenção é a sonda: o tipo
+Nada vai para `anon` (o portal só usa a chave anon para abrir a sessão). Desde a 0218 isso é cobrado: função nova faz `revoke all on function f(args) from public;` e concede a `authenticated, service_role` o que o portal usa (o EXECUTE de PUBLIC chega a `anon`); a sonda `anon_sem_funcoes` reprova no `run.sh` a que esquecer. O que garante a convenção é a sonda: o tipo
 `privilegio` de `fn_instalacao_conferir` (0214) aponta como buraco toda tabela/view/sequence de `public` sem o mínimo
 para `authenticated` e `service_role`. Quem reprova no CI é o `instalacao.test.sql` (dentro do `run.sh`: um banco
 recém-migrado só pode estar sem o requisito do n8n) e, contra produção, o `sonda-producao.mjs` agendado; o `--so-buraco`
@@ -1025,7 +1025,16 @@ supabase db execute --file Supabase/migrations/0216_o_acesso_que_so_o_portal_dec
 #    where migration = '0216' and not presente;                 -- ZERO linhas
 #   select u.email, m.papel from membro m join auth.users u on u.id = m.usuario_id;   -- quem entrou, e como
 
-# A 0217 faz DUAS coisas. (1) O dial deixa de ser promovido sobre o recorte de quem dispara: fn_veredito_producao,
+# A 0217 tira a conferência do token do envio do n8n e a põe no banco: `fn_conferir_envio(token, mandato)`, que lê o segredo do VAULT
+# (nome `n8n_intake_segredo`). Em produção o n8n não tem variável de ambiente nem Variables (licença), então sem esta migração + o segredo
+# TODO envio pelo portal é recusado. A migration NÃO grava o segredo: depois de aplicar, grave-o uma vez no SQL Editor (como postgres),
+# com o MESMO valor de N8N_INTAKE_SEGREDO da Vercel:
+#   select vault.create_secret('<valor>', 'n8n_intake_segredo', 'Segredo do HMAC do envio ao n8n (0217)');
+# Trocar depois: select vault.update_secret(id, '<novo>') from vault.secrets where name = 'n8n_intake_segredo';
+# Conferir (sem ler o valor): select * from fn_instalacao_conferir() where migration = '0217' and not presente;   -- ZERO linhas
+supabase db execute --file Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql
+
+# A 0218 faz DUAS coisas. (1) O dial deixa de ser promovido sobre o recorte de quem dispara: fn_veredito_producao,
 # fn_dial_auto_promover, fn_trg_auto_promover_dial, fn_golden_classe_a, fn_golden_cobertura e fn_classe_contabil_concordancia
 # viram SECURITY DEFINER (guarda fn_exige_metrica: papel no portal; com mandato, poder ler o mandato) e a guarda de Sócio do dial
 # ganha UMA exceção estreita para a promoção automática. (2) `anon` perde todo privilégio em tabela, view, sequence e função
@@ -1035,10 +1044,10 @@ supabase db execute --file Supabase/migrations/0216_o_acesso_que_so_o_portal_dec
 # >>> Convenção nova: função nova leva `revoke all on function f(args) from public;` + grant a authenticated/service_role
 # >>> (função nasce com EXECUTE para PUBLIC e anon o herda; a sonda `anon_sem_funcoes` reprova no run.sh a que esquecer).
 # >>> Não toca storage nem supabase_migrations. Teste: Supabase/test/o_dial_e_o_anon.test.sql.
-supabase db execute --file Supabase/migrations/0217_o_dial_que_so_media_o_recorte_de_quem_disparava.sql
+supabase db execute --file Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql
 # DEPOIS DE APLICAR, confira o catálogo e o anon:
 #   select chave, presente, detalhe from fn_instalacao_conferir()
-#    where migration = '0217' and not presente;                 -- ZERO linhas
+#    where migration = '0218' and not presente;                 -- ZERO linhas
 #   select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and has_function_privilege('anon', p.oid, 'execute')
 #      and p.proowner = 'postgres'::regrole and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e');  -- ZERO
 

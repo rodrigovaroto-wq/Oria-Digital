@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0217 — O DIAL QUE SÓ MEDIA O RECORTE DE QUEM DISPARAVA, e o `anon` que tinha privilégio demais
+-- 0218 — O DIAL QUE SÓ MEDIA O RECORTE DE QUEM DISPARAVA, e o `anon` que tinha privilégio demais
 -- (Cria 1 função (fn_exige_metrica); REDEFINE 7 (fn_veredito_producao, fn_golden_classe_a, fn_golden_cobertura, fn_classe_contabil_concordancia,
 --  fn_dial_auto_promover, fn_trg_auto_promover_dial, fn_trg_so_socio) e fn_instalacao_conferir (+1 tipo, `sem_privilegio`); REVOGA de anon todo
 --  privilégio em public; +12 requisitos na sonda. Sem tabela, sem backfill, sem dado alterado. Idempotente: pode ser reaplicada.)
@@ -64,10 +64,10 @@
 -- 30/10/2026 com `PGOPTIONS='-c dial.medindo=on'` (o assert vira `raise warning` e CONTA; sem a variável é `raise exception`; o `run.sh` completo foi rodado
 -- sem ela, exit 0, e o log relido inteiro sem nenhum FALHOU) e a migration conferida como APLICADA em cada variante (rc 0 na aplicação e 83 execuções no fim).
 -- Controle intacto: 83 ok, 0 falhas. Cada correção desligada UMA vez, num banco que parte da 0216 (reprovações / 83 execuções):
---   * O ESTADO ANTES (banco na 0216, sem a 0217; a migration só é aplicada no `\i` do meio): 17 — o dial não sobe por decisão de Analista (3: nível, base e trilha) e a
+--   * O ESTADO ANTES (banco na 0216, sem a 0218; a migration só é aplicada no `\i` do meio): 17 — o dial não sobe por decisão de Analista (3: nível, base e trilha) e a
 --     Analista recebe veredito global diferente do Sócio (1), as três métricas da /autonomia (classe contábil, classe A, cobertura) devolvem o recorte dela (3), mandato
 --     alheio (3) e usuário sem papel (4) leem, fn_dial_auto_promover aberta ao authenticated (1), a sonda ainda sem os 4 requisitos de anon (1) e o EXECUTE de authenticated
---     diverge do retrato (1: o que a 0217 fecha de propósito). O assert "o dial NÃO sobe com o recorte alto" NÃO reprova aí: a guarda de Sócio da 0216 mascara o defeito
+--     diverge do retrato (1: o que a 0218 fecha de propósito). O assert "o dial NÃO sobe com o recorte alto" NÃO reprova aí: a guarda de Sócio da 0216 mascara o defeito
 --     (ver "UM FATO"); ele é o controle do sentido inverso e não prova nada sozinho — dito aqui para não ser lido como cobertura. Idem o assert de que o veredito do
 --     estágio reconciliacao_classe_a conta o banco inteiro: passa também no ANTES (a cobertura dessa peça é a da classe A, que reprova);
 --   * fn_veredito_producao sozinha sem SECURITY DEFINER: 1 (a Analista deixa de receber o veredito global igual ao do Sócio). O gatilho e fn_dial_auto_promover, definer,
@@ -89,7 +89,7 @@
 --     revogar o default privilege: 4 · ramo `sem_privilegio` da sonda cego (marcador vazio): 7.
 -- As variantes foram geradas por substituição de texto sobre este arquivo e aplicadas numa cópia do banco na 0216 (21 desligamentos + o ANTES).
 -- Limite do teste: simula o estado ANTES com `grant ... to anon` e reaplica o arquivo da migration (`\i`) dentro de uma transação que volta; NÃO reproduz o dono
--- `supabase_admin` nem as ACLs de coluna de produção. O arquivo reaplicado pode ser trocado por `-v arq0217=<arquivo>` (é como se mediu cada variante).
+-- `supabase_admin` nem as ACLs de coluna de produção. O arquivo reaplicado pode ser trocado por `-v arq0218=<arquivo>` (é como se mediu cada variante).
 -- =============================================================================
 
 -- =============================================================================
@@ -115,7 +115,7 @@ end $$;
 revoke all on function fn_exige_metrica(uuid) from public, anon;
 grant execute on function fn_exige_metrica(uuid) to authenticated, service_role;
 comment on function fn_exige_metrica(uuid) is
-  '0217: a guarda das métricas de autonomia (fn_veredito_producao, fn_golden_classe_a, fn_golden_cobertura, fn_classe_contabil_concordancia). Exige papel no portal (ou conexão de serviço) e, com p_caso_id, poder ler o mandato. 42501 nos dois casos.';
+  '0218: a guarda das métricas de autonomia (fn_veredito_producao, fn_golden_classe_a, fn_golden_cobertura, fn_classe_contabil_concordancia). Exige papel no portal (ou conexão de serviço) e, com p_caso_id, poder ler o mandato. 42501 nos dois casos.';
 
 -- =============================================================================
 -- 2. AS MÉTRICAS — as quatro folhas e o veredito, reemitidas INTEIRAS (corpo vigente + definer + guarda)
@@ -177,7 +177,7 @@ end;
 $$;
 
 comment on function fn_golden_classe_a(uuid) is
-  'Taxa de falso-positivo da reconciliação Classe A (Arquitetura do Sistema/2 Especificação/f0/06, linha 5). Única das cinco métricas que NÃO precisa de rotulagem: o rótulo é o estado "rejeitada" que a 0106 define como "não procede (falso positivo do motor)". Denominador = vereditos humanos; pendência que o sistema resolveu sozinho fica fora, contada à parte. 0217: SECURITY DEFINER — devolve o número do BANCO INTEIRO para qualquer papel (com p_caso_id, só do mandato que o chamador lê); antes dependia da RLS do leitor.';
+  'Taxa de falso-positivo da reconciliação Classe A (Arquitetura do Sistema/2 Especificação/f0/06, linha 5). Única das cinco métricas que NÃO precisa de rotulagem: o rótulo é o estado "rejeitada" que a 0106 define como "não procede (falso positivo do motor)". Denominador = vereditos humanos; pendência que o sistema resolveu sozinho fica fora, contada à parte. 0218: SECURITY DEFINER — devolve o número do BANCO INTEIRO para qualquer papel (com p_caso_id, só do mandato que o chamador lê); antes dependia da RLS do leitor.';
 
 create or replace function fn_golden_cobertura(
   p_rodada uuid,
@@ -240,7 +240,7 @@ end;
 $$;
 
 comment on function fn_golden_cobertura(uuid, golden_origem) is
-  'Quantos documentos rotulados a rodada tem por tipo CORE, contra o alvo do Arquitetura do Sistema/2 Especificação/f0/06 (~20-30). Core sai de obrigatoriedade=obrigatorio na taxonomia (0002), que são os mesmos 8 do Kit Básico — não de uma lista repetida aqui. granularidade vem no resultado porque tipo por CASO rende ~1 por mandato: demorar a juntar 20 é esperado. 0217: SECURITY DEFINER — as tabelas do golden set são só do Sócio (0216) e a função devolvia ZERO ao Analista sem aviso (ausência apresentada como dado); agora devolve a contagem real a qualquer papel, e só a contagem.';
+  'Quantos documentos rotulados a rodada tem por tipo CORE, contra o alvo do Arquitetura do Sistema/2 Especificação/f0/06 (~20-30). Core sai de obrigatoriedade=obrigatorio na taxonomia (0002), que são os mesmos 8 do Kit Básico — não de uma lista repetida aqui. granularidade vem no resultado porque tipo por CASO rende ~1 por mandato: demorar a juntar 20 é esperado. 0218: SECURITY DEFINER — as tabelas do golden set são só do Sócio (0216) e a função devolvia ZERO ao Analista sem aviso (ausência apresentada como dado); agora devolve a contagem real a qualquer papel, e só a contagem.';
 
 create or replace function fn_classe_contabil_concordancia(p_caso_id uuid default null)
 returns jsonb
@@ -304,7 +304,7 @@ end;
 $$;
 
 comment on function fn_classe_contabil_concordancia(uuid) is
-  'A concordância humano-máquina na classe contábil — o "sinal de calibração" que o Arquitetura do Sistema/2 Especificação/05 pede, em número, mais as rubricas que mais erram. Denominador = linhas com os DOIS lados; quem ninguém olhou fica fora e é contado à parte. 0217: SECURITY DEFINER — com p_caso_id nulo devolve o número do BANCO INTEIRO para qualquer papel (a tela /autonomia mostrava ao Analista o recorte dele sem avisar); com p_caso_id, só do mandato que o chamador lê.';
+  'A concordância humano-máquina na classe contábil — o "sinal de calibração" que o Arquitetura do Sistema/2 Especificação/05 pede, em número, mais as rubricas que mais erram. Denominador = linhas com os DOIS lados; quem ninguém olhou fica fora e é contado à parte. 0218: SECURITY DEFINER — com p_caso_id nulo devolve o número do BANCO INTEIRO para qualquer papel (a tela /autonomia mostrava ao Analista o recorte dele sem avisar); com p_caso_id, só do mandato que o chamador lê.';
 
 create or replace function fn_veredito_producao(
   p_estagio text,
@@ -327,7 +327,7 @@ declare
   v_falhas    text[]  := '{}';
   v_delegado  jsonb;
 begin
-  -- 0217: a pergunta de quem pode perguntar vem ANTES de qualquer leitura (a função agora enxerga tudo).
+  -- 0218: a pergunta de quem pode perguntar vem ANTES de qualquer leitura (a função agora enxerga tudo).
   perform fn_exige_metrica(p_caso_id);
 
   select natureza into v_natureza from estagio_autonomia where estagio = p_estagio;
@@ -464,7 +464,7 @@ end;
 $$;
 
 comment on function fn_veredito_producao(text, uuid) is
-  'Concordância medida a partir do veredito que o trabalho normal já produz (saída B do B3, 21/08). Despacha por estágio e RECUSA o que não sabe medir, em vez de devolver zero. É PISO ENVIESADO: quem emite o veredito vê o palpite da máquina, e o viés de confirmação puxa para cima. Vale menos que rodada de golden set congelada e mais que nível declarado. 0217: SECURITY DEFINER — o veredito GLOBAL (p_caso_id nulo) é o do banco inteiro, igual para qualquer papel, porque é ele que sobe o dial para todos; antes lia só os mandatos de quem disparava. Com p_caso_id, só se o chamador lê o mandato (42501).';
+  'Concordância medida a partir do veredito que o trabalho normal já produz (saída B do B3, 21/08). Despacha por estágio e RECUSA o que não sabe medir, em vez de devolver zero. É PISO ENVIESADO: quem emite o veredito vê o palpite da máquina, e o viés de confirmação puxa para cima. Vale menos que rodada de golden set congelada e mais que nível declarado. 0218: SECURITY DEFINER — o veredito GLOBAL (p_caso_id nulo) é o do banco inteiro, igual para qualquer papel, porque é ele que sobe o dial para todos; antes lia só os mandatos de quem disparava. Com p_caso_id, só se o chamador lê o mandato (42501).';
 
 -- =============================================================================
 -- 3. A PROMOÇÃO AUTOMÁTICA — independente de quem a dispara, e sem abrir o dial ao Analista
@@ -497,7 +497,7 @@ begin
 end $$;
 
 comment on function fn_trg_so_socio() is
-  '0216/0217: guarda de Sócio do dial (estagio_autonomia) e do catálogo de premissas. Desde a 0217 deixa passar UMA escrita que não é de Sócio: a promoção automática da 0137 (UPDATE a N2, base medida_por_veredito, autor sistema:auto_dial, com a marca tdf.promocao_automatica E rodando como dono, nunca como authenticated).';
+  '0216/0218: guarda de Sócio do dial (estagio_autonomia) e do catálogo de premissas. Desde a 0218 deixa passar UMA escrita que não é de Sócio: a promoção automática da 0137 (UPDATE a N2, base medida_por_veredito, autor sistema:auto_dial, com a marca tdf.promocao_automatica E rodando como dono, nunca como authenticated).';
 
 create or replace function fn_dial_auto_promover(p_estagio text default null)
 returns jsonb
@@ -530,7 +530,7 @@ begin
     -- nenhuma guarda: o teto, a regra de ouro e a trilha continuam sendo os
     -- mesmos, e o dia em que uma guarda nova for acrescentada lá ela passa a
     -- valer aqui sem ninguém lembrar de copiar.
-    -- 0217: a ÚNICA porta que deixa a máquina mexer no dial sem ser Sócio. O gatilho de guarda
+    -- 0218: a ÚNICA porta que deixa a máquina mexer no dial sem ser Sócio. O gatilho de guarda
     -- (fn_trg_so_socio) só a reconhece com esta marca E rodando como dono (não como authenticated).
     perform set_config('tdf.promocao_automatica', 'sim', true);
     v_res := fn_mudar_dial(
@@ -562,7 +562,7 @@ end;
 $$;
 
 comment on function fn_dial_auto_promover(text) is
-  'Sobe para N2 todo estágio interpretativo elegível cujo veredito de produção alcançou o critério (0137). Sobe pela fn_mudar_dial, nunca por update direto, para não escapar de guarda nenhuma. Para em N2 por decisão: piso enviesado não sustenta autonomia plena. 0217: SECURITY DEFINER e fechada ao authenticated — mede o veredito GLOBAL e pode subir o dial mesmo disparada por um Analista (a marca tdf.promocao_automatica abre a exceção estreita de fn_trg_so_socio); só o gatilho e o service_role a chamam.';
+  'Sobe para N2 todo estágio interpretativo elegível cujo veredito de produção alcançou o critério (0137). Sobe pela fn_mudar_dial, nunca por update direto, para não escapar de guarda nenhuma. Para em N2 por decisão: piso enviesado não sustenta autonomia plena. 0218: SECURITY DEFINER e fechada ao authenticated — mede o veredito GLOBAL e pode subir o dial mesmo disparada por um Analista (a marca tdf.promocao_automatica abre a exceção estreita de fn_trg_so_socio); só o gatilho e o service_role a chamam.';
 
 -- Ninguém do portal a chama (grep em portal/src e N8N: nenhum chamador); o gatilho é definer e a chama como dono.
 revoke all on function fn_dial_auto_promover(text) from public, anon, authenticated;
@@ -587,7 +587,7 @@ begin
       raise notice '0137: promoção automática do dial — %', v_r->'promovidos';
     end if;
   exception when others then
-    -- 0217: a marca da promoção nunca sobrevive a uma promoção que falhou (o rollback do sub-bloco já a desfaz; isto é cinto e suspensório).
+    -- 0218: a marca da promoção nunca sobrevive a uma promoção que falhou (o rollback do sub-bloco já a desfaz; isto é cinto e suspensório).
     perform set_config('tdf.promocao_automatica', '', true);
     raise notice '0137: a promoção automática falhou e foi ignorada (a decisão que a disparou está '
                  'gravada). Erro: %', sqlerrm;
@@ -598,7 +598,7 @@ end;
 $$;
 
 comment on function fn_trg_auto_promover_dial() is
-  'Gatilho da promoção automática (0137): toda decisão humana nova pode ter completado o critério do veredito de produção. NUNCA derruba a transação de quem o disparou — falha vira NOTICE, porque o analista não pode perder a rejeição de uma pendência por causa do dial. 0217: SECURITY DEFINER, para que a promoção não dependa do recorte nem do papel de quem decidiu.';
+  'Gatilho da promoção automática (0137): toda decisão humana nova pode ter completado o critério do veredito de produção. NUNCA derruba a transação de quem o disparou — falha vira NOTICE, porque o analista não pode perder a rejeição de uma pendência por causa do dial. 0218: SECURITY DEFINER, para que a promoção não dependa do recorte nem do papel de quem decidiu.';
 
 -- =============================================================================
 -- 4. O ANON — nenhum privilégio em public, nem agora nem nos objetos futuros
@@ -622,7 +622,7 @@ declare
   v_t1 int; v_s1 int; v_f1 int;   -- DEPOIS
 begin
   if not exists (select 1 from pg_roles where rolname = 'anon') then
-    raise notice '0217: o papel anon não existe neste banco — nada a revogar.';
+    raise notice '0218: o papel anon não existe neste banco — nada a revogar.';
     return;
   end if;
 
@@ -676,7 +676,7 @@ begin
       alter default privileges for role postgres in schema public revoke all on sequences from anon;
       alter default privileges for role postgres in schema public revoke all on functions from anon;
     exception when insufficient_privilege then
-      raise warning '0217: não consegui revogar o default privilege de anon do papel postgres (esta migration deve rodar como postgres).';
+      raise warning '0218: não consegui revogar o default privilege de anon do papel postgres (esta migration deve rodar como postgres).';
     end;
   end if;
 
@@ -697,7 +697,7 @@ begin
      and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
      and p.proowner = (select oid from pg_roles where rolname = 'postgres');
 
-  raise notice '0217: anon em public (tabelas+views / sequences / funções fora de extensão) — ANTES: % / % / %; DEPOIS: % / % / % (tem de ser 0 / 0 / 0).',
+  raise notice '0218: anon em public (tabelas+views / sequences / funções fora de extensão) — ANTES: % / % / %; DEPOIS: % / % / % (tem de ser 0 / 0 / 0).',
     v_t0, v_s0, v_f0, v_t1, v_s1, v_f1;
 end $$;
 
@@ -904,7 +904,7 @@ begin
       end if;
 
     elsif r.tipo = 'sem_privilegio' then
-      -- 0217: o INVERSO do `privilegio`. Aquele exige o MÍNIMO (o buraco é o que falta); este exige a AUSÊNCIA (o buraco é o que sobra).
+      -- 0218: o INVERSO do `privilegio`. Aquele exige o MÍNIMO (o buraco é o que falta); este exige a AUSÊNCIA (o buraco é o que sobra).
       -- `objeto` = 'papel:classe' (classe tabelas | views | sequences | funcoes) e `marcador` = os privilégios que o papel NÃO pode ter.
       -- Varre TODO o schema public, não uma lista: o defeito é o objeto NOVO que nasce com privilégio (o default privilege antigo do
       -- Supabase dava tudo a `anon`; função nova nasce com EXECUTE para PUBLIC, e `anon` herda de PUBLIC — por isso `has_*_privilege`,
@@ -993,44 +993,44 @@ end;
 $function$;
 
 comment on function fn_instalacao_conferir() is
-  'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0217 confere também a AUSÊNCIA de privilégio (tipo=sem_privilegio, objeto papel:classe com classe tabelas|views|sequences|funcoes, marcador = privilégios proibidos): todo objeto de public com privilégio para anon é buraco (função herda EXECUTE de PUBLIC; privilégio de coluna conta; função de extensão e teste_* ficam de fora).';
+  'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0218 confere também a AUSÊNCIA de privilégio (tipo=sem_privilegio, objeto papel:classe com classe tabelas|views|sequences|funcoes, marcador = privilégios proibidos): todo objeto de public com privilégio para anon é buraco (função herda EXECUTE de PUBLIC; privilégio de coluna conta; função de extensão e teste_* ficam de fora).';
 
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
-  ('anon_sem_tabelas', '0217', 'sem_privilegio', 'anon:tabelas', 'select,insert,update,delete,truncate,references,trigger', null,
+  ('anon_sem_tabelas', '0218', 'sem_privilegio', 'anon:tabelas', 'select,insert,update,delete,truncate,references,trigger', null,
    'Tabela de public com privilégio para `anon` (inclusive de coluna): quem chega ao PostgREST SEM login passa a ter a RLS como única defesa — e em `membro`/`alocacao` (os papéis do portal) isso é a escalada para Sócio a um erro de policy de distância. O portal nunca usa anon contra tabela. Se aparece, o default privilege antigo do Supabase voltou ou uma migration nova concedeu a anon: revogue (revoke all on <tabela> from anon) e acerte o default (alter default privileges ... revoke all on tables from anon).',
    'bloqueante', 980),
-  ('anon_sem_views', '0217', 'sem_privilegio', 'anon:views', 'select,insert,update,delete,truncate,references,trigger', null,
+  ('anon_sem_views', '0218', 'sem_privilegio', 'anon:views', 'select,insert,update,delete,truncate,references,trigger', null,
    'View de public com privilégio para `anon`: as views instalacao_sonda_* e outras expõem taxonomia e cobertura a quem não fez login.',
    'bloqueante', 981),
-  ('anon_sem_sequences', '0217', 'sem_privilegio', 'anon:sequences', 'usage,select,update', null,
+  ('anon_sem_sequences', '0218', 'sem_privilegio', 'anon:sequences', 'usage,select,update', null,
    'Sequence de public com privilégio para `anon`.',
    'bloqueante', 982),
-  ('anon_sem_funcoes', '0217', 'sem_privilegio', 'anon:funcoes', 'execute', null,
+  ('anon_sem_funcoes', '0218', 'sem_privilegio', 'anon:funcoes', 'execute', null,
    'Função de public executável por `anon` (direto ou herdado de PUBLIC): quem chega ao PostgREST sem login pode chamar a RPC. fn_definir_papel, fn_alocar e fn_acesso_bootstrap só estão a salvo da escalada por causa da guarda dentro do corpo. A migration que cria função faz `revoke all on function <f>(<args>) from public;` e concede a authenticated/service_role o que o portal usa (Supabase/README.md). Função `teste_*` e de extensão não contam.',
    'bloqueante', 983),
-  ('dial_veredito_independe_do_leitor', '0217', 'corpo', 'fn_veredito_producao', 'fn_exige_metrica(p_caso_id)', null,
+  ('dial_veredito_independe_do_leitor', '0218', 'corpo', 'fn_veredito_producao', 'fn_exige_metrica(p_caso_id)', null,
    'Sem SECURITY DEFINER o veredito GLOBAL que sobe o dial para todos é calculado só sobre os mandatos de quem o disparou: um Analista alocado em 3 mandatos a 96% promove o estágio para todos com a média do banco em 85%. Se reprova, uma migration posterior republicou a função da 0138 (invoker).',
    'bloqueante', 984),
-  ('dial_promocao_independe_do_leitor', '0217', 'corpo', 'fn_dial_auto_promover', 'set_config(''tdf.promocao_automatica'', ''sim'', true)', null,
+  ('dial_promocao_independe_do_leitor', '0218', 'corpo', 'fn_dial_auto_promover', 'set_config(''tdf.promocao_automatica'', ''sim'', true)', null,
    'Sem SECURITY DEFINER a promoção automática roda com o papel de quem decidiu: Analista dispara, a guarda de Sócio recusa, o gatilho engole o erro e o dial nunca sobe por decisão dele — calado.',
    'bloqueante', 986),
-  ('dial_gatilho_independe_do_leitor', '0217', 'corpo', 'fn_trg_auto_promover_dial', 'set_config(''tdf.promocao_automatica'', '''', true)', null,
+  ('dial_gatilho_independe_do_leitor', '0218', 'corpo', 'fn_trg_auto_promover_dial', 'set_config(''tdf.promocao_automatica'', '''', true)', null,
    'O gatilho da promoção precisa rodar como dono para chamar fn_dial_auto_promover (fechada ao authenticated).',
    'bloqueante', 987),
-  ('dial_guarda_de_socio_tem_a_promocao', '0217', 'corpo', 'fn_trg_so_socio', 'tdf.promocao_automatica', null,
+  ('dial_guarda_de_socio_tem_a_promocao', '0218', 'corpo', 'fn_trg_so_socio', 'tdf.promocao_automatica', null,
    'Sem a exceção estreita da promoção automática, a guarda de Sócio (0216) impede o dial de subir por decisão de Analista; com uma exceção larga, o Analista mudaria o dial à mão. O marcador é a marca de transação que só fn_dial_auto_promover põe.',
    'bloqueante', 988),
-  ('dial_metrica_cobertura_do_golden', '0217', 'corpo', 'fn_golden_cobertura', 'fn_exige_metrica(null)', null,
+  ('dial_metrica_cobertura_do_golden', '0218', 'corpo', 'fn_golden_cobertura', 'fn_exige_metrica(null)', null,
    'A tela /autonomia mostra a cobertura do golden set: sem definer o Analista vê ZERO documentos rotulados (as tabelas do golden são do Sócio) sem aviso — ausência apresentada como dado.',
    'importante', 989),
-  ('dial_metrica_classe_contabil', '0217', 'corpo', 'fn_classe_contabil_concordancia', 'fn_exige_metrica(p_caso_id)', null,
+  ('dial_metrica_classe_contabil', '0218', 'corpo', 'fn_classe_contabil_concordancia', 'fn_exige_metrica(p_caso_id)', null,
    'A tela /autonomia mostra a concordância da classe contábil: sem definer cada papel vê o número do SEU recorte como se fosse o do sistema.',
    'importante', 990),
-  ('dial_metrica_classe_a', '0217', 'corpo', 'fn_golden_classe_a', 'fn_exige_metrica(p_caso_id)', null,
+  ('dial_metrica_classe_a', '0218', 'corpo', 'fn_golden_classe_a', 'fn_exige_metrica(p_caso_id)', null,
    'O veredito do estágio reconciliacao_classe_a delega nesta função: sem definer ele é medido sobre o recorte de quem dispara.',
    'importante', 991),
-  ('dial_guarda_das_metricas', '0217', 'funcao', 'fn_exige_metrica', null, null,
+  ('dial_guarda_das_metricas', '0218', 'funcao', 'fn_exige_metrica', null, null,
    'As quatro métricas do dial chamam esta guarda; sem ela a chamada falha com "function does not exist".',
    'bloqueante', 992)
 on conflict (chave) do update set
@@ -1039,6 +1039,6 @@ on conflict (chave) do update set
   porque = excluded.porque, severidade = excluded.severidade, ordem = excluded.ordem;
 
 update instalacao_cobertura
-   set ate_migration = '0217', revisado_em = current_date,
-       observacao = 'A 0217 torna SECURITY DEFINER (com guarda de papel e de mandato) o veredito de produção, as três métricas folha e a promoção automática do dial, com exceção estreita na guarda de Sócio; revoga de anon todo privilégio de public (tabela, view, sequence, função) e acrescenta à sonda o tipo sem_privilegio (4 requisitos) e 8 requisitos do dial.'
+   set ate_migration = '0218', revisado_em = current_date,
+       observacao = 'A 0218 torna SECURITY DEFINER (com guarda de papel e de mandato) o veredito de produção, as três métricas folha e a promoção automática do dial, com exceção estreita na guarda de Sócio; revoga de anon todo privilégio de public (tabela, view, sequence, função) e acrescenta à sonda o tipo sem_privilegio (4 requisitos) e 8 requisitos do dial.'
  where id = true;
