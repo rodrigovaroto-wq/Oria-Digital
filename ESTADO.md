@@ -1,5 +1,41 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## RETOMAR AQUI (30/10/2026, pausa pedida pelo dono) — 0217: o dial global e o anon sem privilégios
+
+**Conferido em PRODUÇÃO hoje (somente leitura, pela API de gerenciamento):** a 0216 está aplicada e correta.
+- **Sonda:** 287/287, 0 ausentes, de 0002 a 0216.
+- **Regras de acesso:** nenhuma policy `using (true)`; RLS ligada nas 51 tabelas; policies e funções batem com o repositório. As 4 policies de `storage.objects` vêm da 0216; `unaccent*` e `rls_auto_enable` são da plataforma.
+- **Papéis e mandatos:** 1 usuário (Sócio), 76 mandatos, 0 nomes duplicados, 0 alocações.
+- **BYPASSRLS:** `postgres` e `service_role` sim; `anon` e `authenticated` não.
+- **Sem escalada:** provado localmente com os privilégios de produção. Ao testar, limpe o `request.jwt.claims`: o `tdf_test` guarda o de um Sócio de teste em `pg_db_role_setting`, e sem limpar o "anon" vira Sócio.
+
+**O que falta (autorizado pelo dono: escrever, comitar e APLICAR em produção):** a migration `0217`, com duas correções.
+1. **CRÍTICO.** `fn_dial_auto_promover`, `fn_veredito_producao`, `fn_trg_auto_promover_dial`, `fn_golden_cobertura`, `fn_classe_contabil_concordancia` e `fn_mudar_dial` são INVOKER. Com a RLS, o veredito do dial é calculado sobre os mandatos de quem dispara (um Analista) e promove o estágio para TODOS. Hoje não se materializa (só há um Sócio); passa a valer no primeiro Analista.
+2. **Defesa em profundidade.** Hoje `anon` tem privilégio em 62 tabelas/views/sequences e EXECUTE em 265 de 265 funções de `public`. O default privilege de produção ainda dá ALL a anon para os donos `postgres` E `supabase_admin`.
+
+**Fatos de produção que a 0217 tem de respeitar:**
+- **Corpos das funções:** os que ela reemite são logicamente iguais aos do repositório; só diferem em CRLF e em strings com o caminho `docs/01`. Requisito de corpo não pode depender disso.
+- **Default privileges:** `alter default privileges for role supabase_admin` FALHA rodando como postgres. Faça só `for role postgres` e escreva o efeito.
+- **Sonda "anon sem privilégio":** tem de excluir função de extensão (`unaccent*`, dono `supabase_admin`).
+- **Storage:** não tocar no esquema `storage`.
+- **Histórico:** não inserir em `supabase_migrations.schema_migrations`, que só tem 22 linhas de agosto.
+
+**Onde está:** o branch `wip/0217-dial-e-anon` (commit `371c2f2`, NÃO medido). Arquivos:
+- `0217_o_dial_que_so_media_o_recorte_de_quem_disparava.sql`;
+- `Supabase/test/o_dial_e_o_anon.test.sql`;
+- ajustes em `run.sh`, `README.md` e `reconciliacao_do_lote.test.sql`.
+
+O agente foi parado no meio da medição da regra 2 (17 desligamentos).
+
+**Para retomar:**
+1. Trazer os arquivos do WIP com `git show wip/0217-dial-e-anon:<arquivo> > <arquivo>`. O hook bloqueia restaurar arquivo pelo checkout.
+2. Terminar a regra 2.
+3. Rodar `run.sh`, `Supabase/test/*.test.mjs`, `conferir-chamadas`, `sonda --so-buraco` e `Verificação/run.mts`.
+4. Pôr a 0217 no topo deste arquivo (a linha "Migration mais nova", que o run.sh confere).
+5. Comitar e abrir PR NOVO (o #264 foi mergeado).
+6. Aplicar em produção pela API de gerenciamento. Se o modo automático recusar, entregar o SQL ao dono.
+7. Conferir em produção: a sonda; `has_table_privilege` e `has_function_privilege` de anon; `prosecdef` das funções do dial.
+
 ## SESSÃO 111 (26 a 30/10/2026, PR #264) — Espec. 13: parceiros de dados e pré-mandato; o merge com o redesenho
 
 > **O que este PR entrega (só documentação):** Espec. 13 (parceiros de dados e momento pré-mandato) com os anexos `13A` (plano por nível de dependência), `13B` (RFP aos fornecedores, pronto para envio), `13C` (roteiro do piloto no mandato AMO) e `13_anexos/Plano_de_Captacao_v3.xlsx` (as 179 linhas da planilha de dados do sistema, classificadas, com 26 afirmações conferidas na fonte); fase F2E no roadmap; B9 no mapa; D5/D6/D12.4 revistas nas Espec. 11 e 12.
