@@ -167,6 +167,9 @@ language sql stable as $$
     end
   from pares p;
 $$;
+-- 0217: a sonda `anon_sem_funcoes` varre toda função de public sem prefixo `teste_`, e esta é do harness (a 0151 recriada). Sem EXECUTE para PUBLIC,
+-- como toda função que uma migration cria passou a fazer.
+revoke all on function fn_conflitos_do_caso_v0151(uuid, text, numeric, numeric) from public;
 
 -- Comparador: as duas versões devolvem o MESMO conjunto? Devolve a primeira
 -- diferença por extenso, para o assert poder dizer qual linha discorda em vez
