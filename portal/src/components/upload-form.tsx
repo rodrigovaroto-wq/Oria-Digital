@@ -32,10 +32,13 @@ export default function UploadForm({
   mandatoInicial = "",
   travarMandato = false,
   casoId,
+  podeExcluir = true,
 }: {
   mandatoInicial?: string;
   travarMandato?: boolean;
   casoId?: string;
+  /** Excluir mandato é de Sócio (0216): para os outros papéis o botão do lote vazio não aparece. */
+  podeExcluir?: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +69,10 @@ export default function UploadForm({
   // esperar tranquilo e achar que travou.
   const [progresso, setProgresso] = useState<{ processados: number; esperados: number } | null>(null);
   const [demorou, setDemorou] = useState(false);
+  // SESSÃO EXPIRADA durante o acompanhamento: `/api/intake/status` responde 401 (proxy.ts) e o
+  // poller só agia com `resp.ok`, então a tela ficava "aguardando" até o fim da janela (12–160 min)
+  // sem dizer que já não conseguia ver o andamento.
+  const [sessaoExpirou, setSessaoExpirou] = useState(false);
   // A PARADA SEM REGISTRO — o caso que a 0108 não alcança (ver SEM_PROGRESSO_MS).
   const [parada, setParada] = useState<{ processados: number; esperados: number } | null>(null);
   // O LOTE QUE TERMINOU VAZIO. Vem do status, e só existe depois de `pronto`.
@@ -115,7 +122,7 @@ export default function UploadForm({
   // Acompanha silenciosamente, em segundo plano, até os arquivos enviados
   // estarem organizados — sem nomear nenhuma ferramenta ou etapa técnica.
   useEffect(() => {
-    if (!sucesso || pronto || falha || parada) return;
+    if (!sucesso || pronto || falha || parada || sessaoExpirou) return;
     let cancelado = false;
     let intervalo = INTERVALO_ACOMPANHAMENTO_MS;
     let proximaEspera: ReturnType<typeof setTimeout> | undefined;
@@ -137,7 +144,19 @@ export default function UploadForm({
           esperados: String(sucesso.arquivos),
         });
         const resp = await fetch(`/api/intake/status?${params}`);
+        // 401 ENCERRA o acompanhamento: continuar perguntando só devolveria 401 de novo. O que se
+        // afirma é só o que se sabe — o envio já foi feito e a tela não enxerga mais o andamento.
+        if (!cancelado && resp.status === 401) {
+          setSessaoExpirou(true);
+          return;
+        }
         const json = await resp.json().catch(() => ({}));
+        // 409 = dois mandatos com o mesmo nome: o acompanhamento não sabe qual olhar e NÃO fica
+        // "aguardando" para sempre — encerra dizendo a causa (o envio já foi feito).
+        if (!cancelado && resp.status === 409 && typeof json.error === "string") {
+          setFalha({ etapa: "acompanhamento", mensagem: json.error });
+          return;
+        }
         // A falha ENCERRA o acompanhamento. Continuar perguntando depois dela
         // seria manter a espera de pé sobre um processo que não vai voltar.
         if (!cancelado && resp.ok && json.falha) {
@@ -215,7 +234,7 @@ export default function UploadForm({
       // que o intervalo varia, `proximaEspera` é sempre o único pendente.
       clearTimeout(proximaEspera);
     };
-  }, [sucesso, pronto, falha, parada, casoId, router]);
+  }, [sucesso, pronto, falha, parada, sessaoExpirou, casoId, router]);
 
   function adicionarArquivos(lista: FileList | null) {
     if (!lista) return;
@@ -274,11 +293,13 @@ export default function UploadForm({
   }
 
   async function enviarDireto(
-    destino: { url: string; campos: { mandato: string; arquivos: string }; agora: string },
+    destino: { url: string; campos: { mandato: string; arquivos: string; token: string }; token: string; agora: string },
     aEnviar: File[],
   ): Promise<{ mandato: string; arquivos: number; desde: string } | null> {
     const fd = new FormData();
     fd.append(destino.campos.mandato, mandato.trim());
+    // O TOKEN que o servidor assinou para ESTE mandato (`/api/intake/destino`): sem ele o n8n recusa.
+    fd.append(destino.campos.token, destino.token);
     for (const a of aEnviar) fd.append(destino.campos.arquivos, a, a.name);
     try {
       // `no-cors` não é gambiarra nem afrouxamento: um POST `multipart/form-data`
@@ -579,18 +600,19 @@ export default function UploadForm({
       // responde quatro coisas que a tela não pode adivinhar: se o upload está
       // configurado (503 com a frase de sempre), quais são os nomes REAIS dos
       // campos do Form, DE ONDE eles vieram, e que horas são no servidor.
-      const respDestino = await fetch("/api/intake/destino");
+      const respDestino = await fetch(`/api/intake/destino?mandato=${encodeURIComponent(mandato.trim())}`);
       const destino = await respDestino.json().catch(() => ({}));
       if (!respDestino.ok) {
         setErro(destino.error ?? `Não foi possível preparar o envio (HTTP ${respDestino.status}).`);
         return;
       }
-      // RESPOSTA 200 QUE NÃO É O DESTINO. Sessão expirada: o `proxy.ts` manda
-      // para /login, o `fetch` segue o redirecionamento e entrega **HTML com
-      // status 200** — `respDestino.ok` é verdadeiro e não há destino nenhum
-      // dentro. Sem este guarda, o erro aparecia como um `TypeError` em inglês
-      // vindo lá de dentro da conta do tamanho.
-      if (typeof destino.url !== "string" || !destino.campos?.arquivos || !destino.campos?.mandato) {
+      // RESPOSTA 200 QUE NÃO É O DESTINO. Desde que o `proxy.ts` responde 401 JSON em /api/* (o
+      // 401 cai no `!respDestino.ok` acima, com a frase de sessão expirada em `error`), a sessão
+      // expirada não chega mais aqui como HTML 200. O guarda fica para o que ainda pode devolver 200
+      // sem destino (proxy/CDN no meio, resposta de outra origem): sem ele o erro aparecia como um
+      // `TypeError` em inglês vindo lá de dentro da conta do tamanho.
+      if (typeof destino.url !== "string" || !destino.campos?.arquivos || !destino.campos?.mandato
+        || !destino.campos?.token || typeof destino.token !== "string" || !destino.token) {
         setErro("Sua sessão expirou ou o portal não respondeu. Atualize a página, entre de novo e reenvie — nada foi processado.");
         return;
       }
@@ -737,7 +759,7 @@ export default function UploadForm({
             type="button"
             onClick={() => {
               setFalha(null); setParada(null); setLoteVazio(null); setSucesso(null);
-              setProgresso(null); setDemorou(false); setDescartados(null); setOficiais([]);
+              setProgresso(null); setDemorou(false); setSessaoExpirou(false); setDescartados(null); setOficiais([]);
             }}
             className="rounded bg-risco-700 px-3 py-1.5 text-xs font-medium text-papel hover:bg-risco-800"
           >
@@ -761,7 +783,7 @@ export default function UploadForm({
               nem fato); um lote incompleto tem dado dentro, e apagá-lo perderia
               o que deu certo. A confirmação é a mesma do resto do portal. */}
           {loteVazio && !falha && !parada && loteVazio.comLinhas === 0 && loteVazio.comFatos === 0
-            && casoIdDoLote && (
+            && casoIdDoLote && podeExcluir && (
             <ExcluirMandato casoId={casoIdDoLote} nome={sucesso.mandato} />
           )}
         </div>
@@ -833,6 +855,12 @@ export default function UploadForm({
               </p>
             </div>
           )}
+          {sessaoExpirou && (
+            <p role="alert" className="mt-2 rounded border border-alerta-300 bg-alerta-50 p-2 text-xs text-alerta-900">
+              Sua sessão expirou — entre de novo. O envio já foi feito; esta tela só deixou de
+              conseguir acompanhar o andamento. Depois de entrar, abra o mandato para ver o estado atual.
+            </p>
+          )}
           {demorou && (
             <p className="mt-2 rounded border border-alerta-300 bg-alerta-50 p-2 text-xs text-alerta-900">
               Está levando mais tempo que o previsto e paramos de acompanhar por aqui — o
@@ -883,7 +911,7 @@ export default function UploadForm({
             (falha, parada ou lote sem conteúdo), a explicação é a tela — e ela
             já é renderizada acima, antes de chegar aqui. */}
         {pronto && !explicacao && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/40 px-4">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-fundo-reserva/40 px-4">
             <div className="w-full max-w-sm rounded-lg bg-folha p-6 text-center shadow-xl">
               <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-ok-100 text-2xl">
                 ✓

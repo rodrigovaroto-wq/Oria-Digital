@@ -1,10 +1,13 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { CartaoEntidade, type EntidadeSituacao } from "./CartaoEntidade";
 import {
   confirmarEscopo, definirForma, definirPapel, definirParticipacao, encerrarEscopo,
   registrarControlador, vincularControlador, vincularFamilia, desvincularFamilia, type AcoesPerimetro,
 } from "./actions";
+import { Organograma } from "./Organograma";
 import { SecaoParentesco, type VinculoVigente } from "./SecaoParentesco";
 import { rotuloDoAceite, rotuloDoMotivoDoGrupo, rotuloDoParentesco, tituloDoVeredito } from "@/lib/perimetro";
 
@@ -26,8 +29,8 @@ type Veredito = {
 export default async function PerimetroPage({ params }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
   const supabase = await createClient();
-  const [casoRes, vereditoRes, situacaoRes, controladoresRes, vinculosRes] = await Promise.all([
-    supabase.from("caso").select("nome").eq("id", id).single(),
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
+  const [vereditoRes, situacaoRes, controladoresRes, vinculosRes] = await Promise.all([
     supabase.rpc("fn_perimetro_veredito", { p_caso_id: id }),
     supabase.rpc("fn_perimetro_situacao", { p_caso_id: id }),
     supabase.from("controlador").select("id, nome, documento, tipo_pessoa").eq("caso_id", id).order("nome"),
@@ -43,6 +46,9 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
   const socios = controladores.filter((c) => c.tipo_pessoa === "fisica");
   const vinculos = (vinculosRes.data ?? []) as VinculoVigente[];
   const hoje = new Date().toISOString().slice(0, 10);
+  // Quem não escreve neste mandato lê o grupo econômico, mas os formulários (papel, forma, participação,
+  // controlador, parentesco, escopo) ficam desabilitados; o motivo está na faixa do mandato.
+  const { escrever } = await permissoesDoMandato;
   // Amarradas AQUI, no servidor: o id do caso não passa pelo navegador como dado editável.
   const acoes: AcoesPerimetro = {
     papel: definirPapel.bind(null, id), forma: definirForma.bind(null, id),
@@ -59,18 +65,21 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-titulo text-2xl font-medium tracking-tight text-tinta-900">
-            Perímetro{casoRes.data?.nome ? ` — ${casoRes.data.nome}` : ""}
-          </h1>
+          <h1 className="text-lg font-semibold text-tinta-900">Grupo econômico</h1>
           <p className="mt-0.5 text-sm text-tinta-500">Quem entra no combinado, com que papel e controlado por quem.</p>
         </div>
-        <Link href={`/casos/${id}`} className="btn-secundario">Voltar ao mandato</Link>
       </div>
 
       {falhaLeitura && (
         <output className="carta block p-4 text-sm text-risco-800">
-          Não foi possível ler o perímetro ({falhaLeitura.message}). Se a função não existe, a migration 0208 ainda não foi
-          aplicada: a tela não mostra o perímetro como fechado nem como aberto, ela não sabe.
+          <p>
+            Não foi possível ler o grupo econômico. A tela não o mostra como fechado nem como aberto,
+            porque não sabe. Avise o administrador do sistema.
+          </p>
+          <DetalhesTecnicos>
+            <p>{falhaLeitura.message}</p>
+            <p>Se a função não existe, a migration 0208 ainda não foi aplicada.</p>
+          </DetalhesTecnicos>
         </output>
       )}
 
@@ -80,7 +89,7 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
           <p className="text-sm text-tinta-700">{veredito.fechado_motivo}</p>
           {veredito.fantasmas > 0 && (
             <p className="text-sm text-risco-800">
-              {veredito.fantasmas} entidade(s) fantasma à parte, no fim da página: não contam como empresas.
+              {veredito.fantasmas} empresa(s) não identificada(s) à parte, no fim da página: não contam como empresas.
             </p>
           )}
           {veredito.grupos.length > 0 && (
@@ -113,26 +122,36 @@ export default async function PerimetroPage({ params }: Readonly<{ params: Promi
         </section>
       )}
 
+      {!falhaLeitura && <Organograma entidades={situacao} />}
+
       {falhaVinculos && (
         <output className="carta block p-4 text-sm text-risco-800">
-          Não foi possível ler os vínculos familiares ({falhaVinculos.message}). Se a tabela não existe, a migration 0212 ainda não
-          foi aplicada: a lista abaixo NÃO afirma que não há parentesco declarado.
+          <p>
+            Não foi possível ler os vínculos familiares. A lista abaixo NÃO afirma que não há
+            parentesco declarado. Avise o administrador do sistema.
+          </p>
+          <DetalhesTecnicos>
+            <p>{falhaVinculos.message}</p>
+            <p>Se a tabela não existe, a migration 0212 ainda não foi aplicada.</p>
+          </DetalhesTecnicos>
         </output>
       )}
-      <SecaoParentesco socios={socios} vinculos={vinculos} vincular={acoes.vincularFamilia} desvincular={acoes.desvincularFamilia} />
+      <ZonaDeEscrita pode={escrever.pode} className="space-y-6">
+        <SecaoParentesco socios={socios} vinculos={vinculos} vincular={acoes.vincularFamilia} desvincular={acoes.desvincularFamilia} />
 
-      {reais.map((e) => (
-        <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
-      ))}
+        {reais.map((e) => (
+          <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
+        ))}
 
-      {fantasmas.length > 0 && (
-        <>
-          <h2 className="titulo-secao">Entidades fantasma ({fantasmas.length})</h2>
-          {fantasmas.map((e) => (
-            <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
-          ))}
-        </>
-      )}
+        {fantasmas.length > 0 && (
+          <>
+            <h2 className="titulo-secao">Empresas não identificadas ({fantasmas.length})</h2>
+            {fantasmas.map((e) => (
+              <CartaoEntidade key={e.entidade_id} e={e} todas={todas} existentes={existentes} hoje={hoje} acoes={acoes} casoId={id} />
+            ))}
+          </>
+        )}
+      </ZonaDeEscrita>
     </div>
   );
 }

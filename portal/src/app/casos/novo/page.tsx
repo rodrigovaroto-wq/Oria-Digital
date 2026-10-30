@@ -1,6 +1,9 @@
 import Link from "next/link";
-import UploadForm from "@/components/upload-form";
+import { NovoMandatoPasso1 } from "@/components/novo-mandato-passo1";
+import { TOTAL_DE_PASSOS, textoDoPasso } from "@/lib/passo-do-mandato";
 import { MarcaOria } from "@/components/marca-oria";
+import { lerPermissoes } from "@/lib/supabase/acesso";
+import { FaixaDeAcesso } from "@/components/acesso-na-tela";
 
 // A TELA DE ABRIR MANDATO É A PRIMEIRA COISA QUE ALGUÉM FAZ NO PRODUTO, e ela
 // era um formulário estreito (`max-w-2xl`) encostado à esquerda, com um título
@@ -12,7 +15,19 @@ import { MarcaOria } from "@/components/marca-oria";
 // elas respondem à pergunta que trava quem sobe 38 arquivos pela primeira vez
 // ("e agora, o que o sistema faz com isso?"), e é a mesma resposta que o rodapé
 // dá em uma linha: nada vira fato sem alguém aceitar.
-export default function NovoMandatoPage() {
+export default async function NovoMandatoPage() {
+  // Leitura não abre mandato (o banco recusa o INSERT): o botão some da barra e quem chega pelo
+  // endereço lê o motivo, em vez de preencher um formulário que falharia no fim.
+  const { criarMandato } = await lerPermissoes();
+  if (!criarMandato.pode) {
+    return (
+      <div className="mx-auto max-w-xl space-y-4 py-8">
+        <h1 className="font-titulo text-2xl font-medium text-tinta-900">Novo mandato</h1>
+        <FaixaDeAcesso liberacao={criarMandato} />
+        <Link href="/casos/todos" className="btn-secundario">Voltar aos mandatos</Link>
+      </div>
+    );
+  }
   return (
     <div>
       <div className="mx-auto grid gap-10 py-2 lg:grid-cols-[1.15fr_1fr] lg:py-6">
@@ -24,17 +39,19 @@ export default function NovoMandatoPage() {
           >
             ← Voltar aos mandatos
           </Link>
-          <h1 className="mt-3 font-titulo text-3xl font-medium tracking-tight text-tinta-900">
+          <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-acento-700">
+            {textoDoPasso({ passo: 1, total: TOTAL_DE_PASSOS })} · Dados do mandato
+          </p>
+          <h1 className="mt-1 font-titulo text-3xl font-medium tracking-tight text-tinta-900">
             Novo mandato
           </h1>
           <p className="mt-1.5 max-w-lg text-sm text-tinta-600">
-            Suba os arquivos brutos como o cliente enviou — nomes bagunçados, PDF escaneado e
-            planilha exportada do ERP inclusive. Você pode enviar mais depois: use o mesmo nome de
-            mandato e tudo se acumula no mesmo checklist.
+            Dê um nome ao mandato. No próximo passo você sobe os arquivos brutos como o cliente enviou —
+            nomes bagunçados, PDF escaneado e planilha exportada do ERP inclusive — ou deixa para depois.
           </p>
 
           <div className="mt-6">
-            <UploadForm />
+            <NovoMandatoPasso1 />
           </div>
         </div>
 

@@ -1,21 +1,45 @@
-import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoes } from "@/lib/supabase/acesso";
+import { ROTULO_DO_PAPEL, textoDeRecentesVazio } from "@/lib/acesso";
+import { AcessoNaoLiberado } from "@/components/acesso-nao-liberado";
+import { AvisoDeAcessoNaoConferido } from "@/components/acesso-na-tela";
 import { logout } from "@/app/login/actions";
 import { BarraLateral, type MandatoNaBarra } from "@/components/barra-lateral";
-import { MarcaOria } from "@/components/marca-oria";
+import { FundoDaMarca } from "@/components/fundo-da-marca";
+import { AvisosDeProcessamento } from "@/components/avisos-de-processamento";
+import { BotaoDiscricao } from "@/components/botao-discricao";
+import { BuscaGlobal } from "@/components/busca-global";
+import { MenuConta } from "@/components/menu-conta";
+import { Trilha } from "@/components/trilha";
 
-// O CABEÇALHO É A ÚNICA COISA QUE APARECE EM TODAS AS TELAS, então ele é o que
-// diz se o produto é sério antes de qualquer dado carregar. O que mudou:
+// A MOLDURA DE TODAS AS TELAS AUTENTICADAS, no desenho "vidro" (28/10/2026).
 //
-//   • a marca virou marca — sigla em bloco grafite + nome, no lugar de uma
-//     linha de texto que se confundia com um link qualquer;
-//   • a largura foi de `max-w-5xl` (1024px) para `max-w-6xl`: as telas são
-//     TABELAS de oito colunas, e 1024px obrigava a rolar na horizontal num
-//     monitor de trabalho;
-//   • o e-mail e o "Sair" deixaram de ter o mesmo peso do link de navegação.
+// TRÊS CAMADAS, de trás para a frente:
+//   1. a imagem da marca, fixa em tela cheia (`FundoDaMarca`);
+//   2. o CASCO — barra lateral e barra de topo, vidro escuro suspenso a 12px das
+//      bordas, que só carregam navegação e texto claro;
+//   3. a FOLHA — UMA folha de vidro creme com todo o conteúdo. As 13 telas usam
+//      texto escuro desenhado para superfície creme; a folha mantém cada número
+//      sobre >= 92% de creme (o mesmo contraste de antes) e deixa a imagem
+//      aparecer ao redor e só de leve por baixo. O cabeçalho do mandato e as
+//      abas moram dentro dela, sem mudança.
+//
+// A barra de 57px de largura total SAIU: a marca foi para o topo da barra lateral
+// e a trilha e a conta para uma barra flutuante. Com isso não há mais deslocamento
+// de 57px a calcular — a barra lateral é `sticky top-3`, a de topo também.
+//
+// A largura útil continua a de antes: `max-w-6xl` (1152px) de conteúdo + 2×24px
+// de respiro da folha = 75rem de coluna. As telas são TABELAS de oito colunas, e
+// 1024px obrigava a rolar na horizontal num monitor de trabalho. O e-mail e o
+// "Sair" ficam no menu de conta; o princípio "nada é fato até alguém aceitar"
+// mora no login, uma vez, e não num rodapé fixo em toda tela.
 export default async function CasosLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
-  const [claimsRes, mandatosRes] = await Promise.all([
+  // O PAPEL, lido UMA vez por requisição (`lerPermissoes` é memoizado: layout, página e rotas filhas
+  // pedem e só a primeira vai ao banco). O casco o usa para três coisas — o item "Novo mandato", o
+  // texto de "Recentes" vazio e a tela única de quem ainda não tem papel (item 4 da Fase 5).
+  const [perm, claimsRes, mandatosRes] = await Promise.all([
+    lerPermissoes(),
     supabase.auth.getClaims(),
     // SÓ OS ATIVOS na barra (0114): ela responde "no que estou trabalhando", e
     // mandato fechado não é resposta para isso — ele continua na lista completa.
@@ -31,75 +55,53 @@ export default async function CasosLayout({ children }: { children: React.ReactN
     id: m.id, nome: m.nome, status: m.status,
   }));
 
+  const nomes = Object.fromEntries(mandatos.map((m) => [m.id, m.nome]));
+
+  // SEM PAPEL = a RLS devolve VAZIO em toda lista, e "Nenhum mandato", "Nada encontrado" e "Nenhum
+  // aviso" seriam falsos (regra 1). Esta tela ocupa o lugar de todas elas; a busca e o sino saem do
+  // topo pelo mesmo motivo, e o casco continua para a pessoa poder sair.
+  const semPapel = perm.semPapel;
+
   return (
-    /* SEM `bg-tinta-50` AQUI, e não é descuido: o `body` já pinta essa mesma
-       cor (ver `app/layout.tsx`). Repeti-la neste `div` criava uma camada
-       OPACA em cima do plano de fundo — e era ela que engolia a ilustração do
-       painel, que é um `fixed` em `-z-10`. Elemento em z negativo pinta acima
-       do fundo da raiz e ABAIXO de qualquer bloco do fluxo; com a cor no `div`,
-       o bloco do fluxo era a tela inteira. Tirando a cor daqui, a ilustração
-       aparece nos vãos e continua coberta por tudo o que tem fundo próprio: a
-       barra, o cabeçalho, o rodapé e as cartas. */
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b border-tinta-200 bg-folha/95 backdrop-blur">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
-          {/* NA BARRA, O SEXTANTE. A marca completa é empilhada (instrumento
-              sobre ORIA sobre PARTNERS) e num cabeçalho de 57px cada palavra
-              ficaria com 9px de altura — ilegível, e mal-educado com a marca.
-              A lockup completa aparece no login, onde há altura para ela. */}
-          <Link href="/casos" className="flex items-center gap-2.5">
-            <MarcaOria variante="sextante" className="h-8 w-8" />
-            <span className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold tracking-wide text-tinta-900">ORIA</span>
-              <span className="text-[10px] uppercase tracking-[0.2em] text-tinta-500">Partners</span>
-            </span>
-            <span className="hidden border-l border-tinta-200 pl-2.5 text-[11px] leading-tight text-tinta-500 lg:block">
-              Tratamento de
-              <br />
-              dados financeiros
-            </span>
-          </Link>
-
-          <div className="flex items-center gap-4 text-sm">
-            {/* O dial é GLOBAL, não por mandato — por isso mora fora de /casos.
-                O link fica aqui porque o painel só serve para quem está usando o
-                portal e precisa saber com que autonomia o pipeline rodou. */}
-            <Link
-              href="/autonomia"
-              className="rounded-md px-2 py-1 text-tinta-600 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
-            >
-              Autonomia
-            </Link>
-            {email && (
-              <span className="hidden text-xs text-tinta-500 sm:inline" title={email}>
-                {email}
-              </span>
-            )}
-            <form action={logout}>
-              <button type="submit" className="btn-discreto">
-                Sair
-              </button>
-            </form>
+    // SEM COR DE FUNDO NESTE `div`: a imagem é `fixed` em `-z-10` e um bloco
+    // opaco aqui a engoliria (elemento em z negativo pinta abaixo de qualquer
+    // bloco do fluxo). O que tem fundo é o casco e a folha, e só eles.
+    <div className="flex min-h-screen">
+      <FundoDaMarca variante="app" />
+      <BarraLateral
+        mandatos={mandatos}
+        podeCriar={perm.criarMandato.pode && !semPapel}
+        motivoSemCriar={semPapel ? null : perm.criarMandato.motivo}
+        vazioDa={textoDeRecentesVazio(perm.papel, Boolean(mandatosRes.error))}
+        mostrarAdministracao={perm.papel === "socio" || !perm.conferido}
+      />
+      {/* Abaixo de 640px a barra inferior (fixa: 4rem de altura + o respiro de baixo) cobriria o fim da
+            página: o padding inferior reserva exatamente o espaço dela. */}
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 pb-[calc(var(--altura-barra-inferior)+0.75rem)] sm:pb-3">
+        <header className="vidro-casco sticky top-3 z-10 mx-auto flex w-full max-w-[75rem] items-center justify-between gap-4 rounded-2xl px-4 py-2">
+          <Trilha nomes={nomes} />
+          <div className="flex shrink-0 items-center gap-1">
+            {!semPapel && <BuscaGlobal />}
+            {!semPapel && <AvisosDeProcessamento />}
+            <BotaoDiscricao />
+            <MenuConta
+              email={email}
+              papel={perm.conferido ? (perm.papel ? ROTULO_DO_PAPEL[perm.papel] : "sem papel") : null}
+              sair={logout}
+            />
           </div>
-        </div>
-      </header>
-
-      <div className="flex flex-1">
-        <BarraLateral mandatos={mandatos} />
-        <main className="min-w-0 flex-1 px-6 py-8">
-          <div className="mx-auto w-full max-w-6xl">{children}</div>
+        </header>
+        <main className="vidro-folha mx-auto w-full max-w-[75rem] flex-1 rounded-2xl px-6 py-8">
+          {semPapel ? (
+            <AcessoNaoLiberado email={email} />
+          ) : (
+            <>
+              {!perm.conferido && <div className="mb-6"><AvisoDeAcessoNaoConferido permissoes={perm} /></div>}
+              {children}
+            </>
+          )}
         </main>
       </div>
-
-      {/* O RODAPÉ EXISTE PARA DIZER UMA COISA SÓ, e ela é a mais importante do
-          produto: nada aqui é fato até um humano aceitar. Quem abre o portal
-          pela primeira vez precisa ler isso sem procurar. */}
-      <footer className="border-t border-tinta-200 bg-folha">
-        <div className="px-6 py-4 text-xs text-tinta-500">
-          Os dados desta tela são extraídos dos documentos enviados e conferidos automaticamente.
-          Linha marcada como pendente é sugestão a revisar. Nada é fato até alguém aceitar.
-        </div>
-      </footer>
     </div>
   );
 }

@@ -27,6 +27,7 @@ import { partesDaDescricao, rotuloDaPendencia, rotulosCitados, semALista, suaviz
 import { rotuloDeTipoConhecido } from "@/lib/export";
 import { BOTOES_DECISAO, ROTULO_POR_ESTADO, rotuloDoEstado } from "@/lib/pendencia";
 import { decidirPendencia } from "./actions";
+import { FormDeAcao } from "@/components/form-de-acao";
 
 export interface PendenciaNaTela {
   id: string;
@@ -85,13 +86,13 @@ export function ItemPendencia({
 
       {/* UM FATO POR LINHA, com travessão. A primeira parte é a frase principal e
           vem sem marcador; as demais são qualificações dela. */}
-      <p className="font-medium">{partes[0]}</p>
+      <p className="valor-sensivel font-medium">{partes[0]}</p>
       {partes.length > 1 && (
         <ul className="mt-1 space-y-0.5">
           {partes.slice(1).map((parte, i) => (
             <li key={i} className="flex gap-1.5">
               <span aria-hidden className={cores.fraco}>—</span>
-              <span>{parte}</span>
+              <span className="valor-sensivel">{parte}</span>
             </li>
           ))}
         </ul>
@@ -119,17 +120,20 @@ export function ItemPendencia({
           não fosse o caminho mais curto. Com três botões e nenhum campo, esse
           cuidado vira só atrito: a decisão agora É a interface. */}
       {casoId && (
-        <div className="mt-2 flex flex-wrap items-center gap-2 border-t border-folha/40 pt-2">
+        <div className="mt-2 flex flex-wrap items-start gap-x-4 gap-y-2 border-t border-folha/40 pt-2">
+          {/* O EFEITO FICA À VISTA, embaixo de cada botão (fase 2). Ele morava só no
+              `title=`, que não existe no toque e some antes de ser lido: quem clicava
+              em "Prosseguir sem resolução" descobria o que tinha feito DEPOIS. */}
           {BOTOES_DECISAO.map((b) => (
-            <form key={b.decisao} action={decidirPendencia.bind(null, casoId, p.id, b.decisao)}>
+            <FormDeAcao key={b.decisao} action={decidirPendencia.bind(null, casoId, p.id, b.decisao)} className="max-w-[15rem]">
               <button
                 type="submit"
-                title={b.efeito}
                 className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors ${b.classe}`}
               >
                 {b.rotulo}
               </button>
-            </form>
+              <p className={`mt-1 text-xs leading-snug ${cores.fraco}`}>{b.efeito}</p>
+            </FormDeAcao>
           ))}
           {/* A PONTE PARA A ABA DAS PERGUNTAS (0120), e só depois de "Contatar o
               Cliente" ter sido clicado.

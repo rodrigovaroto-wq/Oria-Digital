@@ -59,6 +59,8 @@ import {
   humanizar, partesDaDescricao, rotuloDaPendencia, rotuloDaSecao, rotulosCitados, semALista, suavizarMensagem,
 } from "../src/lib/rotulos.ts";
 import { BOTOES_DECISAO, ROTULO_POR_ESTADO, rotuloDoEstado } from "../src/lib/pendencia.ts";
+import { JANELA_DE_VERSOES, acoesDoTermo, agruparResultados, digitosDoCnpj, padraoDoTermo, termoDaBusca } from "../src/lib/busca-global.ts";
+import { padraoDeBusca as padraoDaLista } from "../src/lib/painel.ts";
 
 let ok = 0;
 const falhas: string[] = [];
@@ -3481,6 +3483,82 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   for (let r = 1; r <= ws.rowCount; r++) rotulos.push(String(ws.getRow(r).getCell(1).value ?? ""));
   checar(rotulos.includes("Receita mercado interno") && rotulos.includes("Receita de exportação"),
     "(42) as duas linhas seguem visíveis — só o total foi omitido");
+}
+
+// ---- 42b: a busca global (⌘K) — termo, CNPJ por dígitos, escape e agrupamento ----
+{
+  checar(termoDaBusca("a") === null && termoDaBusca(" a ") === null && termoDaBusca(undefined) === null && termoDaBusca("  ") === null,
+    "(42b) menos de 2 caracteres NÃO gera termo (nenhuma requisição sai)", "");
+  checar(termoDaBusca("  ab ") === "ab" && termoDaBusca("x".repeat(200))!.length === 60,
+    "(42b) termo é aparado e limitado a 60 caracteres", String(termoDaBusca("x".repeat(200))?.length));
+  checar(digitosDoCnpj("12.345.678/0001-90") === "12345678000190" && digitosDoCnpj("1234") === "1234",
+    "(42b) CNPJ com pontuação casa por dígitos", String(digitosDoCnpj("12.345.678/0001-90")));
+  checar(digitosDoCnpj("Ana 22") === null && digitosDoCnpj("Ana 2") === null && digitosDoCnpj("Vertentes") === null && digitosDoCnpj("5") === null,
+    "(42b) termo com letra (ou 1 dígito) NUNCA vira busca por CNPJ", "");
+  checar(padraoDoTermo("a*b_%") === padraoDaLista("a*b_%") && padraoDoTermo("a*b") === "%a_b%" && padraoDoTermo("a_b") === "%a\\_b%",
+    "(42b) a busca global usa o MESMO escape da lista de Mandatos (* vira _, % _ \\ escapados)", padraoDoTermo("a*b_%"));
+  checar(acoesDoTermo(null).length === 3 && acoesDoTermo("novo").map((a) => a.rotulo).join() === "Novo mandato"
+    && acoesDoTermo("inicio").map((a) => a.rotulo).join() === "Início" && acoesDoTermo("zzz").length === 0,
+    "(42b) ações rápidas: sem termo todas; com termo casam sem acento e sem caixa", "");
+  const { resultados: fatia, truncados: truncadosFatia } = agruparResultados({
+    mandatos: [{ id: "m1", nome: "Vertentes", fechado_em: null }, { id: "m2", nome: "Antigo", fechado_em: "2026-01-01" }],
+    documentos: [
+      { documento_id: "d1", caso_id: "m1", nome_original: "dre.pdf", caso_nome: "Vertentes" },
+      { documento_id: "d1", caso_id: "m1", nome_original: "dre-v2.pdf", caso_nome: "Vertentes" },
+    ],
+    entidades: [
+      { id: "e1", caso_id: "m1", razao_social: "Alfa SA", cnpj: "12345678000190", caso_nome: "Vertentes" },
+      { id: "e1", caso_id: "m1", razao_social: "Alfa SA", cnpj: "12345678000190", caso_nome: "Vertentes" },
+    ],
+  });
+  const porChave = Object.fromEntries(fatia.map((r) => [r.chave, r]));
+  checar(porChave["mandato:m1"]?.href === "/casos/m1" && porChave["mandato:m1"]?.fechado === false
+    && porChave["mandato:m2"]?.fechado === true,
+    "(42b) mandato fechado é marcado e o ativo não", JSON.stringify(porChave["mandato:m2"]));
+  checar(fatia.filter((r) => r.grupo === "documentos").length === 1
+    && porChave["documento:d1"]?.href === "/casos/m1/documentos/d1" && porChave["documento:d1"]?.detalhe === "Vertentes",
+    "(42b) documento com duas versões casando entra UMA vez, com o nome do mandato", String(fatia.length));
+  checar(fatia.filter((r) => r.grupo === "entidades").length === 1
+    && porChave["entidade:e1"]?.href === "/casos/m1/perimetro"
+    && porChave["entidade:e1"]?.detalhe === "12.345.678/0001-90 · Vertentes",
+    "(42b) entidade (razão social ∪ CNPJ) sem duplicata, com CNPJ formatado e link para o Grupo econômico",
+    String(porChave["entidade:e1"]?.detalhe));
+  checar(truncadosFatia.length === 0, "(42b) abaixo do teto nenhum grupo é marcado como truncado", truncadosFatia.join());
+  const { resultados: muitos, truncados: truncMuitos } = agruparResultados({
+    mandatos: Array.from({ length: 9 }, (_, i) => ({ id: `m${i}`, nome: `M${i}`, fechado_em: null })),
+    documentos: [],
+    entidades: Array.from({ length: 9 }, (_, i) => ({ id: `e${i}`, caso_id: "m1", razao_social: `E${i}`, cnpj: null, caso_nome: null })),
+  });
+  checar(truncMuitos.join() === "mandatos,entidades", "(42b) teto atingido: mandatos e entidades dizem que a lista não é exaustiva", truncMuitos.join());
+  checar(muitos.filter((r) => r.grupo === "mandatos").length === 6 && muitos.filter((r) => r.grupo === "entidades").length === 6,
+    "(42b) teto de 6 por grupo (a união razão social + CNPJ também respeita)", String(muitos.length));
+  // O DEFEITO: o `limit(6)` era por linha de `documento_versao` e a deduplicação por documento
+  // vinha DEPOIS — um documento com 20 versões casando enchia o grupo ("1 resultado" com 7
+  // documentos casando). Arranjo escrito para a regra (não é fixture de produção): d0 com 20
+  // versões primeiro (as mais recentes), depois 7 outros documentos, dentro da janela de 30.
+  const versao = (doc: string, n: number) =>
+    ({ documento_id: doc, caso_id: "m1", nome_original: `${doc}-v${n}.pdf`, caso_nome: "Vertentes" });
+  const docsMuitasVersoes = [
+    ...Array.from({ length: 20 }, (_, n) => versao("d0", n)),
+    ...Array.from({ length: 7 }, (_, i) => versao(`x${i}`, 1)),
+  ];
+  const dedupe = agruparResultados({ mandatos: [], documentos: docsMuitasVersoes, entidades: [] });
+  checar(dedupe.resultados.filter((r) => r.grupo === "documentos").length === 6
+    && dedupe.resultados[0].chave === "documento:d0",
+    "(42b) dedupe ANTES do teto: 20 versões de um documento não consomem os 6 lugares do grupo",
+    String(dedupe.resultados.length));
+  checar(dedupe.truncados.join() === "documentos",
+    "(42b) 8 documentos distintos casam e só 6 aparecem: o grupo é marcado truncado", dedupe.truncados.join());
+  const umSo = agruparResultados({
+    mandatos: [], documentos: Array.from({ length: 20 }, (_, n) => versao("d0", n)), entidades: [],
+  });
+  checar(umSo.resultados.length === 1 && umSo.truncados.length === 0,
+    "(42b) um documento com 20 versões, janela não cheia: 1 resultado e SEM aviso de teto", String(umSo.resultados.length));
+  const janelaCheia = agruparResultados({
+    mandatos: [], documentos: Array.from({ length: JANELA_DE_VERSOES }, (_, n) => versao("d0", n)), entidades: [],
+  });
+  checar(janelaCheia.truncados.join() === "documentos",
+    "(42b) janela de versões cheia: pode haver mais documentos além dela — o grupo avisa", janelaCheia.truncados.join());
 }
 
 // ---- 43: book de uma moeda só não ganha ruído ------------------------------
@@ -8639,6 +8717,84 @@ const arranjoDeCirculante = (ENT: string) => {
       JSON.stringify(lp26));
   }
 
+}
+
+// (40) A RECUSA DO EXPORT VIRA PÁGINA PARA PESSOA E CONTINUA JSON PARA PROGRAMA
+// (src/lib/recusa-do-export.ts). Os motivos vêm do banco — razão social e
+// mensagem do Postgres —, então o que importa é: (a) texto do banco nunca vira
+// marcação; (b) o status da recusa (409/503/500) sobrevive à troca de formato;
+// (c) quem não pede HTML recebe o JSON de sempre.
+{
+  const { recusar } = await import("../src/lib/recusa-do-export.ts");
+  const corpo = {
+    error: "Recusado <b>pelo</b> portão",
+    motivos: ["Empresa <script>alert(1)</script> & Cia"],
+    detalhe: "erro \"x\"",
+  };
+  const html = await recusar(
+    new Request("https://x/casos/1/export", { headers: { accept: "text/html,application/xhtml+xml" } }),
+    "1", corpo, { status: 409 },
+  );
+  const texto = await html.text();
+  checar(html.status === 409, "(40a) a página de recusa preserva o status 409", String(html.status));
+  checar((html.headers.get("content-type") ?? "").startsWith("text/html"),
+    "(40b) navegador recebe HTML", html.headers.get("content-type") ?? "");
+  checar(!texto.includes("<script>alert(1)") && texto.includes("&lt;script&gt;alert(1)&lt;/script&gt; &amp; Cia"),
+    "(40c) motivo vindo do banco sai escapado, nunca como marcação", texto.slice(0, 200));
+  checar(!texto.includes("<b>pelo</b>"), "(40d) a mensagem de erro também sai escapada", "");
+  const json = await recusar(new Request("https://x/casos/1/export", { headers: { accept: "*/*" } }),
+    "1", corpo, { status: 503 });
+  checar(json.status === 503 && (json.headers.get("content-type") ?? "").includes("application/json")
+    && (await json.json()).motivos?.[0] === corpo.motivos[0],
+    "(40e) programa (Accept */*) recebe o JSON de sempre, com o status original", String(json.status));
+}
+
+// (41) O INÍCIO E A LISTA DE MANDATOS (src/lib/painel.ts): a fila "Precisa de você" e a busca.
+// A regra que importa: a contagem de cada filtro é a MESMA conta que a lista aplica, e a busca
+// não deixa "%" e "_" virarem curinga do LIKE.
+{
+  const { filtroDaFila, daFila, contarFila, verboDaPendencia, padraoDeBusca } = await import("../src/lib/painel.ts");
+  const fila = [
+    { tipo: "item_faltante", severidade: "bloqueante" },
+    { tipo: "classificacao_pendente", severidade: "bloqueante" },
+    { tipo: "classificacao_pendente", severidade: "importante" },
+    { tipo: "divergencia_reconciliacao", severidade: "importante" },
+    { tipo: "arquivo_ilegivel", severidade: "complementar" },
+  ];
+  const c = contarFila(fila);
+  checar(c.todas === 5 && c.travam === 2 && c.confirmar === 2,
+    "(41a) contagem de cada filtro da fila", JSON.stringify(c));
+  for (const f of ["todas", "travam", "confirmar"] as const) {
+    checar(fila.filter((p) => daFila(p, f)).length === c[f],
+      `(41b) a lista filtrada por "${f}" tem exatamente a contagem exibida`, f);
+  }
+  checar(filtroDaFila("lixo") === "todas" && filtroDaFila(undefined) === "todas" && filtroDaFila(["travam", "x"]) === "travam",
+    "(41c) filtro desconhecido cai em 'todas' (mostrar demais, nunca esconder)", "");
+  checar(verboDaPendencia("classificacao_pendente") === "Confirmar"
+    && verboDaPendencia("item_faltante") === "Pedir ao cliente"
+    && verboDaPendencia("arquivo_ilegivel") === "Pedir ao cliente"
+    && verboDaPendencia("divergencia_reconciliacao") === "Decidir"
+    && verboDaPendencia("tipo_que_nao_existe") === "Pedir ao cliente",
+    "(41d) o verbo do botão corresponde à gaveta de destino", "");
+  // Estado manda nos tipos de decisão; "confirmar" fica "Confirmar" em qualquer estado em aberto
+  // (a aba Pendências mostra o formulário assim). Sem estado vale o verbo do tipo.
+  checar(verboDaPendencia("item_faltante", "reenviada_ao_cliente") === "Aguardando o cliente"
+    && verboDaPendencia("arquivo_ilegivel", "reenviada_ao_cliente") === "Aguardando o cliente"
+    && verboDaPendencia("divergencia_reconciliacao", "em_correcao_interna") === "Em correção"
+    && verboDaPendencia("item_faltante", "em_correcao_interna") === "Em correção",
+    "(41h) pendência já contatada/em correção não oferece mais o verbo de quando estava aberta", "");
+  checar(verboDaPendencia("item_faltante", "aberta") === "Pedir ao cliente"
+    && verboDaPendencia("divergencia_reconciliacao", "aberta") === "Decidir"
+    && verboDaPendencia("classificacao_pendente", "reenviada_ao_cliente") === "Confirmar"
+    && verboDaPendencia("classificacao_pendente", "em_correcao_interna") === "Confirmar",
+    "(41i) aberta mantém o verbo do tipo; documento a confirmar segue 'Confirmar' em qualquer estado", "");
+  checar(padraoDeBusca("a*b") === "%a_b%" && !padraoDeBusca("*")!.includes("*") && padraoDeBusca("*") === "%_%",
+    "(41j) busca não deixa '*' virar curinga do PostgREST (que o troca por '%' e casaria tudo)", String(padraoDeBusca("*")));
+  checar(padraoDeBusca("a_b%c\\d") === "%a\\_b\\%c\\\\d%",
+    "(41e) busca escapa _ % \\ (senão '_' casaria todo nome)", String(padraoDeBusca("a_b%c\\d")));
+  checar(padraoDeBusca("   ") === null && padraoDeBusca(undefined) === null && padraoDeBusca(["Vertentes", "x"]) === "%Vertentes%",
+    "(41f) busca vazia = sem filtro; array usa o primeiro", "");
+  checar(padraoDeBusca("x".repeat(500))!.length === 82, "(41g) busca limitada a 80 caracteres", "");
 }
 
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);

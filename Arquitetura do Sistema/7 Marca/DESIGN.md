@@ -200,7 +200,8 @@ repete no conteúdo.**
 
 ## Elevation & Depth
 
-Elevação mínima. O produto é dado; sombra demais compete com o número.
+Elevação mínima (o vidro do casco e da folha leva `--vidro-sombra`, difusa, só para
+destacar a superfície da imagem; dentro da folha vale a regra abaixo). O produto é dado; sombra demais compete com o número.
 
 ### Shadow Vocabulary
 
@@ -267,8 +268,153 @@ cor de borda.
 
 ### Navigation
 
-Barra lateral retrátil sobre `tinta-50`, item em `tinta-700`, item ativo com o
-acento. Estado (recolhida, seção aberta) mora no navegador.
+Barra lateral retrátil e **flutuante** (decisão do dono, 28/10/2026): solta a
+12px das bordas, `rounded-2xl`, `sticky top-3`, altura `100dvh - 24px`, em vidro
+escuro (ver *Vidro e imagem de fundo*). A marca mora no topo dela — o sextante
+original (sem recolorir; só um `drop-shadow` azul) e "ORIA / DIGITAL" em
+versalete. Item em `vidro-texto` (#ece8df), item ativo com preenchimento claro a
+10% e uma barra de 2px à esquerda em terracota claro (#e8937c); "Novo mandato" é
+o único botão claro (creme, texto escuro). Recolhida, vira trilho de ícones com o
+mesmo vidro. No lugar do cabeçalho de 57px há uma barra de topo flutuante, do
+mesmo vidro, com a trilha e o menu da conta. Estado (recolhida, seção aberta)
+mora no navegador.
+
+Desde o redesenho (27/10/2026, `REDESENHO_DO_PORTAL.md`): ícones de traço
+próprios no lugar de caracteres soltos; recolhida, a barra vira trilho de
+ícones com o nome em `aria-label`; os mandatos da barra são só os recentes.
+Dentro do mandato, abas fixas sublinhadas pelo acento, com régua de etapas
+(Recebimento → Conferência → Modelagem → Entrega) no cabeçalho.
+
+**Celular (< 640px, Fase 4):** a barra lateral e o trilho somem e entram cinco
+destinos numa **barra inferior** fixa e flutuante, no mesmo vidro do casco: Início ·
+Mandatos · Busca · Novo · Mais (`barra-inferior.tsx`). "Mais" abre uma folha por
+portal com os recentes e a Administração. Rótulos em `vidro-texto` (9,6:1), nunca
+`vidro-suave`, porque texto de 11px não tem folga em 4,71:1; o destino ativo leva
+barra de 2px terracota claro no topo, fundo +10% e `aria-current`. A barra respeita
+`env(safe-area-inset-bottom)` (`max` com 12px), e o conteúdo ganha o padding
+equivalente. As abas do mandato rolam na horizontal e centralizam a ativa.
+
+**Modo discrição:** botão com `aria-pressed` ao lado da busca; liga `data-discricao`
+no `<html>` (script inline no `<head>`, sem flash) e o CSS aplica `blur(6px)` em
+`.valor-sensivel`. Hover e foco **não** revelam — o objetivo é sigilo. O aviso
+"Modo discrição ligado" é texto no botão. Marca valor financeiro (colunas de valor,
+Modelagem, Custos), não contagens. **Limite:** é proteção visual; o texto segue no
+DOM (leitor de tela, Ctrl+F, copiar-tudo, Excel exportado não são cobertos — leitor
+de tela não é silenciado de propósito).
+
+### Vidro e imagem de fundo
+
+**Esta seção substitui a regra anterior "a imagem nunca fica atrás de tabela ou
+de número"** (decisão do dono, 28/10/2026). A regra nova:
+
+- **A imagem da marca cobre a tela inteira, fixa**, em toda tela autenticada e no
+  login (`FundoDaMarca`: `next/image` `fill`, `priority`, `fixed inset-0 -z-10`).
+  Nunca `background-attachment: fixed` (quebra no iOS). Dois arquivos estáticos
+  em `public/marca/` (960px, 94 KB; 1678px, 230 KB) escolhidos por um `loader`
+  próprio: celular baixa 59% menos. O `body` é `#0d0f13` até a imagem chegar.
+- **Véu sobre a imagem**: nas telas do app, `rgba(10,12,16,.62)` no topo a `.78`
+  embaixo; no login, `.15` à esquerda (a placa "ORIA DIGITAL" tem de ser lida) a
+  `.70` à direita.
+- **Casco (vidro escuro)** — barra lateral, barra de topo, cartão do login:
+  `rgba(18,21,27,.64)`, `blur(18px) saturate(140%)`, borda `rgba(255,255,255,.09)`,
+  texto `#ece8df`, secundário `#a39d92`. O cartão do login sobe para `.80`.
+- **Folha (vidro creme)** — **todo o conteúdo** de todas as telas, numa única
+  folha: `rgba(252,251,248,.94)`, **sem** `backdrop-filter` (ver abaixo), borda `rgba(255,255,255,.55)`.
+  As 13 telas usam texto escuro desenhado para superfície creme; a folha mantém
+  todo número sobre >= 94% de creme e a imagem aparece ao redor e só de leve por
+  baixo. **Número nunca fica diretamente sobre a imagem nem sobre o casco.**
+  A folha **não** leva `backdrop-filter`: pela especificação ele vira bloco de
+  contenção dos descendentes `fixed`, e os diálogos de Fechar/Excluir e o "Tudo
+  pronto" moram dentro dela (revisão do PR #265). Os diálogos de Fechar/Excluir
+  também vão para o `<body>` por portal, contra qualquer outro contêiner.
+- **Fallbacks**: `prefers-reduced-transparency: reduce` → superfícies sólidas
+  (casco `#161a20`, folha `#fcfbf8`, sem filtro); sem `backdrop-filter` → casco
+  `.94` e folha `.98`. Os valores moram em `globals.css` (`--vidro-*`,
+  `.vidro-casco`, `.vidro-folha`), nunca repetidos em `.tsx`.
+- **Foco sobre o casco** é terracota claro `#e8937c` (o `#b6482f` dá ~2,6:1 ali);
+  o menu da conta é superfície de conteúdo (`bg-folha`): creme no tema claro, escuro no escuro, e usa o anel de conteúdo (`acento-600` do tema).
+
+**Medições (28/10/2026)**, contra o pior fundo possível — o pixel mais claro da
+foto (255,255,236) sob o véu de `.62` — e contra o mais escuro (preto):
+
+| Par | Razão |
+|---|---|
+| `#ece8df` sobre o casco, pior caso | 9,6:1 |
+| `#a39d92` sobre o casco, pior caso | 4,71:1 (com `.58` eram 4,38 — por isso `.64`) |
+| `#a39d92` sobre o casco, véu `.78` | 5,5:1 |
+| terracota `#e8937c` sobre o casco, pior caso | 5,4:1 |
+| `#ece8df` sobre o item ativo (+10% branco), pior caso | 7,1:1 |
+| `#a39d92` sobre o cartão do login (`.80`, véu `.45`, pixel mais claro) | 4,89:1 |
+| borda de campo `white/40` sobre o cartão do login | 3,47:1 |
+| `tinta-900` sobre a folha, pior caso | 14,8:1 |
+| `tinta-500` sobre a folha `.92`: sobre pixel claro / sobre preto | 4,69:1 / **4,37:1** |
+| `tinta-500` sobre a folha `.94`, sobre preto | 4,57:1 |
+
+Por isso a folha é `.94` e não `.92`: `tinta-500` valia 5,20:1 sobre a `folha`
+sólida e, a `.92`, caía abaixo de 4,5:1 onde a foto é preta — o caso comum, porque
+a foto é escura na maior parte.
+
+**O sextante sobre o casco** leva `.marca-neon` (três sombras azuis: núcleo, halo e
+aura). A arte original é azul-marinho de traço escuro, como a placa da foto, e
+quase sumia no vidro escuro com um brilho só; as sombras reproduzem a luz de
+fundo da placa sem tocar no arquivo.
+
+### Modo escuro
+
+**Claro · Escuro · Sistema** no menu da conta (padrão **Sistema**, via
+`prefers-color-scheme`, e em Sistema o tema segue o aparelho ao vivo). A escolha mora
+em `localStorage` (`oria.tema`, sempre em try/catch) e um script inline do `<head>`
+liga `data-tema="claro|escuro"` no `<html>` antes da pintura — o mesmo padrão do modo
+discrição; a lógica pura está em `lib/casco.ts`.
+
+**Mecanismo:** as cores do `@theme` viram variáveis em `:root` e os utilitários as
+leem com `var()`, então o escuro é **redefinir as variáveis** em
+`html[data-tema="escuro"]` (`globals.css`), sem reescrever componente. A rampa
+**inverte**: `tinta-900` (texto) é o creme claro, `tinta-50` é o tom mais fundo; nas
+rampas de estado `-50/-100` (fundo de chip) são tinta escura do matiz e `-700/-900`
+(texto) o tom claro. `acento-600` vira o terracota claro `#e8937c` — o de sempre
+(`#b6482f`) dá ~2,7:1 sobre a folha escura. Nada de preto puro: o mais fundo é
+`#14181e` (`papel`); a folha é `#1a1f26` a 94% (mesma opacidade do claro).
+
+**Não muda:** o casco (`vidro-*`, `fundo-reserva`, `vidro-tinta`, `vidro-papel` ficam
+**fora** do bloco escuro; o botão creme do casco usa `vidro-tinta`/`vidro-papel`, e as
+rampas de aviso do cartão do login são fixadas nos valores do claro dentro de
+`.vidro-casco`), o Excel exportado, o modo discrição, os diálogos por portal (só
+trocaram o véu `bg-tinta-900/NN` por `bg-fundo-reserva/NN`, que não clareia a tela) e a
+**impressão**: o bloco inteiro está em `@media not print`, então imprime sempre no claro.
+Os fallbacks da folha (menos transparência → sólida `#1a1f26`; sem backdrop-filter →
+`.98`) têm par no escuro, porque o seletor do tema pesa mais que o `:root` deles.
+
+**Medições (29/10/2026)** — calculadas por `verificar-mensagem-de-falha.mts` (seção
+CASCO) a partir dos valores do próprio CSS, 101 pares no total, o pior fundo possível
+(folha a 94% sobre o pixel mais claro da foto: `rgb(40,44,50)`). Texto normal ≥ 4,5:1:
+
+| Par | Folha sobre a foto (pior) | Folha sólida |
+|---|---|---|
+| `tinta-900` (texto primário) | 11,48:1 | 13,55:1 |
+| `tinta-700` | 8,41:1 | 9,92:1 |
+| `tinta-600` | 6,65:1 | 7,85:1 |
+| `tinta-500` (secundário, placeholder) | 5,21:1 | 6,15:1 |
+| `tinta-500` sobre `tinta-100` (chip neutro) / `tinta-50` (faixa) | 4,94:1 / 5,66:1 | — |
+| `tinta-400` (ícone/fio — piso 3,6, como o claro com 3,62) | 3,76:1 | 4,44:1 |
+| link `acento-700` | 6,90:1 | 8,15:1 |
+| `acento-600` (link; anel de foco exige 3:1) | 5,94:1 | 7,02:1 |
+| `risco-700` / `-800` / `-900` | 6,15 / 7,54 / — | 7,26 / 8,90 / — |
+| `ok-700`, `alerta-700`, `info-700`, `serie-700` | 8,71 / 8,71 / 7,84 / 6,42 | — |
+
+Chips (texto sobre o próprio fundo): `risco-800` sobre `-100` 8,27:1; `alerta-900`
+sobre `-100` 9,77:1; `ok-800` sobre `-50` 10,34:1; `info-800` sobre `-100` 8,69:1;
+`serie-800` sobre `-100` 8,50:1; `tinta-700` sobre `tinta-100` 7,97:1.
+Botões (`papel` escuro sobre o preenchimento claro): `tinta-900` 14,57:1; `ok-700`
+11,06:1; `ok-800` 12,34:1; `risco-600` **5,94:1 (o pior)**; `risco-700` 7,80:1;
+`acento-600` 7,54:1. Seleção (`tinta-900` sobre `acento-100`) 10,44:1.
+**O pior par medido é `tinta-500` sobre `tinta-100` (4,94:1) entre os de texto
+normal**, e o mínimo geral do conjunto é 3,76:1 (`tinta-400`, ícone, piso de 3,6).
+Texto desativado (`tinta-300`) fica fora de AA, como no claro.
+
+**Limites declarados:** quem desliga o JavaScript, ou o script do `<head>`, vê sempre o
+claro (o padrão do HTML). O contraste foi **calculado**, não medido em pixel
+renderizado; telas autenticadas não foram fotografadas no escuro.
 
 ### Superfícies do navegador
 

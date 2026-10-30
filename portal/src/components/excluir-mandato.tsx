@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState } from "react";
 import { excluirCaso } from "@/app/casos/[id]/actions";
 
@@ -23,6 +24,8 @@ import { excluirCaso } from "@/app/casos/[id]/actions";
 export function ExcluirMandato({ casoId, nome }: { casoId: string; nome: string }) {
   const [aberto, setAberto] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  // A recusa do banco vem como valor da action (em produção o Next redige o texto de um erro lançado).
+  const [erro, setErro] = useState<string | null>(null);
   const cancelarRef = useRef<HTMLButtonElement>(null);
 
   // ESC fecha o diálogo mesmo com o foco fora dele. O `onKeyDown` no overlay
@@ -55,9 +58,14 @@ export function ExcluirMandato({ casoId, nome }: { casoId: string; nome: string 
         Excluir
       </button>
 
-      {aberto && (
+      {/* O DIÁLOGO VAI PARA O <body> (portal). Dentro da página ele herdava os
+          contêineres dela: uma linha semitransparente da tabela de Mandatos ou
+          qualquer ancestral com filtro o prendiam, e ele aparecia fora da tela ou
+          por baixo das linhas seguintes (revisão do PR #265). No <body>, `fixed`
+          volta a ser a janela. Só monta depois do clique, então `document` existe. */}
+      {aberto && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/50 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-fundo-reserva/50 p-4"
           role="dialog"
           aria-modal="true"
           aria-labelledby="titulo-excluir"
@@ -80,6 +88,7 @@ export function ExcluirMandato({ casoId, nome }: { casoId: string; nome: string 
               modelagem deste mandato. Não há como desfazer.
             </p>
 
+            {erro && <p role="alert" className="mt-3 text-sm font-medium text-risco-700">{erro}</p>}
             <div className="mt-5 flex justify-end gap-2">
               <button
                 type="button"
@@ -97,8 +106,11 @@ export function ExcluirMandato({ casoId, nome }: { casoId: string; nome: string 
                   // grande leva alguns segundos (cascade sobre campo_extraido), e
                   // um botão que não responde convida ao segundo clique.
                   setEnviando(true);
+                  setErro(null);
                   try {
-                    await excluirCaso(casoId);
+                    // Sucesso redireciona (a action não volta); só a recusa volta, como `{ erro }`.
+                    const r = await excluirCaso(casoId);
+                    if (r?.erro) setErro(r.erro);
                   } finally {
                     setEnviando(false);
                   }
@@ -115,7 +127,7 @@ export function ExcluirMandato({ casoId, nome }: { casoId: string; nome: string 
             </div>
           </div>
         </div>
-      )}
+        , document.body)}
     </>
   );
 }

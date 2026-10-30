@@ -18,6 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { detectarFamilia } from "../../../Leitor/lib/familia.mjs";
 import { TETO_BYTES_POR_ARQUIVO } from "../../../N8N/lib/custo.mjs";
 import { formatarBytes } from "./limite-de-envio";
+import { textoDeFalhaDoMandato } from "./acesso";
 
 /** Os primeiros bytes que bastam para reconhecer a família (`detectarFamilia`). */
 export const CABECA_BYTES = 65536;
@@ -227,7 +228,10 @@ export async function obterCasoId(
   if (casoId) return { id: casoId };
   const { data, error } = await cliente.rpc("fn_upsert_caso", { p_nome: nome, p_ator: "portal:navegador" });
   if (error || typeof data !== "string") {
-    throw new Error(`Não foi possível obter o mandato “${nome}”: ${error?.message ?? "o banco não devolveu o id"}`);
+    // 42501 do nome de mandato alheio e 23505 de `caso_nome_unico` têm frase própria — sem ela o
+    // Analista leria o texto cru do Postgres (ou "Seu papel não permite", que erra o remédio).
+    const humano = textoDeFalhaDoMandato(error);
+    throw new Error(humano ?? `Não foi possível obter o mandato “${nome}”: ${error?.message ?? "o banco não devolveu o id"}`);
   }
   return { id: data };
 }

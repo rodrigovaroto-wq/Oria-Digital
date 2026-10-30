@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { vereditoDoLote } from "@/lib/espera-do-lote";
+import { MENSAGEM_NOME_DUPLICADO } from "@/lib/acesso";
 
 // Consultado pelo portal (polling) depois de um upload, pra saber quando os
 // arquivos enviados já passaram pela classificação E pela extração — não tem
@@ -86,15 +87,21 @@ export async function GET(request: Request) {
     });
   }
 
-  const { data: caso, error: casoErr } = await supabase
+  // `limit(2)` e não a leitura de uma linha só: com dois mandatos de mesmo nome (não há UNIQUE) o PostgREST
+  // devolvia erro e o Sócio via 500. Duplicidade é dita, não vira "aguarde" nem erro opaco.
+  const { data: casos, error: casoErr } = await supabase
     .from("caso")
     .select("id")
     .eq("nome", casoNome)
-    .maybeSingle();
+    .limit(2);
 
   if (casoErr) {
     return NextResponse.json({ error: casoErr.message }, { status: 500 });
   }
+  if ((casos?.length ?? 0) > 1) {
+    return NextResponse.json({ error: MENSAGEM_NOME_DUPLICADO }, { status: 409 });
+  }
+  const caso = casos?.[0] ?? null;
   if (!caso) {
     // Ainda nem o `caso` foi criado — normal logo após o envio.
     return NextResponse.json({ classificados: 0, processados: 0, esperados, pronto: false });

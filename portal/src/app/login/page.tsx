@@ -1,6 +1,16 @@
 import { hasEnvVars } from "@/lib/supabase/env";
 import { MarcaOria } from "@/components/marca-oria";
 import { login } from "./actions";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
+import { mensagemDeLogin } from "@/lib/mensagem-de-login";
+import { FundoDaMarca } from "@/components/fundo-da-marca";
+import Link from "next/link";
+
+// Campo translúcido com texto claro. O contorno é `white/40` (3,47:1 sobre o
+// cartão, medido; o piso de borda de componente é 3:1); o foco vem do anel terracota
+// CLARO que `.vidro-casco` define em globals.css, e não de troca de cor de borda.
+const CAMPO =
+  "mt-1 w-full rounded-md border border-white/40 bg-white/10 px-3 py-2 text-sm text-vidro-texto placeholder:text-vidro-suave";
 
 export default async function LoginPage({
   searchParams,
@@ -10,32 +20,51 @@ export default async function LoginPage({
   const { error } = await searchParams;
 
   return (
-    // A PRIMEIRA TELA DO PRODUTO. Ela era um formulário solto no meio do branco;
-    // agora tem a mesma marca do cabeçalho e uma superfície própria — é o que
-    // separa "sistema interno" de "produto" na primeira impressão.
-    <div className="flex min-h-screen items-center justify-center bg-tinta-50 px-4">
-      <div className="w-full max-w-sm space-y-6">
+    // A PRIMEIRA TELA DO PRODUTO, agora sobre a imagem da marca em tela cheia. O
+    // véu é claro à esquerda — onde a placa "ORIA DIGITAL" acende e tem de ser
+    // lida — e escuro à direita, onde mora o cartão de vidro. Em celular não há
+    // "direita": o cartão sobe ao centro e cobre a placa, que é o preço de caber.
+    <div className="flex min-h-screen items-center justify-center px-4 py-8 md:justify-end md:pr-[8vw]">
+      <FundoDaMarca variante="login" />
+      <div className="vidro-casco vidro-casco-denso w-full max-w-sm space-y-6 rounded-2xl p-6">
         <div className="flex flex-col items-center gap-2 text-center">
-          {/* AQUI A MARCA COMPLETA: é a única tela com altura sobrando, e é a
-              primeira coisa que alguém vê do produto. */}
-          <MarcaOria className="h-28 w-28" />
-          <h1 className="sr-only">Oria Partners — Tratamento de dados financeiros</h1>
-          <p className="text-sm text-tinta-500">Tratamento de dados financeiros</p>
+          {/* O SEXTANTE com o brilho do resto do portal: a marca completa tem o
+              texto "ORIA PARTNERS" em tinta escura, ilegível sobre vidro escuro,
+              e a arte original não se recolore. O nome da placa vem em texto. */}
+          <MarcaOria
+            variante="sextante"
+            alt=""
+            className="marca-neon h-16 w-16"
+          />
+          <h1 className="sr-only">Oria Digital — Tratamento de dados financeiros</h1>
+          <p aria-hidden className="flex flex-col leading-tight">
+            <span className="text-lg font-semibold uppercase tracking-wide text-vidro-texto">Oria</span>
+            <span className="text-[11px] font-medium uppercase tracking-[0.2em] text-vidro-suave">Digital</span>
+          </p>
+          <p className="text-sm text-vidro-suave">Tratamento de dados financeiros</p>
         </div>
 
         {!hasEnvVars && (
-          <p className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-800">
-            Variáveis de ambiente do Supabase não configuradas — ver <code>portal/README.md</code>.
-          </p>
+          <div className="rounded-lg border border-alerta-300/50 bg-alerta-900/70 p-3 text-sm text-alerta-100">
+            <p>O acesso ao sistema não está configurado neste ambiente. Avise o administrador.</p>
+            <DetalhesTecnicos>
+              <p>Variáveis de ambiente do Supabase não configuradas — ver portal/README.md.</p>
+            </DetalhesTecnicos>
+          </div>
         )}
 
         {error && (
-          <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">{error}</p>
+          <div role="alert" className="rounded-lg border border-risco-300/50 bg-risco-900/70 p-3 text-sm text-risco-100">
+            <p>{mensagemDeLogin(error)}</p>
+            <DetalhesTecnicos>
+              <p>{error}</p>
+            </DetalhesTecnicos>
+          </div>
         )}
 
-        <form action={login} className="carta space-y-4 p-6">
+        <form action={login} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-tinta-700">
+            <label htmlFor="email" className="block text-sm font-medium text-vidro-texto">
               Email
             </label>
             <input
@@ -44,11 +73,11 @@ export default async function LoginPage({
               type="email"
               required
               autoComplete="email"
-              className="mt-1 w-full rounded-md border border-tinta-200 px-3 py-2 text-sm"
+              className={CAMPO}
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-tinta-700">
+            <label htmlFor="password" className="block text-sm font-medium text-vidro-texto">
               Senha
             </label>
             <input
@@ -57,17 +86,29 @@ export default async function LoginPage({
               type="password"
               required
               autoComplete="current-password"
-              className="mt-1 w-full rounded-md border border-tinta-200 px-3 py-2 text-sm"
+              className={CAMPO}
             />
+            <Link href="/login/recuperar" className="mt-2 inline-block text-sm text-vidro-texto underline underline-offset-2 hover:text-vidro-papel">
+              Esqueci a senha
+            </Link>
           </div>
-          <button type="submit" className="btn-primario w-full justify-center py-2">
+          {/* O botão é CREME com texto escuro: sobre o vidro escuro é a única
+              coisa clara, e por isso a única ação. */}
+          <button
+            type="submit"
+            className="inline-flex w-full items-center justify-center rounded-md bg-vidro-texto px-3 py-2 text-sm font-medium text-vidro-tinta transition-colors hover:bg-vidro-papel"
+          >
             Entrar
           </button>
         </form>
 
-        <p className="text-center text-xs text-tinta-400">
+        <p className="text-center text-xs text-vidro-suave">
           O acesso é criado pelo administrador da equipe.
         </p>
+        {/* O princípio do produto, dito uma vez e antes de qualquer dado. Ele
+            era um rodapé fixo em TODA tela do portal (53px de altura útil a cada
+            uma); aqui custa uma linha, numa tela que já tem altura sobrando. */}
+        <p className="text-center text-xs text-vidro-texto">Nada aqui é fato até alguém aceitar.</p>
       </div>
     </div>
   );

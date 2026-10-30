@@ -26,7 +26,7 @@ export function CartaoEntidade({ e, todas, existentes, hoje, acoes, casoId }: Re
   const ligados = new Set(e.controladores.map((c) => c.controlador_id));
   // Três estados exclusivos, nesta ordem: a fantasma não é "pronta" nem "falta algo", é outra pergunta.
   let estado = { classe: "bg-alerta-100 text-alerta-900", rotulo: "Falta algo" };
-  if (e.fantasma) estado = { classe: "bg-risco-100 text-risco-900", rotulo: "Entidade fantasma" };
+  if (e.fantasma) estado = { classe: "bg-risco-100 text-risco-900", rotulo: "Empresa não identificada" };
   else if (e.pronta) estado = { classe: "bg-ok-100 text-ok-900", rotulo: "Pronta" };
 
   return (
@@ -76,7 +76,7 @@ export function CartaoEntidade({ e, todas, existentes, hoje, acoes, casoId }: Re
               {e.escopos_vigentes.length === 0
                 ? "Sem escopo vigente: o sistema não afirma que esta empresa entra no combinado."
                 : `Vigente: ${e.escopos_vigentes.join(", ")}.`}
-              {outrosEscopos.length > 0 && " (Escopos além de “combinado” são texto livre no banco.)"}
+              {outrosEscopos.length > 0 && " (Há também escopos diferentes de “combinado”, informados à mão.)"}
             </p>
             {combinado ? (
               <Formulario acao={acoes.escopoEncerrar} entidadeId={e.entidade_id} botao="Tirar do combinado">

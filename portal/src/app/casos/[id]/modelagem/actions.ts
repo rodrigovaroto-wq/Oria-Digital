@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { MENSAGEM_SEM_PERMISSAO, ehNegacaoDePermissao, textoDeFalhaDaAcao } from "@/lib/acesso";
 
 // As ações da seção Modelagem (Supabase/migrations/0038).
 //
@@ -75,7 +76,7 @@ export async function definirParametros(
     p_autor: await autor(),
     p_anos_projetados: Number(formData.get("anos_projetados")) || 5,
   });
-  if (error) return erro(`Falha ao salvar os parâmetros: ${error.message}`);
+  if (error) return erro(textoDeFalhaDaAcao("Falha ao salvar os parâmetros", error));
   const r = recusa(data, "Parâmetros recusados.");
   if (r) return r;
   revalidatePath(`/casos/${casoId}/modelagem`);
@@ -108,7 +109,7 @@ export async function ativarPremissa(
     p_origem: String(formData.get("origem") || "digitado"),
     p_autor: await autor(),
   });
-  if (error) return erro(`Falha ao ativar a premissa: ${error.message}`);
+  if (error) return erro(textoDeFalhaDaAcao("Falha ao ativar a premissa", error));
   const r = recusa(data, "Premissa recusada.");
   if (r) return r;
   revalidatePath(`/casos/${casoId}/modelagem`);
@@ -139,7 +140,7 @@ export async function desativarPremissa(
     p_codigo: codigo,
     p_autor: await autor(),
   });
-  if (error) return erro(`Falha ao remover a premissa: ${error.message}`);
+  if (error) return erro(textoDeFalhaDaAcao("Falha ao remover a premissa", error));
   const r = recusa(data, "Remoção recusada.");
   if (r) return r;
 
@@ -201,7 +202,7 @@ export async function salvarSecao(
       p_autor: autorNome,
       p_sazonalidade: sazonalidade || null,
     });
-    if (error) { erros.push(`${rotulo}: ${error.message}`); continue; }
+    if (error) { erros.push(`${rotulo}: ${ehNegacaoDePermissao(error) ? MENSAGEM_SEM_PERMISSAO : error.message}`); continue; }
     // Recusa por linha NÃO aborta as outras: numa submissão de 45 linhas, parar
     // na primeira perderia as 44 decisões seguintes. Junta e relata.
     const r = data as Recusavel;
@@ -230,7 +231,7 @@ export async function aplicarEmLote(
     p_autor: await autor(),
     p_sazonalidade: String(formData.get("sazonalidade") || "") || null,
   });
-  if (error) return erro(`Falha ao aplicar em lote: ${error.message}`);
+  if (error) return erro(textoDeFalhaDaAcao("Falha ao aplicar em lote", error));
   const r0 = recusa(data, "Lote recusado.");
   if (r0) return r0;
 

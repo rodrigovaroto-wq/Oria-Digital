@@ -2,12 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
+import { textoDeFalhaDaAcao, type ResultadoDaAcao } from "@/lib/acesso";
 
 // Chama a RPC fn_revisar_documento (Supabase/migrations/0008_portal_revisao.sql) — o
 // humano confirma ou corrige a classificação sugerida (N1: anti-ancoragem,
 // Arquitetura do Sistema/1 Visão e Doutrina/01). Toda a lógica (resolver pendência, decisao+evento_auditoria,
 // checklist, recomputar completude) fica no Postgres, não aqui.
-export async function revisarDocumento(casoId: string, formData: FormData) {
+export async function revisarDocumento(casoId: string, formData: FormData): Promise<ResultadoDaAcao> {
   const supabase = await createClient();
 
   const documentoId = String(formData.get("documento_id") || "");
@@ -31,10 +32,9 @@ export async function revisarDocumento(casoId: string, formData: FormData) {
     p_motivo: motivo,
   });
 
-  if (error) {
-    throw new Error(`Falha ao revisar documento: ${error.message}`);
-  }
+  if (error) return { erro: textoDeFalhaDaAcao("Falha ao revisar documento", error) };
 
-  revalidatePath(`/casos/${casoId}`);
-  revalidatePath(`/casos/${casoId}/revisao`);
+  // "layout": os números das abas (Pendências, Documentos) moram no layout do mandato, e
+  // `revalidatePath(<rota>)` sozinho não o refaz — a aba seguiria dizendo o número velho.
+  revalidatePath(`/casos/${casoId}`, "layout");
 }

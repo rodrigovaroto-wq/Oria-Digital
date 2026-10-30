@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import { paginar } from "@/lib/supabase/paginar";
-import { SecaoLinhas } from "./SecaoLinhas";
+import { EditorLinhas } from "./EditorLinhas";
 import { FormParametros, FormPremissa } from "./FormsTopo";
 import { SugestoesDoRealizado } from "./SugestoesDoRealizado";
 import { sugerirDoRealizado } from "@/lib/premissas-do-realizado";
@@ -11,6 +13,7 @@ import { entradaDoRealizado, lerRealizadoDoCaso } from "@/lib/leitura-do-caso";
 import { chaveDaLinha, vinculoPorLinha } from "@/lib/modelagem-linha";
 import { portaoFechado, portaoNaoConferido, textoChipModelagem, textoTituloConferenciaModelagem, veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import { humanizar, rotuloDaSecao } from "@/lib/rotulos";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 
 // A seção MODELAGEM do mandato (pedido do dono, Fase 7.3; revisada na Fase 8
 // depois da rodada real do Teste v35).
@@ -141,10 +144,14 @@ export default async function ModelagemPage({
   const { q } = await searchParams;
   const busca = (q ?? "").trim();
   const supabase = await createClient();
+  // Quem não escreve neste mandato (Leitura; Analista não alocado) vê a modelagem e baixa os arquivos,
+  // mas os parâmetros, as premissas e o editor de linhas ficam desabilitados — o salvar do banco
+  // devolveria 42501. O motivo está na faixa do mandato.
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
 
   const casoRes = await supabase.from("caso").select("id, nome, produto, status").eq("id", id).single();
   if (casoRes.error || !casoRes.data) notFound();
-  const caso = casoRes.data;
+  const { escrever } = await permissoesDoMandato;
 
   // Colunas nomeadas, nunca `*`: o tipo logo abaixo já declara exatamente o que
   // esta tela lê, e `*` traz também `atualizado_por`/`atualizado_em`, que ninguém
@@ -257,7 +264,7 @@ export default async function ModelagemPage({
     ["linhas do caso (fn_linhas_para_modelagem)", camposRes.error, msCampos],
     ["curva de sazonalidade (fn_sazonalidade_do_caso)", sazRes.error, msSaz],
     ["documentos do caso", docsRes.error, msDocs],
-    ["Portão 2 (fn_avaliar_portao2)", portaoRes.error, msPortao],
+    ["Aprovação do mandato (fn_avaliar_portao2)", portaoRes.error, msPortao],
     // `problema` é a primeira falha da leitura do realizado (documentos, linhas ou valores).
     ["realizado do caso (documentos, linhas e valores por ano)",
       realizadoLido?.problema ? { message: realizadoLido.problema } : null, msRealizado],
@@ -269,6 +276,11 @@ export default async function ModelagemPage({
   const falhas = chamadas
     .filter(([, e]) => e)
     .map(([nome, e, ms]) => `${nome}: ${e!.message} [${ms} ms]`);
+  // O NOME QUE O ANALISTA LÊ: o mesmo `nome` sem o "(fn_x)" — a função fica em
+  // "Detalhes técnicos", onde o dono a usa para diagnosticar.
+  const falhasEmPortugues = chamadas
+    .filter(([, e]) => e)
+    .map(([nome]) => nome.replace(/ \(.*\)$/, ""));
 
   // E os tempos de QUEM DEU CERTO também, porque é a linha de base que dá sentido
   // ao número da falha: se as cinco chamadas leves voltam em 80 ms e as duas
@@ -433,11 +445,8 @@ export default async function ModelagemPage({
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <Link href={`/casos/${id}`} className="text-sm text-tinta-500 hover:underline">
-            ← {caso.nome}
-          </Link>
-          <div className="mt-0.5 flex flex-wrap items-center gap-2.5">
-            <h1 className="text-xl font-semibold text-tinta-900">Modelagem</h1>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h1 className="text-lg font-semibold text-tinta-900">Modelagem</h1>
             {conf && (
               <span className={`chip ${conf.pronto ? "bg-ok-100 text-ok-800" : "bg-alerta-100 text-alerta-900"}`}>
                 {/* 0158: "pronto" sozinho pintava o mesmo verde para 23 de 480
@@ -453,79 +462,44 @@ export default async function ModelagemPage({
             Escolha as premissas deste mandato e diga onde cada uma entra na projeção.
           </p>
         </div>
-        {/* OS DOIS EXPORTS, LADO A LADO (decisão do dono, 07/08/2026). Eram um só,
-            e o "completo" trazia as 12 abas de dado cru junto com o modelo — 29
-            abas para quem só queria o que vai a comitê. Agora são dois arquivos
-            com dois propósitos, e o nome de cada botão diz qual é o seu:
-            "modelagem" entrega as 14 abas do modelo; "dados financeiros" entrega
-            a conferência da ingestão, linha a linha. O de dados vem primeiro por
-            ser o que se usa ANTES de modelar. */}
-        {/* AS DUAS AÇÕES, COM PESOS DIFERENTES. Eram dois botões de peso igual, e
-            a tela não dizia qual é o produto DELA: o export de modelagem. O de
-            dados continua aqui (é o que se usa para conferir antes de modelar),
-            mas como ação secundária — a mesma hierarquia da tela do mandato. */}
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <a
-            href={`/casos/${id}/export?modo=dados`}
-            className="btn-secundario"
-            title="As abas de dado, linha a linha, como saíram da extração. Serve para conferir contra os documentos — não projeta nada."
-          >
-            Exportar dados
-          </a>
-          {/* Com o Portão 2 fechado a rota recusa com 409 e o navegador mostraria
-              um JSON cru: o botão leva à tela do mandato, onde as pendências
-              bloqueantes se decidem, e diz por quê. */}
-          {portaoNaoConf ? (
-            <div className="flex flex-col items-end gap-1">
-              <button type="button" className="btn-primario" disabled>
-                Exportar modelagem — Portão 2 não conferido
-              </button>
-              <p role="status" className="max-w-xs text-right text-xs text-alerta-900">
-                Não foi possível conferir o Portão 2 (a consulta falhou ou não devolveu veredito); o
-                export de modelagem fica desabilitado até a conferência responder. Recarregue a
-                página; se persistir, o motivo está na faixa de consultas com erro.
-              </p>
-            </div>
-          ) : exportTravado ? (
-            <Link
-              href={`/casos/${id}`}
-              className="btn-primario"
-              title={`O export de modelagem está travado pelo Portão 2: ${(portao?.motivos ?? []).join("; ")}. Decida as pendências na tela do mandato.`}
-            >
-              Exportar modelagem — decidir pendências antes
-            </Link>
-          ) : (
-            <>
-              {/* A APRESENTAÇÃO DE CRÉDITO (.pptx, módulo de crédito do Prompt-Mestre v3) só aparece
-                  onde o export de modelagem aparece: ela lê o MESMO realizado do modelo e passa pelo
-                  mesmo Portão 2 — oferecê-la com o portão fechado seria um botão que devolve 409. */}
-              <a href={`/casos/${id}/apresentacao`} className="btn-secundario"
-                title="Os campos que só o analista ou a pesquisa sabem (títulos, sócios, concorrentes, scorecard). Em branco, saem [a preencher].">
-                Campos da apresentação
-              </a>
-              <a
-                href={`/casos/${id}/export?modo=apresentacao`}
-                className="btn-secundario"
-                title="O módulo de crédito em PowerPoint, no padrão visual Oria: base de informação, evolução financeira, capital de giro, comparativo e amarrações. Gerado do mesmo realizado do modelo."
-              >
-                Gerar apresentação de crédito
-              </a>
-              <a
-                href={`/casos/${id}/export`}
-                className="btn-primario"
-                title="As 14 abas do modelo institucional, projetadas e editáveis dentro do Excel, mais a Modelagem e os índices macro. Sem as abas de dado cru."
-              >
-                Exportar modelagem
-              </a>
-            </>
+        {/* OS EXPORTS SAÍRAM DAQUI (fase 2, item 20). Eram até 4 variantes de botão ("Exportar dados",
+            "Exportar modelagem", "Campos da apresentação", "Gerar apresentação de crédito"), e cada
+            uma repetia a leitura do Portão 2. Agora os três arquivos moram em Entregáveis. O que
+            FICA aqui é o veredito, em palavras: o chip do título (`textoChipModelagem`) e a frase
+            abaixo dizem se o export está liberado, bloqueado (com os motivos) ou NÃO CONFERIDO —
+            sem isso a tela voltaria a dizer "pronto" sobre um export que devolve 409. */}
+        <div className="flex max-w-sm shrink-0 flex-col items-end gap-1 text-right">
+          {portaoNaoConf && (
+            <output className="block text-xs text-alerta-900">
+              Não foi possível conferir a aprovação (a consulta falhou ou não devolveu veredito); o
+              export de modelagem fica retido até a conferência responder. Recarregue a página; se
+              persistir, o motivo está na faixa de consultas com erro.
+            </output>
           )}
+          {exportTravado && (
+            <p className="text-xs text-alerta-900">
+              O export de modelagem está bloqueado até a aprovação do mandato: {(portao?.motivos ?? []).join("; ")}.
+              Decida as pendências na aba Pendências.
+            </p>
+          )}
+          <Link href={`/casos/${id}/entregaveis`} className="text-sm font-medium text-tinta-700 underline">
+            Ver entregáveis →
+          </Link>
         </div>
       </div>
 
       {/* A TRILHA DOS TRÊS PASSOS. Ela é navegação e estado ao mesmo tempo: leva
           direto à seção (a página é longa demais para rolagem cega) e diz o que
-          falta em cada uma sem obrigar a abrir. */}
-      <nav aria-label="Passos da modelagem" className="carta flex flex-wrap divide-x divide-tinta-100">
+          falta em cada uma sem obrigar a abrir.
+          GRUDA NO TOPO DA FOLHA (fase 2, item 21), abaixo da barra flutuante: ela é
+          `sticky top-3` com ~52px (py-2 + o botão da conta), então 4.75rem (76px) deixa
+          ~12px de folga. `z-20` fica acima do cabeçalho grudado das tabelas (z-10) e abaixo
+          dos diálogos. A folha NÃO tem `backdrop-filter`, então o sticky funciona (e
+          nada aqui pode ganhar um, porque os diálogos `fixed` moram dentro dela). */}
+      <nav
+        aria-label="Passos da modelagem"
+        className="carta sticky top-[4.75rem] z-20 flex flex-wrap divide-x divide-tinta-100"
+      >
         {passos.map((p, i) => (
           <a
             key={p.id}
@@ -553,45 +527,53 @@ export default async function ModelagemPage({
       {falhas.length > 0 && (
         <section className="rounded-lg border border-risco-300 bg-risco-50 p-3 text-sm text-risco-900">
           <p className="font-semibold">
-            {falhas.length} consulta(s) ao banco FALHARAM — o que está faltando nesta tela é efeito
-            disso, não é o caso estar vazio.
+            {falhas.length === 1
+              ? "Uma leitura de dados falhou"
+              : `${falhas.length} leituras de dados falharam`}
+            {" "}— o que está faltando nesta tela é efeito disso, não é o mandato estar vazio.
           </p>
-          <ul className="mt-1 list-disc pl-5 text-xs">
-            {falhas.map((f) => <li key={f} className="font-mono">{f}</li>)}
-          </ul>
-          {/* A ORIENTAÇÃO SEGUE O ERRO, não o palpite mais comum.
+          <p className="mt-1 text-xs">Não carregou: {falhasEmPortugues.join("; ")}.</p>
+          <p className="mt-2 text-xs">
+            {falhas.some((f) => /statement timeout|canceling statement/i.test(f))
+              ? "A leitura demorou demais e foi cancelada. Tente de novo em instantes; se repetir, avise o administrador do sistema."
+              : "Recarregue a página; se a falha continuar, avise o administrador do sistema."}
+          </p>
+          <DetalhesTecnicos className="mt-3">
+            <ul className="list-disc pl-5">
+              {falhas.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+            {/* A ORIENTAÇÃO SEGUE O ERRO, não o palpite mais comum.
 
-              Esta caixa nasceu (PR #89) dando SEMPRE o conselho do cache de schema do
-              PostgREST — que é o certo para "function not found" e o ERRADO para
-              consulta cancelada. E foi com um `statement timeout` na tela que o
-              conselho apareceu em produção: mandava recarregar o cache de schema
-              quando a função existia, era encontrada, e só não tinha terminado em 8 s.
-              Orientação errada num painel de diagnóstico é pior que orientação
-              nenhuma: manda o analista consertar o que não está quebrado e confirma
-              a impressão de que o PR não funcionou. */}
-          {falhas.some((f) => /statement timeout|canceling statement/i.test(f)) ? (
-            <p className="mt-2 text-xs">
-              <strong>A consulta foi CANCELADA por tempo</strong> (o Supabase corta em 8 s), não é
-              função faltando nem caso vazio — recarregar o cache de schema não resolve isto. Se as
-              migrations <code className="font-mono">0101</code> e <code className="font-mono">0102</code>{" "}
-              ainda não foram aplicadas neste banco, é isso: elas existirem no GitHub não as coloca
-              no Supabase. Para confirmar sem adivinhar, rode no SQL Editor{" "}
-              <code className="font-mono">select jsonb_pretty(fn_diagnostico_modelagem(&apos;{id}&apos;));</code>{" "}
-              e olhe <code className="font-mono">correcoes_instaladas</code>. O diagnóstico completo
-              de ambiente está em <code className="font-mono">Supabase/diagnostico_modelagem.sql</code>.
-            </p>
-          ) : (
-            <p className="mt-2 text-xs">
-              Se isto começou logo depois de aplicar uma migration, é quase certo que seja o cache de
-              schema do PostgREST: rode <code className="font-mono">notify pgrst, &apos;reload schema&apos;;</code>{" "}
-              no SQL Editor do Supabase e recarregue. Função recém-criada só existe para a API depois
-              disso.
-            </p>
-          )}
-          {/* A linha de base: o tempo das SETE chamadas, inclusive as que deram
-              certo. É o que separa "duas funções não couberam" de "a instância
-              inteira está lenta" — e a segunda não se resolve com SQL. */}
-          <p className="mt-2 font-mono text-[10px] text-risco-800">{tempos}</p>
+                Esta caixa nasceu (PR #89) dando SEMPRE o conselho do cache de schema do
+                PostgREST — que é o certo para "function not found" e o ERRADO para
+                consulta cancelada. E foi com um `statement timeout` na tela que o
+                conselho apareceu em produção: mandava recarregar o cache de schema
+                quando a função existia, era encontrada, e só não tinha terminado em 8 s.
+                Orientação errada num painel de diagnóstico é pior que orientação
+                nenhuma: manda o analista consertar o que não está quebrado e confirma
+                a impressão de que o PR não funcionou. */}
+            {falhas.some((f) => /statement timeout|canceling statement/i.test(f)) ? (
+              <p className="pt-1">
+                A consulta foi CANCELADA por tempo (o Supabase corta em 8 s), não é função faltando
+                nem caso vazio — recarregar o cache de schema não resolve isto. Se as migrations
+                0101 e 0102 ainda não foram aplicadas neste banco, é isso: elas existirem no GitHub
+                não as coloca no Supabase. Para confirmar sem adivinhar, rode no SQL Editor{" "}
+                select jsonb_pretty(fn_diagnostico_modelagem(&apos;{id}&apos;)); e olhe
+                correcoes_instaladas. O diagnóstico completo de ambiente está em
+                Supabase/diagnostico_modelagem.sql.
+              </p>
+            ) : (
+              <p className="pt-1">
+                Se isto começou logo depois de aplicar uma migration, é quase certo que seja o cache
+                de schema do PostgREST: rode notify pgrst, &apos;reload schema&apos;; no SQL Editor
+                do Supabase e recarregue. Função recém-criada só existe para a API depois disso.
+              </p>
+            )}
+            {/* A linha de base: o tempo das SETE chamadas, inclusive as que deram
+                certo. É o que separa "duas funções não couberam" de "a instância
+                inteira está lenta" — e a segunda não se resolve com SQL. */}
+            <p className="pt-1 text-[10px]">{tempos}</p>
+          </DetalhesTecnicos>
         </section>
       )}
 
@@ -633,7 +615,8 @@ export default async function ModelagemPage({
             <li>{conf.premissas_ativas} premissa(s) ativa(s) neste caso.</li>
             {conf.premissas_sem_valor?.length > 0 && (
               <li className="text-alerta-900">
-                <strong>Sem valor preenchido:</strong> {conf.premissas_sem_valor.join(", ")} — premissa
+                <strong>Sem valor preenchido:</strong>{" "}
+                {conf.premissas_sem_valor.map((c) => nomeDaPremissa.get(c) ?? c).join(", ")} — premissa
                 ativa sem valor projetaria com zero, então ela impede o &quot;pronto&quot;. Premissa
                 macro puxa o Focus sozinha ao ser ativada sem valor; se ficou vazia, é porque o Focus
                 não publica expectativa para esses anos.
@@ -661,7 +644,7 @@ export default async function ModelagemPage({
       )}
 
       {/* 1. PARÂMETROS — as três células que saíram do topo da aba Modelagem. */}
-      <section id="parametros" className="carta scroll-mt-20 p-4">
+      <section id="parametros" className="carta scroll-mt-36 p-4">
         <h2 className="titulo-secao">1 · Parâmetros do mandato</h2>
         {/* O TEXTO DE APOIO ENCOLHEU, e o que saiu dele não se perdeu: virou
             comentário. A tela tinha quatro parágrafos de explicação antes do
@@ -675,6 +658,7 @@ export default async function ModelagemPage({
           Entidade e último exercício vêm <strong>sugeridos</strong> pelos documentos deste caso —
           confira antes de salvar. O Excel sai parametrizado com o que estiver aqui.
         </p>
+        <ZonaDeEscrita pode={escrever.pode}>
         <FormParametros casoId={id}>
           <label className="text-sm">
             <span className="text-tinta-600">Entidade modelada</span>
@@ -698,8 +682,11 @@ export default async function ModelagemPage({
               name="indice_macro" defaultValue={parametros?.indice_macro ?? "IPCA"}
               className="mt-1 w-full rounded border border-tinta-200 px-2 py-1"
             >
-              {["IPCA", "IGPM", "INCC", "SELIC", "CAMBIO_USD", "PIB"].map((s) => (
-                <option key={s} value={s}>{s}</option>
+              {([
+                ["IPCA", "IPCA"], ["IGPM", "IGP-M"], ["INCC", "INCC"], ["SELIC", "Selic"],
+                ["CAMBIO_USD", "Câmbio (R$/US$)"], ["PIB", "PIB"],
+              ] as const).map(([v, rotulo]) => (
+                <option key={v} value={v}>{rotulo}</option>
               ))}
             </select>
           </label>
@@ -729,10 +716,11 @@ export default async function ModelagemPage({
             </span>
           </label>
         </FormParametros>
+        </ZonaDeEscrita>
       </section>
 
       {/* 2. PREMISSAS DO CASO */}
-      <section id="premissas" className="carta scroll-mt-20 p-4">
+      <section id="premissas" className="carta scroll-mt-36 p-4">
         <h2 className="titulo-secao">
           2 · Premissas deste caso
           {parametros?.setor && (
@@ -748,7 +736,9 @@ export default async function ModelagemPage({
             cabeçalho da seção já diz, com o nome do setor ao lado. */}
         <p className="mb-3 mt-1 text-xs text-tinta-500">
           Ano em branco fica <strong>em branco</strong>, não vira zero. Premissa{" "}
-          <strong>macro</strong> ativada sem valor puxa a expectativa do Focus que está no banco.
+          <strong>macro</strong> ativada sem valor puxa a expectativa do Focus que está no banco.{" "}
+          <strong>Remover</strong> desativa a premissa e desfaz os vínculos de linha que ela dirigia;
+          os valores digitados ficam guardados.
         </p>
 
         {/* A CURVA DE SAZONALIDADE não é digitada: ela é derivada do faturamento
@@ -803,6 +793,7 @@ export default async function ModelagemPage({
           <span aria-hidden className="invisible px-2 py-0.5 text-xs">Atualizar</span>
         </div>
 
+        <ZonaDeEscrita pode={escrever.pode}>
         <SugestoesDoRealizado
           casoId={id}
           anos={anos}
@@ -821,7 +812,7 @@ export default async function ModelagemPage({
                   const ativa = ativasPorCodigo.get(p.codigo);
                   return (
                     <FormPremissa key={p.codigo} casoId={id} codigo={p.codigo} ativa={!!ativa}>
-                      <span className="min-w-56 flex-1" title={p.descricao ?? undefined}>
+                      <span className="min-w-56 flex-1">
                         {p.nome}
                         {p.unidade && <span className="ml-1 text-tinta-500">({p.unidade})</span>}
                         {p.setores.length > 0 && (
@@ -833,6 +824,12 @@ export default async function ModelagemPage({
                           <span className="ml-1 rounded bg-ok-100 px-1 text-[10px] text-ok-800">
                             Focus
                           </span>
+                        )}
+                        {/* A DESCRIÇÃO FICA ESCRITA sob o nome: ela só existia no `title`
+                            do nome, que não aparece no toque nem no teclado — e é ela que
+                            diz o que a premissa projeta, o que decide ativá-la. */}
+                        {p.descricao && (
+                          <span className="mt-0.5 block text-xs text-tinta-500">{p.descricao}</span>
                         )}
                       </span>
                       {/* O ANO FICA ESCRITO EM CIMA DA CAIXA, em preto.
@@ -852,8 +849,9 @@ export default async function ModelagemPage({
                             type="text" name={`valor_${ano}`}
                             defaultValue={ativa?.valores?.[String(ano)] ?? ""}
                             placeholder={p.unidade ?? "valor"}
+                            aria-label={`${p.nome} — ${ano}${p.unidade ? ` (${p.unidade})` : ""}`}
                             title={`${p.nome} — ${ano}${p.unidade ? ` (${p.unidade})` : ""}`}
-                            className="mt-0.5 w-16 rounded border border-tinta-200 px-1 py-0.5 text-right text-xs"
+                            className="valor-sensivel mt-0.5 w-16 rounded border border-tinta-200 px-1 py-0.5 text-right text-xs"
                           />
                         </label>
                       ))}
@@ -864,10 +862,11 @@ export default async function ModelagemPage({
             </div>
           ))}
         </div>
+        </ZonaDeEscrita>
       </section>
 
       {/* 3. LINHAS × PREMISSAS */}
-      <section id="linhas" className="carta scroll-mt-20 p-4">
+      <section id="linhas" className="carta scroll-mt-36 p-4">
         <h2 className="titulo-secao">
           3 · Linhas × premissas
           <span className="ml-2 font-normal normal-case tracking-normal text-tinta-500">
@@ -907,19 +906,15 @@ export default async function ModelagemPage({
             {/* Ordena pelo NOME DA SEÇÃO. `sort()` sem comparador converte cada entrada
                 em texto — e a entrada é `[secao, linhas]`, então o critério incluía as
                 linhas estringadas ("[object Object],[object Object]…"). A ordem saía
-                certa por acidente do prefixo, não por decisão. */}
-            {[...linhasPorSecao.entries()]
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([secao, linhas]) => (
-              <SecaoLinhas
-                key={secao}
+                certa por acidente do prefixo, não por decisão.
+                UM EDITOR para todas as seções (um só salvar, ver `EditorLinhas.tsx`).
+                A CHAVE canônica continua sendo `secao` (é ela que vai ao banco); o que a
+                tela mostra é o rótulo em português. Misturar os dois foi o defeito:
+                `passivo_nao_circulante` num cabeçalho de seção. */}
+            {linhasPorSecao.size > 0 && (
+              <ZonaDeEscrita pode={escrever.pode}>
+              <EditorLinhas
                 casoId={id}
-                secao={secao}
-                // A CHAVE canônica continua sendo `secao` (é ela que o formulário manda
-                // ao banco); o que a tela mostra é o rótulo em português. Misturar os
-                // dois foi o defeito: `passivo_nao_circulante` num cabeçalho de seção.
-                rotulo={rotuloDaSecao(secao === "(sem seção canônica)" ? null : secao)}
-                linhas={linhas}
                 ativas={ativas.map((a) => ({
                   codigo: a.premissa_codigo,
                   nome: nomeDaPremissa.get(a.premissa_codigo) ?? a.premissa_codigo,
@@ -928,14 +923,22 @@ export default async function ModelagemPage({
                   codigo: a.premissa_codigo,
                   nome: nomeDaPremissa.get(a.premissa_codigo) ?? a.premissa_codigo,
                 }))}
-                vinculos={Object.fromEntries(linhas.map((l) => [l.rotulo_norm, {
-                  premissa: vinculoDaLinha.get(chaveDaLinha(l.secao_canonica, l.rotulo_norm))
-                    ?.premissa_codigo ?? "",
-                  sazonalidade: vinculoDaLinha.get(chaveDaLinha(l.secao_canonica, l.rotulo_norm))
-                    ?.sazonalidade_codigo ?? "",
-                }]))}
+                secoes={[...linhasPorSecao.entries()]
+                  .sort(([x], [y]) => x.localeCompare(y))
+                  .map(([secao, linhas]) => ({
+                    secao,
+                    rotulo: rotuloDaSecao(secao === "(sem seção canônica)" ? null : secao),
+                    linhas,
+                    vinculos: Object.fromEntries(linhas.map((l) => [l.rotulo_norm, {
+                      premissa: vinculoDaLinha.get(chaveDaLinha(l.secao_canonica, l.rotulo_norm))
+                        ?.premissa_codigo ?? "",
+                      sazonalidade: vinculoDaLinha.get(chaveDaLinha(l.secao_canonica, l.rotulo_norm))
+                        ?.sazonalidade_codigo ?? "",
+                    }])),
+                  }))}
               />
-            ))}
+              </ZonaDeEscrita>
+            )}
             {linhasPorSecao.size === 0 && (
               <p className="text-sm text-tinta-500">
                 {busca

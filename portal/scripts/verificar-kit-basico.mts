@@ -34,9 +34,20 @@
  *  4. Um banco sem a 0157 (a função responde erro) faz a tela voltar ao
  *     comportamento de ANTES da 0157 — só o rótulo conta — nunca inventa
  *     "atendido" por conta própria.
+ *  5. O "Próximo passo" da Visão geral (`lib/proximo-passo.ts`) obedece à prioridade
+ *     e nunca chuta: pendência que trava vence tudo; leitura que falhou diz "não dá
+ *     para determinar" em vez de mandar aprovar; aprovado com modelo montado leva a
+ *     Entregáveis. Mora neste script porque o CI já o roda — um script novo exigiria
+ *     linha no `suites.yml` E no CLAUDE.md (o espelho reprova a divergência).
+ *  6. O "← anterior / próximo →" do painel de documento segue a ORDEM DA LISTA FILTRADA
+ *     (`lib/vizinhos-na-ordem.ts`), nunca gira nas pontas e nunca finge posição para um
+ *     documento que não está na ordem.
  */
 
 import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../src/lib/kit-basico.ts";
+import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
+import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
+import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
 
 let falhas = 0;
@@ -138,6 +149,153 @@ console.log("--- 4. banco sem a 0157 (RPC devolve erro, tratado como `false` por
   ok(!atendidos.has("COMBINADO"),
     "sem a 0157 aplicada, COMBINADO continua faltante — o mesmo comportamento de ANTES da migration, "
     + "nunca 'atendido' inventado pelo portal");
+}
+
+// Tudo "certo" por padrão; cada caso muda SÓ o que o caso afirma. O padrão é o caso aprovado
+// com modelo montado — o último degrau —, para que cada degrau acima seja provado por uma
+// entrada que o faria cair no de baixo se a prioridade estivesse errada.
+const limpo: EntradaProximoPasso = {
+  bloqueantesAbertas: 0, revisoesAbertas: 0, kitFaltantes: 0,
+  aprovavel: true, aprovado: true, modeloMontado: true,
+};
+const passoDe = (e: Partial<EntradaProximoPasso>) => proximoPasso({ ...limpo, ...e });
+
+console.log("--- 5. Próximo passo: prioridade, e leitura que falhou nunca vira um passo ---");
+{
+  // 5a. pendência que trava vence TUDO, inclusive o que também estaria pendente.
+  const tudoPendente = { revisoesAbertas: 3, kitFaltantes: 2, aprovavel: false, aprovado: false, modeloMontado: false };
+  const a = passoDe({ ...tudoPendente, bloqueantesAbertas: 2 });
+  ok(a.passo === "decidir" && a.href === "/pendencias",
+    "com pendência bloqueante aberta, o passo é decidir pendências, mesmo com revisão, kit e modelo pendentes");
+  ok(a.titulo === "Decidir 2 pendências que travam a aprovação", "o título diz quantas travam", a.titulo);
+  ok(passoDe({ bloqueantesAbertas: 1 }).titulo === "Decidir 1 pendência que trava a aprovação",
+    "singular quando é uma só");
+  // Mesmo aprovado: bloqueante nova reabre o trabalho de decidir.
+  ok(passoDe({ bloqueantesAbertas: 1, aprovado: true }).passo === "decidir",
+    "um caso já aprovado com pendência bloqueante nova volta a ser 'decidir'");
+  // Leitura posterior falha, mas a resposta já é conhecida: não se esconde um bloqueio atrás dela.
+  ok(passoDe({ bloqueantesAbertas: 2, revisoesAbertas: null, kitFaltantes: null, aprovavel: null, modeloMontado: null }).passo === "decidir",
+    "leitura que falhou DEPOIS do passo decisivo não esconde o bloqueio");
+
+  // 5b. a ordem dos degraus seguintes.
+  const r = passoDe({ revisoesAbertas: 4, kitFaltantes: 2, aprovavel: false, aprovado: false });
+  ok(r.passo === "confirmar" && r.href === "/pendencias?filtro=confirmar",
+    "sem bloqueio, documento a confirmar vem antes do Kit Básico");
+  const k = passoDe({ kitFaltantes: 2, aprovavel: false, aprovado: false });
+  ok(k.passo === "pedir" && k.href === "/perguntas" && k.titulo === "Pedir 2 documentos ao cliente",
+    "Kit Básico incompleto manda pedir os documentos ao cliente", k.titulo);
+  ok(passoDe({ kitFaltantes: 1, aprovavel: false, aprovado: false }).titulo === "Pedir 1 documento ao cliente", "singular no kit");
+  // O kit só manda pedir ENQUANTO o portão não aceita o mandato: item faltante decidido
+  // ("prosseguir sem resolução") deixa kitFaltantes > 0 para sempre, e o banner não pode
+  // ficar preso em "pedir" (revisão do PR #265).
+  ok(passoDe({ kitFaltantes: 1, aprovavel: true, aprovado: false }).passo === "aprovar",
+    "kit com item faltante, mas o portão já aceita: o passo é aprovar, não pedir");
+  ok(passoDe({ kitFaltantes: 1 }).passo === "entregaveis",
+    "kit com item faltante num mandato aprovado e modelado: Entregáveis, não 'pedir' para sempre");
+  ok(passoDe({ kitFaltantes: 1, modeloMontado: false }).passo === "modelar",
+    "kit com item faltante num mandato aprovado sem modelo: Modelagem");
+  const ap = passoDe({ aprovavel: true, aprovado: false });
+  ok(ap.passo === "aprovar" && ap.href === "#aprovacao",
+    "aprovável e ainda não aprovado: aprovar, ancorado no cartão de aprovação");
+  const naoAp = passoDe({ aprovavel: false, aprovado: false });
+  ok(naoAp.passo === "ver_aprovacao", "portão fechado sem causa conhecida: não manda aprovar, manda ver os motivos");
+  ok(passoDe({ modeloMontado: false }).passo === "modelar" && passoDe({ modeloMontado: false }).href === "/modelagem",
+    "aprovado e modelo não montado: Modelagem");
+
+  // 5c. aprovado + modelo montado → Entregáveis.
+  const e = passoDe({});
+  ok(e.passo === "entregaveis" && e.href === "/entregaveis",
+    "aprovado com o modelo montado leva a Entregáveis");
+}
+
+console.log("--- 5b. Próximo passo: leitura que falhou diz que não dá para determinar ---");
+{
+  const campos: Array<keyof EntradaProximoPasso> = ["bloqueantesAbertas", "revisoesAbertas", "kitFaltantes"];
+  for (const c of campos) {
+    // Num caso ainda NÃO aprovável, onde cada uma dessas leituras ainda decide algo.
+    const p = passoDe({ [c]: null, aprovavel: false, aprovado: false });
+    ok(p.passo === "indeterminado" && p.acao === null && p.href === null,
+      `${c} ilegível (null) → "não dá para determinar", sem botão — nunca o próximo degrau`, p.titulo);
+  }
+  const ap = passoDe({ aprovavel: null, aprovado: false });
+  ok(ap.passo === "indeterminado", "avaliação do portão que não respondeu NÃO vira 'aprovar'", ap.titulo);
+  ok(passoDe({ kitFaltantes: null }).passo === "entregaveis",
+    "kit ilegível num mandato JÁ aprovado não trava a resposta: o kit não decide mais nada ali");
+  const m = passoDe({ modeloMontado: null });
+  ok(m.passo === "indeterminado", "configuração do modelo ilegível NÃO vira 'Entregáveis'", m.titulo);
+  ok(/não dá para determinar/i.test(passoDe({ bloqueantesAbertas: null }).titulo),
+    "a frase diz com todas as letras que não dá para determinar");
+}
+
+console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista filtrada ---");
+{
+  // A ordem é a que a lista MOSTRA (aqui, um filtro que pulou "d2" e "d4"): o vizinho de "d3" é "d5",
+  // não o "d4" que o banco teria na ordem completa.
+  const filtrada = ["d1", "d3", "d5"];
+  const meio = vizinhosNaOrdem(filtrada, "d3");
+  ok(meio?.anterior === "d1" && meio?.proximo === "d5" && meio?.posicao === 2 && meio?.total === 3,
+    "no meio: anterior e próximo são os da lista FILTRADA, posição 2 de 3", JSON.stringify(meio));
+  const primeiro = vizinhosNaOrdem(filtrada, "d1");
+  ok(primeiro?.anterior === null && primeiro?.proximo === "d3" && primeiro?.posicao === 1,
+    "primeiro: sem anterior (não gira para o último)", JSON.stringify(primeiro));
+  const ultimo = vizinhosNaOrdem(filtrada, "d5");
+  ok(ultimo?.proximo === null && ultimo?.anterior === "d3" && ultimo?.posicao === 3,
+    "último: sem próximo (não gira para o primeiro)", JSON.stringify(ultimo));
+  ok(vizinhosNaOrdem(filtrada, "d2") === null,
+    "documento fora da ordem (saiu do filtro) → null, não 'primeiro' nem posição inventada");
+  ok(vizinhosNaOrdem([], "d1") === null, "ordem vazia → null");
+  const unico = vizinhosNaOrdem(["d1"], "d1");
+  ok(unico?.anterior === null && unico?.proximo === null && unico?.total === 1,
+    "lista de um documento: sem vizinhos, total 1");
+}
+
+
+// 6. O E-MAIL AO CLIENTE (`lib/email-ao-cliente.ts`, perguntas em lote). Texto que sai da casa:
+//    só o texto da pergunta (nada interno), numeração contínua, empresas agrupadas, ordem estável
+//    e o lote nunca diz "tudo certo" quando algo falhou. Mora aqui porque o CI já roda este script.
+{
+  const P = (codigo: string, prioridade: number, entidade: string | null, pergunta: string): PerguntaParaEmail =>
+    ({ codigo, prioridade, entidade, pergunta, motivo: "MOTIVO-INTERNO", risco: "RISCO-INTERNO" } as PerguntaParaEmail);
+  const pergs = [
+    P("Q2", 2, "Beta Ltda", "Sobre a Beta Ltda: Enviem o balanço de 2024."),
+    P("Q9", 1, null, "Quais as garantias prestadas?"),
+    P("Q1", 1, "Alfa S.A.", "Sobre a Alfa S.A.: Enviem a DRE."),
+    P("Q3", 3, "Alfa S.A.", "Sobre a Alfa S.A.: Enviem o balancete."),
+  ];
+  const t = montarEmailAoCliente(pergs, "Projeto X");
+  ok(t.startsWith("Prezados,") && t.endsWith("[nome]"), "e-mail: saudação e assinatura-placeholder");
+  ok(!/MOTIVO-INTERNO|RISCO-INTERNO|Q1|Q9/.test(t), "e-mail: nenhum campo interno (código, motivo, risco) vaza");
+  const numeros = [...t.matchAll(/^(\d+)\. /gm)].map((m) => Number(m[1]));
+  ok(numeros.join(",") === "1,2,3,4", "e-mail: numeração contínua 1..N", numeros.join(","));
+  ok(t.indexOf("Perguntas gerais:") < t.indexOf("Alfa S.A.:") && t.indexOf("Alfa S.A.:") < t.indexOf("Beta Ltda:"),
+    "e-mail: sem empresa primeiro, depois empresas em ordem alfabética");
+  ok(!t.includes("Sobre a Alfa S.A.:"), "e-mail: prefixo da 0120 retirado sob o título da empresa");
+  ok(t.indexOf("Enviem a DRE") < t.indexOf("Enviem o balancete"), "e-mail: dentro da empresa, por prioridade");
+  ok(t === montarEmailAoCliente([...pergs].reverse(), "Projeto X"), "e-mail: independe da ordem de seleção");
+  ok(montarEmailAoCliente([], "Projeto X").includes("Prezados,"), "e-mail: lista vazia não quebra");
+  ok(!/Alfa S\.A\.:|Perguntas gerais:/.test(listaNumerada([P("Q1", 1, null, "Uma só."), P("Q2", 1, null, "Duas.")])),
+    "lista: sem empresa nenhuma, sem título de grupo");
+  ok(linkMailto(assuntoDoEmail("Projeto X"), "curto")?.startsWith("mailto:?subject=") === true, "mailto: texto curto abre");
+  ok(linkMailto("a", "x".repeat(3000)) === null, "mailto: texto longo devolve null (a tela manda usar Copiar)");
+  ok(resumoDoLote(3, []) === "3 registradas como enviadas.", "lote: tudo certo só quando nada falhou", resumoDoLote(3, []));
+  const parcial = resumoDoLote(2, ["Q1: recusado"]);
+  ok(parcial.startsWith("2 registradas; 1 falhou: Q1") && !parcial.includes("como enviadas"),
+    "lote: falha parcial nunca diz que tudo deu certo", parcial);
+  // ALTO 2: o que se congela por pergunta é o ITEM dela, o mesmo que o e-mail escreve.
+  ok(textoDoItem(pergs[0]) === "Enviem o balanço de 2024." && textoDoItem(pergs[1]) === "Quais as garantias prestadas?",
+    "item: sem o prefixo 'Sobre a X: ' da 0120, e sem numeração nem título de grupo");
+  ok(pergs.every((p) => t.includes(textoDoItem(p)) && !textoDoItem(p).includes(t.slice(0, 20))),
+    "item: cada item aparece no e-mail e NUNCA é o e-mail inteiro");
+  ok(perguntasForaDoTexto(pergs, t).length === 0, "fora do texto: e-mail intacto → nenhuma ausente");
+  const editado = t.replace("Enviem a DRE.", "Enviem a DRE de 2023.").replace(/^\d+\. Quais as garantias prestadas\?\n\n/m, "");
+  ok(perguntasForaDoTexto(pergs, editado).map((p) => p.codigo).join(",") === "Q9,Q1",
+    "fora do texto: pergunta apagada E pergunta reescrita são apontadas; as intactas não",
+    perguntasForaDoTexto(pergs, editado).map((p) => p.codigo).join(","));
+  ok(perguntasForaDoTexto(pergs, t.replace("Enviem o balancete.", "Enviem o\n  balancete.")).length === 0,
+    "fora do texto: reformatar quebra de linha/espaço não conta como ausência");
+  const comAusente = resumoDoLote(2, [], ["Q9"]);
+  ok(comAusente.startsWith("2 registradas; 1 não registrada") && comAusente.includes("Q9") && !comAusente.includes("como enviadas"),
+    "lote: pergunta fora do texto editado nunca vira 'tudo certo'", comAusente);
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

@@ -549,3 +549,11 @@ Contador com o SERPRO), que não bloqueia a etapa 1 nem a onda 1. Os [A CONFIRMA
 **Critério de pronto do B8:** as cinco ondas aceitas em 3 casos reais cada, e um mandato-piloto
 abastecido sem envio manual das fontes do canal B. Até lá, B8 **não** entra na definição de "projeto
 fechado" (§11): é o próximo produto, pelo mesmo critério que deixou B4.2, B4.3 e B7 fora dela.
+
+## 14. Redesenho do portal — fases 1 a 5 concluídas (29/10/2026)
+
+**Fechado no repositório:** casco, abas fixas, estados de carregando/erro, renomes, Histórico, Grupo econômico, perguntas em lote, celular, modo discrição, avisos, modo escuro, papéis e RLS por mandato (migration **0216**, escrita e não aplicada), tela de equipe, recuperar senha, token assinado no envio. Detalhe em `Arquitetura do Sistema/7 Marca/REDESENHO_DO_PORTAL.md`.
+
+**Continua aberto, e quem destrava é o dono:** aplicar 0215 e 0216 (com as conferências de `auth.users` e de nomes duplicados antes da 0216); segredo `N8N_INTAKE_SEGREDO` no n8n e na Vercel; deploy do portal e republicação do workflow (conferir `multipleFiles`); configurar o Auth (Redirect URLs, modelo de recuperação); olhar o preview da Vercel, porque nenhuma tela autenticada foi vista em navegador.
+
+**Critério de pronto:** a 0216 aplicada e conferida pela sonda; o envio recusado sem token válido, com o n8n de produção (ainda não medido); recuperar senha ponta a ponta no preview.

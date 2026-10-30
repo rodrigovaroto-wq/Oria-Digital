@@ -1,8 +1,7 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
 import { paginar } from "@/lib/supabase/paginar";
-import type { Caso } from "@/lib/types";
 import {
   PRIORIDADE,
   chaveDaSugestao,
@@ -12,6 +11,8 @@ import {
   type PerguntaSugerida,
 } from "@/lib/perguntas";
 import { CartaoPergunta } from "./CartaoPergunta";
+import { ProvedorDeSelecao, SelecionarTodas, type PendenteSelecionavel } from "./SelecaoDePerguntas";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 
 // A ABA DAS PERGUNTAS AO CLIENTE.
 //
@@ -49,6 +50,7 @@ export default async function PerguntasAoClientePage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
 
   const [casoRes, sugestoesRes, acoesRes, catalogoRes] = await Promise.all([
     supabase.from("caso").select("id, nome, status").eq("id", id).single(),
@@ -95,7 +97,6 @@ export default async function PerguntasAoClientePage({
   if (casoRes.error || !casoRes.data) {
     notFound();
   }
-  const caso = casoRes.data as Pick<Caso, "id" | "nome" | "status">;
 
   const semMigration =
     pareceMigrationAusente(sugestoesRes.error?.message)
@@ -121,7 +122,19 @@ export default async function PerguntasAoClientePage({
     p.ja_enviada || (acoesPorChave.get(chaveDaSugestao(p.codigo, p.entidade_id))?.length ?? 0) > 0;
 
   const pendentes = sugestoes.filter((p) => !foiTratada(p));
+  const selecionaveis: PendenteSelecionavel[] = pendentes.map((p) => ({
+    chave: chaveDaSugestao(p.codigo, p.entidade_id),
+    codigo: p.codigo,
+    prioridade: p.prioridade,
+    entidade: p.entidade,
+    entidade_id: p.entidade_id,
+    pergunta: p.pergunta,
+  }));
   const enviadas = sugestoes.filter((p) => p.ja_enviada).length;
+  // Papel sem escrita neste mandato: a tela mostra as perguntas e deixa copiá-las, mas não registra
+  // envio nem descarte, nem oferece a seleção em lote (cujo fim é registrar). Motivo: faixa do mandato.
+  const { escrever } = await permissoesDoMandato;
+  const selecionaveisAoPapel = escrever.pode ? selecionaveis : [];
 
   // O QUE JÁ SE PERGUNTOU E NÃO É MAIS SUGERIDO. Uma pergunta some da lista
   // quando o gatilho para de valer — e o caso mais comum é o melhor possível: o
@@ -145,19 +158,17 @@ export default async function PerguntasAoClientePage({
   }));
 
   return (
+    <ProvedorDeSelecao casoId={id} mandato={casoRes.data.nome} pendentes={selecionaveisAoPapel}>
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0">
-          <Link href={`/casos/${id}`} className="text-sm text-tinta-500 hover:underline">
-            &larr; {caso.nome}
-          </Link>
-          <h1 className="mt-0.5 text-xl font-semibold text-tinta-900">Perguntas ao cliente</h1>
+          <h1 className="text-lg font-semibold text-tinta-900">Perguntas ao cliente</h1>
           {/* A FRASE MAIS IMPORTANTE DA TELA. Sem ela, uma lista de perguntas
               prontas com um botão verde parece uma caixa de saída — e a primeira
               coisa que alguém vai supor é que o sistema mandou. Ele não manda:
               não há canal, não há e-mail, não há automação. */}
           <p className="mt-1 max-w-3xl text-sm text-tinta-500">
-            Sugestões do sistema a partir do que a extração encontrou (e do que não encontrou).
+            Perguntas prontas para fazer ao cliente, a partir do que o sistema encontrou (e do que não encontrou) nos documentos.
             <strong className="font-medium text-tinta-700"> O sistema não envia nada</strong>: copie
             o texto, mande pelo seu canal com o cliente e registre aqui o que enviou. O que está sem
             marca ainda não foi perguntado a ninguém.
@@ -184,32 +195,41 @@ export default async function PerguntasAoClientePage({
 
       {semMigration && (
         <div className="rounded-lg border border-alerta-200 bg-alerta-50 p-4 text-sm text-alerta-900">
-          <p className="font-semibold">O banco de perguntas ainda não foi aplicado neste banco.</p>
+          <p className="font-semibold">As sugestões de pergunta não estão disponíveis neste ambiente.</p>
           <p className="mt-1">
-            Esta aba lê a migration <code className="font-mono">0120_banco_de_perguntas.sql</code>,
-            que cria o catálogo e a função de sugestão. Merge não é apply: rode as migrations
-            pendentes conforme <code className="font-mono">Supabase/README.md</code> e recarregue esta
-            tela. O restante do mandato não depende disso.
+            Esta aba ainda não está habilitada aqui. Avise o administrador do sistema. O restante
+            do mandato continua funcionando normalmente.
           </p>
-          <p className="mt-2 text-xs text-alerta-800">
-            Resposta do banco: {sugestoesRes.error?.message ?? acoesRes.error?.message}
-          </p>
+          <DetalhesTecnicos>
+            <p>Falta aplicar a migration 0120_banco_de_perguntas.sql (catálogo e fn_sugerir_perguntas).
+              Merge não é apply: rode as migrations pendentes conforme Supabase/README.md e recarregue.</p>
+            <p>Resposta do banco: {sugestoesRes.error?.message ?? acoesRes.error?.message}</p>
+          </DetalhesTecnicos>
         </div>
       )}
 
       {!semMigration && (sugestoesRes.error || acoesRes.error) && (
-        <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
-          Não foi possível carregar as sugestões:{" "}
-          {sugestoesRes.error?.message ?? acoesRes.error?.message}
-        </p>
+        <div className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
+          <p>
+            Não foi possível carregar as sugestões. Tente de novo em instantes; se persistir, avise
+            o administrador do sistema.
+          </p>
+          <DetalhesTecnicos>
+            <p>{sugestoesRes.error?.message ?? acoesRes.error?.message}</p>
+          </DetalhesTecnicos>
+        </div>
       )}
 
       {(sugestoesRes.truncado || acoesRes.truncado) && (
-        <p className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-900">
-          A lista bateu no teto de leitura do portal e pode estar incompleta. Rode
-          <code className="mx-1 font-mono">select * from fn_sugerir_perguntas(&#39;{id}&#39;)</code>
-          para ver todas.
-        </p>
+        <div className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-900">
+          <p>
+            Há perguntas demais para esta tela mostrar de uma vez, e a lista pode estar incompleta.
+            Peça ao administrador do sistema a lista completa deste mandato.
+          </p>
+          <DetalhesTecnicos>
+            <p>select * from fn_sugerir_perguntas(&#39;{id}&#39;)</p>
+          </DetalhesTecnicos>
+        </div>
       )}
 
       {!semMigration && sugestoes.length === 0 && !sugestoesRes.error && (
@@ -217,14 +237,22 @@ export default async function PerguntasAoClientePage({
           <p className="text-sm font-medium text-tinta-900">Nenhuma pergunta sugerida</p>
           <p className="mx-auto mt-1 max-w-xl text-sm text-tinta-500">
             {catalogoAtivo === 0
-              ? "O catálogo de perguntas está vazio neste banco — o seed da 0120 não foi aplicado."
+              ? "O catálogo de perguntas está vazio neste ambiente, então nada pode ser sugerido. "
+              + "Avise o administrador do sistema."
               : "As perguntas nascem do que a extração encontrou: falta de uma linha exigida numa "
                 + "empresa, ou contexto que vale para todo mandato com dado extraído. Enquanto "
                 + "este mandato não tiver linhas extraídas, não há o que perguntar."}
           </p>
-          <Link href={`/casos/${id}`} className="btn-secundario mt-4">
-            Voltar ao mandato
-          </Link>
+        </div>
+      )}
+
+      {selecionaveisAoPapel.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <SelecionarTodas rotulo="todas as pendentes" />
+          <span className="text-xs text-tinta-500">
+            Marque as perguntas que vão na mesma mensagem ao cliente; a barra de ações aparece
+            quando houver ao menos uma.
+          </span>
         </div>
       )}
 
@@ -234,6 +262,7 @@ export default async function PerguntasAoClientePage({
             <h2 className="titulo-secao">
               Prioridade {prioridade} &middot; {rotuloDaPrioridade(prioridade)}
             </h2>
+            <SelecionarTodas prioridade={prioridade} rotulo="todas desta prioridade" />
             <p className="text-xs text-tinta-500">
               {PRIORIDADE[prioridade]?.explicacao ?? `${itens.length} pergunta(s)`}
             </p>
@@ -245,6 +274,8 @@ export default async function PerguntasAoClientePage({
                 casoId={id}
                 p={p}
                 acoes={acoesPorChave.get(chaveDaSugestao(p.codigo, p.entidade_id)) ?? []}
+                selecionavel={!foiTratada(p) && escrever.pode}
+                somenteLeitura={!escrever.pode}
               />
             ))}
           </ul>
@@ -288,7 +319,7 @@ export default async function PerguntasAoClientePage({
                 {/* O TEXTO CONGELADO, quando houve envio. É a razão de a 0120
                     exigi-lo: o template muda, o que foi perguntado não. */}
                 {a.texto_enviado && (
-                  <p className="mt-1.5 whitespace-pre-wrap text-xs text-tinta-600">{a.texto_enviado}</p>
+                  <p className="valor-sensivel mt-1.5 whitespace-pre-wrap text-xs text-tinta-600">{a.texto_enviado}</p>
                 )}
               </li>
             ))}
@@ -301,12 +332,17 @@ export default async function PerguntasAoClientePage({
           — as outras 25 pedem espécies de gatilho que ainda não existem, e isso
           está declarado na própria migration. */}
       {!semMigration && catalogoAtivo !== null && catalogoAtivo > 0 && (
-        <p className="text-xs text-tinta-400">
-          O catálogo tem {catalogoAtivo} pergunta(s) ativa(s). Aparecem acima apenas as que este
-          mandato dispara; as perguntas da entrega cujo gatilho ainda não existe no sistema estão
-          declaradas em <code className="font-mono">Supabase/migrations/0120_banco_de_perguntas.sql</code>.
-        </p>
+        <div className="text-xs text-tinta-400">
+          <p>
+            O catálogo tem {catalogoAtivo} pergunta(s) ativa(s). Aparecem acima apenas as que este
+            mandato dispara; as demais perguntas da entrega ainda não têm gatilho no sistema.
+          </p>
+          <DetalhesTecnicos className="mt-1">
+            <p>Gatilhos ainda inexistentes declarados em Supabase/migrations/0120_banco_de_perguntas.sql</p>
+          </DetalhesTecnicos>
+        </div>
       )}
     </div>
+    </ProvedorDeSelecao>
   );
 }

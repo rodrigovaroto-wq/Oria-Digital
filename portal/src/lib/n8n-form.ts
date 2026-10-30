@@ -16,6 +16,8 @@
 interface CamposDetectados {
   fileFieldName: string | null;
   textFieldName: string | null;
+  /** O SEGUNDO campo de texto (o primeiro é o mandato): onde vai o token do envio. */
+  tokenFieldName: string | null;
 }
 
 function parseAttrs(tag: string): Record<string, string> {
@@ -39,14 +41,17 @@ export function parseFormFieldNames(html: string): CamposDetectados {
   }
 
   const fileInput = inputs.find((a) => (a.type ?? "").toLowerCase() === "file" && a.name);
-  const textInput = inputs.find((a) => {
+  const textInputs = inputs.filter((a) => {
     const type = (a.type ?? "text").toLowerCase();
     return type !== "file" && type !== "hidden" && type !== "submit" && type !== "button" && a.name;
   });
 
   return {
     fileFieldName: fileInput?.name ?? null,
-    textFieldName: textInput?.name ?? null,
+    textFieldName: textInputs[0]?.name ?? null,
+    // POR POSIÇÃO, como o do mandato: o Form declara o token depois do mandato (`Intake (Form)` em
+    // `N8N/build-workflow.mjs`). Form antigo, sem o campo, deixa `null` e cai no fallback.
+    tokenFieldName: textInputs[1]?.name ?? null,
   };
 }
 
@@ -66,16 +71,20 @@ export function parseFormFieldNames(html: string): CamposDetectados {
 
 const CAMPO_MANDATO_ENV = () => process.env.N8N_INTAKE_FIELD_MANDATO || null;
 const CAMPO_ARQUIVOS_ENV = () => process.env.N8N_INTAKE_FIELD_ARQUIVOS || null;
+const CAMPO_TOKEN_ENV = () => process.env.N8N_INTAKE_FIELD_TOKEN || null;
 
 // Fallback de último recurso, só usado se não houver env E a descoberta falhar
 // (instância fora do ar, HTML inesperado etc.) — mantém o comportamento
 // anterior em vez de travar o upload por completo.
 const CAMPO_MANDATO_FALLBACK = "Mandato (nome do caso)";
 const CAMPO_ARQUIVOS_FALLBACK = "Arquivos";
+const CAMPO_TOKEN_FALLBACK = "Token do envio";
 
 export interface CamposDoForm {
   mandato: string;
   arquivos: string;
+  /** O campo do token do envio (`assinatura-do-envio.ts`): o n8n recusa o lote que não o traga. */
+  token: string;
   /** `true` quando os nomes vieram do HTML do próprio Form, não do fallback. */
   descoberto: boolean;
   /**
@@ -122,7 +131,7 @@ export async function descobrirNomesDeCampo(url: string): Promise<CamposDoForm> 
   const mandatoEnv = CAMPO_MANDATO_ENV();
   const arquivosEnv = CAMPO_ARQUIVOS_ENV();
   if (mandatoEnv && arquivosEnv) {
-    return { mandato: mandatoEnv, arquivos: arquivosEnv, descoberto: false };
+    return { mandato: mandatoEnv, arquivos: arquivosEnv, token: CAMPO_TOKEN_ENV() || CAMPO_TOKEN_FALLBACK, descoberto: false };
   }
   try {
     const resp = await fetch(url, {
@@ -135,16 +144,18 @@ export async function descobrirNomesDeCampo(url: string): Promise<CamposDoForm> 
       return {
         mandato: mandatoEnv || CAMPO_MANDATO_FALLBACK,
         arquivos: arquivosEnv || CAMPO_ARQUIVOS_FALLBACK,
+        token: CAMPO_TOKEN_ENV() || CAMPO_TOKEN_FALLBACK,
         descoberto: false,
         motivo: `GET do form retornou HTTP ${resp.status} ${resp.statusText}`.trim(),
       };
     }
     const html = await resp.text();
-    const { fileFieldName, textFieldName } = parseFormFieldNames(html);
+    const { fileFieldName, textFieldName, tokenFieldName } = parseFormFieldNames(html);
     const descoberto = Boolean(!mandatoEnv && textFieldName) || Boolean(!arquivosEnv && fileFieldName);
     return {
       mandato: mandatoEnv || textFieldName || CAMPO_MANDATO_FALLBACK,
       arquivos: arquivosEnv || fileFieldName || CAMPO_ARQUIVOS_FALLBACK,
+      token: CAMPO_TOKEN_ENV() || tokenFieldName || CAMPO_TOKEN_FALLBACK,
       descoberto,
       ...(descoberto ? {} : {
         // O HTML voltou (200), mas sem `<input>` que bata — o caso que mais
@@ -163,6 +174,7 @@ export async function descobrirNomesDeCampo(url: string): Promise<CamposDoForm> 
     return {
       mandato: mandatoEnv || CAMPO_MANDATO_FALLBACK,
       arquivos: arquivosEnv || CAMPO_ARQUIVOS_FALLBACK,
+      token: CAMPO_TOKEN_ENV() || CAMPO_TOKEN_FALLBACK,
       descoberto: false,
       motivo,
     };

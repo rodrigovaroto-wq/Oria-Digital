@@ -1637,7 +1637,7 @@ test('Modos e referências: cada node Code no modo certo; toda $(ref) existe no 
       // devolvem uma LINHA por item (não um documento), e só vendo o lote
       // inteiro (`.all()`) dá para reagrupar as linhas de cada documento antes
       // de `Medir Documento` — o mesmo motivo de `Juntar Blocos`, um nível acima.
-      if (['Listar Arquivos', 'Orcamento do Lote', 'Abortar Lote', 'Resumo de Custo',
+      if (['Conferir Envio', 'Listar Arquivos', 'Orcamento do Lote', 'Abortar Lote', 'Resumo de Custo',
         'Fatiar Extracao', 'Juntar Blocos', 'Recompor Contexto',
         'Recompor Conteudo Extraido', 'Agrupar Linhas XLSX', 'Agrupar Linhas XLS'].includes(n.name)
         // A espera entre tentativas é UMA para todos os blocos que falharam.
@@ -3001,6 +3001,9 @@ const CODE_QUE_DEVE_ABORTAR = {
   'Orcamento do Lote': 'falha aqui = lote sem decisão de orçamento',
   // E o aborto do lote recusado, que é onde a exceção passou a morar.
   'Abortar Lote': 'orçamento excedido',
+  // A autorização do envio é FAIL CLOSED: se a conferência lançar, continuar entregaria ao Upsert um
+  // item sem veredito — e o Upsert grava. Abortar é o único desfecho que não deixa passar.
+  'Conferir Envio': 'falha aqui = envio sem veredito seguiria para a gravação',
   // Roteamento por formato: se ele falhar, `continueRegularOutput` devolveria
   // o LOTE INTEIRO sem reagrupar as linhas de planilha que ele existe para
   // juntar — o MESMO fan-out (N itens por documento) que o roteamento inteiro
