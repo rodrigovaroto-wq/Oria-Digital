@@ -1,6 +1,6 @@
 -- Teste da 0217 — fn_conferir_envio: a conferência do token HMAC do envio, agora no banco, com o segredo no Vault.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 63 asserts (medidos) — ver o cabeçalho de
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 65 asserts (medidos) — ver o cabeçalho de
 -- Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql ("MEDIÇÃO NÃO-VAZIA") para o número que reprova com cada correção desligada.
 --
 -- O QUE SE AFIRMA (comportamento, não mecanismo): um token que o PORTAL assina é aceito pelo banco; cada motivo de recusa
@@ -193,6 +193,15 @@ begin
   -- 12. A SONDA (regra 7): o segredo ausente é visível, com o sintoma.
   perform teste_assert_envio((select presente from fn_instalacao_conferir() where chave = 'envio_segredo_no_vault'),
     'a sonda: requisito envio_segredo_no_vault presente com o segredo no Vault');
+  -- Em produção quem roda a sonda é o PORTAL, como authenticated, que não lê o schema vault. Se a auxiliar perder o
+  -- security definer, o superusuário acima continua verde e o portal acusa "todo envio recusado" com o envio funcionando
+  -- (achado da revisão de 30/10/2026). Por isso a mesma pergunta, feita pelo papel que a faz em produção.
+  set local role authenticated;
+  perform teste_assert_envio((select presente from fn_instalacao_conferir() where chave = 'envio_segredo_no_vault'),
+    'a sonda, rodada como authenticated (o portal), vê o segredo presente');
+  reset role;
+  perform teste_assert_envio(not has_function_privilege('anon', 'fn_segredo_do_vault_presente(text)', 'execute'),
+    'anon não executa fn_segredo_do_vault_presente');
   delete from vault.secrets where name = 'n8n_intake_segredo';
   select * into v_r from fn_instalacao_conferir() where chave = 'envio_segredo_no_vault';
   perform teste_assert_envio(not v_r.presente and v_r.porque like '%TODO envio%' and v_r.severidade = 'bloqueante',

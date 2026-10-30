@@ -159,7 +159,16 @@ function garantirMolde() {
           select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
                           (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid $fn$;
         grant usage on schema auth to anon, authenticated, service_role;
-        grant usage on schema public to anon, authenticated, service_role;`, MOLDE);
+        grant usage on schema public to anon, authenticated, service_role;
+        -- 0217: o mesmo stub do Vault de Supabase/test/run.sh (a migration aborta sem vault.decrypted_secrets).
+        create schema if not exists vault;
+        create table if not exists vault.secrets(id uuid primary key default gen_random_uuid(), name text unique, description text,
+          secret text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+        create or replace view vault.decrypted_secrets as
+          select id, name, description, secret, secret as decrypted_secret, created_at, updated_at from vault.secrets;
+        insert into vault.secrets(name, description, secret) values ('n8n_intake_segredo', 'stub local', 'segredo-de-teste-do-run-sh')
+          on conflict (name) do nothing;
+      `, MOLDE);
   // A LISTA DAS MIGRATIONS SAI DO DISCO, E NÃO DE UM SHELL. Até aqui ela vinha de
   // `bash -c "ls Supabase/migrations/*.sql"`: o `bash` era resolvido pelo PATH
   // herdado do processo, então um executável com esse nome num diretório gravável

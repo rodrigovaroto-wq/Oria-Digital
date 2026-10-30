@@ -1779,19 +1779,19 @@
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Supabase/test/veredito_producao.test.sql","l":170}
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"Supabase/test/veredito_producao.test.sql","l":40}
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/veredito_producao.test.sql","l":83}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"Verificação/run.mts","l":536}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/run.mts","l":544}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/run.mts","l":324}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/run.mts","l":322}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/run.mts","l":311}
-{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/run.mts","l":546}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":748}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":764}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":745}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":683}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":678}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":665}
-{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":767}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"Verificação/run.mts","l":544}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/run.mts","l":552}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/run.mts","l":332}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/run.mts","l":330}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/run.mts","l":319}
+{"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/run.mts","l":554}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Verificação/variacoes.mts","l":757}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/variacoes.mts","l":773}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_premissas_sugeridas","f":"Verificação/variacoes.mts","l":754}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/variacoes.mts","l":692}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":687}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":674}
+{"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":776}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/gerar-export-do-banco.mts","l":240}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
@@ -2542,9 +2542,9 @@
 {"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_trg_so_quem_escreve_apaga","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":698}
 {"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":548}
 {"k":"e","de":"migration:0216","rel":"CRIA","pa":"fn:fn_upsert_caso","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","l":522}
-{"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":122}
-{"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":204}
-{"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_segredo_do_vault_presente","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":97}
+{"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":124}
+{"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":206}
+{"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_segredo_do_vault_presente","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":99}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

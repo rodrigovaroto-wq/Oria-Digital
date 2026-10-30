@@ -71,6 +71,8 @@
 --   * sem o trim do token: 3          * trim de TODO espaço no mandato (em vez de só U+0020): 1   * segredo só de espaços vale: 3
 --   * sem_segredo desligado: 5        * EXECUTE concedido a authenticated: 2          * prazo conferido ANTES da assinatura: 1
 --   * prazo frouxo (>= em vez de >): 1 * sonda sempre verde para o segredo: 4         * lista de nomes de fn_segredo_do_vault_presente removida: 1
+--   * (revisão de 30/10, +2 asserts, total 65) fn_segredo_do_vault_presente sem security definer: 1 — a sonda rodada como
+--     authenticated (o portal) acusaria "todo envio recusado" com o envio funcionando; o superusuário não via.
 --   * `\d` no lugar de [0-9] no exp: 0 — NÃO reprova em C.UTF-8 (o \d do ARE só casa ASCII nesse locale); o [0-9] fica porque em
 --     outro locale o \d pode casar dígitos não-ASCII, e isso não dá para provar aqui. É o único 0, declarado.
 -- Comparação em tempo constante (HMAC dos dois lados): sem assert, de propósito — é propriedade de TEMPO, e o resultado é idêntico a `<>`.
