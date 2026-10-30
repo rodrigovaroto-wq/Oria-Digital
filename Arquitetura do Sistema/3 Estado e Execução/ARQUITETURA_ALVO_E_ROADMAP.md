@@ -552,7 +552,7 @@ dado que **não vem do cliente** (bureau, processos, Núclea, Open Finance) e cr
 | Etapa | Escopo | Depende de | Em paralelo com | Critério de pronto |
 |---|---|---|---|---|
 | **0 — Decisões e cotações** | RFP (`13_anexos/13B`) de Open Finance (Pluggy, Belvo, Klavi), processos (Escavador, JUDIT, Jusbrasil, Exato), Núclea, bureaus e ONR; piloto no mandato AMO (`13_anexos/13C`); autorização pré-mandato e termo de Open Finance pelo jurídico. A ordem prática, por dependência, está em `13_anexos/13A` | dono | tudo | D13.3–D13.6 respondidas com o relatório do piloto na Espec. 13 |
-| **1 — T0** | RLS por caso, leitura por papel, registro de leitura | — | etapa 0 | mandato A lê 0 linhas do B em toda tabela; desligar a policy reprova |
+| **1 — T0** | RLS por caso, leitura por papel, registro de leitura. **Entregue no repositório em 29/10/2026 pela `0216_o_acesso_que_so_o_portal_decidia.sql` (redesenho do portal, PR #265)**; falta aplicar | — | etapa 0 | mandato A lê 0 linhas do B em toda tabela; desligar a policy reprova |
 | **2 — `consulta_externa`** | Tabelas `consulta_externa`, `fato_externo`, `autorizacao`; coletor das fontes públicas | etapa 1 | etapa 0 | vazio = `nada_encontrado` com data; API fora = `falhou` |
 | **3 — Momento pré-mandato** | `caso.momento`; o banco recusa documento no pré-mandato e consulta PF sem autorização | etapa 2 | — | as duas recusas medidas não-vazias |
 | **4 — Processos** | Coletor; comparativo no mandato AMO contra as certidões; T9 | etapas 2, 3 | etapa 5 | D5 decidida com número; processo fora das contingências abre pendência |

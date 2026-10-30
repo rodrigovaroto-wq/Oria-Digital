@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
+import { conferirEnvioAoMandato, emitirTokenDoEnvio } from "@/lib/supabase/acesso";
 import { descobrirNomesDeCampo } from "@/lib/n8n-form";
-import { createClient } from "@/lib/supabase/server";
-import { obterCasoId, MandatoSemAcessoError } from "@/lib/envio-oficial";
 import { TETO_DA_FUNCTION_BYTES, TETO_DO_PROXY_BYTES, formatarBytes } from "@/lib/limite-de-envio";
 
 // ESTA ROTA SÓ EXISTE PARA O LOTE QUE CABE NELA.
@@ -72,6 +71,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Selecione ao menos um arquivo." }, { status: 400 });
   }
 
+  // O PAPEL, ANTES DE ENCAMINHAR. O n8n grava com a conexão de serviço e acha o mandato pelo nome:
+  // nenhuma RLS o barra, então a recusa tem de ser aqui (ver `decidirEnvioAoMandato`).
+  const permissao = await conferirEnvioAoMandato(mandato);
+  if (!permissao.ok) return NextResponse.json({ error: permissao.mensagem }, { status: permissao.status });
+  // E o TOKEN que o n8n exige (`assinatura-do-envio.ts`), só depois do papel. Sem o segredo
+  // configurado o envio é recusado aqui, com a frase clara, e nunca segue sem token.
+  const autorizacao = await emitirTokenDoEnvio(mandato);
+  if (!autorizacao.ok) return NextResponse.json({ error: autorizacao.mensagem }, { status: autorizacao.status });
+
   // O LOTE GRANDE QUE CHEGOU AQUI MESMO ASSIM.
   //
   // Na Vercel esta verificação é inalcançável — a borda já recusou o corpo com
@@ -97,28 +105,12 @@ export async function POST(request: Request) {
     );
   }
 
-  // A PERTINÊNCIA AO MANDATO É GARANTIDA AQUI TAMBÉM, com a sessão de quem enviou (0216).
-  //
-  // O n8n faz o upsert do caso como service_role, sem identidade: sem esta chamada, quem não é
-  // membro de um mandato existente gravava documento nele só digitando o nome, e o mandato novo
-  // criado pelo n8n nascia sem membro. A tela já chama o mesmo `obterCasoId` antes de enviar, mas
-  // o servidor não pode confiar no cliente (uma aba de versão anterior, um POST direto): a
-  // recusa é a mesma e vem ANTES de encaminhar qualquer byte ao n8n. `fn_upsert_caso` é idempotente
-  // por nome, então a segunda chamada (a da tela já fez a primeira) só devolve o id.
-  try {
-    await obterCasoId(await createClient(), mandato);
-  } catch (e) {
-    if (e instanceof MandatoSemAcessoError) {
-      return NextResponse.json({ error: e.message }, { status: 403 });
-    }
-    return NextResponse.json({ error: `${(e as Error).message} Nada foi enviado ao processamento.` }, { status: 502 });
-  }
-
   const campos = await descobrirNomesDeCampo(url);
 
   // Monta o multipart no formato do Form do N8N e encaminha.
   const fwd = new FormData();
   fwd.append(campos.mandato, mandato);
+  fwd.append(campos.token, autorizacao.token);
   for (const arquivo of arquivos) {
     fwd.append(campos.arquivos, arquivo, arquivo.name);
   }

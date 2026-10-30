@@ -317,7 +317,15 @@ function exigir(tipo, nome, onde) {
 // `Array.from` do portal têm argumento não-literal e nenhum casaria, mas o
 // portão não pode depender disso: exigir uma relação `public.abc` por causa de
 // um `Buffer.from("abc")` é acusar de mentira.
+// `supabase.storage.from("documentos")` também não: é o BUCKET do Storage, não uma
+// relação do Postgres — a rota "Ver no original" (28/10/2026) fez o portão exigir
+// `public.documentos` e reprovar com o bucket existindo. Casa SÓ o `.storage.from(`
+// (receptor exatamente `storage` e precedido de ponto): um sufixo `storage$` no
+// regex acima calaria também `const storage = supabase; storage.from("caso")` ou
+// `admstorage.from(…)`, e a tabela real deixaria de ser exigida sem ruído
+// (revisão do PR #265).
 const NAO_SAO_TABELAS = /(?:Array|Buffer|Object|Date|String|Number|Promise)$/;
+const ehBucketDoStorage = (fonte, m) => m[1] === "storage" && /\.\s*$/.test(fonte.slice(0, m.index));
 
 function varrer(dir) {
   for (const entrada of readdirSync(dir)) {
@@ -334,7 +342,7 @@ function varrer(dir) {
     const onde = relative(RAIZ, caminho);
     for (const m of fonte.matchAll(/\.rpc\(\s*["'`]([a-z0-9_]+)["'`]/g)) exigir("funcao", m[1], onde);
     for (const m of fonte.matchAll(/([A-Za-z_$][\w$]*)\s*\.from\(\s*["'`]([a-z0-9_]+)["'`]/g)) {
-      if (!NAO_SAO_TABELAS.test(m[1])) exigir("relacao", m[2], onde);
+      if (!NAO_SAO_TABELAS.test(m[1]) && !ehBucketDoStorage(fonte, m)) exigir("relacao", m[2], onde);
     }
   }
 }

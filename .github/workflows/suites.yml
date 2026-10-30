@@ -461,12 +461,6 @@ jobs:
         # faria a entidade parecer sem falta. Desligada a tradução, 15 dos 65 asserts reprovam (11 mutações; a família declarada da 0212 entrou com 8).
         run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-perimetro.mts
 
-      - name: Suíte da navegação do mandato (barra de etapas, Meus × Todos, membros)
-        # Membros e Todos só para administrador; mandato sem membro só é dito quando a contagem foi
-        # conferida; a recusa 42501 vira frase. Medido em 27/10/2026: 12 correções desligadas uma a uma,
-        # cada uma reprova de 1 a 2 dos 51 asserts.
-        run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-navegacao.mts
-
       - name: Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)
         # A 0158 endureceu o `pronto` e publicou a FRAÇÃO de contas com premissa,
         # mas um número no banco que a tela não mostra não corrige nada: o chip

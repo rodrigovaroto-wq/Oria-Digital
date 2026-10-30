@@ -48,7 +48,7 @@ de pendências do `ESTADO.md` já disse uma vez que o Modo A não existia depois
 | **B6** | **Operação** — proteção do `main`, ~~observabilidade~~, ~~backup~~ | 🟠 **B6.2 e B6.3 fechadas em 21/08**; sobra o `main` | dono | a segurança do processo |
 | **B7** | Bloqueados por dado que não temos | ⚫ espera | terceiros | nada — são espera |
 | **B8** | **Fontes oficiais e captação** (SPED, eSocial, logística, CNAB, CNAE) — Espec. 12, fase **F2T** do roadmap | 🟡 etapa 1 no repo (S107, PR #257); leitor no navegador (S108); zip no navegador (S109, NÃO verificado em produção); **onda 1 BLOQUEADA** | **dono** (3 ECDs reais; D12.3 para o Integra) e a **F1** | o dado independente que confere o declarado (DATA GATE) |
-| **B9** | **Parceiros de dados e pré-mandato** (bureau, processos, Núclea, Open Finance) — Espec. 13, fase **F2E** do roadmap | 🔴 planejada em 26/10/2026 | **dono** (RFP e cotações, autorização do jurídico) e a **T0** | a apresentação pré-mandato e a fonte que não vem do cliente |
+| **B9** | **Parceiros de dados e pré-mandato** (bureau, processos, Núclea, Open Finance) — Espec. 13, fase **F2E** do roadmap | 🔴 planejada em 26/10/2026; a T0 veio pelo redesenho (§14) | **dono** (RFP e cotações, autorização do jurídico; aplicar a 0216) | a apresentação pré-mandato e a fonte que não vem do cliente |
 
 **O caminho crítico encurtou: `B0` fechou em 20/08.** Sobra `B1 → B2` e, em paralelo, `B3` (decisão)
 e `B6` (higiene). **A rodada real aconteceu em 02/09** (sessão 79 do `ESTADO.md`) e não deixou erro
@@ -551,7 +551,15 @@ Contador com o SERPRO), que não bloqueia a etapa 1 nem a onda 1. Os [A CONFIRMA
 abastecido sem envio manual das fontes do canal B. Até lá, B8 **não** entra na definição de "projeto
 fechado" (§11): é o próximo produto, pelo mesmo critério que deixou B4.2, B4.3 e B7 fora dela.
 
-## 14. B9 — Parceiros de dados e pré-mandato · **PLANEJADA em 26/10/2026**
+## 14. Redesenho do portal — fases 1 a 5 concluídas (29/10/2026)
+
+**Fechado no repositório:** casco, abas fixas, estados de carregando/erro, renomes, Histórico, Grupo econômico, perguntas em lote, celular, modo discrição, avisos, modo escuro, papéis e RLS por mandato (migration **0216**, escrita e não aplicada), tela de equipe, recuperar senha, token assinado no envio. Detalhe em `Arquitetura do Sistema/7 Marca/REDESENHO_DO_PORTAL.md`.
+
+**Continua aberto, e quem destrava é o dono:** aplicar 0215 e 0216 (com as conferências de `auth.users` e de nomes duplicados antes da 0216); segredo `N8N_INTAKE_SEGREDO` no n8n e na Vercel; deploy do portal e republicação do workflow (conferir `multipleFiles`); configurar o Auth (Redirect URLs, modelo de recuperação); olhar o preview da Vercel, porque nenhuma tela autenticada foi vista em navegador.
+
+**Critério de pronto:** a 0216 aplicada e conferida pela sonda; o envio recusado sem token válido, com o n8n de produção (ainda não medido); recuperar senha ponta a ponta no preview.
+
+## 15. B9 — Parceiros de dados e pré-mandato · **PLANEJADA em 26/10/2026**
 
 **O detalhe NÃO mora aqui**, pelo mesmo motivo da §13:
 
@@ -562,7 +570,7 @@ fechado" (§11): é o próximo produto, pelo mesmo critério que deixou B4.2, B4
 | Etapa | Destrava | Quem |
 |---|---|---|
 | 0 — RFP, cotações e autorização do jurídico | os coletores | **dono** + jurídico |
-| 1 — T0, segregação por mandato | qualquer dado de PF | engenharia |
+| 1 — T0, segregação por mandato | qualquer dado de PF | **entregue no repositório pelo redesenho (§14, `0216_o_acesso_que_so_o_portal_decidia.sql`: papéis + RLS por mandato)**; falta aplicar e a correção do dial (ver ESTADO) |
 | 2 — `consulta_externa` e fontes públicas | 3 a 8 | engenharia |
 | 3 — Momento pré-mandato | o caso antes do NDA | engenharia |
 | 4 ∥ 5 — Processos e bureau | o deck | engenharia, depois da etapa 0 |

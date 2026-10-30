@@ -69,13 +69,11 @@ begin
     'sem vínculo, os 2 grupos têm motivo controlador_comum');
 
   raise notice '--- 2. com o irmão declarado, COMO authenticated ---';
-  perform teste_como_admin_0216();
   set local role authenticated;
   v_err := null;
   begin v_vinc := fn_controlador_vincular_familia(v_caso, icaro, carla, 'irmao', 'declaração do cliente (teste)', 'portal@0212');
   exception when others then v_err := sqlstate || ' ' || sqlerrm; end;
   reset role;
-  perform teste_fim_admin_0216();
   perform teste_assert_0212(v_err is null and v_vinc is not null, 'o authenticated declara o vínculo de irmão', v_err);
   select count(distinct grupo_id) into v_g from fn_grupo_por_controle_comum(v_caso);
   perform teste_assert_0212(v_g = 1, 'com Ícaro irmão de Carla declarado: UM grupo', v_g::text);
@@ -169,7 +167,6 @@ begin
     'controle: nenhuma recusa mudou nada (3 grupos: o do bloco dos irmãos, o de X e Y, o de Z; 2 vínculos)');
 
   raise notice '--- 6. encerrar não apaga ---';
-  perform teste_como_admin_0216();
   set local role authenticated;
   v_err := null; begin delete from controlador_vinculo where id = v_vinc;
   exception when others then v_err := sqlstate; end;
@@ -181,7 +178,6 @@ begin
   begin perform fn_controlador_desvincular_familia(v_vinc, 'declaração do cliente retificada', 'portal@0212');
   exception when others then v_err := sqlstate || ' ' || sqlerrm; end;
   reset role;
-  perform teste_fim_admin_0216();
   perform teste_assert_0212(v_err is null, 'o authenticated encerra o vínculo', v_err);
   select count(distinct grupo_id) into v_g from fn_grupo_por_controle_comum(v_caso) where entidade_id in (e1, e2, e3, e4);
   perform teste_assert_0212(v_g = 2, 'encerrado o vínculo de irmão, as 4 voltam a 2 grupos', v_g::text);

@@ -294,14 +294,12 @@ begin
   select count(*) into v_antes from campo_classe_override;
   perform teste_assert_cc(v_antes > 0, 'há override gravado para o teste ter o que tentar apagar');
 
-  perform teste_como_admin_0216();
   set local role authenticated;
   delete from campo_classe_override;
   update campo_classe_override set classe_final = 'revisar_manual';
   delete from campo_classe_sugerida;
   update campo_classe_sugerida set classe_codigo = 'revisar_manual';
   reset role;
-  perform teste_fim_admin_0216();
 
   select count(*) into v_depois from campo_classe_override;
   perform teste_assert_cc(v_antes = v_depois,

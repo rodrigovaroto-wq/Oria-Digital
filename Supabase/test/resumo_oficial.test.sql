@@ -331,7 +331,6 @@ end $$;
 -- As funções são invoker: se faltasse o DELETE nas tabelas filhas, a recusa e a recarga morreriam aqui, e
 -- como superusuário nunca se saberia.
 insert into caso (id, nome, trilha_transacional) values ('77777777-7777-7777-7777-777777777777', 'teste resumo authenticated', true);
-select teste_como_admin_0216();
 set role authenticated;
 do $$
 declare
@@ -359,11 +358,9 @@ begin
   perform teste_assert_ro(v_msg like '42501%', '14-4: o envelope continua sem DELETE para authenticated (evidência, 0206)');
 end $$;
 reset role;
-select teste_fim_admin_0216();
 
 -- 15. fn_upsert_caso PELO NAVEGADOR: a tela de arquivos oficiais obtém o caso_id do mandato pela MESMA
 -- função do n8n (antes ela repetia a regra em TypeScript), e a trilha diz quem criou.
-select teste_como_admin_0216();
 set role authenticated;
 do $$
 declare v_a uuid; v_b uuid;
@@ -375,7 +372,6 @@ begin
     '15-2: ator fora da lista é recusado (é rótulo da trilha, não texto livre do navegador)');
 end $$;
 reset role;
-select teste_fim_admin_0216();
 do $$
 declare v uuid;
 begin

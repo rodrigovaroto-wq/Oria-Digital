@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoes } from "@/lib/supabase/acesso";
+import { escopoDaLista, textoDeNenhumMandato } from "@/lib/acesso";
 import { paginar } from "@/lib/supabase/paginar";
 import type { Caso } from "@/lib/types";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import { humanizar } from "@/lib/rotulos";
-import { FecharMandato } from "@/components/fechar-mandato";
-import { ExcluirMandato } from "@/components/excluir-mandato";
-import { mandatosMeus, resumoDeMembros, situacaoDeMembros, visaoDaLista } from "@/lib/membros";
+import { ETAPAS_DO_MANDATO, etapaDoMandato } from "@/lib/etapa-do-mandato";
+import { padraoDeBusca } from "@/lib/painel";
+import { MenuDoMandato } from "../[id]/menu-do-mandato";
 
 // A LISTA COMPLETA DE MANDATOS — o destino do "Mandatos" da barra lateral.
 //
@@ -27,7 +29,15 @@ import { mandatosMeus, resumoDeMembros, situacaoDeMembros, visaoDaLista } from "
 // A regra que saiu disso vale para as duas telas novas: nenhuma função da barra
 // se repete no conteúdo.
 //
-// A DESCRIÇÃO É DERIVADA, não digitada. Um campo livre a mais é um campo que
+// FORMATO (REDESENHO_DO_PORTAL item 12): TABELA, com abas Ativos/Fechados e busca
+// por nome (`?aba=`, `?q=`, tudo no servidor). Colunas: Mandato, Produto, Etapa,
+// Pendências, Aberto em e o menu "⋯". NÃO há coluna "Responsável": `caso` não
+// guarda responsável, e coluna inventada seria ausência apresentada como dado.
+// As contagens das abas são sobre o resultado da busca (a lista e o número saem
+// do mesmo conjunto). O que a tabela não cabe — quantos documentos chegaram —
+// continua na tela do mandato.
+//
+// A DESCRIÇÃO ERA DERIVADA, não digitada. Um campo livre a mais é um campo que
 // ninguém preenche depois da segunda semana, e a linha ficaria vazia justamente
 // nos mandatos antigos, que são os que precisam de contexto. Estes três fatos o
 // sistema já sabe, e são o que alguém precisa para reconhecer um caso:
@@ -46,224 +56,213 @@ function dataCurta(iso: string | null | undefined): string {
 export default async function CasosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ visao?: string }>;
+  searchParams: Promise<{ aba?: string | string[]; q?: string | string[] }>;
 }) {
+  const { aba: abaBruta, q: qBruto } = await searchParams;
+  const aba = (Array.isArray(abaBruta) ? abaBruta[0] : abaBruta) === "fechados" ? "fechados" : "ativos";
+  const padrao = padraoDeBusca(qBruto);
+  const termo = padrao === null ? "" : (Array.isArray(qBruto) ? qBruto[0] : qBruto)!.trim().slice(0, 80);
+
   const supabase = await createClient();
-  const { visao: visaoPedida } = await searchParams;
+  // O papel (memoizado na requisição) decide o que "nenhum mandato" quer dizer: a RLS devolve VAZIO,
+  // não erro, para quem não está alocado — e só o Sócio vê a mesa inteira.
+  const perm = await lerPermissoes();
+  const soAlocados = escopoDaLista(perm.papel) === "alocados";
 
-  // DUAS VISÕES (27/10/2026, 0215/0216): "Meus mandatos" (onde sou membro) e "Todos" (só administrador,
-  // com a contagem de membros e o mandato sem membro — que só o administrador enxerga). O parâmetro
-  // `?visao=todos` de quem não é administrador é ignorado, e a aba nem aparece. A RLS da 0216 já limita a
-  // consulta abaixo aos mandatos do usuário; o filtro por caso_membro cobre o administrador.
-  const [adminRes, claimsRes] = await Promise.all([supabase.rpc("fn_eh_admin"), supabase.auth.getClaims()]);
-  const ehAdmin = adminRes.data === true;
-  const visao = visaoDaLista(visaoPedida, ehAdmin);
-  const usuarioId = claimsRes.data?.claims?.sub as string | undefined;
-
-  const { data: todosOsCasos, error } = await paginar<Caso>((de, ate) =>
-    supabase
+  const { data, error } = await paginar<Caso>((de, ate) => {
+    let q = supabase
       .from("caso")
-      .select("id, nome, produto, status, criado_em, fechado_em")
+      .select("id, nome, produto, status, criado_em, fechado_em, motivo_fechamento");
+    if (padrao) q = q.ilike("nome", padrao);
+    return q
       .order("criado_em", { ascending: false })
       .order("id", { ascending: true })
-      .range(de, ate),
-  );
+      .range(de, ate);
+  });
 
-  // Leitura de caso_membro com erro = pertinência NÃO conferida (banco sem a 0215): não filtra e não
-  // inventa contagem — a tela avisa, em vez de mostrar "0 membros" ou "meus" = "todos" calado.
-  const meusRes = usuarioId
-    ? await paginar<{ caso_id: string }>((de, ate) =>
-        supabase.from("caso_membro").select("caso_id, usuario_id").eq("usuario_id", usuarioId)
-          .order("caso_id", { ascending: true }).range(de, ate))
-    : null;
-  const meusIds = meusRes && !meusRes.error && !meusRes.truncado
-    ? new Set(meusRes.data.map((l) => l.caso_id))
-    : null;
-  const casosMeus = mandatosMeus(todosOsCasos, meusIds);
-  const casos = visao === "todos" ? todosOsCasos : casosMeus;
+  const casos = data;
 
-  const membrosRes = visao === "todos" && todosOsCasos.length
-    ? await paginar<{ caso_id: string; usuario_id: string }>((de, ate) =>
-        supabase.from("caso_membro").select("caso_id, usuario_id")
-          .order("caso_id", { ascending: true }).order("usuario_id", { ascending: true }).range(de, ate))
-    : null;
-  const membros = visao === "todos"
-    ? resumoDeMembros(membrosRes && !membrosRes.error && !membrosRes.truncado ? membrosRes.data : null)
-    : null;
-
-  // UMA consulta para todos os mandatos, não uma por linha: a lista com 30 casos
-  // faria 90 idas ao banco, e a tela é a primeira que abre no dia.
+  // UMA consulta de pendências para todos os mandatos, não uma por linha. A
+  // contagem de documentos saiu: a tabela não a mostra mais, e era uma consulta
+  // inteira só para uma frase.
   const ids = casos.map((c) => c.id);
-  const [docsRes, pendRes] = ids.length
-    ? await Promise.all([
-        paginar<{ id: string; caso_id: string }>((de, ate) =>
-          supabase.from("documento").select("id, caso_id").in("caso_id", ids)
-            .order("id", { ascending: true }).range(de, ate)),
-        paginar<{ id: string; caso_id: string; severidade: string; estado: string }>((de, ate) =>
-          supabase
-            .from("pendencia")
-            .select("id, caso_id, severidade, estado")
-            .in("caso_id", ids)
-            .in("estado", ["aberta", "em_correcao_interna", "reenviada_ao_cliente"])
-            .order("id", { ascending: true })
-            .range(de, ate)),
-      ])
-    : [
-        { data: [] as Array<{ id: string; caso_id: string }>, error: null, truncado: false },
-        { data: [] as Array<{ id: string; caso_id: string; severidade: string; estado: string }>, error: null, truncado: false },
-      ];
+  const pendRes = ids.length
+    ? await paginar<{ id: string; caso_id: string; severidade: string }>((de, ate) =>
+        supabase
+          .from("pendencia")
+          .select("id, caso_id, severidade")
+          .in("caso_id", ids)
+          .in("estado", ["aberta", "em_correcao_interna", "reenviada_ao_cliente"])
+          .order("id", { ascending: true })
+          .range(de, ate))
+    : { data: [] as Array<{ id: string; caso_id: string; severidade: string }>, error: null, truncado: false };
 
-  const docsPorCaso = new Map<string, number>();
-  for (const d of (docsRes.data as Array<{ caso_id: string }> | null) ?? []) {
-    docsPorCaso.set(d.caso_id, (docsPorCaso.get(d.caso_id) ?? 0) + 1);
-  }
   const pendPorCaso = new Map<string, { total: number; bloqueantes: number }>();
-  for (const p of (pendRes.data as Array<{ caso_id: string; severidade: string }> | null) ?? []) {
+  for (const p of pendRes.data) {
     const atual = pendPorCaso.get(p.caso_id) ?? { total: 0, bloqueantes: 0 };
     atual.total += 1;
     if (p.severidade === "bloqueante") atual.bloqueantes += 1;
     pendPorCaso.set(p.caso_id, atual);
   }
+  // Sem a leitura, "0 pendências" seria ausência apresentada como dado.
+  const pendLida = !pendRes.error && !pendRes.truncado;
 
   const ativos = casos.filter((c) => !c.fechado_em);
   const fechados = casos.filter((c) => c.fechado_em);
+  const lista = aba === "fechados" ? fechados : ativos;
 
-  const descricao = (caso: Caso): string => {
-    const docs = docsPorCaso.get(caso.id) ?? 0;
-    const pend = pendPorCaso.get(caso.id);
-    const partes = [
-      humanizar(caso.produto),
-      docs === 0 ? "sem documentos" : `${docs} ${docs === 1 ? "documento" : "documentos"}`,
-    ];
-    if (pend?.total) {
-      partes.push(
-        pend.bloqueantes > 0
-          ? `${pend.total} ${pend.total === 1 ? "pendência" : "pendências"} (${pend.bloqueantes} bloqueia${
-              pend.bloqueantes === 1 ? "" : "m"
-            })`
-          : `${pend.total} ${pend.total === 1 ? "pendência" : "pendências"}`,
-      );
-    } else if (docs > 0) {
-      partes.push("sem pendência");
-    }
-    if (dataCurta(caso.criado_em)) partes.push(`aberto em ${dataCurta(caso.criado_em)}`);
-    return partes.join(" · ");
+  const href = (a: "ativos" | "fechados") => {
+    const q = new URLSearchParams();
+    if (a === "fechados") q.set("aba", a);
+    if (termo) q.set("q", termo);
+    const t = q.toString();
+    return t ? `/casos/todos?${t}` : "/casos/todos";
   };
-
-  // SEM MEMBRO só se diz quando a contagem foi CONFERIDA e deu zero; sem conferência, a linha diz que
-  // não foi conferido — nunca "0 membros" (regra 1). O mandato sem membro só o administrador vê.
-  const chipDeMembros = (caso: Caso) => {
-    if (!membros) return null;
-    const { situacao, quantos } = situacaoDeMembros(membros, caso.id);
-    if (situacao === "nao_conferido")
-      return <span className="chip bg-alerta-100 text-alerta-800" title="A leitura de caso_membro não terminou; a contagem não é conhecida.">membros não conferidos</span>;
-    if (situacao === "sem_membro")
-      return <span className="chip bg-risco-100 text-risco-800" title="Ninguém trabalha neste mandato; só os administradores o enxergam.">sem membro</span>;
-    return <span className="chip bg-tinta-100 text-tinta-600">{quantos} {quantos === 1 ? "membro" : "membros"}</span>;
-  };
-  const semMembro = (caso: Caso) => membros !== null && situacaoDeMembros(membros, caso.id).situacao === "sem_membro";
 
   const Linha = ({ caso }: { caso: Caso }) => {
     const fechado = Boolean(caso.fechado_em);
+    const pend = pendPorCaso.get(caso.id);
+    const etapa = ETAPAS_DO_MANDATO[etapaDoMandato(caso.status)];
     return (
-      <li className={`carta overflow-hidden ${fechado ? "opacity-75" : ""} ${
-        semMembro(caso) ? "border-risco-300 ring-1 ring-risco-200" : ""
-      }`}>
-        <Link
-          href={`/casos/${caso.id}`}
-          className="flex items-start justify-between gap-4 px-4 py-3.5 transition-colors hover:bg-tinta-50"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-tinta-900">{caso.nome}</p>
-            {/* MENOS DE UMA LINHA, e truncada quando não couber: a lista serve
-                para RECONHECER o mandato, não para explicá-lo. */}
-            <p className="mt-0.5 truncate text-xs text-tinta-500">{descricao(caso)}</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            {/* DOIS RÓTULOS, e eles respondem perguntas diferentes: onde o
-                mandato está no trabalho, e se ele ainda está na mesa. */}
-            {chipDeMembros(caso)}
-            <span className={`chip ${CASO_STATUS_COLOR[caso.status]}`}>
-              {CASO_STATUS_LABEL[caso.status]}
+      <tr className={`relative block px-4 py-3 transition-colors hover:bg-tinta-50 md:table-row md:p-0 ${fechado ? "opacity-75" : ""}`}>
+        <td className="block pr-10 md:table-cell md:px-4 md:py-3 md:pr-4">
+          {/* Linha inteira clicável: o link se estende sobre a linha (after:inset-0)
+              e o menu "⋯" fica acima dele (z-10). */}
+          <Link
+            href={`/casos/${caso.id}`}
+            className="block truncate text-sm font-semibold text-tinta-900 after:absolute after:inset-0"
+          >
+            {caso.nome}
+          </Link>
+          {fechado && (
+            <p className="mt-0.5 text-[11px] text-tinta-500">
+              {`Fechado${dataCurta(caso.fechado_em) ? ` em ${dataCurta(caso.fechado_em)}` : ""}${
+                caso.motivo_fechamento ? ` — ${caso.motivo_fechamento}` : ""
+              }. Nada foi apagado.`}
+            </p>
+          )}
+        </td>
+        <td className="mt-1 inline-block pr-3 text-xs text-tinta-500 md:table-cell md:px-4 md:py-3 md:text-sm md:text-tinta-700">
+          {humanizar(caso.produto)}
+        </td>
+        <td className="inline-block pr-3 md:table-cell md:px-4 md:py-3">
+          {/* Duas perguntas, dois rótulos: onde o trabalho está (etapa, em
+              palavras) e o estado do gate (chip). */}
+          <span className="text-xs text-tinta-700 md:text-sm">{etapa}</span>{" "}
+          <span className={`chip ${CASO_STATUS_COLOR[caso.status]}`}>{CASO_STATUS_LABEL[caso.status]}</span>
+        </td>
+        <td className="inline-block pr-3 text-xs md:table-cell md:px-4 md:py-3 md:text-sm">
+          {!pendLida ? (
+            <span className="text-tinta-400" title="leitura das pendências indisponível agora">—</span>
+          ) : pend?.total ? (
+            <span className="tabular-nums text-tinta-700">
+              {pend.total} {pend.total === 1 ? "pendência" : "pendências"}
+              {pend.bloqueantes > 0 && (
+                <span className="chip ml-1.5 bg-risco-100 text-risco-800">
+                  {pend.bloqueantes} {pend.bloqueantes === 1 ? "trava" : "travam"}
+                </span>
+              )}
             </span>
-            <span
-              className={`chip ${
-                fechado ? "bg-tinta-200 text-tinta-600" : "bg-acento-50 text-acento-700"
-              }`}
-            >
-              {fechado ? "Fechado" : "Ativo"}
-            </span>
-          </div>
-        </Link>
-
-        {/* AS AÇÕES DE FIM DE VIDA ficam no rodapé do item, separadas por uma
-            linha: elas não competem com o clique que abre o mandato, e quem as
-            procura sabe onde estão. */}
-        <div className="flex items-center justify-between gap-3 border-t border-tinta-100 bg-tinta-50/60 px-4 py-2">
-          <span className="truncate text-[11px] text-tinta-500">
-            {fechado
-              ? `Fechado${caso.motivo_fechamento ? ` — ${caso.motivo_fechamento}` : ""}. Nada foi apagado.`
-              : "Fechar tira da mesa e preserva tudo; excluir apaga o mandato e o que veio dele."}
-          </span>
-          <div className="flex shrink-0 items-center gap-2">
-            <FecharMandato casoId={caso.id} nome={caso.nome} fechado={fechado} />
-            <ExcluirMandato casoId={caso.id} nome={caso.nome} />
-          </div>
-        </div>
-      </li>
+          ) : (
+            <span className="text-tinta-500">nenhuma</span>
+          )}
+        </td>
+        <td className="inline-block text-xs text-tinta-500 md:table-cell md:px-4 md:py-3 md:text-sm md:text-tinta-700">
+          <span className="md:hidden">aberto em </span>
+          {dataCurta(caso.criado_em)}
+        </td>
+        {/* O menu reusa o do cabeçalho do mandato: os diálogos de fechar/excluir
+            moram dentro do painel escondido, que nunca é desmontado. */}
+        {/* No celular cada td é `absolute z-10`, ou seja, um contexto de empilhamento
+            próprio: o menu aberto da linha N (z-20, dentro do td) ficava sob o "⋯" da
+            linha N+1. O td que contém o botão expandido sobe para z-30. */}
+        <td className="absolute right-2 top-2 z-10 has-[[aria-expanded=true]]:z-30 md:static md:table-cell md:px-3 md:py-3 md:text-right">
+          <MenuDoMandato casoId={caso.id} nome={caso.nome} fechado={fechado} reservado={perm.reservadoAoSocio} />
+        </td>
+      </tr>
     );
   };
 
+  const aba_ = (a: "ativos" | "fechados", rotulo: string, n: number) => (
+    <Link
+      key={a}
+      href={href(a)}
+      aria-current={aba === a ? "page" : undefined}
+      className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+        aba === a
+          ? "border-tinta-900 text-tinta-900"
+          : "border-transparent text-tinta-500 hover:text-tinta-800"
+      }`}
+    >
+      {rotulo} <span className="tabular-nums">({n})</span>
+    </Link>
+  );
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-tinta-900">Mandatos</h1>
           <p className="mt-0.5 text-sm text-tinta-500">
-            {casos.length === 0
-              ? "Nenhum mandato aberto."
-              : `${ativos.length} ${ativos.length === 1 ? "ativo" : "ativos"}` +
-                (fechados.length ? ` · ${fechados.length} fechado${fechados.length === 1 ? "" : "s"}` : "")}
+            {casos.length === 0 && !termo
+              ? `${soAlocados ? textoDeNenhumMandato(perm.papel) : textoDeNenhumMandato(perm.papel, "aberto")}.`
+              : termo
+                ? `${casos.length} ${casos.length === 1 ? "resultado" : "resultados"} para “${termo}”`
+                : soAlocados
+                  ? "Os mandatos em que você está alocado, incluindo o que já saiu da mesa."
+                  : "O que existe, incluindo o que já saiu da mesa."}
           </p>
         </div>
+        {/* GET puro: a busca é um link que se pode copiar. `aba` segue junto. */}
+        <form action="/casos/todos" method="get" role="search" className="flex items-center gap-2">
+          {aba === "fechados" && <input type="hidden" name="aba" value="fechados" />}
+          <input
+            type="search"
+            name="q"
+            defaultValue={termo}
+            maxLength={80}
+            placeholder="Buscar pelo nome"
+            aria-label="Buscar mandato pelo nome"
+            className="w-48 rounded-md border border-tinta-200 bg-folha px-3 py-1.5 text-sm text-tinta-900 placeholder:text-tinta-400 sm:w-64"
+          />
+          <button type="submit" className="btn-secundario">Buscar</button>
+          {termo && (
+            <Link href={aba === "fechados" ? "/casos/todos?aba=fechados" : "/casos/todos"} className="btn-discreto">
+              Limpar
+            </Link>
+          )}
+        </form>
       </div>
-
-      {/* AS DUAS VISÕES. "Todos" só existe para administrador. */}
-      <nav aria-label="Visão da lista" className="flex gap-1 border-b border-tinta-200">
-        {([
-          ["meus", "Meus mandatos", "/casos/todos", meusIds ? casosMeus.length : null],
-          ...(ehAdmin ? [["todos", "Todos", "/casos/todos?visao=todos", todosOsCasos.length] as const] : []),
-        ] as const).map(([chave, rotulo, href, n]) => (
-          <Link key={chave} href={href} aria-current={visao === chave ? "page" : undefined}
-                className={`-mb-px border-b-2 px-3 py-2 text-sm ${
-                  visao === chave ? "border-acento-600 font-medium text-acento-700"
-                                  : "border-transparent text-tinta-600 hover:text-tinta-900"}`}>
-            {rotulo}{n !== null && <span className="ml-1.5 text-xs text-tinta-400">{n}</span>}
-          </Link>
-        ))}
-      </nav>
-
-      {visao === "meus" && meusIds === null && (
-        <p className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-900">
-          Não foi possível conferir em quais mandatos você é membro; a lista abaixo é a que o banco devolveu, sem filtro.
-        </p>
-      )}
-      {visao === "todos" && membros && membros.porCaso &&
-        casos.filter((c) => semMembro(c)).length > 0 && (
-        <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
-          <strong className="font-semibold">{casos.filter((c) => semMembro(c)).length}{" "}
-          {casos.filter((c) => semMembro(c)).length === 1 ? "mandato sem membro" : "mandatos sem membro"}</strong>
-          {" "}— só os administradores os enxergam. Abra o mandato e use a etapa Membros.
-        </p>
-      )}
 
       {error && (
         <p className="rounded-lg border border-risco-200 bg-risco-50 p-3 text-sm text-risco-800">
           Não foi possível carregar os mandatos: {error.message}
         </p>
       )}
+      {!error && pendRes.error && (
+        <p className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-900">
+          As pendências não puderam ser lidas agora; a coluna Pendências mostra traço, não zero.
+        </p>
+      )}
 
-      {!error && casos.length === 0 ? (
+      {!error && casos.length === 0 && !termo && escopoDaLista(perm.papel) === "indefinido" ? (
+        <div className="carta flex flex-col items-center gap-3 px-6 py-12 text-center">
+          <p className="text-sm font-medium text-tinta-900">{textoDeNenhumMandato(perm.papel)}</p>
+          <p className="max-w-md text-sm text-tinta-500">
+            Não foi possível conferir o seu papel, então a lista pode estar recortada ao seu acesso: não dá
+            para dizer que não existe mandato. Recarregue a página.
+          </p>
+        </div>
+      ) : !error && casos.length === 0 && !termo && soAlocados ? (
+        <div className="carta flex flex-col items-center gap-3 px-6 py-12 text-center">
+          <p className="text-sm font-medium text-tinta-900">Você ainda não está alocado em nenhum mandato</p>
+          <p className="max-w-md text-sm text-tinta-500">
+            Com o papel de {perm.papel === "leitura" ? "Leitura" : "Analista"} você só vê os mandatos em que um
+            Sócio alocou você — o que não aparece aqui pode existir. Peça a alocação a um Sócio
+            {perm.criarMandato.pode ? <>, ou abra um mandato seu em <strong className="font-medium text-tinta-700">Novo mandato</strong></> : ""}.
+          </p>
+        </div>
+      ) : !error && casos.length === 0 && !termo ? (
         <div className="carta flex flex-col items-center gap-3 px-6 py-12 text-center">
           <p className="text-sm font-medium text-tinta-900">Comece subindo os arquivos de um mandato</p>
           <p className="max-w-md text-sm text-tinta-500">
@@ -274,26 +273,48 @@ export default async function CasosPage({
         </div>
       ) : (
         <>
-          <ul className="space-y-3">
-            {ativos.map((caso) => (
-              <Linha key={caso.id} caso={caso} />
-            ))}
-          </ul>
+          <nav aria-label="Mandatos" className="flex gap-1 border-b border-tinta-200">
+            {aba_("ativos", "Ativos", ativos.length)}
+            {aba_("fechados", "Fechados", fechados.length)}
+          </nav>
 
-          {fechados.length > 0 && (
-            <section className="pt-2">
-              <div className="mb-2 flex items-baseline justify-between gap-3">
-                <h2 className="titulo-secao">Fechados</h2>
-                <p className="text-xs text-tinta-500">
-                  saíram da mesa — o dado continua aqui, e reabrir é um clique
-                </p>
-              </div>
-              <ul className="space-y-3">
-                {fechados.map((caso) => (
-                  <Linha key={caso.id} caso={caso} />
-                ))}
-              </ul>
-            </section>
+          {aba === "fechados" && fechados.length > 0 && (
+            <p className="text-xs text-tinta-500">
+              Saíram da mesa — o dado continua aqui, e reabrir é um clique no menu ⋯.
+            </p>
+          )}
+
+          {lista.length === 0 ? (
+            <div className="carta px-6 py-10 text-center text-sm text-tinta-500">
+              {termo
+                ? `Nenhum mandato ${aba === "fechados" ? "fechado" : "ativo"} com “${termo}” no nome.`
+                : aba === "fechados"
+                  ? "Nenhum mandato fechado."
+                  : "Nenhum mandato ativo."}
+            </div>
+          ) : (
+            // Sem `overflow` no contêiner: ele cortaria o menu "⋯", que abre para
+            // baixo da linha. No celular a tabela vira linhas empilhadas (sem
+            // rolagem horizontal); a partir de md é tabela de verdade.
+            <div className="carta">
+              <table className="block w-full md:table">
+                <thead className="hidden md:table-header-group">
+                  <tr className="border-b border-tinta-100 text-left text-[11px] font-semibold uppercase tracking-wide text-tinta-500">
+                    <th scope="col" className="px-4 py-2.5">Mandato</th>
+                    <th scope="col" className="px-4 py-2.5">Produto</th>
+                    <th scope="col" className="px-4 py-2.5">Etapa</th>
+                    <th scope="col" className="px-4 py-2.5">Pendências</th>
+                    <th scope="col" className="px-4 py-2.5">Aberto em</th>
+                    <th scope="col" className="px-3 py-2.5"><span className="sr-only">Ações</span></th>
+                  </tr>
+                </thead>
+                <tbody className="block divide-y divide-tinta-100 md:table-row-group">
+                  {lista.map((caso) => (
+                    <Linha key={caso.id} caso={caso} />
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </>
       )}

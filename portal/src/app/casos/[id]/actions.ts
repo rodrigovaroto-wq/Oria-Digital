@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { DecisaoPendencia } from "@/lib/pendencia";
+import { textoDeFalhaDaAcao, type ResultadoDaAcao } from "@/lib/acesso";
+
+// AS AÇÕES DESTE ARQUIVO DEVOLVEM A FALHA COMO VALOR (`{ erro }`), NÃO LANÇAM. Em produção o Next
+// troca a mensagem de um erro lançado por uma server action por um texto genérico com um digest:
+// a frase do papel ("Seu papel não permite esta ação…") e o motivo de recusa do banco (aprovação
+// bloqueada, fechamento recusado) nunca chegavam à tela. Quem chama mostra `erro` ao lado do botão.
 
 // Chama fn_aprovar_caso (Supabase/migrations/0037) — o Portão 2 POR CASO, que até a
 // 0037 não existia em código: `caso_status` tinha 'aprovado' e nada transicionava
@@ -13,7 +19,7 @@ import type { DecisaoPendencia } from "@/lib/pendencia";
 // encaminha e mostra o resultado. Desde a 0109 ela é UMA: não há bloqueante sem
 // decisão. O teto de ressalvas e a lista fechada de `Arquitetura do Sistema/2 Especificação/f0/04` saíram por decisão
 // do dono e viraram contagem informativa.
-export async function aprovarCaso(casoId: string, formData: FormData) {
+export async function aprovarCaso(casoId: string, formData: FormData): Promise<ResultadoDaAcao> {
   const supabase = await createClient();
 
   const motivo = String(formData.get("motivo") || "").trim() || null;
@@ -28,9 +34,7 @@ export async function aprovarCaso(casoId: string, formData: FormData) {
     p_motivo: motivo,
   });
 
-  if (error) {
-    throw new Error(`Falha ao aprovar o caso: ${error.message}`);
-  }
+  if (error) return { erro: textoDeFalhaDaAcao("Falha ao aprovar o caso", error) };
 
   // RECUSA no payload, não como erro de Postgres — mesmo padrão da 0036, e pelo
   // mesmo motivo: exceção em plpgsql desfaria o registro da própria tentativa em
@@ -41,10 +45,11 @@ export async function aprovarCaso(casoId: string, formData: FormData) {
   // por sucesso e a tela recarregaria como se o caso tivesse sido aprovado.
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (r?.recusado) {
-    throw new Error(r.motivo_recusa ?? "Aprovação recusada pelo Portão 2.");
+    return { erro: r.motivo_recusa ?? "Aprovação recusada: o mandato ainda não cumpre as condições de aprovação." };
   }
 
-  revalidatePath(`/casos/${casoId}`);
+  // "layout": os números das abas moram no layout do mandato e `revalidatePath(<rota>)` sozinho não o refaz.
+  revalidatePath(`/casos/${casoId}`, "layout");
 }
 
 // Chama fn_decidir_pendencia (Supabase/migrations/0109) — os três botões da tela.
@@ -60,7 +65,7 @@ export async function decidirPendencia(
   casoId: string,
   pendenciaId: string,
   decisao: DecisaoPendencia,
-) {
+): Promise<ResultadoDaAcao> {
   const supabase = await createClient();
 
   const {
@@ -73,18 +78,17 @@ export async function decidirPendencia(
     p_decisao: decisao,
   });
 
-  if (error) {
-    throw new Error(`Falha ao registrar a decisão: ${error.message}`);
-  }
+  if (error) return { erro: textoDeFalhaDaAcao("Falha ao registrar a decisão", error) };
   // RECUSA no payload, não como erro de Postgres — mesmo padrão da 0036/0037.
   // Ler este campo é obrigatório: sem isto, `error` nulo faria a recusa passar
   // por sucesso e a tela recarregaria como se a decisão tivesse sido gravada.
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (r?.recusado) {
-    throw new Error(r.motivo_recusa ?? "Decisão recusada.");
+    return { erro: r.motivo_recusa ?? "Decisão recusada." };
   }
 
-  revalidatePath(`/casos/${casoId}`);
+  // "layout": o número da aba Pendências vem do layout; sem isto ele seguiria com o valor de antes da decisão.
+  revalidatePath(`/casos/${casoId}`, "layout");
 }
 
 // Chama fn_excluir_caso (Supabase/migrations/0108) — o botão de excluir o mandato.
@@ -96,7 +100,7 @@ export async function decidirPendencia(
 // FECHAR (0114) É A AÇÃO DO DIA A DIA; excluir é a exceção. As duas moram
 // juntas de propósito: quem vai apagar um mandato passa por aqui e vê que existe
 // um jeito de tirá-lo da frente sem perder o que a equipe produziu.
-export async function fecharCaso(casoId: string, formData?: FormData) {
+export async function fecharCaso(casoId: string, formData?: FormData): Promise<ResultadoDaAcao> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   const motivo = (formData?.get("motivo") as string | null)?.trim() || null;
@@ -106,16 +110,16 @@ export async function fecharCaso(casoId: string, formData?: FormData) {
     p_autor: user?.email ?? "portal:desconhecido",
     p_motivo: motivo,
   });
-  if (error) throw new Error(`Falha ao fechar o mandato: ${error.message}`);
+  if (error) return { erro: textoDeFalhaDaAcao("Falha ao fechar o mandato", error) };
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
-  if (r?.recusado) throw new Error(r.motivo_recusa ?? "Fechamento recusado.");
+  if (r?.recusado) return { erro: r.motivo_recusa ?? "Fechamento recusado." };
 
   revalidatePath("/casos");
   revalidatePath("/casos/todos");
   revalidatePath(`/casos/${casoId}`);
 }
 
-export async function reabrirCaso(casoId: string) {
+export async function reabrirCaso(casoId: string): Promise<ResultadoDaAcao> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -123,16 +127,16 @@ export async function reabrirCaso(casoId: string) {
     p_caso_id: casoId,
     p_autor: user?.email ?? "portal:desconhecido",
   });
-  if (error) throw new Error(`Falha ao reabrir o mandato: ${error.message}`);
+  if (error) return { erro: textoDeFalhaDaAcao("Falha ao reabrir o mandato", error) };
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
-  if (r?.recusado) throw new Error(r.motivo_recusa ?? "Reabertura recusada.");
+  if (r?.recusado) return { erro: r.motivo_recusa ?? "Reabertura recusada." };
 
   revalidatePath("/casos");
   revalidatePath("/casos/todos");
   revalidatePath(`/casos/${casoId}`);
 }
 
-export async function excluirCaso(casoId: string) {
+export async function excluirCaso(casoId: string): Promise<ResultadoDaAcao> {
   const supabase = await createClient();
 
   const {
@@ -144,12 +148,10 @@ export async function excluirCaso(casoId: string) {
     p_autor: user?.email ?? "portal:desconhecido",
   });
 
-  if (error) {
-    throw new Error(`Falha ao excluir o mandato: ${error.message}`);
-  }
+  if (error) return { erro: textoDeFalhaDaAcao("Falha ao excluir o mandato", error) };
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (r?.recusado) {
-    throw new Error(r.motivo_recusa ?? "Exclusão recusada.");
+    return { erro: r.motivo_recusa ?? "Exclusão recusada." };
   }
 
   // A lista e o painel, não o caso: o caso não existe mais, e

@@ -25,22 +25,19 @@ psql -q -d "$DB" -c "
   create table if not exists storage.buckets(id text primary key, name text, public boolean default false);
   create table if not exists storage.objects(id uuid default gen_random_uuid() primary key,
     bucket_id text, name text, owner uuid);
-  alter table storage.objects enable row level security;" >/dev/null
-
-# O SCHEMA `auth` DO SUPABASE, no mínimo que a 0215 usa (27/10/2026): `auth.users` (id, email) e `auth.uid()` lendo o
-# mesmo `request.jwt.claims` que o PostgREST preenche. Antes da 0215 nenhuma migration tocava `auth`, por isso o
-# replay local nunca o teve; sem ele `caso_membro` não cria a FK e nenhum teste consegue ser "um usuário" (o jwt de
-# `set local role authenticated`). O `service_role` lê `auth.users` como no Supabase (o `authenticated` NÃO: lá
-# também não lê). O Supabase real tem mais colunas em `auth.users`; só estas duas são usadas aqui.
-psql -q -d "$DB" -c "
+  alter table storage.objects enable row level security;
+  -- 0216: o Supabase concede ao authenticated o uso do schema storage e as quatro operações em storage.objects (o que
+  -- limita é a policy); sem isto o teste de acesso ao Storage por mandato leva 42501 antes de a policy ser avaliada.
+  grant usage on schema storage to authenticated, service_role;
+  grant select, insert, update, delete on storage.objects to authenticated, service_role;
+  -- 0216: o schema auth do Supabase (usuários e auth.uid()), no mínimo que as migrations e os testes usam. O
+  -- auth.uid() é o do Supabase: lê o sub de request.jwt.claims, que o PostgREST preenche por requisição.
   create schema if not exists auth;
-  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text);
+  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text, created_at timestamptz not null default now());
   create or replace function auth.uid() returns uuid language sql stable as \$\$
     select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
                     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid \$\$;
-  grant usage on schema auth to authenticated, service_role;
-  grant execute on function auth.uid() to anon, authenticated, service_role;
-  grant select on auth.users to service_role;" >/dev/null
+  grant usage on schema auth to anon, authenticated, service_role;" >/dev/null
 
 # O SUPABASE NOVO NÃO CONCEDE MAIS NADA POR DEFAULT PRIVILEGE (20/10/2026). Até 29/10/2026 o projeto trazia
 # `alter default privileges in schema public grant all on tables/sequences to anon, authenticated, service_role`, e este
@@ -203,6 +200,16 @@ for f in Supabase/migrations/*.sql; do
 done
 echo "   $(ls Supabase/migrations/*.sql | wc -l) migrations aplicadas"
 
+# O USUÁRIO PADRÃO DOS TESTES É UM SÓCIO (0216). Depois da 0216 `authenticated` sem papel não lê nada, e ~14 suítes antigas
+# fazem `set role authenticated` só para provar GRANT/policy de escrita da F1 — nenhuma delas fala de papel. Em vez de editar
+# todas, a sessão nasce com o JWT de um Sócio de teste (`alter database ... set request.jwt.claims`: vale para toda conexão
+# nova a este banco). `acesso_por_caso.test.sql` troca o JWT por `set_config` para provar os outros papéis. Isto vem DEPOIS
+# das migrations de propósito: o bootstrap da 0216 não pode ter visto este usuário (em produção, vê os reais).
+psql -q -v ON_ERROR_STOP=1 -d "$DB" -c "
+  insert into auth.users(id, email) values ('00000000-0000-0000-0000-00000000a001', 'socio.padrao@teste.local');
+  insert into membro(usuario_id, papel) values ('00000000-0000-0000-0000-00000000a001', 'socio');
+  alter database $DB set request.jwt.claims to '{\"sub\":\"00000000-0000-0000-0000-00000000a001\",\"role\":\"authenticated\"}';"
+
 # -----------------------------------------------------------------------------
 # O CATALOGO DE INSTALACAO DECLARA ATE ONDE FOI REVISADO — e este portao existe
 # porque ele passou 16 migrations sem que nada acusasse.
@@ -360,11 +367,6 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/despfin_ano_par_do_mapa.test.s
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
-# O SUPORTE DOS TESTES QUE RODAM COMO `authenticated` (0216): depois da restrição por mandato, `set role authenticated`
-# sem identidade lê zero linhas; os 12 testes que dependiam do `using (true)` chamam estas duas funções em par (ver o
-# cabeçalho de Supabase/test/suporte_authenticated.sql). Não é um teste: não tem assert, só funções.
-psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/suporte_authenticated.sql
-
 echo "== testes de reconciliação"
 # A ÁRVORE DA SEÇÃO VEM ANTES DA RECONCILIAÇÃO, E A ORDEM É OBRIGATÓRIA.
 # O bloco 6 do reconciliacao.test.sql renomeia TODA chave da versão ...0001 para
@@ -851,16 +853,6 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/grant_de_tabela.test.sql 2>&1 
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
-echo "== 0215 — o mandato só é visto por quem trabalha nele: membro + administrador, e a transição que não tira o acesso de ninguém"
-psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/caso_membro.test.sql 2>&1 \
-  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
-
-echo
-echo "== 0216 — a leitura que só o membro faz: RLS por mandato em toda tabela de dado do cliente, no storage e no rastro"
-psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/rls_por_mandato.test.sql 2>&1 \
-  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
-
-echo
 echo "== 0211 — a fusão de entidades leva o perímetro da absorvida (e o que não leva fica no evento)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fusao_perimetro.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
@@ -874,6 +866,16 @@ echo
 echo "== 0213 — a fusão leva a pergunta já agida e caso_pergunta segue append-only"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fusao_pergunta.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0215 — o histórico do mandato (fn_historico_do_caso): quem fez o quê e quando, sem vazar outro caso"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/historico_do_caso.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0216 — o acesso por mandato: Sócio · Analista · Leitura, alocação, RLS por caso, e o que só o Sócio faz"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/acesso_por_caso.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo
 echo "== carga inicial dos índices macro (dado real, versionado)"

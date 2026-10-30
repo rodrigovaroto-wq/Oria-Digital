@@ -11,6 +11,16 @@ tela de cadastro: contas são criadas pelo administrador direto no painel do
 Supabase (Authentication → Users). O cliente assessorado **não acessa** o
 portal, e credores ou terceiros tampouco.
 
+**Isto é o HOJE, não o destino (decisão do dono, 27/10/2026).** Duas mudanças de
+público estão decididas e ARQUIVADAS — nenhuma tela deve antecipá-las antes de o
+banco garantir o isolamento (RLS por caso e papel, roadmap F17):
+
+- **Outras casas vão assinar o portal** (multiempresa). Futuro, não agora.
+- **O cliente vai acessar o mandato da própria empresa** para subir documentos e
+  acompanhar o andamento. Futuro, não agora.
+
+O registro completo está em `REDESENHO_DO_PORTAL.md`, § "Arquivado".
+
 O usuário chega ao portal já sabendo de qual mandato precisa. O trabalho dele é
 **conferir e liberar**: olhar o que a ingestão automática classificou e extraiu
 dos documentos que o cliente enviou, corrigir o que está errado, aceitar o que
@@ -117,15 +127,34 @@ Fluxo real de uma sessão de trabalho:
    confiança/status/versão da taxonomia) em comentário de célula.
 
 **Navegação:** barra lateral retrátil onde *Novo mandato* é AÇÃO (fixa) e
-*Mandatos* é LUGAR (abre e lista os ativos). Regra estabelecida: **nenhuma
-função da barra lateral se repete no conteúdo.**
+*Mandatos* é LUGAR. Regra estabelecida: **nenhuma função da barra lateral se
+repete no conteúdo.** Desde o redesenho (27/10/2026) a barra lista só os
+mandatos RECENTES, não todos os ativos — a lista inteira é a tela Mandatos — e
+**dentro do mandato as telas são abas fixas**, sempre as mesmas e na ordem do
+trabalho (`REDESENHO_DO_PORTAL.md`).
 
 **Fim de vida do mandato:** fechar ≠ excluir. `caso.status` diz onde o mandato
 está no trabalho; `fechado_em` responde "ainda estamos nisso?".
 
 **Vocabulário do domínio** (usar, nunca traduzir para genérico): mandato, caso,
 Kit Básico, pendência, reconciliação, entidade, período, taxonomia, aceite,
-Portão 2, dial de autonomia, linha extraída, proveniência.
+linha extraída, proveniência.
+
+**Vocabulário de ENGENHARIA não vai para a tela** (decisão do dono, 27/10/2026).
+A regra acima protegia o termo de mercado, que o analista lê sem legenda; ela
+também protegia, por acidente, nomes que só existem dentro do repositório. Na
+tela, a partir daqui:
+
+| No código e na doutrina | Na tela |
+|---|---|
+| Portão 2 / conferência final | **Aprovação** |
+| Autonomia / dial de autonomia | **Qualidade da automação** |
+| Perímetro | **Grupo econômico** |
+| Entidade fantasma | **Empresa não identificada** |
+| Painel | **Início** |
+
+Os nomes da esquerda continuam valendo no banco, nas funções e nos documentos
+de arquitetura — trocar ali é migration e não muda nada para quem usa.
 
 ## Capabilities and Constraints
 

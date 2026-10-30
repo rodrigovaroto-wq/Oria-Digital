@@ -1,5 +1,6 @@
 "use client";
 
+import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import { useState } from "react";
 import {
   importarTranscricao,
@@ -26,9 +27,12 @@ export function TranscricaoHumana({
   casoId,
   docId,
   motivo,
+  somenteLeitura = false,
 }: {
   casoId: string;
   docId: string;
+  /** Papel sem escrita neste mandato: baixar a planilha continua, importar fica desabilitado. */
+  somenteLeitura?: boolean;
   /** Por que o bloco está aparecendo — ilegível, ou zero linhas extraídas. */
   motivo: "ilegivel" | "sem_linhas";
 }) {
@@ -75,6 +79,7 @@ export function TranscricaoHumana({
         </span>
       </div>
 
+      <ZonaDeEscrita pode={!somenteLeitura}>
       <form
         className="mt-3 space-y-2 border-t border-tinta-200 pt-3"
         action={async (formData) => {
@@ -111,6 +116,7 @@ export function TranscricaoHumana({
           </button>
         </div>
       </form>
+      </ZonaDeEscrita>
 
       {/* A RECUSA É LIDA E MOSTRADA COM PALAVRA. Ela não é ruído de validação: o
           texto diz o que fazer com o arquivo que a pessoa tem na mão — e o caso mais

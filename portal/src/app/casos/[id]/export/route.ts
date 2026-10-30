@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { recusar } from "@/lib/recusa-do-export";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { lerCamposDasVersoes, lerDocumentosDoCaso, lerValoresPorAno } from "@/lib/leitura-do-caso";
@@ -67,7 +68,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   ]);
 
   if (casoRes.error || !casoRes.data) {
-    return NextResponse.json({ error: "Caso não encontrado." }, { status: 404 });
+    return recusar(request, id, { error: "Caso não encontrado." }, { status: 404 });
   }
 
   const caso = casoRes.data;
@@ -84,7 +85,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // pior que não entregar, porque um `.xlsx` que abre parece um resultado.
   if (documentosRes.error) {
     console.error(`[export] consulta de documentos falhou: ${documentosRes.error.message}`, { caso_id: id });
-    return NextResponse.json(
+    return recusar(request, id, 
       {
         error: "Não foi possível ler os documentos deste caso — o export foi ABORTADO em vez de gerar uma planilha vazia.",
         detalhe: documentosRes.error.message,
@@ -110,7 +111,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   if (camposRes.error) {
     console.error(`[export] consulta de campos extraídos falhou: ${camposRes.error.message}`, { caso_id: id });
-    return NextResponse.json(
+    return recusar(request, id, 
       {
         error: "Não foi possível ler as linhas extraídas — o export foi ABORTADO em vez de gerar uma planilha sem números.",
         detalhe: camposRes.error.message,
@@ -292,23 +293,23 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     // mensagem do Postgres não é para o navegador.
     if (estado === "nao_conferido" || !aval) {
       console.error("[export] Portão 2 não conferido", { caso_id: id, erro: portao.error?.message ?? null });
-      return NextResponse.json(
+      return recusar(request, id, 
         {
-          error: "O export COMPLETO foi recusado: não foi possível conferir o Portão 2.",
-          motivos: ["Não foi possível conferir o Portão 2; recarregue a página ou tente mais tarde."],
+          error: "O export COMPLETO foi recusado: não foi possível conferir a aprovação do mandato.",
+          motivos: ["Não foi possível conferir a aprovação do mandato; recarregue a página ou tente mais tarde."],
           dica: "Tente de novo em instantes. \"Exportar dados\" continua disponível para conferir a "
-            + "extração — esse modo não depende do portão. O completo carrega modelo projetado, e "
+            + "extração — esse modo não depende da aprovação. O completo carrega modelo projetado, e "
             + "projetar sem saber se a base foi aprovada daria aparência de resultado aprovado.",
         },
         { status: 503 },
       );
     }
     if (aval.elegivel === false) {
-      return NextResponse.json(
+      return recusar(request, id, 
         {
-          error: "O export COMPLETO foi recusado: este caso não passou o Portão 2.",
+          error: "O export COMPLETO foi recusado: este caso ainda não foi aprovado.",
           motivos: aval.motivos ?? [],
-          dica: "Use \"Exportar dados\" para conferir a extração — esse modo não depende do portão. "
+          dica: "Use \"Exportar dados\" para conferir a extração — esse modo não depende da aprovação. "
             + "O completo carrega modelo projetado, e projetar sobre base não aprovada dá aparência "
             + "de resultado aprovado a número que ninguém aprovou.",
         },
@@ -534,7 +535,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   if (apresentacao) {
     const entradaDoModelo = entradaDoModeloDoWorkbook(workbook);
     if (!entradaDoModelo) {
-      return NextResponse.json(
+      return recusar(request, id, 
         {
           error: "A apresentação de crédito não foi gerada: este caso ainda não tem o modelo institucional montado.",
           motivos: ["Falta a entidade modelada, o último exercício real ou os anos projetados na tela de Modelagem — ou não há exercício com valor numérico."],
@@ -577,7 +578,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         corrente: linhasDoAnoCorrente ? correnteDoBalancete(entradaDoModelo, linhasDoAnoCorrente.linhas, linhasDoAnoCorrente.ano, documentos) : null }, campos), new Date()));
     } catch (e) {
       if (!(e instanceof SemDadoParaApresentar)) throw e;
-      return NextResponse.json({ error: "A apresentação de crédito não foi gerada.", motivos: [e.message] }, { status: 409 });
+      return recusar(request, id, { error: "A apresentação de crédito não foi gerada.", motivos: [e.message] }, { status: 409 });
     }
     const pptx = await deck.gerar();
     const nomePptx = `${nomeArquivoSanitizado(caso.nome)}-apresentacao-credito-${new Date().toISOString().slice(0, 10)}.pptx`;
@@ -627,10 +628,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     const { id } = await params;
     const erro = e instanceof Error ? e : new Error(String(e));
     console.error(`[export] falha inesperada ao montar o arquivo: ${erro.stack ?? erro.message}`, { caso_id: id });
-    return NextResponse.json(
+    return recusar(request, id, 
       {
         error: "O export falhou de um jeito inesperado ao montar o arquivo — não é nenhuma das causas já "
-          + "conhecidas (RLS/GRANT, Portão 2, base vazia). O detalhe foi registrado no log do servidor.",
+          + "conhecidas (RLS/GRANT, aprovação pendente, base vazia). O detalhe foi registrado no log do servidor.",
         detalhe: erro.message,
       },
       { status: 500 },

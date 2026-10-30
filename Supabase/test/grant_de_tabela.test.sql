@@ -57,36 +57,29 @@ begin
   raise notice '--- 2. os revokes intencionais sobrevivem (tentativa real como authenticated) ---';
   foreach v_t in array array['arquivo_oficial', 'perimetro', 'controlador', 'entidade_controlador', 'controlador_vinculo', 'caso_pergunta'] loop
     v_err := null;
-    perform teste_como_admin_0216();
     set local role authenticated;
     begin execute format('delete from %I where false', v_t);
     exception when others then v_err := sqlstate; end;
     reset role;
-    perform teste_fim_admin_0216();
     perform teste_assert_0214(v_err = '42501', format('authenticated NÃO apaga %s (permission denied)', v_t), v_err);
   end loop;
 
   v_err := null;
-  perform teste_como_admin_0216();
   set local role authenticated;
   begin update caso_pergunta set id = id where false;
   exception when others then v_err := sqlstate; end;
   reset role;
-  perform teste_fim_admin_0216();
   perform teste_assert_0214(v_err = '42501', 'authenticated NÃO atualiza caso_pergunta fora de entidade_id', v_err);
 
   v_err := null;
-  perform teste_como_admin_0216();
   set local role authenticated;
   begin update caso_pergunta set entidade_id = entidade_id where false;
   exception when others then v_err := sqlstate; end;
   reset role;
-  perform teste_fim_admin_0216();
   perform teste_assert_0214(v_err is null, 'authenticated ATUALIZA caso_pergunta.entidade_id (o grant de coluna da 0213 sobreviveu)', v_err);
 
   raise notice '--- 3. controle positivo: o que o portal usa continua funcionando ---';
   v_err := null;
-  perform teste_como_admin_0216();
   set local role authenticated;
   begin
     perform 1 from caso limit 1;
@@ -96,7 +89,6 @@ begin
     delete from caso where false;
   exception when others then v_err := sqlstate; end;
   reset role;
-  perform teste_fim_admin_0216();
   perform teste_assert_0214(v_err is null, 'authenticated lê caso, perimetro, instalacao_requisito e uma view, e apaga em caso', v_err);
   perform teste_assert_0214(has_table_privilege('authenticated', 'perimetro', 'insert')
                         and has_table_privilege('authenticated', 'perimetro', 'update')

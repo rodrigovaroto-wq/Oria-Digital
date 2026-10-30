@@ -1,0 +1,105 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { lerAcesso } from "@/lib/supabase/acesso";
+import { MOTIVO_SEM_PAPEL, escopoDaLista } from "@/lib/acesso";
+import {
+  JANELA_DE_VERSOES, LIMITE_POR_GRUPO, agruparResultados, digitosDoCnpj, padraoDoTermo, termoDaBusca,
+  type LinhasDaBusca,
+} from "@/lib/busca-global";
+
+// BUSCA GLOBAL (⌘K). Cliente autenticado do servidor: a RLS decide o que cada
+// pessoa vê, sem service role. Por tecla aceita (>= 2 caracteres, após o debounce
+// do cliente): 3 consultas com colunas nomeadas, filtro em ILIKE no Postgres e
+// `limit` de 6+1 (a linha extra só detecta que o teto foi atingido) — documentos: janela de
+// 30 versões, deduplicada por documento antes do corte de 6. Nada de polling.
+//
+// FALHA NUNCA VIRA LISTA VAZIA (regra 1): qualquer consulta com erro derruba a
+// resposta inteira em 500 com a mensagem, e a tela mostra o erro — não "Nada
+// encontrado", que afirmaria uma ausência que ninguém mediu.
+export const dynamic = "force-dynamic";
+
+type Embutido<T> = T | T[] | null;
+const um = <T,>(v: Embutido<T>): T | null => (Array.isArray(v) ? (v[0] ?? null) : v);
+
+export async function GET(req: NextRequest) {
+  const termo = termoDaBusca(req.nextUrl.searchParams.get("q"));
+  if (termo === null) {
+    return NextResponse.json({ erro: "Digite ao menos 2 caracteres." }, { status: 400 });
+  }
+
+  const supabase = await createClient();
+  // Sem sessão a RLS devolveria listas vazias — que pareceriam "nada encontrado".
+  const { data: claims } = await supabase.auth.getClaims();
+  if (!claims?.claims) {
+    return NextResponse.json({ erro: "Sessão expirada. Entre de novo." }, { status: 401 });
+  }
+
+  const padrao = padraoDoTermo(termo);
+  const digitos = digitosDoCnpj(termo);
+
+  const [mandatos, documentos, entidadesNome, entidadesCnpj] = await Promise.all([
+    supabase.from("caso").select("id, nome, fechado_em")
+      .ilike("nome", padrao).order("criado_em", { ascending: false }).limit(LIMITE_POR_GRUPO + 1),
+    supabase.from("documento_versao")
+      .select("documento_id, nome_original, documento!inner(caso_id, caso(nome))")
+      .ilike("nome_original", padrao).order("criada_em", { ascending: false }).limit(JANELA_DE_VERSOES),
+    // Entidade por razão social; por CNPJ só quando o termo é número (os dígitos
+    // não têm curinga a escapar). Termo numérico procura nas duas colunas.
+    supabase.from("entidade").select("id, caso_id, razao_social, cnpj, caso(nome)")
+      .ilike("razao_social", padrao).limit(LIMITE_POR_GRUPO + 1),
+    digitos
+      ? supabase.from("entidade").select("id, caso_id, razao_social, cnpj, caso(nome)")
+          .ilike("cnpj", `%${digitos}%`).limit(LIMITE_POR_GRUPO + 1)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const erro = mandatos.error ?? documentos.error ?? entidadesNome.error ?? entidadesCnpj.error;
+  if (erro) {
+    return NextResponse.json({ erro: "A busca não conseguiu consultar o banco." }, { status: 500 });
+  }
+
+  type DocRow = {
+    documento_id: string; nome_original: string | null;
+    documento: Embutido<{ caso_id: string; caso: Embutido<{ nome: string }> }>;
+  };
+  type EntRow = {
+    id: string; caso_id: string; razao_social: string; cnpj: string | null;
+    caso: Embutido<{ nome: string }>;
+  };
+
+  const linhas: LinhasDaBusca = {
+    mandatos: mandatos.data ?? [],
+    documentos: ((documentos.data ?? []) as unknown as DocRow[]).flatMap((d) => {
+      const doc = um(d.documento);
+      return doc ? [{
+        documento_id: d.documento_id, caso_id: doc.caso_id,
+        nome_original: d.nome_original, caso_nome: um(doc.caso)?.nome ?? null,
+      }] : [];
+    }),
+    entidades: [...(entidadesNome.data ?? []), ...(entidadesCnpj.data ?? [])]
+      .map((e) => {
+        const r = e as unknown as EntRow;
+        return { id: r.id, caso_id: r.caso_id, razao_social: r.razao_social, cnpj: r.cnpj, caso_nome: um(r.caso)?.nome ?? null };
+      }),
+  };
+
+  const resposta = agruparResultados(linhas);
+
+  // LISTA VAZIA, TRÊS SIGNIFICADOS. Com a RLS por mandato (0216) o banco devolve VAZIO — não erro —
+  // para o que a pessoa não pode ver, então "Nada encontrado" só é verdade para quem vê tudo. O papel
+  // só é lido quando o resultado veio vazio (o caso comum não paga a ida ao banco): sem papel, é
+  // recusa explícita; Analista e Leitura recebem a marca de que a busca cobriu só os alocados.
+  let soAlocados = false;
+  // Papel NÃO conferido (a leitura falhou): o vazio pode ser o recorte do banco, e "nada encontrado" seria
+  // afirmar a mesa inteira. A tela escreve "nenhum resultado visível ao seu acesso".
+  let papelNaoConferido = false;
+  if (resposta.resultados.length === 0) {
+    const acesso = await lerAcesso();
+    if (acesso.estado === "ok" && acesso.papel === null) {
+      return NextResponse.json({ erro: MOTIVO_SEM_PAPEL }, { status: 403 });
+    }
+    soAlocados = acesso.estado === "ok" && escopoDaLista(acesso.papel) === "alocados";
+    papelNaoConferido = acesso.estado === "falha";
+  }
+  return NextResponse.json({ ...resposta, soAlocados, papelNaoConferido });
+}

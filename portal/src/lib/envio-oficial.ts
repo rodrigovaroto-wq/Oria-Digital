@@ -14,9 +14,11 @@
 // sempre: a conta que ninguém consegue CHAMAR num teste é a que erra em
 // silêncio. `portal/scripts/verificar-envio-oficial.mts` chama estas funções —
 // as mesmas que a tela chama.
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { detectarFamilia } from "../../../Leitor/lib/familia.mjs";
 import { TETO_BYTES_POR_ARQUIVO } from "../../../N8N/lib/custo.mjs";
 import { formatarBytes } from "./limite-de-envio";
+import { textoDeFalhaDoMandato } from "./acesso";
 
 /** Os primeiros bytes que bastam para reconhecer a família (`detectarFamilia`). */
 export const CABECA_BYTES = 65536;
@@ -201,22 +203,7 @@ export function fluxoComProgresso(
 // 4. O MANDATO (caso_id) PELO NAVEGADOR
 // ---------------------------------------------------------------------------
 
-// `code` é opcional no tipo porque os testes entregam um cliente de mentira; o supabase-js o preenche.
-type ClienteDoBanco = {
-  rpc: (fn: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: { message: string; code?: string } | null }>;
-};
-
-/** O mandato existe e o usuário não é membro dele (recusa 42501 da `fn_upsert_caso`, migration 0216). */
-export class MandatoSemAcessoError extends Error {
-  constructor(readonly mandato: string) {
-    super(mensagemMandatoSemAcesso(mandato));
-    this.name = "MandatoSemAcessoError";
-  }
-}
-
-export function mensagemMandatoSemAcesso(nome: string): string {
-  return `O mandato «${nome}» já existe e você não é membro dele. Peça acesso a um administrador.`;
-}
+type ClienteDoBanco = Pick<SupabaseClient, "rpc">;
 
 /**
  * O `caso_id` do mandato. O formulário tem o NOME e, às vezes, o `casoId`.
@@ -240,16 +227,11 @@ export async function obterCasoId(
 ): Promise<{ id: string }> {
   if (casoId) return { id: casoId };
   const { data, error } = await cliente.rpc("fn_upsert_caso", { p_nome: nome, p_ator: "portal:navegador" });
-  // A RECUSA DA 0216 (42501, "o mandato existe e você não é membro") É O ANALISTA SEM ACESSO, e
-  // não uma falha técnica. Sem a frase humana, a tela mostrava "Não foi possível obter o mandato
-  // X: o mandato existe e você não é membro; peça acesso ao administrador" — ou, no lote só de
-  // PDF antes desta correção, nem chegava aqui e o status ficava em "aguarde" até o teto de 160 min.
-  // O código sozinho não basta: "permission denied for function" também é 42501 e é outra causa.
-  if (error && error.code === "42501" && /não é membro/i.test(error.message)) {
-    throw new MandatoSemAcessoError(nome);
-  }
   if (error || typeof data !== "string") {
-    throw new Error(`Não foi possível obter o mandato “${nome}”: ${error?.message ?? "o banco não devolveu o id"}`);
+    // 42501 do nome de mandato alheio e 23505 de `caso_nome_unico` têm frase própria — sem ela o
+    // Analista leria o texto cru do Postgres (ou "Seu papel não permite", que erra o remédio).
+    const humano = textoDeFalhaDoMandato(error);
+    throw new Error(humano ?? `Não foi possível obter o mandato “${nome}”: ${error?.message ?? "o banco não devolveu o id"}`);
   }
   return { id: data };
 }

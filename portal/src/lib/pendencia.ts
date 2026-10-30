@@ -80,3 +80,50 @@ export function rotuloDoEstado(estado: string): string {
   };
   return mapa[estado] ?? estado.replace(/_/g, " ");
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// QUEM ESTÁ "EM ABERTO", E EM QUAL GAVETA — a aba Pendências e o número dela.
+//
+// UMA LISTA DE ESTADOS, importada por quem conta e por quem lista. A aba mostra
+// `ESTADOS_EM_ABERTO` por padrão e o layout conta com o MESMO filtro; se cada um
+// escrevesse a sua lista, o número da aba e o dos cartões divergiriam em silêncio
+// (já aconteceu: a aba "Revisão" dizia 3 e a tela abria com 1, filtros diferentes).
+//
+// `resolvida` fica de fora dos dois conjuntos: é do SISTEMA (o problema deixou de
+// existir), não há decisão humana a exibir. Os decididos continuam na tela, na
+// seção "Já decididas" — é onde mora o rótulo dos três botões (0109).
+import {
+  PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS,
+  PENDENCIA_TIPOS_QUALIDADE_EXTRACAO,
+  PENDENCIA_TIPOS_RECONCILIACAO,
+  PENDENCIA_TIPO_ARQUIVO_ILEGIVEL,
+} from "./types";
+
+export const ESTADOS_EM_ABERTO = ["aberta", "em_correcao_interna", "reenviada_ao_cliente"] as const;
+export const ESTADOS_DECIDIDOS = ["aceita_com_ressalva", "rejeitada"] as const;
+
+export type CategoriaDePendencia = "confirmar" | "reconciliacao" | "faltando" | "ilegivel" | "extracao";
+
+/**
+ * Em qual gaveta a pendência cai. `faltando` é o COMPLEMENTO das quatro tipadas, não
+ * uma lista: tipo novo nasce visível (o erro que se paga é mostrar demais, nunca
+ * esconder um bloqueio) — as duas que mais travam, `item_faltante` e
+ * `item_sem_conteudo`, só existem aqui por esse complemento.
+ */
+export function categoriaDaPendencia(tipo: string): CategoriaDePendencia {
+  if ((PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS as readonly string[]).includes(tipo)) return "confirmar";
+  if ((PENDENCIA_TIPOS_RECONCILIACAO as readonly string[]).includes(tipo)) return "reconciliacao";
+  if (tipo === PENDENCIA_TIPO_ARQUIVO_ILEGIVEL) return "ilegivel";
+  if ((PENDENCIA_TIPOS_QUALIDADE_EXTRACAO as readonly string[]).includes(tipo)) return "extracao";
+  return "faltando";
+}
+
+/** Os filtros da aba, na ordem da tela. O parâmetro `filtro` da URL é a `chave`. */
+export const FILTROS_PENDENCIA: ReadonlyArray<{ chave: "todas" | CategoriaDePendencia; rotulo: string }> = [
+  { chave: "todas", rotulo: "Todas" },
+  { chave: "confirmar", rotulo: "Confirmar documento" },
+  { chave: "reconciliacao", rotulo: "Números que não fecham" },
+  { chave: "faltando", rotulo: "Faltando" },
+  { chave: "ilegivel", rotulo: "Arquivos ilegíveis" },
+  { chave: "extracao", rotulo: "Extração incompleta" },
+];

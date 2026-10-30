@@ -25,19 +25,24 @@
 // os mesmos que a suíte do Leitor usa, e o leitor que roda aqui é o MESMO que roda no
 // navegador. O banco é substituído por um `rpc` de mentira — o contrato (0207) é o
 // que se afirma, e o fluxo contra um Postgres com a 0207 é o `Supabase/test`.
+import { semComentarios } from "./lib/sem-comentarios.mts";
 import {
   CABECA_BYTES, MAX_ITENS_POR_CHAMADA, detectarPeloArquivo, separarOficiais, destinoDe, partirEmLotes,
   montarCabecalho, gravarResumo, obterCasoId, fluxoComProgresso, descreverContagem, descreverDesfecho,
   achadosDaConferencia, rotuloDoStatus, desfechoEncerra, decidirNaoOficial, nomeParaN8n, rotuloDaEntrada,
-  contarEntradasDoZip, ORCAMENTO_NAO_OFICIAL_BYTES, MandatoSemAcessoError, mensagemMandatoSemAcesso,
+  contarEntradasDoZip, ORCAMENTO_NAO_OFICIAL_BYTES,
   type ChamarRpc, type EnvelopeDoLeitor, type ResumoDoLeitor, type EntradaDoZip,
 } from "../src/lib/envio-oficial.ts";
+import { avisoDoPasso, cabecalhoDoPasso, hrefDoPasso2, situacaoPrevia, textoDoPasso, validarNomeDoMandato } from "../src/lib/passo-do-mandato.ts";
 import { percorrerPacote, type EventoDoZip } from "../src/lib/pacote.ts";
 import { TETO_POR_ARQUIVO_BYTES } from "../src/lib/limite-de-envio.ts";
 import { lerEnvelopeDeBuffer, lerEnvelopeDeFluxo } from "../../Leitor/lib/envelope.mjs";
 import {
   gerarSped, gerarCnab240, gerarOfx, gerarXmlFiscal, gerarEcdComLancamentos, gerarZip,
 } from "../../Dados de Teste/fontes-oficiais/gerar.mjs";
+import { assinarEnvio, MENSAGEM_ENVIO_DESLIGADO, VALIDADE_DO_TOKEN_S } from "../src/lib/assinatura-do-envio.ts";
+import { parseFormFieldNames } from "../src/lib/n8n-form.ts";
+import { verificarEnvio, veredictoDoEnvio } from "../../N8N/lib/assinatura-do-envio.mjs";
 import { readFileSync } from "node:fs";
 
 let ok = 0;
@@ -248,12 +253,12 @@ const concluirOk = (extra = {}) => ({ resumo: "completo", registros: 12001, grup
 // ---------------------------------------------------------------------------
 // 5. O CASO_ID: pelo fn_upsert_caso (o do n8n), com o ator da tela
 // ---------------------------------------------------------------------------
-function clienteDeCasos(opts: { erro?: string; codigo?: string; dado?: unknown }) {
+function clienteDeCasos(opts: { erro?: string; dado?: unknown }) {
   const log: string[] = [];
   const cliente = {
     rpc: async (funcao: string, args: Record<string, unknown>) => {
       log.push(`${funcao} ${JSON.stringify(args)}`);
-      return opts.erro ? { data: null, error: { message: opts.erro, ...(opts.codigo ? { code: opts.codigo } : {}) } } : { data: "dado" in opts ? opts.dado : "id-do-banco", error: null };
+      return opts.erro ? { data: null, error: { message: opts.erro } } : { data: "dado" in opts ? opts.dado : "id-do-banco", error: null };
     },
   };
   return { cliente: cliente as unknown as Parameters<typeof obterCasoId>[0], log };
@@ -270,21 +275,49 @@ function clienteDeCasos(opts: { erro?: string; codigo?: string; dado?: unknown }
   let msg = "";
   try { await obterCasoId(clienteDeCasos({ erro: "permission denied for function fn_upsert_caso" }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
   checar(msg.includes("permission denied") && msg.includes("AMO"), `erro do banco ao resolver o mandato não sobe com a mensagem dele: "${msg}"`);
-  // A RECUSA DA 0216 vira a frase humana, a mesma que o servidor devolve (403) e a tela mostra.
-  // O texto do banco é o que a 0216 levanta (42501); sem o código, ou com outro 42501, NÃO é esta causa.
-  const recusa = "o mandato existe e você não é membro; peça acesso ao administrador";
-  let erroRecusa: unknown = null;
-  try { await obterCasoId(clienteDeCasos({ erro: recusa, codigo: "42501" }).cliente, "AMO"); } catch (e) { erroRecusa = e; }
-  checar(erroRecusa instanceof MandatoSemAcessoError && (erroRecusa as Error).message === "O mandato «AMO» já existe e você não é membro dele. Peça acesso a um administrador.",
-    `a recusa 42501 da 0216 não virou a mensagem humana: "${(erroRecusa as Error | null)?.message}"`);
-  checar(mensagemMandatoSemAcesso("X") === "O mandato «X» já existe e você não é membro dele. Peça acesso a um administrador.", "a frase do mandato sem acesso mudou");
-  checar(!/42501|fn_upsert_caso|permission|peça acesso ao administrador;/.test((erroRecusa as Error | null)?.message ?? ""), "a mensagem do mandato sem acesso vazou termo técnico");
-  msg = "";
-  try { await obterCasoId(clienteDeCasos({ erro: "permission denied for function fn_upsert_caso", codigo: "42501" }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
-  checar(msg.includes("permission denied"), `um 42501 de OUTRA causa (sem grant) foi lido como "sem membro": "${msg}"`);
   msg = "";
   try { await obterCasoId(clienteDeCasos({ dado: null }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
   checar(msg.includes("não devolveu o id"), `resposta sem id virou mandato: "${msg}"`);
+}
+
+// ---------------------------------------------------------------------------
+// 5b. NOVO MANDATO EM DOIS PASSOS — o passo 1 cria o caso e leva a /adicionar?passo=2
+// ---------------------------------------------------------------------------
+{
+  const c = cabecalhoDoPasso({ passo: "2" });
+  checar(c !== null && textoDoPasso(c) === "Passo 2 de 2" && c.rotulo === "Documentos" && !c.jaExistia, "?passo=2 não vira o cabeçalho 'Passo 2 de 2 / Documentos'");
+  checar(cabecalhoDoPasso({ passo: "2", existente: "1" })?.jaExistia === true, "?existente=1 não chega ao aviso de mandato que já existia");
+  // O parâmetro é apresentação: nada além de exatamente "2" mostra o cabeçalho.
+  for (const ruim of [undefined, "", "1", "3", "02", ["2", "2"]]) {
+    checar(cabecalhoDoPasso({ passo: ruim }) === null, `passo=${JSON.stringify(ruim)} mostrou cabeçalho de passo`);
+  }
+  checar(cabecalhoDoPasso({ existente: "1" }) === null, "existente=1 sozinho mostrou cabeçalho de passo");
+  const h = hrefDoPasso2("abc-123", "novo");
+  checar(h === "/casos/abc-123/adicionar?passo=2", `href do passo 2 errado: ${h}`);
+  checar(hrefDoPasso2("abc-123", "existia").endsWith("&existente=1"), "href do passo 2 perdeu o aviso de mandato existente");
+  // O que o href gera tem de ser lido de volta pelo cabeçalho (ida e volta).
+  const q = new URL(hrefDoPasso2("x", "existia"), "https://l").searchParams;
+  checar(cabecalhoDoPasso({ passo: q.get("passo") ?? undefined, existente: q.get("existente") ?? undefined })?.jaExistia === true, "o href do passo 2 não é lido de volta pelo cabeçalho");
+  checar(!hrefDoPasso2("a/b?x", "novo").includes("a/b?x"), "id com caracter especial não foi escapado no href");
+  // A consulta prévia por nome: erro NÃO é "não existia" (regra 1). Arranjo de teste da lógica pura.
+  checar(situacaoPrevia({ data: null, error: { message: "timeout" } }) === "nao_conferido", "erro da consulta prévia virou 'novo' em silêncio");
+  checar(situacaoPrevia({ data: null, error: null }) === "nao_conferido", "resposta sem dados e sem erro virou 'novo'");
+  checar(situacaoPrevia({ data: [], error: null }) === "novo", "consulta sem linha não é 'novo'");
+  checar(situacaoPrevia({ data: [{ fechado_em: null }], error: null }) === "existia", "caso aberto não é 'existia'");
+  checar(situacaoPrevia({ data: [{ fechado_em: "2026-10-01T00:00:00Z" }], error: null }) === "existia_fechado", "caso fechado não é 'existia_fechado'");
+  checar(/Não foi possível conferir se já havia um mandato com este nome/.test(avisoDoPasso("nao_conferido") ?? ""), "estado não conferido sem o aviso");
+  checar(/FECHADO/.test(avisoDoPasso("existia_fechado") ?? ""), "caso existente fechado não diz que está fechado");
+  checar(avisoDoPasso("novo") === null && /Já existia/.test(avisoDoPasso("existia") ?? ""), "aviso de 'novo' deveria ser nulo e o de 'existia' dizer que já existia");
+  for (const s of ["novo", "existia", "existia_fechado", "nao_conferido"] as const) {
+    const q = new URL(hrefDoPasso2("x", s), "https://l").searchParams;
+    checar(cabecalhoDoPasso({ passo: q.get("passo") ?? undefined, existente: q.get("existente") ?? undefined })?.situacao === s, `ida e volta do href perdeu a situação ${s}`);
+  }
+  const v = validarNomeDoMandato("  AMO  ");
+  checar(v.ok && v.nome === "AMO", "o nome do mandato não foi aparado");
+  for (const vazio of ["", "   ", null, undefined, 3]) {
+    const r = validarNomeDoMandato(vazio);
+    checar(!r.ok && /nome do mandato/.test(r.motivo), `nome ${JSON.stringify(vazio)} passou como mandato válido`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -349,24 +382,6 @@ const WORKER = lerFonte("../src/lib/leitor-worker.ts");
 const LIMITE = lerFonte("../src/lib/limite-de-envio.ts");
 for (const chamada of ["separarOficiais(", "gravarResumo(", "lerNoNavegador(", "obterCasoId(", "detectarPeloArquivo("]) {
   checar(TELA.includes(chamada), `a tela de envio parou de chamar ${chamada}`);
-}
-// O MANDATO É GARANTIDO PARA TODO LOTE (0216): o lote só de PDF também passa por `obterCasoId`, ANTES de
-// qualquer envio. Estrutural porque o componente não roda aqui; a prova do comportamento é a recusa acima.
-{
-  const iCaso = TELA.indexOf("caso = await obterCasoId(");
-  const iOficiais = TELA.indexOf("if (aLerAqui.length > 0 || zips.length > 0)");
-  checar(iCaso > 0 && iOficiais > 0 && iCaso < iOficiais,
-    "o `obterCasoId` voltou para dentro do ramo dos oficiais/zip: o lote só de PDF volta a ir ao n8n sem garantir a pertinência ao mandato");
-  checar(iCaso < TELA.indexOf('fetch("/api/intake/destino")') && iCaso < TELA.indexOf("await enviarPeloPortal(") && iCaso < TELA.indexOf("await enviarDireto("),
-    "o mandato deixou de ser garantido ANTES do envio ao n8n (proxy ou direto)");
-  const trecho = TELA.slice(iCaso, iOficiais);
-  checar(/catch \(err\) \{[^}]*setErro\(\(err as Error\)\.message\);\s*return;/.test(trecho),
-    "a recusa do mandato deixou de mostrar a mensagem e PARAR o envio");
-  const ROTA = lerFonte("../src/app/api/intake/route.ts");
-  const iRota = ROTA.indexOf("await obterCasoId(");
-  checar(iRota > 0 && iRota < ROTA.indexOf("await descobrirNomesDeCampo(") && iRota < ROTA.indexOf("await fetch(url"),
-    "a rota /api/intake deixou de garantir a pertinência (com a sessão do usuário) ANTES de encaminhar ao n8n");
-  checar(/MandatoSemAcessoError[\s\S]{0,120}status: 403/.test(ROTA), "a rota /api/intake não devolve 403 com a frase humana ao não membro");
 }
 checar(TELA.indexOf("separarOficiais(") < TELA.indexOf("planejarEnvio(") && TELA.indexOf("processarOficiais(aLerAqui") < TELA.indexOf("planejarEnvio("),
   "o lote deixou de ser separado (e os oficiais lidos) ANTES de planejar o envio ao n8n");
@@ -567,6 +582,73 @@ for (const [motivo, bytes] of [
   checar(/bytesPorEntrada: 4 \* GiB/.test(ZIP_FONTE) && /bytesTotal: 32 \* GiB/.test(ZIP_FONTE) && /razaoMaxima: 200/.test(ZIP_FONTE),
     "os limites do zip mudaram sem passar por esta suíte (4 GiB por entrada, 32 GiB no total, razão 200x)");
   checar(/37,5 s/.test(ZIP_FONTE) && /25 MB\/s/.test(ZIP_FONTE), "o comentário dos limites do zip perdeu a medição que os justifica (37,5 s, ~25 MB/s)");
+}
+
+
+// ---------------------------------------------------------------------------
+// 8. O TOKEN DO ENVIO: o Form do n8n é público, e só o portal sabe quem pode enviar a quê
+// ---------------------------------------------------------------------------
+// O defeito (revisão do PR #265): o portal conferia o papel, mas um POST direto ao Form contornava
+// o portal, e o n8n gravava em QUALQUER mandato pela conexão de serviço. O portal agora assina
+// HMAC(segredo, mandato|exp|usuario) e o n8n (N8N/lib/assinatura-do-envio.mjs) recusa o que não
+// bater — a suíte do n8n prova a recusa; aqui se prova que o que o PORTAL gera é o que o n8n ACEITA
+// (node:crypto de um lado, JS puro do outro) e que o portal nunca envia sem token.
+{
+  const SEGREDO = "segredo-do-vetor";
+  const USUARIO = "3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10";
+  const T0 = 1_700_000_000_000;
+  const emitido = assinarEnvio({ mandato: "Alfa", usuarioId: USUARIO, segredo: SEGREDO, agoraMs: T0 });
+  // VETOR FIXO, calculado fora do JS (Python hmac): se o portal e a lib do n8n mudassem a mensagem
+  // JUNTOS, os dois lados continuariam concordando e o token mudaria — este assert pega.
+  checar(emitido.ok && emitido.token === "v1.1700001800.3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10.1535774b8f7435e9c0c3d02a8a400fb2dc4902e41b9de6741555dcc23b66e97a",
+    "o token do portal para (Alfa, usuário, exp=T0+30min) deixou de ser o vetor fixo — a mensagem assinada mudou");
+  checar(VALIDADE_DO_TOKEN_S === 1800 && emitido.ok && emitido.exp === 1_700_001_800, "a validade do token não é mais de 30 min");
+  const token = emitido.ok ? emitido.token : "";
+  // O token que o portal gera é ACEITO pela implementação do n8n.
+  const aceita = (m: string, agoraMs: number, ...segredo: [(string | undefined)?]) =>
+    verificarEnvio({ token, mandato: m, segredo: segredo.length ? segredo[0] : SEGREDO, agoraMs });
+  checar(aceita("Alfa", T0).ok === true && (aceita("Alfa", T0) as { usuario_id?: string }).usuario_id === USUARIO,
+    "o token do portal NÃO é aceito pela lib do n8n — o envio legítimo seria recusado");
+  checar(aceita("  ALFA ", T0 + 1000).ok === true, "caixa/espaço nas pontas do mandato deveriam valer o mesmo mandato (índice caso_nome_unico)");
+  checar(aceita("Beta", T0).ok === false, "o token do Alfa foi aceito para o Beta — o defeito do PR #265");
+  checar(aceita("Alfa", T0 + (VALIDADE_DO_TOKEN_S + 1) * 1000).ok === false && aceita("Alfa", T0 + (VALIDADE_DO_TOKEN_S - 1) * 1000).ok === true,
+    "a validade do token não é de 30 min: expirado aceito, ou válido recusado");
+  checar(aceita("Alfa", T0, "outro-segredo").ok === false && aceita("Alfa", T0, undefined).ok === false && aceita("Alfa", T0, "").ok === false,
+    "token aceito com segredo errado/ausente no n8n");
+  checar(veredictoDoEnvio({ token, mandato: "Alfa", segredo: undefined, agoraMs: T0 }).autorizado === false,
+    "o n8n sem segredo deveria recusar tudo (fail closed)");
+
+  // SEM SEGREDO NO PORTAL: recusa clara, nunca token (e o envio nem começa).
+  for (const segredo of [undefined, "", "   "]) {
+    const r = assinarEnvio({ mandato: "Alfa", usuarioId: USUARIO, segredo, agoraMs: T0 });
+    checar(!r.ok && r.status === 503 && r.mensagem === MENSAGEM_ENVIO_DESLIGADO && /N8N_INTAKE_SEGREDO/.test(r.mensagem) && /Envio desligado/.test(r.mensagem),
+      `sem N8N_INTAKE_SEGREDO (${JSON.stringify(segredo)}) o portal deveria recusar com a frase do envio desligado`);
+  }
+
+  // O campo do token no HTML do Form (o 2º texto, depois do mandato), e o Form antigo cai no fallback.
+  const html = '<input type="text" name="field-0"><input type="file" name="field-1" multiple><input type="text" name="field-2"><input type="hidden" name="x">';
+  const campos = parseFormFieldNames(html);
+  checar(campos.textFieldName === "field-0" && campos.tokenFieldName === "field-2" && campos.fileFieldName === "field-1",
+    "a descoberta do campo do token (2º texto) falhou");
+  checar(parseFormFieldNames('<input type="text" name="field-0"><input type="file" name="field-1">').tokenFieldName === null,
+    "Form sem o campo do token deveria devolver null (e o chamador cai no fallback), não repetir o campo do mandato");
+
+  // FIAÇÃO (estrutural, e declarada como tal): a ORDEM e o USO nas três pontas.
+  const sem = semComentarios;
+  const rota = sem(lerFonte("../src/app/api/intake/route.ts")), destino = sem(lerFonte("../src/app/api/intake/destino/route.ts"));
+  const pos = (src: string, re: RegExp) => src.search(re);
+  const ordemOk = (src: string, marco: RegExp) => {
+    const iPapel = pos(src, /conferirEnvioAoMandato\(/), iToken = pos(src, /emitirTokenDoEnvio\(/), iMarco = pos(src, marco);
+    return iPapel >= 0 && iToken > iPapel && iMarco > iToken
+      && /const\s+(\w+)\s*=\s*await\s+emitirTokenDoEnvio\([^)]*\);?\s*if\s*\(\s*!\s*\1\.ok\s*\)\s*return\b/.test(src);
+  };
+  checar(ordemOk(rota, /\bfetch\(/) && /fwd\.append\(campos\.token,\s*autorizacao\.token\)/.test(rota),
+    "POST /api/intake deve assinar DEPOIS do papel e ANTES do fetch ao n8n, recusar se não assinou e anexar o token ao multipart");
+  checar(ordemOk(destino, /process\.env\.N8N_INTAKE_FORM_URL/) && /token:\s*autorizacao\.token/.test(destino) && /campos\.token/.test(destino),
+    "/api/intake/destino deve assinar DEPOIS do papel e ANTES de ler/devolver a URL, e devolver o token e o nome do campo");
+  checar(/fd\.append\(destino\.campos\.token,\s*destino\.token\)/.test(TELA)
+    && /!destino\.campos\?\.token\s*\|\|\s*typeof destino\.token !== "string"/.test(TELA),
+    "o envio direto da tela deve mandar o token como campo do Form, e recusar um destino sem token");
 }
 
 if (falhas.length > 0) {

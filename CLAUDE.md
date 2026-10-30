@@ -81,7 +81,6 @@ node --test 'Supabase/test/*.test.mjs'       # a tradução de "não perguntei a
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-linhas-por-versao.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-exclusividade-ciclo.mts
 ./portal/node_modules/.bin/tsx portal/scripts/verificar-perimetro.mts
-./portal/node_modules/.bin/tsx portal/scripts/verificar-navegacao.mts
 node --test '.claude/conhecimento/test/*.test.mjs'  # ANTES de indexar: o grafo COMMITADO não pode
                                                    # citar arquivo que o git ignora (depois do
                                                    # indexar essa pergunta é verdadeira por construção)

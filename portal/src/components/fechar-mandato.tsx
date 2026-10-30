@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useState } from "react";
 import { fecharCaso, reabrirCaso } from "@/app/casos/[id]/actions";
 
@@ -26,14 +27,21 @@ export function FecharMandato({
 }) {
   const [aberto, setAberto] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  // A recusa do banco vem como valor da action (em produção o Next redige o texto de um erro lançado).
+  const [erro, setErro] = useState<string | null>(null);
 
   if (fechado) {
     return (
       <form
         action={async () => {
           setEnviando(true);
-          await reabrirCaso(casoId);
-          setEnviando(false);
+          setErro(null);
+          try {
+            const r = await reabrirCaso(casoId);
+            if (r?.erro) setErro(r.erro);
+          } finally {
+            setEnviando(false);
+          }
         }}
       >
         <button
@@ -45,6 +53,7 @@ export function FecharMandato({
         >
           {enviando ? "Reabrindo…" : "Reabrir"}
         </button>
+        {erro && <p role="alert" className="mt-1 max-w-xs text-xs font-medium text-risco-700">{erro}</p>}
       </form>
     );
   }
@@ -61,12 +70,17 @@ export function FecharMandato({
         Fechar
       </button>
 
-      {aberto && (
+      {/* O DIÁLOGO VAI PARA O <body> (portal). Dentro da página ele herdava os
+          contêineres dela: uma linha semitransparente da tabela de Mandatos ou
+          qualquer ancestral com filtro o prendiam, e ele aparecia fora da tela ou
+          por baixo das linhas seguintes (revisão do PR #265). No <body>, `fixed`
+          volta a ser a janela. Só monta depois do clique, então `document` existe. */}
+      {aberto && createPortal(
         <div
           role="dialog"
           aria-modal
           aria-label="Fechar mandato"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-tinta-900/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-fundo-reserva/40 p-4"
         >
           <div className="w-full max-w-md rounded-xl border border-tinta-200 bg-folha p-5 shadow-xl">
             <h2 className="text-sm font-semibold text-tinta-900">Fechar “{nome}”?</h2>
@@ -79,9 +93,14 @@ export function FecharMandato({
             <form
               action={async (formData: FormData) => {
                 setEnviando(true);
-                await fecharCaso(casoId, formData);
-                setEnviando(false);
-                setAberto(false);
+                setErro(null);
+                try {
+                  const r = await fecharCaso(casoId, formData);
+                  if (r?.erro) setErro(r.erro);
+                  else setAberto(false);
+                } finally {
+                  setEnviando(false);
+                }
               }}
               className="mt-4 space-y-3"
             >
@@ -98,6 +117,7 @@ export function FecharMandato({
                              placeholder:text-tinta-400"
                 />
               </div>
+              {erro && <p role="alert" className="text-xs font-medium text-risco-700">{erro}</p>}
               <div className="flex items-center justify-end gap-2">
                 <button
                   type="button"
@@ -114,7 +134,7 @@ export function FecharMandato({
             </form>
           </div>
         </div>
-      )}
+        , document.body)}
     </>
   );
 }

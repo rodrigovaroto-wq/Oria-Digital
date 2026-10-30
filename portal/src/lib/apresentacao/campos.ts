@@ -93,5 +93,24 @@ export const CAPITULOS_APRESENTACAO: CapituloApresentacao[] = [
     chave: `contracapa.contato${i}.${c}`, rotulo: `Contato ${i} — ${c === "email" ? "e-mail" : c}` }))) },
 ];
 
+/**
+ * O campo carrega NÚMERO digitado pelo analista (valor, magnitude, percentual, nota, cronograma)?
+ * A tela de preenchimento o marca `valor-sensivel`: no modo discrição o analista que digita com
+ * cliente ao lado não pode ter o número exposto no campo. Texto corrido de julgamento (contexto,
+ * tendências, sócios, SWOT) e as fontes ficam nítidos — borrar tudo tiraria do modo o sentido de
+ * "só o que é dinheiro". Decidido por chave e não por campo da tela, porque a chave é o contrato
+ * (ver o assert 9a de `verificar-apresentacao.mts`): campo novo sem regra aqui NÃO é borrado, e o
+ * assert de `verificar-mensagem-de-falha.mts` (seção 7) lista as chaves cobertas.
+ */
+export function campoCarregaValor(chave: string): boolean {
+  return /^i1\.kpi\d$/.test(chave)            // KPI de mercado (tamanho do setor, juros, crédito)
+    || /^xv2\./.test(chave)                     // alavancas: magnitude em R$ (título/fonte entram: o título cita o número)
+    || /^xvi\.realizacao\./.test(chave)        // % de realização das garantias
+    || chave === "xvi.recuperacao"              // recuperação por classe, em % e R$
+    || chave === "xiii3.cronograma"             // amortização dos próximos 24 meses, em R$
+    || chave === "xiii3.ruptura"                // data da primeira ruptura de caixa
+    || /^xvii\.nota\d$/.test(chave);           // nota 1,0-10,0 do scorecard (a justificativa é texto: nítida)
+}
+
 export const CHAVES_APRESENTACAO: ReadonlySet<string> =
   new Set(CAPITULOS_APRESENTACAO.flatMap((c) => c.campos.map((x) => x.chave)));

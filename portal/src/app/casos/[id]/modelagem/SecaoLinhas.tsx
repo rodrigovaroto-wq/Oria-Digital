@@ -1,7 +1,8 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { aplicarEmLote, salvarSecao, type Resultado } from "./actions";
+import { aplicarEmLote, type Resultado } from "./actions";
+import { excecoesQueOLoteSubstitui, linhaSuja, type EscolhaLinha } from "@/lib/modelagem-lote";
 
 // A SEÇÃO 3 DA MODELAGEM, COM ESTADO PRÓPRIO — e por que ela precisou virar
 // componente de cliente.
@@ -33,9 +34,12 @@ import { aplicarEmLote, salvarSecao, type Resultado } from "./actions";
 //     explicitamente que ela fique fixa, e "fechou sozinha" já custou duas
 //     rodadas de teste.
 //
-// O `key` do formulário muda quando a seção é salva com sucesso, e só então: é o
-// que ressincroniza os campos "original" com o que o banco passou a ter, para o
-// próximo salvamento não reenviar o que já foi gravado.
+// FASE 2 (item 21): O ESTADO SUBIU PARA `EditorLinhas.tsx`, e o SALVAR TAMBÉM.
+// Havia dois botões "salvar esta seção" por seção (cabeçalho e rodapé) e o aviso de
+// "não salvas" por seção; agora as escolhas de TODAS as seções vivem no editor, que
+// tem UMA barra de salvamento. Esta seção ficou controlada: recebe `escolhas`/`gravado`
+// e avisa `onMudar`. O "aplicar em lote" continua aqui, por seção, porque ele é uma ação
+// DA SEÇÃO (grava no banco na hora), não um rascunho a salvar.
 
 export interface LinhaDaSecao {
   chave: string;
@@ -55,26 +59,33 @@ export interface OpcaoPremissa {
   nome: string;
 }
 
-const PAPEL_INFO: Record<string, { rotulo: string; explica: string; cor: string }> = {
+export const PAPEL_INFO: Record<string, { rotulo: string; curto: string; explica: string; cor: string }> = {
   subtotal: {
     rotulo: "subtotal",
+    curto: "soma dos componentes projetados; não recebe premissa",
     explica: "sai no Excel como a SOMA dos componentes projetados — se move sozinho, e por isso "
       + "não recebe premissa (projetá-lo contaria o mesmo dinheiro duas vezes)",
     cor: "bg-info-100 text-info-800",
   },
   serie_mensal: {
     rotulo: "série mensal",
+    curto: "alimenta a curva de sazonalidade; não é conta a projetar",
     explica: "alimenta a curva de sazonalidade, derivada do próprio histórico do caso — não é uma "
       + "conta a projetar",
     cor: "bg-serie-100 text-serie-800",
   },
   derivado: {
     rotulo: "derivado",
+    curto: "indicador gerencial; projetá-lo divergiria das contas que o compõem",
     explica: "indicador gerencial (resultado de outras contas, não dinheiro) — projetá-lo o faria "
       + "divergir das linhas que o compõem",
     cor: "bg-tinta-200 text-tinta-600",
   },
 };
+
+/** O aviso de sobreposição, em texto visível (antes só no `title` do chip). */
+export const SOBREPOSICAO_CURTO =
+  "Outra linha desta seção tem o mesmo valor e um rótulo mais grosso: projetar as duas dobra a conta. Escolha uma.";
 
 const fmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
 
@@ -82,7 +93,7 @@ const escala = (l: LinhaDaSecao) =>
   [l.unidade === "milhar" ? "R$ mil" : l.unidade === "unidade" ? "R$" : l.unidade,
     l.moeda && l.moeda !== "BRL" ? l.moeda : null].filter(Boolean).join(" ");
 
-function Aviso({ r }: { r: Resultado }) {
+export function Aviso({ r }: { r: Resultado }) {
   if (!r) return null;
   return (
     <span
@@ -97,7 +108,7 @@ function Aviso({ r }: { r: Resultado }) {
 }
 
 export function SecaoLinhas({
-  casoId, secao, rotulo, linhas, ativas, sazonais, vinculos,
+  casoId, secao, rotulo, linhas, ativas, sazonais, escolhas, gravado, onMudar, onLoteAplicado,
 }: {
   casoId: string;
   /** chave canônica — é o que vai ao banco */
@@ -107,61 +118,32 @@ export function SecaoLinhas({
   linhas: LinhaDaSecao[];
   ativas: OpcaoPremissa[];
   sazonais: OpcaoPremissa[];
-  /** rotulo_norm → { premissa, sazonalidade } já gravados */
-  vinculos: Record<string, { premissa: string; sazonalidade: string }>;
+  /** o que está na tela (rascunho), por rotulo_norm — vem do editor */
+  escolhas: Record<string, EscolhaLinha>;
+  /** o que o banco tem, por rotulo_norm — base do "só manda o que mudou" */
+  gravado: Record<string, EscolhaLinha>;
+  onMudar: (rotuloNorm: string, campo: "premissa" | "sazonalidade", valor: string) => void;
+  /** o lote é do BANCO: avisa o editor para refletir o que ele gravou */
+  onLoteAplicado: (premissa: string) => void;
 }) {
   const semSecao = secao === "(sem seção canônica)";
   const contas = linhas.filter((l) => l.papel === "conta");
-
-  // O estado de edição desta seção. Nasce do que o banco trouxe e passa a mandar
-  // dali em diante — é ele, e não o DOM, que sobrevive ao re-render.
-  const inicial = () => Object.fromEntries(linhas.map((l) => [l.rotulo_norm, {
-    premissa: vinculos[l.rotulo_norm]?.premissa ?? "",
-    sazonalidade: vinculos[l.rotulo_norm]?.sazonalidade ?? "",
-  }]));
-  const [escolhas, setEscolhas] = useState<Record<string, { premissa: string; sazonalidade: string }>>(inicial);
-  // O que o banco tinha quando esta seção foi carregada ou salva pela última vez.
-  // É a base do "só manda o que mudou".
-  const [gravado, setGravado] = useState<Record<string, { premissa: string; sazonalidade: string }>>(inicial);
   const [premissaDoLote, setPremissaDoLote] = useState("");
-
-  const [rSalvar, actSalvar, salvando] = useActionState(
-    async (prev: Resultado, fd: FormData) => {
-      const r = await salvarSecao(casoId, prev, fd);
-      if (r?.tom === "ok") setGravado(escolhas);
-      return r;
-    }, null as Resultado);
+  const [confirmandoLote, setConfirmandoLote] = useState(false);
 
   const [rLote, actLote, aplicando] = useActionState(
     async (prev: Resultado, fd: FormData) => {
+      setConfirmandoLote(false);
       const r = await aplicarEmLote(casoId, prev, fd);
-      if (r?.tom === "ok") {
-        // O lote é do BANCO: ele acabou de vincular todas as contas da seção.
-        // A tela reflete isso na hora, sem esperar recarregar — e sem descartar
-        // a sazonalidade que já estava escolhida linha a linha.
-        const p = String(fd.get("premissa") ?? "");
-        const novo = Object.fromEntries(linhas.map((l) => [l.rotulo_norm, {
-          premissa: l.papel === "conta" ? p : (escolhas[l.rotulo_norm]?.premissa ?? ""),
-          sazonalidade: escolhas[l.rotulo_norm]?.sazonalidade ?? "",
-        }]));
-        setEscolhas(novo);
-        setGravado(novo);
-      }
+      if (r?.tom === "ok") onLoteAplicado(String(fd.get("premissa") ?? ""));
       return r;
     }, null as Resultado);
 
-  const mudar = (rotulo: string, campo: "premissa" | "sazonalidade", valor: string) =>
-    setEscolhas((e) => ({ ...e, [rotulo]: { ...e[rotulo], [campo]: valor } }));
-
-  const pendentes = linhas.filter((l) =>
-    escolhas[l.rotulo_norm]?.premissa !== gravado[l.rotulo_norm]?.premissa
-    || escolhas[l.rotulo_norm]?.sazonalidade !== gravado[l.rotulo_norm]?.sazonalidade).length;
-
-  // O `id` do formulário desta seção existe para o botão de salvar poder aparecer
-  // DUAS vezes — no cabeçalho e no rodapé — sem aninhar formulário (o HTML não
-  // permite, e o de "aplicar em lote" já mora no cabeçalho). `form=` é o
-  // mecanismo padrão para um botão fora do formulário submetê-lo.
-  const idForm = `secao-${secao.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const vazio: EscolhaLinha = { premissa: "", sazonalidade: "" };
+  // O lote grava a MESMA premissa em todas as contas: a escolha por linha ainda não salva que
+  // difere dela seria substituída em silêncio. Se há alguma, o analista confirma com o número.
+  const substituiria = excecoesQueOLoteSubstitui(contas, escolhas, gravado, premissaDoLote);
+  const pendentes = contas.filter((l) => linhaSuja(escolhas[l.rotulo_norm], gravado[l.rotulo_norm])).length;
 
   return (
     <div>
@@ -173,31 +155,22 @@ export function SecaoLinhas({
             {linhas.length !== contas.length && ` + ${linhas.length - contas.length} não projetável(is)`})
           </span>
         </h3>
-        {/* SALVAR TAMBÉM NO TOPO, e o aviso de pendência junto.
-            Uma seção de balanço tem dezenas de linhas: o botão só existia no
-            rodapé, e o aviso "N alterações ainda NÃO salvas" também — os dois
-            fora da tela justamente enquanto se edita. Sair da página com escolha
-            pendente é a maneira mais fácil de perder trabalho nesta tela, e o
-            aviso que impede isso não pode viver onde ninguém está olhando. */}
+        {/* Só o CONTADOR da seção: o salvar é um só, na barra de baixo. */}
         {pendentes > 0 && (
-          <>
-            <span className="chip bg-alerta-100 text-alerta-900">
-              {pendentes} não salva(s)
-            </span>
-            <button
-              type="submit" form={idForm} disabled={salvando}
-              className="rounded border border-alerta-300 bg-alerta-50 px-2 py-0.5 text-xs font-medium text-alerta-900 hover:bg-alerta-100 disabled:opacity-50"
-            >
-              {salvando ? "salvando…" : "salvar esta seção"}
-            </button>
-          </>
+          <span className="chip bg-alerta-100 text-alerta-900">{pendentes} não salva(s)</span>
         )}
         {!semSecao && contas.length > 0 && (
-          <form action={actLote} className="flex items-center gap-1">
+          <form
+            action={actLote} className="flex items-center gap-1"
+            onSubmit={(ev) => {
+              if (substituiria > 0 && !confirmandoLote) { ev.preventDefault(); setConfirmandoLote(true); }
+            }}
+          >
             <input type="hidden" name="secao_canonica" value={secao} />
             <select
               name="premissa" required value={premissaDoLote}
-              onChange={(e) => setPremissaDoLote(e.target.value)}
+              aria-label={`Aplicar em lote nesta seção (${rotulo})`}
+              onChange={(e) => { setPremissaDoLote(e.target.value); setConfirmandoLote(false); }}
               className="rounded border border-tinta-200 px-1 py-0.5 text-xs"
             >
               <option value="" disabled>aplicar em lote…</option>
@@ -207,130 +180,113 @@ export function SecaoLinhas({
               type="submit" disabled={aplicando}
               className="rounded border border-tinta-200 px-2 py-0.5 text-xs hover:bg-tinta-100 disabled:opacity-50"
             >
-              {aplicando ? "aplicando…" : `aplicar às ${contas.length} conta(s)`}
+              {aplicando ? "aplicando…"
+                : confirmandoLote ? `Confirmar: substituir ${substituiria} escolha(s) não salva(s) e aplicar`
+                : `aplicar às ${contas.length} conta(s)`}
             </button>
+            {confirmandoLote && (
+              <button
+                type="button" onClick={() => setConfirmandoLote(false)}
+                className="text-xs text-tinta-500 underline"
+              >
+                cancelar
+              </button>
+            )}
             <Aviso r={rLote} />
           </form>
         )}
       </div>
 
-      {/* UM formulário por seção: as exceções se ajustam e salvam de uma vez.
-          Antes era um botão por linha — 236 idas ao servidor. */}
-      <form action={actSalvar} id={idForm}>
-        <input type="hidden" name="secao_canonica" value={semSecao ? "" : secao} />
-        <div className="overflow-x-auto rounded border border-tinta-200">
-          <table className="w-full text-left text-sm">
-            {/* CABEÇALHO GRUDADO: numa seção de 60 linhas, rolar até a conta que
-                se quer ajustar deixava as três colunas sem nome — e "premissa que
-                dirige" e "sazonalidade" são dois seletores parecidos lado a lado.
-                Escolher no seletor errado não dá erro nenhum, só projeta diferente. */}
-            <thead className="sticky top-0 z-10 bg-tinta-50 text-xs uppercase text-tinta-500 shadow-[0_1px_0_var(--color-tinta-200)]">
-              <tr>
-                <th className="px-2 py-1">Linha</th>
-                <th className="px-2 py-1 text-right">Último real</th>
-                <th className="px-2 py-1">Premissa que dirige</th>
-                <th className="px-2 py-1">Sazonalidade</th>
-              </tr>
-            </thead>
-            <tbody>
-              {linhas.map((l, i) => {
-                const info = PAPEL_INFO[l.papel];
-                const e = escolhas[l.rotulo_norm] ?? { premissa: "", sazonalidade: "" };
-                const g = gravado[l.rotulo_norm] ?? { premissa: "", sazonalidade: "" };
-                const sujo = e.premissa !== g.premissa || e.sazonalidade !== g.sazonalidade;
-                return (
-                  <tr
-                    key={l.rotulo_norm}
-                    className={`border-t border-tinta-100 align-top ${sujo ? "bg-alerta-50" : ""}`}
-                  >
-                    <td className="px-2 py-1">
-                      <span className={l.papel === "conta" ? "" : "text-tinta-500"}>{l.chave}</span>
-                      {info && (
-                        <span className={`ml-1 rounded px-1 text-[10px] ${info.cor}`} title={info.explica}>
-                          {info.rotulo}
-                        </span>
-                      )}
-                      {l.sobreposicao_suspeita && (
-                        <span
-                          className="ml-1 rounded bg-alerta-100 px-1 text-[10px] text-alerta-800"
-                          title="Outra linha desta seção tem o MESMO valor e um rótulo que descreve a mesma conta de forma mais grossa — provavelmente o balanço sintético e o balancete analítico. Projetar as duas dobra a conta: escolha uma."
-                        >
-                          possível sobreposição
-                        </span>
-                      )}
-                      <span className="block text-[10px] text-tinta-400">
-                        {(l.documentos ?? []).join(" · ")}
-                        {l.n_ocorrencias > 1 && ` · ${l.n_ocorrencias} ocorrências`}
+      <div className="overflow-x-auto rounded border border-tinta-200">
+        <table className="w-full text-left text-sm">
+          {/* CABEÇALHO GRUDADO: numa seção de 60 linhas, rolar até a conta que
+              se quer ajustar deixava as três colunas sem nome — e "premissa que
+              dirige" e "sazonalidade" são dois seletores parecidos lado a lado.
+              Escolher no seletor errado não dá erro nenhum, só projeta diferente. */}
+          <thead className="sticky top-0 z-10 bg-tinta-50 text-xs uppercase text-tinta-500 shadow-[0_1px_0_var(--color-tinta-200)]">
+            <tr>
+              <th className="px-2 py-1">Linha</th>
+              <th className="px-2 py-1 text-right">Último real</th>
+              <th className="px-2 py-1">Premissa que dirige</th>
+              <th className="px-2 py-1">Sazonalidade</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.map((l) => {
+              const info = PAPEL_INFO[l.papel];
+              const e = escolhas[l.rotulo_norm] ?? vazio;
+              const g = gravado[l.rotulo_norm] ?? vazio;
+              const sujo = linhaSuja(e, g);
+              return (
+                <tr
+                  key={l.rotulo_norm}
+                  className={`border-t border-tinta-100 align-top ${sujo ? "bg-alerta-50" : ""}`}
+                >
+                  <td className="px-2 py-1">
+                    <span className={l.papel === "conta" ? "" : "text-tinta-500"}>{l.chave}</span>
+                    {info && (
+                      <span className={`ml-1 rounded px-1 text-[10px] ${info.cor}`} title={info.explica}>
+                        {info.rotulo}
                       </span>
-                    </td>
-                    <td className="px-2 py-1 text-right tabular-nums text-tinta-600">
-                      {fmt.format(l.valor_ultimo)}
-                      <span className="block text-[10px] text-tinta-400">{escala(l)}</span>
-                    </td>
-                    {l.papel === "conta" ? (
-                      <>
-                        <td className="px-2 py-1">
-                          <input type="hidden" name={`rotulo__${i}`} value={l.chave} />
-                          <input type="hidden" name={`entidade__${i}`} value={l.entidade ?? ""} />
-                          <input type="hidden" name={`orig__${i}`} value={g.premissa} />
-                          <select
-                            name={`premissa__${i}`} value={e.premissa}
-                            onChange={(ev) => mudar(l.rotulo_norm, "premissa", ev.target.value)}
-                            className="rounded border border-tinta-200 px-1 py-0.5 text-xs"
-                          >
-                            <option value="">(não projetar)</option>
-                            {ativas.map((a) => <option key={a.codigo} value={a.codigo}>{a.nome}</option>)}
-                          </select>
-                        </td>
-                        <td className="px-2 py-1">
-                          <input type="hidden" name={`origSaz__${i}`} value={g.sazonalidade} />
-                          <select
-                            name={`sazonalidade__${i}`} value={e.sazonalidade}
-                            onChange={(ev) => mudar(l.rotulo_norm, "sazonalidade", ev.target.value)}
-                            className="rounded border border-tinta-200 px-1 py-0.5 text-xs"
-                            disabled={sazonais.length === 0}
-                          >
-                            <option value="">(sem sazonalidade)</option>
-                            {sazonais.map((a) => <option key={a.codigo} value={a.codigo}>{a.nome}</option>)}
-                          </select>
-                        </td>
-                      </>
-                    ) : (
-                      // Sem seletor, com o DESTINO escrito: se a linha simplesmente
-                      // não tivesse controle, o analista procuraria o defeito na tela.
-                      <td colSpan={2} className="px-2 py-1 text-xs text-tinta-500">
-                        {info?.explica}
-                      </td>
                     )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-        {contas.length > 0 && (
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <button
-              type="submit" disabled={salvando}
-              className="rounded border border-tinta-200 px-2 py-0.5 text-xs hover:bg-tinta-100 disabled:opacity-50"
-            >
-              {salvando ? "salvando…" : "salvar esta seção"}
-            </button>
-            <span className="text-[10px] text-tinta-400">
-              só as linhas que você mudou vão ao banco
-            </span>
-            {/* Alteração não salva é destacada na linha E contada aqui: sair da
-                tela com escolha pendente é a maneira mais fácil de perder
-                trabalho, e nada avisava. */}
-            {pendentes > 0 && (
-              <span className="rounded bg-alerta-100 px-2 py-0.5 text-[10px] text-alerta-900">
-                {pendentes} alteração(ões) ainda NÃO salva(s) nesta seção
-              </span>
-            )}
-            <Aviso r={rSalvar} />
-          </div>
-        )}
-      </form>
+                    {l.sobreposicao_suspeita && (
+                      <span className="ml-1 rounded bg-alerta-100 px-1 text-[10px] text-alerta-800">
+                        possível sobreposição
+                      </span>
+                    )}
+                    {l.sobreposicao_suspeita && (
+                      <span className="block text-[11px] text-alerta-900">
+                        {SOBREPOSICAO_CURTO}
+                      </span>
+                    )}
+                    <span className="block text-[10px] text-tinta-500">
+                      {(l.documentos ?? []).join(" · ")}
+                      {l.n_ocorrencias > 1 && ` · ${l.n_ocorrencias} ocorrências`}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1 text-right tabular-nums text-tinta-600">
+                    <span className="valor-sensivel">{fmt.format(l.valor_ultimo)}</span>
+                    <span className="block text-[10px] text-tinta-500">{escala(l)}</span>
+                  </td>
+                  {l.papel === "conta" ? (
+                    <>
+                      <td className="px-2 py-1">
+                        <select
+                          value={e.premissa}
+                          aria-label={`Premissa que dirige: ${l.chave}`}
+                          onChange={(ev) => onMudar(l.rotulo_norm, "premissa", ev.target.value)}
+                          className="rounded border border-tinta-200 px-1 py-0.5 text-xs"
+                        >
+                          <option value="">(não projetar)</option>
+                          {ativas.map((a) => <option key={a.codigo} value={a.codigo}>{a.nome}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-2 py-1">
+                        <select
+                          value={e.sazonalidade}
+                          aria-label={`Sazonalidade: ${l.chave}`}
+                          onChange={(ev) => onMudar(l.rotulo_norm, "sazonalidade", ev.target.value)}
+                          className="rounded border border-tinta-200 px-1 py-0.5 text-xs"
+                          disabled={sazonais.length === 0}
+                        >
+                          <option value="">(sem sazonalidade)</option>
+                          {sazonais.map((a) => <option key={a.codigo} value={a.codigo}>{a.nome}</option>)}
+                        </select>
+                      </td>
+                    </>
+                  ) : (
+                    // Sem seletor, com o DESTINO escrito: se a linha simplesmente
+                    // não tivesse controle, o analista procuraria o defeito na tela.
+                    <td colSpan={2} className="px-2 py-1 text-xs text-tinta-500">
+                      {info?.explica}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

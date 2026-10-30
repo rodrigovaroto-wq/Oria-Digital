@@ -280,13 +280,11 @@ begin
 
   -- 9. NINGUÉM APAGA EVIDÊNCIA PELO PORTAL -------------------------------------------------------------
   raise notice '--- 9. delete negado ao authenticated ---';
-  perform teste_como_admin_0216();
   set local role authenticated;
   perform teste_assert_ao(teste_estado_ao(format('delete from arquivo_oficial where id = %L', v_orig)) = '42501',
     'authenticated não apaga arquivo oficial (permission denied)');
   perform teste_assert_ao((select count(*) from arquivo_oficial where id = v_orig) = 1, 'authenticated ainda LÊ');
   reset role;
-  perform teste_fim_admin_0216();
   perform teste_assert_ao(exists (select 1 from arquivo_oficial where id = v_orig), 'a linha segue lá depois da tentativa');
 
   delete from documento where id = v_doc;

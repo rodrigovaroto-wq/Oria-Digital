@@ -656,14 +656,12 @@ begin
     'há rótulo gravado para o teste de append-only ter o que tentar apagar',
     format('%s', v_antes));
 
-  perform teste_como_admin_0216();
   set local role authenticated;
   delete from golden_rotulo;
   update golden_rotulo set tipo_correto = 'MENTIRA';
   delete from golden_campo;
   delete from golden_documento;
   reset role;
-  perform teste_fim_admin_0216();
 
   select count(*) into v_depois from golden_rotulo;
   perform teste_assert_golden(v_depois = v_antes,

@@ -1,35 +1,68 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import { FaixaDeAcesso } from "@/components/acesso-na-tela";
 import type { Caso } from "@/lib/types";
+import Link from "next/link";
 import UploadForm from "@/components/upload-form";
+import { avisoDoPasso, cabecalhoDoPasso, textoDoPasso } from "@/lib/passo-do-mandato";
 
 export default async function AdicionarArquivosPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ passo?: string | string[]; existente?: string | string[] }>;
 }) {
   const { id } = await params;
+  const passo = cabecalhoDoPasso(await searchParams);
   const supabase = await createClient();
+  const permissoesDoMandato = lerPermissoesDoMandato(id);
   const { data, error } = await supabase.from("caso").select("id, nome, produto, status, criado_em").eq("id", id).single();
 
   if (error || !data) notFound();
   const caso = data as Caso;
+  const perm = await permissoesDoMandato;
+  // Enviar arquivos é escrita (e o envio passa por fora do banco, ver `decidirEnvioAoMandato`): sem
+  // poder escrever aqui, a tela diz o motivo em vez de oferecer um formulário que a rota recusaria.
+  if (!perm.escrever.pode) {
+    return (
+      <div className="max-w-2xl space-y-4">
+        <h1 className="text-lg font-semibold text-tinta-900">Adicionar arquivos</h1>
+        <FaixaDeAcesso liberacao={perm.escrever} />
+        <Link href={`/casos/${caso.id}`} className="btn-secundario">Voltar à Visão geral</Link>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <Link href={`/casos/${id}`} className="text-sm text-tinta-500 underline">
-          ← Voltar ao mandato
-        </Link>
-        <h1 className="mt-2 text-lg font-semibold">Adicionar arquivos — {caso.nome}</h1>
+        {passo && (
+          <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-acento-700">
+            {textoDoPasso(passo)} · {passo.rotulo}
+          </p>
+        )}
+        <h1 className="text-lg font-semibold text-tinta-900">{passo ? `Documentos de ${caso.nome}` : "Adicionar arquivos"}</h1>
         <p className="text-sm text-tinta-500">
           Os novos arquivos entram neste mesmo mandato e somam ao checklist, à exportação para Excel e
-          à checagem de dados já existentes.{" "}
-          <Link href={`/casos/${id}#documentos`} className="underline">Ver os documentos já recebidos</Link>.
+          à checagem de dados já existentes.
         </p>
+        {passo && avisoDoPasso(passo.situacao) && (
+          <p role="status" className="mt-2 rounded-md bg-alerta-50 px-3 py-2 text-xs text-alerta-900">
+            {avisoDoPasso(passo.situacao)}
+          </p>
+        )}
       </div>
-      <UploadForm mandatoInicial={caso.nome} travarMandato casoId={caso.id} />
+      <UploadForm mandatoInicial={caso.nome} travarMandato casoId={caso.id} podeExcluir={perm.reservadoAoSocio.pode} />
+      {passo && (
+        <p className="text-sm">
+          <Link href={`/casos/${caso.id}`} className="text-tinta-500 underline hover:text-tinta-900">
+            Adicionar depois
+          </Link>{" "}
+          <span className="text-tinta-500">— o mandato fica criado, sem documentos, e você vai para a Visão geral.</span>
+        </p>
+      )}
     </div>
   );
 }

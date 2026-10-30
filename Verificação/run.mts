@@ -247,8 +247,6 @@ psql(`create database ${DB}`, "postgres");
 // Supabase deixa de concedê-lo em 30/10/2026 e quem concede agora é a 0214 (e a migration de cada tabela).
 // Mantê-los idênticos importa:
 // dois bootstraps diferentes produziriam duas verdades diferentes sobre o schema.
-// E O SCHEMA `auth` (27/10/2026): a 0215 cria FK para `auth.users` e lê `auth.uid()`. É o mesmo mínimo que
-// `Supabase/test/run.sh` monta, com o mesmo corpo — sem ele a 0215 morre em "schema auth does not exist".
 psql(`
   do $$ begin
     if not exists (select 1 from pg_roles where rolname = 'anon') then create role anon nologin; end if;
@@ -261,13 +259,11 @@ psql(`
     bucket_id text, name text, owner uuid);
   alter table storage.objects enable row level security;
   create schema if not exists auth;
-  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text);
-  create or replace function auth.uid() returns uuid language sql stable as $f$
+  create table if not exists auth.users(id uuid primary key default gen_random_uuid(), email text, created_at timestamptz not null default now());
+  create or replace function auth.uid() returns uuid language sql stable as $fn$
     select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
-                    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid $f$;
-  grant usage on schema auth to authenticated, service_role;
-  grant execute on function auth.uid() to anon, authenticated, service_role;
-  grant select on auth.users to service_role;
+                    (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid $fn$;
+  grant usage on schema auth to anon, authenticated, service_role;
   grant usage on schema public to anon, authenticated, service_role;
 `);
 // A LISTA DAS MIGRATIONS SAI DO DISCO, E NÃO DE UM SHELL. Até aqui ela vinha de

@@ -40,7 +40,6 @@ begin
   v_e3 := fn_upsert_entidade(v_caso, 'TERCEIRA LTDA. (0210)');
   v_e4 := fn_upsert_entidade(v_caso, 'QUARTA LTDA. (0210)');
 
-  perform teste_como_admin_0216();
   set local role authenticated;
 
   raise notice '--- 1. as funções de escrita da F1, COMO authenticated ---';
@@ -138,10 +137,8 @@ begin
 
   raise notice '--- 3. a fusão (apaga a absorvida por cascata) como authenticated ---';
   reset role;
-  perform teste_fim_admin_0216();
   v_ctrl := fn_controlador_registrar(v_caso, 'Outro Sócio (0210)', null, 'fisica', 'setup@0210');
   perform fn_entidade_definir_controlador(v_e3, v_ctrl, 30, 'setup@0210');
-  perform teste_como_admin_0216();
   set local role authenticated;
   v_err := null;
   begin perform fn_fundir_entidade(v_caso, v_e3, v_e4, 'portal@0210');
@@ -152,7 +149,6 @@ begin
     'e o vínculo de controle da absorvida passou para a sobrevivente (UPDATE em entidade_controlador)');
 
   reset role;
-  perform teste_fim_admin_0216();
 
   raise notice '--- 4. a sonda enxerga a policy ---';
   select presente into v_presente from fn_instalacao_conferir() where chave = 'perimetro_insert_policy';

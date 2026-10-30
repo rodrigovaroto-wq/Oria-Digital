@@ -104,8 +104,8 @@ export function textoChipModelagem(
   conf: ConferenciaModelagemCobertura, portao?: PortaoDoExport | null,
 ): string {
   if (!conf.pronto) return "falta algo";
-  if (portaoNaoConferido(portao)) return "premissas prontas — Portão 2 NÃO CONFERIDO, export travado";
-  if (portaoFechado(portao)) return "premissas prontas — export travado pelo Portão 2";
+  if (portaoNaoConferido(portao)) return "premissas prontas — aprovação NÃO CONFERIDA, export travado";
+  if (portaoFechado(portao)) return "premissas prontas — export bloqueado até a aprovação do mandato";
   const pct = fracaoPctDe(conf);
   return pct !== null ? `pronto — ${pct}% das contas projetam` : "pronto para exportar";
 }
@@ -121,14 +121,14 @@ export function textoTituloConferenciaModelagem(
 ): string {
   if (!conf.pronto) return "Ainda falta algo para o export de modelagem";
   if (portaoNaoConferido(portao)) {
-    return "As premissas estão prontas, mas NÃO foi possível conferir o Portão 2 (a consulta falhou): "
+    return "As premissas estão prontas, mas NÃO foi possível conferir a aprovação (a consulta falhou): "
       + "o export de modelagem fica travado até a conferência responder. Recarregue a página; se "
       + "persistir, o motivo está na faixa de consultas com erro.";
   }
   if (portaoFechado(portao)) {
-    return "As premissas estão prontas, mas o export de modelagem está travado pelo Portão 2: "
+    return "As premissas estão prontas, mas o export de modelagem está bloqueado até a aprovação do mandato: "
       + `${(portao!.motivos ?? []).join("; ") || "o caso ainda não pode ser aprovado"}. `
-      + "Decida as pendências na tela do mandato.";
+      + "Decida as pendências na aba Pendências.";
   }
   const pct = fracaoPctDe(conf);
   return pct !== null

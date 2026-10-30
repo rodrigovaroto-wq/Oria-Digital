@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { descobrirNomesDeCampo } from "@/lib/n8n-form";
+import { conferirEnvioAoMandato, emitirTokenDoEnvio } from "@/lib/supabase/acesso";
 
 // PARA ONDE O NAVEGADOR MANDA UM LOTE QUE NÃO CABE NA FUNCTION.
 //
@@ -17,12 +18,14 @@ import { descobrirNomesDeCampo } from "@/lib/n8n-form";
 //
 // O QUE ISTO EXPÕE, dito na cara. Esta rota entrega a URL de produção do Form
 // do n8n a quem está autenticado no portal (todas as rotas passam pelo
-// `proxy.ts`, que manda para /login quem não está). Essa URL é de um formulário
-// PÚBLICO por construção — é o mesmo endereço que qualquer pessoa com o link
-// usa para submeter documentos, e era assim antes desta rota existir. O que
-// muda é que agora ela sai também no tráfego do navegador de quem já pode
-// enviar arquivos pelo portal. Não há credencial nenhuma aqui: nem chave do
-// n8n, nem do Supabase, nem do provedor de IA.
+// `proxy.ts`, que manda para /login quem não está). A URL é de um formulário
+// PÚBLICO por construção — e por isso ela sozinha NÃO autoriza nada: o n8n só
+// grava para quem traga o token assinado por mandato que esta rota entrega
+// DEPOIS de conferir o papel (`assinatura-do-envio.ts`). Antes dele, um
+// Analista alocado só no Beta pegava a URL e postava `Mandato=Alfa`. Não há
+// credencial nenhuma aqui: nem chave do n8n, nem do Supabase, nem do provedor
+// de IA — o token vale 30 min, para um mandato e um usuário, e o segredo que o
+// assina nunca sai do servidor.
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
@@ -34,6 +37,18 @@ export async function GET(request: Request) {
   if (new URL(request.url).searchParams.get("apenas") === "agora") {
     return NextResponse.json({ agora: new Date().toISOString() });
   }
+
+  // A URL do Form do n8n só sai para quem pode enviar a ESTE mandato (o envio direto do navegador
+  // contorna `/api/intake` e o banco não o vê). O nome vem do formulário: sem ele, não há o que conferir.
+  const mandato = (new URL(request.url).searchParams.get("mandato") ?? "").trim();
+  if (!mandato) return NextResponse.json({ error: "Informe o nome do mandato." }, { status: 400 });
+  // E O TOKEN SAI JUNTO, só depois do papel: o Form é público e o n8n recusa o envio sem uma
+  // assinatura válida PARA ESTE MANDATO (`assinatura-do-envio.ts`). Segredo não configurado = 503
+  // com a frase do "envio desligado": nunca se entrega URL sem token.
+  const permissao = await conferirEnvioAoMandato(mandato);
+  if (!permissao.ok) return NextResponse.json({ error: permissao.mensagem }, { status: permissao.status });
+  const autorizacao = await emitirTokenDoEnvio(mandato);
+  if (!autorizacao.ok) return NextResponse.json({ error: autorizacao.mensagem }, { status: autorizacao.status });
 
   const url = process.env.N8N_INTAKE_FORM_URL;
   if (!url) {
@@ -67,7 +82,9 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     url,
-    campos: { mandato: campos.mandato, arquivos: campos.arquivos },
+    campos: { mandato: campos.mandato, arquivos: campos.arquivos, token: campos.token },
+    token: autorizacao.token,
+    tokenExpiraEm: autorizacao.exp,
     descoberto: campos.descoberto,
     origem,
     // SÓ QUANDO NÃO DESCOBRIU. Ver o comentário de `motivo` em `n8n-form.ts`:
