@@ -8,6 +8,14 @@ Pipeline que recebe documentos financeiros de mandatos de M&A/reestruturação, 
 demonstrações com IA, grava em Postgres/Supabase com proveniência, e exporta um book em Excel
 com modelo de FP&A vivo em fórmula.
 
+## Estilo de resposta (vale pra sessão inteira)
+
+- Direto ao ponto: a resposta vem na primeira frase.
+- Frases curtas. Um assunto por parágrafo.
+- Problema em 1 linha; solução em passos numerados.
+- Termo técnico só se explicar em seguida, em uma frase.
+- Se faltar informação pra executar, pergunte ANTES de fazer.
+
 ## Onde está o estado (leia nesta ordem, pare quando tiver o que precisa)
 
 | Arquivo | Pergunta que responde |
