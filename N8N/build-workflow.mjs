@@ -37,7 +37,6 @@ import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
 import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, vereditoDeTamanhoPorArquivo, TETO_BYTES_POR_ARQUIVO, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
 import { sha256Hex, chaveDoOriginal } from './lib/hash.mjs';
-import { normalizarMandato, mensagemAssinada, utf8Bytes, hmacSha256Hex, iguaisEmTempoConstante, verificarEnvio, veredictoDoEnvio } from './lib/assinatura-do-envio.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
   pareceTexto, contarFora, formaDoTexto, detectarFormato, abasDoXlsx,
@@ -783,36 +782,6 @@ return [{ json: {
   documentos_com_falha: comFalha,
   documentos_sem_medicao: semMedicao,
 } }];
-`.trim();
-
-// --- Code (ALL ITEMS): a AUTORIZAÇÃO DO ENVIO, o primeiro nó depois do Form ---
-// O Form é público e a URL é a mesma para todo mandato: sem isto, quem tem a URL grava em
-// QUALQUER mandato pela conexão de serviço (BYPASSRLS). O portal assina
-// HMAC(segredo, mandato|exp|usuario) depois de conferir o papel; aqui se recalcula e se recusa. A
-// conta inteira mora em lib/assinatura-do-envio.mjs (JS puro: o Code node não expõe `crypto`), e o
-// teste executa ESTE jsCode com tokens assinados por `node:crypto`. Tem de vir ANTES do `Upsert
-// Caso`, que já é gravação (cria o mandato). Segredo ausente = recusa tudo (fail closed): `$env`
-// bloqueado lança, e o catch o trata como ausente; `$vars` é o plano B de quem tem Variables.
-const FONTE_ENVIO = [
-  `const sha256Hex = ${sha256Hex.toString()};`,
-  `const normalizarMandato = ${normalizarMandato.toString()};`,
-  `const mensagemAssinada = ${mensagemAssinada.toString()};`,
-  `const utf8Bytes = ${utf8Bytes.toString()};`,
-  `const hmacSha256Hex = ${hmacSha256Hex.toString()};`,
-  `const iguaisEmTempoConstante = ${iguaisEmTempoConstante.toString()};`,
-  `const verificarEnvio = ${verificarEnvio.toString()};`,
-  `const veredictoDoEnvio = ${veredictoDoEnvio.toString()};`,
-].join('\n');
-const CODE_CONFERIR_ENVIO = `
-${FONTE_ENVIO}
-const form = $input.first().json || {};
-let segredo = null;
-try { segredo = $env.N8N_INTAKE_SEGREDO || null; } catch (e) { segredo = null; }
-if (!segredo) { try { segredo = $vars.N8N_INTAKE_SEGREDO || null; } catch (e) { segredo = null; } }
-const v = veredictoDoEnvio({ token: form['Token do envio'], mandato: form['Mandato (nome do caso)'], segredo, agoraMs: Date.now() });
-// Um item só, com o MESMO formato da recusa de tamanho/orçamento (orcamento_mensagem é o campo que o
-// Abortar Lote lança). caso_id null: o caso não foi criado e NÃO vai ser.
-return [{ json: { envio_autorizado: v.autorizado, caso_id: null, etapa_recusa: 'envio', motivo_recusa: v.motivo, orcamento_mensagem: v.mensagem } }];
 `.trim();
 
 // --- Code (ALL ITEMS — fan-out): um item por arquivo enviado no Form ---
@@ -2539,12 +2508,33 @@ const nodes = [
       { fieldLabel: 'Arquivos', fieldType: 'file', multipleFiles: true, requiredField: true },
       // O TOKEN QUE O PORTAL ASSINA (lib/assinatura-do-envio.mjs). Depois dos outros dois de propósito:
       // o portal acha o campo do mandato como o PRIMEIRO texto do HTML (n8n-form.ts) e este o segue.
-      // Não é obrigatório no Form: quem o abre à mão é recusado pelo `Conferir Envio`, com a mensagem.
+      // Não é obrigatório no Form: quem o abre à mão é recusado pelo `Conferir Envio` (fn_conferir_envio), com a mensagem.
       { fieldLabel: 'Token do envio', fieldType: 'text', requiredField: false },
     ] },
   }),
 
-  node('Conferir Envio', 'n8n-nodes-base.code', 2, { mode: 'runOnceForAllItems', jsCode: CODE_CONFERIR_ENVIO }),
+  // A AUTORIZAÇÃO DO ENVIO, o primeiro nó depois do Form — e ela é do BANCO (migration 0217), não de
+  // um nó Code. Era um Code que lia o segredo de `$env`/`$vars`; em produção nenhum dos dois existe
+  // (a licença do n8n não tem Variables e o PikaPods não cria variável de ambiente, medido em
+  // 30/10/2026), e o n8n publicado recusava TODO envio. `fn_conferir_envio` confere o HMAC com o
+  // segredo do Vault e devolve SEMPRE uma linha, no MESMO formato que o Code devolvia (o IF seguinte
+  // e o Registrar Recusa/Abortar Lote leem estes campos).
+  //   - O ARRAY no queryReplacement (não texto com vírgula): token ou mandato ausente chega como
+  //     null/'' sem partir os parâmetros.
+  //   - `x as x` não é enfeite: a guarda de `workflow-sim.test.mjs` só enxerga coluna declarada
+  //     `as nome`, e `select *` esconderia dela o que o Registrar Recusa lê de `$json`.
+  //   - FAIL CLOSED: SEM `onError` (PG_RETRY o poria em continueRegularOutput). Com o banco fora,
+  //     as tentativas se esgotam e a execução ABORTA no nó; continuar entregaria ao Upsert um item
+  //     sem veredito, e o Upsert grava.
+  //   - É um Postgres e substitui o item, por isso o Upsert Caso lê o mandato do `Intake (Form)` e
+  //     não de `$json` (o Code antigo também devolvia item novo — e o Upsert lia `$json` dele).
+  node('Conferir Envio', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery',
+    query: 'select r.envio_autorizado as envio_autorizado, r.caso_id as caso_id, r.etapa_recusa as etapa_recusa, '
+      + 'r.motivo_recusa as motivo_recusa, r.orcamento_mensagem as orcamento_mensagem, r.usuario_id as usuario_id '
+      + 'from fn_conferir_envio($1::text, $2::text) r',
+    options: { queryReplacement: "={{ [$('Intake (Form)').first().json['Token do envio'] ?? '', $('Intake (Form)').first().json['Mandato (nome do caso)'] ?? ''] }}" },
+  }, { credentials: PG_CRED, retryOnFail: true, maxTries: 3, waitBetweenTries: 3000 }),
 
   node('Envio autorizado?', 'n8n-nodes-base.if', 2, {
     conditions: { options: { caseSensitive: true, typeValidation: 'strict' }, combinator: 'and', conditions: [
@@ -2563,7 +2553,7 @@ const nodes = [
     operation: 'executeQuery', query: "select fn_upsert_caso($1::text) as caso_id, "
       + "(select limiar_auto_clear from estagio_autonomia "
       + "where estagio = 'classificacao_doc_checklist') as limiar_classificacao",
-    options: { queryReplacement: "={{ [$json['Mandato (nome do caso)']] }}" },
+    options: { queryReplacement: "={{ [$('Intake (Form)').first().json['Mandato (nome do caso)']] }}" },
   }, { credentials: PG_CRED, ...PG_RETRY }),
 
   node('Listar Arquivos', 'n8n-nodes-base.code', 2, { mode: 'runOnceForAllItems', jsCode: CODE_LISTAR }),

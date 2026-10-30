@@ -1,4 +1,4 @@
-// A ASSINATURA DO ENVIO — o token que o portal entrega e o `Conferir Envio` confere antes de gravar.
+// A ASSINATURA DO ENVIO — o token que o portal entrega e o BANCO confere antes de gravar.
 //
 // O DEFEITO. O Form de ingestão do n8n é PÚBLICO (formTrigger, sem autenticação) e a URL é a
 // mesma para todos os mandatos. O portal confere o papel do usuário (Fase 5, migration 0216) em
@@ -8,22 +8,27 @@
 //
 // O DESENHO. O portal, depois de `conferirEnvioAoMandato`, assina
 //     HMAC-SHA256(segredo, mandato_normalizado | exp | usuario_id)
-// e manda o token junto com o lote, como um campo do Form. O n8n recalcula com o MESMO segredo
-// ANTES do `Upsert Caso` (que já é uma gravação: cria o mandato) e recusa se não bater.
+// e manda o token junto com o lote, como um campo do Form. O nó `Conferir Envio` do n8n chama
+// `fn_conferir_envio(token, mandato)` (migration 0217), que recalcula com o segredo do Vault do
+// banco ANTES do `Upsert Caso` (que já é uma gravação: cria o mandato) e recusa se não bater.
 //   token = "v1.<exp>.<usuario_id>.<hmac hex>"       exp = segundos desde 1970 (UTC)
 // O mandato NÃO vai no token: vem do campo Mandato do próprio POST e entra na conta de quem
 // confere. Trocar o mandato depois de assinado muda a mensagem e, portanto, a assinatura.
 //
-// POR QUE JS PURO E NÃO `node:crypto`. O Code node do n8n do dono NÃO expõe `crypto` (medido em
-// 2026-07-31: o `hash` de `Preparar Conteudo` vinha null — ver lib/hash.mjs), e `require('crypto')`
-// depende de `NODE_FUNCTION_ALLOW_BUILTIN`, que é configuração de servidor. O HMAC aqui sai do
-// `sha256Hex` de JS puro (FIPS 180-4) que já roda em produção. O portal, que TEM `node:crypto`,
-// assina com ele: são duas implementações independentes do mesmo HMAC, e a suíte exige que o
-// token de uma seja aceito pela outra (o vetor de RFC 4231 e o token do portal).
+// O QUE ESTA LIB É HOJE (30/10/2026). A conferência MUDOU DE LUGAR: era um nó Code que lia o
+// segredo de `$env`/`$vars`, e em produção nenhum dos dois existe (a licença do n8n não tem
+// Variables e o PikaPods não cria variável de ambiente) — o n8n publicado recusava TODO envio.
+// Ela agora é SQL, e esta lib deixou de ser embutida em nó nenhum. Duas coisas dela continuam
+// em uso de produção: `normalizarMandato` e `mensagemAssinada`, que o portal importa para ASSINAR.
+// `verificarEnvio`/`veredictoDoEnvio` (e `hmacSha256Hex`, `iguaisEmTempoConstante`, `utf8Bytes`,
+// que eles usam) ficam como a implementação de REFERÊNCIA do lado que confere — o único chamador
+// é `portal/scripts/verificar-envio-oficial.mts` (seção 8, portão do CI), que prova que o token
+// que o portal gera (node:crypto) é aceito, e o vetor fixo. Quem tirar daqui tem de levar aquela
+// seção junto. Não rodam mais em produção: o que confere em produção é `fn_conferir_envio`.
 //
-// AUTO-CONTIDAS de propósito, como as demais libs: o gerador embute o `toString()` de cada função
-// no `jsCode` do nó (Code node não importa arquivo). Constantes ficam DENTRO dos corpos; as funções
-// só chamam umas às outras e `sha256Hex`, que o gerador embute antes.
+// JS PURO (sem `node:crypto`) é herança do tempo em que isto rodava no Code node do n8n, que NÃO
+// expõe `crypto` (medido em 2026-07-31: o `hash` de `Preparar Conteudo` vinha null — ver
+// lib/hash.mjs). Fica assim porque trocar a implementação de referência não compra nada.
 import { sha256Hex } from './hash.mjs';
 
 /**
@@ -118,16 +123,16 @@ export function verificarEnvio({ token, mandato, segredo, agoraMs }) {
 }
 
 /**
- * O que o nó `Conferir Envio` decide, com a mensagem que o portal vai ler (a recusa entra no
- * `Registrar Recusa` -> `Abortar Lote`, que grava em `execucao_falha`). A falta de segredo no n8n
+ * O que o `Conferir Envio` (hoje `fn_conferir_envio`) decide, com a mensagem que o portal vai ler (a recusa entra no
+ * `Registrar Recusa` -> `Abortar Lote`, que grava em `execucao_falha`). A falta de segredo no banco
  * tem mensagem PRÓPRIA: é erro de configuração do dono, não de quem enviou.
  */
 export function veredictoDoEnvio({ token, mandato, segredo, agoraMs }) {
   const v = verificarEnvio({ token, mandato, segredo, agoraMs });
   if (v.ok) return { autorizado: true, motivo: null, mensagem: null, usuario_id: v.usuario_id };
   const mensagem = v.motivo === 'sem_segredo'
-    ? 'Envio recusado: o n8n não tem o segredo N8N_INTAKE_SEGREDO (ou o acesso a variáveis de ambiente '
-      + 'está bloqueado nos nós Code). Nada foi gravado. Peça ao responsável pelo n8n para configurá-lo.'
+    ? 'Envio recusado: o banco não tem o segredo de autorização do envio no Vault. '
+      + 'Nada foi gravado. Peça ao responsável pelo banco para configurá-lo.'
     : v.motivo === 'expirado'
       ? 'Envio sem autorização válida: o token do envio expirou. Nada foi gravado. Reenvie pelo portal.'
       : 'Envio sem autorização válida. Nada foi gravado. Envie pelo portal, com o login de quem tem acesso ao mandato.';

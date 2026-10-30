@@ -61,8 +61,9 @@ confere o token antes de criar mandato ou gravar documento.
 
 - **Fail closed:** sem `N8N_INTAKE_SEGREDO` no portal, responde 503 "envio desligado"; sem o
   segredo no n8n, recusa todo envio.
-- O segredo tem de ser o **mesmo** nos dois lados. O n8n lê `$env` e, se vazio, `$vars`
-  (`N8N/build-workflow.mjs`, 810–811). Por padrão o n8n bloqueia `$env` em nó Code.
+- O segredo tem de ser o **mesmo** nos dois lados. **Desde 30/10/2026 (S114) o n8n não lê `$env`
+  nem `$vars`:** a licença não tem Variables e o PikaPods não aceita variável nova. Quem confere é
+  `fn_conferir_envio` (migration `0217`), com o segredo `n8n_intake_segredo` no Vault do Supabase.
 - **A prova deste ponto é a suíte do n8n** (`N8N/test/assinatura-do-envio.test.mjs`, dentro dos 693),
   não a `run.sh` que está declarada acima. Esta ficha só declara uma prova; o token tem outra.
 

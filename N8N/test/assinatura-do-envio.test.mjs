@@ -121,7 +121,7 @@ test('SEGREDO AUSENTE no n8n recusa tudo (fail closed), mesmo com um token que "
     const v = veredictoDoEnvio({ token: falso, mandato: 'Alfa', segredo, agoraMs: agora() });
     assert.equal(v.autorizado, false, JSON.stringify(segredo));
     assert.equal(v.motivo, 'sem_segredo');
-    assert.match(v.mensagem, /N8N_INTAKE_SEGREDO/);
+    assert.match(v.mensagem, /Vault/);
   }
   // e o token genuinamente assinado com segredo vazio no portal também não vale
   const comVazio = tokenDoPortal({ mandato: 'Alfa', exp: expEm(1800), segredo: '' });
@@ -161,56 +161,41 @@ test('comparação em tempo constante: o trabalho não depende de ONDE as duas s
   assert.equal(iguaisEmTempoConstante(null, ''), true);
 });
 
-// --- o nó, como roda em produção ---------------------------------------------
+// --- o nó, como está no JSON commitado ---------------------------------------------
 const wf = JSON.parse(readFileSync(new URL('../workflow.e1-ingestao.json', import.meta.url), 'utf8'));
 const no = (nome) => wf.nodes.find((n) => n.name === nome);
-const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
 
-async function conferirEnvio({ form, env, vars }) {
-  const $input = { first: () => ({ json: form }), all: () => [{ json: form }] };
-  const fn = new AsyncFunction('$input', '$env', '$vars', no('Conferir Envio').parameters.jsCode);
-  const out = await fn($input, env, vars);
-  assert.equal(out.length, 1, 'um item só, como a recusa de tamanho/orçamento');
-  return out[0].json;
-}
-const formCom = (mandato, token) => ({ 'Mandato (nome do caso)': mandato, 'Token do envio': token });
+// O QUE O NÓ FAZ HOJE: não há mais jsCode para executar — a conferência é `fn_conferir_envio` no
+// banco (a prova do HMAC em si mora em Supabase/test). Aqui se prova a FIAÇÃO, por comportamento.
+const conferir = no('Conferir Envio');
 
-test('Conferir Envio (o jsCode commitado): válido passa; expirado, mandato trocado e adulterado são recusados com a mensagem', async () => {
-  const ok = await conferirEnvio({ form: formCom('Alfa', tokenDoPortal({ mandato: 'Alfa', exp: expEm(1800) })), env: { N8N_INTAKE_SEGREDO: SEGREDO } });
-  assert.equal(ok.envio_autorizado, true);
-  assert.equal(ok.orcamento_mensagem, null);
-
-  const recusas = {
-    expirado: formCom('Alfa', tokenDoPortal({ mandato: 'Alfa', exp: expEm(-30) })),
-    'mandato trocado': formCom('Alfa', tokenDoPortal({ mandato: 'Beta', exp: expEm(1800) })),
-    adulterado: formCom('Alfa', tokenDoPortal({ mandato: 'Alfa', exp: expEm(1800) }).replace(/.$/, (c) => (c === '0' ? '1' : '0'))),
-    'sem token': formCom('Alfa', undefined),
-  };
-  for (const [o_que, form] of Object.entries(recusas)) {
-    const r = await conferirEnvio({ form, env: { N8N_INTAKE_SEGREDO: SEGREDO } });
-    assert.equal(r.envio_autorizado, false, o_que);
-    assert.equal(r.caso_id, null, `${o_que}: nenhum caso foi criado`);
-    assert.equal(r.etapa_recusa, 'envio');
-    assert.match(r.orcamento_mensagem, /envio sem autorização válida/i, o_que);
-  }
+test('Conferir Envio é um nó Postgres que chama fn_conferir_envio com o token e o mandato DO FORM, nessa ordem', () => {
+  assert.equal(conferir.type, 'n8n-nodes-base.postgres');
+  assert.match(conferir.parameters.query, /from fn_conferir_envio\(\$1::text, \$2::text\)/);
+  const repl = conferir.parameters.options.queryReplacement;
+  // array (nunca texto com vírgula) e lido do Form, não de `$json`
+  assert.match(repl, /^=\{\{ \[\$\('Intake \(Form\)'\)\.first\(\)\.json\['Token do envio'\] \?\? '', \$\('Intake \(Form\)'\)\.first\(\)\.json\['Mandato \(nome do caso\)'\] \?\? ''\] \}\}$/);
+  assert.equal(conferir.jsCode, undefined);
 });
 
-test('Conferir Envio: sem segredo no n8n recusa tudo — `$env` vazio, `$env` BLOQUEADO (lança) e sem `$vars`', async () => {
-  const token = tokenDoPortal({ mandato: 'Alfa', exp: expEm(1800) });
-  const bloqueado = new Proxy({}, { get() { throw new Error('access to env vars denied'); } });
-  const semVars = new Proxy({}, { get() { throw new Error('vars indisponível'); } });
-  for (const [o_que, env, vars] of [
-    ['env vazio', {}, {}], ['env bloqueado', bloqueado, semVars], ['env vazio e vars lançando', {}, semVars],
-    ['segredo só com espaços', { N8N_INTAKE_SEGREDO: '  ' }, {}],
-  ]) {
-    const r = await conferirEnvio({ form: formCom('Alfa', token), env, vars });
-    assert.equal(r.envio_autorizado, false, o_que);
-    assert.equal(r.motivo_recusa, 'sem_segredo', o_que);
-    assert.match(r.orcamento_mensagem, /N8N_INTAKE_SEGREDO/);
+test('Conferir Envio devolve as colunas que o IF e o Registrar Recusa leem (o formato do item que o Code devolvia)', () => {
+  const colunas = [...conferir.parameters.query.matchAll(/\bas\s+(\w+)/g)].map((m) => m[1]);
+  for (const c of ['envio_autorizado', 'caso_id', 'etapa_recusa', 'motivo_recusa', 'orcamento_mensagem']) {
+    assert.ok(colunas.includes(c), `falta a coluna ${c}`);
   }
-  // $vars é o plano B: com o segredo ali e `$env` bloqueado, o envio legítimo passa.
-  const viaVars = await conferirEnvio({ form: formCom('Alfa', token), env: bloqueado, vars: { N8N_INTAKE_SEGREDO: SEGREDO } });
-  assert.equal(viaVars.envio_autorizado, true);
+  assert.match(no('Envio autorizado?').parameters.conditions.conditions[0].leftValue, /\$json\.envio_autorizado/);
+  const repl = no('Registrar Recusa').parameters.options.queryReplacement;
+  for (const c of ['caso_id', 'etapa_recusa', 'orcamento_mensagem']) assert.match(repl, new RegExp(`\\$json\\.${c}\\b`));
+});
+
+test('Fail closed: banco fora NÃO deixa o envio passar (sem onError, com retry), e o Upsert não lê o mandato do item do Postgres', () => {
+  assert.equal(conferir.onError, undefined, 'continueRegularOutput entregaria ao Upsert um item sem veredito');
+  assert.equal(conferir.retryOnFail, true);
+  assert.ok(conferir.maxTries >= 2);
+  // O Postgres SUBSTITUI o item: o Upsert tem de ler o mandato do Form, como o Registrar Recusa.
+  const up = no('Upsert Caso (Postgres)').parameters.options.queryReplacement;
+  assert.match(up, /\$\('Intake \(Form\)'\)\.first\(\)\.json\['Mandato \(nome do caso\)'\]/);
+  assert.doesNotMatch(up, /\$json\['Mandato/);
 });
 
 // --- a topologia: a conferência vem ANTES de qualquer gravação -----------------
@@ -223,8 +208,6 @@ test('Topologia: Form -> Conferir Envio -> Envio autorizado?; só o "sim" chega 
   assert.equal(no('Juntar Recusas').parameters.numberInputs, 3, 'três entradas: tamanho, orçamento e envio');
   assert.deepEqual(dest('Juntar Recusas'), ['Registrar Recusa:0']);
   assert.deepEqual(dest('Registrar Recusa'), ['Abortar Lote:0']);
-  // o `Abortar Lote` lança, e o nó de conferência aborta se ele mesmo falhar (fail closed)
-  assert.equal(no('Conferir Envio').onError, undefined);
 });
 
 test('Propriedade: nenhum nó que GRAVA é alcançável do Form sem passar pelo "sim" do Envio autorizado?', () => {
@@ -239,8 +222,10 @@ test('Propriedade: nenhum nó que GRAVA é alcançável do Form sem passar pelo 
   }
   const tipos = (nome) => no(nome).type;
   const quemGrava = [...alcancados].filter((n) => ['n8n-nodes-base.postgres', 'n8n-nodes-base.httpRequest'].includes(tipos(n)));
-  // A única gravação sem autorização é a da PRÓPRIA recusa (execucao_falha, sem caso).
-  assert.deepEqual(quemGrava, ['Registrar Recusa']);
+  // Postgres alcançável sem autorização: o próprio `Conferir Envio` (um select, que decide) e a
+  // gravação da PRÓPRIA recusa (execucao_falha, sem caso). Nada além disso.
+  assert.deepEqual(quemGrava, ['Conferir Envio', 'Registrar Recusa']);
+  assert.match(no('Conferir Envio').parameters.query, /^select /);
   assert.ok(alcancados.has('Abortar Lote') && !alcancados.has('Upsert Caso (Postgres)') && !alcancados.has('Listar Arquivos'));
 });
 

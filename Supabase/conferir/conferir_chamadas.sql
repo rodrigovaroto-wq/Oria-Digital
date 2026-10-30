@@ -27,6 +27,7 @@ do $conf$
 declare
   r record; i int := 0;
   alvos text[][] := array[
+    ['workflow.e1-ingestao.json · Conferir Envio', 'select r.envio_autorizado as envio_autorizado, r.caso_id as caso_id, r.etapa_recusa as etapa_recusa, r.motivo_recusa as motivo_recusa, r.orcamento_mensagem as orcamento_mensagem, r.usuario_id as usuario_id from fn_conferir_envio($1::text, $2::text) r'],
     ['workflow.e1-ingestao.json · Upsert Caso (Postgres)', 'select fn_upsert_caso($1::text) as caso_id, (select limiar_auto_clear from estagio_autonomia where estagio = ''classificacao_doc_checklist'') as limiar_classificacao'],
     ['workflow.e1-ingestao.json · Registrar Recusa', 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r'],
     ['workflow.e1-ingestao.json · Registrar Documento', 'select fn_registrar_documento($1::uuid,$2::text,$3::text,$4::text,$5::text,$6::numeric,$7::text,$8::origem_arquivo,$9::text,$10::text,$11::boolean,$12::text,$13::legibilidade, p_justificativa=>$14::text, p_fingerprint_extracao=>$15::text, p_cnpj=>$16::text) as r'],
