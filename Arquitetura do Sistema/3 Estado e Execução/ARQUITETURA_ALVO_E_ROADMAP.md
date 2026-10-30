@@ -17,6 +17,13 @@ que funciona é descartado.
 **Este arquivo não implementa nada.** Ele decide o desenho, a ordem e os critérios objetivos de
 passagem. A execução começa pela F0, cujo plano está na §9.
 
+> **ORDEM VIGENTE DESDE 30/10/2026 (sessão 114, decisão do dono): `PLANO_DE_EXECUCAO_2026-11.md`.**
+> Ele prevalece sobre o critical path da §8 onde os dois discordam. A ordem é F3 + F3b (estabilidade e
+> completude da extração) → portal → área do cliente e multiempresa → F4 → F2T onda 1 → aceite
+> financeiro → fechar a F1. O roteamento do n8n por `caso_id` entra na primeira semana. O objetivo
+> declarado pelo dono: *captar e rodar todos os dados com confiança alta*, sem cliente real até lá.
+> Teto de custo: US$ 5 por book. O desenho por fase (§7) continua valendo; o que mudou foi a ordem.
+
 ---
 
 ## 1. Decisão por componente existente
@@ -533,7 +540,7 @@ silêncio nenhum número do book (D12.8); não liga coleta automática antes da 
 | | |
 |---|---|
 | **Objetivo** | Parar de perder documento por causa operacional; autonomia N2 deixar de ser declarada |
-| **Estado** | 🟡 schema forte; 39% de falha na rodada de 190; `medicao_*` nulos |
+| **Estado** | 🟡 schema forte; 39% de falha na rodada de 190; `medicao_*` nulos. **Medido em produção em 30/10/2026:** nos dois últimos lotes de documento real, 5 de 15 (Valtra) e 5 de 7 (Krauspenhar) documentos com extração falha ou INCOMPLETA, a maior causa sendo contas descartadas por desalinhamento de coluna; régua de cobertura entre 0,57 e 2,25 (acima de 1 = a régua conta errado); `Maximum call stack size exceeded` em "Juntar Extração de Conteúdo". Plano: semanas 1 a 3 de `PLANO_DE_EXECUCAO_2026-11.md` |
 | **Gap** | fallback de provedor, fila de reprocesso, concordância por veredito de produção |
 | **Dep.** | F0 · **Risco** Médio (toca o dial) · **Impacto** Alto · **Esforço** M |
 | **Saída** | D7 verde |
@@ -687,7 +694,7 @@ Turnaround" eliminada vive aqui, como `categoria`, sem arquitetura própria.
 
 ### F17 — HARDENING (contínuo)
 
-RLS por caso e papel · teste de restauração executado · Sonar com Quality Gate no CI · proteção do
+RLS por caso e papel (**feita: `0216`, aplicada em produção em 30/10/2026, 48/48 requisitos; o próximo degrau é RLS por organização, etapa (g) do plano vigente**) · teste de restauração executado · Sonar com Quality Gate no CI · proteção do
 `main` · registro de leitura no `evento_auditoria` · conversão cambial. **Distribuir ao longo do
 roadmap** — deixar para o fim é o padrão que produz a dívida que este projeto passa o tempo pagando.
 

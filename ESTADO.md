@@ -1,5 +1,13 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 114 (30/10/2026) — 0216 aplicada em produção, e o plano das próximas 6 semanas
+
+> **Migration mais nova: `0216_o_acesso_que_so_o_portal_decidia.sql`, APLICADA EM PRODUÇÃO em 30/10/2026** pela sessão (API de gerenciamento, uma chamada, resposta `[{"fn_acesso_bootstrap":1}]`). **Antes:** `0215` com 0 ausentes; 0 nomes de mandato duplicados; `auth.users` com 1 usuário (o dono); `postgres` e `service_role` com `rolbypassrls = true`; a única policy de `storage.objects` era a `documentos_authenticated_all` da `0003`. Suíte local `run.sh` rc 0, e um **ensaio em produção** (a migration inteira seguida de `raise exception`, que reverte tudo) passou: 1 Sócio, 0 ausentes da 0216. **Depois:** 0216 com 48/48, catálogo inteiro 287/287; o dono é o único Sócio; 0 policies `using (true)` de `authenticated` (136 checam o mandato); storage com `documentos_read/insert/update/delete`.
+> **Configurado:** `N8N_INTAKE_SEGREDO` na Vercel (produção e preview, sensível); Supabase Auth com Site URL `https://tratamento-dados-financeiros.vercel.app` e Redirect URLs `/auth/confirmar**` (produção, previews `oria4`, localhost).
+> **NÃO foi possível:** a Variable no n8n (a licença não tem `feat:variables`, 403), então o segredo vai como variável de ambiente no PikaPods, com `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` (pendência D1 do dono); o modelo do e-mail de recuperação (o plano gratuito recusa sem SMTP próprio, 400), então o link é PKCE e só abre no mesmo navegador.
+> **Ainda NÃO feito (precisa do pedido do dono):** redeploy do portal (a variável só vale no próximo deploy) e republicação da ingestão. Os dois são a fatia P1.
+> **Plano vigente:** `Arquitetura do Sistema/3 Estado e Execução/PLANO_DE_EXECUCAO_2026-11.md` (30 fatias em 6 semanas, mais o mapa até o fim), com o roadmap apontando para ele.
+
 ## SESSÃO 113 (29/10/2026) — fechamento do redesenho do portal (fases 1 a 5)
 
 > **Migration mais nova: `0216_o_acesso_que_so_o_portal_decidia.sql`** (ESCRITA, NÃO aplicada em produção). O defeito que ela corrige: toda policy de `authenticated` era `using (true)` desde a `0003`, então qualquer usuário logado lia e escrevia TODOS os mandatos, e o portal só escondia o que não mostrava. A 0216 põe papéis Sócio · Analista · Leitura (`membro`), alocação por mandato (`alocacao`) e policy por mandato no banco. A rodada inteira está em `Arquitetura do Sistema/7 Marca/REDESENHO_DO_PORTAL.md`, em "O dono faz à mão".

@@ -85,6 +85,8 @@ Nada.
 Ordem de deploy. Cada item diz de onde vem a instrução. Nada disto é feito
 pelo repositório: correção que não chega ao ar não é correção.
 
+> **30/10/2026 (S114): a e b FEITOS e conferidos (0215 já estava; 0216 aplicada, 48/48). De c, só a Vercel; o n8n vai pelo PikaPods (sem licença de Variables). De d, Site URL e Redirect URLs; o modelo de e-mail exige SMTP próprio.** Ver o topo do `ESTADO.md`.
+
 **a. Aplicar a 0215 e conferir.** Depois da 0214 (aplicada em produção em
 20/10/2026). Conferir: `select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0215' and not presente;` → zero linhas. Fonte: `Supabase/README.md`.
 
