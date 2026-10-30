@@ -60,3 +60,10 @@ O grafo é derivado versionado: regerado e não commitado deixa o CI vermelho, i
 
 O que não conseguiu, o que ficou meio-feito, e o que você **mediu** × o que **supôs**. Relatório
 que esconde o que faltou custa a próxima sessão inteira.
+
+## 7. Último passo: sugerir sessão nova
+
+Depois do commit de fechamento, diga ao dono em uma linha: "Rodada fechada — a próxima
+fatia rende mais em sessão nova." Por quê: cada turno relê o contexto inteiro, e sessões
+que seguiram depois de fechar chegaram a 450–615k por chamada (medido 05–30/10/2026;
+a do portal custou US$ 152). Sessão nova parte de ~78k e do topo do `ESTADO.md`.
