@@ -66,6 +66,7 @@
 {"k":"n","id":"arquivo:Supabase/migrations/0028_rls_e_grant_indices_macro.sql","t":"arquivo","f":"Supabase/migrations/0028_rls_e_grant_indices_macro.sql","txt":"0028_rls_e_grant_indices_macro.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0036_completude_exige_conteudo.sql","t":"arquivo","f":"Supabase/migrations/0036_completude_exige_conteudo.sql","txt":"0036_completude_exige_conteudo.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0111_documento_sem_dado_financeiro_nao_e_falha.sql","t":"arquivo","f":"Supabase/migrations/0111_documento_sem_dado_financeiro_nao_e_falha.sql","txt":"0111_documento_sem_dado_financeiro_nao_e_falha.sql"}
+{"k":"n","id":"arquivo:Supabase/migrations/0137_a_promocao_automatica_do_dial.sql","t":"arquivo","f":"Supabase/migrations/0137_a_promocao_automatica_do_dial.sql","txt":"0137_a_promocao_automatica_do_dial.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0153_a_entidade_ambigua_nao_decide.sql","t":"arquivo","f":"Supabase/migrations/0153_a_entidade_ambigua_nao_decide.sql","txt":"0153_a_entidade_ambigua_nao_decide.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql","t":"arquivo","f":"Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql","txt":"0157_o_combinado_que_travava_o_kit_basico.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0179_o_papel_no_grupo_que_nunca_foi_escrito.sql","t":"arquivo","f":"Supabase/migrations/0179_o_papel_no_grupo_que_nunca_foi_escrito.sql","txt":"0179_o_papel_no_grupo_que_nunca_foi_escrito.sql"}
@@ -83,6 +84,7 @@
 {"k":"n","id":"arquivo:Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","t":"arquivo","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","txt":"0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","t":"arquivo","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","txt":"0214_o_grant_que_o_supabase_deixou_de_dar.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","t":"arquivo","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"0216_o_acesso_que_so_o_portal_decidia.sql"}
+{"k":"n","id":"arquivo:Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","t":"arquivo","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"0218_a_medicao_que_dependia_de_quem_olhava.sql"}
 {"k":"n","id":"arquivo:Supabase/schema.sql","t":"arquivo","f":"Supabase/schema.sql","txt":"schema.sql"}
 {"k":"n","id":"arquivo:Supabase/test/acesso_por_caso.test.sql","t":"arquivo","f":"Supabase/test/acesso_por_caso.test.sql","txt":"acesso_por_caso.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/alias_truncado.test.sql","t":"arquivo","f":"Supabase/test/alias_truncado.test.sql","txt":"alias_truncado.test.sql"}
@@ -146,6 +148,7 @@
 {"k":"n","id":"arquivo:Supabase/test/lote_abre_antes_de_fechar.test.sql","t":"arquivo","f":"Supabase/test/lote_abre_antes_de_fechar.test.sql","txt":"lote_abre_antes_de_fechar.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/macro.test.sql","t":"arquivo","f":"Supabase/test/macro.test.sql","txt":"macro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/medicao-denominador.test.mjs","t":"arquivo","f":"Supabase/test/medicao-denominador.test.mjs","txt":"medicao-denominador.test.mjs"}
+{"k":"n","id":"arquivo:Supabase/test/medicao_global.test.sql","t":"arquivo","f":"Supabase/test/medicao_global.test.sql","txt":"medicao_global.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/modelagem_escala.test.sql","t":"arquivo","f":"Supabase/test/modelagem_escala.test.sql","txt":"modelagem_escala.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/modelagem_pronto_exige_cobertura.test.sql","t":"arquivo","f":"Supabase/test/modelagem_pronto_exige_cobertura.test.sql","txt":"modelagem_pronto_exige_cobertura.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/modelagem_v35.test.sql","t":"arquivo","f":"Supabase/test/modelagem_v35.test.sql","txt":"modelagem_v35.test.sql"}
@@ -310,6 +313,7 @@
 {"k":"n","id":"ficha:indexar-le-o-disco-nao-o-commit","t":"ficha","f":".claude/memory/indexar-le-o-disco-nao-o-commit.md","txt":"o indexador do conhecimento lê a árvore de trabalho, não o git — gerar o grafo com edição não commitada (ou arquivo novo não ignorado) deixa o CI vermelho; gere num worktree limpo em HEAD ","d":"o indexador do conhecimento lê a árvore de trabalho, não o git — gerar o grafo com edição não commitada (ou arquivo novo não ignorado) deixa o CI vermelho; gere num worktree limpo em HEAD","kw":"indexar repositório pelo disco readdirsync readfilesync linhas 134 lista files entra apenas para decidir ignorar consequência edição agente ainda commitada arquivo novo ignora muda grafo jsonl local checkout commit regera diff exit code reprova commitado diverge gerar essa contaminação worktree detach head rode copie medido 2026 gerado limpo 96df48d byte igual removido depois remove"}
 {"k":"n","id":"ficha:item-sem-conteudo-so-cobre-obrigatorio","t":"ficha","f":".claude/memory/item-sem-conteudo-so-cobre-obrigatorio.md","txt":"item_sem_conteudo (0036/0157) só dispara para tipo OBRIGATÓRIO; documento COMPLEMENTAR que chega vazio só aparece via extracao_falhou por documento (0111), nunca por item_sem_conteudo ","d":"item_sem_conteudo (0036/0157) só dispara para tipo OBRIGATÓRIO; documento COMPLEMENTAR que chega vazio só aparece via extracao_falhou por documento (0111), nunca por item_sem_conteudo","kw":"registrado 2026 sessão 100 partir revisão 0185 descartada claude conhecimento fichas localizador chave pendencia falsa teria caído nesta armadilha tivesse adiante próprio texto redesenho supunha item_sem_conteudo cobre chegou vazio para nove tipos complementares fn_aceitar_extracao fn_linhas_do_tipo fn_recomputar_completude 0036 fn_documento_serve_como 0157 emitem caminho tipo obrigatório trava básico complementar maioria mudos incluindo único sinal extracao_falhou documento 0111 condição mais fraca extração achou nada específico está linha consequência prática qualquer fatia futura queira tratar como resolvido assumindo cobertura existe checagem necessária precisa nascer nova estender alcance construir sobre sabendo","tp":"armadilha"}
 {"k":"n","id":"ficha:materialized-nao-e-enfeite","t":"ficha","f":".claude/memory/materialized-nao-e-enfeite.md","txt":"sem MATERIALIZED o Postgres inlina a CTE usada uma vez, e o agrupamento escrito para MATAR o produto cartesiano vira o produto cartesiano ","d":"sem MATERIALIZED o Postgres inlina a CTE usada uma vez, e o agrupamento escrito para MATAR o produto cartesiano vira o produto cartesiano","kw":"fn_conflitos_do_caso levava chamada planner estima rows numa onde 619 escolhe nested loop compara 859 127 pares para achar vezes 123 chamadas 0151 dispara correção agrupar acontecia materialized versão agrupada palavra medida 068 praticamente original postgres inlina usada então agrupamento desaparecia plano cartesiano voltava 790 mesmas linhas medido produção estimado lição generaliza neste banco otimização força materialização pode apagada pelo nada acusar sintoma ausência melhora fácil atribuir isso meça depois antes","tp":"defeito"}
+{"k":"n","id":"ficha:medicao-do-dial-dependia-de-quem-olhava","t":"ficha","f":".claude/conhecimento/fichas/medicao-do-dial-dependia-de-quem-olhava.md","txt":"A medição do dial dependia de quem olhava (0218, P1b) ","kw":"medição dial dependia quem olhava 0218 termos busca promoção automática auto_dial veredito produção concordância golden security definer invoker mandato analista leitura papel relrowsecurity sonda surpreende revisão 264 disse promove todos mandatos dele 0216 isso acontecia guarda trg_estagio_autonomia_so_socio barrava escrita gatilho engolia erro como notice defeito real inverso medido global decisão completava critério deixava gravava eventos sumia rastro regra sobra função mede para decidir algo cobertura pode vira recebe parâmetro recorte fn_exige_ler_caso 42501 zero calado ganha requisito corpo marcador search_path basta create replace volta certo verde armadilhas medidas nesta rodada exceção current_user fora authenticated anon abre toda chamável pelo navegador fn_dial_auto_promover primeira versão subia chama também nada vale agregado passar assert trilha tdf_test precisa criado_em transaction_timestamp outras suítes deixam iguais passava quebrada desligada policy continua catálogo tipo fecha exclui tabela extensão pendência registrada feita view public security_invoker dono ignora hoje tocam fixture futura sobre dado vazaria","tp":"defeito","anc":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql#fn_exige_ler_caso","sha":"634e3fe5a7e4","anc_sha":"634e3fe5a7e4"}
 {"k":"n","id":"ficha:medicao-reescreve-derivado","t":"ficha","f":".claude/memory/medicao-reescreve-derivado.md","txt":"o protocolo `cp` protege o arquivo que você alterou, não os DERIVADOS que a suíte reescreve por baixo — medir invariante de banco deixa o Supabase/schema.sql com o defeito ligado ","d":"o protocolo `cp` protege o arquivo que você alterou, não os DERIVADOS que a suíte reescreve por baixo — medir invariante de banco deixa o Supabase/schema.sql com o defeito ligado","kw":"protocolo medir invariante vazio copiar para scratchpad desligar correção rodar suíte restaurar buraco aparece banco supabase test reescreve schema partir monta migration restaura aconteceu 0156 medição desligou carimbo fechado_em rodou regravou devolveu commit levou rodada defeito ligado reprovou passo materializado bate migrations mostrando exatamente três linhas faltavam portão funcionou como devia existe justamente porque gerar conferir deixa fonte resultado divergirem silêncio quem errou regra fecha isto depois qualquer rode mais tudo religado confira status antes commitar basta arquivo você alterou derivados neste repositório quatro build workflow json gerar_fixture fixtures book gabarito vale deles mexendo derivado estado","tp":"armadilha"}
 {"k":"n","id":"ficha:n8n-binario-grande-derruba-a-instancia","t":"ficha","f":".claude/conhecimento/fichas/n8n-binario-grande-derruba-a-instancia.md","txt":"Arquivo grande no nó Code: `getBinaryDataBuffer` derruba o n8n; fatia de Range não ","kw":"arquivo grande code getbinarydatabuffer derruba fatia range termos busca sped milhões linhas memória heap memory task runner workflow leitor pikapods navegador file stream resumo agregado guardar banco storage medido 2026 sessão 108 local detalhe tabela estão medicao readme this helpers processo principal para chegar binário vira objeto byte 117 viraram 355 padrão fatal error javascript 384 mesmo erro instância inteira execução passa http fatias como bytes gravação pedido porque corpo também serializado caminho filha 000 010 foram gravadas postgres 222 pico 563 386 limitado 192 importa laço mesma rundata cada volta fica baixada encoding text perde acento latin1 então arraybuffer tostring alternativa pelo chromium real sobre composição realista 256 incremental igual sha256sum registros chave íntegra i250 somados conta 745 comprimido contra carga bruta custo lançamento individual barreira produção passo teto_bytes_por_arquivo total 600 tamanho listar arquivos recusa lote antes qualquer registrar abortar orçamento cabe merge juntar recusas desconhecido recusado quem desmente","tp":"numero","anc":"N8N/build-workflow.mjs#getBinaryDataBuffer","sha":"967ae9fd3777","anc_sha":"967ae9fd3777"}
 {"k":"n","id":"ficha:n8n-nao-aguenta-baixar-execucao-grande","t":"ficha","f":".claude/memory/n8n-nao-aguenta-baixar-execucao-grande.md","txt":"`GET /executions/<id>?includeData=true` de uma execução com planilha de dezenas de milhares de linhas derrubou a instância do n8n (502 por ~2 min, 30/09/2026) — o dado não chega e a produção para; use `execucao_falha`/`evento_auditoria` no banco ","d":"`GET /executions/<id>?includeData=true` de uma execução com planilha de dezenas de milhares de linhas derrubou a instância do n8n (502 por ~2 min, 30/09/2026) — o dado não chega e a produção para; use `execucao_falha`/`evento_auditoria` no banco","kw":"medido 2026 para diagnosticar execuções 7883 7886 estouro pilha merge tentei baixar dado delas includedata true resposta veio minutos instância pequena pikapod passou responder 502 voltou sozinho nenhuma execução estava rodando naquela hora usar lugar suficiente execucao_falha evento_auditoria banco leitura pela gerenciamento supabase eles etapa mensagem orçamento nome cada arquivo topologia problema fonte nodes base baixado caso actions mode append timeout curl pdfs json desceu","tp":"ambiente"}
@@ -361,7 +365,7 @@
 {"k":"n","id":"fn:fn_caso_nome_ocupado","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"caso nome ocupado"}
 {"k":"n","id":"fn:fn_casos_escreviveis","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"casos escreviveis"}
 {"k":"n","id":"fn:fn_casos_legiveis","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"casos legiveis"}
-{"k":"n","id":"fn:fn_classe_contabil_concordancia","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil concordancia"}
+{"k":"n","id":"fn:fn_classe_contabil_concordancia","t":"fn","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"classe contabil concordancia"}
 {"k":"n","id":"fn:fn_classe_contabil_do_campo","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil do campo"}
 {"k":"n","id":"fn:fn_classe_contabil_sugerir","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classe contabil sugerir"}
 {"k":"n","id":"fn:fn_classificar_contabil","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"classificar contabil"}
@@ -424,6 +428,7 @@
 {"k":"n","id":"fn:fn_entidades_sao_um_grupo","t":"fn","f":"Supabase/migrations/0168_o_apelido_truncado_nao_e_ambiguidade.sql","txt":"entidades sao um grupo"}
 {"k":"n","id":"fn:fn_excluir_caso","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"excluir caso"}
 {"k":"n","id":"fn:fn_exercicio_da_coluna","t":"fn","f":"Supabase/migrations/0150_a_premissa_sai_do_realizado_certo.sql","txt":"exercicio da coluna"}
+{"k":"n","id":"fn:fn_exige_ler_caso","t":"fn","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"exige ler caso"}
 {"k":"n","id":"fn:fn_exige_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"exige socio"}
 {"k":"n","id":"fn:fn_exigencias_do_caso","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"exigencias do caso"}
 {"k":"n","id":"fn:fn_falhas_abertas","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"falhas abertas"}
@@ -435,9 +440,9 @@
 {"k":"n","id":"fn:fn_golden_abrir_rodada","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden abrir rodada"}
 {"k":"n","id":"fn:fn_golden_campos","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"golden campos"}
 {"k":"n","id":"fn:fn_golden_candidatos","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden candidatos"}
-{"k":"n","id":"fn:fn_golden_classe_a","t":"fn","f":"Supabase/migrations/0126_golden_set.sql","txt":"golden classe a"}
+{"k":"n","id":"fn:fn_golden_classe_a","t":"fn","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"golden classe a"}
 {"k":"n","id":"fn:fn_golden_classificacao","t":"fn","f":"Supabase/migrations/0126_golden_set.sql","txt":"golden classificacao"}
-{"k":"n","id":"fn:fn_golden_cobertura","t":"fn","f":"Supabase/migrations/0126_golden_set.sql","txt":"golden cobertura"}
+{"k":"n","id":"fn:fn_golden_cobertura","t":"fn","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"golden cobertura"}
 {"k":"n","id":"fn:fn_golden_congelar","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden congelar"}
 {"k":"n","id":"fn:fn_golden_consenso","t":"fn","f":"Supabase/migrations/0126_golden_set.sql","txt":"golden consenso"}
 {"k":"n","id":"fn:fn_golden_estrato_sugerido","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden estrato sugerido"}
@@ -457,7 +462,7 @@
 {"k":"n","id":"fn:fn_historico_do_caso","t":"fn","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","txt":"historico do caso"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
-{"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","txt":"instalacao conferir"}
+{"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"instalacao conferir"}
 {"k":"n","id":"fn:fn_instalacao_resumo","t":"fn","f":"Supabase/migrations/0131_instalacao_que_se_declara.sql","txt":"instalacao resumo"}
 {"k":"n","id":"fn:fn_lado_do_mutuo","t":"fn","f":"Supabase/migrations/0117_reconciliar_mutuos.sql","txt":"lado do mutuo"}
 {"k":"n","id":"fn:fn_lado_intragrupo","t":"fn","f":"Supabase/migrations/0124_intragrupo_que_nao_e_mutuo.sql","txt":"lado intragrupo"}
@@ -588,7 +593,7 @@
 {"k":"n","id":"fn:fn_trg_instalacao_cobertura_nao_regride","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"trg instalacao cobertura nao regride"}
 {"k":"n","id":"fn:fn_trg_membro_ultimo_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg membro ultimo socio"}
 {"k":"n","id":"fn:fn_trg_so_quem_escreve_apaga","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg so quem escreve apaga"}
-{"k":"n","id":"fn:fn_trg_so_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg so socio"}
+{"k":"n","id":"fn:fn_trg_so_socio","t":"fn","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"trg so socio"}
 {"k":"n","id":"fn:fn_unidade_predominante","t":"fn","f":"Supabase/migrations/0021_classe_b_checagem_unidade.sql","txt":"unidade predominante"}
 {"k":"n","id":"fn:fn_upsert_caso","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"upsert caso"}
 {"k":"n","id":"fn:fn_upsert_entidade","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"upsert entidade"}
@@ -600,7 +605,7 @@
 {"k":"n","id":"fn:fn_valor_estrutural_col","t":"fn","f":"Supabase/migrations/0034_total_do_grupo_sem_a_palavra_total.sql","txt":"valor estrutural col"}
 {"k":"n","id":"fn:fn_valor_pt_br","t":"fn","f":"Supabase/migrations/0122_pergunta_em_portugues.sql","txt":"valor pt br"}
 {"k":"n","id":"fn:fn_valores_por_ano","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"valores por ano"}
-{"k":"n","id":"fn:fn_veredito_producao","t":"fn","f":"Supabase/migrations/0138_a_guarda_que_estourava.sql","txt":"veredito producao"}
+{"k":"n","id":"fn:fn_veredito_producao","t":"fn","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"veredito producao"}
 {"k":"n","id":"fn:fn_versao_atual","t":"fn","f":"Supabase/migrations/0009_reconciliacao_e3.sql","txt":"versao atual"}
 {"k":"n","id":"fn:fn_versao_com_extracao","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"versao com extracao"}
 {"k":"n","id":"fn:fn_vincular_linha_premissa","t":"fn","f":"Supabase/migrations/0100_papel_por_secao.sql","txt":"vincular linha premissa"}
@@ -764,6 +769,7 @@
 {"k":"n","id":"migration:0215","t":"migration","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","txt":"o historico que so o banco sabia"}
 {"k":"n","id":"migration:0216","t":"migration","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"o acesso que so o portal decidia"}
 {"k":"n","id":"migration:0217","t":"migration","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","txt":"o segredo do envio que o n8n nao tinha"}
+{"k":"n","id":"migration:0218","t":"migration","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","txt":"a medicao que dependia de quem olhava"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1521,6 +1527,17 @@
 {"k":"e","de":"arquivo:Supabase/test/macro.test.sql","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"Supabase/test/macro.test.sql","l":76}
 {"k":"e","de":"arquivo:Supabase/test/macro.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"Supabase/test/macro.test.sql","l":115}
 {"k":"e","de":"arquivo:Supabase/test/macro.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"Supabase/test/macro.test.sql","l":15}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_classe_contabil_concordancia","f":"Supabase/test/medicao_global.test.sql","l":160}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_conexao_de_servico","f":"Supabase/test/medicao_global.test.sql","l":15}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_dial_auto_promover","f":"Supabase/test/medicao_global.test.sql","l":232}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_exige_ler_caso","f":"Supabase/test/medicao_global.test.sql","l":262}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_golden_classe_a","f":"Supabase/test/medicao_global.test.sql","l":171}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_golden_cobertura","f":"Supabase/test/medicao_global.test.sql","l":183}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/medicao_global.test.sql","l":241}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Supabase/test/medicao_global.test.sql","l":10}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/test/medicao_global.test.sql","l":274}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_trg_so_socio","f":"Supabase/test/medicao_global.test.sql","l":265}
+{"k":"e","de":"arquivo:Supabase/test/medicao_global.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/medicao_global.test.sql","l":140}
 {"k":"e","de":"arquivo:Supabase/test/modelagem_escala.test.sql","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"Supabase/test/modelagem_escala.test.sql","l":107}
 {"k":"e","de":"arquivo:Supabase/test/modelagem_escala.test.sql","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Supabase/test/modelagem_escala.test.sql","l":106}
 {"k":"e","de":"arquivo:Supabase/test/modelagem_escala.test.sql","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"Supabase/test/modelagem_escala.test.sql","l":8}
@@ -2045,6 +2062,11 @@
 {"k":"e","de":"ficha:item-sem-conteudo-so-cobre-obrigatorio","rel":"TOCA","pa":"arquivo:Supabase/migrations/0036_completude_exige_conteudo.sql","f":".claude/memory/item-sem-conteudo-so-cobre-obrigatorio.md"}
 {"k":"e","de":"ficha:item-sem-conteudo-so-cobre-obrigatorio","rel":"TOCA","pa":"arquivo:Supabase/migrations/0111_documento_sem_dado_financeiro_nao_e_falha.sql","f":".claude/memory/item-sem-conteudo-so-cobre-obrigatorio.md"}
 {"k":"e","de":"ficha:item-sem-conteudo-so-cobre-obrigatorio","rel":"TOCA","pa":"arquivo:Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql","f":".claude/memory/item-sem-conteudo-so-cobre-obrigatorio.md"}
+{"k":"e","de":"ficha:medicao-do-dial-dependia-de-quem-olhava","rel":"PROVADA_POR","pa":"suite:Supabase/test/run.sh","f":".claude/conhecimento/fichas/medicao-do-dial-dependia-de-quem-olhava.md"}
+{"k":"e","de":"ficha:medicao-do-dial-dependia-de-quem-olhava","rel":"TOCA","pa":"arquivo:Supabase/migrations/0137_a_promocao_automatica_do_dial.sql","f":".claude/conhecimento/fichas/medicao-do-dial-dependia-de-quem-olhava.md"}
+{"k":"e","de":"ficha:medicao-do-dial-dependia-de-quem-olhava","rel":"TOCA","pa":"arquivo:Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","f":".claude/conhecimento/fichas/medicao-do-dial-dependia-de-quem-olhava.md"}
+{"k":"e","de":"ficha:medicao-do-dial-dependia-de-quem-olhava","rel":"TOCA","pa":"arquivo:Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","f":".claude/conhecimento/fichas/medicao-do-dial-dependia-de-quem-olhava.md"}
+{"k":"e","de":"ficha:medicao-do-dial-dependia-de-quem-olhava","rel":"TOCA","pa":"arquivo:Supabase/test/medicao_global.test.sql","f":".claude/conhecimento/fichas/medicao-do-dial-dependia-de-quem-olhava.md"}
 {"k":"e","de":"ficha:medicao-reescreve-derivado","rel":"TOCA","pa":"arquivo:Supabase/schema.sql","f":".claude/memory/medicao-reescreve-derivado.md"}
 {"k":"e","de":"ficha:medicao-reescreve-derivado","rel":"TOCA","pa":"arquivo:Supabase/test/run.sh","f":".claude/memory/medicao-reescreve-derivado.md"}
 {"k":"e","de":"ficha:n8n-binario-grande-derruba-a-instancia","rel":"TOCA","pa":"arquivo:Leitor/medicao-n8n/README.md","f":".claude/conhecimento/fichas/n8n-binario-grande-derruba-a-instancia.md"}
@@ -2557,6 +2579,13 @@
 {"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":124}
 {"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":206}
 {"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_segredo_do_vault_presente","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":99}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_classe_contabil_concordancia","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","l":250}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_exige_ler_caso","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","l":69}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_golden_classe_a","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","l":306}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_golden_cobertura","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","l":355}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","l":459}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","l":439}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_veredito_producao","f":"Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql","l":90}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

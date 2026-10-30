@@ -1145,8 +1145,10 @@ $$;
 --
 
 CREATE FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
+  select fn_exige_ler_caso(p_caso_id);
   with par as (
     select s.classe_codigo as sugerida, o.classe_final as humana, s.rubrica_id
     from campo_classe_sugerida s
@@ -2990,7 +2992,8 @@ $$;
 --
 
 CREATE FUNCTION public.fn_dial_auto_promover(p_estagio text DEFAULT NULL::text) RETURNS jsonb
-    LANGUAGE plpgsql
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 declare
   r         record;
@@ -4022,6 +4025,32 @@ $$;
 COMMENT ON FUNCTION public.fn_exercicio_da_coluna(p_coluna text) IS 'O exercício que o cabeçalho da coluna nomeia, ou NULL quando ele não nomeia exercício nenhum ("Saldo", "Crédito", "Ticket médio"). Ausência é ausência: coluna sem ano fica FORA da série histórica em vez de virar um ano inventado.';
 
 --
+-- Name: fn_exige_ler_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_exige_ler_caso(p_caso uuid) RETURNS void
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if fn_conexao_de_servico() or (p_caso is null and fn_tem_papel()) or fn_pode_ler_caso(p_caso) then
+    return;
+  end if;
+  if p_caso is null then
+    raise exception 'Sem papel no portal, nenhuma medição é mostrada' using errcode = '42501';
+  end if;
+  raise exception 'Você não tem acesso a este mandato, então a medição dele não é mostrada (seu papel: %)',
+    coalesce(fn_meu_papel(), 'nenhum')
+    using errcode = '42501';
+end $$;
+
+--
+-- Name: FUNCTION fn_exige_ler_caso(p_caso uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_exige_ler_caso(p_caso uuid) IS '0218: guarda das medições com recorte por mandato. NULL = pergunta global, passa para quem tem papel. Mandato que o leitor não lê = 42501, em vez do zero que a RLS daria calada.';
+
+--
 -- Name: fn_exige_socio(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4833,8 +4862,10 @@ COMMENT ON FUNCTION public.fn_golden_candidatos(p_rodada uuid) IS 'Os documentos
 --
 
 CREATE FUNCTION public.fn_golden_classe_a(p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
+  select fn_exige_ler_caso(p_caso_id);
   with a as (
     select p.id, p.estado, p.resolvida_por
     from pendencia p
@@ -4952,8 +4983,10 @@ COMMENT ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem publi
 --
 
 CREATE FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem DEFAULT 'real'::public.golden_origem) RETURNS TABLE(tipo text, granularidade public.granularidade, n_documentos integer, n_dois_rotuladores integer, estratos text[], n_minimo integer, atinge_minimo boolean)
-    LANGUAGE sql STABLE
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
+  select fn_exige_ler_caso(null);
   with alvo as (
     -- Um n_minimo por rodada: o critério é por ESTÁGIO, e a cobertura por tipo é
     -- a mesma exigência para todos eles. O maior dos critérios é o que vale, para
@@ -6673,6 +6706,23 @@ begin
         v_det := 'não foi possível consultar o Vault: ' || sqlerrm;
       end;
 
+    elsif r.tipo = 'rls' then
+      -- 0218: RLS LIGADA (objeto = o schema). A policy existir (tipo policy) não prova nada sem isto:
+      -- `alter table ... disable row level security` mantém a policy no catálogo e para de aplicá-la, e
+      -- todo usuário logado passa a ler todos os mandatos. Medido: desligar em caso e decisao não mudava
+      -- nenhum outro item desta lista. Tabela e tabela particionada; view não tem RLS própria.
+      select count(*), string_agg(c.relname, ', ' order by c.relname)
+        into v_n, v_lista
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+       where n.nspname = r.objeto and c.relkind in ('r', 'p') and not c.relrowsecurity
+         -- Tabela de EXTENSÃO (spatial_ref_sys do PostGIS, por exemplo) não é nossa e não se liga RLS nela:
+         -- acusá-la deixaria a sonda vermelha para sempre. Mesma exclusão do ramo privilegio.
+         and not exists (select 1 from pg_depend dep
+                          where dep.classid = 'pg_class'::regclass and dep.objid = c.oid and dep.deptype = 'e');
+      v_ok  := v_n = 0;
+      v_det := case when v_ok then 'toda tabela do schema com RLS ligada'
+                    else format('%s tabela(s) de %s com RLS DESLIGADA: %s', v_n, r.objeto, v_lista) end;
+
     elsif r.tipo in ('seed', 'comportamento') then
       -- A tabela pode não existir ainda: contar nela levantaria erro e derrubaria
       -- a sonda inteira, transformando "um requisito faltando" em "o painel não
@@ -6710,7 +6760,7 @@ $$;
 -- Name: FUNCTION fn_instalacao_conferir(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0217 confere SEGREDO do Vault (tipo=segredo, objeto = nome do segredo): existe e não está vazio, sem ler o valor.';
+COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0217 confere SEGREDO do Vault (tipo=segredo, objeto = nome do segredo): existe e não está vazio, sem ler o valor. Desde a 0218 confere RLS LIGADA (tipo=rls, objeto = schema): toda tabela do schema com relrowsecurity — a policy sobrevive a disable row level security.';
 
 --
 -- Name: fn_instalacao_resumo(); Type: FUNCTION; Schema: public; Owner: -
@@ -15152,7 +15202,8 @@ COMMENT ON FUNCTION public.fn_tokens_estruturais(p_chave text) IS 'Palavras estr
 --
 
 CREATE FUNCTION public.fn_trg_auto_promover_dial() RETURNS trigger
-    LANGUAGE plpgsql
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 declare
   v_r jsonb;
@@ -15467,9 +15518,18 @@ CREATE FUNCTION public.fn_trg_so_socio() RETURNS trigger
     SET search_path TO 'public', 'pg_temp'
     AS $$
 begin
+  if current_user::text not in ('authenticated', 'anon') then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
   perform fn_exige_socio(tg_argv[0]);
   return case when tg_op = 'DELETE' then old else new end;
 end $$;
+
+--
+-- Name: FUNCTION fn_trg_so_socio(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_trg_so_socio() IS '0216/0218: só Sócio escreve no dial e no catálogo de premissas. Passa o código do próprio banco (current_user fora de authenticated/anon = dentro de uma função security definer de migration, como a promoção automática do dial); o navegador continua barrado.';
 
 --
 -- Name: fn_unidade_predominante(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -16134,7 +16194,8 @@ COMMENT ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) I
 --
 
 CREATE FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
-    LANGUAGE plpgsql STABLE
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
     AS $$
 declare
   v_natureza  text;
@@ -16147,6 +16208,9 @@ declare
   v_falhas    text[]  := '{}';
   v_delegado  jsonb;
 begin
+  -- 0218: mandato que o leitor não lê dá 42501, nunca o zero da RLS. NULL é a pergunta global.
+  perform fn_exige_ler_caso(p_caso_id);
+
   select natureza into v_natureza from estagio_autonomia where estagio = p_estagio;
   if v_natureza is null then
     return jsonb_build_object(
@@ -17295,7 +17359,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text, 'rls'::text])))
 );
 
 --
@@ -20909,7 +20973,9 @@ GRANT ALL ON FUNCTION public.fn_casos_legiveis() TO service_role;
 -- Name: FUNCTION fn_classe_contabil_concordancia(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_classe_contabil_do_campo(p_campo_extraido_id uuid); Type: ACL; Schema: public; Owner: -
@@ -21084,7 +21150,8 @@ GRANT ALL ON FUNCTION public.fn_dial(p_estagio text) TO authenticated;
 -- Name: FUNCTION fn_dial_auto_promover(p_estagio text); Type: ACL; Schema: public; Owner: -
 --
 
-GRANT ALL ON FUNCTION public.fn_dial_auto_promover(p_estagio text) TO authenticated;
+REVOKE ALL ON FUNCTION public.fn_dial_auto_promover(p_estagio text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_dial_auto_promover(p_estagio text) TO service_role;
 
 --
 -- Name: FUNCTION fn_dial_influencia(p_estagio text); Type: ACL; Schema: public; Owner: -
@@ -21227,6 +21294,14 @@ GRANT ALL ON FUNCTION public.fn_excluir_caso(p_caso_id uuid, p_autor text) TO au
 GRANT ALL ON FUNCTION public.fn_exercicio_da_coluna(p_coluna text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_exige_ler_caso(p_caso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_exige_ler_caso(p_caso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_exige_ler_caso(p_caso uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_exige_ler_caso(p_caso uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_exige_socio(p_acao text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -21292,7 +21367,9 @@ GRANT ALL ON FUNCTION public.fn_golden_candidatos(p_rodada uuid) TO authenticate
 -- Name: FUNCTION fn_golden_classe_a(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_golden_classe_a(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_classe_a(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_golden_classe_a(p_caso_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_golden_classificacao(p_rodada uuid, p_origem public.golden_origem); Type: ACL; Schema: public; Owner: -
@@ -21304,7 +21381,9 @@ GRANT ALL ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem pub
 -- Name: FUNCTION fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) TO service_role;
 
 --
 -- Name: FUNCTION fn_golden_congelar(p_rodada uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -21939,6 +22018,12 @@ GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO authenticate
 GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO authenticated;
 
 --
+-- Name: FUNCTION fn_trg_auto_promover_dial(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_trg_auto_promover_dial() FROM PUBLIC;
+
+--
 -- Name: FUNCTION fn_upsert_caso(p_nome text, p_ator text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -21973,7 +22058,9 @@ GRANT ALL ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text)
 -- Name: FUNCTION fn_veredito_producao(p_estagio text, p_caso_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
+REVOKE ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_versao_com_extracao(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
