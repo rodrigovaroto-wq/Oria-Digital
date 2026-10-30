@@ -16,7 +16,7 @@ com modelo de FP&A vivo em fórmula.
 | `ESTADO.md` (topo) | **Onde estamos agora** — última migration, suítes, a rodada mais recente |
 | `Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md` | **O que falta até fechar**, em ordem, com critério de pronto |
 | `Arquitetura do Sistema/3 Estado e Execução/PRONTIDAO_POR_ESTAGIO.md` | O projeto medido contra o próprio objetivo, estágio por estágio |
-| `.claude/memory/MEMORY.md` | As lições que já custaram caro — **leia sempre, é curto** |
+| `.claude/memory/MEMORY.md` | As lições que já custaram caro — consulte pelo `buscar.mjs` (ele indexa estas fichas); abra o índice inteiro só se o `buscar.mjs` vier vazio ou antes de mexer em migration/produção |
 | `HANDOFF.md` | **Como chegou aqui** — arquivo morto, ~5.000 linhas. Não leia inteiro |
 
 **Nenhum arquivo deste repositório é autoridade sobre o banco.** Quem responde é a sonda,
