@@ -43,7 +43,7 @@ evidência citada não vale.
 |---|---|---|
 | **Produção** | O que está no ar é o que o repositório diz? | sonda contra produção · `conferir-publicado.mjs` · a credencial responde · o limite de runtime (RAM, cota, tamanho de lote) não mudou |
 | **Invariante** | Todo portão novo reprovou com a correção desligada? | o número de asserts que caíram, que a regra 2 manda pôr no commit |
-| **Regressão** | O que a fase não tocou continua verde? | as suítes do `CLAUDE.md` que já estavam verdes |
+| **Regressão** | O que a fase não tocou continua verde? | as suítes de `.claude/COMANDOS-CANONICOS.md` que já estavam verdes |
 | **Financeiro** | O "Aceite financeiro" da fase foi satisfeito? | a linha da própria fase no roadmap |
 | **Derivado** | O gerado bate com o commitado? | `git diff --exit-code` nos workflows, fixtures, `schema.sql` e no grafo |
 | **Contaminação** | A fase criou dependência que atrapalha uma fase adiante? | o dependency graph, seção 6 do roadmap |

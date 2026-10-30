@@ -10,7 +10,7 @@ linha e questionam a arquitetura — não existe quarta tentativa.
 
 ## 1. Medir ANTES (o número de partida, não a impressão)
 
-Rode só o que cerca o alvo — a lista canônica está no `CLAUDE.md`, e o `.github/workflows/suites.yml`
+Rode só o que cerca o alvo — a lista canônica está em `.claude/COMANDOS-CANONICOS.md`, e o `.github/workflows/suites.yml`
 é a fonte. Registre o resultado como número: quantos asserts, qual contagem, qual byte.
 **Suíte que você não rodou não entra no relatório como verde.**
 

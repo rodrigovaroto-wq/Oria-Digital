@@ -32,7 +32,7 @@ Não estime nenhum destes; rode:
   paralelo neste repositório — não assuma nada sobre o `main`.
 - O topo do `ESTADO.md` e o `Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md`. O `HANDOFF.md` é arquivo morto: procure
   nele com `grep -n`, não o leia inteiro.
-- As suítes, com os comandos do `CLAUDE.md`, ANTES de mudar qualquer coisa. Suíte vermelha que já
+- As suítes, com os comandos de `.claude/COMANDOS-CANONICOS.md`, ANTES de mudar qualquer coisa. Suíte vermelha que já
   estava vermelha não é sua regressão — mas você precisa saber disso agora, não depois.
 - Se houver acesso ao banco: `select * from fn_instalacao_conferir() where not presente`. Se não
   houver, diga isso em vez de afirmar qualquer coisa sobre produção.
