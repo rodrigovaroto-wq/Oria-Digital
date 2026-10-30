@@ -902,6 +902,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conferir_envio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0218 — a medição do dial é global para todo leitor, a promoção não depende de quem decide, e a sonda vê RLS desligada"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/medicao_global.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \

@@ -1034,6 +1034,13 @@ supabase db execute --file Supabase/migrations/0216_o_acesso_que_so_o_portal_dec
 # Conferir (sem ler o valor): select * from fn_instalacao_conferir() where migration = '0217' and not presente;   -- ZERO linhas
 supabase db execute --file Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql
 
+# A 0218 torna GLOBAL a medição que decide o dial: `fn_dial_auto_promover` e as quatro medições (fn_veredito_producao,
+# fn_classe_contabil_concordancia, fn_golden_classe_a, fn_golden_cobertura) passam a security definer. Sem ela, a decisão de um
+# Analista que completa o critério deixa o dial parado e sem trilha (medido: 30 vereditos a 1,0 e o dial em N1). Mandato alheio
+# passado a uma medição dá 42501. A sonda ganha o tipo `rls` (toda tabela de public com RLS ligada, bloqueante).
+# Conferir: select * from fn_instalacao_conferir() where migration = '0218' and not presente;   -- ZERO linhas
+supabase db execute --file Supabase/migrations/0218_a_medicao_que_dependia_de_quem_olhava.sql
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
