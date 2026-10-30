@@ -85,6 +85,8 @@ Nada.
 Ordem de deploy. Cada item diz de onde vem a instrução. Nada disto é feito
 pelo repositório: correção que não chega ao ar não é correção.
 
+> **30/10/2026 (S114): a e b FEITOS e conferidos (0215 já estava; 0216 aplicada, 48/48). De c, só a Vercel; o n8n vai pelo PikaPods (sem licença de Variables). De d, Site URL e Redirect URLs; o modelo de e-mail exige SMTP próprio.** Ver o topo do `ESTADO.md`.
+
 **a. Aplicar a 0215 e conferir.** Depois da 0214 (aplicada em produção em
 20/10/2026). Conferir: `select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0215' and not presente;` → zero linhas. Fonte: `Supabase/README.md`.
 
@@ -100,7 +102,7 @@ pelo repositório: correção que não chega ao ar não é correção.
 
 **c. Segredo do envio** (`96df48d`; `portal/README.md`, `portal/.env.example`, `N8N/README.md`):
 1. Gerar: `openssl rand -hex 32`.
-2. Pôr o **mesmo valor** em `N8N_INTAKE_SEGREDO` na Vercel e no n8n. No n8n o workflow lê `$env.N8N_INTAKE_SEGREDO` e, se vier vazio, `$vars.N8N_INTAKE_SEGREDO` (`N8N/build-workflow.mjs`, linhas 810–811). Por padrão o n8n bloqueia `$env` em nó Code. Duas saídas: (i) `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`, com o trade-off de qualquer nó Code ler variável de ambiente; ou (ii) definir a Variable `N8N_INTAKE_SEGREDO` no n8n, que é o caminho sem o trade-off. Sem o segredo o n8n recusa todo envio (fail closed).
+2. **SUPERADO em 30/10/2026 (S114):** o n8n não lê mais `$env`/`$vars`; o segredo vai para o Vault do Supabase (`n8n_intake_segredo`) e `fn_conferir_envio` (`0217`) confere. O texto abaixo é histórico. Pôr o **mesmo valor** em `N8N_INTAKE_SEGREDO` na Vercel e no n8n. No n8n o workflow lê `$env.N8N_INTAKE_SEGREDO` e, se vier vazio, `$vars.N8N_INTAKE_SEGREDO` (`N8N/build-workflow.mjs`, linhas 810–811). Por padrão o n8n bloqueia `$env` em nó Code. Duas saídas: (i) `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`, com o trade-off de qualquer nó Code ler variável de ambiente; ou (ii) definir a Variable `N8N_INTAKE_SEGREDO` no n8n, que é o caminho sem o trade-off. Sem o segredo o n8n recusa todo envio (fail closed).
 3. Ordem: segredo → deploy do portal (sem `N8N_INTAKE_SEGREDO` ele responde 503 "envio desligado") → republicar o workflow de ingestão pela Action "Republicar workflow no n8n".
 4. Na republicação, o `republicar.sh` passa pelo `preparar-republicacao.mjs`, que restaura `onError`, `retryOnFail` e o `multipleFiles` do campo "Arquivos". **Conferir no editor** que "Arquivos" está com múltiplos arquivos marcado. Republicar pela API perdeu esse campo em 26–27/08 (`.claude/memory/republicacao-do-n8n-perde-toggles.md`).
 5. O campo do token no Form se chama "Token do envio" (`N8N/build-workflow.mjs`, linha 2543), que é o padrão do portal. Nada a configurar.

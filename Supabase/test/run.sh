@@ -39,6 +39,25 @@ psql -q -d "$DB" -c "
                     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub'))::uuid \$\$;
   grant usage on schema auth to anon, authenticated, service_role;" >/dev/null
 
+# 0217: o Vault do Supabase (`supabase_vault`, schema `vault`) no mínimo que a conferência do envio usa: a view
+# `vault.decrypted_secrets` (name, decrypted_secret) e as duas funções que o cabeçalho da migration manda o dono chamar. A
+# extensão real cifra `secret`; aqui o valor fica em claro porque o que se testa é a CONFERÊNCIA, não a cifra. Em produção nada
+# disto existe (a extensão cria o schema). O banco montado traz o segredo `n8n_intake_segredo` com um valor de TESTE — é o estado
+# "instalação completa" que a sonda exige (requisito `envio_segredo_no_vault`); `conferir_envio.test.sql` o troca/remove dentro
+# de uma transação e desfaz.
+psql -q -d "$DB" -c "
+  create schema if not exists vault;
+  create table vault.secrets(id uuid primary key default gen_random_uuid(), name text unique, description text,
+    secret text, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+  create view vault.decrypted_secrets as
+    select id, name, description, secret, secret as decrypted_secret, created_at, updated_at from vault.secrets;
+  create function vault.create_secret(new_secret text, new_name text default null, new_description text default '')
+    returns uuid language sql as \$\$
+    insert into vault.secrets(name, description, secret) values (new_name, new_description, new_secret) returning id \$\$;
+  create function vault.update_secret(secret_id uuid, new_secret text default null) returns void language sql as \$\$
+    update vault.secrets set secret = coalesce(new_secret, secret), updated_at = now() where id = secret_id \$\$;
+  select vault.create_secret('segredo-de-teste-do-run-sh', 'n8n_intake_segredo', 'stub local');" >/dev/null
+
 # O SUPABASE NOVO NÃO CONCEDE MAIS NADA POR DEFAULT PRIVILEGE (20/10/2026). Até 29/10/2026 o projeto trazia
 # `alter default privileges in schema public grant all on tables/sequences to anon, authenticated, service_role`, e este
 # script SIMULAVA isso — "nenhuma migration faz GRANT de tabela porque conta com isso". A partir de 30/10/2026 tabela
@@ -875,6 +894,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/historico_do_caso.test.sql 2>&
 echo
 echo "== 0216 — o acesso por mandato: Sócio · Analista · Leitura, alocação, RLS por caso, e o que só o Sócio faz"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/acesso_por_caso.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0217 — o segredo do envio no Vault: fn_conferir_envio confere o token HMAC do portal"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conferir_envio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo

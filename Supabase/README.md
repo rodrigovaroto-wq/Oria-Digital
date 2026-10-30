@@ -1025,6 +1025,15 @@ supabase db execute --file Supabase/migrations/0216_o_acesso_que_so_o_portal_dec
 #    where migration = '0216' and not presente;                 -- ZERO linhas
 #   select u.email, m.papel from membro m join auth.users u on u.id = m.usuario_id;   -- quem entrou, e como
 
+# A 0217 tira a conferência do token do envio do n8n e a põe no banco: `fn_conferir_envio(token, mandato)`, que lê o segredo do VAULT
+# (nome `n8n_intake_segredo`). Em produção o n8n não tem variável de ambiente nem Variables (licença), então sem esta migração + o segredo
+# TODO envio pelo portal é recusado. A migration NÃO grava o segredo: depois de aplicar, grave-o uma vez no SQL Editor (como postgres),
+# com o MESMO valor de N8N_INTAKE_SEGREDO da Vercel:
+#   select vault.create_secret('<valor>', 'n8n_intake_segredo', 'Segredo do HMAC do envio ao n8n (0217)');
+# Trocar depois: select vault.update_secret(id, '<novo>') from vault.secrets where name = 'n8n_intake_segredo';
+# Conferir (sem ler o valor): select * from fn_instalacao_conferir() where migration = '0217' and not presente;   -- ZERO linhas
+supabase db execute --file Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

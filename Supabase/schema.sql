@@ -1902,6 +1902,81 @@ $$;
 COMMENT ON FUNCTION public.fn_conferir_arvore(p_documento_versao_id uuid) IS 'Confere, por (pai × coluna), se o valor da linha-pai é igual à soma dos filhos diretos — a identidade que todo demonstrativo obedece e que a extração teve de satisfazer sem saber que seria conferida. `campo_extraido.secao` é o pai IMEDIATO, então "os filhos de P" é pergunta exata e não casamento por semelhança. Pega linha perdida, valor errado, linha duplicada e sinal invertido, e localiza o defeito na seção. Tolerância é de ARREDONDAMENTO (~0,5·(n+1)), não percentual: 0,5% de um Ativo grande deixaria passar a conta inteira que a checagem existe para achar.';
 
 --
+-- Name: fn_conferir_envio(text, text, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone DEFAULT now()) RETURNS TABLE(envio_autorizado boolean, caso_id uuid, etapa_recusa text, motivo_recusa text, orcamento_mensagem text, usuario_id text)
+    LANGUAGE plpgsql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'extensions', 'public', 'pg_temp'
+    AS $_$
+declare
+  -- \s do ECMAScript (o que String.prototype.trim tira), como classe de ARE. Os controles vão por \uXXXX, não por \n/\r:
+  -- o portão guarda_ancora_crlf.py toma `\n` num regexp_replace por âncora de patch de função (aqui não há patch nenhum).
+  c_ws     constant text := '[\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]';
+  v_segredo text;
+  v_token   text;
+  v_partes  text[];
+  v_msg     text;
+  v_motivo  text;
+  v_usuario text;
+begin
+  -- 1. sem_segredo: ausente, vazio ou só espaços. O valor entra como chave do HMAC SEM trim (como o JS).
+  select s.decrypted_secret into v_segredo from vault.decrypted_secrets s where s.name = 'n8n_intake_segredo' limit 1;
+  if v_segredo is null or regexp_replace(v_segredo, c_ws, '', 'g') = '' then
+    v_motivo := 'sem_segredo';
+  else
+    -- 2. sem_token: nulo, vazio ou só espaços.
+    v_token := regexp_replace(coalesce(p_token, ''), '^' || c_ws || '+|' || c_ws || '+$', '', 'g');
+    if v_token = '' then
+      v_motivo := 'sem_token';
+    else
+      -- 3. malformado: v1.<exp>.<usuario>.<hmac>. [0-9] e não \d: o \d do ARE segue o locale; o do JS é só ASCII.
+      v_partes := string_to_array(v_token, '.');
+      if coalesce(array_length(v_partes, 1), 0) <> 4 or v_partes[1] <> 'v1'
+         or v_partes[2] !~ '^[0-9]{1,12}$' or v_partes[3] !~ '^[0-9a-fA-F-]{8,64}$' or v_partes[4] !~ '^[0-9a-f]{64}$' then
+        v_motivo := 'malformado';
+      else
+        -- 4. assinatura. Mensagem = mandato (só U+0020 das pontas tirado, minúsculas do ICU = toLowerCase) | exp | usuário.
+        v_msg := lower(regexp_replace(coalesce(p_mandato, ''), '^ +| +$', '', 'g') collate "und-x-icu")
+                 || '|' || v_partes[2] || '|' || v_partes[3];
+        -- Comparação dos HMAC dos dois valores (ver o cabeçalho: não vaza a posição da divergência).
+        if hmac(convert_to(encode(hmac(convert_to(v_msg, 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256'), 'hex'), 'UTF8'),
+                convert_to(v_segredo, 'UTF8'), 'sha256')
+           is distinct from hmac(convert_to(v_partes[4], 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256') then
+          v_motivo := 'assinatura';
+        -- 5. expirado: só depois de a assinatura provar que o token é nosso. exp*1000 > agora (ms), senão expirado.
+        elsif not (v_partes[2]::bigint * 1000 > floor(extract(epoch from p_agora) * 1000)::bigint) then
+          v_motivo := 'expirado';
+        else
+          v_usuario := v_partes[3];
+        end if;
+      end if;
+    end if;
+  end if;
+
+  return query select
+    v_motivo is null,
+    null::uuid,
+    'envio'::text,
+    v_motivo,
+    case
+      when v_motivo is null then null
+      when v_motivo = 'sem_segredo' then 'Envio recusado: falta o segredo do envio no Vault do banco (nome n8n_intake_segredo). '
+        || 'Nada foi gravado. É configuração do responsável pelo sistema.'
+      when v_motivo = 'expirado' then 'Envio sem autorização válida: o token do envio expirou. Nada foi gravado. Reenvie pelo portal.'
+      else 'Envio sem autorização válida. Nada foi gravado. Envie pelo portal, com o login de quem tem acesso ao mandato.'
+    end,
+    v_usuario;
+end;
+$_$;
+
+--
+-- Name: FUNCTION fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0217: confere o token HMAC do envio (v1.<exp>.<usuario>.<hmac>, assinado pelo portal sobre mandato_normalizado|exp|usuario) contra o segredo n8n_intake_segredo do Vault. Sempre UMA linha: envio_autorizado, caso_id (sempre NULL), etapa_recusa (sempre envio), motivo_recusa (sem_segredo|sem_token|malformado|assinatura|expirado), orcamento_mensagem, usuario_id. Mesma semântica de verificarEnvio em N8N/lib/assinatura-do-envio.mjs. security definer; só service_role e postgres executam (authenticated testaria tokens contra o segredo).';
+
+--
 -- Name: fn_conferir_lote(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -6584,6 +6659,20 @@ begin
                                   case when v_n > 15 then ' ...' else '' end) end;
       end if;
 
+    elsif r.tipo = 'segredo' then
+      -- 0217: segredo do Vault do Supabase (objeto = o NOME do segredo; o valor nunca é lido aqui). A sonda roda como o
+      -- chamador (o portal é `authenticated`, que não lê o Vault), então a pergunta "existe e não está vazio?" passa por
+      -- uma função SECURITY DEFINER que só devolve boolean. Falha ao perguntar (Vault ausente, sem permissão) é
+      -- `presente = false` com o motivo, nunca uma exceção que derrube a sonda inteira.
+      begin
+        v_ok  := coalesce(fn_segredo_do_vault_presente(r.objeto), false);
+        v_det := case when v_ok then 'segredo presente no Vault (valor não lido)'
+                      else 'o Vault não tem este segredo, ou ele está vazio' end;
+      exception when others then
+        v_ok  := false;
+        v_det := 'não foi possível consultar o Vault: ' || sqlerrm;
+      end;
+
     elsif r.tipo in ('seed', 'comportamento') then
       -- A tabela pode não existir ainda: contar nela levantaria erro e derrubaria
       -- a sonda inteira, transformando "um requisito faltando" em "o painel não
@@ -6621,7 +6710,7 @@ $$;
 -- Name: FUNCTION fn_instalacao_conferir(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026.';
+COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0217 confere SEGREDO do Vault (tipo=segredo, objeto = nome do segredo): existe e não está vazio, sem ler o valor.';
 
 --
 -- Name: fn_instalacao_resumo(); Type: FUNCTION; Schema: public; Owner: -
@@ -14681,6 +14770,29 @@ $$;
 COMMENT ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) IS 'Esta seção canônica é de RESULTADO? Só nelas a pergunta "é recorrente?" faz sentido — conta de balanço não é recorrente nem não recorrente. Medido: rodar a classificação em tudo produziria 3.195 pedidos de revisão contra 527 linhas em que a pergunta cabe, e um analista que recebe 3.195 itens não revisa nenhum (é a lição do Sinal 1 refinado na 0022).';
 
 --
+-- Name: fn_segredo_do_vault_presente(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_segredo_do_vault_presente(p_nome text) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    AS $$
+  -- Só os nomes desta lista: a função é executável por `authenticated` (a sonda roda no portal) e não pode virar um
+  -- oráculo "esta chave existe?" sobre o Vault inteiro. Vazio ou só espaço = ausente (o mesmo critério de fn_conferir_envio).
+  select p_nome in ('n8n_intake_segredo')
+     and exists (select 1 from vault.decrypted_secrets s
+                  where s.name = p_nome
+                    and regexp_replace(coalesce(s.decrypted_secret, ''),
+                        '[\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]', '', 'g') <> '')
+$$;
+
+--
+-- Name: FUNCTION fn_segredo_do_vault_presente(p_nome text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_segredo_do_vault_presente(p_nome text) IS '0217: o segredo (só n8n_intake_segredo) existe no Vault e não está vazio? Devolve boolean, nunca o valor. security definer porque a sonda roda como authenticated, que não lê o Vault.';
+
+--
 -- Name: fn_sem_codigo_de_conta(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -17183,7 +17295,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text])))
 );
 
 --
@@ -20868,6 +20980,13 @@ GRANT ALL ON FUNCTION public.fn_conexao_de_servico() TO service_role;
 GRANT ALL ON FUNCTION public.fn_conferir_arvore(p_documento_versao_id uuid) TO authenticated;
 
 --
+-- Name: FUNCTION fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) TO service_role;
+
+--
 -- Name: FUNCTION fn_conferir_lote(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -21760,6 +21879,14 @@ GRANT ALL ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_ti
 --
 
 GRANT ALL ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) TO authenticated;
+
+--
+-- Name: FUNCTION fn_segredo_do_vault_presente(p_nome text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_segredo_do_vault_presente(p_nome text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_segredo_do_vault_presente(p_nome text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_segredo_do_vault_presente(p_nome text) TO service_role;
 
 --
 -- Name: FUNCTION fn_sem_codigo_de_conta(p_rotulo text); Type: ACL; Schema: public; Owner: -

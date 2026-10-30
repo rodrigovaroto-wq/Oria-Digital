@@ -102,8 +102,11 @@ arquivos" — ver abaixo):
   resto do portal funciona normalmente).
 - `N8N_INTAKE_SEGREDO` — **obrigatório para enviar**: o segredo do HMAC que autoriza cada envio
   a UM mandato (`src/lib/assinatura-do-envio.ts`). O Form do N8N é público; sem o token assinado
-  o nó `Conferir Envio` recusa o lote antes de gravar. Tem de ser o **mesmo valor** na variável
-  `N8N_INTAKE_SEGREDO` do N8N. Ausente, o portal recusa o envio ("envio desligado").
+  o nó `Conferir Envio` recusa o lote antes de gravar. Tem de ser o **mesmo valor** do segredo
+  `n8n_intake_segredo` no **Vault do Supabase**: quem confere é a função `fn_conferir_envio`
+  (migration `0217`), chamada pelo nó Postgres do n8n. Desde 30/10/2026 o n8n não lê mais
+  `$env`/`$vars` (a licença não tem Variables e o PikaPods não aceita variável nova). Ausente na
+  Vercel, o portal recusa o envio ("envio desligado"); ausente no Vault, o n8n recusa todo envio.
 - `N8N_INTAKE_FIELD_MANDATO` / `N8N_INTAKE_FIELD_ARQUIVOS` (opcionais) — nomes
   dos campos do Form. **Normalmente não precisa configurar**: o portal
   DESCOBRE os nomes reais dos campos sozinho, lendo o HTML do próprio Form
