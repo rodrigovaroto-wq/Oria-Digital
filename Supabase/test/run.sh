@@ -878,6 +878,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/acesso_por_caso.test.sql 2>&1 
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0217 — o dial promovido sobre o recorte de quem dispara, e o anon com privilégio demais"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_dial_e_o_anon.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \
