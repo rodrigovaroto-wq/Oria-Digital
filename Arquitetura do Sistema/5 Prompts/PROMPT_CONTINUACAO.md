@@ -20,7 +20,7 @@ travou o cabeçalho do `HANDOFF.md` por 17 PRs em "PR #70, migrations até `0034
 descuido: é que a parte que muda toda rodada morava no arquivo que quase nunca se edita.
 
 **A correção é estrutural: o prompt novo não guarda estado nenhum — ele manda medir.** Onde este
-arquivo dizia "as suítes estão em 160", o novo diz "rode as suítes com os comandos do `CLAUDE.md`,
+arquivo dizia "as suítes estão em 160", o novo diz "rode as suítes com os comandos de `.claude/COMANDOS-CANONICOS.md`,
 antes de mudar qualquer coisa". Prompt que aponta para quem mede o estado não envelhece.
 
 ## O que sobreviveu, e para onde foi
@@ -28,7 +28,7 @@ antes de mudar qualquer coisa". Prompt que aponta para quem mede o estado não e
 | O que era | Onde está hoje |
 |---|---|
 | As regras invioláveis do projeto | `CLAUDE.md`, seção "As sete regras" |
-| Os comandos canônicos das suítes | `CLAUDE.md`, seção "Comandos canônicos" (o CI é a fonte) |
+| Os comandos canônicos das suítes | `.claude/COMANDOS-CANONICOS.md` (o CI é a fonte; saiu do `CLAUDE.md` em 30/10/2026) |
 | As armadilhas conhecidas | `.claude/memory/` — uma por arquivo, indexadas em `MEMORY.md` |
 | O roteiro de abertura de sessão | `Arquitetura do Sistema/5 Prompts/00-continuacao.md` |
 | A lista do que executar | `Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md` — que tem dono e critério de pronto |

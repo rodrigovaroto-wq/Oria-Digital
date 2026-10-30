@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// PORTÃO: o bloco "Comandos canônicos" do `CLAUDE.md` é ESPELHO do `.github/workflows/suites.yml`.
+// PORTÃO: `.claude/COMANDOS-CANONICOS.md` (até 30/10/2026, um bloco do `CLAUDE.md`) é ESPELHO do `.github/workflows/suites.yml`.
 //
 // POR QUE ELE EXISTE, e os números que o justificam. O `CLAUDE.md` é lido por TODA sessão e é dele
 // que sai a lista do que se roda aqui. Quando ele fica para trás do CI, ele não fica silencioso:
@@ -50,7 +50,9 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 // escritas em lugar nenhum. Um portão que enxerga um arquivo e ignora os vizinhos volta a ser o
 // portão de famílias fixas, com outro nome.
 const CI_DIR = '.github/workflows';
-const DOC = 'CLAUDE.md';
+// O bloco morava no `CLAUDE.md` até 30/10/2026; saiu para um arquivo próprio porque eram 9.100
+// dos 18.116 caracteres que TODA sessão carrega. O nome deste portão ficou, para não mexer no CI.
+const DOC = '.claude/COMANDOS-CANONICOS.md';
 
 // O `\.?` do começo existe porque metade dos portões mora em `.claude/`: sem ele o token vinha
 // como `claude/verificar-comandos.mjs` e o portão acusava "não existe" em arquivo que existe.
@@ -72,7 +74,7 @@ const citados = (texto) => new Set([...semComentario(texto).matchAll(SCRIPT)].ma
 
 const workflows = readdirSync(join(RAIZ, CI_DIR)).filter((f) => f.endsWith('.yml')).sort();
 const noCi = citados(workflows.map((f) => ler(join(CI_DIR, f))).join('\n'));
-// Do CLAUDE.md só valem os blocos de comando; prosa explicativa não faz ninguém rodar nada.
+// Do DOC só valem os blocos de comando; prosa explicativa não faz ninguém rodar nada.
 const noDoc = citados((ler(DOC).match(/```bash\n[\s\S]*?```/g) ?? []).join('\n'));
 
 const problemas = [];
@@ -93,7 +95,7 @@ if (problemas.length === 0) {
   console.log(`espelho OK — ${noCi.size} scripts, os mesmos nos ${workflows.length} workflows do CI e no ${DOC}`);
   process.exit(0);
 }
-console.error(`*** o CLAUDE.md e os workflows do CI divergem em ${problemas.length} ponto(s) ***\n`);
+console.error(`*** o ${DOC} e os workflows do CI divergem em ${problemas.length} ponto(s) ***\n`);
 for (const p of problemas.sort()) console.error(`  ${p}`);
 console.error(`\nEspelho que fica para trás é pior que espelho nenhum: ele manda a próxima sessão\nrodar diferente do portão. Acerte o lado que está errado — nunca apague a linha do CI\npara o espelho fechar.`);
 process.exit(1);

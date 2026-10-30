@@ -1,7 +1,7 @@
 # Mapa de execução — daqui até o projeto fechado
 
 **Data:** 09/09/2026, sessão 81 · **Base conferida:** `main` em `668b6fe`, CI verde (PR #203).
-**Tocado em 15/10/2026 (S109):** só a linha B8 do quadro (zip no navegador). **Tocado em 13/10/2026 (S107 e S108):** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
+**Tocado em 26/10/2026:** só a linha B9 do quadro e a §14 (Espec. 13). **Tocado em 15/10/2026 (S109):** só a linha B8 do quadro (zip no navegador). **Tocado em 13/10/2026 (S107 e S108):** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
 conferido em 09/09.
 **Última migration:** `0160` — ver `ESTADO.md`.
 
@@ -48,6 +48,7 @@ de pendências do `ESTADO.md` já disse uma vez que o Modo A não existia depois
 | **B6** | **Operação** — proteção do `main`, ~~observabilidade~~, ~~backup~~ | 🟠 **B6.2 e B6.3 fechadas em 21/08**; sobra o `main` | dono | a segurança do processo |
 | **B7** | Bloqueados por dado que não temos | ⚫ espera | terceiros | nada — são espera |
 | **B8** | **Fontes oficiais e captação** (SPED, eSocial, logística, CNAB, CNAE) — Espec. 12, fase **F2T** do roadmap | 🟡 etapa 1 no repo (S107, PR #257); leitor no navegador (S108); zip no navegador (S109, NÃO verificado em produção); **onda 1 BLOQUEADA** | **dono** (3 ECDs reais; D12.3 para o Integra) e a **F1** | o dado independente que confere o declarado (DATA GATE) |
+| **B9** | **Parceiros de dados e pré-mandato** (bureau, processos, Núclea, Open Finance) — Espec. 13, fase **F2E** do roadmap | 🔴 planejada em 26/10/2026; a T0 veio pelo redesenho (§14) | **dono** (RFP e cotações, autorização do jurídico; aplicar a 0216) | a apresentação pré-mandato e a fonte que não vem do cliente |
 
 **O caminho crítico encurtou: `B0` fechou em 20/08.** Sobra `B1 → B2` e, em paralelo, `B3` (decisão)
 e `B6` (higiene). **A rodada real aconteceu em 02/09** (sessão 79 do `ESTADO.md`) e não deixou erro
@@ -557,3 +558,25 @@ fechado" (§11): é o próximo produto, pelo mesmo critério que deixou B4.2, B4
 **Continua aberto, e quem destrava é o dono:** aplicar 0215 e 0216 (com as conferências de `auth.users` e de nomes duplicados antes da 0216); segredo `N8N_INTAKE_SEGREDO` no n8n e na Vercel; deploy do portal e republicação do workflow (conferir `multipleFiles`); configurar o Auth (Redirect URLs, modelo de recuperação); olhar o preview da Vercel, porque nenhuma tela autenticada foi vista em navegador.
 
 **Critério de pronto:** a 0216 aplicada e conferida pela sonda; o envio recusado sem token válido, com o n8n de produção (ainda não medido); recuperar senha ponta a ponta no preview.
+
+## 15. B9 — Parceiros de dados e pré-mandato · **PLANEJADA em 26/10/2026**
+
+**O detalhe NÃO mora aqui**, pelo mesmo motivo da §13:
+
+- **o quê, por quê, com quem e o que eu faço em cada etapa:**
+  `Arquitetura do Sistema/2 Especificação/13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md` (§4 é o plano);
+- **em que ordem e quando acabou:** `ARQUITETURA_ALVO_E_ROADMAP.md`, fase **F2E**.
+
+| Etapa | Destrava | Quem |
+|---|---|---|
+| 0 — RFP, cotações e autorização do jurídico | os coletores | **dono** + jurídico |
+| 1 — T0, segregação por mandato | qualquer dado de PF | **entregue no repositório pelo redesenho (§14, `0216_o_acesso_que_so_o_portal_decidia.sql`: papéis + RLS por mandato)**; falta aplicar e a correção do dial (ver ESTADO) |
+| 2 — `consulta_externa` e fontes públicas | 3 a 8 | engenharia |
+| 3 — Momento pré-mandato | o caso antes do NDA | engenharia |
+| 4 ∥ 5 — Processos e bureau | o deck | engenharia, depois da etapa 0 |
+| 6 — Deck pré-mandato | **a primeira entrega visível** | engenharia |
+| 7 ∥ 8 — Open Finance e Núclea | o cruzamento pós-mandato | engenharia, a 7 depois da F2T onda 2 |
+
+**Critério de pronto do B9:** um prospect real recebe o deck pré-mandato sem número sem fonte e com
+toda dimensão não pesquisada dita como tal; e um mandato real tem o extrato por Open Finance
+fechando no caixa do BP. Como o B8, o B9 **não** entra na definição de "projeto fechado" (§11).

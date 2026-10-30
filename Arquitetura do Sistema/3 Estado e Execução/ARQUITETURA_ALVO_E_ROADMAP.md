@@ -510,7 +510,7 @@ citadas abaixo (G1–G27) são as do §13 dela.
 |---|---|
 | **Objetivo** | Ler e usar todos os módulos e grupos de SPED, eSocial, logística e CNAB, mais o CNAE, com proveniência por arquivo e linha, e captar esses arquivos com o mínimo de ação humana |
 | **Estado** | 🟡 **Etapa 1 FEITA no repositório (sessão 107, PR #257, mergeado).** **Rota mudada na S108 (13/10/2026):** o leitor roda **no navegador do analista**, com o mesmo `Leitor/lib` do CLI, e só o **resumo** vai ao banco (`0207`, em partes). O lançamento individual é descartado. Não há serviço a hospedar: P5 deixa de ser pré-requisito. **S109 (15/10/2026): o zip do contador abre no navegador** (`8148a3c`: `Leitor/lib/zip.mjs` sobre `Blob`, ZIP64, CRC e fluxo; medido no Chromium: 9,58 GB, 312 entradas, 95,2 s, heap do worker 45 MB) e o portal deixa de mandar zip ao n8n. **NÃO verificado em produção.** Feito: `Leitor/` (famílias G5, envelope em fluxo G6, leiautes G7, formatos G10), `0206` (envelope, releitura, versão vigente G9, desligamento por caso G25) e `0207` (resumo). O n8n recusa arquivo acima de 15 MiB antes de ler, e o portal tira o oficial do lote. **Aplicação: `0206` aplicada pelo dono (NÃO CONFERIDA pela sonda); `0207` NÃO aplicada.** Testes: 47 do leitor, 92 do envio oficial e 58 asserts da `0207`, medidos não-vazios. **Onda 1: BLOQUEADA**, espera a F1, 3 ECDs reais e a conferência de `leiautes.mjs` e `resumo.mjs` contra o Guia Prático. Nada disso está em produção: o deploy do portal e a republicação são do dono |
-| **Gap** | Etapa 0 **quase fechada em 13/10/2026**: 10 de 11 decisões tomadas (tabela no fim da Espec. 12). Sobra a D12.3 (Integra Contador, aguarda cotação), que não bloqueia a etapa 1 nem a onda 1, e os [A CONFIRMAR]. Open Finance foi recusado (D12.4 = D6), e o extrato vem sempre por arquivo |
+| **Gap** | Etapa 0 **quase fechada em 13/10/2026**: 10 de 11 decisões tomadas (tabela no fim da Espec. 12). Sobra a D12.3 (Integra Contador, aguarda cotação), que não bloqueia a etapa 1 nem a onda 1, e os [A CONFIRMAR]. Open Finance foi recusado (D12.4 = D6) e **reaberto em 26/10/2026 (D13.1, fase F2E)**: o extrato por arquivo continua, e o Open Finance entra como fonte a mais quando houver consentimento |
 | **Dep.** | Etapa 1 depende só da F0. As ondas dependem de **F1** (CNPJ por entidade e perímetro). As reconciliações conta a conta (S2, por exemplo) esperam **F4**. A eliminação intragrupo das notas (G11) espera **F6**. Ver a tabela de etapas |
 | **Agentes** | `migrations-postgres` (tabelas, tipos, reconciliações), `n8n-workflow` (roteador, coletores, republicação), `portal-export` (saída no book, envio direto ao Storage, painel), `suites-invariantes` (cada reconciliação medida não-vazia), `revisor-defeito-silencioso` (todo diff) |
 | **Testes** | Um gerador sintético por família, que fecha no BP (padrão `book-distress`), mais um portão no CI por onda. Amostras reais anonimizadas de 3 mandatos para o aceite (G15) |
@@ -534,6 +534,42 @@ citadas abaixo (G1–G27) são as do §13 dela.
 
 **O que a F2T NÃO faz:** não altera `campo_extraido` nem a extração por IA; não substitui em
 silêncio nenhum número do book (D12.8); não liga coleta automática antes da etapa 2.
+
+### F2E — FONTES EXTERNAS, PARCEIROS E PRÉ-MANDATO (Espec. 13) · **PLANEJADA em 26/10/2026; nada implementado**
+
+**Por que não é a F2T:** a F2T lê arquivo oficial que o cliente ou o contador entrega. A F2E traz
+dado que **não vem do cliente** (bureau, processos, Núclea, Open Finance) e cria o momento
+**pré-mandato**, em que o caso existe antes do NDA e só recebe consultas. O escopo inteiro está em
+`Arquitetura do Sistema/2 Especificação/13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md`.
+
+| | |
+|---|---|
+| **Objetivo** | Apresentação pré-mandato com cadastro, sanções, bureau e processos; depois do mandato, Open Finance e indicadores da Núclea cruzados com o declarado. Toda consulta com fornecedor, base legal, custo e os quatro estados (encontrado, nada encontrado, falhou, não consultado) |
+| **Estado** | 🔴 **Planejada (26/10/2026).** Decisões D13.1 (Open Finance reaberto), D13.2 (Obsidian descartado), D13.4 (bureau no pré-mandato) e D13.5 (Núclea) tomadas; D13.3 (processos) em pesquisa; D13.6 (fornecedores) aberta |
+| **Gap** | Etapa 0 (RFP e cotações) e a autorização pré-mandato do jurídico. A T0 (segregação por mandato) não existe: hoje todo usuário autenticado lê todo mandato |
+| **Dep.** | Etapa 1 = **T0 da Espec. 11** (antecipada da F17). A Etapa 7 (Open Finance) espera também o leitor de extrato da **F2T onda 2** |
+| **Agentes** | `migrations-postgres` (T0, `consulta_externa`, `autorizacao`, `caso.momento`), `n8n-workflow` (coletores), `portal-export` (tela do momento, deck pré-mandato), `suites-invariantes`, `revisor-defeito-silencioso` |
+| **Testes** | Teste SQL de RLS com dois usuários e dois casos; suíte de cada coletor com os quatro estados; `verificar-apresentacao.mts` com o caso pré-mandato; `book-distress` gerando também o extrato no formato do agregador |
+| **Risco** | **Médio.** Dado de PF de terceiros (sócios) e credencial de Open Finance; o defeito provável é consulta que falhou virar "nada encontrado" · **Impacto** Alto: é a apresentação que abre o mandato · **Esforço** G |
+| **Saída** | Deck pré-mandato sem número sem fonte; D5 decidida com o número medido no mandato AMO; extrato por Open Finance fechando no caixa do BP igual ao OFX |
+| **Contribui para** | **DATA GATE** (F6), pela fonte independente; e a originação de mandatos, que nenhuma fase cobria |
+
+**As etapas** (o detalhe, com artefatos e sinal de que rodou, está na Espec. 13 §4):
+
+| Etapa | Escopo | Depende de | Em paralelo com | Critério de pronto |
+|---|---|---|---|---|
+| **0 — Decisões e cotações** | RFP (`13_anexos/13B`) de Open Finance (Pluggy, Belvo, Klavi), processos (Escavador, JUDIT, Jusbrasil, Exato), Núclea, bureaus e ONR; piloto no mandato AMO (`13_anexos/13C`); autorização pré-mandato e termo de Open Finance pelo jurídico. A ordem prática, por dependência, está em `13_anexos/13A` | dono | tudo | D13.3–D13.6 respondidas com o relatório do piloto na Espec. 13 |
+| **1 — T0** | RLS por caso, leitura por papel, registro de leitura. **Entregue no repositório em 29/10/2026 pela `0216_o_acesso_que_so_o_portal_decidia.sql` (redesenho do portal, PR #265)**; falta aplicar | — | etapa 0 | mandato A lê 0 linhas do B em toda tabela; desligar a policy reprova |
+| **2 — `consulta_externa`** | Tabelas `consulta_externa`, `fato_externo`, `autorizacao`; coletor das fontes públicas | etapa 1 | etapa 0 | vazio = `nada_encontrado` com data; API fora = `falhou` |
+| **3 — Momento pré-mandato** | `caso.momento`; o banco recusa documento no pré-mandato e consulta PF sem autorização | etapa 2 | — | as duas recusas medidas não-vazias |
+| **4 — Processos** | Coletor; comparativo no mandato AMO contra as certidões; T9 | etapas 2, 3 | etapa 5 | D5 decidida com número; processo fora das contingências abre pendência |
+| **5 — Bureau** | Coletor do bureau, empresa e sócios com autorização | etapas 2, 3 | etapa 4 | PF sem autorização recusada |
+| **6 — Deck pré-mandato** | `.pptx` de crédito com `consulta_externa` como origem | etapas 4, 5 | — | dimensão sem consulta = "não pesquisado"; nenhum número sem fonte |
+| **7 — Open Finance** | Consentimento com estado; origem Open Finance na trilha de extrato; deduplicação contra o OFX | etapa 1 · **F2T onda 2** | etapa 8 | fecha no caixa do BP igual ao OFX; expirado ≠ zero |
+| **8 — Núclea** | Indicadores agregados como plausibilidade (Classe C); 8b, agenda de recebíveis, só se a Núclea confirmar acesso | etapa 2 | etapa 7 | divergência fora da faixa abre pendência; "sem dados" = não observado |
+
+**O que a F2E NÃO faz:** não muda número do book por indicador externo (é Classe C, o analista
+julga); não dá login ao cliente; não consulta PF sem autorização registrada; não inicia pagamento.
 
 ### F3 — ESTABILIDADE E CONCORDÂNCIA DA EXTRAÇÃO
 
@@ -727,6 +763,8 @@ paralelizável.
 - **F2T etapa 1** (roteador e leitor novo) ∥ **F1 ∥ F3 ∥ F3b**: conjuntos disjuntos, desde que a
   etapa 1 não toque o `SYSTEM_PROMPT` nem o schema da linha. **F2T etapas 0 e 2** (decisão,
   jurídico) ∥ qualquer coisa.
+- **F2E etapa 0** (RFP, cotações, jurídico) ∥ qualquer coisa. **F2E etapa 1 (T0)** ∥ F1, F3, F3b:
+  toca só policies. **F2E etapas 4 ∥ 5** e **7 ∥ 8**: coletores e tabelas disjuntos.
 
 ### Paralelização PROIBIDA
 - **F4 com qualquer coisa que toque `campo_extraido` ou as reconciliações.** Arquivos não disjuntos;
@@ -740,6 +778,9 @@ paralelizável.
   onda espera, ou a reconciliação dela fica por total, sem conta a conta.
 - **Coleta automática (F2T captação 4–6) antes da F2T etapa 2.** Credencial fiscal sem termo e sem
   cofre é risco jurídico, não dívida técnica.
+- **Qualquer consulta a PF (F2E etapas 4, 5) ou coleta de Open Finance (etapa 7) antes da T0 e
+  da autorização registrada.** Dado de sócio num banco em que todo usuário lê todo mandato é o
+  vazamento que a D7 proíbe.
 
 ### MVP
 

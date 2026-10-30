@@ -26,7 +26,7 @@
 # (8,5 min no run de 30/09 23:06–23:15). Agora são cinco jobs independentes, cada
 # um no seu runner, rodando ao mesmo tempo — n8n-e-derivados, portal (com o build
 # no fim desde 05/10), banco, e2e, variacoes — e um agregador `suites` que só fica
-# verde se os cinco ficaram. Os COMANDOS são os mesmos, letra por letra (o espelho com o CLAUDE.md
+# verde se os cinco ficaram. Os COMANDOS são os mesmos, letra por letra (o espelho com o COMANDOS-CANONICOS.md
 # confere); só a distribuição mudou. Cada job traz o próprio preparo (npm ci,
 # psql, book gerado) porque runners não compartilham disco. Dentro de cada job,
 # `node --test` já roda os arquivos em paralelo (padrão do Node 22: núcleos − 1).
@@ -278,7 +278,8 @@ jobs:
         run: node .claude/verificar-comandos.mjs
 
       - name: Espelho CLAUDE.md ↔ CI (suítes e medidores)
-        # O CLAUDE.md é lido por TODA sessão e é dele que sai a lista do que se
+        # O bloco de comandos (no CLAUDE.md até 30/10/2026, hoje em
+        # .claude/COMANDOS-CANONICOS.md) é de onde sai a lista do que se
         # roda aqui. Quando ele fica para trás deste arquivo, ele manda a sessão
         # seguinte rodar MENOS do que o portão cobra — e ela relata "baseline
         # completa" sobre medição que não existe. Aconteceu duas vezes, as duas

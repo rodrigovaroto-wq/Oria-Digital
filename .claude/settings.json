@@ -26,6 +26,7 @@
     ]
   },
   "enabledPlugins": {
-    "superpowers@superpowers-marketplace": false
+    "superpowers@superpowers-marketplace": false,
+    "finance@knowledge-work-plugins": false
   }
 }
