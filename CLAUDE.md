@@ -208,6 +208,13 @@ asserts, religar); lembrar que a regra existe não é motivo para abrir um conte
 de arquivos totalmente disjuntos. Quem comita é sempre a sessão principal, uma tarefa por vez,
 capturando o `HEAD` na hora. Ver `Arquitetura do Sistema/5 Prompts/03-onda-paralela.md`.
 
+## Acompanhar PR
+
+Assine o PR ao criá-lo, como o harness manda — mas **desinscreva assim que CI e Sonar
+ficarem verdes** e diga isso ao dono. Notificação que chega depois de 1h parada regrava o
+cache inteiro: medido US$ 2–4 por aviso com contexto de 465–520k (sessões de 06/10 e 30/10),
+sem trabalho novo nenhum. Merge e comentário tardio são o dono quem traz.
+
 ## Antes de codar
 
 Pedido aberto (mais de uma leitura razoável) → `Arquitetura do Sistema/5 Prompts/` primeiro, código depois.
