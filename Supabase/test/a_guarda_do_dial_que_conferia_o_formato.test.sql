@@ -1,8 +1,8 @@
 -- =============================================================================
 -- 0219 — A GUARDA DO DIAL QUE CONFERIA O FORMATO DO UPDATE, e o `rls_auto_enable` que perdeu o PUBLIC
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 86 chamadas de assert, 86 execuções (cada chamada roda uma vez).
--- Controle intacto: 86 ok, 0 falhas.
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 110 chamadas de assert, 110 execuções (cada chamada roda uma vez).
+-- Controle intacto: 110 ok, 0 falhas.
 -- O número por correção desligada está no cabeçalho de Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql
 -- ("MEDIÇÃO NÃO-VAZIA").
 --
@@ -544,6 +544,140 @@ begin
   select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial';
   perform teste_assert_0219(v_acusa and v_det like '%fn_0219_def_dinamica%', 'a sonda ACUSA a definer que chama fn_mudar_dial mesmo com o corpo dela escrito por SQL dinâmico (a raiz é o NOME, não só o corpo)', v_det);
   drop function fn_0219_def_dinamica();
+end $$;
+
+-- =============================================================================
+-- PARTE 2c — A SEGUNDA REVISÃO INDEPENDENTE (03/11/2026): o escape do nome, a porta por ASSINATURA, o `"public"."tabela"` e a porta que ganha EXECUTE
+-- =============================================================================
+do $$
+declare
+  u_socio uuid := '00000000-0000-0000-0000-00000000d901';
+  u_ana   uuid := '00000000-0000-0000-0000-00000000d902';
+  v_t text; v_acusa boolean; v_det text; v_def text; v_ok1 boolean; v_ok2 boolean; v_ok3 boolean; v_ok4 boolean;
+begin
+  perform teste_assert_0219((select presente from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial'), 'controle: a sonda do portão parte VERDE para a parte 2c');
+
+  raise notice '--- 4h. ESCAPE: o nome entra no regex como TEXTO. A sonda não pode morrer nem deixar passar por causa de maiúscula, $ ou ( no nome ---';
+  -- Tabela de nome com MAIÚSCULA ("Cx") com gatilho INVOKER que escreve no catálogo, e uma definer que só INSERE nela. O escape antigo punha `\` antes de TODA letra maiúscula: `\C` é
+  -- "invalid escape" no regex do Postgres (a fn_instalacao_conferir() INTEIRA levantava erro: a sonda morria) e `\Z`, `\D`, `\S` viram âncora/classe (falso negativo calado).
+  create table "Cx" (id int);
+  create function fn_0219_trg_cx() returns trigger language plpgsql set search_path = public, pg_temp
+    as $f$ begin update premissa_catalogo set descricao = 'HACKCX' where codigo = 'IPCA'; return new; end $f$;
+  create trigger teste_0219_cx_gat after insert on "Cx" for each row execute function fn_0219_trg_cx();
+  create function fn_0219_def_cx() returns void language sql security definer set search_path = public, pg_temp
+    as $f$ insert into "Cx" values (1) $f$;
+  grant execute on function fn_0219_def_cx() to authenticated;
+  perform teste_como_0219(u_ana);
+  v_t := teste_tenta_0219($q$select fn_0219_def_cx()$q$);
+  perform teste_super_0219(u_socio);
+  perform teste_assert_0219(v_t = 'ok:1' and (select descricao from premissa_catalogo where codigo = 'IPCA') = 'HACKCX',
+    'controle: a definer que insere em "Cx" (gatilho INVOKER escreve no catálogo) BURLA a guarda (a Analista grava descricao = HACKCX)', v_t);
+  v_t := teste_tenta_0219('select count(*) from fn_instalacao_conferir()');
+  perform teste_assert_0219(v_t like 'ok:%', 'a sonda NÃO morre com uma tabela de nome com maiúscula ("Cx") com gatilho (antes: invalid escape \C, e a fn_instalacao_conferir() inteira levantava erro)', v_t);
+  select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial';
+  perform teste_assert_0219(v_acusa and v_det like '%fn_0219_def_cx%', 'e ACUSA a definer que insere em "Cx" (o escape de maiúscula não pode virar classe/âncora e deixar passar)', v_det);
+  drop table "Cx"; drop function fn_0219_def_cx(); drop function fn_0219_trg_cx();
+
+  -- Função de nome com `$` (era âncora de fim de linha no padrão: falso negativo) e com `(` (parêntese desbalanceado: a sonda inteira morria).
+  create function "zz$w"() returns void language sql set search_path = public, pg_temp as $f$ update premissa_catalogo set descricao = 'HACKW' where codigo = 'IPCA' $f$;
+  create function fn_0219_def_dolar() returns void language sql security definer set search_path = public, pg_temp as $f$ select "zz$w"() $f$;
+  grant execute on function fn_0219_def_dolar() to authenticated;
+  perform teste_como_0219(u_ana);
+  v_t := teste_tenta_0219($q$select fn_0219_def_dolar()$q$);
+  perform teste_super_0219(u_socio);
+  perform teste_assert_0219(v_t = 'ok:1' and (select descricao from premissa_catalogo where codigo = 'IPCA') = 'HACKW',
+    'controle: a definer que chama a função "zz$w" (INVOKER que escreve no catálogo) BURLA a guarda', v_t);
+  select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial';
+  perform teste_assert_0219(v_acusa and v_det like '%fn_0219_def_dolar%', 'a sonda ACUSA a definer que chama uma função de nome com $ (o $ do nome entrava cru no padrão: âncora, falso negativo)', v_det);
+  create function "zz(w"() returns void language sql set search_path = public, pg_temp as $f$ update premissa_catalogo set descricao = 'HACKP' where codigo = 'IPCA' $f$;
+  create function fn_0219_def_paren() returns void language sql security definer set search_path = public, pg_temp as $f$ select "zz(w"() $f$;
+  grant execute on function fn_0219_def_paren() to authenticated;
+  v_t := teste_tenta_0219('select count(*) from fn_instalacao_conferir()');
+  perform teste_assert_0219(v_t like 'ok:%', 'a sonda NÃO morre com uma função de nome com ( (antes: "parentheses () not balanced", e a fn_instalacao_conferir() inteira levantava erro)', v_t);
+  select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial';
+  perform teste_assert_0219(v_acusa and v_det like '%fn_0219_def_paren%', 'e ACUSA a definer que chama a função de nome com (', v_det);
+  drop function fn_0219_def_paren(); drop function "zz(w"(); drop function fn_0219_def_dolar(); drop function "zz$w"();
+
+  raise notice '--- 4i. A PORTA é uma ASSINATURA, não um nome: uma sobrecarga de fn_dial_auto_promover não herda a isenção ---';
+  update estagio_autonomia set nivel_atual = 'N1', atualizado_por = 'teste:0219' where estagio = 'classificacao_doc_checklist';
+  create function fn_dial_auto_promover(p int) returns jsonb language sql set search_path = public, pg_temp
+    as $f$ update estagio_autonomia set atualizado_por = 'HACKSOBRE' where estagio = 'classificacao_doc_checklist'; select '{}'::jsonb $f$;     -- INVOKER, e NÃO é a porta
+  create function fn_0219_def_sobrecarga() returns jsonb language sql security definer set search_path = public, pg_temp as $f$ select fn_dial_auto_promover(1) $f$;
+  grant execute on function fn_0219_def_sobrecarga() to authenticated;
+  perform teste_como_0219(u_ana);
+  v_t := teste_tenta_0219($q$select fn_0219_def_sobrecarga()$q$);
+  perform teste_super_0219(u_socio);
+  perform teste_assert_0219(v_t = 'ok:1' and (select atualizado_por from estagio_autonomia where estagio = 'classificacao_doc_checklist') = 'HACKSOBRE',
+    'controle: a definer que chama a SOBRECARGA fn_dial_auto_promover(int) (INVOKER, escreve no dial) BURLA a guarda (a Analista grava no dial)', v_t);
+  select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial';
+  perform teste_assert_0219(v_acusa and v_det like '%fn_0219_def_sobrecarga%', 'a sonda ACUSA a definer que chama a sobrecarga (a porta é fn_dial_auto_promover(text), e não o nome)', v_det);
+  drop function fn_0219_def_sobrecarga(); drop function fn_dial_auto_promover(int);
+  perform teste_assert_0219((select presente from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial'), 'removida a sobrecarga, a sonda volta a verde: a porta de verdade (fn_trg_auto_promover_dial -> fn_dial_auto_promover(text)) segue sem acusação');
+
+  raise notice '--- 4j. a PORTA que ganha EXECUTE para authenticated é acusada por si mesma ---';
+  grant execute on function fn_dial_auto_promover(text) to authenticated;
+  select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial';
+  perform teste_assert_0219(v_acusa and v_det like '%fn_dial_auto_promover(text)%', 'a sonda ACUSA fn_dial_auto_promover(text) quando ela ganha EXECUTE para authenticated (a isenção é de quem a chama, não dela)', v_det);
+  revoke all on function fn_dial_auto_promover(text) from authenticated;
+  perform teste_assert_0219((select presente from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial'), 'tirado o EXECUTE, a sonda volta a verde');
+
+  raise notice '--- 4k. `"public"."tabela"` (as duas partes entre aspas) também é escrita no dial ---';
+  create function fn_0219_def_aspas() returns void language sql security definer set search_path = public, pg_temp
+    as $f$ update "public"."estagio_autonomia" set atualizado_por = atualizado_por $f$;
+  grant execute on function fn_0219_def_aspas() to authenticated;
+  select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial';
+  perform teste_assert_0219(v_acusa and v_det like '%fn_0219_def_aspas%', 'a sonda ACUSA a definer com `update "public"."estagio_autonomia"` (o prefixo aceitava `public.` e `"tabela"`, não `"public".`)', v_det);
+  drop function fn_0219_def_aspas();
+  create table teste_0219_pai_q (id int primary key);
+  create table teste_0219_filha_q (id int, pai int references teste_0219_pai_q(id) on delete cascade);
+  create function fn_0219_trg_filha_q() returns trigger language plpgsql set search_path = public, pg_temp
+    as $f$ begin update "public"."estagio_autonomia" set atualizado_por = atualizado_por; return old; end $f$;
+  create trigger teste_0219_filha_q_gat before delete on teste_0219_filha_q for each row execute function fn_0219_trg_filha_q();
+  select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'dial_sem_cascata_de_fk';
+  perform teste_assert_0219(v_acusa and v_det like '%teste_0219_filha_q%', 'a sonda da FK ACUSA a cascata cujo filho tem gatilho com `update "public"."estagio_autonomia"` (mesmo prefixo, parte B)', v_det);
+  drop table teste_0219_filha_q; drop table teste_0219_pai_q; drop function fn_0219_trg_filha_q();
+  perform teste_assert_0219((select count(*) from fn_instalacao_conferir() where chave in ('definer_nao_escreve_no_dial', 'dial_sem_cascata_de_fk') and presente) = 2, 'removido tudo, os dois requisitos estão verdes (nada ficou na transação)');
+
+  raise notice '--- 4l. o que JUSTIFICA a porta está travado no corpo dela: a checagem do veredito e o teto N2 (e o marcador não depende de quebra de linha) ---';
+  perform teste_assert_0219((select count(*) from fn_instalacao_conferir() where chave in ('dial_porta_exige_veredito_suficiente', 'dial_porta_para_em_n2') and presente and severidade = 'bloqueante') = 2,
+    'controle: os dois requisitos do corpo da porta estão presentes e BLOQUEANTES no banco montado');
+  v_def := pg_get_functiondef('fn_dial_auto_promover(text)'::regprocedure);
+  perform teste_assert_0219(position('suficiente' in v_def) > 0 and position('''N2''::nivel_autonomia' in v_def) > 0, 'controle: o corpo publicado da porta traz a checagem do veredito e o N2 que os marcadores esperam');
+  begin
+    execute replace(v_def, 'coalesce((v_med->>''suficiente'')::boolean, false)', 'true');         -- a porta SEM a checagem do veredito
+    select presente into v_ok1 from fn_instalacao_conferir() where chave = 'dial_porta_exige_veredito_suficiente';
+    select presente into v_ok2 from fn_instalacao_conferir() where chave = 'dial_porta_para_em_n2';
+    raise exception 'volta' using errcode = 'P0001';
+  exception when sqlstate 'P0001' then null; end;
+  perform teste_assert_0219(v_ok1 is false and v_ok2 is true, 'a porta SEM a checagem do veredito suficiente reprova o requisito da checagem (e só ele)', coalesce(v_ok1::text, 'nulo') || ' / ' || coalesce(v_ok2::text, 'nulo'));
+  begin
+    execute replace(v_def, '''N2''::nivel_autonomia, ''sistema:auto_dial''', '''N3''::nivel_autonomia, ''sistema:auto_dial''');   -- a porta SEM o teto N2
+    select presente into v_ok1 from fn_instalacao_conferir() where chave = 'dial_porta_exige_veredito_suficiente';
+    select presente into v_ok2 from fn_instalacao_conferir() where chave = 'dial_porta_para_em_n2';
+    raise exception 'volta' using errcode = 'P0001';
+  exception when sqlstate 'P0001' then null; end;
+  perform teste_assert_0219(v_ok1 is true and v_ok2 is false, 'a porta que passa a subir a N3 reprova o requisito do teto N2 (e só ele)', coalesce(v_ok1::text, 'nulo') || ' / ' || coalesce(v_ok2::text, 'nulo'));
+  begin
+    execute replace(v_def, E'\n', E'\r\n');                                                         -- o corpo em produção pode vir com CRLF
+    select presente into v_ok3 from fn_instalacao_conferir() where chave = 'dial_porta_exige_veredito_suficiente';
+    select presente into v_ok4 from fn_instalacao_conferir() where chave = 'dial_porta_para_em_n2';
+    raise exception 'volta' using errcode = 'P0001';
+  exception when sqlstate 'P0001' then null; end;
+  perform teste_assert_0219(v_ok3 is true and v_ok4 is true, 'com o corpo em CRLF os dois marcadores continuam presentes (não dependem de quebra de linha)', coalesce(v_ok3::text, 'nulo') || ' / ' || coalesce(v_ok4::text, 'nulo'));
+  perform teste_assert_0219((select count(*) from fn_instalacao_conferir() where chave in ('dial_porta_exige_veredito_suficiente', 'dial_porta_para_em_n2') and presente) = 2, 'e a porta de verdade, restaurada pelo rollback do bloco, está com os dois marcadores');
+
+  raise notice '--- 4m. a porta que SUMIU (assinatura que não resolve) não cega o fecho: um NULL dentro do `<> all` apagaria a junção inteira e tudo ficaria verde ---';
+  begin
+    drop function fn_dial_auto_promover(text);
+    create function fn_0219_def_semporta() returns jsonb language sql security definer set search_path = public, pg_temp
+      as $f$ select fn_mudar_dial('classificacao_doc_checklist', 'N2', 'x', 'y') $f$;
+    grant execute on function fn_0219_def_semporta() to authenticated;
+    v_t := teste_tenta_0219('select count(*) from fn_instalacao_conferir()');
+    select not presente, detalhe into v_acusa, v_det from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial';
+    raise exception 'volta' using errcode = 'P0001';
+  exception when sqlstate 'P0001' then null; end;
+  perform teste_assert_0219(v_t like 'ok:%' and v_acusa and v_det like '%fn_0219_def_semporta%', 'sem a porta no banco a sonda não morre e continua acusando a definer que chama a raiz fn_mudar_dial', coalesce(v_t, 'nulo') || ' / ' || coalesce(v_det, 'nulo'));
+  perform teste_assert_0219(to_regprocedure('fn_dial_auto_promover(text)') is not null and (select presente from fn_instalacao_conferir() where chave = 'definer_nao_escreve_no_dial'), 'e a porta de verdade voltou com o rollback do bloco (sonda verde)');
 end $$;
 
 -- =============================================================================

@@ -6532,7 +6532,7 @@ declare
   v_classe     text;
   v_tabs       text;
   v_funs       text[];
-  v_barr       text[];
+  v_barr       oid[];
   v_pre        text;
   v_pos        text;
 begin
@@ -6802,8 +6802,13 @@ begin
       -- aprovou na 0137 (o gatilho de `decisao` promove, no máximo até N2, SÓ quando o veredito GLOBAL basta; o chamador não escolhe nada).
       v_tabs   := array_to_string(string_to_array(r.objeto, ','), '|');
       v_funs   := coalesce(string_to_array(nullif(split_part(r.marcador, ';', 1), ''), ','), array[]::text[]);
-      v_barr   := coalesce(string_to_array(nullif(split_part(r.marcador, ';', 2), ''), ','), array[]::text[]);
-      v_pre    := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?(public\s*\.\s*)?"?';
+      -- As PORTAS são ASSINATURAS exatas (`fn_dial_auto_promover(text)`, separadas por `|`), resolvidas para oid: por NOME, qualquer sobrecarga herdaria a isenção (medido pela revisão
+      -- independente: `fn_dial_auto_promover(int)` INVOKER com `update estagio_autonomia`, chamada por uma definer com EXECUTE para authenticated, deu presente = t). Assinatura que não resolve
+      -- (a porta sumiu) vira NULL e é descartada: o filtro `is not null` impede que um NULL dentro do `<> all` anule a junção inteira e esconda o fecho.
+      v_barr   := coalesce((select array_agg(to_regprocedure('public.' || btrim(q))::oid)
+                              from unnest(string_to_array(nullif(split_part(r.marcador, ';', 2), ''), '|')) q
+                             where to_regprocedure('public.' || btrim(q)) is not null), array[]::oid[]);
+      v_pre    := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?("?public"?\s*\.\s*)?"?';
       v_pos    := '"?(\s|;|$|\()';
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
@@ -6820,7 +6825,7 @@ begin
           -- gatilhos: (função do gatilho, tabela). Fora do recursive e SEM subconsulta correlacionada: com `exists (select ... from pg_trigger ...)` dentro do join do recursive
           -- a sonda inteira foi de ~100 ms para ~700 ms (medido); com este left join, ~30 ms.
           gat as materialized (
-            select t.tgfoid as oid, regexp_replace(c.relname, '([^a-z0-9_])', '\\\1', 'g') as rel
+            select t.tgfoid as oid, regexp_replace(c.relname, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g') as rel
               from pg_trigger t
               join pg_class c on c.oid = t.tgrelid
              where not t.tgisinternal and c.relnamespace = 'public'::regnamespace),
@@ -6831,9 +6836,9 @@ begin
             union
             select x.oid
               from fecho fe
-              join fn y on y.oid = fe.oid and y.nome <> all (v_barr)
+              join fn y on y.oid = fe.oid and y.oid <> all (v_barr)
               left join gat g on g.oid = y.oid
-              join fn x on (x.src ~* ('(^|[^a-z0-9_])"?' || y.nome || '"?\s*\(')
+              join fn x on (x.src ~* ('(^|[^a-z0-9_])"?' || regexp_replace(y.nome, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g') || '"?\s*\(')
                             or x.src ~* (v_pre || '(' || g.rel || ')' || v_pos))),
           acusadas as (
             select f.oid::regprocedure::text as nome
@@ -6857,7 +6862,7 @@ begin
       -- c|n|d cuja tabela FILHA tem gatilho cuja função (corpo DIRETO, sem o fecho) escreve nas tabelas protegidas: a ação dispara o gatilho como dono. `restrict` e `no action` não
       -- alteram linha e ficam de fora. A FK que TEM a protegida como PAI (golden_criterio -> estagio_autonomia, on delete cascade) não conta: ela apaga a linha do FILHO, que não é protegido.
       v_tabs := array_to_string(string_to_array(r.objeto, ','), '|');
-      v_pre  := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?(public\s*\.\s*)?"?';
+      v_pre  := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?("?public"?\s*\.\s*)?"?';
       v_pos  := '"?(\s|;|$|\()';
       if coalesce(v_tabs, '') = '' then
         v_ok  := false;

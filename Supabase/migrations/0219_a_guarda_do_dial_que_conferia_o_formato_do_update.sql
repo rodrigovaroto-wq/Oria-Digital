@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 0219 — A GUARDA DO DIAL QUE CONFERIA O FORMATO DO UPDATE, e o `rls_auto_enable` que perdeu o PUBLIC
 -- (REDEFINE 4 funções — fn_trg_so_socio, fn_dial_auto_promover, fn_trg_auto_promover_dial e fn_instalacao_conferir (+2 tipos, `definer_sem_escrita` e `sem_acao_referencial`,
---  e o ramo `sem_privilegio` passa a ignorar função que retorna event_trigger); +2 requisitos novos, 1 renomeado e 3 com marcador novo na sonda; DEVOLVE a
+--  e o ramo `sem_privilegio` passa a ignorar função que retorna event_trigger); +4 requisitos novos (2 do portão do dial, 2 do corpo da porta), 1 renomeado e 3 com marcador novo na sonda; DEVOLVE a
 --  `public.rls_auto_enable()` o EXECUTE de PUBLIC, SE ela existir. Sem tabela, sem backfill, sem dado alterado. Idempotente: pode ser reaplicada.)
 --
 -- >>> RODE COMO `postgres` (a função da plataforma é do postgres; o REVOKE/GRANT de quem não é dono só avisa).
@@ -55,9 +55,13 @@
 -- antes de aplicar, está no relatório que acompanha esta migration (e no teste, que roda a mesma lógica).
 -- A INVESTIGAÇÃO QUE O PORTÃO EXIGIU (e a única exceção): sem declarar a PORTA, o fecho acusa UMA função legítima, `fn_trg_auto_promover_dial` (definer, função do gatilho de
 -- `decisao`), porque ela chama `fn_dial_auto_promover`, que chama `fn_mudar_dial`. É o caminho que o dono aprovou na 0137 e que o teste prova: a decisão da Analista dispara a promoção
--- a N2 SÓ quando o veredito GLOBAL basta, e o chamador não escolhe nada. A exceção é uma PORTA declarada no marcador (`fn_mudar_dial;fn_dial_auto_promover`: antes do `;` as
--- raízes, depois as portas), não um mecanismo geral de exceções (degrau 1 da escada): o fecho NÃO atravessa a porta, mas a porta continua sujeita à acusação por si mesma (se
--- alguém der EXECUTE de fn_dial_auto_promover a authenticated, ela é acusada). Sem a porta declarada: 12 asserts reprovam (medido, tabela abaixo).
+-- a N2 SÓ quando o veredito GLOBAL basta, e o chamador não escolhe nada. A exceção é uma PORTA declarada no marcador (`fn_mudar_dial;fn_dial_auto_promover(text)`: antes do `;` as
+-- raízes, por nome; depois as portas, por ASSINATURA EXATA, separadas por `|`), não um mecanismo geral de exceções (degrau 1 da escada): o fecho NÃO atravessa a porta, mas a porta continua
+-- sujeita à acusação por si mesma (se alguém der EXECUTE de fn_dial_auto_promover(text) a authenticated, ela é acusada: o teste prova). Sem a porta declarada: 17 asserts reprovam (medido, tabela abaixo).
+-- A porta é por assinatura, e não por nome, desde a segunda revisão independente (03/11/2026): por nome, `fn_dial_auto_promover(int)` INVOKER com `update estagio_autonomia`, chamada por uma
+-- definer com EXECUTE para authenticated, dava presente = t (a sobrecarga herdava a isenção). E o que JUSTIFICA a porta fica travado no corpo dela por dois requisitos `corpo`
+-- (dial_porta_exige_veredito_suficiente: a checagem do veredito `suficiente`; dial_porta_para_em_n2: o teto N2): sem eles, mexer no corpo da porta tiraria a justificativa e o portão continuaria
+-- dando o caminho por aprovado. Os dois marcadores são de UMA linha cada (o corpo em produção pode vir com CRLF; o teste reaplica o corpo com CRLF e os marcadores seguem presentes).
 -- O QUE O PORTÃO AINDA NÃO VÊ (declarado no ramo; falso negativo possível): SQL dinâmico dentro de uma função que NÃO é raiz (`execute format(...)`, nome de função em texto);
 -- função FORA de public; escrita por VIEW atualizável ou por RULE sobre a tabela; evento de cascata cujo gatilho do filho chega ao dial só por uma cadeia de chamadas (a parte
 -- do requisito da FK lê o corpo DIRETO do gatilho, sem o fecho); definer FECHADA ao authenticated e a que só o service_role executa (não são alcançáveis pelo portal).
@@ -85,11 +89,21 @@
 -- A migration devolve a ACL só da função conhecida, pelo nome: não inventei uma lista do que "seria" de plataforma.
 --
 -- A SONDA (o catálogo revisado). `fn_instalacao_conferir` reemitida INTEIRA a partir da 0218 (ramos `segredo`, 0217, e `sem_privilegio`, 0218, preservados; o teste
--- reprova se sumirem): o diff contra a 0218 é só de linhas ACRESCENTADAS (variáveis, 1 filtro de event_trigger e os dois ramos novos). Requisitos: +2 (definer_nao_escreve_no_dial,
--- dial_sem_cascata_de_fk); `dial_guarda_de_socio_tem_a_promocao` RENOMEADO para `dial_guarda_de_socio_confia_no_dono` (marcador: a linha `current_user not in (...)` da guarda nova; o antigo,
+-- reprova se sumirem): o diff contra a 0218 é só de linhas ACRESCENTADAS (variáveis, 1 filtro de event_trigger e os dois ramos novos). Requisitos: +4 (definer_nao_escreve_no_dial,
+-- dial_sem_cascata_de_fk, dial_porta_exige_veredito_suficiente, dial_porta_para_em_n2); `dial_guarda_de_socio_tem_a_promocao` RENOMEADO para `dial_guarda_de_socio_confia_no_dono` (marcador: a linha `current_user not in (...)` da guarda nova; o antigo,
 -- `tdf.promocao_automatica`, não existe mais no corpo); `dial_promocao_independe_do_leitor` e `dial_gatilho_independe_do_leitor` com marcador novo (o `set_config` da
 -- marca saiu): as linhas SECURITY DEFINER e SET search_path que o pg_get_functiondef gera, que é o que os dois requisitos dizem. Os dois passam a valer `0219` na coluna
 -- migration (são ela que os confere agora). `anon_sem_funcoes` só ganha um `porque` mais fiel. Dois tipos novos na constraint: `definer_sem_escrita` e `sem_acao_referencial`.
+--
+-- A SEGUNDA REVISÃO INDEPENDENTE (03/11/2026, banco próprio) e o que mudou no ramo `definer_sem_escrita` / `sem_acao_referencial` (a fn_instalacao_conferir continua reemitida inteira; o diff
+-- contra a 0218 continua só de linhas ACRESCENTADAS):
+--   (1) ESCAPE. `regexp_replace(c.relname, '([^a-z0-9_])', '\\\1', 'g')` escapava TODA letra maiúscula: `\C`, `\E`, `\F`... são "invalid escape" no regex do Postgres (a fn_instalacao_conferir() INTEIRA
+--       levantava erro: a sonda morria) e `\Z`, `\D`, `\S`... viram âncora/classe (falso negativo calado). Agora o escape é só de metacaractere, `([.^$*+?()\[\]{}|\\])`, na tabela do gatilho (CTE `gat`)
+--       E no nome da função, `y.nome`, que entrava cru no padrão (`zz$w`: o `$` era âncora, falso negativo; `zz(w`: parêntese desbalanceado, a sonda morria).
+--   (2) PORTA POR ASSINATURA (acima): a isenção compara o oid de `fn_dial_auto_promover(text)`, não o nome. Assinatura que não resolve (a porta sumiu) é descartada do array: um NULL dentro do
+--       `<> all` anularia a junção do fecho inteiro e tudo ficaria verde (o teste remove a porta dentro de um bloco que volta e exige a acusação).
+--   (3) PREFIXO `"public"."tabela"`: `(public\s*\.\s*)?"?` não aceitava o `public` entre aspas; agora `("?public"?\s*\.\s*)?"?`, no portão definer e na parte B da FK.
+--   (4) a porta que GANHA `grant execute on function fn_dial_auto_promover(text) to authenticated` é acusada (assert novo: o cabeçalho prometia e nada o provava).
 --
 -- DECIDI SOZINHO (cada item pode ser revertido numa migration nova): (1) incluir função de gatilho E de event trigger no portão; (2) fecho transitivo por nome sem limite de volta
 -- (UNION), e não os cinco níveis sugeridos: o limite é só o comprimento da cadeia que passa; (3) UMA exceção, a porta `fn_dial_auto_promover`, declarada no marcador (a investigação
@@ -98,36 +112,43 @@
 -- promoção, porque sem a GUC não sobrou linha de código própria da 0218 nelas (o corpo é o da 0137); o portão sonda_marcador_e_codigo aceita (tem `_`); (8) a FK tem tipo e
 -- requisito PRÓPRIOS (`sem_acao_referencial`), e acusa também a cascata cujo FILHO tem gatilho que escreve no dial (parte B, além do pedido), lendo só o corpo DIRETO do gatilho;
 -- (9) a acusação inclui o BEFORE e o AFTER do filho, embora só o BEFORE passe (medido), para não depender dessa minúcia; (10) a raiz `fn_mudar_dial` vale pelo NOME além do corpo
--- (o teste a reescreve por SQL dinâmico e exige a acusação).
+-- (o teste a reescreve por SQL dinâmico e exige a acusação); (11) DOIS requisitos `corpo` para a porta (um por marcador) em vez de um, porque os dois trechos (a checagem do veredito e o teto N2) estão em
+-- linhas distantes e um marcador que os cobrisse juntos dependeria da quebra de linha (CRLF em produção); (12) as portas do marcador são separadas por `|` (a assinatura traz vírgula quando tem mais de um argumento);
+-- (13) o escape é só de metacaractere (a lista acima), e não de tudo que não é `[a-z0-9_]`; (14) a sobrecarga de teste da porta atualiza `atualizado_por` (e não o nível): o que se prova é que a sonda acusa a ESCRITA no dial, e o teto de
+-- nível do dial pode recusar um `N3` por outro caminho.
 -- UM EFEITO COLATERAL SEU: a 0218 (arquivo) NÃO pode mais ser reaplicada por cima desta sem apagar antes os requisitos dos dois tipos novos — o `add constraint` do tipo
 -- recusa linha de tipo que ela não conhece. O teste o_dial_e_o_anon.test.sql, que reaplica a 0218, apaga essas linhas antes (dentro da transação que volta).
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql — 86 chamadas de assert, 86 execuções (cada chamada roda uma vez), medidas em
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql — 110 chamadas de assert, 110 execuções (cada chamada roda uma vez), medidas em
 -- 03/11/2026 com `PGOPTIONS='-c dial.medindo=on'` (o assert vira `raise warning` e CONTA; sem a variável é `raise exception`; o `run.sh` completo foi rodado sem ela, exit 0, e o log
--- relido inteiro atrás de FALHOU). Controle intacto: 86 ok, 0 falhas. Cada correção desligada UMA vez, num banco que já tem a 0219, com a variante reaplicada por `\i`
--- (`-v arq0219=<arquivo>`, que o teste faz logo no começo); em cada variante a migration APLICOU (rc 0) e o log traz a linha FIM com 86 execuções. Reprovações / 86:
---   AS CORREÇÕES DA REVISÃO INDEPENDENTE (pontos cegos 1 a 4):
---   * transitividade: fecho CEGO (só o corpo da própria definer, como a primeira versão): 6 · fecho de UMA volta só: 1 · sem a aresta do GATILHO da tabela escrita: 1 · sem a raiz por nome
---     (fn_mudar_dial): 1;
---   * a PORTA declarada, tirada do marcador: 12 (o portão passa a acusar fn_trg_auto_promover_dial, o caminho da 0137, e arrasta os controles);
---   * `begin atomic`: só prosrc (sem pg_get_function_sqlbody): 2;
---   * event_trigger fora da varredura: 1;
---   * FK (ponto cego 3): requisito CEGO (v_ok sempre verdadeiro): 5 · só ON DELETE (sem confupdtype): 1 · sem SET DEFAULT: 1 · sem a parte do gatilho do filho: 1 · acusando também o PAI
---     (golden_criterio -> estagio_autonomia deixa de passar): 4 · a constraint de tipo SEM `sem_acao_referencial`: a migration MORRE ("violated by some row", rc 3) e nenhum assert roda;
---   AS DA 0219 ORIGINAL, REMEDIDAS com o teste de 86 (os números mudaram: os controles novos também dependem da guarda e do portão):
---   * a guarda da 0218 (GUC + formato do UPDATE) com as funções sem a GUC — "o que acontece com a promoção": 12 (o dial não sobe por decisão de Analista: nível, base e trilha; não
---     sobe com o UPDATE em outro formato; o dono com o JWT de Analista leva 42501; e a definer-de-controle também, porque a regra do dono some);
---   * a guarda SEM o `current_user` (passa sempre): 16 · com o `current_user` excluindo só `anon` (authenticated passa): 16 · sem a exceção do dono (nunca passa): 13;
---   * a sonda `definer_sem_escrita` CEGA (v_ok sempre verdadeiro): 12 · sem exigir SECURITY DEFINER: 13 · sem a função de GATILHO nem de event trigger: 2 · com a busca
---     sensível a caixa: 2;
+-- relido inteiro atrás de FALHOU). Controle intacto: 110 ok, 0 falhas. Cada correção desligada UMA vez, num banco que já tem a 0219, com a variante reaplicada por `\i`
+-- (`-v arq0219=<arquivo>`, que o teste faz logo no começo); em cada variante a migration APLICOU (rc 0, salvo onde dito) e o log traz a linha FIM com 110 execuções. Reprovações / 110
+-- (a tabela INTEIRA foi remedida com o teste de 110: os controles novos também dependem da guarda e do portão, então os números antigos mudaram):
+--   A SEGUNDA REVISÃO INDEPENDENTE (as quatro correções acima):
+--   * escape da TABELA do gatilho de volta ao antigo (`[^a-z0-9_]`): a sonda MORRE com "invalid escape" na tabela "Cx": 1 assert reprova (o "a sonda não morre") e o script ABORTA no ERROR seguinte
+--     (rc 3, sem FIM: o resto não roda; o 1 é o que se contou antes de morrer, não o total);
+--   * nome da FUNÇÃO cru no padrão: 2 reprovam (o `$` deixa passar; o `(` derruba a sonda) e o script aborta em seguida (rc 3, sem FIM);
+--   * porta por NOME (a sobrecarga herda a isenção): 1 · prefixo antigo (sem `"public".`) no portão definer: 1 · prefixo antigo na parte B da FK: 1;
+--   * a porta com EXECUTE para authenticated fora da acusação: 1 · a porta que some vira NULL no array (sem o filtro `is not null`): 1;
+--   * sem o requisito do veredito suficiente (linha apagada): 5 · sem o requisito do teto N2 (linha apagada): 5 · marcador do veredito com quebra de linha (o CRLF o derruba): 1;
+--   TRANSITIVIDADE, PORTÃO E FK (pontos cegos 1 a 4 da primeira revisão):
+--   * fecho CEGO (só o corpo da própria definer): 12 · fecho de UMA volta só: 1 · sem a aresta do GATILHO da tabela escrita: 2 · sem a raiz por nome (fn_mudar_dial): 3;
+--   * a PORTA declarada, tirada do marcador: 17 (o portão passa a acusar fn_trg_auto_promover_dial, o caminho da 0137, e arrasta os controles);
+--   * `begin atomic`: só prosrc (sem pg_get_function_sqlbody): 2 · event_trigger fora da varredura: 1;
+--   * FK: requisito CEGO (v_ok sempre verdadeiro): 6 · só ON DELETE (sem confupdtype): 1 · sem SET DEFAULT: 1 · sem a parte do gatilho do filho: 2 · acusando também o PAI (golden_criterio ->
+--     estagio_autonomia deixa de passar): 5 · a constraint de tipo SEM `sem_acao_referencial`: a migration MORRE ("violated by some row", rc 3) e nenhum assert roda;
+--   A 0219 ORIGINAL:
+--   * a guarda da 0218 (GUC + formato do UPDATE) com as funções sem a GUC: 15 (o dial não sobe por decisão de Analista: nível, base e trilha; não sobe com o UPDATE em outro formato; o dono com o
+--     JWT de Analista leva 42501; e a definer-de-controle também, porque a regra do dono some);
+--   * a guarda SEM o `current_user` (passa sempre): 17 · com o `current_user` excluindo só `anon` (authenticated passa): 17 · sem a exceção do dono (nunca passa): 16;
+--   * a sonda `definer_sem_escrita` CEGA (v_ok sempre verdadeiro): 19 · sem exigir SECURITY DEFINER: 18 · sem a função de GATILHO nem de event trigger: 2 · com a busca sensível a caixa: 2;
 --   * a sonda do anon SEM excluir event_trigger: 5 (a correção passa a ser acusada, e o caso de função de event_trigger com PUBLIC);
 --   * `rls_auto_enable` sem o grant a PUBLIC (simulado com uma função de event_trigger de mentira de mesmo nome): 3 · sem retirar os grants explícitos da 0218: 1 · sem checar
 --     que retorna event_trigger (abriria também a homônima comum): 1;
 --   * a reemissão da sonda sem o ramo `segredo` (0217): 2 · sem o ramo `sem_privilegio` (0218): 7;
 --   * os três requisitos do dial com o marcador antigo (a GUC): 1;
---   * SÓ O MARCADOR, e é o número honesto: fn_dial_auto_promover sem SECURITY DEFINER: 1 · fn_trg_auto_promover_dial sem SECURITY DEFINER: 1. Nas duas, o comportamento NÃO muda dentro de uma só
---     sessão (o plpgsql guarda em cache a checagem de EXECUTE da chamada, aquecida pela semeadura como superusuário: mesma limitação que a 0218 já declarava), e quem reprova é o requisito
---     da sonda; por comportamento elas são indistinguíveis aqui;
+--   * SÓ O MARCADOR: fn_dial_auto_promover sem SECURITY DEFINER: 2 (o requisito da sonda, e a porta invoker deixa de ser acusada ao ganhar EXECUTE) · fn_trg_auto_promover_dial sem SECURITY DEFINER: 1. O
+--     comportamento NÃO muda dentro de uma só sessão (o plpgsql guarda em cache a checagem de EXECUTE da chamada, aquecida pela semeadura como superusuário: mesma limitação que a 0218 já declarava);
 --   * a constraint de tipo SEM `definer_sem_escrita`: a migration MORRE (rc 3) e nenhum assert roda — isto NÃO é zero reprovações, é migration recusada.
 -- Limite do teste: simula `rls_auto_enable` com uma função de event_trigger de mentira (a real é da plataforma e não existe no replay), e NÃO reproduz a ACL nem o dono de produção.
 -- Limite da medição das cascatas: o arranjo usa o gatilho BEFORE do filho (o que roda como dono) e NÃO prova, em AFTER, que a guarda segura (isso é comportamento do Postgres, medido à mão).
@@ -306,7 +327,7 @@ declare
   v_classe     text;
   v_tabs       text;
   v_funs       text[];
-  v_barr       text[];
+  v_barr       oid[];
   v_pre        text;
   v_pos        text;
 begin
@@ -576,8 +597,13 @@ begin
       -- aprovou na 0137 (o gatilho de `decisao` promove, no máximo até N2, SÓ quando o veredito GLOBAL basta; o chamador não escolhe nada).
       v_tabs   := array_to_string(string_to_array(r.objeto, ','), '|');
       v_funs   := coalesce(string_to_array(nullif(split_part(r.marcador, ';', 1), ''), ','), array[]::text[]);
-      v_barr   := coalesce(string_to_array(nullif(split_part(r.marcador, ';', 2), ''), ','), array[]::text[]);
-      v_pre    := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?(public\s*\.\s*)?"?';
+      -- As PORTAS são ASSINATURAS exatas (`fn_dial_auto_promover(text)`, separadas por `|`), resolvidas para oid: por NOME, qualquer sobrecarga herdaria a isenção (medido pela revisão
+      -- independente: `fn_dial_auto_promover(int)` INVOKER com `update estagio_autonomia`, chamada por uma definer com EXECUTE para authenticated, deu presente = t). Assinatura que não resolve
+      -- (a porta sumiu) vira NULL e é descartada: o filtro `is not null` impede que um NULL dentro do `<> all` anule a junção inteira e esconda o fecho.
+      v_barr   := coalesce((select array_agg(to_regprocedure('public.' || btrim(q))::oid)
+                              from unnest(string_to_array(nullif(split_part(r.marcador, ';', 2), ''), '|')) q
+                             where to_regprocedure('public.' || btrim(q)) is not null), array[]::oid[]);
+      v_pre    := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?("?public"?\s*\.\s*)?"?';
       v_pos    := '"?(\s|;|$|\()';
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
@@ -594,7 +620,7 @@ begin
           -- gatilhos: (função do gatilho, tabela). Fora do recursive e SEM subconsulta correlacionada: com `exists (select ... from pg_trigger ...)` dentro do join do recursive
           -- a sonda inteira foi de ~100 ms para ~700 ms (medido); com este left join, ~30 ms.
           gat as materialized (
-            select t.tgfoid as oid, regexp_replace(c.relname, '([^a-z0-9_])', '\\\1', 'g') as rel
+            select t.tgfoid as oid, regexp_replace(c.relname, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g') as rel
               from pg_trigger t
               join pg_class c on c.oid = t.tgrelid
              where not t.tgisinternal and c.relnamespace = 'public'::regnamespace),
@@ -605,9 +631,9 @@ begin
             union
             select x.oid
               from fecho fe
-              join fn y on y.oid = fe.oid and y.nome <> all (v_barr)
+              join fn y on y.oid = fe.oid and y.oid <> all (v_barr)
               left join gat g on g.oid = y.oid
-              join fn x on (x.src ~* ('(^|[^a-z0-9_])"?' || y.nome || '"?\s*\(')
+              join fn x on (x.src ~* ('(^|[^a-z0-9_])"?' || regexp_replace(y.nome, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g') || '"?\s*\(')
                             or x.src ~* (v_pre || '(' || g.rel || ')' || v_pos))),
           acusadas as (
             select f.oid::regprocedure::text as nome
@@ -631,7 +657,7 @@ begin
       -- c|n|d cuja tabela FILHA tem gatilho cuja função (corpo DIRETO, sem o fecho) escreve nas tabelas protegidas: a ação dispara o gatilho como dono. `restrict` e `no action` não
       -- alteram linha e ficam de fora. A FK que TEM a protegida como PAI (golden_criterio -> estagio_autonomia, on delete cascade) não conta: ela apaga a linha do FILHO, que não é protegido.
       v_tabs := array_to_string(string_to_array(r.objeto, ','), '|');
-      v_pre  := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?(public\s*\.\s*)?"?';
+      v_pre  := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?("?public"?\s*\.\s*)?"?';
       v_pos  := '"?(\s|;|$|\()';
       if coalesce(v_tabs, '') = '' then
         v_ok  := false;
@@ -712,9 +738,15 @@ insert into instalacao_requisito
    E' SECURITY DEFINER\n SET search_path TO ''public'', ''pg_temp''', null,
    'O gatilho da promoção precisa rodar como dono para chamar fn_dial_auto_promover (fechada ao authenticated) e para a guarda de Sócio o deixar passar. O marcador são as linhas SECURITY DEFINER e SET search_path que o pg_get_functiondef escreve.',
    'bloqueante', 987),
-  ('definer_nao_escreve_no_dial', '0219', 'definer_sem_escrita', 'estagio_autonomia,premissa_catalogo', 'fn_mudar_dial;fn_dial_auto_promover', null,
+  ('definer_nao_escreve_no_dial', '0219', 'definer_sem_escrita', 'estagio_autonomia,premissa_catalogo', 'fn_mudar_dial;fn_dial_auto_promover(text)', null,
    'A guarda de Sócio do dial e do catálogo de premissas confia em quem roda como dono. Uma função SECURITY DEFINER que o portal alcança (EXECUTE para authenticated, ou função de gatilho ou de event trigger) e que escreva nessas tabelas passa pela guarda sem o chamador ser Sócio: o Analista mudaria o dial. A sonda acusa a escrita DIRETA, a que passa por função chamada (de qualquer segurança: um helper INVOKER que dá o update) e a que passa por gatilho de uma tabela que a definer escreve, e lê também o corpo `begin atomic`. Se reprova: faça a função INVOKER, ou `revoke all on function f(args) from public;` se ela não deve ser chamada pelo portal, ou leve a escrita para fn_mudar_dial (INVOKER) chamada por um Sócio.',
    'bloqueante', 993),
+  ('dial_porta_exige_veredito_suficiente', '0219', 'corpo', 'fn_dial_auto_promover', 'coalesce((v_med->>''suficiente'')::boolean, false)', null,
+   'fn_dial_auto_promover é a PORTA do portão definer_nao_escreve_no_dial: o fecho não a atravessa, porque ela só sobe o dial quando o veredito GLOBAL basta (0137). Sem a checagem do veredito `suficiente` ela promoveria todo estágio elegível a cada decisão de qualquer Analista, e o portão continuaria dando o caminho por justificado. O marcador é a linha da checagem (uma linha só: não depende de quebra de linha, e o corpo em produção pode vir com CRLF).',
+   'bloqueante', 995),
+  ('dial_porta_para_em_n2', '0219', 'corpo', 'fn_dial_auto_promover', 'r.estagio, ''N2''::nivel_autonomia, ''sistema:auto_dial''', null,
+   'fn_dial_auto_promover é a PORTA do portão definer_nao_escreve_no_dial, e o que a justifica é o TETO: a promoção automática sobe no máximo a N2, nunca N3, porque o veredito mede um piso enviesado. Sem o `''N2''` no corpo a porta poderia subir o dial além do que o dono aprovou na 0137. O marcador é o argumento de nível da chamada a fn_mudar_dial (uma linha só: não depende de quebra de linha nem de CRLF).',
+   'bloqueante', 996),
   ('dial_sem_cascata_de_fk', '0219', 'sem_acao_referencial', 'estagio_autonomia,premissa_catalogo', null, null,
    'A ação referencial de uma FK (on delete|update cascade, set null, set default) roda como DONO da tabela, e a guarda de Sócio do dial e do catálogo de premissas confia em quem roda como dono. Uma FK com estagio_autonomia ou premissa_catalogo como tabela FILHA (ou cujo filho tenha gatilho que escreva nelas) deixaria um Analista que apaga o PAI alterar o dial ou o catálogo sem ser Sócio. Se reprova: troque a ação por restrict/no action e apague o filho explicitamente, em função de Sócio.',
    'bloqueante', 994),

@@ -1105,6 +1105,7 @@
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_dial_auto_promover","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":25}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":28}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":17}
+{"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":615}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":127}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":139}
 {"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/acesso_por_caso.test.sql","l":337}
@@ -2601,10 +2602,10 @@
 {"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":582}
 {"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":492}
 {"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_veredito_producao","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":320}
-{"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_dial_auto_promover","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":158}
-{"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":286}
-{"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":221}
-{"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":142}
+{"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_dial_auto_promover","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":179}
+{"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":307}
+{"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":242}
+{"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":163}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
