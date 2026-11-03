@@ -2582,15 +2582,15 @@
 {"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":124}
 {"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":206}
 {"k":"e","de":"migration:0217","rel":"CRIA","pa":"fn:fn_segredo_do_vault_presente","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","l":99}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_classe_contabil_concordancia","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":255}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_dial_auto_promover","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":512}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_exige_metrica","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":114}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_golden_classe_a","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":136}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_golden_cobertura","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":192}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":732}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":581}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":491}
-{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_veredito_producao","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":319}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_classe_contabil_concordancia","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":256}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_dial_auto_promover","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":513}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_exige_metrica","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":115}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_golden_classe_a","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":137}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_golden_cobertura","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":193}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":733}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":582}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":492}
+{"k":"e","de":"migration:0218","rel":"CRIA","pa":"fn:fn_veredito_producao","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","l":320}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

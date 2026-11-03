@@ -94,9 +94,10 @@
 --     o requisito de comportamento do n8n — ausentes: custo_gravado_pelo_n8n, envio_segredo_no_vault"), que já pegava; (b) o ramo `segredo` cego (v_ok sempre verdadeiro): 1 (o segredo
 --     tirado do Vault não é mais acusado), e conferir_envio.test.sql, da 0217, também o pega; (c) o laço de revoke de anon sem repor o EXECUTE de authenticated/service_role: 3 (os dois
 --     retratos de antes e o EXECUTE de authenticated em fn_segredo_do_vault_presente, que é novo); (d) ramo `sem_privilegio` cego: 6 com a variante só reaplicada, 7 com o banco inteiro
---     construído com ela (cai também o controle "a sonda ACUSA os 4 requisitos de anon no banco de antes"); (e) o laço SEM repor o EXECUTE do papel somente-leitura `supabase_read_only_user` (a reposição é desta revisão: tirar PUBLIC lhe tiraria fn_instalacao_conferir, e a sonda agendada, se usa esse papel, falharia no banco inteiro; o teste cria o papel no rollback): 1. O assert de EXECUTE em fn_conferir_envio NÃO reprovou em nenhuma variante: o
---     EXECUTE de service_role e postgres nessa função vem de grant direto da 0217, que o laço (só revoga de public e anon) não toca; ele protege uma edição futura do laço e NÃO foi
---     medido não-vazio — declarado para não ser lido como cobertura.
+--     construído com ela (cai também o controle "a sonda ACUSA os 4 requisitos de anon no banco de antes"); (e) o laço SEM repor o EXECUTE do papel somente-leitura `supabase_read_only_user` (a reposição é desta revisão: tirar PUBLIC lhe tiraria fn_instalacao_conferir, e a sonda agendada, se usa esse papel, falharia no banco inteiro; o teste cria o papel no rollback): 1. O assert de EXECUTE em fn_conferir_envio: o
+--     EXECUTE de service_role e postgres nessa função vem de grant direto da 0217, que o laço (só revoga de public e anon) não toca, por isso as variantes do LAÇO não o
+--     reprovam. MEDIDO NÃO-VAZIO em 03/11/2026 com a variante que revoga o EXECUTE de service_role em fn_conferir_envio (o defeito que ele existe para pegar: o nó
+--     "Conferir Envio" do n8n quebraria): 2 reprovam (ele e "o EXECUTE de service_role em cada função de public é o mesmo de antes"); controle 0.
 -- As variantes foram geradas por substituição de texto sobre este arquivo e aplicadas numa cópia do banco na 0216 (21 desligamentos + o ANTES).
 -- Limite do teste: simula o estado ANTES com `grant ... to anon` e reaplica o arquivo da migration (`\i`) dentro de uma transação que volta; NÃO reproduz o dono
 -- `supabase_admin` nem as ACLs de coluna de produção. O arquivo reaplicado pode ser trocado por `-v arq0218=<arquivo>` (é como se mediu cada variante).
