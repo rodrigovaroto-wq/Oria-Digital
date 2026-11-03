@@ -1051,6 +1051,32 @@ supabase db execute --file Supabase/migrations/0218_o_dial_que_so_media_o_recort
 #   select count(*) from pg_proc p where p.pronamespace = 'public'::regnamespace and has_function_privilege('anon', p.oid, 'execute')
 #      and p.proowner = 'postgres'::regrole and not exists (select 1 from pg_depend d where d.objid = p.oid and d.deptype = 'e');  -- ZERO
 
+# A 0219 faz DUAS coisas. (1) A guarda de Sócio do dial e do catálogo de premissas (fn_trg_so_socio) passa a ter UMA regra: quem roda como
+# dono (current_user fora de authenticated/anon: conexão de serviço, SQL Editor, n8n, código SECURITY DEFINER) escreve; authenticated e anon
+# precisam ser Sócio. A GUC `tdf.promocao_automatica` e o formato do UPDATE da 0218 saem, e fn_dial_auto_promover/fn_trg_auto_promover_dial são
+# reemitidas sem a marca. RISCO NOVO, com portão: função SECURITY DEFINER executável por authenticated que escreva em estagio_autonomia ou
+# premissa_catalogo (direto, por helper, por gatilho, begin atomic ou event trigger) burla a guarda; a sonda acusa (definer_nao_escreve_no_dial, bloqueante), e a ação referencial de FK (dial_sem_cascata_de_fk). (2) rls_auto_enable, a
+# função do event trigger da PLATAFORMA Supabase, volta a ter o EXECUTE de PUBLIC que o laço da 0218 tirou (só se existir e retornar
+# event_trigger; no replay é no-op), e a sonda anon_sem_funcoes passa a ignorar função que retorna event_trigger.
+# >>> Rodar COMO `postgres`. NÃO reaplicar a 0218 por cima desta sem apagar antes os requisitos `definer_sem_escrita` e `sem_acao_referencial` da sonda (constraint de tipo).
+# >>> Teste: Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql.
+supabase db execute --file Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0219' and not presente;   -- ZERO linhas
+#   select proacl from pg_proc where oid = 'public.rls_auto_enable()'::regprocedure;                           -- {postgres=X/postgres,=X/postgres}
+
+# A 0220 fecha um FALSO VERDE do portão que a 0219 acrescentou (definer_nao_escreve_no_dial, e a parte B de dial_sem_cascata_de_fk). O regex da sonda só aceitava espaço, `;`, fim ou `(` depois do
+# nome da tabela protegida: uma função SECURITY DEFINER com EXECUTE para authenticated e corpo `with d as (delete from premissa_catalogo) select ...`, `truncate premissa_catalogo, x` ou
+# `(delete from estagio_autonomia)` dava presente = t, e uma Analista a chamou e o catálogo foi de 89 a 0 linhas (revisão independente de 03/11/2026). Agora o nome aceita também `)` e `,` depois,
+# e o prefixo aceita aspas coladas (`delete from"t"`) e comentário entre a palavra e o nome. Reemite fn_instalacao_conferir inteira (sem tipo novo: os 13 da 0219) e acrescenta 3 requisitos `corpo`
+# (sonda_dial_v_pos_fecha_o_definer, sonda_dial_v_pos_fecha_a_fk, sonda_dial_v_g_ve_aspas_e_comentario) que provam em produção que ela foi aplicada. Não muda nenhuma função do projeto.
+# >>> Rodar COMO `postgres`. Idempotente. NÃO edite a 0219 (já aplicada): a correção é esta migration por cima dela.
+# >>> Teste: Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql.
+supabase db execute --file Supabase/migrations/0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0220' and not presente;   -- ZERO linhas
+#   select chave, presente from fn_instalacao_conferir() where chave in ('definer_nao_escreve_no_dial', 'dial_sem_cascata_de_fk');   -- os dois presente = t
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

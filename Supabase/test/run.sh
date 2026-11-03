@@ -907,6 +907,16 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_dial_e_o_anon.test.sql 2>&1 
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0219 — a guarda do dial que conferia o formato do UPDATE, e o rls_auto_enable da plataforma que perdeu o PUBLIC"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0220 — o portão do dial que só via o nome da tabela seguido de espaço, ponto e vírgula, fim ou parêntese"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \
