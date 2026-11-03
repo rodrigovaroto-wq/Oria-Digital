@@ -1063,7 +1063,19 @@ supabase db execute --file Supabase/migrations/0218_o_dial_que_so_media_o_recort
 supabase db execute --file Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0219' and not presente;   -- ZERO linhas
-#   select proacl from pg_proc where oid = 'public.rls_auto_enable()'::regprocedure;                           -- {=X/postgres,postgres=X/postgres}
+#   select proacl from pg_proc where oid = 'public.rls_auto_enable()'::regprocedure;                           -- {postgres=X/postgres,=X/postgres}
+
+# A 0220 fecha um FALSO VERDE do portão que a 0219 acrescentou (definer_nao_escreve_no_dial, e a parte B de dial_sem_cascata_de_fk). O regex da sonda só aceitava espaço, `;`, fim ou `(` depois do
+# nome da tabela protegida: uma função SECURITY DEFINER com EXECUTE para authenticated e corpo `with d as (delete from premissa_catalogo) select ...`, `truncate premissa_catalogo, x` ou
+# `(delete from estagio_autonomia)` dava presente = t, e uma Analista a chamou e o catálogo foi de 89 a 0 linhas (revisão independente de 03/11/2026). Agora o nome aceita também `)` e `,` depois,
+# e o prefixo aceita aspas coladas (`delete from"t"`) e comentário entre a palavra e o nome. Reemite fn_instalacao_conferir inteira (sem tipo novo: os 13 da 0219) e acrescenta 3 requisitos `corpo`
+# (sonda_dial_v_pos_fecha_o_definer, sonda_dial_v_pos_fecha_a_fk, sonda_dial_v_g_ve_aspas_e_comentario) que provam em produção que ela foi aplicada. Não muda nenhuma função do projeto.
+# >>> Rodar COMO `postgres`. Idempotente. NÃO edite a 0219 (já aplicada): a correção é esta migration por cima dela.
+# >>> Teste: Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql.
+supabase db execute --file Supabase/migrations/0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0220' and not presente;   -- ZERO linhas
+#   select chave, presente from fn_instalacao_conferir() where chave in ('definer_nao_escreve_no_dial', 'dial_sem_cascata_de_fk');   -- os dois presente = t
 
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.

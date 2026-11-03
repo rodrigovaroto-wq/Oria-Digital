@@ -155,6 +155,7 @@
 {"k":"n","id":"arquivo:Supabase/test/motivo_especifico.test.sql","t":"arquivo","f":"Supabase/test/motivo_especifico.test.sql","txt":"motivo_especifico.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","t":"arquivo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","txt":"mutuos_retrato_de_uma_data.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","t":"arquivo","f":"Supabase/test/o_dial_e_o_anon.test.sql","txt":"o_dial_e_o_anon.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","t":"arquivo","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","txt":"o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/operacao.test.sql","t":"arquivo","f":"Supabase/test/operacao.test.sql","txt":"operacao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_da_linha.test.sql","t":"arquivo","f":"Supabase/test/papel_da_linha.test.sql","txt":"papel_da_linha.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_por_secao.test.sql","t":"arquivo","f":"Supabase/test/papel_por_secao.test.sql","txt":"papel_por_secao.test.sql"}
@@ -460,7 +461,7 @@
 {"k":"n","id":"fn:fn_historico_do_caso","t":"fn","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","txt":"historico do caso"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
-{"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","txt":"instalacao conferir"}
+{"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql","txt":"instalacao conferir"}
 {"k":"n","id":"fn:fn_instalacao_resumo","t":"fn","f":"Supabase/migrations/0131_instalacao_que_se_declara.sql","txt":"instalacao resumo"}
 {"k":"n","id":"fn:fn_lado_do_mutuo","t":"fn","f":"Supabase/migrations/0117_reconciliar_mutuos.sql","txt":"lado do mutuo"}
 {"k":"n","id":"fn:fn_lado_intragrupo","t":"fn","f":"Supabase/migrations/0124_intragrupo_que_nao_e_mutuo.sql","txt":"lado intragrupo"}
@@ -769,6 +770,7 @@
 {"k":"n","id":"migration:0217","t":"migration","f":"Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql","txt":"o segredo do envio que o n8n nao tinha"}
 {"k":"n","id":"migration:0218","t":"migration","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","txt":"o dial que so media o recorte de quem disparava"}
 {"k":"n","id":"migration:0219","t":"migration","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","txt":"a guarda do dial que conferia o formato do update"}
+{"k":"n","id":"migration:0220","t":"migration","f":"Supabase/migrations/0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql","txt":"o portao do dial que so via espaco e parentese"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1618,6 +1620,8 @@
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_tem_papel","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":228}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":12}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":146}
+{"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":144}
+{"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":94}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"Supabase/test/operacao.test.sql","l":35}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_resumo","f":"Supabase/test/operacao.test.sql","l":90}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"Supabase/test/papel_da_linha.test.sql","l":233}
@@ -2606,6 +2610,7 @@
 {"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":307}
 {"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":242}
 {"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":163}
+{"k":"e","de":"migration:0220","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql","l":75}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

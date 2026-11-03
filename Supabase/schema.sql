@@ -6535,6 +6535,7 @@ declare
   v_barr       oid[];
   v_pre        text;
   v_pos        text;
+  v_g          text := '(\s|/\*([^*]|\*+[^*/])*\*+/|--[^\n]*\n)';
 begin
   for r in select * from instalacao_requisito order by ordem, chave loop
     v_ok  := false;
@@ -6797,7 +6798,12 @@ begin
       -- ACUSADA = função do fecho que é SECURITY DEFINER E (EXECUTE para authenticated, OU retorna trigger/event_trigger, que dispara sem precisar de EXECUTE).
       -- O corpo é prosrc, ou, no `begin atomic` (prosqlbody não nulo, prosrc vazio), pg_get_function_sqlbody: o `begin atomic` passava invisível.
       -- ESCOLHA: o fecho por NOME, não só "uma volta". Falso positivo é o lado seguro: a citação do nome num comentário, ou uma homônima de outro schema, acusam a mais.
-      -- NÃO enxerga (declarado): SQL dinâmico (`execute format(...)`, regproc em texto); função fora de public; escrita por VIEW atualizável ou por RULE sobre a tabela;
+      -- 0220: escrita por VIEW atualizável ou por RULE sobre a tabela NÃO é ponto cego (a 0219 o declarava, sem medir): a view e a regra rodam com os privilégios do dono da
+      -- view, mas `current_user` segue sendo o de quem chamou (authenticated), e a guarda de Sócio recusa com 42501 (medido na 0220, com o Analista).
+      -- O QUE VEM DEPOIS DO NOME: v_pos aceita espaço, `;`, fim, `(`, `)` e `,` (a 0219 só os quatro primeiros: `with d as (delete from t) select`, `truncate t, x` e
+      -- `(delete from t)` davam presente = t; uma definer assim, com EXECUTE para authenticated, apagou o catálogo de 89 a 0 linhas). O QUE VEM ANTES: v_pre aceita, entre a palavra e o nome, espaço, aspas
+      -- imediatas (`delete from"t"`) e comentário de bloco ou de linha (`delete from /* c */ t`): v_g.
+      -- NÃO enxerga (declarado): SQL dinâmico (`execute format(...)`, regproc em texto); função fora de public;
       -- a função que o gatilho chama só por SQL dinâmico. Chamar uma PORTA (fn_dial_auto_promover) de uma definer não conta, de propósito: é o caminho que o dono
       -- aprovou na 0137 (o gatilho de `decisao` promove, no máximo até N2, SÓ quando o veredito GLOBAL basta; o chamador não escolhe nada).
       v_tabs   := array_to_string(string_to_array(r.objeto, ','), '|');
@@ -6808,8 +6814,8 @@ begin
       v_barr   := coalesce((select array_agg(to_regprocedure('public.' || btrim(q))::oid)
                               from unnest(string_to_array(nullif(split_part(r.marcador, ';', 2), ''), '|')) q
                              where to_regprocedure('public.' || btrim(q)) is not null), array[]::oid[]);
-      v_pre    := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?("?public"?\s*\.\s*)?"?';
-      v_pos    := '"?(\s|;|$|\()';
+      v_pre    := replace(replace('(insert@+into$|update$|delete@+from$|merge@+into$|truncate$(table@+)?(only@+)?([a-z0-9_."]+@*,@*)*)(only@+)?("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
+      v_pos    := '"?(\s|;|$|\(|\)|,)';
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas (lista por vírgula) e marcador = RAIZES;PORTAS, com ao menos uma raiz';
@@ -6862,8 +6868,8 @@ begin
       -- c|n|d cuja tabela FILHA tem gatilho cuja função (corpo DIRETO, sem o fecho) escreve nas tabelas protegidas: a ação dispara o gatilho como dono. `restrict` e `no action` não
       -- alteram linha e ficam de fora. A FK que TEM a protegida como PAI (golden_criterio -> estagio_autonomia, on delete cascade) não conta: ela apaga a linha do FILHO, que não é protegido.
       v_tabs := array_to_string(string_to_array(r.objeto, ','), '|');
-      v_pre  := '(insert\s+into\s+|update\s+|delete\s+from\s+|merge\s+into\s+|truncate\s+(table\s+)?(only\s+)?([a-z0-9_."]+\s*,\s*)*)(only\s+)?("?public"?\s*\.\s*)?"?';
-      v_pos  := '"?(\s|;|$|\()';
+      v_pre  := replace(replace('(insert@+into$|update$|delete@+from$|merge@+into$|truncate$(table@+)?(only@+)?([a-z0-9_."]+@*,@*)*)(only@+)?("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
+      v_pos  := '"?(\s|;|$|\(|\)|,)';
       if coalesce(v_tabs, '') = '' then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas, lista por vírgula';

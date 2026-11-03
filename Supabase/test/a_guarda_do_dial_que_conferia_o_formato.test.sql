@@ -752,6 +752,17 @@ begin
     'uma função de mesmo nome que NÃO retorna event_trigger fica como estava (sem PUBLIC): a migration só abre a da plataforma');
 end $$;
 
+-- O número de execuções tem de ser o do arquivo (110): o run.sh só filtra NOTICE/ERROR/WARNING e o `select` do FIM abaixo some do log; um bloco que saiu cedo ou uma chamada que sumiu
+-- passava calado (regra 7, achado da revisão independente de 03/11/2026).
+do $$
+declare v_esperado constant int := 110;
+  v_real int := coalesce(nullif(current_setting('dial.execucoes', true), ''), '0')::int;
+begin
+  if v_real <> v_esperado then
+    raise exception 'FALHOU: o teste da 0219 executou % asserts, e o arquivo declara %. Um bloco saiu antes ou uma chamada sumiu.', v_real, v_esperado;
+  end if;
+end $$;
+
 select 'FIM 0219: ' || coalesce(current_setting('dial.execucoes', true), '0') || ' execuções, '
        || coalesce(nullif(current_setting('dial.falhas', true), ''), '0') || ' falhas' as medicao;
 
