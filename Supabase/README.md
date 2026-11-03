@@ -1055,10 +1055,10 @@ supabase db execute --file Supabase/migrations/0218_o_dial_que_so_media_o_recort
 # dono (current_user fora de authenticated/anon: conexão de serviço, SQL Editor, n8n, código SECURITY DEFINER) escreve; authenticated e anon
 # precisam ser Sócio. A GUC `tdf.promocao_automatica` e o formato do UPDATE da 0218 saem, e fn_dial_auto_promover/fn_trg_auto_promover_dial são
 # reemitidas sem a marca. RISCO NOVO, com portão: função SECURITY DEFINER executável por authenticated que escreva em estagio_autonomia ou
-# premissa_catalogo (ou chame fn_mudar_dial) burla a guarda; a sonda acusa (definer_nao_escreve_no_dial, bloqueante). (2) rls_auto_enable, a
+# premissa_catalogo (direto, por helper, por gatilho, begin atomic ou event trigger) burla a guarda; a sonda acusa (definer_nao_escreve_no_dial, bloqueante), e a ação referencial de FK (dial_sem_cascata_de_fk). (2) rls_auto_enable, a
 # função do event trigger da PLATAFORMA Supabase, volta a ter o EXECUTE de PUBLIC que o laço da 0218 tirou (só se existir e retornar
 # event_trigger; no replay é no-op), e a sonda anon_sem_funcoes passa a ignorar função que retorna event_trigger.
-# >>> Rodar COMO `postgres`. NÃO reaplicar a 0218 por cima desta sem apagar antes os requisitos `definer_sem_escrita` da sonda (constraint de tipo).
+# >>> Rodar COMO `postgres`. NÃO reaplicar a 0218 por cima desta sem apagar antes os requisitos `definer_sem_escrita` e `sem_acao_referencial` da sonda (constraint de tipo).
 # >>> Teste: Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql.
 supabase db execute --file Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql
 # DEPOIS DE APLICAR, confira:
