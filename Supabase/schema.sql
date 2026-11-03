@@ -3023,9 +3023,8 @@ begin
     -- nenhuma guarda: o teto, a regra de ouro e a trilha continuam sendo os
     -- mesmos, e o dia em que uma guarda nova for acrescentada lá ela passa a
     -- valer aqui sem ninguém lembrar de copiar.
-    -- 0218: a ÚNICA porta que deixa a máquina mexer no dial sem ser Sócio. O gatilho de guarda
-    -- (fn_trg_so_socio) só a reconhece com esta marca E rodando como dono (não como authenticated).
-    perform set_config('tdf.promocao_automatica', 'sim', true);
+    -- 0219: SEM MARCA. Esta função é DEFINER (roda como dono) e fn_trg_so_socio deixa passar quem roda como dono; ninguém confere mais o formato do
+    -- UPDATE que fn_mudar_dial faz (a 0218 o conferia, e mudar fn_mudar_dial quebrava a promoção calado: o gatilho da 0137 engole o 42501).
     v_res := fn_mudar_dial(
       r.estagio, 'N2'::nivel_autonomia, 'sistema:auto_dial',
       format('Promoção automática (0137): o veredito de produção alcançou o critério — %s vereditos '
@@ -3034,7 +3033,6 @@ begin
              v_med->>'n', v_med->>'concordancia',
              v_med->>'n_minimo', v_med->>'concordancia_minima'),
       null, null, null, true);
-    perform set_config('tdf.promocao_automatica', '', true);
 
     v_feitos := v_feitos || jsonb_build_object(
       'estagio', r.estagio,
@@ -3058,7 +3056,7 @@ $$;
 -- Name: FUNCTION fn_dial_auto_promover(p_estagio text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_dial_auto_promover(p_estagio text) IS 'Sobe para N2 todo estágio interpretativo elegível cujo veredito de produção alcançou o critério (0137). Sobe pela fn_mudar_dial, nunca por update direto, para não escapar de guarda nenhuma. Para em N2 por decisão: piso enviesado não sustenta autonomia plena. 0218: SECURITY DEFINER e fechada ao authenticated — mede o veredito GLOBAL e pode subir o dial mesmo disparada por um Analista (a marca tdf.promocao_automatica abre a exceção estreita de fn_trg_so_socio); só o gatilho e o service_role a chamam.';
+COMMENT ON FUNCTION public.fn_dial_auto_promover(p_estagio text) IS 'Sobe para N2 todo estágio interpretativo elegível cujo veredito de produção alcançou o critério (0137). Sobe pela fn_mudar_dial, nunca por update direto, para não escapar de guarda nenhuma. Para em N2 por decisão: piso enviesado não sustenta autonomia plena. 0218: SECURITY DEFINER e fechada ao authenticated — mede o veredito GLOBAL e pode subir o dial mesmo disparada por um Analista; só o gatilho e o service_role a chamam. 0219: sem marca de transação; a guarda de Sócio (fn_trg_so_socio) deixa passar quem roda como dono, e esta função roda como dono.';
 
 --
 -- Name: fn_dial_influencia(text); Type: FUNCTION; Schema: public; Owner: -
@@ -6515,7 +6513,7 @@ COMMENT ON FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid) 
 
 CREATE FUNCTION public.fn_instalacao_conferir() RETURNS TABLE(chave text, migration text, tipo text, objeto text, presente boolean, detalhe text, porque text, severidade text)
     LANGUAGE plpgsql STABLE
-    AS $$
+    AS $_$
 declare
   r            instalacao_requisito;
   v_ok         boolean;
@@ -6532,6 +6530,8 @@ declare
   v_kinds      "char"[];
   v_lista      text;
   v_classe     text;
+  v_tabs       text;
+  v_funs       text;
 begin
   for r in select * from instalacao_requisito order by ordem, chave loop
     v_ok  := false;
@@ -6732,6 +6732,11 @@ begin
                    where n.nspname = 'public'
                      and p.proname not like 'teste\_%'
                      and p.proowner = (select oid from pg_roles where rolname = 'postgres')
+                     -- 0219: função que RETORNA event_trigger não é chamável (nem por SQL nem por RPC: "trigger functions can only be called as triggers"),
+                     -- logo o EXECUTE de PUBLIC nela não é superfície. É a função do event trigger da PLATAFORMA Supabase (`rls_auto_enable`, dona postgres,
+                     -- SECURITY DEFINER, que NÃO está neste repositório): o laço da 0218 lhe tirou o PUBLIC e a 0219 o devolveu, e a sonda não pode acusar a correção.
+                     -- Só event_trigger: função de GATILHO comum (`trigger`) continua na varredura, porque o projeto já faz `revoke ... from public` em todas.
+                     and p.prorettype <> 'event_trigger'::regtype
                      and not exists (select 1 from pg_depend d
                                       where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
                      and exists (select 1 from unnest(v_privs) q where has_function_privilege(v_role, p.oid, q))) x;
@@ -6775,6 +6780,37 @@ begin
         v_det := 'não foi possível consultar o Vault: ' || sqlerrm;
       end;
 
+    elsif r.tipo = 'definer_sem_escrita' then
+      -- 0219: a guarda de Sócio (fn_trg_so_socio) deixa passar quem roda como DONO (current_user fora de authenticated/anon). Função SECURITY DEFINER roda como
+      -- dono: uma definer executável por `authenticated` que escreva numa tabela protegida pela guarda — direto, ou chamando a função que a escreve — passaria
+      -- pela guarda sem o chamador ser Sócio. `objeto` = as tabelas protegidas (separadas por vírgula) e `marcador` = as funções cuja chamada também conta.
+      -- Entra na varredura: SECURITY DEFINER em public E (EXECUTE para authenticated OU função de gatilho, que dispara no DML de quem escreve sem precisar de
+      -- EXECUTE) E corpo com `insert into | update | delete from | truncate | merge into <tabela>` ou `<função>(`. NÃO enxerga: SQL dinâmico (`execute format(...)`),
+      -- nem o helper definer chamado por uma definer, nem uma definer FECHADA ao authenticated (fn_dial_auto_promover é assim, de propósito: só o gatilho e o
+      -- service_role a chamam). Falso positivo possível (a frase `update estagio_autonomia` num comentário da função): é o erro do lado seguro, e some com
+      -- `revoke all on function f(args) from public` se a função não deve ser executável, ou com a linha reescrita.
+      v_tabs := array_to_string(string_to_array(r.objeto, ','), '|');
+      v_funs := array_to_string(string_to_array(r.marcador, ','), '|');
+      if coalesce(v_tabs, '') = '' or coalesce(v_funs, '') = '' then
+        v_ok  := false;
+        v_det := 'requisito mal declarado: objeto = tabelas protegidas e marcador = funções que as escrevem, cada lista separada por vírgula';
+      else
+        select count(*), string_agg(x.nome, ', ' order by x.nome) filter (where x.rn <= 15)
+          into v_n, v_lista
+          from (select p.oid::regprocedure::text as nome, row_number() over (order by p.oid::regprocedure::text) as rn
+                  from pg_proc p
+                  join pg_namespace n on n.oid = p.pronamespace
+                 where n.nspname = 'public'
+                   and p.prosecdef
+                   and (p.prorettype = 'trigger'::regtype or has_function_privilege('authenticated', p.oid, 'execute'))
+                   and (p.prosrc ~* ('(insert\s+into|update|delete\s+from|truncate(\s+table)?|merge\s+into)\s+(only\s+)?(public\.)?"?(' || v_tabs || ')"?(\s|;|$|\()')
+                        or p.prosrc ~* ('(^|[^a-z0-9_])(' || v_funs || ')\s*\('))) x;
+        v_ok  := v_n = 0;
+        v_det := case when v_ok then format('nenhuma função SECURITY DEFINER executável por authenticated (ou de gatilho) escreve em %s nem chama %s', r.objeto, r.marcador)
+                      else format('%s função(ões) SECURITY DEFINER que authenticated executa (ou de gatilho) escrevem em %s ou chamam %s — a guarda de Sócio as deixa passar, porque rodam como dono: %s%s',
+                                  v_n, r.objeto, r.marcador, v_lista, case when v_n > 15 then ' ...' else '' end) end;
+      end if;
+
     elsif r.tipo in ('seed', 'comportamento') then
       -- A tabela pode não existir ainda: contar nela levantaria erro e derrubaria
       -- a sonda inteira, transformando "um requisito faltando" em "o painel não
@@ -6806,13 +6842,13 @@ begin
                         r.porque, r.severidade;
   end loop;
 end;
-$$;
+$_$;
 
 --
 -- Name: FUNCTION fn_instalacao_conferir(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0217 confere SEGREDO do Vault (tipo=segredo, objeto = nome do segredo): existe e não está vazio, sem ler o valor. Desde a 0218 confere também a AUSÊNCIA de privilégio (tipo=sem_privilegio, objeto papel:classe com classe tabelas|views|sequences|funcoes, marcador = privilégios proibidos): todo objeto de public com privilégio para anon é buraco (função herda EXECUTE de PUBLIC; privilégio de coluna conta; função de extensão e teste_* ficam de fora).';
+COMMENT ON FUNCTION public.fn_instalacao_conferir() IS 'Confere cada requisito de instalacao_requisito contra o catálogo do banco. Sobrevive ao objeto ausente (to_regclass/to_regproc devolvem NULL em vez de erro): a sonda não pode falhar por causa do que ela existe para medir. Desde a 0147 confere também o CORPO da função (tipo=corpo), que é o único jeito de distinguir uma correção aplicada de uma função homônima com o corpo velho. Desde a 0189 confere também GATILHO (tipo=gatilho): existência na tabela E tgenabled em (''O'',''A'') — a função do gatilho sobrevive a drop trigger/disable trigger e por isso NUNCA prova, sozinha, que a guarda está ligada. Desde a 0210 confere também POLICY (tipo=policy, objeto tabela.nome_da_policy): existência em pg_policy. Desde a 0214 confere PRIVILÉGIO (tipo=privilegio, objeto papel:classe, marcador = privilégios): toda tabela/view/sequence de public sem o mínimo para authenticated e service_role é buraco — o Supabase deixou de conceder por default privilege em 30/10/2026. Desde a 0217 confere SEGREDO do Vault (tipo=segredo, objeto = nome do segredo): existe e não está vazio, sem ler o valor. Desde a 0218 confere também a AUSÊNCIA de privilégio (tipo=sem_privilegio, objeto papel:classe com classe tabelas|views|sequences|funcoes, marcador = privilégios proibidos): todo objeto de public com privilégio para anon é buraco (função herda EXECUTE de PUBLIC; privilégio de coluna conta; função de extensão e teste_* ficam de fora). Desde a 0219 confere DEFINER QUE ESCREVE NO DIAL (tipo=definer_sem_escrita, objeto = tabelas protegidas, marcador = funções cuja chamada conta): função SECURITY DEFINER executável por authenticated (ou de gatilho) que escreve nelas passa pela guarda de Sócio, que confia em quem roda como dono. E o ramo sem_privilegio ignora função que retorna event_trigger (a da plataforma Supabase, não chamável).';
 
 --
 -- Name: fn_instalacao_resumo(); Type: FUNCTION; Schema: public; Owner: -
@@ -15270,8 +15306,6 @@ begin
       raise notice '0137: promoção automática do dial — %', v_r->'promovidos';
     end if;
   exception when others then
-    -- 0218: a marca da promoção nunca sobrevive a uma promoção que falhou (o rollback do sub-bloco já a desfaz; isto é cinto e suspensório).
-    perform set_config('tdf.promocao_automatica', '', true);
     raise notice '0137: a promoção automática falhou e foi ignorada (a decisão que a disparou está '
                  'gravada). Erro: %', sqlerrm;
   end;
@@ -15284,7 +15318,7 @@ $$;
 -- Name: FUNCTION fn_trg_auto_promover_dial(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_trg_auto_promover_dial() IS 'Gatilho da promoção automática (0137): toda decisão humana nova pode ter completado o critério do veredito de produção. NUNCA derruba a transação de quem o disparou — falha vira NOTICE, porque o analista não pode perder a rejeição de uma pendência por causa do dial. 0218: SECURITY DEFINER, para que a promoção não dependa do recorte nem do papel de quem decidiu.';
+COMMENT ON FUNCTION public.fn_trg_auto_promover_dial() IS 'Gatilho da promoção automática (0137): toda decisão humana nova pode ter completado o critério do veredito de produção. NUNCA derruba a transação de quem o disparou — falha vira NOTICE, porque o analista não pode perder a rejeição de uma pendência por causa do dial. 0218: SECURITY DEFINER, para que a promoção não dependa do recorte nem do papel de quem decidiu. 0219: sem a marca tdf.promocao_automatica.';
 
 --
 -- Name: fn_trg_caso_aloca_criador(); Type: FUNCTION; Schema: public; Owner: -
@@ -15572,16 +15606,8 @@ CREATE FUNCTION public.fn_trg_so_socio() RETURNS trigger
     SET search_path TO 'public', 'pg_temp'
     AS $$
 begin
-  -- IFs ANINHADOS de propósito: o Postgres não garante curto-circuito do AND, e `new.atualizado_por` não existe em premissa_catalogo (medido: "record
-  -- new has no field atualizado_por" derrubou o UPDATE do catálogo na primeira versão).
-  if tg_table_name = 'estagio_autonomia' and tg_op = 'UPDATE' then
-    if current_setting('tdf.promocao_automatica', true) = 'sim'
-       and current_user not in ('authenticated', 'anon')
-       and new.atualizado_por = 'sistema:auto_dial'
-       and new.nivel_atual = 'N2'::nivel_autonomia and new.nivel_atual > old.nivel_atual
-       and new.base_do_nivel = 'medida_por_veredito' then
-      return new;
-    end if;
+  if current_user not in ('authenticated', 'anon') then
+    return case when tg_op = 'DELETE' then old else new end;
   end if;
   perform fn_exige_socio(tg_argv[0]);
   return case when tg_op = 'DELETE' then old else new end;
@@ -15591,7 +15617,7 @@ end $$;
 -- Name: FUNCTION fn_trg_so_socio(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_trg_so_socio() IS '0216/0218: guarda de Sócio do dial (estagio_autonomia) e do catálogo de premissas. Desde a 0218 deixa passar UMA escrita que não é de Sócio: a promoção automática da 0137 (UPDATE a N2, base medida_por_veredito, autor sistema:auto_dial, com a marca tdf.promocao_automatica E rodando como dono, nunca como authenticated).';
+COMMENT ON FUNCTION public.fn_trg_so_socio() IS '0216/0219: guarda de Sócio do dial (estagio_autonomia) e do catálogo de premissas. Desde a 0219 a regra é uma só: quem roda como dono (current_user fora de authenticated/anon: conexão de serviço, SQL Editor, n8n, service_role e o código SECURITY DEFINER do dono, como a promoção automática da 0137) escreve; quem roda como authenticated ou anon precisa ser Sócio (fn_exige_socio, 42501). A 0218 conferia a GUC tdf.promocao_automatica e o formato exato do UPDATE da promoção; saíram. RISCO: uma função SECURITY DEFINER executável por authenticated que escreva nessas tabelas passa pela guarda; a sonda (definer_nao_escreve_no_dial) a acusa.';
 
 --
 -- Name: fn_unidade_predominante(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17421,7 +17447,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text, 'sem_privilegio'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text, 'sem_privilegio'::text, 'definer_sem_escrita'::text])))
 );
 
 --

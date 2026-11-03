@@ -372,6 +372,9 @@ create temp table snap_ro_0218 as
    where n.nspname = 'public' and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e');
 
 -- A MIGRATION, reaplicada por cima do que produção tinha antes.
+-- 0219: a 0218 recria a constraint de TIPO da sonda sem o tipo `definer_sem_escrita`, que a 0219 acrescentou e que já existe em uma linha do catálogo; o
+-- `add constraint` recusaria essa linha. Ela sai aqui (dentro da transação, que volta): é o que a 0218 reaplicada sozinha tem de supor.
+delete from instalacao_requisito where tipo = 'definer_sem_escrita';
 \i :arq0218
 
 do $$
