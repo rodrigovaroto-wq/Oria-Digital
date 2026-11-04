@@ -152,7 +152,9 @@ export function verificarEnvio({ token, mandato, segredo, agoraMs }) {
     return { ok: false, motivo: 'malformado' };
   }
   if (!iguaisEmTempoConstante(hmacSha256Hex(segredo, mensagem), sig)) return { ok: false, motivo: 'assinatura' };
-  if (!(Number(exp) * 1000 > agoraMs)) return { ok: false, motivo: 'expirado' };
+  // `<=` em vez de `!(exp > agora)` (S1940), mas com `agoraMs` inválido (NaN/undefined) falhando FECHADO como
+  // antes: toda comparação com NaN é falsa, então `<=` sozinho trataria "relógio ausente" como "não expirou".
+  if (!Number.isFinite(agoraMs) || Number(exp) * 1000 <= agoraMs) return { ok: false, motivo: 'expirado' };
   return { ok: true, usuario_id: usuario, caso_id: caso };
 }
 

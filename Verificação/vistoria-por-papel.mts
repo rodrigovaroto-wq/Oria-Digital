@@ -20,7 +20,6 @@
 import { createRequire } from "node:module";
 import fs from "node:fs";
 import path from "node:path";
-import { createClient } from "../portal/node_modules/@supabase/supabase-js/dist/index.mjs";
 
 const exigir = (n: string): string => {
   const v = process.env[n];
@@ -38,6 +37,17 @@ fs.mkdirSync(SAIDA, { recursive: true });
 
 const req = createRequire(import.meta.url);
 const { chromium } = req(process.env.P2_PLAYWRIGHT ?? "playwright");
+// O supabase-js vem do `portal/` pela resolução de pacote, não por caminho dentro de `node_modules/.../dist`
+// (isso é API interna da dependência e quebra em qualquer reorganização do pacote).
+const { createClient } = createRequire(path.resolve(import.meta.dirname, "../portal/package.json"))("@supabase/supabase-js");
+
+// A ORDEM É SEMÂNTICA: um navegador, navegação sequencial por papel/rota/tentativa. Paralelizar mudaria o que é
+// medido (a sessão e o estado que uma tentativa deixa são lidos pela seguinte) e sobrecarregaria a produção.
+// Por isso toda repetição que espera I/O passa por aqui, em vez de `await` solto dentro de laço: o passo N+1
+// só começa quando o N terminou, e isso fica dito em um lugar só.
+function emSequencia<T>(itens: readonly T[], passo: (item: T) => Promise<unknown>): Promise<void> {
+  return itens.reduce<Promise<void>>((anterior, item) => anterior.then(() => passo(item)).then(() => undefined), Promise.resolve());
+}
 
 type Papel = "socio" | "analista" | "leitura";
 const PAPEIS: Papel[] = ["socio", "analista", "leitura"];
@@ -157,6 +167,33 @@ async function celula(page: any, papel: string, rota: string, vp: "desk" | "mob"
   };
 }
 
+const ROTAS_ARQUIVO = (ids: { A: string; OUTRO: string; DOC: string }) => [
+  `/casos/${ids.A}/export`, `/casos/${ids.A}/documentos/${ids.DOC}/original`,
+  `/casos/${ids.A}/documentos/${ids.DOC}/transcricao`, `/casos/${ids.OUTRO}/export`,
+];
+
+// Rotas que devolvem arquivo ou redirecionam não são telas: mede-se só o status, sem seguir.
+async function celulaDeArquivo(ctx: any, papel: string, rota: string) {
+  const t0 = Date.now();
+  const r = await ctx.request.get(BASE + rota, { maxRedirects: 0, timeout: 60000 }).catch((e: any) => ({ status: () => -1, headers: () => ({}), _e: e }));
+  const destino = String((r.headers() as any).location ?? "").replace(/\?.*/, "").replace(UUID, "{ID}").slice(0, 60);
+  return { papel, viewport: "desk", rota: rota.replace(UUID, "{ID}"), status: r.status(), destino: destino || "(sem redirect)", ms: Date.now() - t0, tipo: "arquivo/redirect" };
+}
+
+async function celulasDoPapel(browser: any, papel: Papel | "anonimo", mobile: boolean, rotas: string[], ids: { A: string; OUTRO: string; DOC: string }) {
+  const celulas: any[] = [];
+  const { ctx, page } = await novoContexto(browser, papel, mobile);
+  const erros: string[] = []; const ruins: string[] = [];
+  page.on("console", (m: any) => { if (m.type() === "error") erros.push(m.text().slice(0, 160)); });
+  page.on("pageerror", (e: any) => erros.push("pageerror: " + String(e.message).slice(0, 160)));
+  page.on("response", (r: any) => { if (r.status() >= 400) ruins.push(`${r.status()} ${new URL(r.url()).pathname.slice(0, 60)}`); });
+  const lista = mobile ? MOBILE.map((m) => m.replace("{A}", ids.A)) : rotas;
+  await emSequencia(lista, async (rota) => { celulas.push(await celula(page, papel, rota, mobile ? "mob" : "desk", erros, ruins)); });
+  if (!mobile) await emSequencia(ROTAS_ARQUIVO(ids), async (rota) => { celulas.push(await celulaDeArquivo(ctx, papel, rota)); });
+  await ctx.close();
+  return celulas;
+}
+
 async function matriz(browser: any, ids: { A: string; OUTRO: string; DOC: string }) {
   const rotas = [
     ...ROTAS_GERAIS,
@@ -165,117 +202,141 @@ async function matriz(browser: any, ids: { A: string; OUTRO: string; DOC: string
     // O mandato ao qual Analista e Leitura NÃO estão alocados: deve ser 404/redirect para eles.
     `/casos/${ids.OUTRO}`, `/casos/${ids.OUTRO}/documentos`, `/casos/${ids.OUTRO}/pendencias`,
   ];
+  // Mesma ordem de antes: para cada papel (anônimo primeiro), desktop e depois celular.
+  const combinacoes = (["anonimo", ...PAPEIS] as const).flatMap((papel) => [false, true].map((mobile) => ({ papel, mobile })));
   const celulas: any[] = [];
-  for (const papel of ["anonimo", ...PAPEIS] as const) {
-    for (const mobile of [false, true]) {
-      const { ctx, page } = await novoContexto(browser, papel, mobile);
-      const erros: string[] = []; const ruins: string[] = [];
-      page.on("console", (m: any) => { if (m.type() === "error") erros.push(m.text().slice(0, 160)); });
-      page.on("pageerror", (e: any) => erros.push("pageerror: " + String(e.message).slice(0, 160)));
-      page.on("response", (r: any) => { if (r.status() >= 400) ruins.push(`${r.status()} ${new URL(r.url()).pathname.slice(0, 60)}`); });
-      const lista = mobile ? MOBILE.map((m) => m.replace("{A}", ids.A)) : rotas;
-      for (const rota of lista) celulas.push(await celula(page, papel, rota, mobile ? "mob" : "desk", erros, ruins));
-      // Rotas que devolvem arquivo ou redirecionam não são telas: mede-se só o status, sem seguir.
-      if (!mobile) {
-        for (const rota of [`/casos/${ids.A}/export`, `/casos/${ids.A}/documentos/${ids.DOC}/original`, `/casos/${ids.A}/documentos/${ids.DOC}/transcricao`, `/casos/${ids.OUTRO}/export`]) {
-          const t0 = Date.now();
-          const r = await ctx.request.get(BASE + rota, { maxRedirects: 0, timeout: 60000 }).catch((e: any) => ({ status: () => -1, headers: () => ({}), _e: e }));
-          celulas.push({ papel, viewport: "desk", rota: rota.replace(UUID, "{ID}"), status: r.status(), destino: String((r.headers() as any).location ?? "").replace(/\?.*/, "").replace(UUID, "{ID}").slice(0, 60) || "(sem redirect)", ms: Date.now() - t0, tipo: "arquivo/redirect" });
-        }
-      }
-      await ctx.close();
-    }
-  }
+  await emSequencia(combinacoes, async ({ papel, mobile }) => { celulas.push(...await celulasDoPapel(browser, papel, mobile, rotas, ids)); });
   return celulas;
 }
 
 // ---------- escalada ----------
 type Linha = { papel: string; tentativa: string; esperado: string; obtido: string; achado?: string };
+type Ids = { A: string; OUTRO: string; DOC: string; PEND: string; PEND_ESTADO: string };
 const linhas: Linha[] = [];
 const barrado = (e: any) => `BARRADO (${e?.code ?? e?.statusCode ?? "?"}: ${String(e?.message ?? e).slice(0, 90)})`;
 function reg(papel: string, tentativa: string, esperado: string, obtido: string, achado = "") {
   const passou = obtido.startsWith("PASSOU");
   linhas.push({ papel, tentativa, esperado, obtido, achado: (esperado === "barrado" && passou) || (esperado === "passa" && !passou) ? achado || "DIVERGE DO ESPERADO" : undefined });
 }
+const doAnalista = (papel: string, seAnalista: string, senao: string) => (papel === "analista" ? seAnalista : senao);
 
-async function escalada(ids: { A: string; OUTRO: string; DOC: string; PEND: string; PEND_ESTADO: string }) {
+// Resultado de um UPDATE com `.select()`: erro e zero linhas afetadas valem "BARRADO"; só linha devolvida é "PASSOU".
+function obtidoDeUpdate(r: { error: any; data: any[] | null }, quandoPassou: (n: number) => string): string {
+  if (r.error) return barrado(r.error);
+  const n = r.data!.length;
+  return n === 0 ? "BARRADO (0 linhas afetadas, sem erro)" : quandoPassou(n);
+}
+
+type Ctx = { papel: "analista" | "leitura" | "anonimo"; c: any; socio: any; ids: Ids; estagio: any; totalSocio: number | null; sondaA: string; sondaO: string };
+const subir = (c: any, p: string) => c.storage.from("documentos").upload(p, new Blob(["sonda P2 sintetica"], { type: "text/plain" }), { upsert: false });
+
+async function escaladaLeitura({ papel, c, ids, totalSocio }: Ctx) {
+  const sel = async (t: string, filtro?: (q: any) => any) => { const q = c.from(t).select("id", { count: "exact", head: true }); const r = await (filtro ? filtro(q) : q); return r.error ? barrado(r.error) : `${r.count ?? 0} linhas visíveis`; };
+  const casos = await c.from("caso").select("id", { count: "exact" });
+  const n = casos.error ? barrado(casos.error) : `${casos.count} de ${totalSocio} mandatos visíveis`;
+  (resultado.casos_visiveis as any)[papel] = casos.error ? "erro" : casos.count;
+  const esperadoCasos = papel === "anonimo" ? "0" : "só os alocados (1)";
+  const doMandatoAlheio = `pendencia: ${await sel("pendencia", (q) => q.eq("caso_id", ids.OUTRO))}; documento: ${await sel("documento", (q) => q.eq("caso_id", ids.OUTRO))}`;
+  const TABS = ["estagio_autonomia", "membro", "alocacao", "evento_auditoria", "golden_criterio", "lote_execucao"];
+  const dasTabelas = (await Promise.all(TABS.map(async (t) => `${t}: ${await sel(t)}`))).join("; ");
+  linhas.push(
+    { papel, tentativa: "ler `caso` (todos)", esperado: esperadoCasos, obtido: n },
+    { papel, tentativa: "ler `pendencia`/`documento` do mandato NÃO alocado", esperado: "0 linhas", obtido: doMandatoAlheio },
+    { papel, tentativa: "ler `" + TABS.join("`, `") + "`", esperado: papel === "anonimo" ? "0 / barrado" : "ver nota", obtido: dasTabelas },
+  );
+}
+
+async function escaladaDial({ papel, c, estagio }: Ctx) {
+  const r1 = await c.rpc("fn_mudar_dial", { p_estagio: estagio.estagio, p_nivel: estagio.nivel_atual, p_autor: `p2:${papel}`, p_motivo: "vistoria P2: reafirma o mesmo nível" });
+  reg(papel, `fn_mudar_dial(${estagio.estagio}, ${estagio.nivel_atual} = nível atual)`, "barrado", r1.error ? barrado(r1.error) : `PASSOU (${JSON.stringify(r1.data).slice(0, 120)})`, "ALTO: dial mudado sem ser Sócio");
+  const r2 = await c.from("estagio_autonomia").update({ nivel_atual: estagio.nivel_atual }).eq("estagio", estagio.estagio).select();
+  reg(papel, "UPDATE direto em `estagio_autonomia` (mesmo nível)", "barrado", obtidoDeUpdate(r2, (k) => `PASSOU (${k} linha)`), "ALTO");
+  const r3 = await c.from("estagio_autonomia").update({ teto: "N3" }).eq("estagio", "__inexistente__").select();
+  let obtido3 = "PASSOU";
+  if (r3.error) obtido3 = barrado(r3.error);
+  else if (r3.data!.length === 0) obtido3 = "BARRADO (0 linhas, sem erro)";
+  reg(papel, "UPDATE em `estagio_autonomia` com filtro que não casa nada (sonda de política)", "barrado", obtido3);
+}
+
+// Estado da pendência depois da decisão, conferido e restaurado pelo Sócio.
+function obtidoDeDecisao(d: any, mudou: boolean, depois: any, ids: Ids): string {
+  if (mudou) return `PASSOU (estado ${ids.PEND_ESTADO} -> ${depois.estado}; restaurado)`;
+  if (d.error) return barrado(d.error);
+  return `BARRADO sem erro? retorno=${JSON.stringify(d.data).slice(0, 100)}; estado inalterado`;
+}
+
+async function escaladaMandato({ papel, c, socio, ids }: Ctx) {
+  const i1 = await c.from("caso").insert({ nome: "P2 escalada " + papel }).select();
+  if (!i1.error && i1.data?.length) await socio.from("caso").delete().eq("id", (i1.data[0] as any).id);
+  reg(papel, "INSERT em `caso` (novo mandato)", doAnalista(papel, "passa ou barra conforme o desenho (ver nota)", "barrado"), i1.error ? barrado(i1.error) : `PASSOU (${i1.data!.length} linha, desfeito)`, papel === "leitura" ? "ALTO: Leitura abriu mandato" : "");
+  const u1 = await c.from("caso").update({ nome: MANDATO }).eq("id", ids.A).select();
+  reg(papel, "UPDATE em `caso` do mandato alocado (mesmo nome)", doAnalista(papel, "passa (escreve no alocado)", "barrado"), obtidoDeUpdate(u1, (k) => `PASSOU (${k} linha, valor idêntico)`));
+  const u2 = await c.from("pendencia").update({ estado: ids.PEND_ESTADO }).eq("id", ids.PEND).select();
+  reg(papel, "UPDATE direto em `pendencia` do mandato alocado (mesmo estado)", doAnalista(papel, "passa", "barrado"), obtidoDeUpdate(u2, (k) => `PASSOU (${k} linha, valor idêntico)`));
+  const u3 = await c.from("documento").update({ status: "em_validacao" }).eq("caso_id", ids.A).select();
+  reg(papel, "UPDATE direto em `documento` do mandato alocado (status = o atual)", doAnalista(papel, "passa", "barrado"), obtidoDeUpdate(u3, (k) => `PASSOU (${k} linhas, valor idêntico)`));
+  // Decidir pendência pela função (é o que o botão da tela chama). Estado conferido e restaurado pelo Sócio.
+  const d = await c.rpc("fn_decidir_pendencia", { p_pendencia_id: ids.PEND, p_autor: `p2:${papel}`, p_decisao: "contatar_cliente" });
+  const depois = (await socio.from("pendencia").select("estado").eq("id", ids.PEND).single()).data as any;
+  const mudou = depois?.estado !== ids.PEND_ESTADO;
+  if (mudou) await socio.from("pendencia").update({ estado: ids.PEND_ESTADO, resolvida_em: null, resolvida_por: null }).eq("id", ids.PEND);
+  reg(papel, "fn_decidir_pendencia(contatar_cliente) numa pendência real", doAnalista(papel, "passa", "barrado"),
+    obtidoDeDecisao(d, mudou, depois, ids),
+    d.error || mudou ? "" : "MÉDIO: a função devolveu sucesso/silêncio sem gravar — a tela mostraria decisão feita?");
+}
+
+async function escaladaEquipe({ papel, c, socio, ids }: Ctx) {
+  const own = cred[papel as Papel]?.id ?? "00000000-0000-0000-0000-000000000000";
+  const p1 = await c.rpc("fn_definir_papel", { p_usuario: own, p_papel: papel === "anonimo" ? "leitura" : papel, p_motivo: "vistoria P2: mesmo papel" });
+  reg(papel, "fn_definir_papel(si mesmo, mesmo papel)", "barrado", p1.error ? barrado(p1.error) : `PASSOU (${JSON.stringify(p1.data).slice(0, 100)})`, "ALTO: gestão de papel sem ser Sócio");
+  const p2 = await c.rpc("fn_alocar", { p_caso: ids.OUTRO, p_usuario: own });
+  if (!p2.error) await socio.rpc("fn_desalocar", { p_caso: ids.OUTRO, p_usuario: own });
+  reg(papel, "fn_alocar(mandato NÃO alocado, si mesmo)", "barrado", p2.error ? barrado(p2.error) : "PASSOU (desfeito por fn_desalocar do Sócio)", "ALTO: auto-alocação");
+  const p3 = await c.rpc("fn_desalocar", { p_caso: ids.OUTRO, p_usuario: own });
+  reg(papel, "fn_desalocar(mandato NÃO alocado, si mesmo; sem alocação a perder)", "barrado", p3.error ? barrado(p3.error) : `PASSOU (${JSON.stringify(p3.data).slice(0, 80)})`);
+  const p4 = await c.rpc("fn_eh_socio");
+  linhas.push({ papel, tentativa: "fn_eh_socio()", esperado: papel === "anonimo" ? "barrado/false" : "false", obtido: p4.error ? barrado(p4.error) : String(p4.data) });
+}
+
+function obtidoDeApagar(rm: any, resta: any): string {
+  if (rm.error) return barrado(rm.error);
+  return resta.error ? "PASSOU (objeto sumiu)" : "BARRADO (0 objetos removidos, sem erro)";
+}
+
+async function escaladaStorage({ papel, c, socio, ids, sondaA, sondaO }: Ctx) {
+  const s1 = await subir(c, `${ids.A}/p2-escrita-${papel}-${Date.now()}.txt`);
+  if (!s1.error) await socio.storage.from("documentos").remove([s1.data!.path]);
+  reg(papel, "storage: subir objeto em `documentos/<mandato alocado>/`", doAnalista(papel, "passa", "barrado"), s1.error ? barrado(s1.error) : "PASSOU (objeto removido pelo Sócio)");
+  const s2 = await subir(c, `${ids.OUTRO}/p2-escrita-${papel}-${Date.now()}.txt`);
+  if (!s2.error) await socio.storage.from("documentos").remove([s2.data!.path]);
+  reg(papel, "storage: subir objeto em `documentos/<mandato NÃO alocado>/`", "barrado", s2.error ? barrado(s2.error) : "PASSOU (objeto removido pelo Sócio)", "ALTO: escrita em mandato alheio");
+  const rm = await c.storage.from("documentos").remove([sondaA]);
+  const resta = await socio.storage.from("documentos").createSignedUrl(sondaA, 30);
+  reg(papel, "storage: apagar a sonda do mandato alocado", doAnalista(papel, "passa (ou barra)", "barrado"), obtidoDeApagar(rm, resta));
+  if (resta.error) await subir(socio, sondaA);
+  const rd = await c.storage.from("documentos").createSignedUrl(sondaO, 30);
+  reg(papel, "storage: assinar/ler objeto de mandato NÃO alocado", "barrado", rd.error ? barrado(rd.error) : "PASSOU (URL assinada emitida)", "ALTO: leitura de arquivo alheio");
+  const rl = await c.storage.from("documentos").createSignedUrl(sondaA, 30);
+  reg(papel, "storage: assinar/ler objeto do mandato alocado", papel === "anonimo" ? "barrado" : "passa", rl.error ? barrado(rl.error) : "PASSOU (URL assinada emitida)");
+}
+
+// Os grupos rodam em sequência, nesta ordem: o seguinte lê o estado que o anterior deixou (e desfez).
+const GRUPOS_DA_ESCALADA = [escaladaLeitura, escaladaDial, escaladaMandato, escaladaEquipe, escaladaStorage];
+
+async function escalada(ids: Ids) {
   const socio = await cliente("socio");
   const sondaA = `${ids.A}/p2-sonda-${Date.now()}.txt`;
   const sondaO = `${ids.OUTRO}/p2-sonda-${Date.now()}.txt`;
-  const up = (c: any, p: string) => c.storage.from("documentos").upload(p, new Blob(["sonda P2 sintetica"], { type: "text/plain" }), { upsert: false });
-  await up(socio, sondaA); await up(socio, sondaO);
+  await subir(socio, sondaA); await subir(socio, sondaO);
   const totalSocio = (await socio.from("caso").select("id", { count: "exact", head: true })).count;
   resultado.casos_visiveis = { socio: totalSocio };
   const estagio = (await socio.from("estagio_autonomia").select("estagio,nivel_atual").eq("estagio", "completude_portao1")).data?.[0] as any;
 
-  for (const papel of ["analista", "leitura", "anonimo"] as const) {
+  await emSequencia(["analista", "leitura", "anonimo"] as const, async (papel) => {
     const c = await cliente(papel);
-    const sel = async (t: string, filtro?: (q: any) => any) => { const q = c.from(t).select("id", { count: "exact", head: true }); const r = await (filtro ? filtro(q) : q); return r.error ? barrado(r.error) : `${r.count ?? 0} linhas visíveis`; };
-
-    // Leitura de dado
-    const casos = await c.from("caso").select("id", { count: "exact" });
-    const n = casos.error ? barrado(casos.error) : `${casos.count} de ${totalSocio} mandatos visíveis`;
-    (resultado.casos_visiveis as any)[papel] = casos.error ? "erro" : casos.count;
-    linhas.push({ papel, tentativa: "ler `caso` (todos)", esperado: papel === "anonimo" ? "0" : papel === "socio" ? "todos" : "só os alocados (1)", obtido: n });
-    linhas.push({ papel, tentativa: "ler `pendencia`/`documento` do mandato NÃO alocado", esperado: "0 linhas", obtido: `pendencia: ${await sel("pendencia", (q) => q.eq("caso_id", ids.OUTRO))}; documento: ${await sel("documento", (q) => q.eq("caso_id", ids.OUTRO))}` });
-    const TABS = ["estagio_autonomia", "membro", "alocacao", "evento_auditoria", "golden_criterio", "lote_execucao"];
-    linhas.push({ papel, tentativa: "ler `" + TABS.join("`, `") + "`", esperado: papel === "anonimo" ? "0 / barrado" : "ver nota", obtido: (await Promise.all(TABS.map(async (t) => `${t}: ${await sel(t)}`))).join("; ") });
-
-    // Dial
-    const r1 = await c.rpc("fn_mudar_dial", { p_estagio: estagio.estagio, p_nivel: estagio.nivel_atual, p_autor: `p2:${papel}`, p_motivo: "vistoria P2: reafirma o mesmo nível" });
-    reg(papel, `fn_mudar_dial(${estagio.estagio}, ${estagio.nivel_atual} = nível atual)`, "barrado", r1.error ? barrado(r1.error) : `PASSOU (${JSON.stringify(r1.data).slice(0, 120)})`, "ALTO: dial mudado sem ser Sócio");
-    const r2 = await c.from("estagio_autonomia").update({ nivel_atual: estagio.nivel_atual }).eq("estagio", estagio.estagio).select();
-    reg(papel, "UPDATE direto em `estagio_autonomia` (mesmo nível)", "barrado", r2.error ? barrado(r2.error) : r2.data!.length === 0 ? "BARRADO (0 linhas afetadas, sem erro)" : `PASSOU (${r2.data!.length} linha)`, "ALTO");
-    const r3 = await c.from("estagio_autonomia").update({ teto: "N3" }).eq("estagio", "__inexistente__").select();
-    reg(papel, "UPDATE em `estagio_autonomia` com filtro que não casa nada (sonda de política)", "barrado", r3.error ? barrado(r3.error) : `${r3.data!.length === 0 ? "BARRADO (0 linhas, sem erro)" : "PASSOU"}`);
-
-    // Escrita nas tabelas do mandato
-    const i1 = await c.from("caso").insert({ nome: "P2 escalada " + papel }).select();
-    if (!i1.error && i1.data?.length) await socio.from("caso").delete().eq("id", (i1.data[0] as any).id);
-    reg(papel, "INSERT em `caso` (novo mandato)", papel === "analista" ? "passa ou barra conforme o desenho (ver nota)" : "barrado", i1.error ? barrado(i1.error) : `PASSOU (${i1.data!.length} linha, desfeito)`, papel === "leitura" ? "ALTO: Leitura abriu mandato" : "");
-    const u1 = await c.from("caso").update({ nome: MANDATO }).eq("id", ids.A).select();
-    reg(papel, "UPDATE em `caso` do mandato alocado (mesmo nome)", papel === "analista" ? "passa (escreve no alocado)" : "barrado", u1.error ? barrado(u1.error) : u1.data!.length === 0 ? "BARRADO (0 linhas afetadas, sem erro)" : `PASSOU (${u1.data!.length} linha, valor idêntico)`);
-    const u2 = await c.from("pendencia").update({ estado: ids.PEND_ESTADO }).eq("id", ids.PEND).select();
-    reg(papel, "UPDATE direto em `pendencia` do mandato alocado (mesmo estado)", papel === "analista" ? "passa" : "barrado", u2.error ? barrado(u2.error) : u2.data!.length === 0 ? "BARRADO (0 linhas afetadas, sem erro)" : `PASSOU (${u2.data!.length} linha, valor idêntico)`);
-    const u3 = await c.from("documento").update({ status: "em_validacao" }).eq("caso_id", ids.A).select();
-    reg(papel, "UPDATE direto em `documento` do mandato alocado (status = o atual)", papel === "analista" ? "passa" : "barrado", u3.error ? barrado(u3.error) : u3.data!.length === 0 ? "BARRADO (0 linhas afetadas, sem erro)" : `PASSOU (${u3.data!.length} linhas, valor idêntico)`);
-    // Decidir pendência pela função (é o que o botão da tela chama). Estado conferido e restaurado pelo Sócio.
-    const d = await c.rpc("fn_decidir_pendencia", { p_pendencia_id: ids.PEND, p_autor: `p2:${papel}`, p_decisao: "contatar_cliente" });
-    const depois = (await socio.from("pendencia").select("estado").eq("id", ids.PEND).single()).data as any;
-    const mudou = depois?.estado !== ids.PEND_ESTADO;
-    if (mudou) await socio.from("pendencia").update({ estado: ids.PEND_ESTADO, resolvida_em: null, resolvida_por: null }).eq("id", ids.PEND);
-    reg(papel, "fn_decidir_pendencia(contatar_cliente) numa pendência real", papel === "analista" ? "passa" : "barrado",
-      mudou ? `PASSOU (estado ${ids.PEND_ESTADO} -> ${depois.estado}; restaurado)` : d.error ? barrado(d.error) : `BARRADO sem erro? retorno=${JSON.stringify(d.data).slice(0, 100)}; estado inalterado`,
-      d.error || mudou ? "" : "MÉDIO: a função devolveu sucesso/silêncio sem gravar — a tela mostraria decisão feita?");
-
-    // Equipe
-    const own = cred[papel as Papel]?.id ?? "00000000-0000-0000-0000-000000000000";
-    const p1 = await c.rpc("fn_definir_papel", { p_usuario: own, p_papel: papel === "anonimo" ? "leitura" : papel, p_motivo: "vistoria P2: mesmo papel" });
-    reg(papel, "fn_definir_papel(si mesmo, mesmo papel)", "barrado", p1.error ? barrado(p1.error) : `PASSOU (${JSON.stringify(p1.data).slice(0, 100)})`, "ALTO: gestão de papel sem ser Sócio");
-    const p2 = await c.rpc("fn_alocar", { p_caso: ids.OUTRO, p_usuario: own });
-    if (!p2.error) await socio.rpc("fn_desalocar", { p_caso: ids.OUTRO, p_usuario: own });
-    reg(papel, "fn_alocar(mandato NÃO alocado, si mesmo)", "barrado", p2.error ? barrado(p2.error) : "PASSOU (desfeito por fn_desalocar do Sócio)", "ALTO: auto-alocação");
-    const p3 = await c.rpc("fn_desalocar", { p_caso: ids.OUTRO, p_usuario: own });
-    reg(papel, "fn_desalocar(mandato NÃO alocado, si mesmo; sem alocação a perder)", "barrado", p3.error ? barrado(p3.error) : `PASSOU (${JSON.stringify(p3.data).slice(0, 80)})`);
-    const p4 = await c.rpc("fn_eh_socio");
-    linhas.push({ papel, tentativa: "fn_eh_socio()", esperado: papel === "anonimo" ? "barrado/false" : "false", obtido: p4.error ? barrado(p4.error) : String(p4.data) });
-
-    // Storage
-    const s1 = await up(c, `${ids.A}/p2-escrita-${papel}-${Date.now()}.txt`);
-    if (!s1.error) await socio.storage.from("documentos").remove([s1.data!.path]);
-    reg(papel, "storage: subir objeto em `documentos/<mandato alocado>/`", papel === "analista" ? "passa" : "barrado", s1.error ? barrado(s1.error) : "PASSOU (objeto removido pelo Sócio)");
-    const s2 = await up(c, `${ids.OUTRO}/p2-escrita-${papel}-${Date.now()}.txt`);
-    if (!s2.error) await socio.storage.from("documentos").remove([s2.data!.path]);
-    reg(papel, "storage: subir objeto em `documentos/<mandato NÃO alocado>/`", "barrado", s2.error ? barrado(s2.error) : "PASSOU (objeto removido pelo Sócio)", "ALTO: escrita em mandato alheio");
-    const rm = await c.storage.from("documentos").remove([sondaA]);
-    const resta = await socio.storage.from("documentos").createSignedUrl(sondaA, 30);
-    reg(papel, "storage: apagar a sonda do mandato alocado", papel === "analista" ? "passa (ou barra)" : "barrado", rm.error ? barrado(rm.error) : resta.error ? "PASSOU (objeto sumiu)" : "BARRADO (0 objetos removidos, sem erro)");
-    if (resta.error) await up(socio, sondaA);
-    const rd = await c.storage.from("documentos").createSignedUrl(sondaO, 30);
-    reg(papel, "storage: assinar/ler objeto de mandato NÃO alocado", "barrado", rd.error ? barrado(rd.error) : "PASSOU (URL assinada emitida)", "ALTO: leitura de arquivo alheio");
-    const rl = await c.storage.from("documentos").createSignedUrl(sondaA, 30);
-    reg(papel, "storage: assinar/ler objeto do mandato alocado", papel === "anonimo" ? "barrado" : "passa", rl.error ? barrado(rl.error) : "PASSOU (URL assinada emitida)");
-  }
+    const ctx: Ctx = { papel, c, socio, ids, estagio, totalSocio, sondaA, sondaO };
+    await emSequencia(GRUPOS_DA_ESCALADA, (grupo) => grupo(ctx));
+  });
   await socio.storage.from("documentos").remove([sondaA, sondaO]);
   // Garantia de limpeza: nenhuma sonda restante.
   const resto = await socio.storage.from("documentos").list(ids.A);
@@ -289,10 +350,10 @@ grava();
 {
   // A chave anon só aparece no cabeçalho `apikey` quando um componente de cliente fala com o Supabase.
   const { ctx, page } = await novoContexto(browser, "socio");
-  for (const r of ["/casos/todos", "/casos/novo", "/administracao/equipe"]) {
-    if (ANON) break;
+  await emSequencia(["/casos/todos", "/casos/novo", "/administracao/equipe"], async (r) => {
+    if (ANON) return;
     await page.goto(BASE + r); await page.waitForTimeout(2500);
-  }
+  });
   await ctx.close();
   if (!ANON) { console.error("Chave anon não obtida: defina P2_ANON_KEY."); process.exit(2); }
 }
@@ -301,7 +362,7 @@ const caso = (await socio.from("caso").select("id").eq("nome", MANDATO).single()
 const doc = (await socio.from("documento").select("id").eq("caso_id", caso.id).limit(1)).data?.[0] as any;
 const outro = (await socio.from("documento").select("caso_id").neq("caso_id", caso.id).limit(1)).data?.[0] as any;
 const pend = (await socio.from("pendencia").select("id,estado").eq("caso_id", caso.id).eq("estado", "aberta").limit(1)).data?.[0] as any;
-const ids = { A: caso.id as string, OUTRO: outro.caso_id as string, DOC: doc.id as string, PEND: pend.id as string, PEND_ESTADO: pend.estado as string };
+const ids: Ids = { A: caso.id as string, OUTRO: outro.caso_id as string, DOC: doc.id as string, PEND: pend.id as string, PEND_ESTADO: pend.estado as string };
 const lote = (await socio.from("lote_execucao").select("*").eq("caso_id", ids.A)).data;
 resultado.lote = lote;
 resultado.matriz = await matriz(browser, ids);

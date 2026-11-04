@@ -13,6 +13,7 @@
 //   3. as causas que pedem AÇÕES OPOSTAS não podem cair na mesma explicação;
 //   4. a genérica ainda responde as três perguntas que tiram o analista da
 //      dúvida: parou, não foi culpa sua, nada se perdeu.
+import { execFileSync } from "node:child_process";
 import {
   explicarFalha, explicarParada, explicarLoteVazio, FRACAO_MINIMA_COM_LINHAS,
   type FalhaExplicada,
@@ -1381,6 +1382,15 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   const iChecaIntake = posicao(intake, /conferirEnvioAoCaso\(/), iFetch = posicao(intake, /\bfetch\(/);
   checar(iChecaIntake >= 0 && iFetch >= 0 && iChecaIntake < iFetch && resultadoBarra(intake, "conferirEnvioAoCaso"),
     "POST /api/intake confere o papel ANTES do primeiro fetch ao n8n, e a recusa (`if (!r.ok) return`) usa o resultado");
+  // COMPORTAMENTO (esta rota, sim, executa até a recusa, que vem antes de qualquer cookie/n8n): `casoId` que chega como
+  // arquivo e não como texto é recusado com a mensagem PRÓPRIA. Com o `String(form.get(...))` antigo o File virava
+  // "[object File]" e a recusa era a genérica "Informe o mandato", que culpa o usuário por algo que ele não digitou.
+  {
+    const saida = execFileSync("./portal/node_modules/.bin/tsx", ["--tsconfig", "portal/tsconfig.json", "portal/scripts/lib/sonda-intake-casoid.mts"], { encoding: "utf8" });
+    const r = JSON.parse(saida.trim().split("\n").pop() ?? "{}");
+    checar(r.status === 400 && /Identificador do mandato inválido/.test(String(r.error)),
+      "POST /api/intake com `casoId` vindo como arquivo é recusado com 400 'Identificador do mandato inválido', não 'Informe o mandato'");
+  }
   const iChecaDestino = posicao(destino, /conferirEnvioAoCaso\(/), iUrl = posicao(destino, /process\.env\.N8N_INTAKE_FORM_URL/), iDescobre = posicao(destino, /descobrirNomesDeCampo\(/);
   checar(iChecaDestino >= 0 && iUrl >= 0 && iDescobre >= 0 && iChecaDestino < iUrl && iChecaDestino < iDescobre && resultadoBarra(destino, "conferirEnvioAoCaso")
     && /searchParams\.get\("caso"\)/.test(destino),
