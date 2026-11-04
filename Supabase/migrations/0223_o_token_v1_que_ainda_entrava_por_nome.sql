@@ -23,11 +23,15 @@
 -- A SONDA. 1 requisito bloqueante, envio_recusa_versao_antiga: o corpo de fn_conferir_envio tem `v_motivo := 'versao_antiga'`. Ausente = a 0223
 -- não foi aplicada e o v1 ainda entra. O requisito envio_v2_etiqueta (0222) segue valendo: o ramo v2 não mudou.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): conferir_envio.test.sql (65 asserts) e conferir_envio_v2.test.sql (65 asserts), medidos em 04/11/2026
+-- MEDIÇÃO NÃO-VAZIA (regra 2): conferir_envio.test.sql (65 asserts) e conferir_envio_v2.test.sql (69 asserts), medidos em 04/11/2026
 -- com `PGOPTIONS=-cenvio.medindo=on` (o assert vira `raise warning` e CONTA), cada um sobre o banco migrado. Controle: 0 falhas nos dois.
 -- Com o ramo v1 da 0222 de volta (conferido que a variante APLICOU antes de rodar): 32 de 65 reprovam em conferir_envio.test.sql e
--- 8 de 65 em conferir_envio_v2.test.sql. A mudança de sentido é a pretendida: 32 asserts de conferir_envio.test.sql e 7 de conferir_envio_v2.test.sql (39) que afirmavam "v1 aceito" (ou recusado
+-- 8 de 69 em conferir_envio_v2.test.sql. A mudança de sentido é a pretendida: 32 asserts de conferir_envio.test.sql e 7 de conferir_envio_v2.test.sql (39) que afirmavam "v1 aceito" (ou recusado
 -- por assinatura/expirado/malformado do v1) passaram a afirmar `versao_antiga`; o resto (v2, sem_token, sem_segredo, EXECUTE, sonda) não mudou de sentido.
+-- Prazo e formato do exp no v2 (4 asserts acrescentados em 04/11/2026, vetores v2 calculados com node/crypto.createHmac; antes só o v1 os afirmava e o
+-- v1 virou versao_antiga): com `>=` no lugar de `>` em `exp*1000 > agora` reprova 1 de 69 (o "exatamente no exp"); com a regex do exp aceitando 13
+-- dígitos reprova 1 de 69; com `\d` no lugar de `[0-9]` reprova 0 de 69 NESTE banco (o \d do Postgres não casou dígitos árabe-índicos na collation do replay) —
+-- DECLARADO: o assert de dígito não ASCII protege contra locale que case, e não foi medido discriminando aqui.
 -- =============================================================================
 
 create or replace function fn_conferir_envio(p_token text, p_mandato text, p_agora timestamptz default now())

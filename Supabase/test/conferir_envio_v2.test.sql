@@ -1,6 +1,6 @@
 -- Teste da 0222 — o token de envio v2 (carrega o CASO) e o mandato que o envio deixou de criar.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 65 asserts (medidos; eram 64 na 0222, a 0223 acrescentou 1 da sonda) — ver o cabeçalho de
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 69 asserts (medidos; eram 64 na 0222, a 0223 acrescentou 1 da sonda e 4 do prazo/formato do exp) — ver o cabeçalho de
 -- Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql ("MEDIÇÃO NÃO-VAZIA") para o número que reprova
 -- com cada correção desligada.
 --
@@ -251,6 +251,18 @@ begin
   perform teste_assert_envio(teste_motivo(replace(t_ana_a, u_ana::text, upper(u_ana::text))) = 'malformado', 'v2 com uuid do usuário em maiúsculas: malformado');
   perform teste_assert_envio(teste_motivo(replace(t_ana_a, k_a::text, 'nao-e-um-uuid')) = 'malformado', 'v2 com caso que não é uuid: malformado (sem erro de cast)');
   perform teste_assert_envio(teste_motivo(replace(t_ana_a, '.c9df', '.c9DF')) = 'malformado', 'v2 com hmac em maiúsculas: malformado');
+
+  -- 9b. O PRAZO E O FORMATO DO exp NO v2 (0223: os asserts equivalentes do v1 viraram versao_antiga; estes mantêm a regra no v2).
+  --     Vetores calculados fora do SQL (node, crypto.createHmac, segredo c_seg, Analista em k_a, exp 1800000000); os dois últimos
+  --     têm HMAC VÁLIDO sobre o exp malformado, para que só o formato os recuse.
+  perform teste_assert_envio(teste_motivo(t_ana_a_exp, 'x', to_timestamp(1800000000) - interval '1 millisecond') = 'ok',
+    'v2 avaliado 1 ms antes do exp: autorizado');
+  perform teste_assert_envio(teste_motivo(t_ana_a_exp, 'x', to_timestamp(1800000000)) = 'expirado',
+    'v2 avaliado exatamente no exp: expirado (exp*1000 > agora é estrito)');
+  perform teste_assert_envio(teste_motivo('v2.1234567890123.a0000000-0000-4000-8000-000000000002.c0000000-0000-4000-8000-00000000000a.5b850f3b54baf81f214d970a4affcf9dd156dee8f01d7d0ae7fb70602bd00152') = 'malformado',
+    'v2 com exp de 13 dígitos (assinatura válida): malformado');
+  perform teste_assert_envio(teste_motivo('v2.٤١٠٢٤٤٤٨٠٠.a0000000-0000-4000-8000-000000000002.c0000000-0000-4000-8000-00000000000a.2e1477cbab842e0177ee612e4f53246ef638245a93663cf954e207632c11ff42') = 'malformado',
+    'v2 com exp de dígitos árabe-índicos (assinatura válida): malformado');
 
   -- 10. EXECUTE: só a conexão de serviço.
   perform teste_assert_envio(has_function_privilege('service_role', 'fn_caso_do_envio(uuid,text)', 'execute')
