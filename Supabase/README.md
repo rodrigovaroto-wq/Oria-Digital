@@ -1096,6 +1096,13 @@ supabase db execute --file Supabase/migrations/0222_o_envio_que_criava_o_mandato
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0222' and not presente;   -- ZERO linhas
 #   select chave, presente from fn_instalacao_conferir() where chave = 'acesso_fn_pode_escrever';   -- presente = t
 
+# A 0223 (P3, fatia F5) RECUSA o token de envio v1 (o envio por NOME): fn_conferir_envio devolve motivo_recusa = 'versao_antiga' ("token de envio antigo; recarregue a página do portal e envie de novo. Nada foi gravado.") para todo token `v1.` de 4 partes, ANTES do HMAC. Mesma assinatura, colunas, ACL e SECURITY DEFINER; o v2 não muda. fn_upsert_caso NÃO é removida (o passo 1 do portal, "Novo mandato", cria o mandato por ela). Acrescenta o requisito envio_recusa_versao_antiga à sonda.
+# >>> SÓ APLIQUE depois de: (1) a 0222 conferida; (2) o n8n F3 republicado e N8N/conferir-publicado.mjs verde; (3) o portal F4 no ar; (4) ZERO conferências autorizadas sem caso_id (v1) no histórico do n8n há 30+ min — "não olhei" não é zero. Rodar COMO `postgres`; idempotente (create or replace + upsert do requisito). Prévia só leitura: begin read only ... rollback.
+# >>> Teste: Supabase/test/conferir_envio.test.sql e Supabase/test/conferir_envio_v2.test.sql. Falta, fora desta migration: o n8n perder o caminho por nome (F5, segunda republicação).
+supabase db execute --file Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0223' and not presente;   -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
