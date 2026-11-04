@@ -917,6 +917,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_portao_do_dial_que_so_via_es
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0221 — a RLS que ninguém conferia ligada, e o portão do dial que não via DDL"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \

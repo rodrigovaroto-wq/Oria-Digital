@@ -107,6 +107,8 @@ create or replace function teste_nivel_0219() returns text
 language sql as $$ select nivel_atual::text from estagio_autonomia where estagio = 'classificacao_doc_checklist' $$;
 
 -- A migration sob teste: o arquivo real (no-op) ou a variante.
+-- 0221: a migration velha recria a constraint de tipo com menos valores; a linha do tipo `rls_ligada` (0221) sairia violando-a. Sai aqui (a transação volta).
+delete from instalacao_requisito where tipo = 'rls_ligada';
 \i :arq0219
 
 delete from decisao;   -- os vereditos de OUTRAS suítes não entram no denominador (a transação volta)
@@ -719,6 +721,8 @@ begin
     'controle: o estado que a 0218 deixou em produção (anon sem EXECUTE, authenticated com grant explícito)');
 end $$;
 
+-- 0221: a migration velha recria a constraint de tipo com menos valores; a linha do tipo `rls_ligada` (0221) sairia violando-a. Sai aqui (a transação volta).
+delete from instalacao_requisito where tipo = 'rls_ligada';
 \i :arq0219
 
 do $$
@@ -744,6 +748,8 @@ begin
   grant execute on function public.rls_auto_enable() to authenticated;
 end $$;
 
+-- 0221: a migration velha recria a constraint de tipo com menos valores; a linha do tipo `rls_ligada` (0221) sairia violando-a. Sai aqui (a transação volta).
+delete from instalacao_requisito where tipo = 'rls_ligada';
 \i :arq0219
 
 do $$

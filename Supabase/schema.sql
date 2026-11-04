@@ -6536,6 +6536,8 @@ declare
   v_pre        text;
   v_pos        text;
   v_g          text := '(\s|/\*([^*]|\*+[^*/])*\*+/|--[^\n]*\n)';
+  v_ddl        text;   -- 0221 PARTE B
+  v_srr        text;   -- 0221 PARTE B
 begin
   for r in select * from instalacao_requisito order by ordem, chave loop
     v_ok  := false;
@@ -6645,7 +6647,7 @@ begin
         elsif v_tg_enabled = 'R' then
           -- 'R' = ENABLE REPLICA TRIGGER. Decisão deliberada, e mais estrita
           -- que `<> 'D'`: um gatilho em modo réplica NÃO dispara com
-          -- `session_replication_role = origin`, que é o padrão de toda sessão
+          -- o parâmetro de réplica da sessão em `origin`, que é o padrão de toda sessão
           -- normal (é o que o pooler do Supabase usa). Do ponto de vista de
           -- quem depende da guarda rodando na sessão normal, um gatilho em
           -- modo réplica está tão desligado quanto um desabilitado — só que
@@ -6803,6 +6805,10 @@ begin
       -- O QUE VEM DEPOIS DO NOME: v_pos aceita espaço, `;`, fim, `(`, `)` e `,` (a 0219 só os quatro primeiros: `with d as (delete from t) select`, `truncate t, x` e
       -- `(delete from t)` davam presente = t; uma definer assim, com EXECUTE para authenticated, apagou o catálogo de 89 a 0 linhas). O QUE VEM ANTES: v_pre aceita, entre a palavra e o nome, espaço, aspas
       -- imediatas (`delete from"t"`) e comentário de bloco ou de linha (`delete from /* c */ t`): v_g.
+      -- 0221 PARTE B: DDL conta como ESCRITA. `alter table <protegida> ...` (disable trigger, disable row level security, no force...), `drop trigger ... on <protegida>` e
+      -- `drop table <protegida>` não escrevem linha, mas desligam a guarda de Sócio (ou a RLS) na mesma transação, e o Analista que chamou a definer escreve no dial direto. E
+      -- o parâmetro de sessão `session_replication` + `_role` (escrito em duas metades aqui) em QUALQUER lugar do corpo (ele faz o Postgres PULAR todos os gatilhos, de qualquer tabela). O alcance do DDL é a lista de tabelas protegidas (v_tabs):
+      -- um `alter table` genérico, de outra tabela ou por SQL dinâmico (rls_auto_enable), não acusa. Lado seguro, como no DML: acusa a mais um `alter table <protegida> add column`.
       -- NÃO enxerga (declarado): SQL dinâmico (`execute format(...)`, regproc em texto); função fora de public;
       -- a função que o gatilho chama só por SQL dinâmico. Chamar uma PORTA (fn_dial_auto_promover) de uma definer não conta, de propósito: é o caminho que o dono
       -- aprovou na 0137 (o gatilho de `decisao` promove, no máximo até N2, SÓ quando o veredito GLOBAL basta; o chamador não escolhe nada).
@@ -6816,6 +6822,10 @@ begin
                              where to_regprocedure('public.' || btrim(q)) is not null), array[]::oid[]);
       v_pre    := replace(replace('(insert@+into$|update$|delete@+from$|merge@+into$|truncate$(table@+)?(only@+)?([a-z0-9_."]+@*,@*)*)(only@+)?("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
       v_pos    := '"?(\s|;|$|\(|\)|,)';
+      -- 0221 PARTE B. O `$` é o mesmo do v_pre: espaço/comentário (v_g) ou nada se a próxima coisa for `"`. o parâmetro é montado em duas metades de propósito: escrito inteiro
+      -- aqui, o corpo desta própria sonda casaria o critério e a poria no fecho (INVOKER, não é acusada, mas puxaria quem a chamasse).
+      v_ddl    := replace(replace('(alter@+table$(if@+exists$)?(only$)?|drop@+table$(if@+exists$)?|drop@+trigger$(if@+exists$)?("[^"]+"|[a-z0-9_]+)$on$(only$)?)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
+      v_srr    := 'session_replication' || '_role';
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas (lista por vírgula) e marcador = RAIZES;PORTAS, com ao menos uma raiz';
@@ -6838,6 +6848,8 @@ begin
           fecho(oid) as (
             select f.oid from fn f
              where f.src ~* (v_pre || '(' || v_tabs || ')' || v_pos)
+                or f.src ~* (v_ddl || '(' || v_tabs || ')' || v_pos)
+                or f.src ~* v_srr
                 or f.nome = any (v_funs)
             union
             select x.oid
@@ -6895,6 +6907,28 @@ begin
         v_det := case when v_ok then format('nenhuma FK com ação referencial (cascade, set null, set default) altera linha de %s', r.objeto)
                       else format('%s FK(s) com ação referencial que alteram %s como dono, sem passar pela guarda de Sócio: %s%s', v_n, r.objeto, v_lista,
                                   case when v_n > 15 then ' ...' else '' end) end;
+      end if;
+
+    elsif r.tipo = 'rls_ligada' then
+      -- 0221 PARTE A: a RLS por mandato (0216) só vale com a RLS LIGADA. Nenhum requisito do catálogo conferia `pg_class.relrowsecurity`: desligá-la numa tabela, ou criar tabela
+      -- nova sem ela, não acendia nada. `objeto` = o SCHEMA (hoje 'public'): TODAS as tabelas (relkind r e p) do schema, e não uma lista, porque a lista é exatamente o que uma tabela
+      -- nova não está. Fora da conta, de propósito: tabela de EXTENSÃO (pg_depend 'e'), que o dono do projeto não altera. Ausente = lista das tabelas sem RLS (até 15).
+      -- Lê só o catálogo, e roda como o chamador: `pg_class` é legível por todos.
+      if to_regnamespace(r.objeto) is null then
+        v_ok  := false;
+        v_det := format('o schema %s nem existe', r.objeto);
+      else
+        select count(*), string_agg(x.nome, ', ' order by x.nome) filter (where x.rn <= 15)
+          into v_n, v_lista
+          from (select c.relname::text as nome, row_number() over (order by c.relname) as rn
+                  from pg_class c
+                 where c.relnamespace = to_regnamespace(r.objeto)
+                   and c.relkind in ('r', 'p')
+                   and not c.relrowsecurity
+                   and not exists (select 1 from pg_depend d where d.classid = 'pg_class'::regclass and d.objid = c.oid and d.deptype = 'e')) x;
+        v_ok  := v_n = 0;
+        v_det := case when v_ok then format('toda tabela de %s tem a RLS ligada', r.objeto)
+                      else format('%s tabela(s) de %s com a RLS DESLIGADA (a policy por mandato não vale nelas): %s%s', v_n, r.objeto, v_lista, case when v_n > 15 then ' ...' else '' end) end;
       end if;
 
     elsif r.tipo in ('seed', 'comportamento') then
@@ -17533,7 +17567,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text, 'sem_privilegio'::text, 'definer_sem_escrita'::text, 'sem_acao_referencial'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text, 'sem_privilegio'::text, 'definer_sem_escrita'::text, 'sem_acao_referencial'::text, 'rls_ligada'::text])))
 );
 
 --
