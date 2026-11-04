@@ -304,8 +304,13 @@ echo "== schema materializado (Supabase/schema.sql)"
 # verdadeiro em produção, então o arquivo publicado continua sendo o que o
 # Supabase tem. O GRANT em si (a anon/authenticated/service_role) não é tocado:
 # é ele que carrega a informação, e é ele que o arquivo existe para denunciar.
+#
+# E O `SET transaction_timeout = 0;` (04/11/2026): o runner do GitHub passou a Ubuntu 26.04, que não
+# tem `postgresql-client-16`; o CI cai no cliente 18, e o pg_dump 17+ emite essa linha, que o 16 não
+# emite. É ajuste de SESSÃO do próprio dump, não schema. Medido: era a ÚNICA diferença do
+# schema.sql gerado pelo cliente 18 contra o do 16 (job `banco` de cfe4e4f e 6f3d023).
 pg_dump --schema-only --no-owner --schema=public -d "$DB" \
-  | grep -vE '^(-- (Dumped (from|by)|PostgreSQL database dump)|\\(un)?restrict )' \
+  | grep -vE '^(-- (Dumped (from|by)|PostgreSQL database dump)|\\(un)?restrict |SET transaction_timeout = 0;$)' \
   | sed -E 's/^ALTER DEFAULT PRIVILEGES FOR ROLE [^ ]+ /ALTER DEFAULT PRIVILEGES FOR ROLE postgres /' \
   | sed -E '/^$/N;/^\n$/D' > Supabase/schema.sql
 echo "   $(grep -c '^CREATE ' Supabase/schema.sql) objetos criados · $(wc -l < Supabase/schema.sql) linhas"
@@ -902,6 +907,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conferir_envio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0222 — o envio que criava um mandato novo quando o nome mudava: token v2 pelo caso, mandato fechado, acesso do momento"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conferir_envio_v2.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== 0218 — o dial promovido sobre o recorte de quem dispara, e o anon com privilégio demais"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_dial_e_o_anon.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
@@ -914,6 +924,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_guarda_do_dial_que_conferia_
 echo
 echo "== 0220 — o portão do dial que só via o nome da tabela seguido de espaço, ponto e vírgula, fim ou parêntese"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0221 — a RLS que ninguém conferia ligada, e o portão do dial que não via DDL"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo

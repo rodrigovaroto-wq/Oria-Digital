@@ -13,7 +13,7 @@ toca:
   - Arquitetura do Sistema/7 Marca/REDESENHO_DO_PORTAL.md
 prova: Supabase/test/run.sh
 ancora: portal/src/lib/assinatura-do-envio.ts#VALIDADE_DO_TOKEN_S
-ancora_sha: 0c58656bdb31
+ancora_sha: 2328a72ed6a6
 substitui: []
 ---
 
@@ -55,9 +55,12 @@ lança vê uma mensagem genérica no lugar da frase que o banco mandou.
 
 O Form de ingestão tem URL única para todos os mandatos. Antes, um Analista alocado só em um
 mandato pegava a URL e postava com outro nome de mandato, e o n8n gravava pela conexão de serviço.
-Agora `/api/intake` emite um token `v1.<exp>.<usuario>.<HMAC-SHA256(segredo, mandato|exp|usuario)>`
-com validade de 30 minutos (`VALIDADE_DO_TOKEN_S`, `portal/src/lib/assinatura-do-envio.ts`). O n8n
-confere o token antes de criar mandato ou gravar documento.
+Agora `/api/intake` emite um token com validade de 30 minutos (`VALIDADE_DO_TOKEN_S`,
+`portal/src/lib/assinatura-do-envio.ts`), e o n8n o confere antes de gravar documento.
+**Desde a P3 (S117, 04/11/2026) o token é v2:** `v2.<exp>.<usuario>.<caso>.<HMAC(segredo, v2|caso|exp|usuario)>`,
+e o envio é roteado pelo `caso_id`, nunca mais pelo nome (renomear um mandato fazia o envio seguinte
+criar um mandato vazio com o nome antigo). O v1 (`mandato|exp|usuario`, pelo nome) fica aceito só na
+transição até a migration 0223. Desenho: `Arquitetura do Sistema/3 Estado e Execução/DESENHO_P3_ROTEAR_POR_CASO_ID.md`.
 
 - **Fail closed:** sem `N8N_INTAKE_SEGREDO` no portal, responde 503 "envio desligado"; sem o
   segredo no n8n, recusa todo envio.

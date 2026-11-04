@@ -14,11 +14,9 @@
 // sempre: a conta que ninguém consegue CHAMAR num teste é a que erra em
 // silêncio. `portal/scripts/verificar-envio-oficial.mts` chama estas funções —
 // as mesmas que a tela chama.
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { detectarFamilia } from "../../../Leitor/lib/familia.mjs";
 import { TETO_BYTES_POR_ARQUIVO } from "../../../N8N/lib/custo.mjs";
 import { formatarBytes } from "./limite-de-envio";
-import { textoDeFalhaDoMandato } from "./acesso";
 
 /** Os primeiros bytes que bastam para reconhecer a família (`detectarFamilia`). */
 export const CABECA_BYTES = 65536;
@@ -203,37 +201,16 @@ export function fluxoComProgresso(
 // 4. O MANDATO (caso_id) PELO NAVEGADOR
 // ---------------------------------------------------------------------------
 
-type ClienteDoBanco = Pick<SupabaseClient, "rpc">;
-
 /**
- * O `caso_id` do mandato. O formulário tem o NOME e, às vezes, o `casoId`.
- *
- * COM `casoId` (tela do mandato, nome travado) usa-se ele: é o id, e não há o que
- * resolver. SEM ele, `fn_upsert_caso` — a MESMA função do nó Upsert Caso do n8n,
- * que reusa o caso pelo nome exato e só cria se não existir. A 0207 deu a ela o
- * `grant execute` ao authenticated e o `p_ator`, para a trilha `caso_criado` dizer
- * que foi a tela. Antes disso esta função repetia a regra em TypeScript (select e
- * depois insert), e duas implementações da mesma regra divergem sem erro.
- *
- * O QUE ISTO NÃO FECHA: `caso.nome` não é único, e o select-depois-insert dentro da
- * função não tem trava — duas abas criando o MESMO mandato novo no mesmo instante
- * criam dois. É por isso que, num lote misto, os oficiais rodam ANTES do envio ao
- * n8n: o n8n encontra o caso criado aqui, em vez de criar outro.
+ * O `caso_id` do mandato, que a tela recebe da página do mandato. O ENVIO NUNCA CRIA MANDATO (P3):
+ * quem cria é o passo 1 de "Novo mandato" (`casos/novo/actions.ts`). Esta função já chamou
+ * `fn_upsert_caso` pelo NOME quando a tela não tinha o id; sem o id agora recusa, em vez de
+ * reabrir a criação de mandato por nome (o nome é texto editável, e é por ele que o envio criava um
+ * mandato novo e vazio depois de uma renomeação).
  */
-export async function obterCasoId(
-  cliente: ClienteDoBanco,
-  nome: string,
-  casoId?: string,
-): Promise<{ id: string }> {
-  if (casoId) return { id: casoId };
-  const { data, error } = await cliente.rpc("fn_upsert_caso", { p_nome: nome, p_ator: "portal:navegador" });
-  if (error || typeof data !== "string") {
-    // 42501 do nome de mandato alheio e 23505 de `caso_nome_unico` têm frase própria — sem ela o
-    // Analista leria o texto cru do Postgres (ou "Seu papel não permite", que erra o remédio).
-    const humano = textoDeFalhaDoMandato(error);
-    throw new Error(humano ?? `Não foi possível obter o mandato “${nome}”: ${error?.message ?? "o banco não devolveu o id"}`);
-  }
-  return { id: data };
+export function obterCasoId(casoId: string): { id: string } {
+  if (!casoId) throw new Error("O mandato do envio não foi identificado, então nada foi enviado. Abra o mandato pela lista e tente de novo.");
+  return { id: casoId };
 }
 
 // ---------------------------------------------------------------------------

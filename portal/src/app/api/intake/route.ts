@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { conferirEnvioAoMandato, emitirTokenDoEnvio } from "@/lib/supabase/acesso";
+import { conferirEnvioAoCaso, emitirTokenDoEnvio } from "@/lib/supabase/acesso";
+import { ehUuid } from "@/lib/equipe";
 import { descobrirNomesDeCampo } from "@/lib/n8n-form";
 import { TETO_DA_FUNCTION_BYTES, TETO_DO_PROXY_BYTES, formatarBytes } from "@/lib/limite-de-envio";
 
@@ -20,8 +21,8 @@ import { TETO_DA_FUNCTION_BYTES, TETO_DO_PROXY_BYTES, formatarBytes } from "@/li
 // — servidor-a-servidor (sem CORS). O pipeline (classificação/extração/
 // reconciliação) continua 100% no N8N: o portal é só um front-end de intake
 // mais amigável, submetendo ao MESMO endpoint que o formulário público do N8N.
-// Assim, reenviar no mesmo "mandato" (nome do caso) acumula no mesmo caso —
-// fn_upsert_caso reusa por nome (Supabase/migrations/0006).
+// O mandato é identificado pelo `casoId` (P3): o token assinado leva o id, e o nome que o Form
+// recebe é só rótulo. O envio nunca cria mandato — quem cria é o passo 1 de "Novo mandato".
 //
 // Precisa do runtime Node (streams/FormData de arquivo), não Edge.
 export const runtime = "nodejs";
@@ -59,25 +60,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Requisição inválida (multipart esperado)." }, { status: 400 });
   }
 
-  const mandato = String(form.get("mandato") ?? "").trim();
+  const casoId = String(form.get("casoId") ?? "").trim();
   const arquivos = form
     .getAll("arquivos")
     .filter((f): f is File => f instanceof File && f.size > 0);
 
-  if (!mandato) {
-    return NextResponse.json({ error: "Informe o nome do mandato." }, { status: 400 });
+  if (!ehUuid(casoId)) {
+    return NextResponse.json({ error: "Informe o mandato (caso) pelo identificador." }, { status: 400 });
   }
   if (arquivos.length === 0) {
     return NextResponse.json({ error: "Selecione ao menos um arquivo." }, { status: 400 });
   }
 
-  // O PAPEL, ANTES DE ENCAMINHAR. O n8n grava com a conexão de serviço e acha o mandato pelo nome:
-  // nenhuma RLS o barra, então a recusa tem de ser aqui (ver `decidirEnvioAoMandato`).
-  const permissao = await conferirEnvioAoMandato(mandato);
+  // O PAPEL, ANTES DE ENCAMINHAR. O n8n grava com a conexão de serviço: nenhuma RLS o barra, então
+  // a recusa tem de ser aqui (ver `decidirEnvioAoCaso`). O nome do mandato que segue ao Form é o
+  // LIDO DO BANCO por esta conferência (só rótulo): o que o cliente digitou não entra.
+  const permissao = await conferirEnvioAoCaso(casoId);
   if (!permissao.ok) return NextResponse.json({ error: permissao.mensagem }, { status: permissao.status });
   // E o TOKEN que o n8n exige (`assinatura-do-envio.ts`), só depois do papel. Sem o segredo
   // configurado o envio é recusado aqui, com a frase clara, e nunca segue sem token.
-  const autorizacao = await emitirTokenDoEnvio(mandato);
+  const autorizacao = await emitirTokenDoEnvio(casoId);
   if (!autorizacao.ok) return NextResponse.json({ error: autorizacao.mensagem }, { status: autorizacao.status });
 
   // O LOTE GRANDE QUE CHEGOU AQUI MESMO ASSIM.
@@ -105,6 +107,7 @@ export async function POST(request: Request) {
     );
   }
 
+  const mandato = permissao.nome ?? "";
   const campos = await descobrirNomesDeCampo(url);
 
   // Monta o multipart no formato do Form do N8N e encaminha.
@@ -138,6 +141,7 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     ok: true,
+    casoId,
     mandato,
     arquivos: arquivos.length,
     desde: new Date().toISOString(),

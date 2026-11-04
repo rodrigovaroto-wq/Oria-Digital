@@ -920,8 +920,11 @@ test('Nós Postgres têm onError+retry — um erro num item não derruba o resto
   // fila some sem nenhum rastro. Com onError:continueRegularOutput +
   // retryOnFail, o pior caso vira "esse item específico fica incompleto"
   // (nunca vira fato, doutrina Arquitetura do Sistema/1 Visão e Doutrina/01), não "o lote inteiro desaparece".
+  // O `Upsert Caso (Postgres)` SAIU desta lista de propósito (P3-F3): ele falha FECHADO. Com
+  // continueRegularOutput, um caso apagado entre a conferência e o upsert faria `fn_caso_do_envio`
+  // lançar e o lote seguir com caso_id undefined nos 7 nós que o leem. Sua guarda é o teste abaixo.
   const nomesPostgres = [
-    'Upsert Caso (Postgres)', 'Registrar Documento', 'Recomputar Completude',
+    'Registrar Documento', 'Recomputar Completude',
     'Gravar Campos (Sombra)', 'Registrar Diagnostico', 'Reconciliar (Classe A)',
   ];
   for (const nm of nomesPostgres) {
@@ -4052,6 +4055,57 @@ test('Tamanho: a recusa sai pelo MESMO caminho do orcamento (Registrar Recusa ->
   await assert.rejects(() => run('Abortar Lote', { item: out[0], items: out }), /ECD-2025\.txt/);
 });
 
+// S114: o `Abortar Lote` lia `orcamento_mensagem` do item do `Registrar Recusa`, que (Postgres
+// substitui o item) so tinha a coluna `r` -> as TRES recusas terminavam a execucao com o texto
+// generico. Aqui o item do Abortar e' montado como o Postgres o monta: cada `$n::text as col` da
+// query devolve o parametro $n que o `queryReplacement` do proprio no calcula a partir da recusa.
+// Limite honesto (regra 4): o Postgres e' simulado so nessa projecao `$n as col`; a gravacao em
+// `execucao_falha` e' coberta pelas suites SQL. O item de recusa do ENVIO e' construido a mao com
+// os campos que `fn_conferir_envio` devolve; tamanho e orcamento saem dos nos Code reais.
+function itemDoRegistrarRecusa(recusa) {
+  const no = wf.nodes.find((n) => n.name === 'Registrar Recusa');
+  const expr = no.parameters.options.queryReplacement.replace(/^=\{\{/, '').replace(/\}\}$/, '');
+  const form = { first: () => ({ json: { 'Mandato (nome do caso)': 'Alfa' } }) };
+  const params = new Function('$json', '$', `return ${expr};`)(recusa.json, () => form);
+  const colunas = [...no.parameters.query.matchAll(/\$(\d+)::text as (\w+)/g)];
+  return { json: { r: 'uuid-da-falha', ...Object.fromEntries(colunas.map((m) => [m[2], params[Number(m[1]) - 1]])) } };
+}
+
+test('Abortar Lote lanca o motivo REAL de cada uma das tres recusas (envio, tamanho, orcamento)', async () => {
+  const tamanho = (await listarComTamanhos([{ nome: 'ECD-2025.txt', bytes: QUINZE_MIB + 1 }]))[0];
+  const n = Math.ceil(TETO_EXECUCAO_USD / CUSTO_ESTIMADO_DOC_USD) + 1;
+  const orcamento = (await run('Orcamento do Lote', {
+    items: Array.from({ length: n }, (_, i) => itemDoc(`${i + 1}_BP_X_2025x2024.pdf`, false)),
+  }))[0];
+  const envio = { json: { caso_id: null, envio_autorizado: false, etapa_recusa: 'envio',
+    orcamento_mensagem: 'Envio recusado: token vencido.' } };
+
+  for (const [recusa, motivo, etapa] of [
+    [envio, /Envio recusado: token vencido\./, 'envio'],
+    // a recusa de tamanho nao informa etapa_recusa: o banco a grava como 'orcamento' (o fallback
+    // do queryReplacement, ja coberto em assinatura-do-envio.test.mjs) e a mensagem e' a que diz o motivo.
+    [tamanho, /ECD-2025\.txt/, 'orcamento'],
+    [orcamento, /Lote recusado ANTES de gastar/, 'orcamento'],
+  ]) {
+    const entrada = itemDoRegistrarRecusa(recusa);
+    await assert.rejects(() => run('Abortar Lote', { item: entrada, items: [entrada] }), (e) => {
+      assert.match(e.message, motivo, `a mensagem da recusa de ${etapa} chega ao Abortar Lote`);
+      assert.doesNotMatch(e.message, /sem motivo/);
+      assert.match(e.message, new RegExp(`\\[etapa: ${etapa}\\]`), `e a etapa (${etapa})`);
+      return true;
+    });
+  }
+});
+
+test('Abortar Lote: recusa SEM mensagem diz que veio sem motivo, nunca "orcamento" (regra 1)', async () => {
+  const entrada = itemDoRegistrarRecusa({ json: { caso_id: null } });
+  await assert.rejects(() => run('Abortar Lote', { item: entrada, items: [entrada] }), (e) => {
+    assert.match(e.message, /sem motivo informado/);
+    assert.doesNotMatch(e.message, /pelo orcamento\./);
+    return true;
+  });
+});
+
 test('Tamanho: o Preparar Conteudo (getBinaryDataBuffer) so e alcancavel DEPOIS do guarda de tamanho', () => {
   const alcanca = (semNo) => {
     const visto = new Set(['Listar Arquivos']); const fila = ['Listar Arquivos'];
@@ -4073,4 +4127,57 @@ test('Listar Arquivos carrega o MESMO vereditoDeTamanhoPorArquivo e o MESMO teto
   assert.ok(code('Listar Arquivos').includes(vereditoDeTamanhoPorArquivo.toString()));
   assert.ok(code('Listar Arquivos').includes(`const TETO_BYTES_POR_ARQUIVO = ${TETO_BYTES_POR_ARQUIVO};`));
   assert.equal(TETO_BYTES_POR_ARQUIVO, 15 * 1024 * 1024);
+});
+
+// P3-F3 — o Upsert Caso roteia pelo caso_id do envio (v2), nunca pelo nome do Form, e falha fechado.
+// Banco SIMULADO só no que o teste afirma (regra 4): a query real do nó é interpretada na projeção
+// `case when nullif($1..) is null then A else B end`, com `fn_upsert_caso` (cria pelo nome) e
+// `fn_caso_do_envio` (por id, lança se não existe, nunca cria) modeladas como a migration 0222 as define.
+// O que NÃO é provado aqui: o SQL de verdade (coberto por Supabase/test/conferir_envio_v2.test.sql).
+function rodarUpsertCaso({ form, conferir, casos }) {
+  const no = wf.nodes.find((n) => n.name === 'Upsert Caso (Postgres)');
+  const expr = no.parameters.options.queryReplacement.replace(/^=\{\{/, '').replace(/\}\}$/, '');
+  const itemDe = { 'Intake (Form)': form, 'Conferir Envio': conferir };
+  const params = new Function('$', `return ${expr};`)((nm) => ({ first: () => ({ json: itemDe[nm] }) }));
+  assert.ok(params.every((p) => p !== null && p !== undefined), 'nunca null cru no array de parametros');
+  const banco = new Map(casos);              // id -> nome
+  const auditoria = [];
+  const fns = {
+    fn_upsert_caso: (nome) => {
+      for (const [id, n] of banco) if (n.trim().toLowerCase() === nome.trim().toLowerCase()) return id;
+      const id = `novo-${banco.size + 1}`; banco.set(id, nome); return id;
+    },
+    fn_caso_do_envio: (id, nome) => {
+      if (!banco.has(id)) throw new Error(`fn_caso_do_envio: o mandato ${id} não existe`);
+      if (banco.get(id).trim().toLowerCase() !== nome.trim().toLowerCase()) auditoria.push({ id, nome });
+      return id;
+    },
+  };
+  const q = no.parameters.query;
+  const arg = (t) => params[Number(t.match(/\$(\d)/)[1]) - 1];
+  const chamada = (t) => { const m = t.match(/(fn_\w+)\(([^)]*)\)/); return fns[m[1]](...m[2].split(',').map(arg)); };
+  const cs = q.match(/case when nullif\((\$\d)[^)]*\) is null then (.+?) else (.+?) end as caso_id/);
+  const caso_id = cs ? (arg(cs[1]) === '' ? chamada(cs[2]) : chamada(cs[3])) : chamada(q.match(/select (fn_\w+\([^)]*\))/)[1]);
+  return { caso_id, banco, auditoria };
+}
+
+test('Upsert Caso: envio v2 roteia pelo caso_id (nunca cria mandato pelo nome); v1 em voo cai no nome; caso apagado FALHA', () => {
+  const form = { 'Mandato (nome do caso)': 'Alfa' };
+  const casos = [['X', 'Alfa Renomeado']];
+  // v2: o nome do Form ("Alfa") nao existe mais; o caso e' o do token.
+  const v2 = rodarUpsertCaso({ form, conferir: { caso_id: 'X' }, casos });
+  assert.equal(v2.caso_id, 'X', 'o caso roteado e o do token');
+  assert.equal(v2.banco.size, 1, 'nenhum mandato novo foi criado');
+  assert.equal(v2.auditoria.length, 1, 'o nome divergente e auditado');
+  // v1 em voo (caso_id nulo): transicao, pelo nome — cria como hoje.
+  const v1 = rodarUpsertCaso({ form, conferir: { caso_id: null }, casos });
+  assert.equal(v1.banco.size, 2, 'v1 ainda cai em fn_upsert_caso pelo nome');
+  assert.notEqual(v1.caso_id, 'X');
+  // caso apagado entre a conferencia e o upsert: lanca, nao segue com id indefinido.
+  assert.throws(() => rodarUpsertCaso({ form, conferir: { caso_id: 'SUMIU' }, casos }), /não existe/);
+  // e o no nao engole o erro: sem onError, com retry.
+  const no = wf.nodes.find((n) => n.name === 'Upsert Caso (Postgres)');
+  assert.equal(no.onError, undefined, 'Upsert falha FECHADO');
+  assert.equal(no.retryOnFail, true);
+  assert.ok(no.maxTries >= 2);
 });

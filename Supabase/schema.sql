@@ -1067,6 +1067,38 @@ CREATE FUNCTION public.fn_caso_da_versao(p_versao uuid) RETURNS uuid
 $$;
 
 --
+-- Name: fn_caso_do_envio(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_caso_do_envio(p_caso uuid, p_nome_no_envio text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_nome text;
+begin
+  if p_caso is null then
+    raise exception 'fn_caso_do_envio: envio sem caso (o envio nunca cria mandato)' using errcode = 'P0002';
+  end if;
+  select nome into v_nome from caso where id = p_caso;
+  if not found then
+    raise exception 'fn_caso_do_envio: o mandato % não existe (o envio nunca cria mandato)', p_caso using errcode = 'P0002';
+  end if;
+  if lower(btrim(v_nome)) is distinct from lower(btrim(coalesce(p_nome_no_envio, ''))) then
+    insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+      values ('sistema:n8n', 'envio_nome_divergente', 'caso:' || p_caso,
+              jsonb_build_object('nome_no_envio', p_nome_no_envio), jsonb_build_object('nome_atual', v_nome));
+  end if;
+  return p_caso;
+end $$;
+
+--
+-- Name: FUNCTION fn_caso_do_envio(p_caso uuid, p_nome_no_envio text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_caso_do_envio(p_caso uuid, p_nome_no_envio text) IS '0222: o mandato de um envio v2, pelo ID (não pelo nome). Exceção se o caso for nulo ou não existir — o envio nunca cria mandato. Se o nome atual divergir do nome que veio no envio (lower(btrim), como o upsert), grava 1 evento_auditoria envio_nome_divergente com os dois nomes e segue.';
+
+--
 -- Name: fn_caso_do_evento(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1915,15 +1947,17 @@ CREATE FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora t
     SET search_path TO 'pg_catalog', 'extensions', 'public', 'pg_temp'
     AS $_$
 declare
-  -- \s do ECMAScript (o que String.prototype.trim tira), como classe de ARE. Os controles vão por \uXXXX, não por \n/\r:
-  -- o portão guarda_ancora_crlf.py toma `\n` num regexp_replace por âncora de patch de função (aqui não há patch nenhum).
   c_ws     constant text := '[\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]';
+  c_uuid   constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_segredo text;
   v_token   text;
   v_partes  text[];
   v_msg     text;
   v_motivo  text;
   v_usuario text;
+  v_caso    uuid;
+  v_ok_mac  boolean;
+  v_exp     text;
 begin
   -- 1. sem_segredo: ausente, vazio ou só espaços. O valor entra como chave do HMAC SEM trim (como o JS).
   select s.decrypted_secret into v_segredo from vault.decrypted_secrets s where s.name = 'n8n_intake_segredo' limit 1;
@@ -1935,25 +1969,58 @@ begin
     if v_token = '' then
       v_motivo := 'sem_token';
     else
-      -- 3. malformado: v1.<exp>.<usuario>.<hmac>. [0-9] e não \d: o \d do ARE segue o locale; o do JS é só ASCII.
       v_partes := string_to_array(v_token, '.');
-      if coalesce(array_length(v_partes, 1), 0) <> 4 or v_partes[1] <> 'v1'
-         or v_partes[2] !~ '^[0-9]{1,12}$' or v_partes[3] !~ '^[0-9a-fA-F-]{8,64}$' or v_partes[4] !~ '^[0-9a-f]{64}$' then
-        v_motivo := 'malformado';
-      else
-        -- 4. assinatura. Mensagem = mandato (só U+0020 das pontas tirado, minúsculas do ICU = toLowerCase) | exp | usuário.
-        v_msg := lower(regexp_replace(coalesce(p_mandato, ''), '^ +| +$', '', 'g') collate "und-x-icu")
-                 || '|' || v_partes[2] || '|' || v_partes[3];
-        -- Comparação dos HMAC dos dois valores (ver o cabeçalho: não vaza a posição da divergência).
-        if hmac(convert_to(encode(hmac(convert_to(v_msg, 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256'), 'hex'), 'UTF8'),
-                convert_to(v_segredo, 'UTF8'), 'sha256')
-           is distinct from hmac(convert_to(v_partes[4], 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256') then
-          v_motivo := 'assinatura';
-        -- 5. expirado: só depois de a assinatura provar que o token é nosso. exp*1000 > agora (ms), senão expirado.
-        elsif not (v_partes[2]::bigint * 1000 > floor(extract(epoch from p_agora) * 1000)::bigint) then
-          v_motivo := 'expirado';
+      if v_partes[1] = 'v2' then
+        -- ---------------------------------------------------------------- v2: v2.<exp>.<usuario>.<caso>.<hmac>
+        -- 3. malformado. Os uuids são MINÚSCULOS e validados por regex ANTES do cast (um cast de lixo viraria erro 22P02).
+        if coalesce(array_length(v_partes, 1), 0) <> 5
+           or v_partes[2] !~ '^[0-9]{1,12}$' or v_partes[3] !~ c_uuid or v_partes[4] !~ c_uuid or v_partes[5] !~ '^[0-9a-f]{64}$' then
+          v_motivo := 'malformado';
         else
-          v_usuario := v_partes[3];
+          v_exp := v_partes[2];
+          -- 4. assinatura, ANTES de qualquer consulta a caso: quem não prova o segredo não descobre se o caso existe.
+          --    A etiqueta 'v2|' separa esta mensagem da v1 (mandato = "<uuid>").
+          v_msg := 'v2|' || v_partes[4] || '|' || v_exp || '|' || v_partes[3];
+          v_ok_mac := hmac(convert_to(encode(hmac(convert_to(v_msg, 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256'), 'hex'), 'UTF8'),
+                           convert_to(v_segredo, 'UTF8'), 'sha256')
+                      is not distinct from hmac(convert_to(v_partes[5], 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256');
+          if not v_ok_mac then
+            v_motivo := 'assinatura';
+          else
+            -- Daqui em diante o token é nosso: toda recusa prende a falha ao caso do token.
+            v_caso := v_partes[4]::uuid;
+            if not (v_exp::bigint * 1000 > floor(extract(epoch from p_agora) * 1000)::bigint) then
+              v_motivo := 'expirado';
+            elsif not exists (select 1 from caso c where c.id = v_caso) then
+              v_motivo := 'caso_inexistente';
+            elsif exists (select 1 from caso c where c.id = v_caso and c.fechado_em is not null) then
+              v_motivo := 'caso_fechado';
+            elsif not fn_pode_escrever_caso_de(v_partes[3]::uuid, v_caso) then
+              v_motivo := 'sem_acesso';
+            else
+              v_usuario := v_partes[3];
+            end if;
+          end if;
+        end if;
+      else
+        -- ---------------------------------------------------------------- v1: v1.<exp>.<usuario>.<hmac> (como na 0217)
+        v_msg := lower(regexp_replace(coalesce(p_mandato, ''), '^ +| +$', '', 'g') collate "und-x-icu");
+        if coalesce(array_length(v_partes, 1), 0) <> 4 or v_partes[1] <> 'v1'
+           or v_partes[2] !~ '^[0-9]{1,12}$' or v_partes[3] !~ '^[0-9a-fA-F-]{8,64}$' or v_partes[4] !~ '^[0-9a-f]{64}$'
+           -- 0222: mandato "v2|..." faria o v1 assinar uma mensagem que o v2 aceitaria; recusa antes do HMAC.
+           or left(v_msg, 3) = 'v2|' then
+          v_motivo := 'malformado';
+        else
+          v_msg := v_msg || '|' || v_partes[2] || '|' || v_partes[3];
+          if hmac(convert_to(encode(hmac(convert_to(v_msg, 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256'), 'hex'), 'UTF8'),
+                  convert_to(v_segredo, 'UTF8'), 'sha256')
+             is distinct from hmac(convert_to(v_partes[4], 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256') then
+            v_motivo := 'assinatura';
+          elsif not (v_partes[2]::bigint * 1000 > floor(extract(epoch from p_agora) * 1000)::bigint) then
+            v_motivo := 'expirado';
+          else
+            v_usuario := v_partes[3];
+          end if;
         end if;
       end if;
     end if;
@@ -1961,7 +2028,10 @@ begin
 
   return query select
     v_motivo is null,
-    null::uuid,
+    -- O id só sai se o caso EXISTE (nulo para caso_inexistente e para qualquer recusa em que o caso foi apagado): execucao_falha.caso_id tem FK
+    -- para caso(id), e o nó Registrar Recusa chama fn_registrar_falha_execucao($json.caso_id, ...). Medido: id inexistente = 23503
+    -- execucao_falha_caso_id_fkey e a recusa se perde. A raiz está em fn_registrar_falha_execucao (seção 2a); isto é a defesa barata.
+    (select c.id from caso c where c.id = v_caso),
     'envio'::text,
     v_motivo,
     case
@@ -1969,6 +2039,12 @@ begin
       when v_motivo = 'sem_segredo' then 'Envio recusado: falta o segredo do envio no Vault do banco (nome n8n_intake_segredo). '
         || 'Nada foi gravado. É configuração do responsável pelo sistema.'
       when v_motivo = 'expirado' then 'Envio sem autorização válida: o token do envio expirou. Nada foi gravado. Reenvie pelo portal.'
+      when v_motivo = 'caso_inexistente' then 'Envio recusado: o mandato deste envio não existe mais. Nada foi gravado. '
+        || 'O envio nunca cria mandato: abra o mandato no portal e reenvie.'
+      when v_motivo = 'caso_fechado' then 'Envio recusado: o mandato está fechado e não recebe documentos. Nada foi gravado. '
+        || 'Peça a um Sócio para reabri-lo.'
+      when v_motivo = 'sem_acesso' then 'Envio recusado: você não tem acesso de escrita a este mandato (só Sócio e Analista alocado enviam). '
+        || 'Nada foi gravado. Peça a um Sócio para alocá-lo.'
       else 'Envio sem autorização válida. Nada foi gravado. Envie pelo portal, com o login de quem tem acesso ao mandato.'
     end,
     v_usuario;
@@ -1979,7 +2055,7 @@ $_$;
 -- Name: FUNCTION fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0217: confere o token HMAC do envio (v1.<exp>.<usuario>.<hmac>, assinado pelo portal sobre mandato_normalizado|exp|usuario) contra o segredo n8n_intake_segredo do Vault. Sempre UMA linha: envio_autorizado, caso_id (sempre NULL), etapa_recusa (sempre envio), motivo_recusa (sem_segredo|sem_token|malformado|assinatura|expirado), orcamento_mensagem, usuario_id. Mesma semântica de verificarEnvio em N8N/lib/assinatura-do-envio.mjs. security definer; só service_role e postgres executam (authenticated testaria tokens contra o segredo).';
+COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura (só se o caso existir; senão NULL). Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
 
 --
 -- Name: fn_conferir_lote(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -6536,6 +6612,12 @@ declare
   v_pre        text;
   v_pos        text;
   v_g          text := '(\s|/\*([^*]|\*+[^*/])*\*+/|--[^\n]*\n)';
+  v_ddl        text;   -- 0221 PARTE B
+  v_dfn        text;   -- 0221 PARTE B
+  v_gfn        text;   -- 0221 PARTE B
+  v_tot        bigint; -- 0221 PARTE A
+  v_tgf        oid;    -- 0221 PARTE B
+  v_srr        text;   -- 0221 PARTE B
 begin
   for r in select * from instalacao_requisito order by ordem, chave loop
     v_ok  := false;
@@ -6629,8 +6711,8 @@ begin
         v_ok  := false;
         v_det := 'a tabela nem existe';
       else
-        select tgenabled, tgfoid::regproc::text
-          into v_tg_enabled, v_tg_fn
+        select tgenabled, tgfoid::regproc::text, tgfoid
+          into v_tg_enabled, v_tg_fn, v_tgf
           from pg_trigger
          where tgrelid = v_alvo
            and tgname  = split_part(r.objeto, '.', 2)
@@ -6645,7 +6727,7 @@ begin
         elsif v_tg_enabled = 'R' then
           -- 'R' = ENABLE REPLICA TRIGGER. Decisão deliberada, e mais estrita
           -- que `<> 'D'`: um gatilho em modo réplica NÃO dispara com
-          -- `session_replication_role = origin`, que é o padrão de toda sessão
+          -- o parâmetro de réplica da sessão em `origin`, que é o padrão de toda sessão
           -- normal (é o que o pooler do Supabase usa). Do ponto de vista de
           -- quem depende da guarda rodando na sessão normal, um gatilho em
           -- modo réplica está tão desligado quanto um desabilitado — só que
@@ -6653,14 +6735,23 @@ begin
           v_ok  := false;
           v_det := 'o gatilho existe mas só dispara em modo réplica — na sessão normal a guarda não roda';
         elsif v_tg_enabled in ('O', 'A') then
-          -- 'O' = ENABLE (origin, o padrão) · 'A' = ENABLE ALWAYS (dispara em
-          -- origin e em réplica). As duas rodam em sessão normal — é só isso
-          -- que este ramo promete. Ele NÃO confere se o gatilho chama a
-          -- função certa nem em quais eventos (INSERT/UPDATE/DELETE) — só que
-          -- existe e dispara. `v_tg_fn` entra no detalhe por informação, sem
-          -- afetar `v_ok`.
-          v_ok  := true;
-          v_det := format('gatilho habilitado (chama %s)', coalesce(v_tg_fn, '?'));
+          -- 'O' = ENABLE (origin, o padrão) · 'A' = ENABLE ALWAYS (dispara em origin e em réplica): as duas rodam em sessão normal.
+          -- 0221 (revisão): ligado NÃO basta. `create or replace trigger <mesmo nome> ... execute function <outra>` deixa o gatilho com o mesmo nome e habilitado, chamando uma função inofensiva, e a
+          -- guarda de Sócio deixa de rodar sem nenhum DML nem DDL de função que um regex veja (nem por SQL dinâmico). Quando o requisito DECLARA a função da guarda (`marcador` = o nome em public), o gatilho
+          -- tem de chamar EXATAMENTE ela (tgfoid = to_regproc). Sem marcador (os demais gatilhos do catálogo) vale o de antes: existe e dispara; ele NÃO confere eventos (INSERT/UPDATE/DELETE).
+          if r.marcador is null then
+            v_ok  := true;
+            v_det := format('gatilho habilitado (chama %s)', coalesce(v_tg_fn, '?'));
+          else
+            begin
+              v_proc := to_regproc('public.' || r.marcador);
+            exception when others then
+              v_proc := null;
+            end;
+            v_ok  := v_proc is not null and v_tgf = v_proc::oid;
+            v_det := case when v_ok then format('gatilho habilitado e chama %s, a função da guarda que o requisito declara', v_tg_fn)
+                          else format('o gatilho está habilitado, mas chama %s e NÃO %s, a função da guarda que o requisito declara: a guarda foi TROCADA (create or replace trigger) e não roda', coalesce(v_tg_fn, '?'), r.marcador) end;
+          end if;
         else
           -- Não deveria acontecer — `tgenabled` só tem estes quatro valores —
           -- mas a sonda nunca assume "presente" por omissão de um `case`.
@@ -6803,6 +6894,12 @@ begin
       -- O QUE VEM DEPOIS DO NOME: v_pos aceita espaço, `;`, fim, `(`, `)` e `,` (a 0219 só os quatro primeiros: `with d as (delete from t) select`, `truncate t, x` e
       -- `(delete from t)` davam presente = t; uma definer assim, com EXECUTE para authenticated, apagou o catálogo de 89 a 0 linhas). O QUE VEM ANTES: v_pre aceita, entre a palavra e o nome, espaço, aspas
       -- imediatas (`delete from"t"`) e comentário de bloco ou de linha (`delete from /* c */ t`): v_g.
+      -- 0221 PARTE B: DDL conta como ESCRITA. `alter table <protegida> ...` (disable trigger, disable row level security, no force...), `drop trigger ... on <protegida>` e
+      -- `drop table <protegida>` não escrevem linha, mas desligam a guarda de Sócio (ou a RLS) na mesma transação, e o Analista que chamou a definer escreve no dial direto. E
+      -- o parâmetro de sessão `session_replication` + `_role` (escrito em duas metades aqui) em QUALQUER lugar do corpo (ele faz o Postgres PULAR todos os gatilhos, de qualquer tabela). O alcance do DDL é a lista de tabelas protegidas (v_tabs):
+      -- um `alter table` genérico, de outra tabela ou por SQL dinâmico (rls_auto_enable), não acusa. Lado seguro, como no DML: acusa a mais um `alter table <protegida> add column`.
+      -- 0221 (revisão): o v_pos aceita também `*` (`alter table t* disable trigger`, `update t *`, `delete from t *` são SQL válido); `drop table a, b` aceita lista; e DDL de FUNÇÃO (drop, alter, create or replace)
+      -- sobre a função de qualquer gatilho das tabelas protegidas (v_gfn, pelo catálogo) conta como escrita.
       -- NÃO enxerga (declarado): SQL dinâmico (`execute format(...)`, regproc em texto); função fora de public;
       -- a função que o gatilho chama só por SQL dinâmico. Chamar uma PORTA (fn_dial_auto_promover) de uma definer não conta, de propósito: é o caminho que o dono
       -- aprovou na 0137 (o gatilho de `decisao` promove, no máximo até N2, SÓ quando o veredito GLOBAL basta; o chamador não escolhe nada).
@@ -6815,10 +6912,29 @@ begin
                               from unnest(string_to_array(nullif(split_part(r.marcador, ';', 2), ''), '|')) q
                              where to_regprocedure('public.' || btrim(q)) is not null), array[]::oid[]);
       v_pre    := replace(replace('(insert@+into$|update$|delete@+from$|merge@+into$|truncate$(table@+)?(only@+)?([a-z0-9_."]+@*,@*)*)(only@+)?("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
-      v_pos    := '"?(\s|;|$|\(|\)|,)';
+      v_pos    := '"?(\s|;|$|\(|\)|,|\*)';
+      -- 0221 PARTE B. O `$` é o mesmo do v_pre: espaço/comentário (v_g) ou nada se a próxima coisa for `"`. o parâmetro é montado em duas metades de propósito: escrito inteiro
+      -- aqui, o corpo desta própria sonda casaria o critério e a poria no fecho (INVOKER, não é acusada, mas puxaria quem a chamasse).
+      v_ddl    := replace(replace('(alter@+table$(if@+exists$)?(only$)?|drop@+table$(if@+exists$)?([a-z0-9_."]+@*,@*)*|drop@+trigger$(if@+exists$)?("[^"]+"|[a-z0-9_]+)$on$(only$)?)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
+      v_srr    := 'session_replication' || '_role';
+      -- A GUARDA É A FUNÇÃO DE QUALQUER GATILHO das tabelas protegidas, resolvida pelo catálogo (pg_trigger), não o nome fixo: apagá-la ou trocá-la tira a guarda (o `drop` com cascata apaga os gatilhos
+      -- junto) sem escrever linha. `v_gfn` = as funções que os requisitos `gatilho` das tabelas protegidas DECLARAM (marcador), escapadas e separadas por `|`: parte do ESPERADO, não do que estiver em pg_trigger agora (um gatilho trocado faria o v_gfn vigiar a função inofensiva). NULL se nada declarado (aí o critério não casa). DDL de função que cite um deles conta como escrita.
+      v_gfn    := (select string_agg(distinct regexp_replace(g.marcador, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g'), '|')
+                     from instalacao_requisito g
+                    where g.tipo = 'gatilho' and g.marcador is not null
+                      and split_part(g.objeto, '.', 1) = any (select btrim(q) from unnest(string_to_array(r.objeto, ',')) q));
+      v_dfn    := replace(replace('(drop@+(function|routine|procedure)$(if@+exists$)?([a-z0-9_."]+@*(\([^)]*\))?@*,@*)*|alter@+(function|routine|procedure)$|create@+(or@+replace@+)?(function|procedure)$)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas (lista por vírgula) e marcador = RAIZES;PORTAS, com ao menos uma raiz';
+      elsif v_gfn is null or exists (select 1 from instalacao_requisito g
+                                      where g.tipo = 'gatilho' and g.marcador is not null
+                                        and split_part(g.objeto, '.', 1) = any (select btrim(q) from unnest(string_to_array(r.objeto, ',')) q)
+                                        and not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = g.marcador)) then
+        -- 0221 (re-revisão, regra 7): sem guarda DECLARADA (marcador nulo nos requisitos `gatilho` das tabelas protegidas, ou declarada e inexistente) o ramo `gatilho` volta a só conferir que o gatilho existe, e o
+        -- critério de DDL de função (v_gfn) desliga calado: a sonda ficaria verde sem vigiar nada. Aqui isso é AUSENTE, com o motivo. Só a 0216 zera o marcador (on conflict com excluded.marcador nulo).
+        v_ok  := false;
+        v_det := format('nenhuma guarda declarada no catálogo para %s (ou a declarada não existe em public) — a troca do gatilho e o DDL da função da guarda não estão sendo vigiados', r.objeto);
       else
         with recursive
           fn as materialized (
@@ -6838,6 +6954,9 @@ begin
           fecho(oid) as (
             select f.oid from fn f
              where f.src ~* (v_pre || '(' || v_tabs || ')' || v_pos)
+                or f.src ~* (v_ddl || '(' || v_tabs || ')' || v_pos)
+                or f.src ~* v_srr
+                or f.src ~* (v_dfn || '(' || v_gfn || ')' || v_pos)
                 or f.nome = any (v_funs)
             union
             select x.oid
@@ -6869,7 +6988,7 @@ begin
       -- alteram linha e ficam de fora. A FK que TEM a protegida como PAI (golden_criterio -> estagio_autonomia, on delete cascade) não conta: ela apaga a linha do FILHO, que não é protegido.
       v_tabs := array_to_string(string_to_array(r.objeto, ','), '|');
       v_pre  := replace(replace('(insert@+into$|update$|delete@+from$|merge@+into$|truncate$(table@+)?(only@+)?([a-z0-9_."]+@*,@*)*)(only@+)?("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
-      v_pos  := '"?(\s|;|$|\(|\)|,)';
+      v_pos  := '"?(\s|;|$|\(|\)|,|\*)';
       if coalesce(v_tabs, '') = '' then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas, lista por vírgula';
@@ -6895,6 +7014,29 @@ begin
         v_det := case when v_ok then format('nenhuma FK com ação referencial (cascade, set null, set default) altera linha de %s', r.objeto)
                       else format('%s FK(s) com ação referencial que alteram %s como dono, sem passar pela guarda de Sócio: %s%s', v_n, r.objeto, v_lista,
                                   case when v_n > 15 then ' ...' else '' end) end;
+      end if;
+
+    elsif r.tipo = 'rls_ligada' then
+      -- 0221 PARTE A: a RLS por mandato (0216) só vale com a RLS LIGADA. Nenhum requisito do catálogo conferia `pg_class.relrowsecurity`: desligá-la numa tabela, ou criar tabela
+      -- nova sem ela, não acendia nada. `objeto` = o SCHEMA (hoje 'public'): TODAS as tabelas (relkind r e p) do schema, e não uma lista, porque a lista é exatamente o que uma tabela
+      -- nova não está. Fora da conta, de propósito: tabela de EXTENSÃO (pg_depend 'e'), que o dono do projeto não altera. Ausente = lista das tabelas sem RLS (até 15).
+      -- Lê só o catálogo, e roda como o chamador: `pg_class` é legível por todos.
+      if to_regnamespace(r.objeto) is null then
+        v_ok  := false;
+        v_det := format('o schema %s nem existe', r.objeto);
+      else
+        select count(*) filter (where not x.rls), string_agg(x.nome, ', ' order by x.nome) filter (where x.rn <= 15 and not x.rls), count(*)
+          into v_n, v_lista, v_tot
+          from (select c.relname::text as nome, c.relrowsecurity as rls, row_number() over (partition by c.relrowsecurity order by c.relname) as rn
+                  from pg_class c
+                 where c.relnamespace = to_regnamespace(r.objeto)
+                   and c.relkind in ('r', 'p')
+                   and not exists (select 1 from pg_depend d where d.classid = 'pg_class'::regclass and d.objid = c.oid and d.deptype = 'e')) x;
+        -- Regra 7: o verde só vale se ALGO foi examinado. Schema que existe e está vazio (ex.: graphql_public) daria presente sem olhar tabela nenhuma.
+        v_ok  := v_n = 0 and v_tot > 0;
+        v_det := case when v_tot = 0 then format('nenhuma tabela examinada em %s (o schema existe e não tem tabela): a conferência não olhou nada', r.objeto)
+                      when v_ok then format('%s tabelas examinadas em %s, todas com a RLS ligada', v_tot, r.objeto)
+                      else format('%s tabela(s) de %s com a RLS DESLIGADA (a policy por mandato não vale nelas): %s%s', v_n, r.objeto, v_lista, case when v_n > 15 then ' ...' else '' end) end;
       end if;
 
     elsif r.tipo in ('seed', 'comportamento') then
@@ -9246,13 +9388,30 @@ CREATE FUNCTION public.fn_pode_escrever_caso(p_caso uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public', 'pg_temp'
     AS $$
+  select fn_pode_escrever_caso_de(auth.uid(), p_caso)
+$$;
+
+--
+-- Name: fn_pode_escrever_caso_de(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
   select exists (
     select 1 from membro m
-     where m.usuario_id = auth.uid()
+     where m.usuario_id = p_usuario
        and (m.papel = 'socio'
             or (m.papel = 'analista' and p_caso is not null
                 and exists (select 1 from alocacao a where a.caso_id = p_caso and a.usuario_id = m.usuario_id))))
 $$;
+
+--
+-- Name: FUNCTION fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid) IS '0222: o usuário X escreve no caso Y? Sócio escreve tudo; Analista onde está alocado; Leitura nunca. Mesmo corpo que fn_pode_escrever_caso tinha na 0216, com o usuário por parâmetro (o envio decide pelo usuário do TOKEN, não por auth.uid()). Só service_role e postgres executam: para um authenticated qualquer seria um oráculo sobre o papel dos outros.';
 
 --
 -- Name: fn_pode_escrever_evento(text); Type: FUNCTION; Schema: public; Owner: -
@@ -13392,19 +13551,39 @@ CREATE FUNCTION public.fn_registrar_falha_execucao(p_caso_id uuid, p_caso_nome t
     LANGUAGE plpgsql
     AS $$
 declare
-  v_id uuid;
+  v_id      uuid;
+  v_caso    uuid := p_caso_id;
+  v_detalhe jsonb := p_detalhe;
 begin
-  insert into execucao_falha (caso_id, caso_nome, etapa, mensagem, detalhe)
-    values (p_caso_id, nullif(trim(coalesce(p_caso_nome, '')), ''),
-            coalesce(nullif(trim(p_etapa), ''), 'desconhecida'),
-            coalesce(nullif(trim(p_mensagem), ''), 'Falha sem mensagem.'),
-            p_detalhe)
-    returning id into v_id;
+  if v_caso is not null and not exists (select 1 from caso c where c.id = v_caso) then
+    v_caso := null;
+  end if;
+  loop
+    if p_caso_id is not null and v_caso is null then
+      -- caso_id_anulado: o id que veio e não existe (mantém o rastro sem inventar coluna).
+      v_detalhe := case when jsonb_typeof(p_detalhe) = 'object' then p_detalhe else '{}'::jsonb end
+                   || jsonb_build_object('caso_id_anulado', p_caso_id)
+                   || case when p_detalhe is not null and jsonb_typeof(p_detalhe) <> 'object'
+                           then jsonb_build_object('detalhe_original', p_detalhe) else '{}'::jsonb end;
+    end if;
+    begin
+      insert into execucao_falha (caso_id, caso_nome, etapa, mensagem, detalhe)
+        values (v_caso, nullif(trim(coalesce(p_caso_nome, '')), ''),
+                coalesce(nullif(trim(p_etapa), ''), 'desconhecida'),
+                coalesce(nullif(trim(p_mensagem), ''), 'Falha sem mensagem.'),
+                v_detalhe)
+        returning id into v_id;
+      exit;
+    exception when foreign_key_violation then
+      if v_caso is null then raise; end if;   -- já era NULL: não é este defeito
+      v_caso := null;                          -- o caso sumiu entre a checagem e o insert
+    end;
+  end loop;
 
   insert into evento_auditoria (ator, acao, entidade_ref, depois)
     values ('sistema:n8n', 'falha_execucao',
-            coalesce('caso:' || p_caso_id::text, 'caso_nome:' || coalesce(p_caso_nome, '?')),
-            jsonb_build_object('etapa', p_etapa, 'mensagem', p_mensagem, 'detalhe', p_detalhe));
+            coalesce('caso:' || v_caso::text, 'caso_nome:' || coalesce(p_caso_nome, '?')),
+            jsonb_build_object('etapa', p_etapa, 'mensagem', p_mensagem, 'detalhe', v_detalhe));
 
   return jsonb_build_object('falha_id', v_id, 'registrada', true);
 end;
@@ -17533,7 +17712,7 @@ CREATE TABLE public.instalacao_requisito (
     marcador text,
     CONSTRAINT instalacao_requisito_marcador_check CHECK (((tipo <> 'corpo'::text) OR ((marcador IS NOT NULL) AND (length(marcador) >= 4)))),
     CONSTRAINT instalacao_requisito_severidade_check CHECK ((severidade = ANY (ARRAY['bloqueante'::text, 'importante'::text, 'informativo'::text]))),
-    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text, 'sem_privilegio'::text, 'definer_sem_escrita'::text, 'sem_acao_referencial'::text])))
+    CONSTRAINT instalacao_requisito_tipo_check CHECK ((tipo = ANY (ARRAY['tabela'::text, 'coluna'::text, 'funcao'::text, 'seed'::text, 'comportamento'::text, 'corpo'::text, 'gatilho'::text, 'policy'::text, 'privilegio'::text, 'segredo'::text, 'sem_privilegio'::text, 'definer_sem_escrita'::text, 'sem_acao_referencial'::text, 'rls_ligada'::text])))
 );
 
 --
@@ -21164,6 +21343,13 @@ GRANT ALL ON FUNCTION public.fn_caso_da_versao(p_versao uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_caso_da_versao(p_versao uuid) TO service_role;
 
 --
+-- Name: FUNCTION fn_caso_do_envio(p_caso uuid, p_nome_no_envio text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_caso_do_envio(p_caso uuid, p_nome_no_envio text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_caso_do_envio(p_caso uuid, p_nome_no_envio text) TO service_role;
+
+--
 -- Name: FUNCTION fn_caso_do_evento(p_ref text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -22399,6 +22585,13 @@ GRANT ALL ON FUNCTION public.fn_pode_criar_caso() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_pode_escrever_evento(p_ref text); Type: ACL; Schema: public; Owner: -

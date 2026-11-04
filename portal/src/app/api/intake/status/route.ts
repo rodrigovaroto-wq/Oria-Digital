@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { vereditoDoLote } from "@/lib/espera-do-lote";
-import { MENSAGEM_NOME_DUPLICADO } from "@/lib/acesso";
+import { ehUuid } from "@/lib/equipe";
 
 // Consultado pelo portal (polling) depois de um upload, pra saber quando os
 // arquivos enviados já passaram pela classificação E pela extração — não tem
@@ -58,15 +58,33 @@ async function conteudoDoLote(supabase: Supabase, versaoIds: string[]) {
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const casoNome = searchParams.get("caso")?.trim();
+  // O ACOMPANHAMENTO É PELO ID DO CASO (P3). Pelo nome, uma renomeação no meio do lote (o nome é
+  // texto editável) fazia a consulta não achar o mandato e a tela ficava em "aguarde" sobre um lote
+  // que andava. O nome que o `fn_falhas_abertas` ainda pede é LIDO do banco por este id, no instante.
+  const casoId = searchParams.get("caso")?.trim();
   const desde = searchParams.get("desde");
   const esperados = Number(searchParams.get("esperados") ?? "0");
 
-  if (!casoNome || !desde || !Number.isFinite(esperados) || esperados <= 0) {
+  if (!casoId || !ehUuid(casoId) || !desde || !Number.isFinite(esperados) || esperados <= 0) {
     return NextResponse.json({ error: "Parâmetros inválidos (caso, desde, esperados)." }, { status: 400 });
   }
 
   const supabase = await createClient();
+
+  // O caso vem PRIMEIRO: o envio nunca cria mandato, então o caso já existe quando o acompanhamento
+  // começa. Zero linhas aqui é "foi apagado ou não está no seu acesso" — dito, nunca "aguarde".
+  const { data: casos, error: casoErr } = await supabase.from("caso").select("id, nome").eq("id", casoId).limit(1);
+  if (casoErr) {
+    return NextResponse.json({ error: casoErr.message }, { status: 500 });
+  }
+  const caso = casos?.[0] ?? null;
+  if (!caso) {
+    return NextResponse.json(
+      { error: "Este mandato não existe mais ou não está no seu acesso, então não dá para acompanhar o envio. Abra o mandato pela lista." },
+      { status: 404 },
+    );
+  }
+  const casoNome = caso.nome as string;
 
   // A FALHA VEM PRIMEIRO, e vem antes de qualquer contagem de progresso.
   //
@@ -85,26 +103,6 @@ export async function GET(request: Request) {
       classificados: 0, processados: 0, esperados, pronto: false, comLinhas: null, comFatos: null,
       falha: { id: falha.id, etapa: falha.etapa, mensagem: falha.mensagem },
     });
-  }
-
-  // `limit(2)` e não a leitura de uma linha só: com dois mandatos de mesmo nome (não há UNIQUE) o PostgREST
-  // devolvia erro e o Sócio via 500. Duplicidade é dita, não vira "aguarde" nem erro opaco.
-  const { data: casos, error: casoErr } = await supabase
-    .from("caso")
-    .select("id")
-    .eq("nome", casoNome)
-    .limit(2);
-
-  if (casoErr) {
-    return NextResponse.json({ error: casoErr.message }, { status: 500 });
-  }
-  if ((casos?.length ?? 0) > 1) {
-    return NextResponse.json({ error: MENSAGEM_NOME_DUPLICADO }, { status: 409 });
-  }
-  const caso = casos?.[0] ?? null;
-  if (!caso) {
-    // Ainda nem o `caso` foi criado — normal logo após o envio.
-    return NextResponse.json({ classificados: 0, processados: 0, esperados, pronto: false });
   }
 
   // PAGINADO: estes dois são CONTADORES DE PROGRESSO da ingestão, e o teto do

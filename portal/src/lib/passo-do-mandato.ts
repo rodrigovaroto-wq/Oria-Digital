@@ -70,9 +70,18 @@ export function hrefDoPasso2(casoId: string, situacao: SituacaoPrevia): string {
   return `/casos/${encodeURIComponent(casoId)}/adicionar?passo=2${param ? `&existente=${encodeURIComponent(param)}` : ""}`;
 }
 
+/**
+ * `|` fica de fora do nome: a mensagem do token v1 é `nome|exp|usuario` e a do v2 é `v2|caso|exp|usuario`
+ * (`N8N/lib/assinatura-do-envio.mjs`). Um mandato chamado literalmente `v2|<uuid de outro caso>`
+ * faria o token v1 do nome coincidir com o v2 daquele caso — a colisão que a etiqueta `v2|` desloca
+ * para aqui e que só se fecha recusando o `|` na origem (enquanto o v1 de transição existir).
+ */
+export const MOTIVO_BARRA_NO_NOME = "O nome do mandato não pode ter o caractere \"|\". Use outro nome (um traço, por exemplo).";
+
 /** O nome que o passo 1 aceita. Em branco não cria mandato: `fn_upsert_caso('')` criaria um sem nome. */
 export function validarNomeDoMandato(bruto: unknown): { ok: true; nome: string } | { ok: false; motivo: string } {
   const nome = typeof bruto === "string" ? bruto.trim() : "";
   if (!nome) return { ok: false, motivo: "Informe o nome do mandato para continuar." };
+  if (nome.includes("|")) return { ok: false, motivo: MOTIVO_BARRA_NO_NOME };
   return { ok: true, nome };
 }

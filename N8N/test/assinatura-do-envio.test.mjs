@@ -18,7 +18,7 @@ import { createHmac } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 
 import {
-  normalizarMandato, mensagemAssinada, hmacSha256Hex, iguaisEmTempoConstante, verificarEnvio, veredictoDoEnvio,
+  normalizarMandato, mensagemAssinada, mensagemAssinadaV2, hmacSha256Hex, iguaisEmTempoConstante, verificarEnvio, veredictoDoEnvio,
 } from '../lib/assinatura-do-envio.mjs';
 
 const SEGREDO = 's3gredo-de-teste-do-n8n';
@@ -54,7 +54,7 @@ test('HMAC de JS puro = node:crypto: RFC 4231 caso 1, chave de bloco+ e texto co
 test('token válido do portal é aceito, e devolve o usuário que o portal assinou', () => {
   const token = tokenDoPortal({ mandato: 'Alfa', exp: expEm(1800) });
   const v = verificarEnvio({ token, mandato: 'Alfa', segredo: SEGREDO, agoraMs: agora() });
-  assert.deepEqual(v, { ok: true, usuario_id: USUARIO });
+  assert.deepEqual(v, { ok: true, usuario_id: USUARIO, caso_id: null }); // v1: por mandato, sem caso
 });
 
 test('a normalização é a do índice caso_nome_unico: caixa e espaço nas pontas valem o mesmo mandato', () => {
@@ -109,7 +109,7 @@ test('token ausente ou malformado é recusado, nunca aceito por omissão', () =>
   for (const t of [undefined, null, '', '   ']) {
     assert.deepEqual(verificarEnvio({ token: t, mandato: 'Alfa', segredo: SEGREDO, agoraMs: agora() }), { ok: false, motivo: 'sem_token' });
   }
-  for (const t of ['lixo', 'v2.1.a.b', 'v1.x.y.z', `v1.${expEm(60)}.${USUARIO}.curto`, 'v1.1.2.3.4']) {
+  for (const t of ['lixo', 'v3.1.a.b', 'v1.x.y.z', `v1.${expEm(60)}.${USUARIO}.curto`, 'v1.1.2.3.4']) {
     assert.equal(verificarEnvio({ token: t, mandato: 'Alfa', segredo: SEGREDO, agoraMs: agora() }).motivo, 'malformado', t);
   }
 });
@@ -188,14 +188,16 @@ test('Conferir Envio devolve as colunas que o IF e o Registrar Recusa leem (o fo
   for (const c of ['caso_id', 'etapa_recusa', 'orcamento_mensagem']) assert.match(repl, new RegExp(`\\$json\\.${c}\\b`));
 });
 
-test('Fail closed: banco fora NÃO deixa o envio passar (sem onError, com retry), e o Upsert não lê o mandato do item do Postgres', () => {
+test('Fail closed: banco fora NÃO deixa o envio passar (sem onError, com retry); o Upsert lê o caso do Conferir Envio e o nome do Form só como rótulo/transição', () => {
   assert.equal(conferir.onError, undefined, 'continueRegularOutput entregaria ao Upsert um item sem veredito');
   assert.equal(conferir.retryOnFail, true);
   assert.ok(conferir.maxTries >= 2);
-  // O Postgres SUBSTITUI o item: o Upsert tem de ler o mandato do Form, como o Registrar Recusa.
+  // O Postgres SUBSTITUI o item: nada vem de `$json`. No v2 o CASO vem do Conferir Envio (P3-F3); o nome do
+  // Form segue como rotulo da auditoria de divergencia e como chave do v1 em voo (ramo que sai na F5).
   const up = no('Upsert Caso (Postgres)').parameters.options.queryReplacement;
+  assert.match(up, /\$\('Conferir Envio'\)\.first\(\)\.json\.caso_id \?\? ''/);
   assert.match(up, /\$\('Intake \(Form\)'\)\.first\(\)\.json\['Mandato \(nome do caso\)'\]/);
-  assert.doesNotMatch(up, /\$json\['Mandato/);
+  assert.doesNotMatch(up, /\$json/);
 });
 
 // --- a topologia: a conferência vem ANTES de qualquer gravação -----------------
@@ -242,4 +244,84 @@ test('O formulário declara o campo do token DEPOIS do mandato (o portal acha o 
 
 test('mensagemAssinada: o vetor que o portal e o n8n usam (mandato normalizado | exp | usuário)', () => {
   assert.equal(mensagemAssinada('  Alfa Ltda ', 1893456000, USUARIO), `alfa ltda|1893456000|${USUARIO}`);
+});
+
+// --- token v2 (roteado por caso_id) --------------------------------------------------
+// VETOR FIXO, calculado FORA desta lib (node:crypto) e colado: segredo, exp, usuário e caso abaixo.
+//   createHmac('sha256', SEGREDO).update(`v2|${CASO}|${EXP_V2}|${USUARIO}`).digest('hex')
+const CASO = '7d2e4b18-5c63-4a9f-8e01-b3a6d5c9f742';
+const EXP_V2 = 1893456000;
+const TOKEN_V2_FIXO = 'v2.1893456000.3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10.7d2e4b18-5c63-4a9f-8e01-b3a6d5c9f742.'
+  + 'f99872e4ecdb126c3d81e69bd34c957573fa70077980fd8dc4062a508f3780ea';
+const AGORA_V2 = (EXP_V2 - 1000) * 1000;
+const v2 = (token, agoraMs = AGORA_V2) => verificarEnvio({ token, mandato: 'qualquer', segredo: SEGREDO, agoraMs });
+const tokenV2 = ({ caso = CASO, usuario = USUARIO, exp = EXP_V2, segredo = SEGREDO } = {}) =>
+  `v2.${exp}.${usuario}.${caso}.${createHmac('sha256', segredo).update(`v2|${caso}|${exp}|${usuario}`, 'utf8').digest('hex')}`;
+
+test('v2: o vetor fixo (calculado fora da lib) é aceito e devolve usuário E caso; a mensagem tem a etiqueta v2|', () => {
+  assert.equal(mensagemAssinadaV2(CASO, EXP_V2, USUARIO), `v2|${CASO}|${EXP_V2}|${USUARIO}`);
+  assert.equal(mensagemAssinadaV2(CASO.toUpperCase(), EXP_V2, USUARIO.toUpperCase()), `v2|${CASO}|${EXP_V2}|${USUARIO}`);
+  assert.deepEqual(v2(TOKEN_V2_FIXO), { ok: true, usuario_id: USUARIO, caso_id: CASO });
+  assert.equal(tokenV2(), TOKEN_V2_FIXO, 'o token do teste e o vetor colado concordam');
+  // o mandato é irrelevante no v2: o caso vem no token
+  assert.equal(verificarEnvio({ token: TOKEN_V2_FIXO, mandato: 'outro', segredo: SEGREDO, agoraMs: AGORA_V2 }).ok, true);
+  const vd = veredictoDoEnvio({ token: TOKEN_V2_FIXO, mandato: 'x', segredo: SEGREDO, agoraMs: AGORA_V2 });
+  assert.deepEqual(vd, { autorizado: true, motivo: null, mensagem: null, usuario_id: USUARIO, caso_id: CASO });
+});
+
+test('v2 adulterado (caso, usuário, exp, hmac, segredo) é recusado por assinatura', () => {
+  const [, e, u, c, sig] = TOKEN_V2_FIXO.split('.');
+  const outro = '00000000-0000-4000-8000-000000000001';
+  const casos = {
+    'outro caso': ['v2', e, u, outro, sig],
+    'outro usuário': ['v2', e, outro, c, sig],
+    'exp para o futuro': ['v2', '1999999999', u, c, sig],
+    'um caractere do hmac': ['v2', e, u, c, (sig[0] === '0' ? '1' : '0') + sig.slice(1)],
+  };
+  for (const [o_que, p] of Object.entries(casos)) assert.deepEqual(v2(p.join('.')), { ok: false, motivo: 'assinatura' }, o_que);
+  assert.equal(v2(tokenV2({ segredo: 'outro-segredo' })).motivo, 'assinatura');
+});
+
+test('v2 vencido é "expirado" (só depois da assinatura); no instante do exp já não vale', () => {
+  assert.deepEqual(v2(TOKEN_V2_FIXO, EXP_V2 * 1000), { ok: false, motivo: 'expirado' });
+  assert.equal(v2(TOKEN_V2_FIXO, EXP_V2 * 1000 - 1).ok, true);
+  assert.equal(veredictoDoEnvio({ token: TOKEN_V2_FIXO, mandato: 'x', segredo: SEGREDO, agoraMs: EXP_V2 * 1000 + 1 }).caso_id, null);
+});
+
+test('v2 malformado: uuid inválido, MAIÚSCULAS, partes a mais/menos e hmac curto -> malformado', () => {
+  const [, e, u, c, sig] = TOKEN_V2_FIXO.split('.');
+  const casos = {
+    'caso não é uuid': ['v2', e, u, 'nao-e-uuid', sig],
+    'caso maiúsculo': ['v2', e, u, c.toUpperCase(), sig],
+    'usuário maiúsculo': ['v2', e, u.toUpperCase(), c, sig],
+    'caso sem hífens': ['v2', e, u, c.replaceAll('-', ''), sig],
+    'exp não numérico': ['v2', 'x', u, c, sig],
+    'hmac curto': ['v2', e, u, c, sig.slice(0, 10)],
+    'hmac maiúsculo': ['v2', e, u, c, sig.toUpperCase()],
+    'sem caso (4 partes com v2)': ['v2', e, u, sig],
+    'parte a mais': ['v2', e, u, c, sig, 'x'],
+  };
+  for (const [o_que, p] of Object.entries(casos)) assert.deepEqual(v2(p.join('.')), { ok: false, motivo: 'malformado' }, o_que);
+});
+
+test('COLISÃO: token v1 de um mandato chamado <uuid-do-outro-caso> reescrito como v2 é recusado (a etiqueta v2|)', () => {
+  // O Analista cria o mandato cujo NOME é o uuid do caso alheio e pede, legitimamente, um token v1 dele.
+  const v1 = tokenDoPortal({ mandato: CASO, exp: EXP_V2 });
+  const [, e, u, sig] = v1.split('.');
+  assert.equal(verificarEnvio({ token: v1, mandato: CASO, segredo: SEGREDO, agoraMs: AGORA_V2 }).ok, true, 'o v1 original vale');
+  // reescrito como v2 do caso alheio, com o MESMO hmac
+  const forjado = ['v2', e, u, CASO, sig].join('.');
+  assert.deepEqual(v2(forjado), { ok: false, motivo: 'assinatura' });
+});
+
+test('v1 de mandato cujo nome normalizado começa por "v2|" é malformado ANTES do HMAC (paridade com a 0222); mandato normal segue aceito', () => {
+  for (const nome of [`v2|${CASO}`, ' V2|abc', 'v2|', 'V2|X  ']) {
+    const token = tokenDoPortal({ mandato: nome, exp: EXP_V2 }); // assinatura VÁLIDA: só a guarda recusa
+    assert.deepEqual(verificarEnvio({ token, mandato: nome, segredo: SEGREDO, agoraMs: AGORA_V2 }), { ok: false, motivo: 'malformado' }, JSON.stringify(nome));
+  }
+  // controles: não é prefixo "v2|" depois de normalizar
+  for (const nome of ['Alfa', 'v2 alfa', 'xv2|a', 'v2', '\tv2|a']) {
+    const token = tokenDoPortal({ mandato: nome, exp: EXP_V2 });
+    assert.equal(verificarEnvio({ token, mandato: nome, segredo: SEGREDO, agoraMs: AGORA_V2 }).ok, true, JSON.stringify(nome));
+  }
 });

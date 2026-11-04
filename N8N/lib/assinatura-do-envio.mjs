@@ -52,6 +52,20 @@ export function mensagemAssinada(mandato, exp, usuarioId) {
   return normalizarMandato(mandato) + '|' + String(exp) + '|' + String(usuarioId);
 }
 
+/**
+ * A mensagem do token v2 (roteado por caso_id): `v2|<caso>|<exp>|<usuario>`, tudo em minúsculas.
+ * A etiqueta `v2|` é OBRIGATÓRIA e é o que separa os dois domínios de assinatura: a mensagem v1 é
+ * `normalizar(nome)|exp|usuario`, e o nome de um mandato é texto livre. Sem a etiqueta, um Analista
+ * cria um mandato cujo NOME é o uuid de outro caso, pede um token v1 dele e o reescreve como v2 do
+ * outro caso com o mesmo hmac (`<uuid>|exp|usuario` seria idêntico nos dois formatos). A etiqueta
+ * desloca a colisão para um mandato chamado literalmente `v2|<uuid>` (o `|` no nome): quem criar o
+ * mandato precisa recusar `|` no nome, ou a colisão volta. Esta lib não vê o nome de ninguém.
+ * O portal e o banco (fn_conferir_envio) montam a mensagem por ESTE contrato.
+ */
+export function mensagemAssinadaV2(casoId, exp, usuarioId) {
+  return 'v2|' + String(casoId).toLowerCase() + '|' + String(exp) + '|' + String(usuarioId).toLowerCase();
+}
+
 /** UTF-8 sem `TextEncoder` (que o sandbox também pode não expor). */
 export function utf8Bytes(texto) {
   const s = String(texto);
@@ -101,25 +115,45 @@ export function iguaisEmTempoConstante(a, b) {
 }
 
 /**
- * Confere o token. `{ ok: true, usuario_id }` ou `{ ok: false, motivo }`, motivo em
- * `sem_segredo` | `sem_token` | `malformado` | `assinatura` | `expirado`. Mandato trocado cai em
- * `assinatura` (ele está dentro da mensagem assinada) — não há como distinguir "mandato trocado"
- * de "assinatura adulterada" sem guardar o mandato no token, e guardá-lo ali só entregaria a quem
- * adulterar o que tentar. A assinatura é conferida ANTES do `exp`, para a recusa por expiração só
- * existir para quem provou ter o segredo.
+ * Confere o token, v1 ou v2. `{ ok: true, usuario_id, caso_id }` (caso_id null no v1, que é por
+ * mandato) ou `{ ok: false, motivo }`, motivo em `sem_segredo` | `sem_token` | `malformado` |
+ * `assinatura` | `expirado`.
+ *   v1 = "v1.<exp>.<usuario_id>.<hmac>"            assina normalizar(mandato)|exp|usuario
+ *   v2 = "v2.<exp>.<usuario>.<caso>.<hmac>"        assina v2|caso|exp|usuario (mandato IGNORADO:
+ *        o caso vem no token; os dois uuids em minúsculas — maiúscula é `malformado`, não normalizada)
+ * Mandato trocado (v1) cai em `assinatura` (ele está dentro da mensagem assinada) — não há como
+ * distinguir "mandato trocado" de "assinatura adulterada" sem guardar o mandato no token, e guardá-lo
+ * ali só entregaria a quem adulterar o que tentar. A assinatura é conferida ANTES do `exp`, para a
+ * recusa por expiração só existir para quem provou ter o segredo.
  */
+const UUID_MIN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 export function verificarEnvio({ token, mandato, segredo, agoraMs }) {
   if (typeof segredo !== 'string' || segredo.trim() === '') return { ok: false, motivo: 'sem_segredo' };
   if (typeof token !== 'string' || token.trim() === '') return { ok: false, motivo: 'sem_token' };
   const partes = token.trim().split('.');
-  if (partes.length !== 4 || partes[0] !== 'v1' || !/^\d{1,12}$/.test(partes[1])
-    || !/^[0-9a-fA-F-]{8,64}$/.test(partes[2]) || !/^[0-9a-f]{64}$/.test(partes[3])) {
+  let exp; let usuario; let caso = null; let sig; let mensagem;
+  if (partes.length === 4 && partes[0] === 'v1') {
+    [, exp, usuario, sig] = partes;
+    // Paridade com fn_conferir_envio (0222): mandato normalizado começando por `v2|` faria o v1 assinar
+    // uma mensagem idêntica à do v2 daquele caso; recusa `malformado` ANTES do HMAC (o banco mediu 14 de 210 vetores divergindo sem isto).
+    if (!/^\d{1,12}$/.test(exp) || !/^[0-9a-fA-F-]{8,64}$/.test(usuario) || !/^[0-9a-f]{64}$/.test(sig)
+      || normalizarMandato(mandato).startsWith('v2|')) {
+      return { ok: false, motivo: 'malformado' };
+    }
+    mensagem = mensagemAssinada(mandato, exp, usuario);
+  } else if (partes.length === 5 && partes[0] === 'v2') {
+    [, exp, usuario, caso, sig] = partes;
+    if (!/^\d{1,12}$/.test(exp) || !UUID_MIN.test(usuario) || !UUID_MIN.test(caso) || !/^[0-9a-f]{64}$/.test(sig)) {
+      return { ok: false, motivo: 'malformado' };
+    }
+    mensagem = mensagemAssinadaV2(caso, exp, usuario);
+  } else {
     return { ok: false, motivo: 'malformado' };
   }
-  const esperado = hmacSha256Hex(segredo, mensagemAssinada(mandato, partes[1], partes[2]));
-  if (!iguaisEmTempoConstante(esperado, partes[3])) return { ok: false, motivo: 'assinatura' };
-  if (!(Number(partes[1]) * 1000 > agoraMs)) return { ok: false, motivo: 'expirado' };
-  return { ok: true, usuario_id: partes[2] };
+  if (!iguaisEmTempoConstante(hmacSha256Hex(segredo, mensagem), sig)) return { ok: false, motivo: 'assinatura' };
+  if (!(Number(exp) * 1000 > agoraMs)) return { ok: false, motivo: 'expirado' };
+  return { ok: true, usuario_id: usuario, caso_id: caso };
 }
 
 /**
@@ -129,12 +163,12 @@ export function verificarEnvio({ token, mandato, segredo, agoraMs }) {
  */
 export function veredictoDoEnvio({ token, mandato, segredo, agoraMs }) {
   const v = verificarEnvio({ token, mandato, segredo, agoraMs });
-  if (v.ok) return { autorizado: true, motivo: null, mensagem: null, usuario_id: v.usuario_id };
+  if (v.ok) return { autorizado: true, motivo: null, mensagem: null, usuario_id: v.usuario_id, caso_id: v.caso_id };
   const mensagem = v.motivo === 'sem_segredo'
     ? 'Envio recusado: o banco não tem o segredo de autorização do envio no Vault. '
       + 'Nada foi gravado. Peça ao responsável pelo banco para configurá-lo.'
     : v.motivo === 'expirado'
       ? 'Envio sem autorização válida: o token do envio expirou. Nada foi gravado. Reenvie pelo portal.'
       : 'Envio sem autorização válida. Nada foi gravado. Envie pelo portal, com o login de quem tem acesso ao mandato.';
-  return { autorizado: false, motivo: v.motivo, mensagem, usuario_id: null };
+  return { autorizado: false, motivo: v.motivo, mensagem, usuario_id: null, caso_id: null };
 }

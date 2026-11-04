@@ -251,33 +251,14 @@ const concluirOk = (extra = {}) => ({ resumo: "completo", registros: 12001, grup
 }
 
 // ---------------------------------------------------------------------------
-// 5. O CASO_ID: pelo fn_upsert_caso (o do n8n), com o ator da tela
+// 5. O CASO_ID: vem da tela do mandato; o ENVIO NUNCA CRIA mandato (P3)
 // ---------------------------------------------------------------------------
-function clienteDeCasos(opts: { erro?: string; dado?: unknown }) {
-  const log: string[] = [];
-  const cliente = {
-    rpc: async (funcao: string, args: Record<string, unknown>) => {
-      log.push(`${funcao} ${JSON.stringify(args)}`);
-      return opts.erro ? { data: null, error: { message: opts.erro } } : { data: "dado" in opts ? opts.dado : "id-do-banco", error: null };
-    },
-  };
-  return { cliente: cliente as unknown as Parameters<typeof obterCasoId>[0], log };
-}
 {
-  const a = clienteDeCasos({});
-  const r1 = await obterCasoId(a.cliente, "AMO", "id-da-tela");
-  checar(r1.id === "id-da-tela" && a.log.length === 0, "com casoId na tela o portal ainda chamou o banco");
-  // Sem casoId: a MESMA função do n8n, com o ator da tela (a trilha diz quem criou).
-  const b = clienteDeCasos({});
-  const r2 = await obterCasoId(b.cliente, "AMO");
-  checar(r2.id === "id-do-banco" && b.log.length === 1 && b.log[0] === 'fn_upsert_caso {"p_nome":"AMO","p_ator":"portal:navegador"}',
-    `o mandato não foi resolvido pelo fn_upsert_caso com o ator da tela: ${b.log.join(" / ")}`);
+  checar(obterCasoId("id-da-tela").id === "id-da-tela", "o casoId da tela não é o que o envio usa");
+  // Sem id o envio recusa: antes caía em fn_upsert_caso pelo nome, e renomear o mandato criava outro, vazio.
   let msg = "";
-  try { await obterCasoId(clienteDeCasos({ erro: "permission denied for function fn_upsert_caso" }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
-  checar(msg.includes("permission denied") && msg.includes("AMO"), `erro do banco ao resolver o mandato não sobe com a mensagem dele: "${msg}"`);
-  msg = "";
-  try { await obterCasoId(clienteDeCasos({ dado: null }).cliente, "AMO"); } catch (e) { msg = (e as Error).message; }
-  checar(msg.includes("não devolveu o id"), `resposta sem id virou mandato: "${msg}"`);
+  try { obterCasoId(""); } catch (e) { msg = (e as Error).message; }
+  checar(/não foi identificado/.test(msg) && /nada foi enviado/.test(msg), `sem casoId o envio deveria recusar dizendo o efeito: "${msg}"`);
 }
 
 // ---------------------------------------------------------------------------
@@ -314,6 +295,12 @@ function clienteDeCasos(opts: { erro?: string; dado?: unknown }) {
   }
   const v = validarNomeDoMandato("  AMO  ");
   checar(v.ok && v.nome === "AMO", "o nome do mandato não foi aparado");
+  // `|` no nome reabre a colisão v1/v2 (`v2|<uuid>` como NOME de mandato): recusado na criação, com o motivo.
+  for (const com of ["a|b", "v2|7d2e4b18-5c63-4a9f-8e01-b3a6d5c9f742", "|"]) {
+    const r = validarNomeDoMandato(com);
+    checar(!r.ok && /não pode ter o caractere "\|"/.test(r.motivo), `nome ${JSON.stringify(com)} com | passou como mandato válido`);
+  }
+  checar(/validarNomeDoMandato\(/.test(readFileSync(new URL("../src/app/casos/novo/actions.ts", import.meta.url), "utf8")), "o passo 1 deixou de validar o nome (e de recusar `|`)");
   for (const vazio of ["", "   ", null, undefined, 3]) {
     const r = validarNomeDoMandato(vazio);
     checar(!r.ok && /nome do mandato/.test(r.motivo), `nome ${JSON.stringify(vazio)} passou como mandato válido`);
@@ -589,38 +576,58 @@ for (const [motivo, bytes] of [
 // 8. O TOKEN DO ENVIO: o Form do n8n é público, e só o portal sabe quem pode enviar a quê
 // ---------------------------------------------------------------------------
 // O defeito (revisão do PR #265): o portal conferia o papel, mas um POST direto ao Form contornava
-// o portal, e o n8n gravava em QUALQUER mandato pela conexão de serviço. O portal agora assina
-// HMAC(segredo, mandato|exp|usuario) e o n8n (N8N/lib/assinatura-do-envio.mjs) recusa o que não
-// bater — a suíte do n8n prova a recusa; aqui se prova que o que o PORTAL gera é o que o n8n ACEITA
-// (node:crypto de um lado, JS puro do outro) e que o portal nunca envia sem token.
+// o portal, e o n8n gravava em QUALQUER mandato pela conexão de serviço. O portal assina
+// HMAC(segredo, v2|caso_id|exp|usuario) e o banco/n8n recusam o que não bater. P3: o token é do CASO,
+// não do nome — renomear o mandato no meio do envio criava um mandato novo e vazio. O portal só
+// emite v2. Aqui se prova que o que o PORTAL gera (node:crypto) é o que a lib de REFERÊNCIA aceita
+// (JS puro), o vetor fixo (o MESMO de N8N/test/assinatura-do-envio.test.mjs) e que o portal nunca
+// envia sem token.
 {
-  const SEGREDO = "segredo-do-vetor";
+  // O MESMO vetor de N8N/test/assinatura-do-envio.test.mjs (calculado fora da lib com node:crypto).
+  const SEGREDO = "s3gredo-de-teste-do-n8n";
   const USUARIO = "3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10";
-  const T0 = 1_700_000_000_000;
-  const emitido = assinarEnvio({ mandato: "Alfa", usuarioId: USUARIO, segredo: SEGREDO, agoraMs: T0 });
-  // VETOR FIXO, calculado fora do JS (Python hmac): se o portal e a lib do n8n mudassem a mensagem
-  // JUNTOS, os dois lados continuariam concordando e o token mudaria — este assert pega.
-  checar(emitido.ok && emitido.token === "v1.1700001800.3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10.1535774b8f7435e9c0c3d02a8a400fb2dc4902e41b9de6741555dcc23b66e97a",
-    "o token do portal para (Alfa, usuário, exp=T0+30min) deixou de ser o vetor fixo — a mensagem assinada mudou");
-  checar(VALIDADE_DO_TOKEN_S === 1800 && emitido.ok && emitido.exp === 1_700_001_800, "a validade do token não é mais de 30 min");
+  const CASO = "7d2e4b18-5c63-4a9f-8e01-b3a6d5c9f742";
+  const EXP_V2 = 1_893_456_000;
+  const VETOR = "v2.1893456000.3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10.7d2e4b18-5c63-4a9f-8e01-b3a6d5c9f742."
+    + "f99872e4ecdb126c3d81e69bd34c957573fa70077980fd8dc4062a508f3780ea";
+  const T0 = (EXP_V2 - VALIDADE_DO_TOKEN_S) * 1000;
+  const emitido = assinarEnvio({ casoId: CASO, usuarioId: USUARIO, segredo: SEGREDO, agoraMs: T0 });
+  // Se o portal e a lib do n8n mudassem a mensagem JUNTOS, os dois lados continuariam concordando e o
+  // token mudaria — o vetor colado pega.
+  checar(emitido.ok && emitido.token === VETOR,
+    "o token do portal para (caso, usuário, exp=T0+30min) deixou de ser o vetor fixo — a mensagem assinada mudou");
+  checar(VALIDADE_DO_TOKEN_S === 1800 && emitido.ok && emitido.exp === EXP_V2, "a validade do token não é mais de 30 min");
   const token = emitido.ok ? emitido.token : "";
-  // O token que o portal gera é ACEITO pela implementação do n8n.
-  const aceita = (m: string, agoraMs: number, ...segredo: [(string | undefined)?]) =>
-    verificarEnvio({ token, mandato: m, segredo: segredo.length ? segredo[0] : SEGREDO, agoraMs });
-  checar(aceita("Alfa", T0).ok === true && (aceita("Alfa", T0) as { usuario_id?: string }).usuario_id === USUARIO,
-    "o token do portal NÃO é aceito pela lib do n8n — o envio legítimo seria recusado");
-  checar(aceita("  ALFA ", T0 + 1000).ok === true, "caixa/espaço nas pontas do mandato deveriam valer o mesmo mandato (índice caso_nome_unico)");
-  checar(aceita("Beta", T0).ok === false, "o token do Alfa foi aceito para o Beta — o defeito do PR #265");
-  checar(aceita("Alfa", T0 + (VALIDADE_DO_TOKEN_S + 1) * 1000).ok === false && aceita("Alfa", T0 + (VALIDADE_DO_TOKEN_S - 1) * 1000).ok === true,
+  // v1 NÃO é mais emitido: o formato é v2 de 5 partes, e o `v1` por nome só vive no banco para o lote em voo.
+  checar(token.startsWith("v2.") && token.split(".").length === 5 && !token.startsWith("v1."), "o portal emitiu algo que não é v2");
+  // uuids em maiúsculas entram em minúsculas (maiúscula é `malformado` no banco)
+  const mai = assinarEnvio({ casoId: CASO.toUpperCase(), usuarioId: USUARIO.toUpperCase(), segredo: SEGREDO, agoraMs: T0 });
+  checar(mai.ok && mai.token === VETOR, "uuid em maiúsculas não foi normalizado para minúsculas antes de assinar");
+
+  // `segredo` por rest: um parâmetro com valor padrão trocaria o `undefined` (segredo ausente) pelo segredo certo.
+  const confere = (t: string, agoraMs: number, ...segredo: [(string | undefined)?]) =>
+    verificarEnvio({ token: t, mandato: "qualquer", segredo: segredo.length ? segredo[0] : SEGREDO, agoraMs });
+  // O token que o portal gera é ACEITO pela implementação de referência, com usuário E caso.
+  const aceito = confere(token, T0) as { ok: boolean; usuario_id?: string; caso_id?: string };
+  checar(aceito.ok === true && aceito.usuario_id === USUARIO && aceito.caso_id === CASO,
+    "o token do portal NÃO é aceito pela lib de referência (ou perdeu o caso/usuário) — o envio legítimo seria recusado");
+  // CASO TROCADO: o token de um caso não vale para outro — era o defeito (por nome) que o P3 fecha.
+  const [, e, u, , sig] = token.split(".");
+  const outroCaso = "00000000-0000-4000-8000-000000000001";
+  checar(confere(["v2", e, u, outroCaso, sig].join("."), T0).ok === false, "o token de um caso foi aceito para OUTRO caso");
+  const outroUsuario = assinarEnvio({ casoId: outroCaso, usuarioId: USUARIO, segredo: SEGREDO, agoraMs: T0 });
+  checar(outroUsuario.ok && (confere(outroUsuario.token, T0) as { caso_id?: string }).caso_id === outroCaso && outroUsuario.token !== token,
+    "dois casos deram o mesmo token ou o caso não vai no resultado");
+  checar(confere(token, T0 + (VALIDADE_DO_TOKEN_S + 1) * 1000).ok === false && confere(token, T0 + (VALIDADE_DO_TOKEN_S - 1) * 1000).ok === true,
     "a validade do token não é de 30 min: expirado aceito, ou válido recusado");
-  checar(aceita("Alfa", T0, "outro-segredo").ok === false && aceita("Alfa", T0, undefined).ok === false && aceita("Alfa", T0, "").ok === false,
+  checar(confere(token, T0, "outro-segredo").ok === false && confere(token, T0, undefined).ok === false && confere(token, T0, "").ok === false,
     "token aceito com segredo errado/ausente no n8n");
-  checar(veredictoDoEnvio({ token, mandato: "Alfa", segredo: undefined, agoraMs: T0 }).autorizado === false,
+  checar(veredictoDoEnvio({ token, mandato: "x", segredo: undefined, agoraMs: T0 }).autorizado === false,
     "o n8n sem segredo deveria recusar tudo (fail closed)");
 
   // SEM SEGREDO NO PORTAL: recusa clara, nunca token (e o envio nem começa).
   for (const segredo of [undefined, "", "   "]) {
-    const r = assinarEnvio({ mandato: "Alfa", usuarioId: USUARIO, segredo, agoraMs: T0 });
+    const r = assinarEnvio({ casoId: CASO, usuarioId: USUARIO, segredo, agoraMs: T0 });
     checar(!r.ok && r.status === 503 && r.mensagem === MENSAGEM_ENVIO_DESLIGADO && /N8N_INTAKE_SEGREDO/.test(r.mensagem) && /Envio desligado/.test(r.mensagem),
       `sem N8N_INTAKE_SEGREDO (${JSON.stringify(segredo)}) o portal deveria recusar com a frase do envio desligado`);
   }
@@ -638,7 +645,7 @@ for (const [motivo, bytes] of [
   const rota = sem(lerFonte("../src/app/api/intake/route.ts")), destino = sem(lerFonte("../src/app/api/intake/destino/route.ts"));
   const pos = (src: string, re: RegExp) => src.search(re);
   const ordemOk = (src: string, marco: RegExp) => {
-    const iPapel = pos(src, /conferirEnvioAoMandato\(/), iToken = pos(src, /emitirTokenDoEnvio\(/), iMarco = pos(src, marco);
+    const iPapel = pos(src, /conferirEnvioAoCaso\(/), iToken = pos(src, /emitirTokenDoEnvio\(/), iMarco = pos(src, marco);
     return iPapel >= 0 && iToken > iPapel && iMarco > iToken
       && /const\s+(\w+)\s*=\s*await\s+emitirTokenDoEnvio\([^)]*\);?\s*if\s*\(\s*!\s*\1\.ok\s*\)\s*return\b/.test(src);
   };
@@ -649,6 +656,16 @@ for (const [motivo, bytes] of [
   checar(/fd\.append\(destino\.campos\.token,\s*destino\.token\)/.test(TELA)
     && /!destino\.campos\?\.token\s*\|\|\s*typeof destino\.token !== "string"/.test(TELA),
     "o envio direto da tela deve mandar o token como campo do Form, e recusar um destino sem token");
+  // O CASO (e não o nome) é o que atravessa o caminho inteiro: a tela pede o destino por id, o servidor assina por id,
+  // o lote pequeno manda o id, e o acompanhamento pergunta por id. Estrutural: não há como executar as rotas aqui.
+  const statusRota = sem(lerFonte("../src/app/api/intake/status/route.ts"));
+  checar(/emitirTokenDoEnvio\(casoId\)/.test(rota) && /emitirTokenDoEnvio\(casoId\)/.test(destino)
+    && /searchParams\.get\("caso"\)/.test(destino) && /form\.get\("casoId"\)/.test(rota),
+    "as rotas deixaram de assinar/ler o envio pelo casoId");
+  checar(/fetch\(`\/api\/intake\/destino\?caso=\$\{encodeURIComponent\(casoId\)\}`\)/.test(TELA) && /fd\.append\("casoId", casoId\)/.test(TELA) && /caso:\s*casoId,/.test(TELA),
+    "a tela deixou de pedir o destino, enviar o lote e acompanhar pelo casoId");
+  checar(/\.eq\("id",\s*casoId\)/.test(statusRota) && !/\.eq\("nome"/.test(statusRota),
+    "o acompanhamento voltou a achar o mandato pelo nome (uma renomeação no meio do lote deixa a tela em 'aguarde')");
 }
 
 if (falhas.length > 0) {

@@ -94,6 +94,8 @@ language sql as $$
   select coalesce((select not presente and detalhe like '%' || p_fn || '%' from fn_instalacao_conferir() where chave = p_chave), false) $$;
 
 -- A migration sob teste: o arquivo real (no-op) ou a variante.
+-- 0221: a migration velha recria a constraint de tipo com menos valores; a linha do tipo `rls_ligada` (0221) sairia violando-a. Sai aqui (a transação volta).
+delete from instalacao_requisito where tipo = 'rls_ligada';
 \i :arq0220
 
 -- =============================================================================
@@ -336,6 +338,8 @@ begin
   perform set_config('dial.corpo_0220', md5(pg_get_functiondef('fn_instalacao_conferir()'::regprocedure)), false);
 end $$;
 
+-- 0221: a migration velha recria a constraint de tipo com menos valores; a linha do tipo `rls_ligada` (0221) sairia violando-a. Sai aqui (a transação volta).
+delete from instalacao_requisito where tipo = 'rls_ligada';
 \i :arq0220
 
 do $$

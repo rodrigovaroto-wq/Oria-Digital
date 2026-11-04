@@ -94,9 +94,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select fn_upsert_caso($1::text) as caso_id, (select limiar_auto_clear from estagio_autonomia where estagio = 'classificacao_doc_checklist') as limiar_classificacao",
+        "query": "select case when nullif($1::text, '') is null then fn_upsert_caso($2::text) else fn_caso_do_envio($1::text::uuid, $2::text) end as caso_id, (select limiar_auto_clear from estagio_autonomia where estagio = 'classificacao_doc_checklist') as limiar_classificacao",
         "options": {
-          "queryReplacement": "={{ [$('Intake (Form)').first().json['Mandato (nome do caso)']] }}"
+          "queryReplacement": "={{ [$('Conferir Envio').first().json.caso_id ?? '', $('Intake (Form)').first().json['Mandato (nome do caso)'] ?? ''] }}"
         }
       },
       "id": "upsert-caso-postgres-",
@@ -113,7 +113,6 @@
           "name": "Supabase Postgres (Session Pooler)"
         }
       },
-      "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
@@ -238,7 +237,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r",
+        "query": "select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r, $3::text as etapa_recusa, $4::text as orcamento_mensagem",
         "options": {
           "queryReplacement": "={{ [$json.caso_id, $('Intake (Form)').first().json['Mandato (nome do caso)'], $json.etapa_recusa || 'orcamento', $json.orcamento_mensagem] }}"
         }
@@ -265,7 +264,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "throw new Error($input.first().json.orcamento_mensagem || 'Lote recusado pelo orcamento.');"
+        "jsCode": "const r = $input.first().json;\nconst etapa = r.etapa_recusa || 'nao informada';\nthrow new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') + ' [etapa: ' + etapa + ']');"
       },
       "id": "abortar-lote",
       "name": "Abortar Lote",

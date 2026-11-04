@@ -2550,11 +2550,24 @@ const nodes = [
     // é preciosismo: sem ele, banco sem a linha do dial devolveria ZERO linha e o
     // `caso_id` sumiria junto — a consulta que lê a configuração não pode
     // derrubar a que cria o caso.
-    operation: 'executeQuery', query: "select fn_upsert_caso($1::text) as caso_id, "
+    //
+    // O CASO VEM DO ENVIO, NÃO DO NOME (migration 0222, DESENHO_P3). O token v2 assina o caso_id e o
+    // `Conferir Envio` o devolve; `fn_caso_do_envio` roteia por ele, NUNCA cria mandato e audita o
+    // nome divergente (o defeito: renomear o mandato e reenviar criava um mandato novo pelo nome do
+    // Form). O token v1 (em voo na publicação) traz caso_id nulo e ainda cai em `fn_upsert_caso` pelo
+    // nome — esse ramo sai na F5. `$1` é '' (nunca null cru no array) e `case` em vez de `coalesce`,
+    // porque `fn_caso_do_envio` LANÇA com caso nulo. O `::text` explícito fixa o tipo do parâmetro.
+    //
+    // FALHA FECHADO: SEM `onError` (PG_RETRY o poria em continueRegularOutput). Caso apagado entre a
+    // conferência e o upsert faz `fn_caso_do_envio` lançar; com continueRegularOutput o lote seguiria
+    // com `caso_id` undefined em todo nó que lê `$('Upsert Caso (Postgres)')` (7 expressões). Retry
+    // como o `Conferir Envio`.
+    operation: 'executeQuery', query: "select case when nullif($1::text, '') is null then fn_upsert_caso($2::text) "
+      + "else fn_caso_do_envio($1::text::uuid, $2::text) end as caso_id, "
       + "(select limiar_auto_clear from estagio_autonomia "
       + "where estagio = 'classificacao_doc_checklist') as limiar_classificacao",
-    options: { queryReplacement: "={{ [$('Intake (Form)').first().json['Mandato (nome do caso)']] }}" },
-  }, { credentials: PG_CRED, ...PG_RETRY }),
+    options: { queryReplacement: "={{ [$('Conferir Envio').first().json.caso_id ?? '', $('Intake (Form)').first().json['Mandato (nome do caso)'] ?? ''] }}" },
+  }, { credentials: PG_CRED, retryOnFail: true, maxTries: 3, waitBetweenTries: 3000 }),
 
   node('Listar Arquivos', 'n8n-nodes-base.code', 2, { mode: 'runOnceForAllItems', jsCode: CODE_LISTAR }),
 
@@ -2593,13 +2606,22 @@ const nodes = [
 
   node('Registrar Recusa', 'n8n-nodes-base.postgres', 2.5, {
     operation: 'executeQuery',
-    query: 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r',
+    // `$3`/`$4` voltam como colunas (`as nome`) porque o Postgres SUBSTITUI o item: sem elas o
+    // `Abortar Lote` lia `orcamento_mensagem` de um item que so tinha `r`, e as TRES recusas
+    // (envio, tamanho, orcamento) terminavam a execucao com o texto generico (S114).
+    query: 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r, '
+      + '$3::text as etapa_recusa, $4::text as orcamento_mensagem',
     options: { queryReplacement: "={{ [$json.caso_id, $('Intake (Form)').first().json['Mandato (nome do caso)'], $json.etapa_recusa || 'orcamento', $json.orcamento_mensagem] }}" },
   }, { credentials: PG_CRED, ...PG_RETRY }),
 
   node('Abortar Lote', 'n8n-nodes-base.code', 2, {
     mode: 'runOnceForAllItems',
-    jsCode: `throw new Error($input.first().json.orcamento_mensagem || 'Lote recusado pelo orcamento.');`,
+    // Lanca a mensagem e a etapa da recusa que CHEGOU (colunas do `Registrar Recusa`). Sem
+    // mensagem, diz que a recusa veio sem motivo: cair em "orcamento" apresentaria ausencia
+    // como causa (regra 1). Sem crase aqui dentro: fecharia o template literal do gerador.
+    jsCode: `const r = $input.first().json;
+const etapa = r.etapa_recusa || 'nao informada';
+throw new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') + ' [etapa: ' + etapa + ']');`,
   }),
   // CAMADA 1 — o texto do PDF lido na própria instância, antes de qualquer
   // chamada. Nó NATIVO do n8n; não manda nada para fora e não custa nada.

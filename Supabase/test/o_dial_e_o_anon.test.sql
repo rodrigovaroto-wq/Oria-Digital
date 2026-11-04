@@ -374,7 +374,7 @@ create temp table snap_ro_0218 as
 -- A MIGRATION, reaplicada por cima do que produção tinha antes.
 -- 0219: a 0218 recria a constraint de TIPO da sonda sem os tipos `definer_sem_escrita` e `sem_acao_referencial`, que a 0219 acrescentou e que já existem em linhas do catálogo; o
 -- `add constraint` recusaria essa linha. Ela sai aqui (dentro da transação, que volta): é o que a 0218 reaplicada sozinha tem de supor.
-delete from instalacao_requisito where tipo in ('definer_sem_escrita', 'sem_acao_referencial');
+delete from instalacao_requisito where tipo in ('definer_sem_escrita', 'sem_acao_referencial', 'rls_ligada');   -- 0221: o `rls_ligada` também
 \i :arq0218
 
 do $$
