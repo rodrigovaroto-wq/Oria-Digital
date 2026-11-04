@@ -2028,9 +2028,10 @@ begin
 
   return query select
     v_motivo is null,
-    -- caso_inexistente devolve NULL: o id não existe e execucao_falha.caso_id tem FK para caso (o nó Registrar Recusa chama
-    -- fn_registrar_falha_execucao($json.caso_id, ...) e levaria 23503, perdendo a recusa). As demais recusas pós-assinatura devolvem o id.
-    case when v_motivo = 'caso_inexistente' then null::uuid else v_caso end,
+    -- O id só sai se o caso EXISTE (nulo para caso_inexistente e para qualquer recusa em que o caso foi apagado): execucao_falha.caso_id tem FK
+    -- para caso(id), e o nó Registrar Recusa chama fn_registrar_falha_execucao($json.caso_id, ...). Medido: id inexistente = 23503
+    -- execucao_falha_caso_id_fkey e a recusa se perde. A raiz está em fn_registrar_falha_execucao (seção 2a); isto é a defesa barata.
+    (select c.id from caso c where c.id = v_caso),
     'envio'::text,
     v_motivo,
     case
@@ -2054,7 +2055,7 @@ $_$;
 -- Name: FUNCTION fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura (menos caso_inexistente: NULL, o id não existe e é FK de execucao_falha). Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
+COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura (só se o caso existir; senão NULL). Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
 
 --
 -- Name: fn_conferir_lote(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -13550,19 +13551,39 @@ CREATE FUNCTION public.fn_registrar_falha_execucao(p_caso_id uuid, p_caso_nome t
     LANGUAGE plpgsql
     AS $$
 declare
-  v_id uuid;
+  v_id      uuid;
+  v_caso    uuid := p_caso_id;
+  v_detalhe jsonb := p_detalhe;
 begin
-  insert into execucao_falha (caso_id, caso_nome, etapa, mensagem, detalhe)
-    values (p_caso_id, nullif(trim(coalesce(p_caso_nome, '')), ''),
-            coalesce(nullif(trim(p_etapa), ''), 'desconhecida'),
-            coalesce(nullif(trim(p_mensagem), ''), 'Falha sem mensagem.'),
-            p_detalhe)
-    returning id into v_id;
+  if v_caso is not null and not exists (select 1 from caso c where c.id = v_caso) then
+    v_caso := null;
+  end if;
+  loop
+    if p_caso_id is not null and v_caso is null then
+      -- caso_id_anulado: o id que veio e não existe (mantém o rastro sem inventar coluna).
+      v_detalhe := case when jsonb_typeof(p_detalhe) = 'object' then p_detalhe else '{}'::jsonb end
+                   || jsonb_build_object('caso_id_anulado', p_caso_id)
+                   || case when p_detalhe is not null and jsonb_typeof(p_detalhe) <> 'object'
+                           then jsonb_build_object('detalhe_original', p_detalhe) else '{}'::jsonb end;
+    end if;
+    begin
+      insert into execucao_falha (caso_id, caso_nome, etapa, mensagem, detalhe)
+        values (v_caso, nullif(trim(coalesce(p_caso_nome, '')), ''),
+                coalesce(nullif(trim(p_etapa), ''), 'desconhecida'),
+                coalesce(nullif(trim(p_mensagem), ''), 'Falha sem mensagem.'),
+                v_detalhe)
+        returning id into v_id;
+      exit;
+    exception when foreign_key_violation then
+      if v_caso is null then raise; end if;   -- já era NULL: não é este defeito
+      v_caso := null;                          -- o caso sumiu entre a checagem e o insert
+    end;
+  end loop;
 
   insert into evento_auditoria (ator, acao, entidade_ref, depois)
     values ('sistema:n8n', 'falha_execucao',
-            coalesce('caso:' || p_caso_id::text, 'caso_nome:' || coalesce(p_caso_nome, '?')),
-            jsonb_build_object('etapa', p_etapa, 'mensagem', p_mensagem, 'detalhe', p_detalhe));
+            coalesce('caso:' || v_caso::text, 'caso_nome:' || coalesce(p_caso_nome, '?')),
+            jsonb_build_object('etapa', p_etapa, 'mensagem', p_mensagem, 'detalhe', v_detalhe));
 
   return jsonb_build_object('falha_id', v_id, 'registrada', true);
 end;

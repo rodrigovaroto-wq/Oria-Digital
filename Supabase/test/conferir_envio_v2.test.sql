@@ -1,6 +1,6 @@
 -- Teste da 0222 — o token de envio v2 (carrega o CASO) e o mandato que o envio deixou de criar.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 55 asserts (medidos) — ver o cabeçalho de
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 64 asserts (medidos) — ver o cabeçalho de
 -- Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql ("MEDIÇÃO NÃO-VAZIA") para o número que reprova
 -- com cada correção desligada.
 --
@@ -46,6 +46,8 @@ declare
   k_b constant uuid := 'c0000000-0000-4000-8000-00000000000b';   -- "Beta": ana NÃO alocada
   k_f constant uuid := 'c0000000-0000-4000-8000-00000000000f';   -- "Fechado": fechado
   k_d constant uuid := 'c0000000-0000-4000-8000-00000000000d';   -- nunca existiu
+  k_x constant uuid := 'c0000000-0000-4000-8000-000000000099';   -- criado e apagado no teste / nunca existiu
+  t_exp_x constant text := 'v2.1800000000.a0000000-0000-4000-8000-000000000001.c0000000-0000-4000-8000-000000000099.42ede57d2d0dcba7dbef771b662ee4aedb0b33bc761a7a8c319cfb06ade09fde';  -- Sócio, caso k_x, exp 1800000000
   -- vetores v2 (node, segredo c_seg, exp 4102444800 = 2100-01-01):
   t_ana_a  constant text := 'v2.4102444800.a0000000-0000-4000-8000-000000000002.c0000000-0000-4000-8000-00000000000a.c9df5f97e60e558f9a541cf63d5b0a9f628c4df462444cb690322ad6658bf271';
   t_soc_a  constant text := 'v2.4102444800.a0000000-0000-4000-8000-000000000001.c0000000-0000-4000-8000-00000000000a.8c8caf3bc1c89f33b4b52256296b45b5601a9fe3fdab50c94fb261ef0fb258d5';
@@ -65,6 +67,8 @@ declare
   k_lib constant uuid := '7d2e4b18-5c63-4a9f-8e01-b3a6d5c9f742';
   u_lib constant uuid := '3f1c9a52-7b0e-4d34-9a5e-0c2b1d6e8f10';
   v_r record;
+  v_f execucao_falha;
+  v_txt text;
   v_n int; v_n0 int; v_id uuid; v_sqlstate text;
 begin
   update vault.secrets set secret = c_seg where name = 'n8n_intake_segredo';
@@ -173,6 +177,44 @@ begin
   perform teste_assert_envio(teste_motivo(t_soc_f) = 'ok', 'reaberto o mandato, o envio volta a ser aceito');
   update caso set fechado_em = now() where id = k_f;
 
+  -- 5b. A RAIZ: a falha NUNCA se perde por causa de um id de caso que não existe (FK de execucao_falha, 23503 medido).
+  -- expirado + mandato apagado: o caso do token existiu e sumiu. Apago k_x (criado aqui) com um token expirado dele.
+  select * into v_r from fn_conferir_envio(t_exp_x, 'X', '2027-06-01');   -- k_x NÃO existe (nunca criado): expirado com caso que nunca existiu
+  perform teste_assert_envio(v_r.motivo_recusa = 'expirado' and v_r.caso_id is null, 'expirado com caso que nunca existiu: devolve caso_id nulo', row_to_json(v_r)::text);
+  select count(*) into v_n0 from execucao_falha;
+  begin perform fn_registrar_falha_execucao(v_r.caso_id, 'X', v_r.etapa_recusa, v_r.orcamento_mensagem, null); v_sqlstate := 'ok';
+  exception when others then v_sqlstate := sqlstate; end;
+  select count(*) into v_n from execucao_falha;
+  perform teste_assert_envio(v_sqlstate = 'ok' and v_n = v_n0 + 1, 'expirado + caso que nunca existiu: a sequência do nó GRAVA a recusa', v_sqlstate || ' ' || v_n0 || '->' || v_n);
+  insert into caso (id, nome) values (k_x, 'Apagado depois');
+  delete from caso where id = k_x;
+  select * into v_r from fn_conferir_envio(t_exp_x, 'Apagado depois', '2027-06-01');
+  perform teste_assert_envio(v_r.motivo_recusa = 'expirado' and v_r.caso_id is null, 'expirado com o mandato APAGADO: caso_id nulo (não devolve id solto)', row_to_json(v_r)::text);
+  select count(*) into v_n0 from execucao_falha;
+  begin perform fn_registrar_falha_execucao(v_r.caso_id, 'Apagado depois', v_r.etapa_recusa, v_r.orcamento_mensagem, null); v_sqlstate := 'ok';
+  exception when others then v_sqlstate := sqlstate; end;
+  select count(*) into v_n from execucao_falha;
+  perform teste_assert_envio(v_sqlstate = 'ok' and v_n = v_n0 + 1, 'expirado + mandato apagado: a sequência do nó GRAVA a recusa', v_sqlstate || ' ' || v_n0 || '->' || v_n);
+  -- A CORRIDA (caso apagado entre o retorno de fn_conferir_envio e o Registrar Recusa): chamada direta com id que não existe.
+  select count(*) into v_n0 from execucao_falha;
+  begin v_txt := fn_registrar_falha_execucao(k_x, 'Corrida', 'envio', 'msg', null)::text; v_sqlstate := 'ok';
+  exception when others then v_sqlstate := sqlstate; end;
+  select count(*) into v_n from execucao_falha;
+  perform teste_assert_envio(v_sqlstate = 'ok' and v_n = v_n0 + 1, 'id inexistente direto na função de registro: grava 1 linha, sem 23503', v_sqlstate || ' ' || v_n0 || '->' || v_n);
+  select * into v_f from execucao_falha where caso_nome = 'Corrida';
+  perform teste_assert_envio(v_f.caso_id is null and v_f.caso_nome = 'Corrida' and v_f.detalhe ->> 'caso_id_anulado' = k_x::text,
+    'a falha com id anulado guarda o NOME e o rastro do id anulado em detalhe', row_to_json(v_f)::text);
+  begin perform fn_registrar_falha_execucao(k_x, 'Corrida2', 'envio', 'msg', '{"a":1}'::jsonb); exception when others then null; end;
+  select * into v_f from execucao_falha where caso_nome = 'Corrida2';
+  perform teste_assert_envio(v_f.detalhe ->> 'a' = '1' and v_f.detalhe ->> 'caso_id_anulado' = k_x::text, 'o detalhe que veio é preservado ao anular o id', row_to_json(v_f)::text);
+  -- CONTROLE: caso que existe grava PRESO ao caso, sem anulação; id nulo continua gravando.
+  perform fn_registrar_falha_execucao(k_b, 'Beta', 'envio', 'msg', null);
+  select * into v_f from execucao_falha where caso_nome = 'Beta' and mensagem = 'msg';
+  perform teste_assert_envio(v_f.caso_id = k_b and v_f.detalhe is null, 'CONTROLE: caso existente grava preso ao caso, sem rastro de anulação', row_to_json(v_f)::text);
+  perform fn_registrar_falha_execucao(null, 'Sem caso', 'envio', 'msg', null);
+  select * into v_f from execucao_falha where caso_nome = 'Sem caso';
+  perform teste_assert_envio(v_f.caso_id is null and v_f.detalhe is null, 'CONTROLE: id nulo segue gravando com caso_id nulo (o caso ainda não existe)', row_to_json(v_f)::text);
+
   -- 6. ASSINATURA ANTES DE QUALQUER CONSULTA A CASO: token adulterado nunca revela se o caso existe/está fechado.
   select * into v_r from fn_conferir_envio(replace(t_soc_f, '.f77e', '.0000'), 'x');
   perform teste_assert_envio(v_r.motivo_recusa = 'assinatura' and v_r.caso_id is null,
@@ -236,9 +278,9 @@ begin
   reset role;
 
   -- 12. A SONDA prova a 0222 aplicada.
-  perform teste_assert_envio((select count(*) from fn_instalacao_conferir() where migration = '0222') = 5
+  perform teste_assert_envio((select count(*) from fn_instalacao_conferir() where migration = '0222') = 6
       and not exists (select 1 from fn_instalacao_conferir() where migration = '0222' and not presente),
-    'a sonda: os 5 requisitos da 0222 presentes');
+    'a sonda: os 6 requisitos da 0222 presentes');
   perform teste_assert_envio((select presente from fn_instalacao_conferir() where chave = 'acesso_fn_pode_escrever'),
     'a sonda: acesso_fn_pode_escrever (0216) segue presente com o marcador da delegação');
 

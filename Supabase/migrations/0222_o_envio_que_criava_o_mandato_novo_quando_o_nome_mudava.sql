@@ -1,6 +1,6 @@
 -- =============================================================================
 -- 0222 — O ENVIO QUE CRIAVA UM MANDATO NOVO QUANDO O NOME MUDAVA: o token v2 carrega o CASO, não o nome
--- (Cria 3 funções — fn_pode_escrever_caso_de, fn_caso_do_envio — e REDEFINE fn_pode_escrever_caso e fn_conferir_envio, esta com a
+-- (Cria 2 funções — fn_pode_escrever_caso_de, fn_caso_do_envio — e REDEFINE fn_pode_escrever_caso, fn_registrar_falha_execucao (ID de caso inexistente não perde a falha) e fn_conferir_envio, esta com a
 --  MESMA assinatura e as MESMAS colunas de saída; acrescenta 5 requisitos à sonda. Sem tabela, sem gatilho, sem backfill.)
 --
 -- O DEFEITO. O envio roteava por NOME: o portal assinava `mandato_normalizado|exp|usuario` e o n8n chamava fn_upsert_caso(nome).
@@ -24,7 +24,7 @@
 -- fn_conferir_envio (MESMA assinatura: fn_conferir_envio(text, text, timestamptz) e as mesmas 6 colunas; o nó publicado não muda):
 --   v1 exatamente como na 0217 (caso_id NULL), mais o fechamento acima. v2, na ordem: sem_segredo > sem_token > malformado >
 --   assinatura (antes de QUALQUER consulta a caso) > expirado > caso_inexistente > caso_fechado > sem_acesso. Autorizado devolve
---   o caso_id; as recusas pós-assinatura (expirado em diante) também, para prender a falha ao caso — EXCETO caso_inexistente, que devolve NULL: o id não existe e execucao_falha.caso_id é FK de caso(id), então devolvê-lo faria o nó Registrar Recusa levar 23503 e a recusa nunca ficaria gravada (achado da revisão de 04/11). `p_mandato` é ignorado no v2.
+--   o caso_id; as recusas pós-assinatura (expirado em diante) também, para prender a falha ao caso — mas só se o caso EXISTE (senão NULL: execucao_falha.caso_id é FK de caso(id) e o nó Registrar Recusa levaria 23503; achado da revisão de 04/11, corrigido na raiz em fn_registrar_falha_execucao, seção 2a). `p_mandato` é ignorado no v2.
 --   sem_acesso: o usuário do token, NO MOMENTO DO ENVIO, não é Sócio nem Analista alocado (fn_pode_escrever_caso_de).
 -- fn_pode_escrever_caso_de(usuario, caso): o corpo de fn_pode_escrever_caso com o usuário como parâmetro; fn_pode_escrever_caso(caso)
 --   passa a delegar a ela com auth.uid() (mesma semântica; está em dezenas de policies, e acesso_por_caso.test.sql passa inteira).
@@ -36,21 +36,25 @@
 -- O QUE FICA PARA O N8N (fora desta migration): o nó publicado ainda chama fn_upsert_caso(nome) com o token v1; trocá-lo por
 -- fn_caso_do_envio(caso_id, nome) é a outra metade da F2 — enquanto isso o v1 continua aceito e o defeito continua aberto para ele.
 --
--- A SONDA. 5 requisitos bloqueantes provam a 0222 aplicada: corpo de fn_conferir_envio com a mensagem `'v2|' || v_partes[4]`, com `caso_fechado` e com
--- `fn_pode_escrever_caso_de(`; as funções fn_caso_do_envio e fn_pode_escrever_caso_de. O requisito acesso_fn_pode_escrever da 0216
+-- A SONDA. 6 requisitos bloqueantes provam a 0222 aplicada: corpo de fn_conferir_envio com a mensagem `'v2|' || v_partes[4]`, com `caso_fechado` e com
+-- `fn_pode_escrever_caso_de(`; as funções fn_caso_do_envio e fn_pode_escrever_caso_de; e o corpo de fn_registrar_falha_execucao com `caso_id_anulado` (seção 2a). O requisito acesso_fn_pode_escrever da 0216
 -- marcava `m.papel = 'analista'` em fn_pode_escrever_caso; o marcador sai dela (vai para a _de) e passa a ser a delegação — o
 -- marcador antigo é recolocado no requisito novo da _de.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/conferir_envio_v2.test.sql — 55 asserts, medidos em 04/11/2026 com
--- `PGOPTIONS=-cenvio.medindo=on` (o assert vira `raise warning` e CONTA). Controle: 0 falhas em 55. Cada correção desligada UMA vez no
--- banco já migrado (conferido que a variante APLICOU antes de rodar o teste); reprovações / 55 (revisão de 04/11: +3 asserts de sequência do nó Registrar Recusa, e caso_inexistente passou a devolver caso_id NULL):
---   * sem a etiqueta `v2|` na mensagem: 19 (inclui a sonda)    * sem a conferência de acesso (sem_acesso): 6 (inclui a sonda)
---   * sem caso_fechado: 1                      * sem caso_inexistente: 2
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/conferir_envio_v2.test.sql — 64 asserts, medidos em 04/11/2026 com
+-- `PGOPTIONS=-cenvio.medindo=on` (o assert vira `raise warning` e CONTA). Controle: 0 falhas em 64. Cada correção desligada UMA vez no
+-- banco já migrado (conferido que a variante APLICOU antes de rodar o teste); reprovações / 64:
+--   * sem a etiqueta `v2|` na mensagem: 21 (inclui a sonda)    * sem a conferência de acesso (sem_acesso): 6 (inclui a sonda)
+--   * sem caso_fechado: 1                      * sem caso_inexistente: 1
 --   * sem a auditoria do nome divergente: 3    * guarda v1 `v2|...` desligada: 2
 --   * fn_caso_do_envio sem a falha fechada (caso inexistente): 1
 --   * fn_pode_escrever_caso_de sempre true: 7 (inclui 2 asserts de fn_pode_escrever_caso, a das policies, que agora delega a ela)
---   * caso_inexistente devolvendo o id solto (FK de execucao_falha viola, a recusa se perde): 1
---   * assinatura conferida DEPOIS da consulta a caso: 1
+--   * assinatura conferida DEPOIS da consulta a caso: 3
+--   * fn_registrar_falha_execucao SEM a anulação do id inexistente (pré-checagem e handler fora): 3 (a chamada direta com id inexistente
+--     leva 23503, o rastro e o detalhe preservado)
+--   * fn_conferir_envio devolvendo o id solto (sem a defesa da mudança 2): 2 (expirado com caso que nunca existiu e com caso apagado)
+--   * SÓ a pré-checagem fora, ou SÓ o handler de foreign_key_violation fora: 0 e 0 — DECLARADO: cada um cobre o outro. O handler existe
+--     para a corrida (caso apagado entre a checagem e o insert), que uma única sessão não consegue provocar; ele não tem assert próprio.
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -74,6 +78,68 @@ comment on function fn_pode_escrever_caso_de(uuid, uuid) is
 create or replace function fn_pode_escrever_caso(p_caso uuid) returns boolean
 language sql stable security definer set search_path = public, pg_temp as $$
   select fn_pode_escrever_caso_de(auth.uid(), p_caso)
+$$;
+
+-- -----------------------------------------------------------------------------
+-- 2a. fn_registrar_falha_execucao: ID DE CASO QUE NÃO EXISTE NÃO PERDE A FALHA (a raiz, no ponto por onde todo chamador passa)
+-- -----------------------------------------------------------------------------
+-- O DEFEITO (medido na revisão de 04/11/2026): execucao_falha.caso_id é FK de caso(id). Qualquer chamador que passe um id que não existe
+-- (mandato apagado com o token ainda válido, token vencido de mandato apagado, ou o mandato apagado ENTRE fn_conferir_envio e o nó
+-- Registrar Recusa) leva `ERROR: 23503 violates foreign key constraint "execucao_falha_caso_id_fkey"`: a recusa nunca é gravada, a tela
+-- não sabe (a regra 7: falha que some tem a cara de nenhuma falha). Foram dois remendos por motivo (caso_inexistente e expirado) antes de
+-- corrigir aqui. Chamadores (grep em Supabase/ N8N/ portal/src/): nó Registrar Recusa em N8N/build-workflow.mjs:2612 (o do envio),
+-- N8N/build-workflow-erros.mjs:110 (o fluxo de erros, que passa o id do execution), e o conferir_chamadas.sql gerado deles. Só a 0108 define a função.
+-- A CORREÇÃO: um id não nulo que não existe em `caso` grava com caso_id NULL; o NOME continua em caso_nome (a tela acha a falha por nome,
+-- fn_falhas_abertas), e o id anulado fica no `detalhe` (chave caso_id_anulado) para não apagar o rastro. Assinatura, SECURITY INVOKER, ACL
+-- (authenticated e service_role, da 0108) e o resto do comportamento são os de antes; create or replace preserva a ACL. A corrida (caso apagado entre a
+-- checagem e o insert) cai no handler de foreign_key_violation, que refaz o insert com NULL.
+create or replace function fn_registrar_falha_execucao(
+  p_caso_id   uuid,
+  p_caso_nome text,
+  p_etapa     text,
+  p_mensagem  text,
+  p_detalhe   jsonb default null
+)
+returns jsonb
+language plpgsql
+as $$
+declare
+  v_id      uuid;
+  v_caso    uuid := p_caso_id;
+  v_detalhe jsonb := p_detalhe;
+begin
+  if v_caso is not null and not exists (select 1 from caso c where c.id = v_caso) then
+    v_caso := null;
+  end if;
+  loop
+    if p_caso_id is not null and v_caso is null then
+      -- caso_id_anulado: o id que veio e não existe (mantém o rastro sem inventar coluna).
+      v_detalhe := case when jsonb_typeof(p_detalhe) = 'object' then p_detalhe else '{}'::jsonb end
+                   || jsonb_build_object('caso_id_anulado', p_caso_id)
+                   || case when p_detalhe is not null and jsonb_typeof(p_detalhe) <> 'object'
+                           then jsonb_build_object('detalhe_original', p_detalhe) else '{}'::jsonb end;
+    end if;
+    begin
+      insert into execucao_falha (caso_id, caso_nome, etapa, mensagem, detalhe)
+        values (v_caso, nullif(trim(coalesce(p_caso_nome, '')), ''),
+                coalesce(nullif(trim(p_etapa), ''), 'desconhecida'),
+                coalesce(nullif(trim(p_mensagem), ''), 'Falha sem mensagem.'),
+                v_detalhe)
+        returning id into v_id;
+      exit;
+    exception when foreign_key_violation then
+      if v_caso is null then raise; end if;   -- já era NULL: não é este defeito
+      v_caso := null;                          -- o caso sumiu entre a checagem e o insert
+    end;
+  end loop;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+    values ('sistema:n8n', 'falha_execucao',
+            coalesce('caso:' || v_caso::text, 'caso_nome:' || coalesce(p_caso_nome, '?')),
+            jsonb_build_object('etapa', p_etapa, 'mensagem', p_mensagem, 'detalhe', v_detalhe));
+
+  return jsonb_build_object('falha_id', v_id, 'registrada', true);
+end;
 $$;
 
 -- -----------------------------------------------------------------------------
@@ -169,9 +235,10 @@ begin
 
   return query select
     v_motivo is null,
-    -- caso_inexistente devolve NULL: o id não existe e execucao_falha.caso_id tem FK para caso (o nó Registrar Recusa chama
-    -- fn_registrar_falha_execucao($json.caso_id, ...) e levaria 23503, perdendo a recusa). As demais recusas pós-assinatura devolvem o id.
-    case when v_motivo = 'caso_inexistente' then null::uuid else v_caso end,
+    -- O id só sai se o caso EXISTE (nulo para caso_inexistente e para qualquer recusa em que o caso foi apagado): execucao_falha.caso_id tem FK
+    -- para caso(id), e o nó Registrar Recusa chama fn_registrar_falha_execucao($json.caso_id, ...). Medido: id inexistente = 23503
+    -- execucao_falha_caso_id_fkey e a recusa se perde. A raiz está em fn_registrar_falha_execucao (seção 2a); isto é a defesa barata.
+    (select c.id from caso c where c.id = v_caso),
     'envio'::text,
     v_motivo,
     case
@@ -195,7 +262,7 @@ revoke all on function fn_conferir_envio(text, text, timestamptz) from public, a
 grant execute on function fn_conferir_envio(text, text, timestamptz) to service_role, postgres;
 
 comment on function fn_conferir_envio(text, text, timestamptz) is
-  '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura (menos caso_inexistente: NULL, o id não existe e é FK de execucao_falha). Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
+  '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura (só se o caso existir; senão NULL). Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
 
 -- -----------------------------------------------------------------------------
 -- 3. O CASO DO ENVIO: falha fechada, e o nome divergente é auditado
@@ -243,7 +310,10 @@ insert into instalacao_requisito
    'bloqueante', 1013),
   ('acesso_fn_pode_escrever_de', '0222', 'corpo', 'fn_pode_escrever_caso_de', 'm.papel = ''analista''', null,
    'A pergunta de escrita com o usuário por parâmetro (usada pelo envio v2 e, por delegação, por toda policy de escrita). O marcador é o papel que escreve só onde está alocado: sem ele Leitura passaria a escrever.',
-   'bloqueante', 1014)
+   'bloqueante', 1014),
+  ('envio_falha_com_id_inexistente', '0222', 'corpo', 'fn_registrar_falha_execucao', 'caso_id_anulado', null,
+   'fn_registrar_falha_execucao sem a anulação do id inexistente: a recusa do envio de um mandato apagado (ou apagado no meio do caminho) leva 23503 da FK de execucao_falha e nunca é gravada; a tela não vê a falha. Ausente = a 0222 não foi aplicada.',
+   'bloqueante', 1015)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
@@ -254,5 +324,5 @@ update instalacao_requisito set marcador = 'fn_pode_escrever_caso_de(auth.uid(),
 
 update instalacao_cobertura
    set ate_migration = '0222', revisado_em = current_date,
-       observacao = 'A 0222 acrescenta o token de envio v2 (carrega o caso, não o nome): fn_conferir_envio ganha v2 e as recusas caso_inexistente, caso_fechado e sem_acesso; nascem fn_pode_escrever_caso_de e fn_caso_do_envio; 5 requisitos (envio_v2_etiqueta, envio_v2_recusa_caso_fechado, envio_v2_confere_acesso, envio_fn_caso_do_envio, acesso_fn_pode_escrever_de) provam em produção que foi aplicada.'
+       observacao = 'A 0222 acrescenta o token de envio v2 (carrega o caso, não o nome): fn_conferir_envio ganha v2 e as recusas caso_inexistente, caso_fechado e sem_acesso; nascem fn_pode_escrever_caso_de e fn_caso_do_envio; 6 requisitos (envio_v2_etiqueta, envio_v2_recusa_caso_fechado, envio_v2_confere_acesso, envio_fn_caso_do_envio, acesso_fn_pode_escrever_de, envio_falha_com_id_inexistente) provam em produção que foi aplicada.'
  where id = true;
