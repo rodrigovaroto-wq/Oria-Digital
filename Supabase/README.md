@@ -1088,6 +1088,14 @@ supabase db execute --file Supabase/migrations/0221_a_rls_que_ninguem_conferia_l
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0221' and not presente;   -- ZERO linhas
 #   select chave, presente from fn_instalacao_conferir() where chave in ('rls_ligada_em_public', 'definer_nao_escreve_no_dial');   -- os dois presente = t
 
+# A 0222 fecha o defeito do envio que CRIAVA um mandato novo e vazio quando o mandato era renomeado (o envio roteava por NOME, via fn_upsert_caso, e o token não levava o caso). Token v2 = v2.<exp>.<usuario_uuid>.<caso_uuid>.<hmac_hex> (hmac sobre v2|caso|exp|usuario, mesmo segredo do Vault): fn_conferir_envio (mesma assinatura e colunas; o nó publicado do n8n não muda) passa a aceitar v2 e a recusar caso_inexistente, caso_fechado e sem_acesso (o usuário do token não é Sócio nem Analista alocado AGORA), devolvendo o caso_id; o v1 segue como era, e um mandato chamado "v2|..." passa a ser malformado no v1. Nascem fn_pode_escrever_caso_de(usuario, caso) (fn_pode_escrever_caso delega a ela) e fn_caso_do_envio(caso, nome) (falha fechada; nome divergente grava evento_auditoria envio_nome_divergente). Decisões do dono (04/11/2026): o envio nunca cria mandato; mandato fechado recusa; nome divergente é aceito e auditado. FALTA, fora desta migration: o nó do n8n chamar fn_caso_do_envio(caso_id, nome) em vez de fn_upsert_caso quando o token for v2, e o portal emitir v2.
+# >>> Rodar COMO `postgres`. NÃO é idempotente (create function sem or replace nas duas funções novas): rodar duas vezes falha na primeira linha, sem efeito colateral. NÃO edite a 0217/0216 (já aplicadas).
+# >>> Teste: Supabase/test/conferir_envio_v2.test.sql.
+supabase db execute --file Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0222' and not presente;   -- ZERO linhas
+#   select chave, presente from fn_instalacao_conferir() where chave = 'acesso_fn_pode_escrever';   -- presente = t
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

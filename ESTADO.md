@@ -2,7 +2,7 @@
 
 ## SESSÃO 117 (04/11/2026) — 0221 APLICADA: a RLS que ninguém conferia ligada, e o DDL que o portão do dial não via
 
-> **Migration mais nova: `0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql` — APLICADA EM PRODUÇÃO em 04/11/2026 e conferida pela sonda (315/315). A anterior, a `0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql`, também está aplicada.** (O portão do `run.sh` exige que toda linha com esta declaração cite a mais nova, por isso as seções antigas abaixo dizem "Última migration DAQUELA sessão".)
+> **Migration mais nova: `0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql` — ESCRITA E TESTADA NO REPLAY, NÃO APLICADA EM PRODUÇÃO (token de envio v2 pelo caso; README tem a linha `supabase db execute`). A anterior, `0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql` — APLICADA EM PRODUÇÃO em 04/11/2026 e conferida pela sonda (315/315). A anterior, a `0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql`, também está aplicada.** (O portão do `run.sh` exige que toda linha com esta declaração cite a mais nova, por isso as seções antigas abaixo dizem "Última migration DAQUELA sessão".)
 
 **O que a 0221 faz:**
 - **Parte A:** tipo novo `rls_ligada`, requisito `rls_ligada_em_public` (bloqueante). Acusa tabela de `public` com a RLS desligada. Exige N > 0 tabelas examinadas, para o requisito não passar vazio.

@@ -1067,6 +1067,38 @@ CREATE FUNCTION public.fn_caso_da_versao(p_versao uuid) RETURNS uuid
 $$;
 
 --
+-- Name: fn_caso_do_envio(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_caso_do_envio(p_caso uuid, p_nome_no_envio text) RETURNS uuid
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_nome text;
+begin
+  if p_caso is null then
+    raise exception 'fn_caso_do_envio: envio sem caso (o envio nunca cria mandato)' using errcode = 'P0002';
+  end if;
+  select nome into v_nome from caso where id = p_caso;
+  if not found then
+    raise exception 'fn_caso_do_envio: o mandato % não existe (o envio nunca cria mandato)', p_caso using errcode = 'P0002';
+  end if;
+  if lower(btrim(v_nome)) is distinct from lower(btrim(coalesce(p_nome_no_envio, ''))) then
+    insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+      values ('sistema:n8n', 'envio_nome_divergente', 'caso:' || p_caso,
+              jsonb_build_object('nome_no_envio', p_nome_no_envio), jsonb_build_object('nome_atual', v_nome));
+  end if;
+  return p_caso;
+end $$;
+
+--
+-- Name: FUNCTION fn_caso_do_envio(p_caso uuid, p_nome_no_envio text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_caso_do_envio(p_caso uuid, p_nome_no_envio text) IS '0222: o mandato de um envio v2, pelo ID (não pelo nome). Exceção se o caso for nulo ou não existir — o envio nunca cria mandato. Se o nome atual divergir do nome que veio no envio (lower(btrim), como o upsert), grava 1 evento_auditoria envio_nome_divergente com os dois nomes e segue.';
+
+--
 -- Name: fn_caso_do_evento(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1915,15 +1947,17 @@ CREATE FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora t
     SET search_path TO 'pg_catalog', 'extensions', 'public', 'pg_temp'
     AS $_$
 declare
-  -- \s do ECMAScript (o que String.prototype.trim tira), como classe de ARE. Os controles vão por \uXXXX, não por \n/\r:
-  -- o portão guarda_ancora_crlf.py toma `\n` num regexp_replace por âncora de patch de função (aqui não há patch nenhum).
-  c_ws     constant text := '[\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]';
+  c_ws     constant text := '[\u0009\u000a\u000b\u000c\u000d    -     　﻿]';
+  c_uuid   constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_segredo text;
   v_token   text;
   v_partes  text[];
   v_msg     text;
   v_motivo  text;
   v_usuario text;
+  v_caso    uuid;
+  v_ok_mac  boolean;
+  v_exp     text;
 begin
   -- 1. sem_segredo: ausente, vazio ou só espaços. O valor entra como chave do HMAC SEM trim (como o JS).
   select s.decrypted_secret into v_segredo from vault.decrypted_secrets s where s.name = 'n8n_intake_segredo' limit 1;
@@ -1935,25 +1969,58 @@ begin
     if v_token = '' then
       v_motivo := 'sem_token';
     else
-      -- 3. malformado: v1.<exp>.<usuario>.<hmac>. [0-9] e não \d: o \d do ARE segue o locale; o do JS é só ASCII.
       v_partes := string_to_array(v_token, '.');
-      if coalesce(array_length(v_partes, 1), 0) <> 4 or v_partes[1] <> 'v1'
-         or v_partes[2] !~ '^[0-9]{1,12}$' or v_partes[3] !~ '^[0-9a-fA-F-]{8,64}$' or v_partes[4] !~ '^[0-9a-f]{64}$' then
-        v_motivo := 'malformado';
-      else
-        -- 4. assinatura. Mensagem = mandato (só U+0020 das pontas tirado, minúsculas do ICU = toLowerCase) | exp | usuário.
-        v_msg := lower(regexp_replace(coalesce(p_mandato, ''), '^ +| +$', '', 'g') collate "und-x-icu")
-                 || '|' || v_partes[2] || '|' || v_partes[3];
-        -- Comparação dos HMAC dos dois valores (ver o cabeçalho: não vaza a posição da divergência).
-        if hmac(convert_to(encode(hmac(convert_to(v_msg, 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256'), 'hex'), 'UTF8'),
-                convert_to(v_segredo, 'UTF8'), 'sha256')
-           is distinct from hmac(convert_to(v_partes[4], 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256') then
-          v_motivo := 'assinatura';
-        -- 5. expirado: só depois de a assinatura provar que o token é nosso. exp*1000 > agora (ms), senão expirado.
-        elsif not (v_partes[2]::bigint * 1000 > floor(extract(epoch from p_agora) * 1000)::bigint) then
-          v_motivo := 'expirado';
+      if v_partes[1] = 'v2' then
+        -- ---------------------------------------------------------------- v2: v2.<exp>.<usuario>.<caso>.<hmac>
+        -- 3. malformado. Os uuids são MINÚSCULOS e validados por regex ANTES do cast (um cast de lixo viraria erro 22P02).
+        if coalesce(array_length(v_partes, 1), 0) <> 5
+           or v_partes[2] !~ '^[0-9]{1,12}$' or v_partes[3] !~ c_uuid or v_partes[4] !~ c_uuid or v_partes[5] !~ '^[0-9a-f]{64}$' then
+          v_motivo := 'malformado';
         else
-          v_usuario := v_partes[3];
+          v_exp := v_partes[2];
+          -- 4. assinatura, ANTES de qualquer consulta a caso: quem não prova o segredo não descobre se o caso existe.
+          --    A etiqueta 'v2|' separa esta mensagem da v1 (mandato = "<uuid>").
+          v_msg := 'v2|' || v_partes[4] || '|' || v_exp || '|' || v_partes[3];
+          v_ok_mac := hmac(convert_to(encode(hmac(convert_to(v_msg, 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256'), 'hex'), 'UTF8'),
+                           convert_to(v_segredo, 'UTF8'), 'sha256')
+                      is not distinct from hmac(convert_to(v_partes[5], 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256');
+          if not v_ok_mac then
+            v_motivo := 'assinatura';
+          else
+            -- Daqui em diante o token é nosso: toda recusa prende a falha ao caso do token.
+            v_caso := v_partes[4]::uuid;
+            if not (v_exp::bigint * 1000 > floor(extract(epoch from p_agora) * 1000)::bigint) then
+              v_motivo := 'expirado';
+            elsif not exists (select 1 from caso c where c.id = v_caso) then
+              v_motivo := 'caso_inexistente';
+            elsif exists (select 1 from caso c where c.id = v_caso and c.fechado_em is not null) then
+              v_motivo := 'caso_fechado';
+            elsif not fn_pode_escrever_caso_de(v_partes[3]::uuid, v_caso) then
+              v_motivo := 'sem_acesso';
+            else
+              v_usuario := v_partes[3];
+            end if;
+          end if;
+        end if;
+      else
+        -- ---------------------------------------------------------------- v1: v1.<exp>.<usuario>.<hmac> (como na 0217)
+        v_msg := lower(regexp_replace(coalesce(p_mandato, ''), '^ +| +$', '', 'g') collate "und-x-icu");
+        if coalesce(array_length(v_partes, 1), 0) <> 4 or v_partes[1] <> 'v1'
+           or v_partes[2] !~ '^[0-9]{1,12}$' or v_partes[3] !~ '^[0-9a-fA-F-]{8,64}$' or v_partes[4] !~ '^[0-9a-f]{64}$'
+           -- 0222: mandato "v2|..." faria o v1 assinar uma mensagem que o v2 aceitaria; recusa antes do HMAC.
+           or left(v_msg, 3) = 'v2|' then
+          v_motivo := 'malformado';
+        else
+          v_msg := v_msg || '|' || v_partes[2] || '|' || v_partes[3];
+          if hmac(convert_to(encode(hmac(convert_to(v_msg, 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256'), 'hex'), 'UTF8'),
+                  convert_to(v_segredo, 'UTF8'), 'sha256')
+             is distinct from hmac(convert_to(v_partes[4], 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256') then
+            v_motivo := 'assinatura';
+          elsif not (v_partes[2]::bigint * 1000 > floor(extract(epoch from p_agora) * 1000)::bigint) then
+            v_motivo := 'expirado';
+          else
+            v_usuario := v_partes[3];
+          end if;
         end if;
       end if;
     end if;
@@ -1961,7 +2028,7 @@ begin
 
   return query select
     v_motivo is null,
-    null::uuid,
+    v_caso,
     'envio'::text,
     v_motivo,
     case
@@ -1969,6 +2036,12 @@ begin
       when v_motivo = 'sem_segredo' then 'Envio recusado: falta o segredo do envio no Vault do banco (nome n8n_intake_segredo). '
         || 'Nada foi gravado. É configuração do responsável pelo sistema.'
       when v_motivo = 'expirado' then 'Envio sem autorização válida: o token do envio expirou. Nada foi gravado. Reenvie pelo portal.'
+      when v_motivo = 'caso_inexistente' then 'Envio recusado: o mandato deste envio não existe mais. Nada foi gravado. '
+        || 'O envio nunca cria mandato: abra o mandato no portal e reenvie.'
+      when v_motivo = 'caso_fechado' then 'Envio recusado: o mandato está fechado e não recebe documentos. Nada foi gravado. '
+        || 'Peça a um Sócio para reabri-lo.'
+      when v_motivo = 'sem_acesso' then 'Envio recusado: você não tem acesso de escrita a este mandato (só Sócio e Analista alocado enviam). '
+        || 'Nada foi gravado. Peça a um Sócio para alocá-lo.'
       else 'Envio sem autorização válida. Nada foi gravado. Envie pelo portal, com o login de quem tem acesso ao mandato.'
     end,
     v_usuario;
@@ -1979,7 +2052,7 @@ $_$;
 -- Name: FUNCTION fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0217: confere o token HMAC do envio (v1.<exp>.<usuario>.<hmac>, assinado pelo portal sobre mandato_normalizado|exp|usuario) contra o segredo n8n_intake_segredo do Vault. Sempre UMA linha: envio_autorizado, caso_id (sempre NULL), etapa_recusa (sempre envio), motivo_recusa (sem_segredo|sem_token|malformado|assinatura|expirado), orcamento_mensagem, usuario_id. Mesma semântica de verificarEnvio em N8N/lib/assinatura-do-envio.mjs. security definer; só service_role e postgres executam (authenticated testaria tokens contra o segredo).';
+COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura. Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
 
 --
 -- Name: fn_conferir_lote(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -9312,13 +9385,30 @@ CREATE FUNCTION public.fn_pode_escrever_caso(p_caso uuid) RETURNS boolean
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public', 'pg_temp'
     AS $$
+  select fn_pode_escrever_caso_de(auth.uid(), p_caso)
+$$;
+
+--
+-- Name: fn_pode_escrever_caso_de(uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
   select exists (
     select 1 from membro m
-     where m.usuario_id = auth.uid()
+     where m.usuario_id = p_usuario
        and (m.papel = 'socio'
             or (m.papel = 'analista' and p_caso is not null
                 and exists (select 1 from alocacao a where a.caso_id = p_caso and a.usuario_id = m.usuario_id))))
 $$;
+
+--
+-- Name: FUNCTION fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid) IS '0222: o usuário X escreve no caso Y? Sócio escreve tudo; Analista onde está alocado; Leitura nunca. Mesmo corpo que fn_pode_escrever_caso tinha na 0216, com o usuário por parâmetro (o envio decide pelo usuário do TOKEN, não por auth.uid()). Só service_role e postgres executam: para um authenticated qualquer seria um oráculo sobre o papel dos outros.';
 
 --
 -- Name: fn_pode_escrever_evento(text); Type: FUNCTION; Schema: public; Owner: -
@@ -21230,6 +21320,13 @@ GRANT ALL ON FUNCTION public.fn_caso_da_versao(p_versao uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_caso_da_versao(p_versao uuid) TO service_role;
 
 --
+-- Name: FUNCTION fn_caso_do_envio(p_caso uuid, p_nome_no_envio text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_caso_do_envio(p_caso uuid, p_nome_no_envio text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_caso_do_envio(p_caso uuid, p_nome_no_envio text) TO service_role;
+
+--
 -- Name: FUNCTION fn_caso_do_evento(p_ref text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -22465,6 +22562,13 @@ GRANT ALL ON FUNCTION public.fn_pode_criar_caso() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pode_escrever_caso(p_caso uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_pode_escrever_caso_de(p_usuario uuid, p_caso uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_pode_escrever_evento(p_ref text); Type: ACL; Schema: public; Owner: -

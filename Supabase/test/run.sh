@@ -907,6 +907,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conferir_envio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo
+echo "== 0222 — o envio que criava um mandato novo quando o nome mudava: token v2 pelo caso, mandato fechado, acesso do momento"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conferir_envio_v2.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
 echo "== 0218 — o dial promovido sobre o recorte de quem dispara, e o anon com privilégio demais"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_dial_e_o_anon.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
