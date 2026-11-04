@@ -2002,26 +2002,11 @@ begin
             end if;
           end if;
         end if;
+      elsif v_partes[1] = 'v1' and coalesce(array_length(v_partes, 1), 0) = 4 then
+        -- ---------------------------------------------------------------- v1: recusado ANTES do HMAC (a versão não precisa do segredo)
+        v_motivo := 'versao_antiga';
       else
-        -- ---------------------------------------------------------------- v1: v1.<exp>.<usuario>.<hmac> (como na 0217)
-        v_msg := lower(regexp_replace(coalesce(p_mandato, ''), '^ +| +$', '', 'g') collate "und-x-icu");
-        if coalesce(array_length(v_partes, 1), 0) <> 4 or v_partes[1] <> 'v1'
-           or v_partes[2] !~ '^[0-9]{1,12}$' or v_partes[3] !~ '^[0-9a-fA-F-]{8,64}$' or v_partes[4] !~ '^[0-9a-f]{64}$'
-           -- 0222: mandato "v2|..." faria o v1 assinar uma mensagem que o v2 aceitaria; recusa antes do HMAC.
-           or left(v_msg, 3) = 'v2|' then
-          v_motivo := 'malformado';
-        else
-          v_msg := v_msg || '|' || v_partes[2] || '|' || v_partes[3];
-          if hmac(convert_to(encode(hmac(convert_to(v_msg, 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256'), 'hex'), 'UTF8'),
-                  convert_to(v_segredo, 'UTF8'), 'sha256')
-             is distinct from hmac(convert_to(v_partes[4], 'UTF8'), convert_to(v_segredo, 'UTF8'), 'sha256') then
-            v_motivo := 'assinatura';
-          elsif not (v_partes[2]::bigint * 1000 > floor(extract(epoch from p_agora) * 1000)::bigint) then
-            v_motivo := 'expirado';
-          else
-            v_usuario := v_partes[3];
-          end if;
-        end if;
+        v_motivo := 'malformado';
       end if;
     end if;
   end if;
@@ -2038,6 +2023,7 @@ begin
       when v_motivo is null then null
       when v_motivo = 'sem_segredo' then 'Envio recusado: falta o segredo do envio no Vault do banco (nome n8n_intake_segredo). '
         || 'Nada foi gravado. É configuração do responsável pelo sistema.'
+      when v_motivo = 'versao_antiga' then 'Envio recusado: token de envio antigo; recarregue a página do portal e envie de novo. Nada foi gravado.'
       when v_motivo = 'expirado' then 'Envio sem autorização válida: o token do envio expirou. Nada foi gravado. Reenvie pelo portal.'
       when v_motivo = 'caso_inexistente' then 'Envio recusado: o mandato deste envio não existe mais. Nada foi gravado. '
         || 'O envio nunca cria mandato: abra o mandato no portal e reenvie.'
@@ -2055,7 +2041,7 @@ $_$;
 -- Name: FUNCTION fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura (só se o caso existir; senão NULL). Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
+COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0223 (sobre a 0222): confere o token HMAC do envio. v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso, devolvendo o caso_id também nas recusas pós-assinatura (só se o caso existir; senão NULL). v1.<exp>.<usuario>.<hmac> (4 partes) é recusado com versao_antiga ANTES do HMAC: o envio por nome não existe mais. Qualquer outra forma é malformado. Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|versao_antiga|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
 
 --
 -- Name: fn_conferir_lote(uuid); Type: FUNCTION; Schema: public; Owner: -

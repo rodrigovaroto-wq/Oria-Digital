@@ -2551,19 +2551,20 @@ const nodes = [
     // `caso_id` sumiria junto — a consulta que lê a configuração não pode
     // derrubar a que cria o caso.
     //
-    // O CASO VEM DO ENVIO, NÃO DO NOME (migration 0222, DESENHO_P3). O token v2 assina o caso_id e o
+    // O CASO VEM DO ENVIO, NÃO DO NOME (migrations 0222/0223, DESENHO_P3). O token v2 assina o caso_id e o
     // `Conferir Envio` o devolve; `fn_caso_do_envio` roteia por ele, NUNCA cria mandato e audita o
     // nome divergente (o defeito: renomear o mandato e reenviar criava um mandato novo pelo nome do
-    // Form). O token v1 (em voo na publicação) traz caso_id nulo e ainda cai em `fn_upsert_caso` pelo
-    // nome — esse ramo sai na F5. `$1` é '' (nunca null cru no array) e `case` em vez de `coalesce`,
-    // porque `fn_caso_do_envio` LANÇA com caso nulo. O `::text` explícito fixa o tipo do parâmetro.
+    // Form). F5: o ramo de transição por nome (`fn_upsert_caso`) SAIU. `$1` é '' quando o Conferir não
+    // devolve caso_id (nunca null cru no array) e '' não converte para uuid: a query LANÇA e a execução
+    // fica vermelha. É falha fechada de propósito e aceitável: depois da 0223 o `Conferir Envio` nunca
+    // autoriza sem caso_id (o v1 é recusado como `versao_antiga` pela 0223), então '' aqui só ocorre se algo
+    // upstream estiver quebrado, e parar é o certo. O `::text` explícito fixa o tipo do parâmetro.
     //
     // FALHA FECHADO: SEM `onError` (PG_RETRY o poria em continueRegularOutput). Caso apagado entre a
     // conferência e o upsert faz `fn_caso_do_envio` lançar; com continueRegularOutput o lote seguiria
     // com `caso_id` undefined em todo nó que lê `$('Upsert Caso (Postgres)')` (7 expressões). Retry
     // como o `Conferir Envio`.
-    operation: 'executeQuery', query: "select case when nullif($1::text, '') is null then fn_upsert_caso($2::text) "
-      + "else fn_caso_do_envio($1::text::uuid, $2::text) end as caso_id, "
+    operation: 'executeQuery', query: "select fn_caso_do_envio($1::text::uuid, $2::text) as caso_id, "
       + "(select limiar_auto_clear from estagio_autonomia "
       + "where estagio = 'classificacao_doc_checklist') as limiar_classificacao",
     options: { queryReplacement: "={{ [$('Conferir Envio').first().json.caso_id ?? '', $('Intake (Form)').first().json['Mandato (nome do caso)'] ?? ''] }}" },

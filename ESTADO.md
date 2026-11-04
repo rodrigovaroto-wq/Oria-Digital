@@ -1,8 +1,34 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 117 (04/11/2026) — 0221 APLICADA: a RLS que ninguém conferia ligada, e o DDL que o portão do dial não via
+## SESSÃO 117 (04/11/2026) — FIM: P2 e P3 fechadas em produção; 0221, 0222 e 0223 aplicadas
 
-> **Migration mais nova: `0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql` — ESCRITA E TESTADA NO REPLAY, NÃO APLICADA EM PRODUÇÃO (token de envio v2 pelo caso; README tem a linha `supabase db execute`). A anterior, `0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql` — APLICADA EM PRODUÇÃO em 04/11/2026 e conferida pela sonda (315/315). A anterior, a `0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql`, também está aplicada.** (O portão do `run.sh` exige que toda linha com esta declaração cite a mais nova, por isso as seções antigas abaixo dizem "Última migration DAQUELA sessão".)
+> **Migration mais nova: `0223_o_token_v1_que_ainda_entrava_por_nome.sql` — APLICADA EM PRODUÇÃO em 04/11/2026, 20:07 UTC (sonda 321→322; ensaio com foto idêntica; ACL, policies, gatilhos e dial iguais). Recusa o token de envio v1 com `versao_antiga`. Só foi aplicada depois de 31 min com zero v1 aceito, medido no histórico do n8n. A anterior, `0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql` (token v2 pelo `caso_id`), também está aplicada (sonda 315→321). A anterior, `0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql`, aplicada e conferida (315/315). A `0220` também está aplicada.** (O portão do `run.sh` exige que toda linha com esta declaração cite a mais nova, por isso as seções antigas abaixo dizem "Última migration DAQUELA sessão".)
+
+**O que fechou nesta sessão (medido):**
+- **P2 fechada.** Vistoria por papel: 168 células. A escalada por API barrou 51 de 51 tentativas indevidas. Três personas: Sócia (celular), Analista júnior, Leitura. Relatório: `Arquitetura do Sistema/3 Estado e Execução/VISTORIA_P2.md`. Cinco temas ALTOS, que vão para a P16 (itens 2 e 3 tocam a F3): (1) decisão de um toque sem confirmação; (2) entrada inválida vira fato (`.txt` aceito sem checagem até o Excel); (3) proveniência: página "—" em 197 de 197 linhas do BP, totais do Excel sem nota, PL "−32.252 × 6.899"; (4) discrição vaza pelo atributo `title`; (5) Início com 643 px no celular de 390 px.
+- **P2, NÃO EXECUTADO:** a sondagem livre de URLs da persona de Leitura foi interrompida pelas salvaguardas do modelo. Caminho: `/security-review` ou pentest.
+- **P2, NÃO CONFERIDO nesta rodada:** o envio válido gravado e conferido no banco pelo Sócio de teste. Não aparece nas medições desta rodada.
+- **P3 fechada em produção.** Desenho: `Arquitetura do Sistema/3 Estado e Execução/DESENHO_P3_ROTEAR_POR_CASO_ID.md`.
+  - Token v2 com `caso_id`, etiqueta `v2|`. A 0222 traz `fn_conferir_envio` v2 (`caso_inexistente`, `caso_fechado` [decisão do dono], `sem_acesso`), `fn_pode_escrever_caso_de`, `fn_caso_do_envio` (audita nome divergente) e `fn_registrar_falha_execucao`, que não perde falha de caso apagado (corrigido na raiz, depois de duas correções pontuais).
+  - n8n republicado: Upsert por `fn_caso_do_envio`, sem `onError`. Portal só com v2 (merge #271; deploy `dpl_33Fudt…` READY 19:35 UTC).
+  - Prova em produção: mandato renomeado entre token e envio dá o mesmo `caso_id`, 0 mandato novo e 1 auditoria `envio_nome_divergente` (execução 9400). Mandato fechado dá 409 no portal.
+  - 0223 (F5): janela de 31 min com 0 v1 aceito. Smoke: v1 recusado com "token de envio antigo…" (execução 9402), 0 mandato. n8n republicado sem `fn_upsert_caso` (0 nós no publicado).
+- **Revisões independentes fecharam antes da aplicação:** na 0222, dois ALTOS de FK (`caso_inexistente` e expirado); a terceira correção foi na raiz. Também: colisão v1/v2 `v2|<uuid>`; ordem de implantação perigosa (portal novo com n8n antigo grava pelo nome do Form), documentada; cobertura do exp do v2.
+- **Infra:** o runner do GitHub passou a Ubuntu 26.04 (cliente `pg` 18). `run.sh` filtra `SET transaction_timeout` do `schema.sql` (ee74f16).
+- **Lição do processo:** o commit 285dc9b passou com o portão do conhecimento vermelho, porque um `| tail` escondeu o código de saída. Portões agora rodam sem pipe.
+
+**Decisão do dono pendente:** o Analista apaga o original do cliente sem trilha (D3 do `VISTORIA_P2.md`; no plano, D16).
+
+**Pendências que ficam (no plano):**
+- P1d: a recusa de tamanho grava a etapa `orcamento`; a recusa de orçamento provavelmente grava N linhas (NÃO VERIFICADO, `queryBatching`).
+- `fn_falhas_abertas` ainda casa por nome: falha antiga só com `caso_nome` não casa após renomeação.
+- Mandatos de teste em produção: "S117 P2 sintetico", "S117 P3 renomeio B", e os usuários +socio/+analista/+leitura. Apagar ou manter é decisão do dono.
+- 48 issues novas do Sonar no script da vistoria (não bloqueiam; os achados vêm do dono).
+- Pontos cegos da 0221 declarados.
+
+**Próximo:** P4 (linha de base da F3 e corpus de regressão). Atraso de ~3 sessões; fim das 30 fatias passa para ~18/12.
+
+### Detalhe da 0221 (início da sessão 117)
 
 **O que a 0221 faz:**
 - **Parte A:** tipo novo `rls_ligada`, requisito `rls_ligada_em_public` (bloqueante). Acusa tabela de `public` com a RLS desligada. Exige N > 0 tabelas examinadas, para o requisito não passar vazio.

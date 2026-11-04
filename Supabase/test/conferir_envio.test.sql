@@ -1,5 +1,10 @@
 -- Teste da 0217 — fn_conferir_envio: a conferência do token HMAC do envio, agora no banco, com o segredo no Vault.
 --
+-- 0223: o ramo v1 saiu. Todo token v1 de 4 partes é recusado como `versao_antiga`, ANTES do HMAC. Os vetores v1 abaixo (gerados pelo Node em
+-- 30/10/2026, que a 0217 aceitava) continuam aqui de propósito: agora provam que o v1 que antes entrava é recusado e não grava nada. Os
+-- asserts de paridade do v1 com o JS (normalização, minúsculas exóticas) mudaram de sentido: 32 deles passaram de "aceito/assinatura/
+-- expirado/malformado do v1" para `versao_antiga`. A aceitação de token válido agora é provada pelos vetores v2 de conferir_envio_v2.test.sql.
+--
 -- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 65 asserts (medidos) — ver o cabeçalho de
 -- Supabase/migrations/0217_o_segredo_do_envio_que_o_n8n_nao_tinha.sql ("MEDIÇÃO NÃO-VAZIA") para o número que reprova com cada correção desligada.
 --
@@ -69,28 +74,29 @@ begin
 
   -- 2. PARIDADE COM O PORTAL: o token que o createHmac do Node gerou é aceito, com o usuário certo.
   select * into v_r from fn_conferir_envio(v_beta, 'Beta Ações', v_agora);
-  perform teste_assert_envio(v_r.envio_autorizado and v_r.usuario_id = c_u and v_r.motivo_recusa is null and v_r.orcamento_mensagem is null,
-    'token do portal (acentuado, com maiúscula) é aceito e devolve o usuário', row_to_json(v_r)::text);
-  perform teste_assert_envio(teste_motivo(v_acoes, '  AÇÕES S.A.  ') = 'ok', 'token assinado com espaços e acentos nas pontas é aceito');
-  perform teste_assert_envio(teste_motivo(v_tab, E'\tTab') = 'ok', 'mandato com TAB na ponta: só U+0020 é tirado, e o token do portal é aceito');
-  perform teste_assert_envio(teste_motivo(v_alfa, ' Alfa 2026 ') = 'ok', 'mandato com espaços nas pontas é aceito');
-  perform teste_assert_envio(teste_motivo(v_istan, 'İSTANBUL') = 'ok',
-    'minúsculas de "İ": o JS dá "i" + U+0307 (o lower() puro do Postgres dá "i" e reprovaria)');
-  perform teste_assert_envio(teste_motivo(v_sigma, 'ΟΔΥΣΣΕΑΣ ΑΣ') = 'ok',
-    'minúsculas de sigma FINAL: o JS dá "ας" (o lower() puro do Postgres dá "ασ" e reprovaria)');
-  perform teste_assert_envio(teste_motivo(v_exot, 'Ǆ ß ẞ ᾈ') = 'ok', 'minúsculas de Ǆ, ß, ẞ, ᾈ batem com o JS');
+  perform teste_assert_envio(not v_r.envio_autorizado and v_r.motivo_recusa = 'versao_antiga' and v_r.usuario_id is null
+      and v_r.orcamento_mensagem like '%recarregue a página do portal%' and v_r.orcamento_mensagem like '%Nada foi gravado%',
+    'v1 que o portal antigo assina (e que a 0217 aceitava) é recusado: versao_antiga, sem usuário, mensagem manda recarregar e diz que nada foi gravado', row_to_json(v_r)::text);
+  perform teste_assert_envio(teste_motivo(v_acoes, '  AÇÕES S.A.  ') = 'versao_antiga', 'v1 assinado com espaços e acentos nas pontas: recusado como versao_antiga (o envio por nome acabou)');
+  perform teste_assert_envio(teste_motivo(v_tab, E'\tTab') = 'versao_antiga', 'v1 com mandato com TAB na ponta: versao_antiga');
+  perform teste_assert_envio(teste_motivo(v_alfa, ' Alfa 2026 ') = 'versao_antiga', 'v1 com mandato com espaços nas pontas: versao_antiga');
+  perform teste_assert_envio(teste_motivo(v_istan, 'İSTANBUL') = 'versao_antiga',
+    'v1 com "İSTANBUL": versao_antiga (a normalização do mandato saiu junto com o ramo v1)');
+  perform teste_assert_envio(teste_motivo(v_sigma, 'ΟΔΥΣΣΕΑΣ ΑΣ') = 'versao_antiga',
+    'v1 com sigma final: versao_antiga');
+  perform teste_assert_envio(teste_motivo(v_exot, 'Ǆ ß ẞ ᾈ') = 'versao_antiga', 'v1 com Ǆ, ß, ẞ, ᾈ: versao_antiga');
 
   -- 3. NORMALIZAÇÃO DO MANDATO.
-  perform teste_assert_envio(teste_motivo(v_beta, 'BETA AÇÕES') = 'ok', 'caixa diferente do mandato normaliza igual: aceito');
-  perform teste_assert_envio(teste_motivo(v_beta, '   beta ações   ') = 'ok', 'espaços nas pontas e caixa: aceito');
-  perform teste_assert_envio(teste_motivo(v_beta, 'Alfa') = 'assinatura', 'mandato TROCADO depois de assinado cai em assinatura');
-  perform teste_assert_envio(teste_motivo(v_beta, 'Beta  Ações') = 'assinatura', 'espaço no MEIO do mandato não é normalizado');
-  perform teste_assert_envio(teste_motivo(v_tab, 'tab') = 'assinatura', 'TAB não é espaço: "\tTab" e "tab" são mandatos diferentes');
-  perform teste_assert_envio(teste_motivo(v_beta, null) = 'assinatura', 'mandato nulo é um mandato vazio: assinatura');
+  perform teste_assert_envio(teste_motivo(v_beta, 'BETA AÇÕES') = 'versao_antiga', 'v1 com outra caixa: versao_antiga, não aceito');
+  perform teste_assert_envio(teste_motivo(v_beta, '   beta ações   ') = 'versao_antiga', 'v1 com espaços e caixa: versao_antiga');
+  perform teste_assert_envio(teste_motivo(v_beta, 'Alfa') = 'versao_antiga', 'v1 com mandato TROCADO: versao_antiga (a assinatura nem é calculada)');
+  perform teste_assert_envio(teste_motivo(v_beta, 'Beta  Ações') = 'versao_antiga', 'v1 com espaço no meio do mandato: versao_antiga');
+  perform teste_assert_envio(teste_motivo(v_tab, 'tab') = 'versao_antiga', 'v1 com "tab": versao_antiga');
+  perform teste_assert_envio(teste_motivo(v_beta, null) = 'versao_antiga', 'v1 com mandato nulo: versao_antiga');
 
   -- 4. TOKEN COM ESPAÇO NAS PONTAS (o JS faz token.trim()).
-  perform teste_assert_envio(teste_motivo('  ' || v_beta || E'\n', 'Beta Ações') = 'ok', 'token com espaço e quebra de linha nas pontas é aceito');
-  perform teste_assert_envio(teste_motivo(E'\u00a0' || v_beta || E'\u3000', 'Beta Ações') = 'ok', 'token com NBSP e espaço ideográfico nas pontas é aceito');
+  perform teste_assert_envio(teste_motivo('  ' || v_beta || E'\n', 'Beta Ações') = 'versao_antiga', 'v1 com espaço e quebra de linha nas pontas: versao_antiga (o trim do token vale)');
+  perform teste_assert_envio(teste_motivo(E'\u00a0' || v_beta || E'\u3000', 'Beta Ações') = 'versao_antiga', 'v1 com NBSP e espaço ideográfico nas pontas: versao_antiga');
 
   -- 5. sem_token
   perform teste_assert_envio(teste_motivo(null, 'Beta Ações') = 'sem_token', 'token nulo: sem_token');
@@ -102,34 +108,34 @@ begin
   perform teste_assert_envio(teste_motivo('v1.' || c_exp || '.' || c_u, 'Beta Ações') = 'malformado', '3 partes: malformado');
   perform teste_assert_envio(teste_motivo(v_beta || '.x', 'Beta Ações') = 'malformado', '5 partes: malformado');
   perform teste_assert_envio(teste_motivo(replace(v_beta, 'v1.', 'v2.'), 'Beta Ações') = 'malformado', 'versão v2: malformado');
-  perform teste_assert_envio(teste_motivo('v1.1234567890123.' || c_u || '.' || c_zero, 'Beta Ações') = 'malformado', 'exp com 13 dígitos: malformado');
-  perform teste_assert_envio(teste_motivo('v1.12a.' || c_u || '.' || c_zero, 'Beta Ações') = 'malformado', 'exp com letra: malformado');
-  perform teste_assert_envio(teste_motivo('v1.' || c_exp || '.abc.' || c_zero, 'Beta Ações') = 'malformado', 'usuário com 3 caracteres: malformado');
+  perform teste_assert_envio(teste_motivo('v1.1234567890123.' || c_u || '.' || c_zero, 'Beta Ações') = 'versao_antiga', 'exp com 13 dígitos  (v1 de 4 partes): versao_antiga, a versão vem antes da forma');
+  perform teste_assert_envio(teste_motivo('v1.12a.' || c_u || '.' || c_zero, 'Beta Ações') = 'versao_antiga', 'exp com letra  (v1 de 4 partes): versao_antiga, a versão vem antes da forma');
+  perform teste_assert_envio(teste_motivo('v1.' || c_exp || '.abc.' || c_zero, 'Beta Ações') = 'versao_antiga', 'usuário com 3 caracteres  (v1 de 4 partes): versao_antiga, a versão vem antes da forma');
   perform teste_assert_envio(teste_motivo(upper(v_beta), 'Beta Ações') = 'malformado', 'hmac em maiúsculas: malformado (o portal emite minúsculas)');
-  perform teste_assert_envio(teste_motivo(c_pre || repeat('a', 63), 'Beta Ações') = 'malformado', 'hmac com 63 hex: malformado');
-  perform teste_assert_envio(teste_motivo(replace(v_beta, '.' || c_exp || '.', '.٤١٠٢٤٤٤٨٠٠.'), 'Beta Ações') = 'malformado',
-    'exp com dígitos não-ASCII: malformado (\d do JS é só ASCII)');
+  perform teste_assert_envio(teste_motivo(c_pre || repeat('a', 63), 'Beta Ações') = 'versao_antiga', 'hmac com 63 hex  (v1 de 4 partes): versao_antiga, a versão vem antes da forma');
+  perform teste_assert_envio(teste_motivo(replace(v_beta, '.' || c_exp || '.', '.٤١٠٢٤٤٤٨٠٠.'), 'Beta Ações') = 'versao_antiga',
+    'v1 com exp de dígitos não-ASCII (4 partes): versao_antiga');
 
   -- 7. assinatura
-  perform teste_assert_envio(teste_motivo(c_pre || c_zero, 'Beta Ações') = 'assinatura', 'hmac bem formado e errado: assinatura');
-  perform teste_assert_envio(teste_motivo(replace(v_beta, c_u, '3f2b8c1e-5a4d-4e6f-9a1b-0c2d3e4f5a6c'), 'Beta Ações') = 'assinatura',
-    'usuário trocado no token: assinatura');
-  perform teste_assert_envio(teste_motivo(replace(v_beta, '.' || c_exp || '.', '.4102444801.'), 'Beta Ações') = 'assinatura',
-    'exp adulterado para mais tempo: assinatura (não vira token eterno)');
-  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações', '2101-01-01') = 'expirado', 'assinatura certa e prazo vencido: expirado, não assinatura');
+  perform teste_assert_envio(teste_motivo(c_pre || c_zero, 'Beta Ações') = 'versao_antiga', 'v1 com hmac errado: versao_antiga, não assinatura (recusa antes do HMAC)');
+  perform teste_assert_envio(teste_motivo(replace(v_beta, c_u, '3f2b8c1e-5a4d-4e6f-9a1b-0c2d3e4f5a6c'), 'Beta Ações') = 'versao_antiga',
+    'v1 com usuário trocado: versao_antiga');
+  perform teste_assert_envio(teste_motivo(replace(v_beta, '.' || c_exp || '.', '.4102444801.'), 'Beta Ações') = 'versao_antiga',
+    'v1 com exp adulterado: versao_antiga (não vira token eterno)');
+  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações', '2101-01-01') = 'versao_antiga', 'v1 com prazo vencido: versao_antiga, não expirado');
   update vault.secrets set secret = c_seg || 'x' where name = 'n8n_intake_segredo';
-  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações') = 'assinatura', 'segredo diferente do que assinou: assinatura');
+  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações') = 'versao_antiga', 'v1 com segredo trocado no Vault: versao_antiga');
   update vault.secrets set secret = c_seg where name = 'n8n_intake_segredo';
 
   -- 8. expirado — e a ordem: a assinatura vem ANTES do prazo.
-  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações', to_timestamp(4102444800) - interval '1 millisecond') = 'ok',
-    'um milissegundo antes de exp: aceito');
-  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações', to_timestamp(4102444800)) = 'expirado', 'exatamente em exp: expirado (exp*1000 > agora é estrito)');
+  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações', to_timestamp(4102444800) - interval '1 millisecond') = 'versao_antiga',
+    'v1 um milissegundo antes de exp: versao_antiga');
+  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações', to_timestamp(4102444800)) = 'versao_antiga', 'v1 exatamente em exp: versao_antiga');
   select * into v_r from fn_conferir_envio(v_beta, 'Beta Ações', '2101-01-01');
-  perform teste_assert_envio(v_r.orcamento_mensagem like '%expirou%' and not v_r.envio_autorizado and v_r.usuario_id is null,
-    'a recusa por expiração diz que expirou e não devolve usuário', v_r.orcamento_mensagem);
-  perform teste_assert_envio(teste_motivo(c_pre || c_zero, 'Beta Ações', '2101-01-01') = 'assinatura',
-    'ordem: assinatura errada com prazo vencido é assinatura (expirado só para quem provou ter o segredo)');
+  perform teste_assert_envio(v_r.orcamento_mensagem like '%recarregue%' and v_r.orcamento_mensagem not like '%expirou%' and not v_r.envio_autorizado and v_r.usuario_id is null,
+    'v1 vencido: a mensagem é a da versão antiga (recarregue), não a de expiração, e não devolve usuário', v_r.orcamento_mensagem);
+  perform teste_assert_envio(teste_motivo(c_pre || c_zero, 'Beta Ações', '2101-01-01') = 'versao_antiga',
+    'v1 com hmac errado e prazo vencido: versao_antiga');
 
   -- 9. sem_segredo — e é o PRIMEIRO motivo.
   select * into v_r from fn_conferir_envio(v_beta, 'Beta Ações', v_agora);
@@ -147,7 +153,7 @@ begin
   perform teste_assert_envio(coalesce(fn_segredo_do_vault_presente('n8n_intake_segredo'), false) = false, 'a sonda vê o segredo ausente');
   update vault.secrets set secret = c_seg where name = 'n8n_intake_segredo';   -- no-op (linha apagada)
   perform vault.create_secret(c_seg, 'n8n_intake_segredo');
-  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações') = 'ok', 'segredo gravado com vault.create_secret: o mesmo token passa a ser aceito');
+  perform teste_assert_envio(teste_motivo(v_beta, 'Beta Ações') = 'versao_antiga', 'segredo gravado com vault.create_secret: o mesmo v1 deixa de ser sem_segredo e vira versao_antiga');
   perform teste_assert_envio(fn_segredo_do_vault_presente('n8n_intake_segredo'), 'a sonda vê o segredo presente');
   perform vault.create_secret('valor qualquer', 'outro_segredo');
   perform teste_assert_envio(fn_segredo_do_vault_presente('outro_segredo') = false, 'fn_segredo_do_vault_presente não responde por nome fora da lista');
@@ -156,13 +162,13 @@ begin
   select count(*) into v_n from fn_conferir_envio(null, null, v_agora);
   perform teste_assert_envio(v_n = 1, 'tudo nulo: exatamente uma linha', v_n::text);
   select count(*) into v_n from fn_conferir_envio(v_beta, 'Beta Ações', v_agora);
-  perform teste_assert_envio(v_n = 1, 'envio autorizado: exatamente uma linha', v_n::text);
+  perform teste_assert_envio(v_n = 1, 'v1 recusado: exatamente uma linha', v_n::text);
   select * into v_r from fn_conferir_envio('lixo', 'x', v_agora);
   perform teste_assert_envio(v_r.caso_id is null and v_r.etapa_recusa = 'envio' and v_r.usuario_id is null and not v_r.envio_autorizado,
     'recusa: caso_id nulo, etapa_recusa = envio, sem usuário', row_to_json(v_r)::text);
   select * into v_r from fn_conferir_envio(v_beta, 'Beta Ações', v_agora);
-  perform teste_assert_envio(v_r.caso_id is null and v_r.etapa_recusa = 'envio',
-    'autorizado: caso_id continua nulo e etapa_recusa = envio', row_to_json(v_r)::text);
+  perform teste_assert_envio(not v_r.envio_autorizado and v_r.caso_id is null and v_r.etapa_recusa = 'envio',
+    'v1 recusado: nunca autorizado, caso_id nulo e etapa_recusa = envio', row_to_json(v_r)::text);
   perform teste_assert_envio(row_to_json(v_r)::text not like '%' || c_seg || '%', 'o segredo nunca aparece no resultado');
 
   -- 11. QUEM PODE EXECUTAR: só a conexão de serviço.
@@ -179,7 +185,7 @@ begin
   set local role service_role;
   begin v_txt := teste_motivo(v_beta, 'Beta Ações'); exception when others then v_txt := 'erro ' || sqlstate; end;
   reset role;
-  perform teste_assert_envio(v_txt = 'ok', 'service_role (a conexão do n8n) executa e o token é aceito', v_txt);
+  perform teste_assert_envio(v_txt = 'versao_antiga', 'service_role (a conexão do n8n) executa e recebe a recusa da versão', v_txt);
   perform teste_assert_envio(has_function_privilege('service_role', 'fn_conferir_envio(text,text,timestamptz)', 'execute')
       and has_function_privilege('postgres', 'fn_conferir_envio(text,text,timestamptz)', 'execute')
       and not has_function_privilege('authenticated', 'fn_conferir_envio(text,text,timestamptz)', 'execute')

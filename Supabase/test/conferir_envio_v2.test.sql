@@ -1,12 +1,12 @@
 -- Teste da 0222 — o token de envio v2 (carrega o CASO) e o mandato que o envio deixou de criar.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 64 asserts (medidos) — ver o cabeçalho de
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 69 asserts (medidos; eram 64 na 0222, a 0223 acrescentou 1 da sonda e 4 do prazo/formato do exp) — ver o cabeçalho de
 -- Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql ("MEDIÇÃO NÃO-VAZIA") para o número que reprova
 -- com cada correção desligada.
 --
 -- O QUE SE AFIRMA (comportamento, não mecanismo): um token v2 que o PORTAL assina é aceito e devolve o caso; renomear o mandato depois
 -- de emitido o token NÃO muda o caso nem cria outro (e o nome antigo fica auditado); sem acesso, fechado e inexistente são recusas com
--- o caso preso; a assinatura vem antes de qualquer consulta a caso; o v1 segue igual.
+-- o caso preso; a assinatura vem antes de qualquer consulta a caso; o v1 é recusado como versao_antiga (0223).
 --
 -- OS VETORES NÃO SÃO FIXTURE INVENTADA PARA UM BUG DE PRODUÇÃO: foram calculados em 04/11/2026 FORA do SQL (`node` com
 -- crypto.createHmac, a mesma mensagem `v2|<caso>|<exp>|<usuario>` da lib) e colados aqui. O banco não os recalcula. Um deles é o vetor
@@ -225,23 +225,24 @@ begin
   perform teste_assert_envio(teste_motivo(replace(t_ana_a, u_ana::text, u_socio::text)) = 'assinatura', 'usuário trocado no token v2 (escalada para Sócio): assinatura');
 
   -- 7. COLISÃO v1 -> v2 (a etiqueta 'v2|' é o que separa as duas mensagens).
-  perform teste_assert_envio(teste_motivo(t_col_v1, k_b::text) = 'ok', 'v1 de um mandato chamado "<uuid de B>" é aceito como v1 (caso_id nulo)');
+  perform teste_assert_envio(teste_motivo(t_col_v1, k_b::text) = 'versao_antiga', 'v1 de um mandato chamado "<uuid de B>": versao_antiga, não aceito (0223)');
   perform teste_assert_envio(teste_motivo(t_col_v2) = 'assinatura', 'o mesmo hmac reescrito como v2 de B: assinatura (a etiqueta v2| separa)');
-  -- 7b. Mandato chamado "v2|<uuid de B>": o v1 recusa na origem; o v2 reescrito (assinatura VÁLIDA, é a de t_ana_b) cai em sem_acesso.
+  -- 7b. Mandato chamado "v2|<uuid de B>": desde a 0223 o v1 inteiro é recusado antes do HMAC (a guarda `v2|` do v1 ficou sem função); o v2
+  --     reescrito (assinatura VÁLIDA, é a de t_ana_b) cai em sem_acesso.
   select * into v_r from fn_conferir_envio(t_nome_v1, 'v2|' || k_b);
-  perform teste_assert_envio(v_r.motivo_recusa = 'malformado' and not v_r.envio_autorizado,
-    'v1 de mandato chamado "v2|<uuid>": malformado, antes do HMAC', row_to_json(v_r)::text);
-  perform teste_assert_envio(teste_motivo(t_nome_v1, '  V2|' || k_b || ' ') = 'malformado', 'idem com caixa e espaços nas pontas');
+  perform teste_assert_envio(v_r.motivo_recusa = 'versao_antiga' and not v_r.envio_autorizado,
+    'v1 de mandato chamado "v2|<uuid>": versao_antiga, antes do HMAC', row_to_json(v_r)::text);
+  perform teste_assert_envio(teste_motivo(t_nome_v1, '  V2|' || k_b || ' ') = 'versao_antiga', 'idem com caixa e espaços nas pontas');
   perform teste_assert_envio(teste_motivo(t_ana_b) = 'sem_acesso', 'o v1 de "v2|<uuid de B>" reescrito como v2 de B: não autoriza (sem_acesso)');
-  perform teste_assert_envio(teste_motivo(t_beta_v1, 'Beta Ações') = 'ok', 'um mandato que só CONTÉM "v2" no meio continua válido no v1');
+  perform teste_assert_envio(teste_motivo(t_beta_v1, 'Beta Ações') = 'versao_antiga', 'v1 de mandato comum: versao_antiga');
 
-  -- 8. v1 EXATAMENTE COMO HOJE.
+  -- 8. v1 RECUSADO (0223): antes, 'exatamente como na 0217'.
   select * into v_r from fn_conferir_envio(t_beta_v1, 'Beta Ações', '2026-11-04 12:00:00+00');
-  perform teste_assert_envio(v_r.envio_autorizado and v_r.caso_id is null and v_r.usuario_id = u_ana::text and v_r.etapa_recusa = 'envio',
-    'v1 válido: autorizado, caso_id nulo, usuário (como na 0217)', row_to_json(v_r)::text);
-  perform teste_assert_envio(teste_motivo(t_beta_v1, 'Alfa') = 'assinatura', 'v1 com mandato trocado: assinatura');
+  perform teste_assert_envio(not v_r.envio_autorizado and v_r.motivo_recusa = 'versao_antiga' and v_r.caso_id is null and v_r.usuario_id is null and v_r.etapa_recusa = 'envio',
+    'v1 que a 0222 ainda aceitava: recusado, sem caso, sem usuário', row_to_json(v_r)::text);
+  perform teste_assert_envio(teste_motivo(t_beta_v1, 'Alfa') = 'versao_antiga', 'v1 com mandato trocado: versao_antiga');
   select * into v_r from fn_conferir_envio(t_beta_v1, 'Beta Ações', '2101-01-01');
-  perform teste_assert_envio(v_r.motivo_recusa = 'expirado' and v_r.caso_id is null, 'v1 expirado: expirado, caso_id nulo', row_to_json(v_r)::text);
+  perform teste_assert_envio(v_r.motivo_recusa = 'versao_antiga' and v_r.caso_id is null, 'v1 expirado: versao_antiga, caso_id nulo', row_to_json(v_r)::text);
 
   -- 9. MALFORMADO v2.
   perform teste_assert_envio(teste_motivo(t_ana_a || '.x') = 'malformado', 'v2 com 6 partes: malformado');
@@ -250,6 +251,18 @@ begin
   perform teste_assert_envio(teste_motivo(replace(t_ana_a, u_ana::text, upper(u_ana::text))) = 'malformado', 'v2 com uuid do usuário em maiúsculas: malformado');
   perform teste_assert_envio(teste_motivo(replace(t_ana_a, k_a::text, 'nao-e-um-uuid')) = 'malformado', 'v2 com caso que não é uuid: malformado (sem erro de cast)');
   perform teste_assert_envio(teste_motivo(replace(t_ana_a, '.c9df', '.c9DF')) = 'malformado', 'v2 com hmac em maiúsculas: malformado');
+
+  -- 9b. O PRAZO E O FORMATO DO exp NO v2 (0223: os asserts equivalentes do v1 viraram versao_antiga; estes mantêm a regra no v2).
+  --     Vetores calculados fora do SQL (node, crypto.createHmac, segredo c_seg, Analista em k_a, exp 1800000000); os dois últimos
+  --     têm HMAC VÁLIDO sobre o exp malformado, para que só o formato os recuse.
+  perform teste_assert_envio(teste_motivo(t_ana_a_exp, 'x', to_timestamp(1800000000) - interval '1 millisecond') = 'ok',
+    'v2 avaliado 1 ms antes do exp: autorizado');
+  perform teste_assert_envio(teste_motivo(t_ana_a_exp, 'x', to_timestamp(1800000000)) = 'expirado',
+    'v2 avaliado exatamente no exp: expirado (exp*1000 > agora é estrito)');
+  perform teste_assert_envio(teste_motivo('v2.1234567890123.a0000000-0000-4000-8000-000000000002.c0000000-0000-4000-8000-00000000000a.5b850f3b54baf81f214d970a4affcf9dd156dee8f01d7d0ae7fb70602bd00152') = 'malformado',
+    'v2 com exp de 13 dígitos (assinatura válida): malformado');
+  perform teste_assert_envio(teste_motivo('v2.٤١٠٢٤٤٤٨٠٠.a0000000-0000-4000-8000-000000000002.c0000000-0000-4000-8000-00000000000a.2e1477cbab842e0177ee612e4f53246ef638245a93663cf954e207632c11ff42') = 'malformado',
+    'v2 com exp de dígitos árabe-índicos (assinatura válida): malformado');
 
   -- 10. EXECUTE: só a conexão de serviço.
   perform teste_assert_envio(has_function_privilege('service_role', 'fn_caso_do_envio(uuid,text)', 'execute')
@@ -283,6 +296,8 @@ begin
     'a sonda: os 6 requisitos da 0222 presentes');
   perform teste_assert_envio((select presente from fn_instalacao_conferir() where chave = 'acesso_fn_pode_escrever'),
     'a sonda: acesso_fn_pode_escrever (0216) segue presente com o marcador da delegação');
+  perform teste_assert_envio((select presente from fn_instalacao_conferir() where chave = 'envio_recusa_versao_antiga'),
+    'a sonda: envio_recusa_versao_antiga (0223) presente');
 
   raise notice 'fim: % execuções', current_setting('envio.execucoes', true);
   if current_setting('envio.medindo', true) = 'on' then
