@@ -313,3 +313,15 @@ test('COLISÃO: token v1 de um mandato chamado <uuid-do-outro-caso> reescrito co
   const forjado = ['v2', e, u, CASO, sig].join('.');
   assert.deepEqual(v2(forjado), { ok: false, motivo: 'assinatura' });
 });
+
+test('v1 de mandato cujo nome normalizado começa por "v2|" é malformado ANTES do HMAC (paridade com a 0222); mandato normal segue aceito', () => {
+  for (const nome of [`v2|${CASO}`, ' V2|abc', 'v2|', 'V2|X  ']) {
+    const token = tokenDoPortal({ mandato: nome, exp: EXP_V2 }); // assinatura VÁLIDA: só a guarda recusa
+    assert.deepEqual(verificarEnvio({ token, mandato: nome, segredo: SEGREDO, agoraMs: AGORA_V2 }), { ok: false, motivo: 'malformado' }, JSON.stringify(nome));
+  }
+  // controles: não é prefixo "v2|" depois de normalizar
+  for (const nome of ['Alfa', 'v2 alfa', 'xv2|a', 'v2', '\tv2|a']) {
+    const token = tokenDoPortal({ mandato: nome, exp: EXP_V2 });
+    assert.equal(verificarEnvio({ token, mandato: nome, segredo: SEGREDO, agoraMs: AGORA_V2 }).ok, true, JSON.stringify(nome));
+  }
+});

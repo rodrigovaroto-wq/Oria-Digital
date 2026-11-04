@@ -135,7 +135,10 @@ export function verificarEnvio({ token, mandato, segredo, agoraMs }) {
   let exp; let usuario; let caso = null; let sig; let mensagem;
   if (partes.length === 4 && partes[0] === 'v1') {
     [, exp, usuario, sig] = partes;
-    if (!/^\d{1,12}$/.test(exp) || !/^[0-9a-fA-F-]{8,64}$/.test(usuario) || !/^[0-9a-f]{64}$/.test(sig)) {
+    // Paridade com fn_conferir_envio (0222): mandato normalizado começando por `v2|` faria o v1 assinar
+    // uma mensagem idêntica à do v2 daquele caso; recusa `malformado` ANTES do HMAC (o banco mediu 14 de 210 vetores divergindo sem isto).
+    if (!/^\d{1,12}$/.test(exp) || !/^[0-9a-fA-F-]{8,64}$/.test(usuario) || !/^[0-9a-f]{64}$/.test(sig)
+      || normalizarMandato(mandato).startsWith('v2|')) {
       return { ok: false, motivo: 'malformado' };
     }
     mensagem = mensagemAssinada(mandato, exp, usuario);

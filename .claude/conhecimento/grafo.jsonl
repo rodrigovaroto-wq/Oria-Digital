@@ -1292,9 +1292,10 @@
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio.test.sql","rel":"CHAMA","pa":"fn:fn_segredo_do_vault_presente","f":"Supabase/test/conferir_envio.test.sql","l":147}
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_caso_do_envio","f":"Supabase/test/conferir_envio_v2.test.sql","l":104}
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_conferir_envio","f":"Supabase/test/conferir_envio_v2.test.sql","l":37}
-{"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/conferir_envio_v2.test.sql","l":221}
-{"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/conferir_envio_v2.test.sql","l":205}
-{"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/test/conferir_envio_v2.test.sql","l":200}
+{"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/conferir_envio_v2.test.sql","l":239}
+{"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/conferir_envio_v2.test.sql","l":223}
+{"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/test/conferir_envio_v2.test.sql","l":218}
+{"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"Supabase/test/conferir_envio_v2.test.sql","l":136}
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/conferir_envio_v2.test.sql","l":14}
 {"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_desvincular_familia","f":"Supabase/test/controlador_familia.test.sql","l":174}
 {"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_registrar","f":"Supabase/test/controlador_familia.test.sql","l":48}
@@ -2638,7 +2639,7 @@
 {"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":163}
 {"k":"e","de":"migration:0220","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql","l":75}
 {"k":"e","de":"migration:0221","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","l":84}
-{"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_caso_do_envio","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":200}
+{"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_caso_do_envio","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":202}
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":81}
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":73}
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":58}
