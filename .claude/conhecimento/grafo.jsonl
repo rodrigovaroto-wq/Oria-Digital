@@ -194,6 +194,7 @@
 {"k":"n","id":"arquivo:Supabase/test/veredito_producao.test.sql","t":"arquivo","f":"Supabase/test/veredito_producao.test.sql","txt":"veredito_producao.test.sql"}
 {"k":"n","id":"arquivo:Verificação/run.mts","t":"arquivo","f":"Verificação/run.mts","txt":"run.mts"}
 {"k":"n","id":"arquivo:Verificação/variacoes.mts","t":"arquivo","f":"Verificação/variacoes.mts","txt":"variacoes.mts"}
+{"k":"n","id":"arquivo:Verificação/vistoria-por-papel.mts","t":"arquivo","f":"Verificação/vistoria-por-papel.mts","txt":"vistoria-por-papel.mts"}
 {"k":"n","id":"arquivo:portal/scripts/gerar-export-do-banco.mts","t":"arquivo","f":"portal/scripts/gerar-export-do-banco.mts","txt":"gerar-export-do-banco.mts"}
 {"k":"n","id":"arquivo:portal/scripts/lib/modelo-da-fixture.mts","t":"arquivo","f":"portal/scripts/lib/modelo-da-fixture.mts","txt":"modelo-da-fixture.mts"}
 {"k":"n","id":"arquivo:portal/scripts/medir-auto-aceite.mts","t":"arquivo","f":"portal/scripts/medir-auto-aceite.mts","txt":"medir-auto-aceite.mts"}
@@ -999,6 +1000,7 @@
 {"k":"n","id":"suite:Supabase/test/run.sh","t":"suite","f":"Supabase/test/run.sh","txt":"run sh"}
 {"k":"n","id":"suite:Verificação/run.mts","t":"suite","f":"Verificação/run.mts","txt":"run mts"}
 {"k":"n","id":"suite:Verificação/variacoes.mts","t":"suite","f":"Verificação/variacoes.mts","txt":"variacoes mts"}
+{"k":"n","id":"suite:Verificação/vistoria-por-papel.mts","t":"suite","f":"Verificação/vistoria-por-papel.mts","txt":"vistoria por papel mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-apresentacao.mts","t":"suite","f":"portal/scripts/verificar-apresentacao.mts","txt":"verificar apresentacao mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-envio-oficial.mts","t":"suite","f":"portal/scripts/verificar-envio-oficial.mts","txt":"verificar envio oficial mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-exclusividade-ciclo.mts","t":"suite","f":"portal/scripts/verificar-exclusividade-ciclo.mts","txt":"verificar exclusividade ciclo mts"}
@@ -1843,6 +1845,12 @@
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":687}
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":674}
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":776}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_alocar","f":"Verificação/vistoria-por-papel.mts","l":255}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_decidir_pendencia","f":"Verificação/vistoria-por-papel.mts","l":243}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Verificação/vistoria-por-papel.mts","l":253}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_desalocar","f":"Verificação/vistoria-por-papel.mts","l":256}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"Verificação/vistoria-por-papel.mts","l":260}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Verificação/vistoria-por-papel.mts","l":225}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/gerar-export-do-banco.mts","l":240}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
