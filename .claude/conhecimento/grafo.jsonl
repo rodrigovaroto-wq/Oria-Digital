@@ -593,7 +593,7 @@
 {"k":"n","id":"fn:fn_trg_instalacao_cobertura_nao_regride","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"trg instalacao cobertura nao regride"}
 {"k":"n","id":"fn:fn_trg_membro_ultimo_socio","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg membro ultimo socio"}
 {"k":"n","id":"fn:fn_trg_so_quem_escreve_apaga","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg so quem escreve apaga"}
-{"k":"n","id":"fn:fn_trg_so_socio","t":"fn","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","txt":"trg so socio"}
+{"k":"n","id":"fn:fn_trg_so_socio","t":"fn","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","txt":"trg so socio"}
 {"k":"n","id":"fn:fn_unidade_predominante","t":"fn","f":"Supabase/migrations/0021_classe_b_checagem_unidade.sql","txt":"unidade predominante"}
 {"k":"n","id":"fn:fn_upsert_caso","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"upsert caso"}
 {"k":"n","id":"fn:fn_upsert_entidade","t":"fn","f":"Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","txt":"upsert entidade"}
@@ -1112,8 +1112,9 @@
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":617}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":129}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":141}
-{"k":"e","de":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","l":166}
+{"k":"e","de":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","l":178}
 {"k":"e","de":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","l":16}
+{"k":"e","de":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","rel":"CHAMA","pa":"fn:fn_trg_so_socio","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","l":326}
 {"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/acesso_por_caso.test.sql","l":337}
 {"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_acesso_bootstrap","f":"Supabase/test/acesso_por_caso.test.sql","l":648}
 {"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/acesso_por_caso.test.sql","l":11}
@@ -2615,8 +2616,7 @@
 {"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":242}
 {"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":163}
 {"k":"e","de":"migration:0220","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql","l":75}
-{"k":"e","de":"migration:0221","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","l":67}
-{"k":"e","de":"migration:0221","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","l":37}
+{"k":"e","de":"migration:0221","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","l":77}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 0221 — A RLS QUE NINGUÉM CONFERIA LIGADA, E O PORTÃO DO DIAL QUE NÃO VIA DDL
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 36 dos 36 asserts medidos (cada chamada roda uma vez). Controle intacto: 36 execuções, 0 falhas.
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 48 dos 48 asserts medidos (cada chamada roda uma vez). Controle intacto: 48 execuções, 0 falhas.
 -- O número por parte, com a correção desligada, está no cabeçalho de Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql.
 --
 -- COMO RODA. Como o teste da 0220: uma transação só (`begin` ... `rollback`); reaplica o arquivo da migration (`\i`) no começo (no-op com o arquivo real: prova a idempotência) ou uma VARIANTE com
@@ -84,9 +84,9 @@ begin
   raise notice '--- 1. estado limpo ---';
   perform teste_assert_0221((select presente and severidade = 'bloqueante' from fn_instalacao_conferir() where chave = 'rls_ligada_em_public'),
     'estado limpo: rls_ligada_em_public presente e BLOQUEANTE (todas as tabelas de public têm a RLS ligada)', teste_detalhe_0221('rls_ligada_em_public'));
-  perform teste_assert_0221((select count(*) from fn_instalacao_conferir() where migration = '0221' and presente) = 4
-                            and (select count(*) from instalacao_requisito where migration = '0221') = 4,
-    'os 4 requisitos da 0221 estão no catálogo e PRESENTES (a sonda prova em produção que a 0221 foi aplicada)',
+  perform teste_assert_0221((select count(*) from fn_instalacao_conferir() where migration = '0221' and presente) = 5
+                            and (select count(*) from instalacao_requisito where migration = '0221') = 5,
+    'os 5 requisitos da 0221 estão no catálogo e PRESENTES (a sonda prova em produção que a 0221 foi aplicada)',
     (select string_agg(chave || '=' || presente, ', ') from fn_instalacao_conferir() where migration = '0221'));
   perform teste_assert_0221((select count(*) from regexp_matches((select pg_get_constraintdef(oid) from pg_constraint where conname = 'instalacao_requisito_tipo_check'), '''[a-z_]+''', 'g')) = 14
                             and (select pg_get_constraintdef(oid) from pg_constraint where conname = 'instalacao_requisito_tipo_check') like '%rls_ligada%',
@@ -144,6 +144,18 @@ begin
   select presente, detalhe into v_n, v_det from (select presente::int as presente, detalhe from fn_instalacao_conferir() where chave = 'zz_rls_schema_0221') x;
   perform teste_assert_0221(v_n = 0 and v_det like '%nem existe%', 'objeto = schema inexistente: AUSENTE com "nem existe", e a sonda inteira ainda responde', v_det);
   delete from instalacao_requisito where chave = 'zz_rls_schema_0221';
+
+  raise notice '--- A5b. schema que existe e está VAZIO: o verde não pode vir de não ter olhado nada (regra 7) ---';
+  create schema zz_vazio_0221;
+  insert into instalacao_requisito (chave, migration, tipo, objeto, porque, severidade, ordem)
+    values ('zz_rls_vazio_0221', '0221', 'rls_ligada', 'zz_vazio_0221', 'teste', 'informativo', 9999);
+  select presente::int, detalhe into v_n, v_det from fn_instalacao_conferir() where chave = 'zz_rls_vazio_0221';
+  perform teste_assert_0221(v_n = 0 and v_det like 'nenhuma tabela examinada%', 'schema existente e VAZIO: AUSENTE, e o detalhe diz que nada foi examinado (não "todas com RLS")', v_det);
+  delete from instalacao_requisito where chave = 'zz_rls_vazio_0221';
+  drop schema zz_vazio_0221;
+  perform teste_assert_0221(teste_detalhe_0221('rls_ligada_em_public') = format('%s tabelas examinadas em public, todas com a RLS ligada',
+                              (select count(*) from pg_class where relnamespace = 'public'::regnamespace and relkind in ('r', 'p'))),
+    'o PRESENTE diz quantas tabelas examinou (N = as tabelas de public)', teste_detalhe_0221('rls_ligada_em_public'));
 
   raise notice '--- A6. muitas tabelas: a lista corta em 15, a contagem não ---';
   for i in 1..17 loop execute format('create table zz_muitas_%s_0221 (id int)', lpad(i::text, 2, '0')); end loop;
@@ -287,6 +299,65 @@ begin
     'quem CHAMA fn_instalacao_conferir() não é acusado: a sonda não entra no fecho (o parâmetro de réplica está em duas metades no corpo dela)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
   drop function zz_chama_sonda_0221();
 
+  raise notice '--- B4. o `*` colado ao nome, a lista no drop table, o DDL da FUNÇÃO da guarda ---';
+  create function zz_estrela_ddl_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin alter table estagio_autonomia* disable trigger all; end $f$;
+  grant execute on function zz_estrela_ddl_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_estrela_ddl_0221'), 'a sonda ACUSA `alter table estagio_autonomia* disable trigger all` (o `*` dos descendentes colado ao nome)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_estrela_ddl_0221();
+  create function zz_estrela_upd_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin update estagio_autonomia * set atualizado_por = atualizado_por; end $f$;
+  grant execute on function zz_estrela_upd_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_estrela_upd_0221'), 'a sonda ACUSA `update estagio_autonomia * set` (DML com `*`)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_estrela_upd_0221();
+  create function zz_estrela_del_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin delete from premissa_catalogo* where false; end $f$;
+  grant execute on function zz_estrela_del_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_estrela_del_0221'), 'a sonda ACUSA `delete from premissa_catalogo*` (DML com `*` colado)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_estrela_del_0221();
+
+  create function zz_droplista_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin drop table if exists zz_nada_0221, estagio_autonomia cascade; end $f$;
+  grant execute on function zz_droplista_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_droplista_0221'), 'a sonda ACUSA `drop table if exists zz_nada, estagio_autonomia cascade` (a protegida DEPOIS da vírgula)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_droplista_0221();
+
+  create function zz_dropfn_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin drop function fn_trg_so_socio() cascade; end $f$;
+  grant execute on function zz_dropfn_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_dropfn_0221'), 'a sonda ACUSA `drop function fn_trg_so_socio() cascade` (apaga a guarda e os gatilhos dela, sem escrever linha)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_dropfn_0221();
+  create function zz_crfn_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin create or replace function public.fn_trg_so_socio() returns trigger language plpgsql as 'begin return new; end'; end $f$;
+  grant execute on function zz_crfn_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_crfn_0221'), 'a sonda ACUSA `create or replace function public.fn_trg_so_socio()` (trocar a guarda por uma que deixa passar)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_crfn_0221();
+  create function zz_alfn_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin alter function fn_trg_so_socio() owner to authenticated; end $f$;
+  grant execute on function zz_alfn_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_alfn_0221'), 'a sonda ACUSA `alter function fn_trg_so_socio() ...`', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_alfn_0221();
+  create function zz_droplfn_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin drop function if exists zz_a_0221(int), public.fn_trg_so_socio(); end $f$;
+  grant execute on function zz_droplfn_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_droplfn_0221'), 'a sonda ACUSA a guarda numa LISTA de `drop function` (depois da vírgula)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_droplfn_0221();
+  -- A guarda é a função de QUALQUER gatilho das tabelas protegidas (pelo catálogo), não o nome fixo.
+  create function zz_guarda_nova_0221() returns trigger language plpgsql as $f$ begin return new; end $f$;
+  create trigger zz_trg_guarda_0221 before update on premissa_catalogo for each row execute function zz_guarda_nova_0221();
+  create function zz_dropguarda_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin drop function zz_guarda_nova_0221() cascade; end $f$;
+  grant execute on function zz_dropguarda_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_dropguarda_0221'), 'a sonda ACUSA o DDL da função de OUTRO gatilho da tabela protegida (resolvido pelo catálogo, não pelo nome fn_trg_so_socio)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_dropguarda_0221();
+  drop trigger zz_trg_guarda_0221 on premissa_catalogo;
+  create function zz_dropoutra_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin drop function if exists zz_qualquer_0221(int); alter function zz_guarda_nova_0221() rename to zz_x_0221; end $f$;
+  grant execute on function zz_dropoutra_0221() to authenticated;
+  perform teste_assert_0221(teste_presente_0221('definer_nao_escreve_no_dial'),
+    'DDL de função que NÃO é a guarda de nenhuma tabela protegida (a ex-guarda, já sem o gatilho) não acusa', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_dropoutra_0221(); drop function zz_guarda_nova_0221();
+
   perform teste_assert_0221(teste_presente_0221('definer_nao_escreve_no_dial') and teste_presente_0221('dial_sem_cascata_de_fk'),
     'controle positivo: sem nenhuma função de teste, o banco montado segue VERDE nos dois portões do dial', teste_detalhe_0221('definer_nao_escreve_no_dial'));
 end $$;
@@ -308,12 +379,12 @@ begin
   perform teste_assert_0221((select count(*) from instalacao_requisito)::text = current_setting('dial.n_req_0221'),
     'reaplicar a migration não muda o número de requisitos do catálogo', (select count(*) from instalacao_requisito)::text || ' / ' || current_setting('dial.n_req_0221'));
   perform teste_assert_0221(md5(pg_get_functiondef('fn_instalacao_conferir()'::regprocedure)) = current_setting('dial.corpo_0221'), 'e o corpo de fn_instalacao_conferir fica idêntico');
-  perform teste_assert_0221((select count(*) from fn_instalacao_conferir() where migration = '0221' and presente) = 4, 'e os 4 requisitos da 0221 seguem presentes');
+  perform teste_assert_0221((select count(*) from fn_instalacao_conferir() where migration = '0221' and presente) = 5, 'e os 5 requisitos da 0221 seguem presentes');
 end $$;
 
 -- O número de execuções tem de ser o do arquivo: assert que sumiu não pode passar calado.
 do $$
-declare v_esperado constant int := 36;
+declare v_esperado constant int := 48;
   v_real int := coalesce(nullif(current_setting('dial.execucoes', true), ''), '0')::int;
 begin
   if v_real <> v_esperado then

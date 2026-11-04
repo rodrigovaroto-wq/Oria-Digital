@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 0221 — A RLS QUE NINGUÉM CONFERIA LIGADA, E O PORTÃO DO DIAL QUE NÃO VIA DDL
 -- (REDEFINE 1 função, fn_instalacao_conferir: +1 ramo (`rls_ligada`, PARTE A) e +2 critérios de ESCRITORA no ramo `definer_sem_escrita` (PARTE B); +1 tipo na constraint (14);
---  +4 requisitos na sonda (1 `rls_ligada` e 3 `corpo`). Sem tabela, sem backfill, sem dado alterado, sem função do projeto alterada. Idempotente: pode ser reaplicada.)
+--  +5 requisitos na sonda (1 `rls_ligada` e 4 `corpo`). Sem tabela, sem backfill, sem dado alterado, sem função do projeto alterada. Idempotente: pode ser reaplicada.)
 --
 -- >>> RODE COMO `postgres`, como a 0219 e a 0220. A 0220 está APLICADA em produção e NÃO foi tocada: esta migration é por cima dela.
 -- >>> DUAS PARTES, MARCADAS COM `PARTE A` / `PARTE B` (arquivo, função e teste). Elas reemitem a MESMA função, então não são dois arquivos: separam-se por hunk (`git add -p`).
@@ -34,25 +34,35 @@
 -- gatilho) NÃO mudaram. Escolha: acusar `alter table <protegida>` de QUALQUER subcomando (até `add column`) é falso positivo do lado seguro: nenhuma função real faz isso hoje.
 -- A sonda não se acusa: o parâmetro é escrito em duas metades no corpo (`'session_replication' || '_role'`), e as menções em comentário foram reescritas, senão o corpo da própria sonda casaria o critério e
 -- a poria no fecho. O teste afirma por comportamento que uma definer que CHAMA fn_instalacao_conferir() não é acusada.
--- O QUE O PORTÃO AINDA NÃO VÊ (declarado, regra 1): SQL dinâmico (`execute format('alter table %s ...')` com a tabela vinda de variável); `create or replace function fn_trg_so_socio` (trocar a guarda por uma que deixa passar);
+-- O QUE O PORTÃO AINDA NÃO VÊ (declarado, regra 1): SQL dinâmico (`execute format('alter table %s ...')` com a tabela vinda de variável); `drop function`/`alter function` com argumento de parênteses aninhados (`drop function f(numeric(10,2))`) antes da guarda numa lista;
 -- `set role`/`set session authorization`; DDL por função em outro schema; `create policy`/`alter policy` na protegida (alargar a RLS); nome de gatilho entre aspas colado ao `on` (`drop trigger "x"on t`);
 -- DDL numa tabela que NÃO é protegida mas tem gatilho que escreve no dial.
+-- REVISÃO INDEPENDENTE (04/11/2026), corrigida neste mesmo arquivo (a 0221 não foi aplicada): (1) `alter table estagio_autonomia* disable trigger all` (o `*` dos descendentes colado ao nome) deixava o gatilho em tgenabled = 'D' com o
+-- portão verde: o v_pos (nos DOIS ramos, definer e FK) aceita também `*`, e isso fecha `delete from t*` e `update t*` pelo mesmo caminho; (2) `drop table if exists x, estagio_autonomia cascade`: o ramo do drop table aceita LISTA, como o truncate;
+-- (3) `drop function fn_trg_so_socio() cascade` apaga os dois gatilhos de guarda sem escrever linha, e a irmã `create or replace function` troca a guarda: ESCOLHIDO fechar a FAMÍLIA, e não o nome fixo. A guarda é a função de QUALQUER
+-- gatilho das tabelas protegidas, resolvida pelo catálogo (pg_trigger) a cada chamada (v_gfn); DDL de função (drop, alter, create or replace, com `public.`, `if exists` e lista) que a cite conta como escrita. A sonda não entra no fecho (o assert
+-- de quem a chama) e as migrations não são varridas (são arquivos, não corpos de função); (4) o `rls_ligada` presente agora diz "N tabelas examinadas" e exige N > 0 (regra 7: schema existente e vazio, como graphql_public, dava t sem olhar nada).
+-- Os marcadores dos 2 requisitos da 0220 sobre o v_pos foram a linha EXATA que mudou: trocados no fim deste arquivo. Requisito novo: sonda_dial_ve_ddl_da_funcao_da_guarda.
 -- Medida da PARTE B (regra 2, o bloco de medição está abaixo): (8 asserts de comportamento + 3 de marcador reprovam sem os dois critérios).
 --
 -- ===== OS REQUISITOS =====
--- +1 `rls_ligada_em_public` (tipo novo, bloqueante) e +3 `corpo` sobre fn_instalacao_conferir, que provam em produção que a 0221 foi aplicada (marcadores de UMA linha, como a 0220, distintos entre si):
---   sonda_ve_rls_ligada (o ramo da PARTE A), sonda_dial_ve_ddl_na_protegida e sonda_dial_ve_replication_role (os dois critérios da PARTE B).
+-- +1 `rls_ligada_em_public` (tipo novo, bloqueante) e +4 `corpo` sobre fn_instalacao_conferir, que provam em produção que a 0221 foi aplicada (marcadores de UMA linha, como a 0220, distintos entre si):
+--   sonda_ve_rls_ligada (o ramo da PARTE A), sonda_dial_ve_ddl_na_protegida, sonda_dial_ve_replication_role e sonda_dial_ve_ddl_da_funcao_da_guarda (os três critérios da PARTE B).
+-- Os dois requisitos da 0220 sobre o v_pos (sonda_dial_v_pos_fecha_o_definer e _a_fk) têm o marcador TROCADO aqui (o v_pos ganhou `\*`): o `update` perto do fim da migration.
 -- QUEM CHAMA fn_instalacao_conferir (grep -rn): o workflow `sonda-producao.yml` (-> sonda-producao.mjs), o SQL Editor, testes e conferir-chamadas. A assinatura de retorno NÃO mudou.
 -- Os testes das migrations 0218, 0219 e 0220 reaplicam a migration velha, que recria a constraint com menos tipos: eles agora apagam antes o requisito do tipo novo (como a 0219 fez com os seus).
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql — 36 dos 36 asserts medidos em 04/11/2026 com `PGOPTIONS='-c dial.medindo=on'` (o assert vira `raise warning` e CONTA;
--- sem a variável é `raise exception`; o `run.sh` completo foi rodado sem ela e o log relido INTEIRO atrás de FALHOU). Controle intacto: 36 execuções, 0 falhas. Cada correção desligada UMA vez, num banco que já
--- tem a 0221, com a variante reaplicada por `\i` (`-v arq0221=<arquivo>`); em todas a migration APLICOU e o log traz a linha FIM com as 36 execuções ('marcador' = os asserts do catálogo que dependem do requisito da linha desligada):
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql — 48 dos 48 asserts medidos em 04/11/2026 com `PGOPTIONS='-c dial.medindo=on'` (o assert vira `raise warning` e CONTA;
+-- sem a variável é `raise exception`; o `run.sh` completo foi rodado sem ela e o log relido INTEIRO atrás de FALHOU). Controle intacto: 48 execuções, 0 falhas. Cada correção desligada UMA vez, num banco que já
+-- tem a 0221, com a variante reaplicada por `\i` (`-v arq0221=<arquivo>`); em todas a migration APLICOU e o log traz a linha FIM com as 48 execuções ('marcador' = os asserts do catálogo que dependem do requisito da linha desligada):
 --   PARTE A: `and not c.relrowsecurity` trocado por `and false` (o ramo nunca acusa): 5 reprovam (a tabela criada sem RLS, a lista de "1 tabela(s)", o `disable row level security` numa existente, a particionada, as 17);
 --            o ramo `rls_ligada` APAGADO da função: 14 reprovam (os 5 acima e 9 que dependem de a linha do ramo responder: o estado limpo, os marcadores, os dois "volta a PRESENTE", o schema inexistente, o outro schema, a limpeza das 17 e a idempotência).
 --   PARTE B: o critério de DDL (`or f.src ~* (v_ddl ...`) fora: 10 reprovam (7 de comportamento: alter table ... disable trigger, drop trigger, disable row level security, `if exists only public.`, comentário e aspas, o helper INVOKER, a função de gatilho; e 3 de marcador);
 --            o critério do parâmetro de réplica (`or f.src ~* v_srr`) fora: 4 (1 de comportamento e 3 de marcador); os DOIS fora: 11 (8 de comportamento e 3 de marcador);
 --            o parâmetro escrito INTEIRO no corpo da sonda (sem as duas metades): 1 (quem chama fn_instalacao_conferir() passa a ser acusado: a sonda entrou no fecho).
+--   REVISÃO (correções acima): `\*` fora do v_pos (nos dois ramos): 2 reprovam (`alter table t*` e `delete from t*`; `update t *` com espaço já era visto); o `drop table` sem lista: 1; o critério de DDL de função (`or f.src ~* (v_dfn ...`) fora:
+--            8 (5 de comportamento: drop, create or replace, alter, a lista, a guarda de outro gatilho; e 3 de marcador/idempotência); só `create or replace function` fora de v_dfn: 1; a guarda pelo NOME FIXO fn_trg_so_socio em vez do catálogo: 1
+--            (a função de outro gatilho da tabela protegida); `v_tot > 0` fora do rls_ligada (schema vazio dá t): 1.
 -- Os asserts da BURLA (B1: a Analista liga a definer e o dial vai de N1 a N0; controle: 42501 sem ela) e os de "não acusa" (a genérica rls_auto_enable, DDL de outra tabela, nome parecido, definer fechada, só leitura) são
 -- CONTROLES do arranjo: nenhuma variante os reprova (a burla existe com ou sem a sonda; o que não acusa é verde também na 0220). Limite do teste: a BURLA mede só o `disable trigger`; as outras formas (drop trigger,
 -- disable row level security, o parâmetro de réplica) são medidas pela ACUSAÇÃO, não pelo efeito.
@@ -92,6 +102,9 @@ declare
   v_pos        text;
   v_g          text := '(\s|/\*([^*]|\*+[^*/])*\*+/|--[^\n]*\n)';
   v_ddl        text;   -- 0221 PARTE B
+  v_dfn        text;   -- 0221 PARTE B
+  v_gfn        text;   -- 0221 PARTE B
+  v_tot        bigint; -- 0221 PARTE A
   v_srr        text;   -- 0221 PARTE B
 begin
   for r in select * from instalacao_requisito order by ordem, chave loop
@@ -364,6 +377,8 @@ begin
       -- `drop table <protegida>` não escrevem linha, mas desligam a guarda de Sócio (ou a RLS) na mesma transação, e o Analista que chamou a definer escreve no dial direto. E
       -- o parâmetro de sessão `session_replication` + `_role` (escrito em duas metades aqui) em QUALQUER lugar do corpo (ele faz o Postgres PULAR todos os gatilhos, de qualquer tabela). O alcance do DDL é a lista de tabelas protegidas (v_tabs):
       -- um `alter table` genérico, de outra tabela ou por SQL dinâmico (rls_auto_enable), não acusa. Lado seguro, como no DML: acusa a mais um `alter table <protegida> add column`.
+      -- 0221 (revisão): o v_pos aceita também `*` (`alter table t* disable trigger`, `update t *`, `delete from t *` são SQL válido); `drop table a, b` aceita lista; e DDL de FUNÇÃO (drop, alter, create or replace)
+      -- sobre a função de qualquer gatilho das tabelas protegidas (v_gfn, pelo catálogo) conta como escrita.
       -- NÃO enxerga (declarado): SQL dinâmico (`execute format(...)`, regproc em texto); função fora de public;
       -- a função que o gatilho chama só por SQL dinâmico. Chamar uma PORTA (fn_dial_auto_promover) de uma definer não conta, de propósito: é o caminho que o dono
       -- aprovou na 0137 (o gatilho de `decisao` promove, no máximo até N2, SÓ quando o veredito GLOBAL basta; o chamador não escolhe nada).
@@ -376,11 +391,18 @@ begin
                               from unnest(string_to_array(nullif(split_part(r.marcador, ';', 2), ''), '|')) q
                              where to_regprocedure('public.' || btrim(q)) is not null), array[]::oid[]);
       v_pre    := replace(replace('(insert@+into$|update$|delete@+from$|merge@+into$|truncate$(table@+)?(only@+)?([a-z0-9_."]+@*,@*)*)(only@+)?("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
-      v_pos    := '"?(\s|;|$|\(|\)|,)';
+      v_pos    := '"?(\s|;|$|\(|\)|,|\*)';
       -- 0221 PARTE B. O `$` é o mesmo do v_pre: espaço/comentário (v_g) ou nada se a próxima coisa for `"`. o parâmetro é montado em duas metades de propósito: escrito inteiro
       -- aqui, o corpo desta própria sonda casaria o critério e a poria no fecho (INVOKER, não é acusada, mas puxaria quem a chamasse).
-      v_ddl    := replace(replace('(alter@+table$(if@+exists$)?(only$)?|drop@+table$(if@+exists$)?|drop@+trigger$(if@+exists$)?("[^"]+"|[a-z0-9_]+)$on$(only$)?)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
+      v_ddl    := replace(replace('(alter@+table$(if@+exists$)?(only$)?|drop@+table$(if@+exists$)?([a-z0-9_."]+@*,@*)*|drop@+trigger$(if@+exists$)?("[^"]+"|[a-z0-9_]+)$on$(only$)?)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
       v_srr    := 'session_replication' || '_role';
+      -- A GUARDA É A FUNÇÃO DE QUALQUER GATILHO das tabelas protegidas, resolvida pelo catálogo (pg_trigger), não o nome fixo: apagá-la ou trocá-la tira a guarda (o `drop` com cascata apaga os gatilhos
+      -- junto) sem escrever linha. `v_gfn` = os nomes dessas funções (escapados, separados por `|`); NULL se não há gatilho (aí o critério não casa). DDL de função que cite um deles conta como escrita.
+      v_gfn    := (select string_agg(distinct regexp_replace(p.proname::text, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g'), '|')
+                     from pg_trigger t join pg_proc p on p.oid = t.tgfoid
+                    where not t.tgisinternal and t.tgrelid = any (select to_regclass('public.' || btrim(q)) from unnest(string_to_array(r.objeto, ',')) q)
+                      and p.pronamespace = 'public'::regnamespace);
+      v_dfn    := replace(replace('(drop@+function$(if@+exists$)?([a-z0-9_."]+@*(\([^)]*\))?@*,@*)*|alter@+function$|create@+(or@+replace@+)?function$)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas (lista por vírgula) e marcador = RAIZES;PORTAS, com ao menos uma raiz';
@@ -405,6 +427,7 @@ begin
              where f.src ~* (v_pre || '(' || v_tabs || ')' || v_pos)
                 or f.src ~* (v_ddl || '(' || v_tabs || ')' || v_pos)
                 or f.src ~* v_srr
+                or f.src ~* (v_dfn || '(' || v_gfn || ')' || v_pos)
                 or f.nome = any (v_funs)
             union
             select x.oid
@@ -436,7 +459,7 @@ begin
       -- alteram linha e ficam de fora. A FK que TEM a protegida como PAI (golden_criterio -> estagio_autonomia, on delete cascade) não conta: ela apaga a linha do FILHO, que não é protegido.
       v_tabs := array_to_string(string_to_array(r.objeto, ','), '|');
       v_pre  := replace(replace('(insert@+into$|update$|delete@+from$|merge@+into$|truncate$(table@+)?(only@+)?([a-z0-9_."]+@*,@*)*)(only@+)?("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
-      v_pos  := '"?(\s|;|$|\(|\)|,)';
+      v_pos  := '"?(\s|;|$|\(|\)|,|\*)';
       if coalesce(v_tabs, '') = '' then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas, lista por vírgula';
@@ -473,16 +496,17 @@ begin
         v_ok  := false;
         v_det := format('o schema %s nem existe', r.objeto);
       else
-        select count(*), string_agg(x.nome, ', ' order by x.nome) filter (where x.rn <= 15)
-          into v_n, v_lista
-          from (select c.relname::text as nome, row_number() over (order by c.relname) as rn
+        select count(*) filter (where not x.rls), string_agg(x.nome, ', ' order by x.nome) filter (where x.rn <= 15 and not x.rls), count(*)
+          into v_n, v_lista, v_tot
+          from (select c.relname::text as nome, c.relrowsecurity as rls, row_number() over (partition by c.relrowsecurity order by c.relname) as rn
                   from pg_class c
                  where c.relnamespace = to_regnamespace(r.objeto)
                    and c.relkind in ('r', 'p')
-                   and not c.relrowsecurity
                    and not exists (select 1 from pg_depend d where d.classid = 'pg_class'::regclass and d.objid = c.oid and d.deptype = 'e')) x;
-        v_ok  := v_n = 0;
-        v_det := case when v_ok then format('toda tabela de %s tem a RLS ligada', r.objeto)
+        -- Regra 7: o verde só vale se ALGO foi examinado. Schema que existe e está vazio (ex.: graphql_public) daria presente sem olhar tabela nenhuma.
+        v_ok  := v_n = 0 and v_tot > 0;
+        v_det := case when v_tot = 0 then format('nenhuma tabela examinada em %s (o schema existe e não tem tabela): a conferência não olhou nada', r.objeto)
+                      when v_ok then format('%s tabelas examinadas em %s, todas com a RLS ligada', v_tot, r.objeto)
                       else format('%s tabela(s) de %s com a RLS DESLIGADA (a policy por mandato não vale nelas): %s%s', v_n, r.objeto, v_lista, case when v_n > 15 then ' ...' else '' end) end;
       end if;
 
@@ -533,6 +557,9 @@ insert into instalacao_requisito
   ('sonda_dial_ve_ddl_na_protegida', '0221', 'corpo', 'fn_instalacao_conferir', 'or f.src ~* (v_ddl || ''('' || v_tabs || '')'' || v_pos)', null,
    'O portão definer_nao_escreve_no_dial só via ESCRITA DE LINHA: uma definer com EXECUTE para authenticated e `alter table estagio_autonomia disable trigger`, `drop trigger ... on <protegida>` ou `alter table <protegida> disable row level security` não era acusada, e desliga a guarda de Sócio na mesma transação em que o Analista escreve no dial. O marcador é a linha do fecho que inclui o DDL sobre a tabela protegida.',
    'bloqueante', 1003),
+  ('sonda_dial_ve_ddl_da_funcao_da_guarda', '0221', 'corpo', 'fn_instalacao_conferir', 'or f.src ~* (v_dfn || ''('' || v_gfn || '')'' || v_pos)', null,
+   'O portão definer_nao_escreve_no_dial não via DDL de FUNÇÃO: uma definer com EXECUTE para authenticated e `drop function ... cascade` (ou create or replace, ou alter function) sobre a função de gatilho das tabelas protegidas apaga ou troca a guarda de Sócio sem escrever linha. A guarda é resolvida pelo catálogo (a função de qualquer gatilho das tabelas protegidas). O marcador é a linha do fecho que inclui esse DDL.',
+   'bloqueante', 1005),
   ('sonda_dial_ve_replication_role', '0221', 'corpo', 'fn_instalacao_conferir', 'or f.src ~* v_srr', null,
    'O parâmetro de sessão de replicação em modo `replica` faz o Postgres PULAR todos os gatilhos, inclusive a guarda de Sócio, e uma definer que o ajusta não escreve linha nenhuma. O marcador é a linha do fecho que o inclui em qualquer lugar do corpo.',
    'bloqueante', 1004)
@@ -540,6 +567,11 @@ on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
   porque = excluded.porque, severidade = excluded.severidade, ordem = excluded.ordem;
+
+-- A 0221 muda a linha do v_pos nos dois ramos (acrescenta `\*`: `alter table t* ...`, `update t *`, `delete from t *`), e os marcadores dos requisitos da 0220 eram essa linha EXATA. Sem trocá-los, a sonda
+-- acusaria a 0220 como ausente em produção logo depois de a 0221 ser aplicada (falso alarme). Trocados aqui, ficam com a migration '0220' (quem os declarou).
+update instalacao_requisito set marcador = 'v_pos    := ''"?(\s|;|$|\(|\)|,|\*)''' where chave = 'sonda_dial_v_pos_fecha_o_definer';
+update instalacao_requisito set marcador = 'v_pos  := ''"?(\s|;|$|\(|\)|,|\*)''' where chave = 'sonda_dial_v_pos_fecha_a_fk';
 
 update instalacao_cobertura
    set ate_migration = '0221', revisado_em = current_date,
