@@ -1,14 +1,41 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 117 (04/11/2026) — 0221 ESCRITA, NÃO APLICADA: a RLS que ninguém conferia ligada, e o portão do dial que não via DDL
+## SESSÃO 117 (04/11/2026) — 0221 APLICADA: a RLS que ninguém conferia ligada, e o DDL que o portão do dial não via
 
-> **Migration mais nova: `0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql` — ESCRITA E TESTADA LOCALMENTE, NÃO APLICADA EM PRODUÇÃO; a anterior, a `0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql`, está aplicada.** (O portão do `run.sh` exige que toda linha com esta declaração cite a mais nova, por isso as seções antigas abaixo dizem "Última migration DAQUELA sessão".)
->
-> - **Parte A:** tipo novo `rls_ligada`, requisito `rls_ligada_em_public` (bloqueante): acusa tabela de `public` com a RLS desligada. Produção (leitura de 04/11): 51 tabelas, 51 com RLS; o replay das migrations: 51 de 51, então a migration não liga RLS em nada.
-> - **Parte B:** o portão `definer_nao_escreve_no_dial` passa a contar DDL (`alter table`, `drop table`, `drop trigger ... on` sobre as tabelas protegidas) e o parâmetro de réplica da sessão como escrita.
-> - **Teste:** `Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql`, 58 asserts. A aplicar à mão: `supabase db execute --file` (README), depois `select chave, presente from fn_instalacao_conferir() where migration = '0221'`.
-> - **Gatilho trocado:** o requisito `gatilho` do dial e do catálogo agora declara a função da guarda (`fn_trg_so_socio`) e a sonda confere que o gatilho a chama; `create or replace trigger ... execute function <outra>` acende `acesso_gatilho_dial`. O DDL de função (drop, alter, create or replace, function/routine/procedure) sobre a guarda declarada conta como escrita no portão do dial.
-> - **Pontos cegos que restam:** SQL dinâmico no portão do dial (a troca de gatilho, essa, é pega pelo catálogo), `set role`/`set session authorization`, `create policy`/`alter policy` na tabela protegida, DDL por função fora de `public`, nome de gatilho entre aspas colado ao `on`, `drop function` com argumento de parênteses aninhados antes da guarda numa lista, DDL numa tabela não protegida cujo gatilho escreve no dial. `alter trigger ... rename` e `alter routine ... rename` foram medidos INOFENSIVOS (o gatilho referencia a função por oid).
+> **Migration mais nova: `0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql` — APLICADA EM PRODUÇÃO em 04/11/2026 e conferida pela sonda (315/315). A anterior, a `0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql`, também está aplicada.** (O portão do `run.sh` exige que toda linha com esta declaração cite a mais nova, por isso as seções antigas abaixo dizem "Última migration DAQUELA sessão".)
+
+**O que a 0221 faz:**
+- **Parte A:** tipo novo `rls_ligada`, requisito `rls_ligada_em_public` (bloqueante). Acusa tabela de `public` com a RLS desligada. Exige N > 0 tabelas examinadas, para o requisito não passar vazio.
+- **Parte B:** o portão `definer_nao_escreve_no_dial` passa a ver DDL: `alter table`, `drop table`, `drop trigger ... on`, `*`, listas, `session_replication_role`, e `drop`/`alter`/`create or replace` de função, routine ou procedure da guarda.
+- **Gatilho:** o requisito `gatilho` confere pelo catálogo o `tgfoid` contra a função da guarda declarada no marcador (`fn_trg_so_socio`). Trocar o gatilho aparece no estado, não no texto. Sem guarda declarada, o portão fica ausente.
+
+**Como chegou aqui:** três rodadas de revisão independente acharam 3, 2 e 1 escapes. Todos foram fechados antes de aplicar. Na segunda rodada, a abordagem mudou de regex para estado do catálogo. Teste: `Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql`, 58 asserts. Commits: d5d32b4, c890a5c, cfe4e4f, 6f3d023.
+
+**Aplicação em produção (04/11/2026):**
+1. Prévia só leitura: 0 tabelas acusadas; 2 gatilhos chamam `fn_trg_so_socio`; 51 de 51 tabelas de `public` com RLS.
+2. Ensaio com `raise exception`: os 6 requisitos da 0221 presentes, nenhum ausente. Foto antes e depois idêntica, depois do rollback.
+3. Aplicação pela API: retorno `[]`.
+4. Depois: sonda 309/309 → 315/315. ACL de funções e tabelas, policies, gatilhos e dial com hash igual ao de antes. Só os corpos mudaram (a sonda reemitida).
+
+**As cinco pendências soltas da P1b:**
+- **1 e 5 (RLS e DDL do dial):** 0221, acima.
+- **2 (recusa com token inválido): metade feita.** A recusa está provada (item 3). O envio VÁLIDO foi para a P2, por decisão do dono. O classificador do agente recusou ler o segredo do Vault para assinar o token. Pelo portal, com o Sócio de teste, o fluxo inteiro é provado sem ninguém manusear o segredo.
+- **3 (mensagem de erro, `fa57400`):** `Abortar Lote` lançava "Lote recusado pelo orcamento." em toda recusa, porque Registrar Recusa só devolvia `r`. Agora lança o motivo real e `[etapa: …]`. Regra 2: 2/2. Revisão sem achado. Ingestão republicada (`na1AEv3m8fjDXlwM`): publicada e conferida, 59 nós, fingerprint igual.
+  - Provado em produção: execução 9262 (30/10), "Lote recusado pelo orcamento." × execução 9390 (04/11), "Envio sem autorização válida. Nada foi gravado. … [etapa: envio]". 0 mandato criado. `execucao_falha` com etapa `envio`.
+- **4 (conta do cron): sem código.** `sonda-producao.yml` conecta como `postgres` (execução 59, log "banco: postgres @"). `envio_segredo_no_vault` presente.
+
+**Achados de passagem, NÃO corrigidos** (viram a fatia P1d do plano):
+- (a) A recusa de tamanho grava a etapa `orcamento`, que é o fallback do `queryReplacement`. Agora mostra "[etapa: orcamento]", e isso é o fallback, não a etapa real.
+- (b) A recusa de orçamento chega com N itens e provavelmente grava N linhas em `execucao_falha`. Não verificado (`queryBatching`).
+
+**Pontos cegos do portão do dial que restam (sem fatia ainda):** SQL dinâmico (a troca de gatilho é pega pelo catálogo, o resto não); `set role` e `set session authorization`; `create policy` e `alter policy` na tabela protegida; DDL de função fora de `public`; nome de gatilho entre aspas colado ao `on`; `drop function` com parênteses aninhados antes da guarda numa lista; DDL em tabela não protegida cujo gatilho escreve no dial. `alter trigger ... rename` e `alter routine ... rename` foram medidos inofensivos (o gatilho referencia a função por oid).
+
+**Decisões do dono nesta sessão:**
+1. A partir da P2, os testes são feitos com Playwright por papel, mais agentes Claude com persona dirigindo o preview, tudo medido. O MiroFish (666ghj/MiroFish) foi avaliado e descartado: simula opinião em rede social fictícia, não toca o portal, mandaria dado para Zep Cloud e Alibaba, e é AGPL-3.0.
+2. Usuários de teste: `rodrigo.varoto+socio@`, `+analista@` e `+leitura@oriapartners.com`.
+3. Produção autorizada nesta rodada: aplicar a 0221, republicar a ingestão e fazer smoke. Os três foram feitos.
+
+**Próximo:** P2 (com personas e com o envio válido), depois P3. Atraso de ~3 sessões. Fim das 30 fatias passa de 11/12 para ~18/12. Plano: `Arquitetura do Sistema/3 Estado e Execução/PLANO_DE_EXECUCAO_2026-11.md`.
 
 
 ## SESSÃO 116b (03/11/2026) — 0220 aplicada: o portão do dial que só via espaço e parêntese

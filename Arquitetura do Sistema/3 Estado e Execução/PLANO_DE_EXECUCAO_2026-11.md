@@ -26,6 +26,9 @@ mandato, e as pendências conhecidas do portal.
 > **Premissa deste plano, para o dono corrigir:** **5 sessões por semana**, 30 fatias em 6 semanas.
 > Com outro ritmo, a ordem não muda; muda só a data em que cada fatia acontece.
 
+> **Atualizado em 04/11/2026 (sessão 117):** P1 ✅, P1b ✅, P1c ✅. Atraso de ~3 sessões. O fim das 30
+> fatias passa de 11/12 para **~18/12**. Detalhe na seção da sessão 117 do `ESTADO.md`.
+
 ---
 
 ## 1. Onde estamos, medido em 30/10/2026 (não lembrado)
@@ -98,11 +101,17 @@ critério que fecha a fatia. Sem ele cumprido, a fatia não fecha.
 | # | Fatia | Pronto quando |
 |---|---|---|
 | **P1** ✅ 30/10 | **Fechar o deploy da Fase 5.** Com o segredo já no PikaPods (pendência D1 do dono): redeploy do portal, republicação da ingestão, conferir `multipleFiles` em "Arquivos", envio ponta a ponta de um book sintético pelo portal | Um lote sintético entra com o token do portal, e o n8n **recusa** token adulterado e token vencido (medido) |
-| **P1b** | **O dial e a concordância calculados por mandato de quem dispara** (pendência crítica achada na revisão do PR #264, vale para a `0216` já aplicada). `fn_dial_auto_promover`, `fn_veredito_producao` e o gatilho `trg_auto_promover_dial` são INVOKER: sob a RLS por mandato, um Analista que decide uma pendência promove o dial de TODOS com a concordância só dos mandatos dele. Mesma família: `fn_golden_cobertura` e `fn_classe_contabil_concordancia`. Migration nova com cálculo global independente do leitor. Junto: sonda que exija RLS ligada (`relrowsecurity`) nas tabelas restritas | Um recorte pequeno com concordância alta NÃO promove o dial (assert medido não-vazio). **Tem de vir ANTES da P2**, que cria o primeiro Analista. Hoje o risco é nulo: o único usuário é Sócio |
-| **P2** | **Três usuários de teste e vistoria por papel.** Criar Sócio, Analista e Leitura; percorrer com Playwright todas as telas autenticadas no preview; registrar cada defeito com captura | Matriz papel × tela, com o que cada papel vê e faz, medida. A lista de defeitos alimenta a semana 4 |
+| **P1b** ✅ 04/11 | **O dial e a concordância calculados por mandato de quem dispara** (pendência crítica achada na revisão do PR #264, vale para a `0216` já aplicada). `fn_dial_auto_promover`, `fn_veredito_producao` e o gatilho `trg_auto_promover_dial` são INVOKER: sob a RLS por mandato, um Analista que decide uma pendência promove o dial de TODOS com a concordância só dos mandatos dele. Mesma família: `fn_golden_cobertura` e `fn_classe_contabil_concordancia`. Migration nova com cálculo global independente do leitor. Junto: sonda que exija RLS ligada (`relrowsecurity`) nas tabelas restritas | Um recorte pequeno com concordância alta NÃO promove o dial (assert medido não-vazio). **Tem de vir ANTES da P2**, que cria o primeiro Analista. Hoje o risco é nulo: o único usuário é Sócio |
+| **P1c** ✅ 04/11 | **Fechar as cinco pendências soltas da P1b.** RLS e DDL do dial (`0221`, aplicada), mensagem de recusa com o motivo real (`fa57400`), conta do cron conferida (`postgres`), segredo no Vault conferido. O envio válido saiu para a P2 | Recusa com token inválido provada em produção (execução 9262 × 9390, 0 mandato criado). Sonda 315/315 depois da `0221` |
+| **P1d** | **Dois achados de passagem da P1c.** (a) A recusa de tamanho grava a etapa `orcamento` (fallback do `queryReplacement`). (b) A recusa de orçamento com N itens provavelmente grava N linhas em `execucao_falha` (`queryBatching` não verificado) | Recusa de tamanho grava a etapa real, com teste que reprova no fallback. Número de linhas por recusa de orçamento medido; se for N, corrigido |
+| **P2** | **Três usuários de teste e vistoria por papel.** Criar Sócio, Analista e Leitura (`rodrigo.varoto+socio@`, `+analista@`, `+leitura@oriapartners.com`). Percorrer as telas autenticadas no preview com Playwright e com agentes Claude com persona dirigindo o preview; registrar cada defeito com captura. Junto: o **envio válido** de um book sintético pelo portal com o Sócio de teste (movido da P1c). MiroFish avaliado e descartado (04/11) | Matriz papel × tela, com o que cada papel vê e faz, medida. Envio válido entra e grava, conferido no banco (critério herdado da P1). A lista de defeitos alimenta a semana 4 |
 | **P3** | **O n8n roteia por `caso_id`.** O token assinado passa a carregar o `caso_id`; o "Upsert Caso" busca por id; o nome vira só exibição | Renomear um mandato não quebra o envio; o invariante reprova com o roteamento antigo (medido) |
 | **P4** | **Linha de base da F3 e corpus de regressão.** Três books sintéticos mais os documentos reais já no banco (Valtra, Krauspenhar, AMO). Script que mede, por documento: falhou, incompleto, linhas, descartadas por desalinhamento, seções que não fecham. Corrigir a régua de cobertura acima de 1 | Número de base publicado por documento; a régua dá entre 0 e 1 no corpus inteiro, ou diz por que não |
 | **P5** | **`Maximum call stack size exceeded` em "Juntar Extração de Conteúdo".** Causa raiz, com o documento que provoca o erro | O documento que estourava passa, e um teste reprova com o código antigo |
+
+**Estado em 04/11 (sessão 117).** P1b ✅ e P1c ✅ com a `0221` aplicada em produção e a sonda em 315/315.
+
+**Pontos cegos do portão do dial sem fatia ainda** (medidos na sessão 117): SQL dinâmico (a troca de gatilho é pega pelo catálogo, o resto não); `set role` e `set session authorization`; `create policy` e `alter policy` na tabela protegida; DDL de função fora de `public`; nome de gatilho entre aspas colado ao `on`; `drop function` com parênteses aninhados antes da guarda numa lista; DDL em tabela não protegida cujo gatilho escreve no dial.
 
 ### Semana 2 (09 a 13/11) — (d) F3: a extração para de perder documento
 
@@ -201,7 +210,7 @@ para cima ou para baixo.
 
 | # | Pendência | Bloqueia | Desde |
 |---|---|---|---|
-| **D1** | **Pôr `N8N_INTAKE_SEGREDO` e `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` nas variáveis do n8n no PikaPods**, com o mesmo valor da Vercel. A licença do n8n não tem Variables, então o `$env` é o único caminho | P1: sem isso, o n8n recusa todo envio | 30/10 |
+| **D1** ✅ 04/11 | **Caiu: o segredo está no Vault do Supabase** (`envio_segredo_no_vault` presente, conferido em 04/11). A variável no PikaPods deixou de ser pré-requisito de P1 | — | 30/10 |
 | **D2** | Controle familiar conta como controle comum? (fatia 1.7) | (a) | 15/10 |
 | **D3** | Pendência "aceita com ressalva" deve segurar o fechamento do perímetro? (hoje não segura) | (a) | 15/10 |
 | **D4** | `caso_pergunta` na fusão de entidades (FK `NO ACTION`: hoje a fusão falha alto) | (a) | 15/10 |
