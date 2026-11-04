@@ -304,8 +304,13 @@ echo "== schema materializado (Supabase/schema.sql)"
 # verdadeiro em produção, então o arquivo publicado continua sendo o que o
 # Supabase tem. O GRANT em si (a anon/authenticated/service_role) não é tocado:
 # é ele que carrega a informação, e é ele que o arquivo existe para denunciar.
+#
+# E O `SET transaction_timeout = 0;` (04/11/2026): o runner do GitHub passou a Ubuntu 26.04, que não
+# tem `postgresql-client-16`; o CI cai no cliente 18, e o pg_dump 17+ emite essa linha, que o 16 não
+# emite. É ajuste de SESSÃO do próprio dump, não schema. Medido: era a ÚNICA diferença do
+# schema.sql gerado pelo cliente 18 contra o do 16 (job `banco` de cfe4e4f e 6f3d023).
 pg_dump --schema-only --no-owner --schema=public -d "$DB" \
-  | grep -vE '^(-- (Dumped (from|by)|PostgreSQL database dump)|\\(un)?restrict )' \
+  | grep -vE '^(-- (Dumped (from|by)|PostgreSQL database dump)|\\(un)?restrict |SET transaction_timeout = 0;$)' \
   | sed -E 's/^ALTER DEFAULT PRIVILEGES FOR ROLE [^ ]+ /ALTER DEFAULT PRIVILEGES FOR ROLE postgres /' \
   | sed -E '/^$/N;/^\n$/D' > Supabase/schema.sql
 echo "   $(grep -c '^CREATE ' Supabase/schema.sql) objetos criados · $(wc -l < Supabase/schema.sql) linhas"
