@@ -2616,7 +2616,7 @@
 {"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":242}
 {"k":"e","de":"migration:0219","rel":"CRIA","pa":"fn:fn_trg_so_socio","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","l":163}
 {"k":"e","de":"migration:0220","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0220_o_portao_do_dial_que_so_via_espaco_e_parentese.sql","l":75}
-{"k":"e","de":"migration:0221","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","l":81}
+{"k":"e","de":"migration:0221","rel":"CRIA","pa":"fn:fn_instalacao_conferir","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","l":84}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

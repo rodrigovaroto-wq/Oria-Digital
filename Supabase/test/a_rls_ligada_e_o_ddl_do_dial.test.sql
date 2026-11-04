@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 0221 — A RLS QUE NINGUÉM CONFERIA LIGADA, E O PORTÃO DO DIAL QUE NÃO VIA DDL
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 55 dos 55 asserts medidos (cada chamada roda uma vez). Controle intacto: 55 execuções, 0 falhas.
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 58 dos 58 asserts medidos (cada chamada roda uma vez). Controle intacto: 58 execuções, 0 falhas.
 -- O número por parte, com a correção desligada, está no cabeçalho de Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql.
 --
 -- COMO RODA. Como o teste da 0220: uma transação só (`begin` ... `rollback`); reaplica o arquivo da migration (`\i`) no começo (no-op com o arquivo real: prova a idempotência) ou uma VARIANTE com
@@ -322,6 +322,16 @@ begin
   perform teste_assert_0221(v_dep = 'ausente', 'o mesmo no catálogo de premissas: acesso_gatilho_premissa_catalogo AUSENTE com o gatilho trocado', v_dep);
   drop function zz_inofensiva_0221();
 
+  raise notice '--- B6. sem guarda DECLARADA o portão não pode ficar verde calado (regra 7) ---';
+  update instalacao_requisito set marcador = null where chave in ('acesso_gatilho_dial', 'acesso_gatilho_premissa_catalogo');
+  perform teste_assert_0221(not teste_presente_0221('definer_nao_escreve_no_dial') and teste_detalhe_0221('definer_nao_escreve_no_dial') like 'nenhuma guarda declarada%',
+    'marcador NULO nos dois requisitos de gatilho: definer_nao_escreve_no_dial AUSENTE, dizendo que a troca do gatilho e o DDL da guarda não estão vigiados', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  update instalacao_requisito set marcador = 'fn_zz_nao_existe_0221' where chave = 'acesso_gatilho_dial';
+  update instalacao_requisito set marcador = 'fn_trg_so_socio' where chave = 'acesso_gatilho_premissa_catalogo';
+  perform teste_assert_0221(not teste_presente_0221('definer_nao_escreve_no_dial'), 'guarda declarada que NÃO existe em public: AUSENTE também', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  update instalacao_requisito set marcador = 'fn_trg_so_socio' where chave in ('acesso_gatilho_dial', 'acesso_gatilho_premissa_catalogo');
+  perform teste_assert_0221(teste_presente_0221('definer_nao_escreve_no_dial'), 'controle: com a guarda declarada de volta (fn_trg_so_socio), o portão volta a PRESENTE', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+
   raise notice '--- B4. o `*` colado ao nome, a lista no drop table, o DDL da FUNÇÃO da guarda ---';
   create function zz_estrela_ddl_0221() returns void language plpgsql security definer set search_path = public, pg_temp
     as $f$ begin alter table estagio_autonomia* disable trigger all; end $f$;
@@ -423,7 +433,7 @@ end $$;
 
 -- O número de execuções tem de ser o do arquivo: assert que sumiu não pode passar calado.
 do $$
-declare v_esperado constant int := 55;
+declare v_esperado constant int := 58;
   v_real int := coalesce(nullif(current_setting('dial.execucoes', true), ''), '0')::int;
 begin
   if v_real <> v_esperado then

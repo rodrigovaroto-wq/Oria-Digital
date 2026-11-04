@@ -42,6 +42,8 @@
 -- (3) `drop function fn_trg_so_socio() cascade` apaga os dois gatilhos de guarda sem escrever linha, e a irmã `create or replace function` troca a guarda: ESCOLHIDO fechar a FAMÍLIA, e não o nome fixo. A guarda é a função de QUALQUER
 -- gatilho das tabelas protegidas, resolvida pelo catálogo (pg_trigger) a cada chamada (v_gfn); DDL de função (drop, alter, create or replace, com `public.`, `if exists` e lista) que a cite conta como escrita. A sonda não entra no fecho (o assert
 -- de quem a chama) e as migrations não são varridas (são arquivos, não corpos de função); (4) o `rls_ligada` presente agora diz "N tabelas examinadas" e exige N > 0 (regra 7: schema existente e vazio, como graphql_public, dava t sem olhar nada).
+-- LIMITE DECLARADO (re-revisão): a troca do gatilho é acusada pelo ESTADO do catálogo (acesso_gatilho_dial ausente) DEPOIS que acontece, não pela definer ANTES de rodar: o portão da definer só vê DDL de função e de tabela, não
+-- `create or replace trigger`. E o portão agora fica AUSENTE se nenhuma guarda estiver declarada (marcador nulo nos dois requisitos `gatilho`), em vez de verde calado.
 -- Os marcadores dos 2 requisitos da 0220 sobre o v_pos foram a linha EXATA que mudou: trocados no fim deste arquivo. Requisito novo: sonda_dial_ve_ddl_da_funcao_da_guarda.
 -- Medida da PARTE B (regra 2, o bloco de medição está abaixo): (8 asserts de comportamento + 3 de marcador reprovam sem os dois critérios).
 --
@@ -52,9 +54,9 @@
 -- QUEM CHAMA fn_instalacao_conferir (grep -rn): o workflow `sonda-producao.yml` (-> sonda-producao.mjs), o SQL Editor, testes e conferir-chamadas. A assinatura de retorno NÃO mudou.
 -- Os testes das migrations 0218, 0219 e 0220 reaplicam a migration velha, que recria a constraint com menos tipos: eles agora apagam antes o requisito do tipo novo (como a 0219 fez com os seus).
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql — 55 dos 55 asserts medidos em 04/11/2026 com `PGOPTIONS='-c dial.medindo=on'` (o assert vira `raise warning` e CONTA;
--- sem a variável é `raise exception`; o `run.sh` completo foi rodado sem ela e o log relido INTEIRO atrás de FALHOU). Controle intacto: 55 execuções, 0 falhas. Cada correção desligada UMA vez, num banco que já
--- tem a 0221, com a variante reaplicada por `\i` (`-v arq0221=<arquivo>`); em todas a migration APLICOU e o log traz a linha FIM com as 55 execuções ('marcador' = os asserts do catálogo que dependem do requisito da linha desligada):
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql — 58 dos 58 asserts medidos em 04/11/2026 com `PGOPTIONS='-c dial.medindo=on'` (o assert vira `raise warning` e CONTA;
+-- sem a variável é `raise exception`; o `run.sh` completo foi rodado sem ela e o log relido INTEIRO atrás de FALHOU). Controle intacto: 58 execuções, 0 falhas. Cada correção desligada UMA vez, num banco que já
+-- tem a 0221, com a variante reaplicada por `\i` (`-v arq0221=<arquivo>`); em todas a migration APLICOU e o log traz a linha FIM com as 58 execuções ('marcador' = os asserts do catálogo que dependem do requisito da linha desligada):
 --   PARTE A: `and not c.relrowsecurity` trocado por `and false` (o ramo nunca acusa): 5 reprovam (a tabela criada sem RLS, a lista de "1 tabela(s)", o `disable row level security` numa existente, a particionada, as 17);
 --            o ramo `rls_ligada` APAGADO da função: 16 reprovam (os 5 acima e 11 que dependem de a linha do ramo responder: o estado limpo, os marcadores, os dois "volta a PRESENTE", o schema inexistente, o outro schema, a limpeza das 17 e a idempotência).
 --   PARTE B: o critério de DDL (`or f.src ~* (v_ddl ...`) fora: 12 reprovam (9 de comportamento, os 7 abaixo mais o `alter table t*` e o `drop table` com lista: alter table ... disable trigger, drop trigger, disable row level security, `if exists only public.`, comentário e aspas, o helper INVOKER, a função de gatilho; e 3 de marcador);
@@ -66,6 +68,7 @@
 --   GATILHO TROCADO (segunda rodada de buraco na varredura de texto, então a correção foi no ESTADO do catálogo e não em regex): o ramo `gatilho` confere a função que o gatilho chama contra a que o requisito declara no `marcador`
 --            (fn_trg_so_socio, em acesso_gatilho_dial e acesso_gatilho_premissa_catalogo), e o v_gfn parte dessa função DECLARADA, não de pg_trigger. Ramo sem a conferência (`if true`): 2 reprovam (o gatilho trocado do dial e o do catálogo
 --            ficam presentes); os marcadores dos dois requisitos NÃO declarados (sem o `update` do fim da migration): 9 (os 2 acima e os 7 do v_dfn, que perdem a função declarada); o v_gfn lido de pg_trigger em vez do declarado: 1.
+--            Sem o ramo `nenhuma guarda declarada` (marcador nulo ou guarda inexistente: o portão ficaria verde calado): 2 reprovam (marcador nulo nos dois; guarda declarada que não existe).
 --            Pega a troca por qualquer caminho, inclusive SQL dinâmico. A troca é real (assert): com o gatilho chamando outra função a Analista escreve no dial.
 -- Os asserts da BURLA (B1: a Analista liga a definer e o dial vai de N1 a N0; controle: 42501 sem ela) e os de "não acusa" (a genérica rls_auto_enable, DDL de outra tabela, nome parecido, definer fechada, só leitura) são
 -- CONTROLES do arranjo: nenhuma variante os reprova (a burla existe com ou sem a sonda; o que não acusa é verde também na 0220). Limite do teste: a BURLA mede só o `disable trigger`; as outras formas (drop trigger,
@@ -420,6 +423,14 @@ begin
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas (lista por vírgula) e marcador = RAIZES;PORTAS, com ao menos uma raiz';
+      elsif v_gfn is null or exists (select 1 from instalacao_requisito g
+                                      where g.tipo = 'gatilho' and g.marcador is not null
+                                        and split_part(g.objeto, '.', 1) = any (select btrim(q) from unnest(string_to_array(r.objeto, ',')) q)
+                                        and not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = g.marcador)) then
+        -- 0221 (re-revisão, regra 7): sem guarda DECLARADA (marcador nulo nos requisitos `gatilho` das tabelas protegidas, ou declarada e inexistente) o ramo `gatilho` volta a só conferir que o gatilho existe, e o
+        -- critério de DDL de função (v_gfn) desliga calado: a sonda ficaria verde sem vigiar nada. Aqui isso é AUSENTE, com o motivo. Só a 0216 zera o marcador (on conflict com excluded.marcador nulo).
+        v_ok  := false;
+        v_det := format('nenhuma guarda declarada no catálogo para %s (ou a declarada não existe em public) — a troca do gatilho e o DDL da função da guarda não estão sendo vigiados', r.objeto);
       else
         with recursive
           fn as materialized (

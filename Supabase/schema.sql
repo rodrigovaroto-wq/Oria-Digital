@@ -6851,6 +6851,14 @@ begin
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas (lista por vírgula) e marcador = RAIZES;PORTAS, com ao menos uma raiz';
+      elsif v_gfn is null or exists (select 1 from instalacao_requisito g
+                                      where g.tipo = 'gatilho' and g.marcador is not null
+                                        and split_part(g.objeto, '.', 1) = any (select btrim(q) from unnest(string_to_array(r.objeto, ',')) q)
+                                        and not exists (select 1 from pg_proc p where p.pronamespace = 'public'::regnamespace and p.proname = g.marcador)) then
+        -- 0221 (re-revisão, regra 7): sem guarda DECLARADA (marcador nulo nos requisitos `gatilho` das tabelas protegidas, ou declarada e inexistente) o ramo `gatilho` volta a só conferir que o gatilho existe, e o
+        -- critério de DDL de função (v_gfn) desliga calado: a sonda ficaria verde sem vigiar nada. Aqui isso é AUSENTE, com o motivo. Só a 0216 zera o marcador (on conflict com excluded.marcador nulo).
+        v_ok  := false;
+        v_det := format('nenhuma guarda declarada no catálogo para %s (ou a declarada não existe em public) — a troca do gatilho e o DDL da função da guarda não estão sendo vigiados', r.objeto);
       else
         with recursive
           fn as materialized (
