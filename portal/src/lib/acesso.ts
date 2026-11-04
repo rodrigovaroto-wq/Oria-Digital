@@ -240,24 +240,34 @@ export function textoDeRecentesVazio(papel: Papel | null, leituraFalhou: boolean
 
 export const MENSAGEM_SEM_ENVIO = "Seu papel não permite enviar arquivos a este mandato.";
 
+export const MENSAGEM_CASO_INVISIVEL =
+  "Este mandato não existe ou não está no seu acesso, então nada foi enviado. Volte à lista de mandatos e abra o mandato pelo portal.";
+
+export const MENSAGEM_CASO_FECHADO =
+  "Este mandato está fechado e não recebe documentos novos, então nada foi enviado. Peça a um Sócio para reabri-lo se o envio é devido.";
+
 export type DecisaoDeEnvio = { ok: true } | { ok: false; status: 403 | 409 | 503; mensagem: string };
 
 /**
- * Pode esta pessoa mandar arquivos a este mandato (pelo NOME)? É a única escrita que a RLS da 0216 não
- * cobre: `/api/intake` encaminha ao Form do n8n, que grava com a conexão de serviço (BYPASSRLS) e acha
- * o mandato pelo nome — então sem esta checagem a Leitura, ou um Analista não alocado, injetaria
- * documentos em qualquer mandato. FALHA FECHA (503): aqui um "não consegui conferir" que deixasse
- * passar seria exatamente o furo; o custo é pedir para tentar de novo.
+ * Pode esta pessoa mandar arquivos a ESTE CASO (pelo `caso_id`)? É a única escrita que a RLS da 0216 não
+ * cobre: `/api/intake` encaminha ao Form do n8n, que grava com a conexão de serviço (BYPASSRLS) — então
+ * sem esta checagem a Leitura, ou um Analista não alocado, injetaria documentos em qualquer mandato.
+ * FALHA FECHA (503): aqui um "não consegui conferir" que deixasse passar seria exatamente o furo; o custo
+ * é pedir para tentar de novo.
  *
- * `achados`: o que a consulta do nome devolveu SOB RLS — `n` mandatos de mesmo nome visíveis e o que
- * `fn_pode_escrever_caso` disse do primeiro (`null` = a pergunta falhou); `null` = a consulta falhou.
- * Sócio não precisa dela (escreve em todos). Mandato que o Analista não enxerga é recusado: a RLS não
- * distingue "não existe" de "existe e é de outra equipe", e o portal sempre cria o mandato ANTES de
- * enviar (passo 1 de Novo mandato), então um nome invisível não é um envio legítimo.
+ * O envio NUNCA cria mandato (P3): o Sócio também passa pela consulta, e o caso que a RLS não devolve é
+ * recusado — "não existe" e "é de outra equipe" são indistinguíveis sob RLS, e o portal só emite token
+ * para um caso que acabou de ver. Antes o Sócio recebia token para qualquer NOME e o primeiro envio
+ * criava o mandato.
+ *
+ * `achado`: o que `select id, nome, fechado_em from caso where id = $1` devolveu SOB RLS (`existe`
+ * = veio 1 linha; `fechado` = `fechado_em` preenchido) e o que `fn_pode_escrever_caso` disse (`null` =
+ * a pergunta falhou; só o Analista precisa dela). `achado = null`: a consulta do caso falhou.
+ * Caso fechado recusa (decisão do dono): mandato fechado não recebe documento.
  */
-export function decidirEnvioAoMandato(
+export function decidirEnvioAoCaso(
   acesso: AcessoLido,
-  achados: { n: number; podeEscrever: boolean | null } | null,
+  achado: { existe: boolean; fechado: boolean; podeEscrever: boolean | null } | null,
 ): DecisaoDeEnvio {
   const recusa = (status: 403 | 409 | 503, mensagem: string): DecisaoDeEnvio => ({ ok: false, status, mensagem });
   if (acesso.estado === "falha") {
@@ -265,17 +275,14 @@ export function decidirEnvioAoMandato(
   }
   if (acesso.papel === null) return recusa(403, MOTIVO_SEM_PAPEL);
   if (acesso.papel === "leitura") return recusa(403, MENSAGEM_SEM_ENVIO);
-  if (acesso.papel === "socio") return { ok: true };
-  if (achados === null || (achados.n === 1 && achados.podeEscrever === null)) {
-    return recusa(503, "Não foi possível conferir a sua alocação neste mandato agora, então nada foi enviado. Tente de novo.");
+  if (achado === null || (achado.existe && acesso.papel === "analista" && achado.podeEscrever === null)) {
+    return recusa(503, "Não foi possível conferir o mandato e a sua alocação agora, então nada foi enviado. Tente de novo.");
   }
-  if (achados.n > 1) return recusa(409, MENSAGEM_NOME_DUPLICADO);
-  if (achados.n === 0 || achados.podeEscrever !== true) return recusa(403, MENSAGEM_SEM_ENVIO);
+  if (!achado.existe) return recusa(403, MENSAGEM_CASO_INVISIVEL);
+  if (acesso.papel === "analista" && achado.podeEscrever !== true) return recusa(403, MENSAGEM_SEM_ENVIO);
+  if (achado.fechado) return recusa(409, MENSAGEM_CASO_FECHADO);
   return { ok: true };
 }
-
-export const MENSAGEM_NOME_DUPLICADO =
-  "Há mais de um mandato com este nome, então o portal não sabe a qual deles se refere. Peça a um Sócio para renomear um dos dois.";
 
 /**
  * O que a Administração mostra a cada papel. Custos, concordância da classificação, golden set e a

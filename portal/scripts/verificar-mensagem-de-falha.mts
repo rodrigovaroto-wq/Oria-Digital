@@ -41,7 +41,7 @@ import {
   montarRedirectTo, origemDaRequisicao, rotaPublica, validarNovaSenha,
 } from "../src/lib/recuperar-senha.ts";
 import {
-  MENSAGEM_NOME_DE_MANDATO_EXISTE, MENSAGEM_NOME_DUPLICADO, MENSAGEM_SEM_ENVIO, MENSAGEM_SEM_PERMISSAO, MOTIVO_SEM_PAPEL, AVISO_TOTAIS_RECORTADOS, MENSAGEM_NENHUM_VISIVEL, decidirAdministracao, decidirEnvioAoMandato, textoDeNenhumMandato,
+  MENSAGEM_NOME_DE_MANDATO_EXISTE, MENSAGEM_CASO_INVISIVEL, MENSAGEM_CASO_FECHADO, MENSAGEM_SEM_ENVIO, MENSAGEM_SEM_PERMISSAO, MOTIVO_SEM_PAPEL, AVISO_TOTAIS_RECORTADOS, MENSAGEM_NENHUM_VISIVEL, decidirAdministracao, decidirEnvioAoCaso, textoDeNenhumMandato,
   ehNegacaoDePermissao, escopoDaLista, interpretarPapel, permissoes, textoDeFalhaDaAcao, textoDeFalhaDoMandato, textoDeRecentesVazio,
   type AcessoLido,
 } from "../src/lib/acesso.ts";
@@ -49,7 +49,6 @@ import {
   MENSAGEM_FALTA_ATUALIZAR_O_BANCO, aguardandoLiberacao, ehUuid, equipeDoMandato, interpretarMembros, linhasDaEquipe,
   membrosDoModoAntigo, pessoaDoUsuario, textoDaFalhaDaEquipe, type MembroDaEquipe,
 } from "../src/lib/equipe.ts";
-import { obterCasoId } from "../src/lib/envio-oficial.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { runInNewContext } from "node:vm";
 import { semComentarios as semComentariosDoFonte } from "./lib/sem-comentarios.mts";
@@ -1332,24 +1331,29 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     && /^Seu papel não permite esta ação/.test(MENSAGEM_SEM_PERMISSAO), "42501 vira 'Seu papel não permite esta ação'");
   checar(textoDeFalhaDaAcao("Falha ao aprovar", { code: "57014", message: "timeout" }) === "Falha ao aprovar: timeout", "erro que não é de permissão segue com o prefixo e o texto técnico");
   // 5. (a) ENVIO DE ARQUIVOS: a escrita que o banco não vê (n8n usa conexão de serviço).
-  const envio = (a: AcessoLido, ach: { n: number; podeEscrever: boolean | null } | null) => decidirEnvioAoMandato(a, ach);
-  checar(envio(ok_("leitura"), { n: 1, podeEscrever: false }).ok === false && (envio(ok_("leitura"), null) as { mensagem: string }).mensagem === MENSAGEM_SEM_ENVIO, "Leitura não envia arquivos");
+  const envio = (a: AcessoLido, ach: { existe: boolean; fechado: boolean; podeEscrever: boolean | null } | null) => decidirEnvioAoCaso(a, ach);
+  const aberto = (podeEscrever: boolean | null) => ({ existe: true, fechado: false, podeEscrever });
+  const invisivel = { existe: false, fechado: false, podeEscrever: null };
+  checar(envio(ok_("leitura"), aberto(false)).ok === false && (envio(ok_("leitura"), null) as { mensagem: string }).mensagem === MENSAGEM_SEM_ENVIO, "Leitura não envia arquivos");
   checar(!envio(semPapel, null).ok && (envio(semPapel, null) as { status: number }).status === 403, "sem papel não envia");
-  // Sócio escreve em TODOS os mandatos (0216): a decisão não pode depender do que a consulta do nome devolveu.
-  checar([null, { n: 0, podeEscrever: null }, { n: 1, podeEscrever: false }, { n: 1, podeEscrever: null }].every((ach) => envio(ok_("socio"), ach).ok),
-    "Sócio envia a qualquer mandato, qualquer que seja o resultado da consulta do nome");
-  checar(envio(ok_("analista"), { n: 1, podeEscrever: true }).ok, "Analista alocado envia");
-  checar(!envio(ok_("analista"), { n: 1, podeEscrever: false }).ok, "Analista não alocado não envia");
-  checar(!envio(ok_("analista"), { n: 0, podeEscrever: null }).ok && (envio(ok_("analista"), { n: 0, podeEscrever: null }) as { status: number }).status === 403,
-    "nome que o Analista não enxerga é recusado (a RLS não distingue 'não existe' de 'é de outra equipe')");
-  // COM A 0216 (índice `caso_nome_unico`) DOIS MANDATOS DE MESMO NOME NÃO EXISTEM: este ramo é defesa em
-  // profundidade para um banco sem o índice. O que se afirma é COMPORTAMENTO — se a consulta devolver mais de um,
-  // o envio fecha (nunca escolhe um dos dois para receber os arquivos) e diz por quê —, não que duplicata ocorra.
-  const dup = envio(ok_("analista"), { n: 2, podeEscrever: true }) as { ok: boolean; status: number; mensagem: string };
-  checar(!dup.ok && dup.status === 409 && dup.mensagem === MENSAGEM_NOME_DUPLICADO,
-    "mais de um mandato de mesmo nome (banco sem o índice único): o envio fecha com 409, mesmo que o primeiro permita escrita");
+  // P3: o envio NUNCA cria mandato. O Sócio escreve em todos (0216), mas só em um caso que a consulta por id devolveu:
+  // antes ele recebia token para qualquer NOME e o primeiro envio criava o mandato.
+  checar(envio(ok_("socio"), aberto(null)).ok && envio(ok_("socio"), aberto(false)).ok, "Sócio envia a um caso que existe, qualquer que seja o resultado de fn_pode_escrever_caso");
+  const socioInexistente = envio(ok_("socio"), invisivel) as { ok: boolean; status: number; mensagem: string };
+  checar(!socioInexistente.ok && socioInexistente.status === 403 && socioInexistente.mensagem === MENSAGEM_CASO_INVISIVEL,
+    "Sócio com caso que não existe (id inventado): o envio recusa, em vez de deixar o n8n criar o mandato");
+  checar(envio(ok_("analista"), aberto(true)).ok, "Analista alocado envia");
+  checar(!envio(ok_("analista"), aberto(false)).ok, "Analista não alocado não envia");
+  checar(!envio(ok_("analista"), invisivel).ok && (envio(ok_("analista"), invisivel) as { status: number }).status === 403,
+    "caso que o Analista não enxerga é recusado (a RLS não distingue 'não existe' de 'é de outra equipe')");
+  // Decisão do dono: mandato fechado não recebe documento — para Sócio e Analista, com a frase que diz o efeito.
+  for (const papel of ["socio", "analista"] as const) {
+    const f = envio(ok_(papel), { existe: true, fechado: true, podeEscrever: true }) as { ok: boolean; status: number; mensagem: string };
+    checar(!f.ok && f.status === 409 && f.mensagem === MENSAGEM_CASO_FECHADO && /nada foi enviado/.test(f.mensagem), `${papel}: caso fechado deveria recusar com 409 e dizer que nada foi enviado`);
+  }
   checar((envio(falhou, null) as { status: number }).status === 503 && (envio(ok_("analista"), null) as { status: number }).status === 503
-    && (envio(ok_("analista"), { n: 1, podeEscrever: null }) as { status: number }).status === 503, "o envio FALHA FECHADO quando não consegue conferir");
+    && (envio(ok_("socio"), null) as { status: number }).status === 503 && (envio(ok_("analista"), aberto(null)) as { status: number }).status === 503,
+    "o envio FALHA FECHADO quando não consegue conferir");
   // 6. (b) ADMINISTRAÇÃO: números somados de todos os mandatos só para Sócio — e papel ilegível não abre calado.
   checar(decidirAdministracao(ok_("socio")) === "liberada" && decidirAdministracao(ok_("analista")) === "fechada"
     && decidirAdministracao(ok_("leitura")) === "fechada" && decidirAdministracao(semPapel) === "fechada", "Administração: só Sócio, quando o papel foi lido");
@@ -1374,16 +1378,17 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   /** A chamada existe, o resultado é guardado e vira um `if (!r.ok) return …` logo em seguida (não ignorado). */
   const resultadoBarra = (src: string, chamada: string) =>
     new RegExp(`const\\s+(\\w+)\\s*=\\s*await\\s+${chamada}\\([^)]*\\);?\\s*if\\s*\\(\\s*!\\s*\\1\\.ok\\s*\\)\\s*return\\b`).test(src);
-  const iChecaIntake = posicao(intake, /conferirEnvioAoMandato\(/), iFetch = posicao(intake, /\bfetch\(/);
-  checar(iChecaIntake >= 0 && iFetch >= 0 && iChecaIntake < iFetch && resultadoBarra(intake, "conferirEnvioAoMandato"),
+  const iChecaIntake = posicao(intake, /conferirEnvioAoCaso\(/), iFetch = posicao(intake, /\bfetch\(/);
+  checar(iChecaIntake >= 0 && iFetch >= 0 && iChecaIntake < iFetch && resultadoBarra(intake, "conferirEnvioAoCaso"),
     "POST /api/intake confere o papel ANTES do primeiro fetch ao n8n, e a recusa (`if (!r.ok) return`) usa o resultado");
-  const iChecaDestino = posicao(destino, /conferirEnvioAoMandato\(/), iUrl = posicao(destino, /process\.env\.N8N_INTAKE_FORM_URL/), iDescobre = posicao(destino, /descobrirNomesDeCampo\(/);
-  checar(iChecaDestino >= 0 && iUrl >= 0 && iDescobre >= 0 && iChecaDestino < iUrl && iChecaDestino < iDescobre && resultadoBarra(destino, "conferirEnvioAoMandato")
-    && /searchParams\.get\("mandato"\)/.test(destino),
+  const iChecaDestino = posicao(destino, /conferirEnvioAoCaso\(/), iUrl = posicao(destino, /process\.env\.N8N_INTAKE_FORM_URL/), iDescobre = posicao(destino, /descobrirNomesDeCampo\(/);
+  checar(iChecaDestino >= 0 && iUrl >= 0 && iDescobre >= 0 && iChecaDestino < iUrl && iChecaDestino < iDescobre && resultadoBarra(destino, "conferirEnvioAoCaso")
+    && /searchParams\.get\("caso"\)/.test(destino),
     "a URL do Form do n8n só é lida/devolvida DEPOIS da checagem (e a recusa usa o resultado): ela só sai para quem pode enviar ao mandato");
-  const iLimite = posicao(status, /\.limit\(2\)/), iDupl = iLimite < 0 ? -1 : status.indexOf("MENSAGEM_NOME_DUPLICADO", iLimite); // o 1º é o import
-  checar(iLimite >= 0 && iDupl > iLimite && !/\.(maybeSingle|single)\(\)/.test(status.slice(0, iDupl)) && /length\s*\?\?\s*0\)\s*>\s*1[\s\S]{0,120}status:\s*409/.test(status),
-    "o status lê o nome com limit(2) ANTES de decidir, e mais de um vira 409 com a frase — nunca maybeSingle por nome");
+  // O acompanhamento acha o mandato pelo ID (uma renomeação no meio do lote não pode deixar a tela em "aguarde") e a
+  // ausência dele é dita (404), não "aguarde".
+  checar(/\.eq\("id",\s*casoId\)/.test(status) && !/\.eq\("nome"/.test(status) && /status:\s*404/.test(status),
+    "o status acompanha o lote pelo id do caso, e caso inexistente é dito (404), nunca 'aguarde'");
   const layoutAdm = semComentarios(fonte("app/administracao/layout.tsx"));
   const iFnSocio = posicao(layoutAdm, /fn_eh_socio/), iDecide = posicao(layoutAdm, /decidirAdministracao\(acesso,\s*ehSocio\)/), iFecha = posicao(layoutAdm, /decisao === "fechada"/);
   checar(iFnSocio >= 0 && iDecide > iFnSocio && iFecha > iDecide && /decisao === "liberada_sem_confirmar"[\s\S]{0,200}AVISO_TOTAIS_RECORTADOS/.test(layoutAdm),
@@ -1446,12 +1451,6 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     && /^Já existe um mandato com este nome/.test(MENSAGEM_NOME_DE_MANDATO_EXISTE), "23505 de caso_nome_unico vira 'Já existe um mandato com este nome'");
   checar(textoDeFalhaDoMandato({ code: "23505", message: 'duplicate key value violates unique constraint "outro_indice"' }) === null && textoDeFalhaDoMandato({ code: "57014", message: "timeout" }) === null && textoDeFalhaDoMandato(null) === null,
     "outro 23505 e erros que não são do nome NÃO são traduzidos (seria atribuir ao nome um erro que não é dele)");
-  const clienteQueFalha = (erro: { code: string; message: string }) => ({ rpc: () => Promise.resolve({ data: null, error: erro }) }) as unknown as Parameters<typeof obterCasoId>[0];
-  for (const [erro, esperado] of [[{ code: "42501", message: alheio }, alheio], [{ code: "23505", message: 'violates unique constraint "caso_nome_unico"' }, MENSAGEM_NOME_DE_MANDATO_EXISTE]] as const) {
-    let msg = "";
-    try { await obterCasoId(clienteQueFalha({ ...erro }), "AMO"); } catch (e) { msg = (e as Error).message; }
-    checar(msg === esperado, `o envio de arquivos (obterCasoId) mostra a frase do nome de mandato (${erro.code}): "${msg}"`);
-  }
   checar(/textoDeFalhaDoMandato\(error\)/.test(fonte("app/casos/novo/actions.ts")), "o passo 1 do novo mandato traduz 42501 do nome alheio e 23505");
   // 10. A recusa chega à tela. Em PRODUÇÃO o Next redige a mensagem de um erro lançado por server action (texto
   //     genérico + digest), então `throw new Error(frase)` perdia a frase do papel e o motivo de recusa do banco.

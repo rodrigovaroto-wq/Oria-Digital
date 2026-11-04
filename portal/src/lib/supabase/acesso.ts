@@ -1,7 +1,7 @@
 import { cache } from "react";
 import { createClient } from "./server";
 import { assinarEnvio } from "../assinatura-do-envio";
-import { decidirEnvioAoMandato, interpretarPapel, permissoes, type AcessoLido, type Permissoes } from "../acesso";
+import { decidirEnvioAoCaso, interpretarPapel, permissoes, type AcessoLido, type Permissoes } from "../acesso";
 
 // O PAPEL DE QUEM ESTÁ NA REQUISIÇÃO, lido UMA vez e entregue a todas as telas.
 //
@@ -36,34 +36,41 @@ export const lerPermissoesDoMandato = cache(async (casoId: string): Promise<Perm
 });
 
 /**
- * `decidirEnvioAoMandato` com as consultas feitas: o mandato pelo NOME sob a RLS do usuário (limit 2,
- * para enxergar duplicata) e `fn_pode_escrever_caso`. Só o Analista precisa delas. Para rotas (sem
- * memória de renderização): chame uma vez por requisição.
+ * `decidirEnvioAoCaso` com as consultas feitas: o caso PELO ID sob a RLS do usuário (0 linhas = não
+ * existe ou não lê = recusa) e, para o Analista, `fn_pode_escrever_caso`. O Sócio TAMBÉM passa pela
+ * consulta: o envio nunca cria mandato. Para rotas (sem memória de renderização): chame uma vez
+ * por requisição. Devolve também o `nome` lido do banco, que vai ao Form só como rótulo.
  */
-export async function conferirEnvioAoMandato(nome: string) {
+export async function conferirEnvioAoCaso(casoId: string) {
   const acesso = await lerAcesso();
-  if (acesso.estado !== "ok" || acesso.papel !== "analista") return decidirEnvioAoMandato(acesso, null);
+  if (acesso.estado !== "ok" || acesso.papel === null || acesso.papel === "leitura") {
+    return { ...decidirEnvioAoCaso(acesso, null), nome: null };
+  }
   const supabase = await createClient();
-  const { data, error } = await supabase.from("caso").select("id").eq("nome", nome).limit(2);
-  if (error) return decidirEnvioAoMandato(acesso, null);
-  const linhas = (data as Array<{ id: string }> | null) ?? [];
-  if (linhas.length !== 1) return decidirEnvioAoMandato(acesso, { n: linhas.length, podeEscrever: null });
-  const r = await supabase.rpc("fn_pode_escrever_caso", { p_caso: linhas[0].id });
-  return decidirEnvioAoMandato(acesso, { n: 1, podeEscrever: r.error || typeof r.data !== "boolean" ? null : r.data });
+  const { data, error } = await supabase.from("caso").select("id, nome, fechado_em").eq("id", casoId).limit(1);
+  if (error) return { ...decidirEnvioAoCaso(acesso, null), nome: null };
+  const linha = ((data as Array<{ id: string; nome: string; fechado_em: string | null }> | null) ?? [])[0];
+  if (!linha) return { ...decidirEnvioAoCaso(acesso, { existe: false, fechado: false, podeEscrever: null }), nome: null };
+  let podeEscrever: boolean | null = null;
+  if (acesso.papel === "analista") {
+    const r = await supabase.rpc("fn_pode_escrever_caso", { p_caso: linha.id });
+    podeEscrever = r.error || typeof r.data !== "boolean" ? null : r.data;
+  }
+  return { ...decidirEnvioAoCaso(acesso, { existe: true, fechado: Boolean(linha.fechado_em), podeEscrever }), nome: linha.nome };
 }
 
 /**
- * O TOKEN DO ENVIO, para quem JÁ passou por `conferirEnvioAoMandato` (as rotas chamam as duas, nesta
+ * O TOKEN DO ENVIO, para quem JÁ passou por `conferirEnvioAoCaso` (as rotas chamam as duas, nesta
  * ordem, e a suíte `verificar-envio-oficial.mts` reprova a ordem invertida): assinar sem o papel
  * reabriria o Form público a quem o portal recusaria. Fica separada da conferência porque
  * `verificar-mensagem-de-falha.mts` lê a ORDEM "papel antes do fetch/URL" nas rotas, e a conferência
  * tem de continuar sendo a chamada que aquele teste vê. Segredo ausente = 503 "envio desligado".
  */
-export async function emitirTokenDoEnvio(nome: string) {
+export async function emitirTokenDoEnvio(casoId: string) {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) {
     return { ok: false as const, status: 503 as const, mensagem: "Não foi possível identificar o usuário para autorizar o envio. Entre de novo e tente outra vez." };
   }
-  return assinarEnvio({ mandato: nome, usuarioId: data.user.id, segredo: process.env.N8N_INTAKE_SEGREDO });
+  return assinarEnvio({ casoId, usuarioId: data.user.id, segredo: process.env.N8N_INTAKE_SEGREDO });
 }

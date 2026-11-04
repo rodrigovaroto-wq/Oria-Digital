@@ -23,7 +23,7 @@ export default async function AdicionarArquivosPage({
   if (error || !data) notFound();
   const caso = data as Caso;
   const perm = await permissoesDoMandato;
-  // Enviar arquivos é escrita (e o envio passa por fora do banco, ver `decidirEnvioAoMandato`): sem
+  // Enviar arquivos é escrita (e o envio passa por fora do banco, ver `decidirEnvioAoCaso`): sem
   // poder escrever aqui, a tela diz o motivo em vez de oferecer um formulário que a rota recusaria.
   if (!perm.escrever.pode) {
     return (

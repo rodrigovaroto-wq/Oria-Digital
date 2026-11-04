@@ -36,7 +36,8 @@ export default function UploadForm({
 }: {
   mandatoInicial?: string;
   travarMandato?: boolean;
-  casoId?: string;
+  /** O mandato, pelo id: o envio nunca cria mandato (P3) e o token é assinado por ele. */
+  casoId: string;
   /** Excluir mandato é de Sócio (0216): para os outros papéis o botão do lote vazio não aparece. */
   podeExcluir?: boolean;
 }) {
@@ -139,7 +140,7 @@ export default function UploadForm({
       if (cancelado) return;
       try {
         const params = new URLSearchParams({
-          caso: sucesso.mandato,
+          caso: casoId,
           desde: sucesso.desde,
           esperados: String(sucesso.arquivos),
         });
@@ -151,9 +152,9 @@ export default function UploadForm({
           return;
         }
         const json = await resp.json().catch(() => ({}));
-        // 409 = dois mandatos com o mesmo nome: o acompanhamento não sabe qual olhar e NÃO fica
+        // 404 = o mandato foi apagado (ou saiu do acesso) no meio do envio: o acompanhamento NÃO fica
         // "aguardando" para sempre — encerra dizendo a causa (o envio já foi feito).
-        if (!cancelado && resp.status === 409 && typeof json.error === "string") {
+        if (!cancelado && resp.status === 404 && typeof json.error === "string") {
           setFalha({ etapa: "acompanhamento", mensagem: json.error });
           return;
         }
@@ -277,7 +278,7 @@ export default function UploadForm({
     aEnviar: File[],
   ): Promise<{ mandato: string; arquivos: number; desde: string } | null> {
     const fd = new FormData();
-    fd.append("mandato", mandato.trim());
+    fd.append("casoId", casoId);
     for (const a of aEnviar) fd.append("arquivos", a, a.name);
     const resp = await fetch("/api/intake", { method: "POST", body: fd });
     const json = await resp.json().catch(() => ({}));
@@ -293,12 +294,14 @@ export default function UploadForm({
   }
 
   async function enviarDireto(
-    destino: { url: string; campos: { mandato: string; arquivos: string; token: string }; token: string; agora: string },
+    destino: { url: string; campos: { mandato: string; arquivos: string; token: string }; token: string; mandato?: string; agora: string },
     aEnviar: File[],
   ): Promise<{ mandato: string; arquivos: number; desde: string } | null> {
     const fd = new FormData();
-    fd.append(destino.campos.mandato, mandato.trim());
-    // O TOKEN que o servidor assinou para ESTE mandato (`/api/intake/destino`): sem ele o n8n recusa.
+    // O NOME É SÓ RÓTULO (o caso vai dentro do token): o servidor devolve o que está no banco.
+    const rotulo = typeof destino.mandato === "string" && destino.mandato ? destino.mandato : mandato.trim();
+    fd.append(destino.campos.mandato, rotulo);
+    // O TOKEN que o servidor assinou para ESTE caso (`/api/intake/destino`): sem ele o n8n recusa.
     fd.append(destino.campos.token, destino.token);
     for (const a of aEnviar) fd.append(destino.campos.arquivos, a, a.name);
     try {
@@ -340,7 +343,7 @@ export default function UploadForm({
     } catch {
       // segue com `destino.agora`
     }
-    return { mandato: mandato.trim(), arquivos: aEnviar.length, desde };
+    return { mandato: rotulo, arquivos: aEnviar.length, desde };
   }
 
   // A LEITURA E A GRAVAÇÃO DOS ARQUIVOS OFICIAIS, um de cada vez.
@@ -556,7 +559,7 @@ export default function UploadForm({
       if (aLerAqui.length > 0 || zips.length > 0) {
         let caso;
         try {
-          caso = await obterCasoId(createClient(), mandato.trim(), casoId);
+          caso = obterCasoId(casoId);
         } catch (err) {
           // Antes de ler e de enviar QUALQUER coisa: nada saiu, e a mensagem é a do banco.
           setErro((err as Error).message);
@@ -600,7 +603,7 @@ export default function UploadForm({
       // responde quatro coisas que a tela não pode adivinhar: se o upload está
       // configurado (503 com a frase de sempre), quais são os nomes REAIS dos
       // campos do Form, DE ONDE eles vieram, e que horas são no servidor.
-      const respDestino = await fetch(`/api/intake/destino?mandato=${encodeURIComponent(mandato.trim())}`);
+      const respDestino = await fetch(`/api/intake/destino?caso=${encodeURIComponent(casoId)}`);
       const destino = await respDestino.json().catch(() => ({}));
       if (!respDestino.ok) {
         setErro(destino.error ?? `Não foi possível preparar o envio (HTTP ${respDestino.status}).`);
