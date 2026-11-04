@@ -2593,13 +2593,22 @@ const nodes = [
 
   node('Registrar Recusa', 'n8n-nodes-base.postgres', 2.5, {
     operation: 'executeQuery',
-    query: 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r',
+    // `$3`/`$4` voltam como colunas (`as nome`) porque o Postgres SUBSTITUI o item: sem elas o
+    // `Abortar Lote` lia `orcamento_mensagem` de um item que so tinha `r`, e as TRES recusas
+    // (envio, tamanho, orcamento) terminavam a execucao com o texto generico (S114).
+    query: 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r, '
+      + '$3::text as etapa_recusa, $4::text as orcamento_mensagem',
     options: { queryReplacement: "={{ [$json.caso_id, $('Intake (Form)').first().json['Mandato (nome do caso)'], $json.etapa_recusa || 'orcamento', $json.orcamento_mensagem] }}" },
   }, { credentials: PG_CRED, ...PG_RETRY }),
 
   node('Abortar Lote', 'n8n-nodes-base.code', 2, {
     mode: 'runOnceForAllItems',
-    jsCode: `throw new Error($input.first().json.orcamento_mensagem || 'Lote recusado pelo orcamento.');`,
+    // Lanca a mensagem e a etapa da recusa que CHEGOU (colunas do `Registrar Recusa`). Sem
+    // mensagem, diz que a recusa veio sem motivo: cair em "orcamento" apresentaria ausencia
+    // como causa (regra 1). Sem crase aqui dentro: fecharia o template literal do gerador.
+    jsCode: `const r = $input.first().json;
+const etapa = r.etapa_recusa || 'nao informada';
+throw new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') + ' [etapa: ' + etapa + ']');`,
   }),
   // CAMADA 1 — o texto do PDF lido na própria instância, antes de qualquer
   // chamada. Nó NATIVO do n8n; não manda nada para fora e não custa nada.
