@@ -4129,11 +4129,11 @@ test('Listar Arquivos carrega o MESMO vereditoDeTamanhoPorArquivo e o MESMO teto
   assert.equal(TETO_BYTES_POR_ARQUIVO, 15 * 1024 * 1024);
 });
 
-// P3-F3 — o Upsert Caso roteia pelo caso_id do envio (v2), nunca pelo nome do Form, e falha fechado.
-// Banco SIMULADO só no que o teste afirma (regra 4): a query real do nó é interpretada na projeção
-// `case when nullif($1..) is null then A else B end`, com `fn_upsert_caso` (cria pelo nome) e
-// `fn_caso_do_envio` (por id, lança se não existe, nunca cria) modeladas como a migration 0222 as define.
-// O que NÃO é provado aqui: o SQL de verdade (coberto por Supabase/test/conferir_envio_v2.test.sql).
+// P3-F3/F5 — o Upsert Caso roteia SEMPRE pelo caso_id do Conferir, nunca pelo nome do Form, e falha fechado.
+// Banco SIMULADO só no que o teste afirma (regra 4): a função chamada é lida da query REAL do nó e os
+// parâmetros saem da expressão REAL do nó; `fn_caso_do_envio` (por id, lança se não existe, nunca cria)
+// e `fn_upsert_caso` (cria pelo nome) são modeladas como a 0222 as define, e '' não converte para uuid.
+// O que NÃO é provado aqui: o SQL de verdade (Supabase/test/conferir_envio_v2.test.sql).
 function rodarUpsertCaso({ form, conferir, casos }) {
   const no = wf.nodes.find((n) => n.name === 'Upsert Caso (Postgres)');
   const expr = no.parameters.options.queryReplacement.replace(/^=\{\{/, '').replace(/\}\}$/, '');
@@ -4148,31 +4148,33 @@ function rodarUpsertCaso({ form, conferir, casos }) {
       const id = `novo-${banco.size + 1}`; banco.set(id, nome); return id;
     },
     fn_caso_do_envio: (id, nome) => {
+      if (id === '') throw new Error('invalid input syntax for type uuid: ""');
       if (!banco.has(id)) throw new Error(`fn_caso_do_envio: o mandato ${id} não existe`);
       if (banco.get(id).trim().toLowerCase() !== nome.trim().toLowerCase()) auditoria.push({ id, nome });
       return id;
     },
   };
-  const q = no.parameters.query;
   const arg = (t) => params[Number(t.match(/\$(\d)/)[1]) - 1];
-  const chamada = (t) => { const m = t.match(/(fn_\w+)\(([^)]*)\)/); return fns[m[1]](...m[2].split(',').map(arg)); };
-  const cs = q.match(/case when nullif\((\$\d)[^)]*\) is null then (.+?) else (.+?) end as caso_id/);
-  const caso_id = cs ? (arg(cs[1]) === '' ? chamada(cs[2]) : chamada(cs[3])) : chamada(q.match(/select (fn_\w+\([^)]*\))/)[1]);
+  const m = no.parameters.query.match(/select (fn_\w+)\(([^)]*)\) as caso_id/);
+  const caso_id = fns[m[1]](...m[2].split(',').map(arg));
   return { caso_id, banco, auditoria };
 }
 
-test('Upsert Caso: envio v2 roteia pelo caso_id (nunca cria mandato pelo nome); v1 em voo cai no nome; caso apagado FALHA', () => {
+test('Upsert Caso: o caso roteado é sempre o do Conferir (nunca cria mandato pelo nome); sem caso_id ou caso apagado FALHA', () => {
   const form = { 'Mandato (nome do caso)': 'Alfa' };
   const casos = [['X', 'Alfa Renomeado']];
-  // v2: o nome do Form ("Alfa") nao existe mais; o caso e' o do token.
+  // o nome do Form ("Alfa") nao existe mais; o caso e' o do Conferir, e o nome divergente e' auditado.
   const v2 = rodarUpsertCaso({ form, conferir: { caso_id: 'X' }, casos });
-  assert.equal(v2.caso_id, 'X', 'o caso roteado e o do token');
+  assert.equal(v2.caso_id, 'X', 'o caso roteado e o do Conferir');
   assert.equal(v2.banco.size, 1, 'nenhum mandato novo foi criado');
   assert.equal(v2.auditoria.length, 1, 'o nome divergente e auditado');
-  // v1 em voo (caso_id nulo): transicao, pelo nome — cria como hoje.
-  const v1 = rodarUpsertCaso({ form, conferir: { caso_id: null }, casos });
-  assert.equal(v1.banco.size, 2, 'v1 ainda cai em fn_upsert_caso pelo nome');
-  assert.notEqual(v1.caso_id, 'X');
+  // mesmo quando o nome do Form bate com OUTRO mandato, o roteado e' o do Conferir.
+  const outro = rodarUpsertCaso({ form, conferir: { caso_id: 'X' }, casos: [['X', 'Alfa Renomeado'], ['Y', 'Alfa']] });
+  assert.equal(outro.caso_id, 'X', 'o nome do Form nao desvia o roteamento');
+  // sem caso_id (null/undefined/''): falha fechado, nao cai no nome nem cria mandato.
+  for (const caso_id of [null, undefined, '']) {
+    assert.throws(() => rodarUpsertCaso({ form, conferir: { caso_id }, casos }), /uuid/, `caso_id=${caso_id}`);
+  }
   // caso apagado entre a conferencia e o upsert: lanca, nao segue com id indefinido.
   assert.throws(() => rodarUpsertCaso({ form, conferir: { caso_id: 'SUMIU' }, casos }), /não existe/);
   // e o no nao engole o erro: sem onError, com retry.
@@ -4180,4 +4182,14 @@ test('Upsert Caso: envio v2 roteia pelo caso_id (nunca cria mandato pelo nome); 
   assert.equal(no.onError, undefined, 'Upsert falha FECHADO');
   assert.equal(no.retryOnFail, true);
   assert.ok(no.maxTries >= 2);
+});
+
+// P3-F5 — regra 7 do desenho: o caminho por nome da transição nunca ser removido. `fn_upsert_caso` cria
+// mandato pelo nome do Form; em qualquer nó do workflow publicado ele reabre o defeito do rename.
+test('workflow.e1-ingestao.json NÃO contém fn_upsert_caso em nenhum nó (o envio nunca cria mandato)', () => {
+  const json = JSON.parse(readFileSync(new URL('../workflow.e1-ingestao.json', import.meta.url), 'utf8'));
+  assert.ok(json.nodes.length > 10, 'o JSON lido tem nós de verdade (guarda de não-vazio)');
+  const com = json.nodes.filter((n) => JSON.stringify(n).includes('fn_upsert_caso')).map((n) => n.name);
+  assert.deepEqual(com, [], `fn_upsert_caso em: ${com.join(', ')}`);
+  assert.ok(json.nodes.some((n) => JSON.stringify(n).includes('fn_caso_do_envio')), 'o roteamento por id existe');
 });
