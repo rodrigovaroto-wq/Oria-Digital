@@ -24,7 +24,7 @@
 -- fn_conferir_envio (MESMA assinatura: fn_conferir_envio(text, text, timestamptz) e as mesmas 6 colunas; o nó publicado não muda):
 --   v1 exatamente como na 0217 (caso_id NULL), mais o fechamento acima. v2, na ordem: sem_segredo > sem_token > malformado >
 --   assinatura (antes de QUALQUER consulta a caso) > expirado > caso_inexistente > caso_fechado > sem_acesso. Autorizado devolve
---   o caso_id; as recusas pós-assinatura (expirado em diante) também, para prender a falha ao caso. `p_mandato` é ignorado no v2.
+--   o caso_id; as recusas pós-assinatura (expirado em diante) também, para prender a falha ao caso — EXCETO caso_inexistente, que devolve NULL: o id não existe e execucao_falha.caso_id é FK de caso(id), então devolvê-lo faria o nó Registrar Recusa levar 23503 e a recusa nunca ficaria gravada (achado da revisão de 04/11). `p_mandato` é ignorado no v2.
 --   sem_acesso: o usuário do token, NO MOMENTO DO ENVIO, não é Sócio nem Analista alocado (fn_pode_escrever_caso_de).
 -- fn_pode_escrever_caso_de(usuario, caso): o corpo de fn_pode_escrever_caso com o usuário como parâmetro; fn_pode_escrever_caso(caso)
 --   passa a delegar a ela com auth.uid() (mesma semântica; está em dezenas de policies, e acesso_por_caso.test.sql passa inteira).
@@ -41,15 +41,16 @@
 -- marcava `m.papel = 'analista'` em fn_pode_escrever_caso; o marcador sai dela (vai para a _de) e passa a ser a delegação — o
 -- marcador antigo é recolocado no requisito novo da _de.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/conferir_envio_v2.test.sql — 52 asserts, medidos em 04/11/2026 com
--- `PGOPTIONS=-cenvio.medindo=on` (o assert vira `raise warning` e CONTA). Controle: 0 falhas em 52. Cada correção desligada UMA vez no
--- banco já migrado (conferido que a variante APLICOU antes de rodar o teste); reprovações / 52:
---   * sem a etiqueta `v2|` na mensagem: 17 (inclui a sonda)    * sem a conferência de acesso (sem_acesso): 6 (inclui a sonda)
---   * sem caso_fechado: 1                      * sem caso_inexistente: 1
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/conferir_envio_v2.test.sql — 55 asserts, medidos em 04/11/2026 com
+-- `PGOPTIONS=-cenvio.medindo=on` (o assert vira `raise warning` e CONTA). Controle: 0 falhas em 55. Cada correção desligada UMA vez no
+-- banco já migrado (conferido que a variante APLICOU antes de rodar o teste); reprovações / 55 (revisão de 04/11: +3 asserts de sequência do nó Registrar Recusa, e caso_inexistente passou a devolver caso_id NULL):
+--   * sem a etiqueta `v2|` na mensagem: 19 (inclui a sonda)    * sem a conferência de acesso (sem_acesso): 6 (inclui a sonda)
+--   * sem caso_fechado: 1                      * sem caso_inexistente: 2
 --   * sem a auditoria do nome divergente: 3    * guarda v1 `v2|...` desligada: 2
 --   * fn_caso_do_envio sem a falha fechada (caso inexistente): 1
 --   * fn_pode_escrever_caso_de sempre true: 7 (inclui 2 asserts de fn_pode_escrever_caso, a das policies, que agora delega a ela)
---   * assinatura conferida DEPOIS da consulta a caso: 2
+--   * caso_inexistente devolvendo o id solto (FK de execucao_falha viola, a recusa se perde): 1
+--   * assinatura conferida DEPOIS da consulta a caso: 1
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
@@ -87,7 +88,7 @@ security definer
 set search_path = pg_catalog, extensions, public, pg_temp
 as $$
 declare
-  c_ws     constant text := '[\u0009\u000a\u000b\u000c\u000d    -     　﻿]';
+  c_ws     constant text := '[\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]';
   c_uuid   constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_segredo text;
   v_token   text;
@@ -168,7 +169,9 @@ begin
 
   return query select
     v_motivo is null,
-    v_caso,
+    -- caso_inexistente devolve NULL: o id não existe e execucao_falha.caso_id tem FK para caso (o nó Registrar Recusa chama
+    -- fn_registrar_falha_execucao($json.caso_id, ...) e levaria 23503, perdendo a recusa). As demais recusas pós-assinatura devolvem o id.
+    case when v_motivo = 'caso_inexistente' then null::uuid else v_caso end,
     'envio'::text,
     v_motivo,
     case
@@ -192,7 +195,7 @@ revoke all on function fn_conferir_envio(text, text, timestamptz) from public, a
 grant execute on function fn_conferir_envio(text, text, timestamptz) to service_role, postgres;
 
 comment on function fn_conferir_envio(text, text, timestamptz) is
-  '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura. Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
+  '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura (menos caso_inexistente: NULL, o id não existe e é FK de execucao_falha). Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
 
 -- -----------------------------------------------------------------------------
 -- 3. O CASO DO ENVIO: falha fechada, e o nome divergente é auditado

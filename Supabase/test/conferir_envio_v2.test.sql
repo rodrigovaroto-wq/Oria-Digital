@@ -1,6 +1,6 @@
 -- Teste da 0222 — o token de envio v2 (carrega o CASO) e o mandato que o envio deixou de criar.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 52 asserts (medidos) — ver o cabeçalho de
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 55 asserts (medidos) — ver o cabeçalho de
 -- Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql ("MEDIÇÃO NÃO-VAZIA") para o número que reprova
 -- com cada correção desligada.
 --
@@ -132,6 +132,11 @@ begin
   perform teste_assert_envio(not v_r.envio_autorizado and v_r.motivo_recusa = 'sem_acesso' and v_r.caso_id = k_b and v_r.usuario_id is null
       and v_r.orcamento_mensagem like '%acesso%' and v_r.orcamento_mensagem like '%Nada foi gravado%',
     'Analista NÃO alocado no caso: sem_acesso, com o caso e a mensagem', row_to_json(v_r)::text);
+  select count(*) into v_n0 from execucao_falha where caso_id = k_b;
+  begin perform fn_registrar_falha_execucao(v_r.caso_id, 'Beta', v_r.etapa_recusa, v_r.orcamento_mensagem, null); v_sqlstate := 'ok';
+  exception when others then v_sqlstate := sqlstate; end;
+  select count(*) into v_n from execucao_falha where caso_id = k_b;
+  perform teste_assert_envio(v_sqlstate = 'ok' and v_n = v_n0 + 1, 'sem_acesso: a recusa é GRAVADA presa ao caso pela sequência do nó', v_sqlstate || ' ' || v_n0 || '->' || v_n);
   delete from alocacao where caso_id = k_a and usuario_id = u_ana;
   select * into v_r from fn_conferir_envio(t_ana_a, 'Alfa');
   perform teste_assert_envio(v_r.motivo_recusa = 'sem_acesso' and v_r.caso_id = k_a,
@@ -143,11 +148,24 @@ begin
   insert into alocacao (caso_id, usuario_id) values (k_a, u_lei);
   perform teste_assert_envio(teste_motivo(t_lei_a) = 'sem_acesso', 'Leitura alocada continua sem_acesso (só Sócio e Analista escrevem)');
   select * into v_r from fn_conferir_envio(t_soc_d, 'x');
-  perform teste_assert_envio(v_r.motivo_recusa = 'caso_inexistente' and v_r.caso_id = k_d and v_r.orcamento_mensagem like '%nunca cria mandato%',
+  perform teste_assert_envio(v_r.motivo_recusa = 'caso_inexistente' and v_r.orcamento_mensagem like '%nunca cria mandato%',
     'caso apagado/inexistente: caso_inexistente (o envio nunca cria mandato)', row_to_json(v_r)::text);
+  -- COMPORTAMENTO: a mesma sequência do nó Registrar Recusa (fn_registrar_falha_execucao(caso_id, mandato, etapa, mensagem, null)) GRAVA a recusa.
+  -- execucao_falha.caso_id é FK de caso(id): devolver o id que não existe fazia o nó levar 23503 e a recusa se perdia.
+  select count(*) into v_n0 from execucao_falha;
+  begin perform fn_registrar_falha_execucao(v_r.caso_id, 'Mandato apagado', v_r.etapa_recusa, v_r.orcamento_mensagem, null); v_sqlstate := 'ok';
+  exception when others then v_sqlstate := sqlstate; end;
+  select count(*) into v_n from execucao_falha;
+  perform teste_assert_envio(v_sqlstate = 'ok' and v_n = v_n0 + 1,
+    'caso_inexistente: a recusa é GRAVADA em execucao_falha pela sequência do nó (sem violar a FK)', v_sqlstate || ' ' || v_n0 || '->' || v_n);
   select * into v_r from fn_conferir_envio(t_soc_f, 'Fechado');
   perform teste_assert_envio(v_r.motivo_recusa = 'caso_fechado' and v_r.caso_id = k_f and v_r.orcamento_mensagem like '%fechado%',
     'mandato FECHADO recusa o envio, mesmo de Sócio: caso_fechado', row_to_json(v_r)::text);
+  select count(*) into v_n0 from execucao_falha where caso_id = k_f;
+  begin perform fn_registrar_falha_execucao(v_r.caso_id, 'Fechado', v_r.etapa_recusa, v_r.orcamento_mensagem, null); v_sqlstate := 'ok';
+  exception when others then v_sqlstate := sqlstate; end;
+  select count(*) into v_n from execucao_falha where caso_id = k_f;
+  perform teste_assert_envio(v_sqlstate = 'ok' and v_n = v_n0 + 1, 'caso_fechado: a recusa é GRAVADA presa ao caso pela sequência do nó', v_sqlstate || ' ' || v_n0 || '->' || v_n);
   select * into v_r from fn_conferir_envio(t_ana_a_exp, 'Alfa', '2027-06-01');
   perform teste_assert_envio(v_r.motivo_recusa = 'expirado' and v_r.caso_id = k_a and v_r.orcamento_mensagem like '%expirou%',
     'v2 expirado: expirado, com o caso preso', row_to_json(v_r)::text);

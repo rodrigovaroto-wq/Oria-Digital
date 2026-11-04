@@ -1947,7 +1947,7 @@ CREATE FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora t
     SET search_path TO 'pg_catalog', 'extensions', 'public', 'pg_temp'
     AS $_$
 declare
-  c_ws     constant text := '[\u0009\u000a\u000b\u000c\u000d    -     　﻿]';
+  c_ws     constant text := '[\u0009\u000a\u000b\u000c\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]';
   c_uuid   constant text := '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
   v_segredo text;
   v_token   text;
@@ -2028,7 +2028,9 @@ begin
 
   return query select
     v_motivo is null,
-    v_caso,
+    -- caso_inexistente devolve NULL: o id não existe e execucao_falha.caso_id tem FK para caso (o nó Registrar Recusa chama
+    -- fn_registrar_falha_execucao($json.caso_id, ...) e levaria 23503, perdendo a recusa). As demais recusas pós-assinatura devolvem o id.
+    case when v_motivo = 'caso_inexistente' then null::uuid else v_caso end,
     'envio'::text,
     v_motivo,
     case
@@ -2052,7 +2054,7 @@ $_$;
 -- Name: FUNCTION fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura. Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
+COMMENT ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone) IS '0222 (sobre a 0217): confere o token HMAC do envio. v1.<exp>.<usuario>.<hmac> (assinado sobre mandato_normalizado|exp|usuario; caso_id NULL; mandato "v2|..." é malformado) e v2.<exp>.<usuario>.<caso>.<hmac> (assinado sobre v2|caso|exp|usuario): v2 confere a assinatura ANTES de consultar caso e recusa caso_inexistente, caso_fechado e sem_acesso (usuário do token não é Sócio nem Analista alocado), devolvendo o caso_id também nas recusas pós-assinatura (menos caso_inexistente: NULL, o id não existe e é FK de execucao_falha). Sempre UMA linha. motivo_recusa = sem_segredo|sem_token|malformado|assinatura|expirado|caso_inexistente|caso_fechado|sem_acesso. security definer; só service_role e postgres executam.';
 
 --
 -- Name: fn_conferir_lote(uuid); Type: FUNCTION; Schema: public; Owner: -
