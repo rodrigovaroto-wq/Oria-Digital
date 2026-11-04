@@ -2550,11 +2550,24 @@ const nodes = [
     // é preciosismo: sem ele, banco sem a linha do dial devolveria ZERO linha e o
     // `caso_id` sumiria junto — a consulta que lê a configuração não pode
     // derrubar a que cria o caso.
-    operation: 'executeQuery', query: "select fn_upsert_caso($1::text) as caso_id, "
+    //
+    // O CASO VEM DO ENVIO, NÃO DO NOME (migration 0222, DESENHO_P3). O token v2 assina o caso_id e o
+    // `Conferir Envio` o devolve; `fn_caso_do_envio` roteia por ele, NUNCA cria mandato e audita o
+    // nome divergente (o defeito: renomear o mandato e reenviar criava um mandato novo pelo nome do
+    // Form). O token v1 (em voo na publicação) traz caso_id nulo e ainda cai em `fn_upsert_caso` pelo
+    // nome — esse ramo sai na F5. `$1` é '' (nunca null cru no array) e `case` em vez de `coalesce`,
+    // porque `fn_caso_do_envio` LANÇA com caso nulo. O `::text` explícito fixa o tipo do parâmetro.
+    //
+    // FALHA FECHADO: SEM `onError` (PG_RETRY o poria em continueRegularOutput). Caso apagado entre a
+    // conferência e o upsert faz `fn_caso_do_envio` lançar; com continueRegularOutput o lote seguiria
+    // com `caso_id` undefined em todo nó que lê `$('Upsert Caso (Postgres)')` (7 expressões). Retry
+    // como o `Conferir Envio`.
+    operation: 'executeQuery', query: "select case when nullif($1::text, '') is null then fn_upsert_caso($2::text) "
+      + "else fn_caso_do_envio($1::text::uuid, $2::text) end as caso_id, "
       + "(select limiar_auto_clear from estagio_autonomia "
       + "where estagio = 'classificacao_doc_checklist') as limiar_classificacao",
-    options: { queryReplacement: "={{ [$('Intake (Form)').first().json['Mandato (nome do caso)']] }}" },
-  }, { credentials: PG_CRED, ...PG_RETRY }),
+    options: { queryReplacement: "={{ [$('Conferir Envio').first().json.caso_id ?? '', $('Intake (Form)').first().json['Mandato (nome do caso)'] ?? ''] }}" },
+  }, { credentials: PG_CRED, retryOnFail: true, maxTries: 3, waitBetweenTries: 3000 }),
 
   node('Listar Arquivos', 'n8n-nodes-base.code', 2, { mode: 'runOnceForAllItems', jsCode: CODE_LISTAR }),
 

@@ -188,14 +188,16 @@ test('Conferir Envio devolve as colunas que o IF e o Registrar Recusa leem (o fo
   for (const c of ['caso_id', 'etapa_recusa', 'orcamento_mensagem']) assert.match(repl, new RegExp(`\\$json\\.${c}\\b`));
 });
 
-test('Fail closed: banco fora NÃO deixa o envio passar (sem onError, com retry), e o Upsert não lê o mandato do item do Postgres', () => {
+test('Fail closed: banco fora NÃO deixa o envio passar (sem onError, com retry); o Upsert lê o caso do Conferir Envio e o nome do Form só como rótulo/transição', () => {
   assert.equal(conferir.onError, undefined, 'continueRegularOutput entregaria ao Upsert um item sem veredito');
   assert.equal(conferir.retryOnFail, true);
   assert.ok(conferir.maxTries >= 2);
-  // O Postgres SUBSTITUI o item: o Upsert tem de ler o mandato do Form, como o Registrar Recusa.
+  // O Postgres SUBSTITUI o item: nada vem de `$json`. No v2 o CASO vem do Conferir Envio (P3-F3); o nome do
+  // Form segue como rotulo da auditoria de divergencia e como chave do v1 em voo (ramo que sai na F5).
   const up = no('Upsert Caso (Postgres)').parameters.options.queryReplacement;
+  assert.match(up, /\$\('Conferir Envio'\)\.first\(\)\.json\.caso_id \?\? ''/);
   assert.match(up, /\$\('Intake \(Form\)'\)\.first\(\)\.json\['Mandato \(nome do caso\)'\]/);
-  assert.doesNotMatch(up, /\$json\['Mandato/);
+  assert.doesNotMatch(up, /\$json/);
 });
 
 // --- a topologia: a conferência vem ANTES de qualquer gravação -----------------

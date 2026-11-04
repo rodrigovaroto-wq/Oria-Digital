@@ -94,9 +94,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "select fn_upsert_caso($1::text) as caso_id, (select limiar_auto_clear from estagio_autonomia where estagio = 'classificacao_doc_checklist') as limiar_classificacao",
+        "query": "select case when nullif($1::text, '') is null then fn_upsert_caso($2::text) else fn_caso_do_envio($1::text::uuid, $2::text) end as caso_id, (select limiar_auto_clear from estagio_autonomia where estagio = 'classificacao_doc_checklist') as limiar_classificacao",
         "options": {
-          "queryReplacement": "={{ [$('Intake (Form)').first().json['Mandato (nome do caso)']] }}"
+          "queryReplacement": "={{ [$('Conferir Envio').first().json.caso_id ?? '', $('Intake (Form)').first().json['Mandato (nome do caso)'] ?? ''] }}"
         }
       },
       "id": "upsert-caso-postgres-",
@@ -113,7 +113,6 @@
           "name": "Supabase Postgres (Session Pooler)"
         }
       },
-      "onError": "continueRegularOutput",
       "retryOnFail": true,
       "maxTries": 3,
       "waitBetweenTries": 3000
