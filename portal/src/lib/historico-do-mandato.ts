@@ -40,6 +40,8 @@ const TIPOS: Record<string, { rotulo: string; categoria: CategoriaDoHistorico }>
   documento_revisado: { rotulo: "Documento revisado", categoria: "documentos" },
   transcricao_humana: { rotulo: "Transcrição humana", categoria: "documentos" },
   classe_corrigida: { rotulo: "Classe contábil corrigida", categoria: "documentos" },
+  // 0224: o original apagado do armazenamento deixa trilha; sem esta entrada cairia em "Outros" com o nome cru.
+  documento_original_apagado: { rotulo: "Original apagado", categoria: "documentos" },
   pendencia_decidida: { rotulo: "Pendência decidida", categoria: "pendencias" },
   pergunta_enviada: { rotulo: "Pergunta enviada ao cliente", categoria: "perguntas" },
   pergunta_descartada: { rotulo: "Pergunta descartada", categoria: "perguntas" },

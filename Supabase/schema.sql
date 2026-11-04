@@ -6254,7 +6254,8 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
                       'modelagem_parametros', 'caso_criado', 'caso_fechado', 'caso_reaberto', 'reconferir_caso',
                       'perimetro_escopo_definido', 'perimetro_escopo_encerrado', 'entidade_papel_no_grupo_definido',
                       'entidade_forma_de_controle_definida', 'entidade_controlador_definido',
-                      'entidade_participacao_definida', 'entidade_fundida')
+                      'entidade_participacao_definida', 'entidade_fundida',
+                     'documento_original_apagado')
   ),
   eventos as (
     -- documento recebido
@@ -6437,6 +6438,20 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
      where e.acao in ('perimetro_escopo_definido', 'perimetro_escopo_encerrado', 'entidade_papel_no_grupo_definido',
                       'entidade_forma_de_controle_definida', 'entidade_controlador_definido',
                       'entidade_participacao_definida', 'entidade_fundida')
+
+    union all
+    -- 0224 (D16): o original do cliente apagado do Storage. O gatilho de storage.objects grava `caso:<id>` + o que se perdeu em `antes`;
+    -- o ator é o e-mail de quem apagou (ou `sistema:storage`, que a consulta final anula como nas demais ações do sistema).
+    select e.criado_em, 'documento_original_apagado', e.ator,
+           format('Original apagado do armazenamento: "%s"%s',
+                  coalesce(e.antes->>'nome_original', nullif(e.antes->>'arquivo', ''), '(sem nome)'),
+                  case when e.antes->>'tamanho_bytes' ~ '^[0-9]+$'
+                       then format(' (%s)', pg_size_pretty((e.antes->>'tamanho_bytes')::bigint)) else '' end),
+           (select d.id from documento d where d.caso_id = p_caso_id and d.id::text = e.antes->>'documento_id'),
+           jsonb_build_object('caminho', e.antes->>'caminho', 'arquivo', e.antes->>'arquivo',
+                              'documento_id', e.antes->>'documento_id', 'n_versao', e.antes->>'n_versao'),
+           'evento:' || e.id::text
+      from ev e where e.acao = 'documento_original_apagado'
   )
   select h.em, h.tipo,
          case when h.autor ~ '^(sistema|n8n)(:|$)' then null else h.autor end,
@@ -6456,7 +6471,7 @@ $_$;
 -- Name: FUNCTION fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) IS '0215: linha do tempo do mandato (quem fez o quê e quando), da mais nova para a mais velha, montada do que já é gravado: documento recebido, extração aceita, documento revisado, transcrição, classe corrigida, pendência decidida, pergunta enviada/descartada, premissa ativada/removida/em lote/vinculada, modelagem, apresentação, caso criado/aprovado/fechado/reaberto/reconferido, perímetro. autor NULL = o sistema (sistema:* e n8n*). paginação por cursor composto (p_antes, p_antes_chave) sobre a ordem total (em desc, chave desc), `chave` = identificador estável e único do evento; p_limite 1..1000. O instante do cursor tem de ser passado com a precisão inteira que a função devolveu (microssegundos). NÃO inclui exportações (não há log) nem mudança de dial (global). Somente leitura, security invoker.';
+COMMENT ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) IS '0224 (sobre a 0215): linha do tempo do mandato (quem fez o quê e quando), da mais nova para a mais velha, montada do que já é gravado. Acrescenta o tipo documento_original_apagado (o original apagado do Storage, com ator e nome do arquivo). Cursor composto (p_antes + p_antes_chave); autor NULL = sistema.';
 
 --
 -- Name: fn_indice_macro_anual(integer); Type: FUNCTION; Schema: public; Owner: -
@@ -15537,6 +15552,56 @@ $$;
 COMMENT ON FUNCTION public.fn_tokens_estruturais(p_chave text) IS 'Palavras estruturais de um rótulo (sem ligação, ruído de rodapé e a palavra "total"), ordenadas e sem repetição. Extraída de fn_rotulo_estrutural na 0102 para ser calculada UMA vez por rótulo: fn_papel_linha comparava nove grupos e pagava nove tokenizações iguais.';
 
 --
+-- Name: fn_trg_auditar_original_apagado(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_auditar_original_apagado() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_uid  uuid := auth.uid();
+  v_ator text;
+  v_caso uuid;
+  v_ref  text;
+  v_ver  record;
+begin
+  -- Defesa em profundidade: o gatilho já tem WHEN (old.bucket_id = 'documentos'); se alguém o recriar sem ele, outro bucket não vira evento.
+  if old.bucket_id is distinct from 'documentos' then return null; end if;
+
+  v_ator := case
+              when v_uid is not null then coalesce((select u.email from auth.users u where u.id = v_uid), 'usuario:' || v_uid::text)
+              when fn_conexao_de_servico() then 'sistema:storage'
+              else 'portal:desconhecido'
+            end;
+  v_caso := fn_caso_da_chave_do_storage(old.name);
+  v_ref  := case when v_caso is not null then 'caso:' || v_caso::text else 'storage:documentos/' || old.name end;
+
+  -- Qual arquivo: o nome que o cliente deu vem de documento_versao (arquivo_ref = a chave). Sem versão apontando para a chave
+  -- (objeto solto, ou o documento já foi apagado) o campo fica null — ausência dita, não inventada.
+  select v.nome_original, v.documento_id, v.n_versao into v_ver
+    from documento_versao v where v.arquivo_ref = old.name order by v.criada_em desc limit 1;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+  values (v_ator, 'documento_original_apagado', v_ref,
+          jsonb_build_object('bucket', old.bucket_id, 'caminho', old.name,
+                             'arquivo', split_part(old.name, '/', 2),
+                             'nome_original', v_ver.nome_original,
+                             'documento_id', v_ver.documento_id,
+                             'n_versao', v_ver.n_versao,
+                             'tamanho_bytes', old.metadata -> 'size',
+                             'usuario_id', v_uid),
+          null);
+  return null;
+end $$;
+
+--
+-- Name: FUNCTION fn_trg_auditar_original_apagado(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_trg_auditar_original_apagado() IS '0224 (D16): gatilho AFTER DELETE de storage.objects (bucket documentos). Grava evento_auditoria `documento_original_apagado` com o ator (e-mail do JWT, ou sistema:storage), o mandato (caso:<id> da chave) e o que se perdeu (caminho, nome original, tamanho). Falha fechada: sem trilha, o DELETE volta.';
+
+--
 -- Name: fn_trg_auto_promover_dial(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -17939,6 +18004,21 @@ UNION ALL
 --
 
 COMMENT ON VIEW public.instalacao_sonda_exigencias_0188 IS 'Sonda da 0188: a alternativa "resultado financeiro" de DRE/despesa_financeira e o localizador ["juros","bancari"] da mesma exigência. Duas linhas.';
+
+--
+-- Name: instalacao_sonda_gatilho_original_apagado; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_gatilho_original_apagado AS
+ SELECT (tgname)::text AS gatilho
+   FROM pg_trigger t
+  WHERE ((tgrelid = ('storage.objects'::regclass)::oid) AND (tgname = 'trg_auditar_original_apagado'::name) AND (NOT tgisinternal) AND (tgenabled = ANY (ARRAY['O'::"char", 'A'::"char"])) AND (((tgtype)::integer & 1) = 1) AND (((tgtype)::integer & 2) = 0) AND (((tgtype)::integer & 8) = 8) AND (tgfoid = (to_regproc('public.fn_trg_auditar_original_apagado'::text))::oid));
+
+--
+-- Name: VIEW instalacao_sonda_gatilho_original_apagado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_gatilho_original_apagado IS 'Sonda da 0224: uma linha = o gatilho de auditoria de exclusão existe em storage.objects, habilitado, AFTER DELETE por linha, chamando fn_trg_auditar_original_apagado. Zero linhas: a exclusão de original voltou a não deixar trilha.';
 
 --
 -- Name: instalacao_sonda_modelagem_pronta; Type: VIEW; Schema: public; Owner: -
@@ -23089,6 +23169,12 @@ GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO authenticate
 GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO service_role;
 
 --
+-- Name: FUNCTION fn_trg_auditar_original_apagado(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_trg_auditar_original_apagado() FROM PUBLIC;
+
+--
 -- Name: FUNCTION fn_trg_auto_promover_dial(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23624,6 +23710,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_linha_alternativa TO
 
 GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_gatilho_original_apagado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_modelagem_pronta; Type: ACL; Schema: public; Owner: -

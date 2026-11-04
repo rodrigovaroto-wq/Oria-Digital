@@ -101,6 +101,9 @@ begin
   select string_agg(x, ', ' order by x) into v_ausentes from (
     (select t.tgrelid::regclass::text || '.' || t.tgname as x
        from pg_trigger t where not t.tgisinternal
+         -- 0224: o gatilho de auditoria em storage.objects NÃO cabe no tipo `gatilho` (que só resolve tabelas de `public`): ele é catalogado
+         -- por view + tipo `comportamento`, e a cobertura dele é afirmada em original_apagado.test.sql (todo gatilho do schema storage tem linha na view).
+         and t.tgrelid::regclass::text not like 'storage.%'
      except
      select objeto from instalacao_requisito where tipo = 'gatilho')
     union all

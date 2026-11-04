@@ -24,7 +24,7 @@ psql -q -d "$DB" -c "
   create schema if not exists storage;
   create table if not exists storage.buckets(id text primary key, name text, public boolean default false);
   create table if not exists storage.objects(id uuid default gen_random_uuid() primary key,
-    bucket_id text, name text, owner uuid);
+    bucket_id text, name text, owner uuid, metadata jsonb);  -- 0224: metadata (size) como no Storage real; o gatilho de auditoria lê o tamanho
   alter table storage.objects enable row level security;
   -- 0216: o Supabase concede ao authenticated o uso do schema storage e as quatro operações em storage.objects (o que
   -- limita é a policy); sem isto o teste de acesso ao Storage por mandato leva 42501 antes de a policy ser avaliada.
@@ -929,6 +929,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_portao_do_dial_que_so_via_es
 echo
 echo "== 0221 — a RLS que ninguém conferia ligada, e o portão do dial que não via DDL"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0224 — o original que o Analista apagava sem trilha: toda exclusão no Storage é auditada e aparece no Histórico (D16)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/original_apagado.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo

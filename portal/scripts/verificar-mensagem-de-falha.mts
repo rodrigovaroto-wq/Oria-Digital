@@ -545,6 +545,10 @@ checar(categoriaDoTipo("tipo_que_ainda_nao_existe") === "outros",
   "tipo desconhecido não caiu em 'outros' (e sairia de todo filtro)");
 checar(rotuloDoTipo("documento_recebido") === "Documento recebido" && rotuloDoTipo("caso_fechado") === "Mandato fechado",
   "rótulo humano de tipo conhecido errado");
+// 0224: apagar o original do armazenamento aparece ao sócio em português, na aba Documentos (não "Outros" cru).
+checar(rotuloDoTipo("documento_original_apagado") === "Original apagado"
+  && categoriaDoTipo("documento_original_apagado") === "documentos",
+  "documento_original_apagado sem rótulo/categoria: cairia em Outros com o nome cru");
 checar(categoriaDoTipo("pergunta_enviada") === "perguntas" && categoriaDoTipo("pergunta_descartada") === "perguntas"
   && categoriaDoTipo("premissa_aplicada_em_lote") === "modelagem" && categoriaDoTipo("perimetro_alterado") === "grupo"
   && categoriaDoTipo("pendencia_decidida") === "pendencias" && categoriaDoTipo("extracao_aceita") === "documentos"

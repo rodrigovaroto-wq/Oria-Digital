@@ -159,6 +159,7 @@
 {"k":"n","id":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","t":"arquivo","f":"Supabase/test/o_dial_e_o_anon.test.sql","txt":"o_dial_e_o_anon.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","t":"arquivo","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","txt":"o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/operacao.test.sql","t":"arquivo","f":"Supabase/test/operacao.test.sql","txt":"operacao.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/original_apagado.test.sql","t":"arquivo","f":"Supabase/test/original_apagado.test.sql","txt":"original_apagado.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_da_linha.test.sql","t":"arquivo","f":"Supabase/test/papel_da_linha.test.sql","txt":"papel_da_linha.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_por_secao.test.sql","t":"arquivo","f":"Supabase/test/papel_por_secao.test.sql","txt":"papel_por_secao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","t":"arquivo","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","txt":"papel_total_com_codigo_contabil.test.sql"}
@@ -461,7 +462,7 @@
 {"k":"n","id":"fn:fn_grupo_por_controle_comum","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum"}
 {"k":"n","id":"fn:fn_grupo_por_controle_comum_motivo","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum motivo"}
 {"k":"n","id":"fn:fn_herdar_secao_pela_arvore","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"herdar secao pela arvore"}
-{"k":"n","id":"fn:fn_historico_do_caso","t":"fn","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","txt":"historico do caso"}
+{"k":"n","id":"fn:fn_historico_do_caso","t":"fn","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","txt":"historico do caso"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
 {"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","txt":"instalacao conferir"}
@@ -585,6 +586,7 @@
 {"k":"n","id":"fn:fn_texto_nomeia_mutuo","t":"fn","f":"Supabase/migrations/0123_mutuos_a_natureza_fora_da_linha.sql","txt":"texto nomeia mutuo"}
 {"k":"n","id":"fn:fn_tokens_estruturais","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tokens estruturais"}
 {"k":"n","id":"fn:fn_tratar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"tratar pendencia"}
+{"k":"n","id":"fn:fn_trg_auditar_original_apagado","t":"fn","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","txt":"trg auditar original apagado"}
 {"k":"n","id":"fn:fn_trg_auto_promover_dial","t":"fn","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","txt":"trg auto promover dial"}
 {"k":"n","id":"fn:fn_trg_caso_aloca_criador","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg caso aloca criador"}
 {"k":"n","id":"fn:fn_trg_caso_pergunta_so_reaponta","t":"fn","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"trg caso pergunta so reaponta"}
@@ -778,6 +780,7 @@
 {"k":"n","id":"migration:0221","t":"migration","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","txt":"a rls que ninguem conferia ligada e o ddl do dial"}
 {"k":"n","id":"migration:0222","t":"migration","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","txt":"o envio que criava o mandato novo quando o nome mudava"}
 {"k":"n","id":"migration:0223","t":"migration","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","txt":"o token v1 que ainda entrava por nome"}
+{"k":"n","id":"migration:0224","t":"migration","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","txt":"o original que o analista apagava sem trilha"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1645,6 +1648,12 @@
 {"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":94}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"Supabase/test/operacao.test.sql","l":35}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_resumo","f":"Supabase/test/operacao.test.sql","l":90}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/original_apagado.test.sql","l":93}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/original_apagado.test.sql","l":89}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"Supabase/test/original_apagado.test.sql","l":188}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/original_apagado.test.sql","l":221}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/original_apagado.test.sql","l":97}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/original_apagado.test.sql","l":87}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"Supabase/test/papel_da_linha.test.sql","l":233}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Supabase/test/papel_da_linha.test.sql","l":204}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"Supabase/test/papel_da_linha.test.sql","l":244}
@@ -1886,10 +1895,10 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/scripts/verificar-kit-basico.mts","l":10}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/verificar-kit-basico.mts","l":8}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1362}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1408}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1299}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1342}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1366}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1412}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1303}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1346}
 {"k":"e","de":"arquivo:portal/scripts/verificar-modelagem-cobertura.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-modelagem-cobertura.mts","l":6}
 {"k":"e","de":"arquivo:portal/scripts/verificar-perimetro.mts","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/scripts/verificar-perimetro.mts","l":3}
 {"k":"e","de":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-premissas-do-realizado.mts","l":444}
@@ -2645,6 +2654,8 @@
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":63}
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_registrar_falha_execucao","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":96}
 {"k":"e","de":"migration:0223","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","l":37}
+{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":172}
+{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_trg_auditar_original_apagado","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":92}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

@@ -1103,6 +1103,16 @@ supabase db execute --file Supabase/migrations/0223_o_token_v1_que_ainda_entrava
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0223' and not presente;   -- ZERO linhas
 
+# A 0224 (D16 do dono, 04/11/2026) AUDITA toda exclusão de original no Storage: o Analista CONTINUA podendo apagar (a 0216 não mudou), mas agora um gatilho AFTER DELETE em storage.objects (bucket documentos) grava em evento_auditoria `documento_original_apagado` — quem (e-mail do JWT; `sistema:storage` para a conexão de serviço), quando, qual arquivo (caminho, nome original, tamanho) e de qual mandato (`caso:<id>` da chave). fn_historico_do_caso é redefinida (a da 0215 + 1 ramo) para o Histórico do mandato mostrar a exclusão. FALHA FECHADA: se a trilha não puder ser gravada, o DELETE volta. Acrescenta 4 requisitos à sonda (o gatilho, que mora fora de public, vai por uma view + tipo `comportamento`).
+# >>> Rodar COMO `postgres` (medido em produção, só leitura: o dono de storage.objects é supabase_storage_admin, e o postgres tem o privilégio TRIGGER nela — CREATE TRIGGER basta). Se o painel recusar com 42501 a mensagem traz o `create trigger` para rodar como o dono. Idempotente (create or replace função/view, upsert dos requisitos; o gatilho só é criado se não existir). ATENÇÃO: o postgres NÃO consegue dar DROP/DISABLE no gatilho (exige ser dono da tabela) — reverter = trocar o corpo da função por um `return null`.
+# >>> Teste: Supabase/test/original_apagado.test.sql. Falta, fora desta migration: o rótulo "Original apagado" no mapa de tipos de portal/src/lib/historico-do-mandato.ts (hoje aparece como `documento_original_apagado`, em "Outros").
+supabase db execute --file Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0224' and not presente;   -- ZERO linhas
+#   -- e a prova que só uma exclusão de verdade dá: suba um arquivo de teste num mandato, apague-o pelo portal/API com o login de um Analista e leia
+#   select criado_em, ator, entidade_ref, antes from evento_auditoria where acao = 'documento_original_apagado' order by criado_em desc limit 3;
+#   -- o `ator` tem de ser o e-mail de quem apagou. Se vier `portal:desconhecido`, a API do Storage não repassa o `sub` do JWT ao gatilho.
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
