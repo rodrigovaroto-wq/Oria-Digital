@@ -2557,7 +2557,7 @@ const nodes = [
     // Form). F5: o ramo de transição por nome (`fn_upsert_caso`) SAIU. `$1` é '' quando o Conferir não
     // devolve caso_id (nunca null cru no array) e '' não converte para uuid: a query LANÇA e a execução
     // fica vermelha. É falha fechada de propósito e aceitável: depois da 0223 o `Conferir Envio` nunca
-    // autoriza sem caso_id (o v1 é recusado como `malformado`), então '' aqui só ocorre se algo
+    // autoriza sem caso_id (o v1 é recusado como `versao_antiga` pela 0223), então '' aqui só ocorre se algo
     // upstream estiver quebrado, e parar é o certo. O `::text` explícito fixa o tipo do parâmetro.
     //
     // FALHA FECHADO: SEM `onError` (PG_RETRY o poria em continueRegularOutput). Caso apagado entre a
