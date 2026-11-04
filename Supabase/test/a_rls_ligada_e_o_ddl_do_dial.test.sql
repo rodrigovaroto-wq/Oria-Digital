@@ -1,7 +1,7 @@
 -- =============================================================================
 -- 0221 — A RLS QUE NINGUÉM CONFERIA LIGADA, E O PORTÃO DO DIAL QUE NÃO VIA DDL
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 48 dos 48 asserts medidos (cada chamada roda uma vez). Controle intacto: 48 execuções, 0 falhas.
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 55 dos 55 asserts medidos (cada chamada roda uma vez). Controle intacto: 55 execuções, 0 falhas.
 -- O número por parte, com a correção desligada, está no cabeçalho de Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql.
 --
 -- COMO RODA. Como o teste da 0220: uma transação só (`begin` ... `rollback`); reaplica o arquivo da migration (`\i`) no começo (no-op com o arquivo real: prova a idempotência) ou uma VARIANTE com
@@ -14,6 +14,8 @@
 --   PARTE B. A Analista, com as policies abertas (só o gatilho resta), chama uma definer que desliga a guarda de Sócio por DDL e escreve no dial: a BURLA é real, e a sonda ACUSA a definer (alter table ...
 --            disable trigger, drop trigger ... on, disable row level security, com `public.`, `if exists`, aspas e comentário; o parâmetro de réplica; helper INVOKER; função de gatilho). NÃO acusa: a
 --            genérica do tipo rls_auto_enable (SQL dinâmico, não cita a protegida), DDL de outra tabela, nome parecido, definer fechada ao authenticated, INVOKER sem definer, leitura, e quem CHAMA fn_instalacao_conferir().
+--   B5. A guarda TROCADA (`create or replace trigger` com o mesmo nome e outra função): a Analista escreve no dial, e acesso_gatilho_dial / acesso_gatilho_premissa_catalogo ficam AUSENTES (o requisito declara a função da guarda). DDL de
+--       routine e procedure é acusado como o de function.
 --   Reaplicar a migration não muda nada.
 -- =============================================================================
 
@@ -84,9 +86,9 @@ begin
   raise notice '--- 1. estado limpo ---';
   perform teste_assert_0221((select presente and severidade = 'bloqueante' from fn_instalacao_conferir() where chave = 'rls_ligada_em_public'),
     'estado limpo: rls_ligada_em_public presente e BLOQUEANTE (todas as tabelas de public têm a RLS ligada)', teste_detalhe_0221('rls_ligada_em_public'));
-  perform teste_assert_0221((select count(*) from fn_instalacao_conferir() where migration = '0221' and presente) = 5
-                            and (select count(*) from instalacao_requisito where migration = '0221') = 5,
-    'os 5 requisitos da 0221 estão no catálogo e PRESENTES (a sonda prova em produção que a 0221 foi aplicada)',
+  perform teste_assert_0221((select count(*) from fn_instalacao_conferir() where migration = '0221' and presente) = 6
+                            and (select count(*) from instalacao_requisito where migration = '0221') = 6,
+    'os 6 requisitos da 0221 estão no catálogo e PRESENTES (a sonda prova em produção que a 0221 foi aplicada)',
     (select string_agg(chave || '=' || presente, ', ') from fn_instalacao_conferir() where migration = '0221'));
   perform teste_assert_0221((select count(*) from regexp_matches((select pg_get_constraintdef(oid) from pg_constraint where conname = 'instalacao_requisito_tipo_check'), '''[a-z_]+''', 'g')) = 14
                             and (select pg_get_constraintdef(oid) from pg_constraint where conname = 'instalacao_requisito_tipo_check') like '%rls_ligada%',
@@ -299,6 +301,27 @@ begin
     'quem CHAMA fn_instalacao_conferir() não é acusado: a sonda não entra no fecho (o parâmetro de réplica está em duas metades no corpo dela)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
   drop function zz_chama_sonda_0221();
 
+  raise notice '--- B5. a guarda TROCADA: create or replace trigger com o mesmo nome, outra função ---';
+  create function zz_inofensiva_0221() returns trigger language plpgsql as $f$ begin return new; end $f$;
+  perform teste_assert_0221((select presente from fn_instalacao_conferir() where chave = 'acesso_gatilho_dial') and teste_presente_0221('acesso_gatilho_premissa_catalogo'),
+    'controle: com os gatilhos certos (fn_trg_so_socio), acesso_gatilho_dial e acesso_gatilho_premissa_catalogo estão PRESENTES', teste_detalhe_0221('acesso_gatilho_dial'));
+  begin
+    execute 'create or replace trigger trg_estagio_autonomia_so_socio before insert or update or delete on estagio_autonomia for each row execute function zz_inofensiva_0221()';
+    perform teste_como_0221(u_ana);
+    v_t2 := teste_tenta_0221($q$update estagio_autonomia set nivel_atual = 'N0' where estagio = 'classificacao_doc_checklist'$q$);
+    perform teste_super_0221(u_socio);
+    v_t  := (select case when presente then 'presente' else detalhe end from fn_instalacao_conferir() where chave = 'acesso_gatilho_dial');
+    execute 'create or replace trigger trg_premissa_catalogo_so_socio before insert or update or delete on premissa_catalogo for each row execute function zz_inofensiva_0221()';
+    v_dep := (select case when presente then 'presente' else 'ausente' end from fn_instalacao_conferir() where chave = 'acesso_gatilho_premissa_catalogo');
+    raise exception 'desfaz a troca' using errcode = 'P0221';
+  exception when sqlstate 'P0221' then null;
+  end;
+  perform teste_super_0221(u_socio);
+  perform teste_assert_0221(v_t2 = 'ok:1', 'a TROCA é real: com o gatilho do dial apontando para outra função (mesmo nome, habilitado), a Analista escreve no dial sem ser Sócio', v_t2);
+  perform teste_assert_0221(v_t like '%TROCADA%' and v_t like '%zz_inofensiva_0221%', 'acesso_gatilho_dial fica AUSENTE quando o gatilho chama outra função, e o detalhe diz qual', v_t);
+  perform teste_assert_0221(v_dep = 'ausente', 'o mesmo no catálogo de premissas: acesso_gatilho_premissa_catalogo AUSENTE com o gatilho trocado', v_dep);
+  drop function zz_inofensiva_0221();
+
   raise notice '--- B4. o `*` colado ao nome, a lista no drop table, o DDL da FUNÇÃO da guarda ---';
   create function zz_estrela_ddl_0221() returns void language plpgsql security definer set search_path = public, pg_temp
     as $f$ begin alter table estagio_autonomia* disable trigger all; end $f$;
@@ -332,6 +355,21 @@ begin
   grant execute on function zz_crfn_0221() to authenticated;
   perform teste_assert_0221(teste_acusa_0221('zz_crfn_0221'), 'a sonda ACUSA `create or replace function public.fn_trg_so_socio()` (trocar a guarda por uma que deixa passar)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
   drop function zz_crfn_0221();
+  create function zz_dropro_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin drop routine fn_trg_so_socio() cascade; end $f$;
+  grant execute on function zz_dropro_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_dropro_0221'), 'a sonda ACUSA `drop routine fn_trg_so_socio() cascade` (routine, e não só function)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_dropro_0221();
+  create function zz_dropproc_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin drop procedure if exists fn_trg_so_socio(); end $f$;
+  grant execute on function zz_dropproc_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_dropproc_0221'), 'a sonda ACUSA `drop procedure fn_trg_so_socio()`', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_dropproc_0221();
+  create function zz_alro_0221() returns void language plpgsql security definer set search_path = public, pg_temp
+    as $f$ begin alter routine fn_trg_so_socio() owner to authenticated; end $f$;
+  grant execute on function zz_alro_0221() to authenticated;
+  perform teste_assert_0221(teste_acusa_0221('zz_alro_0221'), 'a sonda ACUSA `alter routine fn_trg_so_socio() ...`', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  drop function zz_alro_0221();
   create function zz_alfn_0221() returns void language plpgsql security definer set search_path = public, pg_temp
     as $f$ begin alter function fn_trg_so_socio() owner to authenticated; end $f$;
   grant execute on function zz_alfn_0221() to authenticated;
@@ -348,7 +386,8 @@ begin
   create function zz_dropguarda_0221() returns void language plpgsql security definer set search_path = public, pg_temp
     as $f$ begin drop function zz_guarda_nova_0221() cascade; end $f$;
   grant execute on function zz_dropguarda_0221() to authenticated;
-  perform teste_assert_0221(teste_acusa_0221('zz_dropguarda_0221'), 'a sonda ACUSA o DDL da função de OUTRO gatilho da tabela protegida (resolvido pelo catálogo, não pelo nome fn_trg_so_socio)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
+  perform teste_assert_0221(teste_presente_0221('definer_nao_escreve_no_dial'),
+    'o DDL da função de um gatilho EXTRA (não declarado pelo catálogo) não acusa: o portão vigia a guarda DECLARADA, e não o que estiver em pg_trigger (um gatilho trocado faria o portão vigiar a função inofensiva)', teste_detalhe_0221('definer_nao_escreve_no_dial'));
   drop function zz_dropguarda_0221();
   drop trigger zz_trg_guarda_0221 on premissa_catalogo;
   create function zz_dropoutra_0221() returns void language plpgsql security definer set search_path = public, pg_temp
@@ -379,12 +418,12 @@ begin
   perform teste_assert_0221((select count(*) from instalacao_requisito)::text = current_setting('dial.n_req_0221'),
     'reaplicar a migration não muda o número de requisitos do catálogo', (select count(*) from instalacao_requisito)::text || ' / ' || current_setting('dial.n_req_0221'));
   perform teste_assert_0221(md5(pg_get_functiondef('fn_instalacao_conferir()'::regprocedure)) = current_setting('dial.corpo_0221'), 'e o corpo de fn_instalacao_conferir fica idêntico');
-  perform teste_assert_0221((select count(*) from fn_instalacao_conferir() where migration = '0221' and presente) = 5, 'e os 5 requisitos da 0221 seguem presentes');
+  perform teste_assert_0221((select count(*) from fn_instalacao_conferir() where migration = '0221' and presente) = 6, 'e os 6 requisitos da 0221 seguem presentes');
 end $$;
 
 -- O número de execuções tem de ser o do arquivo: assert que sumiu não pode passar calado.
 do $$
-declare v_esperado constant int := 48;
+declare v_esperado constant int := 55;
   v_real int := coalesce(nullif(current_setting('dial.execucoes', true), ''), '0')::int;
 begin
   if v_real <> v_esperado then

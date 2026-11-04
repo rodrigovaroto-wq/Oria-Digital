@@ -6540,6 +6540,7 @@ declare
   v_dfn        text;   -- 0221 PARTE B
   v_gfn        text;   -- 0221 PARTE B
   v_tot        bigint; -- 0221 PARTE A
+  v_tgf        oid;    -- 0221 PARTE B
   v_srr        text;   -- 0221 PARTE B
 begin
   for r in select * from instalacao_requisito order by ordem, chave loop
@@ -6634,8 +6635,8 @@ begin
         v_ok  := false;
         v_det := 'a tabela nem existe';
       else
-        select tgenabled, tgfoid::regproc::text
-          into v_tg_enabled, v_tg_fn
+        select tgenabled, tgfoid::regproc::text, tgfoid
+          into v_tg_enabled, v_tg_fn, v_tgf
           from pg_trigger
          where tgrelid = v_alvo
            and tgname  = split_part(r.objeto, '.', 2)
@@ -6658,14 +6659,23 @@ begin
           v_ok  := false;
           v_det := 'o gatilho existe mas só dispara em modo réplica — na sessão normal a guarda não roda';
         elsif v_tg_enabled in ('O', 'A') then
-          -- 'O' = ENABLE (origin, o padrão) · 'A' = ENABLE ALWAYS (dispara em
-          -- origin e em réplica). As duas rodam em sessão normal — é só isso
-          -- que este ramo promete. Ele NÃO confere se o gatilho chama a
-          -- função certa nem em quais eventos (INSERT/UPDATE/DELETE) — só que
-          -- existe e dispara. `v_tg_fn` entra no detalhe por informação, sem
-          -- afetar `v_ok`.
-          v_ok  := true;
-          v_det := format('gatilho habilitado (chama %s)', coalesce(v_tg_fn, '?'));
+          -- 'O' = ENABLE (origin, o padrão) · 'A' = ENABLE ALWAYS (dispara em origin e em réplica): as duas rodam em sessão normal.
+          -- 0221 (revisão): ligado NÃO basta. `create or replace trigger <mesmo nome> ... execute function <outra>` deixa o gatilho com o mesmo nome e habilitado, chamando uma função inofensiva, e a
+          -- guarda de Sócio deixa de rodar sem nenhum DML nem DDL de função que um regex veja (nem por SQL dinâmico). Quando o requisito DECLARA a função da guarda (`marcador` = o nome em public), o gatilho
+          -- tem de chamar EXATAMENTE ela (tgfoid = to_regproc). Sem marcador (os demais gatilhos do catálogo) vale o de antes: existe e dispara; ele NÃO confere eventos (INSERT/UPDATE/DELETE).
+          if r.marcador is null then
+            v_ok  := true;
+            v_det := format('gatilho habilitado (chama %s)', coalesce(v_tg_fn, '?'));
+          else
+            begin
+              v_proc := to_regproc('public.' || r.marcador);
+            exception when others then
+              v_proc := null;
+            end;
+            v_ok  := v_proc is not null and v_tgf = v_proc::oid;
+            v_det := case when v_ok then format('gatilho habilitado e chama %s, a função da guarda que o requisito declara', v_tg_fn)
+                          else format('o gatilho está habilitado, mas chama %s e NÃO %s, a função da guarda que o requisito declara: a guarda foi TROCADA (create or replace trigger) e não roda', coalesce(v_tg_fn, '?'), r.marcador) end;
+          end if;
         else
           -- Não deveria acontecer — `tgenabled` só tem estes quatro valores —
           -- mas a sonda nunca assume "presente" por omissão de um `case`.
@@ -6832,12 +6842,12 @@ begin
       v_ddl    := replace(replace('(alter@+table$(if@+exists$)?(only$)?|drop@+table$(if@+exists$)?([a-z0-9_."]+@*,@*)*|drop@+trigger$(if@+exists$)?("[^"]+"|[a-z0-9_]+)$on$(only$)?)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
       v_srr    := 'session_replication' || '_role';
       -- A GUARDA É A FUNÇÃO DE QUALQUER GATILHO das tabelas protegidas, resolvida pelo catálogo (pg_trigger), não o nome fixo: apagá-la ou trocá-la tira a guarda (o `drop` com cascata apaga os gatilhos
-      -- junto) sem escrever linha. `v_gfn` = os nomes dessas funções (escapados, separados por `|`); NULL se não há gatilho (aí o critério não casa). DDL de função que cite um deles conta como escrita.
-      v_gfn    := (select string_agg(distinct regexp_replace(p.proname::text, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g'), '|')
-                     from pg_trigger t join pg_proc p on p.oid = t.tgfoid
-                    where not t.tgisinternal and t.tgrelid = any (select to_regclass('public.' || btrim(q)) from unnest(string_to_array(r.objeto, ',')) q)
-                      and p.pronamespace = 'public'::regnamespace);
-      v_dfn    := replace(replace('(drop@+function$(if@+exists$)?([a-z0-9_."]+@*(\([^)]*\))?@*,@*)*|alter@+function$|create@+(or@+replace@+)?function$)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
+      -- junto) sem escrever linha. `v_gfn` = as funções que os requisitos `gatilho` das tabelas protegidas DECLARAM (marcador), escapadas e separadas por `|`: parte do ESPERADO, não do que estiver em pg_trigger agora (um gatilho trocado faria o v_gfn vigiar a função inofensiva). NULL se nada declarado (aí o critério não casa). DDL de função que cite um deles conta como escrita.
+      v_gfn    := (select string_agg(distinct regexp_replace(g.marcador, '([.^$*+?()\[\]{}|\\])', '\\\1', 'g'), '|')
+                     from instalacao_requisito g
+                    where g.tipo = 'gatilho' and g.marcador is not null
+                      and split_part(g.objeto, '.', 1) = any (select btrim(q) from unnest(string_to_array(r.objeto, ',')) q));
+      v_dfn    := replace(replace('(drop@+(function|routine|procedure)$(if@+exists$)?([a-z0-9_."]+@*(\([^)]*\))?@*,@*)*|alter@+(function|routine|procedure)$|create@+(or@+replace@+)?(function|procedure)$)("?public"?@*\.@*)?"?', '$', '(@+|(?="))'), '@', v_g);
       if coalesce(v_tabs, '') = '' or cardinality(v_funs) = 0 then
         v_ok  := false;
         v_det := 'requisito mal declarado: objeto = tabelas protegidas (lista por vírgula) e marcador = RAIZES;PORTAS, com ao menos uma raiz';

@@ -6,8 +6,9 @@
 >
 > - **Parte A:** tipo novo `rls_ligada`, requisito `rls_ligada_em_public` (bloqueante): acusa tabela de `public` com a RLS desligada. Produção (leitura de 04/11): 51 tabelas, 51 com RLS; o replay das migrations: 51 de 51, então a migration não liga RLS em nada.
 > - **Parte B:** o portão `definer_nao_escreve_no_dial` passa a contar DDL (`alter table`, `drop table`, `drop trigger ... on` sobre as tabelas protegidas) e o parâmetro de réplica da sessão como escrita.
-> - **Teste:** `Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql`, 48 asserts. A aplicar à mão: `supabase db execute --file` (README), depois `select chave, presente from fn_instalacao_conferir() where migration = '0221'`.
-> - **Ponto cego que ficou:** SQL dinâmico, `create or replace function fn_trg_so_socio`, `set role`, `create policy` na protegida (lista completa no cabeçalho da 0221).
+> - **Teste:** `Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql`, 55 asserts. A aplicar à mão: `supabase db execute --file` (README), depois `select chave, presente from fn_instalacao_conferir() where migration = '0221'`.
+> - **Gatilho trocado:** o requisito `gatilho` do dial e do catálogo agora declara a função da guarda (`fn_trg_so_socio`) e a sonda confere que o gatilho a chama; `create or replace trigger ... execute function <outra>` acende `acesso_gatilho_dial`. O DDL de função (drop, alter, create or replace, function/routine/procedure) sobre a guarda declarada conta como escrita no portão do dial.
+> - **Pontos cegos que restam:** SQL dinâmico no portão do dial (a troca de gatilho, essa, é pega pelo catálogo), `set role`/`set session authorization`, `create policy`/`alter policy` na tabela protegida, DDL por função fora de `public`, nome de gatilho entre aspas colado ao `on`, `drop function` com argumento de parênteses aninhados antes da guarda numa lista, DDL numa tabela não protegida cujo gatilho escreve no dial. `alter trigger ... rename` e `alter routine ... rename` foram medidos INOFENSIVOS (o gatilho referencia a função por oid).
 
 
 ## SESSÃO 116b (03/11/2026) — 0220 aplicada: o portão do dial que só via espaço e parêntese
