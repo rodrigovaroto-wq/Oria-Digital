@@ -215,3 +215,51 @@ Nenhum de severidade ALTA. Nenhum código do portal foi alterado.
 - `export` completo recusa com 409 enquanto há pendência bloqueante.
 - `anônimo` em `/api/busca` e `/api/intake/destino`: 401 (aparece como erro de console, esperado).
 - Chave anon obtida do cabeçalho `apikey` do próprio portal (não está no HTML do login nem em `.env.example`).
+
+---
+
+## 5. Fase 2 — exploração por persona (04/11/2026, produção, mandato "S117 P2 sintetico")
+
+Três agentes, cada um dirigindo o portal com Playwright como uma pessoa, sem ler o código para saber onde clicar. Cada ação foi gravada com captura (fora do repositório, no scratchpad da sessão). As três rodaram ao mesmo tempo no mesmo mandato, então contagens mudaram durante o teste (documentos 3→5, pendências 7→10→9) — isso é concorrência do teste, não achado.
+
+| Persona | Papel | Objetivos completos | Envios | O que ficou NÃO EXECUTADO |
+|---|---|---|---|---|
+| **Marina**, Sócia, no celular, com pressa | socio | 3 de 6 (status, Excel, discrição); confiança parcial; equipe com atrito; **aprovar impossível** (5 pendências que só o cliente resolve) | — | sino, abas Perguntas e Grupo econômico, Fechar/Excluir |
+| **Lucas**, Analista júnior, 1ª semana | analista | achar mandato, ler pendências, base de dados: ok; Excel do Modelo bloqueado (409 com mensagem clara); bloqueios de Sócio e isolamento por URL ok | DFC válido (29 linhas, 99%, 20 s); `.txt` de 57 bytes **aceito**; PDF corrompido de 14 bytes → falha com erro cru | "Marcar como enviada", premissas, Gravar papel/forma |
+| **Paulo**, Leitura, cético | leitura | 5 de 5; tela × Excel batem em 5 números (Receita 106.580, Prejuízo −17.903, Caixa 380, Empréstimos 27.718, PL 6.899, recalculados no LibreOffice); depois de Sair, nada em cache | — | PDF por "Ver original" (headless não renderiza); histórico real do navegador |
+
+A primeira versão do Paulo (sondagem de URLs adivinhadas e da API à mão) foi **interrompida pelas salvaguardas do modelo** e refeita só com o escopo de usabilidade. A cobertura de acesso por papel é a da seção 3 (60 tentativas por API). Sondagem livre de endpoints fica **NÃO EXECUTADA**: o caminho é `/security-review` sobre o código do portal ou um pentest autorizado.
+
+**Estado deixado em produção, no mandato de teste:** "Faturamento Intragrupo" e "Faturamento em 24 meses" ficaram com a etiqueta "Contatar o Cliente" (a tela não volta a "sem etiqueta"); documentos `anotacoes.txt` (confirmado "sem tipo") e `relatorio_vazio.pdf` (falha de extração) continuam no mandato; parâmetros da Modelagem salvos (Vertentes Metalurgica, 2026–2030). Tudo o mais foi desfeito. Nenhum mandato real foi tocado.
+
+## 6. Diagnóstico consolidado (fase 1 + personas), por tema e prioridade
+
+Ids de origem: D = fase 1; S = Marina; A = Lucas; L = Paulo.
+
+### ALTA — corrigir antes de qualquer cliente
+1. **Decisão de um toque, sem freio** (S1, A3, A2, S3). "Prosseguir sem resolução" aceita pendência BLOQUEANTE sem confirmação e sem motivo; "Confirmar" aceita documento **sem tipo** e o marca "100% · Humano"; "✕" retira membro da equipe sem confirmação. O estado anterior nem sempre volta pela tela.
+2. **Entrada inválida vira fato** (A1, A6). Um `.txt` de 57 bytes entrou como documento, a linha "Saldo de caixa: 1000" foi **auto-aceita** e chegou ao Excel como ACEITO, sem entidade nem período (283 linhas aceitas, 0 pendentes no Resumo). A tela de envio diz "PDF, imagens". O PDF corrompido falha com o erro cru do provedor em inglês, sem ação de reenviar/remover, e o filtro "Arquivos ilegíveis" mostra 0.
+3. **Proveniência que não fecha** (L3, L4, L5, L7, S5, A9). Coluna PÁGINA "—" em 197/197 linhas do Balanço (DRE e Fluxo têm página); totais do Excel (Receita Líquida, Lucro Líquido, subtotais de Empréstimos) sem nota de origem; nota do PL diz "soma = −32.252 contra informado 6.899" (subtotais somados com as contas) enquanto a tela mostra 100% ACEITO; "Todas as linhas foram aceitas" quando o aceite é automático e nenhuma classe contábil foi decidida por humano; na Modelagem, "101.300 ÷ 106.580" exibido como 88% (a divisão dá 95%). É o núcleo da regra 1: o número não diz de onde veio.
+4. **Modo discrição vaza** (L1, L2, S10). O atributo `title` do parágrafo borrado traz o texto inteiro (aparece ao passar o mouse); o botão do avatar mostra o e-mail; nome do cliente, entidade, arquivos, contrapartes nos rótulos, Ctrl+K e sino ficam legíveis.
+5. **Início estoura no celular** (S2). A coluna "Precisa de você" mede 643 px num viewport de 390; a barra inferior fica parcialmente fora e o toque em "Mais" é interceptado (confirmar em aparelho real).
+
+### MÉDIA
+6. **Jargão de engenharia nas telas e no Excel** (S6, A4, L6, S7, L5): "regra 1 do CLAUDE.md", `fn_entidade_definir_forma_de_controle`, `fn_perimetro_situacao`, "fatia 1.5", "dial N2, limiar 0.95", caminho de arquivo do repositório e o erro do provedor de IA na aba Resumo.
+7. **Excel não diz o estado do mandato** (S7): sai sem dizer que está em triagem, com 5 bloqueantes e o Modelo bloqueado.
+8. **Pendência não leva à solução** (A5, S4): "Papel no Grupo" e "Forma de Controle" oferecem "Contatar o Cliente", mas a solução está na aba Grupo econômico; Equipe só se acha por tentativa; "Alocar alguém…" só aparece depois de retirar alguém.
+9. **Layout** (D1, D2): rolagem horizontal em `/casos/todos` com 78 mandatos; Modelagem com 421 px no celular.
+10. **Decisão do dono** (D3): o Analista apaga o original do cliente no bucket, sem trilha — é o desenho da 0216.
+11. **Contagens que não se reconciliam** (L8, S8): "156 de 156 linhas" no Início × 282/283 no mandato; Fluxo de Caixa ausente no Início e recebido no mandato.
+
+### BAIXA
+12. Mensagens e detalhes: "cerca de 1 minutos" (D8, A7 — o real foi ~20 s); mandato alheio com HTTP 200 "não encontrado" (D4, A12); `/login` não redireciona quem já está logado (D6); depois do login vai a /casos e não ao link (L10); `<title>` igual em todas as páginas (L10); "classificar" habilitado para Leitura sem efeito (L9); controles inertes para Leitura (D5); esqueleto de ~5 s no Início (D7, S12); "Quarta-Feira, 04 De Novembro" com maiúsculas; "Excluir" colado em "Fechar"; códigos crus (FAT_INTRAGRUPO, CONTRATO_SOCIAL) no Início e no Histórico (A8); dica do 409 cita "Exportar dados" e o botão chama "Baixar base de dados" (A10); "Ver original" expira em 2 min (L12); sem busca de conta no Balanço (L11); um chunk JS com 502 uma vez (S11).
+
+### O que funcionou (medido)
+Envio válido ponta a ponta em 36 s, US$ 0,0098; DFC extraído com 99% em 20 s e a pendência do Kit Básico se resolveu sozinha; isolamento por papel e por mandato (51/51 escritas indevidas barradas, Analista/Leitura veem 1 de 78 mandatos, dial e papéis com 42501); tela × Excel batem nos 5 números conferidos; nada em cache depois de Sair; 0 erro de console autenticado.
+
+### Feedback das personas (baseado só no que aconteceu)
+- **Marina:** "Vi rápido que não dá para aprovar e por quê, e baixei o Excel em três segundos. Mas o arquivo traz um erro técnico e não diz que o caso está travado, e num toque aceitei uma pendência sem ninguém me perguntar nada. No celular a tela inicial escapa pela direita, e eu não sei se os números fecham."
+- **Lucas:** pendências na língua do sistema, os mesmos 3 botões para tudo, e dois arquivos errados entraram como se estivessem certos.
+- **Paulo:** os números da tela batem com o Excel, mas não consigo achar a página de nenhum número do Balanço, os totais do Excel não dizem de onde vieram, e a discrição esconde o valor e deixa o nome do cliente.
+
+**Para onde vai:** os itens 1–5 entram no lote 1 da P16 (antes de P17), junto com a F3 nos itens 2–3 (entrada inválida e proveniência são extração, não só tela). O item 10 é decisão do dono.
