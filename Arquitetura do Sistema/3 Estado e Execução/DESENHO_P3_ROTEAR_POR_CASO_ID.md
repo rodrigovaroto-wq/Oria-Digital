@@ -55,7 +55,28 @@ A regra de acesso não é duplicada: `fn_pode_escrever_caso_de(usuario, caso)` r
 | **F4** | Portal: só emite v2, `casoId` em todo o caminho, acompanhamento do lote por id | deploy do portal |
 | **F5** | Depois de 30+ min sem nenhum v1 aceito: migration **0223** recusa o v1; o n8n perde o caminho por nome | aplicar 0223 e republicar |
 
-**Ordem errada e o custo:** portal antes da 0222 faz **todo** envio ser recusado como `malformado`.
+**A ordem é rígida, e cada passo só começa com o anterior conferido:**
+
+1. Aplicar a 0222 e conferir a sonda.
+2. Republicar o n8n (F3) e rodar `N8N/conferir-publicado.mjs`: o `Upsert Caso` publicado tem de usar
+   `fn_caso_do_envio` e estar sem `onError`.
+3. **Só então** o deploy do portal (F4).
+4. Antes da 0223 (F5), medir no histórico de execuções do n8n quantas conferências autorizadas chegaram
+   **sem** `caso_id` (v1) desde o deploy. Zero há 30 minutos ou mais é a condição; "não olhei" não é.
+
+**Ordem errada e o custo (revisão independente de 04/11):**
+
+| Estado | O que acontece |
+|---|---|
+| Portal novo antes da 0222 | todo envio recusado como `malformado` (explícito, registrado) |
+| n8n novo antes da 0222 | todo envio falha, inclusive o v1: `fn_caso_do_envio` não existe |
+| **Portal novo com o n8n ANTIGO** | **silencioso e grave:** a 0222 ignora o nome no v2 e o `Upsert` antigo grava pelo nome do Form. Um Analista alocado só em A pede o token de A e posta `Mandato=B`: os documentos caem em B (ou num B criado na hora), execução verde, sem auditoria. Pior que o v1, que assinava o nome |
+
+Por isso o passo 2 tem de terminar com o publicado conferido, e não só com o JSON do repositório: a
+sonda do banco não vê a versão do n8n.
+
+**URLs antigas da Vercel:** um deploy antigo com o segredo continuaria emitindo v1. Depois da 0223 esses
+envios são recusados de forma explícita (`malformado`), não silenciosa.
 
 ## O invariante (regra 2)
 
