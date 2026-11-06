@@ -1965,15 +1965,29 @@ for(const [chave, blocos] of porDocumento){
   // nenhuma expressao \`={{ }}\` do workflow usa arrow function.
   // CAMPO AUSENTE (undefined/null) FICA AUSENTE, nunca vira 0: \`contas_no_documento\`
   // nulo e' "sem camada de texto", e 0 diria "tinha texto e nao achou conta" (regra 1).
-  // SEM NENHUM campo medido a medicao e' null (a 0225 grava \`medicao: null\`
-  // explicito): \`versao_medicao\` sozinha NAO e' medicao (regra 7). \`cobertura\` e
+  // \`blocos_com_resposta\` (sinal positivo, regra 7) vai sempre. \`cobertura\` e
   // \`celulas_no_documento\` nao entram: a cobertura e' derivada (a 0225 calcula) e
   // celula e' outra unidade. \`versao_medicao\` muda quando a forma da medicao muda.
-  const medicao={};
-  for(const k of ['contas_no_documento','linhas_devolvidas','contas_distintas','blocos','blocos_planejados','custo_usd','tokens']){
+  // BLOCO QUE RESPONDEU = \`tokens\` nao nulo: o \`Parse Extracao\` so' monta \`tokens\` a
+  // partir do \`usage\` da resposta, e uma chamada que NUNCA respondeu (erro transitorio
+  // esgotado, 500) sai com \`campos:[]\`, \`custo_usd:0\` e \`tokens:null\` -- identica, nos
+  // outros campos, a uma leitura que devolveu 0 linhas. Sem este sinal a linha de base
+  // contaria falha de infraestrutura como "leitura de 0%" (cobertura 0/120 com motivo
+  // nulo na 0225). Com ZERO blocos respondidos, linhas/contas distintas/custo/tokens
+  // ficam FORA da medicao e a 0225 responde \`medicao_incompleta\`; \`blocos_com_resposta
+  // < blocos\` diz que a medicao de um documento fatiado e' parcial. So' a MEDICAO muda:
+  // \`doc.tokens\`/\`doc.custo_usd\`, que o Resumo de Custo soma, continuam como eram.
+  const respondidos=blocos.filter(b=>b.tokens!==undefined&&b.tokens!==null);
+  const medicao={blocos_com_resposta:respondidos.length};
+  const medidos=['contas_no_documento','blocos','blocos_planejados'];
+  if(respondidos.length>0){
+    medidos.push('linhas_devolvidas','contas_distintas','custo_usd');
+    medicao.tokens=respondidos.reduce((acc,b)=>({entrada:acc.entrada+(b.tokens.entrada||0), saida:acc.saida+(b.tokens.saida||0), cache:acc.cache+(b.tokens.cache||0)}),{entrada:0,saida:0,cache:0});
+  }
+  for(const k of medidos){
     if(doc[k]!==undefined&&doc[k]!==null) medicao[k]=doc[k];
   }
-  doc.medicao_documento=Object.keys(medicao).length>0?{...medicao,versao_medicao:'p4-1'}:null;
+  doc.medicao_documento={...medicao,versao_medicao:'p4-1'};
   saida.push({pairedItem:{item:primeiroIndice.get(chave)??0}, json:doc});
 }
 return saida;

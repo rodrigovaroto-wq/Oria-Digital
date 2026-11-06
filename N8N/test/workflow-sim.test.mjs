@@ -842,7 +842,8 @@ test('Gravar Campos (Sombra): passa p_medicao por NOME e liga o $7 à medição 
   assert.equal(m.linhas_devolvidas, 3);
   assert.equal(m.contas_distintas, 3);
   assert.equal(m.blocos, 2);
-  assert.ok('blocos_planejados' in m);
+  assert.equal(m.blocos_planejados, 2);
+  assert.equal(m.blocos_com_resposta, 2);
   assert.ok(Math.abs(m.custo_usd - 0.05) < 1e-9);
   assert.deepEqual(m.tokens, { entrada: 15, saida: 30, cache: 5 });
   assert.ok(!('cobertura' in m) && !('celulas_no_documento' in m), 'a cobertura é derivada pela 0225');
@@ -857,12 +858,42 @@ test('Gravar Campos (Sombra): contas_no_documento ausente continua AUSENTE na me
   assert.equal(m.versao_medicao, 'p4-1');
 });
 
-test('Juntar Blocos: documento sem nenhuma linha devolvida leva ZERO medido (0 real), não ausência', async () => {
-  // o contrário da regra 1: aqui o 0 É medição (a IA devolveu 0 linhas) e tem de chegar ao banco.
-  // O ramo "nenhum campo medido => null" do Code é defensivo: linhas_devolvidas/custo/tokens saem sempre do reduce.
-  const out = await run('Juntar Blocos', { items: [{ json: { documento_versao_id: 'v3', campos: [], diagnostico: {}, falha_motivo: null } }] });
-  assert.equal(out[0].json.medicao_documento.linhas_devolvidas, 0);
-  assert.equal(out[0].json.medicao_documento.versao_medicao, 'p4-1');
+test('Juntar Blocos: resposta REAL que devolveu 0 linhas leva ZERO medido (0 real), não ausência', async () => {
+  // o contrário da regra 1: aqui houve resposta (tokens medidos) e o 0 É medição.
+  const m = await medicaoGravada([{ documento_versao_id: 'v3', bloco: 1, blocos: 1, contas_no_documento: 30, campos: [], diagnostico: {},
+    falha_motivo: null, custo_usd: 0.01, tokens: { entrada: 800, saida: 5, cache: 0 } }]);
+  assert.equal(m.linhas_devolvidas, 0);
+  assert.equal(m.blocos_com_resposta, 1);
+  assert.deepEqual(m.tokens, { entrada: 800, saida: 5, cache: 0 });
+});
+
+test('Juntar Blocos: chamada que NUNCA respondeu não vira "leitura de 0 linhas" — linhas, custo e tokens saem da medição', async () => {
+  // forma exata do Parse Extracao após erro transitório esgotado / 500: campos [], custo 0, tokens null.
+  const falha = { documento_versao_id: 'v4', bloco: 1, blocos: 1, contas_no_documento: 120, campos: [], diagnostico: {},
+    falha_motivo: 'Rate limit reached', custo_usd: 0, tokens: null };
+  const m = await medicaoGravada([falha]);
+  assert.equal(m.blocos_com_resposta, 0);
+  assert.equal(m.contas_no_documento, 120);
+  for (const k of ['linhas_devolvidas', 'contas_distintas', 'custo_usd', 'tokens']) {
+    assert.ok(!(k in m), `${k} não pode existir numa medição sem nenhuma resposta (a 0225 diz medicao_incompleta)`);
+  }
+  // o Resumo de Custo continua recebendo o que sempre recebeu
+  const out = await run('Juntar Blocos', { items: [{ json: falha }] });
+  assert.equal(out[0].json.linhas_devolvidas, 0);
+  assert.deepEqual(out[0].json.tokens, { entrada: 0, saida: 0, cache: 0 });
+});
+
+test('Juntar Blocos: documento fatiado com um bloco perdido — blocos_com_resposta < blocos e só os blocos que mediram somam', async () => {
+  const m = await medicaoGravada([
+    { documento_versao_id: 'v5', bloco: 1, blocos: 2, contas_no_documento: 80, campos: [linhaM('A', 1), linhaM('B', 2)], diagnostico: {},
+      falha_motivo: null, custo_usd: 0.03, tokens: { entrada: 10, saida: 20, cache: 5 } },
+    { documento_versao_id: 'v5', bloco: 2, blocos: 2, contas_no_documento: 80, campos: [], diagnostico: {},
+      falha_motivo: 'HTTP 500', custo_usd: 0, tokens: null },
+  ]);
+  assert.equal(m.blocos, 2);
+  assert.equal(m.blocos_com_resposta, 1);
+  assert.equal(m.linhas_devolvidas, 2);
+  assert.deepEqual(m.tokens, { entrada: 10, saida: 20, cache: 5 });
 });
 
 test('Nós OpenAI têm batching + retry (evita o 429 de rate limit num upload em lote)', () => {
