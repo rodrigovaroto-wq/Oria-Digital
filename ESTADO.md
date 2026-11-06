@@ -19,6 +19,26 @@
 - **D.** `menu-conta.tsx` tinha `title={email}`. O portão só varria `valor-sensivel` e agora varre todo `title={…}`.
 - **Varredura nova:** `Verificação/varredura-dos-mandatos.mts`. Abre cada aba (desktop e 390 px), cada documento e os três exports de TODO mandato visível. Sai com 2 quando não rodou.
 
+**PAUSADA a pedido do dono (06/11, ~21:05 UTC). Para retomar, nesta ordem:**
+1. **CI do PR #275:** confira o estado. Os dois últimos commits (revisão da G2: kit-basico 160/160; e da varredura) ainda não passaram pelo CI.
+2. **Varredura completa contra o portal publicado:** NÃO terminou. Foi parada no mandato 7 de 77.
+   - Até ali houve 2 FALHAS. As duas são `ERR_ABORTED` / contexto fechado ao navegar (`531ddabc/pendencias` a 390 px e um documento do `1be52ab4`). As duas são suspeitas de concorrência do próprio script, NÃO do portal: refaça só esses dois com `VM_SO`.
+   - Rode de novo a versão revisada:
+     ```
+     VM_CREDENCIAL=<arquivo com e-mail e senha> VM_SAIDA=<pasta> VM_DOCUMENTOS=1 VM_RECALCULAR=1 VM_ESPERADO=<select count(*) from caso> \
+       ./portal/node_modules/.bin/tsx Verificação/varredura-dos-mandatos.mts
+     ```
+   - São cerca de 2 h para 78 mandatos e 1.984 documentos. O recálculo leva 28 s por .xlsx.
+3. **A MESMA varredura contra o código deste PR:** use a prévia da Vercel do #275 (`VM_BASE=`) ou o build local com `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` de produção. As FALHAS dos dois lados têm de ser comparadas.
+4. **Fotografe o banco antes e depois.** A consulta está no fim do script.
+   - ATENÇÃO: em 06/11, entre 20:45 e 21:05, a foto mudou (+96 eventos, +13 decisões) porque um mandato NOVO foi criado pelo portal às 20:55 (`caso_criado`, ator `portal:navegador`) e o n8n o processou.
+   - Não foi a varredura. Para provar "só leitura", compare só eventos de ator `rdvaroto@…`/`portal:*` na janela.
+5. **Não exercitado em produção:**
+   - a recusa de confirmar documento sem tipo pelo navegador (só pela suíte);
+   - "Reabrir pendência" (grava em 1 clique, sem confirmação; decidir se deve pedir confirmação como as outras);
+   - o ✕ da equipe (0 alocações em produção).
+6. **Fechar a rodada:** depois do CI verde, desinscrever o PR, rodar `/fechar` e trocar a senha do dono. Ela passou pelo chat e parece igual à do banco.
+
 **Resíduo medido e deixado:** 738 linhas auto-aceitas em 23 documentos sem tipo, todas em 11 mandatos de teste. A 0228 vale só para a frente.
 
 ## SESSÃO 119 (06/11/2026) — P16 no código: os 5 temas ALTOS da vistoria P2 (0226–0228 aplicadas na S120)
