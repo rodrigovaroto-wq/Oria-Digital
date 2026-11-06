@@ -50,7 +50,7 @@ import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
 import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
 import { BOTOES_DECISAO, exigeConfirmacao } from "../src/lib/pendencia.ts";
 import { passosDaTrilha } from "../src/components/trilha.tsx";
-import { aceiteAutomatico, fraseDoAceiteTotal } from "../src/lib/rotulos.ts";
+import { aceiteAutomatico, fraseDoAceiteTotal, falhaDeExtracaoNaTela } from "../src/lib/rotulos.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
@@ -358,6 +358,21 @@ console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista fil
   ok(misto.includes("1 por uma pessoa") && misto.includes("2 automaticamente"), "misto: conta os dois lados", misto);
   ok(fraseDoAceiteTotal(["ana@oria.com"]).includes("por uma pessoa") && !/AUTOMATICAMENTE/.test(fraseDoAceiteTotal(["ana@oria.com"])),
     "tudo humano: não fala em automático");
+}
+
+// 10. P16 (vistoria P2, ALTA 2): extração que falhou não mostra o erro do provedor cru.
+//     A frase segue o formato real de `fn_descricao_extracao_falhou` (0154). O texto exato do erro
+//     do PDF de 14 bytes não foi guardado na vistoria; o inglês abaixo é representativo, não medido.
+{
+  console.log("\n10. Extração que falhou: o técnico vai para Detalhes técnicos");
+  const doBanco = (m: string) => `Extração de "relatorio_vazio.pdf" falhou ou veio incompleta (0 par(es) conta×coluna gravado(s)). Motivo: ${m}`;
+  const ingles = falhaDeExtracaoNaTela(doBanco("400 Bad Request: The document could not be processed"));
+  ok(ingles.frase.includes("relatorio_vazio.pdf") && !ingles.frase.includes("Bad Request"),
+    "a frase à vista nomeia o arquivo e não traz o erro do provedor", ingles.frase);
+  ok(ingles.motivo === null && (ingles.tecnico ?? "").includes("Bad Request"), "o erro do provedor vai para o técnico");
+  const nosso = falhaDeExtracaoNaTela(doBanco("a chamada respondeu sem erro, mas não trouxe NENHUMA linha."));
+  ok((nosso.motivo ?? "").includes("não trouxe") && nosso.tecnico === null, "motivo em português continua à vista");
+  ok(falhaDeExtracaoNaTela("texto sem motivo").frase === "texto sem motivo", "descrição fora do formato passa inteira");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

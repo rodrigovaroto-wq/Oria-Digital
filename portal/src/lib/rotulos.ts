@@ -357,3 +357,31 @@ export function fraseDoAceiteTotal(aceitosPor: Array<string | null | undefined>)
   return `Todas as linhas foram aceitas: ${pessoa} por uma pessoa e ${auto} automaticamente, pela confiança `
     + "da leitura. Já entram no export como fato.";
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// A EXTRAÇÃO QUE FALHOU, EM PORTUGUÊS (P16, vistoria P2 de 04/11, ALTA 2).
+//
+// O banco escreve `Extração de "<arquivo>" falhou ou veio incompleta (N par(es) …). Motivo: <m>`
+// (`fn_descricao_extracao_falhou`, 0154). Quando <m> é a mensagem do provedor de IA, ela chega
+// em inglês e crua: um PDF corrompido de 14 bytes mostrou o erro do provedor na tela, sem dizer
+// o que fazer. O texto exato daquele erro não foi guardado na vistoria.
+export interface FalhaDeExtracaoNaTela {
+  /** a frase do banco até "Motivo:", que já é português e nomeia o arquivo */
+  frase: string;
+  /** o motivo, quando ele é texto nosso (português) e ajuda a decidir */
+  motivo: string | null;
+  /** o motivo cru, quando é mensagem técnica: vai para "Detalhes técnicos" */
+  tecnico: string | null;
+}
+
+export function falhaDeExtracaoNaTela(descricao: string | null): FalhaDeExtracaoNaTela {
+  const texto = descricao ?? "";
+  const i = texto.indexOf(" Motivo: ");
+  if (i < 0) return { frase: texto, motivo: null, tecnico: null };
+  const motivo = texto.slice(i + " Motivo: ".length).trim();
+  // shortcut: "tem acento → é texto nosso" separa os motivos do banco (todos em português, com
+  // acento) da mensagem do provedor (inglês, sem acento). Motivo nosso sem acento nenhum iria para
+  // "Detalhes técnicos" — continua legível lá. Trocar por um código de motivo quando o banco gravar um.
+  const nosso = /[à-ÿ]/i.test(motivo);
+  return { frase: texto.slice(0, i).trim(), motivo: nosso ? motivo : null, tecnico: nosso ? null : motivo };
+}

@@ -23,7 +23,8 @@
 // não tinha o que fazer na tela. `Arquitetura do Sistema/2 Especificação/f0/04` prevê esse caminho desde a F0
 // (`rejeitada`); faltava código e faltava botão.
 import Link from "next/link";
-import { partesDaDescricao, rotuloDaPendencia, rotulosCitados, semALista, suavizarMensagem } from "@/lib/rotulos";
+import { falhaDeExtracaoNaTela, partesDaDescricao, rotuloDaPendencia, rotulosCitados, semALista, suavizarMensagem } from "@/lib/rotulos";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { rotuloDeTipoConhecido } from "@/lib/export";
 import { BOTOES_DECISAO, ROTULO_POR_ESTADO, rotuloDoEstado } from "@/lib/pendencia";
 import { decidirPendencia } from "./actions";
@@ -57,10 +58,14 @@ export function ItemPendencia({
   // "Item obrigatório do Kit Básico ausente: COMBINADO" — `COMBINADO` é a chave
   // primária da taxonomia, não o nome de nada que o cliente reconheça. A tela já
   // sabe traduzir (`formatarTipoTaxonomia`); faltava aplicar aqui.
-  const bruto = (p.descricao ?? "Sem descrição.").replace(
+  const traduzida = (p.descricao ?? "Sem descrição.").replace(
     /\b([A-Z][A-Z0-9_]{3,})\b/g,
     (m) => rotuloDeTipoConhecido(m) ?? m,
   );
+  // A EXTRAÇÃO QUE FALHOU (P16): a mensagem do provedor, em inglês, vai para "Detalhes técnicos";
+  // fica à vista a frase do banco (que nomeia o arquivo) e o que fazer.
+  const falha = p.tipo === "extracao_falhou" ? falhaDeExtracaoNaTela(traduzida) : null;
+  const bruto = falha ? (falha.motivo ? `${falha.frase} Motivo: ${falha.motivo}` : falha.frase) : traduzida;
   const rotulos = rotulosCitados(bruto);
   const partes = partesDaDescricao(suavizarMensagem(semALista(bruto)));
 
@@ -96,6 +101,24 @@ export function ItemPendencia({
             </li>
           ))}
         </ul>
+      )}
+
+      {falha && (
+        <div className="mt-1.5 text-xs">
+          <p>
+            O que fazer: abra o arquivo original. Se ele estiver corrompido, vazio ou protegido por senha,
+            peça outro ao cliente e{" "}
+            {casoId ? (
+              <Link href={`/casos/${casoId}/adicionar`} className="font-semibold underline underline-offset-2">reenvie o arquivo</Link>
+            ) : "reenvie o arquivo"}
+            .
+          </p>
+          {falha.tecnico && (
+            <DetalhesTecnicos className="mt-1">
+              <p>{falha.tecnico}</p>
+            </DetalhesTecnicos>
+          )}
+        </div>
       )}
 
       {rotulos.length > 0 && (
