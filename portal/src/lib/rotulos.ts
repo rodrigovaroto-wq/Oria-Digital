@@ -332,3 +332,28 @@ export function semALista(texto: string): string {
     .trim();
   return cortado.length > 20 ? cortado : texto;
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// QUEM ACEITOU A LINHA (P16, vistoria P2 de 04/11, ALTA 3).
+//
+// O banco grava o aceite automático com autor `sistema:auto_aceite (dial N2, limiar 0.95, …)`
+// (0019 e seguintes). A tela dizia "Todas as linhas foram aceitas" e "por sistema:auto_aceite
+// (dial N2, limiar 0.95…)": com 283 linhas aceitas pela máquina e nenhuma por uma pessoa, a
+// frase soava como conferência humana, e o autor era jargão de engenharia.
+/** `true` quando o aceite foi da automação (`sistema:*`), não de uma pessoa. */
+export function aceiteAutomatico(aceitoPor: string | null | undefined): boolean {
+  return (aceitoPor ?? "").startsWith("sistema:");
+}
+
+/** A frase de quando todas as linhas estão aceitas, dizendo QUEM aceitou. */
+export function fraseDoAceiteTotal(aceitosPor: Array<string | null | undefined>): string {
+  const auto = aceitosPor.filter(aceiteAutomatico).length;
+  const pessoa = aceitosPor.length - auto;
+  if (auto === 0) return "Todas as linhas foram aceitas por uma pessoa — já entram no export como fato.";
+  if (pessoa === 0) {
+    return "Todas as linhas foram aceitas AUTOMATICAMENTE, pela confiança da leitura; nenhuma foi conferida "
+      + "por uma pessoa. Já entram no export como fato.";
+  }
+  return `Todas as linhas foram aceitas: ${pessoa} por uma pessoa e ${auto} automaticamente, pela confiança `
+    + "da leitura. Já entram no export como fato.";
+}

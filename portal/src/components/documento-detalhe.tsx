@@ -15,6 +15,7 @@ import { ZonaDeEscrita } from "@/components/acesso-na-tela";
 import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
 import { TranscricaoHumana } from "@/components/transcricao-humana";
 import { ehPdf, hrefDoOriginal, rotuloDoLink } from "@/lib/original-do-documento";
+import { aceiteAutomatico, fraseDoAceiteTotal } from "@/lib/rotulos";
 
 function formatValor(valorNum: number | null, valorTexto: string | null, unidade: string | null) {
   if (valorNum != null) {
@@ -272,7 +273,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
         )}
         {tudoAceito && (
           <p className="mb-4 rounded border border-ok-200 bg-ok-50 px-3 py-2 text-sm text-ok-800">
-            ✓ Todas as linhas foram aceitas — já entram no export como fato.
+            ✓ {fraseDoAceiteTotal(campos.map((c) => c.aceito_por))}
           </p>
         )}
 
@@ -360,7 +361,7 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
                             </span>
                             {aceito && linha.aceito_por && (
                               <p className="mt-0.5 text-xs font-normal normal-case text-tinta-500">
-                                por {linha.aceito_por}
+                                {aceiteAutomatico(linha.aceito_por) ? "automático" : `por ${linha.aceito_por}`}
                               </p>
                             )}
                           </td>

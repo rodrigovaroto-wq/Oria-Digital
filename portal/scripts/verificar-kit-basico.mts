@@ -50,6 +50,7 @@ import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
 import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
 import { BOTOES_DECISAO, exigeConfirmacao } from "../src/lib/pendencia.ts";
 import { passosDaTrilha } from "../src/components/trilha.tsx";
+import { aceiteAutomatico, fraseDoAceiteTotal } from "../src/lib/rotulos.ts";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
@@ -340,6 +341,23 @@ console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista fil
   const passos = passosDaTrilha("/casos/abc/pendencias", { abc: "Metalúrgica X" });
   ok(passos.some((p) => p.rotulo === "Metalúrgica X" && p.sensivel === true),
     "a trilha marca o nome do mandato como sensível", JSON.stringify(passos));
+}
+
+// 9. P16 (vistoria P2, ALTA 3): "Todas as linhas foram aceitas" quando quem aceitou foi a máquina.
+//    Medido em 04/11: 283 linhas aceitas, nenhuma por pessoa, e a frase soava como conferência humana.
+{
+  console.log("\n9. O aceite diz quem aceitou");
+  const AUTO = "sistema:auto_aceite (dial N2, limiar 0.95, sem guarda disparada)";
+  ok(aceiteAutomatico(AUTO) && !aceiteAutomatico("analista@oria.com") && !aceiteAutomatico(null),
+    "autor sistema:* é automático; e-mail e nulo não são");
+  const soMaquina = fraseDoAceiteTotal([AUTO, AUTO, AUTO]);
+  ok(/AUTOMATICAMENTE/.test(soMaquina) && /nenhuma foi conferida por uma pessoa/.test(soMaquina),
+    "tudo automático: a frase diz que nenhuma pessoa conferiu", soMaquina);
+  ok(!/dial|limiar|sistema:/.test(soMaquina), "e não publica o jargão do autor gravado", soMaquina);
+  const misto = fraseDoAceiteTotal(["ana@oria.com", AUTO, AUTO]);
+  ok(misto.includes("1 por uma pessoa") && misto.includes("2 automaticamente"), "misto: conta os dois lados", misto);
+  ok(fraseDoAceiteTotal(["ana@oria.com"]).includes("por uma pessoa") && !/AUTOMATICAMENTE/.test(fraseDoAceiteTotal(["ana@oria.com"])),
+    "tudo humano: não fala em automático");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);
