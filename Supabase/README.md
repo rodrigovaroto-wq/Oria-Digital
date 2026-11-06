@@ -1111,6 +1111,24 @@ supabase db execute --file Supabase/migrations/0223_o_token_v1_que_ainda_entrava
 supabase db execute --file Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0224' and not presente;   -- ZERO linhas
+
+# A 0226 (P16, VISTORIA_P2 §6 ALTA 1) faz fn_revisar_documento RECUSAR a confirmação de documento SEM tipo (novo nem antigo): devolve {recusado, documento_id, motivo_recusa} e não grava nada (antes gravava confiança 1.0 / fonte humano: "100% · Humano" num .txt que ninguém classificou). Mesma assinatura e ACL. Acrescenta o requisito revisar_documento_recusa_sem_tipo à sonda. O portal (pendencias/actions.ts) lê `recusado` e mostra o motivo.
+# >>> Rodar COMO `postgres`; idempotente. Teste: Supabase/test/revisar_documento_sem_tipo.test.sql.
+supabase db execute --file Supabase/migrations/0226_o_documento_sem_tipo_que_virava_cem_por_cento_humano.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0226' and not presente;   -- ZERO linhas
+
+# A 0227 (P16, VISTORIA_P2 §6 ALTA 1) acrescenta a decisão 'reabrir' a fn_decidir_pendencia: a pendência decidida (Contatar o Cliente / Prosseguir / Não procede) volta a `aberta` e o Portão 2 volta a contá-la como bloqueante. Os três ramos da 0109 não mudam. Sem `decisao` na reversão (nenhum decisao_tipo a descreve); o evento_auditoria carrega antes->depois e reverte_decisao. Acrescenta o requisito pendencia_decidir_reabrir.
+# >>> Rodar COMO `postgres`; idempotente. Teste: Supabase/test/pendencia_reabrir.test.sql.
+supabase db execute --file Supabase/migrations/0227_a_pendencia_decidida_que_nao_tinha_volta.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0227' and not presente;   -- ZERO linhas
+
+# A 0228 (P16 G1, VISTORIA_P2 §6 ALTA 2) faz o auto-aceite de fn_registrar_campos_extraidos EXIGIR tipo no documento: sem tipo_taxonomia, nenhuma linha é auto-aceita (ficam pendentes, com evento auto_aceite_suprimido "documento sem tipo"). Antes, um .txt sem tipo/entidade/período teve "Saldo de caixa: 1000" auto-aceita e chegou ao Excel como ACEITO. Mesma assinatura e ACL; só o auto-aceite muda. Acrescenta o requisito campos_auto_aceite_exige_tipo.
+# >>> Rodar COMO `postgres`; idempotente. Teste: Supabase/test/auto_aceite_exige_tipo.test.sql.
+supabase db execute --file Supabase/migrations/0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0228' and not presente;   -- ZERO linhas
 #   -- e a prova que só uma exclusão de verdade dá: suba um arquivo de teste num mandato, apague-o pelo portal/API com o login de um Analista e leia
 #   select criado_em, ator, entidade_ref, antes->>'ator_origem' as origem, antes->>'ator_motivo' as motivo from evento_auditoria where acao = 'documento_original_apagado' order by criado_em desc limit 3;
 #   -- o `ator` tem de ser o e-mail de quem apagou (origem `cabecalho_jwt`). Se vier `storage:nao_identificado`, o `motivo` diz por quê: 'operacao <x>' = o `authorization` só é lido nas operações REST de exclusão ('storage.object.delete' e

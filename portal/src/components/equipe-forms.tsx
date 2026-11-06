@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
+import { PedidoDeConfirmacao } from "@/components/form-de-acao";
 import { alocar, definirPapel, desalocar, type ResultadoEquipe } from "@/app/administracao/equipe/actions";
 import { PAPEIS, ROTULO_DO_PAPEL, type Papel } from "@/lib/acesso";
 
@@ -44,8 +45,14 @@ export function MandatoAlocado({
   casoId, usuarioId, nome,
 }: Readonly<{ casoId: string; usuarioId: string; nome: string }>) {
   const [r, acao, pendente] = useActionState<ResultadoEquipe, FormData>(desalocar, null);
+  // P16: o "✕" retirava a pessoa do mandato num toque (vistoria de 04/11). Agora pergunta antes.
+  const [pedindo, setPedindo] = useState(false);
   return (
-    <form action={acao} className="inline-flex flex-wrap items-center gap-1.5">
+    <form
+      action={(fd) => { setPedindo(false); acao(fd); }}
+      onSubmit={(e) => { if (!pedindo) { e.preventDefault(); setPedindo(true); } }}
+      className="inline-flex flex-wrap items-center gap-1.5"
+    >
       <input type="hidden" name="caso_id" value={casoId} />
       <input type="hidden" name="usuario_id" value={usuarioId} />
       <span className="chip bg-tinta-100 text-tinta-800">
@@ -59,6 +66,14 @@ export function MandatoAlocado({
           ✕
         </button>
       </span>
+      {pedindo && (
+        <PedidoDeConfirmacao
+          pergunta={`Retirar a alocação em ${nome}?`}
+          efeito="A pessoa deixa de ver este mandato. Dá para alocar de novo depois."
+          sim="Sim, retirar"
+          cancelar={() => setPedindo(false)}
+        />
+      )}
       <Resultado r={r} />
     </form>
   );

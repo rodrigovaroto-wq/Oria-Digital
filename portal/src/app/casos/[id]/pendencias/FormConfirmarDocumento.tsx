@@ -67,10 +67,11 @@ export function CartaoConfirmarDocumento({
           <select
             id={`${idBase}-tipo`}
             name="novo_tipo_taxonomia"
+            required
             defaultValue={doc.tipo_taxonomia ?? ""}
             className="mt-1 w-full rounded-md border border-tinta-200 px-2.5 py-1.5 text-sm"
           >
-            <option value="">— sem tipo —</option>
+            <option value="" disabled>Escolha o tipo…</option>
             {taxonomia.map((t) => (
               <option key={t.codigo} value={t.codigo}>
                 {t.documento}

@@ -327,6 +327,12 @@ console.log("9. a média dos exercícios");
      String(cv.serie?.length));
   ok(cv.conta.includes("2023, 2024, 2025"),
      "e a conta publicada NOMEIA os exercícios que entraram", cv.conta);
+  // P16 (vistoria P2, 04/11): a tela mostrou "88%" ao lado de "(101.300 ÷ 106.580)", que dá 95%.
+  // O número e a conta à vista têm de falar da MESMA coisa: se há par, ele divide no valor.
+  const divideNoValor = (x: typeof cv) =>
+    !x.numerador || !x.denominador || perto(Math.abs(x.numerador.valor / x.denominador.valor), x.valor ?? Number.NaN);
+  ok(divideNoValor(cv), "na média, nenhum par numerador ÷ denominador que não divida no valor mostrado",
+     `${cv.numerador?.valor} ÷ ${cv.denominador?.valor} vs ${cv.valor}`);
 
   // UM EXERCÍCIO SÓ NÃO É MÉDIA, e a frase tem de dizer isso — senão o número
   // parece ter uma robustez que ele não tem.
@@ -334,6 +340,8 @@ console.log("9. a média dos exercícios");
   const cv1 = achar(sugerir(umAno), "CUSTO_VARIAVEL");
   ok(perto(cv1.valor, 0.7), "com um exercício só, o valor é o dele", String(cv1.valor));
   ok(cv1.conta.includes("2025"), "e a conta diz qual exercício foi", cv1.conta);
+  ok(Boolean(cv1.numerador && cv1.denominador) && divideNoValor(cv1),
+     "com um exercício só, o par continua à vista e divide no valor", `${cv1.numerador?.valor} ÷ ${cv1.denominador?.valor}`);
 
   // EXERCÍCIO SEM RESPOSTA FICA FORA DA MÉDIA, não entra como zero: 2024 sem
   // receita não pode puxar a razão para baixo com um zero que ninguém afirmou.

@@ -6,7 +6,7 @@ import { usePathname } from "next/navigation";
 import { MarcaOria } from "@/components/marca-oria";
 import { BarraInferior } from "@/components/barra-inferior";
 import { armazem, idDoCaso } from "@/lib/casco";
-import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
+import { CASO_STATUS_COLOR } from "@/lib/status";
 import type { CasoStatus } from "@/lib/types";
 import {
   IconeExpandir,
@@ -373,7 +373,6 @@ export function BarraLateral({
                     <li key={m.id}>
                       <Link
                         href={`/casos/${m.id}`}
-                        title={`${m.nome} — ${CASO_STATUS_LABEL[m.status]}`}
                         aria-current={ativo ? "page" : undefined}
                         className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
                           ativo
@@ -389,7 +388,7 @@ export function BarraLateral({
                             CASO_STATUS_COLOR[m.status].split(" ")[0]
                           }`}
                         />
-                        <span className="truncate">{m.nome}</span>
+                        <span className="valor-sensivel truncate">{m.nome}</span>
                       </Link>
                     </li>
                   );

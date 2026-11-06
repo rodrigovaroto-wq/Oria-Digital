@@ -332,3 +332,55 @@ export function semALista(texto: string): string {
     .trim();
   return cortado.length > 20 ? cortado : texto;
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// QUEM ACEITOU A LINHA (P16, vistoria P2 de 04/11, ALTA 3).
+//
+// O banco grava o aceite automático com autor `sistema:auto_aceite (dial N2, limiar 0.95, …)`
+// (0019 e seguintes). A tela dizia "Todas as linhas foram aceitas" e "por sistema:auto_aceite
+// (dial N2, limiar 0.95…)": com 283 linhas aceitas pela máquina e nenhuma por uma pessoa, a
+// frase soava como conferência humana, e o autor era jargão de engenharia.
+/** `true` quando o aceite foi da automação (`sistema:*`), não de uma pessoa. */
+export function aceiteAutomatico(aceitoPor: string | null | undefined): boolean {
+  return (aceitoPor ?? "").startsWith("sistema:");
+}
+
+/** A frase de quando todas as linhas estão aceitas, dizendo QUEM aceitou. */
+export function fraseDoAceiteTotal(aceitosPor: Array<string | null | undefined>): string {
+  const auto = aceitosPor.filter(aceiteAutomatico).length;
+  const pessoa = aceitosPor.length - auto;
+  if (auto === 0) return "Todas as linhas foram aceitas por uma pessoa — já entram no export como fato.";
+  if (pessoa === 0) {
+    return "Todas as linhas foram aceitas AUTOMATICAMENTE, pela confiança da leitura; nenhuma foi conferida "
+      + "por uma pessoa. Já entram no export como fato.";
+  }
+  return `Todas as linhas foram aceitas: ${pessoa} por uma pessoa e ${auto} automaticamente, pela confiança `
+    + "da leitura. Já entram no export como fato.";
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// A EXTRAÇÃO QUE FALHOU, EM PORTUGUÊS (P16, vistoria P2 de 04/11, ALTA 2).
+//
+// O banco escreve `Extração de "<arquivo>" falhou ou veio incompleta (N par(es) …). Motivo: <m>`
+// (`fn_descricao_extracao_falhou`, 0154). Quando <m> é a mensagem do provedor de IA, ela chega
+// em inglês e crua: um PDF corrompido de 14 bytes mostrou o erro do provedor na tela, sem dizer
+// o que fazer. O texto exato daquele erro não foi guardado na vistoria.
+export interface FalhaDeExtracaoNaTela {
+  /** a frase do banco até "Motivo:", que já é português e nomeia o arquivo */
+  frase: string;
+  /** o motivo, quando ele é texto nosso (português) e ajuda a decidir */
+  motivo: string | null;
+  /** o motivo cru, quando é mensagem técnica: vai para "Detalhes técnicos" */
+  tecnico: string | null;
+}
+
+export function falhaDeExtracaoNaTela(texto: string): FalhaDeExtracaoNaTela {
+  const i = texto.indexOf(" Motivo: ");
+  if (i < 0) return { frase: texto, motivo: null, tecnico: null };
+  const motivo = texto.slice(i + " Motivo: ".length).trim();
+  // shortcut: "tem acento → é texto nosso" separa os motivos do banco (todos em português, com
+  // acento) da mensagem do provedor (inglês, sem acento). Motivo nosso sem acento nenhum iria para
+  // "Detalhes técnicos" — continua legível lá. Trocar por um código de motivo quando o banco gravar um.
+  const nosso = /[à-ÿ]/i.test(motivo);
+  return { frase: texto.slice(0, i).trim(), motivo: nosso ? motivo : null, tecnico: nosso ? null : motivo };
+}

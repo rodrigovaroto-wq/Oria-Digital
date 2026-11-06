@@ -15,6 +15,8 @@ import { usePathname } from "next/navigation";
 interface Passo {
   rotulo: string;
   href?: string;
+  /** nome do mandato: o modo discrição o borra (vistoria P2, ALTA 4) */
+  sensivel?: boolean;
 }
 
 export function passosDaTrilha(caminho: string, nomes: Record<string, string>): Passo[] {
@@ -32,12 +34,12 @@ export function passosDaTrilha(caminho: string, nomes: Record<string, string>): 
   if (h) {
     return [
       { rotulo: "Mandatos", href: "/casos/todos" },
-      { rotulo: nomes[h[1]] ?? "Mandato", href: `/casos/${h[1]}` },
+      { rotulo: nomes[h[1]] ?? "Mandato", href: `/casos/${h[1]}`, sensivel: true },
       { rotulo: "Histórico" },
     ];
   }
   const m = /^\/casos\/([^/]+)/.exec(limpo);
-  if (m) return [{ rotulo: "Mandatos", href: "/casos/todos" }, { rotulo: nomes[m[1]] ?? "Mandato" }];
+  if (m) return [{ rotulo: "Mandatos", href: "/casos/todos" }, { rotulo: nomes[m[1]] ?? "Mandato", sensivel: true }];
   return [];
 }
 
@@ -53,13 +55,13 @@ export function Trilha({ nomes }: Readonly<{ nomes: Record<string, string> }>) {
             <li key={p.href ?? p.rotulo} className={`flex items-center gap-1.5 ${ultimo ? "min-w-0" : "shrink-0"}`}>
               {i > 0 && <span aria-hidden>›</span>}
               {p.href && !ultimo ? (
-                <Link href={p.href} className="rounded px-1 hover:text-vidro-texto hover:underline">
+                <Link href={p.href} className={`${p.sensivel ? "valor-sensivel " : ""}rounded px-1 hover:text-vidro-texto hover:underline`}>
                   {p.rotulo}
                 </Link>
               ) : (
                 <span
                   aria-current={ultimo ? "page" : undefined}
-                  className={ultimo ? "truncate font-medium text-vidro-texto" : ""}
+                  className={`${p.sensivel ? "valor-sensivel " : ""}${ultimo ? "truncate font-medium text-vidro-texto" : ""}`}
                 >
                   {p.rotulo}
                 </span>
