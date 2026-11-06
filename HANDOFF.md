@@ -4,7 +4,16 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 113 — COMECE AQUI (29/10/2026)
+## ▶ SESSÃO 117 — COMECE AQUI (04/11/2026; parada pelo dono, continua em outra sessão)
+
+- **Leia primeiro a seção "RETOMADA" no topo do `ESTADO.md`**: tem o que foi verificado em produção, as decisões do dono e a lista numerada do que parou no meio. Este cabeçalho só aponta para lá.
+- **PR aberto: [#273](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/273)** (rascunho, NÃO mergear ainda), branch `claude/awesome-lovelace-6tgste`, sobre a `main` em `26ec556`. Traz o Sonar do #271 corrigido (`5f6f230`) e a **0224 (D16) escrita, NÃO revisada, NÃO aplicada** (`378f3fe`). O CI `banco` deve estar vermelho: `Supabase/schema.sql` pode ter ficado parcial porque o `run.sh` foi interrompido.
+- **Produção hoje:** última migration aplicada **0223** (sonda 322/322); n8n de ingestão `na1AEv3m8fjDXlwM` republicado e conferido (envio pelo `caso_id`, token v2); portal no deploy de `26ec556`. PRs da sessão já na `main`: #271 (0221, P2, P3 F1–F4, 0222) e #272 (0223, n8n sem `fn_upsert_caso`).
+- **Fechado na S117:** as 5 pendências soltas da P1b, P1c, P2 (vistoria por papel + 3 personas → `VISTORIA_P2.md`) e P3 (desenho em `Arquitetura do Sistema/3 Estado e Execução/DESENHO_P3_ROTEAR_POR_CASO_ID.md`). Verificação de produção P1–P3 com 0 falhas.
+- **Antes de qualquer coisa nova:** (1) conferir resíduo em produção da vistoria refatorada, interrompida no meio da escalada (mandato "S117 P2 sintetico", dial em N2, bucket); (2) regerar `schema.sql`; (3) revisar → aplicar → provar a 0224. Depois, limpeza da S117, fichas no grafo, decisões no plano e a **P4**.
+- Credenciais de teste (+socio/+analista/+leitura) estavam em arquivo temporário do container antigo e **se perderam**: para usar os usuários de teste, redefina as senhas pelo Auth admin (service key pela API de gerenciamento, autorizada pelo dono em 04/11) e guarde-as só no scratchpad.
+
+## SESSÃO 113 — COMECE AQUI (29/10/2026; histórico, a mais nova está acima)
 
 - **PR desta rodada: [#265](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/265)** (rascunho), branch `claude/friendly-lamport-22ctle`. Fecha o redesenho do portal (fases 1 a 5). Este cabeçalho é o único trecho que este HANDOFF atualiza por rodada.
 - Migration mais nova: **0216** (escrita, não aplicada). Detalhe e o que o dono aplica: `ESTADO.md`, SESSÃO 113, e `Arquitetura do Sistema/7 Marca/REDESENHO_DO_PORTAL.md`, "O dono faz à mão".
