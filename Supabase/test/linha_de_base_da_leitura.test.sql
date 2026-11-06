@@ -330,8 +330,9 @@ begin
   select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
   perform teste_assert_p4(v_l.cobertura is null and v_l.cobertura_motivo = 'documento_sem_dado_financeiro',
     'tem_dado_financeiro = false e 0 linhas: NÃO é cobertura 0 medida; documento_sem_dado_financeiro', row_to_json(v_l)::text);
-  -- evento anterior à medição por blocos (sem blocos_com_resposta, sem linhas, sem contas): sobra medicao_incompleta
-  v_f := teste_doc_p4(v_c, 'R medicao antiga.pdf', '{"custo_usd": 0.01}'::jsonb, true, v_campos);
+  -- chamador FORA DO CONTRATO (forma que o Juntar Blocos NÃO produz: ele manda blocos_com_resposta sempre): sobra medicao_incompleta.
+  -- Não é medição real antiga (a forma real anterior aos blocos trazia linhas, contas e blocos e sairia com cobertura).
+  v_f := teste_doc_p4(v_c, 'R chamador fora do contrato.pdf', '{"custo_usd": 0.01}'::jsonb, true, v_campos);
   select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
   perform teste_assert_p4(v_l.cobertura is null and v_l.cobertura_motivo = 'medicao_incompleta',
     'medição sem os campos da leitura: o que sobra continua medicao_incompleta', row_to_json(v_l)::text);

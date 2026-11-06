@@ -1556,7 +1556,7 @@
 {"k":"e","de":"arquivo:Supabase/test/kit_basico_combinado_estrutural.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/kit_basico_combinado_estrutural.test.sql","l":63}
 {"k":"e","de":"arquivo:Supabase/test/linha_de_base_da_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/linha_de_base_da_leitura.test.sql","l":105}
 {"k":"e","de":"arquivo:Supabase/test/linha_de_base_da_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/linha_de_base_da_leitura.test.sql","l":102}
-{"k":"e","de":"arquivo:Supabase/test/linha_de_base_da_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/linha_de_base_da_leitura.test.sql","l":384}
+{"k":"e","de":"arquivo:Supabase/test/linha_de_base_da_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/linha_de_base_da_leitura.test.sql","l":385}
 {"k":"e","de":"arquivo:Supabase/test/linha_de_base_da_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_linha_de_base_extracao","f":"Supabase/test/linha_de_base_da_leitura.test.sql","l":207}
 {"k":"e","de":"arquivo:Supabase/test/linha_de_base_da_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/linha_de_base_da_leitura.test.sql","l":11}
 {"k":"e","de":"arquivo:Supabase/test/linha_de_base_da_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/linha_de_base_da_leitura.test.sql","l":49}

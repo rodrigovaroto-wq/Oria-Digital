@@ -1974,7 +1974,7 @@ for(const [chave, blocos] of porDocumento){
   // outros campos, a uma leitura que devolveu 0 linhas. Sem este sinal a linha de base
   // contaria falha de infraestrutura como "leitura de 0%" (cobertura 0/120 com motivo
   // nulo na 0225). Com ZERO blocos respondidos, linhas/contas distintas/custo/tokens
-  // ficam FORA da medicao e a 0225 responde \`medicao_incompleta\`; \`blocos_com_resposta
+  // ficam FORA da medicao e a 0225 responde \`ia_sem_resposta\`; \`blocos_com_resposta
   // < blocos\` diz que a medicao de um documento fatiado e' parcial. So' a MEDICAO muda:
   // \`doc.tokens\`/\`doc.custo_usd\`, que o Resumo de Custo soma, continuam como eram.
   const respondidos=blocos.filter(b=>b.tokens!==undefined&&b.tokens!==null);

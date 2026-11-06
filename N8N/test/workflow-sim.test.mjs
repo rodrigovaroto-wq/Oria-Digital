@@ -875,7 +875,7 @@ test('Juntar Blocos: chamada que NUNCA respondeu não vira "leitura de 0 linhas"
   assert.equal(m.blocos_com_resposta, 0);
   assert.equal(m.contas_no_documento, 120);
   for (const k of ['linhas_devolvidas', 'contas_distintas', 'custo_usd', 'tokens']) {
-    assert.ok(!(k in m), `${k} não pode existir numa medição sem nenhuma resposta (a 0225 diz medicao_incompleta)`);
+    assert.ok(!(k in m), `${k} não pode existir numa medição sem nenhuma resposta (a 0225 diz ia_sem_resposta)`);
   }
   // o Resumo de Custo continua recebendo o que sempre recebeu
   const out = await run('Juntar Blocos', { items: [{ json: falha }] });
