@@ -378,19 +378,64 @@ ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWit
     "tudo humano: não fala em automático");
 }
 
-// 10. P16 (vistoria P2, ALTA 2): extração que falhou não mostra o erro do provedor cru.
-//     A frase segue o formato real de `fn_descricao_extracao_falhou` (0154). O texto exato do erro
-//     do PDF de 14 bytes não foi guardado na vistoria; o inglês abaixo é representativo, não medido.
+// 10. P16 (vistoria P2, ALTA 2) + G2 (06/11): extração que falhou mostra a CAUSA em português, o
+//     texto técnico inteiro em "Detalhes técnicos" e o que fazer SEGUNDO a causa.
+//     Medido em produção em 06/11 (468 pendências abertas): 272 mostravam à vista instrução de
+//     engenharia (caminho de arquivo, TPM_CONTA, colchete [http=…] do provedor) porque a heurística
+//     era "tem acento → é texto nosso"; e TODA falha mandava abrir/reenviar o arquivo, inclusive
+//     chave inválida (220 segmentos) e falta de crédito (87), em que o arquivo está bom.
+//     O corpus é REAL (fixtures/falhas-de-extracao-producao.json, regra 4): nada inventado.
 {
-  console.log("\n10. Extração que falhou: o técnico vai para Detalhes técnicos");
-  const doBanco = (m: string) => `Extração de "relatorio_vazio.pdf" falhou ou veio incompleta (0 par(es) conta×coluna gravado(s)). Motivo: ${m}`;
-  const ingles = falhaDeExtracaoNaTela(doBanco("400 Bad Request: The document could not be processed"));
-  ok(ingles.frase.includes("relatorio_vazio.pdf") && !ingles.frase.includes("Bad Request"),
-    "a frase à vista nomeia o arquivo e não traz o erro do provedor", ingles.frase);
-  ok(ingles.motivo === null && (ingles.tecnico ?? "").includes("Bad Request"), "o erro do provedor vai para o técnico");
-  const nosso = falhaDeExtracaoNaTela(doBanco("a chamada respondeu sem erro, mas não trouxe NENHUMA linha."));
-  ok((nosso.motivo ?? "").includes("não trouxe") && nosso.tecnico === null, "motivo em português continua à vista");
-  ok(falhaDeExtracaoNaTela("texto sem motivo").frase === "texto sem motivo", "descrição fora do formato passa inteira");
+  console.log("\n10. Extração que falhou: causa à vista, técnico inteiro abaixo, ação pela causa");
+  const doBanco = (m: string) => `Extração de "relatorio.pdf" falhou ou veio incompleta (0 par(es) conta×coluna gravado(s)). Motivo: ${m}`;
+  const corpus = JSON.parse(readFileSync(new URL("./fixtures/falhas-de-extracao-producao.json", import.meta.url), "utf8")) as
+    { motivos: Array<{ motivo: string; n: number; abertas: number }> };
+  ok(corpus.motivos.length >= 10, "o corpus de produção foi lido (não passou vazio)", String(corpus.motivos.length));
+
+  const PROIBIDO = /\[http=|provedor=|\[type=|N8N\/|\.mjs|TPM_|RPM_|[A-Z]{2,}_[A-Z]{2,}/;
+  const INGLES = /\b(the|your|you|please|try|requests?|exceeded|invalid|authentication|credentials?|billing|quota|limit reached)\b/i;
+  const REENVIAR_COMO_CAUSA = /abr[ae] o arquivo|corrompid|protegido por senha|pe[çc]a outro/i;
+  for (const { motivo } of corpus.motivos) {
+    const f = falhaDeExtracaoNaTela(doBanco(motivo));
+    const aVista = [f.frase, ...f.aVista].join(" ");
+    const curto = motivo.slice(0, 50);
+    ok(!PROIBIDO.test(aVista), `à vista não há caminho, variável nem colchete do provedor: ${curto}`, aVista.slice(0, 200));
+    ok(!INGLES.test(aVista), `à vista não há texto em inglês: ${curto}`, aVista.slice(0, 200));
+    ok(f.tecnico === motivo, `o texto técnico é o motivo inteiro, sem perda: ${curto}`);
+    ok(f.aVista.length > 0 && f.acoes.length > 0, `há causa à vista e ação: ${curto}`);
+    const doProvedor = /^(bloco \d+: )?(CHAVE|CONTA DO|LIMITE|TETO|Erro da API|Resposta d\S+ OpenAI sem)/.test(motivo);
+    if (doProvedor) {
+      // a falha do provedor nunca manda abrir o arquivo nem culpa o arquivo; e, quando o motivo é
+      // SÓ do provedor, a única ação é a do serviço de IA.
+      ok(!f.acoes.some((a) => a.tipo === "servico_de_ia" && REENVIAR_COMO_CAUSA.test(a.texto)),
+        `falha do provedor não manda abrir/culpa o arquivo: ${curto}`);
+      if (!/INCOMPLETA|não fecha|descartad|colado|truncad/.test(motivo)) {
+        ok(f.acoes.length === 1 && f.acoes[0].tipo === "servico_de_ia", `motivo só do provedor: só a ação do serviço de IA: ${curto}`, JSON.stringify(f.acoes.map((a) => a.tipo)));
+      }
+    }
+  }
+
+  // Famílias com resposta específica (cada uma saiu de um motivo real do corpus).
+  const acha = (re: RegExp) => corpus.motivos.find((m) => re.test(m.motivo))?.motivo ?? "";
+  const chave = falhaDeExtracaoNaTela(doBanco(acha(/CHAVE DO PROVEDOR/)));
+  ok(chave.aVista.some((t) => t.includes("Chave do provedor de IA inválida")), "chave: título em português", chave.aVista.join(" "));
+  const incompleta = falhaDeExtracaoNaTela(doBanco(acha(/^Extração INCOMPLETA/)));
+  ok(/^Extração incompleta: \d+ linha\(s\).*% de cobertura, abaixo do mínimo de 85%\)\.$/.test(incompleta.aVista[0]) && incompleta.acoes[0].tipo === "conferir_na_revisao",
+    "incompleta: cobertura à vista e ação de conferir na revisão", incompleta.aVista[0]);
+  const vazia = falhaDeExtracaoNaTela(doBanco("a chamada respondeu sem erro, mas não trouxe NENHUMA linha. Causa mais comum: formato que o pipeline ainda não converte em texto."));
+  ok(vazia.acoes[0].tipo === "sem_linhas" && vazia.aVista.length === 1, "sem nenhuma linha: ação própria (abrir o arquivo)");
+  const truncada = falhaDeExtracaoNaTela(doBanco(acha(/truncada/)));
+  ok(truncada.acoes.some((a) => a.tipo === "resposta_truncada") && !truncada.acoes.some((a) => a.reenvio && a.tipo === "resposta_truncada"),
+    "resposta truncada não manda reenviar o mesmo arquivo");
+  // A armadilha: " | " DENTRO de um rótulo de conta não cria "título".
+  const comPipe = falhaDeExtracaoNaTela(doBanco(acha(/GRADE|ARADO/)));
+  ok(!comPipe.aVista.some((t) => /PAGO|MATRIZ|GRADE|ARADO/.test(t)), "rótulo com ' | ' não vira causa à vista", comPipe.aVista.join(" || "));
+  // Causa nova (não reconhecida): não afirma causa (regra 1) e o detalhe segue acessível.
+  const nova = falhaDeExtracaoNaTela(doBanco("o disco do servidor encheu"));
+  ok(nova.acoes.length === 1 && nova.acoes[0].tipo === "nao_classificada" && /não foi possível classificar/.test(nova.acoes[0].texto)
+    && nova.tecnico === "o disco do servidor encheu", "causa desconhecida: não afirma causa e guarda o detalhe", JSON.stringify(nova));
+  ok(falhaDeExtracaoNaTela("texto sem motivo").frase === "texto sem motivo" && falhaDeExtracaoNaTela("texto sem motivo").tecnico === null,
+    "descrição fora do formato passa inteira, sem inventar motivo");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);
