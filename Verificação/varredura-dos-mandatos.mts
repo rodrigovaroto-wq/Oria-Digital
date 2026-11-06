@@ -84,7 +84,7 @@ async function abrir(ctx: any, url: string, rotulo: string, opcoes: { celular?: 
   page.on("response", (r: any) => {
     const u = r.url(); if (!u.startsWith(BASE)) return;
     if (r.status() >= 500) http5xx.push(`${r.status()} ${u.replace(BASE, "").slice(0, 120)}`);
-    else if (r.status() >= 400 && !/favicon|\.map$/.test(u)) http4xx.push(`${r.status()} ${u.replace(BASE, "").slice(0, 120)}`);
+    else if (r.status() >= 400 && !/(?:favicon|\.map$)/.test(u)) http4xx.push(`${r.status()} ${u.replace(BASE, "").slice(0, 120)}`);
   });
   const t0 = Date.now();
   try {
