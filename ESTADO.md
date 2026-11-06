@@ -1,8 +1,29 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 119 (06/11/2026) — P16 no código: os 5 temas ALTOS da vistoria P2; 0226, 0227 e 0228 NÃO aplicadas
+## SESSÃO 120 (06/11/2026) — 0226, 0227 e 0228 APLICADAS em produção; P16 conferida no portal publicado; G2 e o `title=` do e-mail corrigidos
 
-> **Migration mais nova: `0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql` — NÃO APLICADA.** As três da P16 (0226, 0227, 0228) esperam o dono, na ordem, pelo `Supabase/README.md`. Nasceram 0224–0226 e foram renumeradas depois que a 0224 (D16) entrou no `main`.
+> **Migration mais nova: `0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql` — APLICADA EM PRODUÇÃO em 06/11/2026.**
+> - Sonda antes: 331/331, na 0224.
+> - Ensaio das três numa transação revertida: 334/334, e a foto (corpo e ACL das três funções) ficou idêntica depois.
+> - Aplicadas uma por vez: 332 → 333 → 334, 0 faltando. A ACL das três funções não mudou.
+> - As três suítes da P16 rodaram contra produção, em transação revertida, e passaram inteiras. Mandatos: 77 antes e depois.
+
+**Portal publicado (`5d0061d`) visto como Sócio, só leitura.** O banco ficou igual antes e depois (eventos, decisões, md5 dos estados de pendência).
+- A, B, C, E, F e F2 batem com o PR.
+- O ✕ da equipe não foi exercitado: há 0 alocações em produção.
+- "Reabrir pendência" grava em um clique, sem confirmação. Foi escolha do #274 e não foi clicado.
+
+**Corrigido nesta sessão (o #274 não cumpria em produção):**
+- **G2.** A heurística do acento mandava o motivo inteiro para a tela. 272 das 468 `extracao_falhou` abertas mostravam instrução de engenharia (`N8N/lib/provedor.mjs`, `TPM_CONTA`) e o colchete do provedor em inglês. E toda falha recebia "abra o arquivo / reenvie", inclusive chave inválida e falta de crédito: 347 pendências abertas são do serviço de IA.
+- Agora a tela mostra a causa em português e a ação que a causa pede. O motivo inteiro vai para Detalhes técnicos. Medido nos 130 motivos reais: 0 com texto técnico à vista.
+- **D.** `menu-conta.tsx` tinha `title={email}`. O portão só varria `valor-sensivel` e agora varre todo `title={…}`.
+- **Varredura nova:** `Verificação/varredura-dos-mandatos.mts`. Abre cada aba (desktop e 390 px), cada documento e os três exports de TODO mandato visível. Sai com 2 quando não rodou.
+
+**Resíduo medido e deixado:** 738 linhas auto-aceitas em 23 documentos sem tipo, todas em 11 mandatos de teste. A 0228 vale só para a frente.
+
+## SESSÃO 119 (06/11/2026) — P16 no código: os 5 temas ALTOS da vistoria P2 (0226–0228 aplicadas na S120)
+
+> As três da P16 (0226, 0227, 0228) foram **aplicadas em produção na S120** (ver acima). Nasceram 0224–0226 e foram renumeradas depois que a 0224 (D16) entrou no `main`.
 
 **O que entrou (branch `claude/dazzling-einstein-mhx4l1`), cada fatia com a regra 2 na mensagem do commit:**
 - A: "Prosseguir sem resolução", "Não procede" e o ✕ da equipe pedem confirmação.
