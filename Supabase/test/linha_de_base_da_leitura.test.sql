@@ -2,7 +2,7 @@
 -- 0225 — A LEITURA QUE SÓ SE MEDIA SOMADA POR LOTE: a cobertura por DOCUMENTO (linha de base da P4)
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): os números por guarda desligada estão no cabeçalho de
--- Supabase/migrations/0225_a_leitura_que_so_se_media_somada_por_lote.sql ("MEDIÇÃO NÃO-VAZIA"): 53 asserts, 21 variantes aplicadas uma a uma, 0 reprovações com a migration intacta.
+-- Supabase/migrations/0225_a_leitura_que_so_se_media_somada_por_lote.sql ("MEDIÇÃO NÃO-VAZIA"): 61 asserts, 27 variantes aplicadas uma a uma, 0 reprovações com a migration intacta.
 --
 -- O QUE AFIRMA (comportamento, não mecanismo):
 --   1. a gravação leva a medição: chamada COM p_medicao grava o objeto no evento; chamada SEM grava `medicao` nula EXPLÍCITA (a chave existe, valor nulo) —
@@ -126,12 +126,12 @@ begin
   raise notice '--- 1. a gravação leva a medição: objeto como veio, nula EXPLÍCITA quando não mediu, tipo errado vira medicao_invalida ---';
   -- B: dois eventos na mesma versão (reprocessou): a 1ª leitura devolveu 5 de 10; a 2ª, 12 de 10 (cobertura acima de 1, como medido em produção).
   perform fn_registrar_campos_extraidos(v_ver_re1, v_campos, 'N0', null, true,
-    '{"contas_no_documento": 10, "linhas_devolvidas": 5, "contas_distintas": 5, "blocos": 2, "blocos_planejados": 2, "custo_usd": 0.12, "tokens": 900}'::jsonb);
+    '{"contas_no_documento": 10, "linhas_devolvidas": 5, "contas_distintas": 5, "blocos": 2, "blocos_planejados": 2, "custo_usd": 0.12, "tokens": 900, "versao_medicao": "p4-0"}'::jsonb);
   perform teste_recua_p4(v_ver_re1);
   perform fn_registrar_campos_extraidos(v_ver_re1, v_campos, 'N0', null, true,
-    '{"contas_no_documento": 10, "linhas_devolvidas": 12, "contas_distintas": 9, "blocos": 3, "blocos_planejados": 3, "custo_usd": 0.31, "tokens": 2100}'::jsonb);
+    '{"contas_no_documento": 10, "linhas_devolvidas": 12, "contas_distintas": 9, "blocos": 3, "blocos_planejados": 3, "custo_usd": 0.31, "tokens": 2100, "versao_medicao": "p4-1"}'::jsonb);
   select depois into v_ev from evento_auditoria where acao = 'extracao_sombra' and entidade_ref = 'documento_versao:' || v_ver_re1 order by criado_em desc, id desc limit 1;
-  perform teste_assert_p4(v_ev->'medicao' = '{"contas_no_documento": 10, "linhas_devolvidas": 12, "contas_distintas": 9, "blocos": 3, "blocos_planejados": 3, "custo_usd": 0.31, "tokens": 2100}'::jsonb,
+  perform teste_assert_p4(v_ev->'medicao' = '{"contas_no_documento": 10, "linhas_devolvidas": 12, "contas_distintas": 9, "blocos": 3, "blocos_planejados": 3, "custo_usd": 0.31, "tokens": 2100, "versao_medicao": "p4-1"}'::jsonb,
     'a medição vai para o evento como veio (todos os campos do n8n, sem validar campo a campo)', v_ev::text);
   perform teste_assert_p4(not (v_ev ? 'medicao_invalida'), 'medição objeto não grava medicao_invalida', v_ev::text);
 
@@ -214,6 +214,10 @@ begin
     'cobertura = linhas/contas = 1,2: SEM truncar em 1 (a régua que conta errado tem de aparecer) e sem motivo quando existe', row_to_json(v_l)::text);
   perform teste_assert_p4(v_l.n_campos = 4 and v_l.nome_original = 'B reprocessado.pdf' and v_l.n_versao = 1,
     'n_campos conta os campos da VERSÃO (as duas gravações do reprocesso: 2+2) e a versão é a 1', row_to_json(v_l)::text);
+  perform teste_assert_p4(v_l.campos_ultimo_evento = 2 and v_l.n_campos = 4,
+    'campos_ultimo_evento é o do ÚLTIMO evento (2) e n_campos o ACUMULADO da versão (4): reprocessar soma as gravações', row_to_json(v_l)::text);
+  perform teste_assert_p4(v_l.versao_medicao = 'p4-1',
+    'versao_medicao é a do ÚLTIMO evento (p4-1, não a p4-0 da primeira leitura)', row_to_json(v_l)::text);
   select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_re2;
   perform teste_assert_p4(v_l.extracao_rodou is false and v_l.cobertura_motivo = 'extracao_nao_rodou' and v_l.n_versao = 2,
     'a versão 2 do mesmo documento, sem evento, não herda o veredito da versão 1', row_to_json(v_l)::text);
@@ -221,6 +225,8 @@ begin
   select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_sm;
   perform teste_assert_p4(v_l.extracao_rodou and v_l.cobertura is null and v_l.cobertura_motivo = 'sem_medicao' and v_l.n_campos = 2,
     'evento sem medição (n8n anterior): rodou, cobertura nula, motivo sem_medicao — diferente de "não rodou"', row_to_json(v_l)::text);
+  perform teste_assert_p4(v_l.versao_medicao is null and v_l.campos_ultimo_evento = 2,
+    'evento sem medição: versao_medicao nula (não inventada), campos_ultimo_evento vem do evento', row_to_json(v_l)::text);
   select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_in;
   perform teste_assert_p4(v_l.extracao_rodou and v_l.cobertura is null and v_l.cobertura_motivo = 'medicao_invalida',
     'medição não-objeto: cobertura nula e motivo medicao_invalida', row_to_json(v_l)::text);
@@ -240,21 +246,30 @@ begin
   -- ---------------------------------------------------------------- 4. pendências por tipo (abertas, da origem extração)
   raise notice '--- 4. pendências: abertas, da origem extração, por tipo, sem multiplicar linhas ---';
   select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_pd1;
-  perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito = 1 and v_l.pendencias_extracao_falhou = 1,
-    'a pendência é do DOCUMENTO: as duas versões do G mostram 1 padrão suspeito e 1 extracao_falhou', row_to_json(v_l)::text);
+  perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito is null and v_l.pendencias_extracao_falhou is null
+      and v_l.pendencias_motivo = 'pendencia_e_do_documento_ver_versao_mais_nova',
+    'a pendência é do DOCUMENTO: a versão 1 do G (limpa) NÃO mostra a falha da versão 2 — NULL com o motivo, não zero', row_to_json(v_l)::text);
   select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_pd2;
-  perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito = 1 and v_l.pendencias_extracao_falhou = 1 and v_l.falha_motivo = 'a IA devolveu vazio'
-      and v_l.contas_no_documento = 8 and v_l.cobertura = 0 and v_l.cobertura_motivo is null,
-    'versão 2 do G: falha_motivo do evento, cobertura 0 MEDIDA (8 contas, 0 linhas) com motivo nulo — zero medido ≠ ausência', row_to_json(v_l)::text);
+  perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito = 1 and v_l.pendencias_extracao_falhou = 1 and v_l.pendencias_motivo is null
+      and v_l.falha_motivo = 'a IA devolveu vazio',
+    'a versão MAIS NOVA do G carrega as pendências do documento (1 padrão suspeito, 1 extracao_falhou), sem motivo de ausência', row_to_json(v_l)::text);
+  perform teste_assert_p4(v_l.contas_no_documento = 8 and v_l.cobertura = 0 and v_l.cobertura_motivo is null,
+    'versão 2 do G: cobertura 0 MEDIDA (8 contas, 0 linhas) com motivo nulo — zero medido ≠ ausência', row_to_json(v_l)::text);
   select count(*) into v_n from fn_linha_de_base_extracao(v_a) where documento_id = v_doc_pd;
   perform teste_assert_p4(v_n = 2, 'o documento com 2 versões e 2 pendências continua em 2 linhas (não 4)', v_n::text);
-  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_re1;
-  perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito = 0 and v_l.pendencias_extracao_falhou = 0, 'documento sem pendência: zeros (não nulos)', row_to_json(v_l)::text);
+  select sum(pendencias_extracao_falhou) + sum(pendencias_extracao_padrao_suspeito) into v_n from fn_linha_de_base_extracao(v_a) where documento_id = v_doc_pd;
+  perform teste_assert_p4(v_n = 2, 'um sum() sobre as linhas do documento conta cada pendência UMA vez (1 + 1, não 2 + 2)', v_n::text);
+  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_sm;
+  perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito = 0 and v_l.pendencias_extracao_falhou = 0 and v_l.pendencias_motivo is null,
+    'documento de uma versão só, sem pendência: zeros (não nulos) e sem motivo de ausência', row_to_json(v_l)::text);
+  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_re2;
+  perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito = 0 and v_l.pendencias_extracao_falhou = 0 and v_l.pendencias_motivo is null,
+    'a versão mais nova de um documento sem pendência: zeros', row_to_json(v_l)::text);
   -- resolvida e de outra origem não entram
   update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'teste' where documento_id = v_doc_pd and tipo = 'extracao_falhou';
   insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id, motivo)
     values (v_a, 'reconciliacao', 'extracao_falhou', 'importante', true, 'de outra origem', v_doc_pd, 'teste:0225:outra_origem');
-  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_pd1;
+  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_pd2;
   perform teste_assert_p4(v_l.pendencias_extracao_falhou = 0 and v_l.pendencias_extracao_padrao_suspeito = 1,
     'pendência resolvida e pendência de outra origem NÃO entram na contagem', row_to_json(v_l)::text);
 
@@ -262,8 +277,13 @@ begin
   raise notice '--- 5. SECURITY INVOKER: a RLS vale; somente leitura; sem anon ---';
   perform teste_como_p4(u_ana);
   select count(*) into v_n from fn_linha_de_base_extracao(v_a);
+  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_re1;
+  select count(*) into v_n_ant from fn_linha_de_base_extracao(v_a) where extracao_rodou;
   perform teste_servico_p4();
   perform teste_assert_p4(v_n = 11, 'a Analista alocada no mandato A vê as 11 linhas', v_n::text);
+  perform teste_assert_p4(v_l.extracao_rodou is true and v_l.cobertura = 1.2 and v_l.cobertura_motivo is null,
+    'vista COMO a Analista, a versão medida mostra extracao_rodou = true e a cobertura 1,2 (se a RLS escondesse evento_auditoria dela, tudo viraria "não rodou")', row_to_json(v_l)::text);
+  perform teste_assert_p4(v_n_ant = 9, 'vista como a Analista, 9 das 11 versões têm evento de extração (só as 2 sem evento aparecem como não rodou)', v_n_ant::text);
   perform teste_como_p4(u_xan);
   select count(*) into v_n from fn_linha_de_base_extracao(v_a);
   perform teste_servico_p4();

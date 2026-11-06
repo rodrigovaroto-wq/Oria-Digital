@@ -26,27 +26,33 @@
 --      versão (contas_no_documento, linhas_devolvidas, cobertura = linhas/contas quando contas > 0, senão NULL com `cobertura_motivo`), as pendências ABERTAS da
 --      origem extração por tipo e `extracao_rodou` (há evento de extração?). Documento sem evento ≠ documento que rodou e não achou nada (regra 7): a coluna
 --      diz qual dos dois é. Pendência é por documento e versão é N por documento: a pendência é agregada por documento_id ANTES da junção, para não multiplicar linhas.
+--      Pela mesma razão ela aparece SÓ na linha da versão mais nova (nas outras NULL + `pendencias_motivo`): repetida em toda versão, a v1 limpa mostraria a falha da v2 e um sum() contaria em dobro.
+--      `n_campos` é o acumulado em campo_extraido; `campos_ultimo_evento` e `versao_medicao` vêm do último evento (comparáveis a `linhas_devolvidas`).
 --      SECURITY INVOKER: a RLS de documento/documento_versao/campo_extraido/evento_auditoria/pendencia vale — quem não lê o mandato recebe ZERO linhas (não distingue
 --      mandato alheio de mandato inexistente; a função não faz essa distinção de propósito).
 --   NÃO muda o n8n: enquanto o nó não passar `p_medicao`, TODO evento novo sai com `medicao` nula e a linha de base diz `sem_medicao` — é o estado honesto, e é ele que
 --   a sonda não pode confundir com "medido". O n8n (nó "Gravar Campos (Sombra)" + o que monta a medição por documento) é a fatia seguinte.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/linha_de_base_da_leitura.test.sql — 53 asserts (EXECUCOES=53 na linha final), medidos em 06/11/2026 com `PGOPTIONS='-c p4.medindo=on'`
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/linha_de_base_da_leitura.test.sql — 61 asserts (EXECUCOES=61 na linha final), medidos em 06/11/2026 com `PGOPTIONS='-c p4.medindo=on'`
 -- (o assert vira `raise warning` e CONTA; voltou para `raise exception` e o log inteiro foi lido atrás de `FALHOU:`). Cada variante foi APLICADA ao banco migrado
--- (conferido: a variante aplicou com rc 0 e a linha final trouxe EXECUCOES=53) e UMA guarda desligada por vez; depois de cada uma a migration intacta foi reaplicada.
--- Controle (migration intacta): 0 dos 53 reprovam, antes e depois das variantes.
---   * gravação que DESCARTA a medição (v_medicao sempre nula): 7 dos 53 asserts reprovam; nula OMITIDA em vez de explícita (a chave some): 4 dos 53 asserts;
---     medicao_invalida descartada: 4 dos 53 asserts; JSON null tratado como inválido: 1 dos 53 asserts; ACL com EXECUTE para PUBLIC (sem o revoke): 1 dos 53 asserts;
+-- (conferido: a variante aplicou com rc 0 e a linha final trouxe EXECUCOES=61) e UMA guarda desligada por vez; depois de cada uma a migration intacta foi reaplicada.
+-- Controle (migration intacta): 0 dos 61 reprovam, antes e depois das variantes.
+--   * gravação que DESCARTA a medição (v_medicao sempre nula): 9 dos 61 asserts reprovam; nula OMITIDA em vez de explícita (a chave some): 4 dos 61 asserts;
+--     medicao_invalida descartada: 4 dos 61 asserts; JSON null tratado como inválido: 1 dos 61 asserts; ACL com EXECUTE para PUBLIC (sem o revoke): 1 dos 61 asserts;
 --     sobrecarga da assinatura antiga de volta: o teste ABORTA na chamada nomeada do n8n ("function ... is not unique"), antes de contar — a chamada do n8n quebraria em produção;
---   * leitura: pendência NÃO agregada por documento (multiplica linhas): 4 dos 53 asserts; cobertura truncada em 1: 1 dos 53 asserts; cobertura arredondada a inteiro: 1 dos 53 asserts;
---     zero FABRICADO quando o documento não tem contas: 5 dos 53 asserts; primeiro evento da versão em vez do último: 3 dos 53 asserts; pendência de qualquer origem: 1 dos 53 asserts;
---     pendência resolvida conta: 1 dos 53 asserts; SECURITY DEFINER (a RLS some): 2 dos 53 asserts; extracao_rodou sempre verdadeiro: 2 dos 53 asserts;
---     sem o motivo extracao_nao_rodou: 3 dos 53 asserts; medicao_invalida vira sem_medicao: 1 dos 53 asserts; medicao_incompleta some: 1 dos 53 asserts;
---     a versão 2 herda o evento da versão 1: 1 dos 53 asserts;
---   * sonda: requisito medicao_gravada_no_evento fora do catálogo: 3 dos 53 asserts; requisito linha_de_base_funcao fora do catálogo: 2 dos 53 asserts.
+--   * leitura: pendência NÃO agregada por documento (multiplica linhas): 3 dos 61 asserts; cobertura truncada em 1: 2 dos 61 asserts; cobertura arredondada a inteiro: 2 dos 61 asserts;
+--     zero FABRICADO quando o documento não tem contas: 5 dos 61 asserts; primeiro evento da versão em vez do último: 5 dos 61 asserts; pendência de qualquer origem: 1 dos 61 asserts;
+--     pendência resolvida conta: 1 dos 61 asserts; SECURITY DEFINER (a RLS some): 2 dos 61 asserts; extracao_rodou sempre verdadeiro: 3 dos 61 asserts;
+--     sem o motivo extracao_nao_rodou: 3 dos 61 asserts; medicao_invalida vira sem_medicao: 1 dos 61 asserts; medicao_incompleta some: 1 dos 61 asserts;
+--     a versão 2 herda o evento da versão 1: 2 dos 61 asserts;
+--   * (revisão) pendência repetida em TODA versão do documento (a v1 limpa mostra a falha da v2; sum() conta em dobro): 2 dos 61 asserts; sem o pendencias_motivo: 1 dos 61 asserts;
+--     "versão mais nova" lida como a mais velha: 4 dos 61 asserts; campos_ultimo_evento igual ao acumulado n_campos: 1 dos 61 asserts; versao_medicao sempre nula: 1 dos 61 asserts;
+--     policy de leitura de evento_auditoria que esconde o evento da Analista (tudo viraria "não rodou" com a suíte verde): 2 dos 61 asserts;
+--   * sonda: requisito medicao_gravada_no_evento fora do catálogo: 3 dos 61 asserts; requisito linha_de_base_funcao fora do catálogo: 2 dos 61 asserts.
 -- NÃO MEDIDO, e dito: (0) "o catálogo declara a 0225" não tem variante: um gatilho da plataforma ("o marcador já está em 0225 e não regride") impede desfazer a cobertura, então o assert
 -- é só o estado esperado (o portão do run.sh cobra a cobertura); (1) a RLS contra um Analista de verdade em PRODUÇÃO (a suíte usa o papel `authenticated` do banco de teste);
--- (2) o n8n real mandando `p_medicao`: o nó ainda não a passa; (3) a latência de fn_linha_de_base_extracao em lote grande (não medida: um lateral por versão sobre idx_evento_entidade_ref).
+-- (2) a latência de fn_linha_de_base_extracao em lote grande (não medida: um lateral por versão sobre idx_evento_entidade_ref); (3) o grant para `supabase_read_only_user`: o papel não existe
+-- no banco de teste, então não há assert; conferi à mão, criando o papel no banco descartável e reaplicando a migration (o EXECUTE aparece), e removi o papel em seguida.
 --
 -- O QUE AINDA PRECISA SER APLICADO À MÃO: esta migration (rodar COMO `postgres`; ver Supabase/README.md). Escrita ≠ aplicada: quem responde é a sonda,
 -- `select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0225' and not presente;` — ZERO linhas.
@@ -332,6 +338,13 @@ comment on function fn_registrar_campos_extraidos(uuid, jsonb, nivel_autonomia, 
 -- A ACL do que o drop levou: o estado medido em Supabase/schema.sql era REVOKE de PUBLIC + EXECUTE para authenticated e service_role.
 revoke all on function fn_registrar_campos_extraidos(uuid, jsonb, nivel_autonomia, text, boolean, jsonb) from public;
 grant execute on function fn_registrar_campos_extraidos(uuid, jsonb, nivel_autonomia, text, boolean, jsonb) to authenticated, service_role;
+-- Produção tem EXECUTE também para `supabase_read_only_user` (concessão avulsa da plataforma: 237 de 271 funções de public têm), e o drop levou a da assinatura antiga.
+-- Para a cópia ser fiel o grant é refeito — mas o papel NÃO existe no banco local de teste (nem em instalação nova), por isso só se ele existir.
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'supabase_read_only_user') then
+    execute 'grant execute on function fn_registrar_campos_extraidos(uuid, jsonb, nivel_autonomia, text, boolean, jsonb) to supabase_read_only_user';
+  end if;
+end $$;
 
 -- ---------------------------------------------------------------------------
 -- 2. A LEITURA: a linha de base por documento (somente leitura, respeita a RLS de quem chama)
@@ -340,7 +353,13 @@ grant execute on function fn_registrar_campos_extraidos(uuid, jsonb, nivel_auton
 -- "a IA devolveu tudo" — um 0 fabricado aqui seria indistinguível de uma medição (regra 1). `cobertura_motivo` é NULL exatamente quando a cobertura existe.
 -- NÃO é arredondada: a P4 compara antes × depois e arredondar esconderia a diferença pequena. Passa de 1 quando a IA devolve mais linhas que contas contadas
 -- (a régua conta errado: medido em produção 1,31 / 1,43 / 2,25 por lote) — a função NÃO trunca em 1, porque truncar esconderia exatamente esse defeito.
-create or replace function fn_linha_de_base_extracao(p_caso_id uuid)
+-- A assinatura de RETORNO cresceu (campos_ultimo_evento, versao_medicao, pendencias_motivo): create or replace não troca colunas de retorno, por isso o drop (reaplicável).
+-- `n_campos` é o ACUMULADO em campo_extraido da versão: reprocessar a MESMA versão soma as gravações (medido em produção: uma versão com 2 eventos, de 32 e 24 campos, dá n_campos 56)
+-- e NÃO é comparável a `linhas_devolvidas`, que vem só do último evento; `campos_ultimo_evento` é o que o último evento gravou, e é com ele que se compara.
+-- A pendência é do DOCUMENTO, não da versão: ela aparece só na linha da versão MAIS NOVA do documento (n_versao máximo); nas demais fica NULL com pendencias_motivo preenchido.
+-- Repetir em toda versão faria a v1 limpa mostrar a falha da v2 e um sum() contar 2 onde há 1 (produção: 12 documentos com mais de uma versão).
+drop function if exists fn_linha_de_base_extracao(uuid);
+create function fn_linha_de_base_extracao(p_caso_id uuid)
 returns table (
   documento_id            uuid,
   documento_versao_id     uuid,
@@ -356,7 +375,10 @@ returns table (
   cobertura               numeric,
   cobertura_motivo        text,
   pendencias_extracao_falhou           integer,
-  pendencias_extracao_padrao_suspeito  integer
+  pendencias_extracao_padrao_suspeito  integer,
+  campos_ultimo_evento    integer,
+  versao_medicao          text,
+  pendencias_motivo       text
 )
 language sql
 stable
@@ -376,7 +398,8 @@ as $$
   base as (
     select d.id as documento_id, dv.id as versao_id, dv.n_versao, dv.nome_original, d.tipo_taxonomia,
            (select count(*) from campo_extraido ce where ce.documento_versao_id = dv.id) as n_campos,
-           ev.criado_em as extraido_em, ev.depois as depois
+           ev.criado_em as extraido_em, ev.depois as depois,
+           dv.n_versao = max(dv.n_versao) over (partition by d.id) as e_a_mais_nova
       from documento d
       join documento_versao dv on dv.documento_id = d.id
       left join lateral (
@@ -411,14 +434,18 @@ as $$
               when n.m is null                       then 'sem_medicao'
               when n.contas is null or n.linhas is null then 'medicao_incompleta'
               when n.contas <= 0                     then 'documento_sem_contas' end,
-         coalesce(pd.falhou, 0), coalesce(pd.suspeito, 0)
+         case when n.e_a_mais_nova then coalesce(pd.falhou, 0) end,
+         case when n.e_a_mais_nova then coalesce(pd.suspeito, 0) end,
+         case when (n.depois->>'campos') ~ '^\d+$' then (n.depois->>'campos')::integer end,
+         n.m->>'versao_medicao',
+         case when not n.e_a_mais_nova then 'pendencia_e_do_documento_ver_versao_mais_nova' end
     from num n
     left join pend pd on pd.documento_id = n.documento_id
    order by n.nome_original, n.n_versao, n.versao_id
 $$;
 
 comment on function fn_linha_de_base_extracao(uuid) is
-  '0225: linha de base da leitura POR DOCUMENTO (P4, comparar antes × depois). Uma linha por documento_versao do mandato: n_campos, falha_motivo, a medição do ÚLTIMO evento extracao_sombra da versão (contas_no_documento, linhas_devolvidas, cobertura = linhas/contas quando contas > 0 — sem arredondar nem truncar em 1), e as pendências ABERTAS da origem extração por tipo. extracao_rodou = existe evento de extração (documento sem evento NÃO é documento que rodou e não achou nada). cobertura_motivo é NULL só quando a cobertura existe; senão diz por quê: extracao_nao_rodou | medicao_invalida | sem_medicao (n8n anterior à 0225) | medicao_incompleta | documento_sem_contas. SECURITY INVOKER: a RLS vale e quem não lê o mandato recebe zero linhas. Somente leitura.';
+  '0225: linha de base da leitura POR DOCUMENTO (P4, comparar antes × depois). Uma linha por documento_versao do mandato: n_campos, falha_motivo, a medição do ÚLTIMO evento extracao_sombra da versão (contas_no_documento, linhas_devolvidas, cobertura = linhas/contas quando contas > 0 — sem arredondar nem truncar em 1), e as pendências ABERTAS da origem extração por tipo — do DOCUMENTO, então só na linha da versão mais nova (nas outras NULL, com pendencias_motivo). n_campos é o ACUMULADO em campo_extraido da versão (reprocessar soma as gravações); campos_ultimo_evento é o que o último evento gravou, comparável a linhas_devolvidas; versao_medicao é a versão da medição que o n8n declarou (separa eventos medidos por versões diferentes). extracao_rodou = existe evento de extração (documento sem evento NÃO é documento que rodou e não achou nada). cobertura_motivo é NULL só quando a cobertura existe; senão diz por quê: extracao_nao_rodou | medicao_invalida | sem_medicao (n8n anterior à 0225) | medicao_incompleta | documento_sem_contas. SECURITY INVOKER: a RLS vale e quem não lê o mandato recebe zero linhas. Somente leitura.';
 
 revoke all on function fn_linha_de_base_extracao(uuid) from public;
 grant execute on function fn_linha_de_base_extracao(uuid) to authenticated, service_role;
