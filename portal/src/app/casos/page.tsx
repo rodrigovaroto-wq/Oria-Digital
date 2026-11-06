@@ -524,7 +524,11 @@ export default async function PainelPage({
       ) : (
         <div className="grid gap-5 lg:grid-cols-3">
           {/* A fila de triagem. */}
-          <Surgir atraso={120} className="lg:col-span-2">
+          {/* `min-w-0` nas duas colunas: item de grid tem largura mínima = o conteúdo, e UMA palavra
+              longa sem espaço na descrição (ex.: um nome de função do banco, vistoria P2 de 04/11)
+              esticava a coluna — 643 px num celular de 390. Reproduzido com o CSS compilado: 542 px
+              sem, 390 px com. */}
+          <Surgir atraso={120} className="min-w-0 lg:col-span-2">
             <div className="mb-2 flex items-baseline justify-between gap-3">
               <h2 className="titulo-secao">Precisa de você</h2>
               <p className="text-xs text-tinta-500">
@@ -610,7 +614,7 @@ export default async function PainelPage({
                             </span>
                           </p>
                           {resumoTexto && (
-                            <p className="valor-sensivel mt-0.5 line-clamp-2 text-xs text-tinta-600">{resumoTexto}</p>
+                            <p className="valor-sensivel mt-0.5 line-clamp-2 text-xs text-tinta-600 [overflow-wrap:anywhere]">{resumoTexto}</p>
                           )}
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1.5">
@@ -642,7 +646,7 @@ export default async function PainelPage({
           </Surgir>
 
           {/* Os documentos mais recentes. */}
-          <Surgir atraso={220}>
+          <Surgir atraso={220} className="min-w-0">
             <div className="mb-2 flex items-baseline justify-between gap-3">
               <h2 className="titulo-secao">O que chegou</h2>
               <p className="text-xs text-tinta-500">últimos {recentes.length}</p>
