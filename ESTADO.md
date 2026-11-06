@@ -1,8 +1,12 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 119 (06/11/2026) — 0225 escrita (P4, linha de base da leitura por documento)
+
+> **Migration mais nova: `0225_a_leitura_que_so_se_media_somada_por_lote.sql` — ESCRITA, NÃO APLICADA.** `fn_registrar_campos_extraidos` ganha `p_medicao jsonb default null` (o evento `extracao_sombra` leva a medição por documento) e nasce `fn_linha_de_base_extracao(p_caso_id)`. Falta: aplicar à mão (COMO `postgres`), conferir a sonda (`migration = '0225'`, 5 requisitos) e o n8n passar `p_medicao` (hoje todo evento novo sai com `medicao` nula).
+
 ## SESSÃO 118 (06/11/2026) — 0224 (D16) aplicada em produção, resíduo da S117 limpo, #269 fechado
 
-> **Migration mais nova: `0224_o_original_que_o_analista_apagava_sem_trilha.sql` — APLICADA EM PRODUÇÃO em 06/11/2026 (sonda 322→331, os 9 requisitos da 0224 presentes; ensaio com rollback e foto idêntica; ACL de funções e tabelas pré-existentes com hash igual; dial igual).** Toda exclusão de original no bucket `documentos` grava `documento_original_apagado` com o ator; mover/sobrescrever só Sócio; ninguém via `authenticated` grava essa ação à mão. A anterior, `0223`, segue aplicada.
+> **Última migration DAQUELA sessão: `0224_o_original_que_o_analista_apagava_sem_trilha.sql` — APLICADA EM PRODUÇÃO em 06/11/2026 (sonda 322→331, os 9 requisitos da 0224 presentes; ensaio com rollback e foto idêntica; ACL de funções e tabelas pré-existentes com hash igual; dial igual).** Toda exclusão de original no bucket `documentos` grava `documento_original_apagado` com o ator; mover/sobrescrever só Sócio; ninguém via `authenticated` grava essa ação à mão. A anterior, `0223`, segue aplicada.
 
 **O que fechou (medido):**
 - **#269 fechado sem merge** (era a P1b paralela; o `main` já tinha a 0218 do #268 e a 0221). **Sonar do #273:** a única issue (S5332, URL `http` falsa na sonda do intake) corrigida em `acb2677`; CI e Sonar verdes.

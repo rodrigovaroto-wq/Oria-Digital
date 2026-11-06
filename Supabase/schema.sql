@@ -7157,6 +7157,74 @@ $$;
 COMMENT ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica text) IS '0124: crédito (ativo) ou obrigação (passivo) de uma linha intragrupo. Seção canônica primeiro; rótulo só como desempate, porque "Fornecedores intragrupo - X" não diz "a pagar".';
 
 --
+-- Name: fn_linha_de_base_extracao(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) RETURNS TABLE(documento_id uuid, documento_versao_id uuid, n_versao integer, nome_original text, tipo_taxonomia text, n_campos bigint, extracao_rodou boolean, extraido_em timestamp with time zone, falha_motivo text, contas_no_documento numeric, linhas_devolvidas numeric, cobertura numeric, cobertura_motivo text, pendencias_extracao_falhou integer, pendencias_extracao_padrao_suspeito integer)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+  with pend as materialized (
+    -- agregada por documento ANTES de juntar às versões (versão é N por documento: junto direto multiplicaria as linhas)
+    select p.documento_id,
+           count(*) filter (where p.tipo = 'extracao_falhou')::integer           as falhou,
+           count(*) filter (where p.tipo = 'extracao_padrao_suspeito')::integer  as suspeito
+      from pendencia p
+     where p.caso_id = p_caso_id and p.origem_estagio = 'extracao' and p.estado <> 'resolvida'
+       and p.documento_id is not null
+     group by p.documento_id
+  ),
+  base as (
+    select d.id as documento_id, dv.id as versao_id, dv.n_versao, dv.nome_original, d.tipo_taxonomia,
+           (select count(*) from campo_extraido ce where ce.documento_versao_id = dv.id) as n_campos,
+           ev.criado_em as extraido_em, ev.depois as depois
+      from documento d
+      join documento_versao dv on dv.documento_id = d.id
+      left join lateral (
+        select ea.criado_em, ea.depois
+          from evento_auditoria ea
+         where ea.acao = 'extracao_sombra' and ea.entidade_ref = 'documento_versao:' || dv.id::text
+         order by ea.criado_em desc, ea.id desc
+         limit 1) ev on true
+     where d.caso_id = p_caso_id
+  ),
+  med as (
+    select b.*,
+           case when b.depois is null then null
+                when jsonb_typeof(b.depois->'medicao') = 'object' then b.depois->'medicao' end as m,
+           case when b.depois->>'medicao_invalida' is not null then 'medicao_invalida' end as invalida
+      from base b
+  ),
+  num as (
+    select m.*,
+           case when (m.m->>'contas_no_documento') ~ '^-?\d+(\.\d+)?$' then (m.m->>'contas_no_documento')::numeric end as contas,
+           case when (m.m->>'linhas_devolvidas')   ~ '^-?\d+(\.\d+)?$' then (m.m->>'linhas_devolvidas')::numeric   end as linhas
+      from med m
+  )
+  select n.documento_id, n.versao_id, n.n_versao, n.nome_original, n.tipo_taxonomia, n.n_campos,
+         n.depois is not null,
+         n.extraido_em,
+         n.depois->>'falha_motivo',
+         n.contas, n.linhas,
+         case when n.contas > 0 and n.linhas is not null then n.linhas / n.contas end,
+         case when n.depois is null                  then 'extracao_nao_rodou'
+              when n.invalida is not null            then 'medicao_invalida'
+              when n.m is null                       then 'sem_medicao'
+              when n.contas is null or n.linhas is null then 'medicao_incompleta'
+              when n.contas <= 0                     then 'documento_sem_contas' end,
+         coalesce(pd.falhou, 0), coalesce(pd.suspeito, 0)
+    from num n
+    left join pend pd on pd.documento_id = n.documento_id
+   order by n.nome_original, n.n_versao, n.versao_id
+$_$;
+
+--
+-- Name: FUNCTION fn_linha_de_base_extracao(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) IS '0225: linha de base da leitura POR DOCUMENTO (P4, comparar antes × depois). Uma linha por documento_versao do mandato: n_campos, falha_motivo, a medição do ÚLTIMO evento extracao_sombra da versão (contas_no_documento, linhas_devolvidas, cobertura = linhas/contas quando contas > 0 — sem arredondar nem truncar em 1), e as pendências ABERTAS da origem extração por tipo. extracao_rodou = existe evento de extração (documento sem evento NÃO é documento que rodou e não achou nada). cobertura_motivo é NULL só quando a cobertura existe; senão diz por quê: extracao_nao_rodou | medicao_invalida | sem_medicao (n8n anterior à 0225) | medicao_incompleta | documento_sem_contas. SECURITY INVOKER: a RLS vale e quem não lê o mandato recebe zero linhas. Somente leitura.';
+
+--
 -- Name: fn_linha_vale_para_ano(uuid, text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -12559,10 +12627,10 @@ end $$;
 COMMENT ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb) IS 'Registra o envelope de um arquivo oficial lido e devolve jsonb {id, status, vigente, atualizado, vigencia}. Recusa com exceção se caso.trilha_transacional = false. Mesmo (caso, hash): lido com o mesmo leitor_versao é reenvio puro; status != lido ou outro leitor_versao ATUALIZA a linha e recalcula a vigência das chaves antiga e nova. Aplica a regra de versão vigente (G9). 0206.';
 
 --
--- Name: fn_registrar_campos_extraidos(uuid, jsonb, public.nivel_autonomia, text, boolean); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_registrar_campos_extraidos(uuid, jsonb, public.nivel_autonomia, text, boolean, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia DEFAULT 'N0'::public.nivel_autonomia, p_falha_motivo text DEFAULT NULL::text, p_tem_dado_financeiro boolean DEFAULT NULL::boolean) RETURNS integer
+CREATE FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia DEFAULT 'N0'::public.nivel_autonomia, p_falha_motivo text DEFAULT NULL::text, p_tem_dado_financeiro boolean DEFAULT NULL::boolean, p_medicao jsonb DEFAULT NULL::jsonb) RETURNS integer
     LANGUAGE plpgsql
     AS $_$
 declare
@@ -12588,6 +12656,8 @@ declare
   v_secao              text;
   v_inferida           boolean;
   v_herdadas           jsonb;
+  v_medicao            jsonb;
+  v_invalida           jsonb;
 begin
   -- 0203: o tipo do documento entra na inferência da seção (fn_secao_canonica_da_secao_bruta).
   select d.tipo_taxonomia into v_tipo
@@ -12661,10 +12731,19 @@ begin
       values ('sistema:n8n', 'secao_herdada_pela_arvore', 'documento_versao:'||p_documento_versao_id, v_herdadas);
   end if;
 
+  -- 0225: a MEDIÇÃO da leitura deste documento (o que o n8n contou: contas que o texto tinha, linhas que a IA devolveu, blocos, custo)
+  -- entra no mesmo evento, como veio. Três estados DISTINTOS, porque "não mediu" e "mediu zero" não podem ter a mesma cara (regra 1 e 7):
+  -- objeto = o n8n mediu; chave `medicao` nula = o n8n era anterior à 0225 ou não mediu; tipo que não é objeto = defeito do chamador,
+  -- gravado na chave `medicao_invalida` com o tipo recebido, em vez de descartado calado. Nenhum campo é validado aqui: o n8n é a fonte.
+  v_medicao  := case when p_medicao is not null and jsonb_typeof(p_medicao) = 'object' then p_medicao else null end;
+  v_invalida := case when p_medicao is not null and jsonb_typeof(p_medicao) not in ('object', 'null')
+                     then jsonb_build_object('medicao_invalida', jsonb_typeof(p_medicao)) else '{}'::jsonb end;
+
   insert into evento_auditoria (ator, acao, entidade_ref, depois)
     values ('sistema:n8n', 'extracao_sombra', 'documento_versao:'||p_documento_versao_id,
             jsonb_build_object('campos', v_count, 'nivel', p_nivel, 'falha_motivo', p_falha_motivo,
-                               'tem_dado_financeiro', p_tem_dado_financeiro, 'auto_aceitos', v_n_auto_aceitos));
+                               'tem_dado_financeiro', p_tem_dado_financeiro, 'auto_aceitos', v_n_auto_aceitos,
+                               'medicao', v_medicao) || v_invalida);
 
   select d.id, d.caso_id, dv.nome_original into v_documento_id, v_caso_id, v_nome_original
   from documento_versao dv join documento d on d.id = dv.documento_id
@@ -12818,10 +12897,10 @@ end;
 $_$;
 
 --
--- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore).';
+COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0225: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao).';
 
 --
 -- Name: fn_registrar_classe_override(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -22400,6 +22479,14 @@ GRANT ALL ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica t
 GRANT ALL ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica text) TO service_role;
 
 --
+-- Name: FUNCTION fn_linha_de_base_extracao(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23013,12 +23100,12 @@ GRANT ALL ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documen
 GRANT ALL ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb) TO service_role;
 
 --
--- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) TO authenticated;
-GRANT ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean) TO service_role;
+REVOKE ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) TO service_role;
 
 --
 -- Name: FUNCTION fn_registrar_classe_override(p_campo_extraido_id uuid, p_classe_final text, p_autor text, p_motivo text); Type: ACL; Schema: public; Owner: -
