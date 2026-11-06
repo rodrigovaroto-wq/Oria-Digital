@@ -283,6 +283,10 @@ export function sugerirDoRealizado(
     return {
       ...ref,
       valor: Number(media.toFixed(4)),
+      // Com mais de um exercício, o par herdado de `ref` é só o do MAIS RECENTE e não divide na
+      // média: a vistoria P2 (04/11) mediu "88%" ao lado de "(101.300 ÷ 106.580)", que dá 95%.
+      // A tela mostra então a razão de cada ano da `serie`, que é o que entrou na média.
+      ...(serie.length > 1 ? { numerador: null, denominador: null } : {}),
       serie,
       conta: serie.length === 1
         ? `${ref.conta} (exercício ${serie[0].exercicio})`
