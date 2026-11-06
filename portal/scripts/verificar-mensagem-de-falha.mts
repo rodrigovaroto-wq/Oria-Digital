@@ -562,6 +562,9 @@ checar(textoDoAutor("pergunta_enviada", "ana@oria.com") === "ana@oria.com",
   "autor gravado não foi mostrado como veio");
 checar(!/^portal:/.test(textoDoAutor("pergunta_enviada", "portal:desconhecido")),
   "'portal:desconhecido' vazou cru para a tela");
+// 0224: exclusão de original sem ator legível NÃO pode virar "Sistema" nem vazar o texto cru (o original foi apagado por alguém).
+checar(/^Não identificado/.test(textoDoAutor("documento_original_apagado", "storage:nao_identificado")),
+  "'storage:nao_identificado' vazou cru ou virou outra coisa na tela");
 // 28/10/2026 01:30 UTC = 27/10 22:30 em São Paulo: o dia é 27, não 28.
 checar(chaveDoDia("2026-10-28T01:30:00.123456+00:00") === "2026-10-27",
   "dia calculado em UTC: evento das 22h30 de SP foi para o dia seguinte");

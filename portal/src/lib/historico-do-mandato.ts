@@ -89,7 +89,7 @@ function bandeira(referencia: unknown, nome: "autor_desconhecido" | "automatico"
  *    sistema, uma regra e não uma falha de registro. "Sistema" genérico esconderia que ninguém
  *    revisou aquela extração; o texto cita o nome que a própria tela já usa ("ajuste de rigor").
  *  - nenhum dos dois: o sistema agiu ("Sistema").
- * `portal:desconhecido` foi gravado quando a sessão não tinha e-mail; não é uma pessoa nomeada.
+ * `portal:desconhecido` foi gravado quando a sessão não tinha e-mail; não é uma pessoa nomeada. `storage:nao_identificado` (0224) idem: o original foi apagado e o Storage não disse por quem.
  * Autor gravado vence qualquer bandeira.
  */
 export function textoDoAutor(tipo: string, autor: string | null, referencia?: unknown): string {
@@ -101,6 +101,8 @@ export function textoDoAutor(tipo: string, autor: string | null, referencia?: un
     return "Sistema";
   }
   if (autor === "portal:desconhecido") return "Não identificado (sessão sem e-mail)";
+  // 0224: o gatilho de exclusão de original não conseguiu ler quem apagou (motivo em evento_auditoria.antes.ator_motivo). Nunca "Sistema": o original FOI apagado por alguém.
+  if (autor === "storage:nao_identificado") return "Não identificado (o Storage não informou quem apagou)";
   return autor;
 }
 

@@ -1,7 +1,8 @@
 -- =============================================================================
 -- 0224 — O ORIGINAL QUE O ANALISTA APAGAVA SEM TRILHA: toda exclusão no Storage passa a ser AUDITADA e aparece no Histórico (D16)
--- (Cria 1 função de gatilho (SECURITY DEFINER), 1 gatilho AFTER DELETE em storage.objects, 1 view da sonda; REDEFINE fn_historico_do_caso
---  (a da 0215 inteira + 1 ramo); acrescenta 4 requisitos à sonda. Sem tabela, sem backfill, sem GRANT de tabela. NÃO muda quem pode apagar.)
+-- (Cria 1 função de gatilho (SECURITY DEFINER), 1 gatilho AFTER DELETE em storage.objects, 3 views da sonda; RESTRINGE a policy documentos_update a Sócio;
+--  REDEFINE fn_historico_do_caso (a da 0215 inteira + 1 ramo); acrescenta 7 requisitos à sonda. Sem tabela, sem backfill, sem GRANT de tabela. NÃO muda quem pode
+--  apagar. Reaplicável: create or replace na função e nas views, drop+create da policy, o gatilho só é criado se não existir, upsert dos requisitos.)
 --
 -- A DECISÃO DO DONO (D16, 04/11/2026): o Analista CONTINUA podendo apagar o original do cliente no Storage (é o desenho da 0216:
 -- policy `documentos_delete` por `<caso_id>/` da chave), mas TODA exclusão é auditada — quem apagou, quando, qual arquivo, de qual
@@ -25,9 +26,14 @@
 --   entidade_ref `caso:<id>` resolvido do primeiro segmento da chave (fn_caso_da_chave_do_storage, 0216 — a chave é `<caso_id>/<hash>.<ext>`).
 --                Chave que NÃO começa com uuid de caso (objeto solto) vira `storage:documentos/<chave>`: a exclusão é gravada MESMO ASSIM
 --                (regra 1: não some da trilha; só o Sócio a lê, porque o prefixo `storage:` não resolve para mandato — 0216).
---   ator         e-mail de quem apagou (auth.users, via auth.uid() do JWT que a API do Storage repassa); `usuario:<uuid>` se o usuário não tem
---                e-mail; `sistema:storage` quando é conexão de serviço (service_role/postgres, sem JWT: fn_conexao_de_servico, 0216);
---                `portal:desconhecido` se chegou como authenticated/anon sem `sub` (o mesmo texto que as demais funções gravam sem e-mail).
+--   ator         QUEM apagou, por ordem: (1) `auth.uid()` (o JWT chegou como o do usuário: PostgREST; o teste das seções 1 a 4); (2) o `sub` do JWT em
+--                `request.headers` -> `authorization`, CONFERIDO em auth.users (é o caminho de TODA exclusão pela API do Storage: ver "A ETAPA 2" abaixo); em ambos o e-mail,
+--                ou `usuario:<uuid>` se o usuário não tem e-mail; (3) `sistema:servico` se o JWT do cabeçalho é de `service_role` (o n8n: não há pessoa, e "Sistema" na tela
+--                é verdade); `sistema:sql` se NÃO há request.headers e a conexão é de serviço (SQL Editor: a API sempre o define, ao menos '{}'); (4) senão
+--                `storage:nao_identificado`, com o motivo em `antes.ator_motivo` ('sem cabecalho authorization' | 'jwt malformado' | 'jwt sem sub' |
+--                'sub inexistente em auth.users' | 'cabecalho ilegivel') e a origem em `antes.ator_origem`. NUNCA `sistema:*` para exclusão vinda da API com usuário:
+--                fn_historico_do_caso anula autor `^(sistema|n8n)` e a tela diria "Sistema" (regra 1: ausência apresentada como dado). Cabeçalho esquisito NÃO derruba o
+--                DELETE (a falha fechada é para "não gravou a trilha", não para "não entendi o cabeçalho"): vira `storage:nao_identificado`.
 --   antes        o que se perdeu: bucket, caminho (a chave inteira), arquivo (hash.ext), nome_original (de documento_versao.arquivo_ref, se
 --                houver), documento_id, n_versao, tamanho_bytes (metadata->size do Storage) e usuario_id.
 --   depois       null (o objeto não existe mais).
@@ -40,9 +46,8 @@
 -- Histórico do mandato (portal/src/app/casos/[id]/historico/page.tsx → fn_historico_do_caso): ele NÃO mostrava o evento — a função lê
 -- `evento_auditoria` por LISTA FECHADA de ações (`ev`), e `documento_original_apagado` não estava nela. Esta migration REDEFINE fn_historico_do_caso
 -- (a da 0215, inteira, com a MESMA assinatura, colunas, ACL, SECURITY INVOKER e STABLE) acrescentando a ação à lista e o ramo
--- `documento_original_apagado`. O portal NÃO foi alterado: o mapa de tipos de portal/src/lib/historico-do-mandato.ts não conhece o tipo
--- novo e o mostra com o NOME CRU na categoria "Outros" (a regra do próprio arquivo: tipo desconhecido nunca some). Para o rótulo certo
--- ("Original apagado", categoria Documentos) falta UMA entrada em TIPOS desse arquivo e o assert correspondente em portal — outra fatia.
+-- `documento_original_apagado`. O portal traz o rótulo ("Original apagado", categoria Documentos) em
+-- portal/src/lib/historico-do-mandato.ts e mostra `storage:nao_identificado` como "Não identificado (o Storage não informou quem apagou)", nunca como "Sistema".
 --
 -- VIABILIDADE EM PRODUÇÃO (medida SÓ LEITURA pela API de gerenciamento, 04/11/2026, begin read only/rollback):
 --   * dono de storage.objects = supabase_storage_admin; o `postgres` NÃO é membro dele (pg_has_role MEMBER = false) e NÃO é superusuário,
@@ -54,58 +59,134 @@
 --     `storage.allow_delete_query` seja 'true', que a API do Storage liga) e `update_objects_updated_at`. O AFTER DELETE FOR EACH ROW
 --     convive: só dispara quando a API apaga. Consequência a saber: `delete from storage.objects` por SQL no painel continua recusado pela
 --     plataforma (não é a 0224), e o que passa pela API é auditado.
+--   * a 0216 já fez `drop policy`/`create policy` em storage.objects como `postgres` e foi aplicada; esta migration repete o padrão em documentos_update (NÃO reverificado em produção).
 --   * RLS ligada em storage.objects; policy de DELETE: só `documentos_delete` [authenticated]. 9 objetos no bucket (prévia de 04/11/2026; 8 na primeira medição), todos com `<caso_id>/` na chave.
 --   * evento_auditoria: colunas id, criado_em, ator, acao, entidade_ref, antes, depois; o authenticated tem INSERT (RLS de mandato, 0216);
 --     o `postgres` (dono da função) tem BYPASSRLS = true.
---   NÃO MEDIDO (só uma exclusão de verdade prova): que a API do Storage repassa o `sub` do JWT em `request.jwt.claims` DENTRO da transação do
---     DELETE (o Storage faz `set_config('request.jwt.claims', ...)` antes de apagar; é o que faz a policy `documentos_delete` enxergar o usuário,
---     e a 0216 foi aplicada e a vistoria D3 passou por ela). Se não repassasse, o ator sairia `portal:desconhecido` e a suíte do banco não
---     perceberia. CONFERIR APÓS APLICAR: apagar um objeto de teste pela API e ler o evento (consulta no fim do README).
+--
+-- A ETAPA 2 (o achado da revisão independente, lendo o código-fonte do supabase/storage). A exclusão pela API tem DUAS etapas: (1) `testPermission` avalia a RLS como o
+-- usuário (authenticated) numa transação DESFEITA; (2) a exclusão EFETIVA roda com `asSuperUser()` (src/internal/database/pg-connection.ts:725-742): role=service_role e
+-- `request.jwt.claim.sub=''`. No gatilho AFTER DELETE real, portanto, auth.uid() é NULO e fn_conexao_de_servico() é VERDADEIRO: a versão anterior desta migration gravaria
+-- `sistema:storage` em TODA exclusão do Analista e o Histórico diria "Sistema" — e a suíte não via, porque apagava como authenticated direto (mecanismo suposto).
+-- O que sobra é o cabeçalho: asSuperUser() repassa `this.headersPayload` (o JSON.stringify dos cabeçalhos do chamador; Node os baixa para minúsculas) e scope.ts:15-24 faz
+-- `set_config('request.headers', $6, true)` na transação da exclusão; o JWT é lido de `request.headers.authorization` em src/http/plugins/jwt.ts:41 e JÁ foi validado pelo
+-- Storage na entrada da requisição — por isso o gatilho só DECODIFICA o payload (base64url, com o padding que o JWT omite e `-`/`_`), sem revalidar a assinatura, e confere o
+-- `sub` em auth.users. `apikey` (chave anon/service) vem em OUTRO cabeçalho e não é lido; se o `authorization` for a chave anon (sem sub) o motivo é 'jwt sem sub'.
+--   NÃO MEDIDO, e dito: o formato REAL de `request.headers` na hospedagem do Supabase (a leitura foi do código-fonte; o Kong/gateway pode renomear ou omitir o cabeçalho).
+--     Só uma exclusão de verdade prova. Se vier `storage:nao_identificado` com ator_motivo 'sem cabecalho authorization', é o gateway. CONFERIR APÓS APLICAR (README).
 --
 -- A SONDA (regra 7: estágio desligado parece limpo). O tipo `gatilho` do catálogo só resolve tabelas de `public` (to_regclass('public.'||...)), então o
 -- gatilho de storage.objects NÃO cabe nele. Em vez de reescrever fn_instalacao_conferir inteira (a 0221 é um ramo de ~450 linhas), a view
 -- `instalacao_sonda_gatilho_original_apagado` devolve UMA linha somente se o gatilho existe em storage.objects, está HABILITADO ('O' ou 'A'), é
--- AFTER DELETE por LINHA e chama exatamente fn_trg_auditar_original_apagado; o requisito é do tipo `comportamento` (>= 1 linha da view). Quatro requisitos:
--- a função, o corpo dela, o gatilho (via view) e o ramo novo do histórico.
+-- AFTER DELETE por LINHA e chama exatamente fn_trg_auditar_original_apagado; o requisito é do tipo `comportamento` (>= 1 linha da view). Sete requisitos: a função, o corpo dela, a leitura
+-- de request.headers (corpo), o gatilho (view), a policy de update só do Sócio (view), o bucket sem versionamento (view) e o ramo novo do histórico.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/original_apagado.test.sql — 26 asserts, medidos em 04/11/2026 com `PGOPTIONS='-c d16.medindo=on'` (o assert vira
--- `raise warning` e CONTA; voltou para `raise exception` e o log inteiro foi lido atrás de `FALHOU:`), cada variante APLICADA ao banco migrado (conferido pela
--- linha final EXECUCOES=26) e a guarda desligada UMA por vez. Controle (migration intacta): 0 dos 26 asserts reprovam, antes e depois das variantes.
---   * SEM O GATILHO (drop trigger): 15 dos 26 asserts reprovam e o arquivo ABORTA na seção 8 (`disable trigger` de um gatilho que não existe), então os 2 últimos
---     asserts nem rodam — é o defeito original: o Analista apaga e nada é gravado;
---   * ator fixo `sistema:storage` (a função ignora o JWT): 4 dos 26 reprovam;
---   * mandato nunca resolvido da chave (tudo vira `storage:documentos/<chave>`): 11 dos 26 reprovam;
---   * sem o filtro de bucket (gatilho sem WHEN e função sem a defesa): 3 dos 26 reprovam;
---   * sem o nome original em `antes` (a busca em documento_versao desligada): 2 dos 26 reprovam;
---   * NÃO falha fechada (erro da gravação da trilha engolido): 1 dos 26 reprova;
---   * Histórico sem o ramo novo de fn_historico_do_caso: 4 dos 26 reprovam; sem a ação na lista fechada `ev` (o ramo existe, mas a lista não a deixa passar): 4 dos 26.
--- NÃO MEDIDO, e dito: (1) o `sub` do JWT chegando ao gatilho pela API REAL do Storage (o teste apaga como `authenticated` com JWT simulado; só uma exclusão em
--- produção prova que o ator sai com o e-mail e não `portal:desconhecido`); (2) o CREATE TRIGGER como `postgres` em storage.objects de produção (viabilidade
--- medida só por catálogo: privilégio TRIGGER presente; a migration aborta com mensagem explicando se o Supabase recusar); (3) `portal:desconhecido` (authenticated
--- sem `sub` com permissão de apagar não existe no desenho da 0216: a policy exige papel).
--- Efeito colateral medido nas suítes antigas: sonda_ve_gatilho.test.sql tinha a igualdade "todo gatilho do banco tem requisito `gatilho`" e passou a EXCLUIR o
--- schema storage (o gatilho novo é catalogado por view + `comportamento`); a cobertura do schema storage é afirmada aqui (assert "nenhum gatilho do schema storage
--- fica fora do catálogo da sonda").
+-- MOVER/SOBRESCREVER (decisão do dono): UPDATE em storage.objects não deixa trilha (move é UPDATE do `name`; upsert sobrescreve o conteúdo) e a 0216 deixava o Analista
+-- alocado fazê-lo. A policy `documentos_update` passa a ser SÓ de Sócio (using e with check). Grep: portal e n8n não fazem update/move/upsert com JWT de usuário (n8n sobe com
+-- x-upsert pela chave de serviço, que ignora RLS). Upload (INSERT) e exclusão do Analista alocado continuam.
+-- VERSIONAMENTO DO BUCKET: hoje `versioning_status='DISABLED'` em produção. Ligado, a exclusão do usuário vira delete marker (INSERT/UPDATE, invisível ao gatilho de DELETE) e o
+-- ciclo de vida apaga versões antigas com DELETE dias depois, atribuído ao sistema. O gatilho ignora `is_delete_marker`/`archived_at` (por to_jsonb: os NOMES dessas colunas
+-- não foram conferidos em produção, e a ausência delas não derruba o gatilho) e a sonda EXIGE `DISABLED` (coluna ausente = acusa: nada foi medido).
+--
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/original_apagado.test.sql — 57 asserts (EXECUCOES=57 na linha final), medidos em 06/11/2026 com `PGOPTIONS='-c d16.medindo=on'`
+-- (o assert vira `raise warning` e CONTA; voltou para `raise exception` e o log inteiro foi lido atrás de `FALHOU:`), cada variante APLICADA ao banco migrado (conferido pela linha
+-- final EXECUCOES=57) e UMA guarda desligada por vez. Controle (migration intacta): 0 dos 57 reprovam, antes e depois das variantes.
+--   * a 0224 ANTERIOR (a função ignora request.headers: `sistema:storage` na etapa 2 da API): 20 dos 57 reprovam — o defeito que a revisão achou;
+--   * sem traduzir `-`/`_` do base64url: 2; sem o padding do base64url: 5; sem o tratamento de cabeçalho esquisito (a exceção sobe e derruba o DELETE): 6;
+--   * sem o ramo do JWT de service_role: 2; sem conferir o `sub` em auth.users: 2; nome do cabeçalho `authorization` sensível a caixa: 2; "Bearer" sensível a caixa: 2;
+--   * não identificado gravado como `sistema:storage` em vez de `storage:nao_identificado`: 13;
+--   * sem ignorar delete marker/versão arquivada: 1; policy documentos_update no desenho da 0216: 6 (3 diretos: a sonda e "a Analista move"; o resto é cascata do objeto movido);
+--   * requisito ator_do_cabecalho tirado do catálogo: 1; requisito update_so_socio: 3; requisito sem_versionamento: 4; view do versionamento sem o filtro DISABLED: 2;
+--   * SEM O GATILHO (drop trigger): 34 reprovam e o arquivo ABORTA na seção 8 (`disable trigger` de um gatilho que não existe), então os asserts seguintes nem rodam;
+--   * mandato nunca resolvido da chave (tudo vira `storage:documentos/<chave>`): 16; sem o filtro de bucket (gatilho sem WHEN e função sem a defesa): 3;
+--     sem o nome original em `antes`: 2; NÃO falha fechada (erro da gravação da trilha engolido): 1;
+--   * Histórico sem o ramo novo de fn_historico_do_caso: 5; sem a ação na lista fechada `ev`: 5.
+-- NÃO MEDIDO, e dito: (1) o formato real de `request.headers` na hospedagem (ver "A ETAPA 2"): a suíte o SIMULA a partir do código do Storage; só uma exclusão em produção prova;
+-- (2) o CREATE TRIGGER e o drop/create de policy como `postgres` em storage.objects de produção (viabilidade por catálogo e pela 0216; a migration aborta com mensagem se o Supabase
+-- recusar o gatilho); (3) os nomes `is_delete_marker`/`archived_at` e a coluna `versioning_status` no Storage de produção (o dono disse que `versioning_status` existe e é DISABLED).
+-- Efeito colateral nas suítes antigas: sonda_ve_gatilho.test.sql EXCLUI o schema storage da igualdade de conjuntos (o gatilho novo é catalogado por view + `comportamento`).
+-- Os gatilhos DA PLATAFORMA em storage.objects (protect_objects_delete, update_objects_updated_at...) ficam fora do catálogo de propósito: não são nossos.
 
 -- =============================================================================
 
-create function fn_trg_auditar_original_apagado() returns trigger
+create or replace function fn_trg_auditar_original_apagado() returns trigger
 language plpgsql security definer set search_path = public, pg_temp as $$
 declare
-  v_uid  uuid := auth.uid();
-  v_ator text;
-  v_caso uuid;
-  v_ref  text;
-  v_ver  record;
+  v_old    jsonb := to_jsonb(old);   -- jsonb porque is_delete_marker/archived_at podem não existir na versão do Storage (campo ausente de record levanta erro)
+  v_uid    uuid  := auth.uid();
+  v_hdr    text  := nullif(current_setting('request.headers', true), '');
+  v_ator   text;
+  v_origem text;
+  v_motivo text;
+  v_uid_ev uuid;     -- quem o evento diz ter apagado (de auth.uid() ou do JWT do cabeçalho)
+  v_auth   text;
+  v_tok    text;
+  v_partes text[];
+  v_seg    text;
+  v_pl     jsonb;
+  v_sub    uuid;
+  v_email  text;
+  v_caso   uuid;
+  v_ref    text;
+  v_ver    record;
 begin
   -- Defesa em profundidade: o gatilho já tem WHEN (old.bucket_id = 'documentos'); se alguém o recriar sem ele, outro bucket não vira evento.
   if old.bucket_id is distinct from 'documentos' then return null; end if;
+  -- Versionamento do bucket (hoje DESABILITADO, e a sonda exige isso): com ele ligado a "exclusão" do usuário vira delete marker (INSERT/UPDATE, que este
+  -- gatilho não vê) e o ciclo de vida apagaria versões antigas com DELETE dias depois, em nome do sistema. Esse DELETE não é um ato de alguém: não vira evento.
+  if v_old ->> 'is_delete_marker' = 'true' or v_old ->> 'archived_at' is not null then return null; end if;
 
-  v_ator := case
-              when v_uid is not null then coalesce((select u.email from auth.users u where u.id = v_uid), 'usuario:' || v_uid::text)
-              when fn_conexao_de_servico() then 'sistema:storage'
-              else 'portal:desconhecido'
-            end;
+  if v_uid is not null then
+    -- Caminho 1: o JWT chegou como o do usuário (PostgREST, ou o que a etapa 1 da API do Storage faz).
+    v_uid_ev := v_uid;
+    v_origem := 'auth.uid';
+    v_ator   := coalesce((select u.email from auth.users u where u.id = v_uid), 'usuario:' || v_uid::text);
+  else
+    -- Caminho 2: a exclusão EFETIVA da API do Storage roda como superusuário (asSuperUser, supabase/storage src/internal/database/pg-connection.ts:725-742):
+    -- role=service_role e request.jwt.claim.sub vazio — auth.uid() é nulo e fn_conexao_de_servico() é VERDADEIRO para toda exclusão, inclusive a do Analista.
+    -- Mas asSuperUser() repassa os cabeçalhos do chamador e scope.ts:15-24 faz set_config('request.headers', ...): o `authorization` (nome em minúsculas: o
+    -- Node baixa a caixa; a busca abaixo ignora a caixa mesmo assim) traz o JWT do usuário que o Storage JÁ validou na entrada (src/http/plugins/jwt.ts:41),
+    -- então aqui basta ler o `sub`, sem revalidar a assinatura. NUNCA se grava `sistema:*` para exclusão vinda da API: o Histórico anula esse autor e a tela diria
+    -- "Sistema" (ausência apresentada como dado, regra 1). Um cabeçalho esquisito NÃO derruba o DELETE (falha fechada é para "não gravou a trilha", não para
+    -- "não entendi o cabeçalho"): vira `storage:nao_identificado` com o motivo em antes.ator_motivo.
+    begin
+      if v_hdr is null then
+        -- Sem request.headers: o DELETE não veio pela API do Storage (ela sempre o define, ao menos '{}'). É conexão SQL de serviço.
+        if fn_conexao_de_servico() then v_ator := 'sistema:sql'; v_origem := 'conexao_sql';
+        else v_motivo := 'sem cabecalho authorization'; end if;
+      else
+        select h.value into v_auth from jsonb_each_text(v_hdr::jsonb) h where lower(h.key) = 'authorization' limit 1;
+        v_tok    := substring(v_auth from '^[Bb][Ee][Aa][Rr][Ee][Rr]\s+(\S+)\s*$');
+        v_partes := string_to_array(v_tok, '.');
+        if v_auth is null then
+          v_motivo := 'sem cabecalho authorization';
+        elsif v_tok is null or cardinality(v_partes) <> 3 then
+          v_motivo := 'jwt malformado';
+        else
+          -- base64url -> base64: '-' e '_' viram '+' e '/', e o padding '=' que o JWT omite volta até fechar múltiplo de 4.
+          v_seg := translate(v_partes[2], '-_', '+/');
+          v_seg := v_seg || repeat('=', (4 - length(v_seg) % 4) % 4);
+          v_pl  := convert_from(decode(v_seg, 'base64'), 'UTF8')::jsonb;
+          if v_pl ->> 'role' = 'service_role' then
+            -- A chave de serviço (o n8n): não há pessoa. "Sistema" na tela é verdade aqui, e só aqui.
+            v_ator := 'sistema:servico'; v_origem := 'jwt_service_role';
+          elsif nullif(v_pl ->> 'sub', '') is null then
+            v_motivo := 'jwt sem sub';
+          else
+            v_sub := (v_pl ->> 'sub')::uuid;
+            select u.email into v_email from auth.users u where u.id = v_sub;
+            if not found then v_motivo := 'sub inexistente em auth.users';
+            else v_uid_ev := v_sub; v_origem := 'cabecalho_jwt'; v_ator := coalesce(v_email, 'usuario:' || v_sub::text); end if;
+          end if;
+        end if;
+      end if;
+    exception when others then
+      v_uid_ev := null; v_origem := null; v_ator := null;
+      v_motivo := 'cabecalho ilegivel';
+    end;
+    if v_ator is null then v_ator := 'storage:nao_identificado'; v_origem := 'nao_identificado'; end if;
+  end if;
+
   v_caso := fn_caso_da_chave_do_storage(old.name);
   v_ref  := case when v_caso is not null then 'caso:' || v_caso::text else 'storage:documentos/' || old.name end;
 
@@ -122,7 +203,9 @@ begin
                              'documento_id', v_ver.documento_id,
                              'n_versao', v_ver.n_versao,
                              'tamanho_bytes', old.metadata -> 'size',
-                             'usuario_id', v_uid),
+                             'usuario_id', v_uid_ev,
+                             'ator_origem', v_origem,
+                             'ator_motivo', v_motivo),
           null);
   return null;
 end $$;
@@ -130,7 +213,7 @@ end $$;
 revoke all on function fn_trg_auditar_original_apagado() from public, anon, authenticated;
 
 comment on function fn_trg_auditar_original_apagado() is
-  '0224 (D16): gatilho AFTER DELETE de storage.objects (bucket documentos). Grava evento_auditoria `documento_original_apagado` com o ator (e-mail do JWT, ou sistema:storage), o mandato (caso:<id> da chave) e o que se perdeu (caminho, nome original, tamanho). Falha fechada: sem trilha, o DELETE volta.';
+  '0224 (D16): gatilho AFTER DELETE de storage.objects (bucket documentos). Grava evento_auditoria `documento_original_apagado` com o ator (e-mail do `sub` do JWT em request.headers, ou storage:nao_identificado + motivo), o mandato (caso:<id> da chave) e o que se perdeu (caminho, nome original, tamanho). Falha fechada: sem trilha, o DELETE volta.';
 
 -- O gatilho. storage.objects é do supabase_storage_admin e o `postgres` tem só o privilégio TRIGGER nela (medido em produção em 04/11/2026): CREATE
 -- TRIGGER basta; DROP/DISABLE exigiriam ser dono, por isso NÃO se faz `drop trigger` aqui (reaplicar não toca no que existe — o corpo da função já foi trocado acima).
@@ -150,6 +233,15 @@ begin
   end if;
 end $$;
 
+-- MOVER/SOBRESCREVER SÓ PARA SÓCIO (decisão do dono, D16). A exclusão é auditada pelo gatilho acima, mas UPDATE em storage.objects NÃO é: `move` da API do Storage
+-- é UPDATE do `name` (o original some da chave antiga sem DELETE, e `documento_versao.arquivo_ref` passa a apontar para o vazio) e o upsert sobrescreve o conteúdo.
+-- A 0216 deixava o Analista alocado fazer as duas coisas (documentos_update: ler no using, escrever no with check). Grep em portal/src e N8N/: ninguém faz update/move/upsert
+-- com JWT de usuário (o portal só assina URL; o n8n sobe com x-upsert pela chave de serviço, que ignora RLS). Mesmo padrão da 0216 (drop + create, como `postgres`).
+drop policy if exists documentos_update on storage.objects;
+create policy documentos_update on storage.objects for update to authenticated
+  using (bucket_id = 'documentos' and (select fn_eh_socio()))
+  with check (bucket_id = 'documentos' and (select fn_eh_socio()));
+
 -- A VIEW DA SONDA: uma linha somente se o gatilho existe, está habilitado, é AFTER DELETE por linha e chama a função certa.
 -- tgtype: bit 1 = por linha, bit 2 = BEFORE (ausente = AFTER), bit 8 = DELETE, bit 4 = INSERT, bit 16 = UPDATE, bit 32 = TRUNCATE.
 create or replace view instalacao_sonda_gatilho_original_apagado as
@@ -166,6 +258,29 @@ comment on view instalacao_sonda_gatilho_original_apagado is
   'Sonda da 0224: uma linha = o gatilho de auditoria de exclusão existe em storage.objects, habilitado, AFTER DELETE por linha, chamando fn_trg_auditar_original_apagado. Zero linhas: a exclusão de original voltou a não deixar trilha.';
 
 grant select on instalacao_sonda_gatilho_original_apagado to authenticated, service_role;  -- service_role: o requisito grant_views_service_role (0214) cobra toda view de public
+
+-- A SONDA DA POLICY DE UPDATE: o tipo `policy` só resolve tabelas de `public`. Uma linha somente se documentos_update existe em storage.objects para UPDATE e AMBAS as
+-- cláusulas (using e with check) exigem fn_eh_socio e nenhuma delas deixa passar por fn_pode_ (a 0216 usava fn_pode_ler/escrever_caso).
+create or replace view instalacao_sonda_update_documentos_so_socio as
+  select p.policyname::text as policy
+    from pg_policies p
+   where p.schemaname = 'storage' and p.tablename = 'objects' and p.policyname = 'documentos_update' and p.cmd = 'UPDATE'
+     and 'authenticated' = any (p.roles)
+     and p.qual ~ 'fn_eh_socio' and p.with_check ~ 'fn_eh_socio'
+     and p.qual !~ 'fn_pode_' and p.with_check !~ 'fn_pode_';
+comment on view instalacao_sonda_update_documentos_so_socio is
+  'Sonda da 0224: uma linha = mover/sobrescrever original (UPDATE em storage.objects do bucket documentos) é só do Sócio. Zero linhas: a policy voltou ao desenho da 0216 (Analista alocado move o original sem trilha).';
+grant select on instalacao_sonda_update_documentos_so_socio to authenticated, service_role;
+
+-- A SONDA DO VERSIONAMENTO: uma linha somente se o bucket `documentos` existe E tem `versioning_status = 'DISABLED'`. Regra 7: se a coluna não existe nesta versão do Storage
+-- o requisito ACUSA (não há medição) em vez de passar vazio. to_jsonb(b) porque a coluna pode não existir e a view não pode quebrar por isso.
+create or replace view instalacao_sonda_versionamento_documentos as
+  select b.id::text as bucket
+    from storage.buckets b
+   where b.id = 'documentos' and to_jsonb(b) ->> 'versioning_status' = 'DISABLED';
+comment on view instalacao_sonda_versionamento_documentos is
+  'Sonda da 0224: uma linha = o bucket documentos tem versioning_status DISABLED. Zero linhas: versionamento ligado (o gatilho deixaria de ver a exclusão do usuário: ela viraria delete marker) ou a coluna/bucket não existe e nada foi medido.';
+grant select on instalacao_sonda_versionamento_documentos to authenticated, service_role;
 
 -- fn_historico_do_caso: a da 0215 INTEIRA (nenhuma outra migration a redefiniu: grep em Supabase/migrations) + a ação na lista `ev` e o ramo
 -- `documento_original_apagado`. NÃO partir de outra: reemitir uma versão anterior APAGARIA ramos.
@@ -414,7 +529,7 @@ as $$
 
     union all
     -- 0224 (D16): o original do cliente apagado do Storage. O gatilho de storage.objects grava `caso:<id>` + o que se perdeu em `antes`;
-    -- o ator é o e-mail de quem apagou (ou `sistema:storage`, que a consulta final anula como nas demais ações do sistema).
+    -- o ator é o e-mail de quem apagou; `storage:nao_identificado` aparece como está; `sistema:servico`/`sistema:sql` a consulta final anula como nas demais ações do sistema.
     select e.criado_em, 'documento_original_apagado', e.ator,
            format('Original apagado do armazenamento: "%s"%s',
                   coalesce(e.antes->>'nome_original', nullif(e.antes->>'arquivo', ''), '(sem nome)'),
@@ -456,6 +571,15 @@ insert into instalacao_requisito
   ('original_apagado_gatilho', '0224', 'comportamento', 'instalacao_sonda_gatilho_original_apagado', null, 1,
    'O gatilho em storage.objects (fora de public, onde o tipo `gatilho` não enxerga): a view só tem linha se ele existe, está habilitado, é AFTER DELETE por linha e chama a função certa. Zero linhas = a exclusão de original voltou a não deixar trilha; a função, sozinha, sobrevive a drop trigger e a disable trigger. O postgres não é dono de storage.objects: recriar o gatilho exige o SQL da 0224 (ou o dono pelo painel).',
    'bloqueante', 1032),
+  ('original_apagado_ator_do_cabecalho', '0224', 'corpo', 'fn_trg_auditar_original_apagado', 'request.headers', null,
+   'A exclusão efetiva da API do Storage roda como service_role sem sub: só o JWT de request.headers diz quem apagou. Sem esta leitura toda exclusão do Analista sai sem autor (ou "Sistema").',
+   'bloqueante', 1034),
+  ('original_apagado_update_so_socio', '0224', 'comportamento', 'instalacao_sonda_update_documentos_so_socio', null, 1,
+   'Mover/sobrescrever original (UPDATE em storage.objects, bucket documentos) é só do Sócio: UPDATE não deixa trilha. Zero linhas = a policy documentos_update voltou ao desenho da 0216, em que o Analista alocado move o original sem evento.',
+   'bloqueante', 1035),
+  ('original_apagado_sem_versionamento', '0224', 'comportamento', 'instalacao_sonda_versionamento_documentos', null, 1,
+   'O bucket documentos precisa de versioning_status DISABLED: ligado, a exclusão do usuário vira delete marker (o gatilho de DELETE não a vê) e o ciclo de vida apaga versões antigas com DELETE atribuído ao sistema. Zero linhas também quando a coluna não existe: nada foi medido.',
+   'bloqueante', 1036),
   ('historico_mostra_original_apagado', '0224', 'corpo', 'fn_historico_do_caso', 'documento_original_apagado', null,
    'fn_historico_do_caso lê evento_auditoria por LISTA FECHADA de ações; sem esta ação na lista, o gatilho grava e o Histórico do mandato não mostra quem apagou o original.',
    'importante', 1033)
@@ -466,5 +590,5 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = '0224', revisado_em = current_date,
-       observacao = 'A 0224 cria o gatilho de auditoria de exclusão em storage.objects (fora de public: catalogado por view + tipo comportamento) e o ramo novo de fn_historico_do_caso; 4 requisitos.'
+       observacao = 'A 0224 cria o gatilho de auditoria de exclusão em storage.objects (fora de public: catalogado por view + tipo comportamento), restringe documentos_update a Sócio e acrescenta o ramo novo de fn_historico_do_caso; 7 requisitos.'
  where id = true;
