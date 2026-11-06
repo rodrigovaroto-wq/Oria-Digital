@@ -7160,7 +7160,7 @@ COMMENT ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica tex
 -- Name: fn_linha_de_base_extracao(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) RETURNS TABLE(documento_id uuid, documento_versao_id uuid, n_versao integer, nome_original text, tipo_taxonomia text, n_campos bigint, extracao_rodou boolean, extraido_em timestamp with time zone, falha_motivo text, contas_no_documento numeric, linhas_devolvidas numeric, cobertura numeric, cobertura_motivo text, pendencias_extracao_falhou integer, pendencias_extracao_padrao_suspeito integer, campos_ultimo_evento integer, versao_medicao text, pendencias_motivo text)
+CREATE FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) RETURNS TABLE(documento_id uuid, documento_versao_id uuid, n_versao integer, nome_original text, tipo_taxonomia text, n_campos bigint, extracao_rodou boolean, extraido_em timestamp with time zone, falha_motivo text, contas_no_documento numeric, linhas_devolvidas numeric, cobertura numeric, cobertura_motivo text, pendencias_extracao_falhou integer, pendencias_extracao_padrao_suspeito integer, campos_ultimo_evento integer, versao_medicao text, pendencias_motivo text, blocos integer, blocos_com_resposta integer, blocos_planejados integer)
     LANGUAGE sql STABLE
     SET search_path TO 'public', 'pg_temp'
     AS $_$
@@ -7178,7 +7178,8 @@ CREATE FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) RETURNS TABLE(d
     select d.id as documento_id, dv.id as versao_id, dv.n_versao, dv.nome_original, d.tipo_taxonomia,
            (select count(*) from campo_extraido ce where ce.documento_versao_id = dv.id) as n_campos,
            ev.criado_em as extraido_em, ev.depois as depois,
-           dv.n_versao = max(dv.n_versao) over (partition by d.id) as e_a_mais_nova
+           dv.n_versao = coalesce(max(dv.n_versao) filter (where ev.criado_em is not null) over (partition by d.id),
+                                   max(dv.n_versao) over (partition by d.id)) as e_a_mais_nova
       from documento d
       join documento_versao dv on dv.documento_id = d.id
       left join lateral (
@@ -7199,26 +7200,43 @@ CREATE FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) RETURNS TABLE(d
   num as (
     select m.*,
            case when (m.m->>'contas_no_documento') ~ '^-?\d+(\.\d+)?$' then (m.m->>'contas_no_documento')::numeric end as contas,
-           case when (m.m->>'linhas_devolvidas')   ~ '^-?\d+(\.\d+)?$' then (m.m->>'linhas_devolvidas')::numeric   end as linhas
+           case when (m.m->>'linhas_devolvidas')   ~ '^-?\d+(\.\d+)?$' then (m.m->>'linhas_devolvidas')::numeric   end as linhas,
+           case when (m.m->>'blocos')              ~ '^\d+$' then (m.m->>'blocos')::integer              end as blq,
+           case when (m.m->>'blocos_com_resposta') ~ '^\d+$' then (m.m->>'blocos_com_resposta')::integer end as bcr,
+           case when (m.m->>'blocos_planejados')   ~ '^\d+$' then (m.m->>'blocos_planejados')::integer   end as blp
       from med m
+  ),
+  mot as (
+    -- UM só lugar decide o motivo; a cobertura sai dele (motivo nulo <=> cobertura existe), e não de uma segunda regra que possa divergir.
+    -- A ORDEM importa: ausência de evento/medição primeiro; depois a leitura que NUNCA respondeu (falha total, antes de "parcial": com 0 respostas não há trecho lido);
+    -- depois a PARCIAL (numerador de um trecho sobre o denominador do documento inteiro seria falha de infraestrutura apresentada como leitura ruim); só então o 0 de um documento
+    -- sem dado financeiro (a régua conta data/CNPJ como conta), a falta de régua (PDF sem texto, xlsx) e o que sobrar.
+    select n.*,
+           case when n.depois is null then 'extracao_nao_rodou'
+                when n.invalida is not null then 'medicao_invalida'
+                when n.m is null then 'sem_medicao'
+                when n.bcr = 0 and n.linhas is null then 'ia_sem_resposta'
+                when n.bcr < n.blq or n.blq < n.blp then 'leitura_parcial'
+                when n.linhas = 0 and n.depois->>'tem_dado_financeiro' = 'false' then 'documento_sem_dado_financeiro'
+                when n.contas is null and n.linhas is not null then 'sem_regua_no_documento'
+                when n.contas is null or n.linhas is null then 'medicao_incompleta'
+                when n.contas <= 0 then 'documento_sem_contas' end as motivo
+      from num n
   )
   select n.documento_id, n.versao_id, n.n_versao, n.nome_original, n.tipo_taxonomia, n.n_campos,
          n.depois is not null,
          n.extraido_em,
          n.depois->>'falha_motivo',
          n.contas, n.linhas,
-         case when n.contas > 0 and n.linhas is not null then n.linhas / n.contas end,
-         case when n.depois is null                  then 'extracao_nao_rodou'
-              when n.invalida is not null            then 'medicao_invalida'
-              when n.m is null                       then 'sem_medicao'
-              when n.contas is null or n.linhas is null then 'medicao_incompleta'
-              when n.contas <= 0                     then 'documento_sem_contas' end,
+         case when n.motivo is null then n.linhas / n.contas end,
+         n.motivo,
          case when n.e_a_mais_nova then coalesce(pd.falhou, 0) end,
          case when n.e_a_mais_nova then coalesce(pd.suspeito, 0) end,
          case when (n.depois->>'campos') ~ '^\d+$' then (n.depois->>'campos')::integer end,
          n.m->>'versao_medicao',
-         case when not n.e_a_mais_nova then 'pendencia_e_do_documento_ver_versao_mais_nova' end
-    from num n
+         case when not n.e_a_mais_nova then 'pendencia_e_do_documento_ver_versao_mais_nova' end,
+         n.blq, n.bcr, n.blp
+    from mot n
     left join pend pd on pd.documento_id = n.documento_id
    order by n.nome_original, n.n_versao, n.versao_id
 $_$;
@@ -7227,7 +7245,7 @@ $_$;
 -- Name: FUNCTION fn_linha_de_base_extracao(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) IS '0225: linha de base da leitura POR DOCUMENTO (P4, comparar antes × depois). Uma linha por documento_versao do mandato: n_campos, falha_motivo, a medição do ÚLTIMO evento extracao_sombra da versão (contas_no_documento, linhas_devolvidas, cobertura = linhas/contas quando contas > 0 — sem arredondar nem truncar em 1), e as pendências ABERTAS da origem extração por tipo — do DOCUMENTO, então só na linha da versão mais nova (nas outras NULL, com pendencias_motivo). n_campos é o ACUMULADO em campo_extraido da versão (reprocessar soma as gravações); campos_ultimo_evento é o que o último evento gravou, comparável a linhas_devolvidas; versao_medicao é a versão da medição que o n8n declarou (separa eventos medidos por versões diferentes). extracao_rodou = existe evento de extração (documento sem evento NÃO é documento que rodou e não achou nada). cobertura_motivo é NULL só quando a cobertura existe; senão diz por quê: extracao_nao_rodou | medicao_invalida | sem_medicao (n8n anterior à 0225) | medicao_incompleta | documento_sem_contas. SECURITY INVOKER: a RLS vale e quem não lê o mandato recebe zero linhas. Somente leitura.';
+COMMENT ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) IS '0225: linha de base da leitura POR DOCUMENTO (P4, comparar antes × depois). Uma linha por documento_versao do mandato: n_campos, falha_motivo, a medição do ÚLTIMO evento extracao_sombra da versão (contas_no_documento, linhas_devolvidas, cobertura = linhas/contas quando contas > 0 — sem arredondar nem truncar em 1), e as pendências ABERTAS da origem extração por tipo — do DOCUMENTO, então só na linha da versão mais nova (nas outras NULL, com pendencias_motivo). n_campos é o ACUMULADO em campo_extraido da versão (reprocessar soma as gravações); campos_ultimo_evento é o que o último evento gravou, comparável a linhas_devolvidas; versao_medicao é a versão da medição que o n8n declarou (separa eventos medidos por versões diferentes). extracao_rodou = existe evento de extração (documento sem evento NÃO é documento que rodou e não achou nada). cobertura_motivo é NULL só quando a cobertura existe; senão diz por quê, nesta ordem: extracao_nao_rodou | medicao_invalida | sem_medicao (n8n anterior à 0225) | ia_sem_resposta (nenhum bloco respondeu: falha de infraestrutura, não leitura de 0%) | leitura_parcial (algum bloco sem resposta ou blocos < blocos_planejados: o numerador seria de um trecho e o denominador do documento inteiro) | documento_sem_dado_financeiro (0 linhas e tem_dado_financeiro = false: certidão, planilha de controle) | sem_regua_no_documento (leitura válida, contas_no_documento ausente: PDF sem texto, xlsx) | medicao_incompleta (o que sobrar: evento anterior à medição por blocos, sem esses campos) | documento_sem_contas (0 contas no texto). Contrato: cobertura_motivo é NULL se e somente se a cobertura existe. blocos, blocos_com_resposta e blocos_planejados vêm da medição. A pendência vai para a versão mais nova COM evento de extração (se nenhuma tem, a de maior n_versao). SECURITY INVOKER: a RLS vale e quem não lê o mandato recebe zero linhas. Somente leitura.';
 
 --
 -- Name: fn_linha_vale_para_ano(uuid, text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -

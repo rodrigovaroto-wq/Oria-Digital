@@ -2,7 +2,7 @@
 -- 0225 — A LEITURA QUE SÓ SE MEDIA SOMADA POR LOTE: a cobertura por DOCUMENTO (linha de base da P4)
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): os números por guarda desligada estão no cabeçalho de
--- Supabase/migrations/0225_a_leitura_que_so_se_media_somada_por_lote.sql ("MEDIÇÃO NÃO-VAZIA"): 61 asserts, 27 variantes aplicadas uma a uma, 0 reprovações com a migration intacta.
+-- Supabase/migrations/0225_a_leitura_que_so_se_media_somada_por_lote.sql ("MEDIÇÃO NÃO-VAZIA"): 73 asserts, 38 variantes aplicadas uma a uma, 0 reprovações com a migration intacta.
 --
 -- O QUE AFIRMA (comportamento, não mecanismo):
 --   1. a gravação leva a medição: chamada COM p_medicao grava o objeto no evento; chamada SEM grava `medicao` nula EXPLÍCITA (a chave existe, valor nulo) —
@@ -42,6 +42,16 @@ create or replace function teste_recua_p4(p_versao uuid) returns void language s
 create or replace function teste_ocorrencias_p4(p_texto text, p_marcador text) returns int language sql immutable as $$
   select (length(p_texto) - length(replace(p_texto, p_marcador, ''))) / length(p_marcador) $$;
 
+-- Registra um documento no mandato e grava a extração dele com a MEDIÇÃO no formato exato que o nó "Juntar Blocos" do n8n produz (copiada de N8N/test/workflow-sim.test.mjs).
+create or replace function teste_doc_p4(p_caso uuid, p_nome text, p_med jsonb, p_tem boolean, p_campos jsonb default '[]'::jsonb) returns uuid language plpgsql as $$
+declare v_r jsonb; v_v uuid;
+begin
+  v_r := fn_registrar_documento(p_caso, 'GAMA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', p_caso || '/' || p_nome, p_nome, true, 'H-' || p_nome, 'ok');
+  v_v := (v_r->>'documento_versao_id')::uuid;
+  perform fn_registrar_campos_extraidos(v_v, p_campos, 'N0', null, p_tem, p_med);
+  return v_v;
+end $$;
+
 create or replace function teste_como_p4(p_uid uuid) returns void language plpgsql as $$
 begin
   perform set_config('request.jwt.claims', jsonb_build_object('sub', p_uid, 'role', 'authenticated')::text, true);
@@ -63,7 +73,8 @@ declare
   u_socio uuid := '00000000-0000-0000-0000-00000000e251';
   u_ana   uuid := '00000000-0000-0000-0000-00000000e252';   -- Analista, alocada em A
   u_xan   uuid := '00000000-0000-0000-0000-00000000e253';   -- Analista, alocado só em B
-  v_a uuid; v_b uuid; v_r jsonb;
+  v_a uuid; v_b uuid; v_c uuid; v_r jsonb;
+  v_f uuid; v_doc_j uuid; v_ver_j1 uuid; v_ver_j2 uuid;
   v_doc_nr uuid; v_ver_nr uuid;       -- nunca extraído
   v_doc_re uuid; v_ver_re1 uuid; v_ver_re2 uuid;   -- reprocessado: 2 versões, a 1ª com 2 eventos
   v_ver_sm uuid;                       -- chamada sem medição
@@ -262,9 +273,71 @@ begin
   select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_sm;
   perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito = 0 and v_l.pendencias_extracao_falhou = 0 and v_l.pendencias_motivo is null,
     'documento de uma versão só, sem pendência: zeros (não nulos) e sem motivo de ausência', row_to_json(v_l)::text);
-  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_re2;
+  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_re1;
   perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito = 0 and v_l.pendencias_extracao_falhou = 0 and v_l.pendencias_motivo is null,
-    'a versão mais nova de um documento sem pendência: zeros', row_to_json(v_l)::text);
+    'a versão mais nova COM EVENTO de um documento sem pendência: zeros (a v2 do B ainda não foi extraída)', row_to_json(v_l)::text);
+  select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_re2;
+  perform teste_assert_p4(v_l.pendencias_extracao_padrao_suspeito is null and v_l.pendencias_motivo = 'pendencia_e_do_documento_ver_versao_mais_nova',
+    'a v2 do B, sem evento, não é "a mais nova" para a pendência: NULL com o motivo', row_to_json(v_l)::text);
+
+  -- A v2 recém-registrada, ainda sem extração, NÃO rouba a pendência que a v1 abriu (mandato C: não mexe nas contagens do A).
+  v_c := fn_upsert_caso('0225 — mandato C (formatos do n8n)');
+  v_r := fn_registrar_documento(v_c, 'GAMA SA', 'anual', '2025', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage', v_c || '/j.pdf', 'J v2 sem extracao.pdf', true, 'H-J-0225', 'ok');
+  v_doc_j := (v_r->>'documento_id')::uuid; v_ver_j1 := (v_r->>'documento_versao_id')::uuid;
+  perform fn_registrar_campos_extraidos(v_ver_j1, '[]'::jsonb, 'N0', 'a IA devolveu vazio', true, '{"blocos_com_resposta": 1, "blocos": 1, "blocos_planejados": 1, "contas_no_documento": 5, "linhas_devolvidas": 0}'::jsonb);
+  insert into documento_versao (documento_id, n_versao, arquivo_ref, nome_original) values (v_doc_j, 2, v_c || '/j2.pdf', 'J v2 sem extracao.pdf') returning id into v_ver_j2;
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_ver_j1;
+  perform teste_assert_p4(v_l.pendencias_extracao_falhou = 1 and v_l.pendencias_motivo is null,
+    'v1 falhou e abriu a pendência; a v2 nova, sem extração, NÃO a leva: a pendência fica na v1', row_to_json(v_l)::text);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_ver_j2;
+  perform teste_assert_p4(v_l.pendencias_extracao_falhou is null and v_l.pendencias_motivo is not null and v_l.cobertura_motivo = 'extracao_nao_rodou',
+    'a v2 sem evento: extracao_nao_rodou e pendência NULL com motivo', row_to_json(v_l)::text);
+
+  -- ---------------------------------------------------------------- 4b. ponta a ponta: a medição NO FORMATO EXATO do Juntar Blocos -> a linha de base
+  raise notice '--- 4b. medição no formato do n8n (Juntar Blocos) gravada via p_medicao e lida pela linha de base ---';
+  -- normal (2 blocos respondidos, 3 linhas de 40 contas)
+  v_f := teste_doc_p4(v_c, 'K normal.pdf', '{"versao_medicao": "p4-1", "blocos_com_resposta": 2, "contas_no_documento": 40, "blocos": 2, "blocos_planejados": 2, "linhas_devolvidas": 3, "contas_distintas": 3, "custo_usd": 0.05, "tokens": {"entrada": 15, "saida": 30, "cache": 5}}'::jsonb, true, v_campos);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
+  perform teste_assert_p4(v_l.cobertura = 0.075 and v_l.cobertura_motivo is null and v_l.blocos = 2 and v_l.blocos_com_resposta = 2 and v_l.blocos_planejados = 2,
+    'normal: cobertura 3/40 = 0,075 sem motivo, e as colunas de blocos expostas', row_to_json(v_l)::text);
+  -- resposta REAL com 0 linhas (zero medido)
+  v_f := teste_doc_p4(v_c, 'L resposta real vazia.pdf', '{"versao_medicao": "p4-1", "blocos_com_resposta": 1, "contas_no_documento": 30, "blocos": 1, "blocos_planejados": 1, "linhas_devolvidas": 0, "contas_distintas": 0, "custo_usd": 0.01, "tokens": {"entrada": 800, "saida": 5, "cache": 0}}'::jsonb, true);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
+  perform teste_assert_p4(v_l.cobertura = 0 and v_l.cobertura_motivo is null,
+    'resposta REAL com 0 linhas (e tem_dado_financeiro = true): cobertura 0 MEDIDA, sem motivo', row_to_json(v_l)::text);
+  -- falha total (a IA nunca respondeu): linhas, contas_distintas, custo e tokens FORA da medição
+  v_f := teste_doc_p4(v_c, 'M ia nunca respondeu.pdf', '{"versao_medicao": "p4-1", "blocos_com_resposta": 0, "contas_no_documento": 120, "blocos": 1, "blocos_planejados": 1}'::jsonb, true);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
+  perform teste_assert_p4(v_l.cobertura is null and v_l.cobertura_motivo = 'ia_sem_resposta' and v_l.blocos_com_resposta = 0 and v_l.contas_no_documento = 120,
+    'falha total: cobertura NULL e motivo ia_sem_resposta (não "leitura de 0%")', row_to_json(v_l)::text);
+  -- fatiado parcial: 1 de 2 blocos respondeu (2 linhas de um trecho sobre 80 contas do documento inteiro)
+  v_f := teste_doc_p4(v_c, 'N fatiado parcial.pdf', '{"versao_medicao": "p4-1", "blocos_com_resposta": 1, "contas_no_documento": 80, "blocos": 2, "blocos_planejados": 2, "linhas_devolvidas": 2, "contas_distintas": 2, "custo_usd": 0.03, "tokens": {"entrada": 10, "saida": 20, "cache": 5}}'::jsonb, true, v_campos);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
+  perform teste_assert_p4(v_l.cobertura is null and v_l.cobertura_motivo = 'leitura_parcial' and v_l.linhas_devolvidas = 2 and v_l.blocos_com_resposta = 1 and v_l.blocos = 2,
+    'fatiado parcial: NÃO vira cobertura 2/80 = 0,025; NULL com motivo leitura_parcial', row_to_json(v_l)::text);
+  -- todos os blocos que foram ao ar responderam, mas faltaram blocos planejados
+  v_f := teste_doc_p4(v_c, 'O blocos a menos que o planejado.pdf', '{"versao_medicao": "p4-1", "blocos_com_resposta": 1, "contas_no_documento": 80, "blocos": 1, "blocos_planejados": 2, "linhas_devolvidas": 2, "contas_distintas": 2, "custo_usd": 0.03, "tokens": {"entrada": 10, "saida": 20, "cache": 5}}'::jsonb, true, v_campos);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
+  perform teste_assert_p4(v_l.cobertura is null and v_l.cobertura_motivo = 'leitura_parcial' and v_l.blocos_planejados = 2,
+    'blocos < blocos_planejados também é leitura_parcial', row_to_json(v_l)::text);
+  -- xlsx / PDF sem texto: sem contas_no_documento (AUSENTE, nunca 0) e leitura válida
+  v_f := teste_doc_p4(v_c, 'P xlsx sem regua.xlsx', '{"versao_medicao": "p4-1", "blocos_com_resposta": 1, "blocos": 1, "blocos_planejados": 1, "linhas_devolvidas": 2, "contas_distintas": 2, "custo_usd": 0.01, "tokens": {"entrada": 1, "saida": 1, "cache": 0}}'::jsonb, true, v_campos);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
+  perform teste_assert_p4(v_l.cobertura is null and v_l.cobertura_motivo = 'sem_regua_no_documento' and v_l.contas_no_documento is null and v_l.linhas_devolvidas = 2,
+    'sem contas_no_documento com leitura válida: sem_regua_no_documento (não medicao_incompleta)', row_to_json(v_l)::text);
+  -- documento sem dado financeiro (certidão): a régua contou data/CNPJ como conta e a IA, certamente, devolveu 0
+  v_f := teste_doc_p4(v_c, 'Q certidao.pdf', '{"versao_medicao": "p4-1", "blocos_com_resposta": 1, "contas_no_documento": 12, "blocos": 1, "blocos_planejados": 1, "linhas_devolvidas": 0, "contas_distintas": 0, "custo_usd": 0.01, "tokens": {"entrada": 300, "saida": 3, "cache": 0}}'::jsonb, false);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
+  perform teste_assert_p4(v_l.cobertura is null and v_l.cobertura_motivo = 'documento_sem_dado_financeiro',
+    'tem_dado_financeiro = false e 0 linhas: NÃO é cobertura 0 medida; documento_sem_dado_financeiro', row_to_json(v_l)::text);
+  -- evento anterior à medição por blocos (sem blocos_com_resposta, sem linhas, sem contas): sobra medicao_incompleta
+  v_f := teste_doc_p4(v_c, 'R medicao antiga.pdf', '{"custo_usd": 0.01}'::jsonb, true, v_campos);
+  select * into v_l from fn_linha_de_base_extracao(v_c) where documento_versao_id = v_f;
+  perform teste_assert_p4(v_l.cobertura is null and v_l.cobertura_motivo = 'medicao_incompleta',
+    'medição sem os campos da leitura: o que sobra continua medicao_incompleta', row_to_json(v_l)::text);
+  -- contrato: motivo NULO <=> cobertura existe, em TODAS as linhas do mandato C
+  select count(*) into v_n from fn_linha_de_base_extracao(v_c) where (cobertura_motivo is null) <> (cobertura is not null);
+  perform teste_assert_p4(v_n = 0, 'contrato: cobertura_motivo é NULL se e somente se a cobertura existe (nenhuma linha viola)', v_n::text);
   -- resolvida e de outra origem não entram
   update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'teste' where documento_id = v_doc_pd and tipo = 'extracao_falhou';
   insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id, motivo)
@@ -333,6 +406,7 @@ begin
   perform teste_assert_p4((select ate_migration from instalacao_cobertura) >= '0225', 'a cobertura do catálogo declara a 0225', null);
 
   -- ---------------------------------------------------------------- limpeza
+  delete from evento_auditoria where entidade_ref in (select 'documento_versao:' || dv.id::text from documento_versao dv join documento d on d.id = dv.documento_id join caso c on c.id = d.caso_id where c.nome like '0225 —%');
   delete from caso where nome like '0225 —%';
   delete from evento_auditoria where entidade_ref in ('documento_versao:' || v_ver_nr, 'documento_versao:' || v_ver_re1, 'documento_versao:' || v_ver_re2,
     'documento_versao:' || v_ver_sm, 'documento_versao:' || v_ver_in, 'documento_versao:' || v_ver_zr, 'documento_versao:' || v_ver_ic,
