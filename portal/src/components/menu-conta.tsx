@@ -114,7 +114,10 @@ export function MenuConta({
         aria-haspopup="true"
         aria-controls={idMenu}
         aria-label={email ? `Conta de ${email}` : "Conta"}
-        title={email || "Conta"}
+        // SEM o e-mail no title=: no modo discrição o navegador mostraria o endereço ao passar o
+        // mouse (o borrão é CSS, a dica é do navegador). O aria-label fica: leitor de tela é fora do
+        // escopo da discrição (ver botao-discricao.tsx).
+        title="Conta"
         className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-vidro-suave transition-colors hover:bg-white/10 hover:text-vidro-texto"
       >
         <span className="flex h-7 w-7 items-center justify-center rounded-full bg-vidro-texto text-[11px] font-semibold text-vidro-tinta">

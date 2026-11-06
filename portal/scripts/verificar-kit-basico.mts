@@ -336,6 +336,26 @@ ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWit
   }
   ok(tsx.length > 50, "a varredura leu os arquivos da tela (não passou vazia)", String(tsx.length));
   ok(vazam.length === 0, "nenhum elemento sensível carrega title=", vazam.join(" | "));
+  // O MESMO VAZAMENTO EM ELEMENTO NÃO MARCADO. Medido em 06/11: `title={email || "Conta"}` no botão
+  // da conta (menu-conta.tsx) mostrava o e-mail com o modo ligado e passou pelo portão acima, que só
+  // olha `valor-sensivel`. Aqui vale QUALQUER `title={...}` cuja expressão cite dado sensível
+  // (e-mail, nome de mandato/entidade/arquivo, resumo), marcado ou não. Heurística por identificador:
+  // um nome novo para o mesmo dado (ex. `titular`) escapa — acrescente-o aqui ao criá-lo.
+  const SENSIVEL = /(?:^|[^A-Za-z0-9_])(email|nome|nome_[a-z_]+|nomeDo\w*|mandato|resumo|razao_social|entidade|empresa|cliente|arquivo)(?![A-Za-z0-9_])/i;
+  const TITLE_EXPR = /\btitle=\{((?:[^{}]|\{[^{}]*\})*)\}/g;
+  const vazamExpr: string[] = [];
+  let expressoes = 0;
+  for (const f of tsx) {
+    for (const m of readFileSync(f, "utf8").matchAll(TITLE_EXPR)) {
+      expressoes++;
+      // `rotuloDoLink(...)` só usa o nome para decidir se é PDF e devolve texto fixo ("Abrir o PDF…").
+      if (!/^\s*rotuloDoLink\(/.test(m[1]) && SENSIVEL.test(m[1])) vazamExpr.push(`${f.split("/src/")[1]}: title={${m[1].slice(0, 60)}}`);
+    }
+  }
+  ok(expressoes >= 5, "a varredura de title={…} viu as expressões (não passou vazia)", String(expressoes));
+  ok(vazamExpr.length === 0, "nenhum title={…} usa dado sensível, marcado ou não", vazamExpr.join(" | "));
+  ok(SENSIVEL.test('email || "Conta"') && SENSIVEL.test("doc.nome_original") && !SENSIVEL.test("info.explica"),
+    "o detector reconhece e-mail e nome de arquivo e deixa passar dica neutra");
   const passos = passosDaTrilha("/casos/abc/pendencias", { abc: "Metalúrgica X" });
   ok(passos.some((p) => p.rotulo === "Metalúrgica X" && p.sensivel === true),
     "a trilha marca o nome do mandato como sensível", JSON.stringify(passos));
