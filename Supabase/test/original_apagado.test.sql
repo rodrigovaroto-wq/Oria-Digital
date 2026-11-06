@@ -25,7 +25,7 @@
 --      JWT sem o prefixo Bearer: atribuído;
 --   6. o Histórico do mandato mostra a exclusão a quem lê o mandato (Analista alocada, Leitura) e NÃO a quem não lê; `storage:nao_identificado` NÃO some como "Sistema";
 --   7. falha fechada: se a trilha não puder ser gravada, o objeto NÃO é apagado;
---   8. a sonda enxerga o gatilho, a policy de update e o versionamento: 8 requisitos da 0224 presentes, e cada um desfeito a faz acusar;
+--   8. a sonda enxerga o gatilho, a policy de update e o versionamento: 9 requisitos da 0224 presentes, e cada um desfeito a faz acusar;
 --   9. mover/sobrescrever original (UPDATE) é só do Sócio; o upload (INSERT) do Analista alocado continua;
 --  11. a trilha não se forja pela porta da frente: ninguém insere à mão a ação documento_original_apagado (nem o Sócio), e o gatilho continua gravando;
 --   1b. `auth.uid()` só atribui dentro da operação REST de exclusão; fora dela (SQL direto com claims à mão) é `storage:sql_direto` com o sub só ALEGADO;
@@ -413,7 +413,7 @@ begin
   -- ---------------------------------------------------------------- 8. a sonda
   raise notice '--- 8. a sonda enxerga o gatilho ---';
   select count(*) filter (where not presente), count(*) into v_falta, v_n from fn_instalacao_conferir() where migration = '0224';
-  perform teste_assert_d16(v_n = 8 and v_falta = 0, 'os 8 requisitos da 0224 estão no catálogo e presentes', format('%s requisitos, %s ausentes', v_n, v_falta));
+  perform teste_assert_d16(v_n = 9 and v_falta = 0, 'os 9 requisitos da 0224 estão no catálogo e presentes', format('%s requisitos, %s ausentes', v_n, v_falta));
   -- O gatilho da 0224 está na view da sonda. Os gatilhos DA PLATAFORMA em storage.objects (em produção: protect_objects_delete, update_objects_updated_at, ...) ficam fora do
   -- catálogo de propósito: não são nossos e o stub do run.sh nem os tem; este assert NÃO afirma nada sobre eles.
   select count(*) into v_n from instalacao_sonda_gatilho_original_apagado where gatilho = 'trg_auditar_original_apagado';
@@ -437,6 +437,17 @@ begin
   drop policy documentos_update on storage.objects;
   execute format('create policy documentos_update on storage.objects for update to authenticated using (%s) with check (%s)', v_pq, v_pw);
   perform teste_assert_d16(v_n = 1, 'com a policy de update no desenho da 0216 (Analista alocado move) a sonda acusa', v_n::text);
+  -- Policies PERMISSIVE somam com OR: uma SEGUNDA policy de UPDATE para authenticated (template do Studio) reabre o buraco, e a sonda tem de acusar mesmo com documentos_update certa.
+  create policy teste_d16_extra_update on storage.objects for update to authenticated using (true);
+  select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_update_so_socio' and not presente;
+  drop policy teste_d16_extra_update on storage.objects;
+  perform teste_assert_d16(v_n = 1, 'uma segunda policy permissiva de UPDATE em storage.objects faz a sonda acusar', v_n::text);
+  create policy teste_d16_extra_all on storage.objects for all to public using (true);
+  select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_update_so_socio' and not presente;
+  drop policy teste_d16_extra_all on storage.objects;
+  perform teste_assert_d16(v_n = 1, 'uma policy permissiva ALL para public em storage.objects também faz a sonda acusar', v_n::text);
+  select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_update_so_socio' and presente;
+  perform teste_assert_d16(v_n = 1, 'removida a policy extra, a sonda volta a ver o update só do Sócio', v_n::text);
   -- o versionamento: ligado, ou a coluna ausente, a sonda acusa (regra 7: sem medição não passa).
   select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_sem_versionamento' and presente;
   perform teste_assert_d16(v_n = 1, 'a sonda vê o bucket documentos com versionamento DISABLED', v_n::text);
@@ -458,6 +469,23 @@ begin
   drop policy evento_auditoria_insert on evento_auditoria;
   execute format('create policy evento_auditoria_insert on evento_auditoria for insert to authenticated with check (%s)', v_pw);
   perform teste_assert_d16(v_n = 1, 'com a policy de INSERT no desenho da 0216 a sonda acusa', v_n::text);
+  create policy teste_d16_extra_insert on evento_auditoria for insert to authenticated with check (true);
+  select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_insert_sem_forja' and not presente;
+  drop policy teste_d16_extra_insert on evento_auditoria;
+  perform teste_assert_d16(v_n = 1, 'uma segunda policy permissiva de INSERT em evento_auditoria faz a sonda acusar', v_n::text);
+  select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_insert_sem_forja' and presente;
+  perform teste_assert_d16(v_n = 1, 'removida a policy extra, a sonda volta a ver o insert fechado', v_n::text);
+
+  -- Marcadores do Histórico: cada um ocorre UMA vez só no corpo publicado (em código), e cada um acusa sozinho.
+  select count(*) into v_n from fn_instalacao_conferir() where chave in ('historico_mostra_original_apagado', 'historico_lista_ev_original_apagado') and presente;
+  perform teste_assert_d16(v_n = 2, 'os dois marcadores do Histórico (ramo e lista ev) estão presentes', v_n::text);
+  select (length(d) - length(replace(d, 'from ev e where e.acao = ''documento_original_apagado''', ''))) / length('from ev e where e.acao = ''documento_original_apagado'''),
+         (length(d) - length(replace(d, '''entidade_fundida'', ''documento_original_apagado'')', ''))) / length('''entidade_fundida'', ''documento_original_apagado'')')
+    into v_n, v_n0 from (select pg_get_functiondef('fn_historico_do_caso(uuid,int,timestamptz,text)'::regprocedure) as d) x;
+  perform teste_assert_d16(v_n = 1 and v_n0 = 1, 'cada marcador ocorre uma vez só no corpo da função', format('ramo %s, lista %s', v_n, v_n0));
+  -- O índice do gatilho existe (a busca por arquivo_ref a cada exclusão, 2x por objeto, era seq scan).
+  select count(*) into v_n from pg_indexes where schemaname = 'public' and tablename = 'documento_versao' and indexdef ~ '\(arquivo_ref\)';
+  perform teste_assert_d16(v_n = 1, 'documento_versao tem índice em arquivo_ref (o gatilho de exclusão o usa)', v_n::text);
 
   -- ---------------------------------------------------------------- 9. mover/sobrescrever só para Sócio
   raise notice '--- 9. mover/sobrescrever original (UPDATE) é só do Sócio; o upload do Analista alocado continua ---';
