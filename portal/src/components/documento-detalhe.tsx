@@ -174,12 +174,12 @@ export async function DocumentoDetalhe({ id, docId }: Readonly<{ id: string; doc
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 id="titulo-documento" className="font-dado text-lg font-semibold break-all text-tinta-900">
+          <h1 id="titulo-documento" className="valor-sensivel font-dado text-lg font-semibold break-all text-tinta-900">
             {versao?.nome_original ?? "(sem nome)"}
           </h1>
           <p className="text-xs text-tinta-500">
             {formatarTipoTaxonomia(doc.tipo_taxonomia)}
-            {doc.entidade?.razao_social ? ` · ${doc.entidade.razao_social}` : ""}
+            {doc.entidade?.razao_social && <> · <span className="valor-sensivel">{doc.entidade.razao_social}</span></>}
             {doc.periodo ? ` · ${formatarPeriodo(doc.periodo.tipo, doc.periodo.referencia)}` : ""}
           </p>
         </div>

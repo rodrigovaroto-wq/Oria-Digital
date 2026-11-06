@@ -605,7 +605,7 @@ export default async function PainelPage({
                                 · {nomeDaChecagem(p.motivo ?? null)}
                               </span>
                             )}
-                            <span className="truncate text-xs text-tinta-500">
+                            <span className="valor-sensivel truncate text-xs text-tinta-500">
                               {nomePorCaso.get(p.caso_id) ?? "mandato"}
                             </span>
                           </p>
@@ -679,7 +679,7 @@ export default async function PainelPage({
                                     ? formatarTipoTaxonomia(d.tipo_taxonomia)
                                     : "tipo ainda não identificado"}
                                 </span>
-                                <span className="block truncate text-[11px] text-tinta-500">
+                                <span className="valor-sensivel block truncate text-[11px] text-tinta-500">
                                   {nomePorCaso.get(d.caso_id) ?? "mandato"}
                                 </span>
                               </span>
@@ -721,7 +721,7 @@ export default async function PainelPage({
                         className="block px-4 py-2.5 transition-colors hover:bg-tinta-50"
                       >
                         <span className="flex items-center justify-between gap-3">
-                          <span className="min-w-0 truncate text-xs font-medium text-tinta-900">{c.nome}</span>
+                          <span className="valor-sensivel min-w-0 truncate text-xs font-medium text-tinta-900">{c.nome}</span>
                           <span className="flex shrink-0 items-center gap-1.5">
                             {quantas > 0 && (
                               <span className="chip bg-risco-100 text-risco-800" title={`${quantas} ${quantas === 1 ? "pendência travando" : "pendências travando"}`}>

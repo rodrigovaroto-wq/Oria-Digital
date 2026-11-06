@@ -96,7 +96,7 @@ export default async function MandatoLayout({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="font-titulo text-2xl font-medium tracking-tight text-tinta-900">{caso.nome}</h1>
+              <h1 className="valor-sensivel font-titulo text-2xl font-medium tracking-tight text-tinta-900">{caso.nome}</h1>
               <span className={`chip ${CASO_STATUS_COLOR[caso.status]}`}>{CASO_STATUS_LABEL[caso.status]}</span>
               {fechado && (
                 <span className="chip bg-tinta-100 text-tinta-600" title="Fora da lista de ativos; nada foi apagado.">

@@ -315,8 +315,7 @@ export default async function DocumentosPage({
                     <LinhaDeDocumento key={doc.id} docId={doc.id} href={`${base}/${doc.id}`}>
                       <td className="max-w-[15rem] px-3 py-2.5">
                         <span
-                          className="block truncate font-medium text-tinta-900"
-                          title={versao?.nome_original ?? ""}
+                          className="valor-sensivel block truncate font-medium text-tinta-900"
                         >
                           {versao?.nome_original ?? "—"}
                         </span>
@@ -332,7 +331,7 @@ export default async function DocumentosPage({
                             arquivo: numa coluna estreita ele aparecia truncado em três
                             palavras, o que é ruído com cara de informação. */}
                         {doc.resumo && (
-                          <p className="valor-sensivel mt-0.5 max-w-[15rem] truncate text-xs text-tinta-500" title={doc.resumo}>
+                          <p className="valor-sensivel mt-0.5 max-w-[15rem] truncate text-xs text-tinta-500">
                             {doc.resumo}
                           </p>
                         )}
@@ -340,8 +339,7 @@ export default async function DocumentosPage({
                       <td className="px-3 py-2.5 whitespace-nowrap text-tinta-700">
                         {formatarTipoTaxonomia(doc.tipo_taxonomia)}
                       </td>
-                      <td className="max-w-[10rem] truncate px-3 py-2.5 text-tinta-700"
-                          title={doc.entidade?.razao_social ?? ""}>
+                      <td className="valor-sensivel max-w-[10rem] truncate px-3 py-2.5 text-tinta-700">
                         {doc.entidade?.razao_social ?? "—"}
                       </td>
                       <td className="px-3 py-2.5 whitespace-nowrap text-tinta-700">

@@ -191,7 +191,7 @@ export function BarraInferior({ recentes, podeCriar, vazioDa, mostrarAdministrac
                       }`}
                     >
                       <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${CASO_STATUS_COLOR[m.status].split(" ")[0]}`} />
-                      <span className="truncate">{m.nome}</span>
+                      <span className="valor-sensivel truncate">{m.nome}</span>
                       <span className="ml-auto shrink-0 text-xs text-vidro-suave">{CASO_STATUS_LABEL[m.status]}</span>
                     </Link>
                   </li>

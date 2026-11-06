@@ -49,6 +49,9 @@ import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo
 import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
 import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
 import { BOTOES_DECISAO, exigeConfirmacao } from "../src/lib/pendencia.ts";
+import { passosDaTrilha } from "../src/components/trilha.tsx";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
 
 let falhas = 0;
@@ -309,6 +312,34 @@ console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista fil
   ok(!exigeConfirmacao("contatar_cliente"), "contatar o cliente grava direto (não libera nada)");
   ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWith("?") && b.confirmacao.sim.length > 0)),
     "toda confirmação traz pergunta e um botão de sim com texto");
+}
+
+// 8. P16 (vistoria P2, ALTA 4): o modo discrição borra, e nada desfaz o borrão.
+//    Medido em 04/11: `title={doc.resumo}` num elemento borrado mostrava o texto inteiro ao passar
+//    o mouse. O borrão é CSS; o `title` é do navegador e ignora o CSS. A varredura lê o código-fonte
+//    porque é ele que a tela renderiza — não há navegador com sessão neste CI.
+{
+  console.log("\n8. Modo discrição: nada marcado como sensível revela o texto pela dica do mouse");
+  const tsx: string[] = [];
+  const andar = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const c = join(d, e.name);
+      if (e.isDirectory()) andar(c);
+      else if (c.endsWith(".tsx")) tsx.push(c);
+    }
+  };
+  andar(new URL("../src", import.meta.url).pathname);
+  const vazam: string[] = [];
+  for (const f of tsx) {
+    for (const tag of readFileSync(f, "utf8").match(/<[A-Za-z][^>]*valor-sensivel[^>]*>/g) ?? []) {
+      if (/\stitle=/.test(tag)) vazam.push(`${f.split("/src/")[1]}: ${tag.slice(0, 80)}`);
+    }
+  }
+  ok(tsx.length > 50, "a varredura leu os arquivos da tela (não passou vazia)", String(tsx.length));
+  ok(vazam.length === 0, "nenhum elemento sensível carrega title=", vazam.join(" | "));
+  const passos = passosDaTrilha("/casos/abc/pendencias", { abc: "Metalúrgica X" });
+  ok(passos.some((p) => p.rotulo === "Metalúrgica X" && p.sensivel === true),
+    "a trilha marca o nome do mandato como sensível", JSON.stringify(passos));
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);
