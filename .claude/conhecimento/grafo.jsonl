@@ -1027,6 +1027,7 @@
 {"k":"n","id":"suite:Supabase/test/run.sh","t":"suite","f":"Supabase/test/run.sh","txt":"run sh"}
 {"k":"n","id":"suite:Verificação/run.mts","t":"suite","f":"Verificação/run.mts","txt":"run mts"}
 {"k":"n","id":"suite:Verificação/variacoes.mts","t":"suite","f":"Verificação/variacoes.mts","txt":"variacoes mts"}
+{"k":"n","id":"suite:Verificação/varredura-dos-mandatos.mts","t":"suite","f":"Verificação/varredura-dos-mandatos.mts","txt":"varredura dos mandatos mts"}
 {"k":"n","id":"suite:Verificação/vistoria-por-papel.mts","t":"suite","f":"Verificação/vistoria-por-papel.mts","txt":"vistoria por papel mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-apresentacao.mts","t":"suite","f":"portal/scripts/verificar-apresentacao.mts","txt":"verificar apresentacao mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-envio-oficial.mts","t":"suite","f":"portal/scripts/verificar-envio-oficial.mts","txt":"verificar envio oficial mts"}
@@ -1928,7 +1929,6 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/scripts/verificar-export.mts","l":4392}
 {"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/scripts/verificar-export.mts","l":5989}
 {"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-export.mts","l":4177}
-{"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_descricao_extracao_falhou","f":"portal/scripts/verificar-kit-basico.mts","l":362}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/scripts/verificar-kit-basico.mts","l":10}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/verificar-kit-basico.mts","l":8}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}
