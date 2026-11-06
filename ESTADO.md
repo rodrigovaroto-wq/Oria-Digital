@@ -31,8 +31,6 @@
    - São cerca de 2 h para 78 mandatos e 1.984 documentos. O recálculo leva 28 s por .xlsx.
 3. **A MESMA varredura contra o código deste PR:** use a prévia da Vercel do #275 (`VM_BASE=`) ou o build local com `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` de produção. As FALHAS dos dois lados têm de ser comparadas.
 4. **Fotografe o banco antes e depois.** A consulta está no fim do script.
-   - ATENÇÃO: em 06/11, entre 20:45 e 21:05, a foto mudou (+96 eventos, +13 decisões) porque um mandato NOVO foi criado pelo portal às 20:55 (`caso_criado`, ator `portal:navegador`) e o n8n o processou.
-   - Não foi a varredura. Para provar "só leitura", compare só eventos de ator `rdvaroto@…`/`portal:*` na janela.
 5. **Não exercitado em produção:**
    - a recusa de confirmar documento sem tipo pelo navegador (só pela suíte);
    - "Reabrir pendência" (grava em 1 clique, sem confirmação; decidir se deve pedir confirmação como as outras);
