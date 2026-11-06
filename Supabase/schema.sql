@@ -15588,11 +15588,18 @@ begin
   -- gatilho não vê) e o ciclo de vida apagaria versões antigas com DELETE dias depois, em nome do sistema. Esse DELETE não é um ato de alguém: não vira evento.
   if v_old ->> 'is_delete_marker' = 'true' or v_old ->> 'archived_at' is not null then return null; end if;
 
-  if v_uid is not null then
-    -- Caminho 1: o JWT chegou como o do usuário (PostgREST, ou o que a etapa 1 da API do Storage faz).
+  if v_uid is not null and v_op in ('storage.object.delete', 'storage.object.delete_many') then
+    -- Caminho 1: o JWT chegou como o do usuário DENTRO de uma operação REST de exclusão (a lista de permitidos abaixo). Na API real auth.uid() só é não-nulo na sondagem
+    -- DESFEITA do testPermission (etapa 1); no DELETE efetivo (etapa 2) é nulo e o ator vem do cabeçalho (caminho 2).
     v_uid_ev := v_uid;
     v_origem := 'auth.uid';
     v_ator   := coalesce((select u.email from auth.users u where u.id = v_uid), 'usuario:' || v_uid::text);
+  elsif v_uid is not null then
+    -- auth.uid() não-nulo FORA da operação REST de exclusão só acontece em SQL direto com claims setados à mão (ex.: personificação de papel no SQL Editor mais
+    -- `set local storage.allow_delete_query='true'`). Gravar o nome da pessoa personificada como autor certo seria ausência apresentada como dado: é SQL direto, o sub
+    -- é só ALEGADO (antes.sub_alegado) e session_user diz quem conectou.
+    v_ator := 'storage:sql_direto'; v_origem := 'auth.uid_fora_da_rest'; v_sub_al := v_uid::text;
+    v_motivo := 'auth.uid fora da operacao REST de exclusao';
   else
     -- Caminho 2: a exclusão EFETIVA da API do Storage roda como superusuário (asSuperUser, supabase/storage src/internal/database/pg-connection.ts:725-742):
     -- role=service_role e request.jwt.claim.sub vazio — auth.uid() é nulo e fn_conexao_de_servico() é VERDADEIRO para toda exclusão, inclusive a do Analista.
@@ -15639,8 +15646,8 @@ begin
           elsif nullif(v_pl ->> 'sub', '') is null then
             v_motivo := 'jwt sem sub';
           else
-            v_sub := (v_pl ->> 'sub')::uuid;
-            v_sub_al := v_sub::text;
+            v_sub_al := v_pl ->> 'sub';   -- antes do cast: um sub que não é uuid cai no handler abaixo e a evidência (texto) fica
+            v_sub := v_sub_al::uuid;
             select u.email into v_email from auth.users u where u.id = v_sub;
             if not found then v_motivo := 'sub inexistente em auth.users';
             else v_uid_ev := v_sub; v_origem := 'cabecalho_jwt'; v_ator := coalesce(v_email, 'usuario:' || v_sub::text); end if;
@@ -15648,7 +15655,7 @@ begin
         end if;
       end if;
     exception when others then
-      v_uid_ev := null; v_origem := null; v_ator := null; v_sub_al := null;
+      v_uid_ev := null; v_origem := null; v_ator := null;
       v_motivo := 'cabecalho ilegivel';
     end;
     if v_ator is null then v_ator := 'storage:nao_identificado'; v_origem := 'nao_identificado'; end if;
@@ -17918,6 +17925,21 @@ CREATE VIEW public.instalacao_sonda_entidade_balcao_ambiguo AS
 --
 
 COMMENT ON VIEW public.instalacao_sonda_entidade_balcao_ambiguo IS '(0162) Autoteste de fn_entidade_e_balcao_ambiguo, EXECUTADO contra um fixture PERMANENTE e isolado (o caso "Sonda 0162", que não é mandato real): 1 linha só se a entidade com pendência entidade_ambigua ABERTA responde true, a entidade sem pendência e a com a MESMA pendência RESOLVIDA respondem false, e o predicado não quebra para entidade inexistente nem confunde caso. Um marcador textual de corpo/função não pega um "false and" que mate o predicado e deixe os comentários intactos (achado D da revisão da 0157) — esta view pega, porque o predicado É executado.';
+
+--
+-- Name: instalacao_sonda_evento_sem_forja; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_evento_sem_forja AS
+ SELECT (policyname)::text AS policy
+   FROM pg_policies p
+  WHERE ((schemaname = 'public'::name) AND (tablename = 'evento_auditoria'::name) AND (policyname = 'evento_auditoria_insert'::name) AND (cmd = 'INSERT'::text) AND ('authenticated'::name = ANY (roles)) AND (with_check ~ 'documento_original_apagado'::text));
+
+--
+-- Name: VIEW instalacao_sonda_evento_sem_forja; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_evento_sem_forja IS 'Sonda da 0224: uma linha = authenticated não insere à mão evento documento_original_apagado. Zero linhas: a policy voltou ao desenho da 0216 e qualquer Analista forja quem apagou o original.';
 
 --
 -- Name: taxonomia_linha_exigida; Type: TABLE; Schema: public; Owner: -
@@ -20842,7 +20864,7 @@ ALTER TABLE public.evento_auditoria ENABLE ROW LEVEL SECURITY;
 -- Name: evento_auditoria evento_auditoria_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY evento_auditoria_insert ON public.evento_auditoria FOR INSERT TO authenticated WITH CHECK (public.fn_pode_escrever_evento(entidade_ref));
+CREATE POLICY evento_auditoria_insert ON public.evento_auditoria FOR INSERT TO authenticated WITH CHECK ((public.fn_pode_escrever_evento(entidade_ref) AND (acao <> 'documento_original_apagado'::text)));
 
 --
 -- Name: evento_auditoria evento_auditoria_read; Type: POLICY; Schema: public; Owner: -
@@ -23790,6 +23812,13 @@ GRANT SELECT ON TABLE public.instalacao_sonda_combinado_estrutural TO service_ro
 
 GRANT SELECT ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_evento_sem_forja; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_evento_sem_forja TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_evento_sem_forja TO service_role;
 
 --
 -- Name: TABLE taxonomia_linha_exigida; Type: ACL; Schema: public; Owner: -

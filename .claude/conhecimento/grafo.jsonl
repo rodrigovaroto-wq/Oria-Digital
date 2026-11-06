@@ -1659,16 +1659,17 @@
 {"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":94}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"Supabase/test/operacao.test.sql","l":35}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_resumo","f":"Supabase/test/operacao.test.sql","l":90}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/original_apagado.test.sql","l":140}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_caso_da_chave_do_storage","f":"Supabase/test/original_apagado.test.sql","l":409}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/original_apagado.test.sql","l":136}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"Supabase/test/original_apagado.test.sql","l":409}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"Supabase/test/original_apagado.test.sql","l":349}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/original_apagado.test.sql","l":390}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/original_apagado.test.sql","l":410}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_ler_caso","f":"Supabase/test/original_apagado.test.sql","l":409}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/original_apagado.test.sql","l":144}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/original_apagado.test.sql","l":133}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/original_apagado.test.sql","l":146}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_caso_da_chave_do_storage","f":"Supabase/test/original_apagado.test.sql","l":434}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/original_apagado.test.sql","l":142}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"Supabase/test/original_apagado.test.sql","l":434}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"Supabase/test/original_apagado.test.sql","l":374}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/original_apagado.test.sql","l":415}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/original_apagado.test.sql","l":435}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_evento","f":"Supabase/test/original_apagado.test.sql","l":456}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_ler_caso","f":"Supabase/test/original_apagado.test.sql","l":434}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/original_apagado.test.sql","l":150}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/original_apagado.test.sql","l":139}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"Supabase/test/papel_da_linha.test.sql","l":233}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Supabase/test/papel_da_linha.test.sql","l":204}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"Supabase/test/papel_da_linha.test.sql","l":244}
@@ -2683,8 +2684,8 @@
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":63}
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_registrar_falha_execucao","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":96}
 {"k":"e","de":"migration:0223","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","l":37}
-{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":314}
-{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_trg_auditar_original_apagado","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":117}
+{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":347}
+{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_trg_auditar_original_apagado","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":121}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

@@ -25,8 +25,10 @@
 --      JWT sem o prefixo Bearer: atribuído;
 --   6. o Histórico do mandato mostra a exclusão a quem lê o mandato (Analista alocada, Leitura) e NÃO a quem não lê; `storage:nao_identificado` NÃO some como "Sistema";
 --   7. falha fechada: se a trilha não puder ser gravada, o objeto NÃO é apagado;
---   8. a sonda enxerga o gatilho, a policy de update e o versionamento: 7 requisitos da 0224 presentes, e cada um desfeito a faz acusar;
+--   8. a sonda enxerga o gatilho, a policy de update e o versionamento: 8 requisitos da 0224 presentes, e cada um desfeito a faz acusar;
 --   9. mover/sobrescrever original (UPDATE) é só do Sócio; o upload (INSERT) do Analista alocado continua;
+--  11. a trilha não se forja pela porta da frente: ninguém insere à mão a ação documento_original_apagado (nem o Sócio), e o gatilho continua gravando;
+--   1b. `auth.uid()` só atribui dentro da operação REST de exclusão; fora dela (SQL direto com claims à mão) é `storage:sql_direto` com o sub só ALEGADO;
 --  10. versionamento: delete marker e versão arquivada não viram evento; sem as colunas do versionamento o gatilho continua gravando.
 -- =============================================================================
 
@@ -95,6 +97,10 @@ create or replace function teste_b64u_d16(p text) returns text language sql immu
 create or replace function teste_jwt_d16(p_payload text) returns text language sql immutable as $$
   select 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' || teste_b64u_d16(p_payload) || '.assinatura' $$;
 
+-- Cabeçalhos de um usuário na REST: só o `authorization` com o JWT dele (o que o Storage verificou na entrada).
+create or replace function teste_hdr_d16(p_uid uuid) returns text language sql immutable as $$
+  select jsonb_build_object('authorization', 'Bearer ' || teste_jwt_d16(jsonb_build_object('sub', p_uid, 'role', 'authenticated')::text))::text $$;
+
 -- Apaga UM objeto pelo caminho real da API com os cabeçalhos dados e devolve o resultado do DELETE.
 create or replace function teste_api_apaga_d16(p_headers text, p_nome text, p_path text default null, p_op text default 'storage.object.delete') returns text
 language plpgsql as $$
@@ -102,7 +108,7 @@ declare r text;
 begin
   -- Sem path/operação informados, é a REST REAL de exclusão (a única em que o Storage verifica o JWT do cabeçalho). Operação '' = job de fila.
   perform teste_api_d16(p_headers, coalesce(p_path, '/object/documentos/' || p_nome), p_op);
-  r := teste_tenta_d16(format($q$delete from storage.objects where bucket_id = 'documentos' and name = %L$q$, p_nome));
+  r := teste_tenta_d16(format($q$delete from storage.objects where bucket_id = 'documentos' and name = any (string_to_array(%L, '|'))$q$, p_nome));   -- p_nome: um nome, ou vários separados por '|' (um DELETE só)
   perform teste_servico_d16();
   return r;
 end $$;
@@ -113,7 +119,7 @@ delete from storage.objects where name like '%-0224.pdf';
 update storage.buckets set versioning_status = 'DISABLED' where id = 'documentos';
 delete from auth.users where id in ('00000000-0000-0000-0000-00000000d161', '00000000-0000-0000-0000-00000000d162',
   '00000000-0000-0000-0000-00000000d163', '00000000-0000-0000-0000-00000000d164', '00000000-0000-0000-0000-00000000d165');
-delete from evento_auditoria where acao = 'documento_original_apagado';
+delete from evento_auditoria where acao in ('documento_original_apagado', 'teste_0224_outra');
 
 do $$
 declare
@@ -158,9 +164,8 @@ begin
 
   -- ---------------------------------------------------------------- 1. Analista alocada apaga o original do mandato dela
   raise notice '--- 1. a Analista alocada apaga: o objeto some e fica UM evento, com ela como ator e o mandato certo ---';
-  perform teste_como_d16(u_ana);
-  v_res := teste_tenta_d16(format($q$delete from storage.objects where bucket_id = 'documentos' and name = '%s/hash-1-0224.pdf'$q$, v_a));
-  perform teste_servico_d16();
+  -- Pela REST REAL (etapa 2: service_role, sub vazio, JWT no cabeçalho, operação storage.object.delete): é o único caminho em que o ator se identifica.
+  v_res := teste_api_apaga_d16(teste_hdr_d16(u_ana), v_a || '/hash-1-0224.pdf');
   perform teste_assert_d16(v_res = 'ok:1' and not exists (select 1 from storage.objects where name = v_a || '/hash-1-0224.pdf'),
     'a Analista alocada apaga o original do mandato dela (a decisão do dono: continua podendo)', v_res);
   select count(*) into v_n from evento_auditoria where acao = 'documento_original_apagado' and entidade_ref = 'caso:' || v_a;
@@ -177,12 +182,31 @@ begin
 
   -- ---------------------------------------------------------------- 2. Sócio apaga
   raise notice '--- 2. o Sócio apaga: evento com o e-mail dele ---';
-  perform teste_como_d16(u_socio);
-  v_res := teste_tenta_d16(format($q$delete from storage.objects where bucket_id = 'documentos' and name = '%s/hash-2-0224.pdf'$q$, v_a));
-  perform teste_servico_d16();
+  v_res := teste_api_apaga_d16(teste_hdr_d16(u_socio), v_a || '/hash-2-0224.pdf');
   select * into v_ev from evento_auditoria where acao = 'documento_original_apagado' and antes->>'caminho' = v_a || '/hash-2-0224.pdf';
   perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'socio@0224.local' and v_ev.entidade_ref = 'caso:' || v_a,
     'o Sócio apaga e a exclusão é auditada com o e-mail dele no mandato certo', v_res || ' ' || coalesce(v_ev.ator, 'sem evento'));
+
+  -- ---------------------------------------------------------------- 1b. auth.uid() só atribui dentro da operação REST de exclusão
+  raise notice '--- 1b. SQL direto com claims à mão (auth.uid() não-nulo, sem operação REST): storage:sql_direto, sub só alegado ---';
+  v_nome := v_c || '/direto-0224.pdf';
+  insert into storage.objects (bucket_id, name, metadata) values ('documentos', v_nome, '{"size": 3}');
+  perform teste_como_d16(u_socio);
+  v_res := teste_tenta_d16(format($q$delete from storage.objects where name = '%s'$q$, v_nome));
+  perform teste_servico_d16();
+  select * into v_ev from evento_auditoria where acao = 'documento_original_apagado' and antes->>'caminho' = v_nome;
+  perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'storage:sql_direto' and v_ev.antes->>'sub_alegado' = u_socio::text and v_ev.antes->>'usuario_id' is null
+    and v_ev.antes->>'sessao_usuario' = session_user and v_ev.antes->>'ator_origem' = 'auth.uid_fora_da_rest',
+    'auth.uid() não-nulo SEM a operação REST de exclusão (personificação em SQL): não atribui; storage:sql_direto com o sub alegado e session_user', v_res || ' ' || coalesce(v_ev.ator, 'sem evento') || ' / ' || coalesce(v_ev.antes::text, ''));
+  v_nome := v_c || '/direto-op-0224.pdf';
+  insert into storage.objects (bucket_id, name, metadata) values ('documentos', v_nome, '{"size": 3}');
+  perform set_config('storage.operation', 'storage.object.delete', true);
+  perform teste_como_d16(u_socio);
+  v_res := teste_tenta_d16(format($q$delete from storage.objects where name = '%s'$q$, v_nome));
+  perform teste_servico_d16();
+  select * into v_ev from evento_auditoria where acao = 'documento_original_apagado' and antes->>'caminho' = v_nome;
+  perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'socio@0224.local' and v_ev.antes->>'ator_origem' = 'auth.uid',
+    'auth.uid() não-nulo DENTRO da operação REST de exclusão: atribui (e-mail)', v_res || ' ' || coalesce(v_ev.ator, 'sem evento'));
 
   -- ---------------------------------------------------------------- 3. quem não pode apagar não apaga e não deixa evento
   raise notice '--- 3. Analista de outro mandato, Leitura e sem papel não apagam, e a tentativa barrada não vira evento ---';
@@ -213,9 +237,7 @@ begin
   select count(*) into v_n from evento_auditoria where acao = 'documento_original_apagado';
   perform teste_assert_d16(v_n = v_n0 and not exists (select 1 from storage.objects where name = v_a || '/outro-bucket-0224.pdf'),
     'apagar objeto de OUTRO bucket não deixa evento de original', format('apagou %s; eventos %s -> %s', v_res, v_n0, v_n));
-  perform teste_como_d16(u_ana);
-  v_res := teste_tenta_d16(format($q$delete from storage.objects where bucket_id = 'documentos' and name in ('%s/hash-4-0224.pdf', '%s/hash-5-0224.pdf')$q$, v_a, v_a));
-  perform teste_servico_d16();
+  v_res := teste_api_apaga_d16(teste_hdr_d16(u_ana), v_a || '/hash-4-0224.pdf|' || v_a || '/hash-5-0224.pdf', '/object/documentos', 'storage.object.delete_many');
   select count(*) into v_n from evento_auditoria where acao = 'documento_original_apagado' and ator = 'ana@0224.local'
     and antes->>'caminho' in (v_a || '/hash-4-0224.pdf', v_a || '/hash-5-0224.pdf');
   perform teste_assert_d16(v_res = 'ok:2' and v_n = 2, 'dois objetos num DELETE só: um evento para cada um', v_res || ' / ' || v_n);
@@ -328,6 +350,9 @@ begin
       and v_ev.ator = 'storage:nao_identificado' and v_ev.antes->>'ator_motivo' = split_part(v_j, '|', 2),
       format('cabeçalho "%s": o DELETE segue e o ator é storage:nao_identificado, motivo "%s"', split_part(v_j, '|', 1), split_part(v_j, '|', 2)),
       v_res || ' ' || coalesce(v_ev.ator, 'sem evento') || ' / ' || coalesce(v_ev.antes->>'ator_motivo', 'sem motivo'));
+    if v_j like 'SUB_NAO_UUID|%' then
+      perform teste_assert_d16(v_ev.antes->>'sub_alegado' = 'nao-e-uuid', 'sub que não é uuid: o texto alegado fica em antes.sub_alegado (evidência)', coalesce(v_ev.antes::text, 'sem evento'));
+    end if;
     if v_j like 'SUB_INEXISTENTE|%' then
       perform teste_assert_d16(v_ev.antes->>'sub_alegado' = '00000000-0000-0000-0000-0000000fffff', 'sub inexistente: o sub alegado fica em antes.sub_alegado (evidência)', coalesce(v_ev.antes::text, 'sem evento'));
     end if;
@@ -388,7 +413,7 @@ begin
   -- ---------------------------------------------------------------- 8. a sonda
   raise notice '--- 8. a sonda enxerga o gatilho ---';
   select count(*) filter (where not presente), count(*) into v_falta, v_n from fn_instalacao_conferir() where migration = '0224';
-  perform teste_assert_d16(v_n = 7 and v_falta = 0, 'os 7 requisitos da 0224 estão no catálogo e presentes', format('%s requisitos, %s ausentes', v_n, v_falta));
+  perform teste_assert_d16(v_n = 8 and v_falta = 0, 'os 8 requisitos da 0224 estão no catálogo e presentes', format('%s requisitos, %s ausentes', v_n, v_falta));
   -- O gatilho da 0224 está na view da sonda. Os gatilhos DA PLATAFORMA em storage.objects (em produção: protect_objects_delete, update_objects_updated_at, ...) ficam fora do
   -- catálogo de propósito: não são nossos e o stub do run.sh nem os tem; este assert NÃO afirma nada sobre eles.
   select count(*) into v_n from instalacao_sonda_gatilho_original_apagado where gatilho = 'trg_auditar_original_apagado';
@@ -423,6 +448,16 @@ begin
   select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_sem_versionamento' and not presente;
   alter table storage.buckets add column versioning_status text default 'DISABLED';
   perform teste_assert_d16(v_n = 1, 'sem a coluna versioning_status nada foi medido e a sonda acusa (não passa vazia)', v_n::text);
+  -- a policy de INSERT de evento_auditoria: no desenho da 0216 (sem excluir a ação) a sonda acusa; devolvida a INSTALADA, volta a ver.
+  select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_insert_sem_forja' and presente;
+  perform teste_assert_d16(v_n = 1, 'a sonda vê a policy de INSERT que barra a ação documento_original_apagado', v_n::text);
+  select p.with_check into v_pw from pg_policies p where p.schemaname = 'public' and p.tablename = 'evento_auditoria' and p.policyname = 'evento_auditoria_insert';
+  drop policy evento_auditoria_insert on evento_auditoria;
+  create policy evento_auditoria_insert on evento_auditoria for insert to authenticated with check (fn_pode_escrever_evento(entidade_ref));
+  select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_insert_sem_forja' and not presente;
+  drop policy evento_auditoria_insert on evento_auditoria;
+  execute format('create policy evento_auditoria_insert on evento_auditoria for insert to authenticated with check (%s)', v_pw);
+  perform teste_assert_d16(v_n = 1, 'com a policy de INSERT no desenho da 0216 a sonda acusa', v_n::text);
 
   -- ---------------------------------------------------------------- 9. mover/sobrescrever só para Sócio
   raise notice '--- 9. mover/sobrescrever original (UPDATE) é só do Sócio; o upload do Analista alocado continua ---';
@@ -466,11 +501,39 @@ begin
   select count(*) into v_n from evento_auditoria where acao = 'documento_original_apagado' and antes->>'caminho' = v_c || '/sem-colunas-0224.pdf';
   perform teste_assert_d16(v_res = 'ok:1' and v_n = 1, 'sem as colunas do versionamento no Storage, o gatilho continua gravando a exclusão', v_res || ' / ' || v_n);
 
+  -- ---------------------------------------------------------------- 11. a trilha não se forja pela porta da frente
+  raise notice '--- 11. ninguém insere à mão a ação documento_original_apagado; outras ações seguem; o gatilho continua gravando ---';
+  perform teste_como_d16(u_ana);
+  v_res := teste_tenta_d16(format($q$insert into evento_auditoria (ator, acao, entidade_ref, antes) values ('socio@0224.local', 'documento_original_apagado', 'caso:%s', '{"nome_original": "FORJADO.pdf"}')$q$, v_a));
+  perform teste_servico_d16();
+  perform teste_assert_d16(v_res = '42501', 'a Analista alocada NÃO insere à mão a exclusão de original (ator livre = forja do Sócio)', v_res);
+  perform teste_como_d16(u_socio);
+  v_res := teste_tenta_d16(format($q$insert into evento_auditoria (ator, acao, entidade_ref, antes) values ('socio@0224.local', 'documento_original_apagado', 'caso:%s', '{"nome_original": "FORJADO.pdf"}')$q$, v_a));
+  perform teste_servico_d16();
+  perform teste_assert_d16(v_res = '42501', 'nem o Sócio insere à mão a exclusão de original (só o gatilho grava essa ação)', v_res);
+  perform teste_como_d16(u_xan);
+  v_res := teste_tenta_d16(format($q$insert into evento_auditoria (ator, acao, entidade_ref, antes) values ('x@0224.local', 'documento_original_apagado', 'caso:%s', '{}')$q$, v_b));
+  perform teste_servico_d16();
+  perform teste_assert_d16(v_res = '42501', 'nem a Analista alocada no próprio mandato B', v_res);
+  perform teste_como_d16(u_ana);
+  perform teste_como_d16(u_ana);
+  v_res := teste_tenta_d16(format($q$insert into evento_auditoria (ator, acao, entidade_ref) values ('ana@0224.local', 'teste_0224_outra', 'caso:%s')$q$, v_a));
+  perform teste_servico_d16();
+  perform teste_assert_d16(v_res = 'ok:1', 'a policy não é larga demais: a Analista alocada continua inserindo OUTRAS ações no mandato dela', v_res);
+  perform teste_como_d16(u_socio);
+  select count(*) into v_n from fn_historico_do_caso(v_a) where resumo like '%FORJADO%';
+  perform teste_servico_d16();
+  perform teste_assert_d16(v_n = 0, 'o Histórico do mandato não mostra a exclusão forjada', v_n::text);
+  select count(*) into v_n from evento_auditoria where acao = 'documento_original_apagado' and antes->>'nome_original' = 'FORJADO.pdf';
+  perform teste_assert_d16(v_n = 0, 'nenhuma linha forjada em evento_auditoria', v_n::text);
+  -- O gatilho (SECURITY DEFINER do dono, que no Supabase tem BYPASSRLS) continua gravando com a policy fechada: as seções 1, 2 e 5b apagam e acham o evento.
+  -- NÃO testável aqui: dono sem BYPASSRLS (o stub local roda como superusuário); em produção o `postgres` tem BYPASSRLS (medido, só leitura).
+
   -- ---------------------------------------------------------------- limpeza
   delete from caso where nome like '0224 —%';
   delete from storage.objects where name like '%-0224.pdf';
   delete from auth.users where id in (u_socio, u_ana, u_leo, u_nil, u_xan);
-  delete from evento_auditoria where acao = 'documento_original_apagado';
+  delete from evento_auditoria where acao in ('documento_original_apagado', 'teste_0224_outra');
 
   raise notice 'EXECUCOES=% FALHAS=%', current_setting('d16.execucoes', true), coalesce(current_setting('d16.falhas', true), '0');
   if current_setting('d16.medindo', true) is distinct from 'on' then
