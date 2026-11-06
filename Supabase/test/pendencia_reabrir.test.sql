@@ -1,12 +1,12 @@
--- Teste da 0225 — a decisão 'reabrir' de fn_decidir_pendencia (P16, VISTORIA_P2 §6 ALTA 1).
+-- Teste da 0227 — a decisão 'reabrir' de fn_decidir_pendencia (P16, VISTORIA_P2 §6 ALTA 1).
 -- Rodar via Supabase/test/run.sh (que aplica as migrations antes).
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2): 23 asserts. Medição: `PGOPTIONS=-cp16.medindo=on` faz o assert virar `raise warning 'FALHOU:'` e CONTAR.
--- Controle com a 0225 aplicada: 0 FALHOU. Com o corpo da 0109 de volta (conferido que a variante APLICOU antes de rodar): 16 de 23 FALHOU.
+-- Controle com a 0227 aplicada: 0 FALHOU. Com o corpo da 0109 de volta (conferido que a variante APLICOU antes de rodar): 16 de 23 FALHOU.
 --
 -- O QUE SE AFIRMA É COMPORTAMENTO: uma pendência decidida volta a `aberta`, sai da contagem de ressalvas/rejeitadas e VOLTA A BLOQUEAR o Portão 2;
 -- a trilha (evento_auditoria) diz de onde veio e se desfez uma decisão. Os três ramos da 0109 seguem em pendencia_decisao.test.sql (não repetidos).
--- Sem `decisao` na reversão é DECISÃO DE DESENHO (cabeçalho da 0225), e por isso há um assert de que a decisao antiga fica e nenhuma nova nasce.
+-- Sem `decisao` na reversão é DECISÃO DE DESENHO (cabeçalho da 0227), e por isso há um assert de que a decisao antiga fica e nenhuma nova nasce.
 
 \set ON_ERROR_STOP on
 
@@ -33,7 +33,7 @@ declare
   v_n     int;
   v_ev    evento_auditoria%rowtype;
 begin
-  v_caso := (fn_upsert_caso('0225 — reabrir pendência'))::uuid;
+  v_caso := (fn_upsert_caso('0227 — reabrir pendência'))::uuid;
   insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao)
     values (v_caso, 'completude', 'item_faltante', 'bloqueante', true, 'falta o MUTUOS')
     returning id into v_pend;
@@ -111,7 +111,7 @@ begin
   perform teste_assert_reab((v_r->>'recusado') = 'true' and (v_r->>'motivo_recusa') like '%reabrir%',
     'a recusa de decisão desconhecida lista reabrir entre as opções', v_r->>'motivo_recusa');
   perform teste_assert_reab((select presente from fn_instalacao_conferir() where chave = 'pendencia_decidir_reabrir'),
-    'a sonda: pendencia_decidir_reabrir (0225) presente');
+    'a sonda: pendencia_decidir_reabrir (0227) presente');
 
   raise notice 'TODOS OS TESTES DE REABRIR A PENDÊNCIA PASSARAM';
 end $$;

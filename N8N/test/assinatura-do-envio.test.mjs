@@ -288,6 +288,17 @@ test('v2 vencido é "expirado" (só depois da assinatura); no instante do exp j�
   assert.equal(veredictoDoEnvio({ token: TOKEN_V2_FIXO, mandato: 'x', segredo: SEGREDO, agoraMs: EXP_V2 * 1000 + 1 }).caso_id, null);
 });
 
+test('v2 com relógio inválido (NaN, undefined, Infinity, texto) é RECUSADO como expirado, nunca aceito', () => {
+  // Toda comparação com NaN é falsa: um `exp <= agora` sozinho trataria "não sei que horas são" como "ainda vale".
+  // O token é válido (a assinatura confere): só o relógio é o defeito, e a recusa tem de ser a de vencido.
+  for (const agoraMs of [Number.NaN, undefined, Infinity, -Infinity, 'agora']) {
+    // `v2()` tem default em agoraMs (undefined viraria um relógio válido): chama-se a lib direto.
+    assert.deepEqual(verificarEnvio({ token: TOKEN_V2_FIXO, mandato: 'qualquer', segredo: SEGREDO, agoraMs }), { ok: false, motivo: 'expirado' }, String(agoraMs));
+    assert.equal(veredictoDoEnvio({ token: TOKEN_V2_FIXO, mandato: 'x', segredo: SEGREDO, agoraMs }).caso_id, null, String(agoraMs));
+  }
+  assert.equal(v2(TOKEN_V2_FIXO, AGORA_V2).ok, true); // o mesmo token com relógio válido segue aceito
+});
+
 test('v2 malformado: uuid inválido, MAIÚSCULAS, partes a mais/menos e hmac curto -> malformado', () => {
   const [, e, u, c, sig] = TOKEN_V2_FIXO.split('.');
   const casos = {

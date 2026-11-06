@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0226 — A LINHA DO DOCUMENTO SEM TIPO QUE CHEGAVA AO EXCEL COMO ACEITA (P16 G1, VISTORIA_P2 §6 ALTA 2)
+-- 0228 — A LINHA DO DOCUMENTO SEM TIPO QUE CHEGAVA AO EXCEL COMO ACEITA (P16 G1, VISTORIA_P2 §6 ALTA 2)
 -- (Redefine fn_registrar_campos_extraidos com a MESMA assinatura, o MESMO retorno e a MESMA ACL (execute para authenticated, invoker); só o
 --  auto-aceite muda. Acrescenta 1 requisito à sonda. Sem tabela, sem gatilho, sem backfill.)
 --
@@ -23,7 +23,7 @@
 -- CHAMADORES de fn_registrar_campos_extraidos: n8n (nó Gravar Campos (Sombra)), Verificação/run.mts:330 e ~30 testes/fixtures em Supabase/test.
 -- Só muda o comportamento de quem chama com documento SEM tipo e dial N2/N3 — antes aceitava, agora deixa pendente.
 --
--- A SONDA. Requisito campos_auto_aceite_exige_tipo (bloqueante): o corpo contém `and v_tipo is not null then`. Ausente = a 0226 não foi aplicada
+-- A SONDA. Requisito campos_auto_aceite_exige_tipo (bloqueante): o corpo contém `and v_tipo is not null then`. Ausente = a 0228 não foi aplicada
 -- (ou uma migration posterior republicou a função da 0204).
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/auto_aceite_exige_tipo.test.sql, 13 asserts, medidos em 06/11/2026 com `PGOPTIONS=-cp16.medindo=on`. Controle com a migration aplicada: 0 reprovam. Com o corpo da 0204 de volta (conferido que a variante APLICOU antes de rodar): 7 de 13 reprovam.
@@ -215,7 +215,7 @@ begin
 
   -- ----- Auto-aceite (0029): DEPOIS das guardas, nunca antes -----------------
   --
-  -- 0226: E SÓ DE DOCUMENTO COM TIPO. `v_tipo` (lido no topo, 0203) nulo = o documento nunca foi classificado: nada do que ele diz foi
+  -- 0228: E SÓ DE DOCUMENTO COM TIPO. `v_tipo` (lido no topo, 0203) nulo = o documento nunca foi classificado: nada do que ele diz foi
   -- conferido contra o que um BALANCO/DRE/... deve conter, e "aceito" no Excel passa a querer dizer "conferido". Medido em produção em 04/11/2026:
   -- um .txt de 57 bytes sem tipo, entidade e período teve "Saldo de caixa: 1000" auto-aceita e chegou ao book como ACEITO.
   --
@@ -295,8 +295,8 @@ grant execute on function fn_registrar_campos_extraidos(uuid, jsonb, nivel_auton
 
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
-  ('campos_auto_aceite_exige_tipo', '0226', 'corpo', 'fn_registrar_campos_extraidos', 'and v_tipo is not null then', null,
-   'fn_registrar_campos_extraidos sem a exigência de tipo no auto-aceite: linha de documento nunca classificado volta a ser auto-aceita e chega ao Excel como ACEITO. Ausente = a 0226 não foi aplicada (ou uma migration posterior republicou a função da 0204).',
+  ('campos_auto_aceite_exige_tipo', '0228', 'corpo', 'fn_registrar_campos_extraidos', 'and v_tipo is not null then', null,
+   'fn_registrar_campos_extraidos sem a exigência de tipo no auto-aceite: linha de documento nunca classificado volta a ser auto-aceita e chega ao Excel como ACEITO. Ausente = a 0228 não foi aplicada (ou uma migration posterior republicou a função da 0204).',
    'bloqueante', 1023)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
@@ -304,6 +304,6 @@ on conflict (chave) do update set
   porque = excluded.porque, severidade = excluded.severidade, ordem = excluded.ordem;
 
 update instalacao_cobertura
-   set ate_migration = '0226', revisado_em = current_date,
-       observacao = 'A 0226 suprime o auto-aceite de linhas de documento sem tipo; o requisito campos_auto_aceite_exige_tipo prova em produção que foi aplicada.'
+   set ate_migration = '0228', revisado_em = current_date,
+       observacao = 'A 0228 suprime o auto-aceite de linhas de documento sem tipo; o requisito campos_auto_aceite_exige_tipo prova em produção que foi aplicada.'
  where id = true;

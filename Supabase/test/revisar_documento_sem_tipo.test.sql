@@ -1,8 +1,8 @@
--- Teste da 0224 — fn_revisar_documento não confirma documento SEM tipo (P16, VISTORIA_P2 §6 ALTA 1).
+-- Teste da 0226 — fn_revisar_documento não confirma documento SEM tipo (P16, VISTORIA_P2 §6 ALTA 1).
 -- Rodar via Supabase/test/run.sh (que aplica as migrations antes).
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2): 19 asserts. Medição: `PGOPTIONS=-cp16.medindo=on` faz o assert virar `raise warning 'FALHOU:'` e CONTAR,
--- em vez de parar no primeiro. Controle com a 0224 aplicada: 0 FALHOU. Com o corpo da 0018 de volta (conferido que a variante APLICOU
+-- em vez de parar no primeiro. Controle com a 0226 aplicada: 0 FALHOU. Com o corpo da 0018 de volta (conferido que a variante APLICOU
 -- antes de rodar): 10 de 19 FALHOU.
 --
 -- O QUE SE AFIRMA É COMPORTAMENTO: confirmar documento sem tipo devolve recusa e NADA muda (nem documento, nem entidade/período novos, nem
@@ -37,7 +37,7 @@ declare
   v_ne0   int;
 begin
   select codigo into v_tipo from taxonomia_tipo_documento order by codigo limit 1;
-  v_caso := (fn_upsert_caso('0224 — documento sem tipo'))::uuid;
+  v_caso := (fn_upsert_caso('0226 — documento sem tipo'))::uuid;
   insert into documento (caso_id, tipo_taxonomia) values (v_caso, null) returning id into v_doc;
   insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id)
     values (v_caso, 'classificacao', 'classificacao_pendente', 'bloqueante', true, 'documento sem tipo', v_doc)
@@ -66,7 +66,7 @@ begin
     'nenhum item de checklist criado');
 
   raise notice '--- 2. a recusa vem ANTES de qualquer escrita: entidade/período novos não nascem ---';
-  v_r := fn_revisar_documento(v_doc, 'ana@oria', null, 'ENTIDADE FANTASMA 0224', 'anual', '2099', 'conferi');
+  v_r := fn_revisar_documento(v_doc, 'ana@oria', null, 'ENTIDADE FANTASMA 0226', 'anual', '2099', 'conferi');
   perform teste_assert_rev((v_r->>'recusado') = 'true', 'sem tipo e com entidade/período novos: recusado', v_r::text);
   select count(*) into v_n from entidade where caso_id = v_caso;
   perform teste_assert_rev(v_n = v_ne0, 'a entidade nova não foi criada', format('%s -> %s', v_ne0, v_n));
@@ -96,7 +96,7 @@ begin
 
   raise notice '--- 5. a sonda vê a correção ---';
   perform teste_assert_rev((select presente from fn_instalacao_conferir() where chave = 'revisar_documento_recusa_sem_tipo'),
-    'a sonda: revisar_documento_recusa_sem_tipo (0224) presente');
+    'a sonda: revisar_documento_recusa_sem_tipo (0226) presente');
 
   raise notice 'TODOS OS TESTES DO DOCUMENTO SEM TIPO PASSARAM';
 end $$;

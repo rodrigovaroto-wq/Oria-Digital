@@ -33,7 +33,7 @@ export async function revisarDocumento(casoId: string, formData: FormData): Prom
   });
 
   if (error) return { erro: textoDeFalhaDaAcao("Falha ao revisar documento", error) };
-  // RECUSA COMO VALOR (0224): sem tipo, o banco não grava nada e devolve `recusado`. Sem ler este
+  // RECUSA COMO VALOR (0226): sem tipo, o banco não grava nada e devolve `recusado`. Sem ler este
   // campo, `error` nulo faria a recusa passar por sucesso — o defeito trocaria de sintoma.
   const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
   if (r?.recusado) return { erro: r.motivo_recusa ?? "Confirmação recusada." };

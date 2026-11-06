@@ -2636,7 +2636,7 @@ begin
       v_estado := 'aceita_com_ressalva';  v_rotulo := 'Prosseguir sem resolução'; v_tipo := 'ressalva';
     when 'nao_procede' then
       v_estado := 'rejeitada';            v_rotulo := 'Pendência não procede'; v_tipo := 'override';
-    -- 0225: a volta. Sem `decisao` (v_tipo nulo): nenhum decisao_tipo existente diz "reabri", ver o cabeçalho.
+    -- 0227: a volta. Sem `decisao` (v_tipo nulo): nenhum decisao_tipo existente diz "reabri", ver o cabeçalho.
     when 'reabrir' then
       v_estado := 'aberta';               v_rotulo := 'Reaberta'; v_tipo := null;
     else
@@ -2689,7 +2689,7 @@ begin
             jsonb_build_object('estado', v_p.estado),
             jsonb_build_object('estado', v_estado, 'rotulo', v_rotulo,
                                'caso_id', v_p.caso_id, 'motivo', v_motivo,
-                               -- 0225: reabrir uma pendência JÁ DECIDIDA desfaz uma decisão que fica na trilha (a `decisao` antiga não se apaga).
+                               -- 0227: reabrir uma pendência JÁ DECIDIDA desfaz uma decisão que fica na trilha (a `decisao` antiga não se apaga).
                                'reverte_decisao', p_decisao = 'reabrir' and v_p.estado in ('aceita_com_ressalva', 'rejeitada')));
 
   return jsonb_build_object('decidida', true, 'pendencia_id', p_pendencia_id,
@@ -2702,7 +2702,7 @@ $$;
 -- Name: FUNCTION fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) IS 'Os botões da tela em UMA função: contatar_cliente (não libera o portão), prosseguir (aceita com ressalva), nao_procede (rejeita) e, desde a 0225, reabrir (volta a aberta; de resolvida é recusado). Sem motivo obrigatório, sem expiração e sem teto, por decisão do dono (0109). Nada é apagado e tudo é contado.';
+COMMENT ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) IS 'Os botões da tela em UMA função: contatar_cliente (não libera o portão), prosseguir (aceita com ressalva), nao_procede (rejeita) e, desde a 0227, reabrir (volta a aberta; de resolvida é recusado). Sem motivo obrigatório, sem expiração e sem teto, por decisão do dono (0109). Nada é apagado e tudo é contado.';
 
 --
 -- Name: fn_definir_modelagem(uuid, text, integer, text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -6259,7 +6259,7 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
                       'modelagem_parametros', 'caso_criado', 'caso_fechado', 'caso_reaberto', 'reconferir_caso',
                       'perimetro_escopo_definido', 'perimetro_escopo_encerrado', 'entidade_papel_no_grupo_definido',
                       'entidade_forma_de_controle_definida', 'entidade_controlador_definido',
-                      'entidade_participacao_definida', 'entidade_fundida')
+                      'entidade_participacao_definida', 'entidade_fundida', 'documento_original_apagado')
   ),
   eventos as (
     -- documento recebido
@@ -6442,6 +6442,20 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
      where e.acao in ('perimetro_escopo_definido', 'perimetro_escopo_encerrado', 'entidade_papel_no_grupo_definido',
                       'entidade_forma_de_controle_definida', 'entidade_controlador_definido',
                       'entidade_participacao_definida', 'entidade_fundida')
+
+    union all
+    -- 0224 (D16): o original do cliente apagado do Storage. O gatilho de storage.objects grava `caso:<id>` + o que se perdeu em `antes`;
+    -- o ator é o e-mail de quem apagou; `storage:nao_identificado` aparece como está; os `storage:*` aparecem como estão (o portal os rotula; nenhum vira "Sistema").
+    select e.criado_em, 'documento_original_apagado', e.ator,
+           format('Original apagado do armazenamento: "%s"%s',
+                  coalesce(e.antes->>'nome_original', nullif(e.antes->>'arquivo', ''), '(sem nome)'),
+                  case when e.antes->>'tamanho_bytes' ~ '^[0-9]+$'
+                       then format(' (%s)', pg_size_pretty((e.antes->>'tamanho_bytes')::bigint)) else '' end),
+           (select d.id from documento d where d.caso_id = p_caso_id and d.id::text = e.antes->>'documento_id'),
+           jsonb_build_object('caminho', e.antes->>'caminho', 'arquivo', e.antes->>'arquivo',
+                              'documento_id', e.antes->>'documento_id', 'n_versao', e.antes->>'n_versao'),
+           'evento:' || e.id::text
+      from ev e where e.acao = 'documento_original_apagado'
   )
   select h.em, h.tipo,
          case when h.autor ~ '^(sistema|n8n)(:|$)' then null else h.autor end,
@@ -6461,7 +6475,7 @@ $_$;
 -- Name: FUNCTION fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) IS '0215: linha do tempo do mandato (quem fez o quê e quando), da mais nova para a mais velha, montada do que já é gravado: documento recebido, extração aceita, documento revisado, transcrição, classe corrigida, pendência decidida, pergunta enviada/descartada, premissa ativada/removida/em lote/vinculada, modelagem, apresentação, caso criado/aprovado/fechado/reaberto/reconferido, perímetro. autor NULL = o sistema (sistema:* e n8n*). paginação por cursor composto (p_antes, p_antes_chave) sobre a ordem total (em desc, chave desc), `chave` = identificador estável e único do evento; p_limite 1..1000. O instante do cursor tem de ser passado com a precisão inteira que a função devolveu (microssegundos). NÃO inclui exportações (não há log) nem mudança de dial (global). Somente leitura, security invoker.';
+COMMENT ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) IS '0224 (sobre a 0215): linha do tempo do mandato (quem fez o quê e quando), da mais nova para a mais velha, montada do que já é gravado. Acrescenta o tipo documento_original_apagado (o original apagado do Storage, com ator e nome do arquivo). Cursor composto (p_antes + p_antes_chave); autor NULL = sistema.';
 
 --
 -- Name: fn_indice_macro_anual(integer); Type: FUNCTION; Schema: public; Owner: -
@@ -12738,7 +12752,7 @@ begin
 
   -- ----- Auto-aceite (0029): DEPOIS das guardas, nunca antes -----------------
   --
-  -- 0226: E SÓ DE DOCUMENTO COM TIPO. `v_tipo` (lido no topo, 0203) nulo = o documento nunca foi classificado: nada do que ele diz foi
+  -- 0228: E SÓ DE DOCUMENTO COM TIPO. `v_tipo` (lido no topo, 0203) nulo = o documento nunca foi classificado: nada do que ele diz foi
   -- conferido contra o que um BALANCO/DRE/... deve conter, e "aceito" no Excel passa a querer dizer "conferido". Medido em produção em 04/11/2026:
   -- um .txt de 57 bytes sem tipo, entidade e período teve "Saldo de caixa: 1000" auto-aceita e chegou ao book como ACEITO.
   --
@@ -14707,7 +14721,7 @@ begin
     raise exception 'documento % não encontrado', p_documento_id;
   end if;
 
-  -- 0224: sem tipo não há o que confirmar. Fica ANTES de qualquer escrita (entidade/período novos também gravam).
+  -- 0226: sem tipo não há o que confirmar. Fica ANTES de qualquer escrita (entidade/período novos também gravam).
   if coalesce(p_novo_tipo_taxonomia, v_tipo_antigo) is null then
     return jsonb_build_object('recusado', true, 'documento_id', p_documento_id,
       'motivo_recusa', 'Escolha o tipo do documento antes de confirmar: sem tipo não há o que confirmar.');
@@ -14786,7 +14800,7 @@ $$;
 -- Name: FUNCTION fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text) IS '0224 (sobre a 0018): confirma/corrige a classificação do documento. Sem tipo final (novo nem antigo) devolve {recusado, documento_id, motivo_recusa} e não grava nada. Com tipo: grava documento (confiança 1.0, fonte humano), refaz o checklist, registra decisão e evento, e fecha as pendências de revisão do documento.';
+COMMENT ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text) IS '0226 (sobre a 0018): confirma/corrige a classificação do documento. Sem tipo final (novo nem antigo) devolve {recusado, documento_id, motivo_recusa} e não grava nada. Com tipo: grava documento (confiança 1.0, fonte humano), refaz o checklist, registra decisão e evento, e fecha as pendências de revisão do documento.';
 
 --
 -- Name: fn_rotulo_contido(text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -15558,6 +15572,148 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_tokens_estruturais(p_chave text) IS 'Palavras estruturais de um rótulo (sem ligação, ruído de rodapé e a palavra "total"), ordenadas e sem repetição. Extraída de fn_rotulo_estrutural na 0102 para ser calculada UMA vez por rótulo: fn_papel_linha comparava nove grupos e pagava nove tokenizações iguais.';
+
+--
+-- Name: fn_trg_auditar_original_apagado(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_trg_auditar_original_apagado() RETURNS trigger
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+declare
+  v_old    jsonb := to_jsonb(old);   -- jsonb porque is_delete_marker/archived_at podem não existir na versão do Storage (campo ausente de record levanta erro)
+  v_uid    uuid  := auth.uid();
+  v_hdr    text  := nullif(current_setting('request.headers', true), '');
+  v_ator   text;
+  v_origem text;
+  v_motivo text;
+  v_uid_ev uuid;     -- quem o evento diz ter apagado (de auth.uid() ou do JWT do cabeçalho)
+  v_auth   text;
+  v_tok    text;
+  v_partes text[];
+  v_seg    text;
+  v_pl     jsonb;
+  v_sub    uuid;
+  v_sub_al text;     -- o sub que o JWT ALEGA (evidência quando ele não existe em auth.users)
+  v_op     text  := coalesce(current_setting('storage.operation', true), '');
+  -- request.path SEM a query (a query do S3 pré-assinado traz X-Amz-Signature e X-Amz-Security-Token = um JWT: não vai para a trilha). É só perícia; nenhuma decisão o usa.
+  v_path   text  := split_part(coalesce(current_setting('request.path', true), ''), '?', 1);
+  v_email  text;
+  v_caso   uuid;
+  v_ref    text;
+  v_ver    record;
+begin
+  -- Defesa em profundidade: o gatilho já tem WHEN (old.bucket_id = 'documentos'); se alguém o recriar sem ele, outro bucket não vira evento.
+  if old.bucket_id is distinct from 'documentos' then return null; end if;
+  -- Versionamento do bucket (hoje DESABILITADO, e a sonda exige isso): com ele ligado a "exclusão" do usuário vira delete marker (INSERT/UPDATE, que este
+  -- gatilho não vê) e o ciclo de vida apagaria versões antigas com DELETE dias depois, em nome do sistema. Esse DELETE não é um ato de alguém: não vira evento.
+  if v_old ->> 'is_delete_marker' = 'true' or v_old ->> 'archived_at' is not null then return null; end if;
+
+  if v_uid is not null and v_op in ('storage.object.delete', 'storage.object.delete_many') then
+    -- Caminho 1: o JWT chegou como o do usuário DENTRO de uma operação REST de exclusão (a lista de permitidos abaixo). Na API real auth.uid() só é não-nulo na sondagem
+    -- DESFEITA do testPermission (etapa 1); no DELETE efetivo (etapa 2) é nulo e o ator vem do cabeçalho (caminho 2).
+    v_uid_ev := v_uid;
+    v_origem := 'auth.uid';
+    v_ator   := coalesce((select u.email from auth.users u where u.id = v_uid), 'usuario:' || v_uid::text);
+  elsif v_uid is not null then
+    -- auth.uid() não-nulo FORA da operação REST de exclusão só acontece em SQL direto com claims setados à mão (ex.: personificação de papel no SQL Editor mais
+    -- `set local storage.allow_delete_query='true'`). Gravar o nome da pessoa personificada como autor certo seria ausência apresentada como dado: é SQL direto, o sub
+    -- é só ALEGADO (antes.sub_alegado) e session_user diz quem conectou.
+    v_ator := 'storage:sql_direto'; v_origem := 'auth.uid_fora_da_rest'; v_sub_al := v_uid::text;
+    v_motivo := 'auth.uid fora da operacao REST de exclusao';
+  else
+    -- Caminho 2: a exclusão EFETIVA da API do Storage roda como superusuário (asSuperUser, supabase/storage src/internal/database/pg-connection.ts:725-742):
+    -- role=service_role e request.jwt.claim.sub vazio — auth.uid() é nulo e fn_conexao_de_servico() é VERDADEIRO para toda exclusão, inclusive a do Analista.
+    -- Mas asSuperUser() repassa os cabeçalhos do chamador e scope.ts:15-24 faz set_config('request.headers', ...): o `authorization` (nome em minúsculas: o
+    -- Node baixa a caixa; a busca abaixo ignora a caixa mesmo assim) traz o JWT do usuário que o Storage JÁ validou na entrada (src/http/plugins/jwt.ts:41),
+    -- então aqui basta ler o `sub`, sem revalidar a assinatura. NUNCA se grava `sistema:*` para exclusão vinda da API: o Histórico anula esse autor e a tela diria
+    -- "Sistema" (ausência apresentada como dado, regra 1). Um cabeçalho esquisito NÃO derruba o DELETE (falha fechada é para "não gravou a trilha", não para
+    -- "não entendi o cabeçalho"): vira `storage:nao_identificado` com o motivo em antes.ator_motivo.
+    begin
+      if v_hdr is null then
+        -- Sem request.headers: o DELETE não veio pela API do Storage (ela sempre o define, ao menos '{}'; os jobs chegam com '{}', não NULL). Apagar por SQL exige
+        -- `set local storage.allow_delete_query='true'` (protect_objects_delete): é ato deliberado de PESSOA, não do sistema. `sistema:*` seria ausência apresentada como
+        -- dado (regra 1): grava `storage:sql_direto` com session_user e o papel em antes (perícia).
+        if fn_conexao_de_servico() then v_ator := 'storage:sql_direto'; v_origem := 'conexao_sql';
+        else v_motivo := 'sem cabecalho authorization'; end if;
+      elsif v_op not in ('storage.object.delete', 'storage.object.delete_many') then
+        -- LISTA DE PERMITIDOS sobre valor que o SERVIDOR define. O `authorization` só vale quando o Storage o VERIFICOU, e isso só acontece nas rotas REST de exclusão, que estão
+        -- sob registerJwtAuth sem allowInvalidJwt (src/http/routes/object/index.ts:28, deleteObject.ts:47 e deleteObjects.ts:71: operações 'storage.object.delete' e
+        -- 'storage.object.delete_many', src/http/routes/operations.ts:19-20). Em qualquer outra rota (S3, que autentica por signatureV4 e NÃO registra o plugin jwt:
+        -- s3/index.ts:242; jobs de fila; rota desconhecida) o db plugin repassa `request.headers` INTEIRO com um `authorization` que ninguém verificou (db.ts:72): quem tem a
+        -- credencial de A poderia acrescentar um Bearer com o sub de B. `storage.operation` vem de `request.operation` = config da ROTA (log-request.ts:112; s3/index.ts:131),
+        -- que o cliente não escreve, e asSuperUser() o repassa (`...this.options`; scope.ts:77-79). A versão anterior era lista de PROIBIDOS sobre `request.path` (a request.url
+        -- CRUA do cliente) e o roteador normaliza antes de rotear (`/%73%33/...`, `/s%33/...` e a absolute-form `http://h/s3/...` chegam à rota S3): o path não decide nada aqui.
+        -- Operação vazia (job de fila: emptyBucket / ObjectAdminDeleteAllBefore, headers '{}') = 'operacao ausente'.
+        v_motivo := case when v_op = '' then 'operacao ausente' else 'operacao ' || v_op end;
+      else
+        select h.value into v_auth from jsonb_each_text(v_hdr::jsonb) h where lower(h.key) = 'authorization' limit 1;
+        -- Espelha o Storage (src/http/plugins/jwt.ts:41: `(authorization || '').replace(/^Bearer\s+/i, '')`): o prefixo "Bearer" é OPCIONAL e a caixa livre.
+        v_tok    := substring(v_auth from '(?i)^\s*(?:bearer\s+)?(\S+)\s*$');
+        v_partes := string_to_array(v_tok, '.');
+        if v_auth is null then
+          v_motivo := 'sem cabecalho authorization';
+        elsif v_tok is null or cardinality(v_partes) <> 3 then
+          v_motivo := 'jwt malformado';
+        else
+          -- base64url -> base64: '-' e '_' viram '+' e '/', e o padding '=' que o JWT omite volta até fechar múltiplo de 4.
+          v_seg := translate(v_partes[2], '-_', '+/');
+          v_seg := v_seg || repeat('=', (4 - length(v_seg) % 4) % 4);
+          v_pl  := convert_from(decode(v_seg, 'base64'), 'UTF8')::jsonb;
+          if v_pl ->> 'role' = 'service_role' then
+            -- A chave de serviço: o n8n NUNCA apaga do bucket (só POST com x-upsert, N8N/build-workflow.mjs:2755-2766); quem apaga com ela é uma PESSOA (script, painel).
+            -- "Sistema" na tela seria ausência apresentada como dado (regra 1): grava `storage:chave_de_servico` e o portal diz que a pessoa não foi identificada.
+            v_ator := 'storage:chave_de_servico'; v_origem := 'jwt_service_role';
+          elsif nullif(v_pl ->> 'sub', '') is null then
+            v_motivo := 'jwt sem sub';
+          else
+            v_sub_al := v_pl ->> 'sub';   -- antes do cast: um sub que não é uuid cai no handler abaixo e a evidência (texto) fica
+            v_sub := v_sub_al::uuid;
+            select u.email into v_email from auth.users u where u.id = v_sub;
+            if not found then v_motivo := 'sub inexistente em auth.users';
+            else v_uid_ev := v_sub; v_origem := 'cabecalho_jwt'; v_ator := coalesce(v_email, 'usuario:' || v_sub::text); end if;
+          end if;
+        end if;
+      end if;
+    exception when others then
+      v_uid_ev := null; v_origem := null; v_ator := null;
+      v_motivo := 'cabecalho ilegivel';
+    end;
+    if v_ator is null then v_ator := 'storage:nao_identificado'; v_origem := 'nao_identificado'; end if;
+  end if;
+
+  v_caso := fn_caso_da_chave_do_storage(old.name);
+  v_ref  := case when v_caso is not null then 'caso:' || v_caso::text else 'storage:documentos/' || old.name end;
+
+  -- Qual arquivo: o nome que o cliente deu vem de documento_versao (arquivo_ref = a chave). Sem versão apontando para a chave
+  -- (objeto solto, ou o documento já foi apagado) o campo fica null — ausência dita, não inventada.
+  select v.nome_original, v.documento_id, v.n_versao into v_ver
+    from documento_versao v where v.arquivo_ref = old.name order by v.criada_em desc limit 1;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+  values (v_ator, 'documento_original_apagado', v_ref,
+          jsonb_build_object('bucket', old.bucket_id, 'caminho', old.name,
+                             'arquivo', split_part(old.name, '/', 2),
+                             'nome_original', v_ver.nome_original,
+                             'documento_id', v_ver.documento_id,
+                             'n_versao', v_ver.n_versao,
+                             'tamanho_bytes', old.metadata -> 'size',
+                             'usuario_id', v_uid_ev,
+                             'ator_origem', v_origem,
+                             'ator_motivo', v_motivo,
+                             'sub_alegado', v_sub_al,
+                             'storage_operation', v_op, 'request_path', v_path,
+                             'sessao_usuario', session_user, 'papel_sessao', current_setting('role', true)),
+          null);
+  return null;
+end $_$;
+
+--
+-- Name: FUNCTION fn_trg_auditar_original_apagado(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_trg_auditar_original_apagado() IS '0224 (D16): gatilho AFTER DELETE de storage.objects (bucket documentos). Grava evento_auditoria `documento_original_apagado` com o ator (e-mail do `sub` do JWT em request.headers, ou storage:nao_identificado + motivo), o mandato (caso:<id> da chave) e o que se perdeu (caminho, nome original, tamanho). Falha fechada: sem trilha, o DELETE volta.';
 
 --
 -- Name: fn_trg_auto_promover_dial(); Type: FUNCTION; Schema: public; Owner: -
@@ -17793,6 +17949,23 @@ CREATE VIEW public.instalacao_sonda_entidade_balcao_ambiguo AS
 COMMENT ON VIEW public.instalacao_sonda_entidade_balcao_ambiguo IS '(0162) Autoteste de fn_entidade_e_balcao_ambiguo, EXECUTADO contra um fixture PERMANENTE e isolado (o caso "Sonda 0162", que não é mandato real): 1 linha só se a entidade com pendência entidade_ambigua ABERTA responde true, a entidade sem pendência e a com a MESMA pendência RESOLVIDA respondem false, e o predicado não quebra para entidade inexistente nem confunde caso. Um marcador textual de corpo/função não pega um "false and" que mate o predicado e deixe os comentários intactos (achado D da revisão da 0157) — esta view pega, porque o predicado É executado.';
 
 --
+-- Name: instalacao_sonda_evento_sem_forja; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_evento_sem_forja AS
+ SELECT (policyname)::text AS policy
+   FROM pg_policies p
+  WHERE ((schemaname = 'public'::name) AND (tablename = 'evento_auditoria'::name) AND (policyname = 'evento_auditoria_insert'::name) AND (cmd = 'INSERT'::text) AND ('authenticated'::name = ANY (roles)) AND (with_check ~ 'documento_original_apagado'::text) AND (NOT (EXISTS ( SELECT 1
+           FROM pg_policies o
+          WHERE ((o.schemaname = 'public'::name) AND (o.tablename = 'evento_auditoria'::name) AND (o.policyname <> 'evento_auditoria_insert'::name) AND (o.permissive = 'PERMISSIVE'::text) AND (o.cmd = ANY (ARRAY['INSERT'::text, 'ALL'::text])) AND (NOT (o.roles <@ ARRAY['service_role'::name])))))));
+
+--
+-- Name: VIEW instalacao_sonda_evento_sem_forja; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_evento_sem_forja IS 'Sonda da 0224: uma linha = authenticated não insere à mão evento documento_original_apagado. Zero linhas: a policy voltou ao desenho da 0216 ou existe outra policy permissiva de INSERT para qualquer papel exceto service_role: qualquer Analista forja quem apagou o original.';
+
+--
 -- Name: taxonomia_linha_exigida; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -17964,6 +18137,21 @@ UNION ALL
 COMMENT ON VIEW public.instalacao_sonda_exigencias_0188 IS 'Sonda da 0188: a alternativa "resultado financeiro" de DRE/despesa_financeira e o localizador ["juros","bancari"] da mesma exigência. Duas linhas.';
 
 --
+-- Name: instalacao_sonda_gatilho_original_apagado; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_gatilho_original_apagado AS
+ SELECT (tgname)::text AS gatilho
+   FROM pg_trigger t
+  WHERE ((tgrelid = ('storage.objects'::regclass)::oid) AND (tgname = 'trg_auditar_original_apagado'::name) AND (NOT tgisinternal) AND (tgenabled = ANY (ARRAY['O'::"char", 'A'::"char"])) AND (((tgtype)::integer & 1) = 1) AND (((tgtype)::integer & 2) = 0) AND (((tgtype)::integer & 8) = 8) AND (tgfoid = (to_regproc('public.fn_trg_auditar_original_apagado'::text))::oid));
+
+--
+-- Name: VIEW instalacao_sonda_gatilho_original_apagado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_gatilho_original_apagado IS 'Sonda da 0224: uma linha = o gatilho de auditoria de exclusão existe em storage.objects, habilitado, AFTER DELETE por linha, chamando fn_trg_auditar_original_apagado. Zero linhas: a exclusão de original voltou a não deixar trilha.';
+
+--
 -- Name: instalacao_sonda_modelagem_pronta; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -18050,6 +18238,38 @@ CREATE VIEW public.instalacao_sonda_saldo_mutuos AS
 --
 
 COMMENT ON VIEW public.instalacao_sonda_saldo_mutuos IS 'Sonda da 0187 (revisão): uma linha por arranjo em que fn_saldo_mutuos_do_documento dá o saldo CERTO (canastra real 16.060; item + total 150; matricial 11.079; sem exercício → não apura). Quatro linhas.';
+
+--
+-- Name: instalacao_sonda_update_documentos_so_socio; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_update_documentos_so_socio AS
+ SELECT (policyname)::text AS policy
+   FROM pg_policies p
+  WHERE ((schemaname = 'storage'::name) AND (tablename = 'objects'::name) AND (policyname = 'documentos_update'::name) AND (cmd = 'UPDATE'::text) AND ('authenticated'::name = ANY (roles)) AND (qual ~ 'fn_eh_socio'::text) AND (with_check ~ 'fn_eh_socio'::text) AND (qual !~ 'fn_pode_'::text) AND (with_check !~ 'fn_pode_'::text) AND (NOT (EXISTS ( SELECT 1
+           FROM pg_policies o
+          WHERE ((o.schemaname = 'storage'::name) AND (o.tablename = 'objects'::name) AND (o.policyname <> 'documentos_update'::name) AND (o.permissive = 'PERMISSIVE'::text) AND (o.cmd = ANY (ARRAY['UPDATE'::text, 'ALL'::text])) AND (NOT (o.roles <@ ARRAY['service_role'::name])))))));
+
+--
+-- Name: VIEW instalacao_sonda_update_documentos_so_socio; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_update_documentos_so_socio IS 'Sonda da 0224: uma linha = mover/sobrescrever original (UPDATE em storage.objects do bucket documentos) é só do Sócio. Zero linhas: a policy voltou ao desenho da 0216 (Analista alocado move o original sem trilha) OU existe outra policy permissiva de UPDATE para qualquer papel exceto service_role.';
+
+--
+-- Name: instalacao_sonda_versionamento_documentos; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_versionamento_documentos AS
+ SELECT id AS bucket
+   FROM storage.buckets b
+  WHERE ((id = 'documentos'::text) AND ((to_jsonb(b.*) ->> 'versioning_status'::text) = 'DISABLED'::text));
+
+--
+-- Name: VIEW instalacao_sonda_versionamento_documentos; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_versionamento_documentos IS 'Sonda da 0224: uma linha = o bucket documentos tem versioning_status DISABLED. Zero linhas: versionamento ligado (o gatilho deixaria de ver a exclusão do usuário: ela viraria delete marker) ou a coluna/bucket não existe e nada foi medido.';
 
 --
 -- Name: lote_execucao; Type: TABLE; Schema: public; Owner: -
@@ -19030,6 +19250,12 @@ CREATE INDEX idx_documento_caso ON public.documento USING btree (caso_id);
 --
 
 CREATE INDEX idx_documento_versao_hash_fingerprint ON public.documento_versao USING btree (hash, fingerprint_extracao) WHERE ((hash IS NOT NULL) AND (fingerprint_extracao IS NOT NULL));
+
+--
+-- Name: idx_docversao_arquivo_ref; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_docversao_arquivo_ref ON public.documento_versao USING btree (arquivo_ref);
 
 --
 -- Name: idx_docversao_documento; Type: INDEX; Schema: public; Owner: -
@@ -20670,7 +20896,7 @@ ALTER TABLE public.evento_auditoria ENABLE ROW LEVEL SECURITY;
 -- Name: evento_auditoria evento_auditoria_insert; Type: POLICY; Schema: public; Owner: -
 --
 
-CREATE POLICY evento_auditoria_insert ON public.evento_auditoria FOR INSERT TO authenticated WITH CHECK (public.fn_pode_escrever_evento(entidade_ref));
+CREATE POLICY evento_auditoria_insert ON public.evento_auditoria FOR INSERT TO authenticated WITH CHECK ((public.fn_pode_escrever_evento(entidade_ref) AND (acao <> 'documento_original_apagado'::text)));
 
 --
 -- Name: evento_auditoria evento_auditoria_read; Type: POLICY; Schema: public; Owner: -
@@ -23112,6 +23338,12 @@ GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO authenticate
 GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO service_role;
 
 --
+-- Name: FUNCTION fn_trg_auditar_original_apagado(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_trg_auditar_original_apagado() FROM PUBLIC;
+
+--
 -- Name: FUNCTION fn_trg_auto_promover_dial(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23614,6 +23846,13 @@ GRANT SELECT ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO authent
 GRANT SELECT ON TABLE public.instalacao_sonda_entidade_balcao_ambiguo TO service_role;
 
 --
+-- Name: TABLE instalacao_sonda_evento_sem_forja; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_evento_sem_forja TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_evento_sem_forja TO service_role;
+
+--
 -- Name: TABLE taxonomia_linha_exigida; Type: ACL; Schema: public; Owner: -
 --
 
@@ -23649,6 +23888,13 @@ GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO service_role;
 
 --
+-- Name: TABLE instalacao_sonda_gatilho_original_apagado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO service_role;
+
+--
 -- Name: TABLE instalacao_sonda_modelagem_pronta; Type: ACL; Schema: public; Owner: -
 --
 
@@ -23682,6 +23928,20 @@ GRANT SELECT ON TABLE public.instalacao_sonda_rotulo_contraditorio TO service_ro
 
 GRANT SELECT ON TABLE public.instalacao_sonda_saldo_mutuos TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_saldo_mutuos TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_update_documentos_so_socio; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_update_documentos_so_socio TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_update_documentos_so_socio TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_versionamento_documentos; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_versionamento_documentos TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_versionamento_documentos TO service_role;
 
 --
 -- Name: TABLE lote_execucao; Type: ACL; Schema: public; Owner: -

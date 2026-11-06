@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0224 — O DOCUMENTO SEM TIPO QUE VIRAVA "100% · HUMANO" (P16, VISTORIA_P2 §6 ALTA 1)
+-- 0226 — O DOCUMENTO SEM TIPO QUE VIRAVA "100% · HUMANO" (P16, VISTORIA_P2 §6 ALTA 1)
 -- (Redefine fn_revisar_documento com a MESMA assinatura, a MESMA ACL (execute para authenticated, invoker, RLS vale) e o MESMO
 --  retorno nos caminhos que gravam; acrescenta 1 requisito à sonda. Sem tabela, sem gatilho, sem backfill.)
 --
@@ -17,7 +17,7 @@
 -- de escrita de trabalho). Nenhuma migration posterior à 0018 a redefine nem mexe nos privilégios dela. Nenhum caller depende do comportamento antigo
 -- SEM tipo; o portal lê `.documento_id`/`.tipo_taxonomia` do retorno — ver o relatório da rodada para o ponto que o portal precisa tratar (recusado).
 --
--- A SONDA. Requisito revisar_documento_recusa_sem_tipo (bloqueante): o corpo de fn_revisar_documento contém o `if coalesce(p_novo_tipo_taxonomia, v_tipo_antigo) is null` da guarda (código, não a frase da recusa). Ausente = a 0224
+-- A SONDA. Requisito revisar_documento_recusa_sem_tipo (bloqueante): o corpo de fn_revisar_documento contém o `if coalesce(p_novo_tipo_taxonomia, v_tipo_antigo) is null` da guarda (código, não a frase da recusa). Ausente = a 0226
 -- não foi aplicada (ou uma migration posterior republicou a função da 0018).
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/revisar_documento_sem_tipo.test.sql, 19 asserts, medidos em 06/11/2026 com `PGOPTIONS=-cp16.medindo=on` (o assert vira `raise warning` e CONTA). Controle com a migration aplicada: 0 reprovam. Com o corpo anterior de volta (conferido que a variante APLICOU antes de rodar): 10 de 19 reprovam.
@@ -52,7 +52,7 @@ begin
     raise exception 'documento % não encontrado', p_documento_id;
   end if;
 
-  -- 0224: sem tipo não há o que confirmar. Fica ANTES de qualquer escrita (entidade/período novos também gravam).
+  -- 0226: sem tipo não há o que confirmar. Fica ANTES de qualquer escrita (entidade/período novos também gravam).
   if coalesce(p_novo_tipo_taxonomia, v_tipo_antigo) is null then
     return jsonb_build_object('recusado', true, 'documento_id', p_documento_id,
       'motivo_recusa', 'Escolha o tipo do documento antes de confirmar: sem tipo não há o que confirmar.');
@@ -128,12 +128,12 @@ end;
 $$;
 
 comment on function fn_revisar_documento(uuid, text, text, text, text, text, text) is
-  '0224 (sobre a 0018): confirma/corrige a classificação do documento. Sem tipo final (novo nem antigo) devolve {recusado, documento_id, motivo_recusa} e não grava nada. Com tipo: grava documento (confiança 1.0, fonte humano), refaz o checklist, registra decisão e evento, e fecha as pendências de revisão do documento.';
+  '0226 (sobre a 0018): confirma/corrige a classificação do documento. Sem tipo final (novo nem antigo) devolve {recusado, documento_id, motivo_recusa} e não grava nada. Com tipo: grava documento (confiança 1.0, fonte humano), refaz o checklist, registra decisão e evento, e fecha as pendências de revisão do documento.';
 
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
-  ('revisar_documento_recusa_sem_tipo', '0224', 'corpo', 'fn_revisar_documento', 'if coalesce(p_novo_tipo_taxonomia, v_tipo_antigo) is null then', null,
-   'fn_revisar_documento sem a recusa do documento sem tipo: confirmar um arquivo que ninguém classificou grava confiança 1.0 / fonte humano ("100% · Humano") e fecha a pendência. Ausente = a 0224 não foi aplicada (ou uma migration posterior republicou a função da 0018).',
+  ('revisar_documento_recusa_sem_tipo', '0226', 'corpo', 'fn_revisar_documento', 'if coalesce(p_novo_tipo_taxonomia, v_tipo_antigo) is null then', null,
+   'fn_revisar_documento sem a recusa do documento sem tipo: confirmar um arquivo que ninguém classificou grava confiança 1.0 / fonte humano ("100% · Humano") e fecha a pendência. Ausente = a 0226 não foi aplicada (ou uma migration posterior republicou a função da 0018).',
    'bloqueante', 1021)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
@@ -141,6 +141,6 @@ on conflict (chave) do update set
   porque = excluded.porque, severidade = excluded.severidade, ordem = excluded.ordem;
 
 update instalacao_cobertura
-   set ate_migration = '0224', revisado_em = current_date,
-       observacao = 'A 0224 recusa confirmar documento sem tipo (fn_revisar_documento devolve recusado e não grava); o requisito revisar_documento_recusa_sem_tipo prova em produção que foi aplicada.'
+   set ate_migration = '0226', revisado_em = current_date,
+       observacao = 'A 0226 recusa confirmar documento sem tipo (fn_revisar_documento devolve recusado e não grava); o requisito revisar_documento_recusa_sem_tipo prova em produção que foi aplicada.'
  where id = true;

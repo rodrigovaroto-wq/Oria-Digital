@@ -60,7 +60,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Requisição inválida (multipart esperado)." }, { status: 400 });
   }
 
-  const casoId = String(form.get("casoId") ?? "").trim();
+  // `form.get` devolve string | File | null. Um File em `casoId` viraria "[object File]" em String(); recusa-se
+  // explicitamente em vez de deixar o `ehUuid` rejeitar uma string fabricada. Ausente (null) segue como vazio.
+  const casoIdBruto = form.get("casoId");
+  if (casoIdBruto !== null && typeof casoIdBruto !== "string") {
+    return NextResponse.json({ error: "Identificador do mandato inválido (texto esperado)." }, { status: 400 });
+  }
+  const casoId = (casoIdBruto ?? "").trim();
   const arquivos = form
     .getAll("arquivos")
     .filter((f): f is File => f instanceof File && f.size > 0);

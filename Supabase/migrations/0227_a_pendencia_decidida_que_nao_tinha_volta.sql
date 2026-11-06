@@ -1,5 +1,5 @@
 -- =============================================================================
--- 0225 — A PENDÊNCIA DECIDIDA QUE NÃO TINHA VOLTA (P16, VISTORIA_P2 §6 ALTA 1)
+-- 0227 — A PENDÊNCIA DECIDIDA QUE NÃO TINHA VOLTA (P16, VISTORIA_P2 §6 ALTA 1)
 -- (Redefine fn_decidir_pendencia com a MESMA assinatura e a MESMA ACL (execute para authenticated, invoker); acrescenta a decisão 'reabrir'
 --  e 1 requisito à sonda. Os três ramos da 0109 ficam byte a byte. Sem tabela, sem gatilho, sem backfill.)
 --
@@ -50,7 +50,7 @@ begin
       v_estado := 'aceita_com_ressalva';  v_rotulo := 'Prosseguir sem resolução'; v_tipo := 'ressalva';
     when 'nao_procede' then
       v_estado := 'rejeitada';            v_rotulo := 'Pendência não procede'; v_tipo := 'override';
-    -- 0225: a volta. Sem `decisao` (v_tipo nulo): nenhum decisao_tipo existente diz "reabri", ver o cabeçalho.
+    -- 0227: a volta. Sem `decisao` (v_tipo nulo): nenhum decisao_tipo existente diz "reabri", ver o cabeçalho.
     when 'reabrir' then
       v_estado := 'aberta';               v_rotulo := 'Reaberta'; v_tipo := null;
     else
@@ -103,7 +103,7 @@ begin
             jsonb_build_object('estado', v_p.estado),
             jsonb_build_object('estado', v_estado, 'rotulo', v_rotulo,
                                'caso_id', v_p.caso_id, 'motivo', v_motivo,
-                               -- 0225: reabrir uma pendência JÁ DECIDIDA desfaz uma decisão que fica na trilha (a `decisao` antiga não se apaga).
+                               -- 0227: reabrir uma pendência JÁ DECIDIDA desfaz uma decisão que fica na trilha (a `decisao` antiga não se apaga).
                                'reverte_decisao', p_decisao = 'reabrir' and v_p.estado in ('aceita_com_ressalva', 'rejeitada')));
 
   return jsonb_build_object('decidida', true, 'pendencia_id', p_pendencia_id,
@@ -113,12 +113,12 @@ end;
 $$;
 
 comment on function fn_decidir_pendencia(uuid, text, text, text) is
-  'Os botões da tela em UMA função: contatar_cliente (não libera o portão), prosseguir (aceita com ressalva), nao_procede (rejeita) e, desde a 0225, reabrir (volta a aberta; de resolvida é recusado). Sem motivo obrigatório, sem expiração e sem teto, por decisão do dono (0109). Nada é apagado e tudo é contado.';
+  'Os botões da tela em UMA função: contatar_cliente (não libera o portão), prosseguir (aceita com ressalva), nao_procede (rejeita) e, desde a 0227, reabrir (volta a aberta; de resolvida é recusado). Sem motivo obrigatório, sem expiração e sem teto, por decisão do dono (0109). Nada é apagado e tudo é contado.';
 
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
-  ('pendencia_decidir_reabrir', '0225', 'corpo', 'fn_decidir_pendencia', 'v_rotulo := ''Reaberta''', null,
-   'fn_decidir_pendencia sem o ramo reabrir: pendência decidida (Contatar o Cliente, Prosseguir, Não procede) não tem volta a aberta e fica presa na etiqueta. Ausente = a 0225 não foi aplicada (ou uma migration posterior republicou a função da 0109).',
+  ('pendencia_decidir_reabrir', '0227', 'corpo', 'fn_decidir_pendencia', 'v_rotulo := ''Reaberta''', null,
+   'fn_decidir_pendencia sem o ramo reabrir: pendência decidida (Contatar o Cliente, Prosseguir, Não procede) não tem volta a aberta e fica presa na etiqueta. Ausente = a 0227 não foi aplicada (ou uma migration posterior republicou a função da 0109).',
    'bloqueante', 1022)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
@@ -126,6 +126,6 @@ on conflict (chave) do update set
   porque = excluded.porque, severidade = excluded.severidade, ordem = excluded.ordem;
 
 update instalacao_cobertura
-   set ate_migration = '0225', revisado_em = current_date,
-       observacao = 'A 0225 acrescenta a decisão reabrir a fn_decidir_pendencia; o requisito pendencia_decidir_reabrir prova em produção que foi aplicada.'
+   set ate_migration = '0227', revisado_em = current_date,
+       observacao = 'A 0227 acrescenta a decisão reabrir a fn_decidir_pendencia; o requisito pendencia_decidir_reabrir prova em produção que foi aplicada.'
  where id = true;
