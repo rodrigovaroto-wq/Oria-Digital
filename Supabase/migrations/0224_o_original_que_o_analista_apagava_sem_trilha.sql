@@ -28,10 +28,9 @@
 --                (regra 1: não some da trilha; só o Sócio a lê, porque o prefixo `storage:` não resolve para mandato — 0216).
 --   ator         QUEM apagou, por ordem: (1) `auth.uid()` (o JWT chegou como o do usuário: PostgREST; o teste das seções 1 a 4); (2) o `sub` do JWT em
 --                `request.headers` -> `authorization`, CONFERIDO em auth.users (é o caminho de TODA exclusão pela API do Storage: ver "A ETAPA 2" abaixo); em ambos o e-mail,
---                ou `usuario:<uuid>` se o usuário não tem e-mail; (3) `sistema:servico` se o JWT do cabeçalho é de `service_role` (o n8n: não há pessoa, e "Sistema" na tela
---                é verdade); `sistema:sql` se NÃO há request.headers e a conexão é de serviço (SQL Editor: a API sempre o define, ao menos '{}'); (4) senão
+--                ou `usuario:<uuid>` se o usuário não tem e-mail; (3) `storage:chave_de_servico` se o JWT do cabeçalho é de `service_role` (o n8n nunca apaga: é uma pessoa com a chave; "Sistema" seria mentira); `sistema:sql` se NÃO há request.headers e a conexão é de serviço (SQL Editor: a API sempre o define, ao menos '{}'); (4) senão
 --                `storage:nao_identificado`, com o motivo em `antes.ator_motivo` ('sem cabecalho authorization' | 'jwt malformado' | 'jwt sem sub' |
---                'sub inexistente em auth.users' | 'cabecalho ilegivel') e a origem em `antes.ator_origem`. NUNCA `sistema:*` para exclusão vinda da API com usuário:
+--                'sub inexistente em auth.users' (com `antes.sub_alegado`) | 'protocolo s3' | 'cabecalho ilegivel') e a origem em `antes.ator_origem`. NUNCA `sistema:*` para exclusão vinda da API com usuário:
 --                fn_historico_do_caso anula autor `^(sistema|n8n)` e a tela diria "Sistema" (regra 1: ausência apresentada como dado). Cabeçalho esquisito NÃO derruba o
 --                DELETE (a falha fechada é para "não gravou a trilha", não para "não entendi o cabeçalho"): vira `storage:nao_identificado`.
 --   antes        o que se perdeu: bucket, caminho (a chave inteira), arquivo (hash.ext), nome_original (de documento_versao.arquivo_ref, se
@@ -59,7 +58,7 @@
 --     `storage.allow_delete_query` seja 'true', que a API do Storage liga) e `update_objects_updated_at`. O AFTER DELETE FOR EACH ROW
 --     convive: só dispara quando a API apaga. Consequência a saber: `delete from storage.objects` por SQL no painel continua recusado pela
 --     plataforma (não é a 0224), e o que passa pela API é auditado.
---   * a 0216 já fez `drop policy`/`create policy` em storage.objects como `postgres` e foi aplicada; esta migration repete o padrão em documentos_update (NÃO reverificado em produção).
+--   * drop/create de policy em storage.objects como `postgres`: funciona NÃO por ser dono (não é), e sim porque `supautils.policy_grants` do Supabase inclui storage.objects (medido pelo revisor); a 0216 fez o mesmo e foi aplicada.
 --   * RLS ligada em storage.objects; policy de DELETE: só `documentos_delete` [authenticated]. 9 objetos no bucket (prévia de 04/11/2026; 8 na primeira medição), todos com `<caso_id>/` na chave.
 --   * evento_auditoria: colunas id, criado_em, ator, acao, entidade_ref, antes, depois; o authenticated tem INSERT (RLS de mandato, 0216);
 --     o `postgres` (dono da função) tem BYPASSRLS = true.
@@ -88,20 +87,23 @@
 -- ciclo de vida apaga versões antigas com DELETE dias depois, atribuído ao sistema. O gatilho ignora `is_delete_marker`/`archived_at` (por to_jsonb: os NOMES dessas colunas
 -- não foram conferidos em produção, e a ausência delas não derruba o gatilho) e a sonda EXIGE `DISABLED` (coluna ausente = acusa: nada foi medido).
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/original_apagado.test.sql — 57 asserts (EXECUCOES=57 na linha final), medidos em 06/11/2026 com `PGOPTIONS='-c d16.medindo=on'`
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/original_apagado.test.sql — 63 asserts (EXECUCOES=63 na linha final), medidos em 06/11/2026 com `PGOPTIONS='-c d16.medindo=on'`
 -- (o assert vira `raise warning` e CONTA; voltou para `raise exception` e o log inteiro foi lido atrás de `FALHOU:`), cada variante APLICADA ao banco migrado (conferido pela linha
--- final EXECUCOES=57) e UMA guarda desligada por vez. Controle (migration intacta): 0 dos 57 reprovam, antes e depois das variantes.
---   * a 0224 ANTERIOR (a função ignora request.headers: `sistema:storage` na etapa 2 da API): 20 dos 57 reprovam — o defeito que a revisão achou;
---   * sem traduzir `-`/`_` do base64url: 2; sem o padding do base64url: 5; sem o tratamento de cabeçalho esquisito (a exceção sobe e derruba o DELETE): 6;
---   * sem o ramo do JWT de service_role: 2; sem conferir o `sub` em auth.users: 2; nome do cabeçalho `authorization` sensível a caixa: 2; "Bearer" sensível a caixa: 2;
---   * não identificado gravado como `sistema:storage` em vez de `storage:nao_identificado`: 13;
+-- final EXECUCOES=63) e UMA guarda desligada por vez. Controle (migration intacta): 0 dos 63 reprovam, antes e depois das variantes.
+--   * a 0224 ANTERIOR (a função ignora request.headers: `sistema:storage` na etapa 2 da API): 27 dos 63 reprovam — o defeito que a revisão achou;
+--   * rota S3 sem a guarda (lê o `authorization` não verificado): 5; "Bearer" obrigatório (o Storage o aceita opcional): 2; "Bearer" sensível a caixa: 2;
+--   * chave de serviço gravada como `sistema:servico` (vira "Sistema" na tela): 3; sem `sub_alegado` em antes: 1;
+--   * sem traduzir `-`/`_` do base64url: 2; sem o padding: 5; sem tratar cabeçalho esquisito (a exceção sobe e derruba o DELETE): 6;
+--   * sem o ramo do JWT de service_role: 2; sem conferir o `sub` em auth.users: 2; nome do cabeçalho `authorization` sensível a caixa: 2;
+--   * não identificado gravado como `sistema:storage` em vez de `storage:nao_identificado`: 17;
 --   * sem ignorar delete marker/versão arquivada: 1; policy documentos_update no desenho da 0216: 6 (3 diretos: a sonda e "a Analista move"; o resto é cascata do objeto movido);
 --   * requisito ator_do_cabecalho tirado do catálogo: 1; requisito update_so_socio: 3; requisito sem_versionamento: 4; view do versionamento sem o filtro DISABLED: 2;
---   * SEM O GATILHO (drop trigger): 34 reprovam e o arquivo ABORTA na seção 8 (`disable trigger` de um gatilho que não existe), então os asserts seguintes nem rodam;
+--     o marcador do requisito ator_do_cabecalho é CÓDIGO (`current_setting('request.headers'`), não o texto solto: revertida a leitura e mantido o comentário, o requisito acusa (conferido);
+--   * SEM O GATILHO (drop trigger): 40 reprovam e o arquivo ABORTA na seção 8 (`disable trigger` de um gatilho que não existe), então os asserts seguintes nem rodam;
 --   * mandato nunca resolvido da chave (tudo vira `storage:documentos/<chave>`): 16; sem o filtro de bucket (gatilho sem WHEN e função sem a defesa): 3;
 --     sem o nome original em `antes`: 2; NÃO falha fechada (erro da gravação da trilha engolido): 1;
 --   * Histórico sem o ramo novo de fn_historico_do_caso: 5; sem a ação na lista fechada `ev`: 5.
--- NÃO MEDIDO, e dito: (1) o formato real de `request.headers` na hospedagem (ver "A ETAPA 2"): a suíte o SIMULA a partir do código do Storage; só uma exclusão em produção prova;
+-- NÃO MEDIDO, e dito: (1) o formato real de `request.headers` e de `request.path` na hospedagem (ver "A ETAPA 2"; o padrão do path S3 cobre '/s3/...' e '/<a>/<b>/s3/...'): a suíte os SIMULA a partir do código do Storage; só uma exclusão em produção prova;
 -- (2) o CREATE TRIGGER e o drop/create de policy como `postgres` em storage.objects de produção (viabilidade por catálogo e pela 0216; a migration aborta com mensagem se o Supabase
 -- recusar o gatilho); (3) os nomes `is_delete_marker`/`archived_at` e a coluna `versioning_status` no Storage de produção (o dono disse que `versioning_status` existe e é DISABLED).
 -- Efeito colateral nas suítes antigas: sonda_ve_gatilho.test.sql EXCLUI o schema storage da igualdade de conjuntos (o gatilho novo é catalogado por view + `comportamento`).
@@ -125,6 +127,8 @@ declare
   v_seg    text;
   v_pl     jsonb;
   v_sub    uuid;
+  v_sub_al text;     -- o sub que o JWT ALEGA (evidência quando ele não existe em auth.users)
+  v_path   text  := split_part(coalesce(current_setting('request.path', true), ''), '?', 1);
   v_email  text;
   v_caso   uuid;
   v_ref    text;
@@ -154,9 +158,20 @@ begin
         -- Sem request.headers: o DELETE não veio pela API do Storage (ela sempre o define, ao menos '{}'). É conexão SQL de serviço.
         if fn_conexao_de_servico() then v_ator := 'sistema:sql'; v_origem := 'conexao_sql';
         else v_motivo := 'sem cabecalho authorization'; end if;
+      elsif v_path ~* '^(/[^/]*){0,2}/s3(/|$)' then
+        -- PROTOCOLO S3: NUNCA se lê `authorization`. Nas rotas /s3/* o Storage NÃO registra o plugin jwt (src/http/routes/s3/index.ts:242 registra signatureV4); a credencial é
+        -- verificada pela assinatura (src/http/plugins/signature-v4.ts:160-215; no modo pré-assinado vem da query, storage/protocols/s3/signature-v4.ts:206) e o plugin db
+        -- (src/http/plugins/db.ts:72) repassa `request.headers` INTEIRO, com um `authorization` que NINGUÉM verificou: quem tem a credencial S3 de A pode acrescentar um
+        -- `Authorization: Bearer <payload com o sub de B>` e a RLS passa como A enquanto este gatilho gravaria B (ou service_role -> "Sistema"). Ler o token verificado
+        -- (x-amz-security-token / X-Amz-Security-Token) seria possível, mas exigiria provar que é o que vira o usuário da etapa 1; gravar "não identificado" é seguro e simples.
+        -- request.path = request.url do Fastify (db.ts:74; scope.ts:77): '/s3/<bucket>/...' ou, atrás do gateway, '/storage/v1/s3/...', sempre com a query. O padrão acha o
+        -- segmento `s3` entre os 3 primeiros; falso positivo (bucket chamado s3) só perde a atribuição, nunca a atribui errado. Sem request.path (jobs de fila do Storage:
+        -- emptyBucket / ObjectAdminDeleteAllBefore conectam sem cabeçalhos, request.headers='{}') não há rota: o ramo de baixo vê '{}' e cai em 'sem cabecalho authorization'.
+        v_motivo := 'protocolo s3';
       else
         select h.value into v_auth from jsonb_each_text(v_hdr::jsonb) h where lower(h.key) = 'authorization' limit 1;
-        v_tok    := substring(v_auth from '^[Bb][Ee][Aa][Rr][Ee][Rr]\s+(\S+)\s*$');
+        -- Espelha o Storage (src/http/plugins/jwt.ts:41: `(authorization || '').replace(/^Bearer\s+/i, '')`): o prefixo "Bearer" é OPCIONAL e a caixa livre.
+        v_tok    := substring(v_auth from '(?i)^\s*(?:bearer\s+)?(\S+)\s*$');
         v_partes := string_to_array(v_tok, '.');
         if v_auth is null then
           v_motivo := 'sem cabecalho authorization';
@@ -168,12 +183,14 @@ begin
           v_seg := v_seg || repeat('=', (4 - length(v_seg) % 4) % 4);
           v_pl  := convert_from(decode(v_seg, 'base64'), 'UTF8')::jsonb;
           if v_pl ->> 'role' = 'service_role' then
-            -- A chave de serviço (o n8n): não há pessoa. "Sistema" na tela é verdade aqui, e só aqui.
-            v_ator := 'sistema:servico'; v_origem := 'jwt_service_role';
+            -- A chave de serviço: o n8n NUNCA apaga do bucket (só POST com x-upsert, N8N/build-workflow.mjs:2755-2766); quem apaga com ela é uma PESSOA (script, painel).
+            -- "Sistema" na tela seria ausência apresentada como dado (regra 1): grava `storage:chave_de_servico` e o portal diz que a pessoa não foi identificada.
+            v_ator := 'storage:chave_de_servico'; v_origem := 'jwt_service_role';
           elsif nullif(v_pl ->> 'sub', '') is null then
             v_motivo := 'jwt sem sub';
           else
             v_sub := (v_pl ->> 'sub')::uuid;
+            v_sub_al := v_sub::text;
             select u.email into v_email from auth.users u where u.id = v_sub;
             if not found then v_motivo := 'sub inexistente em auth.users';
             else v_uid_ev := v_sub; v_origem := 'cabecalho_jwt'; v_ator := coalesce(v_email, 'usuario:' || v_sub::text); end if;
@@ -181,7 +198,7 @@ begin
         end if;
       end if;
     exception when others then
-      v_uid_ev := null; v_origem := null; v_ator := null;
+      v_uid_ev := null; v_origem := null; v_ator := null; v_sub_al := null;
       v_motivo := 'cabecalho ilegivel';
     end;
     if v_ator is null then v_ator := 'storage:nao_identificado'; v_origem := 'nao_identificado'; end if;
@@ -205,7 +222,8 @@ begin
                              'tamanho_bytes', old.metadata -> 'size',
                              'usuario_id', v_uid_ev,
                              'ator_origem', v_origem,
-                             'ator_motivo', v_motivo),
+                             'ator_motivo', v_motivo,
+                             'sub_alegado', v_sub_al),
           null);
   return null;
 end $$;
@@ -236,7 +254,7 @@ end $$;
 -- MOVER/SOBRESCREVER SÓ PARA SÓCIO (decisão do dono, D16). A exclusão é auditada pelo gatilho acima, mas UPDATE em storage.objects NÃO é: `move` da API do Storage
 -- é UPDATE do `name` (o original some da chave antiga sem DELETE, e `documento_versao.arquivo_ref` passa a apontar para o vazio) e o upsert sobrescreve o conteúdo.
 -- A 0216 deixava o Analista alocado fazer as duas coisas (documentos_update: ler no using, escrever no with check). Grep em portal/src e N8N/: ninguém faz update/move/upsert
--- com JWT de usuário (o portal só assina URL; o n8n sobe com x-upsert pela chave de serviço, que ignora RLS). Mesmo padrão da 0216 (drop + create, como `postgres`).
+-- com JWT de usuário (o portal só assina URL; o n8n sobe com x-upsert pela chave de serviço, que ignora RLS). Mesmo padrão da 0216 (drop + create, como `postgres`: permitido por `supautils.policy_grants`, não por posse da tabela).
 drop policy if exists documentos_update on storage.objects;
 create policy documentos_update on storage.objects for update to authenticated
   using (bucket_id = 'documentos' and (select fn_eh_socio()))
@@ -529,7 +547,7 @@ as $$
 
     union all
     -- 0224 (D16): o original do cliente apagado do Storage. O gatilho de storage.objects grava `caso:<id>` + o que se perdeu em `antes`;
-    -- o ator é o e-mail de quem apagou; `storage:nao_identificado` aparece como está; `sistema:servico`/`sistema:sql` a consulta final anula como nas demais ações do sistema.
+    -- o ator é o e-mail de quem apagou; `storage:nao_identificado` aparece como está; `sistema:sql` a consulta final anula como nas demais ações do sistema.
     select e.criado_em, 'documento_original_apagado', e.ator,
            format('Original apagado do armazenamento: "%s"%s',
                   coalesce(e.antes->>'nome_original', nullif(e.antes->>'arquivo', ''), '(sem nome)'),
@@ -571,7 +589,7 @@ insert into instalacao_requisito
   ('original_apagado_gatilho', '0224', 'comportamento', 'instalacao_sonda_gatilho_original_apagado', null, 1,
    'O gatilho em storage.objects (fora de public, onde o tipo `gatilho` não enxerga): a view só tem linha se ele existe, está habilitado, é AFTER DELETE por linha e chama a função certa. Zero linhas = a exclusão de original voltou a não deixar trilha; a função, sozinha, sobrevive a drop trigger e a disable trigger. O postgres não é dono de storage.objects: recriar o gatilho exige o SQL da 0224 (ou o dono pelo painel).',
    'bloqueante', 1032),
-  ('original_apagado_ator_do_cabecalho', '0224', 'corpo', 'fn_trg_auditar_original_apagado', 'request.headers', null,
+  ('original_apagado_ator_do_cabecalho', '0224', 'corpo', 'fn_trg_auditar_original_apagado', 'current_setting(''request.headers''', null,
    'A exclusão efetiva da API do Storage roda como service_role sem sub: só o JWT de request.headers diz quem apagou. Sem esta leitura toda exclusão do Analista sai sem autor (ou "Sistema").',
    'bloqueante', 1034),
   ('original_apagado_update_so_socio', '0224', 'comportamento', 'instalacao_sonda_update_documentos_so_socio', null, 1,

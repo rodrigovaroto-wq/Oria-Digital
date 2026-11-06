@@ -21,7 +21,8 @@
 --   4. objeto de OUTRO bucket apagado: nenhum evento; vários objetos num DELETE só: um evento por objeto;
 --   5. conexão SQL de serviço (sem request.headers: SQL Editor): `sistema:sql`; objeto solto (chave sem mandato) apagado: evento `storage:documentos/<chave>`, não some;
 --   5b. O CAMINHO REAL DA API: ator = e-mail lido do JWT de `request.headers` (com todos os paddings do base64url e com `-`/`_`), cabeçalho em maiúscula também; cabeçalho
---      ausente, malformado, sem sub, sub inexistente ou ilegível: o DELETE SEGUE e o ator é `storage:nao_identificado` com o motivo; JWT de service_role: `sistema:servico`;
+--      ausente, malformado, sem sub, sub inexistente ou ilegível: o DELETE SEGUE e o ator é `storage:nao_identificado` com o motivo; JWT de service_role: `storage:chave_de_servico`; rota S3 com Bearer forjado: nunca lido;
+--      JWT sem o prefixo Bearer: atribuído;
 --   6. o Histórico do mandato mostra a exclusão a quem lê o mandato (Analista alocada, Leitura) e NÃO a quem não lê; `storage:nao_identificado` NÃO some como "Sistema";
 --   7. falha fechada: se a trilha não puder ser gravada, o objeto NÃO é apagado;
 --   8. a sonda enxerga o gatilho, a policy de update e o versionamento: 7 requisitos da 0224 presentes, e cada um desfeito a faz acusar;
@@ -72,15 +73,17 @@ begin
   perform set_config('request.jwt.claims', '', true);
   perform set_config('request.jwt.claim.sub', '', true);
   perform set_config('request.headers', '', true);
+  perform set_config('request.path', '', true);
 end $$;
 
 -- A ETAPA 2 DA API DO STORAGE (a exclusão efetiva): role service_role, sub vazio, e o JWT do usuário só em request.headers (scope.ts:15-24 do supabase/storage).
-create or replace function teste_api_d16(p_headers text) returns void
+create or replace function teste_api_d16(p_headers text, p_path text default '') returns void
 language plpgsql as $$
 begin
   perform set_config('request.jwt.claim.sub', '', true);
   perform set_config('request.jwt.claims', '{"role":"service_role"}', true);
   perform set_config('request.headers', p_headers, true);
+  perform set_config('request.path', p_path, true);   -- request.url do Fastify: '/object/...' (REST), '/s3/...' (protocolo S3), com a query
   execute 'set local role service_role';
 end $$;
 
@@ -91,11 +94,11 @@ create or replace function teste_jwt_d16(p_payload text) returns text language s
   select 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.' || teste_b64u_d16(p_payload) || '.assinatura' $$;
 
 -- Apaga UM objeto pelo caminho real da API com os cabeçalhos dados e devolve o resultado do DELETE.
-create or replace function teste_api_apaga_d16(p_headers text, p_nome text) returns text
+create or replace function teste_api_apaga_d16(p_headers text, p_nome text, p_path text default '') returns text
 language plpgsql as $$
 declare r text;
 begin
-  perform teste_api_d16(p_headers);
+  perform teste_api_d16(p_headers, p_path);
   r := teste_tenta_d16(format($q$delete from storage.objects where bucket_id = 'documentos' and name = %L$q$, p_nome));
   perform teste_servico_d16();
   return r;
@@ -249,6 +252,30 @@ begin
   perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'socio@0224.local' and v_ev.antes->>'ator_origem' = 'cabecalho_jwt',
     'o nome do cabeçalho e o "Bearer" em qualquer caixa funcionam', v_res || ' ' || coalesce(v_ev.ator, 'sem evento'));
 
+  -- O Storage aceita o JWT SEM o prefixo "Bearer" (jwt.ts:41: replace(/^Bearer\s+/i, '')): mandar o token cru não pode virar "não identificado".
+  v_nome := v_c || '/api-cru-0224.pdf';
+  insert into storage.objects (bucket_id, name, metadata) values ('documentos', v_nome, '{"size": 3}');
+  v_res := teste_api_apaga_d16(jsonb_build_object('authorization', teste_jwt_d16(jsonb_build_object('sub', u_ana, 'role', 'authenticated')::text))::text, v_nome, '/object/documentos/x');
+  select * into v_ev from evento_auditoria where acao = 'documento_original_apagado' and antes->>'caminho' = v_nome;
+  perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'ana@0224.local', 'JWT SEM o prefixo "Bearer" (o Storage aceita): atribuído à Analista', v_res || ' ' || coalesce(v_ev.ator, 'sem evento'));
+  -- PROTOCOLO S3: o `authorization` não é verificado ali (o Storage autentica por signatureV4) e o plugin db o repassa. Um Bearer forjado com o sub do Sócio NUNCA pode ser
+  -- atribuído a ele, nem virar service_role; com o path S3 o gatilho não lê o cabeçalho. Com path de REST, o mesmo cabeçalho vale (a distinção é o path, e é afirmada).
+  v_i := 0;
+  foreach v_j in array array['/s3/documentos/x?X-Amz-Signature=abc', '/storage/v1/s3/documentos/x', '/S3/documentos/x'] loop
+    v_i := v_i + 1;
+    v_nome := v_c || '/api-s3-' || v_i || '-0224.pdf';
+    insert into storage.objects (bucket_id, name, metadata) values ('documentos', v_nome, '{"size": 3}');
+    v_res := teste_api_apaga_d16(jsonb_build_object('authorization', 'Bearer ' || teste_jwt_d16(jsonb_build_object('sub', u_socio, 'role', 'authenticated')::text))::text, v_nome, v_j);
+    select * into v_ev from evento_auditoria where acao = 'documento_original_apagado' and antes->>'caminho' = v_nome;
+    perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'storage:nao_identificado' and v_ev.antes->>'ator_motivo' = 'protocolo s3' and v_ev.antes->>'usuario_id' is null,
+      'rota S3 (' || v_j || ') com Bearer forjado do sub do Sócio: nunca atribuído a ele', v_res || ' ' || coalesce(v_ev.ator, 'sem evento'));
+  end loop;
+  v_nome := v_c || '/api-s3-sr-0224.pdf';
+  insert into storage.objects (bucket_id, name, metadata) values ('documentos', v_nome, '{"size": 3}');
+  v_res := teste_api_apaga_d16(jsonb_build_object('authorization', 'Bearer ' || teste_jwt_d16('{"role":"service_role"}'))::text, v_nome, '/s3/documentos/x');
+  select * into v_ev from evento_auditoria where acao = 'documento_original_apagado' and antes->>'caminho' = v_nome;
+  perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'storage:nao_identificado', 'rota S3 com payload service_role forjado: nunca vira chave de serviço nem sistema', v_res || ' ' || coalesce(v_ev.ator, 'sem evento'));
+
   -- O que não identifica ninguém: o DELETE SEGUE (o objeto some) e o ator é storage:nao_identificado com o motivo. NUNCA sistema:*.
   v_i := 0;
   foreach v_j in array array[
@@ -280,25 +307,28 @@ begin
       and v_ev.ator = 'storage:nao_identificado' and v_ev.antes->>'ator_motivo' = split_part(v_j, '|', 2),
       format('cabeçalho "%s": o DELETE segue e o ator é storage:nao_identificado, motivo "%s"', split_part(v_j, '|', 1), split_part(v_j, '|', 2)),
       v_res || ' ' || coalesce(v_ev.ator, 'sem evento') || ' / ' || coalesce(v_ev.antes->>'ator_motivo', 'sem motivo'));
+    if v_j like 'SUB_INEXISTENTE|%' then
+      perform teste_assert_d16(v_ev.antes->>'sub_alegado' = '00000000-0000-0000-0000-0000000fffff', 'sub inexistente: o sub alegado fica em antes.sub_alegado (evidência)', coalesce(v_ev.antes::text, 'sem evento'));
+    end if;
   end loop;
 
-  -- JWT de service_role (o n8n): não há pessoa; "Sistema" é verdade aqui e só aqui.
+  -- JWT de service_role: o n8n nunca apaga do bucket (só POST com x-upsert); quem apaga com a chave é uma pessoa não identificada.
   v_nome := v_c || '/api-servico-0224.pdf';
   insert into storage.objects (bucket_id, name, metadata) values ('documentos', v_nome, '{"size": 3}');
   v_res := teste_api_apaga_d16(jsonb_build_object('authorization', 'Bearer ' || teste_jwt_d16('{"role":"service_role"}'))::text, v_nome);
   select * into v_ev from evento_auditoria where acao = 'documento_original_apagado' and antes->>'caminho' = v_nome;
-  perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'sistema:servico', 'JWT de service_role (o n8n): ator sistema:servico', v_res || ' ' || coalesce(v_ev.ator, 'sem evento'));
+  perform teste_assert_d16(v_res = 'ok:1' and v_ev.ator = 'storage:chave_de_servico', 'JWT de service_role: ator storage:chave_de_servico (o n8n não apaga; é uma pessoa com a chave, nunca "Sistema")', v_res || ' ' || coalesce(v_ev.ator, 'sem evento'));
   -- Um JWT de usuário que traz `role` service_role por engano de claim NÃO é o caso: o `sub` do usuário comum continua valendo (já coberto acima); aqui, o que importa é a
   -- garantia de que NENHUMA exclusão pela API (cabeçalho presente) saiu como sistema:storage ou sistema:sql.
-  select count(*) into v_n from evento_auditoria where acao = 'documento_original_apagado' and entidade_ref = 'caso:' || v_c and ator in ('sistema:storage', 'sistema:sql');
-  perform teste_assert_d16(v_n = 0, 'nenhuma exclusão pela API virou sistema:storage nem sistema:sql', v_n::text);
+  select count(*) into v_n from evento_auditoria where acao = 'documento_original_apagado' and entidade_ref = 'caso:' || v_c and ator like 'sistema:%';
+  perform teste_assert_d16(v_n = 0, 'nenhuma exclusão pela API virou sistema:*', v_n::text);
   -- O Histórico: `storage:nao_identificado` aparece COMO ESTÁ (não é anulado em "Sistema"); `sistema:servico` vira autor nulo.
   perform teste_como_d16(u_socio);
-  select count(*) filter (where autor = 'storage:nao_identificado'), count(*) filter (where autor is null) into v_n, v_n0
+  select count(*) filter (where autor = 'storage:nao_identificado'), count(*) filter (where autor = 'storage:chave_de_servico') into v_n, v_n0
     from fn_historico_do_caso(v_c) where tipo = 'documento_original_apagado';
   perform teste_servico_d16();
-  perform teste_assert_d16(v_n = 11 and v_n0 = 1,
-    'no Histórico, as 11 exclusões não identificadas mostram storage:nao_identificado (não "Sistema") e a do n8n tem autor nulo', format('%s não identificadas, %s nulas', v_n, v_n0));
+  perform teste_assert_d16(v_n = 15 and v_n0 = 1,
+    'no Histórico, as 15 exclusões não identificadas mostram storage:nao_identificado e a da chave de serviço storage:chave_de_servico (nenhuma vira autor nulo = "Sistema")', format('%s não identificadas, %s chave de serviço', v_n, v_n0));
 
   -- ---------------------------------------------------------------- 6. o Histórico do mandato
   raise notice '--- 6. o Histórico do mandato mostra a exclusão a quem lê o mandato, e só a ele ---';

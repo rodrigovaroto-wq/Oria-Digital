@@ -102,6 +102,8 @@ export function textoDoAutor(tipo: string, autor: string | null, referencia?: un
   }
   if (autor === "portal:desconhecido") return "Não identificado (sessão sem e-mail)";
   // 0224: o gatilho de exclusão de original não conseguiu ler quem apagou (motivo em evento_auditoria.antes.ator_motivo). Nunca "Sistema": o original FOI apagado por alguém.
+  // 0224: apagado com a chave de serviço (service_role). O n8n nunca apaga do bucket, então é uma pessoa (script ou painel); "Sistema" seria mentira.
+  if (autor === "storage:chave_de_servico") return "Chave de serviço (painel ou script — pessoa não identificada)";
   if (autor === "storage:nao_identificado") return "Não identificado (o Storage não informou quem apagou)";
   return autor;
 }

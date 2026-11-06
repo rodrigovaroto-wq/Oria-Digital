@@ -1659,16 +1659,16 @@
 {"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":94}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"Supabase/test/operacao.test.sql","l":35}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_resumo","f":"Supabase/test/operacao.test.sql","l":90}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/original_apagado.test.sql","l":134}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_caso_da_chave_do_storage","f":"Supabase/test/original_apagado.test.sql","l":358}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/original_apagado.test.sql","l":130}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"Supabase/test/original_apagado.test.sql","l":358}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"Supabase/test/original_apagado.test.sql","l":298}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/original_apagado.test.sql","l":339}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/original_apagado.test.sql","l":359}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_ler_caso","f":"Supabase/test/original_apagado.test.sql","l":358}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/original_apagado.test.sql","l":138}
-{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/original_apagado.test.sql","l":127}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/original_apagado.test.sql","l":137}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_caso_da_chave_do_storage","f":"Supabase/test/original_apagado.test.sql","l":388}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/original_apagado.test.sql","l":133}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"Supabase/test/original_apagado.test.sql","l":388}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"Supabase/test/original_apagado.test.sql","l":328}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/original_apagado.test.sql","l":369}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/original_apagado.test.sql","l":389}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_ler_caso","f":"Supabase/test/original_apagado.test.sql","l":388}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/original_apagado.test.sql","l":141}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/original_apagado.test.sql","l":130}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"Supabase/test/papel_da_linha.test.sql","l":233}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Supabase/test/papel_da_linha.test.sql","l":204}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"Supabase/test/papel_da_linha.test.sql","l":244}
@@ -1910,10 +1910,10 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/scripts/verificar-kit-basico.mts","l":10}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/verificar-kit-basico.mts","l":8}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1369}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1415}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1306}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1349}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1371}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1417}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1308}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1351}
 {"k":"e","de":"arquivo:portal/scripts/verificar-modelagem-cobertura.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-modelagem-cobertura.mts","l":6}
 {"k":"e","de":"arquivo:portal/scripts/verificar-perimetro.mts","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/scripts/verificar-perimetro.mts","l":3}
 {"k":"e","de":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-premissas-do-realizado.mts","l":444}
@@ -2683,8 +2683,8 @@
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":63}
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_registrar_falha_execucao","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":96}
 {"k":"e","de":"migration:0223","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","l":37}
-{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":287}
-{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_trg_auditar_original_apagado","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":112}
+{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":305}
+{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_trg_auditar_original_apagado","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":114}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

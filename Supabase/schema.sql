@@ -6441,7 +6441,7 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
 
     union all
     -- 0224 (D16): o original do cliente apagado do Storage. O gatilho de storage.objects grava `caso:<id>` + o que se perdeu em `antes`;
-    -- o ator é o e-mail de quem apagou; `storage:nao_identificado` aparece como está; `sistema:servico`/`sistema:sql` a consulta final anula como nas demais ações do sistema.
+    -- o ator é o e-mail de quem apagou; `storage:nao_identificado` aparece como está; `sistema:sql` a consulta final anula como nas demais ações do sistema.
     select e.criado_em, 'documento_original_apagado', e.ator,
            format('Original apagado do armazenamento: "%s"%s',
                   coalesce(e.antes->>'nome_original', nullif(e.antes->>'arquivo', ''), '(sem nome)'),
@@ -15573,6 +15573,8 @@ declare
   v_seg    text;
   v_pl     jsonb;
   v_sub    uuid;
+  v_sub_al text;     -- o sub que o JWT ALEGA (evidência quando ele não existe em auth.users)
+  v_path   text  := split_part(coalesce(current_setting('request.path', true), ''), '?', 1);
   v_email  text;
   v_caso   uuid;
   v_ref    text;
@@ -15602,9 +15604,20 @@ begin
         -- Sem request.headers: o DELETE não veio pela API do Storage (ela sempre o define, ao menos '{}'). É conexão SQL de serviço.
         if fn_conexao_de_servico() then v_ator := 'sistema:sql'; v_origem := 'conexao_sql';
         else v_motivo := 'sem cabecalho authorization'; end if;
+      elsif v_path ~* '^(/[^/]*){0,2}/s3(/|$)' then
+        -- PROTOCOLO S3: NUNCA se lê `authorization`. Nas rotas /s3/* o Storage NÃO registra o plugin jwt (src/http/routes/s3/index.ts:242 registra signatureV4); a credencial é
+        -- verificada pela assinatura (src/http/plugins/signature-v4.ts:160-215; no modo pré-assinado vem da query, storage/protocols/s3/signature-v4.ts:206) e o plugin db
+        -- (src/http/plugins/db.ts:72) repassa `request.headers` INTEIRO, com um `authorization` que NINGUÉM verificou: quem tem a credencial S3 de A pode acrescentar um
+        -- `Authorization: Bearer <payload com o sub de B>` e a RLS passa como A enquanto este gatilho gravaria B (ou service_role -> "Sistema"). Ler o token verificado
+        -- (x-amz-security-token / X-Amz-Security-Token) seria possível, mas exigiria provar que é o que vira o usuário da etapa 1; gravar "não identificado" é seguro e simples.
+        -- request.path = request.url do Fastify (db.ts:74; scope.ts:77): '/s3/<bucket>/...' ou, atrás do gateway, '/storage/v1/s3/...', sempre com a query. O padrão acha o
+        -- segmento `s3` entre os 3 primeiros; falso positivo (bucket chamado s3) só perde a atribuição, nunca a atribui errado. Sem request.path (jobs de fila do Storage:
+        -- emptyBucket / ObjectAdminDeleteAllBefore conectam sem cabeçalhos, request.headers='{}') não há rota: o ramo de baixo vê '{}' e cai em 'sem cabecalho authorization'.
+        v_motivo := 'protocolo s3';
       else
         select h.value into v_auth from jsonb_each_text(v_hdr::jsonb) h where lower(h.key) = 'authorization' limit 1;
-        v_tok    := substring(v_auth from '^[Bb][Ee][Aa][Rr][Ee][Rr]\s+(\S+)\s*$');
+        -- Espelha o Storage (src/http/plugins/jwt.ts:41: `(authorization || '').replace(/^Bearer\s+/i, '')`): o prefixo "Bearer" é OPCIONAL e a caixa livre.
+        v_tok    := substring(v_auth from '(?i)^\s*(?:bearer\s+)?(\S+)\s*$');
         v_partes := string_to_array(v_tok, '.');
         if v_auth is null then
           v_motivo := 'sem cabecalho authorization';
@@ -15616,12 +15629,14 @@ begin
           v_seg := v_seg || repeat('=', (4 - length(v_seg) % 4) % 4);
           v_pl  := convert_from(decode(v_seg, 'base64'), 'UTF8')::jsonb;
           if v_pl ->> 'role' = 'service_role' then
-            -- A chave de serviço (o n8n): não há pessoa. "Sistema" na tela é verdade aqui, e só aqui.
-            v_ator := 'sistema:servico'; v_origem := 'jwt_service_role';
+            -- A chave de serviço: o n8n NUNCA apaga do bucket (só POST com x-upsert, N8N/build-workflow.mjs:2755-2766); quem apaga com ela é uma PESSOA (script, painel).
+            -- "Sistema" na tela seria ausência apresentada como dado (regra 1): grava `storage:chave_de_servico` e o portal diz que a pessoa não foi identificada.
+            v_ator := 'storage:chave_de_servico'; v_origem := 'jwt_service_role';
           elsif nullif(v_pl ->> 'sub', '') is null then
             v_motivo := 'jwt sem sub';
           else
             v_sub := (v_pl ->> 'sub')::uuid;
+            v_sub_al := v_sub::text;
             select u.email into v_email from auth.users u where u.id = v_sub;
             if not found then v_motivo := 'sub inexistente em auth.users';
             else v_uid_ev := v_sub; v_origem := 'cabecalho_jwt'; v_ator := coalesce(v_email, 'usuario:' || v_sub::text); end if;
@@ -15629,7 +15644,7 @@ begin
         end if;
       end if;
     exception when others then
-      v_uid_ev := null; v_origem := null; v_ator := null;
+      v_uid_ev := null; v_origem := null; v_ator := null; v_sub_al := null;
       v_motivo := 'cabecalho ilegivel';
     end;
     if v_ator is null then v_ator := 'storage:nao_identificado'; v_origem := 'nao_identificado'; end if;
@@ -15653,7 +15668,8 @@ begin
                              'tamanho_bytes', old.metadata -> 'size',
                              'usuario_id', v_uid_ev,
                              'ator_origem', v_origem,
-                             'ator_motivo', v_motivo),
+                             'ator_motivo', v_motivo,
+                             'sub_alegado', v_sub_al),
           null);
   return null;
 end $_$;

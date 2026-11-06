@@ -1113,8 +1113,10 @@ supabase db execute --file Supabase/migrations/0224_o_original_que_o_analista_ap
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0224' and not presente;   -- ZERO linhas
 #   -- e a prova que só uma exclusão de verdade dá: suba um arquivo de teste num mandato, apague-o pelo portal/API com o login de um Analista e leia
 #   select criado_em, ator, entidade_ref, antes->>'ator_origem' as origem, antes->>'ator_motivo' as motivo from evento_auditoria where acao = 'documento_original_apagado' order by criado_em desc limit 3;
-#   -- o `ator` tem de ser o e-mail de quem apagou (origem `cabecalho_jwt`). Se vier `storage:nao_identificado`, o `motivo` diz por quê: 'sem cabecalho authorization' = o gateway
-#   -- não repassa o cabeçalho ao Postgres e o gatilho precisa de outra fonte do usuário. Se vier `sistema:*` para uma exclusão feita por pessoa, é defeito: avise.
+#   -- o `ator` tem de ser o e-mail de quem apagou (origem `cabecalho_jwt`). Se vier `storage:nao_identificado`, o `motivo` diz por quê: 'sem cabecalho authorization' pode ser (a) o gateway que não
+#   -- repassa o cabeçalho (o gatilho precisa de outra fonte do usuário) OU (b) um job de fila do Storage (emptyBucket / ObjectAdminDeleteAllBefore, base-event.ts:101), que conecta sem
+#   -- cabeçalhos (request.headers='{}'): confira se o objeto de teste saiu por exclusão sua. 'protocolo s3' = exclusão pelo S3 (o `authorization` não é verificado lá: nunca lido).
+#   -- `storage:chave_de_servico` = alguém apagou com a service_role (script ou painel); o portal mostra "Chave de serviço (pessoa não identificada)". Se vier `sistema:*` para uma exclusão feita por pessoa, é defeito: avise.
 #   -- E confira o versionamento (a sonda também o cobra): select id, versioning_status from storage.buckets where id = 'documentos';   -- DISABLED
 
 # ---------------------------------------------------------------------------
