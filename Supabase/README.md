@@ -1115,6 +1115,12 @@ supabase db execute --file Supabase/migrations/0225_a_pendencia_decidida_que_nao
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0225' and not presente;   -- ZERO linhas
 
+# A 0226 (P16 G1, VISTORIA_P2 §6 ALTA 2) faz o auto-aceite de fn_registrar_campos_extraidos EXIGIR tipo no documento: sem tipo_taxonomia, nenhuma linha é auto-aceita (ficam pendentes, com evento auto_aceite_suprimido "documento sem tipo"). Antes, um .txt sem tipo/entidade/período teve "Saldo de caixa: 1000" auto-aceita e chegou ao Excel como ACEITO. Mesma assinatura e ACL; só o auto-aceite muda. Acrescenta o requisito campos_auto_aceite_exige_tipo.
+# >>> Rodar COMO `postgres`; idempotente. Teste: Supabase/test/auto_aceite_exige_tipo.test.sql.
+supabase db execute --file Supabase/migrations/0226_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0226' and not presente;   -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

@@ -89,6 +89,7 @@
 {"k":"n","id":"arquivo:Supabase/test/acesso_por_caso.test.sql","t":"arquivo","f":"Supabase/test/acesso_por_caso.test.sql","txt":"acesso_por_caso.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/alias_truncado.test.sql","t":"arquivo","f":"Supabase/test/alias_truncado.test.sql","txt":"alias_truncado.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/arquivo_oficial.test.sql","t":"arquivo","f":"Supabase/test/arquivo_oficial.test.sql","txt":"arquivo_oficial.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/auto_aceite_exige_tipo.test.sql","t":"arquivo","f":"Supabase/test/auto_aceite_exige_tipo.test.sql","txt":"auto_aceite_exige_tipo.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/auto_promocao_dial.test.sql","t":"arquivo","f":"Supabase/test/auto_promocao_dial.test.sql","txt":"auto_promocao_dial.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/autoridade_combinado.test.sql","t":"arquivo","f":"Supabase/test/autoridade_combinado.test.sql","txt":"autoridade_combinado.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/balcao_ambiguo_e_cnpj.test.sql","t":"arquivo","f":"Supabase/test/balcao_ambiguo_e_cnpj.test.sql","txt":"balcao_ambiguo_e_cnpj.test.sql"}
@@ -546,7 +547,7 @@
 {"k":"n","id":"fn:fn_reconferir_caso","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"reconferir caso"}
 {"k":"n","id":"fn:fn_reescrever_recado_linha_exigida","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"reescrever recado linha exigida"}
 {"k":"n","id":"fn:fn_registrar_arquivo_oficial","t":"fn","f":"Supabase/migrations/0206_o_arquivo_oficial_lido_e_contado.sql","txt":"registrar arquivo oficial"}
-{"k":"n","id":"fn:fn_registrar_campos_extraidos","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"registrar campos extraidos"}
+{"k":"n","id":"fn:fn_registrar_campos_extraidos","t":"fn","f":"Supabase/migrations/0226_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql","txt":"registrar campos extraidos"}
 {"k":"n","id":"fn:fn_registrar_classe_override","t":"fn","f":"Supabase/migrations/0128_classificacao_contabil_sombra.sql","txt":"registrar classe override"}
 {"k":"n","id":"fn:fn_registrar_diagnostico","t":"fn","f":"Supabase/migrations/0177_a_guarda_do_balcao_ia_so_num_sentido.sql","txt":"registrar diagnostico"}
 {"k":"n","id":"fn:fn_registrar_documento","t":"fn","f":"Supabase/migrations/0170_o_cnpj_atravessa_a_porta_de_entrada.sql","txt":"registrar documento"}
@@ -782,6 +783,7 @@
 {"k":"n","id":"migration:0223","t":"migration","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","txt":"o token v1 que ainda entrava por nome"}
 {"k":"n","id":"migration:0224","t":"migration","f":"Supabase/migrations/0224_o_documento_sem_tipo_que_virava_cem_por_cento_humano.sql","txt":"o documento sem tipo que virava cem por cento humano"}
 {"k":"n","id":"migration:0225","t":"migration","f":"Supabase/migrations/0225_a_pendencia_decidida_que_nao_tinha_volta.sql","txt":"a pendencia decidida que nao tinha volta"}
+{"k":"n","id":"migration:0226","t":"migration","f":"Supabase/migrations/0226_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql","txt":"a linha sem tipo que chegava aceita ao excel"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1179,6 +1181,10 @@
 {"k":"e","de":"arquivo:Supabase/test/alias_truncado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/alias_truncado.test.sql","l":45}
 {"k":"e","de":"arquivo:Supabase/test/alias_truncado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"Supabase/test/alias_truncado.test.sql","l":47}
 {"k":"e","de":"arquivo:Supabase/test/arquivo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_arquivo_oficial","f":"Supabase/test/arquivo_oficial.test.sql","l":28}
+{"k":"e","de":"arquivo:Supabase/test/auto_aceite_exige_tipo.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/auto_aceite_exige_tipo.test.sql","l":83}
+{"k":"e","de":"arquivo:Supabase/test/auto_aceite_exige_tipo.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/auto_aceite_exige_tipo.test.sql","l":53}
+{"k":"e","de":"arquivo:Supabase/test/auto_aceite_exige_tipo.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/auto_aceite_exige_tipo.test.sql","l":47}
+{"k":"e","de":"arquivo:Supabase/test/auto_aceite_exige_tipo.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/auto_aceite_exige_tipo.test.sql","l":39}
 {"k":"e","de":"arquivo:Supabase/test/auto_promocao_dial.test.sql","rel":"CHAMA","pa":"fn:fn_dial_auto_promover","f":"Supabase/test/auto_promocao_dial.test.sql","l":153}
 {"k":"e","de":"arquivo:Supabase/test/auto_promocao_dial.test.sql","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Supabase/test/auto_promocao_dial.test.sql","l":120}
 {"k":"e","de":"arquivo:Supabase/test/autoridade_combinado.test.sql","rel":"CHAMA","pa":"fn:fn_autoridade_do_documento","f":"Supabase/test/autoridade_combinado.test.sql","l":123}
@@ -2660,6 +2666,7 @@
 {"k":"e","de":"migration:0223","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","l":37}
 {"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_revisar_documento","f":"Supabase/migrations/0224_o_documento_sem_tipo_que_virava_cem_por_cento_humano.sql","l":26}
 {"k":"e","de":"migration:0225","rel":"CRIA","pa":"fn:fn_decidir_pendencia","f":"Supabase/migrations/0225_a_pendencia_decidida_que_nao_tinha_volta.sql","l":24}
+{"k":"e","de":"migration:0226","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0226_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql","l":32}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

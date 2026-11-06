@@ -12738,6 +12738,10 @@ begin
 
   -- ----- Auto-aceite (0029): DEPOIS das guardas, nunca antes -----------------
   --
+  -- 0226: E SÓ DE DOCUMENTO COM TIPO. `v_tipo` (lido no topo, 0203) nulo = o documento nunca foi classificado: nada do que ele diz foi
+  -- conferido contra o que um BALANCO/DRE/... deve conter, e "aceito" no Excel passa a querer dizer "conferido". Medido em produção em 04/11/2026:
+  -- um .txt de 57 bytes sem tipo, entidade e período teve "Saldo de caixa: 1000" auto-aceita e chegou ao book como ACEITO.
+  --
   -- 0141: E A TRILHA PASSA A DIZER QUANTO O LIMIAR FILTROU, porque medido em
   -- 24/08 ele nunca filtrou nada. Em 15.030 linhas gravadas por este sistema, a
   -- confiança auto-reportada assumiu TRÊS valores — 0,95, 0,99 e 1 — e o limiar
@@ -12754,7 +12758,7 @@ begin
   -- zero, ela diz isso com todas as letras, porque um portão que aprova tudo e
   -- não declara que aprovou tudo é pior que portão nenhum: ele parece funcionar.
   v_n_excluidas := greatest(v_count - v_n_auto_aceitos, 0);
-  if v_n_auto_aceitos > 0 and not v_guarda_disparou then
+  if v_n_auto_aceitos > 0 and not v_guarda_disparou and v_tipo is not null then
     update campo_extraido
       set status_aceite = 'aceito',
           aceito_por = format('sistema:auto_aceite (dial %s, limiar %s, sem guarda disparada)',
@@ -12783,7 +12787,9 @@ begin
               jsonb_build_object('n_elegiveis', v_n_auto_aceitos,
                                  'n_excluidas_pelo_limiar', v_n_excluidas,
                                  'limiar_discriminou', v_n_excluidas > 0,
-                                 'porque', 'guarda de extracao disparou; linhas seguem pendentes de revisao humana'));
+                                 'porque', case when v_tipo is null
+                                   then 'documento sem tipo; linhas seguem pendentes de revisao humana ate alguem escolher o tipo'
+                                   else 'guarda de extracao disparou; linhas seguem pendentes de revisao humana' end));
   end if;
   perform fn_recomputar_completude(v_caso_id);
 
