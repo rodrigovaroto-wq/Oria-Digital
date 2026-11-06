@@ -567,6 +567,8 @@ checar(/^Não identificado/.test(textoDoAutor("documento_original_apagado", "sto
   "'storage:nao_identificado' vazou cru ou virou outra coisa na tela");
 checar(/^Chave de serviço/.test(textoDoAutor("documento_original_apagado", "storage:chave_de_servico")),
   "'storage:chave_de_servico' vazou cru ou virou \"Sistema\" na tela");
+checar(/^SQL direto/.test(textoDoAutor("documento_original_apagado", "storage:sql_direto")),
+  "'storage:sql_direto' vazou cru ou virou \"Sistema\" na tela");
 // 28/10/2026 01:30 UTC = 27/10 22:30 em São Paulo: o dia é 27, não 28.
 checar(chaveDoDia("2026-10-28T01:30:00.123456+00:00") === "2026-10-27",
   "dia calculado em UTC: evento das 22h30 de SP foi para o dia seguinte");

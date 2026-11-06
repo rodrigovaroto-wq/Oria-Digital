@@ -1113,9 +1113,12 @@ supabase db execute --file Supabase/migrations/0224_o_original_que_o_analista_ap
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0224' and not presente;   -- ZERO linhas
 #   -- e a prova que só uma exclusão de verdade dá: suba um arquivo de teste num mandato, apague-o pelo portal/API com o login de um Analista e leia
 #   select criado_em, ator, entidade_ref, antes->>'ator_origem' as origem, antes->>'ator_motivo' as motivo from evento_auditoria where acao = 'documento_original_apagado' order by criado_em desc limit 3;
-#   -- o `ator` tem de ser o e-mail de quem apagou (origem `cabecalho_jwt`). Se vier `storage:nao_identificado`, o `motivo` diz por quê: 'sem cabecalho authorization' pode ser (a) o gateway que não
-#   -- repassa o cabeçalho (o gatilho precisa de outra fonte do usuário) OU (b) um job de fila do Storage (emptyBucket / ObjectAdminDeleteAllBefore, base-event.ts:101), que conecta sem
-#   -- cabeçalhos (request.headers='{}'): confira se o objeto de teste saiu por exclusão sua. 'protocolo s3' = exclusão pelo S3 (o `authorization` não é verificado lá: nunca lido).
+#   -- o `ator` tem de ser o e-mail de quem apagou (origem `cabecalho_jwt`). Se vier `storage:nao_identificado`, o `motivo` diz por quê: 'operacao <x>' = o `authorization` só é lido nas operações REST de exclusão ('storage.object.delete' e
+#   -- 'storage.object.delete_many', as únicas sob registerJwtAuth); em S3 ('operacao storage.s3.object.delete'...) ele não é verificado pelo Storage e nunca é lido. 'operacao ausente' = job de fila do
+#   -- Storage (emptyBucket / ObjectAdminDeleteAllBefore, base-event.ts:101: sem operação, request.headers='{}'). Se uma exclusão REAL pela API do portal vier 'operacao ...' com outro nome, o nome da operação
+#   -- no Storage hospedado mudou: ajuste a lista na função. 'sem cabecalho authorization' = REST sem o cabeçalho (o gateway não o repassa: o gatilho precisa de outra fonte do usuário). `antes` traz
+#   -- storage_operation e request_path (sem a query) para perícia.
+#   -- `storage:sql_direto` = apagado por SQL direto no banco (exige storage.allow_delete_query, ato de pessoa); `antes->>'sessao_usuario'` diz quem conectou. Nenhum `sistema:*` é gravado para objeto.
 #   -- `storage:chave_de_servico` = alguém apagou com a service_role (script ou painel); o portal mostra "Chave de serviço (pessoa não identificada)". Se vier `sistema:*` para uma exclusão feita por pessoa, é defeito: avise.
 #   -- E confira o versionamento (a sonda também o cobra): select id, versioning_status from storage.buckets where id = 'documentos';   -- DISABLED
 

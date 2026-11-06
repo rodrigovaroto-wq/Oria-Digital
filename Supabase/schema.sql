@@ -6441,7 +6441,7 @@ CREATE FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer DEF
 
     union all
     -- 0224 (D16): o original do cliente apagado do Storage. O gatilho de storage.objects grava `caso:<id>` + o que se perdeu em `antes`;
-    -- o ator é o e-mail de quem apagou; `storage:nao_identificado` aparece como está; `sistema:sql` a consulta final anula como nas demais ações do sistema.
+    -- o ator é o e-mail de quem apagou; `storage:nao_identificado` aparece como está; os `storage:*` aparecem como estão (o portal os rotula; nenhum vira "Sistema").
     select e.criado_em, 'documento_original_apagado', e.ator,
            format('Original apagado do armazenamento: "%s"%s',
                   coalesce(e.antes->>'nome_original', nullif(e.antes->>'arquivo', ''), '(sem nome)'),
@@ -15574,6 +15574,8 @@ declare
   v_pl     jsonb;
   v_sub    uuid;
   v_sub_al text;     -- o sub que o JWT ALEGA (evidência quando ele não existe em auth.users)
+  v_op     text  := coalesce(current_setting('storage.operation', true), '');
+  -- request.path SEM a query (a query do S3 pré-assinado traz X-Amz-Signature e X-Amz-Security-Token = um JWT: não vai para a trilha). É só perícia; nenhuma decisão o usa.
   v_path   text  := split_part(coalesce(current_setting('request.path', true), ''), '?', 1);
   v_email  text;
   v_caso   uuid;
@@ -15601,19 +15603,21 @@ begin
     -- "não entendi o cabeçalho"): vira `storage:nao_identificado` com o motivo em antes.ator_motivo.
     begin
       if v_hdr is null then
-        -- Sem request.headers: o DELETE não veio pela API do Storage (ela sempre o define, ao menos '{}'). É conexão SQL de serviço.
-        if fn_conexao_de_servico() then v_ator := 'sistema:sql'; v_origem := 'conexao_sql';
+        -- Sem request.headers: o DELETE não veio pela API do Storage (ela sempre o define, ao menos '{}'; os jobs chegam com '{}', não NULL). Apagar por SQL exige
+        -- `set local storage.allow_delete_query='true'` (protect_objects_delete): é ato deliberado de PESSOA, não do sistema. `sistema:*` seria ausência apresentada como
+        -- dado (regra 1): grava `storage:sql_direto` com session_user e o papel em antes (perícia).
+        if fn_conexao_de_servico() then v_ator := 'storage:sql_direto'; v_origem := 'conexao_sql';
         else v_motivo := 'sem cabecalho authorization'; end if;
-      elsif v_path ~* '^(/[^/]*){0,2}/s3(/|$)' then
-        -- PROTOCOLO S3: NUNCA se lê `authorization`. Nas rotas /s3/* o Storage NÃO registra o plugin jwt (src/http/routes/s3/index.ts:242 registra signatureV4); a credencial é
-        -- verificada pela assinatura (src/http/plugins/signature-v4.ts:160-215; no modo pré-assinado vem da query, storage/protocols/s3/signature-v4.ts:206) e o plugin db
-        -- (src/http/plugins/db.ts:72) repassa `request.headers` INTEIRO, com um `authorization` que NINGUÉM verificou: quem tem a credencial S3 de A pode acrescentar um
-        -- `Authorization: Bearer <payload com o sub de B>` e a RLS passa como A enquanto este gatilho gravaria B (ou service_role -> "Sistema"). Ler o token verificado
-        -- (x-amz-security-token / X-Amz-Security-Token) seria possível, mas exigiria provar que é o que vira o usuário da etapa 1; gravar "não identificado" é seguro e simples.
-        -- request.path = request.url do Fastify (db.ts:74; scope.ts:77): '/s3/<bucket>/...' ou, atrás do gateway, '/storage/v1/s3/...', sempre com a query. O padrão acha o
-        -- segmento `s3` entre os 3 primeiros; falso positivo (bucket chamado s3) só perde a atribuição, nunca a atribui errado. Sem request.path (jobs de fila do Storage:
-        -- emptyBucket / ObjectAdminDeleteAllBefore conectam sem cabeçalhos, request.headers='{}') não há rota: o ramo de baixo vê '{}' e cai em 'sem cabecalho authorization'.
-        v_motivo := 'protocolo s3';
+      elsif v_op not in ('storage.object.delete', 'storage.object.delete_many') then
+        -- LISTA DE PERMITIDOS sobre valor que o SERVIDOR define. O `authorization` só vale quando o Storage o VERIFICOU, e isso só acontece nas rotas REST de exclusão, que estão
+        -- sob registerJwtAuth sem allowInvalidJwt (src/http/routes/object/index.ts:28, deleteObject.ts:47 e deleteObjects.ts:71: operações 'storage.object.delete' e
+        -- 'storage.object.delete_many', src/http/routes/operations.ts:19-20). Em qualquer outra rota (S3, que autentica por signatureV4 e NÃO registra o plugin jwt:
+        -- s3/index.ts:242; jobs de fila; rota desconhecida) o db plugin repassa `request.headers` INTEIRO com um `authorization` que ninguém verificou (db.ts:72): quem tem a
+        -- credencial de A poderia acrescentar um Bearer com o sub de B. `storage.operation` vem de `request.operation` = config da ROTA (log-request.ts:112; s3/index.ts:131),
+        -- que o cliente não escreve, e asSuperUser() o repassa (`...this.options`; scope.ts:77-79). A versão anterior era lista de PROIBIDOS sobre `request.path` (a request.url
+        -- CRUA do cliente) e o roteador normaliza antes de rotear (`/%73%33/...`, `/s%33/...` e a absolute-form `http://h/s3/...` chegam à rota S3): o path não decide nada aqui.
+        -- Operação vazia (job de fila: emptyBucket / ObjectAdminDeleteAllBefore, headers '{}') = 'operacao ausente'.
+        v_motivo := case when v_op = '' then 'operacao ausente' else 'operacao ' || v_op end;
       else
         select h.value into v_auth from jsonb_each_text(v_hdr::jsonb) h where lower(h.key) = 'authorization' limit 1;
         -- Espelha o Storage (src/http/plugins/jwt.ts:41: `(authorization || '').replace(/^Bearer\s+/i, '')`): o prefixo "Bearer" é OPCIONAL e a caixa livre.
@@ -15669,7 +15673,9 @@ begin
                              'usuario_id', v_uid_ev,
                              'ator_origem', v_origem,
                              'ator_motivo', v_motivo,
-                             'sub_alegado', v_sub_al),
+                             'sub_alegado', v_sub_al,
+                             'storage_operation', v_op, 'request_path', v_path,
+                             'sessao_usuario', session_user, 'papel_sessao', current_setting('role', true)),
           null);
   return null;
 end $_$;
