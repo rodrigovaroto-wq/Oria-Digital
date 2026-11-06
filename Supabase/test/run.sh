@@ -22,12 +22,16 @@ for r in anon authenticated service_role; do
 done
 psql -q -d "$DB" -c "
   create schema if not exists storage;
-  create table if not exists storage.buckets(id text primary key, name text, public boolean default false);
+  create table if not exists storage.buckets(id text primary key, name text, public boolean default false,
+    versioning_status text default 'DISABLED');  -- 0224: a coluna que a sonda lê (o Storage real a tem; produção: DISABLED em documentos)
   create table if not exists storage.objects(id uuid default gen_random_uuid() primary key,
-    bucket_id text, name text, owner uuid);
+    bucket_id text, name text, owner uuid, metadata jsonb,  -- 0224: metadata (size) como no Storage real; o gatilho de auditoria lê o tamanho
+    is_delete_marker boolean default false, archived_at timestamptz);  -- 0224: colunas do versionamento (nomes NÃO conferidos em produção; o gatilho as lê por to_jsonb e tolera a ausência)
   alter table storage.objects enable row level security;
   -- 0216: o Supabase concede ao authenticated o uso do schema storage e as quatro operações em storage.objects (o que
   -- limita é a policy); sem isto o teste de acesso ao Storage por mandato leva 42501 antes de a policy ser avaliada.
+  -- 0224: service_role ignora RLS no Supabase real (BYPASSRLS); a etapa 2 da API do Storage apaga como ele, e o teste precisa disso para simular o caminho real.
+  alter role service_role bypassrls;
   grant usage on schema storage to authenticated, service_role;
   grant select, insert, update, delete on storage.objects to authenticated, service_role;
   -- 0216: o schema auth do Supabase (usuários e auth.uid()), no mínimo que as migrations e os testes usam. O
@@ -929,6 +933,11 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_portao_do_dial_que_so_via_es
 echo
 echo "== 0221 — a RLS que ninguém conferia ligada, e o portão do dial que não via DDL"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0224 — o original que o Analista apagava sem trilha: toda exclusão no Storage é auditada e aparece no Histórico (D16)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/original_apagado.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo

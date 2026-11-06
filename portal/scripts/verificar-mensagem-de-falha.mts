@@ -13,6 +13,7 @@
 //   3. as causas que pedem AÇÕES OPOSTAS não podem cair na mesma explicação;
 //   4. a genérica ainda responde as três perguntas que tiram o analista da
 //      dúvida: parou, não foi culpa sua, nada se perdeu.
+import { execFileSync } from "node:child_process";
 import {
   explicarFalha, explicarParada, explicarLoteVazio, FRACAO_MINIMA_COM_LINHAS,
   type FalhaExplicada,
@@ -544,6 +545,10 @@ checar(categoriaDoTipo("tipo_que_ainda_nao_existe") === "outros",
   "tipo desconhecido não caiu em 'outros' (e sairia de todo filtro)");
 checar(rotuloDoTipo("documento_recebido") === "Documento recebido" && rotuloDoTipo("caso_fechado") === "Mandato fechado",
   "rótulo humano de tipo conhecido errado");
+// 0224: apagar o original do armazenamento aparece ao sócio em português, na aba Documentos (não "Outros" cru).
+checar(rotuloDoTipo("documento_original_apagado") === "Original apagado"
+  && categoriaDoTipo("documento_original_apagado") === "documentos",
+  "documento_original_apagado sem rótulo/categoria: cairia em Outros com o nome cru");
 checar(categoriaDoTipo("pergunta_enviada") === "perguntas" && categoriaDoTipo("pergunta_descartada") === "perguntas"
   && categoriaDoTipo("premissa_aplicada_em_lote") === "modelagem" && categoriaDoTipo("perimetro_alterado") === "grupo"
   && categoriaDoTipo("pendencia_decidida") === "pendencias" && categoriaDoTipo("extracao_aceita") === "documentos"
@@ -557,6 +562,13 @@ checar(textoDoAutor("pergunta_enviada", "ana@oria.com") === "ana@oria.com",
   "autor gravado não foi mostrado como veio");
 checar(!/^portal:/.test(textoDoAutor("pergunta_enviada", "portal:desconhecido")),
   "'portal:desconhecido' vazou cru para a tela");
+// 0224: exclusão de original sem ator legível NÃO pode virar "Sistema" nem vazar o texto cru (o original foi apagado por alguém).
+checar(/^Não identificado/.test(textoDoAutor("documento_original_apagado", "storage:nao_identificado")),
+  "'storage:nao_identificado' vazou cru ou virou outra coisa na tela");
+checar(/^Chave de serviço/.test(textoDoAutor("documento_original_apagado", "storage:chave_de_servico")),
+  "'storage:chave_de_servico' vazou cru ou virou \"Sistema\" na tela");
+checar(/^SQL direto/.test(textoDoAutor("documento_original_apagado", "storage:sql_direto")),
+  "'storage:sql_direto' vazou cru ou virou \"Sistema\" na tela");
 // 28/10/2026 01:30 UTC = 27/10 22:30 em São Paulo: o dia é 27, não 28.
 checar(chaveDoDia("2026-10-28T01:30:00.123456+00:00") === "2026-10-27",
   "dia calculado em UTC: evento das 22h30 de SP foi para o dia seguinte");
@@ -1381,6 +1393,15 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   const iChecaIntake = posicao(intake, /conferirEnvioAoCaso\(/), iFetch = posicao(intake, /\bfetch\(/);
   checar(iChecaIntake >= 0 && iFetch >= 0 && iChecaIntake < iFetch && resultadoBarra(intake, "conferirEnvioAoCaso"),
     "POST /api/intake confere o papel ANTES do primeiro fetch ao n8n, e a recusa (`if (!r.ok) return`) usa o resultado");
+  // COMPORTAMENTO (esta rota, sim, executa até a recusa, que vem antes de qualquer cookie/n8n): `casoId` que chega como
+  // arquivo e não como texto é recusado com a mensagem PRÓPRIA. Com o `String(form.get(...))` antigo o File virava
+  // "[object File]" e a recusa era a genérica "Informe o mandato", que culpa o usuário por algo que ele não digitou.
+  {
+    const saida = execFileSync("./portal/node_modules/.bin/tsx", ["--tsconfig", "portal/tsconfig.json", "portal/scripts/lib/sonda-intake-casoid.mts"], { encoding: "utf8" });
+    const r = JSON.parse(saida.trim().split("\n").pop() ?? "{}");
+    checar(r.status === 400 && /Identificador do mandato inválido/.test(String(r.error)),
+      "POST /api/intake com `casoId` vindo como arquivo é recusado com 400 'Identificador do mandato inválido', não 'Informe o mandato'");
+  }
   const iChecaDestino = posicao(destino, /conferirEnvioAoCaso\(/), iUrl = posicao(destino, /process\.env\.N8N_INTAKE_FORM_URL/), iDescobre = posicao(destino, /descobrirNomesDeCampo\(/);
   checar(iChecaDestino >= 0 && iUrl >= 0 && iDescobre >= 0 && iChecaDestino < iUrl && iChecaDestino < iDescobre && resultadoBarra(destino, "conferirEnvioAoCaso")
     && /searchParams\.get\("caso"\)/.test(destino),

@@ -1103,6 +1103,25 @@ supabase db execute --file Supabase/migrations/0223_o_token_v1_que_ainda_entrava
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0223' and not presente;   -- ZERO linhas
 
+# A 0224 (D16 do dono, 04/11/2026) AUDITA toda exclusão de original no Storage: o Analista CONTINUA podendo apagar (a 0216 não mudou isso), mas um gatilho AFTER DELETE em storage.objects (bucket documentos) grava em evento_auditoria `documento_original_apagado` — quem, quando, qual arquivo (caminho, nome original, tamanho) e de qual mandato (`caso:<id>` da chave). O ATOR vem do `sub` do JWT em `request.headers` -> `authorization` (a exclusão efetiva da API do Storage roda como service_role sem sub; só o cabeçalho diz quem apagou), conferido em auth.users; sem isso, `storage:nao_identificado` com o motivo em `antes->>'ator_motivo'`. fn_historico_do_caso é redefinida (a da 0215 + 1 ramo). FALHA FECHADA: se a trilha não puder ser gravada, o DELETE volta. MOVER/SOBRESCREVER (UPDATE em storage.objects) passa a ser SÓ de Sócio (policy documentos_update). Fecha também o INSERT À MÃO dessa ação em evento_auditoria (policy recriada; só o gatilho a grava; o `ator` livre das demais ações desde a 0216 fica para outra fatia). Acrescenta 8 requisitos à sonda (gatilho, policy e versionamento DISABLED, que moram fora de public, vão por view + tipo `comportamento`).
+# >>> Rodar COMO `postgres` (medido em produção, só leitura: o dono de storage.objects é supabase_storage_admin, e o postgres tem o privilégio TRIGGER nela — CREATE TRIGGER basta). Se o painel recusar com 42501 a mensagem traz o `create trigger` para rodar como o dono. Reaplicável: create or replace na função e nas views, drop+create da policy (padrão da 0216), upsert dos requisitos; o gatilho só é criado se não existir (create or replace NÃO o cobre). ATENÇÃO: o postgres NÃO consegue dar DROP/DISABLE no gatilho (exige ser dono da tabela) — reverter = trocar o corpo da função por um `return null`.
+# >>> Teste: Supabase/test/original_apagado.test.sql (simula a etapa 2 da API: service_role, sub vazio, JWT no cabeçalho). O rótulo "Original apagado" e o texto de `storage:nao_identificado` já estão em portal/src/lib/historico-do-mandato.ts.
+# >>> PARA APAGAR UM MANDATO (fn/DELETE em caso): o evento de exclusão NÃO tem FK para o caso. Apague primeiro os OBJETOS do bucket (a trilha grava o nome original lendo documento_versao) e só depois o caso; na ordem inversa o evento sai com `nome_original` nulo.
+# >>> NÃO MEDIDO: o formato real de `request.headers` na hospedagem do Supabase (a suíte o simula pelo código-fonte do Storage). Só a exclusão de verdade prova.
+supabase db execute --file Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0224' and not presente;   -- ZERO linhas
+#   -- e a prova que só uma exclusão de verdade dá: suba um arquivo de teste num mandato, apague-o pelo portal/API com o login de um Analista e leia
+#   select criado_em, ator, entidade_ref, antes->>'ator_origem' as origem, antes->>'ator_motivo' as motivo from evento_auditoria where acao = 'documento_original_apagado' order by criado_em desc limit 3;
+#   -- o `ator` tem de ser o e-mail de quem apagou (origem `cabecalho_jwt`). Se vier `storage:nao_identificado`, o `motivo` diz por quê: 'operacao <x>' = o `authorization` só é lido nas operações REST de exclusão ('storage.object.delete' e
+#   -- 'storage.object.delete_many', as únicas sob registerJwtAuth); em S3 ('operacao storage.s3.object.delete'...) ele não é verificado pelo Storage e nunca é lido. 'operacao ausente' = job de fila do
+#   -- Storage (emptyBucket / ObjectAdminDeleteAllBefore, base-event.ts:101: sem operação, request.headers='{}'). Se uma exclusão REAL pela API do portal vier 'operacao ...' com outro nome, o nome da operação
+#   -- no Storage hospedado mudou: ajuste a lista na função. 'sem cabecalho authorization' = REST sem o cabeçalho (o gateway não o repassa: o gatilho precisa de outra fonte do usuário). `antes` traz
+#   -- storage_operation e request_path (sem a query) para perícia.
+#   -- `storage:sql_direto` = apagado por SQL direto no banco (exige storage.allow_delete_query, ato de pessoa); `antes->>'sessao_usuario'` diz quem conectou. Nenhum `sistema:*` é gravado para objeto.
+#   -- `storage:chave_de_servico` = alguém apagou com a service_role (script ou painel); o portal mostra "Chave de serviço (pessoa não identificada)". Se vier `sistema:*` para uma exclusão feita por pessoa, é defeito: avise.
+#   -- E confira o versionamento (a sonda também o cobra): select id, versioning_status from storage.buckets where id = 'documentos';   -- DISABLED
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

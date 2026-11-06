@@ -40,6 +40,8 @@ const TIPOS: Record<string, { rotulo: string; categoria: CategoriaDoHistorico }>
   documento_revisado: { rotulo: "Documento revisado", categoria: "documentos" },
   transcricao_humana: { rotulo: "Transcrição humana", categoria: "documentos" },
   classe_corrigida: { rotulo: "Classe contábil corrigida", categoria: "documentos" },
+  // 0224: o original apagado do armazenamento deixa trilha; sem esta entrada cairia em "Outros" com o nome cru.
+  documento_original_apagado: { rotulo: "Original apagado", categoria: "documentos" },
   pendencia_decidida: { rotulo: "Pendência decidida", categoria: "pendencias" },
   pergunta_enviada: { rotulo: "Pergunta enviada ao cliente", categoria: "perguntas" },
   pergunta_descartada: { rotulo: "Pergunta descartada", categoria: "perguntas" },
@@ -87,7 +89,7 @@ function bandeira(referencia: unknown, nome: "autor_desconhecido" | "automatico"
  *    sistema, uma regra e não uma falha de registro. "Sistema" genérico esconderia que ninguém
  *    revisou aquela extração; o texto cita o nome que a própria tela já usa ("ajuste de rigor").
  *  - nenhum dos dois: o sistema agiu ("Sistema").
- * `portal:desconhecido` foi gravado quando a sessão não tinha e-mail; não é uma pessoa nomeada.
+ * `portal:desconhecido` foi gravado quando a sessão não tinha e-mail; não é uma pessoa nomeada. `storage:nao_identificado` (0224) idem: o original foi apagado e o Storage não disse por quem.
  * Autor gravado vence qualquer bandeira.
  */
 export function textoDoAutor(tipo: string, autor: string | null, referencia?: unknown): string {
@@ -99,6 +101,12 @@ export function textoDoAutor(tipo: string, autor: string | null, referencia?: un
     return "Sistema";
   }
   if (autor === "portal:desconhecido") return "Não identificado (sessão sem e-mail)";
+  // 0224: o gatilho de exclusão de original não conseguiu ler quem apagou (motivo em evento_auditoria.antes.ator_motivo). Nunca "Sistema": o original FOI apagado por alguém.
+  // 0224: apagado com a chave de serviço (service_role). O n8n nunca apaga do bucket, então é uma pessoa (script ou painel); "Sistema" seria mentira.
+  // 0224: apagado por SQL direto no banco (exige storage.allow_delete_query, ato deliberado). Nunca "Sistema": o banco guardou session_user em antes.
+  if (autor === "storage:sql_direto") return "SQL direto no banco — pessoa não identificada";
+  if (autor === "storage:chave_de_servico") return "Chave de serviço (painel ou script — pessoa não identificada)";
+  if (autor === "storage:nao_identificado") return "Não identificado (o Storage não informou quem apagou)";
   return autor;
 }
 

@@ -1,8 +1,59 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 118 (06/11/2026) — 0224 (D16) aplicada em produção, resíduo da S117 limpo, #269 fechado
+
+> **Migration mais nova: `0224_o_original_que_o_analista_apagava_sem_trilha.sql` — APLICADA EM PRODUÇÃO em 06/11/2026 (sonda 322→331, os 9 requisitos da 0224 presentes; ensaio com rollback e foto idêntica; ACL de funções e tabelas pré-existentes com hash igual; dial igual).** Toda exclusão de original no bucket `documentos` grava `documento_original_apagado` com o ator; mover/sobrescrever só Sócio; ninguém via `authenticated` grava essa ação à mão. A anterior, `0223`, segue aplicada.
+
+**O que fechou (medido):**
+- **#269 fechado sem merge** (era a P1b paralela; o `main` já tinha a 0218 do #268 e a 0221). **Sonar do #273:** a única issue (S5332, URL `http` falsa na sonda do intake) corrigida em `acb2677`; CI e Sonar verdes.
+- **Resíduo da vistoria interrompida (04/11): nenhum.** 0 objetos-sonda, 0 mandatos "P2 escalada", pendência `19a85786` restaurada para `aberta`, 0 eventos de dial desde 04/11. O dial NÃO é "N2 global": é por estágio (N0/N1/N2) e não mudou.
+- **`schema.sql` não estava parcial:** `run.sh` rc 0 (2.994 ok) sem diferença. O aviso da RETOMADA estava velho.
+- **0224: sete revisões independentes até 0 achado.** Os ALTOS, em ordem:
+  1. a API do Storage apaga como superusuário, e o ator sairia "sistema" sempre;
+  2. a rota S3 não verifica o `Authorization` (o protocolo S3 está LIGADO no projeto);
+  3. a guarda por path foi burlada por percent-encoding, e o desenho virou lista de permitidos sobre `storage.operation`;
+  4. o Analista inseria o evento à mão pelo REST.
+
+  Médios fechados: o JWT sem "Bearer"; chave de serviço e SQL direto não viram "Sistema"; as sondas de policy contam qualquer outra policy (inclusive `anon`); o índice em `documento_versao(arquivo_ref)`. Teste: 88 asserts, regra 2 medida guarda a guarda (tabela no cabeçalho da migration). `run.sh` 3.056 ok. Lição na ficha `storage-apaga-como-superusuario-ator-por-lista-de-permitidos`.
+- **Prova em produção (06/11):**
+  - Analista apagou pela API REST e o evento gravou o e-mail dela (`ator_origem = cabecalho_jwt`, `storage_operation = storage.object.delete`, `papel_sessao = service_role`).
+  - Analista tentando mover: recusado. Analista inserindo o evento à mão: 42501. 0 forjados.
+- **Vistoria por papel refeita contra produção** (`Verificação/vistoria-por-papel.mts`, sem `P2_ENVIAR`): o mesmo comportamento da versão anterior.
+  - 168 células, nenhuma com erro de console ou resposta 4xx/5xx.
+  - Escalada: 60 tentativas, 51 barradas, as 9 que passaram são as previstas pela 0216, 0 divergências.
+  - Resíduo 0. As exclusões da escalada já aparecem na trilha nova com o autor certo, inclusive em `delete_many`.
+- **Limpeza da S117:** os mandatos `b563851b` "S117 P2 sintetico" e `ada45333` "S117 P3 renomeio B" foram apagados como Sócio. Primeiro os 7 objetos pelo Storage (7 eventos com o Sócio e o nome original de cada arquivo), depois `fn_excluir_caso` (7 documentos, 25 pendências, 494 campos; 2 eventos `caso_excluido`). Ensaio com rollback antes. Os 3 usuários de teste ficam até a P20; as senhas foram redefinidas e estão só no scratchpad desta sessão.
+- **Fichas:** 6 novas (as 5 lições da S117 e a do Storage). **Plano:** D6, D7, D15 e D16 registradas.
+
+**Limitações e o que NÃO foi feito:**
+- O ator livre em `evento_auditoria` vale para TODA outra ação desde a 0216 (o Analista grava qualquer ação com qualquer `ator` no próprio mandato). A 0224 fechou só `documento_original_apagado`. Precisa de fatia própria.
+- Pelo S3 e pelo painel do Supabase a exclusão sai `storage:nao_identificado` ou `storage:chave_de_servico`: a trilha existe, mas sem pessoa. Desligar o S3 no painel (ninguém o usa) é decisão do dono, pendente.
+- Quem tem acesso SQL ao banco forja a trilha. É um limite declarado no cabeçalho da 0224.
+- Achados menores da verificação da S117 continuam sem correção (RETOMADA, item 6).
+
+**Próximo:** P4 (linha de base da F3 e corpus de regressão), com teto de US$ 5 por book (D6).
+
+## RETOMADA (04/11/2026) — RESOLVIDA na S118 (itens 1 a 5 feitos; ver acima). Mantida como histórico.
+
+**Feito e conferido nesta continuação (depois do fim da S117 abaixo):**
+- **Verificação de produção P1–P3: 0 falhas.** Banco: sonda 322/322; corpos das 7 funções da S117 idênticos byte a byte ao repositório; papéis, dial, RLS 51/51, recusas de `fn_conferir_envio`, anon sem privilégio, tudo em transação revertida. Portal/n8n: publicado = repositório (59 nós), envio v2 real pelo portal (execução 9411), recusas sem token/v1/adulterado (9405–9407), matriz por papel igual à fase 1, mandato fechado → 409. Escalada por API refeita: 60 tentativas, 51 barradas, as 9 previstas pela 0216. Sonda manual `sonda-producao.yml` sobre 26ec556: OK. NÃO verificado: caminho feliz v2 direto no banco (exigiria escrever no Vault; coberto pelo envio real 9411).
+- **Sonar: as 50 issues do PR #271 corrigidas** (`5f6f230`, sem NOSONAR). Duas mudanças de comportamento com regra 2: relógio inválido no v2 agora recusa (antes passava); `casoId` como arquivo → 400.
+- **D7:** a Action `republicar.yml` em modo ensaio leu os 59 nós com a chave atual — a chave funciona.
+- **Decisões do dono (04/11):** D16 = permitir e AUDITAR exclusão de original; D6 = rodadas pagas autorizadas com teto de US$ 5; D15 = critério conservador (a tabela da seção 2 do plano, como está); D7 = chave já configurada. Limpeza: apagar SÓ os mandatos da S117; usuários de teste ficam até a P20.
+
+**PAROU NO MEIO (não feito ou não conferido):**
+1. **0224 (D16) — ESCRITA, NÃO REVISADA, NÃO APLICADA.** `Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql` + `Supabase/test/original_apagado.test.sql` (26 asserts, regra 2 medida pelo autor) + rótulo "Original apagado" no portal (`historico-do-mandato.ts`, 1 assert). Gatilho AFTER DELETE em `storage.objects` (dono `supabase_storage_admin`; o postgres cria mas NÃO consegue drop/disable — reverter = corpo `return null`), falha FECHADA. **Antes de aplicar:** (a) `Supabase/schema.sql` pode estar parcial (o `run.sh` foi interrompido): regerar com `run.sh` e commitar — o job `banco` do CI fica vermelho até isso; (b) revisão independente focada em: processos do próprio Supabase que apagam de storage.objects e podem travar com a falha fechada, `on delete cascade` de caso, ator via JWT na API do Storage; (c) prova real: subir e apagar um arquivo pela API do Storage como Analista e ler o ator no evento.
+2. **Vistoria refatorada (`5f6f230`) rodando em produção foi INTERROMPIDA no meio.** A escalada escreve e desfaz: conferir resíduo — objeto-sonda no bucket do mandato "S117 P2 sintetico", pendência fora do estado `aberta`, dial (deve estar N2 global) — e rodar de novo para provar que o comportamento é o mesmo da versão anterior (168 células; 60/51/9).
+3. **Limpeza da S117 não feita:** apagar `b563851b-67db-4fa2-a021-cd7adbc286f1` "S117 P2 sintetico" e `ada45333-9726-4c35-a206-54016c0d6100` "S117 P3 renomeio B" (documentos, lotes e objetos do storage) — listar e confirmar antes. Manter os 3 usuários de teste (+socio/+analista/+leitura) até a P20.
+4. **Fichas no grafo não escritas:** documentar em `.claude/conhecimento/fichas/` os problemas e soluções da S117 (FK do registro de falha corrigida na raiz; colisão v1/v2 e etiqueta `v2|`; ordem de implantação rígida da P3; `| tail` escondendo código de saída de portão; runner do GitHub com pg 18). Rodar `indexar.mjs` + `conferir.mjs`.
+5. **Plano:** registrar D6/D7/D15/D16 em `PLANO_DE_EXECUCAO_2026-11.md` (só o ESTADO tem esta nota).
+6. Achados menores da verificação, sem correção: cobertura 4,67 no lote do DMPL (régua da P4); tela de mandato fechado só avisa no Enviar; Leitura vê "Confirmar" desabilitado; "cerca de 1 minutos".
+7. **Depois disso, a P4** (linha de base da F3), com o teto de US$ 5 por book.
+
+
 ## SESSÃO 117 (04/11/2026) — FIM: P2 e P3 fechadas em produção; 0221, 0222 e 0223 aplicadas
 
-> **Migration mais nova: `0223_o_token_v1_que_ainda_entrava_por_nome.sql` — APLICADA EM PRODUÇÃO em 04/11/2026, 20:07 UTC (sonda 321→322; ensaio com foto idêntica; ACL, policies, gatilhos e dial iguais). Recusa o token de envio v1 com `versao_antiga`. Só foi aplicada depois de 31 min com zero v1 aceito, medido no histórico do n8n. A anterior, `0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql` (token v2 pelo `caso_id`), também está aplicada (sonda 315→321). A anterior, `0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql`, aplicada e conferida (315/315). A `0220` também está aplicada.** (O portão do `run.sh` exige que toda linha com esta declaração cite a mais nova, por isso as seções antigas abaixo dizem "Última migration DAQUELA sessão".)
+> **Última migration DAQUELA sessão: `0224_o_original_que_o_analista_apagava_sem_trilha.sql` — ESCRITA, NÃO APLICADA EM PRODUÇÃO (aplicada na S118) (D16: toda exclusão de original no Storage passa a ser auditada e aparece no Histórico; gatilho em storage.objects; aplicar à mão, ver Supabase/README.md). A anterior, `0223_o_token_v1_que_ainda_entrava_por_nome.sql` — APLICADA EM PRODUÇÃO em 04/11/2026, 20:07 UTC (sonda 321→322; ensaio com foto idêntica; ACL, policies, gatilhos e dial iguais). Recusa o token de envio v1 com `versao_antiga`. Só foi aplicada depois de 31 min com zero v1 aceito, medido no histórico do n8n. A anterior, `0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql` (token v2 pelo `caso_id`), também está aplicada (sonda 315→321). A anterior, `0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql`, aplicada e conferida (315/315). A `0220` também está aplicada.** (O portão do `run.sh` exige que toda linha com esta declaração cite a mais nova, por isso as seções antigas abaixo dizem "Última migration DAQUELA sessão".)
 
 **O que fechou nesta sessão (medido):**
 - **P2 fechada.** Vistoria por papel: 168 células. A escalada por API barrou 51 de 51 tentativas indevidas. Três personas: Sócia (celular), Analista júnior, Leitura. Relatório: `Arquitetura do Sistema/3 Estado e Execução/VISTORIA_P2.md`. Cinco temas ALTOS, que vão para a P16 (itens 2 e 3 tocam a F3): (1) decisão de um toque sem confirmação; (2) entrada inválida vira fato (`.txt` aceito sem checagem até o Excel); (3) proveniência: página "—" em 197 de 197 linhas do BP, totais do Excel sem nota, PL "−32.252 × 6.899"; (4) discrição vaza pelo atributo `title`; (5) Início com 643 px no celular de 390 px.

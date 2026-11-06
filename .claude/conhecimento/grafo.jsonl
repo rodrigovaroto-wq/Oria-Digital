@@ -1,3 +1,4 @@
+{"k":"n","id":"arquivo:.claude/COMANDOS-CANONICOS.md","t":"arquivo","f":".claude/COMANDOS-CANONICOS.md","txt":"COMANDOS-CANONICOS.md"}
 {"k":"n","id":"arquivo:.claude/agents/migrations-postgres.md","t":"arquivo","f":".claude/agents/migrations-postgres.md","txt":"migrations-postgres.md"}
 {"k":"n","id":"arquivo:.claude/agents/n8n-workflow.md","t":"arquivo","f":".claude/agents/n8n-workflow.md","txt":"n8n-workflow.md"}
 {"k":"n","id":"arquivo:.claude/agents/portal-export.md","t":"arquivo","f":".claude/agents/portal-export.md","txt":"portal-export.md"}
@@ -10,12 +11,14 @@
 {"k":"n","id":"arquivo:.claude/settings.json","t":"arquivo","f":".claude/settings.json","txt":"settings.json"}
 {"k":"n","id":"arquivo:.claude/verificar-comandos.mjs","t":"arquivo","f":".claude/verificar-comandos.mjs","txt":"verificar-comandos.mjs"}
 {"k":"n","id":"arquivo:.claude/verificar-espelho-claude-md.mjs","t":"arquivo","f":".claude/verificar-espelho-claude-md.mjs","txt":"verificar-espelho-claude-md.mjs"}
+{"k":"n","id":"arquivo:.github/workflows/suites.yml","t":"arquivo","f":".github/workflows/suites.yml","txt":"suites.yml"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/2 Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md","t":"arquivo","f":"Arquitetura do Sistema/2 Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md","txt":"12_FONTES_OFICIAIS_E_CAPTACAO.md"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/2 Especificação/13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md","t":"arquivo","f":"Arquitetura do Sistema/2 Especificação/13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md","txt":"13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/2 Especificação/13_anexos/13A_PLANO_POR_DEPENDENCIA.md","t":"arquivo","f":"Arquitetura do Sistema/2 Especificação/13_anexos/13A_PLANO_POR_DEPENDENCIA.md","txt":"13A_PLANO_POR_DEPENDENCIA.md"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/2 Especificação/13_anexos/13B_RFP_FORNECEDORES_DE_DADOS.md","t":"arquivo","f":"Arquitetura do Sistema/2 Especificação/13_anexos/13B_RFP_FORNECEDORES_DE_DADOS.md","txt":"13B_RFP_FORNECEDORES_DE_DADOS.md"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/2 Especificação/13_anexos/13C_ROTEIRO_DO_PILOTO.md","t":"arquivo","f":"Arquitetura do Sistema/2 Especificação/13_anexos/13C_ROTEIRO_DO_PILOTO.md","txt":"13C_ROTEIRO_DO_PILOTO.md"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md","t":"arquivo","f":"Arquitetura do Sistema/3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md","txt":"ARQUITETURA_ALVO_E_ROADMAP.md"}
+{"k":"n","id":"arquivo:Arquitetura do Sistema/3 Estado e Execução/DESENHO_P3_ROTEAR_POR_CASO_ID.md","t":"arquivo","f":"Arquitetura do Sistema/3 Estado e Execução/DESENHO_P3_ROTEAR_POR_CASO_ID.md","txt":"DESENHO_P3_ROTEAR_POR_CASO_ID.md"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md","t":"arquivo","f":"Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md","txt":"MAPA_DE_EXECUCAO.md"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/7 Marca/DESIGN.md","t":"arquivo","f":"Arquitetura do Sistema/7 Marca/DESIGN.md","txt":"DESIGN.md"}
 {"k":"n","id":"arquivo:Arquitetura do Sistema/7 Marca/PRODUCT.md","t":"arquivo","f":"Arquitetura do Sistema/7 Marca/PRODUCT.md","txt":"PRODUCT.md"}
@@ -83,6 +86,9 @@
 {"k":"n","id":"arquivo:Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","t":"arquivo","f":"Supabase/migrations/0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql","txt":"0211_a_fusao_que_apagava_o_perimetro_da_absorvida.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","t":"arquivo","f":"Supabase/migrations/0214_o_grant_que_o_supabase_deixou_de_dar.sql","txt":"0214_o_grant_que_o_supabase_deixou_de_dar.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","t":"arquivo","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"0216_o_acesso_que_so_o_portal_decidia.sql"}
+{"k":"n","id":"arquivo:Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","t":"arquivo","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","txt":"0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql"}
+{"k":"n","id":"arquivo:Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","t":"arquivo","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","txt":"0223_o_token_v1_que_ainda_entrava_por_nome.sql"}
+{"k":"n","id":"arquivo:Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","t":"arquivo","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","txt":"0224_o_original_que_o_analista_apagava_sem_trilha.sql"}
 {"k":"n","id":"arquivo:Supabase/schema.sql","t":"arquivo","f":"Supabase/schema.sql","txt":"schema.sql"}
 {"k":"n","id":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","t":"arquivo","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","txt":"a_guarda_do_dial_que_conferia_o_formato.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","t":"arquivo","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","txt":"a_rls_ligada_e_o_ddl_do_dial.test.sql"}
@@ -159,6 +165,7 @@
 {"k":"n","id":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","t":"arquivo","f":"Supabase/test/o_dial_e_o_anon.test.sql","txt":"o_dial_e_o_anon.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","t":"arquivo","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","txt":"o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/operacao.test.sql","t":"arquivo","f":"Supabase/test/operacao.test.sql","txt":"operacao.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/original_apagado.test.sql","t":"arquivo","f":"Supabase/test/original_apagado.test.sql","txt":"original_apagado.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_da_linha.test.sql","t":"arquivo","f":"Supabase/test/papel_da_linha.test.sql","txt":"papel_da_linha.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_por_secao.test.sql","t":"arquivo","f":"Supabase/test/papel_por_secao.test.sql","txt":"papel_por_secao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/papel_total_com_codigo_contabil.test.sql","t":"arquivo","f":"Supabase/test/papel_total_com_codigo_contabil.test.sql","txt":"papel_total_com_codigo_contabil.test.sql"}
@@ -305,6 +312,7 @@
 {"k":"n","id":"ficha:f2-localizador-chave-pendencia-falsa","t":"ficha","f":".claude/conhecimento/fichas/f2-localizador-chave-pendencia-falsa.md","txt":"F2.1: a exigência lexical não serve para relatório itemizado (migration `0185`, REPROVADA) Camada 1 — o que a revisão independente pegou (verdadeiro, e não bastou) Camada 2 — o que só a medição contra PRODUÇÃO pegou (e é o veredito) Camada 3 — a armadilha de método, que vale para qualquer portão futuro O que fazer em vez disto Decisão do dono, 21/09/2026 Commits","kw":"exigência lexical serve para relatório itemizado migration 0185 reprovada descoberto 2026 rodada veredito final deve aplicada segue repositório como registro nunca entrou banco produção atualização descartada número fica lacuna passou respondido declaração 0187 taxonomia_tipo_cobertura fn_cobertura_de_tipos também desativou exigências lexicais mutuos fat_intragrupo 0113 mesmo defeito esta ficha reescrita depois medição contra primeira versão concluía localizador casar chave quando termo mora secao cascata resolvia isso está certo insuficiente mostrou desenho inteiro errado registrar conclusão parcial teria mandado próxima sessão aplicar camada revisão independente pegou verdadeiro bastou doze localizadores casavam medido supabase test fixture_book_canastra quatro tipos davam satisfeita false caso correto contingencias headcount extrato_bancario estoque porque conceito mecanismo existe desde tinha sido usado levou bloco teste reprovando passando evitou pendências falsas seriam ficaram padrão causou 0166 simulação somente leitura predicado fn_exigencias_do_caso sobre real 0181 documentos nove 190 casos pares tipo conteúdo abririam linha_exigida_ausente quantos realmente dado zero premissa errada termos aparece rótulo item","tp":"defeito"}
 {"k":"n","id":"ficha:f2e-parceiros-de-dados-e-pre-mandato-espec13","t":"ficha","f":".claude/conhecimento/fichas/f2e-parceiros-de-dados-e-pre-mandato-espec13.md","txt":"F2E — parceiros de dados (bureau, processos, Núclea, Open Finance) e o momento pré-mandato: Espec. 13 O que surpreende quem chega sem ler a Espec. 13 Verificação de 27/10/2026 (a planilha `13_anexos/Plano_de_Captacao_v3.xlsx`, aba \"Verificação\")","kw":"parceiros dados bureau processos núclea open finance momento mandato espec termos busca klavi clavi pluggy belvo exato digital jusbrasil judit escavador infosimples serpro integra contador piloto biro serasa vista quod prospecção recebíveis boleto obsidian estado 2026 planejada nada implementado plano artefatos etapa fase roadmap surpreende quem chega recusado reaberto decisão antiga duas tabelas foram marcadas como revistas oria pode receber diretamente instituição autorizada pelo banco central participa agregador receptor entra parceira liquida vende sobre cnpj agregado faixas anônimas percentil score serve para plausibilidade nunca conciliar transação erro zero empresa nova movimento fora mostrar observado regra consentimento expira silêncio quando mais sócio expirado estados diferentes provedor descobre certidão prova nenhum substitui decide medindo contra certidões catálogo dataroom descartado sharepoint link envio dado antes autorização registrada hoje todo usuário autenticado verificação planilha 13_anexos plano_de_captacao_v3 xlsx código série aceita terceiro conferir site rotula 7447 incc acumulado 2021 mostra validados 192 7456 fornecedor consulta","tp":"doutrina"}
 {"k":"n","id":"ficha:f2t-fontes-oficiais-e-captacao-espec12","t":"ficha","f":".claude/conhecimento/fichas/f2t-fontes-oficiais-e-captacao-espec12.md","txt":"F2T — fontes oficiais (SPED, eSocial, logística, CNAB, OFX, CNAE) e captação: Espec. 12 e decisões D12.x Armadilhas que a revisão independente achou (e que voltam em toda onda) O que a F2T é, e por que não é a F2 Fatos medidos (não supostos) Decisões do dono (13/10/2026) que não se desfazem sem nova decisão Os [A CONFIRMAR] sem responsável (G27)","kw":"fontes oficiais sped esocial logística cnab cnae captação espec decisões termos busca reinf estado 2026 sessão 107 etapa feita ligação leitor reconhece família envelope fluxo conferindo contagem declarada grava arquivo_oficial migration 0206 escrita aplicada produção prova test testes guardas medidos vazios supabase asserts ainda manda para preparar conteúdo tostring 108 roda navegador analista pelo linhas derruba instância ficha binario grande instancia decisão dono arquivo lido resumo máquina guarda íntegra registros pequenos soma i250 conta ind_lcto mesmo código abre disco como node buffer igualdade chromium real medicao igual latin1 textdecoder whatwg windows 1252 0x96 vira campos desfaz isso armadilhas revisão independente achou voltam toda onda identidade escrituração cnpj período traz 0000 sócio ostensivo cod_scp índice livro auxiliar i010 ind_esc convive principal dois entram chave natural senão substitui outro vigência memória quebrar linha quebra readline solto split entrada passa caminho vazia null nunca inteiro number cobre retificado reenvio cancelada evento própria 1200","tp":"doutrina","anc":"Leitor/lib/familia.mjs#detectarFamilia","sha":"b98051c598ec","anc_sha":"b98051c598ec"}
+{"k":"n","id":"ficha:falha-de-envio-perdida-pela-fk-do-caso","t":"ficha","f":".claude/conhecimento/fichas/falha-de-envio-perdida-pela-fk-do-caso.md","txt":"falha-de-envio-perdida-pela-fk-do-caso ","kw":"defeito s117 2026 execucao_falha caso_id caso recusa envio para mandato existe apagado caminho chamava fn_registrar_falha_execucao dele resultado erro 23503 falha nunca gravada tela nada execução parecia banco demorou três rodadas revisão independente achou duas vezes alto caso_inexistente expirado primeiras correções foram pontuais cada chamador terceira raiz anula guarda original detalhe caso_id_anulado ponto onde todo passa lição quando mesmo volta outro correção está lugar errado liste chamadores grep supabase portal corrija comum como manda claude seção 0222 requisito sonda envio_falha_com_id_inexistente regra medida cabeçalho anulação asserts reprovam","tp":"defeito"}
 {"k":"n","id":"ficha:fixture-nasce-vazia","t":"ficha","f":".claude/memory/fixture-nasce-vazia.md","txt":"fixture que passa com o bug LIGADO é o defeito mais comum de teste aqui — duas da sessão 18 nasceram assim ","d":"fixture que passa com o bug LIGADO é o defeito mais comum de teste aqui — duas da sessão 18 nasceram assim","kw":"invariante novo vale depois medido vazio desligue correção rode suíte confirme reprova religue registre número asserts reprovaram mensagem commit duas fixtures sessão escritas para provar dupla contagem total grupo passavam ligado ninguém notou declarava secao subsecaoautoritativa acertava sozinha outra tinha ordem entre contas imobilizado consenso irmãos dois casos fixture reproduzia arranjo real acontece regras junto afirma comportamento mecanismo antigo médias exigia count fórmula posicional justamente defeito teste descreve como código protege nunca inventar produção você consegue reproduzir diga isso comentário afirme registrar consegui estas foram tentativas nasceram vazias resultado válido inventada passa verde engana armadilha lado oposto medida pendências eram falsas extração estava certa quem errava checagens antes corrigir porque checagem acusou confira lembre pendência falsa muda nome linha_exigida_ausente virando precondicao_nao_satisfeita","tp":"armadilha"}
 {"k":"n","id":"ficha:gatilho-sobrevive-sonda-catalogava-funcao","t":"ficha","f":".claude/conhecimento/fichas/0189-gatilho-sobrevive-sonda-catalogava-funcao.md","txt":"A função do gatilho sobrevive ao gatilho — a sonda catalogava o vínculo errado ","kw":"função gatilho sobrevive sonda catalogava vínculo errado fn_instalacao_conferir tinha seis tipos requisito tabela coluna corpo seed comportamento nenhum para está instalado ligado quando catálogo precisava afirmar isso como tipo funcao defeito drop trigger alter table disable depurando deadlock restauração parcial backup pode desligar guarda silenciosamente continua vendo presente porque mediu nunca migration 0189 cria objeto nome_do_gatilho tgenabled reemite inteira partir 0147 cataloga gatilhos internos main originais entrados merge 238 teste supabase test sonda_ve_gatilho asserts igualdade conjuntos reprova blocos ramo desligado aceito habilitado risco ordem 0183 instalacao_cobertura aceita valor menor aconteceu produção 0182 depois 0188 trg_instalacao_cobertura_nao_regride fecha três dela trg_entidade_controlador_soma_maxima trg_entidade_forma_de_controle_tem_vinculo entraram obriga próximo entrar também","tp":"defeito","anc":"Supabase/migrations/0189_o_gatilho_que_a_sonda_nao_via.sql#tgenabled","sha":"6645be54b8eb","anc_sha":"6645be54b8eb"}
 {"k":"n","id":"ficha:git-checkout-apaga-trabalho","t":"ficha","f":".claude/memory/git-checkout-apaga-trabalho.md","txt":"git checkout <arquivo> para desfazer um patch de medição apaga TODO o trabalho não commitado do mesmo arquivo — copie para o scratchpad e restaure com cp ","d":"git checkout <arquivo> para desfazer um patch de medição apaga TODO o trabalho não commitado do mesmo arquivo — copie para o scratchpad e restaure com cp","kw":"fluxo obrigatório medir invariante vazio desligar correção rodar religar leva direto essa armadilha cobrou sessão checkout arquivo restore restauram inteiro índice patch medição você acabou aplicar todo resto trabalho commitado naquele junto aviso desfazer jeito certo bash portal export scratch aplica roda suíte confirma reprova existe hook claude hooks proteger descarte bloqueia forma explica caminho seguro única trava dura projeto todos outros degradam silêncio","tp":"armadilha"}
@@ -322,6 +330,8 @@
 {"k":"n","id":"ficha:nunca-apresentar-ausencia-como-dado","t":"ficha","f":".claude/memory/nunca-apresentar-ausencia-como-dado.md","txt":"zero fabricado numa célula de premissa é indistinguível de uma medição de zero — sempre branco + nota com o motivo E o efeito ","d":"zero fabricado numa célula de premissa é indistinguível de uma medição de zero — sempre branco + nota com o motivo E o efeito","kw":"este arquivo lido quem auditar número numa entrega cliente zero escrito porque dado veio afirmação ninguém como desfeita depois distingue medição forma correta célula branco nota dizendo fonte está vazia efeito bloco dívida cobra juro focus indisponível metade alguém agir mesmo princípio decide projeta valor decisão caso seria isso projeção premissas catálogo natureza formula lista código pegadinha aritmética anda junto excel resolve problema honestidade leitura humana cálculo confira algum caminho produz value nunca deixe null virar meio completosde médias macro","tp":"doutrina"}
 {"k":"n","id":"ficha:nunca-corrigir-funcao-por-replace","t":"ficha","f":".claude/memory/nunca-corrigir-funcao-por-replace.md","txt":"migration que corrige função por replace de texto sobre pg_get_functiondef passa em toda suíte local e reprova em produção — reemita a função inteira com create or replace ","d":"migration que corrige função por replace de texto sobre pg_get_functiondef passa em toda suíte local e reprova em produção — reemita a função inteira com create or replace","kw":"0156 tentou acrescentar coluna insert fn_registrar_uso_lote lendo pg_get_functiondef aplicando três replace texto executando resultado guardas conferia âncora antes recusava substituição mudasse nada passou toda suíte local reprovou produção error mudou âncoras casaram carimbo fechamento ficaria fora nunca pegaria isso supabase test monta banco zero partir próprios arquivos repositório então corpo função construção byte igual espera essa garantia doutrina casa autoridade migration depende bytes exatos está apostando contra própria projeto correção estava escrita desde 0103 create function inteiro pergunta sobre readme registra duplicação linhas inevitável deliberada desleixo sonarcloud properties exclui justamente porque sonar acusava salvou begin commit raise explícito tentativa reverteu inteira deixar metade aplicada diferença entre falha honesta estado pela custa sessão para desfazer guarda recusa alto vale mesmo quando abordagem protege errada regra muda reemite tentação mudar linha aparecer sinal fatia sendo","tp":"doutrina"}
 {"k":"n","id":"ficha:ordem-dos-classificadores","t":"ficha","f":".claude/memory/ordem-dos-classificadores.md","txt":"classificarConta e classificarDemonstracao recebem os mesmos quatro argumentos em ordens diferentes ","d":"classificarConta e classificarDemonstracao recebem os mesmos quatro argumentos em ordens diferentes","kw":"classificarconta estrutura secao chave secaocanonica primeiro classificardemonstracao último quatro argumentos mesmos nenhum tipo distingue troca então argumento fora ordem gera erro classificação errada confira assinatura portal statement templates antes chamar qualquer dois mesmo você lembre 2026 esta memória apontava classifier onde nenhuma duas funções existe elas moram linhas 915 979 nessa data toca corrigido buscar arquivo contar ficha nesse dizer qual quem acha busca portão perceber mudança suspeita para ancora mudar continua verde passa mentir","tp":"armadilha"}
+{"k":"n","id":"ficha:p3-ordem-de-implantacao-portal-depois-do-n8n","t":"ficha","f":".claude/conhecimento/fichas/p3-ordem-de-implantacao-portal-depois-do-n8n.md","txt":"p3-ordem-de-implantacao-portal-depois-do-n8n ","kw":"armadilha s117 mudança atravessa banco portal ordem implantação rígida cada errada falha jeito diferente delas acontece novo antes 0222 todo envio recusado como malformado erro explícito fn_caso_do_envio existe antigo silencioso ignora nome upsert grava pelo form analista alocado posta mandato documentos caem execução verde auditoria certa sonda conferida republicado publicado conferido conferir deploy nenhum aceito histórico 0223 json repositório versão certo prova nada sobre está generalização implantar mais camada monte tabela nova antiga procure linha essa decide","tp":"armadilha"}
+{"k":"n","id":"ficha:pipe-com-tail-esconde-codigo-de-saida","t":"ficha","f":".claude/conhecimento/fichas/pipe-com-tail-esconde-codigo-de-saida.md","txt":"pipe-com-tail-esconde-codigo-de-saida ","kw":"armadilha s117 2026 commit 285dc9b passou portão conhecimento vermelho comando node claude conferir tail pipe código saída shell devolve último reprovou ninguém cortada mostrava linha reprovação regra forma fica mesma cara como rodar arquivo impresso logo seguida scratch echo depois leia grep parte precisar pipefail confira pipestatus declare verde vista parecia limpa conta","tp":"armadilha"}
 {"k":"n","id":"ficha:ponytail-auditado-nao-instalar","t":"ficha","f":".claude/conhecimento/fichas/ponytail-auditado-nao-instalar.md","txt":"o plugin ponytail 4.10.0 (\"lazy senior dev\") foi auditado e NÃO foi instalado — é always-on em três hooks e contradiz as regras 2, 5 e 6; a escada de sete perguntas dele entrou no CLAUDE.md, adaptada, para todo código escrito aqui Por que não o plugin O que foi trazido — como texto, sem hook nenhum O que esta ficha NÃO afirma","d":"o plugin ponytail 4.10.0 (\"lazy senior dev\") foi auditado e NÃO foi instalado — é always-on em três hooks e contradiz as regras 2, 5 e 6; a escada de sete perguntas dele entrou no CLAUDE.md, adaptada, para todo código escrito aqui","kw":"ponytail auditado instalado escada dele entrou claude dietrichgebert commit e3ba2aa lido inteiro 2026 skills review audit debt gain help hooks code regras como plugin pelo mesmo critério desligou superpowers cinco vetadas exposição fixa alta mais texto contradiz always três pontos terceiro alcança especialistas sessionstart injeta 631 bytes toda sessão subagentstart 448 todo subagente sete daqui inclusive cima prompt cada userpromptsubmit roda rastreador modo mensagem medido rodando próprio repositório node injetado trechos literais trecho skill aqui first then most three short lines essays feature tours design notes every paragraph defending simplification complexity smuggled back prose comentário carregam defeito causa número fichas memória prosa propósito runnable check frameworks fixtures function suites unless asked trivial liners need test regra pede reprove correção desligada asserts suítes função complex request ship lazy version question same response never stall answer default pedido aberto leitura razoável prompts primeiro código depois convenção teto quando subir colhe marcadores ancora","tp":"doutrina"}
 {"k":"n","id":"ficha:portao-mede-a-entrada-de-producao","t":"ficha","f":".claude/memory/portao-mede-a-entrada-de-producao.md","txt":"portão calibrado sobre a entrada do GERADOR passa com +3% enquanto produção erra 161% — o texto que o n8n extrai do PDF não é o que nenhum extrator local produz ","d":"portão calibrado sobre a entrada do GERADOR passa com +3% enquanto produção erra 161% — o texto que o n8n extrai do PDF não é o que nenhum extrator local produz","kw":"medir regua cobertura existe para confrontar régua verdade gerador book fazia isso sobre texto_extraido json agrupamento próprio produção nunca esse texto medido 2026 17_livro_razao canastra linhas conta declaradas pelo onde 100 parse instalado localmente 104 extrair 258 dois caminhos locais concordam entre escondem defeito portão devolvia erro mediano passava honestamente enquanto guarda abria pendência falsa extração completa adianta trocar extrator local outro nenhum deles causa quebra linha cada mudança base numa tabela larga visual chega três fragmentos 2025 4000 010000 150 839 fragmento valor letra vira regra calibra heurística extraído rodar saída capturada versionada procedência workflow execução dados teste capturas extraido 7276 faltam declarados contra passa como capturar nada gastar cota serve dado salva get_workflow_execution includedata true nodenames truncatedata text item resposta grande gravada arquivo","tp":"armadilha"}
 {"k":"n","id":"ficha:portao-pode-reprovar-por-ruido","t":"ficha","f":".claude/memory/portao-pode-reprovar-por-ruido.md","txt":"portão que reprova por ruído é pior que portão nenhum — o schema.sql saía com FOR ROLE root contra o FOR ROLE postgres do CI ","d":"portão que reprova por ruído é pior que portão nenhum — o schema.sql saía com FOR ROLE root contra o FOR ROLE postgres do CI","kw":"supabase schema reprovou idêntico causa pg_dump owner cobre default alter privileges role alguem carrega nome superusuário aplicou migrations container root linha saía passou normalizar essa para postgres verdadeiro pela mesma razão filtra versão token aleatório restrict portão medir quem digitou comando caso irmão pior porque produz verde github actions ficou runner execução main cancelada nunca começar runner_name vazio pushes seguintes criaram nenhuma reexecuta retroativamente antes tratar vermelho como regressão confira contagem passos nenhum passo executado infraestrutura existe workflow_dispatch reconferir","tp":"armadilha"}
@@ -330,6 +340,7 @@
 {"k":"n","id":"ficha:republicar-sobrescreve-nome-renomeado-ao-vivo","t":"ficha","f":".claude/conhecimento/fichas/republicar-sobrescreve-nome-renomeado-ao-vivo.md","txt":"Armadilha: republicar sobrescreve um nome que o dono trocou no editor ","kw":"armadilha republicar sobrescreve nome dono trocou editor achado preparação republicação ingestão 2026 sintoma workflow publicado na1aev3m8fjdxlwm estava name oria sarf sistema automático reestruturação financeira rebranding feito direto registro estado claude memory repositório ainda gerava técnico fatia diagnóstico extração sombra reconciliação classe importa preparar republicacao 228 grava repo vivo sempre ganha porque nunca null perceber divergência reverteria silêncio teria sucesso conferir dado confere topo notaria abrir antigo volta aparecer antes agir casa pelo chave declarada próprio script renomear quebra esta ligação rodar leitura workflows bastou para notar preciso adivinhar está correção perguntado qual preservar como saber sozinho deliberado desatualizado gerador resposta build passou gravar marca meta note quem abre json continuar sabendo dentro lição generaliza qualquer compare curl mais evita reverter decisão produto tomada fora vale campo merge prefira lado fonte verdade tudo existe artefato comportamento conexões jscode metadado apresentação descrição pode sido decidido precisa conferido presumido","tp":"armadilha"}
 {"k":"n","id":"ficha:rls-so-select-passa-no-superusuario","t":"ficha","f":".claude/memory/rls-so-select-passa-no-superusuario.md","txt":"RLS com só policy de SELECT faz a escrita passar em todo teste (superusuário ignora RLS) e falhar no primeiro clique — teste a escrita como authenticated ","d":"RLS com só policy de SELECT faz a escrita passar em todo teste (superusuário ignora RLS) e falhar no primeiro clique — teste a escrita como authenticated","kw":"suítes banco rodam como superusuário ignora tabela policy select caso perimetro controlador entidade_controlador s109 toda função escrita passar testes 42501 tela medido local role authenticated fn_perimetro_definir_escopo fn_controlador_registrar update fn_fundir_entidade afetava linhas erro para nova teste roda detalhe claude conhecimento fichas 0208 0211 caminho"}
 {"k":"n","id":"ficha:rodape-do-export-em-linha-fixa-estoura","t":"ficha","f":".claude/conhecimento/fichas/rodape-do-export-em-linha-fixa-estoura.md","txt":"Armadilha: endereço fixo no rodapé do export estoura quando o caso cresce ","kw":"armadilha endereço fixo rodapé export estoura quando caso cresce achado produção mandato teste 2026 dono abriu casos recebeu erro arquivo sintoma modelagem modelo chegou linha 1349 bloco parâmetros começa 186 aumente linha_param_inicio linha_base_inicio adiante causa raiz eram constantes 200 elas precisam conhecidas antes escrito porque toda fórmula coluna cita refentidade refcorte escolha fixa configuração escreve premissa ativa vinculada isso estourou título premissas 188 linhas 215 contra 134 esqueleto cobria folga guarda certo abortou sobrescrever cima abriria normalmente estaria errado exatamente defeito este projeto chama lente central fica correção offset passa somar tamanho único esse conhecido escrever config length mantém como termo soma zero medição regra invariante novo verificar configuradas constante antiga religada reproduz palavra 1318 723 verificações falhas 721 lição generaliza planilha gerada dívida vence cliente grande baixo antemão precisa calculável escrita pergunta certa qual número bastante crescer consigo contar mesmo limite apareceu duas vezes mesma passada reproduzir real portal","tp":"armadilha"}
+{"k":"n","id":"ficha:runner-github-pg18-no-schema-sql","t":"ficha","f":".claude/conhecimento/fichas/runner-github-pg18-no-schema-sql.md","txt":"runner-github-pg18-no-schema-sql ","kw":"armadilha s117 2026 runner ubuntu latest github passou para postgresql client caiu cliente pg_dump escreve transaction_timeout topo dump essa linha efeito banco reprovava portão schema materializado bate migrations gerado container diferente idêntico sessão divergia medido jobs cfe4e4f 6f3d023 correção ee74f16 filtra grep lado outros ajustes cabeçalho lição quando reprova código igual olhe primeiro versão gerou cada version próxima pode trazer outra nova filtro crescer junto","tp":"armadilha"}
 {"k":"n","id":"ficha:servidor-velho-na-porta-mede-o-build-errado","t":"ficha","f":".claude/memory/servidor-velho-na-porta-mede-o-build-errado.md","txt":"medir um conserto do portal servindo o build localmente — se a porta já estiver ocupada, o `next start` novo morre calado e o antigo responde; a medição \"não mudou nada\" é do build velho ","d":"medir um conserto do portal servindo o build localmente — se a porta já estiver ocupada, o `next start` novo morre calado e o antigo responde; a medição \"não mudou nada\" é do build velho","kw":"medido 2026 sessão 104 para validar consertos export contra mandato real krauspenhar caso 33b58a89 compilou portal branch numa worktree serviu porta 3100 apontado supabase produção leitura primeiro servidor subiu dois next start seguintes depois recompilar falharam eaddrinuse dentro nohup continuou respondendo 200 pelo antigo custo concluiu duas vezes correção detecção subtotal muda nada arquivo quase descartou conserto certo receita bruta 113 mandou agente procurar outra causa checagem processo lstart grep server hora início mostrou engano regra antes medir confira quem responde build você acabou compilar ready novo aplicada própria medição cara mudou pkill mesmo comando quer morre exit 144 armadilha s103 mate chamada separada","tp":"ambiente"}
 {"k":"n","id":"ficha:sessao-perto-do-limite-fecha-e-documenta","t":"ficha","f":".claude/memory/sessao-perto-do-limite-fecha-e-documenta.md","txt":"perto do limite de uso da sessão, a prioridade vira commitar o que está pronto e escrever o estado — nunca deixar trabalho pela metade sem rastro para a próxima sessão ","d":"perto do limite de uso da sessão, a prioridade vira commitar o que está pronto e escrever o estado — nunca deixar trabalho pela metade sem rastro para a próxima sessão","kw":"pedido explícito dono 2026 quando sessão passar limite prioridade deixa avançar mais fatia vira fechar segurança commitar tudo está pronto testado nenhuma validada fica working tree commit porque próxima ainda começou nunca parar meio migration mudança pela metade escrita testada commitada termina couber tempo resta reverte para último estado limpo sujo pior possível sabe aquilo intenção acidente escrever handoff feito falta ordem mesma doutrina mapa_de_execucao nova abre isso reconstrói raciocínio zero reconstruir custa caro documentar nomear próximo passo exato continuar plano comando arquivo linha onde recomeça ambiguidade aqui mesmo defeito estagio desligado parece descreve parecer isto memória senso custo errar assimétrico esquecer inteira estava numa tarefa multi como esta diagnóstico fatias cada perde contexto paga novo trabalho pago","tp":"doutrina"}
 {"k":"n","id":"ficha:sessoes-paralelas-aplicam-fora-de-ordem","t":"ficha","f":".claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md","txt":"duas sessões em paralelo aplicam migrations fora de ordem em produção — a numeração reservada segura, mas o marcador de cobertura regrediu e a sonda ficou cega ao buraco; antes de aplicar, compare o corpo de toda função reemitida com o de produção ","d":"duas sessões em paralelo aplicam migrations fora de ordem em produção — a numeração reservada segura, mas o marcador de cobertura regrediu e a sonda ficou cega ao buraco; antes de aplicar, compare o corpo de toda função reemitida com o de produção","kw":"medido 2026 0182 0183 0185 0188 foram feitas duas sessões mesmo tempo aplicou 0186 produção segurou reservar numeração antes começar pediu 0184 começou portão prefixo duplicado nunca disparou mais grátis repositório convive buraco 0044 0100 menos fatal quebrou nenhum erro marcador cobertura regrediu migrations terminam update instalacao_cobertura ate_migration nnnn incondicional aplicada depois escreveu cima corrigido tabela gatilho recalcula partir catálogo quando sonda 132 requisitos ausentes fora migration rodou deixa requisito para acusar producao agora compara contra lista supabase readme cheque evita pior caso sozinho reemite função create replace recebeu outra sessão ponto você compare corpo está rodando instala diferença mudança tiver reemitido mesma aplicar desfaz dela silêncio limpo fn_upsert_entidade prod linha nova nada feito porque houve desconfiança bloqueio classificador modo automático claude code bloqueou apply como production deploy dentro trabalho consultas somente leitura pode estar alcance token ambiente permissão settings local json paralela tinha contorna legitimamente dono trocar manual aprovar","tp":"ambiente"}
@@ -338,10 +349,12 @@
 {"k":"n","id":"ficha:sonda-so-conhece-o-catalogo-que-o-banco-tem","t":"ficha","f":".claude/memory/sonda-so-conhece-o-catalogo-que-o-banco-tem.md","txt":"fn_instalacao_conferir() verde não significa que a rodada vai rodar — o catálogo dela mora DENTRO do banco, então um banco atrasado não sabe o que lhe falta; quem responde a outra ponta é Supabase/test/conferir-chamadas.mjs O que foi medido (02/09/2026) Por que a sonda não podia ver E por que ele confere CHAMADA e não nome As duas coisas que continuam manuais, e a segunda ninguém detecta","d":"fn_instalacao_conferir() verde não significa que a rodada vai rodar — o catálogo dela mora DENTRO do banco, então um banco atrasado não sabe o que lhe falta; quem responde a outra ponta é Supabase/test/conferir-chamadas.mjs","kw":"entrada sonda responde pelo banco continua valendo inteira autoridade nenhum arquivo repositório esta limite dela defeito construção isso conserta medido 2026 estado declarava produção 0150 montado parado exatamente pergunta resposta fn_instalacao_conferir acusa ausência postgres workflow ingestao json resolvem três abrir lote fn_abrir_lote_execucao uuid text jsonb 0156 reconciliar fn_reconciliar_caso 0152 classe fn_reconciliar_por_documento unknown primeiro depois orçamento aprovar rodada morre começo podia catálogo instalacao_requisito dado dentro escrito pelas migrations pode conhecer requisito escreveu este sabe deveria está aqui outra ponta chama perguntar porque conhece código rodar supabase test conferir chamadas bash conferir_psql psql postgresql 5432 node tudo resolve achei chamada quebrada nomeando consegui passou confere nome existe acrescentou p_escopo conferidor presença daria presente morreria nela igual prepare resolver tipos executa escreve nada então seguro apontar para duas coisas continuam manuais segunda ninguém detecta aplicar readme lista aplicação incremental sobre atrasado ensaiada 0151 falhas vale ensaiar novo quando mudança alterar assinatura suíte monta","tp":"doutrina"}
 {"k":"n","id":"ficha:splicerows-desloca-enderecos","t":"ficha","f":".claude/memory/splicerows-desloca-enderecos.md","txt":"inserir linha na aba Macro ou no bloco de premissas desloca endereços de célula em silêncio e cada INDEX/MATCH passa a apontar uma linha acima ","d":"inserir linha na aba Macro ou no bloco de premissas desloca endereços de célula em silêncio e cada INDEX/MATCH passa a apontar uma linha acima","kw":"export duas regiões onde linha nova defeito silencioso splicerows macro desloca linhacabfocus linhafocusde cada index match modelo passa apontar acima isso aviso escrita antes outras para deslocar depois captura endereços bloco premissas endereça premissa deslocamento partir rpremissas inserida meio todas fórmulas branco encerra invariante conta verificar varrendo cabeçalho primeira vazia então logo entra contagem reprova referências conferências junto referência parece pior nenhuma","tp":"armadilha"}
 {"k":"n","id":"ficha:stack-overflow-push-arr-node22-limite-empirico","t":"ficha","f":".claude/conhecimento/fichas/stack-overflow-push-arr-node22-limite-empirico.md","txt":"Descoberta: Stack overflow em push(...arr), não esgotamento de RAM ","kw":"descoberta stack overflow push esgotamento achado análise hipótese anterior rodada real teste 2026 correção atribuía morte lotes grandes 127 planilhas pikapods refutada verdade defeito javascript merge nativo operador espalhamento node estoura quando array 125 000 150 itens limite empírico medido falhas sucessos consecutivos evidência correlacionam acúmulo fila sucesso menores correlação disponível item count mesmo padrão aparece dois casos produção relacionados ação necessária arquitetura_alvo_e_roadmap lista como origem precisa corrigida para mitigação atual usar prototype apply arr1 arr2 length 10000 chunking processar batches urgente porque reais agora alcançam 125k documentar substitui conjectura","tp":"defeito"}
+{"k":"n","id":"ficha:storage-apaga-como-superusuario-ator-por-lista-de-permitidos","t":"ficha","f":".claude/conhecimento/fichas/storage-apaga-como-superusuario-ator-por-lista-de-permitidos.md","txt":"storage-apaga-como-superusuario-ator-por-lista-de-permitidos ","kw":"armadilha s118 2026 migration 0224 gatilho storage objects quem apagou pelo auth apaga duas etapas testa como usuário numa transação desfeita verdade superusuário role service_role request claim dispara etapa grava sistema para toda exclusão inclusive analista suíte porque fazia delete direto authenticated mecanismo suposto regra funciona medido produção repassa cabeçalhos chamador headers nome operação rota operation real ator mail dela ator_origem cabecalho_jwt storage_operation object papel_sessao segunda mais cara lista proibidos sobre texto cliente foram sete revisões independentes zero achado autentica assinatura verifica authorization bearer forjado atribuía sócio protocolo está ligado projeto guarda path burlada roteador decodifica terceira correção mesma trocou desenho permitidos valor servidor define cabeçalho vale quando delete_many rotas registerjwtauth fora disso nao_identificado ator_motivo nunca geral segurança precisa lendo coisa errada troque lido padrão também policy insert evento_auditoria exclui ação senão forjava linha rest sondas contam qualquer outra permissiva anon update limite declarado acesso banco forja trilha nenhuma dentro","tp":"armadilha"}
 {"k":"n","id":"ficha:superpowers-cinco-skills-vetadas","t":"ficha","f":".claude/conhecimento/fichas/superpowers-cinco-skills-vetadas.md","txt":"o plugin superpowers 6.3.0 foi auditado skill por skill e DESLIGADO neste projeto — 5 das 14 contradizem as regras 1, 6 e 7, as 9 restantes somam 29,7k de on-invoke, e ele se contradiz sobre o caso exato da regra 2 A conta que decidiu, e o número certo dela As cinco vetadas — nunca invocar neste repositório As nove restantes — o que valeria, SE o plugin fosse religado O desempate, que é o achado principal O que esta ficha NÃO afirma","d":"o plugin superpowers 6.3.0 foi auditado skill por skill e DESLIGADO neste projeto — 5 das 14 contradizem as regras 1, 6 e 7, as 9 restantes somam 29,7k de on-invoke, e ele se contradiz sobre o caso exato da regra 2","kw":"superpowers auditado skill desligado neste projeto plugin marketplace commit b36e0829 instalado 2026 escopo user contra sete regras antes qualquer claude settings json enabledplugins continua ativo outros projetos dono desligamento aqui repete problema comandos importados forma traz skills agentes barra servidores conta decidiu número certo dela primeira versão desta ficha comparou always 688 declarados mais 800 hook sessionstart injeta colar using inteiro dentro extremely_important 439 bytes cortados essa ganhava comparação errada custo invocação única dele existe para maximizar think there even chance might apply what doing absolutely must invoke have choice nove sobreviveriam veto somam tokens brainstorming writing systematic debugging test driven development receiving code review dispatching parallel agents verification before completion requesting fixos sessão dessas duplicam rodada revisar fechar buscar fazem lente nenhuma delas sobram duas cobrem real enuncia regra corretamente úteis pagam exposição mandato invocar mesmo critério aplicado abaixo valendo porque desligar reversível auditoria alguém religar cinco seção seguem","tp":"doutrina"}
 {"k":"n","id":"ficha:teto-da-borda-recusa-antes-do-codigo","t":"ficha","f":".claude/memory/teto-da-borda-recusa-antes-do-codigo.md","txt":"o 413 de 48 arquivos (~50 MB) veio da BORDA da Vercel: /api/intake nunca rodou, e nenhuma mensagem nossa podia aparecer — teto de 4,5 MB por requisição na Serverless Function Por que nenhuma correção dentro da rota resolveria E \"mandar em levas\" era a correção errada O preço, e por que ele é menor do que parece O que ficou em aberto (achado na revisão da mesma rodada) O bloqueio que criei virou o próximo incidente (mesmo dia, 13/09/2026)","d":"o 413 de 48 arquivos (~50 MB) veio da BORDA da Vercel: /api/intake nunca rodou, e nenhuma mensagem nossa podia aparecer — teto de 4,5 MB por requisição na Serverless Function","kw":"teto hospedagem recusa antes código rodar medido 2026 dono selecionou arquivos para mandato tela ofereceu enviar estimou minutos processamento envio morreu failed load resource server responded with status 413 intake mostrou falha http frase genérica porque json error veio vazio nenhuma correção dentro rota resolveria nunca rodou borda vercel corpo acima invocar serverless function nenhum catch validação mensagem português daquele arquivo tinham como aparecer bodysizelimit next cobre action route handler muda regra geral quando erro chega número nossa primeira pergunta chegou limite plataforma proxy respondem repositório inteiro invisível nesse ponto sinal confirmou cobrou lote houve execução seja requisição saiu mandar levas errada conselho portal readme semanas automatizá teria sido pior cada submissão form abre cadência extrair classificar tier openai 000 treze execuções espaçando próprio minuto contra rate limit conta resultado está sessão cont documentos erros spacing your requests pela metade limpa some quatro contas espera todas dimensionadas tirar bytes caminho","tp":"defeito","anc":"portal/src/lib/limite-de-envio.ts#TETO_DA_FUNCTION_BYTES","sha":"f285efe531b1","anc_sha":"f285efe531b1"}
 {"k":"n","id":"ficha:teto-de-autonomia-por-natureza","t":"ficha","f":".claude/memory/teto-de-autonomia-por-natureza.md","txt":"nenhum volume de veredito sobe reconciliação Classe B/C ou classificação contábil acima de N1 — o teto é doutrina e só muda por migration ","d":"nenhum volume de veredito sobe reconciliação Classe B/C ou classificação contábil acima de N1 — o teto é doutrina e só muda por migration","kw":"cada estágio dial autonomia sombra autônomo teto natureza negocia arquitetura sistema visão doutrina 01_doutrina_de_autonomia determinístico objetivo nasce extração linhas tabelas reconciliação classe classificação contábil recorrente ebitda nunca três portas sobem interpretativo elas intercambiáveis medida golden cego medida_por_veredito piso enviesado quem julgou palpite antes declarada motivo assumido medição assert mais importante suíte vira promoção automática 0137 alcança freio gruda humano baixa nível desliga auto dele hora religar update explícito isso proíbe tentação real sobe leitura certa falta evidência permissão afrouxe fn_mudar_dial para destravar alguma coisa exatamente buraco 0126 fechou dois níveis declarados eram falsos quando chegou","tp":"doutrina"}
 {"k":"n","id":"ficha:todo-em-portugues-vira-achado-do-sonar","t":"ficha","f":".claude/memory/todo-em-portugues-vira-achado-do-sonar.md","txt":"a palavra portuguesa \"todo\" num comentário faz o Sonar abrir S1135 como se fosse marcador de tarefa — e a regra é INSENSÍVEL A MAIÚSCULAS, então \"o tempo todo\" basta ","d":"a palavra portuguesa \"todo\" num comentário faz o Sonar abrir S1135 como se fosse marcador de tarefa — e a regra é INSENSÍVEL A MAIÚSCULAS, então \"o tempo todo\" basta","kw":"regra s1135 complete task associated this todo comment existe todas linguagens sonar analisa aqui javascript typescript shelldre casa texto idioma insensível maiúsculas primeira versão desta memória dizia caixa alta isso protegeu quinta ocorrência frase tempo toda minúscula escrita quem tinha acabado criar este arquivo português palavra corrente padrão para evitar atenção conhecer frases perfeitamente normais viram achado republicar documento extraído perder curto circuito cada grupo depois primeiro exatamente dígitos esta passa aconteceu cinco vezes numa única sessão 2026 taxonomia mundo cobertura duas segunda contagem última existir porque descrevia gatilho errado custou ciclo sonarcloud descobrir falso positivo conserto reescrever silenciar qualquer maior parte todos dizem mesma coisa colidir cuidado também prefixo seria pior pega marcador tarefa verdade projeto inglês espalhado justamente reclama pegadinha reporta código novo então vários arquivos antigos custo test workflow extract classifier aparece como tente limpar esses alargar ganho corrija linha você escreveu verificar limite envio correção jogasse","tp":"armadilha"}
+{"k":"n","id":"ficha:token-v2-etiqueta-contra-colisao-com-v1","t":"ficha","f":".claude/conhecimento/fichas/token-v2-etiqueta-contra-colisao-com-v1.md","txt":"token-v2-etiqueta-contra-colisao-com-v1 ","kw":"armadilha s117 dois formatos token assinados mesmo segredo colidem quando campo livre pode imitar outro assinava nome mandato usuario assina caso_id chamado uuid caso faria assinar exatamente mensagem daquele valeria para alheio fechamento duas camadas leva etiqueta frente fecha puro literalmente ainda colidiria isso ramo recusa como malformado antes hmac todo normalizado comece repete desde 0223 aplicada 2026 recusado versao_antiga colisão deixou alcançável lição continua valendo próxima versão assinada formato velho texto nova medido cabeçalho 0222 asserts reprovam guarda contra","tp":"armadilha"}
 {"k":"n","id":"ficha:verificador-sem-controle-positivo","t":"ficha","f":".claude/memory/verificador-sem-controle-positivo.md","txt":"um \"nenhum encontrado\" só vale se a mesma checagem PROVADAMENTE acha o que procura — cinco verificações do PR #238 responderam uma pergunta diferente da que foi feita, e três delas diziam \"tudo certo\" ","d":"um \"nenhum encontrado\" só vale se a mesma checagem PROVADAMENTE acha o que procura — cinco verificações do PR #238 responderam uma pergunta diferente da que foi feita, e três delas diziam \"tudo certo\"","kw":"medido sessões 2026 238 regra claude fala estágio pipeline esta mesma aplicada verificação sessão checagem consegue achar procura devolve exatamente resposta procurou achou cinco casos todos reais pegos porque alguém desconfiou respondeu verdade merge tree grep marcador conflito conflitos dito dono estado grafo jsonl formato saída atual tinha procurado lista funções minúsculo cruzada nenhuma colisão única linha maiúscula fn_upsert_entidade justamente mais arriscada nunca checada protocolo medição 0183 guarda desligada asserts reprovaram migration morreu antes teste rodou primeiro portão denominador pareando pelo citado 0179 diverge estava certa pareava arquivo errado assert próprio comentário cabeçalho citava padrão funcionou passou procedimento acreditar zero rodar contra caso algo controle positivo acha função própria migrations significar alguma coisa script aparece transformou falso contagem inválida commit 070b0c2 defeito real dele tempo parente próximo disco enquanto agente background ainda edita retrato existiu como final 0182 isso produziu três falhou eram restaurando depois conferir relatório deixado","tp":"doutrina"}
 {"k":"n","id":"fn:fn_abrir_lote_execucao","t":"fn","f":"Supabase/migrations/0156_o_lote_existe_antes_de_terminar.sql","txt":"abrir lote execucao"}
 {"k":"n","id":"fn:fn_aceitar_extracao","t":"fn","f":"Supabase/migrations/0036_completude_exige_conteudo.sql","txt":"aceitar extracao"}
@@ -461,7 +474,7 @@
 {"k":"n","id":"fn:fn_grupo_por_controle_comum","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum"}
 {"k":"n","id":"fn:fn_grupo_por_controle_comum_motivo","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum motivo"}
 {"k":"n","id":"fn:fn_herdar_secao_pela_arvore","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"herdar secao pela arvore"}
-{"k":"n","id":"fn:fn_historico_do_caso","t":"fn","f":"Supabase/migrations/0215_o_historico_que_so_o_banco_sabia.sql","txt":"historico do caso"}
+{"k":"n","id":"fn:fn_historico_do_caso","t":"fn","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","txt":"historico do caso"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
 {"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","txt":"instalacao conferir"}
@@ -585,6 +598,7 @@
 {"k":"n","id":"fn:fn_texto_nomeia_mutuo","t":"fn","f":"Supabase/migrations/0123_mutuos_a_natureza_fora_da_linha.sql","txt":"texto nomeia mutuo"}
 {"k":"n","id":"fn:fn_tokens_estruturais","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tokens estruturais"}
 {"k":"n","id":"fn:fn_tratar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"tratar pendencia"}
+{"k":"n","id":"fn:fn_trg_auditar_original_apagado","t":"fn","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","txt":"trg auditar original apagado"}
 {"k":"n","id":"fn:fn_trg_auto_promover_dial","t":"fn","f":"Supabase/migrations/0219_a_guarda_do_dial_que_conferia_o_formato_do_update.sql","txt":"trg auto promover dial"}
 {"k":"n","id":"fn:fn_trg_caso_aloca_criador","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"trg caso aloca criador"}
 {"k":"n","id":"fn:fn_trg_caso_pergunta_so_reaponta","t":"fn","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"trg caso pergunta so reaponta"}
@@ -778,6 +792,7 @@
 {"k":"n","id":"migration:0221","t":"migration","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","txt":"a rls que ninguem conferia ligada e o ddl do dial"}
 {"k":"n","id":"migration:0222","t":"migration","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","txt":"o envio que criava o mandato novo quando o nome mudava"}
 {"k":"n","id":"migration:0223","t":"migration","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","txt":"o token v1 que ainda entrava por nome"}
+{"k":"n","id":"migration:0224","t":"migration","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","txt":"o original que o analista apagava sem trilha"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -901,77 +916,79 @@
 {"k":"n","id":"portao:Suíte n8n","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte n8n","l":91}
 {"k":"n","id":"portao:Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)","t":"portao","f":".github/workflows/suites.yml","txt":"Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)","l":734}
 {"k":"n","id":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","t":"portao","f":".github/workflows/suites.yml","txt":"Índice do conhecimento — o grafo derivado bate com o repositório","l":232}
-{"k":"n","id":"sessao:10","t":"sessao","f":"HANDOFF.md","txt":"10 Teste v25: reconciliação sem ruído, export que fecha (PRs #49 #52)","l":5783}
-{"k":"n","id":"sessao:107","t":"sessao","f":"HANDOFF.md","txt":"107 passagem da S106 (histórico; o passo 2 dela foi feito na S107)","l":44}
-{"k":"n","id":"sessao:108","t":"sessao","f":"HANDOFF.md","txt":"108 passagem da S107 (histórico; o passo 1 dela foi feito na S108, com outra rota)","l":40}
-{"k":"n","id":"sessao:11","t":"sessao","f":"HANDOFF.md","txt":"11 DMPL e DVA: código próprio na taxonomia e aba própria (`Supabase/migrations/0024`)","l":5730}
-{"k":"n","id":"sessao:12","t":"sessao","f":"HANDOFF.md","txt":"12 Aba Modelagem: modelo pronto em fórmula + consolidação de entidade (v27)","l":5688}
-{"k":"n","id":"sessao:13","t":"sessao","f":"HANDOFF.md","txt":"13 Índices macro: histórico (BCB/IBGE) + Focus, e o modelo consumindo os dois","l":5652}
-{"k":"n","id":"sessao:14","t":"sessao","f":"HANDOFF.md","txt":"14 DF auditada: o conjunto num arquivo só é separado por demonstração","l":5594}
-{"k":"n","id":"sessao:15","t":"sessao","f":"HANDOFF.md","txt":"15 Reextração é versão nova, e substitui em vez de acumular (`Supabase/migrations/0026`)","l":5538}
-{"k":"n","id":"sessao:16","t":"sessao","f":"HANDOFF.md","txt":"16 Teste v28: aba ausente deixa de ser buraco silencioso","l":5472}
-{"k":"n","id":"sessao:17","t":"sessao","f":"HANDOFF.md","txt":"17 Testes v29/v30: macro vazio por AUTORIZAÇÃO, e 429 sem causa conhecida (a causa saiu na sessão 18: teto de gasto do PROJETO)","l":5375}
-{"k":"n","id":"sessao:18","t":"sessao","f":"HANDOFF.md","txt":"18 (2026 07 31)   Etapa 1 completa + Etapa 2 começada; e dois invariantes MEUS nasceram vazios","l":5303}
-{"k":"n","id":"sessao:19","t":"sessao","f":"HANDOFF.md","txt":"19 (2026 07 31, tarde)   pendências do dono fechadas, Etapa 2 quase inteira (PR #69)","l":4995}
-{"k":"n","id":"sessao:20","t":"sessao","f":"HANDOFF.md","txt":"20 (2026 07 31, noite)   Etapa 2 FECHADA, dupla contagem sinalizada, e CI","l":4829}
-{"k":"n","id":"sessao:21","t":"sessao","f":"HANDOFF.md","txt":"21 (2026 08 01)   Etapas 1 a 6, a partir do teste v35","l":4725}
-{"k":"n","id":"sessao:22","t":"sessao","f":"HANDOFF.md","txt":"22 (2026 08 03)   Fase 1: os dois itens que perdiam dado em silêncio","l":4628}
-{"k":"n","id":"sessao:23","t":"sessao","f":"HANDOFF.md","txt":"23 (2026 08 03)   Fase 2: documento que chegou vazio para de contar","l":4542}
-{"k":"n","id":"sessao:24","t":"sessao","f":"HANDOFF.md","txt":"24 (2026 08 03)   Fases 4 e 5: abas resolvidas, Portão 2 existe, roteiro do teste","l":4433}
-{"k":"n","id":"sessao:25","t":"sessao","f":"HANDOFF.md","txt":"25 (2026 08 03)   Fase 7.1: granularidade total e o export de dados","l":4336}
-{"k":"n","id":"sessao:26","t":"sessao","f":"HANDOFF.md","txt":"26 (2026 08 03)   Fase 7.2: a premissa deixa de ser código e passa a ser dado","l":4245}
-{"k":"n","id":"sessao:27","t":"sessao","f":"HANDOFF.md","txt":"27 (2026 08 03)   Fase 7.3: a tela onde linha e premissa se cruzam","l":4174}
-{"k":"n","id":"sessao:28","t":"sessao","f":"HANDOFF.md","txt":"28 (2026 08 03)   Fase 7.4: o export dirigido pelas escolhas do portal","l":4080}
-{"k":"n","id":"sessao:29","t":"sessao","f":"HANDOFF.md","txt":"29 (2026 08 03)   Fase 7.5: as primitivas de projeção que faltavam","l":3999}
-{"k":"n","id":"sessao:30","t":"sessao","f":"HANDOFF.md","txt":"30 (2026 08 03)   Fase 6: calibração   o dial volta a mandar","l":3885}
-{"k":"n","id":"sessao:31","t":"sessao","f":"HANDOFF.md","txt":"31 (2026 08 04)   Fase 8 (papel da linha) + Fase 9 (modelo institucional)","l":7298}
-{"k":"n","id":"sessao:32","t":"sessao","f":"HANDOFF.md","txt":"32 (2026 08 04)   o lote da Modelagem destravado, e a captura de produção","l":7365}
-{"k":"n","id":"sessao:33","t":"sessao","f":"HANDOFF.md","txt":"33 (2026 08 04)   por que a Modelagem continuou quebrada DEPOIS do merge","l":7471}
-{"k":"n","id":"sessao:34","t":"sessao","f":"HANDOFF.md","txt":"34 (2026 08 04)   o timeout sobreviveu ao apply, e a investigação virou de ambiente","l":7627}
-{"k":"n","id":"sessao:35","t":"sessao","f":"HANDOFF.md","txt":"35 (2026 08 05)   a `0103`, a regra do cabeçalho, e um agente que não gravou nada","l":7726}
-{"k":"n","id":"sessao:36","t":"sessao","f":"HANDOFF.md","txt":"36 (2026 08 05)   RESOLVIDO: as três fatias do timeout, medidas na produção","l":7824}
-{"k":"n","id":"sessao:37","t":"sessao","f":"HANDOFF.md","txt":"37 (2026 08 05)   a modelagem exercitada de ponta a ponta, e três defeitos que só o uso real acha","l":7961}
-{"k":"n","id":"sessao:38","t":"sessao","f":"HANDOFF.md","txt":"38 (2026 08 05)   Fase 1 do espelhamento: o Modelo Base mapeado inteiro, e três números que mudam o placar","l":8091}
-{"k":"n","id":"sessao:39","t":"sessao","f":"HANDOFF.md","txt":"39 (2026 08 05)   o espelhamento executado: 11 defeitos corrigidos, o balanço fechando, e os 8 gráficos","l":8243}
-{"k":"n","id":"sessao:40","t":"sessao","f":"HANDOFF.md","txt":"40 (2026 08 06)   o arquivo entregue mentia; seis defeitos e a conferência que os pega","l":3771}
-{"k":"n","id":"sessao:40b","t":"sessao","f":"HANDOFF.md","txt":"40b (2026 08 06)   a Fase A do plano: o portão de fidelidade que faltava","l":3737}
-{"k":"n","id":"sessao:40c","t":"sessao","f":"HANDOFF.md","txt":"40c (2026 08 06)   Fases B e C do plano","l":3706}
-{"k":"n","id":"sessao:40d","t":"sessao","f":"HANDOFF.md","txt":"40d (2026 08 06)   Fase D: a auditoria do arquivo entregue virou comando","l":3652}
-{"k":"n","id":"sessao:40e","t":"sessao","f":"HANDOFF.md","txt":"40e (2026 08 07)   as três premissas decididas, e a dívida passou a amortizar","l":3612}
-{"k":"n","id":"sessao:40f","t":"sessao","f":"HANDOFF.md","txt":"40f (2026 08 07)   dois exports, e as alavancas em uma tela só","l":3564}
-{"k":"n","id":"sessao:40g","t":"sessao","f":"HANDOFF.md","txt":"40g (2026 08 07)   a tela deixou de falar canônico","l":3520}
-{"k":"n","id":"sessao:40h","t":"sessao","f":"HANDOFF.md","txt":"40h (2026 08 07)   o tributo ganhou dono, e o parcelamento passou a ser pago","l":3465}
-{"k":"n","id":"sessao:41","t":"sessao","f":"HANDOFF.md","txt":"41 (2026 08 11)   o diagnóstico, e o backlog dele executado por impacto","l":3411}
-{"k":"n","id":"sessao:42","t":"sessao","f":"HANDOFF.md","txt":"42 (2026 08 11)   o custo mentia por 5×, e o \"aguarde\" mentia duas vezes","l":3314}
-{"k":"n","id":"sessao:43","t":"sessao","f":"HANDOFF.md","txt":"43 (2026 08 13)   a recusa vinha de um workflow de julho, e a 2ª chamada era cobrada como se fosse a 1ª","l":3221}
-{"k":"n","id":"sessao:44","t":"sessao","f":"HANDOFF.md","txt":"44 (2026 08 13)   a primeira fatura real, e metade da saída era contexto repetido","l":3115}
-{"k":"n","id":"sessao:44b","t":"sessao","f":"HANDOFF.md","txt":"44b (2026 08 13)   a linha exigida por tipo vira dado, e o Portão 1 cobra pelo nome (0113)","l":3069}
-{"k":"n","id":"sessao:45","t":"sessao","f":"HANDOFF.md","txt":"45 (2026 08 13)   o custo estava resolvido e o dado não estava: 39% de cobertura, e as três camadas","l":2980}
-{"k":"n","id":"sessao:46","t":"sessao","f":"HANDOFF.md","txt":"46 (2026 08 14)   as três camadas rodaram: 39% → 58%, truncamento zerado, e três defeitos seguidos de mecânica do n8n","l":2930}
-{"k":"n","id":"sessao:47","t":"sessao","f":"HANDOFF.md","txt":"47 (2026 08 17)   o \"Teste V45\": 19 dos 35 documentos nunca tiveram a extração chamada","l":2852}
-{"k":"n","id":"sessao:48","t":"sessao","f":"HANDOFF.md","txt":"48 (2026 08 17)   a v46 auditada contra o gabarito, dois erros de unidade, e o portal com a cara da Oria","l":2722}
-{"k":"n","id":"sessao:5","t":"sessao","f":"HANDOFF.md","txt":"5 Teste aprofundado do export (E4) com dados sintéticos mais realistas","l":6173}
-{"k":"n","id":"sessao:6","t":"sessao","f":"HANDOFF.md","txt":"6 IA sugere a seção canônica (classificação do export, N1)","l":6236}
-{"k":"n","id":"sessao:6#2","t":"sessao","f":"HANDOFF.md","txt":"6 (cont.)   Roteamento por linha: separar cada demonstração em sua aba","l":6277}
-{"k":"n","id":"sessao:7","t":"sessao","f":"HANDOFF.md","txt":"7 BUG CRÍTICO: item errado no upload em lote (conteúdo trocado entre documentos)","l":6317}
-{"k":"n","id":"sessao:7#10","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁹)   Documentos COMPARATIVOS: coluna de período (`Supabase/migrations/0017`)","l":6678}
-{"k":"n","id":"sessao:7#11","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁰)   Upload pelo portal + mandato explícito (intake amigável)","l":6710}
-{"k":"n","id":"sessao:7#12","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹¹)   \"Teste v18\" (16 docs reais, US$3): 9/16 ok, 7 falharam   2ª rodada de hardening","l":6741}
-{"k":"n","id":"sessao:7#13","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹²)   BUG CRÍTICO: upload pelo portal \"sucesso\" mas workflow nunca rodava","l":6798}
-{"k":"n","id":"sessao:7#14","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹³)   \"Teste v19\" (9 arquivos pequenos, kit sintético): confirmação de tier + 2º bug crítico","l":6837}
-{"k":"n","id":"sessao:7#15","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁴)   \"Teste v20\" (kit sintético reprocessado): 2 bugs reais + auto aceite + limpeza de export","l":6869}
-{"k":"n","id":"sessao:7#16","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁵)   \"Total informado × calculado\" divergindo mesmo em arquivo de teste + limpeza final do export","l":6936}
-{"k":"n","id":"sessao:7#17","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁶)   Tipo/período em texto natural no dashboard/planilha do documento + resumo menos redundante","l":6989}
-{"k":"n","id":"sessao:7#2","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.)   Causa raiz da fabricação de valores + guarda de segurança","l":6380}
-{"k":"n","id":"sessao:7#3","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.²)   Reforço de prompt (3 achados secundários) + confirmação do multi entidade","l":6440}
-{"k":"n","id":"sessao:7#4","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.³)   Balanço/DRE/Fluxo completos com FÓRMULAS (reescrita do export)","l":6472}
-{"k":"n","id":"sessao:7#5","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁴)   Layout analítico (margens) inspirado num modelo de FP&A real","l":6515}
-{"k":"n","id":"sessao:7#6","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁵)   Ajustes no export após o teste v12 do dono","l":6541}
-{"k":"n","id":"sessao:7#7","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁶)   Reconciliação Classe B (`Supabase/migrations/0015`)","l":6563}
-{"k":"n","id":"sessao:7#8","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁷)   BUG CRÍTICO: extração silenciosamente vazia (`Supabase/migrations/0016`)","l":6605}
-{"k":"n","id":"sessao:7#9","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁸)   Causa real da extração vazia: rate limit (429) no upload em lote","l":6650}
-{"k":"n","id":"sessao:8","t":"sessao","f":"HANDOFF.md","txt":"8 Camada analítica + rodada de endurecimento (PRs #43 #46)","l":5926}
-{"k":"n","id":"sessao:9","t":"sessao","f":"HANDOFF.md","txt":"9 Correções do teste v24 (PRs #47 #48)","l":5873}
+{"k":"n","id":"sessao:10","t":"sessao","f":"HANDOFF.md","txt":"10 Teste v25: reconciliação sem ruído, export que fecha (PRs #49 #52)","l":5801}
+{"k":"n","id":"sessao:107","t":"sessao","f":"HANDOFF.md","txt":"107 passagem da S106 (histórico; o passo 2 dela foi feito na S107)","l":62}
+{"k":"n","id":"sessao:108","t":"sessao","f":"HANDOFF.md","txt":"108 passagem da S107 (histórico; o passo 1 dela foi feito na S108, com outra rota)","l":58}
+{"k":"n","id":"sessao:11","t":"sessao","f":"HANDOFF.md","txt":"11 DMPL e DVA: código próprio na taxonomia e aba própria (`Supabase/migrations/0024`)","l":5748}
+{"k":"n","id":"sessao:113","t":"sessao","f":"HANDOFF.md","txt":"113 COMECE AQUI (29/10/2026; histórico, a mais nova está acima)","l":25}
+{"k":"n","id":"sessao:117","t":"sessao","f":"HANDOFF.md","txt":"117 (04/11/2026; histórico, a mais nova está acima)","l":16}
+{"k":"n","id":"sessao:12","t":"sessao","f":"HANDOFF.md","txt":"12 Aba Modelagem: modelo pronto em fórmula + consolidação de entidade (v27)","l":5706}
+{"k":"n","id":"sessao:13","t":"sessao","f":"HANDOFF.md","txt":"13 Índices macro: histórico (BCB/IBGE) + Focus, e o modelo consumindo os dois","l":5670}
+{"k":"n","id":"sessao:14","t":"sessao","f":"HANDOFF.md","txt":"14 DF auditada: o conjunto num arquivo só é separado por demonstração","l":5612}
+{"k":"n","id":"sessao:15","t":"sessao","f":"HANDOFF.md","txt":"15 Reextração é versão nova, e substitui em vez de acumular (`Supabase/migrations/0026`)","l":5556}
+{"k":"n","id":"sessao:16","t":"sessao","f":"HANDOFF.md","txt":"16 Teste v28: aba ausente deixa de ser buraco silencioso","l":5490}
+{"k":"n","id":"sessao:17","t":"sessao","f":"HANDOFF.md","txt":"17 Testes v29/v30: macro vazio por AUTORIZAÇÃO, e 429 sem causa conhecida (a causa saiu na sessão 18: teto de gasto do PROJETO)","l":5393}
+{"k":"n","id":"sessao:18","t":"sessao","f":"HANDOFF.md","txt":"18 (2026 07 31)   Etapa 1 completa + Etapa 2 começada; e dois invariantes MEUS nasceram vazios","l":5321}
+{"k":"n","id":"sessao:19","t":"sessao","f":"HANDOFF.md","txt":"19 (2026 07 31, tarde)   pendências do dono fechadas, Etapa 2 quase inteira (PR #69)","l":5013}
+{"k":"n","id":"sessao:20","t":"sessao","f":"HANDOFF.md","txt":"20 (2026 07 31, noite)   Etapa 2 FECHADA, dupla contagem sinalizada, e CI","l":4847}
+{"k":"n","id":"sessao:21","t":"sessao","f":"HANDOFF.md","txt":"21 (2026 08 01)   Etapas 1 a 6, a partir do teste v35","l":4743}
+{"k":"n","id":"sessao:22","t":"sessao","f":"HANDOFF.md","txt":"22 (2026 08 03)   Fase 1: os dois itens que perdiam dado em silêncio","l":4646}
+{"k":"n","id":"sessao:23","t":"sessao","f":"HANDOFF.md","txt":"23 (2026 08 03)   Fase 2: documento que chegou vazio para de contar","l":4560}
+{"k":"n","id":"sessao:24","t":"sessao","f":"HANDOFF.md","txt":"24 (2026 08 03)   Fases 4 e 5: abas resolvidas, Portão 2 existe, roteiro do teste","l":4451}
+{"k":"n","id":"sessao:25","t":"sessao","f":"HANDOFF.md","txt":"25 (2026 08 03)   Fase 7.1: granularidade total e o export de dados","l":4354}
+{"k":"n","id":"sessao:26","t":"sessao","f":"HANDOFF.md","txt":"26 (2026 08 03)   Fase 7.2: a premissa deixa de ser código e passa a ser dado","l":4263}
+{"k":"n","id":"sessao:27","t":"sessao","f":"HANDOFF.md","txt":"27 (2026 08 03)   Fase 7.3: a tela onde linha e premissa se cruzam","l":4192}
+{"k":"n","id":"sessao:28","t":"sessao","f":"HANDOFF.md","txt":"28 (2026 08 03)   Fase 7.4: o export dirigido pelas escolhas do portal","l":4098}
+{"k":"n","id":"sessao:29","t":"sessao","f":"HANDOFF.md","txt":"29 (2026 08 03)   Fase 7.5: as primitivas de projeção que faltavam","l":4017}
+{"k":"n","id":"sessao:30","t":"sessao","f":"HANDOFF.md","txt":"30 (2026 08 03)   Fase 6: calibração   o dial volta a mandar","l":3903}
+{"k":"n","id":"sessao:31","t":"sessao","f":"HANDOFF.md","txt":"31 (2026 08 04)   Fase 8 (papel da linha) + Fase 9 (modelo institucional)","l":7316}
+{"k":"n","id":"sessao:32","t":"sessao","f":"HANDOFF.md","txt":"32 (2026 08 04)   o lote da Modelagem destravado, e a captura de produção","l":7383}
+{"k":"n","id":"sessao:33","t":"sessao","f":"HANDOFF.md","txt":"33 (2026 08 04)   por que a Modelagem continuou quebrada DEPOIS do merge","l":7489}
+{"k":"n","id":"sessao:34","t":"sessao","f":"HANDOFF.md","txt":"34 (2026 08 04)   o timeout sobreviveu ao apply, e a investigação virou de ambiente","l":7645}
+{"k":"n","id":"sessao:35","t":"sessao","f":"HANDOFF.md","txt":"35 (2026 08 05)   a `0103`, a regra do cabeçalho, e um agente que não gravou nada","l":7744}
+{"k":"n","id":"sessao:36","t":"sessao","f":"HANDOFF.md","txt":"36 (2026 08 05)   RESOLVIDO: as três fatias do timeout, medidas na produção","l":7842}
+{"k":"n","id":"sessao:37","t":"sessao","f":"HANDOFF.md","txt":"37 (2026 08 05)   a modelagem exercitada de ponta a ponta, e três defeitos que só o uso real acha","l":7979}
+{"k":"n","id":"sessao:38","t":"sessao","f":"HANDOFF.md","txt":"38 (2026 08 05)   Fase 1 do espelhamento: o Modelo Base mapeado inteiro, e três números que mudam o placar","l":8109}
+{"k":"n","id":"sessao:39","t":"sessao","f":"HANDOFF.md","txt":"39 (2026 08 05)   o espelhamento executado: 11 defeitos corrigidos, o balanço fechando, e os 8 gráficos","l":8261}
+{"k":"n","id":"sessao:40","t":"sessao","f":"HANDOFF.md","txt":"40 (2026 08 06)   o arquivo entregue mentia; seis defeitos e a conferência que os pega","l":3789}
+{"k":"n","id":"sessao:40b","t":"sessao","f":"HANDOFF.md","txt":"40b (2026 08 06)   a Fase A do plano: o portão de fidelidade que faltava","l":3755}
+{"k":"n","id":"sessao:40c","t":"sessao","f":"HANDOFF.md","txt":"40c (2026 08 06)   Fases B e C do plano","l":3724}
+{"k":"n","id":"sessao:40d","t":"sessao","f":"HANDOFF.md","txt":"40d (2026 08 06)   Fase D: a auditoria do arquivo entregue virou comando","l":3670}
+{"k":"n","id":"sessao:40e","t":"sessao","f":"HANDOFF.md","txt":"40e (2026 08 07)   as três premissas decididas, e a dívida passou a amortizar","l":3630}
+{"k":"n","id":"sessao:40f","t":"sessao","f":"HANDOFF.md","txt":"40f (2026 08 07)   dois exports, e as alavancas em uma tela só","l":3582}
+{"k":"n","id":"sessao:40g","t":"sessao","f":"HANDOFF.md","txt":"40g (2026 08 07)   a tela deixou de falar canônico","l":3538}
+{"k":"n","id":"sessao:40h","t":"sessao","f":"HANDOFF.md","txt":"40h (2026 08 07)   o tributo ganhou dono, e o parcelamento passou a ser pago","l":3483}
+{"k":"n","id":"sessao:41","t":"sessao","f":"HANDOFF.md","txt":"41 (2026 08 11)   o diagnóstico, e o backlog dele executado por impacto","l":3429}
+{"k":"n","id":"sessao:42","t":"sessao","f":"HANDOFF.md","txt":"42 (2026 08 11)   o custo mentia por 5×, e o \"aguarde\" mentia duas vezes","l":3332}
+{"k":"n","id":"sessao:43","t":"sessao","f":"HANDOFF.md","txt":"43 (2026 08 13)   a recusa vinha de um workflow de julho, e a 2ª chamada era cobrada como se fosse a 1ª","l":3239}
+{"k":"n","id":"sessao:44","t":"sessao","f":"HANDOFF.md","txt":"44 (2026 08 13)   a primeira fatura real, e metade da saída era contexto repetido","l":3133}
+{"k":"n","id":"sessao:44b","t":"sessao","f":"HANDOFF.md","txt":"44b (2026 08 13)   a linha exigida por tipo vira dado, e o Portão 1 cobra pelo nome (0113)","l":3087}
+{"k":"n","id":"sessao:45","t":"sessao","f":"HANDOFF.md","txt":"45 (2026 08 13)   o custo estava resolvido e o dado não estava: 39% de cobertura, e as três camadas","l":2998}
+{"k":"n","id":"sessao:46","t":"sessao","f":"HANDOFF.md","txt":"46 (2026 08 14)   as três camadas rodaram: 39% → 58%, truncamento zerado, e três defeitos seguidos de mecânica do n8n","l":2948}
+{"k":"n","id":"sessao:47","t":"sessao","f":"HANDOFF.md","txt":"47 (2026 08 17)   o \"Teste V45\": 19 dos 35 documentos nunca tiveram a extração chamada","l":2870}
+{"k":"n","id":"sessao:48","t":"sessao","f":"HANDOFF.md","txt":"48 (2026 08 17)   a v46 auditada contra o gabarito, dois erros de unidade, e o portal com a cara da Oria","l":2740}
+{"k":"n","id":"sessao:5","t":"sessao","f":"HANDOFF.md","txt":"5 Teste aprofundado do export (E4) com dados sintéticos mais realistas","l":6191}
+{"k":"n","id":"sessao:6","t":"sessao","f":"HANDOFF.md","txt":"6 IA sugere a seção canônica (classificação do export, N1)","l":6254}
+{"k":"n","id":"sessao:6#2","t":"sessao","f":"HANDOFF.md","txt":"6 (cont.)   Roteamento por linha: separar cada demonstração em sua aba","l":6295}
+{"k":"n","id":"sessao:7","t":"sessao","f":"HANDOFF.md","txt":"7 BUG CRÍTICO: item errado no upload em lote (conteúdo trocado entre documentos)","l":6335}
+{"k":"n","id":"sessao:7#10","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁹)   Documentos COMPARATIVOS: coluna de período (`Supabase/migrations/0017`)","l":6696}
+{"k":"n","id":"sessao:7#11","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁰)   Upload pelo portal + mandato explícito (intake amigável)","l":6728}
+{"k":"n","id":"sessao:7#12","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹¹)   \"Teste v18\" (16 docs reais, US$3): 9/16 ok, 7 falharam   2ª rodada de hardening","l":6759}
+{"k":"n","id":"sessao:7#13","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹²)   BUG CRÍTICO: upload pelo portal \"sucesso\" mas workflow nunca rodava","l":6816}
+{"k":"n","id":"sessao:7#14","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹³)   \"Teste v19\" (9 arquivos pequenos, kit sintético): confirmação de tier + 2º bug crítico","l":6855}
+{"k":"n","id":"sessao:7#15","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁴)   \"Teste v20\" (kit sintético reprocessado): 2 bugs reais + auto aceite + limpeza de export","l":6887}
+{"k":"n","id":"sessao:7#16","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁵)   \"Total informado × calculado\" divergindo mesmo em arquivo de teste + limpeza final do export","l":6954}
+{"k":"n","id":"sessao:7#17","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.¹⁶)   Tipo/período em texto natural no dashboard/planilha do documento + resumo menos redundante","l":7007}
+{"k":"n","id":"sessao:7#2","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.)   Causa raiz da fabricação de valores + guarda de segurança","l":6398}
+{"k":"n","id":"sessao:7#3","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.²)   Reforço de prompt (3 achados secundários) + confirmação do multi entidade","l":6458}
+{"k":"n","id":"sessao:7#4","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.³)   Balanço/DRE/Fluxo completos com FÓRMULAS (reescrita do export)","l":6490}
+{"k":"n","id":"sessao:7#5","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁴)   Layout analítico (margens) inspirado num modelo de FP&A real","l":6533}
+{"k":"n","id":"sessao:7#6","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁵)   Ajustes no export após o teste v12 do dono","l":6559}
+{"k":"n","id":"sessao:7#7","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁶)   Reconciliação Classe B (`Supabase/migrations/0015`)","l":6581}
+{"k":"n","id":"sessao:7#8","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁷)   BUG CRÍTICO: extração silenciosamente vazia (`Supabase/migrations/0016`)","l":6623}
+{"k":"n","id":"sessao:7#9","t":"sessao","f":"HANDOFF.md","txt":"7 (cont.⁸)   Causa real da extração vazia: rate limit (429) no upload em lote","l":6668}
+{"k":"n","id":"sessao:8","t":"sessao","f":"HANDOFF.md","txt":"8 Camada analítica + rodada de endurecimento (PRs #43 #46)","l":5944}
+{"k":"n","id":"sessao:9","t":"sessao","f":"HANDOFF.md","txt":"9 Correções do teste v24 (PRs #47 #48)","l":5891}
 {"k":"n","id":"suite:.claude/verificar-comandos.mjs","t":"suite","f":".claude/verificar-comandos.mjs","txt":"verificar comandos mjs"}
 {"k":"n","id":"suite:N8N/medir-custo-book.mjs","t":"suite","f":"N8N/medir-custo-book.mjs","txt":"medir custo book mjs"}
 {"k":"n","id":"suite:N8N/medir-fase0-denominador.mjs","t":"suite","f":"N8N/medir-fase0-denominador.mjs","txt":"medir fase0 denominador mjs"}
@@ -1645,6 +1662,17 @@
 {"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":94}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"Supabase/test/operacao.test.sql","l":35}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_resumo","f":"Supabase/test/operacao.test.sql","l":90}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/original_apagado.test.sql","l":146}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_caso_da_chave_do_storage","f":"Supabase/test/original_apagado.test.sql","l":434}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/original_apagado.test.sql","l":142}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"Supabase/test/original_apagado.test.sql","l":434}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"Supabase/test/original_apagado.test.sql","l":374}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/original_apagado.test.sql","l":415}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/original_apagado.test.sql","l":435}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_evento","f":"Supabase/test/original_apagado.test.sql","l":472}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_pode_ler_caso","f":"Supabase/test/original_apagado.test.sql","l":434}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/original_apagado.test.sql","l":150}
+{"k":"e","de":"arquivo:Supabase/test/original_apagado.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/original_apagado.test.sql","l":139}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_aplicar_premissa_em_lote","f":"Supabase/test/papel_da_linha.test.sql","l":233}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_ativar_premissa","f":"Supabase/test/papel_da_linha.test.sql","l":204}
 {"k":"e","de":"arquivo:Supabase/test/papel_da_linha.test.sql","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"Supabase/test/papel_da_linha.test.sql","l":244}
@@ -1859,12 +1887,12 @@
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Verificação/variacoes.mts","l":687}
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Verificação/variacoes.mts","l":674}
 {"k":"e","de":"arquivo:Verificação/variacoes.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"Verificação/variacoes.mts","l":776}
-{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_alocar","f":"Verificação/vistoria-por-papel.mts","l":255}
-{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_decidir_pendencia","f":"Verificação/vistoria-por-papel.mts","l":243}
-{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Verificação/vistoria-por-papel.mts","l":253}
-{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_desalocar","f":"Verificação/vistoria-por-papel.mts","l":256}
-{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"Verificação/vistoria-por-papel.mts","l":260}
-{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Verificação/vistoria-por-papel.mts","l":225}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_alocar","f":"Verificação/vistoria-por-papel.mts","l":292}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_decidir_pendencia","f":"Verificação/vistoria-por-papel.mts","l":279}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Verificação/vistoria-por-papel.mts","l":290}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_desalocar","f":"Verificação/vistoria-por-papel.mts","l":293}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"Verificação/vistoria-por-papel.mts","l":297}
+{"k":"e","de":"arquivo:Verificação/vistoria-por-papel.mts","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Verificação/vistoria-por-papel.mts","l":250}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/gerar-export-do-banco.mts","l":240}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
@@ -1886,10 +1914,10 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/scripts/verificar-kit-basico.mts","l":10}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/verificar-kit-basico.mts","l":8}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1361}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1398}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1298}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1341}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1373}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1419}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1310}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1353}
 {"k":"e","de":"arquivo:portal/scripts/verificar-modelagem-cobertura.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-modelagem-cobertura.mts","l":6}
 {"k":"e","de":"arquivo:portal/scripts/verificar-perimetro.mts","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/scripts/verificar-perimetro.mts","l":3}
 {"k":"e","de":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-premissas-do-realizado.mts","l":444}
@@ -2092,6 +2120,9 @@
 {"k":"e","de":"ficha:f2t-fontes-oficiais-e-captacao-espec12","rel":"TOCA","pa":"arquivo:Leitor/lib/zip.mjs","f":".claude/conhecimento/fichas/f2t-fontes-oficiais-e-captacao-espec12.md"}
 {"k":"e","de":"ficha:f2t-fontes-oficiais-e-captacao-espec12","rel":"TOCA","pa":"arquivo:N8N/lib/formato.mjs","f":".claude/conhecimento/fichas/f2t-fontes-oficiais-e-captacao-espec12.md"}
 {"k":"e","de":"ficha:f2t-fontes-oficiais-e-captacao-espec12","rel":"TOCA","pa":"arquivo:Supabase/migrations/0206_o_arquivo_oficial_lido_e_contado.sql","f":".claude/conhecimento/fichas/f2t-fontes-oficiais-e-captacao-espec12.md"}
+{"k":"e","de":"ficha:falha-de-envio-perdida-pela-fk-do-caso","rel":"PROVADA_POR","pa":"suite:Supabase/test/run.sh","f":".claude/conhecimento/fichas/falha-de-envio-perdida-pela-fk-do-caso.md"}
+{"k":"e","de":"ficha:falha-de-envio-perdida-pela-fk-do-caso","rel":"TOCA","pa":"arquivo:Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","f":".claude/conhecimento/fichas/falha-de-envio-perdida-pela-fk-do-caso.md"}
+{"k":"e","de":"ficha:falha-de-envio-perdida-pela-fk-do-caso","rel":"TOCA","pa":"arquivo:Supabase/test/run.sh","f":".claude/conhecimento/fichas/falha-de-envio-perdida-pela-fk-do-caso.md"}
 {"k":"e","de":"ficha:gatilho-sobrevive-sonda-catalogava-funcao","rel":"PROVADA_POR","pa":"suite:Supabase/test/run.sh","f":".claude/conhecimento/fichas/0189-gatilho-sobrevive-sonda-catalogava-funcao.md"}
 {"k":"e","de":"ficha:gatilho-sobrevive-sonda-catalogava-funcao","rel":"TOCA","pa":"arquivo:Supabase/migrations/0189_o_gatilho_que_a_sonda_nao_via.sql","f":".claude/conhecimento/fichas/0189-gatilho-sobrevive-sonda-catalogava-funcao.md"}
 {"k":"e","de":"ficha:gatilho-sobrevive-sonda-catalogava-funcao","rel":"TOCA","pa":"arquivo:Supabase/test/sonda_ve_gatilho.test.sql","f":".claude/conhecimento/fichas/0189-gatilho-sobrevive-sonda-catalogava-funcao.md"}
@@ -2121,6 +2152,10 @@
 {"k":"e","de":"ficha:n8n-nao-aguenta-baixar-execucao-grande","rel":"TOCA","pa":"arquivo:N8N/republicar.sh","f":".claude/memory/n8n-nao-aguenta-baixar-execucao-grande.md"}
 {"k":"e","de":"ficha:nunca-corrigir-funcao-por-replace","rel":"PROVADA_POR","pa":"suite:Supabase/test/run.sh","f":".claude/memory/nunca-corrigir-funcao-por-replace.md"}
 {"k":"e","de":"ficha:ordem-dos-classificadores","rel":"TOCA","pa":"arquivo:portal/src/lib/statement-templates.ts","f":".claude/memory/ordem-dos-classificadores.md"}
+{"k":"e","de":"ficha:p3-ordem-de-implantacao-portal-depois-do-n8n","rel":"TOCA","pa":"arquivo:Arquitetura do Sistema/3 Estado e Execução/DESENHO_P3_ROTEAR_POR_CASO_ID.md","f":".claude/conhecimento/fichas/p3-ordem-de-implantacao-portal-depois-do-n8n.md"}
+{"k":"e","de":"ficha:p3-ordem-de-implantacao-portal-depois-do-n8n","rel":"TOCA","pa":"arquivo:N8N/conferir-publicado.mjs","f":".claude/conhecimento/fichas/p3-ordem-de-implantacao-portal-depois-do-n8n.md"}
+{"k":"e","de":"ficha:p3-ordem-de-implantacao-portal-depois-do-n8n","rel":"TOCA","pa":"arquivo:Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","f":".claude/conhecimento/fichas/p3-ordem-de-implantacao-portal-depois-do-n8n.md"}
+{"k":"e","de":"ficha:pipe-com-tail-esconde-codigo-de-saida","rel":"TOCA","pa":"arquivo:.claude/COMANDOS-CANONICOS.md","f":".claude/conhecimento/fichas/pipe-com-tail-esconde-codigo-de-saida.md"}
 {"k":"e","de":"ficha:ponytail-auditado-nao-instalar","rel":"TOCA","pa":"arquivo:.claude/agents/migrations-postgres.md","f":".claude/conhecimento/fichas/ponytail-auditado-nao-instalar.md"}
 {"k":"e","de":"ficha:ponytail-auditado-nao-instalar","rel":"TOCA","pa":"arquivo:.claude/agents/n8n-workflow.md","f":".claude/conhecimento/fichas/ponytail-auditado-nao-instalar.md"}
 {"k":"e","de":"ficha:ponytail-auditado-nao-instalar","rel":"TOCA","pa":"arquivo:.claude/agents/portal-export.md","f":".claude/conhecimento/fichas/ponytail-auditado-nao-instalar.md"}
@@ -2147,6 +2182,9 @@
 {"k":"e","de":"ficha:republicar-sobrescreve-nome-renomeado-ao-vivo","rel":"TOCA","pa":"arquivo:N8N/preparar-republicacao.mjs","f":".claude/conhecimento/fichas/republicar-sobrescreve-nome-renomeado-ao-vivo.md"}
 {"k":"e","de":"ficha:rodape-do-export-em-linha-fixa-estoura","rel":"PROVADA_POR","pa":"suite:portal/scripts/verificar-export.mts","f":".claude/conhecimento/fichas/rodape-do-export-em-linha-fixa-estoura.md"}
 {"k":"e","de":"ficha:rodape-do-export-em-linha-fixa-estoura","rel":"TOCA","pa":"arquivo:portal/src/lib/export-modelagem.ts","f":".claude/conhecimento/fichas/rodape-do-export-em-linha-fixa-estoura.md"}
+{"k":"e","de":"ficha:runner-github-pg18-no-schema-sql","rel":"PROVADA_POR","pa":"suite:Supabase/test/run.sh","f":".claude/conhecimento/fichas/runner-github-pg18-no-schema-sql.md"}
+{"k":"e","de":"ficha:runner-github-pg18-no-schema-sql","rel":"TOCA","pa":"arquivo:.github/workflows/suites.yml","f":".claude/conhecimento/fichas/runner-github-pg18-no-schema-sql.md"}
+{"k":"e","de":"ficha:runner-github-pg18-no-schema-sql","rel":"TOCA","pa":"arquivo:Supabase/test/run.sh","f":".claude/conhecimento/fichas/runner-github-pg18-no-schema-sql.md"}
 {"k":"e","de":"ficha:servidor-velho-na-porta-mede-o-build-errado","rel":"TOCA","pa":"arquivo:portal/src/lib/export.ts","f":".claude/memory/servidor-velho-na-porta-mede-o-build-errado.md"}
 {"k":"e","de":"ficha:sessoes-paralelas-aplicam-fora-de-ordem","rel":"TOCA","pa":"arquivo:Supabase/migrations/0183_a_forma_de_controle_que_ninguem_declarava.sql","f":".claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md"}
 {"k":"e","de":"ficha:sessoes-paralelas-aplicam-fora-de-ordem","rel":"TOCA","pa":"arquivo:Supabase/test/instalacao_cobertura_nao_regride.test.sql","f":".claude/memory/sessoes-paralelas-aplicam-fora-de-ordem.md"}
@@ -2158,11 +2196,19 @@
 {"k":"e","de":"ficha:sonda-responde-pelo-banco","rel":"TOCA","pa":"arquivo:Supabase/test/run.sh","f":".claude/memory/sonda-responde-pelo-banco.md"}
 {"k":"e","de":"ficha:splicerows-desloca-enderecos","rel":"PROVADA_POR","pa":"suite:portal/scripts/verificar-export.mts","f":".claude/memory/splicerows-desloca-enderecos.md"}
 {"k":"e","de":"ficha:stack-overflow-push-arr-node22-limite-empirico","rel":"TOCA","pa":"arquivo:Arquitetura do Sistema/3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md","f":".claude/conhecimento/fichas/stack-overflow-push-arr-node22-limite-empirico.md"}
+{"k":"e","de":"ficha:storage-apaga-como-superusuario-ator-por-lista-de-permitidos","rel":"PROVADA_POR","pa":"suite:Supabase/test/run.sh","f":".claude/conhecimento/fichas/storage-apaga-como-superusuario-ator-por-lista-de-permitidos.md"}
+{"k":"e","de":"ficha:storage-apaga-como-superusuario-ator-por-lista-de-permitidos","rel":"TOCA","pa":"arquivo:Supabase/README.md","f":".claude/conhecimento/fichas/storage-apaga-como-superusuario-ator-por-lista-de-permitidos.md"}
+{"k":"e","de":"ficha:storage-apaga-como-superusuario-ator-por-lista-de-permitidos","rel":"TOCA","pa":"arquivo:Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","f":".claude/conhecimento/fichas/storage-apaga-como-superusuario-ator-por-lista-de-permitidos.md"}
+{"k":"e","de":"ficha:storage-apaga-como-superusuario-ator-por-lista-de-permitidos","rel":"TOCA","pa":"arquivo:Supabase/test/original_apagado.test.sql","f":".claude/conhecimento/fichas/storage-apaga-como-superusuario-ator-por-lista-de-permitidos.md"}
 {"k":"e","de":"ficha:teto-da-borda-recusa-antes-do-codigo","rel":"PROVADA_POR","pa":"suite:portal/scripts/verificar-limite-de-envio.mts","f":".claude/memory/teto-da-borda-recusa-antes-do-codigo.md"}
 {"k":"e","de":"ficha:teto-da-borda-recusa-antes-do-codigo","rel":"TOCA","pa":"arquivo:portal/src/components/upload-form.tsx","f":".claude/memory/teto-da-borda-recusa-antes-do-codigo.md"}
 {"k":"e","de":"ficha:teto-da-borda-recusa-antes-do-codigo","rel":"TOCA","pa":"arquivo:portal/src/lib/limite-de-envio.ts","f":".claude/memory/teto-da-borda-recusa-antes-do-codigo.md"}
 {"k":"e","de":"ficha:todo-em-portugues-vira-achado-do-sonar","rel":"TOCA","pa":"arquivo:N8N/lib/cobertura.mjs","f":".claude/memory/todo-em-portugues-vira-achado-do-sonar.md"}
 {"k":"e","de":"ficha:todo-em-portugues-vira-achado-do-sonar","rel":"TOCA","pa":"arquivo:N8N/lib/segunda-contagem.mjs","f":".claude/memory/todo-em-portugues-vira-achado-do-sonar.md"}
+{"k":"e","de":"ficha:token-v2-etiqueta-contra-colisao-com-v1","rel":"PROVADA_POR","pa":"suite:Supabase/test/run.sh","f":".claude/conhecimento/fichas/token-v2-etiqueta-contra-colisao-com-v1.md"}
+{"k":"e","de":"ficha:token-v2-etiqueta-contra-colisao-com-v1","rel":"TOCA","pa":"arquivo:N8N/lib/assinatura-do-envio.mjs","f":".claude/conhecimento/fichas/token-v2-etiqueta-contra-colisao-com-v1.md"}
+{"k":"e","de":"ficha:token-v2-etiqueta-contra-colisao-com-v1","rel":"TOCA","pa":"arquivo:Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","f":".claude/conhecimento/fichas/token-v2-etiqueta-contra-colisao-com-v1.md"}
+{"k":"e","de":"ficha:token-v2-etiqueta-contra-colisao-com-v1","rel":"TOCA","pa":"arquivo:Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","f":".claude/conhecimento/fichas/token-v2-etiqueta-contra-colisao-com-v1.md"}
 {"k":"e","de":"ficha:verificador-sem-controle-positivo","rel":"TOCA","pa":"arquivo:Supabase/test/medicao-denominador.test.mjs","f":".claude/memory/verificador-sem-controle-positivo.md"}
 {"k":"e","de":"ficha:verificador-sem-controle-positivo","rel":"TOCA","pa":"arquivo:Supabase/test/sonda-producao.mjs","f":".claude/memory/verificador-sem-controle-positivo.md"}
 {"k":"e","de":"migration:0004","rel":"CRIA","pa":"fn:fn_recomputar_completude","f":"Supabase/migrations/0004_funcoes_e1.sql","l":131}
@@ -2645,6 +2691,8 @@
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":63}
 {"k":"e","de":"migration:0222","rel":"CRIA","pa":"fn:fn_registrar_falha_execucao","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","l":96}
 {"k":"e","de":"migration:0223","rel":"CRIA","pa":"fn:fn_conferir_envio","f":"Supabase/migrations/0223_o_token_v1_que_ainda_entrava_por_nome.sql","l":37}
+{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_historico_do_caso","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":367}
+{"k":"e","de":"migration:0224","rel":"CRIA","pa":"fn:fn_trg_auditar_original_apagado","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","l":123}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
@@ -2711,295 +2759,302 @@
 {"k":"e","de":"portao:Suíte e2e (extração → banco → export)","rel":"RODA","pa":"arquivo:Verificação/run.mts","f":".github/workflows/suites.yml","l":657}
 {"k":"e","de":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","rel":"RODA","pa":"arquivo:.claude/conhecimento/conferir.mjs","f":".github/workflows/suites.yml","l":232}
 {"k":"e","de":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","rel":"RODA","pa":"arquivo:.claude/conhecimento/indexar.mjs","f":".github/workflows/suites.yml","l":232}
-{"k":"e","de":"sessao:10","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5783}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0004","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0017","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0109","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0116","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0118","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0123","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0125","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0127","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0128","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0129","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0130","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0131","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0132","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0133","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0134","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0135","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0136","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0137","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0138","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0139","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0140","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0141","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0142","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0143","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0144","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0145","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0146","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0147","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0148","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0149","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0150","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0151","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0152","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0153","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0154","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0155","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0156","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0157","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0158","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0159","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0160","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0161","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0162","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0163","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0164","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0165","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0166","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0167","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0168","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0169","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0170","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0171","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0172","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0173","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0174","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0175","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0176","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0177","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0178","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0179","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0180","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0181","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0182","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0183","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0186","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0187","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0188","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0189","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0190","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0191","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0192","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0193","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0194","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0195","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0196","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0197","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0198","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0199","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0201","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0205","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0222","f":"HANDOFF.md","l":44}
-{"k":"e","de":"sessao:108","rel":"CITA","pa":"migration:0207","f":"HANDOFF.md","l":40}
-{"k":"e","de":"sessao:11","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5730}
-{"k":"e","de":"sessao:11","rel":"CITA","pa":"migration:0024","f":"HANDOFF.md","l":5730}
-{"k":"e","de":"sessao:13","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5652}
-{"k":"e","de":"sessao:14","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5594}
-{"k":"e","de":"sessao:14","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5594}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0004","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0007","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0008","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":5538}
-{"k":"e","de":"sessao:16","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5472}
-{"k":"e","de":"sessao:17","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5375}
-{"k":"e","de":"sessao:17","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":5375}
-{"k":"e","de":"sessao:18","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":5303}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0022","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0029","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":4995}
-{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4829}
-{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":4829}
-{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":4829}
-{"k":"e","de":"sessao:21","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":4725}
-{"k":"e","de":"sessao:21","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":4725}
-{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":4628}
-{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":4628}
-{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0035","f":"HANDOFF.md","l":4628}
-{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":4542}
-{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0035","f":"HANDOFF.md","l":4542}
-{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4542}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":4433}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":4433}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":4433}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4433}
-{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":4433}
-{"k":"e","de":"sessao:25","rel":"CITA","pa":"migration:0027","f":"HANDOFF.md","l":4336}
-{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4245}
-{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":4245}
-{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":4245}
-{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4174}
-{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":4174}
-{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":4174}
-{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":4174}
-{"k":"e","de":"sessao:29","rel":"CITA","pa":"migration:0040","f":"HANDOFF.md","l":3999}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0029","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0040","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0041","f":"HANDOFF.md","l":3885}
-{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7298}
-{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":7298}
-{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0043","f":"HANDOFF.md","l":7298}
-{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":7298}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":7365}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":7365}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7365}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":7365}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":7365}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0043","f":"HANDOFF.md","l":7365}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":7365}
-{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7365}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":7471}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":7471}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":7471}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":7471}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7471}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7471}
-{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7471}
-{"k":"e","de":"sessao:34","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7627}
-{"k":"e","de":"sessao:34","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7627}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":7726}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7726}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7726}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7726}
-{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":7726}
-{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7824}
-{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7824}
-{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7824}
-{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":7824}
-{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":7961}
-{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":7961}
-{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":7961}
-{"k":"e","de":"sessao:38","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":8091}
-{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":8243}
-{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":8243}
-{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":8243}
-{"k":"e","de":"sessao:40","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3771}
-{"k":"e","de":"sessao:40","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3771}
-{"k":"e","de":"sessao:40c","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3706}
-{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3652}
-{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3652}
-{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":3652}
-{"k":"e","de":"sessao:40e","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3612}
-{"k":"e","de":"sessao:40e","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3612}
-{"k":"e","de":"sessao:40f","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":3564}
-{"k":"e","de":"sessao:40f","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":3564}
-{"k":"e","de":"sessao:40g","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":3520}
-{"k":"e","de":"sessao:40h","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":3465}
-{"k":"e","de":"sessao:41","rel":"CITA","pa":"migration:0106","f":"HANDOFF.md","l":3411}
-{"k":"e","de":"sessao:41","rel":"CITA","pa":"migration:0107","f":"HANDOFF.md","l":3411}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3314}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0106","f":"HANDOFF.md","l":3314}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0107","f":"HANDOFF.md","l":3314}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":3314}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0109","f":"HANDOFF.md","l":3314}
-{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":3314}
-{"k":"e","de":"sessao:44","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":3115}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":3069}
-{"k":"e","de":"sessao:47","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2852}
-{"k":"e","de":"sessao:47","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2852}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":2722}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0027","f":"HANDOFF.md","l":2722}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2722}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2722}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":2722}
-{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0114","f":"HANDOFF.md","l":2722}
-{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6173}
-{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0003","f":"HANDOFF.md","l":6173}
-{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":6173}
-{"k":"e","de":"sessao:6","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6236}
-{"k":"e","de":"sessao:6","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":6236}
-{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6678}
-{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0014","f":"HANDOFF.md","l":6678}
-{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6678}
-{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0017","f":"HANDOFF.md","l":6678}
-{"k":"e","de":"sessao:7#11","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6710}
-{"k":"e","de":"sessao:7#12","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":6741}
-{"k":"e","de":"sessao:7#13","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6798}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":6869}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0008","f":"HANDOFF.md","l":6869}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6869}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0018","f":"HANDOFF.md","l":6869}
-{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":6869}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0007","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":6989}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6380}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6380}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6380}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6380}
-{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":6380}
-{"k":"e","de":"sessao:7#3","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":6440}
-{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6563}
-{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":6563}
-{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0014","f":"HANDOFF.md","l":6563}
-{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0015","f":"HANDOFF.md","l":6563}
-{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6605}
-{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6605}
-{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":6605}
-{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6605}
-{"k":"e","de":"sessao:7#9","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6650}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0018","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0020","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0021","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0024","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5926}
-{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5873}
-{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0020","f":"HANDOFF.md","l":5873}
-{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0022","f":"HANDOFF.md","l":5873}
+{"k":"e","de":"sessao:10","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5801}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0004","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0017","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0109","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0116","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0118","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0123","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0125","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0127","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0128","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0129","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0130","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0131","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0132","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0133","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0134","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0135","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0136","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0137","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0138","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0139","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0140","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0141","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0142","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0143","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0144","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0145","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0146","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0147","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0148","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0149","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0150","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0151","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0152","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0153","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0154","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0155","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0156","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0157","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0158","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0159","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0160","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0161","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0162","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0163","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0164","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0165","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0166","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0167","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0168","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0169","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0170","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0171","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0172","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0173","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0174","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0175","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0176","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0177","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0178","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0179","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0180","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0181","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0182","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0183","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0186","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0187","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0188","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0189","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0190","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0191","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0192","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0193","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0194","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0195","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0196","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0197","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0198","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0199","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0201","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0205","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:107","rel":"CITA","pa":"migration:0222","f":"HANDOFF.md","l":62}
+{"k":"e","de":"sessao:108","rel":"CITA","pa":"migration:0207","f":"HANDOFF.md","l":58}
+{"k":"e","de":"sessao:11","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5748}
+{"k":"e","de":"sessao:11","rel":"CITA","pa":"migration:0024","f":"HANDOFF.md","l":5748}
+{"k":"e","de":"sessao:113","rel":"CITA","pa":"migration:0206","f":"HANDOFF.md","l":25}
+{"k":"e","de":"sessao:113","rel":"CITA","pa":"migration:0207","f":"HANDOFF.md","l":25}
+{"k":"e","de":"sessao:113","rel":"CITA","pa":"migration:0216","f":"HANDOFF.md","l":25}
+{"k":"e","de":"sessao:117","rel":"CITA","pa":"migration:0221","f":"HANDOFF.md","l":16}
+{"k":"e","de":"sessao:117","rel":"CITA","pa":"migration:0222","f":"HANDOFF.md","l":16}
+{"k":"e","de":"sessao:117","rel":"CITA","pa":"migration:0223","f":"HANDOFF.md","l":16}
+{"k":"e","de":"sessao:117","rel":"CITA","pa":"migration:0224","f":"HANDOFF.md","l":16}
+{"k":"e","de":"sessao:13","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5670}
+{"k":"e","de":"sessao:14","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5612}
+{"k":"e","de":"sessao:14","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5612}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0004","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0007","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0008","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:15","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":5556}
+{"k":"e","de":"sessao:16","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5490}
+{"k":"e","de":"sessao:17","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5393}
+{"k":"e","de":"sessao:17","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":5393}
+{"k":"e","de":"sessao:18","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":5321}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0022","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0029","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:19","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":5013}
+{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0030","f":"HANDOFF.md","l":4847}
+{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":4847}
+{"k":"e","de":"sessao:20","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":4847}
+{"k":"e","de":"sessao:21","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":4743}
+{"k":"e","de":"sessao:21","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":4743}
+{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":4646}
+{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":4646}
+{"k":"e","de":"sessao:22","rel":"CITA","pa":"migration:0035","f":"HANDOFF.md","l":4646}
+{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":4560}
+{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0035","f":"HANDOFF.md","l":4560}
+{"k":"e","de":"sessao:23","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4560}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":4451}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":4451}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":4451}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4451}
+{"k":"e","de":"sessao:24","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":4451}
+{"k":"e","de":"sessao:25","rel":"CITA","pa":"migration:0027","f":"HANDOFF.md","l":4354}
+{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4263}
+{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":4263}
+{"k":"e","de":"sessao:26","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":4263}
+{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":4192}
+{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":4192}
+{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":4192}
+{"k":"e","de":"sessao:27","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":4192}
+{"k":"e","de":"sessao:29","rel":"CITA","pa":"migration:0040","f":"HANDOFF.md","l":4017}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0029","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0040","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:30","rel":"CITA","pa":"migration:0041","f":"HANDOFF.md","l":3903}
+{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7316}
+{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":7316}
+{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0043","f":"HANDOFF.md","l":7316}
+{"k":"e","de":"sessao:31","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":7316}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":7383}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":7383}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7383}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0039","f":"HANDOFF.md","l":7383}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":7383}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0043","f":"HANDOFF.md","l":7383}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":7383}
+{"k":"e","de":"sessao:32","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7383}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":7489}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":7489}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0042","f":"HANDOFF.md","l":7489}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0044","f":"HANDOFF.md","l":7489}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7489}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7489}
+{"k":"e","de":"sessao:33","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7489}
+{"k":"e","de":"sessao:34","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7645}
+{"k":"e","de":"sessao:34","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7645}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":7744}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":7744}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7744}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7744}
+{"k":"e","de":"sessao:35","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":7744}
+{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0100","f":"HANDOFF.md","l":7842}
+{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0101","f":"HANDOFF.md","l":7842}
+{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0102","f":"HANDOFF.md","l":7842}
+{"k":"e","de":"sessao:36","rel":"CITA","pa":"migration:0103","f":"HANDOFF.md","l":7842}
+{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0036","f":"HANDOFF.md","l":7979}
+{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":7979}
+{"k":"e","de":"sessao:37","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":7979}
+{"k":"e","de":"sessao:38","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":8109}
+{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0038","f":"HANDOFF.md","l":8261}
+{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":8261}
+{"k":"e","de":"sessao:39","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":8261}
+{"k":"e","de":"sessao:40","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3789}
+{"k":"e","de":"sessao:40","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3789}
+{"k":"e","de":"sessao:40c","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3724}
+{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3670}
+{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3670}
+{"k":"e","de":"sessao:40d","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":3670}
+{"k":"e","de":"sessao:40e","rel":"CITA","pa":"migration:0104","f":"HANDOFF.md","l":3630}
+{"k":"e","de":"sessao:40e","rel":"CITA","pa":"migration:0105","f":"HANDOFF.md","l":3630}
+{"k":"e","de":"sessao:40f","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":3582}
+{"k":"e","de":"sessao:40f","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":3582}
+{"k":"e","de":"sessao:40g","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":3538}
+{"k":"e","de":"sessao:40h","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":3483}
+{"k":"e","de":"sessao:41","rel":"CITA","pa":"migration:0106","f":"HANDOFF.md","l":3429}
+{"k":"e","de":"sessao:41","rel":"CITA","pa":"migration:0107","f":"HANDOFF.md","l":3429}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0037","f":"HANDOFF.md","l":3332}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0106","f":"HANDOFF.md","l":3332}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0107","f":"HANDOFF.md","l":3332}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":3332}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0109","f":"HANDOFF.md","l":3332}
+{"k":"e","de":"sessao:42","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":3332}
+{"k":"e","de":"sessao:44","rel":"CITA","pa":"migration:0026","f":"HANDOFF.md","l":3133}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0031","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0033","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0034","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0108","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0110","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:44b","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":3087}
+{"k":"e","de":"sessao:47","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2870}
+{"k":"e","de":"sessao:47","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2870}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":2740}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0027","f":"HANDOFF.md","l":2740}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0111","f":"HANDOFF.md","l":2740}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0112","f":"HANDOFF.md","l":2740}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0113","f":"HANDOFF.md","l":2740}
+{"k":"e","de":"sessao:48","rel":"CITA","pa":"migration:0114","f":"HANDOFF.md","l":2740}
+{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6191}
+{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0003","f":"HANDOFF.md","l":6191}
+{"k":"e","de":"sessao:5","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":6191}
+{"k":"e","de":"sessao:6","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6254}
+{"k":"e","de":"sessao:6","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":6254}
+{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6696}
+{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0014","f":"HANDOFF.md","l":6696}
+{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6696}
+{"k":"e","de":"sessao:7#10","rel":"CITA","pa":"migration:0017","f":"HANDOFF.md","l":6696}
+{"k":"e","de":"sessao:7#11","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6728}
+{"k":"e","de":"sessao:7#12","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":6759}
+{"k":"e","de":"sessao:7#13","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6816}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":6887}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0008","f":"HANDOFF.md","l":6887}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6887}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0018","f":"HANDOFF.md","l":6887}
+{"k":"e","de":"sessao:7#15","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":6887}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0007","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0011","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0028","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#17","rel":"CITA","pa":"migration:0032","f":"HANDOFF.md","l":7007}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6398}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6398}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0006","f":"HANDOFF.md","l":6398}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":6398}
+{"k":"e","de":"sessao:7#2","rel":"CITA","pa":"migration:0012","f":"HANDOFF.md","l":6398}
+{"k":"e","de":"sessao:7#3","rel":"CITA","pa":"migration:0002","f":"HANDOFF.md","l":6458}
+{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6581}
+{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":6581}
+{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0014","f":"HANDOFF.md","l":6581}
+{"k":"e","de":"sessao:7#7","rel":"CITA","pa":"migration:0015","f":"HANDOFF.md","l":6581}
+{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":6623}
+{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0005","f":"HANDOFF.md","l":6623}
+{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0013","f":"HANDOFF.md","l":6623}
+{"k":"e","de":"sessao:7#8","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6623}
+{"k":"e","de":"sessao:7#9","rel":"CITA","pa":"migration:0016","f":"HANDOFF.md","l":6668}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0009","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0010","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0018","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0019","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0020","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0021","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0024","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:8","rel":"CITA","pa":"migration:0025","f":"HANDOFF.md","l":5944}
+{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0001","f":"HANDOFF.md","l":5891}
+{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0020","f":"HANDOFF.md","l":5891}
+{"k":"e","de":"sessao:9","rel":"CITA","pa":"migration:0022","f":"HANDOFF.md","l":5891}

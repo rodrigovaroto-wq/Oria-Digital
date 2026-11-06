@@ -26,6 +26,8 @@ mandato, e as pendências conhecidas do portal.
 > **Premissa deste plano, para o dono corrigir:** **5 sessões por semana**, 30 fatias em 6 semanas.
 > Com outro ritmo, a ordem não muda; muda só a data em que cada fatia acontece.
 
+> **Atualizado em 06/11/2026 (sessão 118):** 0224 (D16) aplicada; resíduo e mandatos da S117 limpos; vistoria refeita igual. Próxima fatia: P4.
+>
 > **Atualizado em 04/11/2026 (sessão 117, fim):** P1 ✅, P1b ✅, P1c ✅, P2 ✅, P3 ✅. Atraso de ~3 sessões. O fim das 30
 > fatias passa de 11/12 para **~18/12**. Detalhe na seção da sessão 117 do `ESTADO.md`.
 
@@ -215,8 +217,8 @@ para cima ou para baixo.
 | **D3** | Pendência "aceita com ressalva" deve segurar o fechamento do perímetro? (hoje não segura) | (a) | 15/10 |
 | **D4** | `caso_pergunta` na fusão de entidades (FK `NO ACTION`: hoje a fusão falha alto) | (a) | 15/10 |
 | **D5** | B3, a autonomia: dois estágios rodam em N2 `declarada` sem concordância medida | Etapa (d) declarar confiança alta | 20/08 |
-| **D6** | Autorizar as rodadas pagas de regressão (P10, P15; cada book ≤ US$ 5) | P10, P15 | — |
-| **D7** | Atualizar o secret `N8N_API_KEY` do GitHub (a Action de republicação dá 401) | Republicar pela Action | 15/10 |
+| **D6** ✅ 04/11 | **Autorizadas** as rodadas pagas de regressão (P10, P15), com teto de **US$ 5 por book**. Vale também para a P4 (linha de base da F3) | — | — |
+| **D7** ✅ 04/11 | **Caiu: a chave já estava configurada.** A Action `republicar.yml` em modo ensaio leu os 59 nós com o secret atual (04/11) | — | 15/10 |
 | **D8** | SMTP próprio no Supabase, para o e-mail de recuperação abrir em qualquer aparelho e sair em português | P20 sem a limitação | 30/10 |
 | **D9** | Área do cliente: o cliente envia só contra o Kit Básico ou qualquer documento? Vê o andamento por item ou só o percentual? | P21 | — |
 | **D10** | Multiempresa: escopo da primeira versão (uma organização por usuário ou várias) | P21 | — |
@@ -224,5 +226,5 @@ para cima ou para baixo.
 | **D12** | Cortes de covenant (hoje 3,0x de alavancagem, 1,2x de DSCR, 1,0x de liquidez) | Book de comitê | sessão 38 |
 | **D13** | Integra Contador (D12.3, aguarda cotação) e a etapa jurídica da F2T (termo, RIPD, procuração só de consulta) | F2T captação | 13/10 |
 | **D14** | Os 3 ECDs reais anonimizados para a onda 1 da F2T com dado real | F2T onda 1 real | 13/10 |
-| **D15** | Aprovar o critério de "confiança alta" da seção 2 | Portão da etapa (d) | 30/10 |
-| **D16** | O Analista apaga o original do cliente sem trilha? (D3 do `VISTORIA_P2.md`) | P16 | 04/11 |
+| **D15** ✅ 04/11 | **Aprovado o critério conservador:** a tabela da seção 2, como está | — | 30/10 |
+| **D16** ✅ 04/11 | **Permitir e auditar:** o Analista continua podendo apagar o original, e toda exclusão grava `documento_original_apagado` com o ator e aparece no Histórico. Implementado pela migration **0224, aplicada em 06/11** (sete revisões independentes; prova real: exclusão da Analista gravada com o e-mail dela) | — | 04/11 |
