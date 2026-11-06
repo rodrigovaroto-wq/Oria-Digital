@@ -1928,7 +1928,7 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/scripts/verificar-export.mts","l":4392}
 {"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/scripts/verificar-export.mts","l":5989}
 {"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-export.mts","l":4177}
-{"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_descricao_extracao_falhou","f":"portal/scripts/verificar-kit-basico.mts","l":364}
+{"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_descricao_extracao_falhou","f":"portal/scripts/verificar-kit-basico.mts","l":362}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/scripts/verificar-kit-basico.mts","l":10}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/verificar-kit-basico.mts","l":8}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}

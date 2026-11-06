@@ -330,7 +330,7 @@ console.log("9. a média dos exercícios");
   // P16 (vistoria P2, 04/11): a tela mostrou "88%" ao lado de "(101.300 ÷ 106.580)", que dá 95%.
   // O número e a conta à vista têm de falar da MESMA coisa: se há par, ele divide no valor.
   const divideNoValor = (x: typeof cv) =>
-    !x.numerador || !x.denominador || perto(Math.abs(x.numerador.valor / x.denominador.valor), x.valor ?? NaN);
+    !x.numerador || !x.denominador || perto(Math.abs(x.numerador.valor / x.denominador.valor), x.valor ?? Number.NaN);
   ok(divideNoValor(cv), "na média, nenhum par numerador ÷ denominador que não divida no valor mostrado",
      `${cv.numerador?.valor} ÷ ${cv.denominador?.valor} vs ${cv.valor}`);
 

@@ -374,8 +374,7 @@ export interface FalhaDeExtracaoNaTela {
   tecnico: string | null;
 }
 
-export function falhaDeExtracaoNaTela(descricao: string | null): FalhaDeExtracaoNaTela {
-  const texto = descricao ?? "";
+export function falhaDeExtracaoNaTela(texto: string): FalhaDeExtracaoNaTela {
   const i = texto.indexOf(" Motivo: ");
   if (i < 0) return { frase: texto, motivo: null, tecnico: null };
   const motivo = texto.slice(i + " Motivo: ".length).trim();

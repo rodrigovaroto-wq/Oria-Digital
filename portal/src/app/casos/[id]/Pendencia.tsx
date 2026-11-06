@@ -65,7 +65,8 @@ export function ItemPendencia({
   // A EXTRAÇÃO QUE FALHOU (P16): a mensagem do provedor, em inglês, vai para "Detalhes técnicos";
   // fica à vista a frase do banco (que nomeia o arquivo) e o que fazer.
   const falha = p.tipo === "extracao_falhou" ? falhaDeExtracaoNaTela(traduzida) : null;
-  const bruto = falha ? (falha.motivo ? `${falha.frase} Motivo: ${falha.motivo}` : falha.frase) : traduzida;
+  let bruto = traduzida;
+  if (falha) bruto = falha.motivo ? `${falha.frase} Motivo: ${falha.motivo}` : falha.frase;
   const rotulos = rotulosCitados(bruto);
   const partes = partesDaDescricao(suavizarMensagem(semALista(bruto)));
 
