@@ -125,7 +125,12 @@ export function ItemPendencia({
               `title=`, que não existe no toque e some antes de ser lido: quem clicava
               em "Prosseguir sem resolução" descobria o que tinha feito DEPOIS. */}
           {BOTOES_DECISAO.map((b) => (
-            <FormDeAcao key={b.decisao} action={decidirPendencia.bind(null, casoId, p.id, b.decisao)} className="max-w-[15rem]">
+            <FormDeAcao
+              key={b.decisao}
+              action={decidirPendencia.bind(null, casoId, p.id, b.decisao)}
+              confirmacao={b.confirmacao && { ...b.confirmacao, efeito: b.efeito }}
+              className="max-w-[15rem]"
+            >
               <button
                 type="submit"
                 className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors ${b.classe}`}

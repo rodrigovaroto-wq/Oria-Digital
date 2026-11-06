@@ -48,6 +48,7 @@ import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../sr
 import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
 import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
 import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
+import { BOTOES_DECISAO, exigeConfirmacao } from "../src/lib/pendencia.ts";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
 
 let falhas = 0;
@@ -296,6 +297,18 @@ console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista fil
   const comAusente = resumoDoLote(2, [], ["Q9"]);
   ok(comAusente.startsWith("2 registradas; 1 não registrada") && comAusente.includes("Q9") && !comAusente.includes("como enviadas"),
     "lote: pergunta fora do texto editado nunca vira 'tudo certo'", comAusente);
+}
+
+// 7. P16 (vistoria P2, ALTA 1): decisão que tira a pendência da fila pergunta antes de gravar.
+//    "Prosseguir sem resolução" aceitava pendência que trava a aprovação num toque. Contatar o
+//    cliente não tira nada da fila e continua num clique só — confirmar tudo vira ruído.
+{
+  console.log("\n7. Decisão de pendência que libera o mandato pede confirmação");
+  ok(exigeConfirmacao("prosseguir"), "prosseguir sem resolução pede confirmação");
+  ok(exigeConfirmacao("nao_procede"), "não procede pede confirmação");
+  ok(!exigeConfirmacao("contatar_cliente"), "contatar o cliente grava direto (não libera nada)");
+  ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWith("?") && b.confirmacao.sim.length > 0)),
+    "toda confirmação traz pergunta e um botão de sim com texto");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);
