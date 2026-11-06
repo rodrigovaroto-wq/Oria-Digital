@@ -4,7 +4,16 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 117 — COMECE AQUI (04/11/2026; parada pelo dono, continua em outra sessão)
+## ▶ SESSÃO 118 — COMECE AQUI (06/11/2026)
+
+- **Leia a seção "SESSÃO 118" no topo do `ESTADO.md`.** A RETOMADA da S117 está resolvida.
+- **Produção:** última migration aplicada **0224** (D16, auditoria de exclusão de original; sonda 331/331). n8n de ingestão sem mudança. Portal no deploy de `26ec556`; o PR #273 traz o rótulo do Histórico para os atores novos, e ele só aparece no portal depois do deploy desse merge.
+- **PR [#273](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/273):** o Sonar do #271, a 0224 (sete revisões até 0 achado), as fichas da S117 e da S118 e as decisões D6/D7/D15/D16 no plano. O #269 foi fechado sem merge.
+- **Limpo:** os 2 mandatos da S117 e os 7 objetos deles. Os 3 usuários de teste ficam até a P20. As senhas foram redefinidas na S118 e estavam só no scratchpad daquela sessão: redefina de novo se precisar.
+- **Decisão pendente do dono:** desligar o protocolo S3 do Storage no painel (ninguém o usa; pelo S3 a exclusão sai sem pessoa identificada).
+- **Próximo:** P4 (linha de base da F3), teto de US$ 5 por book.
+
+## SESSÃO 117 (04/11/2026; histórico, a mais nova está acima)
 
 - **Leia primeiro a seção "RETOMADA" no topo do `ESTADO.md`**: tem o que foi verificado em produção, as decisões do dono e a lista numerada do que parou no meio. Este cabeçalho só aponta para lá.
 - **PR aberto: [#273](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/273)** (rascunho, NÃO mergear ainda), branch `claude/awesome-lovelace-6tgste`, sobre a `main` em `26ec556`. Traz o Sonar do #271 corrigido (`5f6f230`) e a **0224 (D16) escrita, NÃO revisada, NÃO aplicada** (`378f3fe`). O CI `banco` deve estar vermelho: `Supabase/schema.sql` pode ter ficado parcial porque o `run.sh` foi interrompido.
