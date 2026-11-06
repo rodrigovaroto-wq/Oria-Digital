@@ -2636,10 +2636,13 @@ begin
       v_estado := 'aceita_com_ressalva';  v_rotulo := 'Prosseguir sem resolução'; v_tipo := 'ressalva';
     when 'nao_procede' then
       v_estado := 'rejeitada';            v_rotulo := 'Pendência não procede'; v_tipo := 'override';
+    -- 0225: a volta. Sem `decisao` (v_tipo nulo): nenhum decisao_tipo existente diz "reabri", ver o cabeçalho.
+    when 'reabrir' then
+      v_estado := 'aberta';               v_rotulo := 'Reaberta'; v_tipo := null;
     else
       return jsonb_build_object('recusado', true, 'pendencia_id', p_pendencia_id,
-        'motivo_recusa', format('Decisão desconhecida: %s. São três — contatar_cliente, '
-                                'prosseguir, nao_procede.', p_decisao));
+        'motivo_recusa', format('Decisão desconhecida: %s. São quatro — contatar_cliente, '
+                                'prosseguir, nao_procede, reabrir.', p_decisao));
   end case;
 
   -- Clicar de novo no mesmo botão é no-op declarado: dois cliques não viram
@@ -2685,7 +2688,9 @@ begin
     values (p_autor, 'pendencia_decidida', 'pendencia:'||p_pendencia_id,
             jsonb_build_object('estado', v_p.estado),
             jsonb_build_object('estado', v_estado, 'rotulo', v_rotulo,
-                               'caso_id', v_p.caso_id, 'motivo', v_motivo));
+                               'caso_id', v_p.caso_id, 'motivo', v_motivo,
+                               -- 0225: reabrir uma pendência JÁ DECIDIDA desfaz uma decisão que fica na trilha (a `decisao` antiga não se apaga).
+                               'reverte_decisao', p_decisao = 'reabrir' and v_p.estado in ('aceita_com_ressalva', 'rejeitada')));
 
   return jsonb_build_object('decidida', true, 'pendencia_id', p_pendencia_id,
                             'estado', v_estado, 'rotulo', v_rotulo,
@@ -2697,7 +2702,7 @@ $$;
 -- Name: FUNCTION fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) IS 'Os três botões da tela em UMA função: contatar_cliente (não libera o portão — o documento ainda não chegou), prosseguir (aceita com ressalva) e nao_procede (rejeita). Sem motivo obrigatório, sem expiração e sem teto, por decisão do dono (0109). Nada é apagado e tudo é contado.';
+COMMENT ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) IS 'Os botões da tela em UMA função: contatar_cliente (não libera o portão), prosseguir (aceita com ressalva), nao_procede (rejeita) e, desde a 0225, reabrir (volta a aberta; de resolvida é recusado). Sem motivo obrigatório, sem expiração e sem teto, por decisão do dono (0109). Nada é apagado e tudo é contado.';
 
 --
 -- Name: fn_definir_modelagem(uuid, text, integer, text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -14696,6 +14701,12 @@ begin
     raise exception 'documento % não encontrado', p_documento_id;
   end if;
 
+  -- 0224: sem tipo não há o que confirmar. Fica ANTES de qualquer escrita (entidade/período novos também gravam).
+  if coalesce(p_novo_tipo_taxonomia, v_tipo_antigo) is null then
+    return jsonb_build_object('recusado', true, 'documento_id', p_documento_id,
+      'motivo_recusa', 'Escolha o tipo do documento antes de confirmar: sem tipo não há o que confirmar.');
+  end if;
+
   if p_nova_entidade_nome is not null and length(trim(p_nova_entidade_nome)) > 0 then
     select id into v_entidade_id from entidade
       where caso_id = v_caso_id and lower(razao_social) = lower(p_nova_entidade_nome) limit 1;
@@ -14764,6 +14775,12 @@ begin
   return jsonb_build_object('documento_id', p_documento_id, 'tipo_taxonomia', v_tipo_final, 'mudou_tipo', v_mudou_tipo);
 end;
 $$;
+
+--
+-- Name: FUNCTION fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text) IS '0224 (sobre a 0018): confirma/corrige a classificação do documento. Sem tipo final (novo nem antigo) devolve {recusado, documento_id, motivo_recusa} e não grava nada. Com tipo: grava documento (confiança 1.0, fonte humano), refaz o checklist, registra decisão e evento, e fecha as pendências de revisão do documento.';
 
 --
 -- Name: fn_rotulo_contido(text, text); Type: FUNCTION; Schema: public; Owner: -

@@ -15,7 +15,7 @@
 // quem pode resolvê-lo (o cliente), depois o que segue apesar dele, por último o
 // que nega que ele exista. Do mais reversível para o menos, que é a ordem em que
 // se deve pensar — e a ordem em que um botão apressado faz menos estrago.
-export type DecisaoPendencia = "contatar_cliente" | "prosseguir" | "nao_procede";
+export type DecisaoPendencia = "contatar_cliente" | "prosseguir" | "nao_procede" | "reabrir";
 
 export interface BotaoDecisao {
   decisao: DecisaoPendencia;

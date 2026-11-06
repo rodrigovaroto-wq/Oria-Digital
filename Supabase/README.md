@@ -1103,6 +1103,18 @@ supabase db execute --file Supabase/migrations/0223_o_token_v1_que_ainda_entrava
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0223' and not presente;   -- ZERO linhas
 
+# A 0224 (P16, VISTORIA_P2 §6 ALTA 1) faz fn_revisar_documento RECUSAR a confirmação de documento SEM tipo (novo nem antigo): devolve {recusado, documento_id, motivo_recusa} e não grava nada (antes gravava confiança 1.0 / fonte humano: "100% · Humano" num .txt que ninguém classificou). Mesma assinatura e ACL. Acrescenta o requisito revisar_documento_recusa_sem_tipo à sonda. O portal (pendencias/actions.ts) ainda ignora o retorno: sem tratar `recusado` a tela mostra sucesso.
+# >>> Rodar COMO `postgres`; idempotente. Teste: Supabase/test/revisar_documento_sem_tipo.test.sql.
+supabase db execute --file Supabase/migrations/0224_o_documento_sem_tipo_que_virava_cem_por_cento_humano.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0224' and not presente;   -- ZERO linhas
+
+# A 0225 (P16, VISTORIA_P2 §6 ALTA 1) acrescenta a decisão 'reabrir' a fn_decidir_pendencia: a pendência decidida (Contatar o Cliente / Prosseguir / Não procede) volta a `aberta` e o Portão 2 volta a contá-la como bloqueante. Os três ramos da 0109 não mudam. Sem `decisao` na reversão (nenhum decisao_tipo a descreve); o evento_auditoria carrega antes->depois e reverte_decisao. Acrescenta o requisito pendencia_decidir_reabrir.
+# >>> Rodar COMO `postgres`; idempotente. Teste: Supabase/test/pendencia_reabrir.test.sql.
+supabase db execute --file Supabase/migrations/0225_a_pendencia_decidida_que_nao_tinha_volta.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0225' and not presente;   -- ZERO linhas
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

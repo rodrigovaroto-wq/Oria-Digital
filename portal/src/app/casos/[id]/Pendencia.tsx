@@ -175,6 +175,17 @@ export function ItemPendencia({
               decisão sobre problema medido, e a aba é o que ainda não foi
               perguntado. As duas continuam separadas — o que se acrescenta é o
               caminho de uma para a outra. */}
+          {/* REABRIR (0225): a decisão tinha ida e não tinha volta — a vistoria de 04/11 deixou
+              pendências presas em "Contatar o Cliente". Volta a "em aberto"; a decisão anterior fica
+              na trilha (evento_auditoria), e a que travava volta a travar o Portão 2. */}
+          {p.estado && ["reenviada_ao_cliente", "aceita_com_ressalva", "rejeitada"].includes(p.estado) && (
+            <FormDeAcao action={decidirPendencia.bind(null, casoId, p.id, "reabrir")} className="max-w-[15rem]">
+              <button type="submit" className="rounded-md border border-tinta-300 bg-folha px-2.5 py-1.5 text-xs font-semibold text-tinta-800 transition-colors hover:bg-tinta-50">
+                Reabrir pendência
+              </button>
+              <p className={`mt-1 text-xs leading-snug ${cores.fraco}`}>Volta para em aberto. A decisão anterior fica na trilha.</p>
+            </FormDeAcao>
+          )}
           {p.estado === "reenviada_ao_cliente" && (
             <Link
               href={`/casos/${casoId}/perguntas`}
