@@ -705,6 +705,7 @@ const marcacoes: Array<[string, RegExp, string]> = [
   ["app/casos/[id]/modelagem/SecaoLinhas.tsx", /valor-sensivel[^>]*>\{fmt\.format\(l\.valor_ultimo\)/, "valor das linhas da Modelagem"],
   ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", /valor-sensivel[^>]*>\{mostrado\}/, "premissa sugerida do realizado"],
   ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", /valor-sensivel[^>]*>\s*\(\{num\(/, "numerador e denominador da sugestão"],
+  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", /valor-sensivel[^>]*>\s*\(\{p\.serie!\.map/, "razão de cada exercício da média (P16)"],
   ["app/casos/[id]/modelagem/page.tsx", /valor-sensivel[^"]*"[\s\S]{0,80}\/>|name=\{`valor_\$\{ano\}`\}[\s\S]{0,600}valor-sensivel/, "caixas de premissa por ano"],
   ["app/administracao/custos/page.tsx", /valor-sensivel[^>]*>\{txt\}/, "custo em US$"],
 ];
@@ -733,8 +734,8 @@ const EXCECOES_DE_FORMATADOR: ReadonlyArray<readonly [arquivo: string, trecho: s
   ["components/documento-detalhe.tsx", "function formatValor(", "definição do formatador; o uso (linha da coluna de valor) é varrido"],
   ["components/documento-detalhe.tsx", "valorNum.toLocaleString", "corpo do formatador; idem"],
   ["app/casos/[id]/modelagem/SecaoLinhas.tsx", "const fmt = new Intl.NumberFormat", "definição; o uso `fmt.format(` é varrido"],
-  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", "p.valor.toLocaleString", "helper de `mostrado`; a marcação nomeada acima cobre o render"],
-  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", "(p.valor * 100).toLocaleString", "helper de `mostrado`; idem"],
+  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", "`${v.toLocaleString", "helper `formatar` de `mostrado` e da série; as marcações nomeadas acima cobrem o render"],
+  ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", "(v * 100).toLocaleString", "helper `formatar`; idem"],
   ["app/casos/[id]/modelagem/SugestoesDoRealizado.tsx", "const num = (v: number)", "helper de numerador/denominador; marcação nomeada acima"],
 ];
 const arquivosTsx = (readdirSync(new URL("../src", import.meta.url), { recursive: true }) as string[])

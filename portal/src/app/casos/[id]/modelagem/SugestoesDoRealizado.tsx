@@ -22,6 +22,12 @@ import { valorParaGravar, type PremissaSugerida } from "@/lib/premissas-do-reali
 // única que não inventa tendência. Mudar ano a ano é o trabalho do analista na
 // lista abaixo, com o número já lá.
 
+function formatar(v: number, unidade: string | null): string {
+  return unidade === "dias"
+    ? `${v.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dias`
+    : `${(v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+}
+
 function Sugestao({
   casoId, anos, p, jaAtiva,
 }: {
@@ -35,11 +41,7 @@ function Sugestao({
     null as Resultado,
   );
 
-  const mostrado = p.valor === null
-    ? "—"
-    : p.unidade === "dias"
-      ? `${p.valor.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} dias`
-      : `${(p.valor * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+  const mostrado = p.valor === null ? "—" : formatar(p.valor, p.unidade);
 
   const num = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 0 });
 
@@ -71,6 +73,11 @@ function Sugestao({
             {p.numerador && p.denominador && (
               <span className="valor-sensivel ml-1 tabular-nums text-tinta-400">
                 ({num(p.numerador.valor)} ÷ {num(p.denominador.valor)})
+              </span>
+            )}
+            {(p.serie?.length ?? 0) > 1 && (
+              <span className="valor-sensivel ml-1 tabular-nums text-tinta-400">
+                ({p.serie!.map((x) => `${x.exercicio}: ${formatar(x.valor, p.unidade)}`).join(" · ")})
               </span>
             )}
           </>

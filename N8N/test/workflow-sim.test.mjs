@@ -817,7 +817,7 @@ test('Gravar Campos (Sombra): passa falha_motivo para fn_registrar_campos_extrai
   assert.match(node.parameters.options.queryReplacement, /\$json\.falha_motivo\s*\|\|\s*null/);
 });
 
-// P4 / migration 0225: a cobertura por DOCUMENTO só existe no banco se o item que sai do
+// P4 / migration 0229: a cobertura por DOCUMENTO só existe no banco se o item que sai do
 // `Juntar Blocos` carregar `medicao_documento` E o `Gravar Campos (Sombra)` a passar como `p_medicao`.
 // Afirma o COMPORTAMENTO ponta a ponta nesses dois nós: blocos entram, $7 sai.
 // (Juntar Blocos liga DIRETO no Gravar Campos: ver o teste de conexões da Camada 3.)
@@ -846,7 +846,7 @@ test('Gravar Campos (Sombra): passa p_medicao por NOME e liga o $7 à medição 
   assert.equal(m.blocos_com_resposta, 2);
   assert.ok(Math.abs(m.custo_usd - 0.05) < 1e-9);
   assert.deepEqual(m.tokens, { entrada: 15, saida: 30, cache: 5 });
-  assert.ok(!('cobertura' in m) && !('celulas_no_documento' in m), 'a cobertura é derivada pela 0225');
+  assert.ok(!('cobertura' in m) && !('celulas_no_documento' in m), 'a cobertura é derivada pela 0229');
 });
 
 test('Gravar Campos (Sombra): contas_no_documento ausente continua AUSENTE na medição — nunca vira 0 (regra 1)', async () => {
@@ -875,7 +875,7 @@ test('Juntar Blocos: chamada que NUNCA respondeu não vira "leitura de 0 linhas"
   assert.equal(m.blocos_com_resposta, 0);
   assert.equal(m.contas_no_documento, 120);
   for (const k of ['linhas_devolvidas', 'contas_distintas', 'custo_usd', 'tokens']) {
-    assert.ok(!(k in m), `${k} não pode existir numa medição sem nenhuma resposta (a 0225 diz ia_sem_resposta)`);
+    assert.ok(!(k in m), `${k} não pode existir numa medição sem nenhuma resposta (a 0229 diz ia_sem_resposta)`);
   }
   // o Resumo de Custo continua recebendo o que sempre recebeu
   const out = await run('Juntar Blocos', { items: [{ json: falha }] });

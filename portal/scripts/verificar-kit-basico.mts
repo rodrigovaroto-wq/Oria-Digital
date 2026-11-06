@@ -48,6 +48,11 @@ import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../sr
 import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
 import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
 import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
+import { BOTOES_DECISAO, exigeConfirmacao } from "../src/lib/pendencia.ts";
+import { passosDaTrilha } from "../src/components/trilha.tsx";
+import { aceiteAutomatico, fraseDoAceiteTotal, falhaDeExtracaoNaTela } from "../src/lib/rotulos.ts";
+import { readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import type { Documento, TaxonomiaTipoDocumento } from "../src/lib/types.ts";
 
 let falhas = 0;
@@ -296,6 +301,76 @@ console.log("--- 6. Painel de documento: anterior/próximo na ordem da lista fil
   const comAusente = resumoDoLote(2, [], ["Q9"]);
   ok(comAusente.startsWith("2 registradas; 1 não registrada") && comAusente.includes("Q9") && !comAusente.includes("como enviadas"),
     "lote: pergunta fora do texto editado nunca vira 'tudo certo'", comAusente);
+}
+
+// 7. P16 (vistoria P2, ALTA 1): decisão que tira a pendência da fila pergunta antes de gravar.
+//    "Prosseguir sem resolução" aceitava pendência que trava a aprovação num toque. Contatar o
+//    cliente não tira nada da fila e continua num clique só — confirmar tudo vira ruído.
+console.log("\n7. Decisão de pendência que libera o mandato pede confirmação");
+ok(exigeConfirmacao("prosseguir"), "prosseguir sem resolução pede confirmação");
+ok(exigeConfirmacao("nao_procede"), "não procede pede confirmação");
+ok(!exigeConfirmacao("contatar_cliente"), "contatar o cliente grava direto (não libera nada)");
+ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWith("?") && b.confirmacao.sim.length > 0)),
+  "toda confirmação traz pergunta e um botão de sim com texto");
+
+// 8. P16 (vistoria P2, ALTA 4): o modo discrição borra, e nada desfaz o borrão.
+//    Medido em 04/11: `title={doc.resumo}` num elemento borrado mostrava o texto inteiro ao passar
+//    o mouse. O borrão é CSS; o `title` é do navegador e ignora o CSS. A varredura lê o código-fonte
+//    porque é ele que a tela renderiza — não há navegador com sessão neste CI.
+{
+  console.log("\n8. Modo discrição: nada marcado como sensível revela o texto pela dica do mouse");
+  const tsx: string[] = [];
+  const andar = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const c = join(d, e.name);
+      if (e.isDirectory()) andar(c);
+      else if (c.endsWith(".tsx")) tsx.push(c);
+    }
+  };
+  andar(new URL("../src", import.meta.url).pathname);
+  const vazam: string[] = [];
+  for (const f of tsx) {
+    for (const tag of readFileSync(f, "utf8").match(/<[A-Za-z][^>]*valor-sensivel[^>]*>/g) ?? []) {
+      if (/\stitle=/.test(tag)) vazam.push(`${f.split("/src/")[1]}: ${tag.slice(0, 80)}`);
+    }
+  }
+  ok(tsx.length > 50, "a varredura leu os arquivos da tela (não passou vazia)", String(tsx.length));
+  ok(vazam.length === 0, "nenhum elemento sensível carrega title=", vazam.join(" | "));
+  const passos = passosDaTrilha("/casos/abc/pendencias", { abc: "Metalúrgica X" });
+  ok(passos.some((p) => p.rotulo === "Metalúrgica X" && p.sensivel === true),
+    "a trilha marca o nome do mandato como sensível", JSON.stringify(passos));
+}
+
+// 9. P16 (vistoria P2, ALTA 3): "Todas as linhas foram aceitas" quando quem aceitou foi a máquina.
+//    Medido em 04/11: 283 linhas aceitas, nenhuma por pessoa, e a frase soava como conferência humana.
+{
+  console.log("\n9. O aceite diz quem aceitou");
+  const AUTO = "sistema:auto_aceite (dial N2, limiar 0.95, sem guarda disparada)";
+  ok(aceiteAutomatico(AUTO) && !aceiteAutomatico("analista@oria.com") && !aceiteAutomatico(null),
+    "autor sistema:* é automático; e-mail e nulo não são");
+  const soMaquina = fraseDoAceiteTotal([AUTO, AUTO, AUTO]);
+  ok(/AUTOMATICAMENTE/.test(soMaquina) && /nenhuma foi conferida por uma pessoa/.test(soMaquina),
+    "tudo automático: a frase diz que nenhuma pessoa conferiu", soMaquina);
+  ok(!/dial|limiar|sistema:/.test(soMaquina), "e não publica o jargão do autor gravado", soMaquina);
+  const misto = fraseDoAceiteTotal(["ana@oria.com", AUTO, AUTO]);
+  ok(misto.includes("1 por uma pessoa") && misto.includes("2 automaticamente"), "misto: conta os dois lados", misto);
+  ok(fraseDoAceiteTotal(["ana@oria.com"]).includes("por uma pessoa") && !/AUTOMATICAMENTE/.test(fraseDoAceiteTotal(["ana@oria.com"])),
+    "tudo humano: não fala em automático");
+}
+
+// 10. P16 (vistoria P2, ALTA 2): extração que falhou não mostra o erro do provedor cru.
+//     A frase segue o formato real de `fn_descricao_extracao_falhou` (0154). O texto exato do erro
+//     do PDF de 14 bytes não foi guardado na vistoria; o inglês abaixo é representativo, não medido.
+{
+  console.log("\n10. Extração que falhou: o técnico vai para Detalhes técnicos");
+  const doBanco = (m: string) => `Extração de "relatorio_vazio.pdf" falhou ou veio incompleta (0 par(es) conta×coluna gravado(s)). Motivo: ${m}`;
+  const ingles = falhaDeExtracaoNaTela(doBanco("400 Bad Request: The document could not be processed"));
+  ok(ingles.frase.includes("relatorio_vazio.pdf") && !ingles.frase.includes("Bad Request"),
+    "a frase à vista nomeia o arquivo e não traz o erro do provedor", ingles.frase);
+  ok(ingles.motivo === null && (ingles.tecnico ?? "").includes("Bad Request"), "o erro do provedor vai para o técnico");
+  const nosso = falhaDeExtracaoNaTela(doBanco("a chamada respondeu sem erro, mas não trouxe NENHUMA linha."));
+  ok((nosso.motivo ?? "").includes("não trouxe") && nosso.tecnico === null, "motivo em português continua à vista");
+  ok(falhaDeExtracaoNaTela("texto sem motivo").frase === "texto sem motivo", "descrição fora do formato passa inteira");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

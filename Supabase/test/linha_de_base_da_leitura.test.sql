@@ -1,8 +1,8 @@
 -- =============================================================================
--- 0225 — A LEITURA QUE SÓ SE MEDIA SOMADA POR LOTE: a cobertura por DOCUMENTO (linha de base da P4)
+-- 0229 — A LEITURA QUE SÓ SE MEDIA SOMADA POR LOTE: a cobertura por DOCUMENTO (linha de base da P4)
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): os números por guarda desligada estão no cabeçalho de
--- Supabase/migrations/0225_a_leitura_que_so_se_media_somada_por_lote.sql ("MEDIÇÃO NÃO-VAZIA"): 73 asserts, 38 variantes aplicadas uma a uma, 0 reprovações com a migration intacta.
+-- Supabase/migrations/0229_a_leitura_que_so_se_media_somada_por_lote.sql ("MEDIÇÃO NÃO-VAZIA"): 79 asserts, 39 variantes aplicadas uma a uma, 0 reprovações com a migration intacta.
 --
 -- O QUE AFIRMA (comportamento, não mecanismo):
 --   1. a gravação leva a medição: chamada COM p_medicao grava o objeto no evento; chamada SEM grava `medicao` nula EXPLÍCITA (a chave existe, valor nulo) —
@@ -14,7 +14,9 @@
 --      documento_sem_contas): documento sem evento NÃO é documento que rodou e não achou nada;
 --   4. as pendências contadas são as ABERTAS da origem extração, por tipo (resolvida e outra origem não entram);
 --   5. SECURITY INVOKER e somente leitura: a RLS vale (Analista alocada vê, Analista de outro mandato recebe zero linhas), e a ACL não abre para anon;
---   6. a sonda enxerga os 5 requisitos da 0225 e os marcadores de código ocorrem UMA vez no corpo publicado.
+--   6. a sonda enxerga os 5 requisitos da 0229 e os marcadores de código ocorrem UMA vez no corpo publicado;
+--   7. a 0229 NÃO desfaz a 0228: documento sem tipo continua com a linha PENDENTE (auto-aceite suprimido) e campos_auto_aceite_exige_tipo segue presente
+--      (a 0229 foi escrita como 0225 sobre o corpo da 0204 e desfaria a guarda da 0228, já aplicada em produção).
 -- =============================================================================
 \set ON_ERROR_STOP on
 
@@ -65,7 +67,7 @@ begin
   perform set_config('request.jwt.claim.sub', '', true);
 end $$;
 
-delete from caso where nome like '0225 —%';
+delete from caso where nome like '0229 —%';
 delete from auth.users where id in ('00000000-0000-0000-0000-00000000e251', '00000000-0000-0000-0000-00000000e252', '00000000-0000-0000-0000-00000000e253');
 
 do $$
@@ -85,7 +87,7 @@ declare
   v_ver_n8 uuid;                       -- chamada do n8n (nomeada)
   v_ver_p5 uuid;                       -- 5 posicionais
   v_doc_x uuid;
-  v_ev jsonb; v_n int; v_l record; v_n_ant int; v_txt text;
+  v_ev jsonb; v_n int; v_l record; v_n_ant int; v_txt text; v_ver_st uuid;
   v_campos jsonb := jsonb_build_array(
     jsonb_build_object('ordem',0,'chave','Receita','valor_num','1000','periodo_coluna','2025','confianca','0.9'),
     jsonb_build_object('ordem',1,'chave','Custo','valor_num','400','periodo_coluna','2025','confianca','0.9'));
@@ -96,40 +98,40 @@ declare
     jsonb_build_object('ordem',3,'chave','Outros créditos','valor_num','9000','periodo_coluna','2023','confianca','0.99'));
 begin
   -- ---------------------------------------------------------------- montagem (Sócio de teste, JWT do run.sh)
-  insert into auth.users (id, email) values (u_socio, 'socio@0225.local'), (u_ana, 'ana@0225.local'), (u_xan, 'xan@0225.local');
-  v_a := fn_upsert_caso('0225 — mandato A');
-  v_b := fn_upsert_caso('0225 — mandato B');
-  perform fn_definir_papel(u_socio, 'socio', 'teste 0225');
+  insert into auth.users (id, email) values (u_socio, 'socio@0229.local'), (u_ana, 'ana@0229.local'), (u_xan, 'xan@0229.local');
+  v_a := fn_upsert_caso('0229 — mandato A');
+  v_b := fn_upsert_caso('0229 — mandato B');
+  perform fn_definir_papel(u_socio, 'socio', 'teste 0229');
   perform fn_definir_papel(u_ana, 'analista');
   perform fn_definir_papel(u_xan, 'analista');
   perform fn_alocar(v_a, u_ana);
   perform fn_alocar(v_b, u_xan);
 
   -- Seis documentos de vocabulários diferentes no mandato A; cada um uma situação da linha de base.
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/nr.pdf', 'A nunca extraido.pdf', true, 'H-NR-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/nr.pdf', 'A nunca extraido.pdf', true, 'H-NR-0229', 'ok');
   v_doc_nr := (v_r->>'documento_id')::uuid; v_ver_nr := (v_r->>'documento_versao_id')::uuid;
 
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'DRE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/re.pdf', 'B reprocessado.pdf', true, 'H-RE-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'DRE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/re.pdf', 'B reprocessado.pdf', true, 'H-RE-0229', 'ok');
   v_doc_re := (v_r->>'documento_id')::uuid; v_ver_re1 := (v_r->>'documento_versao_id')::uuid;
   insert into documento_versao (documento_id, n_versao, arquivo_ref, nome_original) values (v_doc_re, 2, v_a || '/re2.pdf', 'B reprocessado.pdf') returning id into v_ver_re2;
 
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/sm.pdf', 'C sem medicao.pdf', true, 'H-SM-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/sm.pdf', 'C sem medicao.pdf', true, 'H-SM-0229', 'ok');
   v_ver_sm := (v_r->>'documento_versao_id')::uuid;
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/in.pdf', 'D medicao invalida.pdf', true, 'H-IN-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/in.pdf', 'D medicao invalida.pdf', true, 'H-IN-0229', 'ok');
   v_ver_in := (v_r->>'documento_versao_id')::uuid;
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/zr.pdf', 'E sem contas.pdf', true, 'H-ZR-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/zr.pdf', 'E sem contas.pdf', true, 'H-ZR-0229', 'ok');
   v_ver_zr := (v_r->>'documento_versao_id')::uuid;
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/ic.pdf', 'F incompleta.pdf', true, 'H-IC-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/ic.pdf', 'F incompleta.pdf', true, 'H-IC-0229', 'ok');
   v_ver_ic := (v_r->>'documento_versao_id')::uuid;
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2023', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/pd.pdf', 'G pendencias.pdf', true, 'H-PD-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2023', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/pd.pdf', 'G pendencias.pdf', true, 'H-PD-0229', 'ok');
   v_doc_pd := (v_r->>'documento_id')::uuid; v_ver_pd1 := (v_r->>'documento_versao_id')::uuid;
   insert into documento_versao (documento_id, n_versao, arquivo_ref, nome_original) values (v_doc_pd, 2, v_a || '/pd2.pdf', 'G pendencias.pdf') returning id into v_ver_pd2;
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/n8.pdf', 'H chamada do n8n.pdf', true, 'H-N8-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/n8.pdf', 'H chamada do n8n.pdf', true, 'H-N8-0229', 'ok');
   v_ver_n8 := (v_r->>'documento_versao_id')::uuid;
-  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/p5.pdf', 'I cinco posicionais.pdf', true, 'H-P5-0225', 'ok');
+  v_r := fn_registrar_documento(v_a, 'ALFA SA', 'anual', '2025', 'BALANCETE', 0.9, 'nome_arquivo', 'supabase_storage', v_a || '/p5.pdf', 'I cinco posicionais.pdf', true, 'H-P5-0229', 'ok');
   v_ver_p5 := (v_r->>'documento_versao_id')::uuid;
   -- Mandato B: um documento extraído e medido (para provar que o A não o vê e vice-versa).
-  v_r := fn_registrar_documento(v_b, 'BETA SA', 'anual', '2025', 'DRE', 0.9, 'nome_arquivo', 'supabase_storage', v_b || '/b.pdf', 'Z do outro mandato.pdf', true, 'H-B-0225', 'ok');
+  v_r := fn_registrar_documento(v_b, 'BETA SA', 'anual', '2025', 'DRE', 0.9, 'nome_arquivo', 'supabase_storage', v_b || '/b.pdf', 'Z do outro mandato.pdf', true, 'H-B-0229', 'ok');
   v_doc_x := (v_r->>'documento_id')::uuid;
   perform fn_registrar_campos_extraidos((v_r->>'documento_versao_id')::uuid, v_campos, 'N0', null, true, '{"contas_no_documento": 2, "linhas_devolvidas": 2}'::jsonb);
 
@@ -281,8 +283,8 @@ begin
     'a v2 do B, sem evento, não é "a mais nova" para a pendência: NULL com o motivo', row_to_json(v_l)::text);
 
   -- A v2 recém-registrada, ainda sem extração, NÃO rouba a pendência que a v1 abriu (mandato C: não mexe nas contagens do A).
-  v_c := fn_upsert_caso('0225 — mandato C (formatos do n8n)');
-  v_r := fn_registrar_documento(v_c, 'GAMA SA', 'anual', '2025', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage', v_c || '/j.pdf', 'J v2 sem extracao.pdf', true, 'H-J-0225', 'ok');
+  v_c := fn_upsert_caso('0229 — mandato C (formatos do n8n)');
+  v_r := fn_registrar_documento(v_c, 'GAMA SA', 'anual', '2025', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage', v_c || '/j.pdf', 'J v2 sem extracao.pdf', true, 'H-J-0229', 'ok');
   v_doc_j := (v_r->>'documento_id')::uuid; v_ver_j1 := (v_r->>'documento_versao_id')::uuid;
   perform fn_registrar_campos_extraidos(v_ver_j1, '[]'::jsonb, 'N0', 'a IA devolveu vazio', true, '{"blocos_com_resposta": 1, "blocos": 1, "blocos_planejados": 1, "contas_no_documento": 5, "linhas_devolvidas": 0}'::jsonb);
   insert into documento_versao (documento_id, n_versao, arquivo_ref, nome_original) values (v_doc_j, 2, v_c || '/j2.pdf', 'J v2 sem extracao.pdf') returning id into v_ver_j2;
@@ -342,7 +344,7 @@ begin
   -- resolvida e de outra origem não entram
   update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'teste' where documento_id = v_doc_pd and tipo = 'extracao_falhou';
   insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id, motivo)
-    values (v_a, 'reconciliacao', 'extracao_falhou', 'importante', true, 'de outra origem', v_doc_pd, 'teste:0225:outra_origem');
+    values (v_a, 'reconciliacao', 'extracao_falhou', 'importante', true, 'de outra origem', v_doc_pd, 'teste:0229:outra_origem');
   select * into v_l from fn_linha_de_base_extracao(v_a) where documento_versao_id = v_ver_pd2;
   perform teste_assert_p4(v_l.pendencias_extracao_falhou = 0 and v_l.pendencias_extracao_padrao_suspeito = 1,
     'pendência resolvida e pendência de outra origem NÃO entram na contagem', row_to_json(v_l)::text);
@@ -381,13 +383,13 @@ begin
   perform teste_assert_p4(v_n = 0, 'mandato inexistente: zero linhas, sem erro', v_n::text);
 
   -- ---------------------------------------------------------------- 6. a sonda
-  raise notice '--- 6. a sonda enxerga os 5 requisitos da 0225 ---';
-  select count(*) into v_n from fn_instalacao_conferir() where migration = '0225' and presente;
-  perform teste_assert_p4(v_n = 5, 'os 5 requisitos da 0225 estão presentes', v_n::text);
-  select count(*) into v_n from fn_instalacao_conferir() where migration = '0225' and not presente;
-  perform teste_assert_p4(v_n = 0, 'nenhum requisito da 0225 ausente', v_n::text);
+  raise notice '--- 6. a sonda enxerga os 5 requisitos da 0229 ---';
+  select count(*) into v_n from fn_instalacao_conferir() where migration = '0229' and presente;
+  perform teste_assert_p4(v_n = 5, 'os 5 requisitos da 0229 estão presentes', v_n::text);
+  select count(*) into v_n from fn_instalacao_conferir() where migration = '0229' and not presente;
+  perform teste_assert_p4(v_n = 0, 'nenhum requisito da 0229 ausente', v_n::text);
   -- Os marcadores são CÓDIGO, não comentário: cada um ocorre UMA vez no corpo publicado (pg_get_functiondef traz comentário, então um marcador que também
-  -- estivesse num comentário contaria 2 e a sonda ficaria verde com o código removido). Os literais abaixo são os do catálogo da 0225.
+  -- estivesse num comentário contaria 2 e a sonda ficaria verde com o código removido). Os literais abaixo são os do catálogo da 0229.
   v_txt := pg_get_functiondef('fn_registrar_campos_extraidos(uuid, jsonb, nivel_autonomia, text, boolean, jsonb)'::regprocedure);
   perform teste_assert_p4(teste_ocorrencias_p4(v_txt, 'p_medicao jsonb DEFAULT NULL::jsonb') = 1,
     'o marcador da assinatura nova ocorre UMA vez no corpo publicado', null);
@@ -399,19 +401,41 @@ begin
   perform teste_assert_p4(teste_ocorrencias_p4(v_txt, '''sem_medicao''') = 1,
     'o marcador do motivo da cobertura ocorre UMA vez no corpo de fn_linha_de_base_extracao', null);
   perform teste_assert_p4((select count(*) from instalacao_requisito r
-                            where r.migration = '0225' and r.tipo = 'corpo'
+                            where r.migration = '0229' and r.tipo = 'corpo'
                               and position(r.marcador in pg_get_functiondef(to_regproc('public.' || r.objeto)::oid)) > 0) = 4,
     'os 4 marcadores do catálogo estão todos no corpo publicado (e são os 4 conferidos acima)', null);
-  select count(*) into v_n from instalacao_requisito where migration = '0225';
-  perform teste_assert_p4(v_n = 5, 'o catálogo tem exatamente os 5 requisitos da 0225', v_n::text);
-  perform teste_assert_p4((select ate_migration from instalacao_cobertura) >= '0225', 'a cobertura do catálogo declara a 0225', null);
+  select count(*) into v_n from instalacao_requisito where migration = '0229';
+  perform teste_assert_p4(v_n = 5, 'o catálogo tem exatamente os 5 requisitos da 0229', v_n::text);
+  perform teste_assert_p4((select ate_migration from instalacao_cobertura) >= '0229', 'a cobertura do catálogo declara a 0229', null);
+
+  -- ---------------------------------------------------------------- 7. a 0229 não desfaz a 0228
+  raise notice '--- 7. a reemissão do corpo preserva a guarda da 0228 (auto-aceite exige tipo) ---';
+  v_r := fn_registrar_documento(v_a, null, null, null, null, null, 'nome_arquivo', 'supabase_storage', v_a || '/st.txt', 'K sem tipo.txt', true, 'H-ST-0229', 'ok');
+  v_ver_st := (v_r->>'documento_versao_id')::uuid;
+  perform teste_assert_p4((select tipo_taxonomia is null from documento where id = (v_r->>'documento_id')::uuid), 'o arranjo: documento sem tipo', null);
+  perform teste_assert_p4((select nivel_atual in ('N2', 'N3') and limiar_auto_clear is not null and limiar_auto_clear <= 0.98
+                             from estagio_autonomia where estagio = 'extracao_linhas_financeiras'),
+    'o dial da extração auto-aceita 0.98 (senão o teste mediria o dial, não o tipo)', null);
+  perform fn_registrar_campos_extraidos(v_ver_st, jsonb_build_array(jsonb_build_object('ordem', 0, 'chave', 'Saldo de caixa', 'valor_texto', '1000',
+      'valor_num', '1000', 'moeda', 'BRL', 'confianca', '0.98', 'secao_canonica', 'ativo_circulante')), 'N0',
+      p_medicao => '{"contas_no_documento": 1, "linhas_devolvidas": 1}'::jsonb);
+  perform teste_assert_p4((select status_aceite::text from campo_extraido where documento_versao_id = v_ver_st) = 'pendente',
+    'documento sem tipo, chamado COM p_medicao: a linha de confiança 0.98 fica PENDENTE (a guarda da 0228 vive)', null);
+  perform teste_assert_p4(exists (select 1 from evento_auditoria where acao = 'auto_aceite_suprimido' and entidade_ref = 'documento_versao:' || v_ver_st
+                                    and (depois->>'porque') like 'documento sem tipo%'),
+    'e o evento auto_aceite_suprimido diz "documento sem tipo"', null);
+  perform teste_assert_p4((select presente from fn_instalacao_conferir() where chave = 'campos_auto_aceite_exige_tipo'),
+    'a sonda: campos_auto_aceite_exige_tipo (0228) continua presente depois da 0229', null);
+  perform teste_assert_p4(teste_ocorrencias_p4(pg_get_functiondef('fn_registrar_campos_extraidos(uuid, jsonb, nivel_autonomia, text, boolean, jsonb)'::regprocedure),
+                                               'and v_tipo is not null then') = 1,
+    'o marcador da 0228 ocorre UMA vez no corpo publicado pela 0229', null);
 
   -- ---------------------------------------------------------------- limpeza
-  delete from evento_auditoria where entidade_ref in (select 'documento_versao:' || dv.id::text from documento_versao dv join documento d on d.id = dv.documento_id join caso c on c.id = d.caso_id where c.nome like '0225 —%');
-  delete from caso where nome like '0225 —%';
+  delete from evento_auditoria where entidade_ref in (select 'documento_versao:' || dv.id::text from documento_versao dv join documento d on d.id = dv.documento_id join caso c on c.id = d.caso_id where c.nome like '0229 —%');
+  delete from caso where nome like '0229 —%';
   delete from evento_auditoria where entidade_ref in ('documento_versao:' || v_ver_nr, 'documento_versao:' || v_ver_re1, 'documento_versao:' || v_ver_re2,
     'documento_versao:' || v_ver_sm, 'documento_versao:' || v_ver_in, 'documento_versao:' || v_ver_zr, 'documento_versao:' || v_ver_ic,
-    'documento_versao:' || v_ver_pd1, 'documento_versao:' || v_ver_pd2, 'documento_versao:' || v_ver_n8, 'documento_versao:' || v_ver_p5);
+    'documento_versao:' || v_ver_pd1, 'documento_versao:' || v_ver_pd2, 'documento_versao:' || v_ver_n8, 'documento_versao:' || v_ver_p5, 'documento_versao:' || v_ver_st);
   delete from auth.users where id in (u_socio, u_ana, u_xan);
 
   raise notice 'EXECUCOES=% FALHAS=%', current_setting('p4.execucoes', true), coalesce(current_setting('p4.falhas', true), '0');

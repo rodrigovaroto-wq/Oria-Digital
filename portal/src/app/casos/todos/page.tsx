@@ -130,7 +130,7 @@ export default async function CasosPage({
               e o menu "⋯" fica acima dele (z-10). */}
           <Link
             href={`/casos/${caso.id}`}
-            className="block truncate text-sm font-semibold text-tinta-900 after:absolute after:inset-0"
+            className="valor-sensivel block truncate text-sm font-semibold text-tinta-900 after:absolute after:inset-0"
           >
             {caso.nome}
           </Link>

@@ -22,7 +22,7 @@ export async function revisarDocumento(casoId: string, formData: FormData): Prom
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { error } = await supabase.rpc("fn_revisar_documento", {
+  const { data, error } = await supabase.rpc("fn_revisar_documento", {
     p_documento_id: documentoId,
     p_autor: user?.email ?? "portal:desconhecido",
     p_novo_tipo_taxonomia: novoTipo,
@@ -33,6 +33,10 @@ export async function revisarDocumento(casoId: string, formData: FormData): Prom
   });
 
   if (error) return { erro: textoDeFalhaDaAcao("Falha ao revisar documento", error) };
+  // RECUSA COMO VALOR (0226): sem tipo, o banco não grava nada e devolve `recusado`. Sem ler este
+  // campo, `error` nulo faria a recusa passar por sucesso — o defeito trocaria de sintoma.
+  const r = data as { recusado?: boolean; motivo_recusa?: string } | null;
+  if (r?.recusado) return { erro: r.motivo_recusa ?? "Confirmação recusada." };
 
   // "layout": os números das abas (Pendências, Documentos) moram no layout do mandato, e
   // `revalidatePath(<rota>)` sozinho não o refaz — a aba seguiria dizendo o número velho.

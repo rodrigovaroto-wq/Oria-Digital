@@ -2636,10 +2636,13 @@ begin
       v_estado := 'aceita_com_ressalva';  v_rotulo := 'Prosseguir sem resolução'; v_tipo := 'ressalva';
     when 'nao_procede' then
       v_estado := 'rejeitada';            v_rotulo := 'Pendência não procede'; v_tipo := 'override';
+    -- 0227: a volta. Sem `decisao` (v_tipo nulo): nenhum decisao_tipo existente diz "reabri", ver o cabeçalho.
+    when 'reabrir' then
+      v_estado := 'aberta';               v_rotulo := 'Reaberta'; v_tipo := null;
     else
       return jsonb_build_object('recusado', true, 'pendencia_id', p_pendencia_id,
-        'motivo_recusa', format('Decisão desconhecida: %s. São três — contatar_cliente, '
-                                'prosseguir, nao_procede.', p_decisao));
+        'motivo_recusa', format('Decisão desconhecida: %s. São quatro — contatar_cliente, '
+                                'prosseguir, nao_procede, reabrir.', p_decisao));
   end case;
 
   -- Clicar de novo no mesmo botão é no-op declarado: dois cliques não viram
@@ -2685,7 +2688,9 @@ begin
     values (p_autor, 'pendencia_decidida', 'pendencia:'||p_pendencia_id,
             jsonb_build_object('estado', v_p.estado),
             jsonb_build_object('estado', v_estado, 'rotulo', v_rotulo,
-                               'caso_id', v_p.caso_id, 'motivo', v_motivo));
+                               'caso_id', v_p.caso_id, 'motivo', v_motivo,
+                               -- 0227: reabrir uma pendência JÁ DECIDIDA desfaz uma decisão que fica na trilha (a `decisao` antiga não se apaga).
+                               'reverte_decisao', p_decisao = 'reabrir' and v_p.estado in ('aceita_com_ressalva', 'rejeitada')));
 
   return jsonb_build_object('decidida', true, 'pendencia_id', p_pendencia_id,
                             'estado', v_estado, 'rotulo', v_rotulo,
@@ -2697,7 +2702,7 @@ $$;
 -- Name: FUNCTION fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) IS 'Os três botões da tela em UMA função: contatar_cliente (não libera o portão — o documento ainda não chegou), prosseguir (aceita com ressalva) e nao_procede (rejeita). Sem motivo obrigatório, sem expiração e sem teto, por decisão do dono (0109). Nada é apagado e tudo é contado.';
+COMMENT ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) IS 'Os botões da tela em UMA função: contatar_cliente (não libera o portão), prosseguir (aceita com ressalva), nao_procede (rejeita) e, desde a 0227, reabrir (volta a aberta; de resolvida é recusado). Sem motivo obrigatório, sem expiração e sem teto, por decisão do dono (0109). Nada é apagado e tudo é contado.';
 
 --
 -- Name: fn_definir_modelagem(uuid, text, integer, text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -7245,7 +7250,7 @@ $_$;
 -- Name: FUNCTION fn_linha_de_base_extracao(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) IS '0225: linha de base da leitura POR DOCUMENTO (P4, comparar antes × depois). Uma linha por documento_versao do mandato: n_campos, falha_motivo, a medição do ÚLTIMO evento extracao_sombra da versão (contas_no_documento, linhas_devolvidas, cobertura = linhas/contas quando contas > 0 — sem arredondar nem truncar em 1), e as pendências ABERTAS da origem extração por tipo — do DOCUMENTO, então só na linha da versão mais nova (nas outras NULL, com pendencias_motivo). n_campos é o ACUMULADO em campo_extraido da versão (reprocessar soma as gravações); campos_ultimo_evento é o que o último evento gravou, comparável a linhas_devolvidas; versao_medicao é a versão da medição que o n8n declarou (separa eventos medidos por versões diferentes). extracao_rodou = existe evento de extração (documento sem evento NÃO é documento que rodou e não achou nada). cobertura_motivo é NULL só quando a cobertura existe; senão diz por quê, nesta ordem: extracao_nao_rodou | medicao_invalida | sem_medicao (n8n anterior à 0225) | ia_sem_resposta (nenhum bloco respondeu: falha de infraestrutura, não leitura de 0%) | leitura_parcial (algum bloco sem resposta ou blocos < blocos_planejados: o numerador seria de um trecho e o denominador do documento inteiro) | documento_sem_dado_financeiro (0 linhas e tem_dado_financeiro = false: certidão, planilha de controle) | sem_regua_no_documento (leitura válida, contas_no_documento ausente: PDF sem texto, xlsx) | medicao_incompleta (o que sobrar: chamador fora do contrato, sem blocos_com_resposta nem linhas — o Juntar Blocos do n8n não produz essa forma) | documento_sem_contas (0 contas no texto). Contrato: cobertura_motivo é NULL se e somente se a cobertura existe. blocos, blocos_com_resposta e blocos_planejados vêm da medição. A pendência vai para a versão mais nova COM evento de extração (se nenhuma tem, a de maior n_versao). SECURITY INVOKER: a RLS vale e quem não lê o mandato recebe zero linhas. Somente leitura.';
+COMMENT ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) IS '0229: linha de base da leitura POR DOCUMENTO (P4, comparar antes × depois). Uma linha por documento_versao do mandato: n_campos, falha_motivo, a medição do ÚLTIMO evento extracao_sombra da versão (contas_no_documento, linhas_devolvidas, cobertura = linhas/contas quando contas > 0 — sem arredondar nem truncar em 1), e as pendências ABERTAS da origem extração por tipo — do DOCUMENTO, então só na linha da versão mais nova (nas outras NULL, com pendencias_motivo). n_campos é o ACUMULADO em campo_extraido da versão (reprocessar soma as gravações); campos_ultimo_evento é o que o último evento gravou, comparável a linhas_devolvidas; versao_medicao é a versão da medição que o n8n declarou (separa eventos medidos por versões diferentes). extracao_rodou = existe evento de extração (documento sem evento NÃO é documento que rodou e não achou nada). cobertura_motivo é NULL só quando a cobertura existe; senão diz por quê, nesta ordem: extracao_nao_rodou | medicao_invalida | sem_medicao (n8n anterior à 0229) | ia_sem_resposta (nenhum bloco respondeu: falha de infraestrutura, não leitura de 0%) | leitura_parcial (algum bloco sem resposta ou blocos < blocos_planejados: o numerador seria de um trecho e o denominador do documento inteiro) | documento_sem_dado_financeiro (0 linhas e tem_dado_financeiro = false: certidão, planilha de controle) | sem_regua_no_documento (leitura válida, contas_no_documento ausente: PDF sem texto, xlsx) | medicao_incompleta (o que sobrar: chamador fora do contrato, sem blocos_com_resposta nem linhas — o Juntar Blocos do n8n não produz essa forma) | documento_sem_contas (0 contas no texto). Contrato: cobertura_motivo é NULL se e somente se a cobertura existe. blocos, blocos_com_resposta e blocos_planejados vêm da medição. A pendência vai para a versão mais nova COM evento de extração (se nenhuma tem, a de maior n_versao). SECURITY INVOKER: a RLS vale e quem não lê o mandato recebe zero linhas. Somente leitura.';
 
 --
 -- Name: fn_linha_vale_para_ano(uuid, text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -12754,9 +12759,9 @@ begin
       values ('sistema:n8n', 'secao_herdada_pela_arvore', 'documento_versao:'||p_documento_versao_id, v_herdadas);
   end if;
 
-  -- 0225: a MEDIÇÃO da leitura deste documento (o que o n8n contou: contas que o texto tinha, linhas que a IA devolveu, blocos, custo)
+  -- 0229: a MEDIÇÃO da leitura deste documento (o que o n8n contou: contas que o texto tinha, linhas que a IA devolveu, blocos, custo)
   -- entra no mesmo evento, como veio. Três estados DISTINTOS, porque "não mediu" e "mediu zero" não podem ter a mesma cara (regra 1 e 7):
-  -- objeto = o n8n mediu; chave `medicao` nula = o n8n era anterior à 0225 ou não mediu; tipo que não é objeto = defeito do chamador,
+  -- objeto = o n8n mediu; chave `medicao` nula = o n8n era anterior à 0229 ou não mediu; tipo que não é objeto = defeito do chamador,
   -- gravado na chave `medicao_invalida` com o tipo recebido, em vez de descartado calado. Nenhum campo é validado aqui: o n8n é a fonte.
   v_medicao  := case when p_medicao is not null and jsonb_typeof(p_medicao) = 'object' then p_medicao else null end;
   v_invalida := case when p_medicao is not null and jsonb_typeof(p_medicao) not in ('object', 'null')
@@ -12849,6 +12854,10 @@ begin
 
   -- ----- Auto-aceite (0029): DEPOIS das guardas, nunca antes -----------------
   --
+  -- 0228: E SÓ DE DOCUMENTO COM TIPO. `v_tipo` (lido no topo, 0203) nulo = o documento nunca foi classificado: nada do que ele diz foi
+  -- conferido contra o que um BALANCO/DRE/... deve conter, e "aceito" no Excel passa a querer dizer "conferido". Medido em produção em 04/11/2026:
+  -- um .txt de 57 bytes sem tipo, entidade e período teve "Saldo de caixa: 1000" auto-aceita e chegou ao book como ACEITO.
+  --
   -- 0141: E A TRILHA PASSA A DIZER QUANTO O LIMIAR FILTROU, porque medido em
   -- 24/08 ele nunca filtrou nada. Em 15.030 linhas gravadas por este sistema, a
   -- confiança auto-reportada assumiu TRÊS valores — 0,95, 0,99 e 1 — e o limiar
@@ -12865,7 +12874,7 @@ begin
   -- zero, ela diz isso com todas as letras, porque um portão que aprova tudo e
   -- não declara que aprovou tudo é pior que portão nenhum: ele parece funcionar.
   v_n_excluidas := greatest(v_count - v_n_auto_aceitos, 0);
-  if v_n_auto_aceitos > 0 and not v_guarda_disparou then
+  if v_n_auto_aceitos > 0 and not v_guarda_disparou and v_tipo is not null then
     update campo_extraido
       set status_aceite = 'aceito',
           aceito_por = format('sistema:auto_aceite (dial %s, limiar %s, sem guarda disparada)',
@@ -12894,7 +12903,9 @@ begin
               jsonb_build_object('n_elegiveis', v_n_auto_aceitos,
                                  'n_excluidas_pelo_limiar', v_n_excluidas,
                                  'limiar_discriminou', v_n_excluidas > 0,
-                                 'porque', 'guarda de extracao disparou; linhas seguem pendentes de revisao humana'));
+                                 'porque', case when v_tipo is null
+                                   then 'documento sem tipo; linhas seguem pendentes de revisao humana ate alguem escolher o tipo'
+                                   else 'guarda de extracao disparou; linhas seguem pendentes de revisao humana' end));
   end if;
   perform fn_recomputar_completude(v_caso_id);
 
@@ -12923,7 +12934,7 @@ $_$;
 -- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0225: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao).';
+COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0228: o auto-aceite exige documento com tipo (v_tipo nulo = linhas seguem pendentes). 0229: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao).';
 
 --
 -- Name: fn_registrar_classe_override(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -14812,6 +14823,12 @@ begin
     raise exception 'documento % não encontrado', p_documento_id;
   end if;
 
+  -- 0226: sem tipo não há o que confirmar. Fica ANTES de qualquer escrita (entidade/período novos também gravam).
+  if coalesce(p_novo_tipo_taxonomia, v_tipo_antigo) is null then
+    return jsonb_build_object('recusado', true, 'documento_id', p_documento_id,
+      'motivo_recusa', 'Escolha o tipo do documento antes de confirmar: sem tipo não há o que confirmar.');
+  end if;
+
   if p_nova_entidade_nome is not null and length(trim(p_nova_entidade_nome)) > 0 then
     select id into v_entidade_id from entidade
       where caso_id = v_caso_id and lower(razao_social) = lower(p_nova_entidade_nome) limit 1;
@@ -14880,6 +14897,12 @@ begin
   return jsonb_build_object('documento_id', p_documento_id, 'tipo_taxonomia', v_tipo_final, 'mudou_tipo', v_mudou_tipo);
 end;
 $$;
+
+--
+-- Name: FUNCTION fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text) IS '0226 (sobre a 0018): confirma/corrige a classificação do documento. Sem tipo final (novo nem antigo) devolve {recusado, documento_id, motivo_recusa} e não grava nada. Com tipo: grava documento (confiança 1.0, fonte humano), refaz o checklist, registra decisão e evento, e fecha as pendências de revisão do documento.';
 
 --
 -- Name: fn_rotulo_contido(text, text); Type: FUNCTION; Schema: public; Owner: -

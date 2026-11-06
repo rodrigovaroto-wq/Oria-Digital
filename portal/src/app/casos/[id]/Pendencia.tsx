@@ -23,7 +23,8 @@
 // não tinha o que fazer na tela. `Arquitetura do Sistema/2 Especificação/f0/04` prevê esse caminho desde a F0
 // (`rejeitada`); faltava código e faltava botão.
 import Link from "next/link";
-import { partesDaDescricao, rotuloDaPendencia, rotulosCitados, semALista, suavizarMensagem } from "@/lib/rotulos";
+import { falhaDeExtracaoNaTela, partesDaDescricao, rotuloDaPendencia, rotulosCitados, semALista, suavizarMensagem } from "@/lib/rotulos";
+import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import { rotuloDeTipoConhecido } from "@/lib/export";
 import { BOTOES_DECISAO, ROTULO_POR_ESTADO, rotuloDoEstado } from "@/lib/pendencia";
 import { decidirPendencia } from "./actions";
@@ -57,10 +58,15 @@ export function ItemPendencia({
   // "Item obrigatório do Kit Básico ausente: COMBINADO" — `COMBINADO` é a chave
   // primária da taxonomia, não o nome de nada que o cliente reconheça. A tela já
   // sabe traduzir (`formatarTipoTaxonomia`); faltava aplicar aqui.
-  const bruto = (p.descricao ?? "Sem descrição.").replace(
+  const traduzida = (p.descricao ?? "Sem descrição.").replace(
     /\b([A-Z][A-Z0-9_]{3,})\b/g,
     (m) => rotuloDeTipoConhecido(m) ?? m,
   );
+  // A EXTRAÇÃO QUE FALHOU (P16): a mensagem do provedor, em inglês, vai para "Detalhes técnicos";
+  // fica à vista a frase do banco (que nomeia o arquivo) e o que fazer.
+  const falha = p.tipo === "extracao_falhou" ? falhaDeExtracaoNaTela(traduzida) : null;
+  let bruto = traduzida;
+  if (falha) bruto = falha.motivo ? `${falha.frase} Motivo: ${falha.motivo}` : falha.frase;
   const rotulos = rotulosCitados(bruto);
   const partes = partesDaDescricao(suavizarMensagem(semALista(bruto)));
 
@@ -98,6 +104,24 @@ export function ItemPendencia({
         </ul>
       )}
 
+      {falha && (
+        <div className="mt-1.5 text-xs">
+          <p>
+            O que fazer: abra o arquivo original. Se ele estiver corrompido, vazio ou protegido por senha,
+            peça outro ao cliente e{" "}
+            {casoId ? (
+              <Link href={`/casos/${casoId}/adicionar`} className="font-semibold underline underline-offset-2">reenvie o arquivo</Link>
+            ) : "reenvie o arquivo"}
+            .
+          </p>
+          {falha.tecnico && (
+            <DetalhesTecnicos className="mt-1">
+              <p>{falha.tecnico}</p>
+            </DetalhesTecnicos>
+          )}
+        </div>
+      )}
+
       {rotulos.length > 0 && (
         <div className="mt-1.5">
           <p className={`text-xs font-medium ${cores.fraco}`}>
@@ -125,7 +149,12 @@ export function ItemPendencia({
               `title=`, que não existe no toque e some antes de ser lido: quem clicava
               em "Prosseguir sem resolução" descobria o que tinha feito DEPOIS. */}
           {BOTOES_DECISAO.map((b) => (
-            <FormDeAcao key={b.decisao} action={decidirPendencia.bind(null, casoId, p.id, b.decisao)} className="max-w-[15rem]">
+            <FormDeAcao
+              key={b.decisao}
+              action={decidirPendencia.bind(null, casoId, p.id, b.decisao)}
+              confirmacao={b.confirmacao && { ...b.confirmacao, efeito: b.efeito }}
+              className="max-w-[15rem]"
+            >
               <button
                 type="submit"
                 className={`rounded-md border px-2.5 py-1.5 text-xs font-semibold transition-colors ${b.classe}`}
@@ -147,6 +176,17 @@ export function ItemPendencia({
               decisão sobre problema medido, e a aba é o que ainda não foi
               perguntado. As duas continuam separadas — o que se acrescenta é o
               caminho de uma para a outra. */}
+          {/* REABRIR (0227): a decisão tinha ida e não tinha volta — a vistoria de 04/11 deixou
+              pendências presas em "Contatar o Cliente". Volta a "em aberto"; a decisão anterior fica
+              na trilha (evento_auditoria), e a que travava volta a travar o Portão 2. */}
+          {p.estado && ["reenviada_ao_cliente", "aceita_com_ressalva", "rejeitada"].includes(p.estado) && (
+            <FormDeAcao action={decidirPendencia.bind(null, casoId, p.id, "reabrir")} className="max-w-[15rem]">
+              <button type="submit" className="rounded-md border border-tinta-300 bg-folha px-2.5 py-1.5 text-xs font-semibold text-tinta-800 transition-colors hover:bg-tinta-50">
+                Reabrir pendência
+              </button>
+              <p className={`mt-1 text-xs leading-snug ${cores.fraco}`}>Volta para em aberto. A decisão anterior fica na trilha.</p>
+            </FormDeAcao>
+          )}
           {p.estado === "reenviada_ao_cliente" && (
             <Link
               href={`/casos/${casoId}/perguntas`}

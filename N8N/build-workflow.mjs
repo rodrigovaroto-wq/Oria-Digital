@@ -1958,7 +1958,7 @@ for(const [chave, blocos] of porDocumento){
     custo_usd:blocos.reduce((soma,b)=>soma+(typeof b.custo_usd==='number'?b.custo_usd:0),0),
     tokens:blocos.reduce((acc,b)=>b.tokens?{entrada:acc.entrada+(b.tokens.entrada||0), saida:acc.saida+(b.tokens.saida||0), cache:acc.cache+(b.tokens.cache||0)}:acc,{entrada:0,saida:0,cache:0}),
   };
-  // A MEDICAO POR DOCUMENTO (P4, migration 0225): o \`Gravar Campos (Sombra)\` a
+  // A MEDICAO POR DOCUMENTO (P4, migration 0229): o \`Gravar Campos (Sombra)\` a
   // repassa como \`p_medicao\` ao evento \`extracao_sombra\`. Antes so' o \`Resumo de
   // Custo\` via estes numeros, SOMADOS por lote (cobertura 1,31/1,43/2,25 medida
   // em producao, sem saber em qual documento). Montada AQUI, em JS comum, porque
@@ -1966,15 +1966,15 @@ for(const [chave, blocos] of porDocumento){
   // CAMPO AUSENTE (undefined/null) FICA AUSENTE, nunca vira 0: \`contas_no_documento\`
   // nulo e' "sem camada de texto", e 0 diria "tinha texto e nao achou conta" (regra 1).
   // \`blocos_com_resposta\` (sinal positivo, regra 7) vai sempre. \`cobertura\` e
-  // \`celulas_no_documento\` nao entram: a cobertura e' derivada (a 0225 calcula) e
+  // \`celulas_no_documento\` nao entram: a cobertura e' derivada (a 0229 calcula) e
   // celula e' outra unidade. \`versao_medicao\` muda quando a forma da medicao muda.
   // BLOCO QUE RESPONDEU = \`tokens\` nao nulo: o \`Parse Extracao\` so' monta \`tokens\` a
   // partir do \`usage\` da resposta, e uma chamada que NUNCA respondeu (erro transitorio
   // esgotado, 500) sai com \`campos:[]\`, \`custo_usd:0\` e \`tokens:null\` -- identica, nos
   // outros campos, a uma leitura que devolveu 0 linhas. Sem este sinal a linha de base
   // contaria falha de infraestrutura como "leitura de 0%" (cobertura 0/120 com motivo
-  // nulo na 0225). Com ZERO blocos respondidos, linhas/contas distintas/custo/tokens
-  // ficam FORA da medicao e a 0225 responde \`ia_sem_resposta\`; \`blocos_com_resposta
+  // nulo na 0229). Com ZERO blocos respondidos, linhas/contas distintas/custo/tokens
+  // ficam FORA da medicao e a 0229 responde \`ia_sem_resposta\`; \`blocos_com_resposta
   // < blocos\` diz que a medicao de um documento fatiado e' parcial. So' a MEDICAO muda:
   // \`doc.tokens\`/\`doc.custo_usd\`, que o Resumo de Custo soma, continuam como eram.
   const respondidos=blocos.filter(b=>b.tokens!==undefined&&b.tokens!==null);

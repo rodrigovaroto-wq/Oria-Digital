@@ -133,7 +133,7 @@ export function MenuConta({
           className="vidro-claro absolute right-0 top-full z-20 mt-2 w-64 rounded-lg border border-tinta-200 bg-folha p-1.5 shadow-lg"
         >
           {email && (
-            <p className="truncate px-2.5 py-2 text-xs text-tinta-500" title={email}>
+            <p className="valor-sensivel truncate px-2.5 py-2 text-xs text-tinta-500">
               {email}
             </p>
           )}

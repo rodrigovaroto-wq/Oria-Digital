@@ -15,7 +15,7 @@
 // quem pode resolvê-lo (o cliente), depois o que segue apesar dele, por último o
 // que nega que ele exista. Do mais reversível para o menos, que é a ordem em que
 // se deve pensar — e a ordem em que um botão apressado faz menos estrago.
-export type DecisaoPendencia = "contatar_cliente" | "prosseguir" | "nao_procede";
+export type DecisaoPendencia = "contatar_cliente" | "prosseguir" | "nao_procede" | "reabrir";
 
 export interface BotaoDecisao {
   decisao: DecisaoPendencia;
@@ -25,6 +25,17 @@ export interface BotaoDecisao {
   classe: string;
   /** cor do rótulo depois de decidida */
   chip: string;
+  /**
+   * A pergunta que vem ANTES de gravar (P16, vistoria P2 item ALTA 1). Ausente = o clique grava
+   * direto. A vistoria de 04/11 mediu "Prosseguir sem resolução" aceitando pendência que trava a
+   * aprovação num toque, sem nada perguntar; quem clicava descobria o efeito depois.
+   */
+  confirmacao?: { pergunta: string; sim: string };
+}
+
+/** Se a decisão pede confirmação antes de gravar. Contatar o cliente não pede: não tira nada da fila. */
+export function exigeConfirmacao(decisao: DecisaoPendencia): boolean {
+  return Boolean(BOTOES_DECISAO.find((b) => b.decisao === decisao)?.confirmacao);
 }
 
 export const BOTOES_DECISAO: BotaoDecisao[] = [
@@ -41,6 +52,7 @@ export const BOTOES_DECISAO: BotaoDecisao[] = [
     efeito: "O caso deixa de ser travado por esta pendência, e ela fica registrada como aceita.",
     classe: "border-risco-200 bg-risco-50 text-risco-800 hover:bg-risco-100",
     chip: "bg-risco-100 text-risco-800",
+    confirmacao: { pergunta: "Seguir sem resolver esta pendência?", sim: "Sim, seguir sem resolver" },
   },
   {
     decisao: "nao_procede",
@@ -48,6 +60,7 @@ export const BOTOES_DECISAO: BotaoDecisao[] = [
     efeito: "A pendência é declarada improcedente e deixa de travar o caso.",
     classe: "border-alerta-200 bg-alerta-50 text-alerta-900 hover:bg-alerta-100",
     chip: "bg-alerta-100 text-alerta-900",
+    confirmacao: { pergunta: "Declarar esta pendência improcedente?", sim: "Sim, não procede" },
   },
 ];
 

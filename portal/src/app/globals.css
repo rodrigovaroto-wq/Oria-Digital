@@ -660,7 +660,10 @@ body {
    MODO DISCRIÇÃO (Fase 4, 28/10/2026). O botão da barra de topo liga
    `data-discricao` no <html> (e um script inline do <head> o religa antes da
    primeira pintura); este bloco borra o que as telas marcaram com
-   `.valor-sensivel` — número financeiro, premissa, custo.
+   `.valor-sensivel` — número financeiro, premissa, custo e, desde a P16 (vistoria
+   P2 de 04/11), nome do mandato, da entidade, do arquivo e o e-mail da conta.
+   Elemento marcado NÃO leva `title=`: a dica do navegador ignora o desfoque e
+   mostrava o texto inteiro (portão: verificar-kit-basico.mts, bloco 8).
 
    O OBJETIVO É SIGILO, então NÃO HÁ REGRA DE :hover NEM DE :focus que desfaça o
    desfoque: passar o mouse ou tabular até o número não o revela (desligar é só

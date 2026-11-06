@@ -941,7 +941,22 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/original_apagado.test.sql 2>&1
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo
-echo "== 0225 — a leitura que só se media somada por lote: a cobertura por DOCUMENTO (linha de base da P4)"
+echo "== 0226 — o documento sem tipo que virava 100% Humano: fn_revisar_documento recusa confirmar sem tipo"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/revisar_documento_sem_tipo.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0227 — a pendência decidida que não tinha volta: fn_decidir_pendencia reabrir"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/pendencia_reabrir.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0228 — a linha do documento sem tipo que chegava aceita ao Excel: auto-aceite exige tipo"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/auto_aceite_exige_tipo.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0229 — a leitura que só se media somada por lote: a cobertura por DOCUMENTO (linha de base da P4)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/linha_de_base_da_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
