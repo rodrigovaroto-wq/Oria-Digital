@@ -817,6 +817,54 @@ test('Gravar Campos (Sombra): passa falha_motivo para fn_registrar_campos_extrai
   assert.match(node.parameters.options.queryReplacement, /\$json\.falha_motivo\s*\|\|\s*null/);
 });
 
+// P4 / migration 0225: a cobertura por DOCUMENTO só existe no banco se o item que sai do
+// `Juntar Blocos` carregar `medicao_documento` E o `Gravar Campos (Sombra)` a passar como `p_medicao`.
+// Afirma o COMPORTAMENTO ponta a ponta nesses dois nós: blocos entram, $7 sai.
+// (Juntar Blocos liga DIRETO no Gravar Campos: ver o teste de conexões da Camada 3.)
+const medicaoGravada = async (blocos) => {
+  const out = await run('Juntar Blocos', { items: blocos.map((b) => ({ json: b })) });
+  const node = byName['Gravar Campos (Sombra)'];
+  const params = new Function('$json', 'return (' + node.parameters.options.queryReplacement.replace(/^=\{\{/, '').replace(/\}\}$/, '') + ')')(out[0].json);
+  return params[6] === null || params[6] === 'null' ? null : JSON.parse(params[6]);
+};
+const linhaM = (k, v) => ({ ordem: 0, chave: k, valor_num: v, valor_texto: String(v), entidade_coluna: null, periodo_coluna: null });
+
+test('Gravar Campos (Sombra): passa p_medicao por NOME e liga o $7 à medição do documento', async () => {
+  assert.match(byName['Gravar Campos (Sombra)'].parameters.query, /p_medicao\s*=>\s*\$7::jsonb/);
+  const m = await medicaoGravada([
+    { documento_versao_id: 'v1', bloco: 1, blocos: 2, contas_no_documento: 40, campos: [linhaM('A', 1), linhaM('B', 2)],
+      diagnostico: {}, falha_motivo: null, custo_usd: 0.03, tokens: { entrada: 10, saida: 20, cache: 5 } },
+    { documento_versao_id: 'v1', bloco: 2, blocos: 2, contas_no_documento: 40, campos: [linhaM('C', 3)],
+      diagnostico: {}, falha_motivo: null, custo_usd: 0.02, tokens: { entrada: 5, saida: 10, cache: 0 } },
+  ]);
+  assert.equal(m.versao_medicao, 'p4-1');
+  assert.equal(m.contas_no_documento, 40);
+  assert.equal(m.linhas_devolvidas, 3);
+  assert.equal(m.contas_distintas, 3);
+  assert.equal(m.blocos, 2);
+  assert.ok('blocos_planejados' in m);
+  assert.ok(Math.abs(m.custo_usd - 0.05) < 1e-9);
+  assert.deepEqual(m.tokens, { entrada: 15, saida: 30, cache: 5 });
+  assert.ok(!('cobertura' in m) && !('celulas_no_documento' in m), 'a cobertura é derivada pela 0225');
+});
+
+test('Gravar Campos (Sombra): contas_no_documento ausente continua AUSENTE na medição — nunca vira 0 (regra 1)', async () => {
+  // documento sem camada de texto: 0 diria "tinha texto e não achou conta"
+  const m = await medicaoGravada([{ documento_versao_id: 'v2', bloco: 1, blocos: 1, contas_no_documento: null,
+    campos: [linhaM('A', 1)], diagnostico: {}, falha_motivo: null, custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 } }]);
+  assert.equal(m.linhas_devolvidas, 1);
+  assert.ok(!('contas_no_documento' in m), 'contas_no_documento nulo não pode virar 0 nem null na medição');
+  assert.equal(m.versao_medicao, 'p4-1');
+});
+
+test('Juntar Blocos: documento sem nenhuma linha devolvida leva ZERO medido (0 real), não ausência', async () => {
+  // o contrário da regra 1: aqui o 0 É medição (a IA devolveu 0 linhas) e tem de chegar ao banco.
+  // O ramo "nenhum campo medido => null" do Code é defensivo: linhas_devolvidas/custo/tokens saem sempre do reduce.
+  const out = await run('Juntar Blocos', { items: [{ json: { documento_versao_id: 'v3', campos: [], diagnostico: {}, falha_motivo: null } }] });
+  assert.equal(out[0].json.medicao_documento.linhas_devolvidas, 0);
+  assert.equal(out[0].json.medicao_documento.versao_medicao, 'p4-1');
+});
+
 test('Nós OpenAI têm batching + retry (evita o 429 de rate limit num upload em lote)', () => {
   // Achado em produção (sessão 7 cont.⁸, "teste v15"): 16 documentos → 16
   // chamadas OpenAI quase simultâneas → 429 em TODAS ("Try spacing your

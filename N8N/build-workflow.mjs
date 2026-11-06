@@ -1918,7 +1918,7 @@ for(const [chave, blocos] of porDocumento){
   const notaEmenda=r.emendasLimpas>0
     ? r.emendasLimpas+' linha(s) repetida(s) na emenda entre blocos foram descartadas (o modelo repetiu a ancora).'
     : null;
-  saida.push({pairedItem:{item:primeiroIndice.get(chave)??0}, json:{
+  const doc={
     documento_versao_id,
     // Levado adiante pelo mesmo motivo do documento_versao_id: o Registrar
     // Diagnostico e o Reconciliar liam o no' de registro por \`.item\`, que nao
@@ -1957,7 +1957,24 @@ for(const [chave, blocos] of porDocumento){
     cobertura:cobertura?cobertura.razao:(base.contas_no_documento>0?Number((linhasDevolvidas/base.contas_no_documento).toFixed(3)):null),
     custo_usd:blocos.reduce((soma,b)=>soma+(typeof b.custo_usd==='number'?b.custo_usd:0),0),
     tokens:blocos.reduce((acc,b)=>b.tokens?{entrada:acc.entrada+(b.tokens.entrada||0), saida:acc.saida+(b.tokens.saida||0), cache:acc.cache+(b.tokens.cache||0)}:acc,{entrada:0,saida:0,cache:0}),
-  }});
+  };
+  // A MEDICAO POR DOCUMENTO (P4, migration 0225): o \`Gravar Campos (Sombra)\` a
+  // repassa como \`p_medicao\` ao evento \`extracao_sombra\`. Antes so' o \`Resumo de
+  // Custo\` via estes numeros, SOMADOS por lote (cobertura 1,31/1,43/2,25 medida
+  // em producao, sem saber em qual documento). Montada AQUI, em JS comum, porque
+  // nenhuma expressao \`={{ }}\` do workflow usa arrow function.
+  // CAMPO AUSENTE (undefined/null) FICA AUSENTE, nunca vira 0: \`contas_no_documento\`
+  // nulo e' "sem camada de texto", e 0 diria "tinha texto e nao achou conta" (regra 1).
+  // SEM NENHUM campo medido a medicao e' null (a 0225 grava \`medicao: null\`
+  // explicito): \`versao_medicao\` sozinha NAO e' medicao (regra 7). \`cobertura\` e
+  // \`celulas_no_documento\` nao entram: a cobertura e' derivada (a 0225 calcula) e
+  // celula e' outra unidade. \`versao_medicao\` muda quando a forma da medicao muda.
+  const medicao={};
+  for(const k of ['contas_no_documento','linhas_devolvidas','contas_distintas','blocos','blocos_planejados','custo_usd','tokens']){
+    if(doc[k]!==undefined&&doc[k]!==null) medicao[k]=doc[k];
+  }
+  doc.medicao_documento=Object.keys(medicao).length>0?{...medicao,versao_medicao:'p4-1'}:null;
+  saida.push({pairedItem:{item:primeiroIndice.get(chave)??0}, json:doc});
 }
 return saida;
 `.trim();
@@ -2904,10 +2921,10 @@ throw new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') +
   node('Gravar Campos (Sombra)', 'n8n-nodes-base.postgres', 2.5, {
     operation: 'executeQuery',
     query: [
-      'select fn_registrar_campos_extraidos($1::uuid, $2::jsonb, p_falha_motivo=>$3::text, p_tem_dado_financeiro=>$4::boolean) as n_campos,',
+      'select fn_registrar_campos_extraidos($1::uuid, $2::jsonb, p_falha_motivo=>$3::text, p_tem_dado_financeiro=>$4::boolean, p_medicao=>$7::jsonb) as n_campos,',
       '       $5::uuid as documento_id, $1::uuid as documento_versao_id, $6::jsonb as diagnostico',
     ].join('\n'),
-    options: { ...PG_POR_ITEM, queryReplacement: "={{ [$json.documento_versao_id, JSON.stringify($json.campos), $json.falha_motivo || null, $json.diagnostico?.tem_dado_financeiro ?? null, $json.documento_id, JSON.stringify($json.diagnostico ?? null)] }}" },
+    options: { ...PG_POR_ITEM, queryReplacement: "={{ [$json.documento_versao_id, JSON.stringify($json.campos), $json.falha_motivo || null, $json.diagnostico?.tem_dado_financeiro ?? null, $json.documento_id, JSON.stringify($json.diagnostico ?? null), JSON.stringify($json.medicao_documento ?? null)] }}" },
   }, { credentials: PG_CRED, ...PG_RETRY }),
 
   // Diagnóstico (E1/E2, N1): entidade preenche a lacuna quando ainda vazia;
