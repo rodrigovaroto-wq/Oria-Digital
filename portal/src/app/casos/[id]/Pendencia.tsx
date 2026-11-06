@@ -120,7 +120,8 @@ export function ItemPendencia({
           ))}
           {falha.tecnico && (
             <DetalhesTecnicos className="mt-1">
-              <p>{falha.tecnico}</p>
+              {/* o técnico carrega valores e rótulos do cliente: borra no modo discrição */}
+              <p className="valor-sensivel">{falha.tecnico}</p>
             </DetalhesTecnicos>
           )}
         </div>

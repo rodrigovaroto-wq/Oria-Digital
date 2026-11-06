@@ -403,15 +403,13 @@ ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWit
     ok(!INGLES.test(aVista), `à vista não há texto em inglês: ${curto}`, aVista.slice(0, 200));
     ok(f.tecnico === motivo, `o texto técnico é o motivo inteiro, sem perda: ${curto}`);
     ok(f.aVista.length > 0 && f.acoes.length > 0, `há causa à vista e ação: ${curto}`);
-    const doProvedor = /^(bloco \d+: )?(CHAVE|CONTA DO|LIMITE|TETO|Erro da API|Resposta d\S+ OpenAI sem)/.test(motivo);
-    if (doProvedor) {
-      // a falha do provedor nunca manda abrir o arquivo nem culpa o arquivo; e, quando o motivo é
-      // SÓ do provedor, a única ação é a do serviço de IA.
-      ok(!f.acoes.some((a) => a.tipo === "servico_de_ia" && REENVIAR_COMO_CAUSA.test(a.texto)),
-        `falha do provedor não manda abrir/culpa o arquivo: ${curto}`);
-      if (!/INCOMPLETA|não fecha|descartad|colado|truncad/.test(motivo)) {
-        ok(f.acoes.length === 1 && f.acoes[0].tipo === "servico_de_ia", `motivo só do provedor: só a ação do serviço de IA: ${curto}`, JSON.stringify(f.acoes.map((a) => a.tipo)));
-      }
+    // COMPORTAMENTO: motivo que é SÓ falha do provedor (sem nenhum trecho de documento) nunca manda
+    // abrir o arquivo como causa e só tem a ação do serviço de IA.
+    const soProvedor = /^(bloco \d+: )?(CHAVE|CONTA DO|LIMITE|TETO|Erro da API|Resposta d\S+ OpenAI sem)/.test(motivo)
+      && !/INCOMPLETA|não fecha|descartad|colado|truncad/.test(motivo);
+    if (soProvedor) {
+      ok(!f.acoes.some((a) => REENVIAR_COMO_CAUSA.test(a.texto)) && f.acoes.every((a) => a.tipo === "servico_de_ia"),
+        `falha só do provedor: nenhuma ação manda abrir o arquivo como causa: ${curto}`, JSON.stringify(f.acoes.map((a) => a.tipo)));
     }
   }
 
@@ -430,6 +428,73 @@ ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWit
   // A armadilha: " | " DENTRO de um rótulo de conta não cria "título".
   const comPipe = falhaDeExtracaoNaTela(doBanco(acha(/GRADE|ARADO/)));
   ok(!comPipe.aVista.some((t) => /PAGO|MATRIZ|GRADE|ARADO/.test(t)), "rótulo com ' | ' não vira causa à vista", comPipe.aVista.join(" || "));
+  // TEXTO REAL DO EMISSOR (regra 4: nada inventado). Os motivos abaixo saem das funções do n8n que
+  // os gravam, importadas aqui por caminho calculado (o portal não importa N8N/lib no build; o script
+  // pode). Cobre as famílias que o corpus de 06/11 não tem.
+  const n8n = async (m: string) => await import(new URL(`../../N8N/lib/${m}`, import.meta.url).href);
+  const { diagnosticarErroApi, parseExtractionResponse } = await n8n("extract.mjs");
+  const { avisoTruncamentoPlanilha } = await n8n("spreadsheet.mjs");
+  const porErro = (e: unknown) => falhaDeExtracaoNaTela(doBanco(diagnosticarErroApi(e).motivo));
+  const tipos = (f: ReturnType<typeof falhaDeExtracaoNaTela>) => f.acoes.map((a) => a.tipo).join(",");
+  const e429 = (code: string, message: string) => ({ httpCode: 429, error: { error: { type: "x", code, message } } });
+  const casos: Array<[string, unknown, string]> = [
+    ["429 cota diária", e429("rate_limit_exceeded", "Rate limit reached on tokens per day (TPD): Limit 200000"), "servico_de_ia"],
+    ["429 sem causa", { httpCode: 429, error: { error: { message: "x" } } }, "servico_de_ia"],
+    ["404 modelo", { httpCode: 404, error: { error: { type: "invalid_request_error", code: "model_not_found", message: "The model does not exist" } } }, "servico_de_ia"],
+    ["500 servidor", { httpCode: 500, error: { error: { type: "server_error", message: "The server had an error" } } }, "servico_de_ia"],
+    // o caso de origem da P16: PDF corrompido devolve 400 invalid_request_error — NÃO é culpa do serviço
+    ["400 pedido recusado (PDF corrompido)", { httpCode: 400, error: { error: { type: "invalid_request_error", message: "The document could not be processed" } } }, "chamada_incerta"],
+  ];
+  for (const [nome, erro, esperado] of casos) {
+    const f = porErro(erro);
+    ok(tipos(f) === esperado && !PROIBIDO.test(f.aVista.join(" ")) && !INGLES.test(f.aVista.join(" ")),
+      `emissor real, ${nome}: ação ${esperado}, nada técnico à vista`, `${tipos(f)} | ${f.aVista.join(" ")}`);
+  }
+  const recusa = porErro(casos[4][1]);
+  ok(/arquivo/.test(recusa.acoes[0].texto) && /serviço/.test(recusa.acoes[0].texto) && !/o arquivo não é o problema/.test(recusa.acoes[0].texto),
+    "400 recusado: mostra as duas possibilidades (arquivo ou serviço), não afirma culpa do serviço", recusa.acoes[0].texto);
+  const semConteudo = parseExtractionResponse({ choices: [{ message: { content: "" } }] });
+  const motivoVazio = String((semConteudo as { falha_motivo?: string; falhaMotivo?: string }).falha_motivo ?? (semConteudo as { falhaMotivo?: string }).falhaMotivo ?? "");
+  ok(/sem conte/.test(motivoVazio) && tipos(falhaDeExtracaoNaTela(doBanco(motivoVazio))) === "servico_de_ia",
+    "emissor real: resposta sem conteúdo (grafia com acento) é falha do serviço", motivoVazio);
+  const aviso = avisoTruncamentoPlanilha(Array.from({ length: 12 }, () => ({ a: 1 })), { maxRows: 5, maxCols: 5 }) ?? "";
+  const planilha = falhaDeExtracaoNaTela(doBanco(aviso));
+  ok(planilha.acoes.length === 1 && planilha.acoes[0].tipo === "planilha_cortada" && /fatiado/.test(planilha.acoes[0].texto)
+    && !/reenvie o mesmo arquivo\./.test(planilha.acoes[0].texto) && planilha.aVista[0].startsWith("Planilha maior que o teto de envio"),
+    "emissor real: planilha cortada pede reenvio FATIADO, nunca 'reenvie o mesmo arquivo'", `${aviso} || ${tipos(planilha)}`);
+  // Estes emissores moram em strings de nó Code (N8N/build-workflow.mjs ~1180, 1277, 1362-1370,
+  // 2011-2029): não dá para importá-los. Texto transcrito do código-fonte; mudou lá, mude aqui.
+  const doNo: Array<[string, string, string]> = [
+    ["xlsx várias abas", "O arquivo .xlsx tem 3 abas e o extrator nativo leu SO a primeira (120 linha(s)); as outras 2 aba(s) NAO foram lidas e a tabela financeira pode estar em qualquer uma delas. Os nomes das abas nao estao disponiveis (ficam no workbook.xml, comprimido). Abra o arquivo e reenvie a aba certa, ou confirme que a primeira e a unica com dado.", "xlsx_varias_abas"],
+    ["extração nativa falhou", "A extracao NATIVA deste arquivo FALHOU no n8n (xlsx): erro. NENHUM dado deste documento chegou ao banco nem ao book -- o que o arquivo contem NAO foi lido. Isto e uma falha do PIPELINE, nao do arquivo: nao registre este documento como ilegivel sem conferir.", "falha_do_sistema"],
+    ["recompor conteúdo", "Recompor Conteudo Extraido: nao foi possivel religar esta linha ao documento de origem (itemMatching falhou). Conteudo NAO chegou a extracao.", "falha_do_sistema"],
+    ["linha acima do teto", "bloco 2: uma linha sozinha já passa do teto de saída do modelo — não há corte mais fino que a linha, e a resposta deste bloco pode ter vindo cortada", "resposta_truncada"],
+    ["JSON inválido", "Resposta do provedor de IA nao veio em JSON valido.", "resposta_invalida"],
+    ["limite de tokens", "Resposta do provedor de IA atingiu o limite de tokens de saida; o JSON veio valido, mas o conteudo pode estar incompleto (faltando linhas do fim do documento).", "resposta_truncada"],
+    ["sem conteudo (nó inline, sem acento)", "Resposta do provedor de IA (OpenAI) sem conteudo (falha de rede/API).", "servico_de_ia"],
+    ["rótulo colado (nó inline, sem acento)", "2 rotulo(s) com numero colado que nao e o valor da linha (a conta foi mantida): \"A | B\"", "conferir_na_revisao"],
+  ];
+  for (const [nome, texto, esperado] of doNo) {
+    const f = falhaDeExtracaoNaTela(doBanco(texto));
+    ok(tipos(f) === esperado && f.tecnico === texto && !f.aVista.includes("Há uma causa que não foi possível classificar; o detalhe está em Detalhes técnicos."),
+      `emissor do nó, ${nome}: classificado como ${esperado}`, `${tipos(f)} | ${f.aVista.join(" ")}`);
+  }
+  for (const [nome, texto] of doNo.filter(([, , e]) => e === "xlsx_varias_abas")) {
+    ok(!/reenvie o mesmo arquivo\./.test(falhaDeExtracaoNaTela(doBanco(texto)).acoes[0].texto), `${nome}: não manda reenviar o mesmo arquivo`);
+  }
+  // identidade de linha como o emissor a escreve (`<coluna>=<valor> + …`, aritmetica.mjs:119): nomeia a linha
+  const identidade = 'identidade de linha não fecha em "001018 Custo com venda de plantadeira": Janeiro=0 + Fevereiro=5 = 5, mas a coluna "Total" declara 9 — diferença de 4.00 (tolerância de arredondamento: 1). Um dos dois valores está errado, e o book vai sair com essa diferença nesta linha.';
+  const idf = falhaDeExtracaoNaTela(doBanco(identidade));
+  ok(idf.aVista.length === 1 && idf.aVista[0].includes("001018 Custo com venda de plantadeira") && idf.aVista[0].includes("diferença de 4.00"),
+    "identidade de linha no formato real do emissor nomeia a linha", idf.aVista.join(" "));
+  // ERRO NA CHAMADA sem status e sem sinal de rede não afirma causa
+  const semStatus = falhaDeExtracaoNaTela(doBanco("ERRO NA CHAMADA AO PROVEDOR DE IA: falhou"));
+  ok(tipos(semStatus) === "chamada_incerta", "erro de chamada sem status nem sinal de rede não culpa o serviço", tipos(semStatus));
+
+  // O técnico carrega valores e rótulos do cliente: no modo discrição tem de ir num elemento
+  // `valor-sensivel` (a vistoria de 06/11 achou-o sem a marca).
+  const tela = readFileSync(new URL("../src/app/casos/[id]/Pendencia.tsx", import.meta.url), "utf8");
+  ok(/<p className="valor-sensivel">\{falha\.tecnico\}<\/p>/.test(tela), "Detalhes técnicos da falha de extração é marcado como sensível");
   // Causa nova (não reconhecida): não afirma causa (regra 1) e o detalhe segue acessível.
   const nova = falhaDeExtracaoNaTela(doBanco("o disco do servidor encheu"));
   ok(nova.acoes.length === 1 && nova.acoes[0].tipo === "nao_classificada" && /não foi possível classificar/.test(nova.acoes[0].texto)
