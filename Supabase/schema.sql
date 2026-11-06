@@ -17934,13 +17934,13 @@ CREATE VIEW public.instalacao_sonda_evento_sem_forja AS
    FROM pg_policies p
   WHERE ((schemaname = 'public'::name) AND (tablename = 'evento_auditoria'::name) AND (policyname = 'evento_auditoria_insert'::name) AND (cmd = 'INSERT'::text) AND ('authenticated'::name = ANY (roles)) AND (with_check ~ 'documento_original_apagado'::text) AND (NOT (EXISTS ( SELECT 1
            FROM pg_policies o
-          WHERE ((o.schemaname = 'public'::name) AND (o.tablename = 'evento_auditoria'::name) AND (o.policyname <> 'evento_auditoria_insert'::name) AND (o.permissive = 'PERMISSIVE'::text) AND (o.cmd = ANY (ARRAY['INSERT'::text, 'ALL'::text])) AND (o.roles && ARRAY['authenticated'::name, 'public'::name]))))));
+          WHERE ((o.schemaname = 'public'::name) AND (o.tablename = 'evento_auditoria'::name) AND (o.policyname <> 'evento_auditoria_insert'::name) AND (o.permissive = 'PERMISSIVE'::text) AND (o.cmd = ANY (ARRAY['INSERT'::text, 'ALL'::text])) AND (NOT (o.roles <@ ARRAY['service_role'::name])))))));
 
 --
 -- Name: VIEW instalacao_sonda_evento_sem_forja; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.instalacao_sonda_evento_sem_forja IS 'Sonda da 0224: uma linha = authenticated não insere à mão evento documento_original_apagado. Zero linhas: a policy voltou ao desenho da 0216 ou existe outra policy permissiva de INSERT para authenticated/public: qualquer Analista forja quem apagou o original.';
+COMMENT ON VIEW public.instalacao_sonda_evento_sem_forja IS 'Sonda da 0224: uma linha = authenticated não insere à mão evento documento_original_apagado. Zero linhas: a policy voltou ao desenho da 0216 ou existe outra policy permissiva de INSERT para qualquer papel exceto service_role: qualquer Analista forja quem apagou o original.';
 
 --
 -- Name: taxonomia_linha_exigida; Type: TABLE; Schema: public; Owner: -
@@ -18225,13 +18225,13 @@ CREATE VIEW public.instalacao_sonda_update_documentos_so_socio AS
    FROM pg_policies p
   WHERE ((schemaname = 'storage'::name) AND (tablename = 'objects'::name) AND (policyname = 'documentos_update'::name) AND (cmd = 'UPDATE'::text) AND ('authenticated'::name = ANY (roles)) AND (qual ~ 'fn_eh_socio'::text) AND (with_check ~ 'fn_eh_socio'::text) AND (qual !~ 'fn_pode_'::text) AND (with_check !~ 'fn_pode_'::text) AND (NOT (EXISTS ( SELECT 1
            FROM pg_policies o
-          WHERE ((o.schemaname = 'storage'::name) AND (o.tablename = 'objects'::name) AND (o.policyname <> 'documentos_update'::name) AND (o.permissive = 'PERMISSIVE'::text) AND (o.cmd = ANY (ARRAY['UPDATE'::text, 'ALL'::text])) AND (o.roles && ARRAY['authenticated'::name, 'public'::name]))))));
+          WHERE ((o.schemaname = 'storage'::name) AND (o.tablename = 'objects'::name) AND (o.policyname <> 'documentos_update'::name) AND (o.permissive = 'PERMISSIVE'::text) AND (o.cmd = ANY (ARRAY['UPDATE'::text, 'ALL'::text])) AND (NOT (o.roles <@ ARRAY['service_role'::name])))))));
 
 --
 -- Name: VIEW instalacao_sonda_update_documentos_so_socio; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.instalacao_sonda_update_documentos_so_socio IS 'Sonda da 0224: uma linha = mover/sobrescrever original (UPDATE em storage.objects do bucket documentos) é só do Sócio. Zero linhas: a policy voltou ao desenho da 0216 (Analista alocado move o original sem trilha) OU existe outra policy permissiva de UPDATE para authenticated/public.';
+COMMENT ON VIEW public.instalacao_sonda_update_documentos_so_socio IS 'Sonda da 0224: uma linha = mover/sobrescrever original (UPDATE em storage.objects do bucket documentos) é só do Sócio. Zero linhas: a policy voltou ao desenho da 0216 (Analista alocado move o original sem trilha) OU existe outra policy permissiva de UPDATE para qualquer papel exceto service_role.';
 
 --
 -- Name: instalacao_sonda_versionamento_documentos; Type: VIEW; Schema: public; Owner: -

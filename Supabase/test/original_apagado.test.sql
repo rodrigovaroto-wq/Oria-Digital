@@ -446,6 +446,11 @@ begin
   select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_update_so_socio' and not presente;
   drop policy teste_d16_extra_all on storage.objects;
   perform teste_assert_d16(v_n = 1, 'uma policy permissiva ALL para public em storage.objects também faz a sonda acusar', v_n::text);
+  -- anon tem UPDATE em storage.objects em produção (medido: role_table_grants), e a chave anon é pública: uma policy para anon move o original sem login nenhum.
+  create policy teste_d16_extra_anon on storage.objects for update to anon using (true);
+  select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_update_so_socio' and not presente;
+  drop policy teste_d16_extra_anon on storage.objects;
+  perform teste_assert_d16(v_n = 1, 'uma policy permissiva de UPDATE para anon em storage.objects faz a sonda acusar', v_n::text);
   select count(*) into v_n from fn_instalacao_conferir() where chave = 'original_apagado_update_so_socio' and presente;
   perform teste_assert_d16(v_n = 1, 'removida a policy extra, a sonda volta a ver o update só do Sócio', v_n::text);
   -- o versionamento: ligado, ou a coluna ausente, a sonda acusa (regra 7: sem medição não passa).

@@ -327,11 +327,14 @@ create or replace view instalacao_sonda_update_documentos_so_socio as
      and p.qual !~ 'fn_pode_' and p.with_check !~ 'fn_pode_'
      -- Policies PERMISSIVE somam com OR: qualquer OUTRA de UPDATE (ou ALL) para authenticated/public em storage.objects reabre o buraco com a sonda verde (ex.: o template
      -- "Give users access to own folder" do Studio). Sem parsear SQL não dá para saber se ela alcança o bucket `documentos`: qualquer uma acusa (hoje só existem documentos_*, medido).
+     -- Conta QUALQUER papel, não só authenticated/public: anon tem UPDATE em storage.objects em produção (role_table_grants, medido em 06/11) e a chave anon é pública,
+     -- então uma policy `to anon` moveria o original sem login nenhum. Só service_role fica de fora: tem BYPASSRLS, policy não muda nada para ele.
+     -- (Sexta revisão independente; com o filtro antigo authenticated/public, o assert de anon reprova 1.)
      and not exists (select 1 from pg_policies o
                       where o.schemaname = 'storage' and o.tablename = 'objects' and o.policyname <> 'documentos_update'
-                        and o.permissive = 'PERMISSIVE' and o.cmd in ('UPDATE', 'ALL') and o.roles && array['authenticated', 'public']::name[]);
+                        and o.permissive = 'PERMISSIVE' and o.cmd in ('UPDATE', 'ALL') and not (o.roles <@ array['service_role']::name[]));
 comment on view instalacao_sonda_update_documentos_so_socio is
-  'Sonda da 0224: uma linha = mover/sobrescrever original (UPDATE em storage.objects do bucket documentos) é só do Sócio. Zero linhas: a policy voltou ao desenho da 0216 (Analista alocado move o original sem trilha) OU existe outra policy permissiva de UPDATE para authenticated/public.';
+  'Sonda da 0224: uma linha = mover/sobrescrever original (UPDATE em storage.objects do bucket documentos) é só do Sócio. Zero linhas: a policy voltou ao desenho da 0216 (Analista alocado move o original sem trilha) OU existe outra policy permissiva de UPDATE para qualquer papel exceto service_role.';
 grant select on instalacao_sonda_update_documentos_so_socio to authenticated, service_role;
 
 -- A SONDA DA POLICY DE INSERT DE evento_auditoria: uma linha somente se ela existe para INSERT de authenticated e o with check exclui a ação da exclusão de original.
@@ -341,12 +344,12 @@ create or replace view instalacao_sonda_evento_sem_forja as
    where p.schemaname = 'public' and p.tablename = 'evento_auditoria' and p.policyname = 'evento_auditoria_insert' and p.cmd = 'INSERT'
      and 'authenticated' = any (p.roles)
      and p.with_check ~ 'documento_original_apagado'
-     -- idem: outra policy PERMISSIVE de INSERT (ou ALL) em evento_auditoria para authenticated/public soma com OR e anula o `acao <>`.
+     -- idem: outra policy PERMISSIVE de INSERT (ou ALL) em evento_auditoria, para qualquer papel exceto service_role (BYPASSRLS), soma com OR e anula o `acao <>`.
      and not exists (select 1 from pg_policies o
                       where o.schemaname = 'public' and o.tablename = 'evento_auditoria' and o.policyname <> 'evento_auditoria_insert'
-                        and o.permissive = 'PERMISSIVE' and o.cmd in ('INSERT', 'ALL') and o.roles && array['authenticated', 'public']::name[]);
+                        and o.permissive = 'PERMISSIVE' and o.cmd in ('INSERT', 'ALL') and not (o.roles <@ array['service_role']::name[]));
 comment on view instalacao_sonda_evento_sem_forja is
-  'Sonda da 0224: uma linha = authenticated não insere à mão evento documento_original_apagado. Zero linhas: a policy voltou ao desenho da 0216 ou existe outra policy permissiva de INSERT para authenticated/public: qualquer Analista forja quem apagou o original.';
+  'Sonda da 0224: uma linha = authenticated não insere à mão evento documento_original_apagado. Zero linhas: a policy voltou ao desenho da 0216 ou existe outra policy permissiva de INSERT para qualquer papel exceto service_role: qualquer Analista forja quem apagou o original.';
 grant select on instalacao_sonda_evento_sem_forja to authenticated, service_role;
 
 -- A SONDA DO VERSIONAMENTO: uma linha somente se o bucket `documentos` existe E tem `versioning_status = 'DISABLED'`. Regra 7: se a coluna não existe nesta versão do Storage
