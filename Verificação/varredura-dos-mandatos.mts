@@ -142,7 +142,7 @@ async function baixar(ctx: any, casoId: string, modo: "dados" | "completo" | "ap
     if (st !== 200) {
       const corpo = (await r.text().catch(() => "")).replace(/\s+/g, " ").slice(0, 200);
       // Só a recusa do PORTÃO é legítima: 409/422 com mensagem, e nunca na base de dados.
-      const recusaDoPortao = modo !== "dados" && (st === 409 || st === 422) && /recusad|aprovad|bloque/i.test(corpo);
+      const recusaDoPortao = modo !== "dados" && (st === 409 || st === 422) && /recusad|aprovad|bloque|não foi gerad|ainda não tem/i.test(corpo);
       return anota({ onde: rotulo, nivel: recusaDoPortao ? "RECUSA" : "FALHA",
         o_que: `HTTP ${st}${st >= 300 && st < 400 ? ` → ${r.headers().location}` : ""}: ${corpo || "(sem corpo)"}`, ms });
     }
