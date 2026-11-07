@@ -47,6 +47,8 @@ const DOCS = process.env.VM_DOCUMENTOS === "1";
 const PARALELO = Math.max(1, Number(process.env.VM_PARALELO ?? 3));
 const SO = (process.env.VM_SO ?? "").split(",").filter(Boolean);
 const RECALC = process.env.VM_RECALCULAR === "1";
+// Caminho ABSOLUTO (Sonar S4036): resolver "soffice" pelo PATH deixaria um diretório gravável escolher o binário.
+const SOFFICE = process.env.VM_SOFFICE ?? "/usr/bin/soffice";
 const ESPERADO = process.env.VM_ESPERADO ? Number(process.env.VM_ESPERADO) : null;
 const [EMAIL, SENHA] = fs.readFileSync(CRED, "utf8").trim().split("\n").map((s) => s.trim());
 if (!EMAIL || !SENHA) sair(2, "NÃO RODOU: o arquivo de credencial precisa de e-mail e senha em duas linhas.");
@@ -125,7 +127,7 @@ function recalcular(buf: Buffer): Buffer {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "vm-recalc-"));
   try {
     fs.writeFileSync(path.join(dir, "in.xlsx"), buf);
-    execFileSync("soffice", ["--headless", "--calc", "--convert-to", "xlsx:Calc MS Excel 2007 XML", "--outdir", path.join(dir, "out"),
+    execFileSync(SOFFICE, ["--headless", "--calc", "--convert-to", "xlsx:Calc MS Excel 2007 XML", "--outdir", path.join(dir, "out"),
       path.join(dir, "in.xlsx")], { timeout: 300_000, stdio: "ignore", env: { ...process.env, HOME: dir } });
     return fs.readFileSync(path.join(dir, "out", "in.xlsx"));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
