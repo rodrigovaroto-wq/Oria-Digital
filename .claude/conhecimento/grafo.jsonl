@@ -204,6 +204,7 @@
 {"k":"n","id":"arquivo:Supabase/test/tolerancia_na_base.test.sql","t":"arquivo","f":"Supabase/test/tolerancia_na_base.test.sql","txt":"tolerancia_na_base.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/transcricao_humana.test.sql","t":"arquivo","f":"Supabase/test/transcricao_humana.test.sql","txt":"transcricao_humana.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/veredito_producao.test.sql","t":"arquivo","f":"Supabase/test/veredito_producao.test.sql","txt":"veredito_producao.test.sql"}
+{"k":"n","id":"arquivo:Verificação/linha-de-base.mts","t":"arquivo","f":"Verificação/linha-de-base.mts","txt":"linha-de-base.mts"}
 {"k":"n","id":"arquivo:Verificação/run.mts","t":"arquivo","f":"Verificação/run.mts","txt":"run.mts"}
 {"k":"n","id":"arquivo:Verificação/variacoes.mts","t":"arquivo","f":"Verificação/variacoes.mts","txt":"variacoes.mts"}
 {"k":"n","id":"arquivo:Verificação/vistoria-por-papel.mts","t":"arquivo","f":"Verificação/vistoria-por-papel.mts","txt":"vistoria-por-papel.mts"}
@@ -1029,6 +1030,7 @@
 {"k":"n","id":"suite:N8N/test/workflow-sim.test.mjs","t":"suite","f":"N8N/test/workflow-sim.test.mjs","txt":"workflow sim test mjs"}
 {"k":"n","id":"suite:Supabase/test/run.sh","t":"suite","f":"Supabase/test/run.sh","txt":"run sh"}
 {"k":"n","id":"suite:Verificação/enviar-book.mts","t":"suite","f":"Verificação/enviar-book.mts","txt":"enviar book mts"}
+{"k":"n","id":"suite:Verificação/linha-de-base.mts","t":"suite","f":"Verificação/linha-de-base.mts","txt":"linha de base mts"}
 {"k":"n","id":"suite:Verificação/run.mts","t":"suite","f":"Verificação/run.mts","txt":"run mts"}
 {"k":"n","id":"suite:Verificação/variacoes.mts","t":"suite","f":"Verificação/variacoes.mts","txt":"variacoes mts"}
 {"k":"n","id":"suite:Verificação/vistoria-por-papel.mts","t":"suite","f":"Verificação/vistoria-por-papel.mts","txt":"vistoria por papel mts"}
@@ -1902,6 +1904,7 @@
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"Supabase/test/veredito_producao.test.sql","l":170}
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"Supabase/test/veredito_producao.test.sql","l":40}
 {"k":"e","de":"arquivo:Supabase/test/veredito_producao.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/veredito_producao.test.sql","l":83}
+{"k":"e","de":"arquivo:Verificação/linha-de-base.mts","rel":"CHAMA","pa":"fn:fn_linha_de_base_extracao","f":"Verificação/linha-de-base.mts","l":3}
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_definir_modelagem","f":"Verificação/run.mts","l":544}
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Verificação/run.mts","l":552}
 {"k":"e","de":"arquivo:Verificação/run.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"Verificação/run.mts","l":332}

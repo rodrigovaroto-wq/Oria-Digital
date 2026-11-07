@@ -26,6 +26,8 @@ mandato, e as pendências conhecidas do portal.
 > **Premissa deste plano, para o dono corrigir:** **5 sessões por semana**, 30 fatias em 6 semanas.
 > Com outro ritmo, a ordem não muda; muda só a data em que cada fatia acontece.
 
+> **Atualizado em 07/11/2026 (sessão 119b):** P4 medida — linha de base por documento dos 4 books em `LINHA_DE_BASE_P4.md` (US$ 0,61). Achado ALTO novo antes da P5: arquivo com acento no nome some entre o portal e o n8n sem rastro.
+>
 > **Atualizado em 06/11/2026 (sessão 118):** 0224 (D16) aplicada; resíduo e mandatos da S117 limpos; vistoria refeita igual. Próxima fatia: P4.
 >
 > **Atualizado em 04/11/2026 (sessão 117, fim):** P1 ✅, P1b ✅, P1c ✅, P2 ✅, P3 ✅. Atraso de ~3 sessões. O fim das 30
