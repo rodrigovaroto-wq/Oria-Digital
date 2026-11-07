@@ -365,22 +365,206 @@ export function fraseDoAceiteTotal(aceitosPor: Array<string | null | undefined>)
 // (`fn_descricao_extracao_falhou`, 0154). Quando <m> é a mensagem do provedor de IA, ela chega
 // em inglês e crua: um PDF corrompido de 14 bytes mostrou o erro do provedor na tela, sem dizer
 // o que fazer. O texto exato daquele erro não foi guardado na vistoria.
+/** O que a pessoa faz depois — a ação segue a CAUSA, não é a mesma para toda falha. */
+export type AcaoDeFalha =
+  | "servico_de_ia" | "falha_do_sistema" | "chamada_incerta" | "resposta_invalida" | "resposta_truncada"
+  | "planilha_cortada" | "xlsx_varias_abas" | "sem_linhas" | "conferir_na_revisao" | "nao_classificada";
+
 export interface FalhaDeExtracaoNaTela {
   /** a frase do banco até "Motivo:", que já é português e nomeia o arquivo */
   frase: string;
-  /** o motivo, quando ele é texto nosso (português) e ajuda a decidir */
-  motivo: string | null;
-  /** o motivo cru, quando é mensagem técnica: vai para "Detalhes técnicos" */
+  /** a causa em português, uma frase por causa distinta — o único texto do motivo que vai à vista */
+  aVista: string[];
+  /** o motivo INTEIRO, como o banco gravou (nada se perde); null só quando não há motivo */
   tecnico: string | null;
+  /** o que fazer, uma ação por tipo de causa presente */
+  acoes: Array<{ tipo: AcaoDeFalha; texto: string; reenvio: boolean }>;
+}
+
+// Textos de "o que fazer". O caminho de reprocessar é REENVIAR o mesmo arquivo em "Adicionar
+// documentos": mesmo hash no mesmo caso vira versão nova do MESMO documento, sem duplicar
+// (Supabase/migrations/0026_reextracao_por_hash.sql), e a extração boa resolve a pendência da
+// versão anterior (0029, chave por documento_id). Não existe botão de reprocessar — não prometer um.
+const ACAO: Record<AcaoDeFalha, { texto: string; reenvio: boolean }> = {
+  servico_de_ia: {
+    texto: "o arquivo não é o problema: a leitura por IA falhou, no todo ou em parte, por causa do serviço de IA. "
+      + "Avise quem cuida do sistema para corrigi-lo. Depois, reenvie o mesmo arquivo: ele não duplica o "
+      + "documento, vira uma nova leitura dele, e a leitura que der certo resolve esta pendência. "
+      + "Não há botão de reprocessar.",
+    reenvio: true,
+  },
+  // 4xx sem causa reconhecida (ex. 400 invalid_request_error): pode ser o arquivo recusado pelo
+  // provedor (PDF corrompido — o caso de origem da P16) OU o serviço. Não afirma nenhum dos dois.
+  chamada_incerta: {
+    texto: "a chamada à IA foi recusada sem causa identificada: pode ser o arquivo (corrompido, protegido por "
+      + "senha ou em formato que o provedor não aceita) ou o serviço de IA. Abra o arquivo original: se ele "
+      + "não abrir, peça outro ao cliente e reenvie; se abrir normalmente, avise quem cuida do sistema e "
+      + "depois reenvie o mesmo arquivo.",
+    reenvio: true,
+  },
+  // falha do n8n ao ler/religar o arquivo: do pipeline, não do arquivo (texto do próprio emissor).
+  falha_do_sistema: {
+    texto: "a falha foi do sistema, não do arquivo: nenhum dado deste documento chegou ao banco. Avise quem "
+      + "cuida do sistema; depois reenvie o mesmo arquivo. Não registre o documento como ilegível sem conferir.",
+    reenvio: true,
+  },
+  resposta_invalida: {
+    texto: "a IA devolveu uma resposta que o sistema não conseguiu ler. Pode ser falha pontual do serviço: "
+      + "reenvie o arquivo uma vez; se repetir, avise quem cuida do sistema.",
+    reenvio: true,
+  },
+  // Planilha: reenviar o MESMO arquivo repete o corte (teto de linhas/colunas, ou só a 1ª aba).
+  planilha_cortada: {
+    texto: "só parte da planilha foi enviada à leitura; o que ficou de fora não está no banco nem no book. "
+      + "Reenvie o arquivo fatiado (menos linhas e colunas por arquivo) — reenviar o mesmo arquivo repete o corte.",
+    reenvio: true,
+  },
+  xlsx_varias_abas: {
+    texto: "só a primeira aba da planilha foi lida e a tabela financeira pode estar em outra. Abra o arquivo, "
+      + "salve a aba certa como arquivo próprio e reenvie-a — reenviar o mesmo arquivo lê de novo só a primeira aba.",
+    reenvio: true,
+  },
+  resposta_truncada: {
+    texto: "o arquivo está legível, mas é grande ou denso demais para a IA ler numa chamada só. Reenviá-lo "
+      + "do mesmo jeito tende a repetir a falha. Confira na revisão do documento o que foi lido e avise quem "
+      + "cuida do sistema.",
+    reenvio: false,
+  },
+  sem_linhas: {
+    texto: "abra o arquivo original. Se for planilha ou documento de texto, o sistema ainda não converte esse "
+      + "formato; se estiver corrompido, vazio ou protegido por senha, peça outro ao cliente e reenvie-o.",
+    reenvio: true,
+  },
+  conferir_na_revisao: {
+    texto: "o arquivo foi lido, mas parte dele ficou de fora ou não fecha. Confira o documento na fila de "
+      + "revisão antes de usar o book.",
+    reenvio: false,
+  },
+  nao_classificada: { texto: "", reenvio: false }, // o texto depende de haver ou não motivo gravado
+};
+
+// Cada família de motivo tem UMA regra: reconhece o início do trecho, devolve a frase em português
+// que vai à vista e a ação. A gramática vem de N8N/lib/extract.mjs (~1040–1110, motivos do
+// provedor; ~1252 e ~1406, trechos juntados com " | ") e N8N/lib/cobertura.mjs (~957). Medida
+// contra os 130 motivos distintos de produção de 06/11/2026 (portal/scripts/fixtures/).
+interface RegraDeMotivo { inicio: RegExp; acao: AcaoDeFalha | ((trecho: string) => AcaoDeFalha); vista: (trecho: string) => string }
+const fixa = (frase: string) => () => frase;
+const primeiro = (m: RegExpMatchArray | null, quando: (m: RegExpMatchArray) => string, senao: string) => (m ? quando(m) : senao);
+const maiuscula = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+function erroDeServidorOuRede(trecho: string): boolean {
+  const http = /\(HTTP (\d{3})\)/.exec(trecho) ?? /\[http=(\d{3})/.exec(trecho);
+  if (http) return Number(http[1]) >= 500 || Number(http[1]) === 408;
+  return /timed? ?out|timeout|econnreset|etimedout|econnrefused|socket hang up|enotfound|bad gateway|service unavailable/i.test(trecho);
+}
+
+const REGRAS: RegraDeMotivo[] = [
+  { inicio: /^CHAVE DO PROVEDOR/, acao: "servico_de_ia", vista: fixa("Chave do provedor de IA inválida, ausente ou sem permissão.") },
+  { inicio: /^CONTA DO PROVEDOR/, acao: "servico_de_ia", vista: fixa("Conta do provedor de IA sem crédito ou sem cobrança ativa.") },
+  { inicio: /^COTA DI[ÁA]RIA/, acao: "servico_de_ia", vista: fixa("Cota diária do provedor de IA esgotada.") },
+  { inicio: /^LIMITE DE CAD[ÊE]NCIA/, acao: "servico_de_ia", vista: fixa("Limite de chamadas por minuto do provedor de IA atingido.") },
+  { inicio: /^LIMITE DO PROVEDOR/, acao: "servico_de_ia", vista: fixa("Limite do provedor de IA atingido (a resposta não disse qual).") },
+  { inicio: /^TETO DE GASTO/, acao: "servico_de_ia", vista: fixa("Teto de gasto do provedor de IA atingido.") },
+  { inicio: /^MODELO INDISPON[ÍI]VEL/, acao: "servico_de_ia", vista: fixa("Modelo de IA indisponível para esta conta.") },
+  // ERRO NA CHAMADA é a SOBRA de `diagnosticarErroApi`: inclui o 400 invalid_request_error (PDF
+  // corrompido, o caso de origem da P16). Só afirma culpa do serviço com 5xx/408 ou queda de
+  // rede/timeout; 4xx e erro sem causa viram "chamada_incerta" (arquivo OU serviço).
+  { inicio: /^ERRO NA CHAMADA/, acao: (t) => (erroDeServidorOuRede(t) ? "servico_de_ia" : "chamada_incerta"),
+    vista: (t) => (erroDeServidorOuRede(t) ? "Erro na chamada ao provedor de IA (falha do serviço ou da rede)."
+      : "A chamada ao provedor de IA falhou sem causa identificada: pode ser o arquivo ou o serviço.") },
+  // O n8n só acrescenta "Try spacing your requests…" em 429 (cadência); outro "Erro da API" é incerto.
+  { inicio: /^Erro da API/, acao: (t) => (/spacing your requests|too many requests/i.test(t) ? "servico_de_ia" : "chamada_incerta"),
+    vista: (t) => (/spacing your requests|too many requests/i.test(t) ? "Limite de chamadas do provedor de IA atingido."
+      : "A chamada ao provedor de IA falhou sem causa identificada: pode ser o arquivo ou o serviço.") },
+  { inicio: /^Resposta d[ao].*? sem conte[uú]do/, acao: "servico_de_ia", vista: fixa("O provedor de IA respondeu sem conteúdo (falha de rede ou da API).") },
+  { inicio: /^Resposta d[ao].*? truncada/, acao: "resposta_truncada", vista: fixa("A resposta da IA foi cortada por limite de tamanho; o documento é grande ou denso demais para uma chamada só.") },
+  { inicio: /^Resposta d[ao].*? atingiu o limite de tokens/, acao: "resposta_truncada", vista: fixa("A resposta da IA atingiu o limite de tamanho; podem faltar linhas do fim do documento.") },
+  { inicio: /^Resposta d[ao].*? n[ãa]o veio em JSON v[áa]lido/, acao: "resposta_invalida", vista: fixa("A resposta da IA não veio em formato legível.") },
+  { inicio: /^uma linha sozinha j[áa] passa do teto de sa[íi]da/, acao: "resposta_truncada", vista: fixa("Uma linha sozinha já passa do teto de saída do modelo; a resposta deste bloco pode ter vindo cortada.") },
+  { inicio: /^Planilha maior que o teto de envio/, acao: "planilha_cortada",
+    vista: (t) => primeiro(/^Planilha maior que o teto de envio: (.*?)\. /.exec(t), (m) => `Planilha maior que o teto de envio: ${m[1]}; a extração está incompleta.`, "Planilha maior que o teto de envio; a extração está incompleta.") },
+  { inicio: /^O arquivo \.xlsx tem \d+ abas/, acao: "xlsx_varias_abas",
+    vista: (t) => primeiro(/^O arquivo \.xlsx tem (\d+) abas/.exec(t), (m) => `A planilha tem ${m[1]} abas e só a primeira foi lida.`, "A planilha tem várias abas e só a primeira foi lida.") },
+  { inicio: /^A extra[çc]ao NATIVA/, acao: "falha_do_sistema", vista: fixa("A leitura nativa do arquivo falhou no sistema; nenhum dado deste documento chegou ao banco.") },
+  { inicio: /^Recompor Conteudo Extraido/, acao: "falha_do_sistema", vista: fixa("O sistema não conseguiu religar o conteúdo ao documento de origem; nada deste arquivo chegou à extração.") },
+  { inicio: /^a chamada respondeu sem erro, mas n[ãa]o trouxe NENHUMA linha/, acao: "sem_linhas", vista: fixa("A leitura respondeu sem erro, mas não trouxe nenhuma linha deste arquivo.") },
+  {
+    inicio: /^Extra[çc][ãa]o INCOMPLETA/, acao: "conferir_na_revisao",
+    vista: (t) => primeiro(/^Extra[çc][ãa]o INCOMPLETA: (.*?\(\d+% de cobertura[^)]*\))/.exec(t),
+      (m) => `Extração incompleta: ${m[1]}.`, "Extração incompleta."),
+  },
+  {
+    inicio: /^identidade de linha não fecha/, acao: "conferir_na_revisao",
+    vista: (t) => primeiro(/^identidade de linha não fecha em (".*?"): .*?, mas a coluna (".*?") declara (\S+) — diferença de ([-\d.,]+)/.exec(t),
+      (m) => `Uma linha não fecha com o total declarado: ${m[1]}, a coluna ${m[2]} declara ${m[3]} (diferença de ${m[4]}).`,
+      "Uma linha não fecha com o total declarado."),
+  },
+  {
+    inicio: /^total da série não fecha/, acao: "conferir_na_revisao",
+    vista: (t) => primeiro(/^total da série não fecha em .*? — diferença de [-\d.,]+/.exec(t), (m) => `${maiuscula(m[0])}.`,
+      "O total de uma série não fecha com a soma das linhas."),
+  },
+  {
+    inicio: /^\d+ conta\(s\) descartada\(s\) por desalinhamento/, acao: "conferir_na_revisao",
+    vista: (t) => primeiro(/^(\d+ conta\(s\) descartada\(s\) por desalinhamento entre colunas e valores)/.exec(t), (m) => `${m[1]}.`,
+      "Contas descartadas por desalinhamento entre colunas e valores."),
+  },
+  {
+    inicio: /^\d+ linha\(s\) repetida\(s\) na emenda/, acao: "conferir_na_revisao",
+    vista: (t) => primeiro(/^(\d+ linha\(s\) repetida\(s\) na emenda entre blocos foram descartadas)/.exec(t), (m) => `${m[1]}.`,
+      "Linhas repetidas na emenda entre blocos foram descartadas."),
+  },
+  {
+    inicio: /^\d+ r[oó]tulo\(s\) com n[uú]mero colado/, acao: "conferir_na_revisao",
+    vista: (t) => primeiro(/^(\d+) r[oó]tulo\(s\)/.exec(t),
+      (m) => `${m[1]} rótulo(s) com número colado que não é o valor da linha (a conta foi mantida e o rótulo pode não casar na reconciliação).`,
+      "Rótulos com número colado."),
+  },
+];
+
+// Onde um trecho NOVO começa. " | " também aparece DENTRO de um trecho (lista de rótulos de conta
+// do cliente: `"15410 | GRADE … | PAGO | MATRIZ"`, 6 dos 130 motivos medidos), então dividir
+// cegamente criaria "títulos" que são pedaço de rótulo. Só abre trecho novo quem começa como uma
+// família conhecida (ou com "bloco N: "); o resto cola no trecho anterior. TETO conhecido: uma
+// família nova, escrita depois de 06/11, que vier após " | " fica colada no trecho anterior e só
+// aparece em Detalhes técnicos — nunca some, mas também não é classificada à vista.
+const PREFIXO_DE_BLOCO = /^bloco (\d+): /;
+function comecaTrecho(pedaco: string): boolean {
+  return PREFIXO_DE_BLOCO.test(pedaco) || REGRAS.some((r) => r.inicio.test(pedaco));
 }
 
 export function falhaDeExtracaoNaTela(texto: string): FalhaDeExtracaoNaTela {
   const i = texto.indexOf(" Motivo: ");
-  if (i < 0) return { frase: texto, motivo: null, tecnico: null };
+  const naoClassificada = (tecnico: string | null) => ({
+    tipo: "nao_classificada" as const, reenvio: false,
+    texto: tecnico
+      ? "não foi possível classificar a causa desta falha; o detalhe completo está em Detalhes técnicos, logo abaixo."
+      : "não foi possível classificar a causa: o banco não registrou o motivo desta falha.",
+  });
+  if (i < 0) return { frase: texto, aVista: [], tecnico: null, acoes: [naoClassificada(null)] };
   const motivo = texto.slice(i + " Motivo: ".length).trim();
-  // shortcut: "tem acento → é texto nosso" separa os motivos do banco (todos em português, com
-  // acento) da mensagem do provedor (inglês, sem acento). Motivo nosso sem acento nenhum iria para
-  // "Detalhes técnicos" — continua legível lá. Trocar por um código de motivo quando o banco gravar um.
-  const nosso = /[à-ÿ]/i.test(motivo);
-  return { frase: texto.slice(0, i).trim(), motivo: nosso ? motivo : null, tecnico: nosso ? null : motivo };
+
+  const trechos: string[] = [];
+  for (const pedaco of motivo.split(" | ")) {
+    if (trechos.length === 0 || comecaTrecho(pedaco)) trechos.push(pedaco);
+    else trechos[trechos.length - 1] += ` | ${pedaco}`;
+  }
+
+  const vistas = new Map<string, { n: number; acao: AcaoDeFalha }>();
+  let naoReconhecido = false;
+  for (const trecho of trechos) {
+    const corpo = trecho.replace(PREFIXO_DE_BLOCO, "");
+    const regra = REGRAS.find((r) => r.inicio.test(corpo));
+    if (!regra) { naoReconhecido = true; continue; }
+    const frase = regra.vista(corpo);
+    const antes = vistas.get(frase);
+    vistas.set(frase, { n: (antes?.n ?? 0) + 1, acao: typeof regra.acao === "function" ? regra.acao(corpo) : regra.acao });
+  }
+  const aVista = [...vistas].map(([frase, { n }]) => (n > 1 ? `${frase.replace(/\.$/, "")} (em ${n} trechos).` : frase));
+  if (naoReconhecido) aVista.push("Há uma causa que não foi possível classificar; o detalhe está em Detalhes técnicos.");
+
+  const tipos = new Set<AcaoDeFalha>([...vistas.values()].map((v) => v.acao));
+  if (naoReconhecido || tipos.size === 0) tipos.add("nao_classificada");
+  const acoes = [...tipos].map((tipo) => (tipo === "nao_classificada" ? naoClassificada(motivo) : { tipo, ...ACAO[tipo] }));
+  return { frase: texto.slice(0, i).trim(), aVista, tecnico: motivo, acoes };
 }

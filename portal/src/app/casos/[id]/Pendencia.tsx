@@ -62,13 +62,14 @@ export function ItemPendencia({
     /\b([A-Z][A-Z0-9_]{3,})\b/g,
     (m) => rotuloDeTipoConhecido(m) ?? m,
   );
-  // A EXTRAÇÃO QUE FALHOU (P16): a mensagem do provedor, em inglês, vai para "Detalhes técnicos";
-  // fica à vista a frase do banco (que nomeia o arquivo) e o que fazer.
-  const falha = p.tipo === "extracao_falhou" ? falhaDeExtracaoNaTela(traduzida) : null;
-  let bruto = traduzida;
-  if (falha) bruto = falha.motivo ? `${falha.frase} Motivo: ${falha.motivo}` : falha.frase;
+  // A EXTRAÇÃO QUE FALHOU (P16, G2): lê-se o texto CRU do banco, não o `traduzida` — a troca de
+  // CAIXA ALTA por rótulo de taxonomia estragaria o detalhe técnico (rótulos de conta do cliente em
+  // caixa alta, ex. "MATRIZ"). À vista vai só a causa em português; o motivo inteiro fica em
+  // "Detalhes técnicos"; o que fazer segue a causa.
+  const falha = p.tipo === "extracao_falhou" ? falhaDeExtracaoNaTela(p.descricao ?? "Sem descrição.") : null;
+  const bruto = falha ? `${falha.frase} Motivo: ${falha.aVista.join(" ")}` : traduzida;
   const rotulos = rotulosCitados(bruto);
-  const partes = partesDaDescricao(suavizarMensagem(semALista(bruto)));
+  const partes = falha ? [falha.frase, ...falha.aVista] : partesDaDescricao(suavizarMensagem(semALista(bruto)));
 
   return (
     <li className={`rounded-lg border px-3.5 py-3 text-sm ${cores.caixa}`}>
@@ -106,17 +107,21 @@ export function ItemPendencia({
 
       {falha && (
         <div className="mt-1.5 text-xs">
-          <p>
-            O que fazer: abra o arquivo original. Se ele estiver corrompido, vazio ou protegido por senha,
-            peça outro ao cliente e{" "}
-            {casoId ? (
-              <Link href={`/casos/${casoId}/adicionar`} className="font-semibold underline underline-offset-2">reenvie o arquivo</Link>
-            ) : "reenvie o arquivo"}
-            .
-          </p>
+          {falha.acoes.map((a) => (
+            <p key={a.tipo}>
+              O que fazer: {a.texto}
+              {a.reenvio && casoId && (
+                <>
+                  {" "}
+                  <Link href={`/casos/${casoId}/adicionar`} className="font-semibold underline underline-offset-2">Adicionar documentos</Link>
+                </>
+              )}
+            </p>
+          ))}
           {falha.tecnico && (
             <DetalhesTecnicos className="mt-1">
-              <p>{falha.tecnico}</p>
+              {/* o técnico carrega valores e rótulos do cliente: borra no modo discrição */}
+              <p className="valor-sensivel">{falha.tecnico}</p>
             </DetalhesTecnicos>
           )}
         </div>

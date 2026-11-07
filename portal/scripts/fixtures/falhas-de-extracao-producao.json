@@ -1,0 +1,81 @@
+{
+ "origem": "Motivos distintos de extracao_falhou lidos do banco de PRODUCAO em 06/11/2026, depois do deploy do PR #274 (130 distintos, 487 pendencias, 468 abertas). Esta e uma AMOSTRA que cobre cada familia de motivo e a armadilha do separador \" | \" dentro de rotulo de conta; os textos estao como vieram do banco (campo motivo; n = pendencias com esse motivo, abertas = ainda abertas). Regra 4: nada aqui foi inventado.",
+ "lidoEm": "2026-11-06",
+ "motivos": [
+  {
+   "motivo": "bloco 1: CHAVE DO PROVEDOR INVÁLIDA, AUSENTE OU SEM PERMISSÃO (401/403). Nada a ver com cadência ou crédito: a credencial do nó HTTP no N8N precisa ser corrigida — na OpenAI é o header \"Authorization: Bearer sk-...\", no Google é \"x-goog-api-key: ...\". O nome da credencial que o workflow espera está em N8N/lib/provedor.mjs (campo `credencial`). [http=401 code=401 provedor=\"Request had invalid authentication credentials. Expected OAuth 2 access token, login cookie or other valid authentication credential. See https://developers.google.com/identity/sign-in/web/devconsole-\"]",
+   "n": 103,
+   "abertas": 103
+  },
+  {
+   "motivo": "Erro da API OpenAI: Try spacing your requests out using the batching settings under 'Options'",
+   "n": 60,
+   "abertas": 60
+  },
+  {
+   "motivo": "a chamada respondeu sem erro, mas não trouxe NENHUMA linha. Causa mais comum: formato que o pipeline ainda não converte em texto (.xlsx/.docx) — nesses casos a IA recebe um aviso em vez do arquivo.",
+   "n": 59,
+   "abertas": 50
+  },
+  {
+   "motivo": "bloco 1: CONTA DO PROVEDOR SEM CRÉDITO OU SEM COBRANÇA ATIVA. A conta não tem como pagar a chamada — na OpenAI é saldo pré-pago esgotado (insufficient_quota), no Google é o projeto sem billing habilitado. Espaçar as chamadas NÃO resolve: é preciso recarregar crédito (platform.openai.com/settings/organization/billing) ou ligar a cobrança do projeto. [http=429 code=429 provedor=\"You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usa\"]",
+   "n": 35,
+   "abertas": 35
+  },
+  {
+   "motivo": "Resposta da OpenAI sem conteudo (falha de rede/API).",
+   "n": 14,
+   "abertas": 14
+  },
+  {
+   "motivo": "TETO DE GASTO ATINGIDO na OpenAI — e isto NÃO é falta de crédito: há saldo, o tier está normal, e é por isso que as páginas de Billing e de Limits parecem em ordem. O que estourou é um LIMITE CONFIGURADO: teto do PROJETO a que a chave pertence, ou orçamento mensal da organização. Onde olhar: platform.openai.com → Settings → Limits (orçamento mensal da org) E Settings → Projects → o projeto da chave → Limits (teto do projeto). Espaçar as chamadas não resolve; subir o teto resolve na hora. [type=insufficient_quota code=project_spend_limit_exceeded openai=\"Your project has reached its configured enforced spend limit. Update your limit at https://platform.openai.com/settings/proj_YrvNXB3JwycdM0qKb8jG7hGK/limits.\"]",
+   "n": 8,
+   "abertas": 8
+  },
+  {
+   "motivo": "Resposta da OpenAI truncada por limite de tokens de saida (finish_reason=length) -- o JSON ficou incompleto e nao pode ser interpretado. Documento provavelmente grande/denso demais (muitas contas/entidades) para uma unica chamada.",
+   "n": 5,
+   "abertas": 3
+  },
+  {
+   "motivo": "3 linha(s) repetida(s) na emenda entre blocos foram descartadas (o modelo repetiu a ancora).",
+   "n": 4,
+   "abertas": 4
+  },
+  {
+   "motivo": "identidade de linha não fecha em \"(-) IMPOSTOS SOBRE VENDAS E SERVIÇOS\": Valor=-713685.12 = -713685.12, mas a coluna \"Total\" declara -2773456.87 — diferença de 2059771.75 (tolerância de arredondamento: 1). Um dos dois valores está errado, e o book vai sair com essa diferença nesta linha. | identidade de linha não fecha em \"CUSTOS DAS MERCADORIAS VENDIDAS\": Valor=-74900235.19 = -74900235.19, mas a coluna \"Total\" declara -75029821.13 — diferença de 129585.94 (tolerância de arredondamento: 1). Um dos dois valores está errado, e o book vai sair com essa diferença nesta linha. | identidade de linha não fecha em \"DESPESAS GERAIS\": Valor=-1217235.13 = -1217235.13, mas a coluna \"Total\" declara -1305195.67 — diferença de 87960.54 (tolerância de arredondamento: 1). Um dos dois valores está errado, e o book vai sair com essa diferença nesta linha. | identidade de linha não fecha em \"DESPESAS FINANCEIRAS\": Valor=-2625457.14 = -2625457.14, mas a coluna \"Total\" declara -9030854.94 — diferença de 6405397.80 (tolerância de arredondamento: 1). Um dos dois valores está errado, e o book vai sair com essa diferença nesta linha.",
+   "n": 3,
+   "abertas": 3
+  },
+  {
+   "motivo": "bloco 1: 1 conta(s) descartada(s) por desalinhamento entre colunas e valores (a associacao valor-coluna ficou desconhecida, e adivinha-la trocaria um periodo pelo outro): \"TOTAIS D / C\" (Totais): 1 coluna(s) declarada(s), 2 valor(es) numérico(s) e 1 texto(s)",
+   "n": 2,
+   "abertas": 0
+  },
+  {
+   "motivo": "bloco 2: Resposta do provedor de IA truncada por limite de tokens de saida -- o JSON ficou incompleto e nao pode ser interpretado. Documento provavelmente grande/denso demais (muitas contas/entidades) para uma unica chamada. | Extração INCOMPLETA: 76 linha(s) devolvida(s) para um documento com 99 linha(s) de conta no texto (77% de cobertura, abaixo do mínimo de 85%). A contagem do documento é feita sobre o texto do PDF, sem IA: linha que tem valor e tem identidade — rótulo, código de conta, ou linha de tabela numérica —, descontados cabeçalho de ano, CNPJ, data, número de página e bloco de assinatura. As duas medidas estão na MESMA unidade (LINHAS do documento: uma conta com três colunas conta uma vez, e dois lançamentos com o mesmo histórico contam dois), então a diferença é dado que o modelo deixou de ler — conferir o documento na fila de revisão antes de usar o book. A régua erra para cima em cerca de 3% (costuma contar o cabeçalho de colunas como linha), o que já está descontado na folga do limiar. O documento foi lido em 4 de 4 bloco(s) planejado(s) (fatiado, e todos chegaram), entao o que falta nao e teto de uma chamada so nem bloco perdido -- e leitura parcial do modelo.",
+   "n": 1,
+   "abertas": 1
+  },
+  {
+   "motivo": "bloco 3: 1 rotulo(s) com numero colado que nao e o valor da linha (a conta foi mantida, o rotulo NAO foi limpo e pode nao casar na reconciliacao): \"27124 | ARADO ENLEIRADOR BAIXO 2,40M X 19 DENTES AMARELO | PAGO | MATRIZ\" (ESTOQUE DE MÁQUINAS): o rótulo traz o número 2,40 colado ao texto, e ele NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio | bloco 4: 9 rotulo(s) com numero colado que nao e o valor da linha (a conta foi mantida, o rotulo NAO foi limpo e pode nao casar na reconciliacao): \"15410 | GRADE CRGS DE 16 C/DSC REC 24''X6,00 MM GRAXA | PAGO | 42894 | MATRIZ\" (ESTOQUE MÁQUINAS): o rótulo traz o número 6,00 colado ao texto, e ele NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio; \"15409 | GRADE CRSG 14 D/DSC REC 24'' X 6,00MM GRAXA | PAGO | 42894 | MATRIZ\" (ESTOQUE MÁQUINAS): o rótulo traz o número 6,00 colado ao texto, e ele NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio; \"16007 | GRADE CRSG DE 14/ DSC REC 24''X6,00 MM | PAGO | 43087 | MATRIZ\" (ESTOQUE MÁQUINAS): o rótulo traz o número 6,00 colado ao texto, e ele NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio; \"28438 | GRADE MOD:SP28DSC-0021 MIS 18\"X 3,50MM GRAXA- | PAGO | 45993 | MATRIZ\" (ESTOQUE MÁQUINAS): o rótulo traz o número 3,50 colado ao texto, e ele NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio; \"16610 | GRADE NIVELADORA MOD. GNDL 24X18X3,50 MM RG 175 VERM | PAGO | 43237 | MATRIZ\" (ESTOQUE MÁQUINAS): o rótulo traz o número 3,50 colado ao texto, e ele NÃO é igual a nenhum valor da própria linha — o rótulo foi mantido como veio; ...",
+   "n": 1,
+   "abertas": 1
+  },
+  {
+   "motivo": "bloco 4: Resposta do provedor de IA (OpenAI) sem conteudo (falha de rede/API).",
+   "n": 1,
+   "abertas": 1
+  },
+  {
+   "motivo": "bloco 11: LIMITE DE CADÊNCIA DO PROVEDOR (rate limit por minuto). Aqui espaçar as chamadas ajuda de fato — é o único caso em que ajuda. E o número a mexer é TPM_CONTA/RPM_CONTA do provedor ativo (N8N/lib/provedor.mjs): é dele que sai o intervalo entre chamadas, e ajustá-lo no nó à mão faz o teste da cadência e o workflow discordarem no primeiro rebuild. [type=tokens code=rate_limit_exceeded provedor=\"Rate limit reached for gpt-5.6-luna in organization org-Ebx5LgW3oPmkHDy0wo1SHKKn on tokens per min (TPM): Limit 500000, Used 495312, Requested 22655. Please try again in 2.156s. Visit https://platform\"] | bloco 13: LIMITE DE CADÊNCIA DO PROVEDOR (rate limit por minuto). Aqui espaçar as chamadas ajuda de fato — é o único caso em que ajuda. E o número a mexer é TPM_CONTA/RPM_CONTA do provedor ativo (N8N/lib/provedor.mjs): é dele que sai o intervalo entre chamadas, e ajustá-lo no nó à mão faz o teste da cadência e o workflow discordarem no primeiro rebuild. [type=tokens code=rate_limit_exceeded provedor=\"Rate limit reached for gpt-5.6-luna in organization org-Ebx5LgW3oPmkHDy0wo1SHKKn on tokens per min (TPM): Limit 500000, Used 498399, Requested 22654. Please try again in 2.526s. Visit https://platform\"] | bloco 14: LIMITE DE CADÊNCIA DO PROVEDOR (rate limit por minuto). Aqui espaçar as chamadas ajuda de fato — é o único caso em que ajuda. E o número a mexer é TPM_CONTA/RPM_CONTA do provedor ativo (N8N/lib/provedor.mjs): é dele que sai o intervalo entre chamadas, e ajustá-lo no nó à mão faz o teste da cadência e o workflow discordarem no primeiro rebuild. [type=tokens code=rate_limit_exceeded provedor=\"Rate limit reached for gpt-5.6-luna in organization org-Ebx5LgW3oPmkHDy0wo1SHKKn on tokens per min (TPM): Limit 500000, Used 500000, Requested 22655. Please try again in 2.718s. Visit https://platform\"] | bloco 15: LIMITE DE CADÊNCIA DO PROVEDOR (rate limit por minuto). Aqui espaçar as chamadas ajuda de fato — é o único caso em que ajuda. E o número a mexer é TPM_CONTA/RPM_CONTA do provedor ativo (N8N/lib/provedor.mjs): é dele que sai o intervalo entre chamadas, e ajustá-lo no nó à mão faz o teste da cadência e o workflow discordarem no primeiro rebuild. [type=tokens code=rate_limit_exceeded provedor=\"Rate limit reached for gpt-5.6-luna in organization org-Ebx5LgW3oPmkHDy0wo1SHKKn on tokens per min (TPM): Limit 500000, Used 490971, Requested 22650. Please try again in 1.634s. Visit https://platform\"] | bloco 21: 29 conta(s) descartada(s) por desalinhamento entre colunas e valores (a associacao valor-coluna ficou desconhecida, e adivinha-la trocaria um periodo pelo outro): \"6134 3.3.1.09 PROVISÃO P/IMPOSTO DE RENDA\" (OUTROS RESULTADOS): 1 coluna(s) declarada(s), 3 valor(es) numérico(s) e 3 texto(s) — provavelmente o documento tem colunas de valor (Débito/Crédito/Saldo, faixas de aging) que não foram declaradas em \"cols\"; \"6135 3.3.1.09.001 IMPOSTO DE RENDA - PJ\" (PROVISÃO P/IMPOSTO DE RENDA): 1 coluna(s) declarada(s), 3 valor(es) numérico(s) e 3 texto(s) — provavelmente o documento tem colunas de valor (Débito/Crédito/Saldo, faixas de aging) que não foram declaradas em \"cols\"; \"461 3.4 CUSTOS DOS PRODUTOS E SERVIÇOS VENDIDOS\": 1 coluna(s) declarada(s), 4 valor(es) numérico(s) e 4 texto(s) — provavelmente o documento tem colunas de valor (Débito/Crédito/Saldo, faixas de aging) que não foram declaradas em \"cols\"; \"465 3.4.2 CUSTOS DOS SERVIÇOS PRESTADOS OFICINA\" (CUSTOS DOS PRODUTOS E SERVIÇOS VENDIDOS): 1 coluna(s) declarada(s), 4 valor(es) numérico(s) e 4 texto(s) — provavelmente o documento tem colunas de valor (Débito/Crédito/Saldo, faixas de aging) que não foram declaradas em \"cols\"; \"910 3.4.2.02 CUSTOS COM PESSOAL\" (CUSTOS DOS SERVIÇOS PRESTADOS OFICINA): 1 coluna(s) declarada(s), 4 valor(es) numérico(s) e 4 texto(s) — provavelmente o documento tem colunas de valor (Débito/Crédito/Saldo, faixas de aging) que não foram declaradas em \"cols\"; ... | Extração INCOMPLETA: 513 linha(s) devolvida(s) para um documento com 773 linha(s) de conta no texto (66% de cobertura, abaixo do mínimo de 85%). A contagem do documento é feita sobre o texto do PDF, sem IA: linha que tem valor e tem identidade — rótulo, código de conta, ou linha de tabela numérica —, descontados cabeçalho de ano, CNPJ, data, número de página e bloco de assinatura. As duas medidas estão na MESMA unidade (LINHAS do documento: uma conta com três colunas conta uma vez, e dois lançamentos com o mesmo histórico contam dois), então a diferença é dado que o modelo deixou de ler — conferir o documento na fila de revisão antes de usar o book. A régua erra para cima em cerca de 3% (costuma contar o cabeçalho de colunas como linha), o que já está descontado na folga do limiar. O documento foi lido em 26 de 26 bloco(s) planejado(s) (fatiado, e todos chegaram), entao o que falta nao e teto de uma chamada so nem bloco perdido -- e leitura parcial do modelo.",
+   "n": 1,
+   "abertas": 1
+  },
+  {
+   "motivo": "Extração INCOMPLETA: 223 linha(s) devolvida(s) para um documento com 493 linha(s) de conta no texto (45% de cobertura, abaixo do mínimo de 85%). A contagem do documento é feita sobre o texto do PDF, sem IA: linha que tem valor e tem identidade — rótulo, código de conta, ou linha de tabela numérica —, descontados cabeçalho de ano, CNPJ, data, número de página e bloco de assinatura. As duas medidas estão na MESMA unidade (LINHAS do documento: uma conta com três colunas conta uma vez, e dois lançamentos com o mesmo histórico contam dois), então a diferença é dado que o modelo deixou de ler — conferir o documento na fila de revisão antes de usar o book. A régua erra para cima em cerca de 3% (costuma contar o cabeçalho de colunas como linha), o que já está descontado na folga do limiar. O documento foi lido em 16 de 16 bloco(s) planejado(s) (fatiado, e todos chegaram), entao o que falta nao e teto de uma chamada so nem bloco perdido -- e leitura parcial do modelo. | total da série não fecha em \"TOTAL\" (coluna \"Fevereiro\"): total declarado 537578.31, soma das 222 linha(s) da série 2263997.1299999934 — diferença de 1726418.82 (tolerância de arredondamento: 112). Um dos dois números está errado, ou a extração perdeu uma linha da série — nos dois casos o book sai com essa diferença. | total da série não fecha em \"TOTAL\" (coluna \"Março\"): total declarado -948936.64, soma das 222 linha(s) da série -4781907.639999993 — diferença de 3832971.00 (tolerância de arredondamento: 112). Um dos dois números está errado, ou a extração perdeu uma linha da série — nos dois casos o book sai com essa diferença. | total da série não fecha em \"TOTAL\" (coluna \"Abril\"): total declarado -1744985.15, soma das 222 linha(s) da série -9004966.749999983 — diferença de 7259981.60 (tolerância de arredondamento: 112). Um dos dois números está errado, ou a extração perdeu uma linha da série — nos dois casos o book sai com essa diferença. | total da série não fecha em \"TOTAL\" (coluna \"Maio\"): total declarado 53384.19, soma das 222 linha(s) da série 180064.7100000078 — diferença de 126680.52 (tolerância de arredondamento: 112). Um dos dois números está errado, ou a extração perdeu uma linha da série — nos dois casos o book sai com essa diferença. | total da série não fecha em \"TOTAL\" (coluna \"Junho\"): total declarado -245514.3, soma das 222 linha(s) da série -1491186.299999985 — diferença de 1245672.00 (tolerância de arredondamento: 112). Um dos dois números está errado, ou a extração perdeu uma linha da série — nos dois casos o book sai com essa diferença. | ...",
+   "n": 1,
+   "abertas": 0
+  }
+ ]
+}

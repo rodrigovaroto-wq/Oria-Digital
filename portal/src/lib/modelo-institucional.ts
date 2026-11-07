@@ -3634,8 +3634,12 @@ function abaCapitalGiro(wb: ExcelJS.Workbook, ctx: Ctx, gRec: Grade): Grade {
     if (hist) {
       g.set("CHECK_GIRO", ano, "", { fmt: MULT });
     } else {
-      const ref = `(${g.ref("DIAS_AC_TOT", ctx.ultimoHist)}+${g.ref("DIAS_PC_TOT", ctx.ultimoHist)})`;
-      const proj = `(${g.ref("DIAS_AC_TOT", ano)}+${g.ref("DIAS_PC_TOT", ano)})`;
+      // N(): as linhas de dias devolvem "" quando a receita do ano é zero, e "" + "" é #VALUE! no
+      // Excel. Medido em 07/11/2026 na varredura de produção: o modelo completo do mandato 7d1ca7f2
+      // (receita zero no último realizado) saía com #VALUE! em 5 colunas desta linha. Com N(), a
+      // base vazia vale 0 e a guarda cai no "" do IF, que é ausência declarada, não erro.
+      const ref = `(N(${g.ref("DIAS_AC_TOT", ctx.ultimoHist)})+N(${g.ref("DIAS_PC_TOT", ctx.ultimoHist)}))`;
+      const proj = `(N(${g.ref("DIAS_AC_TOT", ano)})+N(${g.ref("DIAS_PC_TOT", ano)}))`;
       g.set("CHECK_GIRO", ano, `=IF(${ref}>0,${proj}/${ref},"")`, {
         fmt: MULT,
         nota: "Giro agregado projetado dividido pelo do último exercício realizado. A régua não "
