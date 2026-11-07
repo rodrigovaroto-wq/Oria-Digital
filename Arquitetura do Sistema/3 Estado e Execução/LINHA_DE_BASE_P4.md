@@ -1,6 +1,6 @@
 # Linha de base da leitura — P4 (07/11/2026)
 
-Medida em produção depois da 0229 e da republicação do n8n (`versao_medicao = p4-1` em todos os documentos), com os 4 books sintéticos enviados pelo portal como Sócio (`Verificação/enviar-book.mts`) e cruzados com a verdade do gerador (`Verificação/linha-de-base.mts`). Custo total dos 4 lotes: US$ 0,61.
+Medida em produção depois da 0229 e da republicação do n8n (o script contou 0 documentos sem `versao_medicao` em cada book — a coluna não está nas tabelas abaixo), com os 4 books sintéticos enviados pelo portal como Sócio (`Verificação/enviar-book.mts`) e cruzados com a verdade do gerador (`Verificação/linha-de-base.mts`). Custo total dos 4 lotes: US$ 0,61.
 
 **Como ler:** *Verdade* = linhas de conta que o gerador escreveu. *Régua* = o que o n8n contou no texto (o denominador de produção). *Lidas* = o que a IA devolveu. *Lidas/verdade* é a completude real; *Régua/verdade* diz se a régua conta certo.
 
@@ -13,11 +13,13 @@ Medida em produção depois da 0229 e da republicação do n8n (`versao_medicao 
 | Distress | 14 | 8 | 3 | 2 | 4 | 1 |
 | Espelho | **3 de 11** | 1 | 0 | 0 | 0 | 0 |
 
+**O que NÃO está nas tabelas:** os 8 arquivos do espelho que não chegaram não têm linha (o script de medição da época só listava o que estava no banco; corrigido depois para listar o ausente). Documentos com verdade 0 (notas explicativas, contrato social) aparecem com "—" e lidas > 0: são linhas a mais, não "sem número". O Extrato .xlsx do espelho conta 136/136, mas a falha diz que só a 1ª aba foi lida — não conferido se a verdade inclui as 2 abas.
+
 ## Achados (medidos, causa ainda NÃO investigada — é a P5 em diante)
 
 1. **ALTO — 8 de 11 arquivos do book-espelho sumiram sem rastro.** O Form do n8n (execução 9508, "success") recebeu só 3 arquivos: os 3 com nome só ASCII. Os 8 perdidos têm acento/ç no nome. Nenhuma linha em `execucao_falha`, nenhum documento. A perda é ENTRE o portal e o Form. NÃO verificado se é defeito do portal ou do upload pelo navegador automatizado (Playwright `setInputFiles`) — é a primeira coisa a investigar, porque cliente real manda nome com acento.
 2. **Colunas desalinhadas:** o Balanço COMBINADO do Vertentes saiu com 0 de 32 linhas (todas descartadas por desalinhamento); os COMBINADOS do Canastra e o Aging a receber perderam 1 linha cada pelo mesmo motivo. É a falha real do Krauspenhar.
-3. **Leitura que infla (> 100%):** DMPL Vertentes 14/3, DMPL Canastra 29/9, BP Piraquara Montagens 43/32, Notas Piraquara 20/5. A régua contou certo nesses; quem duplica é a leitura. É a origem das coberturas 1,31/1,43/2,25 de produção.
+3. **Leitura que infla (> 100%):** DMPL Vertentes 14/3, DMPL Canastra 29/9, BP Piraquara Montagens 43/32 — nesses a régua contou certo e quem infla é a leitura. Notas Piraquara (20 lidas, verdade 5) erra NOS DOIS: a régua contou 24. HIPÓTESE, não medida aqui: é a origem das coberturas 1,31/1,43/2,25 de produção.
 4. **Régua errada:** conta linhas em notas explicativas (9 onde há 0 no Vertentes) e na procuração (medido no gerador). Cobertura do sistema acima de 1 nem sempre é leitura duplicando.
 5. **Custo:** a DRE analítica e o balancete grandes custam ~US$ 0,08/chamada contra a estimativa de 0,055 que sustenta o teto (`medir-custo-book`, rc 1 no espelho).
 

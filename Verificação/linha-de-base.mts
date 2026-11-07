@@ -44,12 +44,14 @@ if (error) { console.error("fn_linha_de_base_extracao: " + error.message); proce
 
 // Verdade por nome de arquivo: documentos (PDF) e planilhas (xlsx, book-espelho) entram igual.
 const verdade = new Map<string, any>();
-for (const d of [...(metricas.documentos ?? []), ...(metricas.planilhas ?? [])]) verdade.set(d.arquivo, d);
+// Casa por nome em NFC: o mesmo nome com acento pode chegar decomposto (NFD) e não pode virar "sem verdade" calado.
+const chave = (n: string) => String(n ?? "").normalize("NFC").replace(/\s+/g, " ").trim();
+for (const d of [...(metricas.documentos ?? []), ...(metricas.planilhas ?? [])]) verdade.set(chave(d.arquivo), d);
 
 const fmt = (x: number | null | undefined, casas = 2) => (x === null || x === undefined ? "—" : Number(x).toFixed(casas));
 const razao = (a: any, b: any) => (a === null || a === undefined || !b ? null : Number(a) / Number(b));
 const tabela = (linhas as any[]).sort((a, b) => String(a.nome_original).localeCompare(String(b.nome_original))).map((l) => {
-  const v = verdade.get(l.nome_original);
+  const v = verdade.get(chave(l.nome_original));
   const vl = v ? v.linhas_de_conta_verdade : null;
   return {
     documento: l.nome_original,
@@ -61,7 +63,7 @@ const tabela = (linhas as any[]).sort((a, b) => String(a.nome_original).localeCo
     completude_real: razao(l.linhas_devolvidas, vl),
     regua_sobre_verdade: razao(l.contas_no_documento, vl),
     cobertura_do_sistema: l.cobertura,
-    motivo: l.cobertura_motivo,
+    motivo: l.cobertura_motivo ?? (v && vl === 0 ? (Number(l.linhas_devolvidas) > 0 ? `verdade 0: ${l.linhas_devolvidas} linha(s) a mais` : "verdade 0: ok") : (v ? null : "arquivo fora do METRICAS.json")),
     blocos: l.blocos, respondidos: l.blocos_com_resposta, planejados: l.blocos_planejados,
     falha: l.falha_motivo, pend_falhou: l.pendencias_extracao_falhou, pend_suspeito: l.pendencias_extracao_padrao_suspeito,
     rodou: l.extracao_rodou, versao_medicao: l.versao_medicao,
@@ -69,6 +71,9 @@ const tabela = (linhas as any[]).sort((a, b) => String(a.nome_original).localeCo
   };
 });
 
+// Junção COMPLETA: arquivo do book que nunca virou documento entra como linha, não some (regra 1).
+const presentes = new Set((linhas as any[]).map((l) => chave(l.nome_original)));
+for (const [k, v] of verdade) if (!presentes.has(k)) tabela.push({ documento: v.arquivo, tipo: null, espelha: v.espelha ?? null, verdade: v.linhas_de_conta_verdade, regua: null, lidas: null, completude_real: null, regua_sobre_verdade: null, cobertura_do_sistema: null, motivo: "arquivo do book NÃO chegou ao banco", blocos: null, respondidos: null, planejados: null, falha: null, pend_falhou: null, pend_suspeito: null, rodou: false, versao_medicao: null, sem_verdade: null } as any);
 fs.writeFileSync(path.join(SAIDA, "linha-de-base.json"), JSON.stringify({ mandato: MANDATO, caso_id: caso.id, documentos: tabela }, null, 2));
 const md = [
   `# Linha de base — ${MANDATO}`, "",
@@ -78,5 +83,7 @@ const md = [
 ];
 fs.writeFileSync(path.join(SAIDA, "linha-de-base.md"), md.join("\n") + "\n");
 const comNumero = tabela.filter((t) => t.completude_real !== null);
-const semMedicao = tabela.filter((t) => t.versao_medicao === null);
-console.log(`${tabela.length} documento(s); ${comNumero.length} com completude real medida; ${tabela.length - comNumero.length} com motivo em vez de número; ${semMedicao.length} sem medição do n8n (anterior à 0229). Resultado em ${SAIDA}`);
+const semMedicao = tabela.filter((t) => t.versao_medicao === null && t.motivo !== "arquivo do book NÃO chegou ao banco");
+const ausentes = tabela.filter((t) => t.motivo === "arquivo do book NÃO chegou ao banco").length;
+if (ausentes > 0) process.exitCode = 1;
+console.log(`${verdade.size - ausentes} de ${verdade.size} arquivo(s) do book chegaram ao banco (${ausentes} ausente(s)); ${tabela.length} linha(s); ${comNumero.length} com completude real medida; ${tabela.length - comNumero.length} com motivo em vez de número; ${semMedicao.length} sem medição do n8n (anterior à 0229). Resultado em ${SAIDA}`);

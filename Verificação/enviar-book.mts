@@ -99,11 +99,17 @@ for (const [n, grupo] of grupos.entries()) {
     if (lote?.fechado_em) break;
     await espera(30_000);
   }
+  // Fechar não basta: o lote pode fechar com MENOS documentos do que os arquivos enviados (medido em 07/11:
+  // 11 enviados, 3 registrados, e o estado dizia "fechado" — regra 7). Confere arquivos × documentos do lote.
   const estado = !lote ? "SEM LOTE (recusado antes do orçamento, ou o envio não chegou)"
-    : lote.fechado_em ? "fechado" : `NÃO FECHOU em ${ESPERA_MAX_MS / 60000} min`;
+    : !lote.fechado_em ? `NÃO FECHOU em ${ESPERA_MAX_MS / 60000} min`
+    : Number(lote.documentos) !== grupo.length ? `fechado INCOMPLETO: ${lote.documentos} de ${grupo.length} arquivo(s) viraram documento`
+    : "fechado";
   envios.push({ envio: n + 1, arquivos: grupo.map((g) => path.basename(g)), estado, lote, minutos: Math.round((Date.now() - t0) / 6000) / 10 });
   fs.writeFileSync(path.join(SAIDA, "envios.json"), JSON.stringify({ mandato: MANDATO, caso_id: casoId, envios }, null, 2));
   console.log(`envio ${n + 1}/${grupos.length}: ${grupo.length} arquivo(s) — ${estado}`);
 }
 await browser.close();
+const incompletos = envios.filter((e) => e.estado !== "fechado").length;
+if (incompletos > 0) { console.error(`${incompletos} envio(s) NÃO fecharam completos.`); process.exitCode = 1; }
 console.log(`caso_id ${casoId}; resultado em ${path.join(SAIDA, "envios.json")}`);
