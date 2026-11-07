@@ -1140,6 +1140,15 @@ supabase db execute --file Supabase/migrations/0228_a_linha_sem_tipo_que_chegava
 #   -- `storage:chave_de_servico` = alguém apagou com a service_role (script ou painel); o portal mostra "Chave de serviço (pessoa não identificada)". Se vier `sistema:*` para uma exclusão feita por pessoa, é defeito: avise.
 #   -- E confira o versionamento (a sonda também o cobra): select id, versioning_status from storage.buckets where id = 'documentos';   -- DISABLED
 
+# A 0229 (P4, linha de base da leitura) grava a MEDIÇÃO da leitura POR DOCUMENTO: `fn_registrar_campos_extraidos` ganha o último parâmetro `p_medicao jsonb default null` (o evento `extracao_sombra` passa a levar `medicao`: objeto como veio, nula explícita quando o chamador não mediu, `medicao_invalida` quando não é objeto) e nasce `fn_linha_de_base_extracao(p_caso_id)` (uma linha por versão: n_campos, falha_motivo, contas_no_documento, linhas_devolvidas, cobertura, pendências de extração abertas; SECURITY INVOKER, respeita a RLS). Troca a ASSINATURA (drop da antiga + create da nova, ACL refeita): a chamada atual do n8n, com argumentos nomeados, continua valendo sem reimportar nada.
+# >>> Rodar COMO `postgres`; reaplicável (drop if exists + create, create or replace, upsert do requisito). Sem tabela, sem backfill.
+# >>> NÃO MUDA O n8n: enquanto o nó "Gravar Campos (Sombra)" não passar `p_medicao`, todo evento novo sai com `medicao` nula e a linha de base diz `sem_medicao` — é o estado honesto. Montar e passar a medição por documento é a fatia seguinte.
+# >>> Teste: Supabase/test/linha_de_base_da_leitura.test.sql.
+supabase db execute --file Supabase/migrations/0229_a_leitura_que_so_se_media_somada_por_lote.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0229' and not presente;   -- ZERO linhas
+#   select count(*) from pg_proc where proname = 'fn_registrar_campos_extraidos';   -- 1 (sem sobrecarga)
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
