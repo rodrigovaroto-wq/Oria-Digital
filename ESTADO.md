@@ -19,23 +19,17 @@
 - **D.** `menu-conta.tsx` tinha `title={email}`. O portão só varria `valor-sensivel` e agora varre todo `title={…}`.
 - **Varredura nova:** `Verificação/varredura-dos-mandatos.mts`. Abre cada aba (desktop e 390 px), cada documento e os três exports de TODO mandato visível. Sai com 2 quando não rodou.
 
-**PAUSADA a pedido do dono (06/11, ~21:05 UTC). Para retomar, nesta ordem:**
-1. **CI do PR #275:** confira o estado. Os dois últimos commits (revisão da G2: kit-basico 160/160; e da varredura) ainda não passaram pelo CI.
-2. **Varredura completa contra o portal publicado:** NÃO terminou. Foi parada no mandato 7 de 77.
-   - Até ali houve 2 FALHAS. As duas são `ERR_ABORTED` / contexto fechado ao navegar (`531ddabc/pendencias` a 390 px e um documento do `1be52ab4`). As duas são suspeitas de concorrência do próprio script, NÃO do portal: refaça só esses dois com `VM_SO`.
-   - Rode de novo a versão revisada:
-     ```
-     VM_CREDENCIAL=<arquivo com e-mail e senha> VM_SAIDA=<pasta> VM_DOCUMENTOS=1 VM_RECALCULAR=1 VM_ESPERADO=<select count(*) from caso> \
-       ./portal/node_modules/.bin/tsx Verificação/varredura-dos-mandatos.mts
-     ```
-   - São cerca de 2 h para 78 mandatos e 1.984 documentos. O recálculo leva 28 s por .xlsx.
-3. **A MESMA varredura contra o código deste PR:** use a prévia da Vercel do #275 (`VM_BASE=`) ou o build local com `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` de produção. As FALHAS dos dois lados têm de ser comparadas.
-4. **Fotografe o banco antes e depois.** A consulta está no fim do script.
-5. **Não exercitado em produção:**
-   - a recusa de confirmar documento sem tipo pelo navegador (só pela suíte);
-   - "Reabrir pendência" (grava em 1 clique, sem confirmação; decidir se deve pedir confirmação como as outras);
-   - o ✕ da equipe (0 alocações em produção).
-6. **Fechar a rodada:** depois do CI verde, desinscrever o PR, rodar `/fechar` e trocar a senha do dono. Ela passou pelo chat e parece igual à do banco.
+**Varredura completa (retomada de 07/11, 00:03–02:20 UTC):**
+- **Produção** (`5d0061d`): 79 mandatos, 2.391 páginas de documento, 120 exports baixados, `.xlsx` recalculados no LibreOffice. 3.458 verificações: 3.323 ok, 88 recusas legítimas, 17 avisos (só lentidão, até 32 s na Modelagem e em documentos grandes), 30 "FALHA". Dessas 30:
+  - **25** eram a recusa legítima da apresentação ("ainda não tem o modelo institucional montado"), lidas como falha pelo script. Corrigido em `a558396`.
+  - **4** eram defeito real: `#VALUE!` na guarda do giro agregado (Working Capital) quando a receita do último realizado é zero. Corrigido em `dd85ed3`. Com a correção, os 4 mandatos passam 72/72.
+  - **1** era um 502 isolado da Vercel numa chamada RSC. Não se repetiu.
+- **As 2 falhas da pausa** (`531ddabc`, `1be52ab4`) refeitas: 198/198 ok. Eram navegação concorrente do script.
+- **Código deste PR** (build local apontado para produção): chegou a 79 de 80 mandatos antes do limite de 2 h. 0 falhas fora as recusas da apresentação, e 1 contexto destruído por navegação (`ca863527/revisao`), do mesmo tipo das da pausa.
+- **CI e Sonar do #275:** verdes em `cb19043`. O Sonar S4036 (`soffice` pelo PATH) foi corrigido em `9c96dfe`. PR desinscrito.
+
+**Não exercitado em produção:** a recusa de confirmar documento sem tipo pelo navegador (só pela suíte); "Reabrir pendência" (grava em 1 clique, sem confirmação; decidir se deve pedir); o ✕ da equipe (0 alocações).
+**Pendente do dono:** decidir sobre o "Reabrir"; trocar a senha (passou pelo chat).
 
 **Resíduo medido e deixado:** 738 linhas auto-aceitas em 23 documentos sem tipo, todas em 11 mandatos de teste. A 0228 vale só para a frente.
 
