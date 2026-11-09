@@ -120,6 +120,10 @@ jobs:
         run: |
           python3 -m pip install --quiet --only-binary :all: 'openpyxl==3.1.5'
           PYTHONPATH=. python3 gerar.py
+      # `N8N/test/cobertura.test.mjs` mede a régua sobre o texto de `pdftotext -raw` dos books (P4,
+      # 9cdf90e). A imagem do runner não garante o poppler; sem ele o teste reprova em voz alta.
+      - name: pdftotext (poppler-utils) para a régua sobre o texto real dos books
+        run: command -v pdftotext || (sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils)
       - name: Dependências do portal (exceljs e jszip da suíte do n8n)
         working-directory: portal
         run: npm ci --ignore-scripts
