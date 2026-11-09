@@ -1026,8 +1026,8 @@ test('Topologia: o teto de gasto fica entre a medição do documento e a primeir
   // O que se afirma agora é o COMPORTAMENTO: o lote é aberto antes de a extração
   // começar, E o item chega inteiro na cadeia. As duas coisas, juntas.
   const doCabe = wf.connections['Lote cabe?'].main[0].map((c) => c.node);
-  assert.deepEqual(doCabe, ['Abrir Lote', 'Precisa Fallback?'],
-    'o "cabe" abre o lote (ramo terminal, primeiro) e segue com o item inteiro');
+  assert.deepEqual(doCabe, ['Abrir Lote', 'Precisa Fallback?', 'Reanexar Original'],
+    'o "cabe" abre o lote (ramo terminal, primeiro), segue com o item inteiro e so agora guarda o original');
   assert.equal(wf.connections['Abrir Lote'], undefined,
     'o Abrir Lote é ramo TERMINAL — inline ele substituiria o item de todo documento');
   assert.equal(wf.nodes.find((n) => n.name === 'Abrir Lote').executeOnce, true,
@@ -1063,6 +1063,58 @@ test('Topologia: o teto de gasto fica entre a medição do documento e a primeir
   }
 });
 
+// LOTE RECUSADO NAO DEIXA ORIGINAL NO STORAGE (medido em producao em 09/11/2026).
+//
+// 3 arquivos .txt de 5,2 MB: o `Orcamento do Lote` recusou (US$ 45,27 contra o teto de
+// US$ 3), gravou 1 linha em `execucao_falha`, e os 3 originais ficaram no bucket
+// `documentos` sem `documento_versao.arquivo_ref` apontando para eles. O `Upload Storage`
+// saia de `Preparar Conteudo`, ANTES da decisao. A recusa da cota diaria (RPD) sai pelo
+// mesmo `Lote cabe?` e tinha o mesmo defeito.
+//
+// Afirma COMPORTAMENTO (caminho, nao nome de vizinho): a partir do Intake, o Upload so e'
+// alcancavel passando pelo `Lote cabe?`, e a recusa nao alcanca nenhum upload.
+test('Lote recusado (orcamento ou cota): nenhum caminho do Intake chega ao Upload Storage sem passar por "Lote cabe?"', () => {
+  const alcanca = (de, ate, proibido) => {
+    const visto = new Set([de]);
+    const fila = [de];
+    while (fila.length) {
+      const atual = fila.shift();
+      if (atual === ate) return true;
+      for (const ramo of (wf.connections[atual]?.main || [])) {
+        for (const c of ramo || []) {
+          if (c.node === proibido || visto.has(c.node)) continue;
+          visto.add(c.node);
+          fila.push(c.node);
+        }
+      }
+    }
+    return false;
+  };
+  assert.equal(alcanca('Intake (Form)', 'Upload Storage', 'Lote cabe?'), false,
+    'ha caminho ate o Upload Storage que nao passa pelo "Lote cabe?": lote recusado deixaria original no bucket');
+  assert.equal(alcanca('Intake (Form)', 'Upload Storage', null), true, 'o upload continua existindo no ramo aceito');
+  assert.equal(alcanca('Registrar Recusa', 'Upload Storage', null), false, 'a recusa nao sobe nada');
+  // Quem cobra o orcamento e a cota e' o MESMO `cabeTudo`: nao ha segunda saida de recusa.
+  assert.ok(code('Orcamento do Lote').includes('const cabeTudo = r.cabe && cota.cabe'),
+    'a cota diaria (RPD) e o orcamento decidem pelo mesmo IF, entao a mesma garantia vale para os dois');
+});
+
+// O binario nao chega a `Lote cabe?`: os extratores e o `Medir Documento` reconstroem o
+// item sem ele. `Reanexar Original` o busca no `Preparar Conteudo`, pelo arquivo_ref.
+test('Reanexar Original: devolve ao item o binario do SEU documento, achado pelo arquivo_ref', async () => {
+  const prepA = { json: { arquivo_ref: 'caso/aaa.pdf' }, binary: { data: { fileName: 'a.pdf', data: 'AAA' } } };
+  const prepB = { json: { arquivo_ref: 'caso/bbb.pdf' }, binary: { data: { fileName: 'b.pdf', data: 'BBB' } } };
+  const refs = { 'Preparar Conteudo': [prepA, prepB] };
+  // o item de B, sem binario (como sai do Medir Documento), chegando DEPOIS do de A
+  const itemB = { json: { arquivo_ref: 'caso/bbb.pdf', orcamento_cabe: true } };
+  const out = await run('Reanexar Original', { item: itemB, refs });
+  assert.equal(out.binary.data.data, 'BBB', 'o original e o do documento B, nao o do primeiro item');
+  assert.equal(out.json.original_reanexado, true);
+  const orfao = await run('Reanexar Original', { item: { json: { arquivo_ref: 'caso/zzz.pdf' } }, refs });
+  assert.equal(orfao.binary, undefined, 'sem original, nao inventa binario');
+  assert.equal(orfao.json.original_reanexado, false, 'a ausencia fica declarada no item, nao silenciosa');
+});
+
 // A TOPOLOGIA ANTIGA (até esta rodada) mandava TODO item, de qualquer
 // mimetype, para um `Extrair Texto` único (operação PDF) — CSV era parseado à
 // mão dentro de `Preparar Conteudo`, e XLSX/XLS/XML nunca eram extraídos. O
@@ -1076,7 +1128,8 @@ test('Topologia: o teto de gasto fica entre a medição do documento e a primeir
 // o formato errado.
 test('Topologia: Upload é ramo lateral; o Roteador manda cada formato a UM extrator só', () => {
   const destinosDePreparar = wf.connections['Preparar Conteudo'].main[0].map((c) => c.node);
-  assert.deepEqual(destinosDePreparar.sort(), ['Roteador de Formato', 'Upload Storage'].sort());
+  assert.deepEqual(destinosDePreparar, ['Roteador de Formato'],
+    'o Upload saiu de Preparar Conteudo: subir antes do orcamento deixava original de lote recusado no bucket');
   assert.equal(wf.connections['Upload Storage'], undefined, 'Upload não alimenta nenhum node');
   // O ramo lateral não pode derrubar a ingestão (regra do c): uma falha do Storage
   // vira item de erro e a execução segue. É o que o onError garante; sem ele o 4xx

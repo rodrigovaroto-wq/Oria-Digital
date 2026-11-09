@@ -513,8 +513,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2080,
-        360
+        4420,
+        540
       ],
       "credentials": {
         "httpCustomAuth": {
@@ -522,6 +522,21 @@
           "name": "Supabase Storage (service_role)"
         }
       },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// --- Code (EACH ITEM): DEVOLVE O ORIGINAL AO ITEM, para o Upload Storage -----\n// O Upload Storage ficava ao lado de Preparar Conteudo, ANTES de Orcamento do Lote e\n// Lote cabe?. Medido em producao em 09/11/2026: 3 arquivos .txt de 5,2 MB, orcamento\n// recusado (US$ 45,27 contra o teto de US$ 3), 1 linha em execucao_falha, e os 3 originais\n// no bucket documentos sem nenhuma documento_versao.arquivo_ref apontando para eles --\n// arquivo do cliente retido sem registro e sem trilha. A recusa da cota diaria (RPD) sai\n// pelo mesmo ramo (cabeTudo = r.cabe && cota.cabe) e tinha o mesmo defeito.\n//\n// O upload foi para DEPOIS de Lote cabe? (ramo true). Mas o binario nao chega la: os\n// extratores e o `Medir Documento` reconstroem o item sem ele. Este no' o busca de volta no\n// `Preparar Conteudo`, que e' ancestral, PELO arquivo_ref (hash do conteudo) e nao por\n// pareamento: o `Orcamento do Lote` e' runOnceForAllItems e nao garante pairedItem.\nconst ref = $json.arquivo_ref;\nlet original = null;\ntry {\n  for (const p of $('Preparar Conteudo').all()) {\n    if (p?.json?.arquivo_ref === ref && p?.binary?.data) { original = p.binary; break; }\n  }\n} catch (err) { original = null; }\nif (!original) {\n  // SEM O ORIGINAL nao ha o que subir: o item segue sem binario e o Upload Storage falha\n  // (continueRegularOutput), o que o Resumo de Custo conta como original nao guardado.\n  return { json: { ...$json, original_reanexado: false } };\n}\nreturn { json: { ...$json, original_reanexado: true }, binary: original };"
+      },
+      "id": "reanexar-original",
+      "name": "Reanexar Original",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4160,
+        540
+      ],
       "onError": "continueRegularOutput"
     },
     {
@@ -1504,12 +1519,18 @@
       "main": [
         [
           {
-            "node": "Upload Storage",
+            "node": "Roteador de Formato",
             "type": "main",
             "index": 0
-          },
+          }
+        ]
+      ]
+    },
+    "Reanexar Original": {
+      "main": [
+        [
           {
-            "node": "Roteador de Formato",
+            "node": "Upload Storage",
             "type": "main",
             "index": 0
           }
@@ -1657,6 +1678,11 @@
           },
           {
             "node": "Precisa Fallback?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Reanexar Original",
             "type": "main",
             "index": 0
           }

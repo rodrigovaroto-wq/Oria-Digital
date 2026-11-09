@@ -1415,6 +1415,36 @@ const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,pr
 return [...completos, ...reconstruidos];
 `.trim();
 
+const CODE_REANEXAR_ORIGINAL = `
+// --- Code (EACH ITEM): DEVOLVE O ORIGINAL AO ITEM, para o Upload Storage -----
+// O Upload Storage ficava ao lado de Preparar Conteudo, ANTES de Orcamento do Lote e
+// Lote cabe?. Medido em producao em 09/11/2026: 3 arquivos .txt de 5,2 MB, orcamento
+// recusado (US$ 45,27 contra o teto de US$ 3), 1 linha em execucao_falha, e os 3 originais
+// no bucket documentos sem nenhuma documento_versao.arquivo_ref apontando para eles --
+// arquivo do cliente retido sem registro e sem trilha. A recusa da cota diaria (RPD) sai
+// pelo mesmo ramo (cabeTudo = r.cabe && cota.cabe) e tinha o mesmo defeito.
+//
+// O upload foi para DEPOIS de Lote cabe? (ramo true). Mas o binario nao chega la: os
+// extratores e o \`Medir Documento\` reconstroem o item sem ele. Este no' o busca de volta no
+// \`Preparar Conteudo\`, que e' ancestral, PELO arquivo_ref (hash do conteudo) e nao por
+// pareamento: o \`Orcamento do Lote\` e' runOnceForAllItems e nao garante pairedItem.
+const ref = $json.arquivo_ref;
+let original = null;
+try {
+  for (const p of $('Preparar Conteudo').all()) {
+    if (p?.json?.arquivo_ref === ref && p?.binary?.data) { original = p.binary; break; }
+  }
+} catch (err) { original = null; }
+if (!original) {
+  // SEM O ORIGINAL nao ha o que subir: o item segue sem binario e o Upload Storage falha
+  // (continueRegularOutput), o que o Resumo de Custo conta como original nao guardado.
+  return { json: { ...$json, original_reanexado: false } };
+}
+return { json: { ...$json, original_reanexado: true }, binary: original };
+`.trim();
+
+
+
 // --- Code (EACH ITEM): monta corpo da chamada de CLASSIFICAÇÃO (fallback) ---
 const CODE_REQ_CLASSIF = `
 ${FONTE_PROVEDOR}
@@ -2796,6 +2826,8 @@ throw new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') +
     sendBody: true, contentType: 'binaryData', inputDataFieldName: 'data',
   }, { credentials: { httpCustomAuth: { id: 'REPLACE', name: 'Supabase Storage (service_role)' } }, onError: 'continueRegularOutput' }),
 
+  node('Reanexar Original', 'n8n-nodes-base.code', 2, { mode: 'runOnceForEachItem', jsCode: CODE_REANEXAR_ORIGINAL }, CODE_CONTINUA),
+
   node('Precisa Fallback?', 'n8n-nodes-base.if', 2, {
     conditions: { options: { caseSensitive: true, typeValidation: 'strict' }, combinator: 'and', conditions: [
       { leftValue: '={{ $json.precisa_fallback_ia }}', rightValue: true, operator: { type: 'boolean', operation: 'true', singleValue: true } },
@@ -3098,10 +3130,13 @@ const connections = {
   // consequência. `Recompor Conteudo Extraido`, depois do Merge, recompõe o
   // contexto lendo o `Preparar Conteudo`, que É ancestral dele (um ramo irmão
   // não seria — ver o teste "aponta para um ANCESTRAL, nunca para um irmão").
+  // O Upload Storage NAO sai mais daqui: subir antes de `Lote cabe?` deixava no bucket o
+  // original de todo lote recusado por orcamento/cota (3 x 5,2 MB em 09/11/2026), sem
+  // documento_versao.arquivo_ref. Ver `Reanexar Original`.
   'Preparar Conteudo': { main: [[
-    { node: 'Upload Storage', type: 'main', index: 0 },
     { node: 'Roteador de Formato', type: 'main', index: 0 },
   ]] },
+  'Reanexar Original': { main: [[{ node: 'Upload Storage', type: 'main', index: 0 }]] },
   // CADA SAÍDA VAI PARA EXATAMENTE UM DESTINO — nunca fan-out cego (a auditoria
   // dos 5 nós "Extract from..." do dono era exatamente o oposto disto: os 5
   // recebiam o MESMO item, sem Switch nenhum decidindo). A ORDEM das saídas
@@ -3162,6 +3197,7 @@ const connections = {
     [
       { node: 'Abrir Lote', type: 'main', index: 0 },           // true — abre o lote (ramo terminal)
       { node: 'Precisa Fallback?', type: 'main', index: 0 },    // ...e o item SEGUE inteiro
+      { node: 'Reanexar Original', type: 'main', index: 0 },    // ...e o original sobe SO' agora (lote aceito)
     ],
     [{ node: 'Juntar Recusas', type: 'main', index: 1 }],       // false — grava e aborta
   ] },
