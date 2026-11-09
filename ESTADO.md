@@ -2,7 +2,7 @@
 
 ## SESSÃO 123 (09/11/2026) — P7: 0230 APLICADA em produção; o #276 (P4, 0229) entrou junto; a medição por documento parou em 09/11
 
-> **Migration mais nova: `0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql` — APLICADA EM PRODUÇÃO em 09/11/2026.**
+> **Migration mais nova: `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql` — ESCRITA, NÃO APLICADA (a 0230 está aplicada em produção desde 09/11/2026).**
 > - Sonda antes: 339 itens, na 0229. Ensaio em transação revertida: 342, 0 faltando.
 > - Depois: 342 itens, os 3 da 0230 presentes. O corpo das duas funções em produção tem o mesmo md5 do banco montado do repositório. ACL de `fn_registrar_documento` igual. Mandatos: 81 antes e depois.
 > - A sonda acusa 1 ausente (`envio_segredo_no_vault`) pela API: é a leitura do Vault negada a esse papel, não o segredo faltando. Dentro da transação do ensaio deu 0 faltando.

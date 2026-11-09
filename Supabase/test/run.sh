@@ -960,6 +960,11 @@ echo "== 0229 — a leitura que só se media somada por lote: a cobertura por DO
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/linha_de_base_da_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo
+echo "== 0231 — o balanço que a IA declarou sem dado financeiro e ninguém via: Sinal 3 por tipo + backfill"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_balanco_sem_dado_financeiro.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \
