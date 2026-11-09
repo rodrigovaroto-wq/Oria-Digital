@@ -231,9 +231,10 @@ test('Propriedade: nenhum nó que GRAVA é alcançável do Form sem passar pelo 
   assert.ok(alcancados.has('Abortar Lote') && !alcancados.has('Upsert Caso (Postgres)') && !alcancados.has('Listar Arquivos'));
 });
 
-test('Registrar Recusa grava a etapa que a recusa informa (envio) e mantém "orcamento" para as outras duas', () => {
+test('Registrar Recusa grava a etapa que a recusa informa e NAO inventa "orcamento" quando ela falta (P1d)', () => {
   const repl = no('Registrar Recusa').parameters.options.queryReplacement;
-  assert.match(repl, /\$json\.etapa_recusa \|\| 'orcamento'/);
+  assert.match(repl, /\$json\.etapa_recusa \?\? null/);
+  assert.doesNotMatch(repl, /'orcamento'/);
 });
 
 test('O formulário declara o campo do token DEPOIS do mandato (o portal acha o mandato como o 1º texto do HTML)', () => {

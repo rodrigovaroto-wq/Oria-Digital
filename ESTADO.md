@@ -1,8 +1,50 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 119 (06/11/2026) — P16 no código: os 5 temas ALTOS da vistoria P2; 0226, 0227 e 0228 NÃO aplicadas
+## SESSÃO 121 (09/11/2026) — semana 1 fechada: P4, P5 e P1d; ingestão REPUBLICADA
 
-> **Migration mais nova: `0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql` — NÃO APLICADA.** As três da P16 (0226, 0227, 0228) esperam o dono, na ordem, pelo `Supabase/README.md`. Nasceram 0224–0226 e foram renumeradas depois que a 0224 (D16) entrou no `main`.
+- **Republicação:** ingestão republicada no n8n em 09/11, 18:04 UTC, com autorização do dono. `preparar-republicacao.mjs` + `conferir-publicado.mjs`: os 59 nós batem com o repositório. A P1d (a recusa grava a etapa real e 1 linha só) e a régua da P4 (cobertura entre 0 e 1, excedente declarado) passam a valer em produção.
+- **P5:** a correção já estava publicada desde 28/10 (Agrupar Linhas XLSX/XLS). Faltava o teste de topologia, e ele foi escrito.
+- **P4:** a linha de base (`Supabase/test/linha-de-base-extracao.sql`) rodou contra produção: 2.053 documentos, 79 mandatos. Os números do corpus estão no `PLANO_DE_EXECUCAO_2026-11.md`.
+- **Plano reprogramado:** as semanas 2 a 6 andaram uma semana. O fim passa a 18/12.
+- **Não provado ao vivo:** a gravação de 1 linha por recusa no Postgres real. Ela é afirmada pelo número de itens no teste, porque provocar uma recusa real exige um lote grande pelo portal.
+- **Próximo:** semana 2, começando pela P6 (desalinhamento de colunas em balancete multi-coluna: Krauspenhar 38, Valtra 29, BP COMBINADO Vertentes 32).
+
+## SESSÃO 120 (06/11/2026) — 0226, 0227 e 0228 APLICADAS em produção; P16 conferida no portal publicado; G2 e o `title=` do e-mail corrigidos
+
+> **Migration mais nova: `0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql` — APLICADA EM PRODUÇÃO em 06/11/2026.**
+> - Sonda antes: 331/331, na 0224.
+> - Ensaio das três numa transação revertida: 334/334, e a foto (corpo e ACL das três funções) ficou idêntica depois.
+> - Aplicadas uma por vez: 332 → 333 → 334, 0 faltando. A ACL das três funções não mudou.
+> - As três suítes da P16 rodaram contra produção, em transação revertida, e passaram inteiras. Mandatos: 77 antes e depois.
+
+**Portal publicado (`5d0061d`) visto como Sócio, só leitura.** O banco ficou igual antes e depois (eventos, decisões, md5 dos estados de pendência).
+- A, B, C, E, F e F2 batem com o PR.
+- O ✕ da equipe não foi exercitado: há 0 alocações em produção.
+- "Reabrir pendência" grava em um clique, sem confirmação. Foi escolha do #274 e não foi clicado.
+
+**Corrigido nesta sessão (o #274 não cumpria em produção):**
+- **G2.** A heurística do acento mandava o motivo inteiro para a tela. 272 das 468 `extracao_falhou` abertas mostravam instrução de engenharia (`N8N/lib/provedor.mjs`, `TPM_CONTA`) e o colchete do provedor em inglês. E toda falha recebia "abra o arquivo / reenvie", inclusive chave inválida e falta de crédito: 347 pendências abertas são do serviço de IA.
+- Agora a tela mostra a causa em português e a ação que a causa pede. O motivo inteiro vai para Detalhes técnicos. Medido nos 130 motivos reais: 0 com texto técnico à vista.
+- **D.** `menu-conta.tsx` tinha `title={email}`. O portão só varria `valor-sensivel` e agora varre todo `title={…}`.
+- **Varredura nova:** `Verificação/varredura-dos-mandatos.mts`. Abre cada aba (desktop e 390 px), cada documento e os três exports de TODO mandato visível. Sai com 2 quando não rodou.
+
+**Varredura completa (retomada de 07/11, 00:03–02:20 UTC):**
+- **Produção** (`5d0061d`): 79 mandatos, 2.391 páginas de documento, 120 exports baixados, `.xlsx` recalculados no LibreOffice. 3.458 verificações: 3.323 ok, 88 recusas legítimas, 17 avisos (só lentidão, até 32 s na Modelagem e em documentos grandes), 30 "FALHA". Dessas 30:
+  - **25** eram a recusa legítima da apresentação ("ainda não tem o modelo institucional montado"), lidas como falha pelo script. Corrigido em `a558396`.
+  - **4** eram defeito real: `#VALUE!` na guarda do giro agregado (Working Capital) quando a receita do último realizado é zero. Corrigido em `dd85ed3`. Com a correção, os 4 mandatos passam 72/72.
+  - **1** era um 502 isolado da Vercel numa chamada RSC. Não se repetiu.
+- **As 2 falhas da pausa** (`531ddabc`, `1be52ab4`) refeitas: 198/198 ok. Eram navegação concorrente do script.
+- **Código deste PR** (build local apontado para produção): chegou a 79 de 80 mandatos antes do limite de 2 h. 0 falhas fora as recusas da apresentação, e 1 contexto destruído por navegação (`ca863527/revisao`), do mesmo tipo das da pausa.
+- **CI e Sonar do #275:** verdes em `cb19043`. O Sonar S4036 (`soffice` pelo PATH) foi corrigido em `9c96dfe`. PR desinscrito.
+
+**Não exercitado em produção:** a recusa de confirmar documento sem tipo pelo navegador (só pela suíte); "Reabrir pendência" (grava em 1 clique, sem confirmação; decidir se deve pedir); o ✕ da equipe (0 alocações).
+**Pendente do dono:** decidir sobre o "Reabrir"; trocar a senha (passou pelo chat).
+
+**Resíduo medido e deixado:** 738 linhas auto-aceitas em 23 documentos sem tipo, todas em 11 mandatos de teste. A 0228 vale só para a frente.
+
+## SESSÃO 119 (06/11/2026) — P16 no código: os 5 temas ALTOS da vistoria P2 (0226–0228 aplicadas na S120)
+
+> As três da P16 (0226, 0227, 0228) foram **aplicadas em produção na S120** (ver acima). Nasceram 0224–0226 e foram renumeradas depois que a 0224 (D16) entrou no `main`.
 
 **O que entrou (branch `claude/dazzling-einstein-mhx4l1`), cada fatia com a regra 2 na mensagem do commit:**
 - A: "Prosseguir sem resolução", "Não procede" e o ✕ da equipe pedem confirmação.

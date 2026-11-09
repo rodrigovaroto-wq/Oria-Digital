@@ -7,7 +7,7 @@ toca:
   - Leitor/medicao-n8n/no-ler-fatia.js
   - Leitor/medicao-n8n/navegador-leitor.js
 ancora: N8N/build-workflow.mjs#getBinaryDataBuffer
-ancora_sha: 967ae9fd3777
+ancora_sha: 5fc762ce4232
 substitui: []
 ---
 

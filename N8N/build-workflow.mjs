@@ -617,7 +617,17 @@ const mensagemFinal = motivos.length > 0 ? motivos.join(' ') : null;
 // \`orcamento_versao\` viaja com o item mesmo quando o lote PASSA. É o que
 // responde, da tela do n8n, a pergunta que custou uma rodada em 12/08: "este
 // workflow é o que está no repositório ou é o que foi importado em julho?".
-return itens.map(i => ({ json: { ...i.json, orcamento_cabe: cabeTudo, orcamento_mensagem: mensagemFinal, orcamento_estimado_usd: r.estimadoUSD, orcamento_teto_usd: r.teto, orcamento_chamadas: r.chamadas, orcamento_versao: r.versao, orcamento_por_conteudo: !!r.porConteudo, orcamento_aviso_medicao: r.aviso || null, orcamento_por_caminho: r.porCaminho || null, cota_cabe: cota.cabe, cota_conhecida: cota.conhecido, cota_fracao: cota.fracao, cota_rpd: cota.rpd, cota_aviso: cota.cabe ? cota.mensagem : null }, binary: i.binary }));
+const saida = itens.map(i => ({ json: { ...i.json, orcamento_cabe: cabeTudo, orcamento_mensagem: mensagemFinal, orcamento_estimado_usd: r.estimadoUSD, orcamento_teto_usd: r.teto, orcamento_chamadas: r.chamadas, orcamento_versao: r.versao, orcamento_por_conteudo: !!r.porConteudo, orcamento_aviso_medicao: r.aviso || null, orcamento_por_caminho: r.porCaminho || null, cota_cabe: cota.cabe, cota_conhecida: cota.conhecido, cota_fracao: cota.fracao, cota_rpd: cota.rpd, cota_aviso: cota.cabe ? cota.mensagem : null }, binary: i.binary }));
+// UMA RECUSA E' UMA LINHA (P1d, 13/09/2026: o lote de 44 documentos gravou 44 linhas em
+// \`execucao_falha\` no mesmo segundo, 4 vezes = 176; o de 7 gravou 7). O \`Registrar Recusa\` roda
+// uma vez POR ITEM e esta saida tinha um item por documento. Recusado, o lote vira UM item,
+// como a recusa de tamanho em \`Listar Arquivos\`, sem binario (ninguem le o arquivo depois da
+// recusa) e com a etapa que o \`Registrar Recusa\` grava.
+if (!cabeTudo && saida.length > 0) {
+  const { binary, ...primeiro } = saida[0];
+  return [{ json: { ...primeiro.json, etapa_recusa: 'orcamento' } }];
+}
+return saida;
 `.trim();
 
 // --- Code (ALL ITEMS): O CUSTO DO LOTE, NUM PAINEL SÓ -----------------------
@@ -711,19 +721,32 @@ const textoOriginais = !uploadExecutou
       + (semGuarda > 0 ? ' (' + semGuarda + ' SEM GUARDA; primeiro erro: ' + primeiroErroUpload + ')' : '');
 
 let extracao = 0, entrada = 0, saida = 0, cache = 0, linhas = 0, comFalha = 0, semMedicao = 0;
-let celulas = 0, contas = 0, fatiados = 0;
+let celulas = 0, contas = 0, fatiados = 0, alem = 0, docsAlem = 0, semContagem = 0;
 for (const it of extracoes) {
   const e = it?.json || {};
   if (typeof e.custo_usd === 'number') extracao += e.custo_usd; else semMedicao += 1;
   if (e.tokens) { entrada += e.tokens.entrada || 0; saida += e.tokens.saida || 0; cache += e.tokens.cache || 0; }
   if (e.falha_motivo) comFalha += 1;
   linhas += Array.isArray(e.campos) ? e.campos.length : 0;
-  if (Number.isFinite(Number(e.contas_no_documento))) celulas += Number(e.contas_no_documento);
-  // O painel do lote soma a MESMA unidade da guarda: linhas devolvidas contra
-  // linhas de conta do texto. \`contas_distintas\` continua saindo por documento,
-  // porque e' ela que diz se o documento tem rotulo repetido.
-  if (Number.isFinite(Number(e.linhas_devolvidas))) contas += Number(e.linhas_devolvidas);
-  else if (Number.isFinite(Number(e.contas_distintas))) contas += Number(e.contas_distintas);
+  // O painel do lote soma a MESMA unidade da guarda: linhas devolvidas contra linhas de conta
+  // do texto. \`contas_distintas\` continua saindo por documento, porque e' ela que diz se o
+  // documento tem rotulo repetido.
+  const devolvidas = Number.isFinite(Number(e.linhas_devolvidas)) ? Number(e.linhas_devolvidas)
+    : (Number.isFinite(Number(e.contas_distintas)) ? Number(e.contas_distintas) : null);
+  // A COBERTURA FICA EM 0..1 SEM ESCONDER O EXCEDENTE (P4). Passava de 1 por dois motivos: (1) a
+  // regua (contagem de texto) erra para baixo em alguns documentos e o modelo devolve mais linhas
+  // do que ela previu; (2) documento SEM contagem de texto (escaneado) entrava no numerador e nao
+  // no denominador. Agora cada documento so' entra com ATE o que a regua contou, o que passou
+  // disso sai em linhas_alem_da_regua, e o documento sem regua e' contado a parte.
+  if (e.contas_no_documento === null || e.contas_no_documento === undefined || !Number.isFinite(Number(e.contas_no_documento))) { semContagem += 1; }
+  else {
+    const esperadas = Number(e.contas_no_documento);
+    celulas += esperadas;
+    if (devolvidas !== null) {
+      contas += Math.min(devolvidas, esperadas);
+      if (devolvidas > esperadas) { alem += devolvidas - esperadas; docsAlem += 1; }
+    }
+  }
   if (Number(e.blocos) > 1) fatiados += 1;
 }
 let classificacao = 0;
@@ -751,6 +774,8 @@ return [{ json: {
     + '. Saída: ' + saida + ' tokens; entrada: ' + entrada + ' (' + cache + ' em cache).'
     + (celulas > 0 ? ' Cobertura: ' + contas + ' contas gravadas de ' + celulas + ' linhas de conta nos PDFs ('
       + (contas / celulas * 100).toFixed(0) + '%), em ' + linhas + ' pares conta-coluna. '
+      + (alem > 0 ? alem + ' linha(s) alem da regua em ' + docsAlem + ' documento(s) (a regua conta o texto e erra para baixo; nao entra na cobertura). ' : '')
+      + (semContagem > 0 ? semContagem + ' documento(s) sem contagem de texto (escaneado) ficam fora da cobertura. ' : '')
       + fatiados + ' documento(s) precisaram de mais de uma chamada.' : ''),
   orcamento_versao: versao,
   documentos: extracoes.length,
@@ -777,6 +802,9 @@ return [{ json: {
   // que e' o que o banco guarda -- as duas coisas sao uteis e nao se misturam.
   contas_nos_documentos: celulas,
   contas_extraidas: contas,
+  linhas_alem_da_regua: alem,
+  documentos_acima_da_regua: docsAlem,
+  documentos_sem_contagem_no_texto: semContagem,
   cobertura_do_lote: celulas > 0 ? Number((contas / celulas).toFixed(3)) : null,
   documentos_fatiados: fatiados,
   documentos_com_falha: comFalha,
@@ -819,7 +847,7 @@ if (out.length === 0) {
 const tam = vereditoDeTamanhoPorArquivo({ arquivos: out.map((o) => ({ nome: o.json.nome_original, bytes: o.json.bytes })), teto: TETO_BYTES_POR_ARQUIVO });
 // Recusado, o lote vira UM item, como a saida do Orcamento do Lote: com um item
 // por arquivo, o Registrar Recusa gravaria a mesma falha N vezes.
-if (!tam.cabe) return [{ json: { caso_id, tamanho_cabe: false, orcamento_mensagem: tam.mensagem } }];
+if (!tam.cabe) return [{ json: { caso_id, tamanho_cabe: false, etapa_recusa: 'tamanho', orcamento_mensagem: tam.mensagem } }];
 return out.map((o) => ({ json: { ...o.json, tamanho_cabe: true }, binary: o.binary }));
 `.trim();
 
@@ -1954,7 +1982,10 @@ for(const [chave, blocos] of porDocumento){
     contas_no_documento:base.contas_no_documento??null,
     contas_distintas:contasDistintas,
     linhas_devolvidas:linhasDevolvidas,
-    cobertura:cobertura?cobertura.razao:(base.contas_no_documento>0?Number((linhasDevolvidas/base.contas_no_documento).toFixed(3)):null),
+    // 0..1: acima da regua o excedente sai em \`linhas_alem_da_regua\` (a regua conta texto e erra
+    // para baixo em alguns documentos; 5 linhas para 3 contadas nao sao 167% de cobertura).
+    cobertura:cobertura?cobertura.razao:(base.contas_no_documento>0?Number((Math.min(linhasDevolvidas,base.contas_no_documento)/base.contas_no_documento).toFixed(3)):null),
+    linhas_alem_da_regua:base.contas_no_documento>0?Math.max(0,linhasDevolvidas-base.contas_no_documento):null,
     custo_usd:blocos.reduce((soma,b)=>soma+(typeof b.custo_usd==='number'?b.custo_usd:0),0),
     tokens:blocos.reduce((acc,b)=>b.tokens?{entrada:acc.entrada+(b.tokens.entrada||0), saida:acc.saida+(b.tokens.saida||0), cache:acc.cache+(b.tokens.cache||0)}:acc,{entrada:0,saida:0,cache:0}),
   }});
@@ -2612,7 +2643,7 @@ const nodes = [
     // (envio, tamanho, orcamento) terminavam a execucao com o texto generico (S114).
     query: 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r, '
       + '$3::text as etapa_recusa, $4::text as orcamento_mensagem',
-    options: { queryReplacement: "={{ [$json.caso_id, $('Intake (Form)').first().json['Mandato (nome do caso)'], $json.etapa_recusa || 'orcamento', $json.orcamento_mensagem] }}" },
+    options: { queryReplacement: "={{ [$json.caso_id, $('Intake (Form)').first().json['Mandato (nome do caso)'], $json.etapa_recusa ?? null, $json.orcamento_mensagem] }}" },
   }, { credentials: PG_CRED, ...PG_RETRY }),
 
   node('Abortar Lote', 'n8n-nodes-base.code', 2, {
