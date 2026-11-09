@@ -39,6 +39,24 @@ A semana 1 não fechou no prazo: P4, P5 e P1d ficaram para trás porque a P16, p
 
 Já medido para a P1d(b) em produção (09/11): uma recusa de orçamento grava UMA linha por documento do lote (44 linhas no lote de 44 de 13/09, 4 vezes). As execuções da P5 (n8n 7859, 7883 e 7886, de 17/09) já foram podadas, então o documento exato não pode ser recuperado.
 
+### A linha de base da P4, medida em produção em 09/11/2026 (`Supabase/test/linha-de-base-extracao.sql`)
+
+2.053 documentos em 79 mandatos. O corpus do plano (versão mais nova de cada documento):
+
+| Mandato | Docs | Falha aberta | Incompleta | Linhas gravadas | Descartadas por desalinhamento | Seções que não fecham | Pior cobertura |
+|---|---|---|---|---|---|---|---|
+| Fw Valtra | 15 | 5 | 3 | 12.476 | 29 | 4 | 55% |
+| KRAUSPENHAR E HARTMANN | 7 | 5 | 5 | 1.388 | 39 | 10 | 45% |
+| AMO teste 00 | 118 | 12 | 6 | 7.670 | 0 | 18 | 0% |
+| P4 — Canastra (sintético) | 38 | 4 | 0 | 2.712 | 3 | 1 | — |
+| P4 — Distress (sintético) | 14 | 2 | 1 | 935 | 0 | 4 | 83% |
+| P4 — Espelho (sintético) | 3 | 2 | 0 | 6.572 | 1 | 0 | — |
+| P4 — Vertentes (sintético) | 14 | 1 | 1 | 914 | 32 | 0 | 0% |
+
+- O desalinhamento (alvo da P6) está concentrado em balancetes multi-coluna: Krauspenhar `balancete_janaago26` (38) e Valtra `Balancete 1º semestre` (29). O BP COMBINADO do Vertentes também não grava nenhuma linha (32 descartadas).
+- No AMO, 4 incompletas com 0 linhas são certidões e alterações contratuais (documento sem tabela financeira) e a `Relação_Contas_AMO.xlsx`.
+- "—" na cobertura quer dizer que a guarda não rodou (sem contagem no texto). Não quer dizer 100%.
+
 ## 1. Onde estamos, medido em 30/10/2026 (não lembrado)
 
 **Banco de produção.** `fn_instalacao_conferir()`: 287 de 287 requisitos presentes; a `0216` com 48
@@ -111,11 +129,11 @@ critério que fecha a fatia. Sem ele cumprido, a fatia não fecha.
 | **P1** ✅ 30/10 | **Fechar o deploy da Fase 5.** Com o segredo já no PikaPods (pendência D1 do dono): redeploy do portal, republicação da ingestão, conferir `multipleFiles` em "Arquivos", envio ponta a ponta de um book sintético pelo portal | Um lote sintético entra com o token do portal, e o n8n **recusa** token adulterado e token vencido (medido) |
 | **P1b** ✅ 04/11 | **O dial e a concordância calculados por mandato de quem dispara** (pendência crítica achada na revisão do PR #264, vale para a `0216` já aplicada). `fn_dial_auto_promover`, `fn_veredito_producao` e o gatilho `trg_auto_promover_dial` são INVOKER: sob a RLS por mandato, um Analista que decide uma pendência promove o dial de TODOS com a concordância só dos mandatos dele. Mesma família: `fn_golden_cobertura` e `fn_classe_contabil_concordancia`. Migration nova com cálculo global independente do leitor. Junto: sonda que exija RLS ligada (`relrowsecurity`) nas tabelas restritas | Um recorte pequeno com concordância alta NÃO promove o dial (assert medido não-vazio). **Tem de vir ANTES da P2**, que cria o primeiro Analista. Hoje o risco é nulo: o único usuário é Sócio |
 | **P1c** ✅ 04/11 | **Fechar as cinco pendências soltas da P1b.** RLS e DDL do dial (`0221`, aplicada), mensagem de recusa com o motivo real (`fa57400`), conta do cron conferida (`postgres`), segredo no Vault conferido. O envio válido saiu para a P2 | Recusa com token inválido provada em produção (execução 9262 × 9390, 0 mandato criado). Sonda 315/315 depois da `0221` |
-| **P1d** ⏳ 09/11 | **Dois achados de passagem da P1c.** (a) A recusa de tamanho grava a etapa `orcamento` (fallback do `queryReplacement`). (b) A recusa de orçamento com N itens provavelmente grava N linhas em `execucao_falha` (`queryBatching` não verificado) | Recusa de tamanho grava a etapa real, com teste que reprova no fallback. Número de linhas por recusa de orçamento medido; se for N, corrigido |
+| **P1d** ✅ 09/11 (no código; vale em produção após republicar a ingestão) | **Dois achados de passagem da P1c.** (a) A recusa de tamanho grava a etapa `orcamento` (fallback do `queryReplacement`). (b) A recusa de orçamento com N itens provavelmente grava N linhas em `execucao_falha` (`queryBatching` não verificado) | Recusa de tamanho grava a etapa real, com teste que reprova no fallback. Número de linhas por recusa de orçamento medido; se for N, corrigido |
 | **P2** ✅ 04/11 | **Três usuários de teste e vistoria por papel.** Criar Sócio, Analista e Leitura (`rodrigo.varoto+socio@`, `+analista@`, `+leitura@oriapartners.com`). Percorrer as telas autenticadas no preview com Playwright e com agentes Claude com persona dirigindo o preview; registrar cada defeito com captura. Junto: o **envio válido** de um book sintético pelo portal com o Sócio de teste (movido da P1c). MiroFish avaliado e descartado (04/11) | Matriz papel × tela, com o que cada papel vê e faz, medida. Envio válido entra e grava, conferido no banco (critério herdado da P1). A lista de defeitos alimenta a semana 4 |
 | **P3** ✅ 04/11 | **O n8n roteia por `caso_id`.** O token assinado passa a carregar o `caso_id`; o "Upsert Caso" busca por id; o nome vira só exibição | Renomear um mandato não quebra o envio; o invariante reprova com o roteamento antigo (medido) |
-| **P4** ⏳ 09/11 | **Linha de base da F3 e corpus de regressão.** Três books sintéticos mais os documentos reais já no banco (Valtra, Krauspenhar, AMO). Script que mede, por documento: falhou, incompleto, linhas, descartadas por desalinhamento, seções que não fecham. Corrigir a régua de cobertura acima de 1 | Número de base publicado por documento; a régua dá entre 0 e 1 no corpus inteiro, ou diz por que não |
-| **P5** ⏳ 09/11 | **`Maximum call stack size exceeded` em "Juntar Extração de Conteúdo".** Causa raiz, com o documento que provoca o erro | O documento que estourava passa, e um teste reprova com o código antigo |
+| **P4** ✅ 09/11 (régua: republicar a ingestão) | **Linha de base da F3 e corpus de regressão.** Três books sintéticos mais os documentos reais já no banco (Valtra, Krauspenhar, AMO). Script que mede, por documento: falhou, incompleto, linhas, descartadas por desalinhamento, seções que não fecham. Corrigir a régua de cobertura acima de 1 | Número de base publicado por documento; a régua dá entre 0 e 1 no corpus inteiro, ou diz por que não |
+| **P5** ✅ 09/11 (já publicada desde 28/10; faltava o teste) | **`Maximum call stack size exceeded` em "Juntar Extração de Conteúdo".** Causa raiz, com o documento que provoca o erro | O documento que estourava passa, e um teste reprova com o código antigo |
 
 **Estado em 04/11 (sessão 117, fim).** P1b ✅, P1c ✅ com a `0221` aplicada (sonda 315/315). P2 ✅: vistoria por papel, 5 temas ALTOS que vão para a P16, e a persona de Leitura não sondou URLs (NÃO EXECUTADO: caminho `/security-review` ou pentest). O envio válido conferido no banco NÃO CONFERIDO nesta rodada. P3 ✅ em produção com `0222` e `0223` aplicadas (sonda 322). Abertas: P1d, P4 (próxima), P16 (novo: temas da vistoria). Detalhe em `ESTADO.md`.
 
