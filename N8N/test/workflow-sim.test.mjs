@@ -4082,9 +4082,8 @@ test('Abortar Lote lanca o motivo REAL de cada uma das tres recusas (envio, tama
 
   for (const [recusa, motivo, etapa] of [
     [envio, /Envio recusado: token vencido\./, 'envio'],
-    // a recusa de tamanho nao informa etapa_recusa: o banco a grava como 'orcamento' (o fallback
-    // do queryReplacement, ja coberto em assinatura-do-envio.test.mjs) e a mensagem e' a que diz o motivo.
-    [tamanho, /ECD-2025\.txt/, 'orcamento'],
+    // P1d(a): a recusa de tamanho grava a etapa REAL ('tamanho'); antes caia no fallback 'orcamento'.
+    [tamanho, /ECD-2025\.txt/, 'tamanho'],
     [orcamento, /Lote recusado ANTES de gastar/, 'orcamento'],
   ]) {
     const entrada = itemDoRegistrarRecusa(recusa);
@@ -4192,4 +4191,123 @@ test('workflow.e1-ingestao.json NÃO contém fn_upsert_caso em nenhum nó (o env
   const com = json.nodes.filter((n) => JSON.stringify(n).includes('fn_upsert_caso')).map((n) => n.name);
   assert.deepEqual(com, [], `fn_upsert_caso em: ${com.join(', ')}`);
   assert.ok(json.nodes.some((n) => JSON.stringify(n).includes('fn_caso_do_envio')), 'o roteamento por id existe');
+});
+
+// P5 (17/09/2026): "Maximum call stack size exceeded" em `Juntar Extracao de Conteudo`
+// (execucoes 7859, 7883, 7886). CAUSA: o Merge nativo empilha com push.apply (o controle
+// positivo acima mede que 150.000 argumentos estouram neste Node 22), e o `Extract From File`
+// de planilha emite UMA LINHA POR ITEM. Mandato "AMO teste 00": 118 documentos, planilhas e
+// razoes longos. REGRA 4: o documento real foi podado (a API devolve 404) e nao se reproduz;
+// o que se afirma e' so' que uma ENTRADA DE 150.000 itens estoura o Merge e que a topologia
+// do repositorio nunca entrega linha solta a um Merge.
+test('P5: nenhum extrator de planilha entrega linha-por-item direto a um Merge', () => {
+  const merges = new Set(wf.nodes.filter((n) => n.type === 'n8n-nodes-base.merge').map((n) => n.name));
+  const planilha = ['Extrair XLSX', 'Extrair XLS'];
+  for (const origem of planilha) {
+    const destinos = (wf.connections[origem]?.main || []).flat().map((c) => c.node);
+    assert.ok(destinos.length > 0, `${origem} nao vai a lugar nenhum`);
+    for (const d of destinos) {
+      assert.ok(!merges.has(d), `${origem} -> ${d}: linha-por-item num Merge estoura a pilha acima de ~120 mil linhas`);
+      assert.match(d, /^Agrupar Linhas/, `${origem} deve passar por Agrupar Linhas (1 item por documento)`);
+    }
+  }
+});
+
+// P1d (a) e (b). REGRA 4: o Postgres e' simulado so' na projecao `$n as col` (ver
+// `itemDoRegistrarRecusa`); a contagem de linhas em `execucao_falha` e' modelada pela regra do
+// n8n que o proprio gerador cita: o `Registrar Recusa` (sem executeOnce) roda UMA VEZ POR ITEM
+// que recebe. Medido em producao em 13/09/2026: 44 documentos => 44 linhas, 4 vezes (176).
+test('P1d(a): a recusa de TAMANHO grava a etapa "tamanho", nao o fallback "orcamento"', async () => {
+  const tamanho = (await listarComTamanhos([{ nome: 'ECD-2025.txt', bytes: QUINZE_MIB + 1 }]))[0];
+  const entrada = itemDoRegistrarRecusa(tamanho);
+  assert.equal(entrada.json.etapa_recusa, 'tamanho');
+});
+
+test('P1d(a): recusa sem etapa nao vira "orcamento" por fallback (regra 1)', () => {
+  const entrada = itemDoRegistrarRecusa({ json: { caso_id: null, orcamento_mensagem: 'x' } });
+  assert.notEqual(entrada.json.etapa_recusa, 'orcamento');
+});
+
+test('P1d(b): recusa de ORCAMENTO de lote com N documentos chega ao Registrar Recusa como UM item (1 linha, nao N)', async () => {
+  const n = Math.ceil(TETO_EXECUCAO_USD / CUSTO_ESTIMADO_DOC_USD) + 1;
+  for (const docs of [n, 44, 7].filter((d) => d >= n)) {
+    const out = await run('Orcamento do Lote', {
+      items: Array.from({ length: docs }, (_, i) => itemDoc(`${i + 1}_BP_X_2025x2024.pdf`, false)),
+    });
+    assert.equal(out[0].json.orcamento_cabe, false, 'o arranjo tem de ser uma recusa');
+    assert.equal(out.length, 1, `lote de ${docs} documentos recusado: um item, senao o Registrar Recusa grava ${docs} linhas`);
+    assert.equal(out[0].json.etapa_recusa, 'orcamento');
+    assert.match(out[0].json.orcamento_mensagem, /Lote recusado ANTES de gastar/);
+  }
+});
+
+test('P1d(b): lote que CABE continua com um item por documento (a correcao nao colapsa o caminho feliz)', async () => {
+  const out = await run('Orcamento do Lote', {
+    items: Array.from({ length: 3 }, (_, i) => itemDoc(`${i + 1}_BP_X_2025x2024.pdf`, false)),
+  });
+  assert.equal(out[0].json.orcamento_cabe, true);
+  assert.equal(out.length, 3);
+});
+
+// P4: a REGUA DE COBERTURA ACIMA DE 1. A razao linhas-devolvidas / linhas-de-conta-do-texto passa
+// de 1 por DOIS motivos, e os dois estavam mudos:
+//  (1) a regua e' uma contagem de texto e erra para baixo em alguns documentos (medido em
+//      `medir-regua-cobertura.mjs`: Mutuos 2 contra 3 reais; o medidor mostra +6% a +17% nos
+//      documentos sem captura de producao), logo o modelo devolve MAIS linhas que a regua previu;
+//  (2) o painel do lote somava as linhas devolvidas de TODO documento, inclusive os sem contagem de
+//      texto (escaneado, imagem: `contas_no_documento` null), mas so' dividia pelas contagens que
+//      existiam: numerador de um conjunto, denominador de outro.
+// A saida e' 0..1 SEM esconder o excedente: ele sai em `linhas_alem_da_regua` e no texto do resumo.
+// REGRA 4: os numeros abaixo sao fixtures aritmeticas, nao um lote real.
+const docCobertura = (esperadas, devolvidas) => ({ json: {
+  custo_usd: 0.1, tokens: { entrada: 1, saida: 1, cache: 0 }, campos: [], falha_motivo: null,
+  contas_no_documento: esperadas, linhas_devolvidas: devolvidas, contas_distintas: devolvidas, blocos: 1,
+} });
+const resumoDe = async (docs) => {
+  const out = await run('Resumo de Custo', { items: [docs[0]], refs: {
+    'Juntar Blocos': { runs: [docs] }, 'Parse Classif': { runs: [[]] },
+    'Orcamento do Lote': { json: { orcamento_estimado_usd: 1, orcamento_versao: 'v' } },
+  } });
+  return (Array.isArray(out) ? out[0] : out).json;
+};
+
+test('P4: cobertura do lote fica em 0..1 e o EXCEDENTE sai declarado (documento acima da regua)', async () => {
+  // A: regua 10, modelo devolveu 15. B: regua 20, devolveu 20. Antes: 35/30 = 1,167.
+  const r = await resumoDe([docCobertura(10, 15), docCobertura(20, 20)]);
+  assert.ok(r.cobertura_do_lote <= 1 && r.cobertura_do_lote >= 0, `cobertura ${r.cobertura_do_lote} fora de 0..1`);
+  assert.equal(r.cobertura_do_lote, 1);
+  assert.equal(r.linhas_alem_da_regua, 5, 'o excedente e informacao: 5 linhas alem do que a regua contou');
+  assert.equal(r.documentos_acima_da_regua, 1);
+  assert.match(r.resumo, /5 linha\(s\) alem da regua em 1 documento\(s\)/);
+});
+
+test('P4: documento SEM contagem de texto nao entra no numerador (nem some: vem contado)', async () => {
+  // C e' escaneado (regua null) e devolveu 5 linhas. Antes: (10+10+5)/20 = 1,25.
+  const r = await resumoDe([docCobertura(10, 10), docCobertura(10, 10), docCobertura(null, 5)]);
+  assert.equal(r.contas_nos_documentos, 20);
+  assert.equal(r.contas_extraidas, 20, 'so as linhas de documentos que TEM regua');
+  assert.equal(r.cobertura_do_lote, 1);
+  assert.equal(r.documentos_sem_contagem_no_texto, 1);
+  assert.equal(r.linhas_alem_da_regua, 0, 'sem regua nao ha "alem": e' + " 'nao medido', e vem declarado acima");
+});
+
+test('P4: cobertura do lote abaixo de 1 continua exata (a correcao nao mexe no caso comum)', async () => {
+  const r = await resumoDe([docCobertura(30, 12), docCobertura(10, 10)]);
+  assert.equal(r.cobertura_do_lote, 0.55);
+  assert.equal(r.linhas_alem_da_regua, 0);
+});
+
+test('P4: cobertura POR DOCUMENTO fica em 0..1 e declara o excedente em linhas_alem_da_regua', async () => {
+  const campos = (n) => Array.from({ length: n }, (_, i) => ({ ordem: i, chave: `k${i}`, valor_num: i, valor_texto: String(i), entidade_coluna: null, periodo_coluna: null }));
+  const out = await run('Juntar Blocos', { items: [
+    { json: { documento_versao_id: 'v-1', bloco: 1, blocos: 1, celulas_no_documento: 4, contas_no_documento: 3,
+      campos: campos(5), diagnostico: { entidade: 'X' }, falha_motivo: null, custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 } } },
+    { json: { documento_versao_id: 'v-2', bloco: 1, blocos: 1, celulas_no_documento: 4, contas_no_documento: 4,
+      campos: campos(4), diagnostico: { entidade: 'X' }, falha_motivo: null, custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 } } },
+  ] });
+  const por = (v) => out.find((i) => i.json.documento_versao_id === v).json;
+  assert.equal(por('v-1').cobertura, 1, '5 de 3 nao e' + " 167%: e 100% mais 2 linhas declaradas");
+  assert.equal(por('v-1').linhas_alem_da_regua, 2);
+  assert.equal(por('v-2').cobertura, 1);
+  assert.equal(por('v-2').linhas_alem_da_regua, 0);
 });
