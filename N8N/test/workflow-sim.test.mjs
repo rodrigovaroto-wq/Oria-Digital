@@ -1774,7 +1774,7 @@ test('Modos e referências: cada node Code no modo certo; toda $(ref) existe no 
       // de `Medir Documento` — o mesmo motivo de `Juntar Blocos`, um nível acima.
       if (['Listar Arquivos', 'Orcamento do Lote', 'Abortar Lote', 'Resumo de Custo',
         'Fatiar Extracao', 'Juntar Blocos', 'Recompor Contexto',
-        'Recompor Conteudo Extraido', 'Agrupar Linhas XLSX', 'Agrupar Linhas XLS'].includes(n.name)
+        'Recompor Conteudo Extraido', 'Agrupar Linhas XLSX', 'Agrupar Linhas XLS', 'Expandir Abas'].includes(n.name)
         // A espera entre tentativas é UMA para todos os blocos que falharam.
         || /^Esperar Retry \d+$/.test(n.name)) {
         assert.equal(n.parameters.mode, 'runOnceForAllItems', `${n.name} enxerga o lote inteiro`);
@@ -3148,6 +3148,10 @@ const CODE_QUE_DEVE_ABORTAR = {
   // que e' exatamente o que estoura a pilha (17/09/2026).
   'Agrupar Linhas XLSX': 'falha aqui = linhas soltas chegam ao Merge e estouram a pilha',
   'Agrupar Linhas XLS': 'falha aqui = linhas soltas chegam ao Merge e estouram a pilha',
+  // Continuar devolveria os itens do DESCOMPRIMIDO (sem o binario original e sem doc_chave) ao
+  // extrator, que leria lixo ou nada; e o tamanho divergente de Copiar Como ZIP e' pareamento
+  // quebrado, que tem de parar visivel (09/11/2026, abas do xlsx).
+  'Expandir Abas': 'falha aqui = a planilha perde o pareamento com o original ou chega sem abas',
 };
 
 test('todo nó Code continua o lote quando um item falha (exceto os que devem abortar)', () => {

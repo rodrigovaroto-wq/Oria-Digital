@@ -36,7 +36,8 @@ Intake (Form: nome do mandato + upload de N arquivos)
              ├─ pdf   → Extrair Texto ........ camada de texto do PDF, na instância, sem IA/custo
              ├─ imagem → (direto — já vai como image_url)
              ├─ csv   → Extrair CSV .......... n8n-nodes-base.extractFromFile, operation csv
-             ├─ xlsx  → Extrair XLSX ......... idem, operation xlsx (Office Open XML, MODERNO)
+             ├─ xlsx  → Copiar Como ZIP → Ler Abas do XLSX (Compression) → Expandir Abas → Extrair XLSX
+             │          ......... UMA ABA POR ITEM (sheetName), original intacto; Agrupar Linhas junta (09/11/2026)
              ├─ xls   → Extrair XLS .......... idem, operation xls (OLE binário, ANTIGO)
              ├─ xml   → Extrair XML .......... idem, operation text (lê o binário como texto cru)
              └─ outros → (direto — mantém "conteudo nao suportado" + pendência)

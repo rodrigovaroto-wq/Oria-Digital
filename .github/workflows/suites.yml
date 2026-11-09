@@ -110,6 +110,20 @@ jobs:
           python3 -m pip install --quiet --only-binary :all: 'reportlab==5.0.1'
           PYTHONPATH=. python3 gerar.py
 
+      # ---- o book-espelho e o portal ANTES da suíte do n8n (09/11/2026) ----
+      # `N8N/test/abas-do-xlsx.test.mjs` lê as 4 planilhas REAIS do book-espelho (todas de 2 abas)
+      # e emula os nós nativos com o exceljs e o jszip do lock do portal. Sem o book, os testes com
+      # arquivo real PULAM (regra 7: estágio que não rodou parece limpo); sem o portal, o arquivo
+      # nem carrega. openpyxl preso pela mesma razão do reportlab acima (wheel py3-none-any).
+      - name: Gerar o book-espelho
+        working-directory: Dados de Teste/book-espelho
+        run: |
+          python3 -m pip install --quiet --only-binary :all: 'openpyxl==3.1.5'
+          PYTHONPATH=. python3 gerar.py
+      - name: Dependências do portal (exceljs e jszip da suíte do n8n)
+        working-directory: portal
+        run: npm ci --ignore-scripts
+
       # ---- os DERIVADOS do gerador do book, conferidos como os workflows ----
       - name: Suíte n8n
         run: node --test 'N8N/test/*.test.mjs'
