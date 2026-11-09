@@ -498,6 +498,8 @@ const REGRAS: RegraDeMotivo[] = [
     vista: (t) => primeiro(/^Aba "(.*?)": Planilha maior que o teto de envio/.exec(t), (m) => `A aba "${m[1]}" é maior que o teto de envio; a extração dela está incompleta.`, "Uma aba é maior que o teto de envio; a extração está incompleta.") },
   { inicio: /^A aba ".*?" NAO foi lida pelo extrator/, acao: "xlsx_varias_abas",
     vista: (t) => primeiro(/^A aba "(.*?)" NAO foi lida/.exec(t), (m) => `A aba "${m[1]}" não foi lida; o que ela contém não chegou ao banco.`, "Uma aba não foi lida; o que ela contém não chegou ao banco.") },
+  { inicio: /^Os bytes do \.xlsx mostram \d+ planilha\(s\)/, acao: "xlsx_varias_abas",
+    vista: (t) => primeiro(/^Os bytes do \.xlsx mostram (\d+) planilha\(s\) e so (\d+) foram listadas/.exec(t), (m) => `A planilha tem ${m[1]} abas e só ${m[2]} foram lidas.`, "Algumas abas da planilha não foram lidas.") },
   { inicio: /^O arquivo \.xlsx teve \d+ aba\(s\) lida\(s\)/, acao: "conferir_na_revisao",
     vista: (t) => primeiro(/^O arquivo \.xlsx teve (\d+) aba\(s\) lida\(s\)/.exec(t), (m) => `As ${m[1]} abas da planilha foram lidas, mas vieram juntas, sem separação por aba.`, "As abas da planilha vieram juntas, sem separação por aba.") },
   { inicio: /^O arquivo \.xlsx tem \d+ planilha\(s\) nos bytes/, acao: "xlsx_varias_abas",
