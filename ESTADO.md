@@ -1,5 +1,14 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 121 (09/11/2026) — semana 1 fechada: P4, P5 e P1d; ingestão REPUBLICADA
+
+- **Republicação:** ingestão republicada no n8n em 09/11, 18:04 UTC, com autorização do dono. `preparar-republicacao.mjs` + `conferir-publicado.mjs`: os 59 nós batem com o repositório. A P1d (a recusa grava a etapa real e 1 linha só) e a régua da P4 (cobertura entre 0 e 1, excedente declarado) passam a valer em produção.
+- **P5:** a correção já estava publicada desde 28/10 (Agrupar Linhas XLSX/XLS). Faltava o teste de topologia, e ele foi escrito.
+- **P4:** a linha de base (`Supabase/test/linha-de-base-extracao.sql`) rodou contra produção: 2.053 documentos, 79 mandatos. Os números do corpus estão no `PLANO_DE_EXECUCAO_2026-11.md`.
+- **Plano reprogramado:** as semanas 2 a 6 andaram uma semana. O fim passa a 18/12.
+- **Não provado ao vivo:** a gravação de 1 linha por recusa no Postgres real. Ela é afirmada pelo número de itens no teste, porque provocar uma recusa real exige um lote grande pelo portal.
+- **Próximo:** semana 2, começando pela P6 (desalinhamento de colunas em balancete multi-coluna: Krauspenhar 38, Valtra 29, BP COMBINADO Vertentes 32).
+
 ## SESSÃO 120 (06/11/2026) — 0226, 0227 e 0228 APLICADAS em produção; P16 conferida no portal publicado; G2 e o `title=` do e-mail corrigidos
 
 > **Migration mais nova: `0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql` — APLICADA EM PRODUÇÃO em 06/11/2026.**
