@@ -10,7 +10,13 @@
 - **Defeito novo, achado no teste:** o lote recusado deixava os arquivos no Storage, porque o upload vinha antes do orçamento. Agora o upload só acontece depois de "Lote cabe?" (nó "Reanexar Original"). Ingestão republicada (60 nós conferidos). Retestado: recusa não guarda nada e o lote aceito guarda e referencia. 0 órfãos no bucket.
 - **Varredura do portal novo:** 81 mandatos, 1.458 verificações, **0 falhas**. 128 exports com o Excel recalculado e sem erro de fórmula (o `#VALUE!` sumiu). 115 recusas legítimas. 12 avisos de lentidão (21–33 s).
 - **Pendente do dono:** o CI do GitHub falhou sem rodar jobs (possível cota ou limite do Actions). Conferir em Settings → Billing.
-- **Próximo:** P6.
+- **P6 (desalinhamento de colunas):**
+  - Causa: o PDF lido como texto cola as células por espaço, e a célula em branco some.
+  - Correção: tabela com linha curta vai à IA como imagem. A guarda continua estrita.
+  - Provado AO VIVO com o BP COMBINADO sintético: antes, 0 linhas e 32 descartadas; agora 185 linhas, 32/32 contas e 0 descartadas, a US$ 0,0071.
+  - Conferido contra o GABARITO: ativo combinado 158.113, as três eliminações iguais, e a coluna em branco não recebeu valor.
+  - **Não retestado com os balancetes reais** (Krauspenhar, Valtra): o original não está no Storage (só 72 de 2.138 versões têm original guardado). Precisa que o dono reenvie os dois PDFs.
+  - Lacuna declarada: balancete com uma célula por linha no texto não é detectado.
 
 ## SESSÃO 121 (09/11/2026) — semana 1 fechada: P4, P5 e P1d; ingestão REPUBLICADA
 
