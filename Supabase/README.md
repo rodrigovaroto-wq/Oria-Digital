@@ -1140,6 +1140,23 @@ supabase db execute --file Supabase/migrations/0228_a_linha_sem_tipo_que_chegava
 #   -- `storage:chave_de_servico` = alguém apagou com a service_role (script ou painel); o portal mostra "Chave de serviço (pessoa não identificada)". Se vier `sistema:*` para uma exclusão feita por pessoa, é defeito: avise.
 #   -- E confira o versionamento (a sonda também o cobra): select id, versioning_status from storage.buckets where id = 'documentos';   -- DISABLED
 
+# A 0229 (P4, linha de base da leitura) grava a MEDIÇÃO da leitura POR DOCUMENTO: `fn_registrar_campos_extraidos` ganha o último parâmetro `p_medicao jsonb default null` (o evento `extracao_sombra` passa a levar `medicao`: objeto como veio, nula explícita quando o chamador não mediu, `medicao_invalida` quando não é objeto) e nasce `fn_linha_de_base_extracao(p_caso_id)` (uma linha por versão: n_campos, falha_motivo, contas_no_documento, linhas_devolvidas, cobertura, pendências de extração abertas; SECURITY INVOKER, respeita a RLS). Troca a ASSINATURA (drop da antiga + create da nova, ACL refeita): a chamada atual do n8n, com argumentos nomeados, continua valendo sem reimportar nada.
+# >>> Rodar COMO `postgres`; reaplicável (drop if exists + create, create or replace, upsert do requisito). Sem tabela, sem backfill.
+# >>> NÃO MUDA O n8n: enquanto o nó "Gravar Campos (Sombra)" não passar `p_medicao`, todo evento novo sai com `medicao` nula e a linha de base diz `sem_medicao` — é o estado honesto. Montar e passar a medição por documento é a fatia seguinte.
+# >>> Teste: Supabase/test/linha_de_base_da_leitura.test.sql.
+supabase db execute --file Supabase/migrations/0229_a_leitura_que_so_se_media_somada_por_lote.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0229' and not presente;   -- ZERO linhas
+#   select count(*) from pg_proc where proname = 'fn_registrar_campos_extraidos';   -- 1 (sem sobrecarga)
+
+# A 0230 (P7) para de pagar a cada reenvio a certidão/organograma que a IA declarou SEM dado financeiro (documento societário/legal: zero linha por natureza; no máximo 30 em produção, medido em 09/11/2026). Cria `fn_versao_extracao_concluida` (a versão TEM linha, como na 0118, OU TODAS: o último evento `extracao_sombra` sem `falha_motivo` com `tem_dado_financeiro = false` explícito; tipo da categoria `Societário/Legal` de `taxonomia_tipo_documento` (CERTIDOES, CONTINGENCIAS, CONTRATO_SOCIAL, ORGANOGRAMA); `medicao.contas_no_documento` nulo ou 0; sem pendência `extracao_falhou` aberta) e reemite `fn_registrar_documento` INTEIRA com a MESMA assinatura (17 args), o mesmo retorno e a mesma ACL: o n8n NÃO precisa ser republicado. A declaração da IA sozinha NÃO basta (41 dos 71 que ela cobriria eram de tipo financeiro). Mudança só ADITIVA: falha COM linha continua reaproveitada até o prompt mudar (teto conhecido; a retentativa classificada é a P8).
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, upsert dos 3 requisitos). Sem tabela, sem backfill.
+# >>> Teste: Supabase/test/reextracao.test.sql (seções 12 a 17).
+supabase db execute --file Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0230' and not presente;   -- ZERO linhas
+#   select count(*) from pg_proc where proname = 'fn_registrar_documento';   -- 1 (sem sobrecarga)
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
