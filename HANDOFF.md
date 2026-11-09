@@ -4,7 +4,25 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 118 — COMECE AQUI (06/11/2026)
+## ▶ SESSÃO 123 — COMECE AQUI (09/11/2026)
+
+- **Leia a seção "SESSÃO 123" no topo do `ESTADO.md`** e a semana 2 do `Arquitetura do Sistema/3 Estado e Execução/PLANO_DE_EXECUCAO_2026-11.md`. Este cabeçalho só aponta para lá.
+- **Produção:** última migration aplicada **0230** em 09/11 (sonda 342 itens; o único ausente pela API é `envio_segredo_no_vault`, que é leitura do Vault negada ao papel da API). n8n de ingestão: o publicado é o do `main` de 09/11, SEM a metade n8n da 0229. Portal: sem mudança nesta sessão.
+- **PR [#278](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/278)** (rascunho, branch `claude/inspiring-cannon-1pov2z`): merge do #276 (P4, 0229), a P7 (0230) e a ficha `reenvio-nao-conserta-falha-com-linha`. Substitui o #276.
+- **O dono faz à mão, nesta ordem:**
+  1. Merge do #278.
+  2. Republicar a ingestão (Actions → "Republicar workflow no n8n", ou `preparar-republicacao.mjs` + `conferir-publicado.mjs`; conferir o `multipleFiles` em "Arquivos"). Sem isso a medição por documento da 0229 continua nula em produção (0 de 5 eventos em 09/11).
+  3. Fechar o #276.
+  4. Reenviar os PDFs de balancete do Krauspenhar e do Valtra, para retestar a P6 com os reais (pendência da S122).
+- **Próximas fatias, na ordem do plano:**
+  - **P7b** (nova): fila com botão "reprocessar falhas" no portal, relendo o original do Storage. Só 9 de 496 falhas têm o original guardado.
+  - **P8:** retentativa classificada. Herda da P7: falha COM linha só deve ser reextraída quando o motivo for transitório (3 de ~75 em produção).
+  - **P9, P10** como estão no plano.
+  - **P12** herda um ALTO medido: 41 documentos de tipo financeiro com zero linha, declarados "sem dado financeiro" pela IA e sem `extracao_falhou` (AMOBELEZA 10, AMO teste 00 2, Krauspenhar 1, teste 28).
+- **Como consultar produção daqui:** a porta 5432 não é alcançável do container. Use a API de gerenciamento (`.claude/memory/aplicar-migration-em-producao-pela-api.md`). Para ensaiar uma migration sem aplicar, troque o `commit;` final por um bloco `do` que faz `raise exception` com a contagem da sonda: a transação inteira é revertida e a mensagem volta na resposta.
+- **NÃO CONFERIDO nesta sessão:** as suítes do portal localmente (o CI as rodou verdes até `1d38c62`); o CI dos commits `9a43738` em diante; a P7 ao vivo, com um reenvio real pelo portal.
+
+## SESSÃO 118 (06/11/2026; histórico, a mais nova está acima)
 
 - **Leia a seção "SESSÃO 118" no topo do `ESTADO.md`.** A RETOMADA da S117 está resolvida.
 - **Produção:** última migration aplicada **0224** (D16, auditoria de exclusão de original; sonda 331/331). n8n de ingestão sem mudança. Portal no deploy de `26ec556`; o PR #273 traz o rótulo do Histórico para os atores novos, e ele só aparece no portal depois do deploy desse merge.
