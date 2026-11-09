@@ -5,7 +5,7 @@ toca:
   - Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql
   - Supabase/test/reextracao.test.sql
   - portal/src/lib/rotulos.ts
-prova: Supabase/test/reextracao.test.sql
+prova: Supabase/test/run.sh
 ---
 
 **O que parecia óbvio e estava errado (P7, S123, 09/11/2026):** "falha de extração que deixou

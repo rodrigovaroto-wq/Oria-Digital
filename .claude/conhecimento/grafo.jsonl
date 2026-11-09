@@ -2221,7 +2221,7 @@
 {"k":"e","de":"ficha:redesenho-portal-fases-1-a-5","rel":"TOCA","pa":"arquivo:portal/src/lib/assinatura-do-envio.ts","f":".claude/conhecimento/fichas/redesenho-portal-fases-1-a-5.md"}
 {"k":"e","de":"ficha:redesenho-portal-fases-1-a-5","rel":"TOCA","pa":"arquivo:portal/src/lib/supabase/acesso.ts","f":".claude/conhecimento/fichas/redesenho-portal-fases-1-a-5.md"}
 {"k":"e","de":"ficha:redesenho-portal-fases-1-a-5","rel":"TOCA","pa":"arquivo:portal/src/lib/supabase/equipe.ts","f":".claude/conhecimento/fichas/redesenho-portal-fases-1-a-5.md"}
-{"k":"e","de":"ficha:reenvio-nao-conserta-falha-com-linha","rel":"PROVADA_POR","pa":"suite:Supabase/test/reextracao.test.sql","f":".claude/conhecimento/fichas/reenvio-nao-conserta-falha-com-linha.md"}
+{"k":"e","de":"ficha:reenvio-nao-conserta-falha-com-linha","rel":"PROVADA_POR","pa":"suite:Supabase/test/run.sh","f":".claude/conhecimento/fichas/reenvio-nao-conserta-falha-com-linha.md"}
 {"k":"e","de":"ficha:reenvio-nao-conserta-falha-com-linha","rel":"TOCA","pa":"arquivo:Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql","f":".claude/conhecimento/fichas/reenvio-nao-conserta-falha-com-linha.md"}
 {"k":"e","de":"ficha:reenvio-nao-conserta-falha-com-linha","rel":"TOCA","pa":"arquivo:Supabase/test/reextracao.test.sql","f":".claude/conhecimento/fichas/reenvio-nao-conserta-falha-com-linha.md"}
 {"k":"e","de":"ficha:reenvio-nao-conserta-falha-com-linha","rel":"TOCA","pa":"arquivo:portal/src/lib/rotulos.ts","f":".claude/conhecimento/fichas/reenvio-nao-conserta-falha-com-linha.md"}
