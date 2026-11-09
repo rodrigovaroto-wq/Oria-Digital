@@ -7,8 +7,10 @@
 -- (ou sem hash) continua sendo documento novo, porque fundir dois documentos
 -- distintos é o erro mais caro que esta função pode cometer.
 --
--- 0230 (seções 12 a 17): o documento que a IA declarou SEM dado financeiro (zero linha, tem_dado_financeiro
--- = false, sem falha) deixa de ser pago a cada reenvio. A mudança é só ADITIVA: "tem linha" continua
+-- 0230 (seções 12 a 17): o documento SOCIETÁRIO/LEGAL (CERTIDOES, ORGANOGRAMA...) que a IA declarou SEM dado
+-- financeiro (zero linha, tem_dado_financeiro = false, sem falha, sem conta contada, sem pendência de falha
+-- aberta) deixa de ser pago a cada reenvio; a declaração da IA para tipo financeiro (BALANCO, DF_AUDITADA...)
+-- NÃO basta (41 de 71 em produção). A mudança é só ADITIVA: "tem linha" continua
 -- reaproveitando como na 0118 (a seção 8 abaixo segue inserindo a linha à mão, sem evento, e segue valendo).
 -- Os eventos das seções novas vêm de fn_registrar_campos_extraidos de verdade; o único arranjo montado à mão é
 -- "linha sem evento" (a função nunca grava linha sem evento), dito no comentário da seção 14.
@@ -206,17 +208,17 @@ end $$;
 -- =============================================================================
 -- 0230 — o documento sem dado financeiro declarado não é pago a cada reenvio
 -- =============================================================================
-create or replace function teste_envia_rx(p_caso uuid, p_nome text, p_hash text) returns jsonb language sql as $$
-  select fn_registrar_documento(p_caso, 'Omega Ltda.', 'anual', '2025', 'BALANCO', 0.95, 'nome_arquivo',
+create or replace function teste_envia_rx(p_caso uuid, p_nome text, p_hash text, p_tipo text default 'BALANCO') returns jsonb language sql as $$
+  select fn_registrar_documento(p_caso, 'Omega Ltda.', 'anual', '2025', p_tipo, 0.95, 'nome_arquivo',
     'supabase_storage', 'bucket/' || p_nome, p_nome, true, p_hash, 'ok', p_fingerprint_extracao => 'FP-P7') $$;
 
 -- Grava a extração da versão pela função de verdade (o formato do evento é o dela).
-create or replace function teste_extrai_rx(p_versao uuid, p_linha boolean, p_falha text, p_tem boolean) returns void language plpgsql as $$
+create or replace function teste_extrai_rx(p_versao uuid, p_linha boolean, p_falha text, p_tem boolean, p_medicao jsonb default null) returns void language plpgsql as $$
 begin
   perform fn_registrar_campos_extraidos(p_versao,
     case when p_linha then jsonb_build_array(jsonb_build_object('ordem', 0, 'chave', 'Caixa', 'valor_num', 100, 'unidade', 'unidade', 'confianca', 0.99))
          else '[]'::jsonb end,
-    'N0', p_falha, p_tem);
+    'N0', p_falha, p_tem, p_medicao);
 end $$;
 
 -- Dentro de UMA transação now() é constante: dois eventos da mesma versão empatam em criado_em. Em produção cada chamada do n8n é a sua transação.
@@ -234,13 +236,13 @@ declare
   v_r jsonb[]; v_i int;
   v_ok int; v_pago int;
 begin
-  raise notice '--- 12. documento SEM linha que declarou não ter dado financeiro (certidão, contrato) não é pago a cada reenvio ---';
+  raise notice '--- 12. certidão (CERTIDOES) SEM linha que declarou não ter dado financeiro não é paga a cada reenvio ---';
   v_caso := (fn_upsert_caso('Caso P7 sem dado financeiro'))::uuid;
-  v_a := teste_envia_rx(v_caso, 'certidao.pdf', 'HP7-CERT');
+  v_a := teste_envia_rx(v_caso, 'certidao.pdf', 'HP7-CERT', 'CERTIDOES');
   perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, false);
   select count(*) into v_nlinhas from campo_extraido where documento_versao_id = (v_a->>'documento_versao_id')::uuid;
   perform teste_assert_rx(v_nlinhas = 0, 'premissa: a versão tem ZERO linha', format('linhas=%s', v_nlinhas));
-  v_b := teste_envia_rx(v_caso, 'certidao.pdf', 'HP7-CERT');
+  v_b := teste_envia_rx(v_caso, 'certidao.pdf', 'HP7-CERT', 'CERTIDOES');
   perform teste_assert_rx((v_b->>'reaproveitou_extracao')::boolean,
     'zero linha + tem_dado_financeiro = false + sem falha: o reenvio reaproveita');
   perform teste_assert_rx((v_b->>'documento_versao_id') = (v_a->>'documento_versao_id'),
@@ -251,20 +253,57 @@ begin
   raise notice '--- 13. o que continua NÃO reaproveitável (a 0118 protege) ---';
   v_caso := (fn_upsert_caso('Caso P7 controles'))::uuid;
   -- (a) zero linha SEM declaração: extração recusada/truncada
-  v_a := teste_envia_rx(v_caso, 'c-a.pdf', 'HP7-CA');
+  v_a := teste_envia_rx(v_caso, 'c-a.pdf', 'HP7-CA', 'CERTIDOES');
   perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, null);
-  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-a.pdf', 'HP7-CA')->>'reaproveitou_extracao')::boolean,
+  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-a.pdf', 'HP7-CA', 'CERTIDOES')->>'reaproveitou_extracao')::boolean,
     'zero linha sem declarar tem_dado_financeiro: NÃO reaproveita');
   -- (b) zero linha com tem_dado_financeiro = true: afirmar que TEM dado e não devolver linha é falha, não certidão
-  v_a := teste_envia_rx(v_caso, 'c-b.pdf', 'HP7-CB');
+  v_a := teste_envia_rx(v_caso, 'c-b.pdf', 'HP7-CB', 'CERTIDOES');
   perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, true);
-  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-b.pdf', 'HP7-CB')->>'reaproveitou_extracao')::boolean,
+  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-b.pdf', 'HP7-CB', 'CERTIDOES')->>'reaproveitou_extracao')::boolean,
     'zero linha com tem_dado_financeiro = true: NÃO reaproveita');
   -- (c) a declaração de "sem dado" NÃO apaga uma falha: falha_motivo vence
-  v_a := teste_envia_rx(v_caso, 'c-c.pdf', 'HP7-CC');
+  v_a := teste_envia_rx(v_caso, 'c-c.pdf', 'HP7-CC', 'CERTIDOES');
   perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, 'timeout da IA', false);
-  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-c.pdf', 'HP7-CC')->>'reaproveitou_extracao')::boolean,
+  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-c.pdf', 'HP7-CC', 'CERTIDOES')->>'reaproveitou_extracao')::boolean,
     'zero linha, tem_dado_financeiro = false COM falha_motivo: NÃO reaproveita');
+  -- (c2) a declaração só vale para tipo SOCIETÁRIO/LEGAL: BALANCO com zero linha e `false` sem falha NÃO reaproveita (41 de 71 em produção eram de tipo financeiro)
+  v_a := teste_envia_rx(v_caso, 'c-e.pdf', 'HP7-CE', 'BALANCO');
+  perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, false);
+  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-e.pdf', 'HP7-CE', 'BALANCO')->>'reaproveitou_extracao')::boolean,
+    'BALANCO, zero linha, tem_dado_financeiro = false sem falha: NÃO reaproveita (a declaração da IA não basta)');
+  -- (c3) documento SEM tipo: a categoria não existe, paga de novo
+  v_a := teste_envia_rx(v_caso, 'c-f.pdf', 'HP7-CF', null);
+  perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, false);
+  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-f.pdf', 'HP7-CF', null)->>'reaproveitou_extracao')::boolean,
+    'documento sem tipo, zero linha, tem_dado_financeiro = false: NÃO reaproveita');
+  -- (c3b) CONTINGENCIAS é da categoria Societário/Legal mas traz valor de causa e provisão: fica de fora, paga de novo
+  v_a := teste_envia_rx(v_caso, 'c-h.pdf', 'HP7-CH', 'CONTINGENCIAS');
+  perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, false);
+  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-h.pdf', 'HP7-CH', 'CONTINGENCIAS')->>'reaproveitou_extracao')::boolean,
+    'CONTINGENCIAS, zero linha, tem_dado_financeiro = false sem falha: NÃO reaproveita (relação de processos traz valores)');
+  -- (c4) a medição contou conta no texto: a IA disse "sem dado" mas o documento tem contas — NÃO reaproveita; com 0 conta, reaproveita
+  v_a := teste_envia_rx(v_caso, 'c-g.pdf', 'HP7-CG', 'CERTIDOES');
+  perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, false, jsonb_build_object('contas_no_documento', 7, 'linhas_devolvidas', 0));
+  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-g.pdf', 'HP7-CG', 'CERTIDOES')->>'reaproveitou_extracao')::boolean,
+    'CERTIDOES declarada sem dado, mas a medição contou 7 contas no documento: NÃO reaproveita');
+  v_a := teste_envia_rx(v_caso, 'c-h.pdf', 'HP7-CH', 'CERTIDOES');
+  perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, false, jsonb_build_object('contas_no_documento', 0, 'linhas_devolvidas', 0));
+  perform teste_assert_rx((teste_envia_rx(v_caso, 'c-h.pdf', 'HP7-CH', 'CERTIDOES')->>'reaproveitou_extracao')::boolean,
+    'CERTIDOES declarada sem dado, medição com 0 contas: reaproveita');
+  -- (c5) mesmo arquivo registrado duas vezes ANTES de extrair: a v1 declara `false`, a v2 falha e abre a pendência; a falha aberta mais nova NÃO pode ser coberta pela v1
+  v_a := teste_envia_rx(v_caso, 'c-i.pdf', 'HP7-CI', 'CERTIDOES');
+  v_b := teste_envia_rx(v_caso, 'c-i.pdf', 'HP7-CI', 'CERTIDOES');
+  perform teste_assert_rx((v_a->>'n_versao')::int = 1 and (v_b->>'n_versao')::int = 2, 'premissa: duas versões do mesmo arquivo, nenhuma extraída ainda',
+    format('n_versao=%s e %s', v_a->>'n_versao', v_b->>'n_versao'));
+  perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, false);
+  perform teste_extrai_rx((v_b->>'documento_versao_id')::uuid, false, 'resposta sem conteúdo', null);
+  select count(*) into v_n from pendencia where documento_id = (v_a->>'documento_id')::uuid and tipo = 'extracao_falhou' and estado <> 'resolvida';
+  perform teste_assert_rx(v_n = 1, 'premissa: a falha da v2 abriu a pendência extracao_falhou', format('pendências=%s', v_n));
+  perform teste_assert_rx(fn_versao_extracao_concluida((v_a->>'documento_versao_id')::uuid) is false,
+    'a v1 (declarou sem dado) NÃO vale como extraída com uma falha aberta no documento');
+  perform teste_assert_rx(not (teste_envia_rx(v_caso, 'c-i.pdf', 'HP7-CI', 'CERTIDOES')->>'reaproveitou_extracao')::boolean,
+    'o terceiro envio NÃO reaproveita a v1 por cima da falha aberta da v2');
   -- (d) versão que nem existe: false, nunca nulo
   perform teste_assert_rx(fn_versao_extracao_concluida(gen_random_uuid()) is false,
     'versão inexistente: a pergunta única responde false (não nulo)');
@@ -299,7 +338,7 @@ begin
 
   raise notice '--- 15. o ÚLTIMO evento decide a parte nova (declaração de sem dado), nos dois sentidos ---';
   v_caso := (fn_upsert_caso('Caso P7 ultimo evento'))::uuid;
-  v_a := teste_envia_rx(v_caso, 'u.pdf', 'HP7-U');
+  v_a := teste_envia_rx(v_caso, 'u.pdf', 'HP7-U', 'CERTIDOES');
   perform teste_extrai_rx((v_a->>'documento_versao_id')::uuid, false, null, false);
   perform teste_assert_rx(fn_versao_extracao_concluida((v_a->>'documento_versao_id')::uuid), 'declaração sem falha: concluída');
   perform teste_recua_rx((v_a->>'documento_versao_id')::uuid);
@@ -311,11 +350,11 @@ begin
   perform teste_assert_rx(fn_versao_extracao_concluida((v_a->>'documento_versao_id')::uuid),
     'e a declaração MAIS NOVA, sem falha, vence a falha mais antiga');
 
-  raise notice '--- 16. O ACEITE DA FATIA: lote de 4 (2 com linha, 1 sem dado financeiro declarado, 1 falha total), reenviado inteiro, paga só a falha ---';
+  raise notice '--- 16. O ACEITE DA FATIA: lote de 4 (2 com linha, 1 CERTIDOES sem dado financeiro declarado, 1 falha total), reenviado inteiro, paga só a falha ---';
   v_caso := (fn_upsert_caso('Caso P7 lote'))::uuid;
   v_r := array[]::jsonb[];
   for v_i in 1..4 loop
-    v_r := v_r || teste_envia_rx(v_caso, v_lote[v_i] || '.pdf', 'HP7-' || v_lote[v_i]);
+    v_r := v_r || teste_envia_rx(v_caso, v_lote[v_i] || '.pdf', 'HP7-' || v_lote[v_i], case when v_i = 3 then 'CERTIDOES' else 'BALANCO' end);
   end loop;
   perform teste_extrai_rx((v_r[1]->>'documento_versao_id')::uuid, true,  null, null);
   perform teste_extrai_rx((v_r[2]->>'documento_versao_id')::uuid, true,  null, null);
@@ -323,7 +362,7 @@ begin
   perform teste_extrai_rx((v_r[4]->>'documento_versao_id')::uuid, false, 'resposta sem conteúdo', null);
   v_ok := 0; v_pago := 0;
   for v_i in 1..4 loop
-    v_c := teste_envia_rx(v_caso, v_lote[v_i] || '.pdf', 'HP7-' || v_lote[v_i]);
+    v_c := teste_envia_rx(v_caso, v_lote[v_i] || '.pdf', 'HP7-' || v_lote[v_i], case when v_i = 3 then 'CERTIDOES' else 'BALANCO' end);
     if (v_c->>'reaproveitou_extracao')::boolean then v_ok := v_ok + 1; else v_pago := v_pago + 1; end if;
     if v_i = 4 then v_d := v_c; end if;
   end loop;
@@ -337,7 +376,7 @@ begin
   perform teste_extrai_rx((v_d->>'documento_versao_id')::uuid, true, null, null);
   v_ok := 0; v_pago := 0;
   for v_i in 1..4 loop
-    v_c := teste_envia_rx(v_caso, v_lote[v_i] || '.pdf', 'HP7-' || v_lote[v_i]);
+    v_c := teste_envia_rx(v_caso, v_lote[v_i] || '.pdf', 'HP7-' || v_lote[v_i], case when v_i = 3 then 'CERTIDOES' else 'BALANCO' end);
     if (v_c->>'reaproveitou_extracao')::boolean then v_ok := v_ok + 1; else v_pago := v_pago + 1; end if;
   end loop;
   perform teste_assert_rx(v_ok = 4 and v_pago = 0, 'terceiro envio do lote: os 4 reaproveitam', format('reaproveitados=%s pagos=%s', v_ok, v_pago));

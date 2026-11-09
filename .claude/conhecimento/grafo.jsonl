@@ -1838,14 +1838,14 @@
 {"k":"e","de":"arquivo:Supabase/test/reconferir.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/reconferir.test.sql","l":46}
 {"k":"e","de":"arquivo:Supabase/test/reconferir.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/test/reconferir.test.sql","l":121}
 {"k":"e","de":"arquivo:Supabase/test/reconferir.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reconferir.test.sql","l":45}
-{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/reextracao.test.sql","l":279}
-{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/reextracao.test.sql","l":348}
-{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/reextracao.test.sql","l":13}
+{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/reextracao.test.sql","l":318}
+{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/reextracao.test.sql","l":387}
+{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/reextracao.test.sql","l":15}
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/reextracao.test.sql","l":1}
-{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"Supabase/test/reextracao.test.sql","l":81}
-{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao.test.sql","l":36}
-{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/reextracao.test.sql","l":287}
-{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/reextracao.test.sql","l":269}
+{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_revisar_documento","f":"Supabase/test/reextracao.test.sql","l":83}
+{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao.test.sql","l":38}
+{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/reextracao.test.sql","l":326}
+{"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/reextracao.test.sql","l":303}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_anexar","f":"Supabase/test/resumo_oficial.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"Supabase/test/resumo_oficial.test.sql","l":80}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_iniciar","f":"Supabase/test/resumo_oficial.test.sql","l":66}
@@ -2748,8 +2748,8 @@
 {"k":"e","de":"migration:0228","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql","l":32}
 {"k":"e","de":"migration:0229","rel":"CRIA","pa":"fn:fn_linha_de_base_extracao","f":"Supabase/migrations/0229_a_leitura_que_so_se_media_somada_por_lote.sql","l":383}
 {"k":"e","de":"migration:0229","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0229_a_leitura_que_so_se_media_somada_por_lote.sql","l":82}
-{"k":"e","de":"migration:0230","rel":"CRIA","pa":"fn:fn_registrar_documento","f":"Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql","l":79}
-{"k":"e","de":"migration:0230","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql","l":49}
+{"k":"e","de":"migration:0230","rel":"CRIA","pa":"fn:fn_registrar_documento","f":"Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql","l":119}
+{"k":"e","de":"migration:0230","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql","l":70}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

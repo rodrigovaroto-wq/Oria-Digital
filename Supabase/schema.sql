@@ -13468,9 +13468,10 @@ begin
       and dv.hash = p_hash
       and dv.fingerprint_extracao = p_fingerprint_extracao
       -- JÁ FOI EXTRAÍDA (0230): quem responde é a função da pergunta única — tem
-      -- linha (o critério da 0118, que mantém a extração que falhou SEM linha
-      -- reextraível) OU o último evento declara que o documento não tem dado
-      -- financeiro (certidão, contrato: 72 em produção eram pagos a cada reenvio).
+      -- linha (o critério da 0118, que mantém reextraível a extração que falhou SEM
+      -- linha) OU o documento é de tipo societário/legal que a IA declarou sem dado
+      -- financeiro, sem falha, sem conta contada e sem pendência de falha aberta
+      -- (certidão, organograma: no máximo 30 em produção eram pagos a cada reenvio).
       and fn_versao_extracao_concluida(dv.id)
     order by dv.n_versao desc
     limit 1;
@@ -13619,7 +13620,7 @@ $$;
 -- Name: FUNCTION fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text) IS 'A porta de entrada do documento: acha ou cria caso/entidade/período, versiona e responde se já foi extraído (0118). 0170: recebe o CNPJ do emitente e o repassa a fn_upsert_entidade — sem este fio, as três regras de identidade da 0169 nunca disparam em produção e o sintoma é que nada melhora. 0230: "já foi extraído" deixa de ser "tem linha" e passa a ser a resposta de fn_versao_extracao_concluida (o último evento extracao_sombra existe, sem falha_motivo, e a versão tem linha ou declara tem_dado_financeiro = false): a falha com linha volta a ser reextraída e o documento sem dado financeiro deixa de ser pago a cada reenvio.';
+COMMENT ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text) IS 'A porta de entrada do documento: acha ou cria caso/entidade/período, versiona e responde se já foi extraído (0118). 0170: recebe o CNPJ do emitente e o repassa a fn_upsert_entidade — sem este fio, as três regras de identidade da 0169 nunca disparam em produção e o sintoma é que nada melhora. 0230: "já foi extraído" passa a ser a resposta de fn_versao_extracao_concluida (a versão tem linha, como na 0118, OU é documento societário/legal que a IA declarou sem dado financeiro, sem falha, sem conta contada e sem pendência de falha aberta): certidão e organograma deixam de ser pagos a cada reenvio.';
 
 --
 -- Name: fn_registrar_expectativa_macro(jsonb); Type: FUNCTION; Schema: public; Owner: -
@@ -17010,26 +17011,45 @@ COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A doc
 
 CREATE FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) RETURNS boolean
     LANGUAGE sql STABLE
-    AS $$
-  -- (1) tem linha: o critério da 0118, intacto. (2) ou o ÚLTIMO evento de extração (criado_em; empate na mesma transação é indefinido, ver o cabeçalho) existe, sem falha, e declara
-  -- tem_dado_financeiro = false. Sem evento a segunda metade é false (coalesce), nunca nula.
+    AS $_$
+  -- (1) tem linha: o critério da 0118, intacto. (2) ou TODAS: o ÚLTIMO evento de extração (criado_em; empate na mesma transação é indefinido, ver o cabeçalho) existe, sem falha,
+  -- declara tem_dado_financeiro = false e não contou conta; o tipo do documento é da categoria 'Societário/Legal'; e não há pendência extracao_falhou aberta no documento.
+  -- Qualquer parte ilegível = false (paga de novo), nunca nula.
   select exists (select 1 from campo_extraido ce where ce.documento_versao_id = p_documento_versao_id)
       or coalesce((
     select u.depois->>'falha_motivo' is null
-           and u.depois->>'tem_dado_financeiro' = 'false'
+       and u.depois->>'tem_dado_financeiro' = 'false'
+       and (u.depois->'medicao'->>'contas_no_documento' is null
+            or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
+                and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0))
+       and exists (select 1
+                     from documento_versao dv
+                     join documento d on d.id = dv.documento_id
+                     join taxonomia_tipo_documento t on t.codigo = d.tipo_taxonomia
+                    where dv.id = p_documento_versao_id
+                      and t.categoria = 'Societário/Legal'
+                      -- CONTINGENCIAS fica de fora: é da mesma categoria, mas a relação de processos traz valor de causa e provisão.
+                      -- Nenhum dos 30 de produção é desse tipo (09/11/2026): tirar não custa nada e evita pular uma tabela de valores.
+                      and t.codigo <> 'CONTINGENCIAS')
+       and not exists (select 1
+                         from documento_versao dv
+                         join pendencia pe on pe.documento_id = dv.documento_id
+                        where dv.id = p_documento_versao_id
+                          and pe.tipo = 'extracao_falhou'
+                          and pe.estado <> 'resolvida')
       from evento_auditoria u
      where u.acao = 'extracao_sombra'
        and u.entidade_ref = 'documento_versao:' || p_documento_versao_id::text
      order by u.criado_em desc
      limit 1
   ), false)
-$$;
+$_$;
 
 --
 -- Name: FUNCTION fn_versao_extracao_concluida(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0230: a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando a versão TEM linha em campo_extraido (o critério da 0118, intacto, mesmo sem evento e mesmo com falha) OU o ÚLTIMO evento extracao_sombra (criado_em) existe, tem falha_motivo nulo e declara tem_dado_financeiro = false explícito (certidão, contrato: 0111). Zero linha sem a declaração = false (a 0118 protege extração recusada/truncada); falha vence a declaração. Teto conhecido: falha COM linha continua reaproveitada até o prompt mudar (P8). A pergunta de fn_registrar_documento e da fatia de orçamento do lote: uma implementação só. SECURITY INVOKER, somente leitura.';
+COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0230: a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando a versão TEM linha em campo_extraido (o critério da 0118, intacto, mesmo sem evento e mesmo com falha) OU quando TODAS valem: o ÚLTIMO evento extracao_sombra (criado_em) existe, sem falha_motivo e com tem_dado_financeiro = false explícito; o tipo do documento é da categoria Societário/Legal de taxonomia_tipo_documento (CERTIDOES, CONTRATO_SOCIAL, ORGANOGRAMA; CONTINGENCIAS é da categoria e fica DE FORA, porque traz valor de causa e provisão; tipo nulo ou de outra categoria = não); a medição do evento não contou conta (contas_no_documento nulo ou 0); e o documento não tem pendência extracao_falhou aberta. Simplificação deliberada: a categoria é proxy de "tipo que não traz tabela financeira"; sobe quando a taxonomia ganhar atributo próprio. Zero linha sem tudo isso = false (a 0118 protege extração recusada/truncada); condição ilegível = false (paga de novo). Falha COM linha continua reaproveitada (teto conhecido, P8). A pergunta de fn_registrar_documento e da fatia de orçamento do lote: uma implementação só. SECURITY INVOKER, somente leitura.';
 
 --
 -- Name: fn_vincular_linha_premissa(uuid, text, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -

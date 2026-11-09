@@ -1,26 +1,45 @@
 -- =============================================================================
--- 0230 — O DOCUMENTO SEM DADO FINANCEIRO QUE O REENVIO PAGAVA DE NOVO (P7: retomar um lote custa só o que ainda não foi extraído)
+-- 0230 — O DOCUMENTO SOCIETÁRIO SEM DADO FINANCEIRO QUE O REENVIO PAGAVA DE NOVO (P7: retomar um lote custa só o que ainda não foi extraído)
 -- (Cria 1 função, fn_versao_extracao_concluida (SQL, stable, SECURITY INVOKER, somente leitura); reemite fn_registrar_documento com a MESMA assinatura (17 args), o MESMO
 --  retorno e a MESMA ACL — só a pergunta "esta versão já foi extraída?" muda, e passa a morar na função nova. Acrescenta 3 requisitos à sonda. Sem tabela, sem gatilho, sem backfill.)
 --
--- O DEFEITO. O reenvio do mesmo arquivo pula a extração paga (`reaproveitou_extracao = true`, 0118) só quando a versão antiga TEM linha em `campo_extraido`. O documento
--- que a IA declarou sem dado financeiro (certidão, contrato: a 0111 já diz que isso não é falha) tem ZERO linha por natureza — e é pago de novo a cada reenvio do lote.
+-- O DEFEITO. O reenvio do mesmo arquivo pula a extração paga (`reaproveitou_extracao = true`, 0118) só quando a versão antiga TEM linha em `campo_extraido`. A certidão e o
+-- organograma, que não têm tabela financeira, têm ZERO linha por natureza (a 0111 já diz que isso não é falha) e são pagos de novo a cada reenvio do lote.
 -- Medido em PRODUÇÃO em 09/11/2026 (somente leitura): 125 documentos têm extração feita, zero linha e nenhuma falha aberta; 72 deles têm no último evento `extracao_sombra`
--- `tem_dado_financeiro = false` explícito e `falha_motivo` nulo. Simulando a função nova sobre o banco: 71 passam de "pagava" para "pula", e nenhum dos 71 tem falha aberta.
+-- `tem_dado_financeiro = false` explícito e `falha_motivo` nulo.
 --
--- A CAUSA. A 0118 usou "existe linha" como PROXY de "a extração terminou". Para o documento sem o que extrair o proxy erra. A informação certa já é gravada por versão em
--- `fn_registrar_campos_extraidos`: o evento `extracao_sombra` leva `falha_motivo` e `tem_dado_financeiro` (formato conferido na 0229).
+-- A CAUSA. A 0118 usou "existe linha" como PROXY de "a extração terminou". Para o documento sem o que extrair o proxy erra. A informação já é gravada por versão em
+-- `fn_registrar_campos_extraidos`: o evento `extracao_sombra` leva `falha_motivo`, `tem_dado_financeiro` e `medicao` (formato conferido na 0229).
 --
--- A CORREÇÃO, SÓ ADITIVA (escada, degraus 2 e 4). `fn_versao_extracao_concluida(p_documento_versao_id)` é verdadeira quando a versão TEM linha em `campo_extraido` (EXATAMENTE o
--- critério da 0118, sem exigir evento e sem olhar falha: comportamento de antes intacto, inclusive para as 6 versões de produção com linha e sem evento) OU quando o ÚLTIMO
--- evento `extracao_sombra` dela existe, tem `falha_motivo` nulo e `tem_dado_financeiro = false` EXPLÍCITO. Só isso. Zero linha sem a declaração continua NÃO reaproveitável
--- (extração recusada/truncada: o caso que a 0118 protege), e a falha vence a declaração. `fn_registrar_documento` chama a função no lugar do `exists`; as demais condições ficam
--- (mesmo caso, hash e fingerprint não nulos; versão de MAIOR n_versao). Uma função só porque a fatia seguinte (orçamento do lote no n8n) precisa da MESMA pergunta, e duas
--- implementações da mesma conta divergem sem erro nenhum.
+-- POR QUE A DECLARAÇÃO DA IA NÃO BASTA (medido em produção em 09/11/2026). Os 71 documentos que uma versão larga desta migration passaria a pular (última versão, zero linha,
+-- último evento sem falha e com `tem_dado_financeiro = false`), por tipo:
+--     CERTIDOES 16, ORGANOGRAMA 11, CONTRATO_SOCIAL 3 (categoria `Societário/Legal`) ................ 30
+--     DF_AUDITADA 16 (2 com medicao.contas_no_documento > 0), NOTAS_EXPL 12 .......................... 28
+--     DRE 5 e BALANCO 3 (arquivos .txt), FATURAMENTO_24M 2, EXTRATO_BANCARIO 2, MAPA_DIVIDA 1 ........ 13
+--   1 ORGANOGRAMA tem contas_no_documento > 0; só 4 dos 71 eventos têm medição (os demais são anteriores à 0229).
+-- Ou seja, 41 dos 71 são de tipos que carregam (ou podem carregar) dado financeiro e a IA disse que não tinham, sem falha e sem pendência. Pular o reenvio deles tornaria
+-- PERMANENTE um buraco silencioso: com `semDadoExtraido`, a guarda de cobertura do n8n se cala (N8N/build-workflow.mjs:1933-1934, `semDadoExtraido && false`) e o Sinal 3 também.
+-- Hoje o reenvio paga de novo e pode consertar por acaso; isso tem de continuar. Por isso a parte nova é ESTREITA, e a economia desta migration em produção é NO MÁXIMO 30
+-- documentos (não 71 nem 72).
+--
+-- A CORREÇÃO, SÓ ADITIVA E ESTREITA (escada, degraus 2 e 4). `fn_versao_extracao_concluida(p_documento_versao_id)` é verdadeira quando a versão TEM linha em `campo_extraido`
+-- (EXATAMENTE o critério da 0118, sem exigir evento e sem olhar falha: comportamento de antes intacto, inclusive para as 6 versões de produção com linha e sem evento) OU
+-- quando TODAS valem:
+--   1. o ÚLTIMO evento `extracao_sombra` da versão existe, com `falha_motivo` nulo e `tem_dado_financeiro = false` EXPLÍCITO;
+--   2. o tipo do documento é da categoria 'Societário/Legal' de `taxonomia_tipo_documento` (CERTIDOES, CONTRATO_SOCIAL, ORGANOGRAMA; CONTINGENCIAS é da categoria e fica DE FORA, porque traz valor de causa e provisão — conferido no banco de
+--      teste, grafia exata). Tipo nulo ou de outra categoria: NÃO reaproveita. SIMPLIFICAÇÃO DELIBERADA com teto conhecido: a categoria é proxy de "tipo que não traz tabela
+--      financeira". Sobe quando a taxonomia ganhar um atributo próprio para isso;
+--   3. a medição do último evento não contou conta: `medicao.contas_no_documento` nulo/ausente ou 0 (maior que 0, ou valor não numérico: NÃO reaproveita);
+--   4. o documento não tem pendência `extracao_falhou` não resolvida (cenário reproduzido pela revisão: mesmo arquivo registrado duas vezes antes de extrair, a v1 declara
+--      `false`, a v2 falha e abre a pendência, e o terceiro envio reaproveitava a v1 por cima da falha aberta).
+-- Condição que não possa ser lida (linha da taxonomia ausente, evento ausente, RLS) = falsa: o erro cai para o lado de PAGAR de novo, nunca de pular.
+-- Zero linha sem a declaração continua NÃO reaproveitável (extração recusada/truncada: o caso que a 0118 protege) e a falha vence a declaração.
+-- `fn_registrar_documento` chama a função no lugar do `exists`; as demais condições ficam (mesmo caso, hash e fingerprint não nulos; versão de MAIOR n_versao). Uma função
+-- só porque a fatia seguinte (orçamento do lote no n8n) precisa da MESMA pergunta, e duas implementações da mesma conta divergem sem erro nenhum.
 --
 -- O "ÚLTIMO" evento é `order by criado_em desc` e nada mais. `criado_em` é o `now()` da transação: dois eventos da mesma versão gravados na MESMA transação empatam e a ordem
 -- entre eles é indefinida (o id é uuid v4 aleatório, não ordena nada; por isso não há desempate por id). Em produção cada chamada do n8n é a sua transação, e só 2 versões em 2.038
--- têm mais de um evento extracao_sombra (medido em 09/11/2026): o empate é raro e o erro dele cai para o lado de pagar de novo, não de pular, porque só a declaração `false` sem falha pula.
+-- têm mais de um evento extracao_sombra (medido em 09/11/2026).
 --
 -- A PRIMEIRA VERSÃO DESTA MIGRATION ERA MAIOR E FOI REPROVADA NA REVISÃO. Ela também reextraía a falha COM linha (79 dos 496 documentos com `extracao_falhou` aberta têm linha na
 -- última versão). A medição em produção dos motivos dessas falhas deu razão à revisão: 36 "Extração INCOMPLETA: N linhas devolvidas para um documento com N linhas"; 11 contas
@@ -28,20 +47,22 @@
 -- 1 truncada por tokens de saída, 1 rótulo com número colado, 1 cobertura de bloco abaixo do mínimo; só 3 são do serviço (2 de limite de cadência do provedor, 1 de resposta sem
 -- conteúdo). ~95% se repetem com o mesmo arquivo e o mesmo prompt (portal/src/lib/rotulos.ts:417-441 já diz isso). Pagar de novo não conserta, custa a cada vez e cria versão nova que
 -- tira da Modelagem a linha que o analista já aceitou (v1 aceita com valor 100 -> reenvio -> v2 pendente com valor 90, sem evento nenhum: medido no banco de teste pelo revisor).
--- O conserto é mudar o prompt (o fingerprint muda e o reaproveitamento cai sozinho) ou a retentativa CLASSIFICADA: fatia P8 do plano, não esta.
+-- O conserto é mudar o prompt (o fingerprint muda e o reaproveitamento cai sozinho) ou a retentativa CLASSIFICADA: fatia P8 do plano, não esta. A segunda versão (larga, só com a
+-- declaração da IA) foi reprovada pela medição por tipo acima.
 --
--- O QUE NÃO MUDA (teto conhecido, sobe na P8): falha COM linha continua reaproveitada até o prompt mudar. E UMA SUPOSIÇÃO QUE FICA, do revisor: um documento escaneado que a IA disse
--- não ter dado financeiro deixa de ganhar nova chance no reenvio do MESMO arquivo com o MESMO prompt (mudar o prompt ou o arquivo continua reextraindo).
+-- O QUE NÃO MUDA (teto conhecido, sobe na P8): falha COM linha continua reaproveitada até o prompt mudar. E UMA SUPOSIÇÃO QUE FICA: um documento societário que a IA disse não ter
+-- dado financeiro (e a medição não contradiz) deixa de ganhar nova chance no reenvio do MESMO arquivo com o MESMO prompt (mudar o prompt ou o arquivo continua reextraindo).
 --
 -- A ASSINATURA E O RETORNO NÃO MUDAM. Chamadores de `fn_registrar_documento` (grep em Supabase/ N8N/ portal/src/): o nó "Registrar Documento" de N8N/build-workflow.mjs (l.2917; 13
 -- posicionais + `p_justificativa`, `p_fingerprint_extracao`, `p_cnpj` por nome) e o curto-circuito do dedup logo depois dele (l.2930, lê `reaproveitou_extracao`);
 -- N8N/lib/{classifier,merge,taxonomia}.mjs e o JSON do workflow só a citam em comentário/consulta; portal/src não a chama; o resto são testes SQL e Supabase/conferir/conferir_chamadas.sql.
 -- Nenhuma função SQL a chama. Mesmo jsonb de retorno: o n8n NÃO precisa ser republicado. CREATE OR REPLACE com a mesma assinatura preserva a ACL (REVOKE de PUBLIC; EXECUTE para
--- authenticated e service_role); o comentário é refeito. O evento é lido com a RLS do chamador (SECURITY INVOKER): quem não o enxerga recebe "não concluída" (paga de novo, nunca pula).
+-- authenticated e service_role); o comentário é refeito. SECURITY INVOKER: a RLS do chamador vale.
 --
 -- SEM BACKFILL: nada a regravar. O critério é lido na hora.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/reextracao.test.sql — 48 asserts (contagem de execuções do arquivo: 23 antigos da 0026/0118 e 25 desta migration), medidos em 09/11/2026 com o assert trocado por raise warning, que CONTA (cópia do teste, rodada pelo run.sh inteiro, banco limpo na hora). Controle (migration intacta): 0 dos 48 reprovam e o run.sh fecha verde (3190 ok antes, 3215 depois). Correção DESLIGADA (fn_registrar_documento de volta ao exists em campo_extraido, migration aplicada; conferido que a rodada passou por ela e que o teste apareceu no log): 9 dos 48 reprovam — 8 de comportamento (a certidão sem linha é paga de novo, com versão nova; o lote de 4 reenviado inteiro paga 2 em vez de 1, reaproveita 2 em vez de 3, ganha versão a mais; o terceiro envio ainda paga 1) e 1 da sonda (marcador fn_versao_extracao_concluida ausente do corpo). A suíte seguinte (instalacao.test.sql) também reprova. Os asserts de controle (zero linha sem declaração, tem_dado_financeiro = true, falha vencendo a declaração, falha com linha e linha sem evento continuando reaproveitadas, o último evento) passam nas duas versões: protegem o comportamento da 0118, que esta migration NÃO muda.
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/reextracao.test.sql — 56 asserts (contagem de execuções do arquivo: 23 antigos da 0026/0118 e 33 desta migration), medidos em 09/11/2026 com o assert trocado por raise warning, que CONTA (cópia do teste, rodada pelo run.sh inteiro; conferido que a migration aplicou e que o teste apareceu no log). Controle (migration intacta): 0 dos 56 reprovam e o run.sh fecha verde (3190 ok antes, 3223 depois). (i) Critério ANTIGO (fn_registrar_documento de volta ao exists em campo_extraido): 10 dos 56 reprovam, 9 de comportamento (a certidão sem linha e a com 0 contas são pagas de novo; o lote de 4 reenviado inteiro paga 2 em vez de 1; o terceiro envio ainda paga 1) e 1 da sonda. (ii) Versão LARGA (a reprovada: só a declaração da IA, sem as condições 2 a 4): 5 dos 56 reprovam (BALANCO declarado sem dado; documento sem tipo; CERTIDOES com 7 contas medidas; e os 2 asserts da falha aberta mais nova). Os asserts de controle (zero linha sem declaração, tem_dado_financeiro = true, falha vencendo a declaração, falha com linha e linha sem evento continuando reaproveitadas, o último evento) passam nas três versões: protegem o comportamento da 0118.
+-- DEPOIS DESSA MEDIÇÃO entrou UM assert a mais (57 no total, 34 desta migration): CONTINGENCIAS, da mesma categoria, fica de fora porque traz valor de causa e provisão. Medido à parte, pelo run.sh inteiro: com a exclusão desligada reprova 1 assert (o dele) e o run.sh sai com rc 3; religada, rc 0 e 3224 ok. As contagens (i) e (ii) acima NÃO foram refeitas com os 57.
 -- =============================================================================
 
 begin;
@@ -51,12 +72,31 @@ returns boolean
 language sql
 stable
 as $$
-  -- (1) tem linha: o critério da 0118, intacto. (2) ou o ÚLTIMO evento de extração (criado_em; empate na mesma transação é indefinido, ver o cabeçalho) existe, sem falha, e declara
-  -- tem_dado_financeiro = false. Sem evento a segunda metade é false (coalesce), nunca nula.
+  -- (1) tem linha: o critério da 0118, intacto. (2) ou TODAS: o ÚLTIMO evento de extração (criado_em; empate na mesma transação é indefinido, ver o cabeçalho) existe, sem falha,
+  -- declara tem_dado_financeiro = false e não contou conta; o tipo do documento é da categoria 'Societário/Legal'; e não há pendência extracao_falhou aberta no documento.
+  -- Qualquer parte ilegível = false (paga de novo), nunca nula.
   select exists (select 1 from campo_extraido ce where ce.documento_versao_id = p_documento_versao_id)
       or coalesce((
     select u.depois->>'falha_motivo' is null
-           and u.depois->>'tem_dado_financeiro' = 'false'
+       and u.depois->>'tem_dado_financeiro' = 'false'
+       and (u.depois->'medicao'->>'contas_no_documento' is null
+            or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
+                and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0))
+       and exists (select 1
+                     from documento_versao dv
+                     join documento d on d.id = dv.documento_id
+                     join taxonomia_tipo_documento t on t.codigo = d.tipo_taxonomia
+                    where dv.id = p_documento_versao_id
+                      and t.categoria = 'Societário/Legal'
+                      -- CONTINGENCIAS fica de fora: é da mesma categoria, mas a relação de processos traz valor de causa e provisão.
+                      -- Nenhum dos 30 de produção é desse tipo (09/11/2026): tirar não custa nada e evita pular uma tabela de valores.
+                      and t.codigo <> 'CONTINGENCIAS')
+       and not exists (select 1
+                         from documento_versao dv
+                         join pendencia pe on pe.documento_id = dv.documento_id
+                        where dv.id = p_documento_versao_id
+                          and pe.tipo = 'extracao_falhou'
+                          and pe.estado <> 'resolvida')
       from evento_auditoria u
      where u.acao = 'extracao_sombra'
        and u.entidade_ref = 'documento_versao:' || p_documento_versao_id::text
@@ -66,7 +106,7 @@ as $$
 $$;
 
 comment on function fn_versao_extracao_concluida(uuid) is
-  '0230: a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando a versão TEM linha em campo_extraido (o critério da 0118, intacto, mesmo sem evento e mesmo com falha) OU o ÚLTIMO evento extracao_sombra (criado_em) existe, tem falha_motivo nulo e declara tem_dado_financeiro = false explícito (certidão, contrato: 0111). Zero linha sem a declaração = false (a 0118 protege extração recusada/truncada); falha vence a declaração. Teto conhecido: falha COM linha continua reaproveitada até o prompt mudar (P8). A pergunta de fn_registrar_documento e da fatia de orçamento do lote: uma implementação só. SECURITY INVOKER, somente leitura.';
+  '0230: a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando a versão TEM linha em campo_extraido (o critério da 0118, intacto, mesmo sem evento e mesmo com falha) OU quando TODAS valem: o ÚLTIMO evento extracao_sombra (criado_em) existe, sem falha_motivo e com tem_dado_financeiro = false explícito; o tipo do documento é da categoria Societário/Legal de taxonomia_tipo_documento (CERTIDOES, CONTRATO_SOCIAL, ORGANOGRAMA; CONTINGENCIAS é da categoria e fica DE FORA, porque traz valor de causa e provisão; tipo nulo ou de outra categoria = não); a medição do evento não contou conta (contas_no_documento nulo ou 0); e o documento não tem pendência extracao_falhou aberta. Simplificação deliberada: a categoria é proxy de "tipo que não traz tabela financeira"; sobe quando a taxonomia ganhar atributo próprio. Zero linha sem tudo isso = false (a 0118 protege extração recusada/truncada); condição ilegível = false (paga de novo). Falha COM linha continua reaproveitada (teto conhecido, P8). A pergunta de fn_registrar_documento e da fatia de orçamento do lote: uma implementação só. SECURITY INVOKER, somente leitura.';
 
 revoke all on function fn_versao_extracao_concluida(uuid) from public;
 grant execute on function fn_versao_extracao_concluida(uuid) to authenticated, service_role;
@@ -107,9 +147,10 @@ begin
       and dv.hash = p_hash
       and dv.fingerprint_extracao = p_fingerprint_extracao
       -- JÁ FOI EXTRAÍDA (0230): quem responde é a função da pergunta única — tem
-      -- linha (o critério da 0118, que mantém a extração que falhou SEM linha
-      -- reextraível) OU o último evento declara que o documento não tem dado
-      -- financeiro (certidão, contrato: 72 em produção eram pagos a cada reenvio).
+      -- linha (o critério da 0118, que mantém reextraível a extração que falhou SEM
+      -- linha) OU o documento é de tipo societário/legal que a IA declarou sem dado
+      -- financeiro, sem falha, sem conta contada e sem pendência de falha aberta
+      -- (certidão, organograma: no máximo 30 em produção eram pagos a cada reenvio).
       and fn_versao_extracao_concluida(dv.id)
     order by dv.n_versao desc
     limit 1;
@@ -257,10 +298,10 @@ comment on function fn_registrar_documento(uuid, text, text, text, text, numeric
   'A porta de entrada do documento: acha ou cria caso/entidade/período, versiona e responde se '
   'já foi extraído (0118). 0170: recebe o CNPJ do emitente e o repassa a fn_upsert_entidade — '
   'sem este fio, as três regras de identidade da 0169 nunca disparam em produção e o sintoma é '
-  'que nada melhora. 0230: "já foi extraído" deixa de ser "tem linha" e passa a ser a resposta de '
-  'fn_versao_extracao_concluida (o último evento extracao_sombra existe, sem falha_motivo, e a versão '
-  'tem linha ou declara tem_dado_financeiro = false): a falha com linha volta a ser reextraída e o '
-  'documento sem dado financeiro deixa de ser pago a cada reenvio.';
+  'que nada melhora. 0230: "já foi extraído" passa a ser a resposta de fn_versao_extracao_concluida '
+  '(a versão tem linha, como na 0118, OU é documento societário/legal que a IA declarou sem dado '
+  'financeiro, sem falha, sem conta contada e sem pendência de falha aberta): certidão e organograma '
+  'deixam de ser pagos a cada reenvio.';
 
 -- ---------------------------------------------------------------------------
 -- A SONDA. Marcadores em CÓDIGO (pg_get_functiondef traz comentário, por isso nenhum deles aparece em comentário nos corpos).
@@ -268,13 +309,13 @@ comment on function fn_registrar_documento(uuid, text, text, text, text, numeric
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
   ('extracao_concluida_funcao', '0230', 'funcao', 'fn_versao_extracao_concluida', null, null,
-   'A pergunta única "esta versão já foi extraída?". Ausente = a 0230 não foi aplicada e o reenvio volta a decidir só por "tem linha": o documento sem dado financeiro é pago a cada reenvio.',
+   'A pergunta única "esta versão já foi extraída?". Ausente = a 0230 não foi aplicada e o reenvio volta a decidir só por "tem linha": certidão e organograma (até 30 em produção) são pagos a cada reenvio.',
    'importante', 1050),
-  ('extracao_concluida_le_a_declaracao', '0230', 'corpo', 'fn_versao_extracao_concluida', 'u.depois->>''tem_dado_financeiro'' = ''false''', null,
-   'A função lê a declaração tem_dado_financeiro = false do ÚLTIMO evento extracao_sombra (sem falha). Corpo sem isto = o documento sem dado financeiro volta a ser pago a cada reenvio.',
+  ('extracao_concluida_estreita_pela_categoria', '0230', 'corpo', 'fn_versao_extracao_concluida', 't.categoria = ''Societário/Legal''', null,
+   'A parte nova da função só vale para tipo da categoria Societário/Legal. Corpo sem isto = a declaração tem_dado_financeiro = false da IA vale para qualquer tipo, e DF_AUDITADA/NOTAS_EXPL/DRE com dado (41 de 71 em produção, medido em 09/11/2026) deixam de ser reextraídos: buraco silencioso permanente.',
    'importante', 1051),
   ('registrar_documento_pergunta_a_funcao', '0230', 'corpo', 'fn_registrar_documento', 'and fn_versao_extracao_concluida(dv.id)', null,
-   'fn_registrar_documento decide o reaproveitamento pela função, não por "tem linha". Corpo anterior = o documento sem dado financeiro declarado (72 em produção, medido em 09/11/2026) é pago a cada reenvio do lote.',
+   'fn_registrar_documento decide o reaproveitamento pela função, não só por "tem linha". Corpo anterior = certidão e organograma declarados sem dado financeiro (até 30 em produção, medido em 09/11/2026) são pagos a cada reenvio do lote.',
    'importante', 1052)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
@@ -283,7 +324,7 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = '0230', revisado_em = current_date,
-       observacao = 'A 0230 cria fn_versao_extracao_concluida (a pergunta única "a versão já foi extraída?": tem linha OU declarou sem dado financeiro) e reemite fn_registrar_documento INTEIRA (mesma assinatura de 17 args, mesma ACL); 3 requisitos.'
+       observacao = 'A 0230 cria fn_versao_extracao_concluida (a pergunta única "a versão já foi extraída?": tem linha OU documento societário/legal declarado sem dado financeiro, sem falha, sem conta contada e sem pendência aberta) e reemite fn_registrar_documento INTEIRA (mesma assinatura de 17 args, mesma ACL); 3 requisitos.'
  where id = true;
 
 commit;
