@@ -25,6 +25,9 @@
 --      (falha_motivo continua nulo nesse caso): conferido que isso não quebra fn_versao_extracao_concluida (documento financeiro sem linha não é reaproveitável: a parte nova exige tipo
 --      societário E não há pendência aberta) nem fn_linha_de_base_extracao (não olha o motivo da pendência; a pendência aparece em pendencias_abertas por tipo).
 --   3b. DECISÃO HUMANA NÃO SE DESFAZ NO REENVIO (achado de revisão, reproduzido: DF_AUDITADA/NOTAS_EXPL, 28 em produção, são esse caso). O motivo manda "se de fato não tem número, resolva esta
+--      E SÓ A DECISÃO DESTA CAUSA (achado ALTO da 2ª revisão, reproduzido): fn_pessoa_decidiu_sem_dado filtra a pendência pelo motivo "a leitura declarou...".
+--      Sem o filtro, uma falha de COTA resolvida por pessoa calava para sempre o BALANCO que voltava zero + false. Regra 2: filtro desligado, o assert 6e reprova
+--      (run.sh rc 3); religado, rc 0 com 3.270 ok. A mesma função serve ao Sinal 3, a fn_versao_extracao_concluida e ao backfill.
 --      Decisão de pessoa vale com QUALQUER contagem da régua (ela conta CPF/OAB como conta: 9 na procuração do book-espelho). Regra 2: exigida a
 --      contagem zero também nesse ramo, o assert 6d "concluída mesmo com 9 contas" reprova (run.sh rc 3); religado, rc 0 com 3.268 ok.
 --      pendência"; resolvida, o reenvio pagava de novo (fn_versao_extracao_concluida dava false, tipo não societário) e o Sinal 3 abria OUTRA, porque procurava só estado <> 'resolvida'.
@@ -72,6 +75,32 @@ do $$ begin
 end $$;
 
 -- Reemitida a partir do corpo da 0230; só o `and exists (... taxonomia ...)` virou a chamada. CREATE OR REPLACE com a mesma assinatura preserva a ACL.
+-- A DECISÃO DE PESSOA, numa função só (achado ALTO da 2ª revisão, reproduzido): "uma pessoa decidiu que este documento não tem número" é
+-- uma extracao_falhou DESTA causa (o motivo que começa por "a leitura declarou que este documento não tem dado financeiro, mas ") resolvida por
+-- quem não é o sistema. Qualquer resolução humana de OUTRA causa (cota do provedor, truncamento) NÃO é essa decisão: contada como se fosse, um
+-- BALANCO que voltasse zero + false meses depois ficava sem linha, sem pendência e pulado em todo reenvio. Usada pelo Sinal 3, por
+-- fn_versao_extracao_concluida e pelo backfill: três cópias da mesma conta divergiriam sem erro.
+create or replace function fn_pessoa_decidiu_sem_dado(p_documento_id uuid)
+returns boolean
+language sql
+stable
+as $$
+  select exists (select 1
+                   from pendencia pe
+                  where pe.documento_id = p_documento_id
+                    and pe.tipo = 'extracao_falhou'
+                    and pe.estado = 'resolvida'
+                    and coalesce(pe.resolvida_por, '') <> 'sistema:extracao'
+                    and position('Motivo: a leitura declarou que este documento não tem dado financeiro, mas ' in coalesce(pe.descricao, '')) > 0)
+$$;
+revoke all on function fn_pessoa_decidiu_sem_dado(uuid) from public;
+grant execute on function fn_pessoa_decidiu_sem_dado(uuid) to authenticated, service_role;
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'supabase_read_only_user') then
+    execute 'grant execute on function fn_pessoa_decidiu_sem_dado(uuid) to supabase_read_only_user';
+  end if;
+end $$;
+
 create or replace function fn_versao_extracao_concluida(p_documento_versao_id uuid)
 returns boolean
 language sql
@@ -91,13 +120,7 @@ as $$
              and (u.depois->'medicao'->>'contas_no_documento' is null
                   or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
                       and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0)))
-            or exists (select 1
-                         from documento_versao dv
-                         join pendencia pe on pe.documento_id = dv.documento_id
-                        where dv.id = p_documento_versao_id
-                          and pe.tipo = 'extracao_falhou'
-                          and pe.estado = 'resolvida'
-                          and coalesce(pe.resolvida_por, '') <> 'sistema:extracao'))
+            or fn_pessoa_decidiu_sem_dado((select dv.documento_id from documento_versao dv where dv.id = p_documento_versao_id)))
        and not exists (select 1
                          from documento_versao dv
                          join pendencia pe on pe.documento_id = dv.documento_id
@@ -303,9 +326,7 @@ begin
   -- e `false` é a IA dizendo que não leu nada de um documento que devia ter número: falha, com motivo próprio (o prefixo é casado por regex no portal).
   -- 0231: e NÃO reabre o que uma PESSOA já decidiu. O motivo manda "se de fato não tem número, resolva"; quem resolveu disse que o documento não tem número, e o reenvio
   -- (que paga de novo porque o tipo não é societário) não pode desfazer isso. Só vale para o ramo novo: `true`/nulo e falha explícita seguem como eram.
-  v_decidiu_pessoa := exists (select 1 from pendencia pe
-                               where pe.documento_id = v_documento_id and pe.tipo = 'extracao_falhou'
-                                 and pe.estado = 'resolvida' and coalesce(pe.resolvida_por, '') <> 'sistema:extracao');
+  v_decidiu_pessoa := fn_pessoa_decidiu_sem_dado(v_documento_id);
   if p_falha_motivo is not null
      or (v_count = 0 and (coalesce(p_tem_dado_financeiro, true)
                           or (not fn_tipo_sem_dado_por_natureza(v_tipo) and not v_decidiu_pessoa))) then
@@ -428,9 +449,7 @@ begin
        and not exists (select 1 from pendencia pe
                         where pe.documento_id = d.id and pe.tipo = 'extracao_falhou' and pe.estado <> 'resolvida')
        -- Decisão de pessoa não se reabre por migration (o defeito da 0183). Medido em produção em 09/11/2026: 0 dos 42 alvos.
-       and not exists (select 1 from pendencia pe
-                        where pe.documento_id = d.id and pe.tipo = 'extracao_falhou' and pe.estado = 'resolvida'
-                          and coalesce(pe.resolvida_por, '') <> 'sistema:extracao')
+       and not fn_pessoa_decidiu_sem_dado(d.id)
        and coalesce((select u.depois->>'falha_motivo' is null and u.depois->>'tem_dado_financeiro' = 'false'
                        from evento_auditoria u
                       where u.acao = 'extracao_sombra'
@@ -464,6 +483,9 @@ end $$;
 -- ---------------------------------------------------------------------------
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
+  ('pessoa_decidiu_so_desta_causa', '0231', 'corpo', 'fn_pessoa_decidiu_sem_dado', 'position(''Motivo: a leitura declarou que este documento não tem dado financeiro', null,
+   'A decisão de pessoa só vale para a pendência DESTA causa. Sem o filtro, uma resolução humana de outra causa (cota, truncamento) cala para sempre um BALANCO que volta zero + false.',
+   'importante', 1066),
   ('tipo_sem_dado_funcao', '0231', 'funcao', 'fn_tipo_sem_dado_por_natureza', null, null,
    'A pergunta única "este tipo não traz tabela financeira por natureza?". Ausente = a 0231 não foi aplicada: BALANCO/DRE declarados sem dado financeiro (41 em produção, 09/11/2026) seguem sem pendência.',
    'importante', 1060),
@@ -482,7 +504,7 @@ insert into instalacao_requisito
   ('falha_nao_reabre_decisao_de_pessoa', '0231', 'corpo', 'fn_registrar_campos_extraidos', 'and not v_decidiu_pessoa', null,
    'O Sinal 3 não reabre a extracao_falhou que uma pessoa resolveu (DF_AUDITADA/NOTAS_EXPL, 28 em produção em 09/11/2026). Corpo sem isto = a decisão do analista é desfeita a cada reenvio.',
    'importante', 1064),
-  ('extracao_concluida_respeita_decisao_de_pessoa', '0231', 'corpo', 'fn_versao_extracao_concluida', 'and pe.estado = ''resolvida''', null,
+  ('extracao_concluida_respeita_decisao_de_pessoa', '0231', 'corpo', 'fn_versao_extracao_concluida', 'fn_pessoa_decidiu_sem_dado(', null,
    'A versão cujo documento teve a extracao_falhou resolvida por pessoa (e nenhuma aberta) conta como concluída: o reenvio não paga de novo o que o analista decidiu que não tem número.',
    'importante', 1065)
 on conflict (chave) do update set

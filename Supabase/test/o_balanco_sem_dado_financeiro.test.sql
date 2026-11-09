@@ -239,6 +239,29 @@ begin
   perform teste_assert_0231(fn_versao_extracao_concluida(v_v1), 'resolvida por pessoa: concluída mesmo com 9 contas na régua (não paga de novo)');
 end $$;
 
+do $$
+declare
+  v_caso uuid; v_ver uuid;
+begin
+  raise notice '--- 6e. resolução humana de OUTRA causa não é a decisão "não tem número" ---';
+  v_caso := (fn_upsert_caso('Caso 0231 outra causa'))::uuid;
+  v_ver := teste_doc_0231(v_caso, 'BALANCO', 'Balanco cota.pdf', 'H0231-COTA');
+  perform teste_extrai_0231(v_ver, false, 'COTA DIÁRIA do provedor esgotada', null);
+  update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'usuario:analista-teste'
+   where caso_id = v_caso and tipo = 'extracao_falhou';
+end $$;
+do $$
+declare
+  v_caso uuid; v_ver uuid;
+begin
+  v_caso := (fn_upsert_caso('Caso 0231 outra causa'))::uuid;
+  select dv.id into v_ver from documento_versao dv join documento d on d.id = dv.documento_id where d.caso_id = v_caso and dv.hash = 'H0231-COTA';
+  -- meses depois, a mesma versão volta sem linha e "sem dado"
+  perform teste_extrai_0231(v_ver, false, null, false);
+  perform teste_assert_0231(teste_abertas_0231(v_ver) = 1, 'a falha de COTA que a pessoa resolveu não cala o balanço que volta zero + false: abre');
+  perform teste_assert_0231(not fn_versao_extracao_concluida(v_ver), 'e a versão NÃO conta como concluída (o reenvio lê de novo)');
+end $$;
+
 -- ---------------------------------------------------------------------------
 -- 7. (g) O BACKFILL. Estado de produção antes da 0231: documentos com extracao_sombra e SEM pendência.
 -- ---------------------------------------------------------------------------

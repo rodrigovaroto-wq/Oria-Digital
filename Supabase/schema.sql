@@ -9466,6 +9466,22 @@ CREATE FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_t
 $$;
 
 --
+-- Name: fn_pessoa_decidiu_sem_dado(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  select exists (select 1
+                   from pendencia pe
+                  where pe.documento_id = p_documento_id
+                    and pe.tipo = 'extracao_falhou'
+                    and pe.estado = 'resolvida'
+                    and coalesce(pe.resolvida_por, '') <> 'sistema:extracao'
+                    and position('Motivo: a leitura declarou que este documento não tem dado financeiro, mas ' in coalesce(pe.descricao, '')) > 0)
+$$;
+
+--
 -- Name: fn_pode_criar_caso(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -12844,9 +12860,7 @@ begin
   -- e `false` é a IA dizendo que não leu nada de um documento que devia ter número: falha, com motivo próprio (o prefixo é casado por regex no portal).
   -- 0231: e NÃO reabre o que uma PESSOA já decidiu. O motivo manda "se de fato não tem número, resolva"; quem resolveu disse que o documento não tem número, e o reenvio
   -- (que paga de novo porque o tipo não é societário) não pode desfazer isso. Só vale para o ramo novo: `true`/nulo e falha explícita seguem como eram.
-  v_decidiu_pessoa := exists (select 1 from pendencia pe
-                               where pe.documento_id = v_documento_id and pe.tipo = 'extracao_falhou'
-                                 and pe.estado = 'resolvida' and coalesce(pe.resolvida_por, '') <> 'sistema:extracao');
+  v_decidiu_pessoa := fn_pessoa_decidiu_sem_dado(v_documento_id);
   if p_falha_motivo is not null
      or (v_count = 0 and (coalesce(p_tem_dado_financeiro, true)
                           or (not fn_tipo_sem_dado_por_natureza(v_tipo) and not v_decidiu_pessoa))) then
@@ -17062,13 +17076,7 @@ CREATE FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) 
              and (u.depois->'medicao'->>'contas_no_documento' is null
                   or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
                       and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0)))
-            or exists (select 1
-                         from documento_versao dv
-                         join pendencia pe on pe.documento_id = dv.documento_id
-                        where dv.id = p_documento_versao_id
-                          and pe.tipo = 'extracao_falhou'
-                          and pe.estado = 'resolvida'
-                          and coalesce(pe.resolvida_por, '') <> 'sistema:extracao'))
+            or fn_pessoa_decidiu_sem_dado((select dv.documento_id from documento_versao dv where dv.id = p_documento_versao_id)))
        and not exists (select 1
                          from documento_versao dv
                          join pendencia pe on pe.documento_id = dv.documento_id
@@ -23001,6 +23009,14 @@ GRANT ALL ON FUNCTION public.fn_periodos_compativeis_array(p_caso_id uuid, p_per
 REVOKE ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) TO service_role;
+
+--
+-- Name: FUNCTION fn_pessoa_decidiu_sem_dado(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_pode_criar_caso(); Type: ACL; Schema: public; Owner: -
