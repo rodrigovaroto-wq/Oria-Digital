@@ -11,8 +11,9 @@
 // = 1a aba, aba inexistente = item {error}, aba sem linha = nenhum item), mas emulador nao e'
 // o no': o que SO se prova depois de republicar esta na lista do relatorio da fatia.
 //
-// Os .xlsx de `Dados de Teste/book-espelho/pdf/` sao gerados por `gerar.py` e ficam fora do git;
-// quando nao existem o teste PULA dizendo o porque (o CI de hoje nao gera o book-espelho).
+// Os .xlsx de `Dados de Teste/book-espelho/pdf/` sao gerados por `gerar.py` e ficam fora do git.
+// O CI gera o book; quando ele falta aqui o teste REPROVA em voz alta (regra 7: um teste que
+// pula tem a mesma aparencia de um que passou).
 // Os demais usam workbooks escritos pelo exceljs (biblioteca real, nao zip montado a mao): o
 // que provam e' o PAREAMENTO e as pendencias, que nao dependem de ser planilha de cliente.
 
@@ -22,6 +23,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { ehLinhaDeConta, linhasDeConta } from '../lib/cobertura.mjs';
 
 const AQUI = dirname(fileURLToPath(import.meta.url));
 const requirePortal = createRequire(resolve(AQUI, '../../portal/package.json'));
@@ -104,7 +106,7 @@ async function emularExtrator(item, j, { ignorarSheetName = false } = {}) {
 
 // --- a cadeia: Preparar -> Copiar -> Compression -> Expandir -> Extrair -> Agrupar -> Recompor ----
 const MIME_XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-async function cadeia(arquivos, { comprimir = emularCompression, extrator = emularExtrator, ctxCruzado = false } = {}) {
+async function cadeia(arquivos, { comprimir = emularCompression, extrator = emularExtrator, ctxCruzado = false, semPi = false } = {}) {
   const lote = arquivos.map((a) => ({
     json: { caso_id: 'caso-1', nome_original: a.nome, binary_key: 'data' },
     binary: { data: { fileName: a.nome, mimeType: MIME_XLSX, data: a.buf.toString('base64') } },
@@ -125,7 +127,7 @@ async function cadeia(arquivos, { comprimir = emularCompression, extrator = emul
   let ctxPorLinha = entradas.map((_, i) => ({ json: preps[docDaLinha(i)].json }));
   if (ctxCruzado) ctxPorLinha = ctxPorLinha.map((_, i) => ({ json: preps[(docDaLinha(i) + 1) % preps.length].json }));
   const agrupados = await executar('Agrupar Linhas XLSX', {
-    items: entradas, refs: { 'Extrair XLSX': rundata, 'Expandir Abas': exp, 'Preparar Conteudo': ctxPorLinha },
+    items: entradas, refs: { 'Extrair XLSX': semPi ? rundata.map((r) => ({ json: r.json })) : rundata, 'Expandir Abas': exp, 'Preparar Conteudo': ctxPorLinha },
   });
   const ctxDoAgrupado = agrupados.map((it) => ({ json: preps[docDaLinha(it.pairedItem.item)].json }));
   const saida = await executar('Recompor Conteudo Extraido', { items: agrupados, refs: { 'Preparar Conteudo': ctxDoAgrupado } });
@@ -168,7 +170,8 @@ async function verdadeDoArquivo(buf) {
   });
 }
 
-test('book-espelho: o book tem xlsx, e nenhum é de 1 aba só (senão este teste não prova nada)', { skip: REAIS.length === 0 && `sem ${PASTA_ESPELHO} — rode "Dados de Teste/book-espelho/gerar.py" (o CI de hoje não gera o book-espelho)` }, async () => {
+test('book-espelho: o book existe, tem 4 xlsx, e nenhum é de 1 aba só (senão estes testes não provam nada)', async () => {
+  assert.ok(existsSync(PASTA_ESPELHO), `falta ${PASTA_ESPELHO} — gere o book: cd "Dados de Teste"/book-espelho && PYTHONPATH=. python3 gerar.py`);
   assert.equal(REAIS.length, 4, `esperava 4 planilhas no book-espelho, achei ${REAIS.length}`);
   for (const f of REAIS) assert.ok((await verdadeDoArquivo(readFileSync(resolve(PASTA_ESPELHO, f)))).length >= 2, `${f} tem menos de 2 abas`);
 });
@@ -190,6 +193,15 @@ for (const f of REAIS) {
     }
     assert.ok(!/leu SO a primeira/.test(doc.aviso_conteudo || ''), `pendência de 1 aba aberta à toa: ${doc.aviso_conteudo}`);
     assert.equal(doc.content_part.text, doc.text, 'a IA recebe o mesmo texto que a régua mede');
+  });
+
+  test(`book-espelho: "${f}" — cabeçalho de aba não é conta para a régua de cobertura`, async () => {
+    const buf = readFileSync(resolve(PASTA_ESPELHO, f));
+    const doc = doDocumento(await cadeia([{ nome: f, buf }]), f);
+    const cabecalhos = doc.text.split('\n').filter((l) => l.startsWith('=== ABA:'));
+    assert.equal(cabecalhos.length, 2, 'o controle positivo: o texto tem os 2 cabeçalhos');
+    const contas = linhasDeConta(doc.text);
+    assert.deepEqual(contas.filter((l) => l.startsWith('=== ABA:')), [], 'cabeçalho de aba contado como conta infla o denominador da régua');
   });
 
   test(`book-espelho: "${f}" — REGRA 2: lendo só a 1a aba (o defeito), a 2a some do texto e a pendência abre`, async () => {
@@ -370,4 +382,55 @@ test('o original NAO é tocado: o binário sob data sai de Copiar Como ZIP idên
   assert.equal(out.binary.zip.fileExtension, 'zip');
   assert.equal(out.binary.zip.data, item.binary.data.data);
   await assert.rejects(() => executar('Copiar Como ZIP', { item: { json: {}, binary: {} } }), /nao tem binario/);
+});
+
+test('régua: cabeçalho de aba com número no nome ("Plan2", "2. Endividamento", "Dívida 12-2025") não é conta', () => {
+  for (const nome of ['Plan2', '2. Endividamento', 'Dívida 12-2025', 'Posição 31/12/2025 (oculta)']) {
+    assert.equal(ehLinhaDeConta(`=== ABA: ${nome} ===`), false, nome);
+    assert.equal(ehLinhaDeConta(`=== ABA: ${nome} (sem linhas) ===`), false, nome);
+  }
+  assert.equal(ehLinhaDeConta('Caixa 1.000 2.000'), true, 'controle: conta de verdade continua conta');
+});
+
+// =============================================================================================
+// 5. SEM pairedItem no rundata do extrator (o fallback que o comentário de codeAgruparPlanilha
+//    declara): nao ha origem por linha, entao as abas vem JUNTAS — e a pendencia diz isso.
+// =============================================================================================
+test('sem pairedItem: as abas vêm juntas e a pendência diz a VERDADE (nunca "leu SO a primeira")', async () => {
+  const r = await cadeia(await loteDeTres(), { semPi: true });
+  const tres = doDocumento(r, 'tres.xlsx');
+  // as 9 linhas das 3 abas estão no texto (nada se perde), sem separação por aba
+  for (const m of ['TRES-indice', 'TRES-D-4', 'TRES-P-2']) assert.ok(tres.text.includes(m), m);
+  assert.ok(!tres.text.includes('=== ABA'), 'sem origem não há como separar');
+  assert.ok(!/leu SO a primeira/.test(tres.aviso_conteudo), `afirma o falso: ${tres.aviso_conteudo}`);
+  assert.match(tres.aviso_conteudo, /teve 3 aba\(s\) lida\(s\) \(Indice, Divida & Cia <2026>, Premissas \(oculta\)\)/);
+  assert.match(tres.aviso_conteudo, /JUNTAS num quadro so/);
+  assert.match(tres.aviso_conteudo, /conferir na revisao/);
+  // documento de 1 aba: nada a dizer; e os documentos não se misturam
+  assert.equal(doDocumento(r, 'um.xlsx').aviso_conteudo, null);
+  assert.equal(r.saida.length, 3);
+  assert.ok(!doDocumento(r, 'dois.xlsx').text.includes('TRES-'));
+});
+
+test('sem pairedItem: a conferência de DOCUMENTO continua — contexto de documento que ninguém carimbou PARA a execução', async () => {
+  const lote = await loteDeTres();
+  const alheio = { json: { caso_id: 'caso-1', nome_original: 'outro.xlsx', hash: 'hash-que-ninguem-carimbou' } };
+  const exp = [{ json: { doc_chave: 'h1', aba_nome: 'A', aba_ordem: 0, abas_nomes_lidos: true }, pairedItem: { item: 0 } }];
+  await assert.rejects(() => executar('Agrupar Linhas XLSX', {
+    items: [{ json: { Conta: 'x' }, pairedItem: { item: 0 } }],
+    refs: { 'Extrair XLSX': [{ json: { Conta: 'x' } }], 'Expandir Abas': exp, 'Preparar Conteudo': [alheio] },
+  }), /pareamento aba\/documento quebrado/);
+  assert.equal(lote.length, 3);
+});
+
+test('sem pairedItem e bytes com mais planilhas que o workbook listou: a pendência diz que as demais NAO foram lidas', async () => {
+  const [, tres] = await loteDeTres();
+  const r = await cadeia([tres], { semPi: true });
+  const ctx = r.preps[0].json;
+  const agr = r.agrupados;
+  const out = await executar('Recompor Conteudo Extraido', {
+    items: agr.map((a) => ({ ...a, json: { ...a.json, abas_juntas: ['Indice', 'Divida & Cia <2026>'] } })),
+    refs: { 'Preparar Conteudo': agr.map(() => ({ json: ctx })) },
+  });
+  assert.match(out[0].json.aviso_conteudo, /mostram 3 planilha\(s\) e so 2 foram listadas/);
 });

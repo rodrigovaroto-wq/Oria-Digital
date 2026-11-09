@@ -1142,6 +1142,10 @@ for(let i=0;i<entradas.length;i+=1){
   // resolve (itemMatching) e a chave que \`Expandir Abas\` carimbou no item da aba. Se
   // divergem o pareamento esta quebrado, e este no' NAO tem \`onError\`: a execucao
   // para, visivel, em vez de gravar a tabela de um documento sob o nome de outro.
+  // SEM origem por linha (rundata do extrator sem pairedItem) nao ha como saber a aba, mas o
+  // DOCUMENTO ainda se confere: a chave que o contexto resolveu tem de ser de algum documento
+  // que \`Expandir Abas\` carimbou.
+  if(!info&&exp&&(ctx.hash||ctx.nome_original)&&exp.some((x)=>x.json&&x.json.doc_chave)&&!exp.some((x)=>x.json&&x.json.doc_chave===chave)) throw new Error('Agrupar Linhas: o contexto resolveu o documento '+chave+', que nao esta entre os que Expandir Abas carimbou -- pareamento aba/documento quebrado.');
   if(info&&info.doc_chave&&info.doc_chave!==chave) throw new Error('Agrupar Linhas: a aba "'+info.aba_nome+'" foi carimbada para o documento '+info.doc_chave+' mas o contexto resolveu '+chave+' -- pareamento aba/documento quebrado.');
   if(!grupos.has(chave)) grupos.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i,abas:new Map(),motivo:null});
   const g=grupos.get(chave);
@@ -1172,7 +1176,16 @@ for(const e of errosDeAba){
 const agrupados=[];
 for(const [chave,g] of grupos.entries()){
   if(g.abas.size===0){
-    agrupados.push({json:{planilha_agrupada:true, linhas:g.linhas, total_linhas:g.total, colunas:Array.from(g.colunas), abas_motivo:g.motivo}, pairedItem:{item:g.primeiro}});
+    // As abas FORAM lidas (Expandir Abas listou os nomes) mas as linhas chegaram sem origem:
+    // vao juntas, e e' isso que a pendencia tem de dizer -- nunca \"leu so a primeira\".
+    let juntas=null;
+    if(exp){
+      for(let k=0;k<exp.length;k+=1){
+        const inf=exp[k].json||{};
+        if(inf.doc_chave===chave&&inf.abas_nomes_lidos===true){ if(!juntas) juntas=[]; juntas.push(inf.aba_nome+(inf.aba_oculta===true?' (oculta)':'')); }
+      }
+    }
+    agrupados.push({json:{planilha_agrupada:true, linhas:g.linhas, total_linhas:g.total, colunas:Array.from(g.colunas), abas_motivo:g.motivo, abas_juntas:juntas}, pairedItem:{item:g.primeiro}});
     continue;
   }
   // ABA SEM LINHA NENHUMA nao e' falha (o extrator nao emite item para ela): entra com
@@ -1486,7 +1499,7 @@ for(let i=0;i<entradas.length;i+=1){
   // posicao criaria dois documentos que o banco depois fundiria, e a identidade
   // do sistema passaria a ter duas definicoes diferentes.
   const chave=ctx.hash||ctx.nome_original||('__sem_chave_'+i);
-  if(!porDocumento.has(chave)) porDocumento.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i,abas:null,motivo:null});
+  if(!porDocumento.has(chave)) porDocumento.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i,abas:null,motivo:null,juntas:null});
   const grupo=porDocumento.get(chave);
   // SEM SPREAD (17/09/2026): \`push(...array)\` passa cada elemento como argumento
   // e estoura a pilha acima de ~120 mil linhas -- o mesmo defeito do Merge. O
@@ -1498,6 +1511,7 @@ for(let i=0;i<entradas.length;i+=1){
     // vem com as suas linhas, o seu total e o seu erro. O texto sai por aba, abaixo.
     if(Array.isArray(raw.abas)){ grupo.abas=(grupo.abas||[]).concat(raw.abas); continue; }
     if(raw.abas_motivo) grupo.motivo=raw.abas_motivo;
+    if(Array.isArray(raw.abas_juntas)) grupo.juntas=raw.abas_juntas;
     for(let k=0;k<raw.linhas.length;k+=1) grupo.linhas.push(raw.linhas[k]);
     grupo.total+=Number(raw.total_linhas)||raw.linhas.length;
     for(let k=0;k<raw.colunas.length;k+=1) grupo.colunas.add(raw.colunas[k]);
@@ -1513,7 +1527,7 @@ for(let i=0;i<entradas.length;i+=1){
     grupo.linhas.push(linha);
   }
 }
-const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,primeiro,abas,motivo})=>{
+const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,primeiro,abas,motivo,juntas})=>{
   // AS ABAS, quando vieram uma a uma. Cada tabela leva um cabecalho com o NOME da aba (so'
   // quando ha mais de uma; uma aba so' sai como sempre saiu) para a IA e a regua de cobertura
   // saberem onde cada tabela comeca. O teto de linhas/colunas vale POR ABA, e o aviso de corte
@@ -1584,7 +1598,13 @@ const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,pr
       // So' acusa quando as abas NAO foram lidas uma a uma (workbook ilegivel, ou o no'
       // de abas nao rodou): ai' vale o comportamento de sempre, uma aba so', e o motivo
       // vem junto. Com as abas lidas, quem acusa e' o bloco por aba acima.
-      (!abas&&ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>1)
+      (!abas&&juntas&&juntas.length>1)
+        ? 'O arquivo .xlsx teve '+juntas.length+' aba(s) lida(s) ('+juntas.join(', ')+'), mas o extrator nao devolveu a ORIGEM de cada linha: as '+total+' linha(s) vieram JUNTAS num quadro so, com as colunas em uniao e SEM separacao por aba. Os numeros estao no texto, mas nao se sabe de qual aba cada linha saiu: conferir na revisao.'
+        : null,
+      (!abas&&juntas&&ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>juntas.length)
+        ? 'Os bytes do .xlsx mostram '+ctx.abas_xlsx+' planilha(s) e so '+juntas.length+' foram listadas: as demais NAO foram lidas.'
+        : null,
+      (!abas&&!juntas&&ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>1)
         ? 'O arquivo .xlsx tem '+ctx.abas_xlsx+' abas e o extrator nativo leu SO a primeira ('+total+' linha(s)); as outras '+(ctx.abas_xlsx-1)+' aba(s) NAO foram lidas e a tabela financeira pode estar em qualquer uma delas. Os nomes das abas nao estao disponiveis (ficam no workbook.xml, comprimido'+(motivo?'; a leitura dele falhou: '+motivo:'')+'). Abra o arquivo e reenvie a aba certa, ou confirme que a primeira e a unica com dado.'
         : null,
     ].filter(Boolean).join(' | ')||null,
