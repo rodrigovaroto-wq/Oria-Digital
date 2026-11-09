@@ -33,6 +33,12 @@ mandato, e as pendências conhecidas do portal.
 
 ---
 
+## 0. Reprogramação de 09/11/2026
+
+A semana 1 não fechou no prazo: P4, P5 e P1d ficaram para trás porque a P16, prevista para a semana 4, foi adiantada (PRs #274 e #275: migrations 0226–0228 aplicadas, a vistoria no portal publicado e a varredura de todos os mandatos de produção). **Semana 1 estendida até 13/11** para fechar P4, P5 e P1d. **As semanas 2 a 6 andam uma semana.** O fim das 6 semanas passa de 11/12 para 18/12.
+
+Já medido para a P1d(b) em produção (09/11): uma recusa de orçamento grava UMA linha por documento do lote (44 linhas no lote de 44 de 13/09, 4 vezes). As execuções da P5 (n8n 7859, 7883 e 7886, de 17/09) já foram podadas, então o documento exato não pode ser recuperado.
+
 ## 1. Onde estamos, medido em 30/10/2026 (não lembrado)
 
 **Banco de produção.** `fn_instalacao_conferir()`: 287 de 287 requisitos presentes; a `0216` com 48
@@ -105,17 +111,17 @@ critério que fecha a fatia. Sem ele cumprido, a fatia não fecha.
 | **P1** ✅ 30/10 | **Fechar o deploy da Fase 5.** Com o segredo já no PikaPods (pendência D1 do dono): redeploy do portal, republicação da ingestão, conferir `multipleFiles` em "Arquivos", envio ponta a ponta de um book sintético pelo portal | Um lote sintético entra com o token do portal, e o n8n **recusa** token adulterado e token vencido (medido) |
 | **P1b** ✅ 04/11 | **O dial e a concordância calculados por mandato de quem dispara** (pendência crítica achada na revisão do PR #264, vale para a `0216` já aplicada). `fn_dial_auto_promover`, `fn_veredito_producao` e o gatilho `trg_auto_promover_dial` são INVOKER: sob a RLS por mandato, um Analista que decide uma pendência promove o dial de TODOS com a concordância só dos mandatos dele. Mesma família: `fn_golden_cobertura` e `fn_classe_contabil_concordancia`. Migration nova com cálculo global independente do leitor. Junto: sonda que exija RLS ligada (`relrowsecurity`) nas tabelas restritas | Um recorte pequeno com concordância alta NÃO promove o dial (assert medido não-vazio). **Tem de vir ANTES da P2**, que cria o primeiro Analista. Hoje o risco é nulo: o único usuário é Sócio |
 | **P1c** ✅ 04/11 | **Fechar as cinco pendências soltas da P1b.** RLS e DDL do dial (`0221`, aplicada), mensagem de recusa com o motivo real (`fa57400`), conta do cron conferida (`postgres`), segredo no Vault conferido. O envio válido saiu para a P2 | Recusa com token inválido provada em produção (execução 9262 × 9390, 0 mandato criado). Sonda 315/315 depois da `0221` |
-| **P1d** | **Dois achados de passagem da P1c.** (a) A recusa de tamanho grava a etapa `orcamento` (fallback do `queryReplacement`). (b) A recusa de orçamento com N itens provavelmente grava N linhas em `execucao_falha` (`queryBatching` não verificado) | Recusa de tamanho grava a etapa real, com teste que reprova no fallback. Número de linhas por recusa de orçamento medido; se for N, corrigido |
+| **P1d** ⏳ 09/11 | **Dois achados de passagem da P1c.** (a) A recusa de tamanho grava a etapa `orcamento` (fallback do `queryReplacement`). (b) A recusa de orçamento com N itens provavelmente grava N linhas em `execucao_falha` (`queryBatching` não verificado) | Recusa de tamanho grava a etapa real, com teste que reprova no fallback. Número de linhas por recusa de orçamento medido; se for N, corrigido |
 | **P2** ✅ 04/11 | **Três usuários de teste e vistoria por papel.** Criar Sócio, Analista e Leitura (`rodrigo.varoto+socio@`, `+analista@`, `+leitura@oriapartners.com`). Percorrer as telas autenticadas no preview com Playwright e com agentes Claude com persona dirigindo o preview; registrar cada defeito com captura. Junto: o **envio válido** de um book sintético pelo portal com o Sócio de teste (movido da P1c). MiroFish avaliado e descartado (04/11) | Matriz papel × tela, com o que cada papel vê e faz, medida. Envio válido entra e grava, conferido no banco (critério herdado da P1). A lista de defeitos alimenta a semana 4 |
 | **P3** ✅ 04/11 | **O n8n roteia por `caso_id`.** O token assinado passa a carregar o `caso_id`; o "Upsert Caso" busca por id; o nome vira só exibição | Renomear um mandato não quebra o envio; o invariante reprova com o roteamento antigo (medido) |
-| **P4** | **Linha de base da F3 e corpus de regressão.** Três books sintéticos mais os documentos reais já no banco (Valtra, Krauspenhar, AMO). Script que mede, por documento: falhou, incompleto, linhas, descartadas por desalinhamento, seções que não fecham. Corrigir a régua de cobertura acima de 1 | Número de base publicado por documento; a régua dá entre 0 e 1 no corpus inteiro, ou diz por que não |
-| **P5** | **`Maximum call stack size exceeded` em "Juntar Extração de Conteúdo".** Causa raiz, com o documento que provoca o erro | O documento que estourava passa, e um teste reprova com o código antigo |
+| **P4** ⏳ 09/11 | **Linha de base da F3 e corpus de regressão.** Três books sintéticos mais os documentos reais já no banco (Valtra, Krauspenhar, AMO). Script que mede, por documento: falhou, incompleto, linhas, descartadas por desalinhamento, seções que não fecham. Corrigir a régua de cobertura acima de 1 | Número de base publicado por documento; a régua dá entre 0 e 1 no corpus inteiro, ou diz por que não |
+| **P5** ⏳ 09/11 | **`Maximum call stack size exceeded` em "Juntar Extração de Conteúdo".** Causa raiz, com o documento que provoca o erro | O documento que estourava passa, e um teste reprova com o código antigo |
 
 **Estado em 04/11 (sessão 117, fim).** P1b ✅, P1c ✅ com a `0221` aplicada (sonda 315/315). P2 ✅: vistoria por papel, 5 temas ALTOS que vão para a P16, e a persona de Leitura não sondou URLs (NÃO EXECUTADO: caminho `/security-review` ou pentest). O envio válido conferido no banco NÃO CONFERIDO nesta rodada. P3 ✅ em produção com `0222` e `0223` aplicadas (sonda 322). Abertas: P1d, P4 (próxima), P16 (novo: temas da vistoria). Detalhe em `ESTADO.md`.
 
 **Pontos cegos do portão do dial sem fatia ainda** (medidos na sessão 117): SQL dinâmico (a troca de gatilho é pega pelo catálogo, o resto não); `set role` e `set session authorization`; `create policy` e `alter policy` na tabela protegida; DDL de função fora de `public`; nome de gatilho entre aspas colado ao `on`; `drop function` com parênteses aninhados antes da guarda numa lista; DDL em tabela não protegida cujo gatilho escreve no dial.
 
-### Semana 2 (09 a 13/11) — (d) F3: a extração para de perder documento
+### Semana 2 (16 a 20/11 — reprogramada em 09/11, era 09 a 13/11) — (d) F3: a extração para de perder documento
 
 | # | Fatia | Pronto quando |
 |---|---|---|
@@ -125,7 +131,7 @@ critério que fecha a fatia. Sem ele cumprido, a fatia não fecha.
 | **P9** | **Período e entidade atribuídos errado** (`precondicao_nao_satisfeita` "sem período par", `periodo_incorreto`, `entidade_incorreta`). Causa raiz na atribuição, não na guarda | No corpus, as pendências falsas desse tipo somem e as verdadeiras continuam abrindo (controle positivo) |
 | **P10** | **Rodada de regressão paga** sobre o corpus (precisa da autorização D6 do dono). Comparar com P4 | Tabela antes × depois por documento; custo de cada book ≤ US$ 5 |
 
-### Semana 3 (16 a 20/11) — (d) F3b: nenhuma linha faltando, nenhuma inventada
+### Semana 3 (23 a 27/11 — reprogramada em 09/11) — (d) F3b: nenhuma linha faltando, nenhuma inventada
 
 Detalhe em `PLANO_LINHA_A_LINHA.md`. Esta é a parte que transforma "extraiu tudo" de estatística em
 aritmética.
@@ -138,17 +144,17 @@ aritmética.
 | **P14** | **Re-perguntar só o buraco.** "Leia só as linhas 23 a 51", no máximo 1 re-pergunta por documento | O buraco do corpus fecha a um custo proporcional ao buraco, e o teto é respeitado |
 | **P15** | **Cada guarda medida não-vazia e portão da etapa (d).** Rodada de regressão final; o padrão suspeito de fabricação e as seções que não fecham reavaliados com a bijeção | A tabela da seção 2 está no alvo, ou cada desvio está explicado. **Fim da etapa (d)** |
 
-### Semana 4 (23 a 27/11) — (f) portal: os erros que impedem o uso
+### Semana 4 (30/11 a 04/12 — reprogramada em 09/11; a P16 já foi feita) — (f) portal: os erros que impedem o uso
 
 | # | Fatia | Pronto quando |
 |---|---|---|
-| **P16** | **Defeitos da vistoria de P2, lote 1** (os que bloqueiam o uso) | Cada defeito do lote reproduzido antes e conferido depois no navegador |
+| **P16** ✅ 06–07/11 (adiantada) | **Defeitos da vistoria de P2, lote 1** (os que bloqueiam o uso) | Cada defeito do lote reproduzido antes e conferido depois no navegador |
 | **P17** | **Lote 2**, mais o tooltip que vaza o resumo no modo discrição e a paginação de `fn_membros_da_equipe` | Modo discrição sem vazamento medido; equipe pagina acima de 1.000 |
 | **P18** | **Novo mandato com Produto e Responsável** (migration e tela) | Os dois campos gravam, aparecem na lista de mandatos e respeitam a RLS |
 | **P19** | **`aprovado_em` e "Tempo até aprovar"**; teste para as funções puras sem teste (`escolherRecentes`, `iniciaisDoEmail`, `passosDaTrilha`, `etapaDoMandato`, `mensagemDeLogin`) e para o ramo da `0215` sem assert | O indicador mede o tempo de aprovação, não o de ingestão; cada teste novo reprova com a função quebrada |
 | **P20** | **Recuperação de senha ponta a ponta e vistoria final por papel** (os 3 usuários), `viewport-fit=cover` no celular | Recuperação conferida no navegador; matriz papel × tela sem defeito aberto. **Fim da etapa (f)** |
 
-### Semana 5 (30/11 a 04/12) — (g) área do cliente e multiempresa
+### Semana 5 (07 a 11/12 — reprogramada em 09/11) — (g) área do cliente e multiempresa
 
 Hoje esses dois itens estão **arquivados** no `REDESENHO_DO_PORTAL.md`. A ordem do dono os traz para cá.
 A regra que vale: **tela que sugere separação de acesso que o banco não garante é pior que nenhuma
@@ -165,7 +171,7 @@ tela.** Por isso o banco vem antes da tela.
 > **Risco declarado:** a etapa (g) estava estimada em G (4–6 sessões) sem a multiempresa completa.
 > Se P22 mostrar que a multiempresa exige mais, ela se divide e a área do cliente vai primeiro.
 
-### Semana 6 (07 a 11/12) — (e) F4: conta canônica, primeira metade
+### Semana 6 (14 a 18/12 — reprogramada em 09/11) — (e) F4: conta canônica, primeira metade
 
 A F4 é a maior intervenção do roadmap (esforço GG, mais de 6 sessões). Nesta semana entra a fundação.
 O resto está na seção 4.
