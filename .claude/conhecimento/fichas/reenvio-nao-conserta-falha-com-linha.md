@@ -22,10 +22,19 @@ diz isso por motivo, em `portal/src/lib/rotulos.ts` (`reenvio: false`).
 a vigente. A linha que o analista já aceitou sai da Modelagem e do book sem evento nenhum
 (reproduzido pelo revisor no banco de teste: v1 aceita com 100, v2 pendente com 90).
 
-**O que ficou:** `fn_versao_extracao_concluida` é o critério da `0118` (tem linha) mais um caso
-só: o último evento `extracao_sombra` declara `tem_dado_financeiro = false` sem falha. Falha com
-linha continua reaproveitada até o prompt mudar (o fingerprint cuida disso).
+**A segunda versão também foi reprovada, antes de aplicar:** pular todo documento de zero linha
+cujo último evento declara `tem_dado_financeiro = false`. Dos 71 que ela pularia em produção, 41
+eram de tipo financeiro (DF_AUDITADA 16, NOTAS_EXPL 12, DRE 5, BALANCO 3 e outros). Quando a IA diz
+"sem dado", a guarda de cobertura e o Sinal 3 se calam: não há `falha_motivo` nem pendência. A
+declaração da IA não prova nada sozinha.
 
-**A lição:** antes de mandar o reenvio reextrair uma classe de falha, agrupe os motivos reais
-dela em produção. Reextrair só vale para motivo transitório, e isso pede a classe do motivo
+**O que ficou (0230, aplicada em 09/11/2026):** `fn_versao_extracao_concluida` é o critério da
+`0118` (tem linha) mais um caso só: último evento sem falha e com `tem_dado_financeiro = false`,
+tipo da categoria Societário/Legal menos CONTINGENCIAS, medição sem conta contada e nenhuma
+`extracao_falhou` aberta. São 29 documentos em produção. Falha com linha continua reaproveitada
+até o prompt mudar (o fingerprint cuida disso).
+
+**A lição:** antes de mudar o que o reenvio pula ou paga, agrupe em produção, por motivo e por
+tipo de documento, os casos que a regra nova alcança. As duas versões reprovadas pareciam certas
+até essa tabela existir. Reextrair só vale para motivo transitório, e isso pede a classe do motivo
 gravada no evento. É a fatia P8 do plano.

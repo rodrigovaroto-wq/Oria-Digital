@@ -1,22 +1,32 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 123 (09/11/2026) — P7 no código (0230, não aplicada); o #276 (P4, 0229) entra junto; a medição por documento tinha parado em 09/11
+## SESSÃO 123 (09/11/2026) — P7: 0230 APLICADA em produção; o #276 (P4, 0229) entrou junto; a medição por documento parou em 09/11
 
-> **Migration mais nova: `0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql` — NÃO APLICADA em produção.** (A 0229, anterior: APLICADA EM PRODUÇÃO em 06/11/2026; sonda de 09/11: 339 itens, a 0229 presente.)
+> **Migration mais nova: `0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql` — APLICADA EM PRODUÇÃO em 09/11/2026.**
+> - Sonda antes: 339 itens, na 0229. Ensaio em transação revertida: 342, 0 faltando.
+> - Depois: 342 itens, os 3 da 0230 presentes. O corpo das duas funções em produção tem o mesmo md5 do banco montado do repositório. ACL de `fn_registrar_documento` igual. Mandatos: 81 antes e depois.
+> - A sonda acusa 1 ausente (`envio_segredo_no_vault`) pela API: é a leitura do Vault negada a esse papel, não o segredo faltando. Dentro da transação do ensaio deu 0 faltando.
 
-- **P7 (o reenvio retoma só o que falhou) — no código, 0230 NÃO aplicada:**
-  - Defeito: o reenvio só pulava documento com linha gravada. Documento bom sem dado financeiro (certidão, contrato) era pago a cada reenvio.
-  - Correção: `fn_versao_extracao_concluida`. Pula também quando o último evento de extração declara `tem_dado_financeiro = false` sem falha.
-  - Simulado em produção (1.571 documentos): 71 deixam de ser pagos, nenhum deles com falha aberta. O resto não muda.
-  - Aceite no teste: lote de 4 com 1 falha total, reenviado inteiro, paga 1. Com o critério antigo pagava 2 (9 de 48 asserts reprovam).
-  - A primeira versão também reextraía falha com linha e foi REPROVADA na revisão: só 3 de ~75 dessas falhas são do serviço, e a versão nova tirava da Modelagem a linha já aceita pelo analista. Isso fica para a P8 (retentativa classificada).
-  - Lacunas declaradas: falha com linha continua reaproveitada até o prompt mudar; o orçamento do lote não desconta o reaproveitado (a estimativa do reenvio é a do lote inteiro); a fila com botão no portal é a P7b (só 9 de 496 falhas têm o original no Storage).
-  - Não muda assinatura nem retorno: o n8n não precisa de republicação por causa da 0230.
-- **Achado:** a 0229 estava em produção e fora do `main` (PR #276, rascunho). A republicação de 09/11 saiu do `main` e desfez a metade n8n dela.
-- **Medido em produção:** em 06 e 07/11, 69 de 69 eventos `extracao_sombra` levam a medição. Em 09/11, 0 de 5 (chave `medicao` nula).
-- **Correção:** o ramo do #276 foi mesclado aqui. Os derivados foram regerados, não resolvidos à mão.
-- **Pendente do dono:** republicar a ingestão depois do merge. Até lá a medição por documento continua nula em produção.
-- A sonda acusa 1 item ausente (`envio_segredo_no_vault`): é a leitura do Vault negada ao papel da API ("permission denied"), não o segredo faltando. O envio de 09/11 funcionou.
+- **P7 (o reenvio retoma só o que falhou):**
+  - Defeito: o reenvio só pulava documento com linha gravada. Certidão, organograma e contrato social (zero linha por natureza) eram pagos a cada reenvio.
+  - Correção: `fn_versao_extracao_concluida`. Pula também quando o último evento declara `tem_dado_financeiro = false` sem falha, o tipo é societário (menos CONTINGENCIAS), a medição não contou conta e não há `extracao_falhou` aberta.
+  - Simulado em produção (1.571 documentos): 29 deixam de ser pagos, nenhum com falha aberta, nenhum passa a ser pago.
+  - Aceite no teste: lote de 4 com 1 falha total, reenviado inteiro, paga 1. Com o critério antigo pagava 2.
+  - O n8n não precisa de republicação por causa da 0230.
+- **Duas versões foram reprovadas na revisão antes de aplicar:**
+  1. Reextrair falha COM linha. Só 3 de ~75 dessas falhas são do serviço, e a versão nova tirava da Modelagem a linha já aceita. Fica para a P8.
+  2. Confiar na declaração da IA para qualquer tipo. Dos 71 que ela pularia, 41 eram de tipo financeiro.
+- **ACHADO ALTO, anterior à P7 e NÃO corrigido:** 41 documentos de tipo financeiro com zero linha, `tem_dado_financeiro = false` e sem `extracao_falhou`.
+  - Reais: AMOBELEZA (10 `.txt` de BALANCO, DRE e FATURAMENTO_24M), Krauspenhar (1 MAPA_DIVIDA `.xlsx`, sem nenhuma pendência aberta), AMO teste 00 (2 EXTRATO_BANCARIO).
+  - Teste e sintéticos: 28, todos DF_AUDITADA ou NOTAS_EXPL.
+  - Causa traçada pelo revisor: quando a IA diz "sem dado", a guarda de cobertura (`build-workflow.mjs:1933-1934`) e o Sinal 3 se calam. Anotado na semana 3 do plano (P12, a bijeção).
+- **Lacunas declaradas:**
+  - Falha com linha continua reaproveitada até o prompt mudar (P8).
+  - O orçamento do lote não desconta o reaproveitado. Não foi construído: 0 recusas de orçamento desde 17/09 e nenhuma atribuível a isso; mexer no guarda de gasto sem caso medido é o risco do v31.
+  - A fila com botão no portal é a P7b (só 9 de 496 falhas têm o original no Storage).
+  - O comentário do IF "Extracao ja feita?" no gerador ainda diz "tem linha". Corrigir quando o gerador for mexido (exige regerar o workflow).
+- **#276 (P4, 0229):** estava em produção e fora do `main`. A republicação de 09/11 saiu do `main` e desfez a metade n8n dela. Medido: em 06 e 07/11, 69 de 69 eventos `extracao_sombra` levam a medição; em 09/11, 0 de 5. O ramo foi mesclado aqui, com os derivados regerados.
+- **Pendente do dono:** merge do #278 e republicar a ingestão, para a medição por documento voltar. Fechar o #276.
 
 ## SESSÃO 122 (09/11/2026) — #275 em produção e testado AO VIVO; defeito do Storage achado e corrigido
 
