@@ -53,7 +53,11 @@ if (!senha) { console.error("Sem a linha do Sócio no arquivo de usuários."); p
 const EMAIL = "rodrigo.varoto+socio@oriapartners.com";
 
 let ANON = process.env.ENVIO_ANON_KEY ?? "";
-const browser = await chromium.launch();
+// LOCALE UTF-8 NO CHROMIUM. Medido em 09/11: com locale POSIX (o do container) o `setInputFiles` descarta
+// CALADO todo caminho com acento — 3 de 11 arquivos do book-espelho chegavam ao input, e a tela dizia
+// "3 arquivo(s) enviado(s)". Era esse o "arquivo com acento some entre o portal e o n8n" de 07/11: nunca
+// foi o portal nem o n8n (o encaminhamento, reproduzido à parte, entrega 11 de 11). Com C.UTF-8, 11 de 11.
+const browser = await chromium.launch({ env: { ...process.env, LC_ALL: "C.UTF-8" } });
 const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
 await ctx.addInitScript("window.__name = (f) => f;");
 const page = await ctx.newPage();
