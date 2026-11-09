@@ -300,7 +300,8 @@ export function ehLinhaSemValor(linha) {
     .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, ' ')   // 31/12/2025
     .replace(diaDeMes, ' ')                             // 31 de dezembro
     .replace(quantosDeDuracao, ' ')                     // 36 MESES
-    .replace(/\b(19|20)\d{2}\b/g, ' ');                // 2025
+    .replace(/\b(19|20)\d{2}\b/g, ' ')                 // 2025
+    .replace(/^\s*\d{1,2}[.)]\s+(?=[^\d\s])/, ' ');   // "3. Parcelamentos tributários": o 3 numera, não mede
   return !/\d/.test(resto);
 }
 

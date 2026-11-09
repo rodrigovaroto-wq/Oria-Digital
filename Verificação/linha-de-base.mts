@@ -53,6 +53,11 @@ const razao = (a: any, b: any) => (a === null || a === undefined || !b ? null : 
 const tabela = (linhas as any[]).sort((a, b) => String(a.nome_original).localeCompare(String(b.nome_original))).map((l) => {
   const v = verdade.get(chave(l.nome_original));
   const vl = v ? v.linhas_de_conta_verdade : null;
+  // DMPL: o prompt manda UMA linha por componente do PL (a conta é a coluna), então a IA devolve
+  // movimentos × componentes — não os movimentos que a régua e `linhas_de_conta_verdade` contam
+  // (Vertentes 14 lidas = 14 células de valor, verdade 3 linhas; Canastra 29 contra 28 células, 9
+  // linhas). Comparar lidas com linhas dava 4,67 e 3,22 e parecia leitura inflada.
+  const vlLidas = l.tipo_taxonomia === "DMPL" && v?.celulas_de_valor_verdade ? v.celulas_de_valor_verdade : vl;
   return {
     documento: l.nome_original,
     tipo: l.tipo_taxonomia,
@@ -60,7 +65,7 @@ const tabela = (linhas as any[]).sort((a, b) => String(a.nome_original).localeCo
     verdade: vl,
     regua: l.contas_no_documento,
     lidas: l.linhas_devolvidas,
-    completude_real: razao(l.linhas_devolvidas, vl),
+    completude_real: razao(l.linhas_devolvidas, vlLidas),
     regua_sobre_verdade: razao(l.contas_no_documento, vl),
     cobertura_do_sistema: l.cobertura,
     motivo: l.cobertura_motivo ?? (v && vl === 0 ? (Number(l.linhas_devolvidas) > 0 ? `verdade 0: ${l.linhas_devolvidas} linha(s) a mais` : "verdade 0: ok") : (v ? null : "arquivo fora do METRICAS.json")),

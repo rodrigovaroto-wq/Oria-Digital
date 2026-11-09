@@ -7,7 +7,9 @@ import {
   MAX_CELULAS_POR_BLOCO, TETO_SAIDA_TOKENS, TOKENS_POR_CELULA, LIMIAR_COBERTURA,
 } from '../lib/cobertura.mjs';
 import { MAX_OUTPUT_TOKENS } from '../lib/extract.mjs';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 // O caso REAL que motivou o arquivo inteiro (book-canastra, 13/08/2026): 1.139
 // das 2.893 células de valor chegaram ao banco. Dois documentos truncaram e
@@ -859,4 +861,46 @@ test('araucária 090: toda linha contada é conta analítica, mais exatamente um
   const totais = contadas.filter((l) => /^TOTAIS /.test(l));
   assert.equal(totais.length, 1, 'a linha de TOTAIS tem de ser contada, uma vez');
   assert.deepEqual(contadas.filter((l) => !/^\d\.\d\.\d{2}\.\d{3} /.test(l) && !/^TOTAIS /.test(l)), []);
+});
+
+// ---------------------------------------------------------------------------
+// A RÉGUA CONTRA O TEXTO REAL DOS BOOKS (P4, 09/11/2026) — texto do `pdftotext -raw`.
+//
+// Por que `pdftotext -raw` e não uma captura: o `Extrair Texto` de produção não roda aqui, mas
+// este extrator reproduziu a régua de produção em 8 de 8 números que a LINHA_DE_BASE_P4 mediu
+// (Vertentes: Notas 9, Faturamento 15; Piraquara: Notas 24, Mapa 17, Aging a receber 14, Extrato
+// 14; Espelho: balancete 621, DRE 439). Não é fixture inventada: é o PDF que o gerador escreveu.
+// O book entra por `pdf/` (ignorado pelo git) e o CI o gera antes desta suíte; se ele faltar o
+// teste FALHA em voz alta — pular aqui é o estágio desligado com cara de estágio limpo (regra 7).
+// ---------------------------------------------------------------------------
+const PDF_VERTENTES = new URL('../../Dados de Teste/book-vertentes/pdf/', import.meta.url);
+const textoDoBook = (nome) => {
+  const caminho = fileURLToPath(new URL(nome, PDF_VERTENTES));
+  assert.ok(existsSync(caminho), `falta ${caminho} — gere o book: cd "Dados de Teste"/book-vertentes && PYTHONPATH=. python3 gerar.py`);
+  return execFileSync('pdftotext', ['-raw', caminho, '-'], { encoding: 'utf8' });
+};
+
+test('Notas Explicativas (Vertentes): o título numerado "3. Parcelamentos tributários" não é conta', () => {
+  // Antes: régua 9 onde a verdade é 0 — seis dos nove eram os títulos "1." a "6.", cujo único
+  // número é o que numera o título. As três restantes são frases com cifra (R$ 17.903 mil).
+  const texto = textoDoBook('14_Notas_Explicativas_Grupo_Vertentes_2025.pdf');
+  const titulos = texto.split('\n').filter((l) => /^\d{1,2}\.\s+\S/.test(l) && !/\d/.test(l.replace(/^\d{1,2}\.\s+/, '')));
+  assert.equal(titulos.length, 6, 'o documento tem 6 títulos numerados');
+  const contadas = linhasDeConta(texto);
+  assert.deepEqual(contadas.filter((l) => titulos.includes(l)), [], 'a régua contou um título como conta');
+  assert.equal(contadas.length, 3);
+});
+
+test('uma conta com número de ordem e valor continua conta', () => {
+  assert.equal(ehLinhaDeConta('1. Caixa e bancos 5.610'), true);
+  assert.equal(ehLinhaDeConta('1.1.01.002 Numerário disponível 2.880 D'), true);
+  assert.equal(ehLinhaDeConta('3. Parcelamentos tributários'), false);
+});
+
+test('Faturamento 24M (Vertentes): a régua e a verdade do gerador contam as mesmas 15 contas', () => {
+  // A verdade dava 16 porque contava o cabeçalho "Mês 2024 2025 Variação %" (rótulo + ano).
+  const nome = '10_Faturamento_24M_Vertentes_Metalurgica.pdf';
+  const doc = JSON.parse(readFileSync(new URL('METRICAS.json', PDF_VERTENTES), 'utf8'))
+    .documentos.find((d) => d.arquivo === nome);
+  assert.equal(linhasDeConta(textoDoBook(nome)).length, doc.linhas_de_conta_verdade);
 });

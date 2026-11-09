@@ -41,6 +41,7 @@ def _tem_digito(s):
 
 
 _TRES_LETRAS = re.compile(r"[^\W\d_]{3}", re.UNICODE)
+_PERIODO = re.compile(r"^\s*((19|20)\d{2}|\d{2}/\d{2}/\d{4})\s*$")
 
 
 def _conta_uma_linha(linha, acc):
@@ -58,7 +59,10 @@ def _conta_uma_linha(linha, acc):
     if i_rotulo is None:
         return
     valores = [c for i, c in enumerate(celulas) if i != i_rotulo and _tem_digito(c)]
-    if not valores:
+    # Cabeçalho de colunas ("Mês | 2024 | 2025 | Variação %") tem rótulo e dígito, mas
+    # o dígito é o ANO, não valor: contava como conta e dava 16 onde o documento tem
+    # 15 (Faturamento 24M do Vertentes; o texto do PDF e a leitura da IA dão 15).
+    if not any(not _PERIODO.match(c) for c in valores):
         return
     acc["linhas_de_conta"] += 1
     acc["celulas_de_valor"] += len(valores)
