@@ -422,6 +422,11 @@ ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWit
     "incompleta: cobertura à vista e ação de conferir na revisão", incompleta.aVista[0]);
   const vazia = falhaDeExtracaoNaTela(doBanco("a chamada respondeu sem erro, mas não trouxe NENHUMA linha. Causa mais comum: formato que o pipeline ainda não converte em texto."));
   ok(vazia.acoes[0].tipo === "sem_linhas" && vazia.aVista.length === 1, "sem nenhuma linha: ação própria (abrir o arquivo)");
+  // 0231: o prefixo é o que `fn_registrar_campos_extraidos` grava (Supabase/migrations/0231_*). Sem a regra,
+  // a pendência nova cai em "não foi possível classificar a causa" e o analista não sabe o que fazer.
+  const semDado = falhaDeExtracaoNaTela(doBanco("a leitura declarou que este documento não tem dado financeiro, mas o tipo dele (BALANCO) é de documento que traz valores."));
+  ok(semDado.acoes.length === 1 && semDado.acoes[0].tipo === "declarado_sem_dado" && semDado.aVista.length === 1,
+    "declarado sem dado em tipo financeiro: ação própria (abrir o arquivo e decidir)");
   const truncada = falhaDeExtracaoNaTela(doBanco(acha(/truncada/)));
   ok(truncada.acoes.some((a) => a.tipo === "resposta_truncada") && !truncada.acoes.some((a) => a.reenvio && a.tipo === "resposta_truncada"),
     "resposta truncada não manda reenviar o mesmo arquivo");

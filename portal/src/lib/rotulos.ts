@@ -368,7 +368,7 @@ export function fraseDoAceiteTotal(aceitosPor: Array<string | null | undefined>)
 /** O que a pessoa faz depois — a ação segue a CAUSA, não é a mesma para toda falha. */
 export type AcaoDeFalha =
   | "servico_de_ia" | "falha_do_sistema" | "chamada_incerta" | "resposta_invalida" | "resposta_truncada"
-  | "planilha_cortada" | "xlsx_varias_abas" | "sem_linhas" | "conferir_na_revisao" | "nao_classificada";
+  | "planilha_cortada" | "xlsx_varias_abas" | "sem_linhas" | "declarado_sem_dado" | "conferir_na_revisao" | "nao_classificada";
 
 export interface FalhaDeExtracaoNaTela {
   /** a frase do banco até "Motivo:", que já é português e nomeia o arquivo */
@@ -435,6 +435,15 @@ const ACAO: Record<AcaoDeFalha, { texto: string; reenvio: boolean }> = {
       + "formato; se estiver corrompido, vazio ou protegido por senha, peça outro ao cliente e reenvie-o.",
     reenvio: true,
   },
+  // 0231: zero linha + a IA declarou "sem dado financeiro" num tipo que traz valores (balanço, DRE,
+  // mapa de dívida). Medido em produção em 09/11/2026: 41 documentos assim, sem pendência nenhuma.
+  // Não afirma falha: o parecer do auditor e a nota só de texto caem aqui legitimamente.
+  declarado_sem_dado: {
+    texto: "abra o arquivo original. Se ele de fato não traz números (parecer, nota só de texto), resolva "
+      + "esta pendência. Se traz, a leitura falhou: reenvie o mesmo arquivo, que vira uma nova leitura do "
+      + "mesmo documento.",
+    reenvio: true,
+  },
   conferir_na_revisao: {
     texto: "o arquivo foi lido, mas parte dele ficou de fora ou não fecha. Confira o documento na fila de "
       + "revisão antes de usar o book.",
@@ -487,6 +496,8 @@ const REGRAS: RegraDeMotivo[] = [
     vista: (t) => primeiro(/^O arquivo \.xlsx tem (\d+) abas/.exec(t), (m) => `A planilha tem ${m[1]} abas e só a primeira foi lida.`, "A planilha tem várias abas e só a primeira foi lida.") },
   { inicio: /^A extra[çc]ao NATIVA/, acao: "falha_do_sistema", vista: fixa("A leitura nativa do arquivo falhou no sistema; nenhum dado deste documento chegou ao banco.") },
   { inicio: /^Recompor Conteudo Extraido/, acao: "falha_do_sistema", vista: fixa("O sistema não conseguiu religar o conteúdo ao documento de origem; nada deste arquivo chegou à extração.") },
+  { inicio: /^a leitura declarou que este documento n[ãa]o tem dado financeiro, mas /, acao: "declarado_sem_dado",
+    vista: fixa("A leitura não gravou nenhuma linha e declarou que este documento não tem dado financeiro, mas o tipo dele costuma trazer valores.") },
   { inicio: /^a chamada respondeu sem erro, mas n[ãa]o trouxe NENHUMA linha/, acao: "sem_linhas", vista: fixa("A leitura respondeu sem erro, mas não trouxe nenhuma linha deste arquivo.") },
   {
     inicio: /^Extra[çc][ãa]o INCOMPLETA/, acao: "conferir_na_revisao",
