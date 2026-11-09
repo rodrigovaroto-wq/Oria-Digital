@@ -2927,10 +2927,12 @@ throw new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') +
     mode: 'runOnceForAllItems', jsCode: CODE_RECOMPOR_CONTEXTO,
   }, CODE_CONTINUA),
 
-  // O CURTO-CIRCUITO DO DEDUP (0118). A `fn_registrar_documento` já respondeu se
-  // este arquivo foi extraído antes com o MESMO prompt+modelo+esquema e se aquela
-  // extração tem linha no banco. Quando sim, não há nada a pedir à OpenAI: o dado
-  // já está lá, sob a mesma versão, e o item pula direto para a reconciliação.
+  // O CURTO-CIRCUITO DO DEDUP (0118, critério ampliado na 0230). A `fn_registrar_documento`
+  // já respondeu se este arquivo foi extraído antes com o MESMO prompt+modelo+esquema e se
+  // aquela extração está CONCLUÍDA (`fn_versao_extracao_concluida`): tem linha no banco, OU é
+  // documento societário que a leitura declarou sem dado financeiro, sem falha aberta (medido
+  // em produção em 09/11/2026: 29 certidões/organogramas/contratos eram pagos a cada reenvio).
+  // Quando sim, não há nada a pedir à OpenAI e o item pula direto para a reconciliação.
   //
   // O IF fica AQUI, e não dentro do `Montar Req Extracao`, por uma restrição do
   // n8n que a 0026 já tinha mapeado: aquele nó é `runOnceForEachItem` e não pode
