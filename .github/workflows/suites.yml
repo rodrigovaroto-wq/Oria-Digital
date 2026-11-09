@@ -89,6 +89,28 @@ jobs:
           cache: npm
           cache-dependency-path: portal/package-lock.json
 
+      # O BOOK VEM ANTES DA SUÍTE: o teste da P6 (workflow-sim) lê o TEXTO_EXTRAIDO.json que ele gera
+      # (pdf/ é ignorado pelo git). Com a ordem antiga a suíte morria ao carregar o arquivo (09/11/2026).
+      - name: Gerar o book sintético
+        # PYTHONPATH=. é OBRIGATÓRIO (o gerar.py importa módulos irmãos), e o
+        # GABARITO.json sai dentro de pdf/. Sem este passo o verificar-export
+        # morre com ENOENT no GABARITO — não é bug, é insumo faltando.
+        working-directory: Dados de Teste/book-vertentes
+        run: |
+          # VERSÃO PRESA, e não é higiene genérica: o book sintético é o ORÁCULO das
+          # suítes, e `pip install reportlab` sem versão faz o CI baixar o que for a
+          # última no dia. Um release que mude a renderização quebra o gerador — ou,
+          # pior, muda o PDF sem quebrar nada e o oráculo passa a medir outra coisa.
+          # 5.0.1 é a versão com que a suíte inteira roda verde (conferido em 21/08).
+          # `--only-binary :all:` — achado do Sonar (`githubactions:S8541`), CI da base
+          # (`main`) e desta PR: sem a flag, um pacote sem wheel cairia para instalar via
+          # `setup.py`, que EXECUTA código arbitrário do pacote baixado. O reportlab==5.0.1
+          # publica wheel `py3-none-any` (conferido em 16/09), então a flag não muda o que
+          # é instalado — só fecha o caminho que executaria script de instalação.
+          python3 -m pip install --quiet --only-binary :all: 'reportlab==5.0.1'
+          PYTHONPATH=. python3 gerar.py
+
+      # ---- os DERIVADOS do gerador do book, conferidos como os workflows ----
       - name: Suíte n8n
         run: node --test 'N8N/test/*.test.mjs'
 
@@ -135,26 +157,6 @@ jobs:
             || { echo "::error::os workflows gerados divergem dos commitados — rode os 4 geradores e commite o resultado"; exit 1; }
 
       # ---- fixtures do book (insumo do export e do e2e) --------------------
-      - name: Gerar o book sintético
-        # PYTHONPATH=. é OBRIGATÓRIO (o gerar.py importa módulos irmãos), e o
-        # GABARITO.json sai dentro de pdf/. Sem este passo o verificar-export
-        # morre com ENOENT no GABARITO — não é bug, é insumo faltando.
-        working-directory: Dados de Teste/book-vertentes
-        run: |
-          # VERSÃO PRESA, e não é higiene genérica: o book sintético é o ORÁCULO das
-          # suítes, e `pip install reportlab` sem versão faz o CI baixar o que for a
-          # última no dia. Um release que mude a renderização quebra o gerador — ou,
-          # pior, muda o PDF sem quebrar nada e o oráculo passa a medir outra coisa.
-          # 5.0.1 é a versão com que a suíte inteira roda verde (conferido em 21/08).
-          # `--only-binary :all:` — achado do Sonar (`githubactions:S8541`), CI da base
-          # (`main`) e desta PR: sem a flag, um pacote sem wheel cairia para instalar via
-          # `setup.py`, que EXECUTA código arbitrário do pacote baixado. O reportlab==5.0.1
-          # publica wheel `py3-none-any` (conferido em 16/09), então a flag não muda o que
-          # é instalado — só fecha o caminho que executaria script de instalação.
-          python3 -m pip install --quiet --only-binary :all: 'reportlab==5.0.1'
-          PYTHONPATH=. python3 gerar.py
-
-      # ---- os DERIVADOS do gerador do book, conferidos como os workflows ----
       - name: Fixtures derivadas do gerador do book (SQL, JSON) e git diff
         # POR QUE ESTE PASSO EXISTE (achado em 19/08/2026). Do MESMO
         # `Supabase/test/gerar_fixture.py` saem TRÊS artefatos versionados:

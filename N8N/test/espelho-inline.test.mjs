@@ -40,7 +40,7 @@ import {
   juntarFragmentosDeLinha, ehLinhaSemValor, ehLinhaDeConta,
   juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
-  planejarFatias, instrucaoDaFatia, juntarBlocos, camadaDeTextoDoPdf, fracaoDePalavrasDobradas,
+  planejarFatias, instrucaoDaFatia, juntarBlocos, camadaDeTextoDoPdf, fracaoDePalavrasDobradas, linhasCurtasDaTabela,
 } from '../lib/cobertura.mjs';
 import {
   custoDaChamada, tokensDeSaida, bytesDoBinario, orcamentoDoLote,
@@ -552,6 +552,14 @@ const TABELA = [
     // do dono (AMOBELEZA 73%, GENERAL TABACO 37,9% de palavras dobradas)
     ['Empprreessaa:: AMOBBELEZA COMEERRCCIIO\nDISSPONIIBILLIIDDAADDES 2.2272.055,77\nEsttooqquueess 26.893.325,14\nCllieentes 22.414.091,17\n', { paginas: 1 }],
     [null, {}], [undefined, { paginas: 0 }],                 // entradas degeneradas
+    // P6: linha da tabela com menos células que a largura dela -> imagem
+    ['GRUPO X\nAtivo 10 20 30 (5) 55\nPassivo 10 20 30 (5) 55\nParticipação de não controladores 78 78\nPatrimônio 4 5 6 (1) 14\n', { paginas: 1 }],
+  ] },
+  { nome: 'linhasCurtasDaTabela', lib: linhasCurtasDaTabela, casos: [
+    ['Ativo 10 20 30\nPassivo 10 20 30\nReserva 5 7\n'], ['Ativo 10 20\nPassivo 10 20\n'], ['Caixa 1\nBancos 2\n'],
+    ['2025 2024 2023\nAtivo 10 20 30\nPassivo 10 20 30\nPosição em 31 de dezembro de 2025\n'],
+    ['Lucro - - - 14.800 14.800\nDividendos - - - (2.400) (2.400)\nRealização - - (6.834) 6.834 -\n'],
+    ['1.1.01.001 Caixa 76 59 39 96 D\n1.1.02.001 Clientes 5.388 4.228 2.796 6.820 D\n'], [''], [null],
   ] },
   { nome: 'avaliarCobertura', lib: avaliarCobertura, casos: [
     [{ extraidas: 90, esperadas: 100 }], [{ extraidas: 30, esperadas: 100 }],

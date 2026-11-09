@@ -1153,6 +1153,75 @@ export function fracaoDePalavrasDobradas(texto) {
   return dobradas / palavras.length;
 }
 
+// A QUARTA CAUSA DE ENVIAR TEXTO ERRADO: O TEXTO NÃO GUARDA ONDE A CÉLULA ESTAVA.
+//
+// P6 (11/2026). Em produção, as extrações de tabela com várias colunas saíam com
+// "N coluna(s) declarada(s), N+1 valor(es)" (BP COMBINADO sintético: 6×7 em 32 de 32
+// contas e ZERO linhas gravadas; Krauspenhar `balancete_janaago26`: 4×5 num bloco,
+// 4×3 em outro). O que o `Extrair Texto` entrega é a linha com as células coladas
+// por espaço: célula EM BRANCO não deixa rastro nenhum. MEDIDO no texto de
+// produção capturado (`capturas/2026-08-31-texto-extraido-n8n`, execução 7276):
+//
+//     Participação de não controladores (2.061) (2.061)      <- 2 números, 8 colunas
+//     Clientes - duplicatas a receber - mercado interno 24.861   <- 1 número, 3 colunas
+//
+// Em qual das 8 colunas está o (2.061)? Em qual dos 3 anos está o 24.861? O texto não
+// diz, e o modelo que o lê só pode adivinhar. O cabeçalho sofre do mesmo mal: nomes
+// de entidade de duas palavras ("Vertentes Part." "VT Logística" "Imóveis SPE") chegam
+// coladas, sem a fronteira que dá a contagem de colunas.
+//
+// O guarda de `achatarGrupos` pega o palpite QUANDO a contagem não fecha — e então
+// descarta a conta (o certo). O que ele NÃO pega é o palpite que fecha a contagem:
+// o modelo põe `null` numa posição escolhida por ele, a conta passa, e o valor de
+// 2024 entra como de 2025 sem aviso. Por isso a correção não está no guarda (que
+// segue estrito) e sim em NÃO entregar ao modelo uma entrada que não contém a
+// resposta: documento cuja camada de texto tem linha de tabela com MENOS células que
+// a largura da própria tabela vai à IA como IMAGEM, onde a posição da célula existe.
+//
+// COMO SE RECONHECE, só pelo texto: o "trecho numérico final" da linha (rótulo à
+// esquerda, depois só números, parênteses de negativo ou traço "-" de célula vazia
+// impresso, com o sufixo D/C do balancete tolerado). A LARGURA da tabela é o maior
+// trecho que aparece em ao menos duas linhas (uma linha sozinha com muitos números é
+// ruído, não tabela). Linha curta = trecho de 1 até largura-1. Linha SEM rótulo
+// (cabeçalho "2025 2024 2023") e linha cujo único número é um ano ("... de 2025") não
+// contam: não são célula de valor.
+//
+// MEDIDO em 34 documentos (20 de produção do Canastra + 14 do Vertentes): 13 passam a
+// IMAGEM (os dois COMBINADOs de produção, o DMPL, o BP COMBINADO do Vertentes, o
+// balanço de 3 exercícios e a DRE de 3 exercícios — todos com célula em branco de
+// verdade) e 21 seguem como texto (inclusive os balanços de 2 colunas sem linha
+// curta, as DFC, as DVA e os balancetes). CUSTO: `medir-custo-book.mjs` mede o book
+// inteiro em imagem 4% acima do texto (US$ 0,1385 contra 0,1334 em 57 chamadas),
+// então o teto do que esta regra pode custar é esse e não passa disso.
+//
+// O QUE NÃO ESTÁ PROVADO: que o modelo, vendo a imagem, passe a declarar as 7
+// colunas do COMBINADO — isso só uma extração em produção responde (ver o roteiro
+// no relatório da P6). O que está provado é a metade determinística: o documento
+// com a posição perdida deixa de ir como texto. E fica uma lacuna aberta, declarada:
+// balancete cujo texto sai UMA CÉLULA POR LINHA (como o `15_Balancete_Analitico` de
+// produção: código, nome e saldo em linhas separadas) não tem trecho numérico final
+// reconhecível aqui, e segue como texto.
+export function linhasCurtasDaTabela(texto) {
+  const celula = /^[-\u2013\u2014]$|^\(?-?\d{1,3}(?:\.\d{3})*(?:,\d+)?\)?-?$|^\(?-?\d+(?:,\d+)?\)?-?$/;
+  const trechos = [];
+  for (const bruta of String(texto || '').split('\n')) {
+    const t = bruta.trim().split(/\s+/);
+    if (t.length > 1 && /^[DC]$/.test(t[t.length - 1])) t.pop();
+    let n = 0;
+    while (n < t.length - 1 && celula.test(t[t.length - 1 - n])) n += 1;
+    if (n === 0) continue;
+    if (!/[A-Za-z\u00C0-\u00FF]/.test(t.slice(0, t.length - n).join(' '))) continue;
+    if (n === 1 && /^(?:19|20)\d\d$/.test(t[t.length - 1])) continue;
+    trechos.push({ n, linha: bruta.trim() });
+  }
+  const freq = new Map();
+  for (const x of trechos) freq.set(x.n, (freq.get(x.n) || 0) + 1);
+  let largura = 0;
+  for (const [n, c] of freq) if (c >= 2 && n > largura) largura = n;
+  if (largura < 2) return { largura, curtas: [] };
+  return { largura, curtas: trechos.filter((x) => x.n < largura).map((x) => x.linha) };
+}
+
 export function camadaDeTextoDoPdf(texto, {
   paginas = 1,
   minPorPagina = CARACTERES_MINIMOS_POR_PAGINA,
@@ -1188,6 +1257,14 @@ export function camadaDeTextoDoPdf(texto, {
       explicacao: `${Math.round(dobradas * 100)}% das palavras têm letra repetida (teto ${Math.round(maxDobradas * 100)}%): `
         + 'a camada de texto deste PDF está corrompida por glifo dobrado e os NÚMEROS saem errados — '
         + 'vai à IA como imagem, que é onde o documento está correto' };
+  }
+  const tabela = linhasCurtasDaTabela(t);
+  if (tabela.curtas.length > 0) {
+    return { ...base, usarTexto: false, motivo: 'colunas-sem-posicao', fracaoDobradas: dobradas,
+      larguraDaTabela: tabela.largura, linhasCurtas: tabela.curtas.length,
+      explicacao: `${tabela.curtas.length} linha(s) da tabela têm menos células que as ${tabela.largura} colunas `
+        + `dela (ex.: "${tabela.curtas[0].slice(0, 80)}"): célula em branco não deixa rastro no texto e a posição `
+        + 'do valor ficaria adivinhada — vai à IA como imagem, que é onde a coluna de cada número está' };
   }
   return { ...base, usarTexto: true, motivo: 'camada-de-texto', fracaoDobradas: dobradas,
     explicacao: `camada de texto com ${t.length} caractere(s) e ${comNumero} linha(s) com número — `
