@@ -432,6 +432,7 @@ ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWit
     ['Aba "Mapa": Planilha maior que o teto de envio: 2000 de 5000 linhas.', "planilha_cortada", 'A aba "Mapa" é maior'],
     ['A aba "Mapa" NAO foi lida pelo extrator (sheet not found): o que ela contem NAO chegou ao banco nem ao book.', "xlsx_varias_abas", 'A aba "Mapa" não foi lida'],
     ["O arquivo .xlsx tem 3 planilha(s) nos bytes, mas o workbook listou so 2: as 1 restante(s) NAO foram lidas.", "xlsx_varias_abas", "tem 3 abas e só 2"],
+    ["O arquivo .xlsx teve 3 aba(s) lida(s) (Indice, Divida, Premissas), mas o extrator nao devolveu a ORIGEM de cada linha: as 9 linha(s) vieram JUNTAS num quadro so.", "conferir_na_revisao", "vieram juntas"],
   ] as const) {
     const f = falhaDeExtracaoNaTela(doBanco(motivo));
     ok(f.acoes.length === 1 && f.acoes[0].tipo === acao && f.aVista.length === 1 && f.aVista[0].includes(frase), `planilha de várias abas: "${motivo.slice(0, 30)}…" tem causa e ação (${acao})`);
