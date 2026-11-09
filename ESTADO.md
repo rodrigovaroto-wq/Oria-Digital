@@ -1,5 +1,17 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 122 (09/11/2026) — #275 em produção e testado AO VIVO; defeito do Storage achado e corrigido
+
+- **#275 mergeado** (`7b29e80`, deploy pronto). Na tela de produção: a falha de extração mostra a causa em português e a ação certa, com o técnico recolhido; o botão da conta não traz mais o e-mail.
+- **Testes ao vivo** num mandato criado pelo portal e apagado depois:
+  - Recusa de TAMANHO (16,5 MB) grava a etapa `tamanho` em 1 linha.
+  - Recusa de ORÇAMENTO (3 docs, US$ 45,27) grava 1 linha; antes eram 3.
+  - Lote válido (2 PDFs do Vertentes): cobertura 1,0000, 0 falhas, US$ 0,0095. O original abre pelo portal.
+- **Defeito novo, achado no teste:** o lote recusado deixava os arquivos no Storage, porque o upload vinha antes do orçamento. Agora o upload só acontece depois de "Lote cabe?" (nó "Reanexar Original"). Ingestão republicada (60 nós conferidos). Retestado: recusa não guarda nada e o lote aceito guarda e referencia. 0 órfãos no bucket.
+- **Varredura do portal novo:** 81 mandatos, 1.458 verificações, **0 falhas**. 128 exports com o Excel recalculado e sem erro de fórmula (o `#VALUE!` sumiu). 115 recusas legítimas. 12 avisos de lentidão (21–33 s).
+- **Pendente do dono:** o CI do GitHub falhou sem rodar jobs (possível cota ou limite do Actions). Conferir em Settings → Billing.
+- **Próximo:** P6.
+
 ## SESSÃO 121 (09/11/2026) — semana 1 fechada: P4, P5 e P1d; ingestão REPUBLICADA
 
 - **Republicação:** ingestão republicada no n8n em 09/11, 18:04 UTC, com autorização do dono. `preparar-republicacao.mjs` + `conferir-publicado.mjs`: os 59 nós batem com o repositório. A P1d (a recusa grava a etapa real e 1 linha só) e a régua da P4 (cobertura entre 0 e 1, excedente declarado) passam a valer em produção.
