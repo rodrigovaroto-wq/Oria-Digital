@@ -13467,9 +13467,11 @@ begin
     where d.caso_id = p_caso_id
       and dv.hash = p_hash
       and dv.fingerprint_extracao = p_fingerprint_extracao
-      -- TEM LINHA: extração que falhou não vale como extração feita (ver o
-      -- cabeçalho). É o que mantém o reenvio como conserto possível.
-      and exists (select 1 from campo_extraido ce where ce.documento_versao_id = dv.id)
+      -- JÁ FOI EXTRAÍDA (0230): quem responde é a função da pergunta única — tem
+      -- linha (o critério da 0118, que mantém a extração que falhou SEM linha
+      -- reextraível) OU o último evento declara que o documento não tem dado
+      -- financeiro (certidão, contrato: 72 em produção eram pagos a cada reenvio).
+      and fn_versao_extracao_concluida(dv.id)
     order by dv.n_versao desc
     limit 1;
   end if;
@@ -13617,7 +13619,7 @@ $$;
 -- Name: FUNCTION fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text) IS 'A porta de entrada do documento: acha ou cria caso/entidade/período, versiona e responde se já foi extraído (0118). 0170: recebe o CNPJ do emitente e o repassa a fn_upsert_entidade — sem este fio, as três regras de identidade da 0169 nunca disparam em produção e o sintoma é que nada melhora.';
+COMMENT ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text) IS 'A porta de entrada do documento: acha ou cria caso/entidade/período, versiona e responde se já foi extraído (0118). 0170: recebe o CNPJ do emitente e o repassa a fn_upsert_entidade — sem este fio, as três regras de identidade da 0169 nunca disparam em produção e o sintoma é que nada melhora. 0230: "já foi extraído" deixa de ser "tem linha" e passa a ser a resposta de fn_versao_extracao_concluida (o último evento extracao_sombra existe, sem falha_motivo, e a versão tem linha ou declara tem_dado_financeiro = false): a falha com linha volta a ser reextraída e o documento sem dado financeiro deixa de ser pago a cada reenvio.';
 
 --
 -- Name: fn_registrar_expectativa_macro(jsonb); Type: FUNCTION; Schema: public; Owner: -
@@ -17001,6 +17003,33 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A documento_versao VIGENTE para quem lê conteúdo: a de maior n_versao que TEM campo_extraido. Difere de fn_versao_atual (max(n_versao)) de propósito: entre fn_registrar_documento e fn_registrar_campos_extraidos a versão mais recente está vazia, e max(n_versao) puro deixaria a tela de Modelagem em branco nessa janela — o mesmo sintoma que a 0101 corrigiu.';
+
+--
+-- Name: fn_versao_extracao_concluida(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  -- (1) tem linha: o critério da 0118, intacto. (2) ou o ÚLTIMO evento de extração (criado_em; empate na mesma transação é indefinido, ver o cabeçalho) existe, sem falha, e declara
+  -- tem_dado_financeiro = false. Sem evento a segunda metade é false (coalesce), nunca nula.
+  select exists (select 1 from campo_extraido ce where ce.documento_versao_id = p_documento_versao_id)
+      or coalesce((
+    select u.depois->>'falha_motivo' is null
+           and u.depois->>'tem_dado_financeiro' = 'false'
+      from evento_auditoria u
+     where u.acao = 'extracao_sombra'
+       and u.entidade_ref = 'documento_versao:' || p_documento_versao_id::text
+     order by u.criado_em desc
+     limit 1
+  ), false)
+$$;
+
+--
+-- Name: FUNCTION fn_versao_extracao_concluida(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0230: a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando a versão TEM linha em campo_extraido (o critério da 0118, intacto, mesmo sem evento e mesmo com falha) OU o ÚLTIMO evento extracao_sombra (criado_em) existe, tem falha_motivo nulo e declara tem_dado_financeiro = false explícito (certidão, contrato: 0111). Zero linha sem a declaração = false (a 0118 protege extração recusada/truncada); falha vence a declaração. Teto conhecido: falha COM linha continua reaproveitada até o prompt mudar (P8). A pergunta de fn_registrar_documento e da fatia de orçamento do lote: uma implementação só. SECURITY INVOKER, somente leitura.';
 
 --
 -- Name: fn_vincular_linha_premissa(uuid, text, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -23667,6 +23696,14 @@ GRANT ALL ON FUNCTION public.fn_versao_atual(p_documento_id uuid) TO service_rol
 REVOKE ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_versao_extracao_concluida(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text); Type: ACL; Schema: public; Owner: -

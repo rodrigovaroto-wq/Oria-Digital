@@ -1,9 +1,17 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 123 (09/11/2026) — o #276 (P4, 0229) entra no ramo da P7; a medição por documento tinha parado em 09/11
+## SESSÃO 123 (09/11/2026) — P7 no código (0230, não aplicada); o #276 (P4, 0229) entra junto; a medição por documento tinha parado em 09/11
 
-> **Migration mais nova: `0229_a_leitura_que_so_se_media_somada_por_lote.sql` — APLICADA EM PRODUÇÃO em 06/11/2026 (sonda de 09/11: 339 itens, a 0229 presente).**
+> **Migration mais nova: `0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql` — NÃO APLICADA em produção.** (A 0229, anterior: APLICADA EM PRODUÇÃO em 06/11/2026; sonda de 09/11: 339 itens, a 0229 presente.)
 
+- **P7 (o reenvio retoma só o que falhou) — no código, 0230 NÃO aplicada:**
+  - Defeito: o reenvio só pulava documento com linha gravada. Documento bom sem dado financeiro (certidão, contrato) era pago a cada reenvio.
+  - Correção: `fn_versao_extracao_concluida`. Pula também quando o último evento de extração declara `tem_dado_financeiro = false` sem falha.
+  - Simulado em produção (1.571 documentos): 71 deixam de ser pagos, nenhum deles com falha aberta. O resto não muda.
+  - Aceite no teste: lote de 4 com 1 falha total, reenviado inteiro, paga 1. Com o critério antigo pagava 2 (9 de 48 asserts reprovam).
+  - A primeira versão também reextraía falha com linha e foi REPROVADA na revisão: só 3 de ~75 dessas falhas são do serviço, e a versão nova tirava da Modelagem a linha já aceita pelo analista. Isso fica para a P8 (retentativa classificada).
+  - Lacunas declaradas: falha com linha continua reaproveitada até o prompt mudar; o orçamento do lote não desconta o reaproveitado (a estimativa do reenvio é a do lote inteiro); a fila com botão no portal é a P7b (só 9 de 496 falhas têm o original no Storage).
+  - Não muda assinatura nem retorno: o n8n não precisa de republicação por causa da 0230.
 - **Achado:** a 0229 estava em produção e fora do `main` (PR #276, rascunho). A republicação de 09/11 saiu do `main` e desfez a metade n8n dela.
 - **Medido em produção:** em 06 e 07/11, 69 de 69 eventos `extracao_sombra` levam a medição. Em 09/11, 0 de 5 (chave `medicao` nula).
 - **Correção:** o ramo do #276 foi mesclado aqui. Os derivados foram regerados, não resolvidos à mão.
@@ -72,7 +80,7 @@
 
 ## SESSÃO 119b (06/11/2026) — P4: linha de base da leitura por documento (0229 APLICADA em 06/11; linha de base medida em 07/11)
 
-> **Migration mais nova: `0229_a_leitura_que_so_se_media_somada_por_lote.sql` — APLICADA EM PRODUÇÃO em 06/11/2026 (sonda 334→339).** Nasceu 0225 e foi renumerada para 0229 depois que a P16 (sessão paralela, PR #274) entrou com 0226–0228 já aplicadas em produção. A 0228 REESCREVE `fn_registrar_campos_extraidos` (auto-aceite exige tipo): a 0229 tem de reemitir o corpo DA 0228 com `p_medicao`, nunca o da 0204, senão desfaz a guarda da 0228 calada. `fn_registrar_campos_extraidos` ganha `p_medicao` (evento `extracao_sombra` leva a medição por documento) e nasce `fn_linha_de_base_extracao(caso)`. O n8n (`Juntar Blocos` → `Gravar Campos (Sombra)`) já passa `p_medicao` no repositório, NÃO republicado. **Ordem rígida: aplicar a 0229 e conferir a sonda ANTES de republicar o n8n** (n8n novo com banco antigo = toda extração falha com "p_medicao does not exist").
+> **Migration nova desta sessão: `0229_a_leitura_que_so_se_media_somada_por_lote.sql` — APLICADA EM PRODUÇÃO em 06/11/2026 (sonda 334→339).** Nasceu 0225 e foi renumerada para 0229 depois que a P16 (sessão paralela, PR #274) entrou com 0226–0228 já aplicadas em produção. A 0228 REESCREVE `fn_registrar_campos_extraidos` (auto-aceite exige tipo): a 0229 tem de reemitir o corpo DA 0228 com `p_medicao`, nunca o da 0204, senão desfaz a guarda da 0228 calada. `fn_registrar_campos_extraidos` ganha `p_medicao` (evento `extracao_sombra` leva a medição por documento) e nasce `fn_linha_de_base_extracao(caso)`. O n8n (`Juntar Blocos` → `Gravar Campos (Sombra)`) já passa `p_medicao` no repositório, NÃO republicado. **Ordem rígida: aplicar a 0229 e conferir a sonda ANTES de republicar o n8n** (n8n novo com banco antigo = toda extração falha com "p_medicao does not exist").
 
 **RETOMADA FEITA (07/11, 00h–01h UTC):** os 4 books foram enviados e medidos; a linha de base está em `Arquitetura do Sistema/3 Estado e Execução/LINHA_DE_BASE_P4.md`. ACHADO ALTO: 8 de 11 arquivos do book-espelho (os de nome com acento) sumiram entre o portal e o Form do n8n sem nenhum registro de falha — investigar primeiro. Próximo: P5 com essa lista de achados.
 

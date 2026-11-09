@@ -1149,6 +1149,14 @@ supabase db execute --file Supabase/migrations/0229_a_leitura_que_so_se_media_so
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0229' and not presente;   -- ZERO linhas
 #   select count(*) from pg_proc where proname = 'fn_registrar_campos_extraidos';   -- 1 (sem sobrecarga)
 
+# A 0230 (P7) para de pagar a cada reenvio o documento que a IA declarou SEM dado financeiro (certidão, contrato: zero linha por natureza, 72 em produção, medido em 09/11/2026). Cria `fn_versao_extracao_concluida` (a versão TEM linha, como na 0118, OU o último evento `extracao_sombra` existe, sem `falha_motivo`, com `tem_dado_financeiro = false` explícito) e reemite `fn_registrar_documento` INTEIRA com a MESMA assinatura (17 args), o mesmo retorno e a mesma ACL: o n8n NÃO precisa ser republicado. Mudança só ADITIVA: falha COM linha continua reaproveitada até o prompt mudar (teto conhecido; a retentativa classificada é a P8).
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, upsert dos 3 requisitos). Sem tabela, sem backfill.
+# >>> Teste: Supabase/test/reextracao.test.sql (seções 12 a 17).
+supabase db execute --file Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0230' and not presente;   -- ZERO linhas
+#   select count(*) from pg_proc where proname = 'fn_registrar_documento';   -- 1 (sem sobrecarga)
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
