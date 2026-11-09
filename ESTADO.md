@@ -1,5 +1,15 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 123 (09/11/2026) — o #276 (P4, 0229) entra no ramo da P7; a medição por documento tinha parado em 09/11
+
+> **Migration mais nova: `0229_a_leitura_que_so_se_media_somada_por_lote.sql` — APLICADA EM PRODUÇÃO em 06/11/2026 (sonda de 09/11: 339 itens, a 0229 presente).**
+
+- **Achado:** a 0229 estava em produção e fora do `main` (PR #276, rascunho). A republicação de 09/11 saiu do `main` e desfez a metade n8n dela.
+- **Medido em produção:** em 06 e 07/11, 69 de 69 eventos `extracao_sombra` levam a medição. Em 09/11, 0 de 5 (chave `medicao` nula).
+- **Correção:** o ramo do #276 foi mesclado aqui. Os derivados foram regerados, não resolvidos à mão.
+- **Pendente do dono:** republicar a ingestão depois do merge. Até lá a medição por documento continua nula em produção.
+- A sonda acusa 1 item ausente (`envio_segredo_no_vault`): é a leitura do Vault negada ao papel da API ("permission denied"), não o segredo faltando. O envio de 09/11 funcionou.
+
 ## SESSÃO 122 (09/11/2026) — #275 em produção e testado AO VIVO; defeito do Storage achado e corrigido
 
 - **#275 mergeado** (`7b29e80`, deploy pronto). Na tela de produção: a falha de extração mostra a causa em português e a ação certa, com o técnico recolhido; o botão da conta não traz mais o e-mail.
@@ -29,7 +39,7 @@
 
 ## SESSÃO 120 (06/11/2026) — 0226, 0227 e 0228 APLICADAS em produção; P16 conferida no portal publicado; G2 e o `title=` do e-mail corrigidos
 
-> **Migration mais nova: `0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql` — APLICADA EM PRODUÇÃO em 06/11/2026.**
+> **Última migration DAQUELA sessão: `0228_a_linha_sem_tipo_que_chegava_aceita_ao_excel.sql` — APLICADA EM PRODUÇÃO em 06/11/2026.**
 > - Sonda antes: 331/331, na 0224.
 > - Ensaio das três numa transação revertida: 334/334, e a foto (corpo e ACL das três funções) ficou idêntica depois.
 > - Aplicadas uma por vez: 332 → 333 → 334, 0 faltando. A ACL das três funções não mudou.
@@ -59,6 +69,19 @@
 **Pendente do dono:** decidir sobre o "Reabrir"; trocar a senha (passou pelo chat).
 
 **Resíduo medido e deixado:** 738 linhas auto-aceitas em 23 documentos sem tipo, todas em 11 mandatos de teste. A 0228 vale só para a frente.
+
+## SESSÃO 119b (06/11/2026) — P4: linha de base da leitura por documento (0229 APLICADA em 06/11; linha de base medida em 07/11)
+
+> **Migration mais nova: `0229_a_leitura_que_so_se_media_somada_por_lote.sql` — APLICADA EM PRODUÇÃO em 06/11/2026 (sonda 334→339).** Nasceu 0225 e foi renumerada para 0229 depois que a P16 (sessão paralela, PR #274) entrou com 0226–0228 já aplicadas em produção. A 0228 REESCREVE `fn_registrar_campos_extraidos` (auto-aceite exige tipo): a 0229 tem de reemitir o corpo DA 0228 com `p_medicao`, nunca o da 0204, senão desfaz a guarda da 0228 calada. `fn_registrar_campos_extraidos` ganha `p_medicao` (evento `extracao_sombra` leva a medição por documento) e nasce `fn_linha_de_base_extracao(caso)`. O n8n (`Juntar Blocos` → `Gravar Campos (Sombra)`) já passa `p_medicao` no repositório, NÃO republicado. **Ordem rígida: aplicar a 0229 e conferir a sonda ANTES de republicar o n8n** (n8n novo com banco antigo = toda extração falha com "p_medicao does not exist").
+
+**RETOMADA FEITA (07/11, 00h–01h UTC):** os 4 books foram enviados e medidos; a linha de base está em `Arquitetura do Sistema/3 Estado e Execução/LINHA_DE_BASE_P4.md`. ACHADO ALTO: 8 de 11 arquivos do book-espelho (os de nome com acento) sumiram entre o portal e o Form do n8n sem nenhum registro de falha — investigar primeiro. Próximo: P5 com essa lista de achados.
+
+**ATUALIZAÇÃO (06/11, ~21h UTC) — 0229 APLICADA e n8n REPUBLICADO; sessão PAUSADA pelo dono (limite de tokens).**
+- Produção: 0229 aplicada (sonda 334→339, 0 ausentes; `campos_auto_aceite_exige_tipo` da 0228 continua presente; corpo de produção era idêntico ao da 0228 antes; só as ACL das duas funções da 0229 mudaram). n8n de ingestão `na1AEv3m8fjDXlwM` republicado a partir de `70f1a69` (PUT 200; `conferir-publicado` ok, 59 nós). Cópia do publicado ANTES ficou só no scratchpad da sessão (perdida ao fechar): para voltar, republicar a partir do commit `5d0061d` do main.
+- PS: o protocolo S3 do Storage foi DESLIGADO no painel (autorizado pelo dono).
+- PAROU NO MEIO: o envio do book-vertentes pelo portal (`Verificação/enviar-book.mts`, mandato **"P4 linha de base - Vertentes (sintetico)"**) foi disparado e o lote pode estar rodando/fechado em produção — conferir em `lote_execucao` desse caso. A medição NÃO foi rodada.
+- Como retomar: (1) redefinir as senhas dos 3 usuários de teste (estavam só no scratchpad desta sessão); (2) rodar `Verificação/linha-de-base.mts` sobre o mandato acima com `LB_METRICAS="Dados de Teste/book-vertentes/pdf/METRICAS.json"` (gerar os books antes: ver COMANDOS-CANONICOS) e conferir que os documentos chegaram com `versao_medicao = p4-1`; (3) se sim, enviar canastra, distress e espelho (`Dados de Teste/book-espelho`, custo estimado US$ 0,45) e montar a tabela; (4) abrir o PR da branch `claude/tender-turing-vybcm8` (ainda SEM PR).
+- Achados já medidos na P4: os originais reais (Valtra, Krauspenhar, AMO) NÃO estão guardados (0 de 140 versões no bucket); `medir-custo-book` reprova no espelho (DRE analítica e balancete custam US$ 0,08/chamada contra a estimativa de 0,055 que sustenta o teto); a régua conta 4 linhas numa procuração (verdade 0); um lote do Valtra de 05/10 ficou aberto sem fechar.
 
 ## SESSÃO 119 (06/11/2026) — P16 no código: os 5 temas ALTOS da vistoria P2 (0226–0228 aplicadas na S120)
 

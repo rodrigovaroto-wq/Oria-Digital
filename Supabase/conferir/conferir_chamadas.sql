@@ -32,7 +32,7 @@ declare
     ['workflow.e1-ingestao.json · Registrar Recusa', 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, null) as r, $3::text as etapa_recusa, $4::text as orcamento_mensagem'],
     ['workflow.e1-ingestao.json · Registrar Documento', 'select fn_registrar_documento($1::uuid,$2::text,$3::text,$4::text,$5::text,$6::numeric,$7::text,$8::origem_arquivo,$9::text,$10::text,$11::boolean,$12::text,$13::legibilidade, p_justificativa=>$14::text, p_fingerprint_extracao=>$15::text, p_cnpj=>$16::text) as r'],
     ['workflow.e1-ingestao.json · Recomputar Completude', 'select fn_recomputar_completude($1::uuid) as resultado'],
-    ['workflow.e1-ingestao.json · Gravar Campos (Sombra)', 'select fn_registrar_campos_extraidos($1::uuid, $2::jsonb, p_falha_motivo=>$3::text, p_tem_dado_financeiro=>$4::boolean) as n_campos,
+    ['workflow.e1-ingestao.json · Gravar Campos (Sombra)', 'select fn_registrar_campos_extraidos($1::uuid, $2::jsonb, p_falha_motivo=>$3::text, p_tem_dado_financeiro=>$4::boolean, p_medicao=>$7::jsonb) as n_campos,
        $5::uuid as documento_id, $1::uuid as documento_versao_id, $6::jsonb as diagnostico'],
     ['workflow.e1-ingestao.json · Registrar Diagnostico', 'select fn_registrar_diagnostico($1::uuid,$2::uuid,$3::text,$4::boolean,$5::text,$6::text,$7::text,$8::legibilidade,$9::text,$10::text,$11::text, p_cnpj=>$13::text) as resultado,
        fn_registrar_fatos($2::uuid,$12::jsonb) as fatos,
