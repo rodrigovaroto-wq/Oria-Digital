@@ -49,7 +49,7 @@ import {
   linhasComNumero, linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
   juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
-  camadaDeTextoDoPdf, CARACTERES_MINIMOS_POR_PAGINA, MINIMO_LINHAS_COM_NUMERO_PDF,
+  camadaDeTextoDoPdf, linhasCurtasDaTabela, CARACTERES_MINIMOS_POR_PAGINA, MINIMO_LINHAS_COM_NUMERO_PDF,
   fracaoDePalavrasDobradas, MAX_FRACAO_PALAVRAS_DOBRADAS,
   celulasDaLinha, celulasEstimadas,
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
@@ -324,6 +324,8 @@ const FONTE_COBERTURA = [
   // `toString()` não leva o escopo do módulo, e é o terceiro caso desta família
   // nesta sessão.
   `const fracaoDePalavrasDobradas = ${fracaoDePalavrasDobradas.toString()};`,
+  // ANTES de `camadaDeTextoDoPdf`, que a chama (P6) — mesma regra de ordem.
+  `const linhasCurtasDaTabela = ${linhasCurtasDaTabela.toString()};`,
   `const camadaDeTextoDoPdf = ${camadaDeTextoDoPdf.toString()};`,
 ].join('\n');
 

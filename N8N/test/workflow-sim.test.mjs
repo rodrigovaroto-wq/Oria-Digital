@@ -3837,6 +3837,62 @@ test('MEDIDO: camada de texto CORROMPIDA por glifo dobrado vai para OCR — sen�
 });
 
 // ---------------------------------------------------------------------------
+// P6 (11/2026): COLUNA EM BRANCO NÃO DEIXA RASTRO NO TEXTO.
+//
+// Textos REAIS, não inventados (regra 4): o do `06_BP_COMBINADO` vem do
+// `TEXTO_EXTRAIDO.json` do book sintético (a mesma conversão que o pipeline faz) e o do
+// COMBINADO do Canastra vem da captura de PRODUÇÃO (execução 7276 do n8n). O que NÃO
+// está reproduzido, e o comentário diz: a resposta do modelo. Nenhuma extração paga foi
+// rodada, então "o modelo declarou 6 colunas para 7 valores" é o relato da medição de
+// 09/11, não algo que este teste exiba. O que ele prova é a metade determinística: um
+// documento cujo texto perdeu a posição das células NÃO vai como texto.
+const TEXTOS_COM_POSICAO_PERDIDA = (() => {
+  const vert = JSON.parse(readFileSync(new URL('../../Dados de Teste/book-vertentes/pdf/TEXTO_EXTRAIDO.json', import.meta.url), 'utf8')).documentos;
+  const prod = JSON.parse(readFileSync(new URL('../../Dados de Teste/capturas/2026-08-31-texto-extraido-n8n/textos.json', import.meta.url), 'utf8')).documentos;
+  return {
+    vertentes: vert['06_BP_COMBINADO_Grupo_Vertentes_2025.pdf'].join('\n'),
+    canastra: prod['13_Balanco_COMBINADO_Grupo_Canastra_2025.pdf'].texto,
+    // CONTROLES: tabelas em que toda linha tem a largura da tabela (ou 1 coluna só).
+    // Têm de continuar como texto, senão a regra é um interruptor e não um critério.
+    componentes: vert['02_BP_Vertentes_Componentes_2025x2024.pdf'].join('\n'),
+    dfc: prod['03_DFC_Canastra_Industria_12M25.pdf'].texto,
+    balancete: vert['13_Balancete_Analitico_Componentes_2025.pdf'].join('\n'),
+  };
+})();
+
+test('MEDIDO (P6): tabela cujo texto perdeu a posição das células vai para IMAGEM, com o motivo declarado', async () => {
+  for (const [nome, texto, larguraEsperada] of [
+    ['BP COMBINADO Vertentes (7 colunas, Eliminações em branco em 19 linhas)', TEXTOS_COM_POSICAO_PERDIDA.vertentes, 7],
+    ['BP COMBINADO Canastra de produção (8 colunas, "(2.061) (2.061)" sem dizer onde)', TEXTOS_COM_POSICAO_PERDIDA.canastra, 8],
+  ]) {
+    const out = await run('Recompor Conteudo Extraido', {
+      items: [{ json: { text: texto, numpages: 2 } }],
+      refs: { 'Preparar Conteudo': [{ json: ctxPdfBase }] },
+    });
+    const j = out[0].json;
+    assert.equal(j.leitura_pdf, 'ocr', `${nome}: o texto não guarda a coluna de cada número`);
+    assert.equal(j.leitura_pdf_motivo, 'colunas-sem-posicao', `${nome}: o veredito tem de dizer POR QUÊ`);
+    assert.ok(!('content_part' in j), `${nome}: o base64 de Preparar Conteudo tem de sobreviver`);
+    assert.match(j.leitura_pdf_explicacao, new RegExp(`as ${larguraEsperada} colunas`), `${nome}: a explicação nomeia a largura medida`);
+  }
+});
+
+test('MEDIDO (P6): tabela em que TODA linha tem a largura da tabela continua como texto', async () => {
+  for (const [nome, texto] of [
+    ['BP de 2 colunas sem linha curta', TEXTOS_COM_POSICAO_PERDIDA.componentes],
+    ['DFC de coluna única', TEXTOS_COM_POSICAO_PERDIDA.dfc],
+    ['balancete de 4 valores por linha', TEXTOS_COM_POSICAO_PERDIDA.balancete],
+  ]) {
+    const out = await run('Recompor Conteudo Extraido', {
+      items: [{ json: { text: texto, numpages: 2 } }],
+      refs: { 'Preparar Conteudo': [{ json: ctxPdfBase }] },
+    });
+    assert.equal(out[0].json.leitura_pdf, 'texto', `${nome}: sem célula em branco, a imagem seria custo à toa`);
+    assert.equal(out[0].json.leitura_pdf_motivo, 'camada-de-texto');
+  }
+});
+
+// ---------------------------------------------------------------------------
 // PLANILHA GRANDE (17/09/2026): o `Extract From File` emite UMA LINHA POR ITEM e o
 // Merge junta com `push.apply` -- acima de ~120 mil itens a pilha estoura
 // ("Maximum call stack size exceeded" em `Juntar Extracao de Conteudo`, execucoes
