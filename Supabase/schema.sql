@@ -12686,6 +12686,7 @@ declare
   v_herdadas           jsonb;
   v_medicao            jsonb;
   v_invalida           jsonb;
+  v_decidiu_pessoa     boolean;
 begin
   -- 0203: o tipo do documento entra na inferência da seção (fn_secao_canonica_da_secao_bruta).
   select d.tipo_taxonomia into v_tipo
@@ -12841,8 +12842,14 @@ begin
     limit 1;
   -- 0231: `false` explícito só cala o sinal quando o TIPO não carrega tabela financeira por natureza (fn_tipo_sem_dado_por_natureza). BALANCO/DRE/... com zero linha
   -- e `false` é a IA dizendo que não leu nada de um documento que devia ter número: falha, com motivo próprio (o prefixo é casado por regex no portal).
+  -- 0231: e NÃO reabre o que uma PESSOA já decidiu. O motivo manda "se de fato não tem número, resolva"; quem resolveu disse que o documento não tem número, e o reenvio
+  -- (que paga de novo porque o tipo não é societário) não pode desfazer isso. Só vale para o ramo novo: `true`/nulo e falha explícita seguem como eram.
+  v_decidiu_pessoa := exists (select 1 from pendencia pe
+                               where pe.documento_id = v_documento_id and pe.tipo = 'extracao_falhou'
+                                 and pe.estado = 'resolvida' and coalesce(pe.resolvida_por, '') <> 'sistema:extracao');
   if p_falha_motivo is not null
-     or (v_count = 0 and (coalesce(p_tem_dado_financeiro, true) or not fn_tipo_sem_dado_por_natureza(v_tipo))) then
+     or (v_count = 0 and (coalesce(p_tem_dado_financeiro, true)
+                          or (not fn_tipo_sem_dado_por_natureza(v_tipo) and not v_decidiu_pessoa))) then
     v_guarda_disparou := true;
     if v_pendencia_id is null then
       insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id, motivo)
@@ -17048,10 +17055,20 @@ CREATE FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) 
       or coalesce((
     select u.depois->>'falha_motivo' is null
        and u.depois->>'tem_dado_financeiro' = 'false'
-       and (u.depois->'medicao'->>'contas_no_documento' is null
-            or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
-                and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0))
-       and fn_tipo_sem_dado_por_natureza((select d.tipo_taxonomia from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id))
+       -- (2a) tipo societário/legal SEM conta contada pela régua, OU uma PESSOA resolveu a extracao_falhou do documento. A decisão
+       -- de pessoa vale com qualquer contagem: a régua conta CPF/OAB/percentual como conta (medido na procuração do book-espelho: 9),
+       -- e foi a pessoa, com o arquivo aberto, que decidiu que não há número. Pagar de novo só repetiria a leitura que ela já julgou.
+       and ((fn_tipo_sem_dado_por_natureza((select d.tipo_taxonomia from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id))
+             and (u.depois->'medicao'->>'contas_no_documento' is null
+                  or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
+                      and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0)))
+            or exists (select 1
+                         from documento_versao dv
+                         join pendencia pe on pe.documento_id = dv.documento_id
+                        where dv.id = p_documento_versao_id
+                          and pe.tipo = 'extracao_falhou'
+                          and pe.estado = 'resolvida'
+                          and coalesce(pe.resolvida_por, '') <> 'sistema:extracao'))
        and not exists (select 1
                          from documento_versao dv
                          join pendencia pe on pe.documento_id = dv.documento_id

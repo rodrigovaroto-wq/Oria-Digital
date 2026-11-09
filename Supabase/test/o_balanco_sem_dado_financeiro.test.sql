@@ -170,6 +170,76 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------
+-- 6b. DECISÃO DE PESSOA NÃO SE DESFAZ NO REENVIO (achado de revisão: DF_AUDITADA/NOTAS_EXPL de produção)
+-- ---------------------------------------------------------------------------
+create or replace function teste_reenvia_0231(p_caso uuid, p_hash text) returns jsonb language sql as $$
+  select fn_registrar_documento(p_caso, 'Beta Ltda.', 'anual', '2025', 'DF_AUDITADA', 0.95, 'nome_arquivo',
+    'supabase_storage', 'bucket/parecer.pdf', 'Parecer.pdf', true, p_hash, 'ok', p_fingerprint_extracao => 'FP-0231') $$;
+
+do $$
+declare
+  v_caso uuid; v_r jsonb;
+begin
+  raise notice '--- 6b. a pessoa resolve a extracao_falhou do parecer sem número ---';
+  v_caso := (fn_upsert_caso('Caso 0231 decisao humana'))::uuid;
+  v_r := teste_reenvia_0231(v_caso, 'H0231-HUM');
+  perform teste_extrai_0231((v_r->>'documento_versao_id')::uuid, false, null, false);
+  perform teste_assert_0231(teste_abertas_0231((v_r->>'documento_versao_id')::uuid) = 1, 'DF_AUDITADA zero linha + false abre (parecer sem número)');
+  update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'usuario:analista-teste'
+   where caso_id = v_caso and tipo = 'extracao_falhou';
+end $$;
+do $$
+declare
+  v_caso uuid; v_r jsonb; v_v1 uuid; v_v2 uuid; v_n int;
+begin
+  v_caso := (fn_upsert_caso('Caso 0231 decisao humana'))::uuid;
+  select dv.id into v_v1 from documento_versao dv join documento d on d.id = dv.documento_id where d.caso_id = v_caso and dv.hash = 'H0231-HUM';
+  perform teste_assert_0231(fn_versao_extracao_concluida(v_v1), 'resolvida por PESSOA: a versão conta como concluída (não paga de novo)');
+  v_r := teste_reenvia_0231(v_caso, 'H0231-HUM');
+  perform teste_assert_0231((v_r->>'reaproveitou_extracao')::boolean, 'o reenvio do mesmo arquivo reaproveita a extração');
+  -- se mesmo assim chegar uma versão nova (arquivo ou prompt mudou) e voltar sem número de novo
+  v_v2 := (teste_doc_0231(v_caso, 'DF_AUDITADA', 'Parecer.pdf', 'H0231-HUM'));
+  perform teste_extrai_0231(v_v2, false, null, false);
+  perform teste_assert_0231(teste_abertas_0231(v_v2) = 0, 'a nova leitura sem número NÃO reabre o que a pessoa resolveu');
+  select count(*) into v_n from pendencia where caso_id = v_caso and tipo = 'extracao_falhou';
+  perform teste_assert_0231(v_n = 1, 'e não cria outra pendência (continua a única, resolvida)', v_n::text);
+end $$;
+do $$
+declare
+  v_caso uuid; v_r jsonb; v_v1 uuid; v_v2 uuid; v_n int;
+begin
+  raise notice '--- 6c. resolvida pelo SISTEMA não é decisão humana ---';
+  v_caso := (fn_upsert_caso('Caso 0231 decisao do sistema'))::uuid;
+  v_r := teste_reenvia_0231(v_caso, 'H0231-SIS');
+  v_v1 := (v_r->>'documento_versao_id')::uuid;
+  perform teste_extrai_0231(v_v1, false, null, false);
+  -- o MESMO registro, só trocando quem resolveu (arranjo à mão): contraste limpo entre sistema e pessoa
+  update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:extracao'
+   where caso_id = v_caso and tipo = 'extracao_falhou';
+  perform teste_assert_0231(not fn_versao_extracao_concluida(v_v1), 'resolvida pelo sistema: a versão NÃO conta como concluída (paga de novo)');
+  update pendencia set resolvida_por = 'usuario:analista-teste' where caso_id = v_caso and tipo = 'extracao_falhou';
+  perform teste_assert_0231(fn_versao_extracao_concluida(v_v1), 'trocado só o autor para uma pessoa: conta como concluída');
+  update pendencia set resolvida_por = 'sistema:extracao' where caso_id = v_caso and tipo = 'extracao_falhou';
+  v_v2 := teste_doc_0231(v_caso, 'DF_AUDITADA', 'Parecer.pdf', 'H0231-SIS');
+  perform teste_extrai_0231(v_v2, false, null, false);
+  perform teste_assert_0231(teste_abertas_0231(v_v2) = 1, 'nova leitura sem número, com a anterior resolvida só pelo sistema: abre de novo');
+end $$;
+do $$
+declare
+  v_caso uuid; v_v1 uuid;
+begin
+  raise notice '--- 6d. a decisão de pessoa vale mesmo com a régua tendo contado conta ---';
+  v_caso := (fn_upsert_caso('Caso 0231 decisao com conta'))::uuid;
+  v_v1 := ((teste_reenvia_0231(v_caso, 'H0231-CNT'))->>'documento_versao_id')::uuid;
+  -- a régua contou 9 (CPF/OAB da procuração do book-espelho, medido em 09/11): leitura zero + false
+  perform fn_registrar_campos_extraidos(v_v1, '[]'::jsonb, 'N0', null, false, '{"contas_no_documento": 9, "linhas_devolvidas": 0}'::jsonb);
+  perform teste_assert_0231(not fn_versao_extracao_concluida(v_v1), 'com 9 contas na régua e sem decisão de ninguém: NÃO concluída (paga de novo)');
+  update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'usuario:analista-teste'
+   where caso_id = v_caso and tipo = 'extracao_falhou';
+  perform teste_assert_0231(fn_versao_extracao_concluida(v_v1), 'resolvida por pessoa: concluída mesmo com 9 contas na régua (não paga de novo)');
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- 7. (g) O BACKFILL. Estado de produção antes da 0231: documentos com extracao_sombra e SEM pendência.
 -- ---------------------------------------------------------------------------
 do $$
@@ -259,3 +329,4 @@ drop function teste_doc_0231(uuid, text, text, text);
 drop function teste_extrai_0231(uuid, boolean, text, boolean);
 drop function teste_abertas_0231(uuid);
 drop function teste_descricao_0231(uuid);
+drop function teste_reenvia_0231(uuid, text);

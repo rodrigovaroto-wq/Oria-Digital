@@ -24,6 +24,13 @@
 --      "a leitura declarou que este documento não tem dado financeiro, mas " (o portal casa esse prefixo por regex: não mude). Os outros ramos ficam como estão. O evento `extracao_sombra` NÃO muda
 --      (falha_motivo continua nulo nesse caso): conferido que isso não quebra fn_versao_extracao_concluida (documento financeiro sem linha não é reaproveitável: a parte nova exige tipo
 --      societário E não há pendência aberta) nem fn_linha_de_base_extracao (não olha o motivo da pendência; a pendência aparece em pendencias_abertas por tipo).
+--   3b. DECISÃO HUMANA NÃO SE DESFAZ NO REENVIO (achado de revisão, reproduzido: DF_AUDITADA/NOTAS_EXPL, 28 em produção, são esse caso). O motivo manda "se de fato não tem número, resolva esta
+--      Decisão de pessoa vale com QUALQUER contagem da régua (ela conta CPF/OAB como conta: 9 na procuração do book-espelho). Regra 2: exigida a
+--      contagem zero também nesse ramo, o assert 6d "concluída mesmo com 9 contas" reprova (run.sh rc 3); religado, rc 0 com 3.268 ok.
+--      pendência"; resolvida, o reenvio pagava de novo (fn_versao_extracao_concluida dava false, tipo não societário) e o Sinal 3 abria OUTRA, porque procurava só estado <> 'resolvida'.
+--      Agora: (i) o ramo novo do Sinal 3 NÃO abre quando o documento tem extracao_falhou resolvida por pessoa (resolvida_por <> 'sistema:extracao'; `true`/nulo e falha explícita não mudam);
+--      (ii) fn_versao_extracao_concluida também vale quando, com o último evento sem falha, false e sem conta contada, o documento tem extracao_falhou resolvida por pessoa e nenhuma aberta.
+--      Resolvida pelo SISTEMA (reextração com linha) NÃO é decisão humana. Societário inalterado.
 --   4. BACKFILL, pelo MESMO predicado: versão mais nova do documento; último evento sem falha e com tem_dado_financeiro = 'false'; zero linha na versão; sem extracao_falhou não resolvida;
 --      not fn_tipo_sem_dado_por_natureza(tipo). Idempotente (o `not exists` de pendência não resolvida com o mesmo motivo). Um evento `extracao_pendencia_backfill` com a contagem. Esperado em
 --      produção: 42. NO BANCO DE TESTE: 0 na aplicação da migration (banco vazio) e 2 na reaplicação do teste (DRE e MAPA_DIVIDA do cenário; as fixtures dos outros testes não caem no predicado), 0 na seguinte.
@@ -31,7 +38,9 @@
 --      por migration (0183). Medido em produção em 09/11/2026: 42 alvos (41 de antes + 1 do lote de medição do mesmo dia), 0 resolvidos por pessoa.
 --      Regra 2 desta exclusão: trocada por `and false`, o run.sh reprova (o assert "o backfill abre só para DRE e MAPA_DIVIDA" vê DRE,DRE,MAPA_DIVIDA; rc 3). Religada: rc 0.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/o_balanco_sem_dado_financeiro.test.sql — 33 asserts (contagem de execuções, medida pelo `ok` no log do run.sh inteiro, rc 0). Medido em 09/11/2026 com `raise exception` trocado por `raise warning` (cópia temporária, restaurada), o log lido atrás de FALHOU:
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/o_balanco_sem_dado_financeiro.test.sql — 42 asserts (contagem de execuções, medida pelo `ok` no log do run.sh inteiro, rc 0). Medido em 09/11/2026 com `raise exception` trocado por `raise warning` (cópia temporária, restaurada), o log lido atrás de FALHOU:
+-- Os números abaixo de 11/19 foram medidos quando o arquivo tinha 33 asserts; com os 9 da decisão de pessoa (6b/6c) a medição desta parte é a das duas linhas seguintes, sobre 42.
+-- DECISÃO DE PESSOA (3b), medido sobre os 42: exclusão do Sinal 3 desligada (`v_decidiu_pessoa := false and ...`, marcador da sonda mantido): 2 reprovam (nova leitura não reabre; não cria outra pendência). Parte de fn_versao_extracao_concluida desligada (`or false and exists`): 3 reprovam (concluída por pessoa; reenvio reaproveita; trocado o autor para pessoa). Religadas: 0.
 -- Com a condição ANTIGA do Sinal 3 religada (mantido o marcador da sonda em código morto): 11 dos 33 reprovam. Com a condição antiga SEM o marcador, a sonda (instalacao.test.sql) já reprova antes, 1 assert, rc 3.
 -- Com fn_tipo_sem_dado_por_natureza devolvendo sempre true: 19 dos 33 reprovam, mais 3 do reextracao.test.sql (0230: BALANCO, sem tipo e CONTINGENCIAS passam a ser reaproveitados). Controle (migration intacta): 0. Conferido em cada rodada que a migration aplicou e que o teste aparece no log.
 -- =============================================================================
@@ -75,10 +84,20 @@ as $$
       or coalesce((
     select u.depois->>'falha_motivo' is null
        and u.depois->>'tem_dado_financeiro' = 'false'
-       and (u.depois->'medicao'->>'contas_no_documento' is null
-            or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
-                and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0))
-       and fn_tipo_sem_dado_por_natureza((select d.tipo_taxonomia from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id))
+       -- (2a) tipo societário/legal SEM conta contada pela régua, OU uma PESSOA resolveu a extracao_falhou do documento. A decisão
+       -- de pessoa vale com qualquer contagem: a régua conta CPF/OAB/percentual como conta (medido na procuração do book-espelho: 9),
+       -- e foi a pessoa, com o arquivo aberto, que decidiu que não há número. Pagar de novo só repetiria a leitura que ela já julgou.
+       and ((fn_tipo_sem_dado_por_natureza((select d.tipo_taxonomia from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id))
+             and (u.depois->'medicao'->>'contas_no_documento' is null
+                  or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
+                      and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0)))
+            or exists (select 1
+                         from documento_versao dv
+                         join pendencia pe on pe.documento_id = dv.documento_id
+                        where dv.id = p_documento_versao_id
+                          and pe.tipo = 'extracao_falhou'
+                          and pe.estado = 'resolvida'
+                          and coalesce(pe.resolvida_por, '') <> 'sistema:extracao'))
        and not exists (select 1
                          from documento_versao dv
                          join pendencia pe on pe.documento_id = dv.documento_id
@@ -126,6 +145,7 @@ declare
   v_herdadas           jsonb;
   v_medicao            jsonb;
   v_invalida           jsonb;
+  v_decidiu_pessoa     boolean;
 begin
   -- 0203: o tipo do documento entra na inferência da seção (fn_secao_canonica_da_secao_bruta).
   select d.tipo_taxonomia into v_tipo
@@ -281,8 +301,14 @@ begin
     limit 1;
   -- 0231: `false` explícito só cala o sinal quando o TIPO não carrega tabela financeira por natureza (fn_tipo_sem_dado_por_natureza). BALANCO/DRE/... com zero linha
   -- e `false` é a IA dizendo que não leu nada de um documento que devia ter número: falha, com motivo próprio (o prefixo é casado por regex no portal).
+  -- 0231: e NÃO reabre o que uma PESSOA já decidiu. O motivo manda "se de fato não tem número, resolva"; quem resolveu disse que o documento não tem número, e o reenvio
+  -- (que paga de novo porque o tipo não é societário) não pode desfazer isso. Só vale para o ramo novo: `true`/nulo e falha explícita seguem como eram.
+  v_decidiu_pessoa := exists (select 1 from pendencia pe
+                               where pe.documento_id = v_documento_id and pe.tipo = 'extracao_falhou'
+                                 and pe.estado = 'resolvida' and coalesce(pe.resolvida_por, '') <> 'sistema:extracao');
   if p_falha_motivo is not null
-     or (v_count = 0 and (coalesce(p_tem_dado_financeiro, true) or not fn_tipo_sem_dado_por_natureza(v_tipo))) then
+     or (v_count = 0 and (coalesce(p_tem_dado_financeiro, true)
+                          or (not fn_tipo_sem_dado_por_natureza(v_tipo) and not v_decidiu_pessoa))) then
     v_guarda_disparou := true;
     if v_pendencia_id is null then
       insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id, motivo)
@@ -447,12 +473,18 @@ insert into instalacao_requisito
   ('tipo_sem_dado_exclui_contingencias', '0231', 'corpo', 'fn_tipo_sem_dado_por_natureza', 't.codigo <> ''CONTINGENCIAS''', null,
    'CONTINGENCIAS é da categoria Societário/Legal mas traz valor de causa e provisão. Sem a exclusão, zero linha + false nele fica calado e o reenvio o pula.',
    'importante', 1061),
-  ('extracao_concluida_pergunta_ao_tipo', '0231', 'corpo', 'fn_versao_extracao_concluida', 'and fn_tipo_sem_dado_por_natureza((select d.tipo_taxonomia', null,
+  ('extracao_concluida_pergunta_ao_tipo', '0231', 'corpo', 'fn_versao_extracao_concluida', 'fn_tipo_sem_dado_por_natureza((select d.tipo_taxonomia', null,
    'fn_versao_extracao_concluida pergunta o tipo à função única. Corpo anterior = duas cópias da mesma conta, que divergem sem erro.',
    'importante', 1062),
   ('falha_do_documento_financeiro_sem_dado', '0231', 'corpo', 'fn_registrar_campos_extraidos', 'not fn_tipo_sem_dado_por_natureza(v_tipo)', null,
    'O Sinal 3 abre extracao_falhou para zero linha + tem_dado_financeiro = false quando o tipo não é societário. Corpo anterior = BALANCO/DRE sem linha e com false (41 em produção, 09/11/2026) ficam sem pendência nenhuma.',
-   'importante', 1063)
+   'importante', 1063),
+  ('falha_nao_reabre_decisao_de_pessoa', '0231', 'corpo', 'fn_registrar_campos_extraidos', 'and not v_decidiu_pessoa', null,
+   'O Sinal 3 não reabre a extracao_falhou que uma pessoa resolveu (DF_AUDITADA/NOTAS_EXPL, 28 em produção em 09/11/2026). Corpo sem isto = a decisão do analista é desfeita a cada reenvio.',
+   'importante', 1064),
+  ('extracao_concluida_respeita_decisao_de_pessoa', '0231', 'corpo', 'fn_versao_extracao_concluida', 'and pe.estado = ''resolvida''', null,
+   'A versão cujo documento teve a extracao_falhou resolvida por pessoa (e nenhuma aberta) conta como concluída: o reenvio não paga de novo o que o analista decidiu que não tem número.',
+   'importante', 1065)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
@@ -460,7 +492,7 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = '0231', revisado_em = current_date,
-       observacao = 'A 0231 cria fn_tipo_sem_dado_por_natureza, reemite fn_versao_extracao_concluida (usa a função) e fn_registrar_campos_extraidos INTEIRA (Sinal 3: zero linha com tem_dado_financeiro = false abre extracao_falhou para tipo não societário), com backfill idempotente; 4 requisitos novos e 1 reapontado.'
+       observacao = 'A 0231 cria fn_tipo_sem_dado_por_natureza, reemite fn_versao_extracao_concluida (usa a função) e fn_registrar_campos_extraidos INTEIRA (Sinal 3: zero linha com tem_dado_financeiro = false abre extracao_falhou para tipo não societário), com backfill idempotente; 6 requisitos novos e 1 reapontado.'
  where id = true;
 
 commit;
