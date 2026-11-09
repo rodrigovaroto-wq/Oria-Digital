@@ -492,6 +492,14 @@ const REGRAS: RegraDeMotivo[] = [
   { inicio: /^uma linha sozinha j[áa] passa do teto de sa[íi]da/, acao: "resposta_truncada", vista: fixa("Uma linha sozinha já passa do teto de saída do modelo; a resposta deste bloco pode ter vindo cortada.") },
   { inicio: /^Planilha maior que o teto de envio/, acao: "planilha_cortada",
     vista: (t) => primeiro(/^Planilha maior que o teto de envio: (.*?)\. /.exec(t), (m) => `Planilha maior que o teto de envio: ${m[1]}; a extração está incompleta.`, "Planilha maior que o teto de envio; a extração está incompleta.") },
+  // As três frases do Agrupar Linhas XLSX desde que ele lê TODAS as abas (3075c8d, 09/11/2026). Sem
+  // estas regras as três caíam em "não foi possível classificar a causa" (medido pela revisão).
+  { inicio: /^Aba ".*?": Planilha maior que o teto de envio/, acao: "planilha_cortada",
+    vista: (t) => primeiro(/^Aba "(.*?)": Planilha maior que o teto de envio/.exec(t), (m) => `A aba "${m[1]}" é maior que o teto de envio; a extração dela está incompleta.`, "Uma aba é maior que o teto de envio; a extração está incompleta.") },
+  { inicio: /^A aba ".*?" NAO foi lida pelo extrator/, acao: "xlsx_varias_abas",
+    vista: (t) => primeiro(/^A aba "(.*?)" NAO foi lida/.exec(t), (m) => `A aba "${m[1]}" não foi lida; o que ela contém não chegou ao banco.`, "Uma aba não foi lida; o que ela contém não chegou ao banco.") },
+  { inicio: /^O arquivo \.xlsx tem \d+ planilha\(s\) nos bytes/, acao: "xlsx_varias_abas",
+    vista: (t) => primeiro(/^O arquivo \.xlsx tem (\d+) planilha\(s\) nos bytes, mas o workbook listou so (\d+)/.exec(t), (m) => `A planilha tem ${m[1]} abas e só ${m[2]} foram lidas.`, "Algumas abas da planilha não foram lidas.") },
   { inicio: /^O arquivo \.xlsx tem \d+ abas/, acao: "xlsx_varias_abas",
     vista: (t) => primeiro(/^O arquivo \.xlsx tem (\d+) abas/.exec(t), (m) => `A planilha tem ${m[1]} abas e só a primeira foi lida.`, "A planilha tem várias abas e só a primeira foi lida.") },
   { inicio: /^A extra[çc]ao NATIVA/, acao: "falha_do_sistema", vista: fixa("A leitura nativa do arquivo falhou no sistema; nenhum dado deste documento chegou ao banco.") },
