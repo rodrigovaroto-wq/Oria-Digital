@@ -387,6 +387,48 @@ test('balancete: documento sem as quatro colunas ou entrada inválida não repro
   assert.deepEqual(conferirBalanceteLinhaALinha(null), []);
 });
 
+// FIXTURE SINTÉTICA (regra 4): números inventados aqui, não copiados do cliente. Reproduz o
+// ARRANJO medido na execução 9601 (balancete_janaago26.pdf lido por imagem, P6b): o CRÉDITO sai
+// impresso NEGATIVO, devedora fecha com SAt = SA + D + C (157/157 no ativo) e credora com
+// SAt = SA - D - C (284/289 no resto), com contas de SA = 0 (onde o ramo "trocada" casava por
+// acaso e abria a pendência falsa). Não prova os 441/446 do documento real, só o arranjo.
+const sinteticoCreditoNegativo = (extra = []) => {
+  const devedoras = Array.from({ length: 12 }, (_, i) => {
+    const sa = i % 3 === 0 ? 0 : 1000 * (i + 1) + 250.5;
+    const d = 5000 + 731.25 * i;
+    const c = -(2000 + 117.4 * i);
+    return [`DEVEDORA ${i}`, [sa, d, c, sa + d + c]];
+  });
+  const credoras = Array.from({ length: 12 }, (_, i) => {
+    const sa = i % 4 === 0 ? 0 : 90000 + 1310.7 * i;
+    const d = 3000 + 411.9 * i;
+    const c = -(8000 + 903.3 * i);
+    return [`CREDORA ${i}`, [sa, d, c, sa - d - c]];
+  });
+  return [...devedoras, ...credoras, ...extra].flatMap(([chave, v], i) =>
+    QUATRO.map((pc, j) => linha(9000 + i * 4 + j, chave, pc, v[j], { secao: 'Balancete', origem_pagina: 1 })));
+};
+
+test('balancete: crédito impresso NEGATIVO (SA+D+C devedora, SA-D-C credora, incl. SA=0) fecha, sem pendência', () => {
+  assert.deepEqual(conferirBalanceteLinhaALinha(sinteticoCreditoNegativo()), []);
+});
+
+test('balancete: com crédito negativo, a conta que não fecha em nenhuma notação continua contando como não fechada', () => {
+  // 12 das 24 não fecham (50% > 20%): o gate não cala tudo.
+  const quebradas = Array.from({ length: 12 }, (_, i) => [`QUEBRADA ${i}`, [100, 5000 + i, -2000, 99999 + i]]);
+  const problemas = conferirBalanceteLinhaALinha(sinteticoCreditoNegativo(quebradas));
+  assert.equal(problemas.length, 1);
+  assert.match(problemas[0], /das 36 conta\(s\) com movimento, 24 fecham como rotuladas, 0 fecham só com a troca/);
+  assert.match(problemas[0], /e 12 não fecham de jeito nenhum/);
+});
+
+test('balancete: crédito POSITIVO não abre o gate (SA+D+C com C>0 não vira rotulada)', () => {
+  // SAt = SA + D + C só fecha com C positivo se o documento estiver errado: tem de reprovar.
+  const campos = Array.from({ length: 12 }, (_, i) => [`POS ${i}`, [100, 5000 + i, 2000, 100 + 5000 + i + 2000]])
+    .flatMap(([chave, v], i) => QUATRO.map((pc, j) => linha(i * 4 + j, chave, pc, v[j], { secao: 'Balancete', origem_pagina: 1 })));
+  assert.equal(conferirBalanceteLinhaALinha(campos).length, 1);
+});
+
 // A função é embutida por toString() e toString() NÃO leva o escopo do módulo: os 4
 // helpers extraídos (Sonar S3776) têm de ir junto, como declarações irmãs. Este
 // teste monta o escopo SÓ com o que o gerador embute; helper que faltasse lá
