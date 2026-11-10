@@ -1173,6 +1173,23 @@ supabase db execute --file Supabase/migrations/0232_a_fila_de_reprocesso_que_o_p
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0232' and not presente;   -- ZERO linhas
 #   select count(*), count(*) filter (where reprocessavel) from fn_fila_de_reprocesso('<caso_id>');   -- em produção, só ~11 de 517 falhas abertas tinham o objeto (10/11/2026)
 
+# A 0233 reemite fn_versao_extracao_concluida (a pergunta única do reenvio e da fila de reprocesso): a versão COM linha cujo último evento extracao_sombra traz `medicao.falha_transitoria_esgotada = true` (o n8n P8 grava), com `extracao_falhou` aberta e SEM linha aceita por humano deixa de ser reaproveitada e o reenvio re-extrai; com aceite humano continua reaproveitando (teto: re-extrair tira da Modelagem a linha aceita). Campo ausente = comportamento de antes.
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, upsert dos requisitos). Sem backfill. NÃO exige republicar o n8n.
+# >>> Teste: Supabase/test/reextracao_transitoria.test.sql.
+supabase db execute --file Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0233' and not presente;   -- ZERO linhas
+#   select count(*) from evento_auditoria where acao = 'extracao_sombra' and depois->'medicao' ? 'falha_transitoria_esgotada';   -- 0 até o n8n P8 ser republicado (medido 10/11/2026: 0 de 2.064)
+
+# A 0234 corrige o período lido pela checagem: (A) fn_coluna_periodo_do_ano passa a dar a coluna "Saldo Final/atual" ao ano da referência do documento e a "Saldo Inicial/anterior" ao ano - 1 (só em documento não parcial) quando nenhuma coluna traz o ano no texto (o "sem período par" do Fw Valtra); (B) fn_periodos_equivalentes passa a declarar o mesmo exercício quando o ano mais recente é o mesmo, um conjunto contém o outro e a união é contígua (o "periodo_incorreto" falso do comparativo "multi 24,25"). Cria fn_resolver_periodo_incorreto_falso. O backfill (no próprio arquivo) resolve as pendências periodo_incorreto falsas com resolvida_por = 'sistema:0234' (só 'aberta', origem diagnostico) e roda fn_reconciliar_caso + fn_recomputar_completude nos mandatos com "sem período par" aberto.
+# >>> Rodar COMO `postgres`; reaplicável. O backfill reconcilia de novo os mandatos com "sem período par" aberto (3 em produção em 10/11/2026): se estourar o tempo do editor, rode o arquivo por `supabase db execute`/psql.
+# >>> Teste: Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql.
+supabase db execute --file Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0234' and not presente;   -- ZERO linhas
+#   select count(*) from pendencia where tipo = 'periodo_incorreto' and resolvida_por = 'sistema:0234';   -- 35 a 41 esperados (medido por simulação em 10/11/2026: 35 pela regra nova + 6 já equivalentes)
+#   select count(*) from pendencia where tipo = 'precondicao_nao_satisfeita' and estado <> 'resolvida' and descricao ilike '%sem período par%';   -- era 8; os 2 do Canastra sintético têm outra causa
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

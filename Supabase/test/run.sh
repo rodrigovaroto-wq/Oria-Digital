@@ -970,6 +970,16 @@ echo "== 0232 — a fila de reprocesso: o que o portal lista com o botão (falha
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fila_de_reprocesso.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo
+echo "== 0233 — a falha transitória COM linha que o reenvio não relia (campo do n8n P8, falha aberta, sem aceite humano)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/reextracao_transitoria.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo
+echo "== 0234 — o período que o documento tinha e a checagem não lia (Saldo Final = ano da referência; comparativo = mesmo exercício; backfill sistema:0234)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \

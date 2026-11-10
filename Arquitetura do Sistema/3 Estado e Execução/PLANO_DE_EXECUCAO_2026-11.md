@@ -45,6 +45,14 @@ A semana 1 não fechou no prazo: P4, P5 e P1d ficaram para trás porque a P16, p
 
 Já medido para a P1d(b) em produção (09/11): uma recusa de orçamento grava UMA linha por documento do lote (44 linhas no lote de 44 de 13/09, 4 vezes). As execuções da P5 (n8n 7859, 7883 e 7886, de 17/09) já foram podadas, então o documento exato não pode ser recuperado.
 
+### Andamento em 10/11/2026 (sessão 126, PAUSADA pelo dono)
+
+- **P7b** escrita, revisada e comitada (0232 + portal). NÃO aplicada nem publicada.
+- **P8** n8n comitada (reserva `gpt-4o`, registro por tentativa); banco na 0233, comitada SEM revisão independente. Falta republicar e provar a reserva ao vivo (TPM do 4o na conta não conferido).
+- **P9** n8n comitada ("Método Indireto"); banco na 0234, comitada SEM revisão independente.
+- **P10** não iniciada: depende do merge, da aplicação da 0232–0234 e da republicação.
+- A ordem exata para retomar está no topo do `ESTADO.md` (sessão 126).
+
 ### A linha de base da P4, medida em produção em 09/11/2026 (`Supabase/test/linha-de-base-extracao.sql`)
 
 2.053 documentos em 79 mandatos. O corpus do plano (versão mais nova de cada documento):

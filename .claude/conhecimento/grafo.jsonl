@@ -171,6 +171,7 @@
 {"k":"n","id":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","t":"arquivo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","txt":"mutuos_retrato_de_uma_data.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_balanco_sem_dado_financeiro.test.sql","t":"arquivo","f":"Supabase/test/o_balanco_sem_dado_financeiro.test.sql","txt":"o_balanco_sem_dado_financeiro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","t":"arquivo","f":"Supabase/test/o_dial_e_o_anon.test.sql","txt":"o_dial_e_o_anon.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","t":"arquivo","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","txt":"o_periodo_que_a_checagem_nao_lia.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","t":"arquivo","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","txt":"o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/operacao.test.sql","t":"arquivo","f":"Supabase/test/operacao.test.sql","txt":"operacao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/original_apagado.test.sql","t":"arquivo","f":"Supabase/test/original_apagado.test.sql","txt":"original_apagado.test.sql"}
@@ -193,6 +194,7 @@
 {"k":"n","id":"arquivo:Supabase/test/reconciliacao_motivo_precondicao.test.sql","t":"arquivo","f":"Supabase/test/reconciliacao_motivo_precondicao.test.sql","txt":"reconciliacao_motivo_precondicao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/reconferir.test.sql","t":"arquivo","f":"Supabase/test/reconferir.test.sql","txt":"reconferir.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/reextracao.test.sql","t":"arquivo","f":"Supabase/test/reextracao.test.sql","txt":"reextracao.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/reextracao_transitoria.test.sql","t":"arquivo","f":"Supabase/test/reextracao_transitoria.test.sql","txt":"reextracao_transitoria.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/resumo_oficial.test.sql","t":"arquivo","f":"Supabase/test/resumo_oficial.test.sql","txt":"resumo_oficial.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/revisar_documento_sem_tipo.test.sql","t":"arquivo","f":"Supabase/test/revisar_documento_sem_tipo.test.sql","txt":"revisar_documento_sem_tipo.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/rotulo_contraditorio.test.sql","t":"arquivo","f":"Supabase/test/rotulo_contraditorio.test.sql","txt":"rotulo_contraditorio.test.sql"}
@@ -412,7 +414,7 @@
 {"k":"n","id":"fn:fn_coluna_e_movimento","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"coluna e movimento"}
 {"k":"n","id":"fn:fn_coluna_e_saldo","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"coluna e saldo"}
 {"k":"n","id":"fn:fn_coluna_entidade","t":"fn","f":"Supabase/migrations/0030_entidade_e_periodo_canonicos.sql","txt":"coluna entidade"}
-{"k":"n","id":"fn:fn_coluna_periodo_do_ano","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"coluna periodo do ano"}
+{"k":"n","id":"fn:fn_coluna_periodo_do_ano","t":"fn","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"coluna periodo do ano"}
 {"k":"n","id":"fn:fn_combinado_estrutural_apto","t":"fn","f":"Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql","txt":"combinado estrutural apto"}
 {"k":"n","id":"fn:fn_conexao_de_servico","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"conexao de servico"}
 {"k":"n","id":"fn:fn_conferir_arvore","t":"fn","f":"Supabase/migrations/0133_a_secao_que_nao_fecha.sql","txt":"conferir arvore"}
@@ -551,7 +553,7 @@
 {"k":"n","id":"fn:fn_periodo_por_extenso","t":"fn","f":"Supabase/migrations/0122_pergunta_em_portugues.sql","txt":"periodo por extenso"}
 {"k":"n","id":"fn:fn_periodos_compativeis","t":"fn","f":"Supabase/migrations/0022_periodo_por_ano_e_guardas.sql","txt":"periodos compativeis"}
 {"k":"n","id":"fn:fn_periodos_compativeis_array","t":"fn","f":"Supabase/migrations/0152_a_reconciliacao_do_lote.sql","txt":"periodos compativeis array"}
-{"k":"n","id":"fn:fn_periodos_equivalentes","t":"fn","f":"Supabase/migrations/0022_periodo_por_ano_e_guardas.sql","txt":"periodos equivalentes"}
+{"k":"n","id":"fn:fn_periodos_equivalentes","t":"fn","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"periodos equivalentes"}
 {"k":"n","id":"fn:fn_pessoa_decidiu_sem_dado","t":"fn","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","txt":"pessoa decidiu sem dado"}
 {"k":"n","id":"fn:fn_pode_criar_caso","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"pode criar caso"}
 {"k":"n","id":"fn:fn_pode_escrever_caso","t":"fn","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","txt":"pode escrever caso"}
@@ -596,6 +598,7 @@
 {"k":"n","id":"fn:fn_registrar_uso_lote","t":"fn","f":"Supabase/migrations/0156_o_lote_existe_antes_de_terminar.sql","txt":"registrar uso lote"}
 {"k":"n","id":"fn:fn_rejeitar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"rejeitar pendencia"}
 {"k":"n","id":"fn:fn_resolver_linha_exigida_superada","t":"fn","f":"Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql","txt":"resolver linha exigida superada"}
+{"k":"n","id":"fn:fn_resolver_periodo_incorreto_falso","t":"fn","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"resolver periodo incorreto falso"}
 {"k":"n","id":"fn:fn_ressalvar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"ressalvar pendencia"}
 {"k":"n","id":"fn:fn_resumo_anexar","t":"fn","f":"Supabase/migrations/0207_o_resumo_do_arquivo_oficial.sql","txt":"resumo anexar"}
 {"k":"n","id":"fn:fn_resumo_concluir","t":"fn","f":"Supabase/migrations/0207_o_resumo_do_arquivo_oficial.sql","txt":"resumo concluir"}
@@ -650,7 +653,7 @@
 {"k":"n","id":"fn:fn_veredito_producao","t":"fn","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","txt":"veredito producao"}
 {"k":"n","id":"fn:fn_versao_atual","t":"fn","f":"Supabase/migrations/0009_reconciliacao_e3.sql","txt":"versao atual"}
 {"k":"n","id":"fn:fn_versao_com_extracao","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"versao com extracao"}
-{"k":"n","id":"fn:fn_versao_extracao_concluida","t":"fn","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","txt":"versao extracao concluida"}
+{"k":"n","id":"fn:fn_versao_extracao_concluida","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao extracao concluida"}
 {"k":"n","id":"fn:fn_vincular_linha_premissa","t":"fn","f":"Supabase/migrations/0100_papel_por_secao.sql","txt":"vincular linha premissa"}
 {"k":"n","id":"migration:0001","t":"migration","f":"Supabase/migrations/0001_schema_fatia1.sql","txt":"schema fatia1"}
 {"k":"n","id":"migration:0002","t":"migration","f":"Supabase/migrations/0002_seed_taxonomia_e_dial.sql","txt":"seed taxonomia e dial"}
@@ -826,6 +829,8 @@
 {"k":"n","id":"migration:0230","t":"migration","f":"Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql","txt":"o documento sem dado financeiro pago a cada reenvio"}
 {"k":"n","id":"migration:0231","t":"migration","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","txt":"o balanco sem dado financeiro que ninguem via"}
 {"k":"n","id":"migration:0232","t":"migration","f":"Supabase/migrations/0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql","txt":"a fila de reprocesso que o portal nao tinha"}
+{"k":"n","id":"migration:0233","t":"migration","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"a falha transitoria com linha que o reenvio nao relia"}
+{"k":"n","id":"migration:0234","t":"migration","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"o periodo que o documento tinha e a checagem nao lia"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1740,6 +1745,15 @@
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_tem_papel","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":228}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":12}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":146}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":62}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":175}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":119}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":66}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":13}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":13}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_resolver_periodo_incorreto_falso","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":10}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":57}
 {"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":146}
 {"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":94}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"Supabase/test/operacao.test.sql","l":35}
@@ -1896,6 +1910,13 @@
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao.test.sql","l":38}
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/reextracao.test.sql","l":326}
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/reextracao.test.sql","l":303}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/reextracao_transitoria.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"Supabase/test/reextracao_transitoria.test.sql","l":136}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/reextracao_transitoria.test.sql","l":148}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/reextracao_transitoria.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/reextracao_transitoria.test.sql","l":37}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao_transitoria.test.sql","l":65}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/reextracao_transitoria.test.sql","l":1}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_anexar","f":"Supabase/test/resumo_oficial.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"Supabase/test/resumo_oficial.test.sql","l":80}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_iniciar","f":"Supabase/test/resumo_oficial.test.sql","l":66}
@@ -2821,6 +2842,10 @@
 {"k":"e","de":"migration:0231","rel":"CRIA","pa":"fn:fn_tipo_sem_dado_por_natureza","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","l":53}
 {"k":"e","de":"migration:0231","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","l":104}
 {"k":"e","de":"migration:0232","rel":"CRIA","pa":"fn:fn_fila_de_reprocesso","f":"Supabase/migrations/0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql","l":44}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":49}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":85}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":149}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_resolver_periodo_incorreto_falso","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":178}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

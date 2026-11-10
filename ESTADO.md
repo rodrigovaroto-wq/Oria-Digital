@@ -1,9 +1,59 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 126 (10/11/2026) — P7b: fila de reprocesso com botão no portal (em andamento)
+## SESSÃO 126 (10/11/2026) — P7b, P8 e P9 escritas; PAUSADA a pedido do dono (créditos) antes da revisão da 0233/0234, da publicação e da P10
 
-> **Migration mais nova: `0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql` — ESCRITA, NÃO aplicada em produção.**
-> - Medido em produção antes (10/11, somente leitura): 517 documentos com `extracao_falhou` aberta; os 517 têm `arquivo_ref`, mas só 11 têm o objeto no bucket `documentos`; 70 têm linha gravada.
+> **Migration mais nova: `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — ESCRITA, NÃO aplicada em produção. 0232, 0233 e 0234 estão TODAS fora de produção.**
+> - Branch `claude/confident-bardeen-15mjip`. Nada mergeado no `main`, nada republicado no n8n, nada publicado no portal, P10 não rodou.
+> - Acesso a produção conferido nesta sessão: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_URL`, `N8N_BASE_URL`, `N8N_API_KEY`, `VERCEL_TOKEN` estão no ambiente (só os nomes foram lidos). Leitura de produção feita pela API de gerenciamento (`POST https://api.supabase.com/v1/projects/<ref>/database/query`, `read_only:true`; o ref sai de `SUPABASE_URL`). O MCP do Supabase (notebooks) recusa permissão.
+
+### Ordem para retomar (nesta ordem)
+
+1. **Revisão independente da 0233 e da 0234 — INTERROMPIDA no meio** (o revisor foi parado sem relatório). Rodar de novo o `revisor-defeito-silencioso` sobre o commit "0233 + 0234" (ver abaixo), com estes riscos já listados para ele olhar: (a) 0233: reenvio em laço / versão nova que falha de novo; coerência com `fn_registrar_documento` (procura QUALQUER versão com mesmo hash+fingerprint concluída) e com a fila da 0232; o corpo partiu da 0231 — conferir que nada da 0231 se perdeu. (b) 0234: TODOS os chamadores de `fn_coluna_periodo_do_ano` e de `fn_periodos_equivalentes` (a regra nova de equivalência vale em todo lugar que usa a função, não só no diagnóstico: reaproveitamento de pendência de reconciliação por período, desempate, fusão); a regra "mesmo ano mais recente + contenção + união contígua" esconder divergência verdadeira; DRE "Saldo anterior" (resultado do ano anterior) tratado como abertura de balanço; backfill reaberto pelo diagnóstico seguinte; backfill tocar decisão humana.
+2. Corrigir o que a revisão achar; `run.sh` oficial verde; comitar a correção.
+3. **Abrir o PR** da branch para o `main` (ainda NÃO aberto). Assinar, esperar CI e Sonar verdes, desassinar (CLAUDE.md, "Acompanhar PR"). **O merge é do dono.**
+4. Depois do merge, **aplicar em produção, nesta ordem: 0232, 0233, 0234** (como `postgres`; a 0234 reconcilia 3 mandatos e pode estourar o tempo do SQL Editor: usar a API de gerenciamento ou psql). Antes de cada uma: sonda e contagem de mandatos; depois: `select chave, presente, detalhe from fn_instalacao_conferir() where not presente;` vazio. Conferir na 0234: `count(*) from pendencia where resolvida_por = 'sistema:0234'` (esperado 35 a 41) e as "sem período par" abertas (8 antes; esperado cair para 2 — as do Canastra sintético têm outra causa).
+5. **A 0232 tem de estar no banco ANTES do deploy do portal**: sem ela a aba Documentos mostra "Não foi possível ler a fila" em TODO mandato.
+6. **Republicar a ingestão** a partir do `main` atualizado (`N8N/republicar.sh`, que usa `preparar-republicacao.mjs` e `conferir-publicado.mjs`; nunca `PUT` direto). No editor, conferir: `Juntar Tentativas` com 5 entradas; `IA Extrair (tentativa 5)` com `onError: continueRegularOutput`, `retryOnFail`, a credencial OpenAI e `neverError`/batching iguais aos outros estágios.
+7. **Risco não provado da P8, conferir antes da P10:** o limite de TPM do `gpt-4o` na conta OpenAI. Os 500 mil TPM declarados são do `gpt-5.6-luna`; se o 4o estiver no Tier 1 (30 mil TPM), a chamada de reserva (~20 mil de entrada + 16 mil de saída reservados) toma 429 sempre. Também não provado: que o `gpt-4o` aceita o `extractionSchema` em modo strict.
+8. Deploy do portal (depois da 0232) e prova no navegador: aba Documentos de um mandato com falha aberta → "Fila de reprocesso" → Reprocessar → acompanhamento até "lido". Em produção só 11 documentos têm o original no bucket.
+9. **P10** (autorizada, D6: teto US$ 5 por book; o código usa `TETO_EXECUCAO_USD` = US$ 3 por execução): rodada de regressão paga sobre o corpus da P4 (Valtra, Krauspenhar, AMO + sintéticos Canastra, Distress, Espelho, Vertentes), comparar com a tabela da P4 (`Supabase/test/linha-de-base-extracao.sql`) documento a documento. Medir também quantas segundas passadas foram pagas (pendência da S125) e quantos documentos usaram a reserva (`resumo` em `lote_execucao`: `documentos_com_reserva`).
+
+### O que foi feito (comitado e enviado na branch)
+
+**P7b — fila de reprocesso com botão (`ff603ba`, `43aa2cf`).**
+- Medido em produção antes (10/11, só leitura): 517 documentos com `extracao_falhou` aberta; os 517 têm `arquivo_ref`, mas só **11** têm o objeto no bucket `documentos` (defeito jul–out/2026); 70 têm linha gravada.
+- `0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql`: `fn_fila_de_reprocesso(caso)` (SECURITY INVOKER; motivo `sem_original` ou `reaproveitaria`, no MESMO predicado de `fn_registrar_documento`: qualquer versão do caso com mesmo hash, fingerprint vigente e concluída). Teste `fila_de_reprocesso.test.sql`, 43 asserts; voltar para "só a versão mais nova" reprova 5.
+- Portal: bloco "Fila de reprocesso" na aba Documentos (`components/fila-de-reprocesso.tsx`); `POST /api/casos/[id]/reprocessar` (papel → token → baixa o original com o cliente do usuário → Form do n8n; corta pelo orçamento do lote de `N8N/lib/custo.mjs`; recusa "já está em leitura" por 32,5 min); `GET /api/casos/[id]/reprocessar/status` acompanha POR DOCUMENTO (só "lido" com versão nova E evento `extracao_sombra`; recusa do n8n mostra a mensagem dele e "Nada foi lido"). Suíte `portal/scripts/verificar-fila-de-reprocesso.mts`, 34 asserts (no CI e em `.claude/COMANDOS-CANONICOS.md`).
+- Revisão independente: 2 ALTO (a fila olhava só a versão mais nova; o status contava `documento.criado_em` e nunca via o reprocesso) e 3 MÉDIO, corrigidos antes do commit.
+- Limites declarados: falha de OUTRO envio no mesmo mandato depois de `desde` pode aparecer como recusa se nada deste pedido foi lido; `rejeitada` conta como aberta (mesmo predicado de `fn_versao_extracao_concluida`).
+
+**P8 no n8n — reserva `gpt-4o` e registro por tentativa (`d4b38b5`).**
+- Decisão do dono (10/11): o alternativo é OUTRO MODELO DA OPENAI (não Gemini). Escolha da sessão: `gpt-4o` (~12,5× o Luna por token).
+- 4 tentativas no principal (30/60/60 s) + 1 na reserva após 60 s; permanente não cai na reserva, exceto 404 do modelo. Em reserva não há segunda passada por cobertura.
+- Defeito silencioso achado e corrigido: o Parse cobrava SEMPRE pelo preço do principal.
+- Medição `p4-2`: `modelos_usados`, `usou_reserva`, `reserva_por_modelo_indisponivel`, `falha_transitoria_esgotada` (contrato lido pela 0233), `registro_tentativas`. Resumo de Custo conta reserva e 404 do principal.
+- FINGERPRINT inalterado (`70de46f4c67573af`). N8N 800/800 no commit. Revisão independente: 2 ALTO, 2 MÉDIO, 1 BAIXO, corrigidos.
+- Teto declarado: o orçamento do lote não conhece a reserva (pior caso ~12,5× a estimativa).
+
+**P9 no n8n — "Método Indireto/Direto" (`0874934`).** O DFC do Valtra registrava a entidade "Metodo Indireto Moto Agricola" (2 `entidade_incorreta` abertas). Corrigido em `parseEntidade`. Sobre 597 nomes de arquivo, mudam só os 3 de DFC com método. N8N 802/802. Vale para envios novos; a Moto Agricola já registrada continua com as 2 pendências.
+
+### Comitado SEM revisão independente (a revisão foi interrompida)
+
+**0233 (P8, banco) — `0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql`.** `fn_versao_extracao_concluida` vira false, mesmo com linha, quando o último `extracao_sombra` traz `medicao.falha_transitoria_esgotada = true` (booleano), há `extracao_falhou` aberta e nenhuma linha teve aceite humano (`aceito_por` não `sistema:%`). Reemitida a partir do corpo da 0231. Produção (10/11): 2.064 eventos, nenhum com o campo, alcance hoje 0; 535 falhas abertas, 77 com linha, 4 delas com aceite humano. Teste `reextracao_transitoria.test.sql`, 23 asserts; sem a condição do campo reprovam 7. **Armadilha:** `o_balanco_sem_dado_financeiro.test.sql` reaplica a 0231 no meio da suíte; o teste da 0233 começa com `\i` da 0233 para restaurar.
+
+**0234 (P9, banco) — `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql`.**
+- Medido em produção (10/11), pendências abertas: `entidade_incorreta` 80, `periodo_incorreto` 57, `precondicao_nao_satisfeita` 347 (8 com "sem período par").
+- (A) "sem período par": o balanço/DRE anual do Valtra tem colunas "Saldo Final/Inicial" e "Saldo atual/anterior", sem ano; `fn_coluna_periodo_do_ano` (0023) só casava ano no texto. Agora cai para fechamento = ano da referência e abertura = ano − 1 (não parcial), com as funções da 0201. Alcance simulado: 6 das 8 (Valtra 5, S105 1); as 2 do Canastra sintético têm outra causa, não diagnosticada.
+- (B) `periodo_incorreto` falso: `fn_periodos_equivalentes` ganhou "mesmo ano mais recente + contenção + união contígua". Simulado sobre as 57 abertas: 35 caem, mais 6 que já eram equivalentes e estavam abertas; 16 verdadeiras continuam. Limite: "multi 32M26" × "multi 24,26" segue aberta.
+- Backfill `fn_resolver_periodo_incorreto_falso` (só `aberta` + `origem_estagio='diagnostico'`, `resolvida_por='sistema:0234'`) e reconciliação dos mandatos com "sem período par".
+- Teste `o_periodo_que_a_checagem_nao_lia.test.sql`, 40 asserts (funções antigas de volta reprovam 19). `canonico.test.sql`: o fixture "multi 22,23,24" × "anual 2024" virou equivalente pela regra nova e foi trocado por "anual 2025" × 2024.
+- Defeito ACHADO e NÃO corrigido: `fn_registrar_reconciliacao` reaproveita a pendência aberta por interseção de anos e reescreve a descrição com a da última checagem (Valtra: a pendência do período "data-base 01/01/2026 - 30/06/2026" mostra "2024: …", vinda do Faturamento "24,26").
+- Fora de escopo, declarado: `entidade_incorreta` por leitura errada da IA ("ARAUGÁRIA" × "ARAUCÁRIA", "OMNIBEAUTY ... DE CONSOLIDADO") é da P13; a pendência de entidade da Moto Agricola já registrada.
+- Suítes no fim: `run.sh` rc=0 (3.376 ok), `Supabase/test/*.test.mjs` 40 pass / 0 fail, `conferir-chamadas` OK, sonda `--so-buraco` sem buraco.
+
+### Medido em produção nesta sessão e ainda sem fatia
+- Das 517 falhas abertas: 72 trazem "ESGOTADO" (transitória esgotada) e nenhuma tem linha; 15 são transitórias sem a marca (14 do Vertentes antigo, "Resposta da OpenAI sem conteudo"; 1 com linha: "DRE MOTO AGRICOLA 2023.pdf", bloco 4, 798 pares, de fingerprint antigo, então qualquer reenvio já re-extrai).
+- `entidade_incorreta` "Comparativo Araucaria …", "Relatorio …", "Liquido …" e o "01_" do prefixo são de rodadas antigas: o classificador atual já acerta. Ficam abertas até o diagnóstico rodar de novo nesses mandatos de teste.
 
 ## SESSÃO 125 (10/11/2026) — P6b provada ao vivo; PR #282 no ar; balancete com "colunas trocadas" falsa corrigido (`d14ef83`, ainda não republicado)
 
