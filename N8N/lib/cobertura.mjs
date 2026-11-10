@@ -502,11 +502,19 @@ export function contasComOrigem(texto) {
   // O extrator põe os números de UMA conta numa linha ("0,009865 0,0055.295,58 -55.295,58") e o nome na
   // seguinte ("BANCO AL5 AG. 0001 C/C 12858268"). O nome tem dígito (agência, conta, contrato), então a régua o
   // contava como segunda conta da mesma: 42 contas a mais em 460 reais. A linha só de números JÁ foi contada; a
-  // linha seguinte, SEM valor monetário (\d,\d{2}) nem grupo de milhar (\d.\d{3}), é o nome dela. Os dois
-  // testes sobre a linha seguinte são o que impede de engolir "Bancos 9.410" (livro em milhares, sem decimal)
-  // quando ela vem depois de uma linha de números: lá o valor está NELA, e ela é conta.
+  // linha seguinte é o NOME dela se NÃO tiver número com cara de valor. Têm cara de valor: número entre
+  // parênteses "(120)", com decimal ou milhar ("1,50", "9.410"), percentual, e inteiro nu que FECHA a linha
+  // ("Caixa 410", "Juros s/ empréstimo 450" — DRE em milhares: o valor está nela, e ela é conta; revisão de
+  // 10/11 mediu 7→5 e "Despesas administrativas (120) (110)" sumindo). NÃO têm: dígito colado a letra
+  // ("AL5", "V8", "13º"), inteiro depois de AG/C/C/CONTA/CONTRATO/Nº ("C/C 12858268" fecha o nome do banco),
+  // nem inteiro no meio ("707679 - CP") ou de 7+ dígitos (contrato: "PARCELAMENTO ICMS 11402191").
   const soNumeros = /^[\d.,()%\s-]+$/;
-  const temValor = /\d,\d{2}|\d\.\d{3}/;
+  const antesDeCodigo = /^(ag\.?|c\/c|c\.c\.?|cc|conta|cta|contrato|n[º°o]\.?|nf)$/i;
+  const temCaraDeValor = (linha) => {
+    const tk = linha.split(/\s+/);
+    return tk.some((t, i) => /^\(\s*-?\d[\d.,]*\)?%?$|^-?\d[\d.]*,\d+%?$|^-?\d{1,3}(\.\d{3})+%?$|^-?\d+%$/.test(t)
+      || (i === tk.length - 1 && /^-?\d{1,6}$/.test(t) && !(i > 0 && antesDeCodigo.test(tk[i - 1]))));
+  };
   let anteriorSoNumeros = false;
   const out = [];
   const grupoDe = []; // índice, em `grupos`, de cada conta de `out` — para saber quem ENCOSTA em quem de verdade
@@ -517,7 +525,7 @@ export function contasComOrigem(texto) {
     if (anteriorEraProsa && /^[a-zà-ú]/.test(linha)) continue;
     anteriorEraProsa = prosa.test(linha);
     if (!ehLinhaDeConta(linha)) { anteriorSoNumeros = false; continue; }
-    if (anteriorSoNumeros && !soNumeros.test(linha) && !temValor.test(linha)) { anteriorSoNumeros = false; continue; }
+    if (anteriorSoNumeros && !soNumeros.test(linha) && !temCaraDeValor(linha)) { anteriorSoNumeros = false; continue; }
     anteriorSoNumeros = soNumeros.test(linha);
     out.push({ linha, de: g.de, n: g.n });
     grupoDe.push(gi);
@@ -527,8 +535,8 @@ export function contasComOrigem(texto) {
   // Usuário: 94Nº reg.:"): 9 por página, 108 nas 12 páginas do mesmo documento, 17,7% das 610 linhas que a régua
   // contava — e nenhuma é conta. A régua dava 610 contra as 502 que a leitura devolveu (82%), e 7 de 11 blocos
   // ficaram abaixo de 85%: sete segundas passadas pagas à toa e extracao_falhou FALSA.
-  //   (1) linha SEM valor monetário (\d,\d{2}) que se repete >= 3 vezes IGUAL, a menos de números ISOLADOS de até 3
-  //       dígitos (a página, o usuário, o contador) — um rótulo de conta distinto difere em número de 4+ dígitos (agência,
+  //   (1) linha SEM valor monetário (\d,\d{2}) que se repete >= 3 vezes IGUAL, a menos do contador depois de ":"
+  //       (folha, usuário, nível) e sem outro número que meça (ver `semMedida`) — um rótulo de conta distinto difere em número de 4+ dígitos (agência,
   //       conta, contrato: "CAPITAL DE GIRO ... 707679 - CP" não colapsa). Três é o mínimo que uma coincidência
   //       raramente faz. Medido: nos outros 87 textos (20 capturas de produção e 67 PDFs dos books) NENHUMA linha
   //       sem valor se repete igual, então a regra não tira nada de lá.
@@ -537,16 +545,21 @@ export function contasComOrigem(texto) {
   //       ("ADIANTAMENTO A FORNECEDORES" sintética e analítica) repete 2 vezes e não encosta em cabeçalho.
   // Por que não "idêntica em N páginas": o texto não traz a quebra de página, e o N seria um palpite.
   const comValor = (l) => /\d,\d{2}/.test(l);
-  // Só número ISOLADO de até 3 dígitos vira '#': o que encosta em '.' ou ',' é parte de código ou de valor
-  // ("1.1.01.001 95 D" e "2.1.02.001 6 C" têm o mesmo molde se tudo colapsar — a primeira versão desta regra
-  // derrubou 12 de 14 contas do aging e 25 de 27 do "digitalizado" do book-canastra por isso).
-  const chave = (l) => l.replace(/(?<![\d.,])\d{1,3}(?![\d.,])/g, '#');
+  // O número que VARIA entre páginas é o contador depois de ":" ("Folha: 7", "Usuário: 94Nº reg.:", "Nível: 9") —
+  // só ele vira '#'. A versão anterior trocava todo inteiro isolado de até 3 dígitos, e em livro em MILHARES uma
+  // linha de tabela numérica ("530 470", "Custo 120 110", "1 | 15/01/2026 | 15000") virava molde repetido e sumia:
+  // DRE 10→3, imobilizado 6→0, aging 6→0, cronograma 4→0 (revisão de 10/11). E mobília é linha SEM número que
+  // meça: depois de tirar data, hora, CNPJ e o contador, não pode sobrar dígito. "Filial 0" sobra (um 0 solto é
+  // indistinguível de "Caixa 0"), então fica contada: 12 linhas A MAIS no 9601, o lado barato do erro.
+  const chave = (l) => l.replace(/(:\s*)\d{1,3}(?![\d/:.,])/g, '$1#');
+  const semMedida = (l) => !/\d/.test(chave(l)
+    .replace(/\d{2}\/\d{2}\/\d{4}|\d{1,2}:\d{2}(:\d{2})?|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, ''));
   const vezes = new Map();
   for (const c of out) {
     const k = comValor(c.linha) ? c.linha : chave(c.linha);
     vezes.set(k, (vezes.get(k) ?? 0) + 1);
   }
-  const mobilia = out.map((c) => !comValor(c.linha) && vezes.get(chave(c.linha)) >= 3);
+  const mobilia = out.map((c) => !comValor(c.linha) && semMedida(c.linha) && vezes.get(chave(c.linha)) >= 3);
   // "Encostada" é na linha IMPRESSA, não na lista de contas: a primeira conta de cada página vem depois do
   // cabeçalho com linhas não contadas no meio ("Fil."), e ali a vizinha na lista é mobília sem encostar.
   const encosta = (i, j) => mobilia[j] === true && Math.abs(grupoDe[i] - grupoDe[j]) === 1;

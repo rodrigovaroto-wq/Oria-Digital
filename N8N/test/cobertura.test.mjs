@@ -933,15 +933,18 @@ test('régua no texto de planilha: linha que termina em célula vazia não é fr
 // linhas eram cabeçalho/rodapé repetido em cada página (9 por página) e 42 eram o NOME da conta, que o
 // extrator põe na linha SEGUINTE à dos números. As 460 restantes são contas. O texto real não se comita; a
 // fixture ANONIMIZADA (`texto-krauspenhar-colado.txt`) tem UMA página, então o documento de 4 páginas abaixo é
-// MONTADO dela: o cabeçalho da fixture com o número da folha trocado, o corpo dela repartido em 4 fatias sem
+// MONTADO dela: o cabeçalho com os literais do 9601 e o número da folha trocado, o corpo da fixture repartido em 4 fatias sem
 // repetição, e o rodapé com os literais do software (não são dado do cliente) como saíram em 9601. Isto NÃO
 // reproduz o arranjo real de 12 páginas — afirma só a regra: mobília e nome solto não contam, conta conta.
 {
   const fixture = readFileSync(new URL('./texto-krauspenhar-colado.txt', import.meta.url), 'utf8').split('\n');
-  const cabecalho = fixture.slice(3, 19);   // da razão social à última linha antes do primeiro valor
+  // O cabeçalho NÃO vem da fixture: a anonimização troca cada palavra por "CONTAxx0" (com um dígito dentro), o que
+  // não existe no texto real, e esconderia o que a regra mede. Vão os literais do 9601, sem dado do cliente.
+  const cabecalho = ['Filial 0', 'Data: 23/09/2026 Hora: 10:14:53', 'Folha: 0', 'EMPRESA TESTE LTDA 00.000.000/0001-00C.N.P.J:',
+    'Balancete mensal A T I V O Nível: 9', 'Periodo de: 01/01/2026 31/08/2026a', 'Diário: 0', 'Fil.'];
   const corpo = fixture.slice(19).filter((l) => l.length > 0);
   const pagina = (n, fatia) => [
-    ...cabecalho.map((l) => (l === '3' ? String(n) : l)),
+    ...cabecalho.map((l) => (l === 'Folha: 0' ? `Folha: ${n}` : l)),
     ...fatia,
     '7004,00 Contabilidade.Rcrp_balan4G', 'Rotina: ', 'Balancete - Anterior / Deb / Cred / A ', `CONTABILUsuário: ${40 + n}Nº reg.:`,
     '',
@@ -954,8 +957,11 @@ test('régua no texto de planilha: linha que termina em célula vazia não é fr
     const contas = linhasDeConta(doc);
     // O número medido (27 linhas de conta no corpo da fixture), não só a regra que o produz.
     assert.equal(comValor, 27);
-    assert.equal(contas.length, comValor, `contou ${contas.length}, o corpo tem ${comValor} contas`);
-    assert.ok(contas.every((l) => /\d,\d{2}/.test(l)), 'toda conta contada tem valor monetário');
+    // "Filial 0" NÃO sai: um 0 solto é indistinguível de "Caixa 0". Sobram 4, uma por página — o
+    // lado barato do erro (no 9601 são 12 de 473). Todo o resto sem valor monetário tem de ter saído.
+    const semValor = contas.filter((l) => !/\d,\d{2}/.test(l));
+    assert.deepEqual(semValor, ['Filial 0', 'Filial 0', 'Filial 0', 'Filial 0']);
+    assert.equal(contas.length, comValor + 4, `contou ${contas.length}, o corpo tem ${comValor} contas`);
   });
 
   test('o que a régua NÃO pode perder: conta com rótulo repetido, e valor sem decimal depois de linha de números', () => {
@@ -969,5 +975,38 @@ test('régua no texto de planilha: linha que termina em célula vazia não é fr
     assert.equal(contas.filter((l) => l === repetida).length, 2);
     assert.ok(contas.includes('Bancos 9.410'));
     assert.equal(contas.filter((l) => l.startsWith('CAPITAL DE GIRO')).length, 3);
+  });
+
+  // OS SEIS CASOS DA REVISÃO DE 10/11 (números sintéticos — só a FORMA importa, regra 4): livro em MILHARES, sem
+  // decimal, onde linha de números e rótulo curto repetem e a primeira versão das regras engolia conta real.
+  // Sem a correção desta rodada reprovam todos os seis (ver mensagem do commit).
+  const contasDe = (linhas) => linhasDeConta(linhas.join('\n'));
+  test('milhares: DRE com subtotal sem rótulo não perde as contas (alto 1 e 2)', () => {
+    const l = ['Receita líquida 980 870', 'Custo (450) (400)', '530 470', 'Despesas administrativas (120) (110)',
+      'Despesas comerciais (80) (70)', '330 290', 'Resultado financeiro (40) (35)', '290 255', 'IR e CS (99) (87)', '191 168'];
+    assert.equal(contasDe(l).length, 10);
+  });
+  test('milhares: imobilizado por classe (Custo/Depreciação x3) não some', () => {
+    const l = ['Máquinas', 'Custo 120 340', 'Depreciação acumulada (45) (60)', 'Veículos', 'Custo 210 180',
+      'Depreciação acumulada (55) (40)', 'Móveis', 'Custo 90 85', 'Depreciação acumulada (35) (30)'];
+    assert.equal(contasDe(l).length, 6);
+  });
+  test('milhares: aging por cliente (A vencer / Vencido x3) não some', () => {
+    const l = ['Cliente A', 'A vencer 120', 'Vencido 1 a 30 dias 45', 'Cliente B', 'A vencer 80', 'Vencido 1 a 30 dias 15',
+      'Cliente C', 'A vencer 60', 'Vencido 1 a 30 dias 5'];
+    assert.equal(contasDe(l).length, 6);
+  });
+  test('planilha: cronograma de parcelas iguais, valor inteiro, não some', () => {
+    const l = ['=== ABA: Cronograma ===', 'Parcela | Vencimento | Valor', '1 | 15/01/2026 | 15000', '2 | 15/02/2026 | 15000',
+      '3 | 15/03/2026 | 15000', '4 | 15/04/2026 | 15000'];
+    assert.equal(contasDe(l).length, 4);
+  });
+  test('o nome solto não engole conta com valor inteiro depois de linha de números', () => {
+    assert.equal(contasDe(['530 470', 'Despesas administrativas (120) (110)', 'Custo dos produtos (300) (230)']).length, 3);
+    assert.equal(contasDe(['10 20 30', 'Juros s/ empréstimo 450', 'Caixa 410']).length, 3);
+  });
+  test('o nome solto continua sendo nome: agência, conta, contrato e dígito colado a letra', () => {
+    const nomes = ['BANCO AL5 AG. 0001 C/C 12858268', 'ADIANTAMENTO DE 13º SALÁRIO', 'PARCELAMENTO ICMS 11402191', 'FUNDOS V8 CASH PLATINUM F'];
+    for (const n of nomes) assert.equal(contasDe(['0,00 0,00 5.295,58 -5.295,58', n]).length, 1, n);
   });
 }
