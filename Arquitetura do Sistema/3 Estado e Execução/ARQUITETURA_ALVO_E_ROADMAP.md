@@ -673,7 +673,7 @@ crédito de A == débito de B.
 
 Seção nova no mandato, **Análise Comparativa**, entre a aprovação e a modelagem: índices do cliente contra empresas que
 publicam balanço (CVM), setor (IBGE por CNAE) e estado do cliente (IBGE, quando publicado), mais
-RAIS, Banco Central, CNPJ aberto, Damodaran e Serasa. Cada desvio vira **oportunidade**; a aceita
+RAIS, Banco Central (juros por modalidade e crédito agregado), CNPJ aberto e Serasa. Cada desvio vira **oportunidade**; a aceita
 pelo analista vira alavanca da F8 e entra na apresentação. Despesas (energia, aluguel, frete...) calculadas por unidade, contra a referência da região de cada unidade. Escopo, fontes e etapas em
 `2 Especificação/14_COMPARATIVOS_SETORIAIS.md`.
 
