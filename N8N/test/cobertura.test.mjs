@@ -904,3 +904,26 @@ test('Faturamento 24M (Vertentes): a régua e a verdade do gerador contam as mes
     .documentos.find((d) => d.arquivo === nome);
   assert.equal(linhasDeConta(textoDoBook(nome)).length, doc.linhas_de_conta_verdade);
 });
+
+// A RÉGUA NO TEXTO DE PLANILHA (10/11/2026) — linhas LITERAIS do Mapa de Dívida do book-espelho, como o n8n de produção as
+// gerou na execução 9570 (Recompor Conteudo Extraido). A verdade do arquivo: 13 contratos + "Total conferido" na aba Dívida
+// e 12 meses na aba Premissas CDI = 26, e a IA leu 26. A régua dava 16: a última célula vazia ("Saldo total" é fórmula sem
+// valor gravado) deixa "| " no fim da linha e a emenda de fragmentos colava 5 contratos numa linha; e o cabeçalho de
+// colunas que o n8n inventa (__EMPTY_1...) contava como conta.
+test('régua no texto de planilha: linha que termina em célula vazia não é fragmento, e __EMPTY não é valor', () => {
+  const contrato = (n) => `Banco Meridional S.A. | FINAME | FINAME ${41200 + n} | TLP + 3,50% a.a. | 47192 | 511530.89 | 720423.07 | `;
+  const texto = [
+    '=== ABA: Dívida ===',
+    'MAPA DE ENDIVIDAMENTO BANCÁRIO | __EMPTY | __EMPTY_1 | __EMPTY_2 | __EMPTY_3 | __EMPTY_4 | __EMPTY_5 | __EMPTY_6',
+    'Credor | Modalidade | Contrato | Taxa | Vencimento final | Saldo curto prazo | Saldo longo prazo | Saldo total',
+    ...[0, 1, 2, 3, 4, 5].map(contrato),
+    'Total conferido (valor) |  |  |  |  | 15629416.78 | 15035762.34 | 30665179.12',
+    '=== ABA: Premissas CDI ===',
+    'Mês | CDI projetado a.m. (%)',
+    'Jan/2026 | 0.82',
+    'Fev/2026 | 0.83',
+  ].join('\n');
+  // 6 contratos + o total + 2 meses = 9; o título de colunas __EMPTY e os cabeçalhos não contam
+  assert.equal(linhasDeConta(texto).length, 9);
+  assert.equal(ehLinhaDeConta('MAPA DE ENDIVIDAMENTO BANCÁRIO | __EMPTY | __EMPTY_1 | __EMPTY_2'), false);
+});
