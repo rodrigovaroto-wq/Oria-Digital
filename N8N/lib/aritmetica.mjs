@@ -261,10 +261,28 @@ export function agruparContasDeBalancete(campos) {
 
 /**
  * Para cada conta com as quatro colunas e movimento, diz se fecha como rotulada
- * (SAt = SA + D - C, ou SA - D + C), só com a troca de colunas (D gravado = SA
- * +/- C gravado +/- SAt gravado) ou de nenhum jeito; guarda o 1º exemplo de cada
- * um dos dois últimos. Tolerância 1 na unidade do documento. Conta de movimento
- * zero (D e C dentro da tolerância) fecha de qualquer jeito e não conta.
+ * (SAt = SA + D - C, ou SA - D + C; e, SÓ na conta com crédito NEGATIVO, também
+ * SA + D + C ou SA - D - C), só com a troca de colunas (D gravado = SA +/- C
+ * gravado +/- SAt gravado) ou de nenhum jeito; guarda o 1º exemplo de cada um dos
+ * dois últimos. Tolerância 1 na unidade do documento. Conta de movimento zero (D
+ * e C dentro da tolerância) fecha de qualquer jeito e não conta.
+ *
+ * POR QUÊ O GATE C < -TOL. O mesmo balancete_janaago26.pdf, lido por imagem (P6b,
+ * execução 9601), imprime o CRÉDITO NEGATIVO ("BANCO AL5": 0 | 55.295,58 |
+ * -55.295,58 | 0). Nessa notação a identidade é SAt = SA + D + C (devedora) e
+ * SAt = SA - D - C (credora). Medido por SQL nos pares gravados, agrupando por
+ * (chave, página): 157/157 do ativo fecham com SA+D+C e 284/289 do resto com
+ * SA-D-C. Por esta função (que separa a conta repetida, 475 com movimento): sem o
+ * ramo, rotulada 207, trocada 194, nenhuma 74, e a pendência "colunas trocadas"
+ * abria FALSA (o ramo "trocada" casa por acaso quando SA = 0); com o ramo, 475, 0
+ * e 0, e nenhuma pendência. O GATE (C < -TOL, por linha) existe porque crédito
+ * negativo só existe em notação com sinal: sem ele, uma conta de crédito positivo
+ * com SAt = SA+D+C viraria "rotulada" (prova: o teste sintético de crédito
+ * positivo). A troca real de 30/09 (ESTOQUES) não depende do gate: SA+D+C dá
+ * 157,5 mi e SA-D-C -70,4 mi, longe do -61,6 mi gravado. TETO DELIBERADO: com
+ * C < 0 os ramos antigos continuam ativos, então as quatro combinações
+ * SA +/- D +/- |C| fecham; uma troca D<->C nunca foi detectável aqui (os ramos
+ * antigos já aceitavam as duas naturezas), e isto não muda isso.
  * AUTO-CONTIDA, embutida por toString().
  */
 export function classificarContasDeBalancete(contas) {
@@ -274,7 +292,9 @@ export function classificarContasDeBalancete(contas) {
   for (const v of contas) {
     const completa = ['SA', 'D', 'C', 'SAt'].every((p) => typeof v[p] === 'number');
     if (!completa || (Math.abs(v.D) <= TOL && Math.abs(v.C) <= TOL)) continue;
-    if (perto(v.SAt, v.SA + v.D - v.C) || perto(v.SAt, v.SA - v.D + v.C)) {
+    const creditoComSinal = v.C < -TOL
+      && (perto(v.SAt, v.SA + v.D + v.C) || perto(v.SAt, v.SA - v.D - v.C));
+    if (creditoComSinal || perto(v.SAt, v.SA + v.D - v.C) || perto(v.SAt, v.SA - v.D + v.C)) {
       r.rotulada += 1;
     } else if ([1, -1].some((s1) => [1, -1].some((s2) => perto(v.D, v.SA + s1 * v.C + s2 * v.SAt)))) {
       r.trocada += 1;
@@ -293,7 +313,7 @@ export function mensagemDoBalancete(naoTriviais, r) {
   const pagina = ex.pagina ? ' (p. ' + ex.pagina + ')' : '';
   const exemplo = '"' + ex.chave + '"' + pagina + ': saldo anterior ' + ex.SA + ', débito ' + ex.D
     + ', crédito ' + ex.C + ', saldo atual ' + ex.SAt;
-  return 'balancete não fecha linha a linha (saldo atual = saldo anterior +/- débito -/+ crédito, tolerância 1): '
+  return 'balancete não fecha linha a linha (saldo atual = saldo anterior +/- débito -/+ crédito, ou +/- débito +/- crédito quando o crédito vem com sinal; tolerância 1): '
     + `das ${naoTriviais} conta(s) com movimento, ${r.rotulada} fecham como rotuladas, ${r.trocada} fecham só com a `
     + 'troca de colunas (a gravada como "Débito" é o saldo atual, a "Crédito" é o débito e a "Saldo atual" é o '
     + `crédito) e ${r.nenhuma} não fecham de jeito nenhum. Exemplo${r.exTroca ? ' com a troca' : ''}: ${exemplo}. `
@@ -318,7 +338,9 @@ export function mensagemDoBalancete(naoTriviais, r) {
  * subiu para 61,6 mi"; o real é 47,96). NÃO corrige o número: o dado do cliente
  * não é reescrito por palpite — só NOMEIA a troca.
  *
- * FORMA DE FECHAR. Como rotulada: acima, nas duas naturezas. Com a troca:
+ * FORMA DE FECHAR. Como rotulada: acima, nas duas naturezas; e, na conta com
+ * crédito NEGATIVO (notação com sinal, execução 9601: 157/157 do ativo fecham com
+ * SA + D + C e 284/289 do resto com SA - D - C), também essas duas. Com a troca:
  * D_gravado = SA +/- C_gravado +/- SAt_gravado (os dois sinais livres, porque
  * o saldo real vem com sinal e a natureza muda de conta para conta). Tolerância
  * de 1 na unidade do documento, a do precedente desta casa para identidade de 3
