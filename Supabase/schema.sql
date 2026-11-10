@@ -4545,6 +4545,73 @@ $$;
 COMMENT ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) IS 'Tira o mandato da mesa sem apagar nada. Idempotente: fechar de novo devolve o fechamento original em vez de reescrever autoria. Reversível por fn_reabrir_caso.';
 
 --
+-- Name: fn_fila_de_reprocesso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) RETURNS TABLE(documento_id uuid, documento_versao_id uuid, n_versao integer, nome_original text, arquivo_ref text, tipo_taxonomia text, falha_aberta_desde timestamp with time zone, falha_descricao text, tem_linha boolean, reprocessavel boolean, motivo_bloqueio text)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  with falha as materialized (
+    select pe.documento_id,
+           min(pe.criada_em) as desde,
+           (array_agg(pe.descricao order by pe.criada_em desc, pe.id desc))[1] as descricao
+      from pendencia pe
+     where pe.caso_id = p_caso_id
+       and pe.tipo = 'extracao_falhou'
+       and pe.estado <> 'resolvida'
+       and pe.documento_id is not null
+     group by pe.documento_id
+  ),
+  nova as (
+    select distinct on (dv.documento_id) dv.*
+      from documento_versao dv
+      join falha f on f.documento_id = dv.documento_id
+     order by dv.documento_id, dv.n_versao desc
+  ),
+  vigente as (
+    select dv.fingerprint_extracao as fp
+      from documento_versao dv
+      join documento d on d.id = dv.documento_id
+     where d.caso_id = p_caso_id
+       and dv.fingerprint_extracao is not null and length(trim(dv.fingerprint_extracao)) > 0
+     order by dv.criada_em desc, dv.id desc
+     limit 1
+  ),
+  fila as (
+    select d.id as doc_id, v.id as versao_id, v.n_versao as n, v.nome_original as nome, v.arquivo_ref as ref,
+           d.tipo_taxonomia as tipo, f.desde, f.descricao,
+           exists (select 1 from campo_extraido ce where ce.documento_versao_id = v.id) as linha,
+           (v.arquivo_ref is not null and length(trim(v.arquivo_ref)) > 0
+              and v.origem_arquivo = 'supabase_storage'
+              and exists (select 1 from storage.objects o where o.bucket_id = 'documentos' and o.name = v.arquivo_ref)) as com_original,
+           (v.hash is not null and length(trim(v.hash)) > 0
+              and exists (select 1
+                            from documento_versao v2
+                            join documento d2 on d2.id = v2.documento_id
+                           where d2.caso_id = p_caso_id
+                             and v2.hash = v.hash
+                             and v2.fingerprint_extracao = (select vg.fp from vigente vg)
+                             and fn_versao_extracao_concluida(v2.id))) as concluida
+      from nova v
+      join documento d on d.id = v.documento_id and d.caso_id = p_caso_id
+      join falha f on f.documento_id = d.id
+  )
+  select doc_id, versao_id, n, nome, ref, tipo, desde, descricao, linha,
+         (com_original and not concluida),
+         case when not com_original then 'sem_original'
+              when concluida then 'reaproveitaria' end
+    from fila
+   order by (com_original and not concluida) desc, desde, doc_id
+$$;
+
+--
+-- Name: FUNCTION fn_fila_de_reprocesso(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) IS '0232: a fila de reprocesso do mandato. Uma linha por documento com pendência extracao_falhou NÃO resolvida (estado <> resolvida, o predicado de fn_versao_extracao_concluida), sobre a versão de maior n_versao. falha_aberta_desde = min(criada_em) das pendências abertas; falha_descricao = a da mais recente. tem_linha = a versão tem campo_extraido. reprocessavel = arquivo_ref não vazio E origem_arquivo = supabase_storage E o objeto existe em storage.objects (bucket documentos, name = arquivo_ref; sem ele, 517 de 517 em produção tinham o ref e só 11 o arquivo) E NÃO existe versão do mandato com o mesmo hash e o fingerprint vigente (o da versão mais recente do mandato) concluída por fn_versao_extracao_concluida: a MESMA forma da pergunta de fn_registrar_documento (qualquer versão, não só a mais nova), então reenviar o original re-extrai de fato. motivo_bloqueio: sem_original (vence), reaproveitaria (hoje: falha COM linha, a P8 trata) ou nulo. Ordem: reprocessáveis primeiro, depois por falha_aberta_desde. SECURITY INVOKER: a RLS do usuário decide o que ele vê. Somente leitura.';
+
+--
 -- Name: fn_fundir_entidade(uuid, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -22378,6 +22445,14 @@ GRANT ALL ON FUNCTION public.fn_fatos_do_caso(p_caso_id uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO service_role;
+
+--
+-- Name: FUNCTION fn_fila_de_reprocesso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text); Type: ACL; Schema: public; Owner: -

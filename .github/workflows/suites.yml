@@ -458,6 +458,12 @@ jobs:
         # mensagem do commit.
         run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-envio-oficial.mts
 
+      - name: Suíte da fila de reprocesso (o botão que reenvia o original guardado ao n8n)
+        # P7b: a rota `api/casos/[id]/reprocessar` segue a ordem de `api/intake` (Form configurado,
+        # entrada, papel, token, só então fila, Storage e fetch) e documento que não é reprocessável
+        # volta com o motivo em vez de sumir. Medido com cada guarda desligada: ver a mensagem do commit.
+        run: ./portal/node_modules/.bin/tsx portal/scripts/verificar-fila-de-reprocesso.mts
+
       - name: Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)
         # A contagem "quantas linhas cada documento rendeu" morava em duas cópias,
         # e só uma paginava: o painel fazia uma consulta só, e o PostgREST corta

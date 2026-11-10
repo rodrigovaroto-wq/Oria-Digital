@@ -1165,6 +1165,14 @@ supabase db execute --file Supabase/migrations/0231_o_balanco_sem_dado_financeir
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0231' and not presente;   -- ZERO linhas
 #   select depois from evento_auditoria where acao = 'extracao_pendencia_backfill' order by criado_em desc limit 1;   -- pendencias_abertas = 41 (esperado)
 
+# A 0232 cria fn_fila_de_reprocesso(p_caso_id): a fila de documentos com `extracao_falhou` aberta e se reenviar o original do bucket `documentos` re-extrairia (a pergunta única fn_versao_extracao_concluida; sem o objeto em storage.objects = 'sem_original'). Só leitura, SECURITY INVOKER.
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, upsert dos requisitos). Sem backfill.
+# >>> Teste: Supabase/test/fila_de_reprocesso.test.sql.
+supabase db execute --file Supabase/migrations/0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0232' and not presente;   -- ZERO linhas
+#   select count(*), count(*) filter (where reprocessavel) from fn_fila_de_reprocesso('<caso_id>');   -- em produção, só ~11 de 517 falhas abertas tinham o objeto (10/11/2026)
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

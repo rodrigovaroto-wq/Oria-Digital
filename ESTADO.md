@@ -1,8 +1,13 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 126 (10/11/2026) — P7b: fila de reprocesso com botão no portal (em andamento)
+
+> **Migration mais nova: `0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql` — ESCRITA, NÃO aplicada em produção.**
+> - Medido em produção antes (10/11, somente leitura): 517 documentos com `extracao_falhou` aberta; os 517 têm `arquivo_ref`, mas só 11 têm o objeto no bucket `documentos`; 70 têm linha gravada.
+
 ## SESSÃO 125 (10/11/2026) — P6b provada ao vivo; PR #282 no ar; balancete com "colunas trocadas" falsa corrigido (`d14ef83`, ainda não republicado)
 
-> **Migration mais nova: continua `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql`.** Nenhuma migration nova nesta sessão. A fatia `d14ef83` mexe só em `N8N/lib/aritmetica.mjs`, nos seus testes e no JSON gerado da ingestão.
+> **Última migration DAQUELA sessão: continua `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql`.** Nenhuma migration nova nesta sessão. A fatia `d14ef83` mexe só em `N8N/lib/aritmetica.mjs`, nos seus testes e no JSON gerado da ingestão.
 > - Sonda `fn_instalacao_conferir` depois do teste: 0 ausentes; 80 mandatos antes e depois.
 > - NÃO conferido nesta rodada: CI da branch `claude/practical-ptolemy-fqvf9e`.
 
@@ -71,7 +76,7 @@
 
 ## SESSÃO 124 (09–10/11/2026) — 0231 aplicada; régua e abas do .xlsx no ar e provadas ao vivo; P6 provada no Valtra real; P6b (Krauspenhar) no PR #282
 
-> **Migration mais nova: `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql` — APLICADA EM PRODUÇÃO em 10/11/2026.**
+> **Última migration DAQUELA sessão: `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql` — APLICADA EM PRODUÇÃO em 10/11/2026.**
 > - Ensaio em transação revertida antes: sonda 349, 0 ausentes, backfill 42, 82 mandatos.
 > - Depois de aplicar: sonda 349 itens, 0 ausentes, os 7 requisitos da 0231 presentes; 42 pendências abertas pelo backfill; 82 mandatos antes e depois. O portal (`912ae59`) foi publicado ANTES.
 > - NÃO conferido: md5 do corpo das funções de produção contra o banco montado do repositório (o Postgres local caiu no meio).
