@@ -927,3 +927,47 @@ test('régua no texto de planilha: linha que termina em célula vazia não é fr
   assert.equal(linhasDeConta(texto).length, 9);
   assert.equal(ehLinhaDeConta('MAPA DE ENDIVIDAMENTO BANCÁRIO | __EMPTY | __EMPTY_1 | __EMPTY_2'), false);
 });
+
+// ── Mobília de página e nome solto do valor não são conta (execução 9601, 10/11/2026) ──────────────────
+// O balancete do Krauspenhar (12 páginas, texto colado) dava 610 contra as 502 que a leitura devolveu: 108
+// linhas eram cabeçalho/rodapé repetido em cada página (9 por página) e 42 eram o NOME da conta, que o
+// extrator põe na linha SEGUINTE à dos números. As 460 restantes são contas. O texto real não se comita; a
+// fixture ANONIMIZADA (`texto-krauspenhar-colado.txt`) tem UMA página, então o documento de 4 páginas abaixo é
+// MONTADO dela: o cabeçalho da fixture com o número da folha trocado, o corpo dela repartido em 4 fatias sem
+// repetição, e o rodapé com os literais do software (não são dado do cliente) como saíram em 9601. Isto NÃO
+// reproduz o arranjo real de 12 páginas — afirma só a regra: mobília e nome solto não contam, conta conta.
+{
+  const fixture = readFileSync(new URL('./texto-krauspenhar-colado.txt', import.meta.url), 'utf8').split('\n');
+  const cabecalho = fixture.slice(3, 19);   // da razão social à última linha antes do primeiro valor
+  const corpo = fixture.slice(19).filter((l) => l.length > 0);
+  const pagina = (n, fatia) => [
+    ...cabecalho.map((l) => (l === '3' ? String(n) : l)),
+    ...fatia,
+    '7004,00 Contabilidade.Rcrp_balan4G', 'Rotina: ', 'Balancete - Anterior / Deb / Cred / A ', `CONTABILUsuário: ${40 + n}Nº reg.:`,
+    '',
+  ];
+  const tam = Math.ceil(corpo.length / 4);
+  const doc = [0, 1, 2, 3].flatMap((i) => pagina(i + 1, corpo.slice(i * tam, (i + 1) * tam))).join('\n');
+  const comValor = corpo.filter((l) => /\d,\d{2}/.test(l)).length;
+
+  test('mobília de página e nome solto do valor não entram na contagem de contas', () => {
+    const contas = linhasDeConta(doc);
+    // O número medido (27 linhas de conta no corpo da fixture), não só a regra que o produz.
+    assert.equal(comValor, 27);
+    assert.equal(contas.length, comValor, `contou ${contas.length}, o corpo tem ${comValor} contas`);
+    assert.ok(contas.every((l) => /\d,\d{2}/.test(l)), 'toda conta contada tem valor monetário');
+  });
+
+  test('o que a régua NÃO pode perder: conta com rótulo repetido, e valor sem decimal depois de linha de números', () => {
+    const repetida = 'ADIANTAMENTO A FORNECEDORES 1.234,56 0,00 1.234,56 0,00';
+    const texto = [
+      repetida, repetida,                                  // sintética e analítica, MESMOS valores: duas contas
+      '0,00 0,00 0,00 0,00', 'Bancos 9.410',               // livro em milhares: o valor está na linha "Bancos"
+      'CAPITAL DE GIRO BANCO 707679 - CP', 'CAPITAL DE GIRO BANCO 747979 - CP', 'CAPITAL DE GIRO BANCO 751291 - CP', // contratos distintos: 6 dígitos não colapsam
+    ].join('\n');
+    const contas = linhasDeConta(texto);
+    assert.equal(contas.filter((l) => l === repetida).length, 2);
+    assert.ok(contas.includes('Bancos 9.410'));
+    assert.equal(contas.filter((l) => l.startsWith('CAPITAL DE GIRO')).length, 3);
+  });
+}

@@ -498,15 +498,60 @@ export function contasComOrigem(texto) {
   // `ehLinhaDeConta`: aqui fica o que depende da linha ANTERIOR, e só isso.
   const prosa = /^(nota|obs)\b|^\(?valores expressos|^exerc[íi]cios? encerrados?/i;
   let anteriorEraProsa = false;
+  // O NOME SOLTO DO VALOR (balancete do Krauspenhar, execução 9601 de 10/11/2026, 12 páginas, texto colado).
+  // O extrator põe os números de UMA conta numa linha ("0,009865 0,0055.295,58 -55.295,58") e o nome na
+  // seguinte ("BANCO AL5 AG. 0001 C/C 12858268"). O nome tem dígito (agência, conta, contrato), então a régua o
+  // contava como segunda conta da mesma: 42 contas a mais em 460 reais. A linha só de números JÁ foi contada; a
+  // linha seguinte, SEM valor monetário (\d,\d{2}) nem grupo de milhar (\d.\d{3}), é o nome dela. Os dois
+  // testes sobre a linha seguinte são o que impede de engolir "Bancos 9.410" (livro em milhares, sem decimal)
+  // quando ela vem depois de uma linha de números: lá o valor está NELA, e ela é conta.
+  const soNumeros = /^[\d.,()%\s-]+$/;
+  const temValor = /\d,\d{2}|\d\.\d{3}/;
+  let anteriorSoNumeros = false;
   const out = [];
-  for (const g of grupos) {
+  const grupoDe = []; // índice, em `grupos`, de cada conta de `out` — para saber quem ENCOSTA em quem de verdade
+  for (let gi = 0; gi < grupos.length; gi += 1) {
+    const g = grupos[gi];
     const linha = g.texto.trim();
-    if (linha.length === 0) { anteriorEraProsa = false; continue; }
+    if (linha.length === 0) { anteriorEraProsa = false; anteriorSoNumeros = false; continue; }
     if (anteriorEraProsa && /^[a-zà-ú]/.test(linha)) continue;
     anteriorEraProsa = prosa.test(linha);
-    if (ehLinhaDeConta(linha)) out.push({ linha, de: g.de, n: g.n });
+    if (!ehLinhaDeConta(linha)) { anteriorSoNumeros = false; continue; }
+    if (anteriorSoNumeros && !soNumeros.test(linha) && !temValor.test(linha)) { anteriorSoNumeros = false; continue; }
+    anteriorSoNumeros = soNumeros.test(linha);
+    out.push({ linha, de: g.de, n: g.n });
+    grupoDe.push(gi);
   }
-  return out;
+  // A MOBÍLIA DE PÁGINA. Todo balancete paginado repete, em CADA página, as mesmas linhas de cabeçalho e rodapé
+  // ("Filial 0", "Data: 23/09/2026 Hora: 10:14:53", "Folha: 7", CNPJ, "Periodo de: ...", "Diário: 0", "Rotina: ...
+  // Usuário: 94Nº reg.:"): 9 por página, 108 nas 12 páginas do mesmo documento, 17,7% das 610 linhas que a régua
+  // contava — e nenhuma é conta. A régua dava 610 contra as 502 que a leitura devolveu (82%), e 7 de 11 blocos
+  // ficaram abaixo de 85%: sete segundas passadas pagas à toa e extracao_falhou FALSA.
+  //   (1) linha SEM valor monetário (\d,\d{2}) que se repete >= 3 vezes IGUAL, a menos de números ISOLADOS de até 3
+  //       dígitos (a página, o usuário, o contador) — um rótulo de conta distinto difere em número de 4+ dígitos (agência,
+  //       conta, contrato: "CAPITAL DE GIRO ... 707679 - CP" não colapsa). Três é o mínimo que uma coincidência
+  //       raramente faz. Medido: nos outros 87 textos (20 capturas de produção e 67 PDFs dos books) NENHUMA linha
+  //       sem valor se repete igual, então a regra não tira nada de lá.
+  //   (2) linha COM valor ("7004,00 Contabilidade.Rcrp_balan4G", o rodapé) só sai se for idêntica >= 3 vezes E
+  //       encostada numa linha já reconhecida como mobília em (1): conta real com os mesmos rótulo e valores
+  //       ("ADIANTAMENTO A FORNECEDORES" sintética e analítica) repete 2 vezes e não encosta em cabeçalho.
+  // Por que não "idêntica em N páginas": o texto não traz a quebra de página, e o N seria um palpite.
+  const comValor = (l) => /\d,\d{2}/.test(l);
+  // Só número ISOLADO de até 3 dígitos vira '#': o que encosta em '.' ou ',' é parte de código ou de valor
+  // ("1.1.01.001 95 D" e "2.1.02.001 6 C" têm o mesmo molde se tudo colapsar — a primeira versão desta regra
+  // derrubou 12 de 14 contas do aging e 25 de 27 do "digitalizado" do book-canastra por isso).
+  const chave = (l) => l.replace(/(?<![\d.,])\d{1,3}(?![\d.,])/g, '#');
+  const vezes = new Map();
+  for (const c of out) {
+    const k = comValor(c.linha) ? c.linha : chave(c.linha);
+    vezes.set(k, (vezes.get(k) ?? 0) + 1);
+  }
+  const mobilia = out.map((c) => !comValor(c.linha) && vezes.get(chave(c.linha)) >= 3);
+  // "Encostada" é na linha IMPRESSA, não na lista de contas: a primeira conta de cada página vem depois do
+  // cabeçalho com linhas não contadas no meio ("Fil."), e ali a vizinha na lista é mobília sem encostar.
+  const encosta = (i, j) => mobilia[j] === true && Math.abs(grupoDe[i] - grupoDe[j]) === 1;
+  return out.filter((c, i) => !mobilia[i]
+    && !(comValor(c.linha) && vezes.get(c.linha) >= 3 && (encosta(i, i - 1) || encosta(i, i + 1))));
 }
 
 /**
