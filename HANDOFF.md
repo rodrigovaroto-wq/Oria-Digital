@@ -4,13 +4,17 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 124 — COMECE AQUI (09–10/11/2026)
+## ▶ SESSÃO 125 — COMECE AQUI (depois de 10/11/2026)
 
-- **Leia a seção "SESSÃO 124" no topo do `ESTADO.md`.** Este cabeçalho só aponta para lá.
-- **Produção:** #278 mergeado (`264605e`), ingestão republicada em 09/11 21:39 UTC (60 nós), última migration aplicada **0230** (sonda 342 itens, 0 ausentes).
-- **No ar desde 10/11:** PR #279 mergeado (`912ae59`), portal publicado, migration **0231** APLICADA (sonda 349, 0 ausentes, backfill 42), ingestão republicada (63 nós) e a leitura de todas as abas do `.xlsx` provada ao vivo (execução 9570).
-- **Pendente do dono:** reenviar os PDFs de balancete do Krauspenhar e do Valtra (P6 com os reais); decidir se apaga os mandatos de teste S124.
-- **NÃO CONFERIDO:** o nó Compression e o `sheetName` na instância do n8n (lidos só no fonte); BP Piraquara Montagens 43 × 32 e +1 na DMPL Canastra (sem causa).
+- **Leia a seção "SESSÃO 124" no topo do `ESTADO.md`**, o bloco "Próxima sessão, nesta ordem". Este cabeçalho só aponta para lá.
+- **Produção:** migration mais nova aplicada **0231** (sonda 349, 0 ausentes). Ingestão republicada em 10/11 com a régua corrigida (63 nós). Portal no `main` de `d316bd3`.
+- **Primeiro passo:** PR [#282](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/282) (P6b) — conferir CI, mergear, republicar, reenviar o balancete do Krauspenhar e medir as 303 descartadas.
+- **Mandatos de teste:** todos apagados em 10/11 (80 mandatos em produção). A senha do Sócio de teste está só no scratchpad da S124: redefina se precisar.
+- **Dado de cliente no repositório:** fixture nova anonimizada; `N8N/test/aritmetica.test.mjs` (antigo) mantido com valores reais, de propósito (ver ESTADO).
+
+## SESSÃO 124 (09–10/11/2026; histórico, a mais nova está acima)
+
+- #278 e #279–#281 mergeados; 0231 aplicada; régua e abas do `.xlsx` no ar e provadas ao vivo; P6 provada no Valtra real; P6b no PR #282. Detalhe no `ESTADO.md`.
 
 ## SESSÃO 123 (09/11/2026; histórico, a mais nova está acima)
 
