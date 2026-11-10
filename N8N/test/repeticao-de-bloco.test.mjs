@@ -22,6 +22,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { decidirRepeticao, diagnosticarErroApi } from '../lib/extract.mjs';
 import { provedor } from '../lib/provedor.mjs';
+import { MODELO_EXTRACAO_RESERVA } from '../lib/custo.mjs';
+
+// Estágios do grafo: as 4 do principal + a da reserva, quando o provedor ativo declara uma.
+const TOTAL_DE_ESTAGIOS = decidirRepeticao().maxTentativas + (MODELO_EXTRACAO_RESERVA ? 1 : 0);
 
 const wf = JSON.parse(readFileSync(new URL('../workflow.e1-ingestao.json', import.meta.url)));
 const porNome = Object.fromEntries(wf.nodes.map((n) => [n.name, n]));
@@ -120,12 +124,12 @@ test('resposta VAZIA (a DRE da execução 8433) é repetida e recupera', async (
   assert.equal(r.saida.json.falha_motivo, null);
 });
 
-test('resposta vazia SEMPRE: 4 tentativas, e a pendência diz quantas', async () => {
+test('resposta vazia SEMPRE: 4 do principal + 1 da reserva, e a pendência diz quantas', async () => {
   const r = await atravessar([VAZIA()]);
-  assert.equal(r.chamadas, decidirRepeticao().maxTentativas);
+  assert.equal(r.chamadas, decidirRepeticao().maxTentativas + 1);
   assert.equal(r.saida.json.campos.length, 0);
   assert.match(r.saida.json.falha_motivo, /sem conteudo/);
-  assert.match(r.saida.json.falha_motivo, /Bloco chamado 4 vez/);
+  assert.match(r.saida.json.falha_motivo, /Bloco chamado 5 vez/);
 });
 
 test('400 (pedido recusado) NÃO é repetido: uma chamada, nenhuma espera', async () => {
@@ -148,14 +152,14 @@ test('crédito esgotado e conteúdo truncado NÃO são repetidos (repetir não m
 
 test('teto esgotado em cadência: gera a pendência com a CONTAGEM e as esperas somadas', async () => {
   const r = await atravessar([RATE()]);
-  assert.equal(r.chamadas, 4);
-  assert.deepEqual(r.esperas, [30_000, 60_000, 60_000]);
+  assert.equal(r.chamadas, 5, '4 do principal + 1 da reserva');
+  assert.deepEqual(r.esperas, [30_000, 60_000, 60_000, 60_000], 'a 4a espera (60 s) é a da reserva');
   assert.equal(r.saida.json.campos.length, 0);
   const m = r.saida.json.falha_motivo;
   assert.match(m, /LIMITE DE CADÊNCIA DO PROVEDOR/, 'a causa do provedor continua nomeada');
-  assert.match(m, /Bloco chamado 4 vez\(es\), esperas somadas 150s/);
-  assert.match(m, /teto de 4 tentativas ESGOTADO/);
-  assert.equal(r.saida.json.tentativas, 4);
+  assert.match(m, /Bloco chamado 5 vez\(es\), esperas somadas 210s/);
+  assert.match(m, /teto de 4 tentativas do principal \+ 1 da reserva ESGOTADO/);
+  assert.equal(r.saida.json.tentativas, 5);
 });
 
 test('a espera respeita o que o provedor pede, com teto de 60 s', async () => {
@@ -197,7 +201,7 @@ test('erro SEM status e SEM corpo de provedor (queda de rede) é transitório; 4
 // --- topologia -----------------------------------------------------------------
 
 test('topologia: todo estágio converge no Merge, que alimenta o Juntar Blocos UMA vez', () => {
-  const max = decidirRepeticao().maxTentativas;
+  const max = TOTAL_DE_ESTAGIOS;
   assert.equal(porNome['Juntar Tentativas'].parameters.numberInputs, max);
   assert.deepEqual(seguinte('Juntar Tentativas'), ['Juntar Blocos']);
   const paraOMerge = Object.entries(wf.connections).flatMap(([de, c]) => c.main.flatMap((saida, s) =>
@@ -211,7 +215,7 @@ test('topologia: todo estágio converge no Merge, que alimenta o Juntar Blocos U
 
 test('as repetições passam pela MESMA cadência da primeira chamada (nunca em rajada)', () => {
   const primeira = porNome['IA Extrair'].parameters.options.batching.batch;
-  for (let k = 2; k <= decidirRepeticao().maxTentativas; k += 1) {
+  for (let k = 2; k <= TOTAL_DE_ESTAGIOS; k += 1) {
     assert.deepEqual(porNome[`IA Extrair (tentativa ${k})`].parameters.options.batching.batch, primeira);
     assert.equal(porNome[`IA Extrair (tentativa ${k})`].parameters.options.response.response.neverError, true,
       'o corpo do erro chega ao Parse, que é quem decide se repete');

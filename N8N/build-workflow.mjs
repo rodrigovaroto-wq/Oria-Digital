@@ -27,7 +27,7 @@ import { codigosConhecidos } from './lib/ia.mjs';
 import {
   provedor, urlDaChamada, montarCorpoIA, schemaDoProvedor, parteDeArquivo, parteDeTexto,
   conteudoDaResposta, cortadoPorLimite, usoDaChamada, usoGemini, acrescentarInstrucao,
-  capacidadesDoModelo, CAPACIDADES_POR_MODELO, CAPACIDADES_PADRAO,
+  capacidadesDoModelo, CAPACIDADES_POR_MODELO, CAPACIDADES_PADRAO, trocarModeloDoCorpo,
 } from './lib/provedor.mjs';
 import { createHash } from 'node:crypto';
 import { SYSTEM_PROMPT, diagnosticarErroApi, decidirRepeticao, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, normalizarMoeda, extractionSchema, achatarGrupos, limparRotuloColado, ehLinhaNaoMonetaria, escalaDeclaradaNaColuna } from './lib/extract.mjs';
@@ -35,7 +35,7 @@ import { ALIASES } from './lib/taxonomia.mjs';
 import { classifyByFilename, parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAnos, parseAssinado, parseEntidade, THRESHOLD_AUTO } from './lib/classifier.mjs';
 import { normalize } from './lib/normalize.mjs';
 import { mergeClassification } from './lib/merge.mjs';
-import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, vereditoDeTamanhoPorArquivo, TETO_BYTES_POR_ARQUIVO, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
+import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, vereditoDaCotaDiaria, FRACAO_AVISO_RPD, custoEstimadoPorConteudo, tokensDeSaida, TETO_EXECUCAO_USD, CUSTO_ESTIMADO_DOC_USD, CUSTO_POR_MB_USD, CUSTO_MINIMO_CHAMADA_USD, bytesDoBinario, vereditoDeTamanhoPorArquivo, TETO_BYTES_POR_ARQUIVO, custoDaChamada, PRECO_USD_POR_MILHAO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, MODELO_EXTRACAO_RESERVA, PARCELA_ENTRADA_NA_CHAMADA, PESO_MINIMO_CLASSIFICACAO, VERSAO_ORCAMENTO, pesoDaChamadaDeClassificacao, TOKENS_POR_PAGINA_IMAGEM, TOKENS_CABECALHO_GRUPO, TOKENS_CONTA_BASE, TOKENS_POR_VALOR, CONTAS_POR_GRUPO, TOKENS_SAIDA_CLASSIFICACAO, MARGEM_ORCAMENTO_CONTEUDO, CARACTERES_POR_TOKEN, PAGINAS_MAX_MEDIDO, custoEstimadoPorTamanho, custoPorMbDeTextoUSD, CELULAS_POR_PAGINA_ESTIMADAS, CARACTERES_POR_CELULA_ESTIMADA, estimativaDoDocumento, esforcosDoProvedor, FORMATOS_DE_TEXTO, ehFormatoDeTexto } from './lib/custo.mjs';
 import { sha256Hex, chaveDoOriginal } from './lib/hash.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
@@ -122,7 +122,17 @@ const FONTE_DIAGNOSTICO_ERRO = `const diagnosticarErroApi = ${diagnosticarErroAp
 // embutida no Parse (que decide repetir) e lida aqui (que decide QUANTOS estágios
 // de repetição o grafo tem). Duas fontes do mesmo teto divergem sem erro nenhum.
 const FONTE_DECIDIR_REPETICAO = `const decidirRepeticao = ${decidirRepeticao.toString()};`;
-const TENTATIVAS_MAX_EXTRACAO = decidirRepeticao().maxTentativas;
+// A RESERVA É UM ESTÁGIO A MAIS NO GRAFO (a 5ª chamada, ver `decidirRepeticao`), e
+// só existe quando o provedor ativo declara `extracao_reserva`. Ela troca o modelo
+// no CORPO (`trocarModeloDoCorpo`), e o nó HTTP de cada estágio posta no MESMO
+// endereço — por isso a reserva só vale onde a URL não leva o modelo. Provedor com
+// `{modelo}` na URL (Google) e reserva declarada é erro de configuração: o corpo
+// trocaria e o endereço não, e a "reserva" repetiria o principal em silêncio.
+const MODELO_RESERVA = MODELO_EXTRACAO_RESERVA;
+if (MODELO_RESERVA && String(provedor().url).includes('{modelo}')) {
+  throw new Error(`extracao_reserva "${MODELO_RESERVA}" declarada para um provedor cuja URL leva o modelo: a reserva chamaria o principal. Use null ou um nó HTTP por modelo.`);
+}
+const TENTATIVAS_MAX_EXTRACAO = decidirRepeticao().maxTentativas + (MODELO_RESERVA ? 1 : 0);
 
 // `parseEntidade` idem — embutida do fonte, não espelhada à mão. Ela é a correção
 // do achado do "teste v31" (entidade "—" nos 14 documentos porque o nome do
@@ -189,6 +199,13 @@ const FONTE_ESCALA_COLUNA = `const escalaCol = ${escalaDeclaradaNaColuna.toStrin
 // chegava a documento já lido; num mandato novo a rota nova deu 0 descartadas e
 // 2.008 pares. CUSTO ACEITO PELO DONO: o próximo envio de cada mandato re-extrai
 // (e paga) todo documento, porque o hash muda uma vez.
+// O MODELO DE RESERVA (`MODELO_EXTRACAO_RESERVA`, P8) FICA DE FORA, e a decisão é do
+// mesmo tipo: ele é fallback de SERVIÇO (só lê o bloco depois de 4 falhas do principal),
+// não "como o documento é lido" no caso normal. Pô-lo aqui faria o próximo envio de TODO
+// mandato re-extrair e pagar outra vez só porque a reserva mudou de nome. O que a
+// reserva leu NÃO some: `medicao.modelos_usados`/`usou_reserva` registram, por documento,
+// quem de fato respondeu. Se um dia a reserva virar rota de leitura (em vez de socorro),
+// ela entra aqui — e é uma decisão de custo para o dono, como foi a da rota do PDF.
 // FICA DE FORA DE PROPÓSITO a régua (`linhasDeConta`, cobertura): ela mede o que
 // a IA devolveu, não muda o que a IA lê, e mexer nela não pode disparar
 // re-extração geral.
@@ -495,6 +512,7 @@ const FONTE_PROVEDOR = [
   `const usoGemini = ${usoGemini.toString()};`,
   `const usoDaChamada = ${usoDaChamada.toString()};`,
   `const acrescentarInstrucao = ${acrescentarInstrucao.toString()};`,
+  `const trocarModeloDoCorpo = ${trocarModeloDoCorpo.toString()};`,
 ].join('\n');
 
 // --- Code (ALL ITEMS): o TETO DE GASTO POR EXECUÇÃO -------------------------
@@ -727,11 +745,15 @@ const textoOriginais = !uploadExecutou
 
 let extracao = 0, entrada = 0, saida = 0, cache = 0, linhas = 0, comFalha = 0, semMedicao = 0;
 let celulas = 0, contas = 0, fatiados = 0, alem = 0, docsAlem = 0, semContagem = 0;
+let comReserva = 0, reservaPorModelo = 0, transitoriaEsgotada = 0;
 for (const it of extracoes) {
   const e = it?.json || {};
   if (typeof e.custo_usd === 'number') extracao += e.custo_usd; else semMedicao += 1;
   if (e.tokens) { entrada += e.tokens.entrada || 0; saida += e.tokens.saida || 0; cache += e.tokens.cache || 0; }
   if (e.falha_motivo) comFalha += 1;
+  if (e.medicao_documento?.usou_reserva === true) comReserva += 1;
+  if (e.medicao_documento?.reserva_por_modelo_indisponivel === true) reservaPorModelo += 1;
+  if (e.medicao_documento?.falha_transitoria_esgotada === true) transitoriaEsgotada += 1;
   linhas += Array.isArray(e.campos) ? e.campos.length : 0;
   // O painel do lote soma a MESMA unidade da guarda: linhas devolvidas contra linhas de conta
   // do texto. \`contas_distintas\` continua saindo por documento, porque e' ela que diz se o
@@ -776,6 +798,11 @@ return [{ json: {
     + ' (' + classificacoes.length + ' pagaram o PDF duas vezes)'
     + (estimado !== null ? '. O orçamento havia estimado US$ ' + Number(estimado).toFixed(2) : '')
     + textoOriginais
+    // A RESERVA NAO ABRE PENDENCIA quando le (e' a recuperacao), entao este e' o UNICO lugar onde o lote a
+    // mostra: o resumo vai inteiro para \`lote_execucao\` (0115) e e' o painel que o dono abre depois de um lote.
+    + (comReserva > 0 ? '. RESERVA DE MODELO (${MODELO_RESERVA}, ~12x o preco por token do principal) chamada em ' + comReserva + ' documento(s)'
+      + (reservaPorModelo > 0 ? '; ' + reservaPorModelo + ' por MODELO PRINCIPAL INDISPONIVEL (404): conferir MODELOS_POR_PROVEDOR em N8N/lib/custo.mjs, enquanto durar, o lote custa a tarifa da reserva' : '') : '')
+    + (transitoriaEsgotada > 0 ? '. ' + transitoriaEsgotada + ' documento(s) com bloco SEM leitura por falha transitoria do provedor (reenviar re-extrai)' : '')
     + '. Saída: ' + saida + ' tokens; entrada: ' + entrada + ' (' + cache + ' em cache).'
     + (celulas > 0 ? ' Cobertura: ' + contas + ' contas gravadas de ' + celulas + ' linhas de conta nos PDFs ('
       + (contas / celulas * 100).toFixed(0) + '%), em ' + linhas + ' pares conta-coluna. '
@@ -813,6 +840,9 @@ return [{ json: {
   cobertura_do_lote: celulas > 0 ? Number((contas / celulas).toFixed(3)) : null,
   documentos_fatiados: fatiados,
   documentos_com_falha: comFalha,
+  documentos_com_reserva: comReserva,
+  documentos_com_reserva_por_modelo_indisponivel: reservaPorModelo,
+  documentos_com_falha_transitoria_esgotada: transitoriaEsgotada,
   documentos_sem_medicao: semMedicao,
 } }];
 `.trim();
@@ -2259,7 +2289,40 @@ for(const [chave, blocos] of porDocumento){
   for(const k of medidos){
     if(doc[k]!==undefined&&doc[k]!==null) medicao[k]=doc[k];
   }
-  doc.medicao_documento={...medicao,versao_medicao:'p4-1'};
+  // O REGISTRO DE RETENTATIVA E RESERVA (P8, versao_medicao p4-2). Cada bloco chega do
+  // \`Parse Extracao\` com \`registro_tentativas\` ({tentativa, modelo, resultado, reserva}, uma
+  // entrada por chamada ao provedor). Daqui saem tres campos por DOCUMENTO, e o terceiro e'
+  // CONTRATO com a proxima migration (lido em evento_auditoria.depois->'medicao'->>'falha_transitoria_esgotada'
+  // para decidir reextrair, no reenvio, a falha COM linha transitoria):
+  //   modelos_usados            lista, na ordem em que apareceram, dos modelos CHAMADOS (inclusive
+  //                             o que so falhou: quem leu e' o ultimo \`ok\` do registro);
+  //   usou_reserva              a reserva foi chamada em algum bloco (rodou, deu certo ou nao);
+  //   falha_transitoria_esgotada  algum bloco TERMINOU com falha transitoria, reserva ja' incluida
+  //                             (ou sem reserva/corpo para tentar) -- o bloco ficou sem leitura por
+  //                             causa do provedor, nao do documento.
+  // So' entram quando ALGUM bloco trouxe o registro: item de um n8n anterior a esta forma nao pode
+  // virar \`usou_reserva:false\` (ausencia nao e' dado, regra 1) -- fica sem os tres campos.
+  // \`registro_tentativas\` do documento so' leva os blocos que NAO foram uma unica chamada ok: o
+  // bloco normal e' uma entrada \`ok\` e, em documento de 30 blocos, repeti-la 30 vezes inflaria o
+  // evento sem dizer nada; \`blocos_com_resposta\`/\`blocos\` ja' dizem quantos foram.
+  const comRegistro=blocos.filter(b=>Array.isArray(b.registro_tentativas));
+  if(comRegistro.length>0){
+    const chamados=[];
+    for(const b of comRegistro) for(const r of b.registro_tentativas) if(!chamados.includes(r.modelo)) chamados.push(r.modelo);
+    medicao.modelos_usados=chamados;
+    medicao.usou_reserva=comRegistro.some(b=>b.registro_tentativas.some(r=>r.reserva===true));
+    medicao.falha_transitoria_esgotada=comRegistro.some(b=>b.falha_transitoria===true);
+    // Quantos blocos foram para a reserva porque o PRINCIPAL estava indisponivel (404): o sinal que o Resumo de Custo conta.
+    medicao.reserva_por_modelo_indisponivel=comRegistro.some(b=>b.reserva_motivo==='modelo_indisponivel');
+    const detalhe=[];
+    for(const b of comRegistro){
+      if(b.registro_tentativas.length>1||b.registro_tentativas.some(r=>r.resultado!=='ok')){
+        for(const r of b.registro_tentativas) detalhe.push({bloco:b.bloco??null,...r});
+      }
+    }
+    if(detalhe.length>0) medicao.registro_tentativas=detalhe;
+  }
+  doc.medicao_documento={...medicao,versao_medicao:'p4-2'};
   saida.push({pairedItem:{item:primeiroIndice.get(chave)??0}, json:doc});
 }
 return saida;
@@ -2286,6 +2349,14 @@ ${FONTE_SEGUNDA_PASSADA}
 ${FONTE_CUSTO_CHAMADA}
 ${FONTE_PROVEDOR}
 const TENTATIVA=${estagio};
+// O MODELO DE RESERVA (P8) e o principal chegam como LITERAL: o no' Code nao importa
+// modulo. \`null\` = sem reserva (o grafo nem tem o estagio extra).
+const MODELO_PRINCIPAL=${JSON.stringify(MODEL_EXTRACAO)};
+const MODELO_RESERVA=${JSON.stringify(MODELO_RESERVA)};
+// O ULTIMO ESTAGIO do grafo: a saida do Parse dele vai direto ao Merge, sem IF. Um item
+// \`repetir:true\` que chegasse la' seguiria ao Juntar Blocos como bloco vazio e sem motivo
+// (o silencio que a regra 1 proibe), entao neste estagio nada mais se repete.
+const ULTIMA_TENTATIVA=${TENTATIVAS_MAX_EXTRACAO};
 // O contexto vem do FATIAMENTO, nao mais do \`Montar Req Extracao\`: e' ele que
 // sabe qual bloco este item e', e um item por bloco significa que o pareamento
 // com o no' anterior a ele deixou de ser 1:1. O fallback existe para o caso de
@@ -2306,10 +2377,10 @@ const resp=$json;
 const cortado=cortadoPorLimite(PROVEDOR,resp);
 const content=conteudoDaResposta(PROVEDOR,resp);
 let p={}; let falhaMotivo=null;
-let transitoria=false; let esperaSugerida=null; let respostaLida=false;
+let transitoria=false; let esperaSugerida=null; let respostaLida=false; let causaDoErro=null;
 if(resp?.error){
   const dg=diagnosticarErroApi(resp.error);
-  falhaMotivo=dg.motivo; transitoria=dg.transitoria; esperaSugerida=dg.esperaSugeridaS;
+  falhaMotivo=dg.motivo; transitoria=dg.transitoria; esperaSugerida=dg.esperaSugeridaS; causaDoErro=dg.causa;
 }else if(!content){
   falhaMotivo='Resposta do provedor de IA ('+PROVEDOR.rotulo+') sem conteudo (falha de rede/API).';
   transitoria=true;
@@ -2324,9 +2395,29 @@ if(resp?.error){
 // REPETIR OU DESISTIR. So' repete o que pode dar certo na segunda vez (transitorio)
 // E o que da' para refazer (o corpo da chamada viaja no ctx; sem ele o proximo
 // estagio mandaria \`undefined\` ao provedor, entao e' falha declarada e nao repeticao).
-const dec=decidirRepeticao({transitoria, tentativa:TENTATIVA, esperaSugeridaS:esperaSugerida});
+//
+// QUEM RESPONDEU NESTA CHAMADA e' o modelo do CORPO que foi ao provedor (\`ia_body.model\`),
+// nao a constante do principal: a reserva troca o modelo no corpo, e custear a resposta
+// do 4o pelo preco do Luna subestimaria a chamada em ~12x sem erro nenhum. Sem corpo ou
+// sem \`model\` (provedor Gemini: o modelo mora na URL) vale o principal, que e' o unico
+// que esse provedor chama.
+const emReserva=ctx.em_reserva===true;
+const modeloDaChamada=(ctx.ia_body&&ctx.ia_body.model)||MODELO_PRINCIPAL;
+// O REGISTRO POR TENTATIVA: uma entrada por chamada ao provedor, na ordem. \`ok\` = a
+// resposta foi LIDA (JSON valido); a falha e' transitoria ou permanente pela MESMA
+// classificacao que decide repetir. A reserva vem marcada.
+const resultadoDaChamada=respostaLida?'ok':(transitoria?'falhou_transitoria':'falhou_permanente');
+const registro=(Array.isArray(ctx.registro_tentativas)?ctx.registro_tentativas:[]).concat([{tentativa:TENTATIVA, modelo:modeloDaChamada, resultado:resultadoDaChamada, reserva:emReserva}]);
+const corpoReserva=(MODELO_RESERVA&&!emReserva&&ctx.ia_body)?trocarModeloDoCorpo(PROVEDOR,ctx.ia_body,MODELO_RESERVA):null;
+const dec=decidirRepeticao({transitoria, tentativa:TENTATIVA, esperaSugeridaS:esperaSugerida, temReserva:corpoReserva!==null, emReserva:emReserva||TENTATIVA>=ULTIMA_TENTATIVA, modeloIndisponivel:causaDoErro==='modelo_indisponivel'});
 if(dec.repetir&&ctx.ia_body){
-  return {json:{...ctx, repetir:true, tentativa:TENTATIVA, espera_s:dec.esperaS, ultima_falha:falhaMotivo}};
+  return {json:{...ctx, repetir:true, tentativa:TENTATIVA, espera_s:dec.esperaS, ultima_falha:falhaMotivo, registro_tentativas:registro}};
+}
+// A RESERVA: principal esgotado em falha transitoria, ou modelo do principal indisponivel.
+// O mesmo item volta com o corpo trocado e a marca \`em_reserva\`; o estagio seguinte posta no
+// mesmo endereco. Depois dela nada se repete (\`decidirRepeticao\`).
+if(dec.usarReserva&&corpoReserva){
+  return {json:{...ctx, ia_body:corpoReserva, em_reserva:true, reserva_motivo:(causaDoErro==='modelo_indisponivel'?'modelo_indisponivel':'transitoria'), repetir:true, tentativa:TENTATIVA, espera_s:dec.esperaS, ultima_falha:falhaMotivo, registro_tentativas:registro}};
 }
 if(!falhaMotivo&&cortado){
   falhaMotivo='Resposta do provedor de IA atingiu o limite de tokens de saida; o JSON veio valido, mas o conteudo pode estar incompleto (faltando linhas do fim do documento).';
@@ -2393,7 +2484,10 @@ const diagnostico={
 // hoje o teto de US$ 3 por execução decide em cima de uma ESTIMATIVA declarada,
 // e trocar estimativa por medição é o único jeito honesto de apertar o teto.
 const uso=usoDaChamada(PROVEDOR,resp);
-const custo_usd=custoDaChamada(uso, '${MODEL_EXTRACAO}');
+// PELO PRECO DO MODELO QUE RESPONDEU (\`modeloDaChamada\`, acima), nao do principal: a
+// resposta da reserva custa ~12x a do Luna por token, e cobra-la como Luna era gravar
+// em \`custo_usd\` (e no Resumo de Custo do lote) um numero 12x menor que a fatura.
+const custo_usd=custoDaChamada(uso, modeloDaChamada);
 // A SEGUNDA PASSADA POR COBERTURA (05/10/2026, Fw Valtra: "36 ALTERACAO E
 // CONSOLIDACAO CONTRATUAL" voltou com 59 linhas para 101 no texto, 58%). O bloco que
 // volta ABAIXO do limiar de cobertura e' refeito UMA vez, com a instrucao reforcada
@@ -2403,11 +2497,13 @@ const custo_usd=custoDaChamada(uso, '${MODEL_EXTRACAO}');
 // duas acharam. A primeira viaja dentro do item (\`passada_anterior\`) ate' o estagio
 // seguinte, que e' quem escolhe; por isso o teto de 4 chamadas por bloco e' UM SO' para
 // falha transitoria e cobertura juntas -- a cota do dia (RPD 500) nao cresce alem de
-// 4 por bloco, e o estagio de repetição e' o mesmo da fatia 1.
+// 4 por bloco NO PRINCIPAL -- mais 1 da reserva (P8) so' para o bloco que esgotou a falha transitoria
+// (ou cujo modelo ficou indisponivel), a cota do modelo de reserva, nao a do principal -- e o
+// estagio de repetição e' o mesmo da fatia 1.
 const ant=ctx.passada_anterior||null;
 const esperadasBloco=(ctx.contas_do_bloco!==null&&ctx.contas_do_bloco!==undefined&&Number.isFinite(Number(ctx.contas_do_bloco)))?Number(ctx.contas_do_bloco):null;
 const tokensDestaChamada=uso?{entrada:uso.prompt_tokens??null, saida:uso.completion_tokens??null, cache:uso.prompt_tokens_details?.cached_tokens??0}:null;
-const esta={campos, diagnostico, falha:falhaMotivo, linhas:linhasDaPassada(campos), custo_usd, tokens:tokensDestaChamada};
+const esta={campos, diagnostico, falha:falhaMotivo, linhas:linhasDaPassada(campos), custo_usd, tokens:tokensDestaChamada, modelo:modeloDaChamada};
 const razaoDe=(n)=>(esperadasBloco>0&&n!==null)?Number((n/esperadasBloco).toFixed(3)):null;
 const pctDe=(r)=>(r===null?'?':Math.round(r*100)+'%');
 let final=esta; let passadas=1; let notaCobertura=null;
@@ -2419,7 +2515,9 @@ if(ant||(respostaLida&&!cortado)){
     passadas=2;
     final=melhorPassada(ant.linhas, esta.linhas)==='segunda'?esta:ant;
   }
-  const dec2=decidirSegundaPassada({linhas:final.linhas, esperadas:esperadasBloco, tentativa:TENTATIVA, maxTentativas:dec.maxTentativas, temDadoFinanceiro:final.diagnostico?.tem_dado_financeiro??null, jaRefeita:!!ant});
+  const dec2=decidirSegundaPassada({linhas:final.linhas, esperadas:esperadasBloco, tentativa:TENTATIVA, maxTentativas:(emReserva?0:dec.maxTentativas), temDadoFinanceiro:final.diagnostico?.tem_dado_financeiro??null, jaRefeita:!!ant});
+  // Em RESERVA nao se refaz por cobertura: o corpo do contexto ja' e' o do 4o, e uma segunda passada
+  // faria a reserva (12x o preco) rodar DUAS vezes no mesmo bloco. \`maxTentativas:0\` zera a sobra.
   if(!ant&&dec2.refazer&&ctx.ia_body){
     const corpo2=JSON.parse(JSON.stringify(ctx.ia_body));
     acrescentarInstrucao(PROVEDOR,corpo2,instrucaoDeSegundaPassada({linhas:esta.linhas, esperadas:esperadasBloco, blocos:ctx.blocos??1}));
@@ -2427,7 +2525,7 @@ if(ant||(respostaLida&&!cortado)){
     // intervalo fixo) ja' separa as chamadas. Se o provedor responder 429, o Parse
     // seguinte trata como qualquer transitoria, com a propria espera.
     return {json:{...ctx, ia_body:corpo2, repetir:true, tentativa:TENTATIVA, espera_s:0, ultima_falha:null, motivo_repeticao:'cobertura',
-      passada_anterior:{campos, diagnostico, falha:falhaMotivo, linhas:esta.linhas, razao:razaoDe(esta.linhas), custo_usd, tokens:tokensDestaChamada}}};
+      passada_anterior:{campos, diagnostico, falha:falhaMotivo, linhas:esta.linhas, razao:razaoDe(esta.linhas), custo_usd, tokens:tokensDestaChamada, modelo:modeloDaChamada}, registro_tentativas:registro}};
   }
   if(dec2.abaixo){
     const rFinal=razaoDe(final.linhas);
@@ -2437,7 +2535,7 @@ if(ant||(respostaLida&&!cortado)){
         +'; ficou a de mais linhas, '+final.linhas+' ('+pctDe(rFinal)+'). As duas respostas NAO se somam (duplicaria linha): o que falta continua faltando no banco.';
     }else{
       const porque=!ctx.ia_body?'o corpo da chamada nao viajou no contexto'
-        :(dec2.porque==='sem-tentativa'?'o teto de '+dec.maxTentativas+' chamadas por bloco ja foi consumido por falha transitoria':'sem motivo declarado');
+        :(dec2.porque==='sem-tentativa'?(emReserva?'o bloco ja foi lido pela reserva ('+modeloDaChamada+'), que roda uma vez so e nao abre segunda passada':'o teto de '+dec.maxTentativas+' chamadas por bloco ja foi consumido por falha transitoria'):'sem motivo declarado');
       notaCobertura='Cobertura do bloco '+(ctx.bloco??1)+' de '+(ctx.blocos??1)+' abaixo do minimo de '+Math.round(LIMIAR_COBERTURA*100)+'% ('+final.linhas+' de ~'+esperadasBloco+' linha(s) de conta, '+pctDe(rFinal)+') e a segunda passada NAO foi feita: '+porque+'.';
     }
   }
@@ -2462,9 +2560,24 @@ if(notaCobertura) falhaMotivo=falhaMotivo?falhaMotivo+' | '+notaCobertura:notaCo
 // foi chamado 4 vezes e a de um chamado uma so' sao identicas, e quem le acha que
 // bastava repetir (ou que ja' repetiram, quando nao repetiram).
 const esperaTotal=Number(ctx.espera_total_s)||0;
+// A RESERVA, quando rodou, e' dita AQUI com o resultado dela e o motivo do principal: sem
+// isto a pendencia de um bloco que falhou 4x e foi para o 4o e a de um que nunca saiu do
+// principal se parecem, e quem le conclui que a reserva nao existe (ou que salvou).
+const chamadaDaReserva=registro.filter((r)=>r.reserva).pop()||null;
+const notaReserva=chamadaDaReserva
+  ?' Reserva '+chamadaDaReserva.modelo+' rodou na tentativa '+chamadaDaReserva.tentativa+' (principal '+MODELO_PRINCIPAL+' tinha falhado antes): '+chamadaDaReserva.resultado+'.'
+    +(chamadaDaReserva.resultado!=='ok'&&ctx.ultima_falha?' Ultima falha do principal: '+String(ctx.ultima_falha).slice(0,200):'')
+  :'';
+const tetoDito=chamadaDaReserva?(dec.maxTentativas+' tentativas do principal + 1 da reserva'):(dec.maxTentativas+' tentativas');
 const notaTentativas=(falhaMotivo&&TENTATIVA>1)
-  ?'[Bloco chamado '+TENTATIVA+' vez(es), esperas somadas '+esperaTotal+'s'+(dec.esgotou?'; teto de '+dec.maxTentativas+' tentativas ESGOTADO, a falha era transitoria e persistiu':'')+']'
+  ?'[Bloco chamado '+TENTATIVA+' vez(es), esperas somadas '+esperaTotal+'s'+(dec.esgotou?'; teto de '+tetoDito+' ESGOTADO, a falha era transitoria e persistiu':'')+notaReserva+']'
   :null;
+// FALHA TRANSITORIA TERMINAL = o bloco ficou SEM leitura (a ultima chamada nao foi \`ok\`) e o provedor
+// e' quem falhou: ou a ultima chamada foi transitoria, ou a ultima do PRINCIPAL foi -- mesmo que a reserva
+// tenha morrido por outra causa (400, contexto maior que o do 4o). Sem isto, 4x 429 no principal + 400 na
+// reserva saia \`false\` e o reenvio nao re-extraia um documento que o principal leria.
+const ultimoDoPrincipal=registro.filter((r)=>!r.reserva).pop()||null;
+const falhaTransitoria=registro[registro.length-1].resultado!=='ok'&&(transitoria===true||(ultimoDoPrincipal!==null&&ultimoDoPrincipal.resultado==='falhou_transitoria'));
 const falhaFinal=[avisoConteudo,falhaMotivo,notaTentativas].filter(Boolean).join(' | ')||null;
 // \`bloco\`/\`blocos\`/\`celulas_no_documento\`/\`contas_no_documento\` viajam para o
 // \`Juntar Blocos\`: sem
@@ -2472,7 +2585,7 @@ const falhaFinal=[avisoConteudo,falhaMotivo,notaTentativas].filter(Boolean).join
 // \`passadas\` e as duas coberturas do bloco so' instrumentam a execucao (nao tocam o
 // Postgres): e' por elas que se mede, na primeira rodada real, quanto a segunda
 // passada recupera -- coisa que nenhum teste sem chamar o modelo consegue dizer.
-return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais}};
+return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais, registro_tentativas:registro, modelo_efetivo:final.modelo||modeloDaChamada, usou_reserva:registro.some((r)=>r.reserva), reserva_motivo:ctx.reserva_motivo??null, falha_transitoria:falhaTransitoria}};
 `.trim();
 const CODE_PARSE_EXTRACAO = codeParseExtracao(1, 'Fatiar Extracao');
 

@@ -194,7 +194,9 @@ test('segunda passada que toma 429 espera, repete e NÃO perde a primeira', asyn
 
 test('429 persistente na segunda passada: o teto de 4 chamadas por bloco vale, e fica a primeira', async () => {
   const r = await atravessar([linhasN(59, 'Primeira'), RATE()]);
-  assert.equal(r.chamadas, MAX, 'nunca mais que o teto por bloco, somando cobertura e transitória');
+  // As 4 do principal (cobertura + transitória somadas) e UMA da reserva, que só existe porque o
+  // bloco esgotou a falha transitória do principal (P8). A reserva NÃO abre outra passada de cobertura.
+  assert.equal(r.chamadas, MAX + 1, 'nunca mais que o teto do principal + a reserva');
   assert.deepEqual([...rotulos(r.saida.json.campos)], ['Primeira']);
   assert.match(r.saida.json.falha_motivo, /segunda passada por cobertura falhou/);
 });

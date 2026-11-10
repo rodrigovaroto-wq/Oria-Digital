@@ -806,9 +806,9 @@ test('Parse Extracao: resposta truncada (finish_reason=length, JSON incompleto) 
 test('Parse Extracao: erro da API OpenAI vira falha_motivo (não silencioso)', async () => {
   const req = { json: { documento_versao_id: 'ver-4', tipo: 'BALANCO', ia_body: {} } };
   const respostaOpenAI = { json: { error: { message: 'Rate limit reached', code: 'rate_limit_exceeded' } } };
-  // Estágio TERMINAL: nas tentativas anteriores o 429 de cadência é repetido, e só
-  // ao esgotar o teto o motivo vira pendência (ver os testes de repetição).
-  const parsed = await run('Parse Extracao (tentativa 4)', { item: respostaOpenAI, refs: { 'Esperar Retry 3': req } });
+  // Estágio TERMINAL (o 5º: 4 do principal + a reserva): nas anteriores o 429 de cadência é
+  // repetido, e só ao esgotar tudo o motivo vira pendência (ver os testes de repetição).
+  const parsed = await run('Parse Extracao (tentativa 5)', { item: respostaOpenAI, refs: { 'Esperar Retry 4': req } });
   assert.equal(parsed.json.campos.length, 0);
   assert.match(parsed.json.falha_motivo, /Rate limit reached/);
 });
@@ -839,7 +839,7 @@ test('Gravar Campos (Sombra): passa p_medicao por NOME e liga o $7 à medição 
     { documento_versao_id: 'v1', bloco: 2, blocos: 2, contas_no_documento: 40, campos: [linhaM('C', 3)],
       diagnostico: {}, falha_motivo: null, custo_usd: 0.02, tokens: { entrada: 5, saida: 10, cache: 0 } },
   ]);
-  assert.equal(m.versao_medicao, 'p4-1');
+  assert.equal(m.versao_medicao, 'p4-2');
   assert.equal(m.contas_no_documento, 40);
   assert.equal(m.linhas_devolvidas, 3);
   assert.equal(m.contas_distintas, 3);
@@ -857,7 +857,7 @@ test('Gravar Campos (Sombra): contas_no_documento ausente continua AUSENTE na me
     campos: [linhaM('A', 1)], diagnostico: {}, falha_motivo: null, custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 } }]);
   assert.equal(m.linhas_devolvidas, 1);
   assert.ok(!('contas_no_documento' in m), 'contas_no_documento nulo não pode virar 0 nem null na medição');
-  assert.equal(m.versao_medicao, 'p4-1');
+  assert.equal(m.versao_medicao, 'p4-2');
 });
 
 test('Juntar Blocos: resposta REAL que devolveu 0 linhas leva ZERO medido (0 real), não ausência', async () => {
@@ -1840,7 +1840,7 @@ test('os nós de parse carregam o MESMO diagnosticarErroApi de lib/extract.mjs',
 test('Parse Extracao: 429 sem corpo vira causa nomeada; quota diz que espaçar não resolve', async () => {
   const req = { json: { documento_versao_id: 'ver-9', tipo: 'BALANCO', ia_body: {} } };
   const soDica = { json: { error: { message: "Try spacing your requests out using the batching settings under 'Options'" } } };
-  const p1 = await run('Parse Extracao (tentativa 4)', { item: soDica, refs: { 'Esperar Retry 3': req } });
+  const p1 = await run('Parse Extracao (tentativa 5)', { item: soDica, refs: { 'Esperar Retry 4': req } });
   assert.equal(p1.json.campos.length, 0);
   assert.match(p1.json.falha_motivo, /HTTP 429/);
   assert.match(p1.json.falha_motivo, /não disse QUAL/, 'não afirma cadência sem evidência');
