@@ -669,6 +669,21 @@ Risco médio · Impacto alto (fecha o Princípio 2) · Esforço M. **Saída: DAT
 **Aceite financeiro:** o combinado das 6 empresas do book-canastra fecha com eliminação explícita;
 crédito de A == débito de B.
 
+### F6C — COMPARATIVOS SETORIAIS (Espec. 14) · **DECIDIDA em 10/11/2026; nada implementado**
+
+Aba nova no mandato, entre a aprovação e a modelagem: índices do cliente contra empresas que
+publicam balanço (CVM), setor (IBGE por CNAE) e estado do cliente (IBGE, quando publicado), mais
+RAIS, Banco Central, CNPJ aberto, Damodaran e Serasa. Cada desvio vira **oportunidade**; a aceita
+pelo analista vira alavanca da F8 e entra na apresentação. Escopo, fontes e etapas em
+`2 Especificação/14_COMPARATIVOS_SETORIAIS.md`.
+
+| | |
+|---|---|
+| **Dep.** | **F4** (índice do cliente sobre a conta canônica) · Espec. 13 etapa 2 (`consulta_externa`) · F2T ondas 4 e 5 só para o custo unitário (eSocial, CT-e) |
+| **Risco** | Médio: a referência errada (par mal escolhido, média no lugar da mediana) vira promessa ao cliente |
+| **Esforço** | G (ordem de grandeza, a confirmar na etapa 0) |
+| **Aceite** | setor com menos de 4 empresas devolve `n/d` com motivo; coletor desligado aparece como `nao_consultado`; toda oportunidade cita fonte e ano |
+
 ### F7 — MOTOR DE CÁLCULO (segunda intervenção central)
 
 | | |
@@ -830,7 +845,7 @@ Cada linha é algo que, construído agora, ficaria **errado** ou **descartado** 
 | 12 | **Conversão cambial** | Só quando houver mandato multimoeda real. Hoje o export se recusa a totalizar — comportamento correto |
 | 13 | **Novos tipos de documento** | 27 dos 36 existentes ainda não têm consumidor. Acrescentar tipo antes de F2 aumenta o silêncio |
 | 14 | **Refatorar `modelo-institucional.ts` antes de F7** | Ele encolhe naturalmente quando vira emissor. Antes, é trabalho jogado fora |
-| 15 | **Comparação entre mandatos / benchmark setorial** | Exige conta canônica estável entre casos. Depois de F4 é quase de graça; antes, impossível |
+| 15 | **Comparação entre mandatos / benchmark setorial** | Exige conta canônica estável entre casos. Depois de F4 é quase de graça; antes, impossível. **Virou a fase F6C em 10/11/2026** (Espec. 14), já posta depois da F4 |
 
 ---
 
