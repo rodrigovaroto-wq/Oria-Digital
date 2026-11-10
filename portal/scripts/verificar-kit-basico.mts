@@ -439,7 +439,7 @@ ok(BOTOES_DECISAO.every((b) => !b.confirmacao || (b.confirmacao.pergunta.endsWit
     ok(f.acoes.length === 1 && f.acoes[0].tipo === acao && f.aVista.length === 1 && f.aVista[0].includes(frase), `planilha de várias abas: "${motivo.slice(0, 30)}…" tem causa e ação (${acao})`);
   }
   const juntasENaoLidas = falhaDeExtracaoNaTela(doBanco("O arquivo .xlsx teve 3 aba(s) lida(s) (A, B, C), mas o extrator nao devolveu a ORIGEM de cada linha: as 9 linha(s) vieram JUNTAS num quadro so. | Os bytes do .xlsx mostram 4 planilha(s) e so 3 foram listadas: as demais NAO foram lidas."));
-  ok(juntasENaoLidas.acoes.map((a) => a.tipo).sort().join(",") === "conferir_na_revisao,xlsx_varias_abas" && juntasENaoLidas.aVista.length === 2,
+  ok(juntasENaoLidas.acoes.length === 2 && ["conferir_na_revisao", "xlsx_varias_abas"].every((t) => juntasENaoLidas.acoes.some((a) => a.tipo === t)) && juntasENaoLidas.aVista.length === 2,
     "abas juntas E abas não lidas no mesmo motivo: as duas causas à vista, nenhuma escondida em Detalhes técnicos");
   const truncada = falhaDeExtracaoNaTela(doBanco(acha(/truncada/)));
   ok(truncada.acoes.some((a) => a.tipo === "resposta_truncada") && !truncada.acoes.some((a) => a.reenvio && a.tipo === "resposta_truncada"),
