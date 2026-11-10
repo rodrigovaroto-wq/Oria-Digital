@@ -556,7 +556,14 @@ export function contasComOrigem(texto) {
   // indistinguível de "Caixa 0"), então fica contada: 12 linhas A MAIS no 9601, o lado barato do erro.
   // SÓ os rótulos de contador do 9601 (Folha, Nível, Diário, Usuário) mais Página/Pág.: "Saldo anterior: 120",
   // "Total: 85" ou "Parcela: 1 | Valor: 850" mantêm o número e nunca são mobília (2ª revisão: 6→0, 6→3, 3→0).
-  const chave = (l) => l.replace(/(folha|p[áa]g(?:ina)?\.?|usu[áa]rio|n[íi]vel|di[áa]rio)(:\s*)\d{1,3}(?![\d/:.,])/gi, '$1$2#');
+  // FOLHA e PÁGINA ANCORADOS no início da linha: sem âncora "folha" casava no fim de conta de folha de
+  // pagamento ("Custo de folha: 120/85/40", "Encargos sobre folha: 45/47/49" por filial iam 3→0, 3ª revisão).
+  // Nível, Diário e Usuário ficam SEM âncora: no 9601 eles vêm no meio da linha ("Balancete mensal A T I V O
+  // Nível: 9", medido: ancorar o Nível devolve 12 linhas de mobília à contagem) ou colados ao rodapé
+  // ("CONTABILUsuário: 45Nº reg.:"), e não são nome de conta de valor.
+  const chave = (l) => l
+    .replace(/^(\s*(?:folha|p[áa]g(?:ina)?\.?))(:\s*)\d{1,3}(?![\d/:.,])/i, '$1$2#')
+    .replace(/(usu[áa]rio|n[íi]vel|di[áa]rio)(:\s*)\d{1,3}(?![\d/:.,])/gi, '$1$2#');
   const semMedida = (l) => !/\d/.test(chave(l)
     .replace(/\d{2}\/\d{2}\/\d{4}|\d{1,2}:\d{2}(:\d{2})?|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, ''));
   const vezes = new Map();

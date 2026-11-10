@@ -1017,6 +1017,9 @@ test('régua no texto de planilha: linha que termina em célula vazia não é fr
       'Saldo atual: 90', 'Conta Clientes', 'Saldo anterior: 40', 'Saldo atual: 50']).length, 6);
     assert.equal(contasDe(['Cliente A 10 20', 'Total: 120', 'Cliente B 30 40', 'Total: 85', 'Cliente C 5 6', 'Total: 40']).length, 6);
     assert.equal(contasDe(['Parcela: 1 | Valor: 850', 'Parcela: 2 | Valor: 850', 'Parcela: 3 | Valor: 850']).length, 3);
+    // 3ª revisão: "folha" sem âncora engolia a conta de folha de pagamento (3→0 nos dois).
+    assert.equal(contasDe(['Filial A', 'Custo de folha: 120', 'Filial B', 'Custo de folha: 85', 'Filial C', 'Custo de folha: 40']).length, 3);
+    assert.equal(contasDe(['Encargos sobre folha: 45', 'Encargos sobre folha: 47', 'Encargos sobre folha: 49']).length, 3);
   });
   test('o nome solto não engole conta com D/C no fim, parênteses colados, "n %", "n-" ou inteiro grande', () => {
     assert.equal(contasDe(['120 340', 'Caixa 450 D']).length, 2);
