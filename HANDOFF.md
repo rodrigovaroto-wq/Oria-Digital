@@ -8,8 +8,8 @@ só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
 - **Leia a seção "SESSÃO 124" no topo do `ESTADO.md`.** Este cabeçalho só aponta para lá.
 - **Produção:** #278 mergeado (`264605e`), ingestão republicada em 09/11 21:39 UTC (60 nós), última migration aplicada **0230** (sonda 342 itens, 0 ausentes).
-- **Só na branch `claude/quirky-lamport-k9pat5`, sem PR:** a migration **0231** (escrita, NÃO aplicada), a régua, as abas do `.xlsx` e o portal novo. O CI do GitHub ainda não rodou nela.
-- **Ordem do dono:** PR + merge (publica o portal), aplicar a 0231, republicar a ingestão, reenviar as 4 planilhas do espelho. O portal antes da 0231.
+- **No ar desde 10/11:** PR #279 mergeado (`912ae59`), portal publicado, migration **0231** APLICADA (sonda 349, 0 ausentes, backfill 42), ingestão republicada (63 nós) e a leitura de todas as abas do `.xlsx` provada ao vivo (execução 9570).
+- **Pendente do dono:** reenviar os PDFs de balancete do Krauspenhar e do Valtra (P6 com os reais); decidir se apaga os mandatos de teste S124.
 - **NÃO CONFERIDO:** o nó Compression e o `sheetName` na instância do n8n (lidos só no fonte); BP Piraquara Montagens 43 × 32 e +1 na DMPL Canastra (sem causa).
 
 ## SESSÃO 123 (09/11/2026; histórico, a mais nova está acima)

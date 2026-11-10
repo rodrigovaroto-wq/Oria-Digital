@@ -1,8 +1,11 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 124 (09–10/11/2026) — #278 mergeado e ingestão republicada; 0231 ESCRITA (NÃO aplicada); planilha de várias abas e régua corrigidas na branch
+## SESSÃO 124 (09–10/11/2026) — #278 mergeado e ingestão republicada; 0231 APLICADA em 10/11; régua e abas do .xlsx no ar e provadas ao vivo
 
-> **Migration mais nova: `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql` — ESCRITA, NÃO APLICADA (a 0230 está aplicada em produção desde 09/11/2026).**
+> **Migration mais nova: `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql` — APLICADA EM PRODUÇÃO em 10/11/2026.**
+> - Ensaio em transação revertida antes: sonda 349, 0 ausentes, backfill 42, 82 mandatos.
+> - Depois de aplicar: sonda 349 itens, 0 ausentes, os 7 requisitos da 0231 presentes; 42 pendências abertas pelo backfill; 82 mandatos antes e depois. O portal (`912ae59`) foi publicado ANTES.
+> - NÃO conferido: md5 do corpo das funções de produção contra o banco montado do repositório (o Postgres local caiu no meio).
 > - Corrige: zero linha + `tem_dado_financeiro = false` em tipo NÃO societário fechava sem linha e sem pendência. Passa a abrir `extracao_falhou`.
 > - Alcance medido em produção (09/11): 42 documentos (os 41 do ALTO da S123 + 1 do lote S124). Em mandatos reais: AMOBELEZA 10, Krauspenhar 1, AMO teste 00 2.
 > - Backfill não reabre decisão humana (medido: 0 dos 42).
@@ -14,7 +17,13 @@
 - **Sonda de produção:** 342 itens, 0 ausentes. Migration aplicada mais nova: 0230.
 - **Mandato de teste criado em produção:** "S124 — Espelho (sintético, medição)" (caso `10d371c2-7266-4d6a-ac11-cd001452a59d`), 11 documentos, 2 lotes: US$ 0,4596 (3 docs; DRE e balancete de 16 blocos custaram US$ 0,217 e 0,208) + US$ 0,1217 (8 docs). A senha do Sócio de teste foi redefinida e está só no scratchpad da sessão.
 
-**NÃO está no ar (só na branch `claude/quirky-lamport-k9pat5`, sem PR):** a 0231; o workflow do repositório (régua + abas do `.xlsx`); o portal desta branch.
+**No ar desde 10/11 (PR #279 mergeado em `912ae59`, CI 8/8 e Sonar verdes):** o portal, a 0231 e a ingestão republicada (`conferir-publicado`: 63 nós batem; `multipleFiles`, path do form e errorWorkflow preservados).
+
+**Provado AO VIVO em 10/11** (mandato "S124 — Planilhas de várias abas (sintético)", caso `2a0a2116-45cc-43be-89d4-7e29dd6497bd`, execução 9570, 5 arquivos, US$ 0,043, 0 falhas):
+- O nó Compression real entrega `workbook.xml`; `Expandir Abas` emitiu 8 itens (2 abas × 4 planilhas, nomes certos); `Agrupar Linhas XLSX` devolveu 4 documentos, com `pairedItem`.
+- Nenhuma pendência "leu SO a primeira" (no lote de 09/11 as 4 tinham). Mapa de Dívida: 14 → 26 linhas lidas (95 → 119 pares); Extrato: 136 → 140. Contingências (61) e Estoque (67) ficaram iguais: NÃO conferido se a 2ª aba delas tem linha de valor.
+- A 0231 ao vivo: a procuração chegou SEM tipo, zero linha e `false`, e abriu a pendência nova com o motivo certo.
+- Observado, sem fatia: no Mapa de Dívida a régua contou 16 e a leitura devolveu 26 (cobertura acima de 1 em planilha de várias abas); a procuração não foi classificada neste lote.
 
 **Defeitos fechados na branch:**
 1. **"Arquivo com acento some entre o portal e o n8n" (ALTO da P4) não era do portal nem do n8n** (`a3ceaa6`, `c8fcabd`). O Chromium do Playwright em locale POSIX descarta calado caminho não-ASCII no `setInputFiles`: 3 de 11 no input; com `LC_ALL=C.UTF-8`, 11 de 11. O encaminhamento do portal, reproduzido à parte: 11 de 11. Provado ao vivo: o reenvio dos 8 com acento deu 8 de 8 documentos. `ENVIO_CASO_ID` no `enviar-book.mts` reenvia a um mandato existente. Não provado: navegador real de cliente em Windows/macOS.
@@ -29,12 +38,8 @@
 **Suítes remedidas em 10/11 (local):** n8n 757/0; banco `run.sh` rc 0 (3.270 ok); leitor 65/0; hooks 11/0; os 12 `verificar-*` rc 0 (kit-basico 167/0, export 894/0); e2e 46/0; variações 0 achados; medidores rc 0; geradores e fixtures sem diff; tsc, eslint e `next build` rc 0. **O CI do GitHub NÃO rodou nesta branch (não há PR).**
 
 **O dono faz à mão / próximo passo, nesta ordem:**
-1. Abrir o PR e mergear (isso publica o portal).
-2. Aplicar a 0231. **O portal vai ANTES**: senão as 42 pendências do backfill aparecem "causa não classificada".
-3. Republicar a ingestão (`preparar-republicacao.mjs` + `conferir-publicado.mjs`; conferir o `multipleFiles`).
-4. Reenviar as 4 planilhas do espelho (`ENVIO_CASO_ID`) e conferir as abas no banco; abrir no editor do n8n o nó Compression e o `sheetName`.
-5. Reenviar os PDFs de balancete do Krauspenhar e do Valtra (P6 com os reais; medido: 0 das 4 versões têm o original no Storage).
-6. Decidir se apaga o mandato S124 e o "P4 linha de base - Espelho" (3 de 11).
+1. Reenviar os PDFs de balancete do Krauspenhar e do Valtra (P6 com os reais; medido: 0 das 4 versões têm o original no Storage).
+2. Decidir se apaga os mandatos de teste S124 (dois) e o "P4 linha de base - Espelho" (3 de 11).
 
 **Em fase planejada (não é lacuna desta sessão):** P7b, P8 (falha COM linha), P9, P10, P11–P15. A P12 não herda mais os 41 documentos (fechado pela 0231); continua com a bijeção.
 
