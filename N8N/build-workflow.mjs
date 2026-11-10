@@ -50,7 +50,7 @@ import {
   juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
   camadaDeTextoDoPdf, linhasCurtasDaTabela, CARACTERES_MINIMOS_POR_PAGINA, MINIMO_LINHAS_COM_NUMERO_PDF,
-  fracaoDePalavrasDobradas, MAX_FRACAO_PALAVRAS_DOBRADAS,
+  fracaoDePalavrasDobradas, MAX_FRACAO_PALAVRAS_DOBRADAS, fracaoDeNumerosColados, MAX_FRACAO_NUMEROS_COLADOS,
   celulasDaLinha, celulasEstimadas,
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
   MAX_CELULAS_POR_BLOCO, LIMIAR_COBERTURA, MINIMO_PARA_AVALIAR,
@@ -319,6 +319,7 @@ const FONTE_COBERTURA = [
   `const CARACTERES_MINIMOS_POR_PAGINA = ${CARACTERES_MINIMOS_POR_PAGINA};`,
   `const MINIMO_LINHAS_COM_NUMERO_PDF = ${MINIMO_LINHAS_COM_NUMERO_PDF};`,
   `const MAX_FRACAO_PALAVRAS_DOBRADAS = ${MAX_FRACAO_PALAVRAS_DOBRADAS};`,
+  `const MAX_FRACAO_NUMEROS_COLADOS = ${MAX_FRACAO_NUMEROS_COLADOS};`,
   // ANTES de `camadaDeTextoDoPdf`, que a chama. O portão do espelho pegou a
   // ausência dela nesta lista antes de virar `ReferenceError` em produção —
   // `toString()` não leva o escopo do módulo, e é o terceiro caso desta família
@@ -326,6 +327,8 @@ const FONTE_COBERTURA = [
   `const fracaoDePalavrasDobradas = ${fracaoDePalavrasDobradas.toString()};`,
   // ANTES de `camadaDeTextoDoPdf`, que a chama (P6) — mesma regra de ordem.
   `const linhasCurtasDaTabela = ${linhasCurtasDaTabela.toString()};`,
+  // ANTES de `camadaDeTextoDoPdf`, que a chama (P6b).
+  `const fracaoDeNumerosColados = ${fracaoDeNumerosColados.toString()};`,
   `const camadaDeTextoDoPdf = ${camadaDeTextoDoPdf.toString()};`,
 ].join('\n');
 

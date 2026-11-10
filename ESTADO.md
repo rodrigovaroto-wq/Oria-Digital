@@ -1,6 +1,6 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 124 (09–10/11/2026) — #278 mergeado e ingestão republicada; 0231 APLICADA em 10/11; régua e abas do .xlsx no ar e provadas ao vivo
+## SESSÃO 124 (09–10/11/2026) — 0231 aplicada; régua e abas do .xlsx no ar e provadas ao vivo; P6 provada no Valtra real; P6b (Krauspenhar) no PR #282
 
 > **Migration mais nova: `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql` — APLICADA EM PRODUÇÃO em 10/11/2026.**
 > - Ensaio em transação revertida antes: sonda 349, 0 ausentes, backfill 42, 82 mandatos.
@@ -41,19 +41,32 @@
 - **Mandatos de teste apagados** como Sócio de teste (originais pelo Storage, com a trilha da 0224; depois `fn_excluir_caso`): "P4 linha de base - Espelho" (3 docs), "S124 — Espelho" (11) e "S124 — Planilhas de várias abas" (5). 19 originais removidos, 0 objetos restantes, 3 eventos `caso_excluido`. 82 → 80 mandatos; sonda 0 ausentes.
 - **Corpos em produção = repositório:** md5 de `fn_registrar_campos_extraidos`, `fn_versao_extracao_concluida`, `fn_pessoa_decidiu_sem_dado`, `fn_tipo_sem_dado_por_natureza` e `fn_registrar_documento` iguais ao banco montado do repositório; ACL igual.
 - **Contingências e Estoque "iguais":** a 2ª aba delas ("Instruções", "Plan2") tem 0 linha com número no arquivo. A contagem igual está certa.
-- **Régua do Mapa de Dívida (16 para 26)** — `70735ef`: linha de planilha que termina em célula vazia era emendada na seguinte (5 contratos numa linha) e `__EMPTY_N` contava como conta. Corrigido em `cobertura.mjs`; régua continua exata em 20 de 20 PDFs de produção. **Exige republicar a ingestão.**
+- **Régua do Mapa de Dívida (16 para 26)** — `70735ef`: linha de planilha que termina em célula vazia era emendada na seguinte (5 contratos numa linha) e `__EMPTY_N` contava como conta. Corrigido em `cobertura.mjs`; régua continua exata em 20 de 20 PDFs de produção. PR #281 mergeado (`d316bd3`), ingestão republicada (63 nós batem). **Provado ao vivo:** o mesmo Mapa de Dívida agora dá régua 26 = 26 lidas, 0 falha (mandato de teste criado e apagado em seguida).
 - **Procuração sem tipo:** não é defeito. A IA leu o conteúdo (confiança 0,99) e a taxonomia não tem tipo de procuração. A pendência da 0231 é o caminho desenhado.
 - **BP Piraquara Montagens (43 × 32), explicado:** o PDF mostra cada grupo uma vez; a IA repetiu 11 linhas de subtotal ("Disponível", "Fornecedores"...) com os mesmos valores. É duplicação da leitura, não erro da régua. Separar duplicata de repetição legítima exige a coordenada da linha: vai para a **P11/P12** (a bijeção já prevê "duplicação vira pendência com o número da linha").
 - **DMPL Canastra (29 × 28), explicado, não é defeito:** a 29ª célula é o "Total" da realização da reserva, que o PDF mostra como "-"; a IA gravou valor vazio (sem inventar zero) e o gerador não conta "-".
 - Achado de passagem, sem fatia: na DMPL, `periodo_coluna` vem vazio e a `chave` é o componente do PL, não o movimento.
 
-**O dono faz à mão / próximo passo, nesta ordem:**
-1. Reenviar os PDFs de balancete do Krauspenhar e do Valtra (P6 com os reais; medido: 0 das 4 versões têm o original no Storage).
-2. Decidir se apaga os mandatos de teste S124 (dois) e o "P4 linha de base - Espelho" (3 de 11).
+**P6 com os balancetes REAIS (10/11, enviados pelo dono; mesmo hash dos originais, lidos de novo porque o fingerprint mudou; US$ 0,93):**
 
-**Em fase planejada (não é lacuna desta sessão):** P7b, P8 (falha COM linha), P9, P10, P11–P15. A P12 não herda mais os 41 documentos (fechado pela 0231); continua com a bijeção.
+| Documento | Descartadas por desalinhamento antes → depois | Pares gravados |
+|---|---|---|
+| Valtra `Balancete 1º semestre 2025` | **29 → 0** (a P6 provada no real) | 2.040 → 2.832 |
+| Valtra `Balancete 1º semestre 2026` | 0 → 1 | 2.429 → 2.468 |
+| Krauspenhar `balancete_janaago26` | **38 → 303** (causa nova, não a da P6) | 1.248 → 1.516 |
 
-**Custo observado, sem fatia:** DRE analítica e balancete do espelho a US$ 0,21 por documento (16 blocos); `medir-custo-book` no espelho dá rc 1 (estimativa por chamada abaixo do real). Abaixo do teto de US$ 5/book.
+- Valtra 2026 e Krauspenhar ainda têm 9–10 blocos com cobertura < 85% depois da 2ª passada (declarado na pendência, não silencioso).
+- **Krauspenhar, causa achada na resposta real da IA (execução 9586):** o `Extrair Texto` entrega os números COLADOS e fora de ordem (saldo anterior grudado no código da conta, saldo atual grudado no débito). 146 linhas vêm com 5 valores (o código no meio) e 144 com 3. A guarda que descarta está CERTA: tirar o código poria o saldo atual na coluna Débito.
+- **P6b (PR #282, NÃO mergeado ao fechar a sessão):** `fracaoDeNumerosColados` em `cobertura.mjs`; acima de 25% das linhas com número, o documento vai pela MESMA rota de imagem da P6, com motivo `numeros-colados`. Calibrado: Krauspenhar 72,3% (dispara); Valtra 9,4% e 6,2% (não); 4 books + 20 capturados de produção 0,0% em 96 documentos. Regra 2: 4 testes reprovam sem o detector. N8N 763/0; régua exata 20/20.
+  - Fixture **anonimizada** (dígitos por permutação fixa, palavras por rótulo sintético): o controle de segurança da sessão bloqueou o commit com dado real do cliente. Decisão do dono: opção A.
+  - CI do #282: dois tropeços de ordem/derivado já corrigidos (canastra e distress gerados ANTES da suíte do n8n; grafo regerado). Ao fechar, aguardava as suítes no `b4fb4cf`; Sonar verde.
+- **Não anonimizado, de propósito:** `N8N/test/aritmetica.test.mjs` (já no `main` antes desta sessão) tem valores reais do mesmo balancete. Ficam no histórico do git de qualquer jeito, e o teste confere identidades aritméticas (saldo anterior + débito − crédito = saldo atual) que uma permutação de dígitos quebraria.
+
+**Próxima sessão, nesta ordem:**
+1. PR #282: conferir CI verde no head, mergear, republicar a ingestão (`preparar-republicacao` + `conferir-publicado`).
+2. Reenviar `balancete_janaago26.pdf` ao mandato KRAUSPENHAR (`33b58a89-0d77-417a-8859-e193c61e8db8`) e medir: descartadas por desalinhamento (303 antes), pares gravados (1.516), `leitura_pdf = 'ocr'` com motivo `numeros-colados`, custo. O original agora ESTÁ no Storage (enviado em 10/11). Se a imagem não resolver, a P6b não fecha: dizer o número.
+3. Os blocos com cobertura < 85% no Valtra 2026 e no Krauspenhar: medir depois do passo 2 antes de abrir fatia.
+4. Seguir o plano: P7b, P8, P9, P10. P11/P12 continuam no plano (o dono decidiu não antecipar).
 
 ## SESSÃO 123 (09/11/2026) — P7: 0230 APLICADA em produção; o #276 (P4, 0229) entrou junto; a medição por documento parou em 09/11
 

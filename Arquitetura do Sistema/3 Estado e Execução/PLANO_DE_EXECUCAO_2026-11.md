@@ -28,6 +28,8 @@ mandato, e as pendências conhecidas do portal.
 
 > **Atualizado em 10/11/2026 (sessão 124):** (1) P12 não herda mais os 41 documentos de tipo financeiro com zero linha e "sem dado": a migration 0231 (escrita, NÃO aplicada) os faz abrir `extracao_falhou`; a bijeção continua. (2) P4: o achado do acento era do script de teste (Chromium em locale POSIX descarta caminho não-ASCII: 3 de 11; com `LC_ALL=C.UTF-8`, 11 de 11), não do portal nem do n8n. (3) Planilha `.xlsx` de várias abas (o n8n lia só a primeira) foi feita FORA de fatia, no repositório; só vale no ar depois de republicar a ingestão. `.xls` fica de fora. (4) Fora do ar até o merge: 0231, régua e abas. Detalhe na seção da sessão 124 do `ESTADO.md`.
 >
+> **Atualizado em 10/11/2026 (sessão 124, fim):** P6 provada no balancete real do Valtra (29 → 0). Krauspenhar tem causa própria (números colados): P6b no PR #282. 0231 aplicada; régua e abas do .xlsx no ar. P11/P12 seguem no plano.
+>
 > **Atualizado em 07/11/2026 (sessão 119b):** P4 medida — linha de base por documento dos 4 books em `LINHA_DE_BASE_P4.md` (US$ 0,61). Achado ALTO novo antes da P5: arquivo com acento no nome some entre o portal e o n8n sem rastro. (Esclarecido em 10/11: era o script de teste, não o portal nem o n8n.)
 >
 > **Atualizado em 06/11/2026 (sessão 118):** 0224 (D16) aplicada; resíduo e mandatos da S117 limpos; vistoria refeita igual. Próxima fatia: P4.
@@ -147,7 +149,8 @@ critério que fecha a fatia. Sem ele cumprido, a fatia não fecha.
 
 | # | Fatia | Pronto quando |
 |---|---|---|
-| **P6** 🟡 09/11 (sintético provado ao vivo; reais pendentes de arquivo) | **Desalinhamento de colunas** (balancete e DRE multi-coluna, a maior causa de INCOMPLETA no Krauspenhar e no Valtra). Causa raiz no fatiamento ou no contrato da resposta | As contas descartadas por desalinhamento no corpus caem a zero, ou cada uma com motivo |
+| **P6** ✅ 10/11 no Valtra real (29 → 0 descartadas); 🟡 Krauspenhar herda a P6b | **Desalinhamento de colunas** (balancete e DRE multi-coluna, a maior causa de INCOMPLETA no Krauspenhar e no Valtra). Causa raiz no fatiamento ou no contrato da resposta | As contas descartadas por desalinhamento no corpus caem a zero, ou cada uma com motivo |
+| **P6b** 🟡 10/11 (PR #282, não mergeado ao fechar) | **Números colados no texto do PDF** (Krauspenhar: 303 descartadas). O texto sai com valores grudados e fora de ordem; detector `fracaoDeNumerosColados` manda o documento à IA como imagem (rota da P6). Calibrado 72,3% × 9,4% × 0% nos books e capturas | Reenvio real do Krauspenhar com as descartadas por desalinhamento caindo a zero, ou cada uma com motivo; custo medido |
 | **P7** ✅ 09/11 (0230 aplicada: o reenvio não paga mais o documento societário sem linha; a fila com botão vira P7b) | **Fila de reprocesso.** Lote com falha parcial retoma só os documentos que falharam, sem pagar de novo o que já foi extraído | Aceite técnico da F3: retomar um lote com 1 falha custa 1 documento, não o lote inteiro |
 | **P8** (herda da P7: falha COM linha só deve ser reextraída no reenvio quando o motivo for transitório; medido em 09/11, 3 de ~75 são) | **Retentativa classificada e fallback de provedor.** Separar erro transitório (rede, 429, 5xx) de definitivo; o transitório tenta de novo e, esgotado, cai no provedor alternativo; cada tentativa registra rodou, falhou ou caiu | Uma falha simulada do provedor principal termina no alternativo, e fica registrada |
 | **P9** | **Período e entidade atribuídos errado** (`precondicao_nao_satisfeita` "sem período par", `periodo_incorreto`, `entidade_incorreta`). Causa raiz na atribuição, não na guarda | No corpus, as pendências falsas desse tipo somem e as verdadeiras continuam abrindo (controle positivo) |
