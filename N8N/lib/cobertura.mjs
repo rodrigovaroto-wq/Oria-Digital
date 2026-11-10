@@ -507,13 +507,17 @@ export function contasComOrigem(texto) {
   // ("Caixa 410", "Juros s/ empréstimo 450" — DRE em milhares: o valor está nela, e ela é conta; revisão de
   // 10/11 mediu 7→5 e "Despesas administrativas (120) (110)" sumindo). NÃO têm: dígito colado a letra
   // ("AL5", "V8", "13º"), inteiro depois de AG/C/C/CONTA/CONTRATO/Nº ("C/C 12858268" fecha o nome do banco),
-  // nem inteiro no meio ("707679 - CP") ou de 7+ dígitos (contrato: "PARCELAMENTO ICMS 11402191").
+  // nem inteiro no meio ("707679 - CP").
   const soNumeros = /^[\d.,()%\s-]+$/;
   const antesDeCodigo = /^(ag\.?|c\/c|c\.c\.?|cc|conta|cta|contrato|n[º°o]\.?|nf)$/i;
   const temCaraDeValor = (linha) => {
-    const tk = linha.split(/\s+/);
-    return tk.some((t, i) => /^\(\s*-?\d[\d.,]*\)?%?$|^-?\d[\d.]*,\d+%?$|^-?\d{1,3}(\.\d{3})+%?$|^-?\d+%$/.test(t)
-      || (i === tk.length - 1 && /^-?\d{1,6}$/.test(t) && !(i > 0 && antesDeCodigo.test(tk[i - 1]))));
+    // Natureza D/C no fim ("Caixa 450 D", "1.1.01.002 Numerário 181 D") não é nome: sai antes de olhar o inteiro final.
+    const tk = linha.replace(/\s+[dc]$/i, '').split(/\s+/);
+    if (/\(\s*-?\d[\d.,]*\s*\)|\d\s+%/.test(linha)) return true; // "(120)", "(120)(110)", "( 120 )", "12 %"
+    return tk.some((t, i) => /^-?\d[\d.]*,\d+%?$|^-?\d{1,3}(\.\d{3})+%?$|^-?\d+%$|^\d[\d.]*-$/.test(t)
+      // Inteiro nu que fecha a linha, de QUALQUER tamanho: "Receita bruta 1250000" é valor. Contrato sem "C/C"
+      // ("PARCELAMENTO ICMS 11402191") passa a ser contado como linha própria: 2 a mais no 9601, o lado barato.
+      || (i === tk.length - 1 && /^-?\d+$/.test(t) && !(i > 0 && antesDeCodigo.test(tk[i - 1]))));
   };
   let anteriorSoNumeros = false;
   const out = [];
@@ -545,13 +549,14 @@ export function contasComOrigem(texto) {
   //       ("ADIANTAMENTO A FORNECEDORES" sintética e analítica) repete 2 vezes e não encosta em cabeçalho.
   // Por que não "idêntica em N páginas": o texto não traz a quebra de página, e o N seria um palpite.
   const comValor = (l) => /\d,\d{2}/.test(l);
-  // O número que VARIA entre páginas é o contador depois de ":" ("Folha: 7", "Usuário: 94Nº reg.:", "Nível: 9") —
-  // só ele vira '#'. A versão anterior trocava todo inteiro isolado de até 3 dígitos, e em livro em MILHARES uma
+  // O número que VARIA entre páginas é o contador ("Folha: 7", "Usuário: 94Nº reg.:", "Nível: 9") — só ele vira '#'. A versão anterior trocava todo inteiro isolado de até 3 dígitos, e em livro em MILHARES uma
   // linha de tabela numérica ("530 470", "Custo 120 110", "1 | 15/01/2026 | 15000") virava molde repetido e sumia:
   // DRE 10→3, imobilizado 6→0, aging 6→0, cronograma 4→0 (revisão de 10/11). E mobília é linha SEM número que
   // meça: depois de tirar data, hora, CNPJ e o contador, não pode sobrar dígito. "Filial 0" sobra (um 0 solto é
   // indistinguível de "Caixa 0"), então fica contada: 12 linhas A MAIS no 9601, o lado barato do erro.
-  const chave = (l) => l.replace(/(:\s*)\d{1,3}(?![\d/:.,])/g, '$1#');
+  // SÓ os rótulos de contador do 9601 (Folha, Nível, Diário, Usuário) mais Página/Pág.: "Saldo anterior: 120",
+  // "Total: 85" ou "Parcela: 1 | Valor: 850" mantêm o número e nunca são mobília (2ª revisão: 6→0, 6→3, 3→0).
+  const chave = (l) => l.replace(/(folha|p[áa]g(?:ina)?\.?|usu[áa]rio|n[íi]vel|di[áa]rio)(:\s*)\d{1,3}(?![\d/:.,])/gi, '$1$2#');
   const semMedida = (l) => !/\d/.test(chave(l)
     .replace(/\d{2}\/\d{2}\/\d{4}|\d{1,2}:\d{2}(:\d{2})?|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, ''));
   const vezes = new Map();

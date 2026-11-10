@@ -1006,7 +1006,23 @@ test('régua no texto de planilha: linha que termina em célula vazia não é fr
     assert.equal(contasDe(['10 20 30', 'Juros s/ empréstimo 450', 'Caixa 410']).length, 3);
   });
   test('o nome solto continua sendo nome: agência, conta, contrato e dígito colado a letra', () => {
-    const nomes = ['BANCO AL5 AG. 0001 C/C 12858268', 'ADIANTAMENTO DE 13º SALÁRIO', 'PARCELAMENTO ICMS 11402191', 'FUNDOS V8 CASH PLATINUM F'];
+    const nomes = ['BANCO AL5 AG. 0001 C/C 12858268', 'ADIANTAMENTO DE 13º SALÁRIO', 'FUNDOS V8 CASH PLATINUM F'];
     for (const n of nomes) assert.equal(contasDe(['0,00 0,00 5.295,58 -5.295,58', n]).length, 1, n);
+  });
+
+  // 2ª REVISÃO (10/11): "Rótulo: n" que NÃO é contador de página não pode virar mobília, e o nome solto não pode
+  // engolir conta com natureza D/C, parênteses colados, "n %", "n-" ou inteiro grande. Sintéticos, só a forma.
+  test('"Rótulo: n" repetido que não é contador de página continua conta', () => {
+    assert.equal(contasDe(['Conta Caixa', 'Saldo anterior: 120', 'Saldo atual: 340', 'Conta Bancos', 'Saldo anterior: 85',
+      'Saldo atual: 90', 'Conta Clientes', 'Saldo anterior: 40', 'Saldo atual: 50']).length, 6);
+    assert.equal(contasDe(['Cliente A 10 20', 'Total: 120', 'Cliente B 30 40', 'Total: 85', 'Cliente C 5 6', 'Total: 40']).length, 6);
+    assert.equal(contasDe(['Parcela: 1 | Valor: 850', 'Parcela: 2 | Valor: 850', 'Parcela: 3 | Valor: 850']).length, 3);
+  });
+  test('o nome solto não engole conta com D/C no fim, parênteses colados, "n %", "n-" ou inteiro grande', () => {
+    assert.equal(contasDe(['120 340', 'Caixa 450 D']).length, 2);
+    assert.equal(contasDe(['530 470', 'Despesas (120)(110)']).length, 2);
+    assert.equal(contasDe(['1250000 1100000', 'Receita bruta 1250000']).length, 2);
+    assert.equal(contasDe(['35% 32%', 'Margem EBITDA 12 %']).length, 2);
+    assert.equal(contasDe(['530 470', 'Ajuste 120-']).length, 2);
   });
 }
