@@ -513,8 +513,13 @@ export function contasComOrigem(texto) {
   const temCaraDeValor = (linha) => {
     // Natureza D/C no fim ("Caixa 450 D", "1.1.01.002 Numerário 181 D") não é nome: sai antes de olhar o inteiro final.
     const tk = linha.replace(/\s+[dc]$/i, '').split(/\s+/);
-    if (/\(\s*-?\d[\d.,]*\s*\)|\d\s+%/.test(linha)) return true; // "(120)", "(120)(110)", "( 120 )", "12 %"
-    return tk.some((t, i) => /^-?\d[\d.]*,\d+%?$|^-?\d{1,3}(\.\d{3})+%?$|^-?\d+%$|^\d[\d.]*-$/.test(t)
+    // "(120)", "(120)(110)", "( 120 )"; e "12 %" pelo token "%" depois de um número (sem `\d\s+%`, que o Sonar
+    // S8786 mede como retrocesso super-linear em linha longa de espaços).
+    if (/\(\s*-?\d[\d.,]*\s*\)/.test(linha)) return true;
+    // As quatro formas de valor num token, uma regex cada (Sonar S5843: a alternância única tinha complexidade 30).
+    const formasDeValor = [/^-?\d[\d.]*,\d+%?$/, /^-?\d{1,3}(\.\d{3})+%?$/, /^-?\d+%$/, /^\d[\d.]*-$/];
+    return tk.some((t, i) => formasDeValor.some((re) => re.test(t))
+      || (t === '%' && i > 0 && /\d$/.test(tk[i - 1]))
       // Inteiro nu que fecha a linha, de QUALQUER tamanho: "Receita bruta 1250000" é valor. Contrato sem "C/C"
       // ("PARCELAMENTO ICMS 11402191") passa a ser contado como linha própria: 2 a mais no 9601, o lado barato.
       || (i === tk.length - 1 && /^-?\d+$/.test(t) && !(i > 0 && antesDeCodigo.test(tk[i - 1]))));
@@ -564,8 +569,11 @@ export function contasComOrigem(texto) {
   const chave = (l) => l
     .replace(/^(\s*(?:folha|p[áa]g(?:ina)?\.?))(:\s*)\d{1,3}(?![\d/:.,])/i, '$1$2#')
     .replace(/(usu[áa]rio|n[íi]vel|di[áa]rio)(:\s*)\d{1,3}(?![\d/:.,])/gi, '$1$2#');
+  // Data, hora e CNPJ saem um de cada vez (Sonar S5843: a alternância única tinha complexidade 27).
   const semMedida = (l) => !/\d/.test(chave(l)
-    .replace(/\d{2}\/\d{2}\/\d{4}|\d{1,2}:\d{2}(:\d{2})?|\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, ''));
+    .replace(/\d{2}\/\d{2}\/\d{4}/g, '')
+    .replace(/\d{1,2}:\d{2}(:\d{2})?/g, '')
+    .replace(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, ''));
   const vezes = new Map();
   for (const c of out) {
     const k = comValor(c.linha) ? c.linha : chave(c.linha);

@@ -46,11 +46,9 @@ import {
   MAX_LINHAS_PLANILHA, MAX_COLUNAS_PLANILHA,
 } from './lib/spreadsheet.mjs';
 import {
-  linhasComNumero, linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
+  linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
   juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
-  camadaDeTextoDoPdf, linhasCurtasDaTabela, CARACTERES_MINIMOS_POR_PAGINA, MINIMO_LINHAS_COM_NUMERO_PDF,
-  fracaoDePalavrasDobradas, MAX_FRACAO_PALAVRAS_DOBRADAS, fracaoDeNumerosColados, MAX_FRACAO_NUMEROS_COLADOS,
   celulasDaLinha, celulasEstimadas,
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
   MAX_CELULAS_POR_BLOCO, LIMIAR_COBERTURA, MINIMO_PARA_AVALIAR,
