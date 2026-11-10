@@ -41,14 +41,14 @@
 - **Mandatos de teste apagados** como Sócio de teste (originais pelo Storage, com a trilha da 0224; depois `fn_excluir_caso`): "P4 linha de base - Espelho" (3 docs), "S124 — Espelho" (11) e "S124 — Planilhas de várias abas" (5). 19 originais removidos, 0 objetos restantes, 3 eventos `caso_excluido`. 82 → 80 mandatos; sonda 0 ausentes.
 - **Corpos em produção = repositório:** md5 de `fn_registrar_campos_extraidos`, `fn_versao_extracao_concluida`, `fn_pessoa_decidiu_sem_dado`, `fn_tipo_sem_dado_por_natureza` e `fn_registrar_documento` iguais ao banco montado do repositório; ACL igual.
 - **Contingências e Estoque "iguais":** a 2ª aba delas ("Instruções", "Plan2") tem 0 linha com número no arquivo. A contagem igual está certa.
-- **Régua do Mapa de Dívida (16 para 26)** — `70735ef`: linha de planilha que termina em célula vazia era emendada na seguinte (5 contratos numa linha) e `__EMPTY_N` contava como conta. Corrigido em `cobertura.mjs`; régua continua exata em 20 de 20 PDFs de produção. **Exige republicar a ingestão.**
+- **Régua do Mapa de Dívida (16 para 26)** — `70735ef`: linha de planilha que termina em célula vazia era emendada na seguinte (5 contratos numa linha) e `__EMPTY_N` contava como conta. Corrigido em `cobertura.mjs`; régua continua exata em 20 de 20 PDFs de produção. PR #281 mergeado (`d316bd3`), ingestão republicada (63 nós batem). **Provado ao vivo:** o mesmo Mapa de Dívida agora dá régua 26 = 26 lidas, 0 falha (mandato de teste criado e apagado em seguida).
 - **Procuração sem tipo:** não é defeito. A IA leu o conteúdo (confiança 0,99) e a taxonomia não tem tipo de procuração. A pendência da 0231 é o caminho desenhado.
 - **BP Piraquara Montagens (43 × 32), explicado:** o PDF mostra cada grupo uma vez; a IA repetiu 11 linhas de subtotal ("Disponível", "Fornecedores"...) com os mesmos valores. É duplicação da leitura, não erro da régua. Separar duplicata de repetição legítima exige a coordenada da linha: vai para a **P11/P12** (a bijeção já prevê "duplicação vira pendência com o número da linha").
 - **DMPL Canastra (29 × 28), explicado, não é defeito:** a 29ª célula é o "Total" da realização da reserva, que o PDF mostra como "-"; a IA gravou valor vazio (sem inventar zero) e o gerador não conta "-".
 - Achado de passagem, sem fatia: na DMPL, `periodo_coluna` vem vazio e a `chave` é o componente do PL, não o movimento.
 
 **O dono faz à mão / próximo passo, nesta ordem:**
-1. Reenviar os PDFs de balancete do Krauspenhar e do Valtra (P6 com os reais; medido: 0 das 4 versões têm o original no Storage).
+1. Reenviar os PDFs de balancete do Krauspenhar e do Valtra — só eles provam a P6 (os 5 balancetes da AMO têm 0 pendência de desalinhamento: servem só de controle de regressão) (P6 com os reais; medido: 0 das 4 versões têm o original no Storage).
 2. Decidir se apaga os mandatos de teste S124 (dois) e o "P4 linha de base - Espelho" (3 de 11).
 
 **Em fase planejada (não é lacuna desta sessão):** P7b, P8 (falha COM linha), P9, P10, P11–P15. A P12 não herda mais os 41 documentos (fechado pela 0231); continua com a bijeção.
