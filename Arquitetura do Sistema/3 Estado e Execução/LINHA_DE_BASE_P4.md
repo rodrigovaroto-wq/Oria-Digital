@@ -1,5 +1,11 @@
 # Linha de base da leitura — P4 (07/11/2026)
 
+> **Nota de 10/11/2026 (sessão 124). As tabelas abaixo NÃO foram reescritas; são a medição de 07/11.** Esclarecidos os achados 1, 3 e 4:
+> - **Achado 1 (acento):** não era do portal nem do n8n. Era o Chromium do Playwright em locale POSIX, que descarta calado caminho não-ASCII: 3 de 11 no input; com `LC_ALL=C.UTF-8`, 11 de 11. O reenvio dos 8 com acento deu 8 de 8 documentos.
+> - **Achado 3 (DMPL "infla"):** medida errada. A IA devolve movimento × componente: 14 lidas = 14 células (Vertentes), não 4,7×. **Segue SEM explicação:** BP Piraquara Montagens 43 lidas × 32 e +1 na DMPL Canastra.
+> - **Achado 4 (régua):** título numerado contava como conta (Notas Vertentes 9→3; Notas Piraquara 24→17). A "verdade" do gerador contava cabeçalho de ano (Faturamento 24M 16→15; Mapa Piraquara 18→17; Notas Piraquara 5→4). As colunas Verdade e Régua acima trazem os valores antigos nessas linhas.
+> - Achados 2 (colunas desalinhadas) e 5 (custo) **não** mudaram.
+
 Medida em produção depois da 0229 e da republicação do n8n (o script contou 0 documentos sem `versao_medicao` em cada book — a coluna não está nas tabelas abaixo), com os 4 books sintéticos enviados pelo portal como Sócio (`Verificação/enviar-book.mts`) e cruzados com a verdade do gerador (`Verificação/linha-de-base.mts`). Custo total dos 4 lotes: US$ 0,61.
 
 **Como ler:** *Verdade* = linhas de conta que o gerador escreveu. *Régua* = o que o n8n contou no texto (o denominador de produção). *Lidas* = o que a IA devolveu. *Lidas/verdade* é a completude real; *Régua/verdade* diz se a régua conta certo.

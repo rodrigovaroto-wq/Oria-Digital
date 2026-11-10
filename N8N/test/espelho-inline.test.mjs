@@ -30,7 +30,7 @@ import { mergeClassification } from '../lib/merge.mjs';
 import { spreadsheetToText, colunasDaPlanilha, avisoTruncamentoPlanilha } from '../lib/spreadsheet.mjs';
 import { sha256Hex, chaveDoOriginal } from '../lib/hash.mjs';
 import {
-  byteEm, casaAssinatura, trechoLatin1, saborDoZip, abasDoXlsx, pareceTexto, contarFora,
+  byteEm, casaAssinatura, trechoLatin1, saborDoZip, abasDoXlsx, nomesDasAbas, pareceTexto, contarFora,
   formaDoTexto, detectarFormato,
 } from '../lib/formato.mjs';
 import { xlsxMinimo } from './zip-minimo.mjs';
@@ -504,6 +504,14 @@ const TABELA = [
   { nome: 'abasDoXlsx', lib: abasDoXlsx, casos: [
     [xlsxMinimo([['A', [['x']]], ['B', [['y']]]])], [xlsxMinimo([['A', [['x']]]])],
     [Buffer.alloc(0)], [Buffer.from('texto')],
+  ] },
+  // O que `Expandir Abas` executa para ler os nomes das abas. A cópia é toString() da lib, mas
+  // a função é AUTOCONTIDA de propósito (o toString não leva o escopo do módulo): estes casos
+  // a executam no sandbox, então um helper de módulo esquecido reprova aqui, não em produção.
+  { nome: 'nomesDasAbas', lib: nomesDasAbas, casos: [
+    ['<workbook><sheets><sheet name="Dívida" sheetId="1" state="visible" r:id="rId1"/><sheet name="Premissas CDI" sheetId="2" r:id="rId2"/></sheets></workbook>'],
+    ['<sheets><sheet name="A &amp;amp; B &lt;x&gt; &#233; &#xE9;" sheetId="1" state="hidden"/><sheet r:id="r2" name=\'Dív>ida\' state="veryHidden"/></sheets>'],
+    ['<workbook/>'], [''], [null], [42],
   ] },
   { nome: 'pareceTexto', lib: pareceTexto, casos: [
     [Buffer.from('CONTA 2025\nATIVO 137.624\n', 'utf-8')],

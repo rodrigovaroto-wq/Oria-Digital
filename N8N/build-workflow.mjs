@@ -39,7 +39,7 @@ import { orcamentoDoLote, orcamentoDoLotePorConteudo, instrucaoDeLevasDoLote, ve
 import { sha256Hex, chaveDoOriginal } from './lib/hash.mjs';
 import {
   ASSINATURAS, SEPARADORES, byteEm, casaAssinatura, saborDoZip, trechoLatin1,
-  pareceTexto, contarFora, formaDoTexto, detectarFormato, abasDoXlsx,
+  pareceTexto, contarFora, formaDoTexto, detectarFormato, abasDoXlsx, nomesDasAbas,
 } from './lib/formato.mjs';
 import {
   spreadsheetToText, colunasDaPlanilha, avisoTruncamentoPlanilha,
@@ -1095,23 +1095,39 @@ return {json:{...item, content_part: part, content_mime: mt, hash, arquivo_ref, 
 // depois de republicar: subir 2+ planilhas grandes no MESMO lote e checar que cada
 // uma virou o SEU documento, com as SUAS linhas e o aviso "N de TOTAL linhas não
 // foram enviadas", e o tempo do nó na execução.
-const codeAgruparPlanilha = (extrator) => `
+const codeAgruparPlanilha = (extrator, expandir = null) => `
 ${FONTE_SPREADSHEET}
 const entradas=$input.all();
 const passam=[];
 const grupos=new Map();
 const ctxPorOrigem=new Map();
+const errosDeAba=[];
 let extr=null;
 try{ extr=$(${JSON.stringify(extrator)}).all(); }catch(e){ extr=null; }
 if(!Array.isArray(extr)||extr.length!==entradas.length) extr=null;
+// AS ABAS DO XLSX (so' o ramo XLSX tem \`Expandir Abas\`; no XLS fica null e o codigo
+// abaixo e' o de sempre). A origem de uma linha e' o indice do item DE ABA no input do
+// extrator, e \`exp[origem]\` e' esse item: e' DELE que sai o nome da aba -- a linha do
+// \`Extract From File\` nao diz de qual aba veio.
+let exp=null;
+${expandir ? `try{ exp=$(${JSON.stringify(expandir)}).all(); }catch(e){ exp=null; }` : ''}
+if(!Array.isArray(exp)) exp=null;
 for(let i=0;i<entradas.length;i+=1){
   const raw=entradas[i].json||{};
-  if('caso_id' in raw||('error' in raw)){ passam.push({json:raw, pairedItem:{item:i}}); continue; }
-  // origem = indice no INPUT do extrator, lido do rundata dele (nao de $input, que o
-  // motor reescreve). Linhas da mesma origem tem o mesmo contexto.
+  if('caso_id' in raw){ passam.push({json:raw, pairedItem:{item:i}}); continue; }
   const pi=extr?extr[i].pairedItem:undefined;
   const origem=(pi!==undefined&&pi!==null&&typeof pi==='object'&&!Array.isArray(pi)&&Number.isInteger(pi.item))?pi.item
     :(Number.isInteger(pi)?pi:null);
+  const info=(exp&&origem!==null&&exp[origem])?(exp[origem].json||null):null;
+  const nomeada=!!(info&&info.abas_nomes_lidos===true&&typeof info.aba_nome==='string');
+  // Item de erro do extrator. Numa aba nomeada o erro e' DA ABA (a pendencia a nomeia, as
+  // outras abas seguem); decide-se depois do laco, quando se sabe se o documento teve linha.
+  if('error' in raw){
+    if(nomeada) errosDeAba.push({i,raw,origem,info}); else passam.push({json:raw, pairedItem:{item:i}});
+    continue;
+  }
+  // origem = indice no INPUT do extrator, lido do rundata dele (nao de $input, que o
+  // motor reescreve). Linhas da mesma origem tem o mesmo contexto.
   let ctx;
   if(origem!==null&&ctxPorOrigem.has(origem)) ctx=ctxPorOrigem.get(origem);
   else{
@@ -1121,21 +1137,166 @@ for(let i=0;i<entradas.length;i+=1){
   }
   if(!ctx){ passam.push({json:raw, pairedItem:{item:i}}); continue; }
   const chave=ctx.hash||ctx.nome_original||('__sem_chave_'+i);
-  if(!grupos.has(chave)) grupos.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i});
+  // CONFERENCIA CRUZADA, a que impede uma aba de ir parar no documento do vizinho: o
+  // documento da aba vem por DUAS contas independentes -- o contexto que o motor
+  // resolve (itemMatching) e a chave que \`Expandir Abas\` carimbou no item da aba. Se
+  // divergem o pareamento esta quebrado, e este no' NAO tem \`onError\`: a execucao
+  // para, visivel, em vez de gravar a tabela de um documento sob o nome de outro.
+  // SEM origem por linha (rundata do extrator sem pairedItem) nao ha como saber a aba, mas o
+  // DOCUMENTO ainda se confere: a chave que o contexto resolveu tem de ser de algum documento
+  // que \`Expandir Abas\` carimbou.
+  if(!info&&exp&&(ctx.hash||ctx.nome_original)&&exp.some((x)=>x.json&&x.json.doc_chave)&&!exp.some((x)=>x.json&&x.json.doc_chave===chave)) throw new Error('Agrupar Linhas: o contexto resolveu o documento '+chave+', que nao esta entre os que Expandir Abas carimbou -- pareamento aba/documento quebrado.');
+  if(info&&info.doc_chave&&info.doc_chave!==chave) throw new Error('Agrupar Linhas: a aba "'+info.aba_nome+'" foi carimbada para o documento '+info.doc_chave+' mas o contexto resolveu '+chave+' -- pareamento aba/documento quebrado.');
+  if(!grupos.has(chave)) grupos.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i,abas:new Map(),motivo:null});
   const g=grupos.get(chave);
+  // \`aba\` = onde ESTA linha cai: a aba nomeada dela, ou o grupo inteiro (XLS, ou xlsx
+  // cujo workbook nao foi lido -- ai' e' o comportamento de sempre, uma aba so').
+  let aba=g;
+  if(nomeada){
+    if(!g.abas.has(origem)) g.abas.set(origem,{nome:info.aba_nome,oculta:info.aba_oculta===true,ordem:info.aba_ordem,linhas:[],colunas:new Set(),total:0,erro:null});
+    aba=g.abas.get(origem);
+  } else if(info&&info.abas_motivo) g.motivo=info.abas_motivo;
   const lote=Array.isArray(raw.data)?raw.data:[raw];
   for(let k=0;k<lote.length;k+=1){
     const linha=lote[k];
-    g.total+=1;
-    if(linha&&typeof linha==='object'){ const ks=Object.keys(linha); for(let c=0;c<ks.length;c+=1) g.colunas.add(ks[c]); }
-    if(g.linhas.length<MAX_LINHAS_PLANILHA) g.linhas.push(linha);
+    aba.total+=1;
+    if(linha&&typeof linha==='object'){ const ks=Object.keys(linha); for(let c=0;c<ks.length;c+=1) aba.colunas.add(ks[c]); }
+    if(aba.linhas.length<MAX_LINHAS_PLANILHA) aba.linhas.push(linha);
   }
 }
+// Erro de aba: entra no grupo do SEU documento se ele teve alguma linha lida; sem grupo
+// (nenhuma aba deu linha) o item de erro passa intacto e o Recompor abre a falha do
+// documento, como sempre.
+for(const e of errosDeAba){
+  const g=grupos.get(e.info.doc_chave);
+  if(!g){ passam.push({json:e.raw, pairedItem:{item:e.i}}); continue; }
+  if(!g.abas.has(e.origem)) g.abas.set(e.origem,{nome:e.info.aba_nome,oculta:e.info.aba_oculta===true,ordem:e.info.aba_ordem,linhas:[],colunas:new Set(),total:0,erro:null});
+  g.abas.get(e.origem).erro=typeof e.raw.error==='string'?e.raw.error:((e.raw.error&&e.raw.error.message)||'sem mensagem');
+}
 const agrupados=[];
-for(const g of grupos.values()){
-  agrupados.push({json:{planilha_agrupada:true, linhas:g.linhas, total_linhas:g.total, colunas:Array.from(g.colunas)}, pairedItem:{item:g.primeiro}});
+for(const [chave,g] of grupos.entries()){
+  if(g.abas.size===0){
+    // As abas FORAM lidas (Expandir Abas listou os nomes) mas as linhas chegaram sem origem:
+    // vao juntas, e e' isso que a pendencia tem de dizer -- nunca \"leu so a primeira\".
+    let juntas=null;
+    if(exp){
+      for(let k=0;k<exp.length;k+=1){
+        const inf=exp[k].json||{};
+        if(inf.doc_chave===chave&&inf.abas_nomes_lidos===true){ if(!juntas) juntas=[]; juntas.push(inf.aba_nome+(inf.aba_oculta===true?' (oculta)':'')); }
+      }
+    }
+    agrupados.push({json:{planilha_agrupada:true, linhas:g.linhas, total_linhas:g.total, colunas:Array.from(g.colunas), abas_motivo:g.motivo, abas_juntas:juntas}, pairedItem:{item:g.primeiro}});
+    continue;
+  }
+  // ABA SEM LINHA NENHUMA nao e' falha (o extrator nao emite item para ela): entra com
+  // total 0, pela lista que \`Expandir Abas\` fez, para o texto dizer que existe e esta vazia.
+  for(let k=0;k<exp.length;k+=1){
+    const inf=exp[k].json||{};
+    if(inf.doc_chave===chave&&inf.abas_nomes_lidos===true&&!g.abas.has(k)) g.abas.set(k,{nome:inf.aba_nome,oculta:inf.aba_oculta===true,ordem:inf.aba_ordem,linhas:[],colunas:new Set(),total:0,erro:null});
+  }
+  const abas=Array.from(g.abas.values()).sort((a,b)=>a.ordem-b.ordem).map((a)=>({nome:a.nome,oculta:a.oculta,linhas:a.linhas,total_linhas:a.total,colunas:Array.from(a.colunas),erro:a.erro}));
+  agrupados.push({json:{planilha_agrupada:true, abas}, pairedItem:{item:g.primeiro}});
 }
 return passam.concat(agrupados);
+`.trim();
+
+// --- AS ABAS DO XLSX: de uma aba so' para todas (09/11/2026) -----------------------
+//
+// O DEFEITO, medido ao vivo. O `Extract From File` de XLSX, sem `sheetName`, le SO a
+// primeira aba (n8n-nodes-base 2.46.6, `fromFile.operation.js:166-173`: `SheetNames[0]`
+// quando `options.sheetName` e' vazio). No book-espelho as 4 planilhas tem 2 abas e todas
+// perderam a segunda (Mapa de Divida, Contingencias, Estoque, Extrato); antes disso
+// `Endividamento Krauspenhar.xlsx` gravou 0 linhas porque a 1a aba era um indice. Ate aqui
+// so' a pendencia de `abasDoXlsx` dizia que a leitura era parcial; agora as abas SAO lidas.
+//
+// O DESENHO, premissa por premissa (conferidas contra o FONTE do n8n 2.46.6 publicado --
+// o `release` do sentry na pagina da instancia diz n8n@2.46.6, e o tarball
+// n8n-nodes-base@2.46.6 foi lido --, NAO contra uma execucao: ver "NAO CONFIRMADO" abaixo):
+//   Copiar Como ZIP -> Ler Abas do XLSX -> Expandir Abas -> Extrair XLSX -> Agrupar Linhas XLSX
+//  1. O no' Code nao tem `zlib` (premissa de lib/formato.mjs), e o nome da aba mora em
+//     `xl/workbook.xml`, comprimido. O no' nativo `Compression` (decompress) existe nessa
+//     versao e devolve cada entrada do zip como binario (`file_0`, `file_1`...). Mas ele so'
+//     aceita `fileExtension` zip/gz/tar (`Compression.node.js:335-374`) e um .xlsx declara
+//     `xlsx`: por isso `Copiar Como ZIP` poe, ao lado do original, uma COPIA do binario
+//     com extensao zip. O original segue intacto sob `data` (decisao do dono: nada de
+//     separar o arquivo no portal; o Upload Storage e o hash continuam sobre o arquivo todo).
+//  2. `Expandir Abas` le o `workbook.xml`, tira os `<sheet name=...>` NA ORDEM DO WORKBOOK
+//     (lib/formato.mjs, nomesDasAbas, com entidades XML desfeitas e a marca de aba oculta) e
+//     emite UM ITEM POR ABA, cada um com o binario ORIGINAL (nao o descomprimido). Aba oculta
+//     e' lida e fica marcada no texto: premissas moram nelas.
+//  3. `Extrair XLSX` recebe `options.sheetName = {{ $json.aba_nome }}`. O parametro e'
+//     resolvido POR ITEM (`getNodeParameter('options', i)`, `fromFile.operation.js:67`).
+//  4. `Agrupar Linhas XLSX` junta as abas de volta num item por documento (ver
+//     codeAgruparPlanilha) e o `Recompor` escreve o texto com um cabecalho por aba.
+//
+// O PAREAMENTO ITEM<->DOCUMENTO, que e' onde isto falharia calado. Cada no' novo carimba
+// `pairedItem` do documento de origem; `Expandir Abas` carimba mais a `doc_chave` (hash do
+// arquivo) em cada item de aba, e o `Agrupar` CONFERE essa chave contra o contexto que o
+// motor resolve -- divergiu, a execucao para. O original vem de `$('Copiar Como ZIP').all()`
+// POR INDICE, e o tamanho e' conferido (o `Compression` devolve um item por entrada, mesmo
+// em erro: `Compression.node.js:395-410`).
+//
+// QUANDO O WORKBOOK NAO SE LE (descompressao recusada -- o `Compression` tem teto de tamanho
+// descomprimido e de entradas --, workbook.xml ausente, nenhuma `<sheet>`): o documento cai
+// no comportamento ANTIGO, um item, sem `sheetName` (1a aba), com `abas_nomes_lidos:false` e
+// o motivo; e a pendencia "leu SO a primeira" continua abrindo, agora dizendo o motivo.
+// Nunca silencio (regra 1).
+//
+// shortcut: `.xls` (OLE2, binario antigo) fica FORA -- nao e' zip e o nome das abas nao sai
+// do `Compression`; segue lendo so' a 1a aba, sem aviso de contagem (nao ha `abasDoXlsx`
+// para ele). Subir quando aparecer um .xls de mandato com dado fora da 1a aba: ler o BIFF
+// ou pedir ao portal para converter para xlsx.
+// shortcut: o teto de linhas/colunas e' POR ABA (MAX_LINHAS_PLANILHA por aba, nao por
+// documento); um workbook de 10 abas cheias manda ate' 10x o texto. Subir o rigor (teto por
+// documento) se o `Orcamento do Lote` passar a recusar planilhas de varias abas.
+//
+// NAO CONFIRMADO CONTRA UMA EXECUCAO (so' se prova ao vivo depois de republicar): (a) que o
+// `Compression` descomprime um .xlsx de verdade e entrega `xl/workbook.xml` com `fileName`
+// terminando em workbook.xml (o fonte do `prepareBinaryData` esta no n8n-core, que nao
+// esta no repositorio; o codigo aceita `xl/workbook.xml` e `workbook.xml`); (b) o teto de
+// descompressao da instancia (`CompressionNodeConfig`) frente a uma planilha de 100 mil
+// linhas -- estourando, cai no fallback acima; (c) que o pairedItem encadeia ate' o
+// `Preparar Conteudo` atraves dos tres no's novos e do Merge.
+const CODE_COPIAR_COMO_ZIP = `
+const bin=($input.item.binary||{}).data;
+if(!bin) throw new Error('Copiar Como ZIP: o item nao tem binario sob data');
+// O original FICA sob data; a copia, so' com a extensao trocada, e' o que o no Compression le.
+return {json:$input.item.json, binary:{data:bin, zip:{...bin, fileExtension:'zip', fileName:'planilha.zip', mimeType:'application/zip'}}};
+`.trim();
+
+const CODE_EXPANDIR_ABAS = `
+const nomesDasAbas = ${nomesDasAbas.toString()};
+const descomprimidos=$input.all();
+let originais=null;
+try{ originais=$('Copiar Como ZIP').all(); }catch(e){ originais=null; }
+// Sem o original nao ha o que ler depois: o Compression devolve UM item por entrada, entao
+// tamanho diferente e' pareamento quebrado -- para a execucao, visivel (este no nao tem onError).
+if(!Array.isArray(originais)||originais.length!==descomprimidos.length) throw new Error('Expandir Abas: o no Copiar Como ZIP devolveu '+(Array.isArray(originais)?originais.length:'nada')+' item(ns) e a descompressao '+descomprimidos.length+' -- nao da para parear cada planilha ao seu original.');
+const saida=[];
+for(let i=0;i<descomprimidos.length;i+=1){
+  const d=descomprimidos[i];
+  const orig=originais[i];
+  const ctx=orig.json||{};
+  const docChave=ctx.hash||ctx.nome_original||null;
+  let abas=null; let motivo=null;
+  try{
+    const bins=d.binary||{};
+    const k=Object.keys(bins).find((n)=>/(^|[\\\\/])workbook\\.xml$/.test((bins[n]||{}).fileName||''));
+    if(!k) throw new Error(d.json&&d.json.error?'a descompressao falhou: '+d.json.error:'xl/workbook.xml nao veio da descompressao');
+    const buf=await this.helpers.getBinaryDataBuffer(i,k);
+    abas=nomesDasAbas(buf.toString('utf8'));
+    if(!abas||abas.length===0) throw new Error('o workbook.xml nao lista nenhuma aba');
+  }catch(e){ abas=null; motivo=String(e&&e.message?e.message:e); }
+  const base={binary:{data:orig.binary.data}, pairedItem:{item:i}};
+  if(!abas){
+    saida.push({...base, json:{doc_chave:docChave, aba_nome:'', aba_oculta:false, aba_ordem:0, abas_total:null, abas_nomes_lidos:false, abas_motivo:motivo}});
+    continue;
+  }
+  for(let k=0;k<abas.length;k+=1){
+    saida.push({...base, json:{doc_chave:docChave, aba_nome:abas[k].nome, aba_oculta:abas[k].oculta, aba_ordem:k, abas_total:abas.length, abas_nomes_lidos:true}});
+  }
+}
+return saida;
 `.trim();
 
 // --- Code (ALL ITEMS): RECOMPÕE o que os 5 extratores por formato devolveram --
@@ -1338,7 +1499,7 @@ for(let i=0;i<entradas.length;i+=1){
   // posicao criaria dois documentos que o banco depois fundiria, e a identidade
   // do sistema passaria a ter duas definicoes diferentes.
   const chave=ctx.hash||ctx.nome_original||('__sem_chave_'+i);
-  if(!porDocumento.has(chave)) porDocumento.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i});
+  if(!porDocumento.has(chave)) porDocumento.set(chave,{ctx,linhas:[],colunas:new Set(),total:0,primeiro:i,abas:null,motivo:null,juntas:null});
   const grupo=porDocumento.get(chave);
   // SEM SPREAD (17/09/2026): \`push(...array)\` passa cada elemento como argumento
   // e estoura a pilha acima de ~120 mil linhas -- o mesmo defeito do Merge. O
@@ -1346,6 +1507,11 @@ for(let i=0;i<entradas.length;i+=1){
   // primeiras linhas + os totais medidos sobre todas); os outros dois formatos
   // continuam aceitos, so' que em laco.
   if(raw.planilha_agrupada===true){
+    // XLSX com as abas lidas UMA A UMA (\`Expandir Abas\` + \`Agrupar Linhas XLSX\`): cada aba
+    // vem com as suas linhas, o seu total e o seu erro. O texto sai por aba, abaixo.
+    if(Array.isArray(raw.abas)){ grupo.abas=(grupo.abas||[]).concat(raw.abas); continue; }
+    if(raw.abas_motivo) grupo.motivo=raw.abas_motivo;
+    if(Array.isArray(raw.abas_juntas)) grupo.juntas=raw.abas_juntas;
     for(let k=0;k<raw.linhas.length;k+=1) grupo.linhas.push(raw.linhas[k]);
     grupo.total+=Number(raw.total_linhas)||raw.linhas.length;
     for(let k=0;k<raw.colunas.length;k+=1) grupo.colunas.add(raw.colunas[k]);
@@ -1361,11 +1527,41 @@ for(let i=0;i<entradas.length;i+=1){
     grupo.linhas.push(linha);
   }
 }
-const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,primeiro})=>{
+const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,primeiro,abas,motivo,juntas})=>{
+  // AS ABAS, quando vieram uma a uma. Cada tabela leva um cabecalho com o NOME da aba (so'
+  // quando ha mais de uma; uma aba so' sai como sempre saiu) para a IA e a regua de cobertura
+  // saberem onde cada tabela comeca. O teto de linhas/colunas vale POR ABA, e o aviso de corte
+  // diz qual aba cortou. Aba sem linha NAO e' falha (fica no texto como "sem linhas"); aba com
+  // erro do extrator NAO foi lida e a pendencia diz isso -- nunca silencio (regra 1).
+  let textoDasAbas=null; const avisosDasAbas=[]; let totalDasAbas=0;
+  if(abas){
+    const varias=abas.length>1;
+    const partes=[];
+    for(const a of abas){
+      totalDasAbas+=Number(a.total_linhas)||0;
+      const nome=a.nome+(a.oculta?' (oculta)':'');
+      const cab=varias?'=== ABA: '+nome+(a.erro?' (NAO LIDA)':(a.total_linhas===0?' (sem linhas)':''))+' ===':'';
+      if(a.erro){
+        avisosDasAbas.push('A aba "'+a.nome+'" NAO foi lida pelo extrator ('+a.erro+'): o que ela contem NAO chegou ao banco nem ao book.');
+        partes.push(cab||'(aba nao lida)');
+      } else if(a.total_linhas===0){
+        partes.push(cab||'(planilha vazia)');
+      } else {
+        const cols=Array.isArray(a.colunas)?a.colunas:undefined;
+        partes.push((cab?cab+'\\n':'')+spreadsheetToText(a.linhas,{colunas:cols,totalLinhas:a.total_linhas}));
+        const av=avisoTruncamentoPlanilha(a.linhas,{totais:{linhas:a.total_linhas,colunas:cols?cols.length:0}});
+        if(av) avisosDasAbas.push(varias?'Aba "'+a.nome+'": '+av:av);
+      }
+    }
+    textoDasAbas=partes.join('\\n\\n');
+    // Os bytes mostram MAIS planilhas do que o workbook listou: o que sobrou nao foi lido.
+    if(ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>abas.length)
+      avisosDasAbas.push('O arquivo .xlsx tem '+ctx.abas_xlsx+' planilha(s) nos bytes, mas o workbook listou so '+abas.length+': as '+(ctx.abas_xlsx-abas.length)+' restante(s) NAO foram lidas.');
+  }
   // Os TOTAIS vem da medicao sobre a planilha inteira (nao do que sobrou depois do
   // corte): o texto e o aviso dizem o numero verdadeiro de linhas e colunas.
   const uniaoColunas=Array.from(colunas);
-  const textoPlanilha=spreadsheetToText(linhas,{colunas:uniaoColunas,totalLinhas:total});
+  const textoPlanilha=textoDasAbas!==null?textoDasAbas:spreadsheetToText(linhas,{colunas:uniaoColunas,totalLinhas:total});
   return {pairedItem:{item:primeiro},json:{...ctx,
     content_part: parteDeTexto(PROVEDOR, textoPlanilha),
     // \`text\`: A MESMA CORRECAO DO CASO XML, e o mesmo achado (revisao
@@ -1389,8 +1585,9 @@ const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,pr
     // Planilha extraida com sucesso NAO abre mais a pendencia de 'nao lida' --
     // so' abre a de TRUNCAMENTO, se a planilha estourar o teto (regra 1: so'
     // declara ausencia onde ela e' real).
+    abas_lidas: abas?abas.map((a)=>({nome:a.nome,oculta:a.oculta===true,linhas:a.total_linhas,lida:!a.erro})):null,
     aviso_conteudo: [
-      avisoTruncamentoPlanilha(linhas,{totais:{linhas:total,colunas:uniaoColunas.length}}),
+      ...(abas?avisosDasAbas:[avisoTruncamentoPlanilha(linhas,{totais:{linhas:total,colunas:uniaoColunas.length}})]),
       // XLSX COM MAIS DE UMA ABA: o \`Extract From File\` leu so' a primeira. O
       // que estava nas outras sumia sem pendencia -- \`Endividamento
       // Krauspenhar.xlsx\` gravou 0 linhas porque a 1a aba e' um indice e a
@@ -1398,8 +1595,17 @@ const reconstruidos=[...porDocumento.values()].map(({ctx,linhas,colunas,total,pr
       // NOME delas nao, porque mora no workbook.xml comprimido e o no' Code nao
       // tem zip. O conteudo lido NAO e' descartado: so' deixa de ser apresentado
       // como o arquivo inteiro.
-      (ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>1)
-        ? 'O arquivo .xlsx tem '+ctx.abas_xlsx+' abas e o extrator nativo leu SO a primeira ('+total+' linha(s)); as outras '+(ctx.abas_xlsx-1)+' aba(s) NAO foram lidas e a tabela financeira pode estar em qualquer uma delas. Os nomes das abas nao estao disponiveis (ficam no workbook.xml, comprimido). Abra o arquivo e reenvie a aba certa, ou confirme que a primeira e a unica com dado.'
+      // So' acusa quando as abas NAO foram lidas uma a uma (workbook ilegivel, ou o no'
+      // de abas nao rodou): ai' vale o comportamento de sempre, uma aba so', e o motivo
+      // vem junto. Com as abas lidas, quem acusa e' o bloco por aba acima.
+      (!abas&&juntas&&juntas.length>1)
+        ? 'O arquivo .xlsx teve '+juntas.length+' aba(s) lida(s) ('+juntas.join(', ')+'), mas o extrator nao devolveu a ORIGEM de cada linha: as '+total+' linha(s) vieram JUNTAS num quadro so, com as colunas em uniao e SEM separacao por aba. Os numeros estao no texto, mas nao se sabe de qual aba cada linha saiu: conferir na revisao.'
+        : null,
+      (!abas&&juntas&&ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>juntas.length)
+        ? 'Os bytes do .xlsx mostram '+ctx.abas_xlsx+' planilha(s) e so '+juntas.length+' foram listadas: as demais NAO foram lidas.'
+        : null,
+      (!abas&&!juntas&&ctx.formato_detectado==='xlsx'&&Number.isFinite(ctx.abas_xlsx)&&ctx.abas_xlsx>1)
+        ? 'O arquivo .xlsx tem '+ctx.abas_xlsx+' abas e o extrator nativo leu SO a primeira ('+total+' linha(s)); as outras '+(ctx.abas_xlsx-1)+' aba(s) NAO foram lidas e a tabela financeira pode estar em qualquer uma delas. Os nomes das abas nao estao disponiveis (ficam no workbook.xml, comprimido'+(motivo?'; a leitura dele falhou: '+motivo:'')+'). Abra o arquivo e reenvie a aba certa, ou confirme que a primeira e a unica com dado.'
         : null,
     ].filter(Boolean).join(' | ')||null,
   }};
@@ -2774,8 +2980,21 @@ throw new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') +
   // RECONHECE o item de erro que o n8n emite (`{error: "..."}`, sem `caso_id`) e
   // preserva a pendência. Até 12/09 ele tratava esse item como LINHA DE
   // PLANILHA, e a mensagem de erro virava o conteúdo do documento.
+  // AS ABAS (09/11/2026): ver CODE_COPIAR_COMO_ZIP. Tres nos novos antes do extrator, que
+  // agora le A ABA QUE O ITEM TRAZ (um item por aba, original intacto).
+  node('Copiar Como ZIP', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForEachItem', jsCode: CODE_COPIAR_COMO_ZIP,
+  }, { onError: 'continueRegularOutput' }),
+  node('Ler Abas do XLSX', 'n8n-nodes-base.compression', 1.1, {
+    operation: 'decompress', binaryPropertyName: 'zip', outputPrefix: 'file_',
+  }, { onError: 'continueRegularOutput' }),
+  node('Expandir Abas', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForAllItems', jsCode: CODE_EXPANDIR_ABAS,
+  }),
   node('Extrair XLSX', 'n8n-nodes-base.extractFromFile', 1, {
     operation: 'xlsx', binaryPropertyName: 'data',
+    // Vazio = a 1a aba (o fallback do workbook ilegivel). Resolvido por item.
+    options: { sheetName: "={{ $json.aba_nome || '' }}" },
   }, { onError: 'continueRegularOutput' }),
   node('Extrair XLS', 'n8n-nodes-base.extractFromFile', 1, {
     operation: 'xls', binaryPropertyName: 'data',
@@ -2784,7 +3003,7 @@ throw new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') +
   // SEM `onError`, como o Recompor: falhar aqui tem de ser visível, não virar
   // planilha vazia. Nó Code, não Postgres: não substitui o contexto do lote.
   node('Agrupar Linhas XLSX', 'n8n-nodes-base.code', 2, {
-    mode: 'runOnceForAllItems', jsCode: codeAgruparPlanilha('Extrair XLSX'),
+    mode: 'runOnceForAllItems', jsCode: codeAgruparPlanilha('Extrair XLSX', 'Expandir Abas'),
   }),
   node('Agrupar Linhas XLS', 'n8n-nodes-base.code', 2, {
     mode: 'runOnceForAllItems', jsCode: codeAgruparPlanilha('Extrair XLS'),
@@ -2927,10 +3146,12 @@ throw new Error((r.orcamento_mensagem || 'Lote recusado sem motivo informado') +
     mode: 'runOnceForAllItems', jsCode: CODE_RECOMPOR_CONTEXTO,
   }, CODE_CONTINUA),
 
-  // O CURTO-CIRCUITO DO DEDUP (0118). A `fn_registrar_documento` já respondeu se
-  // este arquivo foi extraído antes com o MESMO prompt+modelo+esquema e se aquela
-  // extração tem linha no banco. Quando sim, não há nada a pedir à OpenAI: o dado
-  // já está lá, sob a mesma versão, e o item pula direto para a reconciliação.
+  // O CURTO-CIRCUITO DO DEDUP (0118, critério ampliado na 0230). A `fn_registrar_documento`
+  // já respondeu se este arquivo foi extraído antes com o MESMO prompt+modelo+esquema e se
+  // aquela extração está CONCLUÍDA (`fn_versao_extracao_concluida`): tem linha no banco, OU é
+  // documento societário que a leitura declarou sem dado financeiro, sem falha aberta (medido
+  // em produção em 09/11/2026: 29 certidões/organogramas/contratos eram pagos a cada reenvio).
+  // Quando sim, não há nada a pedir à OpenAI e o item pula direto para a reconciliação.
   //
   // O IF fica AQUI, e não dentro do `Montar Req Extracao`, por uma restrição do
   // n8n que a 0026 já tinha mapeado: aquele nó é `runOnceForEachItem` e não pode
@@ -3184,11 +3405,14 @@ const connections = {
   // dizendo o que o arquivo É e não só o que ele alegava ser).
   'Roteador de Formato': { main: [
     [{ node: 'Extrair Texto', type: 'main', index: 0 }],
-    [{ node: 'Extrair XLSX', type: 'main', index: 0 }],
+    [{ node: 'Copiar Como ZIP', type: 'main', index: 0 }],
     [{ node: 'Extrair XLS', type: 'main', index: 0 }],
     [{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 3 }],
   ] },
   'Extrair Texto': { main: [[{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 0 }]] },
+  'Copiar Como ZIP': { main: [[{ node: 'Ler Abas do XLSX', type: 'main', index: 0 }]] },
+  'Ler Abas do XLSX': { main: [[{ node: 'Expandir Abas', type: 'main', index: 0 }]] },
+  'Expandir Abas': { main: [[{ node: 'Extrair XLSX', type: 'main', index: 0 }]] },
   'Extrair XLSX': { main: [[{ node: 'Agrupar Linhas XLSX', type: 'main', index: 0 }]] },
   'Extrair XLS': { main: [[{ node: 'Agrupar Linhas XLS', type: 'main', index: 0 }]] },
   'Agrupar Linhas XLSX': { main: [[{ node: 'Juntar Extracao de Conteudo', type: 'main', index: 1 }]] },

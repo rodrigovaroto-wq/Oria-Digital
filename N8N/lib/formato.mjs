@@ -104,6 +104,42 @@ export function abasDoXlsx(buf) {
   return partes.size;
 }
 
+// OS NOMES DAS ABAS, lidos do texto de `xl/workbook.xml` — a metade que `abasDoXlsx` não
+// alcança (o nome mora no workbook, comprimido). Quem descomprime é o nó nativo
+// `Compression` (n8n-nodes-base 2.46.6: `Compression.node.js`, operation decompress, que
+// devolve cada entrada do zip como binário); esta função só LÊ o texto que ele entrega.
+// Devolve `[{nome, oculta}]` NA ORDEM DO WORKBOOK (a ordem em que o `<sheet>` aparece é a
+// ordem das abas; `sheetId` não é), ou null quando não é texto. `state="hidden"` e
+// `"veryHidden"` marcam oculta: a aba é LIDA mesmo assim (premissas costumam morar nelas) e
+// só ganha a marca no texto. Atributo em qualquer ordem (openpyxl escreve `name sheetId
+// state r:id`, o Excel escreve `name sheetId r:id`). Entidades XML desfeitas numa passada
+// só, para `&amp;lt;` virar `&lt;` e não `<`. Autocontida de propósito: atravessa para o nó
+// por `toString()`, que não leva o escopo do módulo.
+export function nomesDasAbas(xml) {
+  if (typeof xml !== 'string') return null;
+  const desfazer = (s) => s.replace(/&(#x[0-9a-fA-F]+|#[0-9]+|lt|gt|quot|apos|amp);/g, (m, e) => {
+    if (e[0] === '#') {
+      const cp = e[1] === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
+      return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m;
+    }
+    return { lt: '<', gt: '>', quot: '"', apos: "'", amp: '&' }[e];
+  });
+  const atributo = (attrs, nome) => {
+    const m = new RegExp('(?:^|\\s)' + nome + '\\s*=\\s*(?:"([^"]*)"|\'([^\']*)\')').exec(attrs);
+    return m ? (m[1] !== undefined ? m[1] : m[2]) : null;
+  };
+  const abas = [];
+  const re = /<sheet\b((?:"[^"]*"|'[^']*'|[^>"'])*)>/g;
+  let m = re.exec(xml);
+  while (m !== null) {
+    const nome = atributo(m[1], 'name');
+    const estado = atributo(m[1], 'state');
+    if (nome !== null) abas.push({ nome: desfazer(nome), oculta: estado === 'hidden' || estado === 'veryHidden' });
+    m = re.exec(xml);
+  }
+  return abas;
+}
+
 /** Bytes → string latin1, sem depender de TextDecoder (o nó Code não garante). */
 export function trechoLatin1(buf, inicio, fim) {
   if (!buf) return '';

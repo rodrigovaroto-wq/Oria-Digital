@@ -300,7 +300,8 @@ export function ehLinhaSemValor(linha) {
     .replace(/\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, ' ')   // 31/12/2025
     .replace(diaDeMes, ' ')                             // 31 de dezembro
     .replace(quantosDeDuracao, ' ')                     // 36 MESES
-    .replace(/\b(19|20)\d{2}\b/g, ' ');                // 2025
+    .replace(/\b(19|20)\d{2}\b/g, ' ')                 // 2025
+    .replace(/^\s*\d{1,2}[.)]\s+(?=[^\d\s])/, ' ');   // "3. Parcelamentos tributários": o 3 numera, não mede
   return !/\d/.test(resto);
 }
 
@@ -401,6 +402,10 @@ export function ehLinhaDeConta(linha) {
     /^\(?valores expressos/i,              // "(Valores expressos em milhares…)"
     /^exerc[íi]cios? encerrados?/i,        // "Exercícios encerrados em 31 de dezembro…"
     /^(nota|obs)\b|^_{3,}/i,               // nota de rodapé, linha de assinatura
+    // Cabeçalho que o n8n escreve entre as abas de uma planilha ("=== ABA: Plan2 ==="). O nome da
+    // aba é do cliente e pode ter número ("Plan2", "2. Endividamento", "Dívida 12-2025"), que
+    // faria dele uma "conta"; é título, não conta (09/11/2026, revisão da fatia das abas).
+    /^=== ABA:/,
     // Cabeçalho de coluna: só anos/datas, sem rótulo de conta antes.
     /^[\s|]*((19|20)\d{2}|\d{2}\/\d{2}\/\d{4})([\s|]+((19|20)\d{2}|\d{2}\/\d{2}\/\d{4}))*[\s|]*$/,
   ];

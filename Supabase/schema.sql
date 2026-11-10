@@ -9466,6 +9466,22 @@ CREATE FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_t
 $$;
 
 --
+-- Name: fn_pessoa_decidiu_sem_dado(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  select exists (select 1
+                   from pendencia pe
+                  where pe.documento_id = p_documento_id
+                    and pe.tipo = 'extracao_falhou'
+                    and pe.estado = 'resolvida'
+                    and coalesce(pe.resolvida_por, '') <> 'sistema:extracao'
+                    and position('Motivo: a leitura declarou que este documento não tem dado financeiro, mas ' in coalesce(pe.descricao, '')) > 0)
+$$;
+
+--
 -- Name: fn_pode_criar_caso(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -12686,6 +12702,7 @@ declare
   v_herdadas           jsonb;
   v_medicao            jsonb;
   v_invalida           jsonb;
+  v_decidiu_pessoa     boolean;
 begin
   -- 0203: o tipo do documento entra na inferência da seção (fn_secao_canonica_da_secao_bruta).
   select d.tipo_taxonomia into v_tipo
@@ -12839,12 +12856,24 @@ begin
   select id into v_pendencia_id from pendencia
     where caso_id = v_caso_id and motivo = 'extracao:falhou:' || v_documento_id and estado <> 'resolvida'
     limit 1;
-  if p_falha_motivo is not null or (v_count = 0 and coalesce(p_tem_dado_financeiro, true)) then
+  -- 0231: `false` explícito só cala o sinal quando o TIPO não carrega tabela financeira por natureza (fn_tipo_sem_dado_por_natureza). BALANCO/DRE/... com zero linha
+  -- e `false` é a IA dizendo que não leu nada de um documento que devia ter número: falha, com motivo próprio (o prefixo é casado por regex no portal).
+  -- 0231: e NÃO reabre o que uma PESSOA já decidiu. O motivo manda "se de fato não tem número, resolva"; quem resolveu disse que o documento não tem número, e o reenvio
+  -- (que paga de novo porque o tipo não é societário) não pode desfazer isso. Só vale para o ramo novo: `true`/nulo e falha explícita seguem como eram.
+  v_decidiu_pessoa := fn_pessoa_decidiu_sem_dado(v_documento_id);
+  if p_falha_motivo is not null
+     or (v_count = 0 and (coalesce(p_tem_dado_financeiro, true)
+                          or (not fn_tipo_sem_dado_por_natureza(v_tipo) and not v_decidiu_pessoa))) then
     v_guarda_disparou := true;
     if v_pendencia_id is null then
       insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id, motivo)
         values (v_caso_id, 'extracao', 'extracao_falhou', 'importante', true,
-          fn_descricao_extracao_falhou(v_nome_original, v_count, p_falha_motivo),
+          fn_descricao_extracao_falhou(v_nome_original, v_count,
+            case when p_falha_motivo is null and v_count = 0 and p_tem_dado_financeiro is false
+              then 'a leitura declarou que este documento não tem dado financeiro, mas '
+                   || case when v_tipo is null then 'ele não tem tipo' else 'ele é do tipo ' || v_tipo end
+                   || '. Abra o arquivo: se de fato não tem número, resolva esta pendência; se tem, reenvie o documento.'
+              else p_falha_motivo end),
           v_documento_id, 'extracao:falhou:' || v_documento_id);
     end if;
   elsif v_pendencia_id is not null then
@@ -12934,7 +12963,7 @@ $_$;
 -- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0228: o auto-aceite exige documento com tipo (v_tipo nulo = linhas seguem pendentes). 0229: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao).';
+COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0228: o auto-aceite exige documento com tipo (v_tipo nulo = linhas seguem pendentes). 0229: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao). 0231: zero linha com tem_dado_financeiro = false TAMBÉM abre extracao_falhou quando o tipo não é societário/legal por natureza (fn_tipo_sem_dado_por_natureza; tipo nulo abre), com motivo que começa por "a leitura declarou que este documento não tem dado financeiro, mas ".';
 
 --
 -- Name: fn_registrar_classe_override(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -15652,6 +15681,27 @@ $$;
 COMMENT ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) IS '0123: a natureza "mútuo" nomeada NESTE texto. Usada no rótulo (degrau 1) e na seção (degrau 2), com precedência do rótulo — nunca nos dois de uma vez.';
 
 --
+-- Name: fn_tipo_sem_dado_por_natureza(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  select exists (select 1
+                   from taxonomia_tipo_documento t
+                  where t.codigo = p_tipo
+                    and t.categoria = 'Societário/Legal'
+                    -- CONTINGENCIAS fica de fora: é da mesma categoria, mas a relação de processos traz valor de causa e provisão.
+                    and t.codigo <> 'CONTINGENCIAS')
+$$;
+
+--
+-- Name: FUNCTION fn_tipo_sem_dado_por_natureza(p_tipo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) IS '0231: o tipo de documento não carrega tabela financeira por natureza (certidão, organograma, contrato social)? Verdadeira só quando o tipo existe em taxonomia_tipo_documento, é da categoria Societário/Legal e não é CONTINGENCIAS. Tipo nulo ou desconhecido = false, nunca nulo. Quem pergunta: fn_versao_extracao_concluida (reaproveitar no reenvio) e o Sinal 3 de fn_registrar_campos_extraidos (zero linha com tem_dado_financeiro = false só é normal para esses tipos).';
+
+--
 -- Name: fn_tokens_estruturais(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -17019,18 +17069,14 @@ CREATE FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) 
       or coalesce((
     select u.depois->>'falha_motivo' is null
        and u.depois->>'tem_dado_financeiro' = 'false'
-       and (u.depois->'medicao'->>'contas_no_documento' is null
-            or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
-                and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0))
-       and exists (select 1
-                     from documento_versao dv
-                     join documento d on d.id = dv.documento_id
-                     join taxonomia_tipo_documento t on t.codigo = d.tipo_taxonomia
-                    where dv.id = p_documento_versao_id
-                      and t.categoria = 'Societário/Legal'
-                      -- CONTINGENCIAS fica de fora: é da mesma categoria, mas a relação de processos traz valor de causa e provisão.
-                      -- Nenhum dos 30 de produção é desse tipo (09/11/2026): tirar não custa nada e evita pular uma tabela de valores.
-                      and t.codigo <> 'CONTINGENCIAS')
+       -- (2a) tipo societário/legal SEM conta contada pela régua, OU uma PESSOA resolveu a extracao_falhou do documento. A decisão
+       -- de pessoa vale com qualquer contagem: a régua conta CPF/OAB/percentual como conta (medido na procuração do book-espelho: 9),
+       -- e foi a pessoa, com o arquivo aberto, que decidiu que não há número. Pagar de novo só repetiria a leitura que ela já julgou.
+       and ((fn_tipo_sem_dado_por_natureza((select d.tipo_taxonomia from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id))
+             and (u.depois->'medicao'->>'contas_no_documento' is null
+                  or (u.depois->'medicao'->>'contas_no_documento' ~ '^[0-9]+(\.[0-9]+)?$'
+                      and (u.depois->'medicao'->>'contas_no_documento')::numeric = 0)))
+            or fn_pessoa_decidiu_sem_dado((select dv.documento_id from documento_versao dv where dv.id = p_documento_versao_id)))
        and not exists (select 1
                          from documento_versao dv
                          join pendencia pe on pe.documento_id = dv.documento_id
@@ -17049,7 +17095,7 @@ $_$;
 -- Name: FUNCTION fn_versao_extracao_concluida(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0230: a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando a versão TEM linha em campo_extraido (o critério da 0118, intacto, mesmo sem evento e mesmo com falha) OU quando TODAS valem: o ÚLTIMO evento extracao_sombra (criado_em) existe, sem falha_motivo e com tem_dado_financeiro = false explícito; o tipo do documento é da categoria Societário/Legal de taxonomia_tipo_documento (CERTIDOES, CONTRATO_SOCIAL, ORGANOGRAMA; CONTINGENCIAS é da categoria e fica DE FORA, porque traz valor de causa e provisão; tipo nulo ou de outra categoria = não); a medição do evento não contou conta (contas_no_documento nulo ou 0); e o documento não tem pendência extracao_falhou aberta. Simplificação deliberada: a categoria é proxy de "tipo que não traz tabela financeira"; sobe quando a taxonomia ganhar atributo próprio. Zero linha sem tudo isso = false (a 0118 protege extração recusada/truncada); condição ilegível = false (paga de novo). Falha COM linha continua reaproveitada (teto conhecido, P8). A pergunta de fn_registrar_documento e da fatia de orçamento do lote: uma implementação só. SECURITY INVOKER, somente leitura.';
+COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0230: a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando a versão TEM linha em campo_extraido (o critério da 0118, intacto, mesmo sem evento e mesmo com falha) OU quando TODAS valem: o ÚLTIMO evento extracao_sombra (criado_em) existe, sem falha_motivo e com tem_dado_financeiro = false explícito; o tipo do documento é da categoria Societário/Legal de taxonomia_tipo_documento (CERTIDOES, CONTRATO_SOCIAL, ORGANOGRAMA; CONTINGENCIAS é da categoria e fica DE FORA, porque traz valor de causa e provisão; tipo nulo ou de outra categoria = não); a medição do evento não contou conta (contas_no_documento nulo ou 0); e o documento não tem pendência extracao_falhou aberta. Simplificação deliberada: a categoria é proxy de "tipo que não traz tabela financeira"; sobe quando a taxonomia ganhar atributo próprio. Zero linha sem tudo isso = false (a 0118 protege extração recusada/truncada); condição ilegível = false (paga de novo). Falha COM linha continua reaproveitada (teto conhecido, P8). A pergunta de fn_registrar_documento e da fatia de orçamento do lote: uma implementação só. SECURITY INVOKER, somente leitura. 0231: o tipo é perguntado a fn_tipo_sem_dado_por_natureza (mesma conta, comportamento idêntico).';
 
 --
 -- Name: fn_vincular_linha_premissa(uuid, text, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -22965,6 +23011,14 @@ GRANT ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a tex
 GRANT ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) TO service_role;
 
 --
+-- Name: FUNCTION fn_pessoa_decidiu_sem_dado(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_pode_criar_caso(); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23487,6 +23541,14 @@ GRANT ALL ON FUNCTION public.fn_teto_ressalvas() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO service_role;
+
+--
+-- Name: FUNCTION fn_tipo_sem_dado_por_natureza(p_tipo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) TO service_role;
 
 --
 -- Name: FUNCTION fn_tokens_estruturais(p_chave text); Type: ACL; Schema: public; Owner: -

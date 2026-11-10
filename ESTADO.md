@@ -1,8 +1,48 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 124 (09–10/11/2026) — #278 mergeado e ingestão republicada; 0231 ESCRITA (NÃO aplicada); planilha de várias abas e régua corrigidas na branch
+
+> **Migration mais nova: `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql` — ESCRITA, NÃO APLICADA (a 0230 está aplicada em produção desde 09/11/2026).**
+> - Corrige: zero linha + `tem_dado_financeiro = false` em tipo NÃO societário fechava sem linha e sem pendência. Passa a abrir `extracao_falhou`.
+> - Alcance medido em produção (09/11): 42 documentos (os 41 do ALTO da S123 + 1 do lote S124). Em mandatos reais: AMOBELEZA 10, Krauspenhar 1, AMO teste 00 2.
+> - Backfill não reabre decisão humana (medido: 0 dos 42).
+
+**O que está em produção (conferido em 09/11):**
+- **#278 mergeado** em `264605e` (CI 8/8 verde antes). **#276 fechado sem merge**: o #278 o continha (o HEAD do #276 era ancestral).
+- **Ingestão republicada em 09/11, 21:39 UTC**, do `main` de `264605e`. `preparar-republicacao` + `conferir-publicado`: 60 nós batem (antes divergiam 2: Juntar Blocos e Gravar Campos (Sombra), a metade n8n da 0229). `multipleFiles` ligado; path do form e errorWorkflow preservados.
+- **Medição por documento voltou:** 11 de 11 eventos `extracao_sombra` novos levam `medicao` (em 09/11 antes da republicação: 0 de 5).
+- **Sonda de produção:** 342 itens, 0 ausentes. Migration aplicada mais nova: 0230.
+- **Mandato de teste criado em produção:** "S124 — Espelho (sintético, medição)" (caso `10d371c2-7266-4d6a-ac11-cd001452a59d`), 11 documentos, 2 lotes: US$ 0,4596 (3 docs; DRE e balancete de 16 blocos custaram US$ 0,217 e 0,208) + US$ 0,1217 (8 docs). A senha do Sócio de teste foi redefinida e está só no scratchpad da sessão.
+
+**NÃO está no ar (só na branch `claude/quirky-lamport-k9pat5`, sem PR):** a 0231; o workflow do repositório (régua + abas do `.xlsx`); o portal desta branch.
+
+**Defeitos fechados na branch:**
+1. **"Arquivo com acento some entre o portal e o n8n" (ALTO da P4) não era do portal nem do n8n** (`a3ceaa6`, `c8fcabd`). O Chromium do Playwright em locale POSIX descarta calado caminho não-ASCII no `setInputFiles`: 3 de 11 no input; com `LC_ALL=C.UTF-8`, 11 de 11. O encaminhamento do portal, reproduzido à parte: 11 de 11. Provado ao vivo: o reenvio dos 8 com acento deu 8 de 8 documentos. `ENVIO_CASO_ID` no `enviar-book.mts` reenvia a um mandato existente. Não provado: navegador real de cliente em Windows/macOS.
+2. **Comentário do IF "Extracao ja feita?"** (lacuna do #278) corrigido (`b424df1`); workflow regerado idêntico.
+3. **Régua** (`9cdf90e`): contava título numerado como conta (Notas Vertentes 9→3; Notas Piraquara 24→17, e some uma 2ª passada paga). A verdade do gerador contava cabeçalho de ano (Faturamento 24M 16→15; Mapa Piraquara 18→17; Notas Piraquara 5→4). A DMPL "4,7×" era medida errada: a IA devolve movimento × componente, e 14 lidas = 14 células. **NÃO explicado:** BP Piraquara Montagens 43 lidas × 32, e +1 na DMPL Canastra (precisa da saída da IA de produção).
+4. **0231** (`1444e06`, `233e428`, `5bc3fc3`): `fn_tipo_sem_dado_por_natureza` e `fn_pessoa_decidiu_sem_dado`. Só a pendência DESTA causa resolvida por pessoa conta como decisão (ALTO da 2ª revisão: uma cota resolvida à mão calava o balanço para sempre). `run.sh` rc 0, 3.270 ok.
+5. **`.xlsx` com mais de uma aba** (`3075c8d`, `e5252d9`): o n8n lia só a primeira (as 4 planilhas do book-espelho perderam a 2ª; real: Endividamento Krauspenhar.xlsx gravou 0 linhas). 3 nós novos (Copiar Como ZIP, Ler Abas do XLSX [Compression], Expandir Abas), `sheetName` por item. Decisão do dono: ler no n8n, arquivo intacto. `.xls` fica de fora (shortcut declarado). **As premissas sobre os nós nativos foram lidas no FONTE de n8n-nodes-base@2.46.6; NÃO provadas na instância.** Só a republicação prova.
+6. **Portal** (`fd74c24`, `55f2e88`, `5ead9d3`, `b95944e`): causa e ação em português para a pendência da 0231 e para as 5 frases novas de planilha. CI (`d8a2b18`): o job do n8n gera o book-espelho, instala o portal e o pdftotext.
+
+**Revisão independente:** 3 passadas. 1ª: 3 MÉDIOS + 3 BAIXOS; 2ª: 1 ALTO + 1 BAIXO; 3ª: nenhum ALTO nem MÉDIO.
+
+**Suítes remedidas em 10/11 (local):** n8n 757/0; banco `run.sh` rc 0 (3.270 ok); leitor 65/0; hooks 11/0; os 12 `verificar-*` rc 0 (kit-basico 167/0, export 894/0); e2e 46/0; variações 0 achados; medidores rc 0; geradores e fixtures sem diff; tsc, eslint e `next build` rc 0. **O CI do GitHub NÃO rodou nesta branch (não há PR).**
+
+**O dono faz à mão / próximo passo, nesta ordem:**
+1. Abrir o PR e mergear (isso publica o portal).
+2. Aplicar a 0231. **O portal vai ANTES**: senão as 42 pendências do backfill aparecem "causa não classificada".
+3. Republicar a ingestão (`preparar-republicacao.mjs` + `conferir-publicado.mjs`; conferir o `multipleFiles`).
+4. Reenviar as 4 planilhas do espelho (`ENVIO_CASO_ID`) e conferir as abas no banco; abrir no editor do n8n o nó Compression e o `sheetName`.
+5. Reenviar os PDFs de balancete do Krauspenhar e do Valtra (P6 com os reais; medido: 0 das 4 versões têm o original no Storage).
+6. Decidir se apaga o mandato S124 e o "P4 linha de base - Espelho" (3 de 11).
+
+**Em fase planejada (não é lacuna desta sessão):** P7b, P8 (falha COM linha), P9, P10, P11–P15. A P12 não herda mais os 41 documentos (fechado pela 0231); continua com a bijeção.
+
+**Custo observado, sem fatia:** DRE analítica e balancete do espelho a US$ 0,21 por documento (16 blocos); `medir-custo-book` no espelho dá rc 1 (estimativa por chamada abaixo do real). Abaixo do teto de US$ 5/book.
+
 ## SESSÃO 123 (09/11/2026) — P7: 0230 APLICADA em produção; o #276 (P4, 0229) entrou junto; a medição por documento parou em 09/11
 
-> **Migration mais nova: `0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql` — APLICADA EM PRODUÇÃO em 09/11/2026.**
+> **Última migration DAQUELA sessão: `0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql` — APLICADA EM PRODUÇÃO em 09/11/2026.** (A 0231 veio na S124.)
 > - Sonda antes: 339 itens, na 0229. Ensaio em transação revertida: 342, 0 faltando.
 > - Depois: 342 itens, os 3 da 0230 presentes. O corpo das duas funções em produção tem o mesmo md5 do banco montado do repositório. ACL de `fn_registrar_documento` igual. Mandatos: 81 antes e depois.
 > - A sonda acusa 1 ausente (`envio_segredo_no_vault`) pela API: é a leitura do Vault negada a esse papel, não o segredo faltando. Dentro da transação do ensaio deu 0 faltando.

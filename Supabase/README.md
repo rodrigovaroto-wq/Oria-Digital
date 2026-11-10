@@ -1157,6 +1157,14 @@ supabase db execute --file Supabase/migrations/0230_o_documento_sem_dado_finance
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0230' and not presente;   -- ZERO linhas
 #   select count(*) from pg_proc where proname = 'fn_registrar_documento';   -- 1 (sem sobrecarga)
 
+# A 0231 faz o Sinal 3 abrir `extracao_falhou` para zero linha + `tem_dado_financeiro = false` quando o tipo NÃO é societário/legal por natureza (BALANCO, DRE, tipo nulo, CONTINGENCIAS...), com motivo que começa por "a leitura declarou que este documento não tem dado financeiro, mas ". Cria `fn_tipo_sem_dado_por_natureza`; reemite `fn_versao_extracao_concluida` e `fn_registrar_campos_extraidos` (mesmas assinaturas e ACL). BACKFILL: abre a mesma pendência para o que já está assim (41 em produção, medido em 09/11/2026), idempotente, com 1 evento `extracao_pendencia_backfill`. ANTES de aplicar, conte os documentos cuja extracao_falhou foi resolvida por humano: o backfill os reabre.
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, upsert dos requisitos, backfill idempotente).
+# >>> Teste: Supabase/test/o_balanco_sem_dado_financeiro.test.sql.
+supabase db execute --file Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0231' and not presente;   -- ZERO linhas
+#   select depois from evento_auditoria where acao = 'extracao_pendencia_backfill' order by criado_em desc limit 1;   -- pendencias_abertas = 41 (esperado)
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

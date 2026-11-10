@@ -18,6 +18,12 @@ cd "Dados de Teste"/book-vertentes && python3 -m pip install --quiet 'reportlab=
 cd "Dados de Teste"/book-canastra && PYTHONPATH=. python3 gerar.py && cd ../..
 # O terceiro book (F2.4, distress): o gerador É o teste — 16 identidades por `assert`.
 cd "Dados de Teste"/book-distress && PYTHONPATH=. python3 gerar.py && cd ../..
+# `N8N/test/cobertura.test.mjs` usa `pdftotext -raw` (poppler-utils): sem ele, reprova.
+command -v pdftotext || sudo apt-get install -y poppler-utils
+# O QUARTO (P4, a forma dos documentos reais que falharam): as 4 planilhas de 2 abas são o insumo de
+# `N8N/test/abas-do-xlsx.test.mjs`. Sem ele, os testes com arquivo real PULAM. Precisa do openpyxl.
+cd "Dados de Teste"/book-espelho && python3 -m pip install --quiet 'openpyxl==3.1.5' \
+  && PYTHONPATH=. python3 gerar.py && cd ../..
 sudo -u postgres /usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main \
   -o "-c config_file=/etc/postgresql/16/main/postgresql.conf -k /tmp -p 5432" -l /tmp/pg.log start
 # O `run.sh` roda COMO postgres e REESCREVE `Supabase/schema.sql`. Num container em que

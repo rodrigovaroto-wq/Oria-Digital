@@ -64,7 +64,10 @@ Nó sem `onError` é proposital: ali falhar **tem** de parar.
 | Preparar Conteudo | code | continueRegularOutput | — | — |
 | Roteador de Formato | switch | — | — | — |
 | Extrair CSV | extractFromFile | continueRegularOutput | — | — |
-| Extrair XLSX | extractFromFile | continueRegularOutput | — | — |
+| Copiar Como ZIP | code | continueRegularOutput | — | — |
+| Ler Abas do XLSX | compression | continueRegularOutput | — | — |
+| Expandir Abas | code | — | — | — |
+| Extrair XLSX | extractFromFile | continueRegularOutput | — | `options.sheetName` = expressão `$json.aba_nome` |
 | Extrair XLS | extractFromFile | continueRegularOutput | — | — |
 | Extrair XML | extractFromFile | continueRegularOutput | — | — |
 | Juntar Extracao de Conteudo | merge | — | — | — |

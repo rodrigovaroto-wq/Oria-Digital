@@ -26,7 +26,9 @@ mandato, e as pendências conhecidas do portal.
 > **Premissa deste plano, para o dono corrigir:** **5 sessões por semana**, 30 fatias em 6 semanas.
 > Com outro ritmo, a ordem não muda; muda só a data em que cada fatia acontece.
 
-> **Atualizado em 07/11/2026 (sessão 119b):** P4 medida — linha de base por documento dos 4 books em `LINHA_DE_BASE_P4.md` (US$ 0,61). Achado ALTO novo antes da P5: arquivo com acento no nome some entre o portal e o n8n sem rastro.
+> **Atualizado em 10/11/2026 (sessão 124):** (1) P12 não herda mais os 41 documentos de tipo financeiro com zero linha e "sem dado": a migration 0231 (escrita, NÃO aplicada) os faz abrir `extracao_falhou`; a bijeção continua. (2) P4: o achado do acento era do script de teste (Chromium em locale POSIX descarta caminho não-ASCII: 3 de 11; com `LC_ALL=C.UTF-8`, 11 de 11), não do portal nem do n8n. (3) Planilha `.xlsx` de várias abas (o n8n lia só a primeira) foi feita FORA de fatia, no repositório; só vale no ar depois de republicar a ingestão. `.xls` fica de fora. (4) Fora do ar até o merge: 0231, régua e abas. Detalhe na seção da sessão 124 do `ESTADO.md`.
+>
+> **Atualizado em 07/11/2026 (sessão 119b):** P4 medida — linha de base por documento dos 4 books em `LINHA_DE_BASE_P4.md` (US$ 0,61). Achado ALTO novo antes da P5: arquivo com acento no nome some entre o portal e o n8n sem rastro. (Esclarecido em 10/11: era o script de teste, não o portal nem o n8n.)
 >
 > **Atualizado em 06/11/2026 (sessão 118):** 0224 (D16) aplicada; resíduo e mandatos da S117 limpos; vistoria refeita igual. Próxima fatia: P4.
 >
@@ -159,7 +161,7 @@ aritmética.
 | # | Fatia | Pronto quando |
 |---|---|---|
 | **P11** | **A coordenada.** Texto numerado ao lado do PDF; `ln` obrigatório no schema da linha | Toda linha extraída do corpus cita a linha do texto de onde veio |
-| **P12** (herda da P7, ALTO medido em 09/11: 41 documentos de tipo financeiro com zero linha, `tem_dado_financeiro = false` e sem `extracao_falhou`; quando a IA diz "sem dado" a guarda de cobertura e o Sinal 3 se calam) | **A bijeção.** O modelo declara `descartadas` com motivo; buraco, duplicação e origem inventada viram pendência BLOQUEANTE com o número da linha | Os 3 documentos do araucária acusam o buraco nomeado (97−68, 150−102, 20−13) |
+| **P12** (a herança dos 41 documentos de tipo financeiro com "sem dado" foi FECHADA pela 0231 em 10/11, escrita e ainda não aplicada; fica a bijeção) | **A bijeção.** O modelo declara `descartadas` com motivo; buraco, duplicação e origem inventada viram pendência BLOQUEANTE com o número da linha | Os 3 documentos do araucária acusam o buraco nomeado (97−68, 150−102, 20−13) |
 | **P13** | **A literalidade.** `vt` cobrado como o `tr` dos fatos: trecho literal da linha citada | Valor sem trecho literal correspondente abre pendência; a guarda reprova com valor inventado (medido) |
 | **P14** | **Re-perguntar só o buraco.** "Leia só as linhas 23 a 51", no máximo 1 re-pergunta por documento | O buraco do corpus fecha a um custo proporcional ao buraco, e o teto é respeitado |
 | **P15** | **Cada guarda medida não-vazia e portão da etapa (d).** Rodada de regressão final; o padrão suspeito de fabricação e as seções que não fecham reavaliados com a bijeção | A tabela da seção 2 está no alvo, ou cada desvio está explicado. **Fim da etapa (d)** |
