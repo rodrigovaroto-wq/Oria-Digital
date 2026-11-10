@@ -45,11 +45,15 @@
 
 **MAPA_DE_EXECUCAO.md:** não lista P6b como pendente. Não foi alterado.
 
+**2ª parte (10/11): PR #283 mergeado (`034ff52`); o dono decidiu os passos 2 e 3, feitos na branch:**
+- **Fingerprint com a rota** (`66e7fa1`): `N8N/lib/rota-pdf.mjs` é a lista única da rota, embutida no nó e 4ª parte do hash. `ff16b69dc9f1ad42` → `70de46f4c67573af`. A régua fica fora de propósito. Custo aceito pelo dono: o próximo envio de cada mandato re-extrai e paga todo documento.
+- **Régua** (`72b95a4`, `200c002`, `ab048c2`, `ffcf42d`): no texto real da 9601, 610 → 475 (460 contas + 12 "Filial 0" + 2 contratos + 1 CPF; erra para cima). A 1ª versão contava para BAIXO em livro em milhares (DRE 10→3, aging 6→0); três passadas de revisão independente, a última sem ALTO. Régua de produção 20/20 e 87 textos de books e capturas sem mudança. N8N 778/0. Não fechado, declarado: "Receita 450 mil" depois de linha só de números conta 1 em vez de 2.
+- **NÃO republicado:** a correção do alarme "colunas trocadas" (d14ef83), o fingerprint e a régua só entram no ar com a republicação, que pede autorização do dono. Depois dela, reenviar o balancete ao KRAUSPENHAR real e medir: régua ≈ 475, 0 descartadas, ~2.008 pares, sem "colunas trocadas".
+
 **Próxima sessão, nesta ordem:**
-1. PR desta branch: CI verde, merge e republicar (`N8N/republicar.sh`, conferir 63/63).
-2. Decisão do dono: o fingerprint passa a incluir a rota? Custo: re-extração geral.
-3. Fatia da régua em documento de números colados (cabeçalho repetido por página e nome solto).
-4. Seguir o plano: P7b, P8, P9, P10.
+1. PR desta branch: CI verde, merge e republicar (`N8N/republicar.sh`, conferir 63/63; fingerprint `70de46f4c67573af` no "Registrar Documento").
+2. Reenviar o balancete ao mandato KRAUSPENHAR real e medir (números acima).
+3. Seguir o plano: P7b, P8, P9, P10. P11/P12 continuam no plano (as 50 linhas idênticas da 9601 dependem delas).
 
 ## SESSÃO 124 (09–10/11/2026) — 0231 aplicada; régua e abas do .xlsx no ar e provadas ao vivo; P6 provada no Valtra real; P6b (Krauspenhar) no PR #282
 
