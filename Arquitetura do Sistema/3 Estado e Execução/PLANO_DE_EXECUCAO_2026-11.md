@@ -224,6 +224,7 @@ fatiada quando chega a vez dela, contra o estado medido naquele dia.
 | 4 | **(a) F1, fechar o perímetro** | Perímetro declarado pela tela nos mandatos de teste; decisões 1.7, ressalva e fusão (D2–D4 do dono) aplicadas | ~2 | decisões do dono |
 | 5 | **F5 — lineage** | "De onde veio este número" por SQL; a nota do Excel vira render | ~3 | F4 |
 | 6 | **F6 — reconciliação sobre identidade e intercompany** | Eliminação intragrupo como fato próprio. **DATA GATE** | ~3 | F4, F5 |
+| 6b | **F6C — comparativos setoriais** (decidida em 10/11/2026, Espec. 14) | Seção Análise Comparativa antes da modelagem: mercado, receita, índices, despesas e dívida do cliente contra CVM, IBGE por CNAE e estado, RAIS, Banco Central e CNPJ aberto; custo unitário de cada despesa por unidade e região, com a economia até a média; oportunidade aceita vira alavanca. Etapa 0 (conferir as fontes) pode rodar já, em paralelo | ~10, a confirmar | F4; `consulta_externa` (Espec. 13) |
 | 7 | **F2T ondas 2 a 5 e captação** | OFX e CNAB; EFD e XML fiscal; eSocial; logística; cofre e robô. A etapa jurídica (P3, RIPD) vem antes de qualquer coleta | ~22 | F6, D7 e D8 do dono |
 | 8 | **F7 — motor de cálculo** | Aritmética da projeção no sistema, com paridade com o Excel. **MODEL GATE** | ~8 | DATA GATE |
 | 9 | **F8 — cenários e alavancas** | **STRATEGY GATE** | ~5 | F7 |
@@ -232,7 +233,8 @@ fatiada quando chega a vez dela, contra o estado medido naquele dia.
 | 12 | **F15 → F16** | Camada de apresentação e deck. **PRESENTATION GATE** | ~4 | CREDITOR GATE |
 | — | **F17 — hardening, contínuo** | Uma linha por semana: Sonar (achados vindos do dono), teste de restauração, proteção do `main`, registro de leitura | distribuído | — |
 
-**Total depois da semana 6: cerca de 85 sessões, ~17 semanas no ritmo de 5 por semana.** Com as 6
+**Total depois da semana 6: cerca de 85 sessões, ~17 semanas no ritmo de 5 por semana** (contado
+antes da F6C; com ela, cerca de 95 sessões, ~19 semanas). Com as 6
 semanas detalhadas, a aplicação completa fica em torno de **23 semanas**, ou seja, **meados de abril
 de 2027**. É estimativa de ordem de grandeza: a etapa (d) é a que mais pode mover esse número,
 para cima ou para baixo.
