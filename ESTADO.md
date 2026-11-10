@@ -1,5 +1,56 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 125 (10/11/2026) — P6b provada ao vivo; PR #282 no ar; balancete com "colunas trocadas" falsa corrigido (`d14ef83`, ainda não republicado)
+
+> **Migration mais nova: continua `0231`.** Nenhuma migration nova nesta sessão. A fatia `d14ef83` mexe só em `N8N/lib/aritmetica.mjs`, nos seus testes e no JSON gerado da ingestão.
+> - Sonda `fn_instalacao_conferir` depois do teste: 0 ausentes; 80 mandatos antes e depois.
+> - NÃO conferido nesta rodada: CI da branch `claude/practical-ptolemy-fqvf9e`.
+
+**O que está em produção (conferido em 10/11):**
+- **PR #282 mergeado** em `b729715`.
+- **Ingestão republicada em 10/11, 12:02 UTC**, a partir de `b729715`, com `N8N/republicar.sh`: `conferir-publicado` 63 de 63 nós batem.
+- Antes da republicação divergiam 5 nós: Orçamento do Lote, Recompor Conteúdo Extraído, Medir Documento, Fatiar Extração e Juntar Blocos. A P6b não estava no ar.
+
+**P6b provada AO VIVO (10/11, 17:12–17:15 UTC):**
+- Mandato de teste "S125 — P6b números colados (teste, apagar)", caso `cc498e8d-7b28-4b81-af7b-659367046105`, execução n8n 9601.
+- Rota `ocr`, motivo `numeros-colados`.
+- Descartadas por desalinhamento: 303 → 0.
+- Pares gravados: 1.516 → 2.008.
+- Custo: US$ 0,191 → US$ 0,2534.
+- Mandato apagado em seguida como Sócio de teste: 1 original removido do Storage, evento `caso_excluido`, `fn_excluir_caso` (1 documento, 16 pendências, 2.008 campos).
+- 80 mandatos antes e depois. Sonda `fn_instalacao_conferir`: 0 ausentes.
+- A senha do Sócio de teste foi redefinida, com autorização do dono, e está só no scratchpad da sessão.
+
+**Defeito achado, SEM fatia (decisão do dono pendente):**
+- `FINGERPRINT_EXTRACAO` (`N8N/build-workflow.mjs`, ~linha 182) cobre só prompt, modelo e esquema. A P6b muda a rota (texto → imagem) e não muda o fingerprint, que continua `ff16b69dc9f1ad42`.
+- Efeito: reenviar o balancete ao KRAUSPENHAR (`33b58a89-0d77-417a-8859-e193c61e8db8`) seria pulado por `fn_versao_extracao_concluida`, porque a versão `9e13f05e` já tem linhas. Correção de rota nunca chega a documento já lido.
+- O Krauspenhar real segue com 1.516 pares e 303 descartadas.
+- Corrigir o fingerprint faz o próximo envio de TODO mandato re-extrair e pagar de novo.
+
+**Fatia feita (`d14ef83`, NÃO republicada):**
+- A conferência aritmética do balancete (`classificarContasDeBalancete`, `N8N/lib/aritmetica.mjs`) abria "colunas trocadas" falsa.
+- Causa: o PDF imprime o crédito negativo. Coluna devedora: SAt = SA + D + C (157 de 157 do ativo). Coluna credora: SAt = SA − D − C (284 de 289 do resto).
+- Nos 2.008 pares reais: 207 / 194 / 74 contas com 1 pendência → 475 / 0 / 0 sem pendência (contagem por grupo, como medida).
+- Regra 2: 2 testes novos reprovam sem o ramo; 1 reprova com o gate sempre aberto.
+- Suíte n8n 766/0, com os 4 books gerados. FINGERPRINT inalterado.
+- Revisão independente: 0 ALTO, 3 MÉDIO. Dois eram de comentário e foram corrigidos no mesmo commit. O terceiro exige republicar.
+- Enquanto não republicar, a pendência falsa segue nascendo em produção.
+
+**Medido, sem fatia: a régua de cobertura do balancete colado está errada**
+- "82% (502 de 610)" e os 7 de 11 blocos "<85%" do mesmo documento são FALSOS.
+- As 610 linhas da régua: 108 de cabeçalho e rodapé de página (9 por página × 12), 42 nomes de conta soltos (o texto colado põe o nome e os números em linhas separadas) e 460 linhas reais.
+- A leitura devolveu 502, mais que as 460 reais. Efeito: 7 segundas passadas pagas à toa e uma pendência de cobertura falsa.
+- Das 502, 50 linhas são idênticas a outra (mesma chave, página e valores). Parte é legítima (sintética com uma analítica só, ex.: ADIANTAMENTO A FORNECEDORES). Parte é provável duplicata da IA. Separar exige o código da conta e a coordenada da linha (P11/P12).
+- A "régua exata 20/20" da S124 foi medida na rota de texto. Neste layout colado ela não vale.
+
+**MAPA_DE_EXECUCAO.md:** não lista P6b como pendente. Não foi alterado.
+
+**Próxima sessão, nesta ordem:**
+1. PR desta branch: CI verde, merge e republicar (`N8N/republicar.sh`, conferir 63/63).
+2. Decisão do dono: o fingerprint passa a incluir a rota? Custo: re-extração geral.
+3. Fatia da régua em documento de números colados (cabeçalho repetido por página e nome solto).
+4. Seguir o plano: P7b, P8, P9, P10.
+
 ## SESSÃO 124 (09–10/11/2026) — 0231 aplicada; régua e abas do .xlsx no ar e provadas ao vivo; P6 provada no Valtra real; P6b (Krauspenhar) no PR #282
 
 > **Migration mais nova: `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql` — APLICADA EM PRODUÇÃO em 10/11/2026.**
