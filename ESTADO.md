@@ -2,7 +2,7 @@
 
 ## SESSÃO 125 (10/11/2026) — P6b provada ao vivo; PR #282 no ar; balancete com "colunas trocadas" falsa corrigido (`d14ef83`, ainda não republicado)
 
-> **Migration mais nova: continua `0231`.** Nenhuma migration nova nesta sessão. A fatia `d14ef83` mexe só em `N8N/lib/aritmetica.mjs`, nos seus testes e no JSON gerado da ingestão.
+> **Migration mais nova: continua `0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql`.** Nenhuma migration nova nesta sessão. A fatia `d14ef83` mexe só em `N8N/lib/aritmetica.mjs`, nos seus testes e no JSON gerado da ingestão.
 > - Sonda `fn_instalacao_conferir` depois do teste: 0 ausentes; 80 mandatos antes e depois.
 > - NÃO conferido nesta rodada: CI da branch `claude/practical-ptolemy-fqvf9e`.
 
