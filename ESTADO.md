@@ -50,10 +50,24 @@
 - **Régua** (`72b95a4`, `200c002`, `ab048c2`, `ffcf42d`): no texto real da 9601, 610 → 475 (460 contas + 12 "Filial 0" + 2 contratos + 1 CPF; erra para cima). A 1ª versão contava para BAIXO em livro em milhares (DRE 10→3, aging 6→0); três passadas de revisão independente, a última sem ALTO. Régua de produção 20/20 e 87 textos de books e capturas sem mudança. N8N 778/0. Não fechado, declarado: "Receita 450 mil" depois de linha só de números conta 1 em vez de 2.
 - **NÃO republicado:** a correção do alarme "colunas trocadas" (d14ef83), o fingerprint e a régua só entram no ar com a republicação, que pede autorização do dono. Depois dela, reenviar o balancete ao KRAUSPENHAR real e medir: régua ≈ 475, 0 descartadas, ~2.008 pares, sem "colunas trocadas".
 
-**Próxima sessão, nesta ordem:**
-1. PR desta branch: CI verde, merge e republicar (`N8N/republicar.sh`, conferir 63/63; fingerprint `70de46f4c67573af` no "Registrar Documento").
-2. Reenviar o balancete ao mandato KRAUSPENHAR real e medir (números acima).
-3. Seguir o plano: P7b, P8, P9, P10. P11/P12 continuam no plano (as 50 linhas idênticas da 9601 dependem delas).
+**3ª parte (10/11, 18:33 UTC): #284 mergeado (`d6c176b`), ingestão republicada (63/63, fingerprint `70de46f4c67573af` no ar), balancete reenviado ao KRAUSPENHAR real (execução 9605):**
+
+| Medida | Versão 2 (rota velha) | Versão 3 (hoje) |
+|---|---|---|
+| Rota | texto | imagem, `numeros-colados` |
+| Descartadas por desalinhamento | 303 | 0 no resultado final (1 numa tentativa de bloco, "LUCROS DIST. JOAO HATMANN") |
+| Pares gravados | 1.516 | 1.880 (470 linhas) |
+| Régua / lidas | 610 / 379 | 475 / 470 — cobertura 98,95% |
+| Falha do documento | `extracao_falhou` | nenhuma (`falha_motivo` nulo, 0 documentos com falha) |
+| Conferência do balancete | — | rotulada 444, trocada 0, nenhuma 1: sem pendência "colunas trocadas" |
+| Custo | US$ 0,187 | US$ 0,2165 |
+
+- O reenvio foi re-extraído porque o fingerprint mudou: a prova de que correção de rota agora chega a documento já lido.
+- Linhas idênticas: 21 (eram 50 no teste da 9601). Separar repetição legítima de duplicata segue na P11/P12.
+- NÃO conferido: quantas segundas passadas foram pagas (o nó da tentativa 2 recebeu 6 itens).
+- Pendências antigas que seguem abertas, sem relação com esta rodada: `divergencia_reconciliacao` (secao_fecha e conflito_entre_documentos) e `tipo_incorreto`.
+
+**Próxima sessão:** seguir o plano: P7b, P8, P9, P10. P11/P12 continuam no plano.
 
 ## SESSÃO 124 (09–10/11/2026) — 0231 aplicada; régua e abas do .xlsx no ar e provadas ao vivo; P6 provada no Valtra real; P6b (Krauspenhar) no PR #282
 
