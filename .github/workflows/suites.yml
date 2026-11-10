@@ -110,6 +110,27 @@ jobs:
           python3 -m pip install --quiet --only-binary :all: 'reportlab==5.0.1'
           PYTHONPATH=. python3 gerar.py
 
+      # Canastra e distress ANTES da suíte do n8n (10/11/2026): o controle negativo da P6b
+      # (`numeros-colados.test.mjs`) lê o TEXTO_EXTRAIDO.json dos dois; depois da suíte ele reprovava por insumo faltando.
+      # ---- o book difícil: 38 documentos, 3 exercícios, e o custo do lote ----
+      - name: Gerar o book-canastra
+        # O gerador é o próprio teste do book: ele fecha o balanço das 6 empresas
+        # nos 3 exercícios e confere cada anexo contra a conta do balanço que ele
+        # detalha, por `assert`. Se um número deixar de bater, ele MORRE aqui —
+        # antes de qualquer coisa rodar sobre um insumo mentiroso.
+        working-directory: Dados de Teste/book-canastra
+        run: PYTHONPATH=. python3 gerar.py
+
+      # ---- o book distress (F2.4): PL negativo, covenant rompido, aging, extrato ----
+      - name: Gerar o book-distress
+        # Mesmo papel do passo acima: o `motor.validar()` é o teste. 16 identidades
+        # por `assert` — balanço fecha nas 3 entidades × 3 anos, DRE = variação do
+        # PL, DFC reconstrói o caixa sem linha de ajuste, aging AP = Fornecedores
+        # do BP (14.900), extrato = caixa do BP (676), covenant 12,25x > 3,0x.
+        # Medido não-vazio em 22/09/2026: 5 de 5 alterações no gerador reprovam.
+        working-directory: Dados de Teste/book-distress
+        run: PYTHONPATH=. python3 gerar.py
+
       # ---- o book-espelho e o portal ANTES da suíte do n8n (09/11/2026) ----
       # `N8N/test/abas-do-xlsx.test.mjs` lê as 4 planilhas REAIS do book-espelho (todas de 2 abas)
       # e emula os nós nativos com o exceljs e o jszip do lock do portal. Sem o book, os testes com
@@ -207,24 +228,6 @@ jobs:
             Supabase/test/fixture_book_canastra.sql \
             || { echo "::error::as fixtures commitadas divergem do gerador — rode os geradores de fixture e commite o resultado"; exit 1; }
 
-      # ---- o book difícil: 38 documentos, 3 exercícios, e o custo do lote ----
-      - name: Gerar o book-canastra
-        # O gerador é o próprio teste do book: ele fecha o balanço das 6 empresas
-        # nos 3 exercícios e confere cada anexo contra a conta do balanço que ele
-        # detalha, por `assert`. Se um número deixar de bater, ele MORRE aqui —
-        # antes de qualquer coisa rodar sobre um insumo mentiroso.
-        working-directory: Dados de Teste/book-canastra
-        run: PYTHONPATH=. python3 gerar.py
-
-      # ---- o book distress (F2.4): PL negativo, covenant rompido, aging, extrato ----
-      - name: Gerar o book-distress
-        # Mesmo papel do passo acima: o `motor.validar()` é o teste. 16 identidades
-        # por `assert` — balanço fecha nas 3 entidades × 3 anos, DRE = variação do
-        # PL, DFC reconstrói o caixa sem linha de ajuste, aging AP = Fornecedores
-        # do BP (14.900), extrato = caixa do BP (676), covenant 12,25x > 3,0x.
-        # Medido não-vazio em 22/09/2026: 5 de 5 alterações no gerador reprovam.
-        working-directory: Dados de Teste/book-distress
-        run: PYTHONPATH=. python3 gerar.py
 
       - name: Custo do lote (medido no artefato, sem chamar a OpenAI)
         # Reprova quando um documento custa mais que a estimativa por chamada que
