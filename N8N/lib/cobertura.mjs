@@ -192,7 +192,9 @@ export function juntarFragmentosComOrigem(texto) {
     if (bruta.trim().length === 0) {
       descarregar(null, i);
       saida.push({ texto: bruta, de: i, n: 1 });
-    } else if (/[ \t]$/.test(bruta) && quantos < MAX_FRAGMENTOS) {
+    // Linha de PLANILHA (células separadas por " | ") nunca é fragmento: quando a última célula está vazia ela termina em
+    // "| " e a emenda colava 5 contratos numa linha só (Mapa de Dívida do book-espelho, ao vivo em 10/11: régua 16 para 26).
+    } else if (/[ \t]$/.test(bruta) && !bruta.includes(' | ') && quantos < MAX_FRAGMENTOS) {
       // O espaço no fim é a marca do fragmento que NÃO fecha a linha visual.
       if (quantos === 0) deEmenda = i;
       emenda += bruta;
@@ -301,6 +303,7 @@ export function ehLinhaSemValor(linha) {
     .replace(diaDeMes, ' ')                             // 31 de dezembro
     .replace(quantosDeDuracao, ' ')                     // 36 MESES
     .replace(/\b(19|20)\d{2}\b/g, ' ')                 // 2025
+    .replace(/__EMPTY(_\d+)?/g, ' ')                    // nome de coluna vazia que o extrator do n8n inventa
     .replace(/^\s*\d{1,2}[.)]\s+(?=[^\d\s])/, ' ');   // "3. Parcelamentos tributários": o 3 numera, não mede
   return !/\d/.test(resto);
 }
