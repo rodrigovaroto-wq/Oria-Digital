@@ -498,15 +498,95 @@ export function contasComOrigem(texto) {
   // `ehLinhaDeConta`: aqui fica o que depende da linha ANTERIOR, e só isso.
   const prosa = /^(nota|obs)\b|^\(?valores expressos|^exerc[íi]cios? encerrados?/i;
   let anteriorEraProsa = false;
+  // O NOME SOLTO DO VALOR (balancete do Krauspenhar, execução 9601 de 10/11/2026, 12 páginas, texto colado).
+  // O extrator põe os números de UMA conta numa linha ("0,009865 0,0055.295,58 -55.295,58") e o nome na
+  // seguinte ("BANCO AL5 AG. 0001 C/C 12858268"). O nome tem dígito (agência, conta, contrato), então a régua o
+  // contava como segunda conta da mesma: 42 contas a mais em 460 reais. A linha só de números JÁ foi contada; a
+  // linha seguinte é o NOME dela se NÃO tiver número com cara de valor. Têm cara de valor: número entre
+  // parênteses "(120)", com decimal ou milhar ("1,50", "9.410"), percentual, e inteiro nu que FECHA a linha
+  // ("Caixa 410", "Juros s/ empréstimo 450" — DRE em milhares: o valor está nela, e ela é conta; revisão de
+  // 10/11 mediu 7→5 e "Despesas administrativas (120) (110)" sumindo). NÃO têm: dígito colado a letra
+  // ("AL5", "V8", "13º"), inteiro depois de AG/C/C/CONTA/CONTRATO/Nº ("C/C 12858268" fecha o nome do banco),
+  // nem inteiro no meio ("707679 - CP").
+  const soNumeros = /^[\d.,()%\s-]+$/;
+  const antesDeCodigo = /^(ag\.?|c\/c|c\.c\.?|cc|conta|cta|contrato|n[º°o]\.?|nf)$/i;
+  const temCaraDeValor = (linha) => {
+    // Natureza D/C no fim ("Caixa 450 D", "1.1.01.002 Numerário 181 D") não é nome: sai antes de olhar o inteiro final.
+    // Sem `\s+[dc]$` (Sonar S8786: retrocesso super-linear numa corrida de espaços): separa e descarta o token final.
+    const tk = linha.trim().split(/\s+/);
+    if (tk.length > 1 && /^[dc]$/i.test(tk[tk.length - 1])) tk.pop();
+    // "(120)", "(120)(110)", "( 120 )"; e "12 %" pelo token "%" depois de um número (sem `\d\s+%`, que o Sonar
+    // S8786 mede como retrocesso super-linear em linha longa de espaços).
+    if (/\(\s*-?\d[\d.,]*\s*\)/.test(linha)) return true;
+    // As quatro formas de valor num token, uma regex cada (Sonar S5843: a alternância única tinha complexidade 30).
+    const formasDeValor = [/^-?\d[\d.]*,\d+%?$/, /^-?\d{1,3}(\.\d{3})+%?$/, /^-?\d+%$/, /^\d[\d.]*-$/];
+    return tk.some((t, i) => formasDeValor.some((re) => re.test(t))
+      || (t === '%' && i > 0 && /\d$/.test(tk[i - 1]))
+      // Inteiro nu que fecha a linha, de QUALQUER tamanho: "Receita bruta 1250000" é valor. Contrato sem "C/C"
+      // ("PARCELAMENTO ICMS 11402191") passa a ser contado como linha própria: 2 a mais no 9601, o lado barato.
+      || (i === tk.length - 1 && /^-?\d+$/.test(t) && !(i > 0 && antesDeCodigo.test(tk[i - 1]))));
+  };
+  let anteriorSoNumeros = false;
   const out = [];
-  for (const g of grupos) {
+  const grupoDe = []; // índice, em `grupos`, de cada conta de `out` — para saber quem ENCOSTA em quem de verdade
+  for (let gi = 0; gi < grupos.length; gi += 1) {
+    const g = grupos[gi];
     const linha = g.texto.trim();
-    if (linha.length === 0) { anteriorEraProsa = false; continue; }
+    if (linha.length === 0) { anteriorEraProsa = false; anteriorSoNumeros = false; continue; }
     if (anteriorEraProsa && /^[a-zà-ú]/.test(linha)) continue;
     anteriorEraProsa = prosa.test(linha);
-    if (ehLinhaDeConta(linha)) out.push({ linha, de: g.de, n: g.n });
+    if (!ehLinhaDeConta(linha)) { anteriorSoNumeros = false; continue; }
+    if (anteriorSoNumeros && !soNumeros.test(linha) && !temCaraDeValor(linha)) { anteriorSoNumeros = false; continue; }
+    anteriorSoNumeros = soNumeros.test(linha);
+    out.push({ linha, de: g.de, n: g.n });
+    grupoDe.push(gi);
   }
-  return out;
+  // A MOBÍLIA DE PÁGINA. Todo balancete paginado repete, em CADA página, as mesmas linhas de cabeçalho e rodapé
+  // ("Filial 0", "Data: 23/09/2026 Hora: 10:14:53", "Folha: 7", CNPJ, "Periodo de: ...", "Diário: 0", "Rotina: ...
+  // Usuário: 94Nº reg.:"): 9 por página, 108 nas 12 páginas do mesmo documento, 17,7% das 610 linhas que a régua
+  // contava — e nenhuma é conta. A régua dava 610 contra as 502 que a leitura devolveu (82%), e 7 de 11 blocos
+  // ficaram abaixo de 85%: sete segundas passadas pagas à toa e extracao_falhou FALSA.
+  //   (1) linha SEM valor monetário (\d,\d{2}) que se repete >= 3 vezes IGUAL, a menos do contador depois de ":"
+  //       (folha, usuário, nível) e sem outro número que meça (ver `semMedida`) — um rótulo de conta distinto difere em número de 4+ dígitos (agência,
+  //       conta, contrato: "CAPITAL DE GIRO ... 707679 - CP" não colapsa). Três é o mínimo que uma coincidência
+  //       raramente faz. Medido: nos outros 87 textos (20 capturas de produção e 67 PDFs dos books) NENHUMA linha
+  //       sem valor se repete igual, então a regra não tira nada de lá.
+  //   (2) linha COM valor ("7004,00 Contabilidade.Rcrp_balan4G", o rodapé) só sai se for idêntica >= 3 vezes E
+  //       encostada numa linha já reconhecida como mobília em (1): conta real com os mesmos rótulo e valores
+  //       ("ADIANTAMENTO A FORNECEDORES" sintética e analítica) repete 2 vezes e não encosta em cabeçalho.
+  // Por que não "idêntica em N páginas": o texto não traz a quebra de página, e o N seria um palpite.
+  const comValor = (l) => /\d,\d{2}/.test(l);
+  // O número que VARIA entre páginas é o contador ("Folha: 7", "Usuário: 94Nº reg.:", "Nível: 9") — só ele vira '#'. A versão anterior trocava todo inteiro isolado de até 3 dígitos, e em livro em MILHARES uma
+  // linha de tabela numérica ("530 470", "Custo 120 110", "1 | 15/01/2026 | 15000") virava molde repetido e sumia:
+  // DRE 10→3, imobilizado 6→0, aging 6→0, cronograma 4→0 (revisão de 10/11). E mobília é linha SEM número que
+  // meça: depois de tirar data, hora, CNPJ e o contador, não pode sobrar dígito. "Filial 0" sobra (um 0 solto é
+  // indistinguível de "Caixa 0"), então fica contada: 12 linhas A MAIS no 9601, o lado barato do erro.
+  // SÓ os rótulos de contador do 9601 (Folha, Nível, Diário, Usuário) mais Página/Pág.: "Saldo anterior: 120",
+  // "Total: 85" ou "Parcela: 1 | Valor: 850" mantêm o número e nunca são mobília (2ª revisão: 6→0, 6→3, 3→0).
+  // FOLHA e PÁGINA ANCORADOS no início da linha: sem âncora "folha" casava no fim de conta de folha de
+  // pagamento ("Custo de folha: 120/85/40", "Encargos sobre folha: 45/47/49" por filial iam 3→0, 3ª revisão).
+  // Nível, Diário e Usuário ficam SEM âncora: no 9601 eles vêm no meio da linha ("Balancete mensal A T I V O
+  // Nível: 9", medido: ancorar o Nível devolve 12 linhas de mobília à contagem) ou colados ao rodapé
+  // ("CONTABILUsuário: 45Nº reg.:"), e não são nome de conta de valor.
+  const chave = (l) => l
+    .replace(/^(\s*(?:folha|p[áa]g(?:ina)?\.?))(:\s*)\d{1,3}(?![\d/:.,])/i, '$1$2#')
+    .replace(/(usu[áa]rio|n[íi]vel|di[áa]rio)(:\s*)\d{1,3}(?![\d/:.,])/gi, '$1$2#');
+  // Data, hora e CNPJ saem um de cada vez (Sonar S5843: a alternância única tinha complexidade 27).
+  const semMedida = (l) => !/\d/.test(chave(l)
+    .replace(/\d{2}\/\d{2}\/\d{4}/g, '')
+    .replace(/\d{1,2}:\d{2}(:\d{2})?/g, '')
+    .replace(/\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/g, ''));
+  const vezes = new Map();
+  for (const c of out) {
+    const k = comValor(c.linha) ? c.linha : chave(c.linha);
+    vezes.set(k, (vezes.get(k) ?? 0) + 1);
+  }
+  const mobilia = out.map((c) => !comValor(c.linha) && semMedida(c.linha) && vezes.get(chave(c.linha)) >= 3);
+  // "Encostada" é na linha IMPRESSA, não na lista de contas: a primeira conta de cada página vem depois do
+  // cabeçalho com linhas não contadas no meio ("Fil."), e ali a vizinha na lista é mobília sem encostar.
+  const encosta = (i, j) => mobilia[j] === true && Math.abs(grupoDe[i] - grupoDe[j]) === 1;
+  return out.filter((c, i) => !mobilia[i]
+    && !(comValor(c.linha) && vezes.get(c.linha) >= 3 && (encosta(i, i - 1) || encosta(i, i + 1))));
 }
 
 /**

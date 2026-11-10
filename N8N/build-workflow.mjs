@@ -46,15 +46,14 @@ import {
   MAX_LINHAS_PLANILHA, MAX_COLUNAS_PLANILHA,
 } from './lib/spreadsheet.mjs';
 import {
-  linhasComNumero, linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
+  linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
   juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
-  camadaDeTextoDoPdf, linhasCurtasDaTabela, CARACTERES_MINIMOS_POR_PAGINA, MINIMO_LINHAS_COM_NUMERO_PDF,
-  fracaoDePalavrasDobradas, MAX_FRACAO_PALAVRAS_DOBRADAS, fracaoDeNumerosColados, MAX_FRACAO_NUMEROS_COLADOS,
   celulasDaLinha, celulasEstimadas,
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
   MAX_CELULAS_POR_BLOCO, LIMIAR_COBERTURA, MINIMO_PARA_AVALIAR,
 } from './lib/cobertura.mjs';
+import { FONTE_ROTA_PDF } from './lib/rota-pdf.mjs';
 import { conferirIdentidadeDeLinha, conferirTotalDaSerie, conferirBalanceteLinhaALinha, conferirHierarquiaDeCodigos, blocosDeLinha, linhasDaHierarquia, fechaComDeslocamento, blocoDaSintetica, filhasDiretas, classificarHierarquia, papelDeColunaDeBalancete, agruparContasDeBalancete, classificarContasDeBalancete, mensagemDoBalancete } from './lib/aritmetica.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -166,6 +165,9 @@ const FONTE_ESCALA_COLUNA = `const escalaCol = ${escalaDeclaradaNaColuna.toStrin
 // que o nó e a lib normalizem "US$"/"dolar"/"usd" para o MESMO 'USD'. Divergir
 // aqui reintroduziria exatamente a soma de moedas diferentes que a coluna
 // `campo_extraido.moeda` existe para impedir.
+// A ROTA DE LEITURA DO PDF vem de `lib/rota-pdf.mjs` (a lista, UMA vez): embutida no
+// nó Code (`FONTE_COBERTURA`) e no hash do `FINGERPRINT_EXTRACAO` abaixo.
+
 // O FINGERPRINT DA EXTRAÇÃO — o que autoriza NÃO pagar a mesma extração duas
 // vezes (Supabase/migrations/0118).
 //
@@ -177,10 +179,24 @@ const FONTE_ESCALA_COLUNA = `const escalaCol = ${escalaDeclaradaNaColuna.toStrin
 // junto com o workflow, e um workflow importado em julho nunca casa com a
 // extração de hoje.
 //
+// A QUARTA PARTE, A ROTA DO PDF (`FONTE_ROTA_PDF`), entrou em 10/11/2026. Os
+// três primeiros dizem O QUE a IA recebe como instrução; a rota diz O QUE ELA LÊ
+// (o texto do PDF ou a imagem das páginas). A P6b (PR #282) trocou a rota quando
+// `camadaDeTextoDoPdf` acha números colados, e o fingerprint ficou em
+// ff16b69dc9f1ad42 antes e depois. Medido em produção: o balancete do mandato
+// Krauspenhar, lido pela rota velha (303 contas descartadas, 1.516 pares), seria
+// PULADO no reenvio por `fn_versao_extracao_concluida` — correção de rota nunca
+// chegava a documento já lido; num mandato novo a rota nova deu 0 descartadas e
+// 2.008 pares. CUSTO ACEITO PELO DONO: o próximo envio de cada mandato re-extrai
+// (e paga) todo documento, porque o hash muda uma vez.
+// FICA DE FORA DE PROPÓSITO a régua (`linhasDeConta`, cobertura): ela mede o que
+// a IA devolveu, não muda o que a IA lê, e mexer nela não pode disparar
+// re-extração geral.
+//
 // Os 16 primeiros hex bastam: é identidade, não segurança — colisão acidental
 // em 64 bits de conteúdo controlado não é um risco que valha uma coluna maior.
 const FINGERPRINT_EXTRACAO = createHash('sha256')
-  .update([SYSTEM_PROMPT, MODELO_EXTRACAO, JSON.stringify(extractionSchema())].join('\u0000'))
+  .update([SYSTEM_PROMPT, MODELO_EXTRACAO, JSON.stringify(extractionSchema()), FONTE_ROTA_PDF.join('\n')].join('\u0000'))
   .digest('hex')
   .slice(0, 16);
 
@@ -296,7 +312,7 @@ const FONTE_COBERTURA = [
   `const MAX_CELULAS_POR_BLOCO = ${MAX_CELULAS_POR_BLOCO};`,
   `const LIMIAR_COBERTURA = ${LIMIAR_COBERTURA};`,
   `const MINIMO_PARA_AVALIAR = ${MINIMO_PARA_AVALIAR};`,
-  `const linhasComNumero = ${linhasComNumero.toString()};`,
+  ...FONTE_ROTA_PDF,
   // ANTES de `linhasDeConta`, que a chama: no Code do n8n não há hoisting de
   // `const`, e a ordem aqui é a ordem do arquivo que roda.
   // A emenda COM origem vem ANTES da que a usa, e `contasComOrigem` antes de
@@ -314,22 +330,6 @@ const FONTE_COBERTURA = [
   `const instrucaoDaFatia = ${instrucaoDaFatia.toString()};`,
   `const juntarBlocos = ${juntarBlocos.toString()};`,
   `const avaliarCobertura = ${avaliarCobertura.toString()};`,
-  // DEPOIS de `linhasComNumero`, que ela chama — mesma regra de ordem do
-  // comentário acima: o Code do n8n não hoista `const`.
-  `const CARACTERES_MINIMOS_POR_PAGINA = ${CARACTERES_MINIMOS_POR_PAGINA};`,
-  `const MINIMO_LINHAS_COM_NUMERO_PDF = ${MINIMO_LINHAS_COM_NUMERO_PDF};`,
-  `const MAX_FRACAO_PALAVRAS_DOBRADAS = ${MAX_FRACAO_PALAVRAS_DOBRADAS};`,
-  `const MAX_FRACAO_NUMEROS_COLADOS = ${MAX_FRACAO_NUMEROS_COLADOS};`,
-  // ANTES de `camadaDeTextoDoPdf`, que a chama. O portão do espelho pegou a
-  // ausência dela nesta lista antes de virar `ReferenceError` em produção —
-  // `toString()` não leva o escopo do módulo, e é o terceiro caso desta família
-  // nesta sessão.
-  `const fracaoDePalavrasDobradas = ${fracaoDePalavrasDobradas.toString()};`,
-  // ANTES de `camadaDeTextoDoPdf`, que a chama (P6) — mesma regra de ordem.
-  `const linhasCurtasDaTabela = ${linhasCurtasDaTabela.toString()};`,
-  // ANTES de `camadaDeTextoDoPdf`, que a chama (P6b).
-  `const fracaoDeNumerosColados = ${fracaoDeNumerosColados.toString()};`,
-  `const camadaDeTextoDoPdf = ${camadaDeTextoDoPdf.toString()};`,
 ].join('\n');
 
 // A SEGUNDA PASSADA POR COBERTURA (lib/cobertura.mjs), só o que o `Parse Extracao`
