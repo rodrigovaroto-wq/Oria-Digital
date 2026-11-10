@@ -4,7 +4,15 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 123 — COMECE AQUI (09/11/2026)
+## ▶ SESSÃO 124 — COMECE AQUI (09–10/11/2026)
+
+- **Leia a seção "SESSÃO 124" no topo do `ESTADO.md`.** Este cabeçalho só aponta para lá.
+- **Produção:** #278 mergeado (`264605e`), ingestão republicada em 09/11 21:39 UTC (60 nós), última migration aplicada **0230** (sonda 342 itens, 0 ausentes).
+- **Só na branch `claude/quirky-lamport-k9pat5`, sem PR:** a migration **0231** (escrita, NÃO aplicada), a régua, as abas do `.xlsx` e o portal novo. O CI do GitHub ainda não rodou nela.
+- **Ordem do dono:** PR + merge (publica o portal), aplicar a 0231, republicar a ingestão, reenviar as 4 planilhas do espelho. O portal antes da 0231.
+- **NÃO CONFERIDO:** o nó Compression e o `sheetName` na instância do n8n (lidos só no fonte); BP Piraquara Montagens 43 × 32 e +1 na DMPL Canastra (sem causa).
+
+## SESSÃO 123 (09/11/2026; histórico, a mais nova está acima)
 
 - **Leia a seção "SESSÃO 123" no topo do `ESTADO.md`** e a semana 2 do `Arquitetura do Sistema/3 Estado e Execução/PLANO_DE_EXECUCAO_2026-11.md`. Este cabeçalho só aponta para lá.
 - **Produção:** última migration aplicada **0230** em 09/11 (sonda 342 itens; o único ausente pela API é `envio_segredo_no_vault`, que é leitura do Vault negada ao papel da API). n8n de ingestão: o publicado é o do `main` de 09/11, SEM a metade n8n da 0229. Portal: sem mudança nesta sessão.

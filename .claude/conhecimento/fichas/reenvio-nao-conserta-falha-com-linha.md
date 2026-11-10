@@ -38,3 +38,7 @@ até o prompt mudar (o fingerprint cuida disso).
 tipo de documento, os casos que a regra nova alcança. As duas versões reprovadas pareciam certas
 até essa tabela existir. Reextrair só vale para motivo transitório, e isso pede a classe do motivo
 gravada no evento. É a fatia P8 do plano.
+
+**Atualização (S124, 10/11/2026):** o ALTO acima (os 41 documentos de tipo financeiro com "sem dado")
+foi tratado pela `0231`, escrita e NÃO aplicada no momento desta nota. Ver
+`decisao-de-pessoa-so-da-mesma-causa`. O que esta ficha afirma sobre a `0230` não mudou.
