@@ -512,7 +512,9 @@ export function contasComOrigem(texto) {
   const antesDeCodigo = /^(ag\.?|c\/c|c\.c\.?|cc|conta|cta|contrato|n[º°o]\.?|nf)$/i;
   const temCaraDeValor = (linha) => {
     // Natureza D/C no fim ("Caixa 450 D", "1.1.01.002 Numerário 181 D") não é nome: sai antes de olhar o inteiro final.
-    const tk = linha.replace(/\s+[dc]$/i, '').split(/\s+/);
+    // Sem `\s+[dc]$` (Sonar S8786: retrocesso super-linear numa corrida de espaços): separa e descarta o token final.
+    const tk = linha.trim().split(/\s+/);
+    if (tk.length > 1 && /^[dc]$/i.test(tk[tk.length - 1])) tk.pop();
     // "(120)", "(120)(110)", "( 120 )"; e "12 %" pelo token "%" depois de um número (sem `\d\s+%`, que o Sonar
     // S8786 mede como retrocesso super-linear em linha longa de espaços).
     if (/\(\s*-?\d[\d.,]*\s*\)/.test(linha)) return true;
