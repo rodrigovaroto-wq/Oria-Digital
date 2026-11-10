@@ -40,7 +40,7 @@ import {
   juntarFragmentosDeLinha, ehLinhaSemValor, ehLinhaDeConta,
   juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
-  planejarFatias, instrucaoDaFatia, juntarBlocos, camadaDeTextoDoPdf, fracaoDePalavrasDobradas, linhasCurtasDaTabela,
+  planejarFatias, instrucaoDaFatia, juntarBlocos, camadaDeTextoDoPdf, fracaoDePalavrasDobradas, linhasCurtasDaTabela, fracaoDeNumerosColados,
 } from '../lib/cobertura.mjs';
 import {
   custoDaChamada, tokensDeSaida, bytesDoBinario, orcamentoDoLote,
@@ -560,8 +560,14 @@ const TABELA = [
     // do dono (AMOBELEZA 73%, GENERAL TABACO 37,9% de palavras dobradas)
     ['Empprreessaa:: AMOBBELEZA COMEERRCCIIO\nDISSPONIIBILLIIDDAADDES 2.2272.055,77\nEsttooqquueess 26.893.325,14\nCllieentes 22.414.091,17\n', { paginas: 1 }],
     [null, {}], [undefined, { paginas: 0 }],                 // entradas degeneradas
+    // P6b: números colados (linhas literais do Krauspenhar, produção)
+    ['KRAUSPENHAR LTDA\n4.699.506,061.01.01 3.499.683,52135.629.193,62 -136.829.016,16\nDISPONIVEL\n129.953,741.01.01.02 221.596,36105.125.656,62 -105.034.014,00\nCONTA MOVIMENTO\n'.repeat(8), { paginas: 1 }],
     // P6: linha da tabela com menos células que a largura dela -> imagem
     ['GRUPO X\nAtivo 10 20 30 (5) 55\nPassivo 10 20 30 (5) 55\nParticipação de não controladores 78 78\nPatrimônio 4 5 6 (1) 14\n', { paginas: 1 }],
+  ] },
+  { nome: 'fracaoDeNumerosColados', lib: fracaoDeNumerosColados, casos: [
+    ['304.245,913.73.75.75 504.101,55121.647,96 -920.542,32\nCONTAX0\n'], ['Caixa 1.234,56 2.345,67\n'],
+    ['Aging 3,829 1,356 31.0%\n5,4408/US$.\n'], [''], [null],
   ] },
   { nome: 'linhasCurtasDaTabela', lib: linhasCurtasDaTabela, casos: [
     ['Ativo 10 20 30\nPassivo 10 20 30\nReserva 5 7\n'], ['Ativo 10 20\nPassivo 10 20\n'], ['Caixa 1\nBancos 2\n'],

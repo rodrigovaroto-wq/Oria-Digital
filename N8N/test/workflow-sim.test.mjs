@@ -3960,6 +3960,19 @@ test('MEDIDO (P6): tabela cujo texto perdeu a posição das células vai para IM
   }
 });
 
+test('MEDIDO (P6b): texto com números colados (Krauspenhar real) vai para IMAGEM e o veredito diz por quê', async () => {
+  const texto = readFileSync(new URL('./texto-krauspenhar-colado.txt', import.meta.url), 'utf8');
+  const out = await run('Recompor Conteudo Extraido', {
+    items: [{ json: { text: texto, numpages: 1 } }],
+    refs: { 'Preparar Conteudo': [{ json: ctxPdfBase }] },
+  });
+  const j = out[0].json;
+  assert.equal(j.leitura_pdf, 'ocr');
+  assert.equal(j.leitura_pdf_motivo, 'numeros-colados');
+  assert.match(j.leitura_pdf_explicacao, /colados/);
+  assert.ok(!('content_part' in j), 'o base64 de Preparar Conteudo tem de sobreviver');
+});
+
 test('MEDIDO (P6): tabela em que TODA linha tem a largura da tabela continua como texto', async () => {
   for (const [nome, texto] of [
     ['BP de 2 colunas sem linha curta', TEXTOS_COM_POSICAO_PERDIDA.componentes],

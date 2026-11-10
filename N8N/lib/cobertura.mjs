@@ -1230,11 +1230,49 @@ export function linhasCurtasDaTabela(texto) {
   return { largura, curtas: trechos.filter((x) => x.n < largura).map((x) => x.linha) };
 }
 
+// A QUINTA CAUSA: OS NÚMEROS SAEM COLADOS E FORA DE ORDEM (P6b, 10/11/2026).
+//
+// Medido em produção (execução 9586, `balancete_janaago26.pdf`, KRAUSPENHAR): 303 contas
+// "descartadas por desalinhamento". O `Extrair Texto` entrega, para uma linha cujo PDF é
+// Saldo anterior 304.245,91 | Débito 121.647,96 | Crédito -920.542,32 | Saldo atual 504.101,55
+// e código 3.73.75.75 (valores anonimizados: cada dígito trocado por uma permutação fixa; a FORMA é a do texto real):
+//
+//     304.245,913.73.75.75 504.101,55121.647,96 -920.542,32
+//
+// Os números grudam entre si e com o código, e a ordem se perde. A IA devolve 5 ou 3 valores
+// e `achatarGrupos` descarta — o certo: aceitar 4 deixaria o saldo atual na coluna Débito.
+// A correção não mexe na guarda; evita entregar esse texto: vai como imagem.
+//
+// COMO SE RECONHECE: token só de dígito/ponto/vírgula/sinal/parêntese (sufixo D/C tolerado) com
+// `,` + 2 dígitos seguidos de OUTRO dígito (valor brasileiro tem 2 casas: o que vem depois é
+// outro número). Fica de fora o milhar americano "3,829" / "98,467" (`\d{1,3}(,\d{3})+`) e o
+// token com letra ou barra ("5,4408/US$.", taxa de câmbio de 4 casas) — o 1º falso positivo medido.
+// shortcut: cola de exatamente 1 dígito depois de ",dd" ("1,00"+"5") parece milhar americano e
+// não conta; subir se um documento real mostrar essa forma.
+//
+// MEDIDO (fração das linhas com número que têm token colado): Krauspenhar 72,3% (460/636);
+// Valtra 9,4% e 6,2% (cola real, "0,000,00" = dois zeros, mas a extração desse documento
+// funciona); os 96 documentos dos 4 books sintéticos + os 20 capturados de produção: 0,0%.
+// LIMIAR 25%: o meio do vazio entre 9,4% e 72,3%, e a mesma lógica de `MAX_FRACAO_PALAVRAS_DOBRADAS`
+// — linha no vazio entre populações que não se tocam, não calibração fina. Custo: o do
+// documento ir como imagem (a mesma rota da P6; sem teto próprio por documento).
+export const MAX_FRACAO_NUMEROS_COLADOS = 0.25;
+
+/** Fração das linhas com número que têm ao menos um token de dois valores brasileiros colados. */
+export function fracaoDeNumerosColados(texto) {
+  const linhas = linhasComNumero(texto);
+  if (linhas.length === 0) return 0;
+  const colado = (t) => /^[(-]*\d[\d.]*,\d{2}\d[\d.,]*\)?[DC]?$/.test(t)
+    && !/^[(-]*\d{1,3}(,\d{3})+(\.\d+)?[)%]*$/.test(t);
+  return linhas.filter((l) => l.split(/\s+/).some(colado)).length / linhas.length;
+}
+
 export function camadaDeTextoDoPdf(texto, {
   paginas = 1,
   minPorPagina = CARACTERES_MINIMOS_POR_PAGINA,
   minLinhasComNumero = MINIMO_LINHAS_COM_NUMERO_PDF,
   maxDobradas = MAX_FRACAO_PALAVRAS_DOBRADAS,
+  maxColados = MAX_FRACAO_NUMEROS_COLADOS,
 } = {}) {
   const t = typeof texto === 'string' ? texto.trim() : '';
   // `paginas` ausente vira 1, e o efeito é o conservador: exige a densidade de
@@ -1265,6 +1303,13 @@ export function camadaDeTextoDoPdf(texto, {
       explicacao: `${Math.round(dobradas * 100)}% das palavras têm letra repetida (teto ${Math.round(maxDobradas * 100)}%): `
         + 'a camada de texto deste PDF está corrompida por glifo dobrado e os NÚMEROS saem errados — '
         + 'vai à IA como imagem, que é onde o documento está correto' };
+  }
+  const colados = fracaoDeNumerosColados(t);
+  if (colados > maxColados) {
+    return { ...base, usarTexto: false, motivo: 'numeros-colados', fracaoDobradas: dobradas, fracaoColados: colados,
+      explicacao: `${Math.round(colados * 100)}% das linhas com número têm dois valores colados no texto `
+        + `(teto ${Math.round(maxColados * 100)}%): `
+        + 'a ordem e a coluna de cada número se perdem no texto — vai à IA como imagem, que é onde cada coluna está' };
   }
   const tabela = linhasCurtasDaTabela(t);
   if (tabela.curtas.length > 0) {
