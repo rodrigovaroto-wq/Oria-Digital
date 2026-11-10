@@ -46,7 +46,7 @@ Aprovação (go/no-go) ──► COMPARATIVOS ──► Modelagem ──► Book
 | D14.5 | **Liquidez, alavancagem e os demais índices de balanço do setor vêm da CVM**, agrupada por CNAE. O IBGE não traz balanço. |
 | D14.6 | **Região: só o estado do cliente, e só quando o IBGE publica o recorte.** Célula escondida por sigilo vira `n/d — sigilo IBGE`, nunca zero. |
 | D14.7 | **Fontes adicionadas:** RAIS, juros por modalidade e crédito agregado do Banco Central, CNPJ aberto da Receita, Damodaran e Serasa (§2). |
-| D14.8 | **Os blocos de despesa ficam na própria seção Análise Comparativa, não no Kit Básico.** O analista preenche quantidade e valor de cada despesa (kWh, m², m³, km...), e o sistema calcula sozinho o custo unitário, compara com a média da região e mostra ao lado a economia se o custo for trazido para a média. |
+| D14.8 | **Os blocos de despesa ficam na própria seção Análise Comparativa, não no Kit Básico.** O analista preenche quantidade e valor de cada despesa (kWh, m², m³, km...), e o sistema calcula sozinho o custo unitário, compara com a média da região e mostra ao lado a economia se o custo for trazido para a média. **Cada bloco também mostra o percentual da receita gasto com aquele custo, comparado com o percentual do setor.** |
 | D14.9 | **O cálculo é por região de operação, nunca generalista.** Cliente com operação em vários estados tem cada despesa calculada por unidade, contra a referência do lugar daquela unidade (§3.1). |
 
 ---
@@ -127,6 +127,8 @@ analista pode digitar ou anexar o documento para a IA extrair.
 7. **Seção Análise Comparativa no portal**, entre a aprovação e a modelagem: o quadro do cliente
    contra pares, setor e região, os blocos de despesa com o cálculo ao lado, e a lista de
    oportunidades com os botões de decisão.
+8. **Apresentação de crédito**: o capítulo de comparativo setorial passa a ler esta tabela, com a
+   coluna `Setor (fonte, ano)` que o prompt mestre já prevê.
 
 ### 3.1 Operação em várias regiões (D14.9)
 
@@ -147,11 +149,17 @@ não diz nada. O cálculo segue estes passos:
    quando o cliente está acima. Abaixo, mostra "abaixo da média" e economia zero, nunca negativa.
 6. **Total do cliente:** soma das economias das unidades, com a tabela por unidade ao lado. O total
    nunca esconde de qual unidade veio.
-7. **Índices de setor (margem, prazos) com várias regiões:** ponderados pela receita de cada
+7. **Percentual da receita, ao lado de cada bloco:** quanto aquele custo pesa na receita do cliente
+   (despesa ÷ receita líquida do mesmo período) contra o mesmo percentual no setor. A referência vem
+   da estrutura de custos do IBGE (PIA, PAC, PAS, PAIC) pelo CNAE, no recorte do estado quando
+   publicado, e da CVM agrupada por CNAE onde o IBGE não abre a despesa. Custo que a fonte não separa
+   (por exemplo, água junto com outras despesas) fica `n/d — o setor não publica esta despesa
+   separada`. Cada bloco mostra, então, duas leituras independentes: **o preço** (custo unitário
+   contra a região) e **o peso** (percentual contra o setor). Custo unitário na média com percentual
+   acima indica consumo alto, não preço alto, e a hipótese escrita diz isso.
+8. **Índices de setor (margem, prazos) com várias regiões:** ponderados pela receita de cada
    unidade quando o analista a informar. Sem receita por unidade, a comparação usa o estado da
    matriz e diz isso na tela.
-8. **Apresentação de crédito**: o capítulo de comparativo setorial passa a ler esta tabela, com a
-   coluna `Setor (fonte, ano)` que o prompt mestre já prevê.
 
 ---
 
