@@ -671,10 +671,10 @@ crédito de A == débito de B.
 
 ### F6C — COMPARATIVOS SETORIAIS (Espec. 14) · **DECIDIDA em 10/11/2026; nada implementado**
 
-Aba nova no mandato, entre a aprovação e a modelagem: índices do cliente contra empresas que
+Seção nova no mandato, **Análise Comparativa**, entre a aprovação e a modelagem: índices do cliente contra empresas que
 publicam balanço (CVM), setor (IBGE por CNAE) e estado do cliente (IBGE, quando publicado), mais
 RAIS, Banco Central, CNPJ aberto, Damodaran e Serasa. Cada desvio vira **oportunidade**; a aceita
-pelo analista vira alavanca da F8 e entra na apresentação. Escopo, fontes e etapas em
+pelo analista vira alavanca da F8 e entra na apresentação. Despesas (energia, aluguel, frete...) calculadas por unidade, contra a referência da região de cada unidade. Escopo, fontes e etapas em
 `2 Especificação/14_COMPARATIVOS_SETORIAIS.md`.
 
 | | |

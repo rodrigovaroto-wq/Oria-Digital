@@ -21,7 +21,7 @@ nesta data: recorte, formato e acesso de cada fonte precisam ser conferidos ante
 
 ## Resumo
 
-Uma aba nova no mandato, **Comparativos**, entre a aprovação (go/no-go) e a modelagem. Ela compara
+Uma seção nova no mandato, **Análise Comparativa**, entre a aprovação (go/no-go) e a modelagem. Ela compara
 os índices do cliente com empresas parecidas, com o setor e com a região, e lista
 **oportunidades**: onde o cliente gasta acima da referência ou vende abaixo dela. O analista aceita
 ou recusa cada uma. **A aceita vira alavanca na modelagem e aparece na apresentação de crédito**;
@@ -46,6 +46,8 @@ Aprovação (go/no-go) ──► COMPARATIVOS ──► Modelagem ──► Book
 | D14.5 | **Liquidez, alavancagem e os demais índices de balanço do setor vêm da CVM**, agrupada por CNAE. O IBGE não traz balanço. |
 | D14.6 | **Região: só o estado do cliente, e só quando o IBGE publica o recorte.** Célula escondida por sigilo vira `n/d — sigilo IBGE`, nunca zero. |
 | D14.7 | **Fontes adicionadas:** RAIS, juros por modalidade e crédito agregado do Banco Central, CNPJ aberto da Receita, Damodaran e Serasa (§2). |
+| D14.8 | **Os blocos de despesa ficam na própria seção Análise Comparativa, não no Kit Básico.** O analista preenche quantidade e valor de cada despesa (kWh, m², m³, km...), e o sistema calcula sozinho o custo unitário, compara com a média da região e mostra ao lado a economia se o custo for trazido para a média. |
+| D14.9 | **O cálculo é por região de operação, nunca generalista.** Cliente com operação em vários estados tem cada despesa calculada por unidade, contra a referência do lugar daquela unidade (§3.1). |
 
 ---
 
@@ -76,8 +78,9 @@ consulta que falhou fica `falhou`, nunca "nada encontrado" (os quatro estados da
 **O ponto que decide se esta parte funciona:** comparar "aluguel acima da média" exige saber o
 **m²**; energia exige o **kWh**; água, o **m³**; frete, o **km e o peso**. Nenhum desses está na DRE.
 Sem a quantidade, o sistema só pode dizer "aluguel é 8% da receita contra 5% no setor", nunca "o
-m² está caro". Por isso esta parte depende de **documentos operacionais** que o Kit Básico ainda não
-pede (§3).
+m² está caro". Por isso a seção Análise Comparativa tem **blocos de despesa** para preencher,
+um por despesa e por unidade (§3.1). A coluna da direita diz onde a quantidade costuma estar; o
+analista pode digitar ou anexar o documento para a IA extrair.
 
 | Despesa | Fonte de referência | O que compara | Quantidade necessária, e de onde vem |
 |---|---|---|---|
@@ -116,12 +119,37 @@ pede (§3).
    de referência.
 5. **Decisão do analista**: aceitar, recusar com motivo ou pedir mais dado ao cliente. A aceita vira
    **alavanca** (F8, "alavancas operacionais como categoria") e entra na modelagem e na apresentação.
-6. **Kit Básico, bloco opcional "documentos operacionais"**: contas de luz e água dos últimos 12
-   meses, contrato de locação, contrato de frete, apólices. Sem eles, §2.2 fica em `n/d —
-   documento operacional não enviado`, e o efeito aparece escrito: "custo unitário não comparado;
-   só a proporção sobre a receita".
-7. **Aba Comparativos no portal**, entre a aprovação e a modelagem: o quadro do cliente contra
-   pares, setor e região, e a lista de oportunidades com os botões de decisão.
+6. **Blocos de despesa na seção Análise Comparativa** (D14.8), não no Kit Básico: energia, água,
+   aluguel, frete, diesel, folha, cartão, tarifas bancárias, seguros. Cada bloco pede quantidade e
+   valor por unidade do cliente (§3.1), digitados ou extraídos pela IA do documento anexado. Bloco
+   não preenchido fica `n/d — bloco não preenchido`, com o efeito escrito: "custo unitário não
+   comparado; só a proporção sobre a receita".
+7. **Seção Análise Comparativa no portal**, entre a aprovação e a modelagem: o quadro do cliente
+   contra pares, setor e região, os blocos de despesa com o cálculo ao lado, e a lista de
+   oportunidades com os botões de decisão.
+
+### 3.1 Operação em várias regiões (D14.9)
+
+Uma média nacional aplicada a um cliente com fábrica em Goiás e centro de distribuição em São Paulo
+não diz nada. O cálculo segue estes passos:
+
+1. **Localizar as unidades.** O sistema lista todos os estabelecimentos do CNPJ do cliente (matriz e
+   filiais, com estado e município) pelo **CNPJ aberto da Receita**, para cada empresa do perímetro
+   (F1). O analista confirma a lista e acrescenta o que não tem CNPJ próprio (galpão alugado, obra,
+   ponto de apoio).
+2. **Preencher por unidade.** Cada bloco de despesa recebe quantidade e valor por unidade. Despesa
+   que o cliente só tem consolidada pode ser rateada pelo analista, e o rateio fica escrito.
+3. **Custo unitário por unidade:** valor ÷ quantidade (R$/kWh, R$/m², R$/m³, R$/km).
+4. **Referência do lugar da unidade:** mediana do município quando a fonte publica, senão do estado.
+   Se o estado não tem referência, a unidade fica `n/d — sem referência para <UF>`. A média nacional
+   só entra se o analista escolher, e aparece rotulada como "referência nacional (UF sem dado)".
+5. **Economia até a média, por unidade:** (custo unitário − referência) × quantidade, por ano. Só
+   quando o cliente está acima. Abaixo, mostra "abaixo da média" e economia zero, nunca negativa.
+6. **Total do cliente:** soma das economias das unidades, com a tabela por unidade ao lado. O total
+   nunca esconde de qual unidade veio.
+7. **Índices de setor (margem, prazos) com várias regiões:** ponderados pela receita de cada
+   unidade quando o analista a informar. Sem receita por unidade, a comparação usa o estado da
+   matriz e diz isso na tela.
 8. **Apresentação de crédito**: o capítulo de comparativo setorial passa a ler esta tabela, com a
    coluna `Setor (fonte, ano)` que o prompt mestre já prevê.
 
@@ -135,8 +163,8 @@ pede (§3).
 | **1 — Coletores públicos** | CVM, IBGE (SIDRA), RAIS, CNPJ aberto, Banco Central, Damodaran, gravando em `consulta_externa` | etapa 0 · Espec. 13 etapa 2 (`consulta_externa`) | Cada coletor grava os quatro estados; desligar um coletor aparece como `nao_consultado`, não como vazio (medido) |
 | **2 — Referência por setor** | Mediana, quartis e amostra por CNAE e UF; mínimo de 4 empresas; sigilo do IBGE como `n/d` | etapa 1 | Setor com 3 empresas devolve `n/d` com o motivo (medido não-vazio) |
 | **3 — Índices do cliente e oportunidades** | Índices sobre a conta canônica; oportunidade por desvio; hipótese escrita pela IA | etapa 2 · **F4** | Toda oportunidade cita fonte e ano; nenhuma referência sem fonte |
-| **4 — Tela e decisão** | Aba Comparativos; aceitar, recusar, pedir dado | etapa 3 | A aceita aparece na modelagem como alavanca; a recusada fica com motivo |
-| **5 — Custo unitário** | Documentos operacionais no Kit Básico; folha, energia, frete e aluguel (§2.2) | etapa 4 · F2T ondas 4 e 5 para eSocial e CT-e | Cada despesa sem documento mostra o efeito escrito, não um número |
+| **4 — Tela e decisão** | Seção Análise Comparativa; aceitar, recusar, pedir dado | etapa 3 | A aceita aparece na modelagem como alavanca; a recusada fica com motivo |
+| **5 — Custo unitário por região** | Localizar as unidades (§3.1); blocos de despesa por unidade; custo unitário, referência do lugar e economia até a média; folha, energia, frete e aluguel primeiro (§2.2) | etapa 4 · F1 (perímetro) · F2T ondas 4 e 5 só para extrair de eSocial e CT-e | Cliente com 2 estados mostra 2 cálculos, cada um contra a referência do seu estado; unidade sem referência mostra `n/d`, não a média nacional (medido) |
 | **6 — Apresentação** | Capítulo de comparativo setorial lendo a tabela de referência | etapa 4 · F15 | Número do comparativo no PPT igual ao do banco |
 | **7 — Serasa** | Coletor pago, se a etapa 0 aprovar o custo | etapa 1 · decisão do dono | Idem etapa 1 |
 
@@ -146,7 +174,7 @@ pede (§3).
 
 - **Diferença contra o setor é hipótese, não economia garantida.** A tela e a apresentação dizem
   "possível economia", nunca "economia". O cliente não pode ler promessa.
-- **Ausência não é dado.** Setor sem amostra, célula em sigilo, documento operacional não enviado:
+- **Ausência não é dado.** Setor sem amostra, célula em sigilo, bloco de despesa não preenchido:
   `n/d` com o motivo **e o efeito**.
 - **Coletor que não rodou não parece coletor que não achou nada** (regra 7): `nao_consultado` e
   `falhou` são estados visíveis, nunca uma referência vazia.
