@@ -13,6 +13,8 @@ import { createHash } from 'node:crypto';
 import { codigosConhecidos } from '../lib/ia.mjs';
 import { SYSTEM_PROMPT, diagnosticarErroApi, MAX_OUTPUT_TOKENS, TPM_CONTA, RPM_CONTA, PISO_BATCHING_MS, normalizarUnidade, extractionSchema, achatarGrupos } from '../lib/extract.mjs';
 import { ALIASES } from '../lib/taxonomia.mjs';
+import { FONTE_ROTA_PDF } from '../lib/rota-pdf.mjs';
+import { linhasDeConta } from '../lib/cobertura.mjs';
 import { parseEntidade, classifyByFilename } from '../lib/classifier.mjs';
 import { orcamentoDoLote, vereditoDeTamanhoPorArquivo, TETO_BYTES_POR_ARQUIVO, MODELO_CLASSIFICACAO, MODELO_EXTRACAO, VERSAO_ORCAMENTO, PRECO_USD_POR_MILHAO, CUSTO_ESTIMADO_DOC_USD, TETO_EXECUCAO_USD, PAGINAS_MAX_MEDIDO, TOKENS_POR_PAGINA_IMAGEM } from '../lib/custo.mjs';
 
@@ -1685,20 +1687,42 @@ test('Dedup (0118): o fingerprint sai do prompt+modelo+esquema, e viaja no regis
   // mexeu no prompt, e uma extração feita com o prompt de ontem NÃO vale como a
   // de hoje (foi assim que a DMPL classificada como MUTUOS ficou presa no código
   // errado antes da 0024).
-  const esperado = createHash('sha256')
-    .update([SYSTEM_PROMPT, MODELO_EXTRACAO, JSON.stringify(extractionSchema())].join('\u0000'))
+  const impressao = (prompt, rota) => createHash('sha256')
+    .update([prompt, MODELO_EXTRACAO, JSON.stringify(extractionSchema()), rota.join('\n')].join('\u0000'))
     .digest('hex')
     .slice(0, 16);
+  const esperado = impressao(SYSTEM_PROMPT, FONTE_ROTA_PDF);
   assert.ok(q.options.queryReplacement.includes(`'${esperado}'`),
     'o fingerprint embutido no nó divergiu do prompt/modelo/esquema em uso');
 
   // E a prova de que ele MUDA quando o prompt muda — se não mudasse, o dedup
   // reaproveitaria extração feita com regra velha, que é pior que não deduplicar.
-  const comOutroPrompt = createHash('sha256')
-    .update([`${SYSTEM_PROMPT} nota nova`, MODELO_EXTRACAO, JSON.stringify(extractionSchema())].join('\u0000'))
-    .digest('hex')
-    .slice(0, 16);
+  const comOutroPrompt = impressao(`${SYSTEM_PROMPT} nota nova`, FONTE_ROTA_PDF);
   assert.notEqual(esperado, comOutroPrompt);
+
+  // (a) A ROTA do PDF também entra: a P6b trocou texto -> imagem e o fingerprint ficou
+  // em ff16b69dc9f1ad42, então o balancete Krauspenhar (lido pela rota velha: 303 contas
+  // descartadas, 1.516 pares) seria PULADO no reenvio. Mudar um limiar da rota tem de mudar o hash.
+  const rotaComOutroLimiar = FONTE_ROTA_PDF.map((l) => l.startsWith('const MAX_FRACAO_NUMEROS_COLADOS =')
+    ? 'const MAX_FRACAO_NUMEROS_COLADOS = 0.123456;' : l);
+  assert.notDeepEqual(rotaComOutroLimiar, FONTE_ROTA_PDF, 'o limiar existe na lista (senão o teste é vazio)');
+  assert.notEqual(impressao(SYSTEM_PROMPT, rotaComOutroLimiar), esperado,
+    'mudar um limiar da rota do PDF não mudou o fingerprint: documento lido pela rota velha seria pulado');
+});
+
+test('Dedup (0118): a rota do PDF é FECHADA — sozinha, sem o escopo do módulo, ela decide', () => {
+  // Se alguém acrescentar um helper à rota e não à FONTE_ROTA_PDF, ele fica fora do hash E fora
+  // do nó (ReferenceError em produção). Avaliada isolada, ela tem de rodar e devolver um veredito.
+  const camada = new Function(`${FONTE_ROTA_PDF.join('\n')}\nreturn camadaDeTextoDoPdf;`)();
+  const texto = Array.from({ length: 60 }, (_, i) => `Conta ${i + 1}   ${(i + 1) * 1000},00   ${(i + 1) * 900},00`).join('\n');
+  const v = camada(texto, { paginas: 1 });
+  assert.ok(v && typeof v === 'object', 'camadaDeTextoDoPdf devolve um veredito');
+  assert.equal(typeof v.usarTexto, 'boolean', 'o veredito diz se a rota é texto ou imagem');
+});
+
+test('Dedup (0118): a RÉGUA (linhasDeConta) fica fora do fingerprint — mudá-la não re-extrai tudo', () => {
+  assert.ok(!FONTE_ROTA_PDF.some((l) => l.startsWith('const linhasDeConta =') || l.includes(linhasDeConta.toString())),
+    'a régua mede o que a IA devolveu, não o que ela lê; dentro do hash, mexer nela dispararia re-extração geral paga');
 });
 
 test('Os dois ramos do fallback se juntam num Merge, em inputs DIFERENTES', () => {
