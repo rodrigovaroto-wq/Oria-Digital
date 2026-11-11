@@ -14410,8 +14410,8 @@ begin
       null;
     else
       -- 0241: a descrição é do PERÍODO que a pendência carrega. A busca acima acha por compatibilidade, não por igualdade, então chega aqui
-      -- a rodada de um período IRMÃO (anual 2024 x multi 24,26): reescrever dava à pendência de A o texto escrito para B (7 pendências
-      -- abertas em produção, 11/11/2026). Só reescreve a rodada do período da pendência OU da chave que o carrega (o laço desce de uma chave com
+      -- a rodada de um período IRMÃO (anual 2024 x multi 24,26): reescrever dava à pendência de A o texto escrito para B (caso
+      -- do Valtra, S126; 0 abertos em produção em 11/11/2026 pelo critério corrigido). Só reescreve a rodada do período da pendência OU da chave que o carrega (o laço desce de uma chave com
       -- pré-condição no seu período a um compatível e diverge ali: é o texto da MESMA chave, e a pendência da 0192 conta com isso); a chave irmã mantém a deduplicação e deixa o texto como está.
       if v_reescreve_descricao then
         update pendencia set descricao = p_descricao where id = v_pendencia_id;

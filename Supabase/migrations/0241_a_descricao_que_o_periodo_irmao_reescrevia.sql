@@ -41,7 +41,11 @@
 -- incoerente/sem texto: NÃO toca e conta (`sem_registro_proprio`): ausência declarada, não texto inventado. `resolvida_por` e `estado` ficam intocados. Cada correção grava um evento_auditoria (ator `sistema:0241`, acao
 -- `descricao_da_pendencia_corrigida`, entidade_ref `pendencia:<id>`) com a descrição antiga em `antes` e a nova e a `reconciliacao` de origem em `depois`; e um resumo (acao `descricao_contaminada_resumo`) com as
 -- contagens quando algo foi corrigido. Idempotente: depois de corrigida a descrição passa a ser a de um registro do próprio, e a segunda chamada devolve corrigidas = 0. A migration a chama uma vez.
--- O QUE NÃO FOI MEDIDO: quantas das 7 de produção têm registro próprio coerente para devolver (a medição de produção só leu a contaminação, pelo critério antigo, que pode superestimar). O resumo diz (corrigidas x sem_registro_proprio).
+-- REMEDIDO em PRODUÇÃO pelo critério CORRIGIDO (somente leitura, 11/11/2026, depois da revisão): 0 pendências contaminadas. As 7 acima
+-- mostram, todas, o texto de um registro cuja periodo_chave_id é o período da pendência (a chave que desce, 0192/4), que é legítimo.
+-- O critério antigo (só periodo_id) superestimava. Logo o backfill não muda nada em produção hoje; ele fica pela idempotência e para
+-- bancos que divirjam. A correção do corpo vale para frente: o arranjo do irmão (chave B em período compatível) não está aberto em
+-- produção hoje (o caso do Valtra registrado na S126 já não está aberto), e o teste o monta com fixture declarada (regra 4).
 --
 -- A ASSINATURA E O RETORNO DE fn_registrar_reconciliacao NÃO MUDAM. Reaplicável: create or replace + upsert dos requisitos; o backfill é idempotente.
 --
@@ -298,8 +302,8 @@ begin
       null;
     else
       -- 0241: a descrição é do PERÍODO que a pendência carrega. A busca acima acha por compatibilidade, não por igualdade, então chega aqui
-      -- a rodada de um período IRMÃO (anual 2024 x multi 24,26): reescrever dava à pendência de A o texto escrito para B (7 pendências
-      -- abertas em produção, 11/11/2026). Só reescreve a rodada do período da pendência OU da chave que o carrega (o laço desce de uma chave com
+      -- a rodada de um período IRMÃO (anual 2024 x multi 24,26): reescrever dava à pendência de A o texto escrito para B (caso
+      -- do Valtra, S126; 0 abertos em produção em 11/11/2026 pelo critério corrigido). Só reescreve a rodada do período da pendência OU da chave que o carrega (o laço desce de uma chave com
       -- pré-condição no seu período a um compatível e diverge ali: é o texto da MESMA chave, e a pendência da 0192 conta com isso); a chave irmã mantém a deduplicação e deixa o texto como está.
       if v_reescreve_descricao then
         update pendencia set descricao = p_descricao where id = v_pendencia_id;
@@ -461,7 +465,7 @@ end $$;
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
   ('reconciliacao_descricao_so_do_mesmo_periodo', '0241', 'corpo', 'fn_registrar_reconciliacao', 'if v_reescreve_descricao then', null,
-   'A descrição da pendência só é reescrita pela rodada do período que ela carrega (ou da chave dele). Corpo sem isto = a rodada do período compatível de outra chave (anual 2024 x multi 24,26) troca o texto de A pelo de B: o analista lê, na pendência de um período, o valor e a diferença de outro (7 pendências abertas em produção, 11/11/2026).',
+   'A descrição da pendência só é reescrita pela rodada do período que ela carrega (ou da chave dele). Corpo sem isto = a rodada do período compatível de outra chave (anual 2024 x multi 24,26) troca o texto de A pelo de B: o analista lê, na pendência de um período, o valor e a diferença de outro (caso do Valtra, S126; 0 abertos em produção em 11/11/2026 pelo critério corrigido).',
    'importante', 1093),
   ('descricao_contaminada_funcao', '0241', 'funcao', 'fn_corrigir_descricao_contaminada', null, null,
    'O backfill reexecutável da descrição contaminada. Ausente = a 0241 não foi aplicada: as pendências já contaminadas continuam mostrando o texto de outro período.',
