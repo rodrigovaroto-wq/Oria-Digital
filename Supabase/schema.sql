@@ -8646,7 +8646,14 @@ $$;
 CREATE FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text DEFAULT NULL::text) RETURNS TABLE(secao_canonica text, rotulo_a text, rotulo_b text, colunas integer, valor numeric, radical_comum boolean)
     LANGUAGE sql STABLE
     AS $$
-  with ocorrencias as (
+  -- marca-0240
+  -- 0240: a versão de cada documento do caso é resolvida UMA vez por documento (MATERIALIZED: sem isso o Postgres inlina a CTE usada uma vez e a função roda por LINHA de campo_extraido, ~0,05 ms cada).
+  with vigentes as materialized (
+    select d.id as doc_id, fn_versao_atual(d.id) as versao_id
+    from documento d
+    where d.caso_id = p_caso_id
+  ),
+  ocorrencias as (
     select
       ce.secao_canonica,
       fn_normalizar_texto(ce.chave)                as rotulo,
@@ -8661,6 +8668,7 @@ CREATE FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade te
     from campo_extraido ce
     join documento_versao dv on dv.id = ce.documento_versao_id
     join documento d         on d.id = dv.documento_id
+    join vigentes vg         on vg.doc_id = d.id
     left join entidade e     on e.id = d.entidade_id
     left join periodo p      on p.id = d.periodo_id
     where d.caso_id = p_caso_id
@@ -8669,9 +8677,11 @@ CREATE FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade te
       and ce.secao_canonica is not null
       and ce.secao_canonica <> 'NAO_CLASSIFICAVEL'
       -- Só a versão VIGENTE de cada documento (0102): ocorrência de versão
-      -- superada faria uma reextração parecer duplicidade.
-      and dv.n_versao = (select max(dv2.n_versao) from documento_versao dv2
-                          where dv2.documento_id = d.id)
+      -- superada faria uma reextração parecer duplicidade. 0240: "vigente" é a
+      -- mesma versão que as outras reconciliações e a Modelagem leem (0233), e
+      -- não mais max(n_versao): com a v1 com linhas e a v2 flagada a duplicidade
+      -- abria ou fechava pelo número da v2 enquanto as outras sete conferiam a v1.
+      and dv.id = vg.versao_id
       and (p_entidade is null
            or fn_mesma_entidade(coalesce(ce.entidade_coluna, e.razao_social), p_entidade))
   ),
@@ -8794,7 +8804,7 @@ $$;
 -- Name: FUNCTION fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text) IS 'Pares de rótulos DIFERENTES, em DOCUMENTOS DIFERENTES, na mesma seção canônica, com valor idêntico nas mesmas colunas — candidatos a ser a MESMA conta transposta duas vezes (achado do v35: "Prejuízos acumulados" e "Resultados Acumulados", ambos -39.150). Dois rótulos no MESMO documento são a hierarquia DELE (0144), não duplicidade. Não decide nada: alimenta a checagem de reconciliação, que abre pendência para decisão humana. Critério estreito de propósito — falso positivo aqui gasta o tempo do analista.';
+COMMENT ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text) IS 'Pares de rótulos DIFERENTES, em DOCUMENTOS DIFERENTES, na mesma seção canônica, com valor idêntico nas mesmas colunas — candidatos a ser a MESMA conta transposta duas vezes (achado do v35: "Prejuízos acumulados" e "Resultados Acumulados", ambos -39.150). Dois rótulos no MESMO documento são a hierarquia DELE (0144), não duplicidade. Não decide nada: alimenta a checagem de reconciliação, que abre pendência para decisão humana. Critério estreito de propósito — falso positivo aqui gasta o tempo do analista. 0240: lê a versão por fn_versao_atual (a vigente, 0233), como as outras reconciliações.';
 
 --
 -- Name: fn_pendencia_cnpj_colide_balcao(uuid, uuid, text, text, uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17329,7 +17339,7 @@ $$;
 -- Name: FUNCTION fn_versao_com_extracao(p_documento_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A documento_versao VIGENTE para quem lê conteúdo: a de maior n_versao que TEM campo_extraido. Difere de fn_versao_atual (max(n_versao)) de propósito: entre fn_registrar_documento e fn_registrar_campos_extraidos a versão mais recente está vazia, e max(n_versao) puro deixaria a tela de Modelagem em branco nessa janela — o mesmo sintoma que a 0101 corrigiu. 0233: uma versão cuja leitura esgotou a falha transitória (fn_versao_esgotou_transitoria) só é vigente quando nenhuma versão com linha do documento está sem a flag; entre as com a flag vence a de mais linhas (fn_versao_peso_de_leitura), empate pela de maior n_versao. Sem isto o reenvio por falha transitória (0233) trocava a versão anterior, com números no book, por uma leitura pior.';
+COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A documento_versao VIGENTE para quem lê conteúdo: a de maior n_versao que TEM campo_extraido. Difere de fn_versao_mais_nova (max(n_versao)) de propósito: entre fn_registrar_documento e fn_registrar_campos_extraidos a versão mais recente está vazia, e max(n_versao) puro deixaria a tela de Modelagem em branco nessa janela — o mesmo sintoma que a 0101 corrigiu. 0233: uma versão cuja leitura esgotou a falha transitória (fn_versao_esgotou_transitoria) só é vigente quando nenhuma versão com linha do documento está sem a flag; entre as com a flag vence a de mais linhas (fn_versao_peso_de_leitura), empate pela de maior n_versao. Sem isto o reenvio por falha transitória (0233) trocava a versão anterior, com números no book, por uma leitura pior. 0240: fn_versao_atual agora devolve ESTA versão (a mais nova só quando nenhuma tem linha).';
 
 --
 -- Name: fn_versao_esgotou_transitoria(uuid); Type: FUNCTION; Schema: public; Owner: -

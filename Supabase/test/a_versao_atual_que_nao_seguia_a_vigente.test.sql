@@ -7,7 +7,8 @@
 --   (B) controles que passam na função antiga de propósito: documento recém-registrado, sem nenhuma linha, ainda tem "versão atual" (a mais nova); v2 completa vence a v1.
 --   (C) a v2 que volta SEM linha (extracao_falhou aberta) por cima de uma v1 com linha: fn_reconferir_caso NÃO fecha a pendência (lida a v1 as guardas a fechariam com "a versão tem linhas",
 --       e a falha do reenvio sumiria da fila com o book mostrando a v1).
---   (D) a sonda enxerga os 3 requisitos da 0240.
+--   (D) a duplicidade de rótulo (fn_pares_duplicados_do_caso, a oitava reconciliação) lê a mesma versão: documento B com v1 (2 linhas, o par duplicado com o documento A) e v2 flagada só com outra conta: o par da v1 é visto.
+--   (E) a sonda enxerga os 4 requisitos da 0240.
 --
 -- ARRANJO: tudo por fn_registrar_documento / fn_registrar_campos_extraidos de verdade; à mão só a versão a mais (o reenvio de verdade só re-extrai quando a anterior não vale). Nenhum arranjo de
 -- produção é reproduzido: o campo falha_transitoria_esgotada é novo (0 eventos em 10/11/2026) e o número de versões com linha em produção é 9 documentos de 1.465 (0233).
@@ -102,11 +103,32 @@ begin
   select count(*) into v_n from pendencia where documento_id = v_doc and tipo = 'extracao_falhou' and estado <> 'resolvida';
   perform teste_assert_p40(v_n = 1, 'fn_reconferir_caso NÃO fecha a extracao_falhou da v2 vazia só porque a v1 tem linhas', format('abertas=%s', v_n));
 
-  raise notice '--- D. a sonda enxerga os requisitos da 0240 ---';
+  raise notice '--- D. a duplicidade de rótulo lê a versão vigente, como as outras reconciliações ---';
+  v_caso := (fn_upsert_caso('Caso P40 duplicidade'))::uuid;
+  v_a := teste_envia_p40(v_caso, 'e1.pdf', 'HP40-E1'); v_ver := (v_a->>'documento_versao_id')::uuid;
+  perform fn_registrar_campos_extraidos(v_ver, jsonb_build_array(
+    jsonb_build_object('ordem', 0, 'chave', 'Prejuízos acumulados', 'valor_num', -15000, 'secao', 'Patrimônio Líquido', 'secao_canonica', 'patrimonio_liquido', 'periodo_coluna', '2025', 'confianca', 0.99),
+    jsonb_build_object('ordem', 1, 'chave', 'Prejuízos acumulados', 'valor_num', -12000, 'secao', 'Patrimônio Líquido', 'secao_canonica', 'patrimonio_liquido', 'periodo_coluna', '2024', 'confianca', 0.99)), 'N0');
+  v_b := fn_registrar_documento(v_caso, 'Omega Ltda.', 'anual', '2025', 'BALANCETE', 0.95, 'nome_arquivo', 'supabase_storage', 'bucket/e2.pdf', 'e2.pdf', true, 'HP40-E2', 'ok', p_fingerprint_extracao => 'FP-P40');
+  v_ver := (v_b->>'documento_versao_id')::uuid; v_doc := (v_b->>'documento_id')::uuid;
+  perform fn_registrar_campos_extraidos(v_ver, jsonb_build_array(
+    jsonb_build_object('ordem', 0, 'chave', 'Resultados Acumulados', 'valor_num', -15000, 'secao', 'Patrimônio Líquido', 'secao_canonica', 'patrimonio_liquido', 'periodo_coluna', '2025', 'confianca', 0.99),
+    jsonb_build_object('ordem', 1, 'chave', 'Resultados Acumulados', 'valor_num', -12000, 'secao', 'Patrimônio Líquido', 'secao_canonica', 'patrimonio_liquido', 'periodo_coluna', '2024', 'confianca', 0.99)), 'N0', v_falha, null, v_esg);
+  v_ver2 := teste_nova_versao_p40(v_doc, 'HP40-E2-2');
+  perform fn_registrar_campos_extraidos(v_ver2, jsonb_build_array(
+    jsonb_build_object('ordem', 0, 'chave', 'Caixa', 'valor_num', 500, 'secao', 'Ativo Circulante', 'secao_canonica', 'ativo_circulante', 'periodo_coluna', '2025', 'confianca', 0.99)), 'N0', v_falha, null, v_esg);
+  perform teste_assert_p40(fn_versao_com_extracao(v_doc) = v_ver and fn_versao_mais_nova(v_doc) = v_ver2, 'premissa: o book mostra a v1 do balancete (o par) e a mais nova é a v2 flagada, sem o par');
+  select count(*) into v_n from fn_pares_duplicados_do_caso(v_caso);
+  perform teste_assert_p40(v_n = 1, 'fn_pares_duplicados_do_caso vê o par da v1 (a versão vigente), não a v2 sem ele', format('pares=%s', v_n));
+  select entidade_id into v_ent from documento where id = v_doc;
+  v_r := fn_reconciliar_duplicidade(v_caso, v_ent)::json;
+  perform teste_assert_p40((v_r->>'resultado') = 'divergencia', 'e fn_reconciliar_duplicidade acusa a duplicidade que as outras reconciliações e o book também enxergam', v_r::text);
+
+  raise notice '--- E. a sonda enxerga os requisitos da 0240 ---';
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0240' and presente;
-  perform teste_assert_p40(v_n = 3, 'os 3 requisitos da 0240 estão presentes na sonda', format('presentes=%s', v_n));
+  perform teste_assert_p40(v_n = 4, 'os 4 requisitos da 0240 estão presentes na sonda', format('presentes=%s', v_n));
   select count(*) into v_n from instalacao_requisito where migration = '0240';
-  perform teste_assert_p40(v_n = 3, 'e o catálogo declara exatamente 3', format('declarados=%s', v_n));
+  perform teste_assert_p40(v_n = 4, 'e o catálogo declara exatamente 4', format('declarados=%s', v_n));
 
   if current_setting('p40.medindo', true) = 'on' then
     raise warning 'MEDIDO: % falha(s) de % execucoes', coalesce(current_setting('p40.falhas', true), '0'), current_setting('p40.execucoes', true);

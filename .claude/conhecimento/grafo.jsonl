@@ -539,7 +539,7 @@
 {"k":"n","id":"fn:fn_papel_do_rotulo_no_caso","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"papel do rotulo no caso"}
 {"k":"n","id":"fn:fn_papel_linha","t":"fn","f":"Supabase/migrations/0202_o_total_com_codigo_contabil_que_virava_conta.sql","txt":"papel linha"}
 {"k":"n","id":"fn:fn_papel_prioridade","t":"fn","f":"Supabase/migrations/0042_papel_da_linha.sql","txt":"papel prioridade"}
-{"k":"n","id":"fn:fn_pares_duplicados_do_caso","t":"fn","f":"Supabase/migrations/0144_duplicidade_e_entre_documentos.sql","txt":"pares duplicados do caso"}
+{"k":"n","id":"fn:fn_pares_duplicados_do_caso","t":"fn","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","txt":"pares duplicados do caso"}
 {"k":"n","id":"fn:fn_pendencia_cnpj_colide_balcao","t":"fn","f":"Supabase/migrations/0177_a_guarda_do_balcao_ia_so_num_sentido.sql","txt":"pendencia cnpj colide balcao"}
 {"k":"n","id":"fn:fn_pendencia_entidade_ambigua","t":"fn","f":"Supabase/migrations/0153_a_entidade_ambigua_nao_decide.sql","txt":"pendencia entidade ambigua"}
 {"k":"n","id":"fn:fn_pendencia_entidade_nome_suspeito","t":"fn","f":"Supabase/migrations/0178_o_titulo_da_planilha_nao_e_pessoa_juridica.sql","txt":"pendencia entidade nome suspeito"}
@@ -1211,12 +1211,14 @@
 {"k":"e","de":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","l":180}
 {"k":"e","de":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","l":16}
 {"k":"e","de":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","rel":"CHAMA","pa":"fn:fn_trg_so_socio","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","l":307}
-{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":106}
-{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":75}
+{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":128}
+{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_pares_duplicados_do_caso","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":10}
+{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":76}
+{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_duplicidade","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":124}
 {"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_reconferir_caso","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":1}
-{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":12}
-{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":12}
-{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":63}
+{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":13}
+{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":13}
+{"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":64}
 {"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_versao_atual","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":1}
 {"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":6}
 {"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_versao_mais_nova","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":6}
@@ -2875,9 +2877,10 @@
 {"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":109}
 {"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":182}
 {"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_resolver_periodo_incorreto_falso","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":215}
-{"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_reconferir_caso","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":85}
-{"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_atual","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":66}
-{"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_mais_nova","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":51}
+{"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_pares_duplicados_do_caso","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":158}
+{"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_reconferir_caso","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":88}
+{"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_atual","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":69}
+{"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_mais_nova","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":54}
 {"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":341}
 {"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":57}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}

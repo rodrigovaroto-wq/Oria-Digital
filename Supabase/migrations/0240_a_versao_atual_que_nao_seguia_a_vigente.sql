@@ -17,14 +17,17 @@
 --
 -- OS CHAMADORES DE fn_versao_atual (grep em Supabase/ N8N/ portal/src/, 11/11/2026; N8N/ e portal/src/: nenhum) E A SEMÂNTICA QUE CADA UM QUER:
 --   * LEEM CONTEÚDO para reconciliar, devem seguir a vigente (= o book): fn_reconciliar_arvore, fn_reconciliar_ativo_passivo_pl, fn_reconciliar_caixa_bp_fluxo, fn_reconciliar_despfin_dre_vs_divida,
---     fn_reconciliar_intragrupo, fn_reconciliar_mutuos (inclusive o `where ce3.documento_versao_id = fn_versao_atual(d.id)` e os join lateral), fn_reconciliar_receita_dre_vs_faturamento.
+--     fn_reconciliar_intragrupo, fn_reconciliar_duplicidade (indireto, por fn_pares_duplicados_do_caso, reemitida), fn_reconciliar_mutuos (inclusive o `where ce3.documento_versao_id = fn_versao_atual(d.id)` e os join lateral), fn_reconciliar_receita_dre_vs_faturamento.
 --     fn_reconciliar_por_documento e fn_reconciliar_caso só despacham para as acima (não chamam a função). Nenhuma ESCREVE nem avalia guarda de extração: só abrem/fecham pendência de RECONCILIAÇÃO pelo número lido.
 --   * AVALIA GUARDA (precisa da mais nova): fn_reconferir_caso, reemitida aqui. fn_reavaliar_guardas_extracao e fn_registrar_campos_extraidos recebem o id da versão por argumento e não chamam a função.
 --   * Testes: canastra.test.sql e divergencia_prevalece_na_rodada.test.sql acham a versão de documentos de UMA versão (vigente = mais nova, sem mudança); espelho_grupo_a.test.sql ESCREVE linhas na versão recém-criada,
 --     vazia: trocado para fn_versao_mais_nova (com a vigente escreveria na v1 se já houvesse linha).
 --
--- FORA DESTA FATIA (regra 6, pendência declarada): fn_pares_duplicados_do_caso (0144; 145 linhas) também diz aplicar "só a versão vigente (0102)" e usa max(n_versao) sem exigir linha; segue divergindo. E `versoesVigentes` de
--- portal/src/lib/export.ts (a mesma divergência em TypeScript, apontada pela 0233).
+-- DENTRO DESTA FATIA DEPOIS DA REVISÃO INDEPENDENTE: fn_pares_duplicados_do_caso (0144), lida por fn_reconciliar_duplicidade, a oitava reconciliação, dizia aplicar "só a versão vigente (0102)" mas usava max(n_versao) sem exigir
+-- linha: com a v1 com linhas e a v2 flagada, 7 das 8 reconciliações conferiam a v1 e a duplicidade abria ou fechava o par pela v2. Reemitida aqui (corpo vigente da 0144, uma condição trocada: `dv.id` = fn_versao_atual,
+-- resolvida uma vez por documento numa CTE MATERIALIZED). Sem custo mensurável: fn_pares_duplicados_do_caso x30 no caso maior (31 documentos) 4,69 s e 4,17 s antes, 4,37 s e 4,48 s depois. O comment de
+-- fn_versao_com_extracao (0233) citava fn_versao_atual como max(n_versao): reemitido com fn_versao_mais_nova.
+-- FORA DESTA FATIA (regra 6, pendência declarada): `versoesVigentes` de portal/src/lib/export.ts (a mesma divergência em TypeScript, apontada pela 0233).
 --
 -- DESEMPENHO (banco local do run.sh: 401 documentos, 440 versões, 3.994 linhas; 2 rodadas alternadas antes/depois, "antes" = o corpo antigo via fn_versao_mais_nova): fn_versao_atual por documento passou de ~0,002 ms para
 -- ~0,05 ms (300 varreduras dos 401 documentos: 253-254 ms antes, 6.161-6.193 ms depois, 24x; é o índice de evento_auditoria por entidade_ref que a flag lê, mais um exists em campo_extraido por versão). A conta é
@@ -36,10 +39,10 @@
 -- SEM BACKFILL: o critério é lido na hora. As pendências de reconciliação já gravadas se reavaliam no próximo fn_reconciliar_caso/fn_reconferir_caso; em produção a regra nova muda a resposta de 0 documentos hoje (0 eventos
 -- com falha_transitoria_esgotada em 11/11/2026, 0233): vale a partir do n8n P8.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql — 13 asserts (13 execuções), medidos em 11/11/2026 com o assert trocado por raise warning (`p40.medindo = on`), que CONTA; cada
--- sabotagem é a função reemitida sobre o banco já montado pelo run.sh (cópia por template, teste rodado inteiro, aviso MEDIDO lido). Controle (migration intacta): 0 dos 13 reprovam. fn_versao_atual desligada (volta a
--- max(n_versao), fn_versao_mais_nova): 3 (2 de comportamento, a vigente e a reconciliação lendo a v1, + 1 da sonda). fn_reconferir_caso apontando para a vigente (fn_versao_atual): 2 (1 de comportamento, a extracao_falhou
--- da v2 vazia fechada, + 1 da sonda). As duas desligadas juntas (o estado da 0239): 3 (os 2 de comportamento de fn_versao_atual + 1 da sonda; o da reconferência passa, porque lá fn_versao_atual era a mais nova). Os asserts de
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql — 16 asserts (16 execuções), medidos em 11/11/2026 com o assert trocado por raise warning (`p40.medindo = on`), que CONTA; cada
+-- sabotagem é a função reemitida sobre o banco já montado pelo run.sh (cópia por template, teste rodado inteiro, aviso MEDIDO lido). Controle (migration intacta): 0 dos 16 reprovam. fn_versao_atual desligada (volta a
+-- max(n_versao), fn_versao_mais_nova): 5 (4 de comportamento: a vigente, a reconciliação lendo a v1 e os 2 da duplicidade, que lê por ela; + 1 da sonda). fn_pares_duplicados_do_caso desligada (o corpo da 0144 de volta): 3 (2 de comportamento, o par da v1 visto e a duplicidade acusada, + 1 da sonda). fn_reconferir_caso apontando para a vigente (fn_versao_atual): 2 (1 de comportamento, a extracao_falhou
+-- da v2 vazia fechada, + 1 da sonda). As três desligadas juntas (o estado da 0239) reprovam os de fn_versao_atual e os da duplicidade; o da reconferência passa, porque lá fn_versao_atual era a mais nova. Os asserts de
 -- controle (documento sem linha tem versão atual; documento inexistente = nulo; v2 completa vence) passam na função antiga de propósito: protegem o comportamento de antes.
 -- =============================================================================
 
@@ -148,6 +151,177 @@ comment on function fn_reconferir_caso(uuid, text) is
   'Reaplica as regras de HOJE (reconciliação A/B, guardas de extração, completude) sobre o dado já gravado, sem gastar chamada de IA. Existe porque pendência é estado gravado e nada a reavaliava quando uma migration corrigia a regra — o portal mostrava achado corrigido como se fosse corrente (caso real: as duas pendências do v35 que a 0034 já havia fechado). 0240: as guardas de extração avaliam fn_versao_mais_nova (a que o reenvio criou, mesmo vazia), não a vigente; as reconciliações dentro dela leem a vigente (fn_versao_atual).';
 
 -- ---------------------------------------------------------------------------
+-- fn_pares_duplicados_do_caso (0144; a vigente, conferida idêntica ao corpo de schema.sql antes desta migration): a versão lida passa a ser a de fn_versao_atual (a vigente). Única mudança de lógica: o filtro
+-- `dv.n_versao = max(n_versao)` vira `dv.id = vg.versao_id`, com a versão resolvida uma vez por documento numa CTE MATERIALIZED. Mesma assinatura, mesmo retorno, mesma ACL. Entrou depois da revisão
+-- independente: fn_reconciliar_duplicidade é a oitava reconciliação, e com a v1 com linhas e a v2 flagada as outras sete conferiam a v1 e esta abria ou fechava o par pela v2.
+-- ---------------------------------------------------------------------------
+create or replace function fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text default null)
+returns table(secao_canonica text, rotulo_a text, rotulo_b text, colunas integer, valor numeric, radical_comum boolean)
+language sql
+stable
+as $$
+  -- marca-0240
+  -- 0240: a versão de cada documento do caso é resolvida UMA vez por documento (MATERIALIZED: sem isso o Postgres inlina a CTE usada uma vez e a função roda por LINHA de campo_extraido, ~0,05 ms cada).
+  with vigentes as materialized (
+    select d.id as doc_id, fn_versao_atual(d.id) as versao_id
+    from documento d
+    where d.caso_id = p_caso_id
+  ),
+  ocorrencias as (
+    select
+      ce.secao_canonica,
+      fn_normalizar_texto(ce.chave)                as rotulo,
+      coalesce(ce.entidade_coluna, e.razao_social) as ent_col,
+      coalesce(ce.periodo_coluna, p.referencia)    as per_col,
+      ce.valor_num,
+      ce.chave,
+      ce.secao,
+      ce.unidade,
+      d.tipo_taxonomia,
+      d.id                                         as doc_id
+    from campo_extraido ce
+    join documento_versao dv on dv.id = ce.documento_versao_id
+    join documento d         on d.id = dv.documento_id
+    join vigentes vg         on vg.doc_id = d.id
+    left join entidade e     on e.id = d.entidade_id
+    left join periodo p      on p.id = d.periodo_id
+    where d.caso_id = p_caso_id
+      and ce.valor_num is not null
+      and ce.valor_num <> 0
+      and ce.secao_canonica is not null
+      and ce.secao_canonica <> 'NAO_CLASSIFICAVEL'
+      -- Só a versão VIGENTE de cada documento (0102): ocorrência de versão
+      -- superada faria uma reextração parecer duplicidade. 0240: "vigente" é a
+      -- mesma versão que as outras reconciliações e a Modelagem leem (0233), e
+      -- não mais max(n_versao): com a v1 com linhas e a v2 flagada a duplicidade
+      -- abria ou fechava pelo número da v2 enquanto as outras sete conferiam a v1.
+      and dv.id = vg.versao_id
+      and (p_entidade is null
+           or fn_mesma_entidade(coalesce(ce.entidade_coluna, e.razao_social), p_entidade))
+  ),
+  contas as (
+    -- Subtotal e derivado ficam fora: o export já trata subtotal informado por
+    -- estrutura, e cobrar de novo aqui duplicaria a fila de revisão.
+    select * from ocorrencias o
+    where fn_papel_linha(o.chave, o.tipo_taxonomia, o.unidade) = 'conta'
+  ),
+  -- Uma linha por (seção, rótulo, coluna): se o mesmo rótulo aparece em dois
+  -- documentos com o mesmo valor, isso é concordância, não duplicidade.
+  por_coluna as (
+    select secao_canonica, rotulo, ent_col, per_col, min(chave) as chave,
+           -- A SUBSEÇÃO DECLARADA pelo documento, agregada: é ela que denuncia o
+           -- par subtotal × componente (ver o filtro `subtotal_de` abaixo).
+           array_agg(distinct fn_normalizar_texto(coalesce(secao, ''))) as secoes,
+           -- 0144: DE QUAIS DOCUMENTOS este rótulo veio. É o que sustenta o
+           -- filtro `mesmo_documento` — o critério novo, e o mais forte dos três.
+           array_agg(distinct doc_id) as docs,
+           max(valor_num) as valor_num
+    from contas
+    group by secao_canonica, rotulo, ent_col, per_col
+    having count(distinct valor_num) = 1
+  ),
+  pares as (
+    select
+      a.secao_canonica,
+      a.rotulo as rotulo_a, b.rotulo as rotulo_b,
+      min(a.chave) as chave_a, min(b.chave) as chave_b,
+      count(*)     as colunas_iguais,
+      max(abs(a.valor_num)) as valor,
+      -- 0144: OS DOIS RÓTULOS SAEM DO MESMO DOCUMENTO?
+      --
+      -- Se saem, ele é a autoridade sobre a relação entre eles — e o que ele está
+      -- dizendo é hierarquia, não duplicidade. Uma demonstração é internamente
+      -- consistente por construção: cada conta aparece uma vez, e se aparecesse
+      -- duas a seção não fecharia, que é trabalho da `fn_conferir_arvore` (0133),
+      -- não desta checagem. O dano que a 0105 existe para achar é a soma de DUAS
+      -- FONTES — o balanço e o balancete escrevendo o mesmo fato de dois jeitos.
+      --
+      -- Medido na v48: 33 de 33 pares candidatos estavam no mesmo documento, 32
+      -- deles em linhas VIZINHAS (`ordem` a distância 1). Subtotal de grupo
+      -- seguido do seu único componente, e não conta transposta duas vezes.
+      bool_or(a.docs && b.docs) as mesmo_documento,
+      -- É o par SUBTOTAL × COMPONENTE? O documento diz: a subseção declarada de um
+      -- é o rótulo do outro. Medido no book (extração fiel): "Obrigações
+      -- Tributárias" × "Parcelamentos tributários - longo prazo", "Empréstimos e
+      -- Financiamentos" × "Financiamentos - FINAME/BNDES", "Partes Relacionadas" ×
+      -- "Mútuos a pagar", "Investimentos" × "Participações em outras sociedades".
+      -- São grupo com UM componente, não conta duplicada — e o export já os exclui
+      -- da soma pela detecção estrutural. Cobrar de novo aqui encheria a fila de
+      -- revisão com o que já está resolvido, que é exatamente o que a 0023 desfez.
+      --
+      -- 0144: ESTE FILTRO CONTINUA, MAS NÃO SE PODE MAIS CONTAR COM ELE SOZINHO.
+      -- Ele depende de `secao` trazer o grupo IMEDIATO, e na v48 `secao` chega
+      -- ACHATADA (subtotal e folhas com a seção de topo) — a mesma causa raiz que
+      -- a 0143 documentou. Com o sinal ausente, `subtotal_de` nunca dispara.
+      bool_or(a.rotulo = any(b.secoes) or b.rotulo = any(a.secoes)) as subtotal_de,
+      -- MESMA SUBSEÇÃO DECLARADA? Dois rótulos para o MESMO fato estão, por
+      -- construção, no mesmo lugar da demonstração. Quando o documento os coloca em
+      -- subseções diferentes, ele está dizendo que são coisas diferentes — e é o
+      -- que restou de falso positivo no book depois do filtro de subtotal:
+      -- "Créditos tributários - ICMS sobre ativo permanente" (Realizável a Longo
+      -- Prazo) e "Veículos e empilhadeiras" (Imobilizado), ambos 3.900 nos dois
+      -- exercícios. Coincidência de valor, contas distintas.
+      bool_or(a.secoes && b.secoes) as mesma_subsecao,
+      -- O SINAL DE SUBSEÇÃO EXISTE NESTE DOCUMENTO? Sem ele o filtro `subtotal_de`
+      -- não tem como disparar, e aí "Arrendamentos" × "Arrendamentos a pagar - CPC
+      -- 06 (R2)" (grupo com um componente) fica indistinguível de rótulo reescrito —
+      -- os dois têm radical contido. Medido no `fixture_modelagem_v35.sql`, que não
+      -- traz `secao`: era o único par que ele devolvia, e era falso positivo.
+      -- Então o ramo de UMA coluna (que se sustenta no radical) exige a subseção
+      -- declarada; o de DUAS colunas não precisa dela, porque ali a evidência é
+      -- aritmética e independente do nome.
+      bool_or(coalesce(array_to_string(a.secoes, '') || array_to_string(b.secoes, ''), '') <> '') as tem_secao
+    from por_coluna a
+    join por_coluna b
+      on b.secao_canonica = a.secao_canonica
+     and b.ent_col = a.ent_col and b.per_col = a.per_col
+     and b.rotulo > a.rotulo                       -- par sem repetir a ordem
+     and b.valor_num = a.valor_num                 -- idêntico ao centavo
+    group by a.secao_canonica, a.rotulo, b.rotulo
+  ),
+  -- Uma coluna em que os dois aparecem e DISCORDAM derruba o par: contas que
+  -- coincidem num ano e divergem no outro são contas diferentes, ponto.
+  discordantes as (
+    select a.secao_canonica, a.rotulo as rotulo_a, b.rotulo as rotulo_b
+    from por_coluna a
+    join por_coluna b
+      on b.secao_canonica = a.secao_canonica
+     and b.ent_col = a.ent_col and b.per_col = a.per_col
+     and b.rotulo > a.rotulo
+     and b.valor_num <> a.valor_num
+  )
+  select
+    pr.secao_canonica,
+    pr.chave_a,
+    pr.chave_b,
+    pr.colunas_iguais::int,
+    pr.valor,
+    (fn_tokens_estruturais(pr.chave_a) <@ fn_tokens_estruturais(pr.chave_b)
+     or fn_tokens_estruturais(pr.chave_b) <@ fn_tokens_estruturais(pr.chave_a)) as radical_comum
+  from pares pr
+  where not pr.mesmo_documento
+    and not pr.subtotal_de
+    and pr.mesma_subsecao
+    and not exists (
+    select 1 from discordantes dc
+    where dc.secao_canonica = pr.secao_canonica
+      and dc.rotulo_a = pr.rotulo_a and dc.rotulo_b = pr.rotulo_b
+  )
+    and (pr.colunas_iguais >= 2
+         or (pr.tem_secao
+             and (fn_tokens_estruturais(pr.chave_a) <@ fn_tokens_estruturais(pr.chave_b)
+                  or fn_tokens_estruturais(pr.chave_b) <@ fn_tokens_estruturais(pr.chave_a))))
+  order by pr.valor desc, pr.secao_canonica, pr.chave_a, pr.chave_b;
+$$;
+
+comment on function fn_pares_duplicados_do_caso(uuid, text) is
+  'Pares de rótulos DIFERENTES, em DOCUMENTOS DIFERENTES, na mesma seção canônica, com valor idêntico nas mesmas colunas — candidatos a ser a MESMA conta transposta duas vezes (achado do v35: "Prejuízos acumulados" e "Resultados Acumulados", ambos -39.150). Dois rótulos no MESMO documento são a hierarquia DELE (0144), não duplicidade. Não decide nada: alimenta a checagem de reconciliação, que abre pendência para decisão humana. Critério estreito de propósito — falso positivo aqui gasta o tempo do analista. 0240: lê a versão por fn_versao_atual (a vigente, 0233), como as outras reconciliações.';
+
+-- O comment de fn_versao_com_extracao (0233) citava fn_versao_atual como max(n_versao): deixou de ser verdade nesta migration.
+comment on function fn_versao_com_extracao(uuid) is
+  'A documento_versao VIGENTE para quem lê conteúdo: a de maior n_versao que TEM campo_extraido. Difere de fn_versao_mais_nova (max(n_versao)) de propósito: entre fn_registrar_documento e fn_registrar_campos_extraidos a versão mais recente está vazia, e max(n_versao) puro deixaria a tela de Modelagem em branco nessa janela — o mesmo sintoma que a 0101 corrigiu. 0233: uma versão cuja leitura esgotou a falha transitória (fn_versao_esgotou_transitoria) só é vigente quando nenhuma versão com linha do documento está sem a flag; entre as com a flag vence a de mais linhas (fn_versao_peso_de_leitura), empate pela de maior n_versao. Sem isto o reenvio por falha transitória (0233) trocava a versão anterior, com números no book, por uma leitura pior. 0240: fn_versao_atual agora devolve ESTA versão (a mais nova só quando nenhuma tem linha).';
+
+-- ---------------------------------------------------------------------------
 -- A SONDA. Marcadores em CÓDIGO, nunca de comentário (pg_get_functiondef traz os comentários do corpo: um marcador citado num comentário passaria sem a lógica).
 -- ---------------------------------------------------------------------------
 insert into instalacao_requisito
@@ -160,7 +334,10 @@ insert into instalacao_requisito
    'importante', 1087),
   ('reconferir_guardas_na_versao_mais_nova', '0240', 'corpo', 'fn_reconferir_caso', 'fn_versao_mais_nova(v_doc.id)', null,
    'A reconferência avalia as guardas de extração na versão que o reenvio criou, mesmo vazia. Corpo sem isto = a v2 que voltou sem linha tem a pendência extracao_falhou fechada por "a versão tem linhas" (lida a v1), e a falha do reenvio some da fila com o book mostrando a v1.',
-   'importante', 1088)
+   'importante', 1088),
+  ('duplicidade_le_a_versao_vigente', '0240', 'corpo', 'fn_pares_duplicados_do_caso', 'fn_versao_atual(d.id)', null,
+   'A duplicidade de rótulo (fn_reconciliar_duplicidade) lê a MESMA versão que as outras reconciliações. Corpo sem isto = com a v1 com linhas e a v2 parcial (falha_transitoria_esgotada) o par duplicado abre ou fecha pela v2 enquanto as outras sete checagens e o book leem a v1.',
+   'importante', 1092)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
@@ -168,7 +345,7 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = '0240', revisado_em = current_date,
-       observacao = 'A 0240 faz fn_versao_atual seguir a versão vigente (fn_versao_com_extracao, 0102/0233; a mais nova só quando nenhuma tem linha), cria fn_versao_mais_nova (o corpo antigo) e reemite fn_reconferir_caso para as guardas de extração lerem a mais nova. 3 requisitos novos (ordem 1086-1088).'
+       observacao = 'A 0240 faz fn_versao_atual seguir a versão vigente (fn_versao_com_extracao, 0102/0233; a mais nova só quando nenhuma tem linha), cria fn_versao_mais_nova (o corpo antigo) reemite fn_reconferir_caso para as guardas de extração lerem a mais nova e fn_pares_duplicados_do_caso para a duplicidade ler a vigente. 4 requisitos novos (ordem 1086-1088 e 1092).'
  where id = true;
 
 commit;
