@@ -1,10 +1,23 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 126 (10/11/2026) — P7b, P8 e P9 escritas; PAUSADA a pedido do dono (créditos) antes da revisão da 0233/0234, da publicação e da P10
+## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 escritas e revisadas; PR #287 em rascunho; falta merge, publicação e P10
 
 > **Migration mais nova: `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — ESCRITA, NÃO aplicada em produção. 0232, 0233 e 0234 estão TODAS fora de produção.**
 > - Branch `claude/confident-bardeen-15mjip`. Nada mergeado no `main`, nada republicado no n8n, nada publicado no portal, P10 não rodou.
 > - Acesso a produção conferido nesta sessão: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_URL`, `N8N_BASE_URL`, `N8N_API_KEY`, `VERCEL_TOKEN` estão no ambiente (só os nomes foram lidos). Leitura de produção feita pela API de gerenciamento (`POST https://api.supabase.com/v1/projects/<ref>/database/query`, `read_only:true`; o ref sai de `SUPABASE_URL`). O MCP do Supabase (notebooks) recusa permissão.
+
+### Atualização de 11/11 (retomada) — vale por cima do que está abaixo
+
+- **Decisão do dono (11/11): NÃO há modelo de reserva.** Só o `gpt-5.6-luna`. O fallback para `gpt-4o` de `d4b38b5` foi desfeito em `5243b15`. Fica o registro por tentativa e `falha_transitoria_esgotada` (as 4 tentativas do modelo único esgotadas), que a 0233 lê. O risco do TPM do `gpt-4o` deixou de existir. A republicação tem de produzir um `Juntar Tentativas` com 4 entradas, sem "Esperar Retry 4" nem "tentativa 5".
+- **Revisão independente da 0233 e 0234 FEITA**: 2 ALTO, 2 MÉDIO e 1 BAIXO, corrigidos em `373995e`.
+  - 0233: a versão vigente prefere a de maior número sem a flag; se todas têm a flag, a de mais linhas.
+  - 0234: a contenção não vale com lado parcial; documento parcial volta ao sentinela; a abertura ano−1 só vale em BALANCO/BALANCETE ou em documento sem Débito/Crédito.
+  - Números novos: a 0234 alcança 4 das 8 "sem período par" (as anuais do Valtra), e o backfill fecha **32 + 6 = 38** `periodo_incorreto` (era 35 a 41).
+- **Em andamento ao escrever:** o export do portal (`versoesVigentes` em `export.ts`) seguir a mesma regra de versão vigente da 0233. Sem isso, o Excel mostraria a v2 parcial enquanto a Modelagem mostra a v1. Ainda declarado, sem correção: `fn_versao_atual`, usada pelas reconciliações, não segue a regra.
+- **PR [#287](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/287) aberto em RASCUNHO e assinado.** CI do `d34cae7` verde depois de corrigir o import `@/` que o `tsx` da raiz não resolvia. Sonar passou.
+- **P10, preparação medida (11/11, só leitura):**
+  - Foto "antes" do corpus tirada com `Supabase/test/linha-de-base-extracao.sql` (padrões Fw Valtra, KRAUSPENHAR, AMO teste 00, P4). Resumo: AMO 118 docs (14 falhas abertas, 6 incompletos), Valtra 15 (6 falhas, 2 incompletos, pior cobertura 55%), Krauspenhar 7 (5 falhas, 5 incompletos, 39 descartadas, pior 45%). Rodar de novo a mesma consulta depois da P10 para a tabela antes × depois.
+  - **Bloqueio da P10 com dado real:** quase nenhum original do corpus real está no bucket. AMO tem 0 de 118, Valtra 2 de 15, Krauspenhar 1 de 7. Os sintéticos da P4 têm todos (Canastra 38, Distress 14, Vertentes 14), e o book do Espelho está no repositório (o mandato não existe mais em produção). Para a P10 cobrir o corpus real, o dono precisa reenviar os arquivos reais. Sem isso, ela roda só sobre os sintéticos mais os 3 reais com original.
 
 ### Ordem para retomar (nesta ordem)
 
