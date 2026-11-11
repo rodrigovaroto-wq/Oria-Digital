@@ -477,7 +477,10 @@ export function achatarGrupos(grupos) {
   // Rótulos com número monetário COLADO que não deu para provar ser o valor da
   // linha: a linha NÃO é descartada nem reescrita, só declarada (ver abaixo).
   const rotulosSuspeitos = [];
-  if (!Array.isArray(grupos)) return { linhas, problemas, rotulosSuspeitos };
+  // Linha com `vn` alinhado e `vt` não: reatribuídos (não bloqueante) ou perdidos (bloqueante).
+  const textosReatribuidos = [];
+  const textosPerdidos = [];
+  if (!Array.isArray(grupos)) return { linhas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos };
   // Índice da LINHA DO DOCUMENTO que originou cada entrada. Uma conta com três
   // colunas vira três entradas com o MESMO `linha_origem`, e é isso que permite
   // contar de volta quantas linhas o modelo devolveu — a unidade em que a guarda
@@ -501,7 +504,76 @@ export function achatarGrupos(grupos) {
       indiceDaLinha += 1;
       const vt = Array.isArray(l.vt) ? l.vt : [l.vt ?? null];
       const vn = Array.isArray(l.vn) ? l.vn : [l.vn ?? null];
-      if (vn.length !== cols.length || vt.length !== cols.length) {
+      // SÓ O ARRAY DE TEXTOS DESALINHADO: aceita-se a conta SOMENTE com PROVA de que `vn` não
+      // pulou nem repetiu coluna. Medido na resposta real do mapa de dívida Piraquara (execução
+      // 9637, 6 contratos, 10 colunas, 10 números, 9 textos): descartar tudo custou 57 pares
+      // (92 → 35) e abriu extracao_falhou. A PROVA: a subsequência dos textos NUMÉRICOS de `vt`
+      // (milhar ".", decimal ",", sinal, parêntese; "19,11%" NÃO é numérico) é IGUAL, na ordem, aos
+      // números não nulos de `vn`. Provada, os textos NÃO numéricos que sobram são reatribuídos às
+      // posições sem número, na ordem, SÓ se a contagem casar exatamente (`textosReatribuidos`,
+      // não bloqueante). Se não casar, a linha fica com os números e os textos nulos, e isso vai em
+      // `textosPerdidos` (vira falha_motivo: o export lê `valor_texto` de credor/prazo/taxa e
+      // nulo ali sairia como "sem prazo", ausência afirmada como fato). Sem a prova → descarte.
+      // Nunca se encosta texto à esquerda sem a contagem fechar.
+      // Aceita "R$", espaço/espaço fino de milhar, sinal à esquerda/direita, parêntese e ponto decimal
+      // (sem vírgula; "1.234" com exatamente 3 dígitos após o ponto é MILHAR). "19,11%" NÃO é número.
+      const textoNum = (t) => {
+        if (typeof t !== 'string') return null;
+        let x = t.trim().replace(/^R\$\s*/i, '');
+        let neg = false;
+        if (/^\(.*\)$/.test(x)) { neg = true; x = x.slice(1, -1).trim(); }
+        if (x.startsWith('-')) { neg = true; x = x.slice(1).trim(); } else if (x.endsWith('-')) { neg = true; x = x.slice(0, -1).trim(); }
+        x = x.replace(/^R\$\s*/i, '');
+        const milhar = '\\d{1,3}(?:[. \u00a0\u202f]\\d{3})+';
+        const m = new RegExp(`^(${milhar}|\\d+),(\\d+)$`).exec(x)
+          ?? new RegExp(`^(${milhar}|\\d+)()$`).exec(x)
+          ?? /^(\d+)\.(\d+)$/.exec(x);
+        if (!m) return null;
+        const v = Number(`${m[1].replace(/[. \u00a0\u202f]/g, '')}.${m[2] || '0'}`);
+        return neg ? -v : v;
+      };
+      let vtDaLinha = vt;
+      let descartar = vn.length !== cols.length;
+      if (!descartar && vt.length !== cols.length) {
+        const nums = vn.filter((v) => typeof v === 'number');
+        const numTextos = vt.filter((t) => textoNum(t) !== null);
+        // PROVA DE TIPOS (posições, não só sequência): o padrão de `vt` sem nulos (N = texto numérico,
+        // T = texto livre) tem de ser SUBSEQUÊNCIA do padrão de `vn` (N = número, T = nulo). Sem ela,
+        // vn deslocado [100,4,null,null] e verdadeiro [null,100,4,null] passam igual e o deslocado
+        // gravaria Credor=100.
+        const padraoVt = vt.filter((t) => typeof t === 'string').map((t) => (textoNum(t) !== null ? 'N' : 'T'));
+        const padraoVn = vn.map((v) => (typeof v === 'number' ? 'N' : 'T'));
+        let iVn = 0;
+        const tiposOk = padraoVt.every((c) => {
+          while (iVn < padraoVn.length && padraoVn[iVn] !== c) iVn += 1;
+          iVn += 1;
+          return iVn <= padraoVn.length;
+        });
+        const provado = nums.length > 0 && numTextos.length === nums.length && tiposOk
+          && numTextos.every((t, i) => Math.abs(textoNum(t) - nums[i]) < 0.005);
+        if (provado) {
+          const livres = vt.filter((t) => typeof t === 'string' && textoNum(t) === null);
+          const semNumero = vn.filter((v) => typeof v !== 'number').length;
+          const reatribuir = livres.length === semNumero;
+          let iNum = 0;
+          let iLivre = 0;
+          vtDaLinha = vn.map((v) => {
+            if (typeof v === 'number') { iNum += 1; return numTextos[iNum - 1]; }
+            if (reatribuir) { iLivre += 1; return livres[iLivre - 1]; }
+            return null;
+          });
+          const onde = `"${l.k}"${g.s ? ` (${g.s})` : ''}: ${cols.length} coluna(s), ${vn.length} número(s) e ${vt.length} texto(s)`;
+          if (reatribuir) {
+            textosReatribuidos.push(`${onde} — números provados em ordem, ${livres.length} texto(s) reatribuído(s) às colunas sem número`);
+          } else {
+            textosPerdidos.push(`${onde} — números mantidos e provados, mas ${livres.length} texto(s) para ${semNumero} coluna(s) sem número: `
+              + `os textos NÃO foram associados às colunas (ficam em branco: ${livres.slice(0, 3).map((t) => `"${t}"`).join(', ')}${livres.length > 3 ? ', …' : ''})`);
+          }
+        } else {
+          descartar = true;
+        }
+      }
+      if (descartar) {
         problemas.push(
           `"${l.k}"${g.s ? ` (${g.s})` : ''}: ${cols.length} coluna(s) declarada(s), `
           + `${vn.length} valor(es) numérico(s) e ${vt.length} texto(s)`
@@ -520,7 +592,7 @@ export function achatarGrupos(grupos) {
       const chave = rotulo.chave;
       rotulo.suspeitos.forEach((m) => rotulosSuspeitos.push(m));
       for (let j = 0; j < cols.length; j += 1) {
-        const valorTexto = typeof vt[j] === 'string' ? vt[j] : null;
+        const valorTexto = typeof vtDaLinha[j] === 'string' ? vtDaLinha[j] : null;
         const valorNum = typeof vn[j] === 'number' ? vn[j] : null;
         // Célula em branco não vira linha — a mesma regra que a DMPL já tinha
         // ("células vazias ou com traço não geram linha nenhuma"), agora válida
@@ -542,7 +614,7 @@ export function achatarGrupos(grupos) {
       }
     }
   }
-  return { linhas, problemas, rotulosSuspeitos };
+  return { linhas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos };
 }
 
 export function extractionSchema() {
@@ -1306,7 +1378,7 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
   // meses antes. Enquanto existir um JSON velho em alguma instância, ele vai
   // responder no formato plano — e responder em formato plano tem de continuar
   // funcionando, em vez de virar "zero linhas extraídas" sem explicação.
-  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos } = achatarGrupos(p.grupos);
+  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos } = achatarGrupos(p.grupos);
   const camposAgrupados = linhasAgrupadas.map((l, i) => ({
     ordem: i,
     ...l,
@@ -1397,6 +1469,10 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
         + `(a associação valor↔coluna ficou desconhecida, e adivinhá-la trocaria um período pelo `
         + `outro): ${problemas.slice(0, 5).join('; ')}${problemas.length > 5 ? '; …' : ''}`
       : null,
+    textosPerdidos.length > 0
+      ? `${textosPerdidos.length} conta(s) com os números mantidos e os TEXTOS sem coluna (credor, prazo, taxa… `
+        + `saem em branco): ${textosPerdidos.slice(0, 5).join('; ')}${textosPerdidos.length > 5 ? '; …' : ''}`
+      : null,
     rotulosSuspeitos.length > 0
       ? `${rotulosSuspeitos.length} rótulo(s) com número colado que não é o valor da linha (a conta foi `
         + `mantida, o rótulo NÃO foi limpo e pode não casar na reconciliação): `
@@ -1404,7 +1480,9 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
       : null,
   ].filter(Boolean);
   const falhaMotivo = comAviso(motivos.length > 0 ? motivos.join(' | ') : null);
-  return { moeda: moedaDoc, unidade, campos, diagnostico, falhaMotivo };
+  // `textosReatribuidos` NÃO entra em `falhaMotivo` (linha íntegra): o nó `Juntar Blocos` o grava em
+  // `medicao.textos_reatribuidos`. `textosPerdidos` entra, acima.
+  return { moeda: moedaDoc, unidade, campos, diagnostico, falhaMotivo, textosReatribuidos };
 }
 
 export { DEFAULT_MODEL, PERIODO_TIPO_ENUM };

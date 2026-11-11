@@ -142,6 +142,46 @@ test('total da série: fecha quando o total bate com a soma da série', () => {
   assert.deepEqual(conferirTotalDaSerie(campos), []);
 });
 
+test('total da série: SALDO corrente (total = último saldo) não alarma; Débito/Crédito seguem conferidos; Saldo aditivo com linha faltando acusa', () => {
+  // Razão Canastra (execução 9635): "Saldo" é acumulado linha a linha e o total impresso é o saldo
+  // FINAL (17945), não a soma — somar dava 2.407.102 e abria pendência falsa. Números sintéticos
+  // com a mesma forma: 3 lançamentos, saldo corrente 10 -> 25 -> 18, total de Saldo = 18.
+  const lanc = [['L1', 10, 0, 10], ['L2', 15, 0, 25], ['L3', 0, 7, 18]];
+  const montar = (totDeb, totCred, totSaldo) => {
+    const c = [];
+    lanc.forEach(([k, cred, deb, saldo], i) => {
+      c.push({ ...linha(i, k, 'Débito', deb), periodo_coluna: 'Débito' });
+      c.push({ ...linha(i, k, 'Crédito', cred), periodo_coluna: 'Crédito' });
+      c.push({ ...linha(i, k, 'Saldo', saldo), periodo_coluna: 'Saldo' });
+    });
+    c.push({ ...linha(3, 'TOTAIS DO PERÍODO', 'Débito', totDeb), periodo_coluna: 'Débito' });
+    c.push({ ...linha(3, 'TOTAIS DO PERÍODO', 'Crédito', totCred), periodo_coluna: 'Crédito' });
+    c.push({ ...linha(3, 'TOTAIS DO PERÍODO', 'Saldo', totSaldo), periodo_coluna: 'Saldo' });
+    return c;
+  };
+  assert.deepEqual(conferirTotalDaSerie(montar(7, 25, 18)), [], 'razão correto: nada acusa');
+  const errado = conferirTotalDaSerie(montar(700, 25, 18)); // controle positivo: Débito errado
+  assert.equal(errado.length, 1);
+  assert.match(errado[0], /coluna "Débito"/);
+  // Saldo ADITIVO (mapa de dívida/aging): o total é a SOMA; com uma linha faltando, acusa.
+  const aditivo = (total) => [
+    { ...linha(0, 'Contrato A', 'Saldo', 100), periodo_coluna: 'Saldo' },
+    { ...linha(1, 'Contrato B', 'Saldo', 300), periodo_coluna: 'Saldo' },
+    { ...linha(2, 'Contrato C', 'Saldo', 50), periodo_coluna: 'Saldo' },
+    { ...linha(3, 'Total', 'Saldo', total), periodo_coluna: 'Saldo' },
+  ];
+  assert.deepEqual(conferirTotalDaSerie(aditivo(450)), [], 'soma fecha');
+  assert.equal(conferirTotalDaSerie(aditivo(600)).length, 1, 'total é soma de 4 contratos e só 3 vieram: acusa');
+  // Coluna que NÃO é saldo com total igual ao último valor: a exceção não vale, acusa.
+  const naoSaldo = [
+    { ...linha(0, 'Jan', 'Receita', 100), periodo_coluna: 'Receita' },
+    { ...linha(1, 'Fev', 'Receita', 200), periodo_coluna: 'Receita' },
+    { ...linha(2, 'Mar', 'Receita', 300), periodo_coluna: 'Receita' },
+    { ...linha(3, 'Total', 'Receita', 300), periodo_coluna: 'Receita' },
+  ];
+  assert.equal(conferirTotalDaSerie(naoSaldo).length, 1);
+});
+
 test('total da série: uma única parcela não é série — não acusa (evita falso positivo com 1 mês)', () => {
   const campos = [
     linha(0, 'Jan', 'Total', 100_000),
