@@ -231,9 +231,9 @@ begin
   update documento set criado_em = timestamptz '2026-01-01 00:00:00+00' where id in (v_d1, v_d2);
 
   v_menor := least(v_d1, v_d2); v_maior := greatest(v_d1, v_d2);
-  perform fn_registrar_campos_extraidos(fn_versao_atual(case when p_espelho_no_menor_id then v_menor else v_maior end),
+  perform fn_registrar_campos_extraidos(fn_versao_mais_nova(case when p_espelho_no_menor_id then v_menor else v_maior end),
     jsonb_build_array(jsonb_build_object('ordem',0,'chave',v_chave_q,'valor_num','9000','unidade','milhar','periodo_coluna','2025','confianca','0.97')), 'N2');
-  perform fn_registrar_campos_extraidos(fn_versao_atual(case when p_espelho_no_menor_id then v_maior else v_menor end),
+  perform fn_registrar_campos_extraidos(fn_versao_mais_nova(case when p_espelho_no_menor_id then v_maior else v_menor end),
     jsonb_build_array(jsonb_build_object('ordem',0,'chave',v_chave_q,'valor_num','1000','unidade','milhar','periodo_coluna','2025','confianca','0.97')), 'N2');
   v_caso := v_c; v_per := v_p; return next;
 end $$;

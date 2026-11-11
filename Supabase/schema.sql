@@ -2654,6 +2654,102 @@ $$;
 COMMENT ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) IS '0212: declara parentesco próximo entre dois controladores pessoas físicas do caso, COM fonte e autor. A ordem dos dois é indiferente (o par é simétrico). Idempotente para o mesmo par e parentesco vigentes (devolve o id, sem evento); outro parentesco para um par vigente é recusado (encerre antes). Pessoa jurídica, controlador de outro caso e auto-vínculo são recusados. Grava controlador_vinculo_declarado. Nunca infere por sobrenome.';
 
 --
+-- Name: fn_corrigir_descricao_contaminada(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_contaminadas int := 0;
+  v_corrigidas   int := 0;
+  v_sem_registro int := 0;
+  v_pe           record;
+  v_r            record;
+begin
+  -- só a pendência que o sistema abriu (origem reconciliacao) e em estado 'aberta': as demais são decisão de gente (ou já resolvida) e ficam como estão.
+  -- "É do próprio": um registro do mesmo caso e tipo com ESTA descrição, gravado no período da pendência (`periodo_id`) OU pela chave dela (`periodo_chave_id`: o laço de uma chave desce a um período compatível e o
+  -- texto que ele escreve é legítimo, 0192/4); tipo por documento (secao_fecha): o registro do mesmo documento, em qualquer período (o documento pode ter sido reclassificado).
+  for v_pe in
+    select pe.id, pe.caso_id, pe.tipo, pe.motivo, pe.entidade_id, pe.periodo_id, pe.documento_id, pe.descricao
+      from pendencia pe
+     where pe.origem_estagio = 'reconciliacao'
+       and pe.estado = 'aberta'
+       and pe.periodo_id is not null
+       and pe.descricao is not null
+       and pe.motivo like 'reconciliacao:%'
+       and (p_caso_id is null or pe.caso_id = p_caso_id)
+       and not exists (
+         select 1 from reconciliacao r
+          where r.caso_id = pe.caso_id
+            and 'reconciliacao:' || r.tipo = pe.motivo
+            and r.descricao = pe.descricao
+            and case when r.tipo = 'secao_fecha' then r.documento_id is not distinct from pe.documento_id
+                     else (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id) end)
+       -- a regra (3) do corpo: o texto do IRMÃO é legítimo quando o último registro da chave da pendência existe e não diverge (A conferiu, B segue divergindo): um registro do caso e tipo com este texto e o
+       -- último da chave não divergente. Sem isto o backfill contava essa pendência correta como contaminada e "sem registro", em toda chamada.
+       and not (
+         coalesce((select r3.resultado not in ('divergente', 'divergencia', 'zona_cinzenta')
+                     from reconciliacao r3
+                    where r3.caso_id = pe.caso_id and 'reconciliacao:' || r3.tipo = pe.motivo
+                      and coalesce(r3.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                        = coalesce(pe.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                      and r3.periodo_chave_id = pe.periodo_id
+                    order by r3.criado_em desc, r3.cmin::text::int desc
+                    limit 1), false)
+         and exists (select 1 from reconciliacao r4
+                      where r4.caso_id = pe.caso_id and 'reconciliacao:' || r4.tipo = pe.motivo and r4.descricao = pe.descricao))
+     order by pe.criada_em, pe.id
+  loop
+    v_contaminadas := v_contaminadas + 1;
+    v_r := null;
+    -- o ÚLTIMO registro do próprio (mesmo caso, tipo, entidade; no período OU na chave da pendência; tipo por documento: do documento). NÃO se pula o mais novo por ele não combinar com o tipo da
+    -- pendência: voltar a um registro mais antigo escreveria um texto que o próprio período já superou.
+    select r.id, r.descricao, r.resultado into v_r
+      from reconciliacao r
+     where r.caso_id = v_pe.caso_id
+       and 'reconciliacao:' || r.tipo = v_pe.motivo
+       and coalesce(r.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+         = coalesce(v_pe.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+       and case when r.tipo = 'secao_fecha' then r.documento_id is not distinct from v_pe.documento_id
+                else (r.periodo_id = v_pe.periodo_id or r.periodo_chave_id = v_pe.periodo_id) end
+     order by r.criado_em desc, r.cmin::text::int desc
+     limit 1;
+    -- sem registro, ou o último é um `ok` / de outro vocabulário que o tipo da pendência, ou sem texto: não toca e conta (ausência declarada, nada inventado).
+    if v_r.id is null
+       or nullif(btrim(v_r.descricao), '') is null
+       or not (case v_pe.tipo::text
+                 when 'divergencia_reconciliacao' then v_r.resultado in ('divergente', 'divergencia', 'zona_cinzenta')
+                 when 'precondicao_nao_satisfeita' then v_r.resultado = 'precondicao_nao_satisfeita'
+                 else false end) then
+      v_sem_registro := v_sem_registro + 1;
+      continue;
+    end if;
+    update pendencia set descricao = v_r.descricao where id = v_pe.id;
+    insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+      values ('sistema:0241', 'descricao_da_pendencia_corrigida', 'pendencia:' || v_pe.id,
+              jsonb_build_object('descricao', v_pe.descricao),
+              jsonb_build_object('descricao', v_r.descricao, 'reconciliacao_id', v_r.id, 'periodo_id', v_pe.periodo_id,
+                                 'porque', 'a descricao era de outro periodo compativel (a rodada do irmao a reescrevia, ate a 0241)'));
+    v_corrigidas := v_corrigidas + 1;
+  end loop;
+
+  -- SEMPRE, mesmo com tudo zero: sem a linha não há trilha de que o backfill rodou (regra 7: estágio que não rodou parece estágio que rodou e não achou nada).
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+    values ('sistema:0241', 'descricao_contaminada_resumo', 'pendencia',
+            jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro,
+                               'caso_id', p_caso_id));
+  return jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro);
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_corrigir_descricao_contaminada(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) IS '0241: para a pendência de reconciliação aberta cuja descrição nenhuma reconciliacao do próprio período OU da própria chave gerou (a rodada de um período irmão a reescrevia), põe a descrição da reconciliacao MAIS RECENTE do próprio (periodo_id ou periodo_chave_id da pendência; secao_fecha: do documento), desde que o resultado dela seja coerente com o tipo da pendência. Sem registro, ou com o mais recente ok/incoerente/sem texto, não toca e conta (sem_registro_proprio), sem voltar a um registro mais antigo. Só estado aberta (as demais são decisão de gente); resolvida_por e estado intocados. Grava evento_auditoria sistema:0241 com a descrição antiga em antes, e um resumo a cada chamada, mesmo com tudo zero. Respeita o texto do irmão que a regra (3) do corpo legitima. Devolve {contaminadas, corrigidas, sem_registro_proprio}; idempotente.';
+
+--
 -- Name: fn_decidir_pendencia(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -8567,7 +8663,14 @@ $$;
 CREATE FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text DEFAULT NULL::text) RETURNS TABLE(secao_canonica text, rotulo_a text, rotulo_b text, colunas integer, valor numeric, radical_comum boolean)
     LANGUAGE sql STABLE
     AS $$
-  with ocorrencias as (
+  -- marca-0240
+  -- 0240: a versão de cada documento do caso é resolvida UMA vez por documento (MATERIALIZED: sem isso o Postgres inlina a CTE usada uma vez e a função roda por LINHA de campo_extraido, ~0,05 ms cada).
+  with vigentes as materialized (
+    select d.id as doc_id, fn_versao_atual(d.id) as versao_id
+    from documento d
+    where d.caso_id = p_caso_id
+  ),
+  ocorrencias as (
     select
       ce.secao_canonica,
       fn_normalizar_texto(ce.chave)                as rotulo,
@@ -8582,6 +8685,7 @@ CREATE FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade te
     from campo_extraido ce
     join documento_versao dv on dv.id = ce.documento_versao_id
     join documento d         on d.id = dv.documento_id
+    join vigentes vg         on vg.doc_id = d.id
     left join entidade e     on e.id = d.entidade_id
     left join periodo p      on p.id = d.periodo_id
     where d.caso_id = p_caso_id
@@ -8590,9 +8694,11 @@ CREATE FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade te
       and ce.secao_canonica is not null
       and ce.secao_canonica <> 'NAO_CLASSIFICAVEL'
       -- Só a versão VIGENTE de cada documento (0102): ocorrência de versão
-      -- superada faria uma reextração parecer duplicidade.
-      and dv.n_versao = (select max(dv2.n_versao) from documento_versao dv2
-                          where dv2.documento_id = d.id)
+      -- superada faria uma reextração parecer duplicidade. 0240: "vigente" é a
+      -- mesma versão que as outras reconciliações e a Modelagem leem (0233), e
+      -- não mais max(n_versao): com a v1 com linhas e a v2 flagada a duplicidade
+      -- abria ou fechava pelo número da v2 enquanto as outras sete conferiam a v1.
+      and dv.id = vg.versao_id
       and (p_entidade is null
            or fn_mesma_entidade(coalesce(ce.entidade_coluna, e.razao_social), p_entidade))
   ),
@@ -8715,7 +8821,7 @@ $$;
 -- Name: FUNCTION fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text) IS 'Pares de rótulos DIFERENTES, em DOCUMENTOS DIFERENTES, na mesma seção canônica, com valor idêntico nas mesmas colunas — candidatos a ser a MESMA conta transposta duas vezes (achado do v35: "Prejuízos acumulados" e "Resultados Acumulados", ambos -39.150). Dois rótulos no MESMO documento são a hierarquia DELE (0144), não duplicidade. Não decide nada: alimenta a checagem de reconciliação, que abre pendência para decisão humana. Critério estreito de propósito — falso positivo aqui gasta o tempo do analista.';
+COMMENT ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text) IS 'Pares de rótulos DIFERENTES, em DOCUMENTOS DIFERENTES, na mesma seção canônica, com valor idêntico nas mesmas colunas — candidatos a ser a MESMA conta transposta duas vezes (achado do v35: "Prejuízos acumulados" e "Resultados Acumulados", ambos -39.150). Dois rótulos no MESMO documento são a hierarquia DELE (0144), não duplicidade. Não decide nada: alimenta a checagem de reconciliação, que abre pendência para decisão humana. Critério estreito de propósito — falso positivo aqui gasta o tempo do analista. 0240: lê a versão por fn_versao_atual (a vigente, 0233), como as outras reconciliações.';
 
 --
 -- Name: fn_pendencia_cnpj_colide_balcao(uuid, uuid, text, text, uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -12578,6 +12684,7 @@ COMMENT ON FUNCTION public.fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p_e
 CREATE FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text DEFAULT 'portal:reconferir'::text) RETURNS jsonb
     LANGUAGE plpgsql
     AS $$
+  -- marca-0240
 declare
   v_doc          record;
   v_versao       uuid;
@@ -12602,7 +12709,9 @@ begin
     -- regra de hoje (é o que a 0034 corrigiu e nunca foi reaplicado ao v35).
     perform fn_reconciliar_por_documento(v_doc.id);
 
-    v_versao := fn_versao_atual(v_doc.id);
+    -- 0240: as guardas de extração avaliam a versão que o reenvio CRIOU (a mais nova, mesmo vazia), não a vigente: a v2 que voltou sem linha tem a pendência extracao:falhou aberta, e avaliar a v1 (que tem linha)
+    -- a fecharia com 'a versão tem linhas' sem ninguém ter olhado, enquanto o book segue mostrando a v1.
+    v_versao := fn_versao_mais_nova(v_doc.id);
     if v_versao is not null then
       v_r := fn_reavaliar_guardas_extracao(v_versao, p_autor);
       v_resolvidas := v_resolvidas + coalesce(jsonb_array_length(v_r->'resolvidas'), 0);
@@ -12637,7 +12746,7 @@ $$;
 -- Name: FUNCTION fn_reconferir_caso(p_caso_id uuid, p_autor text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) IS 'Reaplica as regras de HOJE (reconciliação A/B, guardas de extração, completude) sobre o dado já gravado, sem gastar chamada de IA. Existe porque pendência é estado gravado e nada a reavaliava quando uma migration corrigia a regra — o portal mostrava achado corrigido como se fosse corrente (caso real: as duas pendências do v35 que a 0034 já havia fechado).';
+COMMENT ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) IS 'Reaplica as regras de HOJE (reconciliação A/B, guardas de extração, completude) sobre o dado já gravado, sem gastar chamada de IA. Existe porque pendência é estado gravado e nada a reavaliava quando uma migration corrigia a regra — o portal mostrava achado corrigido como se fosse corrente (caso real: as duas pendências do v35 que a 0034 já havia fechado). 0240: as guardas de extração avaliam fn_versao_mais_nova (a que o reenvio criou, mesmo vazia), não a vigente; as reconciliações dentro dela leem a vigente (fn_versao_atual).';
 
 --
 -- Name: fn_reescrever_recado_linha_exigida(text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -14144,6 +14253,10 @@ declare
   -- CONCLUIU divergente para um período compatível com ele.
   v_pendencia_periodo_id    uuid;
   v_divergencia_concorrente boolean := false;
+  -- 0241: a rodada é do período que a pendência carrega, ou da CHAVE dele (calculado depois da busca, no corpo).
+  v_reescreve_descricao           boolean;
+  -- 0241 (revisão): o ÚLTIMO registro da chave da pendência (periodo_chave_id = o período dela) existe e NÃO é divergente: A deixou de ser o motivo de a pendência estar aberta.
+  v_chave_deixou_de_divergir boolean;
   -- 0192 (terceira correção da guarda): o período da CHAVE que originou esta chamada — o que o
   -- laço de fn_reconciliar_caso / fn_reconciliar_chaves_do_documento deixou em `oria.periodo_chave`.
   -- Chamada avulsa (sem laço, como a `fn_reconciliar_arvore` e os testes) é a sua própria chave.
@@ -14213,6 +14326,23 @@ begin
     and estado <> 'resolvida'
   order by criada_em
   limit 1;
+
+  -- 0241 (revisão, alto 1): o texto também passa à chave irmã quando a chave da pendência (A) deixou de divergir. A guarda 0192 segura a pendência aberta por causa de B, e sem isto o texto de A ("100 contra 90")
+  -- ficaria congelado depois de A conferir, uma divergência que já não existe. Só com o último registro da chave EXISTINDO e não divergente: sem registro nenhum da chave (pendência aberta por um período que não é chave)
+  -- não há evidência de que A parou de ser o motivo, e o texto fica.
+  select r.resultado not in ('divergente', 'divergencia', 'zona_cinzenta') into v_chave_deixou_de_divergir
+    from reconciliacao r
+   where r.caso_id = p_caso_id and r.tipo = p_tipo
+     and coalesce(r.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+       = coalesce(p_entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+     and r.periodo_chave_id = v_pendencia_periodo_id
+   order by r.criado_em desc, r.cmin::text::int desc
+   limit 1;
+  -- 0241 (revisão, médio): tipo POR DOCUMENTO casa a pendência pelo documento, e a árvore chama sem chave: se o documento muda para um período compatível o texto dele congelaria. O texto é do próprio documento.
+  v_reescreve_descricao := v_por_documento
+                           or v_pendencia_periodo_id is not distinct from p_periodo_id
+                           or v_pendencia_periodo_id is not distinct from v_periodo_chave_id
+                           or coalesce(v_chave_deixou_de_divergir, false);
 
   -- 0192: O OK (OU A PRÉ-CONDIÇÃO) QUE MATAVA A DIVERGÊNCIA IRMÃ — ESTADO VIGENTE POR CHAVE.
   -- Duas checagens do mesmo tipo/entidade com períodos COMPATÍVEIS (Balanço "multi 24,25" ×
@@ -14291,7 +14421,13 @@ begin
       -- continua com o texto e o `tipo` da divergência.
       null;
     else
-      update pendencia set descricao = p_descricao where id = v_pendencia_id;
+      -- 0241: a descrição é do PERÍODO que a pendência carrega. A busca acima acha por compatibilidade, não por igualdade, então chega aqui
+      -- a rodada de um período IRMÃO (anual 2024 x multi 24,26): reescrever dava à pendência de A o texto escrito para B (caso
+      -- do Valtra, S126; 0 abertos em produção em 11/11/2026 pelo critério corrigido). Só reescreve a rodada do período da pendência OU da chave que o carrega (o laço desce de uma chave com
+      -- pré-condição no seu período a um compatível e diverge ali: é o texto da MESMA chave, e a pendência da 0192 conta com isso); a chave irmã mantém a deduplicação e deixa o texto como está.
+      if v_reescreve_descricao then
+        update pendencia set descricao = p_descricao where id = v_pendencia_id;
+      end if;
     end if;
   elsif v_divergente and not v_influencia then
     -- 0127: SOMBRA COM DIVERGÊNCIA PRESENTE — e este ramo existe para não mentir.
@@ -14348,7 +14484,7 @@ $$;
 -- Name: FUNCTION fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) IS 'Registro unificado de reconciliação (0023), motivo fino por pré-condição (0186/0188). 0192: a pendência só resolve (ou troca a descrição por uma de pré-condição) se nenhuma CHAVE viva (período de documento) tem como último registro uma divergência em período compatível, em qualquer rodada; tipo por documento (secao_fecha) casa a pendência e o estado por documento_id; grava documento_id, descricao e periodo_chave_id em toda linha de reconciliacao.';
+COMMENT ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) IS 'Registro unificado de reconciliação (0023), motivo fino por pré-condição (0186/0188). 0192: a pendência só resolve (ou troca a descrição por uma de pré-condição) se nenhuma CHAVE viva (período de documento) tem como último registro uma divergência em período compatível, em qualquer rodada; tipo por documento (secao_fecha) casa a pendência e o estado por documento_id; grava documento_id, descricao e periodo_chave_id em toda linha de reconciliacao. 0241: a pendência é achada por período COMPATÍVEL (deduplica), mas a descrição só é reescrita pela rodada do período que a pendência carrega ou da chave dele: a chave irmã (período compatível) não troca o texto de A pelo de B.';
 
 --
 -- Name: fn_registrar_reconciliacao_b(uuid, uuid, uuid, text, uuid, jsonb, jsonb, text, numeric, numeric, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
@@ -17206,8 +17342,14 @@ COMMENT ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) 
 CREATE FUNCTION public.fn_versao_atual(p_documento_id uuid) RETURNS uuid
     LANGUAGE sql STABLE
     AS $$
-  select id from documento_versao where documento_id = p_documento_id order by n_versao desc limit 1;
+  select coalesce(fn_versao_com_extracao(p_documento_id), fn_versao_mais_nova(p_documento_id));
 $$;
+
+--
+-- Name: FUNCTION fn_versao_atual(p_documento_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_versao_atual(p_documento_id uuid) IS '0240: a versão que as RECONCILIAÇÕES leem = a vigente de fn_versao_com_extracao (a de maior n_versao com linha; a com falha_transitoria_esgotada só vale quando nenhuma com linha está sem a flag, 0233), e a mais nova (fn_versao_mais_nova) só quando nenhuma versão tem linha. Até a 0239 era max(n_versao) puro: com a v2 parcial promovida as reconciliações conferiam a leitura pior enquanto a Modelagem e o export mostravam a v1, e na janela entre fn_registrar_documento e fn_registrar_campos_extraidos liam a v2 VAZIA. Quem precisa da mais nova mesmo vazia (guarda de extração, escrita na versão recém-criada) chama fn_versao_mais_nova. SECURITY INVOKER, somente leitura.';
 
 --
 -- Name: fn_versao_com_extracao(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17230,7 +17372,7 @@ $$;
 -- Name: FUNCTION fn_versao_com_extracao(p_documento_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A documento_versao VIGENTE para quem lê conteúdo: a de maior n_versao que TEM campo_extraido. Difere de fn_versao_atual (max(n_versao)) de propósito: entre fn_registrar_documento e fn_registrar_campos_extraidos a versão mais recente está vazia, e max(n_versao) puro deixaria a tela de Modelagem em branco nessa janela — o mesmo sintoma que a 0101 corrigiu. 0233: uma versão cuja leitura esgotou a falha transitória (fn_versao_esgotou_transitoria) só é vigente quando nenhuma versão com linha do documento está sem a flag; entre as com a flag vence a de mais linhas (fn_versao_peso_de_leitura), empate pela de maior n_versao. Sem isto o reenvio por falha transitória (0233) trocava a versão anterior, com números no book, por uma leitura pior.';
+COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A documento_versao VIGENTE para quem lê conteúdo: a de maior n_versao que TEM campo_extraido. Difere de fn_versao_mais_nova (max(n_versao)) de propósito: entre fn_registrar_documento e fn_registrar_campos_extraidos a versão mais recente está vazia, e max(n_versao) puro deixaria a tela de Modelagem em branco nessa janela — o mesmo sintoma que a 0101 corrigiu. 0233: uma versão cuja leitura esgotou a falha transitória (fn_versao_esgotou_transitoria) só é vigente quando nenhuma versão com linha do documento está sem a flag; entre as com a flag vence a de mais linhas (fn_versao_peso_de_leitura), empate pela de maior n_versao. Sem isto o reenvio por falha transitória (0233) trocava a versão anterior, com números no book, por uma leitura pior. 0240: fn_versao_atual agora devolve ESTA versão (a mais nova só quando nenhuma tem linha).';
 
 --
 -- Name: fn_versao_esgotou_transitoria(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17309,6 +17451,22 @@ $_$;
 --
 
 COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0233 (sobre a 0231): a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando (A) a versão TEM linha em campo_extraido (o critério da 0118) E NÃO se dá o caso de falha transitória esgotada: o ÚLTIMO evento extracao_sombra traz medicao.falha_transitoria_esgotada = true (fn_versao_esgotou_transitoria; booleano; o n8n P8 grava), há extracao_falhou aberta no documento (estado <> resolvida) e nenhuma linha da versão foi aceita por humano (status_aceite <> pendente, aceito_por preenchido e fora de sistema:%); OU (B) o corpo da 0231 INTACTO: o último evento extracao_sombra existe, sem falha_motivo, com tem_dado_financeiro = false explícito, e (tipo sem dado por natureza, fn_tipo_sem_dado_por_natureza, sem conta contada, OU uma pessoa resolveu a falha, fn_pessoa_decidiu_sem_dado), e sem extracao_falhou aberta (0230/0231). Com aceite humano o reenvio continua reaproveitando mesmo com falha transitória (teto: re-extrair tira da Modelagem a linha aceita). Campo ausente/ilegível = reaproveita como antes. A pergunta de fn_registrar_documento e de fn_fila_de_reprocesso: uma implementação só. SECURITY INVOKER, somente leitura.';
+
+--
+-- Name: fn_versao_mais_nova(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) RETURNS uuid
+    LANGUAGE sql STABLE
+    AS $$
+  select id from documento_versao where documento_id = p_documento_id order by n_versao desc limit 1;
+$$;
+
+--
+-- Name: FUNCTION fn_versao_mais_nova(p_documento_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) IS '0240: o id da documento_versao de MAIOR n_versao do documento, com ou sem campo_extraido (o corpo que fn_versao_atual teve de 0009 a 0239). É a resposta certa a "o que o reenvio acabou de criar?" e a "que versão a guarda de extração avalia?": a extração que falhou é a mais nova, mesmo vazia. NÃO é a resposta a "que número o book mostra?" — essa é fn_versao_com_extracao. SECURITY INVOKER, somente leitura.';
 
 --
 -- Name: fn_versao_peso_de_leitura(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -22237,6 +22395,13 @@ GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_c
 GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) TO service_role;
 
 --
+-- Name: FUNCTION fn_corrigir_descricao_contaminada(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -24041,6 +24206,14 @@ GRANT ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id
 REVOKE ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_versao_mais_nova(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_versao_peso_de_leitura(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
