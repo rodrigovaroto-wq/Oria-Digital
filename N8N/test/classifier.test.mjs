@@ -518,3 +518,25 @@ test('YTD no nome: é sinal fraco (a classificação por conteúdo continua roda
   assert.equal(classifyByFilename('DRE mar a ago 2026.pdf').periodo?.referencia, '2026', 'outra faixa não ganha referência ambígua');
   assert.equal(classifyByFilename('DRE_jan a dez 2025.pdf').periodo?.referencia, '2025', 'jan-dez é o ano inteiro');
 });
+
+// "Método Indireto/Direto" qualifica o DFC e não nomeia empresa (Fw Valtra, 10/11/2026: o arquivo abaixo
+// saiu como a entidade "Metodo Indireto Moto Agricola" — 2 pendências entidade_incorreta, e pela 0201 o
+// BP/DRE da empresa ficou fora do Realizado). O nome do arquivo é o REAL medido em produção.
+test('"DFC - Método Indireto/Direto <empresa>": a entidade é a empresa, com e sem acento e hífen; o tipo continua DFC', () => {
+  const casos = [
+    ['DFC - Método Indireto MOTO AGRICOLA 2025 2024.pdf', 'Moto Agricola'],
+    ['DFC - Metodo Indireto MOTO AGRICOLA 2025 2024.pdf', 'Moto Agricola'],
+    ['04_DFC_Método_Direto_Canastra_2025.pdf', 'Canastra'],
+    ['DFC Método-Indireto Canastra 2025.pdf', 'Canastra'],
+  ];
+  for (const [nome, entidade] of casos) {
+    const r = classifyByFilename(nome);
+    assert.equal(r.entidade, entidade, nome);
+    assert.equal(r.tipo_taxonomia, 'FLUXO_CAIXA', nome);
+  }
+});
+
+test('"Direto"/"Metodo" soltos continuam podendo ser razão social (só a FRASE do método é removida)', () => {
+  assert.equal(classifyByFilename('DRE Direto Logistica 2025.pdf').entidade, 'Direto Logistica');
+  assert.equal(classifyByFilename('DRE Metodo Engenharia 2025.pdf').entidade, 'Metodo Engenharia');
+});

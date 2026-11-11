@@ -46,9 +46,10 @@ import { avaliarCelula, esquecerMemoria, linhaVazia } from "./lib/avaliar-formul
 import {
   buildExportWorkbook, chaveCronologicaPeriodo, consolidarNomesDeEntidade,
   entidadePeriodoDaLinha,
-  rotulosDeSubtotalInformado, tipoColunaNaoEntidade, type DocumentoParaExport,
+  rotulosDeSubtotalInformado, tipoColunaNaoEntidade, versoesVigentes, type DocumentoParaExport,
 } from "../src/lib/export";
 import type { CampoExtraido } from "../src/lib/types";
+import { anexarVersaoVigente } from "../src/lib/leitura-do-caso";
 import { classificarConta } from "../src/lib/statement-templates.ts";
 import {
   casarVinculosComLinhas, chaveDaLinha, serieDaLinha, seriesPorLinha, vinculoPorLinha,
@@ -1564,6 +1565,47 @@ const campo = (p: Partial<CampoExtraido> & { chave: string; documento_versao_id:
   const wsSemN = wbSemN.getWorksheet("Balanço")!;
   checar(linhaDe(wsSemN, "Caixa e bancos") > 0 && linhaDe(wsSemN, "Caixa e equivalentes de caixa") > 0,
     "(17e) sem n_versao declarada, nada é descartado por chute");
+
+  // (17f-j) O EXPORT SEGUE A VERSÃO VIGENTE DO BANCO (0233). Arranjo medido na revisão da 0233: v1
+  // parcial (Caixa + Estoques) e v2 parcial PIOR (só Caixa, outro valor). A regra local promove a v2
+  // ("a mais recente com dado"); o banco, pela 0233, mantém a v1 (mais linhas quando todas esgotaram a
+  // falha transitória) — e a Modelagem mostra a v1. O export tem de mostrar a mesma. Aqui o banco é um
+  // stub que devolve V1 (a função SQL em si é provada em Supabase/test/reextracao_transitoria.test.sql).
+  {
+    const docs = [
+      doc([{ id: V1, nome_original: "bp.pdf", n_versao: 1 }, { id: V2, nome_original: "bp.pdf", n_versao: 2 }]),
+      { ...doc([{ id: "u1", nome_original: "dre.pdf", n_versao: 1 }]), id: "d2" },
+    ];
+    const perguntados: string[] = [];
+    const r = await anexarVersaoVigente(docs, async (id) => { perguntados.push(id); return { data: V1, error: null }; });
+    checar(r.error === null && docs[0].versao_vigente_id === V1 && perguntados.join() === "d1",
+      "(17f) só o documento com mais de uma versão é perguntado ao banco, e a resposta é anotada nele",
+      `perguntados=${perguntados.join()} vigente=${docs[0].versao_vigente_id}`);
+    const camposPior: CampoExtraido[] = [
+      campo({ chave: "Caixa e bancos", secao: "Ativo Circulante", valor_num: 1000, documento_versao_id: V1 }),
+      campo({ chave: "Estoques", secao: "Ativo Circulante", valor_num: 500, documento_versao_id: V1 }),
+      campo({ chave: "Caixa e bancos", secao: "Ativo Circulante", valor_num: 300, documento_versao_id: V2 }),
+    ];
+    const wbV = buildExportWorkbook({
+      caso: { nome: "Vigente do banco", produto: "rx" }, documentos: docs, campos: camposPior,
+      agora: new Date("2026-07-29T12:00:00Z"),
+    });
+    const wsV = wbV.getWorksheet("Balanço")!;
+    const rAcV = linhaDe(wsV, "Ativo Circulante");
+    checar(rAcV > 0 && Math.round(avaliar(wsV, "B", rAcV)) === 1500,
+      "(17g) o export mostra a versão que o banco elegeu (v1: 1.500), não a v2 parcial pior (300)",
+      `seção=${rAcV > 0 ? Math.round(avaliar(wsV, "B", rAcV)) : "(ausente)"}`);
+    checar(linhaDe(wsV, "Estoques") > 0, "(17h) a linha que só a v1 tinha continua no book");
+    // Banco devolve nulo (nenhuma versão com linha): vale a regra local (a mais recente).
+    const docNulo = [doc([{ id: V1, nome_original: "bp.pdf", n_versao: 1 }, { id: V2, nome_original: "bp.pdf", n_versao: 2 }])];
+    await anexarVersaoVigente(docNulo, async () => ({ data: null, error: null }));
+    checar(docNulo[0].versao_vigente_id === null && [...versoesVigentes(docNulo, [])].join() === V2,
+      "(17i) banco sem vigente (nulo): cai na regra local, a mais recente");
+    // Falha da função NÃO vira a regra local em silêncio (o export divergiria da Modelagem).
+    const falha = await anexarVersaoVigente(docs, async () => ({ data: null, error: { message: "boom" } }));
+    checar(falha.error !== null && /boom/.test(falha.error.message),
+      "(17j) falha de fn_versao_com_extracao é devolvida, não engolida");
+  }
 
   // E o caso normal (uma versão por documento, como todo o book) não muda.
   const fixture = JSON.parse(

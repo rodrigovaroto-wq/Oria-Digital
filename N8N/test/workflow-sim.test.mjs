@@ -806,8 +806,8 @@ test('Parse Extracao: resposta truncada (finish_reason=length, JSON incompleto) 
 test('Parse Extracao: erro da API OpenAI vira falha_motivo (não silencioso)', async () => {
   const req = { json: { documento_versao_id: 'ver-4', tipo: 'BALANCO', ia_body: {} } };
   const respostaOpenAI = { json: { error: { message: 'Rate limit reached', code: 'rate_limit_exceeded' } } };
-  // Estágio TERMINAL: nas tentativas anteriores o 429 de cadência é repetido, e só
-  // ao esgotar o teto o motivo vira pendência (ver os testes de repetição).
+  // Estágio TERMINAL: nas anteriores o 429 de cadência é
+  // repetido, e só ao esgotar tudo o motivo vira pendência (ver os testes de repetição).
   const parsed = await run('Parse Extracao (tentativa 4)', { item: respostaOpenAI, refs: { 'Esperar Retry 3': req } });
   assert.equal(parsed.json.campos.length, 0);
   assert.match(parsed.json.falha_motivo, /Rate limit reached/);
@@ -839,7 +839,7 @@ test('Gravar Campos (Sombra): passa p_medicao por NOME e liga o $7 à medição 
     { documento_versao_id: 'v1', bloco: 2, blocos: 2, contas_no_documento: 40, campos: [linhaM('C', 3)],
       diagnostico: {}, falha_motivo: null, custo_usd: 0.02, tokens: { entrada: 5, saida: 10, cache: 0 } },
   ]);
-  assert.equal(m.versao_medicao, 'p4-1');
+  assert.equal(m.versao_medicao, 'p4-2');
   assert.equal(m.contas_no_documento, 40);
   assert.equal(m.linhas_devolvidas, 3);
   assert.equal(m.contas_distintas, 3);
@@ -857,7 +857,23 @@ test('Gravar Campos (Sombra): contas_no_documento ausente continua AUSENTE na me
     campos: [linhaM('A', 1)], diagnostico: {}, falha_motivo: null, custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 } }]);
   assert.equal(m.linhas_devolvidas, 1);
   assert.ok(!('contas_no_documento' in m), 'contas_no_documento nulo não pode virar 0 nem null na medição');
-  assert.equal(m.versao_medicao, 'p4-1');
+  assert.equal(m.versao_medicao, 'p4-2');
+});
+
+test('P8 Juntar Blocos: falha_transitoria_esgotada só quando algum bloco terminou transitório; sem registro, AUSENTE', async () => {
+  const bloco = (n, extra) => ({ documento_versao_id: 'v1', bloco: n, blocos: 2, campos: [], diagnostico: {}, falha_motivo: null,
+    custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 }, ...extra });
+  const ok = [{ tentativa: 1, modelo: 'm', resultado: 'ok' }];
+  const esgotado = [1, 2, 3, 4].map((t) => ({ tentativa: t, modelo: 'm', resultado: 'falhou_transitoria' }));
+  const m1 = await medicaoGravada([bloco(1, { registro_tentativas: ok, falha_transitoria: false }), bloco(2, { registro_tentativas: esgotado, falha_transitoria: true, falha_motivo: 'x' })]);
+  assert.equal(m1.falha_transitoria_esgotada, true);
+  assert.equal(m1.registro_tentativas.length, 4, 'só o bloco que não foi uma chamada ok entra no detalhe');
+  assert.equal(m1.registro_tentativas[0].bloco, 2);
+  const m2 = await medicaoGravada([bloco(1, { registro_tentativas: ok, falha_transitoria: false }), bloco(2, { registro_tentativas: ok, falha_transitoria: false })]);
+  assert.equal(m2.falha_transitoria_esgotada, false);
+  assert.ok(!('registro_tentativas' in m2));
+  const m3 = await medicaoGravada([bloco(1, {}), bloco(2, {})]);
+  assert.ok(!('falha_transitoria_esgotada' in m3), 'ausência de registro não vira false (regra 1)');
 });
 
 test('Juntar Blocos: resposta REAL que devolveu 0 linhas leva ZERO medido (0 real), não ausência', async () => {

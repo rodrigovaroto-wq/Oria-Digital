@@ -49,8 +49,10 @@ export function montarBaseCredito(
     if (r && !(r.includes(alvo) || alvo.includes(r))) return [];
     const per = Array.isArray(d.periodo) ? d.periodo[0] : d.periodo;
     const periodo = formatarPeriodo(per?.tipo ?? null, per?.referencia ?? null);
+    // O arquivo citado é o da versão vigente (a que sustenta os números), não a de maior n_versao.
     const versoes = [...(d.documento_versao ?? [])].sort((a, b) => (b.n_versao ?? 0) - (a.n_versao ?? 0));
-    return [{ tipo: d.tipo_taxonomia, arquivo: versoes[0]?.nome_original ?? null, periodo, anos: anosDoPeriodo(periodo) }];
+    const vigente = versoes.find((v) => v.id === d.versao_vigente_id) ?? versoes[0];
+    return [{ tipo: d.tipo_taxonomia, arquivo: vigente?.nome_original ?? null, periodo, anos: anosDoPeriodo(periodo) }];
   }).sort((a, b) => (a.anos[0] ?? 0) - (b.anos[0] ?? 0) || (a.tipo ?? "").localeCompare(b.tipo ?? ""));
 
   return {

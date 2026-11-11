@@ -15,8 +15,26 @@ import type { CampoExtraido } from "./types";
 
 type Cliente = Awaited<ReturnType<typeof createClient>>;
 
-export function lerDocumentosDoCaso(supabase: Cliente, casoId: string) {
-  return paginar<DocumentoParaExport>((de, ate) =>
+/**
+ * Pergunta ao banco qual é a versão vigente de cada documento COM MAIS DE UMA versão
+ * (`fn_versao_com_extracao`, 0233) e a anota em `versao_vigente_id`. Documento de uma versão só
+ * não precisa: é ela (medido 11/11/2026: 9 de 1.465 documentos com linha têm 2 versões). Falha da
+ * função NÃO cai na regra local: o export mostraria um número que a Modelagem não mostra (regra 1).
+ */
+export async function anexarVersaoVigente(
+  docs: DocumentoParaExport[],
+  perguntar: (documentoId: string) => PromiseLike<{ data: unknown; error: { message: string } | null }>,
+): Promise<{ error: { message: string } | null }> {
+  const varias = docs.filter((d) => (d.documento_versao?.length ?? 0) > 1);
+  const respostas = await Promise.all(varias.map((d) => perguntar(d.id)));
+  const falha = respostas.find((r) => r.error);
+  if (falha?.error) return { error: { message: `fn_versao_com_extracao: ${falha.error.message}` } };
+  varias.forEach((d, i) => { d.versao_vigente_id = respostas[i].data as string | null; });
+  return { error: null };
+}
+
+export async function lerDocumentosDoCaso(supabase: Cliente, casoId: string) {
+  const res = await paginar<DocumentoParaExport>((de, ate) =>
     supabase
       .from("documento")
       .select(
@@ -31,6 +49,10 @@ export function lerDocumentosDoCaso(supabase: Cliente, casoId: string) {
       .order("id", { ascending: true })
       .range(de, ate),
   );
+  if (res.error) return res;
+  const { error } = await anexarVersaoVigente(res.data, (id) =>
+    supabase.rpc("fn_versao_com_extracao", { p_documento_id: id }));
+  return error ? { ...res, error } : res;
 }
 
 export function lerCamposDasVersoes(supabase: Cliente, versaoIds: string[]) {

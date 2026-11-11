@@ -139,6 +139,7 @@
 {"k":"n","id":"arquivo:Supabase/test/faturamento_mes_na_coluna.test.sql","t":"arquivo","f":"Supabase/test/faturamento_mes_na_coluna.test.sql","txt":"faturamento_mes_na_coluna.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/faturamento_por_mes.test.sql","t":"arquivo","f":"Supabase/test/faturamento_por_mes.test.sql","txt":"faturamento_por_mes.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fechar_mandato.test.sql","t":"arquivo","f":"Supabase/test/fechar_mandato.test.sql","txt":"fechar_mandato.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","t":"arquivo","f":"Supabase/test/fila_de_reprocesso.test.sql","txt":"fila_de_reprocesso.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fixture_book_canastra.sql","t":"arquivo","f":"Supabase/test/fixture_book_canastra.sql","txt":"fixture_book_canastra.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fixture_modelagem_v35.sql","t":"arquivo","f":"Supabase/test/fixture_modelagem_v35.sql","txt":"fixture_modelagem_v35.sql"}
 {"k":"n","id":"arquivo:Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","t":"arquivo","f":"Supabase/test/fixtures/entidade_incorreta_18-09-2026.json","txt":"entidade_incorreta_18-09-2026.json"}
@@ -170,6 +171,7 @@
 {"k":"n","id":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","t":"arquivo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","txt":"mutuos_retrato_de_uma_data.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_balanco_sem_dado_financeiro.test.sql","t":"arquivo","f":"Supabase/test/o_balanco_sem_dado_financeiro.test.sql","txt":"o_balanco_sem_dado_financeiro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","t":"arquivo","f":"Supabase/test/o_dial_e_o_anon.test.sql","txt":"o_dial_e_o_anon.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","t":"arquivo","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","txt":"o_periodo_que_a_checagem_nao_lia.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","t":"arquivo","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","txt":"o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/operacao.test.sql","t":"arquivo","f":"Supabase/test/operacao.test.sql","txt":"operacao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/original_apagado.test.sql","t":"arquivo","f":"Supabase/test/original_apagado.test.sql","txt":"original_apagado.test.sql"}
@@ -192,6 +194,7 @@
 {"k":"n","id":"arquivo:Supabase/test/reconciliacao_motivo_precondicao.test.sql","t":"arquivo","f":"Supabase/test/reconciliacao_motivo_precondicao.test.sql","txt":"reconciliacao_motivo_precondicao.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/reconferir.test.sql","t":"arquivo","f":"Supabase/test/reconferir.test.sql","txt":"reconferir.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/reextracao.test.sql","t":"arquivo","f":"Supabase/test/reextracao.test.sql","txt":"reextracao.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/reextracao_transitoria.test.sql","t":"arquivo","f":"Supabase/test/reextracao_transitoria.test.sql","txt":"reextracao_transitoria.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/resumo_oficial.test.sql","t":"arquivo","f":"Supabase/test/resumo_oficial.test.sql","txt":"resumo_oficial.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/revisar_documento_sem_tipo.test.sql","t":"arquivo","f":"Supabase/test/revisar_documento_sem_tipo.test.sql","txt":"revisar_documento_sem_tipo.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/rotulo_contraditorio.test.sql","t":"arquivo","f":"Supabase/test/rotulo_contraditorio.test.sql","txt":"rotulo_contraditorio.test.sql"}
@@ -221,6 +224,7 @@
 {"k":"n","id":"arquivo:portal/scripts/verificar-envio-oficial.mts","t":"arquivo","f":"portal/scripts/verificar-envio-oficial.mts","txt":"verificar-envio-oficial.mts"}
 {"k":"n","id":"arquivo:portal/scripts/verificar-exclusividade-ciclo.mts","t":"arquivo","f":"portal/scripts/verificar-exclusividade-ciclo.mts","txt":"verificar-exclusividade-ciclo.mts"}
 {"k":"n","id":"arquivo:portal/scripts/verificar-export.mts","t":"arquivo","f":"portal/scripts/verificar-export.mts","txt":"verificar-export.mts"}
+{"k":"n","id":"arquivo:portal/scripts/verificar-fila-de-reprocesso.mts","t":"arquivo","f":"portal/scripts/verificar-fila-de-reprocesso.mts","txt":"verificar-fila-de-reprocesso.mts"}
 {"k":"n","id":"arquivo:portal/scripts/verificar-kit-basico.mts","t":"arquivo","f":"portal/scripts/verificar-kit-basico.mts","txt":"verificar-kit-basico.mts"}
 {"k":"n","id":"arquivo:portal/scripts/verificar-limite-de-envio.mts","t":"arquivo","f":"portal/scripts/verificar-limite-de-envio.mts","txt":"verificar-limite-de-envio.mts"}
 {"k":"n","id":"arquivo:portal/scripts/verificar-linhas-por-versao.mts","t":"arquivo","f":"portal/scripts/verificar-linhas-por-versao.mts","txt":"verificar-linhas-por-versao.mts"}
@@ -234,6 +238,8 @@
 {"k":"n","id":"arquivo:portal/src/app/administracao/equipe/page.tsx","t":"arquivo","f":"portal/src/app/administracao/equipe/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/administracao/layout.tsx","t":"arquivo","f":"portal/src/app/administracao/layout.tsx","txt":"layout.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/administracao/page.tsx","t":"arquivo","f":"portal/src/app/administracao/page.tsx","txt":"page.tsx"}
+{"k":"n","id":"arquivo:portal/src/app/api/casos/[id]/reprocessar/route.ts","t":"arquivo","f":"portal/src/app/api/casos/[id]/reprocessar/route.ts","txt":"route.ts"}
+{"k":"n","id":"arquivo:portal/src/app/api/casos/[id]/reprocessar/status/route.ts","t":"arquivo","f":"portal/src/app/api/casos/[id]/reprocessar/status/route.ts","txt":"route.ts"}
 {"k":"n","id":"arquivo:portal/src/app/api/intake/status/route.ts","t":"arquivo","f":"portal/src/app/api/intake/status/route.ts","txt":"route.ts"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/actions.ts","t":"arquivo","f":"portal/src/app/casos/[id]/actions.ts","txt":"actions.ts"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/documentos/(lista)/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/documentos/(lista)/page.tsx","txt":"page.tsx"}
@@ -274,6 +280,7 @@
 {"k":"n","id":"arquivo:portal/src/lib/espera-do-lote.ts","t":"arquivo","f":"portal/src/lib/espera-do-lote.ts","txt":"espera-do-lote.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/export-modelagem.ts","t":"arquivo","f":"portal/src/lib/export-modelagem.ts","txt":"export-modelagem.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/export.ts","t":"arquivo","f":"portal/src/lib/export.ts","txt":"export.ts"}
+{"k":"n","id":"arquivo:portal/src/lib/fila-de-reprocesso.ts","t":"arquivo","f":"portal/src/lib/fila-de-reprocesso.ts","txt":"fila-de-reprocesso.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/historico-do-mandato.ts","t":"arquivo","f":"portal/src/lib/historico-do-mandato.ts","txt":"historico-do-mandato.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/kit-basico.ts","t":"arquivo","f":"portal/src/lib/kit-basico.ts","txt":"kit-basico.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/leitura-do-caso.ts","t":"arquivo","f":"portal/src/lib/leitura-do-caso.ts","txt":"leitura-do-caso.ts"}
@@ -293,6 +300,7 @@
 {"k":"n","id":"arquivo:portal/src/lib/statement-templates.ts","t":"arquivo","f":"portal/src/lib/statement-templates.ts","txt":"statement-templates.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/supabase/acesso.ts","t":"arquivo","f":"portal/src/lib/supabase/acesso.ts","txt":"acesso.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/supabase/equipe.ts","t":"arquivo","f":"portal/src/lib/supabase/equipe.ts","txt":"equipe.ts"}
+{"k":"n","id":"arquivo:portal/src/lib/supabase/reprocesso.ts","t":"arquivo","f":"portal/src/lib/supabase/reprocesso.ts","txt":"reprocesso.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/supabase/servico-serve-como.ts","t":"arquivo","f":"portal/src/lib/supabase/servico-serve-como.ts","txt":"servico-serve-como.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/transcricao.ts","t":"arquivo","f":"portal/src/lib/transcricao.ts","txt":"transcricao.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/types.ts","t":"arquivo","f":"portal/src/lib/types.ts","txt":"types.ts"}
@@ -406,7 +414,7 @@
 {"k":"n","id":"fn:fn_coluna_e_movimento","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"coluna e movimento"}
 {"k":"n","id":"fn:fn_coluna_e_saldo","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"coluna e saldo"}
 {"k":"n","id":"fn:fn_coluna_entidade","t":"fn","f":"Supabase/migrations/0030_entidade_e_periodo_canonicos.sql","txt":"coluna entidade"}
-{"k":"n","id":"fn:fn_coluna_periodo_do_ano","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"coluna periodo do ano"}
+{"k":"n","id":"fn:fn_coluna_periodo_do_ano","t":"fn","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"coluna periodo do ano"}
 {"k":"n","id":"fn:fn_combinado_estrutural_apto","t":"fn","f":"Supabase/migrations/0157_o_combinado_que_travava_o_kit_basico.sql","txt":"combinado estrutural apto"}
 {"k":"n","id":"fn:fn_conexao_de_servico","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"conexao de servico"}
 {"k":"n","id":"fn:fn_conferir_arvore","t":"fn","f":"Supabase/migrations/0133_a_secao_que_nao_fecha.sql","txt":"conferir arvore"}
@@ -466,6 +474,7 @@
 {"k":"n","id":"fn:fn_fator_escala","t":"fn","f":"Supabase/migrations/0023_reconciliacao_sem_ruido.sql","txt":"fator escala"}
 {"k":"n","id":"fn:fn_fatos_do_caso","t":"fn","f":"Supabase/migrations/0149_o_fato_material_endurecido.sql","txt":"fatos do caso"}
 {"k":"n","id":"fn:fn_fechar_caso","t":"fn","f":"Supabase/migrations/0114_mandato_fechado.sql","txt":"fechar caso"}
+{"k":"n","id":"fn:fn_fila_de_reprocesso","t":"fn","f":"Supabase/migrations/0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql","txt":"fila de reprocesso"}
 {"k":"n","id":"fn:fn_fundir_entidade","t":"fn","f":"Supabase/migrations/0213_a_fusao_que_falhava_na_pergunta_ja_enviada.sql","txt":"fundir entidade"}
 {"k":"n","id":"fn:fn_golden_abrir_rodada","t":"fn","f":"Supabase/migrations/0130_golden_set_rotulavel.sql","txt":"golden abrir rodada"}
 {"k":"n","id":"fn:fn_golden_campos","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"golden campos"}
@@ -500,7 +509,7 @@
 {"k":"n","id":"fn:fn_linha_vale_para_ano","t":"fn","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","txt":"linha vale para ano"}
 {"k":"n","id":"fn:fn_linhas_do_realizado","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"linhas do realizado"}
 {"k":"n","id":"fn:fn_linhas_do_tipo","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"linhas do tipo"}
-{"k":"n","id":"fn:fn_linhas_para_modelagem","t":"fn","f":"Supabase/migrations/0164_a_estimativa_que_o_filtro_opaco_escondia.sql","txt":"linhas para modelagem"}
+{"k":"n","id":"fn:fn_linhas_para_modelagem","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"linhas para modelagem"}
 {"k":"n","id":"fn:fn_linhas_para_transcrever","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"linhas para transcrever"}
 {"k":"n","id":"fn:fn_marcar_falha_vista","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"marcar falha vista"}
 {"k":"n","id":"fn:fn_membros_da_equipe","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"membros da equipe"}
@@ -544,7 +553,7 @@
 {"k":"n","id":"fn:fn_periodo_por_extenso","t":"fn","f":"Supabase/migrations/0122_pergunta_em_portugues.sql","txt":"periodo por extenso"}
 {"k":"n","id":"fn:fn_periodos_compativeis","t":"fn","f":"Supabase/migrations/0022_periodo_por_ano_e_guardas.sql","txt":"periodos compativeis"}
 {"k":"n","id":"fn:fn_periodos_compativeis_array","t":"fn","f":"Supabase/migrations/0152_a_reconciliacao_do_lote.sql","txt":"periodos compativeis array"}
-{"k":"n","id":"fn:fn_periodos_equivalentes","t":"fn","f":"Supabase/migrations/0022_periodo_por_ano_e_guardas.sql","txt":"periodos equivalentes"}
+{"k":"n","id":"fn:fn_periodos_equivalentes","t":"fn","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"periodos equivalentes"}
 {"k":"n","id":"fn:fn_pessoa_decidiu_sem_dado","t":"fn","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","txt":"pessoa decidiu sem dado"}
 {"k":"n","id":"fn:fn_pode_criar_caso","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"pode criar caso"}
 {"k":"n","id":"fn:fn_pode_escrever_caso","t":"fn","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","txt":"pode escrever caso"}
@@ -589,6 +598,7 @@
 {"k":"n","id":"fn:fn_registrar_uso_lote","t":"fn","f":"Supabase/migrations/0156_o_lote_existe_antes_de_terminar.sql","txt":"registrar uso lote"}
 {"k":"n","id":"fn:fn_rejeitar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"rejeitar pendencia"}
 {"k":"n","id":"fn:fn_resolver_linha_exigida_superada","t":"fn","f":"Supabase/migrations/0187_o_tipo_que_chegava_sem_leitor_declarado.sql","txt":"resolver linha exigida superada"}
+{"k":"n","id":"fn:fn_resolver_periodo_incorreto_falso","t":"fn","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"resolver periodo incorreto falso"}
 {"k":"n","id":"fn:fn_ressalvar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"ressalvar pendencia"}
 {"k":"n","id":"fn:fn_resumo_anexar","t":"fn","f":"Supabase/migrations/0207_o_resumo_do_arquivo_oficial.sql","txt":"resumo anexar"}
 {"k":"n","id":"fn:fn_resumo_concluir","t":"fn","f":"Supabase/migrations/0207_o_resumo_do_arquivo_oficial.sql","txt":"resumo concluir"}
@@ -642,8 +652,10 @@
 {"k":"n","id":"fn:fn_valores_por_ano","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"valores por ano"}
 {"k":"n","id":"fn:fn_veredito_producao","t":"fn","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","txt":"veredito producao"}
 {"k":"n","id":"fn:fn_versao_atual","t":"fn","f":"Supabase/migrations/0009_reconciliacao_e3.sql","txt":"versao atual"}
-{"k":"n","id":"fn:fn_versao_com_extracao","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"versao com extracao"}
-{"k":"n","id":"fn:fn_versao_extracao_concluida","t":"fn","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","txt":"versao extracao concluida"}
+{"k":"n","id":"fn:fn_versao_com_extracao","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao com extracao"}
+{"k":"n","id":"fn:fn_versao_esgotou_transitoria","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao esgotou transitoria"}
+{"k":"n","id":"fn:fn_versao_extracao_concluida","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao extracao concluida"}
+{"k":"n","id":"fn:fn_versao_peso_de_leitura","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao peso de leitura"}
 {"k":"n","id":"fn:fn_vincular_linha_premissa","t":"fn","f":"Supabase/migrations/0100_papel_por_secao.sql","txt":"vincular linha premissa"}
 {"k":"n","id":"migration:0001","t":"migration","f":"Supabase/migrations/0001_schema_fatia1.sql","txt":"schema fatia1"}
 {"k":"n","id":"migration:0002","t":"migration","f":"Supabase/migrations/0002_seed_taxonomia_e_dial.sql","txt":"seed taxonomia e dial"}
@@ -818,6 +830,9 @@
 {"k":"n","id":"migration:0229","t":"migration","f":"Supabase/migrations/0229_a_leitura_que_so_se_media_somada_por_lote.sql","txt":"a leitura que so se media somada por lote"}
 {"k":"n","id":"migration:0230","t":"migration","f":"Supabase/migrations/0230_o_documento_sem_dado_financeiro_pago_a_cada_reenvio.sql","txt":"o documento sem dado financeiro pago a cada reenvio"}
 {"k":"n","id":"migration:0231","t":"migration","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","txt":"o balanco sem dado financeiro que ninguem via"}
+{"k":"n","id":"migration:0232","t":"migration","f":"Supabase/migrations/0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql","txt":"a fila de reprocesso que o portal nao tinha"}
+{"k":"n","id":"migration:0233","t":"migration","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"a falha transitoria com linha que o reenvio nao relia"}
+{"k":"n","id":"migration:0234","t":"migration","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"o periodo que o documento tinha e a checagem nao lia"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -903,49 +918,50 @@
 {"k":"n","id":"no8n:Upload Storage","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Upload Storage httpRequest"}
 {"k":"n","id":"no8n:Upsert Caso (Postgres)","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Upsert Caso (Postgres) postgres"}
 {"k":"n","id":"no8n:Veredito","t":"no8n","f":"N8N/workflow.diagnostico-ia.json","txt":"Veredito code"}
-{"k":"n","id":"portao:A sonda do buraco no meio não dá alarme falso num banco completo","t":"portao","f":".github/workflows/suites.yml","txt":"A sonda do buraco no meio não dá alarme falso num banco completo","l":619}
-{"k":"n","id":"portao:Arnês de variações — a cadeia real sobre documento sujo","t":"portao","f":".github/workflows/suites.yml","txt":"Arnês de variações — a cadeia real sobre documento sujo","l":729}
-{"k":"n","id":"portao:Build do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Build do portal","l":502}
-{"k":"n","id":"portao:Cliente psql 16 para este job","t":"portao","f":".github/workflows/suites.yml","txt":"Cliente psql 16 para este job","l":723}
-{"k":"n","id":"portao:Cliente psql 16","t":"portao","f":".github/workflows/suites.yml","txt":"Cliente psql 16","l":543}
+{"k":"n","id":"portao:A sonda do buraco no meio não dá alarme falso num banco completo","t":"portao","f":".github/workflows/suites.yml","txt":"A sonda do buraco no meio não dá alarme falso num banco completo","l":625}
+{"k":"n","id":"portao:Arnês de variações — a cadeia real sobre documento sujo","t":"portao","f":".github/workflows/suites.yml","txt":"Arnês de variações — a cadeia real sobre documento sujo","l":735}
+{"k":"n","id":"portao:Build do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Build do portal","l":508}
+{"k":"n","id":"portao:Cliente psql 16 para este job","t":"portao","f":".github/workflows/suites.yml","txt":"Cliente psql 16 para este job","l":729}
+{"k":"n","id":"portao:Cliente psql 16","t":"portao","f":".github/workflows/suites.yml","txt":"Cliente psql 16","l":549}
 {"k":"n","id":"portao:Custo do lote (medido no artefato, sem chamar a OpenAI)","t":"portao","f":".github/workflows/suites.yml","txt":"Custo do lote (medido no artefato, sem chamar a OpenAI)","l":230}
 {"k":"n","id":"portao:Dependências do portal (exceljs e jszip da suíte do n8n)","t":"portao","f":".github/workflows/suites.yml","txt":"Dependências do portal (exceljs e jszip da suíte do n8n)","l":148}
 {"k":"n","id":"portao:Espelho CLAUDE.md ↔ CI (suítes e medidores)","t":"portao","f":".github/workflows/suites.yml","txt":"Espelho CLAUDE.md ↔ CI (suítes e medidores)","l":302}
 {"k":"n","id":"portao:Fixtures derivadas do gerador do book (SQL, JSON) e git diff","t":"portao","f":".github/workflows/suites.yml","txt":"Fixtures derivadas do gerador do book (SQL, JSON) e git diff","l":199}
 {"k":"n","id":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","t":"portao","f":".github/workflows/suites.yml","txt":"Geradores de workflow — e o gerado tem de ser igual ao commitado","l":185}
-{"k":"n","id":"portao:Gerar o book sintético (insumo do e2e)","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book sintético (insumo do e2e)","l":675}
+{"k":"n","id":"portao:Gerar o book sintético (insumo do e2e)","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book sintético (insumo do e2e)","l":681}
 {"k":"n","id":"portao:Gerar o book sintético (insumo do verificar-export)","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book sintético (insumo do verificar-export)","l":365}
 {"k":"n","id":"portao:Gerar o book sintético","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book sintético","l":94}
 {"k":"n","id":"portao:Gerar o book-canastra","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book-canastra","l":116}
 {"k":"n","id":"portao:Gerar o book-distress","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book-distress","l":125}
 {"k":"n","id":"portao:Gerar o book-espelho","t":"portao","f":".github/workflows/suites.yml","txt":"Gerar o book-espelho","l":139}
-{"k":"n","id":"portao:Instalar dependências do portal para este job","t":"portao","f":".github/workflows/suites.yml","txt":"Instalar dependências do portal para este job","l":719}
+{"k":"n","id":"portao:Instalar dependências do portal para este job","t":"portao","f":".github/workflows/suites.yml","txt":"Instalar dependências do portal para este job","l":725}
 {"k":"n","id":"portao:Instalar dependências do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Instalar dependências do portal","l":328}
 {"k":"n","id":"portao:Lint e tipos do portal","t":"portao","f":".github/workflows/suites.yml","txt":"Lint e tipos do portal","l":370}
-{"k":"n","id":"portao:O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","t":"portao","f":".github/workflows/suites.yml","txt":"O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","l":603}
-{"k":"n","id":"portao:O que o código chama existe no banco","t":"portao","f":".github/workflows/suites.yml","txt":"O que o código chama existe no banco","l":585}
-{"k":"n","id":"portao:O schema materializado bate com as migrations","t":"portao","f":".github/workflows/suites.yml","txt":"O schema materializado bate com as migrations","l":579}
+{"k":"n","id":"portao:O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","t":"portao","f":".github/workflows/suites.yml","txt":"O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","l":609}
+{"k":"n","id":"portao:O que o código chama existe no banco","t":"portao","f":".github/workflows/suites.yml","txt":"O que o código chama existe no banco","l":591}
+{"k":"n","id":"portao:O schema materializado bate com as migrations","t":"portao","f":".github/workflows/suites.yml","txt":"O schema materializado bate com as migrations","l":585}
 {"k":"n","id":"portao:Portão dos comandos de barra (todo subagent_type existe)","t":"portao","f":".github/workflows/suites.yml","txt":"Portão dos comandos de barra (todo subagent_type existe)","l":293}
 {"k":"n","id":"portao:Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","t":"portao","f":".github/workflows/suites.yml","txt":"Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","l":237}
 {"k":"n","id":"portao:Suíte da apresentação de crédito (o .pptx mostra o número do documento, no padrão Oria)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da apresentação de crédito (o .pptx mostra o número do documento, no padrão Oria)","l":390}
-{"k":"n","id":"portao:Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","l":487}
-{"k":"n","id":"portao:Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","l":460}
-{"k":"n","id":"portao:Suíte da exclusividade do ciclo (uma conta é cliente, estoque OU fornecedor)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da exclusividade do ciclo (uma conta é cliente, estoque OU fornecedor)","l":476}
+{"k":"n","id":"portao:Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","l":493}
+{"k":"n","id":"portao:Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","l":466}
+{"k":"n","id":"portao:Suíte da exclusividade do ciclo (uma conta é cliente, estoque OU fornecedor)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da exclusividade do ciclo (uma conta é cliente, estoque OU fornecedor)","l":482}
+{"k":"n","id":"portao:Suíte da fila de reprocesso (o botão que reenvia o original guardado ao n8n)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da fila de reprocesso (o botão que reenvia o original guardado ao n8n)","l":460}
 {"k":"n","id":"portao:Suíte da mensagem de falha (o texto do dia ruim)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da mensagem de falha (o texto do dia ruim)","l":407}
 {"k":"n","id":"portao:Suíte da planilha de transcrição (ida e volta do formato)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da planilha de transcrição (ida e volta do formato)","l":399}
-{"k":"n","id":"portao:Suíte da sonda de produção (a tradução de \"não perguntei\" em veredito)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da sonda de produção (a tradução de \"não perguntei\" em veredito)","l":553}
-{"k":"n","id":"portao:Suíte da tela do perímetro (toda chave de falta traduzida, a desconhecida aparece crua)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da tela do perímetro (toda chave de falta traduzida, a desconhecida aparece crua)","l":482}
+{"k":"n","id":"portao:Suíte da sonda de produção (a tradução de \"não perguntei\" em veredito)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da sonda de produção (a tradução de \"não perguntei\" em veredito)","l":559}
+{"k":"n","id":"portao:Suíte da tela do perímetro (toda chave de falta traduzida, a desconhecida aparece crua)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte da tela do perímetro (toda chave de falta traduzida, a desconhecida aparece crua)","l":488}
 {"k":"n","id":"portao:Suíte das premissas sugeridas do realizado","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte das premissas sugeridas do realizado","l":415}
-{"k":"n","id":"portao:Suíte de banco (migrations do zero + testes SQL)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte de banco (migrations do zero + testes SQL)","l":569}
+{"k":"n","id":"portao:Suíte de banco (migrations do zero + testes SQL)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte de banco (migrations do zero + testes SQL)","l":575}
 {"k":"n","id":"portao:Suíte de export (invariantes do arquivo entregue)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte de export (invariantes do arquivo entregue)","l":382}
 {"k":"n","id":"portao:Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","l":424}
 {"k":"n","id":"portao:Suíte do envio oficial (SPED/CNAB/OFX/XML lidos no navegador, só o resumo gravado)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte do envio oficial (SPED/CNAB/OFX/XML lidos no navegador, só o resumo gravado)","l":448}
 {"k":"n","id":"portao:Suíte do leitor de arquivos oficiais (F2T, Espec. 12)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte do leitor de arquivos oficiais (F2T, Espec. 12)","l":155}
 {"k":"n","id":"portao:Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","l":433}
 {"k":"n","id":"portao:Suíte dos hooks do agente","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte dos hooks do agente","l":165}
-{"k":"n","id":"portao:Suíte e2e (extração → banco → export)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte e2e (extração → banco → export)","l":680}
+{"k":"n","id":"portao:Suíte e2e (extração → banco → export)","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte e2e (extração → banco → export)","l":686}
 {"k":"n","id":"portao:Suíte n8n","t":"portao","f":".github/workflows/suites.yml","txt":"Suíte n8n","l":153}
-{"k":"n","id":"portao:Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)","t":"portao","f":".github/workflows/suites.yml","txt":"Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)","l":757}
+{"k":"n","id":"portao:Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)","t":"portao","f":".github/workflows/suites.yml","txt":"Todos os jobs passaram (nenhum falhou, foi cancelado ou pulado)","l":763}
 {"k":"n","id":"portao:pdftotext (poppler-utils) para a régua sobre o texto real dos books","t":"portao","f":".github/workflows/suites.yml","txt":"pdftotext (poppler-utils) para a régua sobre o texto real dos books","l":146}
 {"k":"n","id":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","t":"portao","f":".github/workflows/suites.yml","txt":"Índice do conhecimento — o grafo derivado bate com o repositório","l":255}
 {"k":"n","id":"sessao:10","t":"sessao","f":"HANDOFF.md","txt":"10 Teste v25: reconciliação sem ruído, export que fecha (PRs #49 #52)","l":5831}
@@ -1066,6 +1082,7 @@
 {"k":"n","id":"suite:portal/scripts/verificar-envio-oficial.mts","t":"suite","f":"portal/scripts/verificar-envio-oficial.mts","txt":"verificar envio oficial mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-exclusividade-ciclo.mts","t":"suite","f":"portal/scripts/verificar-exclusividade-ciclo.mts","txt":"verificar exclusividade ciclo mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-export.mts","t":"suite","f":"portal/scripts/verificar-export.mts","txt":"verificar export mts"}
+{"k":"n","id":"suite:portal/scripts/verificar-fila-de-reprocesso.mts","t":"suite","f":"portal/scripts/verificar-fila-de-reprocesso.mts","txt":"verificar fila de reprocesso mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-kit-basico.mts","t":"suite","f":"portal/scripts/verificar-kit-basico.mts","txt":"verificar kit basico mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-limite-de-envio.mts","t":"suite","f":"portal/scripts/verificar-limite-de-envio.mts","txt":"verificar limite de envio mts"}
 {"k":"n","id":"suite:portal/scripts/verificar-linhas-por-versao.mts","t":"suite","f":"portal/scripts/verificar-linhas-por-versao.mts","txt":"verificar linhas por versao mts"}
@@ -1078,23 +1095,23 @@
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/build-workflow-macro.mjs","l":235}
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/build-workflow-macro.mjs","l":260}
 {"k":"e","de":"arquivo:N8N/build-workflow-macro.mjs","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/build-workflow-macro.mjs","l":227}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/build-workflow.mjs","l":3347}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_caso_do_envio","f":"N8N/build-workflow.mjs","l":2858}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_envio","f":"N8N/build-workflow.mjs","l":2814}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/build-workflow.mjs","l":3361}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/build-workflow.mjs","l":3377}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_caso_do_envio","f":"N8N/build-workflow.mjs","l":2888}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_envio","f":"N8N/build-workflow.mjs","l":2844}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/build-workflow.mjs","l":3391}
 {"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"N8N/build-workflow.mjs","l":150}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/build-workflow.mjs","l":3144}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/build-workflow.mjs","l":2155}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/build-workflow.mjs","l":2155}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/build-workflow.mjs","l":3282}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/build-workflow.mjs","l":2710}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/build-workflow.mjs","l":1741}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/build-workflow.mjs","l":3216}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/build-workflow.mjs","l":3139}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/build-workflow.mjs","l":2916}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/build-workflow.mjs","l":2380}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/build-workflow.mjs","l":3321}
-{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/build-workflow.mjs","l":2860}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"N8N/build-workflow.mjs","l":3174}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_arvore","f":"N8N/build-workflow.mjs","l":2161}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"N8N/build-workflow.mjs","l":2161}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/build-workflow.mjs","l":3312}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/build-workflow.mjs","l":2740}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/build-workflow.mjs","l":1747}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"N8N/build-workflow.mjs","l":3246}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"N8N/build-workflow.mjs","l":3169}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/build-workflow.mjs","l":2946}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/build-workflow.mjs","l":2410}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/build-workflow.mjs","l":3351}
+{"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/build-workflow.mjs","l":2890}
 {"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/build-workflow.mjs","l":149}
 {"k":"e","de":"arquivo:N8N/build-workflow.mjs","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"N8N/build-workflow.mjs","l":188}
 {"k":"e","de":"arquivo:N8N/gerar-seed-macro.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/gerar-seed-macro.mjs","l":57}
@@ -1136,17 +1153,17 @@
 {"k":"e","de":"arquivo:N8N/test/workflow-macro-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/test/workflow-macro-sim.test.mjs","l":119}
 {"k":"e","de":"arquivo:N8N/test/workflow-macro-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/test/workflow-macro-sim.test.mjs","l":118}
 {"k":"e","de":"arquivo:N8N/test/workflow-macro-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/test/workflow-macro-sim.test.mjs","l":117}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_caso_do_envio","f":"N8N/test/workflow-sim.test.mjs","l":1005}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_conferir_envio","f":"N8N/test/workflow-sim.test.mjs","l":3163}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/test/workflow-sim.test.mjs","l":2518}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/test/workflow-sim.test.mjs","l":1653}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/test/workflow-sim.test.mjs","l":1648}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_caso_do_envio","f":"N8N/test/workflow-sim.test.mjs","l":1021}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_conferir_envio","f":"N8N/test/workflow-sim.test.mjs","l":3179}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_conferir_lote","f":"N8N/test/workflow-sim.test.mjs","l":2534}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"N8N/test/workflow-sim.test.mjs","l":1669}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_por_documento","f":"N8N/test/workflow-sim.test.mjs","l":1664}
 {"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"N8N/test/workflow-sim.test.mjs","l":816}
 {"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_fatos","f":"N8N/test/workflow-sim.test.mjs","l":718}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/test/workflow-sim.test.mjs","l":2531}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/test/workflow-sim.test.mjs","l":4363}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"N8N/test/workflow-sim.test.mjs","l":2740}
-{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/test/workflow-sim.test.mjs","l":3218}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_registrar_uso_lote","f":"N8N/test/workflow-sim.test.mjs","l":2547}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"N8N/test/workflow-sim.test.mjs","l":4379}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"N8N/test/workflow-sim.test.mjs","l":2756}
+{"k":"e","de":"arquivo:N8N/test/workflow-sim.test.mjs","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"N8N/test/workflow-sim.test.mjs","l":3234}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json","l":1399}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_caso_do_envio","f":"N8N/workflow.e1-ingestao.json","l":97}
 {"k":"e","de":"arquivo:N8N/workflow.e1-ingestao.json","rel":"CHAMA","pa":"fn:fn_conferir_envio","f":"N8N/workflow.e1-ingestao.json","l":41}
@@ -1513,6 +1530,14 @@
 {"k":"e","de":"arquivo:Supabase/test/faturamento_por_mes.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/faturamento_por_mes.test.sql","l":46}
 {"k":"e","de":"arquivo:Supabase/test/fechar_mandato.test.sql","rel":"CHAMA","pa":"fn:fn_fechar_caso","f":"Supabase/test/fechar_mandato.test.sql","l":42}
 {"k":"e","de":"arquivo:Supabase/test/fechar_mandato.test.sql","rel":"CHAMA","pa":"fn:fn_reabrir_caso","f":"Supabase/test/fechar_mandato.test.sql","l":61}
+{"k":"e","de":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/fila_de_reprocesso.test.sql","l":232}
+{"k":"e","de":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/fila_de_reprocesso.test.sql","l":230}
+{"k":"e","de":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"Supabase/test/fila_de_reprocesso.test.sql","l":1}
+{"k":"e","de":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/fila_de_reprocesso.test.sql","l":253}
+{"k":"e","de":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/fila_de_reprocesso.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/fila_de_reprocesso.test.sql","l":6}
+{"k":"e","de":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/fila_de_reprocesso.test.sql","l":81}
+{"k":"e","de":"arquivo:Supabase/test/fila_de_reprocesso.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/fila_de_reprocesso.test.sql","l":165}
 {"k":"e","de":"arquivo:Supabase/test/fixture_modelagem_v35.sql","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"Supabase/test/fixture_modelagem_v35.sql","l":328}
 {"k":"e","de":"arquivo:Supabase/test/fixture_modelagem_v35.sql","rel":"CHAMA","pa":"fn:fn_mes_do_rotulo","f":"Supabase/test/fixture_modelagem_v35.sql","l":15}
 {"k":"e","de":"arquivo:Supabase/test/fixture_modelagem_v35.sql","rel":"CHAMA","pa":"fn:fn_normalizar_texto","f":"Supabase/test/fixture_modelagem_v35.sql","l":23}
@@ -1717,6 +1742,15 @@
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_tem_papel","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":228}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":12}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":146}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":62}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":200}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":141}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":66}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":13}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":9}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":13}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_resolver_periodo_incorreto_falso","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":10}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":57}
 {"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":146}
 {"k":"e","de":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","l":94}
 {"k":"e","de":"arquivo:Supabase/test/operacao.test.sql","rel":"CHAMA","pa":"fn:fn_operacao_lotes","f":"Supabase/test/operacao.test.sql","l":35}
@@ -1873,6 +1907,16 @@
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao.test.sql","l":38}
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/reextracao.test.sql","l":326}
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/reextracao.test.sql","l":303}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/reextracao_transitoria.test.sql","l":11}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"Supabase/test/reextracao_transitoria.test.sql","l":155}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/reextracao_transitoria.test.sql","l":219}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Supabase/test/reextracao_transitoria.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_normalizar_texto","f":"Supabase/test/reextracao_transitoria.test.sql","l":176}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/reextracao_transitoria.test.sql","l":11}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/reextracao_transitoria.test.sql","l":40}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao_transitoria.test.sql","l":84}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/reextracao_transitoria.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/reextracao_transitoria.test.sql","l":1}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_anexar","f":"Supabase/test/resumo_oficial.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"Supabase/test/resumo_oficial.test.sql","l":80}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_iniciar","f":"Supabase/test/resumo_oficial.test.sql","l":66}
@@ -1969,6 +2013,7 @@
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/gerar-export-do-banco.mts","l":147}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/scripts/gerar-export-do-banco.mts","l":150}
 {"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/gerar-export-do-banco.mts","l":170}
+{"k":"e","de":"arquivo:portal/scripts/gerar-export-do-banco.mts","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"portal/scripts/gerar-export-do-banco.mts","l":107}
 {"k":"e","de":"arquivo:portal/scripts/lib/modelo-da-fixture.mts","rel":"CHAMA","pa":"fn:fn_mesma_entidade","f":"portal/scripts/lib/modelo-da-fixture.mts","l":75}
 {"k":"e","de":"arquivo:portal/scripts/medir-auto-aceite.mts","rel":"CHAMA","pa":"fn:fn_dial","f":"portal/scripts/medir-auto-aceite.mts","l":70}
 {"k":"e","de":"arquivo:portal/scripts/medir-auto-aceite.mts","rel":"CHAMA","pa":"fn:fn_golden_campos","f":"portal/scripts/medir-auto-aceite.mts","l":36}
@@ -1977,12 +2022,15 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-envio-oficial.mts","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"portal/scripts/verificar-envio-oficial.mts","l":167}
 {"k":"e","de":"arquivo:portal/scripts/verificar-envio-oficial.mts","rel":"CHAMA","pa":"fn:fn_resumo_iniciar","f":"portal/scripts/verificar-envio-oficial.mts","l":167}
 {"k":"e","de":"arquivo:portal/scripts/verificar-envio-oficial.mts","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/scripts/verificar-envio-oficial.mts","l":258}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-export.mts","l":4208}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/scripts/verificar-export.mts","l":4480}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-export.mts","l":6597}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/scripts/verificar-export.mts","l":4392}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/scripts/verificar-export.mts","l":5989}
-{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-export.mts","l":4177}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-export.mts","l":4250}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/scripts/verificar-export.mts","l":4522}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-export.mts","l":6639}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/scripts/verificar-export.mts","l":4434}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_rotulos_candidatos","f":"portal/scripts/verificar-export.mts","l":6031}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/scripts/verificar-export.mts","l":4219}
+{"k":"e","de":"arquivo:portal/scripts/verificar-export.mts","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"portal/scripts/verificar-export.mts","l":1607}
+{"k":"e","de":"arquivo:portal/scripts/verificar-fila-de-reprocesso.mts","rel":"CHAMA","pa":"fn:fn_falhas_abertas","f":"portal/scripts/verificar-fila-de-reprocesso.mts","l":90}
+{"k":"e","de":"arquivo:portal/scripts/verificar-fila-de-reprocesso.mts","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"portal/scripts/verificar-fila-de-reprocesso.mts","l":82}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/scripts/verificar-kit-basico.mts","l":10}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/scripts/verificar-kit-basico.mts","l":8}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}
@@ -2006,6 +2054,9 @@
 {"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_classe_contabil_concordancia","f":"portal/src/app/administracao/page.tsx","l":158}
 {"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_golden_cobertura","f":"portal/src/app/administracao/page.tsx","l":145}
 {"k":"e","de":"arquivo:portal/src/app/administracao/page.tsx","rel":"CHAMA","pa":"fn:fn_mudar_dial","f":"portal/src/app/administracao/page.tsx","l":18}
+{"k":"e","de":"arquivo:portal/src/app/api/casos/[id]/reprocessar/route.ts","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"portal/src/app/api/casos/[id]/reprocessar/route.ts","l":17}
+{"k":"e","de":"arquivo:portal/src/app/api/casos/[id]/reprocessar/route.ts","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"portal/src/app/api/casos/[id]/reprocessar/route.ts","l":17}
+{"k":"e","de":"arquivo:portal/src/app/api/casos/[id]/reprocessar/status/route.ts","rel":"CHAMA","pa":"fn:fn_falhas_abertas","f":"portal/src/app/api/casos/[id]/reprocessar/status/route.ts","l":8}
 {"k":"e","de":"arquivo:portal/src/app/api/intake/status/route.ts","rel":"CHAMA","pa":"fn:fn_falhas_abertas","f":"portal/src/app/api/intake/status/route.ts","l":63}
 {"k":"e","de":"arquivo:portal/src/app/api/intake/status/route.ts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"portal/src/app/api/intake/status/route.ts","l":13}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/actions.ts","rel":"CHAMA","pa":"fn:fn_aprovar_caso","f":"portal/src/app/casos/[id]/actions.ts","l":14}
@@ -2013,7 +2064,8 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/actions.ts","rel":"CHAMA","pa":"fn:fn_excluir_caso","f":"portal/src/app/casos/[id]/actions.ts","l":94}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/actions.ts","rel":"CHAMA","pa":"fn:fn_fechar_caso","f":"portal/src/app/casos/[id]/actions.ts","l":108}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/actions.ts","rel":"CHAMA","pa":"fn:fn_reabrir_caso","f":"portal/src/app/casos/[id]/actions.ts","l":126}
-{"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/(lista)/page.tsx","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/app/casos/[id]/documentos/(lista)/page.tsx","l":111}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/(lista)/page.tsx","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/app/casos/[id]/documentos/(lista)/page.tsx","l":118}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/(lista)/page.tsx","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"portal/src/app/casos/[id]/documentos/(lista)/page.tsx","l":81}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/actions.ts","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"portal/src/app/casos/[id]/documentos/[docId]/actions.ts","l":8}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/actions.ts","rel":"CHAMA","pa":"fn:fn_registrar_classe_override","f":"portal/src/app/casos/[id]/documentos/[docId]/actions.ts","l":50}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/documentos/[docId]/actions.ts","rel":"CHAMA","pa":"fn:fn_registrar_transcricao_humana","f":"portal/src/app/casos/[id]/documentos/[docId]/actions.ts","l":98}
@@ -2087,15 +2139,18 @@
 {"k":"e","de":"arquivo:portal/src/lib/equipe.ts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/src/lib/equipe.ts","l":5}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_indice_macro_anual","f":"portal/src/lib/export-modelagem.ts","l":97}
 {"k":"e","de":"arquivo:portal/src/lib/export-modelagem.ts","rel":"CHAMA","pa":"fn:fn_sazonalidade_do_caso","f":"portal/src/lib/export-modelagem.ts","l":765}
-{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"portal/src/lib/export.ts","l":692}
-{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/export.ts","l":1152}
-{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_conceito","f":"portal/src/lib/export.ts","l":674}
-{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"portal/src/lib/export.ts","l":693}
+{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"portal/src/lib/export.ts","l":711}
+{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/export.ts","l":1171}
+{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_conceito","f":"portal/src/lib/export.ts","l":693}
+{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_valor_em_base","f":"portal/src/lib/export.ts","l":712}
+{"k":"e","de":"arquivo:portal/src/lib/export.ts","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"portal/src/lib/export.ts","l":599}
+{"k":"e","de":"arquivo:portal/src/lib/fila-de-reprocesso.ts","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"portal/src/lib/fila-de-reprocesso.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/lib/historico-do-mandato.ts","rel":"CHAMA","pa":"fn:fn_historico_do_caso","f":"portal/src/lib/historico-do-mandato.ts","l":1}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_documento_de_varias_empresas","f":"portal/src/lib/kit-basico.ts","l":10}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/lib/kit-basico.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/lib/kit-basico.ts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/src/lib/kit-basico.ts","l":6}
-{"k":"e","de":"arquivo:portal/src/lib/leitura-do-caso.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/leitura-do-caso.ts","l":57}
+{"k":"e","de":"arquivo:portal/src/lib/leitura-do-caso.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/leitura-do-caso.ts","l":79}
+{"k":"e","de":"arquivo:portal/src/lib/leitura-do-caso.ts","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"portal/src/lib/leitura-do-caso.ts","l":20}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-cobertura.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/lib/modelagem-cobertura.ts","l":39}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-cobertura.ts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/lib/modelagem-cobertura.ts","l":5}
 {"k":"e","de":"arquivo:portal/src/lib/modelagem-linha.ts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/src/lib/modelagem-linha.ts","l":77}
@@ -2121,6 +2176,7 @@
 {"k":"e","de":"arquivo:portal/src/lib/supabase/acesso.ts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/src/lib/supabase/acesso.ts","l":9}
 {"k":"e","de":"arquivo:portal/src/lib/supabase/acesso.ts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/src/lib/supabase/acesso.ts","l":10}
 {"k":"e","de":"arquivo:portal/src/lib/supabase/equipe.ts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/src/lib/supabase/equipe.ts","l":9}
+{"k":"e","de":"arquivo:portal/src/lib/supabase/reprocesso.ts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"portal/src/lib/supabase/reprocesso.ts","l":8}
 {"k":"e","de":"arquivo:portal/src/lib/supabase/servico-serve-como.ts","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"portal/src/lib/supabase/servico-serve-como.ts","l":7}
 {"k":"e","de":"arquivo:portal/src/lib/transcricao.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_transcrever","f":"portal/src/lib/transcricao.ts","l":24}
 {"k":"e","de":"arquivo:portal/src/lib/types.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/lib/types.ts","l":142}
@@ -2789,6 +2845,15 @@
 {"k":"e","de":"migration:0231","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","l":142}
 {"k":"e","de":"migration:0231","rel":"CRIA","pa":"fn:fn_tipo_sem_dado_por_natureza","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","l":53}
 {"k":"e","de":"migration:0231","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","l":104}
+{"k":"e","de":"migration:0232","rel":"CRIA","pa":"fn:fn_fila_de_reprocesso","f":"Supabase/migrations/0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql","l":44}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_linhas_para_modelagem","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":199}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_com_extracao","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":177}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_esgotou_transitoria","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":88}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":122}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_peso_de_leitura","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":105}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":109}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":182}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_resolver_periodo_incorreto_falso","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":215}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
@@ -2824,8 +2889,8 @@
 {"k":"e","de":"no8n:Registrar Falha","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/workflow.erros.json"}
 {"k":"e","de":"no8n:Registrar Recusa","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Upsert Caso (Postgres)","rel":"CHAMA","pa":"fn:fn_caso_do_envio","f":"N8N/workflow.e1-ingestao.json"}
-{"k":"e","de":"portao:A sonda do buraco no meio não dá alarme falso num banco completo","rel":"RODA","pa":"arquivo:Supabase/test/sonda-producao.mjs","f":".github/workflows/suites.yml","l":619}
-{"k":"e","de":"portao:Arnês de variações — a cadeia real sobre documento sujo","rel":"RODA","pa":"arquivo:Verificação/variacoes.mts","f":".github/workflows/suites.yml","l":729}
+{"k":"e","de":"portao:A sonda do buraco no meio não dá alarme falso num banco completo","rel":"RODA","pa":"arquivo:Supabase/test/sonda-producao.mjs","f":".github/workflows/suites.yml","l":625}
+{"k":"e","de":"portao:Arnês de variações — a cadeia real sobre documento sujo","rel":"RODA","pa":"arquivo:Verificação/variacoes.mts","f":".github/workflows/suites.yml","l":735}
 {"k":"e","de":"portao:Custo do lote (medido no artefato, sem chamar a OpenAI)","rel":"RODA","pa":"arquivo:N8N/medir-custo-book.mjs","f":".github/workflows/suites.yml","l":230}
 {"k":"e","de":"portao:Espelho CLAUDE.md ↔ CI (suítes e medidores)","rel":"RODA","pa":"arquivo:.claude/verificar-espelho-claude-md.mjs","f":".github/workflows/suites.yml","l":302}
 {"k":"e","de":"portao:Fixtures derivadas do gerador do book (SQL, JSON) e git diff","rel":"RODA","pa":"arquivo:Supabase/test/gerar_fixture.py","f":".github/workflows/suites.yml","l":199}
@@ -2835,26 +2900,27 @@
 {"k":"e","de":"portao:Geradores de workflow — e o gerado tem de ser igual ao commitado","rel":"RODA","pa":"arquivo:N8N/build-workflow.mjs","f":".github/workflows/suites.yml","l":185}
 {"k":"e","de":"portao:Gerar o book-distress","rel":"RODA","pa":"arquivo:N8N/test/abas-do-xlsx.test.mjs","f":".github/workflows/suites.yml","l":125}
 {"k":"e","de":"portao:Gerar o book-espelho","rel":"RODA","pa":"arquivo:N8N/test/cobertura.test.mjs","f":".github/workflows/suites.yml","l":139}
-{"k":"e","de":"portao:O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","rel":"RODA","pa":"arquivo:Supabase/conferir/gerar-conferir-chamadas.mjs","f":".github/workflows/suites.yml","l":603}
-{"k":"e","de":"portao:O que o código chama existe no banco","rel":"RODA","pa":"arquivo:Supabase/test/conferir-chamadas.mjs","f":".github/workflows/suites.yml","l":585}
-{"k":"e","de":"portao:O schema materializado bate com as migrations","rel":"RODA","pa":"arquivo:Supabase/test/run.sh","f":".github/workflows/suites.yml","l":579}
+{"k":"e","de":"portao:O conferidor em SQL (o que o dono cola no SQL Editor) é gerado e diz PODE RODAR","rel":"RODA","pa":"arquivo:Supabase/conferir/gerar-conferir-chamadas.mjs","f":".github/workflows/suites.yml","l":609}
+{"k":"e","de":"portao:O que o código chama existe no banco","rel":"RODA","pa":"arquivo:Supabase/test/conferir-chamadas.mjs","f":".github/workflows/suites.yml","l":591}
+{"k":"e","de":"portao:O schema materializado bate com as migrations","rel":"RODA","pa":"arquivo:Supabase/test/run.sh","f":".github/workflows/suites.yml","l":585}
 {"k":"e","de":"portao:Portão dos comandos de barra (todo subagent_type existe)","rel":"RODA","pa":"arquivo:.claude/verificar-comandos.mjs","f":".github/workflows/suites.yml","l":293}
 {"k":"e","de":"portao:Régua da cobertura (texto de PRODUÇÃO contra a verdade do gerador)","rel":"RODA","pa":"arquivo:N8N/medir-regua-cobertura.mjs","f":".github/workflows/suites.yml","l":237}
 {"k":"e","de":"portao:Suíte da apresentação de crédito (o .pptx mostra o número do documento, no padrão Oria)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-apresentacao.mts","f":".github/workflows/suites.yml","l":390}
-{"k":"e","de":"portao:Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-modelagem-cobertura.mts","f":".github/workflows/suites.yml","l":487}
-{"k":"e","de":"portao:Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-linhas-por-versao.mts","f":".github/workflows/suites.yml","l":460}
-{"k":"e","de":"portao:Suíte da exclusividade do ciclo (uma conta é cliente, estoque OU fornecedor)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-exclusividade-ciclo.mts","f":".github/workflows/suites.yml","l":476}
+{"k":"e","de":"portao:Suíte da cobertura da modelagem (o veredito não pinta 5% e 100% do mesmo verde)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-modelagem-cobertura.mts","f":".github/workflows/suites.yml","l":493}
+{"k":"e","de":"portao:Suíte da contagem por documento (o teto de 1000 do PostgREST não corta em silêncio)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-linhas-por-versao.mts","f":".github/workflows/suites.yml","l":466}
+{"k":"e","de":"portao:Suíte da exclusividade do ciclo (uma conta é cliente, estoque OU fornecedor)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-exclusividade-ciclo.mts","f":".github/workflows/suites.yml","l":482}
+{"k":"e","de":"portao:Suíte da fila de reprocesso (o botão que reenvia o original guardado ao n8n)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-fila-de-reprocesso.mts","f":".github/workflows/suites.yml","l":460}
 {"k":"e","de":"portao:Suíte da mensagem de falha (o texto do dia ruim)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","f":".github/workflows/suites.yml","l":407}
 {"k":"e","de":"portao:Suíte da planilha de transcrição (ida e volta do formato)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-transcricao.mts","f":".github/workflows/suites.yml","l":399}
-{"k":"e","de":"portao:Suíte da tela do perímetro (toda chave de falta traduzida, a desconhecida aparece crua)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-perimetro.mts","f":".github/workflows/suites.yml","l":482}
+{"k":"e","de":"portao:Suíte da tela do perímetro (toda chave de falta traduzida, a desconhecida aparece crua)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-perimetro.mts","f":".github/workflows/suites.yml","l":488}
 {"k":"e","de":"portao:Suíte das premissas sugeridas do realizado","rel":"RODA","pa":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","f":".github/workflows/suites.yml","l":415}
-{"k":"e","de":"portao:Suíte de banco (migrations do zero + testes SQL)","rel":"RODA","pa":"arquivo:Supabase/test/run.sh","f":".github/workflows/suites.yml","l":569}
+{"k":"e","de":"portao:Suíte de banco (migrations do zero + testes SQL)","rel":"RODA","pa":"arquivo:Supabase/test/run.sh","f":".github/workflows/suites.yml","l":575}
 {"k":"e","de":"portao:Suíte de export (invariantes do arquivo entregue)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-export.mts","f":".github/workflows/suites.yml","l":382}
 {"k":"e","de":"portao:Suíte do Kit Básico (a tela pergunta ao banco, nunca rederiva a regra)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-kit-basico.mts","f":".github/workflows/suites.yml","l":424}
 {"k":"e","de":"portao:Suíte do envio oficial (SPED/CNAB/OFX/XML lidos no navegador, só o resumo gravado)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-envio-oficial.mts","f":".github/workflows/suites.yml","l":448}
 {"k":"e","de":"portao:Suíte do leitor de arquivos oficiais (F2T, Espec. 12)","rel":"RODA","pa":"arquivo:N8N/lib/formato.mjs","f":".github/workflows/suites.yml","l":155}
 {"k":"e","de":"portao:Suíte do limite de envio (o lote que a hospedagem recusa antes do código rodar)","rel":"RODA","pa":"arquivo:portal/scripts/verificar-limite-de-envio.mts","f":".github/workflows/suites.yml","l":433}
-{"k":"e","de":"portao:Suíte e2e (extração → banco → export)","rel":"RODA","pa":"arquivo:Verificação/run.mts","f":".github/workflows/suites.yml","l":680}
+{"k":"e","de":"portao:Suíte e2e (extração → banco → export)","rel":"RODA","pa":"arquivo:Verificação/run.mts","f":".github/workflows/suites.yml","l":686}
 {"k":"e","de":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","rel":"RODA","pa":"arquivo:.claude/conhecimento/conferir.mjs","f":".github/workflows/suites.yml","l":255}
 {"k":"e","de":"portao:Índice do conhecimento — o grafo derivado bate com o repositório","rel":"RODA","pa":"arquivo:.claude/conhecimento/indexar.mjs","f":".github/workflows/suites.yml","l":255}
 {"k":"e","de":"sessao:10","rel":"CITA","pa":"migration:0023","f":"HANDOFF.md","l":5831}

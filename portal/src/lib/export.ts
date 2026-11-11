@@ -595,6 +595,13 @@ export interface DocumentoParaExport {
   entidade: { razao_social: string } | null;
   periodo: { tipo: string; referencia: string } | null;
   documento_versao: Array<{ id: string; nome_original: string | null; n_versao?: number | null }> | null;
+  /**
+   * A versão vigente que o BANCO escolheu (`fn_versao_com_extracao`, 0102/0233), lida por
+   * `lerDocumentosDoCaso`. É a conta única: a Modelagem e as telas já a usam, e o export deve
+   * mostrar o mesmo número. Ausente (fixture JSON sem banco) ou nula (nenhuma versão tem linha)
+   * = `versoesVigentes` cai na regra local abaixo.
+   */
+  versao_vigente_id?: string | null;
 }
 
 /**
@@ -620,6 +627,14 @@ export interface DocumentoParaExport {
  * Empate (mesma `n_versao`, ou nenhuma informada) mantém as duas: sem ordem
  * declarada não há como saber qual é a nova, e escolher por chute é pior que o
  * comportamento antigo.
+ *
+ * **Quando o banco já escolheu (`versao_vigente_id`), a escolha dele manda** (0233: entre as
+ * versões com linha, a de maior número SEM `falha_transitoria_esgotada`; se todas têm a flag, a de
+ * mais linhas). A regra local não conhece a flag: no arranjo v1 parcial + v2 parcial pior ela
+ * promovia a v2 e o Excel mostrava um número que a Modelagem não mostrava. Não recodifiquei a
+ * flag aqui porque ela mora em `evento` (não em `documento_versao`) e duas implementações da mesma
+ * conta divergem sem erro; a regra local sobra só para a fixture sem banco e para o documento sem
+ * nenhuma versão com linha (onde o banco devolve nulo).
  */
 export function versoesVigentes(documentos: DocumentoParaExport[], campos: CampoExtraido[]): Set<string> {
   const comDado = new Set(campos.map((c) => c.documento_versao_id));
@@ -628,6 +643,10 @@ export function versoesVigentes(documentos: DocumentoParaExport[], campos: Campo
     const versoes = doc.documento_versao ?? [];
     if (versoes.length <= 1) {
       for (const v of versoes) vigentes.add(v.id);
+      continue;
+    }
+    if (doc.versao_vigente_id && versoes.some((v) => v.id === doc.versao_vigente_id)) {
+      vigentes.add(doc.versao_vigente_id);
       continue;
     }
     const n = (v: { n_versao?: number | null }) => v.n_versao ?? 1;

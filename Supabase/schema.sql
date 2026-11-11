@@ -1685,8 +1685,12 @@ CREATE FUNCTION public.fn_coluna_periodo_do_ano(p_documento_versao_id uuid, p_an
     LANGUAGE plpgsql STABLE
     AS $$
 declare
-  v_col text;
-  v_tem boolean;
+  v_col      text;
+  v_tem      boolean;
+  v_tipo_doc text;
+  v_ptipo    text;
+  v_pref     text;
+  v_anos     int[];
 begin
   select ce.periodo_coluna into v_col
   from campo_extraido ce
@@ -1698,6 +1702,40 @@ begin
   limit 1;
   if v_col is not null then return v_col; end if;
 
+  -- 0234: o ano NÃO está no texto de coluna nenhuma. A coluna que NOMEIA um saldo ("Saldo Final", "Saldo atual",
+  -- "Saldo Inicial", "Saldo anterior") herda o ano da referência do período do documento, como na 0201 (Realizado).
+  select d.tipo_taxonomia, p.tipo, p.referencia into v_tipo_doc, v_ptipo, v_pref
+    from documento_versao dv
+    join documento d on d.id = dv.documento_id
+    left join periodo p on p.id = d.periodo_id
+   where dv.id = p_documento_versao_id;
+  v_anos := fn_anos_periodo(v_ptipo, v_pref);
+  -- shortcut: referência multi-ano com coluna sem ano fica no sentinela (não diz de qual ano é o "Saldo Final"); sobe se aparecer documento real assim.
+  if p_ano is not null and cardinality(v_anos) = 1 then
+    select ce.periodo_coluna into v_col
+    from campo_extraido ce
+    where ce.documento_versao_id = p_documento_versao_id
+      and ce.periodo_coluna is not null
+      and fn_coluna_e_saldo(ce.periodo_coluna)
+      -- 0234 (revisão, médio 1): o documento de período PARCIAL (DRE/balancete "01/01/2026 - 30/06/2026") não herda o ano em NENHUMA direção: o "Saldo atual" dele é o acumulado de 6 meses, não o ano
+      -- cheio (comparado ao faturamento de mais meses dava divergência falsa de ~25%), e o "Saldo inicial" é o início do período. Parcial continua no sentinela, como antes da 0234.
+      and not coalesce(fn_periodo_e_parcial(ce.periodo_coluna, v_tipo_doc, v_ptipo, v_pref), false)
+      and case when p_ano = v_anos[1]     then not fn_coluna_e_abertura(ce.periodo_coluna)
+               -- 0234 (revisão, médio 2): a abertura (ano - 1) só vale em demonstração PATRIMONIAL (o saldo inicial do balanço é o fechamento do ano anterior) ou quando o documento NÃO traz colunas de
+               -- movimento. Razão no formato Saldo anterior / Débito / Crédito / Saldo atual zera as contas de resultado no fechamento: o "Saldo anterior" delas é 0, e lê-lo como o ano - 1 faria a receita
+               -- do ano anterior valer ZERO (ausência apresentada como dado, regra 1).
+               when p_ano = v_anos[1] - 1 then fn_coluna_e_abertura(ce.periodo_coluna)
+                                               and (v_tipo_doc in ('BALANCO', 'BALANCETE')
+                                                    or not exists (select 1 from campo_extraido mv
+                                                                    where mv.documento_versao_id = p_documento_versao_id
+                                                                      and fn_coluna_e_movimento(mv.periodo_coluna)))
+               else false end
+    group by ce.periodo_coluna
+    order by count(*) desc, ce.periodo_coluna
+    limit 1;
+    if v_col is not null then return v_col; end if;
+  end if;
+
   select exists (
     select 1 from campo_extraido ce
     where ce.documento_versao_id = p_documento_versao_id and ce.periodo_coluna is not null
@@ -1705,6 +1743,12 @@ begin
   return case when v_tem then E'\x01' else null end;
 end;
 $$;
+
+--
+-- Name: FUNCTION fn_coluna_periodo_do_ano(p_documento_versao_id uuid, p_ano integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_coluna_periodo_do_ano(p_documento_versao_id uuid, p_ano integer) IS '0234 (sobre a 0023): a coluna de período do documento que vale para o ano. 1) a coluna cujo TEXTO tem o ano (a mais frequente; como antes). 2) 0234: sem ano no texto, e a referência do período do documento ancora UM só ano (fn_anos_periodo): ano = esse ano -> a coluna que nomeia saldo e não é de abertura (Saldo Final/atual); ano = esse ano - 1 -> a de abertura (Saldo Inicial/anterior), só em demonstração patrimonial (BALANCO/BALANCETE) ou em documento sem coluna de movimento (Débito/Crédito: no razão o Saldo anterior das contas de resultado é 0); em NENHUM dos dois sentidos para documento de período parcial (fn_periodo_e_parcial: o Saldo atual de um semestre não é o ano); fn_coluna_e_saldo, fn_coluna_e_abertura e fn_coluna_e_movimento são as da 0201; Débito/Crédito nunca é saldo; "Saldo", "Valor" não nomeiam saldo. 3) Nada disso: o sentinela E''\x01'' (o documento TEM colunas de período e nenhuma é deste ano) ou nulo (sem coluna nenhuma). Referência multi-ano com coluna sem ano fica no sentinela (teto conhecido). O ponto único das reconciliações fn_reconciliar_* e de fn_linha_vale_para_ano.';
 
 --
 -- Name: fn_combinado_estrutural_apto(text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -4543,6 +4587,73 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) IS 'Tira o mandato da mesa sem apagar nada. Idempotente: fechar de novo devolve o fechamento original em vez de reescrever autoria. Reversível por fn_reabrir_caso.';
+
+--
+-- Name: fn_fila_de_reprocesso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) RETURNS TABLE(documento_id uuid, documento_versao_id uuid, n_versao integer, nome_original text, arquivo_ref text, tipo_taxonomia text, falha_aberta_desde timestamp with time zone, falha_descricao text, tem_linha boolean, reprocessavel boolean, motivo_bloqueio text)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  with falha as materialized (
+    select pe.documento_id,
+           min(pe.criada_em) as desde,
+           (array_agg(pe.descricao order by pe.criada_em desc, pe.id desc))[1] as descricao
+      from pendencia pe
+     where pe.caso_id = p_caso_id
+       and pe.tipo = 'extracao_falhou'
+       and pe.estado <> 'resolvida'
+       and pe.documento_id is not null
+     group by pe.documento_id
+  ),
+  nova as (
+    select distinct on (dv.documento_id) dv.*
+      from documento_versao dv
+      join falha f on f.documento_id = dv.documento_id
+     order by dv.documento_id, dv.n_versao desc
+  ),
+  vigente as (
+    select dv.fingerprint_extracao as fp
+      from documento_versao dv
+      join documento d on d.id = dv.documento_id
+     where d.caso_id = p_caso_id
+       and dv.fingerprint_extracao is not null and length(trim(dv.fingerprint_extracao)) > 0
+     order by dv.criada_em desc, dv.id desc
+     limit 1
+  ),
+  fila as (
+    select d.id as doc_id, v.id as versao_id, v.n_versao as n, v.nome_original as nome, v.arquivo_ref as ref,
+           d.tipo_taxonomia as tipo, f.desde, f.descricao,
+           exists (select 1 from campo_extraido ce where ce.documento_versao_id = v.id) as linha,
+           (v.arquivo_ref is not null and length(trim(v.arquivo_ref)) > 0
+              and v.origem_arquivo = 'supabase_storage'
+              and exists (select 1 from storage.objects o where o.bucket_id = 'documentos' and o.name = v.arquivo_ref)) as com_original,
+           (v.hash is not null and length(trim(v.hash)) > 0
+              and exists (select 1
+                            from documento_versao v2
+                            join documento d2 on d2.id = v2.documento_id
+                           where d2.caso_id = p_caso_id
+                             and v2.hash = v.hash
+                             and v2.fingerprint_extracao = (select vg.fp from vigente vg)
+                             and fn_versao_extracao_concluida(v2.id))) as concluida
+      from nova v
+      join documento d on d.id = v.documento_id and d.caso_id = p_caso_id
+      join falha f on f.documento_id = d.id
+  )
+  select doc_id, versao_id, n, nome, ref, tipo, desde, descricao, linha,
+         (com_original and not concluida),
+         case when not com_original then 'sem_original'
+              when concluida then 'reaproveitaria' end
+    from fila
+   order by (com_original and not concluida) desc, desde, doc_id
+$$;
+
+--
+-- Name: FUNCTION fn_fila_de_reprocesso(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) IS '0232: a fila de reprocesso do mandato. Uma linha por documento com pendência extracao_falhou NÃO resolvida (estado <> resolvida, o predicado de fn_versao_extracao_concluida), sobre a versão de maior n_versao. falha_aberta_desde = min(criada_em) das pendências abertas; falha_descricao = a da mais recente. tem_linha = a versão tem campo_extraido. reprocessavel = arquivo_ref não vazio E origem_arquivo = supabase_storage E o objeto existe em storage.objects (bucket documentos, name = arquivo_ref; sem ele, 517 de 517 em produção tinham o ref e só 11 o arquivo) E NÃO existe versão do mandato com o mesmo hash e o fingerprint vigente (o da versão mais recente do mandato) concluída por fn_versao_extracao_concluida: a MESMA forma da pergunta de fn_registrar_documento (qualquer versão, não só a mais nova), então reenviar o original re-extrai de fato. motivo_bloqueio: sem_original (vence), reaproveitaria (hoje: falha COM linha, a P8 trata) ou nulo. Ordem: reprocessáveis primeiro, depois por falha_aberta_desde. SECURITY INVOKER: a RLS do usuário decide o que ele vê. Somente leitura.';
 
 --
 -- Name: fn_fundir_entidade(uuid, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -7514,13 +7625,14 @@ CREATE FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) RETURNS TABLE(se
   -- marca-0102
   -- marca-0103
   -- marca-0164
+  -- marca-0233
   --
-  -- AS TRÊS MARCAS FICAM. `fn_diagnostico_modelagem` (0102) confere se a
+  -- AS MARCAS FICAM. `fn_diagnostico_modelagem` (0102) confere se a
   -- correção daquela migration está instalada procurando `marca-0102` no
   -- corpo — é o teste que separa "mergeado" de "aplicado". Trocar a marca
   -- apagaria a resposta; a 0164 reemite o corpo e MANTÉM a regra da 0102
   -- ("só a versão vigente"), só muda COMO ela é expressa (join, não filtro
-  -- opaco) — então as três marcas continuam verdadeiras.
+  -- opaco) — então as marcas continuam verdadeiras.
   with docs_do_caso as (
     select d.id as documento_id, d.tipo_taxonomia, d.entidade_id
     from documento d
@@ -7541,7 +7653,9 @@ CREATE FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) RETURNS TABLE(se
     from documento_versao dv
     join docs_do_caso dc on dc.documento_id = dv.documento_id
     where exists (select 1 from campo_extraido ce where ce.documento_versao_id = dv.id)
-    order by dv.documento_id, dv.n_versao desc
+    -- 0233: a leitura que esgotou a falha transitória só vence quando NENHUMA versão sem a flag tem linha (e, entre elas, a de mais linhas).
+    -- O peso entra no ORDER BY, nunca em filtro: o join continua visível ao planner (0164). A mesma ordem de fn_versao_com_extracao.
+    order by dv.documento_id, fn_versao_peso_de_leitura(dv.id), dv.n_versao desc
   ),
   bruto as (
     select
@@ -7646,7 +7760,7 @@ $$;
 -- Name: FUNCTION fn_linhas_para_modelagem(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) IS 'Linhas lógicas do caso para a tela de Modelagem, com PAPEL (conta/subtotal/derivado/serie_mensal), valor COM SINAL, unidade/moeda, documentos de origem e marca de sobreposição. Existe como função porque campo_extraido não tem caso_id — o escopo por caso mora aqui. 0101: papel calculado uma vez por rótulo e sobreposição por join, para caber no statement_timeout. 0102: só a versão VIGENTE de cada documento (reextração deixava a versão superada somando ocorrência e podendo ditar o valor_ultimo). 0164: a versão vigente passa a ser um JOIN nomeado (CTE versao_vigente), não um filtro por função opaca — o filtro antigo (dv.id = fn_versao_com_extracao(d.id)) fazia o planner estimar rows=1 para dezenas de milhares de linhas reais, escolhendo Nested Loop onde deveria escolher Hash Join (medido: 15,0s → 2,6s num fixture de 190 documentos/800 rótulos). Resultado idêntico ao anterior — comparado linha a linha, com except nos dois sentidos, contra 78 casos.';
+COMMENT ON FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) IS 'Linhas lógicas do caso para a tela de Modelagem, com PAPEL (conta/subtotal/derivado/serie_mensal), valor COM SINAL, unidade/moeda, documentos de origem e marca de sobreposição. Existe como função porque campo_extraido não tem caso_id — o escopo por caso mora aqui. 0101: papel calculado uma vez por rótulo e sobreposição por join, para caber no statement_timeout. 0102: só a versão VIGENTE de cada documento (reextração deixava a versão superada somando ocorrência e podendo ditar o valor_ultimo). 0164: a versão vigente passa a ser um JOIN nomeado (CTE versao_vigente), não um filtro por função opaca — o filtro antigo (dv.id = fn_versao_com_extracao(d.id)) fazia o planner estimar rows=1 para dezenas de milhares de linhas reais, escolhendo Nested Loop onde deveria escolher Hash Join (medido: 15,0s → 2,6s num fixture de 190 documentos/800 rótulos). Resultado idêntico ao anterior — comparado linha a linha, com except nos dois sentidos, contra 78 casos. 0233: a CTE versao_vigente ordena por fn_versao_peso_de_leitura antes de n_versao (a leitura que esgotou a falha transitória só é vigente sem versão melhor), a mesma ordem de fn_versao_com_extracao.';
 
 --
 -- Name: fn_linhas_para_transcrever(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -9462,8 +9576,26 @@ CREATE FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_t
     when cardinality(fn_anos_periodo(p_tipo_a, p_ref_a)) = 0
       or cardinality(fn_anos_periodo(p_tipo_b, p_ref_b)) = 0 then true
     else fn_anos_periodo(p_tipo_a, p_ref_a) = fn_anos_periodo(p_tipo_b, p_ref_b)
+      -- 0234: o documento COMPARATIVO ("multi 24,25") e a leitura do exercício corrente ("anual 12M25") são o MESMO
+      -- documento: mesmo ano mais recente, um conjunto contém o outro, e a união é uma sequência contígua de anos.
+      -- Só entre períodos NÃO parciais (revisão, alto): "data-base 2025-06-30" (balanço intermediário) x "multi 24,25" NÃO é o mesmo exercício: o saldo de junho entraria no Realizado como se fosse o fechamento.
+      -- Parcial segue pela regra de antes (forma canônica igual ou conjuntos de anos iguais).
+      or (    not coalesce(fn_periodo_e_parcial(null, null, p_tipo_a, p_ref_a), false)
+          and not coalesce(fn_periodo_e_parcial(null, null, p_tipo_b, p_ref_b), false)
+          and (select max(x) from unnest(fn_anos_periodo(p_tipo_a, p_ref_a)) x)
+            = (select max(x) from unnest(fn_anos_periodo(p_tipo_b, p_ref_b)) x)
+          and (   fn_anos_periodo(p_tipo_a, p_ref_a) <@ fn_anos_periodo(p_tipo_b, p_ref_b)
+               or fn_anos_periodo(p_tipo_b, p_ref_b) <@ fn_anos_periodo(p_tipo_a, p_ref_a))
+          and (select max(x) - min(x) + 1 = count(distinct x)
+                 from unnest(fn_anos_periodo(p_tipo_a, p_ref_a) || fn_anos_periodo(p_tipo_b, p_ref_b)) x))
   end;
 $$;
+
+--
+-- Name: FUNCTION fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) IS '0234 (sobre a 0022): dois períodos são o mesmo exercício? Verdadeiro quando a forma canônica é igual, quando algum não ancora ano (não verificável), quando os conjuntos de anos são iguais, OU (0234) quando NENHUM dos dois é parcial (fn_periodo_e_parcial) e o ano mais recente é o mesmo, um conjunto contém o outro e a união é uma sequência de anos contígua ("multi 24,25" x "anual 12M25" ou "data-base 2025-12-31"); com um lado parcial ("data-base 2025-06-30", "multi 01/07/2025 a 30/06/2026") a contenção não vale. Continuam distintos: "anual 21,25" x "multi 23,24,25" (um não contém o outro), "anual 25,26" x "multi 24,25" e "anual 23,24" x "anual 2023" (ano mais recente diferente), "multi 2024,2025" x "multi 01,24,25" (união não contígua). Chamador único: fn_registrar_diagnostico.';
 
 --
 -- Name: fn_pessoa_decidiu_sem_dado(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -14578,6 +14710,50 @@ $$;
 COMMENT ON FUNCTION public.fn_resolver_linha_exigida_superada(p_tipos text[], p_ator text) IS '0187: resolve as pendências linha_exigida_ausente ABERTAS dos tipos pedidos que o Portão 1 não abriria mais hoje (exigência inativa ou satisfeita, pelo critério de fn_exigencias_do_caso), com um evento_auditoria por pendência. Não toca aceita_com_ressalva, não roda o resto da completude. Ação de migration/service_role — sem grant para o portal.';
 
 --
+-- Name: fn_resolver_periodo_incorreto_falso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_resolver_periodo_incorreto_falso(p_caso_id uuid DEFAULT NULL::uuid) RETURNS integer
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_n     integer;
+  v_casos text;
+begin
+  with alvo as (
+    select pe.id, pe.caso_id
+      from pendencia pe
+      cross join lateral (
+        select regexp_match(pe.descricao, 'sugere período "(\S+) (.+?)" \(documento está registrado com "(\S+) (.+?)"\)') as m) x
+     where pe.tipo = 'periodo_incorreto'
+       and pe.estado = 'aberta'                  -- só 'aberta': as demais são decisão de gente
+       and pe.origem_estagio = 'diagnostico'     -- só a que o sistema abriu
+       and (p_caso_id is null or pe.caso_id = p_caso_id)
+       and x.m is not null
+       and fn_periodos_equivalentes(x.m[1], x.m[2], x.m[3], x.m[4])),
+  feito as (
+    update pendencia pe
+       set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:0234'
+      from alvo
+     where pe.id = alvo.id
+    returning pe.caso_id)
+  select count(*), string_agg(distinct caso_id::text, ',') into v_n, v_casos from feito;
+  if v_n > 0 then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('sistema:migration_0234', 'periodo_incorreto_falso_resolvido', 'pendencia',
+              jsonb_build_object('pendencias', v_n, 'casos', v_casos));
+  end if;
+  return v_n;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_resolver_periodo_incorreto_falso(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_resolver_periodo_incorreto_falso(p_caso_id uuid) IS '0234: resolve (resolvida_por = sistema:0234) a pendência periodo_incorreto em estado aberta, de origem diagnostico, cujo par sugerido x registrado (lido da descrição) fn_periodos_equivalentes declara equivalente. Não toca em em_correcao_interna, reenviada_ao_cliente, aceita_com_ressalva nem rejeitada (decisão humana). Devolve quantas resolveu; idempotente.';
+
+--
 -- Name: fn_resumo_anexar(uuid, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -17041,11 +17217,12 @@ CREATE FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) RETURNS uuid
     LANGUAGE sql STABLE
     AS $$
   -- marca-0102
+  -- 0233: sem a flag de falha transitória esgotada primeiro (peso 0), a de maior n_versao; se TODAS as versões com linha a têm, a que trouxe mais linhas.
   select dv.id
   from documento_versao dv
   where dv.documento_id = p_documento_id
     and exists (select 1 from campo_extraido ce where ce.documento_versao_id = dv.id)
-  order by dv.n_versao desc
+  order by fn_versao_peso_de_leitura(dv.id), dv.n_versao desc
   limit 1;
 $$;
 
@@ -17053,7 +17230,28 @@ $$;
 -- Name: FUNCTION fn_versao_com_extracao(p_documento_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A documento_versao VIGENTE para quem lê conteúdo: a de maior n_versao que TEM campo_extraido. Difere de fn_versao_atual (max(n_versao)) de propósito: entre fn_registrar_documento e fn_registrar_campos_extraidos a versão mais recente está vazia, e max(n_versao) puro deixaria a tela de Modelagem em branco nessa janela — o mesmo sintoma que a 0101 corrigiu.';
+COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A documento_versao VIGENTE para quem lê conteúdo: a de maior n_versao que TEM campo_extraido. Difere de fn_versao_atual (max(n_versao)) de propósito: entre fn_registrar_documento e fn_registrar_campos_extraidos a versão mais recente está vazia, e max(n_versao) puro deixaria a tela de Modelagem em branco nessa janela — o mesmo sintoma que a 0101 corrigiu. 0233: uma versão cuja leitura esgotou a falha transitória (fn_versao_esgotou_transitoria) só é vigente quando nenhuma versão com linha do documento está sem a flag; entre as com a flag vence a de mais linhas (fn_versao_peso_de_leitura), empate pela de maior n_versao. Sem isto o reenvio por falha transitória (0233) trocava a versão anterior, com números no book, por uma leitura pior.';
+
+--
+-- Name: fn_versao_esgotou_transitoria(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE
+    AS $$
+  select coalesce((select u.depois->'medicao'->'falha_transitoria_esgotada' = 'true'::jsonb
+                     from evento_auditoria u
+                    where u.acao = 'extracao_sombra'
+                      and u.entidade_ref = 'documento_versao:' || p_documento_versao_id::text
+                    order by u.criado_em desc
+                    limit 1), false)
+$$;
+
+--
+-- Name: FUNCTION fn_versao_esgotou_transitoria(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) IS '0233: o ÚLTIMO evento extracao_sombra da versão marca medicao.falha_transitoria_esgotada = true (booleano; string, número, nulo ou ausente = não)? A conta única da flag: fn_versao_extracao_concluida (o reenvio) e fn_versao_peso_de_leitura (a versão vigente) a chamam. SECURITY INVOKER, somente leitura.';
 
 --
 -- Name: fn_versao_extracao_concluida(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17062,10 +17260,25 @@ COMMENT ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) IS 'A doc
 CREATE FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) RETURNS boolean
     LANGUAGE sql STABLE
     AS $_$
-  -- (1) tem linha: o critério da 0118, intacto. (2) ou TODAS: o ÚLTIMO evento de extração (criado_em; empate na mesma transação é indefinido, ver o cabeçalho) existe, sem falha,
-  -- declara tem_dado_financeiro = false e não contou conta; o tipo do documento é da categoria 'Societário/Legal'; e não há pendência extracao_falhou aberta no documento.
-  -- Qualquer parte ilegível = false (paga de novo), nunca nula.
-  select exists (select 1 from campo_extraido ce where ce.documento_versao_id = p_documento_versao_id)
+  -- (1) tem linha (0118) E NÃO é falha transitória esgotada sem aceite humano (0233); (2) ou a declaração sem dado financeiro (0230, estreitada pela 0231: tipo sem dado por natureza OU decisão de pessoa). Parte ilegível = não vale como "re-extrair" (a 0233 reaproveita) e
+  -- não vale como "declaração" (a 0230 paga): cada lado erra para o seu lado seguro.
+  select (exists (select 1 from campo_extraido ce where ce.documento_versao_id = p_documento_versao_id)
+          and not (
+            fn_versao_esgotou_transitoria(p_documento_versao_id)
+            -- falha aberta no documento: o predicado de sempre (estado <> resolvida)
+            and exists (select 1
+                          from documento_versao dv
+                          join pendencia pe on pe.documento_id = dv.documento_id
+                         where dv.id = p_documento_versao_id
+                           and pe.tipo = 'extracao_falhou'
+                           and pe.estado <> 'resolvida')
+            -- aceite HUMANO em alguma linha da versão: re-extrair tiraria da Modelagem a linha aceita (teto declarado no cabeçalho)
+            and not exists (select 1
+                              from campo_extraido ce
+                             where ce.documento_versao_id = p_documento_versao_id
+                               and ce.status_aceite <> 'pendente'
+                               and ce.aceito_por is not null
+                               and ce.aceito_por not like 'sistema:%')))
       or coalesce((
     select u.depois->>'falha_motivo' is null
        and u.depois->>'tem_dado_financeiro' = 'false'
@@ -17095,7 +17308,26 @@ $_$;
 -- Name: FUNCTION fn_versao_extracao_concluida(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0230: a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando a versão TEM linha em campo_extraido (o critério da 0118, intacto, mesmo sem evento e mesmo com falha) OU quando TODAS valem: o ÚLTIMO evento extracao_sombra (criado_em) existe, sem falha_motivo e com tem_dado_financeiro = false explícito; o tipo do documento é da categoria Societário/Legal de taxonomia_tipo_documento (CERTIDOES, CONTRATO_SOCIAL, ORGANOGRAMA; CONTINGENCIAS é da categoria e fica DE FORA, porque traz valor de causa e provisão; tipo nulo ou de outra categoria = não); a medição do evento não contou conta (contas_no_documento nulo ou 0); e o documento não tem pendência extracao_falhou aberta. Simplificação deliberada: a categoria é proxy de "tipo que não traz tabela financeira"; sobe quando a taxonomia ganhar atributo próprio. Zero linha sem tudo isso = false (a 0118 protege extração recusada/truncada); condição ilegível = false (paga de novo). Falha COM linha continua reaproveitada (teto conhecido, P8). A pergunta de fn_registrar_documento e da fatia de orçamento do lote: uma implementação só. SECURITY INVOKER, somente leitura. 0231: o tipo é perguntado a fn_tipo_sem_dado_por_natureza (mesma conta, comportamento idêntico).';
+COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0233 (sobre a 0231): a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando (A) a versão TEM linha em campo_extraido (o critério da 0118) E NÃO se dá o caso de falha transitória esgotada: o ÚLTIMO evento extracao_sombra traz medicao.falha_transitoria_esgotada = true (fn_versao_esgotou_transitoria; booleano; o n8n P8 grava), há extracao_falhou aberta no documento (estado <> resolvida) e nenhuma linha da versão foi aceita por humano (status_aceite <> pendente, aceito_por preenchido e fora de sistema:%); OU (B) o corpo da 0231 INTACTO: o último evento extracao_sombra existe, sem falha_motivo, com tem_dado_financeiro = false explícito, e (tipo sem dado por natureza, fn_tipo_sem_dado_por_natureza, sem conta contada, OU uma pessoa resolveu a falha, fn_pessoa_decidiu_sem_dado), e sem extracao_falhou aberta (0230/0231). Com aceite humano o reenvio continua reaproveitando mesmo com falha transitória (teto: re-extrair tira da Modelagem a linha aceita). Campo ausente/ilegível = reaproveita como antes. A pergunta de fn_registrar_documento e de fn_fila_de_reprocesso: uma implementação só. SECURITY INVOKER, somente leitura.';
+
+--
+-- Name: fn_versao_peso_de_leitura(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) RETURNS bigint
+    LANGUAGE sql STABLE
+    AS $$
+  -- shortcut: "quanto foi lido" = nº de linhas (entre versões COM a flag; sem ela, a de maior número vence, como na 0102); sobe se a medição ganhar blocos lidos por versão. O teto 1e9 supera qualquer versão real (maior medida em produção: dezenas de milhares).
+  select case when fn_versao_esgotou_transitoria(p_documento_versao_id)
+              then 1000000000 - (select count(*) from campo_extraido ce where ce.documento_versao_id = p_documento_versao_id)
+              else 0 end
+$$;
+
+--
+-- Name: FUNCTION fn_versao_peso_de_leitura(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) IS '0233: chave de ordenação da versão vigente (crescente). 0 = a leitura NÃO esgotou a falha transitória (vale a de maior n_versao entre as de peso 0, a regra da 0102); acima de 0 = esgotou (fn_versao_esgotou_transitoria), e o peso cai com o número de linhas: entre leituras parciais vence a que trouxe mais linhas, empate pela de maior n_versao. Uma versão com a flag só é vigente quando nenhuma versão com linha do documento está sem ela. Existe para que re-extrair não TIRE do book o número que a versão anterior já tinha. SECURITY INVOKER, somente leitura.';
 
 --
 -- Name: fn_vincular_linha_premissa(uuid, text, text, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -22380,6 +22612,14 @@ GRANT ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_moti
 GRANT ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO service_role;
 
 --
+-- Name: FUNCTION fn_fila_de_reprocesso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23359,6 +23599,13 @@ GRANT ALL ON FUNCTION public.fn_registrar_uso_lote(p_caso_id uuid, p_execucao_re
 REVOKE ALL ON FUNCTION public.fn_resolver_linha_exigida_superada(p_tipos text[], p_ator text) FROM PUBLIC;
 
 --
+-- Name: FUNCTION fn_resolver_periodo_incorreto_falso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_resolver_periodo_incorreto_falso(p_caso_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_resolver_periodo_incorreto_falso(p_caso_id uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23780,12 +24027,28 @@ GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO auth
 GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO service_role;
 
 --
+-- Name: FUNCTION fn_versao_esgotou_transitoria(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) TO service_role;
+
+--
 -- Name: FUNCTION fn_versao_extracao_concluida(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_versao_peso_de_leitura(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text); Type: ACL; Schema: public; Owner: -

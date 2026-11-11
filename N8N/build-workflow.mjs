@@ -727,11 +727,13 @@ const textoOriginais = !uploadExecutou
 
 let extracao = 0, entrada = 0, saida = 0, cache = 0, linhas = 0, comFalha = 0, semMedicao = 0;
 let celulas = 0, contas = 0, fatiados = 0, alem = 0, docsAlem = 0, semContagem = 0;
+let transitoriaEsgotada = 0;
 for (const it of extracoes) {
   const e = it?.json || {};
   if (typeof e.custo_usd === 'number') extracao += e.custo_usd; else semMedicao += 1;
   if (e.tokens) { entrada += e.tokens.entrada || 0; saida += e.tokens.saida || 0; cache += e.tokens.cache || 0; }
   if (e.falha_motivo) comFalha += 1;
+  if (e.medicao_documento?.falha_transitoria_esgotada === true) transitoriaEsgotada += 1;
   linhas += Array.isArray(e.campos) ? e.campos.length : 0;
   // O painel do lote soma a MESMA unidade da guarda: linhas devolvidas contra linhas de conta
   // do texto. \`contas_distintas\` continua saindo por documento, porque e' ela que diz se o
@@ -776,6 +778,9 @@ return [{ json: {
     + ' (' + classificacoes.length + ' pagaram o PDF duas vezes)'
     + (estimado !== null ? '. O orçamento havia estimado US$ ' + Number(estimado).toFixed(2) : '')
     + textoOriginais
+    // Sinal positivo (regra 7): bloco sem leitura por falha transitoria do provedor NAO e' defeito do documento;
+    // sem esta contagem o lote que perdeu blocos para o provedor tem a mesma cara do que nao perdeu.
+    + (transitoriaEsgotada > 0 ? '. ' + transitoriaEsgotada + ' documento(s) com bloco SEM leitura por falha transitoria do provedor (4 tentativas esgotadas; reenviar re-extrai)' : '')
     + '. Saída: ' + saida + ' tokens; entrada: ' + entrada + ' (' + cache + ' em cache).'
     + (celulas > 0 ? ' Cobertura: ' + contas + ' contas gravadas de ' + celulas + ' linhas de conta nos PDFs ('
       + (contas / celulas * 100).toFixed(0) + '%), em ' + linhas + ' pares conta-coluna. '
@@ -813,6 +818,7 @@ return [{ json: {
   cobertura_do_lote: celulas > 0 ? Number((contas / celulas).toFixed(3)) : null,
   documentos_fatiados: fatiados,
   documentos_com_falha: comFalha,
+  documentos_com_falha_transitoria_esgotada: transitoriaEsgotada,
   documentos_sem_medicao: semMedicao,
 } }];
 `.trim();
@@ -2259,7 +2265,26 @@ for(const [chave, blocos] of porDocumento){
   for(const k of medidos){
     if(doc[k]!==undefined&&doc[k]!==null) medicao[k]=doc[k];
   }
-  doc.medicao_documento={...medicao,versao_medicao:'p4-1'};
+  // O REGISTRO DE TENTATIVAS (P8, versao_medicao p4-2). Cada bloco chega do \`Parse Extracao\` com
+  // \`registro_tentativas\` ({tentativa, modelo, resultado}, uma entrada por chamada ao provedor).
+  // \`falha_transitoria_esgotada\` e' CONTRATO com a migration 0233 (lido em
+  // evento_auditoria.depois->'medicao'->>'falha_transitoria_esgotada' para decidir reextrair no
+  // reenvio): algum bloco ficou SEM leitura e a ultima tentativa foi \`falhou_transitoria\`.
+  // So' entra quando ALGUM bloco trouxe o registro: item de um n8n anterior nao pode virar
+  // \`false\` (ausencia nao e' dado, regra 1). \`registro_tentativas\` do documento so' leva os
+  // blocos que NAO foram uma unica chamada ok (30 blocos ok repetidos so' inflariam o evento).
+  const comRegistro=blocos.filter(b=>Array.isArray(b.registro_tentativas));
+  if(comRegistro.length>0){
+    medicao.falha_transitoria_esgotada=comRegistro.some(b=>b.falha_transitoria===true);
+    const detalhe=[];
+    for(const b of comRegistro){
+      if(b.registro_tentativas.length>1||b.registro_tentativas.some(r=>r.resultado!=='ok')){
+        for(const r of b.registro_tentativas) detalhe.push({bloco:b.bloco??null,...r});
+      }
+    }
+    if(detalhe.length>0) medicao.registro_tentativas=detalhe;
+  }
+  doc.medicao_documento={...medicao,versao_medicao:'p4-2'};
   saida.push({pairedItem:{item:primeiroIndice.get(chave)??0}, json:doc});
 }
 return saida;
@@ -2286,6 +2311,7 @@ ${FONTE_SEGUNDA_PASSADA}
 ${FONTE_CUSTO_CHAMADA}
 ${FONTE_PROVEDOR}
 const TENTATIVA=${estagio};
+const MODELO_PRINCIPAL=${JSON.stringify(MODEL_EXTRACAO)};
 // O contexto vem do FATIAMENTO, nao mais do \`Montar Req Extracao\`: e' ele que
 // sabe qual bloco este item e', e um item por bloco significa que o pareamento
 // com o no' anterior a ele deixou de ser 1:1. O fallback existe para o caso de
@@ -2325,8 +2351,12 @@ if(resp?.error){
 // E o que da' para refazer (o corpo da chamada viaja no ctx; sem ele o proximo
 // estagio mandaria \`undefined\` ao provedor, entao e' falha declarada e nao repeticao).
 const dec=decidirRepeticao({transitoria, tentativa:TENTATIVA, esperaSugeridaS:esperaSugerida});
+// O REGISTRO POR TENTATIVA: uma entrada por chamada ao provedor, na ordem. \`ok\` = a resposta foi LIDA
+// (JSON valido); a falha e' transitoria ou permanente pela MESMA classificacao que decide repetir.
+const resultadoDaChamada=respostaLida?'ok':(transitoria?'falhou_transitoria':'falhou_permanente');
+const registro=(Array.isArray(ctx.registro_tentativas)?ctx.registro_tentativas:[]).concat([{tentativa:TENTATIVA, modelo:MODELO_PRINCIPAL, resultado:resultadoDaChamada}]);
 if(dec.repetir&&ctx.ia_body){
-  return {json:{...ctx, repetir:true, tentativa:TENTATIVA, espera_s:dec.esperaS, ultima_falha:falhaMotivo}};
+  return {json:{...ctx, repetir:true, tentativa:TENTATIVA, espera_s:dec.esperaS, ultima_falha:falhaMotivo, registro_tentativas:registro}};
 }
 if(!falhaMotivo&&cortado){
   falhaMotivo='Resposta do provedor de IA atingiu o limite de tokens de saida; o JSON veio valido, mas o conteudo pode estar incompleto (faltando linhas do fim do documento).';
@@ -2427,7 +2457,7 @@ if(ant||(respostaLida&&!cortado)){
     // intervalo fixo) ja' separa as chamadas. Se o provedor responder 429, o Parse
     // seguinte trata como qualquer transitoria, com a propria espera.
     return {json:{...ctx, ia_body:corpo2, repetir:true, tentativa:TENTATIVA, espera_s:0, ultima_falha:null, motivo_repeticao:'cobertura',
-      passada_anterior:{campos, diagnostico, falha:falhaMotivo, linhas:esta.linhas, razao:razaoDe(esta.linhas), custo_usd, tokens:tokensDestaChamada}}};
+      passada_anterior:{campos, diagnostico, falha:falhaMotivo, linhas:esta.linhas, razao:razaoDe(esta.linhas), custo_usd, tokens:tokensDestaChamada}, registro_tentativas:registro}};
   }
   if(dec2.abaixo){
     const rFinal=razaoDe(final.linhas);
@@ -2472,7 +2502,7 @@ const falhaFinal=[avisoConteudo,falhaMotivo,notaTentativas].filter(Boolean).join
 // \`passadas\` e as duas coberturas do bloco so' instrumentam a execucao (nao tocam o
 // Postgres): e' por elas que se mede, na primeira rodada real, quanto a segunda
 // passada recupera -- coisa que nenhum teste sem chamar o modelo consegue dizer.
-return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais}};
+return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais, registro_tentativas:registro, falha_transitoria:registro[registro.length-1].resultado==='falhou_transitoria'}};
 `.trim();
 const CODE_PARSE_EXTRACAO = codeParseExtracao(1, 'Fatiar Extracao');
 

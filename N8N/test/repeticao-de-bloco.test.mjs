@@ -217,3 +217,26 @@ test('as repetições passam pela MESMA cadência da primeira chamada (nunca em 
       'o corpo do erro chega ao Parse, que é quem decide se repete');
   }
 });
+
+// --- P8: o registro por tentativa e a falha transitória esgotada ------------------
+// Contrato com a migration 0233: `falha_transitoria` do bloco vira
+// `medicao.falha_transitoria_esgotada` (ver Juntar Blocos).
+
+test('P8: 4x 429 -> registro com 4 entradas falhou_transitoria e falha_transitoria=true', async () => {
+  const r = await atravessar([RATE()]);
+  assert.deepEqual(r.saida.json.registro_tentativas.map((x) => x.resultado), Array(4).fill('falhou_transitoria'));
+  assert.deepEqual(r.saida.json.registro_tentativas.map((x) => x.tentativa), [1, 2, 3, 4]);
+  assert.equal(r.saida.json.falha_transitoria, true);
+});
+
+test('P8: 429 e depois 200 -> registro [falhou_transitoria, ok] e falha_transitoria=false', async () => {
+  const r = await atravessar([RATE(), OK()]);
+  assert.deepEqual(r.saida.json.registro_tentativas.map((x) => x.resultado), ['falhou_transitoria', 'ok']);
+  assert.equal(r.saida.json.falha_transitoria, false);
+});
+
+test('P8: 400 permanente NÃO é falha transitória esgotada', async () => {
+  const r = await atravessar([RECUSA_400()]);
+  assert.deepEqual(r.saida.json.registro_tentativas.map((x) => x.resultado), ['falhou_permanente']);
+  assert.equal(r.saida.json.falha_transitoria, false);
+});

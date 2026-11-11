@@ -10,6 +10,9 @@ import { formatarPeriodo, formatarTipoTaxonomia } from "@/lib/export";
 import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
 import { OrdemDosDocumentos } from "@/components/ordem-dos-documentos";
 import { LinhaDeDocumento } from "@/components/linha-de-documento";
+import { FilaDeReprocesso } from "@/components/fila-de-reprocesso";
+import { lerPermissoesDoMandato } from "@/lib/supabase/acesso";
+import type { ItemDaFila } from "@/lib/fila-de-reprocesso";
 
 const LEGIBILIDADE_LABEL: Record<string, string> = {
   degradado: "qualidade degradada",
@@ -50,7 +53,7 @@ export default async function DocumentosPage({
 
   const supabase = await createClient();
 
-  const [kitBasicoRes, documentosRes, checklistRes] = await Promise.all([
+  const [kitBasicoRes, documentosRes, checklistRes, filaRes, permissoes] = await Promise.all([
     supabase
       .from("taxonomia_tipo_documento")
       .select("codigo, categoria, documento, obrigatoriedade")
@@ -74,6 +77,9 @@ export default async function DocumentosPage({
     // Supabase/migrations/0036 — o checklist é a fonte do TERCEIRO estado: um item pode ter
     // documento e ainda assim não ter uma linha extraída (`recebido_nao_valido`).
     supabase.from("checklist_item_status").select("tipo_taxonomia, status").eq("caso_id", id),
+    // 0232: documentos com `extracao_falhou` aberta. Erro daqui NÃO é fila vazia: vira aviso abaixo.
+    supabase.rpc("fn_fila_de_reprocesso", { p_caso_id: id }),
+    lerPermissoesDoMandato(id),
   ]);
 
   // LEITURA QUE FALHOU NÃO É "NENHUM DOCUMENTO" (regra 1). Antes o erro era jogado fora e a
@@ -100,6 +106,7 @@ export default async function DocumentosPage({
 
   const kitBasico = (kitBasicoRes.data as TaxonomiaTipoDocumento[] | null) ?? [];
   const documentos = documentosRes.data;
+  const fila = (filaRes.data as ItemDaFila[] | null) ?? [];
 
   // QUANTAS LINHAS CADA DOCUMENTO RENDEU. É o número que o dono procurava abrindo o export, e
   // ele não existia em tela nenhuma: a tabela dizia que o documento chegou e foi classificado,
@@ -189,6 +196,17 @@ export default async function DocumentosPage({
           O que chegou do cliente, o que falta do Kit Básico e quantas linhas cada arquivo rendeu.
         </p>
       </div>
+
+      {filaRes.error && (
+        <div role="alert" className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-800">
+          Não foi possível ler a fila de reprocesso, então não dá para dizer se há documentos com
+          leitura que falhou. Recarregue a página; se persistir, avise o administrador do sistema.
+          <DetalhesTecnicos><p>{filaRes.error.message}</p></DetalhesTecnicos>
+        </div>
+      )}
+      {!filaRes.error && fila.length > 0 && (
+        <FilaDeReprocesso casoId={id} itens={fila} pode={permissoes.escrever.pode} motivoSemPermissao={permissoes.escrever.motivo} />
+      )}
 
       <section>
         <div className="mb-2 flex items-baseline justify-between gap-3">

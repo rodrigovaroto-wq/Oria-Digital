@@ -45,6 +45,14 @@ A semana 1 não fechou no prazo: P4, P5 e P1d ficaram para trás porque a P16, p
 
 Já medido para a P1d(b) em produção (09/11): uma recusa de orçamento grava UMA linha por documento do lote (44 linhas no lote de 44 de 13/09, 4 vezes). As execuções da P5 (n8n 7859, 7883 e 7886, de 17/09) já foram podadas, então o documento exato não pode ser recuperado.
 
+### Andamento em 10/11/2026 (sessão 126, PAUSADA pelo dono)
+
+- **P7b** escrita, revisada e comitada (0232 + portal). NÃO aplicada nem publicada.
+- **P8** n8n: registro por tentativa e `falha_transitoria_esgotada` na medição (decisão do dono de 11/11: SEM modelo de reserva, só o `gpt-5.6-luna`; o fallback do d4b38b5 foi desfeito); banco na 0233, comitada SEM revisão independente. Falta republicar a ingestão.
+- **P9** n8n comitada ("Método Indireto"); banco na 0234, comitada SEM revisão independente.
+- **P10** não iniciada: depende do merge, da aplicação da 0232–0234 e da republicação.
+- A ordem exata para retomar está no topo do `ESTADO.md` (sessão 126).
+
 ### A linha de base da P4, medida em produção em 09/11/2026 (`Supabase/test/linha-de-base-extracao.sql`)
 
 2.053 documentos em 79 mandatos. O corpus do plano (versão mais nova de cada documento):
@@ -152,7 +160,7 @@ critério que fecha a fatia. Sem ele cumprido, a fatia não fecha.
 | **P6** ✅ 10/11 no Valtra real (29 → 0 descartadas); 🟡 Krauspenhar herda a P6b | **Desalinhamento de colunas** (balancete e DRE multi-coluna, a maior causa de INCOMPLETA no Krauspenhar e no Valtra). Causa raiz no fatiamento ou no contrato da resposta | As contas descartadas por desalinhamento no corpus caem a zero, ou cada uma com motivo |
 | **P6b** 🟡 10/11 (PR #282, não mergeado ao fechar) | **Números colados no texto do PDF** (Krauspenhar: 303 descartadas). O texto sai com valores grudados e fora de ordem; detector `fracaoDeNumerosColados` manda o documento à IA como imagem (rota da P6). Calibrado 72,3% × 9,4% × 0% nos books e capturas | Reenvio real do Krauspenhar com as descartadas por desalinhamento caindo a zero, ou cada uma com motivo; custo medido |
 | **P7** ✅ 09/11 (0230 aplicada: o reenvio não paga mais o documento societário sem linha; a fila com botão vira P7b) | **Fila de reprocesso.** Lote com falha parcial retoma só os documentos que falharam, sem pagar de novo o que já foi extraído | Aceite técnico da F3: retomar um lote com 1 falha custa 1 documento, não o lote inteiro |
-| **P8** (herda da P7: falha COM linha só deve ser reextraída no reenvio quando o motivo for transitório; medido em 09/11, 3 de ~75 são) | **Retentativa classificada e fallback de provedor.** Separar erro transitório (rede, 429, 5xx) de definitivo; o transitório tenta de novo e, esgotado, cai no provedor alternativo; cada tentativa registra rodou, falhou ou caiu | Uma falha simulada do provedor principal termina no alternativo, e fica registrada |
+| **P8** (herda da P7: falha COM linha só deve ser reextraída no reenvio quando o motivo for transitório; medido em 09/11, 3 de ~75 são) | **Retentativa classificada e fallback de provedor.** Separar erro transitório (rede, 429, 5xx) de definitivo; o transitório tenta de novo (4 tentativas, mesmo modelo) e, esgotado, fica declarado (`falha_transitoria_esgotada`); NÃO há provedor/modelo alternativo (decisão do dono, 11/11); cada tentativa registra rodou ou falhou | Uma falha simulada do provedor termina em `falha_transitoria_esgotada=true` com as 4 tentativas registradas |
 | **P9** | **Período e entidade atribuídos errado** (`precondicao_nao_satisfeita` "sem período par", `periodo_incorreto`, `entidade_incorreta`). Causa raiz na atribuição, não na guarda | No corpus, as pendências falsas desse tipo somem e as verdadeiras continuam abrindo (controle positivo) |
 | **P10** | **Rodada de regressão paga** sobre o corpus (precisa da autorização D6 do dono). Comparar com P4 | Tabela antes × depois por documento; custo de cada book ≤ US$ 5 |
 

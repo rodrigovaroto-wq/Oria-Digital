@@ -222,8 +222,10 @@ begin
   v_r := fn_registrar_documento(v_caso, 'Vertentes Metalurgica Ltda.', 'anual', '2024', 'BALANCO', 0.9,
     'nome_arquivo', 'supabase_storage', 'b/diag-periodo.pdf', 'BP-periodo.pdf', true, 'H-DIAG-PERIODO', 'ok');
   perform fn_registrar_diagnostico((v_r->>'documento_id')::uuid, (v_r->>'documento_versao_id')::uuid,
-            'Vertentes Metalurgica Ltda.', true, 'BALANCO', 'multi', '22,23,24', 'ok', null, 'r',
-            'MOTIVO-TESTE-0161: colunas comparativas de 2022 a 2024, não uma data-base isolada.');
+            'Vertentes Metalurgica Ltda.', true, 'BALANCO', 'anual', '2025', 'ok', null, 'r',
+            'MOTIVO-TESTE-0161: as colunas são de 2025, não de 2024.');
+  -- 0234: o fixture era 'multi 22,23,24' contra 'anual 2024', par que a 0234 declara o MESMO exercício (mesmo ano mais recente, contido, contíguo) e que por isso
+  -- já não abre pendência. O que este teste afirma é que a pendência CITA a justificativa quando abre; 2025 contra 2024 segue divergente (ano mais recente diferente).
   select descricao into v_col from pendencia
    where caso_id = v_caso and tipo = 'periodo_incorreto' and estado <> 'resolvida'
    order by criada_em desc limit 1;

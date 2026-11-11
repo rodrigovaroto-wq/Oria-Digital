@@ -267,6 +267,14 @@ export function parseEntidade(textoNormalizado, aliases) {
   termos.sort((x, y) => y.length - x.length);
   for (const termo of termos) s = s.split(` ${termo} `).join(' ');
 
+  // "MÉTODO INDIRETO/DIRETO" QUALIFICA O DFC, não nomeia empresa. Medido em produção (10/11/2026, Fw
+  // Valtra): `DFC - Método Indireto MOTO AGRICOLA 2025 2024.pdf` saía como a entidade "Metodo Indireto
+  // Moto Agricola" — 2 pendências `entidade_incorreta` e, pela 0201, o BP/DRE daquela empresa fora do
+  // Realizado. Não vai para a taxonomia: "metodo indireto" sozinho passaria a TIPAR arquivo, o que
+  // ninguém pediu. É remoção por FRASE (os dois métodos, só juntos): "Direto"/"Metodo" soltos continuam
+  // podendo ser parte de uma razão social.
+  for (const frase of ['metodo indireto', 'metodo direto']) s = s.split(` ${frase} `).join(' ');
+
   // PALAVRA QUE VIVE NO VOCABULÁRIO DE TIPO NÃO É NOME DE EMPRESA.
   //
   // A remoção acima é por FRASE INTEIRA, e o nome de arquivo raramente traz a
