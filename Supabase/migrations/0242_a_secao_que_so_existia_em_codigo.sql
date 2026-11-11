@@ -124,6 +124,17 @@ end $$;
 -- fn_conta_canonica_orfas` na primeira versão); e definer porque, como invoker, o usuário sem papel enxergaria a tabela vazia pela RLS e a sonda daria "sem órfão" sobre o nada. Só lê.
 revoke all on function fn_conta_canonica_orfas() from public, anon;
 grant execute on function fn_conta_canonica_orfas() to authenticated, service_role;
+-- E ao leitor só-leitura da API de gerenciamento, como a 0233 e a 0234 fazem. MEDIDO em produção em
+-- 11/11/2026, logo depois de aplicar a 0242 sem este bloco: `select ... from fn_instalacao_conferir()`
+-- pela API (`supabase_read_only_user`) passou a falhar inteira com "permission denied for function
+-- fn_conta_canonica_orfas" — a view da sonda chama a função com o privilégio de quem LÊ, e a sonda
+-- inteira (377 requisitos) ficou ilegível para quem lê produção sem escrever. O teste local não pega:
+-- o papel não existe quando as migrations rodam no `run.sh`.
+do $$ begin
+  if exists (select 1 from pg_roles where rolname = 'supabase_read_only_user') then
+    execute 'grant execute on function fn_conta_canonica_orfas() to supabase_read_only_user';
+  end if;
+end $$;
 revoke all on function fn_conta_canonica_alcanca_a_raiz() from public, anon, authenticated;
 
 drop trigger if exists trg_conta_canonica_alcanca_a_raiz on conta_canonica;
