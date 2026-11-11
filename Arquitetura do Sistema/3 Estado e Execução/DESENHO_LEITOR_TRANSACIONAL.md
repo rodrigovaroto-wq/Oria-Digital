@@ -1,6 +1,8 @@
 # Desenho — Leitor transacional por código
 
-**Data:** 11/11/2026 · **Conta:** Claude Oria 2 · **Status:** PROPOSTA, aguardando aprovação do dono.
+**Data:** 11/11/2026 · **Conta:** Claude Oria 2 · **Status:** GUARDADO — NÃO APROVADO, NÃO INICIADO. O dono pediu para documentar e não começar (11/11). Reabrir só por decisão dele.
+
+> **Para quem reabrir:** as decisões que faltam são (1) aprovar o desenho, (2) Supabase Pro (US$ 25/mês — o Free limita arquivo a 50 MB e pausa o projeto em 1 semana), (3) hospedagem do worker (Fly `gru` sob demanda ou Cloud Run Jobs), (4) os 6 originais de CP/CR da AMO, que NÃO estão no bucket (o lote 9653 foi recusado antes do upload). Enquanto isso, essas 6 planilhas ficam fora: o orçamento do n8n as recusa com motivo, sem gastar.
 
 ## REVISÃO APÓS A PESQUISA (11/11/2026) — vale por cima do resto deste arquivo
 
