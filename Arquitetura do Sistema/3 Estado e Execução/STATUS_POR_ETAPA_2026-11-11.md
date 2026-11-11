@@ -267,6 +267,100 @@ Status da fase: completo se todas as etapas estão completas; não iniciado se n
 | 19.3 | Registro de leitura na auditoria | F17 | Claude Oria 2 | Não iniciado | 0% | 16/12 |  |
 | 19.4 | Conversão cambial | F17 | Claude Oria 2 | Não iniciado | 0% | 17/12 |  |
 
+## Divisão das fases por conta
+
+Cada fase tem uma conta dona; as fases 5, 16, 17 e 18 são divididas porque as etapas têm dependências e riscos diferentes. A Claude Pessoal só recebe trabalho com dado sintético ou público: nenhum segredo e nenhum dado real de cliente.
+
+| Conta | Papel | Sessões | Período |
+|---|---|---|---|
+| Claude Oria | Caminho crítico do dado e do motor | 47 | 16/11 a 19/01 |
+| Claude Oria 2 | Extração, perímetro, portal e entrega | 45 | 16/11 a 19/01 |
+| Claude Pessoal | Fontes públicas e sintéticas, liquidez e diagnóstico | 39 | 16/11 a 07/01 |
+
+### Claude Oria (caminho crítico)
+
+| Fase | Nome | Etapas desta conta | Fim estimado |
+|---|---|---|---|
+| 3 | Conta canônica | 3.1, 3.2, 3.3, 3.4, 3.5, 3.6 | 03/12 |
+| 4 | Rastreabilidade | 4.1, 4.2, 4.3 | 24/11 |
+| 5 | Perímetro e grupo | 5.3, 5.4, 5.5 | 08/12 |
+| 6 | Motor de cálculo | 6.1, 6.2, 6.3, 6.4, 6.5 | 18/12 |
+| 8 | Estrutura de capital | 8.1, 8.2, 8.3 | 25/12 |
+| 11 | Valuation | 11.1, 11.2, 11.3 | 01/01 |
+| 12 | Recuperação de credores | 12.1, 12.2, 12.3 | 08/01 |
+| 13 | Reestruturação | 13.1, 13.2, 13.3, 13.4 | 13/01 |
+| 14 | Apresentação de crédito | 14.1, 14.2, 14.3, 14.4 | 19/01 |
+
+### Claude Oria 2 (extração, perímetro, portal e entrega)
+
+| Fase | Nome | Etapas desta conta | Fim estimado |
+|---|---|---|---|
+| 0 | Alicerce já construído antes deste plano | 0.2 | após o Portão da extração (24/11), a medir de novo |
+| 2 | Extração que não perde linha | 2.1, 2.2, 2.3, 2.4, 2.5, 2.6 | 24/11 |
+| 5 | Perímetro e grupo | 5.1, 5.2 | 30/11 |
+| 7 | Cenários e alavancas | 7.1, 7.2, 7.3, 7.4 | 28/12 |
+| 15 | Portal e área do cliente | 15.1, 15.2, 15.3, 15.4, 15.5, 15.6, 15.7, 15.8, 15.9 | 11/12 |
+| 16 | Fontes oficiais | 16.9 | 04/01 |
+| 17 | Fontes externas e pré-mandato | 17.3, 17.4, 17.5, 17.6, 17.7 | 14/01 |
+| 18 | Análise comparativa do setor | 18.4, 18.5, 18.7, 18.8 | 19/01 |
+| 19 | Segurança e operação contínua | 19.1, 19.2, 19.3, 19.4 | 17/12 |
+
+### Claude Pessoal (fontes públicas e sintéticas, liquidez e diagnóstico)
+
+| Fase | Nome | Etapas desta conta | Fim estimado |
+|---|---|---|---|
+| 9 | Liquidez de 13 semanas | 9.1, 9.2, 9.3 | 04/01 |
+| 10 | Diagnóstico analítico | 10.1, 10.2, 10.3 | 07/01 |
+| 16 | Fontes oficiais | 16.1, 16.2, 16.3, 16.4, 16.5, 16.6, 16.7, 16.8 | 28/12 |
+| 17 | Fontes externas e pré-mandato | 17.1, 17.2 | 18/11 |
+| 18 | Análise comparativa do setor | 18.1, 18.2, 18.3, 18.6 | 25/11 |
+
+As etapas do alicerce (Fase 0) e a Fase 1 já estão entregues; a Fase 1 foi feita na Claude Oria 2. As etapas 0.2 e 0.19 seguem abertas: 0.2 reabre depois do portão da extração, e 0.19 depende de você.
+
+## Dependências
+
+### Dentro de cada conta
+
+- **Claude Oria:** Fase 3 → Fase 4 → Etapas 3.5 e 3.6 → Etapas 5.3 a 5.5 → **Portão de dados** → Fase 6 → **Portão do modelo** → Fase 8 → Fase 11 → Fase 12 → **Portão do credor** → Fase 13 → Fase 14.
+- **Claude Oria 2:** Fase 1 → Fase 2 → **Portão da extração** → Etapas 5.1 e 5.2 → Fase 15 → Fase 19 → Etapa 18.4 → Fase 7 → **Portão de estratégia** → Etapa 16.9 → Etapas 18.5 e 18.7 → Etapas 17.3 a 17.7 → Etapa 18.8.
+- **Claude Pessoal:** Etapas 17.1 e 17.2 → Etapas 18.1 a 18.3 e 18.6 → Fase 16 (16.2, 16.1, 16.3 a 16.8) → Fase 9 → Fase 10.
+
+### Entre contas
+
+| # | Entrega | Quem entrega | Quem espera | Prazo |
+|---|---|---|---|---|
+| 1 | 2.2 Numerar as linhas (P11) | Claude Oria 2 | Claude Pessoal: 16.2 (onda 1) | 18/11 |
+| 2 | Portão da extração | Claude Oria 2 | Claude Oria: 3.5 e 3.6 | 24/11 |
+| 3 | 5.1 e 5.2 Perímetro e aceite | Claude Oria 2 | Claude Oria: 5.3 a 5.5 | 03/12 |
+| 4 | 17.1 consulta_externa | Claude Pessoal | Claude Oria 2: 17.3 em diante | 17/11 |
+| 5 | 3.1 a 3.4 Conta canônica | Claude Oria | Claude Oria 2: 18.4 | 19/11 |
+| 6 | 3.6 Nove reconciliações e Portão de dados | Claude Oria | Claude Pessoal: 16.5 e 16.6 | 03/12 e 08/12 |
+| 7 | 15.6 RLS por organização | Claude Oria 2 | Claude Oria: tabelas novas da Fase 6 em diante | 08/12 |
+| 8 | Portão do modelo | Claude Oria | Claude Oria 2: Fase 7. Claude Pessoal: Fase 9. | 18/12 |
+| 9 | 16.7 e 16.8 Ondas 4 e 5 | Claude Pessoal | Claude Oria 2: 18.5 | 28/12 |
+| 10 | 16.1 Jurídico assinado | Claude Pessoal | Claude Pessoal: 16.7. Claude Oria 2: 16.9. | até 18/12 |
+| 11 | Fase 7 Alavancas | Claude Oria 2 | Claude Oria: Fase 13. Claude Oria 2: 18.7. | 28/12 |
+| 12 | 14.1 Camada de apresentação | Claude Oria | Claude Oria 2: 18.8 | 18/01 |
+
+### Dependências que o roadmap já declara
+
+- A conta canônica (Fase 3, antiga F4) depende de F0, F1 e F2 do roadmap. A extração com número de linha (Fase 2, antiga F3b) só é exigida mais adiante, pela reconciliação (Fase 5, antiga F6). Por isso as Fases 2 e 3 podem andar em contas diferentes, com as guardas abaixo.
+- O **Portão de dados** (fim da Fase 5) exige as Fases 2, 3 e 4, a etapa 5.1 (perímetro) e o aceite financeiro 5.2. A Fase 6 (motor) só começa depois dele.
+- A Fase 7 (cenários e alavancas) não corre junto da Fase 6 (motor): cenário é parâmetro do motor, e em paralelo ele acabaria fixo dentro do motor.
+- A Fase 11 (valuation) depende do motor (Fase 6) e da estrutura de capital (Fase 8). A Fase 12 (recuperação) depende da 11 e da 8 e não corre junto da 11: a recuperação consome o valor que o valuation calcula.
+- A Fase 14 (apresentação) só roda depois do **Portão do credor**. A camada sem estado (14.1) nunca corre junto do gerador (14.3): o deck leria dado por conta própria e viraria segunda fonte.
+- Fase 18: a etapa 18.4 espera a conta canônica; a 18.5 espera o perímetro e as ondas 4 e 5; a 18.7 espera as alavancas (Fase 7); a 18.8 espera a camada de apresentação (14.1).
+- Fase 17: a etapa 17.3 em diante esperam `consulta_externa` (17.1) e a autorização do jurídico; a 17.6 espera o leitor de extrato (16.3).
+
+### Regras de integração
+
+- **Dono de diretório.** Claude Oria: extração de `N8N/lib`, conta canônica, reconciliações, motor, `export.ts` e `modelo-institucional.ts`. Claude Oria 2: `SYSTEM_PROMPT`, `build-workflow.mjs` (ingestão), `portal/src/**` e as republicações. Claude Pessoal: `N8N/lib/formato.mjs`, `Leitor/` e coletores novos (`build-workflow.<coletor>.mjs`).
+- **Fase 2 em paralelo com a Fase 3 (decisão pendente do dono).** A Fase 2 só adiciona a coluna `ln` em `campo_extraido`; a Fase 3 só lê. Guardas: coluna aditiva, corpus congelado como fixture na Fase 3, faixas de migration separadas e a Etapa 3.6 só depois do portão da extração.
+- **Migrations.** Faixas propostas: Claude Oria 0240–0269, Claude Oria 2 0270–0299, Claude Pessoal 0300–0329 (0235–0239 de reserva). A confirmar: nenhum portão exige numeração contígua.
+- **Produção.** Aplicar migration, republicar o n8n e rodar extração paga são feitos um de cada vez, com a sua autorização. Só a Claude Oria 2 republica a ingestão.
+- **Arquivos derivados** (`schema.sql`, `grafo.jsonl`, `workflow.*.json`) nunca se resolvem à mão: regere depois do rebase.
+- **Estado.** Só a Claude Oria edita `ESTADO.md` e o mapa; as outras duas relatam no corpo do PR.
+
 ## O que ainda depende de você
 
 - **Antes de 25/11:** D5 (autonomia); D2, D3, D4 (perímetro); substituto do COMBINADO do cliente no aceite 5.2; decidir se a etapa 5.5 (F2.3) entra.
