@@ -132,10 +132,11 @@ jobs:
         run: PYTHONPATH=. python3 gerar.py
 
       - name: Bases volumosas (MB0) — o conferidor não nasce vazio
-        # AR, AP e OFX sintéticos cujos totais são os do book-distress (aging = Clientes e
-        # Fornecedores do BP, extrato = caixa). Gera 3.000 linhas, confere relendo o ARQUIVO
-        # (41 conferências) e estraga o arquivo de 7 jeitos: cada estrago derruba a conferência
-        # dele (medido em 11/11/2026: 10, 6, 1, 2, 4, 4 e 1 conferências reprovam). ~1 s.
+        # AR (.csv e .xlsx), AP e OFX sintéticos cujos totais são os do book-distress (aging =
+        # Clientes e Fornecedores do BP, extrato = caixa). Gera 3.000 linhas, confere relendo o
+        # ARQUIVO (92 conferências) e estraga arquivo ou gabarito de 12 jeitos: cada estrago
+        # derruba a conferência dele (medido em 11/11/2026: 12, 8, 3, 3, 6, 3, 1, 7, 8, 2, 1 e 1
+        # reprovam), mais o determinismo ao byte. Só biblioteca padrão. ~5 s.
         working-directory: Dados de Teste/volume
         run: python3 test_volume.py -v
 

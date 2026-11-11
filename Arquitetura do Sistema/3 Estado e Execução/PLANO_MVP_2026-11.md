@@ -232,7 +232,7 @@ Pessoal, a Trilha B passa para a Claude Oria e o fim vai para meados de janeiro.
 | # | Decisão | Bloqueia | Recomendação |
 |---|---|---|---|
 | **DM0** ✅ 11/11 | **Aprovado.** Este recorte vale; a P26 (conta canônica) sai da frente | — | — |
-| **DM1** ✅ 11/11 | **Só o resumo no banco; o arquivo original guardado à parte.** Consequência medida na MB0: o original de 1M de linhas não cabe inteiro no Storage (teto de 50 MiB). O CSV cabe em gzip (21 MB); o .xlsx não cabe nem em gzip (54 MB) e vai em partes | — | — |
+| **DM1** ✅ 11/11 | **Só o resumo no banco; o arquivo original guardado à parte.** Consequência medida na MB0: o original de 1M de linhas não cabe cru no Storage (teto de 50 MiB). Em gzip, o CSV cabe com folga (21,9 MB) e o .xlsx por pouco (47,5 MB); guardar em partes tem de existir desde a MB7 | — | — |
 | **DM2** ✅ 11/11 | **O jurídico escreve** a base legal e o texto da autorização para sócios e familiares | MC1 em produção, MC4, MC6 | — |
 | **DM3** | Quem declara os familiares: o analista, o cliente no kickoff, ou os dois | MC1 | Os dois, sempre com a fonte gravada |
 | **DM4** | Provedor de processos (= D13.3 e D13.6): pedir acesso de teste a dois provedores para o piloto da MC3 | MC3, MC4 | **JUDIT e Escavador**; Jusbrasil de reserva. Os três vendem API com busca por CPF/CNPJ e monitoramento (13B §8). A Exato fica fora do piloto de processos: é relatório de triagem que tira processo do Jusbrasil, e a MC4 precisa de valor, polo e fase estruturados (Espec. 13 §2.2). Pedir com o RFP de `13_anexos/13B` (categoria B) |
@@ -290,12 +290,16 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
   (`plan: null`): o limite de tamanho do banco do plano gratuito fica [A CONFIRMAR] no painel.
 - **Gerador e conferidor** em `Dados de Teste/volume/`. AR, AP e OFX de 10 mil, 100 mil e 1M de
   linhas, cujos totais são os do book-distress (Σ AR = 24.917 mil = Clientes do BP; Σ AP = 14.900
-  mil = Fornecedores; OFX fecha mês a mês com o extrato e no caixa de 676 mil). 41 de 41
-  conferências nos três tamanhos.
-- **Tamanhos medidos de 1M de linhas:** AR .csv 133,2 MB (gzip 21,2); AP .csv 130,7 MB; AR .xlsx
-  61,9 MB (gzip 54,3); OFX 19,8 MB (142.851 transações). Tabela completa no `README.md` de lá.
+  mil = Fornecedores; OFX fecha mês a mês com o extrato e no caixa de 676 mil). 92 de 92
+  conferências nos três tamanhos; 14 testes no CI.
+- **Revisão independente** (`revisor-defeito-silencioso`): 2 achados altos e 6 médios, corrigidos
+  no segundo commit. O mais caro: o .xlsx da primeira versão não tinha `sharedStrings.xml` (o
+  openpyxl em write_only grava `inlineStr`), formato que nenhum arquivo real tem.
+- **Tamanhos medidos de 1M de linhas:** AR .csv 133,1 MB (gzip 21,9); AP .csv 133,1 MB; AR .xlsx
+  57,2 MB (gzip 47,5); OFX 20,3 MB (142.851 transações). Tabela completa no `README.md` de lá.
 - **O que isso muda na MB7:** o original vai ao Storage **comprimido no navegador** (o
   `CompressionStream` já existe no navegador) e, acima de 50 MiB comprimido, **em partes** com o
-  hash do arquivo inteiro. Um .xlsx de 1M sempre cai em partes.
+  hash do arquivo inteiro. O .xlsx sintético de 1M cabe comprimido por 5 MB; um real com mais
+  colunas não cabe.
 - **Não feito:** arquivo real de AR e AP (DM7, depende do dono).
 - **Próxima:** MB1, o leitor tabular em fluxo, medido sobre estes arquivos no Chromium.
