@@ -1,10 +1,36 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 escritas e revisadas; PR #287 em rascunho; falta merge, publicação e P10
+## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 NO AR (PR #287 mergeado, 0232–0234 aplicadas, n8n republicado, portal publicado); P10 bloqueada
 
-> **Migration mais nova: `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — ESCRITA, NÃO aplicada em produção. 0232, 0233 e 0234 estão TODAS fora de produção.**
+> **Migration mais nova: `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, junto com a 0232 e a 0233 (nessa ordem, pela API de gerenciamento, antes do merge).**
 > - Branch `claude/confident-bardeen-15mjip`. Nada mergeado no `main`, nada republicado no n8n, nada publicado no portal, P10 não rodou.
 > - Acesso a produção conferido nesta sessão: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_URL`, `N8N_BASE_URL`, `N8N_API_KEY`, `VERCEL_TOKEN` estão no ambiente (só os nomes foram lidos). Leitura de produção feita pela API de gerenciamento (`POST https://api.supabase.com/v1/projects/<ref>/database/query`, `read_only:true`; o ref sai de `SUPABASE_URL`). O MCP do Supabase (notebooks) recusa permissão.
+
+### Publicação (11/11, depois da retomada) — o estado vigente
+
+- **Migrations aplicadas em produção, na ordem 0232 → 0233 → 0234**, antes do merge (a fila tem de existir antes do portal):
+  - Sonda antes: 349 itens, 1 ausente. O ausente é o conhecido `envio_segredo_no_vault`: a API não lê o Vault, o segredo não está faltando. 80 mandatos.
+  - Depois: os 4 + 4 + 8 requisitos das três migrations presentes, 1 ausente (o mesmo), 80 mandatos.
+- **0234 em produção (45 s):**
+  - Backfill `sistema:0234` resolveu **38** pendências (esperado 38).
+  - `periodo_incorreto` abertas: **57 → 19**.
+  - "sem período par" abertas: **8 → 3**. Ficam as 2 do Canastra sintético, de outra causa, e a do S105.
+  - Nenhuma pendência nova aberta.
+  - Fw Valtra: `ativo_passivo_pl` anual 2023, 2024 e 2025 passaram de "sem período par" para **ok**. O balanço fecha, medido.
+- **PR #287 mergeado** (`42e03c6`), CI todo verde no head (`89e20b9`), Sonar verde. Desassinado.
+- **Ingestão republicada** do `main` com `N8N/republicar.sh`: ensaio e depois publicação; 63 de 63 nós batem; ativo; sem estágio de reserva. FINGERPRINT inalterado (`70de46f4c67573af`), então nada já lido re-extrai por causa disto.
+- **Portal publicado** (Vercel produção READY no `42e03c6`). A rota nova responde 401 sem sessão.
+- NÃO conferido no navegador: o bloco "Fila de reprocesso" e o botão com sessão de usuário, porque não há login de teste nesta sessão.
+
+### P10 — BLOQUEADA nesta sessão (decisão do dono: só os sintéticos por enquanto)
+- O que faltou: reenviar os originais dos 3 mandatos "P4 linha de base" (Canastra `db1dbc3b-…`, 38 docs; Distress `7f71bb97-…`, 14; Vertentes `b5ef0b8a-…`, 14 — todos com o original no bucket) ao Form do n8n.
+- Bloqueio: para isso a sessão precisa da chave de serviço (baixar do bucket) e do segredo do envio (`n8n_intake_segredo`, para assinar o token). A leitura dos dois foi BLOQUEADA pelo controle de segurança da sessão ("Credential Materialization"), e a sessão não contornou.
+- Três caminhos, a decidir pelo dono:
+  1. Liberar essa leitura (regra de permissão).
+  2. Entrar no portal como Sócio e reenviar os PDFs dos books pela aba Adicionar de cada mandato `P4 linha de base`. Os PDFs saem de `Dados de Teste/book-*/` com `gerar.py`.
+  3. Senha do Sócio de teste para a sessão usar o portal.
+- Custo estimado: ~0,4 MB no total; o orçamento do n8n cobra ~US$ 1,48/MB, cerca de US$ 0,6, bem abaixo do teto D6.
+- A foto "antes" está na seção abaixo. Medir "depois" com o MESMO `Supabase/test/linha-de-base-extracao.sql` (padrão `P4 %`) e a tabela de quantas execuções tiveram `documentos_com_falha_transitoria_esgotada` em `lote_execucao.resumo`.
 
 ### Atualização de 11/11 (retomada) — vale por cima do que está abaixo
 
