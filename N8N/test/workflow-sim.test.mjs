@@ -4663,15 +4663,94 @@ test('P11 Fatiar: documento pequeno recebe o texto numerado inteiro, e documento
   assert.equal(sem.json.ln_total, null);
 });
 
-test('P11 Fatiar: conteúdo que já vem numerado (xlsx/csv/xml/PDF-texto) NÃO recebe o texto de novo', async () => {
-  const jaNumerado = itemNumerado({ ln_no_conteudo: true });
+/** O corpo como o `Montar Req Extracao` o monta na rota de texto: o conteúdo (já numerado) é uma parte de texto. */
+function corpoComConteudoNumerado(linhas) {
+  const corpo = corpoFalso({ sistema: 'PROMPT DE SISTEMA', texto: 'Nome do arquivo: planilha.xlsx.' });
+  const parte = GEMINI ? { text: linhas } : { type: 'text', text: linhas };
+  if (GEMINI) corpo.contents[0].parts.splice(1, 1, parte); else corpo.messages[1].content.splice(1, 1, parte);
+  return corpo;
+}
+const textosDoUser = (body) => partesDaReq(body).map((p) => p.text ?? '').join('\n');
+
+test('P11 Fatiar: conteúdo que já vem numerado (xlsx/csv/xml/PDF-texto) NÃO recebe o texto de novo, e o sinal é o que o corpo carrega', async () => {
+  const numerado = Array.from({ length: 462 }, (_, i) => `L${String(i + 1).padStart(3, '0')}: linha ${i}`).join('\n');
+  const jaNumerado = itemNumerado({ ln_no_conteudo: true, ia_body: corpoComConteudoNumerado(numerado) });
   const out = await run('Fatiar Extracao', { items: [jaNumerado] });
   for (const i of out) {
-    assert.ok(!/^L\d+: /m.test(textoDaReq(i.json.ia_body)),
-      'o texto numerado já está no conteúdo; mandá-lo outra vez dobraria os tokens de entrada');
-    assert.equal(i.json.texto_numerado, true, 'a coordenada foi enviada, por dentro do conteúdo');
+    const enviado = textosDoUser(i.json.ia_body);
+    assert.equal(ocorrencias(enviado, 'L001: '), 1, 'o texto numerado está no corpo UMA vez — mandá-lo outra vez dobraria a entrada');
+    assert.ok(enviado.includes('L462: '), 'e o corpo enviado ao modelo contém as linhas L… do documento');
+    assert.equal(i.json.texto_numerado, true);
     assert.equal(i.json.ln_total, 462);
+    assert.equal(i.json.texto_numerado_motivo, null);
   }
+});
+
+test('P11 Fatiar: o sinal NÃO sai true quando o corpo não carrega as linhas L… (declarava o que pretendia enviar, não o que enviou)', async () => {
+  // ln_no_conteudo diz que o conteúdo já vem numerado, mas o corpo montado não tem linha numerada nenhuma.
+  const out = await run('Fatiar Extracao', { items: [itemNumerado({ ln_no_conteudo: true })] });
+  for (const i of out) {
+    assert.ok(!/^L\d+: /m.test(textosDoUser(i.json.ia_body)));
+    assert.equal(i.json.texto_numerado, false);
+    assert.equal(i.json.ln_total, null, 'sem coordenada enviada, o parse não aceita ln nenhum');
+    assert.equal(i.json.texto_numerado_motivo, 'texto-numerado-nao-chegou-ao-corpo');
+  }
+});
+
+const KRAUS_COLADO = readFileSync(new URL('./texto-krauspenhar-colado.txt', import.meta.url), 'utf8');
+
+test('P11 A1: camada de texto REPROVADA pela P6b (Krauspenhar) não é numerada — o texto colado não volta à frente do modelo', async () => {
+  const ctx = { json: { ...ctxPdfBase } };
+  const recomposto = await run('Recompor Conteudo Extraido', { items: [{ json: { text: KRAUS_COLADO, numpages: 1 } }],
+    refs: { 'Preparar Conteudo': [ctx] } });
+  assert.equal(recomposto[0].json.leitura_pdf, 'ocr', 'pré-condição: é o caso que a P6b manda para a imagem');
+  const medido = await run('Medir Documento', { item: recomposto[0], refs: { 'Preparar Conteudo': ctx } });
+  assert.ok(medido.json.contas_no_documento > 0, 'a régua de cobertura segue medindo');
+  assert.equal(medido.json.linhas_numeradas, null);
+  assert.ok(ehParteDeArquivo(medido.json.content_part), 'o PDF segue indo como arquivo');
+  const fatiado = await run('Fatiar Extracao', { items: [{ json: { ...medido.json,
+    ia_body: corpoFalso({ sistema: 'PROMPT DE SISTEMA', texto: 'Nome do arquivo: balancete.pdf.' }) } }] });
+  for (const i of fatiado) {
+    const enviado = textosDoUser(i.json.ia_body);
+    assert.ok(!/^L\d+: /m.test(enviado), 'nenhuma linha numerada chega ao modelo');
+    const amostra = KRAUS_COLADO.split('\n').map((l) => l.trim()).find((l) => l.length > 10 && !l.startsWith('#') && /\d/.test(l));
+    assert.ok(amostra && !enviado.includes(amostra), 'e o texto colado não está no corpo: ' + JSON.stringify(enviado.slice(0, 120)));
+    assert.equal(i.json.texto_numerado, false);
+    assert.equal(i.json.ln_total, null);
+    assert.equal(i.json.texto_numerado_motivo, 'camada-reprovada:numeros-colados');
+  }
+  // E o ln que o modelo citar mesmo assim vira null (sem texto numerado não há coordenada).
+  const p = await run('Parse Extracao', { item: respostaComLn([3, 9]), refs: { 'Fatiar Extracao': { json: { ...fatiado[0].json, contas_do_bloco: null } } } });
+  assert.deepEqual(p.json.campos.map((c) => c.ln), [null, null]);
+});
+
+test('P11 M2: o motivo distingue escaneado (sem-camada-de-texto) de txt/xml lido no preparo (formato-sem-regua)', async () => {
+  const motivoPara = async (formato) => {
+    const ctx = { json: { ...ctxPdfBase, formato_detectado: formato } };
+    const m = await run('Medir Documento', { item: { json: { error: 'sem texto' } }, refs: { 'Preparar Conteudo': ctx } });
+    return m.json.texto_numerado_motivo;
+  };
+  assert.equal(await motivoPara('pdf'), 'sem-camada-de-texto');
+  assert.equal(await motivoPara('imagem'), 'sem-camada-de-texto');
+  assert.equal(await motivoPara('texto'), 'formato-sem-regua');
+  assert.equal(await motivoPara('xml'), 'formato-sem-regua');
+});
+
+test('P11 M2: o motivo chega à medição do documento quando não houve texto numerado', async () => {
+  const campo = (i) => ({ ordem: i, linha_origem: i, chave: `c${i}`, valor_num: i, valor_texto: String(i), entidade_coluna: null, periodo_coluna: null, ln: null });
+  const m = await medicaoGravada([{ documento_versao_id: 'v-m', bloco: 1, blocos: 1, contas_no_documento: 2, diagnostico: {}, falha_motivo: null,
+    custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 }, texto_numerado: false, texto_numerado_motivo: 'formato-sem-regua', campos: [campo(0), campo(1)] }]);
+  assert.equal(m.texto_numerado, false);
+  assert.equal(m.texto_numerado_motivo, 'formato-sem-regua');
+});
+
+test('P11 M1: na rota de arquivo o ln só vale dentro da FAIXA que o bloco recebeu; na rota de texto, o teto global', async () => {
+  const arquivo = { json: { documento_versao_id: 'v', tipo: 'BALANCO', ia_body: {}, ln_total: 462, ln_no_conteudo: false, ln_faixa_de: 240, ln_faixa_ate: 462 } };
+  const a = await run('Parse Extracao', { item: respostaComLn([12, 239, 240, 300, 462, 463]), refs: { 'Fatiar Extracao': arquivo } });
+  assert.deepEqual(a.json.campos.map((c) => c.ln), [null, null, 240, 300, 462, null], 'o bloco que só viu L240–L462 não cita L12');
+  const texto = { json: { ...arquivo.json, ln_no_conteudo: true } };
+  const t = await run('Parse Extracao', { item: respostaComLn([12, 239, 240, 300, 462, 463]), refs: { 'Fatiar Extracao': texto } });
+  assert.deepEqual(t.json.campos.map((c) => c.ln), [12, 239, 240, 300, 462, null], 'na rota de texto o modelo vê o documento inteiro');
 });
 
 const respostaComLn = (lns) => ({ json: respostaIA(JSON.stringify({

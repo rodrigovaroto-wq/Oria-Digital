@@ -1334,3 +1334,8 @@ test('P11: sem texto numerado (lnMax ausente) todo ln vira null, mesmo que o mod
   assert.deepEqual(parseExtracao(apiComLn([3, 5])).campos.map((c) => c.ln), [null, null]);
   assert.deepEqual(parseExtracao(apiComLn([3, 5]), { lnMax: 0 }).campos.map((c) => c.ln), [null, null]);
 });
+
+test('P11: com faixa (lnMin..lnMax) o ln fora dela vira null — o bloco só cita o que recebeu', () => {
+  const r = parseExtracao(apiComLn([12, 239, 240, 462, 463]), { lnMin: 240, lnMax: 462 });
+  assert.deepEqual(r.campos.map((c) => c.ln), [null, null, 240, 462, null]);
+});

@@ -95,6 +95,8 @@ const TOKENS_POR_LINHA_PLANO = 64;
 //     agrupado). ESTIMADO, não medido em fatura — a primeira rodada real diz o número; até lá ele erra
 //     para CIMA, porque conta toda linha com número como linha devolvida.
 const TOKENS_SAIDA_LN_POR_LINHA = 5;
+// `ln` é `required` no schema strict: sem coordenada o modelo ainda escreve `,"ln":null` (~3 tokens por linha).
+const TOKENS_SAIDA_LN_NULO_POR_LINHA = 3;
 
 // A entrada da coordenada, com as MESMAS funções que rodam em produção. Dois caminhos, o mesmo que
 // o `Medir Documento` decide: PDF lido como TEXTO (rota da P6) troca o conteúdo pelo mesmo texto com o
@@ -107,7 +109,9 @@ function coordenadaDoDocumento(linhasDoTexto, paginas) {
   const inteiro = textoNumeradoDaFaixa(numeradas, lnPorLinha, 0, lnPorLinha.length - 1);
   const usarTexto = camadaDeTextoDoPdf(texto, { paginas }).usarTexto === true;
   if (usarTexto) return { rota: 'texto', caracteres: inteiro.texto.length - numeradas.reduce((a, l) => a + l.length, 0) - (numeradas.length - 1) };
-  return { rota: 'arquivo', caracteres: inteiro.texto.length };
+  // Camada reprovada pela P6/P6b (`leitura_pdf: 'ocr'`): o PDF vai como arquivo e o texto NÃO é numerado —
+  // levá-lo de volta à frente do modelo desfaria a P6b. Sem entrada nova; `ln` sai null (revisão da P11, A1).
+  return { rota: 'camada_reprovada', caracteres: 0 };
 }
 
 // AS CÉLULAS, AS COLUNAS E OS BLOCOS — MEDIDOS NO TEXTO, com as MESMAS funções
@@ -183,7 +187,7 @@ function medirDocumento(m, linhasDoTexto) {
 
   const coord = coordenadaDoDocumento(linhasDoTexto, m.paginas);
   const tokensLnEntrada = Math.ceil(coord.caracteres / CARACTERES_POR_TOKEN);
-  const tokensLnSaida = coord.rota === 'sem_texto' ? 0 : TOKENS_SAIDA_LN_POR_LINHA * m.linhas_com_numero;
+  const tokensLnSaida = (coord.rota === 'texto' ? TOKENS_SAIDA_LN_POR_LINHA : TOKENS_SAIDA_LN_NULO_POR_LINHA) * m.linhas_com_numero;
   const extracao = custoDaChamada({
     prompt_tokens: TOKENS_PROMPT_SISTEMA + entradaPdf + tokensLnEntrada,
     completion_tokens: saida + tokensLnSaida,
@@ -200,9 +204,15 @@ function medirDocumento(m, linhasDoTexto) {
     prompt_tokens_details: { cached_tokens: TOKENS_PROMPT_SISTEMA },
   }, MODELO_EXTRACAO);
 
+  // O FALLBACK DE CLASSIFICAÇÃO recebe o `content_part` DEPOIS do `Medir Documento`: na rota de texto ele
+  // já vem numerado ("L001: "), então o prefixo é pago aqui também (revisão da P11, B2). Na rota de
+  // arquivo o fallback recebe o PDF, sem o texto numerado (que só entra no `Fatiar Extracao`).
+  // Opção escolhida: DECLARAR e COBRAR, em vez de guardar o texto cru em outro campo do item — o cru
+  // dobraria o texto do documento na memória de todo o lote para economizar o prefixo, medido abaixo.
+  const tokensLnClassif = coord.rota === 'texto' ? tokensLnEntrada : 0;
   const classificacao = c.precisa_fallback_ia
     ? custoDaChamada({
-      prompt_tokens: entradaPdf + 400,
+      prompt_tokens: entradaPdf + 400 + tokensLnClassif,
       completion_tokens: TOKENS_SAIDA_CLASSIFICACAO,
     }, MODELO_CLASSIFICACAO)
     : 0;
@@ -230,7 +240,7 @@ function medirDocumento(m, linhasDoTexto) {
     blocos,
     tokens_saida_pior_bloco: saidaPiorBloco,
     bloco_acima_do_teto: med ? med.algumBlocoAcimaDoTeto : false,
-    coordenada: { rota: coord.rota, tokens_entrada: tokensLnEntrada, tokens_saida: tokensLnSaida },
+    coordenada: { rota: coord.rota, tokens_entrada: tokensLnEntrada, tokens_saida: tokensLnSaida, tokens_classificacao: c.precisa_fallback_ia ? tokensLnClassif : 0 },
     tokens_entrada: TOKENS_PROMPT_SISTEMA + entradaPdf + tokensLnEntrada,
     tokens_saida: saida + tokensLnSaida,
     tokens_saida_plano: saidaPlana,
@@ -352,7 +362,8 @@ if (comoJson) {
   {
     const porRota = (r) => medidos.filter((d) => d.coordenada.rota === r).length;
     console.log(`  • a coordenada (P11): ${porRota('texto')} documento(s) lidos como texto (só o prefixo "L001: " é token novo), ` +
-      `${porRota('arquivo')} como arquivo (texto numerado à parte), ${porRota('sem_texto')} sem texto (ln null) — ` +
+      `${porRota('camada_reprovada')} com camada reprovada (PDF como arquivo, sem numeração, ln null), ${porRota('sem_texto')} sem texto (ln null) — ` +
+      `+${medidos.reduce((x, d) => x + d.coordenada.tokens_classificacao, 0)} tokens de entrada na classificação por IA (${medidos.filter((d) => d.coordenada.tokens_classificacao > 0).length} documento(s)), ` +
       `+${medidos.reduce((x, d) => x + d.coordenada.tokens_entrada, 0)} tokens de entrada e ` +
       `+${medidos.reduce((x, d) => x + d.coordenada.tokens_saida, 0)} de saída (estimada) no lote.`);
   }

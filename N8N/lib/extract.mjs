@@ -475,13 +475,13 @@ export function limparRotuloColado(chaveCrua, vn, vt, secao) {
  * silêncio — o pior erro possível aqui. Então a conta é DESCARTADA e o motivo
  * volta nomeado, com rótulo e contagens, para virar pendência.
  */
-export function achatarGrupos(grupos, { lnMax = null } = {}) {
+export function achatarGrupos(grupos, { lnMax = null, lnMin = 1 } = {}) {
   // `ln` (P11, a coordenada): a linha do TEXTO NUMERADO de onde o modelo diz que a conta veio.
   // Só vale inteiro de 1 a `lnMax` (quantas linhas numeradas o documento tem). `lnMax` nulo = o
   // modelo NÃO recebeu texto numerado (PDF escaneado), e qualquer `ln` que ele devolva seria
   // invenção: vira null, que é "não medível" e nunca zero. Valor fora da faixa também vira null —
   // a linha 400 de um documento de 120 não é uma coordenada, é um palpite com cara de dado (regra 1).
-  const lnValido = (v) => (Number.isInteger(lnMax) && Number.isInteger(v) && v >= 1 && v <= lnMax ? v : null);
+  const lnValido = (v) => (Number.isInteger(lnMax) && Number.isInteger(v) && v >= Math.max(1, lnMin) && v <= lnMax ? v : null);
   const linhas = [];
   const problemas = [];
   // Rótulos com número monetário COLADO que não deu para provar ser o valor da
@@ -1338,7 +1338,7 @@ export function decidirRepeticao({ transitoria = false, tentativa = 1, esperaSug
 // da própria chamada em vez de competir com ele: os dois cabem no mesmo
 // documento (planilha cortada E resposta truncada), e esconder um dos dois já é
 // a falha que estamos fechando.
-export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = provedor(), lnMax = null } = {}) {
+export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = provedor(), lnMax = null, lnMin = 1 } = {}) {
   const cortado = cortadoPorLimite(prov, apiJson);
   const comAviso = (motivo) => [avisoConteudo, motivo].filter(Boolean).join(' | ') || null;
   const vazio = (falhaMotivo) => ({
@@ -1397,7 +1397,7 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
   // meses antes. Enquanto existir um JSON velho em alguma instância, ele vai
   // responder no formato plano — e responder em formato plano tem de continuar
   // funcionando, em vez de virar "zero linhas extraídas" sem explicação.
-  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos, chavesTextosPerdidos } = achatarGrupos(p.grupos, { lnMax });
+  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos, chavesTextosPerdidos } = achatarGrupos(p.grupos, { lnMax, lnMin });
   const camposAgrupados = linhasAgrupadas.map((l, i) => ({
     ordem: i,
     ...l,
