@@ -18,6 +18,8 @@ cd "Dados de Teste"/book-vertentes && python3 -m pip install --quiet 'reportlab=
 cd "Dados de Teste"/book-canastra && PYTHONPATH=. python3 gerar.py && cd ../..
 # O terceiro book (F2.4, distress): o gerador É o teste — 16 identidades por `assert`.
 cd "Dados de Teste"/book-distress && PYTHONPATH=. python3 gerar.py && cd ../..
+# Bases volumosas (MB0 do PLANO_MVP): o conferidor de AR, AP e OFX reprova quando o arquivo mente.
+cd "Dados de Teste"/volume && python3 test_volume.py -v && cd ../..
 # `N8N/test/cobertura.test.mjs` usa `pdftotext -raw` (poppler-utils): sem ele, reprova.
 command -v pdftotext || sudo apt-get install -y poppler-utils
 # O QUARTO (P4, a forma dos documentos reais que falharam): as 4 planilhas de 2 abas são o insumo de

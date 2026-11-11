@@ -131,6 +131,14 @@ jobs:
         working-directory: Dados de Teste/book-distress
         run: PYTHONPATH=. python3 gerar.py
 
+      - name: Bases volumosas (MB0) — o conferidor não nasce vazio
+        # AR, AP e OFX sintéticos cujos totais são os do book-distress (aging = Clientes e
+        # Fornecedores do BP, extrato = caixa). Gera 3.000 linhas, confere relendo o ARQUIVO
+        # (41 conferências) e estraga o arquivo de 7 jeitos: cada estrago derruba a conferência
+        # dele (medido em 11/11/2026: 10, 6, 1, 2, 4, 4 e 1 conferências reprovam). ~1 s.
+        working-directory: Dados de Teste/volume
+        run: python3 test_volume.py -v
+
       # ---- o book-espelho e o portal ANTES da suíte do n8n (09/11/2026) ----
       # `N8N/test/abas-do-xlsx.test.mjs` lê as 4 planilhas REAIS do book-espelho (todas de 2 abas)
       # e emula os nós nativos com o exceljs e o jszip do lock do portal. Sem o book, os testes com

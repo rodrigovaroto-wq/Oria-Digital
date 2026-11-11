@@ -5,8 +5,8 @@ repositório:** `0271` (escrita, não aplicada) · **Em produção:** até a `02
 
 **Este plano NÃO substitui o `PLANO_DE_EXECUCAO_2026-11.md`.** O anterior fica como está e continua
 sendo o mapa da aplicação completa (111 etapas, fim em 19/01/2027). Este é um recorte: o mínimo
-para um analista da Oria rodar um mandato real com confiança. O recorte vale quando o dono aprovar.
-Até lá, a ordem do plano anterior continua valendo.
+para um analista da Oria rodar um mandato real com confiança. **Aprovado pelo dono em 11/11/2026 (DM0).**
+A ordem deste plano passa a valer para o caminho até o MVP.
 
 **O que entra a mais do que o plano anterior previa para esta fase:**
 1. Arquivos volumosos: contas a receber, contas a pagar, OFX, CNAB e razão, com centenas de
@@ -68,7 +68,8 @@ Canastra, já explicadas pelo PR #288. P11 (texto numerado) está em curso na Cl
   `0187`: nenhuma função SQL os lê. Aging que não fecha com o BP passa sem aviso.
 - O Supabase de produção está no **plano gratuito** (`PLANO_DE_EXECUCAO_2026-11.md` §1). O
   limite de tamanho do banco desse plano decide o que pode ser gravado linha a linha
-  (ver DM1). **Não medido nesta rodada:** o tamanho atual do banco.
+  (ver DM1). **Medido em 11/11/2026 (MB0):** o banco tem 111 MB (`campo_extraido` é 54 MB) e o
+  Storage tem 75 MB em 186 arquivos. O teto do Storage é **50 MiB por arquivo**.
 
 **Processos e notícias.** Nada implementado:
 - A Espec. 13 (`13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md`) já desenhou `consulta_externa`,
@@ -230,11 +231,11 @@ Pessoal, a Trilha B passa para a Claude Oria e o fim vai para meados de janeiro.
 
 | # | Decisão | Bloqueia | Recomendação |
 |---|---|---|---|
-| **DM0** | Aprovar este recorte. Enquanto não aprovar, vale a ordem do plano anterior (a próxima fatia da Claude Oria seria a P26, conta canônica) | tudo | Aprovar |
-| **DM1** | O banco guarda o agregado das bases volumosas (proposta) ou cada linha? Cada linha pode exigir sair do plano gratuito do Supabase. A MB0 traz o tamanho medido | MB7 | Agregado + arquivo bruto no Storage; rever com o número da MB0 |
-| **DM2** | Base legal e texto da autorização para consultar sócios e familiares (pessoa física): o jurídico escreve | MC1 em produção, MC4, MC6 | — (jurídico) |
+| **DM0** ✅ 11/11 | **Aprovado.** Este recorte vale; a P26 (conta canônica) sai da frente | — | — |
+| **DM1** ✅ 11/11 | **Só o resumo no banco; o arquivo original guardado à parte.** Consequência medida na MB0: o original de 1M de linhas não cabe inteiro no Storage (teto de 50 MiB). O CSV cabe em gzip (21 MB); o .xlsx não cabe nem em gzip (54 MB) e vai em partes | — | — |
+| **DM2** ✅ 11/11 | **O jurídico escreve** a base legal e o texto da autorização para sócios e familiares | MC1 em produção, MC4, MC6 | — |
 | **DM3** | Quem declara os familiares: o analista, o cliente no kickoff, ou os dois | MC1 | Os dois, sempre com a fonte gravada |
-| **DM4** | Provedor de processos (= D13.3 e D13.6): pedir acesso de teste a dois provedores para o piloto da MC3 | MC3, MC4 | Pedir já; o RFP está em `13_anexos/13B` |
+| **DM4** | Provedor de processos (= D13.3 e D13.6): pedir acesso de teste a dois provedores para o piloto da MC3 | MC3, MC4 | **JUDIT e Escavador**; Jusbrasil de reserva. Os três vendem API com busca por CPF/CNPJ e monitoramento (13B §8). A Exato fica fora do piloto de processos: é relatório de triagem que tira processo do Jusbrasil, e a MC4 precisa de valor, polo e fase estruturados (Espec. 13 §2.2). Pedir com o RFP de `13_anexos/13B` (categoria B) |
 | **DM5** | Fonte de notícias: grátis (RSS de busca, GDELT) ou clipping pago | MC6 | Começar pela grátis no piloto; contratar só se a cobertura medida não bastar |
 | **DM6** | Teto de custo das consultas externas por mandato (o US$ 5 por book cobre só a extração) | MC4, MC6 | Definir depois do piloto, com o preço medido |
 | **DM7** | Arquivos reais de AR, AP e OFX de um mandato, para a MB0 e o aceite | MB0 (parte real), MD2 | Mandar os de um mandato já em curso |
@@ -276,3 +277,25 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
 - Os termos de uso das fontes de notícias grátis e da API do DataJud (marcados [A CONFIRMAR]).
 - As datas: são estimativa com 5 sessões por semana por conta, sem atrito de integração. Com o
   atrito de ~15% do `STATUS_POR_ETAPA`, some cerca de uma semana.
+
+---
+
+## 7. Andamento
+
+### MB0 — feita em 11/11/2026 (sessão 127)
+
+- **Banco de produção** (leitura pela API de gerenciamento): 111 MB; `campo_extraido` 54 MB com
+  133 mil linhas; Storage 75 MB em 186 arquivos; Postgres 17.6. **Teto do Storage: 50 MiB por
+  arquivo** (`fileSizeLimit` = 52.428.800). O plano da organização não veio na resposta da API
+  (`plan: null`): o limite de tamanho do banco do plano gratuito fica [A CONFIRMAR] no painel.
+- **Gerador e conferidor** em `Dados de Teste/volume/`. AR, AP e OFX de 10 mil, 100 mil e 1M de
+  linhas, cujos totais são os do book-distress (Σ AR = 24.917 mil = Clientes do BP; Σ AP = 14.900
+  mil = Fornecedores; OFX fecha mês a mês com o extrato e no caixa de 676 mil). 41 de 41
+  conferências nos três tamanhos.
+- **Tamanhos medidos de 1M de linhas:** AR .csv 133,2 MB (gzip 21,2); AP .csv 130,7 MB; AR .xlsx
+  61,9 MB (gzip 54,3); OFX 19,8 MB (142.851 transações). Tabela completa no `README.md` de lá.
+- **O que isso muda na MB7:** o original vai ao Storage **comprimido no navegador** (o
+  `CompressionStream` já existe no navegador) e, acima de 50 MiB comprimido, **em partes** com o
+  hash do arquivo inteiro. Um .xlsx de 1M sempre cai em partes.
+- **Não feito:** arquivo real de AR e AP (DM7, depende do dono).
+- **Próxima:** MB1, o leitor tabular em fluxo, medido sobre estes arquivos no Chromium.
