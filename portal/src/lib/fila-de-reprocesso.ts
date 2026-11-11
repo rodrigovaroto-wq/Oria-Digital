@@ -1,5 +1,5 @@
-import { ehUuid } from "@/lib/equipe";
-import { janelaPara } from "@/lib/espera-do-lote";
+import { ehUuid } from "./equipe";
+import { janelaPara } from "./espera-do-lote";
 import { TETO_EXECUCAO_USD, orcamentoDoLote } from "../../../N8N/lib/custo.mjs";
 
 // A FILA DE REPROCESSO: as regras puras (validar o pedido, decidir por documento se segue ou o
