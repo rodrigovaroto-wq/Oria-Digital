@@ -1,5 +1,50 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 127 (11/11/2026, conta Claude Oria) — CI sem apt, 0240 e 0241 escritas (NÃO aplicadas)
+
+> **Migration mais nova: `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql` — escrita e testada no banco local, NÃO aplicada em produção.** A `0240` também está escrita e testada, não aplicada. A última aplicada continua a `0234`. Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
+> - Acesso a produção: NÃO usado nesta rodada (regra do dono). Ver "NÃO medido" abaixo.
+
+### O que a rodada fez
+1. **CI sem apt (`f93d254`).** O DNS do runner não resolvia `*.ubuntu.com` e travava todo PR (#289 e #290 vermelhos antes de qualquer teste). O psql vem da imagem (PostgreSQL 18.6). O pdftotext usa apt com prazo de 120 s e, se falhar, reserva `debian:trixie-slim` via Docker. Provado no CI do próprio PR: o passo levou 2 min 20 s (o apt esgotou e a reserva funcionou) e a suíte n8n deu 786/786.
+2. **0240 (pendência 10 da S126).** `fn_versao_atual` segue a versão vigente da 0233; `fn_versao_mais_nova` guarda o corpo antigo. `fn_reconferir_caso` avalia as guardas na versão mais nova: com a vigente, a falha do reenvio sumiria da fila (achado do especialista). `fn_pares_duplicados_do_caso` também passou à vigente (8 de 8 reconciliações).
+   - FORA desta fatia: `versoesVigentes` em `portal/src/lib/export.ts`. Pertence à Claude Oria pela divisão do #290 e não foi feito.
+3. **0241 (pendência 8 da S126).** A descrição de uma pendência de reconciliação só é reescrita pela rodada do próprio período, da própria chave (regra 3), ou por documento (`secao_fecha`). Backfill `fn_corrigir_descricao_contaminada`, que grava o resumo `sistema:0241` sempre, mesmo com tudo zero.
+   - Número de produção: pelo critério antigo (só `periodo_id`) eram 7; pelo critério corrigido são **0**. As 7 mostravam texto legítimo da própria chave (0192/4). O backfill não muda nada em produção hoje.
+4. **Pendência 9 da S126 (2 "sem período par" do Canastra).** Não era período: o `27_Composicao_do_Imobilizado_Canastra_Industria_2025.pdf` foi classificado como BALANCO, e a própria justificativa da IA diz "não é um balanço completo". A taxonomia não tem tipo para quadro de imobilizado. Diagnóstico sem código; ficha `.claude/conhecimento/fichas/quadro-de-imobilizado-classificado-como-balanco.md`. Criar o tipo muda o `FINGERPRINT_EXTRACAO` e re-extrai todos os documentos: decisão do dono.
+5. **Fase 0, sem código ao alcance.** 0.19 espera a D12.3 (cotação do Integra, dono). 0.2 espera o portão da extração (24/11, Claude Oria 2).
+
+### Decisões do dono registradas nesta sessão
+- A Claude Oria usa a faixa de migrations **0240 a 0269**. A próxima livre é a **0242**.
+- A Fase 3 (conta canônica) pode correr em paralelo à Fase 2 da Claude Oria 2.
+
+### Medido nesta rodada (11/11, banco local `tdf_test`, Postgres 16.15; NÃO é produção)
+- `Supabase/test/run.sh`: TODOS OS TESTES PASSARAM. **0240: 16 asserts ok. 0241: 29 asserts ok.**
+- `N8N/test/*.test.mjs`: **786 de 786.** Para rodar local foi preciso gerar os 4 books (`Dados de Teste/book-*`) e `npm ci --ignore-scripts` no portal; é o mesmo preparo do CI. Sem ele, 5 testes reprovam por falta de arquivo (medido antes do preparo).
+- Portal: os 13 verificadores `tsx` do espelho saem com 0. O portal não foi tocado nesta rodada.
+- `Leitor/test`: 65 de 65. `.claude/conhecimento/test` e `.claude/hooks/test`: 14 de 14. `Supabase/test/*.test.mjs`: 40 passam, 0 falham, 4 saltam.
+- `conferir-chamadas.mjs`: CHAMADAS OK. `sonda-producao.mjs --so-buraco` no banco local: sem buraco (85 migrations).
+- Geradores do n8n regerados: sem diferença em relação ao commitado.
+- Taxonomia: 36 tipos e nenhum "composição do imobilizado", conferido no banco local (montado pelas migrations).
+
+### NÃO medido nesta rodada
+- **Produção.** Nada foi lido nem escrito. Por isso o "0 pendências contaminadas" (`19325ba`, medido em 11/11 antes desta rodada) e as 307 linhas do balanço e a leitura de produção da ficha do imobilizado (feita por quem a escreveu, em 11/11) NÃO foram remedidas aqui.
+- **Mutações** ("cada parte desligada reprova"). Os números (0240: 3, 5 e 2; 0241: 2 e 1 no commit `c4f14be`; 29 asserts) vêm das mensagens de commit. Não foram remedidos aqui.
+- **Desempenho** da `fn_pares_duplicados_do_caso`: não remedido aqui (está no commit `faa3338`).
+- **Abertos da S126, sem tocar:** o Canastra `26_Contingencias` (38 → 16 pares) e `29_Extrato_Bancario` (27 → 6), regressão silenciosa sem pendência, e a guarda de desalinhamento do Distress `08_Mapa_de_Divida` (92 → 35). Continuam abertos, na ordem dada pela S126.
+
+### O que o dono faz à mão, em ordem
+1. **Mergear o #291 primeiro**: ele destrava o CI dos outros. Depois atualizar o #289 e o #290 com o `main` e mergeá-los.
+2. **Aplicar em produção, nesta ordem, como `postgres`: 0240 e depois 0241.**
+   - Conferir: `select chave, presente, detalhe from fn_instalacao_conferir() where migration in ('0240','0241') and not presente;` tem de vir vazio.
+   - Conferir o evento `descricao_contaminada_resumo` (ator `sistema:0241`): esperado `corrigidas = 0`.
+3. **Nada de n8n nem de portal a republicar por causa desta rodada.**
+4. Decidir sobre o tipo "composição do imobilizado" na taxonomia. Criar o tipo re-extrai e paga os documentos.
+5. Já constavam: reenviar os originais reais (P10); trocar a senha colada no chat em 11/11; clicar "Reprocessar" no navegador.
+
+### Próxima sessão da Claude Oria
+Fase 3, etapa 3.1 (**P26**, catálogo `conta_canonica` com hierarquia, natureza e seção, semeado da taxonomia atual), com a primeira migration da faixa livre: **0242**. Conforme `Arquitetura do Sistema/3 Estado e Execução/PLANO_DE_EXECUCAO_2026-11.md` §3, semana 6. O status por etapa (`STATUS_POR_ETAPA_2026-11-11.md`) vem com o #290 e não está nesta branch.
+
 ## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 NO AR (PR #287 mergeado, 0232–0234 aplicadas, n8n republicado, portal publicado); P10 rodada nos sintéticos
 
 > **Migration mais nova: `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql` — ESCRITA E TESTADA NO BANCO LOCAL, NÃO APLICADA EM PRODUÇÃO (a descrição da pendência só é reescrita pela rodada do mesmo período; backfill sistema:0241 das 7 contaminadas; ver o cabeçalho). A 0240 (`0240_a_versao_atual_que_nao_seguia_a_vigente.sql`, fn_versao_atual segue a versão vigente da 0233) também está ESCRITA E TESTADA, NÃO APLICADA. A última aplicada é a `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, junto com a 0232 e a 0233 (nessa ordem, pela API de gerenciamento, antes do merge).**

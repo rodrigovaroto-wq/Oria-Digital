@@ -3,7 +3,7 @@
 **Data:** 09/09/2026, sessão 81 · **Base conferida:** `main` em `668b6fe`, CI verde (PR #203).
 **Tocado em 26/10/2026:** só a linha B9 do quadro e a §14 (Espec. 13). **Tocado em 15/10/2026 (S109):** só a linha B8 do quadro (zip no navegador). **Tocado em 13/10/2026 (S107 e S108):** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
 conferido em 09/09.
-**Última migration:** `0160` — ver `ESTADO.md`.
+**Última migration:** `0160` (09/09) — linha atualizada em 11/11/2026 (S127): a mais nova é a `0241`, escrita e não aplicada em produção; ver `ESTADO.md`.
 
 > **NOTA IMPORTANTE (18/09/2026):** Este arquivo é histórico. O roadmap detalhado e atual está em
 > `Arquitetura do Sistema/3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md` (atualizado em 15/09).
