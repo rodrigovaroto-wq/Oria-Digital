@@ -2,7 +2,7 @@
 
 ## SESSÃO 127 (11/11/2026, conta Claude Oria) — CI sem apt; 0240 e 0241 APLICADAS EM PRODUÇÃO
 
-> **Migration mais nova: `0242_a_secao_que_so_existia_em_codigo.sql` — ESCRITA E NÃO APLICADA (P26, catálogo `conta_canonica`; só a sonda responde por produção). A anterior, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291; a 0240 e a 0241 são do branch `claude/loving-tesla-7eutsq`, PR #291).** A 0242 é do branch `claude/peaceful-archimedes-hisyd0`, PR #294, ESCRITA E NÃO APLICADA. Onde esta seção e a S126 falarem de migration, vale esta.
+> **Migration mais nova: `0243_a_linha_que_nao_tinha_identidade.sql` — ESCRITA E NÃO APLICADA (P27, `fato_financeiro` acima de `campo_extraido`; só a sonda responde por produção; é do branch `claude/peaceful-archimedes-hisyd0`, em cima da `0242_a_secao_que_so_existia_em_codigo.sql`, também ESCRITA E NÃO APLICADA, P26, catálogo `conta_canonica`). A anterior à 0242, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291; a 0240 e a 0241 são do branch `claude/loving-tesla-7eutsq`, PR #291).** A 0242 é do branch `claude/peaceful-archimedes-hisyd0`, PR #294, ESCRITA E NÃO APLICADA. Onde esta seção e a S126 falarem de migration, vale esta.
 
 ### Aplicação em produção (11/11, a pedido do dono)
 - **Antes:** 80 mandatos; sonda com 365 itens e 1 ausente (`envio_segredo_no_vault`, que a API não lê); 479 pendências de reconciliação abertas.
@@ -23,7 +23,7 @@
 5. **Fase 0, sem código ao alcance.** 0.19 espera a D12.3 (cotação do Integra, dono). 0.2 espera o portão da extração (24/11, Claude Oria 2).
 
 ### Decisões do dono registradas nesta sessão
-- A Claude Oria usa a faixa de migrations **0240 a 0269**. A próxima livre é a **0242**.
+- A Claude Oria usa a faixa de migrations **0240 a 0269**. A próxima livre é a **0244** (a 0243 é a P27, ESCRITA E NÃO APLICADA).
 - A Fase 3 (conta canônica) pode correr em paralelo à Fase 2 da Claude Oria 2.
 
 ### Medido nesta rodada (11/11, banco local `tdf_test`, Postgres 16.15; NÃO é produção)

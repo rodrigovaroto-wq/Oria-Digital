@@ -258,7 +258,8 @@ CREATE TYPE public.pendencia_tipo AS ENUM (
     'documento_nao_extraido',
     'linha_exigida_ausente',
     'papel_no_grupo_indefinido',
-    'forma_de_controle_indefinida'
+    'forma_de_controle_indefinida',
+    'conta_canonica_incerta'
 );
 
 --
@@ -4610,6 +4611,87 @@ $_$;
 COMMENT ON FUNCTION public.fn_familia_da_secao(p_secao text) IS 'Família da demonstração pela seção canônica: patrimonial, resultado, fluxo ou a própria seção (0200). Conta única (0201).';
 
 --
+-- Name: fn_fato_pendencia_da_versao(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) RETURNS uuid
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_caso uuid; v_doc uuid; v_nome text;
+  v_h int; v_s int; v_lista text; v_desc text; v_pend uuid;
+  v_motivo text := 'fato:conta_incerta:' || p_documento_versao_id;
+begin
+  select d.caso_id, d.id, dv.nome_original into v_caso, v_doc, v_nome
+    from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id;
+  if v_doc is null then return null; end if;
+
+  select count(*) filter (where x.resolucao_metodo = 'heuristica'), count(*) filter (where x.resolucao_metodo = 'sem_conta'),
+         string_agg(x.rotulo, '; ' order by x.rn) filter (where x.rn <= 12)
+    into v_h, v_s, v_lista
+    from (select f.resolucao_metodo,
+                 ce.chave || case f.resolucao_metodo
+                               when 'heuristica' then ' [seção inferida: ' || coalesce(ce.secao_canonica, '?') || ']'
+                               else ' [sem seção' || case when f.sem_conta_motivo = 'secao_fora_do_catalogo' then ': "' || coalesce(ce.secao_canonica, '') || '" não está no catálogo' else '' end || ']' end as rotulo,
+                 row_number() over (order by ce.ordem nulls last, ce.id) as rn
+            from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id
+           where f.documento_versao_id = p_documento_versao_id and f.origem = 'extracao' and f.resolucao_metodo <> 'declarada') x;
+
+  select id into v_pend from pendencia where caso_id = v_caso and motivo = v_motivo and estado <> 'resolvida' limit 1;
+
+  if v_h + v_s > 0 then
+    v_desc := format('%s linha(s) de "%s" ficaram com a conta canônica por HEURÍSTICA (%s: a IA não deu a seção, ela foi inferida do texto da seção ou da árvore do documento) ou SEM conta (%s: sem seção, ou com uma que o catálogo não conhece). '
+                     'Linha sem conta é fato sem identidade: não entra em nenhuma seção até alguém dizer qual é. Confirme a seção destas linhas%s: %s%s',
+                     v_h + v_s, coalesce(v_nome, '?'), v_h, v_s,
+                     case when v_h + v_s > 12 then ' (as 12 primeiras de ' || (v_h + v_s) || ')' else '' end,
+                     v_lista, '.');
+    if v_pend is not null then
+      update pendencia set descricao = v_desc where id = v_pend;
+    elsif not exists (select 1 from pendencia where caso_id = v_caso and motivo = v_motivo and coalesce(resolvida_por, '') <> 'sistema:extracao') then
+      -- (uma pessoa que já resolveu esta pendência não a vê reaberta pelo reenvio: decisão humana não se desfaz, 0231)
+      insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id, motivo)
+        values (v_caso, 'extracao', 'conta_canonica_incerta', 'complementar', true, v_desc, v_doc, v_motivo)
+        returning id into v_pend;
+    end if;
+  elsif v_pend is not null then
+    update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:extracao' where id = v_pend;
+    v_pend := null;
+  end if;
+  return v_pend;
+end $$;
+
+--
+-- Name: FUNCTION fn_fato_pendencia_da_versao(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) IS '0243: a pendência conta_canonica_incerta (motivo fato:conta_incerta:<versão>), UMA por documento-versão, listando as linhas de EXTRAÇÃO resolvidas por heurística ou sem conta (as 12 primeiras no texto). Reabre-se sozinha no texto e se resolve sozinha quando não sobra linha incerta; resolvida por pessoa, não é reaberta. Complementar e sobrepujável: não trava o mandato, avisa.';
+
+--
+-- Name: fn_fato_segue_o_documento(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_fato_segue_o_documento() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+begin
+  if new.entidade_id is distinct from old.entidade_id then
+    update fato_financeiro f
+       set entidade_id = new.entidade_id,
+           entidade_origem = case when new.entidade_id is null then null when f.entidade_coluna is null then 'documento' else 'coluna_total' end
+     where f.documento_versao_id in (select v.id from documento_versao v where v.documento_id = new.id)
+       and (f.entidade_coluna is null or f.entidade_origem = 'coluna_total');
+  end if;
+  if new.periodo_id is distinct from old.periodo_id then
+    update fato_financeiro f
+       set periodo_id = new.periodo_id,
+           periodo_origem = case when new.periodo_id is null then null else 'documento' end
+     where f.documento_versao_id in (select v.id from documento_versao v where v.documento_id = new.id)
+       and (f.periodo_coluna is null or f.periodo_origem = 'documento');
+  end if;
+  return null;
+end $$;
+
+--
 -- Name: fn_fator_escala(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -4813,6 +4895,8 @@ declare
   -- 0213
   v_perguntas        jsonb;
   v_n_perguntas      int := 0;
+  -- 0243
+  v_fatos            int := 0;
 begin
   if p_de_id = p_para_id then
     raise exception 'fundir uma entidade nela mesma não faz sentido (%)', p_de_id;
@@ -4831,6 +4915,9 @@ begin
     raise exception 'a entidade "%" é controlada por "%", que está sendo fundida nela: a participação passaria a ser dela com ela mesma. Remova a participação (fn_entidade_definir_participacao) e a forma de controle e refaça a fusão.', v_para, v_de;
   end if;
 
+  -- 0243: quantos fatos têm a absorvida (contados ANTES do update do documento, cujo gatilho já leva os que herdaram dela). `fato_financeiro_entidade_id_fkey` é NO ACTION: sem repontar, o `delete from entidade` abaixo recusa a fusão INTEIRA.
+  select count(*)::int into v_fatos from fato_financeiro where entidade_id = p_de_id;
+
   update documento set entidade_id = p_para_id
    where caso_id = p_caso_id and entidade_id = p_de_id;
   get diagnostics v_docs = row_count;
@@ -4844,6 +4931,8 @@ begin
    where caso_id = p_caso_id and entidade_id = p_de_id;
   update reconciliacao set entidade_id = p_para_id
    where caso_id = p_caso_id and entidade_id = p_de_id;
+  -- 0243: o fato cuja entidade veio de uma COLUNA da linha (o do documento o gatilho de documento já levou).
+  update fato_financeiro set entidade_id = p_para_id where entidade_id = p_de_id;
 
   -- 0183: o controle declarado de A. Sem isto, o `on delete cascade` de entidade_controlador o
   -- apagava junto com a linha (ver o item (10) da migration 0183).
@@ -4943,7 +5032,9 @@ begin
                              'perimetro_descartado', v_perim_descartado,
                              'controladas_repontadas', v_controladas,
                              -- 0213
-                             'perguntas_repontadas', v_perguntas));
+                             'perguntas_repontadas', v_perguntas,
+                             -- 0243
+                             'fatos_repontados', v_fatos));
 
   return jsonb_build_object('fundida', v_de, 'em', v_para, 'documentos', v_docs,
                             'vinculos_movidos', v_vinculos_movidos,
@@ -4951,7 +5042,8 @@ begin
                             'perimetro_movido', v_perim_movidos,
                             'perimetro_descartado', jsonb_array_length(v_perim_descartado),
                             'controladas_repontadas', v_n_controladas,
-                            'perguntas_repontadas', v_n_perguntas);
+                            'perguntas_repontadas', v_n_perguntas,
+                            'fatos_repontados', v_fatos);
 end;
 $$;
 
@@ -7532,6 +7624,22 @@ $$;
 COMMENT ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) IS '0195: uma linha (versão do documento, sua periodo_coluna, e o período PRÓPRIO do documento) vale para o ano pedido? Fatorada da lógica que a 0194 escreveu duas vezes dentro de fn_reconciliar_mutuos — documento sem coluna de período só conta para o ano que o SEU período ancora, nunca para qualquer ano perguntado.';
 
 --
+-- Name: fn_linha_vira_fato(text, text, text, numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select p_valor is not null and fn_tipo_gera_fato(p_tipo) and fn_papel_linha(p_chave, p_tipo, p_unidade) = 'conta'
+$$;
+
+--
+-- Name: FUNCTION fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) IS '0243: a linha de campo_extraido vira fato quando (1) tem valor (célula vazia é ausência, não zero: regra 1), (2) o documento é de demonstração e (3) o papel é conta (fn_papel_linha): subtotal é a P28, derivado e série mensal não são conta.';
+
+--
 -- Name: fn_linhas_do_realizado(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -7925,6 +8033,183 @@ begin
   return jsonb_build_object('ok', found);
 end;
 $$;
+
+--
+-- Name: fn_materializar_fatos(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_materializar_fatos(p_documento_versao_id uuid DEFAULT NULL::uuid, p_origem text DEFAULT 'extracao'::text) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $_$
+declare
+  v_r jsonb;
+begin
+  if p_origem not in ('extracao', 'backfill_0243') then
+    raise exception 'fn_materializar_fatos: origem % desconhecida (extracao | backfill_0243)', p_origem;
+  end if;
+
+  with cand as materialized (
+    select ce.id as campo_id, ce.documento_versao_id, d.caso_id, d.tipo_taxonomia as tipo, ce.chave, d.entidade_id as doc_entidade, d.periodo_id as doc_periodo,
+           ce.valor_num, ce.unidade, ce.moeda, ce.secao_canonica as secao, ce.secao_canonica_inferida as inferida,
+           nullif(btrim(ce.entidade_coluna), '') as ecol, nullif(btrim(ce.periodo_coluna), '') as pcol,
+           d.caso_id::text || '|' || coalesce(d.entidade_id::text, '') || '|' || coalesce(nullif(btrim(ce.entidade_coluna), ''), '') as ek,
+           d.caso_id::text || '|' || coalesce(d.periodo_id::text, '') || '|' || coalesce(nullif(btrim(ce.periodo_coluna), ''), '') as pk
+      from campo_extraido ce
+      join documento_versao dv on dv.id = ce.documento_versao_id
+      join documento d on d.id = dv.documento_id
+     where (p_documento_versao_id is null or ce.documento_versao_id = p_documento_versao_id)
+       and ce.valor_num is not null and fn_tipo_gera_fato(d.tipo_taxonomia)
+       and not exists (select 1 from fato_financeiro f where f.campo_extraido_id = ce.id)
+  ),
+  -- O papel da linha (fn_papel_linha, ~180 µs) UMA vez por (tipo, rótulo, unidade) distintos, não por linha. Medido em produção em 11/11/2026: 100.215 linhas de demonstração com valor, 6.841 combinações distintas (15x menos chamadas).
+  -- Medido no local com 124 mil linhas: por linha 21 s; por combinação distinta, o tempo está no cabeçalho. fn_linha_vira_fato é o predicado ÚNICO (a sonda e o teste o usam): o valor entra como 1 porque ele só pergunta se é nulo, e a CTE acima já tirou os nulos.
+  -- (duas CTEs, não uma subconsulta: o Postgres empurra o filtro para DENTRO do distinct e chama fn_papel_linha por LINHA de novo — medido, 21 s.)
+  rotulos as materialized (select distinct tipo, chave, unidade from cand),
+  papel as materialized (
+    select x.tipo, x.chave, x.unidade from rotulos x where fn_linha_vira_fato(x.tipo, x.chave, x.unidade, 1)
+  ),
+  alvo as materialized (
+    select c.* from cand c join papel p on p.tipo = c.tipo and p.chave = c.chave and coalesce(p.unidade, '') = coalesce(c.unidade, '')
+  ),
+  -- MATERIALIZED nas duas resoluções: sem isso o Postgres inlina a CTE usada uma vez e a resolução (que casa nome e período) roda LINHA a linha em vez de uma vez por combinação distinta.
+  ent as materialized (
+    select k.ek, k.caso_id, k.doc_entidade, k.ecol,
+           case when k.ecol is null then k.doc_entidade
+                when m.n = 1 then m.id
+                when m.n = 0 and fn_normalizar_texto(k.ecol) ~ '^(combinad|consolidad|total|soma)' then k.doc_entidade end as entidade_id,
+           case when k.ecol is null then case when k.doc_entidade is not null then 'documento' end
+                when m.n = 1 then 'coluna'
+                when m.n = 0 and fn_normalizar_texto(k.ecol) ~ '^(combinad|consolidad|total|soma)' and k.doc_entidade is not null then 'coluna_total' end as origem
+      from (select distinct ek, caso_id, doc_entidade, ecol from alvo) k
+      left join lateral (select count(*) as n, (array_agg(e.id))[1] as id
+                           from entidade e
+                          where k.ecol is not null and e.caso_id = k.caso_id
+                            and fn_entidade_canonica(e.razao_social) = fn_entidade_canonica(k.ecol)) m on true
+  ),
+  per as materialized (
+    select k.pk, k.caso_id, k.doc_periodo, k.pcol,
+           case when k.pcol is null then k.doc_periodo
+                when cardinality(fn_anos_texto(k.pcol)) > 0 then x.id
+                when fn_coluna_e_abertura(k.pcol) then null
+                else k.doc_periodo end as periodo_id,
+           case when k.pcol is null then case when k.doc_periodo is not null then 'documento' end
+                when cardinality(fn_anos_texto(k.pcol)) > 0 then case when x.id is not null then 'coluna' end
+                when fn_coluna_e_abertura(k.pcol) then null
+                else case when k.doc_periodo is not null then 'documento' end end as origem
+      from (select distinct pk, caso_id, doc_periodo, pcol from alvo) k
+      left join lateral (
+        -- o MESMO casamento de fn_upsert_periodo (forma canônica, o de menor referência no empate), sem o insert: o período NÃO é criado aqui. O fechamento 31/12/AAAA e o ano AAAA são o mesmo período.
+        select coalesce(
+                 (select p.id from periodo p where p.id = k.doc_periodo
+                     and regexp_replace(fn_periodo_canonico(p.tipo, p.referencia), '^(\d{4})-12-31$', '\1') = regexp_replace(fn_periodo_canonico('outro', k.pcol), '^(\d{4})-12-31$', '\1')),
+                 (select p.id from periodo p where p.caso_id = k.caso_id
+                     and regexp_replace(fn_periodo_canonico(p.tipo, p.referencia), '^(\d{4})-12-31$', '\1') = regexp_replace(fn_periodo_canonico('outro', k.pcol), '^(\d{4})-12-31$', '\1')
+                   order by p.referencia, p.id limit 1)) as id
+         where k.pcol is not null) x on true
+  ),
+  ins as (
+    insert into fato_financeiro
+      (campo_extraido_id, documento_versao_id, conta_id, resolucao_metodo, sem_conta_motivo,
+       entidade_id, entidade_origem, entidade_coluna, periodo_id, periodo_origem, periodo_coluna, valor, unidade, moeda, origem)
+    select a.campo_id, a.documento_versao_id, c.codigo,
+           case when c.codigo is null then 'sem_conta' when a.inferida then 'heuristica' else 'declarada' end,
+           case when c.codigo is not null then null
+                when coalesce(nullif(btrim(a.secao), ''), 'NAO_CLASSIFICAVEL') = 'NAO_CLASSIFICAVEL' then 'secao_nao_declarada'
+                else 'secao_fora_do_catalogo' end,
+           e.entidade_id, e.origem, a.ecol, p.periodo_id, p.origem, a.pcol, a.valor_num, a.unidade, a.moeda, p_origem
+      from alvo a
+      left join conta_canonica c on c.secao_canonica = a.secao
+      join ent e on e.ek = a.ek
+      join per p on p.pk = a.pk
+    on conflict (campo_extraido_id) do nothing
+    returning documento_versao_id, resolucao_metodo, sem_conta_motivo, entidade_id, periodo_id
+  )
+  select jsonb_build_object(
+           'fatos_criados', count(*),
+           'declarada', count(*) filter (where resolucao_metodo = 'declarada'),
+           'heuristica', count(*) filter (where resolucao_metodo = 'heuristica'),
+           'sem_conta', count(*) filter (where resolucao_metodo = 'sem_conta'),
+           'sem_conta_secao_nao_declarada', count(*) filter (where sem_conta_motivo = 'secao_nao_declarada'),
+           'sem_conta_secao_fora_do_catalogo', count(*) filter (where sem_conta_motivo = 'secao_fora_do_catalogo'),
+           'sem_entidade', count(*) filter (where entidade_id is null),
+           'sem_periodo', count(*) filter (where periodo_id is null),
+           'versoes', count(distinct documento_versao_id),
+           'versoes_com_linha_incerta', count(distinct documento_versao_id) filter (where resolucao_metodo <> 'declarada'))
+    into v_r from ins;
+  return v_r;
+end $_$;
+
+--
+-- Name: FUNCTION fn_materializar_fatos(p_documento_versao_id uuid, p_origem text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_materializar_fatos(p_documento_versao_id uuid, p_origem text) IS '0243: cria o fato de toda linha elegível (fn_linha_vira_fato) que ainda não tem. Idempotente. Seção declarada = declarada; secao_canonica_inferida = heuristica; sem seção (nula, em branco ou NAO_CLASSIFICAVEL) ou fora do catálogo = sem_conta, com o motivo. Entidade e período pela COLUNA da linha quando ela diz (ver as colunas de fato_financeiro), pelo documento quando não. versão nula = todas (o backfill e o reparo: se a materialização de uma extração falhou, o evento fatos_materializacao_falhou manda rodar esta). NÃO abre pendência: quem abre é fn_materializar_fatos_da_extracao, só para extração nova.';
+
+--
+-- Name: fn_materializar_fatos_backfill(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_materializar_fatos_backfill() RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_r jsonb;
+  v_inc int;
+begin
+  v_r := fn_materializar_fatos(null, 'backfill_0243');
+  v_inc := (v_r->>'heuristica')::int + (v_r->>'sem_conta')::int;
+  v_r := v_r || jsonb_build_object(
+    'pendencias_abertas', 0,
+    'linhas_incertas_sem_pendencia', v_inc,
+    'porque_sem_pendencia', 'decisão do dono (11/11/2026): pendência só para extração daqui em diante. Pendência em massa sobre o que já está gravado é ruído (a 0179 abriu 365 e 347 já estavam julgadas ruído pela triagem); o método gravado em fato_financeiro.resolucao_metodo e a origem backfill_0243 deixam a incerteza consultável sem fila.');
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+    values ('sistema:migration_0243', 'fato_financeiro_backfill', 'migration:0243', v_r);
+  raise notice '0243 backfill: % fato(s) em % versão(ões); % declarada(s), % heurística(s), % sem conta (% sem pendência: decisão do dono); % sem entidade, % sem período',
+    v_r->>'fatos_criados', v_r->>'versoes', v_r->>'declarada', v_r->>'heuristica', v_r->>'sem_conta', v_inc, v_r->>'sem_entidade', v_r->>'sem_periodo';
+  return v_r;
+end $$;
+
+--
+-- Name: FUNCTION fn_materializar_fatos_backfill(); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_materializar_fatos_backfill() IS '0243: fn_materializar_fatos(null, backfill_0243) + o resumo em evento_auditoria (fato_financeiro_backfill): fatos criados por método, sem entidade, sem período, e quantas linhas incertas ficaram SEM pendência e por quê. Idempotente: a segunda chamada cria 0.';
+
+--
+-- Name: fn_materializar_fatos_da_extracao(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_tipo text; v_r jsonb; v_pend uuid;
+begin
+  select d.tipo_taxonomia into v_tipo from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id;
+  if not fn_tipo_gera_fato(v_tipo) then
+    return jsonb_build_object('materializado', false, 'porque', 'tipo do documento não é de demonstração');
+  end if;
+  begin
+    v_r := fn_materializar_fatos(p_documento_versao_id, 'extracao');
+    v_pend := fn_fato_pendencia_da_versao(p_documento_versao_id);
+    v_r := v_r || jsonb_build_object('materializado', true, 'pendencia_id', v_pend);
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('sistema:n8n', 'fatos_materializados', 'documento_versao:' || p_documento_versao_id, v_r);
+  exception when others then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('sistema:n8n', 'fatos_materializacao_falhou', 'documento_versao:' || p_documento_versao_id,
+              jsonb_build_object('sqlstate', sqlstate, 'erro', sqlerrm,
+                                 'porque', 'a extração foi gravada; os fatos não. Rode fn_materializar_fatos() para completar (idempotente).'));
+    v_r := jsonb_build_object('materializado', false, 'erro', sqlerrm);
+  end;
+  return v_r;
+end $$;
+
+--
+-- Name: FUNCTION fn_materializar_fatos_da_extracao(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid) IS '0243: fn_materializar_fatos + fn_fato_pendencia_da_versao para a versão recém-extraída, com o evento fatos_materializados (a prova de que RODOU: regra 7). Tipo fora da lista: não faz nada e não grava evento. Falha: o evento fatos_materializacao_falhou, e a extração não é perdida.';
 
 --
 -- Name: fn_membros_da_equipe(); Type: FUNCTION; Schema: public; Owner: -
@@ -13229,6 +13514,10 @@ begin
   -- devolve zero e segue.
   perform fn_classificar_contabil(p_documento_versao_id);
 
+  -- 0243 (P27): o fato canônico nasce ACIMA da linha que acabou de ser gravada, e só aqui — o ponto por onde TODA extração passa (o n8n chama esta função; a assinatura não mudou). Fica por último de propósito:
+  -- a seção já foi herdada pela árvore (0204) e a classificação contábil já rodou, então o que o fato lê é a linha FINAL. fn_materializar_fatos_da_extracao não deixa a falha dele derrubar a extração (a evidência vale mais).
+  perform fn_materializar_fatos_da_extracao(p_documento_versao_id);
+
   return v_count;
 end;
 $_$;
@@ -13237,7 +13526,7 @@ $_$;
 -- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0228: o auto-aceite exige documento com tipo (v_tipo nulo = linhas seguem pendentes). 0229: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao). 0231: zero linha com tem_dado_financeiro = false TAMBÉM abre extracao_falhou quando o tipo não é societário/legal por natureza (fn_tipo_sem_dado_por_natureza; tipo nulo abre), com motivo que começa por "a leitura declarou que este documento não tem dado financeiro, mas ".';
+COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0228: o auto-aceite exige documento com tipo (v_tipo nulo = linhas seguem pendentes). 0229: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao). 0231: zero linha com tem_dado_financeiro = false TAMBÉM abre extracao_falhou quando o tipo não é societário/legal por natureza (fn_tipo_sem_dado_por_natureza; tipo nulo abre), com motivo que começa por "a leitura declarou que este documento não tem dado financeiro, mas ". 0243: no fim, fn_materializar_fatos_da_extracao materializa o fato_financeiro das linhas elegíveis e abre UMA pendência conta_canonica_incerta por versão quando há linha por heurística ou sem conta; a falha dele não derruba a extração.';
 
 --
 -- Name: fn_registrar_classe_override(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -16026,6 +16315,22 @@ $$;
 COMMENT ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) IS '0123: a natureza "mútuo" nomeada NESTE texto. Usada no rótulo (degrau 1) e na seção (degrau 2), com precedência do rótulo — nunca nos dois de uma vez.';
 
 --
+-- Name: fn_tipo_gera_fato(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_tipo_gera_fato(p_tipo text) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select coalesce(p_tipo in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DRE', 'FLUXO_CAIXA', 'DVA', 'DMPL', 'DF_AUDITADA'), false)
+$$;
+
+--
+-- Name: FUNCTION fn_tipo_gera_fato(p_tipo text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) IS '0243: os tipos de documento cujas linhas viram fato_financeiro: as demonstrações. BALANCO, BALANCETE, COMBINADO, DRE e FLUXO_CAIXA são as 5 de ESTRUTURA_POR_TIPO (statement-templates.ts); DVA e DMPL são as 2 que a 0024 pôs na taxonomia e o portal já roteia por seção (FAMILIA_POR_SECAO_CANONICA); DF_AUDITADA traz as demonstrações juntas e cada linha vai para a SUA seção. A categoria Contábil/Demonstrações da taxonomia NÃO serve de proxy: ela inclui RAZAO e NOTAS_EXPL. Estoque, Razão, Aging, Mapa de Dívida e o resto continuam só evidência.';
+
+--
 -- Name: fn_tipo_sem_dado_por_natureza(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -18294,6 +18599,66 @@ CREATE TABLE public.execucao_falha (
 COMMENT ON TABLE public.execucao_falha IS 'Falha do pipeline (n8n) que a TELA precisa mostrar. Existe porque o portal deduzia progresso de sinais positivos, e falha produz ausência — indistinguível de "ainda processando". Tabela própria e não evento_auditoria: isto é estado operacional que se marca como visto, não trilha.';
 
 --
+-- Name: fato_financeiro; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.fato_financeiro (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    campo_extraido_id uuid NOT NULL,
+    documento_versao_id uuid NOT NULL,
+    conta_id text,
+    resolucao_metodo text NOT NULL,
+    sem_conta_motivo text,
+    entidade_id uuid,
+    entidade_origem text,
+    entidade_coluna text,
+    periodo_id uuid,
+    periodo_origem text,
+    periodo_coluna text,
+    valor numeric NOT NULL,
+    unidade text,
+    moeda text,
+    origem text NOT NULL,
+    criado_em timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT fato_financeiro_conta_metodo_ck CHECK (((conta_id IS NULL) = (resolucao_metodo = 'sem_conta'::text))),
+    CONSTRAINT fato_financeiro_entidade_ck CHECK ((((entidade_id IS NULL) = (entidade_origem IS NULL)) AND ((entidade_origem IS NULL) OR (entidade_origem = ANY (ARRAY['documento'::text, 'coluna'::text, 'coluna_total'::text]))))),
+    CONSTRAINT fato_financeiro_metodo_ck CHECK ((resolucao_metodo = ANY (ARRAY['declarada'::text, 'heuristica'::text, 'sem_conta'::text]))),
+    CONSTRAINT fato_financeiro_motivo_ck CHECK ((((sem_conta_motivo IS NULL) = (resolucao_metodo <> 'sem_conta'::text)) AND ((sem_conta_motivo IS NULL) OR (sem_conta_motivo = ANY (ARRAY['secao_nao_declarada'::text, 'secao_fora_do_catalogo'::text]))))),
+    CONSTRAINT fato_financeiro_origem_ck CHECK ((origem = ANY (ARRAY['extracao'::text, 'backfill_0243'::text]))),
+    CONSTRAINT fato_financeiro_periodo_ck CHECK ((((periodo_id IS NULL) = (periodo_origem IS NULL)) AND ((periodo_origem IS NULL) OR (periodo_origem = ANY (ARRAY['documento'::text, 'coluna'::text])))))
+);
+
+--
+-- Name: TABLE fato_financeiro; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.fato_financeiro IS '0243 (P27): o fato canônico ACIMA de campo_extraido, que não muda (ADR 01). Uma linha por linha extraída elegível (FK única): só documento de demonstração (fn_tipo_gera_fato), só papel conta (fn_papel_linha), só com valor (ausência não vira fato: regra 1). A identidade é a SEÇÃO (nó de conta_canonica; folha é a P28+). Quem consome escolhe a versão vigente com fn_versao_atual. resolucao_metodo: declarada (a IA deu a seção), heuristica (fn_secao_canonica_da_secao_bruta / fn_herdar_secao_pela_arvore, 0203/0204: secao_canonica_inferida) ou sem_conta (conta_id nulo, com o motivo): "não sei a conta" é estado, nunca um palpite.';
+
+--
+-- Name: COLUMN fato_financeiro.conta_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fato_financeiro.conta_id IS 'Nó de conta_canonica que é SEÇÃO (secao_canonica não nula). NULL só com resolucao_metodo = sem_conta (check): linha sem seção declarada, ou com seção que o catálogo não conhece, NÃO ganha conta inventada — nem a raiz da demonstração pelo tipo do documento.';
+
+--
+-- Name: COLUMN fato_financeiro.entidade_origem; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fato_financeiro.entidade_origem IS 'De onde veio a entidade: documento (documento.entidade_id; a linha não tem entidade_coluna), coluna (entidade_coluna casa UMA entidade do mandato por fn_entidade_canonica) ou coluna_total (coluna Combinado/Consolidado/Total/Soma: a entidade do documento, o mesmo vocabulário de fn_coluna_entidade, 0023). NULL = não resolvida e entidade_id NULL: a coluna Eliminações, o nome que casa duas entidades (0153: nunca escolher no empate) ou documento sem entidade. A entidade_coluna da linha fica ao lado, explícita.';
+
+--
+-- Name: COLUMN fato_financeiro.periodo_origem; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fato_financeiro.periodo_origem IS 'De onde veio o período: coluna (periodo_coluna nomeia um ano/data e um periodo do MESMO mandato tem essa forma canônica, fn_periodo_canonico; prevalece sobre o do documento) ou documento (a linha não tem coluna, ou a coluna não nomeia ano e não é de abertura). NULL = não resolvida e periodo_id NULL: coluna de ano que nenhum período do mandato tem (o período NÃO é criado aqui), ou Saldo Inicial/anterior (é o ano ANTERIOR ao do documento, 0199 b). O periodo_coluna da linha fica ao lado.';
+
+--
+-- Name: COLUMN fato_financeiro.valor; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.fato_financeiro.valor IS 'valor_num da linha, como veio. Escala e moeda NÃO são normalizadas aqui (não há regra pronta): unidade e moeda seguem ao lado.';
+
+--
 -- Name: fato_tipo_catalogo; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -18839,6 +19204,83 @@ UNION ALL
 --
 
 COMMENT ON VIEW public.instalacao_sonda_exigencias_0188 IS 'Sonda da 0188: a alternativa "resultado financeiro" de DRE/despesa_financeira e o localizador ["juros","bancari"] da mesma exigência. Duas linhas.';
+
+--
+-- Name: instalacao_sonda_fato_financeiro_constraints; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_fato_financeiro_constraints AS
+ SELECT (c.conname)::text AS constraint_nome
+   FROM (( VALUES ('fato_financeiro_pkey'::text,'p'::text,'PRIMARY KEY (id)'::text), ('fato_financeiro_campo_extraido_id_key'::text,'u'::text,'UNIQUE (campo_extraido_id)'::text), ('fato_financeiro_campo_extraido_id_fkey'::text,'f'::text,'REFERENCES campo_extraido(id) ON DELETE CASCADE'::text), ('fato_financeiro_documento_versao_id_fkey'::text,'f'::text,'REFERENCES documento_versao(id) ON DELETE CASCADE'::text), ('fato_financeiro_conta_id_fkey'::text,'f'::text,'REFERENCES conta_canonica(codigo)'::text), ('fato_financeiro_entidade_id_fkey'::text,'f'::text,'REFERENCES entidade(id) DEFERRABLE INITIALLY DEFERRED'::text), ('fato_financeiro_periodo_id_fkey'::text,'f'::text,'REFERENCES periodo(id) DEFERRABLE INITIALLY DEFERRED'::text), ('fato_financeiro_metodo_ck'::text,'c'::text,'''heuristica''::text'::text), ('fato_financeiro_conta_metodo_ck'::text,'c'::text,'(conta_id IS NULL)'::text), ('fato_financeiro_motivo_ck'::text,'c'::text,'''secao_fora_do_catalogo''::text'::text), ('fato_financeiro_entidade_ck'::text,'c'::text,'''coluna_total''::text'::text), ('fato_financeiro_periodo_ck'::text,'c'::text,'(periodo_origem IS NULL)'::text), ('fato_financeiro_origem_ck'::text,'c'::text,'''backfill_0243''::text'::text)) e(conname, contype, frag)
+     JOIN pg_constraint c ON (((c.conrelid = ('public.fato_financeiro'::regclass)::oid) AND (c.conname = e.conname) AND (c.contype = (e.contype)::"char"))))
+  WHERE (pg_get_constraintdef(c.oid) ~~ (('%'::text || e.frag) || '%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_fato_financeiro_constraints; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_constraints IS 'Sonda da 0243: uma linha = uma das 13 constraints de fato_financeiro existe com o predicado esperado (FK única da evidência, conta nula só com sem_conta e motivo, origem da entidade e do período coerente com o id). Menos de 13: uma guarda foi dropada ou trocada.';
+
+--
+-- Name: instalacao_sonda_fato_financeiro_pendencia_tipo; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_fato_financeiro_pendencia_tipo AS
+ SELECT 1 AS ok
+  WHERE (EXISTS ( SELECT 1
+           FROM pg_enum e
+          WHERE ((e.enumtypid = ('public.pendencia_tipo'::regtype)::oid) AND (e.enumlabel = 'conta_canonica_incerta'::name))));
+
+--
+-- Name: VIEW instalacao_sonda_fato_financeiro_pendencia_tipo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_pendencia_tipo IS 'Sonda da 0243: uma linha = o rótulo conta_canonica_incerta existe em pendencia_tipo. Sem ele a extração nova com linha heurística tentaria abrir a pendência e falharia (a falha é engolida e vira o evento fatos_materializacao_falhou).';
+
+--
+-- Name: instalacao_sonda_fato_financeiro_recentes; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_fato_financeiro_recentes AS
+ SELECT 1 AS ok
+  WHERE (NOT (EXISTS ( SELECT 1
+           FROM (( SELECT dv.id,
+                    d.tipo_taxonomia
+                   FROM (public.documento_versao dv
+                     JOIN public.documento d ON ((d.id = dv.documento_id)))
+                  WHERE (public.fn_tipo_gera_fato(d.tipo_taxonomia) AND (EXISTS ( SELECT 1
+                           FROM public.evento_auditoria e
+                          WHERE ((e.entidade_ref = ('documento_versao:'::text || dv.id)) AND (e.acao = 'extracao_sombra'::text)))))
+                  ORDER BY dv.criada_em DESC, dv.id
+                 LIMIT 20) v
+             JOIN public.campo_extraido ce ON (((ce.documento_versao_id = v.id) AND (ce.origem_valor = 'extracao'::text))))
+          WHERE (public.fn_linha_vira_fato(v.tipo_taxonomia, ce.chave, ce.unidade, ce.valor_num) AND (NOT (EXISTS ( SELECT 1
+                   FROM public.fato_financeiro f
+                  WHERE (f.campo_extraido_id = ce.id))))))));
+
+--
+-- Name: VIEW instalacao_sonda_fato_financeiro_recentes; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_recentes IS 'Sonda da 0243: uma linha = toda linha elegível das 20 versões de demonstração mais novas que passaram pela extração (evento extracao_sombra) tem fato. Zero linhas: a extração nova NÃO está materializando (fn_registrar_campos_extraidos antiga, backfill não aplicado ou a materialização falhando: veja evento fatos_materializacao_falhou).';
+
+--
+-- Name: instalacao_sonda_fato_financeiro_so_secao; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_fato_financeiro_so_secao AS
+ SELECT 1 AS ok
+  WHERE (NOT (EXISTS ( SELECT 1
+           FROM public.conta_canonica c
+          WHERE ((c.secao_canonica IS NULL) AND (EXISTS ( SELECT 1
+                   FROM public.fato_financeiro f
+                  WHERE (f.conta_id = c.codigo)))))));
+
+--
+-- Name: VIEW instalacao_sonda_fato_financeiro_so_secao; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_so_secao IS 'Sonda da 0243: uma linha = nenhum fato aponta para raiz, grupo ou subgrupo (nó sem secao_canonica). Zero linhas: um fato foi gravado numa conta que não é seção.';
 
 --
 -- Name: instalacao_sonda_gatilho_original_apagado; Type: VIEW; Schema: public; Owner: -
@@ -19565,6 +20007,20 @@ ALTER TABLE ONLY public.execucao_falha
     ADD CONSTRAINT execucao_falha_pkey PRIMARY KEY (id);
 
 --
+-- Name: fato_financeiro fato_financeiro_campo_extraido_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fato_financeiro
+    ADD CONSTRAINT fato_financeiro_campo_extraido_id_key UNIQUE (campo_extraido_id);
+
+--
+-- Name: fato_financeiro fato_financeiro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fato_financeiro
+    ADD CONSTRAINT fato_financeiro_pkey PRIMARY KEY (id);
+
+--
 -- Name: fato_tipo_catalogo fato_tipo_catalogo_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -19879,6 +20335,24 @@ CREATE UNIQUE INDEX entidade_caso_cnpj_unico ON public.entidade USING btree (cas
 --
 
 COMMENT ON INDEX public.entidade_caso_cnpj_unico IS 'A regra 1 da 0169 afirmada pelo BANCO: dentro de um caso, um CNPJ identifica UMA entidade. Sem ela, duas chamadas concorrentes de fn_upsert_entidade inserem as duas.';
+
+--
+-- Name: fato_financeiro_conta_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fato_financeiro_conta_idx ON public.fato_financeiro USING btree (conta_id);
+
+--
+-- Name: fato_financeiro_entidade_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fato_financeiro_entidade_idx ON public.fato_financeiro USING btree (entidade_id);
+
+--
+-- Name: fato_financeiro_versao_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX fato_financeiro_versao_idx ON public.fato_financeiro USING btree (documento_versao_id);
 
 --
 -- Name: idx_campo_classe_override_campo; Type: INDEX; Schema: public; Owner: -
@@ -20269,6 +20743,12 @@ CREATE TRIGGER trg_estagio_autonomia_so_socio BEFORE INSERT OR DELETE OR UPDATE 
 --
 
 CREATE TRIGGER trg_execucao_falha_leitura_nao_apaga BEFORE DELETE ON public.execucao_falha FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: documento trg_fato_segue_o_documento; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_fato_segue_o_documento AFTER UPDATE OF entidade_id, periodo_id ON public.documento FOR EACH ROW WHEN (((old.entidade_id IS DISTINCT FROM new.entidade_id) OR (old.periodo_id IS DISTINCT FROM new.periodo_id))) EXECUTE FUNCTION public.fn_fato_segue_o_documento();
 
 --
 -- Name: golden_campo trg_golden_campo_congelada; Type: TRIGGER; Schema: public; Owner: -
@@ -20678,6 +21158,41 @@ ALTER TABLE ONLY public.estagio_autonomia
 
 ALTER TABLE ONLY public.execucao_falha
     ADD CONSTRAINT execucao_falha_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
+-- Name: fato_financeiro fato_financeiro_campo_extraido_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fato_financeiro
+    ADD CONSTRAINT fato_financeiro_campo_extraido_id_fkey FOREIGN KEY (campo_extraido_id) REFERENCES public.campo_extraido(id) ON DELETE CASCADE;
+
+--
+-- Name: fato_financeiro fato_financeiro_conta_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fato_financeiro
+    ADD CONSTRAINT fato_financeiro_conta_id_fkey FOREIGN KEY (conta_id) REFERENCES public.conta_canonica(codigo);
+
+--
+-- Name: fato_financeiro fato_financeiro_documento_versao_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fato_financeiro
+    ADD CONSTRAINT fato_financeiro_documento_versao_id_fkey FOREIGN KEY (documento_versao_id) REFERENCES public.documento_versao(id) ON DELETE CASCADE;
+
+--
+-- Name: fato_financeiro fato_financeiro_entidade_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fato_financeiro
+    ADD CONSTRAINT fato_financeiro_entidade_id_fkey FOREIGN KEY (entidade_id) REFERENCES public.entidade(id) DEFERRABLE INITIALLY DEFERRED;
+
+--
+-- Name: fato_financeiro fato_financeiro_periodo_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.fato_financeiro
+    ADD CONSTRAINT fato_financeiro_periodo_id_fkey FOREIGN KEY (periodo_id) REFERENCES public.periodo(id) DEFERRABLE INITIALLY DEFERRED;
 
 --
 -- Name: golden_campo golden_campo_rodada_id_documento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -21708,6 +22223,40 @@ CREATE POLICY execucao_falha_update ON public.execucao_falha FOR UPDATE TO authe
            FROM public.fn_casos_escreviveis() c(c))))))));
 
 --
+-- Name: fato_financeiro; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.fato_financeiro ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: fato_financeiro fato_financeiro_insert; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fato_financeiro_insert ON public.fato_financeiro FOR INSERT TO authenticated WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT v.id
+   FROM (public.documento_versao v
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
+-- Name: fato_financeiro fato_financeiro_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fato_financeiro_read ON public.fato_financeiro FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT documento_versao.id
+   FROM public.documento_versao))));
+
+--
+-- Name: fato_financeiro fato_financeiro_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY fato_financeiro_update ON public.fato_financeiro FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT documento_versao.id
+   FROM public.documento_versao)))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (documento_versao_id IN ( SELECT v.id
+   FROM (public.documento_versao v
+     JOIN public.documento d ON ((d.id = v.documento_id)))
+  WHERE (d.caso_id IN ( SELECT c.c
+           FROM public.fn_casos_escreviveis() c(c)))))));
+
+--
 -- Name: fato_tipo_catalogo; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -22190,6 +22739,7 @@ GRANT USAGE ON SCHEMA public TO service_role;
 REVOKE ALL ON FUNCTION public.fn_abrir_lote_execucao(p_caso_id uuid, p_execucao_ref text, p_plano jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_abrir_lote_execucao(p_caso_id uuid, p_execucao_ref text, p_plano jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_abrir_lote_execucao(p_caso_id uuid, p_execucao_ref text, p_plano jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_abrir_lote_execucao(p_caso_id uuid, p_execucao_ref text, p_plano jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_aceitar_extracao(p_documento_versao_id uuid, p_autor text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -22198,6 +22748,7 @@ GRANT ALL ON FUNCTION public.fn_abrir_lote_execucao(p_caso_id uuid, p_execucao_r
 REVOKE ALL ON FUNCTION public.fn_aceitar_extracao(p_documento_versao_id uuid, p_autor text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_aceitar_extracao(p_documento_versao_id uuid, p_autor text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_aceitar_extracao(p_documento_versao_id uuid, p_autor text, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aceitar_extracao(p_documento_versao_id uuid, p_autor text, p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_acesso_bootstrap(); Type: ACL; Schema: public; Owner: -
@@ -22229,6 +22780,7 @@ GRANT ALL ON FUNCTION public.fn_alocar(p_caso uuid, p_usuario uuid) TO service_r
 REVOKE ALL ON FUNCTION public.fn_ano4(a text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_ano4(a text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_ano4(a text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_ano4(a text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_ano_da_coluna(p_periodo_coluna text, p_referencia text); Type: ACL; Schema: public; Owner: -
@@ -22237,6 +22789,7 @@ GRANT ALL ON FUNCTION public.fn_ano4(a text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_ano_da_coluna(p_periodo_coluna text, p_referencia text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_ano_da_coluna(p_periodo_coluna text, p_referencia text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_ano_da_coluna(p_periodo_coluna text, p_referencia text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_ano_da_coluna(p_periodo_coluna text, p_referencia text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_anos_alvo(p_periodo_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22245,6 +22798,7 @@ GRANT ALL ON FUNCTION public.fn_ano_da_coluna(p_periodo_coluna text, p_referenci
 REVOKE ALL ON FUNCTION public.fn_anos_alvo(p_periodo_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_anos_alvo(p_periodo_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_anos_alvo(p_periodo_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_anos_alvo(p_periodo_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_anos_do_periodo(p_referencia text); Type: ACL; Schema: public; Owner: -
@@ -22253,6 +22807,7 @@ GRANT ALL ON FUNCTION public.fn_anos_alvo(p_periodo_id uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_anos_do_periodo(p_referencia text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_anos_do_periodo(p_referencia text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_anos_do_periodo(p_referencia text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_anos_do_periodo(p_referencia text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_anos_periodo(p_tipo text, p_ref text); Type: ACL; Schema: public; Owner: -
@@ -22261,6 +22816,7 @@ GRANT ALL ON FUNCTION public.fn_anos_do_periodo(p_referencia text) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_anos_texto(p_texto text); Type: ACL; Schema: public; Owner: -
@@ -22269,6 +22825,7 @@ GRANT ALL ON FUNCTION public.fn_anos_periodo(p_tipo text, p_ref text) TO service
 REVOKE ALL ON FUNCTION public.fn_anos_texto(p_texto text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_anos_texto(p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_anos_texto(p_texto text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_anos_texto(p_texto text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_aplicar_premissa_em_lote(p_caso_id uuid, p_secao_canonica text, p_premissa text, p_autor text, p_sazonalidade text); Type: ACL; Schema: public; Owner: -
@@ -22277,6 +22834,7 @@ GRANT ALL ON FUNCTION public.fn_anos_texto(p_texto text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_aplicar_premissa_em_lote(p_caso_id uuid, p_secao_canonica text, p_premissa text, p_autor text, p_sazonalidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_aplicar_premissa_em_lote(p_caso_id uuid, p_secao_canonica text, p_premissa text, p_autor text, p_sazonalidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_aplicar_premissa_em_lote(p_caso_id uuid, p_secao_canonica text, p_premissa text, p_autor text, p_sazonalidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aplicar_premissa_em_lote(p_caso_id uuid, p_secao_canonica text, p_premissa text, p_autor text, p_sazonalidade text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_aprovar_caso(p_caso_id uuid, p_autor text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -22285,6 +22843,7 @@ GRANT ALL ON FUNCTION public.fn_aplicar_premissa_em_lote(p_caso_id uuid, p_secao
 REVOKE ALL ON FUNCTION public.fn_aprovar_caso(p_caso_id uuid, p_autor text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_aprovar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_aprovar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aprovar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_ativar_premissa(p_caso_id uuid, p_codigo text, p_valores jsonb, p_origem text, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22293,6 +22852,7 @@ GRANT ALL ON FUNCTION public.fn_aprovar_caso(p_caso_id uuid, p_autor text, p_mot
 REVOKE ALL ON FUNCTION public.fn_ativar_premissa(p_caso_id uuid, p_codigo text, p_valores jsonb, p_origem text, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_ativar_premissa(p_caso_id uuid, p_codigo text, p_valores jsonb, p_origem text, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_ativar_premissa(p_caso_id uuid, p_codigo text, p_valores jsonb, p_origem text, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_ativar_premissa(p_caso_id uuid, p_codigo text, p_valores jsonb, p_origem text, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_autoridade_do_documento(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22301,6 +22861,7 @@ GRANT ALL ON FUNCTION public.fn_ativar_premissa(p_caso_id uuid, p_codigo text, p
 REVOKE ALL ON FUNCTION public.fn_autoridade_do_documento(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_autoridade_do_documento(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_autoridade_do_documento(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_autoridade_do_documento(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_avaliar_guardas_extracao(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22309,6 +22870,7 @@ GRANT ALL ON FUNCTION public.fn_autoridade_do_documento(p_documento_id uuid) TO 
 REVOKE ALL ON FUNCTION public.fn_avaliar_guardas_extracao(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_avaliar_guardas_extracao(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_avaliar_guardas_extracao(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_avaliar_guardas_extracao(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_avaliar_portao2(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22317,6 +22879,7 @@ GRANT ALL ON FUNCTION public.fn_avaliar_guardas_extracao(p_documento_versao_id u
 REVOKE ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_caso_da_chave_do_storage(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -22380,6 +22943,7 @@ GRANT ALL ON FUNCTION public.fn_casos_legiveis() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_classe_contabil_do_campo(p_campo_extraido_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22388,6 +22952,7 @@ GRANT ALL ON FUNCTION public.fn_classe_contabil_concordancia(p_caso_id uuid) TO 
 REVOKE ALL ON FUNCTION public.fn_classe_contabil_do_campo(p_campo_extraido_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_classe_contabil_do_campo(p_campo_extraido_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_classe_contabil_do_campo(p_campo_extraido_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_classe_contabil_do_campo(p_campo_extraido_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_classe_contabil_sugerir(p_chave text, p_secao_canonica text, p_tipo_taxonomia text); Type: ACL; Schema: public; Owner: -
@@ -22396,6 +22961,7 @@ GRANT ALL ON FUNCTION public.fn_classe_contabil_do_campo(p_campo_extraido_id uui
 REVOKE ALL ON FUNCTION public.fn_classe_contabil_sugerir(p_chave text, p_secao_canonica text, p_tipo_taxonomia text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_classe_contabil_sugerir(p_chave text, p_secao_canonica text, p_tipo_taxonomia text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_classe_contabil_sugerir(p_chave text, p_secao_canonica text, p_tipo_taxonomia text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_classe_contabil_sugerir(p_chave text, p_secao_canonica text, p_tipo_taxonomia text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_classificar_contabil(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22404,6 +22970,7 @@ GRANT ALL ON FUNCTION public.fn_classe_contabil_sugerir(p_chave text, p_secao_ca
 REVOKE ALL ON FUNCTION public.fn_classificar_contabil(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_classificar_contabil(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_classificar_contabil(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_classificar_contabil(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_cnpj_canonico(p_cnpj text); Type: ACL; Schema: public; Owner: -
@@ -22412,6 +22979,7 @@ GRANT ALL ON FUNCTION public.fn_classificar_contabil(p_documento_versao_id uuid)
 REVOKE ALL ON FUNCTION public.fn_cnpj_canonico(p_cnpj text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_cnpj_canonico(p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_cnpj_canonico(p_cnpj text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_cnpj_canonico(p_cnpj text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_cobertura_de_tipos(); Type: ACL; Schema: public; Owner: -
@@ -22420,6 +22988,7 @@ GRANT ALL ON FUNCTION public.fn_cnpj_canonico(p_cnpj text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_cobertura_de_tipos() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_cobertura_de_tipos() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_cobertura_de_tipos() TO service_role;
+GRANT ALL ON FUNCTION public.fn_cobertura_de_tipos() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_coluna_de_dimensao(p_coluna text); Type: ACL; Schema: public; Owner: -
@@ -22428,6 +22997,7 @@ GRANT ALL ON FUNCTION public.fn_cobertura_de_tipos() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_coluna_de_dimensao(p_coluna text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_coluna_de_dimensao(p_coluna text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_coluna_de_dimensao(p_coluna text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_coluna_de_dimensao(p_coluna text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_coluna_e_abertura(p_coluna text); Type: ACL; Schema: public; Owner: -
@@ -22436,6 +23006,7 @@ GRANT ALL ON FUNCTION public.fn_coluna_de_dimensao(p_coluna text) TO service_rol
 REVOKE ALL ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_coluna_e_movimento(p_coluna text); Type: ACL; Schema: public; Owner: -
@@ -22444,6 +23015,7 @@ GRANT ALL ON FUNCTION public.fn_coluna_e_abertura(p_coluna text) TO service_role
 REVOKE ALL ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_coluna_e_saldo(p_coluna text); Type: ACL; Schema: public; Owner: -
@@ -22452,6 +23024,7 @@ GRANT ALL ON FUNCTION public.fn_coluna_e_movimento(p_coluna text) TO service_rol
 REVOKE ALL ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_coluna_entidade(p_documento_versao_id uuid, p_entidade_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22460,6 +23033,7 @@ GRANT ALL ON FUNCTION public.fn_coluna_e_saldo(p_coluna text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_coluna_entidade(p_documento_versao_id uuid, p_entidade_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_coluna_entidade(p_documento_versao_id uuid, p_entidade_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_coluna_entidade(p_documento_versao_id uuid, p_entidade_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_coluna_entidade(p_documento_versao_id uuid, p_entidade_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_coluna_periodo_do_ano(p_documento_versao_id uuid, p_ano integer); Type: ACL; Schema: public; Owner: -
@@ -22468,6 +23042,7 @@ GRANT ALL ON FUNCTION public.fn_coluna_entidade(p_documento_versao_id uuid, p_en
 REVOKE ALL ON FUNCTION public.fn_coluna_periodo_do_ano(p_documento_versao_id uuid, p_ano integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_coluna_periodo_do_ano(p_documento_versao_id uuid, p_ano integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_coluna_periodo_do_ano(p_documento_versao_id uuid, p_ano integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_coluna_periodo_do_ano(p_documento_versao_id uuid, p_ano integer) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer); Type: ACL; Schema: public; Owner: -
@@ -22476,6 +23051,7 @@ GRANT ALL ON FUNCTION public.fn_coluna_periodo_do_ano(p_documento_versao_id uuid
 REVOKE ALL ON FUNCTION public.fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_combinado_estrutural_apto(p_tipo_fonte text, p_empresas_com_valor integer) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_conexao_de_servico(); Type: ACL; Schema: public; Owner: -
@@ -22492,6 +23068,7 @@ GRANT ALL ON FUNCTION public.fn_conexao_de_servico() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_conferir_arvore(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_conferir_arvore(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_conferir_arvore(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_conferir_arvore(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_conferir_envio(p_token text, p_mandato text, p_agora timestamp with time zone); Type: ACL; Schema: public; Owner: -
@@ -22507,6 +23084,7 @@ GRANT ALL ON FUNCTION public.fn_conferir_envio(p_token text, p_mandato text, p_a
 REVOKE ALL ON FUNCTION public.fn_conferir_lote(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_conferir_lote(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_conferir_lote(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_conferir_lote(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_conferir_modelagem(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22515,6 +23093,7 @@ GRANT ALL ON FUNCTION public.fn_conferir_lote(p_caso_id uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_conferir_modelagem(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_conferir_modelagem(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_conferir_modelagem(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_conferir_modelagem(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
@@ -22523,6 +23102,7 @@ GRANT ALL ON FUNCTION public.fn_conferir_modelagem(p_caso_id uuid) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_conta_canonica_alcanca_a_raiz(); Type: ACL; Schema: public; Owner: -
@@ -22537,6 +23117,7 @@ REVOKE ALL ON FUNCTION public.fn_conta_canonica_alcanca_a_raiz() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_conta_canonica_orfas() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_conta_canonica_orfas() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_conta_canonica_orfas() TO service_role;
+GRANT ALL ON FUNCTION public.fn_conta_canonica_orfas() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_contas_repetindo_valor(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22545,6 +23126,7 @@ GRANT ALL ON FUNCTION public.fn_conta_canonica_orfas() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid); Type: ACL; Schema: public; Owner: -
@@ -22553,6 +23135,7 @@ GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uui
 REVOKE ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22561,6 +23144,7 @@ GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave t
 REVOKE ALL ON FUNCTION public.fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_controlador_registrar(p_caso_id uuid, p_nome text, p_documento text, p_tipo_pessoa public.controlador_tipo_pessoa, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22569,6 +23153,7 @@ GRANT ALL ON FUNCTION public.fn_controlador_desvincular_familia(p_vinculo_id uui
 REVOKE ALL ON FUNCTION public.fn_controlador_registrar(p_caso_id uuid, p_nome text, p_documento text, p_tipo_pessoa public.controlador_tipo_pessoa, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_controlador_registrar(p_caso_id uuid, p_nome text, p_documento text, p_tipo_pessoa public.controlador_tipo_pessoa, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_controlador_registrar(p_caso_id uuid, p_nome text, p_documento text, p_tipo_pessoa public.controlador_tipo_pessoa, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_controlador_registrar(p_caso_id uuid, p_nome text, p_documento text, p_tipo_pessoa public.controlador_tipo_pessoa, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22577,6 +23162,7 @@ GRANT ALL ON FUNCTION public.fn_controlador_registrar(p_caso_id uuid, p_nome tex
 REVOKE ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_corrigir_descricao_contaminada(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22584,6 +23170,7 @@ GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_c
 
 REVOKE ALL ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -22592,6 +23179,7 @@ GRANT ALL ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) T
 REVOKE ALL ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_definir_modelagem(p_caso_id uuid, p_entidade text, p_ultimo_exercicio_real integer, p_indice_macro text, p_setor text, p_autor text, p_anos_projetados integer); Type: ACL; Schema: public; Owner: -
@@ -22600,6 +23188,7 @@ GRANT ALL ON FUNCTION public.fn_decidir_pendencia(p_pendencia_id uuid, p_autor t
 REVOKE ALL ON FUNCTION public.fn_definir_modelagem(p_caso_id uuid, p_entidade text, p_ultimo_exercicio_real integer, p_indice_macro text, p_setor text, p_autor text, p_anos_projetados integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_definir_modelagem(p_caso_id uuid, p_entidade text, p_ultimo_exercicio_real integer, p_indice_macro text, p_setor text, p_autor text, p_anos_projetados integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_definir_modelagem(p_caso_id uuid, p_entidade text, p_ultimo_exercicio_real integer, p_indice_macro text, p_setor text, p_autor text, p_anos_projetados integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_definir_modelagem(p_caso_id uuid, p_entidade text, p_ultimo_exercicio_real integer, p_indice_macro text, p_setor text, p_autor text, p_anos_projetados integer) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_definir_papel(p_usuario uuid, p_papel text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -22624,6 +23213,7 @@ GRANT ALL ON FUNCTION public.fn_desalocar(p_caso uuid, p_usuario uuid) TO servic
 REVOKE ALL ON FUNCTION public.fn_desativar_premissa(p_caso_id uuid, p_codigo text, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_desativar_premissa(p_caso_id uuid, p_codigo text, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_desativar_premissa(p_caso_id uuid, p_codigo text, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_desativar_premissa(p_caso_id uuid, p_codigo text, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_descricao_extracao_falhou(p_nome_original text, p_pares integer, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -22632,6 +23222,7 @@ GRANT ALL ON FUNCTION public.fn_desativar_premissa(p_caso_id uuid, p_codigo text
 REVOKE ALL ON FUNCTION public.fn_descricao_extracao_falhou(p_nome_original text, p_pares integer, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_descricao_extracao_falhou(p_nome_original text, p_pares integer, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_descricao_extracao_falhou(p_nome_original text, p_pares integer, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_descricao_extracao_falhou(p_nome_original text, p_pares integer, p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_descricao_linha_exigida(p_tipo text, p_entidade text, p_rotulo text, p_depende_de text[], p_origem text, p_alternativa_rotulo text, p_alternativa_recado text); Type: ACL; Schema: public; Owner: -
@@ -22640,6 +23231,7 @@ GRANT ALL ON FUNCTION public.fn_descricao_extracao_falhou(p_nome_original text, 
 REVOKE ALL ON FUNCTION public.fn_descricao_linha_exigida(p_tipo text, p_entidade text, p_rotulo text, p_depende_de text[], p_origem text, p_alternativa_rotulo text, p_alternativa_recado text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_descricao_linha_exigida(p_tipo text, p_entidade text, p_rotulo text, p_depende_de text[], p_origem text, p_alternativa_rotulo text, p_alternativa_recado text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_descricao_linha_exigida(p_tipo text, p_entidade text, p_rotulo text, p_depende_de text[], p_origem text, p_alternativa_rotulo text, p_alternativa_recado text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_descricao_linha_exigida(p_tipo text, p_entidade text, p_rotulo text, p_depende_de text[], p_origem text, p_alternativa_rotulo text, p_alternativa_recado text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_diagnostico_modelagem(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22648,6 +23240,7 @@ GRANT ALL ON FUNCTION public.fn_descricao_linha_exigida(p_tipo text, p_entidade 
 REVOKE ALL ON FUNCTION public.fn_diagnostico_modelagem(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_diagnostico_modelagem(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_diagnostico_modelagem(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_diagnostico_modelagem(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_dial(p_estagio text); Type: ACL; Schema: public; Owner: -
@@ -22656,6 +23249,7 @@ GRANT ALL ON FUNCTION public.fn_diagnostico_modelagem(p_caso_id uuid) TO service
 REVOKE ALL ON FUNCTION public.fn_dial(p_estagio text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_dial(p_estagio text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_dial(p_estagio text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_dial(p_estagio text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_dial_auto_promover(p_estagio text); Type: ACL; Schema: public; Owner: -
@@ -22671,6 +23265,7 @@ GRANT ALL ON FUNCTION public.fn_dial_auto_promover(p_estagio text) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_dial_influencia(p_estagio text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_dial_influencia(p_estagio text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_dial_influencia(p_estagio text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_dial_influencia(p_estagio text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_dial_permite_auto(p_estagio text, p_confianca numeric); Type: ACL; Schema: public; Owner: -
@@ -22679,6 +23274,7 @@ GRANT ALL ON FUNCTION public.fn_dial_influencia(p_estagio text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_dial_permite_auto(p_estagio text, p_confianca numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_dial_permite_auto(p_estagio text, p_confianca numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_dial_permite_auto(p_estagio text, p_confianca numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_dial_permite_auto(p_estagio text, p_confianca numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_divergencias_indice_macro(p_tolerancia numeric); Type: ACL; Schema: public; Owner: -
@@ -22687,6 +23283,7 @@ GRANT ALL ON FUNCTION public.fn_dial_permite_auto(p_estagio text, p_confianca nu
 REVOKE ALL ON FUNCTION public.fn_divergencias_indice_macro(p_tolerancia numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_divergencias_indice_macro(p_tolerancia numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_divergencias_indice_macro(p_tolerancia numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_divergencias_indice_macro(p_tolerancia numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_documento_balanco(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22695,6 +23292,7 @@ GRANT ALL ON FUNCTION public.fn_divergencias_indice_macro(p_tolerancia numeric) 
 REVOKE ALL ON FUNCTION public.fn_documento_balanco(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_documento_balanco(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_documento_balanco(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_documento_balanco(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_documento_de_varias_empresas(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22703,6 +23301,7 @@ GRANT ALL ON FUNCTION public.fn_documento_balanco(p_caso_id uuid, p_entidade_id 
 REVOKE ALL ON FUNCTION public.fn_documento_de_varias_empresas(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_documento_de_varias_empresas(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_documento_de_varias_empresas(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_documento_de_varias_empresas(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_documento_decide_sozinho(p_codigo text, p_tipo_incorreto_aberto boolean); Type: ACL; Schema: public; Owner: -
@@ -22711,6 +23310,7 @@ GRANT ALL ON FUNCTION public.fn_documento_de_varias_empresas(p_documento_id uuid
 REVOKE ALL ON FUNCTION public.fn_documento_decide_sozinho(p_codigo text, p_tipo_incorreto_aberto boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_documento_decide_sozinho(p_codigo text, p_tipo_incorreto_aberto boolean) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_documento_decide_sozinho(p_codigo text, p_tipo_incorreto_aberto boolean) TO service_role;
+GRANT ALL ON FUNCTION public.fn_documento_decide_sozinho(p_codigo text, p_tipo_incorreto_aberto boolean) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_documento_por_tipo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text); Type: ACL; Schema: public; Owner: -
@@ -22719,6 +23319,7 @@ GRANT ALL ON FUNCTION public.fn_documento_decide_sozinho(p_codigo text, p_tipo_i
 REVOKE ALL ON FUNCTION public.fn_documento_por_tipo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_documento_por_tipo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_documento_por_tipo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_documento_por_tipo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_documento_preliminar(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -22727,6 +23328,7 @@ GRANT ALL ON FUNCTION public.fn_documento_por_tipo(p_caso_id uuid, p_entidade_id
 REVOKE ALL ON FUNCTION public.fn_documento_preliminar(p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_documento_preliminar(p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_documento_preliminar(p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_documento_preliminar(p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_documento_serve_como(p_documento_id uuid, p_tipo_taxonomia text); Type: ACL; Schema: public; Owner: -
@@ -22735,6 +23337,7 @@ GRANT ALL ON FUNCTION public.fn_documento_preliminar(p_nome text) TO service_rol
 REVOKE ALL ON FUNCTION public.fn_documento_serve_como(p_documento_id uuid, p_tipo_taxonomia text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_documento_serve_como(p_documento_id uuid, p_tipo_taxonomia text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_documento_serve_como(p_documento_id uuid, p_tipo_taxonomia text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_documento_serve_como(p_documento_id uuid, p_tipo_taxonomia text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_documentos_nao_extraidos(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22743,6 +23346,7 @@ GRANT ALL ON FUNCTION public.fn_documento_serve_como(p_documento_id uuid, p_tipo
 REVOKE ALL ON FUNCTION public.fn_documentos_nao_extraidos(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_documentos_nao_extraidos(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_documentos_nao_extraidos(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_documentos_nao_extraidos(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_eh_socio(); Type: ACL; Schema: public; Owner: -
@@ -22759,6 +23363,7 @@ GRANT ALL ON FUNCTION public.fn_eh_socio() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_entidade_aprender_cnpj(p_entidade_id uuid, p_cnpj text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_aprender_cnpj(p_entidade_id uuid, p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_aprender_cnpj(p_entidade_id uuid, p_cnpj text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_aprender_cnpj(p_entidade_id uuid, p_cnpj text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_cadeia_controladora(p_entidade_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22767,6 +23372,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_aprender_cnpj(p_entidade_id uuid, p_cnp
 REVOKE ALL ON FUNCTION public.fn_entidade_cadeia_controladora(p_entidade_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_cadeia_controladora(p_entidade_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_cadeia_controladora(p_entidade_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_cadeia_controladora(p_entidade_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_canonica(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -22775,6 +23381,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_cadeia_controladora(p_entidade_id uuid)
 REVOKE ALL ON FUNCTION public.fn_entidade_canonica(p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_canonica(p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_canonica(p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_canonica(p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_canonica_forte(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -22783,6 +23390,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_canonica(p_nome text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_entidade_canonica_forte(p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_canonica_forte(p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_canonica_forte(p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_canonica_forte(p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_criaria_ciclo_participacao(p_entidade_id uuid, p_nova_controladora_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22791,6 +23399,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_canonica_forte(p_nome text) TO service_
 REVOKE ALL ON FUNCTION public.fn_entidade_criaria_ciclo_participacao(p_entidade_id uuid, p_nova_controladora_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_criaria_ciclo_participacao(p_entidade_id uuid, p_nova_controladora_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_criaria_ciclo_participacao(p_entidade_id uuid, p_nova_controladora_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_criaria_ciclo_participacao(p_entidade_id uuid, p_nova_controladora_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_definir_controlador(p_entidade_id uuid, p_controlador_id uuid, p_percentual numeric, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22799,6 +23408,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_criaria_ciclo_participacao(p_entidade_i
 REVOKE ALL ON FUNCTION public.fn_entidade_definir_controlador(p_entidade_id uuid, p_controlador_id uuid, p_percentual numeric, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_definir_controlador(p_entidade_id uuid, p_controlador_id uuid, p_percentual numeric, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_definir_controlador(p_entidade_id uuid, p_controlador_id uuid, p_percentual numeric, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_definir_controlador(p_entidade_id uuid, p_controlador_id uuid, p_percentual numeric, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_definir_forma_de_controle(p_entidade_id uuid, p_forma public.entidade_forma_de_controle, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22807,6 +23417,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_definir_controlador(p_entidade_id uuid,
 REVOKE ALL ON FUNCTION public.fn_entidade_definir_forma_de_controle(p_entidade_id uuid, p_forma public.entidade_forma_de_controle, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_definir_forma_de_controle(p_entidade_id uuid, p_forma public.entidade_forma_de_controle, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_definir_forma_de_controle(p_entidade_id uuid, p_forma public.entidade_forma_de_controle, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_definir_forma_de_controle(p_entidade_id uuid, p_forma public.entidade_forma_de_controle, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_definir_papel_no_grupo(p_entidade_id uuid, p_papel public.entidade_papel_no_grupo, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22815,6 +23426,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_definir_forma_de_controle(p_entidade_id
 REVOKE ALL ON FUNCTION public.fn_entidade_definir_papel_no_grupo(p_entidade_id uuid, p_papel public.entidade_papel_no_grupo, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_definir_papel_no_grupo(p_entidade_id uuid, p_papel public.entidade_papel_no_grupo, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_definir_papel_no_grupo(p_entidade_id uuid, p_papel public.entidade_papel_no_grupo, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_definir_papel_no_grupo(p_entidade_id uuid, p_papel public.entidade_papel_no_grupo, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_definir_participacao(p_entidade_id uuid, p_controladora_id uuid, p_percentual numeric, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22823,6 +23435,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_definir_papel_no_grupo(p_entidade_id uu
 REVOKE ALL ON FUNCTION public.fn_entidade_definir_participacao(p_entidade_id uuid, p_controladora_id uuid, p_percentual numeric, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_definir_participacao(p_entidade_id uuid, p_controladora_id uuid, p_percentual numeric, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_definir_participacao(p_entidade_id uuid, p_controladora_id uuid, p_percentual numeric, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_definir_participacao(p_entidade_id uuid, p_controladora_id uuid, p_percentual numeric, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_e_balcao_ambiguo(p_caso_id uuid, p_entidade_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22831,6 +23444,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_definir_participacao(p_entidade_id uuid
 REVOKE ALL ON FUNCTION public.fn_entidade_e_balcao_ambiguo(p_caso_id uuid, p_entidade_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_e_balcao_ambiguo(p_caso_id uuid, p_entidade_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_e_balcao_ambiguo(p_caso_id uuid, p_entidade_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_e_balcao_ambiguo(p_caso_id uuid, p_entidade_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_nome_mais_completo(p_atual text, p_novo text); Type: ACL; Schema: public; Owner: -
@@ -22839,6 +23453,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_e_balcao_ambiguo(p_caso_id uuid, p_enti
 REVOKE ALL ON FUNCTION public.fn_entidade_nome_mais_completo(p_atual text, p_novo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_nome_mais_completo(p_atual text, p_novo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_nome_mais_completo(p_atual text, p_novo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_nome_mais_completo(p_atual text, p_novo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_nome_parece_titulo_ou_arquivo(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -22847,6 +23462,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_nome_mais_completo(p_atual text, p_novo
 REVOKE ALL ON FUNCTION public.fn_entidade_nome_parece_titulo_ou_arquivo(p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_nome_parece_titulo_ou_arquivo(p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_nome_parece_titulo_ou_arquivo(p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_nome_parece_titulo_ou_arquivo(p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidade_talvez_renomear(p_caso_id uuid, p_entidade_id uuid, p_nome text, p_cnpj text); Type: ACL; Schema: public; Owner: -
@@ -22855,6 +23471,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_nome_parece_titulo_ou_arquivo(p_nome te
 REVOKE ALL ON FUNCTION public.fn_entidade_talvez_renomear(p_caso_id uuid, p_entidade_id uuid, p_nome text, p_cnpj text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidade_talvez_renomear(p_caso_id uuid, p_entidade_id uuid, p_nome text, p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidade_talvez_renomear(p_caso_id uuid, p_entidade_id uuid, p_nome text, p_cnpj text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidade_talvez_renomear(p_caso_id uuid, p_entidade_id uuid, p_nome text, p_cnpj text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidades_candidatas(p_caso_id uuid, p_nome text); Type: ACL; Schema: public; Owner: -
@@ -22863,6 +23480,7 @@ GRANT ALL ON FUNCTION public.fn_entidade_talvez_renomear(p_caso_id uuid, p_entid
 REVOKE ALL ON FUNCTION public.fn_entidades_candidatas(p_caso_id uuid, p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidades_candidatas(p_caso_id uuid, p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidades_candidatas(p_caso_id uuid, p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidades_candidatas(p_caso_id uuid, p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidades_candidatas_cnpj(p_caso_id uuid, p_nome text, p_cnpj text); Type: ACL; Schema: public; Owner: -
@@ -22871,6 +23489,7 @@ GRANT ALL ON FUNCTION public.fn_entidades_candidatas(p_caso_id uuid, p_nome text
 REVOKE ALL ON FUNCTION public.fn_entidades_candidatas_cnpj(p_caso_id uuid, p_nome text, p_cnpj text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidades_candidatas_cnpj(p_caso_id uuid, p_nome text, p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidades_candidatas_cnpj(p_caso_id uuid, p_nome text, p_cnpj text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidades_candidatas_cnpj(p_caso_id uuid, p_nome text, p_cnpj text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_entidades_sao_um_grupo(p_nomes text[]); Type: ACL; Schema: public; Owner: -
@@ -22879,6 +23498,7 @@ GRANT ALL ON FUNCTION public.fn_entidades_candidatas_cnpj(p_caso_id uuid, p_nome
 REVOKE ALL ON FUNCTION public.fn_entidades_sao_um_grupo(p_nomes text[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_entidades_sao_um_grupo(p_nomes text[]) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_entidades_sao_um_grupo(p_nomes text[]) TO service_role;
+GRANT ALL ON FUNCTION public.fn_entidades_sao_um_grupo(p_nomes text[]) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_excluir_caso(p_caso_id uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -22887,6 +23507,7 @@ GRANT ALL ON FUNCTION public.fn_entidades_sao_um_grupo(p_nomes text[]) TO servic
 REVOKE ALL ON FUNCTION public.fn_excluir_caso(p_caso_id uuid, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_excluir_caso(p_caso_id uuid, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_excluir_caso(p_caso_id uuid, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_excluir_caso(p_caso_id uuid, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_exercicio_da_coluna(p_coluna text); Type: ACL; Schema: public; Owner: -
@@ -22895,6 +23516,7 @@ GRANT ALL ON FUNCTION public.fn_excluir_caso(p_caso_id uuid, p_autor text) TO se
 REVOKE ALL ON FUNCTION public.fn_exercicio_da_coluna(p_coluna text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_exercicio_da_coluna(p_coluna text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_exercicio_da_coluna(p_coluna text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_exercicio_da_coluna(p_coluna text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_exige_metrica(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22919,6 +23541,7 @@ GRANT ALL ON FUNCTION public.fn_exige_socio(p_acao text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone); Type: ACL; Schema: public; Owner: -
@@ -22927,6 +23550,7 @@ GRANT ALL ON FUNCTION public.fn_exigencias_do_caso(p_caso_id uuid) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) TO service_role;
+GRANT ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timestamp with time zone) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_familia_da_secao(p_secao text); Type: ACL; Schema: public; Owner: -
@@ -22935,6 +23559,21 @@ GRANT ALL ON FUNCTION public.fn_falhas_abertas(p_caso_nome text, p_desde timesta
 REVOKE ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_fato_pendencia_da_versao(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_fato_segue_o_documento(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_fato_segue_o_documento() FROM PUBLIC;
 
 --
 -- Name: FUNCTION fn_fator_escala(p_unidade text); Type: ACL; Schema: public; Owner: -
@@ -22943,6 +23582,7 @@ GRANT ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_fator_escala(p_unidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_fator_escala(p_unidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_fator_escala(p_unidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_fator_escala(p_unidade text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_fatos_do_caso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22951,6 +23591,7 @@ GRANT ALL ON FUNCTION public.fn_fator_escala(p_unidade text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_fatos_do_caso(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_fatos_do_caso(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_fatos_do_caso(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_fatos_do_caso(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -22959,6 +23600,7 @@ GRANT ALL ON FUNCTION public.fn_fatos_do_caso(p_caso_id uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_fila_de_reprocesso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -22967,6 +23609,7 @@ GRANT ALL ON FUNCTION public.fn_fechar_caso(p_caso_id uuid, p_autor text, p_moti
 REVOKE ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text); Type: ACL; Schema: public; Owner: -
@@ -22975,6 +23618,7 @@ GRANT ALL ON FUNCTION public.fn_fila_de_reprocesso(p_caso_id uuid) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_abrir_rodada(p_nome text, p_autor text, p_nota text, p_taxonomia_versao integer); Type: ACL; Schema: public; Owner: -
@@ -22983,6 +23627,7 @@ GRANT ALL ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_
 REVOKE ALL ON FUNCTION public.fn_golden_abrir_rodada(p_nome text, p_autor text, p_nota text, p_taxonomia_versao integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_abrir_rodada(p_nome text, p_autor text, p_nota text, p_taxonomia_versao integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_abrir_rodada(p_nome text, p_autor text, p_nota text, p_taxonomia_versao integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_abrir_rodada(p_nome text, p_autor text, p_nota text, p_taxonomia_versao integer) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_campos(p_rodada uuid, p_origem public.golden_origem); Type: ACL; Schema: public; Owner: -
@@ -22991,6 +23636,7 @@ GRANT ALL ON FUNCTION public.fn_golden_abrir_rodada(p_nome text, p_autor text, p
 REVOKE ALL ON FUNCTION public.fn_golden_campos(p_rodada uuid, p_origem public.golden_origem) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_campos(p_rodada uuid, p_origem public.golden_origem) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_campos(p_rodada uuid, p_origem public.golden_origem) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_campos(p_rodada uuid, p_origem public.golden_origem) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_candidatos(p_rodada uuid); Type: ACL; Schema: public; Owner: -
@@ -22999,6 +23645,7 @@ GRANT ALL ON FUNCTION public.fn_golden_campos(p_rodada uuid, p_origem public.gol
 REVOKE ALL ON FUNCTION public.fn_golden_candidatos(p_rodada uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_candidatos(p_rodada uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_candidatos(p_rodada uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_candidatos(p_rodada uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_classe_a(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23007,6 +23654,7 @@ GRANT ALL ON FUNCTION public.fn_golden_candidatos(p_rodada uuid) TO service_role
 REVOKE ALL ON FUNCTION public.fn_golden_classe_a(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_classe_a(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_classe_a(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_classe_a(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_classificacao(p_rodada uuid, p_origem public.golden_origem); Type: ACL; Schema: public; Owner: -
@@ -23015,6 +23663,7 @@ GRANT ALL ON FUNCTION public.fn_golden_classe_a(p_caso_id uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem public.golden_origem) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem public.golden_origem) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem public.golden_origem) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem public.golden_origem) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem); Type: ACL; Schema: public; Owner: -
@@ -23023,6 +23672,7 @@ GRANT ALL ON FUNCTION public.fn_golden_classificacao(p_rodada uuid, p_origem pub
 REVOKE ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.golden_origem) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_congelar(p_rodada uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -23031,6 +23681,7 @@ GRANT ALL ON FUNCTION public.fn_golden_cobertura(p_rodada uuid, p_origem public.
 REVOKE ALL ON FUNCTION public.fn_golden_congelar(p_rodada uuid, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_congelar(p_rodada uuid, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_congelar(p_rodada uuid, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_congelar(p_rodada uuid, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_consenso(p_rodada uuid); Type: ACL; Schema: public; Owner: -
@@ -23039,6 +23690,7 @@ GRANT ALL ON FUNCTION public.fn_golden_congelar(p_rodada uuid, p_autor text) TO 
 REVOKE ALL ON FUNCTION public.fn_golden_consenso(p_rodada uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_consenso(p_rodada uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_consenso(p_rodada uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_consenso(p_rodada uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_estrato_sugerido(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23047,6 +23699,7 @@ GRANT ALL ON FUNCTION public.fn_golden_consenso(p_rodada uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_golden_estrato_sugerido(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_estrato_sugerido(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_estrato_sugerido(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_estrato_sugerido(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_identificadores(p_rodada uuid, p_origem public.golden_origem); Type: ACL; Schema: public; Owner: -
@@ -23055,6 +23708,7 @@ GRANT ALL ON FUNCTION public.fn_golden_estrato_sugerido(p_documento_id uuid) TO 
 REVOKE ALL ON FUNCTION public.fn_golden_identificadores(p_rodada uuid, p_origem public.golden_origem) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_identificadores(p_rodada uuid, p_origem public.golden_origem) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_identificadores(p_rodada uuid, p_origem public.golden_origem) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_identificadores(p_rodada uuid, p_origem public.golden_origem) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_incluir_documento(p_rodada uuid, p_documento_id uuid, p_estrato public.golden_estrato, p_origem public.golden_origem, p_autor text, p_nota text); Type: ACL; Schema: public; Owner: -
@@ -23063,6 +23717,7 @@ GRANT ALL ON FUNCTION public.fn_golden_identificadores(p_rodada uuid, p_origem p
 REVOKE ALL ON FUNCTION public.fn_golden_incluir_documento(p_rodada uuid, p_documento_id uuid, p_estrato public.golden_estrato, p_origem public.golden_origem, p_autor text, p_nota text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_incluir_documento(p_rodada uuid, p_documento_id uuid, p_estrato public.golden_estrato, p_origem public.golden_origem, p_autor text, p_nota text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_incluir_documento(p_rodada uuid, p_documento_id uuid, p_estrato public.golden_estrato, p_origem public.golden_origem, p_autor text, p_nota text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_incluir_documento(p_rodada uuid, p_documento_id uuid, p_estrato public.golden_estrato, p_origem public.golden_origem, p_autor text, p_nota text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_inter_avaliador(p_rodada uuid, p_origem public.golden_origem); Type: ACL; Schema: public; Owner: -
@@ -23071,6 +23726,7 @@ GRANT ALL ON FUNCTION public.fn_golden_incluir_documento(p_rodada uuid, p_docume
 REVOKE ALL ON FUNCTION public.fn_golden_inter_avaliador(p_rodada uuid, p_origem public.golden_origem) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_inter_avaliador(p_rodada uuid, p_origem public.golden_origem) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_inter_avaliador(p_rodada uuid, p_origem public.golden_origem) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_inter_avaliador(p_rodada uuid, p_origem public.golden_origem) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_linhas_para_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text); Type: ACL; Schema: public; Owner: -
@@ -23079,6 +23735,7 @@ GRANT ALL ON FUNCTION public.fn_golden_inter_avaliador(p_rodada uuid, p_origem p
 REVOKE ALL ON FUNCTION public.fn_golden_linhas_para_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_linhas_para_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_linhas_para_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_linhas_para_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_progresso(p_rodada uuid); Type: ACL; Schema: public; Owner: -
@@ -23087,6 +23744,7 @@ GRANT ALL ON FUNCTION public.fn_golden_linhas_para_rotular(p_rodada uuid, p_docu
 REVOKE ALL ON FUNCTION public.fn_golden_progresso(p_rodada uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_progresso(p_rodada uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_progresso(p_rodada uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_progresso(p_rodada uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_rodada_congelada(); Type: ACL; Schema: public; Owner: -
@@ -23095,6 +23753,7 @@ GRANT ALL ON FUNCTION public.fn_golden_progresso(p_rodada uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_golden_rodada_congelada() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_rodada_congelada() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_rodada_congelada() TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_rodada_congelada() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_rodada_congelada_imutavel(); Type: ACL; Schema: public; Owner: -
@@ -23103,6 +23762,7 @@ GRANT ALL ON FUNCTION public.fn_golden_rodada_congelada() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_golden_rodada_congelada_imutavel() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_rodada_congelada_imutavel() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_rodada_congelada_imutavel() TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_rodada_congelada_imutavel() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_tipo_correto text, p_entidade_correta text, p_periodo_correto text, p_assinado_correto boolean, p_legibilidade public.legibilidade, p_item_checklist_correto text, p_nota text); Type: ACL; Schema: public; Owner: -
@@ -23111,6 +23771,7 @@ GRANT ALL ON FUNCTION public.fn_golden_rodada_congelada_imutavel() TO service_ro
 REVOKE ALL ON FUNCTION public.fn_golden_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_tipo_correto text, p_entidade_correta text, p_periodo_correto text, p_assinado_correto boolean, p_legibilidade public.legibilidade, p_item_checklist_correto text, p_nota text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_tipo_correto text, p_entidade_correta text, p_periodo_correto text, p_assinado_correto boolean, p_legibilidade public.legibilidade, p_item_checklist_correto text, p_nota text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_tipo_correto text, p_entidade_correta text, p_periodo_correto text, p_assinado_correto boolean, p_legibilidade public.legibilidade, p_item_checklist_correto text, p_nota text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_rotular(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_tipo_correto text, p_entidade_correta text, p_periodo_correto text, p_assinado_correto boolean, p_legibilidade public.legibilidade, p_item_checklist_correto text, p_nota text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_rotular_campos(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_campos jsonb); Type: ACL; Schema: public; Owner: -
@@ -23119,6 +23780,7 @@ GRANT ALL ON FUNCTION public.fn_golden_rotular(p_rodada uuid, p_documento_id uui
 REVOKE ALL ON FUNCTION public.fn_golden_rotular_campos(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_campos jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_rotular_campos(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_campos jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_rotular_campos(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_campos jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_rotular_campos(p_rodada uuid, p_documento_id uuid, p_rotulador text, p_campos jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_golden_suficiente(p_estagio text, p_rodada uuid); Type: ACL; Schema: public; Owner: -
@@ -23127,6 +23789,7 @@ GRANT ALL ON FUNCTION public.fn_golden_rotular_campos(p_rodada uuid, p_documento
 REVOKE ALL ON FUNCTION public.fn_golden_suficiente(p_estagio text, p_rodada uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_golden_suficiente(p_estagio text, p_rodada uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_golden_suficiente(p_estagio text, p_rodada uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_golden_suficiente(p_estagio text, p_rodada uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean); Type: ACL; Schema: public; Owner: -
@@ -23135,6 +23798,7 @@ GRANT ALL ON FUNCTION public.fn_golden_suficiente(p_estagio text, p_rodada uuid)
 REVOKE ALL ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean) TO service_role;
+GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_familia boolean) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_grupo_por_controle_comum_motivo(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23143,6 +23807,7 @@ GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum(p_caso_id uuid, p_com_f
 REVOKE ALL ON FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23151,6 +23816,7 @@ GRANT ALL ON FUNCTION public.fn_grupo_por_controle_comum_motivo(p_caso_id uuid) 
 REVOKE ALL ON FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id uuid, p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text); Type: ACL; Schema: public; Owner: -
@@ -23159,6 +23825,7 @@ GRANT ALL ON FUNCTION public.fn_herdar_secao_pela_arvore(p_documento_versao_id u
 REVOKE ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_indice_macro_anual(p_desde_ano integer); Type: ACL; Schema: public; Owner: -
@@ -23167,6 +23834,7 @@ GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integ
 REVOKE ALL ON FUNCTION public.fn_indice_macro_anual(p_desde_ano integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_indice_macro_anual(p_desde_ano integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_indice_macro_anual(p_desde_ano integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_indice_macro_anual(p_desde_ano integer) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_inferir_secao_canonica_das_linhas(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23175,6 +23843,7 @@ GRANT ALL ON FUNCTION public.fn_indice_macro_anual(p_desde_ano integer) TO servi
 REVOKE ALL ON FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_instalacao_conferir(); Type: ACL; Schema: public; Owner: -
@@ -23183,6 +23852,7 @@ GRANT ALL ON FUNCTION public.fn_inferir_secao_canonica_das_linhas(p_caso_id uuid
 REVOKE ALL ON FUNCTION public.fn_instalacao_conferir() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_instalacao_conferir() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_instalacao_conferir() TO service_role;
+GRANT ALL ON FUNCTION public.fn_instalacao_conferir() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_instalacao_resumo(); Type: ACL; Schema: public; Owner: -
@@ -23191,6 +23861,7 @@ GRANT ALL ON FUNCTION public.fn_instalacao_conferir() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_instalacao_resumo() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_instalacao_resumo() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_instalacao_resumo() TO service_role;
+GRANT ALL ON FUNCTION public.fn_instalacao_resumo() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_lado_do_mutuo(p_chave text, p_secao_canonica text); Type: ACL; Schema: public; Owner: -
@@ -23199,6 +23870,7 @@ GRANT ALL ON FUNCTION public.fn_instalacao_resumo() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_lado_do_mutuo(p_chave text, p_secao_canonica text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_lado_do_mutuo(p_chave text, p_secao_canonica text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_lado_do_mutuo(p_chave text, p_secao_canonica text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_lado_do_mutuo(p_chave text, p_secao_canonica text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_lado_intragrupo(p_chave text, p_secao_canonica text); Type: ACL; Schema: public; Owner: -
@@ -23207,6 +23879,7 @@ GRANT ALL ON FUNCTION public.fn_lado_do_mutuo(p_chave text, p_secao_canonica tex
 REVOKE ALL ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_lado_intragrupo(p_chave text, p_secao_canonica text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_linha_de_base_extracao(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23223,6 +23896,16 @@ GRANT ALL ON FUNCTION public.fn_linha_de_base_extracao(p_caso_id uuid) TO servic
 REVOKE ALL ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_linhas_do_realizado(p_caso_id uuid, p_entidade text); Type: ACL; Schema: public; Owner: -
@@ -23231,6 +23914,7 @@ GRANT ALL ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_col
 REVOKE ALL ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_linhas_do_tipo(p_caso_id uuid, p_codigo text); Type: ACL; Schema: public; Owner: -
@@ -23239,6 +23923,7 @@ GRANT ALL ON FUNCTION public.fn_linhas_do_realizado(p_caso_id uuid, p_entidade t
 REVOKE ALL ON FUNCTION public.fn_linhas_do_tipo(p_caso_id uuid, p_codigo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_linhas_do_tipo(p_caso_id uuid, p_codigo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_linhas_do_tipo(p_caso_id uuid, p_codigo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_linhas_do_tipo(p_caso_id uuid, p_codigo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_linhas_para_modelagem(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23247,6 +23932,7 @@ GRANT ALL ON FUNCTION public.fn_linhas_do_tipo(p_caso_id uuid, p_codigo text) TO
 REVOKE ALL ON FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_linhas_para_transcrever(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23255,6 +23941,7 @@ GRANT ALL ON FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) TO service
 REVOKE ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_marcar_falha_vista(p_falha_id uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -23263,6 +23950,30 @@ GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO 
 REVOKE ALL ON FUNCTION public.fn_marcar_falha_vista(p_falha_id uuid, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_marcar_falha_vista(p_falha_id uuid, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_marcar_falha_vista(p_falha_id uuid, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_marcar_falha_vista(p_falha_id uuid, p_autor text) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_materializar_fatos(p_documento_versao_id uuid, p_origem text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_materializar_fatos(p_documento_versao_id uuid, p_origem text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_materializar_fatos(p_documento_versao_id uuid, p_origem text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_materializar_fatos(p_documento_versao_id uuid, p_origem text) TO service_role;
+
+--
+-- Name: FUNCTION fn_materializar_fatos_backfill(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_materializar_fatos_backfill() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_materializar_fatos_backfill() TO service_role;
+
+--
+-- Name: FUNCTION fn_materializar_fatos_da_extracao(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_membros_da_equipe(); Type: ACL; Schema: public; Owner: -
@@ -23279,6 +23990,7 @@ GRANT ALL ON FUNCTION public.fn_membros_da_equipe() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_mes_do_rotulo(p_chave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_mes_do_rotulo(p_chave text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_mes_do_rotulo(p_chave text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_mes_do_rotulo(p_chave text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_mesma_entidade(p_a text, p_b text); Type: ACL; Schema: public; Owner: -
@@ -23287,6 +23999,7 @@ GRANT ALL ON FUNCTION public.fn_mes_do_rotulo(p_chave text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_mesma_entidade(p_a text, p_b text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_mesma_entidade(p_a text, p_b text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_mesma_entidade(p_a text, p_b text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_mesma_entidade(p_a text, p_b text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_meu_papel(); Type: ACL; Schema: public; Owner: -
@@ -23303,6 +24016,7 @@ GRANT ALL ON FUNCTION public.fn_meu_papel() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_min_motivo_rejeicao() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_min_motivo_rejeicao() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_min_motivo_rejeicao() TO service_role;
+GRANT ALL ON FUNCTION public.fn_min_motivo_rejeicao() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_modelagem_esta_pronta(p_parametros_definidos boolean, p_premissas_ativas bigint, p_premissas_sem_valor integer, p_linhas_com_premissa bigint); Type: ACL; Schema: public; Owner: -
@@ -23311,6 +24025,7 @@ GRANT ALL ON FUNCTION public.fn_min_motivo_rejeicao() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_modelagem_esta_pronta(p_parametros_definidos boolean, p_premissas_ativas bigint, p_premissas_sem_valor integer, p_linhas_com_premissa bigint) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_modelagem_esta_pronta(p_parametros_definidos boolean, p_premissas_ativas bigint, p_premissas_sem_valor integer, p_linhas_com_premissa bigint) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_modelagem_esta_pronta(p_parametros_definidos boolean, p_premissas_ativas bigint, p_premissas_sem_valor integer, p_linhas_com_premissa bigint) TO service_role;
+GRANT ALL ON FUNCTION public.fn_modelagem_esta_pronta(p_parametros_definidos boolean, p_premissas_ativas bigint, p_premissas_sem_valor integer, p_linhas_com_premissa bigint) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_motivo_do_lado(p_achou boolean, p_col_entidade text, p_col_periodo text); Type: ACL; Schema: public; Owner: -
@@ -23319,6 +24034,7 @@ GRANT ALL ON FUNCTION public.fn_modelagem_esta_pronta(p_parametros_definidos boo
 REVOKE ALL ON FUNCTION public.fn_motivo_do_lado(p_achou boolean, p_col_entidade text, p_col_periodo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_motivo_do_lado(p_achou boolean, p_col_entidade text, p_col_periodo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_motivo_do_lado(p_achou boolean, p_col_entidade text, p_col_periodo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_motivo_do_lado(p_achou boolean, p_col_entidade text, p_col_periodo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_motivo_escala_incomparavel(p_unidade_a text, p_unidade_b text, p_rotulo_a text, p_rotulo_b text); Type: ACL; Schema: public; Owner: -
@@ -23327,6 +24043,7 @@ GRANT ALL ON FUNCTION public.fn_motivo_do_lado(p_achou boolean, p_col_entidade t
 REVOKE ALL ON FUNCTION public.fn_motivo_escala_incomparavel(p_unidade_a text, p_unidade_b text, p_rotulo_a text, p_rotulo_b text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_motivo_escala_incomparavel(p_unidade_a text, p_unidade_b text, p_rotulo_a text, p_rotulo_b text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_motivo_escala_incomparavel(p_unidade_a text, p_unidade_b text, p_rotulo_a text, p_rotulo_b text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_motivo_escala_incomparavel(p_unidade_a text, p_unidade_b text, p_rotulo_a text, p_rotulo_b text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_motivo_precondicao_agregado(p_motivos text[]); Type: ACL; Schema: public; Owner: -
@@ -23335,6 +24052,7 @@ GRANT ALL ON FUNCTION public.fn_motivo_escala_incomparavel(p_unidade_a text, p_u
 REVOKE ALL ON FUNCTION public.fn_motivo_precondicao_agregado(p_motivos text[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_motivo_precondicao_agregado(p_motivos text[]) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_motivo_precondicao_agregado(p_motivos text[]) TO service_role;
+GRANT ALL ON FUNCTION public.fn_motivo_precondicao_agregado(p_motivos text[]) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_motivo_precondicao_prefixo(p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -23343,6 +24061,7 @@ GRANT ALL ON FUNCTION public.fn_motivo_precondicao_agregado(p_motivos text[]) TO
 REVOKE ALL ON FUNCTION public.fn_motivo_precondicao_prefixo(p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_motivo_precondicao_prefixo(p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_motivo_precondicao_prefixo(p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_motivo_precondicao_prefixo(p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_mudar_dial(p_estagio text, p_nivel public.nivel_autonomia, p_autor text, p_motivo text, p_limiar numeric, p_rodada_golden uuid, p_sem_medicao_porque text, p_por_veredito boolean); Type: ACL; Schema: public; Owner: -
@@ -23351,6 +24070,7 @@ GRANT ALL ON FUNCTION public.fn_motivo_precondicao_prefixo(p_motivo text) TO ser
 REVOKE ALL ON FUNCTION public.fn_mudar_dial(p_estagio text, p_nivel public.nivel_autonomia, p_autor text, p_motivo text, p_limiar numeric, p_rodada_golden uuid, p_sem_medicao_porque text, p_por_veredito boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_mudar_dial(p_estagio text, p_nivel public.nivel_autonomia, p_autor text, p_motivo text, p_limiar numeric, p_rodada_golden uuid, p_sem_medicao_porque text, p_por_veredito boolean) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_mudar_dial(p_estagio text, p_nivel public.nivel_autonomia, p_autor text, p_motivo text, p_limiar numeric, p_rodada_golden uuid, p_sem_medicao_porque text, p_por_veredito boolean) TO service_role;
+GRANT ALL ON FUNCTION public.fn_mudar_dial(p_estagio text, p_nivel public.nivel_autonomia, p_autor text, p_motivo text, p_limiar numeric, p_rodada_golden uuid, p_sem_medicao_porque text, p_por_veredito boolean) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_mutuo_com_socio(p_chave text, p_secao text); Type: ACL; Schema: public; Owner: -
@@ -23359,6 +24079,7 @@ GRANT ALL ON FUNCTION public.fn_mudar_dial(p_estagio text, p_nivel public.nivel_
 REVOKE ALL ON FUNCTION public.fn_mutuo_com_socio(p_chave text, p_secao text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_mutuo_com_socio(p_chave text, p_secao text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_mutuo_com_socio(p_chave text, p_secao text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_mutuo_com_socio(p_chave text, p_secao text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_natureza_intragrupo(p_chave text, p_secao text); Type: ACL; Schema: public; Owner: -
@@ -23367,6 +24088,7 @@ GRANT ALL ON FUNCTION public.fn_mutuo_com_socio(p_chave text, p_secao text) TO s
 REVOKE ALL ON FUNCTION public.fn_natureza_intragrupo(p_chave text, p_secao text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_natureza_intragrupo(p_chave text, p_secao text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_natureza_intragrupo(p_chave text, p_secao text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_natureza_intragrupo(p_chave text, p_secao text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_nome_de_secao_normalizado(p_texto text); Type: ACL; Schema: public; Owner: -
@@ -23375,6 +24097,7 @@ GRANT ALL ON FUNCTION public.fn_natureza_intragrupo(p_chave text, p_secao text) 
 REVOKE ALL ON FUNCTION public.fn_nome_de_secao_normalizado(p_texto text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_nome_de_secao_normalizado(p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_nome_de_secao_normalizado(p_texto text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_nome_de_secao_normalizado(p_texto text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_nome_de_topo_ou_total(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -23383,6 +24106,7 @@ GRANT ALL ON FUNCTION public.fn_nome_de_secao_normalizado(p_texto text) TO servi
 REVOKE ALL ON FUNCTION public.fn_nome_de_topo_ou_total(p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_nome_de_topo_ou_total(p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_nome_de_topo_ou_total(p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_nome_de_topo_ou_total(p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_nome_parece_ter_endereco_colado(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -23391,6 +24115,7 @@ GRANT ALL ON FUNCTION public.fn_nome_de_topo_ou_total(p_nome text) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_nome_parece_ter_endereco_colado(p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_nome_parece_ter_endereco_colado(p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_nome_parece_ter_endereco_colado(p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_nome_parece_ter_endereco_colado(p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_nome_tem_sufixo_societario(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -23399,6 +24124,7 @@ GRANT ALL ON FUNCTION public.fn_nome_parece_ter_endereco_colado(p_nome text) TO 
 REVOKE ALL ON FUNCTION public.fn_nome_tem_sufixo_societario(p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_nome_tem_sufixo_societario(p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_nome_tem_sufixo_societario(p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_nome_tem_sufixo_societario(p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_normalizar_texto(p_texto text); Type: ACL; Schema: public; Owner: -
@@ -23407,6 +24133,7 @@ GRANT ALL ON FUNCTION public.fn_nome_tem_sufixo_societario(p_nome text) TO servi
 REVOKE ALL ON FUNCTION public.fn_normalizar_texto(p_texto text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_normalizar_texto(p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_normalizar_texto(p_texto text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_normalizar_texto(p_texto text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_operacao_lotes(p_dias integer, p_limite integer); Type: ACL; Schema: public; Owner: -
@@ -23415,6 +24142,7 @@ GRANT ALL ON FUNCTION public.fn_normalizar_texto(p_texto text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_operacao_lotes(p_dias integer, p_limite integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_operacao_lotes(p_dias integer, p_limite integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_operacao_lotes(p_dias integer, p_limite integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_operacao_lotes(p_dias integer, p_limite integer) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_operacao_resumo(p_dias integer); Type: ACL; Schema: public; Owner: -
@@ -23423,6 +24151,7 @@ GRANT ALL ON FUNCTION public.fn_operacao_lotes(p_dias integer, p_limite integer)
 REVOKE ALL ON FUNCTION public.fn_operacao_resumo(p_dias integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_operacao_resumo(p_dias integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_operacao_resumo(p_dias integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_operacao_resumo(p_dias integer) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_papel_do_rotulo_no_caso(p_caso_id uuid, p_rotulo_norm text, p_secao_canonica text); Type: ACL; Schema: public; Owner: -
@@ -23431,6 +24160,7 @@ GRANT ALL ON FUNCTION public.fn_operacao_resumo(p_dias integer) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_papel_do_rotulo_no_caso(p_caso_id uuid, p_rotulo_norm text, p_secao_canonica text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_papel_do_rotulo_no_caso(p_caso_id uuid, p_rotulo_norm text, p_secao_canonica text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_papel_do_rotulo_no_caso(p_caso_id uuid, p_rotulo_norm text, p_secao_canonica text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_papel_do_rotulo_no_caso(p_caso_id uuid, p_rotulo_norm text, p_secao_canonica text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text); Type: ACL; Schema: public; Owner: -
@@ -23439,6 +24169,7 @@ GRANT ALL ON FUNCTION public.fn_papel_do_rotulo_no_caso(p_caso_id uuid, p_rotulo
 REVOKE ALL ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text, p_unidade text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_papel_prioridade(p_papel text); Type: ACL; Schema: public; Owner: -
@@ -23447,6 +24178,7 @@ GRANT ALL ON FUNCTION public.fn_papel_linha(p_chave text, p_tipo_taxonomia text,
 REVOKE ALL ON FUNCTION public.fn_papel_prioridade(p_papel text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_papel_prioridade(p_papel text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_papel_prioridade(p_papel text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_papel_prioridade(p_papel text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text); Type: ACL; Schema: public; Owner: -
@@ -23455,6 +24187,7 @@ GRANT ALL ON FUNCTION public.fn_papel_prioridade(p_papel text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entidade text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pendencia_cnpj_colide_balcao(p_caso_id uuid, p_balcao_id uuid, p_cnpj text, p_nome_outro text, p_entidade_outro_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23463,6 +24196,7 @@ GRANT ALL ON FUNCTION public.fn_pares_duplicados_do_caso(p_caso_id uuid, p_entid
 REVOKE ALL ON FUNCTION public.fn_pendencia_cnpj_colide_balcao(p_caso_id uuid, p_balcao_id uuid, p_cnpj text, p_nome_outro text, p_entidade_outro_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pendencia_cnpj_colide_balcao(p_caso_id uuid, p_balcao_id uuid, p_cnpj text, p_nome_outro text, p_entidade_outro_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pendencia_cnpj_colide_balcao(p_caso_id uuid, p_balcao_id uuid, p_cnpj text, p_nome_outro text, p_entidade_outro_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pendencia_cnpj_colide_balcao(p_caso_id uuid, p_balcao_id uuid, p_cnpj text, p_nome_outro text, p_entidade_outro_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pendencia_entidade_ambigua(p_caso_id uuid, p_documento_id uuid, p_entidade_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23471,6 +24205,7 @@ GRANT ALL ON FUNCTION public.fn_pendencia_cnpj_colide_balcao(p_caso_id uuid, p_b
 REVOKE ALL ON FUNCTION public.fn_pendencia_entidade_ambigua(p_caso_id uuid, p_documento_id uuid, p_entidade_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pendencia_entidade_ambigua(p_caso_id uuid, p_documento_id uuid, p_entidade_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pendencia_entidade_ambigua(p_caso_id uuid, p_documento_id uuid, p_entidade_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pendencia_entidade_ambigua(p_caso_id uuid, p_documento_id uuid, p_entidade_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pendencia_entidade_nome_suspeito(p_caso_id uuid, p_entidade_id uuid, p_nome text); Type: ACL; Schema: public; Owner: -
@@ -23479,6 +24214,7 @@ GRANT ALL ON FUNCTION public.fn_pendencia_entidade_ambigua(p_caso_id uuid, p_doc
 REVOKE ALL ON FUNCTION public.fn_pendencia_entidade_nome_suspeito(p_caso_id uuid, p_entidade_id uuid, p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pendencia_entidade_nome_suspeito(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pendencia_entidade_nome_suspeito(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pendencia_entidade_nome_suspeito(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pendencia_forma_de_controle_backfill(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23487,6 +24223,7 @@ GRANT ALL ON FUNCTION public.fn_pendencia_entidade_nome_suspeito(p_caso_id uuid,
 REVOKE ALL ON FUNCTION public.fn_pendencia_forma_de_controle_backfill(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pendencia_forma_de_controle_backfill(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pendencia_forma_de_controle_backfill(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pendencia_forma_de_controle_backfill(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pendencia_forma_de_controle_indefinida(p_caso_id uuid, p_entidade_id uuid, p_nome text); Type: ACL; Schema: public; Owner: -
@@ -23495,6 +24232,7 @@ GRANT ALL ON FUNCTION public.fn_pendencia_forma_de_controle_backfill(p_caso_id u
 REVOKE ALL ON FUNCTION public.fn_pendencia_forma_de_controle_indefinida(p_caso_id uuid, p_entidade_id uuid, p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pendencia_forma_de_controle_indefinida(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pendencia_forma_de_controle_indefinida(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pendencia_forma_de_controle_indefinida(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pendencia_papel_no_grupo_indefinido(p_caso_id uuid, p_entidade_id uuid, p_nome text); Type: ACL; Schema: public; Owner: -
@@ -23503,6 +24241,7 @@ GRANT ALL ON FUNCTION public.fn_pendencia_forma_de_controle_indefinida(p_caso_id
 REVOKE ALL ON FUNCTION public.fn_pendencia_papel_no_grupo_indefinido(p_caso_id uuid, p_entidade_id uuid, p_nome text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pendencia_papel_no_grupo_indefinido(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pendencia_papel_no_grupo_indefinido(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pendencia_papel_no_grupo_indefinido(p_caso_id uuid, p_entidade_id uuid, p_nome text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -23511,6 +24250,7 @@ GRANT ALL ON FUNCTION public.fn_pendencia_papel_no_grupo_indefinido(p_caso_id uu
 REVOKE ALL ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_desde date, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -23519,6 +24259,7 @@ GRANT ALL ON FUNCTION public.fn_perimetro_definir_escopo(p_caso_id uuid, p_entid
 REVOKE ALL ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_entidade_id uuid, p_escopo text, p_ate date, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_perimetro_situacao(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23527,6 +24268,7 @@ GRANT ALL ON FUNCTION public.fn_perimetro_encerrar_escopo(p_caso_id uuid, p_enti
 REVOKE ALL ON FUNCTION public.fn_perimetro_situacao(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_perimetro_situacao(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_perimetro_situacao(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_perimetro_situacao(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_perimetro_veredito(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23535,6 +24277,7 @@ GRANT ALL ON FUNCTION public.fn_perimetro_situacao(p_caso_id uuid) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_perimetro_veredito(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: TABLE entidade; Type: ACL; Schema: public; Owner: -
@@ -23550,6 +24293,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.entidade TO service_role;
 REVOKE ALL ON FUNCTION public.fn_perimetro_vigente(p_caso_id uuid, p_escopo text, p_data date) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_perimetro_vigente(p_caso_id uuid, p_escopo text, p_data date) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_perimetro_vigente(p_caso_id uuid, p_escopo text, p_data date) TO service_role;
+GRANT ALL ON FUNCTION public.fn_perimetro_vigente(p_caso_id uuid, p_escopo text, p_data date) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_periodo_canonico(p_tipo text, p_ref text); Type: ACL; Schema: public; Owner: -
@@ -23558,6 +24302,7 @@ GRANT ALL ON FUNCTION public.fn_perimetro_vigente(p_caso_id uuid, p_escopo text,
 REVOKE ALL ON FUNCTION public.fn_periodo_canonico(p_tipo text, p_ref text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_periodo_canonico(p_tipo text, p_ref text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_periodo_canonico(p_tipo text, p_ref text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_periodo_canonico(p_tipo text, p_ref text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text); Type: ACL; Schema: public; Owner: -
@@ -23566,6 +24311,7 @@ GRANT ALL ON FUNCTION public.fn_periodo_canonico(p_tipo text, p_ref text) TO ser
 REVOKE ALL ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_documento text, p_periodo_tipo text, p_referencia text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_periodo_por_extenso(p_tipo text, p_referencia text); Type: ACL; Schema: public; Owner: -
@@ -23574,6 +24320,7 @@ GRANT ALL ON FUNCTION public.fn_periodo_e_parcial(p_coluna text, p_tipo_document
 REVOKE ALL ON FUNCTION public.fn_periodo_por_extenso(p_tipo text, p_referencia text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_periodo_por_extenso(p_tipo text, p_referencia text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_periodo_por_extenso(p_tipo text, p_referencia text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_periodo_por_extenso(p_tipo text, p_referencia text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_periodos_compativeis(p_periodo_a uuid, p_periodo_b uuid); Type: ACL; Schema: public; Owner: -
@@ -23582,6 +24329,7 @@ GRANT ALL ON FUNCTION public.fn_periodo_por_extenso(p_tipo text, p_referencia te
 REVOKE ALL ON FUNCTION public.fn_periodos_compativeis(p_periodo_a uuid, p_periodo_b uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_periodos_compativeis(p_periodo_a uuid, p_periodo_b uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_periodos_compativeis(p_periodo_a uuid, p_periodo_b uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_periodos_compativeis(p_periodo_a uuid, p_periodo_b uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_periodos_compativeis_array(p_caso_id uuid, p_periodo_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23590,6 +24338,7 @@ GRANT ALL ON FUNCTION public.fn_periodos_compativeis(p_periodo_a uuid, p_periodo
 REVOKE ALL ON FUNCTION public.fn_periodos_compativeis_array(p_caso_id uuid, p_periodo_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_periodos_compativeis_array(p_caso_id uuid, p_periodo_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_periodos_compativeis_array(p_caso_id uuid, p_periodo_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_periodos_compativeis_array(p_caso_id uuid, p_periodo_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text); Type: ACL; Schema: public; Owner: -
@@ -23598,6 +24347,7 @@ GRANT ALL ON FUNCTION public.fn_periodos_compativeis_array(p_caso_id uuid, p_per
 REVOKE ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a text, p_tipo_b text, p_ref_b text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pessoa_decidiu_sem_dado(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23606,6 +24356,7 @@ GRANT ALL ON FUNCTION public.fn_periodos_equivalentes(p_tipo_a text, p_ref_a tex
 REVOKE ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pessoa_decidiu_sem_dado(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_pode_criar_caso(); Type: ACL; Schema: public; Owner: -
@@ -23653,6 +24404,7 @@ GRANT ALL ON FUNCTION public.fn_pode_ler_caso(p_caso uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_pode_renomear_por_cnpj(p_atual text, p_novo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_pode_renomear_por_cnpj(p_atual text, p_novo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_pode_renomear_por_cnpj(p_atual text, p_novo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_pode_renomear_por_cnpj(p_atual text, p_novo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_premissa_valores_sugeridos(p_codigo text, p_ano_inicial integer, p_anos integer); Type: ACL; Schema: public; Owner: -
@@ -23661,6 +24413,7 @@ GRANT ALL ON FUNCTION public.fn_pode_renomear_por_cnpj(p_atual text, p_novo text
 REVOKE ALL ON FUNCTION public.fn_premissa_valores_sugeridos(p_codigo text, p_ano_inicial integer, p_anos integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_premissa_valores_sugeridos(p_codigo text, p_ano_inicial integer, p_anos integer) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_premissa_valores_sugeridos(p_codigo text, p_ano_inicial integer, p_anos integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_premissa_valores_sugeridos(p_codigo text, p_ano_inicial integer, p_anos integer) TO supabase_read_only_user;
 
 --
 -- Name: TABLE premissa_catalogo; Type: ACL; Schema: public; Owner: -
@@ -23676,6 +24429,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.premissa_catalogo TO service_r
 REVOKE ALL ON FUNCTION public.fn_premissas_sugeridas(p_setor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_premissas_sugeridas(p_setor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_premissas_sugeridas(p_setor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_premissas_sugeridas(p_setor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_radicais_rotulo(p_chave text); Type: ACL; Schema: public; Owner: -
@@ -23684,6 +24438,7 @@ GRANT ALL ON FUNCTION public.fn_premissas_sugeridas(p_setor text) TO service_rol
 REVOKE ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reabrir_caso(p_caso_id uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -23692,6 +24447,7 @@ GRANT ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_reabrir_caso(p_caso_id uuid, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reabrir_caso(p_caso_id uuid, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reabrir_caso(p_caso_id uuid, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reabrir_caso(p_caso_id uuid, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reavaliar_guardas_extracao(p_documento_versao_id uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -23700,6 +24456,7 @@ GRANT ALL ON FUNCTION public.fn_reabrir_caso(p_caso_id uuid, p_autor text) TO se
 REVOKE ALL ON FUNCTION public.fn_reavaliar_guardas_extracao(p_documento_versao_id uuid, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reavaliar_guardas_extracao(p_documento_versao_id uuid, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reavaliar_guardas_extracao(p_documento_versao_id uuid, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reavaliar_guardas_extracao(p_documento_versao_id uuid, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_recalcular_vigencia_arquivo_oficial(p_caso uuid, p_chave text); Type: ACL; Schema: public; Owner: -
@@ -23708,6 +24465,7 @@ GRANT ALL ON FUNCTION public.fn_reavaliar_guardas_extracao(p_documento_versao_id
 REVOKE ALL ON FUNCTION public.fn_recalcular_vigencia_arquivo_oficial(p_caso uuid, p_chave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_recalcular_vigencia_arquivo_oficial(p_caso uuid, p_chave text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_recalcular_vigencia_arquivo_oficial(p_caso uuid, p_chave text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_recalcular_vigencia_arquivo_oficial(p_caso uuid, p_chave text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_recomputar_completude(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23716,6 +24474,7 @@ GRANT ALL ON FUNCTION public.fn_recalcular_vigencia_arquivo_oficial(p_caso uuid,
 REVOKE ALL ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_arvore(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23724,6 +24483,7 @@ GRANT ALL ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) TO service
 REVOKE ALL ON FUNCTION public.fn_reconciliar_arvore(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_arvore(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_arvore(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_arvore(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_ativo_passivo_pl(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
@@ -23732,6 +24492,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_arvore(p_documento_id uuid) TO servi
 REVOKE ALL ON FUNCTION public.fn_reconciliar_ativo_passivo_pl(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_ativo_passivo_pl(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_ativo_passivo_pl(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_ativo_passivo_pl(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
@@ -23740,6 +24501,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_ativo_passivo_pl(p_caso_id uuid, p_e
 REVOKE ALL ON FUNCTION public.fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_caso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23748,6 +24510,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_caixa_bp_fluxo(p_caso_id uuid, p_ent
 REVOKE ALL ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_chaves_do_documento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text); Type: ACL; Schema: public; Owner: -
@@ -23756,6 +24519,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) TO service_role
 REVOKE ALL ON FUNCTION public.fn_reconciliar_chaves_do_documento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_chaves_do_documento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_chaves_do_documento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_chaves_do_documento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_despfin_dre_vs_divida(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
@@ -23764,6 +24528,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_chaves_do_documento(p_caso_id uuid, 
 REVOKE ALL ON FUNCTION public.fn_reconciliar_despfin_dre_vs_divida(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_despfin_dre_vs_divida(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_despfin_dre_vs_divida(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_despfin_dre_vs_divida(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_duplicidade(p_caso_id uuid, p_entidade_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23772,6 +24537,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_despfin_dre_vs_divida(p_caso_id uuid
 REVOKE ALL ON FUNCTION public.fn_reconciliar_duplicidade(p_caso_id uuid, p_entidade_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_duplicidade(p_caso_id uuid, p_entidade_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_duplicidade(p_caso_id uuid, p_entidade_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_duplicidade(p_caso_id uuid, p_entidade_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
@@ -23780,6 +24546,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_duplicidade(p_caso_id uuid, p_entida
 REVOKE ALL ON FUNCTION public.fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
@@ -23788,6 +24555,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_intragrupo(p_caso_id uuid, p_periodo
 REVOKE ALL ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_por_documento(p_documento_id uuid, p_escopo text); Type: ACL; Schema: public; Owner: -
@@ -23796,6 +24564,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_mutuos(p_caso_id uuid, p_periodo_id 
 REVOKE ALL ON FUNCTION public.fn_reconciliar_por_documento(p_documento_id uuid, p_escopo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_por_documento(p_documento_id uuid, p_escopo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_por_documento(p_documento_id uuid, p_escopo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_por_documento(p_documento_id uuid, p_escopo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_receita_dre_vs_faturamento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric); Type: ACL; Schema: public; Owner: -
@@ -23804,6 +24573,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_por_documento(p_documento_id uuid, p
 REVOKE ALL ON FUNCTION public.fn_reconciliar_receita_dre_vs_faturamento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_receita_dre_vs_faturamento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_receita_dre_vs_faturamento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_receita_dre_vs_faturamento(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p_entidade_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23812,6 +24582,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_receita_dre_vs_faturamento(p_caso_id
 REVOKE ALL ON FUNCTION public.fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p_entidade_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p_entidade_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p_entidade_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p_entidade_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reconferir_caso(p_caso_id uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -23820,6 +24591,7 @@ GRANT ALL ON FUNCTION public.fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p
 REVOKE ALL ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_reescrever_recado_linha_exigida(p_tipo text, p_conceito text); Type: ACL; Schema: public; Owner: -
@@ -23828,6 +24600,7 @@ GRANT ALL ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) TO
 REVOKE ALL ON FUNCTION public.fn_reescrever_recado_linha_exigida(p_tipo text, p_conceito text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_reescrever_recado_linha_exigida(p_tipo text, p_conceito text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_reescrever_recado_linha_exigida(p_tipo text, p_conceito text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reescrever_recado_linha_exigida(p_tipo text, p_conceito text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb); Type: ACL; Schema: public; Owner: -
@@ -23836,6 +24609,7 @@ GRANT ALL ON FUNCTION public.fn_reescrever_recado_linha_exigida(p_tipo text, p_c
 REVOKE ALL ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documento uuid, p_envelope jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb); Type: ACL; Schema: public; Owner: -
@@ -23844,6 +24618,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_arquivo_oficial(p_caso uuid, p_documen
 REVOKE ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_classe_override(p_campo_extraido_id uuid, p_classe_final text, p_autor text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -23852,6 +24627,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id
 REVOKE ALL ON FUNCTION public.fn_registrar_classe_override(p_campo_extraido_id uuid, p_classe_final text, p_autor text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_classe_override(p_campo_extraido_id uuid, p_classe_final text, p_autor text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_classe_override(p_campo_extraido_id uuid, p_classe_final text, p_autor text, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_classe_override(p_campo_extraido_id uuid, p_classe_final text, p_autor text, p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_diagnostico(p_documento_id uuid, p_documento_versao_id uuid, p_entidade_nome text, p_tipo_confirma boolean, p_tipo_sugerido text, p_periodo_tipo text, p_periodo_referencia text, p_legibilidade public.legibilidade, p_nota_legibilidade text, p_resumo text, p_justificativa text, p_cnpj text); Type: ACL; Schema: public; Owner: -
@@ -23860,6 +24636,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_classe_override(p_campo_extraido_id uu
 REVOKE ALL ON FUNCTION public.fn_registrar_diagnostico(p_documento_id uuid, p_documento_versao_id uuid, p_entidade_nome text, p_tipo_confirma boolean, p_tipo_sugerido text, p_periodo_tipo text, p_periodo_referencia text, p_legibilidade public.legibilidade, p_nota_legibilidade text, p_resumo text, p_justificativa text, p_cnpj text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_diagnostico(p_documento_id uuid, p_documento_versao_id uuid, p_entidade_nome text, p_tipo_confirma boolean, p_tipo_sugerido text, p_periodo_tipo text, p_periodo_referencia text, p_legibilidade public.legibilidade, p_nota_legibilidade text, p_resumo text, p_justificativa text, p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_diagnostico(p_documento_id uuid, p_documento_versao_id uuid, p_entidade_nome text, p_tipo_confirma boolean, p_tipo_sugerido text, p_periodo_tipo text, p_periodo_referencia text, p_legibilidade public.legibilidade, p_nota_legibilidade text, p_resumo text, p_justificativa text, p_cnpj text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_diagnostico(p_documento_id uuid, p_documento_versao_id uuid, p_entidade_nome text, p_tipo_confirma boolean, p_tipo_sugerido text, p_periodo_tipo text, p_periodo_referencia text, p_legibilidade public.legibilidade, p_nota_legibilidade text, p_resumo text, p_justificativa text, p_cnpj text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text); Type: ACL; Schema: public; Owner: -
@@ -23868,6 +24645,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_diagnostico(p_documento_id uuid, p_doc
 REVOKE ALL ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_nome text, p_periodo_tipo text, p_periodo_ref text, p_tipo_taxonomia text, p_confianca numeric, p_fonte text, p_origem_arquivo public.origem_arquivo, p_arquivo_ref text, p_nome_original text, p_assinado boolean, p_hash text, p_legibilidade public.legibilidade, p_threshold numeric, p_justificativa text, p_fingerprint_extracao text, p_cnpj text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_expectativa_macro(p_exp jsonb); Type: ACL; Schema: public; Owner: -
@@ -23876,6 +24654,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_documento(p_caso_id uuid, p_entidade_n
 REVOKE ALL ON FUNCTION public.fn_registrar_expectativa_macro(p_exp jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_expectativa_macro(p_exp jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_expectativa_macro(p_exp jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_expectativa_macro(p_exp jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_falha_execucao(p_caso_id uuid, p_caso_nome text, p_etapa text, p_mensagem text, p_detalhe jsonb); Type: ACL; Schema: public; Owner: -
@@ -23884,6 +24663,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_expectativa_macro(p_exp jsonb) TO serv
 REVOKE ALL ON FUNCTION public.fn_registrar_falha_execucao(p_caso_id uuid, p_caso_nome text, p_etapa text, p_mensagem text, p_detalhe jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_falha_execucao(p_caso_id uuid, p_caso_nome text, p_etapa text, p_mensagem text, p_detalhe jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_falha_execucao(p_caso_id uuid, p_caso_nome text, p_etapa text, p_mensagem text, p_detalhe jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_falha_execucao(p_caso_id uuid, p_caso_nome text, p_etapa text, p_mensagem text, p_detalhe jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_fatos(p_documento_versao_id uuid, p_fatos jsonb); Type: ACL; Schema: public; Owner: -
@@ -23892,6 +24672,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_falha_execucao(p_caso_id uuid, p_caso_
 REVOKE ALL ON FUNCTION public.fn_registrar_fatos(p_documento_versao_id uuid, p_fatos jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_fatos(p_documento_versao_id uuid, p_fatos jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_fatos(p_documento_versao_id uuid, p_fatos jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_fatos(p_documento_versao_id uuid, p_fatos jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_indice_macro(p_obs jsonb); Type: ACL; Schema: public; Owner: -
@@ -23900,6 +24681,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_fatos(p_documento_versao_id uuid, p_fa
 REVOKE ALL ON FUNCTION public.fn_registrar_indice_macro(p_obs jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_indice_macro(p_obs jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_indice_macro(p_obs jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_indice_macro(p_obs jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_pergunta_acao(p_caso_id uuid, p_codigo text, p_acao text, p_texto text, p_autor text, p_entidade_id uuid); Type: ACL; Schema: public; Owner: -
@@ -23908,6 +24690,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_indice_macro(p_obs jsonb) TO service_r
 REVOKE ALL ON FUNCTION public.fn_registrar_pergunta_acao(p_caso_id uuid, p_codigo text, p_acao text, p_texto text, p_autor text, p_entidade_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_pergunta_acao(p_caso_id uuid, p_codigo text, p_acao text, p_texto text, p_autor text, p_entidade_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_pergunta_acao(p_caso_id uuid, p_codigo text, p_acao text, p_texto text, p_autor text, p_entidade_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_pergunta_acao(p_caso_id uuid, p_codigo text, p_acao text, p_texto text, p_autor text, p_entidade_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text); Type: ACL; Schema: public; Owner: -
@@ -23916,6 +24699,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_pergunta_acao(p_caso_id uuid, p_codigo
 REVOKE ALL ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_reconciliacao_b(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text); Type: ACL; Schema: public; Owner: -
@@ -23924,6 +24708,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entida
 REVOKE ALL ON FUNCTION public.fn_registrar_reconciliacao_b(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_reconciliacao_b(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_reconciliacao_b(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_reconciliacao_b(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_transcricao_humana(p_documento_id uuid, p_linhas jsonb, p_autor text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -23932,6 +24717,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_reconciliacao_b(p_caso_id uuid, p_enti
 REVOKE ALL ON FUNCTION public.fn_registrar_transcricao_humana(p_documento_id uuid, p_linhas jsonb, p_autor text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_transcricao_humana(p_documento_id uuid, p_linhas jsonb, p_autor text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_transcricao_humana(p_documento_id uuid, p_linhas jsonb, p_autor text, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_transcricao_humana(p_documento_id uuid, p_linhas jsonb, p_autor text, p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_registrar_uso_lote(p_caso_id uuid, p_execucao_ref text, p_resumo jsonb); Type: ACL; Schema: public; Owner: -
@@ -23940,6 +24726,7 @@ GRANT ALL ON FUNCTION public.fn_registrar_transcricao_humana(p_documento_id uuid
 REVOKE ALL ON FUNCTION public.fn_registrar_uso_lote(p_caso_id uuid, p_execucao_ref text, p_resumo jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_registrar_uso_lote(p_caso_id uuid, p_execucao_ref text, p_resumo jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_registrar_uso_lote(p_caso_id uuid, p_execucao_ref text, p_resumo jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_registrar_uso_lote(p_caso_id uuid, p_execucao_ref text, p_resumo jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_resolver_linha_exigida_superada(p_tipos text[], p_ator text); Type: ACL; Schema: public; Owner: -
@@ -23953,6 +24740,7 @@ REVOKE ALL ON FUNCTION public.fn_resolver_linha_exigida_superada(p_tipos text[],
 
 REVOKE ALL ON FUNCTION public.fn_resolver_periodo_incorreto_falso(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_resolver_periodo_incorreto_falso(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_resolver_periodo_incorreto_falso(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb); Type: ACL; Schema: public; Owner: -
@@ -23961,6 +24749,7 @@ GRANT ALL ON FUNCTION public.fn_resolver_periodo_incorreto_falso(p_caso_id uuid)
 REVOKE ALL ON FUNCTION public.fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_resumo_anexar(p_arquivo uuid, p_registros jsonb, p_grupos jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_resumo_concluir(p_arquivo uuid); Type: ACL; Schema: public; Owner: -
@@ -23969,6 +24758,7 @@ GRANT ALL ON FUNCTION public.fn_resumo_anexar(p_arquivo uuid, p_registros jsonb,
 REVOKE ALL ON FUNCTION public.fn_resumo_concluir(p_arquivo uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_resumo_concluir(p_arquivo uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_resumo_concluir(p_arquivo uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_resumo_concluir(p_arquivo uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb); Type: ACL; Schema: public; Owner: -
@@ -23977,6 +24767,7 @@ GRANT ALL ON FUNCTION public.fn_resumo_concluir(p_arquivo uuid) TO service_role;
 REVOKE ALL ON FUNCTION public.fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_envelope jsonb, p_cabecalho jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text); Type: ACL; Schema: public; Owner: -
@@ -23985,6 +24776,7 @@ GRANT ALL ON FUNCTION public.fn_resumo_iniciar(p_caso uuid, p_documento uuid, p_
 REVOKE ALL ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor text, p_novo_tipo_taxonomia text, p_nova_entidade_nome text, p_novo_periodo_tipo text, p_novo_periodo_ref text, p_motivo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_rotulo_contido(p_curto text, p_longo text); Type: ACL; Schema: public; Owner: -
@@ -23993,6 +24785,7 @@ GRANT ALL ON FUNCTION public.fn_revisar_documento(p_documento_id uuid, p_autor t
 REVOKE ALL ON FUNCTION public.fn_rotulo_contido(p_curto text, p_longo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_rotulo_contido(p_curto text, p_longo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_rotulo_contido(p_curto text, p_longo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_rotulo_contido(p_curto text, p_longo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_rotulo_estrutural(p_chave text, p_tokens_exigidos text[]); Type: ACL; Schema: public; Owner: -
@@ -24001,6 +24794,7 @@ GRANT ALL ON FUNCTION public.fn_rotulo_contido(p_curto text, p_longo text) TO se
 REVOKE ALL ON FUNCTION public.fn_rotulo_estrutural(p_chave text, p_tokens_exigidos text[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_rotulo_estrutural(p_chave text, p_tokens_exigidos text[]) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_rotulo_estrutural(p_chave text, p_tokens_exigidos text[]) TO service_role;
+GRANT ALL ON FUNCTION public.fn_rotulo_estrutural(p_chave text, p_tokens_exigidos text[]) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_rotulos_candidatos(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24009,6 +24803,7 @@ GRANT ALL ON FUNCTION public.fn_rotulo_estrutural(p_chave text, p_tokens_exigido
 REVOKE ALL ON FUNCTION public.fn_rotulos_candidatos(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_rotulos_candidatos(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_rotulos_candidatos(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_rotulos_candidatos(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_saldo_mutuos_do_documento(p_linhas jsonb); Type: ACL; Schema: public; Owner: -
@@ -24017,6 +24812,7 @@ GRANT ALL ON FUNCTION public.fn_rotulos_candidatos(p_documento_versao_id uuid) T
 REVOKE ALL ON FUNCTION public.fn_saldo_mutuos_do_documento(p_linhas jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_saldo_mutuos_do_documento(p_linhas jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_saldo_mutuos_do_documento(p_linhas jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_saldo_mutuos_do_documento(p_linhas jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_saldo_mutuos_linhas(p_linhas jsonb); Type: ACL; Schema: public; Owner: -
@@ -24025,6 +24821,7 @@ GRANT ALL ON FUNCTION public.fn_saldo_mutuos_do_documento(p_linhas jsonb) TO ser
 REVOKE ALL ON FUNCTION public.fn_saldo_mutuos_linhas(p_linhas jsonb) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_saldo_mutuos_linhas(p_linhas jsonb) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_saldo_mutuos_linhas(p_linhas jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_saldo_mutuos_linhas(p_linhas jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_saldo_mutuos_texto(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24033,6 +24830,7 @@ GRANT ALL ON FUNCTION public.fn_saldo_mutuos_linhas(p_linhas jsonb) TO service_r
 REVOKE ALL ON FUNCTION public.fn_saldo_mutuos_texto(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_saldo_mutuos_texto(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_saldo_mutuos_texto(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_saldo_mutuos_texto(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_sazonalidade_do_caso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24041,6 +24839,7 @@ GRANT ALL ON FUNCTION public.fn_saldo_mutuos_texto(p_caso_id uuid) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text); Type: ACL; Schema: public; Owner: -
@@ -24049,6 +24848,7 @@ GRANT ALL ON FUNCTION public.fn_sazonalidade_do_caso(p_caso_id uuid) TO service_
 REVOKE ALL ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_tipo_documento text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_secao_e_de_resultado(p_secao text); Type: ACL; Schema: public; Owner: -
@@ -24057,6 +24857,7 @@ GRANT ALL ON FUNCTION public.fn_secao_canonica_da_secao_bruta(p_secao text, p_ti
 REVOKE ALL ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_secao_e_de_resultado(p_secao text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_segredo_do_vault_presente(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -24073,6 +24874,7 @@ GRANT ALL ON FUNCTION public.fn_segredo_do_vault_presente(p_nome text) TO servic
 REVOKE ALL ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_soma_secao(p_documento_versao_id uuid, p_termos_secao text[], p_entidade_coluna text, p_periodo_coluna text, p_exclui_secao text[], p_exclui_chave text[]); Type: ACL; Schema: public; Owner: -
@@ -24081,6 +24883,7 @@ GRANT ALL ON FUNCTION public.fn_sem_codigo_de_conta(p_rotulo text) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_soma_secao(p_documento_versao_id uuid, p_termos_secao text[], p_entidade_coluna text, p_periodo_coluna text, p_exclui_secao text[], p_exclui_chave text[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_soma_secao(p_documento_versao_id uuid, p_termos_secao text[], p_entidade_coluna text, p_periodo_coluna text, p_exclui_secao text[], p_exclui_chave text[]) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_soma_secao(p_documento_versao_id uuid, p_termos_secao text[], p_entidade_coluna text, p_periodo_coluna text, p_exclui_secao text[], p_exclui_chave text[]) TO service_role;
+GRANT ALL ON FUNCTION public.fn_soma_secao(p_documento_versao_id uuid, p_termos_secao text[], p_entidade_coluna text, p_periodo_coluna text, p_exclui_secao text[], p_exclui_chave text[]) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_somar_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]); Type: ACL; Schema: public; Owner: -
@@ -24089,6 +24892,7 @@ GRANT ALL ON FUNCTION public.fn_soma_secao(p_documento_versao_id uuid, p_termos_
 REVOKE ALL ON FUNCTION public.fn_somar_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_somar_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_somar_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]) TO service_role;
+GRANT ALL ON FUNCTION public.fn_somar_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text); Type: ACL; Schema: public; Owner: -
@@ -24097,6 +24901,7 @@ GRANT ALL ON FUNCTION public.fn_somar_conceito(p_documento_versao_id uuid, p_inc
 REVOKE ALL ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid, p_ano4 text, p_ano2 text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_sugerir_perguntas(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24105,6 +24910,7 @@ GRANT ALL ON FUNCTION public.fn_somar_faturamento_ano(p_documento_versao_id uuid
 REVOKE ALL ON FUNCTION public.fn_sugerir_perguntas(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_sugerir_perguntas(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_sugerir_perguntas(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_sugerir_perguntas(p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_tem_palavra_longa(p_chave text); Type: ACL; Schema: public; Owner: -
@@ -24113,6 +24919,7 @@ GRANT ALL ON FUNCTION public.fn_sugerir_perguntas(p_caso_id uuid) TO service_rol
 REVOKE ALL ON FUNCTION public.fn_tem_palavra_longa(p_chave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_tem_palavra_longa(p_chave text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_tem_palavra_longa(p_chave text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_tem_palavra_longa(p_chave text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_tem_papel(); Type: ACL; Schema: public; Owner: -
@@ -24129,6 +24936,7 @@ GRANT ALL ON FUNCTION public.fn_tem_papel() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_teto_ressalvas() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_teto_ressalvas() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_teto_ressalvas() TO service_role;
+GRANT ALL ON FUNCTION public.fn_teto_ressalvas() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_texto_nomeia_mutuo(p_texto text); Type: ACL; Schema: public; Owner: -
@@ -24137,6 +24945,16 @@ GRANT ALL ON FUNCTION public.fn_teto_ressalvas() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_tipo_gera_fato(p_tipo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_tipo_sem_dado_por_natureza(p_tipo text); Type: ACL; Schema: public; Owner: -
@@ -24145,6 +24963,7 @@ GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO service_role
 REVOKE ALL ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_tokens_estruturais(p_chave text); Type: ACL; Schema: public; Owner: -
@@ -24153,6 +24972,7 @@ GRANT ALL ON FUNCTION public.fn_tipo_sem_dado_por_natureza(p_tipo text) TO servi
 REVOKE ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_tokens_estruturais(p_chave text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_auditar_original_apagado(); Type: ACL; Schema: public; Owner: -
@@ -24167,6 +24987,7 @@ REVOKE ALL ON FUNCTION public.fn_trg_auditar_original_apagado() FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.fn_trg_auto_promover_dial() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_auto_promover_dial() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_auto_promover_dial() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_auto_promover_dial() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_caso_aloca_criador(); Type: ACL; Schema: public; Owner: -
@@ -24175,6 +24996,7 @@ GRANT ALL ON FUNCTION public.fn_trg_auto_promover_dial() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_trg_caso_aloca_criador() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_caso_aloca_criador() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_caso_aloca_criador() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_caso_aloca_criador() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_caso_pergunta_so_reaponta(); Type: ACL; Schema: public; Owner: -
@@ -24183,6 +25005,7 @@ GRANT ALL ON FUNCTION public.fn_trg_caso_aloca_criador() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_trg_caso_pergunta_so_reaponta() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_caso_pergunta_so_reaponta() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_caso_pergunta_so_reaponta() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_caso_pergunta_so_reaponta() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_caso_reservado_ao_socio(); Type: ACL; Schema: public; Owner: -
@@ -24191,6 +25014,7 @@ GRANT ALL ON FUNCTION public.fn_trg_caso_pergunta_so_reaponta() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_trg_caso_reservado_ao_socio() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_caso_reservado_ao_socio() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_caso_reservado_ao_socio() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_caso_reservado_ao_socio() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_controlador_vinculo_valido(); Type: ACL; Schema: public; Owner: -
@@ -24199,6 +25023,7 @@ GRANT ALL ON FUNCTION public.fn_trg_caso_reservado_ao_socio() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_trg_controlador_vinculo_valido() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_controlador_vinculo_valido() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_controlador_vinculo_valido() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_controlador_vinculo_valido() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_entidade_ambigua(); Type: ACL; Schema: public; Owner: -
@@ -24207,6 +25032,7 @@ GRANT ALL ON FUNCTION public.fn_trg_controlador_vinculo_valido() TO service_role
 REVOKE ALL ON FUNCTION public.fn_trg_entidade_ambigua() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_entidade_ambigua() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_entidade_ambigua() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_entidade_ambigua() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_entidade_controlador_soma_maxima(); Type: ACL; Schema: public; Owner: -
@@ -24215,6 +25041,7 @@ GRANT ALL ON FUNCTION public.fn_trg_entidade_ambigua() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_trg_entidade_controlador_soma_maxima() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_entidade_controlador_soma_maxima() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_entidade_controlador_soma_maxima() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_entidade_controlador_soma_maxima() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_entidade_forma_de_controle_tem_vinculo(); Type: ACL; Schema: public; Owner: -
@@ -24223,6 +25050,7 @@ GRANT ALL ON FUNCTION public.fn_trg_entidade_controlador_soma_maxima() TO servic
 REVOKE ALL ON FUNCTION public.fn_trg_entidade_forma_de_controle_tem_vinculo() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_entidade_forma_de_controle_tem_vinculo() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_entidade_forma_de_controle_tem_vinculo() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_entidade_forma_de_controle_tem_vinculo() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_instalacao_cobertura_nao_regride(); Type: ACL; Schema: public; Owner: -
@@ -24231,6 +25059,7 @@ GRANT ALL ON FUNCTION public.fn_trg_entidade_forma_de_controle_tem_vinculo() TO 
 REVOKE ALL ON FUNCTION public.fn_trg_instalacao_cobertura_nao_regride() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_instalacao_cobertura_nao_regride() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_instalacao_cobertura_nao_regride() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_instalacao_cobertura_nao_regride() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_membro_ultimo_socio(); Type: ACL; Schema: public; Owner: -
@@ -24239,6 +25068,7 @@ GRANT ALL ON FUNCTION public.fn_trg_instalacao_cobertura_nao_regride() TO servic
 REVOKE ALL ON FUNCTION public.fn_trg_membro_ultimo_socio() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_membro_ultimo_socio() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_membro_ultimo_socio() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_membro_ultimo_socio() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_so_quem_escreve_apaga(); Type: ACL; Schema: public; Owner: -
@@ -24247,6 +25077,7 @@ GRANT ALL ON FUNCTION public.fn_trg_membro_ultimo_socio() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_trg_so_quem_escreve_apaga() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_so_quem_escreve_apaga() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_so_quem_escreve_apaga() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_so_quem_escreve_apaga() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_trg_so_socio(); Type: ACL; Schema: public; Owner: -
@@ -24255,6 +25086,7 @@ GRANT ALL ON FUNCTION public.fn_trg_so_quem_escreve_apaga() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_trg_so_socio() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_trg_so_socio() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_trg_so_socio() TO service_role;
+GRANT ALL ON FUNCTION public.fn_trg_so_socio() TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_unidade_predominante(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24263,6 +25095,7 @@ GRANT ALL ON FUNCTION public.fn_trg_so_socio() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_unidade_predominante(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_unidade_predominante(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_unidade_predominante(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_unidade_predominante(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_upsert_caso(p_nome text, p_ator text); Type: ACL; Schema: public; Owner: -
@@ -24271,6 +25104,7 @@ GRANT ALL ON FUNCTION public.fn_unidade_predominante(p_documento_versao_id uuid)
 REVOKE ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_upsert_entidade(p_caso_id uuid, p_nome text, p_cnpj text); Type: ACL; Schema: public; Owner: -
@@ -24279,6 +25113,7 @@ GRANT ALL ON FUNCTION public.fn_upsert_caso(p_nome text, p_ator text) TO service
 REVOKE ALL ON FUNCTION public.fn_upsert_entidade(p_caso_id uuid, p_nome text, p_cnpj text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_upsert_entidade(p_caso_id uuid, p_nome text, p_cnpj text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_upsert_entidade(p_caso_id uuid, p_nome text, p_cnpj text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_upsert_entidade(p_caso_id uuid, p_nome text, p_cnpj text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_upsert_periodo(p_caso_id uuid, p_tipo text, p_ref text); Type: ACL; Schema: public; Owner: -
@@ -24287,6 +25122,7 @@ GRANT ALL ON FUNCTION public.fn_upsert_entidade(p_caso_id uuid, p_nome text, p_c
 REVOKE ALL ON FUNCTION public.fn_upsert_periodo(p_caso_id uuid, p_tipo text, p_ref text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_upsert_periodo(p_caso_id uuid, p_tipo text, p_ref text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_upsert_periodo(p_caso_id uuid, p_tipo text, p_ref text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_upsert_periodo(p_caso_id uuid, p_tipo text, p_ref text) TO supabase_read_only_user;
 
 --
 -- Name: TABLE campo_extraido; Type: ACL; Schema: public; Owner: -
@@ -24302,6 +25138,7 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.campo_extraido TO service_role
 REVOKE ALL ON FUNCTION public.fn_valor_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_valor_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_valor_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]) TO service_role;
+GRANT ALL ON FUNCTION public.fn_valor_conceito(p_documento_versao_id uuid, p_inclui text[], p_exclui text[]) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_valor_conceito_col(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text); Type: ACL; Schema: public; Owner: -
@@ -24310,6 +25147,7 @@ GRANT ALL ON FUNCTION public.fn_valor_conceito(p_documento_versao_id uuid, p_inc
 REVOKE ALL ON FUNCTION public.fn_valor_conceito_col(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_valor_conceito_col(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_valor_conceito_col(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_valor_conceito_col(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_valor_conceito_secao(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text); Type: ACL; Schema: public; Owner: -
@@ -24318,6 +25156,7 @@ GRANT ALL ON FUNCTION public.fn_valor_conceito_col(p_documento_versao_id uuid, p
 REVOKE ALL ON FUNCTION public.fn_valor_conceito_secao(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_valor_conceito_secao(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_valor_conceito_secao(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_valor_conceito_secao(p_documento_versao_id uuid, p_inclui text[], p_exclui text[], p_entidade_coluna text, p_periodo_coluna text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_valor_em_base(p_valor numeric, p_unidade text); Type: ACL; Schema: public; Owner: -
@@ -24326,6 +25165,7 @@ GRANT ALL ON FUNCTION public.fn_valor_conceito_secao(p_documento_versao_id uuid,
 REVOKE ALL ON FUNCTION public.fn_valor_em_base(p_valor numeric, p_unidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_valor_em_base(p_valor numeric, p_unidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_valor_em_base(p_valor numeric, p_unidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_valor_em_base(p_valor numeric, p_unidade text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_valor_estrutural_col(p_documento_versao_id uuid, p_tokens text[], p_entidade_coluna text, p_periodo_coluna text); Type: ACL; Schema: public; Owner: -
@@ -24334,6 +25174,7 @@ GRANT ALL ON FUNCTION public.fn_valor_em_base(p_valor numeric, p_unidade text) T
 REVOKE ALL ON FUNCTION public.fn_valor_estrutural_col(p_documento_versao_id uuid, p_tokens text[], p_entidade_coluna text, p_periodo_coluna text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_valor_estrutural_col(p_documento_versao_id uuid, p_tokens text[], p_entidade_coluna text, p_periodo_coluna text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_valor_estrutural_col(p_documento_versao_id uuid, p_tokens text[], p_entidade_coluna text, p_periodo_coluna text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_valor_estrutural_col(p_documento_versao_id uuid, p_tokens text[], p_entidade_coluna text, p_periodo_coluna text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_valor_pt_br(p_valor numeric, p_unidade text); Type: ACL; Schema: public; Owner: -
@@ -24342,6 +25183,7 @@ GRANT ALL ON FUNCTION public.fn_valor_estrutural_col(p_documento_versao_id uuid,
 REVOKE ALL ON FUNCTION public.fn_valor_pt_br(p_valor numeric, p_unidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_valor_pt_br(p_valor numeric, p_unidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_valor_pt_br(p_valor numeric, p_unidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_valor_pt_br(p_valor numeric, p_unidade text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_valores_por_ano(p_caso_id uuid, p_entidade text); Type: ACL; Schema: public; Owner: -
@@ -24350,6 +25192,7 @@ GRANT ALL ON FUNCTION public.fn_valor_pt_br(p_valor numeric, p_unidade text) TO 
 REVOKE ALL ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_veredito_producao(p_estagio text, p_caso_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24358,6 +25201,7 @@ GRANT ALL ON FUNCTION public.fn_valores_por_ano(p_caso_id uuid, p_entidade text)
 REVOKE ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_versao_atual(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24366,6 +25210,7 @@ GRANT ALL ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid
 REVOKE ALL ON FUNCTION public.fn_versao_atual(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_atual(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_atual(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_versao_atual(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_versao_com_extracao(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24374,6 +25219,7 @@ GRANT ALL ON FUNCTION public.fn_versao_atual(p_documento_id uuid) TO service_rol
 REVOKE ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_versao_esgotou_transitoria(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24382,6 +25228,7 @@ GRANT ALL ON FUNCTION public.fn_versao_com_extracao(p_documento_id uuid) TO serv
 REVOKE ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_versao_extracao_concluida(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24390,6 +25237,7 @@ GRANT ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id
 REVOKE ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_versao_mais_nova(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24398,6 +25246,7 @@ GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id 
 REVOKE ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_versao_peso_de_leitura(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24406,6 +25255,7 @@ GRANT ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) TO service
 REVOKE ALL ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text); Type: ACL; Schema: public; Owner: -
@@ -24414,6 +25264,7 @@ GRANT ALL ON FUNCTION public.fn_versao_peso_de_leitura(p_documento_versao_id uui
 REVOKE ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text) TO supabase_read_only_user;
 
 --
 -- Name: TABLE alocacao; Type: ACL; Schema: public; Owner: -
@@ -24604,6 +25455,37 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.execucao_falha TO authenticate
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.execucao_falha TO service_role;
 
 --
+-- Name: TABLE fato_financeiro; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT ON TABLE public.fato_financeiro TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.fato_financeiro TO service_role;
+
+--
+-- Name: COLUMN fato_financeiro.entidade_id; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT UPDATE(entidade_id) ON TABLE public.fato_financeiro TO authenticated;
+
+--
+-- Name: COLUMN fato_financeiro.entidade_origem; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT UPDATE(entidade_origem) ON TABLE public.fato_financeiro TO authenticated;
+
+--
+-- Name: COLUMN fato_financeiro.periodo_id; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT UPDATE(periodo_id) ON TABLE public.fato_financeiro TO authenticated;
+
+--
+-- Name: COLUMN fato_financeiro.periodo_origem; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT UPDATE(periodo_origem) ON TABLE public.fato_financeiro TO authenticated;
+
+--
 -- Name: TABLE fato_tipo_catalogo; Type: ACL; Schema: public; Owner: -
 --
 
@@ -24763,6 +25645,34 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_linha_alternativa TO
 
 GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_fato_financeiro_constraints; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_constraints TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_constraints TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_fato_financeiro_pendencia_tipo; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_pendencia_tipo TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_pendencia_tipo TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_fato_financeiro_recentes; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_recentes TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_recentes TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_fato_financeiro_so_secao; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_so_secao TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_so_secao TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_gatilho_original_apagado; Type: ACL; Schema: public; Owner: -

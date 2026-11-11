@@ -1214,6 +1214,18 @@ supabase db execute --file Supabase/migrations/0242_a_secao_que_so_existia_em_co
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0242' and not presente;   -- ZERO linhas
 #   select count(*) from conta_canonica;   -- 27
 
+# A 0243 cria fato_financeiro (P27, o fato canônico ACIMA de campo_extraido: conta = a seção da linha, entidade e período pela coluna da linha quando ela diz), a materialização (fn_materializar_fatos, idempotente), a pendência conta_canonica_incerta (UMA por documento-versão, só para extração nova), o backfill SEM pendência (o resumo fica em evento_auditoria), o gatilho do documento, reemite fn_registrar_campos_extraidos (a chamada nova no fim; assinatura igual, o n8n não muda) e fn_fundir_entidade (repõe os fatos), com 18 requisitos novos na sonda.
+# >>> Rodar COMO `postgres`; aplicar DEPOIS da 0242. O `alter type pendencia_tipo add value` vem ANTES do `begin;` (e o arquivo não USA o rótulo novo: pela API de gerenciamento, que envolve o lote numa transação, passa em UMA chamada). O backfill roda na própria migration: ~76 mil fatos em ~3 s no local (124 mil linhas sintéticas); em produção são ~85,5 mil (medido read-only em 11/11/2026), então peça tempo de folga.
+# >>> Reaplicável (função reemitida, backfill idempotente). Teste: Supabase/test/fato_financeiro.test.sql.
+supabase db execute --file Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0243' and not presente;   -- ZERO linhas
+#   select depois from evento_auditoria where acao = 'fato_financeiro_backfill' order by criado_em desc limit 1;   -- o resumo: fatos por método, sem entidade, sem período, e as linhas incertas SEM pendência (por decisão do dono)
+#   -- a bijeção COMPLETA (a sonda só olha uma amostra das 20 versões mais novas que passaram pela extração): ZERO linhas elegíveis sem fato
+#   select count(*) from campo_extraido ce join documento_versao dv on dv.id = ce.documento_versao_id join documento d on d.id = dv.documento_id
+#    where fn_linha_vira_fato(d.tipo_taxonomia, ce.chave, ce.unidade, ce.valor_num) and not exists (select 1 from fato_financeiro f where f.campo_extraido_id = ce.id);   -- 0
+#   -- se algum dia a materialização de uma extração falhar (evento fatos_materializacao_falhou), o reparo é: select fn_materializar_fatos();
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
