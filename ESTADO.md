@@ -1,9 +1,17 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 127 (11/11/2026, conta Claude Oria) — CI sem apt, 0240 e 0241 escritas (NÃO aplicadas)
+## SESSÃO 127 (11/11/2026, conta Claude Oria) — CI sem apt; 0240 e 0241 APLICADAS EM PRODUÇÃO
 
-> **Migration mais nova: `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql` — escrita e testada no banco local, NÃO aplicada em produção.** A `0240` também está escrita e testada, não aplicada. A última aplicada continua a `0234`. Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
-> - Acesso a produção: NÃO usado nesta rodada (regra do dono). Ver "NÃO medido" abaixo.
+> **Migration mais nova: `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291).** Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
+
+### Aplicação em produção (11/11, a pedido do dono)
+- **Antes:** 80 mandatos; sonda com 365 itens e 1 ausente (`envio_segredo_no_vault`, que a API não lê); 479 pendências de reconciliação abertas.
+- **0240 (1,4 s):** 4 de 4 requisitos presentes.
+- **0241 (1,8 s):** 3 de 3 requisitos presentes. Backfill: `corrigidas = 0`, como esperado.
+  - O resumo diz `contaminadas = 415, sem_registro_proprio = 415`. Não é dano. Medido: são pendências abertas criadas ANTES de 30/09/2026, quando `reconciliacao.descricao` ainda não existia. O backfill não sabe de onde veio o texto delas, conta e não toca. O rótulo "contaminadas" exagera: o certo seria "sem origem gravada". Nenhuma descrição mudou (0 eventos `descricao_da_pendencia_corrigida`).
+- **Depois:** 80 mandatos; sonda só com o mesmo ausente do Vault; 479 pendências de reconciliação abertas.
+- Nada de n8n nem de portal a republicar por causa destas duas.
+
 
 ### O que a rodada fez
 1. **CI sem apt (`f93d254`).** O DNS do runner não resolvia `*.ubuntu.com` e travava todo PR (#289 e #290 vermelhos antes de qualquer teste). O psql vem da imagem (PostgreSQL 18.6). O pdftotext usa apt com prazo de 120 s e, se falhar, reserva `debian:trixie-slim` via Docker. Provado no CI do próprio PR: o passo levou 2 min 20 s (o apt esgotou e a reserva funcionou) e a suíte n8n deu 786/786.
@@ -28,7 +36,7 @@
 - Taxonomia: 36 tipos e nenhum "composição do imobilizado", conferido no banco local (montado pelas migrations).
 
 ### NÃO medido nesta rodada
-- **Produção.** Nada foi lido nem escrito. Por isso o "0 pendências contaminadas" (`19325ba`, medido em 11/11 antes desta rodada) e as 307 linhas do balanço e a leitura de produção da ficha do imobilizado (feita por quem a escreveu, em 11/11) NÃO foram remedidas aqui.
+- **Produção, ANTES da aplicação.** A leitura e a escrita de produção vieram depois do fechamento (ver "Aplicação em produção"). Antes dela, o "0 pendências contaminadas" (`19325ba`, medido em 11/11 antes desta rodada) e as 307 linhas do balanço e a leitura de produção da ficha do imobilizado (feita por quem a escreveu, em 11/11) NÃO foram remedidas aqui.
 - **Mutações** ("cada parte desligada reprova"). Os números (0240: 3, 5 e 2; 0241: 2 e 1 no commit `c4f14be`; 29 asserts) vêm das mensagens de commit. Não foram remedidos aqui.
 - **Desempenho** da `fn_pares_duplicados_do_caso`: não remedido aqui (está no commit `faa3338`).
 - **Achados da P10 da S126 já FECHADOS pelo PR #288 (mergeado, `17176af`), não pela S127:**
@@ -37,20 +45,17 @@
   - O que sobra disso ("Não lido"/"Não conferido" no deck e no export) está no PR #289, ainda aberto.
 
 ### O que o dono faz à mão, em ordem
-1. **Mergear o #291 primeiro**: ele destrava o CI dos outros. Depois atualizar o #289 e o #290 com o `main` e mergeá-los.
-2. **Aplicar em produção, nesta ordem, como `postgres`: 0240 e depois 0241.**
-   - Conferir: `select chave, presente, detalhe from fn_instalacao_conferir() where migration in ('0240','0241') and not presente;` tem de vir vazio.
-   - Conferir o evento `descricao_contaminada_resumo` (ator `sistema:0241`): esperado `corrigidas = 0`.
-3. **Nada de n8n nem de portal a republicar por causa desta rodada.**
-4. Decidir sobre o tipo "composição do imobilizado" na taxonomia. Criar o tipo re-extrai e paga os documentos.
-5. Já constavam: reenviar os originais reais (P10); trocar a senha colada no chat em 11/11; clicar "Reprocessar" no navegador.
+1. ~~Mergear o #291~~ (feito a pedido do dono) e ~~aplicar 0240 e 0241~~ (feito, ver acima).
+2. **Mergear o #289 e o #290.** Eles NÃO estão no #291. Antes, atualizar cada um com o `main` (o CI deles caiu pelo DNS, que o #291 resolve). O #289 conflita no topo do `ESTADO.md` com esta seção: resolver mantendo as duas. Depois do #289, a Claude Oria 2 republica a ingestão.
+3. **Tipo "composição do imobilizado" na taxonomia — autorizado pelo dono "se gerar valor".** Decisão: NÃO criar isolado agora. Criar o tipo muda o prompt de classificação, logo o `FINGERPRINT_EXTRACAO`, e o próximo envio de cada mandato re-extrai e paga TODOS os documentos. A P11 (Claude Oria 2, Fase 2) também vai mudar o prompt. Feito em separado, seriam duas re-extrações pagas; junto, uma. **Entregar à Claude Oria 2 para entrar na mesma mudança de prompt da P11:** seed do tipo na `taxonomia_tipo_documento` (migration da faixa dela) + o tipo no `SYSTEM_PROMPT`. Ver a ficha `quadro-de-imobilizado-classificado-como-balanco`.
+4. Já constavam: reenviar os originais reais (P10); trocar a senha colada no chat em 11/11; clicar "Reprocessar" no navegador.
 
 ### Próxima sessão da Claude Oria
 Fase 3, etapa 3.1 (**P26**, catálogo `conta_canonica` com hierarquia, natureza e seção, semeado da taxonomia atual), com a primeira migration da faixa livre: **0242**. Conforme `Arquitetura do Sistema/3 Estado e Execução/PLANO_DE_EXECUCAO_2026-11.md` §3, semana 6. O status por etapa (`STATUS_POR_ETAPA_2026-11-11.md`) vem com o #290 e não está nesta branch.
 
 ## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 NO AR (PR #287 mergeado, 0232–0234 aplicadas, n8n republicado, portal publicado); P10 rodada nos sintéticos
 
-> **Migration mais nova: `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql` — ESCRITA E TESTADA NO BANCO LOCAL, NÃO APLICADA EM PRODUÇÃO (a descrição da pendência só é reescrita pela rodada do mesmo período; backfill sistema:0241 das 7 contaminadas; ver o cabeçalho). A 0240 (`0240_a_versao_atual_que_nao_seguia_a_vigente.sql`, fn_versao_atual segue a versão vigente da 0233) também está ESCRITA E TESTADA, NÃO APLICADA. A última aplicada é a `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, junto com a 0232 e a 0233 (nessa ordem, pela API de gerenciamento, antes do merge).**
+> **(Superado pela S127, acima: a 0240 e a 0241 foram APLICADAS em produção em 11/11/2026.)** Na S126, a última aplicada era a `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, junto com a 0232 e a 0233 (nessa ordem, pela API de gerenciamento, antes do merge).
 > - Branch `claude/confident-bardeen-15mjip`. Nada mergeado no `main`, nada republicado no n8n, nada publicado no portal, P10 não rodou.
 > - Acesso a produção conferido nesta sessão: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_URL`, `N8N_BASE_URL`, `N8N_API_KEY`, `VERCEL_TOKEN` estão no ambiente (só os nomes foram lidos). Leitura de produção feita pela API de gerenciamento (`POST https://api.supabase.com/v1/projects/<ref>/database/query`, `read_only:true`; o ref sai de `SUPABASE_URL`). O MCP do Supabase (notebooks) recusa permissão.
 
