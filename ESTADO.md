@@ -2,7 +2,7 @@
 
 ## SESSÃO 127 (11/11/2026, conta Claude Oria) — CI sem apt; 0240 e 0241 APLICADAS EM PRODUÇÃO
 
-> **Migration mais nova: `0242_a_secao_que_so_existia_em_codigo.sql` — ESCRITA E NÃO APLICADA (P26, catálogo `conta_canonica`; só a sonda responde por produção). A anterior, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291).** Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
+> **Migration mais nova: `0242_a_secao_que_so_existia_em_codigo.sql` — ESCRITA E NÃO APLICADA (P26, catálogo `conta_canonica`; só a sonda responde por produção). A anterior, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291; a 0240 e a 0241 são do branch `claude/loving-tesla-7eutsq`, PR #291).** A 0242 é do branch `claude/peaceful-archimedes-hisyd0`, PR #294, ESCRITA E NÃO APLICADA. Onde esta seção e a S126 falarem de migration, vale esta.
 
 ### Aplicação em produção (11/11, a pedido do dono)
 - **Antes:** 80 mandatos; sonda com 365 itens e 1 ausente (`envio_segredo_no_vault`, que a API não lê); 479 pendências de reconciliação abertas.

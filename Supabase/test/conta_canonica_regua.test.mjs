@@ -14,7 +14,11 @@
 // TETO: um UPDATE/DELETE em `conta_canonica` numa migration futura NÃO é visto aqui; quem alterar o catálogo por esses
 // comandos atualiza o enum e este teste no mesmo commit (o teste SQL mede o banco montado e pega a outra metade).
 //
-// MEDIÇÃO NÃO-VAZIA (regra 2): os três últimos testes alimentam o comparador com a cópia ADULTERADA de cada lado
+// OS FILHOS DO ANC (P26, revisão): o portal tem o TOTAL `ativo_nao_circulante_grp` com cinco filhos (os 4 subgrupos e o balde "Outros", chave `ativo_nao_circulante`) na `BALANCO_OUTLINE`; no catálogo o nó com
+// secao_canonica = 'ativo_nao_circulante' é o GRUPO e tem os mesmos cinco filhos (o balde é `outros_ativos_nao_circulantes`). A tabela abaixo é o mapeamento de chave, explícito de propósito; o que o portão pega é um lado
+// ganhar ou perder subgrupo sozinho.
+//
+// MEDIÇÃO NÃO-VAZIA (regra 2): os últimos testes alimentam o comparador com a cópia ADULTERADA de cada lado
 // (seção a mais no enum, seção a menos no seed, demonstração trocada no mapa do portal) e exigem que ele aponte
 // exatamente a diferença; o número medido por lado está no cabeçalho de
 // Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql.
@@ -29,6 +33,14 @@ const RAIZ = new URL('../..', import.meta.url).pathname.replace(/\/$/, '');
 const MIGRATIONS = join(RAIZ, 'Supabase/migrations');
 const TEMPLATES = join(RAIZ, 'portal/src/lib/statement-templates.ts');
 const ESCAPE = 'NAO_CLASSIFICAVEL';
+const CHAVE_DO_PORTAL_NO_CATALOGO = { ativo_nao_circulante: 'outros_ativos_nao_circulantes' };
+
+/** Os filhos de `ativo_nao_circulante_grp` na BALANCO_OUTLINE do portal (chaves do portal). */
+export function lerFilhosDoAnc(textoTs) {
+  const linha = textoTs.split('\n').find((l) => /key:\s*"ativo_nao_circulante_grp"/.test(l)) ?? '';
+  const lista = linha.match(/filhos:\s*\[([^\]]*)\]/)?.[1] ?? '';
+  return [...lista.matchAll(/"(\w+)"/g)].map((m) => m[1]);
+}
 
 /** Os nós semeados por toda migration que insere em conta_canonica. */
 export function lerSeed(textoDasMigrations) {
@@ -61,7 +73,7 @@ export function lerFamilia(textoTs) {
 }
 
 /** As diferenças entre os três lados; vazio = o mesmo conjunto. */
-export function comparar({ enumSecoes, seed, familia }) {
+export function comparar({ enumSecoes, seed, familia, filhosAncPortal }) {
   const doEnum = new Set(enumSecoes.filter((s) => s !== ESCAPE));
   const doCatalogo = new Set(seed.filter((n) => n.secao).map((n) => n.secao));
   const doPortal = new Set(Object.keys(familia));
@@ -75,22 +87,34 @@ export function comparar({ enumSecoes, seed, familia }) {
       dif.push(`${n.secao}: catálogo diz ${n.demonstracao}, o portal roteia para ${familia[n.secao]}`);
     }
   }
+  if (filhosAncPortal) {
+    const doPortalAnc = new Set(filhosAncPortal.map((k) => CHAVE_DO_PORTAL_NO_CATALOGO[k] ?? k));
+    const doCatalogoAnc = new Set(seed.filter((n) => n.pai === 'ativo_nao_circulante').map((n) => n.codigo));
+    for (const c of doPortalAnc) if (!doCatalogoAnc.has(c)) dif.push(`o portal tem ${c} sob o ANC, o catálogo não`);
+    for (const c of doCatalogoAnc) if (!doPortalAnc.has(c)) dif.push(`o catálogo tem ${c} sob o ANC, o portal não`);
+  }
   return dif;
 }
 
 const migracoes = readdirSync(MIGRATIONS).filter((f) => f.endsWith('.sql')).sort()
   .map((f) => readFileSync(join(MIGRATIONS, f), 'utf8'));
 const seed = lerSeed(migracoes);
-const familia = lerFamilia(readFileSync(TEMPLATES, 'utf8'));
+const textoTs = readFileSync(TEMPLATES, 'utf8');
+const familia = lerFamilia(textoTs);
+const filhosAncPortal = lerFilhosDoAnc(textoTs);
 
-test('o portão não corre sobre o vazio: leu o enum, o mapa do portal e os 26 nós do seed', () => {
+test('o portão não corre sobre o vazio: leu o enum, o mapa do portal, os filhos do ANC e o seed (com os nós esperados presentes)', () => {
   assert.equal(SECAO_CANONICA_ENUM.length, 16, 'o enum tem as 15 seções e o escape');
   assert.equal(Object.keys(familia).length, 15);
-  assert.equal(seed.length, 26);
+  assert.equal(filhosAncPortal.length, 5, 'o outline do portal tem 5 filhos sob o ANC');
+  const codigos = new Set(seed.map((n) => n.codigo));
+  const esperados = ['demo_balanco', 'demo_dre', 'demo_fluxo_caixa', 'demo_dmpl', 'demo_dva', 'ativo', 'passivo_pl',
+    ...SECAO_CANONICA_ENUM.filter((x) => x !== ESCAPE), 'realizavel_lp', 'investimentos', 'imobilizado', 'intangivel', 'outros_ativos_nao_circulantes'];
+  assert.deepEqual(esperados.filter((c) => !codigos.has(c)), [], 'os nós esperados estão no seed (a P27 pode acrescentar folhas; elas não reprovam)');
 });
 
 test('o catálogo, o enum do extrator e o mapa do portal são o mesmo conjunto de seções, com a mesma demonstração', () => {
-  assert.deepEqual(comparar({ enumSecoes: SECAO_CANONICA_ENUM, seed, familia }), []);
+  assert.deepEqual(comparar({ enumSecoes: SECAO_CANONICA_ENUM, seed, familia, filhosAncPortal }), []);
 });
 
 test('uma seção a mais no enum (a IA passaria a devolvê-la sem conta) é apontada', () => {
@@ -112,4 +136,18 @@ test('a demonstração trocada num dos lados (o portal roteia para outra aba) é
 test('o escape NAO_CLASSIFICAVEL não é seção do catálogo', () => {
   assert.ok(!seed.some((n) => n.secao === ESCAPE));
   assert.ok(SECAO_CANONICA_ENUM.includes(ESCAPE), 'o enum ainda tem o escape (senão este teste não mede nada)');
+});
+
+test('um subgrupo a mais no outline do portal (o catálogo não o tem) é apontado', () => {
+  const dif = comparar({ enumSecoes: SECAO_CANONICA_ENUM, seed, familia, filhosAncPortal: [...filhosAncPortal, 'diferido'] });
+  assert.ok(dif.includes('o portal tem diferido sob o ANC, o catálogo não'), dif.join(' | '));
+});
+
+test('um subgrupo a menos no seed (o portal ainda o tem) é apontado, e o balde Outros é mapeado para o seu nó', () => {
+  const sem = seed.filter((n) => n.codigo !== 'imobilizado');
+  const dif = comparar({ enumSecoes: SECAO_CANONICA_ENUM, seed: sem, familia, filhosAncPortal });
+  assert.ok(dif.includes('o portal tem imobilizado sob o ANC, o catálogo não'), dif.join(' | '));
+  const semOutros = seed.filter((n) => n.codigo !== 'outros_ativos_nao_circulantes');
+  const dif2 = comparar({ enumSecoes: SECAO_CANONICA_ENUM, seed: semOutros, familia, filhosAncPortal });
+  assert.ok(dif2.includes('o portal tem outros_ativos_nao_circulantes sob o ANC, o catálogo não'), dif2.join(' | '));
 });

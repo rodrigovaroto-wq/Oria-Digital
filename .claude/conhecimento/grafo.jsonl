@@ -427,7 +427,8 @@
 {"k":"n","id":"fn:fn_conferir_lote","t":"fn","f":"Supabase/migrations/0112_lote_conferido_documento_por_documento.sql","txt":"conferir lote"}
 {"k":"n","id":"fn:fn_conferir_modelagem","t":"fn","f":"Supabase/migrations/0158_o_pronto_que_nao_provava_cobertura.sql","txt":"conferir modelagem"}
 {"k":"n","id":"fn:fn_conflitos_do_caso","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"conflitos do caso"}
-{"k":"n","id":"fn:fn_conta_canonica_sem_ciclo","t":"fn","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","txt":"conta canonica sem ciclo"}
+{"k":"n","id":"fn:fn_conta_canonica_alcanca_a_raiz","t":"fn","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","txt":"conta canonica alcanca a raiz"}
+{"k":"n","id":"fn:fn_conta_canonica_orfas","t":"fn","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","txt":"conta canonica orfas"}
 {"k":"n","id":"fn:fn_contas_repetindo_valor","t":"fn","f":"Supabase/migrations/0140_a_coluna_de_dimensao_nao_e_valor.sql","txt":"contas repetindo valor"}
 {"k":"n","id":"fn:fn_contraparte_intragrupo","t":"fn","f":"Supabase/migrations/0124_intragrupo_que_nao_e_mutuo.sql","txt":"contraparte intragrupo"}
 {"k":"n","id":"fn:fn_controlador_desvincular_familia","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"controlador desvincular familia"}
@@ -1406,7 +1407,7 @@
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/test/conferir_envio_v2.test.sql","l":273}
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"Supabase/test/conferir_envio_v2.test.sql","l":140}
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/conferir_envio_v2.test.sql","l":14}
-{"k":"e","de":"arquivo:Supabase/test/conta_canonica.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/conta_canonica.test.sql","l":218}
+{"k":"e","de":"arquivo:Supabase/test/conta_canonica.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/conta_canonica.test.sql","l":246}
 {"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_desvincular_familia","f":"Supabase/test/controlador_familia.test.sql","l":174}
 {"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_registrar","f":"Supabase/test/controlador_familia.test.sql","l":48}
 {"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_vincular_familia","f":"Supabase/test/controlador_familia.test.sql","l":74}
@@ -2893,7 +2894,8 @@
 {"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_mais_nova","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":54}
 {"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":371}
 {"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":71}
-{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_conta_canonica_sem_ciclo","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","l":94}
+{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_conta_canonica_alcanca_a_raiz","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","l":111}
+{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_conta_canonica_orfas","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","l":101}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

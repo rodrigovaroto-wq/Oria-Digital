@@ -2454,29 +2454,37 @@ $$;
 COMMENT ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS 'Dois documentos do mesmo período discordando sobre a MESMA conta, com o vencedor por autoridade documental e o critério por extenso (0151). Compara na base, só entre linhas com seção canônica, papel conta e unidade conversível. `decidido = false` é empate OU rótulo contestado pelo diagnóstico (0159, um lado com `decide_sozinho = false`) — nos dois casos ninguém vence e a decisão é humana. O par nasce DEPOIS do agrupamento (0152) — a versão anterior pedia o produto cartesiano e levava 12,4 s por chamada no lote de 190 documentos.';
 
 --
--- Name: fn_conta_canonica_sem_ciclo(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_conta_canonica_alcanca_a_raiz(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_conta_canonica_sem_ciclo() RETURNS trigger
+CREATE FUNCTION public.fn_conta_canonica_alcanca_a_raiz() RETURNS trigger
     LANGUAGE plpgsql
     AS $$
-declare v_n int;
+declare v_orfas text;
 begin
-  if new.pai is null then
-    return new;
-  end if;
-  with recursive sobe(codigo, pai) as (
-    select c.codigo, c.pai from conta_canonica c where c.codigo = new.pai
-    union
-    select c.codigo, c.pai from conta_canonica c join sobe s on c.codigo = s.pai
-  )
-  select count(*) into v_n from sobe where codigo = new.codigo;
-  if v_n > 0 then
-    raise exception 'conta_canonica: % como pai de % fecha um ciclo (% é ancestral de %)', new.pai, new.codigo, new.codigo, new.pai
+  select string_agg(o, ', ') into v_orfas from fn_conta_canonica_orfas() o;
+  if v_orfas is not null then
+    raise exception 'conta_canonica: nó(s) que não sobem até a raiz da própria demonstração (ciclo ou pai solto): %', v_orfas
       using errcode = 'check_violation';
   end if;
-  return new;
+  return null;
 end $$;
+
+--
+-- Name: fn_conta_canonica_orfas(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_conta_canonica_orfas() RETURNS SETOF text
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  with recursive alcanca(codigo, demonstracao) as (
+    select c.codigo, c.demonstracao from conta_canonica c where c.pai is null and c.codigo = 'demo_' || c.demonstracao
+    union
+    select c.codigo, c.demonstracao from conta_canonica c join alcanca a on c.pai = a.codigo and c.demonstracao = a.demonstracao
+  )
+  select c.codigo from conta_canonica c where not exists (select 1 from alcanca a where a.codigo = c.codigo) order by 1
+$$;
 
 --
 -- Name: fn_contas_repetindo_valor(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17960,10 +17968,8 @@ CREATE TABLE public.conta_canonica (
     secao_canonica text,
     classe_recorrencia text,
     ordem integer NOT NULL,
-    ativo boolean DEFAULT true NOT NULL,
     CONSTRAINT conta_canonica_demonstracao_check CHECK ((demonstracao = ANY (ARRAY['balanco'::text, 'dre'::text, 'fluxo_caixa'::text, 'dmpl'::text, 'dva'::text]))),
     CONSTRAINT conta_canonica_natureza_check CHECK ((natureza = ANY (ARRAY['devedora'::text, 'credora'::text, 'mista'::text]))),
-    CONSTRAINT conta_canonica_pai_nao_e_ela_ck CHECK ((pai IS DISTINCT FROM codigo)),
     CONSTRAINT conta_canonica_raiz_ck CHECK (((pai IS NULL) = (codigo = ('demo_'::text || demonstracao)))),
     CONSTRAINT conta_canonica_secao_canonica_check CHECK (((secao_canonica IS NULL) OR (secao_canonica <> 'NAO_CLASSIFICAVEL'::text)))
 );
@@ -17972,13 +17978,13 @@ CREATE TABLE public.conta_canonica (
 -- Name: TABLE conta_canonica; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.conta_canonica IS 'A árvore canônica demonstração > grupo > seção > subgrupo (0242, P26). `secao_canonica` é ATRIBUTO da conta (null nos nós de agrupamento), não um plano de contas paralelo. Só a taxonomia atual (26 nós): sem conta-folha (caixa, clientes…), que é a P27. Raiz declarada (codigo = demo_<demonstracao> ⇔ pai null); o filho tem a demonstração do pai (FK composta); ciclo recusado por gatilho. Mesmo conjunto de SECAO_CANONICA_ENUM (N8N/lib/extract.mjs), conferido por Supabase/test/conta_canonica_regua.test.mjs.';
+COMMENT ON TABLE public.conta_canonica IS 'A árvore canônica demonstração > grupo > seção > subgrupo (0242, P26). `secao_canonica` é ATRIBUTO da conta (null nos nós de agrupamento), não um plano de contas paralelo. Só a taxonomia atual (27 nós): sem conta-folha (caixa, clientes…), que é a P27. Raiz declarada (codigo = demo_<demonstracao> ⇔ pai null); o filho tem a demonstração do pai (FK composta); todo nó sobe até a raiz (gatilho de instrução). Mesmo conjunto de SECAO_CANONICA_ENUM (N8N/lib/extract.mjs), conferido por Supabase/test/conta_canonica_regua.test.mjs.';
 
 --
 -- Name: COLUMN conta_canonica.natureza; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.conta_canonica.natureza IS '''mista'' = sem sinal único, e NÃO um default: receita bruta (receita + deduções), despesas operacionais (inclui outras receitas), resultado financeiro, impostos sobre o lucro, as seções do fluxo, DMPL, DVA e as demonstrações-raiz. Devedora/credora só onde o sinal é o da própria seção (regra 1: não fabricar um sinal que o dado não tem).';
+COMMENT ON COLUMN public.conta_canonica.natureza IS 'O SALDO NORMAL DO GRUPO pela convenção contábil (devedora | credora | mista). Conta REDUTORA (deduções da receita, depreciação/amortização acumulada, prejuízos acumulados) tem natureza PRÓPRIA e é da FOLHA (P27): a folha NUNCA herda a natureza do pai. ''mista'' só onde o grupo tem componentes PRÓPRIOS dos dois lados: resultado financeiro, despesas operacionais (inclui outras receitas), impostos sobre o lucro (corrente e diferido), as seções do fluxo, DMPL, DVA e as demonstrações-raiz. Redutora existe em todo grupo (valor negativo medido nas fixtures: 68 linhas do PL, 47 do ANC, 29 do AC, 28 de receita_bruta), e por isso o sinal da linha não é a natureza do grupo (regra 1: não fabricar um sinal que o dado não tem).';
 
 --
 -- Name: COLUMN conta_canonica.classe_recorrencia; Type: COMMENT; Schema: public; Owner: -
@@ -18584,6 +18590,53 @@ CREATE VIEW public.instalacao_sonda_combinado_estrutural AS
 --
 
 COMMENT ON VIEW public.instalacao_sonda_combinado_estrutural IS '(0157, achado D da revisão) Autoteste da decisão de fn_combinado_estrutural_apto, EXECUTADA por literais (função pura, sem fixture de documento): 1 linha só se o positivo, o achado A (conteúdo exigido) e o achado B (fonte permitida) valem TODOS ao mesmo tempo. Um marcador textual de corpo/função não pega um "false and" que mate o predicado e deixe os comentários intactos — esta view pega, porque o predicado É executado.';
+
+--
+-- Name: instalacao_sonda_conta_canonica_constraints; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_conta_canonica_constraints AS
+ SELECT (c.conname)::text AS constraint_nome
+   FROM (( VALUES ('conta_canonica_pkey'::text,'p'::text,'PRIMARY KEY (codigo)'::text), ('conta_canonica_codigo_demonstracao_uq'::text,'u'::text,'UNIQUE (codigo, demonstracao)'::text), ('conta_canonica_secao_canonica_key'::text,'u'::text,'UNIQUE (secao_canonica)'::text), ('conta_canonica_raiz_ck'::text,'c'::text,'''demo_''::text'::text), ('conta_canonica_pai_fk'::text,'f'::text,'FOREIGN KEY (pai, demonstracao) REFERENCES conta_canonica(codigo, demonstracao)'::text), ('conta_canonica_classe_recorrencia_fkey'::text,'f'::text,'REFERENCES classe_contabil_catalogo(codigo)'::text), ('conta_canonica_demonstracao_check'::text,'c'::text,'''fluxo_caixa''::text'::text), ('conta_canonica_natureza_check'::text,'c'::text,'''mista''::text'::text), ('conta_canonica_secao_canonica_check'::text,'c'::text,'''NAO_CLASSIFICAVEL''::text'::text)) e(conname, contype, frag)
+     JOIN pg_constraint c ON (((c.conrelid = ('public.conta_canonica'::regclass)::oid) AND (c.conname = e.conname) AND (c.contype = (e.contype)::"char"))))
+  WHERE (pg_get_constraintdef(c.oid) ~~ (('%'::text || e.frag) || '%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_conta_canonica_constraints; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_conta_canonica_constraints IS 'Sonda da 0242: uma linha = uma das 9 constraints estruturais de conta_canonica existe com o predicado esperado. Menos de 9: uma guarda (raiz declarada, FK da demonstração do pai, check dos valores, unique da seção) foi dropada ou trocada.';
+
+--
+-- Name: instalacao_sonda_conta_canonica_seed; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_conta_canonica_seed AS
+ SELECT c.codigo
+   FROM (public.conta_canonica c
+     JOIN ( VALUES ('demo_balanco'::text,NULL::text), ('demo_dre'::text,NULL::text), ('demo_fluxo_caixa'::text,NULL::text), ('demo_dmpl'::text,NULL::text), ('demo_dva'::text,NULL::text), ('ativo'::text,'demo_balanco'::text), ('passivo_pl'::text,'demo_balanco'::text), ('receita_bruta'::text,'demo_dre'::text), ('custos'::text,'demo_dre'::text), ('despesas_operacionais'::text,'demo_dre'::text), ('resultado_financeiro'::text,'demo_dre'::text), ('impostos_lucro'::text,'demo_dre'::text), ('atividades_operacionais'::text,'demo_fluxo_caixa'::text), ('atividades_investimento'::text,'demo_fluxo_caixa'::text), ('atividades_financiamento'::text,'demo_fluxo_caixa'::text), ('dmpl'::text,'demo_dmpl'::text), ('dva'::text,'demo_dva'::text), ('ativo_circulante'::text,'ativo'::text), ('ativo_nao_circulante'::text,'ativo'::text), ('passivo_circulante'::text,'passivo_pl'::text), ('passivo_nao_circulante'::text,'passivo_pl'::text), ('patrimonio_liquido'::text,'passivo_pl'::text), ('realizavel_lp'::text,'ativo_nao_circulante'::text), ('investimentos'::text,'ativo_nao_circulante'::text), ('imobilizado'::text,'ativo_nao_circulante'::text), ('intangivel'::text,'ativo_nao_circulante'::text), ('outros_ativos_nao_circulantes'::text,'ativo_nao_circulante'::text)) e(codigo, pai) ON (((e.codigo = c.codigo) AND (NOT (e.pai IS DISTINCT FROM c.pai)))));
+
+--
+-- Name: VIEW instalacao_sonda_conta_canonica_seed; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_conta_canonica_seed IS 'Sonda da 0242: uma linha = um dos 27 nós esperados da taxonomia atual existe com o pai certo. Menos de 27: o seed rodou pela metade ou um nó foi movido. Folha acrescentada pela P27 não conta nem atrapalha.';
+
+--
+-- Name: instalacao_sonda_conta_canonica_sem_orfao; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_conta_canonica_sem_orfao AS
+ SELECT 1 AS ok
+  WHERE ((EXISTS ( SELECT 1
+           FROM public.conta_canonica)) AND (NOT (EXISTS ( SELECT 1
+           FROM public.fn_conta_canonica_orfas() fn_conta_canonica_orfas(fn_conta_canonica_orfas)))));
+
+--
+-- Name: VIEW instalacao_sonda_conta_canonica_sem_orfao; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_conta_canonica_sem_orfao IS 'Sonda da 0242: uma linha = o catálogo não está vazio e nenhum nó fica fora da árvore das cinco raízes (ciclo ou pai solto). Zero linhas: a árvore está quebrada, ou vazia.';
 
 --
 -- Name: instalacao_sonda_entidade_balcao_ambiguo; Type: VIEW; Schema: public; Owner: -
@@ -20146,10 +20199,10 @@ CREATE TRIGGER trg_caso_reservado_ao_socio BEFORE DELETE OR UPDATE ON public.cas
 CREATE TRIGGER trg_checklist_item_status_leitura_nao_apaga BEFORE DELETE ON public.checklist_item_status FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
 
 --
--- Name: conta_canonica trg_conta_canonica_sem_ciclo; Type: TRIGGER; Schema: public; Owner: -
+-- Name: conta_canonica trg_conta_canonica_alcanca_a_raiz; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER trg_conta_canonica_sem_ciclo BEFORE UPDATE OF pai ON public.conta_canonica FOR EACH ROW WHEN ((new.pai IS DISTINCT FROM old.pai)) EXECUTE FUNCTION public.fn_conta_canonica_sem_ciclo();
+CREATE TRIGGER trg_conta_canonica_alcanca_a_raiz AFTER INSERT OR UPDATE OF pai, codigo, demonstracao ON public.conta_canonica FOR EACH STATEMENT EXECUTE FUNCTION public.fn_conta_canonica_alcanca_a_raiz();
 
 --
 -- Name: controlador_vinculo trg_controlador_vinculo_valido; Type: TRIGGER; Schema: public; Owner: -
@@ -22472,10 +22525,18 @@ GRANT ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade tex
 GRANT ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
 
 --
--- Name: FUNCTION fn_conta_canonica_sem_ciclo(); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fn_conta_canonica_alcanca_a_raiz(); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.fn_conta_canonica_sem_ciclo() FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fn_conta_canonica_alcanca_a_raiz() FROM PUBLIC;
+
+--
+-- Name: FUNCTION fn_conta_canonica_orfas(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_conta_canonica_orfas() FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_conta_canonica_orfas() TO authenticated;
+GRANT ALL ON FUNCTION public.fn_conta_canonica_orfas() TO service_role;
 
 --
 -- Name: FUNCTION fn_contas_repetindo_valor(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24632,6 +24693,27 @@ GRANT SELECT ON TABLE public.instalacao_sonda_cobertura_de_tipos TO service_role
 
 GRANT SELECT ON TABLE public.instalacao_sonda_combinado_estrutural TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_combinado_estrutural TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_conta_canonica_constraints; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_constraints TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_constraints TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_conta_canonica_seed; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_seed TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_seed TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_conta_canonica_sem_orfao; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_sem_orfao TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_sem_orfao TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_entidade_balcao_ambiguo; Type: ACL; Schema: public; Owner: -

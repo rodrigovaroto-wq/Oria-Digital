@@ -4,12 +4,12 @@
 -- O QUE ESTE ARQUIVO PROVA (comportamento):
 --   (1) toda `secao_canonica` que as fixtures carregadas gravam em `campo_extraido` tem conta no catálogo — medido sobre o DADO CARREGADO, não sobre uma lista fixa: se o extrator passar a gravar uma seção que o
 --       catálogo não conhece, o teste reprova; e o denominador não é vazio (o assert de "há seções medidas" reprova se a fixture não trouxer nenhuma);
---   (2) a estrutura: 5 raízes (uma por demonstração), 26 nós, todo nó sobe até a raiz da PRÓPRIA demonstração (nenhuma conta sem pai exceto as raízes), os 4 subgrupos do ANC são filhos de ativo_nao_circulante, e a
---       natureza 'mista' está onde a seção não tem sinal único (regra 1: não fabricar);
---   (3) as guardas RECUSAM: pai nulo em não-raiz, raiz com pai, pai de outra demonstração, pai inexistente, pai = o próprio, ciclo de 2 e de 3 nós (por UPDATE), natureza e demonstração inválidas, seção duplicada,
+--   (2) a estrutura: 5 raízes (uma por demonstração), os 27 nós esperados presentes (por CÓDIGO, nunca por contagem: a P27 acrescenta folhas), todo nó sobe até a raiz da PRÓPRIA demonstração (nenhuma conta sem pai exceto as raízes), os 4 subgrupos e o balde Outros do ANC são filhos de ativo_nao_circulante, e a
+--       natureza = saldo normal do grupo (receita_bruta credora), 'mista' só onde o grupo tem componentes próprios dos dois lados (regra 1: não fabricar);
+--   (3) as guardas RECUSAM: pai nulo em não-raiz, raiz com pai, pai de outra demonstração, pai inexistente, pai = o próprio, ciclo de 2 e de 3 nós (por UPDATE), o ciclo de um INSERT em lote e o de dois pais trocados num UPDATE só (os dois que o gatilho de linha da primeira versão deixava passar), natureza e demonstração inválidas, seção duplicada,
 --       o escape NAO_CLASSIFICAVEL, classe_recorrencia inexistente — e ACEITAM o reparentamento legítimo e a folha válida (controle positivo: a guarda não recusa tudo);
 --   (4) o acesso: sem papel o authenticated lê zero linhas; com papel lê o catálogo; não escreve;
---   (5) a sonda: os 6 requisitos da 0242 presentes, e ela ACUSA o seed pela metade e o gatilho desabilitado (a sonda não está cega).
+--   (5) a sonda: os 9 requisitos da 0242 presentes, e ela ACUSA o nó esperado que falta (mesmo com folha a mais), cada uma das 9 constraints dropadas, o gatilho desabilitado e o nó órfão (a sonda não está cega).
 --
 -- HONESTIDADE (regra 4): o book DISTRESS não tem fixture no banco. Os asserts de (1) cobrem as seções que as fixtures de vertentes e canastra trazem (14 de 15; `dva` não aparece) e NÃO provam que o terceiro book
 -- é coberto. As linhas sintéticas de (3) existem para provar a GUARDA (recusa/aceite), não para reproduzir bug de produção, e são desfeitas.
@@ -50,6 +50,14 @@ exception when others then
   return sqlstate || '|' || sqlerrm;
 end $$;
 
+-- Os 27 nós esperados (o conjunto do seed da 0242). Lista própria do teste: é com ela que se confere o banco por CÓDIGO, e não por contagem.
+create or replace function teste_codigos_cc() returns text[] language sql immutable as $$
+  select array['demo_balanco','demo_dre','demo_fluxo_caixa','demo_dmpl','demo_dva','ativo','passivo_pl',
+    'receita_bruta','custos','despesas_operacionais','resultado_financeiro','impostos_lucro',
+    'atividades_operacionais','atividades_investimento','atividades_financiamento','dmpl','dva',
+    'ativo_circulante','ativo_nao_circulante','passivo_circulante','passivo_nao_circulante','patrimonio_liquido',
+    'realizavel_lp','investimentos','imobilizado','intangivel','outros_ativos_nao_circulantes'] $$;
+
 -- ---------------------------------------------------------------------------------------------------------------
 do $$
 declare v_n int; v_lista text;
@@ -88,8 +96,9 @@ begin
   perform teste_assert_cc(v_lista is null, 'cada seção está na demonstração que o portal roteia', v_lista);
 
   raise notice '--- 2. a estrutura: raízes, subida até a raiz, subgrupos, natureza ---';
-  select count(*) into v_n from conta_canonica;
-  perform teste_assert_cc(v_n = 26, 'o catálogo tem os 26 nós da taxonomia atual (5 raízes + 2 grupos + 15 seções + 4 subgrupos)', v_n::text);
+  select string_agg(e, ', ') into v_lista from unnest(teste_codigos_cc()) e where not exists (select 1 from conta_canonica c where c.codigo = e);
+  perform teste_assert_cc(v_lista is null and cardinality(teste_codigos_cc()) = 27,
+    'os 27 nós esperados da taxonomia atual estão presentes, por código (5 raízes + 2 grupos + 15 seções + 4 subgrupos + Outros do ANC)', v_lista);
   select count(*) into v_n from conta_canonica where pai is null;
   perform teste_assert_cc(v_n = 5 and (select count(distinct demonstracao) from conta_canonica where pai is null) = 5,
     'cinco raízes, uma por demonstração', v_n::text);
@@ -107,11 +116,15 @@ begin
   perform teste_assert_cc(v_lista is null, 'todo nó sobe até a raiz da própria demonstração', v_lista);
 
   select count(*) into v_n from conta_canonica
-   where pai = 'ativo_nao_circulante' and codigo in ('realizavel_lp', 'investimentos', 'imobilizado', 'intangivel') and secao_canonica is null;
-  perform teste_assert_cc(v_n = 4, 'os 4 subgrupos do Ativo Não Circulante são filhos dele e não são seção do enum', v_n::text);
+   where pai = 'ativo_nao_circulante' and codigo in ('realizavel_lp', 'investimentos', 'imobilizado', 'intangivel', 'outros_ativos_nao_circulantes')
+     and secao_canonica is null;
+  perform teste_assert_cc(v_n = 5, 'os 4 subgrupos e o balde Outros são filhos do GRUPO ANC (o nó da seção ativo_nao_circulante) e não são seção do enum', v_n::text);
+  perform teste_assert_cc((select secao_canonica from conta_canonica where codigo = 'ativo_nao_circulante') = 'ativo_nao_circulante'
+    and (select pai from conta_canonica where codigo = 'ativo_nao_circulante') = 'ativo',
+    'o nó com secao_canonica ativo_nao_circulante é o grupo ANC, filho de ativo (não o balde Outros)');
 
   select string_agg(secao_canonica, ', ') into v_lista from conta_canonica
-   where secao_canonica in ('receita_bruta', 'despesas_operacionais', 'resultado_financeiro', 'impostos_lucro', 'atividades_operacionais',
+   where secao_canonica in ('despesas_operacionais', 'resultado_financeiro', 'impostos_lucro', 'atividades_operacionais',
                             'atividades_investimento', 'atividades_financiamento', 'dmpl', 'dva')
      and natureza <> 'mista';
   perform teste_assert_cc(v_lista is null, 'seção sem sinal único é mista (nenhum sinal fabricado)', v_lista);
@@ -119,8 +132,11 @@ begin
     (select natureza from conta_canonica where codigo = 'ativo_circulante') = 'devedora'
     and (select natureza from conta_canonica where codigo = 'passivo_circulante') = 'credora'
     and (select natureza from conta_canonica where codigo = 'patrimonio_liquido') = 'credora'
-    and (select natureza from conta_canonica where codigo = 'custos') = 'devedora',
-    'onde o sinal é o da seção ele está declarado (ativo e custos devedoras; passivo e PL credoras)');
+    and (select natureza from conta_canonica where codigo = 'custos') = 'devedora'
+    and (select natureza from conta_canonica where codigo = 'ativo_nao_circulante') = 'devedora',
+    'natureza = saldo normal do grupo (ativo e custos devedoras; passivo e PL credoras)');
+  perform teste_assert_cc((select natureza from conta_canonica where codigo = 'receita_bruta') = 'credora',
+    'receita_bruta é credora: a dedução é folha redutora (P27) e a folha não herda a natureza do pai, então o grupo não fica mista por causa dela');
   perform teste_assert_cc(not exists (select 1 from conta_canonica where classe_recorrencia is not null),
     'nenhum nó traz classe_recorrencia (recorrência é da rubrica; classificá-la por seção seria inventar)');
 end $$;
@@ -153,6 +169,17 @@ begin
 
   v_t := teste_tenta_cc($q$update conta_canonica set pai = 'imobilizado' where codigo = 'ativo'$q$);
   perform teste_assert_cc(v_t like '23514|%ciclo%', 'ciclo de 3 nós (ativo > ANC > imobilizado > ativo) é recusado', v_t);
+
+  v_t := teste_tenta_cc($q$insert into conta_canonica (codigo, nome, pai, demonstracao, natureza, ordem) values
+    ('t_a', 'a', 't_b', 'balanco', 'devedora', 1), ('t_b', 'b', 't_a', 'balanco', 'devedora', 2)$q$);
+  perform teste_assert_cc(v_t like '23514|%ciclo%', 'ciclo num INSERT em lote (t_a pai t_b, t_b pai t_a) é recusado', v_t);
+
+  -- dois pais trocados num UPDATE só: cada linha olhava a outra ainda com o pai antigo (o gatilho de linha da primeira versão não via)
+  v_t := teste_tenta_cc($q$do $x$ begin
+    insert into conta_canonica (codigo, nome, pai, demonstracao, natureza, ordem) values ('t_a', 'a', 'ativo', 'balanco', 'devedora', 1), ('t_b', 'b', 'ativo', 'balanco', 'devedora', 2);
+    update conta_canonica set pai = case codigo when 't_a' then 't_b' else 't_a' end where codigo in ('t_a', 't_b');
+  end $x$ $q$);
+  perform teste_assert_cc(v_t like '23514|%ciclo%', 'ciclo por dois pais trocados num UPDATE só é recusado', v_t);
 
   v_t := teste_tenta_cc($q$update conta_canonica set natureza = 'neutra' where codigo = 'custos'$q$);
   perform teste_assert_cc(v_t like '23514|%', 'natureza fora de devedora/credora/mista é recusada', v_t);
@@ -195,7 +222,7 @@ begin
   insert into membro (usuario_id, papel) values (v_uid, 'leitura');
   execute 'set local role authenticated';
   select count(*) into v_n from conta_canonica;
-  perform teste_assert_cc(v_n = v_total and v_total = 26, 'usuário com papel lê os 26 nós', v_n::text);
+  perform teste_assert_cc(v_n = v_total and (select count(*) from conta_canonica where codigo = any (teste_codigos_cc())) = 27, 'usuário com papel lê o catálogo inteiro (os 27 nós esperados entre eles)', v_n::text);
   v_t := teste_tenta_cc($q$insert into conta_canonica (codigo, nome, pai, demonstracao, natureza, ordem) values ('t_acesso', 'x', 'ativo', 'balanco', 'devedora', 1)$q$);
   perform teste_assert_cc(v_t like '42501|%', 'o authenticated não insere no catálogo', v_t);
   v_t := teste_tenta_cc($q$update conta_canonica set nome = 'alterado' where codigo = 'custos'$q$);
@@ -210,16 +237,20 @@ end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
 do $$
-declare v_n int; v_ok boolean; v_seed boolean; v_gat boolean;
+declare v_n int; v_ok boolean; v_seed boolean; v_seed_folha boolean; v_folha_so boolean; v_gat boolean; v_orf boolean;
+        v_c text; v_res text := ''; v_ausentes int := 0;
 begin
   raise notice '--- 5. a sonda enxerga os requisitos da 0242 e não está cega ---';
   select count(*) into v_n from instalacao_requisito where migration = '0242';
-  perform teste_assert_cc(v_n = 6, 'o catálogo da sonda declara os 6 requisitos da 0242', v_n::text);
+  perform teste_assert_cc(v_n = 9, 'o catálogo da sonda declara os 9 requisitos da 0242', v_n::text);
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0242' and presente;
-  perform teste_assert_cc(v_n = 6, 'os 6 estão presentes no banco montado', v_n::text);
+  perform teste_assert_cc(v_n = 9, 'os 9 estão presentes no banco montado', v_n::text);
   perform teste_assert_cc((select ate_migration >= '0242' from instalacao_cobertura), 'a cobertura da sonda chega à 0242');
 
-  -- seed pela metade: tira um nó (sem filho) dentro de um bloco que desfaz
+  -- as medições dos blocos abaixo são lidas FORA do bloco desfeito: o rollback do bloco desfaz também o contador de asserts (set_config de sessão é transacional), e um assert dentro dele não contaria.
+  -- (variável PL/pgSQL, ao contrário do banco, NÃO volta no rollback do bloco)
+
+  -- nó esperado que falta
   begin
     delete from conta_canonica where codigo = 'intangivel';
     select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_seed';
@@ -228,22 +259,64 @@ begin
   exception when sqlstate 'X0242' then null;
   end;
 
+  -- folha a mais NÃO derruba o seed (a P27 acrescenta folhas) — e não esconde o nó que falta (a contagem esconderia: 27 - 1 + 1)
+  begin
+    insert into conta_canonica (codigo, nome, pai, demonstracao, natureza, ordem) values ('t_folha_sonda', 'folha', 'imobilizado', 'balanco', 'devedora', 99999);
+    select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_seed';
+    v_folha_so := v_ok;
+    delete from conta_canonica where codigo = 'intangivel';
+    select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_seed';
+    v_seed_folha := v_ok;
+    raise exception 'desfaz' using errcode = 'X0242';
+  exception when sqlstate 'X0242' then null;
+  end;
+
+  -- cada constraint estrutural dropada (cascade: a unique da chave composta leva a FK junto)
+  for v_c in select unnest(array['conta_canonica_pkey', 'conta_canonica_codigo_demonstracao_uq', 'conta_canonica_secao_canonica_key', 'conta_canonica_raiz_ck',
+                                 'conta_canonica_pai_fk', 'conta_canonica_classe_recorrencia_fkey',
+                                 'conta_canonica_demonstracao_check', 'conta_canonica_natureza_check', 'conta_canonica_secao_canonica_check']) loop
+    begin
+      execute format('alter table conta_canonica drop constraint if exists %I cascade', v_c);
+      select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_constraints';
+      v_res := v_res || v_c || '=' || coalesce(v_ok::text, 'null') || ' ';
+      if v_ok = false then v_ausentes := v_ausentes + 1; end if;
+      raise exception 'desfaz' using errcode = 'X0242';
+    exception when sqlstate 'X0242' then null;
+    end;
+  end loop;
+
   -- gatilho desligado
   begin
     begin
-      alter table conta_canonica disable trigger trg_conta_canonica_sem_ciclo;
+      alter table conta_canonica disable trigger trg_conta_canonica_alcanca_a_raiz;
     exception when undefined_object then null;  -- gatilho nem existe: a sonda tem de acusar do mesmo jeito
     end;
-    select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_gatilho_ciclo';
+    select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_gatilho_raiz';
     v_gat := v_ok;
     raise exception 'desfaz' using errcode = 'X0242';
   exception when sqlstate 'X0242' then null;
   end;
-  -- as medições dos blocos acima são lidas AQUI, fora do bloco desfeito: o rollback do bloco desfaz também o contador de asserts (set_config de sessão é transacional), e um assert dentro dele não contaria
-  perform teste_assert_cc(v_seed = false, 'a sonda acusa o seed com 25 dos 26 nós');
-  perform teste_assert_cc(v_gat = false, 'a sonda acusa o gatilho de ciclo desabilitado');
-  select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_gatilho_ciclo';
+
+  -- nó órfão (um ciclo, feito driblando as guardas por session_replication_role, o único jeito de ele existir)
+  begin
+    set local session_replication_role = replica;
+    update conta_canonica set pai = 'imobilizado' where codigo = 'ativo_nao_circulante';
+    select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_sem_no_orfao';
+    v_orf := v_ok;
+    raise exception 'desfaz' using errcode = 'X0242';
+  exception when sqlstate 'X0242' then null;
+  end;
+
+  perform teste_assert_cc(v_seed = false, 'a sonda acusa o nó esperado que falta (intangivel)');
+  perform teste_assert_cc(v_folha_so, 'uma folha a mais não derruba o requisito do seed (a P27 acrescenta folhas)');
+  perform teste_assert_cc(v_seed_folha = false, 'e uma folha a mais não esconde o nó esperado que falta (contagem esconderia)');
+  perform teste_assert_cc(v_ausentes = 9, 'a sonda acusa cada uma das 9 constraints estruturais dropadas', v_res);
+  perform teste_assert_cc(v_gat = false, 'a sonda acusa o gatilho de raiz desabilitado');
+  perform teste_assert_cc(v_orf = false, 'a sonda acusa o nó órfão (ciclo)');
+  select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_gatilho_raiz';
   perform teste_assert_cc(v_ok, 'e volta a presente quando o bloco desfaz (o gatilho não ficou desligado)');
+  select presente into v_ok from fn_instalacao_conferir() where chave = 'conta_canonica_sem_no_orfao';
+  perform teste_assert_cc(v_ok, 'e o catálogo continua sem órfão depois dos blocos desfeitos');
 
   if current_setting('cc.medindo', true) = 'on' then
     raise warning 'MEDIDO: % falha(s) de % execucoes', coalesce(current_setting('cc.falhas', true), '0'), current_setting('cc.execucoes', true);
