@@ -1214,6 +1214,13 @@ supabase db execute --file Supabase/migrations/0270_a_linha_que_nao_sabia_de_que
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0270' and not presente;   -- ZERO linhas
 #   select count(*) filter (where ln is not null) as com_ln, count(*) as total from campo_extraido;   -- com_ln = 0 até o n8n da P11 ser republicado
 
+# A 0271 cadastra o tipo COMPOSICAO_IMOBILIZADO (quadro de bens do ativo imobilizado: custo, depreciação acumulada, valor líquido) na taxonomia: complementar, com abertura analítica, declarado no D6 como sem_consumidor. Sem ele a IA gravava o quadro como BALANCO e as checagens ativo_passivo_pl e caixa_bp_fluxo abriam "sem período par" (2 no Canastra sintético, 11/11/2026).
+# >>> Rodar COMO `postgres`; idempotente (on conflict do nothing). Só afeta classificações NOVAS: o quadro já gravado como BALANCO continua BALANCO até ser reextraído ou corrigido na fila de revisão. O tipo só é oferecido à IA depois que o n8n é republicado (muda o FINGERPRINT_EXTRACAO: o próximo envio de cada mandato re-extrai).
+# >>> Teste: Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql.
+supabase db execute --file Supabase/migrations/0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0271' and not presente;   -- ZERO linhas
+#   select codigo, categoria, obrigatoriedade, abertura_analitica from taxonomia_tipo_documento where codigo = 'COMPOSICAO_IMOBILIZADO';   -- 1 linha
 
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.

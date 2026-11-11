@@ -2,7 +2,7 @@
 
 ## SESSÃO 127 (11/11/2026, conta Claude Oria) — CI sem apt; 0240 e 0241 APLICADAS EM PRODUÇÃO
 
-> **Migration mais nova: `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291).** Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
+> **Migration mais nova: `0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql` (e a `0270_a_linha_que_nao_sabia_de_que_linha_veio.sql`) — ESCRITAS NA P11 (etapa 2.2), NÃO APLICADAS EM PRODUÇÃO. A anterior, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291).** Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
 
 ### Aplicação em produção (11/11, a pedido do dono)
 - **Antes:** 80 mandatos; sonda com 365 itens e 1 ausente (`envio_segredo_no_vault`, que a API não lê); 479 pendências de reconciliação abertas.

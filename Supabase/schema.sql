@@ -12944,6 +12944,7 @@ declare
   v_medicao            jsonb;
   v_invalida           jsonb;
   v_decidiu_pessoa     boolean;
+  v_ln                 int;
 begin
   -- 0203: o tipo do documento entra na inferência da seção (fn_secao_canonica_da_secao_bruta).
   select d.tipo_taxonomia into v_tipo
@@ -12959,6 +12960,11 @@ begin
     loop
       v_valor := case when (v_item->>'valor_num') ~ '^-?\d+(\.\d+)?$' then (v_item->>'valor_num')::numeric else null end;
       v_confianca := case when (v_item->>'confianca') ~ '^-?\d+(\.\d+)?$' then (v_item->>'confianca')::numeric else null end;
+
+      -- 0270: a coordenada da linha no texto numerado do documento. Só um NÚMERO JSON inteiro >= 1 e que cabe em int vale (no máximo 9 dígitos, sem zero à esquerda): zero, negativo,
+      -- fracionário, texto (inclusive "12") e o estouro de int viram nulo, e nulo é "não medível", nunca zero nem palpite. Nenhum valor inválido derruba o lote: o laço é de
+      -- um insert por linha, e um cast que estourasse abortaria o documento inteiro.
+      v_ln := case when jsonb_typeof(v_item->'ln') = 'number' and (v_item->>'ln') ~ '^[1-9][0-9]{0,8}$' then (v_item->>'ln')::int else null end;
 
       -- 0203: a IA devolve `secao_canonica` nula em parte das linhas (medido em produção em 05/10/2026: 136 de
       -- 724 numa DRE) e a linha some de receita/custo/giro. Só quando a IA NÃO deu (nulo ou em branco) a seção
@@ -12979,7 +12985,7 @@ begin
 
       insert into campo_extraido
         (documento_versao_id, chave, valor_texto, valor_num, unidade, moeda, confianca,
-         origem_pagina, origem_linha, ordem, nivel_autonomia, secao, secao_canonica, secao_canonica_inferida, entidade_coluna, periodo_coluna,
+         origem_pagina, origem_linha, ordem, ln, nivel_autonomia, secao, secao_canonica, secao_canonica_inferida, entidade_coluna, periodo_coluna,
          status_aceite, aceito_por, aceito_em)
       values (
         p_documento_versao_id,
@@ -12992,6 +12998,7 @@ begin
         case when (v_item->>'origem_pagina') ~ '^\d+$' then (v_item->>'origem_pagina')::int else null end,
         v_item->>'origem_linha',
         case when (v_item->>'ordem') ~ '^\d+$' then (v_item->>'ordem')::int else null end,
+        v_ln,
         p_nivel,
         v_item->>'secao',
         v_secao,
@@ -13204,7 +13211,7 @@ $_$;
 -- Name: FUNCTION fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0228: o auto-aceite exige documento com tipo (v_tipo nulo = linhas seguem pendentes). 0229: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao). 0231: zero linha com tem_dado_financeiro = false TAMBÉM abre extracao_falhou quando o tipo não é societário/legal por natureza (fn_tipo_sem_dado_por_natureza; tipo nulo abre), com motivo que começa por "a leitura declarou que este documento não tem dado financeiro, mas ".';
+COMMENT ON FUNCTION public.fn_registrar_campos_extraidos(p_documento_versao_id uuid, p_campos jsonb, p_nivel public.nivel_autonomia, p_falha_motivo text, p_tem_dado_financeiro boolean, p_medicao jsonb) IS 'Grava campos extraídos e roda as três guardas (0043: fn_avaliar_guardas_extracao). Sinal 3 ("veio vazia") só dispara extracao_falhou quando p_tem_dado_financeiro não é explicitamente false — 0111: documento sem valor monetário por natureza (certidão, organograma, parecer de auditoria) não é falha de extração. 0203: quando a IA não dá secao_canonica, ela é inferida do texto da seção bruta (fn_secao_canonica_da_secao_bruta) e a linha grava secao_canonica_inferida = true; o que a IA deu nunca é sobrescrito. 0204: depois do laço, a seção que ainda falta é herdada pela árvore do próprio documento (fn_herdar_secao_pela_arvore). 0228: o auto-aceite exige documento com tipo (v_tipo nulo = linhas seguem pendentes). 0229: o evento extracao_sombra leva a chave medicao (o objeto de p_medicao como veio; nula explícita quando o chamador não mediu; medicao_invalida quando o tipo não é objeto) — a linha de base da leitura por documento (fn_linha_de_base_extracao). 0231: zero linha com tem_dado_financeiro = false TAMBÉM abre extracao_falhou quando o tipo não é societário/legal por natureza (fn_tipo_sem_dado_por_natureza; tipo nulo abre), com motivo que começa por "a leitura declarou que este documento não tem dado financeiro, mas ". 0270: cada linha grava `ln`, a coordenada (inteiro >= 1) da linha do texto numerado do documento que o n8n manda na chave `ln`; nulo, ausente ou inválido (zero, negativo, fracionário, texto, estouro de int) grava nulo, que é "não medível", nunca zero.';
 
 --
 -- Name: fn_registrar_classe_override(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -16852,6 +16859,8 @@ CREATE TABLE public.campo_extraido (
     moeda text,
     origem_valor text DEFAULT 'extracao'::text NOT NULL,
     secao_canonica_inferida boolean DEFAULT false NOT NULL,
+    ln integer,
+    CONSTRAINT campo_extraido_ln_check CHECK (((ln IS NULL) OR (ln >= 1))),
     CONSTRAINT campo_extraido_origem_valor_check CHECK ((origem_valor = ANY (ARRAY['extracao'::text, 'transcricao_humana'::text]))),
     CONSTRAINT campo_extraido_status_aceite_check CHECK ((status_aceite = ANY (ARRAY['pendente'::text, 'aceito'::text, 'com_ressalva'::text])))
 );
@@ -16909,6 +16918,18 @@ COMMENT ON COLUMN public.campo_extraido.origem_valor IS 'De onde veio o número:
 --
 
 COMMENT ON COLUMN public.campo_extraido.secao_canonica_inferida IS '0203: true = a secao_canonica NÃO veio da IA; foi inferida do texto da seção bruta (campo_extraido.secao) por fn_secao_canonica_da_secao_bruta, na gravação ou no backfill. false = a IA deu (ou a linha segue sem seção). A inferência é conservadora e determinística; o que ela não reconhece fica NULL.';
+
+--
+-- Name: COLUMN campo_extraido.ln; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.campo_extraido.ln IS '0270 (P11, Fase 1): número (1..N, inteiro) da linha do texto numerado do documento de onde esta linha extraída veio. Nulo = não medível (documento sem camada de texto, n8n anterior à P11, linha anterior à 0270, ou valor inválido que fn_registrar_campos_extraidos recusou); nunca zero.';
+
+--
+-- Name: CONSTRAINT campo_extraido_ln_check ON campo_extraido; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT campo_extraido_ln_check ON public.campo_extraido IS '0270: a linha do texto numerado começa em 1; zero ou negativo não é coordenada, é defeito de quem mandou. Nulo é permitido: significa não medível.';
 
 --
 -- Name: fn_valor_conceito(uuid, text[], text[]); Type: FUNCTION; Schema: public; Owner: -
@@ -18739,6 +18760,21 @@ CREATE VIEW public.instalacao_sonda_gatilho_original_apagado AS
 COMMENT ON VIEW public.instalacao_sonda_gatilho_original_apagado IS 'Sonda da 0224: uma linha = o gatilho de auditoria de exclusão existe em storage.objects, habilitado, AFTER DELETE por linha, chamando fn_trg_auditar_original_apagado. Zero linhas: a exclusão de original voltou a não deixar trilha.';
 
 --
+-- Name: instalacao_sonda_ln_check; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_ln_check AS
+ SELECT (conname)::text AS restricao
+   FROM pg_constraint c
+  WHERE ((conrelid = ('public.campo_extraido'::regclass)::oid) AND (conname = 'campo_extraido_ln_check'::name) AND (contype = 'c'::"char") AND (pg_get_constraintdef(oid) ~~ '%ln >= 1%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_ln_check; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_ln_check IS 'Sonda da 0270: uma linha = campo_extraido_ln_check existe e exige ln >= 1. Zero linhas: o banco voltou a aceitar ln zero ou negativo como coordenada.';
+
+--
 -- Name: instalacao_sonda_modelagem_pronta; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -18825,6 +18861,111 @@ CREATE VIEW public.instalacao_sonda_saldo_mutuos AS
 --
 
 COMMENT ON VIEW public.instalacao_sonda_saldo_mutuos IS 'Sonda da 0187 (revisão): uma linha por arranjo em que fn_saldo_mutuos_do_documento dá o saldo CERTO (canastra real 16.060; item + total 150; matricial 11.079; sem exercício → não apura). Quatro linhas.';
+
+--
+-- Name: taxonomia_tipo_cobertura; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.taxonomia_tipo_cobertura (
+    tipo_taxonomia text NOT NULL,
+    estado text NOT NULL,
+    consumidor text,
+    motivo text NOT NULL,
+    efeito text NOT NULL,
+    declarado_em date DEFAULT CURRENT_DATE NOT NULL,
+    marcador text,
+    marcador_em text,
+    CONSTRAINT taxonomia_tipo_cobertura_check CHECK (((estado = 'consumidor_nomeado'::text) = (consumidor IS NOT NULL))),
+    CONSTRAINT taxonomia_tipo_cobertura_check1 CHECK (((estado = 'consumidor_nomeado'::text) = ((marcador IS NOT NULL) AND (marcador_em IS NOT NULL)))),
+    CONSTRAINT taxonomia_tipo_cobertura_check2 CHECK (((marcador IS NULL) = (marcador_em IS NULL))),
+    CONSTRAINT taxonomia_tipo_cobertura_efeito_check CHECK ((length(btrim(efeito)) > 0)),
+    CONSTRAINT taxonomia_tipo_cobertura_estado_check CHECK ((estado = ANY (ARRAY['consumidor_nomeado'::text, 'sem_consumidor'::text]))),
+    CONSTRAINT taxonomia_tipo_cobertura_marcador_check CHECK (((marcador IS NULL) OR (length(btrim(marcador)) > 0))),
+    CONSTRAINT taxonomia_tipo_cobertura_motivo_check CHECK ((length(btrim(motivo)) > 0))
+);
+
+--
+-- Name: TABLE taxonomia_tipo_cobertura; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.taxonomia_tipo_cobertura IS '0187 (portão D6): para cada tipo ATIVO sem exigência viva (taxonomia_linha_exigida ativa com origem=codigo), QUEM confere o número dele — ou a declaração de que ninguém confere, com o motivo e o EFEITO (o que passa sem aviso). Desempate (fn_conflitos_do_caso, 0151) e soma para premissa (fn_linhas_do_realizado, 0150) NÃO contam como consumidor: leem, não conferem. Conferida por fn_cobertura_de_tipos().';
+
+--
+-- Name: COLUMN taxonomia_tipo_cobertura.consumidor; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.taxonomia_tipo_cobertura.consumidor IS 'Nome (proname, schema public) da função SQL que LÊ documentos do tipo e CONFERE o número. Obrigatório quando estado=consumidor_nomeado, NULL caso contrário. Se a função sumir, fn_cobertura_de_tipos devolve DECLARACAO_QUEBRADA.';
+
+--
+-- Name: COLUMN taxonomia_tipo_cobertura.efeito; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.taxonomia_tipo_cobertura.efeito IS 'O que deixa de ser conferido por causa desta declaração (regra 1 do CLAUDE.md): "não tem consumidor" sem o efeito é ausência apresentada como dado.';
+
+--
+-- Name: COLUMN taxonomia_tipo_cobertura.marcador; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.taxonomia_tipo_cobertura.marcador IS 'Trecho de UMA linha que precisa aparecer no corpo publicado (pg_get_functiondef, \r removido) da função marcador_em para a declaração valer: é o que prova que ela AINDA lê o tipo. Obrigatório quando estado=consumidor_nomeado. Some do corpo → DECLARACAO_QUEBRADA.';
+
+--
+-- Name: COLUMN taxonomia_tipo_cobertura.marcador_em; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.taxonomia_tipo_cobertura.marcador_em IS 'proname (schema public) da função cujo corpo carrega o marcador — o consumidor ou o despachante que o chama para o tipo (BALANCETE: fn_reconciliar_por_documento).';
+
+--
+-- Name: taxonomia_tipo_documento; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.taxonomia_tipo_documento (
+    codigo text NOT NULL,
+    categoria text NOT NULL,
+    documento text NOT NULL,
+    obrigatoriedade public.obrigatoriedade NOT NULL,
+    granularidade public.granularidade NOT NULL,
+    vigencia text,
+    sensibilidade public.sensibilidade_lgpd DEFAULT 'nenhuma'::public.sensibilidade_lgpd NOT NULL,
+    versao integer DEFAULT 1 NOT NULL,
+    ativo boolean DEFAULT true NOT NULL,
+    nao_sobrepujavel boolean DEFAULT false NOT NULL,
+    abertura_analitica boolean DEFAULT false NOT NULL,
+    autoridade smallint DEFAULT 0 NOT NULL
+);
+
+--
+-- Name: TABLE taxonomia_tipo_documento; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.taxonomia_tipo_documento IS 'Taxonomia documental v1 (Arquitetura do Sistema/2 Especificação/f0/03). Kit Básico = obrigatorio; Variáveis = complementar.';
+
+--
+-- Name: COLUMN taxonomia_tipo_documento.abertura_analitica; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.taxonomia_tipo_documento.abertura_analitica IS 'Este tipo REAFIRMA aberta uma conta que uma demonstração já declara (o balancete abre o balanço; o aging abre clientes; o extrato abre bancos). Linha que só aparece em documento assim NÃO entra na soma do realizado: somá-la conta a mesma conta duas vezes. `false` é o padrão seguro — o tipo novo entra somando, e quem o cadastra decide.';
+
+--
+-- Name: COLUMN taxonomia_tipo_documento.autoridade; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.taxonomia_tipo_documento.autoridade IS 'Peso da EVIDÊNCIA deste tipo de documento quando dois documentos do mesmo período discordam sobre a mesma conta (0151). Maior vence, e o motivo vai por extenso na pendência. 0 = o catálogo não declarou autoridade para este tipo: ele não decide (dois zeros empatam e a decisão volta para o humano). Nada é apagado em nenhum caso — o perdedor é a evidência de que houve escolha.';
+
+--
+-- Name: instalacao_sonda_tipo_composicao_imobilizado; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_tipo_composicao_imobilizado AS
+ SELECT t.codigo
+   FROM (public.taxonomia_tipo_documento t
+     JOIN public.taxonomia_tipo_cobertura c ON ((c.tipo_taxonomia = t.codigo)))
+  WHERE ((t.codigo = 'COMPOSICAO_IMOBILIZADO'::text) AND t.ativo AND t.abertura_analitica AND (t.categoria <> 'Societário/Legal'::text));
+
+--
+-- Name: VIEW instalacao_sonda_tipo_composicao_imobilizado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_tipo_composicao_imobilizado IS 'Sonda da 0271: uma linha = o tipo COMPOSICAO_IMOBILIZADO existe na taxonomia, ativo, com abertura analítica e fora da categoria Societário/Legal, e declarado no portão D6. Zero linhas: a IA volta a gravar o quadro de imobilizado como BALANCO.';
 
 --
 -- Name: instalacao_sonda_update_documentos_so_socio; Type: VIEW; Schema: public; Owner: -
@@ -19126,95 +19267,6 @@ COMMENT ON COLUMN public.rubrica_classe.padrao IS 'Casado contra fn_normalizar_t
 --
 
 COMMENT ON COLUMN public.rubrica_classe.especificidade IS 'Desempate: mais ALTO ganha. Regra com seção e tipo declarados é mais específica que a genérica, e sem desempate declarado duas regras que casam a mesma linha dariam resultado dependente da ordem em que o banco devolveu — que é a forma de erro que a 0125 corrigiu na proveniência.';
-
---
--- Name: taxonomia_tipo_cobertura; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.taxonomia_tipo_cobertura (
-    tipo_taxonomia text NOT NULL,
-    estado text NOT NULL,
-    consumidor text,
-    motivo text NOT NULL,
-    efeito text NOT NULL,
-    declarado_em date DEFAULT CURRENT_DATE NOT NULL,
-    marcador text,
-    marcador_em text,
-    CONSTRAINT taxonomia_tipo_cobertura_check CHECK (((estado = 'consumidor_nomeado'::text) = (consumidor IS NOT NULL))),
-    CONSTRAINT taxonomia_tipo_cobertura_check1 CHECK (((estado = 'consumidor_nomeado'::text) = ((marcador IS NOT NULL) AND (marcador_em IS NOT NULL)))),
-    CONSTRAINT taxonomia_tipo_cobertura_check2 CHECK (((marcador IS NULL) = (marcador_em IS NULL))),
-    CONSTRAINT taxonomia_tipo_cobertura_efeito_check CHECK ((length(btrim(efeito)) > 0)),
-    CONSTRAINT taxonomia_tipo_cobertura_estado_check CHECK ((estado = ANY (ARRAY['consumidor_nomeado'::text, 'sem_consumidor'::text]))),
-    CONSTRAINT taxonomia_tipo_cobertura_marcador_check CHECK (((marcador IS NULL) OR (length(btrim(marcador)) > 0))),
-    CONSTRAINT taxonomia_tipo_cobertura_motivo_check CHECK ((length(btrim(motivo)) > 0))
-);
-
---
--- Name: TABLE taxonomia_tipo_cobertura; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.taxonomia_tipo_cobertura IS '0187 (portão D6): para cada tipo ATIVO sem exigência viva (taxonomia_linha_exigida ativa com origem=codigo), QUEM confere o número dele — ou a declaração de que ninguém confere, com o motivo e o EFEITO (o que passa sem aviso). Desempate (fn_conflitos_do_caso, 0151) e soma para premissa (fn_linhas_do_realizado, 0150) NÃO contam como consumidor: leem, não conferem. Conferida por fn_cobertura_de_tipos().';
-
---
--- Name: COLUMN taxonomia_tipo_cobertura.consumidor; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.taxonomia_tipo_cobertura.consumidor IS 'Nome (proname, schema public) da função SQL que LÊ documentos do tipo e CONFERE o número. Obrigatório quando estado=consumidor_nomeado, NULL caso contrário. Se a função sumir, fn_cobertura_de_tipos devolve DECLARACAO_QUEBRADA.';
-
---
--- Name: COLUMN taxonomia_tipo_cobertura.efeito; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.taxonomia_tipo_cobertura.efeito IS 'O que deixa de ser conferido por causa desta declaração (regra 1 do CLAUDE.md): "não tem consumidor" sem o efeito é ausência apresentada como dado.';
-
---
--- Name: COLUMN taxonomia_tipo_cobertura.marcador; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.taxonomia_tipo_cobertura.marcador IS 'Trecho de UMA linha que precisa aparecer no corpo publicado (pg_get_functiondef, \r removido) da função marcador_em para a declaração valer: é o que prova que ela AINDA lê o tipo. Obrigatório quando estado=consumidor_nomeado. Some do corpo → DECLARACAO_QUEBRADA.';
-
---
--- Name: COLUMN taxonomia_tipo_cobertura.marcador_em; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.taxonomia_tipo_cobertura.marcador_em IS 'proname (schema public) da função cujo corpo carrega o marcador — o consumidor ou o despachante que o chama para o tipo (BALANCETE: fn_reconciliar_por_documento).';
-
---
--- Name: taxonomia_tipo_documento; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.taxonomia_tipo_documento (
-    codigo text NOT NULL,
-    categoria text NOT NULL,
-    documento text NOT NULL,
-    obrigatoriedade public.obrigatoriedade NOT NULL,
-    granularidade public.granularidade NOT NULL,
-    vigencia text,
-    sensibilidade public.sensibilidade_lgpd DEFAULT 'nenhuma'::public.sensibilidade_lgpd NOT NULL,
-    versao integer DEFAULT 1 NOT NULL,
-    ativo boolean DEFAULT true NOT NULL,
-    nao_sobrepujavel boolean DEFAULT false NOT NULL,
-    abertura_analitica boolean DEFAULT false NOT NULL,
-    autoridade smallint DEFAULT 0 NOT NULL
-);
-
---
--- Name: TABLE taxonomia_tipo_documento; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.taxonomia_tipo_documento IS 'Taxonomia documental v1 (Arquitetura do Sistema/2 Especificação/f0/03). Kit Básico = obrigatorio; Variáveis = complementar.';
-
---
--- Name: COLUMN taxonomia_tipo_documento.abertura_analitica; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.taxonomia_tipo_documento.abertura_analitica IS 'Este tipo REAFIRMA aberta uma conta que uma demonstração já declara (o balancete abre o balanço; o aging abre clientes; o extrato abre bancos). Linha que só aparece em documento assim NÃO entra na soma do realizado: somá-la conta a mesma conta duas vezes. `false` é o padrão seguro — o tipo novo entra somando, e quem o cadastra decide.';
-
---
--- Name: COLUMN taxonomia_tipo_documento.autoridade; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.taxonomia_tipo_documento.autoridade IS 'Peso da EVIDÊNCIA deste tipo de documento quando dois documentos do mesmo período discordam sobre a mesma conta (0151). Maior vence, e o motivo vai por extenso na pendência. 0 = o catálogo não declarou autoridade para este tipo: ele não decide (dois zeros empatam e a decisão volta para o humano). Nada é apagado em nenhum caso — o perdedor é a evidência de que houve escolha.';
 
 --
 -- Name: alocacao alocacao_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -24560,6 +24612,13 @@ GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO authen
 GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO service_role;
 
 --
+-- Name: TABLE instalacao_sonda_ln_check; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_ln_check TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_ln_check TO service_role;
+
+--
 -- Name: TABLE instalacao_sonda_modelagem_pronta; Type: ACL; Schema: public; Owner: -
 --
 
@@ -24593,6 +24652,27 @@ GRANT SELECT ON TABLE public.instalacao_sonda_rotulo_contraditorio TO service_ro
 
 GRANT SELECT ON TABLE public.instalacao_sonda_saldo_mutuos TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_saldo_mutuos TO service_role;
+
+--
+-- Name: TABLE taxonomia_tipo_cobertura; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_cobertura TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_cobertura TO service_role;
+
+--
+-- Name: TABLE taxonomia_tipo_documento; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_documento TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_documento TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_tipo_composicao_imobilizado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_tipo_composicao_imobilizado TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_tipo_composicao_imobilizado TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_update_documentos_so_socio; Type: ACL; Schema: public; Owner: -
@@ -24663,20 +24743,6 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.reconciliacao TO service_role;
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.rubrica_classe TO authenticated;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.rubrica_classe TO service_role;
-
---
--- Name: TABLE taxonomia_tipo_cobertura; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_cobertura TO authenticated;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_cobertura TO service_role;
-
---
--- Name: TABLE taxonomia_tipo_documento; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_documento TO authenticated;
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.taxonomia_tipo_documento TO service_role;
 
 --
 --
