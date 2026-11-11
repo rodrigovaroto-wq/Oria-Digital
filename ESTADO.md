@@ -2,6 +2,26 @@
 
 ## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 NO AR (PR #287 mergeado, 0232–0234 aplicadas, n8n republicado, portal publicado); P10 rodada nos sintéticos
 
+### ▶ PRÓXIMOS PASSOS — lista única e ordenada (atualizada em 11/11, fim da sessão 126)
+
+**A fechar primeiro (já em andamento):**
+1. **PR [#289](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/289)** (o deck e o export deixam de afirmar "o mapa não imprime vencimento" quando o texto não foi lido): conferir o CI verde no head e mergear. Depois, republicar a ingestão com `N8N/republicar.sh`, primeiro `--dry-run` e depois a publicação, a partir do `main`. Conferir que o `Juntar Blocos` publicado grava `versao_medicao: 'p4-3'` e `textos_perdidos`. No commit `73d9b4f`, `banco`, `e2e` e `variacoes` caíram por DNS do runner do GitHub ("Temporary failure resolving archive.ubuntu.com"), antes de qualquer teste. Não era falha do PR.
+
+**Dependem do dono:**
+2. **Corpus real da P10** (Valtra, Krauspenhar, AMO): os originais não estão no bucket (AMO 0 de 118, Valtra 2 de 15, Krauspenhar 1 de 7). Reenviar os arquivos e rodar a P10 de novo, medindo com `Supabase/test/linha-de-base-extracao.sql` (ler `valores_gravados`, não `linhas_gravadas`).
+3. **Trocar a senha** que o dono colou no chat em 11/11. Ela não foi usada pela sessão.
+4. **Testar no navegador o botão "Reprocessar"** (aba Documentos → "Fila de reprocesso") com usuário logado. A rota está no ar, mas nunca foi clicada por uma pessoa.
+
+**Sem fatia ainda (achados registrados):**
+5. **Ramo novo do Mapa de Dívida (texto desalinhado com número provado):** provado só offline, na resposta real da execução 9637. Ao vivo, na 9641, o modelo devolveu os textos alinhados e o ramo não disparou. Provar quando um documento real o acionar.
+6. **Piraquara 08 (Distress sintético) já gravado:** com o #289 no ar, os 6 contratos aparecem como "Não conferido". Para corrigir, re-extrair: o reenvio do mesmo arquivo é reaproveitado, então precisa mudar o arquivo ou o fingerprint.
+7. **Contratos com texto perdido ficam sem credor, vencimento e taxa:** agora isso é dito, mas o dado não volta. A recuperação exigiria a IA devolver o credor como coluna e não só no rótulo (ajuste de prompt muda o FINGERPRINT e re-extrai tudo: decisão do dono).
+8. **`fn_registrar_reconciliacao` reescreve a descrição de uma pendência aberta com a de outro período** que tenha interseção de anos (achado na 0234). No Valtra, a pendência do período "data-base 01/01/2026 - 30/06/2026" mostra "2024: …", vinda do Faturamento "24,26".
+9. **2 "sem período par" do Canastra sintético** com outra causa, não diagnosticada. A 0234 não as alcançou.
+10. **`fn_versao_atual`** (usada pelas reconciliações) não segue a regra de versão vigente da 0233, ao contrário da Modelagem e do export. Inofensivo até o n8n gravar `falha_transitoria_esgotada = true`.
+11. **Do plano:** P11 a P15 (semana 3, "nenhuma linha faltando, nenhuma inventada"), em `PLANO_DE_EXECUCAO_2026-11.md`.
+
+
 > **Migration mais nova: `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, junto com a 0232 e a 0233 (nessa ordem, pela API de gerenciamento, antes do merge).**
 > - Branch `claude/confident-bardeen-15mjip`. Nada mergeado no `main`, nada republicado no n8n, nada publicado no portal, P10 não rodou.
 > - Acesso a produção conferido nesta sessão: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_URL`, `N8N_BASE_URL`, `N8N_API_KEY`, `VERCEL_TOKEN` estão no ambiente (só os nomes foram lidos). Leitura de produção feita pela API de gerenciamento (`POST https://api.supabase.com/v1/projects/<ref>/database/query`, `read_only:true`; o ref sai de `SUPABASE_URL`). O MCP do Supabase (notebooks) recusa permissão.
