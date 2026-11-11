@@ -104,7 +104,7 @@ const caso = q<{ id: string; nome: string; produto: string }>(
   `select id, nome, produto from caso where id = '${CASO}'`)[0];
 
 const documentos = q<DocumentoParaExport>(`
-  select d.id, d.tipo_taxonomia,
+  select d.id, d.tipo_taxonomia, fn_versao_com_extracao(d.id) as versao_vigente_id,
          json_build_object('razao_social', e.razao_social) as entidade,
          json_build_object('tipo', p.tipo, 'referencia', p.referencia) as periodo,
          (select coalesce(json_agg(json_build_object('id', dv.id, 'nome_original', dv.nome_original,
