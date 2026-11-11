@@ -31,7 +31,10 @@
 - **Produção.** Nada foi lido nem escrito. Por isso o "0 pendências contaminadas" (`19325ba`, medido em 11/11 antes desta rodada) e as 307 linhas do balanço e a leitura de produção da ficha do imobilizado (feita por quem a escreveu, em 11/11) NÃO foram remedidas aqui.
 - **Mutações** ("cada parte desligada reprova"). Os números (0240: 3, 5 e 2; 0241: 2 e 1 no commit `c4f14be`; 29 asserts) vêm das mensagens de commit. Não foram remedidos aqui.
 - **Desempenho** da `fn_pares_duplicados_do_caso`: não remedido aqui (está no commit `faa3338`).
-- **Abertos da S126, sem tocar:** o Canastra `26_Contingencias` (38 → 16 pares) e `29_Extrato_Bancario` (27 → 6), regressão silenciosa sem pendência, e a guarda de desalinhamento do Distress `08_Mapa_de_Divida` (92 → 35). Continuam abertos, na ordem dada pela S126.
+- **Achados da P10 da S126 já FECHADOS pelo PR #288 (mergeado, `17176af`), não pela S127:**
+  - Canastra `26_Contingencias` (38 → 16) e `29_Extrato_Bancario` (27 → 6) eram a régua, não o dado: os valores são idênticos (12 valores, 78.608; 6 valores, 1.650). A `linha-de-base-extracao.sql` passou a separar `valores_gravados`.
+  - A guarda de desalinhamento do Distress `08_Mapa_de_Divida` (92 → 35) passou a aceitar o número provado: medido 53 pares, 0 descartados.
+  - O que sobra disso ("Não lido"/"Não conferido" no deck e no export) está no PR #289, ainda aberto.
 
 ### O que o dono faz à mão, em ordem
 1. **Mergear o #291 primeiro**: ele destrava o CI dos outros. Depois atualizar o #289 e o #290 com o `main` e mergeá-los.
