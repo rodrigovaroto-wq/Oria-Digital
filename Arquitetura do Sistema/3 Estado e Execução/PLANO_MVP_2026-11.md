@@ -327,3 +327,24 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
 - **Não feito:** ligar ao Web Worker e à tela do portal (é a ME2); medir dentro do worker; arquivo
   real (DM7).
 - **Próxima:** MB2, o mapeamento de colunas confirmado pelo analista.
+
+### MB2 — biblioteca feita em 11/11/2026 (sessão 127), com os sintéticos; a migration 0242 vem em commit próprio
+
+- **`Leitor/lib/mapeamento.mjs`**: propõe o mapeamento (sinônimo do nome + tipo dos valores da
+  amostra) e o FORMATO do arquivo (vírgula ou ponto decimal; dia/mês ou mês/dia, com a evidência),
+  valida, e aplica a cada linha da MB1: `titulo` (contraparte, vencimento que é data, saldo que é
+  número), `subtotal` ou `rejeitada` com o campo e o valor. Sem autor, data e formato confirmados,
+  recusa. Confere a soma lida com o total do próprio arquivo (`confere`, `diverge` ou
+  `sem_total_no_arquivo`).
+- **Decisão de escopo:** a IA NÃO propõe o mapeamento, ao contrário do que a linha MB2 previa.
+  Sinônimo + tipo acerta as 11 colunas dos sintéticos sem custo nem rede, e o analista confirma de
+  qualquer jeito. Volta se arquivos reais (DM7) mostrarem cabeçalhos fora dos sinônimos.
+- **Achado no caminho:** decidir vírgula/ponto e dia/mês valor a valor erra sem erro ("1.250",
+  "03/04/2025"). Passou a ser formato do arquivo, confirmado e guardado no banco.
+- **Medido no Chromium, 1M de linhas, idêntico ao Node:** o caminho inteiro da tela (1ª leitura só
+  até a amostra, `soAmostra`, + proposta + 2ª leitura aplicando) leva 5,5 s no CSV e 22,0 s no XLSX.
+  999.995 títulos, 0 rejeitadas, Σ saldo = 24.917.000,00 = Clientes do BP, conferência `confere`.
+- **Prova:** `Leitor/test/mapeamento.test.mjs`, 23 testes; 27 correções desligadas reprovam de 1 a
+  5 testes cada (120 testes no Leitor).
+- **Não feito:** a tela de confirmação (ME2); arquivo real (DM7).
+

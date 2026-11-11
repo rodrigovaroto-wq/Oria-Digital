@@ -409,3 +409,19 @@ test('aspa solta que só FECHA 100 linhas depois: não junta 100 títulos num s�
   assert.equal(resumo.linhas, 104, 'cada linha física é um registro');
   assert.ok(resumo.avisos.some((a) => a.includes('sem fechar em 50 linhas')));
 });
+
+test('soAmostra: mesmo cabeçalho e mesma amostra da leitura inteira, lendo uma fração, e o resumo DIZ que é parcial', { skip: !gab && 'sem gabarito' }, async () => {
+  for (const arq of [`contas_a_receber_${N}.csv`, `contas_a_receber_${N}.xlsx`]) {
+    const blob = await openAsBlob(join(dir, arq));
+    const tudo = await lerTabela(blob);
+    const amostra = await lerTabela(blob, { soAmostra: true });
+    assert.deepEqual(amostra.cabecalho, tudo.cabecalho, arq);
+    assert.deepEqual(amostra.amostra, tudo.amostra, arq);
+    assert.deepEqual(amostra.amostra_tipos, tudo.amostra_tipos, arq);
+    assert.equal(amostra.parcial, true);
+    assert.equal(amostra.sha256, null, 'hash de trecho não pode parecer hash do arquivo');
+    assert.equal(amostra.bytes, null);
+    assert.ok(amostra.linhas < 200, `${arq}: leu ${amostra.linhas} linhas`);
+    assert.equal(tudo.parcial, undefined);
+  }
+});

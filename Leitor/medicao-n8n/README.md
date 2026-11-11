@@ -235,3 +235,16 @@ do XLSX não existe no XML e é contada assim mesmo).
 Não medido: dentro do Web Worker do portal (aqui é a página, porque é dela que o CDP dá o heap; o
 código é o mesmo), Safari e Firefox, o custo da passada UTF-8 prévia (só roda quando os 64 KB
 iniciais são ASCII puro; os sintéticos têm acento logo na 1ª linha), e um arquivo REAL de ERP (DM7).
+
+#### O caminho inteiro da tela com o mapeamento (MB2, `--mapear`)
+
+`node Leitor/medicao-n8n/navegador-tabela.mjs --mapear <arquivo>`: 1ª leitura `soAmostra` (para no
+cabeçalho + 30 linhas), proposta de mapeamento e de formato, 2ª leitura aplicando a toda linha.
+
+| Arquivo de 1M de linhas | Chromium | Pico de heap JS | Node 22 | Títulos | Rejeitadas | Σ saldo | Total do arquivo |
+|---|---|---|---|---|---|---|---|
+| contas a receber, CSV | **5,5 s** | 58 MB | 7,6 s | 999.995 | 0 | 24.917.000,00 | confere |
+| contas a receber, XLSX | **22,0 s** | 78 MB | 34,5 s | 999.995 | 0 | 24.917.000,00 | confere |
+
+Sem `soAmostra` (duas leituras inteiras): 8,1 s e 40,8 s. Resumo do aplicador idêntico ao do Node.
+

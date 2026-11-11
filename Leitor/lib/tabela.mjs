@@ -177,7 +177,12 @@ function classificador(aoLinha) {
     r.por_destino[destino]++;
     for (const s of sinais) r.sinais[s]++;
     if (!(destino in r.primeira)) r.primeira[destino] = linha.n;
-    if (destino === 'corpo' && r.amostra.length < AMOSTRA) r.amostra.push(linha.celulas);
+    if (destino === 'corpo' && r.amostra.length < AMOSTRA) {
+      r.amostra.push(linha.celulas);
+      // O tipo de cada célula do XLSX vai junto: sem ele, a MB2 lia o "15172.12" do XML como
+      // texto com ponto decimal e propunha o formato errado para o arquivo (medido no teste).
+      if (linha.tipos) (r.amostra_tipos ??= []).push(linha.tipos);
+    }
     if (aoLinha) aoLinha({ ...linha, destino, sinais });
   }
 
@@ -252,11 +257,21 @@ function classificador(aoLinha) {
       if (!decidido) tentarDecidir(true);
       return r;
     },
+    /** Já há o que a proposta da MB2 precisa: cabeçalho decidido e a amostra cheia. */
+    basta() {
+      return decidido && (!!r.sem_cabecalho || r.amostra.length >= AMOSTRA);
+    },
   };
 }
 
+/** O resumo de uma leitura interrompida em `soAmostra`: o que não foi contado não aparece como contado. */
+function parcial(r) {
+  return { ...r, parcial: true, bytes: null, sha256: null,
+    efeito_parcial: 'leitura interrompida depois do cabeçalho e da amostra: contagens, bytes e sha256 são só do trecho lido' };
+}
+
 // ------------------------------------------------------------------------ CSV --
-async function lerCsv(blob, cabeca, aoLinha, codificacao) {
+async function lerCsv(blob, cabeca, aoLinha, codificacao, soAmostra) {
   // O separador vem do mesmo detector do n8n (escada, degrau 2). Limite conhecido: ele
   // quebra linha sem respeitar aspas, então um arquivo cujas primeiras 50 linhas têm
   // muitas células com quebra de linha dentro cai abaixo dos 70% de consistência. Aí o
@@ -297,6 +312,12 @@ async function lerCsv(blob, cabeca, aoLinha, codificacao) {
 
   const RE = /\r\n|\n|\r/g;
   for (;;) {
+    if (soAmostra && cls.basta()) {
+      // A 1ª leitura da tela só precisa do cabeçalho e da amostra: com 1M de linhas, ir até
+      // o fim custava uma leitura inteira a mais (8,1 s em vez de ~4 s no CSV, medido).
+      await leitor.cancel();
+      return parcial({ formato: 'csv', codificacao, separador: sep, linhas_fisicas: fisicas, avisos, ...cls.fim() });
+    }
     const { done, value } = await leitor.read();
     if (done) break;
     sha.update(value);
@@ -309,6 +330,7 @@ async function lerCsv(blob, cabeca, aoLinha, codificacao) {
       if (m[0] === '\r' && m.index === buf.length - 1) break;
       fechar(buf.slice(ini, m.index));
       ini = m.index + m[0].length;
+      if (soAmostra && cls.basta()) break; // a parada é por linha, não por fatia de 64 KB
     }
     buf = buf.slice(ini);
   }
@@ -429,7 +451,7 @@ const RE_T = new RegExp(`<${P}t(?:\\s[^>]*)?>([\\s\\S]*?)</${P}t>`, 'g');
 const RE_RPH = new RegExp(`<${P}rPh\\b[\\s\\S]*?</${P}rPh>`, 'g');
 const textoDosT = (s) => { let t = ''; for (const m of s.matchAll(RE_T)) t += textoXml(m[1]); return t; };
 
-async function lerXlsx(blob, aoLinha) {
+async function lerXlsx(blob, aoLinha, soAmostra) {
   const entradas = new Map();
   const recusadas = [];
   for await (const e of entradasDoZip(blob)) {
@@ -509,14 +531,18 @@ async function lerXlsx(blob, aoLinha) {
       tiposVistos[tipo] = (tiposVistos[tipo] ?? 0) + 1;
     }
     cls.linha({ n: r - 1, celulas, tipos });
+    if (soAmostra && cls.basta()) break;
   }
   // Folha com conteúdo e nenhuma linha reconhecida é leitura que falhou, não tabela vazia.
   if (rows === 0 && folha.tamanho > 200) throw new Error(`a aba "${aba.nome}" tem ${folha.tamanho} bytes e nenhuma linha reconhecida`);
 
+  const basta = soAmostra && cls.basta();
   const sha = new Sha256();
   const leitor = blob.stream().getReader();
+  if (basta) await leitor.cancel();
   let bytes = 0;
   for (;;) {
+    if (basta) break;
     const { done, value } = await leitor.read();
     if (done) break;
     sha.update(value);
@@ -527,10 +553,11 @@ async function lerXlsx(blob, aoLinha) {
   const naoLidas = abas.filter((a) => a !== aba).map((a) => a.nome);
   if (naoLidas.length) avisos.push(`só a aba "${aba.nome}" foi lida; NÃO lidas: ${naoLidas.map((x) => `"${x}"`).join(', ')}`);
   if (!entradaSst && (tiposVistos.s ?? 0) > 0) avisos.push('a planilha não tem tabela de strings compartilhadas (texto em linha): formato incomum');
-  return {
+  const r = {
     formato: 'xlsx', aba: aba.nome, abas: abas.map((a) => a.nome), data_1904: de1904, bytes, sha256: sha.hex(),
     linhas_ausentes_no_xml: ausentes, strings_compartilhadas: sst.length, tipos_de_celula: tiposVistos, avisos, ...cls.fim(),
   };
+  return basta ? parcial(r) : r;
 }
 
 // -------------------------------------------------------------------- entrada --
@@ -546,18 +573,23 @@ async function lerXlsx(blob, aoLinha) {
  * científica ("1.5E-2") e com o ruído de 17 dígitos que o Excel grava ("1234.5599999999999").
  * Quem converte para centavos (MB2/MB3) arredonda e DECLARA que arredondou.
  *
+ * `soAmostra: true` para depois do cabeçalho e de 30 linhas do corpo (a 1ª leitura da tela,
+ * que só alimenta a proposta da MB2). O resumo sai com `parcial: true` e SEM bytes e sha256:
+ * nada do que não foi lido aparece como contado. No XLSX a tabela de strings é lida inteira
+ * mesmo assim (as linhas apontam para ela).
+ *
  * Devolve o resumo: formato, codificação, separador ou aba, bytes, sha256, o cabeçalho,
  * a largura, as linhas por destino (somam `linhas`), os sinais, a primeira linha de cada
  * destino, a amostra de até 30 linhas do corpo (para a MB2) e os avisos.
  */
-export async function lerTabela(blob, { aoLinha } = {}) {
+export async function lerTabela(blob, { aoLinha, soAmostra = false } = {}) {
   if (typeof blob?.stream !== 'function') blob = new Blob([blob]);
   const cabeca = new Uint8Array(await blob.slice(0, CABECA).arrayBuffer());
   const cod = codificacaoDe(cabeca);
   // UTF-16 tem byte zero: o detector de formato o chamaria de binário. É texto.
   const det = cod.codificacao.startsWith('utf-16') ? { formato: 'texto' } : detectarFormato(cabeca);
   if (det.formato === 'xlsx') {
-    try { return await lerXlsx(blob, aoLinha); } catch (e) { throw new Error(`a planilha não pôde ser lida: ${motivoDoErro(e)}`); }
+    try { return await lerXlsx(blob, aoLinha, soAmostra); } catch (e) { throw new Error(`a planilha não pôde ser lida: ${motivoDoErro(e)}`); }
   }
   if (det.formato !== 'texto') throw new Error(`não é CSV nem XLSX (formato detectado: ${det.formato}${det.detalhe ? `, ${det.detalhe}` : ''})`);
   let codificacao = cod.codificacao;
@@ -566,7 +598,7 @@ export async function lerTabela(blob, { aoLinha } = {}) {
     codificacao = 'windows-1252';
     avisos.push('os primeiros 64 KB eram ASCII puro e o arquivo não é UTF-8 válido adiante: lido como windows-1252');
   }
-  const r = await lerCsv(blob, cabeca, aoLinha, codificacao);
+  const r = await lerCsv(blob, cabeca, aoLinha, codificacao, soAmostra);
   r.avisos.unshift(...avisos);
   return r;
 }
