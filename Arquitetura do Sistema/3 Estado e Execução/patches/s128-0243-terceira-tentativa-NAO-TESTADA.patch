@@ -1,0 +1,968 @@
+diff --git a/Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql b/Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql
+index 7cc03df..969794e 100644
+--- a/Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql
++++ b/Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql
+@@ -1,6 +1,6 @@
+ -- 0243 — A LINHA QUE NÃO TINHA IDENTIDADE: `fato_financeiro` acima de `campo_extraido` (P27, Fase 3, etapa 3.2) — o fato canônico (conta = a SEÇÃO da linha, entidade e período pela coluna da linha quando ela diz), a pendência da heurística e o backfill que não abre fila.
+ -- (Cria 1 tabela, fato_financeiro, as funções fn_tipo_gera_fato, fn_linha_vira_fato, fn_fato_resolver, fn_fato_pode_escrever, fn_materializar_fatos, fn_fato_pendencia_da_versao, fn_materializar_fatos_da_extracao, fn_fato_repontar_entidade, fn_materializar_fatos_backfill e as dos 2 gatilhos (documento e mesmo mandato), 1 gatilho em documento, 1 gatilho em fato, 1 rótulo de pendencia_tipo
+---  (conta_canonica_incerta), 5 views da sonda e 20 requisitos novos (ordem 1105-1126). Reemite INTEIRAS fn_registrar_campos_extraidos (corpo da 0231, conferido igual ao do banco montado; mesma assinatura de 6 args, mesma ACL; UMA chamada nova no fim) e fn_fundir_entidade
++--  (conta_canonica_incerta), 5 views da sonda e 32 requisitos novos (ordem 1105-1138). Reemite INTEIRAS fn_registrar_campos_extraidos (corpo da 0231, conferido igual ao do banco montado; mesma assinatura de 6 args, mesma ACL; UMA chamada nova no fim) e fn_fundir_entidade
+ --  (corpo da 0213, idem; repõe os fatos). O backfill roda na própria migration. Idempotente: pode ser reaplicada.)
+ --
+ -- O DEFEITO. A identidade de uma linha financeira era `(secao_canonica, rótulo)` em `campo_extraido`: texto livre, sem FK, sem entidade nem período PRÓPRIOS (a linha tem `entidade_coluna` e `periodo_coluna` em texto; o documento tem UM `entidade_id`/`periodo_id`). Toda reconciliação refaz esse
+@@ -22,12 +22,15 @@
+ --      o fato de uma versão superada continua evidência do que ela disse.)
+ --   4. A LINHA QUE NÃO RESOLVE VIRA FATO COM ESTADO EXPLÍCITO `sem_conta`, e NÃO ganha conta inventada (nem a raiz da demonstração pelo tipo do documento). `conta_id` é NULO se, e só se, `resolucao_metodo = 'sem_conta'` (check), e o motivo vem junto: `secao_nao_declarada` (seção nula, em branco ou o literal NAO_CLASSIFICAVEL das
+ --      fixtures: o extrator grava null e as fixtures 466 linhas com o literal, tratados IGUAL) ou `secao_fora_do_catalogo`. A bijeção "toda linha elegível tem fato" é medível sem exceção (o teste e a consulta do README), e "0 fato sem identidade" passa a significar algo: o que não tem conta diz que não tem, por constraint.
+---   5. ENTIDADE E PERÍODO DO FATO são os da COLUNA da linha quando a coluna diz, e os do documento SÓ quando a coluna não contradiz: o balanço de duas colunas de ano atribuiria o saldo de 2024 a 2025 se valesse o `periodo_id` do documento. Tudo em fn_fato_resolver (uma função, também usada para repor a identidade).
+---      ENTIDADE: `coluna` (casa UMA entidade do mandato por fn_entidade_canonica; empate NÃO escolhe, 0153), `coluna_total` (Combinado/Consolidado/Total/Soma = a entidade do documento, SÓ quando nenhuma coluna do documento casa essa entidade pelo nome: como fn_coluna_entidade, 0023; senão a HOLDING recebia a coluna dela E o total: 10, 25 e -5) ou `documento`.
+---      PERÍODO: `coluna` (um período do MESMO mandato tem a forma canônica da coluna; 31/12/AAAA e AAAA são o mesmo); `documento` SÓ para a linha sem coluna ou a coluna de SALDO sem ano (fn_coluna_e_saldo, 0201: Saldo final/atual) — Débito, Crédito, Orçado, Variação e percentual NÃO são o saldo do período (0199 a): com o período do documento dariam cinco fatos iguais
+---      e a soma passaria de 150 para 1.310 (reproduzido pela revisão); e documento de período PARCIAL (fn_periodo_e_parcial, 0199 c/0200: balancete de junho) com coluna de ano: o período do documento se o ano bate, NUNCA o anual (o acumulado de junho não vira a receita do ano). "Saldo Inicial/anterior" é o ano ANTERIOR ao do documento (0199 b).
+---      O que não resolve fica NULO, com a origem nula e o MOTIVO (`entidade_motivo`, `periodo_motivo`; id nulo <=> origem nula <=> motivo, por check) e a coluna da linha ao lado; o período NÃO é criado (muda checklist e completude: decisão do dono). Os números de produção estão no bloco abaixo.
+---      O critério do plano "0 fato sem identidade" vale POR CONSTRUÇÃO para a conta (nulo só com sem_conta) e é MEDIDO para a entidade e o período: não é zero no corpus, e o motivo de cada nulo é a coluna ao lado.
++--   5. ENTIDADE E PERÍODO DO FATO — O CRITÉRIO NOVO (decisão do dono, 11/11/2026, depois de três remendos seguidos na mesma família, regra das três correções): A 0243 NÃO INTERPRETA NOME DE COLUNA. Só atribui entidade ou período quando uma função que o banco JÁ usa para a mesma pergunta decide de forma INEQUÍVOCA; em qualquer outro caso, NULO com o motivo
++--      (errar para nulo é ausência declarada, regra 1; errar para valor é número fabricado). Tudo em fn_fato_resolver (também usada para repor a identidade). A família de bugs era uma só: duas colunas diferentes do mesmo documento caindo na mesma (conta, entidade, período) e a soma dobrando (1.310 em vez de 150; 500; 435; 342; HOLDING 10+25-5).
++--      ENTIDADE: a coluna de E é a que fn_coluna_entidade(versão, E) (0023/0030, com fn_mesma_entidade) devolve, para cada entidade do mandato. O casamento de nome da 1ª versão (igualdade de fn_entidade_canonica) falhou "Alfa Comércio" x "ALFA COMERCIO DE ALIMENTOS LTDA"; aqui não há casamento próprio. Coluna que nenhuma entidade escolhe: nula (coluna_sem_entidade_no_mandato:
++--      Eliminações, empresa não cadastrada; coluna_total_nao_escolhida); escolhida por mais de uma (coluna_casa_varias_entidades); a coluna TOTAL quando o documento tem mais de uma (a função devolve "a" total sem ordem: coluna_total_ambigua); e a linha SEM entidade_coluna num documento que TEM colunas de entidade (a coluna total do dono e a linha "sem coluna" seriam duas colunas na mesma chave).
++--      PERÍODO: a coluna que É o período do documento é a ÚNICA coluna de saldo (fn_coluna_e_saldo, não abertura: Saldo final/atual, 0201) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento (31/12/AAAA = AAAA) num documento NÃO parcial (fn_periodo_e_parcial, 0199 c/0200: BALANCETE e período mês/trimestre são parciais). Duas candidatas, ou nenhuma: nenhuma é escolhida —
++--      fn_coluna_periodo_do_ano (0234) existe e é a função de "qual coluna vale para o ano", mas desempata por contagem e ordem alfabética: no balancete de junho com Jun/2025 e 30/06/2025 entrega uma AO ACASO, e com Orçado 2025/AV% 2025/Var. 2025 x 2024 entrega "AV% 2025" (um percentual) — por isso a 0243 usa as mesmas funções de classificação (saldo, abertura, movimento, parcial) mas NÃO o desempate dela. Documento sem coluna de período nenhuma: a linha é do período do documento. Linha sem coluna num documento que TEM colunas: nula
++--      (a regra de fn_linha_vale_para_ano, 0195). A coluna de ano puro de OUTRO ano ("2024" num documento de 2025) só recebe o período do ano em documento NÃO parcial, se UMA coluna só tem aquele ano e um período do MESMO mandato tem a forma canônica (fn_periodo_canonico). Movimento, orçado, variação, percentual, mês por extenso e toda coluna de documento parcial que não foi a escolhida: nulo.
++--      O que não resolve fica NULO, com a origem nula e o MOTIVO (`entidade_motivo`, `periodo_motivo`; id nulo <=> origem nula <=> motivo, por check) e a coluna da linha ao lado; o período NÃO é criado (muda checklist e completude). Mas o nulo NÃO fica falso: cadastrar período ou entidade no mandato DEPOIS re-resolve os fatos nulos dele (gatilhos em periodo e entidade) e fn_materializar_fatos() re-resolve os existentes.
++--      O critério do plano "0 fato sem identidade" vale POR CONSTRUÇÃO para a conta (nulo só com sem_conta) e é MEDIDO para a entidade e o período: não é zero no corpus (números abaixo), e o motivo de cada nulo é a coluna ao lado. O teste afirma a INVARIANTE da família inteira: em nenhum documento duas colunas diferentes caem na mesma (conta, entidade, período) não nulos.
+ --   6. A PENDÊNCIA (`conta_canonica_incerta`, rótulo novo de pendencia_tipo, complementar e sobrepujável: avisa, não trava) é UMA por documento-versão (motivo `fato:conta_incerta:<versão>`), lista as linhas por heurística ou sem conta (as 12 primeiras no texto, com o EFEITO: fato sem identidade não entra em seção nenhuma),
+ --      só para fato de origem `extracao` e só da versão VIGENTE (fn_versao_atual): quando uma versão nova vira a vigente, a pendência ABERTA das anteriores se baixa (resolvida_por sistema:versao_superada; antes a da v1 ficava aberta para sempre). Só toca estado `aberta`: a que alguém está tratando (em correção, reenviada) ou decidiu (aceita com ressalva, rejeitada, resolvida por pessoa) não é baixada, reaberta nem substituída.
+ --      Convergente (resolve-se sozinha quando não sobra linha incerta). Só abre pendência a CONTA incerta; entidade e período nulos ficam no fato, consultáveis, sem fila (a pendência de entidade/período do documento já existe, 0153/0178).
+@@ -39,18 +42,20 @@
+ --   8b. AS FKs DE ENTIDADE E DE PERÍODO SÃO `DEFERRABLE INITIALLY DEFERRED`: a primeira versão, imediata, derrubava `delete from caso` (historico_do_caso.test.sql, no run.sh): a cascata apaga a entidade por um caminho e os fatos por outro, mais fundo (documento > versão > linha > fato), e a conferência da FK imediata rodava com os fatos ainda lá.
+ --      A sonda confere o DEFERRABLE no predicado (uma FK recriada imediata é acusada) e o teste apaga um mandato com fatos.
+ --   9. O FATO É DERIVADO: o authenticated só LÊ (RLS por mandato pela versão, 0216). A 1ª versão deixava inserir e repor colunas; a revisão reproduziu um INSERT de valor 999999999 e a reposição da entidade para a de OUTRO mandato. Escrevem as funções de materialização (security definer, search_path fixo, guarda fn_fato_pode_escrever: conexão de serviço ou quem escreve no mandato, por
+---      `current_setting('role')`, que dentro de definer é o papel do chamador) e o service_role; o authenticated só executa fn_materializar_fatos_da_extracao e fn_fato_repontar_entidade (guardadas); fn_materializar_fatos, a pendência e o backfill são do serviço. O gatilho trg_fato_mesmo_caso recusa entidade ou período de OUTRO mandato, também ao serviço.
++--      `current_setting('role')`, que dentro de definer é o papel do chamador) e o service_role. O authenticated só executa fn_materializar_fatos_da_extracao (guardada; a recusa grava o evento fatos_materializacao_negada com o ator real) e fn_fato_repontar_entidade, que SÓ reponta fato de entidade que JÁ NÃO EXISTE (a fusão apaga a absorvida e chama; chamada direta com as duas vivas recusa) e grava o evento. fn_materializar_fatos, a pendência
++--      e o backfill são do serviço. O gatilho trg_fato_mesmo_caso recusa entidade ou período de OUTRO mandato, também ao serviço. A materialização por reclassificação humana do documento grava o ator REAL (usuario:<id>). A sonda confere a guarda (corpo, search_path fixo) e a AUSÊNCIA de privilégio e policy de escrita do authenticated em fato_financeiro.
+ --  10. DESEMPENHO DO BACKFILL. Medido no local com 123.969 linhas de campo_extraido (as fixtures ×30, sintético: serve só para o TEMPO) e 76.229 elegíveis: 2,96 s o backfill e 0,12 s a segunda chamada (idempotente). Na primeira versão levava 21 s: `fn_papel_linha` (~180 µs) rodava POR LINHA; medido em produção, 100.215 linhas de demonstração com valor têm
+ --      só 6.841 combinações (tipo, rótulo, unidade) distintas (15x menos). Agora o papel roda uma vez por combinação, em duas CTEs `MATERIALIZED` (uma só e o Postgres empurra o filtro para dentro do distinct e volta a chamar por linha: medido). Teto: o tempo cresce com as linhas SEM fato, e a chamada por versão (a extração nova) lê só as da versão.
+---  11. O TETO da materialização na extração nova está no fim deste cabeçalho ("O TETO"), com quando agir.
++--  11. O TETO da materialização na extração nova e o CUSTO DOS GATILHOS estão no fim deste cabeçalho ("O TETO"), com quando agir. APLICAÇÃO: `create trigger` em documento, periodo e entidade segura lock até o COMMIT e o backfill roda na mesma transação: `set local lock_timeout = '5s'` antes dos `create trigger` faz a aplicação falhar RÁPIDO (e se reaplica, a migration é idempotente) em vez de esperar um lote do n8n e arriscar deadlock.
+ --
+ -- MEDIDO EM PRODUÇÃO ANTES DE ESCREVER (11/11/2026, somente leitura, a mesma consulta de resolução da migration sem escrever; versões vigentes por fn_versao_atual) — o que o backfill criaria: 85.531 fatos em demonstração.
+ --   Vigentes 68.523: declarada 62.075, heuristica 2.194, sem_conta 4.254 (todas secao_nao_declarada; 0 fora_do_catalogo). Versões antigas 17.008: declarada 14.616, heuristica 994, sem_conta 1.398. Total: declarada 76.691, heuristica 3.188, sem_conta 5.652.
+ --   Linhas incertas (heurística + sem conta): 8.840, em 563 documentos-versão (536 vigentes) de 48 mandatos — as 563 pendências que o backfill NÃO abre (a decisão do dono; a 0179 abriu 365 de ruído e 347 já estavam julgadas ruído pela triagem). O resumo do backfill (evento fato_financeiro_backfill) conta
+ --   essas linhas, diz que ficaram sem pendência e por quê; o método gravado e a origem `backfill_0243` deixam a incerteza consultável sem fila.
+---   Identidade (a resolução da 2ª versão, medida em produção): SEM ENTIDADE 1.342 (1.271 coluna que não casa entidade do mandato, 66 documento sem entidade, 5 total que duplica a coluna da entidade); entidade resolvida por coluna 118 e por coluna total 455.
+---   SEM PERÍODO 36.892: 23.569 coluna que não é saldo (Saldo genérico, Débito, Crédito, meses por extenso...), 8.841 Saldo Inicial/anterior (abertura), 4.479 coluna de ano/data que o mandato não tem, 3 documento sem período, 0 parcial fora do ano; período resolvido pela coluna em 27.140.
+---   (A 1ª versão tratava como período do documento a coluna sem ano que não era de abertura: 32.438 fatos iguais em (conta, entidade, período) — o achado A1 da revisão.)
++--   IDENTIDADE (a resolução do critério novo, medida em produção com a mesma consulta, read-only; os números abaixo SUBSTITUEM os da 2ª versão): SEM ENTIDADE 1.685 (declarada 1.177, heurística 4, sem conta 504): 1.053 linha sem entidade_coluna em documento com colunas de entidade, 316 coluna que casa várias entidades, 235 coluna sem entidade no mandato (Eliminações, empresa não cadastrada),
++--   15 total não escolhido, 66 documento sem entidade; resolvida por coluna 990 e por coluna total 293.
++--   SEM PERÍODO 59.734 de 85.531 (70%): 45.609 coluna que não é o período do documento (movimento, orçado, "Saldo" genérico, mês por extenso, toda coluna de balancete e de documento parcial que não foi a escolhida), 8.841 Saldo Inicial/anterior, 5.118 mais de uma coluna para o mesmo período, 114 linha sem coluna em documento com colunas, 49 ano que o mandato não tem, 3 documento sem período.
++--   Resolvido: 25.433 no período do documento (a coluna única de saldo ou de ano do documento, ou o documento sem colunas) e 364 pela coluna de ano puro de outro ano. É o preço do critério: a 2ª versão tinha 36.892 nulos e era a que somava errado; o critério novo erra para nulo. A P28 decide se vale criar a leitura de saldo para BALANCETE (parcial por tipo) e para o mês por extenso.
+ --
+ -- O LEITOR SÓ-LEITURA (`supabase_read_only_user`): as views da sonda chamam fn_tipo_gera_fato e fn_linha_vira_fato (e esta, fn_papel_linha) com o privilégio de quem LÊ; o bloco condicional de grant (como 0233/0234 e a correção da 0242) as entrega a ele, e Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql o prova.
+ -- A SONDA (como a 0242: por constraint e por comportamento, não por contagem). A tabela; a policy de leitura (escrita: nenhuma policy para o authenticated, de propósito); as 13 constraints estruturais por nome e predicado (view); nenhum fato numa conta que não é seção (view pelos nós sem seção e o índice de conta_id: custo que não cresce com os fatos);
+@@ -123,12 +128,12 @@ create table if not exists fato_financeiro (
+     (entidade_id is null) = (entidade_origem is null)
+     and (entidade_id is null) = (entidade_motivo is not null)
+     and (entidade_origem is null or entidade_origem in ('documento', 'coluna', 'coluna_total'))
+-    and (entidade_motivo is null or entidade_motivo in ('documento_sem_entidade', 'coluna_sem_entidade_no_mandato', 'coluna_casa_varias_entidades', 'coluna_total_duplica_coluna_da_entidade'))),
++    and (entidade_motivo is null or entidade_motivo in ('documento_sem_entidade', 'coluna_sem_entidade_no_mandato', 'coluna_casa_varias_entidades', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade'))),
+   constraint fato_financeiro_periodo_ck check (
+     (periodo_id is null) = (periodo_origem is null)
+     and (periodo_id is null) = (periodo_motivo is not null)
+     and (periodo_origem is null or periodo_origem in ('documento', 'coluna'))
+-    and (periodo_motivo is null or periodo_motivo in ('documento_sem_periodo', 'periodo_da_coluna_nao_cadastrado', 'periodo_parcial_fora_do_ano', 'coluna_de_abertura', 'coluna_nao_e_saldo'))),
++    and (periodo_motivo is null or periodo_motivo in ('documento_sem_periodo', 'periodo_da_coluna_nao_cadastrado', 'coluna_de_abertura', 'coluna_nao_e_o_periodo_do_documento', 'linha_sem_coluna_em_documento_com_colunas', 'mais_de_uma_coluna_para_o_mesmo_periodo'))),
+   constraint fato_financeiro_origem_ck check (origem in ('extracao', 'backfill_0243'))
+ );
+ create index if not exists fato_financeiro_versao_idx on fato_financeiro (documento_versao_id);
+@@ -139,8 +144,8 @@ comment on table fato_financeiro is
+   '0243 (P27): o fato canônico ACIMA de campo_extraido, que não muda (ADR 01). Uma linha por linha extraída elegível (FK única): só documento de demonstração (fn_tipo_gera_fato), só papel conta (fn_papel_linha), só com valor (ausência não vira fato: regra 1). '
+   'A identidade é a SEÇÃO (nó de conta_canonica; folha é a P28+). Quem consome escolhe a versão vigente com fn_versao_atual. resolucao_metodo: declarada (a IA deu a seção), heuristica (fn_secao_canonica_da_secao_bruta / fn_herdar_secao_pela_arvore, 0203/0204: secao_canonica_inferida) ou sem_conta (conta_id nulo, com o motivo): "não sei a conta" é estado, nunca um palpite.';
+ comment on column fato_financeiro.conta_id is 'Nó de conta_canonica que é SEÇÃO (secao_canonica não nula). NULL só com resolucao_metodo = sem_conta (check): linha sem seção declarada, ou com seção que o catálogo não conhece, NÃO ganha conta inventada — nem a raiz da demonstração pelo tipo do documento.';
+-comment on column fato_financeiro.entidade_origem is 'De onde veio a entidade: documento (documento.entidade_id; a linha não tem entidade_coluna), coluna (entidade_coluna casa UMA entidade do mandato por fn_entidade_canonica) ou coluna_total (coluna Combinado/Consolidado/Total/Soma: a entidade do documento, SÓ quando nenhuma outra coluna do documento casa essa entidade pelo nome: o total não soma de novo o que a coluna da entidade já traz; mesmo critério de fn_coluna_entidade, 0023). NULL = não resolvida; entidade_motivo diz por quê (documento_sem_entidade, coluna_sem_entidade_no_mandato: Eliminações ou empresa não cadastrada, coluna_casa_varias_entidades: empate, 0153, coluna_total_duplica_coluna_da_entidade). A entidade_coluna da linha fica ao lado.';
+-comment on column fato_financeiro.periodo_origem is 'De onde veio o período: coluna (periodo_coluna nomeia um ano/data e um periodo do MESMO mandato tem essa forma canônica, fn_periodo_canonico) ou documento (a linha não tem coluna; ou a coluna é de SALDO sem ano, fn_coluna_e_saldo; ou o documento é de período PARCIAL, fn_periodo_e_parcial, e o ano da coluna é o do documento: o acumulado de junho não vai para o ano). NULL = não resolvido; periodo_motivo diz por quê: coluna_de_abertura (Saldo Inicial/anterior é o ano ANTERIOR ao do documento, 0199 b), coluna_nao_e_saldo (Débito, Crédito, Orçado, Variação, percentual: movimento e comparativo NÃO são o saldo do período, 0199 a/0201: sem isto dariam cinco fatos iguais em (conta, entidade, período) e a soma dobraria), periodo_da_coluna_nao_cadastrado (o período NÃO é criado aqui), periodo_parcial_fora_do_ano, documento_sem_periodo. O periodo_coluna da linha fica ao lado.';
++comment on column fato_financeiro.entidade_origem is 'De onde veio a entidade. A 0243 NÃO interpreta nome de coluna: a entidade da coluna é a que fn_coluna_entidade(versão, entidade) (0023/0030, com fn_mesma_entidade) escolhe para alguma entidade do mandato. coluna = casou pelo NOME da entidade; coluna_total = a coluna Combinado/Consolidado/Total/Soma que a mesma função entrega à entidade do documento (só quando nenhuma coluna casa o nome dela); documento = a linha não tem entidade_coluna (entidade do documento). NULL = a função não escolheu a coluna, ou escolheu para mais de uma entidade: entidade_motivo diz por quê (documento_sem_entidade, coluna_sem_entidade_no_mandato, coluna_casa_varias_entidades, coluna_total_nao_escolhida, coluna_total_ambigua: mais de uma coluna total no documento e a função escolhe sem ordem, linha_sem_coluna_em_documento_com_colunas_de_entidade: documento que tem coluna de entidade e a linha não). A entidade_coluna da linha fica ao lado.';
++comment on column fato_financeiro.periodo_origem is 'De onde veio o período. A 0243 NÃO interpreta nome de coluna: só atribui o período quando as funções do banco para essa pergunta decidem de forma INEQUÍVOCA. documento = a linha sem coluna num documento sem colunas, ou a coluna que É o período do documento: a ÚNICA coluna de saldo (fn_coluna_e_saldo: Saldo final/atual, 0201) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento num documento não parcial (fn_periodo_e_parcial, 0199 c); coluna = coluna de ano puro (31/12/AAAA = AAAA) de OUTRO ano, em documento não parcial, que um período do mesmo mandato tem (fn_periodo_canonico). NULL = ambíguo ou sem base; periodo_motivo diz por quê: coluna_nao_e_o_periodo_do_documento (movimento, orçado, variação, percentual, mês por extenso, coluna de documento parcial que não foi a escolhida), coluna_de_abertura (o ano ANTERIOR, 0199 b), periodo_da_coluna_nao_cadastrado (o período NÃO é criado aqui), mais_de_uma_coluna_para_o_mesmo_periodo, linha_sem_coluna_em_documento_com_colunas (a regra de fn_linha_vale_para_ano, 0195), documento_sem_periodo. O periodo_coluna da linha fica ao lado.';
+ comment on column fato_financeiro.valor is 'valor_num da linha, como veio. Escala e moeda NÃO são normalizadas aqui (não há regra pronta): unidade e moeda seguem ao lado.';
+ 
+ -- -----------------------------------------------------------------------------
+@@ -206,6 +211,12 @@ do $$ begin
+   end if;
+ end $$;
+ 
++-- O ATOR REAL do evento: o usuário autenticado quando há (a reclassificação humana de um documento grava o nome dele, não 'sistema:n8n'), senão o sistema.
++create or replace function fn_fato_ator()
++returns text language sql stable as $$ select coalesce('usuario:' || auth.uid()::text, 'sistema:0243') $$;
++revoke all on function fn_fato_ator() from public, anon;
++grant execute on function fn_fato_ator() to authenticated, service_role;
++
+ -- QUEM PODE ESCREVER fato: conexão de serviço (o n8n, a migration: o papel da sessão é service_role ou nenhum) ou quem escreve no mandato (fn_pode_escrever_caso, 0216). O `current_setting('role')` é o papel que o PostgREST pôs
+ -- com SET ROLE e é lido DENTRO de função security definer (current_user lá seria o dono). Caso nulo (o backfill de tudo) só a conexão de serviço.
+ create or replace function fn_fato_pode_escrever(p_caso uuid)
+@@ -245,79 +256,120 @@ language sql stable as $$
+   papel as materialized (
+     select x.tipo, x.chave, x.unidade from rotulos x where fn_linha_vira_fato(x.tipo, x.chave, x.unidade, 1)
+   ),
+-  alvo0 as materialized (
++  alvo as materialized (
+     select c.* from cand c join papel p on p.tipo = c.tipo and p.chave = c.chave and coalesce(p.unidade, '') = coalesce(c.unidade, '')
+   ),
+-  -- A coluna TOTAL (Combinado/Consolidado/Total/Soma) só vale como a entidade do documento quando NENHUMA coluna do documento já casa essa entidade pelo nome (fn_coluna_entidade, 0023): senão a entidade
+-  -- recebia a coluna dela e o total, e a soma dobrava (reproduzido: HOLDING com 10, 25 e -5).
+-  vmatch as materialized (
+-    select distinct a.documento_versao_id
+-      from (select distinct documento_versao_id, doc_entidade from alvo0 where doc_entidade is not null) a
+-      join entidade e on e.id = a.doc_entidade
+-      join (select distinct ce2.documento_versao_id, nullif(btrim(ce2.entidade_coluna), '') as ecol from campo_extraido ce2
+-             where ce2.documento_versao_id in (select documento_versao_id from alvo0) and nullif(btrim(ce2.entidade_coluna), '') is not null) c
+-        on c.documento_versao_id = a.documento_versao_id
+-     where fn_entidade_canonica(c.ecol) = fn_entidade_canonica(e.razao_social)
++  vinfo as materialized (
++    select v.documento_versao_id, v.caso_id, v.tipo, v.doc_entidade, v.doc_periodo, v.dper_tipo, v.dper_ref,
++           case when cardinality(fn_anos_periodo(v.dper_tipo, v.dper_ref)) = 1 then (fn_anos_periodo(v.dper_tipo, v.dper_ref))[1] end as y
++      from (select distinct documento_versao_id, caso_id, tipo, doc_entidade, doc_periodo, dper_tipo, dper_ref from alvo) v
+   ),
+-  alvo as materialized (
+-    select a.*, (m.documento_versao_id is not null) as vm,
+-           a.caso_id::text || '|' || coalesce(a.doc_entidade::text, '') || '|' || coalesce(a.ecol, '') || '|' || (m.documento_versao_id is not null)::text as ek,
+-           a.caso_id::text || '|' || coalesce(a.doc_periodo::text, '') || '|' || coalesce(a.pcol, '') || '|' || a.tipo as pk
+-      from alvo0 a left join vmatch m on m.documento_versao_id = a.documento_versao_id
++  -- ===== ENTIDADE: quem decide é fn_coluna_entidade (0023/0030, com fn_mesma_entidade): a coluna que ela devolve para a entidade E é a coluna de E. Nenhum casamento de nome é escrito aqui.
++  eescolha as materialized (
++    select x.documento_versao_id, x.col, x.entidade_id, x.razao_social
++      from (select v.documento_versao_id, e.id as entidade_id, e.razao_social, nullif(btrim(fn_coluna_entidade(v.documento_versao_id, e.id)), '') as col
++              from (select distinct documento_versao_id, caso_id from alvo where ecol is not null) v
++              join entidade e on e.caso_id = v.caso_id) x
++     where x.col is not null and x.col <> chr(1)
++  ),
++  emap as materialized (
++    select documento_versao_id, col, count(*) as n, (array_agg(entidade_id))[1] as entidade_id, bool_or(fn_mesma_entidade(col, razao_social)) as por_nome
++      from eescolha group by 1, 2
++  ),
++  -- fn_coluna_entidade entrega "a" coluna total (limit 1, sem ordem): com mais de uma coluna total no documento a escolha é arbitrária, e arbitrária não é inequívoca
++  etot as materialized (
++    select ce.documento_versao_id, count(distinct nullif(btrim(ce.entidade_coluna), '')) as n
++      from campo_extraido ce
++     where ce.documento_versao_id in (select documento_versao_id from vinfo) and ce.entidade_coluna is not null
++       and fn_normalizar_texto(ce.entidade_coluna) ~ '^(combinad|consolidad|total|soma)'
++     group by 1
++  ),
++  -- documento que TEM coluna de entidade: a linha sem entidade_coluna não tem dono inequívoco (a coluna total do dono e a linha "sem coluna" seriam duas colunas na mesma chave: a soma dobra)
++  vecol as materialized (
++    select distinct ce.documento_versao_id
++      from campo_extraido ce
++     where ce.documento_versao_id in (select documento_versao_id from vinfo) and nullif(btrim(ce.entidade_coluna), '') is not null
+   ),
+-  -- MATERIALIZED nas duas resoluções: sem isso o Postgres inlina a CTE usada uma vez e a resolução (que casa nome e período) roda LINHA a linha em vez de uma vez por combinação distinta.
+   ent as materialized (
+-    select z.ek,
+-           z.id as entidade_id,
+-           case when z.id is null then null when z.ecol is null then 'documento' when z.n = 1 then 'coluna' else 'coluna_total' end as origem,
+-           case when z.id is not null then null
+-                when z.ecol is null then 'documento_sem_entidade'
+-                when z.n > 1 then 'coluna_casa_varias_entidades'
+-                when z.total and z.doc_entidade is null then 'documento_sem_entidade'
+-                when z.total and z.vm then 'coluna_total_duplica_coluna_da_entidade'
++    select k.documento_versao_id, coalesce(k.ecol, '') as ekey,
++           case when k.ecol is null then (case when not k.tem_ecols then k.doc_entidade end) when m.n = 1 and (m.por_nome or coalesce(t.n, 0) <= 1) then m.entidade_id end as entidade_id,
++           case when k.ecol is null then (case when k.doc_entidade is not null and not k.tem_ecols then 'documento' end)
++                when m.n = 1 and (m.por_nome or coalesce(t.n, 0) <= 1) then (case when m.por_nome then 'coluna' else 'coluna_total' end) end as origem,
++           case when k.ecol is null then (case when k.doc_entidade is null then 'documento_sem_entidade' when k.tem_ecols then 'linha_sem_coluna_em_documento_com_colunas_de_entidade' end)
++                when m.n = 1 and m.por_nome then null
++                when m.n = 1 and coalesce(t.n, 0) <= 1 then null
++                when m.n = 1 then 'coluna_total_ambigua'
++                when m.n > 1 then 'coluna_casa_varias_entidades'
++                when fn_normalizar_texto(k.ecol) ~ '^(combinad|consolidad|total|soma)' then 'coluna_total_nao_escolhida'
+                 else 'coluna_sem_entidade_no_mandato' end as motivo
+-      from (select k.ek, k.ecol, k.doc_entidade, k.vm, m.n,
+-                   (k.ecol is not null and fn_normalizar_texto(k.ecol) ~ '^(combinad|consolidad|total|soma)') as total,
+-                   case when k.ecol is null then k.doc_entidade
+-                        when m.n = 1 then m.id
+-                        when m.n = 0 and not k.vm and fn_normalizar_texto(k.ecol) ~ '^(combinad|consolidad|total|soma)' then k.doc_entidade end as id
+-              from (select distinct ek, caso_id, doc_entidade, ecol, vm from alvo) k
+-              left join lateral (select count(*) as n, (array_agg(e.id))[1] as id
+-                                   from entidade e
+-                                  where k.ecol is not null and e.caso_id = k.caso_id
+-                                    and fn_entidade_canonica(e.razao_social) = fn_entidade_canonica(k.ecol)) m on true) z
++      from (select x.documento_versao_id, x.doc_entidade, x.ecol, (ve.documento_versao_id is not null) as tem_ecols
++              from (select distinct documento_versao_id, doc_entidade, ecol from alvo) x
++              left join vecol ve on ve.documento_versao_id = x.documento_versao_id) k
++      left join emap m on m.documento_versao_id = k.documento_versao_id and m.col = k.ecol
++      left join etot t on t.documento_versao_id = k.documento_versao_id
++  ),
++  -- ===== PERÍODO: a 0243 não interpreta nome de coluna. Só atribui quando as funções do banco para esta pergunta (fn_coluna_e_saldo, fn_coluna_e_abertura, fn_periodo_e_parcial, fn_anos_periodo, fn_periodo_canonico: 0199-0201/0234) decidem de forma INEQUÍVOCA.
++  --   A coluna que É o período do documento: a ÚNICA coluna de saldo (Saldo final/atual) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento num documento NÃO parcial. Duas candidatas (ou nenhuma): nenhuma é escolhida (fn_coluna_periodo_do_ano
++  --   desempata por contagem e ordem alfabética: no balancete de junho com Jun/2025 e 30/06/2025 ela entrega uma ao acaso, e "ao acaso" é número fabricado). Documento sem coluna nenhuma: a linha é do período do documento.
++  vcol as materialized (
++    select i.documento_versao_id, c.pcol, i.y,
++           fn_coluna_e_abertura(c.pcol) as abertura,
++           (fn_coluna_e_saldo(c.pcol) and not fn_coluna_e_abertura(c.pcol)) as saldo,
++           fn_periodo_e_parcial(c.pcol, i.tipo, i.dper_tipo, i.dper_ref) as parcial,
++           case when regexp_replace(fn_periodo_canonico('outro', c.pcol), '^(\d{4})-12-31$', '\1') ~ '^\d{4}$'
++                then regexp_replace(fn_periodo_canonico('outro', c.pcol), '^(\d{4})-12-31$', '\1')::int end as ano_puro
++      from vinfo i
++      join (select distinct ce.documento_versao_id, nullif(btrim(ce.periodo_coluna), '') as pcol
++              from campo_extraido ce
++             where ce.documento_versao_id in (select documento_versao_id from vinfo) and nullif(btrim(ce.periodo_coluna), '') is not null) c
++        on c.documento_versao_id = i.documento_versao_id
++  ),
++  vcol2 as materialized (
++    select c.*, (c.ano_puro is not null and not c.parcial and c.ano_puro = c.y) as e_ano_do_doc,
++           count(*) filter (where c.ano_puro is not null and not c.parcial) over (partition by c.documento_versao_id, c.ano_puro) as n_mesmo_ano
++      from vcol c
++  ),
++  vesc as materialized (
++    select documento_versao_id, count(*) as n_cols,
++           case when count(*) filter (where y is not null and (saldo or e_ano_do_doc)) = 1
++                then min(pcol) filter (where y is not null and (saldo or e_ano_do_doc)) end as escolhida
++      from vcol2 group by 1
++  ),
++  per0 as materialized (
++    select documento_versao_id, pcol, abertura, parcial, ano_puro, e_ano_do_doc, n_mesmo_ano from vcol2
++    union all
++    select documento_versao_id, null, false, false, null::int, false, 0 from vinfo
+   ),
+   per as materialized (
+-    select z.pk, z.periodo_id,
+-           case when z.periodo_id is null then null when z.pcol is null then 'documento' when z.anos and not z.parcial then 'coluna' else 'documento' end as origem,
+-           case when z.periodo_id is not null then null
+-                when z.pcol is not null and z.anos and z.parcial and z.doc_periodo is not null then 'periodo_parcial_fora_do_ano'
+-                when z.pcol is not null and z.anos and not z.parcial then 'periodo_da_coluna_nao_cadastrado'
+-                when z.pcol is not null and not z.anos and z.abertura then 'coluna_de_abertura'
+-                when z.pcol is not null and not z.anos and not fn_coluna_e_saldo(z.pcol) then 'coluna_nao_e_saldo'
+-                when z.doc_periodo is null and (z.pcol is null or z.anos or fn_coluna_e_saldo(z.pcol)) then 'documento_sem_periodo'
+-                else 'periodo_da_coluna_nao_cadastrado' end as motivo
+-      from (select k.pk, k.pcol, k.doc_periodo, k.parcial, k.anos, k.abertura,
+-                   case when k.pcol is null then k.doc_periodo
+-                        when k.anos and k.parcial then case when k.doc_periodo is not null and fn_anos_texto(k.pcol) && fn_anos_periodo(k.dper_tipo, k.dper_ref) then k.doc_periodo end
+-                        when k.anos then x.id
+-                        when k.abertura then null
+-                        when fn_coluna_e_saldo(k.pcol) then k.doc_periodo
+-                        else null end as periodo_id
+-              from (select u.pk, u.caso_id, u.pcol, u.doc_periodo, u.dper_tipo, u.dper_ref,
+-                           (u.pcol is not null and cardinality(fn_anos_texto(u.pcol)) > 0) as anos,
+-                           (u.pcol is not null and fn_coluna_e_abertura(u.pcol)) as abertura,
+-                           (u.pcol is not null and fn_periodo_e_parcial(u.pcol, u.tipo, u.dper_tipo, u.dper_ref)) as parcial
+-                      from (select distinct pk, caso_id, doc_periodo, pcol, tipo, dper_tipo, dper_ref from alvo) u) k
++    select z.documento_versao_id, coalesce(z.pcol, '') as pkey,
++           z.pid as periodo_id,
++           case when z.pid is null then null when z.pcol is null or z.pcol = z.escolhida then 'documento' else 'coluna' end as origem,
++           case when z.pid is not null then null
++                when z.pcol is null and z.n_cols > 0 then 'linha_sem_coluna_em_documento_com_colunas'
++                when (z.pcol is null or z.pcol = z.escolhida) and z.doc_periodo is null then 'documento_sem_periodo'
++                when z.abertura then 'coluna_de_abertura'
++                when z.n_mesmo_ano > 1 then 'mais_de_uma_coluna_para_o_mesmo_periodo'
++                when z.ano_puro is not null and not z.parcial and not z.e_ano_do_doc then 'periodo_da_coluna_nao_cadastrado'
++                else 'coluna_nao_e_o_periodo_do_documento' end as motivo
++      from (select p.documento_versao_id, p.pcol, p.abertura, p.parcial, p.ano_puro, p.e_ano_do_doc, p.n_mesmo_ano,
++                   i.doc_periodo, coalesce(e.n_cols, 0) as n_cols, e.escolhida,
++                   case when p.pcol is null then (case when coalesce(e.n_cols, 0) = 0 then i.doc_periodo end)
++                        when p.pcol = e.escolhida then i.doc_periodo
++                        when p.abertura then null
++                        when p.ano_puro is not null and not p.parcial and not p.e_ano_do_doc and p.n_mesmo_ano = 1 then x.id
++                        else null end as pid
++              from per0 p
++              join vinfo i on i.documento_versao_id = p.documento_versao_id
++              left join vesc e on e.documento_versao_id = p.documento_versao_id
+               left join lateral (
+                 -- o MESMO casamento de fn_upsert_periodo (forma canônica, o de menor referência no empate), sem o insert: o período NÃO é criado aqui. O fechamento 31/12/AAAA e o ano AAAA são o mesmo período.
+                 select coalesce(
+-                         (select p.id from periodo p where p.id = k.doc_periodo
+-                             and regexp_replace(fn_periodo_canonico(p.tipo, p.referencia), '^(\d{4})-12-31$', '\1') = regexp_replace(fn_periodo_canonico('outro', k.pcol), '^(\d{4})-12-31$', '\1')),
+-                         (select p.id from periodo p where p.caso_id = k.caso_id
+-                             and regexp_replace(fn_periodo_canonico(p.tipo, p.referencia), '^(\d{4})-12-31$', '\1') = regexp_replace(fn_periodo_canonico('outro', k.pcol), '^(\d{4})-12-31$', '\1')
+-                           order by p.referencia, p.id limit 1)) as id
+-                 where k.anos and not k.parcial) x on true) z
++                         (select q.id from periodo q where q.id = i.doc_periodo
++                             and regexp_replace(fn_periodo_canonico(q.tipo, q.referencia), '^(\d{4})-12-31$', '\1') = p.ano_puro::text),
++                         (select q.id from periodo q where q.caso_id = i.caso_id
++                             and regexp_replace(fn_periodo_canonico(q.tipo, q.referencia), '^(\d{4})-12-31$', '\1') = p.ano_puro::text
++                           order by q.referencia, q.id limit 1)) as id
++                 where p.ano_puro is not null and not p.parcial and not p.e_ano_do_doc and p.n_mesmo_ano = 1) x on true) z
+   )
+   select a.campo_id, a.documento_versao_id, c.codigo,
+          case when c.codigo is null then 'sem_conta' when a.inferida then 'heuristica' else 'declarada' end,
+@@ -327,8 +379,8 @@ language sql stable as $$
+          e.entidade_id, e.origem, e.motivo, a.ecol, p.periodo_id, p.origem, p.motivo, a.pcol, a.valor_num, a.unidade, a.moeda
+     from alvo a
+     left join conta_canonica c on c.secao_canonica = a.secao
+-    join ent e on e.ek = a.ek
+-    join per p on p.pk = a.pk
++    join ent e on e.documento_versao_id = a.documento_versao_id and e.ekey = coalesce(a.ecol, '')
++    join per p on p.documento_versao_id = a.documento_versao_id and p.pkey = coalesce(a.pcol, '')
+ $$;
+ comment on function fn_fato_resolver(uuid, boolean) is
+   '0243: a identidade de cada linha elegível: conta (a seção, pelo catálogo), entidade e período (pela coluna da linha quando ela diz, pelo documento quando não, e NULOS com o motivo quando a coluna não é saldo, é de abertura, o documento é parcial ou o total duplica a coluna da entidade). p_novos: as sem fato (materializar); falso: as que já têm (repor a identidade quando o documento muda).';
+@@ -340,7 +392,7 @@ revoke all on function fn_fato_resolver(uuid, boolean) from public, anon, authen
+ create or replace function fn_materializar_fatos(p_documento_versao_id uuid default null, p_origem text default 'extracao')
+ returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+ declare
+-  v_r jsonb; v_caso uuid;
++  v_r jsonb; v_caso uuid; v_rr int := 0;
+ begin
+   if p_origem not in ('extracao', 'backfill_0243') then
+     raise exception 'fn_materializar_fatos: origem % desconhecida (extracao | backfill_0243)', p_origem;
+@@ -374,11 +426,25 @@ begin
+            'versoes', count(distinct documento_versao_id),
+            'versoes_com_linha_incerta', count(distinct documento_versao_id) filter (where resolucao_metodo <> 'declarada'))
+     into v_r from ins;
++
++  -- RE-RESOLVER o que já existe com identidade NULA: "nulo com motivo" fica FALSO quando o período ou a entidade é cadastrado depois (4.479 fatos em produção com periodo_da_coluna_nao_cadastrado). Roda no reparo e no backfill (versão nula)
++  -- e quando a chamada por versão não criou nada (o reenvio); na extração nova, que acabou de resolver tudo, seria a mesma conta duas vezes.
++  if p_documento_versao_id is null or (v_r->>'fatos_criados')::int = 0 then
++    update fato_financeiro f
++       set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
++           periodo_id = r.periodo_id, periodo_origem = r.periodo_origem, periodo_motivo = r.periodo_motivo
++      from fn_fato_resolver(p_documento_versao_id, false) r
++     where r.campo_id = f.campo_extraido_id and (f.entidade_id is null or f.periodo_id is null)
++       and (f.entidade_id, f.entidade_origem, f.entidade_motivo, f.periodo_id, f.periodo_origem, f.periodo_motivo)
++           is distinct from (r.entidade_id, r.entidade_origem, r.entidade_motivo, r.periodo_id, r.periodo_origem, r.periodo_motivo);
++    get diagnostics v_rr = row_count;
++  end if;
++  v_r := v_r || jsonb_build_object('reresolvidos', v_rr);
+   return v_r;
+ end $$;
+ comment on function fn_materializar_fatos(uuid, text) is
+   '0243: cria o fato de toda linha elegível (fn_linha_vira_fato) que ainda não tem, pela identidade de fn_fato_resolver. Idempotente. Seção declarada = declarada; secao_canonica_inferida = heuristica; sem seção (nula, em branco ou NAO_CLASSIFICAVEL) ou fora do catálogo = sem_conta, com o motivo. '
+-  'Versão nula = todas (o backfill e o reparo: se a materialização de uma extração falhou, o evento fatos_materializacao_falhou manda rodar esta). NÃO abre pendência: quem abre é fn_materializar_fatos_da_extracao, só para extração nova. Só a conexão de serviço materializa tudo; o resto, só o mandato que escreve.';
++  'Versão nula = todas (o backfill e o reparo: se a materialização de uma extração falhou, o evento fatos_materializacao_falhou manda rodar esta). NÃO abre pendência: quem abre é fn_materializar_fatos_da_extracao, só para extração nova. Também RE-RESOLVE os fatos existentes de identidade nula (o período ou a entidade cadastrado depois). Só a conexão de serviço materializa tudo; o resto, só o mandato que escreve.';
+ 
+ -- A PENDÊNCIA: UMA por documento-versão, com as linhas resolvidas por heurística ou sem conta. Convergente: reflete o estado atual dos fatos de EXTRAÇÃO da versão (o backfill, origem backfill_0243, nunca entra aqui). Só mexe em estado 'aberta':
+ -- a que alguém já está tratando (em correção, reenviada ao cliente) ou decidiu (aceita com ressalva, rejeitada, resolvida por pessoa) fica como está.
+@@ -442,7 +508,8 @@ comment on function fn_fato_pendencia_da_versao(uuid) is
+ 
+ -- O PONTO ÚNICO da extração nova (chamado por fn_registrar_campos_extraidos, por onde o n8n passa). A extração é a evidência e vale mais que o fato derivado: se a materialização falhar, a extração FICA, o evento diz, e fn_materializar_fatos()
+ -- repara. NÃO se captura query_canceled (statement_timeout, cancelamento): o cancelamento é do chamador e engolí-lo esconderia a lentidão; o teto medido está no cabeçalho.
+-create or replace function fn_materializar_fatos_da_extracao(p_documento_versao_id uuid)
++drop function if exists fn_materializar_fatos_da_extracao(uuid);
++create or replace function fn_materializar_fatos_da_extracao(p_documento_versao_id uuid, p_ator text default 'sistema:n8n')
+ returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+ declare
+   v_tipo text; v_caso uuid; v_doc uuid; v_r jsonb; v_pend uuid; v_vigente uuid;
+@@ -452,6 +519,10 @@ begin
+     return jsonb_build_object('materializado', false, 'porque', 'tipo do documento não é de demonstração');
+   end if;
+   if not fn_fato_pode_escrever(v_caso) then
++    -- (regra 7: a recusa deixa rastro, não é silêncio)
++    insert into evento_auditoria (ator, acao, entidade_ref, depois)
++      values (coalesce(fn_fato_ator(), p_ator), 'fatos_materializacao_negada', 'documento_versao:' || p_documento_versao_id,
++              jsonb_build_object('porque', 'sem permissão de escrita no mandato', 'ator_declarado', p_ator));
+     return jsonb_build_object('materializado', false, 'porque', 'sem permissão de escrita no mandato');
+   end if;
+   begin
+@@ -467,22 +538,23 @@ begin
+     end if;
+     v_r := v_r || jsonb_build_object('materializado', true, 'pendencia_id', v_pend);
+     insert into evento_auditoria (ator, acao, entidade_ref, depois)
+-      values ('sistema:n8n', 'fatos_materializados', 'documento_versao:' || p_documento_versao_id, v_r);
++      values (p_ator, 'fatos_materializados', 'documento_versao:' || p_documento_versao_id, v_r);
+   exception
+     when query_canceled then raise;
+     when others then
+       insert into evento_auditoria (ator, acao, entidade_ref, depois)
+-        values ('sistema:n8n', 'fatos_materializacao_falhou', 'documento_versao:' || p_documento_versao_id,
++        values (p_ator, 'fatos_materializacao_falhou', 'documento_versao:' || p_documento_versao_id,
+                 jsonb_build_object('sqlstate', sqlstate, 'erro', sqlerrm,
+                                    'porque', 'a extração foi gravada; os fatos não. Rode fn_materializar_fatos() para completar (idempotente).'));
+       v_r := jsonb_build_object('materializado', false, 'erro', sqlerrm);
+   end;
+   return v_r;
+ end $$;
+-comment on function fn_materializar_fatos_da_extracao(uuid) is
++comment on function fn_materializar_fatos_da_extracao(uuid, text) is
+   '0243: fn_materializar_fatos + fn_fato_pendencia_da_versao para a versão recém-extraída, com o evento fatos_materializados (a prova de que RODOU: regra 7) e a baixa da pendência aberta das versões superadas. Tipo fora da lista: não faz nada e não grava evento. Falha: o evento fatos_materializacao_falhou, e a extração não é perdida (query_canceled não é engolido).';
+ 
+--- A fusão repõe os fatos da absorvida pela entidade sobrevivente (as duas do MESMO mandato), por função com guarda: o authenticated não escreve em fato.
++-- A fusão repõe os fatos da absorvida pela entidade sobrevivente (as duas do MESMO mandato), por função com guarda: o authenticated não escreve em fato, e esta função NÃO é um atalho para mover fato entre entidades: só reponta os de uma entidade que JÁ NÃO EXISTE
++-- (a fusão apaga a absorvida e depois chama; a FK é adiada, então o fato aponta para a apagada até aqui) — chamada direta, com as duas entidades vivas, recusa. Grava o evento.
+ create or replace function fn_fato_repontar_entidade(p_caso uuid, p_de uuid, p_para uuid)
+ returns int language plpgsql security definer set search_path = public, pg_temp as $$
+ declare v_n int;
+@@ -490,17 +562,25 @@ begin
+   if not fn_fato_pode_escrever(p_caso) then
+     raise exception 'fn_fato_repontar_entidade: sem permissão de escrita no mandato' using errcode = 'insufficient_privilege';
+   end if;
+-  if not exists (select 1 from entidade where id = p_de and caso_id = p_caso) or not exists (select 1 from entidade where id = p_para and caso_id = p_caso) then
+-    raise exception 'fn_fato_repontar_entidade: as duas entidades têm de ser do mandato %', p_caso;
++  if exists (select 1 from entidade where id = p_de) then
++    raise exception 'fn_fato_repontar_entidade: a entidade % ainda existe; só a fusão, que a apaga, reponta os fatos dela', p_de using errcode = 'insufficient_privilege';
++  end if;
++  if not exists (select 1 from entidade where id = p_para and caso_id = p_caso) then
++    raise exception 'fn_fato_repontar_entidade: a entidade % não é do mandato %', p_para, p_caso;
+   end if;
+-  update fato_financeiro set entidade_id = p_para where entidade_id = p_de;
++  update fato_financeiro f set entidade_id = p_para
++   where f.entidade_id = p_de and f.documento_versao_id in (select dv.id from documento_versao dv join documento d on d.id = dv.documento_id where d.caso_id = p_caso);
+   get diagnostics v_n = row_count;
++  if v_n > 0 then
++    insert into evento_auditoria (ator, acao, entidade_ref, depois)
++      values (fn_fato_ator(), 'fatos_repontados_pela_fusao', 'entidade:' || p_para, jsonb_build_object('entidade_absorvida', p_de, 'fatos', v_n));
++  end if;
+   return v_n;
+ end $$;
+ 
+-revoke all on function fn_materializar_fatos(uuid, text), fn_fato_pendencia_da_versao(uuid), fn_materializar_fatos_da_extracao(uuid), fn_fato_repontar_entidade(uuid, uuid, uuid) from public, anon;
++revoke all on function fn_materializar_fatos(uuid, text), fn_fato_pendencia_da_versao(uuid), fn_materializar_fatos_da_extracao(uuid, text), fn_fato_repontar_entidade(uuid, uuid, uuid) from public, anon;
+ grant execute on function fn_materializar_fatos(uuid, text), fn_fato_pendencia_da_versao(uuid) to service_role;
+-grant execute on function fn_materializar_fatos_da_extracao(uuid), fn_fato_repontar_entidade(uuid, uuid, uuid) to authenticated, service_role;
++grant execute on function fn_materializar_fatos_da_extracao(uuid, text), fn_fato_repontar_entidade(uuid, uuid, uuid) to authenticated, service_role;
+ 
+ -- -----------------------------------------------------------------------------
+ -- O fato segue o documento: corrigir a entidade, o período OU O TIPO do documento (a correção humana de entidade_incorreta/periodo_incorreto/tipo_incorreto, a fusão) leva os fatos.
+@@ -517,7 +597,7 @@ begin
+   if new.tipo_taxonomia is distinct from old.tipo_taxonomia then
+     if fn_tipo_gera_fato(new.tipo_taxonomia) and not fn_tipo_gera_fato(old.tipo_taxonomia) then
+       for v_v in select id from documento_versao where documento_id = new.id order by n_versao loop
+-        perform fn_materializar_fatos_da_extracao(v_v);
++        perform fn_materializar_fatos_da_extracao(v_v, fn_fato_ator());
+       end loop;
+       return null;
+     elsif fn_tipo_gera_fato(old.tipo_taxonomia) and not fn_tipo_gera_fato(new.tipo_taxonomia) then
+@@ -526,7 +606,7 @@ begin
+       update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:reclassificacao'
+        where documento_id = new.id and estado = 'aberta' and motivo like 'fato:conta_incerta:%';
+       insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+-        values ('sistema:0243', 'fatos_removidos_por_reclassificacao', 'documento:' || new.id,
++        values (fn_fato_ator(), 'fatos_removidos_por_reclassificacao', 'documento:' || new.id,
+                 jsonb_build_object('tipo_taxonomia', old.tipo_taxonomia), jsonb_build_object('tipo_taxonomia', new.tipo_taxonomia, 'fatos_removidos', v_n,
+                   'porque', 'o documento deixou de ser de demonstração; o fato é derivado, a linha extraída (evidência) continua'));
+       return null;
+@@ -548,6 +628,8 @@ begin
+ end $$;
+ revoke all on function fn_fato_segue_o_documento() from public, anon, authenticated;
+ 
++-- create trigger em documento (e em periodo e entidade, abaixo) segura lock até o COMMIT, e a migration roda o backfill na mesma transação: lock_timeout curto faz a aplicação FALHAR RÁPIDO (e se reaplica) em vez de esperar um lote do n8n e arriscar deadlock.
++set local lock_timeout = '5s';
+ drop trigger if exists trg_fato_segue_o_documento on documento;
+ create trigger trg_fato_segue_o_documento
+   after update of entidade_id, periodo_id, tipo_taxonomia on documento
+@@ -555,6 +637,45 @@ create trigger trg_fato_segue_o_documento
+   when (old.entidade_id is distinct from new.entidade_id or old.periodo_id is distinct from new.periodo_id or old.tipo_taxonomia is distinct from new.tipo_taxonomia)
+   execute function fn_fato_segue_o_documento();
+ 
++-- O CADASTRO DEPOIS: período ou entidade que passa a existir no mandato re-resolve os fatos NULOS dele (o "nulo com motivo" não pode ficar falso). Só os nulos do caso, e só quando há algum: o custo na prática é uma sondagem por índice.
++create or replace function fn_fato_reresolver_caso(p_caso uuid, p_dimensao text)
++returns int language plpgsql security definer set search_path = public, pg_temp as $$
++declare v_v uuid; v_n int := 0; v_k int;
++begin
++  for v_v in
++    select distinct f.documento_versao_id
++      from fato_financeiro f
++      join documento_versao dv on dv.id = f.documento_versao_id
++      join documento d on d.id = dv.documento_id
++     where d.caso_id = p_caso
++       and case p_dimensao when 'periodo' then f.periodo_id is null and f.periodo_motivo = 'periodo_da_coluna_nao_cadastrado'
++                           else f.entidade_id is null and f.entidade_motivo in ('coluna_sem_entidade_no_mandato', 'documento_sem_entidade', 'coluna_casa_varias_entidades', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade') end
++  loop
++    update fato_financeiro f
++       set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
++           periodo_id = r.periodo_id, periodo_origem = r.periodo_origem, periodo_motivo = r.periodo_motivo
++      from fn_fato_resolver(v_v, false) r
++     where r.campo_id = f.campo_extraido_id and (f.entidade_id is null or f.periodo_id is null)
++       and (f.entidade_id, f.entidade_origem, f.entidade_motivo, f.periodo_id, f.periodo_origem, f.periodo_motivo)
++           is distinct from (r.entidade_id, r.entidade_origem, r.entidade_motivo, r.periodo_id, r.periodo_origem, r.periodo_motivo);
++    get diagnostics v_k = row_count;
++    v_n := v_n + v_k;
++  end loop;
++  return v_n;
++end $$;
++revoke all on function fn_fato_reresolver_caso(uuid, text) from public, anon, authenticated;
++
++create or replace function fn_fato_cadastro_periodo() returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
++begin perform fn_fato_reresolver_caso(new.caso_id, 'periodo'); return null; end $$;
++create or replace function fn_fato_cadastro_entidade() returns trigger language plpgsql security definer set search_path = public, pg_temp as $$
++begin perform fn_fato_reresolver_caso(new.caso_id, 'entidade'); return null; end $$;
++revoke all on function fn_fato_cadastro_periodo(), fn_fato_cadastro_entidade() from public, anon, authenticated;
++drop trigger if exists trg_fato_cadastro_periodo on periodo;
++create trigger trg_fato_cadastro_periodo after insert on periodo for each row execute function fn_fato_cadastro_periodo();
++drop trigger if exists trg_fato_cadastro_entidade on entidade;
++create trigger trg_fato_cadastro_entidade after insert or update of razao_social on entidade for each row execute function fn_fato_cadastro_entidade();
++set local lock_timeout = 0;
++
+ -- -----------------------------------------------------------------------------
+ -- fn_registrar_campos_extraidos REEMITIDA: o corpo VIGENTE (o da 0231, conferido igual ao do banco montado; a 0233 e a 0240 só a citam) com UMA chamada nova no fim. Mesma assinatura de 6 argumentos, mesma ACL (o create or replace a preserva).
+ -- Quem chama: o nó "Gravar Campos (Sombra)" do n8n (N8N/build-workflow.mjs) e o reprocesso do portal; nenhum muda.
+@@ -907,7 +1028,7 @@ begin
+     raise exception 'a entidade "%" é controlada por "%", que está sendo fundida nela: a participação passaria a ser dela com ela mesma. Remova a participação (fn_entidade_definir_participacao) e a forma de controle e refaça a fusão.', v_para, v_de;
+   end if;
+ 
+-  -- 0243: quantos fatos têm a absorvida (contados ANTES do update do documento, cujo gatilho já leva os que herdaram dela). `fato_financeiro_entidade_id_fkey` é NO ACTION: sem repontar, o `delete from entidade` abaixo recusa a fusão INTEIRA.
++  -- 0243: quantos fatos têm a absorvida (contados ANTES do update do documento, cujo gatilho já leva os que herdaram dela). `fato_financeiro_entidade_id_fkey` é adiada: o fato aponta para a absorvida até fn_fato_repontar_entidade, logo depois do delete.
+   select count(*)::int into v_fatos from fato_financeiro where entidade_id = p_de_id;
+ 
+   update documento set entidade_id = p_para_id
+@@ -923,8 +1044,6 @@ begin
+    where caso_id = p_caso_id and entidade_id = p_de_id;
+   update reconciliacao set entidade_id = p_para_id
+    where caso_id = p_caso_id and entidade_id = p_de_id;
+-  -- 0243: o fato cuja entidade veio de uma COLUNA da linha (o do documento o gatilho de documento já levou); por função com guarda, o authenticated não escreve em fato.
+-  perform fn_fato_repontar_entidade(p_caso_id, p_de_id, p_para_id);
+ 
+   -- 0183: o controle declarado de A. Sem isto, o `on delete cascade` de entidade_controlador o
+   -- apagava junto com a linha (ver o item (10) da migration 0183).
+@@ -1005,6 +1124,8 @@ begin
+      and estado <> 'resolvida';
+ 
+   delete from entidade where id = p_de_id and caso_id = p_caso_id;
++  -- 0243: DEPOIS de apagar a absorvida (as FKs de dimensão de fato_financeiro são adiadas, então os fatos dela aguardam aqui) os fatos passam para a sobrevivente, por função com guarda: só reponta o fato de entidade que já não existe.
++  perform fn_fato_repontar_entidade(p_caso_id, p_de_id, p_para_id);
+ 
+   insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+   values (p_por, 'entidade_fundida', 'entidade:' || p_para_id,
+@@ -1085,8 +1206,8 @@ create or replace view instalacao_sonda_fato_financeiro_constraints as
+       ('fato_financeiro_metodo_ck', 'c', '''heuristica''::text'),
+       ('fato_financeiro_conta_metodo_ck', 'c', '(conta_id IS NULL)'),
+       ('fato_financeiro_motivo_ck', 'c', '''secao_fora_do_catalogo''::text'),
+-      ('fato_financeiro_entidade_ck', 'c', '''coluna_total_duplica_coluna_da_entidade''::text'),
+-      ('fato_financeiro_periodo_ck', 'c', '''coluna_nao_e_saldo''::text'),
++      ('fato_financeiro_entidade_ck', 'c', '''coluna_total_ambigua''::text'),
++      ('fato_financeiro_periodo_ck', 'c', '''mais_de_uma_coluna_para_o_mesmo_periodo''::text'),
+       ('fato_financeiro_origem_ck', 'c', '''backfill_0243''::text')
+     ) e(conname, contype, frag)
+     join pg_constraint c on c.conrelid = 'public.fato_financeiro'::regclass and c.conname = e.conname and c.contype = e.contype::"char"
+@@ -1134,7 +1255,17 @@ create or replace view instalacao_sonda_fato_financeiro_tipos as
+ comment on view instalacao_sonda_fato_financeiro_tipos is
+   'Sonda da 0243: uma linha = fn_tipo_gera_fato dá a resposta certa para um dos 10 tipos (BALANCO, BALANCETE, COMBINADO, DRE, FLUXO_CAIXA, DVA, DMPL, DF_AUDITADA geram; RAZAO e NOTAS_EXPL não). Menos de 10: um tipo de demonstração perdeu o fato, ou o que é só evidência virou fato.';
+ 
+-grant select on instalacao_sonda_fato_financeiro_tipos to authenticated, service_role;
++-- O authenticated SÓ LÊ fato_financeiro: nenhum privilégio de escrita (nem de coluna) e nenhuma policy de escrita (o `sem_privilegio` da 0218 varre o schema por papel; esta pergunta é desta tabela).
++create or replace view instalacao_sonda_fato_financeiro_authenticated_so_le as
++  select 1 as ok
++   where not has_any_column_privilege('authenticated', 'public.fato_financeiro'::regclass, 'insert')
++     and not has_any_column_privilege('authenticated', 'public.fato_financeiro'::regclass, 'update')
++     and not has_table_privilege('authenticated', 'public.fato_financeiro'::regclass, 'delete')
++     and not has_table_privilege('authenticated', 'public.fato_financeiro'::regclass, 'truncate')
++     and not exists (select 1 from pg_policy p where p.polrelid = 'public.fato_financeiro'::regclass and p.polcmd <> 'r');
++comment on view instalacao_sonda_fato_financeiro_authenticated_so_le is
++  'Sonda da 0243: uma linha = o authenticated não tem privilégio de escrita em fato_financeiro (tabela, coluna) nem policy de insert/update/delete. Zero linhas: o fato derivado voltou a ser gravável pelo portal (valor arbitrário, entidade de outro mandato).';
++grant select on instalacao_sonda_fato_financeiro_tipos, instalacao_sonda_fato_financeiro_authenticated_so_le to authenticated, service_role;
+ grant select on instalacao_sonda_fato_financeiro_constraints, instalacao_sonda_fato_financeiro_so_secao, instalacao_sonda_fato_financeiro_recentes,
+                 instalacao_sonda_fato_financeiro_pendencia_tipo to authenticated, service_role;  -- service_role: grant_views_service_role (0214)
+ 
+@@ -1165,14 +1296,18 @@ insert into instalacao_requisito
+    'Sem o on conflict a segunda chamada (o reenvio, o reparo) morre na FK única ou duplica a evidência.', 'importante', 1115),
+   ('materializa_conta_so_pela_secao', '0243', 'corpo', 'fn_fato_resolver', 'left join conta_canonica c on c.secao_canonica = a.secao', null,
+    'A conta do fato é a SEÇÃO da linha, pelo catálogo; sem seção, sem conta. Outro critério (o tipo do documento, a raiz) inventaria a conta.', 'importante', 1116),
+-  ('materializa_periodo_pela_coluna', '0243', 'corpo', 'fn_fato_resolver', 'fn_anos_texto(u.pcol)', null,
+-   'O período do fato é o da COLUNA da linha quando ela nomeia um ano; o do documento no balanço de duas colunas de ano atribui o saldo de 2024 a 2025.', 'importante', 1117),
+-  ('periodo_so_da_coluna_de_saldo', '0243', 'corpo', 'fn_fato_resolver', 'when fn_coluna_e_saldo(k.pcol) then k.doc_periodo', null,
+-   'Só a coluna de SALDO sem ano herda o período do documento: Débito, Crédito, Orçado, Variação e percentual com o mesmo período dão fatos idênticos em (conta, entidade, período) e a soma dobra (reproduzido: 1.310 no lugar de 150).', 'importante', 1118),
+-  ('periodo_parcial_nao_vai_para_o_ano', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_e_parcial(u.pcol, u.tipo', null,
+-   'Documento de período PARCIAL (balancete de junho) com coluna "2025" casava o período ANUAL 2025: o acumulado de junho virava a receita do ano.', 'importante', 1119),
+-  ('entidade_total_nao_duplica_a_coluna', '0243', 'corpo', 'fn_fato_resolver', 'when m.n = 0 and not k.vm', null,
+-   'A coluna total só é a entidade do documento quando nenhuma coluna do documento já casa essa entidade pelo nome (fn_coluna_entidade, 0023): sem isso a entidade recebe a coluna dela E o total.', 'importante', 1120),
++  ('materializa_periodo_pela_coluna', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_canonico(''outro'', c.pcol)', null,
++   'O período de outro ano vem da forma canônica da coluna de ano puro (31/12/AAAA = AAAA) que um período do MESMO mandato tem; sem isso o balanço de duas colunas de ano atribui o saldo de 2024 a 2025.', 'importante', 1117),
++  ('periodo_so_da_coluna_de_saldo', '0243', 'corpo', 'fn_fato_resolver', 'fn_coluna_e_saldo(c.pcol)', null,
++   'A coluna que É o período do documento é a de SALDO (fn_coluna_e_saldo, 0201): Débito, Crédito, Orçado, Variação e percentual com o mesmo período dão fatos idênticos em (conta, entidade, período) e a soma dobra.', 'importante', 1118),
++  ('periodo_parcial_nao_vai_para_o_ano', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_e_parcial(c.pcol, i.tipo', null,
++   'Documento de período PARCIAL (balancete de junho) não dá a coluna "2025" ao período anual: o acumulado de junho virava a receita do ano.', 'importante', 1119),
++  ('periodo_coluna_do_documento_so_se_unica', '0243', 'corpo', 'fn_fato_resolver', 'count(*) filter (where y is not null and (saldo or e_ano_do_doc)) = 1', null,
++   'Com duas candidatas a ser a coluna do período do documento (Jun/2025 e 30/06/2025; Saldo final e Saldo atual) nenhuma é escolhida: fn_coluna_periodo_do_ano desempata por contagem e ordem alfabética, e "ao acaso" é número fabricado (a soma de 4 colunas deu 500).', 'importante', 1120),
++  ('entidade_pela_funcao_do_banco', '0243', 'corpo', 'fn_fato_resolver', 'fn_coluna_entidade(v.documento_versao_id, e.id)', null,
++   'A entidade da coluna é a que fn_coluna_entidade (0023/0030, com fn_mesma_entidade) escolhe: um casamento de nome próprio errou "Alfa Comércio" x "ALFA COMERCIO DE ALIMENTOS LTDA" e deu o Consolidado à ALFA com a coluna dela nula.', 'importante', 1127),
++  ('entidade_total_so_se_unica', '0243', 'corpo', 'fn_fato_resolver', 'coalesce(t.n, 0) <= 1', null,
++   'fn_coluna_entidade entrega "a" coluna total sem ordem: com mais de uma coluna total no documento a escolha é arbitrária e a entidade fica sem coluna total.', 'importante', 1128),
+   ('tipos_que_geram_fato', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_tipos', null, 10,
+    'A lista dos tipos de demonstração perdeu um tipo (linha de demonstração fica sem fato), ou ganhou Razão/Notas (o que é só evidência vira fato). Conferida tipo a tipo, não pelo corpo.', 'importante', 1121),
+   ('pendencia_uma_por_versao', '0243', 'corpo', 'fn_fato_pendencia_da_versao', '''fato:conta_incerta:''', null,
+@@ -1183,6 +1318,26 @@ insert into instalacao_requisito
+    'Sem ele corrigir a entidade, o período ou o tipo do documento deixa os fatos com a identidade ANTIGA (ou sem fato, ou com fato de documento que deixou de ser demonstração), em silêncio.', 'importante', 1124),
+   ('fundir_entidade_leva_os_fatos', '0243', 'corpo', 'fn_fundir_entidade', 'fatos_repontados', null,
+    'Corpo anterior à 0243: com a FK de fato_financeiro.entidade_id a fusão falha em `delete from entidade` (e antes dela os fatos apontariam para uma entidade que não existe).', 'importante', 1125),
++  ('fato_authenticated_so_le', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_authenticated_so_le', null, 1,
++   'O authenticated ganhou privilégio ou policy de escrita em fato_financeiro: o portal pode gravar fato arbitrário (valor 999999999 em subtotal) e repor a entidade para a de OUTRO mandato.', 'importante', 1129),
++  ('fato_guarda_de_escrita_corpo', '0243', 'corpo', 'fn_fato_pode_escrever', 'fn_pode_escrever_caso(p_caso)', null,
++   'A guarda de escrita (serviço ou quem escreve no mandato) foi trocada (por `select true`, por exemplo): a função security definer escreve fato para qualquer chamador.', 'importante', 1130),
++  ('fato_guarda_de_escrita_search_path', '0243', 'corpo', 'fn_fato_pode_escrever', 'SET search_path TO ''public'', ''pg_temp''', null,
++   'Função security definer sem search_path fixo: um schema do chamador na frente do public sequestra fn_pode_escrever_caso.', 'importante', 1131),
++  ('materializa_chama_a_guarda', '0243', 'corpo', 'fn_materializar_fatos', 'fn_fato_pode_escrever(v_caso)', null,
++   'fn_materializar_fatos é security definer: sem chamar a guarda, qualquer authenticated com execute materializa fato em qualquer mandato.', 'importante', 1132),
++  ('extracao_nova_chama_a_guarda', '0243', 'corpo', 'fn_materializar_fatos_da_extracao', 'fn_fato_pode_escrever(v_caso)', null,
++   'fn_materializar_fatos_da_extracao é security definer e o authenticated a executa: sem a guarda, o Analista não alocado materializa fato (e abre pendência) em outro mandato.', 'importante', 1133),
++  ('repontar_chama_a_guarda', '0243', 'corpo', 'fn_fato_repontar_entidade', 'fn_fato_pode_escrever(p_caso)', null,
++   'fn_fato_repontar_entidade é security definer e o authenticated a executa: sem a guarda, qualquer um reponta fato de um mandato para o outro.', 'importante', 1134),
++  ('repontar_so_entidade_apagada', '0243', 'corpo', 'fn_fato_repontar_entidade', 'if exists (select 1 from entidade where id = p_de)', null,
++   'fn_fato_repontar_entidade só pode mover fato de entidade que já foi apagada (a fusão); com a entidade viva era um atalho para o Analista mover fato de ALFA para BETA sem fusão nem evento.', 'importante', 1135),
++  ('materializa_reresolve_o_nulo', '0243', 'corpo', 'fn_materializar_fatos', 'fn_fato_resolver(p_documento_versao_id, false) r', null,
++   'fn_materializar_fatos() também re-resolve os fatos de identidade nula: período ou entidade cadastrado depois (4.479 fatos em produção) não pode deixar o "nulo com motivo" falso.', 'importante', 1136),
++  ('fato_cadastro_periodo_gatilho', '0243', 'gatilho', 'periodo.trg_fato_cadastro_periodo', 'fn_fato_cadastro_periodo', null,
++   'Sem ele o período cadastrado depois da extração não re-resolve os fatos nulos do mandato.', 'importante', 1137),
++  ('fato_cadastro_entidade_gatilho', '0243', 'gatilho', 'entidade.trg_fato_cadastro_entidade', 'fn_fato_cadastro_entidade', null,
++   'Sem ele a entidade cadastrada (ou renomeada) depois da extração não re-resolve os fatos nulos do mandato.', 'importante', 1138),
+   ('fato_mesmo_caso_gatilho', '0243', 'gatilho', 'fato_financeiro.trg_fato_mesmo_caso', 'fn_fato_mesmo_caso', null,
+    'Sem ele a entidade ou o período de um fato podem ser de OUTRO mandato (a escrita só passa por funções, mas a garantia tem de ser do banco).', 'importante', 1126)
+ on conflict (chave) do update set
+@@ -1192,7 +1347,7 @@ on conflict (chave) do update set
+ 
+ update instalacao_cobertura
+    set ate_migration = '0243', revisado_em = current_date,
+-       observacao = 'A 0243 cria fato_financeiro (o fato acima de campo_extraido: conta = seção, entidade e período pela coluna da linha), a materialização, a pendência conta_canonica_incerta (uma por versão, só extração nova), o backfill sem pendência, o gatilho do documento, reemite fn_registrar_campos_extraidos e fn_fundir_entidade, 5 views de sonda e 20 requisitos novos (ordem 1105-1126).'
++       observacao = 'A 0243 cria fato_financeiro (o fato acima de campo_extraido: conta = seção, entidade e período pela coluna da linha), a materialização, a pendência conta_canonica_incerta (uma por versão, só extração nova), o backfill sem pendência, o gatilho do documento, reemite fn_registrar_campos_extraidos e fn_fundir_entidade, 5 views de sonda e 32 requisitos novos (ordem 1105-1138).'
+  where id = true;
+ 
+ commit;
+diff --git a/Supabase/test/fato_financeiro.test.sql b/Supabase/test/fato_financeiro.test.sql
+index 2fdee91..7cac6c5 100644
+--- a/Supabase/test/fato_financeiro.test.sql
++++ b/Supabase/test/fato_financeiro.test.sql
+@@ -13,7 +13,7 @@
+ --   (g) o período da COLUNA prevalece sobre o do documento quando diferem; coluna de ano sem período no mandato deixa o período explícito e NULO (o período não é criado); a entidade pela coluna (uma entidade, o total
+ --       do documento, a eliminação que não é entidade);
+ --   (h) o fato segue o documento (corrigir a entidade/o período do documento leva os fatos que herdaram dele, não os que vieram de uma coluna); (i) a fusão de entidade leva os fatos (a FK não a derruba);
+---   (j) o acesso: sem papel lê zero, Sócio lê, o Analista alocado materializa pelo caminho do portal; (k) a sonda: os 20 requisitos presentes e ela ACUSA cada guarda removida (não está cega);
++--   (j) o acesso: sem papel lê zero, Sócio lê, o Analista alocado materializa pelo caminho do portal; (k) a sonda: os 32 requisitos presentes e ela ACUSA cada guarda removida (não está cega);
+ --   (g2) a coluna que não é saldo (A1), o período parcial (A2) e o total que duplica a coluna da entidade (M1); (g3) o tipo do documento (M2), a ordem real registrar-depois-preencher (M3), a versão superada (M4), o cancelamento não engolido (M7), a guarda de mesmo mandato (M5).
+ --
+ -- HONESTIDADE (regra 4): as fixtures de vertentes e canastra são sintéticas e não trazem o arranjo que produção traz de linhas com entidade_coluna sem entidade cadastrada nem o de duas colunas de ano de um balanço real;
+@@ -191,7 +191,7 @@ begin
+ 
+   raise notice '--- g. período e entidade: a coluna da linha vence o documento ---';
+   select periodo_id, periodo_origem into v_x from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_a and ce.chave = 'Caixa' and ce.periodo_coluna = '2025';
+-  perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p25 and v_x.periodo_origem = 'coluna', 'coluna 2025 = o período 2025 do mandato (que é também o do documento)', v_x::text);
++  perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p25 and v_x.periodo_origem = 'documento', 'coluna 2025 de um documento de 2025, a ÚNICA coluna do ano do documento: o período do documento', v_x::text);
+   select periodo_id, periodo_origem into v_x from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_a and ce.chave = 'Caixa' and ce.periodo_coluna = '2024';
+   perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p24 and v_x.periodo_id <> (select periodo_id from documento d join documento_versao dv on dv.documento_id = d.id where dv.id = v_a) and v_x.periodo_origem = 'coluna',
+     'coluna 2024 numa DOCUMENTO de 2025 = o período 2024: a coluna prevalece sobre o do documento', v_x::text);
+@@ -199,7 +199,8 @@ begin
+   perform pg_temp.teste_assert_ff(v_x.periodo_id is null and v_x.periodo_origem is null and v_x.periodo_coluna = '2023' and (select f2.periodo_motivo from fato_financeiro f2 join campo_extraido c2 on c2.id = f2.campo_extraido_id where f2.documento_versao_id = v_a and c2.chave = 'Fornecedores') = 'periodo_da_coluna_nao_cadastrado', 'coluna 2023 sem período no mandato: periodo_id NULO, a coluna fica explícita (o período não é inventado nem criado)', v_x::text);
+   perform pg_temp.teste_assert_ff(not exists (select 1 from periodo where caso_id = v_caso and fn_periodo_canonico(tipo, referencia) = '2023'), 'e o período 2023 NÃO foi criado pela materialização');
+   select periodo_id, periodo_origem into v_x from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_a and ce.chave = 'Capital social';
+-  perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p25 and v_x.periodo_origem = 'documento', 'linha sem coluna de período: o período do documento', v_x::text);
++  perform pg_temp.teste_assert_ff(v_x.periodo_id is null and (select f2.periodo_motivo from fato_financeiro f2 join campo_extraido c2 on c2.id = f2.campo_extraido_id where f2.documento_versao_id = v_a and c2.chave = 'Capital social') = 'linha_sem_coluna_em_documento_com_colunas',
++    'linha SEM coluna num documento que TEM colunas: período nulo e explicado (a regra de fn_linha_vale_para_ano, 0195: só a coluna escolhida vale)', v_x::text);
+   select periodo_id, periodo_origem into v_x from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_a and ce.chave = 'Caixa inicial';
+   perform pg_temp.teste_assert_ff(v_x.periodo_id is null and v_x.periodo_origem is null and (select f2.periodo_motivo from fato_financeiro f2 join campo_extraido c2 on c2.id = f2.campo_extraido_id where f2.documento_versao_id = v_a and c2.chave = 'Caixa inicial') = 'coluna_de_abertura', 'coluna "Saldo Inicial" é o ano ANTERIOR ao do documento: período NULO e explicado (coluna_de_abertura), não o do documento', v_x::text);
+   select entidade_id, entidade_origem into v_x from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_a and ce.chave = 'Capital social';
+@@ -308,8 +309,8 @@ begin
+   raise notice '--- h. o fato segue o documento ---';
+   -- A: o período do documento passa de 2025 para 2024 (correção humana de periodo_incorreto); a entidade de ALFA para BETA
+   update documento set periodo_id = v_p24 where id = (select documento_id from documento_versao where id = v_a);
+-  select periodo_id into v_x from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_a and ce.chave = 'Capital social';
+-  perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p24, 'corrigir o período do documento leva o fato que o herdou dele (linha sem coluna)', v_x::text);
++  select periodo_id into v_x from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_a and ce.chave = 'Caixa' and ce.periodo_coluna = '2024';
++  perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p24, 'corrigir o período do documento (agora 2024) leva a coluna 2024, que passa a ser a do documento', v_x::text);
+   select periodo_id into v_x from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_a and ce.chave = 'Caixa' and ce.periodo_coluna = '2025';
+   perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p25, 'e NÃO leva o fato cujo período veio de uma COLUNA (a coluna 2025 continua 2025)', v_x::text);
+   update documento set entidade_id = v_beta where id = (select documento_id from documento_versao where id = v_a);
+@@ -321,17 +322,18 @@ begin
+ end $$;
+ 
+ -- ---------------------------------------------------------------------------------------------------------------
+--- g2. A coluna que não é saldo, o período parcial, o total que duplica a coluna da entidade (os achados A1, A2 e M1 da revisão independente, reproduzidos com linhas sintéticas: a REGRA).
++-- g2. O CRITÉRIO NOVO: a 0243 não interpreta nome de coluna; só atribui período e entidade quando a função do banco decide de forma INEQUÍVOCA, senão nulo com motivo (os achados A1, A2, M1 e a 2ª revisão, com linhas sintéticas: a REGRA).
+ do $$
+ declare
+-  v_caso uuid; v_hold uuid; v_p25 uuid; v_ver uuid; v_n int; v_s numeric; v_x record; v_docp uuid; v_pm uuid;
++  v_caso uuid; v_hold uuid; v_sub uuid; v_p25 uuid; v_ver uuid; v_n int; v_s numeric; v_x record; v_pm uuid; v_alfa uuid;
+ begin
+-  raise notice '--- g2. colunas que não são saldo, período parcial, total que duplica ---';
++  raise notice '--- g2. período e entidade só quando a função do banco decide ---';
+   v_caso := (fn_upsert_caso('0243: colunas do balancete'))::uuid;
+   v_hold := fn_upsert_entidade(v_caso, 'HOLDING P27 LTDA');
++  v_sub := fn_upsert_entidade(v_caso, 'SUB P27 LTDA');
+   v_p25 := fn_upsert_periodo(v_caso, 'anual', '2025');
+ 
+-  -- A1: o balancete de seis colunas (o arranjo reproduzido: Saldo Anterior 100, Débito 500, Crédito 450, Saldo Atual 150, Variação 50, Orçado 160)
++  -- A1: o balancete de seis colunas (Saldo Anterior 100, Débito 500, Crédito 450, Saldo Atual 150, Variação 50, Orçado 160): só o Saldo Atual é o período do documento
+   v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '2025', 'BALANCETE', 'p27-a1', jsonb_build_array(
+     pg_temp.l('Caixa', '100', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Saldo Anterior'),
+     pg_temp.l('Caixa', '500', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Débito'),
+@@ -341,34 +343,86 @@ begin
+     pg_temp.l('Caixa', '160', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Orçado')));
+   select count(*) into v_n from fato_financeiro where documento_versao_id = v_ver;
+   perform pg_temp.teste_assert_ff(v_n = 6, 'A1: as seis colunas viram seis fatos (nenhuma linha é descartada)', v_n::text);
+-  select sum(f.valor) into v_s from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_id = v_p25;
+-  perform pg_temp.teste_assert_ff(v_s = 150, 'A1: somar o fato da conta no período do documento dá 150 (o Saldo Atual), não 1.310', v_s::text);
+-  select count(*) into v_n from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_id is null and f.periodo_origem is null and f.periodo_motivo = 'coluna_nao_e_saldo';
+-  perform pg_temp.teste_assert_ff(v_n = 4, 'A1: Débito, Crédito, Variação e Orçado ficam com período NULO e o motivo coluna_nao_e_saldo', v_n::text);
++  select sum(f.valor) into v_s from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_id is not null;
++  perform pg_temp.teste_assert_ff(v_s = 150, 'A1: somar o fato da conta no período dá 150 (o Saldo Atual), não 1.310', v_s::text);
++  select count(*) into v_n from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_id is null and f.periodo_origem is null and f.periodo_motivo = 'coluna_nao_e_o_periodo_do_documento';
++  perform pg_temp.teste_assert_ff(v_n = 4, 'A1: Débito, Crédito, Variação e Orçado ficam com período NULO e o motivo coluna_nao_e_o_periodo_do_documento', v_n::text);
+   perform pg_temp.teste_assert_ff((select f.periodo_motivo from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_coluna = 'Saldo Anterior') = 'coluna_de_abertura', 'A1: Saldo Anterior segue nulo com o motivo coluna_de_abertura');
+-  select count(*) into v_n from (select 1 from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_id is not null group by f.conta_id, f.entidade_id, f.periodo_id having count(*) > 1) x;
+-  perform pg_temp.teste_assert_ff(v_n = 0, 'A1: nenhum par (conta, entidade, período) tem dois fatos', v_n::text);
+ 
+-  -- A2: balancete de JUNHO (período parcial) com coluna 2025: o acumulado de junho NÃO vai para o ano 2025, que o mandato também tem
++  -- documento SEM coluna nenhuma: a linha é do período do documento
++  v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '2025', 'BALANCO', 'p27-sc', jsonb_build_array(pg_temp.l('Caixa SC', '5', 'ativo_circulante', 'ATIVO CIRCULANTE')));
++  select f.periodo_id, f.periodo_origem into v_x from fato_financeiro f where f.documento_versao_id = v_ver;
++  perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p25 and v_x.periodo_origem = 'documento', 'documento sem coluna de período: o período do documento', v_x::text);
++
++  -- A2 (2ª revisão), balancete de JUNHO com colunas de mês e de data: nenhuma é INEQUÍVOCA (a função desempata ao acaso), então nenhuma recebe o período; antes a soma dava 500
+   v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '06/2025', 'BALANCETE', 'p27-a2', jsonb_build_array(
+-    pg_temp.l('Receita acumulada', '900', 'receita_bruta', 'RECEITA', '2025'),
+-    pg_temp.l('Receita acumulada', '700', 'receita_bruta', 'RECEITA', '2024')), 'mes');
++    pg_temp.l('Receita acumulada', '100', 'receita_bruta', 'RECEITA', 'Mai/2025'),
++    pg_temp.l('Receita acumulada', '150', 'receita_bruta', 'RECEITA', 'Jun/2025'),
++    pg_temp.l('Receita acumulada', '120', 'receita_bruta', 'RECEITA', '31/05/2025'),
++    pg_temp.l('Receita acumulada', '130', 'receita_bruta', 'RECEITA', '30/06/2025')), 'mes');
+   select d.periodo_id into v_pm from documento d join documento_versao dv on dv.documento_id = d.id where dv.id = v_ver;
+   perform pg_temp.teste_assert_ff(v_pm is not null and v_pm <> v_p25, 'A2: arranjo: o mandato tem o período anual 2025 e o documento é do período parcial 06/2025', v_pm::text);
+-  select f.periodo_id, f.periodo_origem, f.periodo_motivo into v_x from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_coluna = '2025';
+-  perform pg_temp.teste_assert_ff(v_x.periodo_id = v_pm and v_x.periodo_origem = 'documento', 'A2: a coluna 2025 do balancete de junho vai para o período do DOCUMENTO (junho), nunca para o anual', v_x::text);
+-  select f.periodo_id, f.periodo_origem, f.periodo_motivo into v_x from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_coluna = '2024';
+-  perform pg_temp.teste_assert_ff(v_x.periodo_id is null and v_x.periodo_motivo = 'periodo_parcial_fora_do_ano', 'A2: a coluna 2024 de um documento parcial de 2025: nulo, periodo_parcial_fora_do_ano', v_x::text);
+-
+-  -- M1: a coluna da própria entidade E o total: o total não soma de novo (HOLDING com 10, 25 e -5 na revisão)
+-  v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '2025', 'BALANCO', 'p27-m1', jsonb_build_array(
++  select coalesce(sum(f.valor) filter (where f.periodo_id is not null), 0), count(*) filter (where f.periodo_id is not null) into v_s, v_n from fato_financeiro f where f.documento_versao_id = v_ver;
++  perform pg_temp.teste_assert_ff(v_n = 0 and v_s = 0, 'A2: Mai/2025, Jun/2025, 31/05/2025 e 30/06/2025: nenhuma recebe o período (antes somavam 500)', v_n || ' com período; soma ' || v_s);
++  -- a DRE de junho: Jun/2025, Acumulado 2025, 1T2025, 2T2025 (antes somavam 435)
++  v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '06/2025', 'DRE', 'p27-a2b', jsonb_build_array(
++    pg_temp.l('Receita', '100', 'receita_bruta', 'RECEITA', 'Jun/2025'),
++    pg_temp.l('Receita', '135', 'receita_bruta', 'RECEITA', 'Acumulado 2025'),
++    pg_temp.l('Receita', '80', 'receita_bruta', 'RECEITA', '1T2025'),
++    pg_temp.l('Receita', '120', 'receita_bruta', 'RECEITA', '2T2025')), 'mes');
++  select count(*) filter (where f.periodo_id is not null) into v_n from fato_financeiro f where f.documento_versao_id = v_ver;
++  perform pg_temp.teste_assert_ff(v_n = 0, 'A2: DRE de junho com Jun/2025, Acumulado 2025, 1T2025 e 2T2025: nenhuma recebe o período (antes somavam 435)', v_n::text);
++  -- documento PARCIAL com colunas de ANO puro (2025 e 2024) e sem saldo: nem a do ano do documento vale (o acumulado do semestre não é o ano), nem a de outro ano (documento parcial)
++  v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '06/2025', 'BALANCETE', 'p27-a2d', jsonb_build_array(
++    pg_temp.l('Receita acumulada', '900', 'receita_bruta', 'RECEITA', '2025'),
++    pg_temp.l('Receita acumulada', '700', 'receita_bruta', 'RECEITA', '2024')), 'mes');
++  select count(*) filter (where f.periodo_id is not null) into v_n from fato_financeiro f where f.documento_versao_id = v_ver;
++  perform pg_temp.teste_assert_ff(v_n = 0, 'A2: balancete de junho com colunas 2025 e 2024 e sem saldo: nenhuma recebe período (documento parcial não dá o ano a coluna nenhuma)', v_n::text);
++  -- Saldo Atual 150, Orçado 2025, AV% 2025, Var. 2025 x 2024 (antes somavam 342): só o Saldo Atual
++  v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '06/2025', 'BALANCETE', 'p27-a2c', jsonb_build_array(
++    pg_temp.l('Caixa', '150', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Saldo Atual'),
++    pg_temp.l('Caixa', '160', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Orçado 2025'),
++    pg_temp.l('Caixa', '12', 'ativo_circulante', 'ATIVO CIRCULANTE', 'AV% 2025'),
++    pg_temp.l('Caixa', '20', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Var. 2025 x 2024')), 'mes');
++  select coalesce(sum(f.valor) filter (where f.periodo_id is not null), 0), count(*) filter (where f.periodo_id is not null) into v_s, v_n from fato_financeiro f where f.documento_versao_id = v_ver;
++  perform pg_temp.teste_assert_ff(v_s = 150 and v_n = 1 and (select f.periodo_id from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_coluna = 'Saldo Atual') = v_pm, 'A2: Saldo Atual + Orçado 2025 + AV% 2025 + Var. 2025 x 2024: só o Saldo Atual recebe o período (150, não 342)', v_n || ' com período; soma ' || v_s);
++
++  -- M1 + 2ª revisão (entidade pela função do banco): o COMBINADO da HOLDING com colunas por empresa, eliminações, total das eliminações e consolidado
++  v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '2025', 'COMBINADO', 'p27-m1', jsonb_build_array(
+     pg_temp.l('Caixa M1', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'HOLDING P27 LTDA'),
+-    pg_temp.l('Caixa M1', '25', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Combinado'),
+-    pg_temp.l('Caixa M1', '-5', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Eliminações')));
++    pg_temp.l('Caixa M1', '20', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'SUB P27 LTDA'),
++    pg_temp.l('Caixa M1', '-5', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Eliminações'),
++    pg_temp.l('Caixa M1', '-5', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Total Eliminações'),
++    pg_temp.l('Caixa M1', '25', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Consolidado')));
+   select sum(f.valor) into v_s from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_id = v_hold;
+   perform pg_temp.teste_assert_ff(v_s = 10, 'M1: a HOLDING recebe só a coluna dela (10), não 10 + 25 + (-5)', v_s::text);
+-  select f.entidade_id, f.entidade_motivo into v_x from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_coluna = 'Combinado';
+-  perform pg_temp.teste_assert_ff(v_x.entidade_id is null and v_x.entidade_motivo = 'coluna_total_duplica_coluna_da_entidade', 'M1: o total fica sem entidade, com o motivo coluna_total_duplica_coluna_da_entidade', v_x::text);
++  select sum(f.valor) into v_s from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_id = v_sub;
++  perform pg_temp.teste_assert_ff(v_s = 20, 'a SUB recebe a coluna dela (20)', v_s::text);
++  select count(*) into v_n from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_id is null and f.entidade_motivo in ('coluna_total_nao_escolhida', 'coluna_sem_entidade_no_mandato');
++  perform pg_temp.teste_assert_ff(v_n = 3, 'as colunas Eliminações, Total Eliminações e Consolidado ficam sem entidade, com o motivo', v_n::text);
++
++  -- duas colunas TOTAL (Consolidado e Total Geral) e nenhuma coluna da própria HOLDING: fn_coluna_entidade entrega "a" total sem ordem, então a escolha é arbitrária e nenhuma vale
++  v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '2025', 'COMBINADO', 'p27-e2', jsonb_build_array(
++    pg_temp.l('Caixa E2', '25', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Consolidado'),
++    pg_temp.l('Caixa E2', '30', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Total Geral')));
++  select count(*) into v_n from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_id is null and f.entidade_motivo in ('coluna_total_ambigua', 'coluna_total_nao_escolhida');
++  perform pg_temp.teste_assert_ff(v_n = 2 and exists (select 1 from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_motivo = 'coluna_total_ambigua'),
++    'duas colunas total e nenhuma da entidade: nenhuma é a do dono (a que a função escolhe é coluna_total_ambigua, a outra coluna_total_nao_escolhida)', v_n::text);
++  -- documento que TEM coluna de entidade: a linha SEM coluna de entidade não tem dono inequívoco
++  v_ver := pg_temp.doc(v_caso, 'HOLDING P27 LTDA', '2025', 'COMBINADO', 'p27-e3', jsonb_build_array(
++    pg_temp.l('Caixa E3', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'HOLDING P27 LTDA'),
++    pg_temp.l('Caixa E3', '7', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025')));
++  select count(*) into v_n from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_id is null and f.entidade_motivo = 'linha_sem_coluna_em_documento_com_colunas_de_entidade';
++  perform pg_temp.teste_assert_ff(v_n = 1, 'a linha sem entidade_coluna num documento com colunas de entidade fica sem entidade (não soma ao dono)', v_n::text);
++
++  -- 2ª revisão: o nome da coluna é abreviado em relação à razão social ("Alfa Comércio" x "ALFA COMERCIO DE ALIMENTOS LTDA"): fn_mesma_entidade casa, a igualdade de nome não casava
++  v_alfa := fn_upsert_entidade(v_caso, 'ALFA COMERCIO DE ALIMENTOS LTDA');
++  v_ver := pg_temp.doc(v_caso, 'ALFA COMERCIO DE ALIMENTOS LTDA', '2025', 'COMBINADO', 'p27-alfa', jsonb_build_array(
++    pg_temp.l('Caixa ALFA', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio'),
++    pg_temp.l('Caixa ALFA', '25', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Consolidado')));
++  select sum(f.valor) into v_s from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_id = v_alfa;
++  perform pg_temp.teste_assert_ff(v_s = 10 and (select f.entidade_origem from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_coluna = 'Alfa Comércio') = 'coluna', 'a coluna "Alfa Comércio" é da ALFA COMERCIO DE ALIMENTOS LTDA (10); o Consolidado não vira dela de novo', v_s::text);
++  perform pg_temp.teste_assert_ff((select f.entidade_id from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_coluna = 'Consolidado') is null, 'e o Consolidado fica sem entidade (a ALFA já tem a coluna dela)');
+ end $$;
+ 
+ -- ---------------------------------------------------------------------------------------------------------------
+@@ -406,15 +460,15 @@ begin
+   -- M3: a ORDEM REAL do n8n: as linhas chegam ANTES de o documento ter entidade e período (o diagnóstico preenche depois). O resultado tem de ser o da ordem inversa.
+   v_k1 := pg_temp.doc(v_caso, 'ORDEM P27 LTDA', '2025', 'BALANCO', 'p27-k1', jsonb_build_array(
+     pg_temp.l('Caixa K', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Saldo Atual', 'Consolidado'),
+-    pg_temp.l('Estoque K', '20', 'ativo_circulante', 'ATIVO CIRCULANTE')));
++    pg_temp.l('Estoque K', '20', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Saldo Atual', 'Consolidado')));
+   v_k2 := (fn_registrar_documento(v_caso, 'ORDEM P27 LTDA', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage', '0243/p27-k2.pdf', 'p27-k2.pdf', true, 'p27-k2', 'ok')->>'documento_versao_id')::uuid;
+   select documento_id into v_doc from documento_versao where id = v_k2;
+   update documento set entidade_id = null, periodo_id = null where id = v_doc;
+   perform fn_registrar_campos_extraidos(v_k2, jsonb_build_array(
+     pg_temp.l('Caixa K', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Saldo Atual', 'Consolidado'),
+-    pg_temp.l('Estoque K', '20', 'ativo_circulante', 'ATIVO CIRCULANTE')));
+-  select count(*) into v_n from fato_financeiro where documento_versao_id = v_k2 and entidade_id is null and periodo_id is null and entidade_motivo = 'documento_sem_entidade' and periodo_motivo = 'documento_sem_periodo';
+-  perform pg_temp.teste_assert_ff(v_n = 2, 'M3: com o documento ainda sem entidade e período, os fatos ficam NULOS com o motivo documento_sem_*', v_n::text);
++    pg_temp.l('Estoque K', '20', 'ativo_circulante', 'ATIVO CIRCULANTE', 'Saldo Atual', 'Consolidado')));
++  select count(*) into v_n from fato_financeiro where documento_versao_id = v_k2 and entidade_id is null and periodo_id is null and entidade_motivo is not null and periodo_motivo is not null;
++  perform pg_temp.teste_assert_ff(v_n = 2, 'M3: com o documento ainda sem entidade e período, os fatos ficam NULOS e explicados', v_n::text);
+   update documento set entidade_id = v_ent, periodo_id = v_per where id = v_doc;
+   select count(*) into v_dif from (
+     select ce.chave, f.entidade_id, f.entidade_origem, f.entidade_motivo, f.periodo_id, f.periodo_origem, f.periodo_motivo
+@@ -467,6 +521,71 @@ begin
+   perform pg_temp.teste_assert_ff(v_t = '23514', 'M5: entidade de OUTRO mandato num fato é recusada (check_violation)', v_t);
+ end $$;
+ 
++-- ---------------------------------------------------------------------------------------------------------------
++-- g4. O "nulo com motivo" não pode ficar FALSO: período ou entidade cadastrado depois re-resolve os fatos nulos (gatilho) e fn_materializar_fatos() re-resolve os existentes (reparo).
++do $$
++declare
++  v_caso uuid; v_ent uuid; v_p25 uuid; v_p23 uuid; v_f uuid; v_ver uuid; v_ver2 uuid; v_x record; v_r jsonb; v_n int;
++begin
++  raise notice '--- g4. cadastro depois re-resolve o nulo ---';
++  v_caso := (fn_upsert_caso('0243: cadastro depois'))::uuid;
++  v_ent := fn_upsert_entidade(v_caso, 'CAD P27 LTDA');
++  v_p25 := fn_upsert_periodo(v_caso, 'anual', '2025');
++  v_ver := pg_temp.doc(v_caso, 'CAD P27 LTDA', '2025', 'BALANCO', 'p27-cad', jsonb_build_array(
++    pg_temp.l('Caixa CAD', '1', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'FILHA CAD P27 LTDA'),
++    pg_temp.l('Caixa CAD', '2', 'ativo_circulante', 'ATIVO CIRCULANTE', '2023')));
++  select f.periodo_id, f.periodo_motivo into v_x from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_coluna = '2023';
++  perform pg_temp.teste_assert_ff(v_x.periodo_id is null and v_x.periodo_motivo = 'periodo_da_coluna_nao_cadastrado', 'antes do cadastro: a coluna 2023 fica nula, periodo_da_coluna_nao_cadastrado', v_x::text);
++  select f.entidade_id, f.entidade_motivo into v_x from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_coluna = 'FILHA CAD P27 LTDA';
++  perform pg_temp.teste_assert_ff(v_x.entidade_id is null and v_x.entidade_motivo = 'coluna_sem_entidade_no_mandato', 'antes do cadastro: a coluna FILHA fica sem entidade, coluna_sem_entidade_no_mandato', v_x::text);
++  v_p23 := fn_upsert_periodo(v_caso, 'anual', '2023');
++  select f.periodo_id, f.periodo_origem, f.periodo_motivo into v_x from fato_financeiro f where f.documento_versao_id = v_ver and f.periodo_coluna = '2023';
++  perform pg_temp.teste_assert_ff(v_x.periodo_id = v_p23 and v_x.periodo_origem = 'coluna' and v_x.periodo_motivo is null, 'cadastrar o período 2023 DEPOIS re-resolve o fato nulo (o gatilho do cadastro)', v_x::text);
++  v_f := fn_upsert_entidade(v_caso, 'FILHA CAD P27 LTDA');
++  select f.entidade_id, f.entidade_origem into v_x from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_coluna = 'FILHA CAD P27 LTDA';
++  perform pg_temp.teste_assert_ff(v_x.entidade_id = v_f and v_x.entidade_origem = 'coluna', 'cadastrar a entidade FILHA depois re-resolve o fato nulo', v_x::text);
++
++  -- o reparo: com os gatilhos de cadastro desligados o nulo fica; fn_materializar_fatos() o re-resolve
++  begin
++    alter table periodo disable trigger trg_fato_cadastro_periodo;
++  exception when undefined_object then null;   -- gatilho já removido
++  end;
++  v_ver2 := pg_temp.doc(v_caso, 'CAD P27 LTDA', '2025', 'BALANCO', 'p27-cad2', jsonb_build_array(pg_temp.l('Caixa CAD2', '3', 'ativo_circulante', 'ATIVO CIRCULANTE', '2022'), pg_temp.l('Caixa CAD2', '4', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025')));
++  perform fn_upsert_periodo(v_caso, 'anual', '2022');
++  begin
++    alter table periodo enable trigger trg_fato_cadastro_periodo;
++  exception when undefined_object then null;
++  end;
++  select count(*) into v_n from fato_financeiro f where f.documento_versao_id = v_ver2 and f.periodo_coluna = '2022' and f.periodo_id is null;
++  perform pg_temp.teste_assert_ff(v_n = 1, 'sem o gatilho de cadastro o nulo continua (o arranjo do reparo)', v_n::text);
++  v_r := fn_materializar_fatos();
++  select count(*) into v_n from fato_financeiro f where f.documento_versao_id = v_ver2 and f.periodo_coluna = '2022' and f.periodo_id is not null and f.periodo_origem = 'coluna';
++  perform pg_temp.teste_assert_ff(v_n = 1 and (v_r->>'reresolvidos')::int >= 1, 'fn_materializar_fatos() re-resolve os fatos existentes de identidade nula', v_r::text);
++end $$;
++
++-- ---------------------------------------------------------------------------------------------------------------
++-- A INVARIANTE (regra 3, a família inteira e não os casos): em NENHUM documento duas colunas diferentes caem na mesma (conta, entidade, período) não nulos — é o que fazia a soma dobrar (1.310 em vez de 150; 500; 435; 342).
++create or replace function pg_temp.colunas_na_mesma_chave() returns bigint language sql as $f$
++  select count(*) from (
++    select f.documento_versao_id, f.conta_id, f.entidade_id, f.periodo_id
++      from fato_financeiro f
++     where f.conta_id is not null and f.entidade_id is not null and f.periodo_id is not null
++     group by 1, 2, 3, 4
++    having count(distinct coalesce(f.periodo_coluna, '') || '|' || coalesce(f.entidade_coluna, '')) > 1) x
++$f$;
++do $$
++declare v_n bigint; v_nn bigint;
++begin
++  raise notice '--- a invariante: nenhuma chave com duas colunas do mesmo documento ---';
++  select count(*) into v_nn from fato_financeiro where conta_id is not null and entidade_id is not null and periodo_id is not null;
++  perform pg_temp.teste_assert_ff(v_nn >= 1000, 'a invariante mede sobre fatos de identidade completa (não sobre o vazio)', v_nn::text);
++  select pg_temp.colunas_na_mesma_chave() into v_n;
++  perform pg_temp.teste_assert_ff(v_n = 0, 'INVARIANTE: nenhum documento (fixtures e cenários) tem duas colunas diferentes na mesma (conta, entidade, período)',
++    v_n || ' chave(s): ' || coalesce((select string_agg(x.d || ' ' || x.c, ' / ') from (select dv.nome_original as d, string_agg(distinct coalesce(f.periodo_coluna, '-') || '|' || coalesce(f.entidade_coluna, '-'), ', ') as c
++        from fato_financeiro f join documento_versao dv on dv.id = f.documento_versao_id where f.conta_id is not null and f.entidade_id is not null and f.periodo_id is not null
++       group by dv.nome_original, f.conta_id, f.entidade_id, f.periodo_id having count(distinct coalesce(f.periodo_coluna, '') || '|' || coalesce(f.entidade_coluna, '')) > 1) x), '-'));
++end $$;
++
+ -- ---------------------------------------------------------------------------------------------------------------
+ -- i. a fusão de entidade leva os fatos (a FK NO ACTION não pode derrubá-la).
+ do $$
+@@ -478,7 +597,7 @@ begin
+   v_para := fn_upsert_entidade(v_caso, 'GAMA P27 LTDA');
+   v_de := fn_upsert_entidade(v_caso, 'DELTA P27 LTDA');
+   v_ver := pg_temp.doc(v_caso, 'GAMA P27 LTDA', '2025', 'BALANCO', 'p27-g', jsonb_build_array(
+-    pg_temp.l('Caixa G', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025'),
++    pg_temp.l('Caixa G', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'GAMA P27 LTDA'),
+     pg_temp.l('Caixa da Delta', '20', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'DELTA P27 LTDA')));
+   select count(*) into v_n from fato_financeiro where entidade_id = v_de;
+   perform pg_temp.teste_assert_ff(v_n = 1, 'a Delta tem 1 fato (pela coluna) antes da fusão', v_n::text);
+@@ -506,7 +625,7 @@ end $$;
+ -- ---------------------------------------------------------------------------------------------------------------
+ do $$
+ declare
+-  v_uid uuid := gen_random_uuid(); v_ana uuid := gen_random_uuid(); v_caso uuid; v_ver uuid; v_n int; v_tot int; v_t text; v_t2 text; v_t3 text; v_sem int; v_n2 int; v_outra uuid; v_r jsonb;
++  v_uid uuid := gen_random_uuid(); v_ana uuid := gen_random_uuid(); v_caso uuid; v_ver uuid; v_n int; v_tot int; v_t text; v_t2 text; v_t3 text; v_sem int; v_n2 int; v_outra uuid; v_r jsonb; v_e1 uuid; v_e2 uuid; v_rz uuid; v_docrz uuid; v_t4 text;
+ begin
+   raise notice '--- j. o acesso ---';
+   select count(*) into v_tot from fato_financeiro;
+@@ -545,8 +664,12 @@ begin
+   v_caso := (fn_upsert_caso('0243: acesso do analista'))::uuid;
+   insert into membro (usuario_id, papel) values (v_ana, 'analista');
+   insert into alocacao (caso_id, usuario_id) values (v_caso, v_ana);
+-  select f.documento_versao_id into v_outra from fato_financeiro f join documento_versao dv on dv.id = f.documento_versao_id join documento d on d.id = dv.documento_id where d.caso_id <> v_caso limit 1;
++  select f.documento_versao_id into v_outra from fato_financeiro f join documento_versao dv on dv.id = f.documento_versao_id join documento d on d.id = dv.documento_id where d.caso_id <> v_caso order by dv.criada_em, dv.id limit 1;   -- a MAIS ANTIGA (uma das fixtures), não uma dos cenários acima
+   delete from fato_financeiro where documento_versao_id = v_outra;
++  v_e1 := fn_upsert_entidade(v_caso, 'ACESSO UM P27 LTDA'); v_e2 := fn_upsert_entidade(v_caso, 'ACESSO DOIS P27 LTDA');
++  v_rz := (fn_registrar_documento(v_caso, 'ACESSO UM P27 LTDA', 'anual', '2025', 'RAZAO', 0.97, 'nome_arquivo', 'supabase_storage', '0243/p27-rz.pdf', 'p27-rz.pdf', true, 'p27-rz', 'ok')->>'documento_versao_id')::uuid;
++  perform fn_registrar_campos_extraidos(v_rz, jsonb_build_array(jsonb_build_object('chave', 'Caixa RZ', 'valor_num', '3', 'secao_canonica', 'ativo_circulante', 'secao', 'AC', 'confianca', '0.97')));
++  select documento_id into v_docrz from documento_versao where id = v_rz;
+   v_ver := (fn_registrar_documento(v_caso, 'ACESSO P27 LTDA', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage', '0243/p27-h.pdf', 'p27-h.pdf', true, 'p27-h', 'ok')->>'documento_versao_id')::uuid;
+   perform set_config('request.jwt.claims', jsonb_build_object('sub', v_ana, 'role', 'authenticated')::text, true);
+   execute 'set local role authenticated';
+@@ -561,7 +684,18 @@ begin
+     v_t := 'ok';
+   exception when others then v_t := sqlstate;
+   end;
++  begin
++    perform fn_fato_repontar_entidade(v_caso, v_e1, v_e2);   -- as duas entidades VIVAS: o atalho para mover fato sem fusão
++    v_t4 := 'ok';
++  exception when others then v_t4 := sqlstate;
++  end;
++  update documento set tipo_taxonomia = 'BALANCETE' where id = v_docrz;   -- a reclassificação humana: o evento leva o NOME dele
+   execute 'reset role';
++  perform pg_temp.teste_assert_ff(v_t4 = '42501', 'o Analista NÃO reponta fato com as duas entidades vivas (só a fusão, que apaga a absorvida, reponta)', v_t4);
++  perform pg_temp.teste_assert_ff(exists (select 1 from evento_auditoria where acao = 'fatos_materializacao_negada' and entidade_ref = 'documento_versao:' || v_outra and ator = 'usuario:' || v_ana),
++    'a recusa por permissão deixa o evento fatos_materializacao_negada, com o ator real (regra 7)');
++  perform pg_temp.teste_assert_ff((select count(*) from fato_financeiro where documento_versao_id = v_rz) = 1 and exists (select 1 from evento_auditoria where acao = 'fatos_materializados' and entidade_ref = 'documento_versao:' || v_rz and ator = 'usuario:' || v_ana),
++    'a materialização por reclassificação humana grava o ator REAL (usuario:<id>), não sistema:n8n');
+   perform pg_temp.teste_assert_ff(coalesce((v_r->>'materializado')::boolean, true) = false and not exists (select 1 from fato_financeiro where documento_versao_id = v_outra),
+     'o Analista NÃO alocado no mandato não materializa fato nele (a função diz sem permissão e não cria nada)', v_r::text);
+   perform pg_temp.teste_assert_ff(v_t = '42501', 'e não chama fn_materializar_fatos direto, nem no mandato onde escreve (execute só do serviço)', v_t);
+@@ -571,14 +705,18 @@ begin
+ end $$;
+ 
+ -- ---------------------------------------------------------------------------------------------------------------
+--- k. A sonda: os 20 requisitos presentes; e ela ACUSA cada guarda removida (nos mesmos termos do teste da 0242: a migration é a coisa medida, aqui o estado do banco montado).
++-- k. A sonda: os 32 requisitos presentes; e ela ACUSA cada guarda removida (nos mesmos termos do teste da 0242: a migration é a coisa medida, aqui o estado do banco montado).
+ do $$
+ declare v_n int; v_lista text; v_def text; v_ok boolean; v_f int;
+ begin
+   raise notice '--- k. a sonda de instalação ---';
+   set constraints all immediate;   -- as FKs de dimensão são adiadas: sem isto o `alter table` abaixo morre em `pending trigger events`
+   select count(*), string_agg(chave, ', ') filter (where not presente) into v_n, v_lista from fn_instalacao_conferir() where migration = '0243';
+-  perform pg_temp.teste_assert_ff(v_n = 20 and v_lista is null, 'os 20 requisitos da 0243 estão no catálogo e presentes', v_n || ' requisitos; ausentes: ' || coalesce(v_lista, 'nenhum'));
++  perform pg_temp.teste_assert_ff(v_n = 32 and v_lista is null, 'os 32 requisitos da 0243 estão no catálogo e presentes', v_n || ' requisitos; ausentes: ' || coalesce(v_lista, 'nenhum') || coalesce(' | versões sem fato: ' || (select string_agg(distinct dv.nome_original || '/' || ce.chave, ', ')
++      from (select dv.id from documento_versao dv join documento d on d.id = dv.documento_id where fn_tipo_gera_fato(d.tipo_taxonomia)
++              and exists (select 1 from evento_auditoria e where e.entidade_ref = 'documento_versao:' || dv.id and e.acao = 'extracao_sombra') order by dv.criada_em desc, dv.id limit 20) v
++      join documento_versao dv on dv.id = v.id join documento d on d.id = dv.documento_id join campo_extraido ce on ce.documento_versao_id = v.id and ce.origem_valor = 'extracao'
++     where fn_linha_vira_fato(d.tipo_taxonomia, ce.chave, ce.unidade, ce.valor_num) and not exists (select 1 from fato_financeiro f where f.campo_extraido_id = ce.id)), ''));
+   perform pg_temp.teste_assert_ff((select count(*) from instalacao_sonda_fato_financeiro_constraints) = 13, 'as 13 constraints estruturais existem com o predicado esperado', (select count(*) from instalacao_sonda_fato_financeiro_constraints)::text);
+ 
+   -- cada constraint dropada deixa o requisito ausente (e a guarda de comportamento junto)
+@@ -632,6 +770,19 @@ begin
+   execute replace(v_def, 'left join conta_canonica c on c.secao_canonica = a.secao', 'left join conta_canonica c on c.codigo = a.tipo');
+   perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'materializa_conta_so_pela_secao'), 'a sonda acusa a materialização que acha a conta por outro critério que a seção');
+   execute v_def;
++  -- a guarda de escrita trocada por `select true`, e sem o search_path fixo; o authenticated com privilégio de escrita
++  v_def := pg_get_functiondef('fn_fato_pode_escrever(uuid)'::regprocedure);
++  execute 'create or replace function fn_fato_pode_escrever(p_caso uuid) returns boolean language sql stable security definer set search_path = public, pg_temp as $q$ select true $q$';
++  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_guarda_de_escrita_corpo'), 'a sonda acusa fn_fato_pode_escrever trocada por select true');
++  execute v_def;
++  alter function fn_fato_pode_escrever(uuid) reset search_path;
++  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_guarda_de_escrita_search_path'), 'a sonda acusa fn_fato_pode_escrever sem o search_path fixo (security definer sequestrável)');
++  alter function fn_fato_pode_escrever(uuid) set search_path = public, pg_temp;
++  grant insert on fato_financeiro to authenticated;
++  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_authenticated_so_le'), 'a sonda acusa o authenticated com INSERT em fato_financeiro');
++  revoke insert on fato_financeiro from authenticated;
++  perform pg_temp.teste_assert_ff((select presente from fn_instalacao_conferir() where chave = 'fato_authenticated_so_le'), 'e volta a presente sem o privilégio');
++
+   -- a lista dos tipos é conferida TIPO A TIPO, não pelo fim do corpo: tirar o BALANCO da lista deixa o requisito ausente
+   v_def := pg_get_functiondef('fn_tipo_gera_fato(text)'::regprocedure);
+   execute replace(v_def, '''BALANCO'', ', '');
+@@ -641,7 +792,7 @@ begin
+   perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'tipos_que_geram_fato'), 'e a que passa a gerar fato de RAZAO (o que é só evidência)');
+   execute v_def;
+   select count(*) into v_f from fn_instalacao_conferir() where migration = '0243' and not presente;
+-  perform pg_temp.teste_assert_ff(v_f = 0, 'depois de recolocar tudo, os 20 requisitos estão presentes de novo', v_f::text);
++  perform pg_temp.teste_assert_ff(v_f = 0, 'depois de recolocar tudo, os 32 requisitos estão presentes de novo', v_f::text);
+ end $$;
+ 
+ -- ---------------------------------------------------------------------------------------------------------------
