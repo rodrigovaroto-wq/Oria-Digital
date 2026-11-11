@@ -35,7 +35,7 @@ function isoParaBR(s) { return s ? `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice
 
 async function ler(blob) {
   const linhas = [];
-  const resumo = await lerTabela(blob, { aoLinha: (l) => { if (l.reinicio) linhas.length = 0; else linhas.push(l); } });
+  const resumo = await lerTabela(blob, { aoLinha: (l) => linhas.push(l) });
   return { resumo, linhas };
 }
 
@@ -93,7 +93,9 @@ const gerado = spawnSync('python3', [join(RAIZ, 'Dados de Teste/volume/gerar_vol
 const gab = gerado.status === 0 ? JSON.parse(readFileSync(join(dir, `GABARITO_${N}.json`), 'utf8')) : null;
 process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
 
-const DESTINO_DO_GABARITO = { cabecalho_relatorio: 'antes_do_cabecalho', em_branco: 'em_branco', cabecalho_colunas: 'cabecalho', titulo: 'dado', total: 'total' };
+// O leitor não sabe o que é título e o que é total (isso é a MB2): os dois são corpo, e o
+// total vem com o SINAL rotulo_de_total.
+const DESTINO_DO_GABARITO = { cabecalho_relatorio: 'antes_do_cabecalho', em_branco: 'em_branco', cabecalho_colunas: 'cabecalho', titulo: 'corpo', total: 'corpo' };
 
 test('o gerador das bases sintéticas rodou (sem ele a parte 1 não prova nada)', () => {
   assert.equal(gerado.status, 0, `python3 gerar_volume.py falhou: ${gerado.stderr || gerado.error}`);
@@ -110,14 +112,16 @@ for (const [chave, arquivo] of [['contas_a_receber', `contas_a_receber_${N}.csv`
     assert.equal(resumo.linhas_fisicas, g.csv.linhas_arquivo);
     assert.equal(resumo.linhas, g.csv.linhas_arquivo);
     assert.equal(Object.values(resumo.por_destino).reduce((a, b) => a + b, 0), resumo.linhas);
-    const esperado = Object.fromEntries(Object.entries(g.linhas_por_destino).map(([k, v]) => [DESTINO_DO_GABARITO[k], v]));
+    const esperado = {};
+    for (const [k, v] of Object.entries(g.linhas_por_destino)) esperado[DESTINO_DO_GABARITO[k]] = (esperado[DESTINO_DO_GABARITO[k]] ?? 0) + v;
     for (const [d, v] of Object.entries(resumo.por_destino)) assert.equal(v, esperado[d] ?? 0, `destino ${d}`);
+    assert.equal(resumo.sinais.rotulo_de_total, g.linhas_por_destino.total, 'só a linha TOTAL GERAL fala em total');
     assert.equal(resumo.bytes, g.csv.bytes);
     assert.equal(resumo.sha256, createHash('sha256').update(readFileSync(caminho)).digest('hex'));
-    // O VALOR lido: Σ da coluna Saldo das linhas de dado = o saldo em aberto do gabarito.
+    // O VALOR lido: Σ da coluna Saldo do corpo sem o total = o saldo em aberto do gabarito.
     const iSaldo = resumo.cabecalho.celulas.indexOf('Saldo');
     assert.ok(iSaldo >= 0, 'cabeçalho sem a coluna Saldo');
-    const dados = linhas.filter((l) => l.destino === 'dado');
+    const dados = linhas.filter((l) => l.destino === 'corpo' && !l.sinais.includes('rotulo_de_total'));
     assert.equal(dados.reduce((s, l) => s + centavosBR(l.celulas[iSaldo]), 0n), BigInt(g.saldo_em_aberto_centavos));
     assert.equal(new Set(dados.map((l) => l.celulas[0])).size, g.contrapartes_no_arquivo);
     assert.equal(resumo.amostra.length, 30);
@@ -138,7 +142,9 @@ test('contas_a_receber .xlsx: diz, linha a linha, o mesmo que o .csv', { skip: !
   assert.deepEqual(xl.resumo.cabecalho, csv.resumo.cabecalho);
   assert.equal(xl.resumo.linhas_ausentes_no_xml, 1, 'a linha 3 em branco não está no XML e tem de ser contada');
   assert.equal(xl.resumo.strings_compartilhadas, gab.contas_a_receber.xlsx.strings_unicas);
-  const dc = csv.linhas.filter((l) => l.destino === 'dado'), dx = xl.linhas.filter((l) => l.destino === 'dado');
+  const titulo = (l) => l.destino === 'corpo' && !l.sinais.includes('rotulo_de_total');
+  const dc = csv.linhas.filter(titulo), dx = xl.linhas.filter(titulo);
+  assert.deepEqual(xl.resumo.sinais, csv.resumo.sinais);
   assert.equal(dx.length, dc.length);
   for (let i = 0; i < dc.length; i++) {
     const c = dc[i].celulas, x = dx[i].celulas, t = dx[i].tipos;
@@ -150,7 +156,7 @@ test('contas_a_receber .xlsx: diz, linha a linha, o mesmo que o .csv', { skip: !
 });
 
 // ================================================== 2. casos de formato =====
-test('cp1252: 0x96 vira "–" e 0xC7 vira "Ç" no Node como no navegador', async () => {
+test('cp1252: 0x96 vira "–" e 0xC7 vira "Ç" (no navegador, navegador-tabela.mjs compara com o Node)', async () => {
   const b = cp('Nome;Valor;Obs\r\nA;1;x\r\n');
   const bytes = new Uint8Array([...b, ...cp('JO'), 0xc3, ...cp('O '), 0x96, ...cp(' A;2;'), 0xc7, 0x0d, 0x0a]);
   const { resumo, linhas } = await ler(new Blob([bytes]));
@@ -171,18 +177,19 @@ test('UTF-8 sem BOM é reconhecido pelos bytes', async () => {
   assert.equal(codificacaoDe(cp('A\xe7\xe3o;Pre\xe7o')).codificacao, 'windows-1252');
 });
 
-test('64 KB de ASCII e um byte cp1252 depois: relê como windows-1252, avisa e zera quem agrega', async () => {
-  const linha = 'Codigo;Nome;Saldo\r\n';
+test('64 KB de ASCII e um byte cp1252 depois: lido como windows-1252 desde a 1ª linha, cada linha UMA vez', async () => {
   const corpo = Array.from({ length: 5000 }, (_, i) => `${i};CLIENTE ${i};1,00\r\n`).join('');
-  const bytes = new Uint8Array([...cp(linha + corpo), ...cp('9;JO'), 0xc3, ...cp('O;2,00\r\n')]);
-  let reinicios = 0;
-  const linhas = [];
-  const resumo = await lerTabela(new Blob([bytes]), { aoLinha: (l) => { if (l.reinicio) { reinicios++; linhas.length = 0; } else linhas.push(l); } });
+  const bytes = new Uint8Array([...cp('Codigo;Nome;Saldo\r\n' + corpo), ...cp('9;JO'), 0xc3, ...cp('O;2,00\r\n')]);
+  // Em fatias de 4 KB, como o File entrega: a primeira versão já tinha emitido linhas
+  // quando descobria a codificação, e as emitia de novo (achado da revisão de 11/11/2026).
+  const fatias = [];
+  for (let k = 0; k < bytes.length; k += 4096) fatias.push(bytes.slice(k, k + 4096));
+  const { resumo, linhas } = await ler(blobEmFatias(fatias));
   assert.equal(resumo.codificacao, 'windows-1252');
-  assert.equal(reinicios, 1);
-  assert.equal(linhas.length, 5002, 'cada linha uma vez só, depois do reinício');
+  assert.equal(linhas.length, 5002);
+  assert.equal(new Set(linhas.map((l) => l.n)).size, 5002, 'nenhuma linha entregue duas vezes');
   assert.equal(linhas.at(-1).celulas[1], 'JOÃO');
-  assert.ok(resumo.avisos.some((a) => a.includes('relido como windows-1252')));
+  assert.ok(resumo.avisos.some((a) => a.includes('lido como windows-1252')));
 });
 
 test('aspas: separador e quebra de linha dentro da célula são UMA célula', async () => {
@@ -191,27 +198,82 @@ test('aspas: separador e quebra de linha dentro da célula são UMA célula', as
   assert.deepEqual(linhas[1].celulas, ['SILVA; JOÃO', 'SÃO\nPAULO', '10,00']);
   assert.equal(resumo.linhas, 12);
   assert.equal(resumo.linhas_fisicas, 13);
-  assert.equal(resumo.por_destino.dado, 11);
+  assert.equal(resumo.por_destino.corpo, 11);
   assert.deepEqual(celulasDoCsv('a;"b""c";d', ';'), ['a', 'b"c', 'd']);
 });
 
-test('separador sem aspas dentro do nome: largura divergente, nunca dado com a coluna deslocada', async () => {
-  const { resumo, linhas } = await ler(new Blob(['Nome;Vencimento;Saldo\nA;01/01/2025;1,00\nSILVA; JOAO;01/01/2025;2,00\nB;02/01/2025;3,00\n']));
+test('aspa solta no meio da célula (polegada) é texto: não junta linhas', async () => {
+  const resto = Array.from({ length: 10 }, (_, i) => `ITEM ${i};X;1,00\n`).join('');
+  const { resumo, linhas } = await ler(new Blob([`Produto;Cliente;Saldo\nMONITOR 15";ALFA;3,00\n${resto}TV 32";BETA;9,00\n`]));
+  assert.equal(resumo.linhas, 13);
+  assert.equal(resumo.linhas_fisicas, 13);
+  assert.deepEqual(linhas[1].celulas, ['MONITOR 15"', 'ALFA', '3,00']);
+  assert.deepEqual(linhas.at(-1).celulas, ['TV 32"', 'BETA', '9,00']);
+  assert.deepEqual(resumo.avisos, []);
+});
+
+test('aspa que abre e nunca fecha: depois de 50 linhas, cada linha volta a ser um registro, com aviso, em tempo linear', async () => {
+  const resto = Array.from({ length: 60000 }, (_, i) => `C${i};CIDADE;1,00\n`).join('');
+  const t0 = Date.now();
+  const { resumo } = await ler(new Blob([`Nome;Cidade;Saldo\n"SEM FIM;X;1,00\n${resto}`]));
+  assert.ok(Date.now() - t0 < 5000, `60 mil linhas depois da aspa levaram ${Date.now() - t0} ms`);
+  assert.equal(resumo.linhas, 60002, 'nenhuma linha perdida nem juntada');
+  assert.ok(resumo.avisos.some((a) => a.includes('aspas abertas na linha física 2')));
+});
+
+test('separador sem aspas dentro do nome: além da largura é largura_divergente, nunca corpo', async () => {
+  const { resumo, linhas } = await ler(new Blob(['Nome;Vencimento;Saldo\nA;01/01/2025;1,00\nSILVA; JOAO;01/01/2025;2,00\nB;02/01/2025;3,00\nC;02/01/2025;3,00\nD;02/01/2025;3,00\n']));
   assert.equal(resumo.por_destino.largura_divergente, 1);
-  assert.equal(resumo.por_destino.dado, 2);
   assert.equal(linhas[2].destino, 'largura_divergente');
 });
 
-test('total × cliente chamado TOTAL: o total tem poucas células, o cliente tem a linha cheia', async () => {
-  const { linhas } = await ler(new Blob(['Nome;Vencimento;Valor;Saldo\nTOTAL DISTRIBUIDORA LTDA;01/01/2025;5,00;5,00\nTOTAL GERAL;;;5,00\n']));
-  assert.deepEqual(linhas.map((l) => l.destino), ['cabecalho', 'dado', 'total']);
+test('título em aberto com as colunas de pagamento vazias é corpo, como o pago', async () => {
+  const cab = 'Cliente;Doc;Emissao;Venc;Valor;DtPgto;VlPago;Juros;Multa;Desc;Saldo;Obs\n';
+  const pago = 'A;1;01/01/2025;01/02/2025;10,00;01/02/2025;10,00;0,00;0,00;0,00;0,00;ok\n';
+  const aberto = (c) => `${c};2;;01/02/2025;10,00;;;;;;10,00;\n`;
+  // Um AR só de abertos também tem cabeçalho: a primeira versão da regra o recusava.
+  const soAbertos = await ler(new Blob([cab + aberto('B') + aberto('C') + aberto('D')]));
+  assert.equal(soAbertos.resumo.por_destino.corpo, 3);
+  const { resumo, linhas } = await ler(new Blob([cab + pago + aberto('B') + aberto('C') + aberto('D') + aberto('E')]));
+  assert.deepEqual(linhas.slice(1).map((l) => l.destino), ['corpo', 'corpo', 'corpo', 'corpo', 'corpo']);
+  assert.equal(resumo.sinais.poucas_celulas, 4, 'o aberto tem 5 de 12 células: sinal, não descarte');
 });
 
-test('sem cabeçalho: nada vira dado, e o resumo diz por quê', async () => {
+test('rótulo de total é sinal em todas as grafias, e um cliente chamado SOMA continua corpo', async () => {
+  const cab = 'Nome;Vencimento;Valor;Saldo\n';
+  const titulos = ['A;01/01/2025;1,00;1,00', 'B;01/01/2025;1,00;1,00', 'C;01/01/2025;1,00;1,00'];
+  const totais = ['Sub-Total;;;10,00', 'Sub Total;;;10,00', 'Totais;;10,00;10,00', '*** TOTAL;;;10,00',
+    'Saldo Geral;;;10,00', 'ACME;Total do cliente;10,00;10,00', 'TOTAL GERAL;;;10,00'];
+  const { resumo, linhas } = await ler(new Blob([cab + [...titulos, ...totais, 'SOMA ENGENHARIA LTDA;01/01/2025;7,00;7,00'].join('\n') + '\n']));
+  const sinal = (l) => l.sinais.includes('rotulo_de_total');
+  assert.deepEqual(linhas.slice(4, 11).map(sinal), totais.map(() => true));
+  assert.equal(linhas[11].destino, 'corpo');
+  assert.equal(resumo.por_destino.corpo, 11, 'total é corpo com sinal: quem decide é a MB2, com o mapeamento');
+});
+
+test('cabeçalho repetido a cada página é cabeçalho, nunca corpo', async () => {
+  const pag = 'Cliente;Vencimento;Valor;Saldo\nA;01/01/2025;1,00;1,00\nB;01/01/2025;1,00;1,00\nC;01/01/2025;1,00;1,00\n';
+  const { resumo } = await ler(new Blob([pag + 'Página 2\n' + pag.replace('Cliente', ' CLIENTE ')]));
+  assert.equal(resumo.por_destino.cabecalho, 2);
+  assert.equal(resumo.por_destino.corpo, 7);
+  assert.ok(resumo.amostra.every((l) => l[0] !== ' CLIENTE '));
+});
+
+test('preâmbulo de 3 células de texto não vira cabeçalho de uma tabela mais larga', async () => {
+  const linhas = ['Empresa:;ACME S.A.;CNPJ 00.000.000/0001-00', '', 'Cliente;Doc;Vencimento;Valor;Saldo',
+    ...Array.from({ length: 6 }, (_, i) => `C${i};${i};01/01/2025;1,00;1,00`)];
+  const { resumo } = await ler(new Blob([linhas.join('\n') + '\n']));
+  assert.equal(resumo.cabecalho.linha, 2);
+  assert.equal(resumo.por_destino.antes_do_cabecalho, 1);
+  assert.equal(resumo.por_destino.corpo, 6);
+  assert.equal(resumo.por_destino.largura_divergente, 0);
+});
+
+test('sem cabeçalho: nada vira corpo, e o resumo diz por quê', async () => {
   const { resumo } = await ler(new Blob(['1;2;3\n4;5;6\n7;8;9\n']));
   assert.equal(resumo.cabecalho, null);
-  assert.equal(resumo.por_destino.dado, 0);
-  assert.equal(resumo.por_destino.fora_da_tabela, 3);
+  assert.equal(resumo.por_destino.corpo, 0);
+  assert.equal(resumo.por_destino.antes_do_cabecalho, 3);
   assert.match(resumo.sem_cabecalho, /nenhuma linha de cabeçalho/);
 });
 
@@ -244,7 +306,7 @@ test('xlsx: sharedStrings com texto rico e leitura fonética, entidade e célula
   const { resumo, linhas } = await ler(blob);
   assert.deepEqual(linhas[1].celulas, ['A & B', '45000', '10.5']);
   assert.deepEqual(linhas[1].tipos, ['s', 'n', 'n']);
-  assert.equal(resumo.por_destino.dado, 1);
+  assert.equal(resumo.por_destino.corpo, 1);
 });
 
 test('xlsx: data por formato embutido (14) e por formato próprio dd/mm/aaaa; número continua número', async () => {
@@ -296,4 +358,54 @@ test('xlsx: linha ausente do XML é linha em branco contada, não linha que some
 test('nem CSV nem XLSX: erro que diz o formato, nunca tabela vazia', async () => {
   await assert.rejects(lerTabela(new Blob([new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31])])), /não é CSV nem XLSX/);
   await assert.rejects(lerTabela(new Blob(['um contrato\nsem tabela nenhuma\n'])), /não é uma tabela delimitada/);
+});
+
+test('xlsx com prefixo de namespace (<x:row>, <x:c>) é lido, não devolve 0 linhas', async () => {
+  const cel = (ref, t) => `<x:c r="${ref}" t="inlineStr"><x:is><x:t>${t}</x:t></x:is></x:c>`;
+  const blob = xlsx({
+    'xl/workbook.xml': '<x:workbook xmlns:x="m" xmlns:r="r"><x:sheets><x:sheet name="P" sheetId="1" r:id="rId1"/></x:sheets></x:workbook>',
+    'xl/worksheets/sheet1.xml': `<x:worksheet><x:sheetData><x:row r="1">${cel('A1', 'Cliente')}${cel('B1', 'Venc')}${cel('C1', 'Saldo')}</x:row>`
+      + `<x:row r="2">${cel('A2', 'X')}<x:c r="B2"><x:v>1</x:v></x:c><x:c r="C2"><x:v>2</x:v></x:c></x:row></x:sheetData></x:worksheet>`,
+  });
+  const { resumo, linhas } = await ler(blob);
+  assert.equal(resumo.por_destino.corpo, 1);
+  assert.deepEqual(linhas[1].celulas, ['X', '1', '2']);
+});
+
+test('xlsx: a aba é achada pelo id da relação com QUALQUER prefixo; sem relação, erro, nunca outra aba', async () => {
+  const folhas = {
+    'xl/worksheets/sheet1.xml': FOLHA('<row r="1"><c r="A1" t="inlineStr"><is><t>LIXO</t></is></c></row>'),
+    'xl/worksheets/sheet2.xml': FOLHA(`${CAB}<row r="2"><c r="A2" t="inlineStr"><is><t>X</t></is></c><c r="B2"><v>1</v></c><c r="C2"><v>2</v></c></row>`),
+  };
+  const ns = await ler(xlsx({ ...folhas, 'xl/workbook.xml': '<workbook xmlns:ns="r"><sheets><sheet name="Oculta" sheetId="1" state="hidden" ns:id="rId1"/><sheet name="Titulos" sheetId="2" ns:id="rId2"/></sheets></workbook>' }));
+  assert.equal(ns.resumo.aba, 'Titulos');
+  assert.equal(ns.linhas[1].celulas[0], 'X');
+  await assert.rejects(ler(xlsx({ ...folhas, 'xl/workbook.xml': WB('', '<sheet name="Titulos" sheetId="2" r:id="rId9"/>') })), /relação rId9, que não existe/);
+});
+
+test('xlsx: linha comentada não vira linha; CDATA, aspas simples e hora arredondada', async () => {
+  const blob = xlsx({
+    'xl/workbook.xml': WB(),
+    'xl/styles.xml': "<styleSheet><cellXfs><xf numFmtId='0'/><xf numFmtId='22'/></cellXfs></styleSheet>",
+    'xl/sharedStrings.xml': '<sst><si><t><![CDATA[A&B <ltda>]]></t></si></sst>',
+    'xl/worksheets/sheet1.xml': FOLHA(`${CAB}<!-- <row r="2"><c r="A2" t="inlineStr"><is><t>FANTASMA</t></is></c></row> -->`
+      + "<row r='3'><c r='A3' t='s'><v>0</v></c><c r='B3' s='1'><v>46022.9999999999</v></c><c r='C3'><v>1</v></c></row>"),
+  });
+  const { resumo, linhas } = await ler(blob);
+  assert.ok(!linhas.some((l) => l.celulas.includes('FANTASMA')));
+  assert.equal(resumo.linhas, 3);
+  assert.deepEqual(linhas[2].celulas, ['A&B <ltda>', '2026-01-01', '1'], '46022,9999999999 é a meia-noite de 01/01/2026');
+  assert.deepEqual(linhas[2].tipos, ['s', 'd', 'n']);
+});
+
+test('xlsx: folha com bytes e nenhuma linha reconhecida é erro, não tabela vazia', async () => {
+  const blob = xlsx({ 'xl/workbook.xml': WB(), 'xl/worksheets/sheet1.xml': `<worksheet><sheetData>${'<y:linha/>'.repeat(40)}</sheetData></worksheet>` });
+  await assert.rejects(ler(blob), /nenhuma linha reconhecida/);
+});
+
+test('aspa solta que só FECHA 100 linhas depois: não junta 100 títulos num só em silêncio', async () => {
+  const meio = Array.from({ length: 100 }, (_, i) => `C${i};CIDADE;1,00\n`).join('');
+  const { resumo } = await ler(new Blob([`Nome;Cidade;Saldo\n"ABRE;X;1,00\n${meio}Z;"FECHA";1,00\nW;Y;1,00\n`]));
+  assert.equal(resumo.linhas, 104, 'cada linha física é um registro');
+  assert.ok(resumo.avisos.some((a) => a.includes('sem fechar em 50 linhas')));
 });

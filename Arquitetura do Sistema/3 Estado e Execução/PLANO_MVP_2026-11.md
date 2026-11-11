@@ -307,18 +307,23 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
 ### MB1 — feita em 11/11/2026 (sessão 127), com os sintéticos
 
 - **`Leitor/lib/tabela.mjs`**: `lerTabela(blob, { aoLinha })` lê CSV (windows-1252, UTF-8, UTF-16,
-  com e sem BOM; aspas com separador e quebra de linha dentro) e XLSX (tabela de strings, texto em
-  linha, datas por estilo, calendário de 1904, primeira aba visível) em fluxo, o mesmo código no
-  Node e no navegador. Toda linha recebe um destino: `antes_do_cabecalho`, `cabecalho`, `dado`,
-  `total`, `em_branco`, `fora_da_tabela` ou `largura_divergente`. O resumo traz o cabeçalho, a
-  amostra de 30 linhas para a MB2, o sha256 e os avisos.
-- **Medido no Chromium, 1M de linhas:** CSV em 2,1 s com 44 MB de heap; XLSX em 15,2 s com 67 MB.
-  Resumo idêntico ao do Node nos 7 arquivos. Detalhe em `Leitor/medicao-n8n/README.md`.
-- **Prova:** `Leitor/test/tabela.test.mjs`, 21 testes no CI. Contra o gabarito da MB0 (contagens,
-  sha256, Σ da coluna Saldo = saldo em aberto) e o .xlsx igual ao .csv linha a linha. Cada uma das
-  13 correções desligada reprova de 1 a 3 testes. Duas correções saíram por serem redundantes
-  (0 testes reprovavam): o `TextDecoder` do Node 22 já é windows-1252 e já descarta o BOM.
+  com e sem BOM; aspa no começo da célula protege separador e quebra de linha) e XLSX (tabela de
+  strings, texto em linha, datas por estilo, calendário de 1904, prefixo de namespace, primeira aba
+  visível) em fluxo, o mesmo código no Node e no navegador. Toda linha recebe um destino
+  ESTRUTURAL: `antes_do_cabecalho`, `cabecalho` (inclusive o repetido), `corpo`, `em_branco` ou
+  `largura_divergente`, mais os sinais `rotulo_de_total` e `poucas_celulas`.
+- **O que a revisão independente mudou:** a primeira versão classificava "dado" e "total" pela
+  contagem de células e errava sem erro nos dois sentidos (título em aberto fora da tabela,
+  subtotal como dado). **Decidir se a linha do corpo é título passa para a MB2**, que tem o
+  mapeamento. Também: aspa solta, releitura de codificação no meio do caminho, aba errada e XML
+  com prefixo. 4 achados altos, 5 médios, todos com teste.
+- **Medido no Chromium, 1M de linhas:** CSV em 2,7 s com 45 MB de heap; XLSX em 18,7 s com 69 MB.
+  Resumo idêntico ao do Node. Detalhe em `Leitor/medicao-n8n/README.md`.
+- **Prova:** `Leitor/test/tabela.test.mjs`, 31 testes no CI (95 no Leitor). As 29 correções,
+  desligadas uma a uma, reprovam de 1 a 4 testes cada.
+- **O que a MB2 herda:** decidir título × subtotal × lixo com o mapeamento; pegar o deslocamento de
+  coluna que cabe na largura (o saldo deixa de ser número); converter o número do XLSX, que pode
+  vir em notação científica ou com 17 dígitos.
 - **Não feito:** ligar ao Web Worker e à tela do portal (é a ME2); medir dentro do worker; arquivo
   real (DM7).
 - **Próxima:** MB2, o mapeamento de colunas confirmado pelo analista.
-

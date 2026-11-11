@@ -190,7 +190,7 @@ jobs:
         # tamanho mentiroso).
         # Inclui o leitor TABULAR (MB1, `Leitor/lib/tabela.mjs`): CSV e XLSX de contas a receber e a
         # pagar. O teste dele chama `python3 Dados de Teste/volume/gerar_volume.py` e REPROVA sem
-        # python3 (não pula). Cada uma das 13 correções desligada reprova de 1 a 3 testes (11/11/2026).
+        # python3 (não pula). Cada uma das 29 correções desligada reprova de 1 a 4 testes (11/11/2026).
         run: node --test 'Leitor/test/*.test.mjs'
 
       - name: Suíte dos hooks do agente

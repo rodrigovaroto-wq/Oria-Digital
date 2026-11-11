@@ -8,37 +8,42 @@
 // SPED (decisão do dono de 13/10/2026, D12.9). É o mesmo código no Node (testes, CLI) e
 // no navegador (`File` e `openAsBlob` são ambos `Blob`).
 //
-// O QUE ELE FAZ, e o que NÃO faz:
-//   - Faz: decodificar, separar linhas e células, achar o cabeçalho da tabela e dar a
-//     TODA linha um destino, contado. Nenhuma linha some sem contagem (regra 7: o
-//     estágio que não rodou não pode parecer limpo).
-//   - Não faz: dizer o que cada coluna significa. Isso é a MB2 (mapeamento confirmado
-//     pelo analista). Por isso a classificação aqui é ESTRUTURAL (quantas células, de
-//     que tipo), nunca pelo nome da coluna.
+// O QUE ELE PROMETE, e o que NÃO promete:
+//   - Promete: decodificar, separar linhas e células, achar o cabeçalho e dar a TODA linha
+//     um destino ESTRUTURAL, contado. Nenhuma linha some sem contagem (regra 7).
+//   - NÃO promete dizer se uma linha do corpo é título, subtotal ou lixo. Sem saber o que
+//     cada coluna significa, isso é palpite. Medido na revisão de 11/11/2026: a primeira
+//     versão decidia pela contagem de células e mandava o título EM ABERTO (colunas de
+//     pagamento vazias) para fora da tabela, enquanto "Sub-Total;;;10,00" virava dado.
+//     Quem decide é a MB2, com o mapeamento: título é a linha cujo vencimento é data e
+//     cujo saldo é número. O que aqui é palpite vira SINAL na linha, contado no resumo.
 //
 // Os destinos, e cada linha cai em exatamente um:
 //   antes_do_cabecalho  título do relatório, filtros, data de emissão
-//   cabecalho           a linha com os nomes das colunas
-//   dado                linha da tabela
-//   total               "TOTAL GERAL", "Subtotal": poucas células, a primeira começa com total
+//   cabecalho           a linha com os nomes das colunas, e cada repetição dela (página nova)
+//   corpo               linha da tabela: a MB2 decide o que ela é
 //   em_branco           nenhuma célula com conteúdo
-//   fora_da_tabela      depois do cabeçalho, com menos da metade das colunas (quebra de
-//                       página, título de grupo); a MB2 decide se descarta
-//   largura_divergente  mais células com conteúdo do que o cabeçalho tem colunas: quase
-//                       sempre um separador dentro de um nome sem aspas, que DESLOCA as
-//                       colunas e faria o saldo ser lido da coluna do vencimento. Nunca
-//                       vira dado em silêncio.
+//   largura_divergente  conteúdo além da última coluna do cabeçalho: um separador dentro de
+//                       um nome sem aspas. ATENÇÃO: o deslocamento que cabe na largura (a
+//                       última coluna costuma vir vazia) NÃO aparece aqui; quem o pega é a
+//                       MB2, porque o saldo deslocado deixa de ser número.
+// Os sinais (vários por linha, contados em `sinais` do resumo):
+//   rotulo_de_total     uma das duas primeiras células preenchidas fala em total, subtotal,
+//                       totais, soma ou saldo geral. É SINAL: "SOMA ENGENHARIA LTDA" também.
+//   poucas_celulas      menos da metade das colunas do cabeçalho preenchidas.
 
 import { detectarFormato, formaDoTexto } from '../../N8N/lib/formato.mjs';
 import { Sha256 } from './sha256.mjs';
 import { entradasDoZip, motivoDoErro } from './zip.mjs';
 
 const CABECA = 65536;
-const AMOSTRA = 30;            // linhas de dado que a MB2 mostra à IA e ao analista
+const AMOSTRA = 30;             // linhas do corpo que a MB2 mostra à IA e ao analista
 const BUSCA_DO_CABECALHO = 200; // linhas examinadas antes de desistir de achar o cabeçalho
+const MAX_LINHAS_NUMA_CELULA = 50; // aspas que não fecham em 50 linhas físicas são aspa solta
 
-export const DESTINOS = ['antes_do_cabecalho', 'cabecalho', 'dado', 'total', 'em_branco',
-  'fora_da_tabela', 'largura_divergente'];
+export const DESTINOS = ['antes_do_cabecalho', 'cabecalho', 'corpo', 'em_branco', 'largura_divergente'];
+export const SINAIS = ['rotulo_de_total', 'poucas_celulas'];
+const RE_TOTAL = /^\W*(sub[\s-]?)?tota(l|is)\b|^\W*soma\b|^\W*saldo\s+geral\b/i;
 
 // ----------------------------------------------------------------- codificação --
 // ERP brasileiro exporta windows-1252. O `TextDecoder('windows-1252')` é o mesmo no Node
@@ -47,79 +52,110 @@ export const DESTINOS = ['antes_do_cabecalho', 'cabecalho', 'dado', 'total', 'em
 // isso `campos.mjs#latin1` desfaz o cp1252 — não reaproveitar aquele aqui.
 // O BOM também é do `TextDecoder`: ele o descarta sozinho (o teste do BOM o prova).
 
-/** A codificação pelos bytes iniciais. UTF-8 só se os 64 KB decodificarem SEM erro. */
+/** A codificação pelos bytes iniciais. `certa: false` = só ASCII, não dá para saber ainda. */
 export function codificacaoDe(cabeca) {
-  if (cabeca[0] === 0xef && cabeca[1] === 0xbb && cabeca[2] === 0xbf) return { codificacao: 'utf-8', bom: 3 };
+  if (cabeca[0] === 0xef && cabeca[1] === 0xbb && cabeca[2] === 0xbf) return { codificacao: 'utf-8', certa: true };
   // "Texto Unicode" do Excel é UTF-16LE com BOM: tem byte zero, e o detector de texto
   // o chamaria de binário. Decidido ANTES dele.
-  if (cabeca[0] === 0xff && cabeca[1] === 0xfe) return { codificacao: 'utf-16le', bom: 2 };
-  if (cabeca[0] === 0xfe && cabeca[1] === 0xff) return { codificacao: 'utf-16be', bom: 2 };
+  if (cabeca[0] === 0xff && cabeca[1] === 0xfe) return { codificacao: 'utf-16le', certa: true };
+  if (cabeca[0] === 0xfe && cabeca[1] === 0xff) return { codificacao: 'utf-16be', certa: true };
   try {
     new TextDecoder('utf-8', { fatal: true }).decode(cabeca, { stream: true });
-    return { codificacao: 'utf-8', bom: 0 };
   } catch {
-    return { codificacao: 'windows-1252', bom: 0 };
+    return { codificacao: 'windows-1252', certa: true };
   }
+  return { codificacao: 'utf-8', certa: cabeca.some((b) => b > 0x7f) };
 }
 
-/** Byte inválido para a codificação decidida. Classe própria: só ELA dispara a releitura. */
-class ErroDeCodificacao extends Error {}
+/**
+ * O arquivo inteiro é UTF-8 válido? Só roda quando os 64 KB iniciais são ASCII puro.
+ * Antes, a decisão era tomada pelos 64 KB e corrigida com uma RELEITURA no meio do
+ * caminho; medido na revisão de 11/11/2026, num CSV de 5 MB lido em fatias de 64 KB,
+ * 199.863 linhas já tinham sido entregues antes do reinício, e quem não tratava o aviso
+ * somava em dobro. Uma passada a mais só de decodificação é mais barata que esse risco.
+ */
+async function todoUtf8(blob) {
+  const d = new TextDecoder('utf-8', { fatal: true });
+  const r = blob.stream().getReader();
+  try {
+    for (;;) {
+      const { done, value } = await r.read();
+      if (done) { d.decode(); return true; }
+      d.decode(value, { stream: true });
+    }
+  } catch {
+    await r.cancel();
+    return false;
+  }
+}
 
 function decodificador(codificacao) {
   // cp1252 não tem byte inválido (os 5 sem caractere viram controle): sem `fatal`.
   const d = new TextDecoder(codificacao, { fatal: codificacao !== 'windows-1252' });
-  const seguro = (f) => { try { return f(); } catch (e) { throw new ErroDeCodificacao(`byte inválido para ${codificacao}: ${e.message}`); } };
-  return { texto: (b) => seguro(() => d.decode(b, { stream: true })), fim: () => seguro(() => d.decode()) };
+  return { texto: (b) => d.decode(b, { stream: true }), fim: () => d.decode() };
 }
 
 // ------------------------------------------------------------------- células --
 const RE_NUMERO_OU_DATA = /^\s*-?[\d.,]+\s*$|^\s*\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\s*$/;
 
-/** Uma linha de CSV em células, respeitando aspas ("a;b" é UMA célula; "" é uma aspa). */
+/**
+ * Varre `texto` a partir do estado `dentro` (entre aspas ou não) e devolve o estado no fim.
+ * Aspa só ABRE no começo de uma célula (RFC 4180): `MONITOR 15"` é texto. Medido na revisão
+ * de 11/11/2026: tratada como abertura em qualquer lugar, uma polegada juntava 6 linhas num
+ * título só, com o nome da primeira e o saldo da última, sem aviso.
+ */
+function estadoDasAspas(texto, sep, dentro, inicioDeCelula) {
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i];
+    if (dentro) {
+      if (c === '"') {
+        if (texto[i + 1] === '"') i++;
+        else dentro = false;
+      }
+    } else if (c === '"' && inicioDeCelula) dentro = true;
+    inicioDeCelula = !dentro && c === sep;
+  }
+  return dentro;
+}
+
+/** Uma linha de CSV em células: aspa no começo da célula protege o separador e a quebra. */
 export function celulasDoCsv(linha, sep) {
   if (!linha.includes('"')) return linha.split(sep);
   const out = [];
-  let atual = '', dentro = false;
+  let atual = '', dentro = false, inicio = true;
   for (let i = 0; i < linha.length; i++) {
     const c = linha[i];
     if (dentro) {
       if (c === '"') {
         if (linha[i + 1] === '"') { atual += '"'; i++; } else dentro = false;
       } else atual += c;
-    } else if (c === '"') dentro = true;
-    else if (c === sep) { out.push(atual); atual = ''; }
-    else atual += c;
+    } else if (c === '"' && inicio) { dentro = true; inicio = false; }
+    else if (c === sep) { out.push(atual); atual = ''; inicio = true; }
+    else { atual += c; inicio = false; }
   }
   out.push(atual);
   return out;
 }
 
-function aspasEquilibradas(s) {
-  let n = 0;
-  for (let i = s.indexOf('"'); i !== -1; i = s.indexOf('"', i + 1)) n++;
-  return n % 2 === 0;
-}
-
 // --------------------------------------------------------------- classificação --
+const vazia = (c) => c === undefined || c === null || String(c).trim() === '';
 function preenchidas(celulas) {
   let n = 0;
-  for (const c of celulas) if (c !== undefined && c !== null && String(c).trim() !== '') n++;
+  for (const c of celulas) if (!vazia(c)) n++;
   return n;
 }
-
 function ultimaPreenchida(celulas) {
-  for (let i = celulas.length - 1; i >= 0; i--) if (String(celulas[i] ?? '').trim() !== '') return i + 1;
+  for (let i = celulas.length - 1; i >= 0; i--) if (!vazia(celulas[i])) return i + 1;
   return 0;
 }
+const normalizar = (celulas) => celulas.map((c) => String(c ?? '').trim().toLowerCase()).join('\u0000').replace(/\u0000+$/, '');
 
-/** Linha de cabeçalho: ≥ 3 células, todas texto (nem número nem data). */
-function pareceCabecalho(linha) {
-  const { celulas, tipos } = linha;
+/** Candidata a cabeçalho: ≥ 3 células, todas texto (nem número nem data). */
+function pareceCabecalho({ celulas, tipos }) {
   if (preenchidas(celulas) < 3) return false;
   for (let i = 0; i < celulas.length; i++) {
-    const c = String(celulas[i] ?? '').trim();
-    if (c === '') continue;
-    if (tipos ? tipos[i] !== 's' : RE_NUMERO_OU_DATA.test(c)) return false;
+    if (vazia(celulas[i])) continue;
+    if (tipos ? tipos[i] !== 's' : RE_NUMERO_OU_DATA.test(String(celulas[i]))) return false;
   }
   return true;
 }
@@ -131,54 +167,69 @@ function pareceCabecalho(linha) {
 function classificador(aoLinha) {
   const r = {
     por_destino: Object.fromEntries(DESTINOS.map((d) => [d, 0])),
+    sinais: Object.fromEntries(SINAIS.map((s) => [s, 0])),
     cabecalho: null, largura: 0, amostra: [], linhas: 0, primeira: {},
   };
   let espera = [];
-  let decidido = false;
+  let decidido = false, chaveDoCabecalho = null, primeiraDoCabecalho = null;
 
-  function emitir(linha, destino) {
+  function emitir(linha, destino, sinais = []) {
     r.por_destino[destino]++;
+    for (const s of sinais) r.sinais[s]++;
     if (!(destino in r.primeira)) r.primeira[destino] = linha.n;
-    if (destino === 'dado' && r.amostra.length < AMOSTRA) r.amostra.push(linha.celulas);
-    if (aoLinha) aoLinha({ ...linha, destino });
+    if (destino === 'corpo' && r.amostra.length < AMOSTRA) r.amostra.push(linha.celulas);
+    if (aoLinha) aoLinha({ ...linha, destino, sinais });
   }
 
-  function destinoDepois(linha) {
+  function depois(linha) {
     const n = preenchidas(linha.celulas);
-    if (n === 0) return 'em_branco';
-    if (ultimaPreenchida(linha.celulas) > r.largura) return 'largura_divergente';
-    // Total: a primeira célula começa com "total" E a seguinte está vazia. Um cliente
-    // chamado "TOTAL DISTRIBUIDORA" preenche a linha toda e continua dado; o "TOTAL
-    // GERAL;;;5,00" de um relatório de 4 colunas tem 2 células, que é a metade, e só
-    // pela contagem viraria dado (medido no teste) e somaria o total ao próprio total.
-    const i = linha.celulas.findIndex((c) => String(c ?? '').trim() !== '');
-    if (/^(total|subtotal|soma)\b/i.test(String(linha.celulas[i]).trim())
-        && String(linha.celulas[i + 1] ?? '').trim() === '') return 'total';
-    if (n < Math.max(2, Math.ceil(r.largura / 2))) return 'fora_da_tabela';
-    return 'dado';
+    if (n === 0) return emitir(linha, 'em_branco');
+    if (ultimaPreenchida(linha.celulas) > r.largura) return emitir(linha, 'largura_divergente');
+    // A primeira célula filtra antes: montar a chave da linha inteira em toda linha custava
+    // ~1 s em 1M de linhas.
+    if (String(linha.celulas[0] ?? '').trim().toLowerCase() === primeiraDoCabecalho
+        && normalizar(linha.celulas) === chaveDoCabecalho) return emitir(linha, 'cabecalho');
+    const sinais = [];
+    const primeiras = linha.celulas.filter((c) => !vazia(c)).slice(0, 2);
+    if (primeiras.some((c) => RE_TOTAL.test(String(c)))) sinais.push('rotulo_de_total');
+    if (n < Math.ceil(r.largura / 2)) sinais.push('poucas_celulas');
+    return emitir(linha, 'corpo', sinais);
   }
 
-  /** O cabeçalho é a primeira linha que parece cabeçalho e é seguida de linhas tão largas quanto a metade dele. */
+  /**
+   * O cabeçalho é a primeira candidata cujas linhas seguintes cabem nela: das próximas 5
+   * com conteúdo, ao menos 3 com 2 células ou mais e NADA além da última coluna. É o "nada
+   * além" que impede um preâmbulo de 3 células ("Empresa:;ACME;CNPJ ...") de virar
+   * cabeçalho de uma tabela de 12 colunas (achado da revisão de 11/11/2026). Não se exige
+   * metade das colunas: o título em aberto de um AR tem as colunas de pagamento vazias
+   * (5 de 12, medido no teste), e exigir metade recusava o cabeçalho de um AR só de abertos.
+   */
   function tentarDecidir(fim) {
     for (let i = 0; i < espera.length; i++) {
       if (!pareceCabecalho(espera[i])) continue;
       const largura = ultimaPreenchida(espera[i].celulas);
       const seguintes = espera.slice(i + 1).filter((l) => preenchidas(l.celulas) > 0).slice(0, 5);
-      if (seguintes.length === 0 && !fim) return false; // ainda não dá para saber
-      if (!seguintes.some((l) => preenchidas(l.celulas) >= Math.ceil(largura / 2))) continue;
+      if (seguintes.length < 5 && !fim) return false; // ainda não dá para saber
+      const cabem = seguintes.filter((l) => ultimaPreenchida(l.celulas) <= largura
+        && preenchidas(l.celulas) >= 2).length;
+      if (cabem < Math.min(3, seguintes.length) || seguintes.length === 0) continue;
       r.cabecalho = { linha: espera[i].n, celulas: espera[i].celulas.slice(0, largura) };
       r.largura = largura;
-      espera.forEach((l, j) => emitir(l, j < i ? (preenchidas(l.celulas) ? 'antes_do_cabecalho' : 'em_branco')
-        : j === i ? 'cabecalho' : destinoDepois(l)));
+      chaveDoCabecalho = normalizar(r.cabecalho.celulas);
+      primeiraDoCabecalho = String(r.cabecalho.celulas[0] ?? '').trim().toLowerCase();
+      espera.forEach((l, j) => {
+        if (j < i) emitir(l, preenchidas(l.celulas) ? 'antes_do_cabecalho' : 'em_branco');
+        else if (j === i) emitir(l, 'cabecalho');
+        else depois(l);
+      });
       espera = [];
       return true;
     }
     if (fim || espera.length >= BUSCA_DO_CABECALHO) {
-      // Sem cabeçalho: ninguém sabe onde a tabela começa. Tudo o que tem conteúdo
-      // fica fora da tabela, e o resumo DIZ por quê (a tela não pode mostrar 0 dados
-      // como se o arquivo estivesse vazio).
-      r.sem_cabecalho = `nenhuma linha de cabeçalho (≥ 3 células de texto seguidas de linhas da mesma largura) nas primeiras ${espera.length} linhas`;
-      for (const l of espera) emitir(l, preenchidas(l.celulas) ? 'fora_da_tabela' : 'em_branco');
+      // Sem cabeçalho: ninguém sabe onde a tabela começa. Nada vira corpo, e o resumo DIZ
+      // por quê (a tela não pode mostrar 0 linhas como se o arquivo estivesse vazio).
+      r.sem_cabecalho = `nenhuma linha de cabeçalho (≥ 3 células de texto, seguida de linhas que cabem nela) nas primeiras ${espera.length} linhas`;
+      for (const l of espera) emitir(l, preenchidas(l.celulas) ? 'antes_do_cabecalho' : 'em_branco');
       espera = [];
       return true;
     }
@@ -188,7 +239,11 @@ function classificador(aoLinha) {
   return {
     linha(l) {
       r.linhas++;
-      if (decidido) return emitir(l, r.sem_cabecalho ? (preenchidas(l.celulas) ? 'fora_da_tabela' : 'em_branco') : destinoDepois(l));
+      if (decidido) {
+        if (r.sem_cabecalho) emitir(l, preenchidas(l.celulas) ? 'antes_do_cabecalho' : 'em_branco');
+        else depois(l);
+        return;
+      }
       espera.push(l);
       // Decidir a cada linha nas primeiras é O(n²) sobre no máximo 200 linhas: desprezível.
       decidido = tentarDecidir(false);
@@ -201,30 +256,43 @@ function classificador(aoLinha) {
 }
 
 // ------------------------------------------------------------------------ CSV --
-async function lerCsv(blob, cabeca, aoLinha, forcar) {
-  const cod = forcar ? { codificacao: forcar, bom: 0 } : codificacaoDe(cabeca);
-  const amostraTexto = decodificador(cod.codificacao).texto(cabeca);
+async function lerCsv(blob, cabeca, aoLinha, codificacao) {
   // O separador vem do mesmo detector do n8n (escada, degrau 2). Limite conhecido: ele
   // quebra linha sem respeitar aspas, então um arquivo cujas primeiras 50 linhas têm
   // muitas células com quebra de linha dentro cai abaixo dos 70% de consistência. Aí o
   // leitor RECUSA com o motivo (abaixo); nunca lê com o separador errado.
-  const forma = formaDoTexto(amostraTexto);
+  const forma = formaDoTexto(decodificador(codificacao).texto(cabeca));
   if (forma.forma !== 'delimitado') {
     throw new Error(`o texto não é uma tabela delimitada (forma: ${forma.forma}); nenhuma das colunas por ';', ',', tab ou '|' é consistente nas primeiras linhas`);
   }
   const sep = forma.separador;
-  const dec = decodificador(cod.codificacao);
+  const dec = decodificador(codificacao);
   const cls = classificador(aoLinha);
   const sha = new Sha256();
   const leitor = blob.stream().getReader();
-  let buf = '', pendente = null, fisicas = 0, n = 0, bytes = 0;
+  const avisos = [];
+  let buf = '', fisicas = 0, n = 0, bytes = 0;
+  let pendentes = [], dentro = false; // linhas físicas de uma célula entre aspas ainda aberta
 
+  const registro = (texto) => cls.linha({ n: n++, celulas: celulasDoCsv(texto, sep) });
   const fechar = (texto) => {
     fisicas++;
-    pendente = pendente === null ? texto : pendente + '\n' + texto;
-    if (!aspasEquilibradas(pendente)) return; // a célula entre aspas continua na próxima linha física
-    cls.linha({ n: n++, celulas: celulasDoCsv(pendente, sep) });
-    pendente = null;
+    // O estado das aspas é carregado de uma linha física para a outra: cada linha é
+    // varrida UMA vez. A primeira versão revarria tudo o que estava pendente a cada linha
+    // nova (40 mil linhas depois de uma aspa solta: 22 s; 1M congelava a aba).
+    // Linha sem aspa nenhuma não muda o estado: o atalho evita varrer caractere a
+    // caractere as ~100% das linhas de um ERP (1M de linhas: 4,2 s sem ele, medido).
+    if (dentro || texto.includes('"')) dentro = estadoDasAspas(texto, sep, dentro, !dentro);
+    pendentes.push(texto);
+    if (dentro && pendentes.length < MAX_LINHAS_NUMA_CELULA) return;
+    if (dentro) {
+      // Uma "célula" de 50 linhas é uma aspa que nunca fecha. Cada linha física volta a
+      // ser um registro, lido sem aspas, e o resumo diz onde.
+      avisos.push(`aspas abertas na linha física ${fisicas - pendentes.length + 1} sem fechar em ${MAX_LINHAS_NUMA_CELULA} linhas: essas linhas foram lidas uma a uma, sem tratar aspas`);
+      for (const p of pendentes) cls.linha({ n: n++, celulas: p.split(sep) });
+      dentro = false;
+    } else registro(pendentes.join('\n'));
+    pendentes = [];
   };
 
   const RE = /\r\n|\n|\r/g;
@@ -248,19 +316,22 @@ async function lerCsv(blob, cabeca, aoLinha, forcar) {
   buf += dec.fim();
   if (buf.endsWith('\r')) fechar(buf.slice(0, -1));
   else if (buf !== '') fechar(buf);
-  const avisos = [];
-  if (pendente !== null) {
-    // Aspas abertas até o fim: o que sobrou vira UMA linha, contada e marcada, nunca descartada.
-    avisos.push(`aspas abertas a partir da linha ${n + 1} até o fim do arquivo: o resto foi lido como uma linha só`);
-    cls.linha({ n: n++, celulas: celulasDoCsv(pendente + '"', sep) });
+  if (pendentes.length) {
+    avisos.push(`aspas abertas na linha física ${fisicas - pendentes.length + 1} até o fim do arquivo: essas linhas foram lidas uma a uma, sem tratar aspas`);
+    for (const p of pendentes) cls.linha({ n: n++, celulas: p.split(sep) });
   }
   return {
-    formato: 'csv', codificacao: cod.codificacao, separador: sep, bytes, sha256: sha.hex(),
+    formato: 'csv', codificacao, separador: sep, bytes, sha256: sha.hex(),
     linhas_fisicas: fisicas, avisos, ...cls.fim(),
   };
 }
 
 // ----------------------------------------------------------------------- XLSX --
+// O XML é varrido por expressão regular, em fluxo, sem montar documento (no Web Worker
+// não há DOMParser). Por isso cada detalhe de XML que o Excel ou outro gerador pode usar é
+// tratado aqui de propósito: prefixo de namespace (`<x:row>`), aspas simples nos
+// atributos, comentário e CDATA.
+const P = '(?:[\\w.-]+:)?'; // prefixo de namespace opcional
 const ENTIDADES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
 function desescapar(s) {
   if (!s.includes('&')) return s;
@@ -269,33 +340,47 @@ function desescapar(s) {
     return ENTIDADES[e] ?? m;
   });
 }
+/** Texto de um nó: CDATA literal, o resto desescapado. */
+function textoXml(s) {
+  if (!s.includes('<![CDATA[')) return desescapar(s);
+  return s.split(/(<!\[CDATA\[[\s\S]*?\]\]>)/).map((p) => (p.startsWith('<![CDATA[') ? p.slice(9, -3) : desescapar(p))).join('');
+}
 
+/** Valor do atributo `nome` (com ou sem prefixo, aspas duplas ou simples). */
 function atributo(attrs, nome) {
-  const m = new RegExp(`(?:^|\\s)${nome}="([^"]*)"`).exec(attrs);
-  return m ? m[1] : null;
+  const m = new RegExp(`(?:^|\\s)${nome}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`).exec(attrs);
+  return m ? desescapar(m[1] ?? m[2]) : null;
 }
 
 async function textoDaEntrada(entrada) {
-  return new Response(entrada.fluxo()).text(); // UTF-8, como o OOXML exige; parte pequena
+  const t = await new Response(entrada.fluxo()).text(); // UTF-8, como o OOXML exige; parte pequena
+  return t.replace(/<!--[\s\S]*?-->/g, '');
 }
 
-/** Percorre os elementos `tag` de um XML grande, em fluxo, sem montar o documento. */
+/** Percorre os elementos `tag` (com ou sem prefixo) de um XML grande, em fluxo. */
 async function* elementos(entrada, tag) {
   const leitor = entrada.fluxo().pipeThrough(new TextDecoderStream()).getReader();
-  const re = new RegExp(`<${tag}\\b[^>]*?/>|<${tag}\\b[^>]*>[\\s\\S]*?</${tag}>`, 'g');
+  const re = new RegExp(`<${P}${tag}\\b[^>]*?/>|<${P}${tag}\\b[^>]*>[\\s\\S]*?</${P}${tag}>`, 'g');
+  const abre = new RegExp(`<${P}${tag}\\b`);
   let buf = '';
   for (;;) {
     const { done, value } = await leitor.read();
     if (done) break;
     buf += value;
+    // Comentário inteiro sai; um comentário ainda aberto espera a próxima fatia, senão
+    // um `<row>` comentado viraria linha (achado da revisão de 11/11/2026).
+    buf = buf.replace(/<!--[\s\S]*?-->/g, '');
+    const aberto = buf.indexOf('<!--');
+    const ate = aberto === -1 ? buf.length : aberto;
+    const trecho = buf.slice(0, ate);
     re.lastIndex = 0;
     let fim = 0, m;
-    while ((m = re.exec(buf)) !== null) { yield m[0]; fim = re.lastIndex; }
-    // O que sobrou pode ser o começo de um elemento: fica para a próxima fatia.
+    while ((m = re.exec(trecho)) !== null) { yield m[0]; fim = re.lastIndex; }
     buf = buf.slice(fim);
-    const abre = buf.indexOf(`<${tag}`);
-    if (abre !== -1) buf = buf.slice(abre);
-    else if (buf.length > 64) buf = buf.slice(-64); // um `<ro` cortado no fim da fatia cabe em 64
+    // O que sobrou pode ser o começo de um elemento: fica para a próxima fatia.
+    const k = aberto === -1 ? buf.search(abre) : 0;
+    if (k > 0) buf = buf.slice(k);
+    else if (k === -1 && buf.length > 64) buf = buf.slice(-64); // um `<x:ro` cortado cabe em 64
   }
 }
 
@@ -308,12 +393,12 @@ function formatoEhData(codigo) {
 
 function estilosDeData(xml) {
   const proprios = new Map();
-  for (const m of xml.matchAll(/<numFmt\b([^>]*)\/?>/g)) {
-    proprios.set(Number(atributo(m[1], 'numFmtId')), desescapar(atributo(m[1], 'formatCode') ?? ''));
+  for (const m of xml.matchAll(new RegExp(`<${P}numFmt\\b([^>]*)`, 'g'))) {
+    proprios.set(Number(atributo(m[1], 'numFmtId')), atributo(m[1], 'formatCode') ?? '');
   }
-  const xfs = /<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/.exec(xml);
+  const xfs = new RegExp(`<${P}cellXfs\\b[^>]*>([\\s\\S]*?)</${P}cellXfs>`).exec(xml);
   const ehData = [];
-  if (xfs) for (const m of xfs[1].matchAll(/<xf\b([^>]*)/g)) {
+  if (xfs) for (const m of xfs[1].matchAll(new RegExp(`<${P}xf\\b([^>]*)`, 'g'))) {
     const id = Number(atributo(m[1], 'numFmtId') ?? 0);
     ehData.push(FORMATOS_DATA.has(id) || (proprios.has(id) && formatoEhData(proprios.get(id))));
   }
@@ -321,14 +406,11 @@ function estilosDeData(xml) {
 }
 
 function serialParaData(serial, de1904) {
-  const dias = Math.floor(serial);
+  // Segundos inteiros desde a época: 46022.9999999999 é 46023 à meia-noite, não "24:00:00".
+  const seg = Math.round(serial * 86400);
   const base = de1904 ? Date.UTC(1904, 0, 1) : Date.UTC(1899, 11, 30);
-  const d = new Date(base + dias * 86400000);
-  const iso = d.toISOString().slice(0, 10);
-  const frac = serial - dias;
-  if (frac === 0) return iso;
-  const seg = Math.round(frac * 86400);
-  return `${iso}T${String(Math.floor(seg / 3600)).padStart(2, '0')}:${String(Math.floor(seg / 60) % 60).padStart(2, '0')}:${String(seg % 60).padStart(2, '0')}`;
+  const iso = new Date(base + seg * 1000).toISOString();
+  return seg % 86400 === 0 ? iso.slice(0, 10) : iso.slice(0, 19);
 }
 
 function colunaDe(ref) {
@@ -341,9 +423,11 @@ function colunaDe(ref) {
   return c - 1;
 }
 
-const RE_CELULA = /<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g;
-const RE_V = /<v>([\s\S]*?)<\/v>/;
-const RE_T = /<t(?:\s[^>]*)?>([\s\S]*?)<\/t>/g;
+const RE_CELULA = new RegExp(`<${P}c\\b([^>]*?)(?:/>|>([\\s\\S]*?)</${P}c>)`, 'g');
+const RE_V = new RegExp(`<${P}v>([\\s\\S]*?)</${P}v>`);
+const RE_T = new RegExp(`<${P}t(?:\\s[^>]*)?>([\\s\\S]*?)</${P}t>`, 'g');
+const RE_RPH = new RegExp(`<${P}rPh\\b[\\s\\S]*?</${P}rPh>`, 'g');
+const textoDosT = (s) => { let t = ''; for (const m of s.matchAll(RE_T)) t += textoXml(m[1]); return t; };
 
 async function lerXlsx(blob, aoLinha) {
   const entradas = new Map();
@@ -359,36 +443,38 @@ async function lerXlsx(blob, aoLinha) {
   };
 
   const workbook = await textoDaEntrada(exigir('xl/workbook.xml'));
-  const de1904 = /<workbookPr\b[^>]*\bdate1904="(1|true)"/.test(workbook);
-  const abas = [...workbook.matchAll(/<sheet\b([^>]*)\/?>/g)].map((m) => ({
-    nome: desescapar(atributo(m[1], 'name') ?? ''), rid: atributo(m[1], 'r:id'),
+  const pr = new RegExp(`<${P}workbookPr\\b([^>]*)`).exec(workbook);
+  const de1904 = !!pr && /^(1|true)$/.test(atributo(pr[1], 'date1904') ?? '');
+  // O id da relação é sempre um atributo COM prefixo (r:id, ns:id...): o `sheetId` não tem.
+  const abas = [...workbook.matchAll(new RegExp(`<${P}sheet\\b([^>]*)`, 'g'))].map((m) => ({
+    nome: atributo(m[1], 'name') ?? '', rid: atributo(m[1], '[\\w.-]+:id'),
     oculta: (atributo(m[1], 'state') ?? 'visible') !== 'visible',
   }));
   const rels = await textoDaEntrada(exigir('xl/_rels/workbook.xml.rels'));
-  const alvo = new Map([...rels.matchAll(/<Relationship\b([^>]*)\/?>/g)].map((m) => [atributo(m[1], 'Id'), atributo(m[1], 'Target')]));
+  const alvo = new Map([...rels.matchAll(new RegExp(`<${P}Relationship\\b([^>]*)`, 'g'))]
+    .map((m) => [atributo(m[1], 'Id'), atributo(m[1], 'Target')]));
   const aba = abas.find((a) => !a.oculta) ?? abas[0];
   if (!aba) throw new Error('a planilha não declara nenhuma aba');
-  const caminhoDaAba = (t) => (t.startsWith('/') ? t.slice(1) : `xl/${t}`).replace(/\/\.\//g, '/');
+  const destino = alvo.get(aba.rid);
+  // Sem alvo, NÃO há palpite (`sheet1.xml` seria outra aba, talvez a oculta, rotulada
+  // com o nome desta: achado da revisão de 11/11/2026).
+  if (!destino) throw new Error(`a aba "${aba.nome}" aponta para a relação ${aba.rid ?? '(sem id)'}, que não existe em workbook.xml.rels`);
+  const caminhoDaAba = destino.startsWith('/') ? destino.slice(1) : `xl/${destino}`.replace(/\/\.\//g, '/');
 
   const sst = [];
   const entradaSst = entradas.get('xl/sharedStrings.xml');
-  if (entradaSst) {
-    for await (const si of elementos(entradaSst, 'si')) {
-      // Texto rico: vários <r><t>; a leitura fonética (<rPh>) não é texto da célula.
-      const sem = si.replace(/<rPh\b[\s\S]*?<\/rPh>/g, '');
-      let s = '';
-      for (const m of sem.matchAll(RE_T)) s += m[1];
-      sst.push(desescapar(s));
-    }
-  }
+  // Texto rico: vários <r><t>; a leitura fonética (<rPh>) não é texto da célula.
+  if (entradaSst) for await (const si of elementos(entradaSst, 'si')) sst.push(textoDosT(si.replace(RE_RPH, '')));
   const estilos = entradas.get('xl/styles.xml') ? estilosDeData(await textoDaEntrada(entradas.get('xl/styles.xml'))) : [];
 
   const cls = classificador(aoLinha);
-  let anterior = 0, ausentes = 0;
+  let anterior = 0, ausentes = 0, rows = 0;
   const tiposVistos = {};
-  for await (const row of elementos(exigir(caminhoDaAba(alvo.get(aba.rid) ?? 'worksheets/sheet1.xml')), 'row')) {
-    const abre = /^<row\b([^>]*)/.exec(row)[1];
-    const r = Number(atributo(abre, 'r') ?? anterior + 1);
+  const folha = exigir(caminhoDaAba);
+  for await (const row of elementos(folha, 'row')) {
+    rows++;
+    const abreRow = new RegExp(`^<${P}row\\b([^>]*)`).exec(row)[1];
+    const r = Number(atributo(abreRow, 'r') ?? anterior + 1);
     // A linha que o XML não traz existe para quem abre a planilha: é linha em branco.
     for (let k = anterior + 1; k < r; k++) { cls.linha({ n: k - 1, celulas: [], tipos: [] }); ausentes++; }
     anterior = r;
@@ -402,24 +488,21 @@ async function lerXlsx(blob, aoLinha) {
       const t = atributo(m[1], 't') ?? 'n';
       const corpo = m[2] ?? '';
       let valor, tipo;
-      if (t === 'inlineStr') {
-        valor = '';
-        for (const x of corpo.matchAll(RE_T)) valor += x[1];
-        valor = desescapar(valor); tipo = 's';
-      } else {
+      if (t === 'inlineStr') { valor = textoDosT(corpo); tipo = 's'; }
+      else {
         const v = RE_V.exec(corpo);
         if (!v) continue; // célula só com estilo: vazia
-        const bruto = v[1];
+        const bruto = textoXml(v[1]);
         if (t === 's') {
           valor = sst[Number(bruto)];
           if (valor === undefined) throw new Error(`a célula ${ref ?? col} aponta para a string ${bruto}, e a tabela tem ${sst.length}`);
           tipo = 's';
-        } else if (t === 'str') { valor = desescapar(bruto); tipo = 's'; }
+        } else if (t === 'str') { valor = bruto; tipo = 's'; }
         else if (t === 'b') { valor = bruto === '1' ? 'VERDADEIRO' : 'FALSO'; tipo = 'b'; }
-        else if (t === 'e') { valor = desescapar(bruto); tipo = 'e'; }
+        else if (t === 'e') { valor = bruto; tipo = 'e'; }
         else if (t === 'd') { valor = bruto; tipo = 'd'; }
         else if (estilos[Number(atributo(m[1], 's') ?? 0)]) { valor = serialParaData(Number(bruto), de1904); tipo = 'd'; }
-        else { valor = bruto; tipo = 'n'; } // o texto do XML, sem passar por float
+        else { valor = bruto; tipo = 'n'; } // o texto do XML, sem passar por float (ver lerTabela)
       }
       while (celulas.length < col) { celulas.push(''); tipos.push(''); }
       celulas[col] = valor; tipos[col] = tipo;
@@ -427,6 +510,8 @@ async function lerXlsx(blob, aoLinha) {
     }
     cls.linha({ n: r - 1, celulas, tipos });
   }
+  // Folha com conteúdo e nenhuma linha reconhecida é leitura que falhou, não tabela vazia.
+  if (rows === 0 && folha.tamanho > 200) throw new Error(`a aba "${aba.nome}" tem ${folha.tamanho} bytes e nenhuma linha reconhecida`);
 
   const sha = new Sha256();
   const leitor = blob.stream().getReader();
@@ -452,40 +537,36 @@ async function lerXlsx(blob, aoLinha) {
 /**
  * Lê uma tabela (CSV ou XLSX) de um `Blob`/`File`, em fluxo.
  *
- * `aoLinha({ n, celulas, tipos, destino })` é chamado para TODA linha, na ordem: é
- * por ele que a MB3 agrega sem guardar o arquivo. `n` começa em 0 (linha 1 da planilha
- * ou do CSV); `tipos` só existe no XLSX ('s' texto, 'n' número, 'd' data ISO, 'b', 'e').
- * Número do XLSX sai como o texto do XML ("15172.12"), sem passar por float.
+ * `aoLinha({ n, celulas, tipos, destino, sinais })` é chamado UMA vez por linha, na ordem:
+ * é por ele que a MB3 agrega sem guardar o arquivo. `n` começa em 0 (linha 1 da planilha
+ * ou registro 1 do CSV); `tipos` só existe no XLSX ('s' texto, 'n' número, 'd' data ISO,
+ * 'b', 'e').
  *
- * Se o CSV parecia UTF-8 nos primeiros 64 KB e não era, ele é RELIDO do zero como
- * windows-1252, e `aoLinha({ reinicio: true })` avisa quem agrega para zerar o que
- * somou. Sem isso o resumo de quem agrega contaria as linhas duas vezes.
+ * NÚMERO DO XLSX sai como o texto do XML, sem passar por float: pode vir em notação
+ * científica ("1.5E-2") e com o ruído de 17 dígitos que o Excel grava ("1234.5599999999999").
+ * Quem converte para centavos (MB2/MB3) arredonda e DECLARA que arredondou.
  *
  * Devolve o resumo: formato, codificação, separador ou aba, bytes, sha256, o cabeçalho,
- * a largura, as linhas por destino (somam `linhas`), a primeira linha de cada destino,
- * a amostra de até 30 linhas de dado (para a MB2) e os avisos.
+ * a largura, as linhas por destino (somam `linhas`), os sinais, a primeira linha de cada
+ * destino, a amostra de até 30 linhas do corpo (para a MB2) e os avisos.
  */
 export async function lerTabela(blob, { aoLinha } = {}) {
   if (typeof blob?.stream !== 'function') blob = new Blob([blob]);
   const cabeca = new Uint8Array(await blob.slice(0, CABECA).arrayBuffer());
-  const { codificacao, bom } = codificacaoDe(cabeca);
+  const cod = codificacaoDe(cabeca);
   // UTF-16 tem byte zero: o detector de formato o chamaria de binário. É texto.
-  const det = codificacao.startsWith('utf-16') ? { formato: 'texto' } : detectarFormato(cabeca);
+  const det = cod.codificacao.startsWith('utf-16') ? { formato: 'texto' } : detectarFormato(cabeca);
   if (det.formato === 'xlsx') {
     try { return await lerXlsx(blob, aoLinha); } catch (e) { throw new Error(`a planilha não pôde ser lida: ${motivoDoErro(e)}`); }
   }
   if (det.formato !== 'texto') throw new Error(`não é CSV nem XLSX (formato detectado: ${det.formato}${det.detalhe ? `, ${det.detalhe}` : ''})`);
-  try {
-    return await lerCsv(blob, cabeca, aoLinha, null);
-  } catch (e) {
-    // Os primeiros 64 KB eram ASCII puro e a decisão foi UTF-8; um byte do cp1252 mais
-    // adiante quebra o decodificador estrito. Relê do zero como windows-1252, e diz.
-    if (codificacao === 'utf-8' && !bom && e instanceof ErroDeCodificacao) {
-      if (aoLinha) aoLinha({ reinicio: true });
-      const r = await lerCsv(blob, cabeca, aoLinha, 'windows-1252');
-      r.avisos.push('os primeiros 64 KB pareciam UTF-8 e um byte adiante não era: o arquivo foi relido como windows-1252');
-      return r;
-    }
-    throw e;
+  let codificacao = cod.codificacao;
+  const avisos = [];
+  if (!cod.certa && !(await todoUtf8(blob))) {
+    codificacao = 'windows-1252';
+    avisos.push('os primeiros 64 KB eram ASCII puro e o arquivo não é UTF-8 válido adiante: lido como windows-1252');
   }
+  const r = await lerCsv(blob, cabeca, aoLinha, codificacao);
+  r.avisos.unshift(...avisos);
+  return r;
 }

@@ -43,15 +43,15 @@ for (const arquivo of process.argv.slice(2)) {
   const noNavegador = await pagina.evaluate(async (url) => {
     const { lerTabela } = await import(url);
     let dados = 0;
-    const r = await lerTabela(document.getElementById('f').files[0], { aoLinha: (l) => { if (l.destino === 'dado') dados++; } });
-    return { ...r, dados_pelo_callback: dados };
+    const r = await lerTabela(document.getElementById('f').files[0], { aoLinha: (l) => { if (l.destino === 'corpo') dados++; } });
+    return { ...r, corpo_pelo_callback: dados };
   }, base + '/Leitor/lib/tabela.mjs');
   const msNavegador = Date.now() - t0;
   clearInterval(amostrar);
   await cdp.detach();
   const t1 = Date.now();
   let dados = 0;
-  const noNode = { ...(await lerTabela(await openAsBlob(arquivo), { aoLinha: (l) => { if (l.destino === 'dado') dados++; } })), dados_pelo_callback: dados };
+  const noNode = { ...(await lerTabela(await openAsBlob(arquivo), { aoLinha: (l) => { if (l.destino === 'corpo') dados++; } })), corpo_pelo_callback: dados };
   const msNode = Date.now() - t1;
   const igual = isDeepStrictEqual(noNavegador, noNode);
   if (!igual) falhou = true;
