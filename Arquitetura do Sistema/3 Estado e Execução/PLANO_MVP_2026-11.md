@@ -303,3 +303,22 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
   colunas não cabe.
 - **Não feito:** arquivo real de AR e AP (DM7, depende do dono).
 - **Próxima:** MB1, o leitor tabular em fluxo, medido sobre estes arquivos no Chromium.
+
+### MB1 — feita em 11/11/2026 (sessão 127), com os sintéticos
+
+- **`Leitor/lib/tabela.mjs`**: `lerTabela(blob, { aoLinha })` lê CSV (windows-1252, UTF-8, UTF-16,
+  com e sem BOM; aspas com separador e quebra de linha dentro) e XLSX (tabela de strings, texto em
+  linha, datas por estilo, calendário de 1904, primeira aba visível) em fluxo, o mesmo código no
+  Node e no navegador. Toda linha recebe um destino: `antes_do_cabecalho`, `cabecalho`, `dado`,
+  `total`, `em_branco`, `fora_da_tabela` ou `largura_divergente`. O resumo traz o cabeçalho, a
+  amostra de 30 linhas para a MB2, o sha256 e os avisos.
+- **Medido no Chromium, 1M de linhas:** CSV em 2,1 s com 44 MB de heap; XLSX em 15,2 s com 67 MB.
+  Resumo idêntico ao do Node nos 7 arquivos. Detalhe em `Leitor/medicao-n8n/README.md`.
+- **Prova:** `Leitor/test/tabela.test.mjs`, 21 testes no CI. Contra o gabarito da MB0 (contagens,
+  sha256, Σ da coluna Saldo = saldo em aberto) e o .xlsx igual ao .csv linha a linha. Cada uma das
+  13 correções desligada reprova de 1 a 3 testes. Duas correções saíram por serem redundantes
+  (0 testes reprovavam): o `TextDecoder` do Node 22 já é windows-1252 e já descarta o BOM.
+- **Não feito:** ligar ao Web Worker e à tela do portal (é a ME2); medir dentro do worker; arquivo
+  real (DM7).
+- **Próxima:** MB2, o mapeamento de colunas confirmado pelo analista.
+

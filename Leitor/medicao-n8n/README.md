@@ -212,3 +212,24 @@ estoura, ZIP64 de verdade) e o PDF de 4,2 GiB declara o tamanho no extra ZIP64.
 
 Não medido: Safari e Firefox; um zip real do contador (o gerador do Python não imita o que o Windows ou o
 macOS escrevem, só o formato); gravação no Supabase de verdade (o atraso é simulado).
+
+### O leitor TABULAR, CSV e XLSX de 1M de linhas (MB1, sessão 127, 11/11/2026)
+
+`navegador-tabela.mjs` importa `Leitor/lib/tabela.mjs` num Chromium real, lê o arquivo pelo `File` e
+compara o resumo inteiro com o do Node (`openAsBlob`). Arquivos de `Dados de Teste/volume`
+(`gerar_volume.py`), cujos totais fecham com o BP do book-distress.
+
+| Arquivo | Bytes | Chromium | Pico de heap JS | Node 22 | Igual ao Node |
+|---|---|---|---|---|---|
+| contas a receber, CSV, 100 mil linhas | 13,3 MB | 0,55 s | 17 MB | 0,30 s | sim |
+| contas a receber, CSV, 1M | 133,1 MB | **2,1 s** | **44 MB** | 2,8 s | sim |
+| contas a pagar, CSV, 1M | 133,1 MB | 2,2 s | 42 MB | 2,8 s | sim |
+| contas a receber, XLSX, 100 mil | 5,6 MB | 1,9 s | 35 MB | 2,3 s | sim |
+| contas a receber, XLSX, 1M (622 mil strings compartilhadas) | 57,2 MB | **15,2 s** | **67 MB** | 22,9 s | sim |
+
+Em todos: 1M de linhas lidas = 1M de linhas do arquivo, com 2 antes do cabeçalho, 1 cabeçalho,
+999.995 de dado, 1 total e 1 em branco (a do XLSX não existe no XML e é contada assim mesmo).
+
+Não medido: dentro do Web Worker do portal (aqui é a página, porque é dela que o CDP dá o heap; o
+código é o mesmo), Safari e Firefox, e um arquivo REAL de ERP (DM7 do PLANO_MVP).
+
