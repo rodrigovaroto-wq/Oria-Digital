@@ -2,7 +2,7 @@
 
 ## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 NO AR (PR #287 mergeado, 0232–0234 aplicadas, n8n republicado, portal publicado); P10 rodada nos sintéticos
 
-> **Migration mais nova: `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, junto com a 0232 e a 0233 (nessa ordem, pela API de gerenciamento, antes do merge).**
+> **Migration mais nova: `0240_a_versao_atual_que_nao_seguia_a_vigente.sql` — ESCRITA E TESTADA NO BANCO LOCAL, NÃO APLICADA EM PRODUÇÃO (fn_versao_atual segue a versão vigente da 0233; ver o cabeçalho). A última aplicada é a `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, junto com a 0232 e a 0233 (nessa ordem, pela API de gerenciamento, antes do merge).**
 > - Branch `claude/confident-bardeen-15mjip`. Nada mergeado no `main`, nada republicado no n8n, nada publicado no portal, P10 não rodou.
 > - Acesso a produção conferido nesta sessão: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_URL`, `N8N_BASE_URL`, `N8N_API_KEY`, `VERCEL_TOKEN` estão no ambiente (só os nomes foram lidos). Leitura de produção feita pela API de gerenciamento (`POST https://api.supabase.com/v1/projects/<ref>/database/query`, `read_only:true`; o ref sai de `SUPABASE_URL`). O MCP do Supabase (notebooks) recusa permissão.
 

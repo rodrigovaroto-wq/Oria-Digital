@@ -12578,6 +12578,7 @@ COMMENT ON FUNCTION public.fn_reconciliar_versoes_do_periodo(p_caso_id uuid, p_e
 CREATE FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text DEFAULT 'portal:reconferir'::text) RETURNS jsonb
     LANGUAGE plpgsql
     AS $$
+  -- marca-0240
 declare
   v_doc          record;
   v_versao       uuid;
@@ -12602,7 +12603,9 @@ begin
     -- regra de hoje (é o que a 0034 corrigiu e nunca foi reaplicado ao v35).
     perform fn_reconciliar_por_documento(v_doc.id);
 
-    v_versao := fn_versao_atual(v_doc.id);
+    -- 0240: as guardas de extração avaliam a versão que o reenvio CRIOU (a mais nova, mesmo vazia), não a vigente: a v2 que voltou sem linha tem a pendência extracao:falhou aberta, e avaliar a v1 (que tem linha)
+    -- a fecharia com 'a versão tem linhas' sem ninguém ter olhado, enquanto o book segue mostrando a v1.
+    v_versao := fn_versao_mais_nova(v_doc.id);
     if v_versao is not null then
       v_r := fn_reavaliar_guardas_extracao(v_versao, p_autor);
       v_resolvidas := v_resolvidas + coalesce(jsonb_array_length(v_r->'resolvidas'), 0);
@@ -12637,7 +12640,7 @@ $$;
 -- Name: FUNCTION fn_reconferir_caso(p_caso_id uuid, p_autor text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) IS 'Reaplica as regras de HOJE (reconciliação A/B, guardas de extração, completude) sobre o dado já gravado, sem gastar chamada de IA. Existe porque pendência é estado gravado e nada a reavaliava quando uma migration corrigia a regra — o portal mostrava achado corrigido como se fosse corrente (caso real: as duas pendências do v35 que a 0034 já havia fechado).';
+COMMENT ON FUNCTION public.fn_reconferir_caso(p_caso_id uuid, p_autor text) IS 'Reaplica as regras de HOJE (reconciliação A/B, guardas de extração, completude) sobre o dado já gravado, sem gastar chamada de IA. Existe porque pendência é estado gravado e nada a reavaliava quando uma migration corrigia a regra — o portal mostrava achado corrigido como se fosse corrente (caso real: as duas pendências do v35 que a 0034 já havia fechado). 0240: as guardas de extração avaliam fn_versao_mais_nova (a que o reenvio criou, mesmo vazia), não a vigente; as reconciliações dentro dela leem a vigente (fn_versao_atual).';
 
 --
 -- Name: fn_reescrever_recado_linha_exigida(text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -17206,8 +17209,14 @@ COMMENT ON FUNCTION public.fn_veredito_producao(p_estagio text, p_caso_id uuid) 
 CREATE FUNCTION public.fn_versao_atual(p_documento_id uuid) RETURNS uuid
     LANGUAGE sql STABLE
     AS $$
-  select id from documento_versao where documento_id = p_documento_id order by n_versao desc limit 1;
+  select coalesce(fn_versao_com_extracao(p_documento_id), fn_versao_mais_nova(p_documento_id));
 $$;
+
+--
+-- Name: FUNCTION fn_versao_atual(p_documento_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_versao_atual(p_documento_id uuid) IS '0240: a versão que as RECONCILIAÇÕES leem = a vigente de fn_versao_com_extracao (a de maior n_versao com linha; a com falha_transitoria_esgotada só vale quando nenhuma com linha está sem a flag, 0233), e a mais nova (fn_versao_mais_nova) só quando nenhuma versão tem linha. Até a 0239 era max(n_versao) puro: com a v2 parcial promovida as reconciliações conferiam a leitura pior enquanto a Modelagem e o export mostravam a v1, e na janela entre fn_registrar_documento e fn_registrar_campos_extraidos liam a v2 VAZIA. Quem precisa da mais nova mesmo vazia (guarda de extração, escrita na versão recém-criada) chama fn_versao_mais_nova. SECURITY INVOKER, somente leitura.';
 
 --
 -- Name: fn_versao_com_extracao(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -17309,6 +17318,22 @@ $_$;
 --
 
 COMMENT ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) IS '0233 (sobre a 0231): a versão já foi extraída (vale reaproveitar no reenvio)? Verdadeira quando (A) a versão TEM linha em campo_extraido (o critério da 0118) E NÃO se dá o caso de falha transitória esgotada: o ÚLTIMO evento extracao_sombra traz medicao.falha_transitoria_esgotada = true (fn_versao_esgotou_transitoria; booleano; o n8n P8 grava), há extracao_falhou aberta no documento (estado <> resolvida) e nenhuma linha da versão foi aceita por humano (status_aceite <> pendente, aceito_por preenchido e fora de sistema:%); OU (B) o corpo da 0231 INTACTO: o último evento extracao_sombra existe, sem falha_motivo, com tem_dado_financeiro = false explícito, e (tipo sem dado por natureza, fn_tipo_sem_dado_por_natureza, sem conta contada, OU uma pessoa resolveu a falha, fn_pessoa_decidiu_sem_dado), e sem extracao_falhou aberta (0230/0231). Com aceite humano o reenvio continua reaproveitando mesmo com falha transitória (teto: re-extrair tira da Modelagem a linha aceita). Campo ausente/ilegível = reaproveita como antes. A pergunta de fn_registrar_documento e de fn_fila_de_reprocesso: uma implementação só. SECURITY INVOKER, somente leitura.';
+
+--
+-- Name: fn_versao_mais_nova(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) RETURNS uuid
+    LANGUAGE sql STABLE
+    AS $$
+  select id from documento_versao where documento_id = p_documento_id order by n_versao desc limit 1;
+$$;
+
+--
+-- Name: FUNCTION fn_versao_mais_nova(p_documento_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) IS '0240: o id da documento_versao de MAIOR n_versao do documento, com ou sem campo_extraido (o corpo que fn_versao_atual teve de 0009 a 0239). É a resposta certa a "o que o reenvio acabou de criar?" e a "que versão a guarda de extração avalia?": a extração que falhou é a mais nova, mesmo vazia. NÃO é a resposta a "que número o book mostra?" — essa é fn_versao_com_extracao. SECURITY INVOKER, somente leitura.';
 
 --
 -- Name: fn_versao_peso_de_leitura(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -24041,6 +24066,14 @@ GRANT ALL ON FUNCTION public.fn_versao_esgotou_transitoria(p_documento_versao_id
 REVOKE ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_versao_extracao_concluida(p_documento_versao_id uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_versao_mais_nova(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_versao_mais_nova(p_documento_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_versao_peso_de_leitura(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
