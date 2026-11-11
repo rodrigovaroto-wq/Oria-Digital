@@ -528,6 +528,82 @@ console.log("--- 12. o mapa da dívida MATRICIAL (forma de produção, 0145) com
     ok(/5 de 9 operações têm vencimento impresso/.test(xiii3),
       `(12c) forma ${nome}: XIII.3 monta o muro pelo vencimento (rotativo e sem prazo à parte)`, xiii3.slice(0, 200));
   }
+
+  // 13. TEXTO NÃO LIDO. `achatarGrupos` (N8N, 4150bc6) mantém os números e PERDE os textos, e NÃO grava
+  // célula nula/nula: o contrato com texto perdido chega SÓ com Saldo e Juros, sem linha de
+  // Credor/Vencimento/Garantia. Quem diz quais contratos perderam é `depois->medicao->textos_perdidos`
+  // do evento 'extracao_sombra' (`textos_perdidos` no documento). Sem isso o deck AFIRMAVA "o mapa não
+  // imprime vencimento" (regra 1). Arranjo: 3 contratos, 2 com texto e 1 só com as colunas numéricas.
+  // Sintético (o mapa real do Distress não está em fixture) — mas com o FORMATO que o n8n grava.
+  const tres = contratos.slice(0, 3);
+  const camposTres = tres.flatMap(([cr, mod, saldo, taxa, venc, gar, juros], i) => [
+    ...(i < 2 ? [campo(cr, "Modalidade", null, mod)] : []), campo(cr, "Saldo devedor (R$)", saldo * 1000, null),
+    ...(i < 2 ? [campo(cr, "Taxa", null, taxa), campo(cr, "Vencimento", null, venc), campo(cr, "Garantia", null, gar)] : []),
+    campo(cr, "Juros do exercício (R$)", juros * 1000, null)]).map((c, i) => ({ ...c, ordem: i }));
+  const chaveSemTexto = tres[2][0];
+  type EstadoDoc = { textos_perdidos?: string[]; textos_perdidos_desconhecido?: boolean };
+  const muro = async (estado: EstadoDoc) => {
+    const docs = fixture.documentos.map((d) => ((d.documento_versao ?? []).some((v) => v.id === VER) ? { ...d, ...estado } : d));
+    const b = montarBaseCredito(ent12, docs, [], {}, [...outros, ...camposTres]);
+    const sl = await slidesDe(b);
+    return { ops: dividaDoMapa(b, [2024, 2025])!.operacoes, x3: textos(slideCom(sl, "XIII.3 · MURO DE VENCIMENTOS")).join(" "),
+      x2: sl.filter((x) => textos(x).some((t) => t.startsWith("XIII.2"))).map((x) => textos(x).join(" | ")).join(" | ") };
+  };
+  const com = await muro({ textos_perdidos: [chaveSemTexto] });
+  ok(com.ops.length === 3 && com.ops.filter((o) => o.textoNaoLido).length === 1 && com.ops.find((o) => o.textoNaoLido)?.credor === chaveSemTexto,
+    "(13a) com textos_perdidos: só a operação cuja chave consta fica marcada como texto não lido", JSON.stringify(com.ops.map((o) => [o.credor, o.textoNaoLido])));
+  ok(/1 de 2 operações têm vencimento impresso/.test(com.x3) && /vencimento de 1 operação não foi lido nesta extração/.test(com.x3)
+    && /à parte, em &quot;Não lido&quot;|à parte, em "Não lido"/.test(com.x3) && !/não imprime vencimento/.test(com.x3),
+    "(13b) XIII.3: não afirma que o mapa não imprime; diz que 1 operação não foi lida e que o saldo aparece à parte", com.x3.slice(0, 300));
+  ok(/não lido/.test(com.x2), "(13c) XIII.2 mostra \"não lido\" no vencimento da operação sem texto, não o placeholder do analista", com.x2.slice(0, 300));
+  const sem = await muro({});
+  ok(sem.ops.every((o) => !o.textoNaoLido && !o.textoNaoConferido) && /1 de 3 operações têm vencimento impresso/.test(sem.x3) && !/não foi lido|conferir/.test(sem.x3),
+    "(13d) SEM textos_perdidos: comportamento antigo (ausência real, 1 de 3 com ano de vencimento)", sem.x3.slice(0, 200));
+  const desc = await muro({ textos_perdidos_desconhecido: true });
+  ok(desc.ops.filter((o) => o.textoNaoConferido).length === 1 && /Não foi possível conferir se o vencimento de 1 operação/.test(desc.x3)
+    && !/não imprime vencimento/.test(desc.x3) && !/1 de 3/.test(desc.x3),
+    "(13e) leitura do registro falhou (desconhecido): o deck não afirma ausência, diz que não foi possível conferir", desc.x3.slice(0, 300));
+  // (13f) credor REPETIDO, como na 9637 (6 contratos, 4 chaves): a chave NÃO é única por contrato. A chave
+  // consta de textos_perdidos, mas o contrato 2 do mesmo credor foi LIDO (tem vencimento): só o 1º, que
+  // ficou com os números e sem NENHUMA célula de texto, sai marcado.
+  const rep = [tres[1], tres[0]].flatMap(([cr, mod, saldo, taxa, venc, gar, juros], i) => [
+    ...(i === 0 ? [] : [campo(cr, "Modalidade", null, mod)]), campo(cr, "Saldo devedor (R$)", saldo * 1000, null),
+    ...(i === 0 ? [] : [campo(cr, "Taxa", null, taxa), campo(cr, "Vencimento", null, venc), campo(cr, "Garantia", null, gar)]),
+    campo(cr, "Juros do exercício (R$)", juros * 1000, null)]).map((c, i) => ({ ...c, ordem: i }));
+  const docsRep = fixture.documentos.map((d) => ((d.documento_versao ?? []).some((v) => v.id === VER) ? { ...d, textos_perdidos: [tres[1][0]] } : d));
+  const bRep = montarBaseCredito(ent12, docsRep, [], {}, [...outros, ...rep]);
+  const opsRep = dividaDoMapa(bRep, [2024, 2025])!.operacoes;
+  const marcadas = opsRep.filter((o) => o.textoNaoLido);
+  ok(opsRep.length === 2 && marcadas.length === 1 && marcadas[0].vencimento === null && opsRep.find((o) => !o.textoNaoLido)?.vencimento === "15/03/2026"
+    && marcadas[0].credor === opsRep.find((o) => !o.textoNaoLido)?.credor,
+    "(13f) mesmo credor, um contrato lido e um perdido: só o perdido (sem texto) é marcado", JSON.stringify(opsRep.map((o) => [o.credor, o.vencimento, o.textoNaoLido])));
+  const x3Rep = textos(slideCom(await slidesDe(bRep), "XIII.3 · MURO DE VENCIMENTOS")).join(" ");
+  const nm = /(\d+) de (\d+) operações têm vencimento impresso/.exec(x3Rep);
+  ok(nm !== null && Number(nm[1]) <= Number(nm[2]) && Number(nm[2]) === 1 && /vencimento de 1 operação não foi lido/.test(x3Rep),
+    "(13g) o cartão nunca diz \"N de M\" com N > M, e o contrato perdido fica fora do M", x3Rep.slice(0, 120));
+  ok(com.x3.match(/(\d+) de (\d+) operações/)!.slice(1).map(Number).every((v, i, a) => i === 0 || a[0] <= v), "(13h) idem no arranjo principal (1 de 2)");
+  // (13j) A quebra "identidade depois de valor" vale SÓ para chave em textos_perdidos. Sem perda, vale a regra
+  // antiga: Taxa|Modalidade|Saldo são 2 operações (2 contratos), e "Saldo, Banco garantidor, Vencimento" é 1.
+  const { linhaDosCampos, textoDesconhecido } = await import("../src/lib/mapa-da-divida.ts");
+  const cm = (id: string, chave: string, col: string, ord: number) => ({ id, chave, periodo_coluna: col, valor_texto: null, ordem: ord });
+  const tmv = [cm("a", "X", "Taxa", 0), cm("b", "X", "Modalidade", 1), cm("c", "X", "Saldo devedor (R$)", 2),
+    cm("d", "X", "Taxa", 3), cm("e", "X", "Modalidade", 4), cm("f", "X", "Saldo devedor (R$)", 5)];
+  const nLin = (cs: typeof tmv, p?: Set<string>) => new Set(linhaDosCampos(cs, p).values()).size;
+  const antiga = nLin(tmv);
+  ok(antiga === 2 && nLin(tmv, new Set()) === antiga, "(13j) Taxa|Modalidade|Saldo SEM perda: 2 operações, igual à regra antiga", String(antiga));
+  const gar = [cm("a", "Y", "Saldo devedor (R$)", 0), cm("b", "Y", "Banco garantidor", 1), cm("c", "Y", "Vencimento", 2)];
+  ok(nLin(gar) === 1 && nLin(gar, new Set(["Z"])) === 1, "(13k) \"Saldo, Banco garantidor, Vencimento\" sem perda: 1 operação (garantidor não abre linha)", String(nLin(gar)));
+  ok(textoDesconhecido({ erroEvento: false, erroPendencias: true, algumNaoMedido: true, comPendencia: false })
+    && !textoDesconhecido({ erroEvento: false, erroPendencias: false, algumNaoMedido: true, comPendencia: false })
+    && textoDesconhecido({ erroEvento: false, erroPendencias: false, algumNaoMedido: true, comPendencia: true })
+    && !textoDesconhecido({ erroEvento: false, erroPendencias: true, algumNaoMedido: false, comPendencia: false })
+    && textoDesconhecido({ erroEvento: true, erroPendencias: false, algumNaoMedido: false, comPendencia: false }),
+    "(13l) pendências ilegíveis + evento não medido = desconhecido (não \"sem perda\"); medido sem falha = vale a lista");
+  // (13i) 'p4-10' é medido (inteiro, não lexical); ausente ou formato inesperado = não medido.
+  const { medicaoSabeTextosPerdidos } = await import("../src/lib/mapa-da-divida.ts");
+  ok(medicaoSabeTextosPerdidos("p4-3") && medicaoSabeTextosPerdidos("p4-10") && !medicaoSabeTextosPerdidos("p4-2")
+    && !medicaoSabeTextosPerdidos(undefined) && !medicaoSabeTextosPerdidos("p5-1") && !medicaoSabeTextosPerdidos("p4-3b"),
+    "(13i) versao_medicao: p4-10 conta como medido, p4-2/ausente/formato estranho não");
 }
 
 console.log(`\n${passou} asserts passaram, ${falhas} falharam`);

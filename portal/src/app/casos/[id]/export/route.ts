@@ -2,11 +2,12 @@ import { NextResponse } from "next/server";
 import { recusar } from "@/lib/recusa-do-export";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
+import { textoDesconhecido, medicaoSabeTextosPerdidos, MARCADOR_TEXTO_NAO_LIDO } from "@/lib/mapa-da-divida";
 import { lerCamposDasVersoes, lerDocumentosDoCaso, lerValoresPorAno } from "@/lib/leitura-do-caso";
 import { veredictoDoPortao } from "@/lib/modelagem-cobertura";
 import type { EntradaModeloInstitucional, LinhaModelo } from "@/lib/modelo-institucional";
 import {
-  buildExportWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, type ConfigModelagem,
+  buildExportWorkbook, finalizarBufferDoExport, nomeArquivoSanitizado, versoesVigentes, type ConfigModelagem,
   type MacroAnual, type MacroExpectativa,
 } from "@/lib/export";
 import {
@@ -94,7 +95,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       { status: 500 },
     );
   }
-  const documentos = documentosRes.data;
+  let documentos = documentosRes.data;
 
   const versaoIds = documentos.flatMap((doc) => (doc.documento_versao ?? []).map((v) => v.id));
   // PAGINADO, E AQUI ERA O PIOR LUGAR PARA NÃO ESTAR.
@@ -141,6 +142,45 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   // que não deu para ler, em vez de abortar o book inteiro ou omitir em silêncio.
   if (falhasRes.error) {
     console.error(`[export] consulta de causas de falha falhou: ${falhasRes.error.message}`, { caso_id: id });
+  }
+  // TEXTO PERDIDO por conta: o `evento_auditoria` 'extracao_sombra' da versão VIGENTE do Mapa de Dívida
+  // traz `depois->medicao->textos_perdidos` (chave de cada conta que perdeu o texto; ausente quando não
+  // houve perda). A conta perdida não tem linha de texto em `campo_extraido`, então só este registro
+  // separa "o mapa não traz" de "a leitura não trouxe". Retry grava VÁRIOS eventos e os campos se somam:
+  // une-se a lista de todos. Evento de antes da medição (`versao_medicao` < p4-3) não diz nada: com a
+  // pendência "TEXTOS sem coluna" aberta no documento, vira "desconhecido"; sem ela, sem perda.
+  // Falha na leitura também é "desconhecido" (ver `estadoDoTextoPorCampo`).
+  {
+    const vigentes = versoesVigentes(documentos, campos);
+    const mapaVers = documentos.filter((d) => d.tipo_taxonomia === "MAPA_DIVIDA")
+      .map((d) => ({ d, ver: (d.documento_versao ?? []).map((v) => v.id).filter((v) => vigentes.has(v)) }));
+    const refs = mapaVers.flatMap((m) => m.ver.map((v) => `documento_versao:${v}`));
+    if (refs.length > 0) {
+      const ev = await supabase.from("evento_auditoria").select("entidade_ref, depois").eq("acao", "extracao_sombra")
+        .in("entidade_ref", refs).order("criado_em", { ascending: true }).order("id", { ascending: true });
+      if (ev.error) console.error(`[export] leitura de textos perdidos falhou: ${ev.error.message}`, { caso_id: id });
+      const porVersao = new Map<string, { chaves: Set<string>; medido: boolean }>();
+      for (const e of ev.data ?? []) {
+        const med = (e.depois as { medicao?: { textos_perdidos?: unknown; versao_medicao?: unknown } } | null)?.medicao;
+        const atual = porVersao.get(e.entidade_ref as string) ?? { chaves: new Set<string>(), medido: false };
+        if (Array.isArray(med?.textos_perdidos)) for (const t of med.textos_perdidos) if (typeof t === "string") atual.chaves.add(t);
+        atual.medido = medicaoSabeTextosPerdidos(med?.versao_medicao); // o ÚLTIMO evento decide se a medição vale
+        porVersao.set(e.entidade_ref as string, atual);
+      }
+      const comPendencia = new Set((falhasRes.data ?? [])
+        .filter((p) => p.documento_id && (p.descricao ?? "").includes(MARCADOR_TEXTO_NAO_LIDO)).map((p) => p.documento_id));
+      const porDoc = new Map(mapaVers.map(({ d, ver }) => {
+        const regs = ver.map((v) => porVersao.get(`documento_versao:${v}`));
+        const desconhecido = textoDesconhecido({ erroEvento: !!ev.error, erroPendencias: !!falhasRes.error,
+          algumNaoMedido: regs.some((r) => !r?.medido), comPendencia: comPendencia.has(d.id) });
+        return [d.id, desconhecido ? null : [...new Set(regs.flatMap((r) => [...(r?.chaves ?? [])]))]] as const;
+      }));
+      documentos = documentos.map((d) => {
+        if (!porDoc.has(d.id)) return d;
+        const t = porDoc.get(d.id);
+        return t === null ? { ...d, textos_perdidos_desconhecido: true } : { ...d, textos_perdidos: t };
+      });
+    }
   }
   const causasDeFalha = [
     ...(falhasRes.error

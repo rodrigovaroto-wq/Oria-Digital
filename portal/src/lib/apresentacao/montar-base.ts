@@ -6,7 +6,7 @@
 // com a 0125, outra sem); uma leitura só não tem com quem discordar.
 import { formatarPeriodo, versoesVigentes, type DocumentoParaExport } from "../export";
 import { fatorDeEscala, historicoParaCredito, type EntradaModeloInstitucional, type LinhaModelo } from "../modelo-institucional";
-import { lerMapaDaDivida, medidaDoRotulo, type LinhaDoMapa } from "../mapa-da-divida";
+import { estadoDoTextoPorCampo, linhaDosCampos, lerMapaDaDivida, medidaDoRotulo, type LinhaDoMapa } from "../mapa-da-divida";
 import type { CampoExtraido } from "../types";
 import { seriesPorLinha, serieDaLinha } from "../modelagem-linha";
 import { naturezaDoAno, type BaseCredito, type DocumentoDaBase } from "./base-credito";
@@ -153,24 +153,18 @@ export function mapaDosCampos(
     const ids = new Set((d.documento_versao ?? []).map((v) => v.id).filter((id) => vigentes.has(id)));
     const doDoc = campos.filter((c) => ids.has(c.documento_versao_id))
       .sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0));
-    // A linha impressa: na forma matricial os campos de uma linha vêm seguidos, um por coluna; muda
-    // de linha quando a chave muda ou uma coluna se repete.
-    let linha = 0;
-    let chaveAnt: string | null = null;
-    const vistas = new Set<string>();
+    // A linha impressa (forma matricial) e o estado do texto vêm do MESMO lugar que o export usa.
+    const linhaDe = linhaDosCampos(doDoc, new Set(d.textos_perdidos));
+    const estados = estadoDoTextoPorCampo(d, doDoc);
     for (const c of doDoc) {
       const anoCol = c.periodo_coluna ? anosDoPeriodo(formatarPeriodo(null, c.periodo_coluna)) : [];
       const ehMedida = c.periodo_coluna !== null && anoCol.length === 0 && medidaDoRotulo(c.periodo_coluna) !== null;
       const ano = ehMedida || !c.periodo_coluna ? anoDoDoc : anoCol.at(-1) ?? null;
       if (ano === null) continue;
-      if (ehMedida) {
-        if (c.chave !== chaveAnt || vistas.has(c.periodo_coluna!)) { linha += 1; vistas.clear(); }
-        vistas.add(c.periodo_coluna!);
-        chaveAnt = c.chave;
-      }
       const f = fatorDeEscala(c.unidade, unidadeModelo) ?? 1;
-      linhas.push({ chave: c.chave, coluna: ehMedida ? c.periodo_coluna : null, ano, linha: ehMedida ? linha : undefined,
-        num: c.valor_num === null ? null : c.valor_num * f, texto: c.valor_texto });
+      linhas.push({ chave: c.chave, coluna: ehMedida ? c.periodo_coluna : null, ano, linha: ehMedida ? linhaDe.get(c.id) : undefined,
+        num: c.valor_num === null ? null : c.valor_num * f, texto: c.valor_texto,
+        ...(estados.has(c.id) ? { textoEstado: estados.get(c.id) } : {}) });
     }
   }
   return lerMapaDaDivida(linhas, anos);

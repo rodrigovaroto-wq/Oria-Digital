@@ -839,7 +839,7 @@ test('Gravar Campos (Sombra): passa p_medicao por NOME e liga o $7 à medição 
     { documento_versao_id: 'v1', bloco: 2, blocos: 2, contas_no_documento: 40, campos: [linhaM('C', 3)],
       diagnostico: {}, falha_motivo: null, custo_usd: 0.02, tokens: { entrada: 5, saida: 10, cache: 0 } },
   ]);
-  assert.equal(m.versao_medicao, 'p4-2');
+  assert.equal(m.versao_medicao, 'p4-3');
   assert.equal(m.contas_no_documento, 40);
   assert.equal(m.linhas_devolvidas, 3);
   assert.equal(m.contas_distintas, 3);
@@ -857,7 +857,7 @@ test('Gravar Campos (Sombra): contas_no_documento ausente continua AUSENTE na me
     campos: [linhaM('A', 1)], diagnostico: {}, falha_motivo: null, custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 } }]);
   assert.equal(m.linhas_devolvidas, 1);
   assert.ok(!('contas_no_documento' in m), 'contas_no_documento nulo não pode virar 0 nem null na medição');
-  assert.equal(m.versao_medicao, 'p4-2');
+  assert.equal(m.versao_medicao, 'p4-3');
 });
 
 test('P8 Juntar Blocos: falha_transitoria_esgotada só quando algum bloco terminou transitório; sem registro, AUSENTE', async () => {

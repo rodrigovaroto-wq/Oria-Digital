@@ -11,7 +11,88 @@
 // As duas formas passam por `lerMapaDaDivida`: quem chama traduz a sua fonte (linhas do modelo,
 // campos extraídos) em `LinhaDoMapa`, e a regra de "que medida é esta" vive num lugar só.
 
+/**
+ * TEXTO PERDIDO. `achatarGrupos` (N8N) mantém os números de uma conta e perde os textos, e NÃO grava
+ * célula nula/nula: o contrato perdido chega só com as colunas numéricas. Quem diz QUAL chave perdeu é
+ * `depois->medicao->textos_perdidos` do evento 'extracao_sombra' (a chave NÃO é única por contrato: o
+ * mesmo credor tem um contrato lido e outro perdido). Então "perdido" = chave ∈ lista E o contrato
+ * (chave + linha impressa) não tem nenhuma célula de texto com valor. PONTO ÚNICO do predicado: deck
+ * (via `montar-base`) e export usam `estadoDoTextoPorCampo`.
+ *  - "desconhecido": não dá para dizer (leitura do evento falhou, ou evento anterior à medição).
+ */
+export type EstadoDoTexto = "perdido" | "desconhecido";
+export interface DocComTextos { textos_perdidos?: string[]; textos_perdidos_desconhecido?: boolean }
+export interface CampoDoMapa { id: string; chave: string; periodo_coluna: string | null; valor_texto: string | null; ordem: number | null }
+
+/**
+ * O documento fica "desconhecido" quando a leitura do evento falhou, ou quando o último evento é de antes
+ * da medição E não dá para descartar a perda (pendência "TEXTOS sem coluna" aberta, ou a consulta das
+ * pendências falhou — sem ela, "sem pendência" seria só ausência de resposta).
+ */
+export function textoDesconhecido(a: { erroEvento: boolean; erroPendencias: boolean; algumNaoMedido: boolean; comPendencia: boolean }): boolean {
+  return a.erroEvento || (a.algumNaoMedido && (a.erroPendencias || a.comPendencia));
+}
+
+/** A frase que o `falha_motivo` do n8n grava na pendência `extracao_falhou` quando perde textos. */
+export const MARCADOR_TEXTO_NAO_LIDO = "TEXTOS sem coluna";
+
+/**
+ * O evento já MEDE textos perdidos? `versao_medicao` 'p4-N' com N >= 3. Compara o INTEIRO (lexical
+ * poria 'p4-10' antes de 'p4-3'); formato inesperado ou ausente = não mede.
+ */
+export function medicaoSabeTextosPerdidos(versao: unknown): boolean {
+  const m = typeof versao === "string" ? /^p4-(\d+)$/.exec(versao) : null;
+  return m !== null && Number(m[1]) >= 3;
+}
+
+/**
+ * A linha impressa de cada campo (forma matricial): muda quando a chave muda, uma coluna se repete, ou
+ * uma coluna de IDENTIDADE (credor, modalidade) chega depois de uma coluna de valor — esta SÓ quando a
+ * chave anterior consta de `perdidas`: o contrato perdido (só Saldo e Juros) fundia com o seguinte do
+ * mesmo credor, que abre por "Modalidade". Fora da perda vale a regra antiga (Taxa|Modalidade|Saldo e
+ * "Banco garantidor" depois de Saldo são UMA operação). Limite: tabela que não abre por identidade.
+ */
+export function linhaDosCampos(campos: CampoDoMapa[], perdidas?: Set<string>): Map<string, number> {
+  const out = new Map<string, number>();
+  let linha = 0;
+  let ant: string | null = null;
+  const vistas = new Set<string>();
+  for (const c of [...campos].sort((x, y) => (x.ordem ?? 0) - (y.ordem ?? 0))) {
+    const col = c.periodo_coluna;
+    if (col === null || medidaDoRotulo(col) === null || /\b(?:19|20)\d{2}\b/.test(col)) continue;
+    const identidade = ["credor", "modalidade"].includes(medidaDoRotulo(col) ?? "");
+    const temValor = [...vistas].some((v) => !["credor", "modalidade"].includes(medidaDoRotulo(v) ?? ""));
+    if (c.chave !== ant || vistas.has(col) || (identidade && temValor && (perdidas?.has(ant ?? "") ?? false))) { linha += 1; vistas.clear(); }
+    vistas.add(col);
+    ant = c.chave;
+    out.set(c.id, linha);
+  }
+  return out;
+}
+
+export function estadoDoTextoPorCampo(doc: DocComTextos, campos: CampoDoMapa[]): Map<string, EstadoDoTexto> {
+  const out = new Map<string, EstadoDoTexto>();
+  if (doc.textos_perdidos_desconhecido) { for (const c of campos) out.set(c.id, "desconhecido"); return out; }
+  const perdidas = doc.textos_perdidos ?? [];
+  if (perdidas.length === 0) return out;
+  const linhas = linhaDosCampos(campos, new Set(perdidas));
+  const grupos = new Map<string, CampoDoMapa[]>();
+  for (const c of campos) {
+    if (!perdidas.includes(c.chave)) continue;
+    const k = `${c.chave}\u0000${linhas.get(c.id) ?? ""}`;
+    grupos.set(k, [...(grupos.get(k) ?? []), c]);
+  }
+  for (const g of grupos.values()) {
+    if (!g.some((c) => (c.valor_texto ?? "").trim() !== "")) for (const c of g) out.set(c.id, "perdido");
+  }
+  return out;
+}
+
 export interface OperacaoDivida {
+  /** a extração leu os números desta operação e PERDEU os textos (credor, prazo, taxa…) */
+  textoNaoLido?: boolean;
+  /** sem texto de vencimento E não foi possível conferir se a extração o perdeu (leitura do evento falhou) */
+  textoNaoConferido?: boolean;
   credor: string; modalidade: string; operacao: string | null;
   saldo: Record<number, number | null>; juros: Record<number, number | null>;
   /** parcela de curto/longo prazo, quando o mapa as separa */
@@ -34,6 +115,8 @@ export interface LinhaDoMapa {
    * fundiria as duas operações numa.
    */
   linha?: number;
+  /** `estadoDoTexto` da conta desta linha */
+  textoEstado?: "perdido" | "desconhecido";
 }
 
 type Medida = "saldo" | "juros" | "cp" | "lp" | "taxa" | "indexador" | "vencimento" | "garantia" | "credor" | "modalidade";
@@ -113,10 +196,14 @@ export function lerMapaDaDivida(linhas: LinhaDoMapa[], anos: number[]):
     const restoDaChave = credorCol ? partes : partes.slice(1);
     const modalidade = modCol ?? restoDaChave[0] ?? "n/d";
     const operacao = (modCol ? restoDaChave : restoDaChave.slice(1)).join(" — ") || null;
+    const vencimento = texto("vencimento");
+    const perdido = itens.some((x) => x.l.textoEstado === "perdido");
     operacoes.push({ credor, modalidade, operacao, saldo, juros: serie("juros"),
       ...(Object.values(cp).some((v) => v !== null) ? { cp } : {}),
       ...(Object.values(lp).some((v) => v !== null) ? { lp } : {}),
-      taxaContratual: texto("taxa"), indexador: texto("indexador"), vencimento: texto("vencimento"), garantia: texto("garantia") });
+      taxaContratual: texto("taxa"), indexador: texto("indexador"), vencimento, garantia: texto("garantia"),
+      ...(perdido ? { textoNaoLido: true } : {}),
+      ...(!perdido && vencimento === null && itens.some((x) => x.l.textoEstado === "desconhecido") ? { textoNaoConferido: true } : {}) });
   }
   return { operacoes, totalDoMapa };
 }

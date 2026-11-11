@@ -4,7 +4,21 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 125 — COMECE AQUI (depois de 10/11/2026)
+## ▶ SESSÃO 127 — COMECE AQUI (depois de 11/11/2026)
+
+- **Leia o bloco "▶ PRÓXIMOS PASSOS" da seção "SESSÃO 126" no topo do `ESTADO.md`.** É a lista única e ordenada do que falta. Este cabeçalho só aponta para lá.
+- **Produção (11/11):**
+  - Migrations 0232, 0233 e 0234 aplicadas (sonda com 1 ausente, o conhecido do Vault); 80 mandatos.
+  - Ingestão republicada do `main` depois do PR #288 (63 nós; FINGERPRINT `70de46f4c67573af`).
+  - Portal publicado com o #287.
+- **Primeiro passo:** fechar o PR #289 (CI, merge, republicar).
+- **Decisões do dono nesta sessão:**
+  - Sem modelo de reserva: só o `gpt-5.6-luna`.
+  - P10 rodada só nos sintéticos; reais depois.
+- **Mandatos de teste:** o da prova das guardas (S126) foi apagado, com os 2 originais removidos do bucket. 80 mandatos.
+
+## SESSÃO 125 (10/11/2026; histórico, a mais nova está acima)
+
 
 - **Leia a seção "SESSÃO 124" no topo do `ESTADO.md`**, o bloco "Próxima sessão, nesta ordem". Este cabeçalho só aponta para lá.
 - **Produção:** migration mais nova aplicada **0231** (sonda 349, 0 ausentes). Ingestão republicada em 10/11 com a régua corrigida (63 nós). Portal no `main` de `d316bd3`.
