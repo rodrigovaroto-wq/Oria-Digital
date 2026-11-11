@@ -2686,6 +2686,19 @@ begin
             and r.descricao = pe.descricao
             and case when r.tipo = 'secao_fecha' then r.documento_id is not distinct from pe.documento_id
                      else (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id) end)
+       -- a regra (3) do corpo: o texto do IRMÃO é legítimo quando o último registro da chave da pendência existe e não diverge (A conferiu, B segue divergindo): um registro do caso e tipo com este texto e o
+       -- último da chave não divergente. Sem isto o backfill contava essa pendência correta como contaminada e "sem registro", em toda chamada.
+       and not (
+         coalesce((select r3.resultado not in ('divergente', 'divergencia', 'zona_cinzenta')
+                     from reconciliacao r3
+                    where r3.caso_id = pe.caso_id and 'reconciliacao:' || r3.tipo = pe.motivo
+                      and coalesce(r3.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                        = coalesce(pe.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                      and r3.periodo_chave_id = pe.periodo_id
+                    order by r3.criado_em desc, r3.cmin::text::int desc
+                    limit 1), false)
+         and exists (select 1 from reconciliacao r4
+                      where r4.caso_id = pe.caso_id and 'reconciliacao:' || r4.tipo = pe.motivo and r4.descricao = pe.descricao))
      order by pe.criada_em, pe.id
   loop
     v_contaminadas := v_contaminadas + 1;
@@ -2721,12 +2734,11 @@ begin
     v_corrigidas := v_corrigidas + 1;
   end loop;
 
-  if v_corrigidas > 0 then
-    insert into evento_auditoria (ator, acao, entidade_ref, depois)
-      values ('sistema:0241', 'descricao_contaminada_resumo', 'pendencia',
-              jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro,
-                                 'caso_id', p_caso_id));
-  end if;
+  -- SEMPRE, mesmo com tudo zero: sem a linha não há trilha de que o backfill rodou (regra 7: estágio que não rodou parece estágio que rodou e não achou nada).
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+    values ('sistema:0241', 'descricao_contaminada_resumo', 'pendencia',
+            jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro,
+                               'caso_id', p_caso_id));
   return jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro);
 end;
 $$;
@@ -2735,7 +2747,7 @@ $$;
 -- Name: FUNCTION fn_corrigir_descricao_contaminada(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) IS '0241: para a pendência de reconciliação aberta cuja descrição nenhuma reconciliacao do próprio período OU da própria chave gerou (a rodada de um período irmão a reescrevia), põe a descrição da reconciliacao MAIS RECENTE do próprio (periodo_id ou periodo_chave_id da pendência; secao_fecha: do documento), desde que o resultado dela seja coerente com o tipo da pendência. Sem registro, ou com o mais recente ok/incoerente/sem texto, não toca e conta (sem_registro_proprio), sem voltar a um registro mais antigo. Só estado aberta (as demais são decisão de gente); resolvida_por e estado intocados. Grava evento_auditoria sistema:0241 com a descrição antiga em antes. Devolve {contaminadas, corrigidas, sem_registro_proprio}; idempotente.';
+COMMENT ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) IS '0241: para a pendência de reconciliação aberta cuja descrição nenhuma reconciliacao do próprio período OU da própria chave gerou (a rodada de um período irmão a reescrevia), põe a descrição da reconciliacao MAIS RECENTE do próprio (periodo_id ou periodo_chave_id da pendência; secao_fecha: do documento), desde que o resultado dela seja coerente com o tipo da pendência. Sem registro, ou com o mais recente ok/incoerente/sem texto, não toca e conta (sem_registro_proprio), sem voltar a um registro mais antigo. Só estado aberta (as demais são decisão de gente); resolvida_por e estado intocados. Grava evento_auditoria sistema:0241 com a descrição antiga em antes, e um resumo a cada chamada, mesmo com tudo zero. Respeita o texto do irmão que a regra (3) do corpo legitima. Devolve {contaminadas, corrigidas, sem_registro_proprio}; idempotente.';
 
 --
 -- Name: fn_decidir_pendencia(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -

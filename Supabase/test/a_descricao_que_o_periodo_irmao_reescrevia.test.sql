@@ -9,6 +9,7 @@
 --       nunca volta a um registro mais antigo que o último do próprio período (não toca e conta); sem registro do próprio período NÃO toca e conta; pendência em decisão humana NÃO é tocada.
 --   (E) (revisão) a chave que desce a um período compatível escreve o texto da própria pendência (0192/4), e o backfill reconhece esse texto (periodo_chave_id) em vez de trocá-lo.
 --   (F) (revisão) A confere e B segue divergindo: a pendência fica aberta (guarda 0192) e passa a mostrar a divergência de B, não a de A que já não existe.
+--   (F2) (2a revisão) o backfill não conta a pendência correta de (F) como contaminada nem sem registro, e grava o resumo mesmo com tudo zero.
 --   (G) (revisão) secao_fecha: o documento reclassificado para um período compatível continua reescrevendo o texto da própria pendência.
 --   (D) a sonda enxerga os 3 requisitos da 0241.
 --
@@ -215,6 +216,18 @@ begin
   select count(*) into v_n from pendencia pe join caso c on c.id = pe.caso_id where c.nome = '0241: estado velho' and pe.motivo = 'reconciliacao:teste_0241' and pe.estado <> 'resolvida';
   perform teste_assert_p41(v_n = 1, 'A conferiu, B segue divergindo: a pendência continua aberta, uma só (guarda 0192)', format('%s', v_n));
   perform teste_assert_p41(v_p.descricao = 'B: 700 contra 400', 'e mostra a divergência que existe (B), não a de A que já conferiu', coalesce(v_p.descricao, ''));
+end $$;
+do $$
+declare v_c uuid; v_r jsonb; v_n int;
+begin
+  select id into v_c from caso where nome = '0241: estado velho';
+  v_r := fn_corrigir_descricao_contaminada(v_c);
+  perform teste_assert_p41((v_r->>'contaminadas')::int = 0 and (v_r->>'sem_registro_proprio')::int = 0 and (v_r->>'corrigidas')::int = 0,
+    'o backfill não conta como contaminada nem como "sem registro" a pendência correta em que A conferiu e B segue divergindo', v_r::text);
+  perform teste_assert_p41((teste_pend_p41('0241: estado velho')).descricao = 'B: 700 contra 400', 'e não toca o texto dela');
+  select count(*) into v_n from evento_auditoria where ator = 'sistema:0241' and acao = 'descricao_contaminada_resumo'
+     and depois->>'caso_id' = v_c::text and (depois->>'corrigidas')::int = 0 and (depois->>'contaminadas')::int = 0;
+  perform teste_assert_p41(v_n = 1, 'o resumo do backfill é gravado mesmo com tudo zero (trilha de que rodou)', format('%s', v_n));
 end $$;
 
 -- G: tipo por documento. A pendência secao_fecha é do documento; o documento passa a outro período compatível (reclassificado) e a árvore chama sem chave: o texto é do documento e tem de seguir.

@@ -40,7 +40,7 @@
 -- (divergente/divergencia/zona_cinzenta para `divergencia_reconciliacao`, precondicao_nao_satisfeita para `precondicao_nao_satisfeita`) e tiver texto (regra 1: nada em branco). Sem registro, ou com o último `ok`/
 -- incoerente/sem texto: NÃO toca e conta (`sem_registro_proprio`): ausência declarada, não texto inventado. `resolvida_por` e `estado` ficam intocados. Cada correção grava um evento_auditoria (ator `sistema:0241`, acao
 -- `descricao_da_pendencia_corrigida`, entidade_ref `pendencia:<id>`) com a descrição antiga em `antes` e a nova e a `reconciliacao` de origem em `depois`; e um resumo (acao `descricao_contaminada_resumo`) com as
--- contagens quando algo foi corrigido. Idempotente: depois de corrigida a descrição passa a ser a de um registro do próprio, e a segunda chamada devolve corrigidas = 0. A migration a chama uma vez.
+-- contagens, a CADA chamada, mesmo com tudo zero (regra 7). O critério de contaminada respeita também a regra (3) do corpo (texto do irmão legítimo quando o último registro da chave não diverge): opção escolhida em vez de um segundo contador, que só renomearia uma pendência correta. Idempotente: depois de corrigida a descrição passa a ser a de um registro do próprio, e a segunda chamada devolve corrigidas = 0. A migration a chama uma vez.
 -- REMEDIDO em PRODUÇÃO pelo critério CORRIGIDO (somente leitura, 11/11/2026, depois da revisão): 0 pendências contaminadas. As 7 acima
 -- mostram, todas, o texto de um registro cuja periodo_chave_id é o período da pendência (a chave que desce, 0192/4), que é legítimo.
 -- O critério antigo (só periodo_id) superestimava. Logo o backfill não muda nada em produção hoje; ele fica pela idempotência e para
@@ -49,13 +49,15 @@
 --
 -- A ASSINATURA E O RETORNO DE fn_registrar_reconciliacao NÃO MUDAM. Reaplicável: create or replace + upsert dos requisitos; o backfill é idempotente.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql — 26 asserts (26 execuções), medidos em 11/11/2026 com o assert trocado por raise warning (`p41.medindo = on`), que CONTA;
--- cada sabotagem é a migration reemitida sobre o banco já montado pelo run.sh (cópia por template, teste rodado inteiro, aviso MEDIDO lido). Controle (migration intacta): 0 dos 26 reprovam. Por parte desligada:
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql — 29 asserts (29 execuções), medidos em 11/11/2026 com o assert trocado por raise warning (`p41.medindo = on`), que CONTA;
+-- cada sabotagem é a migration reemitida sobre o banco já montado pelo run.sh (cópia por template, teste rodado inteiro, aviso MEDIDO lido). Controle (migration intacta): 0 dos 29 reprovam. Por parte desligada:
 --   * correção do corpo (`if true then` no lugar de `if v_reescreve_descricao then`): 3 (2 de comportamento, o texto de B na pendência de A depois da divergência e depois da pré-condição do irmão, + 1 da sonda);
 --   * a metade (3) do corpo (último registro da chave deixou de divergir): 1 (F, o texto de A congelado depois que A conferiu);
 --   * o `secao_fecha` (`v_reescreve_descricao := false or ...`): 1 (G, o texto do documento reclassificado congelado);
 --   * o critério do backfill (só `periodo_id`, sem `periodo_chave_id`): 1 (E, o texto legítimo da chave que desce tratado como contaminado);
 --   * a escolha do backfill (volta a pular o registro mais novo incoerente com o tipo): 1 (C2, devolve a divergência antiga);
+--   * o critério (3) do backfill (a exclusão do texto do irmão legítimo): 2 (F2, a pendência correta contada como contaminada e "sem registro", + o resumo com contaminadas diferente de zero);
+--   * o resumo SEMPRE (volta a `if v_corrigidas > 0`): 1 (F2, sem trilha com tudo zero);
 --   * o `update` do backfill (vira `null`): 3 (a descrição que não volta, a segunda chamada que acha de novo, a trilha duplicada); corpo + backfill juntos: 6.
 -- Os asserts de controle (deduplicação, a rodada do mesmo período que continua reescrevendo, estado e resolvida_por intocados, sem registro próprio, decisão humana, catálogo) passam nas versões sabotadas de propósito:
 -- protegem o que não pode mudar. A primeira versão da correção (só `p_periodo_id`) reprovou 1 assert de divergencia_vigente_entre_rodadas.test.sql (0192/4): é o que fez a condição incluir a chave.
@@ -396,6 +398,19 @@ begin
             and r.descricao = pe.descricao
             and case when r.tipo = 'secao_fecha' then r.documento_id is not distinct from pe.documento_id
                      else (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id) end)
+       -- a regra (3) do corpo: o texto do IRMÃO é legítimo quando o último registro da chave da pendência existe e não diverge (A conferiu, B segue divergindo): um registro do caso e tipo com este texto e o
+       -- último da chave não divergente. Sem isto o backfill contava essa pendência correta como contaminada e "sem registro", em toda chamada.
+       and not (
+         coalesce((select r3.resultado not in ('divergente', 'divergencia', 'zona_cinzenta')
+                     from reconciliacao r3
+                    where r3.caso_id = pe.caso_id and 'reconciliacao:' || r3.tipo = pe.motivo
+                      and coalesce(r3.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                        = coalesce(pe.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+                      and r3.periodo_chave_id = pe.periodo_id
+                    order by r3.criado_em desc, r3.cmin::text::int desc
+                    limit 1), false)
+         and exists (select 1 from reconciliacao r4
+                      where r4.caso_id = pe.caso_id and 'reconciliacao:' || r4.tipo = pe.motivo and r4.descricao = pe.descricao))
      order by pe.criada_em, pe.id
   loop
     v_contaminadas := v_contaminadas + 1;
@@ -431,18 +446,17 @@ begin
     v_corrigidas := v_corrigidas + 1;
   end loop;
 
-  if v_corrigidas > 0 then
-    insert into evento_auditoria (ator, acao, entidade_ref, depois)
-      values ('sistema:0241', 'descricao_contaminada_resumo', 'pendencia',
-              jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro,
-                                 'caso_id', p_caso_id));
-  end if;
+  -- SEMPRE, mesmo com tudo zero: sem a linha não há trilha de que o backfill rodou (regra 7: estágio que não rodou parece estágio que rodou e não achou nada).
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+    values ('sistema:0241', 'descricao_contaminada_resumo', 'pendencia',
+            jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro,
+                               'caso_id', p_caso_id));
   return jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro);
 end;
 $$;
 
 comment on function fn_corrigir_descricao_contaminada(uuid) is
-  '0241: para a pendência de reconciliação aberta cuja descrição nenhuma reconciliacao do próprio período OU da própria chave gerou (a rodada de um período irmão a reescrevia), põe a descrição da reconciliacao MAIS RECENTE do próprio (periodo_id ou periodo_chave_id da pendência; secao_fecha: do documento), desde que o resultado dela seja coerente com o tipo da pendência. Sem registro, ou com o mais recente ok/incoerente/sem texto, não toca e conta (sem_registro_proprio), sem voltar a um registro mais antigo. Só estado aberta (as demais são decisão de gente); resolvida_por e estado intocados. Grava evento_auditoria sistema:0241 com a descrição antiga em antes. Devolve {contaminadas, corrigidas, sem_registro_proprio}; idempotente.';
+  '0241: para a pendência de reconciliação aberta cuja descrição nenhuma reconciliacao do próprio período OU da própria chave gerou (a rodada de um período irmão a reescrevia), põe a descrição da reconciliacao MAIS RECENTE do próprio (periodo_id ou periodo_chave_id da pendência; secao_fecha: do documento), desde que o resultado dela seja coerente com o tipo da pendência. Sem registro, ou com o mais recente ok/incoerente/sem texto, não toca e conta (sem_registro_proprio), sem voltar a um registro mais antigo. Só estado aberta (as demais são decisão de gente); resolvida_por e estado intocados. Grava evento_auditoria sistema:0241 com a descrição antiga em antes, e um resumo a cada chamada, mesmo com tudo zero. Respeita o texto do irmão que a regra (3) do corpo legitima. Devolve {contaminadas, corrigidas, sem_registro_proprio}; idempotente.';
 
 revoke all on function fn_corrigir_descricao_contaminada(uuid) from public, anon;
 grant execute on function fn_corrigir_descricao_contaminada(uuid) to service_role;
