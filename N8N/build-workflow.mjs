@@ -2265,7 +2265,7 @@ for(const [chave, blocos] of porDocumento){
   for(const k of medidos){
     if(doc[k]!==undefined&&doc[k]!==null) medicao[k]=doc[k];
   }
-  // O REGISTRO DE TENTATIVAS (P8, versao_medicao p4-2). Cada bloco chega do \`Parse Extracao\` com
+  // O REGISTRO DE TENTATIVAS (P8, versao_medicao p4-2; p4-3 acrescentou textos_perdidos). Cada bloco chega do \`Parse Extracao\` com
   // \`registro_tentativas\` ({tentativa, modelo, resultado}, uma entrada por chamada ao provedor).
   // \`falha_transitoria_esgotada\` e' CONTRATO com a migration 0233 (lido em
   // evento_auditoria.depois->'medicao'->>'falha_transitoria_esgotada' para decidir reextrair no
@@ -2290,7 +2290,14 @@ for(const [chave, blocos] of porDocumento){
   // falha_motivo no Parse Extracao. Ausente quando nenhum bloco reatribuiu (nunca [] de mentira).
   const textosReatribuidos=blocos.flatMap(b=>Array.isArray(b.textos_reatribuidos)?b.textos_reatribuidos.map(t=>'bloco '+b.bloco+': '+t):[]);
   if(textosReatribuidos.length>0){ medicao.textos_reatribuidos_n=textosReatribuidos.length; medicao.textos_reatribuidos=textosReatribuidos.slice(0,20); }
-  doc.medicao_documento={...medicao,versao_medicao:'p4-2'};
+  // TEXTOS PERDIDOS (achatarGrupos: numeros provados, textos sem coluna): CONTRATO com o portal,
+  // \`textos_perdidos\` = array das CHAVES COMPLETAS (identicas a campo_extraido.chave) das contas que
+  // ficaram sem texto, desta VERSAO. Ausente quando nenhum bloco perdeu (nunca [] de mentira, regra 1).
+  // O falha_motivo continua sendo o texto por documento (corta em 5); este e' a lista inteira.
+  const textosPerdidos=[...new Set(blocos.flatMap(b=>Array.isArray(b.textos_perdidos_chaves)?b.textos_perdidos_chaves:[]))];
+  if(textosPerdidos.length>0){ medicao.textos_perdidos_n=textosPerdidos.length; medicao.textos_perdidos=textosPerdidos; }
+  // p4-3: a partir daqui AUSENTE \`textos_perdidos\` = medido e sem perda; em p4-2 ou menor = nao medido (regra 1).
+  doc.medicao_documento={...medicao,versao_medicao:'p4-3'};
   saida.push({pairedItem:{item:primeiroIndice.get(chave)??0}, json:doc});
 }
 return saida;
@@ -2449,7 +2456,7 @@ const custo_usd=custoDaChamada(uso, '${MODEL_EXTRACAO}');
 const ant=ctx.passada_anterior||null;
 const esperadasBloco=(ctx.contas_do_bloco!==null&&ctx.contas_do_bloco!==undefined&&Number.isFinite(Number(ctx.contas_do_bloco)))?Number(ctx.contas_do_bloco):null;
 const tokensDestaChamada=uso?{entrada:uso.prompt_tokens??null, saida:uso.completion_tokens??null, cache:uso.prompt_tokens_details?.cached_tokens??0}:null;
-const esta={campos, diagnostico, falha:falhaMotivo, linhas:linhasDaPassada(campos), custo_usd, tokens:tokensDestaChamada, textos:ach.textosReatribuidos};
+const esta={campos, diagnostico, falha:falhaMotivo, linhas:linhasDaPassada(campos), custo_usd, tokens:tokensDestaChamada, textos:ach.textosReatribuidos, perdidos:ach.chavesTextosPerdidos};
 const razaoDe=(n)=>(esperadasBloco>0&&n!==null)?Number((n/esperadasBloco).toFixed(3)):null;
 const pctDe=(r)=>(r===null?'?':Math.round(r*100)+'%');
 let final=esta; let passadas=1; let notaCobertura=null;
@@ -2469,7 +2476,7 @@ if(ant||(respostaLida&&!cortado)){
     // intervalo fixo) ja' separa as chamadas. Se o provedor responder 429, o Parse
     // seguinte trata como qualquer transitoria, com a propria espera.
     return {json:{...ctx, ia_body:corpo2, repetir:true, tentativa:TENTATIVA, espera_s:0, ultima_falha:null, motivo_repeticao:'cobertura',
-      passada_anterior:{campos, diagnostico, falha:falhaMotivo, textos:ach.textosReatribuidos, linhas:esta.linhas, razao:razaoDe(esta.linhas), custo_usd, tokens:tokensDestaChamada}, registro_tentativas:registro}};
+      passada_anterior:{campos, diagnostico, falha:falhaMotivo, textos:ach.textosReatribuidos, perdidos:ach.chavesTextosPerdidos, linhas:esta.linhas, razao:razaoDe(esta.linhas), custo_usd, tokens:tokensDestaChamada}, registro_tentativas:registro}};
   }
   if(dec2.abaixo){
     const rFinal=razaoDe(final.linhas);
@@ -2514,7 +2521,7 @@ const falhaFinal=[avisoConteudo,falhaMotivo,notaTentativas].filter(Boolean).join
 // \`passadas\` e as duas coberturas do bloco so' instrumentam a execucao (nao tocam o
 // Postgres): e' por elas que se mede, na primeira rodada real, quanto a segunda
 // passada recupera -- coisa que nenhum teste sem chamar o modelo consegue dizer.
-return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais, textos_reatribuidos:final.textos||[], registro_tentativas:registro, falha_transitoria:registro[registro.length-1].resultado==='falhou_transitoria'}};
+return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais, textos_reatribuidos:final.textos||[], textos_perdidos_chaves:final.perdidos||[], registro_tentativas:registro, falha_transitoria:registro[registro.length-1].resultado==='falhou_transitoria'}};
 `.trim();
 const CODE_PARSE_EXTRACAO = codeParseExtracao(1, 'Fatiar Extracao');
 

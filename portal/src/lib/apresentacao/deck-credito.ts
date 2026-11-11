@@ -602,7 +602,8 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
           const n = pg * POR + k + 1;
           return { celulas: [encurtar(o.credor, 22), encurtar(o.modalidade, 18), mm({ v: o.saldoAno, nota: "" }).t,
             o.taxaContratual ? encurtar(o.taxaContratual, 16) : o.taxa === null ? "n/d" : `${fmtPct({ v: o.taxa }).t}*`,
-            o.vencimento ? encurtar(o.vencimento, 18) : ap(`op${n}.vencimento`), o.garantia ? encurtar(o.garantia, 20) : ap(`op${n}.garantia`)] };
+            o.vencimento ? encurtar(o.vencimento, 18) : o.textoNaoLido ? "não lido" : o.textoNaoConferido ? "não conferido" : ap(`op${n}.vencimento`),
+            o.garantia ? encurtar(o.garantia, 20) : o.textoNaoLido ? "não lido" : o.textoNaoConferido ? "não conferido" : ap(`op${n}.garantia`)] };
         })
         : [1, 2, 3, 4].map(() => ({ celulas: [AP, AP, AP, AP, AP, AP] }));
       tabela(s, GRADE.x, GRADE.topo, [{ titulo: "Credor", w: 180 }, { titulo: "Modalidade", w: 150, algn: "l" },
@@ -624,23 +625,35 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     // cronograma de amortização — o mapa não traz parcelas —, e a fonte diz isso). "Rotativo" e
     // "sem vencimento definido" vão para uma coluna própria: somá-los a um ano seria inventar prazo.
     const comVenc = (mapa?.operacoes ?? []).filter((o) => anoDoVencimento(o.vencimento) !== null);
+    // Texto não lido (a extração perdeu o texto da conta) ou não conferido (a leitura do registro falhou):
+    // o documento pode trazer o vencimento. Fica FORA de "o mapa não imprime" e de "Sem prazo", e a frase
+    // diz o que houve; o saldo delas aparece à parte no gráfico.
+    const ops13 = mapa?.operacoes ?? [];
+    const naoLidas = ops13.filter((o) => o.textoNaoLido).length;
+    const naoConf = ops13.filter((o) => o.textoNaoConferido).length;
+    const resto = ops13.length - naoLidas - naoConf;
+    const plural = (n: number) => `${n} operaç${n === 1 ? "ão" : "ões"}`;
+    const aviso = [
+      naoLidas > 0 ? `O vencimento de ${plural(naoLidas)} não foi lido nesta extração (os textos foram perdidos); o saldo aparece à parte, em "Não lido", e fora dos anos de vencimento.` : "",
+      naoConf > 0 ? `Não foi possível conferir se o vencimento de ${plural(naoConf)} foi lido (o registro da extração não pôde ser consultado); o saldo aparece à parte, em "Não conferido".` : "",
+    ].filter(Boolean).join(" ");
     if (mapa && comVenc.length > 0) {
       const porAno = new Map<string, number>();
       for (const o of mapa.operacoes) {
         const a = anoDoVencimento(o.vencimento);
-        const k = a === null ? "Sem prazo" : a <= mapa.ano ? `Vencido/${mapa.ano}` : a >= mapa.ano + 5 ? `${mapa.ano + 5}+` : String(a);
+        const k = a === null && o.textoNaoLido ? "Não lido" : a === null && o.textoNaoConferido ? "Não conferido" : a === null ? "Sem prazo" : a <= mapa.ano ? `Vencido/${mapa.ano}` : a >= mapa.ano + 5 ? `${mapa.ano + 5}+` : String(a);
         porAno.set(k, (porAno.get(k) ?? 0) + o.saldoAno);
       }
-      const ordem = (k: string) => (k.startsWith("Vencido") ? 0 : k === "Sem prazo" ? 9999 : Number.parseInt(k, 10));
+      const ordem = (k: string) => (k.startsWith("Vencido") ? 0 : k === "Sem prazo" ? 9999 : k === "Não lido" ? 10000 : k === "Não conferido" ? 10001 : Number.parseInt(k, 10));
       const cats = [...porAno.keys()].sort((x, y) => ordem(x) - ordem(y));
       tituloSecao(s, GRADE.x, 228, 520, `Saldo por ano de vencimento final, mapa de ${mapa.ano} (R$ mi)`);
       s.grafico(GRADE.x, 250, 520, 200, { tipo: "colunas", categorias: cats,
         series: [{ nome: "Saldo", valores: cats.map((k) => Math.round((porAno.get(k) ?? 0) * fatorParaMM(esc) * 10) / 10), cor: COR.verde }] });
       cartao(s, 605, 228, GRADE.fim - 605, 150, { titulo: "Leitura",
-        corpo: `${comVenc.length} de ${mapa.operacoes.length} operações têm vencimento impresso no mapa. Ano de vencimento FINAL, não cronograma de parcelas: ${ap("cronograma")}` });
+        corpo: `${comVenc.length} de ${resto} operações têm vencimento impresso no mapa. ${aviso} Ano de vencimento FINAL, não cronograma de parcelas: ${ap("cronograma")}`.replace(/\s{2,}/g, " ") });
     } else {
       cartao(s, GRADE.x, 228, GRADE.w, 150, { titulo: "Principal por trimestre, próximos 24 meses",
-        corpo: `O mapa recebido não imprime vencimento por operação: ${ap("cronograma")}` });
+        corpo: `${aviso}${aviso && resto > 0 ? " Nas demais, o" : aviso ? "" : "O"}${resto > 0 || ops13.length === 0 ? " mapa recebido não imprime vencimento por operação:" : ""} ${ap("cronograma")}`.trim() });
     }
   }
 

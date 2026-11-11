@@ -480,7 +480,11 @@ export function achatarGrupos(grupos) {
   // Linha com `vn` alinhado e `vt` não: reatribuídos (não bloqueante) ou perdidos (bloqueante).
   const textosReatribuidos = [];
   const textosPerdidos = [];
-  if (!Array.isArray(grupos)) return { linhas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos };
+  // A CHAVE COMPLETA (a mesma gravada em campo_extraido.chave, depois de `limparRotuloColado`) de cada
+  // conta que perdeu texto, sem truncar e sem repetir: é o que o portal lê, POR VERSÃO, para dizer
+  // QUAIS contas ficaram sem credor/prazo/taxa (o texto de `textosPerdidos` é por documento e corta em 5).
+  const chavesTextosPerdidos = [];
+  if (!Array.isArray(grupos)) return { linhas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos, chavesTextosPerdidos };
   // Índice da LINHA DO DOCUMENTO que originou cada entrada. Uma conta com três
   // colunas vira três entradas com o MESMO `linha_origem`, e é isso que permite
   // contar de volta quantas linhas o modelo devolveu — a unidade em que a guarda
@@ -533,6 +537,7 @@ export function achatarGrupos(grupos) {
         return neg ? -v : v;
       };
       let vtDaLinha = vt;
+      let perdeuTexto = false;
       let descartar = vn.length !== cols.length;
       if (!descartar && vt.length !== cols.length) {
         const nums = vn.filter((v) => typeof v === 'number');
@@ -566,6 +571,7 @@ export function achatarGrupos(grupos) {
           if (reatribuir) {
             textosReatribuidos.push(`${onde} — números provados em ordem, ${livres.length} texto(s) reatribuído(s) às colunas sem número`);
           } else {
+            perdeuTexto = true;
             textosPerdidos.push(`${onde} — números mantidos e provados, mas ${livres.length} texto(s) para ${semNumero} coluna(s) sem número: `
               + `os textos NÃO foram associados às colunas (ficam em branco: ${livres.slice(0, 3).map((t) => `"${t}"`).join(', ')}${livres.length > 3 ? ', …' : ''})`);
           }
@@ -590,6 +596,7 @@ export function achatarGrupos(grupos) {
       // NÚMERO COLADO NO RÓTULO — ver `limparRotuloColado` (a regra e o porquê moram lá).
       const rotulo = limparRotuloColado(l.k, vn, vt, g.s);
       const chave = rotulo.chave;
+      if (perdeuTexto && !chavesTextosPerdidos.includes(chave)) chavesTextosPerdidos.push(chave);
       rotulo.suspeitos.forEach((m) => rotulosSuspeitos.push(m));
       for (let j = 0; j < cols.length; j += 1) {
         const valorTexto = typeof vtDaLinha[j] === 'string' ? vtDaLinha[j] : null;
@@ -614,7 +621,7 @@ export function achatarGrupos(grupos) {
       }
     }
   }
-  return { linhas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos };
+  return { linhas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos, chavesTextosPerdidos };
 }
 
 export function extractionSchema() {
@@ -1378,7 +1385,7 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
   // meses antes. Enquanto existir um JSON velho em alguma instância, ele vai
   // responder no formato plano — e responder em formato plano tem de continuar
   // funcionando, em vez de virar "zero linhas extraídas" sem explicação.
-  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos } = achatarGrupos(p.grupos);
+  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos, chavesTextosPerdidos } = achatarGrupos(p.grupos);
   const camposAgrupados = linhasAgrupadas.map((l, i) => ({
     ordem: i,
     ...l,
@@ -1482,7 +1489,7 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
   const falhaMotivo = comAviso(motivos.length > 0 ? motivos.join(' | ') : null);
   // `textosReatribuidos` NÃO entra em `falhaMotivo` (linha íntegra): o nó `Juntar Blocos` o grava em
   // `medicao.textos_reatribuidos`. `textosPerdidos` entra, acima.
-  return { moeda: moedaDoc, unidade, campos, diagnostico, falhaMotivo, textosReatribuidos };
+  return { moeda: moedaDoc, unidade, campos, diagnostico, falhaMotivo, textosReatribuidos, chavesTextosPerdidos };
 }
 
 export { DEFAULT_MODEL, PERIODO_TIPO_ENUM };

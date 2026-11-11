@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import JSZip from "jszip";
 import type { CampoExtraido } from "./types";
+import { estadoDoTextoPorCampo } from "./mapa-da-divida";
 import {
   ANALISE_HEADER_FILL, CHAVE_SEP, DIVERGENCIA_FILL, HEADER_FILL, PCT_FMT,
   RATIO_FMT, THIN_TOP_BORDER, VALOR_NUM_FMT, comoNota, compararCodigo,
@@ -602,6 +603,14 @@ export interface DocumentoParaExport {
    * = `versoesVigentes` cai na regra local abaixo.
    */
   versao_vigente_id?: string | null;
+  /**
+   * Chaves completas das contas cujo TEXTO a extração perdeu na versão vigente (evento 'extracao_sombra',
+   * `depois->medicao->textos_perdidos`). `achatarGrupos` não grava a linha de texto perdida: ela não
+   * existe, em vez de existir em branco. Posto por `route.ts`; ver `estadoDoTexto`.
+   */
+  textos_perdidos?: string[];
+  /** a leitura do evento falhou: não dá para dizer se houve texto perdido */
+  textos_perdidos_desconhecido?: boolean;
 }
 
 /**
@@ -2521,7 +2530,13 @@ interface LinhaSimples {
   aceitoPor: string | null;
   aceitoEm: string | null;
   arquivoOrigem: string;
+  /** linha de saldo de contrato cujo texto (credor, vencimento, taxa…) a extração perdeu */
+  textoNaoLido?: boolean;
 }
+
+const NOTA_TEXTO_NAO_LIDO = "TEXTO NÃO LIDO nesta extração — o credor, o vencimento e a taxa desta operação não foram "
+  + "lidos (a linha não existe nesta aba, não é ausência no documento); o vencimento desta operação não entra no muro "
+  + "de vencimentos.";
 
 // Nota de proveniência da linha simples (mesmo espírito de `notaProveniencia`,
 // para os campos que a v20 pediu pra tirar da grade — seção/página/unidade/
@@ -2569,7 +2584,8 @@ function construirAbaSimples(workbook: ExcelJS.Workbook, nomeAba: string, linhas
       valorNum: linha.valorNum ?? linha.valorTexto ?? null,
       statusAceite: formatarStatus(linha.statusAceite),
     });
-    row.getCell("chave").note = comoNota(notaProvenienciaSimples(linha));
+    row.getCell("chave").note = comoNota(
+      (linha.textoNaoLido ? `${NOTA_TEXTO_NAO_LIDO}\n` : "") + notaProvenienciaSimples(linha));
     if (typeof row.getCell("valorNum").value === "number") row.getCell("valorNum").numFmt = VALOR_NUM_FMT;
     if (/total/i.test(linha.chave)) row.font = { bold: true };
     if (linha.statusAceite !== "aceito") {
@@ -2812,6 +2828,15 @@ export function rotearCamposPorAba(
   // comentário de `normalizarEscala`. Daqui para baixo, todo `valor_num` está na
   // mesma escala — que é o que torna `SUM`, AV%, indicadores e a Modelagem
   // corretos sem que nenhum deles precise saber que escala existe.
+  // TEXTO PERDIDO do Mapa de Dívida, por campo (mesmo predicado do deck). A nota vai nas linhas NUMÉRICAS
+  // do contrato perdido — as únicas que existem, pois o n8n não grava célula de texto nula.
+  const perdidoPorCampo = new Set<string>();
+  for (const doc of documentos) {
+    if (doc.tipo_taxonomia !== "MAPA_DIVIDA") continue;
+    const ids = new Set((doc.documento_versao ?? []).map((v) => v.id));
+    const doDoc = camposVigentes.filter((c) => ids.has(c.documento_versao_id));
+    for (const [id, e] of estadoDoTextoPorCampo(doc, doDoc)) if (e === "perdido") perdidoPorCampo.add(id);
+  }
   const escalaAlvo = escolherEscalaAlvo(camposVigentes);
   const { campos, escala } = normalizarEscala(camposVigentes, escalaAlvo);
 
@@ -3013,6 +3038,8 @@ export function rotearCamposPorAba(
         aceitoPor: campo.aceito_por,
         aceitoEm: campo.aceito_em,
         arquivoOrigem: ctx.nomeArquivo,
+        // A nota vai em linha QUE EXISTE: as numéricas (saldo, cp, lp, juros) do contrato sem texto.
+        ...(perdidoPorCampo.has(campo.id) && campo.valor_num != null ? { textoNaoLido: true } : {}),
       });
     }
   }

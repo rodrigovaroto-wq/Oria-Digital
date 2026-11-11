@@ -8839,6 +8839,47 @@ const arranjoDeCirculante = (ENT: string) => {
   checar(padraoDeBusca("x".repeat(500))!.length === 82, "(41g) busca limitada a 80 caracteres", "");
 }
 
+// ---- 42: Mapa da Dívida com TEXTO NÃO LIDO (commit 4150bc6, regra 1) ----------------------------
+// `achatarGrupos` mantém os números e perde os textos, e NÃO grava célula nula/nula: o contrato com texto
+// perdido chega só com Saldo e Juros. Não há célula em branco para anotar; a nota vai na linha de SALDO,
+// que existe. Quem diz qual contrato perdeu é `textos_perdidos` (evento 'extracao_sombra'). Arranjo
+// sintético (o mapa real do Distress não está em fixture) no formato que o n8n grava.
+{
+  const V = "v-mapa";
+  const campos: CampoExtraido[] = [];
+  const num = (nome: string, col: string, v: number) =>
+    campos.push(campo({ chave: nome, periodo_coluna: col, valor_num: v, documento_versao_id: V }));
+  for (const [nome, venc] of [["Banco A", "15/03/2027"], ["Banco B", "10/07/2029"]]) {
+    num(nome, "Saldo devedor (R$)", 1000);
+    campos.push(campo({ chave: nome, periodo_coluna: "Vencimento", valor_texto: venc, documento_versao_id: V }));
+    num(nome, "Juros do exercício (R$)", 100);
+  }
+  num("Banco C", "Saldo devedor (R$)", 1000); num("Banco C", "Juros do exercício (R$)", 100); // só os números
+  // Credor REPETIDO (9637: 6 contratos, 4 chaves): 2º contrato do Banco B perdido (só números), 1º lido.
+  num("Banco B", "Saldo devedor (R$)", 2000); num("Banco B", "Juros do exercício (R$)", 200);
+  const doc = (extra: Partial<DocumentoParaExport>, tipo = "MAPA_DIVIDA"): DocumentoParaExport[] => [{
+    id: "d-mapa", tipo_taxonomia: tipo, entidade: { razao_social: "Alfa" }, periodo: { tipo: "anual", referencia: "2025" },
+    documento_versao: [{ id: V, nome_original: "mapa.pdf" }], ...extra,
+  }];
+  const aba = (extra: Partial<DocumentoParaExport>, tipo = "MAPA_DIVIDA") => buildExportWorkbook({ caso: { nome: "C", produto: "rx" },
+    documentos: doc(extra, tipo), campos, agora: new Date("2026-07-27T12:00:00Z") }).getWorksheet(tipo === "MAPA_DIVIDA" ? "Dívida" : "Balanço")!;
+  const notadas = (ws: ExcelJS.Worksheet) => {
+    const r: string[] = [];
+    for (let i = 2; i <= ws.rowCount; i++) if (/TEXTO NÃO LIDO/.test(notaDaLinha(ws, i))) r.push(`${ws.getRow(i).getCell(3).value}|${ws.getRow(i).getCell(4).value}`);
+    return r;
+  };
+  const com = aba({ textos_perdidos: ["Banco C", "Banco B"] });
+  const n = notadas(com).sort();
+  checar(n.join(",") === "Banco B|200,Banco B|2000,Banco C|100,Banco C|1000",
+    "(42a) com textos_perdidos: a nota vai nas linhas numéricas (saldo e juros) dos contratos SEM texto; o Banco B lido (1000/100) fica sem nota", n.join(", "));
+  const rC = [...Array(com.rowCount).keys()].map((i) => i + 1).find((i) => notaDaLinha(com, i).includes("TEXTO NÃO LIDO"))!;
+  checar(/credor, o vencimento e a taxa desta operação não foram lidos/.test(notaDaLinha(com, rC)) && /não entra no muro de vencimentos/.test(notaDaLinha(com, rC)),
+    "(42b) a nota diz o motivo E o efeito", notaDaLinha(com, rC).slice(0, 160));
+  checar(notadas(aba({})).length === 0, "(42c) SEM textos_perdidos: comportamento antigo, nenhuma nota", "");
+  checar(notadas(aba({ textos_perdidos_desconhecido: true })).length === 0, "(42d) leitura do registro falhou: a aba não inventa perda (o aviso é do deck)", "");
+  checar(notadas(aba({ textos_perdidos: ["Banco C", "Banco B"] }, "BALANCO")).length === 0, "(42e) fora do MAPA_DIVIDA a nota não vale", "");
+}
+
 console.log(`${ok} verificações OK / ${falhas.length} falhas`);
 for (const f of falhas) console.log("  FALHOU:", f);
 process.exit(falhas.length ? 1 : 0);
