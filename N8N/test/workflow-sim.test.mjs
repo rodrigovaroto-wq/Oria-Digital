@@ -839,7 +839,7 @@ test('Gravar Campos (Sombra): passa p_medicao por NOME e liga o $7 à medição 
     { documento_versao_id: 'v1', bloco: 2, blocos: 2, contas_no_documento: 40, campos: [linhaM('C', 3)],
       diagnostico: {}, falha_motivo: null, custo_usd: 0.02, tokens: { entrada: 5, saida: 10, cache: 0 } },
   ]);
-  assert.equal(m.versao_medicao, 'p4-3');
+  assert.equal(m.versao_medicao, 'p4-4');
   assert.equal(m.contas_no_documento, 40);
   assert.equal(m.linhas_devolvidas, 3);
   assert.equal(m.contas_distintas, 3);
@@ -857,7 +857,7 @@ test('Gravar Campos (Sombra): contas_no_documento ausente continua AUSENTE na me
     campos: [linhaM('A', 1)], diagnostico: {}, falha_motivo: null, custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 } }]);
   assert.equal(m.linhas_devolvidas, 1);
   assert.ok(!('contas_no_documento' in m), 'contas_no_documento nulo não pode virar 0 nem null na medição');
-  assert.equal(m.versao_medicao, 'p4-3');
+  assert.equal(m.versao_medicao, 'p4-4');
 });
 
 test('P8 Juntar Blocos: falha_transitoria_esgotada só quando algum bloco terminou transitório; sem registro, AUSENTE', async () => {
@@ -4555,4 +4555,165 @@ test('P4: cobertura POR DOCUMENTO fica em 0..1 e declara o excedente em linhas_a
   assert.equal(por('v-1').linhas_alem_da_regua, 2);
   assert.equal(por('v-2').cobertura, 1);
   assert.equal(por('v-2').linhas_alem_da_regua, 0);
+});
+
+// ===========================================================================
+// P11 — A COORDENADA: o modelo cita a linha do texto numerado de onde leu cada conta (`ln`).
+// ===========================================================================
+//
+// O QUE ISTO AFIRMA É COMPORTAMENTO (regra 3): o que o modelo RECEBE por bloco, o que o parse
+// FAZ com o `ln` que ele devolve, e o que o documento DECLARA no fim (regra 7). Não afirma qual
+// função monta o texto. A bijeção (buraco/duplicação bloqueantes) é a P12 e não está aqui.
+
+const TEXTO_P11 = ['BALANÇO', 'ATIVO CIRCULANTE   44.022 41.310', 'Caixa   825 700', 'Estoques   15.605 14.000',
+  'PASSIVO CIRCULANTE   9.000 8.000', 'Fornecedores   4.000 3.500', 'Total   13.000 11.500'].join('\n');
+
+/** Os itens que o Medir Documento entrega ao Fatiar, para um texto qualquer. */
+async function medirTextoP11(texto, { contentPart, leituraPdf = null } = {}) {
+  const lote = await run('Listar Arquivos', { item: UPSERT_ITEM, items: [UPSERT_ITEM], refs: REFS_BASE });
+  const classificado = await run('Classificar Nome', { item: lote[0], refs: REFS_BASE, itemIndex: 0, binaryStore: lote });
+  const preparado = await run('Preparar Conteudo', { item: classificado, refs: REFS_BASE, itemIndex: 0, binaryStore: lote });
+  const doExtrator = { text: texto, numpages: 1 };
+  if (contentPart) Object.assign(doExtrator, { content_part: contentPart, leitura_pdf: leituraPdf });
+  return run('Medir Documento', { item: { json: doExtrator }, refs: { 'Preparar Conteudo': preparado } });
+}
+
+const textoDoConteudo = (parte) => (parte && typeof parte.text === 'string' ? parte.text : null);
+const ocorrencias = (texto, trecho) => String(texto).split(trecho).length - 1;
+
+test('P11 Medir: PDF mandado como ARQUIVO leva as linhas numeradas à parte, e o arquivo segue intacto', async () => {
+  const medido = await medirTextoP11(TEXTO_P11);
+  assert.ok(ehParteDeArquivo(medido.json.content_part), 'o PDF segue indo como arquivo');
+  assert.equal(medido.json.ln_no_conteudo, false);
+  assert.equal(medido.json.linhas_numeradas.length, 7, 'toda linha não-branca é numerada, com ou sem dígito');
+  assert.equal(medido.json.ln_por_linha.length, medido.json.linhas_do_texto.length,
+    'um ln por posição de linhas_do_texto — é o que o Fatiar usa para cortar a faixa');
+});
+
+test('P11 Medir: conteúdo que JÁ É o texto NÃO vai duas vezes — o content_part é trocado pelo mesmo texto numerado', async () => {
+  const parte = GEMINI ? { text: TEXTO_P11 } : { type: 'text', text: TEXTO_P11 };
+  const medido = await medirTextoP11(TEXTO_P11, { contentPart: parte, leituraPdf: 'texto' });
+  const texto = textoDoConteudo(medido.json.content_part);
+  assert.match(texto, /^L001: BALANÇO\nL002: ATIVO CIRCULANTE/, 'o texto que o modelo lê já traz a coordenada');
+  assert.equal(ocorrencias(texto, 'Fornecedores'), 1, 'o documento aparece UMA vez no que o modelo recebe');
+  assert.equal(medido.json.ln_no_conteudo, true);
+  assert.equal(medido.json.caracteres_do_texto, texto.length, 'o orçamento cobra o que de fato vai');
+});
+
+test('P11 Medir: conteúdo de texto que NÃO é o texto medido (aviso, placeholder) não é reescrito', async () => {
+  const parte = GEMINI ? { text: '(arquivo de texto vazio)' } : { type: 'text', text: '(arquivo de texto vazio)' };
+  const medido = await medirTextoP11(TEXTO_P11, { contentPart: parte, leituraPdf: 'texto' });
+  assert.equal(textoDoConteudo(medido.json.content_part), '(arquivo de texto vazio)');
+  assert.equal(medido.json.ln_no_conteudo, false);
+});
+
+test('P11 Medir: documento sem camada de texto NÃO ganha numeração — ausente, nunca vazio nem zero', async () => {
+  const medido = await medirTextoP11('');
+  assert.equal(medido.json.linhas_numeradas, null);
+  assert.equal(medido.json.ln_por_linha, null);
+  assert.equal(medido.json.ln_no_conteudo, false);
+});
+
+/** Um item como o Medir o entrega, com 6 linhas de conta para fatiar em 2 blocos sem depender do teto. */
+function itemNumerado(extra = {}) {
+  const linhas = Array.from({ length: 460 }, (_, i) => `PAGTO ${i}  ${1000 + i},00`);
+  const numeradas = ['CABECALHO SEM DIGITO', ...linhas, 'ASSINATURA SEM DIGITO'];
+  return { json: { documento_versao_id: 'ver-p11', aviso_conteudo: null, linhas_do_texto: linhas,
+    linhas_numeradas: numeradas, ln_por_linha: linhas.map((_, i) => i + 2), ln_no_conteudo: false,
+    ia_body: corpoFalso({ sistema: 'PROMPT DE SISTEMA', texto: 'Nome do arquivo: razao.pdf.' }), ...extra } };
+}
+
+test('P11 Fatiar: cada bloco recebe SÓ a faixa dele, com a numeração GLOBAL do documento', async () => {
+  const out = await run('Fatiar Extracao', { items: [itemNumerado()] });
+  assert.ok(out.length >= 2, 'o documento tem de ser fatiado para o teste valer');
+  const textos = out.map((i) => textoDaReq(i.json.ia_body));
+  // O bloco 2 começa onde o 1 acabou, na numeração do documento — não em L001.
+  const primeiraLinhaDoBloco2 = out[1].json.ln_faixa_de;
+  assert.ok(primeiraLinhaDoBloco2 > 100, `a faixa do bloco 2 começa em L${primeiraLinhaDoBloco2}, não em L1`);
+  assert.ok(textos[1].includes(`L${String(primeiraLinhaDoBloco2).padStart(3, '0')}: `));
+  assert.ok(!textos[1].includes('L001: '), 'o bloco 2 não recebe o início do documento');
+  assert.ok(!textos[0].includes(`L${String(primeiraLinhaDoBloco2).padStart(3, '0')}: `), 'e o bloco 1 não recebe a faixa do 2');
+  // As faixas particionam o documento: toda linha numerada chega a UM bloco, nenhuma a dois, nenhuma a zero.
+  const vistas = new Map();
+  for (const t of textos) for (const m of t.matchAll(/^L(\d+): /gm)) vistas.set(m[1], (vistas.get(m[1]) ?? 0) + 1);
+  assert.equal(vistas.size, 462, 'as 462 linhas não-brancas chegam ao modelo');
+  assert.ok([...vistas.values()].every((n) => n === 1), 'nenhuma linha chega a dois blocos');
+  // E o item declara a coordenada enviada (regra 7).
+  for (const i of out) {
+    assert.equal(i.json.texto_numerado, true);
+    assert.equal(i.json.ln_total, 462, 'o teto que o parse usa para recusar ln inventado');
+    assert.equal(i.json.linhas_numeradas, undefined, 'o texto do documento não viaja pelo resto do grafo');
+    assert.equal(i.json.ln_por_linha, undefined);
+  }
+  for (const i of out) assert.equal(sistemaDaReq(i.json.ia_body), 'PROMPT DE SISTEMA', 'nunca no prompt de sistema (cache de prefixo)');
+});
+
+test('P11 Fatiar: documento pequeno recebe o texto numerado inteiro, e documento SEM numeração não recebe parte nenhuma', async () => {
+  const pequeno = { json: { ...itemNumerado().json, linhas_do_texto: ['Caixa 10', 'Bancos 20'],
+    linhas_numeradas: ['ATIVO', 'Caixa 10', 'Bancos 20', 'Fim'], ln_por_linha: [2, 3] } };
+  const [um] = await run('Fatiar Extracao', { items: [pequeno] });
+  const texto = textoDaReq(um.json.ia_body);
+  for (const l of ['L001: ATIVO', 'L002: Caixa 10', 'L003: Bancos 20', 'L004: Fim']) assert.ok(texto.includes(l), l);
+  assert.equal(um.json.ln_total, 4);
+
+  const escaneado = { json: { documento_versao_id: 'ver-esc', ia_body: corpoFalso({ sistema: 'S', texto: 'Nome do arquivo: scan.pdf.' }) } };
+  const [sem] = await run('Fatiar Extracao', { items: [escaneado] });
+  assert.equal(textoDaReq(sem.json.ia_body), 'Nome do arquivo: scan.pdf.', 'sem texto, a requisição fica como era');
+  assert.equal(sem.json.texto_numerado, false, 'medido e sem texto — diferente de ausente');
+  assert.equal(sem.json.ln_total, null);
+});
+
+test('P11 Fatiar: conteúdo que já vem numerado (xlsx/csv/xml/PDF-texto) NÃO recebe o texto de novo', async () => {
+  const jaNumerado = itemNumerado({ ln_no_conteudo: true });
+  const out = await run('Fatiar Extracao', { items: [jaNumerado] });
+  for (const i of out) {
+    assert.ok(!/^L\d+: /m.test(textoDaReq(i.json.ia_body)),
+      'o texto numerado já está no conteúdo; mandá-lo outra vez dobraria os tokens de entrada');
+    assert.equal(i.json.texto_numerado, true, 'a coordenada foi enviada, por dentro do conteúdo');
+    assert.equal(i.json.ln_total, 462);
+  }
+});
+
+const respostaComLn = (lns) => ({ json: respostaIA(JSON.stringify({
+  moeda: 'BRL', unidade: 'unidade',
+  diagnostico: { entidade: 'X', tipo_confirma: true, tipo_sugerido: 'BALANCO', periodo_tipo: 'anual', periodo_referencia: '12M25',
+    legibilidade: 'ok', nota_legibilidade: null, resumo: 'r', justificativa: 'j' },
+  grupos: [{ s: 'Ativo', sc: 'ativo_circulante', op: 1, cols: [],
+    l: lns.map((ln, i) => ({ k: `Conta ${i}`, vt: ['1'], vn: [1], cf: 0.9, ln })) }],
+})) });
+
+test('P11 Parse: ln só vale inteiro de 1 até o total de linhas numeradas; o resto vira null, nunca um número inventado', async () => {
+  const ctx = { json: { documento_versao_id: 'v', tipo: 'BALANCO', ia_body: {}, ln_total: 40 } };
+  const p = await run('Parse Extracao', { item: respostaComLn([1, 40, 0, 41, -3, 7.5, null, '12']), refs: { 'Fatiar Extracao': ctx } });
+  assert.deepEqual(p.json.campos.map((c) => c.ln), [1, 40, null, null, null, null, null, null]);
+});
+
+test('P11 Parse: documento SEM texto numerado — o ln que o modelo inventar vira null', async () => {
+  const ctx = { json: { documento_versao_id: 'v', tipo: 'BALANCO', ia_body: {}, ln_total: null } };
+  const p = await run('Parse Extracao', { item: respostaComLn([3, 5]), refs: { 'Fatiar Extracao': ctx } });
+  assert.deepEqual(p.json.campos.map((c) => c.ln), [null, null]);
+});
+
+test('P11 Juntar Blocos: o documento declara quantas linhas vieram com ln e quantas sem, e se havia texto numerado', async () => {
+  const campo = (i, ln) => ({ ordem: i, linha_origem: i, chave: `c${i}`, valor_num: i, valor_texto: String(i), entidade_coluna: null, periodo_coluna: null, ln });
+  const bloco = (extra) => ({ documento_versao_id: 'v-ln', bloco: 1, blocos: 1, contas_no_documento: 4, diagnostico: {}, falha_motivo: null,
+    custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 }, campos: [campo(0, 5), campo(1, 6), campo(2, null), campo(3, 9)], ...extra });
+  const com = await medicaoGravada([bloco({ texto_numerado: true })]);
+  assert.equal(com.texto_numerado, true);
+  assert.equal(com.linhas_com_ln, 3);
+  assert.equal(com.linhas_sem_ln, 1);
+  const escaneado = await medicaoGravada([bloco({ texto_numerado: false, campos: [campo(0, null), campo(1, null)] })]);
+  assert.equal(escaneado.texto_numerado, false, 'medido: não havia texto numerado — e por isso o ln é null em todas');
+  assert.equal(escaneado.linhas_com_ln, 0);
+  assert.equal(escaneado.linhas_sem_ln, 2);
+  const antigo = await medicaoGravada([bloco({})]);
+  assert.ok(!('texto_numerado' in antigo) && !('linhas_com_ln' in antigo), 'n8n sem a coordenada: AUSENTE, não false nem 0');
+});
+
+test('P11: os campos que chegam ao banco levam a chave ln (a função grava campo_extraido.ln a partir dela)', async () => {
+  const ctx = { json: { documento_versao_id: 'v', tipo: 'BALANCO', ia_body: {}, ln_total: 40 } };
+  const p = await run('Parse Extracao', { item: respostaComLn([12]), refs: { 'Fatiar Extracao': ctx } });
+  const junto = await run('Juntar Blocos', { items: [{ json: { ...p.json, bloco: 1, blocos: 1 } }] });
+  const gravado = JSON.parse(JSON.stringify(junto[0].json.campos));
+  assert.equal(gravado[0].ln, 12, 'ln atravessa o Parse, o Juntar e o JSON.stringify da chamada ao Postgres');
 });

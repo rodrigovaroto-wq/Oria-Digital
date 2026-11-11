@@ -47,7 +47,7 @@ import {
 } from './lib/spreadsheet.mjs';
 import {
   linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
-  juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero,
+  juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero, numerarLinhasDoTexto, textoNumeradoDaFaixa,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
   celulasDaLinha, celulasEstimadas,
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
@@ -324,6 +324,8 @@ const FONTE_COBERTURA = [
   `const contasComOrigem = ${contasComOrigem.toString()};`,
   `const linhasDeConta = ${linhasDeConta.toString()};`,
   `const contasPorLinhaComNumero = ${contasPorLinhaComNumero.toString()};`,
+  `const numerarLinhasDoTexto = ${numerarLinhasDoTexto.toString()};`,
+  `const textoNumeradoDaFaixa = ${textoNumeradoDaFaixa.toString()};`,
   `const celulasDaLinha = ${celulasDaLinha.toString()};`,
   `const celulasEstimadas = ${celulasEstimadas.toString()};`,
   `const planejarFatias = ${planejarFatias.toString()};`,
@@ -1907,6 +1909,19 @@ const contentPart='content_part' in doExtrator ? doExtrator.content_part : item.
 const avisoConteudo='content_part' in doExtrator ? (doExtrator.aviso_conteudo??null) : item.aviso_conteudo;
 const linhasDoTexto=linhasComNumero(textoPdf);
 const temTexto=linhasDoTexto.length>0;
+// A COORDENADA (P11): as linhas nao-brancas do texto EMENDADO, numeradas L1..LN no documento
+// inteiro, e o \`ln\` de cada posicao de \`linhas_do_texto\` (o \`Fatiar Extracao\` precisa dele para
+// mandar so' a faixa do bloco, com a numeracao GLOBAL). Sem texto (escaneado) nao ha o que numerar:
+// \`ln\` sai null no parse, que e' "nao medivel" e nunca zero.
+const numeracao=temTexto?numerarLinhasDoTexto(textoPdf):{numeradas:[],lnPorLinha:[]};
+const numerado=temTexto&&numeracao.numeradas.length>0&&numeracao.lnPorLinha.length===linhasDoTexto.length;
+// QUANDO O CONTEUDO JA' E' ESSE TEXTO (PDF lido como texto pela rota da P6, planilha, CSV, XML), o
+// texto NAO vai duas vezes: o \`content_part\` e' TROCADO pelo mesmo texto com o prefixo "L001: ".
+// Custo: so' o prefixo (~6 caracteres por linha nao-branca), nao o documento de novo. A igualdade
+// exata e' o teste: se o conteudo mandado nao e' este texto (o PDF em base64, ou um aviso), o texto
+// numerado vai como parte a mais, por faixa, no \`Fatiar Extracao\`.
+const conteudoEhOTexto=numerado&&!!contentPart&&typeof contentPart.text==='string'&&contentPart.text===textoPdf;
+const textoNumeradoInteiro=conteudoEhOTexto?textoNumeradoDaFaixa(numeracao.numeradas,numeracao.lnPorLinha,0,linhasDoTexto.length-1).texto:null;
 // AS CELULAS, contadas linha a linha. O \`Extract From File\` entrega o texto
 // AGRUPADO POR LINHA, e uma linha de comparativo de tres exercicios produz TRES
 // celulas -- contar linha como celula deixava o fatiamento de 1,7x a 6,8x mais
@@ -1919,8 +1934,11 @@ const celulasEstim=pesosDaLinha.reduce((a,b)=>a+b,0);
 // calam para ele. \`null\` e' "nao sei", nunca "zero": zero ligaria a guarda de
 // cobertura com regua inventada justamente no documento onde o modelo mais erra.
 return {json:{...item,
-  content_part: contentPart,
+  content_part: conteudoEhOTexto?{...contentPart,text:textoNumeradoInteiro}:contentPart,
   aviso_conteudo: avisoConteudo,
+  linhas_numeradas: numerado?numeracao.numeradas:null,
+  ln_por_linha: numerado?numeracao.lnPorLinha:null,
+  ln_no_conteudo: conteudoEhOTexto,
   // DUAS reguas, e a distincao e' o que fez a guarda voltar a enxergar:
   //   celulas -> toda linha com digito. E' o tamanho da RESPOSTA, e e' o que o
   //     fatiamento precisa saber (cabecalho tambem gasta token).
@@ -1963,8 +1981,9 @@ return {json:{...item,
   leitura_pdf: doExtrator.leitura_pdf??null,
   leitura_pdf_motivo: doExtrator.leitura_pdf_motivo??null,
   leitura_planilha: doExtrator.leitura_planilha??null,
-  caracteres_do_texto: Number.isFinite(Number(doExtrator.caracteres_do_texto))
-    ?Number(doExtrator.caracteres_do_texto):(temTexto?textoPdf.length:null),
+  caracteres_do_texto: conteudoEhOTexto?textoNumeradoInteiro.length
+    :(Number.isFinite(Number(doExtrator.caracteres_do_texto))
+      ?Number(doExtrator.caracteres_do_texto):(temTexto?textoPdf.length:null)),
 }};
 `.trim();
 
@@ -2001,6 +2020,10 @@ for(let idx=0; idx<entradas.length; idx+=1){
   // derivado de quantas CELULAS cabem em 60% do teto de saida, e aplica-lo a
   // linhas era o erro de unidade que desligava este no' na pratica.
   const fatias=linhas.length>0?planejarFatias(linhas, MAX_CELULAS_POR_BLOCO, celulasEstimadas(linhas)):[{bloco:1,blocos:1,de:0,ate:0,ancoraInicio:null,ancoraFim:null,celulas:0,linhas:0,acimaDoTeto:false}];
+  // A COORDENADA (P11): so' ha' numeracao quando o \`Medir Documento\` a mediu E ela casa com as linhas.
+  const numeradas=Array.isArray(j.linhas_numeradas)?j.linhas_numeradas:[];
+  const lnPorLinha=Array.isArray(j.ln_por_linha)?j.ln_por_linha:[];
+  const temNumeracao=linhas.length>0&&numeradas.length>0&&lnPorLinha.length===linhas.length;
   for(const f of fatias){
     // A instrucao da faixa vai na mensagem de USER, nunca no prompt de sistema:
     // o prefixo tem de continuar identico em toda chamada para o cache de
@@ -2008,14 +2031,23 @@ for(let idx=0; idx<entradas.length; idx+=1){
     const corpo=JSON.parse(JSON.stringify(j.ia_body||{}));
     // ONDE a instrucao entra e' do provedor (\`contents\` no Google, \`messages\`
     // na OpenAI); QUE ela nao entra no prompt de sistema e' invariante nosso.
-    acrescentarInstrucao(PROVEDOR,corpo,instrucaoDaFatia(f));
+    // O TEXTO NUMERADO DO BLOCO vai na MESMA mensagem de user, ao lado da instrucao da faixa, e
+    // nunca no prompt de sistema (cache de prefixo). So' vai como parte a mais quando o conteudo
+    // NAO e' ja' esse texto (PDF mandado como arquivo): senao o \`content_part\` ja' vem numerado.
+    const faixa=temNumeracao?textoNumeradoDaFaixa(numeradas,lnPorLinha,f.de,f.ate):null;
+    let instrucao=instrucaoDaFatia(f);
+    if(faixa&&faixa.texto&&j.ln_no_conteudo!==true){
+      instrucao+=' TEXTO NUMERADO (extraido do proprio PDF, linhas L'+String(faixa.de)+' a L'+String(faixa.ate)+' de '+String(faixa.total)+'): '
+        +'use-o SO para preencher ln com o numero da linha de onde cada conta veio; os valores e a leitura continuam sendo os do documento.\\n'+faixa.texto;
+    }
+    acrescentarInstrucao(PROVEDOR,corpo,instrucao);
     // \`linhas_do_texto\` fica para tras: ele ja' virou ancora, e levar o
     // documento inteiro em texto por todo o grafo incharia cada item a' toa.
     // \`content_part\` sai pelo mesmo motivo, e agora ele PRECISA sair: desde que o
     // conteudo passou a viajar com o item (para nao depender de pareamento), o
     // base64 do PDF esta no json -- e ele ja' foi copiado para dentro do \`corpo\`.
     // Levar as duas copias por todo o resto do grafo dobraria a memoria do lote.
-    const {linhas_do_texto:_l, contas_por_linha:_cpl, ia_body:_b, content_part:_cp, ...resto}=j;
+    const {linhas_do_texto:_l, contas_por_linha:_cpl, ia_body:_b, content_part:_cp, linhas_numeradas:_ln, ln_por_linha:_lpl, ...resto}=j;
     // CONTAS DO TEXTO NESTA FAIXA, para a segunda passada por cobertura do
     // \`Parse Extracao\`. \`null\` = nao medivel (sem texto, ou vetor que nao casa com
     // as linhas): sem denominador o bloco nao e' avaliado -- nunca um zero de mentira.
@@ -2033,7 +2065,11 @@ for(let idx=0; idx<entradas.length; idx+=1){
     // no teto nao tem corte mais fino, e o caso nao pode ficar em silencio.
     saida.push({json:{...resto, ia_body:corpo, bloco:f.bloco, blocos:f.blocos,
       celulas_do_bloco:f.celulas, linhas_do_bloco:f.linhas??null, contas_do_bloco:contasDoBloco,
-      bloco_de:f.de, bloco_ate:f.ate, bloco_acima_do_teto:!!f.acimaDoTeto}, pairedItem:{item:idx}});
+      bloco_de:f.de, bloco_ate:f.ate, bloco_acima_do_teto:!!f.acimaDoTeto,
+      // P11, regra 7: \`texto_numerado\` e' o SINAL POSITIVO de que a coordenada foi enviada (false = medido e sem
+      // texto, ausente = n8n antigo). \`ln_total\` e' o teto que o parse usa para recusar ln inventado.
+      texto_numerado:!!(faixa&&faixa.texto), ln_total:(faixa&&faixa.texto)?faixa.total:null,
+      ln_faixa_de:faixa?faixa.de:null, ln_faixa_ate:faixa?faixa.ate:null}, pairedItem:{item:idx}});
   }
 }
 return saida;
@@ -2257,6 +2293,15 @@ for(const [chave, blocos] of porDocumento){
   // \`doc.tokens\`/\`doc.custo_usd\`, que o Resumo de Custo soma, continuam como eram.
   const respondidos=blocos.filter(b=>b.tokens!==undefined&&b.tokens!==null);
   const medicao={blocos_com_resposta:respondidos.length};
+  // A COORDENADA (P11, versao_medicao p4-4), regra 7: \`texto_numerado\` e' o sinal positivo de que o texto
+  // numerado FOI enviado (algum bloco o levou); false = o \`Fatiar Extracao\` mediu e nao havia texto
+  // (escaneado) e \`ln\` vem null por isso; AUSENTE = n8n anterior a p4-4, que nao mediu. As linhas COM e SEM
+  // \`ln\` so' entram quando algum bloco respondeu, como \`linhas_devolvidas\`, de quem sao parte.
+  const sinalLn=blocos.filter(b=>typeof b.texto_numerado==='boolean');
+  if(sinalLn.length>0){
+    medicao.texto_numerado=sinalLn.some(b=>b.texto_numerado===true);
+    if(respondidos.length>0){ medicao.linhas_com_ln=r.linhasComLn; medicao.linhas_sem_ln=r.linhasSemLn; }
+  }
   const medidos=['contas_no_documento','blocos','blocos_planejados'];
   if(respondidos.length>0){
     medidos.push('linhas_devolvidas','contas_distintas','custo_usd');
@@ -2297,7 +2342,7 @@ for(const [chave, blocos] of porDocumento){
   const textosPerdidos=[...new Set(blocos.flatMap(b=>Array.isArray(b.textos_perdidos_chaves)?b.textos_perdidos_chaves:[]))];
   if(textosPerdidos.length>0){ medicao.textos_perdidos_n=textosPerdidos.length; medicao.textos_perdidos=textosPerdidos; }
   // p4-3: a partir daqui AUSENTE \`textos_perdidos\` = medido e sem perda; em p4-2 ou menor = nao medido (regra 1).
-  doc.medicao_documento={...medicao,versao_medicao:'p4-3'};
+  doc.medicao_documento={...medicao,versao_medicao:'p4-4'};
   saida.push({pairedItem:{item:primeiroIndice.get(chave)??0}, json:doc});
 }
 return saida;
@@ -2388,13 +2433,13 @@ ${FONTE_ACHATAR_GRUPOS}
 // (conta x coluna) -- a forma que \`campo_extraido\` sempre teve. O achatamento
 // vem EMBUTIDO da fonte, nao copiado: se este no' e a lib discordarem sobre como
 // associar valor a coluna, o banco recebe o numero de 2024 no lugar do de 2025.
-const ach=achatarGrupos(p.grupos);
+const ach=achatarGrupos(p.grupos,{lnMax:Number.isInteger(ctx.ln_total)&&ctx.ln_total>0?ctx.ln_total:null});
 let campos=ach.linhas.length>0||Array.isArray(p.grupos)
   ? ach.linhas.map((l,i)=>({ordem:i, ...l, unidade:naoMonet(l.chave,l.valor_texto,l.periodo_coluna)?null:(escalaCol(l.periodo_coluna)??unidade), moeda:naoMonet(l.chave,l.valor_texto,l.periodo_coluna)?null:moedaDoc}))
   // FORMATO PLANO ANTIGO -- o caminho de um workflow importado velho responder
   // no formato de julho. Em 12/08/2026 o n8n do dono rodou dias assim, e "zero
   // linhas extraidas" sem explicacao seria a pior forma de descobrir.
-  : (Array.isArray(p.linhas)?p.linhas.map((l,i)=>({ordem:i, secao:l.s??null, secao_canonica:(l.sc&&l.sc!=='NAO_CLASSIFICAVEL')?l.sc:null, entidade_coluna:l.ec??null, periodo_coluna:l.pc??null, chave:l.k, valor_texto:l.vt??null, valor_num:(typeof l.vn==='number')?l.vn:null, unidade:naoMonet(l.k,l.vt,l.pc)?null:(escalaCol(l.pc)??unidade), moeda:naoMonet(l.k,l.vt,l.pc)?null:moedaDoc, confianca:(typeof l.cf==='number')?l.cf:null, origem_pagina:Number.isInteger(l.op)?l.op:null})):[]);
+  : (Array.isArray(p.linhas)?p.linhas.map((l,i)=>({ordem:i, secao:l.s??null, secao_canonica:(l.sc&&l.sc!=='NAO_CLASSIFICAVEL')?l.sc:null, entidade_coluna:l.ec??null, periodo_coluna:l.pc??null, chave:l.k, valor_texto:l.vt??null, valor_num:(typeof l.vn==='number')?l.vn:null, unidade:naoMonet(l.k,l.vt,l.pc)?null:(escalaCol(l.pc)??unidade), moeda:naoMonet(l.k,l.vt,l.pc)?null:moedaDoc, confianca:(typeof l.cf==='number')?l.cf:null, origem_pagina:Number.isInteger(l.op)?l.op:null, ln:null})):[]);
 // Conta descartada por desalinhamento de coluna nao pode sumir em silencio: e'
 // dado que o documento tem e o banco nao recebeu.
 if(ach.problemas.length>0){
@@ -2521,7 +2566,7 @@ const falhaFinal=[avisoConteudo,falhaMotivo,notaTentativas].filter(Boolean).join
 // \`passadas\` e as duas coberturas do bloco so' instrumentam a execucao (nao tocam o
 // Postgres): e' por elas que se mede, na primeira rodada real, quanto a segunda
 // passada recupera -- coisa que nenhum teste sem chamar o modelo consegue dizer.
-return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais, textos_reatribuidos:final.textos||[], textos_perdidos_chaves:final.perdidos||[], registro_tentativas:registro, falha_transitoria:registro[registro.length-1].resultado==='falhou_transitoria'}};
+return {json:{documento_id:ctx.documento_id??null, documento_versao_id:ctx.documento_versao_id??null, bloco:ctx.bloco??1, blocos:ctx.blocos??1, celulas_no_documento:ctx.celulas_no_documento??null, contas_no_documento:ctx.contas_no_documento??null, texto_numerado:typeof ctx.texto_numerado==='boolean'?ctx.texto_numerado:null, campos, diagnostico:diagnosticoFinal, falha_motivo:falhaFinal, tentativas:TENTATIVA, passadas, contas_do_bloco:esperadasBloco, cobertura_bloco:razaoDe(final.linhas), cobertura_bloco_primeira:ant?ant.razao:null, custo_usd:custoTotal, tokens:tokensTotais, textos_reatribuidos:final.textos||[], textos_perdidos_chaves:final.perdidos||[], registro_tentativas:registro, falha_transitoria:registro[registro.length-1].resultado==='falhou_transitoria'}};
 `.trim();
 const CODE_PARSE_EXTRACAO = codeParseExtracao(1, 'Fatiar Extracao');
 

@@ -55,7 +55,7 @@ import {
 } from './lib/custo.mjs';
 import {
   linhasComNumero, celulasEstimadas, planejarFatias,
-  MAX_CELULAS_POR_BLOCO,
+  MAX_CELULAS_POR_BLOCO, numerarLinhasDoTexto, textoNumeradoDaFaixa, camadaDeTextoDoPdf,
 } from './lib/cobertura.mjs';
 import { SYSTEM_PROMPT, MAX_OUTPUT_TOKENS } from './lib/extract.mjs';
 import { provedor } from './lib/provedor.mjs';
@@ -89,6 +89,26 @@ const TOKENS_PROMPT_SISTEMA = Math.ceil(SYSTEM_PROMPT.length / CARACTERES_POR_TO
 //    custa US$ 1,41" quando ele custava mais de 2 — e estimativa que erra para
 //    baixo é a que deixa o lote começar e morrer no meio (o incidente v31).
 const TOKENS_POR_LINHA_PLANO = 64;
+
+// 2b) A COORDENADA (P11): o modelo cita `ln` em cada linha que devolve. A chave e o número
+//     (`,"ln":123`) são ~5 tokens por LINHA devolvida (não por célula: o `ln` mora na conta, no formato
+//     agrupado). ESTIMADO, não medido em fatura — a primeira rodada real diz o número; até lá ele erra
+//     para CIMA, porque conta toda linha com número como linha devolvida.
+const TOKENS_SAIDA_LN_POR_LINHA = 5;
+
+// A entrada da coordenada, com as MESMAS funções que rodam em produção. Dois caminhos, o mesmo que
+// o `Medir Documento` decide: PDF lido como TEXTO (rota da P6) troca o conteúdo pelo mesmo texto com o
+// prefixo "L001: " — só o prefixo é token novo; PDF mandado como ARQUIVO leva o texto numerado à parte
+// (o PDF segue indo inteiro). Sem texto (escaneado), nada. É entrada NÃO cacheada: o texto é do documento.
+function coordenadaDoDocumento(linhasDoTexto, paginas) {
+  const texto = (linhasDoTexto || []).join('\n');
+  const { numeradas, lnPorLinha } = numerarLinhasDoTexto(texto);
+  if (numeradas.length === 0 || lnPorLinha.length === 0) return { rota: 'sem_texto', caracteres: 0 };
+  const inteiro = textoNumeradoDaFaixa(numeradas, lnPorLinha, 0, lnPorLinha.length - 1);
+  const usarTexto = camadaDeTextoDoPdf(texto, { paginas }).usarTexto === true;
+  if (usarTexto) return { rota: 'texto', caracteres: inteiro.texto.length - numeradas.reduce((a, l) => a + l.length, 0) - (numeradas.length - 1) };
+  return { rota: 'arquivo', caracteres: inteiro.texto.length };
+}
 
 // AS CÉLULAS, AS COLUNAS E OS BLOCOS — MEDIDOS NO TEXTO, com as MESMAS funções
 // que rodam em produção (`lib/cobertura.mjs`).
@@ -161,9 +181,12 @@ function medirDocumento(m, linhasDoTexto) {
   const blocos = med ? med.blocos : 1;
   const saidaPiorBloco = med ? tokensDeSaida(med.piorBlocoCelulas, colunasEstim) : saida;
 
+  const coord = coordenadaDoDocumento(linhasDoTexto, m.paginas);
+  const tokensLnEntrada = Math.ceil(coord.caracteres / CARACTERES_POR_TOKEN);
+  const tokensLnSaida = coord.rota === 'sem_texto' ? 0 : TOKENS_SAIDA_LN_POR_LINHA * m.linhas_com_numero;
   const extracao = custoDaChamada({
-    prompt_tokens: TOKENS_PROMPT_SISTEMA + entradaPdf,
-    completion_tokens: saida,
+    prompt_tokens: TOKENS_PROMPT_SISTEMA + entradaPdf + tokensLnEntrada,
+    completion_tokens: saida + tokensLnSaida,
     // O prompt de sistema é idêntico em toda chamada e vem primeiro — é a
     // condição exata do cache de prefixo da OpenAI, e ignorá-lo superestimaria.
     prompt_tokens_details: { cached_tokens: TOKENS_PROMPT_SISTEMA },
@@ -207,8 +230,9 @@ function medirDocumento(m, linhasDoTexto) {
     blocos,
     tokens_saida_pior_bloco: saidaPiorBloco,
     bloco_acima_do_teto: med ? med.algumBlocoAcimaDoTeto : false,
-    tokens_entrada: TOKENS_PROMPT_SISTEMA + entradaPdf,
-    tokens_saida: saida,
+    coordenada: { rota: coord.rota, tokens_entrada: tokensLnEntrada, tokens_saida: tokensLnSaida },
+    tokens_entrada: TOKENS_PROMPT_SISTEMA + entradaPdf + tokensLnEntrada,
+    tokens_saida: saida + tokensLnSaida,
     tokens_saida_plano: saidaPlana,
     usd_extracao: extracao,
     usd_classificacao: classificacao,
@@ -325,6 +349,13 @@ if (comoJson) {
   console.log(`  • ${dobrados.length} documento(s) pagam o PDF DUAS vezes ` +
     `(nome não resolve tipo+período com confiança ≥ 0,70), somando ` +
     `${usd(dobrados.reduce((s, d) => s + d.usd_classificacao, 0))} só de classificação.`);
+  {
+    const porRota = (r) => medidos.filter((d) => d.coordenada.rota === r).length;
+    console.log(`  • a coordenada (P11): ${porRota('texto')} documento(s) lidos como texto (só o prefixo "L001: " é token novo), ` +
+      `${porRota('arquivo')} como arquivo (texto numerado à parte), ${porRota('sem_texto')} sem texto (ln null) — ` +
+      `+${medidos.reduce((x, d) => x + d.coordenada.tokens_entrada, 0)} tokens de entrada e ` +
+      `+${medidos.reduce((x, d) => x + d.coordenada.tokens_saida, 0)} de saída (estimada) no lote.`);
+  }
   if (semTipo.length) {
     console.log(`  • ${semTipo.length} sem tipo nenhum pelo nome: ` +
       semTipo.map((d) => d.arquivo).join(', '));

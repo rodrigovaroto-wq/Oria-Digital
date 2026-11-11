@@ -68,8 +68,8 @@ test('Parse Extracao -> Juntar Blocos: vários blocos, segunda passada, e ausent
   assert.ok(!('textos_perdidos' in jl.json.medicao_documento) && !('textos_perdidos_n' in jl.json.medicao_documento));
 });
 
-test('versao_medicao é p4-3: sem ela, "textos_perdidos ausente" não distingue n8n novo sem perda de n8n antigo que não mediu', async () => {
+test('versao_medicao é p4-4 (p4-3 + a coordenada): sem ela, "textos_perdidos ausente" não distingue n8n novo sem perda de n8n antigo que não mediu', async () => {
   const b = await run('Parse Extracao', { item: respostaDe([FECHA]), refs: { 'Fatiar Extracao': ctxDe(1, 1) } });
   const [jb] = await run('Juntar Blocos', { item: b, items: [b] });
-  assert.equal(jb.json.medicao_documento.versao_medicao, 'p4-3');
+  assert.equal(jb.json.medicao_documento.versao_medicao, 'p4-4');
 });
