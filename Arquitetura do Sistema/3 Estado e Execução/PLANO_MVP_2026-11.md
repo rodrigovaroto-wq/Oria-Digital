@@ -328,23 +328,31 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
   real (DM7).
 - **Próxima:** MB2, o mapeamento de colunas confirmado pelo analista.
 
-### MB2 — biblioteca feita em 11/11/2026 (sessão 127), com os sintéticos; a migration 0242 vem em commit próprio
+### MB2 — feita em 11/11/2026 (sessão 127), com os sintéticos; 0242 escrita, NÃO aplicada
 
-- **`Leitor/lib/mapeamento.mjs`**: propõe o mapeamento (sinônimo do nome + tipo dos valores da
-  amostra) e o FORMATO do arquivo (vírgula ou ponto decimal; dia/mês ou mês/dia, com a evidência),
-  valida, e aplica a cada linha da MB1: `titulo` (contraparte, vencimento que é data, saldo que é
-  número), `subtotal` ou `rejeitada` com o campo e o valor. Sem autor, data e formato confirmados,
-  recusa. Confere a soma lida com o total do próprio arquivo (`confere`, `diverge` ou
-  `sem_total_no_arquivo`).
+- **`Leitor/lib/mapeamento.mjs`**: propõe as colunas (sinônimo do nome + tipo dos valores) e
+  DEPOIS o formato do arquivo (vírgula ou ponto; dia/mês ou mês/dia), votado só nas colunas de
+  valor e de data, com a evidência; valida; aplica a cada linha da MB1: `titulo`, `subtotal` ou
+  `rejeitada` contada por motivo com o saldo que ficou de fora. Sem autor, data e formato
+  confirmados, recusa. Confere o cabeçalho de cada linha de cabeçalho que passa e a soma lida
+  contra os totais do próprio arquivo.
+- **`0242`** (escrita pelo especialista, NÃO aplicada): `mapeamento_de_colunas` com autor, data e
+  formato, a impressão do cabeçalho recalculada pelo banco, uma vigente por (tipo_base, impressão),
+  só Sócio e Analista confirmam. 78 asserts; 31 guardas desligadas reprovam de 1 a 10 cada.
 - **Decisão de escopo:** a IA NÃO propõe o mapeamento, ao contrário do que a linha MB2 previa.
   Sinônimo + tipo acerta as 11 colunas dos sintéticos sem custo nem rede, e o analista confirma de
   qualquer jeito. Volta se arquivos reais (DM7) mostrarem cabeçalhos fora dos sinônimos.
-- **Achado no caminho:** decidir vírgula/ponto e dia/mês valor a valor erra sem erro ("1.250",
-  "03/04/2025"). Passou a ser formato do arquivo, confirmado e guardado no banco.
-- **Medido no Chromium, 1M de linhas, idêntico ao Node:** o caminho inteiro da tela (1ª leitura só
-  até a amostra, `soAmostra`, + proposta + 2ª leitura aplicando) leva 5,5 s no CSV e 22,0 s no XLSX.
-  999.995 títulos, 0 rejeitadas, Σ saldo = 24.917.000,00 = Clientes do BP, conferência `confere`.
-- **Prova:** `Leitor/test/mapeamento.test.mjs`, 23 testes; 27 correções desligadas reprovam de 1 a
-  5 testes cada (120 testes no Leitor).
-- **Não feito:** a tela de confirmação (ME2); arquivo real (DM7).
-
+- **O que a revisão independente mudou** (2 altos, 6 médios): total por data com vencimento
+  preenchido era somado como título (aging triplicado, sem aviso) e passou a rejeitada com o
+  saldo; o voto do formato olhava todas as colunas (uma data "15.03.25" fazia "1.234" virar 12,34)
+  e passou a olhar só as de valor e de data; opcional inválido não derruba mais o título; saldo
+  negativo e valores com casas a mais são contados; a conferência aceita o total geral em qualquer
+  posição.
+- **Medido no Chromium, 1M de linhas, idêntico ao Node:** caminho inteiro da tela em 5,8 s (CSV) e
+  22,5 s (XLSX). 999.995 títulos, 0 rejeitadas, Σ saldo = 24.917.000,00 = Clientes do BP.
+- **Prova:** `Leitor/test/mapeamento.test.mjs`, 35 testes; 43 correções desligadas reprovam de 1 a
+  7 testes cada (132 testes no Leitor).
+- **Para a MB3 decidir:** saldo negativo (adiantamento) entra na soma e a reduz; a conciliação é
+  contra Clientes ou contra Clientes menos Adiantamentos?
+- **Não feito:** aplicar a 0242 em produção (sua autorização); a tela de confirmação (ME2); arquivo
+  real (DM7).

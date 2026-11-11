@@ -118,19 +118,23 @@ test('coluna deslocada que CABE na largura (a MB1 não via): rejeitada, com o ca
   assert.equal(resumo.saldo_titulos, '300', 'o 2,00 deslocado NÃO entra na soma');
 });
 
-test('subtotal × título, com as grafias da MB1: o total nunca soma de novo, o cliente SOMA continua título', async () => {
+test('subtotal × título × rejeitada: o total nunca soma; linha com rótulo de total E data fica de fora, visível com o saldo', async () => {
   const linhas = ['Nome;Vencimento;Valor;Saldo', 'A;01/01/2025;1,00;1,00', 'B;01/01/2025;1,00;1,00', 'C;01/01/2025;1,00;1,00',
     'Sub-Total;;;3,00', 'ACME;Total do cliente;3,00;3,00', '*** TOTAL;;;3,00', 'SOMA ENGENHARIA LTDA;01/01/2025;7,00;7,00',
     'TOTAL DISTRIBUIDORA;02/01/2025;5,00;5,00', ';;;15,00'];
   const { resumo, classes } = await aplicar(csv(linhas));
-  assert.deepEqual(classes.slice(1).map((c) => c.classe), ['titulo', 'titulo', 'titulo', 'subtotal', 'subtotal', 'subtotal', 'titulo', 'titulo', 'subtotal']);
-  assert.equal(resumo.saldo_titulos, '1500');
-  assert.equal(resumo.conferencia_com_o_total_do_arquivo.estado, 'confere', 'a última linha de total (15,00) = Σ dos títulos');
+  // "SOMA ENGENHARIA" e "TOTAL DISTRIBUIDORA" com data: sem o analista, não se distinguem de um
+  // total por data; somá-las triplicava o aging (revisão de 11/11/2026). Ficam de fora, com o saldo.
+  assert.deepEqual(classes.slice(1).map((c) => c.classe), ['titulo', 'titulo', 'titulo', 'subtotal', 'subtotal', 'subtotal', 'rejeitada', 'rejeitada', 'subtotal']);
+  assert.equal(resumo.saldo_titulos, '300');
+  const motivo = Object.entries(resumo.motivos).find(([k]) => k.startsWith('rótulo de total com vencimento'));
+  assert.deepEqual(motivo[1], { linhas: 2, saldo: '1200' });
+  assert.equal(resumo.conferencia_com_o_total_do_arquivo.estado, 'confere', 'um dos totais do arquivo (3,00) = Σ dos títulos');
 });
 
 test('o total do arquivo que NÃO bate com a soma lida aparece como divergência', async () => {
   const { resumo } = await aplicar(csv(['Nome;Vencimento;Saldo', 'A;01/01/2025;1,00', 'B;01/01/2025;1,00', 'C;01/01/2025;1,00', 'TOTAL GERAL;;4,00']));
-  assert.deepEqual(resumo.conferencia_com_o_total_do_arquivo, { estado: 'diverge', total_do_arquivo: '400', soma_lida: '300', linha_do_total: 4 });
+  assert.deepEqual(resumo.conferencia_com_o_total_do_arquivo, { estado: 'diverge', maior_total_do_arquivo: '400', soma_lida: '300', linha_do_maior_total: 4 });
 });
 
 test('arquivo sem linha de total: a conferência diz que não houve com o que conferir, e o efeito', async () => {
@@ -174,9 +178,16 @@ test('valor: vírgula, ponto, sinal na frente, no fim, parênteses, R$, XLSX cie
   assert.equal(c('1234.56', 'n'), 123456n);
   assert.equal(c('1.5E-2', 'n'), 2n);
   assert.equal(c('9.87654321E7', 'n'), 9876543210n, 'notação científica grande, sem float');
-  assert.deepEqual(valorEmCentavos('1234.5599999999999', 'n'), { centavos: 123456n, arredondado: false });
-  assert.deepEqual(valorEmCentavos('15172.120000000001', 'n'), { centavos: 1517212n, arredondado: false });
-  assert.deepEqual(valorEmCentavos('1234,567'), { centavos: 123457n, arredondado: true });
+  assert.deepEqual(valorEmCentavos('1234.5599999999999', 'n'), { centavos: 123456n, arredondado: false, casas_extras: false });
+  assert.deepEqual(valorEmCentavos('15172.120000000001', 'n'), { centavos: 1517212n, arredondado: false, casas_extras: false });
+  assert.deepEqual(valorEmCentavos('1234,567'), { centavos: 123457n, arredondado: true, casas_extras: true });
+  assert.deepEqual(valorEmCentavos('1,000'), { centavos: 100n, arredondado: false, casas_extras: true }, '"1,000" com vírgula decimal: marcado');
+  assert.equal(c('-R$ 1,00'), -100n);
+  assert.equal(c('(R$ 1,00)'), -100n);
+  assert.equal(c('R$-1,00'), -100n);
+  assert.equal(valorEmCentavos('(-1,00)'), null, 'dois sinais: recusa, não positivo');
+  assert.equal(valorEmCentavos('-1,00-'), null);
+  assert.equal(valorEmCentavos('--1,00'), null);
   assert.equal(c('quitado'), undefined);
   assert.equal(valorEmCentavos(''), null);
 });
@@ -205,7 +216,7 @@ test('o formato da amostra: com prova e sem prova, e a evidência diz qual', () 
   assert.deepEqual([us.decimal, us.datas], ['ponto', 'mes_dia_ano']);
   const semProva = formatoDaAmostra([['A', '03/04/2025', '10']]);
   assert.match(semProva.evidencia.datas, /SEM prova/);
-  assert.match(semProva.evidencia.decimal, /sem prova/);
+  assert.match(semProva.evidencia.decimal, /SEM prova/);
 });
 
 test('arquivo americano inteiro (ponto decimal, mês/dia): proposto, aplicado, mesma soma', async () => {
@@ -234,7 +245,99 @@ test('contraparte com saldo e SEM vencimento, sem palavra de total: rejeitada, n
   assert.equal(resumo.saldo_titulos, '300');
 });
 
-test('emissão com data impossível rejeita a linha, com o campo e o valor', async () => {
-  const { classes } = await aplicar(csv(['Cliente;Emissão;Vencimento;Saldo', 'A;01/01/2025;01/02/2025;1,00', 'B;01/01/2025;01/02/2025;1,00', 'C;31/02/2025;01/03/2025;1,00']));
-  assert.equal(classes[3].motivo, "emissao não é data: '31/02/2025'");
+test('campo OPCIONAL inválido não derruba o título: o campo fica ausente e é contado', async () => {
+  const { resumo, titulos } = await aplicar(csv(['Cliente;Emissão;Vencimento;Data Pagamento;Valor Pago;Saldo',
+    'A;01/01/2025;01/02/2025;;;1,00', 'B;01/01/2025;01/02/2025;;;1,00', 'C;31/02/2025;01/03/2025;00/00/0000;-;1,00']),
+  // Mapa explícito, como o analista confirma: nesta amostra as colunas de pagamento só têm valor inválido.
+  { mapa: { contraparte: 0, emissao: 1, vencimento: 2, data_pagamento: 3, valor_pago: 4, saldo: 5 } });
+  assert.equal(resumo.titulo, 3);
+  assert.equal(resumo.saldo_titulos, '300');
+  assert.deepEqual(resumo.opcionais_invalidos, { emissao: 1, data_pagamento: 1, valor_pago: 1 });
+  assert.ok(!('emissao' in titulos[2]) && !('data_pagamento' in titulos[2]));
+});
+
+// ============================== 4. achados da revisão independente (11/11/2026) =====
+test('total por data ("Total ACME; 02/01/2025") nunca soma: o aging não sai em dobro nem em triplo', async () => {
+  const { resumo } = await aplicar(csv(['Cliente;Vencimento;Saldo', 'ACME;01/01/2025;10,00', 'ACME;01/01/2025;20,00',
+    'Total ACME;02/01/2025;30,00', 'BETA;01/01/2025;5,00', 'Total BETA;03/01/2025;5,00', 'TOTAL GERAL;31/12/2025;35,00']));
+  assert.equal(resumo.titulo, 3);
+  assert.equal(resumo.saldo_titulos, '3500');
+  assert.equal(resumo.rejeitada, 3);
+});
+
+test('total sem sinal da MB1, só na coluna da contraparte (3ª coluna): subtotal', async () => {
+  const { classes } = await aplicar(csv(['Código;Doc;Cliente;Vencimento;Saldo', '1;10;ACME;01/01/2025;1,00', '2;11;BETA;01/01/2025;1,00',
+    '3;12;GAMA;01/01/2025;1,00', '99;123;Total ACME;;30,00']));
+  assert.equal(classes[4].classe, 'subtotal');
+});
+
+test('formato: a data "15.03.25" não vota no decimal; "1.234" (milhar) prova vírgula', async () => {
+  const { resumo, prop } = await aplicar(csv(['Cliente;Vencimento;Saldo', 'A;15.03.25;1.234', 'B;16.03.25;2.000', 'C;17.03.25;500']));
+  assert.equal(prop.formato.decimal, 'virgula');
+  assert.match(prop.formato.evidencia.decimal, /2 valores provam vírgula/);
+  assert.equal(resumo.saldo_titulos, '373400', '3.734,00, não 503,23');
+});
+
+test('formato: coluna de texto "1.10" não vence a coluna de saldo com vírgula', () => {
+  // Duas colunas de texto com ponto (8 votos) contra uma de saldo com vírgula (4): votando em
+  // todas as colunas, o texto vencia.
+  const p = proporMapeamento(['Cliente', 'Versão', 'Lote', 'Vencimento', 'Saldo'],
+    [['A', '1.10', '2.01', '01/01/2025', '1,50'], ['B', '1.11', '2.02', '01/01/2025', '2,50'], ['C', '1.12', '2.03', '01/01/2025', '3,50'], ['D', '1.13', '2.04', '01/01/2025', '4,50']]);
+  assert.equal(p.formato.decimal, 'virgula');
+});
+
+test('formato: arquivo americano só com inteiros ("1,000") prova ponto; com vírgula, cada valor é marcado', async () => {
+  const linhas = ['Cliente;Vencimento;Saldo', 'A;01/01/2025;1,000', 'B;01/01/2025;12,500', 'C;01/01/2025;3,000'];
+  const { prop } = await aplicar(csv(linhas));
+  assert.equal(prop.formato.decimal, 'ponto');
+  const errado = await aplicar(csv(linhas), { formato: { decimal: 'virgula', datas: 'dia_mes_ano' } });
+  assert.equal(errado.resumo.saldos_com_mais_de_2_casas, 3, 'o formato trocado não passa sem marca');
+});
+
+test('saldo com casas decimais a mais é contado (arredondados), não só arredondado', async () => {
+  const { resumo } = await aplicar(csv(['Cliente;Vencimento;Saldo', 'A;01/01/2025;1,005', 'B;01/01/2025;2,00', 'C;01/01/2025;3,00']));
+  assert.equal(resumo.saldos_arredondados, 1);
+  assert.equal(resumo.saldo_titulos, '601');
+});
+
+test('contraparte vazia (relatório agrupado): rejeitada, com o saldo que ficou de fora', async () => {
+  const { resumo } = await aplicar(csv(['Cliente;Vencimento;Saldo', 'A;01/01/2025;1,00', 'B;01/01/2025;1,00', 'C;01/01/2025;1,00', ';02/01/2025;4,00']));
+  assert.deepEqual(resumo.motivos['contraparte vazia'], { linhas: 1, saldo: '400' });
+});
+
+test('o aplicador confere SOZINHO o cabeçalho que passa por ele: coluna inserida pelo ERP é erro, não saldo errado', async () => {
+  const conf = { mapa: { contraparte: 0, vencimento: 1, saldo: 2 }, cabecalho: ['Cliente', 'Vencimento', 'Saldo'], formato: { decimal: 'virgula', datas: 'dia_mes_ano' }, ...CONFIRMACAO };
+  const ap = aplicadorDeMapeamento(conf);
+  await assert.rejects(lerTabela(csv(['Cliente;Vencimento;Valor Original;Saldo', 'A;01/01/2025;5,00;1,00', 'B;01/01/2025;5,00;1,00', 'C;01/01/2025;5,00;1,00']),
+    { aoLinha: (l) => ap.linha(l) }), /não é o do mapeamento confirmado/);
+  const ap2 = aplicadorDeMapeamento(conf);
+  await lerTabela(csv(['Cliente;Vencimento;Saldo', 'A;01/01/2025;1,00', 'B;01/01/2025;1,00', 'C;01/01/2025;1,00']), { aoLinha: (l) => ap2.linha(l) });
+  assert.equal(ap2.resumo().cabecalhos_conferidos, 1);
+});
+
+test('total geral no TOPO, ou seguido do subtotal do último cliente: confere, não diverge falso', async () => {
+  const topo = await aplicar(csv(['Cliente;Vencimento;Saldo', 'TOTAL GERAL;;3,00', 'A;01/01/2025;1,00', 'B;01/01/2025;1,00', 'C;01/01/2025;1,00']));
+  assert.equal(topo.resumo.conferencia_com_o_total_do_arquivo.estado, 'confere');
+  const fim = await aplicar(csv(['Cliente;Vencimento;Saldo', 'A;01/01/2025;1,00', 'B;01/01/2025;1,00', 'C;01/01/2025;1,00', 'TOTAL GERAL;;3,00', 'Total C;;1,00']));
+  assert.equal(fim.resumo.conferencia_com_o_total_do_arquivo.estado, 'confere');
+});
+
+test('saldo negativo (adiantamento) entra na soma e é contado à parte, com o efeito', async () => {
+  const { resumo } = await aplicar(csv(['Cliente;Vencimento;Saldo', 'A;01/01/2025;10,00', 'B;01/01/2025;10,00', 'D;01/01/2025;-5,00']));
+  assert.equal(resumo.saldo_titulos, '1500');
+  assert.equal(resumo.titulos_com_saldo_negativo.linhas, 1);
+  assert.equal(resumo.titulos_com_saldo_negativo.saldo, '-500');
+  assert.match(resumo.titulos_com_saldo_negativo.efeito, /REDUZ/);
+});
+
+test('data com hora no CSV e ano de 2 dígitos como o Excel', () => {
+  assert.equal(dataIso('31/12/2025 10:00'), '2025-12-31');
+  assert.equal(dataIso('2025-12-31 10:00:00'), '2025-12-31');
+  assert.equal(dataIso('01/01/29'), '2029-01-01');
+  assert.equal(dataIso('01/01/30'), '1930-01-01');
+});
+
+test('a proposta não põe código numérico na contraparte', () => {
+  const p = proporMapeamento(['Cliente', 'Vencimento', 'Saldo'], [['1001', '01/01/2025', '1,00'], ['1002', '01/01/2025', '2,00']]);
+  assert.ok(!('contraparte' in p.mapa));
 });

@@ -243,8 +243,9 @@ cabeçalho + 30 linhas), proposta de mapeamento e de formato, 2ª leitura aplica
 
 | Arquivo de 1M de linhas | Chromium | Pico de heap JS | Node 22 | Títulos | Rejeitadas | Σ saldo | Total do arquivo |
 |---|---|---|---|---|---|---|---|
-| contas a receber, CSV | **5,5 s** | 58 MB | 7,6 s | 999.995 | 0 | 24.917.000,00 | confere |
-| contas a receber, XLSX | **22,0 s** | 78 MB | 34,5 s | 999.995 | 0 | 24.917.000,00 | confere |
+| contas a receber, CSV | **5,8 s** | 53 MB | 7,6 s | 999.995 | 0 | 24.917.000,00 | confere |
+| contas a pagar, CSV | 6,4 s | 45 MB | 7,7 s | 999.995 | 0 | 14.900.000,00 | confere |
+| contas a receber, XLSX | **22,5 s** | 85 MB | 35,4 s | 999.995 | 0 | 24.917.000,00 | confere |
 
-Sem `soAmostra` (duas leituras inteiras): 8,1 s e 40,8 s. Resumo do aplicador idêntico ao do Node.
+Medido depois da revisão independente da MB2. Sem `soAmostra` (duas leituras inteiras): 8,1 s e 40,8 s. Resumo do aplicador idêntico ao do Node.
 
