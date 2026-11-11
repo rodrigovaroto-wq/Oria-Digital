@@ -1,10 +1,55 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 escritas e revisadas; PR #287 em rascunho; falta merge, publicação e P10
+## SESSÃO 126 (10–11/11/2026) — P7b, P8 e P9 NO AR (PR #287 mergeado, 0232–0234 aplicadas, n8n republicado, portal publicado); P10 rodada nos sintéticos
 
-> **Migration mais nova: `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — ESCRITA, NÃO aplicada em produção. 0232, 0233 e 0234 estão TODAS fora de produção.**
+> **Migration mais nova: `0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql` — APLICADA EM PRODUÇÃO em 11/11/2026, junto com a 0232 e a 0233 (nessa ordem, pela API de gerenciamento, antes do merge).**
 > - Branch `claude/confident-bardeen-15mjip`. Nada mergeado no `main`, nada republicado no n8n, nada publicado no portal, P10 não rodou.
 > - Acesso a produção conferido nesta sessão: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_URL`, `N8N_BASE_URL`, `N8N_API_KEY`, `VERCEL_TOKEN` estão no ambiente (só os nomes foram lidos). Leitura de produção feita pela API de gerenciamento (`POST https://api.supabase.com/v1/projects/<ref>/database/query`, `read_only:true`; o ref sai de `SUPABASE_URL`). O MCP do Supabase (notebooks) recusa permissão.
+
+### Publicação (11/11, depois da retomada) — o estado vigente
+
+- **Migrations aplicadas em produção, na ordem 0232 → 0233 → 0234**, antes do merge (a fila tem de existir antes do portal):
+  - Sonda antes: 349 itens, 1 ausente. O ausente é o conhecido `envio_segredo_no_vault`: a API não lê o Vault, o segredo não está faltando. 80 mandatos.
+  - Depois: os 4 + 4 + 8 requisitos das três migrations presentes, 1 ausente (o mesmo), 80 mandatos.
+- **0234 em produção (45 s):**
+  - Backfill `sistema:0234` resolveu **38** pendências (esperado 38).
+  - `periodo_incorreto` abertas: **57 → 19**.
+  - "sem período par" abertas: **8 → 3**. Ficam as 2 do Canastra sintético, de outra causa, e a do S105.
+  - Nenhuma pendência nova aberta.
+  - Fw Valtra: `ativo_passivo_pl` anual 2023, 2024 e 2025 passaram de "sem período par" para **ok**. O balanço fecha, medido.
+- **PR #287 mergeado** (`42e03c6`), CI todo verde no head (`89e20b9`), Sonar verde. Desassinado.
+- **Ingestão republicada** do `main` com `N8N/republicar.sh`: ensaio e depois publicação; 63 de 63 nós batem; ativo; sem estágio de reserva. FINGERPRINT inalterado (`70de46f4c67573af`), então nada já lido re-extrai por causa disto.
+- **Portal publicado** (Vercel produção READY no `42e03c6`). A rota nova responde 401 sem sessão.
+- NÃO conferido no navegador: o bloco "Fila de reprocesso" e o botão com sessão de usuário, porque não há login de teste nesta sessão.
+
+### P10 — RODADA nos sintéticos (11/11, decisão do dono: reais depois)
+
+- **Como foi rodada.** Leitura da chave de serviço e do segredo do envio liberada pelo dono. Os 66 originais dos 3 mandatos "P4 linha de base" foram baixados do bucket e reenviados ao Form do n8n em 3 lotes, um por mandato, com token assinado por `assinarEnvio` (o mesmo código do portal) em nome do Sócio de teste. Os segredos ficaram só em arquivos temporários, apagados no fim. O fingerprint mudou desde 09/11, então cada documento virou versão nova do MESMO documento.
+- **Custo total: US$ 0,28** (Vertentes 0,0595; Canastra 0,1707; Distress 0,0515), muito abaixo do teto D6.
+
+| Mandato (execução) | Docs com falha antes → depois | Linhas extraídas antes → depois | Cobertura antes → depois |
+|---|---|---|---|
+| Vertentes (9496 → 9634) | 1 → **0** | 914 → **1.109** | 92,7% → **99,8%** |
+| Canastra (9505 → 9635) | 1 → 3 | 800 → **2.865** (o lote anterior tinha 18 docs, este 38) | 92,3% → 97,9% |
+| Distress (9506 → 9637) | 2 → 2 | 935 → 849 | 100,7% → 97,1% |
+
+Por documento (`Supabase/test/linha-de-base-extracao.sql`, padrão `P4 %`; a foto "antes" e a "depois" estão no scratchpad da sessão, `p10-antes.json` e `p10-depois.json`):
+
+- **Ganhos:**
+  - Vertentes `06_BP_COMBINADO`: de **0 para 185** pares; a falha aberta fechou.
+  - Canastra `17_Livro_Razao`: 409 → 604.
+  - Distress `04_BP_Montagens`: 126 → 94. Provável melhora: a leitura antiga tinha 11 subtotais repetidos, e 32 linhas × 3 colunas dá 96.
+- **Regressão COM pendência:** Distress `08_Mapa_de_Divida`, 92 → 35 pares, 6 contas descartadas por desalinhamento.
+  - Causa: cada contrato veio com 10 colunas declaradas, 10 números e 9 textos. `achatarGrupos` (`N8N/lib/extract.mjs` ~l.500) descarta a conta inteira quando `vt.length` ≠ colunas, mesmo com os 10 números alinhados.
+  - A guarda é antiga. Na leitura de 09/11 o modelo devolveu alinhado.
+  - Fatia proposta: com `vn` alinhado e só `vt` desalinhado, aceitar os números e descartar só os textos, declarando o descarte. É decisão de desenho da guarda: rever com o dono.
+- **REGRESSÃO SILENCIOSA, sem pendência (regra 7, a pior):**
+  - Canastra `26_Contingencias_e_Processos_Judiciais`: 38 → **16** pares.
+  - Canastra `29_Extrato_Bancario_Consolidado`: 27 → **6** pares.
+  - Nenhuma falha e nenhuma pendência nas duas. A régua de cobertura não reclamou. **Investigar primeiro na próxima sessão**: ler as duas respostas da IA nas execuções 9505 e 9635 e a régua desses documentos.
+- **Falhas novas do Canastra:** 2 contas descartadas por desalinhamento (`01_Balanco`, `22_Aging`) e a série do `17_Livro_Razao`. Esta última soma a coluna "Saldo", que num razão é saldo acumulado, então é provável alarme falso da guarda de série.
+- Nenhum documento terminou com `falha_transitoria_esgotada = true` nesta rodada. A P8 foi exercitada sem disparo.
+- NÃO rodado: o corpus real (Valtra, Krauspenhar, AMO), que precisa dos arquivos originais reenviados pelo dono; e o Espelho, cujo mandato não existe mais.
 
 ### Atualização de 11/11 (retomada) — vale por cima do que está abaixo
 

@@ -889,6 +889,57 @@ test('agrupado: célula em branco ocupa POSIÇÃO e não gera linha', () => {
   assert.deepEqual([linhas[0].periodo_coluna, linhas[0].valor_num], ['2024', 900]);
 });
 
+test('agrupado: vt desalinhado — números PROVADOS em ordem; texto reatribuído, perdido ou descarte', () => {
+  // FORMA da resposta real da execução 9637 (Piraquara, 10 colunas / 10 números / 9 textos), em
+  // versão de 5 colunas — fixture sintética, NÃO a resposta real (regra 4).
+  const cols = ['A', 'B', 'C', 'D', 'E'].map((pc) => ({ ec: null, pc }));
+  const g = (l) => achatarGrupos([{ s: 'S', sc: null, op: 1, cols, l: [l] }]);
+  // (a) contagem fecha: 2 números provados + 3 textos livres para 3 colunas sem número.
+  const a = g({ k: 'Ctr1', vn: [null, null, null, 10, 20], vt: ['x', 'y', 'z', null, '10', '20'] });
+  assert.deepEqual(a.linhas.map((l) => [l.periodo_coluna, l.valor_num, l.valor_texto]),
+    [['A', null, 'x'], ['B', null, 'y'], ['C', null, 'z'], ['D', 10, '10'], ['E', 20, '20']]);
+  assert.equal(a.textosReatribuidos.length, 1);
+  assert.equal(a.textosPerdidos.length, 0);
+  assert.equal(a.problemas.length, 0);
+  // (b) contagem não fecha (2 livres para 3 colunas): números mantidos, textos nulos, PERDIDOS declarados.
+  const b = g({ k: 'Ctr2', vn: [null, null, null, 10, 20], vt: ['x', 'y', '10', '20'] });
+  assert.deepEqual(b.linhas.map((l) => [l.periodo_coluna, l.valor_num, l.valor_texto]), [['D', 10, '10'], ['E', 20, '20']]);
+  assert.equal(b.textosPerdidos.length, 1);
+  assert.equal(b.textosReatribuidos.length, 0);
+  // (c) vn do tamanho certo mas DESLOCADO (modelo omitiu "Credor" e repetiu o saldo): subsequência
+  // numérica de vt [100, 4] difere de vn [100, 100, 4] -> descarte, com pendência.
+  const c = g({ k: 'Ctr3', vn: [100, 100, null, null, 4], vt: ['Banco X', '100', '4'] });
+  assert.equal(c.linhas.length, 0);
+  assert.equal(c.problemas.length, 1);
+  // (c1) POSIÇÕES: Credor|Saldo|Juros|Vencimento, vt ['Banco X','100','4']. Verdadeiro [null,100,4,null]
+  // passa (TNN ⊂ TNNT); deslocado [100,4,null,null] não (TNN ⊄ NNTT) e gravaria Credor=100.
+  const col4 = ['Credor', 'Saldo', 'Juros', 'Venc'].map((pc) => ({ ec: null, pc }));
+  const g4 = (vn) => achatarGrupos([{ s: 'S', sc: null, op: 1, cols: col4, l: [{ k: 'K', vn, vt: ['Banco X', '100', '4'] }] }]);
+  const ok4 = g4([null, 100, 4, null]);
+  assert.equal(ok4.problemas.length, 0);
+  assert.deepEqual(ok4.linhas.map((l) => [l.periodo_coluna, l.valor_num]), [['Saldo', 100], ['Juros', 4]]);
+  const desl = g4([100, 4, null, null]);
+  assert.equal(desl.linhas.length, 0);
+  assert.equal(desl.problemas.length, 1);
+  // formatos de número em vt: cada um tem de ser reconhecido como o número de vn
+  for (const [txt, n] of [['R$ 100', 100], ['1 234,5', 1234.5], ['1\u202f234,50', 1234.5], ['100-', -100], ['1234.56', 1234.56], ['1.234', 1234], ['(50)', -50], ['-R$ 7,5', -7.5]]) {
+    const r = g4([null, n, 4, null]);
+    const r2 = achatarGrupos([{ s: 'S', sc: null, op: 1, cols: col4, l: [{ k: 'K', vn: [null, n, 4, null], vt: ['Banco X', txt, '4'] }] }]);
+    assert.equal(r2.problemas.length, 0, `formato "${txt}" não reconhecido`);
+    assert.equal(r2.linhas.filter((l) => l.valor_num !== null).length, 2, txt);
+    assert.ok(r);
+  }
+  // (c2) mesma contagem de números, VALOR diferente (vt trocou 20 por 21): sem prova, descarte.
+  assert.equal(g({ k: 'Ctr3b', vn: [null, null, null, 10, 20], vt: ['x', 'y', '10', '21'] }).problemas.length, 1);
+  // (d) "19,11%" não é número: não quebra a prova; sem número em vn -> descarte; vn de outro tamanho -> descarte.
+  assert.equal(g({ k: 'Ctr4', vn: [null, null, null, null, null], vt: ['a', 'b', 'c'] }).problemas.length, 1);
+  assert.equal(g({ k: 'Ctr5', vn: [1, 2, 3], vt: ['1', '2', '3', '4'] }).problemas.length, 1);
+  assert.equal(g({ k: 'Ctr6', vn: [null, null, null, null, 7], vt: ['p', '19,11%', 'q', 'r'] }).problemas.length, 1, 'vt sem o número de vn: sem prova, descarte');
+  const neg = g({ k: 'Ctr7', vn: [null, null, null, null, -7], vt: ['p', '19,11%', 'q', '(7)'] }); // "19,11%" não é número; (7) = -7
+  assert.equal(neg.problemas.length, 0);
+  assert.equal(neg.textosPerdidos.length, 1);
+});
+
 test('o prompt manda declarar COLUNA DE VALOR que não é período nem empresa', () => {
   // O caso real que custou 98 de 99 lançamentos: o `17_Livro_Razao` tem Débito,
   // Crédito e Saldo por linha, o modelo devolveu 3 valores e declarou `cols`

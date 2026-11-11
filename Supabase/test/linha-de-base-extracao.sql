@@ -36,7 +36,17 @@
 --     não "cobertura zero". O texto é de produção e pode mudar: se mudar, estas três colunas
 --     voltam NULL com `obs` — não 0.
 --   * linhas_gravadas: count de `campo_extraido` da versão (PARES conta x coluna, não linhas do
---     documento — por isso não se compara com linhas_devolvidas; 0154).
+--     documento — por isso não se compara com linhas_devolvidas; 0154). É a SOMA das duas
+--     colunas seguintes, mantida para parear com a foto antiga.
+--   * valores_gravados: pares com `valor_num` NÃO nulo. REGRESSÃO DE DADO SE LÊ AQUI.
+--   * textos_gravados: pares só de texto (`valor_num` nulo: Natureza, Objeto, Agência, Conta...).
+--     Cair aqui NÃO é perda de dado: o modelo pode juntar a coluna de texto ao rótulo da linha.
+--     Nenhum leitor (portal/src/lib, Supabase/migrations, N8N/lib) depende dessas colunas.
+--     Caso medido em produção (11/11, P10, re-extração do Canastra sintético): `linhas_gravadas`
+--     de 26_Contingencias_e_Processos_Judiciais caiu de 38 para 16 e a de
+--     29_Extrato_Bancario_Consolidado de 27 para 6 — parecia regressão. Não era: valores_gravados
+--     idêntico nas duas versões (Contingências 12 valores, soma 78.608; Extrato 6 valores, soma
+--     1.650); o que caiu foram os textos (26 -> 4 e 21 -> 0).
 --   * descartadas_desalinhamento: "N conta(s) descartada(s) por desalinhamento"
 --     (N8N/lib/extract.mjs ~1396).
 --   * secoes_que_nao_fecham: ocorrências de "identidade de linha não fecha" + "total da série não
@@ -79,7 +89,9 @@ evento as materialized (
    order by dv.documento_id, ea.criado_em desc
 ),
 linhas as materialized (
-  select docs.documento_id, count(ce.id) as n
+  select docs.documento_id, count(ce.id) as n,
+         count(ce.id) filter (where ce.valor_num is not null) as n_valores,
+         count(ce.id) filter (where ce.valor_num is null) as n_textos
     from docs
     left join campo_extraido ce on ce.documento_versao_id = docs.versao_id
    group by docs.documento_id
@@ -104,7 +116,7 @@ base as (
   select docs.*,
          (e.documento_id is not null or l.n > 0) as extraido,
          e.n_versao_evento,
-         l.n as linhas_gravadas,
+         l.n as linhas_gravadas, l.n_valores as valores_gravados, l.n_textos as textos_gravados,
          (f.documento_id is not null) as tem_pend_falhou,
          coalesce(f.aberta, false) as pend_aberta,
          coalesce(e.falha_motivo, f.descricao) as motivo,
@@ -137,6 +149,8 @@ saida as (
          devolvidas as linhas_devolvidas,
          esperadas  as linhas_esperadas,
          case when extraido then linhas_gravadas end as linhas_gravadas,
+         case when extraido then valores_gravados end as valores_gravados,
+         case when extraido then textos_gravados end as textos_gravados,
          case when not extraido then null else coalesce(descartadas, 0) end as descartadas_desalinhamento,
          case when not extraido then null else sec_linha + sec_serie + recon_abertas end as secoes_que_nao_fecham,
          case when not extraido then null else sec_linha end as sec_identidade_linha,
@@ -163,6 +177,8 @@ saida as (
          sum(case when not extraido then null else case when motivo like '%Extração INCOMPLETA%' then 1 else 0 end end),
          sum(devolvidas), sum(esperadas),
          sum(case when extraido then linhas_gravadas end),
+         sum(case when extraido then valores_gravados end),
+         sum(case when extraido then textos_gravados end),
          sum(case when not extraido then null else coalesce(descartadas, 0) end),
          sum(case when not extraido then null else sec_linha + sec_serie + recon_abertas end),
          sum(case when not extraido then null else sec_linha end),

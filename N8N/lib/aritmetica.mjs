@@ -203,6 +203,15 @@ export function conferirTotalDaSerie(campos) {
     const tolerancia = Math.max(1, Math.ceil(0.5 * (partes.length + 1)));
     const diff = Math.abs(soma - total.valor_num);
     if (diff <= tolerancia) continue;
+    // SALDO CORRENTE: o total impresso é o ÚLTIMO saldo da série, não a soma. Livro razão Canastra
+    // (execução 9635): "TOTAIS DO PERÍODO" declara 17945 = saldo da última linha; somar as 75 linhas dava
+    // 2.407.102 e abria pendência falsa. Pelo COMPORTAMENTO, não pelo rótulo: coluna "Saldo" também é
+    // aditiva (mapa de dívida, aging, balancete), e ali o total É a soma — essa já fechou acima, e a que
+    // não fecha continua acusando. Só se cala quando o total bate com o último valor (mesma tolerância).
+    if (/\bsaldo\b/.test(normRotulo(pcCol || ecCol))) {
+      const emOrdem = temOrdem ? partes.slice().sort((x, y) => x.ordem - y.ordem) : partes;
+      if (Math.abs(emOrdem[emOrdem.length - 1].valor_num - total.valor_num) <= tolerancia) continue;
+    }
 
     const rotuloCol = pcCol || ecCol || '(coluna única)';
     problemas.push(
