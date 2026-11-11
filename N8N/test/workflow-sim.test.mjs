@@ -4581,87 +4581,47 @@ async function medirTextoP11(texto, { contentPart, leituraPdf = null } = {}) {
 const textoDoConteudo = (parte) => (parte && typeof parte.text === 'string' ? parte.text : null);
 const ocorrencias = (texto, trecho) => String(texto).split(trecho).length - 1;
 
-test('P11 Medir: PDF mandado como ARQUIVO leva as linhas numeradas à parte, e o arquivo segue intacto', async () => {
-  const medido = await medirTextoP11(TEXTO_P11);
-  assert.ok(ehParteDeArquivo(medido.json.content_part), 'o PDF segue indo como arquivo');
-  assert.equal(medido.json.ln_no_conteudo, false);
-  assert.equal(medido.json.linhas_numeradas.length, 7, 'toda linha não-branca é numerada, com ou sem dígito');
-  assert.equal(medido.json.ln_por_linha.length, medido.json.linhas_do_texto.length,
-    'um ln por posição de linhas_do_texto — é o que o Fatiar usa para cortar a faixa');
-});
-
 test('P11 Medir: conteúdo que JÁ É o texto NÃO vai duas vezes — o content_part é trocado pelo mesmo texto numerado', async () => {
   const parte = GEMINI ? { text: TEXTO_P11 } : { type: 'text', text: TEXTO_P11 };
   const medido = await medirTextoP11(TEXTO_P11, { contentPart: parte, leituraPdf: 'texto' });
   const texto = textoDoConteudo(medido.json.content_part);
   assert.match(texto, /^L001: BALANÇO\nL002: ATIVO CIRCULANTE/, 'o texto que o modelo lê já traz a coordenada');
   assert.equal(ocorrencias(texto, 'Fornecedores'), 1, 'o documento aparece UMA vez no que o modelo recebe');
-  assert.equal(medido.json.ln_no_conteudo, true);
+  assert.equal(medido.json.ln_total, 7, 'toda linha não-branca é numerada, com ou sem dígito');
+  assert.equal(medido.json.texto_numerado_motivo, null);
   assert.equal(medido.json.caracteres_do_texto, texto.length, 'o orçamento cobra o que de fato vai');
 });
 
-test('P11 Medir: conteúdo de texto que NÃO é o texto medido (aviso, placeholder) não é reescrito', async () => {
+test('P11 Medir: conteúdo de texto que NÃO é o texto medido (aviso, placeholder) não é reescrito, e o motivo diz isso', async () => {
   const parte = GEMINI ? { text: '(arquivo de texto vazio)' } : { type: 'text', text: '(arquivo de texto vazio)' };
   const medido = await medirTextoP11(TEXTO_P11, { contentPart: parte, leituraPdf: 'texto' });
   assert.equal(textoDoConteudo(medido.json.content_part), '(arquivo de texto vazio)');
-  assert.equal(medido.json.ln_no_conteudo, false);
+  assert.equal(medido.json.ln_total, null);
+  assert.equal(medido.json.texto_numerado_motivo, 'conteudo-nao-e-o-texto');
 });
 
-test('P11 Medir: documento sem camada de texto NÃO ganha numeração — ausente, nunca vazio nem zero', async () => {
-  const medido = await medirTextoP11('');
-  assert.equal(medido.json.linhas_numeradas, null);
-  assert.equal(medido.json.ln_por_linha, null);
-  assert.equal(medido.json.ln_no_conteudo, false);
-});
-
-/** Um item como o Medir o entrega, com 6 linhas de conta para fatiar em 2 blocos sem depender do teto. */
-function itemNumerado(extra = {}) {
-  const linhas = Array.from({ length: 460 }, (_, i) => `PAGTO ${i}  ${1000 + i},00`);
-  const numeradas = ['CABECALHO SEM DIGITO', ...linhas, 'ASSINATURA SEM DIGITO'];
-  return { json: { documento_versao_id: 'ver-p11', aviso_conteudo: null, linhas_do_texto: linhas,
-    linhas_numeradas: numeradas, ln_por_linha: linhas.map((_, i) => i + 2), ln_no_conteudo: false,
-    ia_body: corpoFalso({ sistema: 'PROMPT DE SISTEMA', texto: 'Nome do arquivo: razao.pdf.' }), ...extra } };
+/** O caminho REAL de um PDF: Recompor Conteudo Extraido → Medir Documento (o Recompor decide leitura_pdf). */
+async function recomporEMedir(raw, ctx = ctxPdfBase) {
+  const recomposto = await run('Recompor Conteudo Extraido', { items: [{ json: raw }], refs: { 'Preparar Conteudo': [{ json: ctx }] } });
+  const medido = await run('Medir Documento', { item: recomposto[0], refs: { 'Preparar Conteudo': { json: ctx } } });
+  return { recomposto: recomposto[0], medido };
 }
 
-test('P11 Fatiar: cada bloco recebe SÓ a faixa dele, com a numeração GLOBAL do documento', async () => {
-  const out = await run('Fatiar Extracao', { items: [itemNumerado()] });
-  assert.ok(out.length >= 2, 'o documento tem de ser fatiado para o teste valer');
-  const textos = out.map((i) => textoDaReq(i.json.ia_body));
-  // O bloco 2 começa onde o 1 acabou, na numeração do documento — não em L001.
-  const primeiraLinhaDoBloco2 = out[1].json.ln_faixa_de;
-  assert.ok(primeiraLinhaDoBloco2 > 100, `a faixa do bloco 2 começa em L${primeiraLinhaDoBloco2}, não em L1`);
-  assert.ok(textos[1].includes(`L${String(primeiraLinhaDoBloco2).padStart(3, '0')}: `));
-  assert.ok(!textos[1].includes('L001: '), 'o bloco 2 não recebe o início do documento');
-  assert.ok(!textos[0].includes(`L${String(primeiraLinhaDoBloco2).padStart(3, '0')}: `), 'e o bloco 1 não recebe a faixa do 2');
-  // As faixas particionam o documento: toda linha numerada chega a UM bloco, nenhuma a dois, nenhuma a zero.
-  const vistas = new Map();
-  for (const t of textos) for (const m of t.matchAll(/^L(\d+): /gm)) vistas.set(m[1], (vistas.get(m[1]) ?? 0) + 1);
-  assert.equal(vistas.size, 462, 'as 462 linhas não-brancas chegam ao modelo');
-  assert.ok([...vistas.values()].every((n) => n === 1), 'nenhuma linha chega a dois blocos');
-  // E o item declara a coordenada enviada (regra 7).
-  for (const i of out) {
-    assert.equal(i.json.texto_numerado, true);
-    assert.equal(i.json.ln_total, 462, 'o teto que o parse usa para recusar ln inventado');
-    assert.equal(i.json.linhas_numeradas, undefined, 'o texto do documento não viaja pelo resto do grafo');
-    assert.equal(i.json.ln_por_linha, undefined);
-  }
-  for (const i of out) assert.equal(sistemaDaReq(i.json.ia_body), 'PROMPT DE SISTEMA', 'nunca no prompt de sistema (cache de prefixo)');
+test('P11 Medir: PDF com camada de texto boa segue o caminho real (Recompor → Medir) e sai numerado', async () => {
+  const { recomposto, medido } = await recomporEMedir({ text: TEXTOS_COM_POSICAO_PERDIDA.balancete, numpages: 2 });
+  assert.equal(recomposto.json.leitura_pdf, 'texto', 'pré-condição: é um PDF lido como texto');
+  assert.ok(medido.json.ln_total > 0);
+  assert.match(textoDoConteudo(medido.json.content_part), /^L\d{3}: /);
 });
 
-test('P11 Fatiar: documento pequeno recebe o texto numerado inteiro, e documento SEM numeração não recebe parte nenhuma', async () => {
-  const pequeno = { json: { ...itemNumerado().json, linhas_do_texto: ['Caixa 10', 'Bancos 20'],
-    linhas_numeradas: ['ATIVO', 'Caixa 10', 'Bancos 20', 'Fim'], ln_por_linha: [2, 3] } };
-  const [um] = await run('Fatiar Extracao', { items: [pequeno] });
-  const texto = textoDaReq(um.json.ia_body);
-  for (const l of ['L001: ATIVO', 'L002: Caixa 10', 'L003: Bancos 20', 'L004: Fim']) assert.ok(texto.includes(l), l);
-  assert.equal(um.json.ln_total, 4);
-
-  const escaneado = { json: { documento_versao_id: 'ver-esc', ia_body: corpoFalso({ sistema: 'S', texto: 'Nome do arquivo: scan.pdf.' }) } };
-  const [sem] = await run('Fatiar Extracao', { items: [escaneado] });
-  assert.equal(textoDaReq(sem.json.ia_body), 'Nome do arquivo: scan.pdf.', 'sem texto, a requisição fica como era');
-  assert.equal(sem.json.texto_numerado, false, 'medido e sem texto — diferente de ausente');
-  assert.equal(sem.json.ln_total, null);
-});
+/** Um item como o Medir o entrega a um documento de 460 linhas, numerado por dentro do conteúdo. */
+function itemNumerado(extra = {}) {
+  const linhas = Array.from({ length: 460 }, (_, i) => `PAGTO ${i}  ${1000 + i},00`);
+  const numerado = ['CABECALHO SEM DIGITO', ...linhas, 'ASSINATURA SEM DIGITO']
+    .map((t, i) => `L${String(i + 1).padStart(3, '0')}: ${t}`).join('\n');
+  return { json: { documento_versao_id: 'ver-p11', aviso_conteudo: null, linhas_do_texto: linhas, ln_total: 462,
+    ia_body: corpoComConteudoNumerado(numerado), ...extra } };
+}
 
 /** O corpo como o `Montar Req Extracao` o monta na rota de texto: o conteúdo (já numerado) é uma parte de texto. */
 function corpoComConteudoNumerado(linhas) {
@@ -4672,23 +4632,34 @@ function corpoComConteudoNumerado(linhas) {
 }
 const textosDoUser = (body) => partesDaReq(body).map((p) => p.text ?? '').join('\n');
 
-test('P11 Fatiar: conteúdo que já vem numerado (xlsx/csv/xml/PDF-texto) NÃO recebe o texto de novo, e o sinal é o que o corpo carrega', async () => {
-  const numerado = Array.from({ length: 462 }, (_, i) => `L${String(i + 1).padStart(3, '0')}: linha ${i}`).join('\n');
-  const jaNumerado = itemNumerado({ ln_no_conteudo: true, ia_body: corpoComConteudoNumerado(numerado) });
-  const out = await run('Fatiar Extracao', { items: [jaNumerado] });
+test('P11 Fatiar: em TODO bloco o texto numerado está no corpo UMA vez, inteiro, e o sinal é o que o corpo carrega', async () => {
+  const out = await run('Fatiar Extracao', { items: [itemNumerado()] });
+  assert.ok(out.length >= 2, 'o documento tem de ser fatiado para o teste valer (o bloco 2+ também recebe o documento inteiro)');
   for (const i of out) {
     const enviado = textosDoUser(i.json.ia_body);
-    assert.equal(ocorrencias(enviado, 'L001: '), 1, 'o texto numerado está no corpo UMA vez — mandá-lo outra vez dobraria a entrada');
-    assert.ok(enviado.includes('L462: '), 'e o corpo enviado ao modelo contém as linhas L… do documento');
+    assert.equal(ocorrencias(enviado, 'L001: '), 1, `bloco ${i.json.bloco}: o texto numerado aparece UMA vez — duas dobrariam a entrada`);
+    assert.equal(ocorrencias(enviado, 'L462: '), 1, `bloco ${i.json.bloco}: e inteiro, com a numeração global`);
     assert.equal(i.json.texto_numerado, true);
-    assert.equal(i.json.ln_total, 462);
+    assert.equal(i.json.ln_total, 462, 'o teto que o parse usa para recusar ln inventado');
     assert.equal(i.json.texto_numerado_motivo, null);
+    assert.equal(sistemaDaReq(i.json.ia_body), 'PROMPT DE SISTEMA', 'nunca no prompt de sistema (cache de prefixo)');
   }
 });
 
+test('P11 Fatiar: documento SEM numeração fica como era e declara o motivo que o Medir deu', async () => {
+  const escaneado = { json: { documento_versao_id: 'ver-esc', texto_numerado_motivo: 'sem-camada-de-texto',
+    ia_body: corpoFalso({ sistema: 'S', texto: 'Nome do arquivo: scan.pdf.' }) } };
+  const [sem] = await run('Fatiar Extracao', { items: [escaneado] });
+  assert.equal(textoDaReq(sem.json.ia_body), 'Nome do arquivo: scan.pdf.', 'sem texto, a requisição fica como era');
+  assert.equal(sem.json.texto_numerado, false);
+  assert.equal(sem.json.ln_total, null);
+  assert.equal(sem.json.texto_numerado_motivo, 'sem-camada-de-texto');
+});
+
 test('P11 Fatiar: o sinal NÃO sai true quando o corpo não carrega as linhas L… (declarava o que pretendia enviar, não o que enviou)', async () => {
-  // ln_no_conteudo diz que o conteúdo já vem numerado, mas o corpo montado não tem linha numerada nenhuma.
-  const out = await run('Fatiar Extracao', { items: [itemNumerado({ ln_no_conteudo: true })] });
+  // ln_total diz que o Medir numerou, mas o corpo montado não tem linha numerada nenhuma.
+  const semNumeracaoNoCorpo = itemNumerado({ ia_body: corpoFalso({ sistema: 'S', texto: 'Nome do arquivo: x.xlsx.' }) });
+  const out = await run('Fatiar Extracao', { items: [semNumeracaoNoCorpo] });
   for (const i of out) {
     assert.ok(!/^L\d+: /m.test(textosDoUser(i.json.ia_body)));
     assert.equal(i.json.texto_numerado, false);
@@ -4700,13 +4671,10 @@ test('P11 Fatiar: o sinal NÃO sai true quando o corpo não carrega as linhas L�
 const KRAUS_COLADO = readFileSync(new URL('./texto-krauspenhar-colado.txt', import.meta.url), 'utf8');
 
 test('P11 A1: camada de texto REPROVADA pela P6b (Krauspenhar) não é numerada — o texto colado não volta à frente do modelo', async () => {
-  const ctx = { json: { ...ctxPdfBase } };
-  const recomposto = await run('Recompor Conteudo Extraido', { items: [{ json: { text: KRAUS_COLADO, numpages: 1 } }],
-    refs: { 'Preparar Conteudo': [ctx] } });
-  assert.equal(recomposto[0].json.leitura_pdf, 'ocr', 'pré-condição: é o caso que a P6b manda para a imagem');
-  const medido = await run('Medir Documento', { item: recomposto[0], refs: { 'Preparar Conteudo': ctx } });
+  const { recomposto, medido } = await recomporEMedir({ text: KRAUS_COLADO, numpages: 1 });
+  assert.equal(recomposto.json.leitura_pdf, 'ocr', 'pré-condição: é o caso que a P6b manda para a imagem');
   assert.ok(medido.json.contas_no_documento > 0, 'a régua de cobertura segue medindo');
-  assert.equal(medido.json.linhas_numeradas, null);
+  assert.equal(medido.json.ln_total, null);
   assert.ok(ehParteDeArquivo(medido.json.content_part), 'o PDF segue indo como arquivo');
   const fatiado = await run('Fatiar Extracao', { items: [{ json: { ...medido.json,
     ia_body: corpoFalso({ sistema: 'PROMPT DE SISTEMA', texto: 'Nome do arquivo: balancete.pdf.' }) } }] });
@@ -4714,7 +4682,7 @@ test('P11 A1: camada de texto REPROVADA pela P6b (Krauspenhar) não é numerada 
     const enviado = textosDoUser(i.json.ia_body);
     assert.ok(!/^L\d+: /m.test(enviado), 'nenhuma linha numerada chega ao modelo');
     const amostra = KRAUS_COLADO.split('\n').map((l) => l.trim()).find((l) => l.length > 10 && !l.startsWith('#') && /\d/.test(l));
-    assert.ok(amostra && !enviado.includes(amostra), 'e o texto colado não está no corpo: ' + JSON.stringify(enviado.slice(0, 120)));
+    assert.ok(amostra && !enviado.includes(amostra), 'e o texto colado não está no corpo');
     assert.equal(i.json.texto_numerado, false);
     assert.equal(i.json.ln_total, null);
     assert.equal(i.json.texto_numerado_motivo, 'camada-reprovada:numeros-colados');
@@ -4724,16 +4692,21 @@ test('P11 A1: camada de texto REPROVADA pela P6b (Krauspenhar) não é numerada 
   assert.deepEqual(p.json.campos.map((c) => c.ln), [null, null]);
 });
 
-test('P11 M2: o motivo distingue escaneado (sem-camada-de-texto) de txt/xml lido no preparo (formato-sem-regua)', async () => {
-  const motivoPara = async (formato) => {
+test('P11 M-1: o escaneado, pelo caminho REAL (Recompor → Medir), declara sem-camada-de-texto — não camada-reprovada', async () => {
+  const { recomposto, medido } = await recomporEMedir({ text: '', numpages: 3 });
+  assert.equal(recomposto.json.leitura_pdf, 'ocr', 'o Recompor manda o escaneado pelo mesmo caminho da camada reprovada…');
+  assert.equal(recomposto.json.leitura_pdf_motivo, 'sem-camada-de-texto');
+  assert.equal(medido.json.texto_numerado_motivo, 'sem-camada-de-texto', '…mas a causa é outra, e o sinal tem de dizê-la');
+  assert.equal(medido.json.ln_total, null);
+});
+
+test('P11 M2: txt/xml lidos no preparo (sem `text` no Medir) declaram formato-sem-regua, não escaneado', async () => {
+  // A entrada do Medir sem `text` é a que a revisão mediu para txt/xml; o escaneado tem teste próprio, pelo Recompor.
+  for (const formato of ['texto', 'xml']) {
     const ctx = { json: { ...ctxPdfBase, formato_detectado: formato } };
-    const m = await run('Medir Documento', { item: { json: { error: 'sem texto' } }, refs: { 'Preparar Conteudo': ctx } });
-    return m.json.texto_numerado_motivo;
-  };
-  assert.equal(await motivoPara('pdf'), 'sem-camada-de-texto');
-  assert.equal(await motivoPara('imagem'), 'sem-camada-de-texto');
-  assert.equal(await motivoPara('texto'), 'formato-sem-regua');
-  assert.equal(await motivoPara('xml'), 'formato-sem-regua');
+    const m = await run('Medir Documento', { item: { json: {} }, refs: { 'Preparar Conteudo': ctx } });
+    assert.equal(m.json.texto_numerado_motivo, 'formato-sem-regua', formato);
+  }
 });
 
 test('P11 M2: o motivo chega à medição do documento quando não houve texto numerado', async () => {
@@ -4742,15 +4715,6 @@ test('P11 M2: o motivo chega à medição do documento quando não houve texto n
     custo_usd: 0.01, tokens: { entrada: 1, saida: 1, cache: 0 }, texto_numerado: false, texto_numerado_motivo: 'formato-sem-regua', campos: [campo(0), campo(1)] }]);
   assert.equal(m.texto_numerado, false);
   assert.equal(m.texto_numerado_motivo, 'formato-sem-regua');
-});
-
-test('P11 M1: na rota de arquivo o ln só vale dentro da FAIXA que o bloco recebeu; na rota de texto, o teto global', async () => {
-  const arquivo = { json: { documento_versao_id: 'v', tipo: 'BALANCO', ia_body: {}, ln_total: 462, ln_no_conteudo: false, ln_faixa_de: 240, ln_faixa_ate: 462 } };
-  const a = await run('Parse Extracao', { item: respostaComLn([12, 239, 240, 300, 462, 463]), refs: { 'Fatiar Extracao': arquivo } });
-  assert.deepEqual(a.json.campos.map((c) => c.ln), [null, null, 240, 300, 462, null], 'o bloco que só viu L240–L462 não cita L12');
-  const texto = { json: { ...arquivo.json, ln_no_conteudo: true } };
-  const t = await run('Parse Extracao', { item: respostaComLn([12, 239, 240, 300, 462, 463]), refs: { 'Fatiar Extracao': texto } });
-  assert.deepEqual(t.json.campos.map((c) => c.ln), [12, 239, 240, 300, 462, null], 'na rota de texto o modelo vê o documento inteiro');
 });
 
 const respostaComLn = (lns) => ({ json: respostaIA(JSON.stringify({

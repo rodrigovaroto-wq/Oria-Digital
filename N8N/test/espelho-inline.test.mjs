@@ -38,7 +38,7 @@ import { parseTipo, parsePeriodo, periodoAcumuladoNoAno, periodoDeIntervaloDeAno
 import {
   avaliarCobertura, celulasDaLinha, celulasEstimadas, linhasComNumero, linhasDeConta,
   juntarFragmentosDeLinha, ehLinhaSemValor, ehLinhaDeConta,
-  juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero, numerarLinhasDoTexto, textoNumeradoDaFaixa,
+  juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero, numerarLinhasDoTexto,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
   planejarFatias, instrucaoDaFatia, juntarBlocos, camadaDeTextoDoPdf, fracaoDePalavrasDobradas, linhasCurtasDaTabela, fracaoDeNumerosColados,
 } from '../lib/cobertura.mjs';
@@ -439,12 +439,6 @@ const TABELA = [
     ['Ativo\nCaixa 10\n\nBancos 20'],
     ['01/12/2025 LC-2025-4000 \nNF 010000 - Papéis e Celulose Aracati S.A. \n- 150 16.839 C\nSaldo 9.999'],
     ['a 1 \nb 2 \nc 3 \nd 4 \ne 5 \nf 6'], ['Caixa | 10 | \nBancos | 20 | '], [''], [null],
-  ] },
-  { nome: 'textoNumeradoDaFaixa', lib: textoNumeradoDaFaixa, casos: [
-    [['Ativo', 'Caixa 10', 'Bancos 20', 'Total 30'], [1, 2, 3], 0, 1],
-    [['Ativo', 'Caixa 10', 'Bancos 20', 'Total 30'], [1, 2, 3], 2, 2],
-    [['Ativo', 'Caixa 10', 'Bancos 20', 'Total 30'], [1, 2, 3], 1, 99],
-    [['a 1 b 2'], [1, 1], 1, 1], [[], [], 0, 0], [null, null, 0, 0],
   ] },
   { nome: 'linhasDaPassada', lib: linhasDaPassada, casos: [
     [[{ linha_origem: 0 }, { linha_origem: 0 }, { linha_origem: 3 }]], [[{ chave: 'plano' }]], [[]], [null],

@@ -47,7 +47,7 @@ import {
 } from './lib/spreadsheet.mjs';
 import {
   linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
-  juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero, numerarLinhasDoTexto, textoNumeradoDaFaixa,
+  juntarFragmentosComOrigem, contasComOrigem, contasPorLinhaComNumero, numerarLinhasDoTexto,
   linhasDaPassada, decidirSegundaPassada, melhorPassada, instrucaoDeSegundaPassada,
   celulasDaLinha, celulasEstimadas,
   planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
@@ -325,7 +325,6 @@ const FONTE_COBERTURA = [
   `const linhasDeConta = ${linhasDeConta.toString()};`,
   `const contasPorLinhaComNumero = ${contasPorLinhaComNumero.toString()};`,
   `const numerarLinhasDoTexto = ${numerarLinhasDoTexto.toString()};`,
-  `const textoNumeradoDaFaixa = ${textoNumeradoDaFaixa.toString()};`,
   `const celulasDaLinha = ${celulasDaLinha.toString()};`,
   `const celulasEstimadas = ${celulasEstimadas.toString()};`,
   `const planejarFatias = ${planejarFatias.toString()};`,
@@ -1920,21 +1919,27 @@ const temTexto=linhasDoTexto.length>0;
 // (balancete Krauspenhar: 303 contas descartadas com o texto, 0 sem ele). Sem numeracao o \`ln\` sai
 // null e o motivo e' declarado -- "nao medivel", nunca coordenada sobre texto sabidamente ruim.
 const camadaReprovada=doExtrator.leitura_pdf==='ocr';
-const numeracao=(temTexto&&!camadaReprovada)?numerarLinhasDoTexto(textoPdf):{numeradas:[],lnPorLinha:[]};
-const numerado=temTexto&&!camadaReprovada&&numeracao.numeradas.length>0&&numeracao.lnPorLinha.length===linhasDoTexto.length;
-// POR QUE NAO HA COORDENADA, para o sinal nao mentir sobre a causa: escaneado (sem camada), texto/xml lido
-// no preparo (sem \`text\`, logo sem regua -- nao e' escaneado), ou camada reprovada pela P6/P6b.
+// O ESCANEADO TAMBEM PASSA POR AQUI com leitura_pdf 'ocr' (Caso 2 do Recompor), mas o motivo dele e' outro: nao
+// havia camada de texto, nao "camada reprovada" -- o sinal declara a causa de verdade.
+const semCamada=doExtrator.leitura_pdf_motivo==='sem-camada-de-texto';
+// SO' SE NUMERA QUANDO O CONTEUDO MANDADO AO MODELO JA' E' ESTE TEXTO (PDF lido como texto pela rota da P6,
+// planilha, CSV, XML): o \`content_part\` e' TROCADO pelo mesmo texto com o prefixo "L001: " e o texto NAO
+// vai duas vezes. Custo: so' o prefixo (~6 caracteres por linha nao-branca), medido no medir-custo-book. A
+// igualdade exata e' o teste. Nao ha rota "PDF como arquivo + texto numerado a parte": com o PDF como arquivo
+// ou a camada foi reprovada (acima) ou nao ha texto, entao ela nao era alcancavel e saiu. E como todo bloco
+// recebe o documento inteiro como conteudo, nao ha faixa por bloco a cortar.
+const conteudoEhOTexto=temTexto&&!camadaReprovada&&!!contentPart&&typeof contentPart.text==='string'&&contentPart.text===textoPdf;
+const numeracao=conteudoEhOTexto?numerarLinhasDoTexto(textoPdf):{texto:'',total:0};
+const numerado=conteudoEhOTexto&&numeracao.total>0;
+// POR QUE NAO HA COORDENADA, para o sinal nao mentir sobre a causa: camada reprovada pela P6/P6b, escaneado
+// (sem camada), texto/xml lido no preparo (sem \`text\`, logo sem regua -- nao e' escaneado) ou conteudo que
+// nao e' o texto medido.
 const fmtLido=item.formato_detectado;
 const textoNumeradoMotivo=numerado?null
-  :(camadaReprovada?'camada-reprovada:'+(doExtrator.leitura_pdf_motivo||'sem-motivo')
-    :((fmtLido==='texto'||fmtLido==='xml')&&!temTexto?'formato-sem-regua':'sem-camada-de-texto'));
-// QUANDO O CONTEUDO JA' E' ESSE TEXTO (PDF lido como texto pela rota da P6, planilha, CSV, XML), o
-// texto NAO vai duas vezes: o \`content_part\` e' TROCADO pelo mesmo texto com o prefixo "L001: ".
-// Custo: so' o prefixo (~6 caracteres por linha nao-branca), nao o documento de novo. A igualdade
-// exata e' o teste: se o conteudo mandado nao e' este texto (o PDF em base64, ou um aviso), o texto
-// numerado vai como parte a mais, por faixa, no \`Fatiar Extracao\`.
-const conteudoEhOTexto=numerado&&!!contentPart&&typeof contentPart.text==='string'&&contentPart.text===textoPdf;
-const textoNumeradoInteiro=conteudoEhOTexto?textoNumeradoDaFaixa(numeracao.numeradas,numeracao.lnPorLinha,0,linhasDoTexto.length-1).texto:null;
+  :(semCamada?'sem-camada-de-texto'
+    :(camadaReprovada?'camada-reprovada:'+(doExtrator.leitura_pdf_motivo||'sem-motivo')
+      :((fmtLido==='texto'||fmtLido==='xml')&&!temTexto?'formato-sem-regua'
+        :(temTexto?'conteudo-nao-e-o-texto':'sem-camada-de-texto'))));
 // AS CELULAS, contadas linha a linha. O \`Extract From File\` entrega o texto
 // AGRUPADO POR LINHA, e uma linha de comparativo de tres exercicios produz TRES
 // celulas -- contar linha como celula deixava o fatiamento de 1,7x a 6,8x mais
@@ -1947,11 +1952,10 @@ const celulasEstim=pesosDaLinha.reduce((a,b)=>a+b,0);
 // calam para ele. \`null\` e' "nao sei", nunca "zero": zero ligaria a guarda de
 // cobertura com regua inventada justamente no documento onde o modelo mais erra.
 return {json:{...item,
-  content_part: conteudoEhOTexto?{...contentPart,text:textoNumeradoInteiro}:contentPart,
+  content_part: numerado?{...contentPart,text:numeracao.texto}:contentPart,
   aviso_conteudo: avisoConteudo,
-  linhas_numeradas: numerado?numeracao.numeradas:null,
-  ln_por_linha: numerado?numeracao.lnPorLinha:null,
-  ln_no_conteudo: conteudoEhOTexto,
+  // \`ln_total\` (N linhas numeradas) so' existe quando o conteudo FOI numerado: e' o teto do parse.
+  ln_total: numerado?numeracao.total:null,
   texto_numerado_motivo: textoNumeradoMotivo,
   // DUAS reguas, e a distincao e' o que fez a guarda voltar a enxergar:
   //   celulas -> toda linha com digito. E' o tamanho da RESPOSTA, e e' o que o
@@ -1995,7 +1999,7 @@ return {json:{...item,
   leitura_pdf: doExtrator.leitura_pdf??null,
   leitura_pdf_motivo: doExtrator.leitura_pdf_motivo??null,
   leitura_planilha: doExtrator.leitura_planilha??null,
-  caracteres_do_texto: conteudoEhOTexto?textoNumeradoInteiro.length
+  caracteres_do_texto: numerado?numeracao.texto.length
     :(Number.isFinite(Number(doExtrator.caracteres_do_texto))
       ?Number(doExtrator.caracteres_do_texto):(temTexto?textoPdf.length:null)),
 }};
@@ -2034,10 +2038,6 @@ for(let idx=0; idx<entradas.length; idx+=1){
   // derivado de quantas CELULAS cabem em 60% do teto de saida, e aplica-lo a
   // linhas era o erro de unidade que desligava este no' na pratica.
   const fatias=linhas.length>0?planejarFatias(linhas, MAX_CELULAS_POR_BLOCO, celulasEstimadas(linhas)):[{bloco:1,blocos:1,de:0,ate:0,ancoraInicio:null,ancoraFim:null,celulas:0,linhas:0,acimaDoTeto:false}];
-  // A COORDENADA (P11): so' ha' numeracao quando o \`Medir Documento\` a mediu E ela casa com as linhas.
-  const numeradas=Array.isArray(j.linhas_numeradas)?j.linhas_numeradas:[];
-  const lnPorLinha=Array.isArray(j.ln_por_linha)?j.ln_por_linha:[];
-  const temNumeracao=linhas.length>0&&numeradas.length>0&&lnPorLinha.length===linhas.length;
   for(const f of fatias){
     // A instrucao da faixa vai na mensagem de USER, nunca no prompt de sistema:
     // o prefixo tem de continuar identico em toda chamada para o cache de
@@ -2045,30 +2045,23 @@ for(let idx=0; idx<entradas.length; idx+=1){
     const corpo=JSON.parse(JSON.stringify(j.ia_body||{}));
     // ONDE a instrucao entra e' do provedor (\`contents\` no Google, \`messages\`
     // na OpenAI); QUE ela nao entra no prompt de sistema e' invariante nosso.
-    // O TEXTO NUMERADO DO BLOCO vai na MESMA mensagem de user, ao lado da instrucao da faixa, e
-    // nunca no prompt de sistema (cache de prefixo). So' vai como parte a mais quando o conteudo
-    // NAO e' ja' esse texto (PDF mandado como arquivo): senao o \`content_part\` ja' vem numerado.
-    const faixa=temNumeracao?textoNumeradoDaFaixa(numeradas,lnPorLinha,f.de,f.ate):null;
-    let instrucao=instrucaoDaFatia(f);
-    if(faixa&&faixa.texto&&j.ln_no_conteudo!==true){
-      instrucao+=' TEXTO NUMERADO (extraido do proprio PDF, linhas L'+String(faixa.de)+' a L'+String(faixa.ate)+' de '+String(faixa.total)+'): '
-        +'use-o SO para preencher ln com o numero da linha de onde cada conta veio; os valores e a leitura continuam sendo os do documento.\\n'+faixa.texto;
-    }
-    acrescentarInstrucao(PROVEDOR,corpo,instrucao);
-    // O SINAL SO' SAI TRUE SE AS LINHAS \`L001: ...\` ESTAO NO CORPO que vai ao modelo (revisao da P11): ele era
-    // derivado de \`faixa.texto\`, que existe mesmo quando o corpo nao a carrega (rota de texto sem o conteudo
-    // numerado). Le o que de fato sera enviado, nao o que se pretendia enviar.
+    acrescentarInstrucao(PROVEDOR,corpo,instrucaoDaFatia(f));
+    // A COORDENADA (P11): quando o \`Medir Documento\` numerou o conteudo, o texto numerado JA' ESTA' no corpo
+    // (o \`content_part\` foi trocado), inteiro em todo bloco -- nao ha faixa a anexar aqui. O SINAL SO' SAI TRUE
+    // SE AS LINHAS \`L001: ...\` ESTAO NO CORPO que vai ao modelo: ele le o que de fato sera enviado, nao o que se
+    // pretendia enviar (\`ln_total\` so' diz que o Medir numerou).
     const partesDoUser=Array.isArray(corpo.messages)?(corpo.messages[corpo.messages.length-1]||{}).content
       :(Array.isArray(corpo.contents)?(corpo.contents[corpo.contents.length-1]||{}).parts:null);
     const enviado=(Array.isArray(partesDoUser)?partesDoUser:[]).map(x=>(x&&typeof x.text==='string')?x.text:'').join('\\n');
-    const numeradoNoCorpo=!!(faixa&&faixa.texto)&&/(^|\\n)L[0-9]{3,}: /.test(enviado);
+    const lnTotalDoDoc=Number.isInteger(j.ln_total)&&j.ln_total>0?j.ln_total:null;
+    const numeradoNoCorpo=lnTotalDoDoc!==null&&/(^|\\n)L[0-9]{3,}: /.test(enviado);
     // \`linhas_do_texto\` fica para tras: ele ja' virou ancora, e levar o
     // documento inteiro em texto por todo o grafo incharia cada item a' toa.
     // \`content_part\` sai pelo mesmo motivo, e agora ele PRECISA sair: desde que o
     // conteudo passou a viajar com o item (para nao depender de pareamento), o
     // base64 do PDF esta no json -- e ele ja' foi copiado para dentro do \`corpo\`.
     // Levar as duas copias por todo o resto do grafo dobraria a memoria do lote.
-    const {linhas_do_texto:_l, contas_por_linha:_cpl, ia_body:_b, content_part:_cp, linhas_numeradas:_ln, ln_por_linha:_lpl, ...resto}=j;
+    const {linhas_do_texto:_l, contas_por_linha:_cpl, ia_body:_b, content_part:_cp, ...resto}=j;
     // CONTAS DO TEXTO NESTA FAIXA, para a segunda passada por cobertura do
     // \`Parse Extracao\`. \`null\` = nao medivel (sem texto, ou vetor que nao casa com
     // as linhas): sem denominador o bloco nao e' avaliado -- nunca um zero de mentira.
@@ -2087,11 +2080,12 @@ for(let idx=0; idx<entradas.length; idx+=1){
     saida.push({json:{...resto, ia_body:corpo, bloco:f.bloco, blocos:f.blocos,
       celulas_do_bloco:f.celulas, linhas_do_bloco:f.linhas??null, contas_do_bloco:contasDoBloco,
       bloco_de:f.de, bloco_ate:f.ate, bloco_acima_do_teto:!!f.acimaDoTeto,
-      // P11, regra 7: \`texto_numerado\` e' o SINAL POSITIVO de que a coordenada foi enviada (false = medido e sem
-      // texto, ausente = n8n antigo). \`ln_total\` e' o teto que o parse usa para recusar ln inventado.
-      texto_numerado:numeradoNoCorpo, ln_total:numeradoNoCorpo?faixa.total:null,
-      ln_faixa_de:faixa?faixa.de:null, ln_faixa_ate:faixa?faixa.ate:null,
-      texto_numerado_motivo:numeradoNoCorpo?null:((faixa&&faixa.texto)?'texto-numerado-nao-chegou-ao-corpo':(j.texto_numerado_motivo??null))}, pairedItem:{item:idx}});
+      // P11, regra 7: \`texto_numerado\` e' o SINAL POSITIVO de que as linhas L... foram ao modelo. \`false\` NAO quer
+      // dizer "escaneado": cobre camada-reprovada, sem-camada-de-texto, formato-sem-regua, conteudo-nao-e-o-texto e
+      // texto-numerado-nao-chegou-ao-corpo -- o MOTIVO e' quem diz qual. Ausente = n8n antigo (nao mediu).
+      // \`ln_total\` e' o teto que o parse usa para recusar ln inventado.
+      texto_numerado:numeradoNoCorpo, ln_total:numeradoNoCorpo?lnTotalDoDoc:null,
+      texto_numerado_motivo:numeradoNoCorpo?null:(lnTotalDoDoc!==null?'texto-numerado-nao-chegou-ao-corpo':(j.texto_numerado_motivo??null))}, pairedItem:{item:idx}});
   }
 }
 return saida;
@@ -2316,8 +2310,10 @@ for(const [chave, blocos] of porDocumento){
   const respondidos=blocos.filter(b=>b.tokens!==undefined&&b.tokens!==null);
   const medicao={blocos_com_resposta:respondidos.length};
   // A COORDENADA (P11, versao_medicao p4-4), regra 7: \`texto_numerado\` e' o sinal positivo de que o texto
-  // numerado FOI enviado (algum bloco o levou); false = o \`Fatiar Extracao\` mediu e nao havia texto
-  // (escaneado) e \`ln\` vem null por isso; AUSENTE = n8n anterior a p4-4, que nao mediu. As linhas COM e SEM
+  // numerado FOI enviado (algum bloco o levou); false = as linhas L... NAO foram ao modelo e \`ln\`
+  // vem null por isso -- e false NAO quer dizer "escaneado": cobre camada-reprovada, sem-camada-de-texto,
+  // formato-sem-regua, conteudo-nao-e-o-texto e texto-numerado-nao-chegou-ao-corpo, e o
+  // \`texto_numerado_motivo\` (so' presente quando false) diz qual; AUSENTE = n8n anterior a p4-4, que nao mediu. As linhas COM e SEM
   // \`ln\` so' entram quando algum bloco respondeu, como \`linhas_devolvidas\`, de quem sao parte.
   const sinalLn=blocos.filter(b=>typeof b.texto_numerado==='boolean');
   if(sinalLn.length>0){
@@ -2457,12 +2453,8 @@ ${FONTE_ACHATAR_GRUPOS}
 // (conta x coluna) -- a forma que \`campo_extraido\` sempre teve. O achatamento
 // vem EMBUTIDO da fonte, nao copiado: se este no' e a lib discordarem sobre como
 // associar valor a coluna, o banco recebe o numero de 2024 no lugar do de 2025.
-// A FAIXA QUE O BLOCO RECEBEU manda quando o texto foi como parte a mais (rota de arquivo): um bloco que so'
-// viu L240-L462 nao pode citar L12. Na rota de texto (\`ln_no_conteudo\`) o modelo ve o documento inteiro e o
-// teto e' o global.
-const lnTotal=Number.isInteger(ctx.ln_total)&&ctx.ln_total>0?ctx.ln_total:null;
-const porFaixa=lnTotal!==null&&ctx.ln_no_conteudo!==true&&Number.isInteger(ctx.ln_faixa_de)&&Number.isInteger(ctx.ln_faixa_ate);
-const ach=achatarGrupos(p.grupos,{lnMax:porFaixa?ctx.ln_faixa_ate:lnTotal, lnMin:porFaixa?ctx.ln_faixa_de:1});
+// O TETO E' O TOTAL DE LINHAS NUMERADAS do documento: o modelo recebe o documento inteiro (numerado) em todo bloco.
+const ach=achatarGrupos(p.grupos,{lnMax:Number.isInteger(ctx.ln_total)&&ctx.ln_total>0?ctx.ln_total:null});
 let campos=ach.linhas.length>0||Array.isArray(p.grupos)
   ? ach.linhas.map((l,i)=>({ordem:i, ...l, unidade:naoMonet(l.chave,l.valor_texto,l.periodo_coluna)?null:(escalaCol(l.periodo_coluna)??unidade), moeda:naoMonet(l.chave,l.valor_texto,l.periodo_coluna)?null:moedaDoc}))
   // FORMATO PLANO ANTIGO -- o caminho de um workflow importado velho responder

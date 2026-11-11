@@ -208,8 +208,8 @@ export function juntarFragmentosComOrigem(texto) {
 }
 
 /**
- * A COORDENADA (P11): numera as linhas NÃO-BRANCAS do texto JÁ EMENDADO, L1..LN globais
- * do documento, e diz a que número de linha cada posição de `linhasComNumero(texto)` pertence.
+ * A COORDENADA (P11): o texto com as linhas NÃO-BRANCAS numeradas ("L001: ..."), L1..LN globais do
+ * documento, sobre o texto JÁ EMENDADO. Devolve `{ texto, total }` (`total` = N).
  *
  * POR QUE A EMENDA VEM ANTES DA NUMERAÇÃO: um fragmento de linha ("RECEITA " + "1.000") é UMA
  * linha visual. Numerar o texto cru daria dois números a ela, e o `ln` que o modelo devolvesse
@@ -220,60 +220,28 @@ export function juntarFragmentosComOrigem(texto) {
  * Numera TODA linha não-branca, com ou sem dígito: o rótulo de seção ("ATIVO CIRCULANTE") é linha
  * do documento e o modelo pode citá-lo como origem de um total.
  *
- * `lnPorLinha[p]` é o `ln` da p-ésima linha de `linhasComNumero(texto)` — o vetor que
- * `planejarFatias` usa. Várias posições podem dividir o mesmo `ln` (fragmentos emendados com
- * dígito em cada um). Texto vazio ou não-string: `{numeradas: [], lnPorLinha: []}` — "não
- * medível", nunca um número inventado.
+ * SÓ O TEXTO INTEIRO, e não por faixa de bloco: a numeração só existe quando o conteúdo mandado ao
+ * modelo JÁ É este texto (PDF lido como texto, planilha, XML), e nesse caso todo bloco recebe o
+ * documento inteiro como conteúdo — não há faixa a cortar. A versão por faixa (texto numerado
+ * anexado ao PDF-arquivo) ficou inalcançável quando a camada reprovada pela P6b deixou de ser
+ * numerada, e saiu (escada do CLAUDE.md, degrau 1). Texto vazio ou não-string: `{texto:'', total:0}`
+ * — "não medível", nunca um número inventado.
  *
  * AUTO-CONTIDA no que importa: chama só `juntarFragmentosComOrigem` (nós Code a embutem por
  * `toString()` na mesma lista, `FONTE_COBERTURA`).
  */
 export function numerarLinhasDoTexto(texto) {
-  if (typeof texto !== 'string' || texto.length === 0) return { numeradas: [], lnPorLinha: [] };
-  const cruas = texto.split('\n');
-  const lnDaCrua = new Array(cruas.length).fill(0);
+  if (typeof texto !== 'string' || texto.length === 0) return { texto: '', total: 0 };
   const numeradas = [];
   for (const g of juntarFragmentosComOrigem(texto)) {
     const t = g.texto.trim();
-    if (t.length === 0) continue;
-    numeradas.push(t);
-    for (let k = g.de; k < g.de + g.n; k += 1) lnDaCrua[k] = numeradas.length;
+    if (t.length > 0) numeradas.push(t);
   }
-  const lnPorLinha = [];
-  for (let i = 0; i < cruas.length; i += 1) {
-    const l = cruas[i].trim();
-    if (l.length === 0 || !/\d/.test(l)) continue;
-    lnPorLinha.push(lnDaCrua[i]);
-  }
-  return { numeradas, lnPorLinha };
-}
-
-/**
- * O texto numerado ("L012: ...") do BLOCO que cobre as posições `de..ate` de `linhasComNumero`,
- * com a numeração GLOBAL do documento preservada. As faixas dos blocos PARTICIONAM as linhas: o
- * bloco k começa na linha seguinte ao último `ln` do bloco k-1 (então um rótulo sem dígito, como
- * "PASSIVO CIRCULANTE", vai para o bloco que traz as contas dele) e o último vai até LN, onde
- * mora a assinatura. Se dois blocos dividem o mesmo `ln` (emenda com dígito nos dois lados do
- * corte), a faixa recua para não ficar vazia — a linha sai nos dois, que é o lado barato do erro.
- *
- * Devolve `{ texto, de, ate, total }` — `de`/`ate` em `ln`; `texto` vazio quando não há o que
- * numerar (documento sem camada de texto: o `ln` fica null, não zero).
- *
- * AUTO-CONTIDA (nós Code a embutem por `toString()`).
- */
-export function textoNumeradoDaFaixa(numeradas, lnPorLinha, de, ate) {
-  const total = Array.isArray(numeradas) ? numeradas.length : 0;
-  const n = Array.isArray(lnPorLinha) ? lnPorLinha.length : 0;
-  if (total === 0 || n === 0) return { texto: '', de: null, ate: null, total: 0 };
-  const ult = n - 1;
-  const d = Math.max(0, Math.min(Number(de) || 0, ult));
-  const a = Math.max(d, Math.min(Number.isFinite(Number(ate)) ? Number(ate) : ult, ult));
-  const ini = d === 0 ? 1 : Math.min(lnPorLinha[d - 1] + 1, lnPorLinha[d]);
-  const fim = a === ult ? total : Math.max(lnPorLinha[a], ini);
-  const larg = Math.max(3, String(total).length);
-  const linhas = [];
-  for (let k = ini; k <= fim; k += 1) linhas.push(`L${String(k).padStart(larg, '0')}: ${numeradas[k - 1]}`);
-  return { texto: linhas.join('\n'), de: ini, ate: fim, total };
+  const larg = Math.max(3, String(numeradas.length).length);
+  return {
+    texto: numeradas.map((t, k) => `L${String(k + 1).padStart(larg, '0')}: ${t}`).join('\n'),
+    total: numeradas.length,
+  };
 }
 
 /**

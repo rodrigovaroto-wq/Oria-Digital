@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   linhasComNumero, linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
   celulasDaLinha, celulasEstimadas,
-  planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura, numerarLinhasDoTexto, textoNumeradoDaFaixa,
+  planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura, numerarLinhasDoTexto,
   MAX_CELULAS_POR_BLOCO, TETO_SAIDA_TOKENS, TOKENS_POR_CELULA, LIMIAR_COBERTURA,
 } from '../lib/cobertura.mjs';
 import { MAX_OUTPUT_TOKENS } from '../lib/extract.mjs';
@@ -1036,54 +1036,19 @@ test('régua no texto de planilha: linha que termina em célula vazia não é fr
 
 test('P11: uma linha emendada de dois fragmentos tem UM ln — o ln nunca aponta para meia linha', () => {
   // "RECEITA " termina em espaço: é fragmento, a linha visual continua na seguinte (juntarFragmentosDeLinha).
-  const { numeradas, lnPorLinha } = numerarLinhasDoTexto('ATIVO\nRECEITA \n1.000 2.000\nCusto 5');
-  assert.deepEqual(numeradas, ['ATIVO', 'RECEITA 1.000 2.000', 'Custo 5']);
-  // posições de linhasComNumero: "1.000 2.000" (ln 2: é parte da linha emendada) e "Custo 5" (ln 3)
-  assert.deepEqual(lnPorLinha, [2, 3]);
-  assert.equal(lnPorLinha.length, linhasComNumero('ATIVO\nRECEITA \n1.000 2.000\nCusto 5').length);
+  const r = numerarLinhasDoTexto('ATIVO\nRECEITA \n1.000 2.000\nCusto 5');
+  assert.equal(r.texto, 'L001: ATIVO\nL002: RECEITA 1.000 2.000\nL003: Custo 5');
+  assert.equal(r.total, 3);
 });
 
 test('P11: linha em branco não é numerada, rótulo sem dígito é, e a numeração é global e sem buraco', () => {
-  const { numeradas, lnPorLinha } = numerarLinhasDoTexto('ATIVO CIRCULANTE\nCaixa 10\n\n  \nBancos 20\nTotal');
-  assert.deepEqual(numeradas, ['ATIVO CIRCULANTE', 'Caixa 10', 'Bancos 20', 'Total']);
-  assert.deepEqual(lnPorLinha, [2, 3]);
+  const r = numerarLinhasDoTexto('ATIVO CIRCULANTE\nCaixa 10\n\n  \nBancos 20\nTotal');
+  assert.equal(r.texto, 'L001: ATIVO CIRCULANTE\nL002: Caixa 10\nL003: Bancos 20\nL004: Total');
+  assert.equal(r.total, 4);
 });
 
 test('P11: texto vazio ou não-texto não tem coordenada (não medível), nunca uma numeração vazia de mentira', () => {
-  for (const v of ['', null, undefined, 42]) assert.deepEqual(numerarLinhasDoTexto(v), { numeradas: [], lnPorLinha: [] });
-  assert.equal(textoNumeradoDaFaixa([], [], 0, 0).texto, '');
-});
-
-test('P11: as faixas dos blocos particionam o texto — todo L aparece em um bloco só, com a numeração do documento', () => {
-  const texto = ['TITULO', ...Array.from({ length: 9 }, (_, i) => `Conta ${i} ${i + 100}`), 'RODAPE'].join('\n');
-  const { numeradas, lnPorLinha } = numerarLinhasDoTexto(texto);
-  const fatias = planejarFatias(linhasComNumero(texto), 4, celulasEstimadas(linhasComNumero(texto)));
-  assert.ok(fatias.length >= 2);
-  const vistos = [];
-  for (const f of fatias) {
-    const r = textoNumeradoDaFaixa(numeradas, lnPorLinha, f.de, f.ate);
-    for (const m of r.texto.matchAll(/^L(\d+): /gm)) vistos.push(Number(m[1]));
-  }
-  assert.deepEqual(vistos, Array.from({ length: numeradas.length }, (_, i) => i + 1));
-  const segundo = textoNumeradoDaFaixa(numeradas, lnPorLinha, fatias[1].de, fatias[1].ate);
-  assert.ok(segundo.de > 1 && !segundo.texto.includes('L001: '), 'o bloco 2 não recomeça em L001');
-  assert.ok(segundo.texto.startsWith(`L${String(segundo.de).padStart(3, '0')}: `));
-});
-
-test('P11: o rótulo de seção sem dígito vai para o bloco que traz as contas dele, e a assinatura para o último', () => {
-  const { numeradas, lnPorLinha } = numerarLinhasDoTexto('A 1\nB 2\nPASSIVO\nC 3\nD 4\nASSINADO');
-  const b1 = textoNumeradoDaFaixa(numeradas, lnPorLinha, 0, 1);
-  const b2 = textoNumeradoDaFaixa(numeradas, lnPorLinha, 2, 3);
-  assert.ok(!b1.texto.includes('PASSIVO') && b2.texto.includes('L003: PASSIVO'));
-  assert.ok(b2.texto.endsWith('L006: ASSINADO'));
-});
-
-test('P11: dois blocos que dividem o MESMO ln (emenda com dígito dos dois lados) não ficam com faixa vazia', () => {
-  const { numeradas, lnPorLinha } = numerarLinhasDoTexto('RECEITA 1 \n2 3\nCusto 5');
-  assert.deepEqual(lnPorLinha, [1, 1, 2], 'as duas posições com dígito dividem o ln da linha emendada');
-  const b1 = textoNumeradoDaFaixa(numeradas, lnPorLinha, 0, 0);
-  const b2 = textoNumeradoDaFaixa(numeradas, lnPorLinha, 1, 1);
-  assert.ok(b1.texto.startsWith('L001: RECEITA 1 2 3') && b2.texto.startsWith('L001: RECEITA 1 2 3'), 'a linha sai nos dois: o lado barato do erro');
+  for (const v of ['', null, undefined, 42]) assert.deepEqual(numerarLinhasDoTexto(v), { texto: '', total: 0 });
 });
 
 test('P11 juntarBlocos: conta as linhas COM e SEM ln, por linha do documento (não por par conta × coluna)', () => {

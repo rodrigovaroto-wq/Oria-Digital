@@ -55,7 +55,7 @@ import {
 } from './lib/custo.mjs';
 import {
   linhasComNumero, celulasEstimadas, planejarFatias,
-  MAX_CELULAS_POR_BLOCO, numerarLinhasDoTexto, textoNumeradoDaFaixa, camadaDeTextoDoPdf,
+  MAX_CELULAS_POR_BLOCO, numerarLinhasDoTexto, camadaDeTextoDoPdf,
 } from './lib/cobertura.mjs';
 import { SYSTEM_PROMPT, MAX_OUTPUT_TOKENS } from './lib/extract.mjs';
 import { provedor } from './lib/provedor.mjs';
@@ -98,20 +98,20 @@ const TOKENS_SAIDA_LN_POR_LINHA = 5;
 // `ln` é `required` no schema strict: sem coordenada o modelo ainda escreve `,"ln":null` (~3 tokens por linha).
 const TOKENS_SAIDA_LN_NULO_POR_LINHA = 3;
 
-// A entrada da coordenada, com as MESMAS funções que rodam em produção. Dois caminhos, o mesmo que
-// o `Medir Documento` decide: PDF lido como TEXTO (rota da P6) troca o conteúdo pelo mesmo texto com o
-// prefixo "L001: " — só o prefixo é token novo; PDF mandado como ARQUIVO leva o texto numerado à parte
-// (o PDF segue indo inteiro). Sem texto (escaneado), nada. É entrada NÃO cacheada: o texto é do documento.
+// A entrada da coordenada, com as MESMAS funções que rodam em produção. Só há UM caminho com numeração: PDF
+// lido como TEXTO (rota da P6) troca o conteúdo pelo mesmo texto com o prefixo "L001: " — só o prefixo é
+// token novo. Camada reprovada pela P6/P6b (o PDF vai como arquivo) e sem texto (escaneado): sem numeração,
+// sem entrada nova, `ln` null. É entrada NÃO cacheada: o texto é do documento.
 function coordenadaDoDocumento(linhasDoTexto, paginas) {
   const texto = (linhasDoTexto || []).join('\n');
-  const { numeradas, lnPorLinha } = numerarLinhasDoTexto(texto);
-  if (numeradas.length === 0 || lnPorLinha.length === 0) return { rota: 'sem_texto', caracteres: 0 };
-  const inteiro = textoNumeradoDaFaixa(numeradas, lnPorLinha, 0, lnPorLinha.length - 1);
+  const { total } = numerarLinhasDoTexto(texto);
+  if (total === 0) return { rota: 'sem_texto', caracteres: 0 };
   const usarTexto = camadaDeTextoDoPdf(texto, { paginas }).usarTexto === true;
-  if (usarTexto) return { rota: 'texto', caracteres: inteiro.texto.length - numeradas.reduce((a, l) => a + l.length, 0) - (numeradas.length - 1) };
   // Camada reprovada pela P6/P6b (`leitura_pdf: 'ocr'`): o PDF vai como arquivo e o texto NÃO é numerado —
   // levá-lo de volta à frente do modelo desfaria a P6b. Sem entrada nova; `ln` sai null (revisão da P11, A1).
-  return { rota: 'camada_reprovada', caracteres: 0 };
+  if (!usarTexto) return { rota: 'camada_reprovada', caracteres: 0 };
+  // "L" + largura + ": " por linha numerada (largura = max(3, dígitos de N), como na função de produção).
+  return { rota: 'texto', caracteres: total * (Math.max(3, String(total).length) + 3) };
 }
 
 // AS CÉLULAS, AS COLUNAS E OS BLOCOS — MEDIDOS NO TEXTO, com as MESMAS funções
