@@ -509,7 +509,7 @@
 {"k":"n","id":"fn:fn_linha_vale_para_ano","t":"fn","f":"Supabase/migrations/0195_o_espelho_que_lia_o_balanco_de_outro_ano.sql","txt":"linha vale para ano"}
 {"k":"n","id":"fn:fn_linhas_do_realizado","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"linhas do realizado"}
 {"k":"n","id":"fn:fn_linhas_do_tipo","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"linhas do tipo"}
-{"k":"n","id":"fn:fn_linhas_para_modelagem","t":"fn","f":"Supabase/migrations/0164_a_estimativa_que_o_filtro_opaco_escondia.sql","txt":"linhas para modelagem"}
+{"k":"n","id":"fn:fn_linhas_para_modelagem","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"linhas para modelagem"}
 {"k":"n","id":"fn:fn_linhas_para_transcrever","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"linhas para transcrever"}
 {"k":"n","id":"fn:fn_marcar_falha_vista","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"marcar falha vista"}
 {"k":"n","id":"fn:fn_membros_da_equipe","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"membros da equipe"}
@@ -652,8 +652,10 @@
 {"k":"n","id":"fn:fn_valores_por_ano","t":"fn","f":"Supabase/migrations/0201_o_realizado_que_nao_lia_saldo_final_e_saldo_atual.sql","txt":"valores por ano"}
 {"k":"n","id":"fn:fn_veredito_producao","t":"fn","f":"Supabase/migrations/0218_o_dial_que_so_media_o_recorte_de_quem_disparava.sql","txt":"veredito producao"}
 {"k":"n","id":"fn:fn_versao_atual","t":"fn","f":"Supabase/migrations/0009_reconciliacao_e3.sql","txt":"versao atual"}
-{"k":"n","id":"fn:fn_versao_com_extracao","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"versao com extracao"}
+{"k":"n","id":"fn:fn_versao_com_extracao","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao com extracao"}
+{"k":"n","id":"fn:fn_versao_esgotou_transitoria","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao esgotou transitoria"}
 {"k":"n","id":"fn:fn_versao_extracao_concluida","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao extracao concluida"}
+{"k":"n","id":"fn:fn_versao_peso_de_leitura","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"versao peso de leitura"}
 {"k":"n","id":"fn:fn_vincular_linha_premissa","t":"fn","f":"Supabase/migrations/0100_papel_por_secao.sql","txt":"vincular linha premissa"}
 {"k":"n","id":"migration:0001","t":"migration","f":"Supabase/migrations/0001_schema_fatia1.sql","txt":"schema fatia1"}
 {"k":"n","id":"migration:0002","t":"migration","f":"Supabase/migrations/0002_seed_taxonomia_e_dial.sql","txt":"seed taxonomia e dial"}
@@ -1741,8 +1743,8 @@
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":12}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":146}
 {"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":62}
-{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":175}
-{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":119}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":200}
+{"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":141}
 {"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_ativo_passivo_pl","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":66}
 {"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":13}
 {"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_diagnostico","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":9}
@@ -1905,12 +1907,15 @@
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao.test.sql","l":38}
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/reextracao.test.sql","l":326}
 {"k":"e","de":"arquivo:Supabase/test/reextracao.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/reextracao.test.sql","l":303}
-{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/reextracao_transitoria.test.sql","l":8}
-{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"Supabase/test/reextracao_transitoria.test.sql","l":136}
-{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/reextracao_transitoria.test.sql","l":148}
-{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/reextracao_transitoria.test.sql","l":8}
-{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/reextracao_transitoria.test.sql","l":37}
-{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao_transitoria.test.sql","l":65}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/reextracao_transitoria.test.sql","l":11}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_fila_de_reprocesso","f":"Supabase/test/reextracao_transitoria.test.sql","l":155}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/reextracao_transitoria.test.sql","l":219}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"Supabase/test/reextracao_transitoria.test.sql","l":8}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_normalizar_texto","f":"Supabase/test/reextracao_transitoria.test.sql","l":176}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/reextracao_transitoria.test.sql","l":11}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/reextracao_transitoria.test.sql","l":40}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/reextracao_transitoria.test.sql","l":84}
+{"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/reextracao_transitoria.test.sql","l":8}
 {"k":"e","de":"arquivo:Supabase/test/reextracao_transitoria.test.sql","rel":"CHAMA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/test/reextracao_transitoria.test.sql","l":1}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_anexar","f":"Supabase/test/resumo_oficial.test.sql","l":74}
 {"k":"e","de":"arquivo:Supabase/test/resumo_oficial.test.sql","rel":"CHAMA","pa":"fn:fn_resumo_concluir","f":"Supabase/test/resumo_oficial.test.sql","l":80}
@@ -2837,10 +2842,14 @@
 {"k":"e","de":"migration:0231","rel":"CRIA","pa":"fn:fn_tipo_sem_dado_por_natureza","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","l":53}
 {"k":"e","de":"migration:0231","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","l":104}
 {"k":"e","de":"migration:0232","rel":"CRIA","pa":"fn:fn_fila_de_reprocesso","f":"Supabase/migrations/0232_a_fila_de_reprocesso_que_o_portal_nao_tinha.sql","l":44}
-{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":49}
-{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":85}
-{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":149}
-{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_resolver_periodo_incorreto_falso","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":178}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_linhas_para_modelagem","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":199}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_com_extracao","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":177}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_esgotou_transitoria","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":88}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_extracao_concluida","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":122}
+{"k":"e","de":"migration:0233","rel":"CRIA","pa":"fn:fn_versao_peso_de_leitura","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","l":105}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":109}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":182}
+{"k":"e","de":"migration:0234","rel":"CRIA","pa":"fn:fn_resolver_periodo_incorreto_falso","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","l":215}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

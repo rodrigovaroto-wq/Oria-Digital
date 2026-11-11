@@ -3,16 +3,16 @@
 --
 -- O QUE ESTE ARQUIVO PROVA (comportamento, não mecanismo):
 --   (A) um balanço/DRE cujas colunas são "Saldo Final"/"Saldo Inicial" (ou "Saldo atual"/"Saldo anterior"), sem ano no texto, é reconciliado no ano da referência do documento em vez de cair em
---       "sem período par"; fechamento = ano, abertura = ano - 1 (só em documento não parcial); Débito/Crédito nunca é saldo; "Saldo"/"Valor" continuam sem exercício; referência multi-ano continua sem
+--       "sem período par"; fechamento = ano, abertura = ano - 1; NENHUM dos dois em documento de período parcial (balancete/DRE semestral, balanço de junho); a abertura só em demonstração patrimonial ou em documento sem Débito/Crédito (o Saldo anterior de uma DRE em razão é 0); Débito/Crédito nunca é saldo; "Saldo"/"Valor" continuam sem exercício; referência multi-ano continua sem
 --       afirmar (teto declarado); coluna com ano no texto continua mandando; a divergência de verdade continua divergente.
---   (B) o período do diagnóstico e o registrado são equivalentes quando o ano mais recente é o mesmo, um conjunto contém o outro e a união é contígua; e os controles que TÊM de continuar abrindo continuam
+--   (B) o período do diagnóstico e o registrado são equivalentes quando NENHUM lado é parcial, o ano mais recente é o mesmo, um conjunto contém o outro e a união é contígua ("data-base 2025-06-30" x "multi 24,25" NÃO); e os controles que TÊM de continuar abrindo continuam
 --       ("anual 21,25" x "multi 23,24,25", "anual 25,26" x "multi 24,25", "anual 23,24" x "anual 2023", "multi 2024,2025" x "multi 01,24,25"). Ponta a ponta por fn_registrar_diagnostico, e o backfill
 --       fn_resolver_periodo_incorreto_falso só resolve o 'aberta' de origem 'diagnostico'.
 --
 -- ARRANJO À MÃO (e só ele): a pendência periodo_incorreto "falsa" do backfill é inserida direto, no formato de descrição que fn_registrar_diagnostico gravava antes da 0234 (a função nova já não a abre,
 -- esse é o ponto); o documento e as linhas vêm de fn_registrar_documento e fn_registrar_campos_extraidos de verdade. Os 8 e os 57 de produção não são reproduzidos: o teste afirma só o que dá para provar.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 40 execuções (28 chamadas de assert no arquivo; 12 delas em laço); o número reprovado por sabotagem está no cabeçalho de
+-- MEDIÇÃO NÃO-VAZIA (regra 2 do CLAUDE.md): 50 execuções (34 chamadas de assert no arquivo; as 16 execuções a mais vêm dos laços B1 e B2); o número reprovado por sabotagem está no cabeçalho de
 -- Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql ("MEDIÇÃO NÃO-VAZIA").
 --
 -- `p9.medindo = on` (PGOPTIONS='-c p9.medindo=on') vira `raise warning` e CONTA.
@@ -83,10 +83,20 @@ begin
     jsonb_build_array('Receita Bruta', 'Saldo atual', 5000), jsonb_build_array('Receita Bruta', 'Saldo anterior', 4000)));
   perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2024) = 'Saldo atual' and fn_coluna_periodo_do_ano(v_ver, 2023) = 'Saldo anterior',
     'DRE: 2024 = "Saldo atual", 2023 = "Saldo anterior"');
+  -- (revisão, médio 2) DRE no formato de RAZÃO (com Débito/Crédito): o Saldo anterior das contas de resultado é 0 (zeradas no fechamento), então NÃO é o ano - 1.
+  v_ver := teste_doc_p9(v_caso, 'MOTO P9 RAZAO LTDA', 'anual', '2024', 'DRE', 'P9-A3B', jsonb_build_array(
+    jsonb_build_array('Receita Bruta', 'Saldo anterior', 0), jsonb_build_array('Receita Bruta', 'Débito', 100), jsonb_build_array('Receita Bruta', 'Crédito', 5100),
+    jsonb_build_array('Receita Bruta', 'Saldo atual', 5000)));
+  perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2024) = 'Saldo atual', 'DRE em razão: 2024 continua "Saldo atual"', coalesce(fn_coluna_periodo_do_ano(v_ver, 2024), 'null'));
+  perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2023) = v_sent, 'DRE em razão (Débito/Crédito): 2023 NÃO é o "Saldo anterior" (seria receita 0 do ano anterior): sentinela', coalesce(fn_coluna_periodo_do_ano(v_ver, 2023), 'null'));
+  -- e o BALANÇO com movimento (patrimonial): o saldo inicial É o fechamento do ano anterior
+  v_ver := teste_doc_p9(v_caso, 'MOTO P9 BPMOV LTDA', 'anual', '2024', 'BALANCO', 'P9-A3C', jsonb_build_array(
+    jsonb_build_array('ATIVO', 'Saldo Inicial', 900), jsonb_build_array('ATIVO', 'Débito', 300), jsonb_build_array('ATIVO', 'Crédito', 200), jsonb_build_array('ATIVO', 'Saldo Final', 1000)));
+  perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2023) = 'Saldo Inicial', 'BALANÇO com Débito/Crédito (patrimonial): 2023 = "Saldo Inicial"', coalesce(fn_coluna_periodo_do_ano(v_ver, 2023), 'null'));
 
   raise notice '--- A4. movimento nunca é saldo; "Saldo" e "Valor" não nomeiam saldo ---';
   v_caso := (fn_upsert_caso('Caso P9 A4'))::uuid;
-  v_ver := teste_doc_p9(v_caso, 'MOTO P9 BAL LTDA', 'anual', '2024', 'BALANCETE', 'P9-A4', jsonb_build_array(
+  v_ver := teste_doc_p9(v_caso, 'MOTO P9 BAL LTDA', 'anual', '2024', 'BALANCO', 'P9-A4', jsonb_build_array(
     jsonb_build_array('ATIVO', 'Débito', 7000), jsonb_build_array('ATIVO', 'Crédito', 6000), jsonb_build_array('ATIVO', 'Saldo Final', 1000)));
   perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2024) = 'Saldo Final', 'com Débito, Crédito e Saldo Final: o ano 2024 é "Saldo Final", nunca o movimento', coalesce(fn_coluna_periodo_do_ano(v_ver, 2024), 'null'));
   perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2023) = v_sent, 'e sem abertura no documento, 2023 é sentinela (Débito/Crédito não viram "Saldo Inicial")');
@@ -103,8 +113,20 @@ begin
     'referência multi 24,25 com "Saldo Final": não diz de qual ano (sentinela; teto declarado)');
   v_ver := teste_doc_p9(v_caso, 'MOTO P9 SEMESTRE LTDA', 'data-base', '01/01/2026 - 30/06/2026', 'BALANCETE', 'P9-A5B', jsonb_build_array(
     jsonb_build_array('ATIVO', 'Saldo Final', 1000), jsonb_build_array('ATIVO', 'Saldo Inicial', 900)));
-  perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2026) = 'Saldo Final', 'balancete semestral: o fechamento é o do ano da referência (2026)', coalesce(fn_coluna_periodo_do_ano(v_ver, 2026), 'null'));
+  perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2026) = v_sent, 'balancete semestral: o "Saldo Final" NÃO vale como o ano cheio de 2026 (sentinela, como antes da 0234)', coalesce(fn_coluna_periodo_do_ano(v_ver, 2026), 'null'));
   perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2025) = v_sent, 'balancete semestral: o "Saldo Inicial" NÃO vira o fechamento de 2025 (é o início do período)', coalesce(fn_coluna_periodo_do_ano(v_ver, 2025), 'null'));
+  -- (revisão, médio 1) DRE de período parcial com "Saldo atual": o acumulado de 6 meses não é o ano de 2026
+  v_ver := teste_doc_p9(v_caso, 'MOTO P9 DRESEM LTDA', 'data-base', '01/01/2026 - 30/06/2026', 'DRE', 'P9-A5D', jsonb_build_array(
+    jsonb_build_array('Receita Bruta', 'Saldo atual', 2500), jsonb_build_array('Receita Bruta', 'Saldo anterior', 0)));
+  perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2026) = v_sent and fn_coluna_periodo_do_ano(v_ver, 2025) = v_sent,
+    'DRE semestral ("01/01/2026 - 30/06/2026") com "Saldo atual": nem 2026 nem 2025 (sentinela; antes valia como o ano cheio)');
+  v_ver := teste_doc_p9(v_caso, 'MOTO P9 BP0630 LTDA', 'data-base', '2025-06-30', 'BALANCO', 'P9-A5E', jsonb_build_array(
+    jsonb_build_array('ATIVO', 'Saldo Final', 1000), jsonb_build_array('ATIVO', 'Saldo Inicial', 900)));
+  perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2025) = v_sent, 'balanço intermediário (data-base 2025-06-30): o "Saldo Final" de junho NÃO é o fechamento de 2025 (sentinela)');
+  v_ver := teste_doc_p9(v_caso, 'MOTO P9 BP1231 LTDA', 'data-base', '2025-12-31', 'BALANCO', 'P9-A5F', jsonb_build_array(
+    jsonb_build_array('ATIVO', 'Saldo Final', 1000), jsonb_build_array('ATIVO', 'Saldo Inicial', 900)));
+  perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2025) = 'Saldo Final' and fn_coluna_periodo_do_ano(v_ver, 2024) = 'Saldo Inicial',
+    'controle: data-base 2025-12-31 (fecha o ano) não é parcial: 2025 = "Saldo Final", 2024 = "Saldo Inicial"');
   v_ver := teste_doc_p9(v_caso, 'MOTO P9 TEXTO LTDA', 'multi', '24,25', 'BALANCO', 'P9-A5C', jsonb_build_array(
     jsonb_build_array('ATIVO', '31/12/2024', 800), jsonb_build_array('ATIVO', '31/12/2025', 900), jsonb_build_array('ATIVO', 'Saldo Final', 999)));
   perform teste_assert_p9(fn_coluna_periodo_do_ano(v_ver, 2024) = '31/12/2024' and fn_coluna_periodo_do_ano(v_ver, 2025) = '31/12/2025',
@@ -119,8 +141,8 @@ begin
   raise notice '--- B1. fn_periodos_equivalentes: o que passa a ser o mesmo exercício ---';
   for v_p in select * from (values
     ('anual', '12M25', 'multi', '24,25'), ('data-base', '2025-12-31', 'multi', '24,25'), ('anual', '23,24,25', 'multi', '24,25'),
-    ('anual', '12M25', 'multi', '23,24,25'), ('multi', '01/07/2025 a 30/06/2026', 'data-base', '2026-06-30'),
-    ('multi', '01/07/2025 a 30/06/2026', 'outro', '12M26'), ('data-base', '15/01/2025', 'data-base', '2025-01-15')
+    ('anual', '12M25', 'multi', '23,24,25'), ('data-base', '15/01/2025', 'data-base', '2025-01-15'),
+    ('data-base', '2025-06-30', 'anual', '2025')   -- parcial x anual do MESMO ano: já era equivalente (conjuntos iguais); a granularidade abaixo do ano não é verificada
   ) as t(ta, ra, tb, rb) loop
     perform teste_assert_p9(fn_periodos_equivalentes(v_p.ta, v_p.ra, v_p.tb, v_p.rb) and fn_periodos_equivalentes(v_p.tb, v_p.rb, v_p.ta, v_p.ra),
       format('equivalentes (nos dois sentidos): %s %s x %s %s', v_p.ta, v_p.ra, v_p.tb, v_p.rb));
@@ -129,7 +151,10 @@ begin
   for v_p in select * from (values
     ('anual', '21,25', 'multi', '23,24,25'), ('anual', '25,26', 'multi', '24,25'), ('anual', '23,24', 'anual', '2023'),
     ('multi', '2024,2025', 'multi', '01,24,25'), ('anual', '2024', 'anual', '2025'), ('anual', '2025', 'multi', '02,25'),
-    ('anual', '23,25', 'multi', '24,25')
+    ('anual', '23,25', 'multi', '24,25'),
+    ('data-base', '2025-06-30', 'multi', '24,25'),               -- (revisão, alto) o balanço de junho não é o comparativo 24,25
+    ('data-base', '2026-06-30', 'multi', '01/07/2025 a 30/06/2026'), ('anual', '12M26', 'multi', '01/07/2025 a 30/06/2026'),
+    ('outro', '12M26', 'multi', '01/07/2025 a 30/06/2026'), ('data-base', '2025-06-30', 'multi', '23,24,25')
   ) as t(ta, ra, tb, rb) loop
     perform teste_assert_p9(not fn_periodos_equivalentes(v_p.ta, v_p.ra, v_p.tb, v_p.rb) and not fn_periodos_equivalentes(v_p.tb, v_p.rb, v_p.ta, v_p.ra),
       format('DISTINTOS (segue abrindo): %s %s x %s %s', v_p.ta, v_p.ra, v_p.tb, v_p.rb));
@@ -173,9 +198,9 @@ begin
 
   raise notice '--- C. a sonda enxerga os requisitos da 0234 ---';
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0234' and presente;
-  perform teste_assert_p9(v_n = 6, 'os 6 requisitos da 0234 estão presentes na sonda', v_n::text);
+  perform teste_assert_p9(v_n = 8, 'os 8 requisitos da 0234 estão presentes na sonda', v_n::text);
   select count(*) into v_n from instalacao_requisito where migration = '0234';
-  perform teste_assert_p9(v_n = 6, 'e o catálogo declara exatamente 6', v_n::text);
+  perform teste_assert_p9(v_n = 8, 'e o catálogo declara exatamente 8', v_n::text);
 
   if current_setting('p9.medindo', true) = 'on' then
     raise warning 'MEDIDO: % falha(s) de % execucoes', coalesce(current_setting('p9.falhas', true), '0'), current_setting('p9.execucoes', true);
