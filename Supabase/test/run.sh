@@ -985,6 +985,10 @@ echo "== 0240 — a versão atual que não seguia a vigente (as reconciliações
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0241 — a descrição que o período irmão reescrevia (a pendência só troca o texto pela rodada do próprio período ou da própria chave; backfill sistema:0241)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \

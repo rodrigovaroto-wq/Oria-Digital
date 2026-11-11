@@ -1197,6 +1197,15 @@ supabase db execute --file Supabase/migrations/0240_a_versao_atual_que_nao_segui
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0240' and not presente;   -- ZERO linhas
 
+# A 0241 faz fn_registrar_reconciliacao reescrever a descrição da pendência só quando a rodada é do MESMO período que ela carrega (a rodada de um período compatível, anual 2024 x multi 24,26, trocava o texto de A pelo de B: 7 pendências abertas em produção, 11/11/2026) e cria fn_corrigir_descricao_contaminada, o backfill (chamado uma vez pela migration; ator sistema:0241; só estado aberta; sem registro do próprio período não toca e conta).
+# >>> Rodar COMO `postgres`; reaplicável (função reemitida, backfill idempotente). Aplicar DEPOIS da 0192.
+# >>> Teste: Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql.
+supabase db execute --file Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0241' and not presente;   -- ZERO linhas
+#   select acao, depois from evento_auditoria where ator = 'sistema:0241' and acao = 'descricao_contaminada_resumo';   -- corrigidas + sem_registro_proprio = 7 (medido em 11/11/2026, antes de aplicar; as sem_registro_proprio ficam como estão)
+#   select count(*) from pendencia pe where pe.origem_estagio = 'reconciliacao' and pe.estado = 'aberta' and pe.periodo_id is not null and not exists (select 1 from reconciliacao r where r.caso_id = pe.caso_id and 'reconciliacao:' || r.tipo = pe.motivo and r.descricao = pe.descricao and r.periodo_id = pe.periodo_id);   -- era 7; = sem_registro_proprio
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #

@@ -2654,6 +2654,85 @@ $$;
 COMMENT ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) IS '0212: declara parentesco próximo entre dois controladores pessoas físicas do caso, COM fonte e autor. A ordem dos dois é indiferente (o par é simétrico). Idempotente para o mesmo par e parentesco vigentes (devolve o id, sem evento); outro parentesco para um par vigente é recusado (encerre antes). Pessoa jurídica, controlador de outro caso e auto-vínculo são recusados. Grava controlador_vinculo_declarado. Nunca infere por sobrenome.';
 
 --
+-- Name: fn_corrigir_descricao_contaminada(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid DEFAULT NULL::uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    AS $$
+declare
+  v_contaminadas int := 0;
+  v_corrigidas   int := 0;
+  v_sem_registro int := 0;
+  v_pe           record;
+  v_r            record;
+begin
+  -- só a pendência que o sistema abriu (origem reconciliacao) e em estado 'aberta': as demais são decisão de gente (ou já resolvida) e ficam como estão.
+  for v_pe in
+    select pe.id, pe.caso_id, pe.tipo, pe.motivo, pe.entidade_id, pe.periodo_id, pe.documento_id, pe.descricao
+      from pendencia pe
+     where pe.origem_estagio = 'reconciliacao'
+       and pe.estado = 'aberta'
+       and pe.periodo_id is not null
+       and pe.descricao is not null
+       and pe.motivo like 'reconciliacao:%'
+       and (p_caso_id is null or pe.caso_id = p_caso_id)
+       and not exists (
+         select 1 from reconciliacao r
+          where r.caso_id = pe.caso_id
+            and 'reconciliacao:' || r.tipo = pe.motivo
+            and r.descricao = pe.descricao
+            and r.periodo_id = pe.periodo_id)
+     order by pe.criada_em, pe.id
+  loop
+    v_contaminadas := v_contaminadas + 1;
+    v_r := null;
+    -- a MAIS RECENTE do próprio período, de resultado coerente com o tipo da pendência; tipo por documento (secao_fecha) também do próprio documento.
+    select r.id, r.descricao into v_r
+      from reconciliacao r
+     where r.caso_id = v_pe.caso_id
+       and 'reconciliacao:' || r.tipo = v_pe.motivo
+       and coalesce(r.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+         = coalesce(v_pe.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+       and r.periodo_id = v_pe.periodo_id
+       and (r.tipo <> 'secao_fecha' or r.documento_id is not distinct from v_pe.documento_id)
+       and nullif(btrim(r.descricao), '') is not null
+       and case v_pe.tipo::text
+             when 'divergencia_reconciliacao' then r.resultado in ('divergente', 'divergencia', 'zona_cinzenta')
+             when 'precondicao_nao_satisfeita' then r.resultado = 'precondicao_nao_satisfeita'
+             else false end
+     order by r.criado_em desc, r.cmin::text::int desc
+     limit 1;
+    if v_r.id is null then
+      v_sem_registro := v_sem_registro + 1;   -- ausência declarada: não se inventa descrição
+      continue;
+    end if;
+    update pendencia set descricao = v_r.descricao where id = v_pe.id;
+    insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+      values ('sistema:0241', 'descricao_da_pendencia_corrigida', 'pendencia:' || v_pe.id,
+              jsonb_build_object('descricao', v_pe.descricao),
+              jsonb_build_object('descricao', v_r.descricao, 'reconciliacao_id', v_r.id, 'periodo_id', v_pe.periodo_id,
+                                 'porque', 'a descricao era de outro periodo compativel (a rodada do irmao a reescrevia, ate a 0241)'));
+    v_corrigidas := v_corrigidas + 1;
+  end loop;
+
+  if v_corrigidas > 0 then
+    insert into evento_auditoria (ator, acao, entidade_ref, depois)
+      values ('sistema:0241', 'descricao_contaminada_resumo', 'pendencia',
+              jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro,
+                                 'caso_id', p_caso_id));
+  end if;
+  return jsonb_build_object('contaminadas', v_contaminadas, 'corrigidas', v_corrigidas, 'sem_registro_proprio', v_sem_registro);
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_corrigir_descricao_contaminada(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) IS '0241: para a pendência de reconciliação aberta cuja descrição nenhuma reconciliacao do próprio período gerou (a rodada de um período irmão a reescrevia), põe a descrição da reconciliacao MAIS RECENTE do próprio período (mesmo caso, tipo, entidade, periodo_id) de resultado coerente com o tipo da pendência. Sem registro assim, não toca e conta (sem_registro_proprio). Só estado aberta (as demais são decisão de gente); resolvida_por e estado intocados. Grava evento_auditoria sistema:0241 com a descrição antiga em antes. Devolve {contaminadas, corrigidas, sem_registro_proprio}; idempotente.';
+
+--
 -- Name: fn_decidir_pendencia(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -14147,6 +14226,8 @@ declare
   -- CONCLUIU divergente para um período compatível com ele.
   v_pendencia_periodo_id    uuid;
   v_divergencia_concorrente boolean := false;
+  -- 0241: a rodada é do período que a pendência carrega, ou da CHAVE dele (calculado depois da busca, no corpo).
+  v_reescreve_descricao           boolean;
   -- 0192 (terceira correção da guarda): o período da CHAVE que originou esta chamada — o que o
   -- laço de fn_reconciliar_caso / fn_reconciliar_chaves_do_documento deixou em `oria.periodo_chave`.
   -- Chamada avulsa (sem laço, como a `fn_reconciliar_arvore` e os testes) é a sua própria chave.
@@ -14216,6 +14297,9 @@ begin
     and estado <> 'resolvida'
   order by criada_em
   limit 1;
+
+  v_reescreve_descricao := v_pendencia_periodo_id is not distinct from p_periodo_id
+                           or v_pendencia_periodo_id is not distinct from v_periodo_chave_id;
 
   -- 0192: O OK (OU A PRÉ-CONDIÇÃO) QUE MATAVA A DIVERGÊNCIA IRMÃ — ESTADO VIGENTE POR CHAVE.
   -- Duas checagens do mesmo tipo/entidade com períodos COMPATÍVEIS (Balanço "multi 24,25" ×
@@ -14294,7 +14378,13 @@ begin
       -- continua com o texto e o `tipo` da divergência.
       null;
     else
-      update pendencia set descricao = p_descricao where id = v_pendencia_id;
+      -- 0241: a descrição é do PERÍODO que a pendência carrega. A busca acima acha por compatibilidade, não por igualdade, então chega aqui
+      -- a rodada de um período IRMÃO (anual 2024 x multi 24,26): reescrever dava à pendência de A o texto escrito para B (7 pendências
+      -- abertas em produção, 11/11/2026). Só reescreve a rodada do período da pendência OU da chave que o carrega (o laço desce de uma chave com
+      -- pré-condição no seu período a um compatível e diverge ali: é o texto da MESMA chave, e a pendência da 0192 conta com isso); a chave irmã mantém a deduplicação e deixa o texto como está.
+      if v_reescreve_descricao then
+        update pendencia set descricao = p_descricao where id = v_pendencia_id;
+      end if;
     end if;
   elsif v_divergente and not v_influencia then
     -- 0127: SOMBRA COM DIVERGÊNCIA PRESENTE — e este ramo existe para não mentir.
@@ -14351,7 +14441,7 @@ $$;
 -- Name: FUNCTION fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) IS 'Registro unificado de reconciliação (0023), motivo fino por pré-condição (0186/0188). 0192: a pendência só resolve (ou troca a descrição por uma de pré-condição) se nenhuma CHAVE viva (período de documento) tem como último registro uma divergência em período compatível, em qualquer rodada; tipo por documento (secao_fecha) casa a pendência e o estado por documento_id; grava documento_id, descricao e periodo_chave_id em toda linha de reconciliacao.';
+COMMENT ON FUNCTION public.fn_registrar_reconciliacao(p_caso_id uuid, p_entidade_id uuid, p_periodo_id uuid, p_tipo text, p_classe text, p_documento_id uuid, p_fonte_a jsonb, p_fonte_b jsonb, p_resultado text, p_divergencia_abs numeric, p_divergencia_pct numeric, p_materialidade jsonb, p_descricao text) IS 'Registro unificado de reconciliação (0023), motivo fino por pré-condição (0186/0188). 0192: a pendência só resolve (ou troca a descrição por uma de pré-condição) se nenhuma CHAVE viva (período de documento) tem como último registro uma divergência em período compatível, em qualquer rodada; tipo por documento (secao_fecha) casa a pendência e o estado por documento_id; grava documento_id, descricao e periodo_chave_id em toda linha de reconciliacao. 0241: a pendência é achada por período COMPATÍVEL (deduplica), mas a descrição só é reescrita pela rodada do período que a pendência carrega ou da chave dele: a chave irmã (período compatível) não troca o texto de A pelo de B.';
 
 --
 -- Name: fn_registrar_reconciliacao_b(uuid, uuid, uuid, text, uuid, jsonb, jsonb, text, numeric, numeric, jsonb, text); Type: FUNCTION; Schema: public; Owner: -
@@ -22260,6 +22350,13 @@ GRANT ALL ON FUNCTION public.fn_controlador_registrar(p_caso_id uuid, p_nome tex
 REVOKE ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_controlador_vincular_familia(p_caso_id uuid, p_controlador_a uuid, p_controlador_b uuid, p_parentesco public.controlador_parentesco, p_fonte text, p_autor text) TO service_role;
+
+--
+-- Name: FUNCTION fn_corrigir_descricao_contaminada(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_corrigir_descricao_contaminada(p_caso_id uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_decidir_pendencia(p_pendencia_id uuid, p_autor text, p_decisao text, p_motivo text); Type: ACL; Schema: public; Owner: -
