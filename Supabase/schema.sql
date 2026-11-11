@@ -6685,6 +6685,30 @@ $_$;
 COMMENT ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) IS '0224 (sobre a 0215): linha do tempo do mandato (quem fez o quê e quando), da mais nova para a mais velha, montada do que já é gravado. Acrescenta o tipo documento_original_apagado (o original apagado do Storage, com ator e nome do arquivo). Cursor composto (p_antes + p_antes_chave); autor NULL = sistema.';
 
 --
+-- Name: fn_impressao_do_cabecalho(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  with celulas as (
+    select e.ord,
+           btrim(regexp_replace(normalize(coalesce(e.v #>> '{}', ''), NFC),
+                                '[ ' || chr(9) || chr(10) || chr(13) || chr(160) || ']+', ' ', 'g'),
+                 ' ' || chr(9) || chr(10) || chr(13) || chr(160)) as c
+      from jsonb_array_elements(p_cabecalho) with ordinality as e(v, ord)),
+  ultima as (select max(ord) as n from celulas where c <> '')
+  select encode(sha256(convert_to(coalesce((select string_agg(c, chr(31) order by ord) from celulas, ultima where ord <= ultima.n), ''), 'UTF8')), 'hex')
+$$;
+
+--
+-- Name: FUNCTION fn_impressao_do_cabecalho(p_cabecalho jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) IS '0242: a impressão digital do cabeçalho (sha256 hex), a MESMA de impressaoDoCabecalho em Leitor/lib/mapeamento.mjs: cada célula em NFC, [espaço \t \n \r U+00A0] colapsados em um espaço e aparados nas pontas, células vazias do FIM fora, junção por U+001F, SEM minúsculas (lower() depende do LC_CTYPE). Calculada aqui, nunca aceita do navegador.';
+
+--
 -- Name: fn_indice_macro_anual(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -7878,6 +7902,174 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) IS 'As linhas que o Portão 1 vai COBRAR deste tipo de documento, para a planilha de transcrição listá-las. São poucas de propósito: taxonomia_linha_exigida é o MÍNIMO exigido, não um gabarito de demonstração — planilha que fingisse listar todas as contas de um balanço estaria inventando a estrutura do documento do cliente. O resto vai em linha livre.';
+
+--
+-- Name: fn_mapeamento_confirmar(text, jsonb, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_uid       uuid := auth.uid();
+  v_papel     text;
+  v_erros     text[];
+  v_impressao text;
+  v_id        uuid := gen_random_uuid();
+  v_antigo    uuid;
+begin
+  -- Anônimo (JWT sem sub), conexão de serviço e quem não tem papel caem TODOS aqui: sem auth.uid() não há linha em `membro`, e fn_meu_papel() é NULL. Um
+  -- `if v_uid is null` à parte seria código morto (medido: desligado, nenhum assert comportamental reprova), por isso não existe; o autor gravado é o v_uid.
+  v_papel := fn_meu_papel();
+  if v_papel is null or v_papel not in ('socio', 'analista') then
+    raise exception 'Confirmar o mapeamento de colunas é reservado a Sócio e Analista (seu papel: %)', coalesce(v_papel, 'nenhum') using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  v_erros := fn_mapeamento_erros(p_mapa, p_cabecalho, p_formato);
+  if cardinality(v_erros) > 0 then
+    raise exception 'Mapeamento recusado: %', array_to_string(v_erros, '; ') using errcode = '22023';
+  end if;
+
+  v_impressao := fn_impressao_do_cabecalho(p_cabecalho);
+  perform pg_advisory_xact_lock(hashtextextended(p_tipo_base || ':' || v_impressao, 0));
+  update mapeamento_de_colunas set substituido_em = now(), substituido_por = v_id
+   where tipo_base = p_tipo_base and impressao = v_impressao and substituido_em is null
+  returning id into v_antigo;
+  insert into mapeamento_de_colunas (id, tipo_base, impressao, cabecalho, mapa, formato, confirmado_por)
+  values (v_id, p_tipo_base, v_impressao, p_cabecalho, p_mapa, p_formato, v_uid);
+
+  insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+  values ('usuario:' || v_uid, 'mapeamento_confirmado', 'mapeamento_de_colunas:' || v_id,
+          case when v_antigo is null then null else jsonb_build_object('substituido', v_antigo) end,
+          jsonb_build_object('tipo_base', p_tipo_base, 'impressao', v_impressao, 'mapa', p_mapa, 'formato', p_formato));
+  return jsonb_build_object('id', v_id, 'impressao', v_impressao, 'substitui', v_antigo);
+end $$;
+
+--
+-- Name: FUNCTION fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) IS '0242: o analista confirma o mapeamento de colunas de um arquivo de contas a receber/a pagar. Só Sócio e Analista (fn_meu_papel, 0216); anônimo e conexão de serviço recusados. Valida (fn_mapeamento_erros) e recusa com o motivo; calcula a impressão do cabeçalho no banco; marca a vigente anterior do mesmo par como substituída; grava mapeamento_confirmado em evento_auditoria. Devolve {id, impressao, substitui}.';
+
+--
+-- Name: fn_mapeamento_erros(jsonb, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) RETURNS text[]
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+declare
+  v_erros  text[] := '{}';
+  v_n      int;
+  k        text;
+  v        jsonb;
+  v_usadas jsonb := '{}';
+  v_efeito text;
+begin
+  if p_cabecalho is null or jsonb_typeof(p_cabecalho) <> 'array' then
+    return array['o cabeçalho tem de ser uma lista de textos (as células do cabeçalho como o arquivo traz)'];
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_cabecalho) e where jsonb_typeof(e) not in ('string', 'null')) then
+    return array['o cabeçalho tem de ser uma lista de textos: há célula que não é texto'];
+  end if;
+  v_n := jsonb_array_length(p_cabecalho);
+  if v_n = 0 or not exists (select 1 from jsonb_array_elements(p_cabecalho) e where btrim(coalesce(e #>> '{}', ''), ' ' || chr(9) || chr(10) || chr(13) || chr(160)) <> '') then
+    return array['o cabeçalho está vazio: sem nome de coluna não há impressão para reaproveitar o mapeamento'];
+  end if;
+
+  if p_mapa is null or jsonb_typeof(p_mapa) <> 'object' then
+    return array['o mapa tem de ser um objeto campo -> índice da coluna'];
+  end if;
+  for k, v in select key, value from jsonb_each(p_mapa) order by key loop
+    if not (k = any (array['contraparte', 'documento_contraparte', 'titulo', 'parcela', 'emissao', 'vencimento',
+                           'valor_original', 'valor_pago', 'saldo', 'data_pagamento', 'situacao'])) then
+      v_erros := v_erros || format('campo desconhecido: %s', k);
+      continue;
+    end if;
+    if jsonb_typeof(v) <> 'number' or v::text !~ '^[0-9]{1,6}$' then
+      v_erros := v_erros || format('%s: o índice da coluna tem de ser um inteiro a partir de 0 (veio %s)', k, v::text);
+      continue;
+    end if;
+    if v::text::int >= v_n then
+      v_erros := v_erros || format('%s: coluna %s fora do cabeçalho (%s colunas)', k, v::text, v_n);
+      continue;
+    end if;
+    if v_usadas ? v::text then
+      v_erros := v_erros || format('a coluna "%s" está em %s e em %s', p_cabecalho ->> (v::text::int), v_usadas ->> v::text, k);
+    else
+      v_usadas := v_usadas || jsonb_build_object(v::text, k);
+    end if;
+  end loop;
+  for k, v_efeito in select * from (values ('contraparte', 'sem contraparte não há aging por cliente ou fornecedor nem concentração'),
+                                            ('vencimento', 'sem vencimento o aging não pode ser calculado'),
+                                            ('saldo', 'sem saldo não há aging nem conciliação com o balanço')) as o(campo, efeito) loop
+    if not (p_mapa ? k) then
+      v_erros := v_erros || format('falta o campo obrigatório %s: %s', k, v_efeito);
+    end if;
+  end loop;
+
+  if p_formato is null or jsonb_typeof(p_formato) <> 'object' then
+    v_erros := v_erros || 'o formato tem de ser um objeto com exatamente as chaves decimal e datas (quem confirma diz os dois)'::text;
+  else
+    for k in select key from jsonb_each(p_formato) where key not in ('decimal', 'datas') order by key loop
+      v_erros := v_erros || format('formato: chave desconhecida "%s" (só decimal e datas)', k);
+    end loop;
+    if not (p_formato ? 'decimal') then
+      v_erros := v_erros || 'formato: falta a chave decimal (virgula ou ponto): "1.250" é mil duzentos e cinquenta ou um e vinte e cinco, e só o arquivo diz'::text;
+    elsif p_formato -> 'decimal' is distinct from to_jsonb('virgula'::text) and p_formato -> 'decimal' is distinct from to_jsonb('ponto'::text) then
+      v_erros := v_erros || format('formato.decimal: %s não está na lista (virgula, ponto)', (p_formato -> 'decimal')::text);
+    end if;
+    if not (p_formato ? 'datas') then
+      v_erros := v_erros || 'formato: falta a chave datas (dia_mes_ano ou mes_dia_ano): "03/04/2025" é 3 de abril ou 4 de março, e só o arquivo diz'::text;
+    elsif p_formato -> 'datas' is distinct from to_jsonb('dia_mes_ano'::text) and p_formato -> 'datas' is distinct from to_jsonb('mes_dia_ano'::text) then
+      v_erros := v_erros || format('formato.datas: %s não está na lista (dia_mes_ano, mes_dia_ano)', (p_formato -> 'datas')::text);
+    end if;
+  end if;
+  return v_erros;
+end $_$;
+
+--
+-- Name: FUNCTION fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) IS '0242: os motivos pelos quais um mapeamento NÃO é aplicável (lista vazia = válido). Espelha validarMapeamento e os 11 CAMPOS de Leitor/lib/mapeamento.mjs (índice contra o cabeçalho ORIGINAL; obrigatórios contraparte, vencimento, saldo; coluna em um só campo) e fecha o formato (decimal, datas). Usada pela confirmação e pela CHECK da tabela.';
+
+--
+-- Name: fn_mapeamento_vigente(text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare v_r jsonb;
+begin
+  if not (fn_conexao_de_servico() or fn_tem_papel()) then
+    raise exception 'Ler o mapeamento de colunas exige um papel (Sócio, Analista ou Leitura)' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  if p_cabecalho is null or jsonb_typeof(p_cabecalho) <> 'array' then
+    raise exception 'o cabeçalho tem de ser uma lista de textos' using errcode = '22023';
+  end if;
+  select jsonb_build_object('id', m.id, 'tipo_base', m.tipo_base, 'impressao', m.impressao, 'cabecalho', m.cabecalho, 'mapa', m.mapa,
+                            'formato', m.formato, 'confirmado_por', m.confirmado_por, 'confirmado_em', m.confirmado_em)
+    into v_r
+    from mapeamento_de_colunas m
+   where m.tipo_base = p_tipo_base and m.impressao = fn_impressao_do_cabecalho(p_cabecalho) and m.substituido_em is null;
+  return v_r;   -- NULL = ninguém confirmou este cabeçalho (ausência declarada, não erro): o arquivo não vira dado até confirmar
+end $$;
+
+--
+-- Name: FUNCTION fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) IS '0242: o mapeamento vigente (a confirmação mais nova) para o tipo_base e o cabeçalho, no formato do `confirmado` de aplicadorDeMapeamento + o `formato`; NULL se ninguém confirmou. Invoker: a RLS vale; sem papel é recusado (para não parecer "ninguém confirmou").';
 
 --
 -- Name: fn_marcar_falha_vista(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -18775,6 +18967,96 @@ CREATE VIEW public.instalacao_sonda_ln_check AS
 COMMENT ON VIEW public.instalacao_sonda_ln_check IS 'Sonda da 0270: uma linha = campo_extraido_ln_check existe e exige ln >= 1. Zero linhas: o banco voltou a aceitar ln zero ou negativo como coordenada.';
 
 --
+-- Name: mapeamento_de_colunas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mapeamento_de_colunas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tipo_base text NOT NULL,
+    impressao text NOT NULL,
+    cabecalho jsonb NOT NULL,
+    mapa jsonb NOT NULL,
+    formato jsonb NOT NULL,
+    confirmado_por uuid NOT NULL,
+    confirmado_em timestamp with time zone DEFAULT now() NOT NULL,
+    substituido_em timestamp with time zone,
+    substituido_por uuid,
+    CONSTRAINT mapeamento_de_colunas_impressao_check CHECK ((impressao ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT mapeamento_de_colunas_tipo_base_check CHECK ((tipo_base = ANY (ARRAY['contas_a_receber'::text, 'contas_a_pagar'::text]))),
+    CONSTRAINT mapeamento_impressao_do_banco CHECK ((impressao = public.fn_impressao_do_cabecalho(cabecalho))),
+    CONSTRAINT mapeamento_substituicao_inteira CHECK (((substituido_em IS NULL) = (substituido_por IS NULL))),
+    CONSTRAINT mapeamento_valido CHECK ((public.fn_mapeamento_erros(mapa, cabecalho, formato) = '{}'::text[]))
+);
+
+--
+-- Name: TABLE mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.mapeamento_de_colunas IS '0242: o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, pela impressão digital do cabeçalho, reaproveitado no próximo arquivo do mesmo ERP em qualquer mandato. NÃO é por mandato: guarda o nome das colunas, não dado do cliente. Escrita só por fn_mapeamento_confirmar; uma confirmação nova marca a anterior como substituída (substituido_em) e a nova vira a vigente.';
+
+--
+-- Name: COLUMN mapeamento_de_colunas.mapa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.mapeamento_de_colunas.mapa IS 'campo -> índice 0-based da coluna NO CABEÇALHO ORIGINAL (a coluna `cabecalho`), não no normalizado.';
+
+--
+-- Name: COLUMN mapeamento_de_colunas.formato; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.mapeamento_de_colunas.formato IS '{"decimal": "virgula"|"ponto", "datas": "dia_mes_ano"|"mes_dia_ano"}: "1.250" e "03/04/2025" não se decidem por valor, só por arquivo. Sem default: quem confirma diz os dois.';
+
+--
+-- Name: COLUMN mapeamento_de_colunas.confirmado_por; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.mapeamento_de_colunas.confirmado_por IS 'auth.uid() de quem confirmou. Sem FK de propósito: a autoria sobrevive à saída do usuário.';
+
+--
+-- Name: CONSTRAINT mapeamento_impressao_do_banco ON mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT mapeamento_impressao_do_banco ON public.mapeamento_de_colunas IS '0242: a impressão é sempre a do cabeçalho gravado, calculada pelo banco; nem o service_role grava uma impressão que o cabeçalho não produz.';
+
+--
+-- Name: CONSTRAINT mapeamento_valido ON mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT mapeamento_valido ON public.mapeamento_de_colunas IS '0242: o mesmo validador da confirmação (fn_mapeamento_erros), para quem escrever sem passar pela função (service_role): obrigatório faltando, índice fora, coluna repetida e formato fora da lista não entram.';
+
+--
+-- Name: instalacao_sonda_mapeamento_checks; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_mapeamento_checks AS
+ SELECT (count(*))::text AS n
+   FROM pg_constraint k
+  WHERE ((conrelid = ('public.mapeamento_de_colunas'::regclass)::oid) AND (contype = 'c'::"char") AND convalidated AND (((conname = 'mapeamento_valido'::name) AND (pg_get_constraintdef(oid) ~~ '%fn_mapeamento_erros(%'::text)) OR ((conname = 'mapeamento_impressao_do_banco'::name) AND (pg_get_constraintdef(oid) ~~ '%fn_impressao_do_cabecalho(%'::text))))
+ HAVING (count(*) = 2);
+
+--
+-- Name: VIEW instalacao_sonda_mapeamento_checks; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_mapeamento_checks IS 'Sonda da 0242: uma linha = as duas CHECKs (validador e impressão do banco) existem, validadas, chamando as funções certas. Zero linhas: quem escreve como service_role grava mapeamento inválido ou impressão que o cabeçalho não produz.';
+
+--
+-- Name: instalacao_sonda_mapeamento_uma_vigente; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_mapeamento_uma_vigente AS
+ SELECT ((i.indexrelid)::regclass)::text AS indice
+   FROM (pg_index i
+     JOIN pg_class c ON (((c.oid = i.indexrelid) AND (c.relname = 'mapeamento_de_colunas_uma_vigente'::name))))
+  WHERE ((i.indrelid = ('public.mapeamento_de_colunas'::regclass)::oid) AND i.indisunique AND i.indisvalid AND (i.indpred IS NOT NULL) AND (pg_get_indexdef(i.indexrelid) ~~ '%(tipo_base, impressao)%'::text) AND (pg_get_expr(i.indpred, i.indrelid) ~~ '%substituido_em IS NULL%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_mapeamento_uma_vigente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_mapeamento_uma_vigente IS 'Sonda da 0242: uma linha = o índice único parcial (tipo_base, impressao) where substituido_em is null existe e é válido. Zero linhas: o banco deixou de garantir uma só confirmação vigente por cabeçalho.';
+
+--
 -- Name: instalacao_sonda_modelagem_pronta; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -19598,6 +19880,13 @@ ALTER TABLE ONLY public.lote_execucao
     ADD CONSTRAINT lote_execucao_pkey PRIMARY KEY (id);
 
 --
+-- Name: mapeamento_de_colunas mapeamento_de_colunas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mapeamento_de_colunas
+    ADD CONSTRAINT mapeamento_de_colunas_pkey PRIMARY KEY (id);
+
+--
 -- Name: membro membro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -20021,6 +20310,12 @@ CREATE INDEX idx_reconciliacao_vigente ON public.reconciliacao USING btree (caso
 --
 
 CREATE UNIQUE INDEX idx_rubrica_classe_unica ON public.rubrica_classe USING btree (padrao, COALESCE(secao_canonica, ''::text), COALESCE(tipo_taxonomia, ''::text), versao);
+
+--
+-- Name: mapeamento_de_colunas_uma_vigente; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX mapeamento_de_colunas_uma_vigente ON public.mapeamento_de_colunas USING btree (tipo_base, impressao) WHERE (substituido_em IS NULL);
 
 --
 -- Name: perimetro_atual_unico; Type: INDEX; Schema: public; Owner: -
@@ -20628,6 +20923,13 @@ ALTER TABLE ONLY public.indice_macro_obs
 
 ALTER TABLE ONLY public.lote_execucao
     ADD CONSTRAINT lote_execucao_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
+-- Name: mapeamento_de_colunas mapeamento_de_colunas_substituido_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mapeamento_de_colunas
+    ADD CONSTRAINT mapeamento_de_colunas_substituido_por_fkey FOREIGN KEY (substituido_por) REFERENCES public.mapeamento_de_colunas(id) DEFERRABLE INITIALLY DEFERRED;
 
 --
 -- Name: membro membro_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -21797,6 +22099,18 @@ CREATE POLICY lote_execucao_read ON public.lote_execucao FOR SELECT TO authentic
 CREATE POLICY lote_execucao_update ON public.lote_execucao FOR UPDATE TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
    FROM public.fn_casos_legiveis() c(c))))) WITH CHECK ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
    FROM public.fn_casos_escreviveis() c(c)))));
+
+--
+-- Name: mapeamento_de_colunas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.mapeamento_de_colunas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: mapeamento_de_colunas mapeamento_de_colunas_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY mapeamento_de_colunas_read ON public.mapeamento_de_colunas FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: membro; Type: ROW SECURITY; Schema: public; Owner: -
@@ -23029,6 +23343,14 @@ GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integ
 GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) TO service_role;
 
 --
+-- Name: FUNCTION fn_impressao_do_cabecalho(p_cabecalho jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) TO service_role;
+
+--
 -- Name: FUNCTION fn_indice_macro_anual(p_desde_ano integer); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23123,6 +23445,30 @@ GRANT ALL ON FUNCTION public.fn_linhas_para_modelagem(p_caso_id uuid) TO service
 REVOKE ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) TO service_role;
+
+--
+-- Name: FUNCTION fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) TO service_role;
+
+--
+-- Name: FUNCTION fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) TO service_role;
 
 --
 -- Name: FUNCTION fn_marcar_falha_vista(p_falha_id uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -24617,6 +24963,27 @@ GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO servic
 
 GRANT SELECT ON TABLE public.instalacao_sonda_ln_check TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_ln_check TO service_role;
+
+--
+-- Name: TABLE mapeamento_de_colunas; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.mapeamento_de_colunas TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.mapeamento_de_colunas TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_mapeamento_checks; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_mapeamento_checks TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_mapeamento_checks TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_mapeamento_uma_vigente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_mapeamento_uma_vigente TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_mapeamento_uma_vigente TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_modelagem_pronta; Type: ACL; Schema: public; Owner: -

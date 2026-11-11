@@ -989,6 +989,10 @@ echo "== 0241 — a descrição que o período irmão reescrevia (a pendência s
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0242 — o mapeamento de colunas que cada arquivo redescobria (confirmado por Sócio/Analista COMO authenticated, impressão do cabeçalho calculada pelo banco, uma vigente por par, formato fechado)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o inteiro >= 1 grava, o inválido vira nulo sem abortar o lote, sem a chave grava como antes)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'

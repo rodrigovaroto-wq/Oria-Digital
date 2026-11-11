@@ -182,6 +182,7 @@
 {"k":"n","id":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","t":"arquivo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","txt":"mutuos_retrato_de_uma_data.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_balanco_sem_dado_financeiro.test.sql","t":"arquivo","f":"Supabase/test/o_balanco_sem_dado_financeiro.test.sql","txt":"o_balanco_sem_dado_financeiro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","t":"arquivo","f":"Supabase/test/o_dial_e_o_anon.test.sql","txt":"o_dial_e_o_anon.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","t":"arquivo","f":"Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","txt":"o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","t":"arquivo","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","txt":"o_periodo_que_a_checagem_nao_lia.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","t":"arquivo","f":"Supabase/test/o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql","txt":"o_portao_do_dial_que_so_via_espaco_e_parentese.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql","t":"arquivo","f":"Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql","txt":"o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql"}
@@ -516,6 +517,7 @@
 {"k":"n","id":"fn:fn_grupo_por_controle_comum_motivo","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"grupo por controle comum motivo"}
 {"k":"n","id":"fn:fn_herdar_secao_pela_arvore","t":"fn","f":"Supabase/migrations/0204_a_secao_que_o_documento_ja_dizia_pela_arvore.sql","txt":"herdar secao pela arvore"}
 {"k":"n","id":"fn:fn_historico_do_caso","t":"fn","f":"Supabase/migrations/0224_o_original_que_o_analista_apagava_sem_trilha.sql","txt":"historico do caso"}
+{"k":"n","id":"fn:fn_impressao_do_cabecalho","t":"fn","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"impressao do cabecalho"}
 {"k":"n","id":"fn:fn_indice_macro_anual","t":"fn","f":"Supabase/migrations/0032_cambio_perdia_janeiro.sql","txt":"indice macro anual"}
 {"k":"n","id":"fn:fn_inferir_secao_canonica_das_linhas","t":"fn","f":"Supabase/migrations/0203_a_secao_que_a_ia_nao_deu_e_a_linha_que_sumia.sql","txt":"inferir secao canonica das linhas"}
 {"k":"n","id":"fn:fn_instalacao_conferir","t":"fn","f":"Supabase/migrations/0221_a_rls_que_ninguem_conferia_ligada_e_o_ddl_do_dial.sql","txt":"instalacao conferir"}
@@ -528,6 +530,9 @@
 {"k":"n","id":"fn:fn_linhas_do_tipo","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"linhas do tipo"}
 {"k":"n","id":"fn:fn_linhas_para_modelagem","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"linhas para modelagem"}
 {"k":"n","id":"fn:fn_linhas_para_transcrever","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"linhas para transcrever"}
+{"k":"n","id":"fn:fn_mapeamento_confirmar","t":"fn","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"mapeamento confirmar"}
+{"k":"n","id":"fn:fn_mapeamento_erros","t":"fn","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"mapeamento erros"}
+{"k":"n","id":"fn:fn_mapeamento_vigente","t":"fn","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"mapeamento vigente"}
 {"k":"n","id":"fn:fn_marcar_falha_vista","t":"fn","f":"Supabase/migrations/0108_falha_de_execucao.sql","txt":"marcar falha vista"}
 {"k":"n","id":"fn:fn_membros_da_equipe","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"membros da equipe"}
 {"k":"n","id":"fn:fn_mes_do_rotulo","t":"fn","f":"Supabase/migrations/0042_papel_da_linha.sql","txt":"mes do rotulo"}
@@ -853,6 +858,7 @@
 {"k":"n","id":"migration:0234","t":"migration","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"o periodo que o documento tinha e a checagem nao lia"}
 {"k":"n","id":"migration:0240","t":"migration","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","txt":"a versao atual que nao seguia a vigente"}
 {"k":"n","id":"migration:0241","t":"migration","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","txt":"a descricao que o periodo irmao reescrevia"}
+{"k":"n","id":"migration:0242","t":"migration","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"o mapeamento de colunas que cada arquivo redescobria"}
 {"k":"n","id":"migration:0270","t":"migration","f":"Supabase/migrations/0270_a_linha_que_nao_sabia_de_que_linha_veio.sql","txt":"a linha que nao sabia de que linha veio"}
 {"k":"n","id":"migration:0271","t":"migration","f":"Supabase/migrations/0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql","txt":"o quadro de imobilizado que a ia gravava como balanco"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
@@ -1788,6 +1794,11 @@
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_tem_papel","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":228}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":12}
 {"k":"e","de":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","rel":"CHAMA","pa":"fn:fn_veredito_producao","f":"Supabase/test/o_dial_e_o_anon.test.sql","l":146}
+{"k":"e","de":"arquivo:Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","l":117}
+{"k":"e","de":"arquivo:Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","rel":"CHAMA","pa":"fn:fn_impressao_do_cabecalho","f":"Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","l":124}
+{"k":"e","de":"arquivo:Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","l":369}
+{"k":"e","de":"arquivo:Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","rel":"CHAMA","pa":"fn:fn_mapeamento_confirmar","f":"Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","l":1}
+{"k":"e","de":"arquivo:Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","rel":"CHAMA","pa":"fn:fn_mapeamento_vigente","f":"Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","l":1}
 {"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_coluna_periodo_do_ano","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":62}
 {"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":200}
 {"k":"e","de":"arquivo:Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_equivalentes","f":"Supabase/test/o_periodo_que_a_checagem_nao_lia.test.sql","l":141}
@@ -2931,6 +2942,10 @@
 {"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_mais_nova","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":54}
 {"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":371}
 {"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":71}
+{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_impressao_do_cabecalho","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","l":76}
+{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_mapeamento_confirmar","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","l":217}
+{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_mapeamento_erros","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","l":94}
+{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_mapeamento_vigente","f":"Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","l":259}
 {"k":"e","de":"migration:0270","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0270_a_linha_que_nao_sabia_de_que_linha_veio.sql","l":71}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
