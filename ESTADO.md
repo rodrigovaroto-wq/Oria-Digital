@@ -22,6 +22,18 @@
 - **Portal publicado** (Vercel produção READY no `42e03c6`). A rota nova responde 401 sem sessão.
 - NÃO conferido no navegador: o bloco "Fila de reprocesso" e o botão com sessão de usuário, porque não há login de teste nesta sessão.
 
+### Correções dos achados da P10 (11/11) — PR #288 mergeado (`17176af`), ingestão republicada (63/63, fingerprint inalterado)
+
+- **"Perda silenciosa" do Canastra era da régua, não do dado.** Contingências 38→16 e Extrato 27→6 eram só pares de texto puro: o modelo juntou Natureza/Prognóstico e Agência/Conta ao rótulo. Os valores são idênticos (12 valores, 78.608; 6 valores, 1.650). `linha-de-base-extracao.sql` passa a separar `valores_gravados` de `textos_gravados`; regressão de dado se lê em `valores_gravados`.
+- **Mapa de Dívida (Distress): o número provado não é mais descartado por texto desalinhado.**
+  - `achatarGrupos` aceita a conta só com prova dupla: os valores numéricos de `vt` e de `vn` batem em ordem, e o padrão de tipos de `vt` é subsequência do de `vn`.
+  - O texto que não dá para reatribuir vira pendência ("números mantidos, TEXTOS sem coluna"), nunca silêncio. O deck lê credor, vencimento e taxa do texto.
+  - Medido na resposta REAL da execução 9637, rodada offline com o código novo: 53 pares (eram 35), 0 descartados, 6 com pendência de texto.
+- **Livro Razão (Canastra):** a coluna "Saldo" só se cala quando a soma não fecha E o total é igual ao último valor da série. "Saldo" aditivo continua conferido.
+- Três rodadas de revisão independente; a última sem ALTO.
+- **NÃO provado ao vivo:** reprocessar os dois documentos nos mandatos originais seria reaproveitado (o fingerprint não mudou e eles têm linha). A prova exige um mandato de teste novo. A criação dele em produção foi BLOQUEADA pelo controle de segurança da sessão ("Modify Shared Resources"), e a sessão não contornou. Caminhos: o dono libera a criação de um mandato de teste (apagado depois) ou cria um mandato e reenvia os dois PDFs (`Dados de Teste/book-distress` 08 e `book-canastra` 17).
+- **Em aberto:** os 6 contratos do Piraquara, quando relidos, ficam com `valor_texto` nulo e pendência declarada; o export mostra a célula em branco (MÉDIO 2 da revisão, sem fatia).
+
 ### P10 — RODADA nos sintéticos (11/11, decisão do dono: reais depois)
 
 - **Como foi rodada.** Leitura da chave de serviço e do segredo do envio liberada pelo dono. Os 66 originais dos 3 mandatos "P4 linha de base" foram baixados do bucket e reenviados ao Form do n8n em 3 lotes, um por mandato, com token assinado por `assinarEnvio` (o mesmo código do portal) em nome do Sócio de teste. Os segredos ficaram só em arquivos temporários, apagados no fim. O fingerprint mudou desde 09/11, então cada documento virou versão nova do MESMO documento.
