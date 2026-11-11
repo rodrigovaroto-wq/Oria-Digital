@@ -187,6 +187,16 @@ método usado.
 
 ### Fase 1 — A coordenada: um texto numerado AO LADO do PDF
 
+> **COMO FICOU NA P11 (11/11/2026, decisão do dono, opção A).** O "texto numerado AO LADO do
+> PDF" descrito abaixo NÃO foi para o ar. Depois da P6/P6b, todo PDF com camada de texto boa já
+> vai ao modelo COMO TEXTO, e a P11 numera esse próprio texto (`L001: …`, sem duplicar tokens).
+> Todo PDF que vai como ARQUIVO foi mandado assim porque a camada foi reprovada (números
+> colados, corrompida, sem posição, rala) — numerá-la devolveria ao modelo o texto que a P6b
+> tirou (Krauspenhar: 303 → 0 descartadas). Esses ficam com `ln` nulo e motivo declarado em
+> `medicao_documento.texto_numerado_motivo`. Medido nos books: sem coordenada 21/38 canastra,
+> 11/14 distress, 4/14 vertentes, 6/7 espelho. Ver a ficha
+> `p11-coordenada-so-onde-o-texto-e-confiavel` (as opções recusadas e por quê).
+
 > **CORREÇÃO DE PREMISSA, 01/09.** A primeira versão desta fase dizia "numerar as linhas do
 > bloco enviado ao modelo". **Não existe bloco de texto sendo enviado.** O `Preparar Conteudo`
 > monta o `content_part` com `parteDeArquivo`, e o modelo recebe o **PDF em si** — é o que o
