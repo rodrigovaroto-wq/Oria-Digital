@@ -6,7 +6,10 @@
 --       pendência (a deduplicação por compatibilidade não muda), a do período A, e ela mostra a descrição de A depois que B roda. A rodada seguinte de A reescreve a descrição de A (o mesmo período continua reescrevendo).
 --   (B) o mesmo com a rodada de B terminando em pré-condição, sem documento vivo na chave de A (a guarda da divergência irmã da 0192 não a segura): o texto de pré-condição de B não troca o de A.
 --   (C) o backfill: uma pendência já contaminada volta a mostrar a descrição da reconciliação mais recente do PRÓPRIO período; é idempotente; grava evento_auditoria (sistema:0241) com a descrição antiga em `antes`;
---       escolhe o resultado coerente com o `tipo` da pendência (a divergência, não a pré-condição mais recente); sem registro do próprio período NÃO toca e conta; pendência em decisão humana NÃO é tocada.
+--       nunca volta a um registro mais antigo que o último do próprio período (não toca e conta); sem registro do próprio período NÃO toca e conta; pendência em decisão humana NÃO é tocada.
+--   (E) (revisão) a chave que desce a um período compatível escreve o texto da própria pendência (0192/4), e o backfill reconhece esse texto (periodo_chave_id) em vez de trocá-lo.
+--   (F) (revisão) A confere e B segue divergindo: a pendência fica aberta (guarda 0192) e passa a mostrar a divergência de B, não a de A que já não existe.
+--   (G) (revisão) secao_fecha: o documento reclassificado para um período compatível continua reescrevendo o texto da própria pendência.
 --   (D) a sonda enxerga os 3 requisitos da 0241.
 --
 -- HONESTIDADE (regra 4): a contaminação de (C) é fabricada por `update pendencia set descricao`, porque o corpo antigo não existe mais no banco montado. O arranjo real de produção (7 pendências, 11/11/2026) vem do
@@ -46,6 +49,18 @@ begin
   return fn_registrar_reconciliacao(v_caso, v_ent, v_per, 'teste_0241', 'A', v_doc, null, null, p_res, null, null, null, p_desc);
 end $$;
 
+-- como teste_reg_p41, mas a chamada vem de uma CHAVE (o período do documento que o laço visita) que pode ser diferente do período em que o resultado fica gravado
+create or replace function teste_chave_p41(p_caso text, p_per text, p_chave text, p_res text, p_desc text)
+returns jsonb language plpgsql as $$
+declare v_caso uuid; v_per uuid; v_ch uuid;
+begin
+  select id into v_caso from caso where nome = p_caso;
+  select id into v_per from periodo where caso_id = v_caso and referencia = case p_per when 'A' then '2024' else '24,26' end;
+  select id into v_ch from periodo where caso_id = v_caso and referencia = case p_chave when 'A' then '2024' else '24,26' end;
+  perform set_config('oria.periodo_chave', v_ch::text, true);
+  return fn_registrar_reconciliacao(v_caso, null, v_per, 'teste_0241', 'A', null, null, null, p_res, null, null, null, p_desc);
+end $$;
+
 create or replace function teste_pend_p41(p_caso text) returns pendencia language sql as $$
   select pe.* from pendencia pe join caso c on c.id = pe.caso_id
    where c.nome = p_caso and pe.motivo = 'reconciliacao:teste_0241' and pe.estado <> 'resolvida' order by pe.criada_em limit 1 $$;
@@ -70,6 +85,15 @@ begin
   perform fn_upsert_periodo(v_c, 'multi', '24,26');
   v_c := (fn_upsert_caso('0241: backfill decisao humana'))::uuid;
   perform fn_upsert_periodo(v_c, 'anual', '2024');
+  perform fn_upsert_periodo(v_c, 'multi', '24,26');
+  v_c := (fn_upsert_caso('0241: estado velho'))::uuid;
+  perform fn_registrar_documento(v_c, 'Velha Ltda.', 'anual', '2024', 'BALANCO', 0.95, 'nome_arquivo', 'supabase_storage', 'p41/c.pdf', 'BP anual v.pdf', true, 'HASH-P41-C', 'ok');
+  perform fn_registrar_documento(v_c, 'Velha Ltda.', 'multi', '24,26', 'BALANCO', 0.95, 'nome_arquivo', 'supabase_storage', 'p41/d.pdf', 'BP multi v.pdf', true, 'HASH-P41-D', 'ok');
+  v_c := (fn_upsert_caso('0241: chave desce'))::uuid;
+  perform fn_upsert_periodo(v_c, 'anual', '2024');
+  perform fn_upsert_periodo(v_c, 'multi', '24,26');
+  v_c := (fn_upsert_caso('0241: documento reclassificado'))::uuid;
+  perform fn_registrar_documento(v_c, 'Reclas Ltda.', 'anual', '2024', 'BALANCO', 0.95, 'nome_arquivo', 'supabase_storage', 'p41/e.pdf', 'BP reclas.pdf', true, 'HASH-P41-E', 'ok');
   perform fn_upsert_periodo(v_c, 'multi', '24,26');
 end $$;
 
@@ -141,7 +165,8 @@ begin
   perform teste_assert_p41(v_n = 1, 'e não repete a trilha', format('%s', v_n));
 end $$;
 
--- C2: coerência com o tipo — a pendência é de DIVERGÊNCIA; o registro mais recente do próprio período é de pré-condição
+-- C2: o backfill nunca volta a um registro MAIS ANTIGO que o último do próprio período. A pendência é de DIVERGÊNCIA; o último registro do período é de pré-condição (e o texto dela é o legítimo: o mesmo período
+-- reescreve). Contaminada à mão, o backfill não a toca (o último registro não é coerente com o tipo) e conta, em vez de pular o mais novo e devolver a divergência velha.
 do $$ begin perform teste_reg_p41('0241: backfill tipo', 'A', 'divergente', 'A: divergência de 10'); end $$;
 do $$ begin perform teste_reg_p41('0241: backfill tipo', 'A', 'precondicao_nao_satisfeita', 'A: a checagem não localizou a linha'); end $$;
 do $$
@@ -149,11 +174,69 @@ declare v_p pendencia; v_r jsonb; v_c uuid;
 begin
   select id into v_c from caso where nome = '0241: backfill tipo';
   v_p := teste_pend_p41('0241: backfill tipo');
-  perform teste_assert_p41(v_p.tipo::text = 'divergencia_reconciliacao' and v_p.descricao = 'A: a checagem não localizou a linha', 'premissa: pendência de divergência, com o texto da pré-condição mais recente de A', v_p.tipo::text || ' / ' || coalesce(v_p.descricao, ''));
+  perform teste_assert_p41(v_p.tipo::text = 'divergencia_reconciliacao' and v_p.descricao = 'A: a checagem não localizou a linha', 'premissa: pendência de divergência, com o texto da pré-condição mais recente de A (o mesmo período reescreve)', v_p.tipo::text || ' / ' || coalesce(v_p.descricao, ''));
   update pendencia set descricao = 'B: divergência de 99' where id = v_p.id;
   v_r := fn_corrigir_descricao_contaminada(v_c);
   v_p := teste_pend_p41('0241: backfill tipo');
-  perform teste_assert_p41((v_r->>'corrigidas')::int = 1 and v_p.descricao = 'A: divergência de 10', 'o backfill escolhe o registro coerente com o tipo da pendência (a divergência, não a pré-condição mais recente)', v_r::text || ' / ' || coalesce(v_p.descricao, ''));
+  perform teste_assert_p41((v_r->>'corrigidas')::int = 0 and (v_r->>'sem_registro_proprio')::int = 1 and v_p.descricao = 'B: divergência de 99',
+    'o backfill não volta à divergência antiga de A quando o último registro de A é outro: não toca e conta', v_r::text || ' / ' || coalesce(v_p.descricao, ''));
+end $$;
+
+-- E: a chave que desce (0192/4). A chave B dá pré-condição no seu período (abre a pendência ali) e desce a A, compatível, onde DIVERGE: na mesma transação, como o laço.
+do $$ begin
+  perform teste_chave_p41('0241: chave desce', 'B', 'B', 'precondicao_nao_satisfeita', 'B: sem par');
+  perform teste_chave_p41('0241: chave desce', 'A', 'B', 'divergente', 'A (chave B): diverge 4340');
+end $$;
+do $$
+declare v_p pendencia; v_r jsonb; v_c uuid;
+begin
+  raise notice '--- E. a chave que desce a um período compatível escreve o texto da própria pendência ---';
+  select id into v_c from caso where nome = '0241: chave desce';
+  v_p := teste_pend_p41('0241: chave desce');
+  perform teste_assert_p41(v_p.descricao = 'A (chave B): diverge 4340', 'a divergência que a chave B achou ao descer troca a pré-condição da própria chave', coalesce(v_p.descricao, ''));
+  v_r := fn_corrigir_descricao_contaminada(v_c);
+  v_p := teste_pend_p41('0241: chave desce');
+  perform teste_assert_p41((v_r->>'contaminadas')::int = 0 and v_p.descricao = 'A (chave B): diverge 4340',
+    'o backfill reconhece o texto da própria chave (periodo_chave_id) e não o troca pelo de pré-condição', v_r::text || ' / ' || coalesce(v_p.descricao, ''));
+end $$;
+
+-- F: o estado velho. Rodada 1: A e B divergem. Rodada 2: A confere (ok) e B ainda diverge, com outro número. A guarda 0192 segura a pendência aberta por causa de B; o texto tem de ser o de B, não a divergência de A que já não existe.
+do $$ begin perform teste_reg_p41('0241: estado velho', 'A', 'divergente', 'A: 100 contra 90', true); end $$;
+do $$ begin perform teste_reg_p41('0241: estado velho', 'B', 'divergente', 'B: 500 contra 400', true); end $$;
+do $$ begin
+  perform teste_reg_p41('0241: estado velho', 'A', 'ok', 'A: confere', true);
+  perform teste_reg_p41('0241: estado velho', 'B', 'divergente', 'B: 700 contra 400', true);
+end $$;
+do $$
+declare v_p pendencia; v_n int;
+begin
+  raise notice '--- F. a divergência de A que já não existe não fica congelada na pendência ---';
+  v_p := teste_pend_p41('0241: estado velho');
+  select count(*) into v_n from pendencia pe join caso c on c.id = pe.caso_id where c.nome = '0241: estado velho' and pe.motivo = 'reconciliacao:teste_0241' and pe.estado <> 'resolvida';
+  perform teste_assert_p41(v_n = 1, 'A conferiu, B segue divergindo: a pendência continua aberta, uma só (guarda 0192)', format('%s', v_n));
+  perform teste_assert_p41(v_p.descricao = 'B: 700 contra 400', 'e mostra a divergência que existe (B), não a de A que já conferiu', coalesce(v_p.descricao, ''));
+end $$;
+
+-- G: tipo por documento. A pendência secao_fecha é do documento; o documento passa a outro período compatível (reclassificado) e a árvore chama sem chave: o texto é do documento e tem de seguir.
+do $$
+declare v_c uuid; v_a uuid; v_d uuid; v_ent uuid;
+begin
+  select id into v_c from caso where nome = '0241: documento reclassificado';
+  select id, entidade_id, periodo_id into v_d, v_ent, v_a from documento where caso_id = v_c;
+  perform fn_registrar_reconciliacao(v_c, v_ent, v_a, 'secao_fecha', 'A', v_d, null, null, 'divergente', null, null, null, 'S1: a seção Estoques não fecha');
+end $$;
+do $$
+declare v_c uuid; v_b uuid; v_d uuid; v_ent uuid; v_n int; v_desc text;
+begin
+  raise notice '--- G. secao_fecha: o texto acompanha o documento reclassificado ---';
+  select id into v_c from caso where nome = '0241: documento reclassificado';
+  select id into v_b from periodo where caso_id = v_c and referencia = '24,26';
+  select id, entidade_id into v_d, v_ent from documento where caso_id = v_c;
+  update documento set periodo_id = v_b where id = v_d;   -- reclassificação montada à mão: o documento muda para um período compatível
+  perform fn_registrar_reconciliacao(v_c, v_ent, v_b, 'secao_fecha', 'A', v_d, null, null, 'divergente', null, null, null, 'S2: a seção Imobilizado não fecha');
+  select count(*), min(descricao) into v_n, v_desc from pendencia where caso_id = v_c and motivo = 'reconciliacao:secao_fecha' and estado <> 'resolvida';
+  perform teste_assert_p41(v_n = 1, 'a pendência do documento segue uma só depois da reclassificação', format('%s', v_n));
+  perform teste_assert_p41(v_desc = 'S2: a seção Imobilizado não fecha', 'e mostra o texto atual do documento, não o congelado do período antigo', coalesce(v_desc, ''));
 end $$;
 
 -- C3: sem registro do próprio período — não toca e conta

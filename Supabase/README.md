@@ -1204,7 +1204,7 @@ supabase db execute --file Supabase/migrations/0241_a_descricao_que_o_periodo_ir
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0241' and not presente;   -- ZERO linhas
 #   select acao, depois from evento_auditoria where ator = 'sistema:0241' and acao = 'descricao_contaminada_resumo';   -- corrigidas + sem_registro_proprio = 7 (medido em 11/11/2026, antes de aplicar; as sem_registro_proprio ficam como estão)
-#   select count(*) from pendencia pe where pe.origem_estagio = 'reconciliacao' and pe.estado = 'aberta' and pe.periodo_id is not null and not exists (select 1 from reconciliacao r where r.caso_id = pe.caso_id and 'reconciliacao:' || r.tipo = pe.motivo and r.descricao = pe.descricao and r.periodo_id = pe.periodo_id);   -- era 7; = sem_registro_proprio
+#   select count(*) from pendencia pe where pe.origem_estagio = 'reconciliacao' and pe.estado = 'aberta' and pe.periodo_id is not null and not exists (select 1 from reconciliacao r where r.caso_id = pe.caso_id and 'reconciliacao:' || r.tipo = pe.motivo and r.descricao = pe.descricao and (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id));   -- o critério da 0241 (período OU chave; secao_fecha pelo documento); a medição antiga, só por período, deu 7
 
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.

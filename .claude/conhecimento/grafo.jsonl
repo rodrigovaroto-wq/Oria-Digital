@@ -1192,13 +1192,13 @@
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/workflow.macro.json","l":156}
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/workflow.macro.json","l":244}
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/workflow.macro.json","l":129}
-{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":129}
-{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":191}
-{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_compativeis","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":88}
-{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":60}
-{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":46}
-{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":59}
-{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_periodo","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":63}
+{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":153}
+{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":274}
+{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_compativeis","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":112}
+{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":75}
+{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":49}
+{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":74}
+{"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_periodo","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":78}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":131}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_decidir_pendencia","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":145}
 {"k":"e","de":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","l":127}
@@ -2881,8 +2881,8 @@
 {"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_reconferir_caso","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":88}
 {"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_atual","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":69}
 {"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_mais_nova","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":54}
-{"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":341}
-{"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":57}
+{"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":365}
+{"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":65}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

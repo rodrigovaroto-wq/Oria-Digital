@@ -18,35 +18,43 @@
 -- A CORREÇÃO, NO PONTO ÚNICO. Todas as fn_reconciliar_* gravam por fn_registrar_reconciliacao (e fn_registrar_reconciliacao_b só a chama com classe 'B'); corrigi-la corrige todas. Chamadores (grep em Supabase/ N8N/
 -- portal/src/, 11/11/2026; N8N/ e portal/src/: nenhum): as fn_reconciliar_* (arvore, ativo_passivo_pl, caixa_bp_fluxo, despfin_dre_vs_divida, intragrupo, mutuos, receita_dre_vs_faturamento e os despachantes de
 -- 0152/0192, nas migrations 0105 a 0234); fn_registrar_reconciliacao_b (0015) e os testes dial_obedecido, divergencia_prevalece_na_rodada, divergencia_vigente_entre_rodadas, reconciliacao_motivo_precondicao.
--- A reescrita da descrição passa a exigir que a rodada seja do período que a pendência carrega (`v_pendencia_periodo_id is not distinct from p_periodo_id`) OU da chave dele (`... from v_periodo_chave_id`, o
--- `oria.periodo_chave` que o laço deixa; chamada avulsa é a sua própria chave). A SEGUNDA metade existe porque a primeira versão desta correção (só o período) reprovou divergencia_vigente_entre_rodadas.test.sql
--- (0192/4, "Pa primeiro"): a chave Pb dá pré-condição no seu período (abre a pendência ali, "Pb sem par") e o laço desce a P24, compatível, onde DIVERGE — e o texto da divergência TEM de trocar o da pré-condição,
--- é a mesma chave. Sem chave gravada na pendência não se distingue o texto de uma chave que desce a um terceiro período compatível: esse caso (chave B descendo a um período A'' que não é o da pendência de A) segue
--- reescrevendo, e é o resíduo declarado desta correção. Nada mais muda: a deduplicação por período compatível, a guarda da divergência irmã (0192, que já impedia o texto de
--- pré-condição de trocar o de divergência quando há divergência concorrente), a resolução e o tipo por documento (secao_fecha casa por documento_id; o período dele é o da chave) seguem como estavam. O corpo é o VIGENTE do
--- schema.sql com a variável, o seu cálculo e o `if`.
---   * O QUE SE PERDE, DECLARADO: a pendência de A só ganha texto novo quando uma rodada de A passa por ela. Se o período de A deixa de ter registro (documento apagado, período do documento mudado), a descrição fica a do
---     último registro de A (velha), onde antes seria a do irmão (de outro período, e por isso errada de outro jeito). O `ok` de B continua não resolvendo (0192, guarda por chave). Em operação normal fn_reconciliar_caso
---     visita cada chave a cada rodada, então A reescreve a sua. Se o laço descer a OUTRO período que o de abertura (pré-condição no período da chave, divergência no compatível), é esse o período que a pendência passa a
---     carregar desde a abertura, e é ele que reescreve de novo a cada rodada: não muda com esta migration.
+-- A reescrita da descrição passa a exigir UMA destas: (1) a rodada é do período que a pendência carrega (`v_pendencia_periodo_id is not distinct from p_periodo_id`); (2) é da CHAVE dele (`... from v_periodo_chave_id`,
+-- o `oria.periodo_chave` que o laço deixa; chamada avulsa é a sua própria chave); (3) o ÚLTIMO registro da chave da pendência (`periodo_chave_id` = o período dela) existe e não é divergente; (4) o tipo é POR DOCUMENTO.
+--   (2) existe porque a primeira versão (só o período) reprovou divergencia_vigente_entre_rodadas.test.sql (0192/4, "Pa primeiro"): a chave Pb dá pré-condição no seu período (abre a pendência ali, "Pb sem par") e o
+--   laço desce a P24, compatível, onde DIVERGE — o texto da divergência TEM de trocar o da pré-condição, é a mesma chave.
+--   (3) (revisão independente, alto): documentos vivos em anual 2024 (A) e multi 24,26 (B); rodada 1, os dois divergem; rodada 2, A dá `ok` e B diverge "700 contra 400". A guarda 0192 segura a pendência aberta por
+--   causa de B, mas B não podia reescrever, e ficava "A: 100 contra 90", uma divergência que já não existe (regra 1). Agora B reescreve quando A deixou de divergir. Só com registro: pendência cujo período não é
+--   chave de ninguém (sem registro com `periodo_chave_id` = ele) não tem evidência de que A parou de ser o motivo, e o texto fica.
+--   (4) (revisão, médio): a pendência de tipo por documento (secao_fecha) é casada pelo documento e a árvore chama sem chave; com o documento reclassificado para um período compatível o texto dele congelaria.
+-- Nada mais muda: a deduplicação por período compatível, a guarda da divergência irmã (0192), a resolução seguem como estavam. O corpo é o VIGENTE do schema.sql com as variáveis, o cálculo e o `if`.
+--   * RESÍDUOS DECLARADOS: (a) a pendência não grava a chave: a chave B que desce a um TERCEIRO período compatível (que não é o da pendência de A) e diverge ali ainda não é distinguida e segue reescrevendo.
+--     (b) Ordem: se B roda antes de A na rodada em que A passa a `ok`, o texto de A fica até a rodada seguinte (o último registro de A ainda era divergente quando B rodou); converge na seguinte, na mesma ordem do laço.
+--     (c) A pendência de A só ganha texto novo de uma rodada de A, da chave dela, ou quando A deixou de divergir. Se o período de A perde o registro (documento apagado) e a chave de A tem divergência como último
+--     registro, o texto fica o de A (velho), onde antes seria o do irmão. O `ok` de B continua não resolvendo (0192).
 --
 -- O BACKFILL. fn_corrigir_descricao_contaminada(p_caso_id default null) acha a pendência de origem 'reconciliacao', estado 'aberta' (as demais são decisão de gente: em_correcao_interna, reenviada_ao_cliente,
--- aceita_com_ressalva, rejeitada; e a resolvida não se toca), com `periodo_id` e descrição, que nenhuma `reconciliacao` do mesmo caso e tipo, com a mesma descrição e o `periodo_id` dela, produziu (o critério da
--- medição acima). Para cada uma põe em `descricao` a da reconciliação MAIS RECENTE do próprio período (mesmo caso, tipo, entidade, `periodo_id`; tipo por documento também no mesmo documento) cujo resultado é coerente
--- com o `tipo` da pendência: divergente/divergencia/zona_cinzenta para `divergencia_reconciliacao`, precondicao_nao_satisfeita para `precondicao_nao_satisfeita`, descrição não vazia (regra 1: nada em branco). Sem
--- registro assim, NÃO toca e conta (`sem_registro_proprio`): ausência declarada, não texto inventado. `resolvida_por` e `estado` ficam intocados. Cada correção grava um evento_auditoria (ator `sistema:0241`, acao
+-- aceita_com_ressalva, rejeitada; e a resolvida não se toca), com `periodo_id` e descrição, que nenhuma `reconciliacao` do mesmo caso e tipo produziu com a mesma descrição NO PERÍODO dela OU PELA CHAVE dela
+-- (`periodo_id` ou `periodo_chave_id` = o período da pendência; secao_fecha: o registro do mesmo documento, em qualquer período). O critério da medição de produção só olhava o `periodo_id`, e tratava como
+-- contaminado o texto legítimo da chave que desce (revisão, alto 2a). Para cada uma põe em `descricao` a do ÚLTIMO registro desse próprio (mesmo caso, tipo, entidade; período ou chave; secao_fecha: do documento), SEM
+-- pular os mais novos (a primeira versão filtrava por "coerente com o tipo" e voltava a uma divergência mais antiga que o período já superou, revisão alto 2b), e só se ele for coerente com o `tipo` da pendência
+-- (divergente/divergencia/zona_cinzenta para `divergencia_reconciliacao`, precondicao_nao_satisfeita para `precondicao_nao_satisfeita`) e tiver texto (regra 1: nada em branco). Sem registro, ou com o último `ok`/
+-- incoerente/sem texto: NÃO toca e conta (`sem_registro_proprio`): ausência declarada, não texto inventado. `resolvida_por` e `estado` ficam intocados. Cada correção grava um evento_auditoria (ator `sistema:0241`, acao
 -- `descricao_da_pendencia_corrigida`, entidade_ref `pendencia:<id>`) com a descrição antiga em `antes` e a nova e a `reconciliacao` de origem em `depois`; e um resumo (acao `descricao_contaminada_resumo`) com as
--- contagens quando algo foi corrigido. Idempotente: depois de corrigida a descrição passa a ser a de uma reconciliação do próprio período, e a segunda chamada devolve corrigidas = 0. A migration a chama uma vez.
--- O QUE NÃO FOI MEDIDO: quantas das 7 de produção têm registro próprio do período para devolver (a medição de produção só leu a contaminação). O resumo do backfill diz (corrigidas x sem_registro_proprio).
+-- contagens quando algo foi corrigido. Idempotente: depois de corrigida a descrição passa a ser a de um registro do próprio, e a segunda chamada devolve corrigidas = 0. A migration a chama uma vez.
+-- O QUE NÃO FOI MEDIDO: quantas das 7 de produção têm registro próprio coerente para devolver (a medição de produção só leu a contaminação, pelo critério antigo, que pode superestimar). O resumo diz (corrigidas x sem_registro_proprio).
 --
 -- A ASSINATURA E O RETORNO DE fn_registrar_reconciliacao NÃO MUDAM. Reaplicável: create or replace + upsert dos requisitos; o backfill é idempotente.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql — 20 asserts (20 execuções), medidos em
--- 11/11/2026 com o assert trocado por raise warning (`p41.medindo = on`), que CONTA; cada sabotagem é a migration reemitida sobre o banco já montado pelo run.sh (cópia por template, teste rodado inteiro, aviso MEDIDO lido).
--- Controle (migration intacta): 0 dos 20 reprovam. Correção desligada (`if true then` no lugar de `if v_reescreve_descricao then`): 3 (2 de comportamento, a pendência de A com o texto de B depois da divergência e depois
--- da pré-condição do irmão, + 1 da sonda). Backfill desligado (o `update` vira `null`): 4 (a descrição que não volta, a segunda chamada que acha de novo, a trilha duplicada e a escolha coerente com o tipo). As duas juntas: 7.
--- Os asserts de controle (deduplicação, a rodada do mesmo período que continua reescrevendo, o estado e resolvida_por intocados, sem registro próprio, decisão humana, catálogo) passam nas versões sabotadas de propósito:
--- protegem o que não pode mudar. A primeira versão da correção (só `p_periodo_id`, sem a chave) reprovou 1 assert de divergencia_vigente_entre_rodadas.test.sql (0192/4, "Pa primeiro"): é o que fez a condição incluir a chave.
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql — 26 asserts (26 execuções), medidos em 11/11/2026 com o assert trocado por raise warning (`p41.medindo = on`), que CONTA;
+-- cada sabotagem é a migration reemitida sobre o banco já montado pelo run.sh (cópia por template, teste rodado inteiro, aviso MEDIDO lido). Controle (migration intacta): 0 dos 26 reprovam. Por parte desligada:
+--   * correção do corpo (`if true then` no lugar de `if v_reescreve_descricao then`): 3 (2 de comportamento, o texto de B na pendência de A depois da divergência e depois da pré-condição do irmão, + 1 da sonda);
+--   * a metade (3) do corpo (último registro da chave deixou de divergir): 1 (F, o texto de A congelado depois que A conferiu);
+--   * o `secao_fecha` (`v_reescreve_descricao := false or ...`): 1 (G, o texto do documento reclassificado congelado);
+--   * o critério do backfill (só `periodo_id`, sem `periodo_chave_id`): 1 (E, o texto legítimo da chave que desce tratado como contaminado);
+--   * a escolha do backfill (volta a pular o registro mais novo incoerente com o tipo): 1 (C2, devolve a divergência antiga);
+--   * o `update` do backfill (vira `null`): 3 (a descrição que não volta, a segunda chamada que acha de novo, a trilha duplicada); corpo + backfill juntos: 6.
+-- Os asserts de controle (deduplicação, a rodada do mesmo período que continua reescrevendo, estado e resolvida_por intocados, sem registro próprio, decisão humana, catálogo) passam nas versões sabotadas de propósito:
+-- protegem o que não pode mudar. A primeira versão da correção (só `p_periodo_id`) reprovou 1 assert de divergencia_vigente_entre_rodadas.test.sql (0192/4): é o que fez a condição incluir a chave.
 -- =============================================================================
 
 begin;
@@ -123,6 +131,8 @@ declare
   v_divergencia_concorrente boolean := false;
   -- 0241: a rodada é do período que a pendência carrega, ou da CHAVE dele (calculado depois da busca, no corpo).
   v_reescreve_descricao           boolean;
+  -- 0241 (revisão): o ÚLTIMO registro da chave da pendência (periodo_chave_id = o período dela) existe e NÃO é divergente: A deixou de ser o motivo de a pendência estar aberta.
+  v_chave_deixou_de_divergir boolean;
   -- 0192 (terceira correção da guarda): o período da CHAVE que originou esta chamada — o que o
   -- laço de fn_reconciliar_caso / fn_reconciliar_chaves_do_documento deixou em `oria.periodo_chave`.
   -- Chamada avulsa (sem laço, como a `fn_reconciliar_arvore` e os testes) é a sua própria chave.
@@ -193,8 +203,22 @@ begin
   order by criada_em
   limit 1;
 
-  v_reescreve_descricao := v_pendencia_periodo_id is not distinct from p_periodo_id
-                           or v_pendencia_periodo_id is not distinct from v_periodo_chave_id;
+  -- 0241 (revisão, alto 1): o texto também passa à chave irmã quando a chave da pendência (A) deixou de divergir. A guarda 0192 segura a pendência aberta por causa de B, e sem isto o texto de A ("100 contra 90")
+  -- ficaria congelado depois de A conferir, uma divergência que já não existe. Só com o último registro da chave EXISTINDO e não divergente: sem registro nenhum da chave (pendência aberta por um período que não é chave)
+  -- não há evidência de que A parou de ser o motivo, e o texto fica.
+  select r.resultado not in ('divergente', 'divergencia', 'zona_cinzenta') into v_chave_deixou_de_divergir
+    from reconciliacao r
+   where r.caso_id = p_caso_id and r.tipo = p_tipo
+     and coalesce(r.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+       = coalesce(p_entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
+     and r.periodo_chave_id = v_pendencia_periodo_id
+   order by r.criado_em desc, r.cmin::text::int desc
+   limit 1;
+  -- 0241 (revisão, médio): tipo POR DOCUMENTO casa a pendência pelo documento, e a árvore chama sem chave: se o documento muda para um período compatível o texto dele congelaria. O texto é do próprio documento.
+  v_reescreve_descricao := v_por_documento
+                           or v_pendencia_periodo_id is not distinct from p_periodo_id
+                           or v_pendencia_periodo_id is not distinct from v_periodo_chave_id
+                           or coalesce(v_chave_deixou_de_divergir, false);
 
   -- 0192: O OK (OU A PRÉ-CONDIÇÃO) QUE MATAVA A DIVERGÊNCIA IRMÃ — ESTADO VIGENTE POR CHAVE.
   -- Duas checagens do mesmo tipo/entidade com períodos COMPATÍVEIS (Balanço "multi 24,25" ×
@@ -350,6 +374,8 @@ declare
   v_r            record;
 begin
   -- só a pendência que o sistema abriu (origem reconciliacao) e em estado 'aberta': as demais são decisão de gente (ou já resolvida) e ficam como estão.
+  -- "É do próprio": um registro do mesmo caso e tipo com ESTA descrição, gravado no período da pendência (`periodo_id`) OU pela chave dela (`periodo_chave_id`: o laço de uma chave desce a um período compatível e o
+  -- texto que ele escreve é legítimo, 0192/4); tipo por documento (secao_fecha): o registro do mesmo documento, em qualquer período (o documento pode ter sido reclassificado).
   for v_pe in
     select pe.id, pe.caso_id, pe.tipo, pe.motivo, pe.entidade_id, pe.periodo_id, pe.documento_id, pe.descricao
       from pendencia pe
@@ -364,29 +390,32 @@ begin
           where r.caso_id = pe.caso_id
             and 'reconciliacao:' || r.tipo = pe.motivo
             and r.descricao = pe.descricao
-            and r.periodo_id = pe.periodo_id)
+            and case when r.tipo = 'secao_fecha' then r.documento_id is not distinct from pe.documento_id
+                     else (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id) end)
      order by pe.criada_em, pe.id
   loop
     v_contaminadas := v_contaminadas + 1;
     v_r := null;
-    -- a MAIS RECENTE do próprio período, de resultado coerente com o tipo da pendência; tipo por documento (secao_fecha) também do próprio documento.
-    select r.id, r.descricao into v_r
+    -- o ÚLTIMO registro do próprio (mesmo caso, tipo, entidade; no período OU na chave da pendência; tipo por documento: do documento). NÃO se pula o mais novo por ele não combinar com o tipo da
+    -- pendência: voltar a um registro mais antigo escreveria um texto que o próprio período já superou.
+    select r.id, r.descricao, r.resultado into v_r
       from reconciliacao r
      where r.caso_id = v_pe.caso_id
        and 'reconciliacao:' || r.tipo = v_pe.motivo
        and coalesce(r.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
          = coalesce(v_pe.entidade_id, '00000000-0000-0000-0000-000000000000'::uuid)
-       and r.periodo_id = v_pe.periodo_id
-       and (r.tipo <> 'secao_fecha' or r.documento_id is not distinct from v_pe.documento_id)
-       and nullif(btrim(r.descricao), '') is not null
-       and case v_pe.tipo::text
-             when 'divergencia_reconciliacao' then r.resultado in ('divergente', 'divergencia', 'zona_cinzenta')
-             when 'precondicao_nao_satisfeita' then r.resultado = 'precondicao_nao_satisfeita'
-             else false end
+       and case when r.tipo = 'secao_fecha' then r.documento_id is not distinct from v_pe.documento_id
+                else (r.periodo_id = v_pe.periodo_id or r.periodo_chave_id = v_pe.periodo_id) end
      order by r.criado_em desc, r.cmin::text::int desc
      limit 1;
-    if v_r.id is null then
-      v_sem_registro := v_sem_registro + 1;   -- ausência declarada: não se inventa descrição
+    -- sem registro, ou o último é um `ok` / de outro vocabulário que o tipo da pendência, ou sem texto: não toca e conta (ausência declarada, nada inventado).
+    if v_r.id is null
+       or nullif(btrim(v_r.descricao), '') is null
+       or not (case v_pe.tipo::text
+                 when 'divergencia_reconciliacao' then v_r.resultado in ('divergente', 'divergencia', 'zona_cinzenta')
+                 when 'precondicao_nao_satisfeita' then v_r.resultado = 'precondicao_nao_satisfeita'
+                 else false end) then
+      v_sem_registro := v_sem_registro + 1;
       continue;
     end if;
     update pendencia set descricao = v_r.descricao where id = v_pe.id;
@@ -409,7 +438,7 @@ end;
 $$;
 
 comment on function fn_corrigir_descricao_contaminada(uuid) is
-  '0241: para a pendência de reconciliação aberta cuja descrição nenhuma reconciliacao do próprio período gerou (a rodada de um período irmão a reescrevia), põe a descrição da reconciliacao MAIS RECENTE do próprio período (mesmo caso, tipo, entidade, periodo_id) de resultado coerente com o tipo da pendência. Sem registro assim, não toca e conta (sem_registro_proprio). Só estado aberta (as demais são decisão de gente); resolvida_por e estado intocados. Grava evento_auditoria sistema:0241 com a descrição antiga em antes. Devolve {contaminadas, corrigidas, sem_registro_proprio}; idempotente.';
+  '0241: para a pendência de reconciliação aberta cuja descrição nenhuma reconciliacao do próprio período OU da própria chave gerou (a rodada de um período irmão a reescrevia), põe a descrição da reconciliacao MAIS RECENTE do próprio (periodo_id ou periodo_chave_id da pendência; secao_fecha: do documento), desde que o resultado dela seja coerente com o tipo da pendência. Sem registro, ou com o mais recente ok/incoerente/sem texto, não toca e conta (sem_registro_proprio), sem voltar a um registro mais antigo. Só estado aberta (as demais são decisão de gente); resolvida_por e estado intocados. Grava evento_auditoria sistema:0241 com a descrição antiga em antes. Devolve {contaminadas, corrigidas, sem_registro_proprio}; idempotente.';
 
 revoke all on function fn_corrigir_descricao_contaminada(uuid) from public, anon;
 grant execute on function fn_corrigir_descricao_contaminada(uuid) to service_role;
@@ -433,13 +462,13 @@ insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
   ('reconciliacao_descricao_so_do_mesmo_periodo', '0241', 'corpo', 'fn_registrar_reconciliacao', 'if v_reescreve_descricao then', null,
    'A descrição da pendência só é reescrita pela rodada do período que ela carrega (ou da chave dele). Corpo sem isto = a rodada do período compatível de outra chave (anual 2024 x multi 24,26) troca o texto de A pelo de B: o analista lê, na pendência de um período, o valor e a diferença de outro (7 pendências abertas em produção, 11/11/2026).',
-   'importante', 1089),
+   'importante', 1093),
   ('descricao_contaminada_funcao', '0241', 'funcao', 'fn_corrigir_descricao_contaminada', null, null,
    'O backfill reexecutável da descrição contaminada. Ausente = a 0241 não foi aplicada: as pendências já contaminadas continuam mostrando o texto de outro período.',
-   'importante', 1090),
+   'importante', 1094),
   ('descricao_contaminada_so_aberta', '0241', 'corpo', 'fn_corrigir_descricao_contaminada', 'pe.estado = ''aberta''', null,
    'O backfill só toca a pendência em estado aberta. Corpo sem isto = o texto de uma pendência em decisão humana (em_correcao_interna, aceita_com_ressalva...) ou já resolvida é reescrito pela migration.',
-   'importante', 1091)
+   'importante', 1095)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
@@ -447,7 +476,7 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = '0241', revisado_em = current_date,
-       observacao = 'A 0241 reemite fn_registrar_reconciliacao (a descrição da pendência só é reescrita pela rodada do mesmo período, não pelo compatível) e cria fn_corrigir_descricao_contaminada (backfill sistema:0241). 3 requisitos novos (ordem 1089-1091).'
+       observacao = 'A 0241 reemite fn_registrar_reconciliacao (a descrição da pendência só é reescrita pela rodada do mesmo período, não pelo compatível) e cria fn_corrigir_descricao_contaminada (backfill sistema:0241). 3 requisitos novos (ordem 1093-1095).'
  where id = true;
 
 commit;
