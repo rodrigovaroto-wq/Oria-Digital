@@ -1214,16 +1214,22 @@ supabase db execute --file Supabase/migrations/0242_a_secao_que_so_existia_em_co
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0242' and not presente;   -- ZERO linhas
 #   select count(*) from conta_canonica;   -- 27
 
-# A 0243 cria fato_financeiro (P27, o fato canônico ACIMA de campo_extraido: conta = a seção da linha, entidade e período pela coluna da linha quando ela diz), a materialização (fn_materializar_fatos, idempotente), a pendência conta_canonica_incerta (UMA por documento-versão, só para extração nova), o backfill SEM pendência (o resumo fica em evento_auditoria), o gatilho do documento, reemite fn_registrar_campos_extraidos (a chamada nova no fim; assinatura igual, o n8n não muda) e fn_fundir_entidade (repõe os fatos), com 18 requisitos novos na sonda.
+# A 0243 cria fato_financeiro (P27, o fato canônico ACIMA de campo_extraido: conta = a seção da linha, entidade e período pela coluna da linha quando ela diz), a materialização (fn_materializar_fatos, idempotente), a pendência conta_canonica_incerta (UMA por documento-versão, só para extração nova), o backfill SEM pendência (o resumo fica em evento_auditoria), o gatilho do documento, reemite fn_registrar_campos_extraidos (a chamada nova no fim; assinatura igual, o n8n não muda) e fn_fundir_entidade (repõe os fatos), com 20 requisitos novos na sonda.
 # >>> Rodar COMO `postgres`; aplicar DEPOIS da 0242. O `alter type pendencia_tipo add value` vem ANTES do `begin;` (e o arquivo não USA o rótulo novo: pela API de gerenciamento, que envolve o lote numa transação, passa em UMA chamada). O backfill roda na própria migration: ~76 mil fatos em ~3 s no local (124 mil linhas sintéticas); em produção são ~85,5 mil (medido read-only em 11/11/2026), então peça tempo de folga.
+# >>> ATENÇÃO, LOCK: `create trigger ... on documento` segura um lock em `documento` até o COMMIT da migration (o backfill roda na mesma transação): a aplicação bloqueia escritas em documento, e com isso o n8n (fn_registrar_documento), por alguns segundos (~3 s locais; em produção, ~85,5 mil fatos: reserve folga e aplique fora de um lote em andamento).
+# >>> TETO: a materialização roda dentro de fn_registrar_campos_extraidos (medido pela revisão: balancete de 4.000 rótulos distintos 3,8 s, ~2,1 s na materialização). Se o statement_timeout do chamador ficar abaixo disso a extração daquela chamada não é gravada (query_canceled não é engolido). Agir quando aparecer erro 57014 ali ou o p95 passar de ~5 s: tirar a materialização do caminho do n8n e deixar fn_materializar_fatos() como o reparo.
 # >>> Reaplicável (função reemitida, backfill idempotente). Teste: Supabase/test/fato_financeiro.test.sql.
 supabase db execute --file Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0243' and not presente;   -- ZERO linhas
 #   select depois from evento_auditoria where acao = 'fato_financeiro_backfill' order by criado_em desc limit 1;   -- o resumo: fatos por método, sem entidade, sem período, e as linhas incertas SEM pendência (por decisão do dono)
-#   -- a bijeção COMPLETA (a sonda só olha uma amostra das 20 versões mais novas que passaram pela extração): ZERO linhas elegíveis sem fato
-#   select count(*) from campo_extraido ce join documento_versao dv on dv.id = ce.documento_versao_id join documento d on d.id = dv.documento_id
-#    where fn_linha_vira_fato(d.tipo_taxonomia, ce.chave, ce.unidade, ce.valor_num) and not exists (select 1 from fato_financeiro f where f.campo_extraido_id = ce.id);   -- 0
+#   -- a bijeção: logo DEPOIS de aplicar, ZERO linhas elegíveis sem fato. Em operação normal ela pode voltar a ter linhas (transcrição humana, linha gravada por SQL direto): não é invariante eterno, é o estado "o backfill terminou", e `select fn_materializar_fatos();` o refaz.
+#   -- (o papel da linha roda UMA vez por combinação, como o backfill, em CTE MATERIALIZED: 180 µs por linha, medido, faz a forma por linha custar dezenas de segundos)
+#   with cand as materialized (select d.tipo_taxonomia t, ce.chave, ce.unidade from campo_extraido ce join documento_versao dv on dv.id = ce.documento_versao_id join documento d on d.id = dv.documento_id
+#                               where ce.valor_num is not null and fn_tipo_gera_fato(d.tipo_taxonomia) and not exists (select 1 from fato_financeiro f where f.campo_extraido_id = ce.id)),
+#        rot as materialized (select distinct t, chave, unidade from cand),
+#        pap as materialized (select t, chave, unidade from rot where fn_linha_vira_fato(t, chave, unidade, 1))
+#   select count(*) from cand c join pap p on p.t = c.t and p.chave = c.chave and coalesce(p.unidade, '') = coalesce(c.unidade, '');   -- 0
 #   -- se algum dia a materialização de uma extração falhar (evento fatos_materializacao_falhou), o reparo é: select fn_materializar_fatos();
 
 # ---------------------------------------------------------------------------
