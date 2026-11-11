@@ -50,7 +50,8 @@ Já medido para a P1d(b) em produção (09/11): uma recusa de orçamento grava U
 - **P7b** escrita, revisada e comitada (0232 + portal). NÃO aplicada nem publicada.
 - **P8** n8n: registro por tentativa e `falha_transitoria_esgotada` na medição (decisão do dono de 11/11: SEM modelo de reserva, só o `gpt-5.6-luna`; o fallback do d4b38b5 foi desfeito); banco na 0233, comitada SEM revisão independente. Falta republicar a ingestão.
 - **P9** n8n comitada ("Método Indireto"); banco na 0234, comitada SEM revisão independente.
-- **P10** não iniciada: depende do merge, da aplicação da 0232–0234 e da republicação.
+- **P7b, P8, P9 no ar em 11/11** (PR #287; 0232–0234 aplicadas; n8n republicado; portal publicado).
+- **P10 rodada nos sintéticos em 11/11** (US$ 0,28): Vertentes melhorou (0 falhas, 99,8%); duas regressões SILENCIOSAS no Canastra (Contingências 38→16, Extrato 27→6) e uma com pendência no Distress (Mapa de Dívida 92→35). Corpus real pendente dos originais. Detalhe no ESTADO.md.
 - A ordem exata para retomar está no topo do `ESTADO.md` (sessão 126).
 
 ### A linha de base da P4, medida em produção em 09/11/2026 (`Supabase/test/linha-de-base-extracao.sql`)
