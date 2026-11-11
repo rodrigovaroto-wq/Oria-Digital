@@ -1219,54 +1219,22 @@ export function diagnosticarErroApi(erro) {
 // falha não gasta um segundo a mais, e um em que todos falham o tempo todo ganha no
 // máximo 3 × (60 s + blocos × 6 s) — só quando o provedor está de fato fora.
 //
-// A RESERVA (P8, 10/11/2026) É A 5ª CHAMADA, e é UMA só. Esgotadas as 4 do principal
-// com falha TRANSITÓRIA, o bloco é lido uma vez pelo modelo de reserva
-// (`MODELOS_POR_PROVEDOR.*.extracao_reserva`) depois de 60 s (`ESPERA_RESERVA_S`).
-// Por que 60 e não 0 nem mais: o limite por minuto da OpenAI é POR MODELO, então o
-// balde do modelo de reserva está cheio e a espera não é por ele — é pelo outro
-// caso: 5xx, queda de rede e 429 sem causa (`limite_indeterminado`) podem ser do
-// provedor INTEIRO, e aí a reserva cai no mesmo buraco se vier colada. 60 s é o
-// teto de espera que esta função já aceita em qualquer ponto (o tempo de um balde
-// por minuto se recompor), e leva o pior bloco de 150 s para 210 s — o `Esperar
-// Retry` espera uma vez por estágio, dentro dos 300 s do Code node.
-// O QUE NÃO CAI NA RESERVA: falha PERMANENTE. Crédito, cota do dia, chave, 400 e
-// truncamento são do provedor/conta/pedido e o outro modelo recebe exatamente o
-// mesmo. A ÚNICA exceção é `modeloIndisponivel` (404 do modelo): aí a reserva
-// conserta, porque o defeito é do ID do principal — e vai direto, sem espera
-// (a causa é determinística, esperar não a muda). A reserva roda no máximo UMA vez
-// por bloco e, depois dela, NADA se repete: falhou, o bloco termina (`esgotou`).
-//
-// Devolve { repetir, esperaS, maxTentativas, esgotou, usarReserva }. `tentativa` é a
-// que ACABOU de falhar (1 = a original). `maxTentativas` continua sendo as 4 do
-// PRINCIPAL (a segunda passada por cobertura e o teto de cota dependem dele: a
-// reserva NÃO abre uma passada de cobertura). `esgotou` = era transitória e não há
-// mais NADA a tentar, reserva incluída: é o único caso em que a pendência
-// `extracao_falhou` por causa transitória é honesta. `temReserva`: o chamador TEM
-// o corpo da reserva em mãos; `emReserva`: a tentativa que acabou de falhar JÁ foi a da reserva.
-export function decidirRepeticao({
-  transitoria = false, tentativa = 1, esperaSugeridaS = null,
-  temReserva = false, emReserva = false, modeloIndisponivel = false,
-} = {}) {
+// Devolve { repetir, esperaS, maxTentativas, esgotou }. `tentativa` é a que ACABOU
+// de falhar (1 = a original). `esgotou` = era transitória e não há mais tentativa:
+// é o único caso em que a pendência `extracao_falhou` por causa transitória é honesta.
+export function decidirRepeticao({ transitoria = false, tentativa = 1, esperaSugeridaS = null } = {}) {
   const MAX_TENTATIVAS = 4;
   const ESPERAS_S = [30, 60, 60];
   const TETO_ESPERA_S = 60;
-  const ESPERA_RESERVA_S = 60;
   const n = Number.isInteger(tentativa) && tentativa >= 1 ? tentativa : 1;
-  const sobra = n < MAX_TENTATIVAS && !emReserva;
+  const sobra = n < MAX_TENTATIVAS;
   const piso = ESPERAS_S[Math.min(n, ESPERAS_S.length) - 1];
   const pedida = Number.isFinite(esperaSugeridaS) && esperaSugeridaS > 0 ? esperaSugeridaS : 0;
-  const repetir = Boolean(transitoria) && sobra;
-  const usarReserva = Boolean(temReserva) && !emReserva && !repetir
-    && (Boolean(transitoria) || Boolean(modeloIndisponivel));
-  const espera = usarReserva
-    ? (transitoria ? Math.min(TETO_ESPERA_S, Math.max(ESPERA_RESERVA_S, pedida)) : 0)
-    : Math.min(TETO_ESPERA_S, Math.max(piso, pedida));
   return {
-    repetir,
-    esperaS: espera,
+    repetir: Boolean(transitoria) && sobra,
+    esperaS: Math.min(TETO_ESPERA_S, Math.max(piso, pedida)),
     maxTentativas: MAX_TENTATIVAS,
-    esgotou: Boolean(transitoria) && !repetir && !usarReserva,
-    usarReserva,
+    esgotou: Boolean(transitoria) && !sobra,
   };
 }
 

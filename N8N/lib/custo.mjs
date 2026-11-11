@@ -113,30 +113,13 @@ export const TETO_EXECUCAO_USD = 3;
 // diferença de 17× que justificava dois modelos deixou de existir. O que separa
 // as duas chamadas agora é o ESFORÇO DE RACIOCÍNIO, não o modelo — ver
 // `ESFORCO_POR_PAPEL` abaixo.
-//
-// `extracao_reserva` (P8, 10/11/2026): o modelo que lê o bloco UMA vez depois de o
-// principal ter falhado de forma transitória nas 4 tentativas — decisão do dono: é
-// OUTRO MODELO da OpenAI, não outro provedor (mesma credencial, mesma URL, mesmo
-// contrato de LGPD). `gpt-4o`: lê documento melhor que o mini e já tinha preço e
-// capacidade declarados. O PREÇO É O PONTO: US$ 2,50/10,00 por milhão (entrada/
-// saída) contra US$ 0,20/1,20 do Luna — 12,5x na entrada e 8,3x na saída. Isso é
-// aceitável porque só roda depois de 4 falhas do principal, mas tem TETO CONHECIDO:
-// se o principal ficar fora por horas com o 4o de pé, o lote INTEIRO cai na reserva
-// e custa até ~12,5x o que `orcamentoDoLote` estimou (que só conhece o principal);
-// nada no meio da execução o freia. Frear isso de verdade (um contador de reservas
-// por lote) fica para quando `medicao.usou_reserva` mostrar, num lote real, a reserva
-// respondendo mais que uma fração pequena dos documentos — sem rodada real ainda
-// (P8 acabou de nascer), o número que justificaria o contador não existe.
-// `null` = sem reserva. No Google é null de propósito: o modelo mora na URL do nó
-// HTTP (ver `trocarModeloDoCorpo`), então reserva ali é um nó novo, não um campo.
 export const MODELOS_POR_PROVEDOR = {
-  openai: { classificacao: 'gpt-5.6-luna', extracao: 'gpt-5.6-luna', extracao_reserva: 'gpt-4o' },
-  google: { classificacao: 'gemini-3.5-flash-lite', extracao: 'gemini-3.5-flash-lite', extracao_reserva: null },
+  openai: { classificacao: 'gpt-5.6-luna', extracao: 'gpt-5.6-luna' },
+  google: { classificacao: 'gemini-3.5-flash-lite', extracao: 'gemini-3.5-flash-lite' },
 };
 
 export const MODELO_CLASSIFICACAO = MODELOS_POR_PROVEDOR[provedorAtivo()].classificacao;
 export const MODELO_EXTRACAO = MODELOS_POR_PROVEDOR[provedorAtivo()].extracao;
-export const MODELO_EXTRACAO_RESERVA = MODELOS_POR_PROVEDOR[provedorAtivo()].extracao_reserva ?? null;
 
 // ---------------------------------------------------------------------------
 // O ESFORÇO DE RACIOCÍNIO — a regra do dono, em código, e o que ela NÃO decide

@@ -320,44 +320,6 @@ export function montarCorpoIA(
   return corpo;
 }
 
-/**
- * O MESMO CORPO, PARA OUTRO MODELO DO MESMO PROVEDOR — o corpo da RESERVA.
- *
- * `ia_body` já vem montado para o modelo principal (GPT-5: sem `temperature`,
- * `max_completion_tokens`, `reasoning_effort`), e mandá-lo como está ao `gpt-4o`
- * é 400 na chamada inteira ("Unsupported parameter") — a reserva existiria no
- * grafo e nunca responderia. Remontar do zero não dá: o corpo já carrega o
- * documento, o schema e a instrução de segunda passada. Então troca-se SÓ o que
- * pertence ao modelo, lendo `CAPACIDADES_POR_MODELO` (a mesma fonte de
- * `montarCorpoIA`, que é quem decide o dialeto em todo o resto do sistema) e
- * preservando o teto de saída pelo NOME novo.
- *
- * `esforco` só vale para quem raciocina; nulo deixa o modelo no default dele
- * (a ida para o 4o nunca precisa; a volta para um GPT-5 sim, se quiser o mesmo
- * esforço da extração principal).
- *
- * DEVOLVE `null` — nunca lança, nunca devolve o corpo original disfarçado — quando
- * não sabe trocar: dialeto Gemini (o modelo mora na URL do nó, não no corpo, então
- * trocá-lo exige outro nó HTTP e não esta função) ou corpo que não é objeto. Quem
- * chama trata `null` como "sem reserva" e declara a falha, em vez de repetir
- * às cegas com o modelo errado. Auto-contida: o nó embute o `toString()`.
- */
-export function trocarModeloDoCorpo(prov, corpo, modelo, esforco = null) {
-  if (!prov || prov.dialeto !== 'openai' || !corpo || typeof corpo !== 'object' || !modelo) return null;
-  const novo = JSON.parse(JSON.stringify(corpo));
-  const cap = capacidadesDoModelo(modelo);
-  const NOMES_DO_TETO = ['max_tokens', 'max_completion_tokens'];
-  const teto = NOMES_DO_TETO.map((n) => novo[n]).find((v) => v !== undefined && v !== null);
-  for (const n of NOMES_DO_TETO) delete novo[n];
-  delete novo.temperature;
-  delete novo.reasoning_effort;
-  novo.model = modelo;
-  if (cap.temperatura) novo.temperature = 0;
-  if (teto !== undefined) novo[cap.tetoDeSaida] = teto;
-  if (cap.raciocina && esforco) novo.reasoning_effort = esforco;
-  return novo;
-}
-
 // ---------------------------------------------------------------------------
 // AS PARTES DE CONTEÚDO
 // ---------------------------------------------------------------------------
