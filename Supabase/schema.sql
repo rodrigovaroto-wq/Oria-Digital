@@ -2454,6 +2454,31 @@ $$;
 COMMENT ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) IS 'Dois documentos do mesmo período discordando sobre a MESMA conta, com o vencedor por autoridade documental e o critério por extenso (0151). Compara na base, só entre linhas com seção canônica, papel conta e unidade conversível. `decidido = false` é empate OU rótulo contestado pelo diagnóstico (0159, um lado com `decide_sozinho = false`) — nos dois casos ninguém vence e a decisão é humana. O par nasce DEPOIS do agrupamento (0152) — a versão anterior pedia o produto cartesiano e levava 12,4 s por chamada no lote de 190 documentos.';
 
 --
+-- Name: fn_conta_canonica_sem_ciclo(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_conta_canonica_sem_ciclo() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+declare v_n int;
+begin
+  if new.pai is null then
+    return new;
+  end if;
+  with recursive sobe(codigo, pai) as (
+    select c.codigo, c.pai from conta_canonica c where c.codigo = new.pai
+    union
+    select c.codigo, c.pai from conta_canonica c join sobe s on c.codigo = s.pai
+  )
+  select count(*) into v_n from sobe where codigo = new.codigo;
+  if v_n > 0 then
+    raise exception 'conta_canonica: % como pai de % fecha um ciclo (% é ancestral de %)', new.pai, new.codigo, new.codigo, new.pai
+      using errcode = 'check_violation';
+  end if;
+  return new;
+end $$;
+
+--
 -- Name: fn_contas_repetindo_valor(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -17923,6 +17948,45 @@ CREATE TABLE public.classe_contabil_catalogo (
 COMMENT ON TABLE public.classe_contabil_catalogo IS 'A taxonomia contábil fechada do Arquitetura do Sistema/2 Especificação/05 (recorrente, nao_recorrente, extraordinario, candidato_ajuste_ebitda, revisar_manual). TABELA e não enum de propósito: acrescentar um sexto rótulo deve custar uma linha de seed, não uma migration que altera tipo — no Postgres alterar enum não remove valor e não volta atrás. Mesma escolha que a 0038 fez com premissas.';
 
 --
+-- Name: conta_canonica; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.conta_canonica (
+    codigo text NOT NULL,
+    nome text NOT NULL,
+    pai text,
+    demonstracao text NOT NULL,
+    natureza text NOT NULL,
+    secao_canonica text,
+    classe_recorrencia text,
+    ordem integer NOT NULL,
+    ativo boolean DEFAULT true NOT NULL,
+    CONSTRAINT conta_canonica_demonstracao_check CHECK ((demonstracao = ANY (ARRAY['balanco'::text, 'dre'::text, 'fluxo_caixa'::text, 'dmpl'::text, 'dva'::text]))),
+    CONSTRAINT conta_canonica_natureza_check CHECK ((natureza = ANY (ARRAY['devedora'::text, 'credora'::text, 'mista'::text]))),
+    CONSTRAINT conta_canonica_pai_nao_e_ela_ck CHECK ((pai IS DISTINCT FROM codigo)),
+    CONSTRAINT conta_canonica_raiz_ck CHECK (((pai IS NULL) = (codigo = ('demo_'::text || demonstracao)))),
+    CONSTRAINT conta_canonica_secao_canonica_check CHECK (((secao_canonica IS NULL) OR (secao_canonica <> 'NAO_CLASSIFICAVEL'::text)))
+);
+
+--
+-- Name: TABLE conta_canonica; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.conta_canonica IS 'A árvore canônica demonstração > grupo > seção > subgrupo (0242, P26). `secao_canonica` é ATRIBUTO da conta (null nos nós de agrupamento), não um plano de contas paralelo. Só a taxonomia atual (26 nós): sem conta-folha (caixa, clientes…), que é a P27. Raiz declarada (codigo = demo_<demonstracao> ⇔ pai null); o filho tem a demonstração do pai (FK composta); ciclo recusado por gatilho. Mesmo conjunto de SECAO_CANONICA_ENUM (N8N/lib/extract.mjs), conferido por Supabase/test/conta_canonica_regua.test.mjs.';
+
+--
+-- Name: COLUMN conta_canonica.natureza; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_canonica.natureza IS '''mista'' = sem sinal único, e NÃO um default: receita bruta (receita + deduções), despesas operacionais (inclui outras receitas), resultado financeiro, impostos sobre o lucro, as seções do fluxo, DMPL, DVA e as demonstrações-raiz. Devedora/credora só onde o sinal é o da própria seção (regra 1: não fabricar um sinal que o dado não tem).';
+
+--
+-- Name: COLUMN conta_canonica.classe_recorrencia; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.conta_canonica.classe_recorrencia IS 'NULL = não determinado, nunca "recorrente": a recorrência é da rubrica (rubrica_classe, 0128), não da seção. Nenhum nó a preenche na 0242.';
+
+--
 -- Name: controlador; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -19336,6 +19400,27 @@ ALTER TABLE ONLY public.classe_contabil_catalogo
     ADD CONSTRAINT classe_contabil_catalogo_pkey PRIMARY KEY (codigo);
 
 --
+-- Name: conta_canonica conta_canonica_codigo_demonstracao_uq; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_canonica
+    ADD CONSTRAINT conta_canonica_codigo_demonstracao_uq UNIQUE (codigo, demonstracao);
+
+--
+-- Name: conta_canonica conta_canonica_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_canonica
+    ADD CONSTRAINT conta_canonica_pkey PRIMARY KEY (codigo);
+
+--
+-- Name: conta_canonica conta_canonica_secao_canonica_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_canonica
+    ADD CONSTRAINT conta_canonica_secao_canonica_key UNIQUE (secao_canonica);
+
+--
 -- Name: controlador controlador_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -20061,6 +20146,12 @@ CREATE TRIGGER trg_caso_reservado_ao_socio BEFORE DELETE OR UPDATE ON public.cas
 CREATE TRIGGER trg_checklist_item_status_leitura_nao_apaga BEFORE DELETE ON public.checklist_item_status FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
 
 --
+-- Name: conta_canonica trg_conta_canonica_sem_ciclo; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER trg_conta_canonica_sem_ciclo BEFORE UPDATE OF pai ON public.conta_canonica FOR EACH ROW WHEN ((new.pai IS DISTINCT FROM old.pai)) EXECUTE FUNCTION public.fn_conta_canonica_sem_ciclo();
+
+--
 -- Name: controlador_vinculo trg_controlador_vinculo_valido; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -20387,6 +20478,20 @@ ALTER TABLE ONLY public.checklist_item_status
 
 ALTER TABLE ONLY public.checklist_item_status
     ADD CONSTRAINT checklist_item_status_tipo_taxonomia_fkey FOREIGN KEY (tipo_taxonomia) REFERENCES public.taxonomia_tipo_documento(codigo);
+
+--
+-- Name: conta_canonica conta_canonica_classe_recorrencia_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_canonica
+    ADD CONSTRAINT conta_canonica_classe_recorrencia_fkey FOREIGN KEY (classe_recorrencia) REFERENCES public.classe_contabil_catalogo(codigo);
+
+--
+-- Name: conta_canonica conta_canonica_pai_fk; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.conta_canonica
+    ADD CONSTRAINT conta_canonica_pai_fk FOREIGN KEY (pai, demonstracao) REFERENCES public.conta_canonica(codigo, demonstracao);
 
 --
 -- Name: controlador controlador_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -21176,6 +21281,18 @@ ALTER TABLE public.classe_contabil_catalogo ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY classe_contabil_catalogo_read ON public.classe_contabil_catalogo FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
+-- Name: conta_canonica; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.conta_canonica ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: conta_canonica conta_canonica_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY conta_canonica_read ON public.conta_canonica FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
 
 --
 -- Name: controlador; Type: ROW SECURITY; Schema: public; Owner: -
@@ -22353,6 +22470,12 @@ GRANT ALL ON FUNCTION public.fn_conferir_modelagem(p_caso_id uuid) TO service_ro
 REVOKE ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_conflitos_do_caso(p_caso_id uuid, p_entidade text, p_tolerancia_abs numeric, p_tolerancia_pct numeric) TO service_role;
+
+--
+-- Name: FUNCTION fn_conta_canonica_sem_ciclo(); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_conta_canonica_sem_ciclo() FROM PUBLIC;
 
 --
 -- Name: FUNCTION fn_contas_repetindo_valor(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
@@ -24341,6 +24464,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.checklist_item_status TO servi
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.classe_contabil_catalogo TO authenticated;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.classe_contabil_catalogo TO service_role;
+
+--
+-- Name: TABLE conta_canonica; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.conta_canonica TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.conta_canonica TO service_role;
 
 --
 -- Name: TABLE controlador; Type: ACL; Schema: public; Owner: -

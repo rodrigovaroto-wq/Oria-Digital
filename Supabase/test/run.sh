@@ -989,6 +989,11 @@ echo "== 0241 — a descrição que o período irmão reescrevia (a pendência s
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo
+echo "== 0242 — a seção que só existia em código (conta_canonica: toda seção das fixtures tem conta, raiz declarada, pai da mesma demonstração, sem ciclo; a sonda não está cega)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conta_canonica.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== carga inicial dos índices macro (dado real, versionado)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/seed/macro_carga_inicial.sql >/dev/null
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/seed_macro.test.sql 2>&1 \
