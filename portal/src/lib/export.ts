@@ -477,6 +477,8 @@ const TIPO_TAXONOMIA_LABEL: Record<string, string> = {
   PLANO_NEGOCIOS: "Plano de Negócios",
   PREMISSAS: "Premissas das Projeções",
   SPED: "Obrigações Acessórias (SPED)",
+  // 0271 (P11): sem esta linha o fallback escrevia "Composicao Imobilizado", sem acento.
+  COMPOSICAO_IMOBILIZADO: "Composição do Imobilizado",
 };
 
 // Tipos ainda sem rótulo explícito (fora do Kit Básico + Variáveis já

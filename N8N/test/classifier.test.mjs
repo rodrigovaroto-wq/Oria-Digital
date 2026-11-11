@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { normalize } from '../lib/normalize.mjs';
 import { classifyByFilename, parseEntidade, parsePeriodo, parseTipo } from '../lib/classifier.mjs';
 import { ALIASES } from '../lib/taxonomia.mjs';
+import { codigosConhecidos } from '../lib/ia.mjs';
 
 test('normalize remove acento, extensão e separadores', () => {
   assert.equal(normalize('12M25_DRE (Assinado).pdf'), '12m25 dre (assinado)');
@@ -539,4 +540,17 @@ test('"DFC - Método Indireto/Direto <empresa>": a entidade é a empresa, com e 
 test('"Direto"/"Metodo" soltos continuam podendo ser razão social (só a FRASE do método é removida)', () => {
   assert.equal(classifyByFilename('DRE Direto Logistica 2025.pdf').entidade, 'Direto Logistica');
   assert.equal(classifyByFilename('DRE Metodo Engenharia 2025.pdf').entidade, 'Metodo Engenharia');
+});
+
+// COMPOSICAO_IMOBILIZADO (11/11/2026): o quadro de bens não é balanço — a IA o gravou como BALANCO por
+// falta de tipo. O código tem de estar no enum que a IA pode devolver e casar o nome do arquivo.
+test('COMPOSICAO_IMOBILIZADO: está no enum da IA e o nome do quadro de imobilizado casa nele, não em BALANCO', () => {
+  assert.ok(codigosConhecidos().includes('COMPOSICAO_IMOBILIZADO'));
+  const r = classifyByFilename('27_Composicao_do_Imobilizado_Canastra_Industria_2025.pdf');
+  assert.equal(r.tipo_taxonomia, 'COMPOSICAO_IMOBILIZADO');
+});
+
+test('COMPOSICAO_IMOBILIZADO: "imobilizado" como assunto de outro documento não o rouba', () => {
+  assert.equal(classifyByFilename('33_Notas_Explicativas_Imobilizado_Grupo_2025.pdf').tipo_taxonomia, 'NOTAS_EXPL');
+  assert.equal(classifyByFilename('01_Balanco_Patrimonial_Canastra_Industria_2025x2024.pdf').tipo_taxonomia, 'BALANCO');
 });

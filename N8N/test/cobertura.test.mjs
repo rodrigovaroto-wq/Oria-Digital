@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {
   linhasComNumero, linhasDeConta, ehLinhaDeConta, juntarFragmentosDeLinha, ehLinhaSemValor,
   celulasDaLinha, celulasEstimadas,
-  planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura,
+  planejarFatias, instrucaoDaFatia, juntarBlocos, avaliarCobertura, numerarLinhasDoTexto,
   MAX_CELULAS_POR_BLOCO, TETO_SAIDA_TOKENS, TOKENS_POR_CELULA, LIMIAR_COBERTURA,
 } from '../lib/cobertura.mjs';
 import { MAX_OUTPUT_TOKENS } from '../lib/extract.mjs';
@@ -1029,3 +1029,32 @@ test('régua no texto de planilha: linha que termina em célula vazia não é fr
     assert.equal(contasDe(['530 470', 'Ajuste 120-']).length, 2);
   });
 }
+
+// ---------------------------------------------------------------------------
+// P11 — A COORDENADA. Comportamento: o número que o modelo cita aponta para UMA linha visual.
+// ---------------------------------------------------------------------------
+
+test('P11: uma linha emendada de dois fragmentos tem UM ln — o ln nunca aponta para meia linha', () => {
+  // "RECEITA " termina em espaço: é fragmento, a linha visual continua na seguinte (juntarFragmentosDeLinha).
+  const r = numerarLinhasDoTexto('ATIVO\nRECEITA \n1.000 2.000\nCusto 5');
+  assert.equal(r.texto, 'L001: ATIVO\nL002: RECEITA 1.000 2.000\nL003: Custo 5');
+  assert.equal(r.total, 3);
+});
+
+test('P11: linha em branco não é numerada, rótulo sem dígito é, e a numeração é global e sem buraco', () => {
+  const r = numerarLinhasDoTexto('ATIVO CIRCULANTE\nCaixa 10\n\n  \nBancos 20\nTotal');
+  assert.equal(r.texto, 'L001: ATIVO CIRCULANTE\nL002: Caixa 10\nL003: Bancos 20\nL004: Total');
+  assert.equal(r.total, 4);
+});
+
+test('P11: texto vazio ou não-texto não tem coordenada (não medível), nunca uma numeração vazia de mentira', () => {
+  for (const v of ['', null, undefined, 42]) assert.deepEqual(numerarLinhasDoTexto(v), { texto: '', total: 0 });
+});
+
+test('P11 juntarBlocos: conta as linhas COM e SEM ln, por linha do documento (não por par conta × coluna)', () => {
+  const par = (linha_origem, ln) => ({ linha_origem, chave: `k${linha_origem}`, entidade_coluna: null, periodo_coluna: null, valor_texto: '1', valor_num: 1, ln });
+  const r = juntarBlocos([{ bloco: 1, blocos: 1, campos: [par(0, 3), par(0, 3), par(1, null), par(2, 8)], diagnostico: {} }]);
+  assert.equal(r.linhasRetornadas, 3);
+  assert.equal(r.linhasComLn, 2);
+  assert.equal(r.linhasSemLn, 1);
+});

@@ -222,8 +222,12 @@ export const SYSTEM_PROMPT = [
   'documento com as COLUNAS de valor que ela tem, e dentro dele uma linha por CONTA. Chaves curtas',
   '(cada caractere é gasto de novo em cada conta): no grupo s=secao, sc=secao_canonica,',
   'op=origem_pagina, cols=colunas, l=linhas; na linha k=chave, vt=valor_texto, vn=valor_num,',
-  'cf=confianca. O texto abaixo usa os nomes completos (mais claro de explicar) — sempre',
+  'cf=confianca, ln=linha_origem. O texto abaixo usa os nomes completos (mais claro de explicar) — sempre',
   'correspondendo à chave curta do schema.',
+  'ln (linha_origem): quando o documento vem com TEXTO NUMERADO (linhas "L001: ...", "L002: ..."),',
+  '  ln é o número da linha de onde a conta foi lida — só o número, sem o "L" (L012 → 12), e é o',
+  '  número IMPRESSO, nunca contado por você. Uma conta emendada de duas linhas cita a primeira. Sem',
+  '  texto numerado (imagem escaneada), ln = null; na dúvida entre duas linhas, null — nunca um palpite.',
   'Extraia TODAS as linhas financeiras do documento (rótulo + valor), preservando a estrutura',
   'original como a "secao" do grupo — ex.: "Ativo Circulante", "Ativo Não Circulante",',
   '"Passivo Circulante", "Passivo Não Circulante", "Patrimônio Líquido", "Receita Operacional",',
@@ -471,7 +475,13 @@ export function limparRotuloColado(chaveCrua, vn, vt, secao) {
  * silêncio — o pior erro possível aqui. Então a conta é DESCARTADA e o motivo
  * volta nomeado, com rótulo e contagens, para virar pendência.
  */
-export function achatarGrupos(grupos) {
+export function achatarGrupos(grupos, { lnMax = null } = {}) {
+  // `ln` (P11, a coordenada): a linha do TEXTO NUMERADO de onde o modelo diz que a conta veio.
+  // Só vale inteiro de 1 a `lnMax` (quantas linhas numeradas o documento tem). `lnMax` nulo = o
+  // modelo NÃO recebeu texto numerado (PDF escaneado), e qualquer `ln` que ele devolva seria
+  // invenção: vira null, que é "não medível" e nunca zero. Valor fora da faixa também vira null —
+  // a linha 400 de um documento de 120 não é uma coordenada, é um palpite com cara de dado (regra 1).
+  const lnValido = (v) => (Number.isInteger(lnMax) && Number.isInteger(v) && v >= 1 && v <= lnMax ? v : null);
   const linhas = [];
   const problemas = [];
   // Rótulos com número monetário COLADO que não deu para provar ser o valor da
@@ -617,6 +627,7 @@ export function achatarGrupos(grupos) {
           valor_num: valorNum,
           confianca: typeof l.cf === 'number' ? l.cf : null,
           origem_pagina: Number.isInteger(g.op) ? g.op : null,
+          ln: lnValido(l.ln),
         });
       }
     }
@@ -754,7 +765,7 @@ export function extractionSchema() {
                 items: {
                   type: 'object',
                   additionalProperties: false,
-                  required: ['k', 'vt', 'vn', 'cf'],
+                  required: ['k', 'vt', 'vn', 'cf', 'ln'],
                   properties: {
                     k: { type: 'string', description: 'chave: rótulo da conta' },
                     vt: {
@@ -768,6 +779,7 @@ export function extractionSchema() {
                       items: { type: ['number', 'null'] },
                     },
                     cf: { type: 'number', description: 'confianca: confiança 0-1 na leitura desta conta' },
+                    ln: { type: ['integer', 'null'], description: 'linha_origem: número N da linha "LNNN:" do texto numerado de onde veio esta conta; null se o documento não veio com texto numerado' },
                   },
                 },
               },
@@ -1326,7 +1338,7 @@ export function decidirRepeticao({ transitoria = false, tentativa = 1, esperaSug
 // da própria chamada em vez de competir com ele: os dois cabem no mesmo
 // documento (planilha cortada E resposta truncada), e esconder um dos dois já é
 // a falha que estamos fechando.
-export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = provedor() } = {}) {
+export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = provedor(), lnMax = null } = {}) {
   const cortado = cortadoPorLimite(prov, apiJson);
   const comAviso = (motivo) => [avisoConteudo, motivo].filter(Boolean).join(' | ') || null;
   const vazio = (falhaMotivo) => ({
@@ -1385,7 +1397,7 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
   // meses antes. Enquanto existir um JSON velho em alguma instância, ele vai
   // responder no formato plano — e responder em formato plano tem de continuar
   // funcionando, em vez de virar "zero linhas extraídas" sem explicação.
-  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos, chavesTextosPerdidos } = achatarGrupos(p.grupos);
+  const { linhas: linhasAgrupadas, problemas, rotulosSuspeitos, textosReatribuidos, textosPerdidos, chavesTextosPerdidos } = achatarGrupos(p.grupos, { lnMax });
   const camposAgrupados = linhasAgrupadas.map((l, i) => ({
     ordem: i,
     ...l,
@@ -1420,6 +1432,8 @@ export function parseExtractionResponse(apiJson, { avisoConteudo = null, prov = 
         moeda: ehLinhaNaoMonetaria(l.k, l.vt, l.pc) ? null : moedaDoc,
         confianca: typeof l.cf === 'number' ? l.cf : null,
         origem_pagina: Number.isInteger(l.op) ? l.op : null,
+        // Formato plano antigo: o schema dele não pede `ln`. Null declarado, não ausente.
+        ln: null,
       }))
     : [];
   // O agrupado manda quando veio; o plano é o caminho do JSON velho.
