@@ -8869,7 +8869,7 @@ const arranjoDeCirculante = (ENT: string) => {
     return r;
   };
   const com = aba({ textos_perdidos: ["Banco C", "Banco B"] });
-  const n = notadas(com).sort();
+  const n = notadas(com).sort((a, b) => a.localeCompare(b));
   checar(n.join(",") === "Banco B|200,Banco B|2000,Banco C|100,Banco C|1000",
     "(42a) com textos_perdidos: a nota vai nas linhas numéricas (saldo e juros) dos contratos SEM texto; o Banco B lido (1000/100) fica sem nota", n.join(", "));
   const rC = [...Array(com.rowCount).keys()].map((i) => i + 1).find((i) => notaDaLinha(com, i).includes("TEXTO NÃO LIDO"))!;
