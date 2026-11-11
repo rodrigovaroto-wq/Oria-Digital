@@ -1190,6 +1190,22 @@ supabase db execute --file Supabase/migrations/0234_o_periodo_que_o_documento_ti
 #   select count(*) from pendencia where tipo = 'periodo_incorreto' and resolvida_por = 'sistema:0234';   -- 32 a 38 esperados (medido por simulação em 10-11/11/2026: 32 pela regra nova, sem os 3 com lado parcial, + 6 já equivalentes)
 #   select count(*) from pendencia where tipo = 'precondicao_nao_satisfeita' and estado <> 'resolvida' and descricao ilike '%sem período par%';   -- era 8; os 2 do Canastra sintético têm outra causa, e a de data-base 01/01/2026 - 30/06/2026 do Valtra e a do S105 (documento parcial) continuam: esperado ~4 a menos
 
+# A 0240 faz fn_versao_atual (lida por 7 reconciliações e por fn_reconferir_caso) seguir a versão VIGENTE da 0233 (fn_versao_com_extracao; a mais nova só quando nenhuma versão tem linha), cria fn_versao_mais_nova (o corpo antigo) reemite fn_reconferir_caso para as guardas de extração lerem a mais nova e fn_pares_duplicados_do_caso (a duplicidade) para ler a vigente. Sem backfill: o critério é lido na hora.
+# >>> Rodar COMO `postgres`; reaplicável. Aplicar DEPOIS da 0233 (precisa de fn_versao_com_extracao com o peso de leitura).
+# >>> Teste: Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql.
+supabase db execute --file Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0240' and not presente;   -- ZERO linhas
+
+# A 0241 faz fn_registrar_reconciliacao reescrever a descrição da pendência só quando a rodada é do MESMO período que ela carrega (a rodada de um período compatível, anual 2024 x multi 24,26, trocava o texto de A pelo de B: 7 pendências abertas em produção, 11/11/2026) e cria fn_corrigir_descricao_contaminada, o backfill (chamado uma vez pela migration; ator sistema:0241; só estado aberta; sem registro do próprio período não toca e conta).
+# >>> Rodar COMO `postgres`; reaplicável (função reemitida, backfill idempotente). Aplicar DEPOIS da 0192.
+# >>> Teste: Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql.
+supabase db execute --file Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0241' and not presente;   -- ZERO linhas
+#   select acao, depois from evento_auditoria where ator = 'sistema:0241' and acao = 'descricao_contaminada_resumo';   -- corrigidas + sem_registro_proprio = 7 (medido em 11/11/2026, antes de aplicar; as sem_registro_proprio ficam como estão)
+#   select count(*) from pendencia pe where pe.origem_estagio = 'reconciliacao' and pe.estado = 'aberta' and pe.periodo_id is not null and not exists (select 1 from reconciliacao r where r.caso_id = pe.caso_id and 'reconciliacao:' || r.tipo = pe.motivo and r.descricao = pe.descricao and (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id));   -- o critério da 0241 (período OU chave; secao_fecha pelo documento); a medição antiga, só por período, deu 7
+
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.
 #
