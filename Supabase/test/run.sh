@@ -993,6 +993,10 @@ echo "== 0272 — o mapeamento de colunas que cada arquivo redescobria (confirma
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0273 — a contraparte com nome de total que só o analista distingue (confirmada/revogada por Sócio/Analista DO MANDATO COMO authenticated, nome normalizado pelo banco, uma vigente, revogar não apaga, outro mandato não lê nem escreve)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o inteiro >= 1 grava, o inválido vira nulo sem abortar o lote, sem a chave grava como antes)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'

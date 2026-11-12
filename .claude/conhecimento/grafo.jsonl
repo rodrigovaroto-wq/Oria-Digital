@@ -101,6 +101,7 @@
 {"k":"n","id":"arquivo:Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","t":"arquivo","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","txt":"0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql"}
 {"k":"n","id":"arquivo:Supabase/migrations/0270_a_linha_que_nao_sabia_de_que_linha_veio.sql","t":"arquivo","f":"Supabase/migrations/0270_a_linha_que_nao_sabia_de_que_linha_veio.sql","txt":"0270_a_linha_que_nao_sabia_de_que_linha_veio.sql"}
 {"k":"n","id":"arquivo:Supabase/schema.sql","t":"arquivo","f":"Supabase/schema.sql","txt":"schema.sql"}
+{"k":"n","id":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","t":"arquivo","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","txt":"a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","t":"arquivo","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","txt":"a_descricao_que_o_periodo_irmao_reescrevia.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","t":"arquivo","f":"Supabase/test/a_guarda_do_dial_que_conferia_o_formato.test.sql","txt":"a_guarda_do_dial_que_conferia_o_formato.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql","t":"arquivo","f":"Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql","txt":"a_linha_que_nao_sabia_de_que_linha_veio.test.sql"}
@@ -440,7 +441,10 @@
 {"k":"n","id":"fn:fn_conferir_modelagem","t":"fn","f":"Supabase/migrations/0158_o_pronto_que_nao_provava_cobertura.sql","txt":"conferir modelagem"}
 {"k":"n","id":"fn:fn_conflitos_do_caso","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"conflitos do caso"}
 {"k":"n","id":"fn:fn_contas_repetindo_valor","t":"fn","f":"Supabase/migrations/0140_a_coluna_de_dimensao_nao_e_valor.sql","txt":"contas repetindo valor"}
+{"k":"n","id":"fn:fn_contraparte_confirmar","t":"fn","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","txt":"contraparte confirmar"}
 {"k":"n","id":"fn:fn_contraparte_intragrupo","t":"fn","f":"Supabase/migrations/0124_intragrupo_que_nao_e_mutuo.sql","txt":"contraparte intragrupo"}
+{"k":"n","id":"fn:fn_contraparte_revogar","t":"fn","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","txt":"contraparte revogar"}
+{"k":"n","id":"fn:fn_contrapartes_confirmadas","t":"fn","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","txt":"contrapartes confirmadas"}
 {"k":"n","id":"fn:fn_controlador_desvincular_familia","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"controlador desvincular familia"}
 {"k":"n","id":"fn:fn_controlador_registrar","t":"fn","f":"Supabase/migrations/0182_o_grupo_horizontal_que_a_controladora_nao_alcancava.sql","txt":"controlador registrar"}
 {"k":"n","id":"fn:fn_controlador_vincular_familia","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"controlador vincular familia"}
@@ -645,6 +649,7 @@
 {"k":"n","id":"fn:fn_tem_papel","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"tem papel"}
 {"k":"n","id":"fn:fn_teto_ressalvas","t":"fn","f":"Supabase/migrations/0037_portao2.sql","txt":"teto ressalvas"}
 {"k":"n","id":"fn:fn_texto_nomeia_mutuo","t":"fn","f":"Supabase/migrations/0123_mutuos_a_natureza_fora_da_linha.sql","txt":"texto nomeia mutuo"}
+{"k":"n","id":"fn:fn_texto_normalizado","t":"fn","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","txt":"texto normalizado"}
 {"k":"n","id":"fn:fn_tipo_sem_dado_por_natureza","t":"fn","f":"Supabase/migrations/0231_o_balanco_sem_dado_financeiro_que_ninguem_via.sql","txt":"tipo sem dado por natureza"}
 {"k":"n","id":"fn:fn_tokens_estruturais","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"tokens estruturais"}
 {"k":"n","id":"fn:fn_tratar_pendencia","t":"fn","f":"Supabase/migrations/0107_papel_ressalva_e_tratamento.sql","txt":"tratar pendencia"}
@@ -861,6 +866,7 @@
 {"k":"n","id":"migration:0270","t":"migration","f":"Supabase/migrations/0270_a_linha_que_nao_sabia_de_que_linha_veio.sql","txt":"a linha que nao sabia de que linha veio"}
 {"k":"n","id":"migration:0271","t":"migration","f":"Supabase/migrations/0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql","txt":"o quadro de imobilizado que a ia gravava como balanco"}
 {"k":"n","id":"migration:0272","t":"migration","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"o mapeamento de colunas que cada arquivo redescobria"}
+{"k":"n","id":"migration:0273","t":"migration","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","txt":"a contraparte com nome de total que so o analista distingue"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1217,6 +1223,17 @@
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_divergencias_indice_macro","f":"N8N/workflow.macro.json","l":156}
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_registrar_expectativa_macro","f":"N8N/workflow.macro.json","l":244}
 {"k":"e","de":"arquivo:N8N/workflow.macro.json","rel":"CHAMA","pa":"fn:fn_registrar_indice_macro","f":"N8N/workflow.macro.json","l":129}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":153}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_contraparte_confirmar","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":1}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_contraparte_revogar","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_contrapartes_confirmadas","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":147}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_impressao_do_cabecalho","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":175}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":407}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":209}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_pode_ler_caso","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":346}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_texto_normalizado","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql","l":151}
 {"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":154}
 {"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":287}
 {"k":"e","de":"arquivo:Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","rel":"CHAMA","pa":"fn:fn_periodos_compativeis","f":"Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql","l":113}
@@ -2947,6 +2964,10 @@
 {"k":"e","de":"migration:0272","rel":"CRIA","pa":"fn:fn_mapeamento_confirmar","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","l":219}
 {"k":"e","de":"migration:0272","rel":"CRIA","pa":"fn:fn_mapeamento_erros","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","l":96}
 {"k":"e","de":"migration:0272","rel":"CRIA","pa":"fn:fn_mapeamento_vigente","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","l":261}
+{"k":"e","de":"migration:0273","rel":"CRIA","pa":"fn:fn_contraparte_confirmar","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","l":133}
+{"k":"e","de":"migration:0273","rel":"CRIA","pa":"fn:fn_contraparte_revogar","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","l":173}
+{"k":"e","de":"migration:0273","rel":"CRIA","pa":"fn:fn_contrapartes_confirmadas","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","l":208}
+{"k":"e","de":"migration:0273","rel":"CRIA","pa":"fn:fn_texto_normalizado","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","l":81}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

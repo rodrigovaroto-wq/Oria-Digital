@@ -2490,6 +2490,55 @@ $$;
 COMMENT ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uuid) IS 'O valor material mais repetido entre contas DISTINTAS da mesma coluna, ignorando os totais estruturais (0034) e as colunas de dimensão (0140). Insumo do sinal 1 da guarda de extração (0013).';
 
 --
+-- Name: fn_contraparte_confirmar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_nome  text;
+  v_id    uuid;
+begin
+  -- Quem não escreve o mandato (Leitura, Analista de outro mandato, sem papel, anônimo e conexão de serviço: sem auth.uid() não há autor) cai aqui,
+  -- com a MESMA mensagem para "mandato que não existe" e "mandato que não é seu": a recusa não conta quais mandatos existem.
+  if p_caso is null or not fn_pode_escrever_caso(p_caso) then
+    raise exception 'Confirmar contraparte exige ser Sócio ou Analista alocado neste mandato' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  v_nome := fn_texto_normalizado(p_contraparte);
+  if v_nome = '' then
+    raise exception 'A contraparte está vazia (depois de tirar espaços): sem nome não há o que confirmar' using errcode = '22023';
+  end if;
+  if not exists (select 1 from caso where id = p_caso) then
+    raise exception 'O mandato % não existe', p_caso using errcode = 'P0002';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_caso::text || ':' || p_tipo_base || ':' || v_nome, 0));
+  select id into v_id from contraparte_confirmada
+   where caso_id = p_caso and tipo_base = p_tipo_base and contraparte = v_nome and revogado_em is null;
+  if v_id is not null then
+    return jsonb_build_object('id', v_id, 'contraparte', v_nome, 'ja_vigente', true);
+  end if;
+  insert into contraparte_confirmada (caso_id, tipo_base, contraparte, confirmado_por)
+  values (p_caso, p_tipo_base, v_nome, auth.uid()) returning id into v_id;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values ('usuario:' || auth.uid(), 'contraparte_confirmada', 'caso:' || p_caso,
+          jsonb_build_object('id', v_id, 'tipo_base', p_tipo_base, 'contraparte', v_nome));
+  return jsonb_build_object('id', v_id, 'contraparte', v_nome, 'ja_vigente', false);
+end $$;
+
+--
+-- Name: FUNCTION fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) IS '0273: o analista confirma que a contraparte (com nome de total) é cliente/fornecedor de verdade NESTE mandato. Só quem escreve o mandato (fn_pode_escrever_caso: Sócio, Analista alocado); Leitura, outro mandato, sem papel, anônimo e conexão de serviço recebem 42501. Normaliza o nome no banco; vazio = 22023. Já vigente: não duplica, não muda autor/data, não grava evento (ja_vigente = true). Grava contraparte_confirmada em evento_auditoria (caso:<id>). Devolve {id, contraparte, ja_vigente}.';
+
+--
 -- Name: fn_contraparte_intragrupo(uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2518,6 +2567,80 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) IS '0124: a empresa DO CASO que o rótulo nomeia como contraparte (o sufixo depois do separador), ou null. É o que permite conferir intragrupo sem adivinhar qual conta casa com qual.';
+
+--
+-- Name: fn_contraparte_revogar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_nome text;
+  v_id   uuid;
+begin
+  if p_caso is null or not fn_pode_escrever_caso(p_caso) then
+    raise exception 'Revogar contraparte exige ser Sócio ou Analista alocado neste mandato' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  v_nome := fn_texto_normalizado(p_contraparte);
+  if v_nome = '' then
+    raise exception 'A contraparte está vazia (depois de tirar espaços): sem nome não há o que revogar' using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_caso::text || ':' || p_tipo_base || ':' || v_nome, 0));
+  update contraparte_confirmada set revogado_em = now(), revogado_por = auth.uid()
+   where caso_id = p_caso and tipo_base = p_tipo_base and contraparte = v_nome and revogado_em is null
+  returning id into v_id;
+  if v_id is null then
+    -- Revogar o que não está confirmado não é "feito": o portal diria que desfez uma confirmação que nunca existiu (a lição do DELETE de 0 linhas, 0216).
+    raise exception 'Não há confirmação vigente de "%" (%) neste mandato para revogar', v_nome, p_tipo_base using errcode = 'P0002';
+  end if;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values ('usuario:' || auth.uid(), 'contraparte_revogada', 'caso:' || p_caso,
+          jsonb_build_object('id', v_id, 'tipo_base', p_tipo_base, 'contraparte', v_nome));
+  return jsonb_build_object('id', v_id, 'contraparte', v_nome);
+end $$;
+
+--
+-- Name: FUNCTION fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) IS '0273: revoga a confirmação vigente da contraparte neste mandato (MARCA revogado_em/revogado_por; não apaga). Mesma guarda de fn_contraparte_confirmar (42501). Sem vigente para revogar: P0002 com o motivo. Grava contraparte_revogada em evento_auditoria (caso:<id>). Devolve {id, contraparte}.';
+
+--
+-- Name: fn_contrapartes_confirmadas(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) RETURNS text[]
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  -- Sem acesso NÃO pode parecer "nenhuma confirmada": recusa (regra 1). O n8n (conexão de serviço) lê.
+  if p_caso is null or not (fn_conexao_de_servico() or fn_pode_ler_caso(p_caso)) then
+    raise exception 'Ler as contrapartes confirmadas exige acesso a este mandato' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  if not exists (select 1 from caso where id = p_caso) then
+    raise exception 'O mandato % não existe', p_caso using errcode = 'P0002';
+  end if;
+  return coalesce((select array_agg(contraparte order by contraparte collate "C")
+                     from contraparte_confirmada
+                    where caso_id = p_caso and tipo_base = p_tipo_base and revogado_em is null), '{}'::text[]);
+end $$;
+
+--
+-- Name: FUNCTION fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) IS '0273: os nomes NORMALIZADOS das contrapartes confirmadas e vigentes do mandato, por tipo_base, ordenados (collate "C"): é o array de `contrapartesReais` de aplicadorDeMapeamento. Invoker (a RLS vale) com guarda explícita: quem não enxerga o mandato leva 42501, nunca um array vazio. Vazio = o mandato existe, você o lê, e ninguém confirmou.';
 
 --
 -- Name: fn_controlador_desvincular_familia(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -16192,6 +16315,25 @@ $$;
 COMMENT ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) IS '0123: a natureza "mútuo" nomeada NESTE texto. Usada no rótulo (degrau 1) e na seção (degrau 2), com precedência do rótulo — nunca nos dois de uma vez.';
 
 --
+-- Name: fn_texto_normalizado(text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_texto_normalizado(p_texto text) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select btrim(regexp_replace(normalize(coalesce(p_texto, ''), NFC),
+                              '[ ' || chr(9) || chr(10) || chr(13) || chr(160) || ']+', ' ', 'g'),
+               ' ' || chr(9) || chr(10) || chr(13) || chr(160))
+$$;
+
+--
+-- Name: FUNCTION fn_texto_normalizado(p_texto text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_texto_normalizado(p_texto text) IS '0273: a normalização de UMA célula, a MESMA de textoNormalizado em Leitor/lib/mapeamento.mjs e da célula de fn_impressao_do_cabecalho (0272): NFC, [espaço \t \n \r U+00A0] colapsados em um espaço e aparados nas pontas, SEM minúsculas (lower() depende do LC_CTYPE). NULL vira texto vazio.';
+
+--
 -- Name: fn_tipo_sem_dado_por_natureza(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -18136,6 +18278,54 @@ CREATE TABLE public.classe_contabil_catalogo (
 COMMENT ON TABLE public.classe_contabil_catalogo IS 'A taxonomia contábil fechada do Arquitetura do Sistema/2 Especificação/05 (recorrente, nao_recorrente, extraordinario, candidato_ajuste_ebitda, revisar_manual). TABELA e não enum de propósito: acrescentar um sexto rótulo deve custar uma linha de seed, não uma migration que altera tipo — no Postgres alterar enum não remove valor e não volta atrás. Mesma escolha que a 0038 fez com premissas.';
 
 --
+-- Name: contraparte_confirmada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.contraparte_confirmada (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    caso_id uuid NOT NULL,
+    tipo_base text NOT NULL,
+    contraparte text NOT NULL,
+    confirmado_por uuid NOT NULL,
+    confirmado_em timestamp with time zone DEFAULT now() NOT NULL,
+    revogado_em timestamp with time zone,
+    revogado_por uuid,
+    CONSTRAINT contraparte_confirmada_tipo_base_check CHECK ((tipo_base = ANY (ARRAY['contas_a_receber'::text, 'contas_a_pagar'::text]))),
+    CONSTRAINT contraparte_normalizada CHECK (((contraparte <> ''::text) AND (contraparte = public.fn_texto_normalizado(contraparte)))),
+    CONSTRAINT contraparte_revogacao_inteira CHECK (((revogado_em IS NULL) = (revogado_por IS NULL)))
+);
+
+--
+-- Name: TABLE contraparte_confirmada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.contraparte_confirmada IS '0273: contrapartes que o analista CONFIRMOU, POR MANDATO, como cliente/fornecedor de verdade apesar do nome de total (alimenta `contrapartesReais` de aplicadorDeMapeamento). Nome de cliente é dado do cliente: RLS por mandato (0216). Escrita só por fn_contraparte_confirmar/fn_contraparte_revogar; revogar não apaga, marca revogado_em.';
+
+--
+-- Name: COLUMN contraparte_confirmada.contraparte; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.contraparte_confirmada.contraparte IS 'Nome NORMALIZADO pelo banco (fn_texto_normalizado): NFC, espaços colapsados e aparados, sem minúsculas.';
+
+--
+-- Name: COLUMN contraparte_confirmada.confirmado_por; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.contraparte_confirmada.confirmado_por IS 'auth.uid() de quem confirmou. Sem FK de propósito: a autoria sobrevive à saída do usuário.';
+
+--
+-- Name: CONSTRAINT contraparte_normalizada ON contraparte_confirmada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT contraparte_normalizada ON public.contraparte_confirmada IS '0273: o nome gravado é o normalizado pelo banco (fn_texto_normalizado) e não vazio, para quem escrever sem passar pela função (service_role): é a forma exata que `contrapartesReais` compara.';
+
+--
+-- Name: CONSTRAINT contraparte_revogacao_inteira ON contraparte_confirmada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT contraparte_revogacao_inteira ON public.contraparte_confirmada IS '0273: revogado_em e revogado_por andam juntos: revogação sem autor ou autor sem data não entra.';
+
+--
 -- Name: controlador; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -18733,6 +18923,38 @@ CREATE VIEW public.instalacao_sonda_combinado_estrutural AS
 --
 
 COMMENT ON VIEW public.instalacao_sonda_combinado_estrutural IS '(0157, achado D da revisão) Autoteste da decisão de fn_combinado_estrutural_apto, EXECUTADA por literais (função pura, sem fixture de documento): 1 linha só se o positivo, o achado A (conteúdo exigido) e o achado B (fonte permitida) valem TODOS ao mesmo tempo. Um marcador textual de corpo/função não pega um "false and" que mate o predicado e deixe os comentários intactos — esta view pega, porque o predicado É executado.';
+
+--
+-- Name: instalacao_sonda_contraparte_checks; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_contraparte_checks AS
+ SELECT (count(*))::text AS n
+   FROM pg_constraint k
+  WHERE ((conrelid = ('public.contraparte_confirmada'::regclass)::oid) AND (contype = 'c'::"char") AND convalidated AND (((conname = 'contraparte_normalizada'::name) AND (pg_get_constraintdef(oid) ~~ '%fn_texto_normalizado(%'::text)) OR ((conname = 'contraparte_revogacao_inteira'::name) AND (pg_get_constraintdef(oid) ~~ '%revogado_em IS NULL%'::text))))
+ HAVING (count(*) = 2);
+
+--
+-- Name: VIEW instalacao_sonda_contraparte_checks; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_contraparte_checks IS 'Sonda da 0273: uma linha = as duas CHECKs (nome normalizado e não vazio; revogação com autor) existem, validadas. Zero linhas: o service_role grava contraparte que o aplicador nunca casaria (caixa de espaço, NFD) ou revogação sem autor.';
+
+--
+-- Name: instalacao_sonda_contraparte_uma_vigente; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_contraparte_uma_vigente AS
+ SELECT ((i.indexrelid)::regclass)::text AS indice
+   FROM (pg_index i
+     JOIN pg_class c ON (((c.oid = i.indexrelid) AND (c.relname = 'contraparte_confirmada_uma_vigente'::name))))
+  WHERE ((i.indrelid = ('public.contraparte_confirmada'::regclass)::oid) AND i.indisunique AND i.indisvalid AND (i.indpred IS NOT NULL) AND (pg_get_indexdef(i.indexrelid) ~~ '%(caso_id, tipo_base, contraparte)%'::text) AND (pg_get_expr(i.indpred, i.indrelid) ~~ '%revogado_em IS NULL%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_contraparte_uma_vigente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_contraparte_uma_vigente IS 'Sonda da 0273: uma linha = o índice único parcial (caso_id, tipo_base, contraparte) where revogado_em is null existe e é válido. Zero linhas: o banco deixou de garantir uma só confirmação vigente por contraparte e mandato.';
 
 --
 -- Name: instalacao_sonda_entidade_balcao_ambiguo; Type: VIEW; Schema: public; Owner: -
@@ -19670,6 +19892,13 @@ ALTER TABLE ONLY public.classe_contabil_catalogo
     ADD CONSTRAINT classe_contabil_catalogo_pkey PRIMARY KEY (codigo);
 
 --
+-- Name: contraparte_confirmada contraparte_confirmada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contraparte_confirmada
+    ADD CONSTRAINT contraparte_confirmada_pkey PRIMARY KEY (id);
+
+--
 -- Name: controlador controlador_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -20046,6 +20275,12 @@ CREATE UNIQUE INDEX caso_nome_unico ON public.caso USING btree (lower(btrim(nome
 --
 
 COMMENT ON INDEX public.caso_nome_unico IS '0216: o nome do mandato é único ignorando caixa e espaços nas pontas. fn_upsert_caso e fn_falhas_abertas já casam por nome assim; sem a unicidade o Analista não alocado criava o homônimo e o n8n roteava para qualquer um.';
+
+--
+-- Name: contraparte_confirmada_uma_vigente; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX contraparte_confirmada_uma_vigente ON public.contraparte_confirmada USING btree (caso_id, tipo_base, contraparte) WHERE (revogado_em IS NULL);
 
 --
 -- Name: controlador_caso_documento_unico; Type: INDEX; Schema: public; Owner: -
@@ -20734,6 +20969,13 @@ ALTER TABLE ONLY public.checklist_item_status
 
 ALTER TABLE ONLY public.checklist_item_status
     ADD CONSTRAINT checklist_item_status_tipo_taxonomia_fkey FOREIGN KEY (tipo_taxonomia) REFERENCES public.taxonomia_tipo_documento(codigo);
+
+--
+-- Name: contraparte_confirmada contraparte_confirmada_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contraparte_confirmada
+    ADD CONSTRAINT contraparte_confirmada_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
 
 --
 -- Name: controlador controlador_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -21530,6 +21772,19 @@ ALTER TABLE public.classe_contabil_catalogo ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY classe_contabil_catalogo_read ON public.classe_contabil_catalogo FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
+-- Name: contraparte_confirmada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.contraparte_confirmada ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: contraparte_confirmada contraparte_confirmada_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY contraparte_confirmada_read ON public.contraparte_confirmada FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: controlador; Type: ROW SECURITY; Schema: public; Owner: -
@@ -22729,12 +22984,36 @@ GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uui
 GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uuid) TO service_role;
 
 --
+-- Name: FUNCTION fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) TO service_role;
+
+--
 -- Name: FUNCTION fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid); Type: ACL; Schema: public; Owner: -
 --
 
 REVOKE ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) TO service_role;
+
+--
+-- Name: FUNCTION fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) TO service_role;
 
 --
 -- Name: FUNCTION fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -24353,6 +24632,14 @@ GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO authenticate
 GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO service_role;
 
 --
+-- Name: FUNCTION fn_texto_normalizado(p_texto text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_texto_normalizado(p_texto text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_texto_normalizado(p_texto text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_texto_normalizado(p_texto text) TO service_role;
+
+--
 -- Name: FUNCTION fn_tipo_sem_dado_por_natureza(p_tipo text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -24741,6 +25028,13 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.classe_contabil_catalogo TO au
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.classe_contabil_catalogo TO service_role;
 
 --
+-- Name: TABLE contraparte_confirmada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.contraparte_confirmada TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.contraparte_confirmada TO service_role;
+
+--
 -- Name: TABLE controlador; Type: ACL; Schema: public; Owner: -
 --
 
@@ -24900,6 +25194,20 @@ GRANT SELECT ON TABLE public.instalacao_sonda_cobertura_de_tipos TO service_role
 
 GRANT SELECT ON TABLE public.instalacao_sonda_combinado_estrutural TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_combinado_estrutural TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_contraparte_checks; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_contraparte_checks TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_contraparte_checks TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_contraparte_uma_vigente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_contraparte_uma_vigente TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_contraparte_uma_vigente TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_entidade_balcao_ambiguo; Type: ACL; Schema: public; Owner: -

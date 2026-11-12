@@ -1214,6 +1214,14 @@ supabase db execute --file Supabase/migrations/0272_o_mapeamento_de_colunas_que_
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0272' and not presente;   -- ZERO linhas
 #   select count(*) from mapeamento_de_colunas;   -- 0 (nasce vazia)
 
+# A 0273 cria `contraparte_confirmada` (a contraparte com nome de total, "TOTAL DISTRIBUIDORA LTDA", que o analista CONFIRMOU como cliente/fornecedor de verdade, POR MANDATO: nome de cliente é dado do cliente, RLS da 0216; alimenta `contrapartesReais` de `aplicadorDeMapeamento`), `fn_contraparte_confirmar` e `fn_contraparte_revogar` (só Sócio e Analista DO MANDATO; revogar não apaga, marca), `fn_contrapartes_confirmadas` (o array das vigentes; quem não enxerga o mandato leva 42501, nunca array vazio) e `fn_texto_normalizado` (a normalização de uma célula, a da biblioteca).
+# >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Aplicar DEPOIS da 0272 (não depende dela, mas a sonda e a cobertura seguem a ordem). Nada de portal/n8n chama estas funções ainda.
+# >>> Teste: Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql.
+supabase db execute --file Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0273' and not presente;   -- ZERO linhas
+#   select count(*) from contraparte_confirmada;   -- 0 (nasce vazia)
+
 # ORDEM DE PRODUÇÃO DA P11: aplicar a 0270 E a 0271 ANTES de republicar a ingestão.
 # Republicar antes da 0271: a IA passa a devolver COMPOSICAO_IMOBILIZADO, o tipo não existe no catálogo e
 # o documento morre na FK documento_tipo_taxonomia_fkey (não é registrado). Republicar antes da 0270: o
