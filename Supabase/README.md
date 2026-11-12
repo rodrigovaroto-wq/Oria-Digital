@@ -1222,6 +1222,14 @@ supabase db execute --file Supabase/migrations/0273_a_contraparte_com_nome_de_to
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0273' and not presente;   -- ZERO linhas
 #   select count(*) from contraparte_confirmada;   -- 0 (nasce vazia)
 
+# A 0274 cria `aging_importado` (o RESUMO do aging de contas a receber/a pagar de uma importação, POR MANDATO e por entidade, RLS da 0216; DM1: o arquivo original vai à parte), `fn_aging_importar` (só Sócio e Analista DO MANDATO; valida o resumo na fronteira e recusa o que não fecha consigo mesmo; reimportar substitui sem apagar; concilia na hora), `fn_aging_resumo_erros`, `fn_reconciliar_aging` (positivos × Clientes/Fornecedores, negativos × Adiantamentos de clientes/a fornecedores; tolerância = meia unidade da escala do balanço, nunca percentual; tipos `aging_ar_clientes`, `aging_ar_adiantamentos`, `aging_ap_fornecedores`, `aging_ap_adiantamentos`, classe A), `fn_reconciliar_aging_do_caso`, `fn_balanco_fecha_em` e `fn_aging_linhas_do_balanco`. NÃO muda a 0187 (AGING_AR/AGING_AP extraídos pela IA seguem sem consumidor) e NÃO liga a conciliação em `fn_reconciliar_caso` (função quente; ver o cabeçalho, "NÃO LIGADO NA RODADA").
+# >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Aplicar DEPOIS da 0272 (a FK `mapeamento_id` é da 0272) e da 0273. Nada de portal/n8n chama estas funções ainda (a tela é a ME2).
+# >>> Teste: Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql.
+supabase db execute --file Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0274' and not presente;   -- ZERO linhas
+#   select count(*) from aging_importado;   -- 0 (nasce vazia)
+
 # ORDEM DE PRODUÇÃO DA P11: aplicar a 0270 E a 0271 ANTES de republicar a ingestão.
 # Republicar antes da 0271: a IA passa a devolver COMPOSICAO_IMOBILIZADO, o tipo não existe no catálogo e
 # o documento morre na FK documento_tipo_taxonomia_fkey (não é registrado). Republicar antes da 0270: o

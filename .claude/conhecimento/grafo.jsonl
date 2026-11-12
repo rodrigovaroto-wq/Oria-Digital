@@ -181,6 +181,7 @@
 {"k":"n","id":"arquivo:Supabase/test/moeda.test.sql","t":"arquivo","f":"Supabase/test/moeda.test.sql","txt":"moeda.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/motivo_especifico.test.sql","t":"arquivo","f":"Supabase/test/motivo_especifico.test.sql","txt":"motivo_especifico.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","t":"arquivo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","txt":"mutuos_retrato_de_uma_data.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","t":"arquivo","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","txt":"o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_balanco_sem_dado_financeiro.test.sql","t":"arquivo","f":"Supabase/test/o_balanco_sem_dado_financeiro.test.sql","txt":"o_balanco_sem_dado_financeiro.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_dial_e_o_anon.test.sql","t":"arquivo","f":"Supabase/test/o_dial_e_o_anon.test.sql","txt":"o_dial_e_o_anon.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","t":"arquivo","f":"Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql","txt":"o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql"}
@@ -400,6 +401,12 @@
 {"k":"n","id":"fn:fn_abrir_lote_execucao","t":"fn","f":"Supabase/migrations/0156_o_lote_existe_antes_de_terminar.sql","txt":"abrir lote execucao"}
 {"k":"n","id":"fn:fn_aceitar_extracao","t":"fn","f":"Supabase/migrations/0036_completude_exige_conteudo.sql","txt":"aceitar extracao"}
 {"k":"n","id":"fn:fn_acesso_bootstrap","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"acesso bootstrap"}
+{"k":"n","id":"fn:fn_aging_centavos","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging centavos"}
+{"k":"n","id":"fn:fn_aging_contagem","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging contagem"}
+{"k":"n","id":"fn:fn_aging_importar","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging importar"}
+{"k":"n","id":"fn:fn_aging_linhas_do_balanco","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging linhas do balanco"}
+{"k":"n","id":"fn:fn_aging_reais","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging reais"}
+{"k":"n","id":"fn:fn_aging_resumo_erros","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging resumo erros"}
 {"k":"n","id":"fn:fn_alocado_agora","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"alocado agora"}
 {"k":"n","id":"fn:fn_alocar","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"alocar"}
 {"k":"n","id":"fn:fn_ano4","t":"fn","f":"Supabase/migrations/0020_periodo_canonico.sql","txt":"ano4"}
@@ -414,6 +421,7 @@
 {"k":"n","id":"fn:fn_autoridade_do_documento","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"autoridade do documento"}
 {"k":"n","id":"fn:fn_avaliar_guardas_extracao","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"avaliar guardas extracao"}
 {"k":"n","id":"fn:fn_avaliar_portao2","t":"fn","f":"Supabase/migrations/0109_pendencia_tres_botoes.sql","txt":"avaliar portao2"}
+{"k":"n","id":"fn:fn_balanco_fecha_em","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"balanco fecha em"}
 {"k":"n","id":"fn:fn_caso_da_chave_do_storage","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"caso da chave do storage"}
 {"k":"n","id":"fn:fn_caso_da_versao","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"caso da versao"}
 {"k":"n","id":"fn:fn_caso_do_envio","t":"fn","f":"Supabase/migrations/0222_o_envio_que_criava_o_mandato_novo_quando_o_nome_mudava.sql","txt":"caso do envio"}
@@ -594,6 +602,8 @@
 {"k":"n","id":"fn:fn_reavaliar_guardas_extracao","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"reavaliar guardas extracao"}
 {"k":"n","id":"fn:fn_recalcular_vigencia_arquivo_oficial","t":"fn","f":"Supabase/migrations/0206_o_arquivo_oficial_lido_e_contado.sql","txt":"recalcular vigencia arquivo oficial"}
 {"k":"n","id":"fn:fn_recomputar_completude","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"recomputar completude"}
+{"k":"n","id":"fn:fn_reconciliar_aging","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"reconciliar aging"}
+{"k":"n","id":"fn:fn_reconciliar_aging_do_caso","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"reconciliar aging do caso"}
 {"k":"n","id":"fn:fn_reconciliar_arvore","t":"fn","f":"Supabase/migrations/0190_a_arvore_que_nao_conferiu_nada.sql","txt":"reconciliar arvore"}
 {"k":"n","id":"fn:fn_reconciliar_ativo_passivo_pl","t":"fn","f":"Supabase/migrations/0188_o_motivo_que_a_checagem_sabia_e_nao_dizia.sql","txt":"reconciliar ativo passivo pl"}
 {"k":"n","id":"fn:fn_reconciliar_caixa_bp_fluxo","t":"fn","f":"Supabase/migrations/0196_o_caixa_que_lia_a_dfc_de_outro_ano.sql","txt":"reconciliar caixa bp fluxo"}
@@ -867,6 +877,7 @@
 {"k":"n","id":"migration:0271","t":"migration","f":"Supabase/migrations/0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql","txt":"o quadro de imobilizado que a ia gravava como balanco"}
 {"k":"n","id":"migration:0272","t":"migration","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"o mapeamento de colunas que cada arquivo redescobria"}
 {"k":"n","id":"migration:0273","t":"migration","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","txt":"a contraparte com nome de total que so o analista distingue"}
+{"k":"n","id":"migration:0274","t":"migration","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"o aging que so existia no navegador e nunca conferia com o balanco"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1784,6 +1795,19 @@
 {"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":280}
 {"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":67}
 {"k":"e","de":"arquivo:Supabase/test/mutuos_retrato_de_uma_data.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_periodo","f":"Supabase/test/mutuos_retrato_de_uma_data.test.sql","l":179}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_aging_importar","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":1}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_aging_linhas_do_balanco","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_aging_resumo_erros","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":221}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_balanco_fecha_em","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":215}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":667}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_mapeamento_confirmar","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":225}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_aging","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_aging_do_caso","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":2}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":15}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":15}
+{"k":"e","de":"arquivo:Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql","l":219}
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_sem_dado_financeiro.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/test/o_balanco_sem_dado_financeiro.test.sql","l":11}
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_sem_dado_financeiro.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/o_balanco_sem_dado_financeiro.test.sql","l":26}
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_sem_dado_financeiro.test.sql","rel":"CHAMA","pa":"fn:fn_tipo_sem_dado_por_natureza","f":"Supabase/test/o_balanco_sem_dado_financeiro.test.sql","l":50}
@@ -2968,6 +2992,15 @@
 {"k":"e","de":"migration:0273","rel":"CRIA","pa":"fn:fn_contraparte_revogar","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","l":173}
 {"k":"e","de":"migration:0273","rel":"CRIA","pa":"fn:fn_contrapartes_confirmadas","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","l":208}
 {"k":"e","de":"migration:0273","rel":"CRIA","pa":"fn:fn_texto_normalizado","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","l":81}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_aging_centavos","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":154}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_aging_contagem","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":161}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_aging_importar","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":629}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_aging_linhas_do_balanco","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":409}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_aging_reais","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":453}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_aging_resumo_erros","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":168}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_balanco_fecha_em","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":336}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_reconciliar_aging","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":462}
+{"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_reconciliar_aging_do_caso","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":607}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}
