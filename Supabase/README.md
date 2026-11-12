@@ -1206,6 +1206,29 @@ supabase db execute --file Supabase/migrations/0241_a_descricao_que_o_periodo_ir
 #   select acao, depois from evento_auditoria where ator = 'sistema:0241' and acao = 'descricao_contaminada_resumo';   -- corrigidas + sem_registro_proprio = 7 (medido em 11/11/2026, antes de aplicar; as sem_registro_proprio ficam como estão)
 #   select count(*) from pendencia pe where pe.origem_estagio = 'reconciliacao' and pe.estado = 'aberta' and pe.periodo_id is not null and not exists (select 1 from reconciliacao r where r.caso_id = pe.caso_id and 'reconciliacao:' || r.tipo = pe.motivo and r.descricao = pe.descricao and (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id));   -- o critério da 0241 (período OU chave; secao_fecha pelo documento); a medição antiga, só por período, deu 7
 
+# A 0272 cria `mapeamento_de_colunas` (o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, guardado pela impressão digital do cabeçalho e reaproveitado no próximo arquivo do mesmo ERP, em qualquer mandato; GLOBAL de propósito: guarda o nome das colunas, não dado do cliente), `fn_mapeamento_confirmar` (só Sócio e Analista; a única porta de escrita), `fn_mapeamento_vigente`, `fn_mapeamento_erros` e `fn_impressao_do_cabecalho`.
+# >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Nada de n8n/portal depende dela ainda: a biblioteca Leitor/lib/mapeamento.mjs é quem a usa (MB2).
+# >>> Teste: Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql.
+supabase db execute --file Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0272' and not presente;   -- ZERO linhas
+#   select count(*) from mapeamento_de_colunas;   -- 0 (nasce vazia)
+
+# A 0273 cria `contraparte_confirmada` (a contraparte com nome de total, "TOTAL DISTRIBUIDORA LTDA", que o analista CONFIRMOU como cliente/fornecedor de verdade, POR MANDATO: nome de cliente é dado do cliente, RLS da 0216; alimenta `contrapartesReais` de `aplicadorDeMapeamento`), `fn_contraparte_confirmar` e `fn_contraparte_revogar` (só Sócio e Analista DO MANDATO; revogar não apaga, marca), `fn_contrapartes_confirmadas` (o array das vigentes; quem não enxerga o mandato leva 42501, nunca array vazio) e `fn_texto_normalizado` (a normalização de uma célula, a da biblioteca).
+# >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Aplicar DEPOIS da 0272 (não depende dela, mas a sonda e a cobertura seguem a ordem). Nada de portal/n8n chama estas funções ainda.
+# >>> Teste: Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql.
+supabase db execute --file Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0273' and not presente;   -- ZERO linhas
+#   select count(*) from contraparte_confirmada;   -- 0 (nasce vazia)
+
+# A 0274 cria `aging_importado` (o RESUMO do aging de contas a receber/a pagar de uma importação, POR MANDATO e por entidade, RLS da 0216; DM1: o arquivo original vai à parte), `fn_aging_importar` (só Sócio e Analista DO MANDATO; valida o resumo na fronteira e recusa o que não fecha consigo mesmo; reimportar substitui sem apagar; concilia na hora), `fn_aging_resumo_erros`, `fn_reconciliar_aging` (positivos × Clientes/Fornecedores, negativos × Adiantamentos de clientes/a fornecedores; tolerância = meia unidade da escala do balanço, nunca percentual; tipos `aging_ar_clientes`, `aging_ar_adiantamentos`, `aging_ap_fornecedores`, `aging_ap_adiantamentos`, classe A), `fn_reconciliar_aging_do_caso`, `fn_balanco_fecha_em` e `fn_aging_linhas_do_balanco`. NÃO muda a 0187 (AGING_AR/AGING_AP extraídos pela IA seguem sem consumidor) e NÃO liga a conciliação em `fn_reconciliar_caso` (função quente; ver o cabeçalho, "NÃO LIGADO NA RODADA").
+# >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Aplicar DEPOIS da 0272 (a FK `mapeamento_id` é da 0272) e da 0273. Nada de portal/n8n chama estas funções ainda (a tela é a ME2).
+# >>> Teste: Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql.
+supabase db execute --file Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0274' and not presente;   -- ZERO linhas
+#   select count(*) from aging_importado;   -- 0 (nasce vazia)
 # A 0242 cria o catálogo conta_canonica (a árvore demonstração > grupo > seção > subgrupo, 27 nós: 5 raízes, 2 grupos, 15 seções do SECAO_CANONICA_ENUM, 4 subgrupos do Ativo Não Circulante e o balde Outros), com RLS de leitura por papel, a guarda de raiz (gatilho de instrução), 3 views de sonda e 9 requisitos na sonda. Só a taxonomia atual: conta-folha (caixa, clientes…) é a P27.
 # >>> Rodar COMO `postgres`; reaplicável (create if not exists, seed on conflict do nothing, requisitos por upsert). Nenhuma linha existente é tocada.
 # >>> Teste: Supabase/test/conta_canonica.test.sql e Supabase/test/conta_canonica_regua.test.mjs.

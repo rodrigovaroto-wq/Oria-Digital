@@ -212,3 +212,40 @@ estoura, ZIP64 de verdade) e o PDF de 4,2 GiB declara o tamanho no extra ZIP64.
 
 Não medido: Safari e Firefox; um zip real do contador (o gerador do Python não imita o que o Windows ou o
 macOS escrevem, só o formato); gravação no Supabase de verdade (o atraso é simulado).
+
+### O leitor TABULAR, CSV e XLSX de 1M de linhas (MB1, sessão 127, 11/11/2026)
+
+`navegador-tabela.mjs` importa `Leitor/lib/tabela.mjs` num Chromium real, lê o arquivo pelo `File` e
+compara o resumo inteiro com o do Node (`openAsBlob`). Arquivos de `Dados de Teste/volume`
+(`gerar_volume.py`), cujos totais fecham com o BP do book-distress. Números depois da revisão
+independente (a primeira versão media 2,1 s e 15,2 s, mas classificava linha por palpite).
+
+| Arquivo | Bytes | Chromium | Pico de heap JS | Node 22 | Igual ao Node |
+|---|---|---|---|---|---|
+| contas a receber, CSV, 100 mil linhas | 13,3 MB | 0,33 s | 18 MB | 0,40 s | sim |
+| contas a receber, CSV, 1M | 133,1 MB | **2,7 s** | **45 MB** | 3,6 s | sim |
+| contas a pagar, CSV, 1M | 133,1 MB | 2,6 s | 45 MB | 3,5 s | sim |
+| contas a receber, XLSX, 100 mil | 5,6 MB | 2,0 s | 36 MB | 3,4 s | sim |
+| contas a receber, XLSX, 1M (622 mil strings compartilhadas) | 57,2 MB | **18,7 s** | **69 MB** | 29,4 s | sim |
+
+Em todos: 1M de linhas lidas = 1M de linhas do arquivo, com 2 antes do cabeçalho, 1 cabeçalho,
+999.996 de corpo (999.995 títulos e o TOTAL GERAL, com o sinal `rotulo_de_total`) e 1 em branco (a
+do XLSX não existe no XML e é contada assim mesmo).
+
+Não medido: dentro do Web Worker do portal (aqui é a página, porque é dela que o CDP dá o heap; o
+código é o mesmo), Safari e Firefox, o custo da passada UTF-8 prévia (só roda quando os 64 KB
+iniciais são ASCII puro; os sintéticos têm acento logo na 1ª linha), e um arquivo REAL de ERP (DM7).
+
+#### O caminho inteiro da tela com o mapeamento (MB2, `--mapear`)
+
+`node Leitor/medicao-n8n/navegador-tabela.mjs --mapear <arquivo>`: 1ª leitura `soAmostra` (para no
+cabeçalho + 30 linhas), proposta de mapeamento e de formato, 2ª leitura aplicando a toda linha.
+
+| Arquivo de 1M de linhas | Chromium | Pico de heap JS | Node 22 | Títulos | Rejeitadas | Σ saldo | Total do arquivo |
+|---|---|---|---|---|---|---|---|
+| contas a receber, CSV | **5,8 s** | 53 MB | 7,6 s | 999.995 | 0 | 24.917.000,00 | confere |
+| contas a pagar, CSV | 6,4 s | 45 MB | 7,7 s | 999.995 | 0 | 14.900.000,00 | confere |
+| contas a receber, XLSX | **22,5 s** | 85 MB | 35,4 s | 999.995 | 0 | 24.917.000,00 | confere |
+
+Medido depois da revisão independente da MB2. Sem `soAmostra` (duas leituras inteiras): 8,1 s e 40,8 s. Resumo do aplicador idêntico ao do Node.
+

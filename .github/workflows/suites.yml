@@ -131,6 +131,15 @@ jobs:
         working-directory: Dados de Teste/book-distress
         run: PYTHONPATH=. python3 gerar.py
 
+      - name: Bases volumosas (MB0) — o conferidor não nasce vazio
+        # AR (.csv e .xlsx), AP e OFX sintéticos cujos totais são os do book-distress (aging =
+        # Clientes e Fornecedores do BP, extrato = caixa). Gera 3.000 linhas, confere relendo o
+        # ARQUIVO (92 conferências) e estraga arquivo ou gabarito de 12 jeitos: cada estrago
+        # derruba a conferência dele (medido em 11/11/2026: 12, 8, 3, 3, 6, 3, 1, 7, 8, 2, 1 e 1
+        # reprovam), mais o determinismo ao byte. Só biblioteca padrão. ~5 s.
+        working-directory: Dados de Teste/volume
+        run: python3 test_volume.py -v
+
       # ---- o book-espelho e o portal ANTES da suíte do n8n (09/11/2026) ----
       # `N8N/test/abas-do-xlsx.test.mjs` lê as 4 planilhas REAIS do book-espelho (todas de 2 abas)
       # e emula os nós nativos com o exceljs e o jszip do lock do portal. Sem o book, os testes com
@@ -179,6 +188,9 @@ jobs:
         # vazio. Seis passavam vazios na primeira versão e foram achados pela revisão independente
         # (fechamento no 9999, XML sem Id, tamanhos iguais e header de lote do CNAB, zip cifrado,
         # tamanho mentiroso).
+        # Inclui o leitor TABULAR (MB1, `Leitor/lib/tabela.mjs`): CSV e XLSX de contas a receber e a
+        # pagar. O teste dele chama `python3 Dados de Teste/volume/gerar_volume.py` e REPROVA sem
+        # python3 (não pula). Cada uma das 29 correções desligada reprova de 1 a 4 testes (11/11/2026).
         run: node --test 'Leitor/test/*.test.mjs'
 
       - name: Suíte dos hooks do agente

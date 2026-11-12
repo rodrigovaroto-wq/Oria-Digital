@@ -1000,6 +1000,18 @@ echo "== 0242 — a seção que só existia em código (conta_canonica: toda se�
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conta_canonica.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0272 — o mapeamento de colunas que cada arquivo redescobria (confirmado por Sócio/Analista COMO authenticated, impressão do cabeçalho calculada pelo banco, uma vigente por par, formato fechado)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0273 — a contraparte com nome de total que só o analista distingue (confirmada/revogada por Sócio/Analista DO MANDATO COMO authenticated, nome normalizado pelo banco, uma vigente, revogar não apaga, outro mandato não lê nem escreve)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0274 — o aging que só existia no navegador e nunca conferia com o balanço (resumo por mandato e entidade, importado só por Sócio/Analista DO MANDATO COMO authenticated, resumo que não fecha recusado, reimportar substitui sem apagar, conciliado com Clientes/Fornecedores e Adiantamentos na meia unidade da escala do balanço)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o inteiro >= 1 grava, o inválido vira nulo sem abortar o lote, sem a chave grava como antes)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
