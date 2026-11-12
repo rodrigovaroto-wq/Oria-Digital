@@ -1229,6 +1229,13 @@ supabase db execute --file Supabase/migrations/0274_o_aging_que_so_existia_no_na
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0274' and not presente;   -- ZERO linhas
 #   select count(*) from aging_importado;   -- 0 (nasce vazia)
+# A 0242 cria o catálogo conta_canonica (a árvore demonstração > grupo > seção > subgrupo, 27 nós: 5 raízes, 2 grupos, 15 seções do SECAO_CANONICA_ENUM, 4 subgrupos do Ativo Não Circulante e o balde Outros), com RLS de leitura por papel, a guarda de raiz (gatilho de instrução), 3 views de sonda e 9 requisitos na sonda. Só a taxonomia atual: conta-folha (caixa, clientes…) é a P27.
+# >>> Rodar COMO `postgres`; reaplicável (create if not exists, seed on conflict do nothing, requisitos por upsert). Nenhuma linha existente é tocada.
+# >>> Teste: Supabase/test/conta_canonica.test.sql e Supabase/test/conta_canonica_regua.test.mjs.
+supabase db execute --file Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0242' and not presente;   -- ZERO linhas
+#   select count(*) from conta_canonica;   -- 27
 
 # ORDEM DE PRODUÇÃO DA P11: aplicar a 0270 E a 0271 ANTES de republicar a ingestão.
 # Republicar antes da 0271: a IA passa a devolver COMPOSICAO_IMOBILIZADO, o tipo não existe no catálogo e

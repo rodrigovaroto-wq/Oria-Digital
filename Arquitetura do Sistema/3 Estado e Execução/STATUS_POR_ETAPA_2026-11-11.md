@@ -103,8 +103,8 @@ Status da fase: completo se todas as etapas estão completas; não iniciado se n
 
 | Etapa | Nome | Código antigo | Conta | Status | % | Fim estimado | Observação |
 |---|---|---|---|---|---|---|---|
-| 3.1 | Catálogo de contas | P26 | Claude Oria | Não iniciado | 0% | 16/11 |  |
-| 3.2 | Fato financeiro com identidade | P27 | Claude Oria | Não iniciado | 0% | 17/11 |  |
+| 3.1 | Catálogo de contas | P26 | Claude Oria | Concluído (no ar) | 100% | 11/11 | 0242 aplicada em produção em 11/11 (27 nós); PR #294 ainda não mergeado |
+| 3.2 | Fato financeiro com identidade | P27 | Claude Oria | Em andamento (parado pelo dono) | 70% | — | 0243 escrita, 2 revisões; 3ª tentativa em patch não testado (ver ESTADO S128) |
 | 3.3 | Subtotal igual à soma das folhas | P28 | Claude Oria | Não iniciado | 0% | 18/11 |  |
 | 3.4 | Primeira reconciliação migrada | P29 | Claude Oria | Não iniciado | 0% | 19/11 |  |
 | 3.5 | Portão das seis semanas | P30 | Claude Oria | Não iniciado | 0% | 25/11 |  |
