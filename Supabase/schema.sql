@@ -4626,7 +4626,7 @@ CREATE FUNCTION public.fn_fato_cadastro_entidade() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public', 'pg_temp'
     AS $$
-begin perform fn_fato_reresolver_caso(new.caso_id, 'entidade'); return null; end $$;
+begin perform fn_fato_recalcular_caso(new.caso_id, 'entidade', 'entidade_cadastrada_ou_renomeada'); return null; end $$;
 
 --
 -- Name: fn_fato_cadastro_periodo(); Type: FUNCTION; Schema: public; Owner: -
@@ -4636,7 +4636,7 @@ CREATE FUNCTION public.fn_fato_cadastro_periodo() RETURNS trigger
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public', 'pg_temp'
     AS $$
-begin perform fn_fato_reresolver_caso(new.caso_id, 'periodo'); return null; end $$;
+begin perform fn_fato_recalcular_caso(new.caso_id, 'periodo', 'periodo_cadastrado'); return null; end $$;
 
 --
 -- Name: fn_fato_extracao_nova(); Type: FUNCTION; Schema: public; Owner: -
@@ -4763,43 +4763,81 @@ CREATE FUNCTION public.fn_fato_pode_escrever(p_caso uuid) RETURNS boolean
 $$;
 
 --
--- Name: fn_fato_repontar_entidade(uuid, uuid, uuid); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_fato_recalcular(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_fato_repontar_entidade(p_caso uuid, p_de uuid, p_para uuid) RETURNS integer
+CREATE FUNCTION public.fn_fato_recalcular(p_documento_versao_id uuid DEFAULT NULL::uuid, p_origem text DEFAULT 'extracao'::text, p_motivo text DEFAULT NULL::text) RETURNS jsonb
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public', 'pg_temp'
     AS $$
-declare v_n int;
+declare
+  v_r jsonb;
 begin
-  if not fn_fato_pode_escrever(p_caso) then
-    raise exception 'fn_fato_repontar_entidade: sem permissão de escrita no mandato' using errcode = 'insufficient_privilege';
+  if p_origem not in ('extracao', 'backfill_0243') then
+    raise exception 'fn_fato_recalcular: origem % desconhecida (extracao | backfill_0243)', p_origem;
   end if;
-  if exists (select 1 from entidade where id = p_de) then
-    raise exception 'fn_fato_repontar_entidade: a entidade % ainda existe; só a fusão, que a apaga, reponta os fatos dela', p_de using errcode = 'insufficient_privilege';
-  end if;
-  if not exists (select 1 from entidade where id = p_para and caso_id = p_caso) then
-    raise exception 'fn_fato_repontar_entidade: a entidade % não é do mandato %', p_para, p_caso;
-  end if;
-  update fato_financeiro f set entidade_id = p_para
-   where f.entidade_id = p_de and f.documento_versao_id in (select dv.id from documento_versao dv join documento d on d.id = dv.documento_id where d.caso_id = p_caso);
-  get diagnostics v_n = row_count;
-  if v_n > 0 then
+  with r as materialized (select * from fn_fato_resolver(p_documento_versao_id)),
+  del as (
+    delete from fato_financeiro f
+     where (p_documento_versao_id is null or f.documento_versao_id = p_documento_versao_id)
+       and not exists (select 1 from r where r.campo_id = f.campo_extraido_id)
+    returning 1
+  ),
+  up as (
+    insert into fato_financeiro as f
+      (campo_extraido_id, documento_versao_id, conta_id, resolucao_metodo, sem_conta_motivo,
+       entidade_id, entidade_origem, entidade_motivo, entidade_coluna, periodo_id, periodo_origem, periodo_motivo, periodo_coluna, valor, unidade, moeda, origem)
+    select r.campo_id, r.documento_versao_id, r.conta_id, r.resolucao_metodo, r.sem_conta_motivo,
+           r.entidade_id, r.entidade_origem, r.entidade_motivo, r.entidade_coluna, r.periodo_id, r.periodo_origem, r.periodo_motivo, r.periodo_coluna, r.valor, r.unidade, r.moeda, p_origem
+      from r
+    on conflict (campo_extraido_id) do update
+      set conta_id = excluded.conta_id, resolucao_metodo = excluded.resolucao_metodo, sem_conta_motivo = excluded.sem_conta_motivo,
+          entidade_id = excluded.entidade_id, entidade_origem = excluded.entidade_origem, entidade_motivo = excluded.entidade_motivo, entidade_coluna = excluded.entidade_coluna,
+          periodo_id = excluded.periodo_id, periodo_origem = excluded.periodo_origem, periodo_motivo = excluded.periodo_motivo, periodo_coluna = excluded.periodo_coluna,
+          valor = excluded.valor, unidade = excluded.unidade, moeda = excluded.moeda
+      where (f.conta_id, f.resolucao_metodo, f.sem_conta_motivo, f.entidade_id, f.entidade_origem, f.entidade_motivo, f.entidade_coluna,
+             f.periodo_id, f.periodo_origem, f.periodo_motivo, f.periodo_coluna, f.valor, f.unidade, f.moeda)
+            is distinct from
+            (excluded.conta_id, excluded.resolucao_metodo, excluded.sem_conta_motivo, excluded.entidade_id, excluded.entidade_origem, excluded.entidade_motivo, excluded.entidade_coluna,
+             excluded.periodo_id, excluded.periodo_origem, excluded.periodo_motivo, excluded.periodo_coluna, excluded.valor, excluded.unidade, excluded.moeda)
+    returning (xmax = 0) as novo, f.resolucao_metodo, f.sem_conta_motivo, f.entidade_id, f.periodo_id, f.documento_versao_id
+  )
+  select jsonb_build_object(
+           'fatos_criados', count(*) filter (where novo),
+           'atualizados', count(*) filter (where not novo),
+           'removidos', (select count(*) from del),
+           'declarada', count(*) filter (where novo and resolucao_metodo = 'declarada'),
+           'heuristica', count(*) filter (where novo and resolucao_metodo = 'heuristica'),
+           'sem_conta', count(*) filter (where novo and resolucao_metodo = 'sem_conta'),
+           'sem_conta_secao_nao_declarada', count(*) filter (where novo and sem_conta_motivo = 'secao_nao_declarada'),
+           'sem_conta_secao_fora_do_catalogo', count(*) filter (where novo and sem_conta_motivo = 'secao_fora_do_catalogo'),
+           'sem_entidade', count(*) filter (where novo and entidade_id is null),
+           'sem_periodo', count(*) filter (where novo and periodo_id is null),
+           'versoes', count(distinct documento_versao_id) filter (where novo),
+           'versoes_com_linha_incerta', count(distinct documento_versao_id) filter (where novo and resolucao_metodo <> 'declarada'))
+    into v_r from up;
+  if p_motivo is not null and ((v_r->>'fatos_criados')::int + (v_r->>'atualizados')::int + (v_r->>'removidos')::int) > 0 then
     insert into evento_auditoria (ator, acao, entidade_ref, depois)
-      values (fn_fato_ator(), 'fatos_repontados_pela_fusao', 'entidade:' || p_para, jsonb_build_object('entidade_absorvida', p_de, 'fatos', v_n));
+      values (fn_fato_ator(), 'fatos_recalculados', coalesce('documento_versao:' || p_documento_versao_id, 'todas'), v_r || jsonb_build_object('motivo', p_motivo));
   end if;
-  return v_n;
+  return v_r;
 end $$;
 
 --
--- Name: fn_fato_reresolver_caso(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: FUNCTION fn_fato_recalcular(p_documento_versao_id uuid, p_origem text, p_motivo text); Type: COMMENT; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_fato_reresolver_caso(p_caso uuid, p_dimensao text) RETURNS integer
+COMMENT ON FUNCTION public.fn_fato_recalcular(p_documento_versao_id uuid, p_origem text, p_motivo text) IS '0243 (4ª revisão): o ÚNICO escritor de fato_financeiro. Recalcula do estado atual os fatos de uma versão (nula = todas): o que fn_fato_resolver devolve entra ou se atualiza (a origem e o id do que já existe ficam), o que não devolve mais sai. Igual a apagar e materializar do zero, sem reescrever o que não mudou. Interna: sem guarda (as portas têm). Não toca pendência. Com p_motivo grava o evento fatos_recalculados quando algo mudou.';
+
+--
+-- Name: fn_fato_recalcular_caso(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_fato_recalcular_caso(p_caso uuid, p_dimensao text, p_motivo text DEFAULT NULL::text) RETURNS integer
     LANGUAGE plpgsql SECURITY DEFINER
     SET search_path TO 'public', 'pg_temp'
     AS $$
-declare v_v uuid; v_n int := 0; v_k int;
+declare v_v uuid; v_n int := 0; v_r jsonb;
 begin
   for v_v in
     select distinct f.documento_versao_id
@@ -4807,29 +4845,20 @@ begin
       join documento_versao dv on dv.id = f.documento_versao_id
       join documento d on d.id = dv.documento_id
      where d.caso_id = p_caso
-       and case p_dimensao when 'periodo' then f.periodo_id is null and f.periodo_motivo = 'periodo_da_coluna_nao_cadastrado'
-                           else (f.entidade_id is null and f.entidade_motivo in ('coluna_sem_entidade_no_mandato', 'documento_sem_entidade', 'coluna_casa_varias_entidades', 'entidade_com_varias_colunas', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade'))
-                 -- 3ª REVISÃO, M4: o que foi atribuído POR COLUNA também envelhece: renomear a entidade (BETA -> DELTA) deixava os fatos da coluna "Beta Indústria" na entidade renomeada, e uma 2ª entidade que casa a mesma coluna não a tornava coluna_casa_varias_entidades
-                 or f.entidade_origem in ('coluna', 'coluna_total') end
+       and case p_dimensao when 'periodo' then f.periodo_id is null or f.periodo_origem = 'coluna'
+                           else f.entidade_id is null or f.entidade_origem in ('coluna', 'coluna_total') or f.entidade_id not in (select id from entidade) end
   loop
-    update fato_financeiro f
-       set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
-           periodo_id = r.periodo_id, periodo_origem = r.periodo_origem, periodo_motivo = r.periodo_motivo
-      from fn_fato_resolver(v_v, false) r
-     where r.campo_id = f.campo_extraido_id
-       and (f.entidade_id, f.entidade_origem, f.entidade_motivo, f.periodo_id, f.periodo_origem, f.periodo_motivo)
-           is distinct from (r.entidade_id, r.entidade_origem, r.entidade_motivo, r.periodo_id, r.periodo_origem, r.periodo_motivo);
-    get diagnostics v_k = row_count;
-    v_n := v_n + v_k;
+    v_r := fn_fato_recalcular(v_v, 'extracao', p_motivo);
+    v_n := v_n + (v_r->>'atualizados')::int + (v_r->>'fatos_criados')::int + (v_r->>'removidos')::int;
   end loop;
   return v_n;
 end $$;
 
 --
--- Name: fn_fato_resolver(uuid, boolean); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_fato_resolver(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid, p_novos boolean) RETURNS TABLE(campo_id uuid, documento_versao_id uuid, conta_id text, resolucao_metodo text, sem_conta_motivo text, entidade_id uuid, entidade_origem text, entidade_motivo text, entidade_coluna text, periodo_id uuid, periodo_origem text, periodo_motivo text, periodo_coluna text, valor numeric, unidade text, moeda text)
+CREATE FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) RETURNS TABLE(campo_id uuid, documento_versao_id uuid, conta_id text, resolucao_metodo text, sem_conta_motivo text, entidade_id uuid, entidade_origem text, entidade_motivo text, entidade_coluna text, periodo_id uuid, periodo_origem text, periodo_motivo text, periodo_coluna text, valor numeric, unidade text, moeda text)
     LANGUAGE sql STABLE
     AS $_$
   with cand as materialized (
@@ -4843,8 +4872,6 @@ CREATE FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid, p_novos bool
       left join periodo pd on pd.id = d.periodo_id
      where (p_documento_versao_id is null or ce.documento_versao_id = p_documento_versao_id)
        and ce.valor_num is not null and fn_tipo_gera_fato(d.tipo_taxonomia)
-       and case when p_novos then not exists (select 1 from fato_financeiro f where f.campo_extraido_id = ce.id)
-                else exists (select 1 from fato_financeiro f where f.campo_extraido_id = ce.id) end
   ),
   -- O papel da linha (fn_papel_linha, ~180 µs) UMA vez por (tipo, rótulo, unidade) distintos, não por linha. Medido em produção em 11/11/2026: 100.215 linhas de demonstração com valor, 6.841 combinações distintas (15x menos chamadas).
   -- fn_linha_vira_fato é o predicado ÚNICO (a sonda e o teste o usam): o valor entra como 1 porque ele só pergunta se é nulo, e a CTE acima já tirou os nulos.
@@ -4997,10 +5024,10 @@ CREATE FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid, p_novos bool
 $_$;
 
 --
--- Name: FUNCTION fn_fato_resolver(p_documento_versao_id uuid, p_novos boolean); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION fn_fato_resolver(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid, p_novos boolean) IS '0243: a identidade de cada linha elegível: conta (a seção, pelo catálogo), entidade e período (pela coluna da linha quando ela diz, pelo documento quando não, e NULOS com o motivo quando a coluna não é saldo, é de abertura, o documento é parcial ou o total duplica a coluna da entidade). p_novos: as sem fato (materializar); falso: as que já têm (repor a identidade quando o documento muda).';
+COMMENT ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) IS '0243: a identidade de cada linha elegível: conta (a seção, pelo catálogo), entidade e período (pela coluna da linha quando ela diz, pelo documento quando não, e NULOS com o motivo quando a coluna não é saldo, é de abertura, o documento é parcial ou o total duplica a coluna da entidade). p_novos: as sem fato (materializar); falso: as que já têm (repor a identidade quando o documento muda).';
 
 --
 -- Name: fn_fato_segue_o_documento(); Type: FUNCTION; Schema: public; Owner: -
@@ -5015,13 +5042,17 @@ declare
 begin
   if new.tipo_taxonomia is distinct from old.tipo_taxonomia then
     if fn_tipo_gera_fato(new.tipo_taxonomia) and not fn_tipo_gera_fato(old.tipo_taxonomia) then
+      -- entra na lista: materializa como extração nova (com a pendência), versão a versão
       for v_v in select id from documento_versao where documento_id = new.id order by n_versao loop
         perform fn_materializar_fatos_da_extracao(v_v, fn_fato_ator());
       end loop;
       return null;
     elsif fn_tipo_gera_fato(old.tipo_taxonomia) and not fn_tipo_gera_fato(new.tipo_taxonomia) then
-      delete from fato_financeiro where documento_versao_id in (select id from documento_versao where documento_id = new.id);
-      get diagnostics v_n = row_count;
+      -- sai da lista: o resolver não devolve mais linha nenhuma desta versão, então o recálculo REMOVE os fatos (derivados); a evidência fica
+      select count(*)::int into v_n from fato_financeiro where documento_versao_id in (select id from documento_versao where documento_id = new.id);
+      for v_v in select id from documento_versao where documento_id = new.id loop
+        perform fn_fato_recalcular(v_v, 'extracao');
+      end loop;
       update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:reclassificacao'
        where documento_id = new.id and estado = 'aberta' and motivo like 'fato:conta_incerta:%';
       insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
@@ -5031,17 +5062,10 @@ begin
       return null;
     end if;
   end if;
-  -- 3ª REVISÃO, ALTO 2: a identidade também depende do TIPO (fn_periodo_e_parcial: BALANCETE é parcial, DRE não): DRE -> BALANCETE (os dois na lista) deixava os fatos com o período de antes, e o do zero seria nulo. Tipo mudou = re-resolve.
-  if fn_tipo_gera_fato(new.tipo_taxonomia)
-     and (new.entidade_id is distinct from old.entidade_id or new.periodo_id is distinct from old.periodo_id or new.tipo_taxonomia is distinct from old.tipo_taxonomia) then
+  -- entidade, período ou tipo (entre dois da lista: BALANCETE é parcial, DRE não) mudaram: recalcula TODAS as versões do documento do estado atual
+  if fn_tipo_gera_fato(new.tipo_taxonomia) then
     for v_v in select id from documento_versao where documento_id = new.id loop
-      update fato_financeiro f
-         set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
-             periodo_id = r.periodo_id, periodo_origem = r.periodo_origem, periodo_motivo = r.periodo_motivo
-        from fn_fato_resolver(v_v, false) r
-       where r.campo_id = f.campo_extraido_id
-         and (f.entidade_id, f.entidade_origem, f.entidade_motivo, f.periodo_id, f.periodo_origem, f.periodo_motivo)
-             is distinct from (r.entidade_id, r.entidade_origem, r.entidade_motivo, r.periodo_id, r.periodo_origem, r.periodo_motivo);
+      perform fn_fato_recalcular(v_v, 'extracao', 'documento_alterado');
     end loop;
   end if;
   return null;
@@ -5367,8 +5391,8 @@ begin
      and estado <> 'resolvida';
 
   delete from entidade where id = p_de_id and caso_id = p_caso_id;
-  -- 0243: DEPOIS de apagar a absorvida (as FKs de dimensão de fato_financeiro são adiadas, então os fatos dela aguardam aqui) os fatos passam para a sobrevivente, por função com guarda: só reponta o fato de entidade que já não existe.
-  perform fn_fato_repontar_entidade(p_caso_id, p_de_id, p_para_id);
+  -- 0243 (4ª revisão): DEPOIS de apagar a absorvida (as FKs de dimensão de fato_financeiro são adiadas, então os fatos dela aguardam aqui) os fatos do mandato que dependem do cadastro de entidade são RECALCULADOS do estado atual, por função com guarda. Antes a fusão trocava o id às cegas: com "Alfa Comércio" e "Atacado Alfa" a ALFA ficava com as duas colunas (170) e o resultado do zero é outro (as duas colunas casam a ALFA: nenhuma é atribuída).
+  perform fn_materializar_fatos_do_caso(p_caso_id, 'entidade', 'fusao_de_entidade');
 
   insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
   values (p_por, 'entidade_fundida', 'entidade:' || p_para_id,
@@ -8399,62 +8423,22 @@ CREATE FUNCTION public.fn_materializar_fatos(p_documento_versao_id uuid DEFAULT 
     SET search_path TO 'public', 'pg_temp'
     AS $$
 declare
-  v_r jsonb; v_caso uuid; v_rr int := 0;
+  v_caso uuid;
 begin
-  if p_origem not in ('extracao', 'backfill_0243') then
-    raise exception 'fn_materializar_fatos: origem % desconhecida (extracao | backfill_0243)', p_origem;
-  end if;
   if p_documento_versao_id is not null then
     select d.caso_id into v_caso from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id;
   end if;
   if not fn_fato_pode_escrever(v_caso) then
     raise exception 'fn_materializar_fatos: sem permissão de escrita no mandato' using errcode = 'insufficient_privilege';
   end if;
-
-  with ins as (
-    insert into fato_financeiro
-      (campo_extraido_id, documento_versao_id, conta_id, resolucao_metodo, sem_conta_motivo,
-       entidade_id, entidade_origem, entidade_motivo, entidade_coluna, periodo_id, periodo_origem, periodo_motivo, periodo_coluna, valor, unidade, moeda, origem)
-    select r.campo_id, r.documento_versao_id, r.conta_id, r.resolucao_metodo, r.sem_conta_motivo,
-           r.entidade_id, r.entidade_origem, r.entidade_motivo, r.entidade_coluna, r.periodo_id, r.periodo_origem, r.periodo_motivo, r.periodo_coluna, r.valor, r.unidade, r.moeda, p_origem
-      from fn_fato_resolver(p_documento_versao_id, true) r
-    on conflict (campo_extraido_id) do nothing
-    returning documento_versao_id, resolucao_metodo, sem_conta_motivo, entidade_id, periodo_id
-  )
-  select jsonb_build_object(
-           'fatos_criados', count(*),
-           'declarada', count(*) filter (where resolucao_metodo = 'declarada'),
-           'heuristica', count(*) filter (where resolucao_metodo = 'heuristica'),
-           'sem_conta', count(*) filter (where resolucao_metodo = 'sem_conta'),
-           'sem_conta_secao_nao_declarada', count(*) filter (where sem_conta_motivo = 'secao_nao_declarada'),
-           'sem_conta_secao_fora_do_catalogo', count(*) filter (where sem_conta_motivo = 'secao_fora_do_catalogo'),
-           'sem_entidade', count(*) filter (where entidade_id is null),
-           'sem_periodo', count(*) filter (where periodo_id is null),
-           'versoes', count(distinct documento_versao_id),
-           'versoes_com_linha_incerta', count(distinct documento_versao_id) filter (where resolucao_metodo <> 'declarada'))
-    into v_r from ins;
-
-  -- RE-RESOLVER o que já existe com identidade NULA: "nulo com motivo" fica FALSO quando o período ou a entidade é cadastrado depois (4.479 fatos em produção com periodo_da_coluna_nao_cadastrado). Roda no reparo e no backfill (versão nula)
-  -- e quando a chamada por versão não criou nada (o reenvio); na extração nova, que acabou de resolver tudo, seria a mesma conta duas vezes.
-  if p_documento_versao_id is null or (v_r->>'fatos_criados')::int = 0 then
-    update fato_financeiro f
-       set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
-           periodo_id = r.periodo_id, periodo_origem = r.periodo_origem, periodo_motivo = r.periodo_motivo
-      from fn_fato_resolver(p_documento_versao_id, false) r
-     where r.campo_id = f.campo_extraido_id and (f.entidade_id is null or f.periodo_id is null)
-       and (f.entidade_id, f.entidade_origem, f.entidade_motivo, f.periodo_id, f.periodo_origem, f.periodo_motivo)
-           is distinct from (r.entidade_id, r.entidade_origem, r.entidade_motivo, r.periodo_id, r.periodo_origem, r.periodo_motivo);
-    get diagnostics v_rr = row_count;
-  end if;
-  v_r := v_r || jsonb_build_object('reresolvidos', v_rr);
-  return v_r;
+  return fn_fato_recalcular(p_documento_versao_id, p_origem, 'reparo');
 end $$;
 
 --
 -- Name: FUNCTION fn_materializar_fatos(p_documento_versao_id uuid, p_origem text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_materializar_fatos(p_documento_versao_id uuid, p_origem text) IS '0243: cria o fato de toda linha elegível (fn_linha_vira_fato) que ainda não tem, pela identidade de fn_fato_resolver. Idempotente. Seção declarada = declarada; secao_canonica_inferida = heuristica; sem seção (nula, em branco ou NAO_CLASSIFICAVEL) ou fora do catálogo = sem_conta, com o motivo. Versão nula = todas (o backfill e o reparo: se a materialização de uma extração falhou, o evento fatos_materializacao_falhou manda rodar esta). NÃO abre pendência: quem abre é fn_materializar_fatos_da_extracao, só para extração nova. Também RE-RESOLVE os fatos existentes de identidade nula (o período ou a entidade cadastrado depois). Só a conexão de serviço materializa tudo; o resto, só o mandato que escreve.';
+COMMENT ON FUNCTION public.fn_materializar_fatos(p_documento_versao_id uuid, p_origem text) IS '0243: recalcula os fatos da versão (nula = todas) do estado atual, por fn_fato_recalcular: cria o que falta, ATUALIZA o que envelheceu (conta, entidade, período) e remove o que não é mais elegível. É o reparo e o backfill. Idempotente. NÃO abre nem fecha pendência: quem abre é fn_materializar_fatos_da_extracao, só para extração nova. Só a conexão de serviço recalcula tudo; o resto exige escrita no mandato.';
 
 --
 -- Name: fn_materializar_fatos_backfill(); Type: FUNCTION; Schema: public; Owner: -
@@ -8467,7 +8451,7 @@ declare
   v_r jsonb;
   v_inc int;
 begin
-  v_r := fn_materializar_fatos(null, 'backfill_0243');
+  v_r := fn_fato_recalcular(null, 'backfill_0243');
   v_inc := (v_r->>'heuristica')::int + (v_r->>'sem_conta')::int;
   v_r := v_r || jsonb_build_object(
     'pendencias_abertas', 0,
@@ -8509,7 +8493,7 @@ begin
     return jsonb_build_object('materializado', false, 'porque', 'sem permissão de escrita no mandato');
   end if;
   begin
-    v_r := fn_materializar_fatos(p_documento_versao_id, 'extracao');
+    v_r := fn_fato_recalcular(p_documento_versao_id, 'extracao');   -- a guarda já foi conferida acima; 2ª chamada na mesma versão = recalcula do estado atual (a 1ª pode ter sido sem entidade_coluna)
     v_pend := fn_fato_pendencia_da_versao(p_documento_versao_id);
     -- A VERSÃO SUPERADA: quando esta é a vigente (fn_versao_atual), a pendência ABERTA das outras versões do documento perde o sentido (a leitura que ela julgava não é mais a que vale).
     v_vigente := fn_versao_atual(v_doc);
@@ -8539,6 +8523,24 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid, p_ator text) IS '0243: fn_materializar_fatos + fn_fato_pendencia_da_versao para a versão recém-extraída, com o evento fatos_materializados (a prova de que RODOU: regra 7) e a baixa da pendência aberta das versões superadas. Tipo fora da lista: não faz nada e não grava evento. Falha: o evento fatos_materializacao_falhou, e a extração não é perdida (query_canceled não é engolido).';
+
+--
+-- Name: fn_materializar_fatos_do_caso(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_materializar_fatos_do_caso(p_caso uuid, p_dimensao text DEFAULT 'entidade'::text, p_motivo text DEFAULT 'fusao_de_entidade'::text) RETURNS integer
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if p_caso is null or p_dimensao not in ('entidade', 'periodo') then
+    raise exception 'fn_materializar_fatos_do_caso: mandato nulo ou dimensão % desconhecida (entidade | periodo)', p_dimensao;
+  end if;
+  if not fn_fato_pode_escrever(p_caso) then
+    raise exception 'fn_materializar_fatos_do_caso: sem permissão de escrita no mandato' using errcode = 'insufficient_privilege';
+  end if;
+  return fn_fato_recalcular_caso(p_caso, p_dimensao, p_motivo);
+end $$;
 
 --
 -- Name: fn_membros_da_equipe(); Type: FUNCTION; Schema: public; Owner: -
@@ -19634,7 +19636,7 @@ CREATE VIEW public.instalacao_sonda_fato_financeiro_recentes AS
 -- Name: VIEW instalacao_sonda_fato_financeiro_recentes; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_recentes IS 'Sonda da 0243: uma linha = toda linha elegível das 20 versões de demonstração mais novas COM LINHA DE EXTRAÇÃO tem fato, e o fato concorda com a linha (conta = a seção dela, método pela flag de inferida). Zero linhas: a extração nova NÃO está materializando (gatilho ausente ou desabilitado, fn_registrar_campos_extraidos que deixou de gravar o evento ou o gravou antes da herança da seção, materialização falhando: veja o evento fatos_materializacao_falhou). Não depende do evento extracao_sombra.';
+COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_recentes IS 'Sonda da 0243: uma linha = toda linha elegível das 20 versões de demonstração mais novas COM LINHA DE EXTRAÇÃO tem fato, e o fato concorda com a linha (conta = a seção dela, método pela flag de inferida). Zero linhas: a extração nova NÃO está materializando (gatilho ausente ou desabilitado, fn_registrar_campos_extraidos que deixou de gravar o evento ou o gravou antes da herança da seção, materialização falhando: veja o evento fatos_materializacao_falhou). Não depende do evento extracao_sombra. O REPARO é `select fn_materializar_fatos();`: recalcula do estado atual (conta, método, entidade, período), então conserta de fato o fato que envelheceu (por exemplo depois de um reparo em massa de campo_extraido.secao_canonica, como os das 0203 e 0204).';
 
 --
 -- Name: instalacao_sonda_fato_financeiro_so_secao; Type: VIEW; Schema: public; Owner: -
@@ -19668,6 +19670,23 @@ CREATE VIEW public.instalacao_sonda_fato_financeiro_tipos AS
 --
 
 COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_tipos IS 'Sonda da 0243: uma linha = fn_tipo_gera_fato dá a resposta certa para um dos 10 tipos (BALANCO, BALANCETE, COMBINADO, DRE, FLUXO_CAIXA, DVA, DMPL, DF_AUDITADA geram; RAZAO e NOTAS_EXPL não). Menos de 10: um tipo de demonstração perdeu o fato, ou o que é só evidência virou fato.';
+
+--
+-- Name: instalacao_sonda_fato_financeiro_um_escritor; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_fato_financeiro_um_escritor AS
+ SELECT 1 AS ok
+  WHERE (( SELECT array_agg((p.proname)::text ORDER BY p.proname) AS array_agg
+           FROM (pg_proc p
+             JOIN pg_namespace n ON ((n.oid = p.pronamespace)))
+          WHERE ((n.nspname = 'public'::name) AND (p.prokind = 'f'::"char") AND (p.prosrc ~* '(insert[[:space:]]+into|update|delete[[:space:]]+from)[[:space:]]+(public\.)?fato_financeiro([[:space:]]|$)'::text))) = ARRAY['fn_fato_recalcular'::text]);
+
+--
+-- Name: VIEW instalacao_sonda_fato_financeiro_um_escritor; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_um_escritor IS 'Sonda da 0243: uma linha = a única função de public que grava em fato_financeiro é fn_fato_recalcular. Zero linhas: voltou outro escritor (re-resolução parcial, reponta às cegas) ou o escritor sumiu.';
 
 --
 -- Name: instalacao_sonda_gatilho_original_apagado; Type: VIEW; Schema: public; Owner: -
@@ -24028,24 +24047,22 @@ GRANT ALL ON FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id u
 REVOKE ALL ON FUNCTION public.fn_fato_pode_escrever(p_caso uuid) FROM PUBLIC;
 
 --
--- Name: FUNCTION fn_fato_repontar_entidade(p_caso uuid, p_de uuid, p_para uuid); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fn_fato_recalcular(p_documento_versao_id uuid, p_origem text, p_motivo text); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.fn_fato_repontar_entidade(p_caso uuid, p_de uuid, p_para uuid) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_fato_repontar_entidade(p_caso uuid, p_de uuid, p_para uuid) TO authenticated;
-GRANT ALL ON FUNCTION public.fn_fato_repontar_entidade(p_caso uuid, p_de uuid, p_para uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.fn_fato_recalcular(p_documento_versao_id uuid, p_origem text, p_motivo text) FROM PUBLIC;
 
 --
--- Name: FUNCTION fn_fato_reresolver_caso(p_caso uuid, p_dimensao text); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fn_fato_recalcular_caso(p_caso uuid, p_dimensao text, p_motivo text); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.fn_fato_reresolver_caso(p_caso uuid, p_dimensao text) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fn_fato_recalcular_caso(p_caso uuid, p_dimensao text, p_motivo text) FROM PUBLIC;
 
 --
--- Name: FUNCTION fn_fato_resolver(p_documento_versao_id uuid, p_novos boolean); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fn_fato_resolver(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid, p_novos boolean) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) FROM PUBLIC;
 
 --
 -- Name: FUNCTION fn_fato_segue_o_documento(); Type: ACL; Schema: public; Owner: -
@@ -24451,6 +24468,14 @@ GRANT ALL ON FUNCTION public.fn_materializar_fatos_backfill() TO service_role;
 REVOKE ALL ON FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid, p_ator text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid, p_ator text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_materializar_fatos_da_extracao(p_documento_versao_id uuid, p_ator text) TO service_role;
+
+--
+-- Name: FUNCTION fn_materializar_fatos_do_caso(p_caso uuid, p_dimensao text, p_motivo text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_materializar_fatos_do_caso(p_caso uuid, p_dimensao text, p_motivo text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_materializar_fatos_do_caso(p_caso uuid, p_dimensao text, p_motivo text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_materializar_fatos_do_caso(p_caso uuid, p_dimensao text, p_motivo text) TO service_role;
 
 --
 -- Name: FUNCTION fn_membros_da_equipe(); Type: ACL; Schema: public; Owner: -
@@ -26140,6 +26165,13 @@ GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_so_secao TO servic
 
 GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_tipos TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_tipos TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_fato_financeiro_um_escritor; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_um_escritor TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_um_escritor TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_gatilho_original_apagado; Type: ACL; Schema: public; Owner: -

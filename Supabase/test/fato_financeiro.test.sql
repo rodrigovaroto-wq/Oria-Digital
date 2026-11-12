@@ -49,6 +49,24 @@ begin
   end if;
 end $$;
 
+-- A INVARIANTE DA FAMÍLIA (4ª revisão, a regra nova do dono: o fato é SEMPRE o recalculado do estado atual): fato_financeiro é IGUAL ao que a materialização do zero daria. Compara (linha, versão, conta, método, motivo da conta, entidade, origem, motivo, coluna, período, origem, motivo, coluna,
+-- valor, unidade, moeda), linha a linha, nos dois sentidos — não conta. O que o resolver devolve e não está no fato, mais o que está no fato e o resolver não devolve. Afirmada depois de cada cenário que muda o que o fato lê.
+create or replace function pg_temp.divergentes() returns bigint language sql as $f$
+  select count(*) from (
+    (select campo_id, documento_versao_id, conta_id, resolucao_metodo, sem_conta_motivo, entidade_id, entidade_origem, entidade_motivo, entidade_coluna, periodo_id, periodo_origem, periodo_motivo, periodo_coluna, valor, unidade, moeda from fn_fato_resolver(null)
+     except
+     select campo_extraido_id, documento_versao_id, conta_id, resolucao_metodo, sem_conta_motivo, entidade_id, entidade_origem, entidade_motivo, entidade_coluna, periodo_id, periodo_origem, periodo_motivo, periodo_coluna, valor, unidade, moeda from fato_financeiro)
+    union all
+    (select campo_extraido_id, documento_versao_id, conta_id, resolucao_metodo, sem_conta_motivo, entidade_id, entidade_origem, entidade_motivo, entidade_coluna, periodo_id, periodo_origem, periodo_motivo, periodo_coluna, valor, unidade, moeda from fato_financeiro
+     except
+     select campo_id, documento_versao_id, conta_id, resolucao_metodo, sem_conta_motivo, entidade_id, entidade_origem, entidade_motivo, entidade_coluna, periodo_id, periodo_origem, periodo_motivo, periodo_coluna, valor, unidade, moeda from fn_fato_resolver(null))) x
+$f$;
+create or replace function pg_temp.inv(p_cenario text) returns void language plpgsql as $f$
+declare v_n bigint := pg_temp.divergentes();
+begin
+  perform pg_temp.teste_assert_ff(v_n = 0, 'INVARIANTE depois de ' || p_cenario || ': fato_financeiro é igual ao que a materialização do zero daria', v_n || ' linha(s) divergentes');
+end $f$;
+
 -- O ELEGÍVEL, reescrito AQUI de propósito (e não pela fn_linha_vira_fato da migration): um teste que pergunta ao código o que o código acha elegível protege o bug (regra 3).
 create temp view _elegiveis as
   select ce.id as campo_id, ce.documento_versao_id, d.tipo_taxonomia as tipo, ce.secao_canonica, ce.secao_canonica_inferida as inferida
@@ -160,6 +178,7 @@ begin
    where d.tipo_taxonomia in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DRE', 'FLUXO_CAIXA', 'DVA', 'DMPL', 'DF_AUDITADA') and ce.valor_num is null and fn_papel_linha(ce.chave, d.tipo_taxonomia, ce.unidade) = 'conta';
   select count(*) into v_n2 from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where ce.valor_num is null;
   perform pg_temp.teste_assert_ff(v_n >= 1 and v_n2 = 0, 'linha de conta SEM valor (célula vazia) não vira fato: ausência não é zero (regra 1)', v_n || ' sem valor; ' || v_n2 || ' viraram fato');
+  perform pg_temp.inv('o backfill sobre as fixtures');
 end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -345,6 +364,7 @@ begin
   update documento set entidade_id = null where id = (select documento_id from documento_versao where id = v_a);
   select count(*) into v_n from fato_financeiro where documento_versao_id = v_a and entidade_id is null and entidade_origem is null;
   perform pg_temp.teste_assert_ff(v_n = 5, 'documento sem entidade: os fatos ficam com entidade NULA e origem NULA (a regra de coerência vale)', v_n::text);
+  perform pg_temp.inv('as extrações novas, a falha com reparo e a correção do documento (cenários d, g, h)');
 end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -462,6 +482,7 @@ begin
   select sum(f.valor) into v_s from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_id = v_alfa;
   perform pg_temp.teste_assert_ff(v_s = 10 and (select f.entidade_origem from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_coluna = 'Alfa Comércio') = 'coluna', 'a coluna "Alfa Comércio" é da ALFA COMERCIO DE ALIMENTOS LTDA (10); o Consolidado não vira dela de novo', v_s::text);
   perform pg_temp.teste_assert_ff((select f.entidade_id from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_coluna = 'Consolidado') is null, 'e o Consolidado fica sem entidade (a ALFA já tem a coluna dela)');
+  perform pg_temp.inv('os cenários do balancete (500, 435, 342), o combinado, as duas colunas de total e o "Alfa Comércio"');
 end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -529,6 +550,8 @@ begin
     pg_temp.l('Conta M4 com seção', '2', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025')));
   select count(*) into v_n from pendencia where documento_id = (select documento_id from documento_versao where id = v_v1) and estado = 'aberta' and motivo like 'fato:conta_incerta:%';
   perform pg_temp.teste_assert_ff(v_n = 0 and v_v2 <> v_v1 and fn_versao_atual((select documento_id from documento_versao where id = v_v1)) = v_v2, 'M4: a v2 limpa vira a vigente e NENHUMA pendência da heurística fica aberta no documento', v_n::text);
+
+  perform pg_temp.inv('a troca de tipo, a ordem real (registrar, depois preencher) e a versão superada');
 
   -- M7: o cancelamento (statement_timeout, query_canceled) NÃO é engolido: a falha comum vira evento, o cancelamento sobe
   create function pg_temp.cancela() returns trigger language plpgsql as $f$ begin raise exception 'cancelado de propósito (teste)' using errcode = '57014'; end $f$;
@@ -599,7 +622,8 @@ begin
   perform pg_temp.teste_assert_ff(v_n = 1, 'sem o gatilho de cadastro o nulo continua (o arranjo do reparo)', v_n::text);
   v_r := fn_materializar_fatos();
   select count(*) into v_n from fato_financeiro f where f.documento_versao_id = v_ver2 and f.periodo_coluna = '2022' and f.periodo_id is not null and f.periodo_origem = 'coluna';
-  perform pg_temp.teste_assert_ff(v_n = 1 and (v_r->>'reresolvidos')::int >= 1, 'fn_materializar_fatos() re-resolve os fatos existentes de identidade nula', v_r::text);
+  perform pg_temp.teste_assert_ff(v_n = 1 and (v_r->>'atualizados')::int >= 1, 'fn_materializar_fatos() RECALCULA os fatos existentes (o de identidade nula que o gatilho de cadastro não pegou)', v_r::text);
+  perform pg_temp.inv('cadastrar período e entidade depois, e o reparo');
 end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -673,6 +697,87 @@ begin
   perform pg_temp.teste_assert_ff(not has_function_privilege('authenticated', 'fn_materializar_fatos(uuid, text)', 'execute') and not has_function_privilege('anon', 'fn_materializar_fatos(uuid, text)', 'execute'), 'B7: fn_materializar_fatos não é executável pelo authenticated nem pelo anon (o default de função foi simulado e revogado)');
   perform pg_temp.teste_assert_ff(not has_function_privilege('authenticated', 'fn_fato_pendencia_da_versao(uuid)', 'execute') and not has_function_privilege('anon', 'fn_fato_pendencia_da_versao(uuid)', 'execute'), 'B7: fn_fato_pendencia_da_versao (sem guarda de mandato) não é executável pelo authenticated nem pelo anon');
   perform pg_temp.teste_assert_ff(has_function_privilege('authenticated', 'fn_materializar_fatos_da_extracao(uuid, text)', 'execute') and has_function_privilege('service_role', 'fn_materializar_fatos(uuid, text)', 'execute'), 'e o que o portal precisa continua executável (a da extração, guardada) e o serviço executa a dele');
+  perform pg_temp.inv('os cenários da 3ª revisão (duas colunas da mesma entidade, troca de tipo, entidade renomeada ou cadastrada)');
+end $$;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- g6. A 4ª revisão independente: a regra nova (o fato é sempre recalculado do estado atual). A fusão sem reponta às cegas, a gravação em duas chamadas na mesma versão, a seção que muda mais o reparo, a pendência preservada, o ator real.
+do $$
+declare
+  v_caso uuid; v_alfa uuid; v_ata uuid; v_v1 uuid; v_v2 uuid; v_s numeric; v_n int; v_r jsonb; v_pend uuid; v_desc text; v_uid uuid := gen_random_uuid(); v_doc uuid; v_ev int; v_n0 int; v_n2 int;
+begin
+  raise notice '--- g6. 4ª revisão ---';
+  -- MÉDIO 1a: a fusão. "ALFA COMERCIO LTDA" + "ATACADO ALFA LTDA", colunas "Alfa Comércio"=100 e "Atacado Alfa"=70. Depois de fn_fundir_entidade(ATACADO -> ALFA) as DUAS colunas casam a ALFA: o do zero não atribui nenhuma. Antes a fusão trocava o id às cegas (a ALFA ficava com 170).
+  v_caso := fn_upsert_caso('0243: fusão que torna a coluna ambígua')::uuid;
+  v_alfa := fn_upsert_entidade(v_caso, 'ALFA COMERCIO LTDA');
+  v_ata := (select id from entidade where caso_id = v_caso and razao_social = 'ATACADO ALFA LTDA');
+  if v_ata is null then insert into entidade (caso_id, razao_social) values (v_caso, 'ATACADO ALFA LTDA') returning id into v_ata; end if;   -- fn_upsert_entidade fundiria as duas por nome
+  perform fn_upsert_periodo(v_caso, 'anual', '2025');
+  v_v1 := pg_temp.doc(v_caso, 'ALFA COMERCIO LTDA', '2025', 'COMBINADO', 'r4-f', jsonb_build_array(
+    pg_temp.l('Caixa', '100', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio'), pg_temp.l('Caixa', '70', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Atacado Alfa')));
+  select coalesce(sum(valor), 0) into v_s from fato_financeiro where documento_versao_id = v_v1 and entidade_id = v_alfa;
+  perform pg_temp.teste_assert_ff(v_s = 100 and (select coalesce(sum(valor), 0) from fato_financeiro where documento_versao_id = v_v1 and entidade_id = v_ata) = 70, 'arranjo da fusão: antes dela a ALFA tem 100 e o ATACADO 70, cada uma pela coluna dela', v_s::text);
+  perform fn_fundir_entidade(v_caso, v_ata, v_alfa);
+  select coalesce(sum(valor), 0) into v_s from fato_financeiro where documento_versao_id = v_v1 and entidade_id = v_alfa;
+  -- o do zero: "Atacado Alfa" não casa a ALFA (fn_mesma_entidade) e o ATACADO deixou de existir: a coluna dele fica sem entidade, a ALFA fica com a dela (100). A fusão antiga trocava o id às cegas e a ALFA ficava com 170, as duas por coluna.
+  perform pg_temp.teste_assert_ff(v_s = 100 and exists (select 1 from fato_financeiro where documento_versao_id = v_v1 and entidade_coluna = 'Atacado Alfa' and entidade_id is null and entidade_motivo = 'coluna_sem_entidade_no_mandato'), 'MÉDIO 1a: depois da fusão a ALFA fica com 100 (a coluna dela) e a coluna do absorvido fica sem entidade, explicada (antes: 170, as duas por coluna)', v_s::text);
+  perform pg_temp.inv('a fusão que torna duas colunas ambíguas');
+  perform fn_upsert_entidade(v_caso, 'OMEGA SEM RELACAO LTDA');
+  perform pg_temp.inv('cadastrar uma entidade que não tem relação com a fusão (antes mudava o resultado)');
+
+  -- MÉDIO 1b: a gravação em DUAS chamadas na MESMA versão: a 1ª sem entidade_coluna, a 2ª com "Consolidado" e a coluna de outra empresa. O do zero: a linha sem coluna fica nula (o documento passou a TER colunas de entidade); a soma da dona é só a do Consolidado (antes 200: 100 'documento' + 100 'coluna_total').
+  v_caso := fn_upsert_caso('0243: duas chamadas na mesma versão')::uuid;
+  v_alfa := fn_upsert_entidade(v_caso, 'METALURGICA P27 LTDA'); perform fn_upsert_entidade(v_caso, 'VERTENTES COMPONENTES LTDA'); perform fn_upsert_periodo(v_caso, 'anual', '2025');
+  v_v2 := (fn_registrar_documento(v_caso, 'METALURGICA P27 LTDA', 'anual', '2025', 'COMBINADO', 0.97, 'nome_arquivo', 'supabase_storage', '0243/r4-d.pdf', 'r4-d.pdf', true, 'r4-d', 'ok')->>'documento_versao_id')::uuid;
+  perform fn_registrar_campos_extraidos(v_v2, jsonb_build_array(pg_temp.l('Receita', '100', 'receita_bruta', 'RECEITA', '2025')));
+  perform fn_registrar_campos_extraidos(v_v2, jsonb_build_array(pg_temp.l('Receita', '100', 'receita_bruta', 'RECEITA', '2025', 'Consolidado'), pg_temp.l('Receita', '40', 'receita_bruta', 'RECEITA', '2025', 'Vertentes Componentes')));
+  select coalesce(sum(valor), 0) into v_s from fato_financeiro where documento_versao_id = v_v2 and entidade_id = v_alfa and periodo_id is not null;
+  perform pg_temp.teste_assert_ff(v_s = 100 and exists (select 1 from fato_financeiro f where f.documento_versao_id = v_v2 and f.entidade_coluna is null and f.entidade_id is null and f.entidade_motivo = 'linha_sem_coluna_em_documento_com_colunas_de_entidade'),
+    'MÉDIO 1b: gravada em duas chamadas, a linha da 1ª (sem coluna) fica nula e a dona soma só o Consolidado: 100 (antes 200, a invariante quebrava)', v_s::text);
+  perform pg_temp.inv('a gravação em duas chamadas na mesma versão');
+
+  -- MÉDIO 2: a seção que muda por reparo de serviço (os reparos em massa das 0203/0204 fazem update de campo_extraido.secao_canonica). Não há gatilho em campo_extraido (decisão no cabeçalho): a sonda recentes acusa o fato velho e o reparo que ela manda rodar DE FATO conserta.
+  v_caso := fn_upsert_caso('0243: seção que muda por reparo')::uuid;
+  perform fn_upsert_entidade(v_caso, 'SECAO P27 LTDA'); perform fn_upsert_periodo(v_caso, 'anual', '2025');
+  v_v1 := pg_temp.doc(v_caso, 'SECAO P27 LTDA', '2025', 'BALANCO', 'r4-s', jsonb_build_array(
+    pg_temp.l('Caixa R4', '5', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025'), pg_temp.l('Clientes R4', '6', null, 'Outros', '2025'), pg_temp.l('Estoques R4', '7', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025')));
+  update documento_versao set criada_em = now() + interval '1 day' where id = v_v1;
+  select id, descricao into v_pend, v_desc from pendencia where motivo = 'fato:conta_incerta:' || v_v1 and estado = 'aberta';
+  perform pg_temp.teste_assert_ff(v_pend is not null, 'arranjo: a extração nova com linha sem seção abre a pendência (1)');
+  update campo_extraido set secao_canonica = case chave when 'Clientes R4' then 'ativo_circulante' else 'passivo_circulante' end, secao_canonica_inferida = false where documento_versao_id = v_v1;   -- o reparo em massa
+  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'depois do reparo de seção em massa o fato envelheceu e a sonda recentes acusa');
+  v_r := fn_materializar_fatos();
+  perform pg_temp.teste_assert_ff((v_r->>'atualizados')::int >= 3 and (select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'MÉDIO 2: o reparo que a sonda manda rodar (fn_materializar_fatos) RECALCULA a conta e a sonda volta a verde (antes devolvia 0 e ela seguia vermelha)', v_r::text);
+  perform pg_temp.teste_assert_ff((select conta_id from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where ce.documento_versao_id = v_v1 and ce.chave = 'Caixa R4') = 'passivo_circulante'
+     and (select resolucao_metodo from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where ce.documento_versao_id = v_v1 and ce.chave = 'Clientes R4') = 'declarada', 'e a conta e o método dos fatos são os da linha de hoje');
+  perform pg_temp.inv('a seção que muda por reparo em massa mais o reparo');
+
+  -- A PENDÊNCIA fica como a extração nova a deixou: nenhum recálculo (reparo, cadastro, documento, fusão) abre, fecha ou reescreve.
+  select count(*) into v_n from pendencia where motivo = 'fato:conta_incerta:' || v_v1 and estado = 'aberta' and id = v_pend and descricao = v_desc;
+  perform pg_temp.teste_assert_ff(v_n = 1, 'a pendência da extração nova (1, aberta, mesmo texto) NÃO foi tocada pelo recálculo do reparo (nem aberta, nem fechada, nem reescrita)', v_n::text);
+  perform fn_upsert_entidade(v_caso, 'OUTRA P27 LTDA'); perform fn_upsert_periodo(v_caso, 'anual', '2024');
+  select count(*) into v_n from pendencia where motivo = 'fato:conta_incerta:' || v_v1 and estado = 'aberta' and id = v_pend and descricao = v_desc;
+  select count(*) into v_n2 from pendencia where caso_id = v_caso and tipo = 'conta_canonica_incerta';
+  perform pg_temp.teste_assert_ff(v_n = 1 and v_n2 = 1, 'e nem o recálculo por cadastro de entidade e de período a toca (continua 1 pendência da versão)', v_n || ' x ' || v_n2);
+  perform pg_temp.teste_assert_ff(not exists (select 1 from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where ce.documento_versao_id = v_v1 and f.origem <> 'extracao'), 'a origem dos fatos da extração nova continua extracao depois dos recálculos (a pendência só lê fato de extração)');
+  -- O ATOR REAL no evento do recálculo: a correção do documento por uma pessoa grava fatos_recalculados com o nome dela; sem pessoa, o sistema
+  select documento_id into v_doc from documento_versao where id = v_v1;
+  select count(*) into v_n0 from evento_auditoria where acao = 'fatos_recalculados';
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', v_uid, 'role', 'authenticated')::text, true);
+  update documento set entidade_id = (select id from entidade where caso_id = v_caso and razao_social = 'OUTRA P27 LTDA') where id = v_doc;
+  perform set_config('request.jwt.claims', '', true);
+  select count(*) into v_ev from evento_auditoria where acao = 'fatos_recalculados' and entidade_ref = 'documento_versao:' || v_v1 and ator = 'usuario:' || v_uid and depois->>'motivo' = 'documento_alterado';
+  perform pg_temp.teste_assert_ff(v_ev = 1, 'trocar a entidade do documento grava o evento fatos_recalculados com o ator REAL e o motivo (o fato trocado nunca é silêncio)', v_ev::text);
+  select count(*) into v_n from pendencia where motivo = 'fato:conta_incerta:' || v_v1 and estado = 'aberta' and id = v_pend and descricao = v_desc;
+  perform pg_temp.teste_assert_ff(v_n = 1, 'e a correção do documento (recálculo da versão) também NÃO toca a pendência: continua aberta, a mesma, com o mesmo texto', v_n::text);
+  perform fn_materializar_fatos(v_v1);
+  select count(*) into v_n from pendencia where motivo = 'fato:conta_incerta:' || v_v1 and estado = 'aberta' and id = v_pend and descricao = v_desc;
+  perform pg_temp.teste_assert_ff(v_n = 1, 'e o recálculo explícito da VERSÃO (o reparo) idem: nem fecha (agora não sobra linha incerta), nem reescreve', v_n::text);
+  -- só a PORTA DA EXTRAÇÃO mexe na pendência: rodar a extração de novo a converge (não sobra linha incerta: resolve-se) e nunca duplica
+  perform fn_materializar_fatos_da_extracao(v_v1);
+  select count(*) into v_n from pendencia where motivo = 'fato:conta_incerta:' || v_v1;
+  perform pg_temp.teste_assert_ff(v_n = 1 and (select estado from pendencia where id = v_pend) = 'resolvida', 'a porta da extração converge a pendência (resolve-se: nenhuma linha incerta) e não duplica', v_n::text);
+  perform pg_temp.inv('a troca de entidade do documento, depois de tudo');
 end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
@@ -719,7 +824,11 @@ begin
   end;
   perform pg_temp.teste_assert_ff(v_r->>'fundida' = 'DELTA P27 LTDA' and (v_r->>'fatos_repontados')::int = 1, 'a fusão NÃO cai na FK de fato_financeiro e conta os fatos repontados', v_r::text);
   select count(*) into v_n from fato_financeiro where documento_versao_id = v_ver and entidade_id = v_para;
-  perform pg_temp.teste_assert_ff(v_n = 2 and not exists (select 1 from entidade where id = v_de), 'os 2 fatos ficam na sobrevivente e a absorvida deixa de existir', v_n::text);
+  -- a coluna da absorvida ("DELTA P27 LTDA") não casa mais nenhuma entidade: o fato dela NÃO some e NÃO é jogado na sobrevivente às cegas — fica sem entidade, com o motivo (é o que o zero daria)
+  perform pg_temp.teste_assert_ff(v_n = 1 and not exists (select 1 from entidade where id = v_de), 'a sobrevivente fica só com o fato da coluna dela e a absorvida deixa de existir', v_n::text);
+  perform pg_temp.teste_assert_ff(exists (select 1 from fato_financeiro f where f.documento_versao_id = v_ver and f.entidade_coluna = 'DELTA P27 LTDA' and f.entidade_id is null and f.entidade_motivo = 'coluna_sem_entidade_no_mandato'),
+    'o fato da coluna da absorvida fica sem entidade com o motivo coluna_sem_entidade_no_mandato (explicado, não perdido, não repontado às cegas)');
+  perform pg_temp.inv('a fusão de entidade');
   select count(*) into v_n from evento_auditoria where acao = 'entidade_fundida' and entidade_ref = 'entidade:' || v_para and (depois->>'fatos_repontados')::int = 1;
   perform pg_temp.teste_assert_ff(v_n = 1, 'o evento da fusão diz quantos fatos foram repontados', v_n::text);
   select count(*) into v_n from fato_financeiro f where f.entidade_id is not null and not exists (select 1 from entidade e where e.id = f.entidade_id);
@@ -797,13 +906,14 @@ begin
   exception when others then v_t := sqlstate;
   end;
   begin
-    perform fn_fato_repontar_entidade(v_caso, v_e1, v_e2);   -- as duas entidades VIVAS: o atalho para mover fato sem fusão
+    perform fn_materializar_fatos_do_caso(gen_random_uuid(), 'entidade');   -- o Analista recalculando fato de OUTRO mandato
     v_t4 := 'ok';
   exception when others then v_t4 := sqlstate;
   end;
   update documento set tipo_taxonomia = 'BALANCETE' where id = v_docrz;   -- a reclassificação humana: o evento leva o NOME dele
   execute 'reset role';
-  perform pg_temp.teste_assert_ff(v_t4 = '42501', 'o Analista NÃO reponta fato com as duas entidades vivas (só a fusão, que apaga a absorvida, reponta)', v_t4);
+  perform pg_temp.teste_assert_ff(v_t4 = '42501', 'o Analista NÃO recalcula os fatos de OUTRO mandato (fn_materializar_fatos_do_caso é guardada)', v_t4);
+  perform pg_temp.teste_assert_ff(not has_function_privilege('authenticated', 'fn_fato_recalcular(uuid, text, text)', 'execute') and not has_function_privilege('authenticated', 'fn_fato_recalcular_caso(uuid, text, text)', 'execute'), 'o escritor interno (fn_fato_recalcular) e o do mandato (fn_fato_recalcular_caso) não são executáveis pelo authenticated');
   perform pg_temp.teste_assert_ff(exists (select 1 from evento_auditoria where acao = 'fatos_materializacao_negada' and entidade_ref = 'documento_versao:' || v_outra and ator = 'usuario:' || v_ana),
     'a recusa por permissão deixa o evento fatos_materializacao_negada, com o ator real (regra 7)');
   perform pg_temp.teste_assert_ff((select count(*) from fato_financeiro where documento_versao_id = v_rz) = 1 and exists (select 1 from evento_auditoria where acao = 'fatos_materializados' and entidade_ref = 'documento_versao:' || v_rz and ator = 'usuario:' || v_ana),
@@ -874,6 +984,12 @@ begin
   update campo_extraido set secao_canonica = 'ativo_circulante' where documento_versao_id = v_new and chave = 'Caixa S';
   perform pg_temp.teste_assert_ff((select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'e volta a presente quando a linha e o fato concordam');
 
+  -- o ÚNICO ESCRITOR (4ª revisão): uma função que grava em fato_financeiro fora de fn_fato_recalcular é acusada
+  execute 'create function fn_fato_escritor_extra() returns void language sql as $q$ update fato_financeiro set valor = valor where false $q$';
+  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_um_escritor_so'), 'a sonda acusa uma 2ª função que grava em fato_financeiro (de volta a re-resolução parcial)');
+  execute 'drop function fn_fato_escritor_extra()';
+  perform pg_temp.teste_assert_ff((select presente from fn_instalacao_conferir() where chave = 'fato_um_escritor_so'), 'removida, o único escritor volta a presente');
+
   -- o gatilho do documento desabilitado
   begin
     alter table documento disable trigger trg_fato_segue_o_documento;
@@ -904,12 +1020,12 @@ begin
   perform pg_temp.teste_assert_ff((select presente from fn_instalacao_conferir() where chave = 'extracao_nova_gatilho_chama'), 'recolocado o corpo, presente');
 
   v_def := pg_get_functiondef('fn_fundir_entidade(uuid,uuid,uuid,text)'::regprocedure);
-  execute replace(v_def, 'fatos_repontados', 'x_repontados');
-  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fundir_entidade_leva_os_fatos'), 'a sonda acusa fn_fundir_entidade de corpo anterior (que cairia na FK dos fatos)');
+  execute replace(v_def, 'perform fn_materializar_fatos_do_caso(p_caso_id, ''entidade'', ''fusao_de_entidade'');', 'null;');
+  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fundir_entidade_leva_os_fatos'), 'a sonda acusa fn_fundir_entidade que não recalcula os fatos (cairia na FK dos fatos)');
   execute v_def;
 
   -- a materialização que acha a conta por outro critério que a seção: a sonda acusa pelo COMPORTAMENTO (o fato novo discorda da linha), não por um marcador de corpo
-  v_def := pg_get_functiondef('fn_fato_resolver(uuid,boolean)'::regprocedure);
+  v_def := pg_get_functiondef('fn_fato_resolver(uuid)'::regprocedure);
   execute replace(v_def, 'left join conta_canonica c on c.secao_canonica = a.secao', 'left join conta_canonica c on c.codigo = a.tipo');
   v_new := pg_temp.doc(v_cs, 'SONDA P27 LTDA', '2025', 'BALANCO', 'r3-s2', jsonb_build_array(pg_temp.l('Caixa S2', '5', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025')));
   update documento_versao set criada_em = now() + interval '3 days' where id = v_new;
