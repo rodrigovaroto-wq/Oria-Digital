@@ -379,3 +379,9 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
   concilia com o balanço extraído (positivos × Clientes, negativos × Adiantamentos), abrindo
   pendência com a diferença pela camada de reconciliação que já existe.
 
+### MB3b — 0274 aplicada em 12/11/2026; a conciliação tem 3 ALTOS a corrigir (0275) antes de ser usada
+
+- **No ar:** `aging_importado`, `fn_aging_importar`, `fn_reconciliar_aging` (positivos × Clientes/Fornecedores, negativos × Adiantamentos, tolerância de meia unidade da escala). Vazia; nada a chama ainda.
+- **Revisão independente depois da aplicação:** 3 ALTOS (pendência chaveada pelo documento e não pela data-base; pai + filhos de Fornecedores em dobro nos balanços reais de 28 de 53 mandatos; balanço só no combinado tratado como ausente) e 5 médios. Detalhe no `ESTADO.md` (S127b). Nenhum ativo: disparam na primeira importação.
+- **Próxima fatia: a 0275**, que reemite `fn_reconciliar_aging` e `fn_aging_linhas_do_balanco`, medida contra os balanços REAIS de produção (leitura), não só contra a fixture. Só depois a ME2 (a tela) pode chamar a importação. A ligação na rodada (`fn_reconciliar_caso`) segue como decisão do dono.
+
