@@ -20,6 +20,12 @@ for r in anon authenticated service_role; do
   psql -tAc "select 1 from pg_roles where rolname='$r'" | grep -q 1 \
     || psql -q -c "create role $r nologin"
 done
+# O leitor SÓ-LEITURA da API de gerenciamento do Supabase, criado ANTES das migrations, como é em produção (membro de pg_monitor e pg_read_all_data, rolbypassrls = true;
+# nologin aqui). Sem isto as migrations rodavam sem o papel e o bloco `if exists (select 1 from pg_roles where rolname = 'supabase_read_only_user')` dos grants nunca
+# executava: a 0242 chegou a produção com a sonda ilegível para esse leitor ("permission denied for function fn_conta_canonica_orfas") e nenhum teste acusou (11/11/2026).
+psql -tAc "select 1 from pg_roles where rolname='supabase_read_only_user'" | grep -q 1 \
+  || psql -q -c "create role supabase_read_only_user nologin bypassrls"
+psql -q -c "alter role supabase_read_only_user nologin bypassrls" -c "grant pg_read_all_data, pg_monitor to supabase_read_only_user"
 psql -q -d "$DB" -c "
   create schema if not exists storage;
   create table if not exists storage.buckets(id text primary key, name text, public boolean default false,
@@ -989,12 +995,21 @@ echo "== 0241 — a descrição que o período irmão reescrevia (a pendência s
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_descricao_que_o_periodo_irmao_reescrevia.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo
+echo "== 0242 — a seção que só existia em código (conta_canonica: toda seção das fixtures tem conta, raiz declarada, pai da mesma demonstração, sem ciclo; a sonda não está cega)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conta_canonica.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o inteiro >= 1 grava, o inválido vira nulo sem abortar o lote, sem a chave grava como antes)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo "== 0271 — o quadro de imobilizado que a IA gravava como balanço (tipo COMPOSICAO_IMOBILIZADO: existe, não entra nas checagens de balanço)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo "== carga inicial dos índices macro (dado real, versionado)"

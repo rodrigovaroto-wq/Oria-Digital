@@ -121,6 +121,7 @@
 {"k":"n","id":"arquivo:Supabase/test/conferir-chamadas.mjs","t":"arquivo","f":"Supabase/test/conferir-chamadas.mjs","txt":"conferir-chamadas.mjs"}
 {"k":"n","id":"arquivo:Supabase/test/conferir_envio.test.sql","t":"arquivo","f":"Supabase/test/conferir_envio.test.sql","txt":"conferir_envio.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/conferir_envio_v2.test.sql","t":"arquivo","f":"Supabase/test/conferir_envio_v2.test.sql","txt":"conferir_envio_v2.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/conta_canonica.test.sql","t":"arquivo","f":"Supabase/test/conta_canonica.test.sql","txt":"conta_canonica.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/controlador_familia.test.sql","t":"arquivo","f":"Supabase/test/controlador_familia.test.sql","txt":"controlador_familia.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/custo_do_lote.test.sql","t":"arquivo","f":"Supabase/test/custo_do_lote.test.sql","txt":"custo_do_lote.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/desativar_premissa.test.sql","t":"arquivo","f":"Supabase/test/desativar_premissa.test.sql","txt":"desativar_premissa.test.sql"}
@@ -215,6 +216,7 @@
 {"k":"n","id":"arquivo:Supabase/test/serie_por_ano_movimento_e_abertura.test.sql","t":"arquivo","f":"Supabase/test/serie_por_ano_movimento_e_abertura.test.sql","txt":"serie_por_ano_movimento_e_abertura.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/sonda-producao.mjs","t":"arquivo","f":"Supabase/test/sonda-producao.mjs","txt":"sonda-producao.mjs"}
 {"k":"n","id":"arquivo:Supabase/test/sonda-producao.test.mjs","t":"arquivo","f":"Supabase/test/sonda-producao.test.mjs","txt":"sonda-producao.test.mjs"}
+{"k":"n","id":"arquivo:Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql","t":"arquivo","f":"Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql","txt":"sonda_para_o_leitor_somente_leitura.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/sonda_ve_gatilho.test.sql","t":"arquivo","f":"Supabase/test/sonda_ve_gatilho.test.sql","txt":"sonda_ve_gatilho.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/tolerancia_na_base.test.sql","t":"arquivo","f":"Supabase/test/tolerancia_na_base.test.sql","txt":"tolerancia_na_base.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/transcricao_humana.test.sql","t":"arquivo","f":"Supabase/test/transcricao_humana.test.sql","txt":"transcricao_humana.test.sql"}
@@ -432,6 +434,8 @@
 {"k":"n","id":"fn:fn_conferir_lote","t":"fn","f":"Supabase/migrations/0112_lote_conferido_documento_por_documento.sql","txt":"conferir lote"}
 {"k":"n","id":"fn:fn_conferir_modelagem","t":"fn","f":"Supabase/migrations/0158_o_pronto_que_nao_provava_cobertura.sql","txt":"conferir modelagem"}
 {"k":"n","id":"fn:fn_conflitos_do_caso","t":"fn","f":"Supabase/migrations/0159_o_rotulo_que_a_propria_estrutura_desmente.sql","txt":"conflitos do caso"}
+{"k":"n","id":"fn:fn_conta_canonica_alcanca_a_raiz","t":"fn","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","txt":"conta canonica alcanca a raiz"}
+{"k":"n","id":"fn:fn_conta_canonica_orfas","t":"fn","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","txt":"conta canonica orfas"}
 {"k":"n","id":"fn:fn_contas_repetindo_valor","t":"fn","f":"Supabase/migrations/0140_a_coluna_de_dimensao_nao_e_valor.sql","txt":"contas repetindo valor"}
 {"k":"n","id":"fn:fn_contraparte_intragrupo","t":"fn","f":"Supabase/migrations/0124_intragrupo_que_nao_e_mutuo.sql","txt":"contraparte intragrupo"}
 {"k":"n","id":"fn:fn_controlador_desvincular_familia","t":"fn","f":"Supabase/migrations/0212_o_bloco_familiar_que_o_controle_comum_nao_via.sql","txt":"controlador desvincular familia"}
@@ -847,6 +851,7 @@
 {"k":"n","id":"migration:0234","t":"migration","f":"Supabase/migrations/0234_o_periodo_que_o_documento_tinha_e_a_checagem_nao_lia.sql","txt":"o periodo que o documento tinha e a checagem nao lia"}
 {"k":"n","id":"migration:0240","t":"migration","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","txt":"a versao atual que nao seguia a vigente"}
 {"k":"n","id":"migration:0241","t":"migration","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","txt":"a descricao que o periodo irmao reescrevia"}
+{"k":"n","id":"migration:0242","t":"migration","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","txt":"a secao que so existia em codigo"}
 {"k":"n","id":"migration:0270","t":"migration","f":"Supabase/migrations/0270_a_linha_que_nao_sabia_de_que_linha_veio.sql","txt":"a linha que nao sabia de que linha veio"}
 {"k":"n","id":"migration:0271","t":"migration","f":"Supabase/migrations/0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql","txt":"o quadro de imobilizado que a ia gravava como balanco"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
@@ -1415,6 +1420,7 @@
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso_de","f":"Supabase/test/conferir_envio_v2.test.sql","l":273}
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_falha_execucao","f":"Supabase/test/conferir_envio_v2.test.sql","l":140}
 {"k":"e","de":"arquivo:Supabase/test/conferir_envio_v2.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/conferir_envio_v2.test.sql","l":14}
+{"k":"e","de":"arquivo:Supabase/test/conta_canonica.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/conta_canonica.test.sql","l":246}
 {"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_desvincular_familia","f":"Supabase/test/controlador_familia.test.sql","l":174}
 {"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_registrar","f":"Supabase/test/controlador_familia.test.sql","l":48}
 {"k":"e","de":"arquivo:Supabase/test/controlador_familia.test.sql","rel":"CHAMA","pa":"fn:fn_controlador_vincular_familia","f":"Supabase/test/controlador_familia.test.sql","l":74}
@@ -2019,6 +2025,8 @@
 {"k":"e","de":"arquivo:Supabase/test/sonda-producao.mjs","rel":"CHAMA","pa":"fn:fn_upsert_entidade","f":"Supabase/test/sonda-producao.mjs","l":83}
 {"k":"e","de":"arquivo:Supabase/test/sonda-producao.test.mjs","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/sonda-producao.test.mjs","l":54}
 {"k":"e","de":"arquivo:Supabase/test/sonda-producao.test.mjs","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"Supabase/test/sonda-producao.test.mjs","l":37}
+{"k":"e","de":"arquivo:Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_conta_canonica_orfas","f":"Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql","l":4}
+{"k":"e","de":"arquivo:Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql","l":3}
 {"k":"e","de":"arquivo:Supabase/test/sonda_ve_gatilho.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/sonda_ve_gatilho.test.sql","l":4}
 {"k":"e","de":"arquivo:Supabase/test/sonda_ve_gatilho.test.sql","rel":"CHAMA","pa":"fn:fn_trg_auto_promover_dial","f":"Supabase/test/sonda_ve_gatilho.test.sql","l":8}
 {"k":"e","de":"arquivo:Supabase/test/tolerancia_na_base.test.sql","rel":"CHAMA","pa":"fn:fn_fator_escala","f":"Supabase/test/tolerancia_na_base.test.sql","l":34}
@@ -2916,6 +2924,8 @@
 {"k":"e","de":"migration:0240","rel":"CRIA","pa":"fn:fn_versao_mais_nova","f":"Supabase/migrations/0240_a_versao_atual_que_nao_seguia_a_vigente.sql","l":54}
 {"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_corrigir_descricao_contaminada","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":371}
 {"k":"e","de":"migration:0241","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0241_a_descricao_que_o_periodo_irmao_reescrevia.sql","l":71}
+{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_conta_canonica_alcanca_a_raiz","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","l":111}
+{"k":"e","de":"migration:0242","rel":"CRIA","pa":"fn:fn_conta_canonica_orfas","f":"Supabase/migrations/0242_a_secao_que_so_existia_em_codigo.sql","l":101}
 {"k":"e","de":"migration:0270","rel":"CRIA","pa":"fn:fn_registrar_campos_extraidos","f":"Supabase/migrations/0270_a_linha_que_nao_sabia_de_que_linha_veio.sql","l":71}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
