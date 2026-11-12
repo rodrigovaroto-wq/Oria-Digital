@@ -1,6 +1,6 @@
 -- 0243 — A LINHA QUE NÃO TINHA IDENTIDADE: `fato_financeiro` acima de `campo_extraido` (P27, Fase 3, etapa 3.2) — o fato canônico (conta = a SEÇÃO da linha, entidade e período pela coluna da linha quando ela diz), a pendência da heurística e o backfill que não abre fila.
 -- (Cria 1 tabela, fato_financeiro, as funções fn_tipo_gera_fato, fn_linha_vira_fato, fn_fato_resolver, fn_fato_pode_escrever, fn_materializar_fatos, fn_fato_pendencia_da_versao, fn_materializar_fatos_da_extracao, fn_fato_repontar_entidade, fn_materializar_fatos_backfill e as dos 3 gatilhos de função (documento, mesmo mandato, extração nova), 1 gatilho em documento, 1 em evento_auditoria, 1 em fato, 2 em periodo/entidade, 1 rótulo de pendencia_tipo
---  (conta_canonica_incerta), 5 views da sonda e 33 requisitos novos (ordem 1105-1139). Reemite INTEIRA fn_fundir_entidade (corpo da 0213, conferido igual ao do banco montado; repõe os fatos). NÃO reemite fn_registrar_campos_extraidos: a extração nova materializa por gatilho em evento_auditoria (decisão 7), para não apagar o `ln` da 0270. O backfill roda na própria migration. Idempotente: pode ser reaplicada.)
+--  (conta_canonica_incerta), 5 views da sonda e 32 requisitos novos (ordem 1105-1139). Reemite INTEIRA fn_fundir_entidade (corpo da 0213, conferido igual ao do banco montado; repõe os fatos). NÃO reemite fn_registrar_campos_extraidos: a extração nova materializa por gatilho em evento_auditoria (decisão 7), para não apagar o `ln` da 0270. O backfill roda na própria migration. Idempotente: pode ser reaplicada.)
 --
 -- O DEFEITO. A identidade de uma linha financeira era `(secao_canonica, rótulo)` em `campo_extraido`: texto livre, sem FK, sem entidade nem período PRÓPRIOS (a linha tem `entidade_coluna` e `periodo_coluna` em texto; o documento tem UM `entidade_id`/`periodo_id`). Toda reconciliação refaz esse
 -- casamento por rótulo (a família de bugs que a F4 existe para extinguir) e nada diz, por linha, "a conta é esta, a entidade é esta, o período é este — e foi a IA quem disse, ou foi um palpite nosso". O roadmap (ARQUITETURA_ALVO_E_ROADMAP, F4) define `fato_financeiro` ACIMA de `campo_extraido`, que NÃO muda (ADR 01: a
@@ -47,7 +47,7 @@
 --      e o backfill são do serviço. O gatilho trg_fato_mesmo_caso recusa entidade ou período de OUTRO mandato, também ao serviço. A materialização por reclassificação humana do documento grava o ator REAL (usuario:<id>). A sonda confere a guarda (corpo, search_path fixo) e a AUSÊNCIA de privilégio e policy de escrita do authenticated em fato_financeiro.
 --  10. DESEMPENHO DO BACKFILL. Medido no local com 123.969 linhas de campo_extraido (as fixtures ×30, sintético: serve só para o TEMPO) e 76.229 elegíveis: 2,96 s o backfill e 0,12 s a segunda chamada (idempotente). Na primeira versão levava 21 s: `fn_papel_linha` (~180 µs) rodava POR LINHA; medido em produção, 100.215 linhas de demonstração com valor têm
 --      só 6.841 combinações (tipo, rótulo, unidade) distintas (15x menos). Agora o papel roda uma vez por combinação, em duas CTEs `MATERIALIZED` (uma só e o Postgres empurra o filtro para dentro do distinct e volta a chamar por linha: medido). Teto: o tempo cresce com as linhas SEM fato, e a chamada por versão (a extração nova) lê só as da versão.
---  11. O TETO da materialização na extração nova e o CUSTO DOS GATILHOS estão no fim deste cabeçalho ("O TETO"), com quando agir. APLICAÇÃO: `create trigger` em documento, periodo e entidade segura lock até o COMMIT e o backfill roda na mesma transação: `set local lock_timeout = '5s'` antes dos `create trigger` faz a aplicação falhar RÁPIDO (e se reaplica, a migration é idempotente) em vez de esperar um lote do n8n e arriscar deadlock.
+--  11. O TETO da materialização na extração nova e o CUSTO DOS GATILHOS estão no fim deste cabeçalho ("O TETO"), com quando agir. APLICAÇÃO E LOCKS (corrigido na 3ª revisão, M5: a versão anterior dizia só dos `create trigger`): o backfill roda na mesma transação da migration, e TUDO que segura lock até o COMMIT é criado depois dele: o `create table` nasce SEM as FKs para campo_extraido, documento_versao, entidade e periodo (cada uma segura ShareRowExclusive na tabela referenciada), e as FKs e os `create trigger` em documento, periodo, entidade e evento_auditoria vêm depois do backfill. `set local lock_timeout = '5s'` logo depois do `begin` faz a aplicação falhar RÁPIDO (e se reaplica: a migration é idempotente) em vez de esperar um lote do n8n e arriscar deadlock. MEDIDO (pg_locks, a migration cortada antes do backfill): ShareRowExclusiveLock em campo_extraido, documento_versao, entidade e periodo ANTES da correção (4 tabelas), nenhum DEPOIS. A janela sem FK (entre o backfill e as FKs, na mesma transação) só falha por inteiro se um lote apagar uma linha nesse intervalo: a validação da FK reprova e a migration volta atrás.
 --
 -- MEDIDO EM PRODUÇÃO ANTES DE ESCREVER (11/11/2026, somente leitura, a mesma consulta de resolução da migration sem escrever; versões vigentes por fn_versao_atual) — o que o backfill criaria: 85.531 fatos em demonstração.
 --   Vigentes 68.523: declarada 62.075, heuristica 2.194, sem_conta 4.254 (todas secao_nao_declarada; 0 fora_do_catalogo). Versões antigas 17.008: declarada 14.616, heuristica 994, sem_conta 1.398. Total: declarada 76.691, heuristica 3.188, sem_conta 5.652.
@@ -64,7 +64,7 @@
 -- a LISTA DOS TIPOS por view, tipo a tipo (os 8 que geram e 2 que não podem gerar), independente do corpo; os corpos (o gatilho da extração nova e o que ele chama; a resolução que pergunta a fn_linha_vira_fato, acha a conta só pela seção, o período pela coluna, só dá o período do documento à coluna de saldo, não manda o parcial para o ano e não duplica o total; a materialização idempotente;
 -- a pendência por versão, a que a extração nova abre, a fusão que repõe); o gatilho do documento pela função que ele tem de chamar e o gatilho de mesmo mandato.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/fato_financeiro.test.sql — 159 asserts (159 execuções, contadas pelo portão medicao-denominador e pelo NOTICE `fato_financeiro: 159 asserts executados, N reprovados`; a migration aplicou e o teste aparece no log em todas as rodadas). Controle (migration intacta): 0 dos 159.
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/fato_financeiro.test.sql — 175 asserts (175 execuções, contadas pelo portão medicao-denominador e pelo NOTICE `fato_financeiro: 175 asserts executados, N reprovados`; a migration aplicou e o teste aparece no log em todas as rodadas). Controle (migration intacta): 0 dos 175. OS NÚMEROS POR PARTE ABAIXO SÃO DA 3ª VERSÃO SOBRE 159 ASSERTS (denominador de então); a 3ª revisão, acima, está medida sobre 175.
 -- Medido em 12/11/2026, sobre o banco montado pelo run.sh: cada sabotagem é a função reemitida com um `replace` sobre pg_get_functiondef (a troca CONFERIDA como aplicada: se o texto não existe a medição aborta) ou o gatilho removido/desabilitado; o teste roda inteiro com `ff.medindo=on` (o assert vira contagem, não aborta), a cópia
 -- do teste SEM as duas linhas do topo que reaplicam a migração (senão ela desfaria a sabotagem), o log lido atrás de FALHOU:, e a migration reaplicada para restaurar. A 3ª tentativa (critério novo) e o gatilho da extração nova são desta rodada; as demais partes foram medidas na 1ª e na 2ª versão e REMEDIDAS nesta rodada onde está o número.
 --   * O BLOQUEIO DA 0270, o gatilho da extração nova: o gatilho trg_fato_extracao_nova removido 66 dos 159 (a extração grava a linha e o fato nunca nasce); a função do gatilho sem chamar a materialização 66; fn_registrar_campos_extraidos com o `ln` descartado (o corpo da 0231, o que a 0243 reemitia e apagaria a 0270) 1 dos 159 (o assert do `ln` gravado); a sonda acusa o gatilho desabilitado e a função que não chama (asserts da parte k).
@@ -76,6 +76,20 @@
 --   * O ACL DE PRODUÇÃO (o `revoke all` antes do `grant select`): a migration sem o revoke, com o default de produção simulado (`grant all` ao authenticated) 5 dos 159 (esta sabotagem roda o teste COM as duas linhas do topo, apontando para a cópia da migration sem o revoke).
 --   * Elegibilidade (fn_linha_vira_fato): só "tem valor" (sem tipo e sem papel) 9 dos 159; sem o papel conta (o subtotal vira fato) 9; o BALANCO fora da lista de tipos 58; a conta achada pelo tipo do documento em vez da seção 11; a versão superada sem baixar a pendência da v1 3; o query_canceled engolido 1; fn_fundir_entidade sem repor os fatos 2.
 --   * NÃO REMEDIDAS nesta rodada (números da 2ª versão, sobre 127 asserts, no commit 1e195b2): o backfill abrindo pendência, o motivo da pendência com uuid, as FKs de dimensão imediatas, as views da sonda fixas em ok, a lista dos tipos na sonda e o leitor só-leitura (Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql, 6 asserts, controle 0 dos 6; sem o grant da 0242 4 dos 6, sem o da 0243 4 dos 6, só o da transitiva fn_papel_linha 4 dos 6).
+-- A 3ª REVISÃO INDEPENDENTE (do commit 006bbab: 3 altos, 3 médios, 1 baixo, todos corrigidos aqui; MEDIDOS em 12/11/2026 pelo mesmo protocolo, sobre 175 asserts — o arquivo ganhou 16: 175 asserts, 175 execuções, conferido pelo portão):
+--   * ALTO 1 (duas colunas da mesma entidade): fn_coluna_entidade usa `limit 1` sem order by, então com "Alfa Comércio Atacado" (não cadastrada) e "Alfa Comércio" a ALFA recebia 77 conforme a ordem física, com a coluna própria anulada pelo motivo falso coluna_sem_entidade_no_mandato. Agora a unicidade é por (versão, entidade): as colunas distintas em que fn_mesma_entidade é verdadeira; mais de uma = nenhuma é atribuída, motivo
+--     PRÓPRIO entidade_com_varias_colunas (a constraint de motivos cresceu; ela saiu do create table e é recriada por drop+add, porque `create table if not exists` não atualiza tabela existente). Testado nas DUAS ordens de gravação. Sem a correção 4 dos 175 reprovam (a ALFA recebe a coluna, o motivo falso, e as duas ordens DÃO identidades diferentes: o assert de igualdade entre as ordens reprova com 4 linhas diferentes).
+--   * ALTO 2 (tipo que muda entre dois da lista): fn_fato_resolver depende do tipo via fn_periodo_e_parcial (DRE não é parcial, BALANCETE é); o gatilho do documento só re-resolvia quando mudavam a entidade ou o período do documento. Agora o tipo mudou também re-resolve. A INVARIANTE afirmada: re-resolver depois de mudar o tipo dá a mesma identidade que materializar do zero um documento já desse tipo. Sem a correção 2 dos 175.
+--   * ALTO 3 (regra 7, a sonda verde com a extração desligada): a amostra "recentes" era das versões COM o evento extracao_sombra, o mesmo que dispara o gatilho; se fn_registrar_campos_extraidos deixasse de gravá-lo (ou o gravasse antes da herança da seção), a amostra ficava vazia e a sonda inteira verde com zero fato novo. Agora a sonda mede por COMPORTAMENTO, sem olhar evento: as 20 versões mais novas
+--     de demonstração com linha de extração têm fato para toda linha elegível E o fato concorda com a linha (conta = a seção dela, método pela flag de inferida; fato nascido antes da herança discorda e é acusado). NÃO há requisito de corpo que ancore o insert do evento nem a posição dele: a P11 reemite fn_registrar_campos_extraidos a cada fatia e esse requisito viraria contrato com ela; o comportamento prova o estágio sem prender a função.
+--     Custo no run.sh: as fixtures e vários testes gravam linha por SQL direto e comitam, sem passar pela extração; o run.sh chama o backfill da 0243 antes do teste da sonda de instalação (a produção tem o mesmo estado: o backfill da migration cobre o que já estava lá). Sem a correção (a view antiga, pelo evento) 3 dos 175 reprovam (a extração sem fato e sem evento, o fato de seção velha, a conta por outro critério); sem só a concordância de conta e método 2 dos 175.
+--     Um efeito a saber: se uma pessoa corrigir a seção da linha depois de materializada, o fato fica velho e a sonda o acusa enquanto a versão estiver entre as 20 mais novas: é o estágio dizendo a verdade (o fato não acompanhou a linha), não um falso positivo.
+--   * M4 (a entidade atribuída por coluna envelhece): fn_fato_reresolver_caso filtrava `entidade_id is null`: renomear BETA para DELTA deixava os 7 fatos da coluna "Beta Indústria" na entidade renomeada, e uma 2ª entidade que casa a coluna não a tornava coluna_casa_varias_entidades. Agora também re-resolve os fatos com entidade_origem coluna ou coluna_total do mandato. Sem a correção 2 dos 175.
+--   * M5 (locks): ver a decisão 11 (as FKs e os gatilhos depois do backfill, lock_timeout logo depois do begin). Não há assert para lock: MEDIDO por pg_locks (4 tabelas com ShareRowExclusiveLock antes, nenhuma depois). A separação em duas transações não é possível: a API de gerenciamento envolve o lote numa só.
+--   * M6 (requisitos de corpo presos a alias de CTE): os marcadores viraram estáveis (nome de função, literal de motivo): fn_linha_vira_fato(, fn_coluna_entidade(, fn_coluna_e_saldo(, fn_periodo_e_parcial(, fn_periodo_canonico(, coluna_total_ambigua, mais_de_uma_coluna_para_o_mesmo_periodo. O requisito da conta-só-pela-seção saiu: é provado pelo comportamento (a concordância da sonda recentes). Preço honesto: um marcador estável é mais fraco
+--     (a sabotagem "coluna escolhida sem exigir unicidade" antes reprovava 4 dos 159 e agora 2 dos 175: a sonda de corpo deixou de pegá-la, os asserts de comportamento continuam). São 32 requisitos novos (antes 33).
+--   * B7 (default de função): o `pg_default_acl` de funções do Supabase dá EXECUTE ao authenticated; fn_materializar_fatos e fn_fato_pendencia_da_versao (esta sem guarda de mandato) ficaram executáveis. Agora revogadas também do authenticated; o teste simula o default (grant execute) e reaplica a migration. Sem o revoke 3 dos 175 reprovam (os dois asserts novos e o do "execute só do serviço").
+--   * O teste isolado reprova asserts de ARRANJO (sobre as fixtures de vertentes e canastra: >= 1.000 linhas elegíveis, >= 100 sem conta, >= 50 subtotais, >= 20 versões, e a parte j que conta fatos de outros mandatos) porque depende dos dados que o run.sh carrega e do estado de suítes anteriores: NÃO foi tornado autossuficiente, porque isso exigiria inventar um corpus (regra 4). Rode-o pelo run.sh.
 -- ACHADOS DA MEDIÇÃO (não do desenho): (1) fn_papel_linha por linha: 21 s no backfill de 124 mil linhas, 2,96 s por combinação distinta; (2) o filtro empurrado para dentro do distinct (uma só CTE) refazia a conta por linha; (3) a FK nova de entidade derrubaria a fusão (fn_fundir_entidade), e o gatilho do documento é o que
 -- mantém a identidade do fato quando uma pessoa corrige o documento; (4) o assert que chama `pg_temp` como `authenticated` morre em `permission denied for sequence`: os asserts rodam depois do `reset role`; (5) com a falha do fato ou da fusão fora do sub-bloco, a sabotagem ABORTA o arquivo e a contagem some: as chamadas ficaram em sub-bloco para a medição contar;
 -- (6) a FK imediata de fato_financeiro.entidade_id derrubou `delete from caso` no historico_do_caso.test.sql do run.sh (cascatas em profundidades diferentes): FKs adiadas e um assert de exclusão de mandato; (7) a sonda `recentes` dava ausência falsa no run.sh com 2 versões de fixture de teste (linhas inseridas direto): a amostra passou a ser só de versões com o evento extracao_sombra;
@@ -93,23 +107,27 @@ alter type pendencia_tipo add value if not exists 'conta_canonica_incerta';
 
 begin;
 
+-- LOCK: `set local lock_timeout` logo depois do begin (3ª revisão, M5): nada abaixo espera um lote do n8n por mais de 5 s. A tabela nasce SEM as FKs para campo_extraido, documento_versao, entidade e periodo (cada uma segura ShareRowExclusive na tabela referenciada até o COMMIT, e o backfill roda na mesma transação):
+-- elas são acrescentadas DEPOIS do backfill, junto dos gatilhos, e o lock nessas quatro tabelas dura a validação (centenas de ms), não o backfill inteiro.
+set local lock_timeout = '5s';
+
 -- -----------------------------------------------------------------------------
 -- A tabela. UMA linha por campo_extraido elegível (FK única): a evidência fica onde está, o fato nasce acima dela (ADR 01).
 -- -----------------------------------------------------------------------------
 create table if not exists fato_financeiro (
   id                  uuid primary key default gen_random_uuid(),
-  campo_extraido_id   uuid not null references campo_extraido(id) on delete cascade,
-  documento_versao_id uuid not null references documento_versao(id) on delete cascade,
+  campo_extraido_id   uuid not null,
+  documento_versao_id uuid not null,
   conta_id            text references conta_canonica(codigo),
   resolucao_metodo    text not null,
   sem_conta_motivo    text,
   -- DEFERRABLE INITIALLY DEFERRED nas duas FKs de dimensão: excluir o mandato (delete from caso) apaga entidade e período por uma cascata e os fatos por OUTRA, mais funda (documento > versão > linha > fato);
   -- a FK imediata recusava a exclusão quando a cascata da entidade terminava antes da dos fatos (medido: historico_do_caso.test.sql, `delete from caso`). Adiada, o Postgres confere no fim da transação, com tudo já apagado.
-  entidade_id         uuid references entidade(id) deferrable initially deferred,
+  entidade_id         uuid,
   entidade_origem     text,
   entidade_motivo     text,
   entidade_coluna     text,
-  periodo_id          uuid references periodo(id) deferrable initially deferred,
+  periodo_id          uuid,
   periodo_origem      text,
   periodo_motivo      text,
   periodo_coluna      text,
@@ -125,11 +143,6 @@ create table if not exists fato_financeiro (
     (sem_conta_motivo is null) = (resolucao_metodo <> 'sem_conta')
     and (sem_conta_motivo is null or sem_conta_motivo in ('secao_nao_declarada', 'secao_fora_do_catalogo'))),
   -- identidade nula = identidade EXPLICADA: o id, a origem e o motivo andam juntos (id nulo <=> origem nula <=> motivo preenchido)
-  constraint fato_financeiro_entidade_ck check (
-    (entidade_id is null) = (entidade_origem is null)
-    and (entidade_id is null) = (entidade_motivo is not null)
-    and (entidade_origem is null or entidade_origem in ('documento', 'coluna', 'coluna_total'))
-    and (entidade_motivo is null or entidade_motivo in ('documento_sem_entidade', 'coluna_sem_entidade_no_mandato', 'coluna_casa_varias_entidades', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade'))),
   constraint fato_financeiro_periodo_ck check (
     (periodo_id is null) = (periodo_origem is null)
     and (periodo_id is null) = (periodo_motivo is not null)
@@ -137,6 +150,14 @@ create table if not exists fato_financeiro (
     and (periodo_motivo is null or periodo_motivo in ('documento_sem_periodo', 'periodo_da_coluna_nao_cadastrado', 'coluna_de_abertura', 'coluna_nao_e_o_periodo_do_documento', 'linha_sem_coluna_em_documento_com_colunas', 'mais_de_uma_coluna_para_o_mesmo_periodo'))),
   constraint fato_financeiro_origem_ck check (origem in ('extracao', 'backfill_0243'))
 );
+-- A constraint da entidade fora do create table: o conjunto de motivos cresceu na 3ª revisão (entidade_com_varias_colunas) e `create table if not exists` não atualiza a tabela que já existe.
+-- identidade nula = identidade EXPLICADA: o id, a origem e o motivo andam juntos (id nulo <=> origem nula <=> motivo preenchido)
+alter table fato_financeiro drop constraint if exists fato_financeiro_entidade_ck;
+alter table fato_financeiro add constraint fato_financeiro_entidade_ck check (
+    (entidade_id is null) = (entidade_origem is null)
+    and (entidade_id is null) = (entidade_motivo is not null)
+    and (entidade_origem is null or entidade_origem in ('documento', 'coluna', 'coluna_total'))
+    and (entidade_motivo is null or entidade_motivo in ('documento_sem_entidade', 'coluna_sem_entidade_no_mandato', 'coluna_casa_varias_entidades', 'entidade_com_varias_colunas', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade')));
 create index if not exists fato_financeiro_versao_idx on fato_financeiro (documento_versao_id);
 create index if not exists fato_financeiro_entidade_idx on fato_financeiro (entidade_id);
 create index if not exists fato_financeiro_conta_idx on fato_financeiro (conta_id);
@@ -269,12 +290,26 @@ language sql stable as $$
       from (select distinct documento_versao_id, caso_id, tipo, doc_entidade, doc_periodo, dper_tipo, dper_ref from alvo) v
   ),
   -- ===== ENTIDADE: quem decide é fn_coluna_entidade (0023/0030, com fn_mesma_entidade): a coluna que ela devolve para a entidade E é a coluna de E. Nenhum casamento de nome é escrito aqui.
+  -- 3ª REVISÃO, ALTO 1: fn_coluna_entidade devolve UMA coluna por entidade (`limit 1` sem order by). Com duas colunas do documento que casam o nome da MESMA entidade ("Alfa Comércio Atacado", empresa não cadastrada, e "Alfa Comércio") ela entrega a que a ordem física der, e a ALFA recebia a soma de uma coluna que
+  -- talvez nem fosse dela, com a própria coluna anulada pelo motivo falso coluna_sem_entidade_no_mandato. Unicidade por (versão, entidade): as colunas DISTINTAS do documento em que fn_mesma_entidade é verdadeira para a entidade; mais de uma = nenhuma delas é atribuída (entidade_com_varias_colunas).
+  ecols as materialized (
+    select distinct ce.documento_versao_id, v.caso_id, nullif(btrim(ce.entidade_coluna), '') as col
+      from (select distinct documento_versao_id, caso_id from alvo where ecol is not null) v
+      join campo_extraido ce on ce.documento_versao_id = v.documento_versao_id and nullif(btrim(ce.entidade_coluna), '') is not null
+  ),
+  enome as materialized (
+    select c.documento_versao_id, c.col, e.id as entidade_id
+      from ecols c join entidade e on e.caso_id = c.caso_id
+     where fn_mesma_entidade(c.col, e.razao_social)
+  ),
+  enome_n as materialized (select documento_versao_id, entidade_id, count(distinct col) as n from enome group by 1, 2),
   eescolha as materialized (
     select x.documento_versao_id, x.col, x.entidade_id, x.razao_social
       from (select v.documento_versao_id, e.id as entidade_id, e.razao_social, nullif(btrim(fn_coluna_entidade(v.documento_versao_id, e.id)), '') as col
               from (select distinct documento_versao_id, caso_id from alvo where ecol is not null) v
               join entidade e on e.caso_id = v.caso_id) x
      where x.col is not null and x.col <> chr(1)
+       and not exists (select 1 from enome_n n where n.documento_versao_id = x.documento_versao_id and n.entidade_id = x.entidade_id and n.n > 1)
   ),
   emap as materialized (
     select documento_versao_id, col, count(*) as n, (array_agg(entidade_id))[1] as entidade_id, bool_or(fn_mesma_entidade(col, razao_social)) as por_nome
@@ -304,6 +339,8 @@ language sql stable as $$
                 when m.n = 1 and coalesce(t.n, 0) <= 1 then null
                 when m.n = 1 then 'coluna_total_ambigua'
                 when m.n > 1 then 'coluna_casa_varias_entidades'
+                when exists (select 1 from enome en join enome_n nn on nn.documento_versao_id = en.documento_versao_id and nn.entidade_id = en.entidade_id
+                              where en.documento_versao_id = k.documento_versao_id and en.col = k.ecol and nn.n > 1) then 'entidade_com_varias_colunas'
                 when fn_normalizar_texto(k.ecol) ~ '^(combinad|consolidad|total|soma)' then 'coluna_total_nao_escolhida'
                 else 'coluna_sem_entidade_no_mandato' end as motivo
       from (select x.documento_versao_id, x.doc_entidade, x.ecol, (ve.documento_versao_id is not null) as tem_ecols
@@ -582,7 +619,9 @@ begin
   return v_n;
 end $$;
 
-revoke all on function fn_materializar_fatos(uuid, text), fn_fato_pendencia_da_versao(uuid), fn_materializar_fatos_da_extracao(uuid, text), fn_fato_repontar_entidade(uuid, uuid, uuid) from public, anon;
+-- 3ª REVISÃO, B7: o `pg_default_acl` de FUNÇÕES do Supabase dá EXECUTE ao authenticated (e ao anon) em toda função nova de public. fn_materializar_fatos e fn_fato_pendencia_da_versao são do SERVIÇO (a segunda NÃO tem guarda de mandato: o authenticated abriria pendência em qualquer mandato): revoga também do authenticated.
+revoke all on function fn_materializar_fatos(uuid, text), fn_fato_pendencia_da_versao(uuid) from public, anon, authenticated;
+revoke all on function fn_materializar_fatos_da_extracao(uuid, text), fn_fato_repontar_entidade(uuid, uuid, uuid) from public, anon;
 grant execute on function fn_materializar_fatos(uuid, text), fn_fato_pendencia_da_versao(uuid) to service_role;
 grant execute on function fn_materializar_fatos_da_extracao(uuid, text), fn_fato_repontar_entidade(uuid, uuid, uuid) to authenticated, service_role;
 
@@ -616,8 +655,9 @@ begin
       return null;
     end if;
   end if;
+  -- 3ª REVISÃO, ALTO 2: a identidade também depende do TIPO (fn_periodo_e_parcial: BALANCETE é parcial, DRE não): DRE -> BALANCETE (os dois na lista) deixava os fatos com o período de antes, e o do zero seria nulo. Tipo mudou = re-resolve.
   if fn_tipo_gera_fato(new.tipo_taxonomia)
-     and (new.entidade_id is distinct from old.entidade_id or new.periodo_id is distinct from old.periodo_id) then
+     and (new.entidade_id is distinct from old.entidade_id or new.periodo_id is distinct from old.periodo_id or new.tipo_taxonomia is distinct from old.tipo_taxonomia) then
     for v_v in select id from documento_versao where documento_id = new.id loop
       update fato_financeiro f
          set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
@@ -645,13 +685,15 @@ begin
       join documento d on d.id = dv.documento_id
      where d.caso_id = p_caso
        and case p_dimensao when 'periodo' then f.periodo_id is null and f.periodo_motivo = 'periodo_da_coluna_nao_cadastrado'
-                           else f.entidade_id is null and f.entidade_motivo in ('coluna_sem_entidade_no_mandato', 'documento_sem_entidade', 'coluna_casa_varias_entidades', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade') end
+                           else (f.entidade_id is null and f.entidade_motivo in ('coluna_sem_entidade_no_mandato', 'documento_sem_entidade', 'coluna_casa_varias_entidades', 'entidade_com_varias_colunas', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade'))
+                 -- 3ª REVISÃO, M4: o que foi atribuído POR COLUNA também envelhece: renomear a entidade (BETA -> DELTA) deixava os fatos da coluna "Beta Indústria" na entidade renomeada, e uma 2ª entidade que casa a mesma coluna não a tornava coluna_casa_varias_entidades
+                 or f.entidade_origem in ('coluna', 'coluna_total') end
   loop
     update fato_financeiro f
        set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
            periodo_id = r.periodo_id, periodo_origem = r.periodo_origem, periodo_motivo = r.periodo_motivo
       from fn_fato_resolver(v_v, false) r
-     where r.campo_id = f.campo_extraido_id and (f.entidade_id is null or f.periodo_id is null)
+     where r.campo_id = f.campo_extraido_id
        and (f.entidade_id, f.entidade_origem, f.entidade_motivo, f.periodo_id, f.periodo_origem, f.periodo_motivo)
            is distinct from (r.entidade_id, r.entidade_origem, r.entidade_motivo, r.periodo_id, r.periodo_origem, r.periodo_motivo);
     get diagnostics v_k = row_count;
@@ -908,6 +950,21 @@ select fn_materializar_fatos_backfill();
 -- criados antes, o lock em documento e em evento_auditoria (que o n8n grava a cada extração) duraria o backfill inteiro; criados depois, dura os milissegundos até o commit. `set local lock_timeout = '5s'` faz a aplicação falhar RÁPIDO
 -- (e se reaplica: a migration é idempotente) em vez de esperar um lote do n8n e arriscar deadlock. Nenhum fato nasce entre o backfill e os gatilhos: é a mesma transação.
 set local lock_timeout = '5s';
+-- as FKs que o create table não leva (M5): idempotente por nome. As de dimensão são DEFERRABLE INITIALLY DEFERRED (8b); a da evidência e a da versão apagam em cascata.
+do $fk$ begin
+  if not exists (select 1 from pg_constraint where conrelid = 'public.fato_financeiro'::regclass and conname = 'fato_financeiro_campo_extraido_id_fkey') then
+    alter table fato_financeiro add constraint fato_financeiro_campo_extraido_id_fkey foreign key (campo_extraido_id) references campo_extraido(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.fato_financeiro'::regclass and conname = 'fato_financeiro_documento_versao_id_fkey') then
+    alter table fato_financeiro add constraint fato_financeiro_documento_versao_id_fkey foreign key (documento_versao_id) references documento_versao(id) on delete cascade;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.fato_financeiro'::regclass and conname = 'fato_financeiro_entidade_id_fkey') then
+    alter table fato_financeiro add constraint fato_financeiro_entidade_id_fkey foreign key (entidade_id) references entidade(id) deferrable initially deferred;
+  end if;
+  if not exists (select 1 from pg_constraint where conrelid = 'public.fato_financeiro'::regclass and conname = 'fato_financeiro_periodo_id_fkey') then
+    alter table fato_financeiro add constraint fato_financeiro_periodo_id_fkey foreign key (periodo_id) references periodo(id) deferrable initially deferred;
+  end if;
+end $fk$;
 drop trigger if exists trg_fato_segue_o_documento on documento;
 create trigger trg_fato_segue_o_documento
   after update of entidade_id, periodo_id, tipo_taxonomia on documento
@@ -957,9 +1014,10 @@ create or replace view instalacao_sonda_fato_financeiro_so_secao as
 comment on view instalacao_sonda_fato_financeiro_so_secao is
   'Sonda da 0243: uma linha = nenhum fato aponta para raiz, grupo ou subgrupo (nó sem secao_canonica). Zero linhas: um fato foi gravado numa conta que não é seção.';
 
--- A EXTRAÇÃO NOVA ESTÁ MATERIALIZANDO (regra 7: estágio que não rodou tem a cara de estágio que rodou e não achou nada). Uma AMOSTRA, não a tabela inteira (a sonda não cresce com o dado, 0132): as linhas de extração das 20 versões
--- mais novas de documento de demonstração QUE PASSARAM PELA EXTRAÇÃO (têm o evento extracao_sombra, gravado por fn_registrar_campos_extraidos, o mesmo que dispara o gatilho: a versão com linha inserida direto por SQL não é o que a pergunta mede; medido no run.sh: 2 versões de fixture de teste
--- caíam na amostra e davam ausência falsa). Antes do backfill e sem o gatilho ela está AUSENTE — é o que ela existe para dizer. A bijeção completa (toda linha elegível tem fato) é a consulta do README.
+-- A EXTRAÇÃO NOVA ESTÁ MATERIALIZANDO (regra 7: estágio que não rodou tem a cara de estágio que rodou e não achou nada) — pelo COMPORTAMENTO, não pelo corpo nem pelo evento (3ª revisão, ALTO 3: a versão anterior amostrava as versões com o evento extracao_sombra, o mesmo que dispara o gatilho; se fn_registrar_campos_extraidos
+-- deixasse de gravá-lo, ou o gravasse antes da herança da seção, a amostra ficava VAZIA e a sonda inteira verde com zero fato novo — a revisora reproduziu). Agora: as 20 versões mais novas de documento de demonstração que têm linha de EXTRAÇÃO elegível (origem_valor = 'extracao', fn_linha_vira_fato), sem olhar evento nenhum;
+-- cada linha elegível delas tem de ter fato E o fato tem de CONCORDAR com a linha como ela está hoje: a conta é o nó da seção da linha (ou sem_conta se o catálogo não a conhece) e o método é declarada/heuristica pela flag secao_canonica_inferida. Fato nascido antes da herança da seção (o evento gravado cedo demais) discorda da linha e é acusado.
+-- Uma AMOSTRA, porque a sonda não cresce com o dado (0132). Custo: 20 versões. Em produção o backfill da 0243 cobre o que já estava gravado, então a amostra é verdadeira desde a aplicação; no banco do run.sh o run.sh roda o backfill sobre as fixtures antes da sonda (como produção). A bijeção completa é a consulta do README.
 create or replace view instalacao_sonda_fato_financeiro_recentes as
   select 1 as ok
    where not exists (
@@ -967,13 +1025,18 @@ create or replace view instalacao_sonda_fato_financeiro_recentes as
        from (select dv.id, d.tipo_taxonomia
                from documento_versao dv join documento d on d.id = dv.documento_id
               where fn_tipo_gera_fato(d.tipo_taxonomia)
-                and exists (select 1 from evento_auditoria e where e.entidade_ref = 'documento_versao:' || dv.id and e.acao = 'extracao_sombra')
+                and exists (select 1 from campo_extraido x where x.documento_versao_id = dv.id and x.origem_valor = 'extracao' and x.valor_num is not null)
               order by dv.criada_em desc, dv.id limit 20) v
        join campo_extraido ce on ce.documento_versao_id = v.id and ce.origem_valor = 'extracao'
       where fn_linha_vira_fato(v.tipo_taxonomia, ce.chave, ce.unidade, ce.valor_num)
-        and not exists (select 1 from fato_financeiro f where f.campo_extraido_id = ce.id));
+        and not exists (
+          select 1 from fato_financeiro f left join conta_canonica c on c.codigo = f.conta_id
+           where f.campo_extraido_id = ce.id
+             and f.resolucao_metodo = case when f.conta_id is null then 'sem_conta' when ce.secao_canonica_inferida then 'heuristica' else 'declarada' end
+             and ((f.conta_id is not null and c.secao_canonica = ce.secao_canonica)
+                  or (f.conta_id is null and not exists (select 1 from conta_canonica c2 where c2.secao_canonica = ce.secao_canonica)))));
 comment on view instalacao_sonda_fato_financeiro_recentes is
-  'Sonda da 0243: uma linha = toda linha elegível das 20 versões de demonstração mais novas que passaram pela extração (evento extracao_sombra) tem fato. Zero linhas: a extração nova NÃO está materializando (gatilho da extração nova ausente, backfill não aplicado ou a materialização falhando: veja evento fatos_materializacao_falhou).';
+  'Sonda da 0243: uma linha = toda linha elegível das 20 versões de demonstração mais novas COM LINHA DE EXTRAÇÃO tem fato, e o fato concorda com a linha (conta = a seção dela, método pela flag de inferida). Zero linhas: a extração nova NÃO está materializando (gatilho ausente ou desabilitado, fn_registrar_campos_extraidos que deixou de gravar o evento ou o gravou antes da herança da seção, materialização falhando: veja o evento fatos_materializacao_falhou). Não depende do evento extracao_sombra.';
 
 create or replace view instalacao_sonda_fato_financeiro_pendencia_tipo as
   select 1 as ok where exists (select 1 from pg_enum e where e.enumtypid = 'pendencia_tipo'::regtype and e.enumlabel = 'conta_canonica_incerta');
@@ -1019,30 +1082,28 @@ insert into instalacao_requisito
   ('fato_financeiro_so_secao', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_so_secao', null, 1,
    'Há fato apontando para raiz, grupo ou subgrupo: a identidade desta fatia é a SEÇÃO (decisão do dono, 11/11/2026).', 'importante', 1110),
   ('fato_financeiro_extracao_nova_materializa', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_recentes', null, 1,
-   'Linha elegível das 20 versões de demonstração mais novas sem fato: a extração nova não está materializando (função antiga, backfill por aplicar, ou falha engolida: evento fatos_materializacao_falhou).', 'importante', 1111),
+   'Linha elegível das 20 versões de demonstração mais novas (com linha de extração) sem fato, ou com fato que discorda da linha (conta, método): a extração nova não está materializando — gatilho ausente, fn_registrar_campos_extraidos que deixou de gravar o evento extracao_sombra ou o grava antes da herança da seção, backfill por aplicar, falha engolida (evento fatos_materializacao_falhou). Medido pelo comportamento, sem olhar o evento.', 'importante', 1111),
   ('fato_financeiro_pendencia_tipo', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_pendencia_tipo', null, 1,
    'Sem o rótulo conta_canonica_incerta em pendencia_tipo a pendência da heurística não abre.', 'importante', 1112),
   ('extracao_nova_gatilho', '0243', 'gatilho', 'evento_auditoria.trg_fato_extracao_nova', 'fn_fato_extracao_nova', null,
    'Sem o gatilho a extração nova grava a linha e NÃO cria o fato nem abre a pendência da heurística (a materialização mora no gatilho, não em fn_registrar_campos_extraidos, que a P11 reemite a cada fatia).', 'importante', 1113),
   ('extracao_nova_gatilho_chama', '0243', 'corpo', 'fn_fato_extracao_nova', 'fn_materializar_fatos_da_extracao(v_versao)', null,
    'O gatilho existe mas não chama a materialização: o evento extracao_sombra passa e nenhum fato nasce, sem erro.', 'importante', 1139),
-  ('materializa_so_o_elegivel', '0243', 'corpo', 'fn_fato_resolver', 'fn_linha_vira_fato(x.tipo', null,
+  ('materializa_so_o_elegivel', '0243', 'corpo', 'fn_fato_resolver', 'fn_linha_vira_fato(', null,
    'A resolução precisa perguntar a fn_linha_vira_fato: sem isso virar fato é "tudo que tem valor" (Estoque, Razão, subtotal).', 'importante', 1114),
   ('materializa_idempotente', '0243', 'corpo', 'fn_materializar_fatos', 'on conflict (campo_extraido_id) do nothing', null,
    'Sem o on conflict a segunda chamada (o reenvio, o reparo) morre na FK única ou duplica a evidência.', 'importante', 1115),
-  ('materializa_conta_so_pela_secao', '0243', 'corpo', 'fn_fato_resolver', 'left join conta_canonica c on c.secao_canonica = a.secao', null,
-   'A conta do fato é a SEÇÃO da linha, pelo catálogo; sem seção, sem conta. Outro critério (o tipo do documento, a raiz) inventaria a conta.', 'importante', 1116),
-  ('materializa_periodo_pela_coluna', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_canonico(''outro'', c.pcol)', null,
+  ('materializa_periodo_pela_coluna', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_canonico(', null,
    'O período de outro ano vem da forma canônica da coluna de ano puro (31/12/AAAA = AAAA) que um período do MESMO mandato tem; sem isso o balanço de duas colunas de ano atribui o saldo de 2024 a 2025.', 'importante', 1117),
-  ('periodo_so_da_coluna_de_saldo', '0243', 'corpo', 'fn_fato_resolver', 'fn_coluna_e_saldo(c.pcol)', null,
+  ('periodo_so_da_coluna_de_saldo', '0243', 'corpo', 'fn_fato_resolver', 'fn_coluna_e_saldo(', null,
    'A coluna que É o período do documento é a de SALDO (fn_coluna_e_saldo, 0201): Débito, Crédito, Orçado, Variação e percentual com o mesmo período dão fatos idênticos em (conta, entidade, período) e a soma dobra.', 'importante', 1118),
-  ('periodo_parcial_nao_vai_para_o_ano', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_e_parcial(c.pcol, i.tipo', null,
+  ('periodo_parcial_nao_vai_para_o_ano', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_e_parcial(', null,
    'Documento de período PARCIAL (balancete de junho) não dá a coluna "2025" ao período anual: o acumulado de junho virava a receita do ano.', 'importante', 1119),
-  ('periodo_coluna_do_documento_so_se_unica', '0243', 'corpo', 'fn_fato_resolver', 'count(*) filter (where y is not null and (saldo or e_ano_do_doc)) = 1', null,
+  ('periodo_coluna_do_documento_so_se_unica', '0243', 'corpo', 'fn_fato_resolver', 'mais_de_uma_coluna_para_o_mesmo_periodo', null,
    'Com duas candidatas a ser a coluna do período do documento (Jun/2025 e 30/06/2025; Saldo final e Saldo atual) nenhuma é escolhida: fn_coluna_periodo_do_ano desempata por contagem e ordem alfabética, e "ao acaso" é número fabricado (a soma de 4 colunas deu 500).', 'importante', 1120),
-  ('entidade_pela_funcao_do_banco', '0243', 'corpo', 'fn_fato_resolver', 'fn_coluna_entidade(v.documento_versao_id, e.id)', null,
+  ('entidade_pela_funcao_do_banco', '0243', 'corpo', 'fn_fato_resolver', 'fn_coluna_entidade(', null,
    'A entidade da coluna é a que fn_coluna_entidade (0023/0030, com fn_mesma_entidade) escolhe: um casamento de nome próprio errou "Alfa Comércio" x "ALFA COMERCIO DE ALIMENTOS LTDA" e deu o Consolidado à ALFA com a coluna dela nula.', 'importante', 1127),
-  ('entidade_total_so_se_unica', '0243', 'corpo', 'fn_fato_resolver', '(m.por_nome or coalesce(t.n, 0) <= 1)', null,
+  ('entidade_total_so_se_unica', '0243', 'corpo', 'fn_fato_resolver', 'coluna_total_ambigua', null,
    'fn_coluna_entidade entrega "a" coluna total sem ordem: com mais de uma coluna total no documento a escolha é arbitrária e a entidade fica sem coluna total.', 'importante', 1128),
   ('tipos_que_geram_fato', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_tipos', null, 10,
    'A lista dos tipos de demonstração perdeu um tipo (linha de demonstração fica sem fato), ou ganhou Razão/Notas (o que é só evidência vira fato). Conferida tipo a tipo, não pelo corpo.', 'importante', 1121),
@@ -1060,15 +1121,15 @@ insert into instalacao_requisito
    'A guarda de escrita (serviço ou quem escreve no mandato) foi trocada (por `select true`, por exemplo): a função security definer escreve fato para qualquer chamador.', 'importante', 1130),
   ('fato_guarda_de_escrita_search_path', '0243', 'corpo', 'fn_fato_pode_escrever', 'SET search_path TO ''public'', ''pg_temp''', null,
    'Função security definer sem search_path fixo: um schema do chamador na frente do public sequestra fn_pode_escrever_caso.', 'importante', 1131),
-  ('materializa_chama_a_guarda', '0243', 'corpo', 'fn_materializar_fatos', 'fn_fato_pode_escrever(v_caso)', null,
+  ('materializa_chama_a_guarda', '0243', 'corpo', 'fn_materializar_fatos', 'fn_fato_pode_escrever(', null,
    'fn_materializar_fatos é security definer: sem chamar a guarda, qualquer authenticated com execute materializa fato em qualquer mandato.', 'importante', 1132),
-  ('extracao_nova_chama_a_guarda', '0243', 'corpo', 'fn_materializar_fatos_da_extracao', 'fn_fato_pode_escrever(v_caso)', null,
+  ('extracao_nova_chama_a_guarda', '0243', 'corpo', 'fn_materializar_fatos_da_extracao', 'fn_fato_pode_escrever(', null,
    'fn_materializar_fatos_da_extracao é security definer e o authenticated a executa: sem a guarda, o Analista não alocado materializa fato (e abre pendência) em outro mandato.', 'importante', 1133),
   ('repontar_chama_a_guarda', '0243', 'corpo', 'fn_fato_repontar_entidade', 'fn_fato_pode_escrever(p_caso)', null,
    'fn_fato_repontar_entidade é security definer e o authenticated a executa: sem a guarda, qualquer um reponta fato de um mandato para o outro.', 'importante', 1134),
   ('repontar_so_entidade_apagada', '0243', 'corpo', 'fn_fato_repontar_entidade', 'if exists (select 1 from entidade where id = p_de)', null,
    'fn_fato_repontar_entidade só pode mover fato de entidade que já foi apagada (a fusão); com a entidade viva era um atalho para o Analista mover fato de ALFA para BETA sem fusão nem evento.', 'importante', 1135),
-  ('materializa_reresolve_o_nulo', '0243', 'corpo', 'fn_materializar_fatos', 'fn_fato_resolver(p_documento_versao_id, false) r', null,
+  ('materializa_reresolve_o_nulo', '0243', 'corpo', 'fn_materializar_fatos', 'fn_fato_resolver(p_documento_versao_id, false)', null,
    'fn_materializar_fatos() também re-resolve os fatos de identidade nula: período ou entidade cadastrado depois (4.479 fatos em produção) não pode deixar o "nulo com motivo" falso.', 'importante', 1136),
   ('fato_cadastro_periodo_gatilho', '0243', 'gatilho', 'periodo.trg_fato_cadastro_periodo', 'fn_fato_cadastro_periodo', null,
    'Sem ele o período cadastrado depois da extração não re-resolve os fatos nulos do mandato.', 'importante', 1137),
@@ -1083,7 +1144,7 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = '0243', revisado_em = current_date,
-       observacao = 'A 0243 cria fato_financeiro (o fato acima de campo_extraido: conta = seção, entidade e período pela coluna da linha), a materialização, a pendência conta_canonica_incerta (uma por versão, só extração nova), o backfill sem pendência, o gatilho do documento, reemite fn_registrar_campos_extraidos e fn_fundir_entidade, 5 views de sonda e 33 requisitos novos (ordem 1105-1139).'
+       observacao = 'A 0243 cria fato_financeiro (o fato acima de campo_extraido: conta = seção, entidade e período pela coluna da linha), a materialização, a pendência conta_canonica_incerta (uma por versão, só extração nova), o backfill sem pendência, o gatilho do documento, reemite fn_registrar_campos_extraidos e fn_fundir_entidade, 5 views de sonda e 32 requisitos novos (ordem 1105-1139).'
  where id = true;
 
 commit;

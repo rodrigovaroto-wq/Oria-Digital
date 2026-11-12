@@ -4808,13 +4808,15 @@ begin
       join documento d on d.id = dv.documento_id
      where d.caso_id = p_caso
        and case p_dimensao when 'periodo' then f.periodo_id is null and f.periodo_motivo = 'periodo_da_coluna_nao_cadastrado'
-                           else f.entidade_id is null and f.entidade_motivo in ('coluna_sem_entidade_no_mandato', 'documento_sem_entidade', 'coluna_casa_varias_entidades', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade') end
+                           else (f.entidade_id is null and f.entidade_motivo in ('coluna_sem_entidade_no_mandato', 'documento_sem_entidade', 'coluna_casa_varias_entidades', 'entidade_com_varias_colunas', 'coluna_total_nao_escolhida', 'coluna_total_ambigua', 'linha_sem_coluna_em_documento_com_colunas_de_entidade'))
+                 -- 3ª REVISÃO, M4: o que foi atribuído POR COLUNA também envelhece: renomear a entidade (BETA -> DELTA) deixava os fatos da coluna "Beta Indústria" na entidade renomeada, e uma 2ª entidade que casa a mesma coluna não a tornava coluna_casa_varias_entidades
+                 or f.entidade_origem in ('coluna', 'coluna_total') end
   loop
     update fato_financeiro f
        set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
            periodo_id = r.periodo_id, periodo_origem = r.periodo_origem, periodo_motivo = r.periodo_motivo
       from fn_fato_resolver(v_v, false) r
-     where r.campo_id = f.campo_extraido_id and (f.entidade_id is null or f.periodo_id is null)
+     where r.campo_id = f.campo_extraido_id
        and (f.entidade_id, f.entidade_origem, f.entidade_motivo, f.periodo_id, f.periodo_origem, f.periodo_motivo)
            is distinct from (r.entidade_id, r.entidade_origem, r.entidade_motivo, r.periodo_id, r.periodo_origem, r.periodo_motivo);
     get diagnostics v_k = row_count;
@@ -4860,12 +4862,26 @@ CREATE FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid, p_novos bool
       from (select distinct documento_versao_id, caso_id, tipo, doc_entidade, doc_periodo, dper_tipo, dper_ref from alvo) v
   ),
   -- ===== ENTIDADE: quem decide é fn_coluna_entidade (0023/0030, com fn_mesma_entidade): a coluna que ela devolve para a entidade E é a coluna de E. Nenhum casamento de nome é escrito aqui.
+  -- 3ª REVISÃO, ALTO 1: fn_coluna_entidade devolve UMA coluna por entidade (`limit 1` sem order by). Com duas colunas do documento que casam o nome da MESMA entidade ("Alfa Comércio Atacado", empresa não cadastrada, e "Alfa Comércio") ela entrega a que a ordem física der, e a ALFA recebia a soma de uma coluna que
+  -- talvez nem fosse dela, com a própria coluna anulada pelo motivo falso coluna_sem_entidade_no_mandato. Unicidade por (versão, entidade): as colunas DISTINTAS do documento em que fn_mesma_entidade é verdadeira para a entidade; mais de uma = nenhuma delas é atribuída (entidade_com_varias_colunas).
+  ecols as materialized (
+    select distinct ce.documento_versao_id, v.caso_id, nullif(btrim(ce.entidade_coluna), '') as col
+      from (select distinct documento_versao_id, caso_id from alvo where ecol is not null) v
+      join campo_extraido ce on ce.documento_versao_id = v.documento_versao_id and nullif(btrim(ce.entidade_coluna), '') is not null
+  ),
+  enome as materialized (
+    select c.documento_versao_id, c.col, e.id as entidade_id
+      from ecols c join entidade e on e.caso_id = c.caso_id
+     where fn_mesma_entidade(c.col, e.razao_social)
+  ),
+  enome_n as materialized (select documento_versao_id, entidade_id, count(distinct col) as n from enome group by 1, 2),
   eescolha as materialized (
     select x.documento_versao_id, x.col, x.entidade_id, x.razao_social
       from (select v.documento_versao_id, e.id as entidade_id, e.razao_social, nullif(btrim(fn_coluna_entidade(v.documento_versao_id, e.id)), '') as col
               from (select distinct documento_versao_id, caso_id from alvo where ecol is not null) v
               join entidade e on e.caso_id = v.caso_id) x
      where x.col is not null and x.col <> chr(1)
+       and not exists (select 1 from enome_n n where n.documento_versao_id = x.documento_versao_id and n.entidade_id = x.entidade_id and n.n > 1)
   ),
   emap as materialized (
     select documento_versao_id, col, count(*) as n, (array_agg(entidade_id))[1] as entidade_id, bool_or(fn_mesma_entidade(col, razao_social)) as por_nome
@@ -4895,6 +4911,8 @@ CREATE FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid, p_novos bool
                 when m.n = 1 and coalesce(t.n, 0) <= 1 then null
                 when m.n = 1 then 'coluna_total_ambigua'
                 when m.n > 1 then 'coluna_casa_varias_entidades'
+                when exists (select 1 from enome en join enome_n nn on nn.documento_versao_id = en.documento_versao_id and nn.entidade_id = en.entidade_id
+                              where en.documento_versao_id = k.documento_versao_id and en.col = k.ecol and nn.n > 1) then 'entidade_com_varias_colunas'
                 when fn_normalizar_texto(k.ecol) ~ '^(combinad|consolidad|total|soma)' then 'coluna_total_nao_escolhida'
                 else 'coluna_sem_entidade_no_mandato' end as motivo
       from (select x.documento_versao_id, x.doc_entidade, x.ecol, (ve.documento_versao_id is not null) as tem_ecols
@@ -5013,8 +5031,9 @@ begin
       return null;
     end if;
   end if;
+  -- 3ª REVISÃO, ALTO 2: a identidade também depende do TIPO (fn_periodo_e_parcial: BALANCETE é parcial, DRE não): DRE -> BALANCETE (os dois na lista) deixava os fatos com o período de antes, e o do zero seria nulo. Tipo mudou = re-resolve.
   if fn_tipo_gera_fato(new.tipo_taxonomia)
-     and (new.entidade_id is distinct from old.entidade_id or new.periodo_id is distinct from old.periodo_id) then
+     and (new.entidade_id is distinct from old.entidade_id or new.periodo_id is distinct from old.periodo_id or new.tipo_taxonomia is distinct from old.tipo_taxonomia) then
     for v_v in select id from documento_versao where documento_id = new.id loop
       update fato_financeiro f
          set entidade_id = r.entidade_id, entidade_origem = r.entidade_origem, entidade_motivo = r.entidade_motivo,
@@ -18950,7 +18969,7 @@ CREATE TABLE public.fato_financeiro (
     origem text NOT NULL,
     criado_em timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT fato_financeiro_conta_metodo_ck CHECK (((conta_id IS NULL) = (resolucao_metodo = 'sem_conta'::text))),
-    CONSTRAINT fato_financeiro_entidade_ck CHECK ((((entidade_id IS NULL) = (entidade_origem IS NULL)) AND ((entidade_id IS NULL) = (entidade_motivo IS NOT NULL)) AND ((entidade_origem IS NULL) OR (entidade_origem = ANY (ARRAY['documento'::text, 'coluna'::text, 'coluna_total'::text]))) AND ((entidade_motivo IS NULL) OR (entidade_motivo = ANY (ARRAY['documento_sem_entidade'::text, 'coluna_sem_entidade_no_mandato'::text, 'coluna_casa_varias_entidades'::text, 'coluna_total_nao_escolhida'::text, 'coluna_total_ambigua'::text, 'linha_sem_coluna_em_documento_com_colunas_de_entidade'::text]))))),
+    CONSTRAINT fato_financeiro_entidade_ck CHECK ((((entidade_id IS NULL) = (entidade_origem IS NULL)) AND ((entidade_id IS NULL) = (entidade_motivo IS NOT NULL)) AND ((entidade_origem IS NULL) OR (entidade_origem = ANY (ARRAY['documento'::text, 'coluna'::text, 'coluna_total'::text]))) AND ((entidade_motivo IS NULL) OR (entidade_motivo = ANY (ARRAY['documento_sem_entidade'::text, 'coluna_sem_entidade_no_mandato'::text, 'coluna_casa_varias_entidades'::text, 'entidade_com_varias_colunas'::text, 'coluna_total_nao_escolhida'::text, 'coluna_total_ambigua'::text, 'linha_sem_coluna_em_documento_com_colunas_de_entidade'::text]))))),
     CONSTRAINT fato_financeiro_metodo_ck CHECK ((resolucao_metodo = ANY (ARRAY['declarada'::text, 'heuristica'::text, 'sem_conta'::text]))),
     CONSTRAINT fato_financeiro_motivo_ck CHECK ((((sem_conta_motivo IS NULL) = (resolucao_metodo <> 'sem_conta'::text)) AND ((sem_conta_motivo IS NULL) OR (sem_conta_motivo = ANY (ARRAY['secao_nao_declarada'::text, 'secao_fora_do_catalogo'::text]))))),
     CONSTRAINT fato_financeiro_origem_ck CHECK ((origem = ANY (ARRAY['extracao'::text, 'backfill_0243'::text]))),
@@ -19594,20 +19613,28 @@ CREATE VIEW public.instalacao_sonda_fato_financeiro_recentes AS
                    FROM (public.documento_versao dv
                      JOIN public.documento d ON ((d.id = dv.documento_id)))
                   WHERE (public.fn_tipo_gera_fato(d.tipo_taxonomia) AND (EXISTS ( SELECT 1
-                           FROM public.evento_auditoria e
-                          WHERE ((e.entidade_ref = ('documento_versao:'::text || dv.id)) AND (e.acao = 'extracao_sombra'::text)))))
+                           FROM public.campo_extraido x
+                          WHERE ((x.documento_versao_id = dv.id) AND (x.origem_valor = 'extracao'::text) AND (x.valor_num IS NOT NULL)))))
                   ORDER BY dv.criada_em DESC, dv.id
                  LIMIT 20) v
              JOIN public.campo_extraido ce ON (((ce.documento_versao_id = v.id) AND (ce.origem_valor = 'extracao'::text))))
           WHERE (public.fn_linha_vira_fato(v.tipo_taxonomia, ce.chave, ce.unidade, ce.valor_num) AND (NOT (EXISTS ( SELECT 1
-                   FROM public.fato_financeiro f
-                  WHERE (f.campo_extraido_id = ce.id))))))));
+                   FROM (public.fato_financeiro f
+                     LEFT JOIN public.conta_canonica c ON ((c.codigo = f.conta_id)))
+                  WHERE ((f.campo_extraido_id = ce.id) AND (f.resolucao_metodo =
+                        CASE
+                            WHEN (f.conta_id IS NULL) THEN 'sem_conta'::text
+                            WHEN ce.secao_canonica_inferida THEN 'heuristica'::text
+                            ELSE 'declarada'::text
+                        END) AND (((f.conta_id IS NOT NULL) AND (c.secao_canonica = ce.secao_canonica)) OR ((f.conta_id IS NULL) AND (NOT (EXISTS ( SELECT 1
+                           FROM public.conta_canonica c2
+                          WHERE (c2.secao_canonica = ce.secao_canonica))))))))))))));
 
 --
 -- Name: VIEW instalacao_sonda_fato_financeiro_recentes; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_recentes IS 'Sonda da 0243: uma linha = toda linha elegível das 20 versões de demonstração mais novas que passaram pela extração (evento extracao_sombra) tem fato. Zero linhas: a extração nova NÃO está materializando (gatilho da extração nova ausente, backfill não aplicado ou a materialização falhando: veja evento fatos_materializacao_falhou).';
+COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_recentes IS 'Sonda da 0243: uma linha = toda linha elegível das 20 versões de demonstração mais novas COM LINHA DE EXTRAÇÃO tem fato, e o fato concorda com a linha (conta = a seção dela, método pela flag de inferida). Zero linhas: a extração nova NÃO está materializando (gatilho ausente ou desabilitado, fn_registrar_campos_extraidos que deixou de gravar o evento ou o gravou antes da herança da seção, materialização falhando: veja o evento fatos_materializacao_falhou). Não depende do evento extracao_sombra.';
 
 --
 -- Name: instalacao_sonda_fato_financeiro_so_secao; Type: VIEW; Schema: public; Owner: -

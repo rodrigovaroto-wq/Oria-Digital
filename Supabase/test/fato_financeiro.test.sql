@@ -13,7 +13,7 @@
 --   (g) o período da COLUNA prevalece sobre o do documento quando diferem; coluna de ano sem período no mandato deixa o período explícito e NULO (o período não é criado); a entidade pela coluna (uma entidade, o total
 --       do documento, a eliminação que não é entidade);
 --   (h) o fato segue o documento (corrigir a entidade/o período do documento leva os fatos que herdaram dele, não os que vieram de uma coluna); (i) a fusão de entidade leva os fatos (a FK não a derruba);
---   (j) o acesso: sem papel lê zero, Sócio lê, o Analista alocado materializa pelo caminho do portal; (k) a sonda: os 33 requisitos presentes e ela ACUSA cada guarda removida (não está cega);
+--   (j) o acesso: sem papel lê zero, Sócio lê, o Analista alocado materializa pelo caminho do portal; (k) a sonda: os 32 requisitos presentes e ela ACUSA cada guarda removida (não está cega);
 --   (g2) a coluna que não é saldo (A1), o período parcial (A2) e o total que duplica a coluna da entidade (M1); (g3) o tipo do documento (M2), a ordem real registrar-depois-preencher (M3), a versão superada (M4), o cancelamento não engolido (M7), a guarda de mesmo mandato (M5).
 --
 -- HONESTIDADE (regra 4): as fixtures de vertentes e canastra são sintéticas e não trazem o arranjo que produção traz de linhas com entidade_coluna sem entidade cadastrada nem o de duas colunas de ano de um balanço real;
@@ -28,6 +28,8 @@
 -- O ACL DE PRODUÇÃO (o `pg_default_acl` do dono dá ALL a authenticated e anon em toda tabela nova de public; o banco montado pelo run.sh não tem esse default): simulado aqui com um `grant all` e a migration REAPLICADA — se ela não revogar, o
 -- authenticated escreve em fato_financeiro e os asserts da parte j (e a sonda fato_authenticated_so_le) reprovam. A migration é idempotente e o marcador de cobertura não regride (o gatilho de instalacao_cobertura ignora a regressão).
 grant all on fato_financeiro to authenticated, anon;
+-- E O DEFAULT DE FUNÇÕES (3ª revisão, B7): o Supabase dá EXECUTE ao authenticated e ao anon em toda função nova de public; simulado nas duas funções do serviço e a migration reaplicada tem de revogar.
+grant execute on function fn_materializar_fatos(uuid, text), fn_fato_pendencia_da_versao(uuid) to authenticated, anon;
 \i Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql
 
 begin;
@@ -601,6 +603,79 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
+-- g5. A 3ª revisão independente: duas colunas da mesma entidade (ALTO 1), o tipo que muda entre dois da lista (ALTO 2), a entidade renomeada ou a 2ª que casa (M4) e o default de função (B7).
+do $$
+declare
+  v_caso uuid; v_alfa uuid; v_v1 uuid; v_v2 uuid; v_n int; v_s numeric; v_dif int; v_doc uuid; v_beta uuid; v_g1 uuid;
+begin
+  raise notice '--- g5. 3ª revisão ---';
+  -- ALTO 1: o mandato tem "ALFA COMERCIO LTDA"; o COMBINADO traz "Alfa Comércio Atacado" (empresa que ninguém cadastrou) E "Alfa Comércio": as duas casam o nome da ALFA e fn_coluna_entidade (limit 1, sem order by) escolhia pela ordem física
+  v_caso := fn_upsert_caso('0243: duas colunas da mesma entidade')::uuid;
+  v_alfa := fn_upsert_entidade(v_caso, 'ALFA COMERCIO LTDA');
+  perform fn_upsert_periodo(v_caso, 'anual', '2025');
+  -- ORDEM 1: a coluna do Atacado primeiro
+  v_v1 := pg_temp.doc(v_caso, 'ALFA COMERCIO LTDA', '2025', 'COMBINADO', 'r3-a1', jsonb_build_array(
+    pg_temp.l('Caixa', '7', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio Atacado'), pg_temp.l('Clientes', '70', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio Atacado'),
+    pg_temp.l('Caixa', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio'), pg_temp.l('Clientes', '100', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio'),
+    pg_temp.l('Caixa', '17', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Consolidado'), pg_temp.l('Clientes', '170', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Consolidado')));
+  -- ORDEM 2: a coluna da ALFA primeiro
+  v_v2 := pg_temp.doc(v_caso, 'ALFA COMERCIO LTDA', '2025', 'COMBINADO', 'r3-a2', jsonb_build_array(
+    pg_temp.l('Caixa', '10', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio'), pg_temp.l('Clientes', '100', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio'),
+    pg_temp.l('Caixa', '7', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio Atacado'), pg_temp.l('Clientes', '70', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Alfa Comércio Atacado'),
+    pg_temp.l('Caixa', '17', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Consolidado'), pg_temp.l('Clientes', '170', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Consolidado')));
+  select coalesce(sum(f.valor), 0) into v_s from fato_financeiro f where f.documento_versao_id = v_v1 and f.entidade_id = v_alfa;
+  perform pg_temp.teste_assert_ff(v_s = 0, 'ALTO 1, ordem 1: com duas colunas que casam a ALFA, a ALFA não recebe NENHUMA delas (antes: 77, a soma das duas colunas de caixa e clientes de uma delas)', v_s::text);
+  select coalesce(sum(f.valor), 0) into v_s from fato_financeiro f where f.documento_versao_id = v_v2 and f.entidade_id = v_alfa;
+  perform pg_temp.teste_assert_ff(v_s = 0, 'ALTO 1, ordem 2: o mesmo com as colunas gravadas na ordem inversa (o resultado não depende da ordem física)', v_s::text);
+  select count(*) into v_n from fato_financeiro f where f.documento_versao_id in (v_v1, v_v2) and f.entidade_id is null and f.entidade_motivo = 'entidade_com_varias_colunas';
+  perform pg_temp.teste_assert_ff(v_n = 8, 'ALTO 1: as 4 linhas de cada coluna ficam sem entidade com o motivo PRÓPRIO entidade_com_varias_colunas (e não o falso coluna_sem_entidade_no_mandato)', v_n::text);
+  select count(*) into v_dif from (
+    select ce.chave, f.entidade_coluna, f.entidade_id, f.entidade_origem, f.entidade_motivo from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_v1
+    except select ce.chave, f.entidade_coluna, f.entidade_id, f.entidade_origem, f.entidade_motivo from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_v2) x;
+  perform pg_temp.teste_assert_ff(v_dif = 0, 'ALTO 1: as duas ordens de gravação dão a MESMA identidade, linha a linha', v_dif::text);
+
+  -- ALTO 2: o tipo muda entre dois da lista. Re-resolver depois da mudança tem de dar o que materializar do zero dá.
+  v_caso := fn_upsert_caso('0243: tipo entre dois da lista')::uuid;
+  perform fn_upsert_entidade(v_caso, 'TIPO P27 LTDA'); perform fn_upsert_periodo(v_caso, 'anual', '2025'); perform fn_upsert_periodo(v_caso, 'anual', '2024');
+  v_v1 := pg_temp.doc(v_caso, 'TIPO P27 LTDA', '2025', 'DRE', 'r3-t1', jsonb_build_array(
+    pg_temp.l('Receita', '1200', 'receita_bruta', 'RECEITA', '2025'), pg_temp.l('Receita', '900', 'receita_bruta', 'RECEITA', '2024')));
+  select count(*) into v_n from fato_financeiro where documento_versao_id = v_v1 and periodo_id is not null;
+  perform pg_temp.teste_assert_ff(v_n = 2, 'arranjo do ALTO 2: o DRE de 2025 com as colunas 2025 e 2024 tem os dois períodos', v_n::text);
+  select documento_id into v_doc from documento_versao where id = v_v1;
+  update documento set tipo_taxonomia = 'BALANCETE' where id = v_doc;
+  v_v2 := pg_temp.doc(v_caso, 'TIPO P27 LTDA', '2025', 'BALANCETE', 'r3-t2', jsonb_build_array(
+    pg_temp.l('Receita', '1200', 'receita_bruta', 'RECEITA', '2025'), pg_temp.l('Receita', '900', 'receita_bruta', 'RECEITA', '2024')));
+  select count(*) into v_n from fato_financeiro where documento_versao_id = v_v1 and periodo_id is not null;
+  perform pg_temp.teste_assert_ff(v_n = 0, 'ALTO 2: DRE -> BALANCETE (os dois na lista, BALANCETE é parcial) NÃO deixa os fatos com o período de antes', v_n::text);
+  select count(*) into v_dif from (
+    select ce.chave, f.periodo_coluna, f.periodo_id, f.periodo_origem, f.periodo_motivo, f.entidade_id from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_v1
+    except select ce.chave, f.periodo_coluna, f.periodo_id, f.periodo_origem, f.periodo_motivo, f.entidade_id from fato_financeiro f join campo_extraido ce on ce.id = f.campo_extraido_id where f.documento_versao_id = v_v2) x;
+  perform pg_temp.teste_assert_ff(v_dif = 0, 'ALTO 2, a INVARIANTE: re-resolver depois de mudar o tipo dá a mesma identidade que materializar do zero um documento já desse tipo', v_dif::text);
+
+  -- M4: a entidade renomeada, e a 2ª entidade que casa uma coluna já atribuída
+  v_caso := fn_upsert_caso('0243: entidade renomeada')::uuid;
+  perform fn_upsert_entidade(v_caso, 'MATRIZ M4 LTDA'); v_beta := fn_upsert_entidade(v_caso, 'BETA INDUSTRIA LTDA'); perform fn_upsert_periodo(v_caso, 'anual', '2025');
+  v_g1 := fn_upsert_entidade(v_caso, 'GAMA SERVICOS LTDA');
+  v_v1 := pg_temp.doc(v_caso, 'MATRIZ M4 LTDA', '2025', 'COMBINADO', 'r3-m4', jsonb_build_array(
+    pg_temp.l('Caixa', '7', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Beta Indústria'), pg_temp.l('Caixa', '3', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'Gama Serviços'),
+    pg_temp.l('Caixa', '99', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025', 'MATRIZ M4 LTDA')));
+  select count(*) into v_n from fato_financeiro where documento_versao_id = v_v1 and entidade_id = v_beta;
+  perform pg_temp.teste_assert_ff(v_n = 1, 'arranjo do M4: a coluna "Beta Indústria" é da BETA INDUSTRIA LTDA', v_n::text);
+  update entidade set razao_social = 'DELTA SERVICOS LTDA' where id = v_beta;
+  select count(*) into v_n from fato_financeiro where documento_versao_id = v_v1 and entidade_id = v_beta;
+  perform pg_temp.teste_assert_ff(v_n = 0 and exists (select 1 from fato_financeiro f where f.documento_versao_id = v_v1 and f.entidade_coluna = 'Beta Indústria' and f.entidade_id is null and f.entidade_motivo = 'coluna_sem_entidade_no_mandato'),
+    'M4: renomear a entidade tira dela os fatos da coluna que não é mais o nome dela (antes ficavam na entidade renomeada)', v_n::text);
+  insert into entidade (caso_id, razao_social) values (v_caso, 'GAMA SERVICOS HOLDING SA');   -- fn_upsert_entidade a fundiria com a GAMA SERVICOS LTDA (casamento por nome); o insert direto é o cadastro que o upsert não impede
+  perform pg_temp.teste_assert_ff(exists (select 1 from fato_financeiro f where f.documento_versao_id = v_v1 and f.entidade_coluna = 'Gama Serviços' and f.entidade_id is null and f.entidade_motivo = 'coluna_casa_varias_entidades'),
+    'M4: cadastrar uma 2ª entidade que casa a coluna "Gama Serviços" já atribuída a outra a torna coluna_casa_varias_entidades (antes ficava com a 1ª)');
+
+  -- B7: o default de função do Supabase (EXECUTE ao authenticated e ao anon) foi simulado no topo e a migration reaplicada revogou
+  perform pg_temp.teste_assert_ff(not has_function_privilege('authenticated', 'fn_materializar_fatos(uuid, text)', 'execute') and not has_function_privilege('anon', 'fn_materializar_fatos(uuid, text)', 'execute'), 'B7: fn_materializar_fatos não é executável pelo authenticated nem pelo anon (o default de função foi simulado e revogado)');
+  perform pg_temp.teste_assert_ff(not has_function_privilege('authenticated', 'fn_fato_pendencia_da_versao(uuid)', 'execute') and not has_function_privilege('anon', 'fn_fato_pendencia_da_versao(uuid)', 'execute'), 'B7: fn_fato_pendencia_da_versao (sem guarda de mandato) não é executável pelo authenticated nem pelo anon');
+  perform pg_temp.teste_assert_ff(has_function_privilege('authenticated', 'fn_materializar_fatos_da_extracao(uuid, text)', 'execute') and has_function_privilege('service_role', 'fn_materializar_fatos(uuid, text)', 'execute'), 'e o que o portal precisa continua executável (a da extração, guardada) e o serviço executa a dele');
+end $$;
+
+-- ---------------------------------------------------------------------------------------------------------------
 -- A INVARIANTE (regra 3, a família inteira e não os casos): em NENHUM documento duas colunas diferentes caem na mesma (conta, entidade, período) não nulos — é o que fazia a soma dobrar (1.310 em vez de 150; 500; 435; 342).
 create or replace function pg_temp.colunas_na_mesma_chave() returns bigint language sql as $f$
   select count(*) from (
@@ -742,14 +817,16 @@ begin
 end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
--- k. A sonda: os 33 requisitos presentes; e ela ACUSA cada guarda removida (nos mesmos termos do teste da 0242: a migration é a coisa medida, aqui o estado do banco montado).
+-- k. A sonda: os 32 requisitos presentes; e ela ACUSA cada guarda removida (nos mesmos termos do teste da 0242: a migration é a coisa medida, aqui o estado do banco montado).
 do $$
-declare v_n int; v_lista text; v_def text; v_ok boolean; v_f int;
+declare v_n int; v_lista text; v_def text; v_ok boolean; v_f int; v_cs uuid; v_new uuid;
 begin
   raise notice '--- k. a sonda de instalação ---';
+  -- a parte j apaga os fatos de uma versão de OUTRO mandato para provar que o Analista não materializa nele: o reparo antes da sonda (que agora mede por comportamento, sem olhar evento)
+  perform fn_materializar_fatos();
   set constraints all immediate;   -- as FKs de dimensão são adiadas: sem isto o `alter table` abaixo morre em `pending trigger events`
   select count(*), string_agg(chave, ', ') filter (where not presente) into v_n, v_lista from fn_instalacao_conferir() where migration = '0243';
-  perform pg_temp.teste_assert_ff(v_n = 33 and v_lista is null, 'os 33 requisitos da 0243 estão no catálogo e presentes', v_n || ' requisitos; ausentes: ' || coalesce(v_lista, 'nenhum') || coalesce(' | versões sem fato: ' || (select string_agg(distinct dv.nome_original || '/' || ce.chave, ', ')
+  perform pg_temp.teste_assert_ff(v_n = 32 and v_lista is null, 'os 32 requisitos da 0243 estão no catálogo e presentes', v_n || ' requisitos; ausentes: ' || coalesce(v_lista, 'nenhum') || coalesce(' | versões sem fato: ' || (select string_agg(distinct dv.nome_original || '/' || ce.chave, ', ')
       from (select dv.id from documento_versao dv join documento d on d.id = dv.documento_id where fn_tipo_gera_fato(d.tipo_taxonomia)
               and exists (select 1 from evento_auditoria e where e.entidade_ref = 'documento_versao:' || dv.id and e.acao = 'extracao_sombra') order by dv.criada_em desc, dv.id limit 20) v
       join documento_versao dv on dv.id = v.id join documento d on d.id = dv.documento_id join campo_extraido ce on ce.documento_versao_id = v.id and ce.origem_valor = 'extracao'
@@ -773,12 +850,29 @@ begin
   delete from fato_financeiro where conta_id = 'demo_dre';
   perform pg_temp.teste_assert_ff((select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_so_secao'), 'sem o fato na raiz a sonda volta a presente');
 
-  -- a extração recente sem fato: a sonda acusa (é o estágio que não rodou)
-  delete from fato_financeiro where documento_versao_id = (select dv.id from documento_versao dv join documento d on d.id = dv.documento_id where fn_tipo_gera_fato(d.tipo_taxonomia) and dv.criada_em = (select max(criada_em) from documento_versao)
-                                                              and exists (select 1 from fato_financeiro f where f.documento_versao_id = dv.id) order by dv.id limit 1);
-  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'a sonda acusa a versão mais nova (que passou pela extração) de demonstração SEM fato (estágio que não rodou não parece limpo, regra 7)');
+  -- A3 (3ª revisão): a sonda da extração nova mede por COMPORTAMENTO, não pelo evento extracao_sombra nem pelo corpo. Sem o gatilho, uma extração nova grava a linha e NENHUM fato; e, se o evento nunca fosse gravado (fn_registrar que deixasse de gravá-lo), a amostra antiga ficaria vazia e a sonda verde.
+  v_cs := fn_upsert_caso('0243: sonda por comportamento')::uuid;
+  perform fn_upsert_entidade(v_cs, 'SONDA P27 LTDA'); perform fn_upsert_periodo(v_cs, 'anual', '2025');
+  begin
+    alter table evento_auditoria disable trigger trg_fato_extracao_nova;
+  exception when undefined_object then null;
+  end;
+  v_new := pg_temp.doc(v_cs, 'SONDA P27 LTDA', '2025', 'BALANCO', 'r3-s1', jsonb_build_array(pg_temp.l('Caixa S', '5', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025'), pg_temp.l('Clientes S', '6', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025')));
+  update documento_versao set criada_em = now() + interval '2 days' where id = v_new;   -- a mais nova (as versões deste teste empatam em now())
+  delete from evento_auditoria where entidade_ref = 'documento_versao:' || v_new and acao = 'extracao_sombra';   -- a extração que NUNCA gravou o evento
+  perform pg_temp.teste_assert_ff((select count(*) from fato_financeiro where documento_versao_id = v_new) = 0, 'arranjo: a extração nova sem o gatilho grava a linha e nenhum fato');
+  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'a sonda acusa a extração nova SEM fato mesmo sem o evento extracao_sombra (regra 7: o estágio que não rodou não parece limpo, e a sonda não depende do sinal que o próprio estágio emite)');
+  begin
+    alter table evento_auditoria enable trigger trg_fato_extracao_nova;
+  exception when undefined_object then null;
+  end;
   perform fn_materializar_fatos();
   perform pg_temp.teste_assert_ff((select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'o reparo (fn_materializar_fatos) devolve a sonda a presente');
+  -- o fato que discorda da linha (o evento gravado ANTES da herança da seção materializaria a seção velha): acusado
+  update campo_extraido set secao_canonica = 'passivo_circulante' where documento_versao_id = v_new and chave = 'Caixa S';
+  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'a sonda acusa o fato cuja conta discorda da seção que a linha tem hoje (o fato nasceu antes da herança da seção)');
+  update campo_extraido set secao_canonica = 'ativo_circulante' where documento_versao_id = v_new and chave = 'Caixa S';
+  perform pg_temp.teste_assert_ff((select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'e volta a presente quando a linha e o fato concordam');
 
   -- o gatilho do documento desabilitado
   begin
@@ -814,10 +908,15 @@ begin
   perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fundir_entidade_leva_os_fatos'), 'a sonda acusa fn_fundir_entidade de corpo anterior (que cairia na FK dos fatos)');
   execute v_def;
 
+  -- a materialização que acha a conta por outro critério que a seção: a sonda acusa pelo COMPORTAMENTO (o fato novo discorda da linha), não por um marcador de corpo
   v_def := pg_get_functiondef('fn_fato_resolver(uuid,boolean)'::regprocedure);
   execute replace(v_def, 'left join conta_canonica c on c.secao_canonica = a.secao', 'left join conta_canonica c on c.codigo = a.tipo');
-  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'materializa_conta_so_pela_secao'), 'a sonda acusa a materialização que acha a conta por outro critério que a seção');
+  v_new := pg_temp.doc(v_cs, 'SONDA P27 LTDA', '2025', 'BALANCO', 'r3-s2', jsonb_build_array(pg_temp.l('Caixa S2', '5', 'ativo_circulante', 'ATIVO CIRCULANTE', '2025')));
+  update documento_versao set criada_em = now() + interval '3 days' where id = v_new;
+  perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'fato_financeiro_extracao_nova_materializa'), 'a sonda acusa a materialização que acha a conta por outro critério que a seção (o fato novo discorda da linha)');
   execute v_def;
+  delete from fato_financeiro where documento_versao_id = v_new;
+  perform fn_materializar_fatos();
   -- a guarda de escrita trocada por `select true`, e sem o search_path fixo; o authenticated com privilégio de escrita
   v_def := pg_get_functiondef('fn_fato_pode_escrever(uuid)'::regprocedure);
   execute 'create or replace function fn_fato_pode_escrever(p_caso uuid) returns boolean language sql stable security definer set search_path = public, pg_temp as $q$ select true $q$';
@@ -840,7 +939,7 @@ begin
   perform pg_temp.teste_assert_ff(not (select presente from fn_instalacao_conferir() where chave = 'tipos_que_geram_fato'), 'e a que passa a gerar fato de RAZAO (o que é só evidência)');
   execute v_def;
   select count(*) into v_f from fn_instalacao_conferir() where migration = '0243' and not presente;
-  perform pg_temp.teste_assert_ff(v_f = 0, 'depois de recolocar tudo, os 33 requisitos estão presentes de novo', v_f::text);
+  perform pg_temp.teste_assert_ff(v_f = 0, 'depois de recolocar tudo, os 32 requisitos estão presentes de novo', v_f::text);
 end $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
