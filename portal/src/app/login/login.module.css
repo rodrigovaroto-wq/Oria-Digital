@@ -1,0 +1,244 @@
+/* LOGIN · direção A "Cobalto noturno". Tokens da maquete (`.dir-a`, variáveis `--l-*`).
+   Movimento: tokens de transitions.dev (`18-texts-reveal`, `_root.css`), colados só nos
+   trechos usados. Toda animação é `from`-only com `both`: se ela não rodar (reduced-motion,
+   CSS sem suporte), o elemento já está no estado final, visível. Nada depende de JS. */
+
+.tela {
+  --l-bg: #070a12;
+  --l-ink: #e9edf3;
+  --l-muted: #8891a1; /* 6,2:1 sobre o fundo e 5,6:1 sobre o cartão: AA */
+  --l-card: rgba(19, 24, 36, 0.72);
+  --l-line: rgba(233, 237, 243, 0.1);
+  --l-field: rgba(233, 237, 243, 0.34); /* contorno de campo: >=3:1 (WCAG 1.4.11) */
+  --l-glow: #3b5bff;
+  --l-accent: color-mix(in oklab, var(--l-glow) 75%, var(--l-ink));
+
+  --dur-stagger: 40ms;
+  --dur-very-slow: 500ms;
+  --dur-fast: 250ms;
+  --dist-medium: 12px;
+  --blur-medium: 3px;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--l-bg);
+  color: var(--l-ink);
+  font-family: var(--fonte-login), system-ui, sans-serif;
+}
+
+/* Brilho cobalto: deriva devagar (28 s), só transform + opacity, no compositor.
+   Sem `filter: blur` (repintaria): o degradê radial já é suave. */
+.luz {
+  position: absolute;
+  inset: -20%;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 35% at 28% 40%, color-mix(in oklab, var(--l-glow) 38%, transparent), transparent 70%),
+    radial-gradient(30% 30% at 70% 80%, color-mix(in oklab, var(--l-glow) 18%, transparent), transparent 70%);
+  animation: deriva 28s ease-in-out infinite alternate;
+  will-change: transform, opacity;
+}
+.grade {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    linear-gradient(var(--l-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--l-line) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(60% 60% at 30% 45%, #000, transparent);
+}
+
+.esq {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 40px;
+  padding: 28px 24px 8px;
+}
+.marca {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  font-size: 13px;
+  text-transform: uppercase;
+}
+.titulo {
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  font-size: clamp(36px, 9.5vw, 64px);
+  line-height: 1.04;
+  max-width: 12ch;
+  margin: 0;
+}
+.titulo em {
+  font-style: normal;
+  color: var(--l-accent);
+}
+.sub {
+  color: var(--l-muted);
+  font-size: 16px;
+  line-height: 1.5;
+  max-width: 42ch;
+  margin: 20px 0 0;
+}
+
+.dir {
+  display: grid;
+  place-items: center;
+  padding: 24px 24px 40px;
+}
+.cartao {
+  width: 100%;
+  max-width: 400px;
+  background: var(--l-card);
+  border: 1px solid var(--l-line);
+  border-radius: 16px;
+  padding: 32px 28px;
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+}
+.cartao h2 {
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: -0.03em;
+  margin: 0;
+}
+.cartao .nota {
+  color: var(--l-muted);
+  font-size: 14px;
+  margin: 6px 0 24px;
+}
+.aviso {
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+.aviso p { margin: 0; }
+.alerta { border: 1px solid rgba(255, 120, 120, 0.45); background: rgba(120, 20, 30, 0.45); color: #ffd9d9; }
+.config { border: 1px solid rgba(255, 190, 90, 0.45); background: rgba(110, 70, 10, 0.45); color: #ffe9c4; }
+
+.rotulo {
+  display: block;
+  font-size: 13px;
+  color: var(--l-muted);
+  margin: 16px 0 8px;
+  letter-spacing: 0.02em;
+}
+.campo {
+  width: 100%;
+  height: 46px;
+  border-radius: 10px;
+  border: 1px solid var(--l-field);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0 14px;
+  font: inherit;
+  font-size: 15px;
+  color: var(--l-ink);
+  transition:
+    border-color var(--dur-fast) var(--ease-smooth-out),
+    box-shadow var(--dur-fast) var(--ease-smooth-out);
+}
+.campo:focus-visible {
+  outline: none;
+  border-color: var(--l-glow);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--l-glow) 32%, transparent);
+}
+.linha {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+  font-size: 13px;
+}
+.link {
+  color: var(--l-ink);
+  text-decoration: none;
+  border-bottom: 1px solid var(--l-field);
+  border-radius: 2px;
+}
+.link:hover { border-bottom-color: var(--l-ink); }
+.link:focus-visible,
+.botao:focus-visible {
+  outline: 2px solid var(--l-accent);
+  outline-offset: 3px;
+}
+.botao {
+  margin-top: 24px;
+  width: 100%;
+  height: 48px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--l-ink);
+  color: var(--l-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: inherit;
+  font-weight: 600;
+  font-size: 15px;
+  cursor: pointer;
+  transition:
+    transform var(--dur-fast) var(--ease-smooth-out),
+    background-color var(--dur-fast) var(--ease-smooth-out);
+}
+.botao svg { transition: transform var(--dur-fast) var(--ease-smooth-out); }
+.botao:hover { background: #fff; }
+.botao:hover svg { transform: translateX(3px); }
+.botao:active { transform: scale(0.98); }
+.rodape {
+  margin: 24px 0 0;
+  padding-top: 20px;
+  border-top: 1px solid var(--l-line);
+  font-size: 13px;
+  color: var(--l-muted);
+  text-align: center;
+}
+
+/* ENTRADA ÚNICA. Título e subtítulo: "texts reveal" (sobe 12px, desfoque 3px, 500 ms,
+   40 ms entre linhas). Depois o cartão: fade + scale .98, começando quando o texto
+   termina de subir. */
+.linha-reveal {
+  animation: sobe var(--dur-very-slow) var(--ease-smooth-out) both;
+}
+.linha-reveal-2 { animation-delay: var(--dur-stagger); }
+.entra-cartao {
+  animation: cartao-entra 600ms var(--ease-smooth-out) 200ms both;
+}
+
+@keyframes sobe {
+  from { opacity: 0; transform: translateY(var(--dist-medium)); filter: blur(var(--blur-medium)); }
+}
+@keyframes cartao-entra {
+  from { opacity: 0; transform: scale(0.98); }
+}
+@keyframes deriva {
+  from { transform: translate3d(-2%, -1%, 0); opacity: 0.85; }
+  to { transform: translate3d(3%, 2%, 0); opacity: 1; }
+}
+
+@media (min-width: 900px) {
+  .tela { grid-template-columns: 1.15fr 1fr; }
+  .esq { padding: 56px 64px; justify-content: flex-start; gap: 0; }
+  .centro { margin: auto 0; }
+  .marca { margin-bottom: 0; }
+  .dir { padding: 40px; }
+  .cartao { padding: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .luz, .linha-reveal, .entra-cartao { animation: none; }
+  .campo, .botao, .botao svg { transition: none; }
+}
