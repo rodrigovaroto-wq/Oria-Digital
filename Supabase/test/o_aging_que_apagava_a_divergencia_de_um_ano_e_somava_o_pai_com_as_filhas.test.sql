@@ -2,22 +2,27 @@
 -- Rodar via Supabase/test/run.sh (que aplica as migrations e carrega as fixtures dos books antes).
 --
 -- O QUE ESTE ARQUIVO PROVA (comportamento, regra 3):
---   1. ALTO 1: num balanço COMPARATIVO ("multi 24,25", colunas 31/12/2024 e 31/12/2025) as carteiras de 2024 e de 2025 têm pendência própria: o ok de um
---      ano nunca resolve a divergência do outro, na importação e na rodada do mandato (fn_reconciliar_aging_do_caso, que visita por data-base crescente).
---      TETO MEDIDO: duas datas-base do MESMO ano (31/12 e 30/06) continuam compartilhando a pendência (a busca por período compatível é por ano).
---      E importar aging não muda o resultado das checagens clássicas do mandato (o `periodo` data-base entra nos laços de períodos compatíveis).
+--   1. ALTO 1: a pendência e o estado vigente do aging são da DATA-BASE da carteira (fn_registrar_reconciliacao, por fonte_a.aging_id). Num balanço COMPARATIVO ("multi 24,25")
+--      as carteiras de 2024 e de 2025 têm pendência própria (na importação e na rodada do mandato); duas datas-base do MESMO ano (31/12 e 30/06) também; a carteira sem par
+--      (periodo_id NULL) não captura a divergência de outro ano; a guarda da 0192 não vale entre datas-base (balanços de períodos compatíveis); o texto é o da última rodada;
+--      a função recusa o tipo do aging sem importação deste mandato e desta entidade. Importar aging NÃO cria período nem muda o que as checagens clássicas produzem (assinatura
+--      tirada ANTES de qualquer aging, num mandato à parte).
 --   2. ALTO 2: pai e filhas de Fornecedores/Clientes NA FORMA DE PRODUÇÃO (mesma `secao` ou `secao` nula; o valor do pai é a soma das filhas) valem uma vez.
---      Pai que as filhas cobrem em parte vale sozinho e AVISA; pai que as filhas excedem não é subtotal: todas entram e AVISA, e o aviso chega à descrição.
+--      Pai que as filhas cobrem em parte vale sozinho e AVISA; o aviso descreve o que ENTROU (três níveis: sem aviso de dobro).
+--   2b. Convenção de sinal: o aging (em módulo) é comparado com o módulo do balanço (produção: 13 grupos só-negativos, 0 mistos); os arranjos de sinais mistos são GUARDAS da
+--      regra declarada, não prova de bug de produção.
 --   3. ALTO 3: balanço que só existe como coluna de um combinado de OUTRA empresa do grupo concilia (e a descrição diz de quem é); o da própria entidade vence;
 --      documento de outra empresa SEM coluna desta entidade não vale (documento_ausente, sem pendência).
 --   4. Médios: conta de ESTOQUE com "cliente"/"fornecedor" no rótulo fica fora (por seção em texto e por secao_canonica de outro lado; secao_canonica NULA não exclui);
---      o resumo que não se amarra ao aplicador é recusado na função e na CHECK da tabela.
+--      carteira sem par com o lado vazio é ok (B2); o resumo que não se amarra ao aplicador é recusado na função e na CHECK da tabela.
 --
 -- DE ONDE VÊM AS FIXTURES (regra 4: nada inventado para provar bug de produção). As FORMAS vêm de produção, lidas em 12/11/2026 (leitura, nenhuma escrita):
 --   "Fornecedores" 24.549 = "Fornecedores nacionais" 16.843 + "Fornecedores intragrupo" 3.600 + "Fornecedores no exterior - resinas" 4.106 (R$ mil, 31/12/2024, ordem 33-36);
 --   "Fornecedores" 1.892 = "Fornecedores de EPC e equipamentos" 1.892; "Fornecedores" 3.966 com a única filha "Fornecedores - silvicultura e colheita" 2.934 (seção Passivo
---   Circulante); "Clientes - duplicatas a receber - mercado interno" 24.861 ao lado de "Duplicatas a receber de clientes - mercado interno" 35.044; "MERCADORIA EM GARANTIA/CONSERTO
---   A RECEBER(FORNECEDOR)" na seção ESTOQUE. Os NÚMEROS de aging são montados aqui (não há arquivo de aging real: DM7 pendente) a partir do valor do balanço.
+--   Circulante); "Clientes - duplicatas a receber - mercado interno" 24.861 ao lado de "Duplicatas a receber de clientes - mercado interno" 35.044 na mesma coluna (d19a86ce: extração
+--   que juntou a mesma conta de dois anos, NÃO um pai com filha; ver o comentário no ponto); "MERCADORIA EM GARANTIA/CONSERTO A RECEBER(FORNECEDOR)" na seção ESTOQUE;
+--   "Fornecedores nacionais - em atraso" -4.719 e "- a vencer" -902 (4a14371f) e "FORNECEDORES" -8.111.470 (5b930fad). Os NÚMEROS de aging são montados aqui (não há arquivo de
+--   aging real: DM7 pendente) a partir do valor do balanço. As empresas dos fixtures têm nomes bem diferentes: a entidade é unificada por nome parecido (o que escondeu uma prova vazia).
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2): o número reprovado por correção desligada está no cabeçalho de
 -- Supabase/migrations/0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql. `ct77.medindo = on` (PGOPTIONS='-c ct77.medindo=on') vira `raise warning`
@@ -136,7 +141,7 @@ declare
   c_ar constant text := 'contas_a_receber';
   c_ap constant text := 'contas_a_pagar';
   e_cmp uuid; e_cmp2 uuid; e_ano uuid; e_pf1 uuid; e_pf2 uuid; e_pf3 uuid; e_pf4 uuid; e_pf5 uuid; e_cl uuid; e_ex uuid; e_cn uuid; e_ct uuid;
-  e_alfa uuid; e_beta uuid; e_gama uuid; e_prop uuid; e_aplic uuid; e_clw uuid;
+  e_alfa uuid; e_beta uuid; e_gama uuid; e_prop uuid; e_aplic uuid; e_clw uuid; e_a1 uuid; e_rv uuid; e_sg1 uuid; e_sg2 uuid; e_sg3 uuid; e_sg4 uuid; e_sg5 uuid; e_sg6 uuid; e_h1 uuid; e_tx uuid; v_b uuid; v_ids1 uuid[]; v_sig1 text; v_sig2 text;
   v_map_ar uuid; v_map_ap uuid;
   v_cab jsonb := '["Cliente0277","Vencimento","Saldo"]'; v_mapa jsonb := '{"contraparte":0,"vencimento":1,"saldo":2}'; v_fmt jsonb := '{"decimal":"virgula","datas":"dia_mes_ano"}';
   v_r jsonb; v_r2 jsonb; rr reconciliacao; l record; v_t text; v_n int; v_ver uuid; v_antes jsonb; v_depois jsonb; v_pend_antes int; v_pend_depois int; v_res text;
@@ -180,39 +185,104 @@ begin
   perform teste_assert_0277(teste_pend_0277(v_a, e_cmp2, 'aging_ar_clientes') = 1 and (teste_rec_0277(v_r2, 'aging_ar_clientes')).resultado = 'ok',
     'sentido contrário: o ok de 2024, importado DEPOIS, não resolve a divergência de 2025', teste_pend_0277(v_a, e_cmp2, 'aging_ar_clientes')::text);
   perform teste_assert_0277((select count(distinct p.id) from pendencia p where p.caso_id = v_a and p.entidade_id = e_cmp2 and p.motivo = 'reconciliacao:aging_ar_clientes') = 1
-                            and (select pe.referencia from pendencia p join periodo pe on pe.id = p.periodo_id where p.caso_id = v_a and p.entidade_id = e_cmp2 and p.motivo = 'reconciliacao:aging_ar_clientes' and p.estado <> 'resolvida') = '2025-12-31',
-    'a pendência aberta é do período da carteira (data-base 2025-12-31), o efeito declarado na migration', null);
+                            and (select p.data_base from pendencia p where p.caso_id = v_a and p.entidade_id = e_cmp2 and p.motivo = 'reconciliacao:aging_ar_clientes' and p.estado <> 'resolvida') = date '2025-12-31',
+    'a pendência aberta é da carteira de 2025-12-31 (pendencia.data_base), e foi UMA pendência no total (a de 2025 reaberta, não duplicada)', null);
   v_r := teste_imp_0277(v_a, e_cmp2, c_ar, '2025-12-31', 2491700000);
   perform teste_assert_0277(teste_pend_0277(v_a, e_cmp2, 'aging_ar_clientes') = 0, 'corrigida a de 2025, fecha', null);
-  perform teste_assert_0277((select count(*) from periodo where caso_id = v_a and tipo = 'data-base' and referencia in ('2024-12-31', '2025-12-31')) = 2,
-    'o período da carteira é criado UMA vez por data-base (2 linhas em periodo para 2 datas, depois de 6 importações)', (select count(*)::text from periodo where caso_id = v_a and tipo = 'data-base'));
+  perform teste_assert_0277((select count(*) from periodo where caso_id = v_a and tipo = 'data-base') = 0
+                            and (select count(*) from reconciliacao where caso_id = v_a and tipo like 'aging\_%' and data_base is null) = 0,
+    'importar aging NÃO cria período nenhum no mandato (a primeira versão fabricava ''data-base AAAA-MM-DD''), e toda checagem do aging grava a data-base da carteira', (select count(*)::text from periodo where caso_id = v_a and tipo = 'data-base'));
 
-  -- TETO MEDIDO: o MESMO ano, datas-base diferentes, compartilham a pendência (fn_registrar_reconciliacao acha por ano). Documentado, não corrigido.
+  -- O MESMO ANO, datas-base diferentes (31/12 e 30/06 de 2025): cada uma tem a sua pendência e o seu texto (o TETO da 0274 acabou: era o que o período por ano não distinguia).
   e_ano := teste_bal_0277(v_a, 'Anual Charlie 0277 Ltda', 3, jsonb_build_array(teste_ln_0277(0, 'Clientes - duplicatas a receber', 24917)));
   v_r := teste_imp_0277(v_a, e_ano, c_ar, '2025-12-31', 2600000000);
   v_r2 := teste_imp_0277(v_a, e_ano, c_ar, '2025-06-30', 2491700000);
-  perform teste_assert_0277(teste_pend_0277(v_a, e_ano, 'aging_ar_clientes') = 1 and (teste_rec_0277(v_r2, 'aging_ar_clientes')).motivo_precondicao = 'sem_periodo_par',
-    'TETO (1) da 0274 que continua: 31/12 divergente e 30/06 (sem par) do MESMO ano compartilham UMA pendência', teste_pend_0277(v_a, e_ano, 'aging_ar_clientes')::text);
+  perform teste_assert_0277(teste_pend_0277(v_a, e_ano, 'aging_ar_clientes') = 2 and (teste_rec_0277(v_r2, 'aging_ar_clientes')).motivo_precondicao = 'sem_periodo_par',
+    'duas datas-base do MESMO ano: a de 30/06 (sem par) abre a SUA pendência, não cai na de 31/12 divergente', teste_pend_0277(v_a, e_ano, 'aging_ar_clientes')::text);
+  perform teste_assert_0277((select p.descricao from pendencia p where p.caso_id = v_a and p.entidade_id = e_ano and p.motivo = 'reconciliacao:aging_ar_clientes' and p.data_base = date '2025-12-31' and p.estado <> 'resolvida') like '%31/12/2025%Diferença de%'
+                            and (select p.descricao from pendencia p where p.caso_id = v_a and p.entidade_id = e_ano and p.motivo = 'reconciliacao:aging_ar_clientes' and p.data_base = date '2025-12-31' and p.estado <> 'resolvida') not like '%30/06/2025%',
+    'e a pendência de 31/12 mantém o texto da divergência de 31/12 (a rodada de 30/06 não o reescreve)', (select string_agg(p.data_base::text || ': ' || left(p.descricao, 80), ' | ') from pendencia p where p.caso_id = v_a and p.entidade_id = e_ano and p.motivo = 'reconciliacao:aging_ar_clientes'));
+  perform teste_assert_0277((teste_rec_0277(v_r2, 'aging_ar_adiantamentos')).resultado = 'ok' and teste_pend_0277(v_a, e_ano, 'aging_ar_adiantamentos') = 0,
+    'B2: carteira de 30/06 sem par mas SEM saldo negativo (lado dos adiantamentos vazio): nada a conciliar, ok, sem pendência', (teste_rec_0277(v_r2, 'aging_ar_adiantamentos')).resultado || ' | ' || coalesce((teste_rec_0277(v_r2, 'aging_ar_adiantamentos')).descricao, ''));
+  v_r := teste_imp_0277(v_a, e_ano, c_ar, '2025-12-31', 2491700000);
+  perform teste_assert_0277(teste_pend_0277(v_a, e_ano, 'aging_ar_clientes') = 1
+                            and (select p.data_base from pendencia p where p.caso_id = v_a and p.entidade_id = e_ano and p.motivo = 'reconciliacao:aging_ar_clientes' and p.estado <> 'resolvida') = date '2025-06-30',
+    'corrigida a de 31/12, fecha SÓ ela: a de 30/06, que segue sem par, continua na fila (na 0274 sumia dela)', teste_pend_0277(v_a, e_ano, 'aging_ar_clientes')::text);
 
-  -- Importar aging não muda as checagens clássicas do mandato (o período data-base entra nos laços de períodos compatíveis).
-  perform fn_reconciliar_caso(v_a);
-  v_antes := (select coalesce(jsonb_object_agg(tipo, resultado), '{}'::jsonb) from (select distinct on (tipo) tipo, resultado from reconciliacao
-               where caso_id = v_a and tipo not like 'aging\_%' order by tipo, criado_em desc, cmin::text::int desc) x);
-  v_pend_antes := (select count(*) from pendencia where caso_id = v_a and motivo not like 'reconciliacao:aging\_%' and estado <> 'resolvida');
-  e_aplic := teste_bal_0277(v_a, 'Neutra Delta 0277 Ltda', 4, jsonb_build_array(teste_ln_0277(0, 'Clientes - duplicatas a receber', 24917, 'milhar', '31/12/2025'),
-                                                                                 teste_ln_0277(1, 'Clientes - duplicatas a receber', 21902, 'milhar', '31/12/2024')), 'multi', '24,25');
-  perform fn_reconciliar_caso(v_a);
-  v_antes := (select coalesce(jsonb_object_agg(tipo, resultado), '{}'::jsonb) from (select distinct on (tipo) tipo, resultado from reconciliacao
-               where caso_id = v_a and tipo not like 'aging\_%' order by tipo, criado_em desc, cmin::text::int desc) x);
-  v_pend_antes := (select count(*) from pendencia where caso_id = v_a and motivo not like 'reconciliacao:aging\_%' and estado <> 'resolvida');
-  v_r := teste_imp_0277(v_a, e_aplic, c_ar, '2025-12-31', 2491700000);
-  v_r := teste_imp_0277(v_a, e_aplic, c_ar, '2024-12-31', 2190200000);
-  perform fn_reconciliar_caso(v_a);
-  v_depois := (select coalesce(jsonb_object_agg(tipo, resultado), '{}'::jsonb) from (select distinct on (tipo) tipo, resultado from reconciliacao
-               where caso_id = v_a and tipo not like 'aging\_%' order by tipo, criado_em desc, cmin::text::int desc) x);
-  v_pend_depois := (select count(*) from pendencia where caso_id = v_a and motivo not like 'reconciliacao:aging\_%' and estado <> 'resolvida');
-  perform teste_assert_0277(v_antes = v_depois and v_pend_antes = v_pend_depois,
-    'importar aging NÃO muda o resultado (por tipo) nem a contagem de pendências das checagens clássicas do mandato', v_antes::text || ' | ' || v_depois::text || ' | ' || v_pend_antes || ' x ' || v_pend_depois);
+  -- ALTO 1 (rv2 da revisão): o balanço comparativo + a carteira de 30/06/2025 (sem par: o balanço fecha em 31/12), que passava periodo_id NULL e casava QUALQUER ano.
+  e_a1 := teste_bal_0277(v_a, 'Comparativa Um 0277 Ltda', 23, jsonb_build_array(
+    teste_ln_0277(0, 'Clientes - duplicatas a receber', 21902, 'milhar', '31/12/2024'), teste_ln_0277(1, 'Clientes - duplicatas a receber', 24917, 'milhar', '31/12/2025')), 'multi', '24,25');
+  v_r := teste_imp_0277(v_a, e_a1, c_ar, '2025-06-30', 2400000000);
+  v_r2 := teste_imp_0277(v_a, e_a1, c_ar, '2024-12-31', 2200000000);
+  rr := teste_rec_0277(v_r2, 'aging_ar_clientes');
+  perform teste_assert_0277(rr.resultado = 'divergente' and rr.divergencia_abs = 98000 and teste_pend_0277(v_a, e_a1, 'aging_ar_clientes') = 2,
+    'sem par (30/06/2025) e divergente (31/12/2024) têm pendência CADA UM: a divergência de 2024 não cai na pendência sem período da outra carteira', rr.resultado || ' | ' || teste_pend_0277(v_a, e_a1, 'aging_ar_clientes'));
+  v_r := teste_imp_0277(v_a, e_a1, c_ar, '2025-12-31', 2491700000);
+  perform teste_assert_0277(teste_pend_0277(v_a, e_a1, 'aging_ar_clientes') = 2
+                            and (select p.descricao from pendencia p where p.caso_id = v_a and p.entidade_id = e_a1 and p.motivo = 'reconciliacao:aging_ar_clientes' and p.data_base = date '2024-12-31' and p.estado <> 'resolvida') like '%R$ 98.000,00%',
+    'o ok de 31/12/2025 não resolve nem a divergência de 2024 (com o valor dela no texto) nem a de 30/06/2025', teste_pend_0277(v_a, e_a1, 'aging_ar_clientes')::text);
+
+  -- A guarda da 0192 (a divergência irmã) não vale entre datas-base. Arranjo da 0192/4 ("Pa primeiro"): a mesma empresa com um balanço comparativo (multi 24,25) e um anual 2025 mais novo: a carteira de 2024 só
+  -- acha o comparativo; a de 2025 acha o anual (o mais novo do mesmo tipo). Com a pendência de 2024 aberta e a de 2025 divergente, corrigir a carteira de 2024 tem de resolver a de 2024: a chave
+  -- "anual 2025" (compatível com multi 24,25) tem como último registro a divergência de 2025, e a guarda a tomaria por irmã da de 2024.
+  e_sg5 := teste_bal_0277(v_a, 'Guarda Zero Dois 0277 Ltda', 29, jsonb_build_array(
+    teste_ln_0277(0, 'Clientes - duplicatas a receber', 21902, 'milhar', '31/12/2024'), teste_ln_0277(1, 'Clientes - duplicatas a receber', 24917, 'milhar', '31/12/2025')), 'multi', '24,25');
+  perform teste_bal_0277(v_a, 'Guarda Zero Dois 0277 Ltda', 30, jsonb_build_array(teste_ln_0277(0, 'Clientes - duplicatas a receber', 24917)), 'anual', '2025');
+  update documento set criado_em = now() + interval '2 minutes' where caso_id = v_a and entidade_id = e_sg5 and periodo_id = (select id from periodo where caso_id = v_a and tipo = 'anual' and referencia = '2025');
+  v_r := teste_imp_0277(v_a, e_sg5, c_ar, '2024-12-31', 2200000000);
+  v_r2 := teste_imp_0277(v_a, e_sg5, c_ar, '2025-12-31', 2600000000);
+  perform teste_assert_0277(teste_pend_0277(v_a, e_sg5, 'aging_ar_clientes') = 2 and (teste_rec_0277(v_r, 'aging_ar_clientes')).periodo_id is distinct from (teste_rec_0277(v_r2, 'aging_ar_clientes')).periodo_id,
+    'duas carteiras divergentes de balanços de períodos compatíveis (multi 24,25 e anual 2025): uma pendência para cada', teste_pend_0277(v_a, e_sg5, 'aging_ar_clientes')::text);
+  v_r := teste_imp_0277(v_a, e_sg5, c_ar, '2024-12-31', 2190200000);
+  perform teste_assert_0277(teste_pend_0277(v_a, e_sg5, 'aging_ar_clientes') = 1 and (select p.data_base from pendencia p where p.caso_id = v_a and p.entidade_id = e_sg5 and p.motivo = 'reconciliacao:aging_ar_clientes' and p.estado <> 'resolvida') = date '2025-12-31',
+    'corrigida a carteira de 2024, a pendência de 2024 RESOLVE mesmo com a divergência de 2025 viva em período compatível (a guarda da 0192 não é entre datas-base)', teste_pend_0277(v_a, e_sg5, 'aging_ar_clientes')::text);
+  -- O texto é sempre o da última rodada daquela carteira, mesmo quando o balanço lido mudou de período (um balanço mais novo entrou entre as duas importações).
+  e_tx := teste_bal_0277(v_a, 'Texto Novo 0277 Ltda', 31, jsonb_build_array(teste_ln_0277(0, 'Clientes - duplicatas a receber', 24917)), 'anual', '2025');
+  v_r := teste_imp_0277(v_a, e_tx, c_ar, '2025-12-31', 2600000000);
+  perform teste_bal_0277(v_a, 'Texto Novo 0277 Ltda', 32, jsonb_build_array(
+    teste_ln_0277(0, 'Clientes - duplicatas a receber', 21902, 'milhar', '31/12/2024'), teste_ln_0277(1, 'Clientes - duplicatas a receber', 24917, 'milhar', '31/12/2025')), 'multi', '24,25');
+  update documento set criado_em = now() + interval '3 minutes' where caso_id = v_a and entidade_id = e_tx and periodo_id = (select id from periodo where caso_id = v_a and tipo = 'multi' and referencia = '24,25');
+  v_r := teste_imp_0277(v_a, e_tx, c_ar, '2025-12-31', 2700000000);
+  perform teste_assert_0277(teste_pend_0277(v_a, e_tx, 'aging_ar_clientes') = 1
+                            and (select p.descricao from pendencia p where p.caso_id = v_a and p.entidade_id = e_tx and p.motivo = 'reconciliacao:aging_ar_clientes' and p.estado <> 'resolvida') like '%R$ 27.000.000,00%',
+    'reimportada a carteira com um balanço mais novo de OUTRO período lido, a pendência é a mesma (uma) e o texto é o da última rodada (27.000.000)',
+    (select string_agg(p.descricao, ' | ') from pendencia p where p.caso_id = v_a and p.entidade_id = e_tx and p.motivo = 'reconciliacao:aging_ar_clientes' and p.estado <> 'resolvida'));
+
+  -- A função central (fn_registrar_reconciliacao): o tipo do aging sem importação deste mandato e desta entidade em fonte_a.aging_id reprova ALTO.
+  begin
+    perform fn_registrar_reconciliacao(v_a, e_a1, null, 'aging_ar_clientes', 'A', null, '{}'::jsonb, null, 'divergente', 1, null, null, 'sem aging_id');
+    v_t := 'passou';
+  exception when others then v_t := sqlstate || '|' || sqlerrm;
+  end;
+  perform teste_assert_0277(v_t like 'P0001|%é por data-base%ausente%', 'tipo do aging SEM fonte_a.aging_id reprova ALTO (a pendência sem data-base voltaria a ser achada por período)', v_t);
+  begin
+    perform fn_registrar_reconciliacao(v_a, e_cmp, null, 'aging_ar_clientes', 'A', null, jsonb_build_object('aging_id', (select id from aging_importado where entidade_id = e_a1 limit 1)), null, 'divergente', 1, null, null, 'aging de outra entidade');
+    v_t := 'passou';
+  exception when others then v_t := sqlstate || '|' || sqlerrm;
+  end;
+  perform teste_assert_0277(v_t like 'P0001|%é por data-base%', 'e a importação de OUTRA entidade em aging_id também reprova (a data-base é lida do que é deste mandato e desta entidade)', v_t);
+
+  -- ALTO 2 da revisão (A2): as checagens clássicas do mandato NÃO mudam depois de importar aging. Arranjo da reprodução da revisão: um balanço comparativo (multi 24,25) com
+  -- Total do Ativo/Passivo, e um anual 2025 mais novo. O que se compara é a ASSINATURA (tipo, resultado, motivo) das linhas que a MESMA rodada produz antes e depois da importação,
+  -- num mandato à parte e com a assinatura tirada ANTES de qualquer aging (a versão anterior a tirava depois de os períodos já existirem: não reprovava).
+  v_b := fn_upsert_caso('0277 — mandato B (checagens clássicas)');
+  e_rv := teste_bal_0277(v_b, 'Classica Eco 0277 Ltda', 21, jsonb_build_array(
+    teste_ln_0277(1, 'Total do Ativo', 1000, 'milhar', '31/12/2024'), teste_ln_0277(2, 'Total do Passivo e Patrimônio Líquido', 1000, 'milhar', '31/12/2024'),
+    teste_ln_0277(3, 'Clientes', 100, 'milhar', '31/12/2024')), 'multi', '24,25');
+  perform teste_bal_0277(v_b, 'Classica Eco 0277 Ltda', 22, jsonb_build_array(teste_ln_0277(1, 'Clientes', 50, 'milhar', '31/12/2025')), 'anual', '2025');
+  update documento set criado_em = now() + interval '1 minute' where caso_id = v_b and periodo_id = (select id from periodo where caso_id = v_b and referencia = '2025');
+  perform fn_reconciliar_caso(v_b);
+  v_ids1 := array(select id from reconciliacao where caso_id = v_b);
+  v_sig1 := (select string_agg(x, ' ; ' order by x) from (select distinct tipo || '/' || resultado || '/' || coalesce(motivo_precondicao, '-') x from reconciliacao where caso_id = v_b) q);
+  v_pend_antes := (select count(*) from pendencia where caso_id = v_b and motivo not like 'reconciliacao:aging\_%' and estado <> 'resolvida');
+  v_r := teste_imp_0277(v_b, e_rv, c_ar, '2024-12-31', 10000000);
+  perform teste_assert_0277((teste_rec_0277(v_r, 'aging_ar_clientes')).resultado = 'ok', 'controle: a carteira de 31/12/2024 do mandato B confere (R$ 100.000 = Clientes 100 milhar)', (teste_rec_0277(v_r, 'aging_ar_clientes')).resultado);
+  perform fn_reconciliar_caso(v_b);
+  v_sig2 := (select string_agg(x, ' ; ' order by x) from (select distinct tipo || '/' || resultado || '/' || coalesce(motivo_precondicao, '-') x from reconciliacao where caso_id = v_b and id <> all(v_ids1) and tipo not like 'aging\_%') q);
+  v_pend_depois := (select count(*) from pendencia where caso_id = v_b and motivo not like 'reconciliacao:aging\_%' and estado <> 'resolvida');
+  perform teste_assert_0277(v_sig1 = v_sig2 and v_pend_antes = v_pend_depois,
+    'importar aging NÃO muda o que a mesma rodada das checagens clássicas produz (resultado e motivo por tipo) nem a contagem de pendências delas', v_sig1 || ' || ' || v_sig2 || ' || ' || v_pend_antes || ' x ' || v_pend_depois);
+  perform teste_assert_0277((select count(*) from periodo where caso_id = v_b) = 2, 'e o mandato continua com os 2 períodos que os documentos trouxeram (nenhum período é fabricado)', (select string_agg(tipo || ' ' || referencia, ', ') from periodo where caso_id = v_b));
 
   -- ================================================================== 2. ALTO 2: O PAI QUE SOMAVA COM AS FILHAS (a forma de PRODUÇÃO)
   raise notice '--- 2. pai e filhas de Fornecedores/Clientes: a forma de produção (mesma seção, seção nula) ---';
@@ -252,16 +322,31 @@ begin
   rr := teste_rec_0277(v_r, 'aging_ap_fornecedores');
   perform teste_assert_0277(rr.resultado = 'divergente' and rr.descricao like '%Atenção na leitura do balanço:%entrou sozinho%',
     'a descrição da divergência carrega o aviso do pai que não fecha (não é escolha em silêncio)', rr.descricao);
-  -- Pai que as filhas EXCEDEM (24.861 contra 35.044): não é subtotal; todas entram e AVISA.
+  -- Pai que as filhas EXCEDEM. REGRA 4, o que isto É e o que NÃO é: o único arranjo de produção com "excede" em grupo real é a versão d19a86ce (BALANCO, coluna 31/12/2024): "Clientes -
+  -- duplicatas a receber - mercado interno" 24.861 e "Duplicatas a receber de clientes - mercado interno" 35.044 na MESMA coluna. Não é pai com filha: é a MESMA conta com dois nomes em
+  -- ANOS diferentes (24.861 é a coluna 2025 e 35.044 a de 2023 na versão 6194209b do mesmo balanço), que a extração de d19a86ce deixou numa coluna só. Aqui afirma-se só o que dá para provar: as
+  -- linhas entram todas (é o que o balanço extraído diz) e o aviso avisa que pode estar em dobro. NÃO se afirma que existe pai cujas filhas excedem na estrutura real do balanço.
   e_pf5 := teste_bal_0277(v_a, 'Pai Cinco 0277 Ltda', 9, jsonb_build_array(
     teste_ln_0277(15, 'Clientes - duplicatas a receber - mercado interno', 24861, 'milhar', '31/12/2024', null, 'Ativo Circulante', 'ativo_circulante'),
-    teste_ln_0277(25, 'Duplicatas a receber de clientes - mercado interno', 35044, 'milhar', '31/12/2024', null, 'Ativo Circulante', 'ativo_circulante'),
-    teste_ln_0277(26, 'Duplicatas a receber de clientes - mercado externo', 5080, 'milhar', '31/12/2024', null, 'Ativo Circulante', 'ativo_circulante')), 'multi', '24,25');
+    teste_ln_0277(17, 'Duplicatas a receber de clientes - mercado externo', 5080, 'milhar', '31/12/2024', null, 'Ativo Circulante', 'ativo_circulante'),
+    teste_ln_0277(25, 'Duplicatas a receber de clientes - mercado interno', 35044, 'milhar', '31/12/2024', null, 'Ativo Circulante', 'ativo_circulante')), 'multi', '24,25');
   select count(*), max(aviso) into v_n, v_t from fn_aging_linhas_do_balanco(teste_ver_0277(v_a, e_pf5), 'clientes', null, '31/12/2024');
-  perform teste_assert_0277(v_n = 3 and v_t like '%parece o total%mais que ele%em dobro%', 'pai que as filhas EXCEDEM não é subtotal: as 3 linhas entram e o AVISO diz que pode estar em dobro', v_n || ' | ' || coalesce(v_t, 'sem aviso'));
+  perform teste_assert_0277(v_n = 3 and v_t like '%entrou na soma junto com a linha%R$ 35.044.000,00 contra os R$ 24.861.000,00%em dobro%', 'extração que juntou a mesma conta de dois anos numa coluna (d19a86ce): as 3 linhas entram e o AVISO diz que pode estar em dobro', v_n || ' | ' || coalesce(v_t, 'sem aviso'));
   v_r := teste_imp_0277(v_a, e_pf5, c_ar, '2024-12-31', 6498500000);
   rr := teste_rec_0277(v_r, 'aging_ar_clientes');
-  perform teste_assert_0277(rr.descricao like '%Atenção na leitura do balanço:%parece o total%', 'e a descrição da conciliação carrega esse aviso, ok ou divergente', rr.resultado || ' | ' || rr.descricao);
+  perform teste_assert_0277(rr.descricao like '%Atenção na leitura do balanço:%entrou na soma junto com%', 'e a descrição da conciliação carrega esse aviso, ok ou divergente', rr.resultado || ' | ' || rr.descricao);
+  -- M2: o aviso descreve o que de fato ENTROU. Três níveis, a forma que a revisão reproduziu: Fornecedores 5.329 > Fornecedores nacionais 5.329 > em atraso 3.381 + a vencer 1.948. A janela por
+  -- ordem absorve "nacionais" no pai e o nome absorve atraso e a vencer em "nacionais": entra só o pai (5.329). Antes o aviso era tirado ANTES da absorção e dizia "entraram todas, em dobro".
+  e_h1 := teste_bal_0277(v_a, 'Tres Niveis 0277 Ltda', 24, jsonb_build_array(
+    teste_ln_0277(47, 'Fornecedores', 5329, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante'),
+    teste_ln_0277(48, 'Fornecedores nacionais', 5329, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante'),
+    teste_ln_0277(49, 'Fornecedores nacionais - em atraso', 3381, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante'),
+    teste_ln_0277(51, 'Fornecedores nacionais - a vencer', 1948, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante')), 'anual', '2024');
+  select count(*), sum(valor_num), max(aviso) into v_n, rr.divergencia_abs, v_t from fn_aging_linhas_do_balanco(teste_ver_0277(v_a, e_h1), 'fornecedores', null, '31/12/2024');
+  perform teste_assert_0277(v_n = 1 and rr.divergencia_abs = 5329 and v_t is null, 'três níveis: entra só o pai (5.329) e NÃO há aviso de "em dobro" (o aviso descreve o que entrou, não o que a leitura do pai supunha)', v_n || ' | ' || coalesce(v_t, 'sem aviso'));
+  v_r := teste_imp_0277(v_a, e_h1, c_ap, '2024-12-31', 532900000);
+  rr := teste_rec_0277(v_r, 'aging_ap_fornecedores');
+  perform teste_assert_0277(rr.resultado = 'ok' and rr.descricao not like '%em dobro%', 'e a conciliação confere (R$ 5.329.000) sem aviso de dobro na descrição', rr.resultado || ' | ' || coalesce(rr.descricao, ''));
   -- Clientes de nome de manual seguido de linhas SEM o nome dele: a janela por ordem (100 = 70 + 30).
   e_cl := teste_bal_0277(v_a, 'Janela Seis 0277 Ltda', 10, jsonb_build_array(
     teste_ln_0277(5, 'Clientes', 100, 'milhar', '31/12/2025', null, 'Ativo Circulante', 'ativo_circulante'),
@@ -274,7 +359,8 @@ begin
     teste_ln_0277(36, 'CLIENTES', 17978205.57, 'unidade', null, null, 'CLIENTES'), teste_ln_0277(37, 'DUPLICATAS A RECEBER', 17978205.57, 'unidade', null, null, 'DUPLICATAS A RECEBER')));
   select count(*) into v_n from fn_aging_linhas_do_balanco(teste_ver_0277(v_a, e_clw), 'clientes', null, null);
   perform teste_assert_0277(v_n = 1, 'CLIENTES e DUPLICATAS A RECEBER com o mesmo valor (com ordem 36/37): contam uma vez', v_n::text);
-  e_ex := teste_bal_0277(v_a, 'Dois Nomes Sem Ordem 0277 Ltda', 12, jsonb_build_array(
+  -- (o nome é bem diferente do anterior: 'Dois Nomes Sem Ordem' era unificado pela entidade 'Dois Nomes' e o assert lia o 1º documento, o COM ordem: a prova era vazia)
+  e_ex := teste_bal_0277(v_a, 'Marte Papeis 0277 Ltda', 12, jsonb_build_array(
     teste_ln_0277(null, 'CLIENTES', 17978205.57, 'unidade', null, null, 'ATIVO'), teste_ln_0277(null, 'DUPLICATAS A RECEBER', 17978205.57, 'unidade', null, null, 'ATIVO')));
   select count(*) into v_n from fn_aging_linhas_do_balanco(teste_ver_0277(v_a, e_ex), 'clientes', null, null);
   perform teste_assert_0277(v_n = 1, 'e o mesmo sem `ordem` (extração que não a leu): contam uma vez', v_n::text);
@@ -289,6 +375,52 @@ begin
     teste_ln_0277(3, 'Fornecedores estrangeiros', 40, 'milhar', null, null, 'Fornecedores')));
   select count(*), sum(valor_num) into v_n, rr.divergencia_abs from fn_aging_linhas_do_balanco(teste_ver_0277(v_a, e_ct), 'fornecedores', null, null);
   perform teste_assert_0277(v_n = 1 and rr.divergencia_abs = 100, 'controle: a forma antiga (filhas com secao = nome do pai) continua valendo o pai sozinho', v_n || ' linhas, soma ' || coalesce(rr.divergencia_abs::text, 'null'));
+
+  -- ================================================================== 2b. A3: A CONVENÇÃO DE SINAL (módulo)
+  raise notice '--- 2b. passivo e crédito impressos negativos: o aging (em módulo) é comparado com o módulo do balanço ---';
+  -- A forma de produção (versão 4a14371f, BALANCETE, que nunca fecha e por isso o fixture é um BALANCO com as MESMAS linhas): "Fornecedores nacionais - em atraso" -4.719 e "- a vencer" -902
+  -- (R$ mil, seção Passivo Circulante), o grupo inteiro negativo. A carteira a pagar é 5.621.000,00.
+  e_sg1 := teste_bal_0277(v_a, 'Sinal Um 0277 Ltda', 25, jsonb_build_array(
+    teste_ln_0277(1, 'Fornecedores nacionais - em atraso', -4719, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante'),
+    teste_ln_0277(2, 'Fornecedores nacionais - a vencer', -902, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante')), 'anual', '2024');
+  v_r := teste_imp_0277(v_a, e_sg1, c_ap, '2024-12-31', 562100000);
+  rr := teste_rec_0277(v_r, 'aging_ap_fornecedores');
+  perform teste_assert_0277(rr.resultado = 'ok' and rr.divergencia_abs = 0 and (rr.fonte_b ->> 'valor')::numeric = 5621000 and (rr.fonte_b ->> 'valor_com_sinal')::numeric = -5621000
+                            and rr.descricao like '%impresso com sinal negativo%' and teste_pend_0277(v_a, e_sg1, 'aging_ap_fornecedores') = 0,
+    'balanço com Fornecedores negativos (-4.719 e -902) contra carteira de 5.621.000: CONFERE (antes: divergente de 11.242.000), e o texto diz que o sinal é convenção', rr.resultado || ' | ' || coalesce(rr.divergencia_abs::text, 'null') || ' | ' || coalesce(rr.descricao, ''));
+  -- Versão 5b930fad (BALANCO): "FORNECEDORES" -8.111.470 em R$ (duas linhas de seções diferentes, o mesmo valor: contam uma).
+  e_sg2 := teste_bal_0277(v_a, 'Sinal Dois 0277 Ltda', 26, jsonb_build_array(
+    teste_ln_0277(26, 'FORNECEDORES', -8111470, 'unidade', null, null, 'PASSIVO CIRCULANTE', 'passivo_circulante'), teste_ln_0277(27, 'FORNECEDORES', -8111470, 'unidade', null, null, 'FORNECEDORES', 'passivo_circulante')));
+  v_r := teste_imp_0277(v_a, e_sg2, c_ap, '2025-12-31', 811147000);
+  rr := teste_rec_0277(v_r, 'aging_ap_fornecedores');
+  perform teste_assert_0277(rr.resultado = 'ok' and rr.divergencia_abs = 0, 'FORNECEDORES -8.111.470 em reais contra a carteira de 8.111.470: confere', rr.resultado || ' | ' || coalesce(rr.divergencia_abs::text, 'null'));
+  -- E a diferença verdadeira continua aparecendo com o sinal negativo (a convenção não vira "ok" para tudo).
+  v_r := teste_imp_0277(v_a, e_sg2, c_ap, '2025-12-31', 900000000);
+  rr := teste_rec_0277(v_r, 'aging_ap_fornecedores');
+  perform teste_assert_0277(rr.resultado = 'divergente' and rr.divergencia_abs = 888530, 'e uma carteira de 9.000.000 contra o -8.111.470 DIVERGE em 888.530 (módulo, não zero)', rr.resultado || ' | ' || coalesce(rr.divergencia_abs::text, 'null'));
+  -- Pai positivo com filhas negativas: ARRANJO QUE PRODUÇÃO NÃO PRODUZ (13 grupos só-negativos e 0 mistos, nos 2.027 medidos). Fica como guarda da regra declarada (módulo), não como prova de bug.
+  e_sg3 := teste_bal_0277(v_a, 'Sinal Tres 0277 Ltda', 27, jsonb_build_array(
+    teste_ln_0277(1, 'Fornecedores', 5621, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante'),
+    teste_ln_0277(2, 'Fornecedores nacionais - em atraso', -4719, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante'),
+    teste_ln_0277(3, 'Fornecedores nacionais - a vencer', -902, 'milhar', '31/12/2024', null, 'Passivo Circulante', 'passivo_circulante')), 'anual', '2024');
+  select count(*), sum(valor_num) into v_n, rr.divergencia_abs from fn_aging_linhas_do_balanco(teste_ver_0277(v_a, e_sg3), 'fornecedores', null, '31/12/2024');
+  perform teste_assert_0277(v_n = 1 and rr.divergencia_abs = 5621, 'guarda (arranjo que produção não produz): pai +5.621 e filhas -4.719 e -902 fecham em módulo: o pai vale sozinho', v_n || ' linhas, soma ' || coalesce(rr.divergencia_abs::text, 'null'));
+  -- Linhas de sinais opostos que ENTRAM na soma (também nunca visto): a soma com sinal é a comparada e o texto diz.
+  e_sg4 := teste_bal_0277(v_a, 'Sinal Quatro 0277 Ltda', 28, jsonb_build_array(
+    teste_ln_0277(1, 'Clientes nacionais', 900, 'milhar', '31/12/2024', null, 'Ativo Circulante', 'ativo_circulante'),
+    teste_ln_0277(2, 'Clientes exterior', -50, 'milhar', '31/12/2024', null, 'Ativo Circulante', 'ativo_circulante')), 'anual', '2024');
+  v_r := teste_imp_0277(v_a, e_sg4, c_ar, '2024-12-31', 85000000);
+  rr := teste_rec_0277(v_r, 'aging_ar_clientes');
+  perform teste_assert_0277(rr.resultado = 'ok' and rr.descricao like '%Atenção na leitura do balanço:%sinais opostos (1 positivas, 1 negativas)%',
+    'linhas de sinais opostos entram com sinal (900 - 50 = 850) e a descrição AVISA (a diferença pode não ser real)', rr.resultado || ' | ' || coalesce(rr.descricao, ''));
+
+  -- A mesma regra na janela por ordem (pai de nome de manual): outro arranjo que produção não produz, guarda do módulo.
+  e_sg6 := teste_bal_0277(v_a, 'Sinal Seis 0277 Ltda', 33, jsonb_build_array(
+    teste_ln_0277(5, 'Clientes', 100, 'milhar', '31/12/2025', null, 'Ativo Circulante', 'ativo_circulante'),
+    teste_ln_0277(6, 'Duplicatas a receber - mercado interno', -70, 'milhar', '31/12/2025', null, 'Ativo Circulante', 'ativo_circulante'),
+    teste_ln_0277(7, 'Duplicatas a receber - exportação', -30, 'milhar', '31/12/2025', null, 'Ativo Circulante', 'ativo_circulante')), 'multi', '24,25');
+  select count(*), sum(valor_num) into v_n, rr.divergencia_abs from fn_aging_linhas_do_balanco(teste_ver_0277(v_a, e_sg6), 'clientes', null, '31/12/2025');
+  perform teste_assert_0277(v_n = 1 and rr.divergencia_abs = 100, 'guarda (arranjo que produção não produz): "Clientes" 100 seguido de duplicatas -70 e -30 fecha em módulo pela janela: o pai vale sozinho', v_n || ' linhas, soma ' || coalesce(rr.divergencia_abs::text, 'null'));
 
   -- ================================================================== 3. MÉDIO: O LADO DO BALANÇO E A SEÇÃO DE ESTOQUE
   raise notice '--- 3. a conta de ESTOQUE com "fornecedor"/"cliente" no rótulo não é o conceito ---';
@@ -384,8 +516,8 @@ begin
 
   -- ================================================================== 6. A SONDA
   raise notice '--- 6. a sonda enxerga a 0277 ---';
-  perform teste_assert_0277((select count(*) from fn_instalacao_conferir() where migration = '0277' and presente) = 7 and (select count(*) from fn_instalacao_conferir() where migration = '0277') = 7,
-    'os 7 requisitos da 0277 existem no catálogo e estão presentes', (select string_agg(chave || ':' || presente, ', ') from fn_instalacao_conferir() where migration = '0277'));
+  perform teste_assert_0277((select count(*) from fn_instalacao_conferir() where migration = '0277' and presente) = 10 and (select count(*) from fn_instalacao_conferir() where migration = '0277') = 10,
+    'os 10 requisitos da 0277 existem no catálogo e estão presentes', (select string_agg(chave || ':' || presente, ', ') from fn_instalacao_conferir() where migration = '0277'));
   perform teste_assert_0277((select ate_migration from instalacao_cobertura where id = true) >= '0277', 'a cobertura da sonda foi até a 0277', (select ate_migration from instalacao_cobertura where id = true));
 
   raise notice 'TODOS OS TESTES DA 0277 PASSARAM (% asserts executados)', current_setting('ct77.execucoes', true);

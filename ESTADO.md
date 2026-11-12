@@ -4,8 +4,9 @@
 
 > **Migration mais nova no repositório: `0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql`** — NÃO APLICADA em produção. O dono pediu 0277 (a 0276 é da branch `claude/youthful-clarke-r6cg5j`; a 0275 ficou livre). Branch `claude/tender-albattani-vx6m60`.
 
-- Corrige os 3 ALTOS da revisão da 0274 (pendência por data-base; pai + filhas pela estrutura; balanço do grupo como fonte) e 2 médios (estoque fora; resumo amarrado ao aplicador). Detalhe e medição no cabeçalho da migration.
-- Produção (leitura): grupos com pai e filhas 282 → 7 no corpus real. BALANCETE nunca fecha numa data (192 de 192): medido, não corrigido.
+- Corrige os 3 ALTOS da revisão da 0274 e médios. 2ª versão (depois da revisão independente da 1ª, que fabricava um período `data-base` e contaminava as checagens clássicas): por decisão do dono, `fn_registrar_reconciliacao` foi reemitida (corpo da 0241 + 51 linhas, só acréscimo) e acha os 4 tipos do aging pela DATA-BASE da carteira (`pendencia.data_base`, `reconciliacao.data_base`, lida de `aging_importado` por `fonte_a.aging_id`); os outros tipos não mudam (suíte inteira verde sem tocar expectativa). Aging × balanço em módulo (13 de 2.027 grupos de produção impressos negativos, 0 mistos). Pai + filhas pela estrutura; balanço do grupo como fonte; estoque fora; resumo amarrado ao aplicador. 66 asserts; detalhe no cabeçalho.
+- Produção (leitura): grupos com pai e filhas 282 → 7. BALANCETE nunca fecha numa data (192 de 192): medido, não corrigido.
+- Ao aplicar: a 0277 reemite a função QUENTE `fn_registrar_reconciliacao`; aplicar só com o dono, depois da 0274, e conferir a sonda (10 requisitos 1354–1363).
 - Fechamento completo (MAPA, plano §7, memória) pendente do `/fechar`.
 
 ## SESSÃO 127b (11–12/11/2026, conta Claude Oria) — PLANO DO MVP: MB0, MB1, MB2; 0272 (mapeamento de colunas)
