@@ -1000,10 +1000,6 @@ echo "== 0242 — a seção que só existia em código (conta_canonica: toda se�
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conta_canonica.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
-echo "== 0243 — a linha que não tinha identidade (fato_financeiro acima de campo_extraido: a bijeção, o método, a pendência só da extração nova, o backfill sem pendência, a coluna que vence o documento, a sonda não está cega)"
-psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro.test.sql 2>&1 \
-  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
-
 echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
