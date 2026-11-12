@@ -1,8 +1,19 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 127b (11–12/11/2026, conta Claude Oria) — PLANO DO MVP: MB0, MB1, MB2; 0272 (mapeamento de colunas)
+
+> **Migration mais nova no repositório: `0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql`.** Nasceu 0242 nesta branch e foi renumerada em 12/11: a 0242 de produção é a da conta canônica (`0242_a_secao_que_so_existia_em_codigo.sql`, branch `claude/peaceful-archimedes-hisyd0`, já aplicada), e a maior do repositório era a 0271. Produção em 12/11, antes desta rodada: 0242 (conta canônica), 0270 e 0271 aplicadas; `instalacao_cobertura` em 0271. Branch `claude/hopeful-ramanujan-c425e4`.
+
+- **Plano novo:** `Arquitetura do Sistema/3 Estado e Execução/PLANO_MVP_2026-11.md`, aprovado pelo dono (DM0) em 11/11. O plano anterior fica como está. O andamento por fatia está no §7 dele.
+- **MB0:** `Dados de Teste/volume/` (AR, AP e OFX sintéticos de até 1M de linhas que fecham com o BP do book-distress).
+- **MB1:** `Leitor/lib/tabela.mjs` (leitor tabular em fluxo, CSV e XLSX, no navegador).
+- **MB2:** `Leitor/lib/mapeamento.mjs` (mapeamento de colunas e formato, título × subtotal × rejeitada) + a 0272.
+- **0272 APLICADA EM PRODUÇÃO em 12/11/2026** (a pedido do dono, pela API de gerenciamento, 1,6 s). Antes: 386 itens na sonda, 0 ausentes, 81 mandatos, cobertura 0271. Depois: 396 itens (os 10 da 0272), 0 ausentes, 81 mandatos, `mapeamento_de_colunas` vazia, cobertura 0272. O vetor da biblioteca JS dá a mesma impressão do cabeçalho no Postgres de produção. `run.sh` local: TODOS OS TESTES PASSARAM.
+- **Sobreposição a decidir:** a Claude Oria 2 guardou no `main` (PR #295) o `DESENHO_LEITOR_TRANSACIONAL.md` (leitor no servidor com DuckDB; GUARDADO, não aprovado), que resolve o mesmo problema da MB1/MB2 por outro caminho e reserva "0272 em diante". A 0272 desta branch ocupa esse número; quem reabrir o desenho usa a próxima livre.
+
 ## SESSÃO 127 (11/11/2026, conta Claude Oria) — CI sem apt; 0240 e 0241 APLICADAS EM PRODUÇÃO
 
-> **Migration mais nova: `0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql` (e a `0270_a_linha_que_nao_sabia_de_que_linha_veio.sql`) — ESCRITAS NA P11 (etapa 2.2), NÃO APLICADAS EM PRODUÇÃO. A anterior, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291).** Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
+> **Migration mais nova (hoje: `0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql`, ver S127b; na S127 era a `0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql`) (e a `0270_a_linha_que_nao_sabia_de_que_linha_veio.sql`) — ESCRITAS NA P11 (etapa 2.2), NÃO APLICADAS EM PRODUÇÃO. A anterior, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291).** Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
 
 ### Aplicação em produção (11/11, a pedido do dono)
 - **Antes:** 80 mandatos; sonda com 365 itens e 1 ausente (`envio_segredo_no_vault`, que a API não lê); 479 pendências de reconciliação abertas.

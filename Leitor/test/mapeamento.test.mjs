@@ -230,7 +230,7 @@ test('arquivo americano inteiro (ponto decimal, mês/dia): proposto, aplicado, m
   assert.deepEqual(titulos.map((t) => t.vencimento), ['2025-03-15', '2025-04-20', '2025-12-31']);
 });
 
-test('impressão do cabeçalho: os vetores que a migration 0242 recalcula no banco', () => {
+test('impressão do cabeçalho: os vetores que a migration 0272 recalcula no banco', () => {
   assert.equal(impressaoDoCabecalho(['Código', 'Cliente', 'CNPJ/CPF', 'Título', 'Parcela', 'Emissão', 'Vencimento', 'Valor Original', 'Valor Pago', 'Saldo', 'Data Pagamento', 'Situação']),
     '85e6f43fb9eed49ea6cc1ed90cab717d711a18b54c14dee3c8a04a667795f72d');
   assert.equal(impressaoDoCabecalho(['  Código ', 'Cli  ente', '', '']), 'b9b00f3fd09b66b137353b69ed211fabfb259bb78b10690a7266e2b6c004188f');

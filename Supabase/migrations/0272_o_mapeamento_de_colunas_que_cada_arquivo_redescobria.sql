@@ -1,7 +1,9 @@
 -- =============================================================================
--- 0242 — O MAPEAMENTO DE COLUNAS QUE CADA ARQUIVO REDESCOBRIA: a tabela do mapeamento confirmado por um analista,
+-- 0272 — O MAPEAMENTO DE COLUNAS QUE CADA ARQUIVO REDESCOBRIA: a tabela do mapeamento confirmado por um analista,
 --        reaproveitado pela impressão digital do cabeçalho (MB2 do PLANO_MVP_2026-11.md; contrato em Leitor/lib/mapeamento.mjs)
 -- (Cria 1 tabela, 4 funções, 1 policy de leitura, 2 views da sonda. Nenhum backfill: a tabela nasce vazia.)
+-- NUMERAÇÃO (12/11/2026): escrita como 0242 e renumerada antes de ir a produção. A 0242 de produção é OUTRA (a conta canônica,
+-- `0242_a_secao_que_so_existia_em_codigo.sql`, de outra branch, já aplicada), e a maior do repositório era a 0271: esta é a 0272.
 --
 -- O DEFEITO. O leitor tabular (MB1) entrega linhas e células, mas não sabe o que cada coluna significa. Sem o mapeamento,
 -- decidir se a linha é título, subtotal ou lixo é palpite (a revisão de 11/11/2026 viu o palpite errar nos dois sentidos).
@@ -86,7 +88,7 @@ language sql immutable set search_path = public, pg_temp as $$
 $$;
 
 comment on function fn_impressao_do_cabecalho(jsonb) is
-  '0242: a impressão digital do cabeçalho (sha256 hex), a MESMA de impressaoDoCabecalho em Leitor/lib/mapeamento.mjs: cada célula em NFC, [espaço \t \n \r U+00A0] colapsados em um espaço e aparados nas pontas, células vazias do FIM fora, junção por U+001F, SEM minúsculas (lower() depende do LC_CTYPE). Calculada aqui, nunca aceita do navegador.';
+  '0272: a impressão digital do cabeçalho (sha256 hex), a MESMA de impressaoDoCabecalho em Leitor/lib/mapeamento.mjs: cada célula em NFC, [espaço \t \n \r U+00A0] colapsados em um espaço e aparados nas pontas, células vazias do FIM fora, junção por U+001F, SEM minúsculas (lower() depende do LC_CTYPE). Calculada aqui, nunca aceita do navegador.';
 
 -- ---------------------------------------------------------------------------
 -- 2. O VALIDADOR — um só (a função de confirmar e a CHECK da tabela)
@@ -164,7 +166,7 @@ begin
 end $$;
 
 comment on function fn_mapeamento_erros(jsonb, jsonb, jsonb) is
-  '0242: os motivos pelos quais um mapeamento NÃO é aplicável (lista vazia = válido). Espelha validarMapeamento e os 11 CAMPOS de Leitor/lib/mapeamento.mjs (índice contra o cabeçalho ORIGINAL; obrigatórios contraparte, vencimento, saldo; coluna em um só campo) e fecha o formato (decimal, datas). Usada pela confirmação e pela CHECK da tabela.';
+  '0272: os motivos pelos quais um mapeamento NÃO é aplicável (lista vazia = válido). Espelha validarMapeamento e os 11 CAMPOS de Leitor/lib/mapeamento.mjs (índice contra o cabeçalho ORIGINAL; obrigatórios contraparte, vencimento, saldo; coluna em um só campo) e fecha o formato (decimal, datas). Usada pela confirmação e pela CHECK da tabela.';
 
 -- ---------------------------------------------------------------------------
 -- 3. A TABELA
@@ -187,15 +189,15 @@ create table mapeamento_de_colunas (
   constraint mapeamento_substituicao_inteira check ((substituido_em is null) = (substituido_por is null))
 );
 comment on constraint mapeamento_valido on mapeamento_de_colunas is
-  '0242: o mesmo validador da confirmação (fn_mapeamento_erros), para quem escrever sem passar pela função (service_role): obrigatório faltando, índice fora, coluna repetida e formato fora da lista não entram.';
+  '0272: o mesmo validador da confirmação (fn_mapeamento_erros), para quem escrever sem passar pela função (service_role): obrigatório faltando, índice fora, coluna repetida e formato fora da lista não entram.';
 comment on constraint mapeamento_impressao_do_banco on mapeamento_de_colunas is
-  '0242: a impressão é sempre a do cabeçalho gravado, calculada pelo banco; nem o service_role grava uma impressão que o cabeçalho não produz.';
+  '0272: a impressão é sempre a do cabeçalho gravado, calculada pelo banco; nem o service_role grava uma impressão que o cabeçalho não produz.';
 
 -- No máximo UMA vigente por (tipo_base, impressao).
 create unique index mapeamento_de_colunas_uma_vigente on mapeamento_de_colunas (tipo_base, impressao) where substituido_em is null;
 
 comment on table mapeamento_de_colunas is
-  '0242: o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, pela impressão digital do cabeçalho, reaproveitado no próximo arquivo do mesmo ERP em qualquer mandato. NÃO é por mandato: guarda o nome das colunas, não dado do cliente. Escrita só por fn_mapeamento_confirmar; uma confirmação nova marca a anterior como substituída (substituido_em) e a nova vira a vigente.';
+  '0272: o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, pela impressão digital do cabeçalho, reaproveitado no próximo arquivo do mesmo ERP em qualquer mandato. NÃO é por mandato: guarda o nome das colunas, não dado do cliente. Escrita só por fn_mapeamento_confirmar; uma confirmação nova marca a anterior como substituída (substituido_em) e a nova vira a vigente.';
 comment on column mapeamento_de_colunas.mapa is
   'campo -> índice 0-based da coluna NO CABEÇALHO ORIGINAL (a coluna `cabecalho`), não no normalizado.';
 comment on column mapeamento_de_colunas.formato is
@@ -254,7 +256,7 @@ begin
 end $$;
 
 comment on function fn_mapeamento_confirmar(text, jsonb, jsonb, jsonb) is
-  '0242: o analista confirma o mapeamento de colunas de um arquivo de contas a receber/a pagar. Só Sócio e Analista (fn_meu_papel, 0216); anônimo e conexão de serviço recusados. Valida (fn_mapeamento_erros) e recusa com o motivo; calcula a impressão do cabeçalho no banco; marca a vigente anterior do mesmo par como substituída; grava mapeamento_confirmado em evento_auditoria. Devolve {id, impressao, substitui}.';
+  '0272: o analista confirma o mapeamento de colunas de um arquivo de contas a receber/a pagar. Só Sócio e Analista (fn_meu_papel, 0216); anônimo e conexão de serviço recusados. Valida (fn_mapeamento_erros) e recusa com o motivo; calcula a impressão do cabeçalho no banco; marca a vigente anterior do mesmo par como substituída; grava mapeamento_confirmado em evento_auditoria. Devolve {id, impressao, substitui}.';
 
 create function fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) returns jsonb
 language plpgsql stable set search_path = public, pg_temp as $$
@@ -278,7 +280,7 @@ begin
 end $$;
 
 comment on function fn_mapeamento_vigente(text, jsonb) is
-  '0242: o mapeamento vigente (a confirmação mais nova) para o tipo_base e o cabeçalho, no formato do `confirmado` de aplicadorDeMapeamento + o `formato`; NULL se ninguém confirmou. Invoker: a RLS vale; sem papel é recusado (para não parecer "ninguém confirmou").';
+  '0272: o mapeamento vigente (a confirmação mais nova) para o tipo_base e o cabeçalho, no formato do `confirmado` de aplicadorDeMapeamento + o `formato`; NULL se ninguém confirmou. Invoker: a RLS vale; sem papel é recusado (para não parecer "ninguém confirmou").';
 
 do $$
 declare f text;
@@ -307,7 +309,7 @@ create view instalacao_sonda_mapeamento_uma_vigente as
      and pg_get_indexdef(i.indexrelid) like '%(tipo_base, impressao)%'
      and pg_get_expr(i.indpred, i.indrelid) like '%substituido_em IS NULL%';
 comment on view instalacao_sonda_mapeamento_uma_vigente is
-  'Sonda da 0242: uma linha = o índice único parcial (tipo_base, impressao) where substituido_em is null existe e é válido. Zero linhas: o banco deixou de garantir uma só confirmação vigente por cabeçalho.';
+  'Sonda da 0272: uma linha = o índice único parcial (tipo_base, impressao) where substituido_em is null existe e é válido. Zero linhas: o banco deixou de garantir uma só confirmação vigente por cabeçalho.';
 grant select on instalacao_sonda_mapeamento_uma_vigente to authenticated, service_role;
 
 create view instalacao_sonda_mapeamento_checks as
@@ -318,39 +320,39 @@ create view instalacao_sonda_mapeamento_checks as
        or (k.conname = 'mapeamento_impressao_do_banco' and pg_get_constraintdef(k.oid) like '%fn_impressao_do_cabecalho(%'))
   having count(*) = 2;
 comment on view instalacao_sonda_mapeamento_checks is
-  'Sonda da 0242: uma linha = as duas CHECKs (validador e impressão do banco) existem, validadas, chamando as funções certas. Zero linhas: quem escreve como service_role grava mapeamento inválido ou impressão que o cabeçalho não produz.';
+  'Sonda da 0272: uma linha = as duas CHECKs (validador e impressão do banco) existem, validadas, chamando as funções certas. Zero linhas: quem escreve como service_role grava mapeamento inválido ou impressão que o cabeçalho não produz.';
 grant select on instalacao_sonda_mapeamento_checks to authenticated, service_role;
 
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
-  ('mapeamento_tabela', '0242', 'tabela', 'mapeamento_de_colunas', null, null,
-   'Onde o mapeamento de colunas confirmado pelo analista é guardado. Ausente = a 0242 não foi aplicada: cada arquivo de contas a receber/a pagar obriga a confirmar as colunas de novo, e "arquivo sem mapeamento confirmado não vira dado" não tem onde se apoiar.',
+  ('mapeamento_tabela', '0272', 'tabela', 'mapeamento_de_colunas', null, null,
+   'Onde o mapeamento de colunas confirmado pelo analista é guardado. Ausente = a 0272 não foi aplicada: cada arquivo de contas a receber/a pagar obriga a confirmar as colunas de novo, e "arquivo sem mapeamento confirmado não vira dado" não tem onde se apoiar.',
    'importante', 1300),
-  ('mapeamento_confirmar_funcao', '0242', 'funcao', 'fn_mapeamento_confirmar', null, null,
+  ('mapeamento_confirmar_funcao', '0272', 'funcao', 'fn_mapeamento_confirmar', null, null,
    'A única porta de escrita do mapeamento (o authenticated não tem grant nem policy de escrita na tabela). Ausente = ninguém consegue confirmar.',
    'importante', 1301),
-  ('mapeamento_vigente_funcao', '0242', 'funcao', 'fn_mapeamento_vigente', null, null,
+  ('mapeamento_vigente_funcao', '0272', 'funcao', 'fn_mapeamento_vigente', null, null,
    'A leitura do mapeamento vigente por tipo_base e cabeçalho. Ausente = o mapeamento confirmado não é reaproveitado no próximo arquivo do mesmo ERP.',
    'importante', 1302),
-  ('mapeamento_validador_funcao', '0242', 'funcao', 'fn_mapeamento_erros', null, null,
+  ('mapeamento_validador_funcao', '0272', 'funcao', 'fn_mapeamento_erros', null, null,
    'O validador único (confirmação e CHECK da tabela). Ausente = a tabela ou a confirmação não existe em estado completo.',
    'importante', 1303),
-  ('mapeamento_impressao_funcao', '0242', 'funcao', 'fn_impressao_do_cabecalho', null, null,
+  ('mapeamento_impressao_funcao', '0272', 'funcao', 'fn_impressao_do_cabecalho', null, null,
    'A impressão do cabeçalho calculada pelo banco. Ausente = a tabela não tem como casar o cabeçalho de um arquivo novo com o confirmado.',
    'importante', 1304),
-  ('mapeamento_confirmar_papel_e_autor', '0242', 'corpo', 'fn_mapeamento_confirmar', 'v_papel not in (''socio'', ''analista'')', null,
+  ('mapeamento_confirmar_papel_e_autor', '0272', 'corpo', 'fn_mapeamento_confirmar', 'v_papel not in (''socio'', ''analista'')', null,
    'Só Sócio e Analista confirmam (o anônimo e a conexão de serviço não têm papel). Corpo sem isto = a Leitura, o authenticated sem papel e o anônimo confirmam o mapeamento que decide o que vira dado no aging.',
    'bloqueante', 1305),
-  ('mapeamento_impressao_nfc', '0242', 'corpo', 'fn_impressao_do_cabecalho', ', NFC)', null,
+  ('mapeamento_impressao_nfc', '0272', 'corpo', 'fn_impressao_do_cabecalho', ', NFC)', null,
    'A impressão normaliza em NFC, como a biblioteca. Corpo sem isto = o MESMO cabeçalho com "Ação" decomposta (NFD) tem outra impressão e o mapeamento confirmado não é reaproveitado.',
    'importante', 1307),
-  ('mapeamento_leitura_policy', '0242', 'policy', 'mapeamento_de_colunas.mapeamento_de_colunas_read', null, null,
+  ('mapeamento_leitura_policy', '0272', 'policy', 'mapeamento_de_colunas.mapeamento_de_colunas_read', null, null,
    'RLS ligada sem policy de leitura devolve zero calado: o mapeamento confirmado pareceria nunca ter existido.',
    'importante', 1308),
-  ('mapeamento_uma_vigente', '0242', 'comportamento', 'instalacao_sonda_mapeamento_uma_vigente', null, 1,
+  ('mapeamento_uma_vigente', '0272', 'comportamento', 'instalacao_sonda_mapeamento_uma_vigente', null, 1,
    'O índice único parcial que garante UMA vigente por (tipo_base, impressao). Zero linhas = duas confirmações vigentes do mesmo cabeçalho e a leitura devolve uma delas ao acaso.',
    'importante', 1309),
-  ('mapeamento_checks', '0242', 'comportamento', 'instalacao_sonda_mapeamento_checks', null, 1,
+  ('mapeamento_checks', '0272', 'comportamento', 'instalacao_sonda_mapeamento_checks', null, 1,
    'As CHECKs da tabela (validador e impressão do banco). Zero linhas = o service_role grava mapeamento com índice fora, coluna repetida, formato fora da lista ou impressão alheia ao cabeçalho.',
    'importante', 1310)
 on conflict (chave) do update set
@@ -359,8 +361,8 @@ on conflict (chave) do update set
   porque = excluded.porque, severidade = excluded.severidade, ordem = excluded.ordem;
 
 update instalacao_cobertura
-   set ate_migration = '0242', revisado_em = current_date,
-       observacao = 'A 0242 cria mapeamento_de_colunas (o mapeamento de colunas confirmado, global, por impressão do cabeçalho), fn_mapeamento_confirmar, fn_mapeamento_vigente, fn_mapeamento_erros e fn_impressao_do_cabecalho. 10 requisitos novos (ordem 1300-1310, sem a 1306).'
+   set ate_migration = '0272', revisado_em = current_date,
+       observacao = 'A 0272 cria mapeamento_de_colunas (o mapeamento de colunas confirmado, global, por impressão do cabeçalho), fn_mapeamento_confirmar, fn_mapeamento_vigente, fn_mapeamento_erros e fn_impressao_do_cabecalho. 10 requisitos novos (ordem 1300-1310, sem a 1306).'
  where id = true;
 
 commit;

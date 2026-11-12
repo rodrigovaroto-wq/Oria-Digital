@@ -328,7 +328,7 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
   real (DM7).
 - **Próxima:** MB2, o mapeamento de colunas confirmado pelo analista.
 
-### MB2 — feita em 11/11/2026 (sessão 127), com os sintéticos; 0242 escrita, NÃO aplicada
+### MB2 — feita em 11/11/2026 (sessão 127), com os sintéticos; migration 0272
 
 - **`Leitor/lib/mapeamento.mjs`**: propõe as colunas (sinônimo do nome + tipo dos valores) e
   DEPOIS o formato do arquivo (vírgula ou ponto; dia/mês ou mês/dia), votado só nas colunas de
@@ -336,7 +336,7 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
   `rejeitada` contada por motivo com o saldo que ficou de fora. Sem autor, data e formato
   confirmados, recusa. Confere o cabeçalho de cada linha de cabeçalho que passa e a soma lida
   contra os totais do próprio arquivo.
-- **`0242`** (escrita pelo especialista, NÃO aplicada): `mapeamento_de_colunas` com autor, data e
+- **`0272`** (escrita pelo especialista; nasceu 0242, renumerada em 12/11 porque a 0242 da conta canônica já estava aplicada em produção): `mapeamento_de_colunas` com autor, data e
   formato, a impressão do cabeçalho recalculada pelo banco, uma vigente por (tipo_base, impressão),
   só Sócio e Analista confirmam. 78 asserts; 31 guardas desligadas reprovam de 1 a 10 cada.
 - **Decisão de escopo:** a IA NÃO propõe o mapeamento, ao contrário do que a linha MB2 previa.
@@ -354,5 +354,5 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
   7 testes cada (132 testes no Leitor).
 - **Para a MB3 decidir:** saldo negativo (adiantamento) entra na soma e a reduz; a conciliação é
   contra Clientes ou contra Clientes menos Adiantamentos?
-- **Não feito:** aplicar a 0242 em produção (sua autorização); a tela de confirmação (ME2); arquivo
+- **Não feito:** a tela de confirmação (ME2); arquivo
   real (DM7).

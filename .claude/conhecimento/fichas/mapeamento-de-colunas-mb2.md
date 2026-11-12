@@ -17,12 +17,12 @@ substitui: []
 Termos de busca: mapeamento de colunas, aging, contas a receber, contas a pagar, subtotal,
 título, total por data, coluna deslocada, vírgula decimal, ponto decimal, milhar, dia/mês,
 mês/dia, impressão do cabeçalho, ERP, confirmação do analista, soAmostra, saldo negativo,
-adiantamento, MB2, PLANO_MVP, 0242.
+adiantamento, MB2, PLANO_MVP, 0272.
 
 **O que é.** `Leitor/lib/mapeamento.mjs`: `proporMapeamento` (colunas por sinônimo do nome E tipo
 dos valores; DEPOIS o formato, votado só nas colunas de valor e de data), `validarMapeamento`,
 `aplicadorDeMapeamento` (cada linha do `aoLinha` da MB1 vira `titulo`, `subtotal` ou `rejeitada`
-contada por motivo COM o saldo que ficou de fora), `impressaoDoCabecalho` (a chave com que a 0242
+contada por motivo COM o saldo que ficou de fora), `impressaoDoCabecalho` (a chave com que a 0272
 guarda o mapeamento confirmado, recalculada pelo banco). Sem autor, data e formato confirmados, o
 aplicador RECUSA.
 
@@ -53,7 +53,7 @@ em silêncio é pior que deixar de fora com o saldo na tela.
   MB3 decide se a conciliação é contra Clientes ou Clientes menos Adiantamentos.
 - **A IA não propõe o mapeamento** (o plano previa): sinônimo + tipo acerta as 11 colunas dos
   sintéticos; colunas em inglês o analista mapeia à mão. Volta com arquivo real (DM7) se preciso.
-- **A lista dos 11 campos está duplicada** na 0242 (`fn_mapeamento_erros`), copiada à mão; nenhum
+- **A lista dos 11 campos está duplicada** na 0272 (`fn_mapeamento_erros`), copiada à mão; nenhum
   portão compara as duas.
 
 ## Medido em 11/11/2026 (Chromium, sintéticos de 1M de linhas, idêntico ao Node)

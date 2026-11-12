@@ -6706,7 +6706,7 @@ $$;
 -- Name: FUNCTION fn_impressao_do_cabecalho(p_cabecalho jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) IS '0242: a impressão digital do cabeçalho (sha256 hex), a MESMA de impressaoDoCabecalho em Leitor/lib/mapeamento.mjs: cada célula em NFC, [espaço \t \n \r U+00A0] colapsados em um espaço e aparados nas pontas, células vazias do FIM fora, junção por U+001F, SEM minúsculas (lower() depende do LC_CTYPE). Calculada aqui, nunca aceita do navegador.';
+COMMENT ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) IS '0272: a impressão digital do cabeçalho (sha256 hex), a MESMA de impressaoDoCabecalho em Leitor/lib/mapeamento.mjs: cada célula em NFC, [espaço \t \n \r U+00A0] colapsados em um espaço e aparados nas pontas, células vazias do FIM fora, junção por U+001F, SEM minúsculas (lower() depende do LC_CTYPE). Calculada aqui, nunca aceita do navegador.';
 
 --
 -- Name: fn_indice_macro_anual(integer); Type: FUNCTION; Schema: public; Owner: -
@@ -7952,7 +7952,7 @@ end $$;
 -- Name: FUNCTION fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) IS '0242: o analista confirma o mapeamento de colunas de um arquivo de contas a receber/a pagar. Só Sócio e Analista (fn_meu_papel, 0216); anônimo e conexão de serviço recusados. Valida (fn_mapeamento_erros) e recusa com o motivo; calcula a impressão do cabeçalho no banco; marca a vigente anterior do mesmo par como substituída; grava mapeamento_confirmado em evento_auditoria. Devolve {id, impressao, substitui}.';
+COMMENT ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) IS '0272: o analista confirma o mapeamento de colunas de um arquivo de contas a receber/a pagar. Só Sócio e Analista (fn_meu_papel, 0216); anônimo e conexão de serviço recusados. Valida (fn_mapeamento_erros) e recusa com o motivo; calcula a impressão do cabeçalho no banco; marca a vigente anterior do mesmo par como substituída; grava mapeamento_confirmado em evento_auditoria. Devolve {id, impressao, substitui}.';
 
 --
 -- Name: fn_mapeamento_erros(jsonb, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
@@ -8036,7 +8036,7 @@ end $_$;
 -- Name: FUNCTION fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) IS '0242: os motivos pelos quais um mapeamento NÃO é aplicável (lista vazia = válido). Espelha validarMapeamento e os 11 CAMPOS de Leitor/lib/mapeamento.mjs (índice contra o cabeçalho ORIGINAL; obrigatórios contraparte, vencimento, saldo; coluna em um só campo) e fecha o formato (decimal, datas). Usada pela confirmação e pela CHECK da tabela.';
+COMMENT ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) IS '0272: os motivos pelos quais um mapeamento NÃO é aplicável (lista vazia = válido). Espelha validarMapeamento e os 11 CAMPOS de Leitor/lib/mapeamento.mjs (índice contra o cabeçalho ORIGINAL; obrigatórios contraparte, vencimento, saldo; coluna em um só campo) e fecha o formato (decimal, datas). Usada pela confirmação e pela CHECK da tabela.';
 
 --
 -- Name: fn_mapeamento_vigente(text, jsonb); Type: FUNCTION; Schema: public; Owner: -
@@ -8069,7 +8069,7 @@ end $$;
 -- Name: FUNCTION fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) IS '0242: o mapeamento vigente (a confirmação mais nova) para o tipo_base e o cabeçalho, no formato do `confirmado` de aplicadorDeMapeamento + o `formato`; NULL se ninguém confirmou. Invoker: a RLS vale; sem papel é recusado (para não parecer "ninguém confirmou").';
+COMMENT ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) IS '0272: o mapeamento vigente (a confirmação mais nova) para o tipo_base e o cabeçalho, no formato do `confirmado` de aplicadorDeMapeamento + o `formato`; NULL se ninguém confirmou. Invoker: a RLS vale; sem papel é recusado (para não parecer "ninguém confirmou").';
 
 --
 -- Name: fn_marcar_falha_vista(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -18992,7 +18992,7 @@ CREATE TABLE public.mapeamento_de_colunas (
 -- Name: TABLE mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.mapeamento_de_colunas IS '0242: o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, pela impressão digital do cabeçalho, reaproveitado no próximo arquivo do mesmo ERP em qualquer mandato. NÃO é por mandato: guarda o nome das colunas, não dado do cliente. Escrita só por fn_mapeamento_confirmar; uma confirmação nova marca a anterior como substituída (substituido_em) e a nova vira a vigente.';
+COMMENT ON TABLE public.mapeamento_de_colunas IS '0272: o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, pela impressão digital do cabeçalho, reaproveitado no próximo arquivo do mesmo ERP em qualquer mandato. NÃO é por mandato: guarda o nome das colunas, não dado do cliente. Escrita só por fn_mapeamento_confirmar; uma confirmação nova marca a anterior como substituída (substituido_em) e a nova vira a vigente.';
 
 --
 -- Name: COLUMN mapeamento_de_colunas.mapa; Type: COMMENT; Schema: public; Owner: -
@@ -19016,13 +19016,13 @@ COMMENT ON COLUMN public.mapeamento_de_colunas.confirmado_por IS 'auth.uid() de 
 -- Name: CONSTRAINT mapeamento_impressao_do_banco ON mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON CONSTRAINT mapeamento_impressao_do_banco ON public.mapeamento_de_colunas IS '0242: a impressão é sempre a do cabeçalho gravado, calculada pelo banco; nem o service_role grava uma impressão que o cabeçalho não produz.';
+COMMENT ON CONSTRAINT mapeamento_impressao_do_banco ON public.mapeamento_de_colunas IS '0272: a impressão é sempre a do cabeçalho gravado, calculada pelo banco; nem o service_role grava uma impressão que o cabeçalho não produz.';
 
 --
 -- Name: CONSTRAINT mapeamento_valido ON mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON CONSTRAINT mapeamento_valido ON public.mapeamento_de_colunas IS '0242: o mesmo validador da confirmação (fn_mapeamento_erros), para quem escrever sem passar pela função (service_role): obrigatório faltando, índice fora, coluna repetida e formato fora da lista não entram.';
+COMMENT ON CONSTRAINT mapeamento_valido ON public.mapeamento_de_colunas IS '0272: o mesmo validador da confirmação (fn_mapeamento_erros), para quem escrever sem passar pela função (service_role): obrigatório faltando, índice fora, coluna repetida e formato fora da lista não entram.';
 
 --
 -- Name: instalacao_sonda_mapeamento_checks; Type: VIEW; Schema: public; Owner: -
@@ -19038,7 +19038,7 @@ CREATE VIEW public.instalacao_sonda_mapeamento_checks AS
 -- Name: VIEW instalacao_sonda_mapeamento_checks; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.instalacao_sonda_mapeamento_checks IS 'Sonda da 0242: uma linha = as duas CHECKs (validador e impressão do banco) existem, validadas, chamando as funções certas. Zero linhas: quem escreve como service_role grava mapeamento inválido ou impressão que o cabeçalho não produz.';
+COMMENT ON VIEW public.instalacao_sonda_mapeamento_checks IS 'Sonda da 0272: uma linha = as duas CHECKs (validador e impressão do banco) existem, validadas, chamando as funções certas. Zero linhas: quem escreve como service_role grava mapeamento inválido ou impressão que o cabeçalho não produz.';
 
 --
 -- Name: instalacao_sonda_mapeamento_uma_vigente; Type: VIEW; Schema: public; Owner: -
@@ -19054,7 +19054,7 @@ CREATE VIEW public.instalacao_sonda_mapeamento_uma_vigente AS
 -- Name: VIEW instalacao_sonda_mapeamento_uma_vigente; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.instalacao_sonda_mapeamento_uma_vigente IS 'Sonda da 0242: uma linha = o índice único parcial (tipo_base, impressao) where substituido_em is null existe e é válido. Zero linhas: o banco deixou de garantir uma só confirmação vigente por cabeçalho.';
+COMMENT ON VIEW public.instalacao_sonda_mapeamento_uma_vigente IS 'Sonda da 0272: uma linha = o índice único parcial (tipo_base, impressao) where substituido_em is null existe e é válido. Zero linhas: o banco deixou de garantir uma só confirmação vigente por cabeçalho.';
 
 --
 -- Name: instalacao_sonda_modelagem_pronta; Type: VIEW; Schema: public; Owner: -

@@ -1206,12 +1206,12 @@ supabase db execute --file Supabase/migrations/0241_a_descricao_que_o_periodo_ir
 #   select acao, depois from evento_auditoria where ator = 'sistema:0241' and acao = 'descricao_contaminada_resumo';   -- corrigidas + sem_registro_proprio = 7 (medido em 11/11/2026, antes de aplicar; as sem_registro_proprio ficam como estão)
 #   select count(*) from pendencia pe where pe.origem_estagio = 'reconciliacao' and pe.estado = 'aberta' and pe.periodo_id is not null and not exists (select 1 from reconciliacao r where r.caso_id = pe.caso_id and 'reconciliacao:' || r.tipo = pe.motivo and r.descricao = pe.descricao and (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id));   -- o critério da 0241 (período OU chave; secao_fecha pelo documento); a medição antiga, só por período, deu 7
 
-# A 0242 cria `mapeamento_de_colunas` (o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, guardado pela impressão digital do cabeçalho e reaproveitado no próximo arquivo do mesmo ERP, em qualquer mandato; GLOBAL de propósito: guarda o nome das colunas, não dado do cliente), `fn_mapeamento_confirmar` (só Sócio e Analista; a única porta de escrita), `fn_mapeamento_vigente`, `fn_mapeamento_erros` e `fn_impressao_do_cabecalho`.
+# A 0272 cria `mapeamento_de_colunas` (o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, guardado pela impressão digital do cabeçalho e reaproveitado no próximo arquivo do mesmo ERP, em qualquer mandato; GLOBAL de propósito: guarda o nome das colunas, não dado do cliente), `fn_mapeamento_confirmar` (só Sócio e Analista; a única porta de escrita), `fn_mapeamento_vigente`, `fn_mapeamento_erros` e `fn_impressao_do_cabecalho`.
 # >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Nada de n8n/portal depende dela ainda: a biblioteca Leitor/lib/mapeamento.mjs é quem a usa (MB2).
 # >>> Teste: Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql.
-supabase db execute --file Supabase/migrations/0242_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql
+supabase db execute --file Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql
 # DEPOIS DE APLICAR, confira:
-#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0242' and not presente;   -- ZERO linhas
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0272' and not presente;   -- ZERO linhas
 #   select count(*) from mapeamento_de_colunas;   -- 0 (nasce vazia)
 
 # ORDEM DE PRODUÇÃO DA P11: aplicar a 0270 E a 0271 ANTES de republicar a ingestão.
