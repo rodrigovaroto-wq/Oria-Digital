@@ -49,6 +49,7 @@ de pendências do `ESTADO.md` já disse uma vez que o Modo A não existia depois
 | **B7** | Bloqueados por dado que não temos | ⚫ espera | terceiros | nada — são espera |
 | **B8** | **Fontes oficiais e captação** (SPED, eSocial, logística, CNAB, CNAE) — Espec. 12, fase **F2T** do roadmap | 🟡 etapa 1 no repo (S107, PR #257); leitor no navegador (S108); zip no navegador (S109, NÃO verificado em produção); **onda 1 BLOQUEADA** | **dono** (3 ECDs reais; D12.3 para o Integra) e a **F1** | o dado independente que confere o declarado (DATA GATE) |
 | **B9** | **Parceiros de dados e pré-mandato** (bureau, processos, Núclea, Open Finance) — Espec. 13, fase **F2E** do roadmap | 🔴 planejada em 26/10/2026; a T0 veio pelo redesenho (§14) | **dono** (RFP e cotações, autorização do jurídico; aplicar a 0216) | a apresentação pré-mandato e a fonte que não vem do cliente |
+| **MVP** — plano `PLANO_MVP_2026-11.md` (§7) | MB0–MB2 e MB3a feitas (sintéticos); MB3b: 0274 aplicada, a conciliação do aging corrigida pela **0277 (S129), NÃO aplicada** | 🟠 **0277 aguarda decisão do dono**; a ME2 (a tela) só depois dela | dono (aplicar a 0277) | MB3c–MB4 e a ME2 |
 
 **O caminho crítico encurtou: `B0` fechou em 20/08.** Sobra `B1 → B2` e, em paralelo, `B3` (decisão)
 e `B6` (higiene). **A rodada real aconteceu em 02/09** (sessão 79 do `ESTADO.md`) e não deixou erro

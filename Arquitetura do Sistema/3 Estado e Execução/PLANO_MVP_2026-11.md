@@ -383,5 +383,13 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
 
 - **No ar:** `aging_importado`, `fn_aging_importar`, `fn_reconciliar_aging` (positivos × Clientes/Fornecedores, negativos × Adiantamentos, tolerância de meia unidade da escala). Vazia; nada a chama ainda.
 - **Revisão independente depois da aplicação:** 3 ALTOS (pendência chaveada pelo documento e não pela data-base; pai + filhos de Fornecedores em dobro nos balanços reais de 28 de 53 mandatos; balanço só no combinado tratado como ausente) e 5 médios. Detalhe no `ESTADO.md` (S127b). Nenhum ativo: disparam na primeira importação.
-- **Próxima fatia: a 0275**, que reemite `fn_reconciliar_aging` e `fn_aging_linhas_do_balanco`, medida contra os balanços REAIS de produção (leitura), não só contra a fixture. Só depois a ME2 (a tela) pode chamar a importação. A ligação na rodada (`fn_reconciliar_caso`) segue como decisão do dono.
+- **Próxima fatia: a 0277** (a 0275 ficou livre; a correção está feita na S129, ver MB3c), que reemitiria `fn_reconciliar_aging` e `fn_aging_linhas_do_balanco`, medida contra os balanços REAIS de produção (leitura), não só contra a fixture. Só depois a ME2 (a tela) pode chamar a importação. A ligação na rodada (`fn_reconciliar_caso`) segue como decisão do dono.
 
+### MB3c — 0277 (12/11/2026): a conciliação do aging corrigida, NÃO aplicada
+
+- **Feita na S129:** a 0277 corrige os 3 ALTOS da revisão da 0274 (pendência do aging por data-base na `fn_registrar_reconciliacao`; pai + filhas de Fornecedores pela estrutura; balanço só no combinado conta como fonte) e a fusão de entidades leva a carteira para a sobrevivente.
+- **Medido:** grupos com pai e filhas em dobro em produção 282 → 7; passivo negativo com a convenção só em 3 de 917 versões, então o módulo fica restrito a essa convenção.
+- **Não aplicada.** A decisão de aplicar é do dono, e ela reemite as funções quentes `fn_registrar_reconciliacao` e `fn_fundir_entidade`. Antes de aplicar, a sonda tem de dar 0 linhas para `migration='0277'`.
+- **Revisão:** 3 revisões independentes; a última correção (35b9795) não teve revisão própria.
+- **Fica para depois:** a ME2 (a tela) só depois da 0277 aplicada; a ligação da conciliação na rodada (`fn_reconciliar_caso`) é decisão do dono.
+- Detalhe e próximos passos: `ESTADO.md`, seção SESSÃO 129.
