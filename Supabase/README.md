@@ -1213,6 +1213,7 @@ supabase db execute --file Supabase/migrations/0242_a_secao_que_so_existia_em_co
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0242' and not presente;   -- ZERO linhas
 #   select count(*) from conta_canonica;   -- 27
+
 # ORDEM DE PRODUÇÃO DA P11: aplicar a 0270 E a 0271 ANTES de republicar a ingestão.
 # Republicar antes da 0271: a IA passa a devolver COMPOSICAO_IMOBILIZADO, o tipo não existe no catálogo e
 # o documento morre na FK documento_tipo_taxonomia_fkey (não é registrado). Republicar antes da 0270: o
