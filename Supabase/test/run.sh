@@ -1004,6 +1004,10 @@ echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0243 — a linha que não tinha identidade (fato_financeiro acima de campo_extraido: a bijeção, o método, a pendência só da extração nova, o backfill sem pendência, a coluna que vence o documento, a sonda não está cega)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== 0271 — o quadro de imobilizado que a IA gravava como balanço (tipo COMPOSICAO_IMOBILIZADO: existe, não entra nas checagens de balanço)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
