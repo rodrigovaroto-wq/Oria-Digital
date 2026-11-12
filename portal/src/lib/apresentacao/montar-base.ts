@@ -125,14 +125,14 @@ export async function lerInformacaoDoKit(e: {
   checklist: Leitura<{ tipo_taxonomia: string; status: string }>;
   documentos: ReadonlyArray<{ id: string; tipo_taxonomia: string | null }>;
   servico: ServicoDocumentoServeComo;
-}): Promise<{ informacao?: BaseCredito["informacao"]; kitNaoConferido: boolean; motivo?: string }> {
+}): Promise<{ informacao?: NonNullable<BaseCredito["informacao"]>; kitNaoConferido: boolean; motivo?: string }> {
   if (e.kit.error || !e.kit.data) return { kitNaoConferido: false, motivo: `kit básico não lido: ${e.kit.error?.message}` };
   if (e.checklist.error) return { kitNaoConferido: true, motivo: `checklist não lido: ${e.checklist.error.message}` };
   let atendidos: Set<string>;
   try {
     atendidos = await itensDoKitBasicoAtendidos(e.kit.data, e.documentos, e.servico);
-  } catch (x) {
-    return { kitNaoConferido: true, motivo: `kit básico não conferido: ${x instanceof Error ? x.message : String(x)}` };
+  } catch (error_) {
+    return { kitNaoConferido: true, motivo: `kit básico não conferido: ${error_ instanceof Error ? error_.message : String(error_)}` };
   }
   const semConteudo = new Set((e.checklist.data ?? []).filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia));
   return { informacao: informacaoDoKit(e.kit.data, atendidos, semConteudo), kitNaoConferido: false };

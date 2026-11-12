@@ -381,9 +381,17 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     const info = base.informacao;
     const recebidos = (info ?? []).filter((d) => d.status === "recebido").length;
     const faltam = (info ?? []).filter((d) => d.status !== "recebido");
-    const s = slide("IX.2 · O que chegou e o que faltou", !info ? (base.kitNaoConferido ? "Conferência dos documentos obrigatórios não feita nesta geração" : "Lista de documentos obrigatórios não lida nesta geração")
-      : faltam.length === 0 ? `Os ${info.length} documentos obrigatórios chegaram com conteúdo`
-      : `${recebidos} de ${info.length} documentos obrigatórios chegaram; ${faltam.length} pendentes`,
+    let manchete: string;
+    if (!info) {
+      manchete = base.kitNaoConferido
+        ? "Conferência dos documentos obrigatórios não feita nesta geração"
+        : "Lista de documentos obrigatórios não lida nesta geração";
+    } else if (faltam.length === 0) {
+      manchete = `Os ${info.length} documentos obrigatórios chegaram com conteúdo`;
+    } else {
+      manchete = `${recebidos} de ${info.length} documentos obrigatórios chegaram; ${faltam.length} pendentes`;
+    }
+    const s = slide("IX.2 · O que chegou e o que faltou", manchete,
     "Fonte: kit básico do mandato e documentos recebidos no portal.");
     if (info) {
       const rot = { recebido: "recebido", sem_conteudo: "chegou sem conteúdo extraído", faltante: "não recebido" } as const;
