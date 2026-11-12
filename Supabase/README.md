@@ -1213,6 +1213,26 @@ supabase db execute --file Supabase/migrations/0242_a_secao_que_so_existia_em_co
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0242' and not presente;   -- ZERO linhas
 #   select count(*) from conta_canonica;   -- 27
+# ORDEM DE PRODUÇÃO DA P11: aplicar a 0270 E a 0271 ANTES de republicar a ingestão.
+# Republicar antes da 0271: a IA passa a devolver COMPOSICAO_IMOBILIZADO, o tipo não existe no catálogo e
+# o documento morre na FK documento_tipo_taxonomia_fkey (não é registrado). Republicar antes da 0270: o
+# `ln` que o n8n manda é descartado em silêncio pelo corpo da 0231 (só a sonda, 1272/1273, acusa).
+#
+# A 0270 acrescenta campo_extraido.ln (P11, Fase 1: o número da linha do texto numerado do documento de onde a linha extraída veio; nulo = não medível) com check ln >= 1, e reemite fn_registrar_campos_extraidos INTEIRA (corpo da 0231; mesma assinatura de 6 argumentos) para gravá-lo: ln inválido (zero, negativo, fracionário, texto, estouro de int) vira nulo e não aborta o lote.
+# >>> Rodar COMO `postgres`; reaplicável (coluna if not exists, check drop + add, função reemitida). Aplicar DEPOIS da 0231. Sem backfill: o `ln` das linhas antigas não é recuperável. Só adianta o n8n mandar a chave `ln` (P11, lado do N8N).
+# >>> Teste: Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql.
+supabase db execute --file Supabase/migrations/0270_a_linha_que_nao_sabia_de_que_linha_veio.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0270' and not presente;   -- ZERO linhas
+#   select count(*) filter (where ln is not null) as com_ln, count(*) as total from campo_extraido;   -- com_ln = 0 até o n8n da P11 ser republicado
+
+# A 0271 cadastra o tipo COMPOSICAO_IMOBILIZADO (quadro de bens do ativo imobilizado: custo, depreciação acumulada, valor líquido) na taxonomia: complementar, com abertura analítica, declarado no D6 como sem_consumidor. Sem ele a IA gravava o quadro como BALANCO e as checagens ativo_passivo_pl e caixa_bp_fluxo abriam "sem período par" (2 no Canastra sintético, 11/11/2026).
+# >>> Rodar COMO `postgres`; idempotente (on conflict do nothing). Só afeta classificações NOVAS: o quadro já gravado como BALANCO continua BALANCO até ser reextraído ou corrigido na fila de revisão. O tipo só é oferecido à IA depois que o n8n é republicado (muda o FINGERPRINT_EXTRACAO: o próximo envio de cada mandato re-extrai).
+# >>> Teste: Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql.
+supabase db execute --file Supabase/migrations/0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0271' and not presente;   -- ZERO linhas
+#   select codigo, categoria, obrigatoriedade, abertura_analitica from taxonomia_tipo_documento where codigo = 'COMPOSICAO_IMOBILIZADO';   -- 1 linha
 
 # ---------------------------------------------------------------------------
 # DEPOIS DE APLICAR, CONFIRA — e a conferência não é reler esta lista.

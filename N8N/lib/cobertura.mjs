@@ -208,6 +208,43 @@ export function juntarFragmentosComOrigem(texto) {
 }
 
 /**
+ * A COORDENADA (P11): o texto com as linhas NÃO-BRANCAS numeradas ("L001: ..."), L1..LN globais do
+ * documento, sobre o texto JÁ EMENDADO. Devolve `{ texto, total }` (`total` = N).
+ *
+ * POR QUE A EMENDA VEM ANTES DA NUMERAÇÃO: um fragmento de linha ("RECEITA " + "1.000") é UMA
+ * linha visual. Numerar o texto cru daria dois números a ela, e o `ln` que o modelo devolvesse
+ * apontaria para meia linha — a bijeção da P12 contaria um buraco e uma duplicação onde não há
+ * nenhum. Por isso a MESMA `juntarFragmentosComOrigem` da régua de cobertura, e não uma segunda
+ * emenda (duas cópias dela divergem sem erro nenhum).
+ *
+ * Numera TODA linha não-branca, com ou sem dígito: o rótulo de seção ("ATIVO CIRCULANTE") é linha
+ * do documento e o modelo pode citá-lo como origem de um total.
+ *
+ * SÓ O TEXTO INTEIRO, e não por faixa de bloco: a numeração só existe quando o conteúdo mandado ao
+ * modelo JÁ É este texto (PDF lido como texto, planilha, XML), e nesse caso todo bloco recebe o
+ * documento inteiro como conteúdo — não há faixa a cortar. A versão por faixa (texto numerado
+ * anexado ao PDF-arquivo) ficou inalcançável quando a camada reprovada pela P6b deixou de ser
+ * numerada, e saiu (escada do CLAUDE.md, degrau 1). Texto vazio ou não-string: `{texto:'', total:0}`
+ * — "não medível", nunca um número inventado.
+ *
+ * AUTO-CONTIDA no que importa: chama só `juntarFragmentosComOrigem` (nós Code a embutem por
+ * `toString()` na mesma lista, `FONTE_COBERTURA`).
+ */
+export function numerarLinhasDoTexto(texto) {
+  if (typeof texto !== 'string' || texto.length === 0) return { texto: '', total: 0 };
+  const numeradas = [];
+  for (const g of juntarFragmentosComOrigem(texto)) {
+    const t = g.texto.trim();
+    if (t.length > 0) numeradas.push(t);
+  }
+  const larg = Math.max(3, String(numeradas.length).length);
+  return {
+    texto: numeradas.map((t, k) => `L${String(k + 1).padStart(larg, '0')}: ${t}`).join('\n'),
+    total: numeradas.length,
+  };
+}
+
+/**
  * A linha NÃO MEDE NADA — todo número dela é data, período ou código.
  *
  * O RESÍDUO QUE ISTO TIRA, medido sobre os 20 documentos capturados de produção
@@ -906,6 +943,9 @@ export function juntarBlocos(blocos) {
   const vistos = new Set();
   let algumBlocoLeuFatos = false;
   const linhas = new Set();
+  // As linhas (as mesmas chaves de `linhas`) que trouxeram `ln` — P11, regra 7: o número de linhas COM
+  // e SEM coordenada tem de aparecer, porque "nenhuma linha sem ln" e "ninguém pediu ln" se parecem.
+  const linhasComLn = new Set();
   const chaveDaLinha = [];   // paralelo a `campos`: qual linha do documento originou cada par
   const assinatura = (c) => [c.chave, c.entidade_coluna, c.periodo_coluna, c.valor_texto, c.valor_num].join('\u0001');
 
@@ -926,7 +966,10 @@ export function juntarBlocos(blocos) {
       // Cada bloco numera as suas a partir de zero, então a chave leva o bloco.
       const chave = Number.isInteger(c.linha_origem) ? `${b.bloco}:${c.linha_origem}` : null;
       chaveDaLinha.push(chave);
-      if (chave !== null) linhas.add(chave);
+      if (chave !== null) {
+        linhas.add(chave);
+        if (Number.isInteger(c.ln)) linhasComLn.add(chave);
+      }
     }
     // A DEDUPLICAÇÃO É NECESSÁRIA porque os blocos se SOBREPÕEM de propósito (a
     // emenda repete a âncora, ver a limpeza acima): um fato que caia na região
@@ -1011,6 +1054,10 @@ export function juntarBlocos(blocos) {
     // `linha_origem`), e quem chama trata isso caindo para as contas distintas —
     // o comportamento de antes desta correção.
     linhasRetornadas: linhas.size,
+    // Das `linhasRetornadas`, quantas citam a linha do texto numerado e quantas não (0 e N quando o
+    // documento não veio com texto numerado — quem lê distingue pelo `texto_numerado` do bloco).
+    linhasComLn: linhasComLn.size,
+    linhasSemLn: linhas.size - linhasComLn.size,
     // `null` quando NENHUM bloco trouxe a chave `fatos` (workflow antigo), `[]`
     // quando algum leu e não achou nada. A distinção não é estética: no banco,
     // `null` manda NÃO TOCAR nos fatos já gravados e `[]` manda apagá-los.

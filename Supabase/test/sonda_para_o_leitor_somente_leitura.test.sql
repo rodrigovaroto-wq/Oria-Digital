@@ -8,7 +8,9 @@
 -- COMPORTAMENTO (regra 3): como o leitor, a sonda roda inteira e dá a MESMA resposta que dá ao dono (mesmos requisitos, mesmos ausentes) — nenhum requisito ausente por permissão. Cada função que
 -- as views da sonda chamam (diretas e transitivas) é executável por ele.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2), em Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql: o número de asserts que reprovam sem o grant da 0242 e sem o da 0243 está no cabeçalho dela.
+-- MEDIÇÃO NÃO-VAZIA (regra 2), 12/11/2026: com `revoke execute on function fn_conta_canonica_orfas() from supabase_read_only_user` no banco montado, 4 dos 6 asserts reprovam, com a mesma
+-- mensagem do defeito de produção ("permission denied for function fn_conta_canonica_orfas"; o leitor vê -1 de 386 requisitos). Religado: 0 de 6. Quem acrescentar view à sonda que chame função
+-- acrescenta a função à lista abaixo e o grant condicional na migration (como 0233, 0234 e 0242).
 
 \set ON_ERROR_STOP on
 

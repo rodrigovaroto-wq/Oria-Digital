@@ -152,4 +152,15 @@ export const ALIASES = [
   // documento, números que podem divergir do .xlsx do lote 7377 já
   // entregue. Decisão de republicar é do dono do workflow, não automática.
   { codigo: 'HEADCOUNT', termos: ['folha de pagamento', 'folha pagamento', 'headcount'] },
+  // COMPOSICAO_IMOBILIZADO (P11, 11/11/2026): quadro de bens com custo, depreciação acumulada e valor
+  // líquido — NÃO é balanço. Sem tipo próprio a IA gravou o `27_Composicao_do_Imobilizado_Canastra`
+  // como BALANCO ("embora não seja um balanço completo..."), e `ativo_passivo_pl` e `caixa_bp_fluxo`
+  // acusaram duas pendências "sem período par" que eram de classificação, não de período (ficha
+  // quadro-de-imobilizado-classificado-como-balanco). Por ÚLTIMO, como HEADCOUNT e pelo mesmo motivo:
+  // `parseTipo` para no primeiro alias que casa e "imobilizado" é assunto de nota explicativa e de
+  // balanço. Só frases de várias palavras: a palavra solta roubaria `Notas_Explicativas_Imobilizado`.
+  // O seed em `taxonomia_tipo_documento` (Supabase) tem de ter o MESMO código.
+  // REPUBLICAÇÃO: acrescentar um código ao fim muda o enum e portanto o `FINGERPRINT_EXTRACAO`.
+  { codigo: 'COMPOSICAO_IMOBILIZADO', termos: ['composicao do imobilizado', 'composicao de imobilizado',
+    'composicao imobilizado', 'quadro do imobilizado', 'quadro de imobilizado'] },
 ];

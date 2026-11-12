@@ -77,7 +77,7 @@ test('extractionSchema é estrito, agrupa por seção e declara as colunas UMA v
   // A linha: rótulo + LISTAS de valor. Se `vt`/`vn` deixarem de ser array, a
   // associação valor↔coluna acaba, e é ela que impede trocar 2025 por 2024.
   const l = g.items.properties.l;
-  assert.deepEqual(l.items.required, ['k', 'vt', 'vn', 'cf']);
+  assert.deepEqual(l.items.required, ['k', 'vt', 'vn', 'cf', 'ln']);
   assert.equal(l.items.properties.vt.type, 'array');
   assert.equal(l.items.properties.vn.type, 'array');
   assert.deepEqual(l.items.properties.vn.items.type, ['number', 'null']);
@@ -1302,4 +1302,35 @@ test('o prompt de extração manda o acumulado no ano (YTD) virar NM+ano, nunca 
   assert.match(SYSTEM_PROMPT, /ACUMULADO NO ANO \(YTD\)/);
   assert.match(SYSTEM_PROMPT, /"8M26"/);
   assert.match(SYSTEM_PROMPT, /ERRO emitir "12M26"/);
+});
+
+// --- P11: a coordenada (ln) -------------------------------------------------
+function apiComLn(lns) {
+  return {
+    choices: [{ finish_reason: 'stop', message: { content: JSON.stringify({
+      moeda: 'BRL', unidade: 'unidade',
+      diagnostico: { entidade: 'X', tipo_confirma: true, tipo_sugerido: 'BALANCO', periodo_tipo: 'anual', periodo_referencia: '12M25',
+        legibilidade: 'ok', nota_legibilidade: null, resumo: 'r', justificativa: 'j' },
+      grupos: [{ s: 'Ativo', sc: 'ativo_circulante', op: 1, cols: [],
+        l: lns.map((ln, i) => ({ k: `Conta ${i}`, vt: ['1'], vn: [1], cf: 0.9, ln })) }],
+    }) } }],
+  };
+}
+
+test('P11: o schema pede ln (inteiro ou null) em TODA linha, e o prompt explica o que é', () => {
+  const l = extractionSchema().schema.properties.grupos.items.properties.l.items;
+  assert.ok(l.required.includes('ln'), 'o schema é strict: o que não é required o modelo pode omitir');
+  assert.deepEqual(l.properties.ln.type, ['integer', 'null']);
+  assert.match(SYSTEM_PROMPT, /ln=linha_origem/);
+  assert.match(SYSTEM_PROMPT, /null/, 'e diz o que fazer sem texto numerado');
+});
+
+test('P11: ln válido é inteiro entre 1 e lnMax; fora disso (ou não-inteiro) vira null — nunca um número inventado', () => {
+  const r = parseExtracao(apiComLn([1, 40, 0, 41, -2, 7.5, null, '12']), { lnMax: 40 });
+  assert.deepEqual(r.campos.map((c) => c.ln), [1, 40, null, null, null, null, null, null]);
+});
+
+test('P11: sem texto numerado (lnMax ausente) todo ln vira null, mesmo que o modelo tenha citado um', () => {
+  assert.deepEqual(parseExtracao(apiComLn([3, 5])).campos.map((c) => c.ln), [null, null]);
+  assert.deepEqual(parseExtracao(apiComLn([3, 5]), { lnMax: 0 }).campos.map((c) => c.ln), [null, null]);
 });

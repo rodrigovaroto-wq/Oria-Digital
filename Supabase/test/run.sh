@@ -1000,6 +1000,14 @@ echo "== 0242 — a seção que só existia em código (conta_canonica: toda se�
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conta_canonica.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o inteiro >= 1 grava, o inválido vira nulo sem abortar o lote, sem a chave grava como antes)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0271 — o quadro de imobilizado que a IA gravava como balanço (tipo COMPOSICAO_IMOBILIZADO: existe, não entra nas checagens de balanço)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'

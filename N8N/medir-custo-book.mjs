@@ -55,7 +55,7 @@ import {
 } from './lib/custo.mjs';
 import {
   linhasComNumero, celulasEstimadas, planejarFatias,
-  MAX_CELULAS_POR_BLOCO,
+  MAX_CELULAS_POR_BLOCO, numerarLinhasDoTexto, camadaDeTextoDoPdf,
 } from './lib/cobertura.mjs';
 import { SYSTEM_PROMPT, MAX_OUTPUT_TOKENS } from './lib/extract.mjs';
 import { provedor } from './lib/provedor.mjs';
@@ -89,6 +89,30 @@ const TOKENS_PROMPT_SISTEMA = Math.ceil(SYSTEM_PROMPT.length / CARACTERES_POR_TO
 //    custa US$ 1,41" quando ele custava mais de 2 — e estimativa que erra para
 //    baixo é a que deixa o lote começar e morrer no meio (o incidente v31).
 const TOKENS_POR_LINHA_PLANO = 64;
+
+// 2b) A COORDENADA (P11): o modelo cita `ln` em cada linha que devolve. A chave e o número
+//     (`,"ln":123`) são ~5 tokens por LINHA devolvida (não por célula: o `ln` mora na conta, no formato
+//     agrupado). ESTIMADO, não medido em fatura — a primeira rodada real diz o número; até lá ele erra
+//     para CIMA, porque conta toda linha com número como linha devolvida.
+const TOKENS_SAIDA_LN_POR_LINHA = 5;
+// `ln` é `required` no schema strict: sem coordenada o modelo ainda escreve `,"ln":null` (~3 tokens por linha).
+const TOKENS_SAIDA_LN_NULO_POR_LINHA = 3;
+
+// A entrada da coordenada, com as MESMAS funções que rodam em produção. Só há UM caminho com numeração: PDF
+// lido como TEXTO (rota da P6) troca o conteúdo pelo mesmo texto com o prefixo "L001: " — só o prefixo é
+// token novo. Camada reprovada pela P6/P6b (o PDF vai como arquivo) e sem texto (escaneado): sem numeração,
+// sem entrada nova, `ln` null. É entrada NÃO cacheada: o texto é do documento.
+function coordenadaDoDocumento(linhasDoTexto, paginas) {
+  const texto = (linhasDoTexto || []).join('\n');
+  const { total } = numerarLinhasDoTexto(texto);
+  if (total === 0) return { rota: 'sem_texto', caracteres: 0 };
+  const usarTexto = camadaDeTextoDoPdf(texto, { paginas }).usarTexto === true;
+  // Camada reprovada pela P6/P6b (`leitura_pdf: 'ocr'`): o PDF vai como arquivo e o texto NÃO é numerado —
+  // levá-lo de volta à frente do modelo desfaria a P6b. Sem entrada nova; `ln` sai null (revisão da P11, A1).
+  if (!usarTexto) return { rota: 'camada_reprovada', caracteres: 0 };
+  // "L" + largura + ": " por linha numerada (largura = max(3, dígitos de N), como na função de produção).
+  return { rota: 'texto', caracteres: total * (Math.max(3, String(total).length) + 3) };
+}
 
 // AS CÉLULAS, AS COLUNAS E OS BLOCOS — MEDIDOS NO TEXTO, com as MESMAS funções
 // que rodam em produção (`lib/cobertura.mjs`).
@@ -161,9 +185,12 @@ function medirDocumento(m, linhasDoTexto) {
   const blocos = med ? med.blocos : 1;
   const saidaPiorBloco = med ? tokensDeSaida(med.piorBlocoCelulas, colunasEstim) : saida;
 
+  const coord = coordenadaDoDocumento(linhasDoTexto, m.paginas);
+  const tokensLnEntrada = Math.ceil(coord.caracteres / CARACTERES_POR_TOKEN);
+  const tokensLnSaida = (coord.rota === 'texto' ? TOKENS_SAIDA_LN_POR_LINHA : TOKENS_SAIDA_LN_NULO_POR_LINHA) * m.linhas_com_numero;
   const extracao = custoDaChamada({
-    prompt_tokens: TOKENS_PROMPT_SISTEMA + entradaPdf,
-    completion_tokens: saida,
+    prompt_tokens: TOKENS_PROMPT_SISTEMA + entradaPdf + tokensLnEntrada,
+    completion_tokens: saida + tokensLnSaida,
     // O prompt de sistema é idêntico em toda chamada e vem primeiro — é a
     // condição exata do cache de prefixo da OpenAI, e ignorá-lo superestimaria.
     prompt_tokens_details: { cached_tokens: TOKENS_PROMPT_SISTEMA },
@@ -177,9 +204,15 @@ function medirDocumento(m, linhasDoTexto) {
     prompt_tokens_details: { cached_tokens: TOKENS_PROMPT_SISTEMA },
   }, MODELO_EXTRACAO);
 
+  // O FALLBACK DE CLASSIFICAÇÃO recebe o `content_part` DEPOIS do `Medir Documento`: na rota de texto ele
+  // já vem numerado ("L001: "), então o prefixo é pago aqui também (revisão da P11, B2). Na rota de
+  // arquivo o fallback recebe o PDF, sem o texto numerado (que só entra no `Fatiar Extracao`).
+  // Opção escolhida: DECLARAR e COBRAR, em vez de guardar o texto cru em outro campo do item — o cru
+  // dobraria o texto do documento na memória de todo o lote para economizar o prefixo, medido abaixo.
+  const tokensLnClassif = coord.rota === 'texto' ? tokensLnEntrada : 0;
   const classificacao = c.precisa_fallback_ia
     ? custoDaChamada({
-      prompt_tokens: entradaPdf + 400,
+      prompt_tokens: entradaPdf + 400 + tokensLnClassif,
       completion_tokens: TOKENS_SAIDA_CLASSIFICACAO,
     }, MODELO_CLASSIFICACAO)
     : 0;
@@ -207,8 +240,9 @@ function medirDocumento(m, linhasDoTexto) {
     blocos,
     tokens_saida_pior_bloco: saidaPiorBloco,
     bloco_acima_do_teto: med ? med.algumBlocoAcimaDoTeto : false,
-    tokens_entrada: TOKENS_PROMPT_SISTEMA + entradaPdf,
-    tokens_saida: saida,
+    coordenada: { rota: coord.rota, tokens_entrada: tokensLnEntrada, tokens_saida: tokensLnSaida, tokens_classificacao: c.precisa_fallback_ia ? tokensLnClassif : 0 },
+    tokens_entrada: TOKENS_PROMPT_SISTEMA + entradaPdf + tokensLnEntrada,
+    tokens_saida: saida + tokensLnSaida,
     tokens_saida_plano: saidaPlana,
     usd_extracao: extracao,
     usd_classificacao: classificacao,
@@ -325,6 +359,14 @@ if (comoJson) {
   console.log(`  • ${dobrados.length} documento(s) pagam o PDF DUAS vezes ` +
     `(nome não resolve tipo+período com confiança ≥ 0,70), somando ` +
     `${usd(dobrados.reduce((s, d) => s + d.usd_classificacao, 0))} só de classificação.`);
+  {
+    const porRota = (r) => medidos.filter((d) => d.coordenada.rota === r).length;
+    console.log(`  • a coordenada (P11): ${porRota('texto')} documento(s) lidos como texto (só o prefixo "L001: " é token novo), ` +
+      `${porRota('camada_reprovada')} com camada reprovada (PDF como arquivo, sem numeração, ln null), ${porRota('sem_texto')} sem texto (ln null) — ` +
+      `+${medidos.reduce((x, d) => x + d.coordenada.tokens_classificacao, 0)} tokens de entrada na classificação por IA (${medidos.filter((d) => d.coordenada.tokens_classificacao > 0).length} documento(s)), ` +
+      `+${medidos.reduce((x, d) => x + d.coordenada.tokens_entrada, 0)} tokens de entrada e ` +
+      `+${medidos.reduce((x, d) => x + d.coordenada.tokens_saida, 0)} de saída (estimada) no lote.`);
+  }
   if (semTipo.length) {
     console.log(`  • ${semTipo.length} sem tipo nenhum pelo nome: ` +
       semTipo.map((d) => d.arquivo).join(', '));
