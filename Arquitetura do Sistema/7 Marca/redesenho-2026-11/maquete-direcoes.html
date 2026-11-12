@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oria Digital — direção</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Fraunces:opsz,wght@9..144,400;9..144,500&family=Instrument+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- três direções, só tokens mudam ---------- */
+.dir-a{ /* Cobalto noturno */
+  --l-bg:#070a12; --l-ink:#e9edf3; --l-muted:#8891a1; --l-card:rgba(19,24,36,.72); --l-line:rgba(233,237,243,.10); --l-glow:#3b5bff;
+  --bg:#eef0f3; --surface:#ffffff; --surface-2:#f6f7f9; --ink:#0b0c0e; --muted:#5d6470; --line:#dfe2e8;
+  --accent:#1f2de6; --accent-ink:#fff; --accent-soft:#e6e8fd;
+  --nav-bg:#0b0f1a; --nav-ink:#e9edf3; --nav-muted:#8891a1; --nav-active:rgba(90,120,255,.18);
+  --risco:#d1344d; --risco-soft:#fbe7ea; --alerta:#c27c0e; --alerta-soft:#fbf0dc; --ok:#13875a; --ok-soft:#e1f3ea;
+  --f-display:"Geist",system-ui,sans-serif; --f-text:"Geist",system-ui,sans-serif; --f-mono:"Geist Mono",ui-monospace,monospace;
+  --display-w:500; --radius:10px; --track:-0.03em;
+}
+.dir-b{ /* Papel e bronze */
+  --l-bg:#0c0a08; --l-ink:#f6f1e7; --l-muted:#9b948a; --l-card:rgba(24,21,18,.78); --l-line:rgba(246,241,231,.10); --l-glow:#c9a45a;
+  --bg:#f3efe6; --surface:#fcfaf5; --surface-2:#f7f3ea; --ink:#1a1612; --muted:#6f675c; --line:#e3dccd;
+  --accent:#8a6a2f; --accent-ink:#fff; --accent-soft:#f1e8d4;
+  --nav-bg:#fcfaf5; --nav-ink:#1a1612; --nav-muted:#7d7466; --nav-active:#efe7d6;
+  --risco:#a8323e; --risco-soft:#f5e3e2; --alerta:#a66a12; --alerta-soft:#f6ead4; --ok:#3c7a4a; --ok-soft:#e4efe2;
+  --f-display:"Fraunces",Georgia,serif; --f-text:"Instrument Sans",system-ui,sans-serif; --f-mono:"DM Mono",ui-monospace,monospace;
+  --display-w:400; --radius:4px; --track:-0.015em;
+}
+.dir-c{ /* Grafite e petróleo */
+  --l-bg:#121516; --l-ink:#eef2f1; --l-muted:#8e9896; --l-card:rgba(30,35,36,.80); --l-line:rgba(238,242,241,.10); --l-glow:#1f9aa6;
+  --bg:#ffffff; --surface:#ffffff; --surface-2:#f4f7f6; --ink:#0d1d20; --muted:#55686b; --line:#e3e9e8;
+  --accent:#06525c; --accent-ink:#fff; --accent-soft:#e0eeee;
+  --nav-bg:#f4f7f6; --nav-ink:#0d1d20; --nav-muted:#55686b; --nav-active:#ffffff;
+  --risco:#c2372f; --risco-soft:#fbe6e4; --alerta:#b7791f; --alerta-soft:#fbf1df; --ok:#1d7f5f; --ok-soft:#e0f2eb;
+  --f-display:"IBM Plex Sans",system-ui,sans-serif; --f-text:"IBM Plex Sans",system-ui,sans-serif; --f-mono:"IBM Plex Mono",ui-monospace,monospace;
+  --display-w:500; --radius:6px; --track:-0.02em;
+}
+*{box-sizing:border-box;margin:0}
+body{font-family:var(--f-text);color:var(--ink);background:var(--bg);-webkit-font-smoothing:antialiased;font-size:14px}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.tela{display:none}.tela.on{display:block}
+
+/* ---------- LOGIN ---------- */
+.login{min-height:100vh;background:var(--l-bg);color:var(--l-ink);display:grid;grid-template-columns:1.15fr 1fr;position:relative;overflow:hidden}
+.login .campo-luz{position:absolute;inset:-20%;background:
+  radial-gradient(40% 35% at 28% 40%, color-mix(in oklab,var(--l-glow) 38%,transparent), transparent 70%),
+  radial-gradient(30% 30% at 70% 80%, color-mix(in oklab,var(--l-glow) 18%,transparent), transparent 70%);
+  filter:blur(20px);opacity:.9}
+.login .grade{position:absolute;inset:0;background-image:linear-gradient(var(--l-line) 1px,transparent 1px),linear-gradient(90deg,var(--l-line) 1px,transparent 1px);background-size:64px 64px;mask-image:radial-gradient(60% 60% at 30% 45%,#000,transparent)}
+.login .esq{position:relative;padding:56px 64px;display:flex;flex-direction:column;justify-content:space-between}
+.marca{display:flex;align-items:center;gap:12px;font-family:var(--f-text);font-weight:600;letter-spacing:.14em;font-size:13px}
+.marca svg{width:30px;height:30px}
+.login h1{font-family:var(--f-display);font-weight:var(--display-w);letter-spacing:var(--track);font-size:64px;line-height:1.02;max-width:12ch}
+.login h1 em{font-style:normal;color:color-mix(in oklab,var(--l-glow) 75%,var(--l-ink))}
+.login .sub{color:var(--l-muted);font-size:16px;max-width:42ch;margin-top:20px;line-height:1.5}
+.login .provas{display:flex;gap:40px;color:var(--l-muted);font-size:12px}
+.login .provas b{display:block;color:var(--l-ink);font-family:var(--f-mono);font-weight:500;font-size:20px;margin-bottom:4px}
+.login .dir{position:relative;display:grid;place-items:center;padding:40px}
+.cartao{width:100%;max-width:400px;background:var(--l-card);border:1px solid var(--l-line);border-radius:calc(var(--radius) + 6px);padding:36px;backdrop-filter:blur(18px);box-shadow:0 30px 80px rgba(0,0,0,.45)}
+.cartao h2{font-family:var(--f-display);font-weight:var(--display-w);font-size:26px;letter-spacing:var(--track)}
+.cartao p{color:var(--l-muted);margin:6px 0 28px}
+.cartao label{display:block;font-size:12px;color:var(--l-muted);margin:16px 0 8px;letter-spacing:.02em}
+.cartao .in{height:46px;border-radius:var(--radius);border:1px solid var(--l-line);background:rgba(255,255,255,.04);padding:0 14px;display:flex;align-items:center;color:var(--l-ink)}
+.cartao .in.foco{border-color:var(--l-glow);box-shadow:0 0 0 4px color-mix(in oklab,var(--l-glow) 22%,transparent)}
+.cartao .linha{display:flex;justify-content:space-between;align-items:center;margin-top:14px;font-size:12px;color:var(--l-muted)}
+.cartao .linha a{color:var(--l-ink);text-decoration:none;border-bottom:1px solid var(--l-line)}
+.btn-l{margin-top:24px;height:48px;border-radius:var(--radius);background:var(--l-ink);color:var(--l-bg);display:flex;align-items:center;justify-content:center;gap:8px;font-weight:600}
+.cartao .rodape{margin-top:24px;padding-top:20px;border-top:1px solid var(--l-line);font-size:12px;color:var(--l-muted);text-align:center}
+.dir-b .login h1{font-size:72px}
+.dir-c .login{grid-template-columns:1fr 1fr}
+.dir-c .login .campo-luz{opacity:.55}
+
+/* ---------- APP ---------- */
+.app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+.nav{background:var(--nav-bg);color:var(--nav-ink);padding:20px 14px;display:flex;flex-direction:column;gap:4px;border-right:1px solid var(--line)}
+.dir-a .nav{border-right:none}
+.nav .marca{padding:4px 8px 22px;font-size:12px}
+.nav .novo{display:flex;align-items:center;gap:8px;height:38px;padding:0 12px;border-radius:var(--radius);background:var(--accent);color:var(--accent-ink);font-weight:500;margin-bottom:14px}
+.nav .it{display:flex;align-items:center;justify-content:space-between;height:36px;padding:0 10px;border-radius:var(--radius);color:var(--nav-muted)}
+.nav .it.on{background:var(--nav-active);color:var(--nav-ink);font-weight:500}
+.nav .it .num{font-size:11px}
+.nav h6{font-size:10.5px;letter-spacing:.12em;color:var(--nav-muted);font-weight:500;margin:18px 10px 6px}
+.main{padding:28px 36px 40px;min-width:0}
+.topo{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:22px}
+.topo h1{font-family:var(--f-display);font-weight:var(--display-w);letter-spacing:var(--track);font-size:30px}
+.topo p{color:var(--muted);margin-top:4px}
+.busca{display:flex;align-items:center;gap:10px;height:38px;width:300px;padding:0 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);color:var(--muted)}
+.busca kbd{margin-left:auto;font-family:var(--f-mono);font-size:11px;border:1px solid var(--line);border-radius:4px;padding:1px 6px}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+.kpi .v{font-family:var(--f-mono);font-size:28px;font-weight:500;letter-spacing:-.02em}
+.kpi .r{color:var(--muted);font-size:12.5px;margin-top:2px}
+.kpi .d{font-size:12px;margin-top:10px;display:flex;align-items:center;gap:6px}
+.kpi .barra{height:4px;border-radius:4px;background:var(--surface-2);margin-top:10px;overflow:hidden}
+.kpi .barra i{display:block;height:100%;width:82%;background:var(--ok)}
+.ponto{width:7px;height:7px;border-radius:50%;display:inline-block}
+.grid2{display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start}
+.bloco{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+.bloco-h{display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid var(--line)}
+.bloco-h h3{font-size:13px;font-weight:600;letter-spacing:.01em}
+.bloco-h .m{color:var(--muted);font-size:12px}
+.abas{position:relative;display:inline-flex;background:var(--surface-2);border-radius:calc(var(--radius) + 2px);padding:3px;gap:2px}
+.abas span{position:relative;z-index:1;padding:6px 12px;font-size:12.5px;color:var(--muted);border-radius:var(--radius)}
+.abas span.on{background:var(--surface);color:var(--ink);font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.abas .num{margin-left:6px;font-size:11px}
+table{width:100%;border-collapse:collapse}
+th{font-size:11px;font-weight:500;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);text-align:left;padding:10px 18px;background:var(--surface-2);border-bottom:1px solid var(--line)}
+td{padding:13px 18px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr.hover td{background:color-mix(in oklab,var(--accent-soft) 55%,var(--surface))}
+.nome{font-weight:500}.nome small{display:block;color:var(--muted);font-weight:400;font-size:12px;margin-top:2px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border-radius:999px;font-size:11.5px;font-weight:500}
+.chip.risco{background:var(--risco-soft);color:var(--risco)}.chip.alerta{background:var(--alerta-soft);color:var(--alerta)}.chip.ok{background:var(--ok-soft);color:var(--ok)}.chip.neutro{background:var(--surface-2);color:var(--muted)}
+.etapas{display:flex;gap:3px;align-items:center}
+.etapas i{width:22px;height:5px;border-radius:3px;background:var(--line)}
+.etapas i.f{background:var(--accent)}.etapas i.a{background:color-mix(in oklab,var(--accent) 45%,var(--line))}
+.etapas b{font-weight:400;color:var(--muted);font-size:12px;margin-left:8px}
+.acao{height:30px;padding:0 12px;border:1px solid var(--line);border-radius:var(--radius);display:inline-flex;align-items:center;font-size:12.5px;font-weight:500;background:var(--surface)}
+.acao.p{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.pag{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;color:var(--muted);font-size:12px;border-top:1px solid var(--line)}
+.pag .bts{display:flex;gap:6px}.pag .bts span{width:28px;height:28px;border:1px solid var(--line);border-radius:var(--radius);display:grid;place-items:center}
+.pag .bts span.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.tl{padding:6px 18px 12px}
+.tl .e{display:grid;grid-template-columns:44px 1fr auto;gap:8px;padding:10px 0;border-bottom:1px dashed var(--line);align-items:baseline}
+.tl .e:last-child{border:none}
+.tl .h{color:var(--muted);font-size:12px}.tl .t{font-weight:500}.tl .t small{display:block;color:var(--muted);font-weight:400;font-size:12px}
+.tl .q{color:var(--muted);font-size:12px}
+.precisa td .grp{display:flex;gap:6px;flex-wrap:wrap}
+.sec{margin-top:20px}
+.dir-b .kpi .v{font-family:var(--f-display);font-weight:400;font-size:34px}
+.dir-b .topo h1{font-size:36px}
+.dir-c .kpi{border:none;background:var(--surface-2)}
+.dir-c .bloco{border-color:var(--line)}
+
+/* ---------- celular ---------- */
+@media (max-width:700px){
+  .login,.dir-c .login{grid-template-columns:1fr}.login .esq{padding:28px 20px 0}.login h1{font-size:40px!important}.login .provas{display:none}.login .esq .rod{display:none}
+  .login .dir{padding:24px 16px 40px}.cartao{padding:24px}
+  .app{grid-template-columns:1fr}.nav{display:none}.main{padding:18px 16px 90px}
+  .topo{flex-direction:column;align-items:flex-start;gap:12px}.busca{width:100%}
+  .kpis{grid-template-columns:1fr 1fr}.bloco-h{flex-direction:column;align-items:flex-start;gap:10px}.abas{max-width:100%;overflow-x:auto}.abas span{white-space:nowrap}.grid2{grid-template-columns:1fr}
+  .col-etapa,.col-ult,th.col-etapa,th.col-ult{display:none}
+  .barra-m{position:fixed;left:12px;right:12px;bottom:12px;height:58px;border-radius:16px;background:var(--nav-bg);color:var(--nav-muted);display:flex!important;justify-content:space-around;align-items:center;box-shadow:0 10px 30px rgba(0,0,0,.18);border:1px solid var(--line);font-size:11px}
+  .barra-m .on{color:var(--accent);font-weight:600}
+}
+.barra-m{display:none}
+</style>
+</head>
+<body>
+<!-- LOGIN -->
+<section class="tela" id="login"><div class="login">
+  <div class="campo-luz"></div><div class="grade"></div>
+  <div class="esq">
+    <div class="marca"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 22 L13 9 L24 9 M7 22 Q16 30 27 21"/><rect x="14" y="5" width="12" height="5" transform="rotate(-25 20 7)"/></svg>ORIA&nbsp;DIGITAL</div>
+    <div>
+      <h1 id="h">Os números do mandato, <em>conferidos</em> antes de virarem tese.</h1>
+      <p class="sub" id="sb">Documentos do cliente lidos, extraídos e rastreados até a página de origem. Nada aqui é fato até alguém aceitar.</p>
+    </div>
+    <div class="provas rod"><div><b>49.126</b>linhas lidas</div><div><b>82%</b>cobertura da leitura</div><div><b>8 min</b>do envio ao balanço</div></div>
+  </div>
+  <div class="dir"><div class="cartao">
+    <h2>Entrar</h2><p>Acesso criado pelo administrador da equipe.</p>
+    <label>E-mail</label><div class="in foco">nome@oriapartners.com</div>
+    <label>Senha</label><div class="in">••••••••••</div>
+    <div class="linha"><span>☐ Manter conectado</span><a>Esqueci a senha</a></div>
+    <div class="btn-l">Entrar no portal →</div>
+    <div class="rodape">Conexão protegida · sessões auditadas por mandato</div>
+  </div></div>
+</div></section>
+
+<!-- LISTA DE CASOS -->
+<section class="tela" id="casos"><div class="app">
+  <aside class="nav">
+    <div class="marca"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" width="26" height="26"><path d="M5 22 L13 9 L24 9 M7 22 Q16 30 27 21"/><rect x="14" y="5" width="12" height="5" transform="rotate(-25 20 7)"/></svg>ORIA&nbsp;DIGITAL</div>
+    <div class="novo">＋ Novo mandato</div>
+    <div class="it on">Início</div>
+    <div class="it">Mandatos <span class="num">81</span></div>
+    <div class="it">Pendências <span class="num">222</span></div>
+    <h6>RECENTES</h6>
+    <div class="it">Grupo Atlas — Reestr.</div>
+    <div class="it">Vértice Alimentos</div>
+    <div class="it">Cia. Serra Azul</div>
+    <h6>ADMINISTRAÇÃO</h6>
+    <div class="it">Qualidade e custos</div>
+    <div class="it">Equipe</div>
+  </aside>
+  <main class="main">
+    <div class="topo"><div><h1>Boa tarde, Rodrigo</h1><p>46 mandatos travados por 222 pendências — 12 dependem só de você.</p></div>
+      <div class="busca">⌕ Buscar mandato, documento… <kbd>Ctrl K</kbd></div></div>
+    <div class="kpis">
+      <div class="kpi"><div class="v">81</div><div class="r">mandatos em andamento</div><div class="d" style="color:var(--risco)"><span class="ponto" style="background:var(--risco)"></span>46 travados</div></div>
+      <div class="kpi"><div class="v">222</div><div class="r">pendências que travam aprovação</div><div class="d" style="color:var(--alerta)"><span class="ponto" style="background:var(--alerta)"></span>em 46 mandatos</div></div>
+      <div class="kpi"><div class="v">82%</div><div class="r">cobertura da leitura</div><div class="barra"><i></i></div></div>
+      <div class="kpi"><div class="v">8 min</div><div class="r">ingestão média</div><div class="d" style="color:var(--ok)"><span class="ponto" style="background:var(--ok)"></span>2 fora da média</div></div>
+    </div>
+    <div class="grid2">
+      <div>
+        <div class="bloco precisa">
+          <div class="bloco-h"><h3>Precisa de você</h3><div class="abas"><span class="on">Por mandato<span class="num">12</span></span><span>Travam aprovação<span class="num">222</span></span><span>Confirmar documento<span class="num">486</span></span></div></div>
+          <table><thead><tr><th>Mandato</th><th>O que falta</th><th></th></tr></thead><tbody>
+            <tr class="hover"><td class="nome">Grupo Atlas<small>Reestruturação · Recebimento</small></td><td><div class="grp"><span class="chip risco">3 bloqueiam</span><span class="chip neutro">Fluxo de caixa</span><span class="chip neutro">Mútuos</span><span class="chip alerta">Entidade a confirmar</span></div></td><td style="text-align:right"><span class="acao p">Resolver</span></td></tr>
+            <tr><td class="nome">Vértice Alimentos<small>M&amp;A · Recebimento</small></td><td><div class="grp"><span class="chip risco">4 bloqueiam</span><span class="chip neutro">Contrato social</span><span class="chip neutro">+3 itens do Kit</span></div></td><td style="text-align:right"><span class="acao">Pedir ao cliente</span></td></tr>
+            <tr><td class="nome">Cia. Serra Azul<small>Reestruturação · Conferência</small></td><td><div class="grp"><span class="chip risco">2 bloqueiam</span><span class="chip neutro">DRE</span><span class="chip neutro">Faturamento 24M</span></div></td><td style="text-align:right"><span class="acao">Pedir ao cliente</span></td></tr>
+            <tr><td class="nome">Delta Logística<small>M&amp;A · Recebimento</small></td><td><div class="grp"><span class="chip alerta">1 a confirmar</span><span class="chip neutro">Balancete 2025</span></div></td><td style="text-align:right"><span class="acao">Confirmar</span></td></tr>
+          </tbody></table>
+          <div class="pag"><span>4 de 12 mandatos</span><span style="color:var(--accent);font-weight:500">Ver todos →</span></div>
+        </div>
+        <div class="bloco sec">
+          <div class="bloco-h"><h3>Seus mandatos</h3><div class="abas"><span class="on">Travados<span class="num">46</span></span><span>Em andamento<span class="num">35</span></span><span>Fechados</span></div></div>
+          <table><thead><tr><th>Mandato</th><th class="col-etapa">Etapa</th><th>Situação</th><th class="col-ult">Última atividade</th></tr></thead><tbody>
+            <tr><td class="nome">Grupo Atlas<small>115 documentos</small></td><td class="col-etapa"><div class="etapas"><i class="a"></i><i></i><i></i><i></i><b>Recebimento</b></div></td><td><span class="chip risco">3 pendências</span></td><td class="col-ult num" style="color:var(--muted)">hoje 18:01</td></tr>
+            <tr><td class="nome">Cia. Serra Azul<small>64 documentos</small></td><td class="col-etapa"><div class="etapas"><i class="f"></i><i class="a"></i><i></i><i></i><b>Conferência</b></div></td><td><span class="chip risco">2 pendências</span></td><td class="col-ult num" style="color:var(--muted)">hoje 14:22</td></tr>
+            <tr><td class="nome">Vértice Alimentos<small>38 documentos</small></td><td class="col-etapa"><div class="etapas"><i class="a"></i><i></i><i></i><i></i><b>Recebimento</b></div></td><td><span class="chip risco">4 pendências</span></td><td class="col-ult num" style="color:var(--muted)">ontem</td></tr>
+            <tr><td class="nome">Nórdica Têxtil<small>92 documentos</small></td><td class="col-etapa"><div class="etapas"><i class="f"></i><i class="f"></i><i class="a"></i><i></i><b>Modelagem</b></div></td><td><span class="chip ok">Pronto p/ revisar</span></td><td class="col-ult num" style="color:var(--muted)">10/11</td></tr>
+            <tr><td class="nome">Delta Logística<small>21 documentos</small></td><td class="col-etapa"><div class="etapas"><i class="a"></i><i></i><i></i><i></i><b>Recebimento</b></div></td><td><span class="chip alerta">1 a confirmar</span></td><td class="col-ult num" style="color:var(--muted)">09/11</td></tr>
+          </tbody></table>
+          <div class="pag"><span>1–5 de 46</span><div class="bts"><span class="on">1</span><span>2</span><span>3</span><span>›</span></div></div>
+        </div>
+      </div>
+      <div class="bloco">
+        <div class="bloco-h"><h3>O que chegou</h3><span class="m">últimas 24h</span></div>
+        <div class="tl">
+          <div class="e"><span class="h num">18:01</span><span class="t">Balanço 2025<small>Grupo Atlas</small></span><span class="q num">35 linhas</span></div>
+          <div class="e"><span class="h num">18:01</span><span class="t">Balancete set/25<small>Grupo Atlas</small></span><span class="q num">832 linhas</span></div>
+          <div class="e"><span class="h num">14:22</span><span class="t">DRE 2024<small>Cia. Serra Azul</small></span><span class="q num">47 linhas</span></div>
+          <div class="e"><span class="h num">11:05</span><span class="t">Endividamento<small>Nórdica Têxtil</small></span><span class="q" style="color:var(--alerta)">sem linha</span></div>
+          <div class="e"><span class="h num">09:40</span><span class="t">Contrato social<small>Delta Logística</small></span><span class="q">documento</span></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <nav class="barra-m"><span class="on">Início</span><span>Mandatos</span><span>Buscar</span><span>Novo</span><span>Mais</span></nav>
+</div></section>
+<script>
+const q=new URLSearchParams(location.search);
+document.documentElement.className='dir-'+(q.get('dir')||'a');
+document.getElementById(q.get('tela')||'login').classList.add('on');
+const F={
+ '1':['Cada linha lida. <em>Cada número</em> com origem.','Os documentos do mandato são percorridos por inteiro, notas e anexos incluídos, e cada valor é rastreado até a página de onde saiu.'],
+ '2':['Do arquivo do cliente ao balanço conferido <em>em minutos</em>.','Extração, conciliação e rastreabilidade feitas na entrada dos documentos. A equipe dedica o tempo à análise, não à digitação.'],
+ '3':['O detalhe que muda a tese <em>aparece primeiro</em>.','Contingências, partes relacionadas e eventos subsequentes declarados em nota são lidos e destacados antes da primeira reunião.']};
+if(q.get('frase')){const f=F[q.get('frase')];document.getElementById('h').innerHTML=f[0];document.getElementById('sb').textContent=f[1];}
+</script>
+</body>
+</html>

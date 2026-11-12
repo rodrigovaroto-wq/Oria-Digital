@@ -8,7 +8,35 @@
 - **0276 APLICADA EM PRODUÇÃO em 12/11/2026** (a pedido do dono, pela API de gerenciamento, 1,2 s). Antes: 422 itens na sonda, 0 ausentes, cobertura 0274, 81 mandatos, nenhuma das duas funções. Depois: 426 itens (os 4 da 0276), 0 ausentes, cobertura 0276, 81 mandatos. Medido com a sessão do dono no mandato de 115 documentos: contagem 5,2 s (12 idas) → 0,2 s (1 ida), 115 de 115 versões devolvidas, soma 10.231 igual à paginada; Kit 4,7 s (230 RPCs) → 0,45 s (2 RPCs), mesma resposta.
 - **Falta:** trocar `lib/supabase/linhas-por-versao.ts` e `lib/kit-basico.ts` para chamar as funções em lote, mantendo o caminho atual quando a função não existir. **São TRÊS chamadores do Kit, não dois:** `casos/[id]/page.tsx`, `documentos/(lista)/page.tsx` e `casos/[id]/export/route.ts:603-607`.
 - **ALTO pré-existente (revisão independente da 0276, não introduzido por ela):** o export monta o próprio serviço do Kit com `return !r.error && r.data === true;`, então QUALQUER erro (um timeout numa das RPCs) vira "item não atendido" e o item sai como faltante no book entregue ao cliente (regra 1). Os outros dois chamadores lançam quando há erro. Ao trocar para o lote, o export tem de ir junto, sem herdar o `!r.error &&`.
-- **Redesenho do portal:** linha de base (capturas e métricas) e três direções de arte fora do repositório; o dono escolhe a direção.
+- **Redesenho do portal: o dono escolheu a direção A (Cobalto noturno)** e a frase de login "O detalhe que muda a tese aparece primeiro." Maquetes, pranchas e a comparação com 8 concorrentes estão em `Arquitetura do Sistema/7 Marca/redesenho-2026-11/`.
+- **Feito e comitado nesta sessão (PR #298):**
+  - a 0276, aplicada em produção;
+  - o portal usando as leituras em lote: visão geral 13,4 s → 1,1 s;
+  - o ALTO do export, em que erro virava "Kit faltante";
+  - o ALTO do checklist no export, a partir da revisão;
+  - o login na direção A, com acessibilidade revisada.
+- **▶ ONDE PAROU (o dono pediu para parar em 12/11, por limite de uso):**
+  1. **Item 2, "a tela aparece na hora"** (streaming com Suspense e um esqueleto que se revela em `/casos` e `/casos/[id]`).
+     - O trabalho foi interrompido NO MEIO, NÃO TESTADO, e salvo em `Arquitetura do Sistema/3 Estado e Execução/patches/s129-item2-streaming-NAO-TESTADO.patch` (8 arquivos; `git apply --check` limpo sobre o commit que o versiona).
+     - Quando parou, o `casos/[id]/page.tsx` não compilava: o agente estava corrigindo o cabeçalho de imports.
+     - Para retomar: aplique o patch, conserte o `page.tsx`, depois rode `tsc`, `eslint`, os 13 `verificar-*.mts` (o `verificar-mensagem-de-falha` reprovava em `painel-blocos.tsx`, que usa `toLocaleString` sem `.valor-sensivel`), meça o FCP antes e depois, e passe por revisão independente.
+  2. **Fila aprovada pelo dono, nesta ordem:**
+     - telas internas na direção A, incorporando do benchmark a cor por origem do número, o Kit com % de prontidão (recebido ≠ conferido) e o progresso por documento;
+     - transições de página e abas deslizantes (transitions.dev);
+     - régua do mandato animada;
+     - modo apresentação ("ver como o cliente vê");
+     - sextante em traço, número com troca suave e confirmações vivas;
+     - gráficos sóbrios;
+     - destaque do trecho no PDF (investigar se o banco guarda a posição);
+     - a conta do número calculado;
+     - a grade documento × fato.
+  3. **Aprovados pelo dono, mas que exigem banco (desenho antes do código; o desenho foi interrompido antes de ser escrito):**
+     - (a) o envio fecha sozinho o item do Kit e a pendência, sem fechar o que não foi conferido;
+     - (b) link para o cliente enviar documentos (Área do cliente, arquivada no REDESENHO; pré-requisito 0216 feito);
+     - (c) número novo × reapresentado por período entre versões;
+     - (d) pendência vira achado, com dono, efeito e mitigação, e relatório de riscos.
+     Numeração a partir de 0277 (a 0275 segue reservada para o aging); reconferir na hora.
+  - Ferramentas auditadas: transitions.dev aprovado (CSS puro, licença sem redistribuir a biblioteca); React Bits, um componente por vez; Taste Skill NÃO instalar (gatilho Stop de 10 min e manda inventar dado), só a biblioteca de paletas.
 
 ## SESSÃO 127b (11–12/11/2026, conta Claude Oria) — PLANO DO MVP: MB0, MB1, MB2; 0272 (mapeamento de colunas)
 
