@@ -656,7 +656,16 @@ declare
   v_pend_resolvidas jsonb;
   v_movidos int;
   v_ids jsonb;
+  v_ator text;
 begin
+  -- 0277 (revisão): só a fusão chama. A função é definer e o authenticated tem EXECUTE (fn_fundir_entidade é invoker e a chama com o papel dele), então por /rpc ela era chamável
+  -- fora de uma fusão: movia a carteira de A para B com A viva, deixava a pendência de A órfã e dava ao evento o ator que o chamador quisesse. A guarda é o set_config LOCAL
+  -- que fn_fundir_entidade faz imediatamente antes da chamada: o PostgREST não expõe set_config e uma RPC é uma chamada por transação, então só a fusão a satisfaz.
+  if current_setting('oria.fusao_de', true) is distinct from p_de::text then
+    raise exception 'fn_aging_levar_na_fusao só é chamada por fn_fundir_entidade (use a fusão de entidades)' using errcode = '42501';
+  end if;
+  -- o ator do evento é quem está logado (como fn_aging_importar); `p_por` só vale na conexão de serviço (balcões do n8n), onde não há auth.uid().
+  v_ator := case when auth.uid() is not null then 'usuario:' || auth.uid() else p_por end;
   -- definer porque o authenticated só LÊ aging_importado (a escrita é a função, 0274), e quem funde é ele; a checagem é a mesma de fn_aging_importar (e a conexão de serviço,
   -- que os balcões do n8n usam para fundir).
   if p_caso is null or not (fn_conexao_de_servico() or fn_pode_escrever_caso(p_caso)) then
@@ -682,7 +691,7 @@ begin
 
   -- a pendência da carteira substituída: a carteira que ela descrevia deixou de ser a vigente. Resolve com o ator da fusão (o evento abaixo diz quais).
   with resolvidas as (
-    update pendencia p set estado = 'resolvida', resolvida_em = now(), resolvida_por = p_por
+    update pendencia p set estado = 'resolvida', resolvida_em = now(), resolvida_por = v_ator
      where p.caso_id = p_caso and p.entidade_id = p_de and p.estado <> 'resolvida'
        and exists (select 1 from jsonb_array_elements(v_substituidos) x
                     where (x ->> 'data_base')::date = p.data_base
@@ -701,7 +710,7 @@ begin
 
   if v_movidos > 0 then
     insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
-    values (p_por, 'aging_levado_na_fusao', 'entidade:' || p_para,
+    values (v_ator, 'aging_levado_na_fusao', 'entidade:' || p_para,
             jsonb_build_object('entidade_id', p_de),
             jsonb_build_object('entidade_id', p_para, 'importacoes_movidas', v_ids, 'importacoes_substituidas', v_substituidos, 'pendencias_resolvidas', v_pend_resolvidas,
                                'porque', 'a fusão leva a carteira da absorvida; a vigente da absorvida que colide com a da sobrevivente (mesma tipo_base e data_base) vira substituída, sem apagar'));
@@ -5552,6 +5561,7 @@ begin
   -- (o resumo que o analista subiu do arquivo) SEM evento, e a pendência da carteira, que a fusão repõe na sobrevivente, ficava aberta com data_base e sem
   -- origem, sem como se resolver (reproduzido: depois da fusão aging=0, pend_abertas=1, eventos_aging=0). Tem de ser ANTES do reponte das pendências abaixo:
   -- a função resolve a pendência da carteira que a fusão substitui.
+  perform set_config('oria.fusao_de', p_de_id::text, true);   -- a guarda de fn_aging_levar_na_fusao: só esta chamada a satisfaz
   v_aging := fn_aging_levar_na_fusao(p_caso_id, p_de_id, p_para_id, p_por);
 
   -- Tudo o que aponta para a entidade acompanha o documento. `checklist_item_status`

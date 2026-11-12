@@ -137,6 +137,20 @@ exception when others then
   return sqlstate || '|' || sqlerrm;
 end $$;
 
+-- A função de levar a carteira chamada DIRETO (como /rpc), com o papel authenticated e as claims que estiverem postas: devolve 'ok|<json>' ou o sqlstate.
+create or replace function teste_levar_direto_0277(p_caso uuid, p_de uuid, p_para uuid, p_por text) returns text
+language plpgsql as $$
+declare v_r jsonb;
+begin
+  set local role authenticated;
+  v_r := fn_aging_levar_na_fusao(p_caso, p_de, p_para, p_por);
+  reset role;
+  return 'ok|' || v_r::text;
+exception when others then
+  reset role;
+  return sqlstate;
+end $$;
+
 create or replace function teste_rec_0277(p_imp jsonb, p_tipo text) returns reconciliacao
 language sql stable as $$
   select r.* from reconciliacao r
@@ -164,7 +178,7 @@ declare
   v_cab jsonb := '["Cliente0277","Vencimento","Saldo"]'; v_mapa jsonb := '{"contraparte":0,"vencimento":1,"saldo":2}'; v_fmt jsonb := '{"decimal":"virgula","datas":"dia_mes_ano"}';
   v_r jsonb; v_r2 jsonb; rr reconciliacao; l record; v_t text; v_n int; v_ver uuid; v_antes jsonb; v_depois jsonb; v_pend_antes int; v_pend_depois int; v_res text;
   v_id uuid;
-  e_sc1 uuid; e_sc2 uuid; e_sc3 uuid; e_sc4 uuid; e_sc5 uuid; v_f uuid; e_f1 uuid; e_f2 uuid; e_f3 uuid; e_f4 uuid; e_f5 uuid; e_f6 uuid; v_ag1 uuid; v_ag2 uuid; v_n2 int; v_uid_ant text;
+  e_sc1 uuid; e_sc2 uuid; e_sc3 uuid; e_sc4 uuid; e_sc5 uuid; v_f uuid; e_f1 uuid; e_f2 uuid; e_f3 uuid; e_f4 uuid; e_f5 uuid; e_f6 uuid; v_ag1 uuid; v_ag2 uuid; v_n2 int; v_uid_ant text; u_ana77 uuid := '00000000-0000-0000-0000-000000277b02'; e_g1 uuid; e_g2 uuid; e_g3 uuid; e_g4 uuid; v_ator text; v_g uuid;
 begin
   v_a := fn_upsert_caso('0277 — mandato A');
   v_map_ar := (fn_mapeamento_confirmar(c_ar, v_cab, v_mapa, v_fmt) ->> 'id')::uuid;
@@ -672,7 +686,38 @@ begin
   exception when others then v_t := sqlstate || '|' || sqlerrm;
   end;
   perform teste_assert_0277(v_t = 'apagou' and not exists (select 1 from aging_importado where caso_id = v_f), 'apagar o MANDATO com carteira continua funcionando (a cascata do caso apaga entidade e aging na mesma instrução)', v_t);
-  -- A função de levar a carteira checa quem chama (ela é definer): alguém sem papel no mandato leva 42501.
+  -- A função de levar a carteira só é chamada pela fusão (revisão: o authenticated tem EXECUTE e a chamava por /rpc, fora de uma fusão). Direto, como Sócio e como Analista alocado:
+  -- recusada (42501) e NADA move (a carteira de A não vai para B, A continua existindo, a pendência de A não fica órfã). A fusão real (acima) segue levando.
+  v_g := fn_upsert_caso('0277 — mandato G (levar direto)');
+  insert into auth.users (id, email) values (u_ana77, 'ana@0277.local') on conflict (id) do nothing;
+  perform fn_definir_papel(u_ana77, 'analista');
+  e_g1 := teste_bal_0277(v_g, 'Ferro Alfa 0277 Ltda', 61, jsonb_build_array(teste_ln_0277(1, 'Clientes', 50, 'milhar', null, null, 'Ativo Circulante', 'ativo_circulante')), 'anual', '2025');
+  e_g2 := teste_bal_0277(v_g, 'Gama Beta 0277 SA', 62, jsonb_build_array(teste_ln_0277(1, 'Clientes', 80, 'milhar', null, null, 'Ativo Circulante', 'ativo_circulante')), 'anual', '2025');
+  e_g3 := teste_bal_0277(v_g, 'Ônix Delta 0277 Ltda', 63, jsonb_build_array(teste_ln_0277(1, 'Clientes', 50, 'milhar', null, null, 'Ativo Circulante', 'ativo_circulante')), 'anual', '2025');
+  e_g4 := teste_bal_0277(v_g, 'Prata Eta 0277 SA', 64, jsonb_build_array(teste_ln_0277(1, 'Clientes', 80, 'milhar', null, null, 'Ativo Circulante', 'ativo_circulante')), 'anual', '2025');
+  perform fn_alocar(v_g, u_ana77);
+  perform teste_imp_0277(v_g, e_g1, c_ar, '2025-12-31', 10000000);
+  v_n := (select count(*) from evento_auditoria where acao = 'aging_levado_na_fusao');
+  v_t := teste_levar_direto_0277(v_g, e_g1, e_g2, 'quem-eu-quiser');
+  perform teste_assert_0277(v_t = '42501', 'chamada direta de fn_aging_levar_na_fusao como SÓCIO (authenticated, fora de uma fusão) é recusada (42501)', v_t);
+  v_uid_ant := current_setting('request.jwt.claims', true);
+  perform set_config('request.jwt.claims', jsonb_build_object('sub', u_ana77, 'role', 'authenticated')::text, true);
+  v_t := teste_levar_direto_0277(v_g, e_g1, e_g2, 'quem-eu-quiser');
+  v_n2 := (select count(*) from aging_importado where caso_id = v_g and entidade_id = e_g1 and substituido_em is null);
+  perform set_config('request.jwt.claims', v_uid_ant, true);
+  perform teste_assert_0277(v_t = '42501', 'chamada direta como ANALISTA ALOCADO no mandato (authenticated, fora de uma fusão) é recusada (42501)', v_t);
+  perform teste_assert_0277(v_n2 = 1 and not exists (select 1 from aging_importado where entidade_id = e_g2) and exists (select 1 from entidade where id = e_g1)
+                            and teste_pend_0277(v_g, e_g1, 'aging_ar_clientes') = 1 and teste_pend_0277(v_g, e_g2, 'aging_ar_clientes') = 0
+                            and (select count(*) from evento_auditoria where acao = 'aging_levado_na_fusao') = v_n,
+    'a chamada direta recusada não move nada: a carteira e a pendência seguem na entidade de origem, a origem existe, nenhum evento (antes: a carteira ia para B, A ficava e a pendência de A ficava órfã)', v_n2 || ' | ' || teste_pend_0277(v_g, e_g1, 'aging_ar_clientes') || ' | ' || teste_pend_0277(v_g, e_g2, 'aging_ar_clientes'));
+  -- A fusão real, na mesma entidade, continua levando; e o ator do evento é o usuário logado, não o texto de p_por.
+  v_t := teste_funde_0277(v_g, e_g1, e_g2);
+  select e.ator into v_ator from evento_auditoria e where e.acao = 'aging_levado_na_fusao' and e.entidade_ref = 'entidade:' || e_g2;
+  perform teste_assert_0277(v_t like 'ok|%' and (substr(v_t, 4)::jsonb ->> 'aging_movido') = '1' and (select entidade_id from aging_importado where caso_id = v_g and substituido_em is null and entidade_id = e_g2 limit 1) = e_g2,
+    'a fusão real, depois das chamadas diretas recusadas, continua levando a carteira', v_t);
+  perform teste_assert_0277(v_ator = 'usuario:00000000-0000-0000-0000-00000000a001', 'o ator do evento aging_levado_na_fusao é o usuário logado (auth.uid), não o `p_por` que a fusão recebeu', v_ator);
+  -- A função de levar a carteira checa quem chama (ela é definer): alguém sem papel no mandato leva 42501. A guarda da fusão é armada à mão para que ESTE assert meça só o papel.
+  perform set_config('oria.fusao_de', e_cmp::text, true);
   v_uid_ant := current_setting('request.jwt.claims', true);
   perform set_config('request.jwt.claims', jsonb_build_object('sub', '00000000-0000-0000-0000-00000000dead', 'role', 'authenticated')::text, true);
   begin
@@ -681,6 +726,7 @@ begin
   exception when others then v_t := sqlstate;
   end;
   perform set_config('request.jwt.claims', v_uid_ant, true);
+  perform set_config('oria.fusao_de', '', true);
   perform teste_assert_0277(v_t = '42501', 'fn_aging_levar_na_fusao (security definer) recusa quem não escreve no mandato (42501)', v_t);
 
   -- ================================================================== 6. A SONDA

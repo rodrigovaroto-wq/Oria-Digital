@@ -161,39 +161,42 @@
 -- as duas colunas data_base, a view da CHECK, a função e o corpo da fusão (leva a carteira) e a view da FK sem cascade. Os requisitos de corpo da 0192, da 0241, da 0183, da 0211 e da 0213 sobre
 -- fn_registrar_reconciliacao e fn_fundir_entidade seguem casando (os corpos são os vigentes com acréscimos).
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.test.sql — 86 asserts
---   (medido: 86 chamadas, 86 execuções, nenhum em laço; reconferido com Supabase/test/medicao-denominador.test.mjs). Cada correção desligada UMA por vez DENTRO
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.test.sql — 91 asserts
+--   (medido: 91 chamadas, 91 execuções, nenhum em laço; reconferido com Supabase/test/medicao-denominador.test.mjs). Cada correção desligada UMA por vez DENTRO
 --   de uma transação (a sabotagem recompõe a função por pg_get_functiondef e ABORTA se o trecho não existe: nenhuma variante deixou de aplicar), o teste inteiro
 --   com o assert em `raise warning` (ct77.medindo=on; voltou para `raise exception`; log lido atrás de FALHOU) e a transação desfeita. Controle (migration
---   intacta): 0 dos 86 asserts reprovam, 86 execuções. O teste da 0274 segue verde com os fixtures do aplicador coerentes (helper teste_aplicador_0274; nenhum
+--   intacta): 0 dos 91 asserts reprovam, 91 execuções. O teste da 0274 segue verde com os fixtures do aplicador coerentes (helper teste_aplicador_0274; nenhum
 --   assert mudou de valor esperado) e a suíte inteira do run.sh passa sem alterar a expectativa de nenhum outro teste. Por correção desligada (12/11/2026):
---   * ALTO 1, a função central: pendência achada por período compatível (sem o critério data_base): 15 dos 86 · guarda da 0192 não saltada para o aging: 1 ·
+--   * ALTO 1, a função central: pendência achada por período compatível (sem o critério data_base): 15 dos 91 · guarda da 0192 não saltada para o aging: 1 ·
 --     texto não reescrito pela rodada da data-base: 1 · pendência gravada sem data_base: 14 · reconciliacao gravada sem data_base: 1 · aging_id não exigido
 --     (sem o raise): 2 · o período fabricado religado (A2, as checagens clássicas mudam): 3 · uma linha `ok` a mais num tipo clássico que já tinha `ok` (a assinatura agora
---     é a CONTAGEM por tipo, resultado, motivo e período, não o conjunto distinto): 1 dos 86 (o assert antigo, por conjunto distinto, reprovava 0 com essa mesma sabotagem);
---   * ALTO 3 (sinal; prova da convenção no documento): comparar sempre com sinal: 4 dos 86 · comparar sempre em módulo (a 2ª versão desta migration): 5 · convenção sem exigir
+--     é a CONTAGEM por tipo, resultado, motivo e período, não o conjunto distinto): 1 dos 91 (o assert antigo, por conjunto distinto, reprovava 0 com essa mesma sabotagem);
+--   * ALTO 3 (sinal; prova da convenção no documento): comparar sempre com sinal: 4 dos 91 · comparar sempre em módulo (a 2ª versão desta migration): 5 · convenção sem exigir
 --     passivo só negativo no documento: 2 · convenção valendo também para conta do ativo: 1 · a prova contando o patrimônio líquido como passivo: 1 · convenção sem exigir que todas as
 --     linhas do grupo sejam negativas: 1 · sem o aviso do saldo negativo não provado: 3 · o pai que fecha só com sinal (nome): 1 · só com sinal (janela por ordem): 1 ·
 --     sem o aviso de sinais opostos: 3 · sem a nota "impresso com sinal negativo": 2;
---   * M2, o aviso do "excede" sem olhar o que entrou: 2 dos 86 · B2, sem par com o lado da carteira vazio abre pendência: 1 dos 86;
---   * ALTO 3 da 0277 original, só o documento da própria entidade: 3 dos 86 · sem a preferência pelo próprio: 2 dos 86;
---   * ALTO 2, pai que fecha não vale sozinho: 4 dos 86 · pai que cobre em parte: 2 · sem a janela por ordem: 4 · sem o mesmo valor com dois nomes: 1 · sem o parentesco
---     pelo nome (tudo de (i)): 7 · o aviso fora da descrição: 3 dos 86;
---   * ALTO 4, a fusão (seção 5b): fusão sem chamar a carteira, com a FK já restrita (a fusão falha): 9 dos 86 · sem chamar a carteira E com a FK em cascade (o estado da 0274: a perda
---     silenciosa): 10 · só a FK de volta para cascade (a carteira é levada, mas apagar a entidade a apaga): 2 · sem substituir a vigente colidente (o índice único derruba a fusão): 3 ·
---     sem resolver a pendência da carteira substituída: 1 · sem o evento aging_levado_na_fusao: 2 · sem a checagem de papel da função (definer): 1 · a função como security invoker
---     (o authenticated não escreve em aging_importado): 9 · o evento da fusão sem o `aging`: 1 · levando só as vigentes (as substituídas ficam e a FK trava a fusão): 3;
---   * médios, sem o lado do balanço (secao_canonica): 1 dos 86 · sem a seção de estoque: 1 · importar sem amarrar o aplicador: 7 · sem a CHECK da tabela: 3 · os dois: 9;
---   * o validador, uma regra por vez: títulos 2 dos 86 · soma dos saldos 1 · negativos (linhas) 1 · negativos (saldo) 1 · identidade do resumo 1 · aplicador sem o campo 1.
+--   * M2, o aviso do "excede" sem olhar o que entrou: 2 dos 91 · B2, sem par com o lado da carteira vazio abre pendência: 1 dos 91;
+--   * ALTO 3 da 0277 original, só o documento da própria entidade: 3 dos 91 · sem a preferência pelo próprio: 2 dos 91;
+--   * ALTO 2, pai que fecha não vale sozinho: 4 dos 91 · pai que cobre em parte: 2 · sem a janela por ordem: 4 · sem o mesmo valor com dois nomes: 1 · sem o parentesco
+--     pelo nome (tudo de (i)): 7 · o aviso fora da descrição: 3 dos 91;
+--   * ALTO 4, a fusão (seção 5b): fusão sem chamar a carteira, com a FK já restrita (a fusão falha): 11 dos 91 · sem chamar a carteira E com a FK em cascade (o estado da 0274: a perda
+--     silenciosa): 12 · só a FK de volta para cascade (a carteira é levada, mas apagar a entidade a apaga): 2 · sem substituir a vigente colidente (o índice único derruba a fusão): 3 ·
+--     sem resolver a pendência da carteira substituída: 1 · sem o evento aging_levado_na_fusao: 3 · sem a checagem de papel da função (definer): 1 · a função como security invoker
+--     (o authenticated não escreve em aging_importado): 11 · o evento da fusão sem o `aging`: 1 · levando só as vigentes (as substituídas ficam e a FK trava a fusão): 3;
+--   * revisão final, a função de levar só é chamável pela fusão (guarda `oria.fusao_de`, armada por fn_fundir_entidade; antes o authenticated a chamava por /rpc fora de uma fusão): guarda desligada
+--     (a chamada direta de Sócio e de Analista alocado passa e move a carteira): 4 dos 91 · a fusão sem armar a guarda (ela mesma é recusada): 11 · o ator do evento vindo de `p_por` em vez de auth.uid: 1
+--     (a sabotagem "sem a checagem de papel" segue em 1 porque o assert dela arma a guarda à mão); os 5 asserts novos somaram 5 aos 86 (86 + 5 = 91, reconferido com medicao-denominador);
+--   * médios, sem o lado do balanço (secao_canonica): 1 dos 91 · sem a seção de estoque: 1 · importar sem amarrar o aplicador: 7 · sem a CHECK da tabela: 3 · os dois: 9;
+--   * o validador, uma regra por vez: títulos 2 dos 91 · soma dos saldos 1 · negativos (linhas) 1 · negativos (saldo) 1 · identidade do resumo 1 · aplicador sem o campo 1.
 --   Os asserts de controle (balanço próprio, forma antiga, duas contas irmãs, a regra por módulo nos arranjos que produção não produz, a fusão sem carteira) passam em todas as
 --   variantes que não os tocam: protegem o que não pode mudar. Regra 4: as FORMAS dos fixtures são as lidas em produção (cada uma citada no teste); os números de aging são montados
 --   (não há arquivo de aging real: DM7), e nenhuma fusão com carteira existe em produção (o defeito foi reproduzido pela revisão, não observado). O assert das checagens clássicas (A2) tira a
 --   assinatura ANTES de qualquer aging num mandato à parte.
 --   Mutantes sem efeito, declarados: a variante "período compatível E data-base" (a pendência exigir os dois) reprova 0 asserts e não é uma guarda: a data-base fixa o ano, e os
 --   documentos que fecham naquele ano têm períodos que se intersectam, então o critério do período não restringe nada além do que a data-base já restringe.
---   NÃO MEDIDO PELA SUÍTE (declarado): o passo 0 (o `raise` com pendência `reconciliacao:aging%` anterior) roda DURANTE a migration e a suíte roda depois dela. Medido à mão num
---   banco montado, em transação desfeita, com o bloco extraído deste arquivo: 0 pendências do aging, o bloco passa; com 1 pendência `reconciliacao:aging_ap_fornecedores`, ele
---   para com "1 pendência(s) ... anterior(es)". Produção: 0 linhas (leitura de 12/11/2026), então a migration aplica sem parar.
+--   NÃO MEDIDO PELA SUÍTE (declarado): o passo 0 (o `raise` com pendência NÃO resolvida `reconciliacao:aging%` anterior) roda DURANTE a migration e a suíte roda depois dela. Medido à mão num
+--   banco montado, em transação desfeita, com o bloco extraído deste arquivo: 0 pendências do aging, o bloco passa; com 1 pendência aberta `reconciliacao:aging_ap_fornecedores`, ele
+--   para com "1 pendência(s) ... anterior(es)"; com 1 pendência já `resolvida`, passa (filtro `estado <> 'resolvida'`). Produção: 0 linhas (leitura de 12/11/2026), então a migration aplica sem parar.
 -- =============================================================================
 begin;
 
@@ -208,9 +211,9 @@ begin;
 do $$
 declare v_n int;
 begin
-  select count(*) into v_n from pendencia where motivo like 'reconciliacao:aging\_%';
+  select count(*) into v_n from pendencia where motivo like 'reconciliacao:aging\_%' and estado <> 'resolvida';
   if v_n > 0 then
-    raise exception '0277 não se aplica: % pendência(s) reconciliacao:aging_* anterior(es) a esta migration ficariam sem data_base (a identidade nova) e abertas para sempre. Resolva-as à mão (ou preencha pendencia.data_base a partir de reconciliacao.fonte_a->>''aging_id'') e aplique de novo.', v_n;
+    raise exception '0277 não se aplica: % pendência(s) reconciliacao:aging_* NÃO resolvida(s), anterior(es) a esta migration, ficariam sem data_base (a identidade nova) e abertas para sempre (as já resolvidas não contam). Resolva-as à mão (ou preencha pendencia.data_base a partir de reconciliacao.fonte_a->>''aging_id'') e aplique de novo.', v_n;
   end if;
 end $$;
 
@@ -1034,7 +1037,7 @@ comment on function fn_aging_importar(uuid, uuid, text, date, jsonb, jsonb, json
 -- reprova com 23503 em vez de apagar. Único caminho legítimo que apaga entidade: fn_fundir_entidade (grep `delete from entidade` em Supabase/ N8N/ portal/src em 12/11/2026:
 -- 0153, 0183, 0211 e 0213, todas versões dela) e a cascata do mandato (aging_importado.caso_id continua ON DELETE CASCADE).
 -- Chamadores de fn_fundir_entidade (grep em Supabase/ N8N/ portal/src, 12/11/2026): as versões dela (0153, 0183, 0211, 0213), os balcões (0160-0178, 0210), os testes de fusão
--- e acesso, e fundir_omnibeauty_teste143.sql (script manual). A assinatura, o retorno (só ganha chaves) e a ACL não mudam; o corpo é o da 0213 com 14 linhas NOVAS e 2 existentes modificadas (a vírgula depois de `perguntas_repontadas`, no evento e no retorno), medido com `diff` em 12/11/2026.
+-- e acesso, e fundir_omnibeauty_teste143.sql (script manual). A assinatura, o retorno (só ganha chaves) e a ACL não mudam; o corpo é o da 0213 com 13 linhas NOVAS e 2 existentes modificadas (a vírgula depois de `perguntas_repontadas`, no evento e no retorno), medido com `diff` em 12/11/2026 (a 13ª é o `set_config('oria.fusao_de', ...)` que arma a guarda de fn_aging_levar_na_fusao).
 alter table aging_importado drop constraint aging_importado_entidade_id_fkey;
 alter table aging_importado add constraint aging_importado_entidade_id_fkey foreign key (entidade_id) references entidade(id) on delete no action;
 comment on constraint aging_importado_entidade_id_fkey on aging_importado is
@@ -1047,7 +1050,16 @@ declare
   v_pend_resolvidas jsonb;
   v_movidos int;
   v_ids jsonb;
+  v_ator text;
 begin
+  -- 0277 (revisão): só a fusão chama. A função é definer e o authenticated tem EXECUTE (fn_fundir_entidade é invoker e a chama com o papel dele), então por /rpc ela era chamável
+  -- fora de uma fusão: movia a carteira de A para B com A viva, deixava a pendência de A órfã e dava ao evento o ator que o chamador quisesse. A guarda é o set_config LOCAL
+  -- que fn_fundir_entidade faz imediatamente antes da chamada: o PostgREST não expõe set_config e uma RPC é uma chamada por transação, então só a fusão a satisfaz.
+  if current_setting('oria.fusao_de', true) is distinct from p_de::text then
+    raise exception 'fn_aging_levar_na_fusao só é chamada por fn_fundir_entidade (use a fusão de entidades)' using errcode = '42501';
+  end if;
+  -- o ator do evento é quem está logado (como fn_aging_importar); `p_por` só vale na conexão de serviço (balcões do n8n), onde não há auth.uid().
+  v_ator := case when auth.uid() is not null then 'usuario:' || auth.uid() else p_por end;
   -- definer porque o authenticated só LÊ aging_importado (a escrita é a função, 0274), e quem funde é ele; a checagem é a mesma de fn_aging_importar (e a conexão de serviço,
   -- que os balcões do n8n usam para fundir).
   if p_caso is null or not (fn_conexao_de_servico() or fn_pode_escrever_caso(p_caso)) then
@@ -1073,7 +1085,7 @@ begin
 
   -- a pendência da carteira substituída: a carteira que ela descrevia deixou de ser a vigente. Resolve com o ator da fusão (o evento abaixo diz quais).
   with resolvidas as (
-    update pendencia p set estado = 'resolvida', resolvida_em = now(), resolvida_por = p_por
+    update pendencia p set estado = 'resolvida', resolvida_em = now(), resolvida_por = v_ator
      where p.caso_id = p_caso and p.entidade_id = p_de and p.estado <> 'resolvida'
        and exists (select 1 from jsonb_array_elements(v_substituidos) x
                     where (x ->> 'data_base')::date = p.data_base
@@ -1092,7 +1104,7 @@ begin
 
   if v_movidos > 0 then
     insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
-    values (p_por, 'aging_levado_na_fusao', 'entidade:' || p_para,
+    values (v_ator, 'aging_levado_na_fusao', 'entidade:' || p_para,
             jsonb_build_object('entidade_id', p_de),
             jsonb_build_object('entidade_id', p_para, 'importacoes_movidas', v_ids, 'importacoes_substituidas', v_substituidos, 'pendencias_resolvidas', v_pend_resolvidas,
                                'porque', 'a fusão leva a carteira da absorvida; a vigente da absorvida que colide com a da sobrevivente (mesma tipo_base e data_base) vira substituída, sem apagar'));
@@ -1156,6 +1168,7 @@ begin
   -- (o resumo que o analista subiu do arquivo) SEM evento, e a pendência da carteira, que a fusão repõe na sobrevivente, ficava aberta com data_base e sem
   -- origem, sem como se resolver (reproduzido: depois da fusão aging=0, pend_abertas=1, eventos_aging=0). Tem de ser ANTES do reponte das pendências abaixo:
   -- a função resolve a pendência da carteira que a fusão substitui.
+  perform set_config('oria.fusao_de', p_de_id::text, true);   -- a guarda de fn_aging_levar_na_fusao: só esta chamada a satisfaz
   v_aging := fn_aging_levar_na_fusao(p_caso_id, p_de_id, p_para_id, p_por);
 
   -- Tudo o que aponta para a entidade acompanha o documento. `checklist_item_status`
