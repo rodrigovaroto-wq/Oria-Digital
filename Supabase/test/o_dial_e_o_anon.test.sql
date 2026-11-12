@@ -312,7 +312,7 @@ end $$;
 -- PARTE 2 — O ANON: o que produção tinha ANTES, a migration reaplicada, e o que sobra
 -- =============================================================================
 -- O que authenticated e service_role podem EXECUTAR e LER agora (antes de qualquer simulação): a migration não pode mexer nisto.
--- O papel somente-leitura do Supabase (existe em produção; o run.sh o cria ANTES das migrations, como lá, e este bloco só o cria se faltar): chega às funções por PUBLIC e pelos grants explícitos das migrations (0233, 0234, 0242).
+-- O papel somente-leitura do Supabase (existe em produção; o run.sh o cria ANTES das migrations, como lá, e este bloco só o cria se faltar): chega às funções por PUBLIC e pelos grants explícitos das migrations (0233, 0234, 0242, 0243).
 do $$ begin
   if not exists (select 1 from pg_roles where rolname = 'supabase_read_only_user') then create role supabase_read_only_user nologin; end if;
 end $$;
