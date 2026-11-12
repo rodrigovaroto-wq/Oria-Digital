@@ -38,6 +38,7 @@ sys.path.insert(1, os.path.join(AQUI, "..", "book-distress"))  # antes do site-p
 
 import demonstracoes as X  # noqa: E402
 import motor as M  # noqa: E402
+from caminhos import arquivo_seguro, pasta_segura  # noqa: E402
 
 DATA_BASE = dt.date(2025, 12, 31)
 ANO = 2025
@@ -209,12 +210,19 @@ def conferir_aging(conf, papel, chave, formato, gab, saida):
 
     g = gab[chave]
     meta = g[formato]
-    arq = os.path.join(saida, meta["arquivo"])
+    # O nome é MONTADO aqui e o do gabarito é só conferido contra ele: abrir o arquivo pelo
+    # nome lido do JSON deixava um gabarito adulterado ler fora da pasta (Sonar, S2083).
+    nome = f"{chave}_{gab['linhas_pedidas']}.{formato}"
+    if meta["arquivo"] != nome:
+        conf.falha(f"{chave}.{formato}: gabarito, arquivo", f"o gabarito diz {meta['arquivo']!r}, o esperado é {nome!r}")
+        return
+    arq = arquivo_seguro(saida, nome)
     p = f"{chave}.{formato}"
     try:
         leitor = linhas_do_csv(arq) if formato == "csv" else linhas_do_xlsx(arq)
         destinos, titulos, total, n_linhas = classificar(leitor)
-    except Exception as e:  # noqa: BLE001 — arquivo ilegível é falha conferida, não exceção solta
+    # Arquivo ilegível é falha CONFERIDA (entra na lista), não exceção solta que derruba a conferência.
+    except Exception as e:  # noqa: BLE001
         conf.falha(f"{p}: arquivo legível", f"{type(e).__name__}: {e}")
         return
 
@@ -316,7 +324,11 @@ def conferir_ofx(conf, gab, saida):
     bp, _tot, _dre = M.construir()
     meses, ini, fim = X.extrato(bp, ANO)
     g = gab["extrato_ofx"]
-    arq = os.path.join(saida, g["arquivo"])
+    nome = f"extrato_{gab['linhas_pedidas']}.ofx"
+    if g["arquivo"] != nome:
+        conf.falha("extrato_ofx: gabarito, arquivo", f"o gabarito diz {g['arquivo']!r}, o esperado é {nome!r}")
+        return
+    arq = arquivo_seguro(saida, nome)
     p = "extrato_ofx"
     txs, folhas = ler_ofx(arq)
 
@@ -360,7 +372,7 @@ def conferir_ofx(conf, gab, saida):
 
 
 def conferir(n_linhas, saida):
-    with open(os.path.join(saida, f"GABARITO_{n_linhas}.json"), encoding="utf-8") as fh:
+    with open(arquivo_seguro(saida, f"GABARITO_{int(n_linhas)}.json"), encoding="utf-8") as fh:
         gab = json.load(fh)
     conf = Conferencia()
     conferir_aging(conf, "Cliente", "contas_a_receber", "csv", gab, saida)
@@ -378,6 +390,7 @@ def main():
     ap.add_argument("--linhas", type=int, action="append")
     ap.add_argument("--saida", default=os.path.join(AQUI, "saida"))
     a = ap.parse_args()
+    a.saida = pasta_segura(a.saida)
     tamanhos = a.linhas or sorted(int(re.search(r"_(\d+)\.json$", f).group(1))
                                   for f in glob.glob(os.path.join(a.saida, "GABARITO_*.json")))
     if not tamanhos:

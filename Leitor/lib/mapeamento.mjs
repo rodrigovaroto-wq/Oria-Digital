@@ -196,7 +196,8 @@ export function formatoDaAmostra(amostra, tipos = [], colunas = {}) {
     }
     if (conta(colunas.datas, i)) {
       const x = RE_BR.exec(t);
-      if (x) { if (Number(x[1]) > 12) dmy++; if (Number(x[2]) > 12) mdy++; }
+      if (x && Number(x[1]) > 12) dmy++;
+      if (x && Number(x[2]) > 12) mdy++;
     }
   }));
   const decimal = ponto > virgula ? 'ponto' : 'virgula';

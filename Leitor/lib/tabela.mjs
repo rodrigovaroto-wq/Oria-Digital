@@ -148,7 +148,12 @@ function ultimaPreenchida(celulas) {
   for (let i = celulas.length - 1; i >= 0; i--) if (!vazia(celulas[i])) return i + 1;
   return 0;
 }
-const normalizar = (celulas) => celulas.map((c) => String(c ?? '').trim().toLowerCase()).join('\u0000').replace(/\u0000+$/, '');
+/** A linha como chave de comparação com o cabeçalho: células aparadas, minúsculas, sem as vazias do fim. */
+const normalizar = (celulas) => {
+  const c = celulas.map((x) => String(x ?? '').trim().toLowerCase());
+  while (c.length && c[c.length - 1] === '') c.pop();
+  return JSON.stringify(c);
+};
 
 /** Candidata a cabeçalho: ≥ 3 células, todas texto (nem número nem data). */
 function pareceCabecalho({ celulas, tipos }) {
@@ -449,7 +454,11 @@ const RE_CELULA = new RegExp(`<${P}c\\b([^>]*?)(?:/>|>([\\s\\S]*?)</${P}c>)`, 'g
 const RE_V = new RegExp(`<${P}v>([\\s\\S]*?)</${P}v>`);
 const RE_T = new RegExp(`<${P}t(?:\\s[^>]*)?>([\\s\\S]*?)</${P}t>`, 'g');
 const RE_RPH = new RegExp(`<${P}rPh\\b[\\s\\S]*?</${P}rPh>`, 'g');
-const textoDosT = (s) => { let t = ''; for (const m of s.matchAll(RE_T)) t += textoXml(m[1]); return t; };
+const textoDosT = (s) => {
+  let t = '';
+  for (const m of s.matchAll(RE_T)) t += textoXml(m[1]);
+  return t;
+};
 
 async function lerXlsx(blob, aoLinha, soAmostra) {
   const entradas = new Map();
@@ -516,8 +525,12 @@ async function lerXlsx(blob, aoLinha, soAmostra) {
         if (!v) continue; // célula só com estilo: vazia
         const bruto = textoXml(v[1]);
         if (t === 's') {
-          valor = sst[Number(bruto)];
-          if (valor === undefined) throw new Error(`a célula ${ref ?? col} aponta para a string ${bruto}, e a tabela tem ${sst.length}`);
+          // Índice fora da tabela de strings é arquivo corrompido: erro, nunca célula vazia.
+          const indice = Number(bruto);
+          if (!Number.isInteger(indice) || indice < 0 || indice >= sst.length) {
+            throw new Error(`a célula ${ref ?? col} aponta para a string ${bruto}, e a tabela tem ${sst.length}`);
+          }
+          valor = sst[indice];
           tipo = 's';
         } else if (t === 'str') { valor = bruto; tipo = 's'; }
         else if (t === 'b') { valor = bruto === '1' ? 'VERDADEIRO' : 'FALSO'; tipo = 'b'; }

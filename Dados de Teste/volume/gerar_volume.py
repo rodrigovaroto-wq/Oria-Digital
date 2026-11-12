@@ -51,6 +51,7 @@ sys.path.insert(1, os.path.join(AQUI, "..", "book-distress"))
 
 import demonstracoes as X  # noqa: E402  (book-distress)
 import motor as M  # noqa: E402
+from caminhos import arquivo_seguro, pasta_segura  # noqa: E402
 
 DATA_BASE = dt.date(2025, 12, 31)
 ANO = 2025
@@ -277,7 +278,8 @@ def escrever_csv(caminho, papel, titulos):
 # de strings — o formato que nenhum arquivo real tem, e justamente a tabela que
 # pesa no heap de um leitor em fluxo. Um leitor calibrado nele leria nome e CNPJ
 # como índice no primeiro AR de verdade.
-_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"  # NOSONAR(S5332): namespace, não URL
+# Os três são NAMESPACES do OOXML (identificadores), não URLs que se acessam: S5332 não se aplica.
+_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"  # NOSONAR(S5332)
 _NS_R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"  # NOSONAR(S5332)
 _NS_PR = "http://schemas.openxmlformats.org/package/2006/relationships"  # NOSONAR(S5332)
 _CT = "application/vnd.openxmlformats-officedocument.spreadsheetml."
@@ -485,6 +487,8 @@ def _gabarito_aging(papel, titulos, total_mil, por_linha):
 
 
 def gerar(n_linhas, saida, xlsx=True):
+    n_linhas = int(n_linhas)
+    saida = pasta_segura(saida)
     os.makedirs(saida, exist_ok=True)
     rng = random.Random(SEMENTE + n_linhas)
     gab = {"data_base": DATA_BASE.isoformat(), "linhas_pedidas": n_linhas,
@@ -494,24 +498,24 @@ def gerar(n_linhas, saida, xlsx=True):
     for chave, papel in (("contas_a_receber", "Cliente"), ("contas_a_pagar", "Fornecedor")):
         # -5: as cinco linhas de cabeçalho, branco e total — o arquivo sai com n_linhas.
         titulos, total_mil = gerar_titulos(papel, n_linhas - 5, rng)
-        arq = os.path.join(saida, f"{chave}_{n_linhas}.csv")
+        arq = arquivo_seguro(saida, f"{chave}_{n_linhas}.csv")
         por_linha = escrever_csv(arq, papel, titulos)
         g = _gabarito_aging(papel, titulos, total_mil, por_linha)
         g["csv"] = {"arquivo": os.path.basename(arq), "linhas_arquivo": _contar_linhas(arq), **_medir(arq)}
         if xlsx and papel == "Cliente":
-            arqx = os.path.join(saida, f"{chave}_{n_linhas}.xlsx")
+            arqx = arquivo_seguro(saida, f"{chave}_{n_linhas}.xlsx")
             info = escrever_xlsx(arqx, papel, titulos)
             g["xlsx"] = {"arquivo": os.path.basename(arqx), **info, **_medir(arqx)}
         gab[chave] = g
 
     txs, resumo, ini, fim = gerar_extrato(n_linhas, rng)
-    arq = os.path.join(saida, f"extrato_{n_linhas}.ofx")
+    arq = arquivo_seguro(saida, f"extrato_{n_linhas}.ofx")
     escrever_ofx(arq, txs, fim)
     gab["extrato_ofx"] = {"arquivo": os.path.basename(arq), "linhas_arquivo": _contar_linhas(arq),
                           **_medir(arq), "transacoes": len(txs), "saldo_inicial_centavos": ini,
                           "saldo_final_centavos": fim, "por_mes": resumo}
 
-    with open(os.path.join(saida, f"GABARITO_{n_linhas}.json"), "w", encoding="utf-8") as fh:
+    with open(arquivo_seguro(saida, f"GABARITO_{n_linhas}.json"), "w", encoding="utf-8") as fh:
         json.dump(gab, fh, ensure_ascii=False, indent=1)
     return gab
 

@@ -184,5 +184,24 @@ class ConferidorNaoNasceVazio(unittest.TestCase):
         self.assertReprova("contas_a_receber.csv: gabarito, titulos")
 
 
+    # ------------------------------------------- caminho (SonarCloud do #297) --
+    def test_gabarito_com_caminho_adulterado_nao_le_fora_da_pasta(self):
+        """O nome do arquivo vem do código; o do gabarito só é conferido contra ele."""
+        with open(self.gab, encoding="utf-8") as fh:
+            g = json.load(fh)
+        g["extrato_ofx"]["arquivo"] = "../../../../etc/passwd"
+        with open(self.gab, "w", encoding="utf-8") as fh:
+            json.dump(g, fh)
+        self.assertReprova("extrato_ofx: gabarito, arquivo")
+
+    def test_pasta_fora_do_permitido_e_recusada(self):
+        import caminhos
+        with self.assertRaises(SystemExit):
+            caminhos.pasta_segura("/etc")
+        with self.assertRaises(SystemExit):
+            caminhos.arquivo_seguro(self.dir, "../fora.csv")
+        self.assertTrue(caminhos.arquivo_seguro(self.dir, f"extrato_{N}.ofx").startswith(os.path.realpath(self.dir)))
+
+
 if __name__ == "__main__":
     unittest.main()

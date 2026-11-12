@@ -425,3 +425,12 @@ test('soAmostra: mesmo cabeçalho e mesma amostra da leitura inteira, lendo uma 
     assert.equal(tudo.parcial, undefined);
   }
 });
+
+test('xlsx: célula que aponta para uma string fora da tabela é arquivo corrompido: erro, nunca célula vazia', async () => {
+  const blob = xlsx({
+    'xl/workbook.xml': WB(),
+    'xl/sharedStrings.xml': '<sst><si><t>Cliente</t></si></sst>',
+    'xl/worksheets/sheet1.xml': FOLHA(`${CAB}<row r="2"><c r="A2" t="s"><v>5</v></c><c r="B2"><v>1</v></c><c r="C2"><v>2</v></c></row>`),
+  });
+  await assert.rejects(ler(blob), /aponta para a string 5, e a tabela tem 1/);
+});
