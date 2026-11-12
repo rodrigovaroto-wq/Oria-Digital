@@ -19,6 +19,7 @@ import {
 import { entradaDoModeloDoWorkbook } from "@/lib/export";
 import { correnteDoBalancete, informacaoDoKit, linhasDoAnoCorrenteDe, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
 import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
+import { servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
 import { projecaoDoModelo } from "@/lib/apresentacao/projecao";
 import { construirDeckCredito, SemDadoParaApresentar } from "@/lib/apresentacao/deck-credito";
 
@@ -600,14 +601,20 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     let informacao: ReturnType<typeof informacaoDoKit> | undefined;
     if (!kitRes.error && kitRes.data) {
       const kit = kitRes.data as Array<{ codigo: string; documento: string }>;
-      const atendidos = await itensDoKitBasicoAtendidos(kit, documentos.map((d) => ({ id: d.id, tipo_taxonomia: d.tipo_taxonomia })),
-        async (documentoId, tipo) => {
-          const r = await supabase.rpc("fn_documento_serve_como", { p_documento_id: documentoId, p_tipo_taxonomia: tipo });
-          return !r.error && r.data === true;
-        });
+      // O MESMO serviço das telas (lança quando o banco falha). O serviço próprio que havia aqui devolvia
+      // `!r.error && r.data === true`: um timeout virava "item não atendido" e o book do cliente saía com o
+      // item como FALTANTE (regra 1). Kit que não pôde ser lido deixa `informacao` indefinida — o slide
+      // diz que não leu, o mesmo tratamento da leitura do kit acima — e o motivo vai ao log.
+      let atendidos: Set<string> | null = null;
+      try {
+        atendidos = await itensDoKitBasicoAtendidos(kit, documentos.map((d) => ({ id: d.id, tipo_taxonomia: d.tipo_taxonomia })),
+          servicoDocumentoServeComo(supabase));
+      } catch (e) {
+        console.error(`[export] kit básico não conferido: ${e instanceof Error ? e.message : String(e)}`, { caso_id: id });
+      }
       const semConteudo = new Set(((checkRes.data ?? []) as Array<{ tipo_taxonomia: string; status: string }>)
         .filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia));
-      informacao = informacaoDoKit(kit, atendidos, semConteudo);
+      if (atendidos) informacao = informacaoDoKit(kit, atendidos, semConteudo);
     } else console.error(`[export] kit básico não lido: ${kitRes.error?.message}`, { caso_id: id });
     const perimetro = entRes.error ? undefined : perimetroDoCaso(
       (entRes.data ?? []) as Array<{ razao_social: string; cnpj: string | null; papel_no_grupo: string | null }>,

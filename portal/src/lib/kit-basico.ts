@@ -28,13 +28,16 @@ import type { Documento, TaxonomiaTipoDocumento } from "./types";
 
 /**
  * A única porta de saída para o banco. No portal é
- * `supabase.rpc("fn_documento_serve_como", { p_documento_id, p_tipo_taxonomia })`;
- * em teste é um dublê que devolve o que o SQL devolveria — para o invariante
- * travar no COMPORTAMENTO (a tela concorda com o Portão 1) e não em como a
- * exceção é calculada.
+ * `supabase.rpc("fn_algum_documento_serve_como", { p_documento_ids, p_tipo_taxonomia })`
+ * (0276, bool_or de `fn_documento_serve_como` sobre o array): UMA ida por item do Kit em vez de
+ * uma por documento — 2 itens x 115 documentos eram 230 RPCs, 4,7 s medidos; em lote são 2 RPCs,
+ * 0,45 s. Em teste é um dublê que devolve o que o SQL devolveria — para o invariante travar no
+ * COMPORTAMENTO (a tela concorda com o Portão 1) e não em como a exceção é calculada.
+ *
+ * Contrato de falha: lança. Quem chama trata o lançamento como Kit NÃO LIDO, nunca como "não atende".
  */
 export type ServicoDocumentoServeComo = (
-  documentoId: string,
+  documentoIds: string[],
   tipoTaxonomia: string,
 ) => Promise<boolean>;
 
@@ -58,16 +61,15 @@ export async function itensDoKitBasicoAtendidos(
   );
   const atendidos = new Set(porRotulo);
 
+  // Sem documento não há o que perguntar (e o banco responderia false de qualquer jeito).
+  const ids = documentos.map((d) => d.id);
+  if (ids.length === 0) return atendidos;
+
   await Promise.all(
     kitBasico
       .filter((item) => !porRotulo.has(item.codigo))
       .map(async (item) => {
-        const respostas = await Promise.all(
-          documentos.map((d) => servico(d.id, item.codigo)),
-        );
-        if (respostas.some(Boolean)) {
-          atendidos.add(item.codigo);
-        }
+        if (await servico(ids, item.codigo)) atendidos.add(item.codigo);
       }),
   );
 
