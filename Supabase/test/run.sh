@@ -1020,6 +1020,10 @@ echo "== 0271 — o quadro de imobilizado que a IA gravava como balanço (tipo C
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0276 — a visão geral que buscava dez mil linhas e fazia 230 chamadas para contar (contagem por versão em lote sem teto de 1.000, serve-como em lote = bool_or das individuais, ambas COMO authenticated sob a RLS do mandato)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'

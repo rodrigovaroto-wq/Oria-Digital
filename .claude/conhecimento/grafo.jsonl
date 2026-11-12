@@ -108,6 +108,7 @@
 {"k":"n","id":"arquivo:Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql","t":"arquivo","f":"Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql","txt":"a_linha_que_nao_sabia_de_que_linha_veio.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","t":"arquivo","f":"Supabase/test/a_rls_ligada_e_o_ddl_do_dial.test.sql","txt":"a_rls_ligada_e_o_ddl_do_dial.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","t":"arquivo","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","txt":"a_versao_atual_que_nao_seguia_a_vigente.test.sql"}
+{"k":"n","id":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","t":"arquivo","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","txt":"a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/acesso_por_caso.test.sql","t":"arquivo","f":"Supabase/test/acesso_por_caso.test.sql","txt":"acesso_por_caso.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/alias_truncado.test.sql","t":"arquivo","f":"Supabase/test/alias_truncado.test.sql","txt":"alias_truncado.test.sql"}
 {"k":"n","id":"arquivo:Supabase/test/arquivo_oficial.test.sql","t":"arquivo","f":"Supabase/test/arquivo_oficial.test.sql","txt":"arquivo_oficial.test.sql"}
@@ -411,6 +412,7 @@
 {"k":"n","id":"fn:fn_aging_linhas_do_balanco","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging linhas do balanco"}
 {"k":"n","id":"fn:fn_aging_reais","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging reais"}
 {"k":"n","id":"fn:fn_aging_resumo_erros","t":"fn","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"aging resumo erros"}
+{"k":"n","id":"fn:fn_algum_documento_serve_como","t":"fn","f":"Supabase/migrations/0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql","txt":"algum documento serve como"}
 {"k":"n","id":"fn:fn_alocado_agora","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"alocado agora"}
 {"k":"n","id":"fn:fn_alocar","t":"fn","f":"Supabase/migrations/0216_o_acesso_que_so_o_portal_decidia.sql","txt":"alocar"}
 {"k":"n","id":"fn:fn_ano4","t":"fn","f":"Supabase/migrations/0020_periodo_canonico.sql","txt":"ano4"}
@@ -548,6 +550,7 @@
 {"k":"n","id":"fn:fn_linhas_do_tipo","t":"fn","f":"Supabase/migrations/0102_modelagem_versao_vigente.sql","txt":"linhas do tipo"}
 {"k":"n","id":"fn:fn_linhas_para_modelagem","t":"fn","f":"Supabase/migrations/0233_a_falha_transitoria_com_linha_que_o_reenvio_nao_relia.sql","txt":"linhas para modelagem"}
 {"k":"n","id":"fn:fn_linhas_para_transcrever","t":"fn","f":"Supabase/migrations/0129_transcricao_humana_assistida.sql","txt":"linhas para transcrever"}
+{"k":"n","id":"fn:fn_linhas_por_versao","t":"fn","f":"Supabase/migrations/0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql","txt":"linhas por versao"}
 {"k":"n","id":"fn:fn_mapeamento_confirmar","t":"fn","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"mapeamento confirmar"}
 {"k":"n","id":"fn:fn_mapeamento_erros","t":"fn","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"mapeamento erros"}
 {"k":"n","id":"fn:fn_mapeamento_vigente","t":"fn","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"mapeamento vigente"}
@@ -885,6 +888,7 @@
 {"k":"n","id":"migration:0272","t":"migration","f":"Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql","txt":"o mapeamento de colunas que cada arquivo redescobria"}
 {"k":"n","id":"migration:0273","t":"migration","f":"Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql","txt":"a contraparte com nome de total que so o analista distingue"}
 {"k":"n","id":"migration:0274","t":"migration","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","txt":"o aging que so existia no navegador e nunca conferia com o balanco"}
+{"k":"n","id":"migration:0276","t":"migration","f":"Supabase/migrations/0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql","txt":"a visao geral que buscava dez mil linhas e 230 chamadas para contar"}
 {"k":"n","id":"no8n:Abortar Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abortar Lote code"}
 {"k":"n","id":"no8n:Abrir Lote","t":"no8n","f":"N8N/workflow.e1-ingestao.json","txt":"Abrir Lote postgres"}
 {"k":"n","id":"no8n:Agenda Mensal","t":"no8n","f":"N8N/workflow.macro.json","txt":"Agenda Mensal scheduleTrigger"}
@@ -1286,6 +1290,14 @@
 {"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_versao_atual","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":1}
 {"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":6}
 {"k":"e","de":"arquivo:Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","rel":"CHAMA","pa":"fn:fn_versao_mais_nova","f":"Supabase/test/a_versao_atual_que_nao_seguia_a_vigente.test.sql","l":6}
+{"k":"e","de":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","rel":"CHAMA","pa":"fn:fn_algum_documento_serve_como","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","l":1}
+{"k":"e","de":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","l":82}
+{"k":"e","de":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","l":77}
+{"k":"e","de":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","rel":"CHAMA","pa":"fn:fn_documento_serve_como","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","l":7}
+{"k":"e","de":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","l":167}
+{"k":"e","de":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","rel":"CHAMA","pa":"fn:fn_linhas_por_versao","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","l":1}
+{"k":"e","de":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","rel":"CHAMA","pa":"fn:fn_registrar_documento","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","l":12}
+{"k":"e","de":"arquivo:Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql","l":80}
 {"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_aceitar_extracao","f":"Supabase/test/acesso_por_caso.test.sql","l":337}
 {"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_acesso_bootstrap","f":"Supabase/test/acesso_por_caso.test.sql","l":648}
 {"k":"e","de":"arquivo:Supabase/test/acesso_por_caso.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/acesso_por_caso.test.sql","l":11}
@@ -3015,6 +3027,8 @@
 {"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_balanco_fecha_em","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":336}
 {"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_reconciliar_aging","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":462}
 {"k":"e","de":"migration:0274","rel":"CRIA","pa":"fn:fn_reconciliar_aging_do_caso","f":"Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql","l":607}
+{"k":"e","de":"migration:0276","rel":"CRIA","pa":"fn:fn_algum_documento_serve_como","f":"Supabase/migrations/0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql","l":66}
+{"k":"e","de":"migration:0276","rel":"CRIA","pa":"fn:fn_linhas_por_versao","f":"Supabase/migrations/0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql","l":46}
 {"k":"e","de":"no8n:Abrir Lote","rel":"CHAMA","pa":"fn:fn_abrir_lote_execucao","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_documento_preliminar","f":"N8N/workflow.e1-ingestao.json"}
 {"k":"e","de":"no8n:Classificar Nome","rel":"CHAMA","pa":"fn:fn_periodo_canonico","f":"N8N/workflow.e1-ingestao.json"}

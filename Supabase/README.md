@@ -1229,6 +1229,12 @@ supabase db execute --file Supabase/migrations/0274_o_aging_que_so_existia_no_na
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0274' and not presente;   -- ZERO linhas
 #   select count(*) from aging_importado;   -- 0 (nasce vazia)
+# A 0276 cria `fn_linhas_por_versao(uuid[])` (contagem de linhas de campo_extraido por versão, no banco, sem o teto de 1.000 linhas do PostgREST) e `fn_algum_documento_serve_como(uuid[], text)` (bool_or de `fn_documento_serve_como`, 0157): as duas leituras em lote da visão geral do mandato (13,4 s, 10,2 s delas em 12 idas de paginação + 230 RPCs). `security invoker`: a RLS de quem chama decide. Só funções novas, nenhum dado tocado; o portal só usa depois de trocar `linhas-por-versao.ts` e `kit-basico.ts`.
+# >>> Rodar COMO `postgres`; reaplicável (create or replace). Sem backfill.
+# >>> Teste: Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql.
+supabase db execute --file Supabase/migrations/0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0276' and not presente;   -- ZERO linhas
 # A 0242 cria o catálogo conta_canonica (a árvore demonstração > grupo > seção > subgrupo, 27 nós: 5 raízes, 2 grupos, 15 seções do SECAO_CANONICA_ENUM, 4 subgrupos do Ativo Não Circulante e o balde Outros), com RLS de leitura por papel, a guarda de raiz (gatilho de instrução), 3 views de sonda e 9 requisitos na sonda. Só a taxonomia atual: conta-folha (caixa, clientes…) é a P27.
 # >>> Rodar COMO `postgres`; reaplicável (create if not exists, seed on conflict do nothing, requisitos por upsert). Nenhuma linha existente é tocada.
 # >>> Teste: Supabase/test/conta_canonica.test.sql e Supabase/test/conta_canonica_regua.test.mjs.

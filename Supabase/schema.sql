@@ -768,6 +768,24 @@ end $$;
 COMMENT ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base date) IS '0274: o validador do resumo do aging (Leitor/lib/aging.mjs): devolve os motivos (vazio = coerente). Σ por_faixa = positivos.saldo; vencido = Σ faixas menos a_vencer; Σ maiores + demais = positivos.saldo e positivos.titulos; Σ negativos.maiores + negativos.demais = negativos.saldo; negativos <= 0 <= positivos; data_base igual; centavos inteiros em texto; 7 faixas. Não prova que o arquivo foi lido inteiro: só recusa o resumo que não fecha consigo mesmo. Usado pela função de importar e pela CHECK da tabela.';
 
 --
+-- Name: fn_algum_documento_serve_como(uuid[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select coalesce(bool_or(fn_documento_serve_como(d, p_tipo_taxonomia)), false)
+    from unnest(p_documento_ids) as d;
+$$;
+
+--
+-- Name: FUNCTION fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) IS '0276: algum destes documentos satisfaz o item <tipo_taxonomia> do Kit Básico? bool_or de fn_documento_serve_como (0157, a regra mora lá) sobre o array; array vazio ou nulo = false. Uma ida no lugar de uma por documento (2 itens × 115 documentos = 230 RPCs, 4,4 s). security invoker: documento sob RLS, como a função de uma só.';
+
+--
 -- Name: fn_alocado_agora(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -8447,6 +8465,26 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) IS 'As linhas que o Portão 1 vai COBRAR deste tipo de documento, para a planilha de transcrição listá-las. São poucas de propósito: taxonomia_linha_exigida é o MÍNIMO exigido, não um gabarito de demonstração — planilha que fingisse listar todas as contas de um balanço estaria inventando a estrutura do documento do cliente. O resto vai em linha livre.';
+
+--
+-- Name: fn_linhas_por_versao(uuid[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) RETURNS TABLE(documento_versao_id uuid, linhas bigint)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select ce.documento_versao_id, count(*)::bigint
+    from campo_extraido ce
+   where ce.documento_versao_id = any (p_versoes)
+   group by ce.documento_versao_id;
+$$;
+
+--
+-- Name: FUNCTION fn_linhas_por_versao(p_versoes uuid[]); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) IS '0276: quantas linhas de campo_extraido tem cada versão pedida, contadas no banco (sem o teto silencioso de 1.000 linhas do PostgREST que obrigava o portal a paginar: 10.231 linhas = 12 idas, 5,8 s). Versão SEM linha NÃO vem no resultado; quem lê trata ausência como 0. security invoker: a RLS de campo_extraido (0216) decide, então mandato alheio devolve zero linhas, como a leitura direta da tabela.';
 
 --
 -- Name: fn_mapeamento_confirmar(text, jsonb, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
@@ -19985,6 +20023,24 @@ CREATE VIEW public.instalacao_sonda_gatilho_original_apagado AS
 COMMENT ON VIEW public.instalacao_sonda_gatilho_original_apagado IS 'Sonda da 0224: uma linha = o gatilho de auditoria de exclusão existe em storage.objects, habilitado, AFTER DELETE por linha, chamando fn_trg_auditar_original_apagado. Zero linhas: a exclusão de original voltou a não deixar trilha.';
 
 --
+-- Name: instalacao_sonda_leitura_em_lote_invoker; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_leitura_em_lote_invoker AS
+ SELECT (count(*))::text AS n
+   FROM pg_proc p
+  WHERE ((pronamespace = ('public'::regnamespace)::oid) AND (proname = ANY (ARRAY['fn_linhas_por_versao'::name, 'fn_algum_documento_serve_como'::name])) AND (NOT prosecdef) AND (provolatile = 's'::"char") AND (EXISTS ( SELECT 1
+           FROM unnest(COALESCE(p.proconfig, '{}'::text[])) c(c)
+          WHERE (c.c ~~ 'search_path=%'::text))))
+ HAVING (count(*) = 2);
+
+--
+-- Name: VIEW instalacao_sonda_leitura_em_lote_invoker; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_leitura_em_lote_invoker IS 'Sonda da 0276: uma linha = as duas leituras em lote são security invoker, stable e com search_path fixo. Zero linhas: alguma virou security definer e o authenticated conta linhas de mandato alheio.';
+
+--
 -- Name: instalacao_sonda_ln_check; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -23631,6 +23687,13 @@ GRANT ALL ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base d
 GRANT ALL ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base date) TO supabase_read_only_user;
 
 --
+-- Name: FUNCTION fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) TO authenticated;
+
+--
 -- Name: FUNCTION fn_alocado_agora(p_caso uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -24837,6 +24900,13 @@ REVOKE ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) FR
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO service_role;
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_linhas_por_versao(p_versoes uuid[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) TO authenticated;
 
 --
 -- Name: FUNCTION fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb); Type: ACL; Schema: public; Owner: -
@@ -26578,6 +26648,13 @@ GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO service_role;
 
 GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_leitura_em_lote_invoker; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_leitura_em_lote_invoker TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_leitura_em_lote_invoker TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_ln_check; Type: ACL; Schema: public; Owner: -
