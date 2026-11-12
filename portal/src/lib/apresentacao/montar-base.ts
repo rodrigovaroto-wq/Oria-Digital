@@ -8,6 +8,7 @@ import { formatarPeriodo, versoesVigentes, type DocumentoParaExport } from "../e
 import { fatorDeEscala, historicoParaCredito, type EntradaModeloInstitucional, type LinhaModelo } from "../modelo-institucional";
 import { estadoDoTextoPorCampo, linhaDosCampos, lerMapaDaDivida, medidaDoRotulo, type LinhaDoMapa } from "../mapa-da-divida";
 import type { CampoExtraido } from "../types";
+import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../kit-basico";
 import { seriesPorLinha, serieDaLinha } from "../modelagem-linha";
 import { naturezaDoAno, type BaseCredito, type DocumentoDaBase } from "./base-credito";
 
@@ -26,7 +27,7 @@ export function montarBaseCredito(
   ent: EntradaModeloInstitucional,
   documentos: DocumentoParaExport[],
   campos: Array<{ chave: string; valor: string; fonte: string | null }> = [],
-  extras: Pick<BaseCredito, "informacao" | "perimetro" | "projecao" | "corrente"> = {},
+  extras: Pick<BaseCredito, "informacao" | "kitNaoConferido" | "perimetro" | "projecao" | "corrente"> = {},
   camposExtraidos: CampoExtraido[] = [],
 ): BaseCredito {
   const historico = historicoParaCredito(ent);
@@ -105,6 +106,36 @@ export function informacaoDoKit(
     codigo: k.codigo, documento: k.documento,
     status: semConteudo.has(k.codigo) ? "sem_conteudo" as const : atendidos.has(k.codigo) ? "recebido" as const : "faltante" as const,
   }));
+}
+
+type Leitura<T> = { data: T[] | null; error: { message: string } | null };
+
+/**
+ * A `informacao` do kit a partir do que a rota LEU. É a única porta: a rota não decide nada aqui.
+ * Três estados, e nenhum vira "faltante" por omissão (regra 1):
+ *  - lista do kit não lida: `informacao` indefinida, `kitNaoConferido` falso (o slide diz "lista não lida");
+ *  - lista lida mas serviço do banco lançou OU checklist com erro: `informacao` indefinida e
+ *    `kitNaoConferido` verdadeiro. Checklist vazio por erro faria `recebido_nao_valido` sair como
+ *    "recebido" (e a manchete "os N documentos chegaram com conteúdo");
+ *  - tudo lido: a informação, como sempre.
+ * `motivo` vai ao log da rota.
+ */
+export async function lerInformacaoDoKit(e: {
+  kit: Leitura<{ codigo: string; documento: string }>;
+  checklist: Leitura<{ tipo_taxonomia: string; status: string }>;
+  documentos: ReadonlyArray<{ id: string; tipo_taxonomia: string | null }>;
+  servico: ServicoDocumentoServeComo;
+}): Promise<{ informacao?: BaseCredito["informacao"]; kitNaoConferido: boolean; motivo?: string }> {
+  if (e.kit.error || !e.kit.data) return { kitNaoConferido: false, motivo: `kit básico não lido: ${e.kit.error?.message}` };
+  if (e.checklist.error) return { kitNaoConferido: true, motivo: `checklist não lido: ${e.checklist.error.message}` };
+  let atendidos: Set<string>;
+  try {
+    atendidos = await itensDoKitBasicoAtendidos(e.kit.data, e.documentos, e.servico);
+  } catch (x) {
+    return { kitNaoConferido: true, motivo: `kit básico não conferido: ${x instanceof Error ? x.message : String(x)}` };
+  }
+  const semConteudo = new Set((e.checklist.data ?? []).filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia));
+  return { informacao: informacaoDoKit(e.kit.data, atendidos, semConteudo), kitNaoConferido: false };
 }
 
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];

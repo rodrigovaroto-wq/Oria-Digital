@@ -152,9 +152,28 @@
     box-shadow var(--dur-fast) var(--ease-smooth-out);
 }
 .campo:focus-visible {
-  outline: none;
+  /* Contorno REAL, não só borda e sombra: em forced-colors (Windows alto contraste) `box-shadow` e
+     `border-color` são descartados e o `outline: none` anterior deixava o campo sem indicador de foco. */
+  outline: 2px solid var(--l-accent);
+  outline-offset: 2px;
   border-color: var(--l-glow);
   box-shadow: 0 0 0 4px color-mix(in oklab, var(--l-glow) 32%, transparent);
+}
+@media (forced-colors: active) {
+  .campo:focus-visible { outline: 2px solid CanvasText; }
+}
+/* Autopreenchimento do Chrome pinta o campo de amarelo-claro com texto escuro. Antes vivia em
+   `.vidro-casco input:-webkit-autofill` (globals.css), que o login deixou de usar. O fundo é o do
+   cartão com o véu do campo (rgb(28 33 44)), para o e-mail salvo não virar um retângulo claro. */
+.campo:-webkit-autofill,
+.campo:-webkit-autofill:hover,
+.campo:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--l-ink);
+  box-shadow: 0 0 0 1000px rgb(28 33 44) inset;
+  caret-color: var(--l-ink);
+}
+.campo:-webkit-autofill:focus-visible {
+  box-shadow: 0 0 0 1000px rgb(28 33 44) inset, 0 0 0 4px color-mix(in oklab, var(--l-glow) 32%, transparent);
 }
 .linha {
   display: flex;
@@ -170,7 +189,10 @@
 }
 .link:hover { border-bottom-color: var(--l-ink); }
 .link:focus-visible,
-.botao:focus-visible {
+.botao:focus-visible,
+.aviso summary:focus-visible {
+  /* O `summary` de "Detalhes técnicos" cairia no anel global acento-600 (~2,6:1 sobre o fundo escuro);
+     o accent do login dá >=3:1 sobre o cartão e sobre o vermelho/âmbar do aviso. */
   outline: 2px solid var(--l-accent);
   outline-offset: 3px;
 }

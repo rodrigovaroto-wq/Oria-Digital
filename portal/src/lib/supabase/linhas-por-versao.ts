@@ -53,8 +53,7 @@ export async function contarLinhasPorVersao(supabase: Supabase, versoes: string[
   for (let i = 0; i < distintas.length; i += FATIA) fatias.push(distintas.slice(i, i + FATIA));
 
   const respostas = await Promise.all(fatias.map((f) => supabase.rpc("fn_linhas_por_versao", { p_versoes: f })));
-  const ausente = respostas.find((r) => r.error && (r.error.code === "PGRST202" || r.error.code === "42883"));
-  if (ausente) return contarPaginado(supabase, versoes);
+  if (respostas.some((r) => r.error && (r.error.code === "PGRST202" || r.error.code === "42883"))) return contarPaginado(supabase, versoes);
 
   let incompleto = false;
   respostas.forEach((r, i) => {

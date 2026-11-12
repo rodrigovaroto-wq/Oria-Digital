@@ -17,8 +17,7 @@ import {
 // A apresentação de crédito importa em linhas PRÓPRIAS (e não acrescentando nomes às listas de cima):
 // outro PR que mexa nas listas de import desta rota não colide com estas linhas.
 import { entradaDoModeloDoWorkbook } from "@/lib/export";
-import { correnteDoBalancete, informacaoDoKit, linhasDoAnoCorrenteDe, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
-import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
+import { correnteDoBalancete, lerInformacaoDoKit, linhasDoAnoCorrenteDe, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
 import { servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
 import { projecaoDoModelo } from "@/lib/apresentacao/projecao";
 import { construirDeckCredito, SemDadoParaApresentar } from "@/lib/apresentacao/deck-credito";
@@ -598,30 +597,22 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       supabase.from("checklist_item_status").select("tipo_taxonomia, status").eq("caso_id", id),
       supabase.from("entidade").select("razao_social, cnpj, papel_no_grupo").eq("caso_id", id),
     ]);
-    let informacao: ReturnType<typeof informacaoDoKit> | undefined;
-    if (!kitRes.error && kitRes.data) {
-      const kit = kitRes.data as Array<{ codigo: string; documento: string }>;
-      // O MESMO serviço das telas (lança quando o banco falha). O serviço próprio que havia aqui devolvia
-      // `!r.error && r.data === true`: um timeout virava "item não atendido" e o book do cliente saía com o
-      // item como FALTANTE (regra 1). Kit que não pôde ser lido deixa `informacao` indefinida — o slide
-      // diz que não leu, o mesmo tratamento da leitura do kit acima — e o motivo vai ao log.
-      let atendidos: Set<string> | null = null;
-      try {
-        atendidos = await itensDoKitBasicoAtendidos(kit, documentos.map((d) => ({ id: d.id, tipo_taxonomia: d.tipo_taxonomia })),
-          servicoDocumentoServeComo(supabase));
-      } catch (e) {
-        console.error(`[export] kit básico não conferido: ${e instanceof Error ? e.message : String(e)}`, { caso_id: id });
-      }
-      const semConteudo = new Set(((checkRes.data ?? []) as Array<{ tipo_taxonomia: string; status: string }>)
-        .filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia));
-      if (atendidos) informacao = informacaoDoKit(kit, atendidos, semConteudo);
-    } else console.error(`[export] kit básico não lido: ${kitRes.error?.message}`, { caso_id: id });
+    // O MESMO serviço das telas (lança quando o banco falha). Toda a decisão "lido / não conferido /
+    // conferido" mora em `lerInformacaoDoKit` (pura, com invariantes em verificar-kit-basico): checklist
+    // com erro ou serviço que lança deixam o slide dizendo que não conferiu, nunca "nada faltou".
+    const kitLeitura = await lerInformacaoDoKit({
+      kit: kitRes, checklist: checkRes,
+      documentos: documentos.map((d) => ({ id: d.id, tipo_taxonomia: d.tipo_taxonomia })),
+      servico: servicoDocumentoServeComo(supabase),
+    });
+    if (kitLeitura.motivo) console.error(`[export] ${kitLeitura.motivo}`, { caso_id: id });
+    const { informacao, kitNaoConferido } = kitLeitura;
     const perimetro = entRes.error ? undefined : perimetroDoCaso(
       (entRes.data ?? []) as Array<{ razao_social: string; cnpj: string | null; papel_no_grupo: string | null }>,
       documentos, entradaDoModelo.entidade ?? "");
     let deck;
     try {
-      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp, { informacao, perimetro, projecao: projecaoDoModelo(workbook, entradaDoModelo),
+      ({ deck } = construirDeckCredito(montarBaseCredito(entradaDoModelo, documentos, camposAp, { informacao, kitNaoConferido, perimetro, projecao: projecaoDoModelo(workbook, entradaDoModelo),
         corrente: linhasDoAnoCorrente ? correnteDoBalancete(entradaDoModelo, linhasDoAnoCorrente.linhas, linhasDoAnoCorrente.ano, documentos) : null }, campos), new Date()));
     } catch (e) {
       if (!(e instanceof SemDadoParaApresentar)) throw e;
