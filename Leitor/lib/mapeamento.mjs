@@ -287,6 +287,8 @@ export function validarMapeamento(mapa, cabecalho) {
 
 // -------------------------------------------------------------------- aplicação --
 const RE_TOTAL = /^\W*(sub[\s-]?)?tota(l|is)\b|^\W*soma\b|^\W*saldo\s+geral\b/i;
+// O nome que é SÓ o rótulo de total, sem nada que identifique alguém: nunca contraparte real.
+const RE_SO_ROTULO = /^\W*((sub[\s-]?)?tota(l|is)(\s+gera(l|is))?|soma|saldo\s+geral)\W*$/i;
 const MAX_SUBTOTAIS_GUARDADOS = 10000;
 
 /**
@@ -348,6 +350,15 @@ export function aplicadorDeMapeamento(confirmado, { cabecalhoDoArquivo, contrapa
   const reais = new Set(contrapartesReais.map(textoNormalizado));
   const candidatas = new Map();
   const MAX_CANDIDATAS = 200;
+  let candidatasTruncadas = false;
+  // O sinal da linha veio SÓ do nome? A MB1 marca rotulo_de_total olhando as duas primeiras
+  // células preenchidas; se alguma delas, que não seja a contraparte, fala em total, o total é da
+  // linha, não do nome.
+  const sinalSoDoNome = (l, contraparte) => {
+    const iCp = mapa.contraparte;
+    const primeiras = l.celulas.map((c, i) => [i, String(c ?? '').trim()]).filter(([, c]) => c !== '').slice(0, 2);
+    return !primeiras.some(([i, c]) => i !== iCp && RE_TOTAL.test(c)) && RE_TOTAL.test(contraparte);
+  };
   const subtotais = new Set();
   let maiorSubtotal = null;
   const cel = (l, campo) => (campo in mapa ? l.celulas[mapa[campo]] : undefined);
@@ -385,13 +396,22 @@ export function aplicadorDeMapeamento(confirmado, { cabecalhoDoArquivo, contrapa
       if (!saldo) return rejeitar(l, `saldo não é número: '${cel(l, 'saldo') ?? ''}'`);
       if (!venc) return rejeitar(l, `vencimento não é data: '${vencTexto ?? ''}'`, saldo);
       if (contraparte === '') return rejeitar(l, 'contraparte vazia', saldo);
-      const confirmada = temSinal && reais.has(textoNormalizado(contraparte));
+      // A confirmação do analista só vale quando é o NOME que parece total ("TOTAL DISTRIBUIDORA
+      // LTDA"). Se quem acusou foi outra célula da linha ("Total;ACME LTDA;02/01/2025;30,00"), a
+      // linha é um total e ACME é cliente comum: oferecê-la para confirmar e aceitar a confirmação
+      // somava o total de ACME como título (revisão de 12/11/2026: ACME em dobro, em todo arquivo
+      // seguinte do mandato). Nome que é SÓ o rótulo ("Total", "Total geral") nunca é candidato.
+      const nomeDeTotal = RE_TOTAL.test(contraparte) && !RE_SO_ROTULO.test(contraparte);
+      const soDoNome = nomeDeTotal && sinalSoDoNome(l, contraparte);
+      const confirmada = temSinal && soDoNome && reais.has(textoNormalizado(contraparte));
       if (temSinal && !confirmada) {
         const k = textoNormalizado(contraparte);
-        if (candidatas.has(k) || candidatas.size < MAX_CANDIDATAS) {
-          const x = candidatas.get(k) ?? { contraparte: k, linhas: 0, saldo: 0n };
-          x.linhas++; x.saldo += saldo.centavos;
-          candidatas.set(k, x);
+        if (soDoNome) {
+          if (candidatas.has(k) || candidatas.size < MAX_CANDIDATAS) {
+            const x = candidatas.get(k) ?? { contraparte: k, linhas: 0, saldo: 0n };
+            x.linhas++; x.saldo += saldo.centavos;
+            candidatas.set(k, x);
+          } else candidatasTruncadas = true;
         }
         return rejeitar(l, `rótulo de total com vencimento (total por data, ou contraparte chamada Total?): '${contraparte}'`, saldo);
       }
@@ -434,7 +454,7 @@ export function aplicadorDeMapeamento(confirmado, { cabecalhoDoArquivo, contrapa
       return {
         ...r, motivos, saldo_titulos: r.saldo_titulos.toString(),
         candidatas_a_contraparte_real: [...candidatas.values()].map((c) => ({ ...c, saldo: c.saldo.toString() })),
-        candidatas_truncadas: candidatas.size >= MAX_CANDIDATAS,
+        candidatas_truncadas: candidatasTruncadas,
         titulos_com_saldo_negativo: { linhas: r.titulos_com_saldo_negativo.linhas, saldo: r.titulos_com_saldo_negativo.saldo.toString(),
           efeito: 'saldo negativo (adiantamento ou crédito) entra na soma e a REDUZ: a soma é a carteira menos os créditos' },
         conferencia_com_o_total_do_arquivo: conferencia,

@@ -96,7 +96,8 @@ test('saldo NEGATIVO fica separado: não entra nas faixas nem reduz a carteira',
   assert.equal(r.positivos.saldo, '150000');
   assert.equal(r.negativos.saldo, '-7000');
   assert.equal(r.negativos.titulos, 2);
-  assert.deepEqual(r.negativos.maiores, [{ contraparte: 'D', documento: null, saldo: '-7000' }]);
+  assert.deepEqual(r.negativos.maiores, [{ contraparte: 'D', documento: null, saldo: '-7000', titulos: 2 }]);
+  assert.deepEqual(r.negativos.demais, { contrapartes: 0, saldo: '0', titulos: 0 });
   assert.equal(Object.values(r.positivos.por_faixa).reduce((a, b) => a + BigInt(b), 0n), 150000n);
   assert.match(r.negativos.efeito, /Adiantamentos/);
 });
@@ -116,20 +117,20 @@ test('emitido depois da data-base entra e é contado com o saldo e o efeito', ()
   ag.titulo(t('A', '2026-02-01', 700, { emissao: '2026-01-05' }));
   ag.titulo(t('B', '2026-01-01', 300, { emissao: '2025-12-20' }));
   const r = ag.resumo();
-  assert.deepEqual([r.emitidos_depois_da_data_base.titulos, r.emitidos_depois_da_data_base.saldo], [1, '700']);
+  assert.deepEqual([r.emitidos_depois_da_data_base.titulos, r.emitidos_depois_da_data_base.saldo_positivos], [1, '700']);
   assert.match(r.emitidos_depois_da_data_base.efeito, /data-base errada/);
   assert.equal(r.positivos.saldo, '1000');
 });
 
 test('homônimo com CNPJ diferente não se soma; o mesmo nome sem documento se soma', () => {
   const ag = agregadorDeAging({ dataBase: '2025-12-31' });
-  ag.titulo(t('ACME LTDA', '2025-12-01', 100, { documento_contraparte: '11.111.111/0001-11' }));
-  ag.titulo(t('ACME LTDA', '2025-12-01', 200, { documento_contraparte: '22.222.222/0001-22' }));
+  ag.titulo(t('ACME LTDA', '2025-12-01', 100, { documento_contraparte: '11.222.333/0001-81' }));
+  ag.titulo(t('ACME LTDA', '2025-12-01', 200, { documento_contraparte: '33.000.001/0001-95' }));
   ag.titulo(t('BETA', '2025-12-01', 10));
   ag.titulo(t(' BETA ', '2025-12-01', 20));
   const r = ag.resumo();
   assert.equal(r.contrapartes_com_saldo, 3);
-  assert.deepEqual(r.maiores.map((c) => [c.contraparte, c.documento, c.saldo]), [['ACME LTDA', '22222222000122', '200'], ['ACME LTDA', '11111111000111', '100'], ['BETA', null, '30']]);
+  assert.deepEqual(r.maiores.map((c) => [c.contraparte, c.documento, c.saldo]), [['ACME LTDA', '33000001000195', '200'], ['ACME LTDA', '11222333000181', '100'], ['BETA', null, '30']]);
 });
 
 test('top e demais: nada some — nominais + demais = total, com a contagem', () => {
@@ -137,7 +138,7 @@ test('top e demais: nada some — nominais + demais = total, com a contagem', ()
   for (let i = 1; i <= 8; i++) ag.titulo(t(`C${i}`, '2025-12-01', i * 100));
   const r = ag.resumo();
   assert.deepEqual(r.maiores.map((c) => c.contraparte), ['C8', 'C7', 'C6']);
-  assert.deepEqual(r.demais, { contrapartes: 5, saldo: '1500', vencido: '1500' });
+  assert.deepEqual(r.demais, { contrapartes: 5, saldo: '1500', vencido: '1500', titulos: 5 });
   assert.equal(r.maiores.reduce((a, c) => a + BigInt(c.saldo), 0n) + BigInt(r.demais.saldo), BigInt(r.positivos.saldo));
 });
 
@@ -160,3 +161,86 @@ test('data-base do título: as frases do ERP, e sem frase nenhuma o motivo (nunc
   assert.equal(nada.data, null);
   assert.match(nada.evidencia, /o analista informa/);
 });
+
+// ============================ 3. achados da revisão independente (12/11/2026) =====
+test('data-base: a data de impressão, geração ou emissão NUNCA vence a da posição', () => {
+  const l = (c, n = 0) => ({ n, celulas: [c] });
+  assert.equal(dataBaseDoTitulo([l('Impresso em 12/11/2026 10:32'), l('Posição em 31/12/2025', 1)]).data, '2025-12-31');
+  assert.equal(dataBaseDoTitulo([l('Gerado em 05/01/2026'), l('Data-base: 31/12/2025', 1)]).data, '2025-12-31');
+  assert.equal(dataBaseDoTitulo([l('Emitido em 05/01/2026')]).data, null, 'só emissão: nenhuma proposta');
+  assert.equal(dataBaseDoTitulo([l('Item 05/01/2026')]).data, null, '"em" dentro de "Item" não é a palavra "em"');
+  assert.equal(dataBaseDoTitulo([l('Período de 01/01/2025 até 31/12/2025')]).data, '2025-12-31');
+  assert.equal(dataBaseDoTitulo([l('Relatório de Clientes em 30/06/2025')]).data, '2025-06-30', '"em" fraco vale sem frase forte');
+});
+
+test('CNPJ/CPF de preenchimento ou com DV errado não junta contrapartes diferentes', () => {
+  const ag = agregadorDeAging({ dataBase: '2025-12-31' });
+  ag.titulo(t('ACME', '2025-12-01', 100, { documento_contraparte: '00.000.000/0000-00' }));
+  ag.titulo(t('BETA', '2025-12-01', 200, { documento_contraparte: '00.000.000/0000-00' }));
+  ag.titulo(t('GAMA', '2025-12-01', 300, { documento_contraparte: '000.000.000-00' }));
+  ag.titulo(t('DELTA', '2025-12-01', 400, { documento_contraparte: '11.222.333/0001-99' }));
+  const r = ag.resumo();
+  assert.equal(r.contrapartes_com_saldo, 4);
+  assert.equal(r.documentos_invalidos.titulos, 4);
+  assert.match(r.documentos_invalidos.efeito, /agrupados pelo nome/);
+  assert.ok(r.maiores.every((c) => c.documento === null));
+});
+
+test('o mesmo cliente com e sem documento é UMA contraparte; com dois documentos para o nome, fica à parte e contado', () => {
+  const ag = agregadorDeAging({ dataBase: '2025-12-31' });
+  ag.titulo(t('ACME', '2025-12-01', 100, { documento_contraparte: '11.222.333/0001-81' }));
+  ag.titulo(t('ACME', '2025-12-01', 200));
+  ag.titulo(t('BETA', '2025-12-01', 10, { documento_contraparte: '33.000.001/0001-95' }));
+  ag.titulo(t('BETA', '2025-12-01', 20, { documento_contraparte: '33.000.002/0001-30' }));
+  ag.titulo(t('BETA', '2025-12-01', 5));
+  const r = ag.resumo();
+  const acme = r.maiores.filter((c) => c.contraparte === 'ACME');
+  assert.deepEqual(acme.map((c) => [c.documento, c.saldo, c.titulos]), [['11222333000181', '300', 2]]);
+  assert.equal(r.maiores.filter((c) => c.contraparte === 'BETA').length, 3, 'homônimos: o sem documento não é fundido');
+  assert.equal(r.sem_documento_ambiguo.titulos, 1);
+});
+
+test('CNPJ do XLSX que perdeu o zero à esquerda (13 dígitos) é o mesmo CNPJ', () => {
+  const ag = agregadorDeAging({ dataBase: '2025-12-31' });
+  ag.titulo(t('ACME', '2025-12-01', 100, { documento_contraparte: '1222333000128' }));
+  ag.titulo(t('ACME', '2025-12-01', 200, { documento_contraparte: '01.222.333/0001-28' }));
+  ag.titulo(t('OUTRA', '2025-12-01', 50, { documento_contraparte: '1222333000128' }));
+  const r = ag.resumo();
+  assert.equal(r.documentos_invalidos.titulos, 0);
+  assert.deepEqual(r.maiores.map((c) => [c.contraparte, c.documento, c.saldo]), [['ACME', '01222333000128', '350']],
+    'o CNPJ identifica: o mesmo CNPJ com outro nome é a mesma contraparte (nome da primeira linha)');
+});
+
+test('data-base impossível (30/02) é recusada, não rolada para março', () => {
+  assert.throws(() => agregadorDeAging({ dataBase: '2025-02-30' }), /sem data-base válida/);
+  assert.throws(() => agregadorDeAging({ dataBase: '2025-04-31' }), /sem data-base válida/);
+  assert.doesNotThrow(() => agregadorDeAging({ dataBase: '2024-02-29' }));
+});
+
+test('créditos: nada some — maiores + demais = negativos, com a contagem', () => {
+  const ag = agregadorDeAging({ dataBase: '2025-12-31', top: 10 });
+  for (let i = 1; i <= 12; i++) ag.titulo(t(`C${i}`, '2025-12-01', -i));
+  const r = ag.resumo();
+  assert.equal(r.negativos.saldo, '-78');
+  assert.equal(r.negativos.maiores.reduce((a, c) => a + BigInt(c.saldo), 0n) + BigInt(r.negativos.demais.saldo), -78n);
+  assert.deepEqual(r.negativos.demais, { contrapartes: 2, saldo: '-3', titulos: 2 });
+});
+
+test('maiores[].titulos conta só os positivos; Σ maiores + demais = positivos.titulos', () => {
+  const ag = agregadorDeAging({ dataBase: '2025-12-31', top: 1 });
+  ag.titulo(t('A', '2025-12-01', 100));
+  for (let i = 0; i < 5; i++) ag.titulo(t('A', '2025-12-01', -1));
+  ag.titulo(t('B', '2025-12-01', 50));
+  const r = ag.resumo();
+  assert.equal(r.maiores[0].titulos, 1);
+  assert.equal(r.maiores[0].titulos + r.demais.titulos, r.positivos.titulos);
+});
+
+test('emitidos depois da data-base: +700 e −700 não se anulam', () => {
+  const ag = agregadorDeAging({ dataBase: '2025-12-31' });
+  ag.titulo(t('A', '2026-02-01', 700, { emissao: '2026-01-05' }));
+  ag.titulo(t('B', '2026-02-01', -700, { emissao: '2026-01-05' }));
+  const r = ag.resumo();
+  assert.deepEqual([r.emitidos_depois_da_data_base.saldo_positivos, r.emitidos_depois_da_data_base.saldo_negativos], ['700', '-700']);
+});
+

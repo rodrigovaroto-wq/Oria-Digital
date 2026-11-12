@@ -380,3 +380,38 @@ test('textoNormalizado: os vetores que a 0273 recalcula no banco, e o U+2003 que
   assert.equal(impressaoDoCabecalho(['\u2003Saldo']) === impressaoDoCabecalho(['Saldo']), false);
 });
 
+// ======================= 6. achados da revisão da contraparte confirmada (12/11/2026) =====
+test('total na OUTRA coluna ("Total;ACME LTDA;..."): ACME não é candidata, e confirmá-la não soma o total', async () => {
+  const linhas = ['Título;Cliente;Vencimento;Saldo', '001;ACME LTDA;02/01/2025;10,00', '002;ACME LTDA;02/01/2025;20,00',
+    '003;BETA;02/01/2025;12,00', 'Total;ACME LTDA;02/01/2025;30,00'];
+  const sem = await aplicar(csv(linhas));
+  assert.deepEqual(sem.resumo.candidatas_a_contraparte_real, []);
+  const com = await aplicar(csv(linhas), { contrapartesReais: ['ACME LTDA'] });
+  assert.equal(com.resumo.saldo_titulos, '4200', 'ACME não sai em dobro');
+  assert.equal(com.resumo.titulos_de_contraparte_confirmada, 0);
+});
+
+test('subtotal por data de um cliente CONFIRMADO ("Total;TOTAL DISTRIBUIDORA;...") continua fora', async () => {
+  const linhas = ['Título;Cliente;Vencimento;Saldo', '001;TOTAL DISTRIBUIDORA;02/01/2025;10,00', '002;TOTAL DISTRIBUIDORA;02/01/2025;20,00',
+    '003;BETA;02/01/2025;12,00', 'Total;TOTAL DISTRIBUIDORA;02/01/2025;30,00'];
+  const { resumo, classes } = await aplicar(csv(linhas), { contrapartesReais: ['TOTAL DISTRIBUIDORA'] });
+  assert.deepEqual(classes.slice(1).map((c) => c.classe), ['titulo', 'titulo', 'titulo', 'rejeitada']);
+  assert.equal(resumo.saldo_titulos, '4200');
+});
+
+test('nome que é SÓ o rótulo ("Total", "Total geral", "Soma") nunca é candidato nem confirmável', async () => {
+  const linhas = ['Cliente;Vencimento;Saldo', 'A;01/01/2025;3,00', 'B;01/01/2025;3,00', 'C;01/01/2025;3,00',
+    'Total;01/01/2025;3,00', 'Total geral;02/01/2025;3,00', 'Soma;02/01/2025;9,00'];
+  const sem = await aplicar(csv(linhas));
+  assert.deepEqual(sem.resumo.candidatas_a_contraparte_real, []);
+  const com = await aplicar(csv(linhas), { contrapartesReais: ['Total', 'Total geral', 'Soma'] });
+  assert.equal(com.resumo.saldo_titulos, '900');
+});
+
+test('candidatas_truncadas só quando alguma candidata ficou de fora (200 cabem; a 201ª trunca)', async () => {
+  const base = ['Cliente;Vencimento;Saldo', 'A;01/01/2025;1,00', 'B;01/01/2025;1,00', 'C;01/01/2025;1,00'];
+  const nomes = (n) => Array.from({ length: n }, (_, i) => `TOTAL CLIENTE ${i};01/01/2025;1,00`);
+  assert.equal((await aplicar(csv([...base, ...nomes(200)]))).resumo.candidatas_truncadas, false);
+  assert.equal((await aplicar(csv([...base, ...nomes(201)]))).resumo.candidatas_truncadas, true);
+});
+

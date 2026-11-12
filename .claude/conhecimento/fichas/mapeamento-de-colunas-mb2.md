@@ -8,7 +8,7 @@ toca:
   - Leitor/medicao-n8n/navegador-tabela.mjs
 prova: Leitor/test/*.test.mjs
 ancora: Leitor/lib/mapeamento.mjs#RE_TOTAL
-ancora_sha: bad87f65c9fa
+ancora_sha: 689dd1978666
 substitui: []
 ---
 
@@ -50,6 +50,9 @@ em silêncio é pior que deixar de fora com o saldo na tela.
   saem em `candidatas_a_contraparte_real` (nome, linhas, saldo) para a tela oferecer. A confirmação
   é POR MANDATO, com autor (0273), nunca na tabela global do mapeamento: nome de cliente é dado do
   cliente. Comparação por `textoNormalizado`, que NÃO usa `.trim()` (ele apara U+2003 e o banco não).
+  A confirmação só vale quando é o PRÓPRIO NOME que parece total: em "Total;ACME LTDA;02/01;30,00"
+  quem acusa é outra célula, ACME não é candidata e confirmá-la não soma o total (a 1ª versão
+  dobrava ACME, revisão de 12/11). Nome que é só o rótulo ("Total", "Total geral") nunca é candidato.
 - **Conferência com o total do arquivo**: `confere` se ALGUM subtotal = Σ títulos (o total geral
   pode estar no topo ou antes do subtotal do último cliente); senão `diverge` com o maior.
 - **Campo opcional inválido** ("00/00/0000", "-") não derruba o título: fica ausente, contado em
