@@ -644,6 +644,78 @@ end $_$;
 COMMENT ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) IS '0274 (reemitida pela 0277): guarda o resumo do aging de uma importação, por mandato e entidade, e o concilia com o balanço extraído. Só quem escreve o mandato (fn_pode_escrever_caso: Sócio, Analista alocado); os demais, o anônimo e a conexão de serviço recebem 42501. Recusa (22023, com todos os motivos) resumo que não fecha consigo mesmo, resumo que não se amarra ao aplicador (0277: títulos e saldos), entidade de outro mandato, leitura parcial, sha256 divergente, arquivo inválido e mapeamento inexistente ou de outro tipo_base. Reimportar a mesma (entidade, tipo_base, data_base) substitui a vigente SEM apagar. Grava aging_importado em evento_auditoria (caso:<id>). Devolve {id, substitui, conciliacao}.';
 
 --
+-- Name: fn_aging_levar_na_fusao(uuid, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_aging_levar_na_fusao(p_caso uuid, p_de uuid, p_para uuid, p_por text DEFAULT 'sistema:fusao'::text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_substituidos jsonb;
+  v_pend_resolvidas jsonb;
+  v_movidos int;
+  v_ids jsonb;
+begin
+  -- definer porque o authenticated só LÊ aging_importado (a escrita é a função, 0274), e quem funde é ele; a checagem é a mesma de fn_aging_importar (e a conexão de serviço,
+  -- que os balcões do n8n usam para fundir).
+  if p_caso is null or not (fn_conexao_de_servico() or fn_pode_escrever_caso(p_caso)) then
+    raise exception 'Levar a carteira de aging na fusão exige ser Sócio ou Analista alocado neste mandato' using errcode = '42501';
+  end if;
+  if p_de is null or p_para is null or p_de = p_para
+     or (select count(*) from entidade where caso_id = p_caso and id in (p_de, p_para)) <> 2 then
+    raise exception 'fn_aging_levar_na_fusao: as duas entidades têm de ser distintas e deste mandato (de=%, para=%)', p_de, p_para using errcode = '22023';
+  end if;
+
+  -- (2) a vigente da absorvida que colide com a vigente da sobrevivente (mesma tipo_base e data_base) vira SUBSTITUÍDA por ela, sem apagar.
+  with colide as (
+    update aging_importado d set substituido_em = now(), substituido_por = s.id
+      from aging_importado s
+     where d.caso_id = p_caso and d.entidade_id = p_de and d.substituido_em is null
+       and s.caso_id = p_caso and s.entidade_id = p_para and s.substituido_em is null
+       and s.tipo_base = d.tipo_base and s.data_base = d.data_base
+    returning d.id, d.tipo_base, d.data_base, s.id as vigente_da_sobrevivente
+  )
+  select coalesce(jsonb_agg(jsonb_build_object('aging_id', c.id, 'tipo_base', c.tipo_base, 'data_base', c.data_base, 'substituida_por', c.vigente_da_sobrevivente)
+                            order by c.data_base, c.id), '[]'::jsonb)
+    into v_substituidos from colide c;
+
+  -- a pendência da carteira substituída: a carteira que ela descrevia deixou de ser a vigente. Resolve com o ator da fusão (o evento abaixo diz quais).
+  with resolvidas as (
+    update pendencia p set estado = 'resolvida', resolvida_em = now(), resolvida_por = p_por
+     where p.caso_id = p_caso and p.entidade_id = p_de and p.estado <> 'resolvida'
+       and exists (select 1 from jsonb_array_elements(v_substituidos) x
+                    where (x ->> 'data_base')::date = p.data_base
+                      and p.motivo = any (case x ->> 'tipo_base'
+                                            when 'contas_a_receber' then array['reconciliacao:aging_ar_clientes', 'reconciliacao:aging_ar_adiantamentos']
+                                            else array['reconciliacao:aging_ap_fornecedores', 'reconciliacao:aging_ap_adiantamentos'] end))
+    returning p.id
+  )
+  select coalesce(jsonb_agg(r.id order by r.id), '[]'::jsonb) into v_pend_resolvidas from resolvidas r;
+
+  -- (1) todas as importações da absorvida (vigentes, substituídas e as que acabaram de ser) passam para a sobrevivente.
+  with movidos as (
+    update aging_importado set entidade_id = p_para where caso_id = p_caso and entidade_id = p_de returning id
+  )
+  select count(*)::int, coalesce(jsonb_agg(m.id order by m.id), '[]'::jsonb) into v_movidos, v_ids from movidos m;
+
+  if v_movidos > 0 then
+    insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+    values (p_por, 'aging_levado_na_fusao', 'entidade:' || p_para,
+            jsonb_build_object('entidade_id', p_de),
+            jsonb_build_object('entidade_id', p_para, 'importacoes_movidas', v_ids, 'importacoes_substituidas', v_substituidos, 'pendencias_resolvidas', v_pend_resolvidas,
+                               'porque', 'a fusão leva a carteira da absorvida; a vigente da absorvida que colide com a da sobrevivente (mesma tipo_base e data_base) vira substituída, sem apagar'));
+  end if;
+  return jsonb_build_object('movidos', v_movidos, 'substituidos', v_substituidos, 'pendencias_resolvidas', jsonb_array_length(v_pend_resolvidas));
+end $$;
+
+--
+-- Name: FUNCTION fn_aging_levar_na_fusao(p_caso uuid, p_de uuid, p_para uuid, p_por text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_aging_levar_na_fusao(p_caso uuid, p_de uuid, p_para uuid, p_por text) IS '0277: chamada por fn_fundir_entidade antes de apagar a entidade absorvida: passa as importações de aging (aging_importado) dela para a sobrevivente. A vigente da absorvida que colide com a vigente da sobrevivente (mesma tipo_base e data_base; o índice único não admite duas) vira SUBSTITUÍDA por ela, sem apagar, e a pendência dela é resolvida. Grava aging_levado_na_fusao em evento_auditoria quando move algo. NÃO refaz a conciliação. Sócio ou Analista alocado, ou a conexão de serviço; security definer porque o authenticated só lê aging_importado.';
+
+--
 -- Name: fn_aging_linhas_do_balanco(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5452,6 +5524,8 @@ declare
   -- 0213
   v_perguntas        jsonb;
   v_n_perguntas      int := 0;
+  -- 0277
+  v_aging            jsonb;
 begin
   if p_de_id = p_para_id then
     raise exception 'fundir uma entidade nela mesma não faz sentido (%)', p_de_id;
@@ -5473,6 +5547,12 @@ begin
   update documento set entidade_id = p_para_id
    where caso_id = p_caso_id and entidade_id = p_de_id;
   get diagnostics v_docs = row_count;
+
+  -- 0277: a carteira de aging da absorvida. `aging_importado.entidade_id` era ON DELETE CASCADE: o `delete from entidade` abaixo apagava as importações
+  -- (o resumo que o analista subiu do arquivo) SEM evento, e a pendência da carteira, que a fusão repõe na sobrevivente, ficava aberta com data_base e sem
+  -- origem, sem como se resolver (reproduzido: depois da fusão aging=0, pend_abertas=1, eventos_aging=0). Tem de ser ANTES do reponte das pendências abaixo:
+  -- a função resolve a pendência da carteira que a fusão substitui.
+  v_aging := fn_aging_levar_na_fusao(p_caso_id, p_de_id, p_para_id, p_por);
 
   -- Tudo o que aponta para a entidade acompanha o documento. `checklist_item_status`
   -- e `pendencia` guardam entidade_id por conta própria, e deixá-los para trás
@@ -5582,7 +5662,9 @@ begin
                              'perimetro_descartado', v_perim_descartado,
                              'controladas_repontadas', v_controladas,
                              -- 0213
-                             'perguntas_repontadas', v_perguntas));
+                             'perguntas_repontadas', v_perguntas,
+                             -- 0277
+                             'aging', v_aging));
 
   return jsonb_build_object('fundida', v_de, 'em', v_para, 'documentos', v_docs,
                             'vinculos_movidos', v_vinculos_movidos,
@@ -5590,7 +5672,9 @@ begin
                             'perimetro_movido', v_perim_movidos,
                             'perimetro_descartado', jsonb_array_length(v_perim_descartado),
                             'controladas_repontadas', v_n_controladas,
-                            'perguntas_repontadas', v_n_perguntas);
+                            'perguntas_repontadas', v_n_perguntas,
+                            'aging_movido', (v_aging ->> 'movidos')::int,
+                            'aging_substituido', jsonb_array_length(v_aging -> 'substituidos'));
 end;
 $$;
 
@@ -5598,7 +5682,7 @@ $$;
 -- Name: FUNCTION fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) IS 'Funde duas entidades que são a mesma empresa, levando junto documentos, checklist, pendências e reconciliações (0153). Nada some sem rastro: evento_auditoria guarda o nome que existia e quantos documentos mudaram de dono. 0183: leva os vínculos de entidade_controlador quando a sobrevivente não tem nenhum (senão vão para o evento como vinculos_descartados); não herda forma_de_controle e resolve as pendências de forma e de papel da absorvida. 0211: leva os intervalos de perimetro da absorvida, exceto os que se sobrepõem a um intervalo do mesmo escopo da sobrevivente (ficam no evento em perimetro_descartado); repõe como controladora da sobrevivente quem era controlado pela absorvida; recusa em português se a sobrevivente era controlada pela absorvida; registra papel, controladora e percentual da absorvida. 0213: leva as perguntas JÁ ENVIADAS ou descartadas (caso_pergunta) para a sobrevivente, listadas no evento em perguntas_repontadas; a sugestão não se carrega (é calculada ao vivo).';
+COMMENT ON FUNCTION public.fn_fundir_entidade(p_caso_id uuid, p_de_id uuid, p_para_id uuid, p_por text) IS 'Funde duas entidades que são a mesma empresa, levando junto documentos, checklist, pendências e reconciliações (0153). Nada some sem rastro: evento_auditoria guarda o nome que existia e quantos documentos mudaram de dono. 0183: leva os vínculos de entidade_controlador quando a sobrevivente não tem nenhum (senão vão para o evento como vinculos_descartados); não herda forma_de_controle e resolve as pendências de forma e de papel da absorvida. 0211: leva os intervalos de perimetro da absorvida, exceto os que se sobrepõem a um intervalo do mesmo escopo da sobrevivente (ficam no evento em perimetro_descartado); repõe como controladora da sobrevivente quem era controlado pela absorvida; recusa em português se a sobrevivente era controlada pela absorvida; registra papel, controladora e percentual da absorvida. 0213: leva as perguntas JÁ ENVIADAS ou descartadas (caso_pergunta) para a sobrevivente, listadas no evento em perguntas_repontadas; a sugestão não se carrega (é calculada ao vivo). 0277: leva as importações de aging (fn_aging_levar_na_fusao): a vigente da absorvida que colide com a da sobrevivente (mesma tipo_base e data_base) vira substituída, sem apagar; o evento traz `aging` e o retorno aging_movido e aging_substituido.';
 
 --
 -- Name: fn_golden_abrir_rodada(text, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
@@ -11210,6 +11294,9 @@ declare
   v_tipo_doc  text;
   v_avisos    text[];            -- 0277: o que a busca das linhas desconfia e não resolveu (pai que não fecha, valor repetido, sinais opostos)
   v_n_pos     int; v_n_neg int;  -- 0277: quantas linhas que entraram na soma estão positivas e negativas (convenção de sinal, ver o cabeçalho)
+  v_pas_pos   int := 0; v_pas_neg int := 0;   -- 0277: as linhas de PASSIVO (circulante e não circulante) do documento lido, positivas e negativas: a prova da convenção de sinal
+  v_convencao boolean;           -- 0277: o sinal negativo desta conta é convenção de apresentação PROVADA no documento (então se compara em módulo)?
+  v_cmp       numeric;           -- 0277: o valor do balanço que se compara com o aging (módulo se a convenção está provada; senão, com o sinal)
 begin
   select * into a from aging_importado where id = p_aging_id;
   if not found then return jsonb_build_object('executado', false, 'motivo', 'importação de aging não encontrada'); end if;
@@ -11253,6 +11340,13 @@ begin
   if v_doc is not null then
     v_col_per := fn_coluna_periodo_do_ano(v_ver, v_ano);
     if v_col_per = E'\x01' then v_col_per := null; end if;
+    -- 0277 (convenção de sinal): o documento imprime o passivo com sinal negativo? Prova = a versão lida tem linhas de passivo (circulante ou não circulante) e NENHUMA positiva,
+    -- em qualquer coluna. Medido em produção (12/11/2026, leitura): das 917 versões de BALANCO/COMBINADO/BALANCETE, 3 têm só passivo negativo (5b930fad, b5ce0a25, 4a14371f: a
+    -- convenção), 89 misturam, 533 só positivo, 292 sem passivo classificado. Os outros 10 grupos de Clientes/Fornecedores/Adiantamentos negativos NÃO são convenção: a versão
+    -- 044202cf (COMBINADO) imprime a coluna "Crédito" (movimento, não saldo) negativa ao lado de colunas de passivo positivo, e 09e89930, 28923274 e 787ec844 (BALANCETE) misturam sinais.
+    select count(*) filter (where ce.valor_num > 0), count(*) filter (where ce.valor_num < 0) into v_pas_pos, v_pas_neg
+      from campo_extraido ce
+     where ce.documento_versao_id = v_ver and ce.valor_num is not null and ce.secao_canonica in ('passivo_circulante', 'passivo_nao_circulante');
   end if;
 
   -- 0277 (ALTO 1): o período que a reconciliação carrega é o do DOCUMENTO (como na 0274: é o que a tela mostra), e a IDENTIDADE da pendência e do estado
@@ -11311,16 +11405,26 @@ begin
            array_remove(array_agg(distinct l.aviso), null), count(*) filter (where l.valor_num > 0), count(*) filter (where l.valor_num < 0)
       into v_n_lin, v_balanco, v_soma_fatores, v_sem_escala, v_chaves, v_avisos, v_n_pos, v_n_neg
       from fn_aging_linhas_do_balanco(v_ver, v_cfg.conceito, v_col_ent, v_col_per) l;
-    -- 0277 (A3): CONVENÇÃO DE SINAL. O aging entra em módulo (v_aging = abs), e o balanço também: o sinal de Clientes/Fornecedores/Adiantamentos no balanço é
-    -- convenção de APRESENTAÇÃO (passivo e crédito impressos negativos: balancete com colunas Crédito/Saldo Atual, "FORNECEDORES" -8.111.470), não um saldo
-    -- oposto. Medido em produção (12/11/2026, leitura): dos 2.027 grupos (versão × coluna × conceito) com linha das quatro contas, 13 têm linha negativa e
-    -- NENHUM mistura sinais (10 de Fornecedores, 1 de Clientes, 1 de Adiantamentos de clientes, 1 de Adiantamentos a fornecedores): quando é negativo, é
-    -- negativo o grupo inteiro. Por isso compara-se o MÓDULO da soma com sinal. Se um grupo MISTURAR sinais (nunca visto), a soma com sinal é a que entra e
-    -- o texto diz, porque duas linhas de sinais opostos podem ser duas contas diferentes e a diferença não se explica sozinha.
+    -- 0277 (A3): CONVENÇÃO DE SINAL, SÓ QUANDO O DOCUMENTO A PROVA. O aging entra em módulo (v_aging = abs). O balanço só entra em módulo quando o sinal negativo é convenção de
+    -- APRESENTAÇÃO comprovada no próprio documento: a conta é de PASSIVO (Fornecedores, Adiantamentos de clientes), todas as linhas que entraram são negativas, e a versão lida
+    -- não tem nenhuma linha de passivo positiva (v_pas_pos = 0, v_pas_neg > 0: "FORNECEDORES" -8.111.470, "Fornecedores nacionais - em atraso" -4.719; medido em produção, 3 das 917
+    -- versões; ver acima). Fora disso o sinal é um FATO e o balanço se compara com o sinal: conta do ATIVO negativa é saldo credor (Clientes -100 mil contra uma carteira de R$ 100.000
+    -- dava `ok`, a diferença real é R$ 200.000), e passivo negativo num documento que também imprime passivo positivo é saldo credor ou coluna de movimento (Crédito), não convenção.
+    -- A diferença sai como divergência, com o aviso dizendo o porquê; nunca como "conferido" em silêncio. Sinais MISTURADOS entre as linhas que entraram (nunca visto em produção):
+    -- a soma com sinal é a comparada e o texto diz, porque duas linhas de sinais opostos podem ser duas contas diferentes.
+    v_convencao := v_n_lin > 0 and v_n_neg > 0 and v_n_pos = 0 and v_cfg.conceito in ('fornecedores', 'adiantamentos_de_clientes') and v_pas_pos = 0 and v_pas_neg > 0;
+    v_cmp := case when v_convencao then abs(v_balanco) else v_balanco end;
     if v_n_pos > 0 and v_n_neg > 0 then
-      v_avisos := coalesce(v_avisos, '{}'::text[]) || format('as linhas que entraram na soma têm sinais opostos (%s positivas, %s negativas): somaram com o sinal e o módulo do resultado foi o comparado; se são contas diferentes, a diferença pode não ser real.', v_n_pos, v_n_neg);
+      v_avisos := coalesce(v_avisos, '{}'::text[]) || format('as linhas que entraram na soma têm sinais opostos (%s positivas, %s negativas): somaram com o sinal e a soma com sinal foi a comparada; se são contas diferentes, a diferença pode não ser real.', v_n_pos, v_n_neg);
+    elsif v_balanco < 0 and not v_convencao then
+      v_avisos := coalesce(v_avisos, '{}'::text[]) || format('o balanço traz %s com saldo NEGATIVO (%s) e o documento não prova que imprime o passivo com sinal negativo (%s): comparado com o sinal, a diferença é a real; se é saldo credor ou coluna de movimento (Crédito), esta linha não é a carteira.',
+        v_cfg.rotulo, fn_aging_reais(v_balanco),
+        case when v_cfg.conceito not in ('fornecedores', 'adiantamentos_de_clientes') then 'a conta é do ativo: negativa é saldo credor'
+             when v_pas_pos > 0 then format('o documento tem %s linhas de passivo positivas', v_pas_pos)
+             else 'o documento não traz passivo classificado' end);
     end if;
-    v_fb := case when v_n_lin = 0 then null else jsonb_build_object('chaves', to_jsonb(v_chaves), 'valor', abs(v_balanco), 'valor_com_sinal', v_balanco, 'unidade', 'unidade', 'documento_versao_id', v_ver,
+    v_fb := case when v_n_lin = 0 then null else jsonb_build_object('chaves', to_jsonb(v_chaves), 'valor', v_cmp, 'valor_com_sinal', v_balanco, 'convencao_de_sinal_provada', v_convencao,
+                                                          'unidade', 'unidade', 'documento_versao_id', v_ver,
                                                           'documento_id', v_doc, 'coluna_entidade', v_col_ent, 'documento_de_outra_empresa', not v_proprio,
                                                           'avisos', to_jsonb(coalesce(v_avisos, '{}'::text[]))) end;
 
@@ -11347,13 +11451,13 @@ begin
       continue;
     end if;
 
-    v_div := abs(v_aging - abs(v_balanco));
+    v_div := abs(v_aging - v_cmp);
     -- A tolerância É o arredondamento do número impresso: meia unidade da escala de cada linha usada (R$ 500 em R$ mil), nunca um percentual.
     v_tol := v_soma_fatores / 2;
     v_pct := case when v_aging <> 0 then v_div / v_aging end;
     v_resultado := case when v_div <= v_tol then 'ok' else 'divergente' end;
     v_desc := v_cabeca || format(': %s de %s contra %s do balanço de %s%s (%s). ', v_cfg.rotulo_aging, fn_aging_reais(v_aging), v_cfg.rotulo,
-                                 fn_aging_reais(abs(v_balanco)), case when v_balanco < 0 then ', impresso com sinal negativo (convenção de apresentação: comparado em módulo)' else '' end,
+                                 fn_aging_reais(v_cmp), case when v_convencao then ', impresso com sinal negativo (convenção de apresentação, provada: o documento só imprime passivo negativo; comparado em módulo)' else '' end,
                                  array_to_string(v_chaves, '; '))
       || case when v_resultado = 'ok'
               then format('Conferido, diferença de %s (tolerância de %s: o arredondamento da escala do balanço).', fn_aging_reais(v_div), fn_aging_reais(v_tol))
@@ -19865,6 +19969,21 @@ CREATE VIEW public.instalacao_sonda_aging_checks AS
 COMMENT ON VIEW public.instalacao_sonda_aging_checks IS 'Sonda da 0274: uma linha = as quatro CHECKs (resumo que fecha; arquivo inteiro; leitura e aplicador objetos; substituição inteira) existem, validadas. Zero linhas: o service_role grava resumo incoerente ou arquivo sem hash.';
 
 --
+-- Name: instalacao_sonda_aging_fk_entidade; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_aging_fk_entidade AS
+ SELECT (conname)::text AS nome
+   FROM pg_constraint k
+  WHERE ((conrelid = ('public.aging_importado'::regclass)::oid) AND (contype = 'f'::"char") AND (conname = 'aging_importado_entidade_id_fkey'::name) AND (confdeltype = 'a'::"char") AND convalidated);
+
+--
+-- Name: VIEW instalacao_sonda_aging_fk_entidade; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_aging_fk_entidade IS 'Sonda da 0277: uma linha = a FK aging_importado.entidade_id é NO ACTION (apagar entidade com carteira reprova). Zero linhas: voltou o ON DELETE CASCADE da 0274 e a fusão de entidades apaga a carteira sem evento.';
+
+--
 -- Name: instalacao_sonda_aging_uma_vigente; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -21879,7 +21998,13 @@ ALTER TABLE ONLY public.aging_importado
 --
 
 ALTER TABLE ONLY public.aging_importado
-    ADD CONSTRAINT aging_importado_entidade_id_fkey FOREIGN KEY (entidade_id) REFERENCES public.entidade(id) ON DELETE CASCADE;
+    ADD CONSTRAINT aging_importado_entidade_id_fkey FOREIGN KEY (entidade_id) REFERENCES public.entidade(id);
+
+--
+-- Name: CONSTRAINT aging_importado_entidade_id_fkey ON aging_importado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT aging_importado_entidade_id_fkey ON public.aging_importado IS '0277: NO ACTION (era CASCADE na 0274): apagar uma entidade que ainda tem carteira de aging reprova (23503) em vez de apagar o resumo sem trilha. fn_fundir_entidade leva as importações para a sobrevivente antes de apagar a absorvida.';
 
 --
 -- Name: aging_importado aging_importado_mapeamento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -23847,6 +23972,15 @@ REVOKE ALL ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_
 GRANT ALL ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) TO service_role;
 GRANT ALL ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_aging_levar_na_fusao(p_caso uuid, p_de uuid, p_para uuid, p_por text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_aging_levar_na_fusao(p_caso uuid, p_de uuid, p_para uuid, p_por text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_aging_levar_na_fusao(p_caso uuid, p_de uuid, p_para uuid, p_por text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_aging_levar_na_fusao(p_caso uuid, p_de uuid, p_para uuid, p_por text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aging_levar_na_fusao(p_caso uuid, p_de uuid, p_para uuid, p_por text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text); Type: ACL; Schema: public; Owner: -
@@ -26719,6 +26853,14 @@ GRANT SELECT ON TABLE public.instalacao_sonda_aging_aplicador_check TO supabase_
 
 GRANT SELECT ON TABLE public.instalacao_sonda_aging_checks TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_aging_checks TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_aging_fk_entidade; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_fk_entidade TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_fk_entidade TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_fk_entidade TO supabase_read_only_user;
 
 --
 -- Name: TABLE instalacao_sonda_aging_uma_vigente; Type: ACL; Schema: public; Owner: -
