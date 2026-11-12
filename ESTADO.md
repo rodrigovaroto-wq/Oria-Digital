@@ -5,7 +5,8 @@
 > **Migration mais nova no repositório: `0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql` (ESCRITA, NÃO APLICADA).** `fn_linhas_por_versao(uuid[])` e `fn_algum_documento_serve_como(uuid[], text)`, ambas `security invoker`. A 0275 ficou de fora DE PROPÓSITO: está reservada para a correção do aging (S127b, abaixo).
 
 - **Defeito medido:** a visão geral do mandato (`portal/src/app/casos/[id]/page.tsx`) levava 13,4 s num mandato de 115 documentos e 10.231 linhas. Duas causas somavam 10,2 s: a contagem de linhas paginava `campo_extraido` em 12 idas sequenciais (5,8 s), e o Kit Básico fazia 230 RPCs de `fn_documento_serve_como` (4,4 s).
-- **Falta:** aplicar a 0276 em produção (o dono), depois trocar `lib/supabase/linhas-por-versao.ts` e `lib/kit-basico.ts` para chamar as funções em lote, mantendo o caminho atual quando a função não existir.
+- **Falta:** aplicar a 0276 em produção (o dono), depois trocar `lib/supabase/linhas-por-versao.ts` e `lib/kit-basico.ts` para chamar as funções em lote, mantendo o caminho atual quando a função não existir. **São TRÊS chamadores do Kit, não dois:** `casos/[id]/page.tsx`, `documentos/(lista)/page.tsx` e `casos/[id]/export/route.ts:603-607`.
+- **ALTO pré-existente (revisão independente da 0276, não introduzido por ela):** o export monta o próprio serviço do Kit com `return !r.error && r.data === true;`, então QUALQUER erro (um timeout numa das RPCs) vira "item não atendido" e o item sai como faltante no book entregue ao cliente (regra 1). Os outros dois chamadores lançam quando há erro. Ao trocar para o lote, o export tem de ir junto, sem herdar o `!r.error &&`.
 - **Redesenho do portal:** linha de base (capturas e métricas) e três direções de arte fora do repositório; o dono escolhe a direção.
 
 ## SESSÃO 127b (11–12/11/2026, conta Claude Oria) — PLANO DO MVP: MB0, MB1, MB2; 0272 (mapeamento de colunas)
