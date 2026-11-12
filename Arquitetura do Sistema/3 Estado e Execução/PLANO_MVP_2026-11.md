@@ -356,3 +356,26 @@ Cada item segue no `PLANO_DE_EXECUCAO_2026-11.md` e volta depois do portão do M
   contra Clientes ou contra Clientes menos Adiantamentos?
 - **Não feito:** a tela de confirmação (ME2); arquivo
   real (DM7).
+
+### 12/11/2026 — decisões do dono e o que se seguiu
+
+- **0272 aplicada em produção** (renumerada de 0242: a 0242 de produção é a conta canônica, de outra
+  branch). Sonda de 386 para 396 itens, 0 ausentes, 81 mandatos intactos.
+- **Saldo negativo** (adiantamento, crédito): SEPARADO. Positivos conciliam com Clientes
+  (Fornecedores); negativos com Adiantamentos de clientes (a fornecedores).
+- **Contraparte com nome de total**: o analista confirma, POR MANDATO, que "TOTAL DISTRIBUIDORA
+  LTDA" é cliente de verdade (`contrapartesReais` no aplicador; a 0273 guarda a confirmação com
+  autor, em commit próprio). A tela que oferece as candidatas é a ME2.
+
+### MB3a — feita em 12/11/2026: o aging (biblioteca)
+
+- **`Leitor/lib/aging.mjs`**: 7 faixas (vencer na data-base é a vencer), vencido e %, concentração
+  nos 10 maiores, maiores contrapartes + "demais" com a contagem, contraparte pelo CNPJ/CPF,
+  negativos separados, liquidados e emitidos depois da data-base contados à parte. A data-base é
+  proposta pela frase do relatório e confirmada; sem ela, recusa.
+- **Medido:** MB1 → MB2 → aging nos sintéticos = gabarito nas 7 faixas, centavo a centavo.
+- **Prova:** `Leitor/test/aging.test.mjs`, 12 testes; 13 correções desligadas reprovam 1 a 3 cada.
+- **Próxima: MB3b**, a migration que guarda o resumo do aging por mandato, entidade e data-base e o
+  concilia com o balanço extraído (positivos × Clientes, negativos × Adiantamentos), abrindo
+  pendência com a diferença pela camada de reconciliação que já existe.
+
