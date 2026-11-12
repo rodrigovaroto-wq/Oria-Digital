@@ -1229,6 +1229,12 @@ supabase db execute --file Supabase/migrations/0274_o_aging_que_so_existia_no_na
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0274' and not presente;   -- ZERO linhas
 #   select count(*) from aging_importado;   -- 0 (nasce vazia)
+# A 0277 corrige os 3 ALTOS da conciliação do aging da 0274 e 3 médios: (1) a pendência da carteira é do PERÍODO DA CARTEIRA (`periodo` 'data-base' AAAA-MM-DD, criado por mandato quando não existe), então o ok de 2025 não apaga a divergência de 2024 num balanço comparativo; (2) `fn_aging_linhas_do_balanco` (recriada: ganha a coluna `aviso`) acha o pai de Fornecedores/Clientes pela estrutura (valor = soma das linhas com o nome dentro do dele) e não soma pai e filhas; (3) o balanço de OUTRA empresa do grupo vale quando a coluna dele é a da entidade (o próprio vem primeiro); médios: o lado do balanço (`secao_canonica`) e a seção ESTOQUE ficam fora de Clientes/Fornecedores; `fn_aging_aplicador_erros` + CHECK `aging_resumo_e_aplicador` amarram o resumo ao aplicador (`fn_aging_importar` reemitida; `fn_reconciliar_aging` reemitida). 7 requisitos na sonda (ordem 1354-1360).
+# >>> Rodar COMO `postgres`; sem backfill (aging_importado tinha 0 linhas em produção em 12/11/2026, e a CHECK valida sem backfill). Aplicar DEPOIS da 0274. A CHECK nova recusa linha com aplicador sem os campos titulo/saldo_titulos/titulos_com_saldo_negativo: o navegador (Leitor/lib/mapeamento.mjs) já os envia.
+# >>> Teste: Supabase/test/o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.test.sql.
+supabase db execute --file Supabase/migrations/0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0277' and not presente;   -- ZERO linhas
 # A 0242 cria o catálogo conta_canonica (a árvore demonstração > grupo > seção > subgrupo, 27 nós: 5 raízes, 2 grupos, 15 seções do SECAO_CANONICA_ENUM, 4 subgrupos do Ativo Não Circulante e o balde Outros), com RLS de leitura por papel, a guarda de raiz (gatilho de instrução), 3 views de sonda e 9 requisitos na sonda. Só a taxonomia atual: conta-folha (caixa, clientes…) é a P27.
 # >>> Rodar COMO `postgres`; reaplicável (create if not exists, seed on conflict do nothing, requisitos por upsert). Nenhuma linha existente é tocada.
 # >>> Teste: Supabase/test/conta_canonica.test.sql e Supabase/test/conta_canonica_regua.test.mjs.

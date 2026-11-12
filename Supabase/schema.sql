@@ -461,6 +461,70 @@ end $$;
 COMMENT ON FUNCTION public.fn_acesso_bootstrap() IS '0216: promove a Sócio todo usuário de auth.users, mas SÓ se `membro` estiver vazia (banco recém-migrado). Idempotente: com qualquer membro cadastrado devolve 0. Não é exposta ao authenticated.';
 
 --
+-- Name: fn_aging_aplicador_erros(jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_aging_aplicador_erros(p_resumo jsonb, p_aplicador jsonb) RETURNS text[]
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  e       text[] := '{}';
+  v_tit   numeric;
+  v_ap_t  numeric; v_ap_s numeric; v_ap_nl numeric; v_ap_ns numeric;
+  v_r_pos_t numeric; v_r_neg_t numeric; v_r_liq numeric;
+  v_pos_s numeric; v_neg_saldo numeric;
+begin
+  -- Objeto que não é objeto, ou resumo que não fecha consigo mesmo, é de fn_aging_resumo_erros e do teste de objetos: aqui só o que AMARRA os dois.
+  if jsonb_typeof(p_resumo) is distinct from 'object' or jsonb_typeof(p_aplicador) is distinct from 'object' then
+    return e;
+  end if;
+  v_tit      := fn_aging_contagem(p_resumo -> 'titulos');
+  v_r_pos_t  := fn_aging_contagem(p_resumo #> '{positivos,titulos}');
+  v_r_neg_t  := fn_aging_contagem(p_resumo #> '{negativos,titulos}');
+  v_r_liq    := fn_aging_contagem(p_resumo -> 'liquidados');
+  v_pos_s    := fn_aging_centavos(p_resumo #> '{positivos,saldo}');
+  v_neg_saldo := fn_aging_centavos(p_resumo #> '{negativos,saldo}');
+  -- A identidade da própria biblioteca (Leitor/lib/aging.mjs, titulo(): todo título conta em `titulos`; saldo zero é liquidado; o resto é positivo ou negativo).
+  if v_tit is not null and v_r_pos_t is not null and v_r_neg_t is not null and v_r_liq is not null and v_tit <> v_r_pos_t + v_r_neg_t + v_r_liq then
+    e := e || format('resumo.titulos (%s) diferente de positivos (%s) + negativos (%s) + liquidados (%s): título que sumiu do resumo', v_tit, v_r_pos_t, v_r_neg_t, v_r_liq);
+  end if;
+  -- O que o APLICADOR (Leitor/lib/mapeamento.mjs) entregou à biblioteca tem de ser o que o resumo contou. Sem o campo, a ausência é dita: o banco não
+  -- aceita um resumo que ninguém pode amarrar ao arquivo.
+  v_ap_t := fn_aging_contagem(p_aplicador -> 'titulo');
+  if v_ap_t is null then
+    e := e || 'o aplicador não diz quantos títulos aplicou (titulo: contagem inteira): o resumo não se amarra ao arquivo'::text;
+  elsif v_tit is not null and v_ap_t <> v_tit then
+    e := e || format('o resumo conta %s títulos e o aplicador aplicou %s: o resumo não é o deste arquivo', v_tit, v_ap_t);
+  end if;
+  v_ap_s := fn_aging_centavos(p_aplicador -> 'saldo_titulos');
+  if v_ap_s is null then
+    e := e || 'o aplicador não diz a soma dos saldos (saldo_titulos: centavos, em texto): o resumo não se amarra ao arquivo'::text;
+  elsif v_pos_s is not null and v_neg_saldo is not null and v_ap_s <> v_pos_s + v_neg_saldo then
+    e := e || format('a soma dos saldos do aplicador (%s) é diferente de positivos (%s) + negativos (%s) do resumo', v_ap_s, v_pos_s, v_neg_saldo);
+  end if;
+  v_ap_nl := fn_aging_contagem(p_aplicador #> '{titulos_com_saldo_negativo,linhas}');
+  v_ap_ns := fn_aging_centavos(p_aplicador #> '{titulos_com_saldo_negativo,saldo}');
+  if v_ap_nl is null or v_ap_ns is null then
+    e := e || 'o aplicador não diz os títulos de saldo negativo (titulos_com_saldo_negativo: linhas e saldo): os créditos do resumo não se amarram ao arquivo'::text;
+  else
+    if v_r_neg_t is not null and v_ap_nl <> v_r_neg_t then
+      e := e || format('o resumo tem %s títulos negativos e o aplicador %s', v_r_neg_t, v_ap_nl);
+    end if;
+    if v_neg_saldo is not null and v_ap_ns <> v_neg_saldo then
+      e := e || format('o saldo negativo do resumo (%s) é diferente do do aplicador (%s)', v_neg_saldo, v_ap_ns);
+    end if;
+  end if;
+  return e;
+end $$;
+
+--
+-- Name: FUNCTION fn_aging_aplicador_erros(p_resumo jsonb, p_aplicador jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_aging_aplicador_erros(p_resumo jsonb, p_aplicador jsonb) IS '0277: amarra o resumo do aging ao resumo do aplicador do mapeamento (Leitor/lib/mapeamento.mjs): titulo = resumo.titulos; saldo_titulos = positivos.saldo + negativos.saldo; titulos_com_saldo_negativo = negativos (linhas e saldo); e a identidade do próprio resumo titulos = positivos + negativos + liquidados. Campo ausente no aplicador é erro dito (nunca passa por zero). Devolve os motivos (vazio = coerente). Usado por fn_aging_importar e pela CHECK aging_resumo_e_aplicador; LIMITE: o banco compara o que o navegador diz, não relê o arquivo.';
+
+--
 -- Name: fn_aging_centavos(jsonb); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -526,6 +590,8 @@ begin
   end if;
 
   v_erros := fn_aging_resumo_erros(p_resumo, p_data_base);
+  -- 0277: o resumo tem de ser o do arquivo que o aplicador leu (mesmos títulos, mesmos saldos); a 0274 validava cada um por si e nada os amarrava.
+  v_erros := v_erros || fn_aging_aplicador_erros(p_resumo, p_aplicador);
   if jsonb_typeof(p_leitura) is distinct from 'object' or jsonb_typeof(p_aplicador) is distinct from 'object' then
     v_erros := v_erros || 'o resumo da leitura e o do aplicador têm de ser objetos'::text;
   end if;
@@ -575,21 +641,25 @@ end $_$;
 -- Name: FUNCTION fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) IS '0274: guarda o resumo do aging de uma importação, por mandato e entidade, e o concilia com o balanço extraído. Só quem escreve o mandato (fn_pode_escrever_caso: Sócio, Analista alocado); os demais, o anônimo e a conexão de serviço recebem 42501. Recusa (22023, com todos os motivos) resumo que não fecha consigo mesmo, entidade de outro mandato, leitura parcial, sha256 divergente, arquivo inválido e mapeamento inexistente ou de outro tipo_base. Reimportar a mesma (entidade, tipo_base, data_base) substitui a vigente SEM apagar. Grava aging_importado em evento_auditoria (caso:<id>). Devolve {id, substitui, conciliacao}.';
+COMMENT ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) IS '0274 (reemitida pela 0277): guarda o resumo do aging de uma importação, por mandato e entidade, e o concilia com o balanço extraído. Só quem escreve o mandato (fn_pode_escrever_caso: Sócio, Analista alocado); os demais, o anônimo e a conexão de serviço recebem 42501. Recusa (22023, com todos os motivos) resumo que não fecha consigo mesmo, resumo que não se amarra ao aplicador (0277: títulos e saldos), entidade de outro mandato, leitura parcial, sha256 divergente, arquivo inválido e mapeamento inexistente ou de outro tipo_base. Reimportar a mesma (entidade, tipo_base, data_base) substitui a vigente SEM apagar. Grava aging_importado em evento_auditoria (caso:<id>). Devolve {id, substitui, conciliacao}.';
 
 --
 -- Name: fn_aging_linhas_do_balanco(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) RETURNS TABLE(id uuid, chave text, valor_num numeric, unidade text, secao text)
+CREATE FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) RETURNS TABLE(id uuid, chave text, valor_num numeric, unidade text, secao text, aviso text)
     LANGUAGE plpgsql STABLE
     SET search_path TO 'public', 'pg_temp'
-    AS $$
+    AS $_$
 #variable_conflict use_column
 declare
   v_inc text;
   v_exc text;
+  v_sc  text;
   c_ded constant text := 'perda|pecld|pdd|duvidos|provis|descontad|antecipa|ajuste a valor presente';
+  -- 0277: o nome do PAI "de manual": só o conceito (com código de plano de contas na frente, "1.7 - Fornecedores"). Só ele pode ser subtotal de linhas
+  -- que NÃO repetem o nome dele (Clientes, seguido de "Duplicatas a receber"), porque a janela por ordem não tem outra prova de parentesco.
+  c_nome_pai constant text := '^([0-9][0-9. -]*)?(clientes|fornecedores|duplicatas a receber)$';
 begin
   v_inc := case p_conceito
              when 'clientes'                     then 'cliente|duplicatas? a receber'
@@ -599,6 +669,10 @@ begin
   if v_inc is null then
     raise exception 'conceito "%" não existe (clientes, fornecedores, adiantamentos_de_clientes, adiantamentos_a_fornecedores)', p_conceito using errcode = '22023';
   end if;
+  -- 0277: o lado do balanço em que o conceito mora. `secao_canonica` NULA não exclui nada (a IA não classificou: a linha fica, e só a seção em texto
+  -- e o nome a filtram); preenchida e de outro lado, a linha não é do conceito (medido em produção, 12/11/2026: Fornecedores com secao_canonica
+  -- ativo_circulante = 28 linhas, todas "MERCADORIA EM GARANTIA/CONSERTO A RECEBER(FORNECEDOR)" na seção ESTOQUE; Clientes idem, 40 linhas).
+  v_sc := case p_conceito when 'clientes' then 'ativo_circulante' when 'adiantamentos_a_fornecedores' then 'ativo_circulante' else 'passivo_circulante' end;
   -- Fora, sempre: variações de fluxo, deduções (PDD, duplicatas descontadas, ajuste a valor presente), longo prazo e partes relacionadas.
   -- Clientes/Fornecedores também deixam de fora o que é Adiantamento (conta própria).
   v_exc := case when p_conceito in ('clientes', 'fornecedores') then 'adiant|' else '' end
@@ -612,23 +686,71 @@ begin
        and p_col_ent is distinct from E'\x01' and p_col_per is distinct from E'\x01'
        and (p_col_ent is null or fn_normalizar_texto(ce.entidade_coluna) = fn_normalizar_texto(p_col_ent))
        and (p_col_per is null or fn_normalizar_texto(ce.periodo_coluna) = fn_normalizar_texto(p_col_per))
+       and (ce.secao_canonica is null or ce.secao_canonica = v_sc)
+       and coalesce(fn_normalizar_texto(ce.secao), '') !~ 'estoque'
   ), cand as (
     select distinct on (b.n) b.* from base b where b.n ~ v_inc and b.n !~ v_exc
      order by b.n, coalesce(b.confianca, 0) desc, b.ordem nulls last, b.id
   ), liquido as (   -- pai cuja dedução (PDD, descontadas) é filha: o valor dele é LÍQUIDO, não o bruto que a conciliação quer
     select c.n from cand c where exists (select 1 from base d where d.s = c.n and d.n ~ c_ded)
+  ), c2 as materialized (   -- o que sobra das duas regras antigas (0274): pai líquido cede aos filhos; filha com `secao` = nome do pai some
+    select c.*, fn_fator_escala(c.unidade) as fator, c.valor_num * fn_fator_escala(c.unidade) as vb,
+           array(select left(w, 7) from unnest(regexp_split_to_array(c.n, '[^a-z0-9]+')) w where w <> '') as tok   -- palavras, pelos 7 primeiros caracteres (fornecedor = fornecedores)
+      from cand c
+     where not exists (select 1 from cand p where p.n = c.s and p.n <> c.n and p.n not in (select n from liquido))
+       and not (c.n in (select n from liquido) and exists (select 1 from cand f where f.s = c.n and f.n <> c.n))
+  ), fam as materialized (   -- (i) PELO NOME: f é "filha" de p quando o nome de f contém todas as palavras do nome de p e mais alguma
+    select p.id as pai, f.id as filha, f.vb, f.fator
+      from c2 p join c2 f on f.id <> p.id and f.tok @> p.tok and not p.tok @> f.tok
+  ), fam_soma as (
+    select m.pai, count(*) as nf, sum(m.vb) as sv, sum(m.fator) as sf, bool_and(m.fator is not null) as completo
+      from fam m group by m.pai
+  ), fam_estado as (
+    select s.pai, s.nf, s.sv, p.vb as vp,
+           case when not (s.completo and p.fator is not null) then 'sem_escala'
+                when abs(p.vb - s.sv) <= (p.fator + s.sf) / 2 then 'fecha'
+                when (p.vb > 0 and s.sv >= 0 and p.vb > s.sv) or (p.vb < 0 and s.sv <= 0 and p.vb < s.sv) then 'cobre_parte'
+                else 'excede' end as estado
+      from fam_soma s join c2 p on p.id = s.pai
+  ), seq as materialized (   -- (ii) PELA ORDEM: só o pai de nome de manual (Clientes, Fornecedores), e só onde a extração trouxe `ordem`
+    select c.id, c.n, c.vb, c.fator, row_number() over (order by c.ordem, c.id) as rn from c2 c where c.ordem is not null
+  ), jan as materialized (
+    select p.id as pai, f.id as filha, f.rn - p.rn as k, p.vb as vp, p.fator as fp,
+           sum(f.vb) over w as sv, sum(f.fator) over w as sf, bool_and(f.fator is not null) over w as completo
+      from seq p join seq f on f.rn > p.rn and f.rn <= p.rn + 6
+     where p.n ~ c_nome_pai and p.fator is not null
+    window w as (partition by p.id order by f.rn)
+  ), jan_fecha as (
+    select j.pai, min(j.k) as k from jan j where j.completo and abs(j.vp - j.sv) <= (j.fp + j.sf) / 2 group by j.pai
+  ), absorvida as (   -- as linhas que o pai que FECHA (ou cobre) já contém: não somam de novo
+    select m.filha as id from fam m where m.pai in (select e.pai from fam_estado e where e.estado in ('fecha', 'cobre_parte'))
+    union
+    select j.filha from jan j join jan_fecha jf on jf.pai = j.pai and j.k <= jf.k
+    union   -- (iii) a MESMA conta com dois nomes de manual: "Clientes" e "Duplicatas a receber" com o valor idêntico (ao centavo) na mesma escala valem uma vez só
+    select f.id from c2 p join c2 f on f.id <> p.id and p.n ~ '^([0-9][0-9. -]*)?(clientes|fornecedores)$' and f.n ~ '^([0-9][0-9. -]*)?duplicatas a receber$'
+                                  and p.valor_num <> 0 and f.valor_num = p.valor_num and f.unidade is not distinct from p.unidade
   )
-  select c.id, c.chave, c.valor_num, c.unidade, c.secao from cand c
-   where not exists (select 1 from cand p where p.n = c.s and p.n <> c.n and p.n not in (select n from liquido))
-     and not (c.n in (select n from liquido) and exists (select 1 from cand f where f.s = c.n and f.n <> c.n))
+  select c.id, c.chave, c.valor_num, c.unidade, c.secao,
+         nullif(concat_ws(' ',
+           case e.estado
+             when 'cobre_parte' then format('"%s" entrou sozinho: %s com o nome dentro do dele soma(m) %s e cobre(m) só parte dos %s dele; se o resto é de linhas que a extração não trouxe, o pai vale e o valor está certo, e se o pai é uma conta própria, o valor está subestimado.',
+                                            c.chave, case when e.nf = 1 then 'a única linha' else 'as ' || e.nf || ' linhas' end, fn_aging_reais(e.sv), fn_aging_reais(e.vp))
+             when 'excede' then format('"%s" parece o total d%s com o nome dentro do dele, mas %s mais que ele (%s contra %s): entraram todas na soma, e se o balanço as conta dentro dele o valor está em dobro.',
+                                       c.chave, case when e.nf = 1 then 'a única linha' else 'as ' || e.nf || ' linhas' end, case when e.nf = 1 then 'ela vale' else 'elas somam' end, fn_aging_reais(e.sv), fn_aging_reais(e.vp))
+           end,
+           (select format('"%s" e "%s" têm o mesmo valor (%s, na mesma escala): se são a mesma conta com dois nomes, a soma está em dobro.', c.chave, b.chave, c.valor_num)
+              from c2 b where b.id <> c.id and b.id not in (select x.id from absorvida x) and c.valor_num <> 0 and b.valor_num = c.valor_num
+                          and b.unidade is not distinct from c.unidade and c.id < b.id order by b.id limit 1)), '') as aviso
+    from c2 c left join fam_estado e on e.pai = c.id
+   where c.id not in (select x.id from absorvida x)
    order by c.ordem nulls last, c.id;
-end $$;
+end $_$;
 
 --
 -- Name: FUNCTION fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) IS '0274: as linhas do balanço (uma versão de documento) de um conceito, pelo rótulo normalizado e pelas colunas de entidade e período, como fn_valor_conceito_col, mas devolvendo TODAS as linhas do conceito (mercado interno + externo somam). Pai e filhos: o pai vale sozinho (os filhos não somam de novo), salvo pai com dedução (PDD, descontadas) como filho, que é líquido e cede aos filhos do conceito. Deduções, variações de fluxo, longo prazo e partes relacionadas ficam de fora; Clientes/Fornecedores também deixam de fora Adiantamentos.';
+COMMENT ON FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) IS '0277 (sobre a 0274): as linhas do balanço (uma versão de documento) de um conceito, pelo rótulo normalizado, pelas colunas de entidade e período e pelo LADO do balanço (secao_canonica do conceito, ou nula; seção em texto com "estoque" fora). Pai e filhas pela ESTRUTURA: o pai cujo valor é a soma das linhas com o nome dentro do dele (meia unidade da escala por linha), ou que as cobre, vale sozinho; o de nome de manual (Clientes, Fornecedores) também pela janela de ordem (até 6 linhas seguintes); as filhas com secao = nome do pai e o pai líquido (dedução filha) seguem a regra da 0274. Pai que as filhas EXCEDEM não é subtotal: todas entram e a coluna aviso diz isso; dois nomes com o mesmo valor também avisam. Devolve (id, chave, valor_num, unidade, secao, aviso). Deduções, variações de fluxo, longo prazo e partes relacionadas ficam de fora; Clientes/Fornecedores também deixam de fora Adiantamentos.';
 
 --
 -- Name: fn_aging_reais(numeric); Type: FUNCTION; Schema: public; Owner: -
@@ -11078,6 +11200,10 @@ declare
   v_resultado text; v_desc text; v_fa jsonb; v_fb jsonb; v_pct numeric;
   v_rej_l     numeric; v_rej_s numeric; v_ressalva text;
   v_tb        text; v_cabeca text;
+  v_proprio   boolean := true;   -- 0277: o balanço escolhido é o da PRÓPRIA entidade?
+  v_dono      text;              -- 0277: de quem é o documento, quando não é o da entidade
+  v_tipo_doc  text;
+  v_avisos    text[];            -- 0277: o que a busca das linhas desconfia e não resolveu (pai que não fecha, valor repetido)
 begin
   select * into a from aging_importado where id = p_aging_id;
   if not found then return jsonb_build_object('executado', false, 'motivo', 'importação de aging não encontrada'); end if;
@@ -11088,14 +11214,24 @@ begin
   v_tb  := case a.tipo_base when 'contas_a_receber' then 'contas a receber' else 'contas a pagar' end;
   v_cabeca := format('Carteira de %s em %s (arquivo "%s")', v_tb, to_char(a.data_base, 'DD/MM/YYYY'), a.arquivo_nome);
 
-  -- O balanço da entidade que fecha NA data-base.
-  for r in select d.id, d.tipo_taxonomia, d.periodo_id from documento d
-            where d.caso_id = a.caso_id and d.entidade_id = a.entidade_id and d.tipo_taxonomia in ('BALANCO', 'COMBINADO', 'BALANCETE')
-            order by array_position(array['BALANCO', 'COMBINADO', 'BALANCETE'], d.tipo_taxonomia), d.criado_em desc, d.id loop
+  -- O balanço que fecha NA data-base e que TEM a entidade do aging. 0277 (ALTO 3): a ordem é (1) o documento da PRÓPRIA entidade, (2) o de outra
+  -- empresa do grupo cuja COLUNA fn_coluna_entidade resolve para esta entidade (o balanço combinado do grupo, que é a única fonte de uma controlada
+  -- sem balanço próprio); dentro de cada grupo, BALANCO antes de COMBINADO antes de BALANCETE e o mais novo entre iguais. O próprio vem primeiro
+  -- porque é a demonstração da empresa; a coluna de um combinado é uma leitura derivada (pode já trazer ajustes de consolidação). O documento de
+  -- outra empresa só entra quando a coluna é achada de verdade (fn_coluna_entidade nulo = documento sem colunas de entidade, e E'\x01' = tem
+  -- colunas e nenhuma é desta entidade): nunca por palpite, e a descrição diz de quem é o documento.
+  for r in select d.id, d.tipo_taxonomia, coalesce(d.entidade_id = a.entidade_id, false) as proprio, e.razao_social as dono_nome
+             from documento d
+             left join entidade e on e.id = d.entidade_id
+            cross join lateral (select fn_coluna_entidade(fn_versao_atual(d.id), a.entidade_id) as col) x
+            where d.caso_id = a.caso_id and d.tipo_taxonomia in ('BALANCO', 'COMBINADO', 'BALANCETE')
+              and (d.entidade_id = a.entidade_id or (x.col is not null and x.col <> E'\x01'))
+            order by coalesce(d.entidade_id = a.entidade_id, false) desc,
+                     array_position(array['BALANCO', 'COMBINADO', 'BALANCETE'], d.tipo_taxonomia), d.criado_em desc, d.id loop
     v_n_docs := v_n_docs + 1;
     select * into f from fn_balanco_fecha_em(r.id, v_ano);
     if f.fecha_em is distinct from a.data_base then
-      v_notas := v_notas || format('%s %s', r.tipo_taxonomia,
+      v_notas := v_notas || format('%s%s %s', r.tipo_taxonomia, case when r.proprio then '' else ' de ' || coalesce(r.dono_nome, 'outra empresa') end,
         coalesce('fecha em ' || to_char(f.fecha_em, 'DD/MM/YYYY') || ', não em ' || to_char(a.data_base, 'DD/MM/YYYY'), f.observacao));
       continue;
     end if;
@@ -11105,7 +11241,7 @@ begin
       v_sem_ent := true; v_notas := v_notas || format('%s fecha em %s mas não tem coluna desta entidade', r.tipo_taxonomia, to_char(a.data_base, 'DD/MM/YYYY'));
       continue;
     end if;
-    v_doc := r.id; v_periodo := r.periodo_id;
+    v_doc := r.id; v_proprio := r.proprio; v_dono := r.dono_nome; v_tipo_doc := r.tipo_taxonomia;
     exit;
   end loop;
   if v_doc is not null then
@@ -11113,8 +11249,23 @@ begin
     if v_col_per = E'\x01' then v_col_per := null; end if;
   end if;
 
-  -- A chave do período para a guarda de fn_registrar_reconciliacao (a do balanço escolhido; sem balanço, nenhuma).
-  perform set_config('oria.periodo_chave', coalesce(v_periodo::text, ''), true);
+  -- 0277 (ALTO 1): o PERÍODO DA CARTEIRA é a data-base dela, não o do documento. fn_registrar_reconciliacao acha a pendência por período COMPATÍVEL
+  -- (fn_periodos_compativeis: os anos se intersectam), e o período do balanço comparativo ("multi 24,25") contém os dois anos: carteiras de
+  -- 31/12/2024 e 31/12/2025 caíam na MESMA pendência e o ok do ano novo (visitado por último) apagava a divergência do velho. Com o período
+  -- ('data-base', 'AAAA-MM-DD') da carteira, anos diferentes não se intersectam e cada um tem a sua pendência e a sua descrição. Este período é
+  -- FABRICADO por esta função (nenhum documento o trouxe): tipo 'data-base' e a data ISO, a mesma notação que o mapa de dívida já usa. EFEITO: o
+  -- mandato ganha uma linha em `periodo` por data-base conciliada, e ela entra nos laços de períodos compatíveis das checagens clássicas
+  -- (fn_periodos_compativeis_array), que só tentam o seguinte quando o anterior deu pré-condição. Mesmo ano com datas-base diferentes (30/06 e 31/12
+  -- de 2025) continua compartilhando a pendência: ver o teto (1) no cabeçalho.
+  insert into periodo (caso_id, tipo, referencia) values (a.caso_id, 'data-base', a.data_base::text)
+    on conflict (caso_id, tipo, referencia) do nothing;
+  select p.id into v_periodo from periodo p where p.caso_id = a.caso_id and p.tipo = 'data-base' and p.referencia = a.data_base::text;
+  if v_doc is not null and not v_proprio then
+    v_cabeca := v_cabeca || format(' [balanço lido: %s de %s, na coluna "%s", outra empresa do grupo]', v_tipo_doc, coalesce(v_dono, 'empresa sem nome'), coalesce(v_col_ent, 'sem coluna de entidade'));
+  end if;
+
+  -- A chave do período para a guarda de fn_registrar_reconciliacao: a da carteira (sem documento no período, a guarda por chave viva da 0192 não a prende: só a da mesma transação).
+  perform set_config('oria.periodo_chave', v_periodo::text, true);
 
   -- O que a leitura deixou fora do aging (para a descrição de uma divergência).
   select coalesce(sum(fn_aging_contagem(m.value -> 'linhas')), 0), coalesce(sum(fn_aging_centavos(m.value -> 'saldo')), 0) into v_rej_l, v_rej_s
@@ -11137,7 +11288,7 @@ begin
       if v_n_docs = 0 then
         v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, null, v_cfg.tipo, 'A', null, v_fa, null,
           'documento_ausente', null, null, jsonb_build_object('criterio', 'meia_unidade_da_escala'),
-          v_cabeca || format(': sem par para reconciliar, o balanço desta entidade não foi entregue (%s de %s, sem conta do balanço para conferir).', v_cfg.rotulo_aging, fn_aging_reais(v_aging))));
+          v_cabeca || format(': sem par para reconciliar, o balanço desta entidade não foi entregue, nem como coluna de um balanço de outra empresa do grupo (%s de %s, sem conta do balanço para conferir).', v_cfg.rotulo_aging, fn_aging_reais(v_aging))));
       else
         v_resultado := case when v_sem_ent and not exists (select 1 from unnest(v_notas) n where n not like '%não tem coluna desta entidade') then 'precondicao_nao_satisfeita' else 'sem_periodo_par' end;
         v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, null, v_cfg.tipo, 'A', null, v_fa, null,
@@ -11149,10 +11300,13 @@ begin
     end if;
 
     select count(*), coalesce(sum(l.valor_num * fn_fator_escala(l.unidade)), 0), coalesce(sum(fn_fator_escala(l.unidade)), 0),
-           coalesce(bool_or(fn_fator_escala(l.unidade) is null), false), array_agg(format('"%s" = %s %s', l.chave, l.valor_num, coalesce(l.unidade, 'sem escala')) order by l.chave)
-      into v_n_lin, v_balanco, v_soma_fatores, v_sem_escala, v_chaves
+           coalesce(bool_or(fn_fator_escala(l.unidade) is null), false), array_agg(format('"%s" = %s %s', l.chave, l.valor_num, coalesce(l.unidade, 'sem escala')) order by l.chave),
+           array_remove(array_agg(distinct l.aviso), null)
+      into v_n_lin, v_balanco, v_soma_fatores, v_sem_escala, v_chaves, v_avisos
       from fn_aging_linhas_do_balanco(v_ver, v_cfg.conceito, v_col_ent, v_col_per) l;
-    v_fb := case when v_n_lin = 0 then null else jsonb_build_object('chaves', to_jsonb(v_chaves), 'valor', v_balanco, 'unidade', 'unidade', 'documento_versao_id', v_ver) end;
+    v_fb := case when v_n_lin = 0 then null else jsonb_build_object('chaves', to_jsonb(v_chaves), 'valor', v_balanco, 'unidade', 'unidade', 'documento_versao_id', v_ver,
+                                                          'documento_id', v_doc, 'coluna_entidade', v_col_ent, 'documento_de_outra_empresa', not v_proprio,
+                                                          'avisos', to_jsonb(coalesce(v_avisos, '{}'::text[]))) end;
 
     if v_n_lin = 0 then
       if v_valor_c = 0 then
@@ -11186,7 +11340,9 @@ begin
                                  fn_aging_reais(v_balanco), array_to_string(v_chaves, '; '))
       || case when v_resultado = 'ok'
               then format('Conferido, diferença de %s (tolerância de %s: o arredondamento da escala do balanço).', fn_aging_reais(v_div), fn_aging_reais(v_tol))
-              else format('Diferença de %s, acima de %s (o arredondamento da escala do balanço).%s', fn_aging_reais(v_div), fn_aging_reais(v_tol), v_ressalva) end;
+              else format('Diferença de %s, acima de %s (o arredondamento da escala do balanço).%s', fn_aging_reais(v_div), fn_aging_reais(v_tol), v_ressalva) end
+      -- 0277: o que a leitura das linhas do balanço desconfiou e não resolveu (pai que não fecha com as filhas, valor repetido) vai no texto, ok ou divergente.
+      || coalesce(' Atenção na leitura do balanço: ' || nullif(array_to_string(v_avisos, ' '), ''), '');
     v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, v_periodo, v_cfg.tipo, 'A', v_doc, v_fa, v_fb,
       v_resultado, v_div, v_pct, jsonb_build_object('tolerancia_abs', v_tol, 'criterio', 'meia_unidade_da_escala'), v_desc));
   end loop;
@@ -11199,7 +11355,7 @@ end $_$;
 -- Name: FUNCTION fn_reconciliar_aging(p_aging_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_reconciliar_aging(p_aging_id uuid) IS '0274: concilia UMA importação vigente de aging com o balanço extraído da entidade que fecha na data-base: saldos positivos × Clientes (a receber) ou Fornecedores (a pagar), negativos × Adiantamentos de clientes/a fornecedores. Tolerância = meia unidade da escala do balanço (nunca percentual). Tipos aging_ar_clientes, aging_ar_adiantamentos, aging_ap_fornecedores, aging_ap_adiantamentos, classe A, por fn_registrar_reconciliacao com descrição sempre; divergência zero é gravada como conferida (ok, 0). Sem balanço = documento_ausente (sem pendência); balanço de outra data = sem_periodo_par. Só service_role e as funções definer chamam.';
+COMMENT ON FUNCTION public.fn_reconciliar_aging(p_aging_id uuid) IS '0274 (reemitida pela 0277): concilia UMA importação vigente de aging com o balanço extraído que fecha na data-base e TEM a entidade: o documento da própria entidade, ou a coluna desta entidade de um balanço de outra empresa do grupo (própria primeiro). Saldos positivos × Clientes (a receber) ou Fornecedores (a pagar), negativos × Adiantamentos de clientes/a fornecedores. Tolerância = meia unidade da escala do balanço (nunca percentual). Tipos aging_ar_clientes, aging_ar_adiantamentos, aging_ap_fornecedores, aging_ap_adiantamentos, classe A, por fn_registrar_reconciliacao com descrição sempre; divergência zero é gravada como conferida (ok, 0). O PERÍODO da reconciliação é o da carteira (periodo data-base AAAA-MM-DD, criado se não existe): anos diferentes nunca dividem pendência. Sem balanço = documento_ausente (sem pendência); balanço de outra data = sem_periodo_par. As desconfianças da leitura das linhas (pai que não fecha, valor repetido) vão na descrição. Só service_role e as funções definer chamam.';
 
 --
 -- Name: fn_reconciliar_aging_do_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -18534,6 +18690,7 @@ CREATE TABLE public.aging_importado (
     CONSTRAINT aging_arquivo_inteiro CHECK (((arquivo_nome <> ''::text) AND (arquivo_sha256 ~ '^[0-9a-f]{64}$'::text) AND (arquivo_bytes > 0) AND (arquivo_formato = ANY (ARRAY['csv'::text, 'xlsx'::text])))),
     CONSTRAINT aging_importado_tipo_base_check CHECK ((tipo_base = ANY (ARRAY['contas_a_receber'::text, 'contas_a_pagar'::text]))),
     CONSTRAINT aging_leitura_e_aplicador_objetos CHECK (((jsonb_typeof(leitura) = 'object'::text) AND (jsonb_typeof(aplicador) = 'object'::text))),
+    CONSTRAINT aging_resumo_e_aplicador CHECK ((cardinality(public.fn_aging_aplicador_erros(resumo, aplicador)) = 0)),
     CONSTRAINT aging_resumo_fecha CHECK ((cardinality(public.fn_aging_resumo_erros(resumo, data_base)) = 0)),
     CONSTRAINT aging_substituicao_inteira CHECK (((substituido_em IS NULL) = (substituido_por IS NULL)))
 );
@@ -18585,6 +18742,12 @@ COMMENT ON CONSTRAINT aging_arquivo_inteiro ON public.aging_importado IS '0274: 
 --
 
 COMMENT ON CONSTRAINT aging_leitura_e_aplicador_objetos ON public.aging_importado IS '0274: o resumo da leitura e o do aplicador são objetos (a ausência não se disfarça de objeto vazio na checagem, mas nunca de número).';
+
+--
+-- Name: CONSTRAINT aging_resumo_e_aplicador ON aging_importado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT aging_resumo_e_aplicador ON public.aging_importado IS '0277: o resumo do aging e o do aplicador contam os mesmos títulos e os mesmos saldos (fn_aging_aplicador_erros vazio), para quem escrever sem passar pela função (service_role). Produção tinha 0 linhas em aging_importado em 12/11/2026: a CHECK valida sem backfill.';
 
 --
 -- Name: CONSTRAINT aging_resumo_fecha ON aging_importado; Type: COMMENT; Schema: public; Owner: -
@@ -19625,6 +19788,21 @@ COMMENT ON COLUMN public.instalacao_requisito.porque IS 'O SINTOMA VISÍVEL da a
 --
 
 COMMENT ON COLUMN public.instalacao_requisito.marcador IS 'Para tipo=''corpo'': o TRECHO que precisa aparecer em pg_get_functiondef(objeto). É a única forma de a sonda distinguir uma função corrigida de uma função homônima com o corpo velho — e essa distinção é a maior parte do catálogo, porque a maioria das migrations recentes só republica corpo.';
+
+--
+-- Name: instalacao_sonda_aging_aplicador_check; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_aging_aplicador_check AS
+ SELECT (conname)::text AS nome
+   FROM pg_constraint k
+  WHERE ((conrelid = ('public.aging_importado'::regclass)::oid) AND (contype = 'c'::"char") AND convalidated AND (conname = 'aging_resumo_e_aplicador'::name) AND (pg_get_constraintdef(oid) ~~ '%fn_aging_aplicador_erros(%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_aging_aplicador_check; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_aging_aplicador_check IS 'Sonda da 0277: uma linha = a CHECK aging_resumo_e_aplicador existe, validada, e chama fn_aging_aplicador_erros. Zero linhas: o service_role grava um resumo que não é o do arquivo lido.';
 
 --
 -- Name: instalacao_sonda_aging_checks; Type: VIEW; Schema: public; Owner: -
@@ -23577,6 +23755,15 @@ REVOKE ALL ON FUNCTION public.fn_acesso_bootstrap() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_acesso_bootstrap() TO service_role;
 
 --
+-- Name: FUNCTION fn_aging_aplicador_erros(p_resumo jsonb, p_aplicador jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_aging_aplicador_erros(p_resumo jsonb, p_aplicador jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_aging_aplicador_erros(p_resumo jsonb, p_aplicador jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_aging_aplicador_erros(p_resumo jsonb, p_aplicador jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aging_aplicador_erros(p_resumo jsonb, p_aplicador jsonb) TO supabase_read_only_user;
+
+--
 -- Name: FUNCTION fn_aging_centavos(p jsonb); Type: ACL; Schema: public; Owner: -
 --
 
@@ -26459,6 +26646,14 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_cobertura TO servic
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_requisito TO authenticated;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_requisito TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_aging_aplicador_check; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_aplicador_check TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_aplicador_check TO service_role;
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_aplicador_check TO supabase_read_only_user;
 
 --
 -- Name: TABLE instalacao_sonda_aging_checks; Type: ACL; Schema: public; Owner: -

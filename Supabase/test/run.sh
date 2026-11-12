@@ -1012,6 +1012,10 @@ echo "== 0274 — o aging que só existia no navegador e nunca conferia com o ba
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0277 — o aging que apagava a divergência de um ano e somava o pai com as filhas (pendência por data-base, pai de Fornecedores pela estrutura, balanço do grupo como fonte, resumo amarrado ao aplicador)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o inteiro >= 1 grava, o inválido vira nulo sem abortar o lote, sem a chave grava como antes)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
