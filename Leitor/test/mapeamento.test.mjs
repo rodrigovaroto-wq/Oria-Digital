@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { lerTabela } from '../lib/tabela.mjs';
 import {
   proporMapeamento, validarMapeamento, aplicadorDeMapeamento, valorEmCentavos, dataIso,
-  formatoDaAmostra, impressaoDoCabecalho, CAMPOS,
+  formatoDaAmostra, impressaoDoCabecalho, textoNormalizado, CAMPOS,
 } from '../lib/mapeamento.mjs';
 
 const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -24,10 +24,10 @@ const N = 3000;
 const CONFIRMACAO = { confirmado_por: '00000000-0000-0000-0000-000000000001', confirmado_em: '2026-11-11T12:00:00Z' };
 
 /** Lê, propõe, confirma a proposta como está e aplica: o caminho inteiro da MB2. */
-async function aplicar(blob, { mapa, formato } = {}) {
+async function aplicar(blob, { mapa, formato, contrapartesReais } = {}) {
   const r1 = await lerTabela(blob);
   const prop = proporMapeamento(r1.cabecalho.celulas, r1.amostra, { tipos: r1.amostra_tipos });
-  const ap = aplicadorDeMapeamento({ mapa: mapa ?? prop.mapa, formato: formato ?? prop.formato, cabecalho: r1.cabecalho.celulas, ...CONFIRMACAO });
+  const ap = aplicadorDeMapeamento({ mapa: mapa ?? prop.mapa, formato: formato ?? prop.formato, cabecalho: r1.cabecalho.celulas, ...CONFIRMACAO }, { contrapartesReais });
   const titulos = [], classes = [];
   await lerTabela(blob, { aoLinha: (l) => { const x = ap.linha(l); classes.push(x); if (x.titulo) titulos.push(x.titulo); } });
   return { r1, prop, resumo: ap.resumo(), titulos, classes };
@@ -341,3 +341,42 @@ test('a proposta não põe código numérico na contraparte', () => {
   const p = proporMapeamento(['Cliente', 'Vencimento', 'Saldo'], [['1001', '01/01/2025', '1,00'], ['1002', '01/01/2025', '2,00']]);
   assert.ok(!('contraparte' in p.mapa));
 });
+
+// ============================ 5. a contraparte confirmada pelo analista (12/11/2026) =====
+const COM_TOTAL = ['Cliente;Vencimento;Saldo', 'A;01/01/2025;1,00', 'B;01/01/2025;1,00', 'C;01/01/2025;1,00',
+  'TOTAL DISTRIBUIDORA LTDA;02/01/2025;5,00', 'TOTAL DISTRIBUIDORA LTDA;03/01/2025;2,00', 'SOMA ENGENHARIA LTDA;01/01/2025;7,00',
+  'Total ACME;02/01/2025;30,00'];
+
+test('sem confirmação, os nomes de total viram CANDIDATAS (nome, linhas, saldo), para a tela oferecer', async () => {
+  const { resumo } = await aplicar(csv(COM_TOTAL));
+  assert.equal(resumo.saldo_titulos, '300');
+  assert.deepEqual(resumo.candidatas_a_contraparte_real, [
+    { contraparte: 'TOTAL DISTRIBUIDORA LTDA', linhas: 2, saldo: '700' },
+    { contraparte: 'SOMA ENGENHARIA LTDA', linhas: 1, saldo: '700' },
+    { contraparte: 'Total ACME', linhas: 1, saldo: '3000' },
+  ]);
+  assert.equal(resumo.candidatas_truncadas, false);
+});
+
+test('a contraparte confirmada volta a ser título; a não confirmada continua de fora', async () => {
+  // O nome chega como o analista confirmou (espaços e NBSP a mais): a comparação é pelo normalizado.
+  const { resumo, classes } = await aplicar(csv(COM_TOTAL), { contrapartesReais: ['  TOTAL\u00a0DISTRIBUIDORA  LTDA ', 'SOMA ENGENHARIA LTDA'] });
+  assert.deepEqual(classes.slice(4).map((c) => c.classe), ['titulo', 'titulo', 'titulo', 'rejeitada']);
+  assert.equal(resumo.titulos_de_contraparte_confirmada, 3);
+  assert.equal(resumo.saldo_titulos, '1700');
+  assert.deepEqual(resumo.candidatas_a_contraparte_real, [{ contraparte: 'Total ACME', linhas: 1, saldo: '3000' }]);
+});
+
+test('confirmar uma contraparte NÃO transforma o subtotal dela (sem data) em título', async () => {
+  const { classes } = await aplicar(csv(['Cliente;Vencimento;Saldo', 'A;01/01/2025;1,00', 'B;01/01/2025;1,00', 'C;01/01/2025;1,00', 'TOTAL DISTRIBUIDORA LTDA;;5,00']),
+    { contrapartesReais: ['TOTAL DISTRIBUIDORA LTDA'] });
+  assert.equal(classes[4].classe, 'subtotal');
+});
+
+test('textoNormalizado: os vetores que a 0273 recalcula no banco, e o U+2003 que o .trim() apararia', () => {
+  assert.equal(textoNormalizado('  SOMA\u00a0 ENGENHARIA  LTDA '), 'SOMA ENGENHARIA LTDA');
+  assert.equal(textoNormalizado('CONSTRUC\u0327A\u0303O TOTAL S.A.'), 'CONSTRUÇÃO TOTAL S.A.');
+  assert.equal(textoNormalizado('\u2003ACME\u2003'), '\u2003ACME\u2003', 'o banco não apara U+2003: a biblioteca também não');
+  assert.equal(impressaoDoCabecalho(['\u2003Saldo']) === impressaoDoCabecalho(['Saldo']), false);
+});
+

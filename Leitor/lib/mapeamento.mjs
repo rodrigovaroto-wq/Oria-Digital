@@ -67,9 +67,17 @@ const SINONIMOS = {
 // internos colapsados, células vazias do FIM fora, junção por U+001F. NÃO há minúsculas:
 // o `lower()` do Postgres depende do LC_CTYPE do banco, e um ERP exporta o mesmo
 // cabeçalho sempre com a mesma caixa.
-const ESPACOS = /[ \t\n\r ]+/g;
+const ESPACOS = /[ \t\n\r\u00a0]+/g;
+/**
+ * Uma célula normalizada: NFC, sequências de [espaço \t \n \r U+00A0] viram um espaço, pontas
+ * aparadas desses MESMOS caracteres. Não `.trim()`: ele apara qualquer espaço Unicode (U+2003...)
+ * e o banco (0272, 0273) apara só esses cinco; as duas impressões divergiriam.
+ */
+export function textoNormalizado(x) {
+  return String(x ?? '').normalize('NFC').replace(ESPACOS, ' ').replace(/^ | $/g, '');
+}
 export function cabecalhoNormalizado(celulas) {
-  const c = celulas.map((x) => String(x ?? '').normalize('NFC').replace(ESPACOS, ' ').trim());
+  const c = celulas.map(textoNormalizado);
   while (c.length && c[c.length - 1] === '') c.pop();
   return c;
 }
@@ -297,6 +305,13 @@ const MAX_SUBTOTAIS_GUARDADOS = 10000;
  * a repetida) é conferida contra o cabeçalho confirmado: se o ERP mudou uma coluna de lugar, o
  * aplicador ERRA em vez de ler o saldo da coluna errada.
  *
+ * `contrapartesReais` são as contrapartes que o analista CONFIRMOU, no mandato, como cliente ou
+ * fornecedor de verdade apesar do nome de total ("TOTAL DISTRIBUIDORA LTDA", "SOMA ENGENHARIA"):
+ * a linha delas com vencimento data volta a ser título, contada em
+ * `titulos_de_contraparte_confirmada`. As que ainda não foram confirmadas aparecem em
+ * `candidatas_a_contraparte_real` (nome, linhas e saldo), que é o que a tela oferece para confirmar.
+ * Comparação pelo nome normalizado (`textoNormalizado`), o mesmo que o banco grava (0273).
+ *
  * Campo OPCIONAL inválido (data de pagamento "00/00/0000", valor pago "-") não derruba o
  * título: o campo fica ausente e é contado em `opcionais_invalidos` (regra 1: a ausência
  * aparece). Só os obrigatórios rejeitam.
@@ -305,7 +320,7 @@ const MAX_SUBTOTAIS_GUARDADOS = 10000;
  * confirmado_em }. Sem autor e data, ou sem o formato, o aplicador recusa: arquivo sem
  * confirmação não vira dado.
  */
-export function aplicadorDeMapeamento(confirmado, { cabecalhoDoArquivo } = {}) {
+export function aplicadorDeMapeamento(confirmado, { cabecalhoDoArquivo, contrapartesReais = [] } = {}) {
   if (!confirmado?.confirmado_por || !confirmado?.confirmado_em) {
     throw new Error('mapeamento sem confirmação (autor e data): o arquivo não vira dado sem um analista confirmar as colunas');
   }
@@ -326,10 +341,13 @@ export function aplicadorDeMapeamento(confirmado, { cabecalhoDoArquivo } = {}) {
     linhas: 0, fora_do_corpo: 0, cabecalhos_conferidos: 0, titulo: 0, subtotal: 0, rejeitada: 0,
     motivos: {}, primeira_rejeitada: null, opcionais_invalidos: {},
     saldos_arredondados: 0, saldos_com_mais_de_2_casas: 0,
-    titulos_com_saldo_negativo: { linhas: 0, saldo: 0n },
+    titulos_com_saldo_negativo: { linhas: 0, saldo: 0n }, titulos_de_contraparte_confirmada: 0,
     saldo_titulos: 0n,
     campos_ausentes: Object.entries(CAMPOS).filter(([c]) => !(c in mapa)).map(([campo, d]) => ({ campo, efeito: d.efeito })),
   };
+  const reais = new Set(contrapartesReais.map(textoNormalizado));
+  const candidatas = new Map();
+  const MAX_CANDIDATAS = 200;
   const subtotais = new Set();
   let maiorSubtotal = null;
   const cel = (l, campo) => (campo in mapa ? l.celulas[mapa[campo]] : undefined);
@@ -367,7 +385,17 @@ export function aplicadorDeMapeamento(confirmado, { cabecalhoDoArquivo } = {}) {
       if (!saldo) return rejeitar(l, `saldo não é número: '${cel(l, 'saldo') ?? ''}'`);
       if (!venc) return rejeitar(l, `vencimento não é data: '${vencTexto ?? ''}'`, saldo);
       if (contraparte === '') return rejeitar(l, 'contraparte vazia', saldo);
-      if (temSinal) return rejeitar(l, `rótulo de total com vencimento (total por data, ou contraparte chamada Total?): '${contraparte}'`, saldo);
+      const confirmada = temSinal && reais.has(textoNormalizado(contraparte));
+      if (temSinal && !confirmada) {
+        const k = textoNormalizado(contraparte);
+        if (candidatas.has(k) || candidatas.size < MAX_CANDIDATAS) {
+          const x = candidatas.get(k) ?? { contraparte: k, linhas: 0, saldo: 0n };
+          x.linhas++; x.saldo += saldo.centavos;
+          candidatas.set(k, x);
+        }
+        return rejeitar(l, `rótulo de total com vencimento (total por data, ou contraparte chamada Total?): '${contraparte}'`, saldo);
+      }
+      if (confirmada) r.titulos_de_contraparte_confirmada++;
       const titulo = { n: l.n, contraparte, vencimento: venc, saldo: saldo.centavos };
       if (saldo.arredondado) r.saldos_arredondados++;
       if (saldo.casas_extras) r.saldos_com_mais_de_2_casas++;
@@ -405,6 +433,8 @@ export function aplicadorDeMapeamento(confirmado, { cabecalhoDoArquivo } = {}) {
       const motivos = Object.fromEntries(Object.entries(r.motivos).map(([k, m]) => [k, { linhas: m.linhas, saldo: m.saldo.toString() }]));
       return {
         ...r, motivos, saldo_titulos: r.saldo_titulos.toString(),
+        candidatas_a_contraparte_real: [...candidatas.values()].map((c) => ({ ...c, saldo: c.saldo.toString() })),
+        candidatas_truncadas: candidatas.size >= MAX_CANDIDATAS,
         titulos_com_saldo_negativo: { linhas: r.titulos_com_saldo_negativo.linhas, saldo: r.titulos_com_saldo_negativo.saldo.toString(),
           efeito: 'saldo negativo (adiantamento ou crédito) entra na soma e a REDUZ: a soma é a carteira menos os créditos' },
         conferencia_com_o_total_do_arquivo: conferencia,

@@ -8,7 +8,7 @@ toca:
   - Leitor/medicao-n8n/navegador-tabela.mjs
 prova: Leitor/test/*.test.mjs
 ancora: Leitor/lib/mapeamento.mjs#RE_TOTAL
-ancora_sha: 80e614c37e68
+ancora_sha: bad87f65c9fa
 substitui: []
 ---
 
@@ -45,6 +45,11 @@ em silêncio é pior que deixar de fora com o saldo na tela.
   em `saldos_com_mais_de_2_casas`: é o sinal do formato trocado (16.500,00 virando 16,50).
 - **O aplicador confere sozinho a linha de cabeçalho** que passa por ele (inclusive a repetida):
   coluna inserida pelo ERP é ERRO, não saldo lido da coluna vizinha.
+- **Contraparte confirmada pelo analista** (pedido do dono, 12/11): `contrapartesReais` no aplicador
+  faz a linha de um "TOTAL DISTRIBUIDORA LTDA" com vencimento voltar a ser título; as não confirmadas
+  saem em `candidatas_a_contraparte_real` (nome, linhas, saldo) para a tela oferecer. A confirmação
+  é POR MANDATO, com autor (0273), nunca na tabela global do mapeamento: nome de cliente é dado do
+  cliente. Comparação por `textoNormalizado`, que NÃO usa `.trim()` (ele apara U+2003 e o banco não).
 - **Conferência com o total do arquivo**: `confere` se ALGUM subtotal = Σ títulos (o total geral
   pode estar no topo ou antes do subtotal do último cliente); senão `diverge` com o maior.
 - **Campo opcional inválido** ("00/00/0000", "-") não derruba o título: fica ausente, contado em
