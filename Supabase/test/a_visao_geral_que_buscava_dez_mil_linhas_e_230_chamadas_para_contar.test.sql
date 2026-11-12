@@ -3,7 +3,7 @@
 --
 -- O QUE ESTE ARQUIVO PROVA (comportamento, regra 3):
 --   * a contagem em lote bate com `count(*)` direto por versão, inclusive numa versão com 2.500 linhas (> 1.000: o teto silencioso do
---     PostgREST que obrigava o portal a paginar; a função não tem teto), e versão sem linha não vem (ausência = 0 para quem lê);
+--     PostgREST que obrigava o portal a paginar; a função não tem teto), e versão sem linha vem com 0;
 --   * fn_algum_documento_serve_como concorda com o bool_or das chamadas individuais a fn_documento_serve_como (0157), num caso que serve
 --     (pelo rótulo e pela exceção estrutural do COMBINADO) e num que não serve, e dá false para array vazio/nulo;
 --   * o ISOLAMENTO POR MANDATO, COMO authenticated com JWT (a lição .claude/memory/rls-so-select-passa-no-superusuario.md): quem não tem
@@ -106,34 +106,39 @@ begin
   perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[vg]) = vg || '=2500',
     'a versão com 2.500 linhas devolve 2.500, não 1.000 (a função não tem teto)', teste_lote_0276(u_socio, 'authenticated', array[vg]));
   perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[vp]) = vp || '=3', 'a versão com 3 linhas devolve 3', null);
-  perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[vz]) = '', 'versão sem nenhuma linha NÃO vem (ausência = 0 para quem lê)', null);
+  perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[vz]) = vz || '=0', 'versão sem nenhuma linha VEM, com 0 explícito (o portal distingue zero de resposta cortada)', teste_lote_0276(u_socio, 'authenticated', array[vz]));
   v_t := teste_lote_0276(u_socio, 'authenticated', array[vg, vp, vz]);
-  perform teste_assert_0276(v_t = (select string_agg(x.v || '=' || x.n, ';' order by x.v) from
-                                     (select documento_versao_id v, count(*) n from campo_extraido where documento_versao_id in (vg, vp, vz) group by 1) x),
-    'três versões numa só ida: o resultado é exatamente o count(*) direto agrupado', v_t);
-  perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[vg, vg]) = vg || '=2500', 'versão repetida no array não duplica a contagem', null);
-  perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[]::uuid[]) = '', 'array vazio devolve zero linhas', null);
+  perform teste_assert_0276(v_t = (select string_agg(v.id || '=' || (select count(*) from campo_extraido c where c.documento_versao_id = v.id), ';' order by v.id) from unnest(array[vg, vp, vz]) v(id)),
+    'três versões numa só ida (uma com 0): o resultado é exatamente o count(*) direto por versão', v_t);
+  perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[vg, vg]) = vg || '=2500', 'versão repetida no array vem UMA vez e não duplica a contagem', null);
+  perform teste_assert_0276((select count(*) from fn_linhas_por_versao(array[vg, vg, vp, vz, vp, null]::uuid[])) = 3,
+    'linhas devolvidas = versões DISTINTAS pedidas (repetidas e nulo não contam): o sinal positivo de leitura completa', null);
+  perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[]::uuid[]) = '', 'array vazio devolve zero linhas (nenhuma versão pedida)', null);
   perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', null) = '', 'array nulo devolve zero linhas (e não erro)', null);
 
   -- ---------------------------------------------------------------- 2. O ISOLAMENTO POR MANDATO (RLS de quem chama)
   raise notice '--- 2. isolamento por mandato, COMO authenticated ---';
-  perform teste_assert_0276(teste_lote_0276(u_ana, 'authenticated', array[vg, vp, vb]) = (select string_agg(x.v || '=' || x.n, ';' order by x.v) from
-                              (select vg v, 2500 n union all select vp, 3) x),
-    'a Analista de A conta as versões de A e NÃO a de B (mesma chamada, mandato alheio some)', teste_lote_0276(u_ana, 'authenticated', array[vg, vp, vb]));
-  perform teste_assert_0276(teste_lote_0276(u_xan, 'authenticated', array[vg, vp]) = '',
-    'a Analista de B pedindo só versões de A recebe zero linhas (não obtém contagem de outro mandato)', teste_lote_0276(u_xan, 'authenticated', array[vg, vp]));
+  perform teste_assert_0276(teste_lote_0276(u_ana, 'authenticated', array[vg, vp, vb]) = (select string_agg(x.v || '=' || x.n, ';' order by x.v) from (select vg::uuid v, 2500 n union all select vp::uuid v, 3 n union all select vb::uuid v, 0 n) x),
+    'a Analista de A conta as versões de A e a de B vem com 0 (a RLS esconde as linhas; é o que a leitura direta mostraria)', teste_lote_0276(u_ana, 'authenticated', array[vg, vp, vb]));
+  perform teste_assert_0276(teste_lote_0276(u_xan, 'authenticated', array[vg, vp]) = (select string_agg(x.v || '=' || x.n, ';' order by x.v) from (select vg::uuid v, 0 n union all select vp::uuid v, 0 n) x),
+    'a Analista de B pedindo só versões de A recebe 0 em cada (não obtém contagem de outro mandato)', teste_lote_0276(u_xan, 'authenticated', array[vg, vp]));
   perform teste_assert_0276(teste_lote_0276(u_xan, 'authenticated', array[vb]) = vb || '=4', 'e conta a do próprio mandato', null);
-  perform teste_assert_0276(teste_lote_0276(u_nil, 'authenticated', array[vg, vb]) = '', 'quem não tem papel não conta nada', null);
-  perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[vg, vb]) like vg || '=2500;%' or teste_lote_0276(u_socio, 'authenticated', array[vg, vb]) like '%;' || vg || '=2500',
+  perform teste_assert_0276(teste_lote_0276(u_nil, 'authenticated', array[vg, vb]) = (select string_agg(x.v || '=' || x.n, ';' order by x.v) from (select vg::uuid v, 0 n union all select vb::uuid v, 0 n) x), 'quem não tem papel recebe 0 em tudo', null);
+  perform teste_assert_0276(teste_lote_0276(u_xan, 'authenticated', array[vg]) = vg || '=0'
+                            and teste_lote_0276(u_xan, 'authenticated', array['00000000-0000-0000-0000-000000000275'::uuid]) = '00000000-0000-0000-0000-000000000275=0',
+    'versão de mandato alheio e uuid inexistente dão o mesmo 0 (a função não revela se a versão existe)', null);
+  perform teste_assert_0276(teste_lote_0276(u_socio, 'authenticated', array[vg, vb]) = (select string_agg(x.v || '=' || x.n, ';' order by x.v) from (select vg::uuid v, 2500 n union all select vb::uuid v, 4 n) x),
     'o Sócio conta as de todos os mandatos', teste_lote_0276(u_socio, 'authenticated', array[vg, vb]));
   perform teste_assert_0276(teste_lote_0276(null, 'anon', array[vg]) like '42501|%', 'o anon não executa (sem grant)', teste_lote_0276(null, 'anon', array[vg]));
 
   -- O 42501 acima pode vir da tabela (o anon não lê campo_extraido), não da função: o privilégio de EXECUTE é afirmado à parte.
   perform teste_assert_0276(not has_function_privilege('anon', 'fn_linhas_por_versao(uuid[])', 'execute')
                             and not has_function_privilege('anon', 'fn_algum_documento_serve_como(uuid[], text)', 'execute')
+                            and has_function_privilege('service_role', 'fn_linhas_por_versao(uuid[])', 'execute')
+                            and has_function_privilege('service_role', 'fn_algum_documento_serve_como(uuid[], text)', 'execute')
                             and has_function_privilege('authenticated', 'fn_linhas_por_versao(uuid[])', 'execute')
                             and has_function_privilege('authenticated', 'fn_algum_documento_serve_como(uuid[], text)', 'execute'),
-    'o anon não tem EXECUTE nas duas funções e o authenticated tem', null);
+    'o anon não tem EXECUTE nas duas funções; o authenticated e o service_role têm', null);
 
   -- ---------------------------------------------------------------- 3. fn_algum_documento_serve_como = bool_or das individuais
   raise notice '--- 3. fn_algum_documento_serve_como concorda com bool_or de fn_documento_serve_como ---';

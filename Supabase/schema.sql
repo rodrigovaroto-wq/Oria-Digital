@@ -8474,17 +8474,19 @@ CREATE FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) RETURNS TABLE(docu
     LANGUAGE sql STABLE
     SET search_path TO 'public', 'pg_temp'
     AS $$
-  select ce.documento_versao_id, count(*)::bigint
-    from campo_extraido ce
-   where ce.documento_versao_id = any (p_versoes)
-   group by ce.documento_versao_id;
+  select v.id, coalesce(c.n, 0)::bigint
+    from (select distinct u.id from unnest(p_versoes) as u(id) where u.id is not null) v
+    left join (select ce.documento_versao_id as id, count(*) as n
+                 from campo_extraido ce
+                where ce.documento_versao_id = any (p_versoes)
+                group by ce.documento_versao_id) c on c.id = v.id;
 $$;
 
 --
 -- Name: FUNCTION fn_linhas_por_versao(p_versoes uuid[]); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) IS '0276: quantas linhas de campo_extraido tem cada versão pedida, contadas no banco (sem o teto silencioso de 1.000 linhas do PostgREST que obrigava o portal a paginar: 10.231 linhas = 12 idas, 5,8 s). Versão SEM linha NÃO vem no resultado; quem lê trata ausência como 0. security invoker: a RLS de campo_extraido (0216) decide, então mandato alheio devolve zero linhas, como a leitura direta da tabela.';
+COMMENT ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) IS '0276: quantas linhas de campo_extraido tem cada versão pedida, contadas no banco (sem o teto silencioso de 1.000 linhas do PostgREST que obrigava o portal a paginar: 10.231 linhas = 12 idas, 5,8 s). UMA linha por versão distinta pedida, com 0 explícito (o teto de 1.000 do PostgREST vale para o número de linhas da resposta: o portal confere linhas devolvidas = versões distintas pedidas). security invoker: a RLS de campo_extraido (0216) decide, então mandato alheio devolve zero linhas, como a leitura direta da tabela.';
 
 --
 -- Name: fn_mapeamento_confirmar(text, jsonb, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
@@ -23692,6 +23694,7 @@ GRANT ALL ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base d
 
 REVOKE ALL ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) TO service_role;
 
 --
 -- Name: FUNCTION fn_alocado_agora(p_caso uuid); Type: ACL; Schema: public; Owner: -
@@ -24907,6 +24910,7 @@ GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO 
 
 REVOKE ALL ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) TO service_role;
 
 --
 -- Name: FUNCTION fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb); Type: ACL; Schema: public; Owner: -
