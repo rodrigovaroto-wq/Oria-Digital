@@ -130,7 +130,7 @@ export default async function CasosPage({
               e o menu "⋯" fica acima dele (z-10). */}
           <Link
             href={`/casos/${caso.id}`}
-            className="valor-sensivel block truncate text-sm font-semibold text-tinta-900 after:absolute after:inset-0"
+            className="valor-sensivel block truncate text-sm font-semibold text-tinta-900 after:absolute after:inset-0 md:max-w-[28rem]"
           >
             {caso.nome}
           </Link>
@@ -191,7 +191,7 @@ export default async function CasosPage({
       className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
         aba === a
           ? "border-tinta-900 text-tinta-900"
-          : "border-transparent text-tinta-500 hover:text-tinta-800"
+          : "border-transparent texto-fundo hover:text-tinta-900"
       }`}
     >
       {rotulo} <span className="tabular-nums">({n})</span>
@@ -203,7 +203,7 @@ export default async function CasosPage({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-tinta-900">Mandatos</h1>
-          <p className="mt-0.5 text-sm text-tinta-500">
+          <p className="mt-0.5 text-sm texto-fundo">
             {casos.length === 0 && !termo
               ? `${soAlocados ? textoDeNenhumMandato(perm.papel) : textoDeNenhumMandato(perm.papel, "aberto")}.`
               : termo
@@ -279,7 +279,7 @@ export default async function CasosPage({
           </nav>
 
           {aba === "fechados" && fechados.length > 0 && (
-            <p className="text-xs text-tinta-500">
+            <p className="text-xs texto-fundo">
               Saíram da mesa — o dado continua aqui, e reabrir é um clique no menu ⋯.
             </p>
           )}
@@ -295,7 +295,9 @@ export default async function CasosPage({
           ) : (
             // Sem `overflow` no contêiner: ele cortaria o menu "⋯", que abre para
             // baixo da linha. No celular a tabela vira linhas empilhadas (sem
-            // rolagem horizontal); a partir de md é tabela de verdade.
+            // rolagem horizontal); a partir de md é tabela de verdade. O NOME TEM TETO (`md:max-w-[28rem]` no
+            // link): o `truncate` não encolhe a coluna, que seguia o nome mais longo (616 px), e a tabela de
+            // 1.180 px estourava o cartão de 1.144 px em 1440, com o menu "⋯" para fora e 13 px de rolagem lateral.
             <div className="carta">
               <table className="block w-full md:table">
                 <thead className="hidden md:table-header-group">

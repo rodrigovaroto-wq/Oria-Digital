@@ -1,4 +1,5 @@
 import type { ServicoDocumentoServeComo } from "@/lib/kit-basico";
+import type { ChamaRpc } from "@/lib/kit-do-caso";
 import type { createClient } from "./server";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -46,4 +47,9 @@ export function servicoDocumentoServeComo(supabase: Supabase): ServicoDocumentoS
     }));
     return respostas.some(Boolean);
   };
+}
+
+/** A porta de `lerKitDoCaso` para `fn_kit_do_caso`: o mesmo cliente das telas, sem tratar erro (quem lê trata). */
+export function chamaRpc(supabase: Supabase): ChamaRpc {
+  return (nome, args) => supabase.rpc(nome, args);
 }

@@ -9,7 +9,7 @@ import { categoriaDaPendencia } from "@/lib/pendencia";
 import { ETAPAS_DO_MANDATO, etapaDoMandato } from "@/lib/etapa-do-mandato";
 import type { Caso } from "@/lib/types";
 import {
-  ABAS_DOS_MANDATOS, FILTROS_DA_FILA, agruparPorMandato, contarFila, daFila, fatiaDaPagina, verboDaPendencia,
+  ABAS_DOS_MANDATOS, FILTROS_DA_FILA, agruparPorMandato, contarFila, daFila, fatiaDaPagina, rotuloDeBloqueantes, verboDaPendencia,
   type AbaDosMandatos, type FiltroDaFila, type GrupoDoMandato,
 } from "@/lib/painel";
 import { rotuloDaPendencia, nomeDaChecagem, partesDaDescricao, suavizarMensagem } from "@/lib/rotulos";
@@ -126,9 +126,9 @@ export async function ResumoDoPainel() {
   const resumo = veredito(perm.papel, ativos.length, pendenciasLidas, bloqueantes, casosTravados);
   return (
     <>
-      <p className="mt-0.5 text-sm text-tinta-500">{resumo}</p>
+      <p className="mt-0.5 text-sm texto-fundo">{resumo}</p>
       {soAlocados && (
-        <p className="mt-0.5 text-xs text-tinta-500">
+        <p className="mt-0.5 text-xs texto-fundo">
           Os números abaixo são dos mandatos em que você está alocado.
         </p>
       )}
@@ -212,53 +212,60 @@ export async function IndicadoresDoPainel() {
     ? "medição indisponível agora"
     : "nenhum documento processado ainda";
 
+  // QUATRO CARTÕES EM GRADE 2×2 (o do cobalto é o primeiro: o que trava a aprovação). Cada ↗ só existe onde há
+  // para onde ir: as pendências levam à fila já filtrada, os mandatos à lista; cobertura e tempo não têm tela
+  // própria, e botão sem destino seria enfeite. NENHUM chip de variação (↑/↓ %): não existe período anterior lido
+  // (ver o FUTURO no topo de `page.tsx`), e variação sem medida seria número inventado.
   return (
-    <div className="space-y-2">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <Indicador
-            valor={numero(ativos.length)}
-            rotulo={plural(ativos.length, "mandato em andamento", "mandatos em andamento")}
-            detalhe={detalheDosMandatos(pendenciasLidas, casosTravados)}
-            tom="alerta"
-          />
-          {/* Falha de leitura NÃO vira zero: sem a lista, traço com a causa. */}
-          <Indicador
-            valor={pendenciasLidas ? numero(bloqueantes) : null}
-            rotulo={plural(bloqueantes, "pendência que trava a aprovação", "pendências que travam a aprovação")}
-            detalhe={detalheDasPendencias(bloqueantes, casosTravados, pendencias.length)}
-            tom={bloqueantes > 0 ? "alerta" : "bom"}
-            nota="leitura das pendências indisponível agora"
-          />
-          {/* A cobertura tem barra porque é a única fração: quanto do que estava
-              escrito no documento chegou ao sistema. */}
-          <Indicador
-            valor={cobertura === null ? null : `${Math.round(cobertura * 100)}%`}
-            rotulo="cobertura da leitura"
-            origem="calculado"
-            barra={cobertura}
-            detalhe={
-              cobertura === null
-                ? null
-                : `${numero(contasExtraidas)} de ${numero(contasNosDocs)} linhas de conta nos documentos`
-            }
-            tom={cobertura !== null && cobertura < 0.6 ? "alerta" : "bom"}
-            nota={semMedicao}
-          />
-          {/* O rótulo diz o que é: do envio do lote ao último documento registrado
-              (ingestão), NÃO até a aprovação — `caso` não guarda a data de aprovação. */}
-          <Indicador
-            valor={tempoMedioMs === null ? null : duracaoCurta(tempoMedioMs)}
-            rotulo="tempo médio de ingestão"
-            origem="calculado"
-            detalhe={detalheDoTempo(nJanelas, janelasLongas)}
-            nota={
-              documentosLidos
-                ? "nenhum mandato com documento registrado ainda"
-                : "leitura dos documentos indisponível agora"
-            }
-          />
-        </div>
-        <LegendaDeOrigem />
+    <div className="flex h-full flex-col gap-3">
+      <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 sm:grid-rows-2">
+        {/* Falha de leitura NÃO vira zero: sem a lista, traço com a causa. */}
+        <Indicador
+          destaque
+          valor={pendenciasLidas ? numero(bloqueantes) : null}
+          rotulo={plural(bloqueantes, "pendência que trava a aprovação", "pendências que travam a aprovação")}
+          detalhe={detalheDasPendencias(bloqueantes, casosTravados, pendencias.length)}
+          tom={bloqueantes > 0 ? "alerta" : "bom"}
+          nota="leitura das pendências indisponível agora"
+          href={pendenciasLidas ? "/casos?fila=travam#fila-do-painel" : undefined}
+        />
+        <Indicador
+          valor={numero(ativos.length)}
+          rotulo={plural(ativos.length, "mandato em andamento", "mandatos em andamento")}
+          detalhe={detalheDosMandatos(pendenciasLidas, casosTravados)}
+          tom="alerta"
+          href="/casos/todos"
+        />
+        {/* A cobertura tem ANEL porque é a única fração: quanto do que estava escrito no documento chegou ao
+            sistema. */}
+        <Indicador
+          valor={cobertura === null ? null : `${Math.round(cobertura * 100)}%`}
+          rotulo="cobertura da leitura"
+          origem="calculado"
+          barra={cobertura}
+          detalhe={
+            cobertura === null
+              ? null
+              : `${numero(contasExtraidas)} de ${numero(contasNosDocs)} linhas de conta nos documentos`
+          }
+          tom={cobertura !== null && cobertura < 0.6 ? "alerta" : "bom"}
+          nota={semMedicao}
+        />
+        {/* O rótulo diz o que é: do envio do lote ao último documento registrado
+            (ingestão), NÃO até a aprovação — `caso` não guarda a data de aprovação. */}
+        <Indicador
+          valor={tempoMedioMs === null ? null : duracaoCurta(tempoMedioMs)}
+          rotulo="tempo médio de ingestão"
+          origem="calculado"
+          detalhe={detalheDoTempo(nJanelas, janelasLongas)}
+          nota={
+            documentosLidos
+              ? "nenhum mandato com documento registrado ainda"
+              : "leitura dos documentos indisponível agora"
+          }
+        />
+      </div>
+      <LegendaDeOrigem />
     </div>
   );
 }
@@ -320,22 +327,25 @@ export async function AvisosDoPainel() {
 // diferença cai sempre ABAIXO de tudo o que já foi lido — a fila é o fim da coluna da esquerda e os
 // mandatos, o da direita — então nada que alguém já leu muda de lugar. CLS medido nas duas telas
 // no relatório do commit.
-const ALTURA_CELULA_DO_INDICADOR = 122;
+const ALTURA_CELULA_DO_INDICADOR = 168;
 const ALTURA_LINHA_DA_FILA = 64;
-const ALTURA_LINHA_RECENTE = 53.5;
-const ALTURA_CABECALHO_DO_DIA = 29.5;
+const ALTURA_CABECALHO_DO_DIA = 28;
+// A linha de "O que chegou": 2 linhas no celular (tipo e mandato empilhados), 1 linha de 36 px de 640 px em diante.
+const ALTURA_LINHA_RECENTE = "min-h-[56px] sm:min-h-9";
 const ALTURA_LINHA_MANDATO = 62;
 // ---------------------------------------------------------------------------------------------------
 
 export function EsqueletoDosIndicadores() {
   return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+    <div className="flex h-full flex-col gap-3">
+      <div className="grid flex-1 grid-cols-1 gap-4 sm:grid-cols-2 sm:grid-rows-2">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="carta px-[18px] py-4" style={{ minHeight: ALTURA_CELULA_DO_INDICADOR }}>
-            <Bloco className="h-8 w-16" />
-            <Bloco className="mt-2 h-3.5 w-32" />
-            <Bloco className="mt-1 h-4 w-24" />
+          <div key={i} className="carta flex flex-col justify-between gap-5 p-[18px]" style={{ minHeight: ALTURA_CELULA_DO_INDICADOR }}>
+            <Bloco className="h-4 w-40 max-w-full" />
+            <div className="space-y-2">
+              <Bloco className="h-10 w-20" />
+              <Bloco className="h-4 w-28" />
+            </div>
           </div>
         ))}
       </div>
@@ -344,7 +354,7 @@ export function EsqueletoDosIndicadores() {
   );
 }
 
-const CABECALHO_DO_BLOCO = "flex flex-col gap-2 border-b border-tinta-200 px-[18px] py-3.5 sm:flex-row sm:items-center sm:justify-between";
+const CABECALHO_DO_BLOCO = "flex flex-col gap-2 px-5 pb-2 pt-4 sm:flex-row sm:items-center sm:justify-between";
 
 export function EsqueletoDaFila() {
   return (
@@ -370,21 +380,21 @@ export function EsqueletoDaFila() {
 
 export function EsqueletoDosRecentes() {
   return (
-    <div className="carta overflow-hidden">
+    <div className="carta h-full overflow-hidden">
       <div className={CABECALHO_DO_BLOCO}>
         <h2 className="titulo-secao">O que chegou</h2>
         <Bloco className="h-4 w-16" />
       </div>
-      <div className="border-b border-tinta-100 bg-tinta-50 px-[18px] py-1.5" style={{ height: ALTURA_CABECALHO_DO_DIA }}>
+      <div className="px-5 pb-1 pt-2" style={{ height: ALTURA_CABECALHO_DO_DIA }}>
         <Bloco className="h-3 w-12" />
       </div>
-      <ul className="divide-y divide-tinta-100">
+      <ul>
         {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-          <li key={i} className="flex items-start gap-3 px-[18px] py-2.5" style={{ minHeight: ALTURA_LINHA_RECENTE }}>
+          <li key={i} className={`flex items-start gap-3 px-5 py-2 ${ALTURA_LINHA_RECENTE}`}>
             <Bloco className="h-3 w-9" />
-            <div className="min-w-0 flex-1 space-y-1.5">
+            <div className="min-w-0 flex-1 space-y-1.5 sm:space-y-0">
               <Bloco className="h-3 w-2/3" />
-              <Bloco className="h-3 w-1/2" />
+              <Bloco className="h-3 w-1/2 sm:hidden" />
             </div>
             <Bloco className="h-3 w-12" />
           </li>
@@ -414,16 +424,13 @@ export function EsqueletoDosMandatos() {
   );
 }
 
-/** A grade inteira, enquanto nem se sabe se há mandato (a lista de mandatos ainda não chegou). */
+/** O corpo inteiro (a fila e os mandatos, em lista larga), enquanto nem se sabe se há mandato. */
 export function EsqueletoDaGrade() {
   return (
-    <div role="status" aria-live="polite" className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+    <div role="status" aria-live="polite" className="min-w-0 space-y-5">
       <span className="sr-only">Carregando o painel…</span>
-      <div className="min-w-0 space-y-5">
-        <EsqueletoDaFila />
-        <EsqueletoDosMandatos />
-      </div>
-      <div className="min-w-0"><EsqueletoDosRecentes /></div>
+      <EsqueletoDaFila />
+      <EsqueletoDosMandatos />
     </div>
   );
 }
@@ -487,22 +494,17 @@ export async function CorpoDoPainel({ estado }: Readonly<{ estado: EstadoDaUrl }
 
   if (ativos.length === 0) return <SemMandato perm={perm} />;
 
+  // `min-w-0`: item de grid/flex tem largura mínima = o conteúdo, e UMA palavra longa sem espaço na descrição
+  // (ex.: um nome de função do banco, vistoria P2 de 04/11) esticava a coluna — 643 px num celular de 390.
+  // Reproduzido com o CSS compilado: 542 px sem, 390 px com. "O que chegou" subiu para a linha dos
+  // indicadores (`page.tsx`); aqui ficam as duas listas largas, uma sob a outra.
   return (
-    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
-      {/* `min-w-0` nas colunas: item de grid tem largura mínima = o conteúdo, e UMA palavra
-          longa sem espaço na descrição (ex.: um nome de função do banco, vistoria P2 de 04/11)
-          esticava a coluna — 643 px num celular de 390. Reproduzido com o CSS compilado: 542 px
-          sem, 390 px com. */}
-      <div className="min-w-0 space-y-5">
-        <Revelar rotulo="Carregando a fila de pendências…" esqueleto={<EsqueletoDaFila />}>
-          <FilaDoPainel estado={estado} />
-        </Revelar>
-        <Revelar rotulo="Carregando seus mandatos…" esqueleto={<EsqueletoDosMandatos />}>
-          <MandatosDoPainel estado={estado} />
-        </Revelar>
-      </div>
-      <Revelar rotulo="Carregando os documentos recentes…" className="min-w-0" esqueleto={<EsqueletoDosRecentes />}>
-        <RecentesDoPainel />
+    <div className="min-w-0 space-y-5">
+      <Revelar rotulo="Carregando a fila de pendências…" esqueleto={<EsqueletoDaFila />}>
+        <FilaDoPainel estado={estado} />
+      </Revelar>
+      <Revelar rotulo="Carregando seus mandatos…" esqueleto={<EsqueletoDosMandatos />}>
+        <MandatosDoPainel estado={estado} />
       </Revelar>
     </div>
   );
@@ -529,12 +531,13 @@ function textoDoTopoDaFila(lida: boolean, abertas: number, mandatos: number, fil
   return `${mandatos} ${plural(mandatos, "mandato", "mandatos")} · ${numero(filtradas)} ${plural(filtradas, "pendência", "pendências")}`;
 }
 
-/** As abas: uma faixa segmentada que rola de lado no celular em vez de quebrar a linha. */
+/** As abas em PÍLULA: um trilho redondo de vidro que rola de lado no celular em vez de quebrar a linha; a aba
+ *  atual é a pílula cheia de cobalto (o texto `papel` sobre `acento-600` é um par medido no portão de contraste). */
 const FAIXA_DE_ABAS = "-mx-1 max-w-full overflow-x-auto px-1 py-0.5";
-const TRILHO_DE_ABAS = "inline-flex gap-0.5 rounded-xl bg-tinta-50 p-[3px]";
+const TRILHO_DE_ABAS = "inline-flex gap-0.5 rounded-full border border-[var(--cartao-borda)] bg-[var(--cartao-fundo)] p-[3px]";
 function classeDaAba(atual: boolean): string {
-  return `inline-flex items-center gap-1.5 whitespace-nowrap rounded-[9px] px-3 py-1.5 text-[12.5px] transition-colors ${
-    atual ? "bg-folha font-medium text-tinta-900 shadow-sm" : "text-tinta-500 hover:text-tinta-900"
+  return `inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3.5 py-1.5 text-[12.5px] transition-colors duration-150 ${
+    atual ? "bg-acento-600 font-medium text-papel" : "text-tinta-500 hover:text-tinta-900"
   }`;
 }
 
@@ -551,7 +554,7 @@ function FiltrosDaFila({ estado, contagens }: Readonly<{ estado: EstadoDaUrl; co
               aria-current={atual ? "page" : undefined}
               className={classeDaAba(atual)}
             >
-              {f.rotulo} <span className="num text-[11px] opacity-75">{numero(contagens[f.chave])}</span>
+              {f.rotulo} <span className="num text-[11px]">{numero(contagens[f.chave])}</span>
             </Link>
           );
         })}
@@ -582,7 +585,7 @@ function LinhaDoGrupo({ g, nome, casoPorId }: Readonly<{
   const resto = g.chips.slice(MAX_CHIPS).reduce((n, c) => n + c.n, 0);
   return (
     <tr>
-      <td className="max-w-[16rem] align-top">
+      <td className="align-top sm:max-w-[16rem]">
         <Link href={destino} className="valor-sensivel block truncate font-medium text-tinta-900 hover:underline">{nome}</Link>
         <span className="mt-0.5 block text-xs text-tinta-500">
           {caso ? `${CASO_STATUS_LABEL[caso.status]} · ` : ""}{numero(g.total)} {plural(g.total, "pendência", "pendências")}
@@ -590,11 +593,11 @@ function LinhaDoGrupo({ g, nome, casoPorId }: Readonly<{
       </td>
       <td>
         <div className="flex flex-wrap gap-1.5">
-          {g.bloqueantes > 0 && <span className="chip bg-risco-100 text-risco-800">{numero(g.bloqueantes)} {plural(g.bloqueantes, "bloqueia", "bloqueiam")}</span>}
+          {g.bloqueantes > 0 && <span className="chip bg-risco-100 text-risco-800">{rotuloDeBloqueantes(g.bloqueantes)}</span>}
           {g.aConfirmar > 0 && <span className="chip bg-alerta-100 text-alerta-800">{numero(g.aConfirmar)} a confirmar</span>}
           {visiveis.map((c) => (
             <span key={c.rotulo} className="chip bg-tinta-100 text-tinta-700">
-              {c.rotulo}{c.n > 1 && <span className="num text-[11px] opacity-75"> ×{c.n}</span>}
+              {c.rotulo}{c.n > 1 && <span className="num text-[11px]"> ×{c.n}</span>}
             </span>
           ))}
           {resto > 0 && <span className="chip bg-tinta-100 text-tinta-700">+{numero(resto)}</span>}
@@ -604,7 +607,7 @@ function LinhaDoGrupo({ g, nome, casoPorId }: Readonly<{
         )}
       </td>
       <td className="hidden text-right align-top sm:table-cell">
-        <Link href={destino} className="btn-secundario !px-2.5 !py-1 !text-xs">{verbo}</Link>
+        <Link href={destino} className="btn-secundario whitespace-nowrap !px-2.5 !py-1 !text-xs">{verbo}</Link>
       </td>
     </tr>
   );
@@ -665,7 +668,7 @@ function CorpoDaFila({ pendenciasLidas, abertas, filtradas, grupos, nomePorCaso,
   const ocultos = grupos.slice(visiveis.length);
   return (
     <>
-      <table className="tabela-a">
+      <table className="tabela-a tabela-vidro tabela-empilha">
         <thead>
           <tr><th>Mandato</th><th>O que falta</th><th className="hidden sm:table-cell"><span className="sr-only">Ação</span></th></tr>
         </thead>
@@ -696,7 +699,7 @@ async function FilaDoPainel({ estado }: Readonly<{ estado: EstadoDaUrl }>) {
   const grupos = agruparPorMandato(filtradas, rotuloDoChip);
   const casoPorId = new Map(casos.map((c) => [c.id, c] as const));
   return (
-    <div className="carta overflow-hidden">
+    <div id="fila-do-painel" className="carta scroll-mt-4 overflow-hidden">
       <div className={CABECALHO_DO_BLOCO}>
         <div className="flex items-baseline gap-3">
           <h2 className="titulo-secao">Precisa de você</h2>
@@ -736,20 +739,22 @@ function agruparPorDia(recentes: DocumentoNoPainel[], agora: Date): GrupoDoDia[]
 function LinhaRecente({ d, nomeDoMandato, linhas }: Readonly<{ d: DocumentoNoPainel; nomeDoMandato: string; linhas: number }>) {
   return (
     <li>
+      {/* Duas linhas no celular (tipo em cima, mandato embaixo); de 640 px em diante, uma só: hora, tipo, mandato
+          e contagem lado a lado, que é o que deixa os 10 últimos caberem na altura dos quatro cartões ao lado. */}
       <Link
         href={`/casos/${d.caso_id}/documentos/${d.id}`}
-        className="flex items-start gap-3 px-[18px] py-2.5 transition-colors hover:bg-tinta-50"
+        className={`mx-2 flex items-start gap-3 rounded-xl px-3 py-2 transition-colors duration-150 hover:bg-tinta-100 ${ALTURA_LINHA_RECENTE}`}
       >
         <span className="num mt-0.5 shrink-0 text-[11px] text-tinta-500">
           {horaCurta(d.criado_em)}
         </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-medium text-tinta-900">
+        <span className="flex min-w-0 flex-1 flex-col sm:flex-row sm:items-baseline sm:gap-2">
+          <span className="block truncate text-xs font-medium text-tinta-900 sm:max-w-[55%] sm:shrink-0">
             {d.tipo_taxonomia
               ? formatarTipoTaxonomia(d.tipo_taxonomia)
               : "tipo ainda não identificado"}
           </span>
-          <span className="valor-sensivel block truncate text-[11px] text-tinta-500">
+          <span className="valor-sensivel block min-w-0 truncate text-[11px] text-tinta-500">
             {nomeDoMandato}
           </span>
         </span>
@@ -762,7 +767,7 @@ function LinhaRecente({ d, nomeDoMandato, linhas }: Readonly<{ d: DocumentoNoPai
 }
 
 // Os documentos mais recentes.
-async function RecentesDoPainel() {
+export async function RecentesDoPainel() {
   const [{ nomePorCaso }, documentosRes, { recentes, linhasPorVersao }] = await Promise.all([
     lerCarteira(), lerDocumentos(), lerRecentes(),
   ]);
@@ -771,7 +776,7 @@ async function RecentesDoPainel() {
     (d.documento_versao ?? []).reduce((s, v) => s + (linhasPorVersao.get(v.id) ?? 0), 0);
   const grupos = agruparPorDia(recentes, new Date());
   return (
-    <div className="carta overflow-hidden">
+    <div className="carta h-full overflow-hidden pb-2">
       <div className={CABECALHO_DO_BLOCO}>
         <h2 className="titulo-secao">O que chegou</h2>
         <p className="text-xs text-tinta-500">últimos {recentes.length}</p>
@@ -787,10 +792,10 @@ async function RecentesDoPainel() {
         <div>
           {grupos.map((g) => (
             <div key={g.dia}>
-              <p className="border-b border-tinta-100 bg-tinta-50 px-[18px] py-1.5 text-[11px] font-semibold uppercase tracking-wide text-tinta-500">
+              <p className="px-5 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-tinta-500" style={{ minHeight: ALTURA_CABECALHO_DO_DIA }}>
                 {g.dia}
               </p>
-              <ul className="divide-y divide-tinta-100">
+              <ul>
                 {g.itens.map((d) => (
                   <LinhaRecente key={d.id} d={d} nomeDoMandato={nomePorCaso.get(d.caso_id) ?? "mandato"} linhas={linhasDoDocumento(d)} />
                 ))}
@@ -835,7 +840,7 @@ type LinhaDeMandato = {
 function SituacaoDoMandato({ l }: Readonly<{ l: LinhaDeMandato }>) {
   if (l.caso.fechado_em) return <span className="chip bg-tinta-100 text-tinta-600">Fechado</span>;
   if (l.travadas > 0) {
-    return <span className="chip bg-risco-100 text-risco-800">{l.travadas} {plural(l.travadas, "pendência", "pendências")}</span>;
+    return <span className="chip bg-risco-100 text-risco-800">{rotuloDeBloqueantes(l.travadas)}</span>;
   }
   if (l.abertas > 0) {
     return <span className="chip bg-alerta-100 text-alerta-800">{l.abertas} em aberto</span>;
@@ -944,7 +949,7 @@ async function MandatosDoPainel({ estado }: Readonly<{ estado: EstadoDaUrl }>) {
                 className={classeDaAba(a.chave === aba)}
               >
                 {a.rotulo}{" "}
-                <span className="num text-[11px] opacity-75">
+                <span className="num text-[11px]">
                   {a.chave === "travados" && !pendenciasLidas ? "—" : numero(listas[a.chave].length)}
                 </span>
               </Link>
@@ -967,7 +972,7 @@ async function MandatosDoPainel({ estado }: Readonly<{ estado: EstadoDaUrl }>) {
         </p>
       ) : (
         <>
-          <table className="tabela-a">
+          <table className="tabela-a tabela-vidro">
             <thead>
               <tr>
                 <th>Mandato</th>

@@ -220,7 +220,7 @@ export default async function PendenciasPage({
       <section aria-labelledby="em-aberto" className="space-y-3">
         <div className="flex items-baseline justify-between gap-3">
           <h2 id="em-aberto" className="titulo-secao">Em aberto</h2>
-          {lido && <p className="text-xs text-tinta-500">{abertas.length} {abertas.length === 1 ? "pendência" : "pendências"}</p>}
+          {lido && <p className="text-xs texto-fundo">{abertas.length} {abertas.length === 1 ? "pendência" : "pendências"}</p>}
         </div>
         {abertas.length === 0 && lido ? (
           <div className="carta px-6 py-10 text-center">
@@ -236,7 +236,7 @@ export default async function PendenciasPage({
         <section aria-labelledby="ja-decididas" className="space-y-3">
           <div className="flex items-baseline justify-between gap-3">
             <h2 id="ja-decididas" className="titulo-secao">Já decididas</h2>
-            <p className="text-xs text-tinta-500">{decididas.length} {decididas.length === 1 ? "pendência" : "pendências"}</p>
+            <p className="text-xs texto-fundo">{decididas.length} {decididas.length === 1 ? "pendência" : "pendências"}</p>
           </div>
           <p className="text-xs text-tinta-500">
             Seguem visíveis porque a decisão é um registro do mandato; dá para mudá-la com os botões.

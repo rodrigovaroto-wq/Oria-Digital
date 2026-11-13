@@ -88,7 +88,7 @@ export default async function CustosPage({
             className={`rounded-full border px-3 py-1 ${
               o.id === periodo.id
                 ? "border-acento-600 bg-acento-50 font-semibold text-tinta-900"
-                : "border-tinta-200 text-tinta-600 hover:border-tinta-300"
+                : "border-tinta-300 texto-fundo hover:border-tinta-400"
             }`}
           >
             {o.rotulo}
@@ -104,22 +104,22 @@ export default async function CustosPage({
       )}
 
       {t.lotes === 0 ? (
-        <p className="rounded border border-tinta-200 p-4 text-sm text-tinta-600">
+        <p className="carta p-4 text-sm text-tinta-700">
           Nenhuma execução de ingestão registrada ainda. Sem execução não há custo a mostrar — isto
           não significa custo zero.
         </p>
       ) : (
         <>
           <dl className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded border border-tinta-200 p-4">
+            <div className="carta p-4">
               <dt className="text-xs uppercase text-tinta-500">Custo de IA — {periodo.rotulo.toLowerCase()}</dt>
               <dd className="mt-1 text-xl font-semibold text-tinta-900"><Valor s={p} campo="custoUsd" /></dd>
             </div>
-            <div className="rounded border border-tinta-200 p-4">
+            <div className="carta p-4">
               <dt className="text-xs uppercase text-tinta-500">Custo por documento</dt>
               <dd className="mt-1 text-xl font-semibold text-tinta-900"><Valor s={p} campo="custoPorDocumentoUsd" /></dd>
             </div>
-            <div className="rounded border border-tinta-200 p-4">
+            <div className="carta p-4">
               <dt className="text-xs uppercase text-tinta-500">Execuções no período</dt>
               <dd className="mt-1 text-xl font-semibold text-tinta-900 tabular-nums">{p.lotes}</dd>
             </div>
@@ -133,7 +133,8 @@ export default async function CustosPage({
             </p>
           )}
 
-          <div className="overflow-x-auto rounded border border-tinta-200">
+          <div className="carta">
+            <div className="overflow-x-auto rounded-[14px]">
             <table className="w-full text-sm">
               <thead className="bg-tinta-50 text-left text-xs uppercase text-tinta-500">
                 <tr>
@@ -172,13 +173,14 @@ export default async function CustosPage({
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
 
-          <p className="text-xs text-tinta-500">
+          <p className="text-xs texto-fundo">
             Soma dos mandatos existentes desde o início: <Valor s={t} campo="custoUsd" />
             {t.semCusto > 0 && ` (piso: ${t.semCusto} de ${t.lotes} execuções sem custo registrado)`}.
           </p>
-          <p className="text-xs text-tinta-500">
+          <p className="text-xs texto-fundo">
             Mandato excluído leva suas execuções junto (o registro de custo é apagado com ele): o gasto
             de um mandato que já não existe não entra nesta soma e não pode ser recuperado por esta tela.
           </p>
@@ -203,7 +205,7 @@ function Titulo() {
   return (
     <div>
       <h1 className="text-lg font-semibold text-tinta-900">Custos</h1>
-      <p className="mt-1 text-sm text-tinta-500">
+      <p className="mt-1 text-sm texto-fundo">
         Quanto a leitura dos documentos por IA custou, por mandato e no período. Esta tela só
         mostra o que as execuções registraram.
       </p>

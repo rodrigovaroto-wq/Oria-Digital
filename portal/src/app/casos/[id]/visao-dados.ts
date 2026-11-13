@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
-import { servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
-import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
+import { chamaRpc, servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
+import { contarKit, lerKitDoCaso, type ContagemDoKit, type KitDoCaso } from "@/lib/kit-do-caso";
 import { ESTADOS_EM_ABERTO } from "@/lib/pendencia";
 import { proximoPasso } from "@/lib/proximo-passo";
 import { lerResultadoDeFatos } from "@/lib/fatos-do-caso";
@@ -122,19 +122,27 @@ export const lerLinhas = cache(async (id: string) => {
   return contarLinhasPorVersao(await cliente(), versoes);
 });
 
-// 0157: o Kit Básico é perguntado ao banco (`fn_documento_serve_como`), não reimplementado aqui — ver
-// `lib/supabase/servico-serve-como.ts` e `verificar-kit-basico.mts`. Falha da pergunta ao banco = Kit
-// NÃO LIDO (null), nunca "itens faltantes".
-const lerKitAtendido = cache(async (id: string): Promise<Set<string> | null> => {
-  const [kitBasicoRes, documentosRes] = await Promise.all([lerKitObrigatorio(), lerDocumentosDoCaso(id)]);
-  const kitBasico = (kitBasicoRes.data as TaxonomiaTipoDocumento[] | null) ?? [];
-  try {
-    return await itensDoKitBasicoAtendidos(
-      kitBasico, documentosRes.data as Documento[], servicoDocumentoServeComo(await cliente()),
-    );
-  } catch {
-    return null;
-  }
+// O Kit Básico vem de `fn_kit_do_caso` (0300), UMA ida, com o estado de cada item derivado de
+// `campo_extraido` — o mesmo que a aba Documentos e o export leem (`lib/kit-do-caso.ts`). Banco sem a
+// 0300 cai em `itensDoKitBasicoAtendidos` (0157). Erro, exceção ou zero linhas = Kit NÃO LIDO (null),
+// nunca "itens faltantes" nem "itens prontos". Antes, o % contava como lido o item cujo checklist não era
+// `recebido_nao_valido`, e o checklist vira `presente` no registro do documento, antes de existir linha.
+const lerKitDoMandato = cache(async (id: string) => {
+  const [kitBasicoRes, documentosRes, checklistRes] = await Promise.all([
+    lerKitObrigatorio(), lerDocumentosDoCaso(id), lerChecklist(id),
+  ]);
+  const supabase = await cliente();
+  const leitura = await lerKitDoCaso({
+    rpc: chamaRpc(supabase), casoId: id,
+    kit: { data: kitBasicoRes.data as TaxonomiaTipoDocumento[] | null, error: kitBasicoRes.error },
+    documentos: documentosRes.data as Documento[],
+    checklist: { data: checklistRes.data as Array<{ tipo_taxonomia: string; status: string }> | null, error: checklistRes.error },
+    servico: servicoDocumentoServeComo(supabase),
+  });
+  // A queda olha a lista de documentos: truncada ou com erro, o "chegou" dela não é verdade.
+  const quedaSemBase = leitura.tipo === "lido" && leitura.kit.origem === "queda"
+    && (Boolean(documentosRes.error) || Boolean(documentosRes.truncado));
+  return quedaSemBase ? null : leitura.tipo === "lido" ? leitura.kit : null;
 });
 
 type ModeloDoMandato = { entidade: string | null; ultimo_exercicio_real: number | null; anos_projetados: number | null };
@@ -157,9 +165,10 @@ function detalheDasPendenciasDoMandato(nAbertas: number | null, nBloqueantes: nu
   return null;
 }
 
-function detalheDoKitDoMandato(kitLido: boolean, presentes: number, total: number): string | null {
-  if (!kitLido) return "a leitura do kit falhou";
-  return presentes === total ? "kit completo" : null;
+function detalheDoKitDoMandato(kit: KitDoCaso | null, c: ContagemDoKit | null): string | null {
+  if (!kit || !c) return "a leitura do kit falhou";
+  if (kit.origem === "queda") return "banco sem a 0300: não se sabe quais itens foram lidos";
+  return c.lidos === c.total ? "todos os itens com conteúdo lido" : null;
 }
 
 /**
@@ -167,10 +176,10 @@ function detalheDoKitDoMandato(kitLido: boolean, presentes: number, total: numbe
  * tinha inline, só movida. Só espera o que precisa; os blocos que não dependem dele não o pedem.
  */
 export const lerIndicadores = cache(async (id: string) => {
-  const [casoRes, kitBasicoRes, documentosRes, abertasRes, bloqueantesRes, revisoesRes, checklistRes,
-         portao2Res, modeloRes, linhas, kitAtendidos] = await Promise.all([
+  const [casoRes, kitBasicoRes, documentosRes, abertasRes, bloqueantesRes, revisoesRes,
+         portao2Res, modeloRes, linhas, kit] = await Promise.all([
     lerCaso(id), lerKitObrigatorio(), lerDocumentosDoCaso(id), lerAbertas(id), lerBloqueantes(id),
-    lerRevisoes(id), lerChecklist(id), lerPortao2(id), lerModelo(id), lerLinhas(id), lerKitAtendido(id),
+    lerRevisoes(id), lerPortao2(id), lerModelo(id), lerLinhas(id), lerKitDoMandato(id),
   ]);
   if (casoRes.error || !casoRes.data) notFound();
   const caso = casoRes.data as Caso;
@@ -182,10 +191,6 @@ export const lerIndicadores = cache(async (id: string) => {
   const { porVersao: linhasPorVersao, incompleto: linhasIncompletas } = linhas;
 
   const portao2 = portao2Res.data as Portao2 | null;
-  const checklist = (checklistRes.data as Array<{ tipo_taxonomia: string; status: string }> | null) ?? [];
-  const tiposSemConteudo = new Set(
-    checklist.filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia),
-  );
 
   // Contagem que falhou sai como null — nunca 0 (regra 1).
   const contagem = (r: { error: unknown; count: number | null }) => (r.error ? null : r.count);
@@ -194,10 +199,8 @@ export const lerIndicadores = cache(async (id: string) => {
   const nRevisoes = contagem(revisoesRes);
 
   const linhasTotais = [...linhasPorVersao.values()].reduce((a, b) => a + b, 0);
-  const kitLido = !kitBasicoRes.error && documentosLidos && !checklistRes.error && kitAtendidos !== null;
-  const kitPresentes = kitBasico.filter(
-    (i) => (kitAtendidos?.has(i.codigo) ?? false) && !tiposSemConteudo.has(i.codigo),
-  ).length;
+  const kitLido = kit !== null;
+  const contagemKit = kit ? contarKit(kit) : null;
   // Documento que chegou, foi classificado e não rendeu UMA linha. É o que o
   // `fn_conferir_lote` mede do lado do banco; aqui ele vira número de topo,
   // porque é a pergunta que a rodada v45 respondeu tarde demais.
@@ -205,9 +208,6 @@ export const lerIndicadores = cache(async (id: string) => {
     (d) => ((d.documento_versao ?? []).reduce((n, v) => n + (linhasPorVersao.get(v.id) ?? 0), 0)) === 0,
   );
   const semLinha = documentosSemLinha.length;
-  // O Kit em três partes (benchmark, item 4): recebido NÃO é "com conteúdo". `kitPresentes` já descontava o
-  // recebido sem conteúdo; agora o recebido inteiro também sai, para a tela mostrar a diferença.
-  const kitRecebidos = kitBasico.filter((i) => kitAtendidos?.has(i.codigo) ?? false).length;
   // Contagem parcial não é contagem (regra 1): com a leitura incompleta, a soma parcial NÃO
   // aparece como total (o valor vira "—") e "sem nenhuma linha" não é dito — contaria
   // documento cujas linhas estavam nas páginas que não vieram.
@@ -219,7 +219,9 @@ export const lerIndicadores = cache(async (id: string) => {
   const passo = proximoPasso({
     bloqueantesAbertas: nBloqueantes,
     revisoesAbertas: nRevisoes,
-    kitFaltantes: kitLido ? kitBasico.length - kitPresentes : null,
+    // o que o cliente ainda tem de mandar: não chegou, ou chegou sem dado. Dispensado (decidido por pessoa)
+    // e aguardando leitura (a espera é do sistema) não são pedido ao cliente. Na queda nada se sabe de leitura.
+    kitFaltantes: contagemKit ? contagemKit.paraPedirAoCliente : null,
     aprovavel: portao2 ? portao2.elegivel : null,
     aprovado,
     // Falta de configuração é uma resposta ("não montou"); erro de leitura é outra ("não sei").
@@ -229,11 +231,11 @@ export const lerIndicadores = cache(async (id: string) => {
   // Leitura de bloqueantes que falhou é DITA, não some: `(null ?? 0) > 0` escondia a
   // falha e o indicador parecia dizer "nenhuma trava" (regra 1).
   const detalheDasPendencias = detalheDasPendenciasDoMandato(nAbertas, nBloqueantes);
-  const detalheDoKit = detalheDoKitDoMandato(kitLido, kitPresentes, kitBasico.length);
+  const detalheDoKit = detalheDoKitDoMandato(kit, contagemKit);
 
   return {
     caso, portao2, documentos, documentosLidos, nAbertas, linhasTotais, linhasConhecidas, semLinha,
-    kitLido, kitPresentes, kitRecebidos, kitTotal: kitBasico.length, passo, linhasIncompletas,
+    kitLido, kit, contagemKit, kitTotal: kitBasico.length, passo, linhasIncompletas,
     documentosSemLinha: documentosSemLinha.map((x) => ({ id: x.id, tipo: x.tipo_taxonomia })), detalheDasLinhas, detalheDasPendencias, detalheDoKit,
   };
 });
