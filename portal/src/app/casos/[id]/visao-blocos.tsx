@@ -6,6 +6,7 @@ import { ehPdf, hrefDoOriginal, rotuloDoLink } from "@/lib/original-do-documento
 import { suavizarMensagem } from "@/lib/rotulos";
 import type { FatoDoCaso } from "@/lib/types";
 import { aprovarCaso } from "./actions";
+import { FatosNaoLidos } from "@/components/fatos-nao-lidos";
 import { casoDaTela, lerFatosDoCaso, lerIndicadores, lerPortao2, type Portao2 } from "./visao-dados";
 
 // OS BLOCOS DA VISÃO GERAL DO MANDATO, cada um com a sua consulta e o seu `<Suspense>`
@@ -19,6 +20,8 @@ import { casoDaTela, lerFatosDoCaso, lerIndicadores, lerPortao2, type Portao2 } 
 // REGRA 1 / 7: o mesmo tratamento de falha de antes, movido sem mudar. Contagem que falha sai como
 // traço com a causa, nunca zero; o Portão 2 que não respondeu diz "Aprovação não conferida".
 
+const COR_DO_DETALHE = { alerta: "text-risco-700", bom: "text-ok-700", neutro: "text-tinta-500" } as const;
+
 // Um indicador do topo. Número grande, rótulo embaixo, e um detalhe opcional em
 // cor quando ele muda a leitura do número (ex.: "2 bloqueantes"). Cada um leva à aba
 // onde o número se explica (fase 2): um número sem para onde ir é só decoração.
@@ -31,8 +34,7 @@ function Indicador({
   tom?: "neutro" | "alerta" | "bom";
   href: string;
 }>) {
-  const corDetalhe =
-    tom === "alerta" ? "text-risco-700" : tom === "bom" ? "text-ok-700" : "text-tinta-500";
+  const corDetalhe = COR_DO_DETALHE[tom ?? "neutro"];
   return (
     <Link href={href} className="block px-4 py-3 transition-colors hover:bg-tinta-50">
       <p className="indicador-valor">{valor}</p>
@@ -177,6 +179,26 @@ export async function IndicadoresDoMandato({ id }: Readonly<{ id: string }>) {
   );
 }
 
+function frasesDasRessalvas(n: number): string {
+  if (n === 0) return "Nenhuma pendência foi aceita sem resolução neste caso.";
+  const quantas = n === 1 ? "pendência seguiu sem resolução" : "pendências seguiram sem resolução";
+  return `${n} ${quantas} — o caso avança com elas registradas, não resolvidas.`;
+}
+
+function Rejeitadas({ n, naoSobrepujaveis }: Readonly<{ n: number; naoSobrepujaveis: number }>) {
+  const quantas = n === 1 ? "1 pendência foi declarada improcedente" : `${n} pendências foram declaradas improcedentes`;
+  const quais = naoSobrepujaveis === 1
+    ? "sendo 1 daquelas que nenhuma ressalva libera"
+    : `sendo ${naoSobrepujaveis} daquelas que nenhuma ressalva libera`;
+  return (
+    <p className="mt-1 text-xs text-tinta-700">
+      <strong>{quantas}</strong>
+      {naoSobrepujaveis > 0 && <>{", "}{quais}</>}
+      . Quem decidiu e por quê está na trilha do caso, e vai junto com a aprovação.
+    </p>
+  );
+}
+
 export async function PortaoDoMandato({ id }: Readonly<{ id: string }>) {
   // O papel neste mandato (memoizado: o layout já o pediu).
   const [caso, portao2Res, perm] = await Promise.all([casoDaTela(id), lerPortao2(id), lerPermissoesDoMandato(id)]);
@@ -223,13 +245,7 @@ export async function PortaoDoMandato({ id }: Readonly<{ id: string }>) {
               {/* A CONTAGEM, sem teto (0109). O limite de 3 saiu por decisão do
                   dono; o número continua na tela porque é o que distingue um caso
                   limpo de um caso que seguiu por cima de seis pendências. */}
-              <p className="mt-1.5 text-xs text-tinta-600">
-                {portao2.ressalvas_ativas === 0
-                  ? "Nenhuma pendência foi aceita sem resolução neste caso."
-                  : `${portao2.ressalvas_ativas} ${portao2.ressalvas_ativas === 1
-                      ? "pendência seguiu sem resolução" : "pendências seguiram sem resolução"}`
-                    + " — o caso avança com elas registradas, não resolvidas."}
-              </p>
+              <p className="mt-1.5 text-xs text-tinta-600">{frasesDasRessalvas(portao2.ressalvas_ativas)}</p>
               {/* O QUE FOI DECLARADO IMPROCEDENTE (0106). Rejeitar é a única ação
                   que libera o portão SEM TETO — inclusive a pendência que nenhuma
                   ressalva libera. Não dá para proibir (senão uma pendência
@@ -237,23 +253,7 @@ export async function PortaoDoMandato({ id }: Readonly<{ id: string }>) {
                   tabela por fora, que é a mesma liberação sem rastro). O que dá
                   é não deixar invisível: aqui, e dentro da decisão de aprovação. */}
               {(portao2.rejeitadas ?? 0) > 0 && (
-                <p className="mt-1 text-xs text-tinta-700">
-                  <strong>
-                    {portao2.rejeitadas === 1
-                      ? "1 pendência foi declarada improcedente"
-                      : `${portao2.rejeitadas} pendências foram declaradas improcedentes`}
-                  </strong>
-                  {(portao2.rejeitadas_nao_sobrepujaveis ?? 0) > 0 && (
-                    <>
-                      {", "}
-                      {portao2.rejeitadas_nao_sobrepujaveis === 1
-                        ? "sendo 1 daquelas que nenhuma ressalva libera"
-                        : `sendo ${portao2.rejeitadas_nao_sobrepujaveis} daquelas que nenhuma `
-                          + "ressalva libera"}
-                    </>
-                  )}
-                  . Quem decidiu e por quê está na trilha do caso, e vai junto com a aprovação.
-                </p>
+                <Rejeitadas n={portao2.rejeitadas ?? 0} naoSobrepujaveis={portao2.rejeitadas_nao_sobrepujaveis ?? 0} />
               )}
             </div>
             {portao2.elegivel && caso.status !== "aprovado" && caso.status !== "pronto_para_base" && !perm.reservadoAoSocio.pode && (
@@ -293,9 +293,10 @@ export async function PortaoDoMandato({ id }: Readonly<{ id: string }>) {
 }
 
 export async function FatosDoMandato({ id }: Readonly<{ id: string }>) {
-  // `?? []` e não `!`: banco sem a 0148 devolve erro e `data` nulo, e a tela tem de sair sem o bloco em
-  // vez de quebrar.
-  const fatos: FatoDoCaso[] = await lerFatosDoCaso(id);
+  // Banco sem a 0148 (função ausente) sai sem o bloco, em vez de quebrar. Qualquer OUTRO erro aparece:
+  // sumir teria a mesma cara de "o documento não diz nada" (regra 7).
+  const { fatos, falhou }: { fatos: FatoDoCaso[]; falhou: boolean } = await lerFatosDoCaso(id);
+  if (falhou) return <FatosNaoLidos />;
   const fatosCriticos = fatos.filter((f) => f.severidade === "critico").length;
   return (
     <>

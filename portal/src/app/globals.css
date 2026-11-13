@@ -183,6 +183,11 @@
    no celular, com o botão de salvar coberto. Vale só abaixo de `sm` (a barra some a partir dele). */
 :root {
   --altura-barra-inferior: calc(4rem + max(0.75rem, env(safe-area-inset-bottom)));
+  /* Tokens de movimento do SKELETON REVEAL (mais abaixo), copiados do `_root.css` da skill
+     transitions.dev: `--duration-slow` 400ms, `--ease-in-out`, `--blur-small` 2px. */
+  --duration-slow: 400ms;
+  --ease-in-out: ease-in-out;
+  --blur-small: 2px;
 }
 
 :root {
@@ -525,16 +530,9 @@ body {
 
 /* SKELETON REVEAL (transitions.dev, 14-skeleton-reveal; só o trecho usado). O esqueleto de um bloco
    que chega por streaming (`components/revelar.tsx`) sai e o conteúdo entra em cross-fade com
-   cross-blur. Tokens de movimento copiados do `_root.css` da skill: `--duration-slow` 400ms,
-   `--ease-in-out`, `--blur-small` 2px.
+   cross-blur. Os tokens de movimento moram no `:root` do topo do arquivo.
    O ESTADO BASE É O FINAL (conteúdo visível, cópia do esqueleto transparente): a animação parte de
    "escondido" até o base, então, se ela não rodar, nada fica invisível. */
-:root {
-  --duration-slow: 400ms;
-  --ease-in-out: ease-in-out;
-  --blur-small: 2px;
-}
-
 @keyframes t-skel-in {
   from { opacity: 0; filter: blur(var(--blur-small)); }
   to   { opacity: 1; filter: blur(0); }
@@ -562,8 +560,10 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .t-skel-content { animation: none !important; }
-  .t-skel-ghost { display: none !important; }
+  /* Sem `!important`: estas regras vêm DEPOIS das de base e têm a mesma especificidade (uma classe),
+     então vencem pela ordem. */
+  .t-skel-content { animation: none; }
+  .t-skel-ghost { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

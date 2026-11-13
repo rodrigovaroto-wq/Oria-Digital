@@ -61,9 +61,10 @@ export default async function PainelPage({
       </div>
 
       {/* Avisos de leitura (falha, teto de paginação). Sem esqueleto de propósito: em operação normal
-          o bloco não existe, e reservar espaço para ele empurraria a tela inteira por nada. Enquanto
-          ele não chega, os blocos abaixo continuam com cara de "carregando", então a ausência do aviso
-          não lê como "tudo certo"; se chegar, o aviso aparece em cima, de forma visível. */}
+          o bloco não existe, e reservar espaço para ele empurraria a tela por nada. LIMITE: o aviso
+          espera `lerRecentes` (a contagem de linhas), que os indicadores NÃO esperam; então os
+          indicadores podem pintar antes dele, e um aviso que chegue depois empurra a tela para baixo
+          (limite conhecido; só acontece em falha ou teto de leitura, nunca em operação normal). */}
       <Suspense fallback={null}>
         <AvisosDoPainel />
       </Suspense>

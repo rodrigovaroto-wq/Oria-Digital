@@ -726,6 +726,7 @@ const EXCECOES_DE_FORMATADOR: ReadonlyArray<readonly [arquivo: string, trecho: s
   ["components/painel-zip.tsx", "progresso.indice.toLocaleString", "contagem de entradas do ZIP, não valor"],
   ["app/casos/[id]/documentos/(lista)/page.tsx", 'linhas.toLocaleString("pt-BR")', "contagem de linhas do documento, não valor"],
   ["app/administracao/page.tsx", 'new Date(iso).toLocaleString("pt-BR"', "data/hora, não valor"],
+  ["app/casos/painel-blocos.tsx", "const numero = (n: number) => n.toLocaleString", "contagens do painel (mandatos, pendências, chips da fila, N linhas em O que chegou), não valor"],
   // DEFINIÇÕES de formatador (não são uso em JSX): o uso é varrido (`formatValor(` em
   // documento-detalhe, `fmt.format(` em SecaoLinhas) ou, quando o resultado passa por uma variável
   // (`mostrado`, `num(`), é garantido pelas marcações NOMEADAS acima (SugestoesDoRealizado).
@@ -741,7 +742,16 @@ const arquivosTsx = (readdirSync(new URL("../src", import.meta.url), { recursive
 let usosVarridos = 0;
 const excecoesUsadas = new Set<number>();
 for (const arq of arquivosTsx) {
-  const txt = fonte(arq);
+  // Comentários MASCARADOS (trocados por espaços, para os índices continuarem os do arquivo): antes, um
+  // `toLocaleString("pt-BR")` citado num COMENTÁRIO ao lado de um `valor-sensivel` satisfazia a
+  // varredura sem proteger nenhuma chamada real. Só se mascara comentário de linha inteira, bloco que
+  // começa na linha e `{/* */}` do JSX: `semComentarios` do script lib come código quando há `/*` dentro
+  // de string (medido em upload-form.tsx, que perdia a linha da exceção), e aqui isso derrubaria o
+  // portão. LIMITE: `// …` no fim de uma linha de código não é mascarado.
+  const original = fonte(arq);
+  const txt = original
+    .replace(/^[ \t]*\/\/.*$/gm, (c) => " ".repeat(c.length))
+    .replace(/\{\/\*[\s\S]*?\*\/\}|^[ \t]*\/\*[\s\S]*?\*\//gm, (c) => c.replace(/[^\n]/g, " "));
   for (const m of txt.matchAll(FORMATADORES)) {
     const ini = m.index ?? 0;
     const linha = txt.slice(txt.lastIndexOf("\n", ini) + 1, txt.indexOf("\n", ini));
@@ -1551,16 +1561,17 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
 
   // (3) A REDE DE SEGURANÇA no CSS: o estado BASE é o final. Se a animação não rodar (movimento
   // reduzido, CSS que falhou), o conteúdo está visível e a cópia do esqueleto está transparente.
-  const cssSk = fonte("app/globals.css");
+  const cssSk = fonte("app/globals.css").replace(/\/\*[\s\S]*?\*\//g, ""); // sem comentários: eles citam os seletores
   const regra = (seletor: string) => {
-    const i = cssSk.search(new RegExp(`^${seletor.replace(/[.]/g, "\\.")}\\s*\\{`, "m"));
+    const i = cssSk.search(new RegExp(`^${seletor.replace(/[.]/g, String.raw`\.`)}${String.raw`\s*\{`}`, "m"));
     return i < 0 ? "" : cssSk.slice(i, cssSk.indexOf("}", i));
   };
   checar(regra(".t-skel-content") !== "" && !/opacity\s*:\s*0\b/.test(regra(".t-skel-content")),
     "globals.css: o conteúdo revelado NÃO nasce com opacity 0 (a animação é quem parte de escondido; sem ela, o número está na tela)");
   checar(/opacity\s*:\s*0\b/.test(regra(".t-skel-ghost")),
     "globals.css: a cópia do esqueleto nasce transparente (se a animação não rodar, não fica um esqueleto por cima do número)");
-  const reduzido = cssSk.slice(cssSk.indexOf("@media (prefers-reduced-motion: reduce) {\n  .t-skel-content"));
+  const iReduzido = cssSk.search(/@media \(prefers-reduced-motion: reduce\) \{\s*\.t-skel-content/);
+  const reduzido = iReduzido < 0 ? "" : cssSk.slice(iReduzido);
   checar(/\.t-skel-content\s*\{\s*animation:\s*none/.test(reduzido) && /\.t-skel-ghost\s*\{\s*display:\s*none/.test(reduzido),
     "globals.css: prefers-reduced-motion desliga a revelação (sem fade nem blur)");
 
@@ -1575,7 +1586,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
 
   // (5) Os esqueletos são "carregando", nunca valor: nenhum dígito em texto e nenhuma leitura de dado.
   const corpoDe = (src: string, nome: string) => {
-    const i = src.search(new RegExp(`function ${nome}\\(`));
+    const i = src.search(new RegExp(`function ${nome}${String.raw`\(`}`));
     return i < 0 ? null : src.slice(i, src.indexOf("\n}\n", i));
   };
   const blocosPainel = semComentariosDoFonte(fonte("app/casos/painel-blocos.tsx"));
@@ -1586,7 +1597,10 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
       .map((n) => [n, corpoDe(paginaVisao, n) ?? ""] as [string, string]),
   ];
   for (const [nome, corpo] of esqueletos) {
-    checar(corpo !== "" && !/>[^<>{}]*\d[^<>{}]*</.test(corpo) && !/\bler[A-Z]|toLocaleString|\.data\b/.test(corpo),
+    // Texto entre `>` e `<` sem `{}`: um laço sobre os trechos, em vez de `[^<>{}]*\d[^<>{}]*` (dois
+    // quantificadores em volta do dígito, com retrocesso quadrático em corpo longo sem dígito).
+    const textoComDigito = [...corpo.matchAll(/>([^<>{}]*)</g)].some((m) => /\d/.test(m[1]));
+    checar(corpo !== "" && !textoComDigito && !/\bler[A-Z]|toLocaleString|\.data\b/.test(corpo),
       `${nome}: o esqueleto não carrega número nem lê dado (esqueleto é "carregando", nunca valor)`);
   }
 
@@ -1597,6 +1611,9 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   const portao = corpoDe(blocosVisao, "PortaoDoMandato") ?? "";
   checar(/Aprovação não conferida/.test(portao) && /A consulta que diz se o mandato pode ser aprovado não respondeu/.test(portao),
     "Portão 2: avaliação que não respondeu diz 'Aprovação não conferida' com o efeito (não some como 'nada a aprovar')");
+  // LIMITE: estas duas afirmam o TEXTO de `visao-dados.ts` (a leitura do Kit depende de Supabase e do
+  // serviço de classificação, que a suíte não sobe; regra 4: sem fixture inventada). Elas pegam o
+  // revert do bloco, não um desvio de comportamento.
   checar(/catch \{\s*return null;\s*\}/.test(dadosVisao)
     && /kitLido = !kitBasicoRes\.error && documentosLidos && !checklistRes\.error && kitAtendidos !== null/.test(dadosVisao),
     "Kit Básico: serviço que lança vira 'não lido' (null) e o Kit só é lido com tudo lido — nunca 'itens faltantes'");
@@ -1611,12 +1628,71 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   checar(/Não foi possível carregar o Início/.test(avisosPainel) && /A leitura das pendências falhou/.test(avisosPainel)
     && /A leitura dos documentos falhou/.test(avisosPainel) && /Parte das leituras acima não terminou/.test(avisosPainel),
     "Painel: os avisos de leitura (falha e teto) continuam existindo, em bloco próprio");
-  checar(/Não foi possível conferir as pendências/.test(blocosPainel) && /não conferido agora/.test(blocosPainel)
-    && /Não foi possível ler os documentos agora/.test(blocosPainel) && /sem o status “travado”/.test(blocosPainel),
-    "Painel: fila, 'O que chegou' e 'Seus mandatos' dizem a falha da própria leitura (não viram vazio)");
+  // LIMITE: a LIGAÇÃO do bloco ao componente de falha é texto (`FatosDoMandato` é um componente
+  // assíncrono que importa o Supabase; a suíte não o monta, regra 4). O comportamento de cada lado
+  // está medido acima; aqui só se afirma que o bloco consulta `falhou` e devolve `FatosNaoLidos`.
+  const fatosDoMandato = corpoDe(blocosVisao, "FatosDoMandato") ?? "";
+  checar(/falhou\b[\s\S]*return <FatosNaoLidos \/>/.test(fatosDoMandato),
+    "Fatos: o bloco do mandato devolve FatosNaoLidos quando a leitura falhou");
+
+  // (8) INDICADOR DO INÍCIO — COMPORTAMENTO no modo discrição. A contagem do painel não é valor
+  // financeiro (a política do globals.css não a lista) e a nota de ausência é o motivo do traço
+  // (regra 1): nenhuma das duas leva `valor-sensivel`, nem com valor, nem sem. Com a leitura das
+  // pendências falha e o modo ligado, "travados: não conferido agora" tem de continuar legível.
+  {
+    const { Indicador } = await import("../src/app/casos/indicador-do-painel.tsx");
+    const comValor = renderToString(h(Indicador, { valor: "3", rotulo: "mandatos em andamento", detalhe: "travados: não conferido agora", tom: "alerta" }));
+    checar(comValor.includes("travados: não conferido agora") && !comValor.includes("valor-sensivel"),
+      "Indicador do Início: com valor, nem o número nem a nota 'travados: não conferido agora' são borrados no modo discrição");
+    const semValor = renderToString(h(Indicador, { valor: null, rotulo: "pendências", nota: "leitura das pendências indisponível agora" }));
+    checar(semValor.includes("leitura das pendências indisponível agora") && !semValor.includes("valor-sensivel"),
+      "Indicador do Início: sem valor, o traço e a nota de ausência não são borrados");
+  }
+
+  // Cada frase é procurada no corpo do bloco que a diz, não "em qualquer lugar do arquivo": a frase da
+  // fila migrando para outro bloco (ou sobrando num comentário já removido) reprova.
+  const filaPainel = (corpoDe(blocosPainel, "CorpoDaFila") ?? "") + (corpoDe(blocosPainel, "textoDoTopoDaFila") ?? "");
+  const recentesPainel = corpoDe(blocosPainel, "RecentesDoPainel") ?? "";
+  const mandatosPainel = corpoDe(blocosPainel, "MandatosDoPainel") ?? "";
+  // (7) FATOS DO MANDATO — COMPORTAMENTO. Falha de leitura não some com a seção (regra 7): erro que
+  // NÃO é "função ausente" mostra a frase com o efeito; função ausente (banco sem a 0148) e "sem
+  // fatos" não mostram nada. A regra CSS `.t-skel:has(> .t-skel-content:empty)` esconde o bloco só
+  // quando o conteúdo é vazio, então o bloco de falha tem de ser NÃO vazio.
+  {
+    const { lerResultadoDeFatos } = await import("../src/lib/fatos-do-caso.ts");
+    const { FatosNaoLidos } = await import("../src/components/fatos-nao-lidos.tsx");
+    const fato = { fato_id: "f1" };
+    const renderBloco = (r: Parameters<typeof lerResultadoDeFatos>[0]) => {
+      const l = lerResultadoDeFatos(r);
+      return renderToString(h(Revelar, { rotulo: "x", esqueleto: h("i"), children: l.falhou ? h(FatosNaoLidos) : null }));
+    };
+    const conteudoVazio = (html: string) => /class="t-skel-content"><\/div>/.test(html);
+    const comErro = renderBloco({ data: null, error: { code: "57014" } });
+    checar(comErro.includes("Não foi possível ler os fatos declarados nos documentos agora")
+      && comErro.includes("podem existir e não estão listados aqui") && !conteudoVazio(comErro),
+      "Fatos: erro de leitura (timeout 57014) mostra a frase com motivo e efeito, e o conteúdo não é vazio (a regra :empty não o esconde)");
+    const semFuncao = renderBloco({ data: null, error: { code: "PGRST202" } });
+    checar(!semFuncao.includes("Não foi possível ler os fatos") && conteudoVazio(semFuncao),
+      "Fatos: função ausente (PGRST202, banco sem a 0148) não mostra nada: é estado normal, não falha");
+    checar(!renderBloco({ data: null, error: { code: "42883" } }).includes("Não foi possível ler os fatos"),
+      "Fatos: função ausente (42883) também não mostra nada");
+    checar(!renderBloco({ data: [], error: null }).includes("Não foi possível ler os fatos"),
+      "Fatos: leitura bem-sucedida sem fatos não diz falha");
+    checar(lerResultadoDeFatos({ data: [fato], error: null }).fatos.length === 1 && !lerResultadoDeFatos({ data: [fato], error: null }).falhou,
+      "Fatos: leitura com fatos devolve os fatos e não falha");
+    checar(lerResultadoDeFatos({ data: null, error: { code: null } }).falhou,
+      "Fatos: erro sem código é falha (só o código de função ausente a dispensa)");
+  }
+
+  checar(/Não foi possível conferir as pendências/.test(filaPainel) && /não conferido agora/.test(filaPainel),
+    "Painel: a fila diz a falha da própria leitura (não vira vazio)");
+  checar(/Não foi possível ler os documentos agora/.test(recentesPainel),
+    "Painel: 'O que chegou' diz a falha da própria leitura (não vira vazio)");
+  checar(/sem o status “travado”/.test(mandatosPainel),
+    "Painel: 'Seus mandatos' diz a falha da própria leitura (não vira vazio)");
   checar(/<Suspense fallback=\{null\}>\s*<AvisosDoPainel \/>/.test(paginaPainel)
     && /<EsqueletoDaGrade \/>/.test(paginaPainel),
-    "Painel: o aviso de leitura não reserva espaço, mas os blocos abaixo continuam com cara de carregando até chegarem");
+    "Painel: o aviso de leitura não reserva espaço (limite documentado na página) e o corpo tem esqueleto próprio até chegar");
 }
 
 if (falhas.length > 0) {

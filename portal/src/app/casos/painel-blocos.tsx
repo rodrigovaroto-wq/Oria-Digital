@@ -14,6 +14,7 @@ import {
   lerCarteira, lerDocumentos, lerRecentes, lerTrava, lerUso,
   type DocumentoNoPainel, type UsoDoLote,
 } from "./painel-dados";
+import { Indicador } from "./indicador-do-painel";
 
 // OS BLOCOS DO PAINEL, cada um com a sua consulta e o seu `<Suspense>` (ver `components/revelar.tsx`).
 //
@@ -97,74 +98,34 @@ function resumoDaPendencia(descricao: string | null): string {
   return (primeira ?? "").trim();
 }
 
-/**
- * Um número do topo. `valor` é string de propósito: metade destes indicadores
- * é dinheiro ou duração, e formatar aqui dentro obrigaria o componente a saber
- * de moeda e de fuso. Nulo vira traço, que é informação e não buraco.
- */
-function Indicador({
-  valor, rotulo, detalhe, tom, nota, barra,
-}: {
-  valor: string | null;
-  rotulo: string;
-  detalhe?: string | null;
-  tom?: "neutro" | "alerta" | "bom";
-  /** por que não há número; só aparece quando `valor` é nulo */
-  nota?: string;
-  /** 0..1, desenha a fração embaixo do número. Só onde a fração É o número. */
-  barra?: number | null;
-}) {
-  const corDetalhe =
-    tom === "alerta" ? "text-risco-700" : tom === "bom" ? "text-ok-700" : "text-tinta-500";
-  return (
-    <div className="bg-folha px-4 py-4">
-      {valor === null ? (
-        <p className="text-2xl font-semibold text-tinta-300" title={nota}>
-          —
-        </p>
-      ) : (
-        <p className="indicador-valor valor-sensivel">{valor}</p>
-      )}
-      <p className="indicador-rotulo">{rotulo}</p>
-      {/* A barra só existe onde a fração É o número, hoje a cobertura. Ao lado
-          de um total ela sugeriria um limite que não existe. */}
-      {typeof barra === "number" && (
-        <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-tinta-100">
-          <div
-            className={`h-full rounded-full ${barra >= 0.9 ? "bg-ok-600" : barra >= 0.6 ? "bg-alerta-500" : "bg-risco-500"}`}
-            style={{ width: `${Math.min(100, Math.max(2, barra * 100))}%` }}
-          />
-        </div>
-      )}
-      {/* A nota de ausência NÃO é borrada: ela é o motivo do traço (regra 1), e não carrega número do cliente. */}
-      <p className={`mt-1 min-h-4 text-xs font-medium ${valor === null ? "text-tinta-400" : `valor-sensivel ${corDetalhe}`}`}>
-        {valor === null ? (nota ?? "") : (detalhe ?? "")}
-      </p>
-    </div>
-  );
-}
+const plural = (n: number, um: string, varios: string) => (n === 1 ? um : varios);
 
-// Contagem com separador de milhar. Mora logo abaixo do `Indicador` de propósito: o número e o detalhe
-// dele ("em 3 mandatos", "2.088 em aberto") saem com `.valor-sensivel`, e a varredura de
-// `verificar-mensagem-de-falha.mts` exige a classe a 600 caracteres de cada `toLocaleString("pt-BR")`.
+// Contagem com separador de milhar (mandatos, pendências, linhas): não é valor financeiro, então não
+// leva `.valor-sensivel`; é exceção registrada, com o motivo, em `verificar-mensagem-de-falha.mts`.
 const numero = (n: number) => n.toLocaleString("pt-BR");
+
+type Papel = Parameters<typeof textoDeNenhumMandato>[0];
+
+/** A frase de abertura dá o veredito para quem não vai ler número nenhum. */
+function veredito(
+  papel: Papel, ativos: number, pendenciasLidas: boolean, bloqueantes: number, casosTravados: number,
+): string {
+  if (ativos === 0) return `${textoDeNenhumMandato(papel, "em andamento")}.`;
+  const mandatos = `${ativos} ${plural(ativos, "mandato em andamento", "mandatos em andamento")}`;
+  if (!pendenciasLidas) {
+    return `${mandatos}. ` + "Não foi possível conferir as pendências agora; não dá para dizer o que trava a aprovação.";
+  }
+  if (bloqueantes === 0) return `${mandatos}. Nada trava a aprovação.`;
+  return `${bloqueantes} ${plural(bloqueantes, "pendência trava", "pendências travam")} ` +
+    `${casosTravados} ${plural(casosTravados, "mandato", "mandatos")}.`;
+}
 
 export async function ResumoDoPainel() {
   // O papel já foi lido pelo layout (`lerPermissoes` é memoizado): aqui não vai ao banco de novo.
   const perm = await lerPermissoes();
   const soAlocados = escopoDaLista(perm.papel) === "alocados";
   const [{ ativos }, { pendenciasLidas, nBloqueantes: bloqueantes, casosTravados }] = await Promise.all([lerCarteira(), lerTrava()]);
-  // A frase de abertura dá o veredito para quem não vai ler número nenhum.
-  const resumo =
-    ativos.length === 0
-      ? `${textoDeNenhumMandato(perm.papel, "em andamento")}.`
-      : !pendenciasLidas
-        ? `${ativos.length} ${ativos.length === 1 ? "mandato em andamento" : "mandatos em andamento"}. ` +
-          "Não foi possível conferir as pendências agora; não dá para dizer o que trava a aprovação."
-        : bloqueantes === 0
-        ? `${ativos.length} ${ativos.length === 1 ? "mandato em andamento" : "mandatos em andamento"}. Nada trava a aprovação.`
-        : `${bloqueantes} ${bloqueantes === 1 ? "pendência trava" : "pendências travam"} ` +
-          `${casosTravados === 1 ? "1 mandato" : `${casosTravados} mandatos`}.`;
+  const resumo = veredito(perm.papel, ativos.length, pendenciasLidas, bloqueantes, casosTravados);
   return (
     <>
       <p className="mt-0.5 text-sm text-tinta-500">{resumo}</p>
@@ -177,20 +138,16 @@ export async function ResumoDoPainel() {
   );
 }
 
-export async function IndicadoresDoPainel() {
-  const [{ ativos, casos }, trava, documentosRes, usoRes] = await Promise.all([
-    lerCarteira(), lerTrava(), lerDocumentos(), lerUso(),
-  ]);
-  const { pendencias, pendenciasLidas, nBloqueantes: bloqueantes, casosTravados } = trava;
-  const documentos = documentosRes.data;
-  const documentosLidos = !documentosRes.error;
+type CasoDaCarteira = Awaited<ReturnType<typeof lerCarteira>>["casos"][number];
 
-  // Tempo médio: do envio do lote ao último documento registrado, que é a
-  // duração real da ingestão. Acrescentar documentos depois dispara uma segunda
-  // execução e o intervalo passa a incluir a espera pelo cliente; por isso a
-  // média só considera janelas de até 12 horas, e as demais são contadas à parte
-  // em vez de inflarem o número em silêncio.
-  const TETO_JANELA_MS = 12 * 3_600_000;
+// Tempo médio: do envio do lote ao último documento registrado, que é a
+// duração real da ingestão. Acrescentar documentos depois dispara uma segunda
+// execução e o intervalo passa a incluir a espera pelo cliente; por isso a
+// média só considera janelas de até 12 horas, e as demais são contadas à parte
+// em vez de inflarem o número em silêncio.
+const TETO_JANELA_MS = 12 * 3_600_000;
+
+function medirIngestao(casos: CasoDaCarteira[], documentos: DocumentoNoPainel[]) {
   const ultimoDocPorCaso = new Map<string, number>();
   for (const d of documentos) {
     const t = new Date(d.criado_em).getTime();
@@ -207,14 +164,13 @@ export async function IndicadoresDoPainel() {
     if (dur > TETO_JANELA_MS) janelasLongas += 1;
     else janelas.push(dur);
   }
-  const tempoMedioMs = janelas.length
-    ? janelas.reduce((s, v) => s + v, 0) / janelas.length
-    : null;
+  const tempoMedioMs = janelas.length ? janelas.reduce((s, v) => s + v, 0) / janelas.length : null;
+  return { nJanelas: janelas.length, janelasLongas, tempoMedioMs };
+}
 
-  // A cobertura é a razão de duas somas, não a média das razões: um lote de 400
-  // linhas com 90% e um de 4 com 25% dão 89,4%, não 57,5%.
-  const usoErro = Boolean((usoRes as { error?: unknown }).error);
-  const usos = (usoRes.data as UsoDoLote[] | null) ?? [];
+// A cobertura é a razão de duas somas, não a média das razões: um lote de 400
+// linhas com 90% e um de 4 com 25% dão 89,4%, não 57,5%.
+function somarUso(usos: UsoDoLote[]) {
   let contasNosDocs = 0;
   let contasExtraidas = 0;
   for (const u of usos) {
@@ -222,6 +178,37 @@ export async function IndicadoresDoPainel() {
     contasNosDocs += u.contas_nos_documentos;
     contasExtraidas += u.contas_extraidas ?? 0;
   }
+  return { contasNosDocs, contasExtraidas };
+}
+
+function detalheDosMandatos(pendenciasLidas: boolean, casosTravados: number): string | null {
+  if (!pendenciasLidas) return "travados: não conferido agora";
+  if (casosTravados > 0) return `${casosTravados} travado${plural(casosTravados, "", "s")}`;
+  return null;
+}
+
+function detalheDasPendencias(bloqueantes: number, casosTravados: number, abertas: number): string {
+  if (bloqueantes > 0) return `em ${casosTravados} ${plural(casosTravados, "mandato", "mandatos")}`;
+  if (abertas > 0) return `${numero(abertas)} em aberto, nenhuma trava`;
+  return "nada em aberto";
+}
+
+function detalheDoTempo(nJanelas: number, janelasLongas: number): string | null {
+  if (!nJanelas) return null;
+  return `${nJanelas} ${plural(nJanelas, "mandato medido", "mandatos medidos")}` +
+    (janelasLongas ? `, ${janelasLongas} fora da média` : "");
+}
+
+export async function IndicadoresDoPainel() {
+  const [{ ativos, casos }, trava, documentosRes, usoRes] = await Promise.all([
+    lerCarteira(), lerTrava(), lerDocumentos(), lerUso(),
+  ]);
+  const { pendencias, pendenciasLidas, nBloqueantes: bloqueantes, casosTravados } = trava;
+  const documentosLidos = !documentosRes.error;
+  const { nJanelas, janelasLongas, tempoMedioMs } = medirIngestao(casos, documentosRes.data);
+
+  const usoErro = Boolean((usoRes as { error?: unknown }).error);
+  const { contasNosDocs, contasExtraidas } = somarUso((usoRes.data as UsoDoLote[] | null) ?? []);
   const cobertura: number | null = usoErro || contasNosDocs === 0 ? null : contasExtraidas / contasNosDocs;
   const semMedicao = usoErro
     ? "medição indisponível agora"
@@ -232,27 +219,15 @@ export async function IndicadoresDoPainel() {
         <div className="grid grid-cols-2 gap-px bg-tinta-100 sm:grid-cols-4">
           <Indicador
             valor={numero(ativos.length)}
-            rotulo={ativos.length === 1 ? "mandato em andamento" : "mandatos em andamento"}
-            detalhe={
-              !pendenciasLidas
-                ? "travados: não conferido agora"
-                : casosTravados > 0
-                  ? `${casosTravados} travado${casosTravados === 1 ? "" : "s"}`
-                  : null
-            }
+            rotulo={plural(ativos.length, "mandato em andamento", "mandatos em andamento")}
+            detalhe={detalheDosMandatos(pendenciasLidas, casosTravados)}
             tom="alerta"
           />
           {/* Falha de leitura NÃO vira zero: sem a lista, traço com a causa. */}
           <Indicador
             valor={pendenciasLidas ? numero(bloqueantes) : null}
-            rotulo={bloqueantes === 1 ? "pendência que trava a aprovação" : "pendências que travam a aprovação"}
-            detalhe={
-              bloqueantes > 0
-                ? `em ${casosTravados} ${casosTravados === 1 ? "mandato" : "mandatos"}`
-                : pendencias.length > 0
-                  ? `${numero(pendencias.length)} em aberto, nenhuma trava`
-                  : "nada em aberto"
-            }
+            rotulo={plural(bloqueantes, "pendência que trava a aprovação", "pendências que travam a aprovação")}
+            detalhe={detalheDasPendencias(bloqueantes, casosTravados, pendencias.length)}
             tom={bloqueantes > 0 ? "alerta" : "bom"}
             nota="leitura das pendências indisponível agora"
           />
@@ -275,12 +250,7 @@ export async function IndicadoresDoPainel() {
           <Indicador
             valor={tempoMedioMs === null ? null : duracaoCurta(tempoMedioMs)}
             rotulo="tempo médio de ingestão"
-            detalhe={
-              janelas.length
-                ? `${janelas.length} ${janelas.length === 1 ? "mandato medido" : "mandatos medidos"}` +
-                  (janelasLongas ? `, ${janelasLongas} fora da média` : "")
-                : null
-            }
+            detalhe={detalheDoTempo(nJanelas, janelasLongas)}
             nota={
               documentosLidos
                 ? "nenhum mandato com documento registrado ainda"
@@ -467,41 +437,46 @@ export function EsqueletoDaGrade() {
 // O CORPO: sem mandato, a mensagem; com mandato, a grade com três blocos, cada um com a sua consulta.
 // ---------------------------------------------------------------------------------------------------
 
+type PermissoesDaTela = Awaited<ReturnType<typeof lerPermissoes>>;
+
+function SemMandato({ perm }: Readonly<{ perm: PermissoesDaTela }>) {
+  const escopo = escopoDaLista(perm.papel);
+  const soAlocados = escopo === "alocados";
+  return (
+    /* Sem mandato o painel não inventa conteúdo, e não repete o botão de
+       criar, que mora no menu. */
+    <div className="carta flex flex-col items-center gap-2 px-6 py-14 text-center">
+      <p className="text-sm font-medium text-tinta-900">
+        {textoDeNenhumMandato(perm.papel, "em andamento")}
+      </p>
+      {escopo === "indefinido" && (
+        <p className="max-w-md text-sm text-tinta-500">
+          Não foi possível conferir o seu papel, então a lista pode estar recortada ao seu acesso: não dá
+          para dizer que não há mandato em andamento. Recarregue a página.
+        </p>
+      )}
+      {soAlocados && (
+        <p className="max-w-md text-sm text-tinta-500">
+          Com o papel de {perm.papel === "leitura" ? "Leitura" : "Analista"} você só vê os mandatos em que um
+          Sócio alocou você; peça a alocação a um Sócio.
+        </p>
+      )}
+      {escopo !== "indefinido" && (!soAlocados || perm.criarMandato.pode) && (
+        <p className="max-w-md text-sm text-tinta-500">
+          Abra um em <strong className="font-medium text-tinta-700">Novo mandato</strong>, no menu
+          à esquerda. Cada documento enviado é classificado e tem suas linhas financeiras lidas.
+          O que faltar ou não bater aparece aqui.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export async function CorpoDoPainel({ filtro, verTudo }: Readonly<{ filtro: FiltroDaFila; verTudo: boolean }>) {
   const perm = await lerPermissoes();
-  const soAlocados = escopoDaLista(perm.papel) === "alocados";
   const { ativos } = await lerCarteira();
 
-  if (ativos.length === 0) {
-    return (
-      /* Sem mandato o painel não inventa conteúdo, e não repete o botão de
-         criar, que mora no menu. */
-        <div className="carta flex flex-col items-center gap-2 px-6 py-14 text-center">
-          <p className="text-sm font-medium text-tinta-900">
-            {textoDeNenhumMandato(perm.papel, "em andamento")}
-          </p>
-          {escopoDaLista(perm.papel) === "indefinido" && (
-            <p className="max-w-md text-sm text-tinta-500">
-              Não foi possível conferir o seu papel, então a lista pode estar recortada ao seu acesso: não dá
-              para dizer que não há mandato em andamento. Recarregue a página.
-            </p>
-          )}
-          {soAlocados && (
-            <p className="max-w-md text-sm text-tinta-500">
-              Com o papel de {perm.papel === "leitura" ? "Leitura" : "Analista"} você só vê os mandatos em que um
-              Sócio alocou você; peça a alocação a um Sócio.
-            </p>
-          )}
-          {escopoDaLista(perm.papel) !== "indefinido" && (!soAlocados || perm.criarMandato.pode) ? (
-          <p className="max-w-md text-sm text-tinta-500">
-            Abra um em <strong className="font-medium text-tinta-700">Novo mandato</strong>, no menu
-            à esquerda. Cada documento enviado é classificado e tem suas linhas financeiras lidas.
-            O que faltar ou não bater aparece aqui.
-          </p>
-          ) : null}
-        </div>
-    );
-  }
+  if (ativos.length === 0) return <SemMandato perm={perm} />;
 
   return (
     <div className="grid gap-5 lg:grid-cols-3">
@@ -524,6 +499,160 @@ export async function CorpoDoPainel({ filtro, verTudo }: Readonly<{ filtro: Filt
   );
 }
 
+type PendenciaDaFila = Awaited<ReturnType<typeof lerTrava>>["pendencias"][number];
+
+function hrefDaFila(f: string, ver = false): string {
+  const q = new URLSearchParams();
+  if (f !== "todas") q.set("fila", f);
+  if (ver) q.set("ver", "tudo");
+  const t = q.toString();
+  return t ? `/casos?${t}` : "/casos";
+}
+
+function textoDoTopoDaFila(lida: boolean, abertas: number, mostradas: number, filtradas: number): string {
+  if (!lida) return "não conferido agora";
+  if (abertas === 0) return "nada em aberto";
+  return `${mostradas} de ${filtradas}, as que travam primeiro`;
+}
+
+function FiltrosDaFila({ filtro, contagens }: Readonly<{ filtro: FiltroDaFila; contagens: ReturnType<typeof contarFila> }>) {
+  return (
+    <nav aria-label="Filtrar a fila" className="mb-2 flex flex-wrap gap-1.5">
+      {FILTROS_DA_FILA.map((f) => {
+        const atual = f.chave === filtro;
+        return (
+          <Link
+            key={f.chave}
+            href={hrefDaFila(f.chave)}
+            aria-current={atual ? "page" : undefined}
+            className={`chip border transition-colors ${
+              atual
+                ? "border-tinta-900 bg-tinta-900 text-papel"
+                : "border-tinta-200 bg-folha text-tinta-700 hover:bg-tinta-50"
+            }`}
+          >
+            {f.rotulo} <span className="tabular-nums opacity-75">{numero(contagens[f.chave])}</span>
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
+function LinhaDaFila({ p, nomeDoMandato }: Readonly<{ p: PendenciaDaFila; nomeDoMandato: string }>) {
+  const tom = TOM_SEVERIDADE[p.severidade] ?? TOM_SEVERIDADE.complementar;
+  // A fila leva à gaveta certa da aba Pendências: documento a confirmar abre o
+  // formulário; o resto cai no filtro da própria espécie. O verbo do botão
+  // vem da mesma categoria que escolhe a gaveta (lib/painel.ts).
+  const destino = `/casos/${p.caso_id}/pendencias?filtro=${categoriaDaPendencia(p.tipo)}`;
+  const resumoTexto = resumoDaPendencia(p.descricao);
+  const checagem = nomeDaChecagem(p.motivo ?? null);
+  return (
+    <li>
+      <Link
+        href={destino}
+        className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-tinta-50"
+      >
+        {/* O ponto repete em cor o que o chip diz em palavra: cor
+            sozinha nunca carrega significado nesta tela. */}
+        <span aria-hidden className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tom.ponto}`} />
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="font-semibold text-tinta-900">{rotuloDaPendencia(p.tipo)}</span>
+            {/* Qual checagem acusou. Sem isto, seis reconciliações
+                diferentes viram seis linhas iguais na fila. */}
+            {checagem && (
+              <span className="text-xs text-tinta-500">
+                · {checagem}
+              </span>
+            )}
+            <span className="valor-sensivel truncate text-xs text-tinta-500">
+              {nomeDoMandato}
+            </span>
+          </p>
+          {resumoTexto && (
+            <p className="valor-sensivel mt-0.5 line-clamp-2 text-xs text-tinta-600 [overflow-wrap:anywhere]">{resumoTexto}</p>
+          )}
+        </div>
+        <span className="flex shrink-0 flex-col items-end gap-1.5">
+          <span className={`chip ${tom.chip}`}>{tom.rotulo}</span>
+          <span className="btn-secundario !px-2.5 !py-1 !text-xs">{verboDaPendencia(p.tipo, p.estado)}</span>
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+function RodapeDaFila({ restantes, verTudo, filtradas, filtro }: Readonly<{
+  restantes: number; verTudo: boolean; filtradas: number; filtro: FiltroDaFila;
+}>) {
+  const passaDoTeto = filtradas > FILA_VISIVEL_AMPLA;
+  const quantas = passaDoTeto ? `as primeiras ${FILA_VISIVEL_AMPLA}` : "todas";
+  return (
+    <li className="bg-tinta-50/60 px-4 py-2 text-[11px] text-tinta-500">
+      Mais {restantes}{" "}
+      {plural(restantes, "pendência", "pendências")} em aberto.{" "}
+      {!verTudo && (
+        <>
+          <Link href={hrefDaFila(filtro, true)} className="font-medium text-acento-700 hover:underline">
+            Mostrar {quantas}
+          </Link>
+          .{" "}
+        </>
+      )}
+      {(verTudo || passaDoTeto) &&
+        "O resto está em cada mandato, na aba Pendências."}
+    </li>
+  );
+}
+
+function CorpoDaFila({ pendenciasLidas, abertas, filtradas, fila, nomePorCaso, verTudo, filtro }: Readonly<{
+  pendenciasLidas: boolean;
+  abertas: number;
+  filtradas: number;
+  fila: PendenciaDaFila[];
+  nomePorCaso: Map<string, string>;
+  verTudo: boolean;
+  filtro: FiltroDaFila;
+}>) {
+  if (!pendenciasLidas) {
+    return (
+      <div className="rounded-lg border border-risco-200 bg-risco-50 px-5 py-10 text-center">
+        <p className="text-sm font-medium text-risco-900">Não foi possível conferir as pendências</p>
+        <p className="mt-1 text-sm text-risco-800">
+          Não dá para dizer se há algo em aberto. Abra cada mandato, na aba Pendências, ou recarregue a página.
+        </p>
+      </div>
+    );
+  }
+  if (abertas === 0) {
+    return (
+      <div className="rounded-lg border border-ok-200 bg-ok-50 px-5 py-10 text-center">
+        <p className="text-sm font-medium text-ok-900">Nenhuma pendência em aberto</p>
+        <p className="mt-1 text-sm text-ok-800">
+          Todos os documentos recebidos foram conferidos.
+        </p>
+      </div>
+    );
+  }
+  if (filtradas === 0) {
+    return (
+      <div className="carta px-5 py-10 text-center text-sm text-tinta-500">
+        Nenhuma pendência neste filtro.{" "}
+        <Link href="/casos" className="font-medium text-acento-700 hover:underline">Ver todas</Link>
+      </div>
+    );
+  }
+  return (
+    <ul className="carta divide-y divide-tinta-100 overflow-hidden">
+      {fila.map((p) => <LinhaDaFila key={p.id} p={p} nomeDoMandato={nomePorCaso.get(p.caso_id) ?? "mandato"} />)}
+      {filtradas > fila.length && (
+        <RodapeDaFila restantes={filtradas - fila.length} verTudo={verTudo} filtradas={filtradas} filtro={filtro} />
+      )}
+    </ul>
+  );
+}
+
 // A fila de triagem.
 async function FilaDoPainel({ filtro, verTudo }: Readonly<{ filtro: FiltroDaFila; verTudo: boolean }>) {
   const [{ nomePorCaso }, { pendencias, pendenciasLidas }] = await Promise.all([lerCarteira(), lerTrava()]);
@@ -538,130 +667,69 @@ async function FilaDoPainel({ filtro, verTudo }: Readonly<{ filtro: FiltroDaFila
   );
   const filtradas = ordenada.filter((p) => daFila(p, filtro));
   const fila = filtradas.slice(0, verTudo ? FILA_VISIVEL_AMPLA : FILA_VISIVEL);
-  const hrefFila = (f: string, ver = false) => {
-    const q = new URLSearchParams();
-    if (f !== "todas") q.set("fila", f);
-    if (ver) q.set("ver", "tudo");
-    const t = q.toString();
-    return t ? `/casos?${t}` : "/casos";
-  };
   return (
     <>
-          <div className="mb-2 flex items-baseline justify-between gap-3">
+      <div className="mb-2 flex items-baseline justify-between gap-3">
         <h2 className="titulo-secao">Precisa de você</h2>
         <p className="text-xs text-tinta-500">
-          {!pendenciasLidas
-            ? "não conferido agora"
-            : pendencias.length === 0
-              ? "nada em aberto"
-              : `${fila.length} de ${filtradas.length}, as que travam primeiro`}
+          {textoDoTopoDaFila(pendenciasLidas, pendencias.length, fila.length, filtradas.length)}
         </p>
       </div>
 
-      {pendenciasLidas && pendencias.length > 0 && (
-        <nav aria-label="Filtrar a fila" className="mb-2 flex flex-wrap gap-1.5">
-          {FILTROS_DA_FILA.map((f) => {
-            const atual = f.chave === filtro;
-            return (
-              <Link
-                key={f.chave}
-                href={hrefFila(f.chave)}
-                aria-current={atual ? "page" : undefined}
-                className={`chip border transition-colors ${
-                  atual
-                    ? "border-tinta-900 bg-tinta-900 text-papel"
-                    : "border-tinta-200 bg-folha text-tinta-700 hover:bg-tinta-50"
-                }`}
-              >
-                {f.rotulo} <span className="tabular-nums opacity-75">{numero(contagens[f.chave])}</span>
-              </Link>
-            );
-          })}
-        </nav>
-      )}
+      {pendenciasLidas && pendencias.length > 0 && <FiltrosDaFila filtro={filtro} contagens={contagens} />}
 
-      {!pendenciasLidas ? (
-        <div className="rounded-lg border border-risco-200 bg-risco-50 px-5 py-10 text-center">
-          <p className="text-sm font-medium text-risco-900">Não foi possível conferir as pendências</p>
-          <p className="mt-1 text-sm text-risco-800">
-            Não dá para dizer se há algo em aberto. Abra cada mandato, na aba Pendências, ou recarregue a página.
-          </p>
-        </div>
-      ) : pendencias.length === 0 ? (
-        <div className="rounded-lg border border-ok-200 bg-ok-50 px-5 py-10 text-center">
-          <p className="text-sm font-medium text-ok-900">Nenhuma pendência em aberto</p>
-          <p className="mt-1 text-sm text-ok-800">
-            Todos os documentos recebidos foram conferidos.
-          </p>
-        </div>
-      ) : filtradas.length === 0 ? (
-        <div className="carta px-5 py-10 text-center text-sm text-tinta-500">
-          Nenhuma pendência neste filtro.{" "}
-          <Link href="/casos" className="font-medium text-acento-700 hover:underline">Ver todas</Link>
-        </div>
-      ) : (
-        <ul className="carta divide-y divide-tinta-100 overflow-hidden">
-          {fila.map((p) => {
-            const tom = TOM_SEVERIDADE[p.severidade] ?? TOM_SEVERIDADE.complementar;
-            // A fila leva à gaveta certa da aba Pendências: documento a confirmar abre o
-            // formulário; o resto cai no filtro da própria espécie. O verbo do botão
-            // vem da mesma categoria que escolhe a gaveta (lib/painel.ts).
-            const destino = `/casos/${p.caso_id}/pendencias?filtro=${categoriaDaPendencia(p.tipo)}`;
-            const resumoTexto = resumoDaPendencia(p.descricao);
-            return (
-              <li key={p.id}>
-                <Link
-                  href={destino}
-                  className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-tinta-50"
-                >
-                  {/* O ponto repete em cor o que o chip diz em palavra: cor
-                      sozinha nunca carrega significado nesta tela. */}
-                  <span aria-hidden className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tom.ponto}`} />
-                  <div className="min-w-0 flex-1">
-                    <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
-                      <span className="font-semibold text-tinta-900">{rotuloDaPendencia(p.tipo)}</span>
-                      {/* Qual checagem acusou. Sem isto, seis reconciliações
-                          diferentes viram seis linhas iguais na fila. */}
-                      {nomeDaChecagem(p.motivo ?? null) && (
-                        <span className="text-xs text-tinta-500">
-                          · {nomeDaChecagem(p.motivo ?? null)}
-                        </span>
-                      )}
-                      <span className="valor-sensivel truncate text-xs text-tinta-500">
-                        {nomePorCaso.get(p.caso_id) ?? "mandato"}
-                      </span>
-                    </p>
-                    {resumoTexto && (
-                      <p className="valor-sensivel mt-0.5 line-clamp-2 text-xs text-tinta-600 [overflow-wrap:anywhere]">{resumoTexto}</p>
-                    )}
-                  </div>
-                  <span className="flex shrink-0 flex-col items-end gap-1.5">
-                    <span className={`chip ${tom.chip}`}>{tom.rotulo}</span>
-                    <span className="btn-secundario !px-2.5 !py-1 !text-xs">{verboDaPendencia(p.tipo, p.estado)}</span>
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-          {filtradas.length > fila.length && (
-            <li className="bg-tinta-50/60 px-4 py-2 text-[11px] text-tinta-500">
-              Mais {filtradas.length - fila.length}{" "}
-              {filtradas.length - fila.length === 1 ? "pendência" : "pendências"} em aberto.{" "}
-              {!verTudo && (
-                <>
-                  <Link href={hrefFila(filtro, true)} className="font-medium text-acento-700 hover:underline">
-                    Mostrar {filtradas.length > FILA_VISIVEL_AMPLA ? `as primeiras ${FILA_VISIVEL_AMPLA}` : "todas"}
-                  </Link>
-                  .{" "}
-                </>
-              )}
-              {(verTudo || filtradas.length > FILA_VISIVEL_AMPLA) &&
-                "O resto está em cada mandato, na aba Pendências."}
-            </li>
-          )}
-        </ul>
-      )}
+      <CorpoDaFila
+        pendenciasLidas={pendenciasLidas}
+        abertas={pendencias.length}
+        filtradas={filtradas.length}
+        fila={fila}
+        nomePorCaso={nomePorCaso}
+        verTudo={verTudo}
+        filtro={filtro}
+      />
     </>
+  );
+}
+
+type GrupoDoDia = { dia: string; itens: DocumentoNoPainel[] };
+
+/** A linha do tempo é agrupada por dia, com o cabeçalho escrito uma vez só. */
+function agruparPorDia(recentes: DocumentoNoPainel[], agora: Date): GrupoDoDia[] {
+  const grupos: GrupoDoDia[] = [];
+  for (const d of recentes) {
+    const dia = diaRelativo(d.criado_em, agora);
+    const ultimo = grupos.at(-1);
+    if (ultimo?.dia === dia) ultimo.itens.push(d);
+    else grupos.push({ dia, itens: [d] });
+  }
+  return grupos;
+}
+
+function LinhaRecente({ d, nomeDoMandato, linhas }: Readonly<{ d: DocumentoNoPainel; nomeDoMandato: string; linhas: number }>) {
+  return (
+    <li>
+      <Link
+        href={`/casos/${d.caso_id}/documentos/${d.id}`}
+        className="flex items-start gap-3 px-4 py-2.5 transition-colors hover:bg-tinta-50"
+      >
+        <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-tinta-400">
+          {horaCurta(d.criado_em)}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-xs font-medium text-tinta-900">
+            {d.tipo_taxonomia
+              ? formatarTipoTaxonomia(d.tipo_taxonomia)
+              : "tipo ainda não identificado"}
+          </span>
+          <span className="valor-sensivel block truncate text-[11px] text-tinta-500">
+            {nomeDoMandato}
+          </span>
+        </span>
+        <span className="shrink-0 text-[11px] font-medium tabular-nums text-tinta-500">
+          {numero(linhas)} {plural(linhas, "linha", "linhas")}
+        </span>
+      </Link>
+    </li>
   );
 }
 
@@ -671,17 +739,9 @@ async function RecentesDoPainel() {
     lerCarteira(), lerDocumentos(), lerRecentes(),
   ]);
   const documentosLidos = !documentosRes.error;
-  const agora = new Date();
   const linhasDoDocumento = (d: DocumentoNoPainel) =>
     (d.documento_versao ?? []).reduce((s, v) => s + (linhasPorVersao.get(v.id) ?? 0), 0);
-  // A linha do tempo é agrupada por dia, com o cabeçalho escrito uma vez só.
-  const grupos: Array<{ dia: string; itens: DocumentoNoPainel[] }> = [];
-  for (const d of recentes) {
-    const dia = diaRelativo(d.criado_em, agora);
-    const ultimo = grupos[grupos.length - 1];
-    if (ultimo && ultimo.dia === dia) ultimo.itens.push(d);
-    else grupos.push({ dia, itens: [d] });
-  }
+  const grupos = agruparPorDia(recentes, new Date());
   return (
     <>
       <div className="mb-2 flex items-baseline justify-between gap-3">
@@ -703,40 +763,55 @@ async function RecentesDoPainel() {
                 {g.dia}
               </p>
               <ul className="divide-y divide-tinta-100">
-                {g.itens.map((d) => {
-                  const linhas = linhasDoDocumento(d);
-                  return (
-                    <li key={d.id}>
-                      <Link
-                        href={`/casos/${d.caso_id}/documentos/${d.id}`}
-                        className="flex items-start gap-3 px-4 py-2.5 transition-colors hover:bg-tinta-50"
-                      >
-                        <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-tinta-400">
-                          {horaCurta(d.criado_em)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs font-medium text-tinta-900">
-                            {d.tipo_taxonomia
-                              ? formatarTipoTaxonomia(d.tipo_taxonomia)
-                              : "tipo ainda não identificado"}
-                          </span>
-                          <span className="valor-sensivel block truncate text-[11px] text-tinta-500">
-                            {nomePorCaso.get(d.caso_id) ?? "mandato"}
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-[11px] font-medium tabular-nums text-tinta-500">
-                          {numero(linhas)} {linhas === 1 ? "linha" : "linhas"}
-                        </span>
-                      </Link>
-                    </li>
-                  );
-                })}
+                {g.itens.map((d) => (
+                  <LinhaRecente key={d.id} d={d} nomeDoMandato={nomePorCaso.get(d.caso_id) ?? "mandato"} linhas={linhasDoDocumento(d)} />
+                ))}
               </ul>
             </div>
           ))}
         </div>
       )}
     </>
+  );
+}
+
+function corDoPasso(feito: boolean, travado: boolean): string {
+  if (!feito) return "bg-tinta-100";
+  return travado ? "bg-risco-500" : "bg-acento-600";
+}
+
+function LinhaDoMandato({ c, quantas }: Readonly<{ c: CasoDaCarteira; quantas: number }>) {
+  const etapa = etapaDoMandato(c.status);
+  const travando = `${quantas} ${plural(quantas, "pendência travando", "pendências travando")}`;
+  return (
+    <li>
+      <Link
+        href={`/casos/${c.id}`}
+        className="block px-4 py-2.5 transition-colors hover:bg-tinta-50"
+      >
+        <span className="flex items-center justify-between gap-3">
+          <span className="valor-sensivel min-w-0 truncate text-xs font-medium text-tinta-900">{c.nome}</span>
+          <span className="flex shrink-0 items-center gap-1.5">
+            {quantas > 0 && (
+              <span className="chip bg-risco-100 text-risco-800" title={travando}>
+                travado
+              </span>
+            )}
+            <span className={`chip ${CASO_STATUS_COLOR[c.status]}`}>{CASO_STATUS_LABEL[c.status]}</span>
+          </span>
+        </span>
+        {/* A régua é texto + preenchimento: a etapa atual vem escrita. */}
+        <span className="mt-1.5 flex gap-1" role="img" aria-label={`Etapa ${etapa + 1} de ${ETAPAS_DO_MANDATO.length}: ${ETAPAS_DO_MANDATO[etapa]}`}>
+          {ETAPAS_DO_MANDATO.map((nome, i) => (
+            <span key={nome} className={`h-1 flex-1 rounded-full ${corDoPasso(i <= etapa, quantas > 0)}`} />
+          ))}
+        </span>
+        <span className="mt-1 flex items-baseline justify-between text-[11px] text-tinta-500">
+          <span>{ETAPAS_DO_MANDATO[etapa]}</span>
+          {quantas > 0 && <span className="text-risco-700">{travando}</span>}
+        </span>
+      </Link>
+    </li>
   );
 }
 
@@ -765,47 +840,10 @@ async function MandatosDoPainel() {
           </p>
         )}
         <ul className="carta divide-y divide-tinta-100 overflow-hidden">
-          {seusMandatos.map((c) => {
-            const quantas = travadasPorCaso.get(c.id) ?? 0;
-            const etapa = etapaDoMandato(c.status);
-            return (
-              <li key={c.id}>
-                <Link
-                  href={`/casos/${c.id}`}
-                  className="block px-4 py-2.5 transition-colors hover:bg-tinta-50"
-                >
-                  <span className="flex items-center justify-between gap-3">
-                    <span className="valor-sensivel min-w-0 truncate text-xs font-medium text-tinta-900">{c.nome}</span>
-                    <span className="flex shrink-0 items-center gap-1.5">
-                      {quantas > 0 && (
-                        <span className="chip bg-risco-100 text-risco-800" title={`${quantas} ${quantas === 1 ? "pendência travando" : "pendências travando"}`}>
-                          travado
-                        </span>
-                      )}
-                      <span className={`chip ${CASO_STATUS_COLOR[c.status]}`}>{CASO_STATUS_LABEL[c.status]}</span>
-                    </span>
-                  </span>
-                  {/* A régua é texto + preenchimento: a etapa atual vem escrita. */}
-                  <span className="mt-1.5 flex gap-1" role="img" aria-label={`Etapa ${etapa + 1} de ${ETAPAS_DO_MANDATO.length}: ${ETAPAS_DO_MANDATO[etapa]}`}>
-                    {ETAPAS_DO_MANDATO.map((nome, i) => (
-                      <span key={nome} className={`h-1 flex-1 rounded-full ${i <= etapa ? (quantas > 0 ? "bg-risco-500" : "bg-acento-600") : "bg-tinta-100"}`} />
-                    ))}
-                  </span>
-                  <span className="mt-1 flex items-baseline justify-between text-[11px] text-tinta-500">
-                    <span>{ETAPAS_DO_MANDATO[etapa]}</span>
-                    {quantas > 0 && (
-                      <span className="text-risco-700">
-                        {quantas} {quantas === 1 ? "pendência travando" : "pendências travando"}
-                      </span>
-                    )}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
+          {seusMandatos.map((c) => <LinhaDoMandato key={c.id} c={c} quantas={travadasPorCaso.get(c.id) ?? 0} />)}
           {foraDaLista > 0 && (
             <li className="bg-tinta-50/60 px-4 py-2 text-[11px] text-tinta-500">
-              Mais {foraDaLista} {foraDaLista === 1 ? "mandato" : "mandatos"}.{" "}
+              Mais {foraDaLista} {plural(foraDaLista, "mandato", "mandatos")}.{" "}
               <Link href="/casos/todos" className="font-medium text-acento-700 hover:underline">Ver em Mandatos</Link>
             </li>
           )}

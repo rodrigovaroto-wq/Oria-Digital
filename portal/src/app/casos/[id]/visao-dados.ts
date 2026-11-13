@@ -7,6 +7,7 @@ import { servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
 import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
 import { ESTADOS_EM_ABERTO } from "@/lib/pendencia";
 import { proximoPasso } from "@/lib/proximo-passo";
+import { lerResultadoDeFatos } from "@/lib/fatos-do-caso";
 import {
   PENDENCIA_TIPOS_DIAGNOSTICO_REVISAVEIS,
   type Caso,
@@ -136,6 +137,31 @@ const lerKitAtendido = cache(async (id: string): Promise<Set<string> | null> => 
   }
 });
 
+type ModeloDoMandato = { entidade: string | null; ultimo_exercicio_real: number | null; anos_projetados: number | null };
+
+function modeloEstaMontado(modelo: ModeloDoMandato | null): boolean {
+  return Boolean(modelo?.entidade?.trim()) && modelo?.ultimo_exercicio_real != null && Boolean(modelo?.anos_projetados);
+}
+
+function detalheDasLinhasDoMandato(documentosLidos: boolean, linhasIncompletas: boolean, semLinha: number): string | null {
+  if (!documentosLidos) return "a leitura dos documentos falhou";
+  if (linhasIncompletas) return "contagem incompleta — a leitura das linhas não terminou";
+  if (semLinha > 0) return `${semLinha} ${semLinha === 1 ? "documento sem nenhuma linha" : "documentos sem nenhuma linha"}`;
+  return null;
+}
+
+function detalheDasPendenciasDoMandato(nAbertas: number | null, nBloqueantes: number | null): string | null {
+  if (nAbertas === null) return "a leitura das pendências falhou";
+  if (nBloqueantes === null) return "não foi possível saber quantas travam a aprovação";
+  if (nBloqueantes > 0) return `${nBloqueantes} ${nBloqueantes === 1 ? "bloqueia" : "bloqueiam"} a aprovação`;
+  return null;
+}
+
+function detalheDoKitDoMandato(kitLido: boolean, presentes: number, total: number): string | null {
+  if (!kitLido) return "a leitura do kit falhou";
+  return presentes === total ? "kit completo" : null;
+}
+
 /**
  * Tudo o que mais de um bloco da tela usa, derivado das leituras acima — a MESMA lógica que a página
  * tinha inline, só movida. Só espera o que precisa; os blocos que não dependem dele não o pedem.
@@ -182,13 +208,10 @@ export const lerIndicadores = cache(async (id: string) => {
   // aparece como total (o valor vira "—") e "sem nenhuma linha" não é dito — contaria
   // documento cujas linhas estavam nas páginas que não vieram.
   const linhasConhecidas = documentosLidos && !linhasIncompletas;
-  let detalheDasLinhas: string | null = null;
-  if (!documentosLidos) detalheDasLinhas = "a leitura dos documentos falhou";
-  else if (linhasIncompletas) detalheDasLinhas = "contagem incompleta — a leitura das linhas não terminou";
-  else if (semLinha > 0) detalheDasLinhas = `${semLinha} ${semLinha === 1 ? "documento sem nenhuma linha" : "documentos sem nenhuma linha"}`;
+  const detalheDasLinhas = detalheDasLinhasDoMandato(documentosLidos, linhasIncompletas, semLinha);
 
   const aprovado = caso.status === "aprovado" || caso.status === "pronto_para_base";
-  const modelo = modeloRes.data as { entidade: string | null; ultimo_exercicio_real: number | null; anos_projetados: number | null } | null;
+  const modelo = modeloRes.data as ModeloDoMandato | null;
   const passo = proximoPasso({
     bloqueantesAbertas: nBloqueantes,
     revisoesAbertas: nRevisoes,
@@ -196,19 +219,13 @@ export const lerIndicadores = cache(async (id: string) => {
     aprovavel: portao2 ? portao2.elegivel : null,
     aprovado,
     // Falta de configuração é uma resposta ("não montou"); erro de leitura é outra ("não sei").
-    modeloMontado: modeloRes.error ? null : Boolean(modelo?.entidade?.trim()) && modelo?.ultimo_exercicio_real != null && Boolean(modelo?.anos_projetados),
+    modeloMontado: modeloRes.error ? null : modeloEstaMontado(modelo),
   });
 
   // Leitura de bloqueantes que falhou é DITA, não some: `(null ?? 0) > 0` escondia a
   // falha e o indicador parecia dizer "nenhuma trava" (regra 1).
-  let detalheDasPendencias: string | null = null;
-  if (nAbertas === null) detalheDasPendencias = "a leitura das pendências falhou";
-  else if (nBloqueantes === null) detalheDasPendencias = "não foi possível saber quantas travam a aprovação";
-  else if (nBloqueantes > 0) {
-    detalheDasPendencias = `${nBloqueantes} ${nBloqueantes === 1 ? "bloqueia" : "bloqueiam"} a aprovação`;
-  }
-  let detalheDoKit: string | null = "a leitura do kit falhou";
-  if (kitLido) detalheDoKit = kitPresentes === kitBasico.length ? "kit completo" : null;
+  const detalheDasPendencias = detalheDasPendenciasDoMandato(nAbertas, nBloqueantes);
+  const detalheDoKit = detalheDoKitDoMandato(kitLido, kitPresentes, kitBasico.length);
 
   return {
     caso, portao2, documentos, documentosLidos, nAbertas, linhasTotais, linhasConhecidas, semLinha,
@@ -216,5 +233,14 @@ export const lerIndicadores = cache(async (id: string) => {
   };
 });
 
+/**
+ * Os fatos do mandato, com a falha DITA. Antes `.error` era jogado fora e o retorno era `[]`: um timeout
+ * num mandato com covenant rompido "crítico" fazia a seção sumir, com a mesma cara de "o documento não
+ * diz nada" (regra 7). Agora há três respostas:
+ *   - leu, com fatos          -> `{ fatos, falhou: false }`
+ *   - função ausente (banco sem a 0148: PGRST202/42883, estado NORMAL) -> `{ fatos: [], falhou: false }`,
+ *     o bloco não aparece, como sempre apareceu
+ *   - qualquer outro erro     -> `{ fatos: [], falhou: true }`, e o bloco diz que não leu.
+ */
 export const lerFatosDoCaso = cache(async (id: string) =>
-  (((await lerFatos(id)).data as FatoDoCaso[] | null) ?? []));
+  lerResultadoDeFatos((await lerFatos(id)) as { data: FatoDoCaso[] | null; error: { code?: string | null } | null }));
