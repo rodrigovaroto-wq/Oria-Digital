@@ -779,15 +779,6 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/auto_promocao_dial.test.sql 2>
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
 
 echo
-# O BACKFILL DA 0243 SOBRE O QUE OS TESTES ANTERIORES GRAVARAM. A migration faz o backfill do que já existe quando é aplicada; as fixtures e vários testes gravam linha de extração DEPOIS dela, por SQL direto (sem passar por fn_registrar_campos_extraidos,
-# que é o que dispara a materialização) e COMITAM. A sonda de extração nova mede por comportamento ("toda linha elegível das versões mais novas tem fato"), então sem isto ela acusaria, com razão, linhas que nenhuma extração real gravou.
-backfill_fatos() {
-  psql -v ON_ERROR_STOP=1 -d "$DB" -qAt -c "select 'fatos criados: ' || (fn_materializar_fatos_backfill()->>'fatos_criados')" 2>&1 | grep -E '^(fatos|ERROR|psql)'
-}
-
-echo "== o backfill da 0243 sobre o que os testes anteriores gravaram por SQL direto (a sonda de extração nova mede por comportamento)"
-backfill_fatos
-
 echo "== testes da sonda de instalação (0131) — o catálogo conferido contra a realidade"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/instalacao.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql)' | sed -E 's/^NOTICE:  //'
@@ -1015,8 +1006,12 @@ echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
-echo "== 0243 — a linha que não tinha identidade (fato_financeiro acima de campo_extraido: a bijeção, o método, a pendência só da extração nova, o backfill sem pendência, a coluna que vence o documento, a sonda não está cega)"
+echo "== 0243 — a linha que não tinha identidade (fato_financeiro é uma VIEW security_invoker sobre o resolver: o fato escrito à mão por cenário, a bijeção, a pendência só da extração nova, a segurança sob o default de privilégio do Supabase, a sonda não está cega)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0243 — as corridas, com duas sessões reais (dblink): extração x cadastro de entidade, update de documento não comitado, duas extrações do mesmo documento"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro_corridas.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo "== 0271 — o quadro de imobilizado que a IA gravava como balanço (tipo COMPOSICAO_IMOBILIZADO: existe, não entra nas checagens de balanço)"

@@ -1,8 +1,15 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
+## SESSÃO 130 (13/11/2026, conta Claude Oria) — P27 reescrita como VIEW; aguarda a 6ª revisão
+
+> **A 0243 do #296 agora é VIEW** (`fato_financeiro` com `security_invoker = true` sobre `fn_fato_resolver`, invoker; um gatilho só, em `evento_auditoria`/`extracao_sombra`, que abre e baixa a pendência `conta_canonica_incerta` sem gravar fato). NÃO APLICADA. Os 2 ALTOS da 5ª revisão (corrida; transcrição humana sem fato) deixam de existir por construção; falta a 6ª revisão independente provar isso. O detalhe (desenho, matriz de teste, sabotagens, desempenho, não medido) está no cabeçalho da 0243 e em `Arquitetura do Sistema/3 Estado e Execução/patches/s130-p27-view-progresso.md`.
+> - Medido local (PG16): fato_financeiro 187 asserts e corridas com dblink 14 asserts, 0 reprovados; run.sh inteiro verde; N8N 814/814; portal verde. Aplicação 0,065 s. Extração de 4.000 linhas 1,5–1,7 s. Ler um mandato de 40 mil fatos: 5,2–5,7 s (a P28 deve materializar por mandato).
+> - NÃO medido: produção (versão do Postgres: ≥ 15 inferido da 0207; maior mandato real).
+> - Para retomar: 6ª revisão (`revisor-defeito-silencioso`) → sem ALTO, confirmar com o dono e aplicar → medir a sonda da 0243 e o `ln` → merge com merge commit.
+
 ## SESSÃO 129 (12/11/2026, conta Claude Oria) — P27 no PR #296: 5 revisões, decisão de trocar a tabela por VIEW; PARADA pelo dono (limite)
 
-> **Migration mais nova do repositório: continua `0271`.** A `0243` está SÓ no PR #296 (branch `claude/eager-franklin-n4oxjd`, HEAD `7d5f503`), **NÃO APLICADA** e **NÃO PODE ser aplicada como está** (2 ALTOS abertos da 5ª revisão, abaixo). CI verde no `7d5f503` (os testes não pegam os ALTOS).
+> **Migration mais nova do repositório: continua `0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql`.** A `0243` está SÓ no PR #296 (branch `claude/eager-franklin-n4oxjd`, HEAD `7d5f503`), **NÃO APLICADA** e **NÃO PODE ser aplicada como está** (2 ALTOS abertos da 5ª revisão, abaixo). CI verde no `7d5f503` (os testes não pegam os ALTOS).
 
 ### Onde parou (12/11, ~20:00 UTC)
 - O dono mandou parar por limite de uso. O especialista foi parado ANTES de escrever a versão VIEW: nada de código novo se perdeu; a árvore estava limpa.
