@@ -7953,6 +7953,15 @@ CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, esta
       from kit k
       join documento d on d.caso_id = p_caso and fn_documento_serve_como(d.id, k.codigo)
   ),
+  -- A pergunta "a leitura desta versão concluiu" (fn_versao_extracao_concluida, cara: 0,77 ms por versão sob a RLS) só interessa às versões dos documentos
+  -- DESTE mandato sem versão com linha. Como `exists (... where dv.documento_id = s.doc and fn_...)` a RLS a transformava em hash sobre documento_versao
+  -- INTEIRA (2.247 versões, 1.679 chamadas, duas vezes: 2,96 de 3,18 s medidos em produção, 13/11/2026); o CTE separado, materializado, calcula a pergunta uma vez por versão do mandato.
+  concluida as materialized (
+    select distinct s.doc
+      from serve s
+      cross join lateral (select dv.id from documento_versao dv where dv.documento_id = s.doc) v
+     where s.v is null and fn_versao_extracao_concluida(v.id)
+  ),
   lido as materialized (
     select s.*,
            case
@@ -7968,11 +7977,9 @@ CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, esta
                  -- leitura concluída SEM dado em tipo que não traz dado financeiro por natureza (contrato social, certidão): zero linha é o
                  -- resultado certo, não falta (fn_tipo_sem_dado_por_natureza, 0231). Não há linha a conferir.
                  when fn_tipo_sem_dado_por_natureza(s.tipo_doc)
-                      and exists (select 1 from documento_versao dv
-                                   where dv.documento_id = s.doc and fn_versao_extracao_concluida(dv.id))
+                      and exists (select 1 from concluida c where c.doc = s.doc)
                       then 'lido_sem_dado_por_natureza'
-                 when exists (select 1 from documento_versao dv
-                               where dv.documento_id = s.doc and fn_versao_extracao_concluida(dv.id))
+                 when exists (select 1 from concluida c where c.doc = s.doc)
                       or exists (select 1 from pendencia pe
                                   where pe.documento_id = s.doc and pe.tipo = 'extracao_falhou' and pe.estado <> 'resolvida')
                       then 'recebido_sem_linha'
@@ -8071,14 +8078,14 @@ CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, esta
     ) est
    -- mandato que o chamador não enxerga (RLS) ou que não existe: nenhuma linha, nunca "tudo faltante"
    where exists (select 1 from caso c where c.id = p_caso)
-   order by i.codigo;
+  order by i.codigo;
 $$;
 
 --
 -- Name: FUNCTION fn_kit_do_caso(p_caso uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_kit_do_caso(p_caso uuid) IS '0300: o estado de cada item OBRIGATÓRIO do Kit Básico do mandato, derivado de campo_extraido na leitura. Estados: faltante, dispensado (item_faltante aceita_com_ressalva e ainda sem documento), aguardando_extracao (aguardando_desde = o criado_em do documento mais antigo nessa espera), recebido_sem_linha (extração concluída ou falha aberta sem linha, OU o sistema já declarou documento_nao_extraido/arquivo_ilegivel/arquivo_corrompido aberta), lido_sem_dado_por_natureza (leitura concluída sem dado em tipo societário/legal: não há linha a conferir), extraido, conferido (toda linha da versão vigente aceita por PESSOA; o auto-aceite sistema: não conta). O item toma o pior estado dos documentos que servem (o lido_sem_dado_por_natureza não pesa, salvo se for o único). empresas_total/com_documento/atendidas/documentos_sem_empresa dizem "N de M" SÓ para granularidade entidade e entidade_periodo (M sem fora_do_perimetro); nos demais tipos (caso, periodo) são NULOS e a tela não mostra fração. conferencia_em = último evento completude_recomputada; documentos_depois_da_conferencia = documentos criados depois dele (todos se nunca rodou). Mandato invisível ao chamador (RLS) = zero linhas, e o portal deve ler isso como "Kit não lido", nunca como faltante. security invoker.';
+COMMENT ON FUNCTION public.fn_kit_do_caso(p_caso uuid) IS '0300: o estado de cada item OBRIGATÓRIO do Kit Básico do mandato, derivado de campo_extraido na leitura. Estados: faltante, dispensado (item_faltante aceita_com_ressalva e ainda sem documento), aguardando_extracao (aguardando_desde = o criado_em do documento mais antigo nessa espera), recebido_sem_linha (extração concluída ou falha aberta sem linha, OU o sistema já declarou documento_nao_extraido/arquivo_ilegivel/arquivo_corrompido aberta), lido_sem_dado_por_natureza (leitura concluída sem dado em tipo societário/legal: não há linha a conferir), extraido, conferido (toda linha da versão vigente aceita por PESSOA; o auto-aceite sistema: não conta). O item toma o pior estado dos documentos que servem (o lido_sem_dado_por_natureza não pesa, salvo se for o único). empresas_total/com_documento/atendidas/documentos_sem_empresa dizem "N de M" SÓ para granularidade entidade e entidade_periodo (M sem fora_do_perimetro); nos demais tipos (caso, periodo) são NULOS e a tela não mostra fração. conferencia_em = último evento completude_recomputada; documentos_depois_da_conferencia = documentos criados depois dele (todos se nunca rodou). Mandato invisível ao chamador (RLS) = zero linhas, e o portal deve ler isso como "Kit não lido", nunca como faltante. security invoker. 0301: o CTE concluida pergunta fn_versao_extracao_concluida só das versões dos documentos do mandato (LATERAL), não de documento_versao inteira sob a RLS; mesma resposta.';
 
 --
 -- Name: fn_lado_do_mutuo(text, text); Type: FUNCTION; Schema: public; Owner: -

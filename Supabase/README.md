@@ -1243,6 +1243,13 @@ supabase db execute --file Supabase/migrations/0300_o_item_do_kit_que_ficava_rec
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0300' and not presente;   -- ZERO linhas
 #   select count(*) from pendencia where tipo = 'item_faltante' and estado <> 'resolvida' and chave_motor is not null;   -- 233 (as 2 de contrato social ficam sem chave)
 #   select depois from evento_auditoria where acao = 'chave_motor_item_faltante_adotada';   -- {"adotadas": 233}
+# A 0301 reemite `fn_kit_do_caso(uuid)` (mesma assinatura, mesmas 14 colunas, mesma resposta, mesmos grants): a 0300 fazia, sob a RLS, um Seq Scan em `documento_versao` INTEIRA chamando `fn_versao_extracao_concluida` em cada versão (3,2 s no mandato de 9 documentos como `authenticated`, contra 44 ms como `postgres`); agora pergunta só das versões do mandato (0,03 s e 0,4 s, medido em produção com rollback). Nenhuma tabela, índice ou outra função muda; 1 requisito novo na sonda (ordem 1389).
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, requisito por upsert). Sem backfill, sem ALTER, sem lock.
+# >>> Teste: Supabase/test/o_kit_que_levava_quatro_segundos_para_abrir.test.sql.
+supabase db execute --file Supabase/migrations/0301_o_kit_que_levava_quatro_segundos_para_abrir.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0301' and not presente;   -- ZERO linhas
+#   select chave, presente from fn_instalacao_conferir() where migration = '0300' and not presente;   -- ZERO linhas (os marcadores da 0300 seguem no corpo)
 # A 0242 cria o catálogo conta_canonica (a árvore demonstração > grupo > seção > subgrupo, 27 nós: 5 raízes, 2 grupos, 15 seções do SECAO_CANONICA_ENUM, 4 subgrupos do Ativo Não Circulante e o balde Outros), com RLS de leitura por papel, a guarda de raiz (gatilho de instrução), 3 views de sonda e 9 requisitos na sonda. Só a taxonomia atual: conta-folha (caixa, clientes…) é a P27.
 # >>> Rodar COMO `postgres`; reaplicável (create if not exists, seed on conflict do nothing, requisitos por upsert). Nenhuma linha existente é tocada.
 # >>> Teste: Supabase/test/conta_canonica.test.sql e Supabase/test/conta_canonica_regua.test.mjs.

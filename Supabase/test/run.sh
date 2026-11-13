@@ -1037,6 +1037,10 @@ echo "== 0300 — o item do Kit que ficava recebido sem ninguém ter lido nada (
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0301 — o Kit que levava quatro segundos para abrir (fn_kit_do_caso igual à 0300 linha a linha, COMO superusuário, sócio e analista; sob a RLS só pergunta a leitura das versões do mandato, não do banco)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_kit_que_levava_quatro_segundos_para_abrir.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
