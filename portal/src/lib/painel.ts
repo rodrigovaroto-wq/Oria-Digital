@@ -18,6 +18,15 @@ export function filtroDaFila(bruto: string | string[] | undefined): FiltroDaFila
   return FILTROS_DA_FILA.find((f) => f.chave === v)?.chave ?? "todas";
 }
 
+/**
+ * O texto que diz QUANTAS pendências travam um mandato. A fila ("8 bloqueiam") e o chip da lista de mandatos
+ * usam esta função e nenhuma outra: o chip dizia "8 pendências" para o número de BLOQUEANTES, enquanto a fila
+ * do mesmo mandato dizia 418 pendências (8 bloqueiam) — 418 contra 8 na mesma tela, medido em 13/11/2026.
+ */
+export function rotuloDeBloqueantes(n: number): string {
+  return `${n.toLocaleString("pt-BR")} ${n === 1 ? "bloqueia" : "bloqueiam"}`;
+}
+
 type ItemDaFila = { tipo: string; severidade: string };
 
 export function daFila(p: ItemDaFila, filtro: FiltroDaFila): boolean {

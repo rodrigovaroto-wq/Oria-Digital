@@ -202,6 +202,9 @@
   --cartao-sombra: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 3px rgb(15 23 42 / 0.16), 0 20px 44px -12px rgb(15 23 42 / 0.34);
   --cartao-filtro: blur(20px) saturate(0.8);
   --marmore-pior: #c4c9d4;
+  /* A TINTA DO TEXTO QUE FICA DIRETO NO MÁRMORE, sem cartão: no claro `tinta-600` (5,29:1 sobre `--marmore-pior`;
+     `tinta-500` dava 3,59 e `tinta-400` 2,72). Medida por verificar-mensagem-de-falha.mts nos dois temas. */
+  --tinta-marmore: var(--color-tinta-600);
   --marmore-tamanho-veios: 240px 240px, 1100px 1100px, 1500px 1500px;
   /* O MÁRMORE CLARO: branco e cinza-pérola. Camadas, de cima para baixo: luz no canto, sombra suave no
      canto oposto, grão fino (240px), dois veios de ruído SVG em escalas diferentes (1100px e 1500px, para
@@ -323,6 +326,9 @@
     --cartao-borda: rgb(255 255 255 / 0.16);
     --cartao-sombra: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 1px 3px rgb(0 0 0 / 0.6), 0 22px 48px -12px rgb(0 0 0 / 0.85);
     --marmore-pior: #5a5f68;
+    /* No escuro só `tinta-800` e `tinta-900` passam de 4,5:1 sobre o pior pixel: `tinta-800` dá 4,62 (a
+       `tinta-500` dava 2,21). */
+    --tinta-marmore: var(--color-tinta-800);
     /* O MÁRMORE ESCURO: preto metálico com veios em grafite e chumbo e um brilho frio no canto. */
     --marmore-base:
     radial-gradient(1100px 620px at 10% -6%, rgb(130 140 160 / .17), transparent 62%),
@@ -579,6 +585,27 @@ body {
   .tabela-a tbody tr:last-child td { @apply border-b-0; }
   .tabela-a tbody tr:hover td { background-color: color-mix(in oklab, var(--color-acento-100) 55%, transparent); }
   .num { font-family: var(--font-dado); font-variant-numeric: tabular-nums; }
+  .texto-marmore { color: var(--tinta-marmore); }
+
+  /* A FILA EMPILHA NO CELULAR (< 640 px). Em 390 px a tabela tinha 466 px dentro de um cartão de 356 px com
+     `overflow-hidden`: 12 textos ficavam invisíveis e 39 cortados, e a página não rolava, então a checagem de
+     rolagem não via. Aqui cada linha vira um bloco (mandato em cima, o que falta embaixo); o cabeçalho sai da
+     vista e continua para o leitor de tela. */
+  @media (max-width: 639px) {
+    .tabela-empilha,
+    .tabela-empilha tbody,
+    .tabela-empilha tr,
+    .tabela-empilha td { display: block; }
+    .tabela-empilha thead {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    }
+    .tabela-empilha tr { padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-tinta-100); }
+    .tabela-empilha tbody tr:last-child { border-bottom: 0; }
+    .tabela-empilha td { padding: 0; border: 0; }
+    .tabela-empilha td + td { margin-top: 0.5rem; }
+    .tabela-empilha tbody tr:hover { background-color: color-mix(in oklab, var(--color-acento-100) 55%, transparent); }
+    .tabela-empilha tbody tr:hover td { background-color: transparent; }
+  }
 }
 
 /* =============================================================================

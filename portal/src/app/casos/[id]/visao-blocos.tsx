@@ -245,7 +245,7 @@ export async function KitBasicoDoMandato({ id }: Readonly<{ id: string }>) {
         <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-ok-500" /><span className="num">{c.lidos}</span> com conteúdo lido</li>
         <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-alerta-500" /><span className="num">{c.recebidosSemLinha}</span> recebidos sem dado lido</li>
         <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-alerta-300" /><span className="num">{c.aguardando}</span> aguardando leitura{espera ? ` (o mais antigo, ${espera})` : ""}</li>
-        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-tinta-200" /><span className="num">{c.faltantes}</span> faltantes{c.dispensados > 0 ? ` (+ ${c.dispensados} dispensados com ressalva)` : ""}</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-tinta-400" /><span className="num">{c.faltantes}</span> faltantes{c.dispensados > 0 ? ` (+ ${c.dispensados} dispensados com ressalva)` : ""}</li>
         {c.pctLido !== null && (
           <li className="flex items-center gap-2 text-tinta-500"><span aria-hidden className="h-2 w-2 rounded-full border border-tinta-400" /><span className="num">{c.conferidos}</span> conferidos por pessoa</li>
         )}

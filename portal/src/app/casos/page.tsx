@@ -59,7 +59,7 @@ export default async function PainelPage({
             <ResumoDoPainel />
           </Revelar>
         </div>
-        <p className="text-xs capitalize text-tinta-400">{dataDeHoje}</p>
+        <p className="text-xs texto-marmore">{dataDeHoje}</p>
       </div>
 
       {/* Avisos de leitura (falha, teto de paginação). Sem esqueleto de propósito: em operação normal

@@ -9,7 +9,7 @@ import { categoriaDaPendencia } from "@/lib/pendencia";
 import { ETAPAS_DO_MANDATO, etapaDoMandato } from "@/lib/etapa-do-mandato";
 import type { Caso } from "@/lib/types";
 import {
-  ABAS_DOS_MANDATOS, FILTROS_DA_FILA, agruparPorMandato, contarFila, daFila, fatiaDaPagina, verboDaPendencia,
+  ABAS_DOS_MANDATOS, FILTROS_DA_FILA, agruparPorMandato, contarFila, daFila, fatiaDaPagina, rotuloDeBloqueantes, verboDaPendencia,
   type AbaDosMandatos, type FiltroDaFila, type GrupoDoMandato,
 } from "@/lib/painel";
 import { rotuloDaPendencia, nomeDaChecagem, partesDaDescricao, suavizarMensagem } from "@/lib/rotulos";
@@ -126,9 +126,9 @@ export async function ResumoDoPainel() {
   const resumo = veredito(perm.papel, ativos.length, pendenciasLidas, bloqueantes, casosTravados);
   return (
     <>
-      <p className="mt-0.5 text-sm text-tinta-500">{resumo}</p>
+      <p className="mt-0.5 text-sm texto-marmore">{resumo}</p>
       {soAlocados && (
-        <p className="mt-0.5 text-xs text-tinta-500">
+        <p className="mt-0.5 text-xs texto-marmore">
           Os números abaixo são dos mandatos em que você está alocado.
         </p>
       )}
@@ -551,7 +551,7 @@ function FiltrosDaFila({ estado, contagens }: Readonly<{ estado: EstadoDaUrl; co
               aria-current={atual ? "page" : undefined}
               className={classeDaAba(atual)}
             >
-              {f.rotulo} <span className="num text-[11px] opacity-75">{numero(contagens[f.chave])}</span>
+              {f.rotulo} <span className="num text-[11px]">{numero(contagens[f.chave])}</span>
             </Link>
           );
         })}
@@ -582,7 +582,7 @@ function LinhaDoGrupo({ g, nome, casoPorId }: Readonly<{
   const resto = g.chips.slice(MAX_CHIPS).reduce((n, c) => n + c.n, 0);
   return (
     <tr>
-      <td className="max-w-[16rem] align-top">
+      <td className="align-top sm:max-w-[16rem]">
         <Link href={destino} className="valor-sensivel block truncate font-medium text-tinta-900 hover:underline">{nome}</Link>
         <span className="mt-0.5 block text-xs text-tinta-500">
           {caso ? `${CASO_STATUS_LABEL[caso.status]} · ` : ""}{numero(g.total)} {plural(g.total, "pendência", "pendências")}
@@ -590,11 +590,11 @@ function LinhaDoGrupo({ g, nome, casoPorId }: Readonly<{
       </td>
       <td>
         <div className="flex flex-wrap gap-1.5">
-          {g.bloqueantes > 0 && <span className="chip bg-risco-100 text-risco-800">{numero(g.bloqueantes)} {plural(g.bloqueantes, "bloqueia", "bloqueiam")}</span>}
+          {g.bloqueantes > 0 && <span className="chip bg-risco-100 text-risco-800">{rotuloDeBloqueantes(g.bloqueantes)}</span>}
           {g.aConfirmar > 0 && <span className="chip bg-alerta-100 text-alerta-800">{numero(g.aConfirmar)} a confirmar</span>}
           {visiveis.map((c) => (
             <span key={c.rotulo} className="chip bg-tinta-100 text-tinta-700">
-              {c.rotulo}{c.n > 1 && <span className="num text-[11px] opacity-75"> ×{c.n}</span>}
+              {c.rotulo}{c.n > 1 && <span className="num text-[11px]"> ×{c.n}</span>}
             </span>
           ))}
           {resto > 0 && <span className="chip bg-tinta-100 text-tinta-700">+{numero(resto)}</span>}
@@ -604,7 +604,7 @@ function LinhaDoGrupo({ g, nome, casoPorId }: Readonly<{
         )}
       </td>
       <td className="hidden text-right align-top sm:table-cell">
-        <Link href={destino} className="btn-secundario !px-2.5 !py-1 !text-xs">{verbo}</Link>
+        <Link href={destino} className="btn-secundario whitespace-nowrap !px-2.5 !py-1 !text-xs">{verbo}</Link>
       </td>
     </tr>
   );
@@ -665,7 +665,7 @@ function CorpoDaFila({ pendenciasLidas, abertas, filtradas, grupos, nomePorCaso,
   const ocultos = grupos.slice(visiveis.length);
   return (
     <>
-      <table className="tabela-a">
+      <table className="tabela-a tabela-empilha">
         <thead>
           <tr><th>Mandato</th><th>O que falta</th><th className="hidden sm:table-cell"><span className="sr-only">Ação</span></th></tr>
         </thead>
@@ -835,7 +835,7 @@ type LinhaDeMandato = {
 function SituacaoDoMandato({ l }: Readonly<{ l: LinhaDeMandato }>) {
   if (l.caso.fechado_em) return <span className="chip bg-tinta-100 text-tinta-600">Fechado</span>;
   if (l.travadas > 0) {
-    return <span className="chip bg-risco-100 text-risco-800">{l.travadas} {plural(l.travadas, "pendência", "pendências")}</span>;
+    return <span className="chip bg-risco-100 text-risco-800">{rotuloDeBloqueantes(l.travadas)}</span>;
   }
   if (l.abertas > 0) {
     return <span className="chip bg-alerta-100 text-alerta-800">{l.abertas} em aberto</span>;
@@ -944,7 +944,7 @@ async function MandatosDoPainel({ estado }: Readonly<{ estado: EstadoDaUrl }>) {
                 className={classeDaAba(a.chave === aba)}
               >
                 {a.rotulo}{" "}
-                <span className="num text-[11px] opacity-75">
+                <span className="num text-[11px]">
                   {a.chave === "travados" && !pendenciasLidas ? "—" : numero(listas[a.chave].length)}
                 </span>
               </Link>

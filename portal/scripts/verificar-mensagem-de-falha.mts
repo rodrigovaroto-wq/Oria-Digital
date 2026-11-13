@@ -1092,6 +1092,94 @@ checar(reprovados.length === 0,
   checar(ruins.length === 0,
     "contraste abaixo do mínimo no claro (cartão sobre o pior pixel do mármore): " + ruins.map(([t, min]) => `${t} = ${razao(corClaro(t), fundo).toFixed(2)} (< ${min})`).join("; "));
 }
+// TEXTO DIRETO NO MÁRMORE (revisão do 3c9ad4f, A4): o bloco acima mede o CARTÃO sobre o pior pixel. Mas há texto
+// que fica SEM cartão (subtítulo da página, data do Início, legenda de origem, abas, contagem "N pendências" de
+// seção) e esse vê o mármore puro: `tinta-500` dá 3,59:1 no claro e 2,21:1 no escuro sobre `--marmore-pior`,
+// `tinta-400` 2,72:1 no claro — medido no render: 3,41 a 4,49:1 em 8 pontos de 4 telas. Cada site abaixo é
+// (arquivo, trecho do className do elemento que está direto no mármore); a classe de cor de cada um é RESOLVIDA
+// nos dois temas e medida contra `--marmore-pior`. Elemento novo direto no mármore entra nesta lista.
+{
+  const lerFonte = (rel: string) => readFileSync(new URL(`../src/${rel}`, import.meta.url), "utf8");
+  const corDeClasse = (classe: string, mapa: Map<string, string>, resolver: (t: string) => string): string | null => {
+    if (classe === "texto-marmore") {
+      const ref = /^var\((--color-[\w-]+)\)$/.exec(mapa.get("--tinta-marmore") ?? "");
+      return ref ? resolver(ref[1]) : null;
+    }
+    const m = /^text-(tinta-\d+)$/.exec(classe);
+    return m ? resolver(`--color-${m[1]}`) : null;
+  };
+  const marmorePiorClaro = (declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--marmore-pior")) ?? "").get("--marmore-pior")) ?? "";
+  const mapaClaro = declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--marmore-pior")) ?? "");
+  checar(/^#[0-9a-f]{6}$/i.test(marmorePiorClaro), "--marmore-pior do claro ilegível: o texto direto no mármore não é calculável");
+  // [arquivo, regex cujo grupo 1 é o trecho de className do elemento direto no mármore]
+  const SITES: ReadonlyArray<readonly [string, RegExp]> = [
+    ["app/casos/page.tsx", /<p className="([^"]*)">\{dataDeHoje\}/],
+    ["app/casos/painel-blocos.tsx", /<p className="([^"]*)">\{resumo\}/],
+    ["app/casos/painel-blocos.tsx", /<p className="([^"]*)">\s*Os números abaixo são dos mandatos/],
+    ["components/selo-de-origem.tsx", /export function LegendaDeOrigem[\s\S]*?<p className="([^"]*)"/],
+    ["app/casos/[id]/layout.tsx", /<p className="([^"]*)">\s*\{humanizar\(caso\.produto\)\}/],
+    ["app/casos/[id]/documentos/(lista)/page.tsx", /<p className="([^"]*)">\s*O que chegou do cliente/],
+    ["app/casos/[id]/pendencias/page.tsx", /<p className="([^"]*)">\{abertas\.length\} /],
+    ["app/casos/[id]/pendencias/page.tsx", /<p className="([^"]*)">\{decididas\.length\} /],
+    ["app/casos/todos/page.tsx", /<p className="([^"]*)">\s*\{casos\.length === 0 && !termo/],
+    ["app/casos/todos/page.tsx", /"border-transparent ([^"]*)"/],
+    ["app/casos/[id]/abas-do-mandato.tsx", /"border-transparent ([^"]*)"/],
+    ["app/administracao/abas-da-administracao.tsx", /"border-transparent ([^"]*)"/],
+    ["app/administracao/custos/page.tsx", /<p className="([^"]*)">\s*Quanto a leitura/],
+    ["app/administracao/custos/page.tsx", /<p className="([^"]*)">\s*Soma dos mandatos/],
+    ["app/casos/todos/page.tsx", /<p className="([^"]*)">\s*Saíram da mesa/],
+  ];
+  let achados = 0;
+  for (const [arq, re] of SITES) {
+    const trecho = re.exec(semComentariosDoFonte(lerFonte(arq)))?.[1];
+    if (trecho === undefined) { checar(false, `texto direto no mármore: trecho não achado em ${arq} (${re}) — o site mudou de forma e saiu da medição`); continue; }
+    achados += 1;
+    const cores = trecho.split(/\s+/).filter((c) => /^(text-tinta-\d+|texto-marmore)$/.test(c));
+    const classe = cores.at(-1) ?? "";
+    for (const [nomeDoTema, mapa, piorHex] of [["claro", mapaClaro, marmorePiorClaro], ["escuro", escuro, escuro.get("--marmore-pior") ?? ""]] as const) {
+      const hex = corDeClasse(classe, mapa, (t) => (nomeDoTema === "claro" ? tema : escuro).get(t) ?? "");
+      const r = /^#[0-9a-f]{6}$/i.test(hex ?? "") ? razao(rgbDe(hex as string), rgbDe(piorHex)) : 0;
+      checar(r >= 4.5, `texto direto no mármore (${nomeDoTema}): "${classe || "sem cor de texto"}" em ${arq} dá ${r.toFixed(2)}:1 sobre o pior pixel (< 4,5)`);
+    }
+  }
+  checar(achados >= 15, `só ${achados} sites de texto direto no mármore medidos`);
+}
+// A2 — O CHIP DO MANDATO DIZ O QUE A FILA DIZ. O chip chamava de "pendências" o número de BLOQUEANTES: o mesmo
+// mandato aparecia com "418 pendências (8 bloqueiam)" na fila e "8 pendências" no chip (medido em 13/11/2026; o
+// AMOBELEZA, 233 e 8). As duas telas passam pela MESMA função, e o chip só pode chamar de "pendência" o que conta
+// pendência — o que ele conta é bloqueante.
+{
+  const { rotuloDeBloqueantes } = await import("../src/lib/painel.ts");
+  checar(rotuloDeBloqueantes(8) === "8 bloqueiam" && rotuloDeBloqueantes(1) === "1 bloqueia" && rotuloDeBloqueantes(1234) === "1.234 bloqueiam",
+    `rótulo de bloqueantes: ${rotuloDeBloqueantes(8)} / ${rotuloDeBloqueantes(1)} / ${rotuloDeBloqueantes(1234)}`);
+  const painel = semComentariosDoFonte(readFileSync(new URL("../src/app/casos/painel-blocos.tsx", import.meta.url), "utf8"));
+  const chip = /function SituacaoDoMandato[\s\S]*?\n\}\n/.exec(painel)?.[0] ?? "";
+  checar(chip.includes("rotuloDeBloqueantes(l.travadas)") && !/l\.travadas\}?\s*\{?plural\(l\.travadas[^)]*pendência/.test(chip),
+    "o chip da lista de mandatos não usa rotuloDeBloqueantes(l.travadas) (ou voltou a chamar bloqueante de 'pendência')");
+  checar(painel.includes("rotuloDeBloqueantes(g.bloqueantes)"), "a fila 'Precisa de você' não usa rotuloDeBloqueantes(g.bloqueantes): chip e fila podem divergir");
+}
+// A3 — A FILA EMPILHA NO CELULAR. Sem DOM aqui, o que se afirma é a ESTRUTURA que impediu o corte (a medição de
+// verdade — nenhum texto fora da caixa do cartão a 390 px — é a do navegador, em /tmp/.../medir-revisao.cjs):
+// a tabela da fila leva `.tabela-empilha`, o CSS a faz virar blocos abaixo de 640 px, e o nome não tem teto de
+// largura fixo no celular (o `max-w-[16rem]` incondicional cortava o "O que falta").
+{
+  const painel = semComentariosDoFonte(readFileSync(new URL("../src/app/casos/painel-blocos.tsx", import.meta.url), "utf8"));
+  checar(/<table className="tabela-a tabela-empilha">/.test(painel), "a tabela da fila perdeu `tabela-empilha`: no celular ela volta a ser cortada pelo cartão");
+  checar(!/<td className="max-w-\[16rem\]/.test(painel), "o nome do mandato na fila voltou a ter max-w fixo no celular");
+  const bloco = /@media \(max-width: 639px\)\s*\{([\s\S]*?)\n  \}/.exec(css.slice(css.indexOf(".tabela-empilha") - 400))?.[1] ?? "";
+  checar(/\.tabela-empilha td\s*\{[^}]*display: block/.test(bloco.replace(/\n\s*/g, " ")) || /\.tabela-empilha td \{ display: block; \}/.test(bloco.replace(/\s+/g, " ")),
+    "o CSS não empilha as células de .tabela-empilha abaixo de 640 px");
+}
+// M2 — /casos/todos a 1440 px: o nome do mandato tem teto de largura (a coluna seguia o nome mais longo, 616 px, e a tabela de
+// 1.180 px estourava o cartão de 1.144 px, com 13 px de rolagem lateral). A medição de verdade é a do navegador (largura da página).
+checar(/className="valor-sensivel block truncate[^"]*md:max-w-\[28rem\]/.test(semComentariosDoFonte(readFileSync(new URL("../src/app/casos/todos/page.tsx", import.meta.url), "utf8"))),
+  "/casos/todos: o link do nome do mandato perdeu o teto md:max-w: a tabela volta a estourar o cartão");
+// M3 — /administracao/custos não pode voltar a pôr tabela e blocos de número direto no mármore.
+{
+  const custos = semComentariosDoFonte(readFileSync(new URL("../src/app/administracao/custos/page.tsx", import.meta.url), "utf8"));
+  checar(!/rounded border border-tinta-200/.test(custos) && (custos.match(/className="carta/g) ?? []).length >= 5,
+    "custos: tabela e blocos de número voltaram a ficar sem cartão sobre o mármore");
+}
 checar(razao(rgbDe("#11161d"), rgbDe("#ece8df")) >= 4.5 && razao(rgbDe("#11161d"), rgbDe("#f6f4ef")) >= 4.5,
   "texto do botão creme do casco (vidro-tinta sobre vidro-texto/vidro-papel) abaixo de 4,5:1");
 if (process.env.TABELA_DE_CONTRASTE) {

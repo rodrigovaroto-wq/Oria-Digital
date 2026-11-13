@@ -14,12 +14,12 @@ export function SeloDeOrigem({ origem }: Readonly<{ origem: Exclude<OrigemDoNume
 /** A legenda das três origens. A que não tem dado diz que não foi medida, em vez de sumir. */
 export function LegendaDeOrigem() {
   return (
-    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-tinta-500">
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] texto-marmore">
       <span>Origem do número:</span>
       {(Object.keys(ORIGENS) as OrigemDoNumero[]).map((k) => {
         const o = ORIGENS[k];
         return (
-          <span key={k} className={`inline-flex items-center gap-1 ${o.disponivel ? o.texto : "text-tinta-500"}`}>
+          <span key={k} className="inline-flex items-center gap-1">
             <span aria-hidden className={`h-1.5 w-1.5 rounded-full ${o.disponivel ? o.ponto : "border border-tinta-400"}`} />
             {o.rotulo}
             {!o.disponivel && <span> ({o.semDado})</span>}
