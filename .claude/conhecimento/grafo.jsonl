@@ -620,6 +620,7 @@
 {"k":"n","id":"fn:fn_premissa_valores_sugeridos","t":"fn","f":"Supabase/migrations/0042_papel_da_linha.sql","txt":"premissa valores sugeridos"}
 {"k":"n","id":"fn:fn_premissas_sugeridas","t":"fn","f":"Supabase/migrations/0038_premissas_catalogo.sql","txt":"premissas sugeridas"}
 {"k":"n","id":"fn:fn_radicais_rotulo","t":"fn","f":"Supabase/migrations/0103_papel_linha_tokeniza_uma_vez.sql","txt":"radicais rotulo"}
+{"k":"n","id":"fn:fn_rastro_aging_nao_conciliado","t":"fn","f":"Supabase/migrations/0278_o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.sql","txt":"rastro aging nao conciliado"}
 {"k":"n","id":"fn:fn_reabrir_caso","t":"fn","f":"Supabase/migrations/0114_mandato_fechado.sql","txt":"reabrir caso"}
 {"k":"n","id":"fn:fn_reavaliar_guardas_extracao","t":"fn","f":"Supabase/migrations/0043_reconferir_o_que_ja_esta_no_banco.sql","txt":"reavaliar guardas extracao"}
 {"k":"n","id":"fn:fn_recalcular_vigencia_arquivo_oficial","t":"fn","f":"Supabase/migrations/0206_o_arquivo_oficial_lido_e_contado.sql","txt":"recalcular vigencia arquivo oficial"}
@@ -1863,7 +1864,7 @@
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","rel":"CHAMA","pa":"fn:fn_aging_importar","f":"Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","l":21}
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","rel":"CHAMA","pa":"fn:fn_alocar","f":"Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","l":219}
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","rel":"CHAMA","pa":"fn:fn_definir_papel","f":"Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","l":143}
-{"k":"e","de":"arquivo:Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","l":295}
+{"k":"e","de":"arquivo:Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","rel":"CHAMA","pa":"fn:fn_instalacao_conferir","f":"Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","l":335}
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","rel":"CHAMA","pa":"fn:fn_mapeamento_confirmar","f":"Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","l":145}
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_aging","f":"Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","l":15}
 {"k":"e","de":"arquivo:Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","rel":"CHAMA","pa":"fn:fn_reconciliar_caso","f":"Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql","l":1}
@@ -3108,7 +3109,8 @@
 {"k":"e","de":"migration:0277","rel":"CRIA","pa":"fn:fn_fundir_entidade","f":"Supabase/migrations/0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql","l":1117}
 {"k":"e","de":"migration:0277","rel":"CRIA","pa":"fn:fn_reconciliar_aging","f":"Supabase/migrations/0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql","l":731}
 {"k":"e","de":"migration:0277","rel":"CRIA","pa":"fn:fn_registrar_reconciliacao","f":"Supabase/migrations/0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql","l":404}
-{"k":"e","de":"migration:0278","rel":"CRIA","pa":"fn:fn_reconciliar_caso","f":"Supabase/migrations/0278_o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.sql","l":90}
+{"k":"e","de":"migration:0278","rel":"CRIA","pa":"fn:fn_rastro_aging_nao_conciliado","f":"Supabase/migrations/0278_o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.sql","l":113}
+{"k":"e","de":"migration:0278","rel":"CRIA","pa":"fn:fn_reconciliar_caso","f":"Supabase/migrations/0278_o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.sql","l":126}
 {"k":"e","de":"migration:0300","rel":"CRIA","pa":"fn:fn_adotar_chave_item_faltante","f":"Supabase/migrations/0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql","l":143}
 {"k":"e","de":"migration:0300","rel":"CRIA","pa":"fn:fn_kit_do_caso","f":"Supabase/migrations/0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql","l":451}
 {"k":"e","de":"migration:0300","rel":"CRIA","pa":"fn:fn_recomputar_completude","f":"Supabase/migrations/0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql","l":171}

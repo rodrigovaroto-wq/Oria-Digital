@@ -137,7 +137,7 @@ declare
   e_ok uuid; e_div uuid; e_leit uuid; e_ana uuid; e_k1 uuid; e_k2 uuid; e_k3 uuid; e_srv uuid;
   u_leo uuid := '00000000-0000-0000-0000-000000278b01'; u_ana uuid := '00000000-0000-0000-0000-000000278b02';
   v_cab jsonb := '["Cliente0278","Vencimento","Saldo"]'; v_mapa jsonb := '{"contraparte":0,"vencimento":1,"saldo":2}'; v_fmt jsonb := '{"decimal":"virgula","datas":"dia_mes_ano"}';
-  v_r jsonb; v_imp jsonb; v_t text; v_chk jsonb; v_chk2 jsonb; rr reconciliacao; v_n int; v_n2 int; v_pend uuid; v_pend2 uuid; v_ch text;
+  v_r jsonb; v_imp jsonb; v_t text; v_chk jsonb; v_chk2 jsonb; rr reconciliacao; v_n int; v_n2 int; v_m int; v_g uuid; v_def text; v_pend uuid; v_pend2 uuid; v_ch text;
 begin
   insert into auth.users (id, email) values (u_leo, 'leo@0278.local'), (u_ana, 'ana@0278.local') on conflict (id) do nothing;
   perform fn_definir_papel(u_leo, 'leitura');
@@ -237,6 +237,10 @@ begin
                                      where e ->> 'tipo' = 'aging' and e ->> 'executado' = 'false' and (e ->> 'carteiras_vigentes')::int = 1 and e ->> 'motivo' like '%não foi conciliada nesta rodada%'),
     'e diz que o aging NÃO rodou, com o motivo e quantas carteiras ficaram de fora (sinal positivo, não silêncio)', left(coalesce(v_chk ->> 'checagens', 'null'), 300));
   perform teste_assert_0278(teste_n_aging_0278(v_d) = v_n, 'o Leitura não grava nada do aging (a rodada pulou, e disse que pulou)', (teste_n_aging_0278(v_d) - v_n)::text);
+  -- O retorno ninguém lê (o nó n8n não o lê): o "não conciliou" também fica DURÁVEL, em evento_auditoria, mesmo para quem não escreve (o Leitura não insere lá: a função é definer).
+  perform teste_assert_0278((select count(*) from evento_auditoria where entidade_ref = 'caso:' || v_d and acao = 'aging_nao_conciliado_na_rodada' and ator = 'sistema:reconciliacao'
+                               and depois ->> 'sqlstate' = '42501' and (depois ->> 'carteiras_vigentes')::int = 1 and depois ->> 'motivo' like '%não foi conciliada nesta rodada%') = 1,
+    'o aviso de permissão deixa rastro DURÁVEL: 1 evento aging_nao_conciliado_na_rodada no mandato, com o motivo, o sqlstate e as carteiras de fora', (select count(*)::text from evento_auditoria where entidade_ref = 'caso:' || v_d));
   -- O Analista alocado roda o aging (a função é definer) mesmo chamando COMO authenticated.
   v_e := fn_upsert_caso('0278 — mandato E (Analista)');
   perform fn_alocar(v_e, u_ana);
@@ -290,10 +294,46 @@ begin
   perform teste_assert_0278(v_t like 'ok|%' and coalesce(current_setting('oria.periodo_chave', true), '') = '',
     'depois da rodada a chave vale vazio, mesmo começando de uma chave posta por fora (não herda a anterior nem deixa a do aging)', coalesce(current_setting('oria.periodo_chave', true), 'null'));
 
+  -- ================================================================== 8. O AGING QUE LEVANTA EXCEÇÃO NÃO DERRUBA A RODADA
+  raise notice '--- 8. exceção no aging: as checagens clássicas do lote ficam e o rastro fica ---';
+  v_g := fn_upsert_caso('0278 — mandato H (aging que falha)');
+  e_k1 := teste_doc_0278(v_g, 'Falha Um 0278 Ltda', 14, jsonb_build_array(teste_ln_0278(0, 'Receita líquida', 90000)), 'anual', '2025', 'DRE');
+  perform teste_doc_0278(v_g, 'Falha Um 0278 Ltda', 15, jsonb_build_array(teste_ln_0278(1, 'Total do Ativo', 1000, 'milhar', '31/12/2025'),
+    teste_ln_0278(2, 'Total do Passivo e Patrimônio Líquido', 1000, 'milhar', '31/12/2025'), teste_ln_0278(3, 'Clientes - duplicatas a receber', 24917)));
+  perform set_config('ct78.ent', e_k1::text, false);
+  perform teste_imp_0278(v_g, e_k1, '2025-12-31', 2491700000);
+  -- Rodada normal: mede quantas linhas CLÁSSICAS (fora do aging) uma rodada grava neste mandato (a referência).
+  v_n := (select count(*) from reconciliacao where caso_id = v_g and tipo not like 'aging\_%');
+  v_t := teste_rodada_0278(v_g, null);
+  v_n2 := (select count(*) from reconciliacao where caso_id = v_g and tipo not like 'aging\_%') - v_n;       -- clássicas gravadas por uma rodada sem sabotagem
+  perform teste_assert_0278(v_t like 'ok|%' and v_n2 >= 6 and not exists (select 1 from evento_auditoria where entidade_ref = 'caso:' || v_g and acao = 'aging_nao_conciliado_na_rodada'),
+    'referência: a rodada sem sabotagem grava as checagens clássicas (pelo menos 6, não vazio) e não deixa rastro de aging não conciliado', v_n2::text);
+  -- Sabota o aging (levanta divisão por zero), SÓ dentro deste bloco: o DO é uma transação e a definição original é reposta logo abaixo.
+  v_def := pg_get_functiondef('fn_reconciliar_aging(uuid)'::regprocedure);
+  execute 'create or replace function fn_reconciliar_aging(p_aging_id uuid) returns jsonb language plpgsql as $f$ begin perform 1/0; return null; end $f$';
+  v_n := (select count(*) from reconciliacao where caso_id = v_g and tipo not like 'aging\_%');
+  v_m := (select count(*) from reconciliacao where caso_id = v_g and tipo like 'aging\_%');
+  v_t := teste_rodada_0278(v_g, null);
+  v_chk := case when v_t like 'ok|%' then substr(v_t, 4)::jsonb else '{}'::jsonb end;
+  perform teste_assert_0278(v_t like 'ok|%', 'o aging levantando exceção NÃO derruba a rodada (a chamada não leva o erro)', left(v_t, 200));
+  perform teste_assert_0278((select count(*) from reconciliacao where caso_id = v_g and tipo not like 'aging\_%') - v_n = v_n2,
+    'e as checagens clássicas do lote continuam gravadas (a mesma contagem da rodada sem sabotagem)', ((select count(*) from reconciliacao where caso_id = v_g and tipo not like 'aging\_%') - v_n)::text || ' de ' || v_n2);
+  perform teste_assert_0278((select count(*) from reconciliacao where caso_id = v_g and tipo like 'aging\_%') = v_m,
+    'o aging que falhou não deixa linha pela metade (a subtransação o desfaz inteiro)', ((select count(*) from reconciliacao where caso_id = v_g and tipo like 'aging\_%') - v_m)::text);
+  perform teste_assert_0278(exists (select 1 from jsonb_array_elements(coalesce(v_chk -> 'checagens', '[]'::jsonb)) e
+                                     where e ->> 'tipo' = 'aging' and e ->> 'executado' = 'false' and e ->> 'sqlstate' = '22012' and e ->> 'motivo' like '%division by zero%'),
+    'o retorno diz que o aging NÃO rodou, com o motivo e o sqlstate (22012)', left(coalesce(v_chk ->> 'checagens', 'null'), 200));
+  perform teste_assert_0278((select count(*) from evento_auditoria where entidade_ref = 'caso:' || v_g and acao = 'aging_nao_conciliado_na_rodada' and ator = 'sistema:reconciliacao'
+                               and depois ->> 'sqlstate' = '22012' and depois ->> 'motivo' like '%division by zero%' and (depois ->> 'carteiras_vigentes')::int = 1) = 1,
+    'e deixa rastro DURÁVEL: 1 evento aging_nao_conciliado_na_rodada com o motivo, o sqlstate e as carteiras de fora', (select count(*)::text from evento_auditoria where entidade_ref = 'caso:' || v_g));
+  execute v_def;                                                          -- repõe fn_reconciliar_aging
+  perform teste_assert_0278(pg_get_functiondef('fn_reconciliar_aging(uuid)'::regprocedure) = v_def,
+    'a sabotagem do teste foi desfeita (fn_reconciliar_aging volta a ser a original)', null);
+
   -- ================================================================== 7. A SONDA
   raise notice '--- 7. a sonda enxerga a 0278 ---';
-  perform teste_assert_0278((select count(*) from fn_instalacao_conferir() where migration = '0278' and presente) = 2 and (select count(*) from fn_instalacao_conferir() where migration = '0278') = 2,
-    'os 2 requisitos da 0278 existem no catálogo e estão presentes', (select string_agg(chave || ':' || presente, ', ') from fn_instalacao_conferir() where migration = '0278'));
+  perform teste_assert_0278((select count(*) from fn_instalacao_conferir() where migration = '0278' and presente) = 5 and (select count(*) from fn_instalacao_conferir() where migration = '0278') = 5,
+    'os 5 requisitos da 0278 existem no catálogo e estão presentes', (select string_agg(chave || ':' || presente, ', ') from fn_instalacao_conferir() where migration = '0278'));
 
   raise notice 'TODOS OS TESTES DA 0278 PASSARAM (% asserts executados)', current_setting('ct78.execucoes', true);
 end $$;

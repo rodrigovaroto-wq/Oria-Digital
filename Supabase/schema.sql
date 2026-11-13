@@ -11107,6 +11107,27 @@ $$;
 COMMENT ON FUNCTION public.fn_radicais_rotulo(p_chave text) IS 'Radicais de 5 letras das palavras de um rótulo, ordenados e sem repetição. Extraído de fn_rotulo_contido na 0102 para ser calculado uma vez por linha lógica em vez de duas vezes por PAR de linhas comparadas.';
 
 --
+-- Name: fn_rastro_aging_nao_conciliado(uuid, text, text, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_rastro_aging_nao_conciliado(p_caso_id uuid, p_motivo text, p_sqlstate text, p_carteiras_vigentes integer) RETURNS void
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  if not (fn_conexao_de_servico() or fn_pode_ler_caso(p_caso_id)) then return; end if;
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+    values ('sistema:reconciliacao', 'aging_nao_conciliado_na_rodada', 'caso:' || p_caso_id,
+            jsonb_build_object('motivo', p_motivo, 'sqlstate', p_sqlstate, 'carteiras_vigentes', p_carteiras_vigentes));
+end $$;
+
+--
+-- Name: FUNCTION fn_rastro_aging_nao_conciliado(p_caso_id uuid, p_motivo text, p_sqlstate text, p_carteiras_vigentes integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_rastro_aging_nao_conciliado(p_caso_id uuid, p_motivo text, p_sqlstate text, p_carteiras_vigentes integer) IS '0278: grava em evento_auditoria (caso:<id>, ator sistema:reconciliacao) que a rodada NÃO conciliou a carteira de aging (sem permissão, ou o aging levantou exceção): o retorno da rodada ninguém lê. Definer porque o Leitura não insere em evento_auditoria. Só conexão de serviço ou quem lê o mandato; os demais não gravam e não levam erro.';
+
+--
 -- Name: fn_reabrir_caso(uuid, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -12620,12 +12641,22 @@ begin
   select count(*) into v_vigentes from aging_importado where caso_id = p_caso_id and substituido_em is null;
   if v_vigentes > 0 then
     if fn_conexao_de_servico() or fn_pode_escrever_caso(p_caso_id) then
-      v_checagens := v_checagens || fn_reconciliar_aging_do_caso(p_caso_id);
-      v_chamadas := v_chamadas + v_vigentes;
+      -- Subtransação: o aging NUNCA derruba a rodada. O nó n8n `Reconciliar Lote` é onError=continueRegularOutput e ninguém lê a saída; uma exceção solta aqui desfazia as
+      -- checagens clássicas do lote INTEIRO, sem pendência e sem log (medido: com fn_reconciliar_aging levantando, a rodada gravava 0 linhas em vez de 18). Só o aging é desfeito.
+      begin
+        v_checagens := v_checagens || fn_reconciliar_aging_do_caso(p_caso_id);
+        v_chamadas := v_chamadas + v_vigentes;
+      exception when others then
+        v_checagens := v_checagens || jsonb_build_array(jsonb_build_object(
+          'executado', false, 'tipo', 'aging', 'caso_id', p_caso_id, 'carteiras_vigentes', v_vigentes, 'motivo', sqlerrm, 'sqlstate', sqlstate));
+        perform fn_rastro_aging_nao_conciliado(p_caso_id, sqlerrm, sqlstate, v_vigentes);
+      end;
     else
       v_checagens := v_checagens || jsonb_build_array(jsonb_build_object(
         'executado', false, 'tipo', 'aging', 'caso_id', p_caso_id, 'carteiras_vigentes', v_vigentes,
         'motivo', 'a conciliação da carteira de aging exige ser Sócio ou Analista alocado neste mandato (ou a conexão de serviço): a carteira não foi conciliada nesta rodada'));
+      perform fn_rastro_aging_nao_conciliado(p_caso_id,
+        'a conciliação da carteira de aging exige ser Sócio ou Analista alocado neste mandato (ou a conexão de serviço): a carteira não foi conciliada nesta rodada', '42501', v_vigentes);
     end if;
   end if;
 
@@ -12641,7 +12672,7 @@ $$;
 -- Name: FUNCTION fn_reconciliar_caso(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) IS 'Roda cada uma das oito checagens de reconciliação sobre a SUA chave (0152). 0192: `order by` em cada laço `select distinct` — determinismo de qual período a pendência carrega quando mais de um é compatível; o aberto/resolvido em si já não depende da ordem (guarda em fn_registrar_reconciliacao). 0192: cada laço grava o período da CHAVE em oria.periodo_chave (lido por fn_registrar_reconciliacao). 0278: no fim, UMA vez por rodada, concilia as carteiras de aging VIGENTES do mandato com o balanço (o balanço que chega depois da carteira a reconcilia); quem não é Sócio, Analista alocado ou a conexão de serviço não leva 42501 por causa do aging: a rodada devolve uma checagem executado=false, tipo aging, com o motivo. Sem carteira vigente o retorno é o de antes. `chamadas` conta uma por carteira vigente.';
+COMMENT ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) IS 'Roda cada uma das oito checagens de reconciliação sobre a SUA chave (0152). 0192: `order by` em cada laço `select distinct` — determinismo de qual período a pendência carrega quando mais de um é compatível; o aberto/resolvido em si já não depende da ordem (guarda em fn_registrar_reconciliacao). 0192: cada laço grava o período da CHAVE em oria.periodo_chave (lido por fn_registrar_reconciliacao). 0278: no fim, UMA vez por rodada, concilia as carteiras de aging VIGENTES do mandato com o balanço (o balanço que chega depois da carteira a reconcilia); quem não é Sócio, Analista alocado ou a conexão de serviço não leva 42501 por causa do aging: a rodada devolve uma checagem executado=false, tipo aging, com o motivo, e grava o rastro em evento_auditoria (aging_nao_conciliado_na_rodada); o mesmo vale se o aging levantar qualquer exceção (subtransação: as checagens clássicas do lote ficam). Sem carteira vigente o retorno é o de antes. `chamadas` conta uma por carteira vigente.';
 
 --
 -- Name: fn_reconciliar_chaves_do_documento(uuid, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -26129,6 +26160,14 @@ REVOKE ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) TO service_role;
 GRANT ALL ON FUNCTION public.fn_radicais_rotulo(p_chave text) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_rastro_aging_nao_conciliado(p_caso_id uuid, p_motivo text, p_sqlstate text, p_carteiras_vigentes integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_rastro_aging_nao_conciliado(p_caso_id uuid, p_motivo text, p_sqlstate text, p_carteiras_vigentes integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_rastro_aging_nao_conciliado(p_caso_id uuid, p_motivo text, p_sqlstate text, p_carteiras_vigentes integer) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_rastro_aging_nao_conciliado(p_caso_id uuid, p_motivo text, p_sqlstate text, p_carteiras_vigentes integer) TO service_role;
 
 --
 -- Name: FUNCTION fn_reabrir_caso(p_caso_id uuid, p_autor text); Type: ACL; Schema: public; Owner: -
