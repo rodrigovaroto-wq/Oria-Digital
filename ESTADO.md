@@ -36,7 +36,12 @@
      - (b) link para o cliente enviar documentos (Área do cliente, arquivada no REDESENHO; pré-requisito 0216 feito);
      - (c) número novo × reapresentado por período entre versões;
      - (d) pendência vira achado, com dono, efeito e mitigação, e relatório de riscos.
-     Numeração a partir de 0277 (a 0275 segue reservada para o aging); reconferir na hora.
+     - **Desenho pronto:** `Arquitetura do Sistema/3 Estado e Execução/DESENHO_QUATRO_FUNCOES_2026-11.md`.
+     - **Decidido pelo dono em 13/11:**
+       - aceitas todas as 23 recomendações;
+       - ordem 1 → 4 → 3 → 2;
+       - a Área do cliente (2) só depois de 18/12;
+       - migrations desta frente a partir da **0300** (não 0277); a 0275 segue reservada para o aging. Reconferir na hora.
   - Ferramentas auditadas: transitions.dev aprovado (CSS puro, licença sem redistribuir a biblioteca); React Bits, um componente por vez; Taste Skill NÃO instalar (gatilho Stop de 10 min e manda inventar dado), só a biblioteca de paletas.
 
 ## SESSÃO 127b (11–12/11/2026, conta Claude Oria) — PLANO DO MVP: MB0, MB1, MB2; 0272 (mapeamento de colunas)

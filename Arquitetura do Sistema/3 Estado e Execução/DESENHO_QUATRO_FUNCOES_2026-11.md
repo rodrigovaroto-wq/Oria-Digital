@@ -1,10 +1,17 @@
 # Desenho técnico — quatro funções aprovadas pelo dono (sem código)
 
+> **Decisões do dono (13/11/2026):**
+> - Aceitas TODAS as recomendações (D1.1 a D4.6).
+> - A Área do cliente (função 2) entra DEPOIS do portão de 18/12.
+> - As migrations desta frente começam na **0300**, não na 0277. Os números abaixo já foram renumerados (0277–0283 → 0300–0306) e precisam ser reconferidos na hora de escrever.
+> - A 0275 continua reservada para o aging.
+
+
 **Data:** 13/11/2026 · **Base lida:** `main` em `ef92088` · **Escrito por:** agente de desenho, sem
 editar o repositório.
 
 **Numeração.** A migration mais nova no repositório é a `0276`. A `0275` está RESERVADA para a
-correção do aging (ESTADO S127b) e não aparece aqui. Proponho `0277` a `0283`. **Os números têm de
+correção do aging (ESTADO S127b) e não aparece aqui. Proponho `0300` a `0306`. **Os números têm de
 ser reconferidos na hora de escrever** (`ls Supabase/migrations | tail`), porque três contas
 escrevem migration em paralelo e a 0243 da P27 continua sem número final.
 
@@ -66,7 +73,7 @@ a conferência rodou.
 3. **Postgres resolve.** Uma função `stable` que DERIVA o estado na leitura, em vez de uma coluna de
    status que envelhece.
 
-**Migration `0277` (proposta):**
+**Migration `0300` (proposta):**
 - **Função nova `fn_kit_do_caso(p_caso uuid)`**, `stable`, `security invoker` (a RLS da 0216 vale
   sozinha). Uma linha por item do Kit (tipo obrigatório): `tipo`, `estado`, `documentos uuid[]`,
   `motivo` (texto do porquê, inclusive do efeito), `conferido_por`, `conferido_em`. É a única
@@ -77,7 +84,7 @@ a conferência rodou.
   contagem gravada em evento (zero também).
   - **Cuidado medido no código:** `fn_decidir_pendencia` grava `motivo = coalesce(p_motivo, motivo)`
     (`0109_…sql:194`, mantido em `0227_…sql:81`). Se a tela um dia mandar motivo humano, a chave some e a
-    completude reabre a pendência. A 0277 tem de guardar a chave em coluna própria
+    completude reabre a pendência. A 0300 tem de guardar a chave em coluna própria
     (`pendencia.chave_motor text`) ou a fn_decidir_pendencia tem de deixar de sobrescrever `motivo`.
     Recomendo a coluna própria: não mexe em função com 8 chamadores.
 - **Rastro do fechamento.** Coluna `pendencia.resolvida_por_documento_id uuid references documento
@@ -95,13 +102,13 @@ a conferência rodou.
 - **Sonda:** requisitos `funcao fn_kit_do_caso`; `coluna pendencia.resolvida_por_documento_id`;
   `coluna pendencia.chave_motor`; `corpo fn_recomputar_completude` com o marcador
   `completude_recomputada`; `corpo fn_recomputar_completude` com `completude:item_faltante:`.
-  Subir `instalacao_cobertura` para 0277 (e nunca rebaixar quando a 0275 entrar).
+  Subir `instalacao_cobertura` para 0300 (e nunca rebaixar quando a 0275 entrar).
 
 **n8n:** nada. A chamada `fn_recomputar_completude` continua a mesma; a assinatura não muda.
 
 **Portal (dono do diretório: Claude Oria 2):**
 - `lib/kit-basico.ts` passa a ler `fn_kit_do_caso` (UMA ida). `itensDoKitBasicoAtendidos` fica como
-  queda para banco sem a 0277, como a 0276 já fez.
+  queda para banco sem a 0300, como a 0276 já fez.
 - Grade do Kit com os cinco estados e o percentual **por estado**, nunca um só "% pronto".
 - Os TRÊS chamadores do Kit mudam juntos: `casos/[id]/page.tsx`, `documentos/(lista)/page.tsx`,
   `casos/[id]/export/route.ts:597`. Erro na leitura = "Kit não lido", nunca "faltante" (ALTO da
@@ -172,11 +179,11 @@ Cada um medido não-vazio (regra 2): desligar a parte, contar quantos reprovam, 
 ### (g) Fatias, uma por commit
 | # | Fatia | Pronto quando |
 |---|---|---|
-| 1.0 | **Medir antes (só leitura, produção).** Quantas linhas `presente` têm zero linha na vigente; quantas `item_faltante` resolvidas estavam decididas por pessoa antes; quantas abertas casariam pela chave nova | Três números no cabeçalho da 0277 |
-| 1.1 | `0277`: `fn_kit_do_caso` + colunas + chave + evento + sonda + teste SQL | `run.sh` verde; I1.1–I1.5 e I1.8 medidos não-vazio, número no commit |
+| 1.0 | **Medir antes (só leitura, produção).** Quantas linhas `presente` têm zero linha na vigente; quantas `item_faltante` resolvidas estavam decididas por pessoa antes; quantas abertas casariam pela chave nova | Três números no cabeçalho da 0300 |
+| 1.1 | `0300`: `fn_kit_do_caso` + colunas + chave + evento + sonda + teste SQL | `run.sh` verde; I1.1–I1.5 e I1.8 medidos não-vazio, número no commit |
 | 1.2 | Portal: os três chamadores leem `fn_kit_do_caso`, com queda | `verificar-kit-basico.mts` com I1.6 e I1.7 medidos; `tsc` e `eslint` limpos |
 | 1.3 | Portal: grade com os cinco estados e "reconferido às HH:MM" | Vistoria no navegador num mandato com documento sem linha |
-| 1.4 | Aplicar em produção (dono) | Sonda: 0 ausentes da 0277; evento `completude_recomputada` aparece no primeiro lote |
+| 1.4 | Aplicar em produção (dono) | Sonda: 0 ausentes da 0300; evento `completude_recomputada` aparece no primeiro lote |
 
 ### (h) Decisões do dono
 Estão na seção 6, D1.1 a D1.4.
@@ -213,7 +220,7 @@ devolve verdadeiro para qualquer `membro` alocado, e todas as tabelas por caso d
 uma delas mostra número ao cliente, sem erro nenhum. O link não entra na RLS: ele só fala com
 funções `security definer` que devolvem uma lista fechada de campos.
 
-**Migration `0281` (proposta; depois de 0277–0280):**
+**Migration `0304` (proposta; depois de 0300–0303):**
 - **Tabela `link_cliente`**: `id`, `caso_id` (FK, on delete cascade), `token_hash bytea` (SHA-256 do
   token; **o token nunca é gravado**), `criado_por uuid`, `criado_em`, `expira_em` (not null),
   `revogado_em`, `revogado_por`, `motivo_revogacao`, `teto_arquivos int`, `teto_bytes bigint`,
@@ -322,8 +329,8 @@ resto não foi lido).
 | # | Fatia | Pronto quando |
 |---|---|---|
 | 2.0 | **Decisões D2.1–D2.8** respondidas por escrito | Registradas no PLANO_MVP §4 |
-| 2.1 | `0281`: tabelas, emitir/revogar, painel, sonda, teste | I2.1–I2.4, I2.6, I2.7 medidos não-vazio |
-| 2.2 | `0282`: reservar + bucket + policy de Storage + quota | I2.5 medido; varredura do `reservado` sem objeto |
+| 2.1 | `0304`: tabelas, emitir/revogar, painel, sonda, teste | I2.1–I2.4, I2.6, I2.7 medidos não-vazio |
+| 2.2 | `0305`: reservar + bucket + policy de Storage + quota | I2.5 medido; varredura do `reservado` sem objeto |
 | 2.3 | Portal interno: emitir, revogar, ver como o cliente vê | I2.8 na suíte; revisão independente com a lente de segurança |
 | 2.4 | Portal externo `/enviar/[token]` | Vistoria no navegador: link válido, expirado, revogado, mandato fechado, arquivo grande |
 | 2.5 | Portal interno: quarentena e promoção | Arquivo promovido vira documento e muda o Kit; descartado não |
@@ -386,7 +393,7 @@ produção dão anos diferentes nas duas.
 | `conta_nao_localizada` | há original de `a(l)`, mas a conta (rótulo + seção) não aparece nele. Nota: "pode ter sido renomeada; comparar à mão" — **nunca** `novo` |
 | `nao_comparavel` | parcial, movimento, sem escala, sem seção canônica, papel ≠ `conta`; com o motivo |
 
-**Migration `0279` (proposta):**
+**Migration `0302` (proposta):**
 - **Função `fn_ocorrencias_por_documento(caso, entidade)`** `stable`, invoker: o CTE `por_documento`
   de `fn_conflitos_do_caso` extraído para uma função só, com o ano do documento junto. Escada degrau
   2: duas montagens da mesma conta divergem sem erro.
@@ -396,7 +403,7 @@ produção dão anos diferentes nas duas.
 - **Fatia separada:** `fn_conflitos_do_caso` passa a ler `fn_ocorrencias_por_documento`. Antes,
   listar os chamadores (`grep -rn fn_conflitos_do_caso Supabase/ N8N/ portal/src/`) e provar a saída
   idêntica na fixture do Canastra e num mandato real (leitura).
-- **Migration `0280` (só se D3.1 = b):** `documento.substitui_documento_id uuid references documento
+- **Migration `0303` (só se D3.1 = b):** `documento.substitui_documento_id uuid references documento
   on delete set null`, escrito só por `fn_documento_marcar_substituicao` (pessoa que escreve no
   caso, evento). Com ela, "versão anterior" de um balanço 2024 refeito = o balanço 2024 marcado.
   Sem marca, os dois continuam sendo conflito (como hoje), nunca "novo × reapresentado".
@@ -448,11 +455,11 @@ A decisão sobre QUAL número vale continua onde está: autoridade documental + 
 ### (g) Fatias
 | # | Fatia | Pronto quando |
 |---|---|---|
-| 3.0 | **Medir antes (leitura, produção).** Quantos (entidade, conta, ano) têm original E reapresentação; quantos discordam; quantas linhas dão ano diferente em `fn_exercicio_da_coluna` × `fn_ano_da_coluna`; tempo da consulta no maior mandato | Quatro números no cabeçalho da 0279 |
-| 3.1 | `0279`: `fn_ocorrencias_por_documento` + `fn_apresentacoes_por_periodo` + sonda + teste | I3.1, I3.2, I3.4–I3.7 medidos não-vazio |
+| 3.0 | **Medir antes (leitura, produção).** Quantos (entidade, conta, ano) têm original E reapresentação; quantos discordam; quantas linhas dão ano diferente em `fn_exercicio_da_coluna` × `fn_ano_da_coluna`; tempo da consulta no maior mandato | Quatro números no cabeçalho da 0302 |
+| 3.1 | `0302`: `fn_ocorrencias_por_documento` + `fn_apresentacoes_por_periodo` + sonda + teste | I3.1, I3.2, I3.4–I3.7 medidos não-vazio |
 | 3.2 | `fn_conflitos_do_caso` lê a função de base | Saída idêntica antes × depois (fixture e um mandato real em leitura); I3.3 medido |
 | 3.3 | Portal: página por período | Vistoria com um mandato que tenha DF de dois anos |
-| 3.4 | (se D3.1 = b) `0280`: marcar substituição | Marcar e desmarcar muda o rótulo; evento gravado |
+| 3.4 | (se D3.1 = b) `0303`: marcar substituição | Marcar e desmarcar muda o rótulo; evento gravado |
 | 3.5 | (se D3.3 ≠ a) aba ou marca no book | `verificar-export.mts` reprova célula de comparação sem origem |
 
 ---
@@ -483,7 +490,7 @@ sozinha** quando o dado aparece (`resolvida`, do motor), e um risco da tese não
 porque a linha foi extraída. Duas vidas diferentes na mesma linha = um achado que some quando o
 motor resolve a pendência. Por isso a recomendação é tabela própria.
 
-**Migration `0278` (proposta):**
+**Migration `0301` (proposta):**
 - **Tabela `achado`**: `id`, `caso_id`, `titulo text not null`, `descricao text not null`,
   `categoria` (texto livre na primeira versão; enum só depois de medir, como `periodo.tipo`),
   `severidade` (`alta` | `media` | `baixa`), `efeito_em` (`numero` | `tese` | `ambos`),
@@ -551,8 +558,8 @@ resolvida em D" aparece ao lado, e a pessoa decide.
 ### (g) Fatias
 | # | Fatia | Pronto quando |
 |---|---|---|
-| 4.0 | **Medir antes.** Quantas pendências abertas por tipo e severidade; quantos `documento_fato`; o dono marca 5 pendências reais que seriam achado (amostra) | Números e amostra no cabeçalho da 0278 |
-| 4.1 | `0278`: tabelas, funções, RLS, sonda, teste | I4.1–I4.6 medidos não-vazio |
+| 4.0 | **Medir antes.** Quantas pendências abertas por tipo e severidade; quantos `documento_fato`; o dono marca 5 pendências reais que seriam achado (amostra) | Números e amostra no cabeçalho da 0301 |
+| 4.1 | `0301`: tabelas, funções, RLS, sonda, teste | I4.1–I4.6 medidos não-vazio |
 | 4.2 | Portal: promover, aba Achados, mudar estado | Vistoria com um Analista de teste e um Leitura |
 | 4.3 | Relatório: página + export (D4.3) | I4.4 e I4.7 na suíte; o arquivo abre no Excel sem reparo |
 
@@ -589,7 +596,7 @@ resolvida em D" aparece ao lado, e a pessoa decide.
    Sem tirar algo, o fim do MVP anda. Recomendo: Funções 1 e 4 entram no MVP (são pequenas e
    servem ao analista); 3 e 2 depois do portão do MVP.
 3. **Faixas de migration** (`STATUS_POR_ETAPA_2026-11-11.md:359`): 0240–0269 Claude Oria,
-   0270–0299 Claude Oria 2, 0300+ Claude Pessoal. A 0277+ cai na faixa da Claude Oria 2. Quem
+   0270–0299 Claude Oria 2, 0300+ Claude Pessoal. A 0300+ cai na faixa da Claude Oria 2. Quem
    escrever confere a faixa e o `ls` na hora.
 4. **Reserva da 0275.** Nada aqui usa 0275. Ao aplicar, a `instalacao_cobertura` sobe para o
    número novo e **nunca** é rebaixada quando a 0275 entrar (ESTADO S127b).
@@ -601,13 +608,13 @@ resolvida em D" aparece ao lado, e a pessoa decide.
 ### Migrations propostas (reconferir na hora)
 | Nº | Função | Conteúdo |
 |---|---|---|
-| 0277 | 1 | `fn_kit_do_caso`, chave estável, rastro, evento `completude_recomputada` |
-| 0278 | 4 | `achado`, `achado_origem`, funções, relatório |
-| 0279 | 3 | `fn_ocorrencias_por_documento`, `fn_apresentacoes_por_periodo` |
-| 0280 | 3 | (só se D3.1 = b) `documento.substitui_documento_id` |
-| 0281 | 2 | `link_cliente`, `envio_cliente`, emitir/revogar/painel |
-| 0282 | 2 | reservar, bucket, policy de Storage, quota |
-| 0283 | 2 | (só se D2.2 ≠ b) ramo v3 em `fn_conferir_envio` |
+| 0300 | 1 | `fn_kit_do_caso`, chave estável, rastro, evento `completude_recomputada` |
+| 0301 | 4 | `achado`, `achado_origem`, funções, relatório |
+| 0302 | 3 | `fn_ocorrencias_por_documento`, `fn_apresentacoes_por_periodo` |
+| 0303 | 3 | (só se D3.1 = b) `documento.substitui_documento_id` |
+| 0304 | 2 | `link_cliente`, `envio_cliente`, emitir/revogar/painel |
+| 0305 | 2 | reservar, bucket, policy de Storage, quota |
+| 0306 | 2 | (só se D2.2 ≠ b) ramo v3 em `fn_conferir_envio` |
 
 ---
 
@@ -675,7 +682,7 @@ não procede). O que acontece?**
 **D2.6 — A Área do cliente entra no MVP?**
 - (a) Sim, deslocando outra fatia.
 - (b) Depois do portão do MVP (18/12).
-- (c) Só o banco agora (0281–0282), telas depois.
+- (c) Só o banco agora (0304–0305), telas depois.
 - **Recomendo (b):** o PLANO_MVP §5 a deixou fora, e ela é a maior das quatro.
 
 **D2.7 — Que limites o link tem?**
