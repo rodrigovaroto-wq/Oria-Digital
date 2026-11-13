@@ -2,6 +2,11 @@
 
 ## SESSÃO 129 (12/11/2026) — VISÃO GERAL DO MANDATO: 13,4 s → leituras em lote (0276); redesenho do portal em andamento
 
+> **▶ RETOMAR POR AQUI: `Arquitetura do Sistema/3 Estado e Execução/PLANO_DE_CONTINUACAO_S129.md`.** Pausada a pedido do dono em 13/11.
+> - O plano traz o estado exato, tudo o que a S129 fez com os commits, a ordem do que falta e o "como trabalhar" que custou caro.
+> - Primeiro passo: refazer a revisão independente do redesenho (`3c9ad4f`), que foi interrompida.
+> - Depois: corrigir os achados e os 7 avisos do Sonar, ter o CI verde e fazer o merge do #298, já autorizado pelo dono.
+
 > **Migration mais nova (S130, Função 1 do desenho das quatro funções, ESCRITA, NÃO APLICADA): `0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql`.** (Anterior: ver o resto desta linha.) **Migration mais nova no repositório: `0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql` (ESCRITA, NÃO APLICADA).** `fn_linhas_por_versao(uuid[])` e `fn_algum_documento_serve_como(uuid[], text)`, ambas `security invoker`. A 0275 ficou de fora DE PROPÓSITO: está reservada para a correção do aging (S127b, abaixo).
 
 - **Defeito medido:** a visão geral do mandato (`portal/src/app/casos/[id]/page.tsx`) levava 13,4 s num mandato de 115 documentos e 10.231 linhas. Duas causas somavam 10,2 s: a contagem de linhas paginava `campo_extraido` em 12 idas sequenciais (5,8 s), e o Kit Básico fazia 230 RPCs de `fn_documento_serve_como` (4,4 s).
