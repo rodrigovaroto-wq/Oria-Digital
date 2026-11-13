@@ -256,8 +256,8 @@ begin
     'sem documento, a conferência NÃO desfaz a decisão da pessoa', (select estado::text from pendencia where id = v_dre_p));
   perform teste_assert_0300(teste_kit_0300(v_caso, 'DRE') = 'dispensado',
     'o item é dispensado (seguiu sem o documento, por decisão de pessoa), não faltante', teste_kit_0300(v_caso, 'DRE'));
-  perform teste_assert_0300((select motivo from fn_kit_do_caso(v_caso) where tipo = 'DRE') like '%sai em branco no book%',
-    'e o motivo diz o efeito da dispensa', null);
+  perform teste_assert_0300((select motivo from fn_kit_do_caso(v_caso) where tipo = 'DRE') like 'Seguiu sem%',
+    'e o motivo é o da dispensa (e não o do faltante, que também diz "sai em branco no book")', null);
 
   r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'DRE', 0.97, 'nome_arquivo', 'supabase_storage',
                               '0300/dre3.pdf', 'dre3.pdf', true, 'HASH-0300-B3-DRE', 'ok');
@@ -433,6 +433,204 @@ begin
     'o documento sem empresa é contado à parte e NÃO entra no N (o número não é inventado)', k.documentos_sem_empresa::text);
 end $$;
 
+
+-- =============================================================================================================================
+-- BLOCO 8 — o que o sistema JÁ declarou (A1), o tipo sem dado por natureza (M1), a fração por granularidade (M2), a idade da espera (M3)
+-- =============================================================================================================================
+do $$
+declare
+  v_caso uuid; r jsonb; v_doc uuid; v_ver uuid; k record; v_ig uuid; v_cor uuid;
+begin
+  raise notice '--- 8a. arquivo ilegível ou corrompido declarado: recebido_sem_linha, não aguardando ---';
+  v_caso := fn_upsert_caso('0300 — bloco 8a ilegivel');
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/i8.pdf', 'i8.pdf', true, 'HASH-0300-I8', 'ok');
+  v_doc := (r ->> 'documento_id')::uuid; v_ig := (r ->> 'documento_versao_id')::uuid;
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'BALANCO') = 'aguardando_extracao', 'o arranjo: registrado e ainda sem nada declarado = aguardando', teste_kit_0300(v_caso, 'BALANCO'));
+  select * into k from fn_kit_do_caso(v_caso) where tipo = 'BALANCO';
+  perform teste_assert_0300(k.aguardando_desde = (select criado_em from documento where id = v_doc),
+    'M3: aguardando_desde é o criado_em do documento que espera (a tela diz "há N dias")', coalesce(k.aguardando_desde::text, '(nulo)'));
+  perform fn_registrar_diagnostico(v_doc, v_ig, 'Alfa 0300 Ltda', true, 'BALANCO', 'anual', '2025', 'ilegivel', 'Digitalização ilegível.', 'r', 'j');
+  perform teste_assert_0300(exists (select 1 from pendencia where documento_id = v_doc and tipo = 'arquivo_ilegivel' and estado <> 'resolvida'),
+    'o arranjo: o diagnóstico abriu arquivo_ilegivel (pelo caminho de produção)', null);
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'BALANCO') = 'recebido_sem_linha',
+    'A1: o sistema JÁ declarou o arquivo ilegível: recebido_sem_linha, não aguardando', teste_kit_0300(v_caso, 'BALANCO'));
+  select * into k from fn_kit_do_caso(v_caso) where tipo = 'BALANCO';
+  perform teste_assert_0300(k.aguardando_desde is null and k.motivo like '%nenhuma linha foi lida%ilegível%VAZIO%',
+    'e não há espera a medir; o motivo diz o porquê e o efeito', k.motivo);
+
+  -- arquivo_corrompido não tem produtor hoje (o enum o reserva): a única forma de armar o cenário é a linha, escrita à mão.
+  r := fn_registrar_documento(v_caso, 'Beta 0300 Ltda', 'anual', '2025', 'DRE', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/c8.pdf', 'c8.pdf', true, 'HASH-0300-C8', 'ok');
+  insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id)
+    values (v_caso, 'diagnostico', 'arquivo_corrompido', 'importante', true, 'arquivo corrompido (fixture: o enum não tem produtor)', (r ->> 'documento_id')::uuid);
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'DRE') = 'recebido_sem_linha', 'A1: arquivo_corrompido aberto também é recebido_sem_linha', teste_kit_0300(v_caso, 'DRE'));
+
+  raise notice '--- 8b. documento_nao_extraido (fn_conferir_lote) ---';
+  v_caso := fn_upsert_caso('0300 — bloco 8b nao extraido');
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/n8.pdf', 'n8.pdf', true, 'HASH-0300-N8', 'ok');
+  v_doc := (r ->> 'documento_id')::uuid;
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'BALANCO') = 'aguardando_extracao', 'o arranjo: antes da conferência do lote, aguardando', teste_kit_0300(v_caso, 'BALANCO'));
+  perform fn_conferir_lote(v_caso);
+  perform teste_assert_0300(exists (select 1 from pendencia where documento_id = v_doc and tipo = 'documento_nao_extraido' and estado <> 'resolvida'),
+    'o arranjo: fn_conferir_lote declarou "a extração nunca foi chamada" (pendência bloqueante)', null);
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'BALANCO') = 'recebido_sem_linha',
+    'A1: o sistema JÁ declarou que a extração nunca foi chamada: recebido_sem_linha, não aguardando', teste_kit_0300(v_caso, 'BALANCO'));
+end $$;
+
+do $$
+declare
+  v_caso uuid; r jsonb; k record; v_v1 uuid; v_v2 uuid; v_n int;
+begin
+  raise notice '--- 8c. sem dado por natureza (M1) e a fração por granularidade (M2) ---';
+  v_caso := fn_upsert_caso('0300 — bloco 8c natureza e granularidade');
+  -- Contrato social lido certo: zero linha, a leitura declarou "sem dado financeiro" (formato de produção, 0230/0231).
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'CONTRATO_SOCIAL', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/cs.pdf', 'cs.pdf', true, 'HASH-0300-CS', 'ok');
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, '[]'::jsonb, 'N0', null, false,
+                                        jsonb_build_object('contas_no_documento', 0));
+  perform teste_assert_0300(fn_versao_extracao_concluida((r ->> 'documento_versao_id')::uuid),
+    'o arranjo: a leitura do contrato social está CONCLUÍDA sem dado (0231)', null);
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'CONTRATO_SOCIAL') = 'lido_sem_dado_por_natureza',
+    'M1: contrato social lido, zero linha, sem dado por natureza: lido_sem_dado_por_natureza', teste_kit_0300(v_caso, 'CONTRATO_SOCIAL'));
+  select * into k from fn_kit_do_caso(v_caso) where tipo = 'CONTRATO_SOCIAL';
+  perform teste_assert_0300(k.motivo like 'Lido:%não há linha a conferir%' and k.motivo not like '%VAZIO%' and k.empresas_atendidas = 1,
+    'M1: o motivo é verdadeiro (nada de "o book sai VAZIO") e a empresa conta como lida', k.motivo);
+
+  -- O MESMO arranjo num tipo que TEM dado (BALANCO) não é "por natureza": o item não vira lido_sem_dado.
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/bs.pdf', 'bs.pdf', true, 'HASH-0300-BS', 'ok');
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, '[]'::jsonb, 'N0', null, false,
+                                        jsonb_build_object('contas_no_documento', 0));
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'BALANCO') = 'recebido_sem_linha',
+    'M1: balanço declarado sem dado NÃO é "sem dado por natureza": segue recebido_sem_linha (o book sai vazio de verdade)', teste_kit_0300(v_caso, 'BALANCO'));
+  -- E se uma PESSOA resolve a falha ("é isso mesmo, não há dado")? A leitura passa a CONCLUÍDA (0231), mas o balanço não é sem dado por natureza:
+  -- zero linha continua sendo book vazio. Mesmo precedente de o_balanco_sem_dado_financeiro.test.sql (a pessoa resolve a extracao_falhou).
+  update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'usuario:analista-teste'
+   where documento_id = (r ->> 'documento_id')::uuid and tipo = 'extracao_falhou';
+  perform teste_assert_0300(fn_versao_extracao_concluida((r ->> 'documento_versao_id')::uuid),
+    'o arranjo: com a decisão da pessoa, a leitura do balanço está CONCLUÍDA sem dado', null);
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'BALANCO') = 'recebido_sem_linha',
+    'M1: concluída por decisão de pessoa num tipo COM dado financeiro continua recebido_sem_linha (só o tipo sem dado por natureza vira lido_sem_dado)', teste_kit_0300(v_caso, 'BALANCO'));
+
+  -- Dois contratos: um sem dado por natureza e outro com linhas conferidas por pessoa: o sem-dado não pesa.
+  r := fn_registrar_documento(v_caso, 'Beta 0300 Ltda', 'anual', '2025', 'CONTRATO_SOCIAL', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/cs2.pdf', 'cs2.pdf', true, 'HASH-0300-CS2', 'ok');
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, teste_linhas_0300(1, 0.5), 'N0');
+  perform fn_aceitar_extracao((r ->> 'documento_versao_id')::uuid, 'analista@oria', 'conferi');
+  select * into k from fn_kit_do_caso(v_caso) where tipo = 'CONTRATO_SOCIAL';
+  perform teste_assert_0300(k.estado = 'conferido' and k.docs_por_estado = '{"conferido": 1, "lido_sem_dado_por_natureza": 1}'::jsonb,
+    'o documento lido-sem-dado-por-natureza não rebaixa o item cujo outro documento foi conferido', k.docs_por_estado::text);
+
+  -- M2: a fração só existe onde o item é por empresa.
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'MUTUOS', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/mu.pdf', 'mu.pdf', true, 'HASH-0300-MU', 'ok');
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, teste_linhas_0300(1, 0.5), 'N0');
+  select count(*) into v_n from fn_kit_do_caso(v_caso) f join taxonomia_tipo_documento t on t.codigo = f.tipo
+   where t.granularidade::text not in ('entidade', 'entidade_periodo')
+     and (f.empresas_total is not null or f.empresas_com_documento is not null or f.empresas_atendidas is not null or f.documentos_sem_empresa is not null);
+  perform teste_assert_0300(v_n = 0 and exists (select 1 from fn_kit_do_caso(v_caso) f join taxonomia_tipo_documento t on t.codigo = f.tipo
+                                                  where t.granularidade::text not in ('entidade', 'entidade_periodo')),
+    'M2: MUTUOS, FAT_INTRAGRUPO e COMBINADO (granularidade caso/periodo) vêm com os quatro contadores NULOS, com ou sem documento', v_n::text);
+  select * into k from fn_kit_do_caso(v_caso) where tipo = 'BALANCO';
+  perform teste_assert_0300(k.empresas_total = 2 and k.empresas_com_documento = 1,
+    'e o balanço (por empresa e período) segue com a fração: 2 empresas no mandato, 1 com documento', format('%s/%s', k.empresas_total, k.empresas_com_documento));
+  select * into k from fn_kit_do_caso(v_caso) where tipo = 'FATURAMENTO_24M';
+  perform teste_assert_0300(k.empresas_total = 2, 'FATURAMENTO_24M (granularidade entidade) também tem fração, mesmo faltante', coalesce(k.empresas_total::text, '(nulo)'));
+end $$;
+
+-- =============================================================================================================================
+-- BLOCO 9 — D1.3 para a `rejeitada` ("não procede"): o documento também a resolve e ela nunca é reaberta errado
+-- =============================================================================================================================
+do $$
+declare
+  v_caso uuid; r jsonb; v_p uuid; v_doc uuid; v_n int; v_ev jsonb;
+begin
+  raise notice '--- 9. rejeitada ---';
+  v_caso := fn_upsert_caso('0300 — bloco 9 rejeitada');
+  perform fn_recomputar_completude(v_caso);
+  select id into v_p from pendencia where caso_id = v_caso and chave_motor = 'completude:item_faltante:FATURAMENTO_24M';
+  perform fn_decidir_pendencia(v_p, 'ana@oria', 'nao_procede', 'não se aplica a este cliente');
+  perform teste_assert_0300((select estado from pendencia where id = v_p) = 'rejeitada', 'o arranjo: a pessoa decidiu "não procede"', (select estado::text from pendencia where id = v_p));
+  perform fn_recomputar_completude(v_caso);
+  select count(*) into v_n from pendencia where caso_id = v_caso and chave_motor = 'completude:item_faltante:FATURAMENTO_24M' and estado <> 'resolvida';
+  perform teste_assert_0300(v_n = 1 and (select estado from pendencia where id = v_p) = 'rejeitada',
+    'sem documento, a rejeitada fica como está e NÃO se abre uma segunda (nunca reaberta errado)', v_n::text);
+  perform teste_assert_0300(teste_kit_0300(v_caso, 'FATURAMENTO_24M') = 'faltante',
+    'o Kit segue dizendo faltante (só a ressalva dispensa; "não procede" não)', teste_kit_0300(v_caso, 'FATURAMENTO_24M'));
+
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'FATURAMENTO_24M', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/f9.pdf', 'f9.pdf', true, 'HASH-0300-F9', 'ok');
+  v_doc := (r ->> 'documento_id')::uuid;
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, teste_linhas_0300(2, 0.5), 'N0');
+  perform teste_assert_0300((select estado from pendencia where id = v_p) = 'resolvida' and (select resolvida_por_documento_id from pendencia where id = v_p) = v_doc,
+    'D1.3: o documento que chega resolve também a REJEITADA, com o id dele', (select estado::text from pendencia where id = v_p));
+  select e.depois into v_ev from evento_auditoria e
+   where e.acao = 'completude_recomputada' and e.entidade_ref = 'caso:' || v_caso
+     and exists (select 1 from jsonb_array_elements(e.depois -> 'item_faltante' -> 'fechadas') f where f ->> 'tipo' = 'FATURAMENTO_24M');
+  perform teste_assert_0300(v_ev is not null and exists (select 1 from jsonb_array_elements(v_ev -> 'item_faltante' -> 'fechadas') f
+                              where f ->> 'tipo' = 'FATURAMENTO_24M' and f ->> 'estado_anterior' = 'rejeitada' and f ->> 'resolvida_por_anterior' = 'ana@oria'),
+    'e o evento guarda o estado anterior (rejeitada) e quem decidiu', coalesce(v_ev::text, '(nenhum)'));
+  perform fn_recomputar_completude(v_caso);
+  select count(*) into v_n from pendencia where caso_id = v_caso and chave_motor = 'completude:item_faltante:FATURAMENTO_24M' and estado <> 'resolvida';
+  perform teste_assert_0300(v_n = 0, 'resolvida, não reabre numa conferência seguinte', v_n::text);
+end $$;
+
+-- =============================================================================================================================
+-- BLOCO 10 — as contagens NÃO-zero do evento (item_sem_conteudo e linha_exigida_ausente: abertas, mantidas e resolvidas)
+-- =============================================================================================================================
+do $$
+declare
+  v_caso uuid; r jsonb; v_ver uuid;
+  c_sem constant text := 'item_sem_conteudo';
+  c_le  constant text := 'linha_exigida_ausente';
+begin
+  raise notice '--- 10a. item_sem_conteudo: abre, mantém, resolve ---';
+  v_caso := fn_upsert_caso('0300 — bloco 10a sem conteudo');
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/s10.pdf', 's10.pdf', true, 'HASH-0300-S10', 'ok');
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, '[]'::jsonb, 'N0', 'Arquivo ilegível.');
+  perform teste_assert_0300(exists (select 1 from evento_auditoria e where e.acao = 'completude_recomputada' and e.entidade_ref = 'caso:' || v_caso
+                                      and (e.depois -> c_sem ->> 'abertas')::int = 1),
+    'item_sem_conteudo: o evento conta 1 aberta', null);
+  perform fn_recomputar_completude(v_caso);
+  perform teste_assert_0300(exists (select 1 from evento_auditoria e where e.acao = 'completude_recomputada' and e.entidade_ref = 'caso:' || v_caso
+                                      and (e.depois -> c_sem ->> 'abertas')::int = 0 and (e.depois -> c_sem ->> 'mantidas')::int = 1),
+    'item_sem_conteudo: a conferência seguinte conta 1 MANTIDA e 0 aberta', null);
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage',
+                              '0300/s10b.pdf', 's10b.pdf', true, 'HASH-0300-S10B', 'ok');
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, teste_linhas_0300(2, 0.5), 'N0');
+  perform teste_assert_0300(exists (select 1 from evento_auditoria e where e.acao = 'completude_recomputada' and e.entidade_ref = 'caso:' || v_caso
+                                      and (e.depois -> c_sem ->> 'resolvidas')::int = 1 and (e.depois -> c_sem ->> 'mantidas')::int = 0),
+    'item_sem_conteudo: quando a linha chega, o evento conta 1 RESOLVIDA', null);
+
+  raise notice '--- 10b. linha_exigida_ausente: abre, mantém, resolve ---';
+  v_caso := fn_upsert_caso('0300 — bloco 10b linha exigida');
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage',
+                              '0300/l10.pdf', 'l10.pdf', true, 'HASH-0300-L10', 'ok');
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, '[
+    {"chave": "TOTAL DO ATIVO", "valor_num": "800", "confianca": "0.9"},
+    {"chave": "TOTAL DO PASSIVO E DO PATRIMONIO LIQUIDO", "valor_num": "800", "confianca": "0.9"},
+    {"chave": "Estoques", "valor_num": "800", "confianca": "0.9"}]'::jsonb, 'N0');
+  perform teste_assert_0300(exists (select 1 from evento_auditoria e where e.acao = 'completude_recomputada' and e.entidade_ref = 'caso:' || v_caso
+                                      and (e.depois -> c_le ->> 'abertas')::int = 1),
+    'linha_exigida_ausente: o evento conta 1 aberta (o caixa que não veio)', null);
+  perform fn_recomputar_completude(v_caso);
+  perform teste_assert_0300(exists (select 1 from evento_auditoria e where e.acao = 'completude_recomputada' and e.entidade_ref = 'caso:' || v_caso
+                                      and (e.depois -> c_le ->> 'abertas')::int = 0 and (e.depois -> c_le ->> 'mantidas')::int = 1),
+    'linha_exigida_ausente: a conferência seguinte conta 1 MANTIDA', null);
+  r := fn_registrar_documento(v_caso, 'Alfa 0300 Ltda', 'anual', '2025', 'BALANCO', 0.9, 'nome_arquivo', 'supabase_storage',
+                              '0300/l10b.pdf', 'l10b.pdf', true, 'HASH-0300-L10B', 'ok');
+  perform fn_registrar_campos_extraidos((r ->> 'documento_versao_id')::uuid, '[
+    {"chave": "TOTAL DO ATIVO", "valor_num": "800", "confianca": "0.9"},
+    {"chave": "TOTAL DO PASSIVO E DO PATRIMONIO LIQUIDO", "valor_num": "800", "confianca": "0.9"},
+    {"chave": "Caixa e equivalentes de caixa", "valor_num": "50", "confianca": "0.9"}]'::jsonb, 'N0');
+  perform teste_assert_0300(exists (select 1 from evento_auditoria e where e.acao = 'completude_recomputada' and e.entidade_ref = 'caso:' || v_caso
+                                      and (e.depois -> c_le ->> 'resolvidas')::int = 1 and (e.depois -> c_le ->> 'mantidas')::int = 0),
+    'linha_exigida_ausente: quando o caixa chega, o evento conta 1 RESOLVIDA', null);
+end $$;
+
 -- =============================================================================================================================
 -- BLOCO 7 — isolamento por mandato COMO authenticated, grants e a sonda
 -- =============================================================================================================================
@@ -493,7 +691,7 @@ begin
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0300' and not presente;
   perform teste_assert_0300(v_n = 0, 'a sonda enxerga os requisitos da 0300 (zero ausentes)', v_n::text);
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0300';
-  perform teste_assert_0300(v_n = 8, 'e o catálogo da 0300 tem 8 requisitos (não está vazio nem encolheu)', v_n::text);
+  perform teste_assert_0300(v_n = 9, 'e o catálogo da 0300 tem 9 requisitos (não está vazio nem encolheu)', v_n::text);
 
   delete from caso where nome like '0300 —%';
   delete from auth.users where id in (u_socio, u_ana, u_xan, u_nil);

@@ -23,14 +23,27 @@
 --   (3) `fn_recomputar_completude` só deixava rastro na troca de status do caso: conferência que não achou nada tinha a mesma cara
 --       de conferência que nunca rodou (regra 7). 0 eventos `completude_recomputada` em produção, por construção.
 --
+-- Achados da revisão independente (36575aa), corrigidos NESTE arquivo porque a 0300 não foi aplicada:
+--   (A1) documento que o sistema JÁ declarou sem leitura aparecia como `aguardando_extracao`: fn_conferir_lote (ativa no n8n) abre
+--        `documento_nao_extraido` bloqueante, o diagnóstico abre `arquivo_ilegivel`/`arquivo_corrompido`, e a primeira versão ignorava as três.
+--        Medido em PRODUÇÃO em 13/11/2026 (só leitura): `documento_nao_extraido` aberta = 0 documentos; `arquivo_corrompido` aberta = 0;
+--        `arquivo_ilegivel` aberta = 63 documentos em 2 mandatos, os 63 sem nenhuma linha lida — 63 itens que a tela diria "aguardando".
+--        Agora as três, abertas, valem `recebido_sem_linha`.
+--   (M1) contrato social lido certo (zero linha, sem dado financeiro por natureza, fn_tipo_sem_dado_por_natureza) virava `recebido_sem_linha`
+--        com o efeito falso "o book sai VAZIO": novo estado `lido_sem_dado_por_natureza` (não há linha a conferir).
+--   (M2) "N de M empresas" ignorava taxonomia_tipo_documento.granularidade: só entidade e entidade_periodo têm fração; MUTUOS e
+--        FAT_INTRAGRUPO (caso) e COMBINADO (periodo) devolvem os quatro contadores NULOS.
+--   (M3) `aguardando_desde`: o criado_em mais antigo entre os documentos aguardando, para a tela dizer "há N dias".
+--   (B5) `set local lock_timeout = '5s'` antes do ALTER TABLE (ACCESS EXCLUSIVE em pendencia).
+
 -- O QUE A MIGRATION INSTALA
 --   * `fn_kit_do_caso(p_caso uuid)`: stable, security invoker (a RLS da 0216 vale sozinha). Uma linha por item OBRIGATÓRIO do Kit.
 --     O estado é DERIVADO na leitura de campo_extraido, nunca lido do checklist (que envelhece): faltante · dispensado ·
---     aguardando_extracao · recebido_sem_linha · extraido · conferido. O item toma o PIOR estado dos documentos que servem (um
+--     aguardando_extracao · recebido_sem_linha · lido_sem_dado_por_natureza · extraido · conferido. O item toma o PIOR estado dos documentos que servem (um
 --     documento sem linha segura o item em "sem linha" mesmo com o irmão lido; `docs_por_estado` mostra a conta). `conferido` exige
 --     aceite de PESSOA em TODA linha da versão vigente de TODO documento que serve: o auto-aceite do sistema (`aceito_por` com
 --     `sistema:`, confiança >= 95%) NÃO conta (D1.1 a). O item é mandato × tipo (D1.2 a): `empresas_total`, `empresas_com_documento`
---     e `empresas_atendidas` (com documento LIDO) dizem "N de M"; documento sem empresa (`entidade_id` nulo, caso do COMBINADO) vai em
+--     e `empresas_atendidas` (com documento LIDO) dizem "N de M" SÓ para granularidade entidade e entidade_periodo (MUTUOS, FAT_INTRAGRUPO e COMBINADO vêm NULOS: "1 de 8" para item completo seria falso); documento sem empresa (`entidade_id` nulo, caso do COMBINADO) vai em
 --     `documentos_sem_empresa` e NÃO entra no N — o número não é inventado. M exclui entidade `fora_do_perimetro`.
 --     `conferencia_em` é o último evento `completude_recomputada` e `documentos_depois_da_conferencia` conta os documentos criados
 --     depois dele (todos, se a conferência nunca rodou). Mandato que o chamador não enxerga devolve ZERO linhas (nunca "tudo faltante").
@@ -51,7 +64,7 @@
 --   * D1.4 (a): quem dispara a conferência continua sendo o n8n; nada de gatilho em `documento` (colide com a P27/0243). O que esta
 --     migration acrescenta é o aviso "N documentos chegaram depois da última conferência". NÃO reemite fn_registrar_documento nem
 --     fn_registrar_campos_extraidos.
---   * A SONDA: 8 requisitos (ordem 1364-1371) e `instalacao_cobertura` em 0300.
+--   * A SONDA: 9 requisitos (ordem 1364-1372) e `instalacao_cobertura` em 0300.
 --
 -- LIMITES DITOS. (a) `fn_registrar_documento` não chama a conferência: entre o registro e a extração a pendência `item_faltante` segue
 --   aberta mesmo com o documento já servindo, e o Kit mostra `aguardando_extracao` — é exatamente a janela que o estado novo torna
@@ -66,37 +79,57 @@
 --   pessoa, 56 misturam auto-aceita e pendente, e as 285 linhas de pessoa são 0,3% das 95.991 aceitas. Esta migration NÃO muda
 --   fn_aceitar_extracao (função com chamador no portal, fora do desenho da Função 1): fica como decisão do dono, ver o relatório.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.test.sql — 75 asserts
---   (medido: 75 execuções, controle com a migration intacta: 0 reprovam; reconferido com Supabase/test/medicao-denominador.test.mjs).
+-- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.test.sql — 106 asserts
+--   (medido: 106 execuções, controle com a migration intacta: 0 reprovam; reconferido com Supabase/test/medicao-denominador.test.mjs).
 --   Cada correção desligada UMA por vez, com o teste em `raise warning` (voltou para `raise exception`; log lido atrás de FALHOU), 13/11/2026:
---   Reprovam, por correção desligada (cada número é "N dos 75 asserts"):
---   * auto-aceite do sistema passa a contar como conferência (tira o filtro `sistema:` de fn_kit_do_caso): 4 dos 75 asserts (3 de comportamento e 1 da sonda, que acusa o corpo sem o filtro).
---   * o estado `aguardando_extracao` vira `recebido_sem_linha` (I1.4): 6 dos 75 asserts.
---   * documento sem nenhuma linha lida passa a aparecer como `extraido` (é o defeito dos 267 `presente` de produção: o estado vindo do registro, não da leitura; I1.1): 10 dos 75 asserts.
---   * a conferência volta a resolver o item_faltante de OUTRO assunto (contrato_social_ausente): 2 dos 75 asserts.
---   * a pendência volta a ser achada pelo TEXTO da descrição (I1.8: reescrever a frase abre uma segunda): 1 dos 75 asserts.
---   * sem o `resolvida_por_documento_id` (I1.3 e D1.3): 4 dos 75 asserts.
---   * o evento só é gravado quando a conferência mudou alguma coisa (I1.5): 3 dos 75 asserts.
---   * a decisão de pessoa (aceita_com_ressalva, rejeitada) deixa de ser resolvida pelo documento que chega (D1.3): 3 dos 75 asserts.
---   * o evento sem o `estado_anterior`: 1 dos 75 asserts.
---   * o evento sem quem decidiu (`resolvida_por_anterior`): 1 dos 75 asserts.
---   * `documentos_depois_da_conferencia` sempre zero (I1.5): 1 dos 75 asserts.
---   * fn_kit_do_caso como security definer (a Analista de B lê o Kit de A): 3 dos 75 asserts.
---   * EXECUTE de fn_kit_do_caso concedido a public (o anon executa; o 42501 do anon vem da tabela, por isso o assert de has_function_privilege à parte): 1 dos 75 asserts.
---   * `dispensado` some (a decisão de pessoa de seguir sem o documento volta a parecer falta): 1 dos 75 asserts.
---   * M (empresas do mandato) passa a incluir a entidade fora_do_perimetro: 1 dos 75 asserts.
---   * o documento sem empresa passa a contar como uma empresa (número inventado): 1 dos 75 asserts.
---   * a falha de extração aberta deixa de contar (documento que falhou parece ainda aguardando): 2 dos 75 asserts.
---   * a adoção da chave não adota nada (o backfill alcançaria zero, por construção): 2 dos 75 asserts.
---   * a conferência deixa de adotar a pendência sem chave (abre uma segunda): 1 dos 75 asserts.
---   * mandato invisível ao chamador devolve o Kit inteiro como faltante em vez de zero linhas: 2 dos 75 asserts.
---   * linha PENDENTE passa a contar como conferida: 6 dos 75 asserts.
---   * o item toma o MELHOR estado dos documentos em vez do pior: 2 dos 75 asserts.
+--   Reprovam, por correção desligada (cada número é "N dos 106 asserts"):
+--   * auto-aceite do sistema passa a contar como conferência (tira o filtro `sistema:` de fn_kit_do_caso): 4 dos 106 asserts (3 de comportamento e 1 da sonda, que acusa o corpo sem o filtro).
+--   * o estado `aguardando_extracao` vira `recebido_sem_linha` (I1.4): 9 dos 106 asserts.
+--   * documento sem nenhuma linha lida passa a aparecer como `extraido` (é o defeito dos 267 `presente` de produção: o estado vindo do registro, não da leitura; I1.1): 23 dos 106 asserts.
+--   * a conferência volta a resolver o item_faltante de OUTRO assunto (contrato_social_ausente): 2 dos 106 asserts.
+--   * a pendência volta a ser achada pelo TEXTO da descrição (I1.8: reescrever a frase abre uma segunda): 1 dos 106 asserts.
+--   * sem o `resolvida_por_documento_id` (I1.3 e D1.3): 5 dos 106 asserts.
+--   * o evento só é gravado quando a conferência mudou alguma coisa (I1.5): 5 dos 106 asserts.
+--   * a decisão de pessoa (aceita_com_ressalva, rejeitada) deixa de ser resolvida pelo documento que chega (D1.3): 6 dos 106 asserts.
+--   * a `rejeitada` sozinha deixa de ser resolvida pelo documento que chega (D1.3, B2): 3 dos 106 asserts.
+--   * a `rejeitada` passa a abrir uma segunda pendência em vez de ser reconhecida como aberta (B2): 1 dos 106 asserts.
+--   * o evento sem o `estado_anterior`: 2 dos 106 asserts.
+--   * o evento sem quem decidiu (`resolvida_por_anterior`): 2 dos 106 asserts.
+--   * `documentos_depois_da_conferencia` sempre zero (I1.5): 1 dos 106 asserts.
+--   * fn_kit_do_caso como security definer (a Analista de B lê o Kit de A): 3 dos 106 asserts.
+--   * EXECUTE de fn_kit_do_caso concedido a public (o anon executa; o 42501 do anon vem da tabela, por isso o assert de has_function_privilege à parte): 1 dos 106 asserts.
+--   * `dispensado` some (a decisão de pessoa de seguir sem o documento volta a parecer falta; o assert do motivo casa 'Seguiu sem%', B1): 2 dos 106 asserts.
+--   * M (empresas do mandato) passa a incluir a entidade fora_do_perimetro: 1 dos 106 asserts.
+--   * o documento sem empresa passa a contar como uma empresa (número inventado): 1 dos 106 asserts.
+--   * a falha de extração aberta deixa de contar (documento que falhou parece ainda aguardando): 3 dos 106 asserts.
+--   * a adoção da chave não adota nada (o backfill alcançaria zero, por construção): 2 dos 106 asserts.
+--   * a conferência deixa de adotar a pendência sem chave (abre uma segunda): 1 dos 106 asserts.
+--   * mandato invisível ao chamador devolve o Kit inteiro como faltante em vez de zero linhas: 2 dos 106 asserts.
+--   * linha PENDENTE passa a contar como conferida: 6 dos 106 asserts.
+--   * o item toma o MELHOR estado dos documentos em vez do pior: 2 dos 106 asserts.
+--   * A1: `documento_nao_extraido` deixa de valer como leitura perdida (volta a `aguardando`): 2 dos 106 asserts (1 de comportamento e 1 da sonda).
+--   * A1: `arquivo_ilegivel` deixa de valer: 2 dos 106 asserts.
+--   * A1: `arquivo_corrompido` deixa de valer: 1 dos 106 asserts.
+--   * M1: o ramo `lido_sem_dado_por_natureza` some (contrato social lido volta a `recebido_sem_linha` com o efeito falso): 3 dos 106 asserts.
+--   * M1: o ramo vale para QUALQUER tipo, não só o sem dado por natureza (balanço cuja falha a pessoa resolveu viraria "lido sem dado"): 1 dos 106 asserts.
+--   * M1: o `lido_sem_dado_por_natureza` passa a pesar no pior estado do item (rebaixa o item cujo outro documento foi conferido): 2 dos 106 asserts.
+--   * M2: a fração N de M ignora a granularidade (MUTUOS, FAT_INTRAGRUPO e COMBINADO voltam com número): 1 dos 106 asserts.
+--   * M3: `aguardando_desde` nulo: 1 dos 106 asserts.
+--   * B3: o evento sem as `resolvidas` de item_sem_conteudo: 1 dos 106 asserts.
+--   * B3: o evento sem as `mantidas` de item_sem_conteudo: 1 dos 106 asserts.
+--   * B3: o evento sem as `resolvidas` de linha_exigida_ausente: 1 dos 106 asserts.
+--   * B3: o evento sem as `mantidas` de linha_exigida_ausente: 1 dos 106 asserts.
 --   O assert "anon: 42501" sozinho NÃO pega o EXECUTE a public (o 42501 vem da tabela); por isso o assert de has_function_privilege à parte.
+--   A variante "o ramo vale para qualquer tipo" só reprovou depois de o teste ganhar o cenário em que uma PESSOA resolve a falha do balanço: sem ele a mutação dava 0, porque fn_versao_extracao_concluida já embute a natureza do tipo.
 --   Protocolo: cada variante foi a migration inteira com UMA edição, aplicada sobre o banco montado; o teste rodou com PGOPTIONS='-c ct300.medindo=on'; a migration original foi reaplicada e o controle deu 0 reprovações.
 -- =============================================================================
 
 begin;
+
+-- `alter table pendencia ... references documento` pede ACCESS EXCLUSIVE em pendencia (e SHARE ROW EXCLUSIVE em documento). pendencia é escrita a cada
+-- extração (a conferência abre e resolve linhas nela); sem teto de espera, o ALTER entra na fila atrás de uma transação longa e TODA escrita nova
+-- em pendencia fica atrás dele. 5 s: se não pegar o lock, a migration falha inteira (nada aplicado) e o dono tenta de novo fora do lote.
+set local lock_timeout = '5s';
 
 alter table pendencia
   add column if not exists chave_motor text,
@@ -428,6 +461,7 @@ returns table (
   empresas_com_documento int,
   empresas_atendidas int,
   documentos_sem_empresa int,
+  aguardando_desde timestamptz,
   conferencia_em timestamptz,
   documentos_depois_da_conferencia int
 )
@@ -437,11 +471,14 @@ security invoker
 set search_path = public, pg_temp
 as $$
   with kit as materialized (
-    select t.codigo from taxonomia_tipo_documento t where t.obrigatoriedade = 'obrigatorio'
+    -- "N de M empresas" só faz sentido onde o item é cobrado por empresa (granularidade entidade e entidade_periodo): MUTUOS e FAT_INTRAGRUPO
+    -- são do caso, COMBINADO é do período — um documento só os cumpre, e "1 de 8" para item completo seria número falso.
+    select t.codigo, t.granularidade::text in ('entidade', 'entidade_periodo') as por_empresa
+      from taxonomia_tipo_documento t where t.obrigatoriedade = 'obrigatorio'
   ),
   -- A pergunta "este documento serve como o tipo" é a de fn_documento_serve_como (0157), a mesma do passo 1 da conferência.
   serve as materialized (
-    select k.codigo, d.id as doc, d.entidade_id, d.criado_em, fn_versao_com_extracao(d.id) as v,
+    select k.codigo, d.id as doc, d.tipo_taxonomia as tipo_doc, d.entidade_id, d.criado_em, fn_versao_com_extracao(d.id) as v,
            exists (select 1 from entidade e
                     where e.id = d.entidade_id and e.papel_no_grupo is distinct from 'fora_do_perimetro') as no_perimetro
       from kit k
@@ -450,14 +487,27 @@ as $$
   lido as materialized (
     select s.*,
            case
-             -- sem versão com linha: ou a leitura já acabou sem dado (concluída, ou falha aberta) ou ainda não acabou
+             -- sem versão com linha: ou a leitura já acabou sem dado, ou o sistema já declarou que não vai acontecer, ou ainda não acabou
              when s.v is null then
-               case when exists (select 1 from documento_versao dv
-                                  where dv.documento_id = s.doc and fn_versao_extracao_concluida(dv.id))
-                         or exists (select 1 from pendencia pe
-                                     where pe.documento_id = s.doc and pe.tipo = 'extracao_falhou' and pe.estado <> 'resolvida')
-                    then 'recebido_sem_linha'
-                    else 'aguardando_extracao' end
+               case
+                 -- o sistema JÁ disse que a leitura não houve: fn_conferir_lote abre documento_nao_extraido (a extração nunca foi chamada),
+                 -- e o diagnóstico abre arquivo_ilegivel/arquivo_corrompido. Esperar por uma leitura que ele já declarou perdida é mentir "aguardando".
+                 when exists (select 1 from pendencia pe
+                               where pe.documento_id = s.doc and pe.estado <> 'resolvida'
+                                 and pe.tipo in ('documento_nao_extraido', 'arquivo_ilegivel', 'arquivo_corrompido'))
+                      then 'recebido_sem_linha'
+                 -- leitura concluída SEM dado em tipo que não traz dado financeiro por natureza (contrato social, certidão): zero linha é o
+                 -- resultado certo, não falta (fn_tipo_sem_dado_por_natureza, 0231). Não há linha a conferir.
+                 when fn_tipo_sem_dado_por_natureza(s.tipo_doc)
+                      and exists (select 1 from documento_versao dv
+                                   where dv.documento_id = s.doc and fn_versao_extracao_concluida(dv.id))
+                      then 'lido_sem_dado_por_natureza'
+                 when exists (select 1 from documento_versao dv
+                               where dv.documento_id = s.doc and fn_versao_extracao_concluida(dv.id))
+                      or exists (select 1 from pendencia pe
+                                  where pe.documento_id = s.doc and pe.tipo = 'extracao_falhou' and pe.estado <> 'resolvida')
+                      then 'recebido_sem_linha'
+                 else 'aguardando_extracao' end
              -- com linha, mas alguma sem aceite de PESSOA (o auto-aceite `sistema:` não conta)
              when exists (select 1 from campo_extraido ce
                            where ce.documento_versao_id = s.v
@@ -476,17 +526,20 @@ as $$
      group by l.codigo
   ),
   item as materialized (
-    select k.codigo,
+    select k.codigo, k.por_empresa,
            count(l.doc)::int as n_docs,
            coalesce(array_agg(l.doc order by l.criado_em, l.doc) filter (where l.doc is not null), '{}') as docs,
+           -- o documento lido-sem-dado-por-natureza não pesa: não há linha a conferir nele; só vale como estado do item se for o ÚNICO
            min(case l.estado when 'recebido_sem_linha' then 1 when 'aguardando_extracao' then 2
-                             when 'extraido' then 3 when 'conferido' then 4 end) as pior,
+                             when 'extraido' then 3 when 'conferido' then 4 end)
+             filter (where l.estado <> 'lido_sem_dado_por_natureza') as pior,
+           min(l.criado_em) filter (where l.estado = 'aguardando_extracao') as aguardando_desde,
            count(*) filter (where l.doc is not null and l.entidade_id is null)::int as sem_empresa,
            count(distinct l.entidade_id) filter (where l.no_perimetro)::int as com_documento,
-           count(distinct l.entidade_id) filter (where l.no_perimetro and l.estado in ('extraido', 'conferido'))::int as lidas
+           count(distinct l.entidade_id) filter (where l.no_perimetro and l.estado in ('extraido', 'conferido', 'lido_sem_dado_por_natureza'))::int as lidas
       from kit k
       left join lido l on l.codigo = k.codigo
-     group by k.codigo
+     group by k.codigo, k.por_empresa
   ),
   conf as (
     select max(ev.criado_em) as em
@@ -507,7 +560,9 @@ as $$
            when 'aguardando_extracao' then
              'Recebido, mas a leitura ainda não terminou: nenhuma versão concluiu a extração e não há falha registrada. Se isto não mudar, o documento ficou sem leitura e o book sai vazio nesta parte.'
            when 'recebido_sem_linha' then
-             'Recebido, mas nenhuma linha foi lida da versão vigente: o book sai VAZIO nesta parte, mesmo com o item recebido.'
+             'Recebido, mas nenhuma linha foi lida (a extração falhou, nunca foi chamada ou o arquivo está ilegível): o book sai VAZIO nesta parte, mesmo com o item recebido.'
+           when 'lido_sem_dado_por_natureza' then
+             'Lido: este tipo de documento (societário/legal) não traz dado financeiro, então não há linha a conferir. O book não depende de linha dele.'
            when 'extraido' then
              'Lido, mas nenhuma pessoa conferiu todas as linhas. O aceite automático do sistema não conta como conferência.'
            else
@@ -519,10 +574,11 @@ as $$
                   '{}'::jsonb),
          case when est.estado = 'conferido' then a.por end,
          case when est.estado = 'conferido' then a.em end,
-         m.n,
-         i.com_documento,
-         i.lidas,
-         i.sem_empresa,
+         case when i.por_empresa then m.n end,
+         case when i.por_empresa then i.com_documento end,
+         case when i.por_empresa then i.lidas end,
+         case when i.por_empresa then i.sem_empresa end,
+         i.aguardando_desde,
          conf.em,
          (select count(*)::int from documento d where d.caso_id = p_caso and (conf.em is null or d.criado_em > conf.em))
     from item i
@@ -537,6 +593,7 @@ as $$
                                       and pe.chave_motor = 'completude:item_faltante:' || i.codigo
                                       and pe.estado = 'aceita_com_ressalva')
                       then 'dispensado' else 'faltante' end
+               when i.pior is null then 'lido_sem_dado_por_natureza'
                when i.pior = 1 then 'recebido_sem_linha'
                when i.pior = 2 then 'aguardando_extracao'
                when i.pior = 3 then 'extraido'
@@ -549,7 +606,7 @@ as $$
 $$;
 
 comment on function fn_kit_do_caso(uuid) is
-  '0300: o estado de cada item OBRIGATÓRIO do Kit Básico do mandato, derivado de campo_extraido na leitura. Estados: faltante, dispensado (item_faltante aceita_com_ressalva e ainda sem documento), aguardando_extracao, recebido_sem_linha, extraido, conferido (toda linha da versão vigente aceita por PESSOA, o auto-aceite sistema: não conta). O item toma o pior estado dos documentos que servem. empresas_total/com_documento/atendidas dizem "N de M" (M sem fora_do_perimetro); documentos_sem_empresa não entra no N. conferencia_em = último evento completude_recomputada; documentos_depois_da_conferencia = documentos criados depois dele (todos se nunca rodou). Mandato invisível ao chamador (RLS) = zero linhas, e o portal deve ler isso como "Kit não lido", nunca como faltante. security invoker.';
+  '0300: o estado de cada item OBRIGATÓRIO do Kit Básico do mandato, derivado de campo_extraido na leitura. Estados: faltante, dispensado (item_faltante aceita_com_ressalva e ainda sem documento), aguardando_extracao (aguardando_desde = o criado_em do documento mais antigo nessa espera), recebido_sem_linha (extração concluída ou falha aberta sem linha, OU o sistema já declarou documento_nao_extraido/arquivo_ilegivel/arquivo_corrompido aberta), lido_sem_dado_por_natureza (leitura concluída sem dado em tipo societário/legal: não há linha a conferir), extraido, conferido (toda linha da versão vigente aceita por PESSOA; o auto-aceite sistema: não conta). O item toma o pior estado dos documentos que servem (o lido_sem_dado_por_natureza não pesa, salvo se for o único). empresas_total/com_documento/atendidas/documentos_sem_empresa dizem "N de M" SÓ para granularidade entidade e entidade_periodo (M sem fora_do_perimetro); nos demais tipos (caso, periodo) são NULOS e a tela não mostra fração. conferencia_em = último evento completude_recomputada; documentos_depois_da_conferencia = documentos criados depois dele (todos se nunca rodou). Mandato invisível ao chamador (RLS) = zero linhas, e o portal deve ler isso como "Kit não lido", nunca como faltante. security invoker.';
 
 revoke all on function fn_kit_do_caso(uuid) from public, anon;
 grant execute on function fn_kit_do_caso(uuid) to authenticated, service_role;
@@ -608,6 +665,9 @@ insert into instalacao_requisito
   ('completude_item_faltante_por_chave', '0300', 'corpo', 'fn_recomputar_completude', 'c_chave_ft constant text := ''completude:item_faltante:''', null,
    'A item_faltante achada pela chave e não pelo texto, resolvendo só a que o motor abriu. Corpo anterior = frase da descrição que muda duplica a pendência e item_faltante de contrato social some na próxima conferência.',
    'bloqueante', 1370),
+  ('kit_nao_extraido_nao_aguarda', '0300', 'corpo', 'fn_kit_do_caso', '''documento_nao_extraido''', null,
+   'Documento que o sistema já declarou sem extração (documento_nao_extraido, arquivo_ilegivel, arquivo_corrompido) é recebido_sem_linha, não aguardando. Corpo sem isto = o Kit diz "aguardando leitura" de documento cuja leitura o sistema já deu como perdida: 63 documentos com arquivo_ilegivel aberta em produção em 13/11/2026.',
+   'bloqueante', 1372),
   ('kit_leitura_invoker', '0300', 'comportamento', 'instalacao_sonda_kit_invoker', null, 1,
    'fn_kit_do_caso e fn_adotar_chave_item_faltante rodam COM a RLS de quem chama (security invoker). Zero linhas = alguma virou security definer e um usuário lê o Kit, ou altera pendência, de mandato alheio.',
    'bloqueante', 1371)
@@ -618,7 +678,7 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = '0300', revisado_em = current_date,
-       observacao = 'A 0300 cria fn_kit_do_caso (estado do item do Kit derivado na leitura), fn_adotar_chave_item_faltante, pendencia.chave_motor e pendencia.resolvida_por_documento_id, e reemite fn_recomputar_completude (chave estável, documento que fechou, evento completude_recomputada sempre). 8 requisitos novos (ordem 1364-1371). A 0275 continua reservada ao aging: nunca rebaixar esta cobertura quando ela entrar.'
+       observacao = 'A 0300 cria fn_kit_do_caso (estado do item do Kit derivado na leitura), fn_adotar_chave_item_faltante, pendencia.chave_motor e pendencia.resolvida_por_documento_id, e reemite fn_recomputar_completude (chave estável, documento que fechou, evento completude_recomputada sempre). 9 requisitos novos (ordem 1364-1372). A 0275 continua reservada ao aging: nunca rebaixar esta cobertura quando ela entrar.'
  where id = true;
 
 commit;

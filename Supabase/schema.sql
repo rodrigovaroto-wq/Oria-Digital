@@ -7935,16 +7935,19 @@ COMMENT ON FUNCTION public.fn_instalacao_resumo() IS 'O veredito de uma linha so
 -- Name: fn_kit_do_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, estado text, motivo text, documentos uuid[], docs_por_estado jsonb, conferido_por text, conferido_em timestamp with time zone, empresas_total integer, empresas_com_documento integer, empresas_atendidas integer, documentos_sem_empresa integer, conferencia_em timestamp with time zone, documentos_depois_da_conferencia integer)
+CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, estado text, motivo text, documentos uuid[], docs_por_estado jsonb, conferido_por text, conferido_em timestamp with time zone, empresas_total integer, empresas_com_documento integer, empresas_atendidas integer, documentos_sem_empresa integer, aguardando_desde timestamp with time zone, conferencia_em timestamp with time zone, documentos_depois_da_conferencia integer)
     LANGUAGE sql STABLE
     SET search_path TO 'public', 'pg_temp'
     AS $$
   with kit as materialized (
-    select t.codigo from taxonomia_tipo_documento t where t.obrigatoriedade = 'obrigatorio'
+    -- "N de M empresas" só faz sentido onde o item é cobrado por empresa (granularidade entidade e entidade_periodo): MUTUOS e FAT_INTRAGRUPO
+    -- são do caso, COMBINADO é do período — um documento só os cumpre, e "1 de 8" para item completo seria número falso.
+    select t.codigo, t.granularidade::text in ('entidade', 'entidade_periodo') as por_empresa
+      from taxonomia_tipo_documento t where t.obrigatoriedade = 'obrigatorio'
   ),
   -- A pergunta "este documento serve como o tipo" é a de fn_documento_serve_como (0157), a mesma do passo 1 da conferência.
   serve as materialized (
-    select k.codigo, d.id as doc, d.entidade_id, d.criado_em, fn_versao_com_extracao(d.id) as v,
+    select k.codigo, d.id as doc, d.tipo_taxonomia as tipo_doc, d.entidade_id, d.criado_em, fn_versao_com_extracao(d.id) as v,
            exists (select 1 from entidade e
                     where e.id = d.entidade_id and e.papel_no_grupo is distinct from 'fora_do_perimetro') as no_perimetro
       from kit k
@@ -7953,14 +7956,27 @@ CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, esta
   lido as materialized (
     select s.*,
            case
-             -- sem versão com linha: ou a leitura já acabou sem dado (concluída, ou falha aberta) ou ainda não acabou
+             -- sem versão com linha: ou a leitura já acabou sem dado, ou o sistema já declarou que não vai acontecer, ou ainda não acabou
              when s.v is null then
-               case when exists (select 1 from documento_versao dv
-                                  where dv.documento_id = s.doc and fn_versao_extracao_concluida(dv.id))
-                         or exists (select 1 from pendencia pe
-                                     where pe.documento_id = s.doc and pe.tipo = 'extracao_falhou' and pe.estado <> 'resolvida')
-                    then 'recebido_sem_linha'
-                    else 'aguardando_extracao' end
+               case
+                 -- o sistema JÁ disse que a leitura não houve: fn_conferir_lote abre documento_nao_extraido (a extração nunca foi chamada),
+                 -- e o diagnóstico abre arquivo_ilegivel/arquivo_corrompido. Esperar por uma leitura que ele já declarou perdida é mentir "aguardando".
+                 when exists (select 1 from pendencia pe
+                               where pe.documento_id = s.doc and pe.estado <> 'resolvida'
+                                 and pe.tipo in ('documento_nao_extraido', 'arquivo_ilegivel', 'arquivo_corrompido'))
+                      then 'recebido_sem_linha'
+                 -- leitura concluída SEM dado em tipo que não traz dado financeiro por natureza (contrato social, certidão): zero linha é o
+                 -- resultado certo, não falta (fn_tipo_sem_dado_por_natureza, 0231). Não há linha a conferir.
+                 when fn_tipo_sem_dado_por_natureza(s.tipo_doc)
+                      and exists (select 1 from documento_versao dv
+                                   where dv.documento_id = s.doc and fn_versao_extracao_concluida(dv.id))
+                      then 'lido_sem_dado_por_natureza'
+                 when exists (select 1 from documento_versao dv
+                               where dv.documento_id = s.doc and fn_versao_extracao_concluida(dv.id))
+                      or exists (select 1 from pendencia pe
+                                  where pe.documento_id = s.doc and pe.tipo = 'extracao_falhou' and pe.estado <> 'resolvida')
+                      then 'recebido_sem_linha'
+                 else 'aguardando_extracao' end
              -- com linha, mas alguma sem aceite de PESSOA (o auto-aceite `sistema:` não conta)
              when exists (select 1 from campo_extraido ce
                            where ce.documento_versao_id = s.v
@@ -7979,17 +7995,20 @@ CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, esta
      group by l.codigo
   ),
   item as materialized (
-    select k.codigo,
+    select k.codigo, k.por_empresa,
            count(l.doc)::int as n_docs,
            coalesce(array_agg(l.doc order by l.criado_em, l.doc) filter (where l.doc is not null), '{}') as docs,
+           -- o documento lido-sem-dado-por-natureza não pesa: não há linha a conferir nele; só vale como estado do item se for o ÚNICO
            min(case l.estado when 'recebido_sem_linha' then 1 when 'aguardando_extracao' then 2
-                             when 'extraido' then 3 when 'conferido' then 4 end) as pior,
+                             when 'extraido' then 3 when 'conferido' then 4 end)
+             filter (where l.estado <> 'lido_sem_dado_por_natureza') as pior,
+           min(l.criado_em) filter (where l.estado = 'aguardando_extracao') as aguardando_desde,
            count(*) filter (where l.doc is not null and l.entidade_id is null)::int as sem_empresa,
            count(distinct l.entidade_id) filter (where l.no_perimetro)::int as com_documento,
-           count(distinct l.entidade_id) filter (where l.no_perimetro and l.estado in ('extraido', 'conferido'))::int as lidas
+           count(distinct l.entidade_id) filter (where l.no_perimetro and l.estado in ('extraido', 'conferido', 'lido_sem_dado_por_natureza'))::int as lidas
       from kit k
       left join lido l on l.codigo = k.codigo
-     group by k.codigo
+     group by k.codigo, k.por_empresa
   ),
   conf as (
     select max(ev.criado_em) as em
@@ -8010,7 +8029,9 @@ CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, esta
            when 'aguardando_extracao' then
              'Recebido, mas a leitura ainda não terminou: nenhuma versão concluiu a extração e não há falha registrada. Se isto não mudar, o documento ficou sem leitura e o book sai vazio nesta parte.'
            when 'recebido_sem_linha' then
-             'Recebido, mas nenhuma linha foi lida da versão vigente: o book sai VAZIO nesta parte, mesmo com o item recebido.'
+             'Recebido, mas nenhuma linha foi lida (a extração falhou, nunca foi chamada ou o arquivo está ilegível): o book sai VAZIO nesta parte, mesmo com o item recebido.'
+           when 'lido_sem_dado_por_natureza' then
+             'Lido: este tipo de documento (societário/legal) não traz dado financeiro, então não há linha a conferir. O book não depende de linha dele.'
            when 'extraido' then
              'Lido, mas nenhuma pessoa conferiu todas as linhas. O aceite automático do sistema não conta como conferência.'
            else
@@ -8022,10 +8043,11 @@ CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, esta
                   '{}'::jsonb),
          case when est.estado = 'conferido' then a.por end,
          case when est.estado = 'conferido' then a.em end,
-         m.n,
-         i.com_documento,
-         i.lidas,
-         i.sem_empresa,
+         case when i.por_empresa then m.n end,
+         case when i.por_empresa then i.com_documento end,
+         case when i.por_empresa then i.lidas end,
+         case when i.por_empresa then i.sem_empresa end,
+         i.aguardando_desde,
          conf.em,
          (select count(*)::int from documento d where d.caso_id = p_caso and (conf.em is null or d.criado_em > conf.em))
     from item i
@@ -8040,6 +8062,7 @@ CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, esta
                                       and pe.chave_motor = 'completude:item_faltante:' || i.codigo
                                       and pe.estado = 'aceita_com_ressalva')
                       then 'dispensado' else 'faltante' end
+               when i.pior is null then 'lido_sem_dado_por_natureza'
                when i.pior = 1 then 'recebido_sem_linha'
                when i.pior = 2 then 'aguardando_extracao'
                when i.pior = 3 then 'extraido'
@@ -8055,7 +8078,7 @@ $$;
 -- Name: FUNCTION fn_kit_do_caso(p_caso uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_kit_do_caso(p_caso uuid) IS '0300: o estado de cada item OBRIGATÓRIO do Kit Básico do mandato, derivado de campo_extraido na leitura. Estados: faltante, dispensado (item_faltante aceita_com_ressalva e ainda sem documento), aguardando_extracao, recebido_sem_linha, extraido, conferido (toda linha da versão vigente aceita por PESSOA, o auto-aceite sistema: não conta). O item toma o pior estado dos documentos que servem. empresas_total/com_documento/atendidas dizem "N de M" (M sem fora_do_perimetro); documentos_sem_empresa não entra no N. conferencia_em = último evento completude_recomputada; documentos_depois_da_conferencia = documentos criados depois dele (todos se nunca rodou). Mandato invisível ao chamador (RLS) = zero linhas, e o portal deve ler isso como "Kit não lido", nunca como faltante. security invoker.';
+COMMENT ON FUNCTION public.fn_kit_do_caso(p_caso uuid) IS '0300: o estado de cada item OBRIGATÓRIO do Kit Básico do mandato, derivado de campo_extraido na leitura. Estados: faltante, dispensado (item_faltante aceita_com_ressalva e ainda sem documento), aguardando_extracao (aguardando_desde = o criado_em do documento mais antigo nessa espera), recebido_sem_linha (extração concluída ou falha aberta sem linha, OU o sistema já declarou documento_nao_extraido/arquivo_ilegivel/arquivo_corrompido aberta), lido_sem_dado_por_natureza (leitura concluída sem dado em tipo societário/legal: não há linha a conferir), extraido, conferido (toda linha da versão vigente aceita por PESSOA; o auto-aceite sistema: não conta). O item toma o pior estado dos documentos que servem (o lido_sem_dado_por_natureza não pesa, salvo se for o único). empresas_total/com_documento/atendidas/documentos_sem_empresa dizem "N de M" SÓ para granularidade entidade e entidade_periodo (M sem fora_do_perimetro); nos demais tipos (caso, periodo) são NULOS e a tela não mostra fração. conferencia_em = último evento completude_recomputada; documentos_depois_da_conferencia = documentos criados depois dele (todos se nunca rodou). Mandato invisível ao chamador (RLS) = zero linhas, e o portal deve ler isso como "Kit não lido", nunca como faltante. security invoker.';
 
 --
 -- Name: fn_lado_do_mutuo(text, text); Type: FUNCTION; Schema: public; Owner: -
