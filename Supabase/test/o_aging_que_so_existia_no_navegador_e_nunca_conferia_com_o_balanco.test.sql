@@ -86,6 +86,19 @@ begin
     'demais', jsonb_build_object('contrapartes', 1, 'saldo', (p_pos - v_m1)::text, 'vencido', '0', 'titulos', 1));
 end $$;
 
+-- 0277: o resumo do aplicador (Leitor/lib/mapeamento.mjs) COERENTE com o resumo do aging: mesmos títulos, mesma soma, mesmos negativos. Desde a 0277 o banco
+-- recusa o resumo que não se amarra ao aplicador, então todo fixture deste arquivo o monta a partir do resumo.
+create or replace function teste_aplicador_0274(p_resumo jsonb) returns jsonb
+language plpgsql immutable as $$
+begin
+  return jsonb_build_object('titulo', (p_resumo ->> 'titulos')::int, 'motivos', '{}'::jsonb,
+    'saldo_titulos', ((p_resumo #>> '{positivos,saldo}')::numeric + (p_resumo #>> '{negativos,saldo}')::numeric)::text,
+    'titulos_com_saldo_negativo', jsonb_build_object('linhas', (p_resumo #>> '{negativos,titulos}')::int, 'saldo', p_resumo #>> '{negativos,saldo}'),
+    'conferencia_com_o_total_do_arquivo', jsonb_build_object('estado', 'confere'));
+exception when others then
+  return '{}'::jsonb;   -- resumo quebrado de propósito (a recusa do resumo é de outro assert): o aplicador também fica sem os campos
+end $$;
+
 -- Importa COMO o papel, com leitura, aplicador, arquivo e mapeamento coerentes (cada um pode ser trocado para provar a recusa).
 create or replace function teste_imp_0274(p_uid uuid, p_caso uuid, p_ent uuid, p_tipo text, p_data date, p_resumo jsonb,
   p_papel text default 'authenticated', p_leitura jsonb default null, p_arquivo jsonb default null, p_map uuid default null, p_aplicador jsonb default null) returns text
@@ -93,7 +106,7 @@ language sql as $$
   select teste_exec_0274(p_uid, p_papel, format('fn_aging_importar(%L::uuid, %L::uuid, %L, %L::date, %L::jsonb, %L::jsonb, %L::jsonb, %L::jsonb, %L::uuid)',
     p_caso, p_ent, p_tipo, p_data, p_resumo,
     coalesce(p_leitura, jsonb_build_object('formato', 'csv', 'sha256', repeat('a', 64), 'bytes', 2048, 'linhas', jsonb_build_object('corpo', 3))),
-    coalesce(p_aplicador, jsonb_build_object('titulo', 3, 'motivos', '{}'::jsonb, 'conferencia_com_o_total_do_arquivo', jsonb_build_object('estado', 'confere'))),
+    coalesce(p_aplicador, teste_aplicador_0274(p_resumo)),
     coalesce(p_arquivo, jsonb_build_object('nome', 'ar.csv', 'sha256', repeat('a', 64), 'bytes', 2048, 'formato', 'csv')),
     coalesce(p_map, current_setting('ct74.map_' || case p_tipo when 'contas_a_pagar' then 'ap' else 'ar' end)::uuid))) $$;
 
@@ -133,7 +146,7 @@ language plpgsql as $$
 begin
   insert into aging_importado (caso_id, entidade_id, tipo_base, data_base, resumo, leitura, aplicador, arquivo_nome, arquivo_sha256, arquivo_bytes,
                                arquivo_formato, mapeamento_id, importado_por, substituido_em, substituido_por)
-  values (p_caso, p_ent, p_tipo, p_data, p_resumo, coalesce(p_leitura, '{}'::jsonb), '{}'::jsonb, 'direto.csv', coalesce(p_sha, repeat('b', 64)), p_bytes, p_formato,
+  values (p_caso, p_ent, p_tipo, p_data, p_resumo, coalesce(p_leitura, '{}'::jsonb), case when jsonb_typeof(p_resumo) = 'object' then teste_aplicador_0274(p_resumo) else '{}'::jsonb end, 'direto.csv', coalesce(p_sha, repeat('b', 64)), p_bytes, p_formato,
           current_setting('ct74.map_ar')::uuid, '00000000-0000-0000-0000-00000000a001', p_sub_em, p_sub_por);
   return 'ok';
 exception when others then
@@ -442,8 +455,9 @@ begin
   perform teste_assert_0274(rr.resultado = 'divergente' and (rr.fonte_b ->> 'valor')::numeric = 20000000, 'dois balanços fecham na data: vale o BALANCO (20.000) antes do BALANCETE criado depois (24.917)', rr.resultado || ' | ' || rr.fonte_b::text);
   perform teste_assert_0274(coalesce(current_setting('oria.periodo_chave', true), '') = '', 'a conciliação devolve o `oria.periodo_chave` como encontrou (não vaza o período do balanço para a checagem seguinte)', current_setting('oria.periodo_chave', true));
   v_res := teste_imp_0274(u_ana, v_a, e1, c_ar, '2025-12-31', teste_resumo_0274('2025-12-31', 2491760000, -21200000), 'authenticated', null, null, null,
-    jsonb_build_object('titulo', 3, 'motivos', jsonb_build_object('total_por_data', jsonb_build_object('linhas', 3, 'saldo', '1500000')),
-                       'conferencia_com_o_total_do_arquivo', jsonb_build_object('estado', 'diverge')));
+    teste_aplicador_0274(teste_resumo_0274('2025-12-31', 2491760000, -21200000))
+      || jsonb_build_object('motivos', jsonb_build_object('total_por_data', jsonb_build_object('linhas', 3, 'saldo', '1500000')),
+                            'conferencia_com_o_total_do_arquivo', jsonb_build_object('estado', 'diverge')));
   rr := teste_rec_0274(teste_json_0274(v_res), 'aging_ar_clientes');
   perform teste_assert_0274(rr.resultado = 'divergente' and rr.descricao like '%deixou fora do aging 3 linhas rejeitadas, com saldo de R$ 15.000,00%',
     'a divergência diz o que o aplicador deixou FORA do aging (3 linhas, R$ 15.000,00): pode explicar a diferença', rr.descricao);
