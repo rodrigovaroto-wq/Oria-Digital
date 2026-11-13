@@ -47,6 +47,7 @@
 import { lerInformacaoDoKit } from "../src/lib/apresentacao/montar-base.ts";
 import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../src/lib/kit-basico.ts";
 import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
+import { contarKit, haDias, lerKitDaFuncao, lerKitDoCaso, statusParaOExport, textoDoItem as textoDoItemDoKit, type ChamaRpc, type EstadoDoItem } from "../src/lib/kit-do-caso.ts";
 import { servicoDocumentoServeComo } from "../src/lib/supabase/servico-serve-como.ts";
 import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
 import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
@@ -246,20 +247,143 @@ console.log("--- 4f. o Kit do export: leitura que falha é 'não lido', nunca 'n
   const checkErro = { data: null, error: { message: "RLS" } };
   const serv: ServicoDocumentoServeComo = async () => false;
   const lanca: ServicoDocumentoServeComo = async () => { throw new Error("statement timeout"); };
+  // 4f prova a QUEDA (banco sem a 0300: `fn_kit_do_caso` ausente); o caminho da função é o 4g.
+  const rpc: ChamaRpc = async () => ({ data: null, error: { code: "PGRST202", message: "função ausente" } });
+  const casoId = "caso-4f";
   const st = (r: Awaited<ReturnType<typeof lerInformacaoDoKit>>) => (r.informacao ?? []).map((i) => `${i.codigo}:${i.status}`).join();
 
-  const feliz = await lerInformacaoDoKit({ kit, checklist: checkOk, documentos: docs, servico: serv });
+  const feliz = await lerInformacaoDoKit({ kit, checklist: checkOk, documentos: docs, servico: serv, rpc, casoId });
   ok(st(feliz) === "BALANCO:recebido,DRE:sem_conteudo,COMBINADO:faltante" && !feliz.kitNaoConferido,
     "(c)(d) caminho feliz: recebido, chegou sem conteúdo (recebido_nao_valido continua assim) e faltante", st(feliz));
 
-  const a = await lerInformacaoDoKit({ kit, checklist: checkOk, documentos: docs, servico: lanca });
+  const a = await lerInformacaoDoKit({ kit, checklist: checkOk, documentos: docs, servico: lanca, rpc, casoId });
   ok(a.informacao === undefined && a.kitNaoConferido, "(a) serviço que lança: Kit não conferido, sem informação — nunca 'não recebido'", st(a));
 
-  const b = await lerInformacaoDoKit({ kit, checklist: checkErro, documentos: docs, servico: serv });
+  const b = await lerInformacaoDoKit({ kit, checklist: checkErro, documentos: docs, servico: serv, rpc, casoId });
   ok(b.informacao === undefined && b.kitNaoConferido, "(b) checklist com erro: Kit não conferido — recebido_nao_valido não vira 'recebido'", st(b));
 
-  const c = await lerInformacaoDoKit({ kit: { data: null, error: { message: "x" } }, checklist: checkOk, documentos: docs, servico: serv });
+  const c = await lerInformacaoDoKit({ kit: { data: null, error: { message: "x" } }, checklist: checkOk, documentos: docs, servico: serv, rpc, casoId });
   ok(c.informacao === undefined && !c.kitNaoConferido && Boolean(c.motivo), "lista do kit não lida: indefinida e distinta de 'não conferido'");
+}
+
+console.log("--- 4g. I1.6 e I1.7: o Kit vem de fn_kit_do_caso; recebido sem linha nunca conta como lido; erro é 'não lido' ---");
+{
+  const kit8 = ["BALANCO", "DRE", "FLUXO_CAIXA", "COMBINADO", "FAT_INTRAGRUPO", "MUTUOS", "CONTRATO_SOCIAL", "FATURAMENTO_24M"]
+    .map((c) => ({ codigo: c, documento: `Documento ${c}` }));
+  const linhasDe = (estados: string[]) => kit8.map((k, i) => ({
+    tipo: k.codigo, estado: estados[i], motivo: `motivo de ${k.codigo}`, aguardando_desde: null,
+    empresas_total: null, empresas_atendidas: null, conferencia_em: "2026-11-13T10:00:00Z", documentos_depois_da_conferencia: 2,
+  }));
+  const dubleRpc = (data: unknown, error: { code?: string; message: string } | null = null): ChamaRpc => async () => ({ data, error });
+  const lanca: ChamaRpc = async () => { throw new Error("fetch failed"); };
+  // A queda não pode rodar quando a função RESPONDEU (nem com erro): o dublê responde "não serve" e conta a chamada,
+  // para que a queda indevida apareça como chamada e como item faltante — e não escondida por um throw capturado.
+  let perguntasDaQueda = 0;
+  const nuncaServe: ServicoDocumentoServeComo = async () => { perguntasDaQueda += 1; return false; };
+  const entrada = (rpc: ChamaRpc, servico: ServicoDocumentoServeComo = nuncaServe) => ({
+    rpc, casoId: "caso-4g", kit: { data: kit8, error: null }, documentos: [{ id: "d1", tipo_taxonomia: "BALANCO" }],
+    // O checklist de produção do 'teste v19': TODOS 'presente' (nasce no registro, antes de existir linha).
+    checklist: { data: kit8.map((k) => ({ tipo_taxonomia: k.codigo, status: "presente" })), error: null }, servico,
+  });
+
+  // I1.6 — o estado da tela é o do banco, item a item, para os sete estados.
+  const todos: EstadoDoItem[] = ["faltante", "dispensado", "aguardando_extracao", "recebido_sem_linha", "lido_sem_dado_por_natureza", "extraido", "conferido", "faltante"];
+  const l1 = await lerKitDoCaso(entrada(dubleRpc(linhasDe(todos))));
+  ok(l1.tipo === "lido" && l1.kit.origem === "fn_kit_do_caso" && l1.kit.itens.map((i) => i.estado).join() === todos.join(),
+    "I1.6: cada item chega à tela com o MESMO estado que fn_kit_do_caso devolveu (os 7 estados)", l1.tipo === "lido" ? l1.kit.itens.map((i) => i.estado).join() : l1.motivo);
+  ok(l1.tipo === "lido" && l1.kit.conferenciaEm === "2026-11-13T10:00:00Z" && l1.kit.documentosDepoisDaConferencia === 2,
+    "I1.6: a data da última conferência e os documentos chegados depois vêm da função");
+
+  // O mandato 'teste v19': o checklist diz 'presente' nos 8 e o banco diz que nenhum foi lido.
+  const v19 = await lerKitDoCaso(entrada(dubleRpc(linhasDe(kit8.map(() => "recebido_sem_linha")))));
+  const cv19 = v19.tipo === "lido" ? contarKit(v19.kit) : null;
+  ok(cv19 !== null && cv19.lidos === 0 && cv19.pctLido === 0 && cv19.recebidosSemLinha === 8,
+    "COMPORTAMENTO: 8 itens recebidos sem linha (checklist 'presente' nos 8) dão 0% lido — nunca '100% com conteúdo lido'", JSON.stringify(cv19));
+
+  // Só os estados com linha entram no numerador; aguardando e recebido_sem_linha nunca.
+  const mistura = await lerKitDoCaso(entrada(dubleRpc(linhasDe(
+    ["extraido", "conferido", "lido_sem_dado_por_natureza", "recebido_sem_linha", "recebido_sem_linha", "aguardando_extracao", "faltante", "dispensado"]))));
+  const cm = mistura.tipo === "lido" ? contarKit(mistura.kit) : null;
+  ok(cm !== null && cm.lidos === 3 && cm.pctLido === 38 && cm.conferidos === 1 && cm.recebidosSemLinha === 2 && cm.aguardando === 1
+    && cm.faltantes === 1 && cm.dispensados === 1,
+    "COMPORTAMENTO: só extraido/conferido/lido_sem_dado_por_natureza contam como lido (3 de 8 = 38%)", JSON.stringify(cm));
+  ok(cm !== null && cm.paraPedirAoCliente === 3,
+    "o que o cliente ainda tem de mandar = faltante + recebido sem dado; dispensado e aguardando leitura ficam fora", String(cm?.paraPedirAoCliente));
+
+  // I1.7 — leitura que falha é 'não lido'; nenhum item vira faltante, nenhum vira lido, e a queda NÃO é chamada.
+  const casos: Array<[string, ChamaRpc]> = [
+    ["erro de timeout (57014)", dubleRpc(null, { code: "57014", message: "statement timeout" })],
+    ["erro de permissão", dubleRpc(null, { code: "42501", message: "permission denied" })],
+    ["a chamada lança", lanca],
+    ["zero linhas (RLS ou mandato inexistente)", dubleRpc([])],
+    ["resposta que não é lista", dubleRpc(null)],
+    ["item do Kit sem linha na resposta", dubleRpc(linhasDe(todos).slice(1))],
+    ["estado que o portal não conhece", dubleRpc(linhasDe(todos).map((l, i) => (i === 0 ? { ...l, estado: "pronto" } : l)))],
+  ];
+  for (const [nome, rpc] of casos) {
+    perguntasDaQueda = 0;
+    const r = await lerKitDoCaso(entrada(rpc));
+    ok(r.tipo === "nao_lido" && Boolean(r.motivo) && perguntasDaQueda === 0,
+      `I1.7: ${nome} = Kit NÃO LIDO (sem item faltante, sem item lido, sem queda)`, JSON.stringify(r).slice(0, 160));
+  }
+  const exp = await lerInformacaoDoKit({ ...entrada(dubleRpc([])), kit: { data: kit8, error: null }, checklist: { data: [], error: null } });
+  ok(exp.informacao === undefined && exp.kitNaoConferido && Boolean(exp.motivo),
+    "I1.7: o export com zero linhas do banco diz 'não conferido' — nunca 'nada faltou' nem 'tudo faltou'");
+  const expErro = await lerInformacaoDoKit({ ...entrada(dubleRpc(null, { code: "57014", message: "timeout" })), checklist: { data: [], error: null } });
+  ok(expErro.informacao === undefined && expErro.kitNaoConferido, "I1.7: o export com erro da função diz 'não conferido'");
+
+  // Função ausente (banco sem a 0300) é o ÚNICO caso da queda, e a queda não diz 'lido'.
+  for (const code of ["PGRST202", "42883"]) {
+    let perguntou = false;
+    const servico: ServicoDocumentoServeComo = async (_ids, tipo) => { perguntou = true; return tipo === "COMBINADO"; };
+    const r = await lerKitDoCaso(entrada(dubleRpc(null, { code, message: "função ausente" }), servico));
+    const c = r.tipo === "lido" ? contarKit(r.kit) : null;
+    ok(r.tipo === "lido" && r.kit.origem === "queda" && perguntou && c !== null && c.lidos === 0 && c.pctLido === null,
+      `função ausente (${code}): cai em itensDoKitBasicoAtendidos e NÃO diz que algo foi lido nem dá percentual`, JSON.stringify(c));
+  }
+  const ausente = await lerKitDaFuncao(dubleRpc(null, { code: "PGRST202", message: "x" }), "c", kit8);
+  ok(ausente.tipo === "ausente", "lerKitDaFuncao separa 'ausente' (queda) de 'não lido'");
+
+  // O export lê o MESMO estado: recebido sem linha e aguardando leitura NÃO viram 'recebido' no book.
+  const info = await lerInformacaoDoKit({
+    ...entrada(dubleRpc(linhasDe(["conferido", "extraido", "lido_sem_dado_por_natureza", "recebido_sem_linha", "aguardando_extracao", "faltante", "dispensado", "faltante"]))),
+    checklist: { data: [], error: null },
+  });
+  ok((info.informacao ?? []).map((i) => i.status).join() === "recebido,recebido,lido_sem_dado,sem_conteudo,aguardando,faltante,dispensado,faltante",
+    "I1.6 no export: o status de cada item sai do estado do banco (recebido sem linha e aguardando não viram 'recebido')",
+    (info.informacao ?? []).map((i) => i.status).join());
+  ok(statusParaOExport("recebido_sem_linha") !== "recebido" && statusParaOExport("aguardando_extracao") !== "recebido" && statusParaOExport("faltante") === "faltante",
+    "mapeamento do export: nenhum estado sem linha vira 'recebido'");
+
+  // O que a tela diz de cada item
+  const quando = new Date("2026-11-13T12:00:00Z");
+  ok(haDias("2026-11-10T08:00:00Z", quando) === "há 3 dias" && haDias("2026-11-12T08:00:00Z", quando) === "há 1 dia"
+    && haDias("2026-11-13T08:00:00Z", quando) === "hoje" && haDias(null, quando) === null && haDias("lixo", quando) === null,
+    "'há N dias': dia cheio, singular, hoje, e data ausente ou ilegível não diz nada");
+  const base = { codigo: "BALANCO", documento: "Balanço", motivo: null, aguardandoDesde: null, empresasTotal: null, empresasAtendidas: null, conferidoPor: null, conferidoEm: null };
+  const ag = textoDoItemDoKit({ ...base, estado: "aguardando_extracao", aguardandoDesde: "2026-11-10T08:00:00Z" }, quando);
+  ok(ag.rotulo.includes("leitura em andamento") && ag.complemento === "esperando há 3 dias", "aguardando leitura mostra 'esperando há N dias'", JSON.stringify(ag));
+  const nulo = textoDoItemDoKit({ ...base, estado: "extraido" }, quando);
+  const com = textoDoItemDoKit({ ...base, estado: "extraido", empresasTotal: 8, empresasAtendidas: 1 }, quando);
+  ok(nulo.complemento === null && com.complemento === "1 de 8 empresas", "'N de M empresas' só aparece onde a função devolveu não-nulo", `${nulo.complemento} | ${com.complemento}`);
+  ok(textoDoItemDoKit({ ...base, estado: "lido_sem_dado_por_natureza" }, quando).rotulo.includes("sem dado financeiro")
+    && textoDoItemDoKit({ ...base, estado: "recebido_sem_linha" }, quando).tom === "alerta"
+    && textoDoItemDoKit({ ...base, estado: "faltante" }, quando).tom === "apagado",
+    "os estados novos têm texto próprio: lido sem dado por natureza, recebido sem dado (âmbar), faltante (apagado)");
+
+  // As três telas passam pela porta única: ninguém chama `itensDoKitBasicoAtendidos` fora dela.
+  // LIMITE (como o 4e): pega a chamada direta; o comportamento está provado acima.
+  const diretos: string[] = [];
+  const andar3 = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const c = join(d, e.name);
+      if (e.isDirectory()) andar3(c);
+      else if (/\.tsx?$/.test(c) && !/lib\/kit-(basico|do-caso)\.ts$/.test(c)
+        && readFileSync(c, "utf8").split("\n").some((l) => !/^\s*(\*|\/\/)/.test(l) && /itensDoKitBasicoAtendidos\(/.test(l))) diretos.push(c.split("/src/")[1]);
+    }
+  };
+  andar3(new URL("../src", import.meta.url).pathname);
+  ok(diretos.length === 0, "nenhuma tela chama itensDoKitBasicoAtendidos direto: a porta é lerKitDoCaso", diretos.join(" | "));
 }
 
 // Tudo "certo" por padrão; cada caso muda SÓ o que o caso afirma. O padrão é o caso aprovado

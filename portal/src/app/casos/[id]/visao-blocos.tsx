@@ -9,6 +9,7 @@ import { aprovarCaso } from "./actions";
 import { FatosNaoLidos } from "@/components/fatos-nao-lidos";
 import { LegendaDeOrigem, SeloDeOrigem } from "@/components/selo-de-origem";
 import { formatarTipoTaxonomia } from "@/lib/export";
+import { haDias } from "@/lib/kit-do-caso";
 import { casoDaTela, lerFatosDoCaso, lerIndicadores, lerPortao2, type Portao2 } from "./visao-dados";
 
 // OS BLOCOS DA VISÃO GERAL DO MANDATO, cada um com a sua consulta e o seu `<Suspense>`
@@ -140,7 +141,7 @@ export async function ProximoPassoDoMandato({ id }: Readonly<{ id: string }>) {
 
 export async function IndicadoresDoMandato({ id }: Readonly<{ id: string }>) {
   const {
-    documentos, documentosLidos, linhasTotais, linhasConhecidas, semLinha, kitLido, kitPresentes, kitTotal,
+    documentos, documentosLidos, linhasTotais, linhasConhecidas, semLinha, kitLido, contagemKit, kitTotal,
     nAbertas, detalheDasLinhas, detalheDoKit, detalheDasPendencias,
   } = await lerIndicadores(id);
   const base = `/casos/${id}`;
@@ -168,11 +169,11 @@ export async function IndicadoresDoMandato({ id }: Readonly<{ id: string }>) {
           href={linhasConhecidas && semLinha > 0 ? `${base}/documentos?filtro=sem-linha` : `${base}/documentos`}
         />
         <Indicador
-          valor={kitLido ? `${kitPresentes}/${kitTotal}` : "—"}
-          rotulo="itens do Kit Básico"
+          valor={contagemKit?.pctLido == null ? "—" : `${contagemKit.lidos}/${kitTotal}`}
+          rotulo="itens do Kit com conteúdo lido"
           origem="calculado"
           detalhe={detalheDoKit}
-          tom={kitLido ? "bom" : "alerta"}
+          tom={kitLido && contagemKit?.lidos === kitTotal ? "bom" : "alerta"}
           href={`${base}/documentos`}
         />
         <Indicador
@@ -189,52 +190,76 @@ export async function IndicadoresDoMandato({ id }: Readonly<{ id: string }>) {
   );
 }
 
-// O KIT BÁSICO COM PRONTIDÃO (item 4 do benchmark). O percentual é só do que tem CONTEÚDO LIDO: o item
-// que chegou como arquivo e não rendeu nenhuma linha é "recebido", não "pronto" — copiar o "sobe a cada
-// upload" da Ansarada violaria a regra 1 (o benchmark, §5.2, diz o mesmo). "Conferido por pessoa" tem o
-// lugar dele na lista e diz que não foi medido: o estado nasce em `fn_kit_do_caso` (migration 0300).
-// NÃO há "por que este item importa": `taxonomia_tipo_documento` não tem coluna de descrição, e texto
-// inventado aqui seria afirmação sem origem.
+// O KIT BÁSICO COM PRONTIDÃO (item 4 do benchmark). O estado de cada item vem de `fn_kit_do_caso` (0300),
+// derivado de `campo_extraido` na leitura. O percentual é só do que tem LINHA LIDA (`extraido`, `conferido`) ou
+// leitura concluída que por natureza não tem linha (`lido_sem_dado_por_natureza`: contrato social, certidão):
+// o item que chegou como arquivo e não rendeu linha (`recebido_sem_linha`) ou ainda não foi lido
+// (`aguardando_extracao`) NUNCA conta. Antes, o % usava o checklist, que vira `presente` no registro do documento:
+// "100% de 8 itens com conteúdo lido" ao lado de "0 linhas extraídas" no mandato "teste v19" (regra 1).
+// Sem a 0300 no banco (queda), o % não é dito: sem o estado, "0%" ou "100%" seriam número inventado.
+// NÃO há "por que este item importa": `taxonomia_tipo_documento` não tem coluna de descrição.
 export async function KitBasicoDoMandato({ id }: Readonly<{ id: string }>) {
-  const { kitLido, kitPresentes, kitRecebidos, kitTotal } = await lerIndicadores(id);
+  const { kitLido, kit, contagemKit: c, kitTotal } = await lerIndicadores(id);
   const base = `/casos/${id}/documentos`;
-  if (!kitLido || kitTotal === 0) {
+  if (!kitLido || !kit || !c || kitTotal === 0) {
     return (
       <section aria-label="Kit Básico" className="carta border-alerta-200 bg-alerta-50 px-[18px] py-4 text-sm text-alerta-900">
         <h2 className="titulo-secao">Kit Básico</h2>
         <p className="mt-1 text-xs">
           {kitLido
             ? "Nenhum item obrigatório cadastrado na taxonomia: não há como medir a prontidão."
-            : "Não foi possível ler o Kit Básico agora, então não dá para dizer o que falta nem o quanto está pronto."}
+            : "Kit não lido: não foi possível ler o Kit Básico agora, então não dá para dizer o que falta nem o quanto está pronto."}
         </p>
       </section>
     );
   }
-  const semConteudo = kitRecebidos - kitPresentes;
-  const faltantes = kitTotal - kitRecebidos;
-  const pct = Math.round((kitPresentes / kitTotal) * 100);
   const parte = (n: number) => `${(n / kitTotal) * 100}%`;
+  const maisAntigo = kit.itens.filter((i) => i.estado === "aguardando_extracao" && i.aguardandoDesde)
+    .map((i) => i.aguardandoDesde as string).sort((a, b) => a.localeCompare(b))[0] ?? null;
+  const espera = haDias(maisAntigo);
+  const pendente = c.recebidosSemLinha + c.aguardando + c.faltantes + c.recebidosSemEstado > 0;
   return (
     <section aria-label="Kit Básico" className="carta px-[18px] py-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="titulo-secao">Kit Básico</h2>
         <SeloDeOrigem origem="calculado" />
       </div>
-      <div className="mt-3 flex items-baseline gap-3">
-        <p className="indicador-valor">{pct}%</p>
-        <p className="text-xs text-tinta-500">de {kitTotal} itens com conteúdo lido (recebido não conta)</p>
-      </div>
-      <div role="img" aria-label={`${kitPresentes} com conteúdo, ${semConteudo} recebidos sem conteúdo, ${faltantes} faltantes`} className="mt-2 flex h-2 overflow-hidden rounded-full bg-tinta-100">
-        <span className="bg-ok-500" style={{ width: parte(kitPresentes) }} />
-        <span className="bg-alerta-500" style={{ width: parte(semConteudo) }} />
-      </div>
+      {c.pctLido === null ? (
+        <p className="mt-3 text-sm text-alerta-900">
+          Banco sem a migration 0300: o Kit só diz o que chegou ({kitTotal - c.faltantes} de {kitTotal} itens), não o que foi
+          lido. Sem o estado de leitura, não há percentual de conteúdo lido.
+        </p>
+      ) : (
+        <>
+          <div className="mt-3 flex items-baseline gap-3">
+            <p className="indicador-valor">{c.pctLido}%</p>
+            <p className="text-xs text-tinta-500">de {kitTotal} itens com conteúdo lido (recebido não conta)</p>
+          </div>
+          <div role="img" aria-label={`${c.lidos} com conteúdo lido, ${c.recebidosSemLinha} recebidos sem dado lido, ${c.aguardando} aguardando leitura, ${c.faltantes + c.dispensados} sem documento`} className="mt-2 flex h-2 overflow-hidden rounded-full bg-tinta-100">
+            <span className="bg-ok-500" style={{ width: parte(c.lidos) }} />
+            <span className="bg-alerta-500" style={{ width: parte(c.recebidosSemLinha + c.aguardando) }} />
+          </div>
+        </>
+      )}
       <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-xs text-tinta-700 sm:grid-cols-2">
-        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-ok-500" /><span className="num">{kitPresentes}</span> com conteúdo lido</li>
-        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-alerta-500" /><span className="num">{semConteudo}</span> recebidos sem conteúdo lido</li>
-        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-tinta-200" /><span className="num">{faltantes}</span> faltantes</li>
-        <li className="flex items-center gap-2 text-tinta-500"><span aria-hidden className="h-2 w-2 rounded-full border border-tinta-400" />Conferido por pessoa: ainda não medido</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-ok-500" /><span className="num">{c.lidos}</span> com conteúdo lido</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-alerta-500" /><span className="num">{c.recebidosSemLinha}</span> recebidos sem dado lido</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-alerta-300" /><span className="num">{c.aguardando}</span> aguardando leitura{espera ? ` (o mais antigo, ${espera})` : ""}</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-tinta-200" /><span className="num">{c.faltantes}</span> faltantes{c.dispensados > 0 ? ` (+ ${c.dispensados} dispensados com ressalva)` : ""}</li>
+        {c.pctLido !== null && (
+          <li className="flex items-center gap-2 text-tinta-500"><span aria-hidden className="h-2 w-2 rounded-full border border-tinta-400" /><span className="num">{c.conferidos}</span> conferidos por pessoa</li>
+        )}
       </ul>
-      {(semConteudo > 0 || faltantes > 0) && (
+      {kit.origem === "fn_kit_do_caso" && (
+        <p className="mt-2 text-xs text-tinta-500">
+          {/* Sem evento de conferência, "documentos depois dela" seria TODOS os documentos: dito como está, sem a contagem. */}
+          {kit.conferenciaEm === null
+            ? "A conferência do Kit nunca rodou neste mandato."
+            : `Kit reconferido em ${new Date(kit.conferenciaEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" })}${
+              kit.documentosDepoisDaConferencia ? `; ${kit.documentosDepoisDaConferencia} ${kit.documentosDepoisDaConferencia === 1 ? "documento chegou" : "documentos chegaram"} depois.` : "."}`}
+        </p>
+      )}
+      {pendente && (
         <p className="mt-3 text-xs"><Link href={base} className="font-medium text-acento-700 hover:underline">Ver os documentos →</Link></p>
       )}
     </section>

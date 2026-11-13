@@ -726,6 +726,7 @@ const EXCECOES_DE_FORMATADOR: ReadonlyArray<readonly [arquivo: string, trecho: s
   ["components/painel-zip.tsx", "progresso.indice.toLocaleString", "contagem de entradas do ZIP, não valor"],
   ["app/casos/[id]/documentos/(lista)/page.tsx", 'linhas.toLocaleString("pt-BR")', "contagem de linhas do documento, não valor"],
   ["app/administracao/page.tsx", 'new Date(iso).toLocaleString("pt-BR"', "data/hora, não valor"],
+  ["app/casos/[id]/visao-blocos.tsx", 'new Date(kit.conferenciaEm).toLocaleString("pt-BR"', "data/hora da última conferência do Kit, não valor"],
   ["app/casos/painel-blocos.tsx", "const numero = (n: number) => n.toLocaleString", "contagens do painel (mandatos, pendências, chips da fila, N linhas em O que chegou), não valor"],
   // DEFINIÇÕES de formatador (não são uso em JSX): o uso é varrido (`formatValor(` em
   // documento-detalhe, `fmt.format(` em SecaoLinhas) ou, quando o resultado passa por uma variável
@@ -1643,9 +1644,11 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   // LIMITE: estas duas afirmam o TEXTO de `visao-dados.ts` (a leitura do Kit depende de Supabase e do
   // serviço de classificação, que a suíte não sobe; regra 4: sem fixture inventada). Elas pegam o
   // revert do bloco, não um desvio de comportamento.
-  checar(/catch \{\s*return null;\s*\}/.test(dadosVisao)
-    && /kitLido = !kitBasicoRes\.error && documentosLidos && !checklistRes\.error && kitAtendidos !== null/.test(dadosVisao),
-    "Kit Básico: serviço que lança vira 'não lido' (null) e o Kit só é lido com tudo lido — nunca 'itens faltantes'");
+  // (o comportamento — erro, exceção e zero linhas de `fn_kit_do_caso` = não lido — está medido em
+  // `verificar-kit-basico.mts` 4g; aqui só o revert da visão: o Kit vem da porta única e a falta dele é null.)
+  checar(/lerKitDoCaso\(/.test(dadosVisao) && /const kitLido = kit !== null/.test(dadosVisao)
+    && /quedaSemBase \? null : leitura\.tipo === "lido" \? leitura\.kit : null/.test(dadosVisao),
+    "Kit Básico: a visão lê a porta única (fn_kit_do_caso) e Kit sem leitura é 'não lido' (null) — nunca 'itens faltantes'");
   checar(/linhasIncompletas/.test(dadosVisao) && /contagem incompleta — a leitura das linhas não terminou/.test(dadosVisao)
     && /a leitura dos documentos falhou/.test(dadosVisao) && /a leitura das pendências falhou/.test(dadosVisao)
     && /não foi possível saber quantas travam a aprovação/.test(dadosVisao) && /a leitura do kit falhou/.test(dadosVisao),

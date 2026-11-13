@@ -2,12 +2,12 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { paginar } from "@/lib/supabase/paginar";
 import { contarLinhasPorVersao } from "@/lib/supabase/linhas-por-versao";
-import { servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
+import { chamaRpc, servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
 import { DetalhesTecnicos } from "@/components/detalhes-tecnicos";
 import type { Documento, TaxonomiaTipoDocumento } from "@/lib/types";
 import { humanizar } from "@/lib/rotulos";
 import { formatarPeriodo, formatarTipoTaxonomia } from "@/lib/export";
-import { itensDoKitBasicoAtendidos } from "@/lib/kit-basico";
+import { lerKitDoCaso, textoDoItem, type KitDoCaso } from "@/lib/kit-do-caso";
 import { OrdemDosDocumentos } from "@/components/ordem-dos-documentos";
 import { LinhaDeDocumento } from "@/components/linha-de-documento";
 import { FilaDeReprocesso } from "@/components/fila-de-reprocesso";
@@ -115,19 +115,16 @@ export default async function DocumentosPage({
   const versoes = documentos.flatMap((d) => (d.documento_versao ?? []).map((v) => v.id)).filter(Boolean);
   const { porVersao: linhasPorVersao, incompleto: linhasIncompletas } = await contarLinhasPorVersao(supabase, versoes);
 
-  // 0157: a mesma resposta do Portão 1 (`fn_documento_serve_como`), não uma regra própria da tela.
-  // Falha da pergunta ao banco = Kit não conferido: a grade NÃO desenha "não recebido"
-  // por cima de uma leitura que falhou (revisão do PR #265).
-  let kitAtendidos: Set<string> | null = null;
-  try {
-    kitAtendidos = await itensDoKitBasicoAtendidos(kitBasico, documentos, servicoDocumentoServeComo(supabase));
-  } catch {
-    kitAtendidos = null;
-  }
-  const checklist = (checklistRes.data as Array<{ tipo_taxonomia: string; status: string }> | null) ?? [];
-  const tiposSemConteudo = new Set(
-    checklist.filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia),
-  );
+  // O Kit vem de `fn_kit_do_caso` (0300), a MESMA resposta da visão geral e do export (`lib/kit-do-caso.ts`);
+  // sem a função no banco, cai na pergunta ao Portão 1 (0157). Erro, exceção ou zero linhas = Kit NÃO LIDO:
+  // a grade NÃO desenha "não recebido" por cima de uma leitura que falhou (revisão do PR #265).
+  const leituraDoKit = await lerKitDoCaso({
+    rpc: chamaRpc(supabase), casoId: id,
+    kit: { data: kitBasico, error: null },
+    documentos, checklist: { data: (checklistRes.data as Array<{ tipo_taxonomia: string; status: string }> | null), error: null },
+    servico: servicoDocumentoServeComo(supabase),
+  });
+  const kit: KitDoCaso | null = leituraDoKit.tipo === "lido" ? leituraDoKit.kit : null;
 
   // ORDEM DA TABELA: pelo NOME DO ARQUIVO, não pela hora do upload. O cliente manda o book
   // numerado (`01_Balanco`, `02_DRE`, …) e procura por esse número; ordenar por `criado_em desc`
@@ -215,29 +212,29 @@ export default async function DocumentosPage({
             os {kitBasico.length} documentos obrigatórios do mandato
           </p>
         </div>
-        {kitAtendidos === null ? (
+        {kit === null ? (
           <p className="rounded-lg border border-alerta-200 bg-alerta-50 p-3 text-sm text-alerta-800">
             Não foi possível conferir agora quais itens do Kit Básico já chegaram. Recarregue a
             página; até lá, nada aqui deve ser lido como &quot;faltando&quot;.
           </p>
         ) : (
         <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {kitBasico.map((item) => {
-            const semConteudo = tiposSemConteudo.has(item.codigo);
-            // TRÊS estados, não dois (0036): verde só quando chegou E rendeu
-            // linha. O documento que chegou vazio fica âmbar — não verde, porque
-            // o book sai vazio nessa parte, e não "faltante", porque o arquivo
-            // está lá e pedi-lo de novo ao cliente seria pedir o que ele mandou.
-            const presente = (kitAtendidos?.has(item.codigo) ?? false) && !semConteudo;
-            const { cor, corTexto, rotulo } = estadoDoItemDoKit(presente, semConteudo);
+          {kit.itens.map((item) => {
+            // Os estados vêm do banco (0300), sem rederivar: verde só quando há LINHA lida (ou leitura concluída
+            // que por natureza não tem linha); recebido que não rendeu linha e recebido ainda sem leitura são
+            // âmbar; faltante, cinza. `recebido` (queda) é "chegou" sem dizer se foi lido.
+            const t = textoDoItem(item);
+            const { cor, corTexto } = TOM_DO_ITEM[t.tom];
             return (
               <li
                 key={item.codigo}
+                title={item.motivo ?? undefined}
                 className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-sm ${cor}`}
               >
                 <span className="text-tinta-800">{item.documento}</span>
-                <span className={`shrink-0 text-xs font-medium ${corTexto}`}>
-                  {rotulo}
+                <span className={`shrink-0 text-right text-xs font-medium ${corTexto}`}>
+                  {item.estado === "conferido" || item.estado === "extraido" || item.estado === "lido_sem_dado_por_natureza" ? "✓ " : ""}{t.rotulo}
+                  {t.complemento && <span className="block font-normal text-tinta-500">{t.complemento}</span>}
                 </span>
               </li>
             );
@@ -401,15 +398,13 @@ export default async function DocumentosPage({
   );
 }
 
-// Os TRÊS estados de um item do Kit Básico (0036), fora do componente para a
-// página não acumular ternário aninhado (Sonar S3358/S3776).
-function estadoDoItemDoKit(presente: boolean, semConteudo: boolean) {
-  if (presente) return { cor: "border-ok-200 bg-ok-50/60", corTexto: "text-ok-700", rotulo: "✓ recebido" };
-  if (semConteudo) {
-    return { cor: "border-alerta-200 bg-alerta-50", corTexto: "text-alerta-800", rotulo: "chegou, sem dado extraído" };
-  }
-  return { cor: "border-tinta-200 bg-folha", corTexto: "text-tinta-400", rotulo: "não recebido" };
-}
+// A cor de cada tom do item do Kit (o tom nasce em `textoDoItem`, lib/kit-do-caso.ts).
+const TOM_DO_ITEM = {
+  ok: { cor: "border-ok-200 bg-ok-50/60", corTexto: "text-ok-700" },
+  alerta: { cor: "border-alerta-200 bg-alerta-50", corTexto: "text-alerta-800" },
+  neutro: { cor: "border-tinta-200 bg-folha", corTexto: "text-tinta-600" },
+  apagado: { cor: "border-tinta-200 bg-folha", corTexto: "text-tinta-400" },
+} as const;
 
 function rotuloDoTipo(t: string): string {
   return t === SEM_TIPO ? "Sem tipo" : formatarTipoTaxonomia(t);
