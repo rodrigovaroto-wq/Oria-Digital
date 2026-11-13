@@ -27,7 +27,15 @@
       - Selo de origem do número, Kit Básico com % só do que tem conteúdo, e o bloco "Andamento da leitura".
       - "Conferido" segue como "ainda não medido", porque depende da 0300 aplicada e da decisão do dono (botão "conferi" por documento, recomendado, sem resposta ainda).
       - FALTA: a revisão independente do commit das telas.
-  1c. **0300 escrita, revisada e com os achados corrigidos (e4a3a9e): NÃO APLICADA.** Para aplicar, o dono autoriza. O portal ainda não lê `fn_kit_do_caso`; os estados novos estão no relatório do commit.
+  1c. **0300 APLICADA EM PRODUÇÃO em 13/11/2026** (a pedido do dono, pela API de gerenciamento, 2,5 s, sem erro).
+      - Antes: 426 itens na sonda, 0 ausentes, cobertura 0276, 81 mandatos, 235 `item_faltante` abertas.
+      - Depois: 435 itens (os 9 da 0300), 0 ausentes, cobertura 0300, 81 mandatos.
+      - Backfill: 233 chaves adotadas (evento `{"adotadas":233}`); as 2 de contrato social da 0208 ficaram sem chave, como previsto.
+      - `fn_kit_do_caso` no mandato 5469db1d: BALANCO, COMBINADO, FAT_INTRAGRUPO e FATURAMENTO_24M `extraido`; DRE `recebido_sem_linha`; FLUXO_CAIXA e MUTUOS `faltante`; CONTRATO_SOCIAL `aguardando_extracao`.
+      - O portal AINDA NÃO LÊ `fn_kit_do_caso` (fatia 1.2). Ver o relatório no commit e4a3a9e: estados novos `lido_sem_dado_por_natureza` e `aguardando_desde`; contadores de empresa nulos fora das granularidades `entidade` e `entidade_periodo`.
+      - **"Conferido": decisão em aberto, com possibilidade RECOMENDADA registrada.** Hoje é quase inalcançável: 1.443 de 1.648 versões têm todas as linhas auto-aceitas, e `fn_aceitar_extracao` não converte auto-aceite em aceite de pessoa.
+        - Recomendação: um botão "conferi" por documento, que grava quem conferiu e quando (padrão DataSnipper). `fn_kit_do_caso` passaria a tratar como `conferido` o item cujo documento vigente tenha esse registro.
+        - O dono pediu para NÃO implementar ainda (13/11).
   2. **Fila aprovada pelo dono, nesta ordem:**
      - telas internas na direção A, incorporando do benchmark a cor por origem do número, o Kit com % de prontidão (recebido ≠ conferido) e o progresso por documento;
      - transições de página e abas deslizantes (transitions.dev);

@@ -5,6 +5,8 @@
 > - A Área do cliente (função 2) entra DEPOIS do portão de 18/12.
 > - As migrations desta frente começam na **0300**, não na 0277. Os números abaixo já foram renumerados (0277–0283 → 0300–0306) e precisam ser reconferidos na hora de escrever.
 > - A 0275 continua reservada para o aging.
+> - **13/11: 0300 aplicada em produção.** D1.1 ("conferido" = toda linha aceita por pessoa) ficou quase inalcançável, porque 1.443 de 1.648 versões em produção têm todas as linhas auto-aceitas.
+>   - Possibilidade RECOMENDADA, ainda não implementada a pedido do dono: um botão "conferi" por documento, que grava quem e quando, contando como `conferido` em `fn_kit_do_caso`.
 
 
 **Data:** 13/11/2026 · **Base lida:** `main` em `ef92088` · **Escrito por:** agente de desenho, sem
