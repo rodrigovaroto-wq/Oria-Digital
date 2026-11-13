@@ -189,7 +189,7 @@ export default async function DocumentosPage({
     <div className="space-y-6">
       <div>
         <h1 className="text-lg font-semibold text-tinta-900">Documentos</h1>
-        <p className="mt-0.5 max-w-2xl text-sm texto-marmore">
+        <p className="mt-0.5 max-w-2xl text-sm texto-fundo">
           O que chegou do cliente, o que falta do Kit Básico e quantas linhas cada arquivo rendeu.
         </p>
       </div>

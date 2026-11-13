@@ -1033,33 +1033,33 @@ const folhaNaPior = (folhaVidro
   ? [1, 2, 3].map((i, k) => Math.round(alfaFolha * Number(folhaVidro[i]) + (1 - alfaFolha) * [255, 255, 236][k]))
   : [255, 255, 255]) as [number, number, number];
 // O CARTÃO FOSCO sobre o MÁRMORE (13/11/2026): o fundo do app não é mais foto. O pior caso é o cartão (rgb com
-// alfa, em --cartao-fundo) sobre o pixel MAIS CLARO do mármore escuro (--marmore-pior, medido na tela renderizada
+// alfa, em --cartao-fundo) sobre o pixel MAIS CLARO do fundo escuro (--fundo-pior, medido na tela renderizada
 // e com folga: veio mais o brilho do canto), que é o que mais clareia o fundo do texto claro.
 const cartaoDark = /rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/.exec(escuro.get("--cartao-fundo") ?? "");
-const marmorePior = rgbDe(escuro.get("--marmore-pior") ?? "#ffffff");
-checar(cartaoDark !== null && /^#[0-9a-f]{6}$/i.test(escuro.get("--marmore-pior") ?? ""),
-  "--cartao-fundo do escuro não é rgb(r g b / a), ou --marmore-pior não é #rrggbb: o pior caso do cartão não é calculável");
+const fundoPior = rgbDe(escuro.get("--fundo-pior") ?? "#ffffff");
+checar(cartaoDark !== null && /^#[0-9a-f]{6}$/i.test(escuro.get("--fundo-pior") ?? ""),
+  "--cartao-fundo do escuro não é rgb(r g b / a), ou --fundo-pior não é #rrggbb: o pior caso do cartão não é calculável");
 const alfaCartao = Number(cartaoDark?.[4] ?? 1);
 const cartaoNaPior = (cartaoDark
-  ? [1, 2, 3].map((i, k) => Math.round(alfaCartao * Number(cartaoDark[i]) + (1 - alfaCartao) * marmorePior[k]))
+  ? [1, 2, 3].map((i, k) => Math.round(alfaCartao * Number(cartaoDark[i]) + (1 - alfaCartao) * fundoPior[k]))
   : [255, 255, 255]) as [number, number, number];
-const fundoDe = (n: string) => (n === "folha-sobre-foto" ? folhaNaPior : n === "cartao-sobre-marmore" ? cartaoNaPior : corDe(n));
+const fundoDe = (n: string) => (n === "folha-sobre-foto" ? folhaNaPior : n === "cartao-sobre-fundo" ? cartaoNaPior : corDe(n));
 type ParDeContraste = [fg: string, bg: string, minimo: number];
 const pares: ParDeContraste[] = [];
 const texto = (fg: string, bgs: string[], min = 4.5) => bgs.forEach((bg) => pares.push([fg, bg, min]));
-const SUPERFICIES = ["folha-sobre-foto", "cartao-sobre-marmore", "folha", "papel"];
+const SUPERFICIES = ["folha-sobre-foto", "cartao-sobre-fundo", "folha", "papel"];
 texto("tinta-900", [...SUPERFICIES, "tinta-50", "tinta-100"]);            // texto primário
 texto("tinta-800", SUPERFICIES);
 texto("tinta-700", [...SUPERFICIES, "tinta-50"]);
 texto("tinta-600", [...SUPERFICIES, "tinta-50", "tinta-100", "tinta-200"]); // secundário, chips neutros
 texto("tinta-500", [...SUPERFICIES, "tinta-50", "tinta-100"]);              // placeholder e rótulo
-texto("tinta-400", ["folha-sobre-foto", "cartao-sobre-marmore", "folha"], 3.6);                     // ícone/fio: o piso do claro (3,62)
+texto("tinta-400", ["folha-sobre-foto", "cartao-sobre-fundo", "folha"], 3.6);                     // ícone/fio: o piso do claro (3,62)
 for (const f of ["risco", "alerta", "ok", "info", "serie"]) {
   texto(`${f}-800`, [`${f}-50`, `${f}-100`]);                                // chip
   texto(`${f}-900`, [`${f}-50`, `${f}-100`]);
-  texto(`${f}-700`, [`${f}-50`, "folha-sobre-foto", "cartao-sobre-marmore", "folha"]);               // texto de estado sobre a folha
-  texto(`${f}-800`, ["folha-sobre-foto", "cartao-sobre-marmore", "folha"]);
-  texto(`${f}-900`, ["folha-sobre-foto", "cartao-sobre-marmore", "folha"]);
+  texto(`${f}-700`, [`${f}-50`, "folha-sobre-foto", "cartao-sobre-fundo", "folha"]);               // texto de estado sobre a folha
+  texto(`${f}-800`, ["folha-sobre-foto", "cartao-sobre-fundo", "folha"]);
+  texto(`${f}-900`, ["folha-sobre-foto", "cartao-sobre-fundo", "folha"]);
 }
 texto("tinta-700", ["tinta-100"]); texto("tinta-700", ["tinta-200"]);        // chip neutro e o hover dele
 texto("acento-700", [...SUPERFICIES, "acento-50", "acento-100"]);           // link e item ativo
@@ -1072,17 +1072,17 @@ for (const bg of ["tinta-900", "tinta-800", "tinta-600", "ok-600", "ok-700", "ok
 // o que o `:root` mantém igual no escuro: o casco, medido no claro com o pior caso (DESIGN.md) — aqui só se
 // confere que o terracota de foco do casco e o texto do botão creme dele seguem sendo ≥ 4,5:1 entre si.
 checar(pares.length >= 100, `só ${pares.length} pares de contraste medidos: o conjunto encolheu ou o parse falhou`);
-const medivel = ([fg, bg]: ParDeContraste) => [fg, bg].every((t) => t === "folha-sobre-foto" || t === "cartao-sobre-marmore" || escuro.has(`--color-${t}`));
+const medivel = ([fg, bg]: ParDeContraste) => [fg, bg].every((t) => t === "folha-sobre-foto" || t === "cartao-sobre-fundo" || escuro.has(`--color-${t}`));
 checar(pares.every(medivel), `par de contraste com token ausente do escuro: ${pares.filter((p) => !medivel(p)).map(([f, b]) => `${f}/${b}`).join(", ")}`);
 const reprovados = pares.filter(medivel).filter(([fg, bg, min]) => razao(corDe(fg), fundoDe(bg)) < min);
 checar(reprovados.length === 0,
   `contraste abaixo do mínimo no escuro: ${reprovados.map(([fg, bg, min]) => `${fg} sobre ${bg} = ${razao(corDe(fg), fundoDe(bg)).toFixed(2)} (< ${min})`).join("; ")}`);
-// O MESMO NO TEMA CLARO: o texto escuro sobre o cartão branco a 68% e o pixel mais ESCURO do mármore claro.
+// O MESMO NO TEMA CLARO: o texto escuro sobre o cartão branco a 68% e o pixel mais ESCURO do fundo claro.
 {
-  const principal = declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--marmore-pior")) ?? "");
+  const principal = declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--fundo-pior")) ?? "");
   const m = /rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/.exec(principal.get("--cartao-fundo") ?? "");
-  const pior = principal.get("--marmore-pior") ?? "";
-  checar(m !== null && /^#[0-9a-f]{6}$/i.test(pior), "--cartao-fundo/--marmore-pior do tema claro ilegíveis: o pior caso não é calculável");
+  const pior = principal.get("--fundo-pior") ?? "";
+  checar(m !== null && /^#[0-9a-f]{6}$/i.test(pior), "--cartao-fundo/--fundo-pior do tema claro ilegíveis: o pior caso não é calculável");
   const a = Number(m?.[4] ?? 1);
   const fundo = [1, 2, 3].map((i, k) => Math.round(a * Number(m?.[i] ?? 255) + (1 - a) * rgbDe(pior)[k])) as [number, number, number];
   const corClaro = (t: string) => rgbDe(tema.get(`--color-${t}`) ?? "#000000");
@@ -1090,28 +1090,28 @@ checar(reprovados.length === 0,
     ["acento-700", 4.5], ["acento-600", 4.5], ...["risco", "alerta", "ok", "info", "serie"].flatMap((f) => [[`${f}-700`, 4.5], [`${f}-800`, 4.5]] as Array<[string, number]>)];
   const ruins = ps.filter(([t, min]) => razao(corClaro(t), fundo) < min);
   checar(ruins.length === 0,
-    "contraste abaixo do mínimo no claro (cartão sobre o pior pixel do mármore): " + ruins.map(([t, min]) => `${t} = ${razao(corClaro(t), fundo).toFixed(2)} (< ${min})`).join("; "));
+    "contraste abaixo do mínimo no claro (cartão sobre o pior pixel do fundo): " + ruins.map(([t, min]) => `${t} = ${razao(corClaro(t), fundo).toFixed(2)} (< ${min})`).join("; "));
 }
 // TEXTO DIRETO NO MÁRMORE (revisão do 3c9ad4f, A4): o bloco acima mede o CARTÃO sobre o pior pixel. Mas há texto
 // que fica SEM cartão (subtítulo da página, data do Início, legenda de origem, abas, contagem "N pendências" de
-// seção) e esse vê o mármore puro: `tinta-500` dá 3,59:1 no claro e 2,21:1 no escuro sobre `--marmore-pior`,
+// seção) e esse vê o fundo puro: `tinta-500` dá 3,59:1 no claro e 2,21:1 no escuro sobre `--fundo-pior`,
 // `tinta-400` 2,72:1 no claro — medido no render: 3,41 a 4,49:1 em 8 pontos de 4 telas. Cada site abaixo é
-// (arquivo, trecho do className do elemento que está direto no mármore); a classe de cor de cada um é RESOLVIDA
-// nos dois temas e medida contra `--marmore-pior`. Elemento novo direto no mármore entra nesta lista.
+// (arquivo, trecho do className do elemento que está direto no fundo); a classe de cor de cada um é RESOLVIDA
+// nos dois temas e medida contra `--fundo-pior`. Elemento novo direto no fundo entra nesta lista.
 {
   const lerFonte = (rel: string) => readFileSync(new URL(`../src/${rel}`, import.meta.url), "utf8");
   const corDeClasse = (classe: string, mapa: Map<string, string>, resolver: (t: string) => string): string | null => {
-    if (classe === "texto-marmore") {
-      const ref = /^var\((--color-[\w-]+)\)$/.exec(mapa.get("--tinta-marmore") ?? "");
+    if (classe === "texto-fundo") {
+      const ref = /^var\((--color-[\w-]+)\)$/.exec(mapa.get("--tinta-fundo") ?? "");
       return ref ? resolver(ref[1]) : null;
     }
     const m = /^text-(tinta-\d+)$/.exec(classe);
     return m ? resolver(`--color-${m[1]}`) : null;
   };
-  const marmorePiorClaro = (declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--marmore-pior")) ?? "").get("--marmore-pior")) ?? "";
-  const mapaClaro = declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--marmore-pior")) ?? "");
-  checar(/^#[0-9a-f]{6}$/i.test(marmorePiorClaro), "--marmore-pior do claro ilegível: o texto direto no mármore não é calculável");
-  // [arquivo, regex cujo grupo 1 é o trecho de className do elemento direto no mármore]
+  const fundoPiorClaro = (declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--fundo-pior")) ?? "").get("--fundo-pior")) ?? "";
+  const mapaClaro = declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--fundo-pior")) ?? "");
+  checar(/^#[0-9a-f]{6}$/i.test(fundoPiorClaro), "--fundo-pior do claro ilegível: o texto direto no fundo não é calculável");
+  // [arquivo, regex cujo grupo 1 é o trecho de className do elemento direto no fundo]
   const SITES: ReadonlyArray<readonly [string, RegExp]> = [
     ["app/casos/page.tsx", /<p className="([^"]*)">\{dataDeHoje\}/],
     ["app/casos/painel-blocos.tsx", /<p className="([^"]*)">\{resumo\}/],
@@ -1128,21 +1128,30 @@ checar(reprovados.length === 0,
     ["app/administracao/custos/page.tsx", /<p className="([^"]*)">\s*Quanto a leitura/],
     ["app/administracao/custos/page.tsx", /<p className="([^"]*)">\s*Soma dos mandatos/],
     ["app/casos/todos/page.tsx", /<p className="([^"]*)">\s*Saíram da mesa/],
+    // A JANELA DE VIDRO (redesenho etapa 1): a saudação do Início, o trilho de navegação e a trilha de "onde estou"
+    // ficam direto na janela, sem cartão. Os rótulos do trilho aberto e o item inativo são `tinta-500`: passam em
+    // 4,7:1 no claro e 5,3:1 no escuro porque o fundo atrás deles é o `--fundo-pior` (ver globals.css).
+    ["app/casos/page.tsx", /<h1 className="([^"]*)">\{saudacao\(agora\)\}/],
+    ["components/barra-lateral.tsx", /const ROTULO_SECAO = "([^"]*)"/],
+    ["components/barra-lateral.tsx", /const ITEM_INATIVO = "([^"]*)"/],
+    ["components/barra-lateral.tsx", /<p className="([^"]*)">\{vazioDa\}<\/p>/],
+    ["components/barra-lateral.tsx", /<p className="([^"]*)">\{motivoSemCriar\}/],
+    ["components/trilha.tsx", /<ol className="([^"]*)"/],
   ];
   let achados = 0;
   for (const [arq, re] of SITES) {
     const trecho = re.exec(semComentariosDoFonte(lerFonte(arq)))?.[1];
-    if (trecho === undefined) { checar(false, `texto direto no mármore: trecho não achado em ${arq} (${re}) — o site mudou de forma e saiu da medição`); continue; }
+    if (trecho === undefined) { checar(false, `texto direto no fundo: trecho não achado em ${arq} (${re}) — o site mudou de forma e saiu da medição`); continue; }
     achados += 1;
-    const cores = trecho.split(/\s+/).filter((c) => /^(text-tinta-\d+|texto-marmore)$/.test(c));
+    const cores = trecho.split(/\s+/).filter((c) => /^(text-tinta-\d+|texto-fundo)$/.test(c));
     const classe = cores.at(-1) ?? "";
-    for (const [nomeDoTema, mapa, piorHex] of [["claro", mapaClaro, marmorePiorClaro], ["escuro", escuro, escuro.get("--marmore-pior") ?? ""]] as const) {
+    for (const [nomeDoTema, mapa, piorHex] of [["claro", mapaClaro, fundoPiorClaro], ["escuro", escuro, escuro.get("--fundo-pior") ?? ""]] as const) {
       const hex = corDeClasse(classe, mapa, (t) => (nomeDoTema === "claro" ? tema : escuro).get(t) ?? "");
       const r = /^#[0-9a-f]{6}$/i.test(hex ?? "") ? razao(rgbDe(hex as string), rgbDe(piorHex)) : 0;
-      checar(r >= 4.5, `texto direto no mármore (${nomeDoTema}): "${classe || "sem cor de texto"}" em ${arq} dá ${r.toFixed(2)}:1 sobre o pior pixel (< 4,5)`);
+      checar(r >= 4.5, `texto direto no fundo (${nomeDoTema}): "${classe || "sem cor de texto"}" em ${arq} dá ${r.toFixed(2)}:1 sobre o pior pixel (< 4,5)`);
     }
   }
-  checar(achados >= 15, `só ${achados} sites de texto direto no mármore medidos`);
+  checar(achados >= 21, `só ${achados} sites de texto direto no fundo medidos`);
 }
 // A2 — O CHIP DO MANDATO DIZ O QUE A FILA DIZ. O chip chamava de "pendências" o número de BLOQUEANTES: o mesmo
 // mandato aparecia com "418 pendências (8 bloqueiam)" na fila e "8 pendências" no chip (medido em 13/11/2026; o
@@ -1164,7 +1173,7 @@ checar(reprovados.length === 0,
 // largura fixo no celular (o `max-w-[16rem]` incondicional cortava o "O que falta").
 {
   const painel = semComentariosDoFonte(readFileSync(new URL("../src/app/casos/painel-blocos.tsx", import.meta.url), "utf8"));
-  checar(/<table className="tabela-a tabela-empilha">/.test(painel), "a tabela da fila perdeu `tabela-empilha`: no celular ela volta a ser cortada pelo cartão");
+  checar(/<table className="tabela-a [^"]*\btabela-empilha\b[^"]*">/.test(painel), "a tabela da fila perdeu `tabela-empilha`: no celular ela volta a ser cortada pelo cartão");
   checar(!/<td className="max-w-\[16rem\]/.test(painel), "o nome do mandato na fila voltou a ter max-w fixo no celular");
   const bloco = /@media \(max-width: 639px\)\s*\{([\s\S]*?)\n  \}/.exec(css.slice(css.indexOf(".tabela-empilha") - 400))?.[1] ?? "";
   checar(/\.tabela-empilha td\s*\{[^}]*display: block/.test(bloco.replace(/\n\s*/g, " ")) || /\.tabela-empilha td \{ display: block; \}/.test(bloco.replace(/\s+/g, " ")),
@@ -1174,11 +1183,11 @@ checar(reprovados.length === 0,
 // 1.180 px estourava o cartão de 1.144 px, com 13 px de rolagem lateral). A medição de verdade é a do navegador (largura da página).
 checar(/className="valor-sensivel block truncate[^"]*md:max-w-\[28rem\]/.test(semComentariosDoFonte(readFileSync(new URL("../src/app/casos/todos/page.tsx", import.meta.url), "utf8"))),
   "/casos/todos: o link do nome do mandato perdeu o teto md:max-w: a tabela volta a estourar o cartão");
-// M3 — /administracao/custos não pode voltar a pôr tabela e blocos de número direto no mármore.
+// M3 — /administracao/custos não pode voltar a pôr tabela e blocos de número direto no fundo.
 {
   const custos = semComentariosDoFonte(readFileSync(new URL("../src/app/administracao/custos/page.tsx", import.meta.url), "utf8"));
   checar(!/rounded border border-tinta-200/.test(custos) && (custos.match(/className="carta/g) ?? []).length >= 5,
-    "custos: tabela e blocos de número voltaram a ficar sem cartão sobre o mármore");
+    "custos: tabela e blocos de número voltaram a ficar sem cartão sobre o fundo");
 }
 checar(razao(rgbDe("#11161d"), rgbDe("#ece8df")) >= 4.5 && razao(rgbDe("#11161d"), rgbDe("#f6f4ef")) >= 4.5,
   "texto do botão creme do casco (vidro-tinta sobre vidro-texto/vidro-papel) abaixo de 4,5:1");
@@ -1767,6 +1776,42 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     const semValor = renderToString(h(Indicador, { valor: null, rotulo: "pendências", nota: "leitura das pendências indisponível agora" }));
     checar(semValor.includes("leitura das pendências indisponível agora") && !semValor.includes("valor-sensivel"),
       "Indicador do Início: sem valor, o traço e a nota de ausência não são borrados");
+  }
+
+  // (8b) O ANEL, O BOTÃO ↗ E O CARTÃO EM COBALTO (redesenho do Início, 13/11/2026). COMPORTAMENTO, não mecanismo:
+  //  - o arco do anel É a fração do número (o anel é o número desenhado; um arco que não acompanha a fração é um
+  //    número falso com cara de gráfico) e sem número não há anel (traço, nunca arco);
+  //  - o ↗ só existe quando há destino (botão sem destino seria enfeite) e nenhum cartão mostra variação ↑/↓: não
+  //    há período anterior lido, e variação sem medida é número inventado (regra 1);
+  //  - o texto branco do cartão em cobalto passa de 4,5:1 nas DUAS pontas do gradiente (é a única superfície do
+  //    portal fora dos tokens de tema, então nenhuma outra linha desta suíte a mede).
+  {
+    const { Indicador } = await import("../src/app/casos/indicador-do-painel.tsx");
+    const perimetro = 2 * Math.PI * 36;
+    const arco = (html: string) => {
+      const m = /stroke-dasharray="([\d.]+) ([\d.]+)"/.exec(html);
+      return m ? Number(m[1]) / perimetro : null;
+    };
+    for (const f of [0.82, 0.1]) {
+      const a = arco(renderToString(h(Indicador, { valor: `${Math.round(f * 100)}%`, rotulo: "cobertura da leitura", barra: f })));
+      checar(a !== null && Math.abs(a - f) < 0.005, `anel: o arco desenhado (${a?.toFixed(3) ?? "nenhum"}) não é a fração do número (${f})`);
+    }
+    checar(arco(renderToString(h(Indicador, { valor: null, rotulo: "cobertura da leitura", barra: null, nota: "medição indisponível agora" }))) === null,
+      "anel: sem número a tela desenha um arco (deveria ser o traço com a causa)");
+    const semDestino = renderToString(h(Indicador, { valor: "81", rotulo: "mandatos em andamento" }));
+    const comDestino = renderToString(h(Indicador, { valor: "81", rotulo: "mandatos em andamento", href: "/casos/todos" }));
+    checar(!/<a[\s>]/.test(semDestino), "indicador sem destino ganhou o botão ↗ (enfeite)");
+    checar(/<a [^>]*href="\/casos\/todos"[^>]*aria-label="Ver: mandatos em andamento"/.test(comDestino)
+      || /<a [^>]*aria-label="Ver: mandatos em andamento"[^>]*href="\/casos\/todos"/.test(comDestino),
+      "indicador com destino perdeu o ↗ nomeado (o ícone sozinho não é rótulo)");
+    checar(![semDestino, comDestino].some((x) => /[↑↓]/.test(x)), "indicador mostra variação ↑/↓ sem período anterior medido");
+    const destaque = renderToString(h(Indicador, { valor: "222", rotulo: "pendências que travam a aprovação", destaque: true }));
+    checar(/class="cartao-destaque /.test(destaque) && !/class="carta /.test(destaque), "o indicador em destaque não é o cartão de cobalto");
+    const cssDestaque = /\.cartao-destaque\s*\{([^}]*)\}/.exec(readFileSync(new URL("../src/app/globals.css", import.meta.url), "utf8"))?.[1] ?? "";
+    const pontas = [...(/linear-gradient\([^)]*\)/.exec(cssDestaque)?.[0] ?? "").matchAll(/#[0-9a-f]{6}/gi)].map((m) => m[0]);
+    checar(pontas.length >= 2 && /color:\s*#fff\b/i.test(cssDestaque), "cartão em cobalto: gradiente ou cor do texto ilegíveis");
+    const ruinsDestaque = pontas.filter((c) => razao(rgbDe("#ffffff"), rgbDe(c)) < 4.5);
+    checar(ruinsDestaque.length === 0, `cartão em cobalto: texto branco abaixo de 4,5:1 sobre ${ruinsDestaque.join(", ")}`);
   }
 
   // Cada frase é procurada no corpo do bloco que a diz, não "em qualquer lugar do arquivo": a frase da

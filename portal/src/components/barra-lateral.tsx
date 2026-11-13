@@ -36,11 +36,14 @@ import {
 // navegador) não ver uma seção vazia. Só ATIVOS entram: o servidor já filtra
 // `fechado_em is null` (0114), e mandato fechado continua na lista completa.
 //
-// A BARRA É UM CARTÃO FLUTUANTE (13/11/2026): `.cartao-vidro` (globals.css), fosco, com 16px de margem em
-// volta, cantos de 14px, e SÓ DA ALTURA DO SEU CONTEÚDO (termina no último item, não no rodapé da janela).
-// Fica `sticky` no topo ao rolar; `max-h` em `dvh` (em celular `100vh` conta a área atrás da barra de
-// endereço) com rolagem interna só para a janela muito baixa. Texto nos tokens `tinta`, que trocam com o
-// tema: o vidro é claro no tema claro e escuro no escuro.
+// A BARRA É O TRILHO DA JANELA DE VIDRO (13/11/2026, redesenho etapa 1): uma coluna de ícones de 72px no lado
+// esquerdo da janela, separada do conteúdo por um fio vertical, e NÃO MAIS um cartão solto. O item ativo é um
+// quadrado de vidro mais claro com uma marca de cobalto na borda do trilho (a cor não diz sozinha onde se está:
+// `aria-current` continua dizendo). O padrão é o TRILHO; o botão de expandir (ou a marca) abre a coluna de 248px
+// com os NOMES, os "Recentes" e a seção "Administração", e a escolha fica no navegador (`oria.barra.aberta`).
+// Abaixo de 640px nenhum dos dois aparece: a `BarraInferior` assume. Fica `sticky` no topo ao rolar; `max-h` em
+// `dvh` (em celular `100vh` conta a área atrás da barra de endereço) com rolagem interna só para a janela baixa.
+// Texto nos tokens `tinta`, que trocam com o tema.
 
 export interface MandatoNaBarra {
   id: string;
@@ -48,7 +51,9 @@ export interface MandatoNaBarra {
   status: CasoStatus;
 }
 
-const CHAVE_RECOLHIDA = "oria.barra.recolhida";
+// Chave nova (a antiga, `oria.barra.recolhida`, guardava o contrário e o padrão era aberta): quem tinha a barra
+// aberta ontem recebe o trilho, que é o padrão da janela de vidro.
+const CHAVE_ABERTA = "oria.barra.aberta";
 const CHAVE_VISITADOS = "oria.mandatos.visitados";
 const EVENTO = "oria:preferencia";
 const MAX_RECENTES = 5;
@@ -140,21 +145,20 @@ export function escolherRecentes(
   return escolhidos;
 }
 
-const ITEM_BASE = "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors";
-// O ATIVO NO VIDRO: preenchimento claro a 10% e uma barra de 2px à esquerda em
-// terracota CLARO. O terracota de sempre (#b6482f) some sobre o casco escuro
-// (~2,6:1); o #e8937c passa de 7:1. É marca de "onde estou" — e o `aria-current`
-// continua dizendo isso a quem não vê cor.
-const ITEM_ATIVO = "bg-tinta-100 font-semibold text-tinta-900";
+const ITEM_BASE = "flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors duration-150";
+// O ATIVO NO VIDRO: quadrado mais claro (`tinta-100`) com fio e peso 600. A marca de cobalto fica à parte
+// (`MARCA_ATIVA`), só no trilho.
+const ITEM_ATIVO = "bg-tinta-100 font-semibold text-tinta-900 shadow-[inset_0_0_0_1px_var(--cartao-borda)]";
 const ITEM_INATIVO = "text-tinta-500 hover:bg-tinta-100 hover:text-tinta-900";
-// No trilho o item é só o ícone: quadrado de 40px, centrado.
-const TRILHO_BASE = "flex h-10 w-10 items-center justify-center rounded-md transition-colors";
+// No trilho o item é só o ícone: quadrado de 44px, centrado.
+const TRILHO_BASE = "relative flex h-11 w-11 items-center justify-center rounded-xl transition-colors duration-150";
+const MARCA_ATIVA = "pointer-events-none absolute -right-[9px] top-2.5 bottom-2.5 w-[3px] rounded-full bg-acento-600";
 // O sextante é a arte ORIGINAL em azul; o brilho é só um `drop-shadow` de CSS,
 // que o destaca do vidro sem recolorir nem redesenhar nada.
 const MARCA_SEXTANTE = "marca-neon h-8 w-8 shrink-0";
 const ROTULO_SECAO = "text-[11px] font-semibold uppercase tracking-wider text-tinta-500";
-// Mesma altura nas duas formas da barra (aberta e trilho), flutuando a 12px.
-const CASCA = "cartao-vidro max-h-[calc(100dvh-2rem)] overflow-y-auto";
+// Mesma altura nas duas formas da barra (aberta e trilho): presa ao topo da janela ao rolar.
+const CASCA = "sticky top-4 max-h-[calc(100dvh-2rem)] overflow-y-auto";
 
 export function BarraLateral({
   mandatos, podeCriar, motivoSemCriar, vazioDa, mostrarAdministracao,
@@ -169,8 +173,8 @@ export function BarraLateral({
   mostrarAdministracao: boolean;
 }) {
   const caminho = usePathname();
-  const [recolhidaStr, definirRecolhida] = useArmazenado(CHAVE_RECOLHIDA, "0");
-  const recolhida = recolhidaStr === "1";
+  const [abertaStr, definirAberta] = useArmazenado(CHAVE_ABERTA, "0");
+  const aberta = abertaStr === "1";
   const [visitadosStr, definirVisitados] = useArmazenado(CHAVE_VISITADOS, "[]");
 
   // REGISTRA A VISITA. É um efeito porque escreve FORA do React (localStorage) —
@@ -209,21 +213,19 @@ export function BarraLateral({
   // <aside> é que se anulam). Ela é `sm:hidden`, então no desktop continua tela cheia.
   if (naCriacao) return <BarraInferior recentes={recentes} podeCriar={podeCriar} vazioDa={vazioDa} mostrarAdministracao={mostrarAdministracao} />;
 
-  const alternarBarra = () => definirRecolhida(recolhida ? "0" : "1");
+  const alternarBarra = () => definirAberta(aberta ? "0" : "1");
 
-  // O TRILHO (~56px = 40px de alvo + 2×8px de respiro) serve a dois casos: a
-  // barra recolhida de propósito, e a barra abaixo de 768px (os 240px da aberta
-  // tomariam 64% de uma tela de 375px). ABAIXO DE 640px NENHUM DOS DOIS APARECE:
-  // a `BarraInferior` (Fase 4) assume a navegação do celular, e o trilho de 56px
-  // que sobraria ali comeria 15% de uma tela de 375px só para repetir os mesmos
-  // quatro destinos. Cada item leva `aria-label` e `title` com o NOME: ícone
-  // sozinho não é rótulo.
+  // O TRILHO (72px = 44px de alvo + 2×14px de respiro) é a forma PADRÃO da barra e também a única que cabe
+  // abaixo de 768px (os 248px da aberta tomariam um terço de um tablet). ABAIXO DE 640px NENHUM DOS DOIS
+  // APARECE: a `BarraInferior` assume a navegação do celular. Cada item leva `aria-label` e `title` com o
+  // NOME: ícone sozinho não é rótulo.
+  const marca = (ativo: boolean) => (ativo ? <span aria-hidden className={MARCA_ATIVA} /> : null);
   const trilho = (comBotao: boolean) => (
     <nav
       aria-label="Navegação principal"
-      className={`${CASCA} flex w-14 flex-col items-center gap-1 py-3`}
+      className={`${CASCA} flex w-[72px] flex-col items-center gap-2 py-5`}
     >
-      <Link href="/casos" title="Oria Digital — início" aria-label="Oria Digital — início" className="mb-1 rounded-md">
+      <Link href="/casos" title="Oria Digital — início" aria-label="Oria Digital — início" className="mb-1 rounded-xl">
         <MarcaOria variante="sextante" alt="" className={MARCA_SEXTANTE} />
       </Link>
       {comBotao && (
@@ -233,7 +235,7 @@ export function BarraLateral({
           title="Expandir o menu"
           aria-label="Expandir o menu"
           aria-expanded={false}
-          className={`${TRILHO_BASE} mb-1 text-tinta-500 hover:bg-tinta-100 hover:text-tinta-900`}
+          className={`${TRILHO_BASE} text-tinta-500 hover:bg-tinta-100 hover:text-tinta-900`}
         >
           <IconeExpandir />
         </button>
@@ -256,6 +258,7 @@ export function BarraLateral({
         className={`${TRILHO_BASE} ${noInicio ? ITEM_ATIVO : ITEM_INATIVO}`}
       >
         <IconeInicio />
+        {marca(noInicio)}
       </Link>
       <Link
         href="/casos/todos"
@@ -265,25 +268,30 @@ export function BarraLateral({
         className={`${TRILHO_BASE} ${naLista || idAtual ? ITEM_ATIVO : ITEM_INATIVO}`}
       >
         <IconeMandatos />
+        {marca(naLista || Boolean(idAtual))}
       </Link>
       {mostrarAdministracao && (
-      <Link
-        href="/administracao"
-        title="Administração"
-        aria-label="Administração"
-        aria-current={naAdministracao ? "page" : undefined}
-        className={`${TRILHO_BASE} mt-auto ${naAdministracao ? ITEM_ATIVO : ITEM_INATIVO}`}
-      >
-        <IconeQualidade />
-      </Link>
+        <Link
+          href="/administracao"
+          title="Administração"
+          aria-label="Administração"
+          aria-current={naAdministracao ? "page" : undefined}
+          className={`${TRILHO_BASE} mt-auto ${naAdministracao ? ITEM_ATIVO : ITEM_INATIVO}`}
+        >
+          <IconeQualidade />
+          {marca(naAdministracao)}
+        </Link>
       )}
     </nav>
   );
 
-  if (recolhida) {
+  // O fio vertical que separa o trilho do conteúdo é a borda da coluna (`--janela-fio`).
+  const COLUNA = "hidden shrink-0 border-r border-[var(--janela-fio)] sm:block";
+
+  if (!aberta) {
     return (
       <>
-        <aside className="hidden shrink-0 self-start sticky top-0 p-4 pr-0 sm:block">{trilho(true)}</aside>
+        <aside className={COLUNA}>{trilho(true)}</aside>
         <BarraInferior recentes={recentes} podeCriar={podeCriar} vazioDa={vazioDa} mostrarAdministracao={mostrarAdministracao} />
       </>
     );
@@ -292,15 +300,13 @@ export function BarraLateral({
   return (
     <>
       <BarraInferior recentes={recentes} podeCriar={podeCriar} vazioDa={vazioDa} mostrarAdministracao={mostrarAdministracao} />
-      <aside className="hidden shrink-0 self-start sticky top-0 p-4 pr-0 sm:block md:hidden">{trilho(false)}</aside>
-      <aside className="hidden w-[15.5rem] shrink-0 self-start sticky top-0 p-4 pr-0 md:block">
-        {/* A BARRA TEM A ALTURA DA TELA menos os 12px de cima e de baixo, e o
-            que passa disso rola AQUI dentro, não com a página: o topo (a marca,
-            a ação e os lugares) fica parado, e a Administração fica ancorada
-            embaixo. Com no máximo 5 recentes quase nunca há rolagem, mas telas
-            baixas existem. 15.75rem = os 240px de antes + os 12px de margem. */}
-        <nav aria-label="Navegação principal" className={`${CASCA} flex flex-col gap-1 p-3`}>
-          <div className="mb-1 flex items-center justify-between gap-2 px-1">
+      <aside className={`${COLUNA} md:hidden`}>{trilho(false)}</aside>
+      <aside className="hidden w-[15.5rem] shrink-0 border-r border-[var(--janela-fio)] md:block">
+        {/* A COLUNA ABERTA tem a altura da tela menos a margem, e o que passa disso rola AQUI dentro, não com a
+            página: o topo (a marca, a ação e os lugares) fica parado, e a Administração fica ancorada embaixo.
+            Com no máximo 5 recentes quase nunca há rolagem, mas telas baixas existem. */}
+        <nav aria-label="Navegação principal" className={`${CASCA} flex flex-col gap-1 p-4`}>
+          <div className="mb-2 flex items-center justify-between gap-2 px-1">
             {/* A MARCA NO TOPO DA BARRA. O nome da placa do dono é "ORIA
                 DIGITAL"; o sextante é a arte original, sem recolorir. Texto de
                 verdade ao lado, então o `alt` da imagem fica vazio. */}
@@ -317,15 +323,14 @@ export function BarraLateral({
               title="Recolher o menu"
               aria-label="Recolher o menu"
               aria-expanded
-              className="rounded p-1 text-tinta-500 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
+              className="rounded-lg p-1.5 text-tinta-500 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
             >
               <IconeRecolher />
             </button>
           </div>
 
-          {/* AÇÃO — a única coisa CLARA da barra (creme com texto escuro), e por
-              isso a única que grita. Era a única escura sobre a barra creme; o
-              vidro inverteu a polaridade e a regra continua a mesma. */}
+          {/* AÇÃO — o único item preenchido de cobalto, e por isso o único que grita. Sem o botão, o MOTIVO:
+              quem procura "Novo mandato" e não acha lê por que (não é `title=`). */}
           {podeCriar ? (
             <Link
               href="/casos/novo"
@@ -335,7 +340,6 @@ export function BarraLateral({
               Novo mandato
             </Link>
           ) : (
-            // Sem o botão, o MOTIVO: quem procura "Novo mandato" e não acha lê por que (não é `title=`).
             motivoSemCriar && <p className="px-3 py-1.5 text-xs text-tinta-500">{motivoSemCriar}</p>
           )}
 
@@ -358,7 +362,7 @@ export function BarraLateral({
             </Link>
           </div>
 
-          <div className="mt-3">
+          <div className="mt-4">
             <p className={`px-3 pb-1 ${ROTULO_SECAO}`}>
               Recentes
             </p>
@@ -373,7 +377,7 @@ export function BarraLateral({
                       <Link
                         href={`/casos/${m.id}`}
                         aria-current={ativo ? "page" : undefined}
-                        className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors ${
+                        className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors duration-150 ${
                           ativo
                             ? `${ITEM_ATIVO} font-medium`
                             : ITEM_INATIVO
@@ -397,7 +401,7 @@ export function BarraLateral({
           </div>
 
           {mostrarAdministracao && (
-          <div className="mt-auto border-t border-tinta-200 pt-3">
+          <div className="mt-auto border-t border-[var(--janela-fio)] pt-3">
             <p className={`px-3 pb-1 ${ROTULO_SECAO}`}>
               Administração
             </p>

@@ -88,7 +88,7 @@ export default async function CustosPage({
             className={`rounded-full border px-3 py-1 ${
               o.id === periodo.id
                 ? "border-acento-600 bg-acento-50 font-semibold text-tinta-900"
-                : "border-tinta-300 texto-marmore hover:border-tinta-400"
+                : "border-tinta-300 texto-fundo hover:border-tinta-400"
             }`}
           >
             {o.rotulo}
@@ -176,11 +176,11 @@ export default async function CustosPage({
             </div>
           </div>
 
-          <p className="text-xs texto-marmore">
+          <p className="text-xs texto-fundo">
             Soma dos mandatos existentes desde o início: <Valor s={t} campo="custoUsd" />
             {t.semCusto > 0 && ` (piso: ${t.semCusto} de ${t.lotes} execuções sem custo registrado)`}.
           </p>
-          <p className="text-xs texto-marmore">
+          <p className="text-xs texto-fundo">
             Mandato excluído leva suas execuções junto (o registro de custo é apagado com ele): o gasto
             de um mandato que já não existe não entra nesta soma e não pode ser recuperado por esta tela.
           </p>
@@ -205,7 +205,7 @@ function Titulo() {
   return (
     <div>
       <h1 className="text-lg font-semibold text-tinta-900">Custos</h1>
-      <p className="mt-1 text-sm texto-marmore">
+      <p className="mt-1 text-sm texto-fundo">
         Quanto a leitura dos documentos por IA custou, por mandato e no período. Esta tela só
         mostra o que as execuções registraram.
       </p>

@@ -14,7 +14,7 @@ export function SeloDeOrigem({ origem }: Readonly<{ origem: Exclude<OrigemDoNume
 /** A legenda das três origens. A que não tem dado diz que não foi medida, em vez de sumir. */
 export function LegendaDeOrigem() {
   return (
-    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] texto-marmore">
+    <p className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] texto-fundo">
       <span>Origem do número:</span>
       {(Object.keys(ORIGENS) as OrigemDoNumero[]).map((k) => {
         const o = ORIGENS[k];

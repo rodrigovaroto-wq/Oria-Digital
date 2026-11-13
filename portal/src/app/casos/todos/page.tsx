@@ -191,7 +191,7 @@ export default async function CasosPage({
       className={`border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
         aba === a
           ? "border-tinta-900 text-tinta-900"
-          : "border-transparent texto-marmore hover:text-tinta-900"
+          : "border-transparent texto-fundo hover:text-tinta-900"
       }`}
     >
       {rotulo} <span className="tabular-nums">({n})</span>
@@ -203,7 +203,7 @@ export default async function CasosPage({
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-tinta-900">Mandatos</h1>
-          <p className="mt-0.5 text-sm texto-marmore">
+          <p className="mt-0.5 text-sm texto-fundo">
             {casos.length === 0 && !termo
               ? `${soAlocados ? textoDeNenhumMandato(perm.papel) : textoDeNenhumMandato(perm.papel, "aberto")}.`
               : termo
@@ -279,7 +279,7 @@ export default async function CasosPage({
           </nav>
 
           {aba === "fechados" && fechados.length > 0 && (
-            <p className="text-xs texto-marmore">
+            <p className="text-xs texto-fundo">
               Saíram da mesa — o dado continua aqui, e reabrir é um clique no menu ⋯.
             </p>
           )}
