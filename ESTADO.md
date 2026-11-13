@@ -1,9 +1,11 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 129b (12–13/11/2026, conta Claude Oria, branch `claude/tender-albattani-vx6m60`) — 0277: a conciliação do aging corrigida (3 ALTOS da 0274), NÃO aplicada
+## SESSÃO 129b (12–13/11/2026, conta Claude Oria, branch `claude/tender-albattani-vx6m60`) — 0277: a conciliação do aging corrigida (3 ALTOS da 0274), APLICADA em 13/11
 
 > **Migration desta seção: `0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql`** (a mais nova do repositório é a `0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql`, da S129/S130 abaixo, já aplicada). Em 13/11, depois do merge do `main` (#298: 0276 e 0300), o dono pediu: aplicar a 0277, abrir o PR e ligar a conciliação do aging na rodada (nota da aplicação abaixo, quando houver). O dono pediu 0277; a 0275 ficou livre. Branch `claude/tender-albattani-vx6m60`, tudo enviado (commits 69926e1, 25cf23c, f765403, 35b9795). Sem PR.
 
+- **0277 APLICADA EM PRODUÇÃO em 13/11/2026** (a pedido do dono, pela API de gerenciamento, 1,9 s, arquivo do commit `1927f31`, que já traz a cobertura com `greatest` e a sonda renumerada para 1373–1386). Antes: 435 itens na sonda, 1 ausente (`envio_segredo_no_vault`, o de sempre), cobertura 0300, 81 mandatos, `aging_importado` 0, 0 pendências do aging, 2.999 pendências (2.146 abertas), 7.599 reconciliações. Depois: 449 itens (os 14 da 0277, 0 ausentes deles), o mesmo ausente do Vault, cobertura 0300 (não rebaixou), 81 mandatos, 2.999 / 2.146 / 7.599 (nada tocado), FK `aging_importado.entidade_id` NO ACTION. `fn_registrar_reconciliacao` e `fn_fundir_entidade` trocadas (md5 do corpo mudou).
+- **Ligar a conciliação do aging na rodada:** decisão do dono em 13/11 = SIM. Migration 0278 em escrita.
 - **O que a 0277 corrige** (a 0274 está em produção com a tabela `aging_importado` vazia: nada foi conciliado errado):
   1. **O ok de um ano resolvia a divergência de outro.** A pendência do aging passa a ser achada pela data-base da carteira na função central `fn_registrar_reconciliacao`, reemitida do corpo da 0241 com 33 linhas novas e 6 modificadas. Os outros tipos ficam idênticos (corpo de produção conferido byte a byte com o da 0241).
   2. **Pai + filhas de Fornecedores somavam em dobro.** Em produção, grupos com pai e filhas somando em dobro: 282 → 7 (quase todos sem escala, que viram `unidade_divergente`).
