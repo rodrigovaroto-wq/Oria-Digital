@@ -48,20 +48,20 @@ export function Trilha({ nomes }: Readonly<{ nomes: Record<string, string> }>) {
   if (passos.length === 0) return null;
   return (
     <nav aria-label="Você está em" className="min-w-0 flex-1">
-      <ol className="flex min-w-0 items-center gap-1.5 text-sm text-vidro-suave">
+      <ol className="flex min-w-0 items-center gap-1.5 text-sm text-tinta-500">
         {passos.map((p, i) => {
           const ultimo = i === passos.length - 1;
           return (
             <li key={p.href ?? p.rotulo} className={`flex items-center gap-1.5 ${ultimo ? "min-w-0" : "shrink-0"}`}>
               {i > 0 && <span aria-hidden>›</span>}
               {p.href && !ultimo ? (
-                <Link href={p.href} className={`${p.sensivel ? "valor-sensivel " : ""}rounded px-1 hover:text-vidro-texto hover:underline`}>
+                <Link href={p.href} className={`${p.sensivel ? "valor-sensivel " : ""}rounded px-1 hover:text-tinta-900 hover:underline`}>
                   {p.rotulo}
                 </Link>
               ) : (
                 <span
                   aria-current={ultimo ? "page" : undefined}
-                  className={`${p.sensivel ? "valor-sensivel " : ""}${ultimo ? "truncate font-medium text-vidro-texto" : ""}`}
+                  className={`${p.sensivel ? "valor-sensivel " : ""}${ultimo ? "truncate font-medium text-tinta-900" : ""}`}
                 >
                   {p.rotulo}
                 </span>

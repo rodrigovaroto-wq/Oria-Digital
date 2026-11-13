@@ -156,7 +156,7 @@
 --
 -- FORA, por pedido (não feito): ACL de default privileges, tela/mapeamento global, ligar fn_reconciliar_aging_do_caso em fn_reconciliar_caso.
 --
--- A SONDA (14 requisitos, ordem 1354-1367): a função do validador, o corpo da importação (amarra o aplicador), o corpo da função central (a pendência por
+-- A SONDA (14 requisitos, ordem 1373-1386: renumerados de 1354-1367 em 13/11, depois do merge do main, porque a 0276 usa 1360-1363 e a 0300 1364-1372): a função do validador, o corpo da importação (amarra o aplicador), o corpo da função central (a pendência por
 -- data-base), o corpo da conciliação (o balanço do grupo; a comparação e a prova da convenção de sinal), o corpo das linhas (o pai que fecha, em módulo; o lado do balanço),
 -- as duas colunas data_base, a view da CHECK, a função e o corpo da fusão (leva a carteira) e a view da FK sem cascade. Os requisitos de corpo da 0192, da 0241, da 0183, da 0211 e da 0213 sobre
 -- fn_registrar_reconciliacao e fn_fundir_entidade seguem casando (os corpos são os vigentes com acréscimos).
@@ -1346,54 +1346,55 @@ insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
   ('aging_aplicador_funcao', '0277', 'funcao', 'fn_aging_aplicador_erros', null, null,
    'O validador que amarra o resumo do aging ao resumo do aplicador. Ausente = a 0277 não foi aplicada: o resumo pode ser de outro arquivo que o lido.',
-   'importante', 1354),
+   'importante', 1373),
   ('aging_importar_amarra_aplicador', '0277', 'corpo', 'fn_aging_importar', 'fn_aging_aplicador_erros(', null,
    'A importação recusa o resumo que não se amarra ao aplicador. Corpo sem isto = a carteira de um arquivo é guardada com o resumo de outro e concilia com o balanço como se fosse a dele.',
-   'importante', 1355),
+   'importante', 1374),
   ('aging_aplicador_check', '0277', 'comportamento', 'instalacao_sonda_aging_aplicador_check', null, 1,
    'A CHECK da tabela que amarra o resumo ao aplicador. Zero linhas = o service_role grava resumo que não é o do arquivo lido.',
-   'importante', 1356),
+   'importante', 1375),
   ('aging_registrar_por_data_base', '0277', 'corpo', 'fn_registrar_reconciliacao', 'data_base is not distinct from v_data_base', null,
    'A pendência e o estado vigente do aging são achados pela DATA-BASE da carteira, não pelo período do documento. Corpo sem isto = balanço comparativo (multi 24,25) com carteiras de 2024 e 2025, ou 30/06 e 31/12 do mesmo ano: o ok de uma carteira apaga a divergência da outra.',
-   'bloqueante', 1357),
+   'bloqueante', 1376),
   ('aging_conciliar_balanco_do_grupo', '0277', 'corpo', 'fn_reconciliar_aging', 'fn_coluna_entidade(fn_versao_atual(d.id), a.entidade_id)', null,
    'A conciliação aceita o balanço de outra empresa do grupo cuja coluna é a da entidade. Corpo sem isto = a controlada que só existe como coluna do combinado vira documento_ausente (sem pendência): a carteira nunca é conferida.',
-   'importante', 1358),
+   'importante', 1377),
   ('aging_linhas_pai_que_fecha', '0277', 'corpo', 'fn_aging_linhas_do_balanco', 'abs(abs(p.vb) - abs(s.sv)) <= (p.fator + s.sf) / 2', null,
    'O pai (Fornecedores) que é a soma das filhas vale sozinho. Corpo sem isto = pai e filhas somam em dobro quando têm a mesma seção ou seção nula (a forma de produção), e a carteira correta aparece como divergente.',
-   'bloqueante', 1359),
+   'bloqueante', 1378),
   ('aging_linhas_lado_do_balanco', '0277', 'corpo', 'fn_aging_linhas_do_balanco', 'ce.secao_canonica = v_sc', null,
    'A linha tem de estar do lado do balanço em que o conceito mora. Corpo sem isto = a mercadoria em garantia "(FORNECEDOR)" da seção ESTOQUE entra como Fornecedores.',
-   'importante', 1360),
+   'importante', 1379),
   ('aging_pendencia_data_base_coluna', '0277', 'coluna', 'pendencia.data_base', null, null,
    'A data-base da carteira que originou a pendência do aging. Ausente = a 0277 não foi aplicada por inteiro: a função central não acha a pendência por data-base.',
-   'bloqueante', 1361),
+   'bloqueante', 1380),
   ('aging_reconciliacao_data_base_coluna', '0277', 'coluna', 'reconciliacao.data_base', null, null,
    'A data-base da carteira de cada checagem do aging (a identidade do estado vigente). Ausente = a 0277 não foi aplicada por inteiro.',
-   'bloqueante', 1362),
+   'bloqueante', 1381),
   ('aging_conciliar_compara_em_modulo', '0277', 'corpo', 'fn_reconciliar_aging', 'abs(v_aging - v_cmp)', null,
    'O aging (em módulo) é comparado com o balanço em módulo quando a convenção de passivo negativo está provada, e com o sinal quando não. Corpo sem isto = Fornecedores de -5.621 contra uma carteira de 5.621 dá divergente num documento que imprime o passivo negativo (produção: 3 versões de 917).',
-   'importante', 1363),
+   'importante', 1382),
   ('aging_levar_na_fusao_funcao', '0277', 'funcao', 'fn_aging_levar_na_fusao', null, null,
    'A função que leva as importações de aging da entidade absorvida para a sobrevivente. Ausente = a 0277 não foi aplicada por inteiro: fn_fundir_entidade falha ao chamá-la.',
-   'importante', 1364),
+   'importante', 1383),
   ('aging_fundir_leva_a_carteira', '0277', 'corpo', 'fn_fundir_entidade', 'fn_aging_levar_na_fusao(', null,
    'A fusão de entidades leva a carteira de aging da absorvida. Corpo sem isto = a fusão apaga aging_importado da absorvida sem evento (cascade) ou, com a FK restrita, falha para toda entidade com carteira.',
-   'bloqueante', 1365),
+   'bloqueante', 1384),
   ('aging_entidade_fk_sem_cascade', '0277', 'comportamento', 'instalacao_sonda_aging_fk_entidade', null, 1,
    'A FK aging_importado.entidade_id não apaga em cascata. Zero linhas = apagar uma entidade apaga o resumo do aging sem trilha (a fusão perdia a carteira em silêncio).',
-   'bloqueante', 1366),
+   'bloqueante', 1385),
   ('aging_conciliar_convencao_provada', '0277', 'corpo', 'fn_reconciliar_aging', 'v_pas_pos = 0 and v_pas_neg > 0', null,
    'O módulo do balanço só vale quando o documento prova que imprime o passivo negativo (passivo só negativo na versão lida). Corpo sem isto = Clientes -100 mil no ativo contra uma carteira de R$ 100.000 confere, e a coluna Crédito (movimento) de um combinado vira convenção de sinal.',
-   'importante', 1367)
+   'importante', 1386)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
   porque = excluded.porque, severidade = excluded.severidade, ordem = excluded.ordem;
 
+-- A cobertura NUNCA é rebaixada: a 0300 (aplicada antes desta em produção, 13/11) já a pôs em 0300; gravar '0277' faria a sonda tratar 0278-0300 como fora da cobertura.
 update instalacao_cobertura
-   set ate_migration = '0277', revisado_em = current_date,
-       observacao = 'A 0277 corrige os 3 ALTOS da conciliação do aging da 0274 (a pendência por data-base na função central fn_registrar_reconciliacao, o pai de Fornecedores/Clientes que somava com as filhas, o balanço do grupo como fonte da entidade), a convenção de sinal e 3 médios (o lado do balanço, o resumo amarrado ao aplicador). Reemite fn_registrar_reconciliacao, fn_reconciliar_aging, fn_aging_importar e fn_fundir_entidade (leva a carteira na fusão; a FK de aging_importado.entidade_id deixa de ser cascade), recria fn_aging_linhas_do_balanco (ganha a coluna aviso), cria fn_aging_aplicador_erros, fn_aging_levar_na_fusao e as colunas data_base de pendencia e reconciliacao. 14 requisitos novos (ordem 1354-1367).'
+   set ate_migration = greatest(ate_migration, '0277'), revisado_em = current_date,
+       observacao = 'A 0277 corrige os 3 ALTOS da conciliação do aging da 0274 (a pendência por data-base na função central fn_registrar_reconciliacao, o pai de Fornecedores/Clientes que somava com as filhas, o balanço do grupo como fonte da entidade), a convenção de sinal e 3 médios (o lado do balanço, o resumo amarrado ao aplicador). Reemite fn_registrar_reconciliacao, fn_reconciliar_aging, fn_aging_importar e fn_fundir_entidade (leva a carteira na fusão; a FK de aging_importado.entidade_id deixa de ser cascade), recria fn_aging_linhas_do_balanco (ganha a coluna aviso), cria fn_aging_aplicador_erros, fn_aging_levar_na_fusao e as colunas data_base de pendencia e reconciliacao. 14 requisitos novos (ordem 1373-1386).'
  where id = true;
 
 commit;

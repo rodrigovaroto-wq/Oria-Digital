@@ -51,7 +51,7 @@ export function AbasDoMandato({ casoId, abas }: Readonly<{ casoId: string; abas:
     nav.scrollTo({ left: atual.offsetLeft - (nav.clientWidth - atual.offsetWidth) / 2 });
   }, [caminho]);
   return (
-    <nav ref={faixa} aria-label="Seções do mandato" className="relative -mx-6 overflow-x-auto px-6 sm:mx-0 sm:px-0">
+    <nav ref={faixa} aria-label="Seções do mandato" className="relative -mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
       <ul className="flex min-w-max gap-1 border-b border-tinta-200">
         {abas.map((a) => {
           const atual = ativa(caminho, base, a.sufixo);

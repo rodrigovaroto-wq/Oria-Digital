@@ -1,35 +1,15 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter_Tight, JetBrains_Mono } from "next/font/google";
+import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SCRIPT_DISCRICAO_ANTES_DA_PINTURA, SCRIPT_TEMA_ANTES_DA_PINTURA } from "@/lib/casco";
 
-/* As três famílias do site da Oria, auto-hospedadas pelo `next/font`: os
-   arquivos são baixados no build e servidos do nosso próprio domínio. Nada de
-   `<link>` para o Google em runtime — uma requisição a menos para um terceiro,
-   e `display: swap` com métricas de fallback ajustadas evita o salto de layout
-   que trocar de fonte costuma causar.
-
-   `titulo` (Fraunces) só nomeia DOCUMENTO — mandato e a lockup do login.
-   `dado` (JetBrains Mono) só onde há medição. O resto da interface é `texto`
-   (Inter Tight). A regra completa está no comentário de `globals.css`. */
-const texto = Inter_Tight({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--fonte-texto",
-});
-
-const titulo = Fraunces({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--fonte-titulo",
-  axes: ["opsz"],
-});
-
-const dado = JetBrains_Mono({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--fonte-dado",
-});
+/* GEIST NO PORTAL INTEIRO (direção A, 13/11/2026), auto-hospedada pelo `next/font`: o arquivo é baixado
+   no build e servido do nosso domínio, sem `<link>` para terceiro em runtime. Substitui Fraunces, Inter
+   Tight e JetBrains Mono. Duas famílias, uma só voz: `texto` (Geist) para tudo, `dado` (Geist Mono) só
+   onde há medição (valor, contagem, hora, referência). A Geist do login saiu de `login/layout.tsx` e
+   foi unificada aqui: o login lê --fonte-texto, e o arquivo da fonte é pedido uma vez só. */
+const texto = Geist({ subsets: ["latin"], display: "swap", variable: "--fonte-texto" });
+const dado = Geist_Mono({ subsets: ["latin"], display: "swap", variable: "--fonte-dado" });
 
 export const metadata: Metadata = {
   title: "Oria Partners · Tratamento de Dados Financeiros",
@@ -42,7 +22,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html
       lang="pt-BR"
-      className={`h-full ${texto.variable} ${titulo.variable} ${dado.variable}`}
+      className={`h-full ${texto.variable} ${dado.variable}`}
       // Os scripts abaixo podem ligar `data-discricao` e `data-tema` no <html> ANTES de o React hidratar; sem
       // isto o React acusaria a divergência entre o HTML do servidor e o do cliente.
       suppressHydrationWarning
@@ -57,10 +37,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             da escolha guardada ou, em "Sistema", do aparelho. */}
         <script dangerouslySetInnerHTML={{ __html: SCRIPT_TEMA_ANTES_DA_PINTURA }} />
       </head>
-      {/* `bg-fundo-reserva` e não `bg-papel`: o fundo da marca é uma foto escura
-          e fixa (`FundoDaMarca`); enquanto ela carrega, creme piscando e virando
-          escuro seria pior do que escuro virando foto. */}
-      <body className="min-h-full bg-fundo-reserva font-texto text-tinta-900 antialiased">{children}</body>
+      <body className="min-h-full bg-papel font-texto text-tinta-900 antialiased">{children}</body>
     </html>
   );
 }

@@ -1,8 +1,8 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
-## SESSÃO 129 (12/11/2026, conta Claude Oria) — 0277: a conciliação do aging corrigida (3 ALTOS da 0274), NÃO aplicada
+## SESSÃO 129b (12–13/11/2026, conta Claude Oria, branch `claude/tender-albattani-vx6m60`) — 0277: a conciliação do aging corrigida (3 ALTOS da 0274), NÃO aplicada
 
-> **Migration mais nova no repositório: `0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql`. NÃO APLICADA em produção.** Sonda de leitura em 12/11: `pendencia.data_base` não existe; a última aplicada é a 0276 de outra branch (`claude/youthful-clarke-r6cg5j`). O dono pediu 0277; a 0275 ficou livre. Branch `claude/tender-albattani-vx6m60`, tudo enviado (commits 69926e1, 25cf23c, f765403, 35b9795). Sem PR.
+> **Migration desta seção: `0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql`** (a mais nova do repositório é a `0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql`, da S129/S130 abaixo, já aplicada). Em 13/11, depois do merge do `main` (#298: 0276 e 0300), o dono pediu: aplicar a 0277, abrir o PR e ligar a conciliação do aging na rodada (nota da aplicação abaixo, quando houver). O dono pediu 0277; a 0275 ficou livre. Branch `claude/tender-albattani-vx6m60`, tudo enviado (commits 69926e1, 25cf23c, f765403, 35b9795). Sem PR.
 
 - **O que a 0277 corrige** (a 0274 está em produção com a tabela `aging_importado` vazia: nada foi conciliado errado):
   1. **O ok de um ano resolvia a divergência de outro.** A pendência do aging passa a ser achada pela data-base da carteira na função central `fn_registrar_reconciliacao`, reemitida do corpo da 0241 com 33 linhas novas e 6 modificadas. Os outros tipos ficam idênticos (corpo de produção conferido byte a byte com o da 0241).
@@ -19,14 +19,78 @@
 
 ### ▶ PRÓXIMOS PASSOS (em ordem)
 
-1. **Dono decide aplicar a 0277 em produção.** Ela reemite as funções QUENTES `fn_registrar_reconciliacao` e `fn_fundir_entidade`. Aplicar depois da 0274 (já aplicada). Arquivo: o da branch no commit `35b9795`. Depois, conferir pela sonda: `select chave, migration, tipo, objeto, presente, detalhe, porque from fn_instalacao_conferir() where migration='0277' and not presente;` deve dar 0 linhas (são 14 requisitos, ordem 1354–1367).
+1. **Dono decide aplicar a 0277 em produção.** Ela reemite as funções QUENTES `fn_registrar_reconciliacao` e `fn_fundir_entidade`. Aplicar depois da 0274 (já aplicada). Arquivo: o da branch no commit `35b9795`. Depois, conferir pela sonda: `select chave, migration, tipo, objeto, presente, detalhe, porque from fn_instalacao_conferir() where migration='0277' and not presente;` deve dar 0 linhas (são 14 requisitos, ordem 1373–1386).
 2. Abrir o PR quando o dono pedir.
 3. A ME2 (a tela) só depois da 0277 aplicada.
 4. Decisão do dono sobre ligar a conciliação na rodada (`fn_reconciliar_caso`).
 
+## SESSÃO 129 (12/11/2026) — VISÃO GERAL DO MANDATO: 13,4 s → leituras em lote (0276); redesenho do portal em andamento
+
+> **▶ RETOMAR POR AQUI: `Arquitetura do Sistema/3 Estado e Execução/PLANO_DE_CONTINUACAO_S129.md`.** Pausada a pedido do dono em 13/11.
+> - O plano traz o estado exato, tudo o que a S129 fez com os commits, a ordem do que falta e o "como trabalhar" que custou caro.
+> - Primeiro passo: refazer a revisão independente do redesenho (`3c9ad4f`), que foi interrompida.
+> - Depois: corrigir os achados e os 7 avisos do Sonar, ter o CI verde e fazer o merge do #298, já autorizado pelo dono.
+
+> **Migration mais nova (S130, Função 1 do desenho das quatro funções, ESCRITA, NÃO APLICADA): `0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql`.** (Anterior: ver o resto desta linha.) **Migration mais nova no repositório: `0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql` (ESCRITA, NÃO APLICADA).** `fn_linhas_por_versao(uuid[])` e `fn_algum_documento_serve_como(uuid[], text)`, ambas `security invoker`. A 0275 ficou de fora DE PROPÓSITO: está reservada para a correção do aging (S127b, abaixo).
+
+- **Defeito medido:** a visão geral do mandato (`portal/src/app/casos/[id]/page.tsx`) levava 13,4 s num mandato de 115 documentos e 10.231 linhas. Duas causas somavam 10,2 s: a contagem de linhas paginava `campo_extraido` em 12 idas sequenciais (5,8 s), e o Kit Básico fazia 230 RPCs de `fn_documento_serve_como` (4,4 s).
+- **0276 APLICADA EM PRODUÇÃO em 12/11/2026** (a pedido do dono, pela API de gerenciamento, 1,2 s). Antes: 422 itens na sonda, 0 ausentes, cobertura 0274, 81 mandatos, nenhuma das duas funções. Depois: 426 itens (os 4 da 0276), 0 ausentes, cobertura 0276, 81 mandatos. Medido com a sessão do dono no mandato de 115 documentos: contagem 5,2 s (12 idas) → 0,2 s (1 ida), 115 de 115 versões devolvidas, soma 10.231 igual à paginada; Kit 4,7 s (230 RPCs) → 0,45 s (2 RPCs), mesma resposta.
+- **Falta:** trocar `lib/supabase/linhas-por-versao.ts` e `lib/kit-basico.ts` para chamar as funções em lote, mantendo o caminho atual quando a função não existir. **São TRÊS chamadores do Kit, não dois:** `casos/[id]/page.tsx`, `documentos/(lista)/page.tsx` e `casos/[id]/export/route.ts:603-607`.
+- **ALTO pré-existente (revisão independente da 0276, não introduzido por ela):** o export monta o próprio serviço do Kit com `return !r.error && r.data === true;`, então QUALQUER erro (um timeout numa das RPCs) vira "item não atendido" e o item sai como faltante no book entregue ao cliente (regra 1). Os outros dois chamadores lançam quando há erro. Ao trocar para o lote, o export tem de ir junto, sem herdar o `!r.error &&`.
+- **Redesenho do portal: o dono escolheu a direção A (Cobalto noturno)** e a frase de login "O detalhe que muda a tese aparece primeiro." Maquetes, pranchas e a comparação com 8 concorrentes estão em `Arquitetura do Sistema/7 Marca/redesenho-2026-11/`.
+- **Feito e comitado nesta sessão (PR #298):**
+  - a 0276, aplicada em produção;
+  - o portal usando as leituras em lote: visão geral 13,4 s → 1,1 s;
+  - o ALTO do export, em que erro virava "Kit faltante";
+  - o ALTO do checklist no export, a partir da revisão;
+  - o login na direção A, com acessibilidade revisada.
+- **▶ ONDE PAROU (o dono pediu para parar em 12/11, por limite de uso):**
+  1. **Item 2, "a tela aparece na hora": FEITO em 13/11 (retomada às 21:02 BRT).**
+     - O patch foi aplicado e terminado. Os blocos chegam por Suspense com esqueleto (`components/revelar.tsx`, `casos/painel-*.ts(x)`, `casos/[id]/visao-*.ts(x)`).
+     - Título do Início: 3,2–3,8 s → 0,28 s. DCL do Início: 3,3 → 2,4 s. Visão geral: DCL 1,0–2,1 → 0,65–0,97 s.
+     - CLS 0 nas 12 cargas.
+     - Patch removido.
+  1b. **Telas internas na direção A: FEITAS em 13/11.**
+      - Visual: fundo único de mármore (escuro e claro), cartões foscos flutuantes, barra lateral flutuante, botão Sol/Lua entre a discrição e o perfil, e Geist no portal todo.
+      - "Precisa de você" agrupado por mandato e "Seus mandatos" em tabela com régua de etapas e paginação.
+      - Selo de origem do número, Kit Básico com % só do que tem conteúdo, e o bloco "Andamento da leitura".
+      - "Conferido" segue como "ainda não medido", porque depende da 0300 aplicada e da decisão do dono (botão "conferi" por documento, recomendado, sem resposta ainda).
+      - FALTA: a revisão independente do commit das telas.
+  1c. **0300 APLICADA EM PRODUÇÃO em 13/11/2026** (a pedido do dono, pela API de gerenciamento, 2,5 s, sem erro).
+      - Antes: 426 itens na sonda, 0 ausentes, cobertura 0276, 81 mandatos, 235 `item_faltante` abertas.
+      - Depois: 435 itens (os 9 da 0300), 0 ausentes, cobertura 0300, 81 mandatos.
+      - Backfill: 233 chaves adotadas (evento `{"adotadas":233}`); as 2 de contrato social da 0208 ficaram sem chave, como previsto.
+      - `fn_kit_do_caso` no mandato 5469db1d: BALANCO, COMBINADO, FAT_INTRAGRUPO e FATURAMENTO_24M `extraido`; DRE `recebido_sem_linha`; FLUXO_CAIXA e MUTUOS `faltante`; CONTRATO_SOCIAL `aguardando_extracao`.
+      - O portal AINDA NÃO LÊ `fn_kit_do_caso` (fatia 1.2). Ver o relatório no commit e4a3a9e: estados novos `lido_sem_dado_por_natureza` e `aguardando_desde`; contadores de empresa nulos fora das granularidades `entidade` e `entidade_periodo`.
+      - **"Conferido": decisão em aberto, com possibilidade RECOMENDADA registrada.** Hoje é quase inalcançável: 1.443 de 1.648 versões têm todas as linhas auto-aceitas, e `fn_aceitar_extracao` não converte auto-aceite em aceite de pessoa.
+        - Recomendação: um botão "conferi" por documento, que grava quem conferiu e quando (padrão DataSnipper). `fn_kit_do_caso` passaria a tratar como `conferido` o item cujo documento vigente tenha esse registro.
+        - O dono pediu para NÃO implementar ainda (13/11).
+  2. **Fila aprovada pelo dono, nesta ordem:**
+     - telas internas na direção A, incorporando do benchmark a cor por origem do número, o Kit com % de prontidão (recebido ≠ conferido) e o progresso por documento;
+     - transições de página e abas deslizantes (transitions.dev);
+     - régua do mandato animada;
+     - modo apresentação ("ver como o cliente vê");
+     - sextante em traço, número com troca suave e confirmações vivas;
+     - gráficos sóbrios;
+     - destaque do trecho no PDF (investigar se o banco guarda a posição);
+     - a conta do número calculado;
+     - a grade documento × fato.
+  3. **Aprovados pelo dono, mas que exigem banco (desenho antes do código; o desenho foi interrompido antes de ser escrito):**
+     - (a) o envio fecha sozinho o item do Kit e a pendência, sem fechar o que não foi conferido;
+     - (b) link para o cliente enviar documentos (Área do cliente, arquivada no REDESENHO; pré-requisito 0216 feito);
+     - (c) número novo × reapresentado por período entre versões;
+     - (d) pendência vira achado, com dono, efeito e mitigação, e relatório de riscos.
+     - **Desenho pronto:** `Arquitetura do Sistema/3 Estado e Execução/DESENHO_QUATRO_FUNCOES_2026-11.md`.
+     - **Decidido pelo dono em 13/11:**
+       - aceitas todas as 23 recomendações;
+       - ordem 1 → 4 → 3 → 2;
+       - a Área do cliente (2) só depois de 18/12;
+       - migrations desta frente a partir da **0300** (não 0277); a 0275 segue reservada para o aging. Reconferir na hora.
+  - Ferramentas auditadas: transitions.dev aprovado (CSS puro, licença sem redistribuir a biblioteca); React Bits, um componente por vez; Taste Skill NÃO instalar (gatilho Stop de 10 min e manda inventar dado), só a biblioteca de paletas.
+
 ## SESSÃO 127b (11–12/11/2026, conta Claude Oria) — PLANO DO MVP: MB0, MB1, MB2; 0272 (mapeamento de colunas)
 
-> **Migration mais nova no repositório: `0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql`** (S129, acima: NÃO aplicada). A da S127b, `0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql`, está (APLICADA EM PRODUÇÃO em 12/11/2026, ver abaixo; nota de quando foi escrita: a sessão principal comita e aplica; `aging_importado`, o resumo do aging por mandato e entidade, e a conciliação com Clientes/Fornecedores e Adiantamentos do balanço; MB3b). A anterior, `0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql`, está APLICADA (abaixo), e a `0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql` também. A 0272 nasceu 0242 nesta branch e foi renumerada em 12/11: a 0242 de produção é a da conta canônica (`0242_a_secao_que_so_existia_em_codigo.sql`, branch `claude/peaceful-archimedes-hisyd0`, já aplicada), e a maior do repositório era a 0271. Produção em 12/11, antes desta rodada: 0242 (conta canônica), 0270 e 0271 aplicadas; `instalacao_cobertura` em 0271. Branch `claude/hopeful-ramanujan-c425e4`.
+> **Migration mais nova (S130, Função 1 do desenho das quatro funções, ESCRITA, NÃO APLICADA): `0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql`.** (Anterior: ver o resto desta linha.) **Migration mais nova no repositório: `0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql` (S129, APLICADA EM PRODUÇÃO em 12/11). Na S127b era a `0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql`** (APLICADA EM PRODUÇÃO em 12/11/2026, ver abaixo; nota de quando foi escrita: a sessão principal comita e aplica; `aging_importado`, o resumo do aging por mandato e entidade, e a conciliação com Clientes/Fornecedores e Adiantamentos do balanço; MB3b). A anterior, `0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql`, está APLICADA (abaixo), e a `0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql` também. A 0272 nasceu 0242 nesta branch e foi renumerada em 12/11: a 0242 de produção é a da conta canônica (`0242_a_secao_que_so_existia_em_codigo.sql`, branch `claude/peaceful-archimedes-hisyd0`, já aplicada), e a maior do repositório era a 0271. Produção em 12/11, antes desta rodada: 0242 (conta canônica), 0270 e 0271 aplicadas; `instalacao_cobertura` em 0271. Branch `claude/hopeful-ramanujan-c425e4`.
 
 - **Plano novo:** `Arquitetura do Sistema/3 Estado e Execução/PLANO_MVP_2026-11.md`, aprovado pelo dono (DM0) em 11/11. O plano anterior fica como está. O andamento por fatia está no §7 dele.
 - **MB0:** `Dados de Teste/volume/` (AR, AP e OFX sintéticos de até 1M de linhas que fecham com o BP do book-distress).
@@ -35,7 +99,7 @@
 - **0272 APLICADA EM PRODUÇÃO em 12/11/2026** (a pedido do dono, pela API de gerenciamento, 1,6 s). Antes: 386 itens na sonda, 0 ausentes, 81 mandatos, cobertura 0271. Depois: 396 itens (os 10 da 0272), 0 ausentes, 81 mandatos, `mapeamento_de_colunas` vazia, cobertura 0272. O vetor da biblioteca JS dá a mesma impressão do cabeçalho no Postgres de produção. `run.sh` local: TODOS OS TESTES PASSARAM.
 - **0273 APLICADA EM PRODUÇÃO em 12/11/2026** (a pedido do dono, 1,5 s): `contraparte_confirmada` (o analista confirma, POR MANDATO, que um "TOTAL DISTRIBUIDORA LTDA" é cliente de verdade). Antes: 396 itens, 0 ausentes, 81 mandatos, cobertura 0272. Depois: 408 (os 12 da 0273), 0 ausentes, 81 mandatos, tabela vazia, cobertura 0273. Os três vetores de `fn_texto_normalizado` conferem em produção. NADA chama `fn_contrapartes_confirmadas` ainda: a tela é a ME2.
 - **0274 APLICADA EM PRODUÇÃO em 12/11/2026** (a pedido do dono, 1,9 s): `aging_importado` + a conciliação do aging com o balanço (positivos × Clientes/Fornecedores, negativos × Adiantamentos). A consulta de "antes" falhou (coluna errada) e não foi refeita a tempo: o último estado medido antes é o de depois da 0273 (408 itens, 0 ausentes, 81 mandatos). Depois: 422 itens (os 14 da 0274), 0 ausentes, 81 mandatos, `aging_importado` vazia, cobertura 0274; 7.599 reconciliações, a mais nova de 11/11 19:14 (a 0274 não criou nenhuma), 0 do tipo `aging_*`, 2.999 pendências. **A conciliação NÃO está ligada na rodada** (`fn_reconciliar_caso`): roda na importação e por `fn_reconciliar_aging_do_caso`; decisão do dono pendente.
-- (FEITO na S129 como 0277, ver acima) **▶ PRIMEIRA TAREFA DA PRÓXIMA SESSÃO — 0275, ANTES de qualquer tela ou n8n chamar `fn_aging_importar`.** A revisão independente da 0274 (12/11, depois de aplicada) achou 3 ALTOS na conciliação, todos reproduzidos e NENHUM ativo em produção (as tabelas `aging_importado`, `contraparte_confirmada` e `mapeamento_de_colunas` estão vazias e nada chama a importação):
+- **(FEITO na S129b como 0277, ver acima)** **▶ PRIMEIRA TAREFA DA PRÓXIMA SESSÃO — 0275 (o número CONTINUA reservado para isto: a S129 usou a 0276 de propósito para não tomá-lo; ao escrevê-la, a 0275 fica abaixo da mais nova e a `instalacao_cobertura` NÃO pode ser rebaixada de 0276 para 0275), ANTES de qualquer tela ou n8n chamar `fn_aging_importar`.** A revisão independente da 0274 (12/11, depois de aplicada) achou 3 ALTOS na conciliação, todos reproduzidos e NENHUM ativo em produção (as tabelas `aging_importado`, `contraparte_confirmada` e `mapeamento_de_colunas` estão vazias e nada chama a importação):
   1. **O ok de um ano resolve a divergência de outro ano.** A pendência é chaveada pelo `periodo_id` do documento do balanço, não pela data-base; num comparativo (2024 e 2025 no mesmo documento) a carteira que confere apaga a pendência da outra; `fn_reconciliar_aging_do_caso` visita por data-base crescente e o ano mais novo sempre apaga o mais velho. Caso normal: 169 balanços comparativos de 31/12 por ano em produção.
   2. **Pai e filhos de Fornecedores somam em dobro** (`0274:439-448`): a regra "o pai vale sozinho" depende de `secao` dos filhos = nome do pai; a fixture monta assim, a extração de produção grava os filhos com `secao = 'Passivo Circulante'`. Medido em produção (leitura): o dobro em 245 grupos documento×ano de Fornecedores, em 28 de 53 mandatos (Clientes: 4). Carteira correta → pendência falsa de 100%. O assert do teste prova arranjo que produção não produz (regra 4).
   3. **Balanço que só existe como coluna de um combinado vira `documento_ausente`**, sem pendência (a busca filtra `d.entidade_id`): 16 entidades em 7 mandatos.
@@ -44,7 +108,7 @@
 
 ## SESSÃO 128 (11–12/11/2026, conta Claude Oria) — P26 NO AR (0242 aplicada); P27 (0243) SEPARADA para PR próprio
 
-> **Migration mais nova do repositório (hoje: `0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql`, ver S129; na S128 era a `0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql`) (Claude Oria 2, P11, junto da `0270_a_linha_que_nao_sabia_de_que_linha_veio.sql`) — as duas APLICADAS EM PRODUÇÃO segundo a sonda de 12/11 (0270: 4/4; 0271: 1/1), ao contrário do que a seção da P11 diz abaixo.** A da Claude Oria: `0242_a_secao_que_so_existia_em_codigo.sql` — APLICADA EM PRODUÇÃO (11/11, com o bloco de grant do `3e5d012` aplicado logo depois). Em 12/11 o dono decidiu SEPARAR: o PR #294 leva só a P26 (0242 + o teste do leitor só-leitura) e a P27 (0243) sai daqui para um PR novo. A 0243 NÃO está aplicada e NÃO está nesta branch: o código está nos commits `8f0f66d` e `1e195b2` (histórico desta branch) e a 3ª tentativa no patch abaixo. Onde esta seção e a S127 falarem de migration, vale esta.
+> **Migration mais nova (S130, Função 1 do desenho das quatro funções, ESCRITA, NÃO APLICADA): `0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql`.** (Anterior: ver o resto desta linha.) **Migration mais nova do repositório (hoje: `0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql`, ver S129; antes dela `0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql`, ver S127b; na S128 era a `0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql`) (Claude Oria 2, P11, junto da `0270_a_linha_que_nao_sabia_de_que_linha_veio.sql`) — as duas APLICADAS EM PRODUÇÃO segundo a sonda de 12/11 (0270: 4/4; 0271: 1/1), ao contrário do que a seção da P11 diz abaixo.** A da Claude Oria: `0242_a_secao_que_so_existia_em_codigo.sql` — APLICADA EM PRODUÇÃO (11/11, com o bloco de grant do `3e5d012` aplicado logo depois). Em 12/11 o dono decidiu SEPARAR: o PR #294 leva só a P26 (0242 + o teste do leitor só-leitura) e a P27 (0243) sai daqui para um PR novo. A 0243 NÃO está aplicada e NÃO está nesta branch: o código está nos commits `8f0f66d` e `1e195b2` (histórico desta branch) e a 3ª tentativa no patch abaixo. Onde esta seção e a S127 falarem de migration, vale esta.
 
 > **BLOQUEIO NOVO DA P27 (medido em 12/11):** a `0270` da Claude Oria 2 (P11, coluna `ln`) está APLICADA em produção e reemitiu `fn_registrar_campos_extraidos`. A 0243 reemite essa função a partir do corpo da 0231: aplicada, APAGARIA em silêncio a gravação do `ln` da P11; e num banco do zero a 0270 (depois da 0243 na ordem) apagaria a materialização. Decisão para o PR da P27: tirar a materialização de dentro de `fn_registrar_campos_extraidos` (gatilho próprio), para não depender do corpo de uma função que a Claude Oria 2 reemite a cada fatia.
 
@@ -83,7 +147,7 @@
 
 ## SESSÃO 127 (11/11/2026, conta Claude Oria) — CI sem apt; 0240 e 0241 APLICADAS EM PRODUÇÃO
 
-> **(Superado pela S128, acima: a 0242 foi APLICADA em produção em 11/11; e a sonda de 12/11 diz que a 0270 e a 0271 TAMBÉM estão aplicadas.)** **Migration mais nova (hoje: `0277_o_aging_que_apagava_a_divergencia_de_um_ano_e_somava_o_pai_com_as_filhas.sql`, ver S129; na S127 era a `0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql` (e a `0270_a_linha_que_nao_sabia_de_que_linha_veio.sql`) — ESCRITAS NA P11 (etapa 2.2), NÃO APLICADAS EM PRODUÇÃO. A anterior, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291).** Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
+> **Migration mais nova (S130, Função 1 do desenho das quatro funções, ESCRITA, NÃO APLICADA): `0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql`.** (Anterior: ver o resto desta linha.) **(Superado pela S128, acima: a 0242 foi APLICADA em produção em 11/11; e a sonda de 12/11 diz que a 0270 e a 0271 TAMBÉM estão aplicadas.)** **Migration mais nova (hoje: `0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql`, ver S129; antes dela `0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql`, ver S127b; na S127 era a `0271_o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.sql` (e a `0270_a_linha_que_nao_sabia_de_que_linha_veio.sql`) — ESCRITAS NA P11 (etapa 2.2), NÃO APLICADAS EM PRODUÇÃO. A anterior, `0241_a_descricao_que_o_periodo_irmao_reescrevia.sql`, está APLICADA EM PRODUÇÃO em 11/11/2026, depois da `0240` (nessa ordem, pela API de gerenciamento, a pedido do dono, antes do merge do #291).** Branch `claude/loving-tesla-7eutsq`, PR #291. Onde esta seção e a S126 falarem de migration, vale esta.
 
 ### Aplicação em produção (11/11, a pedido do dono)
 - **Antes:** 80 mandatos; sonda com 365 itens e 1 ausente (`envio_segredo_no_vault`, que a API não lê); 479 pendências de reconciliação abertas.
