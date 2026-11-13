@@ -16,10 +16,11 @@
   - o ALTO do checklist no export, a partir da revisão;
   - o login na direção A, com acessibilidade revisada.
 - **▶ ONDE PAROU (o dono pediu para parar em 12/11, por limite de uso):**
-  1. **Item 2, "a tela aparece na hora"** (streaming com Suspense e um esqueleto que se revela em `/casos` e `/casos/[id]`).
-     - O trabalho foi interrompido NO MEIO, NÃO TESTADO, e salvo em `Arquitetura do Sistema/3 Estado e Execução/patches/s129-item2-streaming-NAO-TESTADO.patch` (8 arquivos; `git apply --check` limpo sobre o commit que o versiona).
-     - Quando parou, o `casos/[id]/page.tsx` não compilava: o agente estava corrigindo o cabeçalho de imports.
-     - Para retomar: aplique o patch, conserte o `page.tsx`, depois rode `tsc`, `eslint`, os 13 `verificar-*.mts` (o `verificar-mensagem-de-falha` reprovava em `painel-blocos.tsx`, que usa `toLocaleString` sem `.valor-sensivel`), meça o FCP antes e depois, e passe por revisão independente.
+  1. **Item 2, "a tela aparece na hora": FEITO em 13/11 (retomada às 21:02 BRT).**
+     - O patch foi aplicado e terminado. Os blocos chegam por Suspense com esqueleto (`components/revelar.tsx`, `casos/painel-*.ts(x)`, `casos/[id]/visao-*.ts(x)`).
+     - Título do Início: 3,2–3,8 s → 0,28 s. DCL do Início: 3,3 → 2,4 s. Visão geral: DCL 1,0–2,1 → 0,65–0,97 s.
+     - CLS 0 nas 12 cargas.
+     - Patch removido.
   2. **Fila aprovada pelo dono, nesta ordem:**
      - telas internas na direção A, incorporando do benchmark a cor por origem do número, o Kit com % de prontidão (recebido ≠ conferido) e o progresso por documento;
      - transições de página e abas deslizantes (transitions.dev);

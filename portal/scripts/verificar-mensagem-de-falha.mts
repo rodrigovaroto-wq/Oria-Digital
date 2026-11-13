@@ -724,9 +724,7 @@ const FORMATADORES = /formatValor\(|formatarUsd\(|\bfmt\.format\(|Intl\.NumberFo
 const EXCECOES_DE_FORMATADOR: ReadonlyArray<readonly [arquivo: string, trecho: string, motivo: string]> = [
   ["components/upload-form.tsx", 'new Date(sucesso.desde).toLocaleString("pt-BR")', "data/hora do envio, não valor"],
   ["components/painel-zip.tsx", "progresso.indice.toLocaleString", "contagem de entradas do ZIP, não valor"],
-  ["app/casos/[id]/page.tsx", 'linhasTotais.toLocaleString("pt-BR")', "contagem de linhas extraídas, não valor"],
   ["app/casos/[id]/documentos/(lista)/page.tsx", 'linhas.toLocaleString("pt-BR")', "contagem de linhas do documento, não valor"],
-  ["app/casos/page.tsx", "const numero = (n: number) => n.toLocaleString", "contagens do painel (mandatos, pendências), não valor"],
   ["app/administracao/page.tsx", 'new Date(iso).toLocaleString("pt-BR"', "data/hora, não valor"],
   // DEFINIÇÕES de formatador (não são uso em JSX): o uso é varrido (`formatValor(` em
   // documento-detalhe, `fmt.format(` em SecaoLinhas) ou, quando o resultado passa por uma variável
@@ -766,9 +764,9 @@ const textosDoBanco: Array<[string, RegExp, string]> = [
   ["app/casos/[id]/Pendencia.tsx", /valor-sensivel[^>]*>\{parte\}/, "qualificações da pendência"],
   ["app/casos/[id]/pendencias/page.tsx", /valor-sensivel[^>]*>\{p\.descricao\}/, "descrição no cartão de confirmar"],
   ["app/casos/[id]/pendencias/FormConfirmarDocumento.tsx", /valor-sensivel[^>]*>\{p\.descricao\}/, "descrição no formulário de confirmar"],
-  ["app/casos/page.tsx", /valor-sensivel[^>]*>\{resumoTexto\}/, "resumo da pendência na fila do início"],
-  ["app/casos/[id]/page.tsx", /<blockquote className="valor-sensivel[^>]*>\s*“\{f\.trecho\}”/, "trecho do fato material"],
-  ["app/casos/[id]/page.tsx", /valor-sensivel[^>]*>\{f\.leitura\}/, "leitura do fato material"],
+  ["app/casos/painel-blocos.tsx", /valor-sensivel[^>]*>\{resumoTexto\}/, "resumo da pendência na fila do início"],
+  ["app/casos/[id]/visao-blocos.tsx", /<blockquote className="valor-sensivel[^>]*>\s*“\{f\.trecho\}”/, "trecho do fato material"],
+  ["app/casos/[id]/visao-blocos.tsx", /valor-sensivel[^>]*>\{f\.leitura\}/, "leitura do fato material"],
   ["app/casos/[id]/historico/linha-do-tempo.tsx", /valor-sensivel[^>]*>\{e\.resumo\}/, "resumo do evento do histórico"],
   ["app/casos/[id]/perguntas/CartaoPergunta.tsx", /valor-sensivel[^>]*whitespace-pre-wrap[^>]*>\s*\{p\.pergunta\}/, "texto da pergunta"],
   ["app/casos/[id]/perguntas/CartaoPergunta.tsx", /valor-sensivel">\{p\.motivo\}[\s\S]*valor-sensivel">\{p\.risco\}[\s\S]*valor-sensivel">\{p\.impacto\}/, "motivo, risco e impacto da pergunta"],
@@ -1489,7 +1487,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     "as cinco ações do mandato devolvem { erro } nos DOIS caminhos de falha (erro do banco e recusa no payload)");
   checar(/const r = await registrarAcaoDaPergunta\(casoId, formData\);\s*return r \? \{ ok: false, erro: r\.erro \} : \{ ok: true \}/.test(semCom(fonte("app/casos/[id]/perguntas/actions.ts"))),
     "o lote de perguntas lê o { erro } devolvido (senão uma recusa viraria { ok: true })");
-  const chamadoresDeForm = ["app/casos/[id]/page.tsx", "app/casos/[id]/Pendencia.tsx", "app/casos/[id]/perguntas/CartaoPergunta.tsx", "app/casos/[id]/pendencias/FormConfirmarDocumento.tsx", "components/documento-detalhe.tsx"];
+  const chamadoresDeForm = ["app/casos/[id]/visao-blocos.tsx", "app/casos/[id]/Pendencia.tsx", "app/casos/[id]/perguntas/CartaoPergunta.tsx", "app/casos/[id]/pendencias/FormConfirmarDocumento.tsx", "components/documento-detalhe.tsx"];
   for (const arq of chamadoresDeForm) {
     const src = semCom(fonte(arq));
     checar(/<FormDeAcao\b/.test(src) && !/<form\b[^>]*action=\{(aprovarCaso|decidirPendencia|registrar|revisarAction|aceitarAction|aceitarExtracao|revisarDocumento)/.test(src),
@@ -1503,7 +1501,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
       `${arq}: ${chamada} tem o { erro } guardado e escrito na tela`);
   }
   // 12. Lista/busca vazia com papel NÃO conferido: o vazio pode ser o recorte do banco.
-  checar(/textoDeNenhumMandato\(perm\.papel, "em andamento"\)/.test(semCom(fonte("app/casos/page.tsx"))) && !/"Nenhum mandato em andamento"/.test(semCom(fonte("app/casos/page.tsx")))
+  checar(/textoDeNenhumMandato\(perm\.papel, "em andamento"\)/.test(semCom(fonte("app/casos/painel-blocos.tsx"))) && !/"Nenhum mandato em andamento"/.test(semCom(fonte("app/casos/painel-blocos.tsx")))
     && /textoDeNenhumMandato\(perm\.papel/.test(semCom(fonte("app/casos/todos/page.tsx"))) && !/"Nenhum mandato aberto\."/.test(semCom(fonte("app/casos/todos/page.tsx"))),
     "Início e Mandatos: o 'nenhum' vem de textoDeNenhumMandato (papel não conferido não afirma a mesa inteira)");
   const rotaBusca = semCom(fonte("app/api/busca/route.ts")), telaBusca = semCom(fonte("components/busca-global.tsx"));
@@ -1516,6 +1514,109 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     "limpar campo vazio: o DELETE devolve as linhas apagadas e MENOS que as existentes vira a frase do papel (não 'salvo')");
   checar(!/\.delete\(\)/.test(semCom(fonte("app/casos/[id]/modelagem/actions.ts"))) && !/\.(update|delete)\(/.test(semCom(fonte("app/casos/[id]/perimetro/actions.ts")) + semCom(fonte("app/administracao/equipe/actions.ts"))),
     "varredura: as demais ações do portal escrevem por RPC (que levanta 42501), não por update/delete direto que a RLS poderia zerar calado");
+}
+
+// ---------------------------------------------------------------------------------------------------
+// A TELA QUE APARECE NA HORA (streaming com Suspense): `/casos` e `/casos/[id]` devolvem o casco e
+// cada bloco chega quando a SUA consulta responde. O risco novo é um bloco que não chegou ter a cara
+// de "nada a mostrar" (regra 7), ou o esqueleto/erro de um bloco virar valor (regra 1). Cada item
+// abaixo afirma o que a tela FAZ; a prova de que reprovam sem a correção (regra 2) está no commit.
+{
+  const { renderToString } = await import("react-dom/server");
+  const React = await import("react");
+  const h = React.createElement;
+  // tsx compila o .tsx com o JSX clássico (o tsconfig do Next usa "preserve"): o componente chama `React.`.
+  (globalThis as { React?: unknown }).React = React;
+  const { Revelar } = await import("../src/components/revelar.tsx");
+
+  // (1) Um bloco que NÃO CHEGA mostra "carregando", com texto para o leitor de tela e o esqueleto —
+  // nunca vazio. `renderToString` não espera um filho que suspende: devolve o `fallback`, que é
+  // exatamente o que o navegador pinta enquanto a consulta não responde.
+  const nuncaChega = () => { throw new Promise(() => {}); };
+  const NuncaChega = () => nuncaChega();
+  const pendente = renderToString(
+    h(Revelar, { rotulo: "Carregando o teste…", esqueleto: h("i", { "data-esq": "1" }), children: h(NuncaChega) }),
+  );
+  checar(/role="status"/.test(pendente) && pendente.includes("Carregando o teste…") && pendente.includes('data-esq="1"'),
+    "Revelar: o bloco que ainda não chegou mostra o esqueleto com role=status e o texto de carregando (não fica vazio)");
+  checar(!pendente.includes("t-skel-content"),
+    "Revelar: o esqueleto NÃO simula o conteúdo — a moldura do conteúdo só existe quando ele chega");
+
+  // (2) O bloco que chegou entra com o conteúdo VISÍVEL no HTML e o esqueleto só como cópia aria-hidden.
+  const chegou = renderToString(
+    h(Revelar, { rotulo: "x", esqueleto: h("i", { "data-esq": "1" }), children: h("p", null, "CONTEUDO-DO-BLOCO") }),
+  );
+  checar(chegou.includes("CONTEUDO-DO-BLOCO") && /class="t-skel-ghost"[^>]*aria-hidden|aria-hidden="true"[^>]*class="t-skel-ghost"/.test(chegou),
+    "Revelar: o bloco que chegou traz o conteúdo e a cópia do esqueleto escondida do leitor de tela");
+
+  // (3) A REDE DE SEGURANÇA no CSS: o estado BASE é o final. Se a animação não rodar (movimento
+  // reduzido, CSS que falhou), o conteúdo está visível e a cópia do esqueleto está transparente.
+  const cssSk = fonte("app/globals.css");
+  const regra = (seletor: string) => {
+    const i = cssSk.search(new RegExp(`^${seletor.replace(/[.]/g, "\\.")}\\s*\\{`, "m"));
+    return i < 0 ? "" : cssSk.slice(i, cssSk.indexOf("}", i));
+  };
+  checar(regra(".t-skel-content") !== "" && !/opacity\s*:\s*0\b/.test(regra(".t-skel-content")),
+    "globals.css: o conteúdo revelado NÃO nasce com opacity 0 (a animação é quem parte de escondido; sem ela, o número está na tela)");
+  checar(/opacity\s*:\s*0\b/.test(regra(".t-skel-ghost")),
+    "globals.css: a cópia do esqueleto nasce transparente (se a animação não rodar, não fica um esqueleto por cima do número)");
+  const reduzido = cssSk.slice(cssSk.indexOf("@media (prefers-reduced-motion: reduce) {\n  .t-skel-content"));
+  checar(/\.t-skel-content\s*\{\s*animation:\s*none/.test(reduzido) && /\.t-skel-ghost\s*\{\s*display:\s*none/.test(reduzido),
+    "globals.css: prefers-reduced-motion desliga a revelação (sem fade nem blur)");
+
+  // (4) As páginas não leem dado nenhum: o casco sai sem esperar consulta. É o contrato de "aparece
+  // na hora" — uma consulta que voltasse para a página seguraria TUDO atrás dela.
+  const paginaPainel = semComentariosDoFonte(fonte("app/casos/page.tsx"));
+  const paginaVisao = semComentariosDoFonte(fonte("app/casos/[id]/page.tsx"));
+  for (const [nome, src] of [["/casos", paginaPainel], ["/casos/[id]", paginaVisao]] as const) {
+    checar(!/@\/lib\/supabase|createClient|\.from\(|\.rpc\(|paginar\(/.test(src),
+      `${nome}: a página não faz consulta — cada bloco faz a sua dentro do <Suspense>`);
+  }
+
+  // (5) Os esqueletos são "carregando", nunca valor: nenhum dígito em texto e nenhuma leitura de dado.
+  const corpoDe = (src: string, nome: string) => {
+    const i = src.search(new RegExp(`function ${nome}\\(`));
+    return i < 0 ? null : src.slice(i, src.indexOf("\n}\n", i));
+  };
+  const blocosPainel = semComentariosDoFonte(fonte("app/casos/painel-blocos.tsx"));
+  const esqueletos: Array<[string, string]> = [
+    ...["EsqueletoDosIndicadores", "EsqueletoDaFila", "EsqueletoDosRecentes", "EsqueletoDosMandatos", "EsqueletoDaGrade"]
+      .map((n) => [n, corpoDe(blocosPainel, n) ?? ""] as [string, string]),
+    ...["EsqueletoDoProximoPasso", "EsqueletoDosIndicadoresDoMandato", "EsqueletoDosFatos", "EsqueletoDaEquipe"]
+      .map((n) => [n, corpoDe(paginaVisao, n) ?? ""] as [string, string]),
+  ];
+  for (const [nome, corpo] of esqueletos) {
+    checar(corpo !== "" && !/>[^<>{}]*\d[^<>{}]*</.test(corpo) && !/\bler[A-Z]|toLocaleString|\.data\b/.test(corpo),
+      `${nome}: o esqueleto não carrega número nem lê dado (esqueleto é "carregando", nunca valor)`);
+  }
+
+  // (6) A DIVISÃO EM BLOCOS não perdeu nenhuma frase de falha nem a semântica de "não lido": cada
+  // mensagem mora no bloco que a usava (movida, não reescrita).
+  const blocosVisao = semComentariosDoFonte(fonte("app/casos/[id]/visao-blocos.tsx"));
+  const dadosVisao = semComentariosDoFonte(fonte("app/casos/[id]/visao-dados.ts"));
+  const portao = corpoDe(blocosVisao, "PortaoDoMandato") ?? "";
+  checar(/Aprovação não conferida/.test(portao) && /A consulta que diz se o mandato pode ser aprovado não respondeu/.test(portao),
+    "Portão 2: avaliação que não respondeu diz 'Aprovação não conferida' com o efeito (não some como 'nada a aprovar')");
+  checar(/catch \{\s*return null;\s*\}/.test(dadosVisao)
+    && /kitLido = !kitBasicoRes\.error && documentosLidos && !checklistRes\.error && kitAtendidos !== null/.test(dadosVisao),
+    "Kit Básico: serviço que lança vira 'não lido' (null) e o Kit só é lido com tudo lido — nunca 'itens faltantes'");
+  checar(/linhasIncompletas/.test(dadosVisao) && /contagem incompleta — a leitura das linhas não terminou/.test(dadosVisao)
+    && /a leitura dos documentos falhou/.test(dadosVisao) && /a leitura das pendências falhou/.test(dadosVisao)
+    && /não foi possível saber quantas travam a aprovação/.test(dadosVisao) && /a leitura do kit falhou/.test(dadosVisao),
+    "Indicadores do mandato: cada leitura que falha ou veio incompleta é DITA, com a causa (traço, nunca zero)");
+  checar(/contarLinhasPorVersao\(/.test(dadosVisao) && /nAbertas\s*=\s*contagem\(abertasRes\)/.test(dadosVisao)
+    && /r\.error \? null : r\.count/.test(dadosVisao),
+    "Indicadores do mandato: contagem que falhou sai null (nunca 0) e a soma de linhas vem de contarLinhasPorVersao (com 'incompleto')");
+  const avisosPainel = corpoDe(blocosPainel, "AvisosDoPainel") ?? "";
+  checar(/Não foi possível carregar o Início/.test(avisosPainel) && /A leitura das pendências falhou/.test(avisosPainel)
+    && /A leitura dos documentos falhou/.test(avisosPainel) && /Parte das leituras acima não terminou/.test(avisosPainel),
+    "Painel: os avisos de leitura (falha e teto) continuam existindo, em bloco próprio");
+  checar(/Não foi possível conferir as pendências/.test(blocosPainel) && /não conferido agora/.test(blocosPainel)
+    && /Não foi possível ler os documentos agora/.test(blocosPainel) && /sem o status “travado”/.test(blocosPainel),
+    "Painel: fila, 'O que chegou' e 'Seus mandatos' dizem a falha da própria leitura (não viram vazio)");
+  checar(/<Suspense fallback=\{null\}>\s*<AvisosDoPainel \/>/.test(paginaPainel)
+    && /<EsqueletoDaGrade \/>/.test(paginaPainel),
+    "Painel: o aviso de leitura não reserva espaço, mas os blocos abaixo continuam com cara de carregando até chegarem");
 }
 
 if (falhas.length > 0) {

@@ -523,6 +523,49 @@ body {
   .intro-sai { animation: oria-sai 520ms ease-in both; }
 }
 
+/* SKELETON REVEAL (transitions.dev, 14-skeleton-reveal; só o trecho usado). O esqueleto de um bloco
+   que chega por streaming (`components/revelar.tsx`) sai e o conteúdo entra em cross-fade com
+   cross-blur. Tokens de movimento copiados do `_root.css` da skill: `--duration-slow` 400ms,
+   `--ease-in-out`, `--blur-small` 2px.
+   O ESTADO BASE É O FINAL (conteúdo visível, cópia do esqueleto transparente): a animação parte de
+   "escondido" até o base, então, se ela não rodar, nada fica invisível. */
+:root {
+  --duration-slow: 400ms;
+  --ease-in-out: ease-in-out;
+  --blur-small: 2px;
+}
+
+@keyframes t-skel-in {
+  from { opacity: 0; filter: blur(var(--blur-small)); }
+  to   { opacity: 1; filter: blur(0); }
+}
+
+@keyframes t-skel-out {
+  from { opacity: 1; filter: blur(0); }
+  to   { opacity: 0; filter: blur(var(--blur-small)); }
+}
+
+.t-skel { position: relative; }
+/* Bloco que chegou SEM conteúdo (ex.: não há fato material) não ocupa lugar — nem o espaço entre
+   irmãos que o `space-y-*` do pai reservaria. Só vale para o que o componente devolveu vazio, nunca
+   para um bloco ainda carregando (esse é o esqueleto, com forma e `role="status"`). */
+.t-skel:has(> .t-skel-content:empty) { display: none; }
+.t-skel-content { animation: t-skel-in var(--duration-slow) var(--ease-in-out); }
+.t-skel-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  animation: t-skel-out var(--duration-slow) var(--ease-in-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .t-skel-content { animation: none !important; }
+  .t-skel-ghost { display: none !important; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .surgir,
   .intro-marca,
