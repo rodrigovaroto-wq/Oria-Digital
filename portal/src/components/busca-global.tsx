@@ -198,11 +198,11 @@ export function BuscaGlobal() {
         onClick={(e) => { origem.current = e.currentTarget; setAberto(true); }}
         aria-haspopup="dialog"
         aria-keyshortcuts="Control+K Meta+K"
-        className="hidden items-center gap-2 rounded-full py-1.5 pl-2.5 pr-2 text-sm text-vidro-suave sm:flex transition-colors hover:bg-white/10 hover:text-vidro-texto"
+        className="hidden items-center gap-2 rounded-full py-1.5 pl-2.5 pr-2 text-sm text-tinta-500 sm:flex transition-colors hover:bg-tinta-100 hover:text-tinta-900"
       >
         <IconeBusca tamanho={16} />
         <span>Buscar</span>
-        <kbd className="hidden rounded border border-white/20 px-1.5 text-[11px] font-sans sm:inline">
+        <kbd className="hidden rounded border border-tinta-300 px-1.5 text-[11px] font-sans sm:inline">
           {mac ? "⌘K" : "Ctrl K"}
         </kbd>
       </button>

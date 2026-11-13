@@ -44,8 +44,10 @@
  *     documento que não está na ordem.
  */
 
+import { lerInformacaoDoKit } from "../src/lib/apresentacao/montar-base.ts";
 import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../src/lib/kit-basico.ts";
 import { proximoPasso, type EntradaProximoPasso } from "../src/lib/proximo-passo.ts";
+import { servicoDocumentoServeComo } from "../src/lib/supabase/servico-serve-como.ts";
 import { vizinhosNaOrdem } from "../src/lib/vizinhos-na-ordem.ts";
 import { montarEmailAoCliente, listaNumerada, linkMailto, resumoDoLote, assuntoDoEmail, textoDoItem, perguntasForaDoTexto, type PerguntaParaEmail } from "../src/lib/email-ao-cliente.ts";
 import { BOTOES_DECISAO, exigeConfirmacao } from "../src/lib/pendencia.ts";
@@ -89,10 +91,9 @@ function documento(id: string, tipo_taxonomia: string | null): Pick<Documento, "
 // nunca reimplementa `fn_documento_de_varias_empresas` em TypeScript. Cada
 // entrada é um fato medido do lote 7377, não uma regra derivada.
 function bancoComEstrutura(estruturais: Set<string>): ServicoDocumentoServeComo {
-  return async (documentoId, tipoTaxonomia) => {
-    if (tipoTaxonomia === "COMBINADO" && estruturais.has(documentoId)) return true;
-    return false;
-  };
+  // Em lote (0276): "algum destes documentos serve?" — bool_or sobre o array, como o SQL.
+  return async (documentoIds, tipoTaxonomia) =>
+    tipoTaxonomia === "COMBINADO" && documentoIds.some((id) => estruturais.has(id));
 }
 
 const bancoSemChamadaEsperada: ServicoDocumentoServeComo = async () => {
@@ -154,6 +155,111 @@ console.log("--- 4. banco sem a 0157 (RPC devolve erro, tratado como `false` por
   ok(!atendidos.has("COMBINADO"),
     "sem a 0157 aplicada, COMBINADO continua faltante — o mesmo comportamento de ANTES da migration, "
     + "nunca 'atendido' inventado pelo portal");
+}
+
+console.log("--- 4b. UMA pergunta por item faltante, com todos os documentos (não uma por documento) ---");
+{
+  const documentos = Array.from({ length: 115 }, (_, i) => documento(`doc-${i}`, "BALANCO"));
+  const perguntas: Array<{ n: number; tipo: string }> = [];
+  const atendidos = await itensDoKitBasicoAtendidos(kitBasico, documentos, async (ids, tipo) => {
+    perguntas.push({ n: ids.length, tipo });
+    return false;
+  });
+  ok(perguntas.length === 2 && perguntas.every((p) => p.n === 115),
+    "115 documentos x 2 itens faltantes = 2 perguntas de 115 documentos (eram 230 chamadas)", JSON.stringify(perguntas));
+  ok(!atendidos.has("DRE") && !atendidos.has("COMBINADO"), "sem documento que sirva, os dois itens seguem faltantes");
+  let chamou = false;
+  await itensDoKitBasicoAtendidos(kitBasico, [], async () => { chamou = true; return true; });
+  ok(!chamou, "sem documento nenhum não se pergunta nada ao banco");
+}
+
+console.log("--- 4c. falha do banco LANÇA — nunca vira 'item não atendido' ---");
+{
+  let lancou = false;
+  try {
+    await itensDoKitBasicoAtendidos(kitBasico, [documento("doc-13", "BALANCO")], async () => { throw new Error("statement timeout"); });
+  } catch { lancou = true; }
+  ok(lancou, "timeout do banco propaga: a tela mostra o Kit como NÃO LIDO em vez de item faltante");
+}
+
+console.log("--- 4d. o serviço do portal: lote, queda para o laço sem a 0276, erro lança ---");
+{
+  type Resp = { data: unknown; error: { code?: string; message: string } | null };
+  const AUSENTE: Resp = { data: null, error: { code: "PGRST202", message: "função ausente" } };
+  const TIMEOUT: Resp = { data: null, error: { code: "57014", message: "statement timeout" } };
+  const falso = (resp: Record<string, (args: Record<string, unknown>) => Resp>) => {
+    const chamadas: string[] = [];
+    return { chamadas, rpc: (nome: string, args: Record<string, unknown>) => { chamadas.push(nome); return Promise.resolve(resp[nome](args)); } };
+  };
+  const servico = (f: ReturnType<typeof falso>) => servicoDocumentoServeComo(f as never);
+  const ids = ["a", "b", "c"];
+
+  const lote = falso({ fn_algum_documento_serve_como: () => ({ data: true, error: null }), fn_documento_serve_como: () => AUSENTE });
+  ok(await servico(lote)(ids, "COMBINADO") === true && lote.chamadas.join() === "fn_algum_documento_serve_como",
+    "com a 0276: UMA RPC em lote, sem laço", lote.chamadas.join());
+
+  const laco = falso({ fn_algum_documento_serve_como: () => AUSENTE,
+    fn_documento_serve_como: (a) => ({ data: a.p_documento_id === "b", error: null }) });
+  ok(await servico(laco)(ids, "COMBINADO") === true && laco.chamadas.length === 4,
+    "sem a 0276: cai no laço por documento da 0157 e acha o que serve", laco.chamadas.join());
+
+  const semTudo = falso({ fn_algum_documento_serve_como: () => AUSENTE, fn_documento_serve_como: () => AUSENTE });
+  ok(await servico(semTudo)(ids, "COMBINADO") === false, "sem a 0276 e sem a 0157: só o rótulo conta (false)");
+
+  const lancaLote = falso({ fn_algum_documento_serve_como: () => TIMEOUT, fn_documento_serve_como: () => ({ data: true, error: null }) });
+  let l1 = false;
+  try { await servico(lancaLote)(ids, "COMBINADO"); } catch { l1 = true; }
+  ok(l1 && lancaLote.chamadas.length === 1, "timeout do lote LANÇA e não cai no laço mais pesado", lancaLote.chamadas.join());
+
+  const lancaLaco = falso({ fn_algum_documento_serve_como: () => AUSENTE, fn_documento_serve_como: () => TIMEOUT });
+  let l2 = false;
+  try { await servico(lancaLaco)(ids, "COMBINADO"); } catch { l2 = true; }
+  ok(l2, "timeout no laço de reserva LANÇA — nunca 'não atende'");
+}
+
+console.log("--- 4e. nenhuma tela monta o próprio serviço do Kit (o do export engolia erro como 'não atende') ---");
+{
+  // LIMITE: esta varredura só pega quem chama a RPC direto fora do serviço. Reversão sutil (um
+  // `.catch(() => false)` no serviço, `new Set()` no catch da rota) NÃO é pega aqui: isso é o que o 4f
+  // prova em COMPORTAMENTO, pela função pura que a rota usa. A rota em si não roda neste CI (regra 4).
+  const fora: string[] = [];
+  const andar2 = (d: string) => {
+    for (const e of readdirSync(d, { withFileTypes: true })) {
+      const c = join(d, e.name);
+      if (e.isDirectory()) andar2(c);
+      else if (/\.tsx?$/.test(c) && !c.endsWith("supabase/servico-serve-como.ts")
+        && readFileSync(c, "utf8").split("\n").some((l) => !/^\s*(\*|\/\/)/.test(l)
+          && /rpc\(\s*["']fn_(algum_)?documento_serve_como["']/.test(l))) fora.push(c.split("/src/")[1]);
+    }
+  };
+  andar2(new URL("../src", import.meta.url).pathname);
+  ok(fora.length === 0, "só servico-serve-como.ts chama fn_documento_serve_como / fn_algum_documento_serve_como", fora.join(" | "));
+  const rota = readFileSync(new URL("../src/app/casos/[id]/export/route.ts", import.meta.url), "utf8");
+  ok(/servicoDocumentoServeComo\(supabase\)/.test(rota), "a rota de export usa o serviço único das telas");
+}
+
+console.log("--- 4f. o Kit do export: leitura que falha é 'não lido', nunca 'não recebido' nem 'recebido' ---");
+{
+  const kit = { data: [{ codigo: "BALANCO", documento: "Balanço" }, { codigo: "DRE", documento: "DRE" }, { codigo: "COMBINADO", documento: "Combinado" }], error: null };
+  const docs = [{ id: "d1", tipo_taxonomia: "BALANCO" }, { id: "d2", tipo_taxonomia: "DRE" }];
+  const checkOk = { data: [{ tipo_taxonomia: "DRE", status: "recebido_nao_valido" }], error: null };
+  const checkErro = { data: null, error: { message: "RLS" } };
+  const serv: ServicoDocumentoServeComo = async () => false;
+  const lanca: ServicoDocumentoServeComo = async () => { throw new Error("statement timeout"); };
+  const st = (r: Awaited<ReturnType<typeof lerInformacaoDoKit>>) => (r.informacao ?? []).map((i) => `${i.codigo}:${i.status}`).join();
+
+  const feliz = await lerInformacaoDoKit({ kit, checklist: checkOk, documentos: docs, servico: serv });
+  ok(st(feliz) === "BALANCO:recebido,DRE:sem_conteudo,COMBINADO:faltante" && !feliz.kitNaoConferido,
+    "(c)(d) caminho feliz: recebido, chegou sem conteúdo (recebido_nao_valido continua assim) e faltante", st(feliz));
+
+  const a = await lerInformacaoDoKit({ kit, checklist: checkOk, documentos: docs, servico: lanca });
+  ok(a.informacao === undefined && a.kitNaoConferido, "(a) serviço que lança: Kit não conferido, sem informação — nunca 'não recebido'", st(a));
+
+  const b = await lerInformacaoDoKit({ kit, checklist: checkErro, documentos: docs, servico: serv });
+  ok(b.informacao === undefined && b.kitNaoConferido, "(b) checklist com erro: Kit não conferido — recebido_nao_valido não vira 'recebido'", st(b));
+
+  const c = await lerInformacaoDoKit({ kit: { data: null, error: { message: "x" } }, checklist: checkOk, documentos: docs, servico: serv });
+  ok(c.informacao === undefined && !c.kitNaoConferido && Boolean(c.motivo), "lista do kit não lida: indefinida e distinta de 'não conferido'");
 }
 
 // Tudo "certo" por padrão; cada caso muda SÓ o que o caso afirma. O padrão é o caso aprovado

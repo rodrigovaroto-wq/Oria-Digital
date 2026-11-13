@@ -71,10 +71,10 @@ export function BotaoDiscricao() {
       aria-pressed={ligada}
       aria-label="Modo discrição"
       title="Modo discrição: borra os valores na tela, para usar o portal diante de outras pessoas"
-      className={`flex items-center gap-2 rounded-full py-1.5 pl-2.5 pr-2.5 text-sm transition-colors hover:bg-white/10 ${
+      className={`flex items-center gap-2 rounded-full py-1.5 pl-2.5 pr-2.5 text-sm transition-colors hover:bg-tinta-100 ${
         ligada
-          ? "bg-white/10 text-vidro-texto shadow-[inset_0_0_0_1px_var(--color-vidro-terracota)]"
-          : "text-vidro-suave hover:text-vidro-texto"
+          ? "bg-tinta-100 text-tinta-900 shadow-[inset_0_0_0_1px_var(--color-acento-600)]"
+          : "text-tinta-500 hover:text-tinta-900"
       }`}
     >
       <IconeOlhoRiscado tamanho={16} />

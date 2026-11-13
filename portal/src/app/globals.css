@@ -1,50 +1,30 @@
 @import "tailwindcss";
 
 /* =============================================================================
-   A CARA DA ORIA NA TELA.
+   A CARA DO PORTAL: direção A, "Cobalto noturno" (escolhida pelo dono, 13/11/2026).
+   Maquete e tokens: Arquitetura do Sistema/7 Marca/redesenho-2026-11/maquete-direcoes.html (.dir-a).
 
-   POR QUE ESTE ARQUIVO MUDOU DE MUNDO. Até aqui o portal usava a paleta `slate`
-   do Tailwind com um acento ciano — cores derivadas do ENTREGÁVEL em Excel
-   (`src/lib/oria-marca.ts`), que por sua vez foram derivadas do modelo
-   institucional. Só que a Oria tem uma identidade própria, viva em produção em
-   oriapartners.com, e o portal não se parecia com ela. Eram dois produtos com
-   caras diferentes saindo da mesma casa, e o que o cliente vê primeiro — a tela
-   — era o que parecia menos acabado.
+   OS NOMES DOS TOKENS FICARAM, OS VALORES MUDARAM. Antes o mundo era papel creme, tinta
+   quente e acento terracota; reescrever cada tela para trocar de paleta seria ruído. Então
+   `papel` é a mesa (--bg #eef0f3), `folha` a superfície que recebe dado (--surface #fff),
+   `tinta-900` o texto (--ink #0b0c0e), `tinta-500` o secundário (--muted #5d6470),
+   `tinta-200` o fio (--line #dfe2e8). Único renome: `vidro-terracota` virou
+   `vidro-acento` (o destaque do casco não é mais terracota) e entrou `vidro-acao`.
 
-   Os valores abaixo foram MEDIDOS no site em produção (`assets/index-*.css`,
-   tokens `--background`, `--foreground`, `--accent`, `--border`), convertidos de
-   HSL para hex:
+   REGRA DE COR, e ela vale mais que o gosto: A COR INDICA ESTADO E SÓ ESTADO.
+     risco  = trava       alerta = confirmar / pendente       ok = pronto
+     acento (cobalto #1f2de6) = AÇÃO e FOCO, nunca estado
+     info   = nota do sistema e origem "lido do documento"; serie = origem "calculado"
+   Cor nunca carrega significado sozinha: todo estado é cor MAIS texto.
 
-     papel      #F6F4EF   hsl(44 27% 95%)   fundo do site
-     tinta      #11161D   hsl(213 26% 9%)   texto e AÇÃO PRIMÁRIA (é o
-                                            `--primary` do próprio site)
-     acento     #B6482F   hsl(11 59% 45%)   terracota
-     linha      #D2CDC1   hsl(44 16% 79%)   fio/borda
+   CONTRASTE (WCAG 2.x, medido pelos valores deste arquivo): o pior par de texto no claro
+   é `alerta-700` sobre `alerta-50`; os pares do modo escuro são reprovados por
+   `verificar-mensagem-de-falha.mts` (seção CASCO) se caírem de AA. O `--alerta` da maquete
+   (#c27c0e) dá só 3,2:1 como TEXTO sobre o fundo suave dela: aqui ele é `alerta-500`
+   (ponto, barra), e o texto de chip usa `alerta-700`/`-800`.
 
-   A DECISÃO QUE ESTE ARQUIVO NÃO TOMA SOZINHO, e que antes ele afirmava: o
-   Excel NÃO acompanha. `oria-marca.ts` continua grafite + ciano, de propósito.
-   Modelo de crédito é lido em impressão preto e branco por comitê, e a gramática
-   de cor de fonte de lá (azul = digitado, preto = calculado, verde = outra aba)
-   é convenção de mercado que um analista lê sem legenda. Tela e papel de comitê
-   são meios diferentes com leitores diferentes; divergir aqui é decisão, não
-   dívida. Mudar cor de marca NÃO é mais mudar nos dois lugares.
-
-   O QUE O SITE FAZ E NÃO PODE SER COPIADO PARA CÁ. No site, `--accent` e
-   `--destructive` são a MESMA cor. Numa página de marketing isso passa; num
-   portal que tem "excluir mandato" não passa — a cor da marca não pode ser a
-   cor do perigo. Então o terracota ficou com IDENTIDADE (seleção, foco, item
-   ativo, links) e o risco ganhou um oxblood próprio, #78223A na faixa 700, a
-   28° de matiz do acento e mais escuro que ele.
-
-   REGRA HERDADA DO ENTREGÁVEL, e ela vale mais na tela do que no papel: cor
-   nunca carrega significado sozinha. Todo estado aqui é cor MAIS texto (o chip
-   diz "faltante", não é só âmbar) — é o que mantém a tela legível para quem não
-   distingue verde de vermelho, que é 8% dos homens que vão abrir este portal.
-
-   As rampas de estado foram geradas com saturação alta nas faixas claras, de
-   propósito: sobre creme, um tom claro pouco saturado vira o próprio papel e o
-   chip some. Todos os pares texto/preenchimento usados no código foram medidos
-   e passam AA (o pior é 5,39:1, em `alerta-700` sobre `alerta-50`).
+   O Excel NÃO acompanha (`oria-marca.ts` segue grafite + ciano, de propósito): modelo de
+   crédito é lido em impressão preto e branco por comitê.
    ============================================================================ */
 
 @theme {
@@ -54,8 +34,8 @@
      mata-borrão. `tinta-50` é a faixa de navegação, um passo mais funda.
      Nenhuma delas é branco: branco puro ao lado de creme lê como papel de
      outro lote. */
-  --color-papel: #f6f4ef;
-  --color-folha: #fcfbf8;
+  --color-papel: #eef0f3;
+  --color-folha: #ffffff;
 
   /* --- vidro (decisão do dono, 28/10/2026) ---------------------------------
      As cores de TEXTO e de realce sobre o casco escuro (barra lateral, barra
@@ -63,15 +43,16 @@
      secundário ali: ver a medição em DESIGN.md, "Vidro e imagem de fundo".
      `fundo-reserva` é o que o `body` pinta ANTES da imagem chegar — creme
      piscando e virando foto escura é pior do que escuro virando foto escura. */
-  --color-vidro-texto: #ece8df;
-  --color-vidro-suave: #a39d92;
-  --color-vidro-terracota: #e8937c;
-  --color-fundo-reserva: #0d0f13;
+  --color-vidro-texto: #e9edf3;
+  --color-vidro-suave: #8891a1;
+  --color-vidro-acento: #8c9bff;
+  --color-vidro-acao: #1f2de6;
+  --color-fundo-reserva: #070a12;
   /* Tinta e papel SOBRE o vidro: no modo escuro `tinta-900` e `papel` trocam de
      lado, mas o botão creme do casco (`bg-vidro-texto`) continua creme — o texto
      dele não pode seguir a troca. Fixos, fora do bloco escuro. */
-  --color-vidro-tinta: #11161d;
-  --color-vidro-papel: #f6f4ef;
+  --color-vidro-tinta: #0b0c0e;
+  --color-vidro-papel: #eef0f3;
 
   /* --- tinta ---------------------------------------------------------------
      A rampa sai do `--foreground` do site (#11161D) e desce em direção ao
@@ -84,24 +65,24 @@
      JÁ os usava — barra lateral, borda de input, ponto de severidade
      `complementar` — contra um tema que nunca os declarou. Classe sem token
      não gera regra: esses elementos vinham renderizando sem a cor pedida. */
-  --color-tinta-900: #11161d;
-  --color-tinta-800: #1e242c;
-  --color-tinta-700: #2c323a;
-  --color-tinta-600: #3a4048;
-  --color-tinta-500: #6e6a62;
-  --color-tinta-400: #847f77;
-  --color-tinta-300: #bdb7ab;
-  --color-tinta-200: #d2cdc1;
-  --color-tinta-100: #e7e2d8;
-  --color-tinta-50: #f1eee6;
+  --color-tinta-900: #0b0c0e;
+  --color-tinta-800: #1c2029;
+  --color-tinta-700: #2f3540;
+  --color-tinta-600: #444b57;
+  --color-tinta-500: #5d6470;
+  --color-tinta-400: #6f7786;
+  --color-tinta-300: #b7bdc8;
+  --color-tinta-200: #dfe2e8;
+  --color-tinta-100: #e8ebf0;
+  --color-tinta-50: #f6f7f9;
 
   /* --- acento: identidade, nunca alarme ------------------------------------
      Seleção corrente, foco, item ativo da navegação, link. NÃO é a cor de
      ação primária: essa é a tinta, exatamente como no site. */
-  --color-acento-700: #93381f;
-  --color-acento-600: #b6482f;
-  --color-acento-100: #f2ddd6;
-  --color-acento-50: #f9eeea;
+  --color-acento-700: #1722b8;
+  --color-acento-600: #1f2de6;
+  --color-acento-100: #e6e8fd;
+  --color-acento-50: #f1f2fe;
 
   /* --- estados -------------------------------------------------------------
      risco   = divergência, bloqueio, erro, ação destrutiva
@@ -109,35 +90,35 @@
      ok      = conferido, aceito, completo
      info    = nota do sistema, subtotal (não é bom nem ruim)
      serie   = categoria de linha derivada/série (taxonomia, não estado) */
-  --color-risco-50: #f3e7ea;
-  --color-risco-100: #eed3db;
-  --color-risco-200: #e0aebc;
-  --color-risco-300: #d08097;
-  --color-risco-500: #b73459;
-  --color-risco-600: #972b49;
-  --color-risco-700: #78223a;
-  --color-risco-800: #671d32;
-  --color-risco-900: #541829;
+  --color-risco-50: #fbe7ea;
+  --color-risco-100: #f6d3d9;
+  --color-risco-200: #ebabb6;
+  --color-risco-300: #de7c8d;
+  --color-risco-500: #d1344d;
+  --color-risco-600: #b82a41;
+  --color-risco-700: #9b2236;
+  --color-risco-800: #7f1c2d;
+  --color-risco-900: #621623;
 
-  --color-alerta-50: #f4efe6;
-  --color-alerta-100: #efe4d2;
-  --color-alerta-200: #e3cdab;
-  --color-alerta-300: #d5b37c;
-  --color-alerta-500: #be862d;
-  --color-alerta-600: #9d6f25;
-  --color-alerta-700: #805a1e;
-  --color-alerta-800: #6b4c19;
-  --color-alerta-900: #573d14;
+  --color-alerta-50: #fbf0dc;
+  --color-alerta-100: #f6e3bd;
+  --color-alerta-200: #ecd09a;
+  --color-alerta-300: #deb066;
+  --color-alerta-500: #c27c0e;
+  --color-alerta-600: #a3660b;
+  --color-alerta-700: #7f4f08;
+  --color-alerta-800: #6a4107;
+  --color-alerta-900: #543406;
 
-  --color-ok-50: #eaf0ea;
-  --color-ok-100: #dae7db;
-  --color-ok-200: #bbd3bc;
-  --color-ok-300: #96bb97;
-  --color-ok-500: #579459;
-  --color-ok-600: #487a49;
-  --color-ok-700: #3a643c;
-  --color-ok-800: #315432;
-  --color-ok-900: #284329;
+  --color-ok-50: #e1f3ea;
+  --color-ok-100: #cdeadb;
+  --color-ok-200: #a8d9c0;
+  --color-ok-300: #78c09d;
+  --color-ok-500: #13875a;
+  --color-ok-600: #0f7249;
+  --color-ok-700: #0d5f3d;
+  --color-ok-800: #0a4d32;
+  --color-ok-900: #083c27;
 
   --color-info-50: #e9eff2;
   --color-info-100: #d7e4ea;
@@ -173,7 +154,7 @@
      proveniência. Mono como fantasia de "técnico" em texto corrido é costume,
      não tipografia. */
   --font-texto: var(--fonte-texto), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-titulo: var(--fonte-titulo), ui-serif, Georgia, "Times New Roman", serif;
+  --font-titulo: var(--fonte-texto), ui-sans-serif, system-ui, sans-serif;
   --font-dado: var(--fonte-dado), ui-monospace, "SF Mono", "Cascadia Mono", monospace;
 }
 
@@ -183,6 +164,11 @@
    no celular, com o botão de salvar coberto. Vale só abaixo de `sm` (a barra some a partir dele). */
 :root {
   --altura-barra-inferior: calc(4rem + max(0.75rem, env(safe-area-inset-bottom)));
+  /* Tokens de movimento do SKELETON REVEAL (mais abaixo), copiados do `_root.css` da skill
+     transitions.dev: `--duration-slow` 400ms, `--ease-in-out`, `--blur-small` 2px. */
+  --duration-slow: 400ms;
+  --ease-in-out: ease-in-out;
+  --blur-small: 2px;
 }
 
 :root {
@@ -190,28 +176,44 @@
      social. Elevação demais compete com o número. Agora tingidas da tinta
      (#11161D) em vez do slate antigo — sombra cinza sobre creme lê como
      sujeira. */
-  --sombra-carta: 0 1px 2px 0 rgb(17 22 29 / 0.05), 0 1px 3px 0 rgb(17 22 29 / 0.07);
-  --sombra-topo: 0 1px 0 0 rgb(17 22 29 / 0.07);
+  --sombra-carta: 0 1px 2px 0 rgb(11 12 14 / 0.04);
+  --sombra-topo: 0 1px 0 0 rgb(11 12 14 / 0.07);
 
   /* O VIDRO, em um lugar só (regra 8 do pedido do dono): quem precisar de outra
      opacidade muda aqui, e as três mídias de fallback ao fim do arquivo
      redefinem estes mesmos valores — nenhum arquivo .tsx repete um rgba. */
   /* 0,64 e não 0,58: com o pixel MAIS CLARO da foto (255,255,236) sob o véu
      de 0,62, 0,58 dá 4,38:1 para `vidro-suave` (abaixo de AA); 0,64 dá 4,71:1. */
-  --vidro-casco-fundo: rgb(18 21 27 / 0.64);
-  --vidro-casco-denso: rgb(18 21 27 / 0.8);
-  --vidro-casco-borda: rgb(255 255 255 / 0.09);
-  --vidro-casco-filtro: blur(18px) saturate(140%);
   /* 0,94 e não 0,92: medido, `tinta-500` sobre a folha a 0,92 com a foto PRETA
      atrás dá 4,37:1 (abaixo de AA); a 0,94 dá 4,57:1. A foto é escura na
      maior parte, então o pior caso é o caso comum. */
-  --vidro-folha-fundo: rgb(252 251 248 / 0.94);
+  --vidro-folha-fundo: rgb(255 255 255 / 0.94);
   --vidro-folha-borda: rgb(255 255 255 / 0.55);
-  --vidro-sombra: 0 8px 32px 0 rgb(0 0 0 / 0.28);
+  --vidro-sombra: none;
   /* O NEON DA PLACA. O sextante original é azul-marinho de traço escuro — igual
      à placa da foto, onde o que o faz aparecer é a LUZ AZUL POR TRÁS. Um brilho
      só de 6px quase sumia no vidro escuro; três camadas (núcleo, halo, aura)
      reproduzem a luz de fundo da placa sem tocar na arte, que segue intacta. */
+  /* O CARTÃO FLUTUANTE (13/11/2026): vidro fosco sobre o mármore. Tema claro: branco-pérola a 82%, borda
+     branca, sombra dupla (curta e longa) e filete interno de 1px no topo; sem gradiente nem brilho; o contraste do texto é medido sobre o PIOR pixel do mármore
+     (`--marmore-pior`, o mais escuro do claro e o mais claro do escuro) por verificar-mensagem-de-falha.mts. */
+  --cartao-fundo: rgb(251 251 253 / 0.82);
+  --cartao-borda: rgb(255 255 255 / 0.95);
+  --cartao-sombra: inset 0 1px 0 rgb(255 255 255 / 0.9), 0 1px 3px rgb(15 23 42 / 0.16), 0 20px 44px -12px rgb(15 23 42 / 0.34);
+  --cartao-filtro: blur(20px) saturate(0.8);
+  --marmore-pior: #c4c9d4;
+  --marmore-tamanho-veios: 240px 240px, 1100px 1100px, 1500px 1500px;
+  /* O MÁRMORE CLARO: branco e cinza-pérola. Camadas, de cima para baixo: luz no canto, sombra suave no
+     canto oposto, grão fino (240px), dois veios de ruído SVG em escalas diferentes (1100px e 1500px, para
+     o ladrilho não repetir à vista) e o degradê-base. Tudo num `url(data:)` de ~0,6 KB cada: sem imagem. */
+  --marmore-base:
+    radial-gradient(1100px 620px at 8% -8%, rgb(255 255 255 / .85), transparent 62%),
+    radial-gradient(900px 600px at 100% 100%, rgb(190 197 210 / .45), transparent 66%),
+    linear-gradient(180deg,#f3f4f7,#e4e7ec);
+  --marmore-veios:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .8 0 0 0 0 .84 0 0 0 0 .9 0 0 0 0.05 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m' x='0' y='0' width='100%' height='100%'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.0055 0.010' numOctaves='4' seed='11' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' values='0 0 0 0 0.45 0 0 0 0 0.49 0 0 0 0 0.58 -1.2 0 0 0 0.26'/%3E%3C/filter%3E%3Crect width='900' height='900' filter='url(%23m)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m' x='0' y='0' width='100%' height='100%'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.011 0.0065' numOctaves='4' seed='29' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' values='0 0 0 0 0.6 0 0 0 0 0.64 0 0 0 0 0.72 -1.1 0 0 0 0.2'/%3E%3C/filter%3E%3Crect width='900' height='900' filter='url(%23m)'/%3E%3C/svg%3E");
   --marca-neon: drop-shadow(0 0 1.5px rgb(150 180 255 / 0.95))
     drop-shadow(0 0 6px rgb(77 124 255 / 0.9)) drop-shadow(0 0 16px rgb(77 124 255 / 0.55));
 }
@@ -246,24 +248,24 @@
   html[data-tema="escuro"] {
     color-scheme: dark;
 
-    --color-papel: #14181e;
-    --color-folha: #1a1f26;
+    --color-papel: #0e1118;
+    --color-folha: #151a24;
 
-    --color-tinta-900: #ece8df;
-    --color-tinta-800: #dcd7cc;
-    --color-tinta-700: #cdc8bc;
-    --color-tinta-600: #b8b2a6;
-    --color-tinta-500: #a39d92;
-    --color-tinta-400: #7d8590;
-    --color-tinta-300: #48515d;
-    --color-tinta-200: #373f4a;
-    --color-tinta-100: #29303a;
-    --color-tinta-50: #20262e;
+    --color-tinta-900: #e9edf3;
+    --color-tinta-800: #d6dbe4;
+    --color-tinta-700: #c3c9d4;
+    --color-tinta-600: #aab2bf;
+    --color-tinta-500: #8f98a8;
+    --color-tinta-400: #8791a2;
+    --color-tinta-300: #3d4556;
+    --color-tinta-200: #2c3444;
+    --color-tinta-100: #232a38;
+    --color-tinta-50: #1b212d;
 
-    --color-acento-700: #f0a38d;
-    --color-acento-600: #e8937c;
-    --color-acento-100: #4a2a22;
-    --color-acento-50: #34231f;
+    --color-acento-700: #b3bbff;
+    --color-acento-600: #8c9bff;
+    --color-acento-100: #1e2552;
+    --color-acento-50: #171c3f;
 
     --color-risco-50: #30121a;
     --color-risco-100: #3f1822;
@@ -317,7 +319,21 @@
 
     /* A folha escura: mesmo 0,94 do claro (a foto aparece ao redor e só de leve
        por baixo), tingida da tinta e não do preto. A borda vira um fio claro. */
-    --vidro-folha-fundo: rgb(26 31 38 / 0.94);
+    --cartao-fundo: rgb(31 35 44 / 0.78);
+    --cartao-borda: rgb(255 255 255 / 0.16);
+    --cartao-sombra: inset 0 1px 0 rgb(255 255 255 / 0.1), 0 1px 3px rgb(0 0 0 / 0.6), 0 22px 48px -12px rgb(0 0 0 / 0.85);
+    --marmore-pior: #5a5f68;
+    /* O MÁRMORE ESCURO: preto metálico com veios em grafite e chumbo e um brilho frio no canto. */
+    --marmore-base:
+    radial-gradient(1100px 620px at 10% -6%, rgb(130 140 160 / .17), transparent 62%),
+    radial-gradient(900px 600px at 102% 104%, rgb(78 86 104 / .22), transparent 66%),
+    linear-gradient(112deg, transparent 36%, rgb(160 168 186 / .05) 38.5%, transparent 41%, transparent 63%, rgb(160 168 186 / .04) 64.5%, transparent 67%),
+    linear-gradient(180deg,#0c0d11,#050608);
+    --marmore-veios:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .8 0 0 0 0 .84 0 0 0 0 .9 0 0 0 0.07 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m' x='0' y='0' width='100%' height='100%'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.0055 0.010' numOctaves='4' seed='11' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' values='0 0 0 0 0.66 0 0 0 0 0.7 0 0 0 0 0.78 -1 0 0 0 0.2'/%3E%3C/filter%3E%3Crect width='900' height='900' filter='url(%23m)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='900'%3E%3Cfilter id='m' x='0' y='0' width='100%' height='100%'%3E%3CfeTurbulence type='turbulence' baseFrequency='0.011 0.0065' numOctaves='4' seed='29' stitchTiles='stitch' result='t'/%3E%3CfeColorMatrix in='t' values='0 0 0 0 0.5 0 0 0 0 0.54 0 0 0 0 0.62 -1 0 0 0 0.15'/%3E%3C/filter%3E%3Crect width='900' height='900' filter='url(%23m)'/%3E%3C/svg%3E");
+    --vidro-folha-fundo: rgb(21 26 36 / 0.94);
     --vidro-folha-borda: rgb(255 255 255 / 0.1);
     --sombra-carta: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 0 rgb(0 0 0 / 0.35);
     --sombra-topo: 0 1px 0 0 rgb(0 0 0 / 0.35);
@@ -329,12 +345,14 @@
      a folha translúcida no escuro, não a sólida. */
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     html[data-tema="escuro"] {
-      --vidro-folha-fundo: rgb(26 31 38 / 0.98);
+      --vidro-folha-fundo: rgb(21 26 36 / 0.98);
+      --cartao-fundo: rgb(22 25 33 / 0.94);
     }
   }
   @media (prefers-reduced-transparency: reduce) {
     html[data-tema="escuro"] {
-      --vidro-folha-fundo: #1a1f26;
+      --vidro-folha-fundo: #151a24;
+      --cartao-fundo: #161920;
     }
   }
 }
@@ -346,9 +364,8 @@ html {
 }
 
 body {
-  /* Escuro, não creme: o fundo da marca é uma foto escura e fica fixo atrás de
-     tudo (`FundoDaMarca`). Enquanto ela não chega, o que se vê é isto. */
-  background-color: var(--color-fundo-reserva);
+  /* A mesa do app (`papel`). O login e as telas de recuperação pintam o próprio fundo escuro. */
+  background-color: var(--color-papel);
   font-family: var(--font-texto);
   -webkit-font-smoothing: antialiased;
 }
@@ -400,9 +417,36 @@ body {
 
 @layer components {
   /* --- superfícies --------------------------------------------------------- */
-  .carta {
-    @apply rounded-lg border border-tinta-200 bg-folha;
-    box-shadow: var(--sombra-carta);
+  /* O CARTÃO FLUTUANTE: fosco, de cantos de 14px, com anel e sombra. O desfoque mora num `::before`, e
+     não no cartão: `backdrop-filter` no próprio elemento o torna o bloco de contenção dos descendentes
+     `position: fixed`, e os diálogos de Excluir/Fechar e o "Tudo pronto" do envio moram dentro de
+     cartões (o defeito do PR #265, que obrigou a folha antiga a abrir mão do filtro). No `::before` o
+     filtro age só sobre o que está atrás dele. `position` fica relativo, mas `sticky`/`fixed` de
+     utilitário vencem (esta camada é a de baixo). */
+  .carta,
+  .cartao-vidro {
+    position: relative;
+    isolation: isolate;
+    border-radius: 14px;
+    border: 1px solid var(--cartao-borda);
+    background-color: var(--cartao-fundo);
+    box-shadow: var(--cartao-sombra);
+  }
+  .carta::before,
+  .cartao-vidro::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    /* O DESFOQUE SÓ LIGA DEPOIS DO PRIMEIRO QUADRO: `from` (antes do atraso) é sem filtro. Medido (mesma
+       página, headless, sem GPU): o desfoque dos cartões custava ~250 ms de FCP (564 → 312 ms sem ele). O
+       cartão já tem 78 a 82% de opacidade sobre um fundo de baixo contraste, então o quadro sem desfoque é
+       indistinguível; 300 ms depois o vidro fosco entra. Sem animação, o estado base (com filtro) vale. */
+    -webkit-backdrop-filter: var(--cartao-filtro);
+    backdrop-filter: var(--cartao-filtro);
+    animation: cartao-desfoca 1ms linear 300ms backwards;
   }
 
   /* --- ações --------------------------------------------------------------- */
@@ -438,20 +482,103 @@ body {
   }
 
   /* --- estrutura ----------------------------------------------------------- */
-  /* Título de seção: o mesmo tamanho e peso em todas as telas, com a contagem
-     em cinza ao lado. Antes cada seção escolhia o seu, e a página inteira
+  /* Título de seção (maquete: `.bloco-h h3`, 13px/600, em tinta e sem caixa alta): o mesmo
+     tamanho e peso em todas as telas, com a contagem em cinza ao lado. Antes cada seção escolhia o seu, e a página inteira
      parecia uma lista de coisas sem hierarquia. */
   .titulo-secao {
-    @apply text-[13px] font-semibold uppercase tracking-wide text-tinta-500;
+    @apply text-[13px] font-semibold tracking-[0.01em] text-tinta-900;
   }
 
   /* Indicador de topo: o número grande, o rótulo pequeno embaixo. */
   .indicador-valor {
-    @apply font-dado text-2xl font-semibold tabular-nums tracking-tight text-tinta-900;
+    @apply font-dado text-[28px] leading-9 font-medium tabular-nums tracking-[-0.02em] text-tinta-900;
   }
   .indicador-rotulo {
     @apply mt-0.5 text-xs text-tinta-500;
   }
+}
+
+/* =============================================================================
+   O FUNDO ÚNICO: MÁRMORE (13/11/2026). `fundo-marmore` está na raiz de `casos/layout.tsx`; o login e as
+   telas de recuperação de senha têm o fundo próprio e não passam por ele. É UM elemento `fixed` atrás de
+   tudo (`::before`, z-index -1 dentro do `isolation: isolate` da raiz): o navegador o compõe uma vez e a
+   rolagem não o repinta, ao contrário de `background-attachment: fixed` no `body`, que repinta a cada
+   quadro. Nada anima o fundo: o único movimento é a entrada única dos veios (fade). As camadas vêm de `--marmore-base` e `--marmore-veios` (por tema, no
+   `:root` e em `html[data-tema="escuro"]`); o peso é o do CSS, sem imagem.
+   ============================================================================ */
+.fundo-marmore {
+  position: relative;
+  isolation: isolate;
+}
+.fundo-marmore::before,
+.fundo-marmore::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+/* Base: só gradientes (luz, sombra, degradê); pinta já no primeiro quadro, sem filtro SVG. */
+.fundo-marmore::before { background: var(--marmore-base); }
+/* Veios e grão: três `url(data:)` com `feTurbulence`, que o navegador rasteriza por software e que custaram
+   ~150 ms no primeiro quadro (FCP 408 contra 564 ms medidos, mesma página, headless). Ficam `visibility:
+   hidden` até 250 ms (nada é pintado nem rasterizado) e entram em fade de 700 ms. Sem animação
+   (movimento reduzido), a regra de base já os mostra: o estado base é o final. */
+.fundo-marmore::after {
+  background: var(--marmore-veios);
+  background-size: var(--marmore-tamanho-veios);
+  animation: marmore-veios-entram 700ms ease-out 250ms both;
+}
+@keyframes cartao-desfoca {
+  from { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@keyframes marmore-veios-entram {
+  from { opacity: 0; visibility: hidden; }
+  1% { visibility: visible; }
+  to { opacity: 1; visibility: visible; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fundo-marmore::after { animation: none; }
+}
+@media print {
+  .fundo-marmore::before,
+  .fundo-marmore::after { display: none; }
+}
+
+/* A TROCA DE TEMA (botão da barra de topo): dois ícones empilhados, um cross-fade com giro e
+   desfoque curto (o padrão "icon swap" do transitions.dev, só o trecho usado). O estado base é o
+   FINAL: sem animação (movimento reduzido), o ícone certo está visível e o outro, transparente. */
+.troca-de-icone { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; }
+.troca-de-icone > svg {
+  grid-area: 1 / 1;
+  transition: opacity var(--duration-fast, 250ms) var(--ease-in-out), transform var(--duration-fast, 250ms) var(--ease-in-out),
+    filter var(--duration-fast, 250ms) var(--ease-in-out);
+}
+/* Escuro: mostra o SOL (o clique leva ao claro). Claro: mostra a LUA. */
+.troca-de-icone .icone-sol { opacity: 0; transform: rotate(-60deg) scale(0.6); filter: blur(2px); }
+.troca-de-icone .icone-lua { opacity: 1; transform: none; filter: none; }
+:root[data-tema="escuro"] .troca-de-icone .icone-sol { opacity: 1; transform: none; filter: none; }
+:root[data-tema="escuro"] .troca-de-icone .icone-lua { opacity: 0; transform: rotate(60deg) scale(0.6); filter: blur(2px); }
+@media (prefers-reduced-motion: reduce) {
+  .troca-de-icone > svg { transition: none; }
+}
+
+/* =============================================================================
+   TABELA DE DADOS E CHIPS DE ORIGEM (direção A). `th` em caixa alta pequena sobre `tinta-50`, célula
+   com fio embaixo, número em Geist Mono tabular. A linha inteira é o link (`<a>` cobrindo a célula do
+   nome, ver painel-blocos.tsx), então o hover vale para a linha toda.
+   ============================================================================ */
+@layer components {
+  .tabela-a { @apply w-full border-collapse text-sm; }
+  .tabela-a th {
+    background-color: color-mix(in oklab, var(--color-tinta-100) 55%, transparent);
+    @apply border-b border-tinta-200 px-4 py-2.5 text-left text-[11px] font-medium
+           uppercase tracking-[0.08em] text-tinta-500;
+  }
+  .tabela-a td { @apply border-b border-tinta-100 px-4 py-3 align-middle; }
+  .tabela-a tbody tr:last-child td { @apply border-b-0; }
+  .tabela-a tbody tr:hover td { background-color: color-mix(in oklab, var(--color-acento-100) 55%, transparent); }
+  .num { font-family: var(--font-dado); font-variant-numeric: tabular-nums; }
 }
 
 /* =============================================================================
@@ -523,6 +650,44 @@ body {
   .intro-sai { animation: oria-sai 520ms ease-in both; }
 }
 
+/* SKELETON REVEAL (transitions.dev, 14-skeleton-reveal; só o trecho usado). O esqueleto de um bloco
+   que chega por streaming (`components/revelar.tsx`) sai e o conteúdo entra em cross-fade com
+   cross-blur. Os tokens de movimento moram no `:root` do topo do arquivo.
+   O ESTADO BASE É O FINAL (conteúdo visível, cópia do esqueleto transparente): a animação parte de
+   "escondido" até o base, então, se ela não rodar, nada fica invisível. */
+@keyframes t-skel-in {
+  from { opacity: 0; filter: blur(var(--blur-small)); }
+  to   { opacity: 1; filter: blur(0); }
+}
+
+@keyframes t-skel-out {
+  from { opacity: 1; filter: blur(0); }
+  to   { opacity: 0; filter: blur(var(--blur-small)); }
+}
+
+.t-skel { position: relative; }
+/* Bloco que chegou SEM conteúdo (ex.: não há fato material) não ocupa lugar — nem o espaço entre
+   irmãos que o `space-y-*` do pai reservaria. Só vale para o que o componente devolveu vazio, nunca
+   para um bloco ainda carregando (esse é o esqueleto, com forma e `role="status"`). */
+.t-skel:has(> .t-skel-content:empty) { display: none; }
+.t-skel-content { animation: t-skel-in var(--duration-slow) var(--ease-in-out); }
+.t-skel-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  animation: t-skel-out var(--duration-slow) var(--ease-in-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Sem `!important`: estas regras vêm DEPOIS das de base e têm a mesma especificidade (uma classe),
+     então vencem pela ordem. */
+  .t-skel-content { animation: none; }
+  .t-skel-ghost { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .surgir,
   .intro-marca,
@@ -554,12 +719,9 @@ body {
    ============================================================================ */
 
 .vidro-casco {
-  background-color: var(--vidro-casco-fundo);
+  background-color: #0b0f1a; /* --nav-bg da maquete: cartões de recuperação de senha e 404 */
   color: var(--color-vidro-texto);
-  border: 1px solid var(--vidro-casco-borda);
-  -webkit-backdrop-filter: var(--vidro-casco-filtro);
-  backdrop-filter: var(--vidro-casco-filtro);
-  box-shadow: var(--vidro-sombra);
+  border: 1px solid rgb(255 255 255 / 0.06);
 }
 
 /* O CASCO NÃO ACOMPANHA O TEMA. O cartão do login pinta os avisos com
@@ -568,20 +730,18 @@ body {
    claro com texto escuro sobre o casco. Aqui elas voltam aos valores do claro, só
    dentro do casco (o teste confere que são idênticos aos do `@theme`). */
 .vidro-casco {
-  --color-alerta-100: #efe4d2;
-  --color-alerta-300: #d5b37c;
-  --color-alerta-900: #573d14;
-  --color-risco-100: #eed3db;
-  --color-risco-300: #d08097;
-  --color-risco-900: #541829;
+  --color-alerta-100: #f6e3bd;
+  --color-alerta-300: #deb066;
+  --color-alerta-900: #543406;
+  --color-risco-100: #f6d3d9;
+  --color-risco-300: #de7c8d;
+  --color-risco-900: #621623;
 }
 
 /* O cartão do login: o véu ali vai de 0,15 a 0,70 e o cartão fica onde ele é
    mais fraco em celular (~0,45), onde 0,64 deixaria `vidro-suave` em ~3,9:1 sobre
    o pixel mais claro. 0,80 dá 4,89:1 nesse ponto. */
-.vidro-casco-denso {
-  background-color: var(--vidro-casco-denso);
-}
+
 
 /* A FOLHA NÃO TEM backdrop-filter, de propósito. Pela especificação (Filter
    Effects), um backdrop-filter diferente de `none` vira BLOCO DE CONTENÇÃO dos
@@ -601,7 +761,7 @@ body {
    abre CREME dentro do casco, e nele o anel escuro volta (especificidade maior
    que a do casco, de propósito). */
 .vidro-casco :where(a, button, input, select, textarea, summary):focus-visible {
-  outline-color: var(--color-vidro-terracota);
+  outline-color: var(--color-vidro-acento);
 }
 .vidro-casco .vidro-claro :where(a, button, input, select, textarea, summary):focus-visible {
   outline-color: var(--color-acento-600);
@@ -631,25 +791,25 @@ body {
    opacidade para o texto não depender do que o filtro faria. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
-    --vidro-casco-fundo: rgb(18 21 27 / 0.94);
-    --vidro-casco-denso: rgb(18 21 27 / 0.96);
-    --vidro-folha-fundo: rgb(252 251 248 / 0.98);
+    --vidro-folha-fundo: rgb(255 255 255 / 0.98);
+    --cartao-fundo: rgb(255 255 255 / 0.94);
   }
 }
 
-/* QUEM PEDIU MENOS TRANSPARÊNCIA ao sistema recebe superfícies SÓLIDAS: casco
-   #161a20, folha #fcfbf8 (a `folha` do tema), sem filtro e sem sombra difusa. */
+/* QUEM PEDIU MENOS TRANSPARÊNCIA ao sistema recebe superfícies SÓLIDAS, sem filtro. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
-    --vidro-casco-fundo: #161a20;
-    --vidro-casco-denso: #161a20;
-    --vidro-folha-fundo: #fcfbf8;
-    --vidro-casco-filtro: none;
+    --vidro-folha-fundo: #ffffff;
+    --cartao-fundo: #ffffff;
+    --cartao-filtro: none;
   }
 }
 
 /* Sextante com a luz de fundo da placa "ORIA DIGITAL" (ver --marca-neon). */
 .marca-neon {
+  filter: none;
+}
+:root[data-tema="escuro"] .marca-neon {
   filter: var(--marca-neon);
 }
 @media (prefers-reduced-transparency: reduce) {

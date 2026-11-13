@@ -69,3 +69,92 @@ export function padraoDeBusca(bruto: string | string[] | undefined): string | nu
   if (!v) return null;
   return `%${v.replace(/[\\%_]/g, "\\$&").replace(/\*/g, "_")}%`;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// A FILA AGRUPADA POR MANDATO (direção A, 13/11/2026).
+//
+// Medido no mandato do dono: 2.088 pendências em aberto viravam 20 linhas quase iguais de "Item Faltante",
+// uma por item do Kit, de 3 ou 4 mandatos. A fila continua sendo UMA lista de pendências — o filtro e as
+// contagens das abas saem do mesmo conjunto de antes, então "Travam a aprovação 222" segue sendo 222
+// PENDÊNCIAS —; só a APRESENTAÇÃO junta as que são do mesmo mandato numa linha com chips. O invariante que
+// protege isto: a soma de `total` dos grupos é exatamente o número de pendências que entrou, e o mesmo vale
+// para `bloqueantes` e `aConfirmar` (verificar-export.mts, "Fila agrupada por mandato").
+// ---------------------------------------------------------------------------------------------------
+
+export type PendenciaAgrupavel = {
+  id: string; caso_id: string; tipo: string; severidade: string; estado?: string | null;
+};
+
+export type ChipDoGrupo = { rotulo: string; n: number; severidade: string };
+
+export type GrupoDoMandato<P extends PendenciaAgrupavel> = {
+  casoId: string;
+  itens: P[];
+  total: number;
+  bloqueantes: number;
+  aConfirmar: number;
+  /** Um chip por rótulo, com a contagem; os que travam vêm primeiro. */
+  chips: ChipDoGrupo[];
+};
+
+const PESO = (s: string) => (s === "bloqueante" ? 0 : s === "importante" ? 1 : 2);
+
+/**
+ * Agrupa por mandato SEM descartar nada. A ordem dos grupos é consequência: mais pendências que travam,
+ * depois mais a confirmar, depois mais pendências; empate fica na ordem em que a lista veio.
+ * `rotuloDe` dá o texto do chip (quem chama sabe ler o item faltante do Kit na descrição).
+ */
+export function agruparPorMandato<P extends PendenciaAgrupavel>(
+  itens: readonly P[], rotuloDe: (p: P) => string,
+): GrupoDoMandato<P>[] {
+  const porCaso = new Map<string, P[]>();
+  for (const p of itens) {
+    const lista = porCaso.get(p.caso_id);
+    if (lista) lista.push(p); else porCaso.set(p.caso_id, [p]);
+  }
+  const grupos = [...porCaso].map(([casoId, lista]) => {
+    const chips = new Map<string, ChipDoGrupo>();
+    for (const p of lista) {
+      const rotulo = rotuloDe(p);
+      const c = chips.get(rotulo);
+      if (c) { c.n += 1; if (PESO(p.severidade) < PESO(c.severidade)) c.severidade = p.severidade; }
+      else chips.set(rotulo, { rotulo, n: 1, severidade: p.severidade });
+    }
+    return {
+      casoId,
+      itens: lista,
+      total: lista.length,
+      bloqueantes: lista.filter((p) => p.severidade === "bloqueante").length,
+      aConfirmar: lista.filter((p) => daFila(p, "confirmar")).length,
+      chips: [...chips.values()].sort((a, b) => PESO(a.severidade) - PESO(b.severidade) || b.n - a.n),
+    };
+  });
+  return grupos.sort((a, b) => b.bloqueantes - a.bloqueantes || b.aConfirmar - a.aConfirmar || b.total - a.total);
+}
+
+/** As abas de "Seus mandatos". Valor desconhecido na URL cai em `null` (quem chama escolhe o padrão). */
+export const ABAS_DOS_MANDATOS = [
+  { chave: "travados", rotulo: "Travados" },
+  { chave: "andamento", rotulo: "Em andamento" },
+  { chave: "fechados", rotulo: "Fechados" },
+] as const;
+export type AbaDosMandatos = (typeof ABAS_DOS_MANDATOS)[number]["chave"];
+
+export function abaDosMandatos(bruto: string | string[] | undefined): AbaDosMandatos | null {
+  const v = Array.isArray(bruto) ? bruto[0] : bruto;
+  return ABAS_DOS_MANDATOS.find((a) => a.chave === v)?.chave ?? null;
+}
+
+/** Página da URL (`?p=`): inteiro >= 1; lixo, zero e negativo caem na primeira. */
+export function paginaDaUrl(bruto: string | string[] | undefined): number {
+  const v = Number(Array.isArray(bruto) ? bruto[0] : bruto);
+  return Number.isInteger(v) && v >= 1 ? v : 1;
+}
+
+/** A fatia de uma página, com a página PEDIDA limitada à última (URL velha não cai em tela vazia). */
+export function fatiaDaPagina(total: number, pagina: number, porPagina: number) {
+  const paginas = Math.max(1, Math.ceil(total / porPagina));
+  const atual = Math.min(Math.max(1, pagina), paginas);
+  const de = (atual - 1) * porPagina;
+  return { pagina: atual, paginas, de, ate: Math.min(total, de + porPagina) };
+}

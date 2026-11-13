@@ -724,10 +724,9 @@ const FORMATADORES = /formatValor\(|formatarUsd\(|\bfmt\.format\(|Intl\.NumberFo
 const EXCECOES_DE_FORMATADOR: ReadonlyArray<readonly [arquivo: string, trecho: string, motivo: string]> = [
   ["components/upload-form.tsx", 'new Date(sucesso.desde).toLocaleString("pt-BR")', "data/hora do envio, não valor"],
   ["components/painel-zip.tsx", "progresso.indice.toLocaleString", "contagem de entradas do ZIP, não valor"],
-  ["app/casos/[id]/page.tsx", 'linhasTotais.toLocaleString("pt-BR")', "contagem de linhas extraídas, não valor"],
   ["app/casos/[id]/documentos/(lista)/page.tsx", 'linhas.toLocaleString("pt-BR")', "contagem de linhas do documento, não valor"],
-  ["app/casos/page.tsx", "const numero = (n: number) => n.toLocaleString", "contagens do painel (mandatos, pendências), não valor"],
   ["app/administracao/page.tsx", 'new Date(iso).toLocaleString("pt-BR"', "data/hora, não valor"],
+  ["app/casos/painel-blocos.tsx", "const numero = (n: number) => n.toLocaleString", "contagens do painel (mandatos, pendências, chips da fila, N linhas em O que chegou), não valor"],
   // DEFINIÇÕES de formatador (não são uso em JSX): o uso é varrido (`formatValor(` em
   // documento-detalhe, `fmt.format(` em SecaoLinhas) ou, quando o resultado passa por uma variável
   // (`mostrado`, `num(`), é garantido pelas marcações NOMEADAS acima (SugestoesDoRealizado).
@@ -743,7 +742,16 @@ const arquivosTsx = (readdirSync(new URL("../src", import.meta.url), { recursive
 let usosVarridos = 0;
 const excecoesUsadas = new Set<number>();
 for (const arq of arquivosTsx) {
-  const txt = fonte(arq);
+  // Comentários MASCARADOS (trocados por espaços, para os índices continuarem os do arquivo): antes, um
+  // `toLocaleString("pt-BR")` citado num COMENTÁRIO ao lado de um `valor-sensivel` satisfazia a
+  // varredura sem proteger nenhuma chamada real. Só se mascara comentário de linha inteira, bloco que
+  // começa na linha e `{/* */}` do JSX: `semComentarios` do script lib come código quando há `/*` dentro
+  // de string (medido em upload-form.tsx, que perdia a linha da exceção), e aqui isso derrubaria o
+  // portão. LIMITE: `// …` no fim de uma linha de código não é mascarado.
+  const original = fonte(arq);
+  const txt = original
+    .replace(/^[ \t]*\/\/.*$/gm, (c) => " ".repeat(c.length))
+    .replace(/\{\/\*[\s\S]*?\*\/\}|^[ \t]*\/\*[\s\S]*?\*\//gm, (c) => c.replace(/[^\n]/g, " "));
   for (const m of txt.matchAll(FORMATADORES)) {
     const ini = m.index ?? 0;
     const linha = txt.slice(txt.lastIndexOf("\n", ini) + 1, txt.indexOf("\n", ini));
@@ -766,9 +774,9 @@ const textosDoBanco: Array<[string, RegExp, string]> = [
   ["app/casos/[id]/Pendencia.tsx", /valor-sensivel[^>]*>\{parte\}/, "qualificações da pendência"],
   ["app/casos/[id]/pendencias/page.tsx", /valor-sensivel[^>]*>\{p\.descricao\}/, "descrição no cartão de confirmar"],
   ["app/casos/[id]/pendencias/FormConfirmarDocumento.tsx", /valor-sensivel[^>]*>\{p\.descricao\}/, "descrição no formulário de confirmar"],
-  ["app/casos/page.tsx", /valor-sensivel[^>]*>\{resumoTexto\}/, "resumo da pendência na fila do início"],
-  ["app/casos/[id]/page.tsx", /<blockquote className="valor-sensivel[^>]*>\s*“\{f\.trecho\}”/, "trecho do fato material"],
-  ["app/casos/[id]/page.tsx", /valor-sensivel[^>]*>\{f\.leitura\}/, "leitura do fato material"],
+  ["app/casos/painel-blocos.tsx", /valor-sensivel[^>]*>\{resumoTexto\}/, "resumo da pendência na fila do início"],
+  ["app/casos/[id]/visao-blocos.tsx", /<blockquote className="valor-sensivel[^>]*>\s*“\{f\.trecho\}”/, "trecho do fato material"],
+  ["app/casos/[id]/visao-blocos.tsx", /valor-sensivel[^>]*>\{f\.leitura\}/, "leitura do fato material"],
   ["app/casos/[id]/historico/linha-do-tempo.tsx", /valor-sensivel[^>]*>\{e\.resumo\}/, "resumo do evento do histórico"],
   ["app/casos/[id]/perguntas/CartaoPergunta.tsx", /valor-sensivel[^>]*whitespace-pre-wrap[^>]*>\s*\{p\.pergunta\}/, "texto da pergunta"],
   ["app/casos/[id]/perguntas/CartaoPergunta.tsx", /valor-sensivel">\{p\.motivo\}[\s\S]*valor-sensivel">\{p\.risco\}[\s\S]*valor-sensivel">\{p\.impacto\}/, "motivo, risco e impacto da pergunta"],
@@ -925,8 +933,8 @@ const escuro = new Map([...blocosEscuro.slice(1).flatMap((b) => [...declaracoes(
 const coresClaro = [...tema.keys()].filter((k) => k.startsWith("--color-"));
 const coresEscuro = [...escuro.keys()].filter((k) => k.startsWith("--color-"));
 // O casco NÃO acompanha o tema, de propósito: estas são as ÚNICAS cores sem par no escuro.
-const FIXAS_DO_CASCO = ["--color-fundo-reserva", "--color-vidro-papel", "--color-vidro-suave",
-  "--color-vidro-terracota", "--color-vidro-texto", "--color-vidro-tinta"];
+const FIXAS_DO_CASCO = ["--color-fundo-reserva", "--color-vidro-acao", "--color-vidro-acento", "--color-vidro-papel",
+  "--color-vidro-suave", "--color-vidro-texto", "--color-vidro-tinta"];
 checar(coresClaro.length >= 60 && coresEscuro.length >= 60, `leitura do globals.css vazia (${coresClaro.length} claro / ${coresEscuro.length} escuro): o teste mediria nada`);
 checar(coresEscuro.every((k) => tema.has(k)),
   `token redefinido no escuro que não existe no claro: ${coresEscuro.filter((k) => !tema.has(k)).join(", ")}`);
@@ -1023,23 +1031,34 @@ const alfaFolha = Number(folhaVidro?.[4] ?? 1);
 const folhaNaPior = (folhaVidro
   ? [1, 2, 3].map((i, k) => Math.round(alfaFolha * Number(folhaVidro[i]) + (1 - alfaFolha) * [255, 255, 236][k]))
   : [255, 255, 255]) as [number, number, number];
-const fundoDe = (n: string) => (n === "folha-sobre-foto" ? folhaNaPior : corDe(n));
+// O CARTÃO FOSCO sobre o MÁRMORE (13/11/2026): o fundo do app não é mais foto. O pior caso é o cartão (rgb com
+// alfa, em --cartao-fundo) sobre o pixel MAIS CLARO do mármore escuro (--marmore-pior, medido na tela renderizada
+// e com folga: veio mais o brilho do canto), que é o que mais clareia o fundo do texto claro.
+const cartaoDark = /rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/.exec(escuro.get("--cartao-fundo") ?? "");
+const marmorePior = rgbDe(escuro.get("--marmore-pior") ?? "#ffffff");
+checar(cartaoDark !== null && /^#[0-9a-f]{6}$/i.test(escuro.get("--marmore-pior") ?? ""),
+  "--cartao-fundo do escuro não é rgb(r g b / a), ou --marmore-pior não é #rrggbb: o pior caso do cartão não é calculável");
+const alfaCartao = Number(cartaoDark?.[4] ?? 1);
+const cartaoNaPior = (cartaoDark
+  ? [1, 2, 3].map((i, k) => Math.round(alfaCartao * Number(cartaoDark[i]) + (1 - alfaCartao) * marmorePior[k]))
+  : [255, 255, 255]) as [number, number, number];
+const fundoDe = (n: string) => (n === "folha-sobre-foto" ? folhaNaPior : n === "cartao-sobre-marmore" ? cartaoNaPior : corDe(n));
 type ParDeContraste = [fg: string, bg: string, minimo: number];
 const pares: ParDeContraste[] = [];
 const texto = (fg: string, bgs: string[], min = 4.5) => bgs.forEach((bg) => pares.push([fg, bg, min]));
-const SUPERFICIES = ["folha-sobre-foto", "folha", "papel"];
+const SUPERFICIES = ["folha-sobre-foto", "cartao-sobre-marmore", "folha", "papel"];
 texto("tinta-900", [...SUPERFICIES, "tinta-50", "tinta-100"]);            // texto primário
 texto("tinta-800", SUPERFICIES);
 texto("tinta-700", [...SUPERFICIES, "tinta-50"]);
 texto("tinta-600", [...SUPERFICIES, "tinta-50", "tinta-100", "tinta-200"]); // secundário, chips neutros
 texto("tinta-500", [...SUPERFICIES, "tinta-50", "tinta-100"]);              // placeholder e rótulo
-texto("tinta-400", ["folha-sobre-foto", "folha"], 3.6);                     // ícone/fio: o piso do claro (3,62)
+texto("tinta-400", ["folha-sobre-foto", "cartao-sobre-marmore", "folha"], 3.6);                     // ícone/fio: o piso do claro (3,62)
 for (const f of ["risco", "alerta", "ok", "info", "serie"]) {
   texto(`${f}-800`, [`${f}-50`, `${f}-100`]);                                // chip
   texto(`${f}-900`, [`${f}-50`, `${f}-100`]);
-  texto(`${f}-700`, [`${f}-50`, "folha-sobre-foto", "folha"]);               // texto de estado sobre a folha
-  texto(`${f}-800`, ["folha-sobre-foto", "folha"]);
-  texto(`${f}-900`, ["folha-sobre-foto", "folha"]);
+  texto(`${f}-700`, [`${f}-50`, "folha-sobre-foto", "cartao-sobre-marmore", "folha"]);               // texto de estado sobre a folha
+  texto(`${f}-800`, ["folha-sobre-foto", "cartao-sobre-marmore", "folha"]);
+  texto(`${f}-900`, ["folha-sobre-foto", "cartao-sobre-marmore", "folha"]);
 }
 texto("tinta-700", ["tinta-100"]); texto("tinta-700", ["tinta-200"]);        // chip neutro e o hover dele
 texto("acento-700", [...SUPERFICIES, "acento-50", "acento-100"]);           // link e item ativo
@@ -1052,11 +1071,26 @@ for (const bg of ["tinta-900", "tinta-800", "tinta-600", "ok-600", "ok-700", "ok
 // o que o `:root` mantém igual no escuro: o casco, medido no claro com o pior caso (DESIGN.md) — aqui só se
 // confere que o terracota de foco do casco e o texto do botão creme dele seguem sendo ≥ 4,5:1 entre si.
 checar(pares.length >= 100, `só ${pares.length} pares de contraste medidos: o conjunto encolheu ou o parse falhou`);
-const medivel = ([fg, bg]: ParDeContraste) => [fg, bg].every((t) => t === "folha-sobre-foto" || escuro.has(`--color-${t}`));
+const medivel = ([fg, bg]: ParDeContraste) => [fg, bg].every((t) => t === "folha-sobre-foto" || t === "cartao-sobre-marmore" || escuro.has(`--color-${t}`));
 checar(pares.every(medivel), `par de contraste com token ausente do escuro: ${pares.filter((p) => !medivel(p)).map(([f, b]) => `${f}/${b}`).join(", ")}`);
 const reprovados = pares.filter(medivel).filter(([fg, bg, min]) => razao(corDe(fg), fundoDe(bg)) < min);
 checar(reprovados.length === 0,
   `contraste abaixo do mínimo no escuro: ${reprovados.map(([fg, bg, min]) => `${fg} sobre ${bg} = ${razao(corDe(fg), fundoDe(bg)).toFixed(2)} (< ${min})`).join("; ")}`);
+// O MESMO NO TEMA CLARO: o texto escuro sobre o cartão branco a 68% e o pixel mais ESCURO do mármore claro.
+{
+  const principal = declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--marmore-pior")) ?? "");
+  const m = /rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/.exec(principal.get("--cartao-fundo") ?? "");
+  const pior = principal.get("--marmore-pior") ?? "";
+  checar(m !== null && /^#[0-9a-f]{6}$/i.test(pior), "--cartao-fundo/--marmore-pior do tema claro ilegíveis: o pior caso não é calculável");
+  const a = Number(m?.[4] ?? 1);
+  const fundo = [1, 2, 3].map((i, k) => Math.round(a * Number(m?.[i] ?? 255) + (1 - a) * rgbDe(pior)[k])) as [number, number, number];
+  const corClaro = (t: string) => rgbDe(tema.get(`--color-${t}`) ?? "#000000");
+  const ps: Array<[string, number]> = [["tinta-900", 4.5], ["tinta-800", 4.5], ["tinta-700", 4.5], ["tinta-600", 4.5], ["tinta-500", 4.5], ["tinta-400", 3.6],
+    ["acento-700", 4.5], ["acento-600", 4.5], ...["risco", "alerta", "ok", "info", "serie"].flatMap((f) => [[`${f}-700`, 4.5], [`${f}-800`, 4.5]] as Array<[string, number]>)];
+  const ruins = ps.filter(([t, min]) => razao(corClaro(t), fundo) < min);
+  checar(ruins.length === 0,
+    "contraste abaixo do mínimo no claro (cartão sobre o pior pixel do mármore): " + ruins.map(([t, min]) => `${t} = ${razao(corClaro(t), fundo).toFixed(2)} (< ${min})`).join("; "));
+}
 checar(razao(rgbDe("#11161d"), rgbDe("#ece8df")) >= 4.5 && razao(rgbDe("#11161d"), rgbDe("#f6f4ef")) >= 4.5,
   "texto do botão creme do casco (vidro-tinta sobre vidro-texto/vidro-papel) abaixo de 4,5:1");
 if (process.env.TABELA_DE_CONTRASTE) {
@@ -1489,7 +1523,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     "as cinco ações do mandato devolvem { erro } nos DOIS caminhos de falha (erro do banco e recusa no payload)");
   checar(/const r = await registrarAcaoDaPergunta\(casoId, formData\);\s*return r \? \{ ok: false, erro: r\.erro \} : \{ ok: true \}/.test(semCom(fonte("app/casos/[id]/perguntas/actions.ts"))),
     "o lote de perguntas lê o { erro } devolvido (senão uma recusa viraria { ok: true })");
-  const chamadoresDeForm = ["app/casos/[id]/page.tsx", "app/casos/[id]/Pendencia.tsx", "app/casos/[id]/perguntas/CartaoPergunta.tsx", "app/casos/[id]/pendencias/FormConfirmarDocumento.tsx", "components/documento-detalhe.tsx"];
+  const chamadoresDeForm = ["app/casos/[id]/visao-blocos.tsx", "app/casos/[id]/Pendencia.tsx", "app/casos/[id]/perguntas/CartaoPergunta.tsx", "app/casos/[id]/pendencias/FormConfirmarDocumento.tsx", "components/documento-detalhe.tsx"];
   for (const arq of chamadoresDeForm) {
     const src = semCom(fonte(arq));
     checar(/<FormDeAcao\b/.test(src) && !/<form\b[^>]*action=\{(aprovarCaso|decidirPendencia|registrar|revisarAction|aceitarAction|aceitarExtracao|revisarDocumento)/.test(src),
@@ -1503,7 +1537,7 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
       `${arq}: ${chamada} tem o { erro } guardado e escrito na tela`);
   }
   // 12. Lista/busca vazia com papel NÃO conferido: o vazio pode ser o recorte do banco.
-  checar(/textoDeNenhumMandato\(perm\.papel, "em andamento"\)/.test(semCom(fonte("app/casos/page.tsx"))) && !/"Nenhum mandato em andamento"/.test(semCom(fonte("app/casos/page.tsx")))
+  checar(/textoDeNenhumMandato\(perm\.papel, "em andamento"\)/.test(semCom(fonte("app/casos/painel-blocos.tsx"))) && !/"Nenhum mandato em andamento"/.test(semCom(fonte("app/casos/painel-blocos.tsx")))
     && /textoDeNenhumMandato\(perm\.papel/.test(semCom(fonte("app/casos/todos/page.tsx"))) && !/"Nenhum mandato aberto\."/.test(semCom(fonte("app/casos/todos/page.tsx"))),
     "Início e Mandatos: o 'nenhum' vem de textoDeNenhumMandato (papel não conferido não afirma a mesa inteira)");
   const rotaBusca = semCom(fonte("app/api/busca/route.ts")), telaBusca = semCom(fonte("components/busca-global.tsx"));
@@ -1516,6 +1550,178 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
     "limpar campo vazio: o DELETE devolve as linhas apagadas e MENOS que as existentes vira a frase do papel (não 'salvo')");
   checar(!/\.delete\(\)/.test(semCom(fonte("app/casos/[id]/modelagem/actions.ts"))) && !/\.(update|delete)\(/.test(semCom(fonte("app/casos/[id]/perimetro/actions.ts")) + semCom(fonte("app/administracao/equipe/actions.ts"))),
     "varredura: as demais ações do portal escrevem por RPC (que levanta 42501), não por update/delete direto que a RLS poderia zerar calado");
+}
+
+// ---------------------------------------------------------------------------------------------------
+// A TELA QUE APARECE NA HORA (streaming com Suspense): `/casos` e `/casos/[id]` devolvem o casco e
+// cada bloco chega quando a SUA consulta responde. O risco novo é um bloco que não chegou ter a cara
+// de "nada a mostrar" (regra 7), ou o esqueleto/erro de um bloco virar valor (regra 1). Cada item
+// abaixo afirma o que a tela FAZ; a prova de que reprovam sem a correção (regra 2) está no commit.
+{
+  const { renderToString } = await import("react-dom/server");
+  const React = await import("react");
+  const h = React.createElement;
+  // tsx compila o .tsx com o JSX clássico (o tsconfig do Next usa "preserve"): o componente chama `React.`.
+  (globalThis as { React?: unknown }).React = React;
+  const { Revelar } = await import("../src/components/revelar.tsx");
+
+  // (1) Um bloco que NÃO CHEGA mostra "carregando", com texto para o leitor de tela e o esqueleto —
+  // nunca vazio. `renderToString` não espera um filho que suspende: devolve o `fallback`, que é
+  // exatamente o que o navegador pinta enquanto a consulta não responde.
+  const nuncaChega = () => { throw new Promise(() => {}); };
+  const NuncaChega = () => nuncaChega();
+  const pendente = renderToString(
+    h(Revelar, { rotulo: "Carregando o teste…", esqueleto: h("i", { "data-esq": "1" }), children: h(NuncaChega) }),
+  );
+  checar(/role="status"/.test(pendente) && pendente.includes("Carregando o teste…") && pendente.includes('data-esq="1"'),
+    "Revelar: o bloco que ainda não chegou mostra o esqueleto com role=status e o texto de carregando (não fica vazio)");
+  checar(!pendente.includes("t-skel-content"),
+    "Revelar: o esqueleto NÃO simula o conteúdo — a moldura do conteúdo só existe quando ele chega");
+
+  // (2) O bloco que chegou entra com o conteúdo VISÍVEL no HTML e o esqueleto só como cópia aria-hidden.
+  const chegou = renderToString(
+    h(Revelar, { rotulo: "x", esqueleto: h("i", { "data-esq": "1" }), children: h("p", null, "CONTEUDO-DO-BLOCO") }),
+  );
+  checar(chegou.includes("CONTEUDO-DO-BLOCO") && /class="t-skel-ghost"[^>]*aria-hidden|aria-hidden="true"[^>]*class="t-skel-ghost"/.test(chegou),
+    "Revelar: o bloco que chegou traz o conteúdo e a cópia do esqueleto escondida do leitor de tela");
+
+  // (3) A REDE DE SEGURANÇA no CSS: o estado BASE é o final. Se a animação não rodar (movimento
+  // reduzido, CSS que falhou), o conteúdo está visível e a cópia do esqueleto está transparente.
+  const cssSk = fonte("app/globals.css").replace(/\/\*[\s\S]*?\*\//g, ""); // sem comentários: eles citam os seletores
+  const regra = (seletor: string) => {
+    const escapado = seletor.replace(/[.]/g, String.raw`\.`);
+    const abreChave = String.raw`\s*\{`;
+    const i = cssSk.search(new RegExp(`^${escapado}${abreChave}`, "m"));
+    return i < 0 ? "" : cssSk.slice(i, cssSk.indexOf("}", i));
+  };
+  checar(regra(".t-skel-content") !== "" && !/opacity\s*:\s*0\b/.test(regra(".t-skel-content")),
+    "globals.css: o conteúdo revelado NÃO nasce com opacity 0 (a animação é quem parte de escondido; sem ela, o número está na tela)");
+  checar(/opacity\s*:\s*0\b/.test(regra(".t-skel-ghost")),
+    "globals.css: a cópia do esqueleto nasce transparente (se a animação não rodar, não fica um esqueleto por cima do número)");
+  const iReduzido = cssSk.search(/@media \(prefers-reduced-motion: reduce\) \{\s*\.t-skel-content/);
+  const reduzido = iReduzido < 0 ? "" : cssSk.slice(iReduzido);
+  checar(/\.t-skel-content\s*\{\s*animation:\s*none/.test(reduzido) && /\.t-skel-ghost\s*\{\s*display:\s*none/.test(reduzido),
+    "globals.css: prefers-reduced-motion desliga a revelação (sem fade nem blur)");
+
+  // (4) As páginas não leem dado nenhum: o casco sai sem esperar consulta. É o contrato de "aparece
+  // na hora" — uma consulta que voltasse para a página seguraria TUDO atrás dela.
+  const paginaPainel = semComentariosDoFonte(fonte("app/casos/page.tsx"));
+  const paginaVisao = semComentariosDoFonte(fonte("app/casos/[id]/page.tsx"));
+  for (const [nome, src] of [["/casos", paginaPainel], ["/casos/[id]", paginaVisao]] as const) {
+    checar(!/@\/lib\/supabase|createClient|\.from\(|\.rpc\(|paginar\(/.test(src),
+      `${nome}: a página não faz consulta — cada bloco faz a sua dentro do <Suspense>`);
+  }
+
+  // (5) Os esqueletos são "carregando", nunca valor: nenhum dígito em texto e nenhuma leitura de dado.
+  const corpoDe = (src: string, nome: string) => {
+    const abreParenteses = String.raw`\(`;
+    const i = src.search(new RegExp(`function ${nome}${abreParenteses}`));
+    return i < 0 ? null : src.slice(i, src.indexOf("\n}\n", i));
+  };
+  const blocosPainel = semComentariosDoFonte(fonte("app/casos/painel-blocos.tsx"));
+  const esqueletos: Array<[string, string]> = [
+    ...["EsqueletoDosIndicadores", "EsqueletoDaFila", "EsqueletoDosRecentes", "EsqueletoDosMandatos", "EsqueletoDaGrade"]
+      .map((n) => [n, corpoDe(blocosPainel, n) ?? ""] as [string, string]),
+    ...["EsqueletoDoProximoPasso", "EsqueletoDosIndicadoresDoMandato", "EsqueletoDosFatos", "EsqueletoDaEquipe"]
+      .map((n) => [n, corpoDe(paginaVisao, n) ?? ""] as [string, string]),
+  ];
+  for (const [nome, corpo] of esqueletos) {
+    // Texto entre `>` e `<` sem `{}`: um laço sobre os trechos, em vez de `[^<>{}]*\d[^<>{}]*` (dois
+    // quantificadores em volta do dígito, com retrocesso quadrático em corpo longo sem dígito).
+    const textoComDigito = [...corpo.matchAll(/>([^<>{}]*)</g)].some((m) => /\d/.test(m[1]));
+    checar(corpo !== "" && !textoComDigito && !/\bler[A-Z]|toLocaleString|\.data\b/.test(corpo),
+      `${nome}: o esqueleto não carrega número nem lê dado (esqueleto é "carregando", nunca valor)`);
+  }
+
+  // (6) A DIVISÃO EM BLOCOS não perdeu nenhuma frase de falha nem a semântica de "não lido": cada
+  // mensagem mora no bloco que a usava (movida, não reescrita).
+  const blocosVisao = semComentariosDoFonte(fonte("app/casos/[id]/visao-blocos.tsx"));
+  const dadosVisao = semComentariosDoFonte(fonte("app/casos/[id]/visao-dados.ts"));
+  const portao = corpoDe(blocosVisao, "PortaoDoMandato") ?? "";
+  checar(/Aprovação não conferida/.test(portao) && /A consulta que diz se o mandato pode ser aprovado não respondeu/.test(portao),
+    "Portão 2: avaliação que não respondeu diz 'Aprovação não conferida' com o efeito (não some como 'nada a aprovar')");
+  // LIMITE: estas duas afirmam o TEXTO de `visao-dados.ts` (a leitura do Kit depende de Supabase e do
+  // serviço de classificação, que a suíte não sobe; regra 4: sem fixture inventada). Elas pegam o
+  // revert do bloco, não um desvio de comportamento.
+  checar(/catch \{\s*return null;\s*\}/.test(dadosVisao)
+    && /kitLido = !kitBasicoRes\.error && documentosLidos && !checklistRes\.error && kitAtendidos !== null/.test(dadosVisao),
+    "Kit Básico: serviço que lança vira 'não lido' (null) e o Kit só é lido com tudo lido — nunca 'itens faltantes'");
+  checar(/linhasIncompletas/.test(dadosVisao) && /contagem incompleta — a leitura das linhas não terminou/.test(dadosVisao)
+    && /a leitura dos documentos falhou/.test(dadosVisao) && /a leitura das pendências falhou/.test(dadosVisao)
+    && /não foi possível saber quantas travam a aprovação/.test(dadosVisao) && /a leitura do kit falhou/.test(dadosVisao),
+    "Indicadores do mandato: cada leitura que falha ou veio incompleta é DITA, com a causa (traço, nunca zero)");
+  checar(/contarLinhasPorVersao\(/.test(dadosVisao) && /nAbertas\s*=\s*contagem\(abertasRes\)/.test(dadosVisao)
+    && /r\.error \? null : r\.count/.test(dadosVisao),
+    "Indicadores do mandato: contagem que falhou sai null (nunca 0) e a soma de linhas vem de contarLinhasPorVersao (com 'incompleto')");
+  const avisosPainel = corpoDe(blocosPainel, "AvisosDoPainel") ?? "";
+  checar(/Não foi possível carregar o Início/.test(avisosPainel) && /A leitura das pendências falhou/.test(avisosPainel)
+    && /A leitura dos documentos falhou/.test(avisosPainel) && /Parte das leituras acima não terminou/.test(avisosPainel),
+    "Painel: os avisos de leitura (falha e teto) continuam existindo, em bloco próprio");
+  // LIMITE: a LIGAÇÃO do bloco ao componente de falha é texto (`FatosDoMandato` é um componente
+  // assíncrono que importa o Supabase; a suíte não o monta, regra 4). O comportamento de cada lado
+  // está medido acima; aqui só se afirma que o bloco consulta `falhou` e devolve `FatosNaoLidos`.
+  const fatosDoMandato = corpoDe(blocosVisao, "FatosDoMandato") ?? "";
+  checar(/falhou\b[\s\S]*return <FatosNaoLidos \/>/.test(fatosDoMandato),
+    "Fatos: o bloco do mandato devolve FatosNaoLidos quando a leitura falhou");
+
+  // (8) INDICADOR DO INÍCIO — COMPORTAMENTO no modo discrição. A contagem do painel não é valor
+  // financeiro (a política do globals.css não a lista) e a nota de ausência é o motivo do traço
+  // (regra 1): nenhuma das duas leva `valor-sensivel`, nem com valor, nem sem. Com a leitura das
+  // pendências falha e o modo ligado, "travados: não conferido agora" tem de continuar legível.
+  {
+    const { Indicador } = await import("../src/app/casos/indicador-do-painel.tsx");
+    const comValor = renderToString(h(Indicador, { valor: "3", rotulo: "mandatos em andamento", detalhe: "travados: não conferido agora", tom: "alerta" }));
+    checar(comValor.includes("travados: não conferido agora") && !comValor.includes("valor-sensivel"),
+      "Indicador do Início: com valor, nem o número nem a nota 'travados: não conferido agora' são borrados no modo discrição");
+    const semValor = renderToString(h(Indicador, { valor: null, rotulo: "pendências", nota: "leitura das pendências indisponível agora" }));
+    checar(semValor.includes("leitura das pendências indisponível agora") && !semValor.includes("valor-sensivel"),
+      "Indicador do Início: sem valor, o traço e a nota de ausência não são borrados");
+  }
+
+  // Cada frase é procurada no corpo do bloco que a diz, não "em qualquer lugar do arquivo": a frase da
+  // fila migrando para outro bloco (ou sobrando num comentário já removido) reprova.
+  const filaPainel = (corpoDe(blocosPainel, "CorpoDaFila") ?? "") + (corpoDe(blocosPainel, "textoDoTopoDaFila") ?? "");
+  const recentesPainel = corpoDe(blocosPainel, "RecentesDoPainel") ?? "";
+  const mandatosPainel = corpoDe(blocosPainel, "MandatosDoPainel") ?? "";
+  // (7) FATOS DO MANDATO — COMPORTAMENTO. Falha de leitura não some com a seção (regra 7): erro que
+  // NÃO é "função ausente" mostra a frase com o efeito; função ausente (banco sem a 0148) e "sem
+  // fatos" não mostram nada. A regra CSS `.t-skel:has(> .t-skel-content:empty)` esconde o bloco só
+  // quando o conteúdo é vazio, então o bloco de falha tem de ser NÃO vazio.
+  {
+    const { lerResultadoDeFatos } = await import("../src/lib/fatos-do-caso.ts");
+    const { FatosNaoLidos } = await import("../src/components/fatos-nao-lidos.tsx");
+    const fato = { fato_id: "f1" };
+    const renderBloco = (r: Parameters<typeof lerResultadoDeFatos>[0]) => {
+      const l = lerResultadoDeFatos(r);
+      return renderToString(h(Revelar, { rotulo: "x", esqueleto: h("i"), children: l.falhou ? h(FatosNaoLidos) : null }));
+    };
+    const conteudoVazio = (html: string) => /class="t-skel-content"><\/div>/.test(html);
+    const comErro = renderBloco({ data: null, error: { code: "57014" } });
+    checar(comErro.includes("Não foi possível ler os fatos declarados nos documentos agora")
+      && comErro.includes("podem existir e não estão listados aqui") && !conteudoVazio(comErro),
+      "Fatos: erro de leitura (timeout 57014) mostra a frase com motivo e efeito, e o conteúdo não é vazio (a regra :empty não o esconde)");
+    const semFuncao = renderBloco({ data: null, error: { code: "PGRST202" } });
+    checar(!semFuncao.includes("Não foi possível ler os fatos") && conteudoVazio(semFuncao),
+      "Fatos: função ausente (PGRST202, banco sem a 0148) não mostra nada: é estado normal, não falha");
+    checar(!renderBloco({ data: null, error: { code: "42883" } }).includes("Não foi possível ler os fatos"),
+      "Fatos: função ausente (42883) também não mostra nada");
+    checar(!renderBloco({ data: [], error: null }).includes("Não foi possível ler os fatos"),
+      "Fatos: leitura bem-sucedida sem fatos não diz falha");
+    checar(lerResultadoDeFatos({ data: [fato], error: null }).fatos.length === 1 && !lerResultadoDeFatos({ data: [fato], error: null }).falhou,
+      "Fatos: leitura com fatos devolve os fatos e não falha");
+    checar(lerResultadoDeFatos({ data: null, error: { code: null } }).falhou,
+      "Fatos: erro sem código é falha (só o código de função ausente a dispensa)");
+  }
+
+  checar(/Não foi possível conferir as pendências/.test(filaPainel) && /não conferido agora/.test(filaPainel),
+    "Painel: a fila diz a falha da própria leitura (não vira vazio)");
+  checar(/Não foi possível ler os documentos agora/.test(recentesPainel),
+    "Painel: 'O que chegou' diz a falha da própria leitura (não vira vazio)");
+  checar(/sem o status “travado”/.test(mandatosPainel),
+    "Painel: 'Seus mandatos' diz a falha da própria leitura (não vira vazio)");
+  checar(/<Suspense fallback=\{null\}>\s*<AvisosDoPainel \/>/.test(paginaPainel)
+    && /<EsqueletoDaGrade \/>/.test(paginaPainel),
+    "Painel: o aviso de leitura não reserva espaço (limite documentado na página) e o corpo tem esqueleto próprio até chegar");
 }
 
 if (falhas.length > 0) {

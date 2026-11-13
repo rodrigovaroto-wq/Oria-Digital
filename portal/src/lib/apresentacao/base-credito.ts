@@ -62,6 +62,12 @@ export interface BaseCredito {
    * a rota não leu; o slide diz isso em vez de afirmar que nada faltou.
    */
   informacao?: Array<{ codigo: string; documento: string; status: "recebido" | "sem_conteudo" | "faltante" }>;
+  /**
+   * A lista do kit FOI lida, mas a conferência de quais itens chegaram não pôde ser feita (serviço do
+   * banco ou checklist falharam). Sem isto o slide dizia "a lista não foi lida", o que é falso, e não
+   * dizia o efeito: o status de cada item fica em aberto e nada é afirmado como faltante.
+   */
+  kitNaoConferido?: boolean;
   /** As empresas cadastradas no caso — o perímetro — e qual delas o deck analisa. */
   /**
    * O ANO EM CURSO (balancete): o mesmo realizado, classificado pelo mesmo `historicoParaCredito`, para

@@ -36,12 +36,11 @@ import {
 // navegador) não ver uma seção vazia. Só ATIVOS entram: o servidor já filtra
 // `fechado_em is null` (0114), e mandato fechado continua na lista completa.
 //
-// A BARRA FLUTUA (28/10/2026): solta das bordas (12px), cantos de 16px, vidro
-// escuro (`.vidro-casco`, em globals.css) sobre a imagem da marca. A marca mudou
-// do cabeçalho de 57px para o TOPO desta barra — e com o cabeçalho foram-se os
-// `top-[57px]` e `calc(100vh-57px)`: ela gruda a `top-3` e ocupa a altura da
-// tela menos os 12px de cima e de baixo. `dvh` e não `vh`: em celular, `100vh`
-// conta a área atrás da barra de endereço e o rodapé da barra ficaria cortado.
+// A BARRA É UM CARTÃO FLUTUANTE (13/11/2026): `.cartao-vidro` (globals.css), fosco, com 16px de margem em
+// volta, cantos de 14px, e SÓ DA ALTURA DO SEU CONTEÚDO (termina no último item, não no rodapé da janela).
+// Fica `sticky` no topo ao rolar; `max-h` em `dvh` (em celular `100vh` conta a área atrás da barra de
+// endereço) com rolagem interna só para a janela muito baixa. Texto nos tokens `tinta`, que trocam com o
+// tema: o vidro é claro no tema claro e escuro no escuro.
 
 export interface MandatoNaBarra {
   id: string;
@@ -146,16 +145,16 @@ const ITEM_BASE = "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-m
 // terracota CLARO. O terracota de sempre (#b6482f) some sobre o casco escuro
 // (~2,6:1); o #e8937c passa de 7:1. É marca de "onde estou" — e o `aria-current`
 // continua dizendo isso a quem não vê cor.
-const ITEM_ATIVO = "bg-white/10 text-vidro-texto shadow-[inset_2px_0_0_var(--color-vidro-terracota)]";
-const ITEM_INATIVO = "text-vidro-texto hover:bg-white/[0.07]";
+const ITEM_ATIVO = "bg-tinta-100 font-semibold text-tinta-900";
+const ITEM_INATIVO = "text-tinta-500 hover:bg-tinta-100 hover:text-tinta-900";
 // No trilho o item é só o ícone: quadrado de 40px, centrado.
 const TRILHO_BASE = "flex h-10 w-10 items-center justify-center rounded-md transition-colors";
 // O sextante é a arte ORIGINAL em azul; o brilho é só um `drop-shadow` de CSS,
 // que o destaca do vidro sem recolorir nem redesenhar nada.
 const MARCA_SEXTANTE = "marca-neon h-8 w-8 shrink-0";
-const ROTULO_SECAO = "text-[11px] font-semibold uppercase tracking-wider text-vidro-suave";
+const ROTULO_SECAO = "text-[11px] font-semibold uppercase tracking-wider text-tinta-500";
 // Mesma altura nas duas formas da barra (aberta e trilho), flutuando a 12px.
-const CASCA = "vidro-casco sticky top-3 h-[calc(100dvh-1.5rem)] overflow-y-auto rounded-2xl";
+const CASCA = "cartao-vidro max-h-[calc(100dvh-2rem)] overflow-y-auto";
 
 export function BarraLateral({
   mandatos, podeCriar, motivoSemCriar, vazioDa, mostrarAdministracao,
@@ -234,7 +233,7 @@ export function BarraLateral({
           title="Expandir o menu"
           aria-label="Expandir o menu"
           aria-expanded={false}
-          className={`${TRILHO_BASE} mb-1 text-vidro-suave hover:bg-white/10 hover:text-vidro-texto`}
+          className={`${TRILHO_BASE} mb-1 text-tinta-500 hover:bg-tinta-100 hover:text-tinta-900`}
         >
           <IconeExpandir />
         </button>
@@ -244,7 +243,7 @@ export function BarraLateral({
           href="/casos/novo"
           title="Novo mandato"
           aria-label="Novo mandato"
-          className={`${TRILHO_BASE} bg-vidro-texto text-vidro-tinta hover:bg-vidro-papel`}
+          className={`${TRILHO_BASE} bg-acento-600 text-papel hover:opacity-90`}
         >
           <IconeMais />
         </Link>
@@ -284,7 +283,7 @@ export function BarraLateral({
   if (recolhida) {
     return (
       <>
-        <aside className="hidden shrink-0 py-3 pl-3 sm:block">{trilho(true)}</aside>
+        <aside className="hidden shrink-0 self-start sticky top-0 p-4 pr-0 sm:block">{trilho(true)}</aside>
         <BarraInferior recentes={recentes} podeCriar={podeCriar} vazioDa={vazioDa} mostrarAdministracao={mostrarAdministracao} />
       </>
     );
@@ -293,8 +292,8 @@ export function BarraLateral({
   return (
     <>
       <BarraInferior recentes={recentes} podeCriar={podeCriar} vazioDa={vazioDa} mostrarAdministracao={mostrarAdministracao} />
-      <aside className="hidden shrink-0 py-3 pl-3 sm:block md:hidden">{trilho(false)}</aside>
-      <aside className="hidden w-[15.75rem] shrink-0 py-3 pl-3 md:block">
+      <aside className="hidden shrink-0 self-start sticky top-0 p-4 pr-0 sm:block md:hidden">{trilho(false)}</aside>
+      <aside className="hidden w-[15.5rem] shrink-0 self-start sticky top-0 p-4 pr-0 md:block">
         {/* A BARRA TEM A ALTURA DA TELA menos os 12px de cima e de baixo, e o
             que passa disso rola AQUI dentro, não com a página: o topo (a marca,
             a ação e os lugares) fica parado, e a Administração fica ancorada
@@ -308,8 +307,8 @@ export function BarraLateral({
             <Link href="/casos" className="flex min-w-0 items-center gap-2.5 rounded-md">
               <MarcaOria variante="sextante" alt="" className={MARCA_SEXTANTE} />
               <span className="flex flex-col leading-tight">
-                <span className="text-sm font-semibold uppercase tracking-wide text-vidro-texto">Oria</span>
-                <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-vidro-suave">Digital</span>
+                <span className="text-sm font-semibold uppercase tracking-wide text-tinta-900">Oria</span>
+                <span className="text-[10px] font-medium uppercase tracking-[0.2em] text-tinta-500">Digital</span>
               </span>
             </Link>
             <button
@@ -318,7 +317,7 @@ export function BarraLateral({
               title="Recolher o menu"
               aria-label="Recolher o menu"
               aria-expanded
-              className="rounded p-1 text-vidro-suave transition-colors hover:bg-white/10 hover:text-vidro-texto"
+              className="rounded p-1 text-tinta-500 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
             >
               <IconeRecolher />
             </button>
@@ -330,14 +329,14 @@ export function BarraLateral({
           {podeCriar ? (
             <Link
               href="/casos/novo"
-              className={`${ITEM_BASE} bg-vidro-texto text-vidro-tinta hover:bg-vidro-papel`}
+              className={`${ITEM_BASE} bg-acento-600 text-papel hover:opacity-90`}
             >
               <IconeMais />
               Novo mandato
             </Link>
           ) : (
             // Sem o botão, o MOTIVO: quem procura "Novo mandato" e não acha lê por que (não é `title=`).
-            motivoSemCriar && <p className="px-3 py-1.5 text-xs text-vidro-suave">{motivoSemCriar}</p>
+            motivoSemCriar && <p className="px-3 py-1.5 text-xs text-tinta-500">{motivoSemCriar}</p>
           )}
 
           <div className="mt-2 flex flex-col gap-0.5">
@@ -364,7 +363,7 @@ export function BarraLateral({
               Recentes
             </p>
             {recentes.length === 0 ? (
-              <p className="px-3 py-1.5 text-xs text-vidro-suave">{vazioDa}</p>
+              <p className="px-3 py-1.5 text-xs text-tinta-500">{vazioDa}</p>
             ) : (
               <ul className="space-y-0.5">
                 {recentes.map((m) => {
@@ -398,7 +397,7 @@ export function BarraLateral({
           </div>
 
           {mostrarAdministracao && (
-          <div className="mt-auto border-t border-white/10 pt-3">
+          <div className="mt-auto border-t border-tinta-200 pt-3">
             <p className={`px-3 pb-1 ${ROTULO_SECAO}`}>
               Administração
             </p>
