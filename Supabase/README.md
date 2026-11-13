@@ -1235,6 +1235,14 @@ supabase db execute --file Supabase/migrations/0274_o_aging_que_so_existia_no_na
 supabase db execute --file Supabase/migrations/0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql
 # DEPOIS DE APLICAR, confira:
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0276' and not presente;   -- ZERO linhas
+# A 0300 (Função 1 do desenho das quatro funções) cria `fn_kit_do_caso(uuid)` (o estado de cada item do Kit Básico derivado na leitura: faltante, dispensado, aguardando_extracao, recebido_sem_linha, extraido, conferido; conferido = toda linha da versão vigente aceita por PESSOA, o auto-aceite não conta), `fn_adotar_chave_item_faltante(uuid)`, as colunas `pendencia.chave_motor` e `pendencia.resolvida_por_documento_id`, e REEMITE `fn_recomputar_completude` (mesma assinatura e ACL: a item_faltante passa a ser achada pela chave e não pelo texto da descrição, resolve só a que o motor abriu, guarda o documento que fechou e grava SEMPRE o evento `completude_recomputada`). 8 requisitos novos na sonda (ordem 1364-1371).
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, add column if not exists, requisitos por upsert). BACKFILL: atribui a chave às 233 item_faltante do Kit ainda não resolvidas (medido em 13/11/2026: 205 abertas + 26 aceita_com_ressalva + 2 rejeitada, 52 mandatos); não muda estado nem descrição. Efeito colateral CONHECIDO: na próxima conferência de cada mandato, as pendências decididas por pessoa que já têm documento que serve (6 das 26 aceita_com_ressalva) passam a resolvida, com o estado anterior no evento. Aplicar DEPOIS da 0276.
+# >>> Teste: Supabase/test/o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.test.sql.
+supabase db execute --file Supabase/migrations/0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0300' and not presente;   -- ZERO linhas
+#   select count(*) from pendencia where tipo = 'item_faltante' and estado <> 'resolvida' and chave_motor is not null;   -- 233 (as 2 de contrato social ficam sem chave)
+#   select depois from evento_auditoria where acao = 'chave_motor_item_faltante_adotada';   -- {"adotadas": 233}
 # A 0242 cria o catálogo conta_canonica (a árvore demonstração > grupo > seção > subgrupo, 27 nós: 5 raízes, 2 grupos, 15 seções do SECAO_CANONICA_ENUM, 4 subgrupos do Ativo Não Circulante e o balde Outros), com RLS de leitura por papel, a guarda de raiz (gatilho de instrução), 3 views de sonda e 9 requisitos na sonda. Só a taxonomia atual: conta-folha (caixa, clientes…) é a P27.
 # >>> Rodar COMO `postgres`; reaplicável (create if not exists, seed on conflict do nothing, requisitos por upsert). Nenhuma linha existente é tocada.
 # >>> Teste: Supabase/test/conta_canonica.test.sql e Supabase/test/conta_canonica_regua.test.mjs.

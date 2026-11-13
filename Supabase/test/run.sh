@@ -1033,6 +1033,10 @@ echo "== 0276 — a visão geral que buscava dez mil linhas e fazia 230 chamadas
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0300 — o item do Kit que ficava recebido sem ninguém ter lido nada (estado do item derivado no banco, auto-aceite não é conferência, item_faltante achada por chave, documento que fechou, evento da conferência sempre gravado, mandato invisível = zero linhas)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
