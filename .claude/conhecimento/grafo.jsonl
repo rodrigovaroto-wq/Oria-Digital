@@ -279,6 +279,7 @@
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/perguntas/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/perguntas/page.tsx","txt":"page.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/perimetro/actions.ts","t":"arquivo","f":"portal/src/app/casos/[id]/perimetro/actions.ts","txt":"actions.ts"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/perimetro/page.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/perimetro/page.tsx","txt":"page.tsx"}
+{"k":"n","id":"arquivo:portal/src/app/casos/[id]/visao-blocos.tsx","t":"arquivo","f":"portal/src/app/casos/[id]/visao-blocos.tsx","txt":"visao-blocos.tsx"}
 {"k":"n","id":"arquivo:portal/src/app/casos/[id]/visao-dados.ts","t":"arquivo","f":"portal/src/app/casos/[id]/visao-dados.ts","txt":"visao-dados.ts"}
 {"k":"n","id":"arquivo:portal/src/app/casos/novo/actions.ts","t":"arquivo","f":"portal/src/app/casos/novo/actions.ts","txt":"actions.ts"}
 {"k":"n","id":"arquivo:portal/src/components/botao-discricao.tsx","t":"arquivo","f":"portal/src/components/botao-discricao.tsx","txt":"botao-discricao.tsx"}
@@ -310,6 +311,7 @@
 {"k":"n","id":"arquivo:portal/src/lib/modelagem-linha.ts","t":"arquivo","f":"portal/src/lib/modelagem-linha.ts","txt":"modelagem-linha.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/modelagem-lote.ts","t":"arquivo","f":"portal/src/lib/modelagem-lote.ts","txt":"modelagem-lote.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/modelo-institucional.ts","t":"arquivo","f":"portal/src/lib/modelo-institucional.ts","txt":"modelo-institucional.ts"}
+{"k":"n","id":"arquivo:portal/src/lib/origem-do-numero.ts","t":"arquivo","f":"portal/src/lib/origem-do-numero.ts","txt":"origem-do-numero.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/original-do-documento.ts","t":"arquivo","f":"portal/src/lib/original-do-documento.ts","txt":"original-do-documento.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/passo-do-mandato.ts","t":"arquivo","f":"portal/src/lib/passo-do-mandato.ts","txt":"passo-do-mandato.ts"}
 {"k":"n","id":"arquivo:portal/src/lib/perguntas.ts","t":"arquivo","f":"portal/src/lib/perguntas.ts","txt":"perguntas.ts"}
@@ -2188,10 +2190,10 @@
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_recomputar_completude","f":"portal/scripts/verificar-kit-basico.mts","l":7}
 {"k":"e","de":"arquivo:portal/scripts/verificar-kit-basico.mts","rel":"CHAMA","pa":"fn:fn_registrar_campos_extraidos","f":"portal/scripts/verificar-kit-basico.mts","l":531}
 {"k":"e","de":"arquivo:portal/scripts/verificar-linhas-por-versao.mts","rel":"CHAMA","pa":"fn:fn_linhas_por_versao","f":"portal/scripts/verificar-linhas-por-versao.mts","l":45}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1382}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1428}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1319}
-{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1362}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_eh_socio","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1408}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_membros_da_equipe","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1454}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_meu_papel","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1345}
+{"k":"e","de":"arquivo:portal/scripts/verificar-mensagem-de-falha.mts","rel":"CHAMA","pa":"fn:fn_pode_escrever_caso","f":"portal/scripts/verificar-mensagem-de-falha.mts","l":1388}
 {"k":"e","de":"arquivo:portal/scripts/verificar-modelagem-cobertura.mts","rel":"CHAMA","pa":"fn:fn_conferir_modelagem","f":"portal/scripts/verificar-modelagem-cobertura.mts","l":6}
 {"k":"e","de":"arquivo:portal/scripts/verificar-perimetro.mts","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/scripts/verificar-perimetro.mts","l":3}
 {"k":"e","de":"arquivo:portal/scripts/verificar-premissas-do-realizado.mts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/scripts/verificar-premissas-do-realizado.mts","l":452}
@@ -2261,6 +2263,7 @@
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perimetro/actions.ts","rel":"CHAMA","pa":"fn:fn_perimetro_encerrar_escopo","f":"portal/src/app/casos/[id]/perimetro/actions.ts","l":133}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perimetro/page.tsx","rel":"CHAMA","pa":"fn:fn_perimetro_situacao","f":"portal/src/app/casos/[id]/perimetro/page.tsx","l":16}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/perimetro/page.tsx","rel":"CHAMA","pa":"fn:fn_perimetro_veredito","f":"portal/src/app/casos/[id]/perimetro/page.tsx","l":16}
+{"k":"e","de":"arquivo:portal/src/app/casos/[id]/visao-blocos.tsx","rel":"CHAMA","pa":"fn:fn_kit_do_caso","f":"portal/src/app/casos/[id]/visao-blocos.tsx","l":195}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/visao-dados.ts","rel":"CHAMA","pa":"fn:fn_algum_documento_serve_como","f":"portal/src/app/casos/[id]/visao-dados.ts","l":29}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/visao-dados.ts","rel":"CHAMA","pa":"fn:fn_aprovar_caso","f":"portal/src/app/casos/[id]/visao-dados.ts","l":93}
 {"k":"e","de":"arquivo:portal/src/app/casos/[id]/visao-dados.ts","rel":"CHAMA","pa":"fn:fn_avaliar_portao2","f":"portal/src/app/casos/[id]/visao-dados.ts","l":95}
@@ -2319,6 +2322,7 @@
 {"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_linhas_para_modelagem","f":"portal/src/lib/modelo-institucional.ts","l":26}
 {"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_papel_linha","f":"portal/src/lib/modelo-institucional.ts","l":260}
 {"k":"e","de":"arquivo:portal/src/lib/modelo-institucional.ts","rel":"CHAMA","pa":"fn:fn_valores_por_ano","f":"portal/src/lib/modelo-institucional.ts","l":7161}
+{"k":"e","de":"arquivo:portal/src/lib/origem-do-numero.ts","rel":"CHAMA","pa":"fn:fn_kit_do_caso","f":"portal/src/lib/origem-do-numero.ts","l":8}
 {"k":"e","de":"arquivo:portal/src/lib/original-do-documento.ts","rel":"CHAMA","pa":"fn:fn_versao_com_extracao","f":"portal/src/lib/original-do-documento.ts","l":36}
 {"k":"e","de":"arquivo:portal/src/lib/passo-do-mandato.ts","rel":"CHAMA","pa":"fn:fn_upsert_caso","f":"portal/src/lib/passo-do-mandato.ts","l":14}
 {"k":"e","de":"arquivo:portal/src/lib/perguntas.ts","rel":"CHAMA","pa":"fn:fn_registrar_pergunta_acao","f":"portal/src/lib/perguntas.ts","l":30}

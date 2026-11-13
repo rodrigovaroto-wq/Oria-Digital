@@ -7,7 +7,11 @@ import { escopoDaLista, textoDeNenhumMandato } from "@/lib/acesso";
 import { CASO_STATUS_LABEL, CASO_STATUS_COLOR } from "@/lib/status";
 import { categoriaDaPendencia } from "@/lib/pendencia";
 import { ETAPAS_DO_MANDATO, etapaDoMandato } from "@/lib/etapa-do-mandato";
-import { FILTROS_DA_FILA, contarFila, daFila, verboDaPendencia, type FiltroDaFila } from "@/lib/painel";
+import type { Caso } from "@/lib/types";
+import {
+  ABAS_DOS_MANDATOS, FILTROS_DA_FILA, agruparPorMandato, contarFila, daFila, fatiaDaPagina, verboDaPendencia,
+  type AbaDosMandatos, type FiltroDaFila, type GrupoDoMandato,
+} from "@/lib/painel";
 import { rotuloDaPendencia, nomeDaChecagem, partesDaDescricao, suavizarMensagem } from "@/lib/rotulos";
 import { formatarTipoTaxonomia } from "@/lib/export";
 import {
@@ -15,6 +19,7 @@ import {
   type DocumentoNoPainel, type UsoDoLote,
 } from "./painel-dados";
 import { Indicador } from "./indicador-do-painel";
+import { LegendaDeOrigem } from "@/components/selo-de-origem";
 
 // OS BLOCOS DO PAINEL, cada um com a sua consulta e o seu `<Suspense>` (ver `components/revelar.tsx`).
 //
@@ -28,11 +33,10 @@ import { Indicador } from "./indicador-do-painel";
 // sendo dita pelo bloco que a usa (traço com a causa, cartão de erro, faixa de aviso) — a MESMA
 // lógica de antes, só movida. Um erro lançado aqui cai no `error.tsx` do segmento, como antes.
 
-/** A fila mostra 20; "ver todas" sobe a 100. Acima disso o texto manda abrir o mandato. */
-const FILA_VISIVEL = 20;
-const FILA_VISIVEL_AMPLA = 100;
-/** "Seus mandatos": os travados entram TODOS; os demais completam até este total. */
-const MANDATOS_VISIVEIS = 6;
+/** A fila mostra 10 MANDATOS (cada um com todas as suas pendências em chips); "ver todos" mostra todos. */
+const FILA_VISIVEL = 10;
+/** "Seus mandatos": linhas por página (a maquete pede de 10 a 15). */
+const MANDATOS_POR_PAGINA = 12;
 
 // A fila é ordenada por consequência, não por data: bloqueante impede a
 // aprovação do mandato, complementar não impede nada.
@@ -40,12 +44,6 @@ const PESO_SEVERIDADE: Record<string, number> = {
   bloqueante: 0,
   importante: 1,
   complementar: 2,
-};
-
-const TOM_SEVERIDADE: Record<string, { ponto: string; chip: string; rotulo: string }> = {
-  bloqueante: { ponto: "bg-risco-500", chip: "bg-risco-100 text-risco-800", rotulo: "bloqueia a aprovação" },
-  importante: { ponto: "bg-alerta-500", chip: "bg-alerta-100 text-alerta-900", rotulo: "importante" },
-  complementar: { ponto: "bg-tinta-400", chip: "bg-tinta-100 text-tinta-600", rotulo: "complementar" },
 };
 
 const FUSO = "America/Sao_Paulo";
@@ -215,8 +213,8 @@ export async function IndicadoresDoPainel() {
     : "nenhum documento processado ainda";
 
   return (
-    <div className="carta overflow-hidden">
-        <div className="grid grid-cols-2 gap-px bg-tinta-100 sm:grid-cols-4">
+    <div className="space-y-2">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
           <Indicador
             valor={numero(ativos.length)}
             rotulo={plural(ativos.length, "mandato em andamento", "mandatos em andamento")}
@@ -236,6 +234,7 @@ export async function IndicadoresDoPainel() {
           <Indicador
             valor={cobertura === null ? null : `${Math.round(cobertura * 100)}%`}
             rotulo="cobertura da leitura"
+            origem="calculado"
             barra={cobertura}
             detalhe={
               cobertura === null
@@ -250,6 +249,7 @@ export async function IndicadoresDoPainel() {
           <Indicador
             valor={tempoMedioMs === null ? null : duracaoCurta(tempoMedioMs)}
             rotulo="tempo médio de ingestão"
+            origem="calculado"
             detalhe={detalheDoTempo(nJanelas, janelasLongas)}
             nota={
               documentosLidos
@@ -258,6 +258,7 @@ export async function IndicadoresDoPainel() {
             }
           />
         </div>
+        <LegendaDeOrigem />
     </div>
   );
 }
@@ -319,99 +320,93 @@ export async function AvisosDoPainel() {
 // diferença cai sempre ABAIXO de tudo o que já foi lido — a fila é o fim da coluna da esquerda e os
 // mandatos, o da direita — então nada que alguém já leu muda de lugar. CLS medido nas duas telas
 // no relatório do commit.
-const ALTURA_CELULA_DO_INDICADOR = 130;
-const ALTURA_LINHA_DA_FILA = 77;
+const ALTURA_CELULA_DO_INDICADOR = 122;
+const ALTURA_LINHA_DA_FILA = 64;
 const ALTURA_LINHA_RECENTE = 53.5;
 const ALTURA_CABECALHO_DO_DIA = 29.5;
-const ALTURA_LINHA_MANDATO = 71.5;
+const ALTURA_LINHA_MANDATO = 62;
 // ---------------------------------------------------------------------------------------------------
 
 export function EsqueletoDosIndicadores() {
   return (
-    <div className="carta overflow-hidden">
-      <div className="grid grid-cols-2 gap-px bg-tinta-100 sm:grid-cols-4">
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (
-          <div key={i} className="bg-folha px-4 py-4" style={{ minHeight: ALTURA_CELULA_DO_INDICADOR }}>
+          <div key={i} className="carta px-[18px] py-4" style={{ minHeight: ALTURA_CELULA_DO_INDICADOR }}>
             <Bloco className="h-8 w-16" />
             <Bloco className="mt-2 h-3.5 w-32" />
             <Bloco className="mt-1 h-4 w-24" />
           </div>
         ))}
       </div>
+      <Bloco className="h-4 w-80 max-w-full" />
     </div>
   );
 }
 
+const CABECALHO_DO_BLOCO = "flex flex-col gap-2 border-b border-tinta-200 px-[18px] py-3.5 sm:flex-row sm:items-center sm:justify-between";
+
 export function EsqueletoDaFila() {
   return (
-    <>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
+    <div className="carta overflow-hidden">
+      <div className={CABECALHO_DO_BLOCO}>
         <h2 className="titulo-secao">Precisa de você</h2>
-        <Bloco className="h-4 w-40" />
+        <Bloco className="h-8 w-72 max-w-full rounded-xl" />
       </div>
-      <div className="mb-2 flex flex-wrap gap-1.5">
-        {[0, 1, 2, 3, 4].map((i) => <Bloco key={i} className="h-[22px] w-24 rounded-full" />)}
-      </div>
-      <ul className="carta divide-y divide-tinta-100 overflow-hidden">
-        {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-          <li key={i} className="flex items-start gap-3 px-4 py-3" style={{ minHeight: ALTURA_LINHA_DA_FILA }}>
-            <Bloco className="mt-1.5 h-2 w-2 rounded-full" />
+      <ul className="divide-y divide-tinta-100">
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <li key={i} className="flex items-center gap-3 px-[18px] py-3" style={{ minHeight: ALTURA_LINHA_DA_FILA }}>
             <div className="min-w-0 flex-1 space-y-2">
-              <Bloco className="h-4 w-1/2" />
-              <Bloco className="h-3 w-5/6" />
+              <Bloco className="h-4 w-1/3" />
+              <Bloco className="h-5 w-2/3" />
             </div>
-            <Bloco className="h-6 w-28" />
+            <Bloco className="hidden h-8 w-28 sm:block" />
           </li>
         ))}
       </ul>
-    </>
+    </div>
   );
 }
 
 export function EsqueletoDosRecentes() {
   return (
-    <>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
+    <div className="carta overflow-hidden">
+      <div className={CABECALHO_DO_BLOCO}>
         <h2 className="titulo-secao">O que chegou</h2>
         <Bloco className="h-4 w-16" />
       </div>
-      <div className="carta overflow-hidden">
-        <div className="border-b border-tinta-100 bg-tinta-50/60 px-4 py-1.5" style={{ height: ALTURA_CABECALHO_DO_DIA }}>
-          <Bloco className="h-3 w-12" />
-        </div>
-        <ul className="divide-y divide-tinta-100">
-          {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
-            <li key={i} className="flex items-start gap-3 px-4 py-2.5" style={{ minHeight: ALTURA_LINHA_RECENTE }}>
-              <Bloco className="h-3 w-9" />
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <Bloco className="h-3 w-2/3" />
-                <Bloco className="h-3 w-1/2" />
-              </div>
-              <Bloco className="h-3 w-12" />
-            </li>
-          ))}
-        </ul>
+      <div className="border-b border-tinta-100 bg-tinta-50 px-[18px] py-1.5" style={{ height: ALTURA_CABECALHO_DO_DIA }}>
+        <Bloco className="h-3 w-12" />
       </div>
-    </>
+      <ul className="divide-y divide-tinta-100">
+        {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => (
+          <li key={i} className="flex items-start gap-3 px-[18px] py-2.5" style={{ minHeight: ALTURA_LINHA_RECENTE }}>
+            <Bloco className="h-3 w-9" />
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Bloco className="h-3 w-2/3" />
+              <Bloco className="h-3 w-1/2" />
+            </div>
+            <Bloco className="h-3 w-12" />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
 export function EsqueletoDosMandatos() {
   return (
-    <div className="mt-5">
-      <div className="mb-2 flex items-baseline justify-between gap-3">
+    <div className="carta overflow-hidden">
+      <div className={CABECALHO_DO_BLOCO}>
         <h2 className="titulo-secao">Seus mandatos</h2>
-        <Bloco className="h-4 w-24" />
+        <Bloco className="h-8 w-64 max-w-full rounded-xl" />
       </div>
-      <ul className="carta divide-y divide-tinta-100 overflow-hidden">
+      <ul className="divide-y divide-tinta-100">
         {[0, 1, 2, 3, 4, 5].map((i) => (
-          <li key={i} className="px-4 py-2.5" style={{ minHeight: ALTURA_LINHA_MANDATO }}>
-            <div className="flex items-center justify-between gap-3">
-              <Bloco className="h-3.5 w-1/2" />
-              <Bloco className="h-5 w-20 rounded-full" />
-            </div>
-            <Bloco className="mt-2 h-1 w-full rounded-full" />
-            <Bloco className="mt-2 h-3 w-24" />
+          <li key={i} className="flex items-center justify-between gap-3 px-[18px] py-3" style={{ minHeight: ALTURA_LINHA_MANDATO }}>
+            <Bloco className="h-4 w-1/3" />
+            <Bloco className="hidden h-3 w-32 sm:block" />
+            <Bloco className="h-5 w-20 rounded-full" />
           </li>
         ))}
       </ul>
@@ -422,13 +417,13 @@ export function EsqueletoDosMandatos() {
 /** A grade inteira, enquanto nem se sabe se há mandato (a lista de mandatos ainda não chegou). */
 export function EsqueletoDaGrade() {
   return (
-    <div role="status" aria-live="polite" className="grid gap-5 lg:grid-cols-3">
+    <div role="status" aria-live="polite" className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
       <span className="sr-only">Carregando o painel…</span>
-      <div className="min-w-0 lg:col-span-2"><EsqueletoDaFila /></div>
-      <div className="min-w-0">
-        <EsqueletoDosRecentes />
+      <div className="min-w-0 space-y-5">
+        <EsqueletoDaFila />
         <EsqueletoDosMandatos />
       </div>
+      <div className="min-w-0"><EsqueletoDosRecentes /></div>
     </div>
   );
 }
@@ -472,152 +467,175 @@ function SemMandato({ perm }: Readonly<{ perm: PermissoesDaTela }>) {
   );
 }
 
-export async function CorpoDoPainel({ filtro, verTudo }: Readonly<{ filtro: FiltroDaFila; verTudo: boolean }>) {
+/** O que a URL do Início carrega: a aba da fila, "ver todos", a aba dos mandatos e a página deles. */
+export type EstadoDaUrl = { fila: FiltroDaFila; verTudo: boolean; aba: AbaDosMandatos | null; pagina: number };
+
+function hrefDoPainel(e: EstadoDaUrl, mudar: Partial<EstadoDaUrl> = {}): string {
+  const v = { ...e, ...mudar };
+  const q = new URLSearchParams();
+  if (v.fila !== "todas") q.set("fila", v.fila);
+  if (v.verTudo) q.set("ver", "tudo");
+  if (v.aba) q.set("m", v.aba);
+  if (v.pagina > 1) q.set("p", String(v.pagina));
+  const t = q.toString();
+  return t ? `/casos?${t}` : "/casos";
+}
+
+export async function CorpoDoPainel({ estado }: Readonly<{ estado: EstadoDaUrl }>) {
   const perm = await lerPermissoes();
   const { ativos } = await lerCarteira();
 
   if (ativos.length === 0) return <SemMandato perm={perm} />;
 
   return (
-    <div className="grid gap-5 lg:grid-cols-3">
-      {/* `min-w-0` nas duas colunas: item de grid tem largura mínima = o conteúdo, e UMA palavra
+    <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_340px]">
+      {/* `min-w-0` nas colunas: item de grid tem largura mínima = o conteúdo, e UMA palavra
           longa sem espaço na descrição (ex.: um nome de função do banco, vistoria P2 de 04/11)
           esticava a coluna — 643 px num celular de 390. Reproduzido com o CSS compilado: 542 px
           sem, 390 px com. */}
-      <Revelar rotulo="Carregando a fila de pendências…" className="min-w-0 lg:col-span-2" esqueleto={<EsqueletoDaFila />}>
-        <FilaDoPainel filtro={filtro} verTudo={verTudo} />
-      </Revelar>
-      <div className="min-w-0">
-        <Revelar rotulo="Carregando os documentos recentes…" esqueleto={<EsqueletoDosRecentes />}>
-          <RecentesDoPainel />
+      <div className="min-w-0 space-y-5">
+        <Revelar rotulo="Carregando a fila de pendências…" esqueleto={<EsqueletoDaFila />}>
+          <FilaDoPainel estado={estado} />
         </Revelar>
         <Revelar rotulo="Carregando seus mandatos…" esqueleto={<EsqueletoDosMandatos />}>
-          <MandatosDoPainel />
+          <MandatosDoPainel estado={estado} />
         </Revelar>
       </div>
+      <Revelar rotulo="Carregando os documentos recentes…" className="min-w-0" esqueleto={<EsqueletoDosRecentes />}>
+        <RecentesDoPainel />
+      </Revelar>
     </div>
   );
 }
 
 type PendenciaDaFila = Awaited<ReturnType<typeof lerTrava>>["pendencias"][number];
 
-function hrefDaFila(f: string, ver = false): string {
-  const q = new URLSearchParams();
-  if (f !== "todas") q.set("fila", f);
-  if (ver) q.set("ver", "tudo");
-  const t = q.toString();
-  return t ? `/casos?${t}` : "/casos";
+/**
+ * O texto do chip. O Item Faltante do Kit é o caso que fez a fila repetir "Item Faltante" 20 vezes: o que
+ * distingue uma linha da outra está na descrição ("...ausente: FLUXO_CAIXA"), então o chip diz o ITEM.
+ * Se a descrição não segue o padrão, cai no rótulo do tipo — nunca num chute.
+ */
+function rotuloDoChip(p: PendenciaDaFila): string {
+  if (p.tipo === "item_faltante") {
+    const m = /ausente:\s*([A-Z0-9_]+)\s*$/.exec(p.descricao ?? "");
+    if (m) return formatarTipoTaxonomia(m[1]);
+  }
+  return nomeDaChecagem(p.motivo ?? null) ?? rotuloDaPendencia(p.tipo);
 }
 
-function textoDoTopoDaFila(lida: boolean, abertas: number, mostradas: number, filtradas: number): string {
+function textoDoTopoDaFila(lida: boolean, abertas: number, mandatos: number, filtradas: number): string {
   if (!lida) return "não conferido agora";
   if (abertas === 0) return "nada em aberto";
-  return `${mostradas} de ${filtradas}, as que travam primeiro`;
+  return `${mandatos} ${plural(mandatos, "mandato", "mandatos")} · ${numero(filtradas)} ${plural(filtradas, "pendência", "pendências")}`;
 }
 
-function FiltrosDaFila({ filtro, contagens }: Readonly<{ filtro: FiltroDaFila; contagens: ReturnType<typeof contarFila> }>) {
+/** As abas: uma faixa segmentada que rola de lado no celular em vez de quebrar a linha. */
+const FAIXA_DE_ABAS = "-mx-1 max-w-full overflow-x-auto px-1 py-0.5";
+const TRILHO_DE_ABAS = "inline-flex gap-0.5 rounded-xl bg-tinta-50 p-[3px]";
+function classeDaAba(atual: boolean): string {
+  return `inline-flex items-center gap-1.5 whitespace-nowrap rounded-[9px] px-3 py-1.5 text-[12.5px] transition-colors ${
+    atual ? "bg-folha font-medium text-tinta-900 shadow-sm" : "text-tinta-500 hover:text-tinta-900"
+  }`;
+}
+
+function FiltrosDaFila({ estado, contagens }: Readonly<{ estado: EstadoDaUrl; contagens: ReturnType<typeof contarFila> }>) {
   return (
-    <nav aria-label="Filtrar a fila" className="mb-2 flex flex-wrap gap-1.5">
-      {FILTROS_DA_FILA.map((f) => {
-        const atual = f.chave === filtro;
-        return (
-          <Link
-            key={f.chave}
-            href={hrefDaFila(f.chave)}
-            aria-current={atual ? "page" : undefined}
-            className={`chip border transition-colors ${
-              atual
-                ? "border-tinta-900 bg-tinta-900 text-papel"
-                : "border-tinta-200 bg-folha text-tinta-700 hover:bg-tinta-50"
-            }`}
-          >
-            {f.rotulo} <span className="tabular-nums opacity-75">{numero(contagens[f.chave])}</span>
-          </Link>
-        );
-      })}
+    <nav aria-label="Filtrar a fila" className={FAIXA_DE_ABAS}>
+      <div className={TRILHO_DE_ABAS}>
+        {FILTROS_DA_FILA.map((f) => {
+          const atual = f.chave === estado.fila;
+          return (
+            <Link
+              key={f.chave}
+              href={hrefDoPainel(estado, { fila: f.chave, verTudo: false })}
+              aria-current={atual ? "page" : undefined}
+              className={classeDaAba(atual)}
+            >
+              {f.rotulo} <span className="num text-[11px] opacity-75">{numero(contagens[f.chave])}</span>
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
 
-function LinhaDaFila({ p, nomeDoMandato }: Readonly<{ p: PendenciaDaFila; nomeDoMandato: string }>) {
-  const tom = TOM_SEVERIDADE[p.severidade] ?? TOM_SEVERIDADE.complementar;
-  // A fila leva à gaveta certa da aba Pendências: documento a confirmar abre o
-  // formulário; o resto cai no filtro da própria espécie. O verbo do botão
-  // vem da mesma categoria que escolhe a gaveta (lib/painel.ts).
-  const destino = `/casos/${p.caso_id}/pendencias?filtro=${categoriaDaPendencia(p.tipo)}`;
-  const resumoTexto = resumoDaPendencia(p.descricao);
-  const checagem = nomeDaChecagem(p.motivo ?? null);
-  return (
-    <li>
-      <Link
-        href={destino}
-        className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-tinta-50"
-      >
-        {/* O ponto repete em cor o que o chip diz em palavra: cor
-            sozinha nunca carrega significado nesta tela. */}
-        <span aria-hidden className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${tom.ponto}`} />
-        <div className="min-w-0 flex-1">
-          <p className="flex flex-wrap items-baseline gap-x-2 text-sm">
-            <span className="font-semibold text-tinta-900">{rotuloDaPendencia(p.tipo)}</span>
-            {/* Qual checagem acusou. Sem isto, seis reconciliações
-                diferentes viram seis linhas iguais na fila. */}
-            {checagem && (
-              <span className="text-xs text-tinta-500">
-                · {checagem}
-              </span>
-            )}
-            <span className="valor-sensivel truncate text-xs text-tinta-500">
-              {nomeDoMandato}
-            </span>
-          </p>
-          {resumoTexto && (
-            <p className="valor-sensivel mt-0.5 line-clamp-2 text-xs text-tinta-600 [overflow-wrap:anywhere]">{resumoTexto}</p>
-          )}
-        </div>
-        <span className="flex shrink-0 flex-col items-end gap-1.5">
-          <span className={`chip ${tom.chip}`}>{tom.rotulo}</span>
-          <span className="btn-secundario !px-2.5 !py-1 !text-xs">{verboDaPendencia(p.tipo, p.estado)}</span>
-        </span>
-      </Link>
-    </li>
-  );
-}
+const MAX_CHIPS = 3;
 
-function RodapeDaFila({ restantes, verTudo, filtradas, filtro }: Readonly<{
-  restantes: number; verTudo: boolean; filtradas: number; filtro: FiltroDaFila;
+function LinhaDoGrupo({ g, nome, casoPorId }: Readonly<{
+  g: GrupoDoMandato<PendenciaDaFila>; nome: string; casoPorId: Map<string, Caso>;
 }>) {
-  const passaDoTeto = filtradas > FILA_VISIVEL_AMPLA;
-  const quantas = passaDoTeto ? `as primeiras ${FILA_VISIVEL_AMPLA}` : "todas";
+  const caso = casoPorId.get(g.casoId);
+  // A fila leva à gaveta certa da aba Pendências. Com UMA espécie só, cai no filtro dela; com várias,
+  // abre a aba inteira. O verbo segue a mesma regra: um só verbo, esse; verbos diferentes, "Resolver".
+  const categorias = new Set(g.itens.map((p) => categoriaDaPendencia(p.tipo)));
+  const verbos = new Set(g.itens.map((p) => verboDaPendencia(p.tipo, p.estado)));
+  const [unica] = categorias;
+  const destino = `/casos/${g.casoId}/pendencias${categorias.size === 1 ? `?filtro=${unica}` : ""}`;
+  const [unico] = verbos;
+  const verbo = verbos.size === 1 ? unico : "Resolver";
+  // A frase do documento/entidade (nome de empresa, números) vem do pior item que NÃO é Item Faltante do
+  // Kit: esse já está dito inteiro no chip e a frase só repetiria "Item obrigatório ... ausente".
+  const comFrase = g.itens.find((p) => p.tipo !== "item_faltante");
+  const resumoTexto = comFrase ? resumoDaPendencia(comFrase.descricao) : "";
+  const visiveis = g.chips.slice(0, MAX_CHIPS);
+  const resto = g.chips.slice(MAX_CHIPS).reduce((n, c) => n + c.n, 0);
   return (
-    <li className="bg-tinta-50/60 px-4 py-2 text-[11px] text-tinta-500">
-      Mais {restantes}{" "}
-      {plural(restantes, "pendência", "pendências")} em aberto.{" "}
-      {!verTudo && (
-        <>
-          <Link href={hrefDaFila(filtro, true)} className="font-medium text-acento-700 hover:underline">
-            Mostrar {quantas}
-          </Link>
-          .{" "}
-        </>
-      )}
-      {(verTudo || passaDoTeto) &&
-        "O resto está em cada mandato, na aba Pendências."}
-    </li>
+    <tr>
+      <td className="max-w-[16rem] align-top">
+        <Link href={destino} className="valor-sensivel block truncate font-medium text-tinta-900 hover:underline">{nome}</Link>
+        <span className="mt-0.5 block text-xs text-tinta-500">
+          {caso ? `${CASO_STATUS_LABEL[caso.status]} · ` : ""}{numero(g.total)} {plural(g.total, "pendência", "pendências")}
+        </span>
+      </td>
+      <td>
+        <div className="flex flex-wrap gap-1.5">
+          {g.bloqueantes > 0 && <span className="chip bg-risco-100 text-risco-800">{numero(g.bloqueantes)} {plural(g.bloqueantes, "bloqueia", "bloqueiam")}</span>}
+          {g.aConfirmar > 0 && <span className="chip bg-alerta-100 text-alerta-800">{numero(g.aConfirmar)} a confirmar</span>}
+          {visiveis.map((c) => (
+            <span key={c.rotulo} className="chip bg-tinta-100 text-tinta-700">
+              {c.rotulo}{c.n > 1 && <span className="num text-[11px] opacity-75"> ×{c.n}</span>}
+            </span>
+          ))}
+          {resto > 0 && <span className="chip bg-tinta-100 text-tinta-700">+{numero(resto)}</span>}
+        </div>
+        {resumoTexto && (
+          <p className="valor-sensivel mt-1.5 line-clamp-1 text-xs text-tinta-600 [overflow-wrap:anywhere]">{resumoTexto}</p>
+        )}
+      </td>
+      <td className="hidden text-right align-top sm:table-cell">
+        <Link href={destino} className="btn-secundario !px-2.5 !py-1 !text-xs">{verbo}</Link>
+      </td>
+    </tr>
   );
 }
 
-function CorpoDaFila({ pendenciasLidas, abertas, filtradas, fila, nomePorCaso, verTudo, filtro }: Readonly<{
+function RodapeDaFila({ ocultos, pendenciasOcultas, estado }: Readonly<{
+  ocultos: number; pendenciasOcultas: number; estado: EstadoDaUrl;
+}>) {
+  return (
+    <div className="border-t border-tinta-200 px-[18px] py-3 text-xs text-tinta-500">
+      Mais {numero(ocultos)} {plural(ocultos, "mandato", "mandatos")} ({numero(pendenciasOcultas)}{" "}
+      {plural(pendenciasOcultas, "pendência", "pendências")}).{" "}
+      <Link href={hrefDoPainel(estado, { verTudo: true })} className="font-medium text-acento-700 hover:underline">
+        Ver todos →
+      </Link>
+    </div>
+  );
+}
+
+function CorpoDaFila({ pendenciasLidas, abertas, filtradas, grupos, nomePorCaso, casoPorId, estado }: Readonly<{
   pendenciasLidas: boolean;
   abertas: number;
   filtradas: number;
-  fila: PendenciaDaFila[];
+  grupos: GrupoDoMandato<PendenciaDaFila>[];
   nomePorCaso: Map<string, string>;
-  verTudo: boolean;
-  filtro: FiltroDaFila;
+  casoPorId: Map<string, Caso>;
+  estado: EstadoDaUrl;
 }>) {
   if (!pendenciasLidas) {
     return (
-      <div className="rounded-lg border border-risco-200 bg-risco-50 px-5 py-10 text-center">
+      <div className="m-3 rounded-lg border border-risco-200 bg-risco-50 px-5 py-10 text-center">
         <p className="text-sm font-medium text-risco-900">Não foi possível conferir as pendências</p>
         <p className="mt-1 text-sm text-risco-800">
           Não dá para dizer se há algo em aberto. Abra cada mandato, na aba Pendências, ou recarregue a página.
@@ -627,7 +645,7 @@ function CorpoDaFila({ pendenciasLidas, abertas, filtradas, fila, nomePorCaso, v
   }
   if (abertas === 0) {
     return (
-      <div className="rounded-lg border border-ok-200 bg-ok-50 px-5 py-10 text-center">
+      <div className="m-3 rounded-lg border border-ok-200 bg-ok-50 px-5 py-10 text-center">
         <p className="text-sm font-medium text-ok-900">Nenhuma pendência em aberto</p>
         <p className="mt-1 text-sm text-ok-800">
           Todos os documentos recebidos foram conferidos.
@@ -637,57 +655,67 @@ function CorpoDaFila({ pendenciasLidas, abertas, filtradas, fila, nomePorCaso, v
   }
   if (filtradas === 0) {
     return (
-      <div className="carta px-5 py-10 text-center text-sm text-tinta-500">
+      <div className="px-5 py-10 text-center text-sm text-tinta-500">
         Nenhuma pendência neste filtro.{" "}
         <Link href="/casos" className="font-medium text-acento-700 hover:underline">Ver todas</Link>
       </div>
     );
   }
+  const visiveis = estado.verTudo ? grupos : grupos.slice(0, FILA_VISIVEL);
+  const ocultos = grupos.slice(visiveis.length);
   return (
-    <ul className="carta divide-y divide-tinta-100 overflow-hidden">
-      {fila.map((p) => <LinhaDaFila key={p.id} p={p} nomeDoMandato={nomePorCaso.get(p.caso_id) ?? "mandato"} />)}
-      {filtradas > fila.length && (
-        <RodapeDaFila restantes={filtradas - fila.length} verTudo={verTudo} filtradas={filtradas} filtro={filtro} />
+    <>
+      <table className="tabela-a">
+        <thead>
+          <tr><th>Mandato</th><th>O que falta</th><th className="hidden sm:table-cell"><span className="sr-only">Ação</span></th></tr>
+        </thead>
+        <tbody>
+          {visiveis.map((g) => <LinhaDoGrupo key={g.casoId} g={g} nome={nomePorCaso.get(g.casoId) ?? "mandato"} casoPorId={casoPorId} />)}
+        </tbody>
+      </table>
+      {ocultos.length > 0 && (
+        <RodapeDaFila ocultos={ocultos.length} pendenciasOcultas={ocultos.reduce((n, g) => n + g.total, 0)} estado={estado} />
       )}
-    </ul>
+    </>
   );
 }
 
-// A fila de triagem.
-async function FilaDoPainel({ filtro, verTudo }: Readonly<{ filtro: FiltroDaFila; verTudo: boolean }>) {
-  const [{ nomePorCaso }, { pendencias, pendenciasLidas }] = await Promise.all([lerCarteira(), lerTrava()]);
+// A fila de triagem, agrupada por mandato (ver `agruparPorMandato`).
+async function FilaDoPainel({ estado }: Readonly<{ estado: EstadoDaUrl }>) {
+  const [{ nomePorCaso, casos }, { pendencias, pendenciasLidas }] = await Promise.all([lerCarteira(), lerTrava()]);
   // A fila é uma só lista: o filtro e as contagens saem do MESMO conjunto
   // (`pendencias`, abertas dos mandatos ativos), então "Travam a aprovação (3)"
-  // é exatamente a lista de 3 que aparece ao clicar.
+  // é exatamente o conjunto de 3 pendências que aparece, agrupado, ao clicar.
   const contagens = contarFila(pendencias);
   const ordenada = [...pendencias].sort(
     (a, b) =>
       (PESO_SEVERIDADE[a.severidade] ?? 9) - (PESO_SEVERIDADE[b.severidade] ?? 9) ||
       new Date(b.criada_em).getTime() - new Date(a.criada_em).getTime(),
   );
-  const filtradas = ordenada.filter((p) => daFila(p, filtro));
-  const fila = filtradas.slice(0, verTudo ? FILA_VISIVEL_AMPLA : FILA_VISIVEL);
+  const filtradas = ordenada.filter((p) => daFila(p, estado.fila));
+  const grupos = agruparPorMandato(filtradas, rotuloDoChip);
+  const casoPorId = new Map(casos.map((c) => [c.id, c] as const));
   return (
-    <>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h2 className="titulo-secao">Precisa de você</h2>
-        <p className="text-xs text-tinta-500">
-          {textoDoTopoDaFila(pendenciasLidas, pendencias.length, fila.length, filtradas.length)}
-        </p>
+    <div className="carta overflow-hidden">
+      <div className={CABECALHO_DO_BLOCO}>
+        <div className="flex items-baseline gap-3">
+          <h2 className="titulo-secao">Precisa de você</h2>
+          <p className="text-xs text-tinta-500">
+            {textoDoTopoDaFila(pendenciasLidas, pendencias.length, grupos.length, filtradas.length)}
+          </p>
+        </div>
+        {pendenciasLidas && pendencias.length > 0 && <FiltrosDaFila estado={estado} contagens={contagens} />}
       </div>
-
-      {pendenciasLidas && pendencias.length > 0 && <FiltrosDaFila filtro={filtro} contagens={contagens} />}
-
       <CorpoDaFila
         pendenciasLidas={pendenciasLidas}
         abertas={pendencias.length}
         filtradas={filtradas.length}
-        fila={fila}
+        grupos={grupos}
         nomePorCaso={nomePorCaso}
-        verTudo={verTudo}
-        filtro={filtro}
+        casoPorId={casoPorId}
+        estado={estado}
       />
-    </>
+    </div>
   );
 }
 
@@ -710,9 +738,9 @@ function LinhaRecente({ d, nomeDoMandato, linhas }: Readonly<{ d: DocumentoNoPai
     <li>
       <Link
         href={`/casos/${d.caso_id}/documentos/${d.id}`}
-        className="flex items-start gap-3 px-4 py-2.5 transition-colors hover:bg-tinta-50"
+        className="flex items-start gap-3 px-[18px] py-2.5 transition-colors hover:bg-tinta-50"
       >
-        <span className="mt-0.5 shrink-0 text-[11px] tabular-nums text-tinta-400">
+        <span className="num mt-0.5 shrink-0 text-[11px] text-tinta-500">
           {horaCurta(d.criado_em)}
         </span>
         <span className="min-w-0 flex-1">
@@ -725,7 +753,7 @@ function LinhaRecente({ d, nomeDoMandato, linhas }: Readonly<{ d: DocumentoNoPai
             {nomeDoMandato}
           </span>
         </span>
-        <span className="shrink-0 text-[11px] font-medium tabular-nums text-tinta-500">
+        <span className="num shrink-0 text-[11px] font-medium text-tinta-500">
           {numero(linhas)} {plural(linhas, "linha", "linhas")}
         </span>
       </Link>
@@ -743,23 +771,23 @@ async function RecentesDoPainel() {
     (d.documento_versao ?? []).reduce((s, v) => s + (linhasPorVersao.get(v.id) ?? 0), 0);
   const grupos = agruparPorDia(recentes, new Date());
   return (
-    <>
-      <div className="mb-2 flex items-baseline justify-between gap-3">
+    <div className="carta overflow-hidden">
+      <div className={CABECALHO_DO_BLOCO}>
         <h2 className="titulo-secao">O que chegou</h2>
         <p className="text-xs text-tinta-500">últimos {recentes.length}</p>
       </div>
 
       {recentes.length === 0 ? (
-        <div className="carta px-4 py-10 text-center text-sm text-tinta-500">
+        <div className="px-4 py-10 text-center text-sm text-tinta-500">
           {documentosLidos
             ? "Nenhum documento recebido ainda."
             : "Não foi possível ler os documentos agora."}
         </div>
       ) : (
-        <div className="carta overflow-hidden">
+        <div>
           {grupos.map((g) => (
             <div key={g.dia}>
-              <p className="border-b border-tinta-100 bg-tinta-50/60 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-tinta-400">
+              <p className="border-b border-tinta-100 bg-tinta-50 px-[18px] py-1.5 text-[11px] font-semibold uppercase tracking-wide text-tinta-500">
                 {g.dia}
               </p>
               <ul className="divide-y divide-tinta-100">
@@ -771,84 +799,195 @@ async function RecentesDoPainel() {
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
-function corDoPasso(feito: boolean, travado: boolean): string {
-  if (!feito) return "bg-tinta-100";
-  return travado ? "bg-risco-500" : "bg-acento-600";
-}
-
-function LinhaDoMandato({ c, quantas }: Readonly<{ c: CasoDaCarteira; quantas: number }>) {
-  const etapa = etapaDoMandato(c.status);
-  const travando = `${quantas} ${plural(quantas, "pendência travando", "pendências travando")}`;
+/** A régua de 4 passos. Cor é ESTADO: o passo atual de um mandato travado é risco; fora disso, tinta. */
+function ReguaDeEtapas({ etapa, travado }: Readonly<{ etapa: number; travado: boolean }>) {
   return (
-    <li>
-      <Link
-        href={`/casos/${c.id}`}
-        className="block px-4 py-2.5 transition-colors hover:bg-tinta-50"
-      >
-        <span className="flex items-center justify-between gap-3">
-          <span className="valor-sensivel min-w-0 truncate text-xs font-medium text-tinta-900">{c.nome}</span>
-          <span className="flex shrink-0 items-center gap-1.5">
-            {quantas > 0 && (
-              <span className="chip bg-risco-100 text-risco-800" title={travando}>
-                travado
-              </span>
-            )}
-            <span className={`chip ${CASO_STATUS_COLOR[c.status]}`}>{CASO_STATUS_LABEL[c.status]}</span>
-          </span>
-        </span>
-        {/* A régua é texto + preenchimento: a etapa atual vem escrita. */}
-        <span className="mt-1.5 flex gap-1" role="img" aria-label={`Etapa ${etapa + 1} de ${ETAPAS_DO_MANDATO.length}: ${ETAPAS_DO_MANDATO[etapa]}`}>
-          {ETAPAS_DO_MANDATO.map((nome, i) => (
-            <span key={nome} className={`h-1 flex-1 rounded-full ${corDoPasso(i <= etapa, quantas > 0)}`} />
-          ))}
-        </span>
-        <span className="mt-1 flex items-baseline justify-between text-[11px] text-tinta-500">
-          <span>{ETAPAS_DO_MANDATO[etapa]}</span>
-          {quantas > 0 && <span className="text-risco-700">{travando}</span>}
-        </span>
-      </Link>
-    </li>
+    <span className="flex items-center gap-2" role="img" aria-label={`Etapa ${etapa + 1} de ${ETAPAS_DO_MANDATO.length}: ${ETAPAS_DO_MANDATO[etapa]}`}>
+      <span className="flex gap-[3px]">
+        {ETAPAS_DO_MANDATO.map((nome, i) => {
+          let cor = "bg-tinta-200";
+          if (i < etapa) cor = "bg-tinta-400";
+          else if (i === etapa) cor = travado ? "bg-risco-500" : "bg-tinta-900";
+          return <span key={nome} className={`h-[5px] w-[22px] rounded-[3px] ${cor}`} />;
+        })}
+      </span>
+      <span className="text-xs text-tinta-500">{ETAPAS_DO_MANDATO[etapa]}</span>
+    </span>
   );
 }
 
-// "Seus mandatos": todo mandato travado entra (nenhum some por causa do teto), os demais completam
-// até MANDATOS_VISIVEIS, do mais novo ao mais antigo.
-async function MandatosDoPainel() {
-  const [{ ativos }, { pendenciasLidas, travadasPorCaso }] = await Promise.all([lerCarteira(), lerTrava()]);
-  const travados = ativos.filter((c) => travadasPorCaso.has(c.id));
-  const livres = ativos.filter((c) => !travadasPorCaso.has(c.id));
-  const seusMandatos = [...travados, ...livres.slice(0, Math.max(0, MANDATOS_VISIVEIS - travados.length))];
-  const foraDaLista = ativos.length - seusMandatos.length;
+/** "hoje 18:01", "ontem" ou "10/11": a data do último documento, no fuso de quem usa. */
+function atividadeCurta(iso: string, agora: Date): string {
+  const dia = diaRelativo(iso, agora);
+  if (dia === "Hoje") return `hoje ${horaCurta(iso)}`;
+  if (dia === "Ontem") return "ontem";
+  return new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: FUSO });
+}
+
+type LinhaDeMandato = {
+  caso: Caso; travadas: number; abertas: number; documentos: number | null; ultimo: string | null;
+};
+
+function SituacaoDoMandato({ l }: Readonly<{ l: LinhaDeMandato }>) {
+  if (l.caso.fechado_em) return <span className="chip bg-tinta-100 text-tinta-600">Fechado</span>;
+  if (l.travadas > 0) {
+    return <span className="chip bg-risco-100 text-risco-800">{l.travadas} {plural(l.travadas, "pendência", "pendências")}</span>;
+  }
+  if (l.abertas > 0) {
+    return <span className="chip bg-alerta-100 text-alerta-800">{l.abertas} em aberto</span>;
+  }
+  return <span className={`chip ${CASO_STATUS_COLOR[l.caso.status]}`}>{CASO_STATUS_LABEL[l.caso.status]}</span>;
+}
+
+function LinhaDoMandato({ l, agora, documentosLidos }: Readonly<{ l: LinhaDeMandato; agora: Date; documentosLidos: boolean }>) {
+  const { caso } = l;
+  const etapa = etapaDoMandato(caso.status);
   return (
-    <>
-      {/* Os mandatos ativos com a régua de etapas. Quem tem pendência
-          bloqueante vem primeiro e leva o chip "travado" — a informação do
-          antigo "Travados agora", sem perder nenhum mandato dele. */}
-      <div className="mt-5">
-        <div className="mb-2 flex items-baseline justify-between gap-3">
-          <h2 className="titulo-secao">Seus mandatos</h2>
-          <p className="text-xs text-tinta-500">{ativos.length} em andamento</p>
-        </div>
-        {!pendenciasLidas && (
-          <p className="mb-2 text-[11px] text-alerta-900">
-            Não foi possível conferir quais mandatos estão travados; a lista segue a ordem de abertura,
-            sem o status “travado”, e pode deixar de fora mandatos travados.
-          </p>
+    <tr>
+      <td className="max-w-[14rem]">
+        <Link href={`/casos/${caso.id}`} className="valor-sensivel block truncate font-medium text-tinta-900 hover:underline">{caso.nome}</Link>
+        <span className="mt-0.5 block text-xs text-tinta-500">
+          {l.documentos === null ? CASO_STATUS_LABEL[caso.status] : `${numero(l.documentos)} ${plural(l.documentos, "documento", "documentos")}`}
+        </span>
+      </td>
+      <td className="hidden sm:table-cell"><ReguaDeEtapas etapa={etapa} travado={l.travadas > 0} /></td>
+      <td><SituacaoDoMandato l={l} /></td>
+      <td className="num hidden whitespace-nowrap text-xs text-tinta-500 sm:table-cell">
+        {l.ultimo ? atividadeCurta(l.ultimo, agora) : (
+          // Sem documento NÃO é "sem atividade" nem uma data inventada: o traço diz o motivo.
+          <span title={documentosLidos ? "nenhum documento recebido ainda" : "a leitura dos documentos falhou"}>—</span>
         )}
-        <ul className="carta divide-y divide-tinta-100 overflow-hidden">
-          {seusMandatos.map((c) => <LinhaDoMandato key={c.id} c={c} quantas={travadasPorCaso.get(c.id) ?? 0} />)}
-          {foraDaLista > 0 && (
-            <li className="bg-tinta-50/60 px-4 py-2 text-[11px] text-tinta-500">
-              Mais {foraDaLista} {plural(foraDaLista, "mandato", "mandatos")}.{" "}
-              <Link href="/casos/todos" className="font-medium text-acento-700 hover:underline">Ver em Mandatos</Link>
-            </li>
-          )}
-        </ul>
+      </td>
+    </tr>
+  );
+}
+
+function PaginasDosMandatos({ estado, aba, de, ate, total, paginas, pagina }: Readonly<{
+  estado: EstadoDaUrl; aba: AbaDosMandatos; de: number; ate: number; total: number; paginas: number; pagina: number;
+}>) {
+  const botao = "grid h-7 min-w-7 place-items-center rounded-[10px] border border-tinta-200 px-1.5 text-xs";
+  const numeros = Array.from({ length: paginas }, (_, i) => i + 1)
+    .filter((n) => n === 1 || n === paginas || Math.abs(n - pagina) <= 1);
+  const alvo = (n: number) => hrefDoPainel(estado, { aba, pagina: n });
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-tinta-200 px-[18px] py-3 text-xs text-tinta-500">
+      <span className="num">{de + 1}–{ate} de {numero(total)}</span>
+      {paginas > 1 && (
+        <nav aria-label="Páginas de mandatos" className="flex items-center gap-1.5">
+          {pagina > 1 && <Link href={alvo(pagina - 1)} aria-label="Página anterior" className={`${botao} hover:bg-tinta-50`}>‹</Link>}
+          {numeros.map((n, i) => (
+            <span key={n} className="flex items-center gap-1.5">
+              {i > 0 && n - numeros[i - 1] > 1 && <span aria-hidden>…</span>}
+              {n === pagina
+                ? <span aria-current="page" className={`${botao} num border-tinta-900 bg-tinta-900 text-papel`}>{n}</span>
+                : <Link href={alvo(n)} className={`${botao} num hover:bg-tinta-50`}>{n}</Link>}
+            </span>
+          ))}
+          {pagina < paginas && <Link href={alvo(pagina + 1)} aria-label="Próxima página" className={`${botao} hover:bg-tinta-50`}>›</Link>}
+        </nav>
+      )}
+    </div>
+  );
+}
+
+// "Seus mandatos", em tabela e em três abas. Todo mandato ativo está em Travados ou em Andamento e todo
+// fechado em Fechados — a soma das abas é a carteira, nenhum some por causa de teto (a paginação só
+// reparte). Sem a leitura das pendências NÃO há "travado": Em andamento passa a listar todos os ativos e a
+// aba Travados diz que não sabe, em vez de ficar vazia.
+async function MandatosDoPainel({ estado }: Readonly<{ estado: EstadoDaUrl }>) {
+  const [{ ativos, casos }, { pendencias, pendenciasLidas, travadasPorCaso }, documentosRes] =
+    await Promise.all([lerCarteira(), lerTrava(), lerDocumentos()]);
+  const documentosLidos = !documentosRes.error;
+  const docs = new Map<string, { n: number; ultimo: string }>();
+  for (const d of documentosRes.data) {
+    const atual = docs.get(d.caso_id);
+    if (!atual) docs.set(d.caso_id, { n: 1, ultimo: d.criado_em });
+    else {
+      atual.n += 1;
+      if (new Date(d.criado_em).getTime() > new Date(atual.ultimo).getTime()) atual.ultimo = d.criado_em;
+    }
+  }
+  const abertasPorCaso = new Map<string, number>();
+  for (const p of pendencias) abertasPorCaso.set(p.caso_id, (abertasPorCaso.get(p.caso_id) ?? 0) + 1);
+  const linha = (caso: Caso): LinhaDeMandato => ({
+    caso,
+    travadas: travadasPorCaso.get(caso.id) ?? 0,
+    abertas: abertasPorCaso.get(caso.id) ?? 0,
+    documentos: documentosLidos ? (docs.get(caso.id)?.n ?? 0) : null,
+    ultimo: docs.get(caso.id)?.ultimo ?? null,
+  });
+  const travados = pendenciasLidas
+    ? ativos.filter((c) => travadasPorCaso.has(c.id)).sort((a, b) => (travadasPorCaso.get(b.id) ?? 0) - (travadasPorCaso.get(a.id) ?? 0))
+    : [];
+  const andamento = pendenciasLidas ? ativos.filter((c) => !travadasPorCaso.has(c.id)) : ativos;
+  const fechados = casos.filter((c) => c.fechado_em);
+  const listas: Record<AbaDosMandatos, Caso[]> = { travados, andamento, fechados };
+  const aba: AbaDosMandatos = estado.aba ?? (travados.length > 0 ? "travados" : "andamento");
+  const lista = listas[aba];
+  const fatia = fatiaDaPagina(lista.length, estado.pagina, MANDATOS_POR_PAGINA);
+  const agora = new Date();
+  return (
+    <div className="carta overflow-hidden">
+      <div className={CABECALHO_DO_BLOCO}>
+        <h2 className="titulo-secao">Seus mandatos</h2>
+        <nav aria-label="Filtrar os mandatos" className={FAIXA_DE_ABAS}>
+          <div className={TRILHO_DE_ABAS}>
+            {ABAS_DOS_MANDATOS.map((a) => (
+              <Link
+                key={a.chave}
+                href={hrefDoPainel(estado, { aba: a.chave, pagina: 1 })}
+                aria-current={a.chave === aba ? "page" : undefined}
+                className={classeDaAba(a.chave === aba)}
+              >
+                {a.rotulo}{" "}
+                <span className="num text-[11px] opacity-75">
+                  {a.chave === "travados" && !pendenciasLidas ? "—" : numero(listas[a.chave].length)}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </nav>
       </div>
-    </>
+      {!pendenciasLidas && (
+        <p className="border-b border-tinta-100 px-[18px] py-2 text-[11px] text-alerta-800">
+          Não foi possível conferir quais mandatos estão travados; a lista segue a ordem de abertura,
+          sem o status “travado”, e pode deixar de fora mandatos travados.
+        </p>
+      )}
+      {lista.length === 0 ? (
+        <p className="px-4 py-10 text-center text-sm text-tinta-500">
+          {aba === "travados" && !pendenciasLidas && "Não dá para dizer quais mandatos estão travados agora."}
+          {aba === "travados" && pendenciasLidas && "Nenhum mandato travado."}
+          {aba === "andamento" && "Nenhum mandato em andamento sem trava."}
+          {aba === "fechados" && "Nenhum mandato fechado."}
+        </p>
+      ) : (
+        <>
+          <table className="tabela-a">
+            <thead>
+              <tr>
+                <th>Mandato</th>
+                <th className="hidden sm:table-cell">Etapa</th>
+                <th>Situação</th>
+                <th className="hidden sm:table-cell" title="Data do último documento recebido">Último documento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lista.slice(fatia.de, fatia.ate).map((c) => (
+                <LinhaDoMandato key={c.id} l={linha(c)} agora={agora} documentosLidos={documentosLidos} />
+              ))}
+            </tbody>
+          </table>
+          <PaginasDosMandatos
+            estado={estado} aba={aba} de={fatia.de} ate={fatia.ate} total={lista.length}
+            paginas={fatia.paginas} pagina={fatia.pagina}
+          />
+        </>
+      )}
+    </div>
   );
 }

@@ -29,7 +29,7 @@
   grid-template-columns: 1fr;
   background: var(--l-bg);
   color: var(--l-ink);
-  font-family: var(--fonte-login), system-ui, sans-serif;
+  font-family: var(--fonte-texto), system-ui, sans-serif;
 }
 
 /* Brilho cobalto: deriva devagar (28 s), só transform + opacity, no compositor.

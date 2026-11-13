@@ -21,6 +21,13 @@
      - Título do Início: 3,2–3,8 s → 0,28 s. DCL do Início: 3,3 → 2,4 s. Visão geral: DCL 1,0–2,1 → 0,65–0,97 s.
      - CLS 0 nas 12 cargas.
      - Patch removido.
+  1b. **Telas internas na direção A: FEITAS em 13/11.**
+      - Visual: fundo único de mármore (escuro e claro), cartões foscos flutuantes, barra lateral flutuante, botão Sol/Lua entre a discrição e o perfil, e Geist no portal todo.
+      - "Precisa de você" agrupado por mandato e "Seus mandatos" em tabela com régua de etapas e paginação.
+      - Selo de origem do número, Kit Básico com % só do que tem conteúdo, e o bloco "Andamento da leitura".
+      - "Conferido" segue como "ainda não medido", porque depende da 0300 aplicada e da decisão do dono (botão "conferi" por documento, recomendado, sem resposta ainda).
+      - FALTA: a revisão independente do commit das telas.
+  1c. **0300 escrita, revisada e com os achados corrigidos (e4a3a9e): NÃO APLICADA.** Para aplicar, o dono autoriza. O portal ainda não lê `fn_kit_do_caso`; os estados novos estão no relatório do commit.
   2. **Fila aprovada pelo dono, nesta ordem:**
      - telas internas na direção A, incorporando do benchmark a cor por origem do número, o Kit com % de prontidão (recebido ≠ conferido) e o progresso por documento;
      - transições de página e abas deslizantes (transitions.dev);

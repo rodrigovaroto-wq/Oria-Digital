@@ -201,9 +201,13 @@ export const lerIndicadores = cache(async (id: string) => {
   // Documento que chegou, foi classificado e não rendeu UMA linha. É o que o
   // `fn_conferir_lote` mede do lado do banco; aqui ele vira número de topo,
   // porque é a pergunta que a rodada v45 respondeu tarde demais.
-  const semLinha = documentos.filter(
+  const documentosSemLinha = documentos.filter(
     (d) => ((d.documento_versao ?? []).reduce((n, v) => n + (linhasPorVersao.get(v.id) ?? 0), 0)) === 0,
-  ).length;
+  );
+  const semLinha = documentosSemLinha.length;
+  // O Kit em três partes (benchmark, item 4): recebido NÃO é "com conteúdo". `kitPresentes` já descontava o
+  // recebido sem conteúdo; agora o recebido inteiro também sai, para a tela mostrar a diferença.
+  const kitRecebidos = kitBasico.filter((i) => kitAtendidos?.has(i.codigo) ?? false).length;
   // Contagem parcial não é contagem (regra 1): com a leitura incompleta, a soma parcial NÃO
   // aparece como total (o valor vira "—") e "sem nenhuma linha" não é dito — contaria
   // documento cujas linhas estavam nas páginas que não vieram.
@@ -229,7 +233,8 @@ export const lerIndicadores = cache(async (id: string) => {
 
   return {
     caso, portao2, documentos, documentosLidos, nAbertas, linhasTotais, linhasConhecidas, semLinha,
-    kitLido, kitPresentes, kitTotal: kitBasico.length, passo, detalheDasLinhas, detalheDasPendencias, detalheDoKit,
+    kitLido, kitPresentes, kitRecebidos, kitTotal: kitBasico.length, passo, linhasIncompletas,
+    documentosSemLinha: documentosSemLinha.map((x) => ({ id: x.id, tipo: x.tipo_taxonomia })), detalheDasLinhas, detalheDasPendencias, detalheDoKit,
   };
 });
 

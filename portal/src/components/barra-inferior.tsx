@@ -26,10 +26,9 @@ import type { MandatoNaBarra } from "@/components/barra-lateral";
 // mesmo motivo de `busca-global.tsx`: a barra tem `backdrop-filter` (vidro), que vira o bloco de
 // contenção de qualquer descendente `fixed`, e a folha ficaria presa dentro dos 56px dela.
 //
-// VIDRO E CONTRASTE: é o casco de sempre (`.vidro-casco`, DESIGN.md). Todo rótulo usa
-// `vidro-texto` (#ece8df, 9,6:1 no pior caso medido) — e não `vidro-suave` (4,71:1): texto de
-// 11px é onde 4,5:1 não sobra. O destino ativo leva barra de 2px em terracota claro NO TOPO, fundo
-// +10% e `aria-current`: a cor sozinha não diz onde se está.
+// VIDRO E CONTRASTE: o cartão fosco de sempre (`.cartao-vidro`), com rótulos em `tinta-900` (a cor muda
+// com o tema). O destino ativo leva fundo `tinta-100`, peso 600 e `aria-current`: a cor sozinha não diz
+// onde se está.
 //
 // SAFE AREA: `bottom: max(0.75rem, env(safe-area-inset-bottom))`. O `env()` só vale com
 // `viewport-fit=cover` (que o portal NÃO declara) ou em PWA instalado; no Safari comum o próprio
@@ -37,8 +36,8 @@ import type { MandatoNaBarra } from "@/components/barra-lateral";
 // 12px de respiro. Não foi vista em aparelho real (ver relatório da fase).
 
 const ITEM =
-  "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[11px] font-medium text-vidro-texto transition-colors hover:bg-white/[0.07]";
-const ATIVO = "bg-white/10 font-semibold shadow-[inset_0_2px_0_var(--color-vidro-terracota)]";
+  "relative flex min-h-14 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 text-[11px] font-medium text-tinta-900 transition-colors hover:bg-tinta-100";
+const ATIVO = "bg-tinta-100 font-semibold";
 
 function Item({
   destino, ativo, caminho, rotulo, children, href, aoClicar, aberto,
@@ -136,7 +135,7 @@ export function BarraInferior({ recentes, podeCriar, vazioDa, mostrarAdministrac
     <>
       <nav
         aria-label="Navegação principal"
-        className="vidro-casco fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex items-stretch gap-1 rounded-2xl p-1 sm:hidden"
+        className="cartao-vidro fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-30 flex items-stretch gap-1 rounded-2xl p-1 sm:hidden"
       >
         <Item destino="inicio" ativo={ativo} caminho={caminho} rotulo="Início" href="/casos"><IconeInicio tamanho={20} /></Item>
         <Item destino="mandatos" ativo={ativo} caminho={caminho} rotulo="Mandatos" href="/casos/todos"><IconeMandatos tamanho={20} /></Item>
@@ -173,11 +172,11 @@ export function BarraInferior({ recentes, podeCriar, vazioDa, mostrarAdministrac
             role="dialog"
             aria-modal="true"
             aria-label="Mais"
-            className="vidro-casco vidro-casco-denso relative m-3 mb-[max(0.75rem,env(safe-area-inset-bottom))] max-h-[70dvh] overflow-y-auto rounded-2xl p-3"
+            className="cartao-vidro bg-folha relative m-3 mb-[max(0.75rem,env(safe-area-inset-bottom))] max-h-[70dvh] overflow-y-auto rounded-2xl p-3"
           >
-            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-vidro-suave">Recentes</p>
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-tinta-500">Recentes</p>
             {recentes.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-vidro-suave">{vazioDa}</p>
+              <p className="px-3 py-2 text-sm text-tinta-500">{vazioDa}</p>
             ) : (
               <ul className="space-y-0.5">
                 {recentes.map((m) => (
@@ -186,26 +185,26 @@ export function BarraInferior({ recentes, podeCriar, vazioDa, mostrarAdministrac
                       href={`/casos/${m.id}`}
                       onClick={dispensar}
                       aria-current={ariaCurrentDoLink(`/casos/${m.id}`, caminho, idAtual === m.id.toLowerCase())}
-                      className={`flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-vidro-texto hover:bg-white/[0.07] ${
-                        idAtual === m.id.toLowerCase() ? "bg-white/10 font-medium" : ""
+                      className={`flex min-h-11 items-center gap-2 rounded-md px-3 text-sm text-tinta-900 hover:bg-tinta-100 ${
+                        idAtual === m.id.toLowerCase() ? "bg-tinta-100 font-medium" : ""
                       }`}
                     >
                       <span aria-hidden className={`h-1.5 w-1.5 shrink-0 rounded-full ${CASO_STATUS_COLOR[m.status].split(" ")[0]}`} />
                       <span className="valor-sensivel truncate">{m.nome}</span>
-                      <span className="ml-auto shrink-0 text-xs text-vidro-suave">{CASO_STATUS_LABEL[m.status]}</span>
+                      <span className="ml-auto shrink-0 text-xs text-tinta-500">{CASO_STATUS_LABEL[m.status]}</span>
                     </Link>
                   </li>
                 ))}
               </ul>
             )}
             {mostrarAdministracao && (
-            <div className="mt-2 border-t border-white/10 pt-2">
+            <div className="mt-2 border-t border-tinta-200 pt-2">
               <Link
                 href="/administracao"
                 onClick={dispensar}
                 aria-current={ariaCurrentDoLink("/administracao", caminho, ativo === "mais")}
-                className={`flex min-h-11 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-vidro-texto hover:bg-white/[0.07] ${
-                  ativo === "mais" ? "bg-white/10" : ""
+                className={`flex min-h-11 items-center gap-2.5 rounded-md px-3 text-sm font-medium text-tinta-900 hover:bg-tinta-100 ${
+                  ativo === "mais" ? "bg-tinta-100" : ""
                 }`}
               >
                 <IconeQualidade />

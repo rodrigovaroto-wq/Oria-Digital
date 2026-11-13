@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { filtroDaFila } from "@/lib/painel";
+import { abaDosMandatos, filtroDaFila, paginaDaUrl } from "@/lib/painel";
 import { Bloco } from "@/components/esqueleto";
 import { Revelar } from "@/components/revelar";
 import {
@@ -32,9 +32,11 @@ export const dynamic = "force-dynamic";
 export default async function PainelPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fila?: string | string[]; ver?: string | string[]; aviso?: string }>;
+  searchParams: Promise<{
+    fila?: string | string[]; ver?: string | string[]; m?: string | string[]; p?: string | string[]; aviso?: string;
+  }>;
 }) {
-  const { fila: filaBruta, ver: verBruto, aviso } = await searchParams;
+  const { fila: filaBruta, ver: verBruto, m: abaBruta, p: paginaBruta, aviso } = await searchParams;
   const filtro = filtroDaFila(filaBruta);
   const verTudo = (Array.isArray(verBruto) ? verBruto[0] : verBruto) === "tudo";
   const agora = new Date();
@@ -51,7 +53,7 @@ export default async function PainelPage({
       )}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-tinta-900">{saudacao(agora)}</h1>
+          <h1 className="font-titulo text-[30px] leading-9 font-medium tracking-[-0.03em] text-tinta-900">{saudacao(agora)}</h1>
           {/* O veredito depende das pendências; a linha chega com elas. 20 px = a linha pronta. */}
           <Revelar rotulo="Carregando o resumo…" esqueleto={<Bloco className="mt-0.5 h-5 w-72" />}>
             <ResumoDoPainel />
@@ -76,7 +78,7 @@ export default async function PainelPage({
       </Revelar>
 
       <Suspense fallback={<EsqueletoDaGrade />}>
-        <CorpoDoPainel filtro={filtro} verTudo={verTudo} />
+        <CorpoDoPainel estado={{ fila: filtro, verTudo, aba: abaDosMandatos(abaBruta), pagina: paginaDaUrl(paginaBruta) }} />
       </Suspense>
     </div>
   );

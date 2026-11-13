@@ -1,7 +1,8 @@
 import { Revelar } from "@/components/revelar";
 import { Bloco } from "@/components/esqueleto";
 import {
-  EquipeDoMandatoComPapel, FatosDoMandato, IndicadoresDoMandato, PortaoDoMandato, ProximoPassoDoMandato,
+  AndamentoDoMandato, EquipeDoMandatoComPapel, FatosDoMandato, IndicadoresDoMandato, KitBasicoDoMandato, PortaoDoMandato,
+  ProximoPassoDoMandato,
 } from "./visao-blocos";
 
 // A VISÃO GERAL DO MANDATO, por streaming (item 2 do plano do dono). Cabeçalho e abas moram no
@@ -19,13 +20,21 @@ export default async function CasoDashboardPage({
 }>) {
   const { id } = await params;
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <Revelar rotulo="Carregando o próximo passo…" esqueleto={<EsqueletoDoProximoPasso />}>
         <ProximoPassoDoMandato id={id} />
       </Revelar>
       <Revelar rotulo="Carregando os indicadores…" esqueleto={<EsqueletoDosIndicadoresDoMandato />}>
         <IndicadoresDoMandato id={id} />
       </Revelar>
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        <Revelar rotulo="Carregando o Kit Básico…" className="min-w-0" esqueleto={<Bloco className="h-[212px] w-full rounded-[10px]" />}>
+          <KitBasicoDoMandato id={id} />
+        </Revelar>
+        <Revelar rotulo="Carregando o andamento da leitura…" className="min-w-0" esqueleto={<Bloco className="h-[150px] w-full rounded-[10px]" />}>
+          <AndamentoDoMandato id={id} />
+        </Revelar>
+      </div>
       <Revelar rotulo="Carregando a avaliação de aprovação…" esqueleto={<Bloco className="h-[102px] w-full" />}>
         <PortaoDoMandato id={id} />
       </Revelar>
@@ -54,13 +63,16 @@ function EsqueletoDoProximoPasso() {
 
 function EsqueletoDosIndicadoresDoMandato() {
   return (
-    <div className="carta grid grid-cols-2 divide-x divide-y divide-tinta-100 sm:grid-cols-4 sm:divide-y-0">
+    <div className="space-y-2">
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
       {[0, 1, 2, 3].map((i) => (
-        <div key={i} className="px-4 py-3" style={{ minHeight: 94 }}>
+        <div key={i} className="carta px-[18px] py-4" style={{ minHeight: 104 }}>
           <Bloco className="h-8 w-14" />
           <Bloco className="mt-2 h-4 w-32" />
         </div>
       ))}
+    </div>
+    <Bloco className="h-4 w-80 max-w-full" />
     </div>
   );
 }

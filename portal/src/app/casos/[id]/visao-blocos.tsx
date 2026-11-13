@@ -7,6 +7,8 @@ import { suavizarMensagem } from "@/lib/rotulos";
 import type { FatoDoCaso } from "@/lib/types";
 import { aprovarCaso } from "./actions";
 import { FatosNaoLidos } from "@/components/fatos-nao-lidos";
+import { LegendaDeOrigem, SeloDeOrigem } from "@/components/selo-de-origem";
+import { formatarTipoTaxonomia } from "@/lib/export";
 import { casoDaTela, lerFatosDoCaso, lerIndicadores, lerPortao2, type Portao2 } from "./visao-dados";
 
 // OS BLOCOS DA VISÃO GERAL DO MANDATO, cada um com a sua consulta e o seu `<Suspense>`
@@ -26,19 +28,22 @@ const COR_DO_DETALHE = { alerta: "text-risco-700", bom: "text-ok-700", neutro: "
 // cor quando ele muda a leitura do número (ex.: "2 bloqueantes"). Cada um leva à aba
 // onde o número se explica (fase 2): um número sem para onde ir é só decoração.
 function Indicador({
-  valor, rotulo, detalhe, tom, href,
+  valor, rotulo, detalhe, tom, href, origem,
 }: Readonly<{
   valor: React.ReactNode;
   rotulo: string;
   detalhe?: string | null;
   tom?: "neutro" | "alerta" | "bom";
   href: string;
+  /** de onde o número vem (lib/origem-do-numero.ts); só onde a origem muda a leitura */
+  origem?: "lido" | "calculado";
 }>) {
   const corDetalhe = COR_DO_DETALHE[tom ?? "neutro"];
   return (
-    <Link href={href} className="block px-4 py-3 transition-colors hover:bg-tinta-50">
+    <Link href={href} className="carta block px-[18px] py-4 transition-colors hover:bg-tinta-50">
       <p className="indicador-valor">{valor}</p>
       <p className="indicador-rotulo">{rotulo}</p>
+      {origem && <p className="mt-0.5"><SeloDeOrigem origem={origem} /></p>}
       {detalhe && <p className={`mt-1 text-xs font-medium ${corDetalhe}`}>{detalhe}</p>}
     </Link>
   );
@@ -145,7 +150,8 @@ export async function IndicadoresDoMandato({ id }: Readonly<{ id: string }>) {
           quatro números respondem em um olhar, e o terceiro — documentos sem uma linha extraída —
           é o que a rodada de 15/08 descobriu tarde: documento classificado, checklist verde, e
           nada no banco. Cada um leva à aba onde se explica. */}
-      <div className="carta grid grid-cols-2 divide-x divide-y divide-tinta-100 sm:grid-cols-4 sm:divide-y-0">
+      <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Indicador
           valor={documentosLidos ? documentos.length : "—"}
           rotulo="documentos recebidos"
@@ -156,6 +162,7 @@ export async function IndicadoresDoMandato({ id }: Readonly<{ id: string }>) {
         <Indicador
           valor={linhasConhecidas ? <span className="valor-sensivel">{linhasTotais.toLocaleString("pt-BR")}</span> : "—"}
           rotulo="linhas financeiras extraídas"
+          origem="lido"
           detalhe={detalheDasLinhas}
           tom="alerta"
           href={linhasConhecidas && semLinha > 0 ? `${base}/documentos?filtro=sem-linha` : `${base}/documentos`}
@@ -163,6 +170,7 @@ export async function IndicadoresDoMandato({ id }: Readonly<{ id: string }>) {
         <Indicador
           valor={kitLido ? `${kitPresentes}/${kitTotal}` : "—"}
           rotulo="itens do Kit Básico"
+          origem="calculado"
           detalhe={detalheDoKit}
           tom={kitLido ? "bom" : "alerta"}
           href={`${base}/documentos`}
@@ -175,7 +183,129 @@ export async function IndicadoresDoMandato({ id }: Readonly<{ id: string }>) {
           href={`${base}/pendencias`}
         />
       </div>
+      <LegendaDeOrigem />
+      </div>
     </>
+  );
+}
+
+// O KIT BÁSICO COM PRONTIDÃO (item 4 do benchmark). O percentual é só do que tem CONTEÚDO LIDO: o item
+// que chegou como arquivo e não rendeu nenhuma linha é "recebido", não "pronto" — copiar o "sobe a cada
+// upload" da Ansarada violaria a regra 1 (o benchmark, §5.2, diz o mesmo). "Conferido por pessoa" tem o
+// lugar dele na lista e diz que não foi medido: o estado nasce em `fn_kit_do_caso` (migration 0300).
+// NÃO há "por que este item importa": `taxonomia_tipo_documento` não tem coluna de descrição, e texto
+// inventado aqui seria afirmação sem origem.
+export async function KitBasicoDoMandato({ id }: Readonly<{ id: string }>) {
+  const { kitLido, kitPresentes, kitRecebidos, kitTotal } = await lerIndicadores(id);
+  const base = `/casos/${id}/documentos`;
+  if (!kitLido || kitTotal === 0) {
+    return (
+      <section aria-label="Kit Básico" className="carta border-alerta-200 bg-alerta-50 px-[18px] py-4 text-sm text-alerta-900">
+        <h2 className="titulo-secao">Kit Básico</h2>
+        <p className="mt-1 text-xs">
+          {kitLido
+            ? "Nenhum item obrigatório cadastrado na taxonomia: não há como medir a prontidão."
+            : "Não foi possível ler o Kit Básico agora, então não dá para dizer o que falta nem o quanto está pronto."}
+        </p>
+      </section>
+    );
+  }
+  const semConteudo = kitRecebidos - kitPresentes;
+  const faltantes = kitTotal - kitRecebidos;
+  const pct = Math.round((kitPresentes / kitTotal) * 100);
+  const parte = (n: number) => `${(n / kitTotal) * 100}%`;
+  return (
+    <section aria-label="Kit Básico" className="carta px-[18px] py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="titulo-secao">Kit Básico</h2>
+        <SeloDeOrigem origem="calculado" />
+      </div>
+      <div className="mt-3 flex items-baseline gap-3">
+        <p className="indicador-valor">{pct}%</p>
+        <p className="text-xs text-tinta-500">de {kitTotal} itens com conteúdo lido (recebido não conta)</p>
+      </div>
+      <div role="img" aria-label={`${kitPresentes} com conteúdo, ${semConteudo} recebidos sem conteúdo, ${faltantes} faltantes`} className="mt-2 flex h-2 overflow-hidden rounded-full bg-tinta-100">
+        <span className="bg-ok-500" style={{ width: parte(kitPresentes) }} />
+        <span className="bg-alerta-500" style={{ width: parte(semConteudo) }} />
+      </div>
+      <ul className="mt-3 grid gap-x-6 gap-y-1.5 text-xs text-tinta-700 sm:grid-cols-2">
+        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-ok-500" /><span className="num">{kitPresentes}</span> com conteúdo lido</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-alerta-500" /><span className="num">{semConteudo}</span> recebidos sem conteúdo lido</li>
+        <li className="flex items-center gap-2"><span aria-hidden className="h-2 w-2 rounded-full bg-tinta-200" /><span className="num">{faltantes}</span> faltantes</li>
+        <li className="flex items-center gap-2 text-tinta-500"><span aria-hidden className="h-2 w-2 rounded-full border border-tinta-400" />Conferido por pessoa: ainda não medido</li>
+      </ul>
+      {(semConteudo > 0 || faltantes > 0) && (
+        <p className="mt-3 text-xs"><Link href={base} className="font-medium text-acento-700 hover:underline">Ver os documentos →</Link></p>
+      )}
+    </section>
+  );
+}
+
+// O ANDAMENTO DA LEITURA, por etapa e por documento (item 10 do benchmark), só com o dado que a visão
+// já lê: documentos recebidos, os que renderam linha e os que não renderam NENHUMA. Estágio que não rodou
+// tem a cara de estágio que rodou e não achou nada (regra 7): por isso o documento sem linha é listado
+// com nome e link, e a contagem que não terminou de ler diz que não terminou, em vez de somar menos.
+// "Conferido por pessoa" é a terceira etapa e não tem dado (0300): fica com o traço e o motivo.
+export async function AndamentoDoMandato({ id }: Readonly<{ id: string }>) {
+  const {
+    documentos, documentosLidos, semLinha, linhasConhecidas, linhasIncompletas, documentosSemLinha,
+  } = await lerIndicadores(id);
+  if (!documentosLidos) {
+    return (
+      <section aria-label="Andamento da leitura" className="carta border-risco-200 bg-risco-50 px-[18px] py-4 text-sm text-risco-900">
+        <h2 className="titulo-secao">Andamento da leitura</h2>
+        <p className="mt-1 text-xs">A leitura dos documentos falhou: não dá para dizer o que já foi lido. Recarregue a página.</p>
+      </section>
+    );
+  }
+  if (documentos.length === 0) return null;
+  const lidos = documentos.length - semLinha;
+  const etapa = (rotulo: string, valor: React.ReactNode, nota?: string) => (
+    <li className="min-w-0 flex-1">
+      <p className="num text-xl font-medium text-tinta-900">{valor}</p>
+      <p className="text-xs text-tinta-500">{rotulo}</p>
+      {nota && <p className="mt-0.5 text-[11px] text-tinta-500">{nota}</p>}
+    </li>
+  );
+  return (
+    <section aria-label="Andamento da leitura" className="carta px-[18px] py-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="titulo-secao">Andamento da leitura</h2>
+        <SeloDeOrigem origem="lido" />
+      </div>
+      <ol className="mt-3 flex gap-4">
+        {etapa("recebidos", documentos.length)}
+        {etapa("com linha extraída", linhasConhecidas ? lidos : "—", linhasConhecidas ? undefined : "contagem incompleta")}
+        {etapa("conferidos por pessoa", "—", "ainda não medido")}
+      </ol>
+      {linhasIncompletas && (
+        <p role="status" className="mt-3 rounded-lg border border-alerta-200 bg-alerta-50 px-3 py-2 text-xs text-alerta-900">
+          A contagem de linhas não terminou: o que aparece como lido pode ser menos que o real. Recarregue a página.
+        </p>
+      )}
+      {linhasConhecidas && semLinha > 0 && (
+        <div role="status" className="mt-3 rounded-lg border border-alerta-200 bg-alerta-50 px-3 py-2 text-xs text-alerta-900">
+          <p className="font-medium">
+            {semLinha} {semLinha === 1 ? "documento não rendeu nenhuma linha" : "documentos não renderam nenhuma linha"}:
+            a leitura pode ter falhado, ou o arquivo não tem tabela. Abra para conferir.
+          </p>
+          <ul className="mt-1.5 space-y-0.5">
+            {documentosSemLinha.slice(0, 5).map((d) => (
+              <li key={d.id}>
+                <Link href={`/casos/${id}/documentos/${d.id}`} className="font-medium underline">
+                  {formatarTipoTaxonomia(d.tipo)}
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {semLinha > 5 && (
+            <p className="mt-1.5">
+              e mais {semLinha - 5} — <Link href={`/casos/${id}/documentos?filtro=sem-linha`} className="font-medium underline">ver todos</Link>
+            </p>
+          )}
+        </div>
+      )}
+    </section>
   );
 }
 

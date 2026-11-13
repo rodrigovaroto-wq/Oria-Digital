@@ -8791,6 +8791,51 @@ const arranjoDeCirculante = (ENT: string) => {
     "(40e) programa (Accept */*) recebe o JSON de sempre, com o status original", String(json.status));
 }
 
+// (41k) A FILA AGRUPADA POR MANDATO (direção A, 13/11/2026). Agrupar muda a APRESENTAÇÃO, nunca a conta:
+// a soma das pendências dos grupos é exatamente a que entrou, por total, por bloqueantes e por a-confirmar;
+// e as contagens das abas (`contarFila`) seguem sendo de PENDÊNCIAS, não de mandatos. Também a paginação de
+// "Seus mandatos": a soma das fatias é a lista inteira e URL velha não cai em tela vazia.
+{
+  const { agruparPorMandato, contarFila, daFila, fatiaDaPagina, paginaDaUrl, abaDosMandatos } = await import("../src/lib/painel.ts");
+  const mk = (i: number, caso: string, tipo: string, severidade: string) => ({ id: `p${i}`, caso_id: caso, tipo, severidade });
+  const fila = [
+    mk(1, "A", "item_faltante", "bloqueante"), mk(2, "A", "item_faltante", "bloqueante"),
+    mk(3, "A", "classificacao_pendente", "bloqueante"), mk(4, "B", "item_faltante", "bloqueante"),
+    mk(5, "B", "divergencia_reconciliacao", "importante"), mk(6, "C", "classificacao_pendente", "importante"),
+    mk(7, "C", "arquivo_ilegivel", "complementar"), mk(8, "D", "item_faltante", "complementar"),
+  ];
+  const rotulo = (p: { tipo: string; id: string }) => (p.tipo === "item_faltante" ? `item ${p.id === "p1" ? "x" : "y"}` : p.tipo);
+  for (const f of ["todas", "travam", "confirmar"] as const) {
+    const entrada = fila.filter((p) => daFila(p, f));
+    const grupos = agruparPorMandato(entrada, rotulo);
+    const soma = (k: "total" | "bloqueantes" | "aConfirmar") => grupos.reduce((n, g) => n + g[k], 0);
+    checar(soma("total") === entrada.length && soma("total") === contarFila(fila)[f],
+      `(41k) agrupar não perde nem inventa pendência no filtro "${f}": a soma dos grupos é a contagem da aba`, `${soma("total")} x ${contarFila(fila)[f]}`);
+    checar(soma("bloqueantes") === entrada.filter((p) => p.severidade === "bloqueante").length
+      && soma("aConfirmar") === entrada.filter((p) => daFila(p, "confirmar")).length
+      && grupos.every((g) => g.chips.reduce((n, c) => n + c.n, 0) === g.total && g.itens.length === g.total),
+      `(41l) por filtro "${f}": bloqueantes, a-confirmar e chips (soma dos ×n) fecham com o total de cada grupo`, "");
+    checar(new Set(grupos.map((g) => g.casoId)).size === grupos.length, `(41m) um grupo por mandato no filtro "${f}"`, "");
+  }
+  const todos = agruparPorMandato(fila, rotulo);
+  checar(todos.map((g) => g.casoId).join("") === "ABCD",
+    "(41n) a ordem dos grupos é consequência: mais travas, depois a confirmar, depois total", todos.map((g) => g.casoId).join(""));
+  checar(agruparPorMandato([...fila].reverse(), rotulo).map((g) => g.casoId).join("") === "ABCD",
+    "(41n2) a ordem dos grupos não depende da ordem em que a lista chegou", "");
+  const chipsDeB = todos.find((g) => g.casoId === "B")!.chips;
+  checar(chipsDeB[0].severidade === "bloqueante" && chipsDeB[1].severidade === "importante",
+    "(41o) os chips que travam vêm primeiro", JSON.stringify(chipsDeB));
+  checar(agruparPorMandato([], rotulo).length === 0, "(41p) fila vazia agrupa em nada, não em um grupo fantasma", "");
+  const fatias = [0, 1, 2].map((n) => fatiaDaPagina(26, n + 1, 12));
+  checar(fatias.reduce((n, f) => n + (f.ate - f.de), 0) === 26 && fatias[2].ate === 26 && fatias[0].paginas === 3,
+    "(41q) as páginas de 12 cobrem 26 mandatos sem sobra nem repetição", JSON.stringify(fatias));
+  checar(fatiaDaPagina(26, 99, 12).pagina === 3 && fatiaDaPagina(0, 1, 12).paginas === 1 && paginaDaUrl("0") === 1
+    && paginaDaUrl("abc") === 1 && paginaDaUrl("2.5") === 1 && paginaDaUrl(["3", "4"]) === 3,
+    "(41r) página além da última cai na última, lista vazia tem 1 página e lixo na URL cai na primeira", "");
+  checar(abaDosMandatos("fechados") === "fechados" && abaDosMandatos("x") === null && abaDosMandatos(undefined) === null,
+    "(41s) aba desconhecida na URL não escolhe nada (a tela decide o padrão)", "");
+}
+
 // (41) O INÍCIO E A LISTA DE MANDATOS (src/lib/painel.ts): a fila "Precisa de você" e a busca.
 // A regra que importa: a contagem de cada filtro é a MESMA conta que a lista aplica, e a busca
 // não deixa "%" e "_" virarem curinga do LIKE.

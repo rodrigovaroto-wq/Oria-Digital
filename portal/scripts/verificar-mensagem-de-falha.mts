@@ -933,8 +933,8 @@ const escuro = new Map([...blocosEscuro.slice(1).flatMap((b) => [...declaracoes(
 const coresClaro = [...tema.keys()].filter((k) => k.startsWith("--color-"));
 const coresEscuro = [...escuro.keys()].filter((k) => k.startsWith("--color-"));
 // O casco NÃO acompanha o tema, de propósito: estas são as ÚNICAS cores sem par no escuro.
-const FIXAS_DO_CASCO = ["--color-fundo-reserva", "--color-vidro-papel", "--color-vidro-suave",
-  "--color-vidro-terracota", "--color-vidro-texto", "--color-vidro-tinta"];
+const FIXAS_DO_CASCO = ["--color-fundo-reserva", "--color-vidro-acao", "--color-vidro-acento", "--color-vidro-papel",
+  "--color-vidro-suave", "--color-vidro-texto", "--color-vidro-tinta"];
 checar(coresClaro.length >= 60 && coresEscuro.length >= 60, `leitura do globals.css vazia (${coresClaro.length} claro / ${coresEscuro.length} escuro): o teste mediria nada`);
 checar(coresEscuro.every((k) => tema.has(k)),
   `token redefinido no escuro que não existe no claro: ${coresEscuro.filter((k) => !tema.has(k)).join(", ")}`);
@@ -1031,23 +1031,34 @@ const alfaFolha = Number(folhaVidro?.[4] ?? 1);
 const folhaNaPior = (folhaVidro
   ? [1, 2, 3].map((i, k) => Math.round(alfaFolha * Number(folhaVidro[i]) + (1 - alfaFolha) * [255, 255, 236][k]))
   : [255, 255, 255]) as [number, number, number];
-const fundoDe = (n: string) => (n === "folha-sobre-foto" ? folhaNaPior : corDe(n));
+// O CARTÃO FOSCO sobre o MÁRMORE (13/11/2026): o fundo do app não é mais foto. O pior caso é o cartão (rgb com
+// alfa, em --cartao-fundo) sobre o pixel MAIS CLARO do mármore escuro (--marmore-pior, medido na tela renderizada
+// e com folga: veio mais o brilho do canto), que é o que mais clareia o fundo do texto claro.
+const cartaoDark = /rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/.exec(escuro.get("--cartao-fundo") ?? "");
+const marmorePior = rgbDe(escuro.get("--marmore-pior") ?? "#ffffff");
+checar(cartaoDark !== null && /^#[0-9a-f]{6}$/i.test(escuro.get("--marmore-pior") ?? ""),
+  "--cartao-fundo do escuro não é rgb(r g b / a), ou --marmore-pior não é #rrggbb: o pior caso do cartão não é calculável");
+const alfaCartao = Number(cartaoDark?.[4] ?? 1);
+const cartaoNaPior = (cartaoDark
+  ? [1, 2, 3].map((i, k) => Math.round(alfaCartao * Number(cartaoDark[i]) + (1 - alfaCartao) * marmorePior[k]))
+  : [255, 255, 255]) as [number, number, number];
+const fundoDe = (n: string) => (n === "folha-sobre-foto" ? folhaNaPior : n === "cartao-sobre-marmore" ? cartaoNaPior : corDe(n));
 type ParDeContraste = [fg: string, bg: string, minimo: number];
 const pares: ParDeContraste[] = [];
 const texto = (fg: string, bgs: string[], min = 4.5) => bgs.forEach((bg) => pares.push([fg, bg, min]));
-const SUPERFICIES = ["folha-sobre-foto", "folha", "papel"];
+const SUPERFICIES = ["folha-sobre-foto", "cartao-sobre-marmore", "folha", "papel"];
 texto("tinta-900", [...SUPERFICIES, "tinta-50", "tinta-100"]);            // texto primário
 texto("tinta-800", SUPERFICIES);
 texto("tinta-700", [...SUPERFICIES, "tinta-50"]);
 texto("tinta-600", [...SUPERFICIES, "tinta-50", "tinta-100", "tinta-200"]); // secundário, chips neutros
 texto("tinta-500", [...SUPERFICIES, "tinta-50", "tinta-100"]);              // placeholder e rótulo
-texto("tinta-400", ["folha-sobre-foto", "folha"], 3.6);                     // ícone/fio: o piso do claro (3,62)
+texto("tinta-400", ["folha-sobre-foto", "cartao-sobre-marmore", "folha"], 3.6);                     // ícone/fio: o piso do claro (3,62)
 for (const f of ["risco", "alerta", "ok", "info", "serie"]) {
   texto(`${f}-800`, [`${f}-50`, `${f}-100`]);                                // chip
   texto(`${f}-900`, [`${f}-50`, `${f}-100`]);
-  texto(`${f}-700`, [`${f}-50`, "folha-sobre-foto", "folha"]);               // texto de estado sobre a folha
-  texto(`${f}-800`, ["folha-sobre-foto", "folha"]);
-  texto(`${f}-900`, ["folha-sobre-foto", "folha"]);
+  texto(`${f}-700`, [`${f}-50`, "folha-sobre-foto", "cartao-sobre-marmore", "folha"]);               // texto de estado sobre a folha
+  texto(`${f}-800`, ["folha-sobre-foto", "cartao-sobre-marmore", "folha"]);
+  texto(`${f}-900`, ["folha-sobre-foto", "cartao-sobre-marmore", "folha"]);
 }
 texto("tinta-700", ["tinta-100"]); texto("tinta-700", ["tinta-200"]);        // chip neutro e o hover dele
 texto("acento-700", [...SUPERFICIES, "acento-50", "acento-100"]);           // link e item ativo
@@ -1060,11 +1071,26 @@ for (const bg of ["tinta-900", "tinta-800", "tinta-600", "ok-600", "ok-700", "ok
 // o que o `:root` mantém igual no escuro: o casco, medido no claro com o pior caso (DESIGN.md) — aqui só se
 // confere que o terracota de foco do casco e o texto do botão creme dele seguem sendo ≥ 4,5:1 entre si.
 checar(pares.length >= 100, `só ${pares.length} pares de contraste medidos: o conjunto encolheu ou o parse falhou`);
-const medivel = ([fg, bg]: ParDeContraste) => [fg, bg].every((t) => t === "folha-sobre-foto" || escuro.has(`--color-${t}`));
+const medivel = ([fg, bg]: ParDeContraste) => [fg, bg].every((t) => t === "folha-sobre-foto" || t === "cartao-sobre-marmore" || escuro.has(`--color-${t}`));
 checar(pares.every(medivel), `par de contraste com token ausente do escuro: ${pares.filter((p) => !medivel(p)).map(([f, b]) => `${f}/${b}`).join(", ")}`);
 const reprovados = pares.filter(medivel).filter(([fg, bg, min]) => razao(corDe(fg), fundoDe(bg)) < min);
 checar(reprovados.length === 0,
   `contraste abaixo do mínimo no escuro: ${reprovados.map(([fg, bg, min]) => `${fg} sobre ${bg} = ${razao(corDe(fg), fundoDe(bg)).toFixed(2)} (< ${min})`).join("; ")}`);
+// O MESMO NO TEMA CLARO: o texto escuro sobre o cartão branco a 68% e o pixel mais ESCURO do mármore claro.
+{
+  const principal = declaracoes(blocosDe(/(?:^|\n):root\s*\{([^}]*)\}/g).find((b) => b.includes("--marmore-pior")) ?? "");
+  const m = /rgb\((\d+) (\d+) (\d+) \/ ([\d.]+)\)/.exec(principal.get("--cartao-fundo") ?? "");
+  const pior = principal.get("--marmore-pior") ?? "";
+  checar(m !== null && /^#[0-9a-f]{6}$/i.test(pior), "--cartao-fundo/--marmore-pior do tema claro ilegíveis: o pior caso não é calculável");
+  const a = Number(m?.[4] ?? 1);
+  const fundo = [1, 2, 3].map((i, k) => Math.round(a * Number(m?.[i] ?? 255) + (1 - a) * rgbDe(pior)[k])) as [number, number, number];
+  const corClaro = (t: string) => rgbDe(tema.get(`--color-${t}`) ?? "#000000");
+  const ps: Array<[string, number]> = [["tinta-900", 4.5], ["tinta-800", 4.5], ["tinta-700", 4.5], ["tinta-600", 4.5], ["tinta-500", 4.5], ["tinta-400", 3.6],
+    ["acento-700", 4.5], ["acento-600", 4.5], ...["risco", "alerta", "ok", "info", "serie"].flatMap((f) => [[`${f}-700`, 4.5], [`${f}-800`, 4.5]] as Array<[string, number]>)];
+  const ruins = ps.filter(([t, min]) => razao(corClaro(t), fundo) < min);
+  checar(ruins.length === 0,
+    "contraste abaixo do mínimo no claro (cartão sobre o pior pixel do mármore): " + ruins.map(([t, min]) => `${t} = ${razao(corClaro(t), fundo).toFixed(2)} (< ${min})`).join("; "));
+}
 checar(razao(rgbDe("#11161d"), rgbDe("#ece8df")) >= 4.5 && razao(rgbDe("#11161d"), rgbDe("#f6f4ef")) >= 4.5,
   "texto do botão creme do casco (vidro-tinta sobre vidro-texto/vidro-papel) abaixo de 4,5:1");
 if (process.env.TABELA_DE_CONTRASTE) {
@@ -1563,7 +1589,9 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
   // reduzido, CSS que falhou), o conteúdo está visível e a cópia do esqueleto está transparente.
   const cssSk = fonte("app/globals.css").replace(/\/\*[\s\S]*?\*\//g, ""); // sem comentários: eles citam os seletores
   const regra = (seletor: string) => {
-    const i = cssSk.search(new RegExp(`^${seletor.replace(/[.]/g, String.raw`\.`)}${String.raw`\s*\{`}`, "m"));
+    const escapado = seletor.replace(/[.]/g, String.raw`\.`);
+    const abreChave = String.raw`\s*\{`;
+    const i = cssSk.search(new RegExp(`^${escapado}${abreChave}`, "m"));
     return i < 0 ? "" : cssSk.slice(i, cssSk.indexOf("}", i));
   };
   checar(regra(".t-skel-content") !== "" && !/opacity\s*:\s*0\b/.test(regra(".t-skel-content")),
@@ -1586,7 +1614,8 @@ checar(/<nav[^>]*overflow-x-auto/.test(abas) && /<ul[^>]*min-w-max/.test(abas) &
 
   // (5) Os esqueletos são "carregando", nunca valor: nenhum dígito em texto e nenhuma leitura de dado.
   const corpoDe = (src: string, nome: string) => {
-    const i = src.search(new RegExp(`function ${nome}${String.raw`\(`}`));
+    const abreParenteses = String.raw`\(`;
+    const i = src.search(new RegExp(`function ${nome}${abreParenteses}`));
     return i < 0 ? null : src.slice(i, src.indexOf("\n}\n", i));
   };
   const blocosPainel = semComentariosDoFonte(fonte("app/casos/painel-blocos.tsx"));

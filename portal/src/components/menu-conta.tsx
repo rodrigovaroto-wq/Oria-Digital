@@ -69,8 +69,12 @@ export function MenuConta({
       setTema(pref);
       aplicarTema(document.documentElement, pref, consulta.matches);
     };
+    // O botão de tema da barra de topo grava a escolha e avisa por este evento: o seletor daqui a segue.
+    const aoTrocarNoBotao = () => setTema(lerPreferenciaDeTema(armazem()));
     window.addEventListener("storage", aoMudarEmOutraAba);
+    window.addEventListener("oria:tema", aoTrocarNoBotao);
     return () => {
+      window.removeEventListener("oria:tema", aoTrocarNoBotao);
       consulta.removeEventListener("change", aoMudar);
       window.removeEventListener("storage", aoMudarEmOutraAba);
     };
@@ -118,9 +122,9 @@ export function MenuConta({
         // mouse (o borrão é CSS, a dica é do navegador). O aria-label fica: leitor de tela é fora do
         // escopo da discrição (ver botao-discricao.tsx).
         title="Conta"
-        className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-vidro-suave transition-colors hover:bg-white/10 hover:text-vidro-texto"
+        className="flex items-center gap-1.5 rounded-full py-1 pl-1 pr-2 text-tinta-500 transition-colors hover:bg-tinta-100 hover:text-tinta-900"
       >
-        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-vidro-texto text-[11px] font-semibold text-vidro-tinta">
+        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-tinta-900 text-[11px] font-semibold text-papel">
           {iniciais || <IconeConta tamanho={16} />}
         </span>
         <IconeChevronBaixo tamanho={14} className={`transition-transform ${aberto ? "rotate-180" : ""}`} />
