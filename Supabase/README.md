@@ -1249,6 +1249,13 @@ supabase db execute --file Supabase/migrations/0300_o_item_do_kit_que_ficava_rec
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0300' and not presente;   -- ZERO linhas
 #   select count(*) from pendencia where tipo = 'item_faltante' and estado <> 'resolvida' and chave_motor is not null;   -- 233 (as 2 de contrato social ficam sem chave)
 #   select depois from evento_auditoria where acao = 'chave_motor_item_faltante_adotada';   -- {"adotadas": 233}
+# A 0278 liga a conciliação do aging (0274/0277) na RODADA de reconciliações: `fn_reconciliar_caso` (REEMITIDA do corpo da 0192, +16 linhas, 0 modificadas, mesma assinatura e ACL) passa a chamar, UMA vez no fim, `fn_reconciliar_aging_do_caso` — o balanço que chega depois da carteira a reconcilia (antes ela ficava documento_ausente até alguém chamar à mão). Quem não é Sócio/Analista alocado/conexão de serviço não leva 42501 do aging: a rodada devolve uma checagem `executado=false, tipo=aging` com o motivo. Sem carteira vigente o retorno é o de antes; `chamadas` ganha uma por carteira vigente. `fn_reconciliar_por_documento(doc, 'tudo')` NÃO liga o aging (declarado no cabeçalho). 2 requisitos na sonda (1387-1388); a cobertura usa `greatest` (não rebaixa da 0300).
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, requisitos por upsert). Sem backfill, nenhum dado tocado (produção: aging_importado vazia em 13/11/2026). Aplicar DEPOIS da 0300 é seguro (a cobertura não regride). Não muda o n8n (mesma assinatura e formato de retorno).
+# >>> Teste: Supabase/test/o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.test.sql.
+supabase db execute --file Supabase/migrations/0278_o_balanco_que_chegava_depois_da_carteira_e_nao_a_conciliava.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0278' and not presente;   -- ZERO linhas
+#   select ate_migration from instalacao_cobertura;   -- 0300 (não rebaixou)
 # A 0242 cria o catálogo conta_canonica (a árvore demonstração > grupo > seção > subgrupo, 27 nós: 5 raízes, 2 grupos, 15 seções do SECAO_CANONICA_ENUM, 4 subgrupos do Ativo Não Circulante e o balde Outros), com RLS de leitura por papel, a guarda de raiz (gatilho de instrução), 3 views de sonda e 9 requisitos na sonda. Só a taxonomia atual: conta-folha (caixa, clientes…) é a P27.
 # >>> Rodar COMO `postgres`; reaplicável (create if not exists, seed on conflict do nothing, requisitos por upsert). Nenhuma linha existente é tocada.
 # >>> Teste: Supabase/test/conta_canonica.test.sql e Supabase/test/conta_canonica_regua.test.mjs.

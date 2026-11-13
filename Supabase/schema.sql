@@ -12515,6 +12515,7 @@ declare
   v_checagens  jsonb := '[]'::jsonb;
   v_chamadas   int := 0;
   v_documentos int := 0;
+  v_vigentes   int := 0;
   c_arvore     constant text[] := array['BALANCO','BALANCETE','COMBINADO'];
   c_fluxo      constant text[] := array['BALANCO','BALANCETE','COMBINADO','FLUXO_CAIXA'];
   c_receita    constant text[] := array['DRE','FATURAMENTO_24M'];
@@ -12613,6 +12614,21 @@ begin
     v_chamadas := v_chamadas + 1;
   end loop;
 
+  -- 0278: a carteira de aging (0274/0277) é conciliada com o balanço do mandato TODA vez que a rodada roda, não só na importação: o balanço que chega
+  -- depois da carteira a concilia aqui. UMA vez por rodada (não por chave). Sem carteira vigente não há nada abaixo (mesmo retorno de antes).
+  -- Quem não pode escrever no mandato não derruba a rodada com 42501: a rodada devolve uma checagem executado=false com o motivo (nunca pula calada).
+  select count(*) into v_vigentes from aging_importado where caso_id = p_caso_id and substituido_em is null;
+  if v_vigentes > 0 then
+    if fn_conexao_de_servico() or fn_pode_escrever_caso(p_caso_id) then
+      v_checagens := v_checagens || fn_reconciliar_aging_do_caso(p_caso_id);
+      v_chamadas := v_chamadas + v_vigentes;
+    else
+      v_checagens := v_checagens || jsonb_build_array(jsonb_build_object(
+        'executado', false, 'tipo', 'aging', 'caso_id', p_caso_id, 'carteiras_vigentes', v_vigentes,
+        'motivo', 'a conciliação da carteira de aging exige ser Sócio ou Analista alocado neste mandato (ou a conexão de serviço): a carteira não foi conciliada nesta rodada'));
+    end if;
+  end if;
+
   perform set_config('oria.periodo_chave', '', true);
   return jsonb_build_object(
     'executado', true, 'caso_id', p_caso_id,
@@ -12625,7 +12641,7 @@ $$;
 -- Name: FUNCTION fn_reconciliar_caso(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) IS 'Roda cada uma das oito checagens de reconciliação sobre a SUA chave (0152). 0192: `order by` em cada laço `select distinct` — determinismo de qual período a pendência carrega quando mais de um é compatível; o aberto/resolvido em si já não depende da ordem (guarda em fn_registrar_reconciliacao). 0192: cada laço grava o período da CHAVE em oria.periodo_chave (lido por fn_registrar_reconciliacao).';
+COMMENT ON FUNCTION public.fn_reconciliar_caso(p_caso_id uuid) IS 'Roda cada uma das oito checagens de reconciliação sobre a SUA chave (0152). 0192: `order by` em cada laço `select distinct` — determinismo de qual período a pendência carrega quando mais de um é compatível; o aberto/resolvido em si já não depende da ordem (guarda em fn_registrar_reconciliacao). 0192: cada laço grava o período da CHAVE em oria.periodo_chave (lido por fn_registrar_reconciliacao). 0278: no fim, UMA vez por rodada, concilia as carteiras de aging VIGENTES do mandato com o balanço (o balanço que chega depois da carteira a reconcilia); quem não é Sócio, Analista alocado ou a conexão de serviço não leva 42501 por causa do aging: a rodada devolve uma checagem executado=false, tipo aging, com o motivo. Sem carteira vigente o retorno é o de antes. `chamadas` conta uma por carteira vigente.';
 
 --
 -- Name: fn_reconciliar_chaves_do_documento(uuid, uuid, uuid, text); Type: FUNCTION; Schema: public; Owner: -
