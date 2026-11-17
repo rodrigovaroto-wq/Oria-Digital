@@ -103,7 +103,7 @@ AGENTES = [  # (n, agente opera?, nome, [(existe?, análise)])
         (1, "Mapa da dívida por vencimento"),          # portal/src/lib/mapa-da-divida.ts
         (1, "Capacidade de pagamento em fórmula"),        # modelo-institucional.ts:6062 (ND/EBITDA)
         (0, "Garantias e covenants por credor"),          # STATUS 8.1-8.3
-        (0, "Waterfall de credores (Lei 11.101)")]),             # STATUS 12.1-12.3 waterfall, Lei 11.101
+        (0, "Waterfall de credores")]),             # STATUS 12.1-12.3 waterfall, Lei 11.101
     (7, False, "Estrategista", [
         (1, "Plano em 3 cenários, com stress"),               # modelo-institucional.ts:96 Base/Cliente/Stress
         (0, "Recálculo automático das premissas"),           # STATUS 6.1/6.2 motor de cálculo

@@ -90,7 +90,7 @@ Pedido do dono: tirar as métricas soltas e escrever cada ramo **como uma entreg
 - Duplicata barrada por fingerprint
 - Capacidade de pagamento em fórmula
 - Liquidez de 13 semanas
-- Waterfall de credores (Lei 11.101)
+- Waterfall de credores (sem a referência à Lei 11.101, a pedido do dono)
 - Capital de giro: NCG e ciclo
 
 **Reescritos:**
