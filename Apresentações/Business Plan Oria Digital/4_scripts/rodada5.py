@@ -70,47 +70,49 @@ LEFT_L, RIGHT_L, LW, LH = 0.60, 9.78, 2.95, 0.25   # pílulas das análises (2,9
 PITCH, GROUP_GAP = 0.285, 0.21                # vão interno 0,035" x vão entre grupos 0,21"
 _id = [3000]
 
-# Cada ramo diz o VALOR para o cliente (não o mecanismo interno) e tem evidência no repositório.
+# Cada ramo é uma ENTREGA (nome de etapa, nunca frase corrida — regra do dono) e tem evidência no repositório.
+# Cinco ramos ficam com o texto original por decisão do dono: fingerprint, capacidade de pagamento,
+# liquidez de 13 semanas, waterfall de credores, capital de giro.
 # Status: ● = no código hoje; ○ = etapa do STATUS_POR_ETAPA_2026-11-11.md ainda não concluída.
 # Rodada de auditoria (pedido do dono): saíram métricas que não dizem nada a quem decide
 # ("4 formatos", "fingerprint", "14 abas", "7 fórmulas e 89 premissas"); a evidência ficou aqui.
 AGENTES = [  # (n, agente opera?, nome, [(existe?, análise)])
     (1, True, "Captador", [
-        (1, "Lê os documentos sem digitação"),            # ROADMAP:122 ingestão de 4 formatos + extração
-        (1, "Nenhum documento entra em dobro"),           # ROADMAP:122 fingerprint contra reenvio
-        (1, "Mostra o que chegou e o que falta"),         # kit do mandato, ESTADO S130, 0300/0301
-        (0, "Busca SPED, ECD e NF-e na fonte")]),         # STATUS fase 16 (ondas 1 e 3), 0%
+        (1, "Leitura de documentos sem digitação"),            # ROADMAP:122 ingestão de 4 formatos + extração
+        (1, "Duplicata barrada por fingerprint"),           # ROADMAP:122 fingerprint contra reenvio
+        (1, "Controle de documentos pendentes"),         # kit do mandato, ESTADO S130, 0300/0301
+        (0, "Coleta de SPED, ECD e NF-e na fonte")]),         # STATUS fase 16 (ondas 1 e 3), 0%
     (2, True, "Conferidor", [
-        (1, "Balanço, caixa e DRE conferidos"),           # 0009, 0015 (caixa BP x DFC), 0105, 0133
-        (1, "Mútuos do grupo batidos dos 2 lados"),       # 0117, 0124
-        (1, "Lacuna vira pergunta ao cliente"),           # portal/src/lib/perguntas.ts
-        (0, "Consolidado sem dupla contagem")]),          # STATUS 5.3/5.4 eliminação intragrupo, 0%
+        (1, "Conferência de balanço, caixa e DRE"),           # 0009, 0015 (caixa BP x DFC), 0105, 0133
+        (1, "Conciliação de mútuos do grupo"),       # 0117, 0124
+        (1, "Perguntas ao cliente sobre lacunas"),           # portal/src/lib/perguntas.ts
+        (0, "Consolidação sem dupla contagem")]),          # STATUS 5.3/5.4 eliminação intragrupo, 0%
     (3, False, "Mercado", [
         (1, "Projeção com IPCA e Selic do Focus"),        # export/route.ts:200 (premissas de inflação/juro)
-        (0, "Juro acima do mercado, por contrato"),       # STATUS 18.6 dívida contra o Banco Central
-        (0, "Despesa acima do setor e da região")]),      # STATUS 18.3/18.5
+        (0, "Juro por contrato vs. Banco Central"),       # STATUS 18.6 dívida contra o Banco Central
+        (0, "Despesas vs. setor e região")]),      # STATUS 18.3/18.5
     (4, False, "Risco", [
-        (0, "Sinais de deterioração nos números"),        # STATUS 10.1-10.3
-        (0, "Passivo oculto em processos e bureau"),      # STATUS 17.3/17.4
+        (0, "Sinais de deterioração financeira"),        # STATUS 10.1-10.3
+        (0, "Mapeamento de processos e bureau"),      # STATUS 17.3/17.4
         (0, "Nota de risco para o comitê")]),             # scorecard em deck-credito.ts (estrutura)
     (5, False, "Caixa", [
-        (1, "Caixa preso no capital de giro"),            # modelo-institucional.ts aba Capital de Giro (NCG)
-        (1, "Atrasos de clientes e fornecedores"),        # 0274 aging conciliado com o balanço
-        (0, "Em que semana o caixa aperta")]),            # STATUS 9.1-9.3 liquidez de 13 semanas
+        (1, "Capital de giro: NCG e ciclo"),            # modelo-institucional.ts aba Capital de Giro (NCG)
+        (1, "Aging conciliado com o balanço"),        # 0274 aging conciliado com o balanço
+        (0, "Liquidez de 13 semanas")]),            # STATUS 9.1-9.3 liquidez de 13 semanas
     (6, False, "Dívida", [
-        (1, "Dívida organizada por vencimento"),          # portal/src/lib/mapa-da-divida.ts
-        (1, "Quanto de dívida a empresa aguenta"),        # modelo-institucional.ts:6062 (ND/EBITDA)
+        (1, "Mapa da dívida por vencimento"),          # portal/src/lib/mapa-da-divida.ts
+        (1, "Capacidade de pagamento em fórmula"),        # modelo-institucional.ts:6062 (ND/EBITDA)
         (0, "Garantias e covenants por credor"),          # STATUS 8.1-8.3
-        (0, "Quanto cada credor recupera")]),             # STATUS 12.1-12.3 waterfall, Lei 11.101
+        (0, "Waterfall de credores (Lei 11.101)")]),             # STATUS 12.1-12.3 waterfall, Lei 11.101
     (7, False, "Estrategista", [
-        (1, "Plano testado em 3 cenários"),               # modelo-institucional.ts:96 Base/Cliente/Stress
-        (0, "Plano recalcula a cada premissa"),           # STATUS 6.1/6.2 motor de cálculo
-        (0, "Valor da empresa: DCF e múltiplos"),         # STATUS 11.1/11.2
-        (0, "Propostas aos credores simuladas")]),        # STATUS 13.1-13.4 carência, haircut, new money
+        (1, "Plano em 3 cenários, com stress"),               # modelo-institucional.ts:96 Base/Cliente/Stress
+        (0, "Recálculo automático das premissas"),           # STATUS 6.1/6.2 motor de cálculo
+        (0, "Valuation por DCF e múltiplos"),         # STATUS 11.1/11.2
+        (0, "Simulação de propostas aos credores")]),        # STATUS 13.1-13.4 carência, haircut, new money
     (8, True, "Entregas", [
         (1, "Modelo do comitê auditável em Excel"),       # modelo-institucional.ts:73-78 (14 abas em fórmula)
-        (1, "Números conferíveis desde o 1º dia"),        # export/route.ts ?modo=dados "desde a ingestão"
-        (0, "Apresentação pronta para o credor")]),       # STATUS 14.3 (80%) / 14.4
+        (1, "Base de dados conferível no 1º dia"),        # export/route.ts ?modo=dados "desde a ingestão"
+        (0, "Apresentação de crédito pronta")]),       # STATUS 14.3 (80%) / 14.4
 ]
 SIDE = {n: ("L" if n <= 4 else "R") for n in range(1, 9)}
 
