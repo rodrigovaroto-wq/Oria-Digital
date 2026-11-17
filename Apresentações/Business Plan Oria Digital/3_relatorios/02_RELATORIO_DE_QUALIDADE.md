@@ -12,7 +12,7 @@ Foram cinco rodadas de gerar → renderizar → inspecionar → criticar → cor
 | 2 | `rodada2.py` | Achados de 2 revisores independentes | Uma regressão minha no slide 7 ("no mesmo modelo" colidia com o texto de baixo) |
 | 3 | `rodada3.py` | Cards preenchidos e dado do BC | Painel em gráfico ilegível no slide 13, trocado por números grandes; respostas do slide 3 encostando no pé do card |
 | 4 | `rodada4.py` | Despesa de 15% para 10% | — |
-| 5 | `rodada5.py` | Mapa mental, remoção do slide 7 e acabamento | Elipses partindo nomes; grupos de análises fundidos (achado do 3º revisor); raio de canto e títulos dos pilares |
+| 5 | `rodada5.py` | Mapa mental, remoção do slide 7 e acabamento | Elipses partindo nomes; grupos de análises fundidos (achado do 3º revisor); raio de canto e títulos dos pilares; depois, por pedido seu, 1 a 4 à esquerda, ramos preenchidos e 28 ramos específicos |
 
 ## 2. Testes e resultados
 
@@ -25,7 +25,7 @@ Foram cinco rodadas de gerar → renderizar → inspecionar → criticar → cor
 | Contagens dos painéis de impacto | Script (contagem dos selos) + revisor | 5/4/5/5 e 2/3/2/6. **OK** |
 | Contas do exemplo do slide 7 | Conferência | 2 p.p. × 500 = 10; 10% × 200 = 20; recorrente = 30/ano; único = 20. **OK** |
 | Saldo de crédito PJ | Relatório oficial do BC (PDF de 29/10/2026, texto extraído) | "R$ 2,8 trilhões" em setembro. O deck dizia 2,7 (agosto). **Corrigido** |
-| Status das 21 análises | Levantamento no repositório (STATUS_POR_ETAPA, ROADMAP, migrations, portal) | 11 já existem e 10 estão em construção. **A validar com você** |
+| Status das 28 análises | Cada ramo conferido no código (grep) ou no STATUS_POR_ETAPA | 14 já existem e 14 estão em construção. "18 capítulos" não tem evidência e ficou de fora. **A validar com você** |
 | Contraste do selo RISCO | WCAG | 3,1:1 → **5,1:1** |
 | Crítica visual independente | 3 rodadas de subagente "diretor de arte" e 1 de "narrativa/finanças", sem ver o meu raciocínio | Nenhuma regressão de identidade. Os achados foram conferidos na geometria antes de serem aplicados |
 | Editabilidade | Inspeção | Texto vivo, gráfico nativo com a planilha atualizada e conectores nativos (curvas editáveis) no mapa mental. Nenhum slide virou imagem |
@@ -35,7 +35,7 @@ Foram cinco rodadas de gerar → renderizar → inspecionar → criticar → cor
 | Dimensão (peso) | v2 | v3 | Evidência |
 |---|---|---|---|
 | Narrativa e inteligência (25%) | 7 | **9** | Um motor descrito de um jeito só (fluxo → agentes e análises), pedido explícito, títulos-conclusão, nenhuma contradição de prazo ou de cliente |
-| Direção de arte (25%) | 7 | **9** | Os cards vazios ganharam conteúdo que tem função. O mapa mental mostra 21 análises sem perder a leitura. Os componentes novos são cópias dos existentes. Os pontos que sobram (anexo 1, cards escuros do slide 4) vêm do desenho original |
+| Direção de arte (25%) | 7 | **9** | Os cards vazios ganharam conteúdo que tem função. O mapa mental mostra 28 análises sem perder a leitura. Os componentes novos são cópias dos existentes. Os pontos que sobram (anexo 1, cards escuros do slide 4) vêm do desenho original |
 | Fidelidade à identidade (20%) | n/a | **9** | Paleta, tipografia, sextante, cartões, elipses e curvas do original |
 | Precisão informacional (15%) | 4 | **9,5** | BC conferido na fonte, o anual separado do único, citação sem prova removida, status das análises honesto |
 | Legibilidade e acabamento (10%) | 4,5 | **8,5** | Zero colisões e selos legíveis. As pílulas do mapa mental, em 10 pt, são o ponto mais pequeno do deck |

@@ -16,7 +16,7 @@ Decisões do dono que guiaram o trabalho: [`00_BRIEFING.md`](00_BRIEFING.md).
 | 6 Dados | 6 | "principais fontes" (a lista é um resumo) e uma frase de fecho no card escuro |
 | 7 Nove análises | — | **Removido.** O conteúdo foi para o slide 8 |
 | 8 O que o cliente ganha | 7 | Tirei o texto solto sobreposto, revisei o exemplo (despesa de 15% para 10%), troquei os rótulos do gráfico e saiu a citação "McKinsey" |
-| 9 Estratégia de IA | 8 | **Mapa mental:** Orquestrador → 8 agentes → 21 análises, com o status de cada uma |
+| 9 Estratégia de IA | 8 | **Mapa mental:** Orquestrador → 8 agentes (1 a 4 à esquerda, 5 a 8 à direita) → 28 análises, cada uma com fonte no repositório |
 | 10 Para levar adiante | 9 | O pedido ao sócio com os 4 pilares, o fim da contradição sobre o primeiro cliente e o prazo de 3 a 6 meses |
 | 11 Anexo 1 | 10 | Uma palavra no rodapé |
 | 12–14 Anexo 2 | 11–13 | Selos legíveis, painel "Onde os blocos pesam" nos slides 11 e 13 e uma palavra a menos no título do 11 |
@@ -36,9 +36,9 @@ Decisões do dono que guiaram o trabalho: [`00_BRIEFING.md`](00_BRIEFING.md).
 
 - **O motor era descrito três vezes sem ligação entre as descrições:** 5 etapas (slide 5), 9 análises (slide 7) e 8 agentes (slide 9). Agora fica assim:
   - O slide 5 mostra o fluxo, e cada etapa diz o que entrega ("RESULTADO").
-  - O slide 8 mostra quem faz o quê: cada agente com as análises dele. Cheio quer dizer que já existe, e vazado ou tracejado quer dizer em construção.
+  - O slide 8 mostra quem faz o quê: cada agente com as análises dele. Todo ramo é preenchido, e a bolinha diz o status: ● já existe, ○ em construção.
   - A mensagem do slide removido ("o especialista escolhe a saída que preserva mais valor") foi para a linha de supervisão.
-- **O mapa mental mostra o que já existe e não aparecia antes:** reconciliações, mútuos e intragrupo, mapa da dívida, capacidade de pagamento, capital de giro, três cenários e o Excel em fórmula viva. As 21 análises vêm do levantamento no repositório (11 já existem e 10 estão em construção).
+- **O mapa mental mostra o que já existe e não aparecia antes:** reconciliações, mútuos e intragrupo, mapa da dívida, capacidade de pagamento, capital de giro, três cenários e o Excel em fórmula viva. As 28 análises vêm do código e do `STATUS_POR_ETAPA_2026-11-11.md` (14 já existem e 14 estão em construção). A fonte de cada ramo (arquivo ou etapa do plano) está comentada na lista `AGENTES` em `4_scripts/rodada5.py`. Exemplos: "3 cenários: Base, Cliente e Stress" (`modelo-institucional.ts:96`), "Waterfall de credores (Lei 11.101)" (etapas 12.1 a 12.3), "Motor: 7 fórmulas e 89 premissas" (etapas 6.1 e 6.2).
 - **Pedido ao sócio (final 9):** "O QUE BUSCAMOS NO SÓCIO" traz os quatro pilares na sua ordem: Direção estratégica, Time, Infraestrutura segura para desenvolvimento e Banco de dados.
 - **Títulos que viraram conclusão:** slides 5, 7, 8 e 9. "direto" saiu do título do slide 11.
 
@@ -53,7 +53,7 @@ Os elementos novos são cópias de elementos que já existiam no deck: o divisor
   - "Onde os blocos pesam" nos slides 11 e 13. O painel é contado direto dos selos de cada slide (5/4/5/5 e 2/3/2/6, conferidos pelo revisor).
 - **Mapa mental com dois lados:**
   - O Orquestrador fica no centro, os agentes 1 a 4 à direita e os 5 a 8 à esquerda, no sentido horário como no original.
-  - As análises que já existem aparecem como pílula branca. As que estão em construção aparecem como pílula tracejada.
+  - Todas as análises aparecem como pílula branca. A bolinha diz o status: ● já existe, ○ em construção.
 - **Acabamento:**
   - margem do antigo slide 7;
   - selos dos anexos de 7 para 8 pt, com o contraste do "RISCO" passando de 3,1:1 para 5,1:1;
@@ -67,7 +67,7 @@ Os elementos novos são cópias de elementos que já existiam no deck: o divisor
 
 | # | Questão | Situação |
 |---|---|---|
-| 1 | **Status das 21 análises (final 8)** | Veio do repositório. Confira se você quer incluir as funcionalidades novas que estão sendo adicionadas. É só ampliar a lista `AGENTES` em `4_scripts/rodada5.py` |
+| 1 | **Status das 28 análises (final 8)** | Veio do código e do plano de execução. Confira se você quer incluir as funcionalidades novas que estão sendo adicionadas. É só ampliar a lista `AGENTES` em `4_scripts/rodada5.py` |
 | 2 | **Slide de modelo de negócio** | Não entrou. A prévia com valores fictícios está em `2_renders/previas_rodada4/`, aguardando você e seu sócio |
 | 3 | **"Mais de 30 fontes" (final 5)** | Mantido, por sua decisão. O slide 6 agora diz "principais fontes" |
 | 4 | **Abrir no PowerPoint** | Conferir principalmente o gráfico do slide 7 e o mapa mental do slide 8 |
