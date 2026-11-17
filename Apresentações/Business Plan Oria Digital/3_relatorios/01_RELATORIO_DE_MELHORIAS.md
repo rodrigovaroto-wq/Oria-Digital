@@ -1,89 +1,83 @@
-# Relatório de melhorias: Business Plan Oria Digital, v2 → v3
+# Relatório de melhorias: Business Plan Oria Digital, v2 (14 slides) → v3 (13 slides)
 
-**Resumo:** 13 dos 14 slides mudaram. Nenhum foi reconstruído. A ordem, a estrutura e a identidade visual ficaram iguais. Corrigi um defeito visível na apresentação (slide 8), três inconsistências de dados, o pedido ao sócio, que não estava explícito, e seis problemas de grade e legibilidade.
+**Resumo:** o deck passou de 14 para 13 slides. O slide das "nove análises" foi fundido no slide dos agentes, que virou um mapa mental. Os outros slides foram editados por partes, sem reconstrução. Paleta, tipografia, sextante, cartões e rodapé ficaram iguais.
 
-Referência das decisões: [`00_BRIEFING.md`](00_BRIEFING.md).
+Decisões do dono que guiaram o trabalho: [`00_BRIEFING.md`](00_BRIEFING.md).
 
-## 1. Classificação por slide
+## 1. Mapa de slides
 
-| Slide | Classe | O que mudou |
+| Original | Final | O que mudou |
 |---|---|---|
-| 1 Capa | **A**, preservar | Nada |
-| 2 O problema | **B**, refinar | "recuperação (extra) judicial" → "recuperação judicial e extrajudicial" |
-| 3 Consequências | **B** | "Semanas perdidas" → "Meses perdidos" |
-| 4 O negócio | **A** | Nada |
-| 5 Como funciona | **B** | Título |
-| 6 Dados | **A** | Nada |
-| 7 O que calcula | **B** | Rótulo e margem |
-| 8 O que o cliente ganha | **C**, reorganizar | Defeito visível, dados, título, gráfico, fonte |
-| 9 Estratégia de IA | **B** | Status dos agentes (aprovado pelo dono com prévia) e título |
-| 10 Para levar adiante | **C** | O pedido ao sócio, os pilares, uma contradição e o prazo nas notas |
-| 11 Anexo 1 | **B** | Uma palavra no rodapé |
-| 12–14 Anexo 2 | **B** | Selos legíveis e contraste; uma palavra no título do 12 |
+| 1 Capa | 1 | Nada |
+| 2 O problema | 2 | "recuperação (extra) judicial" → "recuperação judicial e extrajudicial" |
+| 3 Consequências | 3 | "Meses perdidos" e um bloco **"COMO RESOLVEMOS"** em cada card. O problema já anuncia a resposta |
+| 4 O negócio | 4 | **R$ 2,7 tri → R$ 2,8 tri de saldo em set/2026**, conferido no Banco Central |
+| 5 Como funciona | 5 | Título novo e um bloco **"RESULTADO"** em cada etapa |
+| 6 Dados | 6 | "principais fontes" (a lista é um resumo) e uma frase de fecho no card escuro |
+| 7 Nove análises | — | **Removido.** O conteúdo foi para o slide 8 |
+| 8 O que o cliente ganha | 7 | Tirei o texto solto sobreposto, revisei o exemplo (despesa de 15% para 10%), troquei os rótulos do gráfico e saiu a citação "McKinsey" |
+| 9 Estratégia de IA | 8 | **Mapa mental:** Orquestrador → 8 agentes → 21 análises, com o status de cada uma |
+| 10 Para levar adiante | 9 | O pedido ao sócio com os 4 pilares, o fim da contradição sobre o primeiro cliente e o prazo de 3 a 6 meses |
+| 11 Anexo 1 | 10 | Uma palavra no rodapé |
+| 12–14 Anexo 2 | 11–13 | Selos legíveis, painel "Onde os blocos pesam" nos slides 11 e 13 e uma palavra a menos no título do 11 |
 
-Nenhum slide ficou na classe D (reconstruir).
+## 2. Correções de fato (prioridade 1)
 
-## 2. Problemas encontrados e o que foi feito
+1. **Texto solto sobre os cards (final 7).** A frase "com um nível de excelência e exigência extremamente alto" cobria números. A checagem de render media 4 palavras sobrepostas, e agora mede zero.
+2. **Ganho anual somado com ganho único (final 7).** O gráfico somava R$ 60 mi "por ano". Agora os rótulos são "R$ 10 mi / ano", "R$ 20 mi / ano" e "R$ 20 mi" (único, em verde).
+3. **Despesa de 15% → 10% (final 7)**, por sua decisão. O exemplo agora é 10% de R$ 200 mi = R$ 20 mi por ano, com R$ 30 mi por ano de ganho recorrente. As notas acompanham.
+4. **"Fonte: McKinsey."** saiu, por sua decisão. No lugar entrou a premissa do exemplo: empresa com R$ 500 mi de dívida e R$ 200 mi de custos operacionais por ano.
+5. **Crédito a empresas (final 4).** Os R$ 2,7 tri eram de **agosto** (relatório do BC de 29/09/2026). O relatório de 29/10/2026 traz **R$ 2,8 trilhões em setembro**. O slide passou a dizer "R$ 2,8 tri · de saldo em set/2026", e a fonte virou "Banco Central (out/2026)".
+6. **Prazo de 6 a 12 meses nas notas** contra 3 a 6 meses no slide: corrigido para 3 a 6.
+7. **"O primeiro cliente já existe"** contradizia a linha do tempo. Agora o texto diz "O método já funciona na Oria Partners".
+8. **Análises apresentadas como prontas que ainda não existem.** O antigo slide 7 listava como prontas Valuation, Recuperação por credor, Simulação de propostas e Comparativo setorial, que estão em 0% no `STATUS_POR_ETAPA_2026-11-11.md`. No mapa mental elas aparecem como "em construção".
 
-### Erros de fato e de consistência (prioridade 1)
+## 3. Narrativa e estrutura
 
-1. **Slide 8: texto solto sobre os cartões.** A caixa "com um nível de excelência e exigência extremamente alto" ficava por cima do meio do slide e cobria números (detectado também pelo script de colisão: 4 palavras sobrepostas). **Removida.**
-2. **Slide 8: soma de ganho anual com ganho único.** O gráfico se chamava "R$ mi por ano" e somava R$ 60 mi. Mas R$ 20 mi de crédito tributário é ganho de uma vez só. **Agora:** "Exemplo ilustrativo · R$ 40 mi por ano + R$ 20 mi uma vez". A parte única fica em verde, a cor do cartão "Amortiza dívida". A separação é sutil, como você pediu.
-3. **Slide 8: "Fonte: McKinsey."** era uma citação sem estudo identificável, embaixo de um exemplo inventado. **Retirada** por sua decisão. No lugar entrou a premissa: "empresa com R$ 500 mi de dívida e R$ 200 mi de custos operacionais por ano". "Operacionais" deixa claro que o juro (R$ 10 mi) não está dentro dos R$ 200 mi, então não há dupla contagem.
-4. **Slide 10, notas: "Em 6 a 12 meses"** contradizia o "3 a 6 meses" do slide. **Corrigido para 3 a 6**, por sua decisão.
-5. **Slide 10: "O método e o primeiro cliente já existem"** contradizia a linha do tempo do mesmo slide, que põe o primeiro cliente daqui a 3 a 6 meses. **Agora:** "O método já funciona na Oria Partners. Com esses quatro pilares, o Oria Digital ganha escala."
+- **O motor era descrito três vezes sem ligação entre as descrições:** 5 etapas (slide 5), 9 análises (slide 7) e 8 agentes (slide 9). Agora fica assim:
+  - O slide 5 mostra o fluxo, e cada etapa diz o que entrega ("RESULTADO").
+  - O slide 8 mostra quem faz o quê: cada agente com as análises dele. Cheio quer dizer que já existe, e vazado ou tracejado quer dizer em construção.
+  - A mensagem do slide removido ("o especialista escolhe a saída que preserva mais valor") foi para a linha de supervisão.
+- **O mapa mental mostra o que já existe e não aparecia antes:** reconciliações, mútuos e intragrupo, mapa da dívida, capacidade de pagamento, capital de giro, três cenários e o Excel em fórmula viva. As 21 análises vêm do levantamento no repositório (11 já existem e 10 estão em construção).
+- **Pedido ao sócio (final 9):** "O QUE BUSCAMOS NO SÓCIO" traz os quatro pilares na sua ordem: Direção estratégica, Time, Infraestrutura segura para desenvolvimento e Banco de dados.
+- **Títulos que viraram conclusão:** slides 5, 7, 8 e 9. "direto" saiu do título do slide 11.
 
-### Narrativa e mensagem para o sócio (prioridade 3)
+## 4. Direção de arte
 
-6. **Slide 10: o pedido não estava explícito.** "PARA CHEGAR LÁ" virou **"O QUE BUSCAMOS NO SÓCIO"**. Os quatro pilares estão na sua ordem:
-   - **Direção estratégica** (cartão novo, com ícone de bússola, que conversa com o sextante da marca);
-   - Time de especialistas;
-   - **Infraestrutura segura para desenvolvimento** (junta os dois cartões de infraestrutura);
-   - Banco de dados.
+Os elementos novos são cópias de elementos que já existiam no deck: o divisor do slide 4, os rótulos laranja, os números grandes, as elipses e badges do slide dos agentes e as curvas cinza.
 
-   O título virou conclusão: "Quatro pilares levam o Oria Digital do método validado ao mercado". As notas foram reescritas com o pedido.
-7. **Slide 9: o que já funciona.** Pelas suas notas, só Captador, Conferidor e Entregas operam hoje. Agora eles aparecem "já em operação" (badge cheio). Os demais aparecem "em construção" (badge vazado), com legenda. Você aprovou com a prévia. Título: "Oito agentes de IA cobrem o diagnóstico, e o Especialista Oria decide", que perdeu o ponto final e o exagero "todo o diagnóstico".
-8. **Slide 7: "Nove análises rodando juntas"** afirmava no presente o que o slide 9 mostra em construção. Virou "Nove análises integradas".
-9. **Slide 5: o título repetia o do slide 4** ("Do documento ao diagnóstico…" / "Do caos de documentos à decisão…"). Virou "Do documento ao diagnóstico, com a prova de cada número", que ancora o diferencial.
-10. **Slide 3: "Semanas perdidas"** competia com os "3 meses" dos slides 2 e 4. Virou "Meses perdidos".
-11. **Slide 12: "5 com efeito direto no EBITDA".** A legenda não define o que é efeito "direto". Ficou "5 com efeito no EBITDA", no padrão dos slides 13 e 14.
-12. **Slide 11: "está no roteiro"** virou "está no plano de construção", o termo das notas do slide 9.
+- **Cards preenchidos com conteúdo que tem função:**
+  - "COMO RESOLVEMOS" no slide 3;
+  - "RESULTADO" no slide 5;
+  - "principais fontes" e a frase de fecho no slide 6;
+  - "Onde os blocos pesam" nos slides 11 e 13. O painel é contado direto dos selos de cada slide (5/4/5/5 e 2/3/2/6, conferidos pelo revisor).
+- **Mapa mental com dois lados:**
+  - O Orquestrador fica no centro, os agentes 1 a 4 à direita e os 5 a 8 à esquerda, no sentido horário como no original.
+  - As análises que já existem aparecem como pílula branca. As que estão em construção aparecem como pílula tracejada.
+- **Acabamento:**
+  - margem do antigo slide 7;
+  - selos dos anexos de 7 para 8 pt, com o contraste do "RISCO" passando de 3,1:1 para 5,1:1;
+  - rótulos do slide 9 com o espaçamento do deck;
+  - títulos dos pilares com a mesma linha de base;
+  - setas centradas;
+  - rótulos do gráfico sem quebra de linha;
+  - raio de canto dos painéis igual ao dos cards.
 
-### Acabamento e legibilidade (prioridades 4 e 5)
+## 5. Para você validar
 
-13. **Slide 7:** o bloco "A melhor saída" ia até 13,17", e a margem direita do deck é 12,73". Agora ele espelha o bloco da esquerda (3,70" de largura).
-14. **Slide 8:**
-    - Os valores não se separam mais da unidade na quebra de linha ("R$ 10 / mi/ano" virou "R$ 10 mi/ano", com espaço que não quebra).
-    - O rótulo do gráfico está alinhado aos rótulos dos cartões (2,15" → 2,20").
-    - O título perdeu o "; Mais", maiúsculo depois de ponto e vírgula, e ficou paralelo: "Menos custo desnecessário, mais dívida amortizada".
-15. **Slide 10:** os rótulos "HOJE", "PRÓXIMO MARCO", "EM 3 A 6 MESES" e "O QUE BUSCAMOS NO SÓCIO" ganharam o mesmo espaçamento entre letras dos outros rótulos do deck (`spc=300`).
-16. **Slides 12–14:**
-    - Os 59 selos (EBITDA, DÍVIDA, CAIXA, RISCO) subiram de 7 para 8 pt. É o máximo que o selo comporta sem mudar de tamanho.
-    - O cinza do "RISCO" escureceu de `8A9590` para `66716C`. O contraste do branco sobre ele passou de 3,1:1 para 5,1:1 (a recomendação WCAG é de 4,5:1). O tom continua cinza e a legenda acompanha.
-
-## 3. O que foi preservado de propósito
-
-- **Paleta e logotipo:** paleta, sextante, rodapé, logotipo, sistema de cartões, tipografia (Calibri) e a ordem e quantidade de slides.
-- **Os quatro números de mercado e as fontes deles** (slides 2 e 4).
-- **Os anexos:** conteúdo integral. Só a legibilidade mudou.
-- **Slides 1, 4 e 6 sem alteração:** cumprem a função, e mexer neles seria só para demonstrar atividade.
-
-## 4. Questões que precisam de validação humana
-
-| # | Questão | Por que não mexi |
+| # | Questão | Situação |
 |---|---|---|
-| 1 | **"Mais de 30 fontes" (slide 5).** O slide 6 lista 14 grupos e cerca de 28 itens. | Não há prova no projeto para confirmar nem para negar. Se você não tiver a lista, sugiro "cerca de 30" ou "14 grupos de fontes". |
-| 2 | **"3 meses" (slide 2)** não tem fonte. | É a experiência da Oria Partners. Vale ter o caso pronto se o sócio perguntar. |
-| 3 | **R$ 18,9 bi (OBRE), 2.466, 1.581, R$ 2,7 tri, R$ 56 bi** | Dados externos que não conferi neste ambiente, sem acesso às fontes. "R$ 2,7 tri" parece saldo de crédito (estoque), e os outros são do ano. Se for saldo, considere "R$ 2,7 tri de saldo de crédito a empresas". |
-| 4 | **15% de redução de despesa (slide 8)** | É o número mais agressivo do exemplo. Um sócio pode perguntar a base. |
-| 5 | **Perguntas que o deck não responde:** modelo de receita/preço, concorrência, quem é o time hoje | Não é falha de slide: com público ao vivo, basta ter as respostas prontas. Não criei slides com dados que não existem. |
+| 1 | **Status das 21 análises (final 8)** | Veio do repositório. Confira se você quer incluir as funcionalidades novas que estão sendo adicionadas. É só ampliar a lista `AGENTES` em `4_scripts/rodada5.py` |
+| 2 | **Slide de modelo de negócio** | Não entrou. A prévia com valores fictícios está em `2_renders/previas_rodada4/`, aguardando você e seu sócio |
+| 3 | **"Mais de 30 fontes" (final 5)** | Mantido, por sua decisão. O slide 6 agora diz "principais fontes" |
+| 4 | **Abrir no PowerPoint** | Conferir principalmente o gráfico do slide 7 e o mapa mental do slide 8 |
 
-## 5. Melhorias propostas e não aplicadas
+## 6. Apontado e não aplicado
 
-Ficaram de fora por serem de baixo impacto ou por tocarem em escolhas originais:
-
-- O número da página aparece na capa e fica uns 0,05" acima da linha de "ORIA DIGITAL" em todos os slides (vem do layout).
-- Slide 6: a frase "Resultado:" fica solta. Os slides 2 e 3 usam faixa tingida para o mesmo papel. Falta espaço vertical antes do rodapé para a faixa.
-- Slide 8: os "Entregáveis" usam bolinha, e o resto do deck usa seta.
-- Slides 3, 5, 11, 12 e 14: há bastante espaço vazio no pé dos cartões. Está assim no original, e preenchê-lo seria decoração sem função.
-- Slide 9: o texto das elipses está em 10,5 pt, pequeno para projeção. Aumentar exige redesenhar as elipses.
+| Ponto | Motivo |
+|---|---|
+| Barra "R$ 20 mi" (única) ao lado das barras "/ ano", no gráfico do slide 7 | Decisão sua. A diferença está no rótulo e na cor |
+| Cards 1 e 6 do anexo 1 (final 10) com metade vazia | O card 3 tem 8 itens e não sobra espaço para um elemento comum aos seis |
+| O painel de impacto não aparece no final 12 | Os 15 itens dos blocos 3 e 4 ocupam o slide inteiro. O título do 12 já traz as contagens |
+| Cards escuros do final 4 com alturas de texto diferentes | Já era assim no original |
+| Número da página na capa | Vem do layout do original |

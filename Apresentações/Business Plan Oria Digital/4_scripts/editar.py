@@ -81,40 +81,12 @@ set_para(shape(s8, 10), f"2{NBSP}p.p. sobre R${NBSP}500{NBSP}mi = R${NBSP}10{NBS
 set_para(shape(s8, 14), f"15% de R${NBSP}200{NBSP}mi = R${NBSP}30{NBSP}mi/ano")
 set_para(shape(s8, 20), f"R${NBSP}20{NBSP}mi recuperados = R${NBSP}20{NBSP}mi a menos de dívida")
 
-# cabeçalho do gráfico: rótulo + separação sutil recorrente x única
+# cabeçalho do gráfico: só o rótulo; a separação recorrente x única fica nos próprios valores (pedido do dono)
 hdr = shape(s8, 26)
 set_para(hdr, "EXEMPLO ILUSTRATIVO")
-sub_el = copy.deepcopy(hdr._element)
-hdr._element.addnext(sub_el)
-sub = [s for s in s8.shapes if s._element is sub_el][0]
-sub.top = Inches(2.47)
-sub.name = "t263b"
-sub_el.find(".//{%s}cNvPr" % "http://schemas.openxmlformats.org/presentationml/2006/main").set("id", "40")
-set_para(sub, f"R${NBSP}40{NBSP}mi por ano + R${NBSP}20{NBSP}mi uma vez")
-rpr = sub.text_frame.paragraphs[0].runs[0]._r.get_or_add_rPr()
-rpr.attrib.pop("spc", None)
-rpr.set("b", "1")
-rpr.set("sz", "1300")
-for f in rpr.findall("{%s}solidFill" % NS["a"]):
-    rpr.remove(f)
-fill = etree.SubElement(rpr, "{%s}solidFill" % NS["a"])
-etree.SubElement(fill, "{%s}srgbClr" % NS["a"]).set("val", "16263B")
-rpr.insert(0, fill)  # solidFill precisa vir antes de latin/ea/cs
-# o subtítulo é a legenda: cada parte na cor da barra que soma (laranja recorrente, verde único)
-r0 = sub.text_frame.paragraphs[0].runs[0]._r
-for txt, color in ((" + ", "16263B"), (f"R${NBSP}20{NBSP}mi uma vez", GREEN)):
-    r = copy.deepcopy(r0)
-    r.find("{%s}t" % NS["a"]).text = txt
-    r.find("{%s}rPr/{%s}solidFill/{%s}srgbClr" % (NS["a"], NS["a"], NS["a"])).set("val", color)
-    r0.getparent().append(r)
-    r0 = r
-first = sub.text_frame.paragraphs[0].runs[0]
-first.text = f"R${NBSP}40{NBSP}mi por ano"
-first._r.find("{%s}rPr/{%s}solidFill/{%s}srgbClr" % (NS["a"], NS["a"], NS["a"])).set("val", "F04600")
-
 chart_gf = shape(s8, 27)
-chart_gf.top = Inches(2.78)
-chart_gf.height = Inches(1.87)
+chart_gf.top = Inches(2.50)
+chart_gf.height = Inches(2.15)
 
 chart = chart_gf.chart
 cs = chart._chartSpace
@@ -128,6 +100,26 @@ dpt = etree.fromstring(
     f"<a:effectLst/></c:spPr></c:dPt>"
 )
 inv.addnext(dpt)
+# rótulos por ponto: "/ ano" nos recorrentes; sem quebra de linha (wrap="none") e com
+# largura explícita (c15:layout), senão o rótulo se parte em "R$ 30 mi" + "/ ano" (medido no render)
+dlbls = ser.find("c:dLbls", NS)
+txpr = copy.deepcopy(dlbls.find("c:txPr", NS))
+txpr.find("a:bodyPr", NS).set("wrap", "none")
+C15 = "http://schemas.microsoft.com/office/drawing/2012/chart"
+for idx, fmt in ((0, '"R$ "0" mi / ano"'), (1, '"R$ "0" mi / ano"'), (2, '"R$ "0" mi"')):
+    fmt_xml = fmt.replace('"', "&quot;").replace(" ", NBSP)
+    lbl = etree.fromstring(
+        f'<c:dLbl xmlns:c="{NS["c"]}" xmlns:a="{NS["a"]}" xmlns:c15="{C15}"><c:idx val="{idx}"/>'
+        f'<c:numFmt formatCode="{fmt_xml}" sourceLinked="0"/>'
+        f"<c:spPr><a:noFill/><a:ln><a:noFill/></a:ln></c:spPr>"
+        f"{etree.tostring(txpr).decode()}"
+        f'<c:dLblPos val="outEnd"/><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/>'
+        f'<c:showSerName val="0"/><c:showPercent val="0"/><c:showBubbleSize val="0"/>'
+        f'<c:extLst><c:ext uri="{{CE6537A1-D6FC-4f65-9D91-7224C49458BB}}"><c15:layout><c:manualLayout>'
+        f'<c:w val="0.34"/><c:h val="0.13"/></c:manualLayout></c15:layout></c:ext></c:extLst></c:dLbl>'
+    )
+    dlbls.insert(idx, lbl)
+dlbls.find("c:txPr", NS).find("a:bodyPr", NS).set("wrap", "none")
 # a planilha embutida acompanha o cache
 wb_part = chart.part.chart_workbook.xlsx_part
 wb = load_workbook(io.BytesIO(wb_part.blob))
@@ -135,7 +127,7 @@ wb.active["B1"] = "R$ mi"
 buf = io.BytesIO()
 wb.save(buf)
 wb_part._blob = buf.getvalue()
-log.append("S8: ponto único do gráfico em verde; subtítulo-legenda 40/ano (laranja) + 20 uma vez (verde)")
+log.append("S8: ponto único em verde; rótulos R$ 10 mi / ano, R$ 30 mi / ano, R$ 20 mi")
 
 src = shape(s8, 31)
 set_para(src, f"Exemplo ilustrativo: empresa com R${NBSP}500{NBSP}mi de dívida e R${NBSP}200{NBSP}mi de custos por ano.")

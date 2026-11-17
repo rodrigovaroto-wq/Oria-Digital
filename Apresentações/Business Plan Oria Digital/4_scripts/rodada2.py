@@ -74,10 +74,8 @@ log.append("S7: bloco 'A melhor saída' recolhido para dentro da margem, espelha
 # S8: rótulo do gráfico na mesma linha de 'REDUZ CUSTO' / 'AMORTIZA DÍVIDA' (2,20")
 hdr = find(S(8), "EXEMPLO ILUSTRATIVO", exact=True)[0]
 hdr.top = Inches(2.20)
-sub = find(S(8), "por ano + R$")[0]
-sub.top = Inches(2.52)
 chart = [sh for sh in S(8).shapes if sh.has_chart][0]
-chart.top, chart.height = Inches(2.85), Inches(1.80)
+chart.top, chart.height = Inches(2.55), Inches(2.10)
 log.append("S8: rótulo do gráfico alinhado aos rótulos dos cards (2,15\" -> 2,20\")")
 
 # S9: símbolos da legenda legíveis ao lado dos badges
