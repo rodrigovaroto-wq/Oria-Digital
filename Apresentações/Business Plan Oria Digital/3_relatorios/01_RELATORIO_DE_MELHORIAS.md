@@ -81,3 +81,33 @@ Os elementos novos são cópias de elementos que já existiam no deck: o divisor
 | O painel de impacto não aparece no final 12 | Os 15 itens dos blocos 3 e 4 ocupam o slide inteiro. O título do 12 já traz as contagens |
 | Cards escuros do final 4 com alturas de texto diferentes | Já era assim no original |
 | Número da página na capa | Vem do layout do original |
+
+## 7. Auditoria de valor do slide 8
+
+Pedido do dono: separar o que tem valor real do que é métrica solta. O critério foi este: um sócio investidor entende qual problema do cliente o ramo resolve? Todo ramo passou a dizer **o benefício**. A evidência técnica continua comentada em `4_scripts/rodada5.py`.
+
+| Agente | Antes (mecanismo ou métrica) | Depois (valor para o cliente) | Por que mudou |
+|---|---|---|---|
+| Captador | Leitura de 4 formatos de arquivo | Lê os documentos sem digitação | "4 formatos" não diz nada; o ganho é não digitar |
+| Captador | Duplicata barrada por fingerprint | Nenhum documento entra em dobro | Jargão técnico; o ganho é não contar em dobro |
+| Captador | Kit do mandato: o que chegou e falta | Mostra o que chegou e o que falta | Tirei o nome interno ("kit") |
+| Captador | SPED, ECD, ECF, NF-e e eSocial | Busca SPED, ECD e NF-e na fonte | Lista de siglas virou ação: o dado vem da fonte, não do cliente |
+| Conferidor | Balanço, caixa e receita batidos | Balanço, caixa e DRE conferidos | Mantido. É o valor central |
+| Conferidor | Pendência vira pergunta ao cliente | Lacuna vira pergunta ao cliente | Mantido |
+| Conferidor | Combinado do grupo sem intragrupo | Consolidado sem dupla contagem | Diz o risco que evita |
+| Mercado | IPCA e índices do BC e do IBGE | Projeção com IPCA e Selic do Focus | Dado solto virou uso. **Conferido:** os índices alimentam as premissas de inflação e juro do modelo (`export/route.ts:200`) |
+| Mercado | Juro de cada contrato vs. BC | Juro acima do mercado, por contrato | Diz o achado, igual ao slide 7 |
+| Risco | Índices, tendências e sinais | Sinais de deterioração nos números | "Índices" é vago |
+| Risco | Scorecard de risco Oria | Nota de risco para o comitê | Nome interno virou o uso |
+| Caixa | Capital de giro: NCG e ciclo | Caixa preso no capital de giro | A sigla virou o efeito |
+| Caixa | Liquidez de 13 semanas | Em que semana o caixa aperta | A pergunta que o credor faz |
+| Dívida | Capacidade de pagamento em fórmula | Quanto de dívida a empresa aguenta | O mecanismo virou a resposta |
+| Dívida | Waterfall de credores (Lei 11.101) | Quanto cada credor recupera | Diz o resultado |
+| Estrategista | 3 cenários: Base, Cliente e Stress | Plano testado em 3 cenários | Os nomes dos cenários são internos |
+| Estrategista | Motor: 7 fórmulas e 89 premissas | Plano recalcula a cada premissa | **Métrica solta, removida.** "7 e 89" não significam nada para quem decide |
+| Estrategista | Carência, haircut e new money | Propostas aos credores simuladas | Jargão de reestruturação virou ação |
+| Entregas | Excel do comitê: 14 abas em fórmula | Modelo do comitê auditável em Excel | **Métrica solta, removida.** "14 abas" não é valor; ser auditável é |
+| Entregas | Excel de dados desde a ingestão | Números conferíveis desde o 1º dia | Diz o ganho de tempo |
+| Entregas | Apresentação de crédito em .pptx | Apresentação pronta para o credor | O formato do arquivo não importa |
+
+Os ramos que não aparecem na tabela foram só reescritos com as mesmas ideias. Os números técnicos (4 formatos, 14 abas, 13 semanas, Lei 11.101, 89 premissas) continuam nas **notas do apresentador**, para responder se o sócio perguntar.
