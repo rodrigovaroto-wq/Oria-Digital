@@ -1,22 +1,22 @@
 -- 135 achados
 S01 LIMITE  sextante (7.3, 0.6, 14.5, 6.5)
-S08 SOBREP  'Oito agentes de IA cob' x 'Agentes e análises:   ' (1.15 pol²)
-S08 SOBREP  'Agente Captador
-Reúne ' x '1' (0.11 pol²)
-S08 SOBREP  'Agente Conferidor
-Apon' x '2' (0.11 pol²)
-S08 SOBREP  'Agente Mercado
-Compara' x '3' (0.11 pol²)
-S08 SOBREP  'Agente Risco
-Acha o pa' x '4' (0.11 pol²)
-S08 SOBREP  'Agente Caixa
-Projeta o' x '5' (0.11 pol²)
-S08 SOBREP  'Agente Dívida
-Organiza' x '6' (0.11 pol²)
-S08 SOBREP  'Agente Estrategista
-Si' x '7' (0.11 pol²)
-S08 SOBREP  'Agente Entregas
-Monta ' x '8' (0.11 pol²)
+S08 SOBREP  'Oito agentes de IA cob' x 'Agentes e análises:   ' (1.25 pol²)
+S08 SOBREP  'Agente
+Captador' x '1' (0.09 pol²)
+S08 SOBREP  'Agente
+Conferidor' x '2' (0.09 pol²)
+S08 SOBREP  'Agente
+Mercado' x '3' (0.09 pol²)
+S08 SOBREP  'Agente
+Risco' x '4' (0.09 pol²)
+S08 SOBREP  'Agente
+Caixa' x '5' (0.09 pol²)
+S08 SOBREP  'Agente
+Dívida' x '6' (0.09 pol²)
+S08 SOBREP  'Agente
+Estrategista' x '7' (0.09 pol²)
+S08 SOBREP  'Agente
+Entregas' x '8' (0.09 pol²)
 S11 FONTE   8.0pt 'RISCO'
 S11 FONTE   8.0pt 'EBITDA'
 S11 FONTE   8.0pt 'CAIXA'

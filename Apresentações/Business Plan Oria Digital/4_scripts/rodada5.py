@@ -60,25 +60,80 @@ for sh in list(s.shapes):
     if sh.name == "legenda-status":
         sh._element.getparent().remove(sh._element)
 
-CX, CY, RING = 6.665, 4.095, 1.075          # centro do círculo do Orquestrador (já existente)
-ROWS = (2.415, 3.535, 4.655, 5.775)          # simétricas em torno de CY; passo 1,12"
-EW, EH = 2.30, 0.92                          # elipse do agente (2,10" partia "Agente Estrategista" em 2 linhas)
-RIGHT_E, LEFT_E = 8.24, 2.79                 # x da elipse (direita / esquerda)
-RIGHT_L, LEFT_L, LW, LH = 10.72, 0.60, 2.01, 0.27   # pílulas das análises
+# geometria (pedido do dono: 1-4 à esquerda, 5-8 à direita; ramos mais largos e específicos)
+CX, CY = 6.665, 4.16                          # centro do Orquestrador
+RING_D, CORE_D = 1.75, 1.43                   # anel e núcleo reduzidos (eram 2,15 e 1,76) para abrir espaço aos ramos
+RING = RING_D / 2
+EW, EH = 1.90, 0.78                           # elipse do agente: "Agente" + nome
+LEFT_E, RIGHT_E = 3.72, 7.71
+LEFT_L, RIGHT_L, LW, LH = 0.60, 9.78, 2.95, 0.25   # pílulas das análises (2,95" = ~34 caracteres em 9,5 pt)
+PITCH, GROUP_GAP = 0.285, 0.21                # vão interno 0,035" x vão entre grupos 0,21"
 _id = [3000]
 
-AGENTES = [  # (n, opera?, nome, papel, [(existe?, análise)])  — lado, linha
-    (1, True, "Captador", "Reúne documentos e dados.", [(1, "Leitura de documentos"), (1, "Pendências do mandato"), (0, "SPED e Open Finance")]),
-    (2, True, "Conferidor", "Aponta o que não bate.", [(1, "Reconciliações"), (1, "Mútuos e intragrupo"), (1, "Perguntas ao cliente")]),
-    (3, False, "Mercado", "Compara com setor e região.", [(1, "Índices macro"), (0, "Comparativo setorial")]),
-    (4, False, "Risco", "Acha o passivo escondido.", [(0, "Processos e protestos"), (0, "Bureaus e dívida ativa"), (0, "Score de risco")]),
-    (5, False, "Caixa", "Projeta o caixa e o estresse.", [(1, "Capital de giro e aging"), (0, "Fluxo de 13 semanas")]),
-    (6, False, "Dívida", "Organiza a dívida por credor.", [(1, "Mapa da dívida"), (1, "Capacidade de pagamento"), (0, "Recuperação por credor")]),
-    (7, False, "Estrategista", "Simula as saídas.", [(1, "Três cenários e EBITDA"), (0, "Valuation"), (0, "Propostas aos credores")]),
-    (8, True, "Entregas", "Monta book e apresentação.", [(1, "Excel em fórmula viva"), (0, "Apresentação de crédito")]),
+# Cada ramo tem evidência no repositório (status em STATUS_POR_ETAPA_2026-11-11.md; ● = no código hoje):
+AGENTES = [  # (n, agente opera?, nome, [(existe?, análise)])
+    (1, True, "Captador", [
+        (1, "Leitura de 4 formatos de arquivo"),          # ROADMAP:122 "4 formatos, fatiamento"
+        (1, "Duplicata barrada por fingerprint"),         # ROADMAP:122 "fingerprint"
+        (1, "Kit do mandato: o que chegou e falta"),      # ESTADO S130, migrations 0300/0301
+        (0, "SPED, ECD, ECF, NF-e e eSocial")]),          # STATUS fase 16 (ondas 1 a 4), 0%
+    (2, True, "Conferidor", [
+        (1, "Balanço, caixa e receita batidos"),           # migrations 0009, 0015, 0105, 0133
+        (1, "Mútuos cruzados entre as empresas"),          # migrations 0117, 0124
+        (1, "Pendência vira pergunta ao cliente"),         # portal/src/lib/perguntas.ts
+        (0, "Combinado do grupo sem intragrupo")]),        # STATUS 5.3/5.4 (6 empresas), 0%
+    (3, False, "Mercado", [
+        (1, "IPCA e índices do BC e do IBGE"),             # N8N/workflow.macro.json
+        (0, "Juro de cada contrato vs. BC"),               # STATUS 18.6 "Dívida contra o Banco Central"
+        (0, "Despesas vs. setor e região")]),              # STATUS 18.3/18.5
+    (4, False, "Risco", [
+        (0, "Índices, tendências e sinais"),               # STATUS 10.1-10.3
+        (0, "Processos, protestos e bureau"),              # STATUS 17.3/17.4
+        (0, "Scorecard de risco Oria")]),                  # deck-credito.ts (estrutura), em construção
+    (5, False, "Caixa", [
+        (1, "Capital de giro: NCG e ciclo"),               # modelo-institucional.ts (aba Capital de Giro)
+        (1, "Aging conciliado com o balanço"),             # migration 0274
+        (0, "Liquidez de 13 semanas")]),                   # STATUS 9.1-9.3
+    (6, False, "Dívida", [
+        (1, "Mapa da dívida lido do cliente"),             # portal/src/lib/mapa-da-divida.ts
+        (1, "Capacidade de pagamento em fórmula"),         # modelo-institucional.ts:6062
+        (0, "Credor, garantia e covenant"),                # STATUS 8.1-8.3
+        (0, "Waterfall de credores (Lei 11.101)")]),       # STATUS 12.1-12.3; ROADMAP
+    (7, False, "Estrategista", [
+        (1, "3 cenários: Base, Cliente e Stress"),         # modelo-institucional.ts:96
+        (0, "Motor: 7 fórmulas e 89 premissas"),           # STATUS 6.1/6.2
+        (0, "Valuation: DCF e múltiplos"),                 # STATUS 11.1/11.2
+        (0, "Carência, haircut e new money")]),            # STATUS 13.1-13.3
+    (8, True, "Entregas", [
+        (1, "Excel do comitê: 14 abas em fórmula"),        # modelo-institucional.ts:73-78
+        (1, "Excel de dados desde a ingestão"),            # export/route.ts ?modo=dados
+        (0, "Apresentação de crédito em .pptx")]),         # STATUS 14.3 (80%) / 14.4
 ]
-# horário a partir do alto à direita: 1-4 descem pela direita, 5-8 sobem pela esquerda
-POS = {1: ("R", 0), 2: ("R", 1), 3: ("R", 2), 4: ("R", 3), 5: ("L", 3), 6: ("L", 2), 7: ("L", 1), 8: ("L", 0)}
+SIDE = {n: ("L" if n <= 4 else "R") for n in range(1, 9)}
+
+
+def layout(ns):
+    """Centros das pílulas e do grupo, empilhando os grupos de um lado em torno de CY."""
+    grupos = [len(AGENTES[n - 1][3]) for n in ns]
+    total = sum(g * PITCH - (PITCH - LH) for g in grupos) + GROUP_GAP * (len(grupos) - 1)
+    y = CY - total / 2
+    out = {}
+    for n, g in zip(ns, grupos):
+        ys = [y + LH / 2 + i * PITCH for i in range(g)]
+        out[n] = ((ys[0] + ys[-1]) / 2, ys)
+        y += g * PITCH - (PITCH - LH) + GROUP_GAP
+    return out
+
+
+POS = {**layout([1, 2, 3, 4]), **layout([5, 6, 7, 8])}
+
+# Orquestrador menor, recentrado
+for sid, d in ((11, RING_D), (9, CORE_D), (10, CORE_D)):
+    sh = shapes[sid]
+    sh.left, sh.top, sh.width, sh.height = Inches(CX - d / 2), Inches(CY - d / 2), Inches(d), Inches(d)
+for r in shapes[10].text_frame.paragraphs:
+    for run in r.runs:
+        run.font.size = Pt(15)
 
 
 def place(el, x, y, w, h, name):
@@ -127,24 +182,19 @@ def texto(sh, paras_spec, algn="ctr", ins=0.04):
             etree.SubElement(r, f"{{{A}}}t").text = t
 
 
-for n, on, nome, papel, itens in AGENTES:
-    side, row = POS[n]
-    ya = ROWS[row]
+for n, on, nome, itens in AGENTES:
+    side = SIDE[n]
+    ya, ys = POS[n]
     ex = RIGHT_E if side == "R" else LEFT_E
     e = place(ELIPSE, ex, ya - EH / 2, EW, EH, f"agente-{n}")
-    texto(e, [[("Agente " + nome, 11.5, True, NAVY)], [(papel, 9.5, False, TXT)]], ins=0.02)
-    b = place(BADGE_ON if on else BADGE_OFF, ex + 0.02, ya - EH / 2 - 0.1, 0.38, 0.38, f"badge-{n}")
+    texto(e, [[("Agente", 9.5, False, TXT)], [(nome, 13, True, NAVY)]], ins=0.02)
+    b = place(BADGE_ON if on else BADGE_OFF, ex + 0.0, ya - EH / 2 - 0.1, 0.36, 0.36, f"badge-{n}")
     b.text_frame.paragraphs[0].runs[0].text = str(n)
 
-    # Orquestrador -> agente: sai do anel na direção do agente
     inner_x = ex if side == "R" else ex + EW
     ang = math.atan2(ya - CY, inner_x - CX)
     curve(CX + RING * math.cos(ang), CY + RING * math.sin(ang), inner_x, ya, 22225, f"liga-orq-{n}")
 
-    # agente -> análises
-    k = len(itens)
-    gap = 0.31  # vão interno 0,04" x vão entre grupos ~0,22": os grupos se leem separados (revisor: 0,16" fundia)
-    ys = [ya + (i - (k - 1) / 2) * gap for i in range(k)]
     lx = RIGHT_L if side == "R" else LEFT_L
     outer_x = ex + EW if side == "R" else ex
     for (existe, txt), yl in zip(itens, ys):
@@ -153,26 +203,18 @@ for n, on, nome, papel, itens in AGENTES:
         pill = s.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Inches(lx), Inches(yl - LH / 2), Inches(LW), Inches(LH))
         pill.name = f"analise-{n}"
         pill.adjustments[0] = 0.5
-        pill.shadow.inherit = False
-        if existe:
-            pill.fill.solid()
-            pill.fill.fore_color.rgb = RGBColor.from_string("FFFFFF")
-            pill.line.color.rgb = RGBColor.from_string(BORDA)
-        else:
-            pill.fill.background()
-            pill.line.color.rgb = RGBColor.from_string(LINE)
-            pill.line.dash_style = MSO_LINE_DASH_STYLE.DASH
-        pill.line.width = Pt(1)
-        texto(pill, [[("●  " if existe else "○  ", 10, True, ORANGE), (txt, 10, False, NAVY if existe else TXT)]],
-              algn="l", ins=0.1)
-        # sem estilo de tema no texto (o add_shape traz fontRef lt1)
         st = pill._element.find(f"{{{P}}}style")
         if st is not None:
             pill._element.remove(st)
-            pill.line.color.rgb = RGBColor.from_string(BORDA if existe else LINE)
+        # o dono: todo ramo preenchido; só a bolinha diz se já existe (●) ou está em construção (○)
+        pill.fill.solid()
+        pill.fill.fore_color.rgb = RGBColor.from_string("FFFFFF")
+        pill.line.color.rgb = RGBColor.from_string(BORDA)
+        pill.line.width = Pt(1)
+        texto(pill, [[("●  " if existe else "○  ", 9.5, True, ORANGE), (txt, 9.5, False, NAVY)]], algn="l", ins=0.1)
 
 # legenda única (vale para badge do agente e para a pílula da análise)
-leg = s.shapes.add_textbox(Inches(7.73), Inches(1.55), Inches(5.0), Inches(0.25))
+leg = s.shapes.add_textbox(Inches(7.73), Inches(1.5), Inches(5.0), Inches(0.25))
 leg.name = "legenda-status"
 texto(leg, [[("Agentes e análises:   ", 10.5, True, NAVY), ("●", 14, True, ORANGE), ("  já existe     ", 10.5, False, NAVY), ("○", 14, True, ORANGE), ("  em construção", 10.5, False, NAVY)]],
       algn="r", ins=0)
@@ -186,18 +228,19 @@ for r in sup[1:-1]:
 
 nt = s.notes_slide.notes_text_frame.paragraphs[0]
 nt.runs[0].text = (
-    "O Orquestrador Oria coordena oito agentes de IA, e cada ramo mostra o que o agente analisa. "
-    "Cheio é o que já existe no sistema; vazado é o que está em construção. Hoje operam o Captador, "
-    "o Conferidor e o Entregas, e já existem reconciliações, mútuos e intragrupo, mapa da dívida, "
-    "capacidade de pagamento, capital de giro, três cenários e o Excel em fórmula viva. Valuation, "
-    "comparativo setorial, recuperação por credor e propostas aos credores são o plano de construção, "
-    "e o catálogo cresce a cada mandato. O especialista aprova cada etapa e escolhe a saída que "
-    "preserva mais valor; cada agente só ganha autonomia onde mede o próprio acerto."
+    "O Orquestrador Oria coordena oito agentes de IA; cada ramo é uma análise concreta, e todas estão "
+    "no plano de execução. Bolinha cheia: já existe no sistema hoje. Bolinha vazada: em construção. "
+    "Do lado esquerdo, a base: o Captador lê 4 formatos e barra duplicata; o Conferidor bate balanço, caixa "
+    "e receita e cruza os mútuos do grupo; Mercado e Risco são a próxima fronteira, com juro contra o Banco "
+    "Central, despesas contra o setor e processos e bureau. Do lado direito, a decisão: capital de giro e "
+    "aging já conciliados, mapa da dívida e capacidade de pagamento em fórmula, três cenários e o Excel do "
+    "comitê com 14 abas; liquidez de 13 semanas, waterfall de credores, valuation e propostas com carência, "
+    "haircut e new money são o plano. O especialista aprova cada etapa e escolhe a saída que preserva mais valor."
 )
 for r in nt.runs[1:]:
     r._r.getparent().remove(r._r)
-tot = sum(len(a[4]) for a in AGENTES)
-ok = sum(e for a in AGENTES for e, _ in a[4])
+tot = sum(len(a[3]) for a in AGENTES)
+ok = sum(e for a in AGENTES for e, _ in a[3])
 log.append(f"Slide dos agentes vira mapa mental: Orquestrador -> 8 agentes -> {tot} análises ({ok} já existem, {tot - ok} em construção)")
 
 # ---------------------------------------------------------------- 3. acabamento (revisor independente, rodada 5)
