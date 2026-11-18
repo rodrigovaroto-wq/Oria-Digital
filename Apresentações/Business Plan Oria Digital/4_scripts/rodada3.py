@@ -88,14 +88,14 @@ def divider(slide, x, y, w, color=None):
 # cada consequência aponta a resposta do Oria Digital: o problema já anuncia a solução
 s3 = S(3)
 for sid in (5, 11, 17, 23):
-    by_id(s3, sid).height = Inches(3.92)          # card 2,00 -> 5,92 (o texto do card Tempo tem 3 linhas)
+    by_id(s3, sid).height = Inches(3.72)          # card 2,00 -> 5,72 (textos de até 2 linhas)
 for sid in (10, 16, 22, 28):
     by_id(s3, sid).height = Inches(0.60)          # corpo: 2 linhas de 15 pt
 for sid in (29, 30):
-    by_id(s3, sid).top = Inches(6.12)             # faixa "Quem sente" desce junto (vão 0,20")
+    by_id(s3, sid).top = Inches(5.92)             # faixa "Quem sente" desce junto (vão 0,20")
 SOLUCOES = [
     # textos do dono (18/11): a dor resolvida, não o mecanismo
-    (0.90, "Time focado na interpretação dos dados, não na captação e organização", False),
+    (0.90, "Time focado na tomada de decisão", False),
     (3.98, "Erro achado antes do credor", False),
     (7.06, "Rastreabilidade de cada valor", False),
     (10.14, "Empresa vs. seus benchmarks", True),
