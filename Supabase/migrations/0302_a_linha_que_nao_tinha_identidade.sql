@@ -1,5 +1,6 @@
--- 0243 — A LINHA QUE NÃO TINHA IDENTIDADE: `fato_financeiro` acima de `campo_extraido` (P27, Fase 3, etapa 3.2) — uma VIEW security_invoker sobre `fn_fato_resolver`: o fato (conta = a SEÇÃO da linha; entidade e período pela coluna quando uma função do banco decide sem ambiguidade) é CALCULADO na leitura, não gravado. A única coisa que a migration escreve é a pendência `conta_canonica_incerta` da extração nova.
--- (Cria 1 view, fato_financeiro, e as funções fn_tipo_gera_fato, fn_linha_vira_fato, fn_fato_resolver, fn_fato_pode_escrever, fn_fato_ator, fn_fato_pendencia_da_versao, fn_fato_pendencia_da_extracao e fn_fato_sonda_recentes; 1 gatilho, em evento_auditoria; 1 rótulo de pendencia_tipo (conta_canonica_incerta); 6 views da sonda e 20 requisitos novos (ordem 1105-1124).
+-- 0302 (era a 0243; renumerada em 18/11/2026: aplicada depois da 0301, o número 0243 rebaixava o marcador de
+-- instalacao_cobertura de 0301 para 0243, e a ordem da sonda 1105-1124 virou 1400-1419) — A LINHA QUE NÃO TINHA IDENTIDADE: `fato_financeiro` acima de `campo_extraido` (P27, Fase 3, etapa 3.2) — uma VIEW security_invoker sobre `fn_fato_resolver`: o fato (conta = a SEÇÃO da linha; entidade e período pela coluna quando uma função do banco decide sem ambiguidade) é CALCULADO na leitura, não gravado. A única coisa que a migration escreve é a pendência `conta_canonica_incerta` da extração nova.
+-- (Cria 1 view, fato_financeiro, e as funções fn_tipo_gera_fato, fn_linha_vira_fato, fn_fato_resolver, fn_fato_pode_escrever, fn_fato_ator, fn_fato_pendencia_da_versao, fn_fato_pendencia_da_extracao e fn_fato_sonda_recentes; 1 gatilho, em evento_auditoria; 1 rótulo de pendencia_tipo (conta_canonica_incerta); 6 views da sonda e 20 requisitos novos (ordem 1400-1419).
 --  NÃO reemite fn_registrar_campos_extraidos (a 0270, aplicada em produção, a reemitiu para gravar o `ln`) nem fn_fundir_entidade (volta a ser a da migration anterior). Sem tabela, sem backfill, sem recálculo, sem FK. Idempotente: pode ser reaplicada. Aplicação: 0,065 s medido reaplicando-a sobre um banco com 82.634 linhas de campo_extraido.)
 --
 -- O DEFEITO. A identidade de uma linha financeira era `(secao_canonica, rótulo)` em `campo_extraido`: texto livre, sem FK, sem entidade nem período PRÓPRIOS (a linha tem `entidade_coluna` e `periodo_coluna` em texto; o documento tem UM `entidade_id`/`periodo_id`). Toda reconciliação refaz esse casamento por rótulo (a família de bugs que a F4 existe para extinguir) e nada diz,
@@ -27,7 +28,7 @@
 --   2. LINHA SEM VALOR NÃO É FATO (regra 1: célula vazia é ausência, não zero; o ZERO é valor e vira fato). Medido em produção em 11/11/2026: 4.798 linhas de documento de demonstração (de qualquer papel) com `valor_num` nulo ficam só como evidência.
 --   3. TODAS AS VERSÕES do documento, como a tabela tinha; quem consome escolhe a vigente com `fn_versao_atual`. Em produção (11/11, medido): 85.531 fatos, 68.523 de versão vigente e 17.008 de versão antiga. Identidade do fato = `campo_extraido_id` (1:1): a view expõe `id` e `campo_extraido_id` iguais. NÃO há `origem` nem `criado_em` (eram do estado gravado) e há `caso_id` a mais (o filtro por mandato poda o cálculo).
 --   4. A LINHA QUE NÃO RESOLVE VIRA FATO COM ESTADO EXPLÍCITO `sem_conta`, sem conta inventada (nem a raiz da demonstração pelo tipo): `conta_id` é nulo se, e só se, `resolucao_metodo = 'sem_conta'`, com o motivo `secao_nao_declarada` (seção nula, em branco ou o literal NAO_CLASSIFICAVEL das fixtures) ou `secao_fora_do_catalogo`.
---   5. ENTIDADE E PERÍODO — O CRITÉRIO (decisão do dono, 11/11/2026, depois de três remendos na mesma família): A 0243 NÃO INTERPRETA NOME DE COLUNA. Só atribui entidade ou período quando uma função que o banco JÁ usa para a mesma pergunta decide de forma INEQUÍVOCA; senão NULO com o motivo (errar para nulo é ausência declarada, regra 1; errar para valor é número fabricado). A família de bugs era uma só: duas colunas diferentes do mesmo documento
+--   5. ENTIDADE E PERÍODO — O CRITÉRIO (decisão do dono, 11/11/2026, depois de três remendos na mesma família): A 0302 NÃO INTERPRETA NOME DE COLUNA. Só atribui entidade ou período quando uma função que o banco JÁ usa para a mesma pergunta decide de forma INEQUÍVOCA; senão NULO com o motivo (errar para nulo é ausência declarada, regra 1; errar para valor é número fabricado). A família de bugs era uma só: duas colunas diferentes do mesmo documento
 --      caindo na mesma (conta, entidade, período) e a soma dobrando (1.310; 500; 435; 342). ENTIDADE: a coluna de E é a que `fn_coluna_entidade(versão, E)` devolve; coluna que nenhuma entidade escolhe: nula (`coluna_sem_entidade_no_mandato`, `coluna_total_nao_escolhida`); escolhida por mais de uma (`coluna_casa_varias_entidades`); duas colunas casando a MESMA entidade (`entidade_com_varias_colunas`); mais de uma coluna total (`coluna_total_ambigua`); a linha SEM entidade_coluna num documento que TEM colunas de
 --      entidade (`linha_sem_coluna_em_documento_com_colunas_de_entidade`). PERÍODO: a coluna que É o período do documento é a ÚNICA coluna de saldo (não abertura) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento num documento NÃO parcial (BALANCETE e período mês/trimestre são parciais); coluna de ano puro de OUTRO ano só em documento não parcial e se UM período do mesmo mandato tem a forma canônica; o resto nulo, com o motivo. O período NÃO é criado.
 --      Entidade e período nulos ficam no fato, consultáveis, sem fila (a pendência de entidade/período do documento já existe, 0153/0178). Medido em produção (read-only, 11/11, a mesma consulta de resolução): SEM ENTIDADE 1.685 de 85.531 e SEM PERÍODO 59.734 (70%): 45.609 coluna que não é o período do documento, 8.841 Saldo Inicial/anterior, 5.118 mais de uma coluna para o mesmo período, 114 linha sem coluna, 49 ano que o mandato não tem, 3 documento sem período. É o preço do critério: erra para nulo. A P28 decide se vale criar a leitura de saldo do BALANCETE e do mês por extenso.
@@ -41,7 +42,7 @@
 --      (RAZAO -> BALANCETE) também não abre: não é extração, e a linha aparece na view na hora. LIMITES CONHECIDOS (não corrigidos, por decisão de um gatilho só): a pendência aberta de uma versão que a transcrição humana superou, ou de um documento que deixou de ser demonstração, fica aberta até alguém a resolver ou a próxima extração a convergir; e a correção de seção por reparo em massa (0203/0204) não reavalia a pendência (a view já mostra o fato novo).
 --      A TRAVA DO DOCUMENTO (corrida R4, medida com duas sessões): duas extrações concorrentes de duas versões do MESMO documento avaliavam cada uma com o snapshot que não enxerga as linhas da outra e deixavam DUAS pendências abertas (a da v2 superada nunca baixava). `pg_advisory_xact_lock` por documento, até o fim da transação da extração (milissegundos): a segunda avalia DEPOIS do commit da primeira. Sem a trava a corrida R4 reprova; com ela passa (Supabase/test/fato_financeiro_corridas.test.sql).
 --   8. O PONTO DA EXTRAÇÃO NOVA É O GATILHO, NÃO O CORPO DE fn_registrar_campos_extraidos (decisão do dono, 12/11/2026): a 0270 (P11, APLICADA em produção) reemitiu essa função para gravar campo_extraido.ln e a P11 a reemite a cada fatia; reemiti-la daqui a partir do corpo da 0231 apagaria o `ln` em silêncio (e, num banco do zero, a 0270 — que roda depois — apagaria a nossa parte). O evento `extracao_sombra` é gravado DEPOIS do laço de inserção e DEPOIS da herança da seção pela árvore (0204): as duas únicas coisas que mudam o que a pendência lê.
---      Medido: o schema `public` do banco montado na ORDEM DO ZERO (0243 antes de 0270/0271) e na ORDEM DE PRODUÇÃO (0243 depois) é IDÊNTICO (pg_dump, 25.889 linhas, diff vazio), o catálogo da sonda também (md5), e o `ln` (7 e 9) é gravado e a pendência abre nas DUAS. A falha da pendência NÃO derruba a extração (a evidência vale mais que o derivado): sub-bloco que grava o evento `fato_pendencia_falhou` e segue; `query_canceled` NÃO é engolido; o evento `fato_pendencia_avaliada` é o sinal de que RODOU (regra 7); a recusa por permissão grava `fato_pendencia_negada` com o ator real.
+--      Medido: o schema `public` do banco montado com esta migration ANTES de 0270/0271 e DEPOIS delas é IDÊNTICO (medido quando ela era a 0243) (pg_dump, 25.889 linhas, diff vazio), o catálogo da sonda também (md5), e o `ln` (7 e 9) é gravado e a pendência abre nas DUAS. A falha da pendência NÃO derruba a extração (a evidência vale mais que o derivado): sub-bloco que grava o evento `fato_pendencia_falhou` e segue; `query_canceled` NÃO é engolido; o evento `fato_pendencia_avaliada` é o sinal de que RODOU (regra 7); a recusa por permissão grava `fato_pendencia_negada` com o ator real.
 --   9. DESEMPENHO. Medido em 13/11/2026 no banco local (Postgres 16, 4 CPUs, balancetes de 4.000 rótulos distintos, o pior caso do papel por combinação; 82.034 linhas de campo_extraido; NÃO é produção): uma versão de 4.000 linhas 0,54 a 0,69 s; o maior mandato das fixtures (684 fatos, 1.264 linhas) 0,46 s e o segundo (544) 0,39 s; um mandato sintético de 10 x 4.000 (40.000 fatos) 5,2 a 5,7 s; a view INTEIRA (81.831 fatos) 12,5 s; como authenticated (uma Analista alocada só no mandato) o mesmo: 5,4 s para o mandato de 40.000 e 0,59 s para uma versão, ou seja a RLS por mandato não custa mais que o superusuário; a sonda inteira 0,28 s; a extração de 4.000 linhas 1,47 a 1,71 s COM o gatilho e 0,92 a 1,00 s SEM (a pendência custa 0,55 a 0,7 s) e a de 100 linhas 65 a 79 ms com e 46 a 69 ms sem; a aplicação da migration 0,065 s. Na versão de TABELA (7d5f503): extração de 4.000 linhas 3,2 a 3,4 s com e 1,1 s sem; recálculo final ao aplicar 4,9 s; cadastro de período ~36 s num mandato 10 x 4.000 (a 5ª revisão): a ESCRITA ficou mais barata e a LEITURA passou a custar o cálculo. Ler um mandato de 40.000 fatos passa de 5 s e a view inteira de 12 s: a P28 resolve com VIEW MATERIALIZADA por mandato (proposta, NÃO implementada aqui).
 --      TRÊS ACHADOS DA MEDIÇÃO: (1) a junção linha x papel (`cand join papel`, três igualdades) era escolhida pelo planejador como laço aninhado — ele estima ~150 linhas por versão (a média) e a versão recém-extraída tem 4.000 e nenhuma estatística — e custava 1,8 a 2,1 s numa versão de 4.000 rótulos (16 milhões de comparações) contra 0,4 a 0,54 s sem a junção: o conjunto dos (tipo, rótulo, unidade) que viram fato é UM jsonb (chave = o array jsonb, injetivo) e cada linha só pergunta se a sua chave está lá;
 --      resultado IDÊNTICO ao da junção, conferido linha a linha nos dois sentidos (57.231 linhas: as fixtures mais versões sintéticas); (2) a primeira `fn_fato_sonda_recentes` usava `not exists` correlacionado contra uma CTE (12,5 s com 3 versões de 4.000 linhas) e passou a junção por igualdade (4 s) e a um TETO (3 versões de até 1.500 linhas, entre as 30 mais novas: ~0,2 s); (3) o JIT e o plano: a consulta inlinada era grande e, com o JIT do servidor ligado (o padrão do Postgres; o de produção não foi conferido), o Postgres gastava ~3 s COMPILANDO para ler 684 fatos (3,5 s contra 0,68 s com `jit = off`); `SET jit = off` na função resolve, mas ela deixa de ser inlinada e o planejador passa a estimar 1.000 linhas a custo 100
@@ -99,7 +100,7 @@
 --   * V07 as DUAS camadas desligadas (view sem security_invoker E resolver SECURITY DEFINER): o vazamento de verdade: 10 dos 187 asserts reprovam.
 -- A medição das sabotagens de MIGRATION (M01-M06) roda o teste COM o topo apontando para a migration sabotada. O teste isolado reprova 4 asserts de ARRANJO (as fixtures trazem >= 1 linha com seção inferida, >= 1 com seção nula, >= 100 sem conta, e a invariante mede >= 1.000 fatos de identidade completa) em um banco só com as fixtures: eles dependem dos dados que o run.sh carrega e do estado de suítes anteriores; NÃO foi tornado autossuficiente, porque isso exigiria inventar um corpus (regra 4). Rode-o pelo run.sh.
 --
--- O QUE NÃO FOI MEDIDO / O QUE FALTA. (1) Produção: nenhuma leitura de produção foi feita nesta rodada (sem credencial); os números de produção acima são da sessão de 11/11 (somente leitura). Medir DEPOIS de aplicar: `show server_version`, a sonda da 0243 (0 ausentes), `select count(*) filter (where ln is not null) from campo_extraido` (não pode ter caído), e a leitura do maior mandato real pela view (tempo). (2) O ACL de produção das funções antigas (se PUBLIC tem EXECUTE nelas): coberto pela concessão explícita, não conferido. (3) A janela com mais de uma transação concorrente além das duas sessões.
+-- O QUE NÃO FOI MEDIDO / O QUE FALTA. (1) Produção: nenhuma leitura de produção foi feita nesta rodada (sem credencial); os números de produção acima são da sessão de 11/11 (somente leitura). Medir DEPOIS de aplicar: `show server_version`, a sonda da 0302 (0 ausentes), `select count(*) filter (where ln is not null) from campo_extraido` (não pode ter caído), e a leitura do maior mandato real pela view (tempo). (2) O ACL de produção das funções antigas (se PUBLIC tem EXECUTE nelas): coberto pela concessão explícita, não conferido. (3) A janela com mais de uma transação concorrente além das duas sessões.
 -- (4) A leitura de um mandato real pelo `authenticated` (RLS por linha com os usuários reais): medida só com a Analista sintética. (5) Fica para a P28: view materializada se a leitura de mandato grande passar de poucos segundos; leitura de saldo do BALANCETE e do mês por extenso; conta-folha e hierarquia; reconciliação sobre o fato (P29).
 
 alter type pendencia_tipo add value if not exists 'conta_canonica_incerta';
@@ -113,14 +114,14 @@ set local lock_timeout = '5s';
 -- o authenticated leria o fato de TODOS os mandatos. Produção é PG >= 15 (a 0207, aplicada em 15/10/2026, usa `unique nulls not distinct`, que é do 15; o CI e o banco local são 16). A versão exata de produção NÃO foi medida aqui: confira com `show server_version;`.
 do $$ begin
   if current_setting('server_version_num')::int < 150000 then
-    raise exception '0243: fato_financeiro é uma VIEW com security_invoker (Postgres 15+); este servidor é %. Sem isso a view pularia a RLS por mandato.', current_setting('server_version');
+    raise exception '0302: fato_financeiro é uma VIEW com security_invoker (Postgres 15+); este servidor é %. Sem isso a view pularia a RLS por mandato.', current_setting('server_version');
   end if;
 end $$;
 
 -- O DESENHO ANTERIOR (a TABELA fato_financeiro, nunca aplicada em produção) não é convertido em silêncio: se um banco de desenvolvimento ainda a tem, a migration para aqui, dizendo o que fazer. `create or replace view` sobre uma tabela já falharia, só que com uma mensagem que não ensina nada.
 do $$ begin
   if exists (select 1 from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'public' and c.relname = 'fato_financeiro' and c.relkind = 'r') then
-    raise exception '0243: fato_financeiro existe como TABELA (a versão antiga desta migration, que nunca foi aplicada em produção). Descarte-a no banco de desenvolvimento (drop table fato_financeiro cascade; e as funções fn_fato_*, fn_materializar_fatos* e os gatilhos trg_fato_*) e reaplique.';
+    raise exception '0302: fato_financeiro existe como TABELA (a versão antiga desta migration, que nunca foi aplicada em produção). Descarte-a no banco de desenvolvimento (drop table fato_financeiro cascade; e as funções fn_fato_*, fn_materializar_fatos* e os gatilhos trg_fato_*) e reaplique.';
   end if;
 end $$;
 
@@ -132,7 +133,7 @@ returns boolean language sql immutable as $$
   select coalesce(p_tipo in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DRE', 'FLUXO_CAIXA', 'DVA', 'DMPL', 'DF_AUDITADA'), false)
 $$;
 comment on function fn_tipo_gera_fato(text) is
-  '0243: os tipos de documento cujas linhas viram fato_financeiro: as demonstrações. BALANCO, BALANCETE, COMBINADO, DRE e FLUXO_CAIXA são as 5 de ESTRUTURA_POR_TIPO (statement-templates.ts); DVA e DMPL são as 2 que a 0024 pôs na taxonomia e o portal já roteia por seção (FAMILIA_POR_SECAO_CANONICA); DF_AUDITADA traz as demonstrações juntas e cada linha vai para a SUA seção. '
+  '0302: os tipos de documento cujas linhas viram fato_financeiro: as demonstrações. BALANCO, BALANCETE, COMBINADO, DRE e FLUXO_CAIXA são as 5 de ESTRUTURA_POR_TIPO (statement-templates.ts); DVA e DMPL são as 2 que a 0024 pôs na taxonomia e o portal já roteia por seção (FAMILIA_POR_SECAO_CANONICA); DF_AUDITADA traz as demonstrações juntas e cada linha vai para a SUA seção. '
   'A categoria Contábil/Demonstrações da taxonomia NÃO serve de proxy: ela inclui RAZAO e NOTAS_EXPL. Estoque, Razão, Aging, Mapa de Dívida e o resto continuam só evidência. A sonda confere os 8 tipos um a um (view), não pelo corpo.';
 
 create or replace function fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric)
@@ -140,11 +141,11 @@ returns boolean language sql immutable as $$
   select p_valor is not null and fn_tipo_gera_fato(p_tipo) and fn_papel_linha(p_chave, p_tipo, p_unidade) = 'conta'
 $$;
 comment on function fn_linha_vira_fato(text, text, text, numeric) is
-  '0243: a linha de campo_extraido vira fato quando (1) tem valor (célula vazia é ausência, não zero: regra 1), (2) o documento é de demonstração e (3) o papel é conta (fn_papel_linha): subtotal é a P28, derivado e série mensal não são conta.';
+  '0302: a linha de campo_extraido vira fato quando (1) tem valor (célula vazia é ausência, não zero: regra 1), (2) o documento é de demonstração e (3) o papel é conta (fn_papel_linha): subtotal é a P28, derivado e série mensal não são conta.';
 
 -- O ATOR REAL do evento: o usuário autenticado quando há, senão o sistema.
 create or replace function fn_fato_ator()
-returns text language sql stable as $$ select coalesce('usuario:' || auth.uid()::text, 'sistema:0243') $$;
+returns text language sql stable as $$ select coalesce('usuario:' || auth.uid()::text, 'sistema:0302') $$;
 
 -- QUEM PODE ESCREVER pendência de fato: conexão de serviço (o n8n, a migration: o papel da sessão é service_role ou nenhum) ou quem escreve no mandato (fn_pode_escrever_caso, 0216). O `current_setting('role')` é o papel que o PostgREST pôs com SET ROLE e é lido DENTRO de função
 -- security definer (current_user lá seria o dono). É a MESMA guarda da versão anterior: a pendência é a única coisa que esta migration ainda escreve, e a policy de insert em evento_auditoria (que dispara o gatilho) já exige poder escrever o mandato; a guarda é a segunda trava.
@@ -256,7 +257,7 @@ language sql stable cost 100000 rows 200 set jit = off as $$   -- cost/rows: sem
       left join emap m on m.documento_versao_id = k.documento_versao_id and m.col = k.ecol
       left join etot t on t.documento_versao_id = k.documento_versao_id
   ),
-  -- ===== PERÍODO: a 0243 não interpreta nome de coluna. Só atribui quando as funções do banco para esta pergunta (fn_coluna_e_saldo, fn_coluna_e_abertura, fn_periodo_e_parcial, fn_anos_periodo, fn_periodo_canonico: 0199-0201/0234) decidem de forma INEQUÍVOCA.
+  -- ===== PERÍODO: a 0302 não interpreta nome de coluna. Só atribui quando as funções do banco para esta pergunta (fn_coluna_e_saldo, fn_coluna_e_abertura, fn_periodo_e_parcial, fn_anos_periodo, fn_periodo_canonico: 0199-0201/0234) decidem de forma INEQUÍVOCA.
   --   A coluna que É o período do documento: a ÚNICA coluna de saldo (Saldo final/atual) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento num documento NÃO parcial. Duas candidatas (ou nenhuma): nenhuma é escolhida (fn_coluna_periodo_do_ano
   --   desempata por contagem e ordem alfabética: no balancete de junho com Jun/2025 e 30/06/2025 ela entrega uma ao acaso, e "ao acaso" é número fabricado). Documento sem coluna nenhuma: a linha é do período do documento.
   vcol as materialized (
@@ -332,7 +333,7 @@ language sql stable cost 100000 rows 200 set jit = off as $$   -- cost/rows: sem
 $$;
 
 comment on function fn_fato_resolver(uuid) is
-  '0243: a identidade de cada linha elegível, calculada na hora e SÓ LÊ: conta (a seção, pelo catálogo), entidade e período (pela coluna da linha quando uma função do banco decide sem ambiguidade, pelo documento quando não, e NULOS com o motivo quando a coluna não é saldo, é de abertura, o documento é parcial ou o total duplica a coluna da entidade). '
+  '0302: a identidade de cada linha elegível, calculada na hora e SÓ LÊ: conta (a seção, pelo catálogo), entidade e período (pela coluna da linha quando uma função do banco decide sem ambiguidade, pelo documento quando não, e NULOS com o motivo quando a coluna não é saldo, é de abertura, o documento é parcial ou o total duplica a coluna da entidade). '
   'Versão nula = todas. NÃO É SECURITY DEFINER, de propósito: ela lê campo_extraido, documento, entidade e periodo com a RLS de QUEM CHAMA (por isso a view fato_financeiro, security_invoker, mostra a cada usuário só o próprio mandato). É a única definição de "o fato"; não existe cópia gravada.';
 
 -- -----------------------------------------------------------------------------
@@ -353,13 +354,13 @@ create or replace view fato_financeiro with (security_invoker = true) as
    cross join lateral fn_fato_resolver(dv.id) r
    where fn_tipo_gera_fato(d.tipo_taxonomia);
 comment on view fato_financeiro is
-  '0243 (P27): o fato canônico ACIMA de campo_extraido, que não muda (ADR 01): UMA linha por linha extraída elegível (só documento de demonstração, fn_tipo_gera_fato; só papel conta, fn_papel_linha; só com valor: ausência não vira fato, regra 1), calculada na hora por fn_fato_resolver. '
+  '0302 (P27): o fato canônico ACIMA de campo_extraido, que não muda (ADR 01): UMA linha por linha extraída elegível (só documento de demonstração, fn_tipo_gera_fato; só papel conta, fn_papel_linha; só com valor: ausência não vira fato, regra 1), calculada na hora por fn_fato_resolver. '
   'É VIEW com security_invoker: cada usuário lê o fato do próprio mandato (a RLS de campo_extraido, documento, entidade e periodo vale para quem lê) e NINGUÉM escreve nela. A identidade é a SEÇÃO (nó de conta_canonica; folha é a P28+). Todas as versões do documento; quem consome escolhe a vigente com fn_versao_atual. '
   'resolucao_metodo: declarada (a IA deu a seção), heuristica (fn_secao_canonica_da_secao_bruta / fn_herdar_secao_pela_arvore, 0203/0204: secao_canonica_inferida) ou sem_conta (conta_id nulo, com o motivo): "não sei a conta" é estado, nunca um palpite. Filtre por caso_id ou documento_versao_id: é o que poda o cálculo.';
 comment on column fato_financeiro.id is 'IGUAL a campo_extraido_id: a identidade do fato é a da linha extraída que o sustenta (1:1). Não há uuid próprio porque não há linha gravada.';
 comment on column fato_financeiro.conta_id is 'Nó de conta_canonica que é SEÇÃO (secao_canonica não nula). NULL só com resolucao_metodo = sem_conta: linha sem seção declarada, ou com seção que o catálogo não conhece, NÃO ganha conta inventada — nem a raiz da demonstração pelo tipo do documento.';
-comment on column fato_financeiro.entidade_origem is 'De onde veio a entidade. A 0243 NÃO interpreta nome de coluna: a entidade da coluna é a que fn_coluna_entidade(versão, entidade) (0023/0030, com fn_mesma_entidade) escolhe para alguma entidade do mandato. coluna = casou pelo NOME da entidade; coluna_total = a coluna Combinado/Consolidado/Total/Soma que a mesma função entrega à entidade do documento (só quando nenhuma coluna casa o nome dela); documento = a linha não tem entidade_coluna (entidade do documento). NULL = a função não escolheu a coluna, ou escolheu para mais de uma entidade: entidade_motivo diz por quê (documento_sem_entidade, coluna_sem_entidade_no_mandato, coluna_casa_varias_entidades, entidade_com_varias_colunas, coluna_total_nao_escolhida, coluna_total_ambigua, linha_sem_coluna_em_documento_com_colunas_de_entidade). A entidade_coluna da linha fica ao lado.';
-comment on column fato_financeiro.periodo_origem is 'De onde veio o período. A 0243 NÃO interpreta nome de coluna: só atribui o período quando as funções do banco para essa pergunta decidem de forma INEQUÍVOCA. documento = a linha sem coluna num documento sem colunas, ou a coluna que É o período do documento: a ÚNICA coluna de saldo (fn_coluna_e_saldo: Saldo final/atual, 0201) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento num documento não parcial (fn_periodo_e_parcial, 0199 c); coluna = coluna de ano puro (31/12/AAAA = AAAA) de OUTRO ano, em documento não parcial, que um período do mesmo mandato tem (fn_periodo_canonico). NULL = ambíguo ou sem base; periodo_motivo diz por quê (coluna_nao_e_o_periodo_do_documento, coluna_de_abertura, periodo_da_coluna_nao_cadastrado: o período NÃO é criado aqui, mais_de_uma_coluna_para_o_mesmo_periodo, linha_sem_coluna_em_documento_com_colunas, documento_sem_periodo). O periodo_coluna da linha fica ao lado.';
+comment on column fato_financeiro.entidade_origem is 'De onde veio a entidade. A 0302 NÃO interpreta nome de coluna: a entidade da coluna é a que fn_coluna_entidade(versão, entidade) (0023/0030, com fn_mesma_entidade) escolhe para alguma entidade do mandato. coluna = casou pelo NOME da entidade; coluna_total = a coluna Combinado/Consolidado/Total/Soma que a mesma função entrega à entidade do documento (só quando nenhuma coluna casa o nome dela); documento = a linha não tem entidade_coluna (entidade do documento). NULL = a função não escolheu a coluna, ou escolheu para mais de uma entidade: entidade_motivo diz por quê (documento_sem_entidade, coluna_sem_entidade_no_mandato, coluna_casa_varias_entidades, entidade_com_varias_colunas, coluna_total_nao_escolhida, coluna_total_ambigua, linha_sem_coluna_em_documento_com_colunas_de_entidade). A entidade_coluna da linha fica ao lado.';
+comment on column fato_financeiro.periodo_origem is 'De onde veio o período. A 0302 NÃO interpreta nome de coluna: só atribui o período quando as funções do banco para essa pergunta decidem de forma INEQUÍVOCA. documento = a linha sem coluna num documento sem colunas, ou a coluna que É o período do documento: a ÚNICA coluna de saldo (fn_coluna_e_saldo: Saldo final/atual, 0201) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento num documento não parcial (fn_periodo_e_parcial, 0199 c); coluna = coluna de ano puro (31/12/AAAA = AAAA) de OUTRO ano, em documento não parcial, que um período do mesmo mandato tem (fn_periodo_canonico). NULL = ambíguo ou sem base; periodo_motivo diz por quê (coluna_nao_e_o_periodo_do_documento, coluna_de_abertura, periodo_da_coluna_nao_cadastrado: o período NÃO é criado aqui, mais_de_uma_coluna_para_o_mesmo_periodo, linha_sem_coluna_em_documento_com_colunas, documento_sem_periodo). O periodo_coluna da linha fica ao lado.';
 comment on column fato_financeiro.valor is 'valor_num da linha, como veio. Escala e moeda NÃO são normalizadas aqui (não há regra pronta): unidade e moeda seguem ao lado.';
 
 -- O fato é DERIVADO: ninguém escreve nele (a view tem junção e função na cláusula FROM, não é atualizável, e mesmo assim os privilégios saem). REVOKE antes do GRANT: o `pg_default_acl` do dono dá ALL a authenticated e service_role em toda tabela e view nova de `public` (medido em produção
@@ -455,11 +456,11 @@ begin
   return v_pend;
 end $$;
 comment on function fn_fato_pendencia_da_versao(uuid) is
-  '0243: a pendência conta_canonica_incerta (motivo fato:conta_incerta:<versão>), UMA por documento-versão, listando as linhas resolvidas (por fn_fato_resolver) por heurística ou sem conta (as 12 primeiras no texto). Reabre-se sozinha no texto e se resolve sozinha quando não sobra linha incerta; só toca estado aberta. Em outro estado, ou resolvida por pessoa, não é reaberta. Complementar e sobrepujável: não trava o mandato, avisa. Só o gatilho da extração nova a chama.';
+  '0302: a pendência conta_canonica_incerta (motivo fato:conta_incerta:<versão>), UMA por documento-versão, listando as linhas resolvidas (por fn_fato_resolver) por heurística ou sem conta (as 12 primeiras no texto). Reabre-se sozinha no texto e se resolve sozinha quando não sobra linha incerta; só toca estado aberta. Em outro estado, ou resolvida por pessoa, não é reaberta. Complementar e sobrepujável: não trava o mandato, avisa. Só o gatilho da extração nova a chama.';
 
 -- -----------------------------------------------------------------------------
 -- O ÚNICO GATILHO: o evento `extracao_sombra` (a prova de que a extração RODOU, regra 7), que fn_registrar_campos_extraidos grava DEPOIS do laço de inserção e DEPOIS da herança da seção pela árvore (0204): as duas únicas coisas que mudam o que a pendência lê (seção, flag de inferida).
--- NÃO reemite fn_registrar_campos_extraidos (decisão do dono, 12/11/2026): a 0270 (P11, APLICADA em produção) a reemitiu para gravar campo_extraido.ln e a P11 a reemite a cada fatia; a 0243 não depende do corpo dela e, no banco do zero (0243 antes da 0270) e em produção (0243 depois), o `ln` continua gravado.
+-- NÃO reemite fn_registrar_campos_extraidos (decisão do dono, 12/11/2026): a 0270 (P11, APLICADA em produção) a reemitiu para gravar campo_extraido.ln e a P11 a reemite a cada fatia; a 0302 não depende do corpo dela e, no banco do zero (0302 antes da 0270) e em produção (0302 depois), o `ln` continua gravado.
 -- Só a extração nova abre pendência: o que já estava gravado (as versões antigas) não tem evento novo e não abre; a transcrição humana (fn_registrar_transcricao_humana, 0129) não grava extracao_sombra e a pessoa que a digitou é a autoridade da seção (decisão no cabeçalho); a mudança de tipo do documento também não abre.
 -- Não grava fato: o fato é a view. A falha da pendência NÃO derruba a extração (a evidência vale mais que o derivado): sub-bloco que grava o evento `fato_pendencia_falhou` e segue. NÃO se captura query_canceled: o cancelamento é do chamador.
 -- -----------------------------------------------------------------------------
@@ -507,7 +508,7 @@ begin
   return null;
 end $$;
 comment on function fn_fato_pendencia_da_extracao() is
-  '0243: gatilho de evento_auditoria (acao = extracao_sombra, o evento que fn_registrar_campos_extraidos grava depois da herança da seção): abre/atualiza/baixa a pendência conta_canonica_incerta da versão recém-extraída (fn_fato_pendencia_da_versao) e baixa a das versões superadas. NÃO grava fato (o fato é a view fato_financeiro). Só extração nova: versão antiga, transcrição humana e mudança de tipo não passam por aqui.';
+  '0302: gatilho de evento_auditoria (acao = extracao_sombra, o evento que fn_registrar_campos_extraidos grava depois da herança da seção): abre/atualiza/baixa a pendência conta_canonica_incerta da versão recém-extraída (fn_fato_pendencia_da_versao) e baixa a das versões superadas. NÃO grava fato (o fato é a view fato_financeiro). Só extração nova: versão antiga, transcrição humana e mudança de tipo não passam por aqui.';
 
 revoke all on function fn_fato_pendencia_da_versao(uuid), fn_fato_pendencia_da_extracao() from public, anon, authenticated, service_role;
 grant execute on function fn_fato_pendencia_da_versao(uuid) to service_role;   -- o reparo/avaliação manual do serviço; a do gatilho é só do dono (o gatilho a chama sem precisar de EXECUTE de quem inseriu o evento)
@@ -530,7 +531,7 @@ create or replace view instalacao_sonda_fato_financeiro_view_invoker as
      and pg_get_viewdef('public.fato_financeiro'::regclass) like '%fn_fato_resolver(%'
      and exists (select 1 from pg_proc p where p.oid = 'public.fn_fato_resolver(uuid)'::regprocedure and not p.prosecdef);
 comment on view instalacao_sonda_fato_financeiro_view_invoker is
-  'Sonda da 0243: uma linha = fato_financeiro é VIEW com security_invoker = true, definida sobre fn_fato_resolver, e o resolver não é security definer. Zero linhas: a view roda com o privilégio do dono e o authenticated lê o fato de TODOS os mandatos (a RLS de campo_extraido e documento é pulada), ou a view deixou de calcular pelo resolver.';
+  'Sonda da 0302: uma linha = fato_financeiro é VIEW com security_invoker = true, definida sobre fn_fato_resolver, e o resolver não é security definer. Zero linhas: a view roda com o privilégio do dono e o authenticated lê o fato de TODOS os mandatos (a RLS de campo_extraido e documento é pulada), ou a view deixou de calcular pelo resolver.';
 
 -- NINGUÉM ESCREVE NA VIEW e o anon não lê: o authenticated só SELECT, o service_role só SELECT, o anon nada (nem coluna).
 create or replace view instalacao_sonda_fato_financeiro_so_le as
@@ -548,7 +549,7 @@ create or replace view instalacao_sonda_fato_financeiro_so_le as
      and not has_any_column_privilege('anon', 'public.fato_financeiro'::regclass, 'insert')
      and not has_function_privilege('anon', 'public.fn_fato_resolver(uuid)'::regprocedure, 'execute');
 comment on view instalacao_sonda_fato_financeiro_so_le is
-  'Sonda da 0243: uma linha = o authenticated e o service_role só LEEM fato_financeiro (nenhum privilégio de escrita, nem de coluna), o anon não tem acesso a ela nem ao resolver. Zero linhas: o fato derivado voltou a ser gravável pelo portal, ou o anon o lê (o default de privilégio do Supabase dá ALL a toda view nova se a migration não revogar).';
+  'Sonda da 0302: uma linha = o authenticated e o service_role só LEEM fato_financeiro (nenhum privilégio de escrita, nem de coluna), o anon não tem acesso a ela nem ao resolver. Zero linhas: o fato derivado voltou a ser gravável pelo portal, ou o anon o lê (o default de privilégio do Supabase dá ALL a toda view nova se a migration não revogar).';
 
 -- A LEITURA FUNCIONA SOBRE O QUE CHEGOU AGORA (regra 7: o estágio que não rodou não parece limpo): as 3 versões mais novas de documento de demonstração com linha de EXTRAÇÃO, resolvidas por fn_fato_resolver, concordam com o que as linhas dizem hoje: toda linha elegível (fn_linha_vira_fato) tem fato,
 -- a conta é o nó da seção da linha (ou sem_conta se o catálogo não a conhece), o método é declarada/heuristica pela flag secao_canonica_inferida, e nenhum fato nasce de linha que não é elegível. Roda como DEFINER (função auxiliar abaixo): o resolver dentro de uma view de sonda corre com a RLS de QUEM LÊ, e um Analista veria
@@ -586,14 +587,14 @@ returns bigint language sql stable security definer set search_path = public, pg
   end
 $$;
 comment on function fn_fato_sonda_recentes() is
-  '0243: quantas divergências há entre as 3 versões de demonstração mais novas (com linha de extração) e o fato que o resolver devolve para elas (linha elegível sem fato, fato de conta ou método diferentes da linha, fato de linha não elegível); -1 se não há versão a medir. security definer só para a RLS do chamador não mudar a amostra; devolve um número, nenhum dado.';
+  '0302: quantas divergências há entre as 3 versões de demonstração mais novas (com linha de extração) e o fato que o resolver devolve para elas (linha elegível sem fato, fato de conta ou método diferentes da linha, fato de linha não elegível); -1 se não há versão a medir. security definer só para a RLS do chamador não mudar a amostra; devolve um número, nenhum dado.';
 revoke all on function fn_fato_sonda_recentes() from public, anon, authenticated, service_role;
 grant execute on function fn_fato_sonda_recentes() to authenticated, service_role;
 
 create or replace view instalacao_sonda_fato_financeiro_recentes as
   select 1 as ok where fn_fato_sonda_recentes() = 0;
 comment on view instalacao_sonda_fato_financeiro_recentes is
-  'Sonda da 0243: uma linha = as 3 versões de demonstração mais novas com linha de extração têm fato para toda linha elegível, e o fato concorda com a linha (conta = a seção dela, método pela flag de inferida). Zero linhas: o resolver falha ou diverge da linha (função da cadeia sem grant, corpo trocado), ou não há versão de demonstração a medir (-1: ausente, não verde). Não depende de evento nem de gatilho: o fato é calculado.';
+  'Sonda da 0302: uma linha = as 3 versões de demonstração mais novas com linha de extração têm fato para toda linha elegível, e o fato concorda com a linha (conta = a seção dela, método pela flag de inferida). Zero linhas: o resolver falha ou diverge da linha (função da cadeia sem grant, corpo trocado), ou não há versão de demonstração a medir (-1: ausente, não verde). Não depende de evento nem de gatilho: o fato é calculado.';
 
 -- A CADEIA EXECUTÁVEL: as 17 funções do fecho do resolver executáveis pelo authenticated e pelo service_role (e pelo leitor só-leitura, quando o papel existe). Uma linha por função. Menos de 17: a view fato_financeiro fica ilegível para o portal ("permission denied for function ...").
 create or replace view instalacao_sonda_fato_financeiro_cadeia as
@@ -606,12 +607,12 @@ create or replace view instalacao_sonda_fato_financeiro_cadeia as
      and has_function_privilege('service_role', f.nome, 'execute')
      and (not exists (select 1 from pg_roles where rolname = 'supabase_read_only_user') or has_function_privilege('supabase_read_only_user', f.nome, 'execute'));
 comment on view instalacao_sonda_fato_financeiro_cadeia is
-  'Sonda da 0243: uma linha = uma das 17 funções que o resolver chama (o fecho) é executável pelo authenticated, pelo service_role e pelo leitor só-leitura. Menos de 17: a view fato_financeiro (security_invoker: o EXECUTE é de quem lê) fica ilegível para o portal.';
+  'Sonda da 0302: uma linha = uma das 17 funções que o resolver chama (o fecho) é executável pelo authenticated, pelo service_role e pelo leitor só-leitura. Menos de 17: a view fato_financeiro (security_invoker: o EXECUTE é de quem lê) fica ilegível para o portal.';
 
 create or replace view instalacao_sonda_fato_financeiro_pendencia_tipo as
   select 1 as ok where exists (select 1 from pg_enum e where e.enumtypid = 'pendencia_tipo'::regtype and e.enumlabel = 'conta_canonica_incerta');
 comment on view instalacao_sonda_fato_financeiro_pendencia_tipo is
-  'Sonda da 0243: uma linha = o rótulo conta_canonica_incerta existe em pendencia_tipo. Sem ele a extração nova com linha heurística tentaria abrir a pendência e falharia (a falha é engolida e vira o evento fato_pendencia_falhou).';
+  'Sonda da 0302: uma linha = o rótulo conta_canonica_incerta existe em pendencia_tipo. Sem ele a extração nova com linha heurística tentaria abrir a pendência e falharia (a falha é engolida e vira o evento fato_pendencia_falhou).';
 
 -- A LISTA DOS TIPOS, um a um e INDEPENDENTE do corpo da função: os 8 tipos de demonstração geram fato e 2 que NÃO podem gerar (Razão e Notas, da mesma categoria da taxonomia) não geram. Uma linha por resposta certa: 10 = a lista inteira.
 create or replace view instalacao_sonda_fato_financeiro_tipos as
@@ -619,7 +620,7 @@ create or replace view instalacao_sonda_fato_financeiro_tipos as
     from (values ('BALANCO', true), ('BALANCETE', true), ('COMBINADO', true), ('DRE', true), ('FLUXO_CAIXA', true), ('DVA', true), ('DMPL', true), ('DF_AUDITADA', true), ('RAZAO', false), ('NOTAS_EXPL', false)) e(tipo, gera)
    where fn_tipo_gera_fato(e.tipo) = e.gera;
 comment on view instalacao_sonda_fato_financeiro_tipos is
-  'Sonda da 0243: uma linha = fn_tipo_gera_fato dá a resposta certa para um dos 10 tipos (BALANCO, BALANCETE, COMBINADO, DRE, FLUXO_CAIXA, DVA, DMPL, DF_AUDITADA geram; RAZAO e NOTAS_EXPL não). Menos de 10: um tipo de demonstração perdeu o fato, ou o que é só evidência virou fato.';
+  'Sonda da 0302: uma linha = fn_tipo_gera_fato dá a resposta certa para um dos 10 tipos (BALANCO, BALANCETE, COMBINADO, DRE, FLUXO_CAIXA, DVA, DMPL, DF_AUDITADA geram; RAZAO e NOTAS_EXPL não). Menos de 10: um tipo de demonstração perdeu o fato, ou o que é só evidência virou fato.';
 
 grant select on instalacao_sonda_fato_financeiro_view_invoker, instalacao_sonda_fato_financeiro_so_le, instalacao_sonda_fato_financeiro_recentes, instalacao_sonda_fato_financeiro_cadeia,
                 instalacao_sonda_fato_financeiro_pendencia_tipo, instalacao_sonda_fato_financeiro_tipos to authenticated, service_role;  -- service_role: grant_views_service_role (0214)
@@ -636,57 +637,57 @@ end $$;
 -- A SONDA. Marcadores em CÓDIGO, nunca de comentário.
 -- -----------------------------------------------------------------------------
 -- Os requisitos desta migration são REESCRITOS por inteiro: a lista da versão anterior (a tabela e as materializações) deixou de fazer sentido e não pode ficar ausente para sempre num banco que a aplicou.
-delete from instalacao_requisito where migration = '0243';
+delete from instalacao_requisito where migration = '0302';
 insert into instalacao_requisito
   (chave, migration, tipo, objeto, marcador, criterio_seed, porque, severidade, ordem) values
-  ('fato_financeiro_view_invoker', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_view_invoker', null, 1,
-   'fato_financeiro não é view com security_invoker sobre o resolver, ou o resolver virou security definer: a view roda com o privilégio do dono e o portal lê o fato de TODOS os mandatos.', 'importante', 1105),
-  ('fato_financeiro_so_le', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_so_le', null, 1,
-   'O authenticated ou o service_role ganharam privilégio de escrita em fato_financeiro, ou o anon passou a lê-la: o fato é derivado e a escrita não existe.', 'importante', 1106),
-  ('fato_financeiro_le_as_versoes_recentes', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_recentes', null, 1,
-   'O resolver não devolve fato para linha elegível das 3 versões de demonstração mais novas, ou devolve fato que discorda da linha (conta, método): a leitura do fato está quebrada (função da cadeia sem grant, corpo trocado) ou não há versão a medir.', 'importante', 1107),
-  ('fato_financeiro_cadeia_executavel', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_cadeia', null, 17,
-   'Alguma das 17 funções do fecho do resolver não é executável pelo authenticated, pelo service_role ou pelo leitor só-leitura: a view fato_financeiro (security_invoker) fica ilegível para o portal.', 'importante', 1108),
-  ('fato_financeiro_pendencia_tipo', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_pendencia_tipo', null, 1,
-   'Sem o rótulo conta_canonica_incerta em pendencia_tipo a pendência da heurística não abre.', 'importante', 1109),
-  ('tipos_que_geram_fato', '0243', 'comportamento', 'instalacao_sonda_fato_financeiro_tipos', null, 10,
-   'A lista dos tipos de demonstração perdeu um tipo (linha de demonstração fica sem fato), ou ganhou Razão/Notas (o que é só evidência vira fato). Conferida tipo a tipo, não pelo corpo.', 'importante', 1110),
-  ('pendencia_conta_gatilho', '0243', 'gatilho', 'evento_auditoria.trg_fato_pendencia_da_extracao', 'fn_fato_pendencia_da_extracao', null,
-   'Sem o gatilho a extração nova com linha de conta incerta NÃO abre a pendência conta_canonica_incerta (a heurística fica calada). A pendência mora no gatilho, não em fn_registrar_campos_extraidos, que a P11 reemite a cada fatia.', 'importante', 1111),
-  ('pendencia_conta_gatilho_chama', '0243', 'corpo', 'fn_fato_pendencia_da_extracao', 'fn_fato_pendencia_da_versao(v_versao)', null,
-   'O gatilho existe mas não chama a avaliação da pendência: o evento extracao_sombra passa e nenhuma pendência abre, sem erro.', 'importante', 1112),
-  ('pendencia_conta_chama_a_guarda', '0243', 'corpo', 'fn_fato_pendencia_da_extracao', 'fn_fato_pode_escrever(v_caso)', null,
-   'O gatilho é security definer: sem chamar a guarda, um evento extracao_sombra forjado abre pendência em qualquer mandato.', 'importante', 1113),
-  ('pendencia_uma_por_versao', '0243', 'corpo', 'fn_fato_pendencia_da_versao', '''fato:conta_incerta:''', null,
-   'A pendência da heurística é UMA por documento-versão (o motivo carrega a versão). Outro motivo = uma por linha (fila de ruído) ou nenhuma.', 'importante', 1114),
-  ('pendencia_le_o_resolver', '0243', 'corpo', 'fn_fato_pendencia_da_versao', 'fn_fato_resolver(', null,
-   'A pendência precisa ler a MESMA definição de fato que a view (o resolver): outra consulta é uma segunda implementação da conta, e as duas divergem sem erro nenhum.', 'importante', 1115),
-  ('materializa_so_o_elegivel', '0243', 'corpo', 'fn_fato_resolver', 'fn_linha_vira_fato(', null,
-   'A resolução precisa perguntar a fn_linha_vira_fato: sem isso virar fato é "tudo que tem valor" (Estoque, Razão, subtotal).', 'importante', 1116),
-  ('materializa_periodo_pela_coluna', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_canonico(', null,
-   'O período de outro ano vem da forma canônica da coluna de ano puro (31/12/AAAA = AAAA) que um período do MESMO mandato tem; sem isso o balanço de duas colunas de ano atribui o saldo de 2024 a 2025.', 'importante', 1117),
-  ('periodo_so_da_coluna_de_saldo', '0243', 'corpo', 'fn_fato_resolver', 'fn_coluna_e_saldo(', null,
-   'A coluna que É o período do documento é a de SALDO (fn_coluna_e_saldo, 0201): Débito, Crédito, Orçado, Variação e percentual com o mesmo período dão fatos idênticos em (conta, entidade, período) e a soma dobra.', 'importante', 1118),
-  ('periodo_parcial_nao_vai_para_o_ano', '0243', 'corpo', 'fn_fato_resolver', 'fn_periodo_e_parcial(', null,
-   'Documento de período PARCIAL (balancete de junho) não dá a coluna "2025" ao período anual: o acumulado de junho virava a receita do ano.', 'importante', 1119),
-  ('periodo_coluna_do_documento_so_se_unica', '0243', 'corpo', 'fn_fato_resolver', 'mais_de_uma_coluna_para_o_mesmo_periodo', null,
-   'Com duas candidatas a ser a coluna do período do documento (Jun/2025 e 30/06/2025; Saldo final e Saldo atual) nenhuma é escolhida: fn_coluna_periodo_do_ano desempata por contagem e ordem alfabética, e "ao acaso" é número fabricado (a soma de 4 colunas deu 500).', 'importante', 1120),
-  ('entidade_pela_funcao_do_banco', '0243', 'corpo', 'fn_fato_resolver', 'fn_coluna_entidade(', null,
-   'A entidade da coluna é a que fn_coluna_entidade (0023/0030, com fn_mesma_entidade) escolhe: um casamento de nome próprio errou "Alfa Comércio" x "ALFA COMERCIO DE ALIMENTOS LTDA" e deu o Consolidado à ALFA com a coluna dela nula.', 'importante', 1121),
-  ('entidade_total_so_se_unica', '0243', 'corpo', 'fn_fato_resolver', 'coluna_total_ambigua', null,
-   'fn_coluna_entidade entrega "a" coluna total sem ordem: com mais de uma coluna total no documento a escolha é arbitrária e a entidade fica sem coluna total.', 'importante', 1122),
-  ('fato_guarda_de_escrita_corpo', '0243', 'corpo', 'fn_fato_pode_escrever', 'fn_pode_escrever_caso(p_caso)', null,
-   'A guarda de escrita (serviço ou quem escreve no mandato) foi trocada (por `select true`, por exemplo): a função security definer abre pendência para qualquer chamador.', 'importante', 1123),
-  ('fato_guarda_de_escrita_search_path', '0243', 'corpo', 'fn_fato_pode_escrever', 'SET search_path TO ''public'', ''pg_temp''', null,
-   'Função security definer sem search_path fixo: um schema do chamador na frente do public sequestra fn_pode_escrever_caso.', 'importante', 1124)
+  ('fato_financeiro_view_invoker', '0302', 'comportamento', 'instalacao_sonda_fato_financeiro_view_invoker', null, 1,
+   'fato_financeiro não é view com security_invoker sobre o resolver, ou o resolver virou security definer: a view roda com o privilégio do dono e o portal lê o fato de TODOS os mandatos.', 'importante', 1400),
+  ('fato_financeiro_so_le', '0302', 'comportamento', 'instalacao_sonda_fato_financeiro_so_le', null, 1,
+   'O authenticated ou o service_role ganharam privilégio de escrita em fato_financeiro, ou o anon passou a lê-la: o fato é derivado e a escrita não existe.', 'importante', 1401),
+  ('fato_financeiro_le_as_versoes_recentes', '0302', 'comportamento', 'instalacao_sonda_fato_financeiro_recentes', null, 1,
+   'O resolver não devolve fato para linha elegível das 3 versões de demonstração mais novas, ou devolve fato que discorda da linha (conta, método): a leitura do fato está quebrada (função da cadeia sem grant, corpo trocado) ou não há versão a medir.', 'importante', 1402),
+  ('fato_financeiro_cadeia_executavel', '0302', 'comportamento', 'instalacao_sonda_fato_financeiro_cadeia', null, 17,
+   'Alguma das 17 funções do fecho do resolver não é executável pelo authenticated, pelo service_role ou pelo leitor só-leitura: a view fato_financeiro (security_invoker) fica ilegível para o portal.', 'importante', 1403),
+  ('fato_financeiro_pendencia_tipo', '0302', 'comportamento', 'instalacao_sonda_fato_financeiro_pendencia_tipo', null, 1,
+   'Sem o rótulo conta_canonica_incerta em pendencia_tipo a pendência da heurística não abre.', 'importante', 1404),
+  ('tipos_que_geram_fato', '0302', 'comportamento', 'instalacao_sonda_fato_financeiro_tipos', null, 10,
+   'A lista dos tipos de demonstração perdeu um tipo (linha de demonstração fica sem fato), ou ganhou Razão/Notas (o que é só evidência vira fato). Conferida tipo a tipo, não pelo corpo.', 'importante', 1405),
+  ('pendencia_conta_gatilho', '0302', 'gatilho', 'evento_auditoria.trg_fato_pendencia_da_extracao', 'fn_fato_pendencia_da_extracao', null,
+   'Sem o gatilho a extração nova com linha de conta incerta NÃO abre a pendência conta_canonica_incerta (a heurística fica calada). A pendência mora no gatilho, não em fn_registrar_campos_extraidos, que a P11 reemite a cada fatia.', 'importante', 1406),
+  ('pendencia_conta_gatilho_chama', '0302', 'corpo', 'fn_fato_pendencia_da_extracao', 'fn_fato_pendencia_da_versao(v_versao)', null,
+   'O gatilho existe mas não chama a avaliação da pendência: o evento extracao_sombra passa e nenhuma pendência abre, sem erro.', 'importante', 1407),
+  ('pendencia_conta_chama_a_guarda', '0302', 'corpo', 'fn_fato_pendencia_da_extracao', 'fn_fato_pode_escrever(v_caso)', null,
+   'O gatilho é security definer: sem chamar a guarda, um evento extracao_sombra forjado abre pendência em qualquer mandato.', 'importante', 1408),
+  ('pendencia_uma_por_versao', '0302', 'corpo', 'fn_fato_pendencia_da_versao', '''fato:conta_incerta:''', null,
+   'A pendência da heurística é UMA por documento-versão (o motivo carrega a versão). Outro motivo = uma por linha (fila de ruído) ou nenhuma.', 'importante', 1409),
+  ('pendencia_le_o_resolver', '0302', 'corpo', 'fn_fato_pendencia_da_versao', 'fn_fato_resolver(', null,
+   'A pendência precisa ler a MESMA definição de fato que a view (o resolver): outra consulta é uma segunda implementação da conta, e as duas divergem sem erro nenhum.', 'importante', 1410),
+  ('materializa_so_o_elegivel', '0302', 'corpo', 'fn_fato_resolver', 'fn_linha_vira_fato(', null,
+   'A resolução precisa perguntar a fn_linha_vira_fato: sem isso virar fato é "tudo que tem valor" (Estoque, Razão, subtotal).', 'importante', 1411),
+  ('materializa_periodo_pela_coluna', '0302', 'corpo', 'fn_fato_resolver', 'fn_periodo_canonico(', null,
+   'O período de outro ano vem da forma canônica da coluna de ano puro (31/12/AAAA = AAAA) que um período do MESMO mandato tem; sem isso o balanço de duas colunas de ano atribui o saldo de 2024 a 2025.', 'importante', 1412),
+  ('periodo_so_da_coluna_de_saldo', '0302', 'corpo', 'fn_fato_resolver', 'fn_coluna_e_saldo(', null,
+   'A coluna que É o período do documento é a de SALDO (fn_coluna_e_saldo, 0201): Débito, Crédito, Orçado, Variação e percentual com o mesmo período dão fatos idênticos em (conta, entidade, período) e a soma dobra.', 'importante', 1413),
+  ('periodo_parcial_nao_vai_para_o_ano', '0302', 'corpo', 'fn_fato_resolver', 'fn_periodo_e_parcial(', null,
+   'Documento de período PARCIAL (balancete de junho) não dá a coluna "2025" ao período anual: o acumulado de junho virava a receita do ano.', 'importante', 1414),
+  ('periodo_coluna_do_documento_so_se_unica', '0302', 'corpo', 'fn_fato_resolver', 'mais_de_uma_coluna_para_o_mesmo_periodo', null,
+   'Com duas candidatas a ser a coluna do período do documento (Jun/2025 e 30/06/2025; Saldo final e Saldo atual) nenhuma é escolhida: fn_coluna_periodo_do_ano desempata por contagem e ordem alfabética, e "ao acaso" é número fabricado (a soma de 4 colunas deu 500).', 'importante', 1415),
+  ('entidade_pela_funcao_do_banco', '0302', 'corpo', 'fn_fato_resolver', 'fn_coluna_entidade(', null,
+   'A entidade da coluna é a que fn_coluna_entidade (0023/0030, com fn_mesma_entidade) escolhe: um casamento de nome próprio errou "Alfa Comércio" x "ALFA COMERCIO DE ALIMENTOS LTDA" e deu o Consolidado à ALFA com a coluna dela nula.', 'importante', 1416),
+  ('entidade_total_so_se_unica', '0302', 'corpo', 'fn_fato_resolver', 'coluna_total_ambigua', null,
+   'fn_coluna_entidade entrega "a" coluna total sem ordem: com mais de uma coluna total no documento a escolha é arbitrária e a entidade fica sem coluna total.', 'importante', 1417),
+  ('fato_guarda_de_escrita_corpo', '0302', 'corpo', 'fn_fato_pode_escrever', 'fn_pode_escrever_caso(p_caso)', null,
+   'A guarda de escrita (serviço ou quem escreve no mandato) foi trocada (por `select true`, por exemplo): a função security definer abre pendência para qualquer chamador.', 'importante', 1418),
+  ('fato_guarda_de_escrita_search_path', '0302', 'corpo', 'fn_fato_pode_escrever', 'SET search_path TO ''public'', ''pg_temp''', null,
+   'Função security definer sem search_path fixo: um schema do chamador na frente do public sequestra fn_pode_escrever_caso.', 'importante', 1419)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
   porque = excluded.porque, severidade = excluded.severidade, ordem = excluded.ordem;
 
 update instalacao_cobertura
-   set ate_migration = '0243', revisado_em = current_date,
-       observacao = 'A 0243 cria fato_financeiro como VIEW security_invoker sobre fn_fato_resolver (o fato acima de campo_extraido: conta = seção, entidade e período pela coluna da linha quando uma função do banco decide), a pendência conta_canonica_incerta (uma por versão, só extração nova, por gatilho em evento_auditoria), 6 views de sonda, 1 função de amostra e 20 requisitos novos (ordem 1105-1124). Não reemite fn_registrar_campos_extraidos nem fn_fundir_entidade.'
+   set ate_migration = greatest(ate_migration, '0302'), revisado_em = current_date,
+       observacao = 'A 0302 cria fato_financeiro como VIEW security_invoker sobre fn_fato_resolver (o fato acima de campo_extraido: conta = seção, entidade e período pela coluna da linha quando uma função do banco decide), a pendência conta_canonica_incerta (uma por versão, só extração nova, por gatilho em evento_auditoria), 6 views de sonda, 1 função de amostra e 20 requisitos novos (ordem 1400-1419). Não reemite fn_registrar_campos_extraidos nem fn_fundir_entidade.'
  where id = true;
 
 commit;

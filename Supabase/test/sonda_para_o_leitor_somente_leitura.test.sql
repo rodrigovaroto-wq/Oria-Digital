@@ -46,8 +46,8 @@ begin
 
   select string_agg(f, ', ') into v_priv from unnest(array['fn_conta_canonica_orfas()', 'fn_fato_sonda_recentes()', 'fn_fato_resolver(uuid)', 'fn_tipo_gera_fato(text)', 'fn_linha_vira_fato(text,text,text,numeric)', 'fn_papel_linha(text,text,text)', 'fn_sem_codigo_de_conta(text)', 'fn_tokens_estruturais(text)', 'fn_mes_do_rotulo(text)', 'fn_ano4(text)', 'fn_anos_periodo(text,text)', 'fn_coluna_e_abertura(text)', 'fn_coluna_e_saldo(text)', 'fn_coluna_entidade(uuid,uuid)', 'fn_entidade_canonica(text)', 'fn_mesma_entidade(text,text)', 'fn_normalizar_texto(text)', 'fn_periodo_canonico(text,text)', 'fn_periodo_e_parcial(text,text,text,text)']) f
    where not has_function_privilege('supabase_read_only_user', f::regprocedure, 'execute');
-  perform pg_temp.teste_assert_leitor(v_priv is null, 'o leitor executa as funções que as views da sonda chamam (a 0242 e a 0243: a amostra da sonda, o resolver e as 16 funções que ele chama, diretas e transitivas)', v_priv);
-  perform pg_temp.teste_assert_leitor((select count(*) from fn_instalacao_conferir() where migration in ('0242', '0243')) >= 29, 'a sonda do dono vê os requisitos da 0242 e da 0243 (o que o leitor lê não é vazio)');
+  perform pg_temp.teste_assert_leitor(v_priv is null, 'o leitor executa as funções que as views da sonda chamam (a 0242 e a 0302: a amostra da sonda, o resolver e as 16 funções que ele chama, diretas e transitivas)', v_priv);
+  perform pg_temp.teste_assert_leitor((select count(*) from fn_instalacao_conferir() where migration in ('0242', '0302')) >= 29, 'a sonda do dono vê os requisitos da 0242 e da 0302 (o que o leitor lê não é vazio)');
   raise notice 'sonda_leitor: % asserts executados, % reprovados', (select last_value from pg_temp._execucoes_leitor), (select case when is_called then last_value else 0 end from pg_temp._falhas_leitor);
   if (select is_called from pg_temp._falhas_leitor) and coalesce(current_setting('leitor.medindo', true), '') <> 'on' then
     raise exception 'FALHOU: a sonda não é legível para o leitor só-leitura';

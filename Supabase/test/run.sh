@@ -1027,11 +1027,11 @@ echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
-echo "== 0243 — a linha que não tinha identidade (fato_financeiro é uma VIEW security_invoker sobre o resolver: o fato escrito à mão por cenário, a bijeção, a pendência só da extração nova, a segurança sob o default de privilégio do Supabase, a sonda não está cega)"
+echo "== 0302 — a linha que não tinha identidade (fato_financeiro é uma VIEW security_invoker sobre o resolver: o fato escrito à mão por cenário, a bijeção, a pendência só da extração nova, a segurança sob o default de privilégio do Supabase, a sonda não está cega)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
-echo "== 0243 — as corridas, com duas sessões reais (dblink): extração x cadastro de entidade, update de documento não comitado, duas extrações do mesmo documento"
+echo "== 0302 — as corridas, com duas sessões reais (dblink): extração x cadastro de entidade, update de documento não comitado, duas extrações do mesmo documento"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro_corridas.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 

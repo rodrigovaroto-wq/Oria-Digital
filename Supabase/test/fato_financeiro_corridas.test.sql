@@ -1,4 +1,4 @@
--- AS CORRIDAS DA 0243, COM DUAS SESSÕES REAIS (Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql).
+-- AS CORRIDAS DA 0302, COM DUAS SESSÕES REAIS (Supabase/migrations/0302_a_linha_que_nao_tinha_identidade.sql).
 --
 -- O DEFEITO QUE ESTE ARQUIVO EXISTE PARA PEGAR. No desenho anterior (a TABELA fato_financeiro mantida por gatilhos) a 5ª revisão reproduziu corridas em que o fato gravado não convergia para o estado atual: um gatilho de cadastro recalculava num snapshot velho enquanto um update de documento não comitado segurava o lock (R1 e R3), e uma
 -- extração COMBINADO concorrente com o cadastro de uma entidade que casa a mesma coluna deixava o motivo falso ou o valor atribuído onde o do-zero dá coluna_casa_varias_entidades (R2). Com a VIEW não há cópia: cada leitura lê o estado COMITADO daquele instante, e a única coisa que a migration ainda escreve é a pendência (R4).
@@ -7,9 +7,9 @@
 -- (R3) o update de documento.entidade_id não comitado e o cadastro de entidade e de período: a leitura mostra o estado comitado e, depois do commit, o novo; (R4) duas extrações concorrentes de duas versões do MESMO documento: uma pendência aberta só (a da vigente), pela trava do documento.
 -- Só dá para provar com sessões que comitam separadas, por isso é um arquivo à parte e usa dblink (uma conexão do servidor a ele mesmo, pelo socket Unix). Sem dblink a suíte diz "NÃO EXECUTADO" e NÃO finge que passou (regra 7); o CI roda o postgres:16 oficial, que o tem.
 --
--- NÃO É TRANSACIONAL: comita de verdade e apaga o que criou no fim (os mandatos "0243 corrida ..."). Roda DEPOIS dos demais testes do banco montado.
+-- NÃO É TRANSACIONAL: comita de verdade e apaga o que criou no fim (os mandatos "0302 corrida ..."). Roda DEPOIS dos demais testes do banco montado.
 --
--- MEDIÇÃO NÃO-VAZIA (regra 2): o número que reprova com a correção desligada está no cabeçalho de Supabase/migrations/0243_a_linha_que_nao_tinha_identidade.sql (a trava do documento removida: a R4; as demais corridas não têm código a desligar na view: o que elas provam é que NÃO há cópia a envelhecer, e a medição é rodar o mesmo roteiro contra a TABELA da versão 7d5f503, onde reprovam).
+-- MEDIÇÃO NÃO-VAZIA (regra 2): o número que reprova com a correção desligada está no cabeçalho de Supabase/migrations/0302_a_linha_que_nao_tinha_identidade.sql (a trava do documento removida: a R4; as demais corridas não têm código a desligar na view: o que elas provam é que NÃO há cópia a envelhecer, e a medição é rodar o mesmo roteiro contra a TABELA da versão 7d5f503, onde reprovam).
 
 \set ON_ERROR_STOP on
 
@@ -45,7 +45,7 @@ begin
   begin
     create extension if not exists dblink schema ff_dblink;
   exception when others then
-    raise notice 'NÃO EXECUTADO: dblink indisponível neste servidor (%). As corridas R1-R4 da 0243 NÃO foram provadas por este teste.', sqlerrm;
+    raise notice 'NÃO EXECUTADO: dblink indisponível neste servidor (%). As corridas R1-R4 da 0302 NÃO foram provadas por este teste.', sqlerrm;
     perform set_config('ffc.sem_dblink', '1', false);
     return;
   end;
@@ -58,7 +58,7 @@ begin
     perform ff_dblink.dblink_exec('a', 'set lock_timeout = ''20s''');
     perform ff_dblink.dblink_exec('b', 'set lock_timeout = ''20s''');
   exception when others then
-    raise notice 'NÃO EXECUTADO: dblink não conectou (%). As corridas R1-R4 da 0243 NÃO foram provadas por este teste.', sqlerrm;
+    raise notice 'NÃO EXECUTADO: dblink não conectou (%). As corridas R1-R4 da 0302 NÃO foram provadas por este teste.', sqlerrm;
     perform set_config('ffc.sem_dblink', '1', false);
   end;
 end $$;
@@ -76,11 +76,11 @@ do $$
 declare v_c uuid;
 begin
   if current_setting('ffc.sem_dblink', true) = '1' then return; end if;
-  delete from caso where nome like '0243 corrida %';   -- o que uma execução anterior interrompida deixou
-  v_c := fn_upsert_caso('0243 corrida R1')::uuid; perform fn_upsert_entidade(v_c, 'METAL R1 LTDA'); perform fn_upsert_periodo(v_c, 'anual', '2025');
-  v_c := fn_upsert_caso('0243 corrida R2')::uuid; perform fn_upsert_entidade(v_c, 'VERTENTES R2 LTDA'); perform fn_upsert_periodo(v_c, 'anual', '2025');
-  v_c := fn_upsert_caso('0243 corrida R3')::uuid; perform fn_upsert_entidade(v_c, 'DOC R3 UM LTDA'); perform fn_upsert_entidade(v_c, 'DOC R3 DOIS LTDA'); perform fn_upsert_periodo(v_c, 'anual', '2025');
-  v_c := fn_upsert_caso('0243 corrida R4')::uuid; perform fn_upsert_entidade(v_c, 'PEND R4 LTDA'); perform fn_upsert_periodo(v_c, 'anual', '2025');
+  delete from caso where nome like '0302 corrida %';   -- o que uma execução anterior interrompida deixou
+  v_c := fn_upsert_caso('0302 corrida R1')::uuid; perform fn_upsert_entidade(v_c, 'METAL R1 LTDA'); perform fn_upsert_periodo(v_c, 'anual', '2025');
+  v_c := fn_upsert_caso('0302 corrida R2')::uuid; perform fn_upsert_entidade(v_c, 'VERTENTES R2 LTDA'); perform fn_upsert_periodo(v_c, 'anual', '2025');
+  v_c := fn_upsert_caso('0302 corrida R3')::uuid; perform fn_upsert_entidade(v_c, 'DOC R3 UM LTDA'); perform fn_upsert_entidade(v_c, 'DOC R3 DOIS LTDA'); perform fn_upsert_periodo(v_c, 'anual', '2025');
+  v_c := fn_upsert_caso('0302 corrida R4')::uuid; perform fn_upsert_entidade(v_c, 'PEND R4 LTDA'); perform fn_upsert_periodo(v_c, 'anual', '2025');
 end $$;
 
 -- R1: a sessão A extrai um COMBINADO e NÃO comita; a sessão B cadastra a entidade GAMA FORJADOS (uma das colunas da extração) e comita. Nada trava (a view não tem gatilho nem cópia). Antes do commit de A a leitura não vê a extração; depois vê o fato certo.
@@ -89,7 +89,7 @@ declare v_c uuid; v_a text; v_antes bigint; v_d text; v_n int;
 begin
   if current_setting('ffc.sem_dblink', true) = '1' then return; end if;
   raise notice '--- R1: extração não comitada (A) x cadastro de entidade (B) ---';
-  select id into v_c from caso where nome = '0243 corrida R1';
+  select id into v_c from caso where nome = '0302 corrida R1';
   perform ff_dblink.dblink_exec('a', 'begin');
   v_a := pg_temp.via('a', format($q$select (fn_registrar_documento(%L, 'METAL R1 LTDA', 'anual', '2025', 'COMBINADO', 0.97, 'nome_arquivo', 'supabase_storage', 'r1/a.pdf', 'r1a.pdf', true, 'r1hash', 'ok')->>'documento_versao_id')$q$, v_c));
   perform pg_temp.via('a', format($q$select fn_registrar_campos_extraidos(%L::uuid, '[{"chave":"Receita de vendas","valor_num":"100","secao_canonica":"receita_bruta","periodo_coluna":"2025","entidade_coluna":"Gama Forjados R1","confianca":"0.97"},{"chave":"Receita de vendas","valor_num":"200","secao_canonica":"receita_bruta","periodo_coluna":"2025","entidade_coluna":"Metal R1","confianca":"0.97"}]'::jsonb)::text$q$, v_a));
@@ -109,7 +109,7 @@ declare v_c uuid; v_a text; v_d text;
 begin
   if current_setting('ffc.sem_dblink', true) = '1' then return; end if;
   raise notice '--- R2: extração COMBINADO (A) x 2ª entidade que casa a coluna (B) ---';
-  select id into v_c from caso where nome = '0243 corrida R2';
+  select id into v_c from caso where nome = '0302 corrida R2';
   perform ff_dblink.dblink_exec('a', 'begin');
   v_a := pg_temp.via('a', format($q$select (fn_registrar_documento(%L, 'VERTENTES R2 LTDA', 'anual', '2025', 'COMBINADO', 0.97, 'nome_arquivo', 'supabase_storage', 'r2/a.pdf', 'r2a.pdf', true, 'r2hash', 'ok')->>'documento_versao_id')$q$, v_c));
   perform pg_temp.via('a', format($q$select fn_registrar_campos_extraidos(%L::uuid, '[{"chave":"Receita de vendas","valor_num":"200","secao_canonica":"receita_bruta","periodo_coluna":"2025","entidade_coluna":"Vertentes R2","confianca":"0.97"}]'::jsonb)::text$q$, v_a));
@@ -132,10 +132,10 @@ do $$
 declare v_c uuid; v_v text;
 begin
   if current_setting('ffc.sem_dblink', true) = '1' then return; end if;
-  select id into v_c from caso where nome = '0243 corrida R3';
+  select id into v_c from caso where nome = '0302 corrida R3';
   v_v := (fn_registrar_documento(v_c, 'DOC R3 UM LTDA', 'anual', '2025', 'DRE', 0.97, 'nome_arquivo', 'supabase_storage', 'r3/a.pdf', 'r3a.pdf', true, 'r3hash', 'ok')->>'documento_versao_id');
   perform fn_registrar_campos_extraidos(v_v::uuid, '[{"chave":"Receita de vendas","valor_num":"100","secao_canonica":"receita_bruta","periodo_coluna":"2025","confianca":"0.97"},{"chave":"Custo","valor_num":"-40","secao_canonica":"custos","periodo_coluna":"2025","confianca":"0.97"}]'::jsonb);
-  select id into v_c from caso where nome = '0243 corrida R4';
+  select id into v_c from caso where nome = '0302 corrida R4';
   v_v := (fn_registrar_documento(v_c, 'PEND R4 LTDA', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage', 'r4/a.pdf', 'r4a.pdf', true, 'r4hash', 'ok')->>'documento_versao_id');
   perform fn_registrar_campos_extraidos(v_v::uuid, '[{"chave":"Clientes R4a","valor_num":"1","secao":"ATIVO CIRCULANTE","periodo_coluna":"2025","confianca":"0.97"}]'::jsonb);
   perform fn_registrar_documento(v_c, 'PEND R4 LTDA', 'anual', '2025', 'BALANCO', 0.97, 'nome_arquivo', 'supabase_storage', 'r4/b.pdf', 'r4b.pdf', true, 'r4hash', 'ok');
@@ -147,7 +147,7 @@ declare v_c uuid; v_v text; v_doc uuid; v_um uuid; v_dois uuid; v_d text; v_t ti
 begin
   if current_setting('ffc.sem_dblink', true) = '1' then return; end if;
   raise notice '--- R3: update de documento não comitado (A) x cadastro de entidade e de período (B) ---';
-  select id into v_c from caso where nome = '0243 corrida R3';
+  select id into v_c from caso where nome = '0302 corrida R3';
   select id into v_um from entidade where caso_id = v_c and razao_social = 'DOC R3 UM LTDA';
   select id into v_dois from entidade where caso_id = v_c and razao_social = 'DOC R3 DOIS LTDA';
   select dv.id::text, dv.documento_id into v_v, v_doc from documento_versao dv join documento d on d.id = dv.documento_id where d.caso_id = v_c and dv.n_versao = 1;
@@ -171,7 +171,7 @@ declare v_c uuid; v_v1 uuid; v_v2 uuid; v_v3 uuid; v_doc uuid; v_abertas int; v_
 begin
   if current_setting('ffc.sem_dblink', true) = '1' then return; end if;
   raise notice '--- R4: duas extrações concorrentes do mesmo documento (a pendência) ---';
-  select id into v_c from caso where nome = '0243 corrida R4';
+  select id into v_c from caso where nome = '0302 corrida R4';
   select dv.id, dv.documento_id into v_v1, v_doc from documento_versao dv join documento d on d.id = dv.documento_id where d.caso_id = v_c and dv.n_versao = 1;
   select dv.id into v_v2 from documento_versao dv where dv.documento_id = v_doc and dv.n_versao = 2;
   select dv.id into v_v3 from documento_versao dv where dv.documento_id = v_doc and dv.n_versao = 3;
@@ -195,9 +195,9 @@ end $$;
 do $$
 begin
   if current_setting('ffc.sem_dblink', true) = '1' then return; end if;
-  delete from caso where nome like '0243 corrida %';
+  delete from caso where nome like '0302 corrida %';
   perform ff_dblink.dblink_disconnect('a'); perform ff_dblink.dblink_disconnect('b');
-  perform pg_temp.teste_assert_ffc(not exists (select 1 from caso where nome like '0243 corrida %'), 'a limpeza: nenhum mandato de corrida sobrou');
+  perform pg_temp.teste_assert_ffc(not exists (select 1 from caso where nome like '0302 corrida %'), 'a limpeza: nenhum mandato de corrida sobrou');
 end $$;
 do $$ begin
   if current_setting('ffc.sem_dblink', true) is distinct from '1' then
@@ -216,7 +216,7 @@ begin
   select case when is_called then last_value else 0 end into v_falhas from pg_temp._falhas_ffc;
   raise notice 'fato_financeiro_corridas: % asserts executados, % reprovados', v_exec, v_falhas;
   if v_falhas > 0 and coalesce(current_setting('ff.medindo', true), '') <> 'on' then
-    raise exception 'FALHOU: % assert(s) das corridas da 0243 reprovaram (veja os FALHOU acima)', v_falhas;
+    raise exception 'FALHOU: % assert(s) das corridas da 0302 reprovaram (veja os FALHOU acima)', v_falhas;
   end if;
   if v_falhas = 0 then raise notice 'TODOS OS TESTES DAS CORRIDAS DO FATO FINANCEIRO PASSARAM'; end if;
 end $$;
