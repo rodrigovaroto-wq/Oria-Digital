@@ -300,7 +300,7 @@ src/
 - Aceite por linha/célula (hoje é por documento_versao inteiro, v0 —
   `Arquitetura do Sistema/2 Especificação/f0/07_output_spec.md` permite refinar o "layout fino" depois).
 - Portão 2 formal do caso inteiro (bloqueantes não-sobrepujáveis, teto de
-  ressalva, `Arquitetura do Sistema/3 Estado e Execução/07_STATUS_E_PENDENCIAS.md`) — hoje só existe o aceite
+  ressalva, `Arquitetura do Sistema/2 Especificação/07_STATUS_E_PENDENCIAS.md`) — hoje só existe o aceite
   mínimo por linha extraída (`fn_aceitar_extracao`).
 - RLS por caso (membership) — hoje é "qualquer autenticado vê tudo" (decisão
   explícita da F1, `Supabase/migrations/0003_rls_e_storage.sql`).

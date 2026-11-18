@@ -190,7 +190,7 @@ por parte; até onde se sabe, não. Descobrir processo por CPF/CNPJ exige proved
 ## 3. Ordem, contas e datas
 
 **Premissa, para o dono corrigir:** as três contas do plano anterior, 5 sessões por semana cada,
-a partir de 16/11. A divisão respeita os donos de diretório do `STATUS_POR_ETAPA_2026-11-11.md`.
+a partir de 16/11. A divisão respeita os donos de diretório do retrato `STATUS_POR_ETAPA_2026-11-11.md` (removido em 18/11/2026; recuperável pelo histórico do git).
 
 | Conta | Trilhas | Por quê |
 |---|---|---|

@@ -59,7 +59,7 @@ serviços transversais** (pendências e status/auditoria) que atravessam tudo.
 - **Portão 1 (Completude):** determinístico, mas **honesto sobre suas premissas**. "Recebemos
   o mínimo para trabalhar?" Pode ser leve/assíncrono, humano só nas exceções.
 - **Portão 2 (Aprovação humana):** o **único portão que trava avanço** para análise. Sempre
-  humano, sempre auditado, com limites duros (`07_STATUS_E_PENDENCIAS.md`).
+  humano, sempre auditado, com limites duros (`../2 Especificação/07_STATUS_E_PENDENCIAS.md`).
 
 > **Não crie um portão entre cada camada.** Extração e reconciliação produzem *pendências*,
 > não portões. Portões demais matam a operação.

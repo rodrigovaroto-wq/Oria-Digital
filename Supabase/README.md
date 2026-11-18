@@ -1446,7 +1446,7 @@ where relname in ('caso','documento','pendencia','evento_auditoria') order by re
 
 O refinamento de RLS por caso, e as Classes B/C de reconciliação (`Arquitetura do Sistema/2 Especificação/04_RECONCILIACAO.md`
 — continuam N1/aproximação, não têm engine determinística ainda). O Portão 2 formal
-(`Arquitetura do Sistema/3 Estado e Execução/07_STATUS_E_PENDENCIAS.md`: bloqueantes não-sobrepujáveis, teto/expiração de ressalva)
+(`Arquitetura do Sistema/2 Especificação/07_STATUS_E_PENDENCIAS.md`: bloqueantes não-sobrepujáveis, teto/expiração de ressalva)
 também não está aqui — `fn_aceitar_extracao` (0011) é só o aceite mínimo por linha extraída,
 não a regra de portão do caso inteiro. Ver o plano da F1 e `Arquitetura do Sistema/2 Especificação/f0/05_schema_conceitual.md`.
 (`campo_extraido` entrou em `0005`; `reconciliacao` — Classe A — entrou em `0009`; aceite/E4
