@@ -136,7 +136,7 @@ Os detalhes técnicos (4 formatos, 14 abas, 13 semanas, Lei 11.101, 89 premissas
 
 ## 7. Como conferir e comparar
 
-Os comandos abaixo rodam a partir desta pasta. Pré-requisitos: LibreOffice, Poppler (`pdftoppm`, `pdftotext`) e Python com `python-pptx` e `Pillow`.
+Os comandos abaixo rodam a partir desta pasta. Pré-requisitos: LibreOffice (`soffice` ou `libreoffice` no `PATH`), Poppler (`pdftoppm`, `pdftotext`) e Python com `python-pptx` e `Pillow`. **Por segurança, as ferramentas só aceitam arquivos `.pptx`/`.pdf` que existem dentro da pasta de trabalho.** Para comparar com uma versão nova, copie-a para esta pasta antes.
 
 ```bash
 soffice --headless --convert-to pdf Business_Plan_Oria_Digital.pptx
@@ -153,6 +153,5 @@ python3 ferramentas/comparativo.py Business_Plan_Oria_Digital.pptx nova_versao.p
   Os outros achados da lista são do próprio desenho: o sextante que sangra para fora da capa, os badges presos às elipses e os títulos empilhados nos anexos.
 - **`comparativo.py`** compara duas versões quaisquer, lado a lado, e marca IGUAL ou ALTERADO pela contagem de pixels.
   - Testado em 18/11/2026: a mesma versão contra ela mesma dá 0 slides alterados. Trocar um único número ("R$ 56 bi" → "R$ 99 bi") marca só aquele slide, com 519 pixels diferentes.
-  - Se o LibreOffice tiver outro nome, defina a variável `SOFFICE`.
 
 **Limitação.** A conferência visual foi feita no LibreOffice, em que a Calibri é substituída pela Carlito, de métricas iguais. Abra no Microsoft PowerPoint antes de apresentar. Os pontos mais sensíveis são os conectores curvos do slide 8 e os rótulos do gráfico do slide 7.

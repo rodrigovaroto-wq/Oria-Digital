@@ -6,14 +6,15 @@ declaração de quem editou.
 
 Uso:
     python3 comparativo.py antes.pptx depois.pptx saida.pdf [--rotulos "Antes" "Depois"]
-Aceita .pptx ou .pdf nas duas entradas. Para .pptx, converte com o LibreOffice: o comando vem
-da variável SOFFICE (padrão: "soffice"). Precisa de `pdftoppm` (Poppler) e de Pillow.
+Aceita .pptx ou .pdf nas duas entradas, que precisam estar dentro da pasta de trabalho. Para
+.pptx, converte com o LibreOffice (`soffice` ou `libreoffice` no PATH). Precisa de `pdftoppm`
+(Poppler) e de Pillow.
 Os slides são pareados pela posição. Se uma versão tiver mais slides, a outra mostra uma
 página vazia com o aviso "sem slide correspondente".
 """
 import argparse
 import os
-import shlex
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -37,17 +38,35 @@ def fonte(tamanho, negrito=False):
     return ImageFont.load_default()
 
 
-def para_pdf(arquivo: Path, tmp: Path) -> Path:
-    if arquivo.suffix.lower() == ".pdf":
-        return arquivo
-    cmd = shlex.split(os.environ.get("SOFFICE", "soffice"))
-    out = tmp / arquivo.stem
+def arquivo_de_entrada(caminho, extensoes):
+    """Aceita só um arquivo que existe, dentro da pasta de trabalho, com extensão esperada.
+
+    Devolve o caminho absoluto (nunca começa com "-", então não vira opção do programa externo).
+    SonarCloud S8705/S8707 (PR #301): o argumento ia direto ao subprocess sem validação.
+    """
+    base = os.path.realpath(os.getcwd())
+    real = os.path.realpath(caminho)
+    if not real.startswith(base + os.sep):
+        sys.exit(f"recusado: {caminho} está fora da pasta de trabalho ({base})")
+    if os.path.splitext(real)[1].lower() not in extensoes or not os.path.isfile(real):
+        sys.exit(f"recusado: {caminho} não é um arquivo {'/'.join(sorted(extensoes))} existente")
+    return real
+
+
+def para_pdf(caminho: str, tmp: Path, nome: str) -> Path:
+    real = arquivo_de_entrada(caminho, {".pptx", ".pdf"})
+    if real.lower().endswith(".pdf"):
+        return Path(real)
+    soffice = shutil.which("soffice") or shutil.which("libreoffice")
+    if not soffice:
+        sys.exit("LibreOffice não encontrado no PATH (soffice/libreoffice)")
+    out = tmp / nome
     out.mkdir(exist_ok=True)
-    subprocess.run(cmd + ["--headless", "--convert-to", "pdf", "--outdir", str(out), str(arquivo)],
+    subprocess.run([soffice, "--headless", "--convert-to", "pdf", "--outdir", str(out), real],
                    check=True, capture_output=True)
-    pdf = out / (arquivo.stem + ".pdf")
+    pdf = out / (Path(real).stem + ".pdf")
     if not pdf.exists():
-        sys.exit(f"conversão falhou: {arquivo}")
+        sys.exit(f"conversão falhou: {caminho}")
     return pdf
 
 
@@ -97,8 +116,8 @@ def main():
     a = ap.parse_args()
     with tempfile.TemporaryDirectory() as t:
         tmp = Path(t)
-        pa = paginas(para_pdf(Path(a.antes), tmp), tmp, "a")
-        pb = paginas(para_pdf(Path(a.depois), tmp), tmp, "b")
+        pa = paginas(para_pdf(a.antes, tmp, "a"), tmp, "a")
+        pb = paginas(para_pdf(a.depois, tmp, "b"), tmp, "b")
         total = max(len(pa), len(pb))
         res = [pagina(i + 1, pa[i] if i < len(pa) else None, pb[i] if i < len(pb) else None, a.rotulos)
                for i in range(total)]

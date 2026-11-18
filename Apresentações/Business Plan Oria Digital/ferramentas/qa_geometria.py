@@ -1,11 +1,13 @@
 """QA automático de geometria: limites, sobreposições, fonte mínima e colisão de palavras renderizadas.
 
-Uso: python3 -I qa_geometria.py deck.pptx deck.pdf
+Uso (a partir da pasta do deck): python3 -I ferramentas/qa_geometria.py deck.pptx deck.pdf
+Os dois arquivos precisam estar dentro da pasta de trabalho.
 - limites: shape fora do slide (tolerância 0,01")
 - sobreposição: dois shapes COM TEXTO cujas caixas se cruzam (contêiner sem texto é ignorado)
 - fonte: runs abaixo de 9 pt
 - colisão: duas palavras do PDF renderizado com caixas sobrepostas (texto sobre texto)
 """
+import os
 import re
 import subprocess
 import sys
@@ -14,7 +16,26 @@ from itertools import combinations
 from pptx import Presentation
 
 EMU = 914400
-deck, pdf = sys.argv[1:3]
+
+def arquivo_de_entrada(caminho, extensoes):
+    """Aceita só um arquivo que existe, dentro da pasta de trabalho, com extensão esperada.
+
+    Devolve o caminho absoluto (nunca começa com "-", então não vira opção do programa externo).
+    SonarCloud S8705/S8707 (PR #301): o argumento ia direto ao subprocess sem validação.
+    """
+    base = os.path.realpath(os.getcwd())
+    real = os.path.realpath(caminho)
+    if not real.startswith(base + os.sep):
+        sys.exit(f"recusado: {caminho} está fora da pasta de trabalho ({base})")
+    if os.path.splitext(real)[1].lower() not in extensoes or not os.path.isfile(real):
+        sys.exit(f"recusado: {caminho} não é um arquivo {'/'.join(sorted(extensoes))} existente")
+    return real
+
+
+if len(sys.argv) != 3:
+    sys.exit("uso: qa_geometria.py deck.pptx deck.pdf")
+deck = arquivo_de_entrada(sys.argv[1], {".pptx"})
+pdf = arquivo_de_entrada(sys.argv[2], {".pdf"})
 prs = Presentation(deck)
 W, H = prs.slide_width / EMU, prs.slide_height / EMU
 out = []
