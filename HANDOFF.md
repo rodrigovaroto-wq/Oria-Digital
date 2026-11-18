@@ -4,7 +4,12 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 127 — COMECE AQUI (depois de 11/11/2026)
+## ▶ SESSÃO 129 — COMECE AQUI (12/11/2026)
+
+- **Leia a seção "SESSÃO 129" e o bloco "▶ PRÓXIMOS PASSOS" no topo do `ESTADO.md`.** Este cabeçalho só aponta para lá.
+- **Migration mais nova: 0277**, NÃO aplicada em produção. Aplicar é decisão do dono (reemite as funções quentes). Branch `claude/tender-albattani-vx6m60`, sem PR.
+
+## SESSÃO 127 (depois de 11/11/2026; histórico, a mais nova está acima)
 
 - **Leia o bloco "▶ PRÓXIMOS PASSOS" da seção "SESSÃO 126" no topo do `ESTADO.md`.** É a lista única e ordenada do que falta. Este cabeçalho só aponta para lá.
 - **Produção (11/11):**
