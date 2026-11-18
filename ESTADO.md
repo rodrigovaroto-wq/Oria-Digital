@@ -1,13 +1,19 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
-## SESSÃO 131 (18/11/2026) — #296 destravado: 0243 renumerada para `0302_a_linha_que_nao_tinha_identidade.sql`
+## SESSÃO 131 (18/11/2026) — 0302 (`fato_financeiro`, P27) APLICADA EM PRODUÇÃO; repositório organizado (#302)
 
-> **Migration mais nova no repositório: `0302_a_linha_que_nao_tinha_identidade.sql` (ESCRITA, NÃO APLICADA).** É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
+> **Migration mais nova no repositório: `0302_a_linha_que_nao_tinha_identidade.sql` — APLICADA EM PRODUÇÃO em 18/11/2026.** É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
 
-- **Por que renumerar:** aplicada depois da 0301, a 0243 gravaria `instalacao_cobertura.ate_migration = '0243'` e rebaixaria o marcador de 0301 para 0243 (o mesmo defeito que a 0277 corrigiu com `greatest`). Agora ela usa `greatest(ate_migration, '0302')`, e a ordem da sonda foi de 1105–1124 para 1400–1419 (a 0278 vai até 1391).
-- **Por que o CI estava vermelho:** o job `banco` reprovou só pelo `schema.sql`. Eram 496 linhas `SET (pg_attver=N)` que o `pg_dump` do runner passou a emitir em 13/11; o filtro já estava no `main` (fae35f5) e chegou pelo merge. O Sonar reprovou pelos rascunhos de `patches/s129-p27-scripts-de-revisao` e `patches/s130-p27-view` (48 problemas, 87% de duplicação), que saíram do PR.
-- **Ainda falta antes de aplicar:** a 6ª revisão independente e o dono aplicar em produção. Depois, conferir pela sonda: `select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0302' and not presente;` → zero linhas (20 requisitos).
+- **0302 APLICADA EM PRODUÇÃO em 18/11/2026** (pedido do dono). Pelo MCP do Supabase, em dois notebooks: "0302 — aplicar" (célula 1: o `alter type ... add value`, sozinho; célula 2: o resto do arquivo do commit `1e68bcb` sem `begin`/`commit` e sem os comentários de nível de topo) e "0302 — conferir depois". A cópia de transporte foi conferida antes no banco de teste: reaplicada, a assinatura md5 dos objetos não muda (`09fc3a17…`) e a sonda dá 20 de 20.
+  - Antes: Postgres 17; cobertura 0301; 455 itens na sonda, 1 ausente (`envio_segredo_no_vault`, o de sempre); 81 mandatos; 2.999 pendências; 138.931 linhas em `campo_extraido`, 0 com `ln`; `fato_financeiro` inexistente; rótulo `conta_canonica_incerta` inexistente.
+  - Depois: cobertura 0302; 475 itens, o mesmo 1 ausente; os 20 requisitos da 0302 presentes; `fato_financeiro` é VIEW `{security_invoker=true}`; `fn_fato_sonda_recentes()` = 0 (as 3 versões mais novas medidas, nenhuma divergência); 81 / 2.999 / 138.931 / `ln` 0 (nada tocado); 0 pendências `conta_canonica_incerta` (só a extração nova abre).
+  - Definição dos objetos idêntica à do banco de teste: md5 sem ACL `b22379cd…` nos dois. Com ACL difere só pelo privilégio `m` (MAINTAIN) que o Postgres 17 dá ao dono; nenhum objeto da 0302 dá acesso ao `anon`.
+- **Por que renumerar:** aplicada depois da 0301, a 0243 gravaria `instalacao_cobertura.ate_migration = '0243'` e rebaixaria o marcador de 0301 para 0243. Agora usa `greatest(ate_migration, '0302')`, e a ordem da sonda foi de 1105–1124 para 1400–1419.
+- **Por que o CI do #296 estava vermelho:** o job `banco` reprovou só pelo `schema.sql` (496 linhas `SET (pg_attver=N)`; o filtro já estava no `main`, fae35f5). O Sonar reprovou pelos rascunhos de `patches/s129-…` e `patches/s130-…` (48 problemas, 87% de duplicação), que saíram do PR.
+- **6ª revisão independente: 0 ALTO.** Os 2 MÉDIOS foram corrigidos e medidos (as views da sonda legíveis pelo `anon` sob o default de privilégio: 1 assert reprova sem a correção; corridas sem dblink pareciam verdes: agora reprovam). BAIXO não corrigido: o marcador literal do `search_path` em `fato_guarda_de_escrita_search_path`.
+- **Organização do repositório (#302, mergeado):** README na raiz, índice da documentação, READMEs por camada, 12 arquivos superados removidos, sessões até a 117 movidas para `Arquitetura do Sistema/3 Estado e Execução/ESTADO_ATE_2026-11-04.md`.
+- **NÃO MEDIDO:** uma extração nova em produção passando pelo gatilho (`fato_pendencia_avaliada` deve aparecer em `evento_auditoria`). Conferir na próxima rodada do n8n.
 
 ## SESSÃO 130 (13/11/2026) — REVISÃO DO REDESENHO, KIT PELO BANCO (0301) E REDESENHO "JANELA DE VIDRO"
 
