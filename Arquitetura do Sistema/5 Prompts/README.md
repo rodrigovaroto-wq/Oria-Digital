@@ -2,7 +2,7 @@
 
 Cada arquivo aqui é um prompt colável. **Nenhum deles guarda número, PR ou nome de branch.**
 
-Essa regra tem causa: o `Arquitetura do Sistema/5 Prompts/PROMPT_CONTINUACAO.md` original virou uma fotografia da sessão 19 —
+Essa regra tem causa: o antigo `PROMPT_CONTINUACAO.md` (removido em 18/11/2026) virou uma fotografia da sessão 19 —
 mandava trabalhar na branch `claude/handoff-next-steps-6k88f2`, no PR #69, contra 160 testes e 32
 migrations. Nada disso era verdade 50 sessões depois, e o prompt continuava mandando começar
 errado. **Um prompt que cita estado envelhece; um prompt que aponta para quem mede o estado, não.**

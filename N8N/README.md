@@ -1,9 +1,33 @@
-# Camada N8N — Fatia 1 (E1 — Ingestão + E2 — Extração-sombra + E3 — Reconciliação Classe A)
+# N8N — orquestração da ingestão e da extração
 
-O N8N é o **orquestrador stateless** (Arquitetura do Sistema/1 Visão e Doutrina/02, trava de stack nº 1): recebe o upload em lote,
-classifica cada arquivo e chama as funções do Postgres (`Supabase/migrations/0004-0010`) que cuidam
-do estado. A ingestão é feita **pelo próprio N8N** (Form Trigger) — sem Vercel nesta fatia.
+O n8n é o **orquestrador sem estado** do sistema: recebe o lote de documentos que o portal envia,
+classifica cada arquivo, chama a IA para extrair as demonstrações e grava tudo pelas funções do
+Postgres, que guardam o estado e fazem a conferência. Ver a visão geral no [`README`](../README.md)
+da raiz.
 
+**Os workflows são gerados por código.** A lógica dos nós mora em [`lib/`](lib/) (testada por
+`node:test`), os geradores `build-workflow*.mjs` montam o JSON, e o JSON commitado é o que se
+importa no n8n. O CI regera os quatro e reprova se o commitado divergir. Nunca edite um
+`workflow.*.json` à mão nem só no editor do n8n: a próxima publicação apaga a mudança.
+
+| Workflow (derivado) | Gerador | O que faz |
+|---|---|---|
+| `workflow.e1-ingestao.json` | `build-workflow.mjs` | o pipeline principal: intake, classificação, extração, diagnóstico, conciliação, custo e fechamento do lote |
+| `workflow.erros.json` | `build-workflow-erros.mjs` | transforma qualquer falha do pipeline numa linha de `execucao_falha`, que o portal mostra |
+| `workflow.macro.json` | `build-workflow-macro.mjs` | coleta os índices macroeconômicos (fontes oficiais) para as premissas |
+| `workflow.diagnostico-ia.json` | `build-workflow-diagnostico.mjs` | diz por que o provedor de IA está recusando chamadas |
+
+| Pasta / script | Para que serve |
+|---|---|
+| [`lib/`](lib/) | classificação, extração, normalização, aritmética, cobertura, custo, merge de pedaços, taxonomia |
+| [`test/`](test/) | `node --test 'N8N/test/*.test.mjs'` |
+| `preparar-republicacao.mjs`, `republicar.sh`, `conferir-publicado.mjs` | publicar no n8n sem perder a identidade da instalação, e conferir campo a campo que o publicado é o do repositório |
+| `medir-regua-cobertura.mjs`, `medir-custo-book.mjs`, `medir-fase0-denominador.mjs` | medidores que rodam no CI sem gastar chamada de IA |
+| `diagnosticar-ia.mjs`, `gerar-seed-macro.mjs`, `layout.mjs`, `entrada-workflow.mjs` | utilitários |
+| [`REIMPORTAR.md`](REIMPORTAR.md) | passo a passo de reimportação manual |
+
+O restante deste arquivo é o manual de operação: o fluxo nó a nó, as regras do n8n aprendidas
+em produção, credenciais e problemas conhecidos.
 
 ## Reportar erro — ligue o Error Workflow (passo do dono, uma vez)
 

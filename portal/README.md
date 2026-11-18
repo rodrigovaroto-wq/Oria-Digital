@@ -1,16 +1,29 @@
-# Portal (Vercel) — Fatia 1
+# Portal — Next.js
 
-Next.js (App Router) + Supabase Auth. Telas cobrem a F1 do plano (`f0` /
-`Arquitetura do Sistema/1 Visão e Doutrina/03`): **dashboard do caso** (checklist do Kit Básico, lista de
-documentos, pendências de reconciliação/qualidade), **fila de revisão**
-(humano confirma/corrige classificação/entidade/tipo/período — o N1 da
-Doutrina de Autonomia, `Arquitetura do Sistema/1 Visão e Doutrina/01`), **planilha por documento** (linhas
-extraídas + aceite humano — Portão 2 mínimo, `Arquitetura do Sistema/2 Especificação/f0/07_output_spec.md`) e
-**export Excel** do caso inteiro.
+A interface do analista e do sócio: lista de mandatos, envio de documentos, tela do mandato
+(Kit Básico, documentos, pendências, histórico, perímetro), fila de revisão humana, modelagem de
+premissas, **export do book em Excel com o modelo vivo em fórmula** e a apresentação de crédito.
+Ver a visão geral no [`README`](../README.md) da raiz.
 
-> **Upload em lote continua fora do portal por decisão explícita** (ver
-> `N8N/README.md`): a ingestão roda pelo Form Trigger do N8N. O portal aqui é
-> só o lado de **leitura + revisão humana**.
+- **Stack:** Next.js 16 (App Router), React 19, TypeScript, Tailwind 4, `@supabase/ssr`, `exceljs`.
+- **Acesso a dados:** sempre pelo Supabase com a sessão do usuário, sob RLS por mandato. A
+  aritmética que chega ao cliente é do banco (ADR-02); o portal mostra e exporta.
+- **Envio:** `src/app/api/intake` assina o lote por mandato e o encaminha ao formulário do n8n.
+- **Deploy:** Vercel.
+
+| Pasta | Conteúdo |
+|---|---|
+| [`src/app/`](src/app/) | rotas: `casos/` (mandatos e as abas de cada um), `administracao/`, `autonomia/`, `login/`, `api/` |
+| [`src/lib/`](src/lib/) | acesso ao Supabase, export Excel, modelo institucional, apresentação, kit básico |
+| [`src/components/`](src/components/) | componentes compartilhados (navegação, avisos, busca, tema) |
+| [`scripts/`](scripts/) | `verificar-*.mts`: invariantes do arquivo entregue ao cliente, rodados no CI |
+
+```bash
+npm ci --ignore-scripts
+npm run dev
+```
+
+As variáveis de ambiente estão em "Configuração", abaixo.
 
 ## O que tem
 
