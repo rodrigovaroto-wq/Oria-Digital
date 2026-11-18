@@ -1,1 +1,0 @@
-\i /dev/stdin
