@@ -4,7 +4,7 @@ Este diretório contém os **artefatos concretos da F0**, a fase que precede qua
 código. Nada aqui é implementação — é o que precisa estar **fechado com o time** para que a
 construção do workflow (F1 em diante) não seja feita sobre premissas.
 
-> **Regra de ouro (repetida do `Arquitetura do Sistema/3 Estado e Execução/09_PLANO_DE_EXECUCAO.md`):** nada de código antes de
+> **Regra de ouro (do plano de execução original, `09_PLANO_DE_EXECUCAO.md`, removido em 18/11/2026 e recuperável pelo histórico do git):** nada de código antes de
 > taxonomia, modelo de status e schema conceitual fechados. A F0 existe para fechar isso.
 
 ## Como usar este kit

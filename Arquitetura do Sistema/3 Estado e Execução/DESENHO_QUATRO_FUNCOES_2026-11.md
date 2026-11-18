@@ -597,7 +597,7 @@ resolvida em D" aparece ao lado, e a pessoa decide.
 2. **Calendário do PLANO_MVP §3** está cheio até 18/12 (33 fatias). Estas quatro somam ~20 fatias.
    Sem tirar algo, o fim do MVP anda. Recomendo: Funções 1 e 4 entram no MVP (são pequenas e
    servem ao analista); 3 e 2 depois do portão do MVP.
-3. **Faixas de migration** (`STATUS_POR_ETAPA_2026-11-11.md:359`): 0240–0269 Claude Oria,
+3. **Faixas de migration** (do retrato `STATUS_POR_ETAPA_2026-11-11.md`, linha 359; removido em 18/11/2026, recuperável pelo histórico do git): 0240–0269 Claude Oria,
    0270–0299 Claude Oria 2, 0300+ Claude Pessoal. A 0300+ cai na faixa da Claude Oria 2. Quem
    escrever confere a faixa e o `ls` na hora.
 4. **Reserva da 0275.** Nada aqui usa 0275. Ao aplicar, a `instalacao_cobertura` sobe para o

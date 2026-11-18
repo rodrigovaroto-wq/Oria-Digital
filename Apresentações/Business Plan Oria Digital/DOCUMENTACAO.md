@@ -58,7 +58,7 @@ O total é de R$ 30 mi por ano recorrentes, mais R$ 20 mi uma vez. Nenhuma fonte
 
 ## 4. Slide 8: os 28 ramos e a evidência de cada um
 
-A bolinha cheia (●) quer dizer que o ramo já existe no sistema hoje, e a vazada (○) que está em construção. O badge do agente segue a mesma regra: cheio indica agente em operação. Hoje há **14 ramos que já existem e 14 em construção**. O status vem do código deste repositório e do plano `Arquitetura do Sistema/3 Estado e Execução/STATUS_POR_ETAPA_2026-11-11.md`. Atualize a tabela quando o plano mudar.
+A bolinha cheia (●) quer dizer que o ramo já existe no sistema hoje, e a vazada (○) que está em construção. O badge do agente segue a mesma regra: cheio indica agente em operação. Hoje há **14 ramos que já existem e 14 em construção**. O status vem do código deste repositório e do retrato de 11/11/2026 (`STATUS_POR_ETAPA_2026-11-11.md`, hoje só no histórico do git). Ao atualizar, use o plano em vigor: `Arquitetura do Sistema/3 Estado e Execução/PLANO_MVP_2026-11.md`.
 
 Lado esquerdo do mapa:
 
