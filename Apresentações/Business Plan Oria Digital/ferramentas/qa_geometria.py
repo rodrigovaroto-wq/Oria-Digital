@@ -9,8 +9,10 @@ Os dois arquivos precisam estar dentro da pasta de trabalho.
 """
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from itertools import combinations
 
 from pptx import Presentation
@@ -71,7 +73,12 @@ for n, s in enumerate(prs.slides, 1):
             out.append(f"S{n:02d} SOBREP  '{s1.text_frame.text[:22]}' x '{s2.text_frame.text[:22]}' ({a:.2f} pol²)")
 
 # colisão de palavras no PDF renderizado
-html = subprocess.run(["pdftotext", "-bbox", pdf, "-"], capture_output=True, text=True).stdout
+# o PDF validado é copiado com NOME FIXO para uma pasta temporária: só esse nome chega à linha de
+# comando do pdftotext (SonarCloud S8705 no PR #301: a validação de caminho sozinha não bastou)
+with tempfile.TemporaryDirectory() as _tmp:
+    copia = os.path.join(_tmp, "deck.pdf")
+    shutil.copyfile(pdf, copia)
+    html = subprocess.run(["pdftotext", "-bbox", copia, "-"], capture_output=True, text=True).stdout
 for n, page in enumerate(html.split("<page ")[1:], 1):
     words = [
         (float(a), float(b), float(c), float(d), t)

@@ -54,17 +54,26 @@ def arquivo_de_entrada(caminho, extensoes):
 
 
 def para_pdf(caminho: str, tmp: Path, nome: str) -> Path:
+    """Copia a entrada validada para a pasta temporária com NOME FIXO e devolve o PDF dela.
+
+    Só o nome fixo (tmp/a.pptx, tmp/b.pdf…) chega à linha de comando do LibreOffice e do
+    pdftoppm: nenhum texto vindo do usuário vira argumento de programa externo. A validação
+    de caminho sozinha não bastou (SonarCloud S8705 no PR #301, segunda análise).
+    """
     real = arquivo_de_entrada(caminho, {".pptx", ".pdf"})
-    if real.lower().endswith(".pdf"):
-        return Path(real)
+    ext = ".pdf" if real.lower().endswith(".pdf") else ".pptx"
+    pasta = tmp / nome
+    pasta.mkdir(exist_ok=True)
+    copia = pasta / ("entrada" + ext)
+    shutil.copyfile(real, copia)
+    if ext == ".pdf":
+        return copia
     soffice = shutil.which("soffice") or shutil.which("libreoffice")
     if not soffice:
         sys.exit("LibreOffice não encontrado no PATH (soffice/libreoffice)")
-    out = tmp / nome
-    out.mkdir(exist_ok=True)
-    subprocess.run([soffice, "--headless", "--convert-to", "pdf", "--outdir", str(out), real],
+    subprocess.run([soffice, "--headless", "--convert-to", "pdf", "--outdir", str(pasta), str(copia)],
                    check=True, capture_output=True)
-    pdf = out / (Path(real).stem + ".pdf")
+    pdf = pasta / "entrada.pdf"
     if not pdf.exists():
         sys.exit(f"conversão falhou: {caminho}")
     return pdf
