@@ -66,7 +66,11 @@ RING_D, CORE_D = 1.75, 1.43                   # anel e núcleo reduzidos (eram 2
 RING = RING_D / 2
 EW, EH = 1.90, 0.78                           # elipse do agente: "Agente" + nome
 LEFT_E, RIGHT_E = 3.72, 7.71
-LEFT_L, RIGHT_L, LW, LH = 0.60, 9.78, 2.95, 0.25   # pílulas das análises (2,95" = ~34 caracteres em 9,5 pt)
+LW_BASE = 2.95                                # largura de referência das pílulas (2,95")
+LW = round(LW_BASE * 0.84, 3)  # 18/11: 0,88 -> 0,84 ("um pouquinho mais"); depois o mapa todo cresce 5%                 # dono (18/11): pílula 12% mais estreita, só cortando o branco após o texto;
+                                              # o texto mais longo ocupa ~2,25", então 2,60" ainda folga
+LEFT_L = 0.60 + (LW_BASE - LW)                # lado esquerdo: a borda que encosta na curva fica parada
+RIGHT_L, LH = 9.78, 0.25
 PITCH, GROUP_GAP = 0.285, 0.21                # vão interno 0,035" x vão entre grupos 0,21"
 _id = [3000]
 
@@ -217,6 +221,21 @@ for n, on, nome, itens in AGENTES:
         pill.line.color.rgb = RGBColor.from_string(BORDA)
         pill.line.width = Pt(1)
         texto(pill, [[("●  " if existe else "○  ", 9.5, True, ORANGE), (txt, 9.5, False, NAVY)]], algn="l", ins=0.1)
+
+# dono (18/11): o organograma inteiro 5% maior (posições a partir do centro, tamanhos e fontes)
+K = 1.05
+mapa = [sh for sh in s.shapes if sh.shape_id in (9, 10, 11)
+        or sh.name.split("-")[0] in ("agente", "badge", "analise", "liga")]
+for sh in mapa:
+    x, y = sh.left / 914400, sh.top / 914400
+    w, h = sh.width / 914400, sh.height / 914400
+    sh.left = Inches(CX + (x - CX) * K)
+    sh.top = Inches(CY + (y - CY) * K)
+    sh.width, sh.height = Inches(w * K), Inches(h * K)
+    for rpr in sh._element.iter(f"{{{A}}}rPr"):
+        if rpr.get("sz"):
+            rpr.set("sz", str(int(round(int(rpr.get("sz")) * K / 5.0) * 5)))
+log.append(f"Mapa: pílulas a {LW:.2f}\" e organograma +5% ({len(mapa)} shapes)")
 
 # legenda única (vale para badge do agente e para a pílula da análise)
 leg = s.shapes.add_textbox(Inches(7.73), Inches(1.5), Inches(5.0), Inches(0.25))

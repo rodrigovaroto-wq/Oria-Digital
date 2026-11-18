@@ -10,16 +10,16 @@ Decisões do dono que guiaram o trabalho: [`00_BRIEFING.md`](00_BRIEFING.md).
 |---|---|---|
 | 1 Capa | 1 | Nada |
 | 2 O problema | 2 | "recuperação (extra) judicial" → "recuperação judicial e extrajudicial" |
-| 3 Consequências | 3 | "Meses perdidos" e um bloco **"COMO RESOLVEMOS"** em cada card. O problema já anuncia a resposta |
+| 3 Consequências | 3 | "Meses perdidos" e um bloco **"COMO RESOLVEMOS"** em cada card, com a dor resolvida nas palavras do dono (ex.: "Erro achado antes do credor") |
 | 4 O negócio | 4 | **R$ 2,7 tri → R$ 2,8 tri de saldo em set/2026**, conferido no Banco Central |
-| 5 Como funciona | 5 | Título novo e um bloco **"RESULTADO"** em cada etapa |
+| 5 Como funciona | 5 | Título novo e um bloco **"RESULTADO"** em cada etapa, com o que muda para o cliente (ex.: "Até onde o caixa aguenta") |
 | 6 Dados | 6 | "principais fontes" (a lista é um resumo) e uma frase de fecho no card escuro |
 | 7 Nove análises | — | **Removido.** O conteúdo foi para o slide 8 |
 | 8 O que o cliente ganha | 7 | Tirei o texto solto sobreposto, revisei o exemplo (despesa de 15% para 10%), troquei os rótulos do gráfico e saiu a citação "McKinsey" |
 | 9 Estratégia de IA | 8 | **Mapa mental:** Orquestrador → 8 agentes (1 a 4 à esquerda, 5 a 8 à direita) → 28 análises, cada uma com fonte no repositório |
 | 10 Para levar adiante | 9 | O pedido ao sócio com os 4 pilares, o fim da contradição sobre o primeiro cliente e o prazo de 3 a 6 meses |
 | 11 Anexo 1 | 10 | Uma palavra no rodapé |
-| 12–14 Anexo 2 | 11–13 | Selos legíveis, painel "Onde os blocos pesam" nos slides 11 e 13 e uma palavra a menos no título do 11 |
+| 12–14 Anexo 2 | 11–13 | Selos legíveis e uma palavra a menos no título do 11 (o painel "Onde os blocos pesam" chegou a entrar e foi removido a pedido do dono) |
 
 ## 2. Correções de fato (prioridade 1)
 
@@ -35,11 +35,11 @@ Decisões do dono que guiaram o trabalho: [`00_BRIEFING.md`](00_BRIEFING.md).
 ## 3. Narrativa e estrutura
 
 - **O motor era descrito três vezes sem ligação entre as descrições:** 5 etapas (slide 5), 9 análises (slide 7) e 8 agentes (slide 9). Agora fica assim:
-  - O slide 5 mostra o fluxo, e cada etapa diz o que entrega ("RESULTADO").
+  - O slide 5 mostra o fluxo, e cada etapa diz o que muda para o cliente ("RESULTADO").
   - O slide 8 mostra quem faz o quê: cada agente com as análises dele. Todo ramo é preenchido, e a bolinha diz o status: ● já existe, ○ em construção.
   - A mensagem do slide removido ("o especialista escolhe a saída que preserva mais valor") foi para a linha de supervisão.
 - **O mapa mental mostra o que já existe e não aparecia antes:** reconciliações, mútuos e intragrupo, mapa da dívida, capacidade de pagamento, capital de giro, três cenários e o Excel em fórmula viva. As 28 análises vêm do código e do `STATUS_POR_ETAPA_2026-11-11.md` (14 já existem e 14 estão em construção). A fonte de cada ramo (arquivo ou etapa do plano) está comentada na lista `AGENTES` em `4_scripts/rodada5.py`. Exemplos: "Plano em 3 cenários, com stress" (`modelo-institucional.ts:96`), "Waterfall de credores" (etapas 12.1 a 12.3), "Recálculo automático das premissas" (etapas 6.1 e 6.2).
-- **Pedido ao sócio (final 9):** "O QUE BUSCAMOS NO SÓCIO" traz os quatro pilares na sua ordem: Direção estratégica, Time, Infraestrutura segura para desenvolvimento e Banco de dados.
+- **Pedido ao sócio (final 9):** "O QUE BUSCAMOS" traz os quatro pilares na sua ordem: Direção estratégica, Time, Infraestrutura segura para desenvolvimento e Banco de dados.
 - **Títulos que viraram conclusão:** slides 5, 7, 8 e 9. "direto" saiu do título do slide 11.
 
 ## 4. Direção de arte
@@ -47,10 +47,8 @@ Decisões do dono que guiaram o trabalho: [`00_BRIEFING.md`](00_BRIEFING.md).
 Os elementos novos são cópias de elementos que já existiam no deck: o divisor do slide 4, os rótulos laranja, os números grandes, as elipses e badges do slide dos agentes e as curvas cinza.
 
 - **Cards preenchidos com conteúdo que tem função:**
-  - "COMO RESOLVEMOS" no slide 3;
-  - "RESULTADO" no slide 5;
+  - "COMO RESOLVEMOS" no slide 3 e "RESULTADO" no slide 5, com a dor resolvida do cliente e não o mecanismo. Os textos são do dono;
   - "principais fontes" e a frase de fecho no slide 6;
-  - "Onde os blocos pesam" nos slides 11 e 13. O painel é contado direto dos selos de cada slide (5/4/5/5 e 2/3/2/6, conferidos pelo revisor).
 - **Mapa mental com dois lados:**
   - O Orquestrador fica no centro, os agentes 1 a 4 à direita e os 5 a 8 à esquerda, no sentido horário como no original.
   - Todas as análises aparecem como pílula branca. A bolinha diz o status: ● já existe, ○ em construção.
@@ -78,7 +76,6 @@ Os elementos novos são cópias de elementos que já existiam no deck: o divisor
 |---|---|
 | Barra "R$ 20 mi" (única) ao lado das barras "/ ano", no gráfico do slide 7 | Decisão sua. A diferença está no rótulo e na cor |
 | Cards 1 e 6 do anexo 1 (final 10) com metade vazia | O card 3 tem 8 itens e não sobra espaço para um elemento comum aos seis |
-| O painel de impacto não aparece no final 12 | Os 15 itens dos blocos 3 e 4 ocupam o slide inteiro. O título do 12 já traz as contagens |
 | Cards escuros do final 4 com alturas de texto diferentes | Já era assim no original |
 | Número da página na capa | Vem do layout do original |
 
@@ -118,3 +115,29 @@ Pedido do dono: tirar as métricas soltas e escrever cada ramo **como uma entreg
 | Entregas | Apresentação de crédito em .pptx | Apresentação de crédito pronta | O formato do arquivo não importa |
 
 Os números técnicos (4 formatos, 14 abas, 89 premissas) continuam nas **notas do apresentador**, para responder se o sócio perguntar.
+
+## 8. Revisão independente final e ajustes de 18/11
+
+Dois revisores independentes não acharam bloqueador visual nem erro numérico. Aplicados com o aval do dono:
+
+- **Correções objetivas:**
+  - "360º" (ordinal) → "360°" (grau);
+  - "mi / ano" também nos cards do slide 7;
+  - "Resultado diferente do declarado à Receita" no lugar de "Resultado diferente do da Receita".
+- **Coerência com o slide 8:**
+  - slide 6 "cruzados em uma base única", sem o "automaticamente";
+  - slide 8 "dividem", em vez de "cobrem";
+  - notas do slide 8 com "metade já existe; a outra metade é o que construímos com o sócio";
+  - pilar de infraestrutura ligado aos 14 ramos em construção.
+- **Clareza:**
+  - KPI do BC: "de crédito PJ em set/2026";
+  - legenda do slide 8: "agente em operação · análise pronta".
+- **Acabamento:**
+  - pilares do slide 9 empilhados a partir do ícone;
+  - gráfico do slide 7 com as barras mais altas (escala de 0 a 23).
+- **Pedidos do dono:**
+  - "O QUE BUSCAMOS";
+  - painéis "Onde os blocos pesam" removidos;
+  - textos novos nos blocos dos slides 3 e 5;
+  - no slide 8, pílulas mais estreitas (2,48") e organograma 5% maior, com fontes e blocos crescendo juntos a partir do centro.
+- **Grafia:** dois ajustes nos textos enviados pelo dono. "Encima da hora" foi escrito "em cima da hora", e "Benchmarks" ficou em minúscula, no padrão do deck.

@@ -88,22 +88,23 @@ def divider(slide, x, y, w, color=None):
 # cada consequência aponta a resposta do Oria Digital: o problema já anuncia a solução
 s3 = S(3)
 for sid in (5, 11, 17, 23):
-    by_id(s3, sid).height = Inches(3.62)          # card 2,00 -> 5,62
+    by_id(s3, sid).height = Inches(3.92)          # card 2,00 -> 5,92 (o texto do card Tempo tem 3 linhas)
 for sid in (10, 16, 22, 28):
     by_id(s3, sid).height = Inches(0.60)          # corpo: 2 linhas de 15 pt
 for sid in (29, 30):
-    by_id(s3, sid).top = Inches(5.85)             # faixa "Quem sente" desce junto (vão 0,23")
+    by_id(s3, sid).top = Inches(6.12)             # faixa "Quem sente" desce junto (vão 0,20")
 SOLUCOES = [
-    (0.90, "Extração automática", False),
-    (3.98, "Conferência entre fontes", False),
-    (7.06, "Prova de cada número", False),
-    (10.14, "Cada linha vs. mercado", True),
+    # textos do dono (18/11): a dor resolvida, não o mecanismo
+    (0.90, "Time focado na interpretação dos dados, não na captação e organização", False),
+    (3.98, "Erro achado antes do credor", False),
+    (7.06, "Rastreabilidade de cada valor", False),
+    (10.14, "Empresa vs. seus benchmarks", True),
 ]
 for x, txt, dark in SOLUCOES:
-    divider(s3, x, 4.78, 2.28, color="34465E" if dark else None)
-    set_text(clone(s3, LABEL, x, 4.92, 2.28, 0.22, "rotulo-resposta"), "COMO RESOLVEMOS", size=10)
+    divider(s3, x, 4.72, 2.28, color="34465E" if dark else None)
+    set_text(clone(s3, LABEL, x, 4.85, 2.28, 0.22, "rotulo-resposta"), "COMO RESOLVEMOS", size=10)
     set_text(
-        clone(s3, BODY, x, 5.17, 2.28, 0.26, "resposta"),
+        clone(s3, BODY, x, 5.10, 2.28, 0.68, "resposta"),
         f"→{NBSP} {txt}", size=13, bold=True, color=WHITE if dark else NAVY,
     )
 log.append("S3: cada card ganhou 'COMO RESOLVEMOS' (problema -> resposta), com o divisor dos cards do S4")
@@ -120,22 +121,23 @@ log.append("S4: R$ 2,7 tri (agosto, relatório de 29/09) -> R$ 2,8 tri (setembro
 # cada etapa diz o que sai dela: o leitor vê a cadeia de entregas, não só verbos
 s5 = S(5)
 for sid in (8, 13, 18, 23, 28):
-    by_id(s5, sid).height = Inches(2.40)          # card 3,10 -> 5,50
+    by_id(s5, sid).height = Inches(2.62)          # card 3,10 -> 5,72 (textos de até 3 linhas)
 for sid in (9, 14, 19, 24, 29):
     by_id(s5, sid).height = Inches(1.15)
 for sid in (30, 31):
-    by_id(s5, sid).top = Inches(5.70)
+    by_id(s5, sid).top = Inches(5.90)
 RESULTADOS = [
-    (0.80, "Tudo em uma base única"),
-    (3.20, "Lista de divergências e desvios"),
-    (5.60, "Caixa e dívida em três cenários"),
-    (8.00, "Plano de corte e de renegociação"),
-    (10.40, "Excel em fórmula, dossiê e apresentação"),
+    # textos do dono (18/11): o que muda para o cliente em cada etapa
+    (0.80, "Maior confiabilidade nos dados"),
+    (3.20, "Nenhuma surpresa em cima da hora"),
+    (5.60, "Até onde o caixa aguenta"),
+    (8.00, "Sugestões estruturadas e bem embasadas"),
+    (10.40, "A prova que o banco precisava para renegociar"),
 ]
 for x, txt in RESULTADOS:
     divider(s5, x, 4.55, 1.90)
     set_text(clone(s5, LABEL, x, 4.66, 1.90, 0.22, "rotulo-resultado"), "RESULTADO", size=10)
-    set_text(clone(s5, BODY, x, 4.90, 1.90, 0.50, "resultado"), txt, size=13, bold=True, color=NAVY)
+    set_text(clone(s5, BODY, x, 4.90, 1.90, 0.72, "resultado"), txt, size=13, bold=True, color=NAVY)
 log.append("S5: cada etapa ganhou 'RESULTADO' (o que sai dela)")
 
 # ------------------------------------------------------------------ slide 6
@@ -189,13 +191,9 @@ def contar(slide):
     return c
 
 
-c12 = contar(S(12))  # contado dos selos do próprio slide: a fonte do painel é o slide
-painel(S(12), 0.60, 4.00, 5.98, 2.05, "ONDE OS BLOCOS 1 E 2 PESAM", c12, 6)
-c14 = contar(S(14))
-painel(S(14), 0.60, 4.50, 12.13, 1.85, "ONDE OS BLOCOS 5 E 6 PESAM", c14,
-       [s for s in S(14).shapes if s.has_text_frame and s.text_frame.text == ""][0].shape_id)
-log.append(f"S12: painel de impacto {c12}")
-log.append(f"S14: painel de impacto {c14}")
+# Painéis "Onde os blocos pesam" (S12/S14) REMOVIDOS por decisão do dono em 18/11: os anexos
+# voltam ao desenho original. A função painel() fica para referência; não é chamada.
+
 
 prs.save(sys.argv[2])
 print("\n".join(log))

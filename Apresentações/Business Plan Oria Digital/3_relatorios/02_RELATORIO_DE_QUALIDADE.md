@@ -12,6 +12,7 @@ Foram cinco rodadas de gerar → renderizar → inspecionar → criticar → cor
 | 2 | `rodada2.py` | Achados de 2 revisores independentes | Uma regressão minha no slide 7 ("no mesmo modelo" colidia com o texto de baixo) |
 | 3 | `rodada3.py` | Cards preenchidos e dado do BC | Painel em gráfico ilegível no slide 13, trocado por números grandes; respostas do slide 3 encostando no pé do card |
 | 4 | `rodada4.py` | Despesa de 15% para 10% | — |
+| 6 | `rodada6.py` | Revisão independente final + pedidos de 18/11 | Texto de 3 linhas do slide 3 encostando no pé do card (cards +0,3") |
 | 5 | `rodada5.py` | Mapa mental, remoção do slide 7 e acabamento | Elipses partindo nomes; grupos de análises fundidos (achado do 3º revisor); raio de canto e títulos dos pilares; depois, por pedido seu, 1 a 4 à esquerda, ramos preenchidos e 28 ramos específicos |
 
 ## 2. Testes e resultados
@@ -49,4 +50,4 @@ O revisor visual independente deu notas mais baixas (direção de arte 7 → 7,5
 
 1. **Não verifiquei no Microsoft PowerPoint, só no LibreOffice**, com Carlito no lugar da Calibri e as mesmas métricas. Os conectores curvos do mapa mental e os rótulos sem quebra do gráfico são os pontos para conferir no PowerPoint.
 2. **Os outros dados externos não foram conferidos neste ambiente:** OBRE, Serasa, KPMG e Anbima. Você confirmou que estão corretos.
-3. **Para reproduzir a versão final**, a partir de `0_original/`, rode em sequência: `editar.py` → `slide9_status.py` → `rodada2.py` → `rodada3.py` → `rodada4.py` → `rodada5.py`.
+3. **Para reproduzir a versão final**, a partir de `0_original/`, rode em sequência: `editar.py` → `slide9_status.py` → `rodada2.py` → `rodada3.py` → `rodada4.py` → `rodada5.py` → `rodada6.py`.
