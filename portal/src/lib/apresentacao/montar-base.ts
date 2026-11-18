@@ -8,7 +8,8 @@ import { formatarPeriodo, versoesVigentes, type DocumentoParaExport } from "../e
 import { fatorDeEscala, historicoParaCredito, type EntradaModeloInstitucional, type LinhaModelo } from "../modelo-institucional";
 import { estadoDoTextoPorCampo, linhaDosCampos, lerMapaDaDivida, medidaDoRotulo, type LinhaDoMapa } from "../mapa-da-divida";
 import type { CampoExtraido } from "../types";
-import { itensDoKitBasicoAtendidos, type ServicoDocumentoServeComo } from "../kit-basico";
+import type { ServicoDocumentoServeComo } from "../kit-basico";
+import { lerKitDoCaso, statusParaOExport, type ChamaRpc } from "../kit-do-caso";
 import { seriesPorLinha, serieDaLinha } from "../modelagem-linha";
 import { naturezaDoAno, type BaseCredito, type DocumentoDaBase } from "./base-credito";
 
@@ -111,13 +112,13 @@ export function informacaoDoKit(
 type Leitura<T> = { data: T[] | null; error: { message: string } | null };
 
 /**
- * A `informacao` do kit a partir do que a rota LEU. É a única porta: a rota não decide nada aqui.
- * Três estados, e nenhum vira "faltante" por omissão (regra 1):
+ * A `informacao` do kit a partir do que a rota LEU. É a única porta: a rota não decide nada aqui, e o
+ * estado de cada item vem de `lerKitDoCaso` (`fn_kit_do_caso`, a MESMA resposta das telas; sem a 0300
+ * no banco, a queda por `itensDoKitBasicoAtendidos`). Três respostas, e nenhuma vira "faltante" por omissão:
  *  - lista do kit não lida: `informacao` indefinida, `kitNaoConferido` falso (o slide diz "lista não lida");
- *  - lista lida mas serviço do banco lançou OU checklist com erro: `informacao` indefinida e
- *    `kitNaoConferido` verdadeiro. Checklist vazio por erro faria `recebido_nao_valido` sair como
- *    "recebido" (e a manchete "os N documentos chegaram com conteúdo");
- *  - tudo lido: a informação, como sempre.
+ *  - função com erro, zero linhas, serviço que lançou OU (na queda) checklist com erro: `informacao`
+ *    indefinida e `kitNaoConferido` verdadeiro. Sem isso o erro virava "não atendido" no book;
+ *  - tudo lido: a informação, com os estados novos (aguardando leitura, dispensado, lido sem dado).
  * `motivo` vai ao log da rota.
  */
 export async function lerInformacaoDoKit(e: {
@@ -125,17 +126,18 @@ export async function lerInformacaoDoKit(e: {
   checklist: Leitura<{ tipo_taxonomia: string; status: string }>;
   documentos: ReadonlyArray<{ id: string; tipo_taxonomia: string | null }>;
   servico: ServicoDocumentoServeComo;
+  rpc: ChamaRpc;
+  casoId: string;
 }): Promise<{ informacao?: NonNullable<BaseCredito["informacao"]>; kitNaoConferido: boolean; motivo?: string }> {
-  if (e.kit.error || !e.kit.data) return { kitNaoConferido: false, motivo: `kit básico não lido: ${e.kit.error?.message}` };
-  if (e.checklist.error) return { kitNaoConferido: true, motivo: `checklist não lido: ${e.checklist.error.message}` };
-  let atendidos: Set<string>;
-  try {
-    atendidos = await itensDoKitBasicoAtendidos(e.kit.data, e.documentos, e.servico);
-  } catch (error_) {
-    return { kitNaoConferido: true, motivo: `kit básico não conferido: ${error_ instanceof Error ? error_.message : String(error_)}` };
+  const r = await lerKitDoCaso(e);
+  if (r.tipo === "nao_lido") {
+    // `kit` sem dado = a lista nem foi lida; qualquer outra falha = lida, mas não conferida
+    return { kitNaoConferido: Boolean(!e.kit.error && e.kit.data), motivo: r.motivo };
   }
-  const semConteudo = new Set((e.checklist.data ?? []).filter((c) => c.status === "recebido_nao_valido").map((c) => c.tipo_taxonomia));
-  return { informacao: informacaoDoKit(e.kit.data, atendidos, semConteudo), kitNaoConferido: false };
+  return {
+    informacao: r.kit.itens.map((i) => ({ codigo: i.codigo, documento: i.documento, status: statusParaOExport(i.estado) })),
+    kitNaoConferido: false,
+  };
 }
 
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];

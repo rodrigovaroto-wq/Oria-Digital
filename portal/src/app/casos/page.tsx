@@ -3,8 +3,8 @@ import { abaDosMandatos, filtroDaFila, paginaDaUrl } from "@/lib/painel";
 import { Bloco } from "@/components/esqueleto";
 import { Revelar } from "@/components/revelar";
 import {
-  AvisosDoPainel, CorpoDoPainel, EsqueletoDaGrade, EsqueletoDosIndicadores, IndicadoresDoPainel,
-  ResumoDoPainel, saudacao,
+  AvisosDoPainel, CorpoDoPainel, EsqueletoDaGrade, EsqueletoDosIndicadores, EsqueletoDosRecentes, IndicadoresDoPainel,
+  RecentesDoPainel, ResumoDoPainel, saudacao,
 } from "./painel-blocos";
 
 // O PAINEL: a primeira tela do dia, e ela responde o que precisa de mim agora.
@@ -51,15 +51,17 @@ export default async function PainelPage({
           Senha atualizada. Você já está dentro; use a nova senha no próximo acesso.
         </p>
       )}
+      {/* A SAUDAÇÃO e a data, como no cabeçalho do CRM de referência. A data vem como o `toLocaleDateString` a
+          escreve (minúscula, "sexta-feira, 13 de novembro"): sem `capitalize`, que punha maiúscula em "De". */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-titulo text-[30px] leading-9 font-medium tracking-[-0.03em] text-tinta-900">{saudacao(agora)}</h1>
+          <h1 className="font-titulo text-[34px] leading-10 font-medium tracking-[-0.03em] text-tinta-900">{saudacao(agora)}</h1>
           {/* O veredito depende das pendências; a linha chega com elas. 20 px = a linha pronta. */}
           <Revelar rotulo="Carregando o resumo…" esqueleto={<Bloco className="mt-0.5 h-5 w-72" />}>
             <ResumoDoPainel />
           </Revelar>
         </div>
-        <p className="text-xs capitalize text-tinta-400">{dataDeHoje}</p>
+        <p className="text-sm texto-fundo">{dataDeHoje}</p>
       </div>
 
       {/* Avisos de leitura (falha, teto de paginação). Sem esqueleto de propósito: em operação normal
@@ -71,11 +73,18 @@ export default async function PainelPage({
         <AvisosDoPainel />
       </Suspense>
 
-      {/* Quatro indicadores executivos. A grade separa com `gap-px` sobre fundo cinza e não com
-          `divide-x`, que poria borda à esquerda do primeiro item de uma segunda fileira no celular. */}
-      <Revelar rotulo="Carregando os indicadores…" esqueleto={<EsqueletoDosIndicadores />}>
-        <IndicadoresDoPainel />
-      </Revelar>
+      {/* A LINHA DE CIMA: os quatro indicadores em grade 2×2 à esquerda e "O que chegou" (os 10 últimos documentos)
+          à direita, no lugar em que o CRM de referência põe o gráfico de receita. Sem série real não há gráfico: o
+          espaço é da lista. As duas colunas têm a mesma altura (`h-full` nos dois blocos), e cada uma chega
+          quando a SUA consulta responde. */}
+      <div className="grid items-stretch gap-5 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1fr)]">
+        <Revelar rotulo="Carregando os indicadores…" className="h-full min-w-0" esqueleto={<EsqueletoDosIndicadores />}>
+          <IndicadoresDoPainel />
+        </Revelar>
+        <Revelar rotulo="Carregando os documentos recentes…" className="h-full min-w-0" esqueleto={<EsqueletoDosRecentes />}>
+          <RecentesDoPainel />
+        </Revelar>
+      </div>
 
       <Suspense fallback={<EsqueletoDaGrade />}>
         <CorpoDoPainel estado={{ fila: filtro, verTudo, aba: abaDosMandatos(abaBruta), pagina: paginaDaUrl(paginaBruta) }} />

@@ -4,10 +4,12 @@
 // "pronto"; origem é outra pergunta): `lido` = veio do documento (info), `calculado` = o sistema
 // derivou de outros números (serie), `conferido` = uma PESSOA aceitou (tinta cheia, sem cor).
 //
-// `conferido` NÃO TEM DADO HOJE, e a tela diz isso em vez de omitir o slot: o estado "conferido" do item
-// do Kit nasce em `fn_kit_do_caso` (migration 0300, ainda não aplicada). Marcar algo como conferido
-// sem esse dado seria apresentar ausência como dado (regra 1). Quando a 0300 entrar, `disponivel`
-// vira `true` num lugar só e a legenda passa a mostrar o selo cheio.
+// `conferido` AINDA NÃO É SELO DE NENHUM NÚMERO, e a tela diz isso em vez de omitir o slot: o estado "conferido"
+// do item do Kit nasce em `fn_kit_do_caso` (migration 0300, aplicada em produção em 13/11/2026) e o Kit já o
+// conta ("N conferidos por pessoa"), mas a maioria dos itens fica em `extraido`: 1.443 de 1.648 versões têm
+// todas as linhas aceitas só pelo auto-aceite, que não é conferência. Marcar um número como conferido por pessoa
+// sem essa conferência seria apresentar ausência como dado (regra 1). Quando o selo passar a ter número que o
+// carregue, `disponivel` vira `true` num lugar só e a legenda passa a mostrar o selo cheio.
 export type OrigemDoNumero = "lido" | "calculado" | "conferido";
 
 export const ORIGENS: Record<OrigemDoNumero, {

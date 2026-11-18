@@ -28,7 +28,7 @@ export function AbasDaAdministracao() {
                 className={`-mb-px flex items-center whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${
                   atual
                     ? "border-acento-600 font-semibold text-tinta-900"
-                    : "border-transparent text-tinta-500 hover:border-tinta-300 hover:text-tinta-900"
+                    : "border-transparent texto-fundo hover:border-tinta-300 hover:text-tinta-900"
                 }`}
               >
                 {a.rotulo}

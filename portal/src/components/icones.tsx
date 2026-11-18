@@ -103,6 +103,12 @@ export const IconeCheck = (p: Props) => (
   </Base>
 );
 
+export const IconeSetaCanto = (p: Props) => (
+  <Base {...p}>
+    <path d="M7.5 16.5 16.5 7.5M9 7.5h7.5V15" />
+  </Base>
+);
+
 export const IconeMais3Pontos = (p: Props) => (
   <Base {...p}>
     <circle cx="5.5" cy="12" r="1.1" fill="currentColor" />

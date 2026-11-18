@@ -12,17 +12,17 @@ import { BuscaGlobal } from "@/components/busca-global";
 import { MenuConta } from "@/components/menu-conta";
 import { Trilha } from "@/components/trilha";
 
-// A MOLDURA DE TODAS AS TELAS AUTENTICADAS, no desenho "vidro" (28/10/2026).
+// A MOLDURA DE TODAS AS TELAS AUTENTICADAS: A JANELA DE VIDRO (13/11/2026, redesenho etapa 1).
 //
-// UM FUNDO, CARTÕES FLUTUANTES (13/11/2026): a tela inteira tem UM só fundo, o mármore (`fundo-marmore`,
-// globals.css), e nada tem fundo próprio por trás do conteúdo: a barra lateral é um cartão fosco curto e
-// `sticky`, a barra de topo não tem fundo (rola com a página: um fundo seria necessário para ela ficar presa
-// sobre o conteúdo, e o pedido foi não ter), e cada bloco da página é um `carta` fosco, com 16 a 24px de
-// espaço entre todos. No celular a barra inferior fixa substitui a lateral.
+// UM FUNDO, UMA JANELA: a tela inteira tem UM só fundo (`fundo-vidro`, globals.css: estilhaços de vidro sobre
+// quase-preto no escuro, pérola no claro, feitos em CSS e SVG nossos), e o app inteiro mora numa janela de vidro
+// arredondada (`janela-vidro`, 28px) com 60px de margem em 1280px ou mais e tela cheia no celular. Dentro dela:
+// o trilho de ícones à esquerda (que expande), o cabeçalho (onde estou, busca em pílula, avisos, discrição, tema,
+// conta) e o conteúdo, onde cada bloco é um `carta` de vidro. A janela tem a altura do conteúdo e a PÁGINA rola
+// (ver o comentário em globals.css). No celular a barra inferior fixa substitui o trilho.
 //
-// A largura útil segue `max-w-[75rem]`: as telas são TABELAS de oito colunas, e 1024px obrigava a rolar na
-// horizontal. O e-mail e o "Sair" ficam no menu de conta; o princípio "nada é fato até alguém aceitar" mora
-// no login, uma vez, e não num rodapé fixo em toda tela.
+// A largura útil segue `max-w-[78rem]`: as telas são TABELAS de oito colunas. O e-mail e o "Sair" ficam no menu de
+// conta; o princípio "nada é fato até alguém aceitar" mora no login, uma vez, e não num rodapé fixo em toda tela.
 export default async function CasosLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   // O PAPEL, lido UMA vez por requisição (`lerPermissoes` é memoizado: layout, página e rotas filhas
@@ -53,42 +53,46 @@ export default async function CasosLayout({ children }: { children: React.ReactN
   const semPapel = perm.semPapel;
 
   return (
-    // `fundo-marmore`: o fundo único da tela inteira (globals.css); barra lateral e blocos flutuam sobre ele.
-    <div className="fundo-marmore flex min-h-screen">
-      <BarraLateral
-        mandatos={mandatos}
-        podeCriar={perm.criarMandato.pode && !semPapel}
-        motivoSemCriar={semPapel ? null : perm.criarMandato.motivo}
-        vazioDa={textoDeRecentesVazio(perm.papel, Boolean(mandatosRes.error))}
-        mostrarAdministracao={perm.papel === "socio" || !perm.conferido}
-      />
-      {/* Abaixo de 640px a barra inferior (fixa: 4rem de altura + o respiro de baixo) cobriria o fim da
-            página: o padding inferior reserva exatamente o espaço dela. */}
-      <div className="flex min-w-0 flex-1 flex-col pb-[calc(var(--altura-barra-inferior)+0.75rem)] sm:pb-0">
-        <header className="flex w-full items-center justify-between gap-4 px-4 py-3 sm:px-6">
-          <Trilha nomes={nomes} />
-          <div className="flex shrink-0 items-center gap-1">
-            {!semPapel && <BuscaGlobal />}
-            {!semPapel && <AvisosDeProcessamento />}
-            <BotaoDiscricao />
-            <BotaoTema />
-            <MenuConta
-              email={email}
-              papel={perm.conferido ? (perm.papel ? ROTULO_DO_PAPEL[perm.papel] : "sem papel") : null}
-              sair={logout}
-            />
+    // `fundo-vidro`: o fundo único da tela inteira; a janela de vidro flutua sobre ele (globals.css).
+    <div className="fundo-vidro min-h-screen">
+      <div className="moldura-janela">
+        <div className="janela-vidro">
+          <BarraLateral
+            mandatos={mandatos}
+            podeCriar={perm.criarMandato.pode && !semPapel}
+            motivoSemCriar={semPapel ? null : perm.criarMandato.motivo}
+            vazioDa={textoDeRecentesVazio(perm.papel, Boolean(mandatosRes.error))}
+            mostrarAdministracao={perm.papel === "socio" || !perm.conferido}
+          />
+          {/* Abaixo de 640px a barra inferior (fixa: 4rem de altura + o respiro de baixo) cobriria o fim da
+                página: o padding inferior reserva exatamente o espaço dela. */}
+          <div className="flex min-w-0 flex-1 flex-col pb-[calc(var(--altura-barra-inferior)+0.75rem)] sm:pb-0">
+            <header className="flex w-full items-center justify-between gap-4 px-4 py-4 sm:px-8 sm:py-5">
+              <Trilha nomes={nomes} />
+              <div className="flex shrink-0 items-center gap-1">
+                {!semPapel && <BuscaGlobal />}
+                {!semPapel && <AvisosDeProcessamento />}
+                <BotaoDiscricao />
+                <BotaoTema />
+                <MenuConta
+                  email={email}
+                  papel={perm.conferido ? (perm.papel ? ROTULO_DO_PAPEL[perm.papel] : "sem papel") : null}
+                  sair={logout}
+                />
+              </div>
+            </header>
+            <main className="mx-auto w-full max-w-[78rem] flex-1 px-4 pb-8 pt-2 sm:px-8 sm:pb-10">
+              {semPapel ? (
+                <AcessoNaoLiberado email={email} />
+              ) : (
+                <>
+                  {!perm.conferido && <div className="mb-6"><AvisoDeAcessoNaoConferido permissoes={perm} /></div>}
+                  {children}
+                </>
+              )}
+            </main>
           </div>
-        </header>
-        <main className="mx-auto w-full max-w-[75rem] flex-1 px-4 py-6 sm:px-6 sm:py-8">
-          {semPapel ? (
-            <AcessoNaoLiberado email={email} />
-          ) : (
-            <>
-              {!perm.conferido && <div className="mb-6"><AvisoDeAcessoNaoConferido permissoes={perm} /></div>}
-              {children}
-            </>
-          )}
-        </main>
+        </div>
       </div>
     </div>
   );

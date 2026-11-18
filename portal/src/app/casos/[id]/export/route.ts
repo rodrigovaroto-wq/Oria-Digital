@@ -18,7 +18,7 @@ import {
 // outro PR que mexa nas listas de import desta rota não colide com estas linhas.
 import { entradaDoModeloDoWorkbook } from "@/lib/export";
 import { correnteDoBalancete, lerInformacaoDoKit, linhasDoAnoCorrenteDe, montarBaseCredito, perimetroDoCaso } from "@/lib/apresentacao/montar-base";
-import { servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
+import { chamaRpc, servicoDocumentoServeComo } from "@/lib/supabase/servico-serve-como";
 import { projecaoDoModelo } from "@/lib/apresentacao/projecao";
 import { construirDeckCredito, SemDadoParaApresentar } from "@/lib/apresentacao/deck-credito";
 
@@ -598,12 +598,14 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       supabase.from("entidade").select("razao_social, cnpj, papel_no_grupo").eq("caso_id", id),
     ]);
     // O MESMO serviço das telas (lança quando o banco falha). Toda a decisão "lido / não conferido /
-    // conferido" mora em `lerInformacaoDoKit` (pura, com invariantes em verificar-kit-basico): checklist
-    // com erro ou serviço que lança deixam o slide dizendo que não conferiu, nunca "nada faltou".
+    // conferido" mora em `lerInformacaoDoKit` (que lê `fn_kit_do_caso`, com invariantes em verificar-kit-basico):
+    // função com erro, zero linhas, checklist com erro (na queda) ou serviço que lança deixam o slide dizendo
+    // que não conferiu, nunca "nada faltou".
     const kitLeitura = await lerInformacaoDoKit({
       kit: kitRes, checklist: checkRes,
       documentos: documentos.map((d) => ({ id: d.id, tipo_taxonomia: d.tipo_taxonomia })),
       servico: servicoDocumentoServeComo(supabase),
+      rpc: chamaRpc(supabase), casoId: id,
     });
     if (kitLeitura.motivo) console.error(`[export] ${kitLeitura.motivo}`, { caso_id: id });
     const { informacao, kitNaoConferido } = kitLeitura;

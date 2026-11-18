@@ -379,8 +379,9 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   {
     // IX.2 — O QUE CHEGOU E O QUE FALTOU dos documentos obrigatórios, pela regra do kit básico.
     const info = base.informacao;
-    const recebidos = (info ?? []).filter((d) => d.status === "recebido").length;
-    const faltam = (info ?? []).filter((d) => d.status !== "recebido");
+    const chegou = (d: { status: string }) => d.status === "recebido" || d.status === "lido_sem_dado";
+    const recebidos = (info ?? []).filter(chegou).length;
+    const faltam = (info ?? []).filter((d) => !chegou(d));
     let manchete: string;
     if (!info) {
       manchete = base.kitNaoConferido
@@ -394,8 +395,12 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
     const s = slide("IX.2 · O que chegou e o que faltou", manchete,
     "Fonte: kit básico do mandato e documentos recebidos no portal.");
     if (info) {
-      const rot = { recebido: "recebido", sem_conteudo: "chegou sem conteúdo extraído", faltante: "não recebido" } as const;
-      const ordenada = [...faltam, ...info.filter((d) => d.status === "recebido")];
+      const rot = {
+        recebido: "recebido", sem_conteudo: "chegou sem conteúdo extraído", faltante: "não recebido",
+        aguardando: "recebido, leitura em andamento", dispensado: "seguiu sem o documento (ressalva)",
+        lido_sem_dado: "lido, sem dado financeiro por natureza",
+      } as const;
+      const ordenada = [...faltam, ...info.filter(chegou)];
       const meio = Math.ceil(Math.min(ordenada.length, 28) / 2);
       campoValor(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, ordenada.slice(0, Math.min(meio, 14)).map((d) => [encurtar(d.documento, 34), rot[d.status]]), { colValor: 215 });
       campoValor(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, ordenada.slice(meio, Math.min(meio * 2, 28)).map((d) => [encurtar(d.documento, 34), rot[d.status]]), { colValor: 215 });
