@@ -340,6 +340,8 @@ psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fixture_book_vertentes.sql
 echo "== fixture (book CANASTRA, extração fiel dos documentos DIFÍCEIS)"
 psql -q -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fixture_book_canastra.sql
 
+
+
 # O ACEITE FINANCEIRO DA F0 (`cobertura-do-lote.sql`) RODA AQUI — e antes de 24/09/2026 não rodava
 # em lugar nenhum. É consulta manual contra produção (CLAUDE.md, bloco "contra PRODUÇÃO"), mas nada
 # a executava nem contra o schema do banco de teste: uma coluna renomeada numa migration só seria
@@ -1031,6 +1033,14 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_balanco_que_chegava_depois_d
 
 echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o inteiro >= 1 grava, o inválido vira nulo sem abortar o lote, sem a chave grava como antes)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0302 — a linha que não tinha identidade (fato_financeiro é uma VIEW security_invoker sobre o resolver: o fato escrito à mão por cenário, a bijeção, a pendência só da extração nova, a segurança sob o default de privilégio do Supabase, a sonda não está cega)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0302 — as corridas, com duas sessões reais (dblink): extração x cadastro de entidade, update de documento não comitado, duas extrações do mesmo documento"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro_corridas.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo "== 0271 — o quadro de imobilizado que a IA gravava como balanço (tipo COMPOSICAO_IMOBILIZADO: existe, não entra nas checagens de balanço)"
