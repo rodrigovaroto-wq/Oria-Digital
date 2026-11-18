@@ -211,6 +211,11 @@ declare v_exec bigint := (select last_value from pg_temp._execucoes_ffc); v_falh
 begin
   if current_setting('ffc.sem_dblink', true) = '1' then
     raise notice 'fato_financeiro_corridas: NÃO EXECUTADO (sem dblink): 0 asserts executados — isto NÃO é um teste verde';
+    -- Estágio que não rodou não pode parecer estágio verde (regra 7; revisão de 18/11/2026): sem dblink o run.sh
+    -- terminava em "TODOS OS TESTES PASSARAM" com as corridas R1–R4 sem prova. Só passa adiante com permissão explícita.
+    if coalesce(current_setting('ffc.permitir_sem_dblink', true), '') <> 'on' and coalesce(current_setting('ff.medindo', true), '') <> 'on' then
+      raise exception 'FALHOU: as corridas da 0302 NÃO rodaram (sem dblink). Para aceitar conscientemente: PGOPTIONS=''-c ffc.permitir_sem_dblink=on''';
+    end if;
     return;
   end if;
   select case when is_called then last_value else 0 end into v_falhas from pg_temp._falhas_ffc;

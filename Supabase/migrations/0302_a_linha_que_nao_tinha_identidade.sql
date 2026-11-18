@@ -622,6 +622,11 @@ create or replace view instalacao_sonda_fato_financeiro_tipos as
 comment on view instalacao_sonda_fato_financeiro_tipos is
   'Sonda da 0302: uma linha = fn_tipo_gera_fato dá a resposta certa para um dos 10 tipos (BALANCO, BALANCETE, COMBINADO, DRE, FLUXO_CAIXA, DVA, DMPL, DF_AUDITADA geram; RAZAO e NOTAS_EXPL não). Menos de 10: um tipo de demonstração perdeu o fato, ou o que é só evidência virou fato.';
 
+-- REVOKE ANTES DO GRANT (revisão independente de 18/11/2026): com o default de privilégio do Supabase ligado para o dono
+-- que aplica, as 6 views nasciam com ALL para anon, authenticated e service_role, e a sonda bloqueante `anon_sem_views`
+-- ficava vermelha. Medido: sem este revoke, o assert h1 = h2 de fato_financeiro.test.sql reprova (1 assert).
+revoke all on instalacao_sonda_fato_financeiro_view_invoker, instalacao_sonda_fato_financeiro_so_le, instalacao_sonda_fato_financeiro_recentes, instalacao_sonda_fato_financeiro_cadeia,
+              instalacao_sonda_fato_financeiro_pendencia_tipo, instalacao_sonda_fato_financeiro_tipos from public, anon, authenticated, service_role;
 grant select on instalacao_sonda_fato_financeiro_view_invoker, instalacao_sonda_fato_financeiro_so_le, instalacao_sonda_fato_financeiro_recentes, instalacao_sonda_fato_financeiro_cadeia,
                 instalacao_sonda_fato_financeiro_pendencia_tipo, instalacao_sonda_fato_financeiro_tipos to authenticated, service_role;  -- service_role: grant_views_service_role (0214)
 

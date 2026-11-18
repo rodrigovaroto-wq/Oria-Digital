@@ -30,7 +30,7 @@ create or replace function pg_temp.acl_txt(p_acl aclitem[]) returns text languag
 $f$;
 create or replace function pg_temp.assinatura() returns text language sql as $f$
   select md5(string_agg(x, E'\n' order by x)) from (
-    select 'view|' || pg_get_viewdef(c.oid) || '|' || pg_temp.acl_txt(c.relacl) || '|' || coalesce(c.reloptions::text, '-') as x from pg_class c where c.oid = 'public.fato_financeiro'::regclass
+    select 'view|' || pg_get_viewdef(c.oid) || '|' || pg_temp.acl_txt(c.relacl) || '|' || coalesce(c.reloptions::text, '-') as x from pg_class c where c.relnamespace = 'public'::regnamespace and c.relkind = 'v' and (c.relname = 'fato_financeiro' or c.relname like 'instalacao\_sonda\_fato\_financeiro\_%')  -- as 6 views da sonda também: o default de privilégio do Supabase as deixava com ALL para o anon (revisão de 18/11)
     union all
     select 'fn|' || p.oid::regprocedure::text || '|' || pg_get_functiondef(p.oid) || '|' || pg_temp.acl_txt(p.proacl)
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
