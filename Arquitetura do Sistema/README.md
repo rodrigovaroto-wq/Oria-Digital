@@ -1,94 +1,99 @@
-# Oria — Sistema de Intake e Prontidão de Dados (Workflow Operacional)
+# Arquitetura do Sistema — índice da documentação
 
-Base de arquitetura e decisão do sistema interno que transforma as submissões documentais
-dos clientes da Oria em uma **base estruturada, completa, formalmente válida, reconciliada e
-auditável**, com um portão explícito de go/no-go para análise.
+Esta pasta guarda o **porquê** do sistema: a visão, as decisões, a especificação de cada
+estágio, o plano e as auditorias. O **como** está no código e nos READMEs de cada camada
+([`Supabase/`](../Supabase/README.md), [`N8N/`](../N8N/README.md), [`portal/`](../portal/README.md),
+[`Leitor/`](../Leitor/README.md)). A visão geral do repositório está no [`README.md`](../README.md) da raiz.
 
-> Isto é documentação de arquitetura e decisão. **Não há código nesta etapa.** A taxonomia
-> canônica e o schema físico são registrados quando fechados com o time.
+**Por onde começar:**
+1. [`Como o sistema funciona`](3%20Estado%20e%20Execução/COMO_O_SISTEMA_FUNCIONA.md): o fluxo inteiro em linguagem simples.
+2. [`00 — Visão e Escopo`](1%20Visão%20e%20Doutrina/00_VISAO_E_ESCOPO.md) e [`01 — Doutrina de Autonomia`](1%20Visão%20e%20Doutrina/01_DOUTRINA_DE_AUTONOMIA.md): o problema e a regra que governa a IA.
+3. [`PLANO_MVP_2026-11.md`](3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md): o plano em vigor.
 
-## Decisões travadas
+Os documentos numerados de `00` a `14` são a série original da especificação. Eles estão
+distribuídos pelas pastas conforme o tipo; o número continua sendo a forma de citá-los.
 
-1. **Produto inicial: Reestruturação** (dívida, mapa de dívida, fluxo de caixa,
-   mútuos/intragrupo). M&A vem depois.
-2. **Foco inicial: motor interno** (triagem/completude/pendências/aprovação). Portal do
-   cliente vem depois.
-3. **O MVP é o workflow COMPLETO.** Constrói-se todo o fluxo ponta a ponta na primeira
-   versão; depois calibram-se as partes mal ajustadas. Não há corte de estágios do core nem
-   entrega faseada por feature.
+---
 
-## Doutrina de Autonomia (em um parágrafo)
+## 1 Visão e Doutrina
 
-O workflow inteiro é construído de uma vez, mas a segurança não vem de cortar estágios — vem
-de cada estágio nascer no seu **nível de autonomia mínimo seguro** (N0 sombra → N1 sugestão →
-N2 auto-clear → N3 autônomo) e só subir com dado de calibração. O determinístico já nasce
-autônomo; **tudo interpretativo nasce em sombra ou sugestão, com humano obrigatório no loop**.
-"Ajustar as partes mal calibradas" significa **subir o dial de cada estágio**, e só quando a
-concordância humano-máquina medida contra o golden set provar que pode. O sistema é completo
-no dia 1, mas **não confia em si mesmo até medir que pode**. Ver
-[`01_DOUTRINA_DE_AUTONOMIA.md`](01_DOUTRINA_DE_AUTONOMIA.md).
-
-## Prompts e memória do agente
-
-O fluxo de trabalho assistido por IA deste repositório está em
-[`prompts/README.md`](prompts/README.md) (os prompts coláveis, nenhum deles guardando estado),
-no `CLAUDE.md` da raiz (carregado em toda sessão) e em `.claude/` (memória, especialistas e
-hooks). O `PROMPT_CONTINUACAO.md` foi aposentado — ele explica por quê.
-
-## Índice
+O que o sistema é, o que ele não é, e as decisões que não se reabrem.
 
 | Documento | Conteúdo |
 |---|---|
-| [`00_VISAO_E_ESCOPO.md`](00_VISAO_E_ESCOPO.md) | Leitura crítica, redefinição madura, escopo negativo |
-| [`01_DOUTRINA_DE_AUTONOMIA.md`](01_DOUTRINA_DE_AUTONOMIA.md) | Níveis de autonomia, tetos por estágio, fail-safe |
-| [`02_ARQUITETURA_FUNCIONAL.md`](02_ARQUITETURA_FUNCIONAL.md) | Estágios, portões, transversais, stack |
-| [`03_MVP_E_ROADMAP.md`](03_MVP_E_ROADMAP.md) | MVP como workflow completo; roadmap construir→calibrar |
-| [`04_RECONCILIACAO.md`](04_RECONCILIACAO.md) | Classes A/B/C, materialidade, o que é automático |
-| [`05_CLASSIFICACAO_CONTABIL.md`](05_CLASSIFICACAO_CONTABIL.md) | Taxonomia fechada, sugestão, override, anti-ancoragem |
-| [`06_HUMAN_IN_THE_LOOP.md`](06_HUMAN_IN_THE_LOOP.md) | Checkpoints, papéis, calibração, auditoria |
-| [`07_STATUS_E_PENDENCIAS.md`](07_STATUS_E_PENDENCIAS.md) | Máquina de status, severidades, limites do portão |
-| [`08_RISCOS.md`](08_RISCOS.md) | Riscos prováveis e mitigações |
-| [`09_PLANO_DE_EXECUCAO.md`](09_PLANO_DE_EXECUCAO.md) | Alterações, plano executável por fase, próximos passos |
-| [`10_DADOS_RETENCAO_E_LGPD.md`](10_DADOS_RETENCAO_E_LGPD.md) | Onde o dado do cliente mora, retenção, recuperação e quem vê o quê |
+| [`00_VISAO_E_ESCOPO.md`](1%20Visão%20e%20Doutrina/00_VISAO_E_ESCOPO.md) | o problema, a redefinição do escopo e o escopo negativo |
+| [`01_DOUTRINA_DE_AUTONOMIA.md`](1%20Visão%20e%20Doutrina/01_DOUTRINA_DE_AUTONOMIA.md) | os níveis N0 (sombra) a N3 (autônomo); cada estágio só sobe com concordância medida |
+| [`02_ARQUITETURA_FUNCIONAL.md`](1%20Visão%20e%20Doutrina/02_ARQUITETURA_FUNCIONAL.md) | estágios, portões, componentes transversais e as travas de stack |
+| [`03_MVP_E_ROADMAP.md`](1%20Visão%20e%20Doutrina/03_MVP_E_ROADMAP.md) | o MVP como workflow completo; o roadmap construir → calibrar |
+| [`04_ADR_01_EVIDENCIA_IMUTAVEL.md`](1%20Visão%20e%20Doutrina/04_ADR_01_EVIDENCIA_IMUTAVEL.md) | ADR-01: o que foi extraído nunca muda; o canônico é construído acima |
+| [`05_ADR_02_ARITMETICA_NO_MOTOR.md`](1%20Visão%20e%20Doutrina/05_ADR_02_ARITMETICA_NO_MOTOR.md) | ADR-02: toda conta que chega ao cliente é feita no banco, não na tela nem no Excel |
 
-Fora da série numerada: [`PRONTIDAO_POR_ESTAGIO.md`](PRONTIDAO_POR_ESTAGIO.md) mede o projeto
-contra o objetivo do `00` — estágio por estágio (ingestão, tratamento, 1º export, modelagem, 2º
-export), com o que não está 100% e o que já foi fechado. Declara no fim o que NÃO cobriu.
+## 2 Especificação
 
-[`MAPA_DE_EXECUCAO.md`](MAPA_DE_EXECUCAO.md) é **o que falta até o projeto
-fechar**, em ordem, com o critério de pronto de cada bloco e a distinção entre o que é pendência, o
-que é decisão do dono e o que é espera por dado de terceiro. Os três documentos de estado respondem
-perguntas diferentes: `ESTADO.md` diz onde estamos, `HANDOFF.md` diz como chegamos, e este diz para
-onde vamos.
+Como cada parte deve se comportar.
 
-[`AUDITORIA_PROFUNDA_2026-09-15.md`](4%20An%C3%A1lises%20e%20Auditorias/AUDITORIA_PROFUNDA_2026-09-15.md)
-é a auditoria de estado com a bateria COMPLETA do CI executada antes de qualquer conclusão (n8n 543,
-banco 1.272 asserts, export 721, e2e 46, 25 variações — todos verdes). Ela achou o que portão verde
-não alcança: o repositório está na `0174` e produção na `0157`, o n8n publicado é de 02/09, e 27 dos
-36 tipos de documento são ingeridos sem que nada confira se o conteúdo chegou. Declara no fim o que
-NÃO cobriu.
+| Documento | Conteúdo |
+|---|---|
+| [`04_RECONCILIACAO.md`](2%20Especificação/04_RECONCILIACAO.md) | conciliação cruzada: classes A/B/C, materialidade, o que é automático |
+| [`05_CLASSIFICACAO_CONTABIL.md`](2%20Especificação/05_CLASSIFICACAO_CONTABIL.md) | taxonomia fechada, sugestão, override, anti-ancoragem |
+| [`06_HUMAN_IN_THE_LOOP.md`](2%20Especificação/06_HUMAN_IN_THE_LOOP.md) | pontos de revisão humana, papéis, calibração e auditoria |
+| [`07_STATUS_E_PENDENCIAS.md`](2%20Especificação/07_STATUS_E_PENDENCIAS.md) | máquina de status do mandato, severidades e limites do portão |
+| [`10_DADOS_RETENCAO_E_LGPD.md`](2%20Especificação/10_DADOS_RETENCAO_E_LGPD.md) | onde o dado do cliente mora, retenção, recuperação e quem vê o quê |
+| [`11_ANALISE_DE_CREDITO_ASSESSORIA.md`](2%20Especificação/11_ANALISE_DE_CREDITO_ASSESSORIA.md) | análise de crédito pela ótica da assessoria, etapas 1 a 4 |
+| [`12_FONTES_OFICIAIS_E_CAPTACAO.md`](2%20Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md) | SPED, eSocial, CNAB e a captação automática (é a especificação do [`Leitor/`](../Leitor/)) |
+| [`13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md`](2%20Especificação/13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md) | parceiros de dados e o momento pré-mandato; anexos em [`13_anexos/`](2%20Especificação/13_anexos/) |
+| [`14_COMPARATIVOS_SETORIAIS.md`](2%20Especificação/14_COMPARATIVOS_SETORIAIS.md) | análise comparativa: onde cortar custo e onde crescer receita |
+| [`f0/`](2%20Especificação/f0/README.md) | o kit da fundação: baseline, build-vs-buy, taxonomia, schema conceitual, golden set e especificação do output |
 
-[`ARQUITETURA_ALVO_E_ROADMAP.md`](3%20Estado%20e%20Execu%C3%A7%C3%A3o/ARQUITETURA_ALVO_E_ROADMAP.md)
-é o desenho derivado dela: a decisão KEEP/REFACTOR/REBUILD/EXTEND/DEPRECATE/REMOVE de cada
-componente existente, as camadas, o grafo de dependências, os cinco portões (DATA, MODEL, STRATEGY,
-CREDITOR, PRESENTATION) com critério objetivo, as 17 fases, o MVP, o `DO NOT BUILD YET` e o plano de
-execução da F0. **Ele evolui o sistema; não propõe um projeto novo.**
+## 3 Estado e Execução
 
-[`ACEITE.md`](ACEITE.md) é o aceite de um `.xlsx` exportado — 10 itens que
-exigem o Excel de verdade (o arquivo abre, o gráfico desenha, o dropdown reprojeta), com o resto
-respondido pelo comando `portal/scripts/auditar-xlsx.mts`.
+Para onde o projeto vai e como chegar lá. O estado do dia está no [`ESTADO.md`](../ESTADO.md), na raiz.
 
-[`referencia/`](referencia/) guarda os documentos que o **dono** subiu como
-fonte — o `onboarding.pdf` (67 páginas, citado por seção em `HANDOFF.md` e `Supabase/README.md`) e o
-`modelo-base.xlsx` (a planilha que `portal/src/lib/modelo-institucional.ts` reconstrói). Os dois
-estavam soltos na raiz e sem extensão.
+| Documento | Conteúdo |
+|---|---|
+| [`PLANO_MVP_2026-11.md`](3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md) | **o plano em vigor**: o mínimo para rodar o primeiro mandato real (aprovado em 11/11/2026) |
+| [`PLANO_DE_EXECUCAO_2026-11.md`](3%20Estado%20e%20Execução/PLANO_DE_EXECUCAO_2026-11.md) | o mapa da aplicação completa, etapa por etapa |
+| [`ARQUITETURA_ALVO_E_ROADMAP.md`](3%20Estado%20e%20Execução/ARQUITETURA_ALVO_E_ROADMAP.md) | a arquitetura-alvo: decisão por componente, camadas, portões e fases |
+| [`COMO_O_SISTEMA_FUNCIONA.md`](3%20Estado%20e%20Execução/COMO_O_SISTEMA_FUNCIONA.md) | o fluxo inteiro em linguagem simples |
+| [`MAPA_DE_EXECUCAO.md`](3%20Estado%20e%20Execução/MAPA_DE_EXECUCAO.md) | quadro de blocos com critério de pronto (o corpo é de setembro; as linhas novas apontam para os planos acima) |
+| [`PRONTIDAO_POR_ESTAGIO.md`](3%20Estado%20e%20Execução/PRONTIDAO_POR_ESTAGIO.md) | o projeto medido contra o objetivo, estágio por estágio |
+| [`PLANO_LINHA_A_LINHA.md`](3%20Estado%20e%20Execução/PLANO_LINHA_A_LINHA.md) | plano para nenhuma linha faltar nem ser inventada na extração |
+| [`DESENHO_QUATRO_FUNCOES_2026-11.md`](3%20Estado%20e%20Execução/DESENHO_QUATRO_FUNCOES_2026-11.md) | desenho técnico das quatro funções aprovadas em novembro |
+| [`DESENHO_LEITOR_TRANSACIONAL.md`](3%20Estado%20e%20Execução/DESENHO_LEITOR_TRANSACIONAL.md) | desenho do leitor transacional por código |
+| [`DESENHO_P3_ROTEAR_POR_CASO_ID.md`](3%20Estado%20e%20Execução/DESENHO_P3_ROTEAR_POR_CASO_ID.md) | o envio roteado pelo `caso_id` |
+| [`LINHA_DE_BASE_P4.md`](3%20Estado%20e%20Execução/LINHA_DE_BASE_P4.md) | a linha de base da leitura por IA (07/11/2026) |
 
-## Stack (referência)
+## 4 Análises e Auditorias
 
-Supabase (Postgres + Storage + Auth + Realtime — fonte da verdade do estado), N8N
-(orquestração stateless), Vercel (portal interno + fila de revisão + painel de autonomia),
-Claude Code (apoio à construção), Obsidian (conhecimento e espelho legível da taxonomia).
+Medições do sistema real, cada uma datada.
 
-Fundamento reutilizado: o projeto `clipping-news` já prova esta stack (Supabase
-Postgres+pgvector, N8N 2.27.4, split determinístico-vs-LLM, thresholds calibrados depois com
-dados reais). Pegadinhas herdadas em `clipping-news/docs/DECISOES_E_APRENDIZADOS.md`.
+| Documento | Conteúdo |
+|---|---|
+| [`08_RISCOS.md`](4%20Análises%20e%20Auditorias/08_RISCOS.md) | riscos e falhas prováveis, com mitigação |
+| [`AUDITORIA_PROFUNDA_2026-09-15.md`](4%20Análises%20e%20Auditorias/AUDITORIA_PROFUNDA_2026-09-15.md) | auditoria completa com o CI inteiro rodado antes de concluir; deu origem à arquitetura-alvo |
+| [`DIAGNOSTICO_SISTEMA_2026-08-11.md`](4%20Análises%20e%20Auditorias/DIAGNOSTICO_SISTEMA_2026-08-11.md) | diagnóstico de agosto |
+| [`VISTORIA_P2.md`](4%20Análises%20e%20Auditorias/VISTORIA_P2.md) | o portal por papel (quem vê e altera o quê), medido em produção |
+| [`CUSTO_IA.md`](4%20Análises%20e%20Auditorias/CUSTO_IA.md) | para onde vai o custo de IA e como reduzir sem perder qualidade |
+| [`SONARCLOUD.md`](4%20Análises%20e%20Auditorias/SONARCLOUD.md) | como o SonarCloud está ligado, o que mede e o que não mede |
+
+## 5 Prompts
+
+Roteiros de trabalho para o desenvolvimento assistido por IA. Nenhum guarda estado. Ver o
+[`README`](5%20Prompts/README.md) da pasta.
+
+## 6 Referência
+
+Material de consulta: o [`modelo-base.xlsx`](6%20Referência/modelo-base.xlsx) que o export
+reconstrói e o seu [`mapa`](6%20Referência/MAPA_MODELO_BASE.md), a
+[`conformidade`](6%20Referência/CONFORMIDADE.md) do export com ele, o
+[`aceite`](6%20Referência/ACEITE.md) de um `.xlsx` exportado, o
+[`teste de restauração`](6%20Referência/RESTAURACAO.md) do backup, o
+[`passo a passo pós-rodada`](6%20Referência/POS_RODADA.md), o `onboarding.pdf` e a
+[`apresentação de crédito`](6%20Referência/apresentacao-credito/README.md). Ver o
+[`README`](6%20Referência/README.md) da pasta.
+
+## 7 Marca
+
+[`DESIGN.md`](7%20Marca/DESIGN.md) (design system do portal), [`PRODUCT.md`](7%20Marca/PRODUCT.md),
+[`REDESENHO_DO_PORTAL.md`](7%20Marca/REDESENHO_DO_PORTAL.md) e as pranchas e o benchmark do
+redesenho de novembro em [`redesenho-2026-11/`](7%20Marca/redesenho-2026-11/).

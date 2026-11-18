@@ -2,7 +2,7 @@
 
 ## Quando usar
 
-Primeira mensagem de uma sessão nova. Substitui o `Arquitetura do Sistema/5 Prompts/PROMPT_CONTINUACAO.md` antigo, que era uma
+Primeira mensagem de uma sessão nova. Substitui o antigo `PROMPT_CONTINUACAO.md` (removido em 18/11/2026), que era uma
 fotografia da sessão 19 e mandava começar errado.
 
 ## Por que funciona

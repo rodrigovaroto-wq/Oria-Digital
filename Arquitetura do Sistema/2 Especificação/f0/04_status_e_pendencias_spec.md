@@ -1,7 +1,7 @@
 # 0.4 — Modelo de Status + Pendências + Regra do Portão  ·  [APROVADO]
 
 **Objetivo:** especificação executável das máquinas de estado e do motor de pendências.
-Proposta pronta (decorre da arquitetura aprovada em `Arquitetura do Sistema/3 Estado e Execução/07_STATUS_E_PENDENCIAS.md`).
+Proposta pronta (decorre da arquitetura aprovada em `Arquitetura do Sistema/2 Especificação/07_STATUS_E_PENDENCIAS.md`).
 
 > **Aprovado em 2026-07-14 (Rodrigo Varoto):** máquinas de estado, catálogo de pendências,
 > severidades e regra do Portão 2 aceitos como estão. Teto de ressalvas confirmado em **3**

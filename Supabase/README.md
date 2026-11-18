@@ -1,10 +1,30 @@
-# Camada de banco (Supabase / Postgres) — Fatia 1
+# Supabase — banco, motor e sonda
 
-Materializa o schema conceitual (`Arquitetura do Sistema/2 Especificação/f0/05_schema_conceitual.md`) no Postgres do Supabase, no
-subconjunto necessário para a **Fatia 1 (E1 — Intake determinístico)** da F1.
+O Postgres é a **fonte da verdade do estado e o motor do sistema**. Toda aritmética que chega ao
+cliente, toda conciliação e toda recusa de dado inconsistente acontecem aqui, em funções
+PL/pgSQL. O n8n não guarda estado; o portal lê e escreve sob RLS por mandato. Ver a visão geral
+no [`README`](../README.md) da raiz.
 
-> **Fonte da verdade do estado = Postgres** (ver `Arquitetura do Sistema/1 Visão e Doutrina/02`, trava de stack nº 1). O N8N é
-> stateless; o portal Vercel lê/escreve via camada que respeita RLS.
+| Pasta / arquivo | Conteúdo |
+|---|---|
+| [`migrations/`](migrations/) | `NNNN_<o defeito que ela corrige>.sql`, aplicadas em ordem. Cada uma registra os seus requisitos na sonda |
+| [`test/`](test/) | `run.sh` monta o banco do zero, aplica todas as migrations e roda as suítes `*.test.sql`; os `*.test.mjs` testam as ferramentas de conferência |
+| `schema.sql` | o schema final, **derivado** do `run.sh`; nunca editar à mão |
+| [`conferir/`](conferir/) | conferidor, gerado, de que toda chamada do n8n ao banco resolve |
+| [`seed/`](seed/), [`rollback/`](rollback/) | carga inicial dos índices macro e reversões declaradas |
+| `diagnostico_*.sql`, `pendencias_do_mandato.sql`, `roteiro_modelagem_v35.sql`, `varredura_linha_exigida.sql` | consultas de leitura para operação; não mudam nada |
+
+**A sonda.** `fn_instalacao_conferir()` responde, contra o banco em que se está conectado, o que
+o código espera e ainda não está instalado. Nenhum arquivo do repositório é autoridade sobre o
+banco de produção:
+
+```sql
+select chave, migration, tipo, objeto, presente, detalhe, porque
+  from fn_instalacao_conferir() where not presente order by 1;
+```
+
+O restante deste arquivo tem as convenções de migration e o roteiro de aplicação de cada uma,
+com a conferência de depois.
 
 ## Faixas de numeração — leia antes de criar uma migration
 
@@ -1446,7 +1466,7 @@ where relname in ('caso','documento','pendencia','evento_auditoria') order by re
 
 O refinamento de RLS por caso, e as Classes B/C de reconciliação (`Arquitetura do Sistema/2 Especificação/04_RECONCILIACAO.md`
 — continuam N1/aproximação, não têm engine determinística ainda). O Portão 2 formal
-(`Arquitetura do Sistema/3 Estado e Execução/07_STATUS_E_PENDENCIAS.md`: bloqueantes não-sobrepujáveis, teto/expiração de ressalva)
+(`Arquitetura do Sistema/2 Especificação/07_STATUS_E_PENDENCIAS.md`: bloqueantes não-sobrepujáveis, teto/expiração de ressalva)
 também não está aqui — `fn_aceitar_extracao` (0011) é só o aceite mínimo por linha extraída,
 não a regra de portão do caso inteiro. Ver o plano da F1 e `Arquitetura do Sistema/2 Especificação/f0/05_schema_conceitual.md`.
 (`campo_extraido` entrou em `0005`; `reconciliacao` — Classe A — entrou em `0009`; aceite/E4
