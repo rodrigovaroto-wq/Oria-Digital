@@ -1206,6 +1206,50 @@ supabase db execute --file Supabase/migrations/0241_a_descricao_que_o_periodo_ir
 #   select acao, depois from evento_auditoria where ator = 'sistema:0241' and acao = 'descricao_contaminada_resumo';   -- corrigidas + sem_registro_proprio = 7 (medido em 11/11/2026, antes de aplicar; as sem_registro_proprio ficam como estão)
 #   select count(*) from pendencia pe where pe.origem_estagio = 'reconciliacao' and pe.estado = 'aberta' and pe.periodo_id is not null and not exists (select 1 from reconciliacao r where r.caso_id = pe.caso_id and 'reconciliacao:' || r.tipo = pe.motivo and r.descricao = pe.descricao and (r.periodo_id = pe.periodo_id or r.periodo_chave_id = pe.periodo_id));   -- o critério da 0241 (período OU chave; secao_fecha pelo documento); a medição antiga, só por período, deu 7
 
+# A 0272 cria `mapeamento_de_colunas` (o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, guardado pela impressão digital do cabeçalho e reaproveitado no próximo arquivo do mesmo ERP, em qualquer mandato; GLOBAL de propósito: guarda o nome das colunas, não dado do cliente), `fn_mapeamento_confirmar` (só Sócio e Analista; a única porta de escrita), `fn_mapeamento_vigente`, `fn_mapeamento_erros` e `fn_impressao_do_cabecalho`.
+# >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Nada de n8n/portal depende dela ainda: a biblioteca Leitor/lib/mapeamento.mjs é quem a usa (MB2).
+# >>> Teste: Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql.
+supabase db execute --file Supabase/migrations/0272_o_mapeamento_de_colunas_que_cada_arquivo_redescobria.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0272' and not presente;   -- ZERO linhas
+#   select count(*) from mapeamento_de_colunas;   -- 0 (nasce vazia)
+
+# A 0273 cria `contraparte_confirmada` (a contraparte com nome de total, "TOTAL DISTRIBUIDORA LTDA", que o analista CONFIRMOU como cliente/fornecedor de verdade, POR MANDATO: nome de cliente é dado do cliente, RLS da 0216; alimenta `contrapartesReais` de `aplicadorDeMapeamento`), `fn_contraparte_confirmar` e `fn_contraparte_revogar` (só Sócio e Analista DO MANDATO; revogar não apaga, marca), `fn_contrapartes_confirmadas` (o array das vigentes; quem não enxerga o mandato leva 42501, nunca array vazio) e `fn_texto_normalizado` (a normalização de uma célula, a da biblioteca).
+# >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Aplicar DEPOIS da 0272 (não depende dela, mas a sonda e a cobertura seguem a ordem). Nada de portal/n8n chama estas funções ainda.
+# >>> Teste: Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql.
+supabase db execute --file Supabase/migrations/0273_a_contraparte_com_nome_de_total_que_so_o_analista_distingue.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0273' and not presente;   -- ZERO linhas
+#   select count(*) from contraparte_confirmada;   -- 0 (nasce vazia)
+
+# A 0274 cria `aging_importado` (o RESUMO do aging de contas a receber/a pagar de uma importação, POR MANDATO e por entidade, RLS da 0216; DM1: o arquivo original vai à parte), `fn_aging_importar` (só Sócio e Analista DO MANDATO; valida o resumo na fronteira e recusa o que não fecha consigo mesmo; reimportar substitui sem apagar; concilia na hora), `fn_aging_resumo_erros`, `fn_reconciliar_aging` (positivos × Clientes/Fornecedores, negativos × Adiantamentos de clientes/a fornecedores; tolerância = meia unidade da escala do balanço, nunca percentual; tipos `aging_ar_clientes`, `aging_ar_adiantamentos`, `aging_ap_fornecedores`, `aging_ap_adiantamentos`, classe A), `fn_reconciliar_aging_do_caso`, `fn_balanco_fecha_em` e `fn_aging_linhas_do_balanco`. NÃO muda a 0187 (AGING_AR/AGING_AP extraídos pela IA seguem sem consumidor) e NÃO liga a conciliação em `fn_reconciliar_caso` (função quente; ver o cabeçalho, "NÃO LIGADO NA RODADA").
+# >>> Rodar COMO `postgres`; sem backfill (a tabela nasce vazia). Aplicar DEPOIS da 0272 (a FK `mapeamento_id` é da 0272) e da 0273. Nada de portal/n8n chama estas funções ainda (a tela é a ME2).
+# >>> Teste: Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql.
+supabase db execute --file Supabase/migrations/0274_o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0274' and not presente;   -- ZERO linhas
+#   select count(*) from aging_importado;   -- 0 (nasce vazia)
+# A 0276 cria `fn_linhas_por_versao(uuid[])` (contagem de linhas de campo_extraido por versão, no banco, sem o teto de 1.000 linhas do PostgREST) e `fn_algum_documento_serve_como(uuid[], text)` (bool_or de `fn_documento_serve_como`, 0157): as duas leituras em lote da visão geral do mandato (13,4 s, 10,2 s delas em 12 idas de paginação + 230 RPCs). `security invoker`: a RLS de quem chama decide. Só funções novas, nenhum dado tocado; o portal só usa depois de trocar `linhas-por-versao.ts` e `kit-basico.ts`.
+# >>> Rodar COMO `postgres`; reaplicável (create or replace). Sem backfill.
+# >>> Teste: Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql.
+supabase db execute --file Supabase/migrations/0276_a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0276' and not presente;   -- ZERO linhas
+# A 0300 (Função 1 do desenho das quatro funções) cria `fn_kit_do_caso(uuid)` (o estado de cada item do Kit Básico derivado na leitura: faltante, dispensado, aguardando_extracao, recebido_sem_linha, extraido, conferido; conferido = toda linha da versão vigente aceita por PESSOA, o auto-aceite não conta), `fn_adotar_chave_item_faltante(uuid)`, as colunas `pendencia.chave_motor` e `pendencia.resolvida_por_documento_id`, e REEMITE `fn_recomputar_completude` (mesma assinatura e ACL: a item_faltante passa a ser achada pela chave e não pelo texto da descrição, resolve só a que o motor abriu, guarda o documento que fechou e grava SEMPRE o evento `completude_recomputada`). 9 requisitos novos na sonda (ordem 1364-1372). Estados do item: faltante, dispensado, aguardando_extracao (com `aguardando_desde`), recebido_sem_linha (inclui documento_nao_extraido/arquivo_ilegivel/arquivo_corrompido abertos), lido_sem_dado_por_natureza, extraido, conferido; a fração N de M só vem para granularidade entidade e entidade_periodo.
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, add column if not exists, requisitos por upsert; tem `set local lock_timeout = '5s'` antes do ALTER: se falhar por lock, tente de novo fora do lote). BACKFILL: atribui a chave às 233 item_faltante do Kit ainda não resolvidas (medido em 13/11/2026: 205 abertas + 26 aceita_com_ressalva + 2 rejeitada, 52 mandatos); não muda estado nem descrição. Efeito colateral CONHECIDO: na próxima conferência de cada mandato, as pendências decididas por pessoa que já têm documento que serve (6 das 26 aceita_com_ressalva) passam a resolvida, com o estado anterior no evento. Aplicar DEPOIS da 0276.
+# >>> Teste: Supabase/test/o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.test.sql.
+supabase db execute --file Supabase/migrations/0300_o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0300' and not presente;   -- ZERO linhas
+#   select count(*) from pendencia where tipo = 'item_faltante' and estado <> 'resolvida' and chave_motor is not null;   -- 233 (as 2 de contrato social ficam sem chave)
+#   select depois from evento_auditoria where acao = 'chave_motor_item_faltante_adotada';   -- {"adotadas": 233}
+# A 0301 reemite `fn_kit_do_caso(uuid)` (mesma assinatura, mesmas 14 colunas, mesma resposta, mesmos grants): a 0300 fazia, sob a RLS, um Seq Scan em `documento_versao` INTEIRA chamando `fn_versao_extracao_concluida` em cada versão (3,2 s no mandato de 9 documentos como `authenticated`, contra 44 ms como `postgres`); agora pergunta só das versões do mandato (0,03 s e 0,4 s, medido em produção com rollback). Nenhuma tabela, índice ou outra função muda; 1 requisito novo na sonda (ordem 1389).
+# >>> Rodar COMO `postgres`; reaplicável (create or replace, requisito por upsert). Sem backfill, sem ALTER, sem lock.
+# >>> Teste: Supabase/test/o_kit_que_levava_quatro_segundos_para_abrir.test.sql.
+supabase db execute --file Supabase/migrations/0301_o_kit_que_levava_quatro_segundos_para_abrir.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0301' and not presente;   -- ZERO linhas
+#   select chave, presente from fn_instalacao_conferir() where migration = '0300' and not presente;   -- ZERO linhas (os marcadores da 0300 seguem no corpo)
 # A 0242 cria o catálogo conta_canonica (a árvore demonstração > grupo > seção > subgrupo, 27 nós: 5 raízes, 2 grupos, 15 seções do SECAO_CANONICA_ENUM, 4 subgrupos do Ativo Não Circulante e o balde Outros), com RLS de leitura por papel, a guarda de raiz (gatilho de instrução), 3 views de sonda e 9 requisitos na sonda. Só a taxonomia atual: conta-folha (caixa, clientes…) é a P27.
 # >>> Rodar COMO `postgres`; reaplicável (create if not exists, seed on conflict do nothing, requisitos por upsert). Nenhuma linha existente é tocada.
 # >>> Teste: Supabase/test/conta_canonica.test.sql e Supabase/test/conta_canonica_regua.test.mjs.

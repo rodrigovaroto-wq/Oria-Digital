@@ -58,10 +58,16 @@ export interface BaseCredito {
   campos?: Record<string, { valor: string; fonte: string | null }>;
   /**
    * O que chegou e o que faltou dos documentos obrigatórios (kit básico), com a MESMA regra da tela
-   * do caso (`itensDoKitBasicoAtendidos`, que pergunta ao banco pelo combinado estrutural). Ausente =
+   * do caso (`fn_kit_do_caso`, o estado de cada item; sem a 0300, `itensDoKitBasicoAtendidos`). Ausente =
    * a rota não leu; o slide diz isso em vez de afirmar que nada faltou.
    */
-  informacao?: Array<{ codigo: string; documento: string; status: "recebido" | "sem_conteudo" | "faltante" }>;
+  informacao?: Array<{ codigo: string; documento: string; status: "recebido" | "sem_conteudo" | "faltante" | "aguardando" | "dispensado" | "lido_sem_dado" }>;
+  /**
+   * A lista do kit FOI lida, mas a conferência de quais itens chegaram não pôde ser feita (serviço do
+   * banco ou checklist falharam). Sem isto o slide dizia "a lista não foi lida", o que é falso, e não
+   * dizia o efeito: o status de cada item fica em aberto e nada é afirmado como faltante.
+   */
+  kitNaoConferido?: boolean;
   /** As empresas cadastradas no caso — o perímetro — e qual delas o deck analisa. */
   /**
    * O ANO EM CURSO (balancete): o mesmo realizado, classificado pelo mesmo `historicoParaCredito`, para

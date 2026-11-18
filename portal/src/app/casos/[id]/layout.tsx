@@ -105,7 +105,7 @@ export default async function MandatoLayout({
               )}
             </div>
             {/* O produto em português: o banco guarda `reestruturacao`. */}
-            <p className="mt-0.5 text-sm text-tinta-500">
+            <p className="mt-0.5 text-sm texto-fundo">
               {humanizar(caso.produto)} · aberto em {aberto}
               {nDocumentos !== null && ` · ${nDocumentos} ${nDocumentos === 1 ? "documento" : "documentos"}`}
             </p>
@@ -129,7 +129,7 @@ export default async function MandatoLayout({
             const feita = i < etapa;
             const atual = i === etapa;
             let tom = "bg-tinta-100 text-tinta-500";
-            if (atual) tom = "bg-acento-600 font-semibold text-papel";
+            if (atual) tom = "bg-tinta-900 font-semibold text-papel";
             else if (feita) tom = "bg-ok-100 text-ok-800";
             return (
               <li

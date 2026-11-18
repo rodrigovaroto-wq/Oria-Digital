@@ -38,10 +38,28 @@ function checar(cond: boolean, msg: string) {
 
 type Linha = { id: number; documento_versao_id: string };
 
-/** Um PostgREST de mentira que só sabe uma coisa: cortar em `teto` linhas. */
-function servidor(linhas: Linha[], teto: number, falhaNaConsulta = 0) {
+type Rpc = "ausente" | "ok" | "erro";
+
+/**
+ * Um PostgREST de mentira que sabe duas coisas: cortar em `teto` linhas (vale para a leitura da
+ * tabela E para a resposta do RPC, como o `db-max-rows` real) e responder `fn_linhas_por_versao`
+ * como a 0276 (UMA linha por versão distinta pedida, 0 explícito). `rpc: "ausente"` é o banco sem
+ * a 0276 (PGRST202), que força o caminho paginado.
+ */
+function servidor(linhas: Linha[], teto: number, falhaNaConsulta = 0, rpc: Rpc = "ausente") {
   let consultas = 0;
+  let chamadasRpc = 0;
   const cliente = {
+    rpc: (nome: string, args: { p_versoes: string[] }) => {
+      chamadasRpc++;
+      if (nome !== "fn_linhas_por_versao" || rpc === "ausente") {
+        return Promise.resolve({ data: null, error: { code: "PGRST202", message: "Could not find the function" } });
+      }
+      if (rpc === "erro") return Promise.resolve({ data: null, error: { code: "57014", message: "canceling statement due to statement timeout" } });
+      const distintas = [...new Set(args.p_versoes)];
+      const data = distintas.map((v) => ({ documento_versao_id: v, linhas: linhas.filter((l) => l.documento_versao_id === v).length }));
+      return Promise.resolve({ data: data.slice(0, teto), error: null });
+    },
     from: () => ({
       select: () => ({
         in: (_c: string, versoes: string[]) => {
@@ -59,7 +77,7 @@ function servidor(linhas: Linha[], teto: number, falhaNaConsulta = 0) {
       }),
     }),
   };
-  return { cliente, consultas: () => consultas };
+  return { cliente, consultas: () => consultas, chamadasRpc: () => chamadasRpc };
 }
 
 function lote(porVersao: Record<string, number>): Linha[] {
@@ -103,6 +121,55 @@ function lote(porVersao: Record<string, number>): Linha[] {
   const { porVersao, incompleto } = await contarLinhasPorVersao(cliente as never, ["v-razao"]);
   checar(incompleto === true,
     `a segunda página falhou e a contagem (${porVersao.get("v-razao")} de 2500) NÃO se declarou incompleta`);
+}
+
+// --- 4. o caminho em lote (0276) -----------------------------------------------
+// 4a. uma ida só, mesma soma que o caminho paginado, sem tocar a tabela.
+{
+  const esperado = { "v-razao": 2500, "v-bp": 180, "v-dre": 1, "v-vazia": 0 };
+  const s = servidor(lote(esperado), 1000, 0, "ok");
+  const { porVersao, incompleto } = await contarLinhasPorVersao(s.cliente as never, Object.keys(esperado));
+  for (const [v, n] of Object.entries(esperado)) checar(porVersao.get(v) === n, `(lote) ${v}: contou ${porVersao.get(v)}, esperado ${n}`);
+  checar(incompleto === false, "(lote) leitura completa se declarou incompleta");
+  checar(s.chamadasRpc() === 1 && s.consultas() === 0, `(lote) esperava 1 RPC e nenhuma leitura da tabela; foram ${s.chamadasRpc()} RPC e ${s.consultas()} leituras`);
+}
+// 4b. acima de 1.000 versões DISTINTAS: o teto do PostgREST corta a resposta do RPC em 1.000, então o
+// pedido é fatiado. Sem o fatiamento, as 500 versões acima do teto sumiriam sem erro.
+{
+  const esperado: Record<string, number> = {};
+  for (let i = 0; i < 2500; i++) esperado[`v${i}`] = i % 3;
+  const s = servidor(lote(esperado), 1000, 0, "ok");
+  // versão repetida no pedido não pode dobrar a contagem
+  const { porVersao, incompleto } = await contarLinhasPorVersao(s.cliente as never, [...Object.keys(esperado), "v0", "v1"]);
+  checar(porVersao.size === 2500, `(lote>1000) devolveu ${porVersao.size} versões de 2500 — o teto cortou em silêncio`);
+  checar(Object.entries(esperado).every(([v, n]) => porVersao.get(v) === n), "(lote>1000) alguma contagem diverge do esperado");
+  checar(incompleto === false, "(lote>1000) leitura completa se declarou incompleta");
+  checar(s.chamadasRpc() === 3, `(lote>1000) esperava 3 fatias (1000+1000+500), foram ${s.chamadasRpc()}`);
+}
+// 4c. resposta com MENOS versões que o pedido (servidor cortando abaixo da fatia): incompleto, e a
+// versão que não veio NÃO ganha 0.
+{
+  const esperado: Record<string, number> = {};
+  for (let i = 0; i < 800; i++) esperado[`v${i}`] = 2;
+  const s = servidor(lote(esperado), 500, 0, "ok");
+  const { porVersao, incompleto } = await contarLinhasPorVersao(s.cliente as never, Object.keys(esperado));
+  checar(incompleto === true, `(lote cortado) ${porVersao.size} de 800 versões voltaram e a contagem NÃO se declarou incompleta`);
+  checar(!porVersao.has("v799"), "(lote cortado) a versão que não veio ganhou contagem inventada");
+}
+// 4d. erro do RPC que NÃO é função ausente: incompleto, sem cair no paginado nem inventar zero.
+{
+  const s = servidor(lote({ "v-razao": 10 }), 1000, 0, "erro");
+  const { porVersao, incompleto } = await contarLinhasPorVersao(s.cliente as never, ["v-razao"]);
+  checar(incompleto === true && !porVersao.has("v-razao"), "(lote erro) timeout do RPC não se declarou incompleto ou virou contagem");
+  checar(s.consultas() === 0, "(lote erro) um erro que não é função ausente caiu na leitura paginada");
+}
+// 4e. banco sem a 0276: cai no paginado e conta certo (as seções 1 a 2b já rodam com rpc ausente).
+{
+  const esperado = { "v-razao": 2500 };
+  const s = servidor(lote(esperado), 1000, 0, "ausente");
+  const { porVersao, incompleto } = await contarLinhasPorVersao(s.cliente as never, ["v-razao"]);
+  checar(porVersao.get("v-razao") === 2500 && incompleto === false && s.consultas() > 1,
+    `(sem 0276) função ausente não caiu no paginado: contou ${porVersao.get("v-razao")}, ${s.consultas()} leituras`);
 }
 
 // --- e o caso vazio não consulta nada nem inventa zero -------------------------

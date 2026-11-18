@@ -438,6 +438,9 @@ console.log("--- 10. endividamento pelo mapa, ativos reais, o que faltou e o per
   const semInfo = await slidesDe(montarBaseCredito(ent10, fixture.documentos));
   ok(/não lida nesta geração/.test(textos(slideCom(semInfo, "IX.2 · O QUE CHEGOU E O QUE FALTOU")).join(" ")),
     "(10f) sem a lista do kit, o IX.2 diz que não leu — nunca \"nada faltou\"");
+  const naoConf = textos(slideCom(await slidesDe(montarBaseCredito(ent10, fixture.documentos, [], { kitNaoConferido: true })), "IX.2 · O QUE CHEGOU E O QUE FALTOU")).join(" ");
+  ok(/conferência de quais itens chegaram não pôde ser feita/.test(naoConf) && /nada é afirmado como faltante/.test(naoConf) && !/lista de documentos obrigatórios não foi lida/.test(naoConf),
+    "(10f2) lista lida mas conferência falhou: o IX.2 diz que não conferiu, com o efeito, e não que a lista não foi lida", naoConf.slice(0, 200));
   // Mapa de OUTRA entidade (o "GRUPO" no Canastra): dito, não somado nem calado.
   const outra = { ...b10, historico: { ...b10.historico, operacoes: [], totalDoMapa: {} }, mapasDeOutrasEntidades: ["GRUPO X"] };
   ok(/O mapa da dívida recebido é de GRUPO X, não desta entidade/.test(textos(slideCom(await slidesDe(outra), "XIII.1 · ENDIVIDAMENTO")).join(" ")),

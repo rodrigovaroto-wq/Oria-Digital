@@ -258,8 +258,7 @@ CREATE TYPE public.pendencia_tipo AS ENUM (
     'documento_nao_extraido',
     'linha_exigida_ausente',
     'papel_no_grupo_indefinido',
-    'forma_de_controle_indefinida',
-    'conta_canonica_incerta'
+    'forma_de_controle_indefinida'
 );
 
 --
@@ -460,6 +459,358 @@ end $$;
 --
 
 COMMENT ON FUNCTION public.fn_acesso_bootstrap() IS '0216: promove a Sócio todo usuário de auth.users, mas SÓ se `membro` estiver vazia (banco recém-migrado). Idempotente: com qualquer membro cadastrado devolve 0. Não é exposta ao authenticated.';
+
+--
+-- Name: fn_adotar_chave_item_faltante(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_adotar_chave_item_faltante(p_caso_id uuid DEFAULT NULL::uuid) RETURNS bigint
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_n bigint;
+begin
+  update pendencia p
+     set chave_motor = 'completude:item_faltante:' || substr(p.descricao, length('Item obrigatório do Kit Básico ausente: ') + 1)
+   where p.tipo = 'item_faltante' and p.estado <> 'resolvida' and p.chave_motor is null
+     and starts_with(p.descricao, 'Item obrigatório do Kit Básico ausente: ')
+     and (p_caso_id is null or p.caso_id = p_caso_id);
+  get diagnostics v_n = row_count;
+  return v_n;
+end;
+$$;
+
+--
+-- Name: FUNCTION fn_adotar_chave_item_faltante(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_adotar_chave_item_faltante(p_caso_id uuid) IS '0300: dá a chave estável (pendencia.chave_motor) às item_faltante do Kit Básico ainda não resolvidas que o motor abriu antes da 0300 (descrição com o prefixo "Item obrigatório do Kit Básico ausente: "). Um mandato ou, com NULL, todos. Devolve quantas adotou. Idempotente: a segunda chamada devolve 0. O item_faltante de outro assunto (contrato_social_ausente) não tem esse prefixo e fica de fora.';
+
+--
+-- Name: fn_aging_centavos(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_aging_centavos(p jsonb) RETURNS numeric
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+  select case when jsonb_typeof(p) = 'string' and (p #>> '{}') ~ '^-?[0-9]{1,30}$' then (p #>> '{}')::numeric end
+$_$;
+
+--
+-- Name: FUNCTION fn_aging_centavos(p jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_aging_centavos(p jsonb) IS '0274: centavos do aging: só TEXTO de inteiro (BigInt serializado) vira número; número JSON, decimal, vazio ou texto qualquer devolve NULL (o validador recusa).';
+
+--
+-- Name: fn_aging_contagem(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_aging_contagem(p jsonb) RETURNS numeric
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+  select case when jsonb_typeof(p) = 'number' and (p #>> '{}') ~ '^[0-9]{1,12}$' then (p #>> '{}')::numeric end
+$_$;
+
+--
+-- Name: FUNCTION fn_aging_contagem(p jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_aging_contagem(p jsonb) IS '0274: contagem de títulos do aging: número JSON inteiro >= 0; qualquer outra coisa devolve NULL.';
+
+--
+-- Name: fn_aging_importar(uuid, uuid, text, date, jsonb, jsonb, jsonb, jsonb, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+declare
+  v_erros text[];
+  v_id    uuid := gen_random_uuid();
+  v_antigo uuid;
+  v_map_tipo text;
+  v_conc  jsonb;
+begin
+  if p_caso is null or not fn_pode_escrever_caso(p_caso) then
+    raise exception 'Importar aging exige ser Sócio ou Analista alocado neste mandato' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  if not exists (select 1 from caso where id = p_caso) then
+    raise exception 'O mandato % não existe', p_caso using errcode = 'P0002';
+  end if;
+  if p_data_base is null then
+    raise exception 'O aging sem data-base não é uma posição: a data-base é obrigatória' using errcode = '22023';
+  end if;
+  if p_entidade is null or not exists (select 1 from entidade where id = p_entidade and caso_id = p_caso) then
+    raise exception 'A entidade % não é deste mandato: o aging tem de dizer de qual empresa do grupo é a carteira', p_entidade using errcode = '22023';
+  end if;
+
+  v_erros := fn_aging_resumo_erros(p_resumo, p_data_base);
+  if jsonb_typeof(p_leitura) is distinct from 'object' or jsonb_typeof(p_aplicador) is distinct from 'object' then
+    v_erros := v_erros || 'o resumo da leitura e o do aplicador têm de ser objetos'::text;
+  end if;
+  if jsonb_typeof(p_arquivo) is distinct from 'object'
+     or coalesce(p_arquivo ->> 'nome', '') = ''
+     or coalesce(p_arquivo ->> 'sha256', '') !~ '^[0-9a-f]{64}$'
+     or coalesce(p_arquivo ->> 'bytes', '') !~ '^[1-9][0-9]{0,15}$'
+     or coalesce(p_arquivo ->> 'formato', '') not in ('csv', 'xlsx') then
+    v_erros := v_erros || 'o arquivo precisa de nome, sha256 (64 hex minúsculos), bytes > 0 e formato csv ou xlsx'::text;
+  elsif jsonb_typeof(p_leitura) = 'object' then
+    if p_leitura ->> 'parcial' = 'true' then
+      v_erros := v_erros || 'a leitura foi PARCIAL (interrompida depois da amostra): contagens e sha256 são só do trecho lido'::text;
+    elsif p_leitura ->> 'sha256' is distinct from p_arquivo ->> 'sha256' then
+      v_erros := v_erros || 'o sha256 da leitura é diferente do sha256 do arquivo'::text;
+    end if;
+  end if;
+  select tipo_base into v_map_tipo from mapeamento_de_colunas where id = p_mapeamento;
+  if v_map_tipo is null then
+    v_erros := v_erros || 'mapeamento inexistente: arquivo sem mapeamento confirmado não vira dado'::text;
+  elsif v_map_tipo <> p_tipo_base then
+    v_erros := v_erros || format('o mapeamento é de %s e a importação é de %s', v_map_tipo, p_tipo_base);
+  end if;
+  if cardinality(v_erros) > 0 then
+    raise exception 'Aging recusado: %', array_to_string(v_erros, '; ') using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_caso::text || ':' || p_entidade::text || ':' || p_tipo_base || ':' || p_data_base::text, 0));
+  update aging_importado set substituido_em = now(), substituido_por = v_id
+   where caso_id = p_caso and entidade_id = p_entidade and tipo_base = p_tipo_base and data_base = p_data_base and substituido_em is null
+  returning id into v_antigo;
+  insert into aging_importado (id, caso_id, entidade_id, tipo_base, data_base, resumo, leitura, aplicador,
+                               arquivo_nome, arquivo_sha256, arquivo_bytes, arquivo_formato, mapeamento_id, importado_por)
+  values (v_id, p_caso, p_entidade, p_tipo_base, p_data_base, p_resumo, p_leitura, p_aplicador,
+          p_arquivo ->> 'nome', p_arquivo ->> 'sha256', (p_arquivo ->> 'bytes')::bigint, p_arquivo ->> 'formato', p_mapeamento, auth.uid());
+
+  insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+  values ('usuario:' || auth.uid(), 'aging_importado', 'caso:' || p_caso,
+          case when v_antigo is null then null else jsonb_build_object('substituido', v_antigo) end,
+          jsonb_build_object('id', v_id, 'entidade_id', p_entidade, 'tipo_base', p_tipo_base, 'data_base', p_data_base,
+                             'arquivo_sha256', p_arquivo ->> 'sha256'));
+
+  v_conc := fn_reconciliar_aging(v_id);
+  return jsonb_build_object('id', v_id, 'substitui', v_antigo, 'conciliacao', v_conc -> 'checagens');
+end $_$;
+
+--
+-- Name: FUNCTION fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) IS '0274: guarda o resumo do aging de uma importação, por mandato e entidade, e o concilia com o balanço extraído. Só quem escreve o mandato (fn_pode_escrever_caso: Sócio, Analista alocado); os demais, o anônimo e a conexão de serviço recebem 42501. Recusa (22023, com todos os motivos) resumo que não fecha consigo mesmo, entidade de outro mandato, leitura parcial, sha256 divergente, arquivo inválido e mapeamento inexistente ou de outro tipo_base. Reimportar a mesma (entidade, tipo_base, data_base) substitui a vigente SEM apagar. Grava aging_importado em evento_auditoria (caso:<id>). Devolve {id, substitui, conciliacao}.';
+
+--
+-- Name: fn_aging_linhas_do_balanco(uuid, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) RETURNS TABLE(id uuid, chave text, valor_num numeric, unidade text, secao text)
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+#variable_conflict use_column
+declare
+  v_inc text;
+  v_exc text;
+  c_ded constant text := 'perda|pecld|pdd|duvidos|provis|descontad|antecipa|ajuste a valor presente';
+begin
+  v_inc := case p_conceito
+             when 'clientes'                     then 'cliente|duplicatas? a receber'
+             when 'fornecedores'                 then 'fornecedor'
+             when 'adiantamentos_de_clientes'    then 'adiant.*cliente'
+             when 'adiantamentos_a_fornecedores' then 'adiant.*fornecedor' end;
+  if v_inc is null then
+    raise exception 'conceito "%" não existe (clientes, fornecedores, adiantamentos_de_clientes, adiantamentos_a_fornecedores)', p_conceito using errcode = '22023';
+  end if;
+  -- Fora, sempre: variações de fluxo, deduções (PDD, duplicatas descontadas, ajuste a valor presente), longo prazo e partes relacionadas.
+  -- Clientes/Fornecedores também deixam de fora o que é Adiantamento (conta própria).
+  v_exc := case when p_conceito in ('clientes', 'fornecedores') then 'adiant|' else '' end
+           || 'variacao|aumento|reducao|' || c_ded || '|longo prazo|nao circulante|mutuo|partes relacionadas|coligad|controlad|imobilizado|salario|empregado|tributo|imposto|dividendo';
+  return query
+  with base as (
+    select ce.id, ce.chave, ce.valor_num, ce.unidade, ce.secao, ce.confianca, ce.ordem,
+           fn_normalizar_texto(ce.chave) as n, fn_normalizar_texto(ce.secao) as s
+      from campo_extraido ce
+     where ce.documento_versao_id = p_versao and ce.valor_num is not null
+       and p_col_ent is distinct from E'\x01' and p_col_per is distinct from E'\x01'
+       and (p_col_ent is null or fn_normalizar_texto(ce.entidade_coluna) = fn_normalizar_texto(p_col_ent))
+       and (p_col_per is null or fn_normalizar_texto(ce.periodo_coluna) = fn_normalizar_texto(p_col_per))
+  ), cand as (
+    select distinct on (b.n) b.* from base b where b.n ~ v_inc and b.n !~ v_exc
+     order by b.n, coalesce(b.confianca, 0) desc, b.ordem nulls last, b.id
+  ), liquido as (   -- pai cuja dedução (PDD, descontadas) é filha: o valor dele é LÍQUIDO, não o bruto que a conciliação quer
+    select c.n from cand c where exists (select 1 from base d where d.s = c.n and d.n ~ c_ded)
+  )
+  select c.id, c.chave, c.valor_num, c.unidade, c.secao from cand c
+   where not exists (select 1 from cand p where p.n = c.s and p.n <> c.n and p.n not in (select n from liquido))
+     and not (c.n in (select n from liquido) and exists (select 1 from cand f where f.s = c.n and f.n <> c.n))
+   order by c.ordem nulls last, c.id;
+end $$;
+
+--
+-- Name: FUNCTION fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) IS '0274: as linhas do balanço (uma versão de documento) de um conceito, pelo rótulo normalizado e pelas colunas de entidade e período, como fn_valor_conceito_col, mas devolvendo TODAS as linhas do conceito (mercado interno + externo somam). Pai e filhos: o pai vale sozinho (os filhos não somam de novo), salvo pai com dedução (PDD, descontadas) como filho, que é líquido e cede aos filhos do conceito. Deduções, variações de fluxo, longo prazo e partes relacionadas ficam de fora; Clientes/Fornecedores também deixam de fora Adiantamentos.';
+
+--
+-- Name: fn_aging_reais(numeric); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_aging_reais(p_valor numeric) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+  select 'R$ ' || translate(to_char(p_valor, 'FM999,999,999,999,990.00'), ',.', '.,')
+$_$;
+
+--
+-- Name: FUNCTION fn_aging_reais(p_valor numeric); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_aging_reais(p_valor numeric) IS '0274: reais no formato brasileiro (R$ 24.917.000,00) para as descrições das conciliações; independe de lc_numeric.';
+
+--
+-- Name: fn_aging_resumo_erros(jsonb, date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base date) RETURNS text[]
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  e        text[] := '{}';
+  c_faixas constant text[] := array['a_vencer', '1_30', '31_60', '61_90', '91_180', '181_360', 'acima_360'];
+  k        text;
+  x        numeric;
+  t        numeric;
+  it       jsonb;
+  v_pos    jsonb := p_resumo -> 'positivos';
+  v_neg    jsonb := p_resumo -> 'negativos';
+  v_dem    jsonb := p_resumo -> 'demais';
+  v_ndem   jsonb := p_resumo -> 'negativos' -> 'demais';
+  v_pos_saldo numeric; v_pos_tit numeric; v_venc numeric; v_neg_saldo numeric;
+  s_faixas numeric := 0; s_venc numeric := 0; s_sal numeric := 0; s_tit numeric := 0;
+  ok_faixas boolean := true; ok_max boolean := true; ok_nmax boolean := true;
+begin
+  if p_data_base is null or jsonb_typeof(p_resumo) is distinct from 'object' then
+    return array['o resumo do aging não é um objeto (ou a data-base falta)'];
+  end if;
+  if p_resumo ->> 'data_base' is distinct from p_data_base::text then
+    e := e || format('data_base do resumo (%s) diferente da data-base informada (%s)', coalesce(p_resumo ->> 'data_base', 'ausente'), p_data_base);
+  end if;
+
+  -- positivos e as 7 faixas
+  if jsonb_typeof(v_pos) is distinct from 'object' then
+    e := e || 'positivos ausente'::text; ok_faixas := false; v_pos_saldo := null;
+  else
+    v_pos_saldo := fn_aging_centavos(v_pos -> 'saldo');
+    v_venc      := fn_aging_centavos(v_pos -> 'vencido');
+    v_pos_tit   := fn_aging_contagem(v_pos -> 'titulos');
+    if v_pos_saldo is null then e := e || 'positivos.saldo não é inteiro em centavos, em texto'::text;
+    elsif v_pos_saldo < 0 then e := e || format('positivos.saldo negativo (%s)', v_pos_saldo); end if;
+    if v_venc is null then e := e || 'positivos.vencido não é inteiro em centavos, em texto'::text; end if;
+    if v_pos_tit is null then e := e || 'positivos.titulos não é contagem inteira'::text; end if;
+    if jsonb_typeof(v_pos -> 'por_faixa') is distinct from 'object' then
+      e := e || 'positivos.por_faixa ausente'::text; ok_faixas := false;
+    else
+      if (select count(*) from jsonb_object_keys(v_pos -> 'por_faixa')) <> 7 then
+        e := e || 'positivos.por_faixa tem de ter exatamente as 7 faixas (a_vencer, 1_30, 31_60, 61_90, 91_180, 181_360, acima_360)'::text; ok_faixas := false;
+      end if;
+      foreach k in array c_faixas loop
+        x := fn_aging_centavos(v_pos -> 'por_faixa' -> k);
+        if x is null or x < 0 then
+          e := e || format('faixa %s não é inteiro >= 0 em centavos, em texto', k); ok_faixas := false;
+        else
+          s_faixas := s_faixas + x;
+          if k <> 'a_vencer' then s_venc := s_venc + x; end if;
+        end if;
+      end loop;
+      if ok_faixas and v_pos_saldo is not null and s_faixas <> v_pos_saldo then
+        e := e || format('Σ por_faixa (%s) diferente de positivos.saldo (%s)', s_faixas, v_pos_saldo);
+      end if;
+      if ok_faixas and v_venc is not null and s_venc <> v_venc then
+        e := e || format('positivos.vencido (%s) diferente da Σ das faixas vencidas (%s)', v_venc, s_venc);
+      end if;
+    end if;
+  end if;
+
+  -- maiores + demais = positivos (em saldo e em títulos): nada some
+  if jsonb_typeof(p_resumo -> 'maiores') is distinct from 'array' or jsonb_typeof(v_dem) is distinct from 'object' then
+    e := e || 'maiores (lista) ou demais (objeto) ausente'::text;
+  else
+    for it in select * from jsonb_array_elements(p_resumo -> 'maiores') loop
+      x := fn_aging_centavos(it -> 'saldo'); t := fn_aging_contagem(it -> 'titulos');
+      if x is null or x < 0 or t is null then ok_max := false; else s_sal := s_sal + x; s_tit := s_tit + t; end if;
+    end loop;
+    x := fn_aging_centavos(v_dem -> 'saldo'); t := fn_aging_contagem(v_dem -> 'titulos');
+    if x is null or x < 0 or t is null then ok_max := false; else s_sal := s_sal + x; s_tit := s_tit + t; end if;
+    if not ok_max then
+      e := e || 'maiores/demais com saldo que não é inteiro >= 0 em centavos (texto) ou titulos que não é contagem'::text;
+    else
+      if v_pos_saldo is not null and s_sal <> v_pos_saldo then
+        e := e || format('Σ maiores + demais (%s) diferente de positivos.saldo (%s): alguma contraparte sumiu do resumo', s_sal, v_pos_saldo);
+      end if;
+      if v_pos_tit is not null and s_tit <> v_pos_tit then
+        e := e || format('Σ títulos de maiores + demais (%s) diferente de positivos.titulos (%s)', s_tit, v_pos_tit);
+      end if;
+    end if;
+  end if;
+
+  -- negativos: <= 0, e maiores + demais = negativos.saldo
+  if jsonb_typeof(v_neg) is distinct from 'object' then
+    e := e || 'negativos ausente'::text;
+  else
+    v_neg_saldo := fn_aging_centavos(v_neg -> 'saldo');
+    if v_neg_saldo is null then e := e || 'negativos.saldo não é inteiro em centavos, em texto'::text;
+    elsif v_neg_saldo > 0 then e := e || format('negativos.saldo positivo (%s)', v_neg_saldo); end if;
+    s_sal := 0;
+    if jsonb_typeof(v_neg -> 'maiores') is distinct from 'array' or jsonb_typeof(v_ndem) is distinct from 'object' then
+      e := e || 'negativos.maiores (lista) ou negativos.demais (objeto) ausente'::text;
+    else
+      for it in select * from jsonb_array_elements(v_neg -> 'maiores') loop
+        x := fn_aging_centavos(it -> 'saldo');
+        if x is null then ok_nmax := false; else s_sal := s_sal + x; end if;
+      end loop;
+      x := fn_aging_centavos(v_ndem -> 'saldo');
+      if x is null then ok_nmax := false; else s_sal := s_sal + x; end if;
+      if not ok_nmax then
+        e := e || 'negativos.maiores/negativos.demais com saldo que não é inteiro em centavos, em texto'::text;
+      elsif v_neg_saldo is not null and s_sal <> v_neg_saldo then
+        e := e || format('Σ negativos.maiores + negativos.demais (%s) diferente de negativos.saldo (%s): algum crédito sumiu do resumo', s_sal, v_neg_saldo);
+      end if;
+    end if;
+  end if;
+  return e;
+end $$;
+
+--
+-- Name: FUNCTION fn_aging_resumo_erros(p_resumo jsonb, p_data_base date); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base date) IS '0274: o validador do resumo do aging (Leitor/lib/aging.mjs): devolve os motivos (vazio = coerente). Σ por_faixa = positivos.saldo; vencido = Σ faixas menos a_vencer; Σ maiores + demais = positivos.saldo e positivos.titulos; Σ negativos.maiores + negativos.demais = negativos.saldo; negativos <= 0 <= positivos; data_base igual; centavos inteiros em texto; 7 faixas. Não prova que o arquivo foi lido inteiro: só recusa o resumo que não fecha consigo mesmo. Usado pela função de importar e pela CHECK da tabela.';
+
+--
+-- Name: fn_algum_documento_serve_como(uuid[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) RETURNS boolean
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select coalesce(bool_or(fn_documento_serve_como(d, p_tipo_taxonomia)), false)
+    from unnest(p_documento_ids) as d;
+$$;
+
+--
+-- Name: FUNCTION fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) IS '0276: algum destes documentos satisfaz o item <tipo_taxonomia> do Kit Básico? bool_or de fn_documento_serve_como (0157, a regra mora lá) sobre o array; array vazio ou nulo = false. Uma ida no lugar de uma por documento (2 itens × 115 documentos = 230 RPCs, 4,4 s). security invoker: documento sob RLS, como a função de uma só.';
 
 --
 -- Name: fn_alocado_agora(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -1043,6 +1394,88 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) IS 'Portão 2 (0109): elegível quando não há pendência BLOQUEANTE sem decisão. O teto de ressalvas e a lista fechada de Arquitetura do Sistema/2 Especificação/f0/04 deixaram de bloquear por decisão do dono — as contagens continuam publicadas como informação, e vão gravadas dentro da decisão de aprovação.';
+
+--
+-- Name: fn_balanco_fecha_em(uuid, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_balanco_fecha_em(p_documento_id uuid, p_ano integer) RETURNS TABLE(fecha_em date, coluna text, observacao text)
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+declare
+  v_ver uuid; v_tipo_doc text; v_pt text; v_pr text; v_col text; v_can text; v_anos int[]; m text[];
+begin
+  v_ver := fn_versao_atual(p_documento_id);
+  select d.tipo_taxonomia, pe.tipo, pe.referencia into v_tipo_doc, v_pt, v_pr
+    from documento d left join periodo pe on pe.id = d.periodo_id where d.id = p_documento_id;
+  v_col := fn_coluna_periodo_do_ano(v_ver, p_ano);
+
+  if v_col is not null then
+    if v_col = E'\x01' then
+      return query select null::date, null::text, format('o balanço tem colunas de período e nenhuma é de %s', p_ano);
+      return;
+    end if;
+    m := regexp_match(v_col, '(\d{1,2})/(\d{1,2})/((?:19|20)\d{2})');
+    if m is not null then
+      begin return query select make_date(m[3]::int, m[2]::int, m[1]::int), v_col, null::text; return;
+      exception when others then null; end;
+    end if;
+    if fn_periodo_e_parcial(v_col, v_tipo_doc, v_pt, v_pr) then
+      return query select null::date, v_col, format('a coluna "%s" é de período parcial e não diz a data de fechamento', v_col);
+      return;
+    end if;
+    return query select make_date(p_ano, 12, 31), v_col, null::text;
+    return;
+  end if;
+
+  -- sem coluna de período: o período do PRÓPRIO documento
+  v_can  := fn_periodo_canonico(v_pt, v_pr);
+  v_anos := fn_anos_periodo(v_pt, v_pr);
+  if cardinality(v_anos) = 0 then
+    return query select null::date, null::text, format('o período do documento ("%s") não ancora ano nenhum', coalesce(v_pr, 'sem período'));
+    return;
+  end if;
+  if not (p_ano = any(v_anos)) then
+    return query select null::date, null::text, format('o balanço é de %s e não traz o exercício %s', v_pr, p_ano);
+    return;
+  end if;
+  if v_can ~ '^\d{4}-\d{2}-\d{2}$' then
+    begin return query select v_can::date, null::text, null::text; return;
+    exception when others then null; end;
+  end if;
+  m := regexp_match(v_can, '^(\d{1,2})m(\d{4})$');
+  if m is not null then
+    begin return query select (make_date(m[2]::int, m[1]::int, 1) + interval '1 month - 1 day')::date, null::text, null::text; return;
+    exception when others then null; end;
+  end if;
+  m := regexp_match(v_can, '^(\d{1,2})/(\d{4})$');
+  if m is not null then
+    begin return query select (make_date(m[2]::int, m[1]::int, 1) + interval '1 month - 1 day')::date, null::text, null::text; return;
+    exception when others then null; end;
+  end if;
+  m := regexp_match(v_can, '^([1-4])t(\d{4})$');
+  if m is not null then
+    return query select (make_date(m[2]::int, m[1]::int * 3, 1) + interval '1 month - 1 day')::date, null::text, null::text;
+    return;
+  end if;
+  if fn_periodo_e_parcial(null, v_tipo_doc, v_pt, v_pr) then
+    return query select null::date, null::text, format('o período do documento ("%s") é parcial e não diz a data de fechamento', v_pr);
+    return;
+  end if;
+  if cardinality(v_anos) = 1 then
+    return query select make_date(p_ano, 12, 31), null::text, null::text;
+    return;
+  end if;
+  return query select null::date, null::text,
+    format('o período do documento ("%s") cobre vários exercícios e não há coluna de período para dizer qual', v_pr);
+end $_$;
+
+--
+-- Name: FUNCTION fn_balanco_fecha_em(p_documento_id uuid, p_ano integer); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_balanco_fecha_em(p_documento_id uuid, p_ano integer) IS '0274: em que DATA o balanço fecha no exercício pedido (a conciliação do aging só compara saldos da MESMA data). Coluna com data vale a data; coluna ou período de um exercício só = 31/12; mensal e trimestral = fim do mês/trimestre. Parcial sem data, ano que o documento não traz e vários exercícios sem coluna = NULL com a observação (nunca palpite). Devolve (fecha_em, coluna, observacao).';
 
 --
 -- Name: fn_caso_da_chave_do_storage(text); Type: FUNCTION; Schema: public; Owner: -
@@ -2524,6 +2957,55 @@ $$;
 COMMENT ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uuid) IS 'O valor material mais repetido entre contas DISTINTAS da mesma coluna, ignorando os totais estruturais (0034) e as colunas de dimensão (0140). Insumo do sinal 1 da guarda de extração (0013).';
 
 --
+-- Name: fn_contraparte_confirmar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_nome  text;
+  v_id    uuid;
+begin
+  -- Quem não escreve o mandato (Leitura, Analista de outro mandato, sem papel, anônimo e conexão de serviço: sem auth.uid() não há autor) cai aqui,
+  -- com a MESMA mensagem para "mandato que não existe" e "mandato que não é seu": a recusa não conta quais mandatos existem.
+  if p_caso is null or not fn_pode_escrever_caso(p_caso) then
+    raise exception 'Confirmar contraparte exige ser Sócio ou Analista alocado neste mandato' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  v_nome := fn_texto_normalizado(p_contraparte);
+  if v_nome = '' then
+    raise exception 'A contraparte está vazia (depois de tirar espaços): sem nome não há o que confirmar' using errcode = '22023';
+  end if;
+  if not exists (select 1 from caso where id = p_caso) then
+    raise exception 'O mandato % não existe', p_caso using errcode = 'P0002';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_caso::text || ':' || p_tipo_base || ':' || v_nome, 0));
+  select id into v_id from contraparte_confirmada
+   where caso_id = p_caso and tipo_base = p_tipo_base and contraparte = v_nome and revogado_em is null;
+  if v_id is not null then
+    return jsonb_build_object('id', v_id, 'contraparte', v_nome, 'ja_vigente', true);
+  end if;
+  insert into contraparte_confirmada (caso_id, tipo_base, contraparte, confirmado_por)
+  values (p_caso, p_tipo_base, v_nome, auth.uid()) returning id into v_id;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values ('usuario:' || auth.uid(), 'contraparte_confirmada', 'caso:' || p_caso,
+          jsonb_build_object('id', v_id, 'tipo_base', p_tipo_base, 'contraparte', v_nome));
+  return jsonb_build_object('id', v_id, 'contraparte', v_nome, 'ja_vigente', false);
+end $$;
+
+--
+-- Name: FUNCTION fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) IS '0273: o analista confirma que a contraparte (com nome de total) é cliente/fornecedor de verdade NESTE mandato. Só quem escreve o mandato (fn_pode_escrever_caso: Sócio, Analista alocado); Leitura, outro mandato, sem papel, anônimo e conexão de serviço recebem 42501. Normaliza o nome no banco; vazio = 22023. Já vigente: não duplica, não muda autor/data, não grava evento (ja_vigente = true). Grava contraparte_confirmada em evento_auditoria (caso:<id>). Devolve {id, contraparte, ja_vigente}.';
+
+--
 -- Name: fn_contraparte_intragrupo(uuid, text, uuid); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -2552,6 +3034,80 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) IS '0124: a empresa DO CASO que o rótulo nomeia como contraparte (o sufixo depois do separador), ou null. É o que permite conferir intragrupo sem adivinhar qual conta casa com qual.';
+
+--
+-- Name: fn_contraparte_revogar(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_nome text;
+  v_id   uuid;
+begin
+  if p_caso is null or not fn_pode_escrever_caso(p_caso) then
+    raise exception 'Revogar contraparte exige ser Sócio ou Analista alocado neste mandato' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  v_nome := fn_texto_normalizado(p_contraparte);
+  if v_nome = '' then
+    raise exception 'A contraparte está vazia (depois de tirar espaços): sem nome não há o que revogar' using errcode = '22023';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(p_caso::text || ':' || p_tipo_base || ':' || v_nome, 0));
+  update contraparte_confirmada set revogado_em = now(), revogado_por = auth.uid()
+   where caso_id = p_caso and tipo_base = p_tipo_base and contraparte = v_nome and revogado_em is null
+  returning id into v_id;
+  if v_id is null then
+    -- Revogar o que não está confirmado não é "feito": o portal diria que desfez uma confirmação que nunca existiu (a lição do DELETE de 0 linhas, 0216).
+    raise exception 'Não há confirmação vigente de "%" (%) neste mandato para revogar', v_nome, p_tipo_base using errcode = 'P0002';
+  end if;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+  values ('usuario:' || auth.uid(), 'contraparte_revogada', 'caso:' || p_caso,
+          jsonb_build_object('id', v_id, 'tipo_base', p_tipo_base, 'contraparte', v_nome));
+  return jsonb_build_object('id', v_id, 'contraparte', v_nome);
+end $$;
+
+--
+-- Name: FUNCTION fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) IS '0273: revoga a confirmação vigente da contraparte neste mandato (MARCA revogado_em/revogado_por; não apaga). Mesma guarda de fn_contraparte_confirmar (42501). Sem vigente para revogar: P0002 com o motivo. Grava contraparte_revogada em evento_auditoria (caso:<id>). Devolve {id, contraparte}.';
+
+--
+-- Name: fn_contrapartes_confirmadas(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) RETURNS text[]
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+begin
+  -- Sem acesso NÃO pode parecer "nenhuma confirmada": recusa (regra 1). O n8n (conexão de serviço) lê.
+  if p_caso is null or not (fn_conexao_de_servico() or fn_pode_ler_caso(p_caso)) then
+    raise exception 'Ler as contrapartes confirmadas exige acesso a este mandato' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  if not exists (select 1 from caso where id = p_caso) then
+    raise exception 'O mandato % não existe', p_caso using errcode = 'P0002';
+  end if;
+  return coalesce((select array_agg(contraparte order by contraparte collate "C")
+                     from contraparte_confirmada
+                    where caso_id = p_caso and tipo_base = p_tipo_base and revogado_em is null), '{}'::text[]);
+end $$;
+
+--
+-- Name: FUNCTION fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) IS '0273: os nomes NORMALIZADOS das contrapartes confirmadas e vigentes do mandato, por tipo_base, ordenados (collate "C"): é o array de `contrapartesReais` de aplicadorDeMapeamento. Invoker (a RLS vale) com guarda explícita: quem não enxerga o mandato leva 42501, nunca um array vazio. Vazio = o mandato existe, você o lê, e ninguém confirmou.';
 
 --
 -- Name: fn_controlador_desvincular_familia(uuid, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -4609,378 +5165,6 @@ $_$;
 --
 
 COMMENT ON FUNCTION public.fn_familia_da_secao(p_secao text) IS 'Família da demonstração pela seção canônica: patrimonial, resultado, fluxo ou a própria seção (0200). Conta única (0201).';
-
---
--- Name: fn_fato_ator(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.fn_fato_ator() RETURNS text
-    LANGUAGE sql STABLE
-    AS $$ select coalesce('usuario:' || auth.uid()::text, 'sistema:0243') $$;
-
---
--- Name: fn_fato_pendencia_da_extracao(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.fn_fato_pendencia_da_extracao() RETURNS trigger
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public', 'pg_temp'
-    AS $_$
-declare v_versao uuid; v_tipo text; v_caso uuid; v_doc uuid; v_pend uuid; v_vigente uuid;
-begin
-  -- entidade_ref = 'documento_versao:<uuid>'; qualquer outra forma (evento sintético, uuid inválido) não é extração de versão nenhuma: não faz nada, e NÃO derruba o evento
-  if new.entidade_ref ~ '^documento_versao:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then
-    v_versao := substr(new.entidade_ref, length('documento_versao:') + 1)::uuid;
-    select d.tipo_taxonomia, d.caso_id, d.id into v_tipo, v_caso, v_doc from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = v_versao;
-    if not fn_tipo_gera_fato(v_tipo) then
-      return null;   -- (tipo fora da lista, ou versão inexistente: não rodou e não finge)
-    end if;
-    if not fn_fato_pode_escrever(v_caso) then
-      -- (regra 7: a recusa deixa rastro, não é silêncio)
-      insert into evento_auditoria (ator, acao, entidade_ref, depois)
-        values (coalesce(fn_fato_ator(), new.ator), 'fato_pendencia_negada', new.entidade_ref, jsonb_build_object('porque', 'sem permissão de escrita no mandato', 'ator_declarado', new.ator));
-      return null;
-    end if;
-    -- A TRAVA DO DOCUMENTO (corrida R4, medida com duas sessões): duas extrações concorrentes de duas versões do MESMO documento avaliavam cada uma com o snapshot que não enxerga as linhas da outra, e a pendência da versão superada ficava aberta para sempre
-    -- (a v2 e a v3 abertas ao mesmo tempo). A trava é por documento e dura até o fim da transação da extração (milissegundos): a segunda avalia DEPOIS do commit da primeira, com o estado novo (a v3 vigente baixa a da v2).
-    perform pg_advisory_xact_lock(hashtextextended('fato:conta_incerta:' || v_doc::text, 0));
-    begin
-      v_pend := fn_fato_pendencia_da_versao(v_versao);
-      -- A VERSÃO SUPERADA: quando esta é a vigente (fn_versao_atual), a pendência ABERTA das outras versões do documento perde o sentido (a leitura que ela julgava não é mais a que vale).
-      v_vigente := fn_versao_atual(v_doc);
-      if v_vigente = v_versao then
-        update pendencia
-           set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:versao_superada',
-               descricao = coalesce(descricao, '') || ' — Resolvida automaticamente: versão superada pela versão ' || v_versao || ' do documento.'
-         where documento_id = v_doc and estado = 'aberta' and motivo like 'fato:conta_incerta:%' and motivo <> 'fato:conta_incerta:' || v_versao;
-      end if;
-      -- o sinal de que RODOU (regra 7): a avaliação da pendência desta versão, com o que ela decidiu
-      insert into evento_auditoria (ator, acao, entidade_ref, depois)
-        values (new.ator, 'fato_pendencia_avaliada', new.entidade_ref, jsonb_build_object('pendencia_id', v_pend, 'versao_vigente', v_vigente = v_versao));
-    exception
-      when query_canceled then raise;
-      when others then
-        insert into evento_auditoria (ator, acao, entidade_ref, depois)
-          values (new.ator, 'fato_pendencia_falhou', new.entidade_ref,
-                  jsonb_build_object('sqlstate', sqlstate, 'erro', sqlerrm, 'porque', 'a extração foi gravada; a pendência da conta incerta não. O fato (a view) não depende dela. Rode select fn_fato_pendencia_da_versao(<versão>) para avaliá-la de novo.'));
-    end;
-  end if;
-  return null;
-end $_$;
-
---
--- Name: FUNCTION fn_fato_pendencia_da_extracao(); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.fn_fato_pendencia_da_extracao() IS '0243: gatilho de evento_auditoria (acao = extracao_sombra, o evento que fn_registrar_campos_extraidos grava depois da herança da seção): abre/atualiza/baixa a pendência conta_canonica_incerta da versão recém-extraída (fn_fato_pendencia_da_versao) e baixa a das versões superadas. NÃO grava fato (o fato é a view fato_financeiro). Só extração nova: versão antiga, transcrição humana e mudança de tipo não passam por aqui.';
-
---
--- Name: fn_fato_pendencia_da_versao(uuid); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) RETURNS uuid
-    LANGUAGE plpgsql SECURITY DEFINER
-    SET search_path TO 'public', 'pg_temp'
-    AS $$
-declare
-  v_caso uuid; v_doc uuid; v_nome text;
-  v_h int; v_s int; v_lista text; v_desc text; v_pend uuid; v_vigente uuid;
-  v_motivo text := 'fato:conta_incerta:' || p_documento_versao_id;
-begin
-  select d.caso_id, d.id, dv.nome_original into v_caso, v_doc, v_nome
-    from documento_versao dv join documento d on d.id = dv.documento_id where dv.id = p_documento_versao_id;
-  if v_doc is null then return null; end if;
-  if not fn_fato_pode_escrever(v_caso) then
-    raise exception 'fn_fato_pendencia_da_versao: sem permissão de escrita no mandato' using errcode = 'insufficient_privilege';
-  end if;
-
-  -- versão que NÃO é a vigente (fn_versao_atual): a leitura que ela traz foi superada, não se abre pendência sobre ela (e a aberta se baixa abaixo, pelo ramo de "sem linha incerta")
-  v_vigente := fn_versao_atual(v_doc);
-
-  select count(*) filter (where x.resolucao_metodo = 'heuristica'), count(*) filter (where x.resolucao_metodo = 'sem_conta'),
-         string_agg(x.rotulo, '; ' order by x.rn) filter (where x.rn <= 12)
-    into v_h, v_s, v_lista
-    from (select r.resolucao_metodo,
-                 ce.chave || case r.resolucao_metodo
-                               when 'heuristica' then ' [seção inferida: ' || coalesce(ce.secao_canonica, '?') || ']'
-                               else ' [sem seção' || case when r.sem_conta_motivo = 'secao_fora_do_catalogo' then ': "' || coalesce(ce.secao_canonica, '') || '" não está no catálogo' else '' end || ']' end as rotulo,
-                 row_number() over (order by ce.ordem nulls last, ce.id) as rn
-            from fn_fato_resolver(p_documento_versao_id) r join campo_extraido ce on ce.id = r.campo_id
-           where r.resolucao_metodo <> 'declarada') x;
-
-  select id into v_pend from pendencia where caso_id = v_caso and motivo = v_motivo and estado = 'aberta' limit 1;
-
-  if v_vigente is distinct from p_documento_versao_id then
-    v_h := 0; v_s := 0;
-  end if;
-
-  if v_h + v_s > 0 then
-    v_desc := format('%s linha(s) de "%s" ficaram com a conta canônica por HEURÍSTICA (%s: a IA não deu a seção, ela foi inferida do texto da seção ou da árvore do documento) ou SEM conta (%s: sem seção, ou com uma que o catálogo não conhece). '
-                     'Linha sem conta é fato sem identidade: não entra em nenhuma seção até alguém dizer qual é. Confirme a seção destas linhas%s: %s%s',
-                     v_h + v_s, coalesce(v_nome, '?'), v_h, v_s,
-                     case when v_h + v_s > 12 then ' (as 12 primeiras de ' || (v_h + v_s) || ')' else '' end,
-                     v_lista, '.');
-    if v_pend is not null then
-      update pendencia set descricao = v_desc where id = v_pend;
-    elsif not exists (select 1 from pendencia where caso_id = v_caso and motivo = v_motivo
-                         and (estado <> 'resolvida' or coalesce(resolvida_por, '') not like 'sistema:%')) then
-      -- (viva em outro estado, ou resolvida por uma PESSOA: não se abre outra; decisão humana não se desfaz, 0231)
-      insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, documento_id, motivo)
-        values (v_caso, 'extracao', 'conta_canonica_incerta', 'complementar', true, v_desc, v_doc, v_motivo)
-        returning id into v_pend;
-    end if;
-  elsif v_pend is not null then
-    update pendencia set estado = 'resolvida', resolvida_em = now(), resolvida_por = case when v_vigente is distinct from p_documento_versao_id then 'sistema:versao_superada' else 'sistema:extracao' end where id = v_pend;
-    v_pend := null;
-  end if;
-  return v_pend;
-end $$;
-
---
--- Name: FUNCTION fn_fato_pendencia_da_versao(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) IS '0243: a pendência conta_canonica_incerta (motivo fato:conta_incerta:<versão>), UMA por documento-versão, listando as linhas resolvidas (por fn_fato_resolver) por heurística ou sem conta (as 12 primeiras no texto). Reabre-se sozinha no texto e se resolve sozinha quando não sobra linha incerta; só toca estado aberta. Em outro estado, ou resolvida por pessoa, não é reaberta. Complementar e sobrepujável: não trava o mandato, avisa. Só o gatilho da extração nova a chama.';
-
---
--- Name: fn_fato_pode_escrever(uuid); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.fn_fato_pode_escrever(p_caso uuid) RETURNS boolean
-    LANGUAGE sql STABLE SECURITY DEFINER
-    SET search_path TO 'public', 'pg_temp'
-    AS $$
-  select coalesce(current_setting('role', true), 'none') in ('none', 'service_role', 'postgres', 'supabase_admin')
-      or (p_caso is not null and fn_pode_escrever_caso(p_caso))
-$$;
-
---
--- Name: fn_fato_resolver(uuid); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) RETURNS TABLE(campo_id uuid, documento_versao_id uuid, conta_id text, resolucao_metodo text, sem_conta_motivo text, entidade_id uuid, entidade_origem text, entidade_motivo text, entidade_coluna text, periodo_id uuid, periodo_origem text, periodo_motivo text, periodo_coluna text, valor numeric, unidade text, moeda text)
-    LANGUAGE sql STABLE COST 100000 ROWS 200
-    SET jit TO 'off'
-    AS $_$   -- cost/rows: sem eles o planejador estima 1.000 linhas a custo 100 e, ao juntar a view com outra tabela, pode escolher laço aninhado que REEXECUTA o resolver inteiro por linha externa (medido: o teste inteiro passou de 15 s para mais de 2 minutos); com o custo real (uma chamada custa dezenas de milissegundos a segundos) ele faz a junção uma vez. jit = off: o JIT do servidor gastava ~3 s COMPILANDO para ler 684 fatos (3,5 s contra 0,68 s medido em 13/11/2026)
-  with cand as materialized (
-    select ce.id as campo_id, ce.documento_versao_id, d.caso_id, d.tipo_taxonomia as tipo, ce.chave, d.entidade_id as doc_entidade, d.periodo_id as doc_periodo,
-           pd.tipo as dper_tipo, pd.referencia as dper_ref,
-           ce.valor_num, ce.unidade, ce.moeda, ce.secao_canonica as secao, ce.secao_canonica_inferida as inferida,
-           nullif(btrim(ce.entidade_coluna), '') as ecol, nullif(btrim(ce.periodo_coluna), '') as pcol
-      from campo_extraido ce
-      join documento_versao dv on dv.id = ce.documento_versao_id
-      join documento d on d.id = dv.documento_id
-      left join periodo pd on pd.id = d.periodo_id
-     where (p_documento_versao_id is null or ce.documento_versao_id = p_documento_versao_id)
-       and ce.valor_num is not null and fn_tipo_gera_fato(d.tipo_taxonomia)
-  ),
-  -- O papel da linha (fn_papel_linha, ~180 µs) UMA vez por (tipo, rótulo, unidade) distintos, não por linha. Medido em produção em 11/11/2026: 100.215 linhas de demonstração com valor, 6.841 combinações distintas (15x menos chamadas).
-  -- fn_linha_vira_fato é o predicado ÚNICO (a sonda e o teste o usam): o valor entra como 1 porque ele só pergunta se é nulo, e a CTE acima já tirou os nulos.
-  -- (duas CTEs, não uma subconsulta: o Postgres empurra o filtro para DENTRO do distinct e chama fn_papel_linha por LINHA de novo — medido, 21 s.)
-  rotulos as materialized (select distinct tipo, chave, unidade from cand),
-  papel as materialized (
-    select x.tipo, x.chave, x.unidade from rotulos x where fn_linha_vira_fato(x.tipo, x.chave, x.unidade, 1)
-  ),
-  -- O CASAMENTO DA LINHA COM O PAPEL NÃO É UMA JUNÇÃO (4ª VERSÃO DESTE TRECHO, medida em 13/11/2026): `cand join papel` com três igualdades era escolhida pelo planejador como laço aninhado (estimava ~150 linhas por versão: média das versões; a versão extraída agora tem 4.000 e nenhuma estatística) e
-  -- custava 1,8 a 2,1 s numa versão de 4.000 rótulos distintos (16 milhões de comparações) contra 0,4 a 0,54 s sem a junção; o gatilho da extração pagava isso em toda extração grande. Agora o conjunto dos (tipo, rótulo, unidade) que viram fato é UM jsonb (chave = o array jsonb, injetivo) e cada linha só pergunta se a sua chave está lá:
-  -- não há junção para o planejador errar. Mesmo resultado (conferido linha a linha contra a junção, nas fixtures e em 120 mil linhas sintéticas).
-  papel_chave as materialized (
-    select coalesce(jsonb_object_agg(jsonb_build_array(tipo, chave, coalesce(unidade, ''))::text, true), '{}'::jsonb) as m from papel
-  ),
-  alvo as materialized (
-    select c.* from cand c cross join papel_chave k where k.m ? (jsonb_build_array(c.tipo, c.chave, coalesce(c.unidade, ''))::text)
-  ),
-  vinfo as materialized (
-    select v.documento_versao_id, v.caso_id, v.tipo, v.doc_entidade, v.doc_periodo, v.dper_tipo, v.dper_ref,
-           case when cardinality(fn_anos_periodo(v.dper_tipo, v.dper_ref)) = 1 then (fn_anos_periodo(v.dper_tipo, v.dper_ref))[1] end as y
-      from (select distinct documento_versao_id, caso_id, tipo, doc_entidade, doc_periodo, dper_tipo, dper_ref from alvo) v
-  ),
-  -- ===== ENTIDADE: quem decide é fn_coluna_entidade (0023/0030, com fn_mesma_entidade): a coluna que ela devolve para a entidade E é a coluna de E. Nenhum casamento de nome é escrito aqui.
-  -- 3ª REVISÃO, ALTO 1: fn_coluna_entidade devolve UMA coluna por entidade (`limit 1` sem order by). Com duas colunas do documento que casam o nome da MESMA entidade ("Alfa Comércio Atacado", empresa não cadastrada, e "Alfa Comércio") ela entrega a que a ordem física der, e a ALFA recebia a soma de uma coluna que
-  -- talvez nem fosse dela, com a própria coluna anulada pelo motivo falso coluna_sem_entidade_no_mandato. Unicidade por (versão, entidade): as colunas DISTINTAS do documento em que fn_mesma_entidade é verdadeira para a entidade; mais de uma = nenhuma delas é atribuída (entidade_com_varias_colunas).
-  ecols as materialized (
-    select distinct ce.documento_versao_id, v.caso_id, nullif(btrim(ce.entidade_coluna), '') as col
-      from (select distinct documento_versao_id, caso_id from alvo where ecol is not null) v
-      join campo_extraido ce on ce.documento_versao_id = v.documento_versao_id and nullif(btrim(ce.entidade_coluna), '') is not null
-  ),
-  enome as materialized (
-    select c.documento_versao_id, c.col, e.id as entidade_id
-      from ecols c join entidade e on e.caso_id = c.caso_id
-     where fn_mesma_entidade(c.col, e.razao_social)
-  ),
-  enome_n as materialized (select documento_versao_id, entidade_id, count(distinct col) as n from enome group by 1, 2),
-  eescolha as materialized (
-    select x.documento_versao_id, x.col, x.entidade_id, x.razao_social
-      from (select v.documento_versao_id, e.id as entidade_id, e.razao_social, nullif(btrim(fn_coluna_entidade(v.documento_versao_id, e.id)), '') as col
-              from (select distinct documento_versao_id, caso_id from alvo where ecol is not null) v
-              join entidade e on e.caso_id = v.caso_id) x
-     where x.col is not null and x.col <> chr(1)
-       and not exists (select 1 from enome_n n where n.documento_versao_id = x.documento_versao_id and n.entidade_id = x.entidade_id and n.n > 1)
-  ),
-  emap as materialized (
-    select documento_versao_id, col, count(*) as n, (array_agg(entidade_id))[1] as entidade_id, bool_or(fn_mesma_entidade(col, razao_social)) as por_nome
-      from eescolha group by 1, 2
-  ),
-  -- fn_coluna_entidade entrega "a" coluna total (limit 1, sem ordem): com mais de uma coluna total no documento a escolha é arbitrária, e arbitrária não é inequívoca
-  etot as materialized (
-    select ce.documento_versao_id, count(distinct nullif(btrim(ce.entidade_coluna), '')) as n
-      from campo_extraido ce
-     where ce.documento_versao_id in (select documento_versao_id from vinfo) and ce.entidade_coluna is not null
-       and fn_normalizar_texto(ce.entidade_coluna) ~ '^(combinad|consolidad|total|soma)'
-     group by 1
-  ),
-  -- documento que TEM coluna de entidade: a linha sem entidade_coluna não tem dono inequívoco (a coluna total do dono e a linha "sem coluna" seriam duas colunas na mesma chave: a soma dobra)
-  vecol as materialized (
-    select distinct ce.documento_versao_id
-      from campo_extraido ce
-     where ce.documento_versao_id in (select documento_versao_id from vinfo) and nullif(btrim(ce.entidade_coluna), '') is not null
-  ),
-  ent as materialized (
-    select k.documento_versao_id, coalesce(k.ecol, '') as ekey,
-           case when k.ecol is null then (case when not k.tem_ecols then k.doc_entidade end) when m.n = 1 and (m.por_nome or coalesce(t.n, 0) <= 1) then m.entidade_id end as entidade_id,
-           case when k.ecol is null then (case when k.doc_entidade is not null and not k.tem_ecols then 'documento' end)
-                when m.n = 1 and (m.por_nome or coalesce(t.n, 0) <= 1) then (case when m.por_nome then 'coluna' else 'coluna_total' end) end as origem,
-           case when k.ecol is null then (case when k.doc_entidade is null then 'documento_sem_entidade' when k.tem_ecols then 'linha_sem_coluna_em_documento_com_colunas_de_entidade' end)
-                when m.n = 1 and m.por_nome then null
-                when m.n = 1 and coalesce(t.n, 0) <= 1 then null
-                when m.n = 1 then 'coluna_total_ambigua'
-                when m.n > 1 then 'coluna_casa_varias_entidades'
-                when exists (select 1 from enome en join enome_n nn on nn.documento_versao_id = en.documento_versao_id and nn.entidade_id = en.entidade_id
-                              where en.documento_versao_id = k.documento_versao_id and en.col = k.ecol and nn.n > 1) then 'entidade_com_varias_colunas'
-                when fn_normalizar_texto(k.ecol) ~ '^(combinad|consolidad|total|soma)' then 'coluna_total_nao_escolhida'
-                else 'coluna_sem_entidade_no_mandato' end as motivo
-      from (select x.documento_versao_id, x.doc_entidade, x.ecol, (ve.documento_versao_id is not null) as tem_ecols
-              from (select distinct documento_versao_id, doc_entidade, ecol from alvo) x
-              left join vecol ve on ve.documento_versao_id = x.documento_versao_id) k
-      left join emap m on m.documento_versao_id = k.documento_versao_id and m.col = k.ecol
-      left join etot t on t.documento_versao_id = k.documento_versao_id
-  ),
-  -- ===== PERÍODO: a 0243 não interpreta nome de coluna. Só atribui quando as funções do banco para esta pergunta (fn_coluna_e_saldo, fn_coluna_e_abertura, fn_periodo_e_parcial, fn_anos_periodo, fn_periodo_canonico: 0199-0201/0234) decidem de forma INEQUÍVOCA.
-  --   A coluna que É o período do documento: a ÚNICA coluna de saldo (Saldo final/atual) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento num documento NÃO parcial. Duas candidatas (ou nenhuma): nenhuma é escolhida (fn_coluna_periodo_do_ano
-  --   desempata por contagem e ordem alfabética: no balancete de junho com Jun/2025 e 30/06/2025 ela entrega uma ao acaso, e "ao acaso" é número fabricado). Documento sem coluna nenhuma: a linha é do período do documento.
-  vcol as materialized (
-    select i.documento_versao_id, c.pcol, i.y,
-           fn_coluna_e_abertura(c.pcol) as abertura,
-           (fn_coluna_e_saldo(c.pcol) and not fn_coluna_e_abertura(c.pcol)) as saldo,
-           fn_periodo_e_parcial(c.pcol, i.tipo, i.dper_tipo, i.dper_ref) as parcial,
-           case when regexp_replace(fn_periodo_canonico('outro', c.pcol), '^(\d{4})-12-31$', '\1') ~ '^\d{4}$'
-                then regexp_replace(fn_periodo_canonico('outro', c.pcol), '^(\d{4})-12-31$', '\1')::int end as ano_puro
-      from vinfo i
-      join (select distinct ce.documento_versao_id, nullif(btrim(ce.periodo_coluna), '') as pcol
-              from campo_extraido ce
-             where ce.documento_versao_id in (select documento_versao_id from vinfo) and nullif(btrim(ce.periodo_coluna), '') is not null) c
-        on c.documento_versao_id = i.documento_versao_id
-  ),
-  vcol2 as materialized (
-    select c.*, (c.ano_puro is not null and not c.parcial and c.ano_puro = c.y) as e_ano_do_doc,
-           count(*) filter (where c.ano_puro is not null and not c.parcial) over (partition by c.documento_versao_id, c.ano_puro) as n_mesmo_ano
-      from vcol c
-  ),
-  vesc as materialized (
-    select documento_versao_id, count(*) as n_cols,
-           case when count(*) filter (where y is not null and (saldo or e_ano_do_doc)) = 1
-                then min(pcol) filter (where y is not null and (saldo or e_ano_do_doc)) end as escolhida
-      from vcol2 group by 1
-  ),
-  per0 as materialized (
-    select documento_versao_id, pcol, abertura, parcial, ano_puro, e_ano_do_doc, n_mesmo_ano from vcol2
-    union all
-    select documento_versao_id, null, false, false, null::int, false, 0 from vinfo
-  ),
-  per as materialized (
-    select z.documento_versao_id, coalesce(z.pcol, '') as pkey,
-           z.pid as periodo_id,
-           case when z.pid is null then null when z.pcol is null or z.pcol = z.escolhida then 'documento' else 'coluna' end as origem,
-           case when z.pid is not null then null
-                when z.pcol is null and z.n_cols > 0 then 'linha_sem_coluna_em_documento_com_colunas'
-                when (z.pcol is null or z.pcol = z.escolhida) and z.doc_periodo is null then 'documento_sem_periodo'
-                when z.abertura then 'coluna_de_abertura'
-                when z.n_mesmo_ano > 1 then 'mais_de_uma_coluna_para_o_mesmo_periodo'
-                when z.ano_puro is not null and not z.parcial and not z.e_ano_do_doc then 'periodo_da_coluna_nao_cadastrado'
-                else 'coluna_nao_e_o_periodo_do_documento' end as motivo
-      from (select p.documento_versao_id, p.pcol, p.abertura, p.parcial, p.ano_puro, p.e_ano_do_doc, p.n_mesmo_ano,
-                   i.doc_periodo, coalesce(e.n_cols, 0) as n_cols, e.escolhida,
-                   case when p.pcol is null then (case when coalesce(e.n_cols, 0) = 0 then i.doc_periodo end)
-                        when p.pcol = e.escolhida then i.doc_periodo
-                        when p.abertura then null
-                        when p.ano_puro is not null and not p.parcial and not p.e_ano_do_doc and p.n_mesmo_ano = 1 then x.id
-                        else null end as pid
-              from per0 p
-              join vinfo i on i.documento_versao_id = p.documento_versao_id
-              left join vesc e on e.documento_versao_id = p.documento_versao_id
-              left join lateral (
-                -- o MESMO casamento de fn_upsert_periodo (forma canônica, o de menor referência no empate), sem o insert: o período NÃO é criado aqui. O fechamento 31/12/AAAA e o ano AAAA são o mesmo período.
-                select coalesce(
-                         (select q.id from periodo q where q.id = i.doc_periodo
-                             and regexp_replace(fn_periodo_canonico(q.tipo, q.referencia), '^(\d{4})-12-31$', '\1') = p.ano_puro::text),
-                         (select q.id from periodo q where q.caso_id = i.caso_id
-                             and regexp_replace(fn_periodo_canonico(q.tipo, q.referencia), '^(\d{4})-12-31$', '\1') = p.ano_puro::text
-                           order by q.referencia, q.id limit 1)) as id
-                 where p.ano_puro is not null and not p.parcial and not p.e_ano_do_doc and p.n_mesmo_ano = 1) x on true) z
-  )
-  select a.campo_id, a.documento_versao_id, c.codigo,
-         case when c.codigo is null then 'sem_conta' when a.inferida then 'heuristica' else 'declarada' end,
-         case when c.codigo is not null then null
-              when coalesce(nullif(btrim(a.secao), ''), 'NAO_CLASSIFICAVEL') = 'NAO_CLASSIFICAVEL' then 'secao_nao_declarada'
-              else 'secao_fora_do_catalogo' end,
-         e.entidade_id, e.origem, e.motivo, a.ecol, p.periodo_id, p.origem, p.motivo, a.pcol, a.valor_num, a.unidade, a.moeda
-    from alvo a
-    left join conta_canonica c on c.secao_canonica = a.secao
-    join ent e on e.documento_versao_id = a.documento_versao_id and e.ekey = coalesce(a.ecol, '')
-    join per p on p.documento_versao_id = a.documento_versao_id and p.pkey = coalesce(a.pcol, '')
-$_$;
-
---
--- Name: FUNCTION fn_fato_resolver(p_documento_versao_id uuid); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) IS '0243: a identidade de cada linha elegível, calculada na hora e SÓ LÊ: conta (a seção, pelo catálogo), entidade e período (pela coluna da linha quando uma função do banco decide sem ambiguidade, pelo documento quando não, e NULOS com o motivo quando a coluna não é saldo, é de abertura, o documento é parcial ou o total duplica a coluna da entidade). Versão nula = todas. NÃO É SECURITY DEFINER, de propósito: ela lê campo_extraido, documento, entidade e periodo com a RLS de QUEM CHAMA (por isso a view fato_financeiro, security_invoker, mostra a cada usuário só o próprio mandato). É a única definição de "o fato"; não existe cópia gravada.';
-
---
--- Name: fn_fato_sonda_recentes(); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.fn_fato_sonda_recentes() RETURNS bigint
-    LANGUAGE sql STABLE SECURITY DEFINER
-    SET search_path TO 'public', 'pg_temp'
-    SET jit TO 'off'
-    AS $$
-  with recentes as materialized (
-    select dv.id, d.tipo_taxonomia, dv.criada_em
-      from documento_versao dv join documento d on d.id = dv.documento_id
-     where fn_tipo_gera_fato(d.tipo_taxonomia)
-       and exists (select 1 from campo_extraido x where x.documento_versao_id = dv.id and x.origem_valor = 'extracao' and x.valor_num is not null)
-     order by dv.criada_em desc, dv.id limit 30),
-  -- as 3 mais novas, entre as 30 mais novas, de até 1.500 linhas: o custo da sonda tem TETO (medido: 3 versões de 4.000 linhas custavam 4 s por leitura da sonda inteira; com o teto, ~0,3 s)
-  v as materialized (
-    select id, tipo_taxonomia from recentes where (select count(*) from campo_extraido x where x.documento_versao_id = recentes.id) <= 1500 order by criada_em desc, id limit 3),
-  r as materialized (select r.* from v cross join lateral fn_fato_resolver(v.id) r),
-  -- as linhas elegíveis das 3 versões, pela pergunta INDEPENDENTE (fn_linha_vira_fato por linha, sem passar pelo resolver)
-  e as materialized (
-    select ce.id, ce.secao_canonica, ce.secao_canonica_inferida
-      from v join campo_extraido ce on ce.documento_versao_id = v.id and ce.origem_valor = 'extracao'
-     where fn_linha_vira_fato(v.tipo_taxonomia, ce.chave, ce.unidade, ce.valor_num)),
-  -- (uma junção por igualdade, não um `not exists` correlacionado contra a CTE: medido, o correlacionado leva 12 s com 3 versões de 4.000 linhas, a junção ~1 s)
-  achado as materialized (
-    select e.id, e.secao_canonica, e.secao_canonica_inferida, r.campo_id, r.resolucao_metodo, r.conta_id, c.secao_canonica as secao_da_conta
-      from e left join r on r.campo_id = e.id left join conta_canonica c on c.codigo = r.conta_id)
-  select case when not exists (select 1 from v) then -1 else
-    -- linha elegível sem fato, ou com fato de conta/método diferentes da linha (a conta é o nó da seção; sem_conta só se o catálogo não conhece a seção)
-    (select count(*) from achado a
-      where a.campo_id is null
-         or a.resolucao_metodo <> case when a.conta_id is null then 'sem_conta' when a.secao_canonica_inferida then 'heuristica' else 'declarada' end
-         or (a.conta_id is not null and a.secao_da_conta is distinct from a.secao_canonica)
-         or (a.conta_id is null and exists (select 1 from conta_canonica c2 where c2.secao_canonica = a.secao_canonica)))
-    -- fato de linha que NÃO é elegível: o resolver é injetivo (um fato por linha), então sobra fato se há mais fatos do que linhas elegíveis com fato
-    + ((select count(*) from r) - (select count(*) from achado a where a.campo_id is not null))
-  end
-$$;
-
---
--- Name: FUNCTION fn_fato_sonda_recentes(); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.fn_fato_sonda_recentes() IS '0243: quantas divergências há entre as 3 versões de demonstração mais novas (com linha de extração) e o fato que o resolver devolve para elas (linha elegível sem fato, fato de conta ou método diferentes da linha, fato de linha não elegível); -1 se não há versão a medir. security definer só para a RLS do chamador não mudar a amostra; devolve um número, nenhum dado.';
 
 --
 -- Name: fn_fator_escala(text); Type: FUNCTION; Schema: public; Owner: -
@@ -7091,6 +7275,30 @@ $_$;
 COMMENT ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) IS '0224 (sobre a 0215): linha do tempo do mandato (quem fez o quê e quando), da mais nova para a mais velha, montada do que já é gravado. Acrescenta o tipo documento_original_apagado (o original apagado do Storage, com ator e nome do arquivo). Cursor composto (p_antes + p_antes_chave); autor NULL = sistema.';
 
 --
+-- Name: fn_impressao_do_cabecalho(jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) RETURNS text
+    LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  with celulas as (
+    select e.ord,
+           btrim(regexp_replace(normalize(coalesce(e.v #>> '{}', ''), NFC),
+                                '[ ' || chr(9) || chr(10) || chr(13) || chr(160) || ']+', ' ', 'g'),
+                 ' ' || chr(9) || chr(10) || chr(13) || chr(160)) as c
+      from jsonb_array_elements(p_cabecalho) with ordinality as e(v, ord)),
+  ultima as (select max(ord) as n from celulas where c <> '')
+  select encode(sha256(convert_to(coalesce((select string_agg(c, chr(31) order by ord) from celulas, ultima where ord <= ultima.n), ''), 'UTF8')), 'hex')
+$$;
+
+--
+-- Name: FUNCTION fn_impressao_do_cabecalho(p_cabecalho jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) IS '0272: a impressão digital do cabeçalho (sha256 hex), a MESMA de impressaoDoCabecalho em Leitor/lib/mapeamento.mjs: cada célula em NFC, [espaço \t \n \r U+00A0] colapsados em um espaço e aparados nas pontas, células vazias do FIM fora, junção por U+001F, SEM minúsculas (lower() depende do LC_CTYPE). Calculada aqui, nunca aceita do navegador.';
+
+--
 -- Name: fn_indice_macro_anual(integer); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -7724,6 +7932,162 @@ $$;
 COMMENT ON FUNCTION public.fn_instalacao_resumo() IS 'O veredito de uma linha sobre a instalação, para o painel. "completa" só é true quando NENHUM requisito falta — inclusive os informativos, porque um requisito que não vale a pena conferir não devia estar no catálogo.';
 
 --
+-- Name: fn_kit_do_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_kit_do_caso(p_caso uuid) RETURNS TABLE(tipo text, estado text, motivo text, documentos uuid[], docs_por_estado jsonb, conferido_por text, conferido_em timestamp with time zone, empresas_total integer, empresas_com_documento integer, empresas_atendidas integer, documentos_sem_empresa integer, aguardando_desde timestamp with time zone, conferencia_em timestamp with time zone, documentos_depois_da_conferencia integer)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  with kit as materialized (
+    -- "N de M empresas" só faz sentido onde o item é cobrado por empresa (granularidade entidade e entidade_periodo): MUTUOS e FAT_INTRAGRUPO
+    -- são do caso, COMBINADO é do período — um documento só os cumpre, e "1 de 8" para item completo seria número falso.
+    select t.codigo, t.granularidade::text in ('entidade', 'entidade_periodo') as por_empresa
+      from taxonomia_tipo_documento t where t.obrigatoriedade = 'obrigatorio'
+  ),
+  -- A pergunta "este documento serve como o tipo" é a de fn_documento_serve_como (0157), a mesma do passo 1 da conferência.
+  serve as materialized (
+    select k.codigo, d.id as doc, d.tipo_taxonomia as tipo_doc, d.entidade_id, d.criado_em, fn_versao_com_extracao(d.id) as v,
+           exists (select 1 from entidade e
+                    where e.id = d.entidade_id and e.papel_no_grupo is distinct from 'fora_do_perimetro') as no_perimetro
+      from kit k
+      join documento d on d.caso_id = p_caso and fn_documento_serve_como(d.id, k.codigo)
+  ),
+  -- A pergunta "a leitura desta versão concluiu" (fn_versao_extracao_concluida, cara: 0,77 ms por versão sob a RLS) só interessa às versões dos documentos
+  -- DESTE mandato sem versão com linha. Como `exists (... where dv.documento_id = s.doc and fn_...)` a RLS a transformava em hash sobre documento_versao
+  -- INTEIRA (2.247 versões, 1.679 chamadas, duas vezes: 2,96 de 3,18 s medidos em produção, 13/11/2026); o CTE separado, materializado, calcula a pergunta uma vez por versão do mandato.
+  concluida as materialized (
+    select distinct s.doc
+      from serve s
+      cross join lateral (select dv.id from documento_versao dv where dv.documento_id = s.doc) v
+     where s.v is null and fn_versao_extracao_concluida(v.id)
+  ),
+  lido as materialized (
+    select s.*,
+           case
+             -- sem versão com linha: ou a leitura já acabou sem dado, ou o sistema já declarou que não vai acontecer, ou ainda não acabou
+             when s.v is null then
+               case
+                 -- o sistema JÁ disse que a leitura não houve: fn_conferir_lote abre documento_nao_extraido (a extração nunca foi chamada),
+                 -- e o diagnóstico abre arquivo_ilegivel/arquivo_corrompido. Esperar por uma leitura que ele já declarou perdida é mentir "aguardando".
+                 when exists (select 1 from pendencia pe
+                               where pe.documento_id = s.doc and pe.estado <> 'resolvida'
+                                 and pe.tipo in ('documento_nao_extraido', 'arquivo_ilegivel', 'arquivo_corrompido'))
+                      then 'recebido_sem_linha'
+                 -- leitura concluída SEM dado em tipo que não traz dado financeiro por natureza (contrato social, certidão): zero linha é o
+                 -- resultado certo, não falta (fn_tipo_sem_dado_por_natureza, 0231). Não há linha a conferir.
+                 when fn_tipo_sem_dado_por_natureza(s.tipo_doc)
+                      and exists (select 1 from concluida c where c.doc = s.doc)
+                      then 'lido_sem_dado_por_natureza'
+                 when exists (select 1 from concluida c where c.doc = s.doc)
+                      or exists (select 1 from pendencia pe
+                                  where pe.documento_id = s.doc and pe.tipo = 'extracao_falhou' and pe.estado <> 'resolvida')
+                      then 'recebido_sem_linha'
+                 else 'aguardando_extracao' end
+             -- com linha, mas alguma sem aceite de PESSOA (o auto-aceite `sistema:` não conta)
+             when exists (select 1 from campo_extraido ce
+                           where ce.documento_versao_id = s.v
+                             and not (ce.status_aceite <> 'pendente' and ce.aceito_por is not null
+                                      and ce.aceito_por not like 'sistema:%')) then 'extraido'
+             else 'conferido'
+           end as estado
+      from serve s
+  ),
+  aceite as materialized (
+    select l.codigo, max(ce.aceito_em) as em,
+           (array_agg(ce.aceito_por order by ce.aceito_em desc nulls last))[1] as por
+      from lido l
+      join campo_extraido ce on ce.documento_versao_id = l.v
+     where l.estado = 'conferido'
+     group by l.codigo
+  ),
+  item as materialized (
+    select k.codigo, k.por_empresa,
+           count(l.doc)::int as n_docs,
+           coalesce(array_agg(l.doc order by l.criado_em, l.doc) filter (where l.doc is not null), '{}') as docs,
+           -- o documento lido-sem-dado-por-natureza não pesa: não há linha a conferir nele; só vale como estado do item se for o ÚNICO
+           min(case l.estado when 'recebido_sem_linha' then 1 when 'aguardando_extracao' then 2
+                             when 'extraido' then 3 when 'conferido' then 4 end)
+             filter (where l.estado <> 'lido_sem_dado_por_natureza') as pior,
+           min(l.criado_em) filter (where l.estado = 'aguardando_extracao') as aguardando_desde,
+           count(*) filter (where l.doc is not null and l.entidade_id is null)::int as sem_empresa,
+           count(distinct l.entidade_id) filter (where l.no_perimetro)::int as com_documento,
+           count(distinct l.entidade_id) filter (where l.no_perimetro and l.estado in ('extraido', 'conferido', 'lido_sem_dado_por_natureza'))::int as lidas
+      from kit k
+      left join lido l on l.codigo = k.codigo
+     group by k.codigo, k.por_empresa
+  ),
+  conf as (
+    select max(ev.criado_em) as em
+      from evento_auditoria ev
+     where ev.acao = 'completude_recomputada' and ev.entidade_ref = 'caso:' || p_caso::text
+  ),
+  m as (
+    select count(*)::int as n from entidade e
+     where e.caso_id = p_caso and e.papel_no_grupo is distinct from 'fora_do_perimetro'
+  )
+  select i.codigo::text,
+         est.estado,
+         case est.estado
+           when 'faltante' then
+             format('Nenhum documento recebido serve como %s. Enquanto faltar, o Portão 1 não abre e o que depende dele sai em branco no book.', i.codigo)
+           when 'dispensado' then
+             format('Seguiu sem %s por decisão de pessoa (prosseguir com ressalva). O que depende dele sai em branco no book, e a ressalva fica na pendência.', i.codigo)
+           when 'aguardando_extracao' then
+             'Recebido, mas a leitura ainda não terminou: nenhuma versão concluiu a extração e não há falha registrada. Se isto não mudar, o documento ficou sem leitura e o book sai vazio nesta parte.'
+           when 'recebido_sem_linha' then
+             'Recebido, mas nenhuma linha foi lida (a extração falhou, nunca foi chamada ou o arquivo está ilegível): o book sai VAZIO nesta parte, mesmo com o item recebido.'
+           when 'lido_sem_dado_por_natureza' then
+             'Lido: este tipo de documento (societário/legal) não traz dado financeiro, então não há linha a conferir. O book não depende de linha dele.'
+           when 'extraido' then
+             'Lido, mas nenhuma pessoa conferiu todas as linhas. O aceite automático do sistema não conta como conferência.'
+           else
+             'Toda linha da versão vigente foi aceita por pessoa.'
+         end,
+         i.docs,
+         coalesce((select jsonb_object_agg(g.estado, g.n)
+                     from (select l2.estado, count(*) as n from lido l2 where l2.codigo = i.codigo group by l2.estado) g),
+                  '{}'::jsonb),
+         case when est.estado = 'conferido' then a.por end,
+         case when est.estado = 'conferido' then a.em end,
+         case when i.por_empresa then m.n end,
+         case when i.por_empresa then i.com_documento end,
+         case when i.por_empresa then i.lidas end,
+         case when i.por_empresa then i.sem_empresa end,
+         i.aguardando_desde,
+         conf.em,
+         (select count(*)::int from documento d where d.caso_id = p_caso and (conf.em is null or d.criado_em > conf.em))
+    from item i
+    cross join conf
+    cross join m
+    left join aceite a on a.codigo = i.codigo
+    cross join lateral (
+      select case
+               when i.n_docs = 0 then
+                 case when exists (select 1 from pendencia pe
+                                    where pe.caso_id = p_caso and pe.tipo = 'item_faltante'
+                                      and pe.chave_motor = 'completude:item_faltante:' || i.codigo
+                                      and pe.estado = 'aceita_com_ressalva')
+                      then 'dispensado' else 'faltante' end
+               when i.pior is null then 'lido_sem_dado_por_natureza'
+               when i.pior = 1 then 'recebido_sem_linha'
+               when i.pior = 2 then 'aguardando_extracao'
+               when i.pior = 3 then 'extraido'
+               else 'conferido'
+             end as estado
+    ) est
+   -- mandato que o chamador não enxerga (RLS) ou que não existe: nenhuma linha, nunca "tudo faltante"
+   where exists (select 1 from caso c where c.id = p_caso)
+  order by i.codigo;
+$$;
+
+--
+-- Name: FUNCTION fn_kit_do_caso(p_caso uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_kit_do_caso(p_caso uuid) IS '0300: o estado de cada item OBRIGATÓRIO do Kit Básico do mandato, derivado de campo_extraido na leitura. Estados: faltante, dispensado (item_faltante aceita_com_ressalva e ainda sem documento), aguardando_extracao (aguardando_desde = o criado_em do documento mais antigo nessa espera), recebido_sem_linha (extração concluída ou falha aberta sem linha, OU o sistema já declarou documento_nao_extraido/arquivo_ilegivel/arquivo_corrompido aberta), lido_sem_dado_por_natureza (leitura concluída sem dado em tipo societário/legal: não há linha a conferir), extraido, conferido (toda linha da versão vigente aceita por PESSOA; o auto-aceite sistema: não conta). O item toma o pior estado dos documentos que servem (o lido_sem_dado_por_natureza não pesa, salvo se for o único). empresas_total/com_documento/atendidas/documentos_sem_empresa dizem "N de M" SÓ para granularidade entidade e entidade_periodo (M sem fora_do_perimetro); nos demais tipos (caso, periodo) são NULOS e a tela não mostra fração. conferencia_em = último evento completude_recomputada; documentos_depois_da_conferencia = documentos criados depois dele (todos se nunca rodou). Mandato invisível ao chamador (RLS) = zero linhas, e o portal deve ler isso como "Kit não lido", nunca como faltante. security invoker. 0301: o CTE concluida pergunta fn_versao_extracao_concluida só das versões dos documentos do mandato (LATERAL), não de documento_versao inteira sob a RLS; mesma resposta.';
+
+--
 -- Name: fn_lado_do_mutuo(text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -7903,22 +8267,6 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) IS '0195: uma linha (versão do documento, sua periodo_coluna, e o período PRÓPRIO do documento) vale para o ano pedido? Fatorada da lógica que a 0194 escreveu duas vezes dentro de fn_reconciliar_mutuos — documento sem coluna de período só conta para o ano que o SEU período ancora, nunca para qualquer ano perguntado.';
-
---
--- Name: fn_linha_vira_fato(text, text, text, numeric); Type: FUNCTION; Schema: public; Owner: -
---
-
-CREATE FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) RETURNS boolean
-    LANGUAGE sql IMMUTABLE
-    AS $$
-  select p_valor is not null and fn_tipo_gera_fato(p_tipo) and fn_papel_linha(p_chave, p_tipo, p_unidade) = 'conta'
-$$;
-
---
--- Name: FUNCTION fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric); Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) IS '0243: a linha de campo_extraido vira fato quando (1) tem valor (célula vazia é ausência, não zero: regra 1), (2) o documento é de demonstração e (3) o papel é conta (fn_papel_linha): subtotal é a P28, derivado e série mensal não são conta.';
 
 --
 -- Name: fn_linhas_do_realizado(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -8300,6 +8648,196 @@ $$;
 --
 
 COMMENT ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) IS 'As linhas que o Portão 1 vai COBRAR deste tipo de documento, para a planilha de transcrição listá-las. São poucas de propósito: taxonomia_linha_exigida é o MÍNIMO exigido, não um gabarito de demonstração — planilha que fingisse listar todas as contas de um balanço estaria inventando a estrutura do documento do cliente. O resto vai em linha livre.';
+
+--
+-- Name: fn_linhas_por_versao(uuid[]); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) RETURNS TABLE(documento_versao_id uuid, linhas bigint)
+    LANGUAGE sql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+  select v.id, coalesce(c.n, 0)::bigint
+    from (select distinct u.id from unnest(p_versoes) as u(id) where u.id is not null) v
+    left join (select ce.documento_versao_id as id, count(*) as n
+                 from campo_extraido ce
+                where ce.documento_versao_id = any (p_versoes)
+                group by ce.documento_versao_id) c on c.id = v.id;
+$$;
+
+--
+-- Name: FUNCTION fn_linhas_por_versao(p_versoes uuid[]); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) IS '0276: quantas linhas de campo_extraido tem cada versão pedida, contadas no banco (sem o teto silencioso de 1.000 linhas do PostgREST que obrigava o portal a paginar: 10.231 linhas = 12 idas, 5,8 s). UMA linha por versão distinta pedida, com 0 explícito (o teto de 1.000 do PostgREST vale para o número de linhas da resposta: o portal confere linhas devolvidas = versões distintas pedidas). security invoker: a RLS de campo_extraido (0216) decide, então mandato alheio devolve zero linhas, como a leitura direta da tabela.';
+
+--
+-- Name: fn_mapeamento_confirmar(text, jsonb, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_uid       uuid := auth.uid();
+  v_papel     text;
+  v_erros     text[];
+  v_impressao text;
+  v_id        uuid := gen_random_uuid();
+  v_antigo    uuid;
+begin
+  -- Anônimo (JWT sem sub), conexão de serviço e quem não tem papel caem TODOS aqui: sem auth.uid() não há linha em `membro`, e fn_meu_papel() é NULL. Um
+  -- `if v_uid is null` à parte seria código morto (medido: desligado, nenhum assert comportamental reprova), por isso não existe; o autor gravado é o v_uid.
+  v_papel := fn_meu_papel();
+  if v_papel is null or v_papel not in ('socio', 'analista') then
+    raise exception 'Confirmar o mapeamento de colunas é reservado a Sócio e Analista (seu papel: %)', coalesce(v_papel, 'nenhum') using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  v_erros := fn_mapeamento_erros(p_mapa, p_cabecalho, p_formato);
+  if cardinality(v_erros) > 0 then
+    raise exception 'Mapeamento recusado: %', array_to_string(v_erros, '; ') using errcode = '22023';
+  end if;
+
+  v_impressao := fn_impressao_do_cabecalho(p_cabecalho);
+  perform pg_advisory_xact_lock(hashtextextended(p_tipo_base || ':' || v_impressao, 0));
+  update mapeamento_de_colunas set substituido_em = now(), substituido_por = v_id
+   where tipo_base = p_tipo_base and impressao = v_impressao and substituido_em is null
+  returning id into v_antigo;
+  insert into mapeamento_de_colunas (id, tipo_base, impressao, cabecalho, mapa, formato, confirmado_por)
+  values (v_id, p_tipo_base, v_impressao, p_cabecalho, p_mapa, p_formato, v_uid);
+
+  insert into evento_auditoria (ator, acao, entidade_ref, antes, depois)
+  values ('usuario:' || v_uid, 'mapeamento_confirmado', 'mapeamento_de_colunas:' || v_id,
+          case when v_antigo is null then null else jsonb_build_object('substituido', v_antigo) end,
+          jsonb_build_object('tipo_base', p_tipo_base, 'impressao', v_impressao, 'mapa', p_mapa, 'formato', p_formato));
+  return jsonb_build_object('id', v_id, 'impressao', v_impressao, 'substitui', v_antigo);
+end $$;
+
+--
+-- Name: FUNCTION fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) IS '0272: o analista confirma o mapeamento de colunas de um arquivo de contas a receber/a pagar. Só Sócio e Analista (fn_meu_papel, 0216); anônimo e conexão de serviço recusados. Valida (fn_mapeamento_erros) e recusa com o motivo; calcula a impressão do cabeçalho no banco; marca a vigente anterior do mesmo par como substituída; grava mapeamento_confirmado em evento_auditoria. Devolve {id, impressao, substitui}.';
+
+--
+-- Name: fn_mapeamento_erros(jsonb, jsonb, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) RETURNS text[]
+    LANGUAGE plpgsql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+declare
+  v_erros  text[] := '{}';
+  v_n      int;
+  k        text;
+  v        jsonb;
+  v_usadas jsonb := '{}';
+  v_efeito text;
+begin
+  if p_cabecalho is null or jsonb_typeof(p_cabecalho) <> 'array' then
+    return array['o cabeçalho tem de ser uma lista de textos (as células do cabeçalho como o arquivo traz)'];
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_cabecalho) e where jsonb_typeof(e) not in ('string', 'null')) then
+    return array['o cabeçalho tem de ser uma lista de textos: há célula que não é texto'];
+  end if;
+  v_n := jsonb_array_length(p_cabecalho);
+  if v_n = 0 or not exists (select 1 from jsonb_array_elements(p_cabecalho) e where btrim(coalesce(e #>> '{}', ''), ' ' || chr(9) || chr(10) || chr(13) || chr(160)) <> '') then
+    return array['o cabeçalho está vazio: sem nome de coluna não há impressão para reaproveitar o mapeamento'];
+  end if;
+
+  if p_mapa is null or jsonb_typeof(p_mapa) <> 'object' then
+    return array['o mapa tem de ser um objeto campo -> índice da coluna'];
+  end if;
+  for k, v in select key, value from jsonb_each(p_mapa) order by key loop
+    if not (k = any (array['contraparte', 'documento_contraparte', 'titulo', 'parcela', 'emissao', 'vencimento',
+                           'valor_original', 'valor_pago', 'saldo', 'data_pagamento', 'situacao'])) then
+      v_erros := v_erros || format('campo desconhecido: %s', k);
+      continue;
+    end if;
+    if jsonb_typeof(v) <> 'number' or v::text !~ '^[0-9]{1,6}$' then
+      v_erros := v_erros || format('%s: o índice da coluna tem de ser um inteiro a partir de 0 (veio %s)', k, v::text);
+      continue;
+    end if;
+    if v::text::int >= v_n then
+      v_erros := v_erros || format('%s: coluna %s fora do cabeçalho (%s colunas)', k, v::text, v_n);
+      continue;
+    end if;
+    if v_usadas ? v::text then
+      v_erros := v_erros || format('a coluna "%s" está em %s e em %s', p_cabecalho ->> (v::text::int), v_usadas ->> v::text, k);
+    else
+      v_usadas := v_usadas || jsonb_build_object(v::text, k);
+    end if;
+  end loop;
+  for k, v_efeito in select * from (values ('contraparte', 'sem contraparte não há aging por cliente ou fornecedor nem concentração'),
+                                            ('vencimento', 'sem vencimento o aging não pode ser calculado'),
+                                            ('saldo', 'sem saldo não há aging nem conciliação com o balanço')) as o(campo, efeito) loop
+    if not (p_mapa ? k) then
+      v_erros := v_erros || format('falta o campo obrigatório %s: %s', k, v_efeito);
+    end if;
+  end loop;
+
+  if p_formato is null or jsonb_typeof(p_formato) <> 'object' then
+    v_erros := v_erros || 'o formato tem de ser um objeto com exatamente as chaves decimal e datas (quem confirma diz os dois)'::text;
+  else
+    for k in select key from jsonb_each(p_formato) where key not in ('decimal', 'datas') order by key loop
+      v_erros := v_erros || format('formato: chave desconhecida "%s" (só decimal e datas)', k);
+    end loop;
+    if not (p_formato ? 'decimal') then
+      v_erros := v_erros || 'formato: falta a chave decimal (virgula ou ponto): "1.250" é mil duzentos e cinquenta ou um e vinte e cinco, e só o arquivo diz'::text;
+    elsif p_formato -> 'decimal' is distinct from to_jsonb('virgula'::text) and p_formato -> 'decimal' is distinct from to_jsonb('ponto'::text) then
+      v_erros := v_erros || format('formato.decimal: %s não está na lista (virgula, ponto)', (p_formato -> 'decimal')::text);
+    end if;
+    if not (p_formato ? 'datas') then
+      v_erros := v_erros || 'formato: falta a chave datas (dia_mes_ano ou mes_dia_ano): "03/04/2025" é 3 de abril ou 4 de março, e só o arquivo diz'::text;
+    elsif p_formato -> 'datas' is distinct from to_jsonb('dia_mes_ano'::text) and p_formato -> 'datas' is distinct from to_jsonb('mes_dia_ano'::text) then
+      v_erros := v_erros || format('formato.datas: %s não está na lista (dia_mes_ano, mes_dia_ano)', (p_formato -> 'datas')::text);
+    end if;
+  end if;
+  return v_erros;
+end $_$;
+
+--
+-- Name: FUNCTION fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) IS '0272: os motivos pelos quais um mapeamento NÃO é aplicável (lista vazia = válido). Espelha validarMapeamento e os 11 CAMPOS de Leitor/lib/mapeamento.mjs (índice contra o cabeçalho ORIGINAL; obrigatórios contraparte, vencimento, saldo; coluna em um só campo) e fecha o formato (decimal, datas). Usada pela confirmação e pela CHECK da tabela.';
+
+--
+-- Name: fn_mapeamento_vigente(text, jsonb); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) RETURNS jsonb
+    LANGUAGE plpgsql STABLE
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare v_r jsonb;
+begin
+  if not (fn_conexao_de_servico() or fn_tem_papel()) then
+    raise exception 'Ler o mapeamento de colunas exige um papel (Sócio, Analista ou Leitura)' using errcode = '42501';
+  end if;
+  if p_tipo_base is null or p_tipo_base not in ('contas_a_receber', 'contas_a_pagar') then
+    raise exception 'tipo_base "%" não existe (contas_a_receber ou contas_a_pagar)', p_tipo_base using errcode = '22023';
+  end if;
+  if p_cabecalho is null or jsonb_typeof(p_cabecalho) <> 'array' then
+    raise exception 'o cabeçalho tem de ser uma lista de textos' using errcode = '22023';
+  end if;
+  select jsonb_build_object('id', m.id, 'tipo_base', m.tipo_base, 'impressao', m.impressao, 'cabecalho', m.cabecalho, 'mapa', m.mapa,
+                            'formato', m.formato, 'confirmado_por', m.confirmado_por, 'confirmado_em', m.confirmado_em)
+    into v_r
+    from mapeamento_de_colunas m
+   where m.tipo_base = p_tipo_base and m.impressao = fn_impressao_do_cabecalho(p_cabecalho) and m.substituido_em is null;
+  return v_r;   -- NULL = ninguém confirmou este cabeçalho (ausência declarada, não erro): o arquivo não vira dado até confirmar
+end $$;
+
+--
+-- Name: FUNCTION fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) IS '0272: o mapeamento vigente (a confirmação mais nova) para o tipo_base e o cabeçalho, no formato do `confirmado` de aplicadorDeMapeamento + o `formato`; NULL se ninguém confirmou. Invoker: a RLS vale; sem papel é recusado (para não parecer "ninguém confirmou").';
 
 --
 -- Name: fn_marcar_falha_vista(uuid, text); Type: FUNCTION; Schema: public; Owner: -
@@ -10552,6 +11090,18 @@ declare
   v_linhas_ausentes jsonb := '[]'::jsonb;
   -- 0188
   v_desc text;
+  -- 0300: a chave estável do item faltante, o rastro do fechamento e o sinal positivo de que a conferência rodou
+  c_chave_ft constant text := 'completude:item_faltante:';
+  v_chaves text[];
+  v_fechadas jsonb;
+  v_ft_abertas int := 0;
+  v_ft_mantidas int;
+  v_sc_abertas int := 0;
+  v_sc_resolvidas int := 0;
+  v_sc_mantidas int;
+  v_le_abertas int := 0;
+  v_le_resolvidas int := 0;
+  v_le_mantidas int;
 begin
   -- ----- (1) obrigatório sem NENHUM documento QUE SIRVA (0006/0157) ----------
   -- 0157: "sem documento" deixava de contar um documento que ESTÁ no caso só
@@ -10570,9 +11120,47 @@ begin
     );
   v_faltantes := coalesce(v_faltantes, array[]::text[]);
 
-  update pendencia p set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:n8n'
-  where p.caso_id = p_caso_id and p.tipo = 'item_faltante' and p.estado <> 'resolvida'
-    and not (p.descricao = any (select 'Item obrigatório do Kit Básico ausente: '||x from unnest(v_faltantes) x));
+  -- 0300: a pendência é achada pela CHAVE (pendencia.chave_motor = 'completude:item_faltante:<TIPO>'), não pelo texto da descrição.
+  -- Antes, mudar a frase da descrição duplicava a pendência aberta e resolvia a velha (I1.8). A adoção pega a que um motor antigo
+  -- deixou sem chave (a migration e uma conferência em andamento podem se cruzar) com a MESMA função do backfill.
+  perform fn_adotar_chave_item_faltante(p_caso_id);
+  v_chaves := array(select c_chave_ft || x from unnest(v_faltantes) x);
+
+  -- 0300: resolve só o que o PRÓPRIO motor abriu (chave com o prefixo). Até a 0299 o filtro era "item_faltante cuja descrição não
+  -- está na lista", e resolvia também o item_faltante de OUTRO assunto (contrato_social_ausente:<id>, 0208): 2 abertas em produção
+  -- em 13/11/2026, esperando a conferência seguinte do mandato para sumirem sem ninguém ter recebido contrato nenhum.
+  -- D1.3: resolve também a que uma PESSOA decidiu (aceita_com_ressalva, rejeitada) — o documento chegou, o problema deixou de existir —
+  -- e o estado anterior, quem decidiu e quando vão para o evento (a coluna resolvida_por é sobrescrita, o evento é append-only).
+  with alvo as materialized (
+    select p.id, p.estado as estado_anterior, p.resolvida_por as resolvida_por_anterior,
+           p.resolvida_em as resolvida_em_anterior,
+           substr(p.chave_motor, length(c_chave_ft) + 1) as tipo
+      from pendencia p
+     where p.caso_id = p_caso_id and p.tipo = 'item_faltante' and p.estado <> 'resolvida'
+       and starts_with(p.chave_motor, c_chave_ft)
+       and not (p.chave_motor = any (v_chaves))
+  ), fechou as (
+    update pendencia p
+       set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:n8n',
+           -- o documento que fechou: o primeiro que serve e chegou depois de a pendência abrir; sem nenhum depois (reclassificação),
+           -- o primeiro que serve; sem nenhum (o tipo deixou de ser obrigatório), nulo — e nulo é a verdade, não um chute.
+           resolvida_por_documento_id = (
+             select d.id from documento d
+              where d.caso_id = p.caso_id and fn_documento_serve_como(d.id, a.tipo)
+              order by (d.criado_em >= p.criada_em) desc, d.criado_em, d.id
+              limit 1)
+      from alvo a
+     where p.id = a.id
+    returning p.id, p.resolvida_por_documento_id
+  )
+  select coalesce(jsonb_agg(jsonb_build_object(
+           'pendencia_id', a.id, 'tipo', a.tipo,
+           'estado_anterior', a.estado_anterior::text,
+           'resolvida_por_anterior', a.resolvida_por_anterior,
+           'resolvida_em_anterior', a.resolvida_em_anterior,
+           'documento_id', f.resolvida_por_documento_id) order by a.tipo, a.id), '[]'::jsonb)
+    into v_fechadas
+    from alvo a join fechou f on f.id = a.id;
 
   foreach v_cod in array v_faltantes loop
     select nao_sobrepujavel into v_nao_sobre from taxonomia_tipo_documento where codigo = v_cod;
@@ -10580,12 +11168,14 @@ begin
       select 1 from pendencia p
       where p.caso_id = p_caso_id and p.tipo = 'item_faltante'
         and p.estado <> 'resolvida'
-        and p.descricao = 'Item obrigatório do Kit Básico ausente: '||v_cod
+        and p.chave_motor = c_chave_ft || v_cod
     ) then
-      insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao)
+      insert into pendencia (caso_id, origem_estagio, tipo, severidade, sobrepujavel, descricao, chave_motor)
         values (p_caso_id, 'completude', 'item_faltante', 'bloqueante',
                 not coalesce(v_nao_sobre,false),
-                'Item obrigatório do Kit Básico ausente: '||v_cod);
+                'Item obrigatório do Kit Básico ausente: '||v_cod,
+                c_chave_ft || v_cod);
+      v_ft_abertas := v_ft_abertas + 1;
     end if;
   end loop;
 
@@ -10603,6 +11193,7 @@ begin
   update pendencia p set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:extracao'
   where p.caso_id = p_caso_id and p.tipo = 'item_sem_conteudo' and p.estado <> 'resolvida'
     and not (p.motivo = any (select 'completude:sem_conteudo:'||x from unnest(v_sem_conteudo) x));
+  get diagnostics v_sc_resolvidas = row_count;
 
   foreach v_cod in array v_sem_conteudo loop
     if not exists (
@@ -10619,6 +11210,7 @@ begin
                        'é validade (Arquitetura do Sistema/3 Estado e Execução/07), e um obrigatório sem conteúdo não passa o Portão 2.',
                        v_cod),
                 'completude:sem_conteudo:'||v_cod);
+      v_sc_abertas := v_sc_abertas + 1;
     end if;
   end loop;
 
@@ -10665,6 +11257,7 @@ begin
                 v_desc,
                 v_ex.entidade_id,
                 v_motivo);
+      v_le_abertas := v_le_abertas + 1;
     else
       -- 0188: a DESCRIÇÃO também é atualizada. Até a 0187 só a política era, e
       -- a pendência aberta antes de uma alternativa existir ficava para sempre
@@ -10682,6 +11275,7 @@ begin
   update pendencia p set estado = 'resolvida', resolvida_em = now(), resolvida_por = 'sistema:extracao'
   where p.caso_id = p_caso_id and p.tipo = 'linha_exigida_ausente' and p.estado <> 'resolvida'
     and not (p.motivo = any (v_motivos_ausentes));
+  get diagnostics v_le_resolvidas = row_count;
 
   -- ----- (3) o checklist reflete os três estados (0036) ----------------------
   update checklist_item_status c
@@ -10710,6 +11304,31 @@ begin
               jsonb_build_object('status', v_novo_status));
   end if;
 
+  -- 0300 (regra 7): o sinal POSITIVO de que a conferência rodou, gravado SEMPRE — inclusive com tudo zero. Antes só a troca de status do
+  -- caso deixava rastro, e uma conferência que não achou nada tinha a mesma cara de uma que nunca rodou. fn_kit_do_caso lê o
+  -- último destes eventos (conferencia_em) e conta os documentos que chegaram depois dele.
+  select count(*) into v_ft_mantidas from pendencia p
+   where p.caso_id = p_caso_id and p.tipo = 'item_faltante' and p.estado <> 'resolvida' and starts_with(p.chave_motor, c_chave_ft);
+  v_ft_mantidas := v_ft_mantidas - v_ft_abertas;
+  select count(*) into v_sc_mantidas from pendencia p
+   where p.caso_id = p_caso_id and p.tipo = 'item_sem_conteudo' and p.estado <> 'resolvida' and starts_with(p.motivo, 'completude:sem_conteudo:');
+  v_sc_mantidas := v_sc_mantidas - v_sc_abertas;
+  select count(*) into v_le_mantidas from pendencia p
+   where p.caso_id = p_caso_id and p.tipo = 'linha_exigida_ausente' and p.estado <> 'resolvida' and starts_with(p.motivo, 'completude:linha_exigida:');
+  v_le_mantidas := v_le_mantidas - v_le_abertas;
+
+  insert into evento_auditoria (ator, acao, entidade_ref, depois)
+    values ('sistema:n8n', 'completude_recomputada', 'caso:' || p_caso_id,
+            jsonb_build_object(
+              'item_faltante', jsonb_build_object(
+                 'abertas', v_ft_abertas, 'resolvidas', jsonb_array_length(v_fechadas), 'mantidas', v_ft_mantidas,
+                 'faltantes', to_jsonb(v_faltantes), 'fechadas', v_fechadas),
+              'item_sem_conteudo', jsonb_build_object(
+                 'abertas', v_sc_abertas, 'resolvidas', v_sc_resolvidas, 'mantidas', v_sc_mantidas),
+              'linha_exigida_ausente', jsonb_build_object(
+                 'abertas', v_le_abertas, 'resolvidas', v_le_resolvidas, 'mantidas', v_le_mantidas),
+              'status_caso', v_novo_status));
+
   return jsonb_build_object(
     'portao1_ok', array_length(v_faltantes,1) is null,
     'faltantes', to_jsonb(v_faltantes),
@@ -10729,7 +11348,191 @@ $$;
 -- Name: FUNCTION fn_recomputar_completude(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) IS 'Portão 1 (chegada) + 0036 (recebido sem conteúdo) + 0113/0119 (passo 2b: linha exigida ausente, cobrada POR ENTIDADE quando o escopo pede) + 0157 (passo 1: "sem documento do tipo" vira "sem documento que SIRVA como o tipo" — fn_documento_serve_como aceita, só para COMBINADO, um documento estruturalmente combinado e com conteúdo (fn_combinado_estrutural_apto, achados A e B da revisão) classificado como BALANCO/DRE/FLUXO_CAIXA). Política por linha é do dono; default = importante/sobrepujável. `portao1_ok` segue "chegou tudo"; `pronto_para_revisao` segue "chegou tudo E tem conteúdo".';
+COMMENT ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) IS 'Portão 1 (chegada) + 0036 (recebido sem conteúdo) + 0113/0119 (passo 2b: linha exigida ausente, por entidade quando o escopo pede) + 0157 (passo 1: "sem documento do tipo" vira "sem documento que SIRVA como o tipo", fn_documento_serve_como) + 0300 (a item_faltante é achada pela chave pendencia.chave_motor, não pelo texto; só resolve a que o motor abriu; resolve também a decidida por pessoa guardando o estado anterior no evento; grava pendencia.resolvida_por_documento_id; grava SEMPRE o evento completude_recomputada com as contagens). Política por linha é do dono; default = importante/sobrepujável. `portao1_ok` segue "chegou tudo"; `pronto_para_revisao` segue "chegou tudo E tem conteúdo".';
+
+--
+-- Name: fn_reconciliar_aging(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_reconciliar_aging(p_aging_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public', 'pg_temp'
+    AS $_$
+declare
+  a           aging_importado;
+  v_ano       int;
+  r           record;
+  f           record;
+  v_doc       uuid;
+  v_periodo   uuid;
+  v_ver       uuid;
+  v_col_ent   text;
+  v_col_per   text;
+  v_n_docs    int := 0;
+  v_sem_ent   boolean := false;
+  v_notas     text[] := '{}';
+  v_res       jsonb := '[]'::jsonb;
+  v_prev_chave text := current_setting('oria.periodo_chave', true);
+  v_cfg       record;
+  v_valor_c   numeric;      -- o valor da carteira em centavos (absoluto)
+  v_aging     numeric;      -- em reais
+  v_lin       record;
+  v_n_lin     int; v_balanco numeric; v_soma_fatores numeric; v_tol numeric; v_div numeric; v_sem_escala boolean;
+  v_chaves    text[];
+  v_resultado text; v_desc text; v_fa jsonb; v_fb jsonb; v_pct numeric;
+  v_rej_l     numeric; v_rej_s numeric; v_ressalva text;
+  v_tb        text; v_cabeca text;
+begin
+  select * into a from aging_importado where id = p_aging_id;
+  if not found then return jsonb_build_object('executado', false, 'motivo', 'importação de aging não encontrada'); end if;
+  if a.substituido_em is not null then
+    return jsonb_build_object('executado', false, 'motivo', 'importação substituída por outra: só a vigente se concilia');
+  end if;
+  v_ano := extract(year from a.data_base)::int;
+  v_tb  := case a.tipo_base when 'contas_a_receber' then 'contas a receber' else 'contas a pagar' end;
+  v_cabeca := format('Carteira de %s em %s (arquivo "%s")', v_tb, to_char(a.data_base, 'DD/MM/YYYY'), a.arquivo_nome);
+
+  -- O balanço da entidade que fecha NA data-base.
+  for r in select d.id, d.tipo_taxonomia, d.periodo_id from documento d
+            where d.caso_id = a.caso_id and d.entidade_id = a.entidade_id and d.tipo_taxonomia in ('BALANCO', 'COMBINADO', 'BALANCETE')
+            order by array_position(array['BALANCO', 'COMBINADO', 'BALANCETE'], d.tipo_taxonomia), d.criado_em desc, d.id loop
+    v_n_docs := v_n_docs + 1;
+    select * into f from fn_balanco_fecha_em(r.id, v_ano);
+    if f.fecha_em is distinct from a.data_base then
+      v_notas := v_notas || format('%s %s', r.tipo_taxonomia,
+        coalesce('fecha em ' || to_char(f.fecha_em, 'DD/MM/YYYY') || ', não em ' || to_char(a.data_base, 'DD/MM/YYYY'), f.observacao));
+      continue;
+    end if;
+    v_ver := fn_versao_atual(r.id);
+    v_col_ent := fn_coluna_entidade(v_ver, a.entidade_id);
+    if v_col_ent = E'\x01' then
+      v_sem_ent := true; v_notas := v_notas || format('%s fecha em %s mas não tem coluna desta entidade', r.tipo_taxonomia, to_char(a.data_base, 'DD/MM/YYYY'));
+      continue;
+    end if;
+    v_doc := r.id; v_periodo := r.periodo_id;
+    exit;
+  end loop;
+  if v_doc is not null then
+    v_col_per := fn_coluna_periodo_do_ano(v_ver, v_ano);
+    if v_col_per = E'\x01' then v_col_per := null; end if;
+  end if;
+
+  -- A chave do período para a guarda de fn_registrar_reconciliacao (a do balanço escolhido; sem balanço, nenhuma).
+  perform set_config('oria.periodo_chave', coalesce(v_periodo::text, ''), true);
+
+  -- O que a leitura deixou fora do aging (para a descrição de uma divergência).
+  select coalesce(sum(fn_aging_contagem(m.value -> 'linhas')), 0), coalesce(sum(fn_aging_centavos(m.value -> 'saldo')), 0) into v_rej_l, v_rej_s
+    from jsonb_each(case when jsonb_typeof(a.aplicador -> 'motivos') = 'object' then a.aplicador -> 'motivos' else '{}'::jsonb end) m;
+  v_ressalva := case when v_rej_l > 0 then format(' O aplicador deixou fora do aging %s linhas rejeitadas, com saldo de %s: pode explicar a diferença.', v_rej_l, fn_aging_reais(v_rej_s / 100)) else '' end;
+
+  for v_cfg in select * from (values
+      ('aging_ar_clientes',        'contas_a_receber', 'clientes',                    'Clientes',                      'positivos', 'saldo positivo (carteira a receber)'),
+      ('aging_ar_adiantamentos',   'contas_a_receber', 'adiantamentos_de_clientes',   'Adiantamentos de clientes',     'negativos', 'saldo negativo (adiantamentos e créditos de clientes)'),
+      ('aging_ap_fornecedores',    'contas_a_pagar',   'fornecedores',                'Fornecedores',                  'positivos', 'saldo positivo (carteira a pagar)'),
+      ('aging_ap_adiantamentos',   'contas_a_pagar',   'adiantamentos_a_fornecedores','Adiantamentos a fornecedores',  'negativos', 'saldo negativo (adiantamentos e créditos a fornecedores)')
+    ) as t(tipo, base, conceito, rotulo, lado, rotulo_aging) where t.base = a.tipo_base loop
+    v_valor_c := abs(fn_aging_centavos(a.resumo -> v_cfg.lado -> 'saldo'));
+    v_aging := v_valor_c / 100;
+    v_fa := jsonb_build_object('chave', format('aging %s %s (%s)', a.tipo_base, a.data_base, v_cfg.lado), 'valor', v_aging, 'unidade', 'unidade',
+                               'centavos', v_valor_c::text, 'aging_id', a.id);
+    v_fb := null; v_pct := null; v_div := null;
+
+    if v_doc is null then
+      if v_n_docs = 0 then
+        v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, null, v_cfg.tipo, 'A', null, v_fa, null,
+          'documento_ausente', null, null, jsonb_build_object('criterio', 'meia_unidade_da_escala'),
+          v_cabeca || format(': sem par para reconciliar, o balanço desta entidade não foi entregue (%s de %s, sem conta do balanço para conferir).', v_cfg.rotulo_aging, fn_aging_reais(v_aging))));
+      else
+        v_resultado := case when v_sem_ent and not exists (select 1 from unnest(v_notas) n where n not like '%não tem coluna desta entidade') then 'precondicao_nao_satisfeita' else 'sem_periodo_par' end;
+        v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, null, v_cfg.tipo, 'A', null, v_fa, null,
+          v_resultado, null, null, jsonb_build_object('criterio', 'meia_unidade_da_escala'),
+          fn_motivo_precondicao_prefixo(v_resultado) || v_cabeca
+            || format(': o balanço desta entidade não fecha na data-base (%s não se compara com outra data). Balanços vistos: %s.', v_cfg.rotulo_aging, array_to_string(v_notas, '; '))));
+      end if;
+      continue;
+    end if;
+
+    select count(*), coalesce(sum(l.valor_num * fn_fator_escala(l.unidade)), 0), coalesce(sum(fn_fator_escala(l.unidade)), 0),
+           coalesce(bool_or(fn_fator_escala(l.unidade) is null), false), array_agg(format('"%s" = %s %s', l.chave, l.valor_num, coalesce(l.unidade, 'sem escala')) order by l.chave)
+      into v_n_lin, v_balanco, v_soma_fatores, v_sem_escala, v_chaves
+      from fn_aging_linhas_do_balanco(v_ver, v_cfg.conceito, v_col_ent, v_col_per) l;
+    v_fb := case when v_n_lin = 0 then null else jsonb_build_object('chaves', to_jsonb(v_chaves), 'valor', v_balanco, 'unidade', 'unidade', 'documento_versao_id', v_ver) end;
+
+    if v_n_lin = 0 then
+      if v_valor_c = 0 then
+        v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, v_periodo, v_cfg.tipo, 'A', v_doc, v_fa, null,
+          'ok', 0, null, jsonb_build_object('criterio', 'meia_unidade_da_escala'),
+          v_cabeca || format(': nada a conciliar, a carteira não tem %s e o balanço não traz a conta %s.', v_cfg.rotulo_aging, v_cfg.rotulo)));
+      else
+        v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, v_periodo, v_cfg.tipo, 'A', v_doc, v_fa, null,
+          'linha_nao_localizada', v_aging, null, jsonb_build_object('criterio', 'meia_unidade_da_escala'),
+          fn_motivo_precondicao_prefixo('linha_nao_localizada') || v_cabeca
+            || format(': %s de %s e o balanço não traz a conta %s para conferir: a diferença é o valor inteiro, %s.%s',
+                      v_cfg.rotulo_aging, fn_aging_reais(v_aging), v_cfg.rotulo, fn_aging_reais(v_aging), v_ressalva)));
+      end if;
+      continue;
+    end if;
+
+    if v_sem_escala then
+      v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, v_periodo, v_cfg.tipo, 'A', v_doc, v_fa, v_fb,
+        'unidade_divergente', null, null, jsonb_build_object('criterio', 'meia_unidade_da_escala'),
+        fn_motivo_precondicao_prefixo('unidade_divergente') || v_cabeca
+          || format(': a conta %s do balanço não tem escala reconhecida (esperado: unidade, milhar ou milhão), e o aging está em reais: comparar arriscaria um falso "confere".', v_cfg.rotulo)));
+      continue;
+    end if;
+
+    v_div := abs(v_aging - v_balanco);
+    -- A tolerância É o arredondamento do número impresso: meia unidade da escala de cada linha usada (R$ 500 em R$ mil), nunca um percentual.
+    v_tol := v_soma_fatores / 2;
+    v_pct := case when v_aging <> 0 then v_div / v_aging end;
+    v_resultado := case when v_div <= v_tol then 'ok' else 'divergente' end;
+    v_desc := v_cabeca || format(': %s de %s contra %s do balanço de %s (%s). ', v_cfg.rotulo_aging, fn_aging_reais(v_aging), v_cfg.rotulo,
+                                 fn_aging_reais(v_balanco), array_to_string(v_chaves, '; '))
+      || case when v_resultado = 'ok'
+              then format('Conferido, diferença de %s (tolerância de %s: o arredondamento da escala do balanço).', fn_aging_reais(v_div), fn_aging_reais(v_tol))
+              else format('Diferença de %s, acima de %s (o arredondamento da escala do balanço).%s', fn_aging_reais(v_div), fn_aging_reais(v_tol), v_ressalva) end;
+    v_res := v_res || jsonb_build_array(fn_registrar_reconciliacao(a.caso_id, a.entidade_id, v_periodo, v_cfg.tipo, 'A', v_doc, v_fa, v_fb,
+      v_resultado, v_div, v_pct, jsonb_build_object('tolerancia_abs', v_tol, 'criterio', 'meia_unidade_da_escala'), v_desc));
+  end loop;
+
+  perform set_config('oria.periodo_chave', coalesce(v_prev_chave, ''), true);
+  return jsonb_build_object('executado', true, 'aging_id', p_aging_id, 'checagens', v_res);
+end $_$;
+
+--
+-- Name: FUNCTION fn_reconciliar_aging(p_aging_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_reconciliar_aging(p_aging_id uuid) IS '0274: concilia UMA importação vigente de aging com o balanço extraído da entidade que fecha na data-base: saldos positivos × Clientes (a receber) ou Fornecedores (a pagar), negativos × Adiantamentos de clientes/a fornecedores. Tolerância = meia unidade da escala do balanço (nunca percentual). Tipos aging_ar_clientes, aging_ar_adiantamentos, aging_ap_fornecedores, aging_ap_adiantamentos, classe A, por fn_registrar_reconciliacao com descrição sempre; divergência zero é gravada como conferida (ok, 0). Sem balanço = documento_ausente (sem pendência); balanço de outra data = sem_periodo_par. Só service_role e as funções definer chamam.';
+
+--
+-- Name: fn_reconciliar_aging_do_caso(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.fn_reconciliar_aging_do_caso(p_caso_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'pg_temp'
+    AS $$
+declare
+  v_id  uuid;
+  v_res jsonb := '[]'::jsonb;
+  v_um  jsonb;
+begin
+  if p_caso_id is null or not (fn_conexao_de_servico() or fn_pode_escrever_caso(p_caso_id)) then
+    raise exception 'Reconciliar o aging exige ser Sócio ou Analista alocado neste mandato (ou a conexão de serviço)' using errcode = '42501';
+  end if;
+  for v_id in select id from aging_importado where caso_id = p_caso_id order by data_base, tipo_base, id loop
+    v_um := fn_reconciliar_aging(v_id);
+    v_res := v_res || coalesce(v_um -> 'checagens', '[]'::jsonb);
+  end loop;
+  return v_res;
+end $$;
+
+--
+-- Name: FUNCTION fn_reconciliar_aging_do_caso(p_caso_id uuid); Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON FUNCTION public.fn_reconciliar_aging_do_caso(p_caso_id uuid) IS '0274: concilia todas as importações VIGENTES de aging do mandato e devolve o array das checagens (o mesmo formato de fn_reconciliar_caso). É o ponto único para a rodada de reconciliações chamar quando um balanço novo chega depois da carteira (a ligação em fn_reconciliar_caso NÃO está nesta migration). Só Sócio, Analista do mandato ou a conexão de serviço (42501).';
 
 --
 -- Name: fn_reconciliar_arvore(uuid); Type: FUNCTION; Schema: public; Owner: -
@@ -16422,20 +17225,23 @@ $$;
 COMMENT ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) IS '0123: a natureza "mútuo" nomeada NESTE texto. Usada no rótulo (degrau 1) e na seção (degrau 2), com precedência do rótulo — nunca nos dois de uma vez.';
 
 --
--- Name: fn_tipo_gera_fato(text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: fn_texto_normalizado(text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.fn_tipo_gera_fato(p_tipo text) RETURNS boolean
+CREATE FUNCTION public.fn_texto_normalizado(p_texto text) RETURNS text
     LANGUAGE sql IMMUTABLE
+    SET search_path TO 'public', 'pg_temp'
     AS $$
-  select coalesce(p_tipo in ('BALANCO', 'BALANCETE', 'COMBINADO', 'DRE', 'FLUXO_CAIXA', 'DVA', 'DMPL', 'DF_AUDITADA'), false)
+  select btrim(regexp_replace(normalize(coalesce(p_texto, ''), NFC),
+                              '[ ' || chr(9) || chr(10) || chr(13) || chr(160) || ']+', ' ', 'g'),
+               ' ' || chr(9) || chr(10) || chr(13) || chr(160))
 $$;
 
 --
--- Name: FUNCTION fn_tipo_gera_fato(p_tipo text); Type: COMMENT; Schema: public; Owner: -
+-- Name: FUNCTION fn_texto_normalizado(p_texto text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) IS '0243: os tipos de documento cujas linhas viram fato_financeiro: as demonstrações. BALANCO, BALANCETE, COMBINADO, DRE e FLUXO_CAIXA são as 5 de ESTRUTURA_POR_TIPO (statement-templates.ts); DVA e DMPL são as 2 que a 0024 pôs na taxonomia e o portal já roteia por seção (FAMILIA_POR_SECAO_CANONICA); DF_AUDITADA traz as demonstrações juntas e cada linha vai para a SUA seção. A categoria Contábil/Demonstrações da taxonomia NÃO serve de proxy: ela inclui RAZAO e NOTAS_EXPL. Estoque, Razão, Aging, Mapa de Dívida e o resto continuam só evidência. A sonda confere os 8 tipos um a um (view), não pelo corpo.';
+COMMENT ON FUNCTION public.fn_texto_normalizado(p_texto text) IS '0273: a normalização de UMA célula, a MESMA de textoNormalizado em Leitor/lib/mapeamento.mjs e da célula de fn_impressao_do_cabecalho (0272): NFC, [espaço \t \n \r U+00A0] colapsados em um espaço e aparados nas pontas, SEM minúsculas (lower() depende do LC_CTYPE). NULL vira texto vazio.';
 
 --
 -- Name: fn_tipo_sem_dado_por_natureza(text); Type: FUNCTION; Schema: public; Owner: -
@@ -18008,6 +18814,95 @@ end;
 $$;
 
 --
+-- Name: aging_importado; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.aging_importado (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    caso_id uuid NOT NULL,
+    entidade_id uuid NOT NULL,
+    tipo_base text NOT NULL,
+    data_base date NOT NULL,
+    resumo jsonb NOT NULL,
+    leitura jsonb NOT NULL,
+    aplicador jsonb NOT NULL,
+    arquivo_nome text NOT NULL,
+    arquivo_sha256 text NOT NULL,
+    arquivo_bytes bigint NOT NULL,
+    arquivo_formato text NOT NULL,
+    mapeamento_id uuid NOT NULL,
+    importado_por uuid NOT NULL,
+    importado_em timestamp with time zone DEFAULT now() NOT NULL,
+    substituido_em timestamp with time zone,
+    substituido_por uuid,
+    CONSTRAINT aging_arquivo_inteiro CHECK (((arquivo_nome <> ''::text) AND (arquivo_sha256 ~ '^[0-9a-f]{64}$'::text) AND (arquivo_bytes > 0) AND (arquivo_formato = ANY (ARRAY['csv'::text, 'xlsx'::text])))),
+    CONSTRAINT aging_importado_tipo_base_check CHECK ((tipo_base = ANY (ARRAY['contas_a_receber'::text, 'contas_a_pagar'::text]))),
+    CONSTRAINT aging_leitura_e_aplicador_objetos CHECK (((jsonb_typeof(leitura) = 'object'::text) AND (jsonb_typeof(aplicador) = 'object'::text))),
+    CONSTRAINT aging_resumo_fecha CHECK ((cardinality(public.fn_aging_resumo_erros(resumo, data_base)) = 0)),
+    CONSTRAINT aging_substituicao_inteira CHECK (((substituido_em IS NULL) = (substituido_por IS NULL)))
+);
+
+--
+-- Name: TABLE aging_importado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.aging_importado IS '0274: o RESUMO do aging de contas a receber/a pagar de uma importação, POR MANDATO e por entidade (DM1: só o resumo; o arquivo original vai à parte). Uma vigente por (caso, entidade, tipo_base, data_base); reimportar substitui sem apagar. RLS por mandato (0216). Escrita só por fn_aging_importar; conciliada com o balanço por fn_reconciliar_aging.';
+
+--
+-- Name: COLUMN aging_importado.resumo; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.aging_importado.resumo IS 'O resumo de agregadorDeAging(...).resumo(): centavos como TEXTO de inteiro (BigInt serializado).';
+
+--
+-- Name: COLUMN aging_importado.leitura; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.aging_importado.leitura IS 'O resumo de lerTabela (Leitor/lib/tabela.mjs): linhas por destino, sha256, bytes, formato.';
+
+--
+-- Name: COLUMN aging_importado.aplicador; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.aging_importado.aplicador IS 'O resumo do aplicador do mapeamento (Leitor/lib/mapeamento.mjs): títulos, subtotais, rejeitadas por motivo com o saldo, conferência com o total do arquivo.';
+
+--
+-- Name: COLUMN aging_importado.mapeamento_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.aging_importado.mapeamento_id IS 'O mapeamento confirmado (0272) com que o arquivo foi lido: arquivo sem mapeamento confirmado não vira dado.';
+
+--
+-- Name: COLUMN aging_importado.importado_por; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.aging_importado.importado_por IS 'auth.uid() de quem importou. Sem FK de propósito: a autoria sobrevive à saída do usuário.';
+
+--
+-- Name: CONSTRAINT aging_arquivo_inteiro ON aging_importado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT aging_arquivo_inteiro ON public.aging_importado IS '0274: o arquivo tem nome, sha256 de 64 hex minúsculos, bytes > 0 e formato csv/xlsx.';
+
+--
+-- Name: CONSTRAINT aging_leitura_e_aplicador_objetos ON aging_importado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT aging_leitura_e_aplicador_objetos ON public.aging_importado IS '0274: o resumo da leitura e o do aplicador são objetos (a ausência não se disfarça de objeto vazio na checagem, mas nunca de número).';
+
+--
+-- Name: CONSTRAINT aging_resumo_fecha ON aging_importado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT aging_resumo_fecha ON public.aging_importado IS '0274: o resumo fecha consigo mesmo (fn_aging_resumo_erros vazio), para quem escrever sem passar pela função (service_role).';
+
+--
+-- Name: CONSTRAINT aging_substituicao_inteira ON aging_importado; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT aging_substituicao_inteira ON public.aging_importado IS '0274: substituido_em e substituido_por andam juntos.';
+
+--
 -- Name: alocacao; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -18419,6 +19314,54 @@ COMMENT ON COLUMN public.conta_canonica.natureza IS 'O SALDO NORMAL DO GRUPO pel
 COMMENT ON COLUMN public.conta_canonica.classe_recorrencia IS 'NULL = não determinado, nunca "recorrente": a recorrência é da rubrica (rubrica_classe, 0128), não da seção. Nenhum nó a preenche na 0242.';
 
 --
+-- Name: contraparte_confirmada; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.contraparte_confirmada (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    caso_id uuid NOT NULL,
+    tipo_base text NOT NULL,
+    contraparte text NOT NULL,
+    confirmado_por uuid NOT NULL,
+    confirmado_em timestamp with time zone DEFAULT now() NOT NULL,
+    revogado_em timestamp with time zone,
+    revogado_por uuid,
+    CONSTRAINT contraparte_confirmada_tipo_base_check CHECK ((tipo_base = ANY (ARRAY['contas_a_receber'::text, 'contas_a_pagar'::text]))),
+    CONSTRAINT contraparte_normalizada CHECK (((contraparte <> ''::text) AND (contraparte = public.fn_texto_normalizado(contraparte)))),
+    CONSTRAINT contraparte_revogacao_inteira CHECK (((revogado_em IS NULL) = (revogado_por IS NULL)))
+);
+
+--
+-- Name: TABLE contraparte_confirmada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.contraparte_confirmada IS '0273: contrapartes que o analista CONFIRMOU, POR MANDATO, como cliente/fornecedor de verdade apesar do nome de total (alimenta `contrapartesReais` de aplicadorDeMapeamento). Nome de cliente é dado do cliente: RLS por mandato (0216). Escrita só por fn_contraparte_confirmar/fn_contraparte_revogar; revogar não apaga, marca revogado_em.';
+
+--
+-- Name: COLUMN contraparte_confirmada.contraparte; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.contraparte_confirmada.contraparte IS 'Nome NORMALIZADO pelo banco (fn_texto_normalizado): NFC, espaços colapsados e aparados, sem minúsculas.';
+
+--
+-- Name: COLUMN contraparte_confirmada.confirmado_por; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.contraparte_confirmada.confirmado_por IS 'auth.uid() de quem confirmou. Sem FK de propósito: a autoria sobrevive à saída do usuário.';
+
+--
+-- Name: CONSTRAINT contraparte_normalizada ON contraparte_confirmada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT contraparte_normalizada ON public.contraparte_confirmada IS '0273: o nome gravado é o normalizado pelo banco (fn_texto_normalizado) e não vazio, para quem escrever sem passar pela função (service_role): é a forma exata que `contrapartesReais` compara.';
+
+--
+-- Name: CONSTRAINT contraparte_revogacao_inteira ON contraparte_confirmada; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT contraparte_revogacao_inteira ON public.contraparte_confirmada IS '0273: revogado_em e revogado_por andam juntos: revogação sem autor ou autor sem data não entra.';
+
+--
 -- Name: controlador; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -18720,70 +19663,6 @@ CREATE TABLE public.execucao_falha (
 COMMENT ON TABLE public.execucao_falha IS 'Falha do pipeline (n8n) que a TELA precisa mostrar. Existe porque o portal deduzia progresso de sinais positivos, e falha produz ausência — indistinguível de "ainda processando". Tabela própria e não evento_auditoria: isto é estado operacional que se marca como visto, não trilha.';
 
 --
--- Name: fato_financeiro; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.fato_financeiro WITH (security_invoker='true') AS
- SELECT r.campo_id AS id,
-    r.campo_id AS campo_extraido_id,
-    dv.id AS documento_versao_id,
-    d.caso_id,
-    r.conta_id,
-    r.resolucao_metodo,
-    r.sem_conta_motivo,
-    r.entidade_id,
-    r.entidade_origem,
-    r.entidade_motivo,
-    r.entidade_coluna,
-    r.periodo_id,
-    r.periodo_origem,
-    r.periodo_motivo,
-    r.periodo_coluna,
-    r.valor,
-    r.unidade,
-    r.moeda
-   FROM ((public.documento d
-     JOIN public.documento_versao dv ON ((dv.documento_id = d.id)))
-     CROSS JOIN LATERAL public.fn_fato_resolver(dv.id) r(campo_id, documento_versao_id, conta_id, resolucao_metodo, sem_conta_motivo, entidade_id, entidade_origem, entidade_motivo, entidade_coluna, periodo_id, periodo_origem, periodo_motivo, periodo_coluna, valor, unidade, moeda))
-  WHERE public.fn_tipo_gera_fato(d.tipo_taxonomia);
-
---
--- Name: VIEW fato_financeiro; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.fato_financeiro IS '0243 (P27): o fato canônico ACIMA de campo_extraido, que não muda (ADR 01): UMA linha por linha extraída elegível (só documento de demonstração, fn_tipo_gera_fato; só papel conta, fn_papel_linha; só com valor: ausência não vira fato, regra 1), calculada na hora por fn_fato_resolver. É VIEW com security_invoker: cada usuário lê o fato do próprio mandato (a RLS de campo_extraido, documento, entidade e periodo vale para quem lê) e NINGUÉM escreve nela. A identidade é a SEÇÃO (nó de conta_canonica; folha é a P28+). Todas as versões do documento; quem consome escolhe a vigente com fn_versao_atual. resolucao_metodo: declarada (a IA deu a seção), heuristica (fn_secao_canonica_da_secao_bruta / fn_herdar_secao_pela_arvore, 0203/0204: secao_canonica_inferida) ou sem_conta (conta_id nulo, com o motivo): "não sei a conta" é estado, nunca um palpite. Filtre por caso_id ou documento_versao_id: é o que poda o cálculo.';
-
---
--- Name: COLUMN fato_financeiro.id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fato_financeiro.id IS 'IGUAL a campo_extraido_id: a identidade do fato é a da linha extraída que o sustenta (1:1). Não há uuid próprio porque não há linha gravada.';
-
---
--- Name: COLUMN fato_financeiro.conta_id; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fato_financeiro.conta_id IS 'Nó de conta_canonica que é SEÇÃO (secao_canonica não nula). NULL só com resolucao_metodo = sem_conta: linha sem seção declarada, ou com seção que o catálogo não conhece, NÃO ganha conta inventada — nem a raiz da demonstração pelo tipo do documento.';
-
---
--- Name: COLUMN fato_financeiro.entidade_origem; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fato_financeiro.entidade_origem IS 'De onde veio a entidade. A 0243 NÃO interpreta nome de coluna: a entidade da coluna é a que fn_coluna_entidade(versão, entidade) (0023/0030, com fn_mesma_entidade) escolhe para alguma entidade do mandato. coluna = casou pelo NOME da entidade; coluna_total = a coluna Combinado/Consolidado/Total/Soma que a mesma função entrega à entidade do documento (só quando nenhuma coluna casa o nome dela); documento = a linha não tem entidade_coluna (entidade do documento). NULL = a função não escolheu a coluna, ou escolheu para mais de uma entidade: entidade_motivo diz por quê (documento_sem_entidade, coluna_sem_entidade_no_mandato, coluna_casa_varias_entidades, entidade_com_varias_colunas, coluna_total_nao_escolhida, coluna_total_ambigua, linha_sem_coluna_em_documento_com_colunas_de_entidade). A entidade_coluna da linha fica ao lado.';
-
---
--- Name: COLUMN fato_financeiro.periodo_origem; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fato_financeiro.periodo_origem IS 'De onde veio o período. A 0243 NÃO interpreta nome de coluna: só atribui o período quando as funções do banco para essa pergunta decidem de forma INEQUÍVOCA. documento = a linha sem coluna num documento sem colunas, ou a coluna que É o período do documento: a ÚNICA coluna de saldo (fn_coluna_e_saldo: Saldo final/atual, 0201) ou, na falta de saldo, a ÚNICA coluna que nomeia só o ano do documento num documento não parcial (fn_periodo_e_parcial, 0199 c); coluna = coluna de ano puro (31/12/AAAA = AAAA) de OUTRO ano, em documento não parcial, que um período do mesmo mandato tem (fn_periodo_canonico). NULL = ambíguo ou sem base; periodo_motivo diz por quê (coluna_nao_e_o_periodo_do_documento, coluna_de_abertura, periodo_da_coluna_nao_cadastrado: o período NÃO é criado aqui, mais_de_uma_coluna_para_o_mesmo_periodo, linha_sem_coluna_em_documento_com_colunas, documento_sem_periodo). O periodo_coluna da linha fica ao lado.';
-
---
--- Name: COLUMN fato_financeiro.valor; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON COLUMN public.fato_financeiro.valor IS 'valor_num da linha, como veio. Escala e moeda NÃO são normalizadas aqui (não há regra pronta): unidade e moeda seguem ao lado.';
-
---
 -- Name: fato_tipo_catalogo; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -19052,6 +19931,38 @@ COMMENT ON COLUMN public.instalacao_requisito.porque IS 'O SINTOMA VISÍVEL da a
 COMMENT ON COLUMN public.instalacao_requisito.marcador IS 'Para tipo=''corpo'': o TRECHO que precisa aparecer em pg_get_functiondef(objeto). É a única forma de a sonda distinguir uma função corrigida de uma função homônima com o corpo velho — e essa distinção é a maior parte do catálogo, porque a maioria das migrations recentes só republica corpo.';
 
 --
+-- Name: instalacao_sonda_aging_checks; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_aging_checks AS
+ SELECT (count(*))::text AS n
+   FROM pg_constraint k
+  WHERE ((conrelid = ('public.aging_importado'::regclass)::oid) AND (contype = 'c'::"char") AND convalidated AND (((conname = 'aging_resumo_fecha'::name) AND (pg_get_constraintdef(oid) ~~ '%fn_aging_resumo_erros(%'::text)) OR ((conname = 'aging_arquivo_inteiro'::name) AND (pg_get_constraintdef(oid) ~~ '%[0-9a-f]{64}%'::text)) OR ((conname = 'aging_leitura_e_aplicador_objetos'::name) AND (pg_get_constraintdef(oid) ~~ '%jsonb_typeof(aplicador)%'::text)) OR ((conname = 'aging_substituicao_inteira'::name) AND (pg_get_constraintdef(oid) ~~ '%substituido_em IS NULL%'::text))))
+ HAVING (count(*) = 4);
+
+--
+-- Name: VIEW instalacao_sonda_aging_checks; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_aging_checks IS 'Sonda da 0274: uma linha = as quatro CHECKs (resumo que fecha; arquivo inteiro; leitura e aplicador objetos; substituição inteira) existem, validadas. Zero linhas: o service_role grava resumo incoerente ou arquivo sem hash.';
+
+--
+-- Name: instalacao_sonda_aging_uma_vigente; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_aging_uma_vigente AS
+ SELECT ((i.indexrelid)::regclass)::text AS indice
+   FROM (pg_index i
+     JOIN pg_class c ON (((c.oid = i.indexrelid) AND (c.relname = 'aging_importado_uma_vigente'::name))))
+  WHERE ((i.indrelid = ('public.aging_importado'::regclass)::oid) AND i.indisunique AND i.indisvalid AND (i.indpred IS NOT NULL) AND (pg_get_indexdef(i.indexrelid) ~~ '%(caso_id, entidade_id, tipo_base, data_base)%'::text) AND (pg_get_expr(i.indpred, i.indrelid) ~~ '%substituido_em IS NULL%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_aging_uma_vigente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_aging_uma_vigente IS 'Sonda da 0274: uma linha = o índice único parcial (caso_id, entidade_id, tipo_base, data_base) where substituido_em is null existe e é válido. Zero linhas: duas importações vigentes da mesma carteira e a conciliação usa uma delas ao acaso.';
+
+--
 -- Name: instalacao_sonda_cobertura_de_tipos; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -19127,6 +20038,38 @@ CREATE VIEW public.instalacao_sonda_conta_canonica_sem_orfao AS
 --
 
 COMMENT ON VIEW public.instalacao_sonda_conta_canonica_sem_orfao IS 'Sonda da 0242: uma linha = o catálogo não está vazio e nenhum nó fica fora da árvore das cinco raízes (ciclo ou pai solto). Zero linhas: a árvore está quebrada, ou vazia.';
+
+--
+-- Name: instalacao_sonda_contraparte_checks; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_contraparte_checks AS
+ SELECT (count(*))::text AS n
+   FROM pg_constraint k
+  WHERE ((conrelid = ('public.contraparte_confirmada'::regclass)::oid) AND (contype = 'c'::"char") AND convalidated AND (((conname = 'contraparte_normalizada'::name) AND (pg_get_constraintdef(oid) ~~ '%fn_texto_normalizado(%'::text)) OR ((conname = 'contraparte_revogacao_inteira'::name) AND (pg_get_constraintdef(oid) ~~ '%revogado_em IS NULL%'::text))))
+ HAVING (count(*) = 2);
+
+--
+-- Name: VIEW instalacao_sonda_contraparte_checks; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_contraparte_checks IS 'Sonda da 0273: uma linha = as duas CHECKs (nome normalizado e não vazio; revogação com autor) existem, validadas. Zero linhas: o service_role grava contraparte que o aplicador nunca casaria (caixa de espaço, NFD) ou revogação sem autor.';
+
+--
+-- Name: instalacao_sonda_contraparte_uma_vigente; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_contraparte_uma_vigente AS
+ SELECT ((i.indexrelid)::regclass)::text AS indice
+   FROM (pg_index i
+     JOIN pg_class c ON (((c.oid = i.indexrelid) AND (c.relname = 'contraparte_confirmada_uma_vigente'::name))))
+  WHERE ((i.indrelid = ('public.contraparte_confirmada'::regclass)::oid) AND i.indisunique AND i.indisvalid AND (i.indpred IS NOT NULL) AND (pg_get_indexdef(i.indexrelid) ~~ '%(caso_id, tipo_base, contraparte)%'::text) AND (pg_get_expr(i.indpred, i.indrelid) ~~ '%revogado_em IS NULL%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_contraparte_uma_vigente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_contraparte_uma_vigente IS 'Sonda da 0273: uma linha = o índice único parcial (caso_id, tipo_base, contraparte) where revogado_em is null existe e é válido. Zero linhas: o banco deixou de garantir uma só confirmação vigente por contraparte e mandato.';
 
 --
 -- Name: instalacao_sonda_entidade_balcao_ambiguo; Type: VIEW; Schema: public; Owner: -
@@ -19331,102 +20274,6 @@ UNION ALL
 COMMENT ON VIEW public.instalacao_sonda_exigencias_0188 IS 'Sonda da 0188: a alternativa "resultado financeiro" de DRE/despesa_financeira e o localizador ["juros","bancari"] da mesma exigência. Duas linhas.';
 
 --
--- Name: instalacao_sonda_fato_financeiro_cadeia; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.instalacao_sonda_fato_financeiro_cadeia AS
- SELECT nome AS funcao
-   FROM ( VALUES ('fn_fato_resolver(uuid)'::text), ('fn_tipo_gera_fato(text)'::text), ('fn_linha_vira_fato(text, text, text, numeric)'::text), ('fn_papel_linha(text, text, text)'::text), ('fn_sem_codigo_de_conta(text)'::text), ('fn_tokens_estruturais(text)'::text), ('fn_mes_do_rotulo(text)'::text), ('fn_ano4(text)'::text), ('fn_anos_periodo(text, text)'::text), ('fn_coluna_e_abertura(text)'::text), ('fn_coluna_e_saldo(text)'::text), ('fn_coluna_entidade(uuid, uuid)'::text), ('fn_entidade_canonica(text)'::text), ('fn_mesma_entidade(text, text)'::text), ('fn_normalizar_texto(text)'::text), ('fn_periodo_canonico(text, text)'::text), ('fn_periodo_e_parcial(text, text, text, text)'::text)) f(nome)
-  WHERE (has_function_privilege('authenticated'::name, nome, 'execute'::text) AND has_function_privilege('service_role'::name, nome, 'execute'::text) AND ((NOT (EXISTS ( SELECT 1
-           FROM pg_roles
-          WHERE (pg_roles.rolname = 'supabase_read_only_user'::name)))) OR has_function_privilege('supabase_read_only_user'::name, nome, 'execute'::text)));
-
---
--- Name: VIEW instalacao_sonda_fato_financeiro_cadeia; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_cadeia IS 'Sonda da 0243: uma linha = uma das 17 funções que o resolver chama (o fecho) é executável pelo authenticated, pelo service_role e pelo leitor só-leitura. Menos de 17: a view fato_financeiro (security_invoker: o EXECUTE é de quem lê) fica ilegível para o portal.';
-
---
--- Name: instalacao_sonda_fato_financeiro_pendencia_tipo; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.instalacao_sonda_fato_financeiro_pendencia_tipo AS
- SELECT 1 AS ok
-  WHERE (EXISTS ( SELECT 1
-           FROM pg_enum e
-          WHERE ((e.enumtypid = ('public.pendencia_tipo'::regtype)::oid) AND (e.enumlabel = 'conta_canonica_incerta'::name))));
-
---
--- Name: VIEW instalacao_sonda_fato_financeiro_pendencia_tipo; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_pendencia_tipo IS 'Sonda da 0243: uma linha = o rótulo conta_canonica_incerta existe em pendencia_tipo. Sem ele a extração nova com linha heurística tentaria abrir a pendência e falharia (a falha é engolida e vira o evento fato_pendencia_falhou).';
-
---
--- Name: instalacao_sonda_fato_financeiro_recentes; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.instalacao_sonda_fato_financeiro_recentes AS
- SELECT 1 AS ok
-  WHERE (public.fn_fato_sonda_recentes() = 0);
-
---
--- Name: VIEW instalacao_sonda_fato_financeiro_recentes; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_recentes IS 'Sonda da 0243: uma linha = as 3 versões de demonstração mais novas com linha de extração têm fato para toda linha elegível, e o fato concorda com a linha (conta = a seção dela, método pela flag de inferida). Zero linhas: o resolver falha ou diverge da linha (função da cadeia sem grant, corpo trocado), ou não há versão de demonstração a medir (-1: ausente, não verde). Não depende de evento nem de gatilho: o fato é calculado.';
-
---
--- Name: instalacao_sonda_fato_financeiro_so_le; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.instalacao_sonda_fato_financeiro_so_le AS
- SELECT 1 AS ok
-  WHERE (has_table_privilege('authenticated'::name, ('public.fato_financeiro'::regclass)::oid, 'select'::text) AND has_table_privilege('service_role'::name, ('public.fato_financeiro'::regclass)::oid, 'select'::text) AND (NOT has_any_column_privilege('authenticated'::name, ('public.fato_financeiro'::regclass)::oid, 'insert'::text)) AND (NOT has_any_column_privilege('authenticated'::name, ('public.fato_financeiro'::regclass)::oid, 'update'::text)) AND (NOT has_table_privilege('authenticated'::name, ('public.fato_financeiro'::regclass)::oid, 'delete'::text)) AND (NOT has_table_privilege('authenticated'::name, ('public.fato_financeiro'::regclass)::oid, 'truncate'::text)) AND (NOT has_any_column_privilege('service_role'::name, ('public.fato_financeiro'::regclass)::oid, 'insert'::text)) AND (NOT has_any_column_privilege('service_role'::name, ('public.fato_financeiro'::regclass)::oid, 'update'::text)) AND (NOT has_table_privilege('service_role'::name, ('public.fato_financeiro'::regclass)::oid, 'delete'::text)) AND (NOT has_any_column_privilege('anon'::name, ('public.fato_financeiro'::regclass)::oid, 'select'::text)) AND (NOT has_any_column_privilege('anon'::name, ('public.fato_financeiro'::regclass)::oid, 'insert'::text)) AND (NOT has_function_privilege('anon'::name, ('public.fn_fato_resolver(uuid)'::regprocedure)::oid, 'execute'::text)));
-
---
--- Name: VIEW instalacao_sonda_fato_financeiro_so_le; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_so_le IS 'Sonda da 0243: uma linha = o authenticated e o service_role só LEEM fato_financeiro (nenhum privilégio de escrita, nem de coluna), o anon não tem acesso a ela nem ao resolver. Zero linhas: o fato derivado voltou a ser gravável pelo portal, ou o anon o lê (o default de privilégio do Supabase dá ALL a toda view nova se a migration não revogar).';
-
---
--- Name: instalacao_sonda_fato_financeiro_tipos; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.instalacao_sonda_fato_financeiro_tipos AS
- SELECT tipo
-   FROM ( VALUES ('BALANCO'::text,true), ('BALANCETE'::text,true), ('COMBINADO'::text,true), ('DRE'::text,true), ('FLUXO_CAIXA'::text,true), ('DVA'::text,true), ('DMPL'::text,true), ('DF_AUDITADA'::text,true), ('RAZAO'::text,false), ('NOTAS_EXPL'::text,false)) e(tipo, gera)
-  WHERE (public.fn_tipo_gera_fato(tipo) = gera);
-
---
--- Name: VIEW instalacao_sonda_fato_financeiro_tipos; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_tipos IS 'Sonda da 0243: uma linha = fn_tipo_gera_fato dá a resposta certa para um dos 10 tipos (BALANCO, BALANCETE, COMBINADO, DRE, FLUXO_CAIXA, DVA, DMPL, DF_AUDITADA geram; RAZAO e NOTAS_EXPL não). Menos de 10: um tipo de demonstração perdeu o fato, ou o que é só evidência virou fato.';
-
---
--- Name: instalacao_sonda_fato_financeiro_view_invoker; Type: VIEW; Schema: public; Owner: -
---
-
-CREATE VIEW public.instalacao_sonda_fato_financeiro_view_invoker AS
- SELECT 1 AS ok
-  WHERE ((EXISTS ( SELECT 1
-           FROM pg_class c
-          WHERE ((c.oid = ('public.fato_financeiro'::regclass)::oid) AND (c.relkind = 'v'::"char") AND (EXISTS ( SELECT 1
-                   FROM pg_options_to_table(c.reloptions) o(option_name, option_value)
-                  WHERE ((o.option_name = 'security_invoker'::text) AND (lower(o.option_value) = ANY (ARRAY['true'::text, 'on'::text, 'yes'::text, '1'::text, 't'::text])))))))) AND (pg_get_viewdef(('public.fato_financeiro'::regclass)::oid) ~~ '%fn_fato_resolver(%'::text) AND (EXISTS ( SELECT 1
-           FROM pg_proc p
-          WHERE ((p.oid = ('public.fn_fato_resolver(uuid)'::regprocedure)::oid) AND (NOT p.prosecdef)))));
-
---
--- Name: VIEW instalacao_sonda_fato_financeiro_view_invoker; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON VIEW public.instalacao_sonda_fato_financeiro_view_invoker IS 'Sonda da 0243: uma linha = fato_financeiro é VIEW com security_invoker = true, definida sobre fn_fato_resolver, e o resolver não é security definer. Zero linhas: a view roda com o privilégio do dono e o authenticated lê o fato de TODOS os mandatos (a RLS de campo_extraido e documento é pulada), ou a view deixou de calcular pelo resolver.';
-
---
 -- Name: instalacao_sonda_gatilho_original_apagado; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -19442,6 +20289,42 @@ CREATE VIEW public.instalacao_sonda_gatilho_original_apagado AS
 COMMENT ON VIEW public.instalacao_sonda_gatilho_original_apagado IS 'Sonda da 0224: uma linha = o gatilho de auditoria de exclusão existe em storage.objects, habilitado, AFTER DELETE por linha, chamando fn_trg_auditar_original_apagado. Zero linhas: a exclusão de original voltou a não deixar trilha.';
 
 --
+-- Name: instalacao_sonda_kit_invoker; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_kit_invoker AS
+ SELECT (count(*))::text AS n
+   FROM pg_proc p
+  WHERE ((pronamespace = ('public'::regnamespace)::oid) AND (proname = ANY (ARRAY['fn_kit_do_caso'::name, 'fn_adotar_chave_item_faltante'::name])) AND (NOT prosecdef) AND (EXISTS ( SELECT 1
+           FROM unnest(COALESCE(p.proconfig, '{}'::text[])) c(c)
+          WHERE (c.c ~~ 'search_path=%'::text))) AND ((proname <> 'fn_kit_do_caso'::name) OR (provolatile = 's'::"char")))
+ HAVING (count(*) = 2);
+
+--
+-- Name: VIEW instalacao_sonda_kit_invoker; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_kit_invoker IS 'Sonda da 0300: uma linha = fn_kit_do_caso (stable) e fn_adotar_chave_item_faltante são security invoker com search_path fixo. Zero linhas: alguma virou security definer e o authenticated lê o Kit, ou altera pendência, de mandato alheio.';
+
+--
+-- Name: instalacao_sonda_leitura_em_lote_invoker; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_leitura_em_lote_invoker AS
+ SELECT (count(*))::text AS n
+   FROM pg_proc p
+  WHERE ((pronamespace = ('public'::regnamespace)::oid) AND (proname = ANY (ARRAY['fn_linhas_por_versao'::name, 'fn_algum_documento_serve_como'::name])) AND (NOT prosecdef) AND (provolatile = 's'::"char") AND (EXISTS ( SELECT 1
+           FROM unnest(COALESCE(p.proconfig, '{}'::text[])) c(c)
+          WHERE (c.c ~~ 'search_path=%'::text))))
+ HAVING (count(*) = 2);
+
+--
+-- Name: VIEW instalacao_sonda_leitura_em_lote_invoker; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_leitura_em_lote_invoker IS 'Sonda da 0276: uma linha = as duas leituras em lote são security invoker, stable e com search_path fixo. Zero linhas: alguma virou security definer e o authenticated conta linhas de mandato alheio.';
+
+--
 -- Name: instalacao_sonda_ln_check; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -19455,6 +20338,96 @@ CREATE VIEW public.instalacao_sonda_ln_check AS
 --
 
 COMMENT ON VIEW public.instalacao_sonda_ln_check IS 'Sonda da 0270: uma linha = campo_extraido_ln_check existe e exige ln >= 1. Zero linhas: o banco voltou a aceitar ln zero ou negativo como coordenada.';
+
+--
+-- Name: mapeamento_de_colunas; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mapeamento_de_colunas (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    tipo_base text NOT NULL,
+    impressao text NOT NULL,
+    cabecalho jsonb NOT NULL,
+    mapa jsonb NOT NULL,
+    formato jsonb NOT NULL,
+    confirmado_por uuid NOT NULL,
+    confirmado_em timestamp with time zone DEFAULT now() NOT NULL,
+    substituido_em timestamp with time zone,
+    substituido_por uuid,
+    CONSTRAINT mapeamento_de_colunas_impressao_check CHECK ((impressao ~ '^[0-9a-f]{64}$'::text)),
+    CONSTRAINT mapeamento_de_colunas_tipo_base_check CHECK ((tipo_base = ANY (ARRAY['contas_a_receber'::text, 'contas_a_pagar'::text]))),
+    CONSTRAINT mapeamento_impressao_do_banco CHECK ((impressao = public.fn_impressao_do_cabecalho(cabecalho))),
+    CONSTRAINT mapeamento_substituicao_inteira CHECK (((substituido_em IS NULL) = (substituido_por IS NULL))),
+    CONSTRAINT mapeamento_valido CHECK ((public.fn_mapeamento_erros(mapa, cabecalho, formato) = '{}'::text[]))
+);
+
+--
+-- Name: TABLE mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.mapeamento_de_colunas IS '0272: o mapeamento de colunas CONFIRMADO por um analista para um arquivo de contas a receber/a pagar, pela impressão digital do cabeçalho, reaproveitado no próximo arquivo do mesmo ERP em qualquer mandato. NÃO é por mandato: guarda o nome das colunas, não dado do cliente. Escrita só por fn_mapeamento_confirmar; uma confirmação nova marca a anterior como substituída (substituido_em) e a nova vira a vigente.';
+
+--
+-- Name: COLUMN mapeamento_de_colunas.mapa; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.mapeamento_de_colunas.mapa IS 'campo -> índice 0-based da coluna NO CABEÇALHO ORIGINAL (a coluna `cabecalho`), não no normalizado.';
+
+--
+-- Name: COLUMN mapeamento_de_colunas.formato; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.mapeamento_de_colunas.formato IS '{"decimal": "virgula"|"ponto", "datas": "dia_mes_ano"|"mes_dia_ano"}: "1.250" e "03/04/2025" não se decidem por valor, só por arquivo. Sem default: quem confirma diz os dois.';
+
+--
+-- Name: COLUMN mapeamento_de_colunas.confirmado_por; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.mapeamento_de_colunas.confirmado_por IS 'auth.uid() de quem confirmou. Sem FK de propósito: a autoria sobrevive à saída do usuário.';
+
+--
+-- Name: CONSTRAINT mapeamento_impressao_do_banco ON mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT mapeamento_impressao_do_banco ON public.mapeamento_de_colunas IS '0272: a impressão é sempre a do cabeçalho gravado, calculada pelo banco; nem o service_role grava uma impressão que o cabeçalho não produz.';
+
+--
+-- Name: CONSTRAINT mapeamento_valido ON mapeamento_de_colunas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON CONSTRAINT mapeamento_valido ON public.mapeamento_de_colunas IS '0272: o mesmo validador da confirmação (fn_mapeamento_erros), para quem escrever sem passar pela função (service_role): obrigatório faltando, índice fora, coluna repetida e formato fora da lista não entram.';
+
+--
+-- Name: instalacao_sonda_mapeamento_checks; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_mapeamento_checks AS
+ SELECT (count(*))::text AS n
+   FROM pg_constraint k
+  WHERE ((conrelid = ('public.mapeamento_de_colunas'::regclass)::oid) AND (contype = 'c'::"char") AND convalidated AND (((conname = 'mapeamento_valido'::name) AND (pg_get_constraintdef(oid) ~~ '%fn_mapeamento_erros(%'::text)) OR ((conname = 'mapeamento_impressao_do_banco'::name) AND (pg_get_constraintdef(oid) ~~ '%fn_impressao_do_cabecalho(%'::text))))
+ HAVING (count(*) = 2);
+
+--
+-- Name: VIEW instalacao_sonda_mapeamento_checks; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_mapeamento_checks IS 'Sonda da 0272: uma linha = as duas CHECKs (validador e impressão do banco) existem, validadas, chamando as funções certas. Zero linhas: quem escreve como service_role grava mapeamento inválido ou impressão que o cabeçalho não produz.';
+
+--
+-- Name: instalacao_sonda_mapeamento_uma_vigente; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_mapeamento_uma_vigente AS
+ SELECT ((i.indexrelid)::regclass)::text AS indice
+   FROM (pg_index i
+     JOIN pg_class c ON (((c.oid = i.indexrelid) AND (c.relname = 'mapeamento_de_colunas_uma_vigente'::name))))
+  WHERE ((i.indrelid = ('public.mapeamento_de_colunas'::regclass)::oid) AND i.indisunique AND i.indisvalid AND (i.indpred IS NOT NULL) AND (pg_get_indexdef(i.indexrelid) ~~ '%(tipo_base, impressao)%'::text) AND (pg_get_expr(i.indpred, i.indrelid) ~~ '%substituido_em IS NULL%'::text));
+
+--
+-- Name: VIEW instalacao_sonda_mapeamento_uma_vigente; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_mapeamento_uma_vigente IS 'Sonda da 0272: uma linha = o índice único parcial (tipo_base, impressao) where substituido_em is null existe e é válido. Zero linhas: o banco deixou de garantir uma só confirmação vigente por cabeçalho.';
 
 --
 -- Name: instalacao_sonda_modelagem_pronta; Type: VIEW; Schema: public; Owner: -
@@ -19776,8 +20749,22 @@ CREATE TABLE public.pendencia (
     motivo text,
     criada_em timestamp with time zone DEFAULT now() NOT NULL,
     resolvida_em timestamp with time zone,
-    resolvida_por text
+    resolvida_por text,
+    chave_motor text,
+    resolvida_por_documento_id uuid
 );
+
+--
+-- Name: COLUMN pendencia.chave_motor; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.pendencia.chave_motor IS '0300: a chave estável com que o MOTOR de completude acha a sua própria pendência (hoje: completude:item_faltante:<TIPO>). Coluna própria porque `motivo` é sobrescrito por fn_decidir_pendencia (coalesce(p_motivo, motivo)) e o texto da `descricao` muda quando alguém melhora a frase: chave que mora num deles duplica ou resolve a pendência errada. Nulo = a pendência não é de um motor que use chave (ex.: item_faltante de contrato social, motivo contrato_social_ausente:<id>, 0208).';
+
+--
+-- Name: COLUMN pendencia.resolvida_por_documento_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.pendencia.resolvida_por_documento_id IS '0300: o documento cuja chegada fechou a pendência item_faltante (o primeiro que serve depois de ela abrir; sem nenhum depois, o primeiro que serve). Nulo = não foi fechada por documento (decisão de pessoa, outro motor) ou o tipo deixou de ser obrigatório. NÃO é pendencia.documento_id: fn_revisar_documento resolve por ele.';
 
 --
 -- Name: pergunta_catalogo; Type: TABLE; Schema: public; Owner: -
@@ -19951,6 +20938,13 @@ COMMENT ON COLUMN public.rubrica_classe.padrao IS 'Casado contra fn_normalizar_t
 COMMENT ON COLUMN public.rubrica_classe.especificidade IS 'Desempate: mais ALTO ganha. Regra com seção e tipo declarados é mais específica que a genérica, e sem desempate declarado duas regras que casam a mesma linha dariam resultado dependente da ordem em que o banco devolveu — que é a forma de erro que a 0125 corrigiu na proveniência.';
 
 --
+-- Name: aging_importado aging_importado_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aging_importado
+    ADD CONSTRAINT aging_importado_pkey PRIMARY KEY (id);
+
+--
 -- Name: alocacao alocacao_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -20089,6 +21083,13 @@ ALTER TABLE ONLY public.conta_canonica
 
 ALTER TABLE ONLY public.conta_canonica
     ADD CONSTRAINT conta_canonica_secao_canonica_key UNIQUE (secao_canonica);
+
+--
+-- Name: contraparte_confirmada contraparte_confirmada_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contraparte_confirmada
+    ADD CONSTRAINT contraparte_confirmada_pkey PRIMARY KEY (id);
 
 --
 -- Name: controlador controlador_pkey; Type: CONSTRAINT; Schema: public; Owner: -
@@ -20301,6 +21302,13 @@ ALTER TABLE ONLY public.lote_execucao
     ADD CONSTRAINT lote_execucao_pkey PRIMARY KEY (id);
 
 --
+-- Name: mapeamento_de_colunas mapeamento_de_colunas_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mapeamento_de_colunas
+    ADD CONSTRAINT mapeamento_de_colunas_pkey PRIMARY KEY (id);
+
+--
 -- Name: membro membro_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -20420,6 +21428,18 @@ ALTER TABLE ONLY public.taxonomia_tipo_documento
     ADD CONSTRAINT taxonomia_tipo_documento_pkey PRIMARY KEY (codigo);
 
 --
+-- Name: aging_importado_caso; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX aging_importado_caso ON public.aging_importado USING btree (caso_id);
+
+--
+-- Name: aging_importado_uma_vigente; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX aging_importado_uma_vigente ON public.aging_importado USING btree (caso_id, entidade_id, tipo_base, data_base) WHERE (substituido_em IS NULL);
+
+--
 -- Name: alocacao_usuario_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -20460,6 +21480,12 @@ CREATE UNIQUE INDEX caso_nome_unico ON public.caso USING btree (lower(btrim(nome
 --
 
 COMMENT ON INDEX public.caso_nome_unico IS '0216: o nome do mandato é único ignorando caixa e espaços nas pontas. fn_upsert_caso e fn_falhas_abertas já casam por nome assim; sem a unicidade o Analista não alocado criava o homônimo e o n8n roteava para qualquer um.';
+
+--
+-- Name: contraparte_confirmada_uma_vigente; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX contraparte_confirmada_uma_vigente ON public.contraparte_confirmada USING btree (caso_id, tipo_base, contraparte) WHERE (revogado_em IS NULL);
 
 --
 -- Name: controlador_caso_documento_unico; Type: INDEX; Schema: public; Owner: -
@@ -20726,6 +21752,12 @@ CREATE INDEX idx_reconciliacao_vigente ON public.reconciliacao USING btree (caso
 CREATE UNIQUE INDEX idx_rubrica_classe_unica ON public.rubrica_classe USING btree (padrao, COALESCE(secao_canonica, ''::text), COALESCE(tipo_taxonomia, ''::text), versao);
 
 --
+-- Name: mapeamento_de_colunas_uma_vigente; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX mapeamento_de_colunas_uma_vigente ON public.mapeamento_de_colunas USING btree (tipo_base, impressao) WHERE (substituido_em IS NULL);
+
+--
 -- Name: perimetro_atual_unico; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -20888,12 +21920,6 @@ CREATE TRIGGER trg_estagio_autonomia_so_socio BEFORE INSERT OR DELETE OR UPDATE 
 CREATE TRIGGER trg_execucao_falha_leitura_nao_apaga BEFORE DELETE ON public.execucao_falha FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
 
 --
--- Name: evento_auditoria trg_fato_pendencia_da_extracao; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER trg_fato_pendencia_da_extracao AFTER INSERT ON public.evento_auditoria FOR EACH ROW WHEN ((new.acao = 'extracao_sombra'::text)) EXECUTE FUNCTION public.fn_fato_pendencia_da_extracao();
-
---
 -- Name: golden_campo trg_golden_campo_congelada; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -20958,6 +21984,27 @@ CREATE TRIGGER trg_premissa_catalogo_so_socio BEFORE INSERT OR DELETE OR UPDATE 
 --
 
 CREATE TRIGGER trg_reconciliacao_leitura_nao_apaga BEFORE DELETE ON public.reconciliacao FOR EACH STATEMENT EXECUTE FUNCTION public.fn_trg_so_quem_escreve_apaga();
+
+--
+-- Name: aging_importado aging_importado_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aging_importado
+    ADD CONSTRAINT aging_importado_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
+-- Name: aging_importado aging_importado_entidade_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aging_importado
+    ADD CONSTRAINT aging_importado_entidade_id_fkey FOREIGN KEY (entidade_id) REFERENCES public.entidade(id) ON DELETE CASCADE;
+
+--
+-- Name: aging_importado aging_importado_mapeamento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.aging_importado
+    ADD CONSTRAINT aging_importado_mapeamento_id_fkey FOREIGN KEY (mapeamento_id) REFERENCES public.mapeamento_de_colunas(id);
 
 --
 -- Name: alocacao alocacao_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -21170,6 +22217,13 @@ ALTER TABLE ONLY public.conta_canonica
     ADD CONSTRAINT conta_canonica_pai_fk FOREIGN KEY (pai, demonstracao) REFERENCES public.conta_canonica(codigo, demonstracao);
 
 --
+-- Name: contraparte_confirmada contraparte_confirmada_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.contraparte_confirmada
+    ADD CONSTRAINT contraparte_confirmada_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
+
+--
 -- Name: controlador controlador_caso_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -21359,6 +22413,13 @@ ALTER TABLE ONLY public.lote_execucao
     ADD CONSTRAINT lote_execucao_caso_id_fkey FOREIGN KEY (caso_id) REFERENCES public.caso(id) ON DELETE CASCADE;
 
 --
+-- Name: mapeamento_de_colunas mapeamento_de_colunas_substituido_por_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mapeamento_de_colunas
+    ADD CONSTRAINT mapeamento_de_colunas_substituido_por_fkey FOREIGN KEY (substituido_por) REFERENCES public.mapeamento_de_colunas(id) DEFERRABLE INITIALLY DEFERRED;
+
+--
 -- Name: membro membro_usuario_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -21392,6 +22453,13 @@ ALTER TABLE ONLY public.pendencia
 
 ALTER TABLE ONLY public.pendencia
     ADD CONSTRAINT pendencia_periodo_id_fkey FOREIGN KEY (periodo_id) REFERENCES public.periodo(id);
+
+--
+-- Name: pendencia pendencia_resolvida_por_documento_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.pendencia
+    ADD CONSTRAINT pendencia_resolvida_por_documento_id_fkey FOREIGN KEY (resolvida_por_documento_id) REFERENCES public.documento(id) ON DELETE SET NULL;
 
 --
 -- Name: pergunta_catalogo pergunta_catalogo_gatilho_tipo_taxonomia_gatilho_conceito_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
@@ -21490,6 +22558,19 @@ ALTER TABLE ONLY public.taxonomia_linha_localizador
 
 ALTER TABLE ONLY public.taxonomia_tipo_cobertura
     ADD CONSTRAINT taxonomia_tipo_cobertura_tipo_taxonomia_fkey FOREIGN KEY (tipo_taxonomia) REFERENCES public.taxonomia_tipo_documento(codigo);
+
+--
+-- Name: aging_importado; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.aging_importado ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: aging_importado aging_importado_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY aging_importado_read ON public.aging_importado FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: alocacao; Type: ROW SECURITY; Schema: public; Owner: -
@@ -21969,6 +23050,19 @@ ALTER TABLE public.conta_canonica ENABLE ROW LEVEL SECURITY;
 --
 
 CREATE POLICY conta_canonica_read ON public.conta_canonica FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
+-- Name: contraparte_confirmada; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.contraparte_confirmada ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: contraparte_confirmada contraparte_confirmada_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY contraparte_confirmada_read ON public.contraparte_confirmada FOR SELECT TO authenticated USING ((( SELECT public.fn_eh_socio() AS fn_eh_socio) OR (caso_id IN ( SELECT c.c
+   FROM public.fn_casos_legiveis() c(c)))));
 
 --
 -- Name: controlador; Type: ROW SECURITY; Schema: public; Owner: -
@@ -22540,6 +23634,18 @@ CREATE POLICY lote_execucao_update ON public.lote_execucao FOR UPDATE TO authent
    FROM public.fn_casos_escreviveis() c(c)))));
 
 --
+-- Name: mapeamento_de_colunas; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.mapeamento_de_colunas ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: mapeamento_de_colunas mapeamento_de_colunas_read; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY mapeamento_de_colunas_read ON public.mapeamento_de_colunas FOR SELECT TO authenticated USING (( SELECT public.fn_tem_papel() AS fn_tem_papel));
+
+--
 -- Name: membro; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -22832,6 +23938,76 @@ REVOKE ALL ON FUNCTION public.fn_acesso_bootstrap() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_acesso_bootstrap() TO service_role;
 
 --
+-- Name: FUNCTION fn_adotar_chave_item_faltante(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_adotar_chave_item_faltante(p_caso_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_adotar_chave_item_faltante(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_adotar_chave_item_faltante(p_caso_id uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_aging_centavos(p jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_aging_centavos(p jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_aging_centavos(p jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_aging_centavos(p jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aging_centavos(p jsonb) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_aging_contagem(p jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_aging_contagem(p jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_aging_contagem(p jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_aging_contagem(p jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aging_contagem(p jsonb) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aging_importar(p_caso uuid, p_entidade uuid, p_tipo_base text, p_data_base date, p_resumo jsonb, p_leitura jsonb, p_aplicador jsonb, p_arquivo jsonb, p_mapeamento uuid) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aging_linhas_do_balanco(p_versao uuid, p_conceito text, p_col_ent text, p_col_per text) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_aging_reais(p_valor numeric); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_aging_reais(p_valor numeric) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_aging_reais(p_valor numeric) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_aging_reais(p_valor numeric) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aging_reais(p_valor numeric) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_aging_resumo_erros(p_resumo jsonb, p_data_base date); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base date) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base date) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base date) TO service_role;
+GRANT ALL ON FUNCTION public.fn_aging_resumo_erros(p_resumo jsonb, p_data_base date) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_algum_documento_serve_como(p_documento_ids uuid[], p_tipo_taxonomia text) TO service_role;
+
+--
 -- Name: FUNCTION fn_alocado_agora(p_caso uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -22954,6 +24130,15 @@ REVOKE ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) TO service_role;
 GRANT ALL ON FUNCTION public.fn_avaliar_portao2(p_caso_id uuid) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_balanco_fecha_em(p_documento_id uuid, p_ano integer); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_balanco_fecha_em(p_documento_id uuid, p_ano integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_balanco_fecha_em(p_documento_id uuid, p_ano integer) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_balanco_fecha_em(p_documento_id uuid, p_ano integer) TO service_role;
+GRANT ALL ON FUNCTION public.fn_balanco_fecha_em(p_documento_id uuid, p_ano integer) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_caso_da_chave_do_storage(p_nome text); Type: ACL; Schema: public; Owner: -
@@ -23203,6 +24388,15 @@ GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uui
 GRANT ALL ON FUNCTION public.fn_contas_repetindo_valor(p_documento_versao_id uuid) TO supabase_read_only_user;
 
 --
+-- Name: FUNCTION fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_contraparte_confirmar(p_caso uuid, p_tipo_base text, p_contraparte text) TO supabase_read_only_user;
+
+--
 -- Name: FUNCTION fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23210,6 +24404,24 @@ REVOKE ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave 
 GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO service_role;
 GRANT ALL ON FUNCTION public.fn_contraparte_intragrupo(p_caso_id uuid, p_chave text, p_entidade_dona uuid) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_contraparte_revogar(p_caso uuid, p_tipo_base text, p_contraparte text) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_contrapartes_confirmadas(p_caso uuid, p_tipo_base text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_controlador_desvincular_familia(p_vinculo_id uuid, p_motivo text, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -23636,49 +24848,6 @@ GRANT ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) TO service_role;
 GRANT ALL ON FUNCTION public.fn_familia_da_secao(p_secao text) TO supabase_read_only_user;
 
 --
--- Name: FUNCTION fn_fato_ator(); Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON FUNCTION public.fn_fato_ator() FROM PUBLIC;
-
---
--- Name: FUNCTION fn_fato_pendencia_da_extracao(); Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON FUNCTION public.fn_fato_pendencia_da_extracao() FROM PUBLIC;
-
---
--- Name: FUNCTION fn_fato_pendencia_da_versao(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_fato_pendencia_da_versao(p_documento_versao_id uuid) TO service_role;
-
---
--- Name: FUNCTION fn_fato_pode_escrever(p_caso uuid); Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON FUNCTION public.fn_fato_pode_escrever(p_caso uuid) FROM PUBLIC;
-
---
--- Name: FUNCTION fn_fato_resolver(p_documento_versao_id uuid); Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) TO authenticated;
-GRANT ALL ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) TO service_role;
-GRANT ALL ON FUNCTION public.fn_fato_resolver(p_documento_versao_id uuid) TO supabase_read_only_user;
-
---
--- Name: FUNCTION fn_fato_sonda_recentes(); Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON FUNCTION public.fn_fato_sonda_recentes() FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_fato_sonda_recentes() TO authenticated;
-GRANT ALL ON FUNCTION public.fn_fato_sonda_recentes() TO service_role;
-GRANT ALL ON FUNCTION public.fn_fato_sonda_recentes() TO supabase_read_only_user;
-
---
 -- Name: FUNCTION fn_fator_escala(p_unidade text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23931,6 +25100,15 @@ GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integ
 GRANT ALL ON FUNCTION public.fn_historico_do_caso(p_caso_id uuid, p_limite integer, p_antes timestamp with time zone, p_antes_chave text) TO supabase_read_only_user;
 
 --
+-- Name: FUNCTION fn_impressao_do_cabecalho(p_cabecalho jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_impressao_do_cabecalho(p_cabecalho jsonb) TO supabase_read_only_user;
+
+--
 -- Name: FUNCTION fn_indice_macro_anual(p_desde_ano integer); Type: ACL; Schema: public; Owner: -
 --
 
@@ -23965,6 +25143,14 @@ REVOKE ALL ON FUNCTION public.fn_instalacao_resumo() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.fn_instalacao_resumo() TO authenticated;
 GRANT ALL ON FUNCTION public.fn_instalacao_resumo() TO service_role;
 GRANT ALL ON FUNCTION public.fn_instalacao_resumo() TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_kit_do_caso(p_caso uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_kit_do_caso(p_caso uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_kit_do_caso(p_caso uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_kit_do_caso(p_caso uuid) TO service_role;
 
 --
 -- Name: FUNCTION fn_lado_do_mutuo(p_chave text, p_secao_canonica text); Type: ACL; Schema: public; Owner: -
@@ -24002,15 +25188,6 @@ GRANT ALL ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_col
 GRANT ALL ON FUNCTION public.fn_linha_vale_para_ano(p_versao uuid, p_periodo_coluna text, p_periodo_tipo text, p_periodo_ref text, p_ano integer) TO supabase_read_only_user;
 
 --
--- Name: FUNCTION fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric); Type: ACL; Schema: public; Owner: -
---
-
-REVOKE ALL ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) TO authenticated;
-GRANT ALL ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) TO service_role;
-GRANT ALL ON FUNCTION public.fn_linha_vira_fato(p_tipo text, p_chave text, p_unidade text, p_valor numeric) TO supabase_read_only_user;
-
---
 -- Name: FUNCTION fn_linhas_do_realizado(p_caso_id uuid, p_entidade text); Type: ACL; Schema: public; Owner: -
 --
 
@@ -24045,6 +25222,41 @@ REVOKE ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) FR
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO authenticated;
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO service_role;
 GRANT ALL ON FUNCTION public.fn_linhas_para_transcrever(p_documento_id uuid) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_linhas_por_versao(p_versoes uuid[]); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_linhas_por_versao(p_versoes uuid[]) TO service_role;
+
+--
+-- Name: FUNCTION fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_mapeamento_confirmar(p_tipo_base text, p_cabecalho jsonb, p_mapa jsonb, p_formato jsonb) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_mapeamento_erros(p_mapa jsonb, p_cabecalho jsonb, p_formato jsonb) TO supabase_read_only_user;
+
+--
+-- Name: FUNCTION fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) TO service_role;
+GRANT ALL ON FUNCTION public.fn_mapeamento_vigente(p_tipo_base text, p_cabecalho jsonb) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_marcar_falha_vista(p_falha_id uuid, p_autor text); Type: ACL; Schema: public; Owner: -
@@ -24557,6 +25769,22 @@ GRANT ALL ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) TO service
 GRANT ALL ON FUNCTION public.fn_recomputar_completude(p_caso_id uuid) TO supabase_read_only_user;
 
 --
+-- Name: FUNCTION fn_reconciliar_aging(p_aging_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_reconciliar_aging(p_aging_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_reconciliar_aging(p_aging_id uuid) TO service_role;
+
+--
+-- Name: FUNCTION fn_reconciliar_aging_do_caso(p_caso_id uuid); Type: ACL; Schema: public; Owner: -
+--
+
+REVOKE ALL ON FUNCTION public.fn_reconciliar_aging_do_caso(p_caso_id uuid) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_reconciliar_aging_do_caso(p_caso_id uuid) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_reconciliar_aging_do_caso(p_caso_id uuid) TO service_role;
+GRANT ALL ON FUNCTION public.fn_reconciliar_aging_do_caso(p_caso_id uuid) TO supabase_read_only_user;
+
+--
 -- Name: FUNCTION fn_reconciliar_arvore(p_documento_id uuid); Type: ACL; Schema: public; Owner: -
 --
 
@@ -25028,13 +26256,13 @@ GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO service_role
 GRANT ALL ON FUNCTION public.fn_texto_nomeia_mutuo(p_texto text) TO supabase_read_only_user;
 
 --
--- Name: FUNCTION fn_tipo_gera_fato(p_tipo text); Type: ACL; Schema: public; Owner: -
+-- Name: FUNCTION fn_texto_normalizado(p_texto text); Type: ACL; Schema: public; Owner: -
 --
 
-REVOKE ALL ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) FROM PUBLIC;
-GRANT ALL ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) TO authenticated;
-GRANT ALL ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) TO service_role;
-GRANT ALL ON FUNCTION public.fn_tipo_gera_fato(p_tipo text) TO supabase_read_only_user;
+REVOKE ALL ON FUNCTION public.fn_texto_normalizado(p_texto text) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.fn_texto_normalizado(p_texto text) TO authenticated;
+GRANT ALL ON FUNCTION public.fn_texto_normalizado(p_texto text) TO service_role;
+GRANT ALL ON FUNCTION public.fn_texto_normalizado(p_texto text) TO supabase_read_only_user;
 
 --
 -- Name: FUNCTION fn_tipo_sem_dado_por_natureza(p_tipo text); Type: ACL; Schema: public; Owner: -
@@ -25347,6 +26575,13 @@ GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_
 GRANT ALL ON FUNCTION public.fn_vincular_linha_premissa(p_caso_id uuid, p_secao_canonica text, p_rotulo text, p_entidade text, p_premissa text, p_autor text, p_sazonalidade text) TO supabase_read_only_user;
 
 --
+-- Name: TABLE aging_importado; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.aging_importado TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.aging_importado TO service_role;
+
+--
 -- Name: TABLE alocacao; Type: ACL; Schema: public; Owner: -
 --
 
@@ -25465,6 +26700,13 @@ GRANT SELECT ON TABLE public.conta_canonica TO authenticated;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.conta_canonica TO service_role;
 
 --
+-- Name: TABLE contraparte_confirmada; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.contraparte_confirmada TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.contraparte_confirmada TO service_role;
+
+--
 -- Name: TABLE controlador; Type: ACL; Schema: public; Owner: -
 --
 
@@ -25533,13 +26775,6 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.evento_auditoria TO service_ro
 
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.execucao_falha TO authenticated;
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.execucao_falha TO service_role;
-
---
--- Name: TABLE fato_financeiro; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT ON TABLE public.fato_financeiro TO authenticated;
-GRANT SELECT ON TABLE public.fato_financeiro TO service_role;
 
 --
 -- Name: TABLE fato_tipo_catalogo; Type: ACL; Schema: public; Owner: -
@@ -25619,6 +26854,20 @@ GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_requisito TO authen
 GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.instalacao_requisito TO service_role;
 
 --
+-- Name: TABLE instalacao_sonda_aging_checks; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_checks TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_checks TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_aging_uma_vigente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_uma_vigente TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_aging_uma_vigente TO service_role;
+
+--
 -- Name: TABLE instalacao_sonda_cobertura_de_tipos; Type: ACL; Schema: public; Owner: -
 --
 
@@ -25652,6 +26901,20 @@ GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_seed TO service_rol
 
 GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_sem_orfao TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_conta_canonica_sem_orfao TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_contraparte_checks; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_contraparte_checks TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_contraparte_checks TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_contraparte_uma_vigente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_contraparte_uma_vigente TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_contraparte_uma_vigente TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_entidade_balcao_ambiguo; Type: ACL; Schema: public; Owner: -
@@ -25703,48 +26966,6 @@ GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_exigencias_0188 TO service_role;
 
 --
--- Name: TABLE instalacao_sonda_fato_financeiro_cadeia; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_cadeia TO authenticated;
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_cadeia TO service_role;
-
---
--- Name: TABLE instalacao_sonda_fato_financeiro_pendencia_tipo; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_pendencia_tipo TO authenticated;
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_pendencia_tipo TO service_role;
-
---
--- Name: TABLE instalacao_sonda_fato_financeiro_recentes; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_recentes TO authenticated;
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_recentes TO service_role;
-
---
--- Name: TABLE instalacao_sonda_fato_financeiro_so_le; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_so_le TO authenticated;
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_so_le TO service_role;
-
---
--- Name: TABLE instalacao_sonda_fato_financeiro_tipos; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_tipos TO authenticated;
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_tipos TO service_role;
-
---
--- Name: TABLE instalacao_sonda_fato_financeiro_view_invoker; Type: ACL; Schema: public; Owner: -
---
-
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_view_invoker TO authenticated;
-GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_view_invoker TO service_role;
-
---
 -- Name: TABLE instalacao_sonda_gatilho_original_apagado; Type: ACL; Schema: public; Owner: -
 --
 
@@ -25752,11 +26973,46 @@ GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO authen
 GRANT SELECT ON TABLE public.instalacao_sonda_gatilho_original_apagado TO service_role;
 
 --
+-- Name: TABLE instalacao_sonda_kit_invoker; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_kit_invoker TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_kit_invoker TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_leitura_em_lote_invoker; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_leitura_em_lote_invoker TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_leitura_em_lote_invoker TO service_role;
+
+--
 -- Name: TABLE instalacao_sonda_ln_check; Type: ACL; Schema: public; Owner: -
 --
 
 GRANT SELECT ON TABLE public.instalacao_sonda_ln_check TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_ln_check TO service_role;
+
+--
+-- Name: TABLE mapeamento_de_colunas; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.mapeamento_de_colunas TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE public.mapeamento_de_colunas TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_mapeamento_checks; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_mapeamento_checks TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_mapeamento_checks TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_mapeamento_uma_vigente; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_mapeamento_uma_vigente TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_mapeamento_uma_vigente TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_modelagem_pronta; Type: ACL; Schema: public; Owner: -

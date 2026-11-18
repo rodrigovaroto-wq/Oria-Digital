@@ -1,50 +1,30 @@
 @import "tailwindcss";
 
 /* =============================================================================
-   A CARA DA ORIA NA TELA.
+   A CARA DO PORTAL: direção A, "Cobalto noturno" (escolhida pelo dono, 13/11/2026).
+   Maquete e tokens: Arquitetura do Sistema/7 Marca/redesenho-2026-11/maquete-direcoes.html (.dir-a).
 
-   POR QUE ESTE ARQUIVO MUDOU DE MUNDO. Até aqui o portal usava a paleta `slate`
-   do Tailwind com um acento ciano — cores derivadas do ENTREGÁVEL em Excel
-   (`src/lib/oria-marca.ts`), que por sua vez foram derivadas do modelo
-   institucional. Só que a Oria tem uma identidade própria, viva em produção em
-   oriapartners.com, e o portal não se parecia com ela. Eram dois produtos com
-   caras diferentes saindo da mesma casa, e o que o cliente vê primeiro — a tela
-   — era o que parecia menos acabado.
+   OS NOMES DOS TOKENS FICARAM, OS VALORES MUDARAM. Antes o mundo era papel creme, tinta
+   quente e acento terracota; reescrever cada tela para trocar de paleta seria ruído. Então
+   `papel` é a mesa (--bg #eef0f3), `folha` a superfície que recebe dado (--surface #fff),
+   `tinta-900` o texto (--ink #0b0c0e), `tinta-500` o secundário (--muted #5d6470),
+   `tinta-200` o fio (--line #dfe2e8). Único renome: `vidro-terracota` virou
+   `vidro-acento` (o destaque do casco não é mais terracota) e entrou `vidro-acao`.
 
-   Os valores abaixo foram MEDIDOS no site em produção (`assets/index-*.css`,
-   tokens `--background`, `--foreground`, `--accent`, `--border`), convertidos de
-   HSL para hex:
+   REGRA DE COR, e ela vale mais que o gosto: A COR INDICA ESTADO E SÓ ESTADO.
+     risco  = trava       alerta = confirmar / pendente       ok = pronto
+     acento (cobalto #1f2de6) = AÇÃO e FOCO, nunca estado
+     info   = nota do sistema e origem "lido do documento"; serie = origem "calculado"
+   Cor nunca carrega significado sozinha: todo estado é cor MAIS texto.
 
-     papel      #F6F4EF   hsl(44 27% 95%)   fundo do site
-     tinta      #11161D   hsl(213 26% 9%)   texto e AÇÃO PRIMÁRIA (é o
-                                            `--primary` do próprio site)
-     acento     #B6482F   hsl(11 59% 45%)   terracota
-     linha      #D2CDC1   hsl(44 16% 79%)   fio/borda
+   CONTRASTE (WCAG 2.x, medido pelos valores deste arquivo): o pior par de texto no claro
+   é `alerta-700` sobre `alerta-50`; os pares do modo escuro são reprovados por
+   `verificar-mensagem-de-falha.mts` (seção CASCO) se caírem de AA. O `--alerta` da maquete
+   (#c27c0e) dá só 3,2:1 como TEXTO sobre o fundo suave dela: aqui ele é `alerta-500`
+   (ponto, barra), e o texto de chip usa `alerta-700`/`-800`.
 
-   A DECISÃO QUE ESTE ARQUIVO NÃO TOMA SOZINHO, e que antes ele afirmava: o
-   Excel NÃO acompanha. `oria-marca.ts` continua grafite + ciano, de propósito.
-   Modelo de crédito é lido em impressão preto e branco por comitê, e a gramática
-   de cor de fonte de lá (azul = digitado, preto = calculado, verde = outra aba)
-   é convenção de mercado que um analista lê sem legenda. Tela e papel de comitê
-   são meios diferentes com leitores diferentes; divergir aqui é decisão, não
-   dívida. Mudar cor de marca NÃO é mais mudar nos dois lugares.
-
-   O QUE O SITE FAZ E NÃO PODE SER COPIADO PARA CÁ. No site, `--accent` e
-   `--destructive` são a MESMA cor. Numa página de marketing isso passa; num
-   portal que tem "excluir mandato" não passa — a cor da marca não pode ser a
-   cor do perigo. Então o terracota ficou com IDENTIDADE (seleção, foco, item
-   ativo, links) e o risco ganhou um oxblood próprio, #78223A na faixa 700, a
-   28° de matiz do acento e mais escuro que ele.
-
-   REGRA HERDADA DO ENTREGÁVEL, e ela vale mais na tela do que no papel: cor
-   nunca carrega significado sozinha. Todo estado aqui é cor MAIS texto (o chip
-   diz "faltante", não é só âmbar) — é o que mantém a tela legível para quem não
-   distingue verde de vermelho, que é 8% dos homens que vão abrir este portal.
-
-   As rampas de estado foram geradas com saturação alta nas faixas claras, de
-   propósito: sobre creme, um tom claro pouco saturado vira o próprio papel e o
-   chip some. Todos os pares texto/preenchimento usados no código foram medidos
-   e passam AA (o pior é 5,39:1, em `alerta-700` sobre `alerta-50`).
+   O Excel NÃO acompanha (`oria-marca.ts` segue grafite + ciano, de propósito): modelo de
+   crédito é lido em impressão preto e branco por comitê.
    ============================================================================ */
 
 @theme {
@@ -54,8 +34,8 @@
      mata-borrão. `tinta-50` é a faixa de navegação, um passo mais funda.
      Nenhuma delas é branco: branco puro ao lado de creme lê como papel de
      outro lote. */
-  --color-papel: #f6f4ef;
-  --color-folha: #fcfbf8;
+  --color-papel: #eef0f3;
+  --color-folha: #ffffff;
 
   /* --- vidro (decisão do dono, 28/10/2026) ---------------------------------
      As cores de TEXTO e de realce sobre o casco escuro (barra lateral, barra
@@ -63,15 +43,16 @@
      secundário ali: ver a medição em DESIGN.md, "Vidro e imagem de fundo".
      `fundo-reserva` é o que o `body` pinta ANTES da imagem chegar — creme
      piscando e virando foto escura é pior do que escuro virando foto escura. */
-  --color-vidro-texto: #ece8df;
-  --color-vidro-suave: #a39d92;
-  --color-vidro-terracota: #e8937c;
-  --color-fundo-reserva: #0d0f13;
+  --color-vidro-texto: #e9edf3;
+  --color-vidro-suave: #8891a1;
+  --color-vidro-acento: #8c9bff;
+  --color-vidro-acao: #1f2de6;
+  --color-fundo-reserva: #070a12;
   /* Tinta e papel SOBRE o vidro: no modo escuro `tinta-900` e `papel` trocam de
      lado, mas o botão creme do casco (`bg-vidro-texto`) continua creme — o texto
      dele não pode seguir a troca. Fixos, fora do bloco escuro. */
-  --color-vidro-tinta: #11161d;
-  --color-vidro-papel: #f6f4ef;
+  --color-vidro-tinta: #0b0c0e;
+  --color-vidro-papel: #eef0f3;
 
   /* --- tinta ---------------------------------------------------------------
      A rampa sai do `--foreground` do site (#11161D) e desce em direção ao
@@ -84,24 +65,24 @@
      JÁ os usava — barra lateral, borda de input, ponto de severidade
      `complementar` — contra um tema que nunca os declarou. Classe sem token
      não gera regra: esses elementos vinham renderizando sem a cor pedida. */
-  --color-tinta-900: #11161d;
-  --color-tinta-800: #1e242c;
-  --color-tinta-700: #2c323a;
-  --color-tinta-600: #3a4048;
-  --color-tinta-500: #6e6a62;
-  --color-tinta-400: #847f77;
-  --color-tinta-300: #bdb7ab;
-  --color-tinta-200: #d2cdc1;
-  --color-tinta-100: #e7e2d8;
-  --color-tinta-50: #f1eee6;
+  --color-tinta-900: #0b0c0e;
+  --color-tinta-800: #1c2029;
+  --color-tinta-700: #2f3540;
+  --color-tinta-600: #444b57;
+  --color-tinta-500: #5d6470;
+  --color-tinta-400: #6f7786;
+  --color-tinta-300: #b7bdc8;
+  --color-tinta-200: #dfe2e8;
+  --color-tinta-100: #e8ebf0;
+  --color-tinta-50: #f6f7f9;
 
   /* --- acento: identidade, nunca alarme ------------------------------------
      Seleção corrente, foco, item ativo da navegação, link. NÃO é a cor de
      ação primária: essa é a tinta, exatamente como no site. */
-  --color-acento-700: #93381f;
-  --color-acento-600: #b6482f;
-  --color-acento-100: #f2ddd6;
-  --color-acento-50: #f9eeea;
+  --color-acento-700: #1722b8;
+  --color-acento-600: #1f2de6;
+  --color-acento-100: #e6e8fd;
+  --color-acento-50: #f1f2fe;
 
   /* --- estados -------------------------------------------------------------
      risco   = divergência, bloqueio, erro, ação destrutiva
@@ -109,35 +90,35 @@
      ok      = conferido, aceito, completo
      info    = nota do sistema, subtotal (não é bom nem ruim)
      serie   = categoria de linha derivada/série (taxonomia, não estado) */
-  --color-risco-50: #f3e7ea;
-  --color-risco-100: #eed3db;
-  --color-risco-200: #e0aebc;
-  --color-risco-300: #d08097;
-  --color-risco-500: #b73459;
-  --color-risco-600: #972b49;
-  --color-risco-700: #78223a;
-  --color-risco-800: #671d32;
-  --color-risco-900: #541829;
+  --color-risco-50: #fbe7ea;
+  --color-risco-100: #f6d3d9;
+  --color-risco-200: #ebabb6;
+  --color-risco-300: #de7c8d;
+  --color-risco-500: #d1344d;
+  --color-risco-600: #b82a41;
+  --color-risco-700: #9b2236;
+  --color-risco-800: #7f1c2d;
+  --color-risco-900: #621623;
 
-  --color-alerta-50: #f4efe6;
-  --color-alerta-100: #efe4d2;
-  --color-alerta-200: #e3cdab;
-  --color-alerta-300: #d5b37c;
-  --color-alerta-500: #be862d;
-  --color-alerta-600: #9d6f25;
-  --color-alerta-700: #805a1e;
-  --color-alerta-800: #6b4c19;
-  --color-alerta-900: #573d14;
+  --color-alerta-50: #fbf0dc;
+  --color-alerta-100: #f6e3bd;
+  --color-alerta-200: #ecd09a;
+  --color-alerta-300: #deb066;
+  --color-alerta-500: #c27c0e;
+  --color-alerta-600: #a3660b;
+  --color-alerta-700: #7f4f08;
+  --color-alerta-800: #6a4107;
+  --color-alerta-900: #543406;
 
-  --color-ok-50: #eaf0ea;
-  --color-ok-100: #dae7db;
-  --color-ok-200: #bbd3bc;
-  --color-ok-300: #96bb97;
-  --color-ok-500: #579459;
-  --color-ok-600: #487a49;
-  --color-ok-700: #3a643c;
-  --color-ok-800: #315432;
-  --color-ok-900: #284329;
+  --color-ok-50: #e1f3ea;
+  --color-ok-100: #cdeadb;
+  --color-ok-200: #a8d9c0;
+  --color-ok-300: #78c09d;
+  --color-ok-500: #13875a;
+  --color-ok-600: #0f7249;
+  --color-ok-700: #0d5f3d;
+  --color-ok-800: #0a4d32;
+  --color-ok-900: #083c27;
 
   --color-info-50: #e9eff2;
   --color-info-100: #d7e4ea;
@@ -173,7 +154,7 @@
      proveniência. Mono como fantasia de "técnico" em texto corrido é costume,
      não tipografia. */
   --font-texto: var(--fonte-texto), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-titulo: var(--fonte-titulo), ui-serif, Georgia, "Times New Roman", serif;
+  --font-titulo: var(--fonte-texto), ui-sans-serif, system-ui, sans-serif;
   --font-dado: var(--fonte-dado), ui-monospace, "SF Mono", "Cascadia Mono", monospace;
 }
 
@@ -183,6 +164,11 @@
    no celular, com o botão de salvar coberto. Vale só abaixo de `sm` (a barra some a partir dele). */
 :root {
   --altura-barra-inferior: calc(4rem + max(0.75rem, env(safe-area-inset-bottom)));
+  /* Tokens de movimento do SKELETON REVEAL (mais abaixo), copiados do `_root.css` da skill
+     transitions.dev: `--duration-slow` 400ms, `--ease-in-out`, `--blur-small` 2px. */
+  --duration-slow: 400ms;
+  --ease-in-out: ease-in-out;
+  --blur-small: 2px;
 }
 
 :root {
@@ -190,28 +176,56 @@
      social. Elevação demais compete com o número. Agora tingidas da tinta
      (#11161D) em vez do slate antigo — sombra cinza sobre creme lê como
      sujeira. */
-  --sombra-carta: 0 1px 2px 0 rgb(17 22 29 / 0.05), 0 1px 3px 0 rgb(17 22 29 / 0.07);
-  --sombra-topo: 0 1px 0 0 rgb(17 22 29 / 0.07);
+  --sombra-carta: 0 1px 2px 0 rgb(11 12 14 / 0.04);
+  --sombra-topo: 0 1px 0 0 rgb(11 12 14 / 0.07);
 
   /* O VIDRO, em um lugar só (regra 8 do pedido do dono): quem precisar de outra
      opacidade muda aqui, e as três mídias de fallback ao fim do arquivo
      redefinem estes mesmos valores — nenhum arquivo .tsx repete um rgba. */
   /* 0,64 e não 0,58: com o pixel MAIS CLARO da foto (255,255,236) sob o véu
      de 0,62, 0,58 dá 4,38:1 para `vidro-suave` (abaixo de AA); 0,64 dá 4,71:1. */
-  --vidro-casco-fundo: rgb(18 21 27 / 0.64);
-  --vidro-casco-denso: rgb(18 21 27 / 0.8);
-  --vidro-casco-borda: rgb(255 255 255 / 0.09);
-  --vidro-casco-filtro: blur(18px) saturate(140%);
   /* 0,94 e não 0,92: medido, `tinta-500` sobre a folha a 0,92 com a foto PRETA
      atrás dá 4,37:1 (abaixo de AA); a 0,94 dá 4,57:1. A foto é escura na
      maior parte, então o pior caso é o caso comum. */
-  --vidro-folha-fundo: rgb(252 251 248 / 0.94);
+  --vidro-folha-fundo: rgb(255 255 255 / 0.94);
   --vidro-folha-borda: rgb(255 255 255 / 0.55);
-  --vidro-sombra: 0 8px 32px 0 rgb(0 0 0 / 0.28);
+  --vidro-sombra: none;
   /* O NEON DA PLACA. O sextante original é azul-marinho de traço escuro — igual
      à placa da foto, onde o que o faz aparecer é a LUZ AZUL POR TRÁS. Um brilho
      só de 6px quase sumia no vidro escuro; três camadas (núcleo, halo, aura)
      reproduzem a luz de fundo da placa sem tocar na arte, que segue intacta. */
+  /* A JANELA DE VIDRO (13/11/2026, redesenho etapa 1). O app inteiro mora numa janela arredondada (28px) sobre o
+     fundo de estilhaços; barra de navegação, cabeçalho e blocos são vidro DENTRO dela. Claro: pérola a 46 por cento. */
+  --janela-fundo: rgb(255 255 255 / 0.46);
+  --janela-borda: rgb(255 255 255 / 0.85);
+  --janela-sombra: inset 0 1px 0 #fff, 0 34px 70px -28px rgb(15 23 42 / 0.38), 0 2px 6px rgb(15 23 42 / 0.08);
+  --janela-filtro: blur(26px) saturate(150%);
+  /* Sem margem (celular) a janela É a tela. No claro o véu continua; no escuro ele some, porque só clarearia o fundo
+     atrás do texto claro (medido: +10 em cada canal, o que levava o pior pixel de lum 0,014 a 0,021). */
+  --janela-fundo-celular: var(--janela-fundo);
+  --janela-fio: rgb(15 23 42 / 0.1);
+  /* O CARTÃO DE VIDRO dentro da janela. Claro: branco a 66 por cento, borda branca, sombra curta e longa. O contraste do
+     texto é medido sobre o PIOR pixel do fundo (`--fundo-pior`: o mais escuro do claro e o mais claro do escuro,
+     lido da tela renderizada COM a janela por cima e sem texto nem cartão) por verificar-mensagem-de-falha.mts. */
+  --cartao-fundo: rgb(255 255 255 / 0.66);
+  --cartao-borda: rgb(255 255 255 / 0.95);
+  --cartao-sombra: inset 0 1px 0 #fff, 0 1px 2px rgb(15 23 42 / 0.08), 0 16px 32px -16px rgb(15 23 42 / 0.26);
+  --cartao-filtro: blur(18px) saturate(1.3);
+  /* MEDIDO em 13/11/2026 (texto, cartões e controles escondidos, só a janela sobre o fundo; 7 larguras de 390 a 2560 px):
+     o pixel de MENOR luminância é #e1e4f5 (390 px; de 1024 a 2560 px o menor é #e1e6fc). Arredondado para o lado pior. */
+  --fundo-pior: #e1e4f5;
+  /* A TINTA DO TEXTO QUE FICA DIRETO NO FUNDO, sem cartão: no claro `tinta-600`. Medida por
+     verificar-mensagem-de-falha.mts nos dois temas contra `--fundo-pior`. */
+  --tinta-fundo: var(--color-tinta-600);
+  /* O FUNDO CLARO: pérola com luz no canto e um toque de cobalto no oposto, e por cima os estilhaços (SVG de
+     triângulos, ~7,5 KB, sem filtro nem imagem: ao contrário do `feTurbulence` do mármore, que o navegador
+     rasterizava por software e custava ~150 ms de FCP). Os estilhaços são facetas em branco e cobalto a
+     poucos por cento, mais um fio branco de 1,2px. */
+  --fundo-base:
+    radial-gradient(1000px 600px at 6% -8%, rgb(255 255 255 / .9), transparent 62%),
+    radial-gradient(800px 560px at 104% 106%, rgb(31 45 230 / .12), transparent 66%),
+    linear-gradient(160deg,#eef1f8,#dde2ee);
+  --fundo-estilhacos: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cpolygon points='0,0 120,0 0,240' fill='rgb(255,255,255)' fill-opacity='0.101'/%3E%3Cpolygon points='120,0 241,207 0,240' fill='rgb(255,255,255)' fill-opacity='0.418'/%3E%3Cpolygon points='120,0 467,0 241,207' fill='rgb(255,255,255)' fill-opacity='0.11'/%3E%3Cpolygon points='467,0 430,222 241,207' fill='rgb(255,255,255)' fill-opacity='0.194'/%3E%3Cpolygon points='467,0 566,0 651,159' fill='rgb(255,255,255)' fill-opacity='0.383'/%3E%3Cpolygon points='467,0 651,159 430,222' fill='rgb(31,45,230)' fill-opacity='0.012'/%3E%3Cpolygon points='566,0 754,0 780,233' fill='rgb(255,255,255)' fill-opacity='0.204'/%3E%3Cpolygon points='566,0 780,233 651,159' fill='rgb(255,255,255)' fill-opacity='0.126'/%3E%3Cpolygon points='754,0 1037,0 780,233' fill='rgb(255,255,255)' fill-opacity='0.45'/%3E%3Cpolygon points='1037,0 1032,129 780,233' fill='rgb(31,45,230)' fill-opacity='0.022'/%3E%3Cpolygon points='1037,0 1205,0 1229,195' fill='rgb(255,255,255)' fill-opacity='0.155'/%3E%3Cpolygon points='1037,0 1229,195 1032,129' fill='rgb(255,255,255)' fill-opacity='0.165'/%3E%3Cpolygon points='1205,0 1373,0 1229,195' fill='rgb(31,45,230)' fill-opacity='0.04'/%3E%3Cpolygon points='1373,0 1468,249 1229,195' fill='rgb(255,255,255)' fill-opacity='0.542'/%3E%3Cpolygon points='1373,0 1600,0 1468,249' fill='rgb(255,255,255)' fill-opacity='0.596'/%3E%3Cpolygon points='1600,0 1600,140 1468,249' fill='rgb(31,45,230)' fill-opacity='0.034'/%3E%3Cpolygon points='0,240 241,207 0,402' fill='rgb(255,255,255)' fill-opacity='0.224'/%3E%3Cpolygon points='241,207 268,430 0,402' fill='rgb(31,45,230)' fill-opacity='0.04'/%3E%3Cpolygon points='241,207 430,222 268,430' fill='rgb(31,45,230)' fill-opacity='0.011'/%3E%3Cpolygon points='430,222 423,412 268,430' fill='rgb(255,255,255)' fill-opacity='0.543'/%3E%3Cpolygon points='430,222 651,159 666,465' fill='rgb(255,255,255)' fill-opacity='0.276'/%3E%3Cpolygon points='430,222 666,465 423,412' fill='rgb(31,45,230)' fill-opacity='0.033'/%3E%3Cpolygon points='651,159 780,233 666,465' fill='rgb(31,45,230)' fill-opacity='0.033'/%3E%3Cpolygon points='780,233 780,374 666,465' fill='rgb(31,45,230)' fill-opacity='0.009'/%3E%3Cpolygon points='780,233 1032,129 1054,373' fill='rgb(255,255,255)' fill-opacity='0.593'/%3E%3Cpolygon points='780,233 1054,373 780,374' fill='rgb(255,255,255)' fill-opacity='0.416'/%3E%3Cpolygon points='1032,129 1229,195 1054,373' fill='rgb(31,45,230)' fill-opacity='0.041'/%3E%3Cpolygon points='1229,195 1144,368 1054,373' fill='rgb(31,45,230)' fill-opacity='0.029'/%3E%3Cpolygon points='1229,195 1468,249 1144,368' fill='rgb(255,255,255)' fill-opacity='0.349'/%3E%3Cpolygon points='1468,249 1389,367 1144,368' fill='rgb(255,255,255)' fill-opacity='0.486'/%3E%3Cpolygon points='1468,249 1600,140 1600,470' fill='rgb(31,45,230)' fill-opacity='0.022'/%3E%3Cpolygon points='1468,249 1600,470 1389,367' fill='rgb(31,45,230)' fill-opacity='0.02'/%3E%3Cpolygon points='0,402 268,430 0,609' fill='rgb(31,45,230)' fill-opacity='0.03'/%3E%3Cpolygon points='268,430 237,660 0,609' fill='rgb(31,45,230)' fill-opacity='0.025'/%3E%3Cpolygon points='268,430 423,412 329,564' fill='rgb(31,45,230)' fill-opacity='0.034'/%3E%3Cpolygon points='268,430 329,564 237,660' fill='rgb(31,45,230)' fill-opacity='0.034'/%3E%3Cpolygon points='423,412 666,465 610,601' fill='rgb(31,45,230)' fill-opacity='0.013'/%3E%3Cpolygon points='423,412 610,601 329,564' fill='rgb(255,255,255)' fill-opacity='0.201'/%3E%3Cpolygon points='666,465 780,374 787,551' fill='rgb(31,45,230)' fill-opacity='0.013'/%3E%3Cpolygon points='666,465 787,551 610,601' fill='rgb(31,45,230)' fill-opacity='0.03'/%3E%3Cpolygon points='780,374 1054,373 1065,529' fill='rgb(255,255,255)' fill-opacity='0.138'/%3E%3Cpolygon points='780,374 1065,529 787,551' fill='rgb(255,255,255)' fill-opacity='0.511'/%3E%3Cpolygon points='1054,373 1144,368 1178,575' fill='rgb(255,255,255)' fill-opacity='0.555'/%3E%3Cpolygon points='1054,373 1178,575 1065,529' fill='rgb(31,45,230)' fill-opacity='0.043'/%3E%3Cpolygon points='1144,368 1389,367 1426,668' fill='rgb(255,255,255)' fill-opacity='0.481'/%3E%3Cpolygon points='1144,368 1426,668 1178,575' fill='rgb(255,255,255)' fill-opacity='0.462'/%3E%3Cpolygon points='1389,367 1600,470 1426,668' fill='rgb(31,45,230)' fill-opacity='0.002'/%3E%3Cpolygon points='1600,470 1600,602 1426,668' fill='rgb(31,45,230)' fill-opacity='0.004'/%3E%3Cpolygon points='0,609 237,660 0,746' fill='rgb(31,45,230)' fill-opacity='0.004'/%3E%3Cpolygon points='237,660 185,765 0,746' fill='rgb(255,255,255)' fill-opacity='0.403'/%3E%3Cpolygon points='237,660 329,564 185,765' fill='rgb(31,45,230)' fill-opacity='0.009'/%3E%3Cpolygon points='329,564 378,788 185,765' fill='rgb(255,255,255)' fill-opacity='0.201'/%3E%3Cpolygon points='329,564 610,601 378,788' fill='rgb(31,45,230)' fill-opacity='0.011'/%3E%3Cpolygon points='610,601 573,805 378,788' fill='rgb(31,45,230)' fill-opacity='0.045'/%3E%3Cpolygon points='610,601 787,551 573,805' fill='rgb(255,255,255)' fill-opacity='0.437'/%3E%3Cpolygon points='787,551 818,757 573,805' fill='rgb(31,45,230)' fill-opacity='0.018'/%3E%3Cpolygon points='787,551 1065,529 1065,793' fill='rgb(31,45,230)' fill-opacity='0.003'/%3E%3Cpolygon points='787,551 1065,793 818,757' fill='rgb(255,255,255)' fill-opacity='0.504'/%3E%3Cpolygon points='1065,529 1178,575 1065,793' fill='rgb(255,255,255)' fill-opacity='0.176'/%3E%3Cpolygon points='1178,575 1258,822 1065,793' fill='rgb(31,45,230)' fill-opacity='0.023'/%3E%3Cpolygon points='1178,575 1426,668 1421,803' fill='rgb(255,255,255)' fill-opacity='0.205'/%3E%3Cpolygon points='1178,575 1421,803 1258,822' fill='rgb(31,45,230)' fill-opacity='0.008'/%3E%3Cpolygon points='1426,668 1600,602 1421,803' fill='rgb(255,255,255)' fill-opacity='0.236'/%3E%3Cpolygon points='1600,602 1600,801 1421,803' fill='rgb(31,45,230)' fill-opacity='0.025'/%3E%3Cpolygon points='0,746 185,765 230,1000' fill='rgb(31,45,230)' fill-opacity='0.045'/%3E%3Cpolygon points='0,746 230,1000 0,1000' fill='rgb(31,45,230)' fill-opacity='0.019'/%3E%3Cpolygon points='185,765 378,788 230,1000' fill='rgb(31,45,230)' fill-opacity='0'/%3E%3Cpolygon points='378,788 470,1000 230,1000' fill='rgb(31,45,230)' fill-opacity='0.019'/%3E%3Cpolygon points='378,788 573,805 583,1000' fill='rgb(255,255,255)' fill-opacity='0.217'/%3E%3Cpolygon points='378,788 583,1000 470,1000' fill='rgb(255,255,255)' fill-opacity='0.489'/%3E%3Cpolygon points='573,805 818,757 583,1000' fill='rgb(255,255,255)' fill-opacity='0.318'/%3E%3Cpolygon points='818,757 833,1000 583,1000' fill='rgb(255,255,255)' fill-opacity='0.581'/%3E%3Cpolygon points='818,757 1065,793 833,1000' fill='rgb(255,255,255)' fill-opacity='0.431'/%3E%3Cpolygon points='1065,793 960,1000 833,1000' fill='rgb(31,45,230)' fill-opacity='0.016'/%3E%3Cpolygon points='1065,793 1258,822 1214,1000' fill='rgb(31,45,230)' fill-opacity='0.022'/%3E%3Cpolygon points='1065,793 1214,1000 960,1000' fill='rgb(255,255,255)' fill-opacity='0.384'/%3E%3Cpolygon points='1258,822 1421,803 1214,1000' fill='rgb(255,255,255)' fill-opacity='0.433'/%3E%3Cpolygon points='1421,803 1376,1000 1214,1000' fill='rgb(255,255,255)' fill-opacity='0.464'/%3E%3Cpolygon points='1421,803 1600,801 1376,1000' fill='rgb(255,255,255)' fill-opacity='0.523'/%3E%3Cpolygon points='1600,801 1600,1000 1376,1000' fill='rgb(31,45,230)' fill-opacity='0.02'/%3E%3Cpath d='M0 0L120 0M0 240L120 0M0 0L0 240M120 0L241 207M0 240L241 207M120 0L467 0M241 207L467 0M430 222L467 0M241 207L430 222M467 0L566 0M566 0L651 159M467 0L651 159M430 222L651 159M566 0L754 0M754 0L780 233M566 0L780 233M651 159L780 233M1037 0L754 0M1037 0L780 233M1032 129L1037 0M1032 129L780 233M1037 0L1205 0M1205 0L1229 195M1037 0L1229 195M1032 129L1229 195M1205 0L1373 0M1229 195L1373 0M1373 0L1468 249M1229 195L1468 249M1373 0L1600 0M1468 249L1600 0M1600 0L1600 140M1468 249L1600 140M0 402L241 207M0 240L0 402M241 207L268 430M0 402L268 430M268 430L430 222M423 412L430 222M268 430L423 412M651 159L666 465M430 222L666 465M423 412L666 465M666 465L780 233M780 233L780 374M666 465L780 374M1032 129L1054 373M1054 373L780 233M1054 373L780 374M1054 373L1229 195M1144 368L1229 195M1054 373L1144 368M1144 368L1468 249M1389 367L1468 249M1144 368L1389 367M1600 140L1600 470M1468 249L1600 470M1389 367L1600 470M0 609L268 430M0 402L0 609M237 660L268 430M0 609L237 660M329 564L423 412M268 430L329 564M237 660L329 564M610 601L666 465M423 412L610 601M329 564L610 601M780 374L787 551M666 465L787 551M610 601L787 551M1054 373L1065 529M1065 529L780 374M1065 529L787 551M1144 368L1178 575M1054 373L1178 575M1065 529L1178 575M1389 367L1426 668M1144 368L1426 668M1178 575L1426 668M1426 668L1600 470M1600 470L1600 602M1426 668L1600 602M0 746L237 660M0 609L0 746M185 765L237 660M0 746L185 765M185 765L329 564M329 564L378 788M185 765L378 788M378 788L610 601M573 805L610 601M378 788L573 805M573 805L787 551M787 551L818 757M573 805L818 757M1065 529L1065 793M1065 793L787 551M1065 793L818 757M1065 793L1178 575M1178 575L1258 822M1065 793L1258 822M1421 803L1426 668M1178 575L1421 803M1258 822L1421 803M1421 803L1600 602M1600 602L1600 801M1421 803L1600 801M185 765L230 1000M0 746L230 1000M0 1000L230 1000M0 1000L0 746M230 1000L378 788M378 788L470 1000M230 1000L470 1000M573 805L583 1000M378 788L583 1000M470 1000L583 1000M583 1000L818 757M818 757L833 1000M583 1000L833 1000M1065 793L833 1000M1065 793L960 1000M833 1000L960 1000M1214 1000L1258 822M1065 793L1214 1000M1214 1000L960 1000M1214 1000L1421 803M1376 1000L1421 803M1214 1000L1376 1000M1376 1000L1600 801M1600 1000L1600 801M1376 1000L1600 1000' fill='none' stroke='rgb(255,255,255)' stroke-opacity='.8' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
   --marca-neon: drop-shadow(0 0 1.5px rgb(150 180 255 / 0.95))
     drop-shadow(0 0 6px rgb(77 124 255 / 0.9)) drop-shadow(0 0 16px rgb(77 124 255 / 0.55));
 }
@@ -246,24 +260,24 @@
   html[data-tema="escuro"] {
     color-scheme: dark;
 
-    --color-papel: #14181e;
-    --color-folha: #1a1f26;
+    --color-papel: #0e1118;
+    --color-folha: #151a24;
 
-    --color-tinta-900: #ece8df;
-    --color-tinta-800: #dcd7cc;
-    --color-tinta-700: #cdc8bc;
-    --color-tinta-600: #b8b2a6;
-    --color-tinta-500: #a39d92;
-    --color-tinta-400: #7d8590;
-    --color-tinta-300: #48515d;
-    --color-tinta-200: #373f4a;
-    --color-tinta-100: #29303a;
-    --color-tinta-50: #20262e;
+    --color-tinta-900: #e9edf3;
+    --color-tinta-800: #d6dbe4;
+    --color-tinta-700: #c3c9d4;
+    --color-tinta-600: #aab2bf;
+    --color-tinta-500: #8f98a8;
+    --color-tinta-400: #8791a2;
+    --color-tinta-300: #3d4556;
+    --color-tinta-200: #2c3444;
+    --color-tinta-100: #232a38;
+    --color-tinta-50: #1b212d;
 
-    --color-acento-700: #f0a38d;
-    --color-acento-600: #e8937c;
-    --color-acento-100: #4a2a22;
-    --color-acento-50: #34231f;
+    --color-acento-700: #b3bbff;
+    --color-acento-600: #8c9bff;
+    --color-acento-100: #1e2552;
+    --color-acento-50: #171c3f;
 
     --color-risco-50: #30121a;
     --color-risco-100: #3f1822;
@@ -315,12 +329,44 @@
     --color-serie-800: #d5b8e0;
     --color-serie-900: #e1cdea;
 
-    /* A folha escura: mesmo 0,94 do claro (a foto aparece ao redor e só de leve
-       por baixo), tingida da tinta e não do preto. A borda vira um fio claro. */
-    --vidro-folha-fundo: rgb(26 31 38 / 0.94);
+    /* A janela e o cartão escuros: vidro BRANCO a poucos por cento sobre o fundo quase preto, com fio claro. */
+    --janela-fundo: rgb(255 255 255 / 0.04);
+    --janela-fundo-celular: transparent;
+    --janela-borda: rgb(255 255 255 / 0.15);
+    --janela-sombra: inset 0 1px 0 rgb(255 255 255 / 0.12), 0 40px 90px -24px rgb(0 0 0 / 0.8), 0 2px 8px rgb(0 0 0 / 0.5);
+    --janela-fio: rgb(255 255 255 / 0.1);
+    --cartao-fundo: rgb(255 255 255 / 0.05);
+    --cartao-borda: rgb(255 255 255 / 0.13);
+    --cartao-sombra: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 1px 2px rgb(0 0 0 / 0.4), 0 18px 36px -16px rgb(0 0 0 / 0.7);
+    /* MEDIDO em 13/11/2026, mesmas 7 larguras: o pixel de MAIOR luminância é #1c2246 (lum 0,0183, em 768 px; 0,0138 a
+       0,0161 de 1280 a 2560 px e 0,0141 em 390 px). Arredondado para o lado pior. */
+    --fundo-pior: #1c2246;
+    /* No escuro `tinta-600` também (7,2:1 sobre `--fundo-pior`; `tinta-500` dá 5,3:1). No mármore anterior só `tinta-800`
+       passava (o pior pixel dele era #5a5f68, e `tinta-500` dava 2,21:1): o fundo escuro novo é bem mais fundo, e o texto
+       secundário direto nele pode voltar a ser secundário, sem competir com o título. */
+    --tinta-fundo: var(--color-tinta-600);
+    /* O FUNDO ESCURO: quase preto azulado, luz cobalto no canto, e os estilhaços em facetas de cobalto-claro e branco. */
+    --fundo-base:
+      radial-gradient(900px 560px at 6% -8%, rgb(31 45 230 / .12), transparent 64%),
+      radial-gradient(800px 560px at 104% 106%, rgb(96 60 220 / .12), transparent 66%),
+      linear-gradient(160deg,#0a0d19,#05060b);
+    --fundo-estilhacos: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cpolygon points='0,0 120,0 0,240' fill='rgb(255,255,255)' fill-opacity='0.043'/%3E%3Cpolygon points='120,0 241,207 0,240' fill='rgb(96,112,255)' fill-opacity='0.03'/%3E%3Cpolygon points='120,0 467,0 241,207' fill='rgb(255,255,255)' fill-opacity='0.015'/%3E%3Cpolygon points='467,0 430,222 241,207' fill='rgb(255,255,255)' fill-opacity='0.032'/%3E%3Cpolygon points='467,0 566,0 651,159' fill='rgb(255,255,255)' fill-opacity='0.043'/%3E%3Cpolygon points='467,0 651,159 430,222' fill='rgb(96,112,255)' fill-opacity='0.018'/%3E%3Cpolygon points='566,0 754,0 780,233' fill='rgb(96,112,255)' fill-opacity='0.068'/%3E%3Cpolygon points='566,0 780,233 651,159' fill='rgb(255,255,255)' fill-opacity='0.041'/%3E%3Cpolygon points='754,0 1037,0 780,233' fill='rgb(255,255,255)' fill-opacity='0.029'/%3E%3Cpolygon points='1037,0 1032,129 780,233' fill='rgb(96,112,255)' fill-opacity='0.046'/%3E%3Cpolygon points='1037,0 1205,0 1229,195' fill='rgb(255,255,255)' fill-opacity='0.039'/%3E%3Cpolygon points='1037,0 1229,195 1032,129' fill='rgb(96,112,255)' fill-opacity='0.074'/%3E%3Cpolygon points='1205,0 1373,0 1229,195' fill='rgb(96,112,255)' fill-opacity='0.058'/%3E%3Cpolygon points='1373,0 1468,249 1229,195' fill='rgb(96,112,255)' fill-opacity='0.034'/%3E%3Cpolygon points='1373,0 1600,0 1468,249' fill='rgb(96,112,255)' fill-opacity='0.05'/%3E%3Cpolygon points='1600,0 1600,140 1468,249' fill='rgb(255,255,255)' fill-opacity='0.04'/%3E%3Cpolygon points='0,240 241,207 0,402' fill='rgb(255,255,255)' fill-opacity='0.015'/%3E%3Cpolygon points='241,207 268,430 0,402' fill='rgb(96,112,255)' fill-opacity='0.075'/%3E%3Cpolygon points='241,207 430,222 268,430' fill='rgb(255,255,255)' fill-opacity='0.014'/%3E%3Cpolygon points='430,222 423,412 268,430' fill='rgb(96,112,255)' fill-opacity='0'/%3E%3Cpolygon points='430,222 651,159 666,465' fill='rgb(96,112,255)' fill-opacity='0.034'/%3E%3Cpolygon points='430,222 666,465 423,412' fill='rgb(255,255,255)' fill-opacity='0.031'/%3E%3Cpolygon points='651,159 780,233 666,465' fill='rgb(96,112,255)' fill-opacity='0.015'/%3E%3Cpolygon points='780,233 780,374 666,465' fill='rgb(255,255,255)' fill-opacity='0.043'/%3E%3Cpolygon points='780,233 1032,129 1054,373' fill='rgb(96,112,255)' fill-opacity='0.015'/%3E%3Cpolygon points='780,233 1054,373 780,374' fill='rgb(96,112,255)' fill-opacity='0.053'/%3E%3Cpolygon points='1032,129 1229,195 1054,373' fill='rgb(255,255,255)' fill-opacity='0.037'/%3E%3Cpolygon points='1229,195 1144,368 1054,373' fill='rgb(96,112,255)' fill-opacity='0.064'/%3E%3Cpolygon points='1229,195 1468,249 1144,368' fill='rgb(255,255,255)' fill-opacity='0.015'/%3E%3Cpolygon points='1468,249 1389,367 1144,368' fill='rgb(96,112,255)' fill-opacity='0.081'/%3E%3Cpolygon points='1468,249 1600,140 1600,470' fill='rgb(255,255,255)' fill-opacity='0.026'/%3E%3Cpolygon points='1468,249 1600,470 1389,367' fill='rgb(255,255,255)' fill-opacity='0.032'/%3E%3Cpolygon points='0,402 268,430 0,609' fill='rgb(96,112,255)' fill-opacity='0.051'/%3E%3Cpolygon points='268,430 237,660 0,609' fill='rgb(255,255,255)' fill-opacity='0.002'/%3E%3Cpolygon points='268,430 423,412 329,564' fill='rgb(255,255,255)' fill-opacity='0.01'/%3E%3Cpolygon points='268,430 329,564 237,660' fill='rgb(96,112,255)' fill-opacity='0.021'/%3E%3Cpolygon points='423,412 666,465 610,601' fill='rgb(255,255,255)' fill-opacity='0.028'/%3E%3Cpolygon points='423,412 610,601 329,564' fill='rgb(96,112,255)' fill-opacity='0.069'/%3E%3Cpolygon points='666,465 780,374 787,551' fill='rgb(96,112,255)' fill-opacity='0.077'/%3E%3Cpolygon points='666,465 787,551 610,601' fill='rgb(96,112,255)' fill-opacity='0.059'/%3E%3Cpolygon points='780,374 1054,373 1065,529' fill='rgb(255,255,255)' fill-opacity='0.036'/%3E%3Cpolygon points='780,374 1065,529 787,551' fill='rgb(96,112,255)' fill-opacity='0.068'/%3E%3Cpolygon points='1054,373 1144,368 1178,575' fill='rgb(96,112,255)' fill-opacity='0.078'/%3E%3Cpolygon points='1054,373 1178,575 1065,529' fill='rgb(96,112,255)' fill-opacity='0.07'/%3E%3Cpolygon points='1144,368 1389,367 1426,668' fill='rgb(255,255,255)' fill-opacity='0.039'/%3E%3Cpolygon points='1144,368 1426,668 1178,575' fill='rgb(255,255,255)' fill-opacity='0.033'/%3E%3Cpolygon points='1389,367 1600,470 1426,668' fill='rgb(96,112,255)' fill-opacity='0.073'/%3E%3Cpolygon points='1600,470 1600,602 1426,668' fill='rgb(96,112,255)' fill-opacity='0.061'/%3E%3Cpolygon points='0,609 237,660 0,746' fill='rgb(255,255,255)' fill-opacity='0.006'/%3E%3Cpolygon points='237,660 185,765 0,746' fill='rgb(96,112,255)' fill-opacity='0.081'/%3E%3Cpolygon points='237,660 329,564 185,765' fill='rgb(96,112,255)' fill-opacity='0.007'/%3E%3Cpolygon points='329,564 378,788 185,765' fill='rgb(255,255,255)' fill-opacity='0.042'/%3E%3Cpolygon points='329,564 610,601 378,788' fill='rgb(96,112,255)' fill-opacity='0.081'/%3E%3Cpolygon points='610,601 573,805 378,788' fill='rgb(96,112,255)' fill-opacity='0.017'/%3E%3Cpolygon points='610,601 787,551 573,805' fill='rgb(255,255,255)' fill-opacity='0.021'/%3E%3Cpolygon points='787,551 818,757 573,805' fill='rgb(96,112,255)' fill-opacity='0.012'/%3E%3Cpolygon points='787,551 1065,529 1065,793' fill='rgb(96,112,255)' fill-opacity='0.041'/%3E%3Cpolygon points='787,551 1065,793 818,757' fill='rgb(96,112,255)' fill-opacity='0.005'/%3E%3Cpolygon points='1065,529 1178,575 1065,793' fill='rgb(255,255,255)' fill-opacity='0.004'/%3E%3Cpolygon points='1178,575 1258,822 1065,793' fill='rgb(255,255,255)' fill-opacity='0.021'/%3E%3Cpolygon points='1178,575 1426,668 1421,803' fill='rgb(96,112,255)' fill-opacity='0.062'/%3E%3Cpolygon points='1178,575 1421,803 1258,822' fill='rgb(96,112,255)' fill-opacity='0.06'/%3E%3Cpolygon points='1426,668 1600,602 1421,803' fill='rgb(255,255,255)' fill-opacity='0.028'/%3E%3Cpolygon points='1600,602 1600,801 1421,803' fill='rgb(255,255,255)' fill-opacity='0.035'/%3E%3Cpolygon points='0,746 185,765 230,1000' fill='rgb(255,255,255)' fill-opacity='0.032'/%3E%3Cpolygon points='0,746 230,1000 0,1000' fill='rgb(96,112,255)' fill-opacity='0.068'/%3E%3Cpolygon points='185,765 378,788 230,1000' fill='rgb(255,255,255)' fill-opacity='0.003'/%3E%3Cpolygon points='378,788 470,1000 230,1000' fill='rgb(96,112,255)' fill-opacity='0.055'/%3E%3Cpolygon points='378,788 573,805 583,1000' fill='rgb(96,112,255)' fill-opacity='0.046'/%3E%3Cpolygon points='378,788 583,1000 470,1000' fill='rgb(96,112,255)' fill-opacity='0.042'/%3E%3Cpolygon points='573,805 818,757 583,1000' fill='rgb(96,112,255)' fill-opacity='0.006'/%3E%3Cpolygon points='818,757 833,1000 583,1000' fill='rgb(96,112,255)' fill-opacity='0.03'/%3E%3Cpolygon points='818,757 1065,793 833,1000' fill='rgb(255,255,255)' fill-opacity='0.009'/%3E%3Cpolygon points='1065,793 960,1000 833,1000' fill='rgb(96,112,255)' fill-opacity='0.011'/%3E%3Cpolygon points='1065,793 1258,822 1214,1000' fill='rgb(255,255,255)' fill-opacity='0'/%3E%3Cpolygon points='1065,793 1214,1000 960,1000' fill='rgb(96,112,255)' fill-opacity='0.074'/%3E%3Cpolygon points='1258,822 1421,803 1214,1000' fill='rgb(96,112,255)' fill-opacity='0.065'/%3E%3Cpolygon points='1421,803 1376,1000 1214,1000' fill='rgb(255,255,255)' fill-opacity='0.018'/%3E%3Cpolygon points='1421,803 1600,801 1376,1000' fill='rgb(96,112,255)' fill-opacity='0.068'/%3E%3Cpolygon points='1600,801 1600,1000 1376,1000' fill='rgb(96,112,255)' fill-opacity='0.084'/%3E%3Cpath d='M0 0L120 0M0 240L120 0M0 0L0 240M120 0L241 207M0 240L241 207M120 0L467 0M241 207L467 0M430 222L467 0M241 207L430 222M467 0L566 0M566 0L651 159M467 0L651 159M430 222L651 159M566 0L754 0M754 0L780 233M566 0L780 233M651 159L780 233M1037 0L754 0M1037 0L780 233M1032 129L1037 0M1032 129L780 233M1037 0L1205 0M1205 0L1229 195M1037 0L1229 195M1032 129L1229 195M1205 0L1373 0M1229 195L1373 0M1373 0L1468 249M1229 195L1468 249M1373 0L1600 0M1468 249L1600 0M1600 0L1600 140M1468 249L1600 140M0 402L241 207M0 240L0 402M241 207L268 430M0 402L268 430M268 430L430 222M423 412L430 222M268 430L423 412M651 159L666 465M430 222L666 465M423 412L666 465M666 465L780 233M780 233L780 374M666 465L780 374M1032 129L1054 373M1054 373L780 233M1054 373L780 374M1054 373L1229 195M1144 368L1229 195M1054 373L1144 368M1144 368L1468 249M1389 367L1468 249M1144 368L1389 367M1600 140L1600 470M1468 249L1600 470M1389 367L1600 470M0 609L268 430M0 402L0 609M237 660L268 430M0 609L237 660M329 564L423 412M268 430L329 564M237 660L329 564M610 601L666 465M423 412L610 601M329 564L610 601M780 374L787 551M666 465L787 551M610 601L787 551M1054 373L1065 529M1065 529L780 374M1065 529L787 551M1144 368L1178 575M1054 373L1178 575M1065 529L1178 575M1389 367L1426 668M1144 368L1426 668M1178 575L1426 668M1426 668L1600 470M1600 470L1600 602M1426 668L1600 602M0 746L237 660M0 609L0 746M185 765L237 660M0 746L185 765M185 765L329 564M329 564L378 788M185 765L378 788M378 788L610 601M573 805L610 601M378 788L573 805M573 805L787 551M787 551L818 757M573 805L818 757M1065 529L1065 793M1065 793L787 551M1065 793L818 757M1065 793L1178 575M1178 575L1258 822M1065 793L1258 822M1421 803L1426 668M1178 575L1421 803M1258 822L1421 803M1421 803L1600 602M1600 602L1600 801M1421 803L1600 801M185 765L230 1000M0 746L230 1000M0 1000L230 1000M0 1000L0 746M230 1000L378 788M378 788L470 1000M230 1000L470 1000M573 805L583 1000M378 788L583 1000M470 1000L583 1000M583 1000L818 757M818 757L833 1000M583 1000L833 1000M1065 793L833 1000M1065 793L960 1000M833 1000L960 1000M1214 1000L1258 822M1065 793L1214 1000M1214 1000L960 1000M1214 1000L1421 803M1376 1000L1421 803M1214 1000L1376 1000M1376 1000L1600 801M1600 1000L1600 801M1376 1000L1600 1000' fill='none' stroke='rgb(180,190,255)' stroke-opacity='.06' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+    --vidro-folha-fundo: rgb(21 26 36 / 0.94);
     --vidro-folha-borda: rgb(255 255 255 / 0.1);
     --sombra-carta: 0 1px 2px 0 rgb(0 0 0 / 0.3), 0 1px 3px 0 rgb(0 0 0 / 0.35);
     --sombra-topo: 0 1px 0 0 rgb(0 0 0 / 0.35);
+  }
+
+  /* No celular a janela é a tela inteira e o brilho de cobalto do canto cai TODO atrás do texto: medido, o pixel
+     mais claro do fundo atrás do texto era lum 0,025 contra 0,017 no desktop (onde a margem de 60px o deixa fora
+     da janela). Mesmo desenho, brilho pela metade. */
+  @media (max-width: 639.98px) {
+    html[data-tema="escuro"] {
+      --fundo-base:
+        radial-gradient(900px 560px at 6% -8%, rgb(31 45 230 / .06), transparent 64%),
+        radial-gradient(800px 560px at 104% 106%, rgb(96 60 220 / .07), transparent 66%),
+        linear-gradient(160deg,#0a0d19,#05060b);
+    }
   }
 
   /* Os dois fallbacks do vidro redefinem `--vidro-folha-fundo` em `:root`, que
@@ -329,12 +375,16 @@
      a folha translúcida no escuro, não a sólida. */
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     html[data-tema="escuro"] {
-      --vidro-folha-fundo: rgb(26 31 38 / 0.98);
+      --vidro-folha-fundo: rgb(21 26 36 / 0.98);
+      --cartao-fundo: rgb(22 25 33 / 0.94);
+      --janela-fundo: rgb(14 17 27 / 0.9);
     }
   }
   @media (prefers-reduced-transparency: reduce) {
     html[data-tema="escuro"] {
-      --vidro-folha-fundo: #1a1f26;
+      --vidro-folha-fundo: #151a24;
+      --cartao-fundo: #161920;
+      --janela-fundo: #0e111b;
     }
   }
 }
@@ -346,9 +396,8 @@ html {
 }
 
 body {
-  /* Escuro, não creme: o fundo da marca é uma foto escura e fica fixo atrás de
-     tudo (`FundoDaMarca`). Enquanto ela não chega, o que se vê é isto. */
-  background-color: var(--color-fundo-reserva);
+  /* A mesa do app (`papel`). O login e as telas de recuperação pintam o próprio fundo escuro. */
+  background-color: var(--color-papel);
   font-family: var(--font-texto);
   -webkit-font-smoothing: antialiased;
 }
@@ -400,9 +449,36 @@ body {
 
 @layer components {
   /* --- superfícies --------------------------------------------------------- */
-  .carta {
-    @apply rounded-lg border border-tinta-200 bg-folha;
-    box-shadow: var(--sombra-carta);
+  /* O CARTÃO FLUTUANTE: fosco, de cantos de 14px, com anel e sombra. O desfoque mora num `::before`, e
+     não no cartão: `backdrop-filter` no próprio elemento o torna o bloco de contenção dos descendentes
+     `position: fixed`, e os diálogos de Excluir/Fechar e o "Tudo pronto" do envio moram dentro de
+     cartões (o defeito do PR #265, que obrigou a folha antiga a abrir mão do filtro). No `::before` o
+     filtro age só sobre o que está atrás dele. `position` fica relativo, mas `sticky`/`fixed` de
+     utilitário vencem (esta camada é a de baixo). */
+  .carta,
+  .cartao-vidro {
+    position: relative;
+    isolation: isolate;
+    border-radius: 14px;
+    border: 1px solid var(--cartao-borda);
+    background-color: var(--cartao-fundo);
+    box-shadow: var(--cartao-sombra);
+  }
+  .carta::before,
+  .cartao-vidro::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    /* O DESFOQUE SÓ LIGA DEPOIS DO PRIMEIRO QUADRO: `from` (antes do atraso) é sem filtro. Medido (mesma
+       página, headless, sem GPU): o desfoque dos cartões custava ~250 ms de FCP (564 → 312 ms sem ele). O
+       cartão já tem 78 a 82% de opacidade sobre um fundo de baixo contraste, então o quadro sem desfoque é
+       indistinguível; 300 ms depois o vidro fosco entra. Sem animação, o estado base (com filtro) vale. */
+    -webkit-backdrop-filter: var(--cartao-filtro);
+    backdrop-filter: var(--cartao-filtro);
+    animation: cartao-desfoca 1ms linear 300ms backwards;
   }
 
   /* --- ações --------------------------------------------------------------- */
@@ -438,19 +514,187 @@ body {
   }
 
   /* --- estrutura ----------------------------------------------------------- */
-  /* Título de seção: o mesmo tamanho e peso em todas as telas, com a contagem
-     em cinza ao lado. Antes cada seção escolhia o seu, e a página inteira
+  /* Título de seção (maquete: `.bloco-h h3`, 13px/600, em tinta e sem caixa alta): o mesmo
+     tamanho e peso em todas as telas, com a contagem em cinza ao lado. Antes cada seção escolhia o seu, e a página inteira
      parecia uma lista de coisas sem hierarquia. */
   .titulo-secao {
-    @apply text-[13px] font-semibold uppercase tracking-wide text-tinta-500;
+    @apply text-[13px] font-semibold tracking-[0.01em] text-tinta-900;
   }
 
   /* Indicador de topo: o número grande, o rótulo pequeno embaixo. */
   .indicador-valor {
-    @apply font-dado text-2xl font-semibold tabular-nums tracking-tight text-tinta-900;
+    @apply font-dado text-[28px] leading-9 font-medium tabular-nums tracking-[-0.02em] text-tinta-900;
   }
   .indicador-rotulo {
     @apply mt-0.5 text-xs text-tinta-500;
+  }
+}
+
+/* =============================================================================
+   O FUNDO ÚNICO E A JANELA DE VIDRO (13/11/2026, redesenho etapa 1). `fundo-vidro` está na raiz de
+   `casos/layout.tsx`; o login e as telas de recuperação de senha têm o fundo próprio e não passam por ele.
+   É UM elemento `fixed` atrás de tudo (`::before` com os gradientes, `::after` com os estilhaços; z-index -1
+   dentro do `isolation: isolate` da raiz): o navegador o compõe uma vez e a rolagem não o repinta, ao contrário
+   de `background-attachment: fixed` no `body`. Nada anima o fundo: o único movimento é a entrada única dos
+   estilhaços (fade de 600ms depois de 150ms). As camadas vêm de `--fundo-base` e `--fundo-estilhacos` (por tema,
+   no `:root` e em `html[data-tema="escuro"]`); o peso é o do CSS, sem imagem.
+
+   A JANELA (`janela-vidro`) é o app inteiro dentro de UM painel arredondado: 60px de margem em 1280px ou mais,
+   menos abaixo disso, e tela cheia (sem margem, sem raio) no celular. Altura = a do conteúdo (a página rola, a
+   janela não): rolagem interna quebraria as barras `sticky` e os diálogos `fixed` das telas do mandato. O desfoque
+   mora no `::before`, pelo mesmo motivo do cartão (`backdrop-filter` no próprio elemento vira o bloco de contenção
+   dos descendentes `position: fixed`: o defeito do PR #265).
+   ============================================================================= */
+.fundo-vidro {
+  position: relative;
+  isolation: isolate;
+}
+.fundo-vidro::before,
+.fundo-vidro::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+}
+/* Base: só gradientes; pinta já no primeiro quadro. */
+.fundo-vidro::before { background: var(--fundo-base); }
+/* Estilhaços: um SVG de triângulos, `cover`. Entram em fade depois do primeiro quadro (o estado base é o final:
+   sem animação, eles já estão lá). */
+.fundo-vidro::after {
+  background: var(--fundo-estilhacos) center / cover no-repeat;
+  animation: fundo-estilhacos-entram 600ms ease-out 150ms backwards;
+}
+@keyframes cartao-desfoca {
+  from { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@keyframes fundo-estilhacos-entram {
+  from { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fundo-vidro::after { animation: none; }
+}
+@media print {
+  .fundo-vidro::before,
+  .fundo-vidro::after { display: none; }
+}
+
+.moldura-janela { padding: 0; }
+@media (min-width: 640px) { .moldura-janela { padding: 16px; } }
+@media (min-width: 1024px) { .moldura-janela { padding: 32px; } }
+@media (min-width: 1280px) { .moldura-janela { padding: 60px; } }
+.janela-vidro {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  min-height: 100dvh;
+  background-color: var(--janela-fundo-celular);
+}
+@media (min-width: 640px) {
+  .janela-vidro {
+    background-color: var(--janela-fundo);
+    min-height: calc(100dvh - 32px);
+    border-radius: 28px;
+    border: 1px solid var(--janela-borda);
+    box-shadow: var(--janela-sombra);
+  }
+  .janela-vidro::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    -webkit-backdrop-filter: var(--janela-filtro);
+    backdrop-filter: var(--janela-filtro);
+    /* O desfoque só liga depois do primeiro quadro (ver `.carta::before`). */
+    animation: cartao-desfoca 1ms linear 300ms backwards;
+  }
+}
+@media (min-width: 1024px) { .janela-vidro { min-height: calc(100dvh - 64px); } }
+@media (min-width: 1280px) { .janela-vidro { min-height: calc(100dvh - 120px); } }
+@media print {
+  .moldura-janela { padding: 0; }
+  .janela-vidro { background: none; border: 0; box-shadow: none; border-radius: 0; }
+  .janela-vidro::before { display: none; }
+}
+
+/* O CARTÃO EM DESTAQUE do Início: preenchido com o cobalto da marca, em gradiente. O texto é branco (8,2:1 sobre
+   o cobalto #1f2de6, medido; o gradiente termina em #4a3fe0, 6,4:1). É ênfase, não estado: quem diz o estado
+   continua sendo o texto do detalhe. Igual nos dois temas. */
+.cartao-destaque {
+  position: relative;
+  border-radius: 14px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  background: linear-gradient(150deg, #1f2de6 0%, #4a3fe0 100%);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), 0 18px 40px -16px rgb(31 45 230 / 0.75);
+}
+
+/* A TROCA DE TEMA (botão da barra de topo): dois ícones empilhados, um cross-fade com giro e
+   desfoque curto (o padrão "icon swap" do transitions.dev, só o trecho usado). O estado base é o
+   FINAL: sem animação (movimento reduzido), o ícone certo está visível e o outro, transparente. */
+.troca-de-icone { position: relative; display: inline-grid; place-items: center; width: 16px; height: 16px; }
+.troca-de-icone > svg {
+  grid-area: 1 / 1;
+  transition: opacity var(--duration-fast, 250ms) var(--ease-in-out), transform var(--duration-fast, 250ms) var(--ease-in-out),
+    filter var(--duration-fast, 250ms) var(--ease-in-out);
+}
+/* Escuro: mostra o SOL (o clique leva ao claro). Claro: mostra a LUA. */
+.troca-de-icone .icone-sol { opacity: 0; transform: rotate(-60deg) scale(0.6); filter: blur(2px); }
+.troca-de-icone .icone-lua { opacity: 1; transform: none; filter: none; }
+:root[data-tema="escuro"] .troca-de-icone .icone-sol { opacity: 1; transform: none; filter: none; }
+:root[data-tema="escuro"] .troca-de-icone .icone-lua { opacity: 0; transform: rotate(60deg) scale(0.6); filter: blur(2px); }
+@media (prefers-reduced-motion: reduce) {
+  .troca-de-icone > svg { transition: none; }
+}
+
+/* =============================================================================
+   TABELA DE DADOS E CHIPS DE ORIGEM (direção A). `th` em caixa alta pequena sobre `tinta-50`, célula
+   com fio embaixo, número em Geist Mono tabular. A linha inteira é o link (`<a>` cobrindo a célula do
+   nome, ver painel-blocos.tsx), então o hover vale para a linha toda.
+   ============================================================================ */
+@layer components {
+  .tabela-a { @apply w-full border-collapse text-sm; }
+  .tabela-a th {
+    background-color: color-mix(in oklab, var(--color-tinta-100) 55%, transparent);
+    @apply border-b border-tinta-200 px-4 py-2.5 text-left text-[11px] font-medium
+           uppercase tracking-[0.08em] text-tinta-500;
+  }
+  .tabela-a td { @apply border-b border-tinta-100 px-4 py-3 align-middle; }
+  .tabela-a tbody tr:last-child td { @apply border-b-0; }
+  .tabela-a tbody tr:hover td { background-color: color-mix(in oklab, var(--color-acento-100) 55%, transparent); }
+  .num { font-family: var(--font-dado); font-variant-numeric: tabular-nums; }
+
+  /* A LISTA LARGA DE VIDRO do Início (estilo "Chats" de referência): linhas separadas por 4px de ar, cada uma com
+     cantos de 12px e o hover como placa de vidro mais clara; cabeçalho sem faixa. Só as duas tabelas do Início
+     levam `tabela-vidro`: as abas do mandato seguem na `tabela-a` de sempre. */
+  .tabela-vidro { border-collapse: separate; border-spacing: 0 4px; }
+  .tabela-vidro th { background-color: transparent; border-bottom: 0; }
+  .tabela-vidro td { border-bottom: 0; }
+  .tabela-vidro tbody tr td:first-child { border-radius: 12px 0 0 12px; }
+  .tabela-vidro tbody tr td:last-child { border-radius: 0 12px 12px 0; }
+  .tabela-vidro tbody tr:hover td { background-color: color-mix(in oklab, var(--color-tinta-100) 80%, transparent); }
+  .texto-fundo { color: var(--tinta-fundo); }
+
+  /* A FILA EMPILHA NO CELULAR (< 640 px). Em 390 px a tabela tinha 466 px dentro de um cartão de 356 px com
+     `overflow-hidden`: 12 textos ficavam invisíveis e 39 cortados, e a página não rolava, então a checagem de
+     rolagem não via. Aqui cada linha vira um bloco (mandato em cima, o que falta embaixo); o cabeçalho sai da
+     vista e continua para o leitor de tela. */
+  @media (max-width: 639px) {
+    .tabela-empilha,
+    .tabela-empilha tbody,
+    .tabela-empilha tr,
+    .tabela-empilha td { display: block; }
+    .tabela-empilha thead {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+    }
+    .tabela-empilha tr { padding: 0.75rem 1rem; border-bottom: 1px solid var(--color-tinta-100); }
+    .tabela-empilha tbody tr:last-child { border-bottom: 0; }
+    .tabela-empilha td { padding: 0; border: 0; }
+    .tabela-empilha td + td { margin-top: 0.5rem; }
+    .tabela-empilha tbody tr:hover { background-color: color-mix(in oklab, var(--color-acento-100) 55%, transparent); }
+    .tabela-empilha tbody tr:hover td { background-color: transparent; }
   }
 }
 
@@ -523,6 +767,46 @@ body {
   .intro-sai { animation: oria-sai 520ms ease-in both; }
 }
 
+/* SKELETON REVEAL (transitions.dev, 14-skeleton-reveal; só o trecho usado). O esqueleto de um bloco
+   que chega por streaming (`components/revelar.tsx`) sai e o conteúdo entra em cross-fade com
+   cross-blur. Os tokens de movimento moram no `:root` do topo do arquivo.
+   O ESTADO BASE É O FINAL (conteúdo visível, cópia do esqueleto transparente): a animação parte de
+   "escondido" até o base, então, se ela não rodar, nada fica invisível. */
+@keyframes t-skel-in {
+  from { opacity: 0; filter: blur(var(--blur-small)); }
+  to   { opacity: 1; filter: blur(0); }
+}
+
+@keyframes t-skel-out {
+  from { opacity: 1; filter: blur(0); }
+  to   { opacity: 0; filter: blur(var(--blur-small)); }
+}
+
+.t-skel { position: relative; }
+/* Bloco que chegou SEM conteúdo (ex.: não há fato material) não ocupa lugar — nem o espaço entre
+   irmãos que o `space-y-*` do pai reservaria. Só vale para o que o componente devolveu vazio, nunca
+   para um bloco ainda carregando (esse é o esqueleto, com forma e `role="status"`). */
+.t-skel:has(> .t-skel-content:empty) { display: none; }
+.t-skel-content { animation: t-skel-in var(--duration-slow) var(--ease-in-out); }
+/* Bloco que preenche a altura do pai (as duas colunas da linha de cima do Início): o wrapper e o conteúdo. */
+.t-skel.h-full > .t-skel-content { height: 100%; }
+.t-skel-ghost {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  animation: t-skel-out var(--duration-slow) var(--ease-in-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Sem `!important`: estas regras vêm DEPOIS das de base e têm a mesma especificidade (uma classe),
+     então vencem pela ordem. */
+  .t-skel-content { animation: none; }
+  .t-skel-ghost { display: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .surgir,
   .intro-marca,
@@ -554,12 +838,9 @@ body {
    ============================================================================ */
 
 .vidro-casco {
-  background-color: var(--vidro-casco-fundo);
+  background-color: #0b0f1a; /* --nav-bg da maquete: cartões de recuperação de senha e 404 */
   color: var(--color-vidro-texto);
-  border: 1px solid var(--vidro-casco-borda);
-  -webkit-backdrop-filter: var(--vidro-casco-filtro);
-  backdrop-filter: var(--vidro-casco-filtro);
-  box-shadow: var(--vidro-sombra);
+  border: 1px solid rgb(255 255 255 / 0.06);
 }
 
 /* O CASCO NÃO ACOMPANHA O TEMA. O cartão do login pinta os avisos com
@@ -568,20 +849,18 @@ body {
    claro com texto escuro sobre o casco. Aqui elas voltam aos valores do claro, só
    dentro do casco (o teste confere que são idênticos aos do `@theme`). */
 .vidro-casco {
-  --color-alerta-100: #efe4d2;
-  --color-alerta-300: #d5b37c;
-  --color-alerta-900: #573d14;
-  --color-risco-100: #eed3db;
-  --color-risco-300: #d08097;
-  --color-risco-900: #541829;
+  --color-alerta-100: #f6e3bd;
+  --color-alerta-300: #deb066;
+  --color-alerta-900: #543406;
+  --color-risco-100: #f6d3d9;
+  --color-risco-300: #de7c8d;
+  --color-risco-900: #621623;
 }
 
 /* O cartão do login: o véu ali vai de 0,15 a 0,70 e o cartão fica onde ele é
    mais fraco em celular (~0,45), onde 0,64 deixaria `vidro-suave` em ~3,9:1 sobre
    o pixel mais claro. 0,80 dá 4,89:1 nesse ponto. */
-.vidro-casco-denso {
-  background-color: var(--vidro-casco-denso);
-}
+
 
 /* A FOLHA NÃO TEM backdrop-filter, de propósito. Pela especificação (Filter
    Effects), um backdrop-filter diferente de `none` vira BLOCO DE CONTENÇÃO dos
@@ -601,7 +880,7 @@ body {
    abre CREME dentro do casco, e nele o anel escuro volta (especificidade maior
    que a do casco, de propósito). */
 .vidro-casco :where(a, button, input, select, textarea, summary):focus-visible {
-  outline-color: var(--color-vidro-terracota);
+  outline-color: var(--color-vidro-acento);
 }
 .vidro-casco .vidro-claro :where(a, button, input, select, textarea, summary):focus-visible {
   outline-color: var(--color-acento-600);
@@ -631,25 +910,28 @@ body {
    opacidade para o texto não depender do que o filtro faria. */
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
   :root {
-    --vidro-casco-fundo: rgb(18 21 27 / 0.94);
-    --vidro-casco-denso: rgb(18 21 27 / 0.96);
-    --vidro-folha-fundo: rgb(252 251 248 / 0.98);
+    --vidro-folha-fundo: rgb(255 255 255 / 0.98);
+    --cartao-fundo: rgb(255 255 255 / 0.94);
+    --janela-fundo: rgb(245 247 251 / 0.9);
   }
 }
 
-/* QUEM PEDIU MENOS TRANSPARÊNCIA ao sistema recebe superfícies SÓLIDAS: casco
-   #161a20, folha #fcfbf8 (a `folha` do tema), sem filtro e sem sombra difusa. */
+/* QUEM PEDIU MENOS TRANSPARÊNCIA ao sistema recebe superfícies SÓLIDAS, sem filtro. */
 @media (prefers-reduced-transparency: reduce) {
   :root {
-    --vidro-casco-fundo: #161a20;
-    --vidro-casco-denso: #161a20;
-    --vidro-folha-fundo: #fcfbf8;
-    --vidro-casco-filtro: none;
+    --vidro-folha-fundo: #ffffff;
+    --cartao-fundo: #ffffff;
+    --janela-fundo: #f3f5fa;
+    --janela-filtro: none;
+    --cartao-filtro: none;
   }
 }
 
 /* Sextante com a luz de fundo da placa "ORIA DIGITAL" (ver --marca-neon). */
 .marca-neon {
+  filter: none;
+}
+:root[data-tema="escuro"] .marca-neon {
   filter: var(--marca-neon);
 }
 @media (prefers-reduced-transparency: reduce) {

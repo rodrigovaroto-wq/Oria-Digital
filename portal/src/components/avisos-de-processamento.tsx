@@ -150,13 +150,13 @@ export function AvisosDeProcessamento() {
         aria-controls={idMenu}
         aria-label={nomeDoSino(estado.fase, naoVistos)}
         title="Avisos de processamento"
-        className="relative flex h-10 w-10 items-center justify-center rounded-full text-vidro-suave transition-colors hover:bg-white/10 hover:text-vidro-texto sm:h-9 sm:w-9"
+        className="relative flex h-10 w-10 items-center justify-center rounded-full text-tinta-500 transition-colors hover:bg-tinta-100 hover:text-tinta-900 sm:h-9 sm:w-9"
       >
         <IconeSino tamanho={18} />
         {estado.fase === "ok" && naoVistos > 0 && (
           <span
             aria-hidden
-            className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-vidro-texto px-1 text-[10px] font-semibold leading-none text-vidro-tinta"
+            className="absolute right-0.5 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-tinta-900 px-1 text-[10px] font-semibold leading-none text-papel"
           >
             {naoVistos > 9 ? "9+" : naoVistos}
           </span>

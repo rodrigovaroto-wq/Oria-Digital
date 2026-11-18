@@ -379,20 +379,35 @@ export function construirDeckCredito(base: BaseCredito, agora: Date): SaidaDeck 
   {
     // IX.2 — O QUE CHEGOU E O QUE FALTOU dos documentos obrigatórios, pela regra do kit básico.
     const info = base.informacao;
-    const recebidos = (info ?? []).filter((d) => d.status === "recebido").length;
-    const faltam = (info ?? []).filter((d) => d.status !== "recebido");
-    const s = slide("IX.2 · O que chegou e o que faltou", !info ? "Lista de documentos obrigatórios não lida nesta geração"
-      : faltam.length === 0 ? `Os ${info.length} documentos obrigatórios chegaram com conteúdo`
-      : `${recebidos} de ${info.length} documentos obrigatórios chegaram; ${faltam.length} pendentes`,
+    const chegou = (d: { status: string }) => d.status === "recebido" || d.status === "lido_sem_dado";
+    const recebidos = (info ?? []).filter(chegou).length;
+    const faltam = (info ?? []).filter((d) => !chegou(d));
+    let manchete: string;
+    if (!info) {
+      manchete = base.kitNaoConferido
+        ? "Conferência dos documentos obrigatórios não feita nesta geração"
+        : "Lista de documentos obrigatórios não lida nesta geração";
+    } else if (faltam.length === 0) {
+      manchete = `Os ${info.length} documentos obrigatórios chegaram com conteúdo`;
+    } else {
+      manchete = `${recebidos} de ${info.length} documentos obrigatórios chegaram; ${faltam.length} pendentes`;
+    }
+    const s = slide("IX.2 · O que chegou e o que faltou", manchete,
     "Fonte: kit básico do mandato e documentos recebidos no portal.");
     if (info) {
-      const rot = { recebido: "recebido", sem_conteudo: "chegou sem conteúdo extraído", faltante: "não recebido" } as const;
-      const ordenada = [...faltam, ...info.filter((d) => d.status === "recebido")];
+      const rot = {
+        recebido: "recebido", sem_conteudo: "chegou sem conteúdo extraído", faltante: "não recebido",
+        aguardando: "recebido, leitura em andamento", dispensado: "seguiu sem o documento (ressalva)",
+        lido_sem_dado: "lido, sem dado financeiro por natureza",
+      } as const;
+      const ordenada = [...faltam, ...info.filter(chegou)];
       const meio = Math.ceil(Math.min(ordenada.length, 28) / 2);
       campoValor(s, GRADE.col2.x[0], GRADE.topo, GRADE.col2.w, ordenada.slice(0, Math.min(meio, 14)).map((d) => [encurtar(d.documento, 34), rot[d.status]]), { colValor: 215 });
       campoValor(s, GRADE.col2.x[1], GRADE.topo, GRADE.col2.w, ordenada.slice(meio, Math.min(meio * 2, 28)).map((d) => [encurtar(d.documento, 34), rot[d.status]]), { colValor: 215 });
     } else {
-      cartao(s, GRADE.x, GRADE.topo, GRADE.w, 90, { titulo: "Kit básico", corpo: "A lista de documentos obrigatórios não foi lida nesta geração: confira a tela do caso." });
+      cartao(s, GRADE.x, GRADE.topo, GRADE.w, 90, { titulo: "Kit básico", corpo: base.kitNaoConferido
+        ? "A conferência de quais itens chegaram não pôde ser feita nesta geração: o status de cada item fica em aberto e nada é afirmado como faltante. Confira a tela do mandato."
+        : "A lista de documentos obrigatórios não foi lida nesta geração: nada é afirmado como faltante nem como recebido. Confira a tela do mandato." });
     }
   }
   if (temDRE) {

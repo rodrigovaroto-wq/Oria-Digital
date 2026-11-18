@@ -5,34 +5,24 @@ import { AcessoNaoLiberado } from "@/components/acesso-nao-liberado";
 import { AvisoDeAcessoNaoConferido } from "@/components/acesso-na-tela";
 import { logout } from "@/app/login/actions";
 import { BarraLateral, type MandatoNaBarra } from "@/components/barra-lateral";
-import { FundoDaMarca } from "@/components/fundo-da-marca";
 import { AvisosDeProcessamento } from "@/components/avisos-de-processamento";
 import { BotaoDiscricao } from "@/components/botao-discricao";
+import { BotaoTema } from "@/components/botao-tema";
 import { BuscaGlobal } from "@/components/busca-global";
 import { MenuConta } from "@/components/menu-conta";
 import { Trilha } from "@/components/trilha";
 
-// A MOLDURA DE TODAS AS TELAS AUTENTICADAS, no desenho "vidro" (28/10/2026).
+// A MOLDURA DE TODAS AS TELAS AUTENTICADAS: A JANELA DE VIDRO (13/11/2026, redesenho etapa 1).
 //
-// TRÊS CAMADAS, de trás para a frente:
-//   1. a imagem da marca, fixa em tela cheia (`FundoDaMarca`);
-//   2. o CASCO — barra lateral e barra de topo, vidro escuro suspenso a 12px das
-//      bordas, que só carregam navegação e texto claro;
-//   3. a FOLHA — UMA folha de vidro creme com todo o conteúdo. As 13 telas usam
-//      texto escuro desenhado para superfície creme; a folha mantém cada número
-//      sobre >= 92% de creme (o mesmo contraste de antes) e deixa a imagem
-//      aparecer ao redor e só de leve por baixo. O cabeçalho do mandato e as
-//      abas moram dentro dela, sem mudança.
+// UM FUNDO, UMA JANELA: a tela inteira tem UM só fundo (`fundo-vidro`, globals.css: estilhaços de vidro sobre
+// quase-preto no escuro, pérola no claro, feitos em CSS e SVG nossos), e o app inteiro mora numa janela de vidro
+// arredondada (`janela-vidro`, 28px) com 60px de margem em 1280px ou mais e tela cheia no celular. Dentro dela:
+// o trilho de ícones à esquerda (que expande), o cabeçalho (onde estou, busca em pílula, avisos, discrição, tema,
+// conta) e o conteúdo, onde cada bloco é um `carta` de vidro. A janela tem a altura do conteúdo e a PÁGINA rola
+// (ver o comentário em globals.css). No celular a barra inferior fixa substitui o trilho.
 //
-// A barra de 57px de largura total SAIU: a marca foi para o topo da barra lateral
-// e a trilha e a conta para uma barra flutuante. Com isso não há mais deslocamento
-// de 57px a calcular — a barra lateral é `sticky top-3`, a de topo também.
-//
-// A largura útil continua a de antes: `max-w-6xl` (1152px) de conteúdo + 2×24px
-// de respiro da folha = 75rem de coluna. As telas são TABELAS de oito colunas, e
-// 1024px obrigava a rolar na horizontal num monitor de trabalho. O e-mail e o
-// "Sair" ficam no menu de conta; o princípio "nada é fato até alguém aceitar"
-// mora no login, uma vez, e não num rodapé fixo em toda tela.
+// A largura útil segue `max-w-[78rem]`: as telas são TABELAS de oito colunas. O e-mail e o "Sair" ficam no menu de
+// conta; o princípio "nada é fato até alguém aceitar" mora no login, uma vez, e não num rodapé fixo em toda tela.
 export default async function CasosLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   // O PAPEL, lido UMA vez por requisição (`lerPermissoes` é memoizado: layout, página e rotas filhas
@@ -63,44 +53,46 @@ export default async function CasosLayout({ children }: { children: React.ReactN
   const semPapel = perm.semPapel;
 
   return (
-    // SEM COR DE FUNDO NESTE `div`: a imagem é `fixed` em `-z-10` e um bloco
-    // opaco aqui a engoliria (elemento em z negativo pinta abaixo de qualquer
-    // bloco do fluxo). O que tem fundo é o casco e a folha, e só eles.
-    <div className="flex min-h-screen">
-      <FundoDaMarca variante="app" />
-      <BarraLateral
-        mandatos={mandatos}
-        podeCriar={perm.criarMandato.pode && !semPapel}
-        motivoSemCriar={semPapel ? null : perm.criarMandato.motivo}
-        vazioDa={textoDeRecentesVazio(perm.papel, Boolean(mandatosRes.error))}
-        mostrarAdministracao={perm.papel === "socio" || !perm.conferido}
-      />
-      {/* Abaixo de 640px a barra inferior (fixa: 4rem de altura + o respiro de baixo) cobriria o fim da
-            página: o padding inferior reserva exatamente o espaço dela. */}
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-3 pb-[calc(var(--altura-barra-inferior)+0.75rem)] sm:pb-3">
-        <header className="vidro-casco sticky top-3 z-10 mx-auto flex w-full max-w-[75rem] items-center justify-between gap-4 rounded-2xl px-4 py-2">
-          <Trilha nomes={nomes} />
-          <div className="flex shrink-0 items-center gap-1">
-            {!semPapel && <BuscaGlobal />}
-            {!semPapel && <AvisosDeProcessamento />}
-            <BotaoDiscricao />
-            <MenuConta
-              email={email}
-              papel={perm.conferido ? (perm.papel ? ROTULO_DO_PAPEL[perm.papel] : "sem papel") : null}
-              sair={logout}
-            />
+    // `fundo-vidro`: o fundo único da tela inteira; a janela de vidro flutua sobre ele (globals.css).
+    <div className="fundo-vidro min-h-screen">
+      <div className="moldura-janela">
+        <div className="janela-vidro">
+          <BarraLateral
+            mandatos={mandatos}
+            podeCriar={perm.criarMandato.pode && !semPapel}
+            motivoSemCriar={semPapel ? null : perm.criarMandato.motivo}
+            vazioDa={textoDeRecentesVazio(perm.papel, Boolean(mandatosRes.error))}
+            mostrarAdministracao={perm.papel === "socio" || !perm.conferido}
+          />
+          {/* Abaixo de 640px a barra inferior (fixa: 4rem de altura + o respiro de baixo) cobriria o fim da
+                página: o padding inferior reserva exatamente o espaço dela. */}
+          <div className="flex min-w-0 flex-1 flex-col pb-[calc(var(--altura-barra-inferior)+0.75rem)] sm:pb-0">
+            <header className="flex w-full items-center justify-between gap-4 px-4 py-4 sm:px-8 sm:py-5">
+              <Trilha nomes={nomes} />
+              <div className="flex shrink-0 items-center gap-1">
+                {!semPapel && <BuscaGlobal />}
+                {!semPapel && <AvisosDeProcessamento />}
+                <BotaoDiscricao />
+                <BotaoTema />
+                <MenuConta
+                  email={email}
+                  papel={perm.conferido ? (perm.papel ? ROTULO_DO_PAPEL[perm.papel] : "sem papel") : null}
+                  sair={logout}
+                />
+              </div>
+            </header>
+            <main className="mx-auto w-full max-w-[78rem] flex-1 px-4 pb-8 pt-2 sm:px-8 sm:pb-10">
+              {semPapel ? (
+                <AcessoNaoLiberado email={email} />
+              ) : (
+                <>
+                  {!perm.conferido && <div className="mb-6"><AvisoDeAcessoNaoConferido permissoes={perm} /></div>}
+                  {children}
+                </>
+              )}
+            </main>
           </div>
-        </header>
-        <main className="vidro-folha mx-auto w-full max-w-[75rem] flex-1 rounded-2xl px-6 py-8">
-          {semPapel ? (
-            <AcessoNaoLiberado email={email} />
-          ) : (
-            <>
-              {!perm.conferido && <div className="mb-6"><AvisoDeAcessoNaoConferido permissoes={perm} /></div>}
-              {children}
-            </>
-          )}
-        </main>
+        </div>
       </div>
     </div>
   );

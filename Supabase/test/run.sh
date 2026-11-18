@@ -319,8 +319,17 @@ echo "== schema materializado (Supabase/schema.sql)"
 # tem `postgresql-client-16`; o CI cai no cliente 18, e o pg_dump 17+ emite essa linha, que o 16 não
 # emite. É ajuste de SESSÃO do próprio dump, não schema. Medido: era a ÚNICA diferença do
 # schema.sql gerado pelo cliente 18 contra o do 16 (job `banco` de cfe4e4f e 6f3d023).
+#
+# E O `ALTER TABLE ONLY <t> ALTER COLUMN <c> SET (pg_attver=<n>);` (13/11/2026): de um dia para o
+# outro, sem mudança no repositório, o cliente do runner passou a emitir uma linha dessas por coluna.
+# O CI do ef92088 (12/11, 19:58) passou e o do 3e06bbb (13/11, 10:39) reprovou, e entre os dois nenhum
+# commit tocou `Supabase/`. O número muda de coluna para coluna (27265576, 30338304, 28933848…), a linha
+# vem fora do CREATE TABLE e o cliente 16 local não a emite: é metadado do dump, não schema. Filtrar SÓ
+# esse formato exato (ALTER COLUMN … SET com uma única opção pg_attver numérica) não esconde nenhum
+# ALTER COLUMN de verdade (default, not null, tipo, statistics), porque todos esses têm outra forma.
 pg_dump --schema-only --no-owner --schema=public -d "$DB" \
   | grep -vE '^(-- (Dumped (from|by)|PostgreSQL database dump)|\\(un)?restrict |SET transaction_timeout = 0;$)' \
+  | grep -vE '^ALTER TABLE ONLY [^ ]+ ALTER COLUMN [^ ]+ SET \(pg_attver=[0-9]+\);$' \
   | sed -E 's/^ALTER DEFAULT PRIVILEGES FOR ROLE [^ ]+ /ALTER DEFAULT PRIVILEGES FOR ROLE postgres /' \
   | sed -E '/^$/N;/^\n$/D' > Supabase/schema.sql
 echo "   $(grep -c '^CREATE ' Supabase/schema.sql) objetos criados · $(wc -l < Supabase/schema.sql) linhas"
@@ -1002,6 +1011,18 @@ echo "== 0242 — a seção que só existia em código (conta_canonica: toda se�
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/conta_canonica.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0272 — o mapeamento de colunas que cada arquivo redescobria (confirmado por Sócio/Analista COMO authenticated, impressão do cabeçalho calculada pelo banco, uma vigente por par, formato fechado)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_mapeamento_de_colunas_que_cada_arquivo_redescobria.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0273 — a contraparte com nome de total que só o analista distingue (confirmada/revogada por Sócio/Analista DO MANDATO COMO authenticated, nome normalizado pelo banco, uma vigente, revogar não apaga, outro mandato não lê nem escreve)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_contraparte_com_nome_de_total_que_so_o_analista_distingue.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0274 — o aging que só existia no navegador e nunca conferia com o balanço (resumo por mandato e entidade, importado só por Sócio/Analista DO MANDATO COMO authenticated, resumo que não fecha recusado, reimportar substitui sem apagar, conciliado com Clientes/Fornecedores e Adiantamentos na meia unidade da escala do balanço)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_aging_que_so_existia_no_navegador_e_nunca_conferia_com_o_balanco.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== 0270 — a linha que não sabia de que linha veio (campo_extraido.ln: o inteiro >= 1 grava, o inválido vira nulo sem abortar o lote, sem a chave grava como antes)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_linha_que_nao_sabia_de_que_linha_veio.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
@@ -1016,6 +1037,18 @@ psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/fato_financeiro_corridas.test.
 
 echo "== 0271 — o quadro de imobilizado que a IA gravava como balanço (tipo COMPOSICAO_IMOBILIZADO: existe, não entra nas checagens de balanço)"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_quadro_de_imobilizado_que_a_ia_gravava_como_balanco.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0276 — a visão geral que buscava dez mil linhas e fazia 230 chamadas para contar (contagem por versão em lote sem teto de 1.000, serve-como em lote = bool_or das individuais, ambas COMO authenticated sob a RLS do mandato)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_visao_geral_que_buscava_dez_mil_linhas_e_230_chamadas_para_contar.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0300 — o item do Kit que ficava recebido sem ninguém ter lido nada (estado do item derivado no banco, auto-aceite não é conferência, item_faltante achada por chave, documento que fechou, evento da conferência sempre gravado, mandato invisível = zero linhas)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_item_do_kit_que_ficava_recebido_sem_ninguem_ter_lido.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
+echo "== 0301 — o Kit que levava quatro segundos para abrir (fn_kit_do_caso igual à 0300 linha a linha, COMO superusuário, sócio e analista; sob a RLS só pergunta a leitura das versões do mandato, não do banco)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_kit_que_levava_quatro_segundos_para_abrir.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
 echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
