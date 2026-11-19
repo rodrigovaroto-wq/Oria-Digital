@@ -1,16 +1,15 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
-## SESSÃO 132 (19/11/2026) — inventário completo do que está construído; README corrigido
+## SESSÃO 132 (19/11/2026) — README corrigido sobre a IA e o Postgres
 
 > **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`, aplicada em 18/11.
 
-- **Inventário novo:** `Arquitetura do Sistema/3 Estado e Execução/INVENTARIO_2026-11-19.html`, uma página para abrir no navegador. Cobre plataformas, stack, arquitetura, funcionamento passo a passo, doutrina, banco, n8n, Leitor, portal, export, taxonomia, testes, ferramental de IA, documentação, prontidão e riscos. As contagens foram feitas no `main` em 19/11 (190 migrations, 54 tabelas, 310 funções no `schema.sql`, 140 policies, 38 gatilhos, 126 suítes SQL, 203 arquivos TS no portal). É um retrato datado: o estado do dia continua aqui.
 - **README estava errado sobre a IA.** Dizia `gpt-4o-mini` na classificação e `gpt-4o` na extração. O modelo ativo é o `gpt-5.6-luna` nas duas, desde 11/09/2026 (`N8N/lib/custo.mjs`, `MODELOS_POR_PROVEDOR`; o `workflow.e1-ingestao.json` gerado cita o Luna 29 vezes). Corrigido, com o Gemini 3.5 Flash-Lite como alternativa por `IA_PROVEDOR`.
 - **README dizia Postgres 16.** Produção é 17.6 (medido na MB0, 11/11); local e CI seguem em 16. Corrigido. Contagens de migrations e testes atualizadas (189 → 190; 124 → 126).
-- **NÃO CONFERIDO, e o inventário diz isso:** onde a instância do n8n está hospedada, a região do Supabase e a proteção do `main`.
-- Portões rodados: `conhecimento/conferir.mjs` OK (grafo sem mudança), `verificar-espelho-claude-md.mjs` OK, `verificar-comandos.mjs` OK.
-
+- **Inventário completo do que está construído:** feito como página HTML fora do repositório (a pedido do dono, não fica versionado). Contagens do `main` em 19/11: 190 migrations, 54 tabelas, 310 funções no `schema.sql`, 140 policies, 38 gatilhos, 126 suítes SQL, 203 arquivos TS no portal.
+- **NÃO CONFERIDO:** onde a instância do n8n está hospedada, a região do Supabase e a proteção do `main`.
+- Portões rodados: `conhecimento/conferir.mjs` OK, `verificar-espelho-claude-md.mjs` OK, `verificar-comandos.mjs` OK.
 
 ## SESSÃO 131 (18/11/2026) — 0302 (`fato_financeiro`, P27) APLICADA EM PRODUÇÃO; repositório organizado (#302)
 

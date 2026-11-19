@@ -153,7 +153,7 @@ As sete regras completas, e o porquê de cada uma, estão no [`CLAUDE.md`](CLAUD
 |---|---|
 | [`1 Visão e Doutrina`](Arquitetura%20do%20Sistema/1%20Visão%20e%20Doutrina/) | escopo, doutrina de autonomia (N0 → N3), arquitetura funcional e ADRs |
 | [`2 Especificação`](Arquitetura%20do%20Sistema/2%20Especificação/) | reconciliação, classificação contábil, revisão humana, status e pendências, LGPD, fontes oficiais |
-| [`3 Estado e Execução`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/) | inventário completo do que está construído ([`INVENTARIO_2026-11-19.html`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/INVENTARIO_2026-11-19.html)), **plano em vigor** ([`PLANO_MVP_2026-11.md`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md)), roadmap e desenhos técnicos |
+| [`3 Estado e Execução`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/) | **plano em vigor** ([`PLANO_MVP_2026-11.md`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md)), roadmap e desenhos técnicos |
 | [`4 Análises e Auditorias`](Arquitetura%20do%20Sistema/4%20Análises%20e%20Auditorias/) | riscos, custo de IA, auditorias e vistorias medidas |
 | [`5 Prompts`](Arquitetura%20do%20Sistema/5%20Prompts/) | roteiros de trabalho para o desenvolvimento assistido por IA |
 | [`6 Referência`](Arquitetura%20do%20Sistema/6%20Referência/) | modelo-base do Excel, critérios de aceite, conformidade, restauração |
