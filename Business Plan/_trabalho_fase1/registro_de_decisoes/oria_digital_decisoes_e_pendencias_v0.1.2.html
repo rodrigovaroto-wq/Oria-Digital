@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Oria Digital | Registro de decisões e pendências | v0.1.2</title>
+<style>
+:root {--bg:#f5f7fa;--paper:#fff;--ink:#17212f;--sub:#5f6f82;--border:#dce3eb;--nav:#11233a;--blue:#225d91;--pale:#eff5fa;}
+*{box-sizing:border-box} html{scroll-behavior:smooth} body{margin:0;background:var(--bg);font-family:ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;color:var(--ink);line-height:1.65;font-size:15px}a{color:var(--blue)}
+.topbar{background:var(--nav);color:#fff;padding:28px max(18px, calc((100vw - 1240px)/2));} .topbar .eyebrow{font-size:11px;letter-spacing:.12em;text-transform:uppercase;opacity:.75;font-weight:700}.topbar h1{margin:6px 0 4px;font-size:clamp(21px,3vw,30px);line-height:1.23}.topbar p{margin:0;opacity:.82;font-size:13px}.pill{display:inline-block;color:#cde3f8;border:1px solid #4d789f;border-radius:40px;padding:2px 10px;margin-top:12px;font-size:12px}
+.shell{display:grid;grid-template-columns:260px minmax(0,850px);gap:24px;max-width:1230px;margin:24px auto;padding:0 18px;align-items:start}aside{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto;background:var(--paper);border:1px solid var(--border);border-radius:12px;padding:18px 12px}aside h2{font-size:13px;margin:0 10px 12px;color:var(--sub)}aside a{display:block;font-size:12px;color:#314961;text-decoration:none;padding:7px 10px;border-radius:6px;line-height:1.4}aside a:hover{background:var(--pale)}main{background:var(--paper);border:1px solid var(--border);border-radius:12px;padding:34px 45px;min-width:0;box-shadow:0 3px 14px #10203208}
+article h1{font-size:26px;line-height:1.3;margin:0 0 18px}article h2{font-size:21px;line-height:1.33;border-top:1px solid var(--border);padding-top:26px;margin-top:42px;scroll-margin-top:16px}article h3{font-size:17px;margin:28px 0 10px}article p{margin:11px 0}article li{margin:6px 0}article ul,article ol{padding-left:23px}article blockquote{margin:18px 0;border-left:3px solid #89a9c8;background:#f2f6fa;padding:10px 16px;color:#33485f}article blockquote p{margin:5px 0}article strong{font-weight:650}.table-wrap{overflow-x:auto;margin:18px 0;border:1px solid var(--border);border-radius:9px}table{border-collapse:collapse;width:100%;min-width:570px;font-size:13px;line-height:1.45}th{background:#eef2f7;text-align:left;font-weight:650}th,td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}tr:last-child td{border-bottom:none}hr{border:0;border-top:1px solid var(--border);margin:34px 0}.notice{border-left:3px solid #365c81;background:#eaf1f8;padding:13px 18px;margin:0 0 23px;border-radius:0 8px 8px 0;font-size:13px}.muted{color:var(--sub)}.foot{text-align:center;color:var(--sub);font-size:12px;margin:22px auto 45px}@media(max-width:900px){.shell{display:block;margin:12px auto}aside{position:static;max-height:220px;overflow:auto;margin-bottom:12px} main{padding:23px 20px}.topbar{padding:25px 19px}}@media print{body{background:#fff;color:#111;font-size:11pt}aside{display:none}.topbar{background:white;color:#111;border-bottom:2px solid #ccc;padding:0 0 12px}.topbar .pill{color:#111;border-color:#777}.shell{display:block;padding:0;margin:0}main{border:0;box-shadow:none;padding:0}article h2{break-after:avoid}a{color:#111;text-decoration:none}.notice{background:#eee}table{min-width:0;font-size:9pt}@page{margin:18mm}}
+</style>
+</head>
+<body>
+<header class="topbar"><div class="eyebrow">Oria Digital · Especificação operacional</div><h1>Registro de decisões e pendências</h1><p>Versão cumulativa 0.1.2 · 18 de novembro de 2026 · Exportação HTML para consulta e arquivo</p><span class="pill">Histórico preservado · Adendo ao final</span></header>
+<div class="shell"><aside aria-label="Navegação"><h2>SEÇÕES</h2><a href="#sec-1">1. Visão geral e princípios</a>
+<a href="#sec-2">2. Entrada, dados e mandato</a>
+<a href="#sec-3">3. Agentes especialistas e supervisor</a>
+<a href="#sec-4">4. Memória, histórico e separação de funções</a>
+<a href="#sec-5">5. Auditoria dos diagnósticos financeiros</a>
+<a href="#sec-6">6. Aprovação humana de diagnósticos e pendências</a>
+<a href="#sec-7">7. Relatórios, cliente e comunicação</a>
+<a href="#sec-8">8. Monitoramento e alertas</a>
+<a href="#sec-9">9. Autoaprimoramento: escopo, testes e histórico</a>
+<a href="#sec-10">10. Autoaprimoramento: dois fluxos de autorização</a>
+<a href="#sec-11">11. Aprovação técnica, implantação, rollback</a>
+<a href="#sec-12">12. Infraestrutura, segurança e ferramentas</a>
+<a href="#sec-13">13. Retenção e privacidade</a>
+<a href="#sec-14">14. Pendências de decisão que NÃO devem ser apresentadas como fechadas</a>
+<a href="#sec-15">15. Fluxo operacional consolidado (resumo textual)</a>
+<a href="#sec-16">16. Controle de versões deste documento</a>
+<a href="#sec-17">17. Orientações para uso e continuidade</a>
+<a href="#sec-18">18. Adendo cumulativo v0.1.2 — questão anterior sobre o escopo da primeira versão</a></aside>
+<main><div class="notice"><strong>Atualização desta versão:</strong> foi incluída ao final a pergunta anterior sobre o escopo da primeira versão do sistema. Não há resposta confirmada para ela. Todo o texto da versão 0.1.1 foi mantido, inclusive seus metadados históricos.</div><article><h1>Oria Digital — Registro de decisões e especificação operacional</h1>
+<p><strong>Versão:</strong> 0.1.1<br/>
+<strong>Data de consolidação:</strong> 18/11/2026<br/>
+<strong>Estado:</strong> decisões de produto e governança consolidadas a partir da conversa; <strong>não</strong> é comprovação de implementação.<br/>
+<strong>Fonte:</strong> histórico de decisões fornecido nesta conversa.<br/>
+<strong>Objetivo:</strong> registrar os requisitos para posterior projeto, implementação, testes e auditoria do sistema multiagente da Oria Digital.</p>
+<blockquote>
+<p><strong>Legenda:</strong> <strong>[DEFINIDO]</strong> decisão expressamente aceita; <strong>[PROPOSTO]</strong> detalhamento ou solução sugerida, ainda não homologada como requisito; <strong>[PENDENTE]</strong> questão em aberto. O sistema não foi inspecionado neste registro; referências a tecnologias são propostas, não componentes verificados.</p>
+</blockquote>
+<h2 id="indice">Índice de consulta</h2>
+<ol>
+<li>Visão geral e princípios</li>
+<li>Entrada, dados e mandato</li>
+<li>Agentes especialistas e supervisor</li>
+<li>Memória, histórico e separação de funções</li>
+<li>Auditoria dos diagnósticos financeiros</li>
+<li>Aprovação humana de diagnósticos e pendências</li>
+<li>Relatórios, cliente e comunicação</li>
+<li>Monitoramento e alertas</li>
+<li>Autoaprimoramento: escopo, testes e histórico</li>
+<li>Autoaprimoramento: dois fluxos de autorização</li>
+<li>Aprovação técnica, implantação e reversão</li>
+<li>Infraestrutura, segurança e ferramentas</li>
+<li>Retenção e privacidade</li>
+<li>Pendências ainda não decididas</li>
+<li>Fluxo operacional consolidado</li>
+<li>Controle de versões</li>
+<li>Orientações para uso e continuidade</li>
+</ol>
+<p><strong>Nota de cobertura histórica:</strong> o histórico recuperável nesta conversa começa com uma pergunta sobre o tratamento de inconsistências nos relatórios da Oria. Esta especificação consolida as decisões acessíveis; não afirma cobrir interações anteriores que não estejam presentes no histórico. <strong>Nenhuma nova decisão foi inferida para preencher lacunas.</strong></p>
+<h2 id="sec-1">1. Visão geral e princípios</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> Sistema de apoio à análise financeira e à reestruturação empresarial, com agentes especialistas, agente supervisor/consolidador, agente auditor independente e agente de autoaprimoramento.</li>
+<li><strong>[DEFINIDO]</strong> Agentes têm autonomia para buscar evidências, analisar, apontar divergências, propor correções e, quando permitido, testar melhorias em ambiente isolado.</li>
+<li><strong>[DEFINIDO]</strong> Diagnósticos finais são submetidos a aprovação humana; melhorias técnicas só entram em produção após aprovação humana com permissão técnica específica.</li>
+<li><strong>[DEFINIDO]</strong> Evidências, justificativas, correções, versões e decisões devem ser rastreáveis; erros não podem ser transformados em resultados confiáveis por uma simples autorização.</li>
+<li><strong>[PROPOSTO]</strong> Implementar isolamento estrito entre mandatos/clientes, trilhas de auditoria imutáveis e regras explícitas de qualidade de dados.</li>
+</ul>
+<h2 id="sec-2">2. Entrada, dados e mandato</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> O sistema deverá trabalhar com dados documentais, financeiros, contábeis, operacionais e, quando autorizadas, fontes externas; pode ser acionado por rotina, eventos e pedidos humanos.</li>
+<li><strong>[DEFINIDO]</strong> Cada especialista recebe por padrão somente os dados pertinentes à própria especialidade, <strong>mas pode consultar automaticamente dados e evidências de outras áreas do mesmo mandato</strong> quando necessário e autorizado, sem pedir aprovação humana a cada consulta.</li>
+<li><strong>[DEFINIDO]</strong> Na primeira rodada de análises, o especialista pode consultar dados e evidências de outras especialidades, <strong>não</strong> as conclusões e interpretações que outros agentes produziram. Isso preserva a independência inicial.</li>
+<li><strong>[DEFINIDO]</strong> Acesso adicional deve ser registrado; informações sensíveis e permissões do mandato permanecem protegidas.</li>
+<li><strong>[PROPOSTO]</strong> Manter origem, período, versão, data de captura, confiança e vínculos de evidência; não interpretar dados ausentes como zero sem regra explícita.</li>
+<li><strong>[PROPOSTO]</strong> No início de cada mandato, configurar fontes, indicadores, metas, permissões, responsabilidades e limites de monitoramento.</li>
+</ul>
+<h2 id="sec-3">3. Agentes especialistas e supervisor</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> Especialistas realizam primeiro análises independentes. O supervisor reúne os resultados, cruza conclusões e identifica interdependências e contradições.</li>
+<li><strong>[DEFINIDO]</strong> Se houver divergência, o supervisor pode, <strong>na segunda rodada</strong>, compartilhar as conclusões relevantes entre especialistas e pedir nova investigação, com confronto de evidências.</li>
+<li><strong>[DEFINIDO]</strong> Quando a divergência permanecer, ela deve ser registrada e encaminhada à auditoria e ao analista humano; o sistema não pode inventar consenso.</li>
+<li><strong>[DEFINIDO]</strong> O supervisor coordena o encaminhamento de correções provenientes da auditoria, identifica análises impactadas e volta a consolidar os resultados após correção.</li>
+<li><strong>[PROPOSTO]</strong> As áreas dos especialistas incluem documental, contábil/fiscal, dívidas, caixa e liquidez, custos/eficiência, mercado e riscos; divisão exata ainda deve ser validada.</li>
+</ul>
+<h2 id="sec-4">4. Memória, histórico e separação de funções</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> Especialistas <strong>não mantêm memória própria permanente por empresa</strong>. Podem consultar o histórico financeiro e os diagnósticos da empresa na base central conforme necessidade e permissão.</li>
+<li><strong>[DEFINIDO]</strong> O agente de autoaprimoramento utiliza o histórico de análises, erros, correções, resultados e justificativas humanas para identificar oportunidades de melhorar os agentes e procedimentos.</li>
+<li><strong>[DEFINIDO]</strong> O agente de autoaprimoramento <strong>pode acessar documentos originais dos clientes</strong> dentro das permissões do mandato, mas deve começar a investigação pelo histórico de análises, erros, correções e justificativas. Consulta documentos originais sempre que necessário, especialmente para entender falhas de interpretação financeira ou contábil, e não só erros de código.</li>
+<li><strong>[DEFINIDO]</strong> Informações ficam em memória/base central segura e separadas por cliente. Aprendizados de processo podem melhorar agentes, mas informações confidenciais de um cliente não podem ser reveladas a outro.</li>
+<li><strong>[PROPOSTO]</strong> Registrar consultas do agente de autoaprimoramento e separar treinamento/avaliações por autorização e privacidade.</li>
+</ul>
+<h2 id="sec-5">5. Auditoria dos diagnósticos financeiros</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> Auditoria <strong>híbrida</strong>: os principais indicadores financeiros devem ser recalculados automaticamente e suas fontes/evidências verificadas em toda análise.</li>
+<li><strong>[DEFINIDO]</strong> A investigação documental/interpretativa profunda só ocorre quando surgem falhas, divergências, inconsistências, indicadores anormais ou sinais de que a análise não funciona como deveria.</li>
+<li><strong>[DEFINIDO]</strong> O auditor encaminha erros <strong>primeiro ao supervisor</strong>, que identifica as dependências e aciona os especialistas envolvidos; o resultado corrigido volta ao auditor para nova verificação.</li>
+<li><strong>[DEFINIDO]</strong> Limite de <strong>cinco tentativas automáticas de correção por erro</strong>. Se persistir, o sistema para novas tentativas automáticas desse erro e encaminha a pendência a um analista da Oria com histórico das tentativas, possíveis causas e impactos.</li>
+<li><strong>[DEFINIDO]</strong> Erro em uma análise não deve bloquear outras análises independentes. O supervisor suspende apenas etapas e entregáveis direta ou indiretamente dependentes da parte não confiável, preservando resultados válidos.</li>
+<li><strong>[DEFINIDO]</strong> Uma conclusão dependente de informação pendente ou incorreta não pode ser publicada como definitiva e confiável.</li>
+<li><strong>[PROPOSTO]</strong> Separar validação matemática determinística de revisão semântica por LLM, para otimizar custo, latência e rastreabilidade.</li>
+</ul>
+<h2 id="sec-6">6. Aprovação humana de diagnósticos e pendências</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> Qualquer <strong>analista autorizado</strong> da Oria pode aprovar diagnósticos, incluindo o próprio diagnóstico; não se exige que seja gerente ou sócio.</li>
+<li><strong>[DEFINIDO]</strong> A revisão pelo agente auditor ocorre antes da decisão humana.</li>
+<li><strong>[DEFINIDO]</strong> O analista autorizado pode aprovar o prosseguimento <strong>com ressalvas</strong> apesar de uma pendência não resolvida, desde que registre <strong>justificativa obrigatória</strong>. Não equivale a validar uma informação reconhecidamente incorreta.</li>
+<li><strong>[DEFINIDO]</strong> Registrar aprovador, data, versão, riscos, problemas pendentes, análises afetadas e justificativa. Esses registros ficam disponíveis ao supervisor, auditor, especialistas envolvidos e, para aprendizado de processo, ao agente de autoaprimoramento, dentro das permissões.</li>
+<li><strong>[DEFINIDO]</strong> Analista também pode solicitar correção/revisão ou manter a parte dependente bloqueada.</li>
+</ul>
+<h2 id="sec-7">7. Relatórios, cliente e comunicação</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> Haverá relatório <strong>interno da Oria</strong> e relatório <strong>para a empresa cliente</strong>.</li>
+<li><strong>[DEFINIDO]</strong> Problemas e inconsistências não resolvidos e detalhes internos da auditoria aparecem no relatório <strong>interno</strong>. O relatório do cliente apresenta análises e conclusões aprovadas.</li>
+<li><strong>[DEFINIDO]</strong> Se um problema afetar materialmente a confiabilidade de uma conclusão, o relatório do cliente deverá indicar a <strong>limitação relevante</strong>, sem revelar necessariamente os detalhes internos da auditoria.</li>
+<li><strong>[DEFINIDO]</strong> Relatórios de acompanhamento pós-reestruturação foram previstos com periodicidade <strong>mensal</strong>.</li>
+<li><strong>[DEFINIDO]</strong> O cliente não recebe automaticamente alertas críticos; a decisão de comunicar ao cliente é de um analista autorizado da Oria.</li>
+</ul>
+<h2 id="sec-8">8. Monitoramento e alertas</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> Mesmo após a aprovação, agentes continuam acompanhando dados e podem propor revisão do diagnóstico se surgirem novas evidências.</li>
+<li><strong>[DEFINIDO]</strong> Versões aprovadas são preservadas; uma nova conclusão passa novamente por auditoria independente e aprovação humana.</li>
+<li><strong>[DEFINIDO]</strong> Eventos críticos são detectados pela <strong>combinação de regras objetivas definidas pela Oria e avaliação contextual de agentes</strong>.</li>
+<li><strong>[DEFINIDO]</strong> Alertas críticos são encaminhados <strong>exclusivamente ao portal interno da Oria</strong>; não há e-mail, WhatsApp ou notificação automática ao cliente.</li>
+<li><strong>[PROPOSTO]</strong> Estabelecer parâmetros por indicador e mandato, classificações de gravidade, registro de evidência e prazos de tratamento de alertas.</li>
+</ul>
+<h2 id="sec-9">9. Autoaprimoramento: escopo, testes e histórico</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> O agente de autoaprimoramento pode corrigir erros, melhorar funcionalidades e desempenho de agentes existentes e <strong>criar novas ferramentas, skills e funcionalidades</strong>.</li>
+<li><strong>[DEFINIDO]</strong> Pode propor mudanças de código e testá-las autonomamente <strong>em ambiente isolado</strong>, sem permissão de alterar produção diretamente.</li>
+<li><strong>[DEFINIDO]</strong> Cada proposta deve trazer um <strong>relatório técnico-econômico</strong>: problema e causa, o que muda, arquitetura/arquivos/agentes afetados, métodos, resultados antes/depois, testes e falhas, benefícios, regressões, riscos, estimativa de custo atual e futuro (tokens, APIs, infraestrutura, licenças, manutenção, custo por análise e impacto mensal), premissas, incertezas, estratégia de implantação e reversão, e recomendação justificada.</li>
+<li><strong>[DEFINIDO]</strong> Analista competente pode aprovar, rejeitar ou solicitar ajustes; ajustes exigem novos testes e nova apresentação.</li>
+<li><strong>[DEFINIDO]</strong> Mudanças estruturais ou que afetem resultados/outputs devem passar por <strong>backtest antes da aprovação</strong> usando dados de clientes já atendidos ou em acompanhamento, reproduzindo as análises e comparando resultados e efeitos.</li>
+<li><strong>[DEFINIDO]</strong> Diagnósticos antigos são <strong>referência, não verdades absolutas</strong>; divergências devem ser investigadas à luz de evidências e documentos originais, sem assumir automaticamente que o resultado antigo é correto.</li>
+<li><strong>[DEFINIDO]</strong> O agente deve tentar corrigir as regressões encontradas. Pode recomendar mudança com pioras residuais se considerar que seu impacto é pequeno, quantificá-las e justificar. Regressões críticas não devem ser descartadas por uma melhora média.</li>
+<li><strong>[DEFINIDO]</strong> A gravidade das regressões combina <strong>métricas objetivas da Oria</strong> com <strong>análise contextual do agente</strong>.</li>
+<li><strong>[DEFINIDO]</strong> O ciclo completo de avaliação é <strong>semanal</strong>; incidentes graves podem disparar tratamento antecipado, conforme as regras de autorização a seguir.</li>
+<li><strong>[DEFINIDO]</strong> O aprimoramento envolve alterações de processos/código/instruções/ferramentas, não treinamento dos pesos do modelo de linguagem.</li>
+</ul>
+<h2 id="sec-10">10. Autoaprimoramento: dois fluxos de autorização</h2>
+<h3>10.1 Rotina semanal</h3>
+<ul>
+<li><strong>[DEFINIDO]</strong> O agente investiga, cria e testa propostas autonomamente em ambiente isolado.</li>
+<li><strong>[DEFINIDO]</strong> A implementação de qualquer proposta em produção requer aprovação humana de profissional com <strong>permissão específica para alterações técnicas</strong>.</li>
+</ul>
+<h3>10.2 Erros graves e correções extraordinárias fora da rotina</h3>
+<ul>
+<li><strong>[DEFINIDO]</strong> Na detecção preliminar de erro grave, o agente registra problema e impacto conhecido e <strong>notifica imediatamente a Oria no portal</strong>.</li>
+<li><strong>[DEFINIDO]</strong> Antes de iniciar investigação aprofundada/testes dessa correção extraordinária, apresenta pedido com as opções <strong>autorizar investigação e testes</strong>, <strong>não autorizar</strong> ou <strong>aguardar</strong>.</li>
+<li><strong>[DEFINIDO]</strong> Se autorizado, investiga e testa em ambiente isolado; em seguida apresenta relatório para uma <strong>segunda decisão humana</strong> específica de implementação em produção.</li>
+<li><strong>[DEFINIDO]</strong> <strong>Exceção importante:</strong> se um erro grave acontecer <strong>após uma publicação em produção e provocar rollback automático</strong>, o agente pode começar a investigar e testar a correção <strong>automaticamente, sem essa primeira autorização</strong>. Ainda precisa de aprovação técnica humana antes de recolocar a mudança em produção.</li>
+<li><strong>[DEFINIDO]</strong> Permissão para aprovar diagnósticos financeiros <strong>não implica</strong> permissão para aprovar mudanças técnicas.</li>
+</ul>
+<h2 id="sec-11">11. Aprovação técnica, implantação, rollback</h2>
+<ul>
+<li><strong>[DEFINIDO]</strong> Alterações técnicas de código, ferramentas, agentes e skills exigem aprovação de usuário com <strong>permissão técnica específica</strong>.</li>
+<li><strong>[DEFINIDO]</strong> <strong>Uma única aprovação técnica final</strong> autoriza a implantação automática — não é necessário um segundo clique para publicar.</li>
+<li><strong>[DEFINIDO]</strong> A alteração aprovada é destinada <strong>a todos os mandatos</strong>, sem fase obrigatória de liberação para poucos clientes, porque os backtests são feitos antes da aprovação.</li>
+<li><strong>[DEFINIDO]</strong> O sistema deve monitorar a versão publicada e <strong>reverter automaticamente</strong> alterações que provoquem erro grave, avisando a Oria imediatamente pelo portal.</li>
+<li><strong>[DEFINIDO]</strong> O funcionamento deve continuar com a <strong>última versão estável</strong> enquanto o agente investiga e testa uma correção; ela só volta à produção após nova aprovação técnica.</li>
+<li><strong>[DEFINIDO]</strong> Se surgirem problemas menores, o sistema alerta a Oria em vez de reverter automaticamente.</li>
+<li><strong>[DEFINIDO]</strong> <strong>Bloqueio pré-publicação:</strong> nenhuma atualização é publicada se não tiver sido previamente verificada a capacidade real de reversão à versão estável, inclusive compatibilidade de dados.</li>
+<li><strong>[PROPOSTO]</strong> Tratar mudanças irreversíveis de esquema/dados com migrações retrocompatíveis, backups verificáveis, testes de restauração, gates de integridade e planos de contingência. O rollback de código isoladamente pode não desfazer alterações em dados; validar esse risco antes da implantação.</li>
+</ul>
+<h2 id="sec-12">12. Infraestrutura, segurança e ferramentas</h2>
+<p><strong>Possibilidades mencionadas no desenho inicial, ainda não homologadas após inspeção do repositório:</strong></p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Componente</th>
+<th>Papel proposto</th>
+<th>Estado</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Supabase / PostgreSQL</td>
+<td>Base oficial de dados, evidências, aprovações, histórico, permissões</td>
+<td><strong>[PROPOSTO]</strong></td>
+</tr>
+<tr>
+<td>n8n</td>
+<td>Ingestão, agendamento, integrações e eventos</td>
+<td><strong>[PROPOSTO]</strong></td>
+</tr>
+<tr>
+<td>Langfuse (self-hosted)</td>
+<td>Observabilidade e avaliações de qualidade dos agentes</td>
+<td><strong>[PROPOSTO]</strong></td>
+</tr>
+<tr>
+<td>GitHub / branches</td>
+<td>Versionamento de código, prompts, ferramentas, skills e testes</td>
+<td><strong>[PROPOSTO]</strong></td>
+</tr>
+<tr>
+<td>Portal Oria Digital</td>
+<td>Diagnósticos, relatórios, aprovações e único canal de alertas</td>
+<td><strong>[DEFINIDO: função]</strong>; implementação pendente</td>
+</tr>
+<tr>
+<td>Python / FastAPI / Polars / DuckDB / filas</td>
+<td>Processamento e cálculos auditáveis</td>
+<td><strong>[PROPOSTO]</strong></td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>[PROPOSTO]</strong> Proibir credenciais de produção e dados desnecessários nos ambientes de teste; usar política de acesso entre mandatos, logs e segregação de funções.</li>
+<li><strong>[PENDENTE]</strong> Arquitetura real, contratos entre agentes, segurança de execução em sandbox, autenticação, tratamento de dados sensíveis, disaster recovery, observabilidade e custos devem ser confrontados com o código existente.</li>
+</ul>
+<h2 id="sec-13">13. Retenção e privacidade</h2>
+<ul>
+<li><strong>[DEFINIDO COMO DIRETRIZ INICIAL]</strong> Foi mencionado prazo inicial de <strong>seis meses após o encerramento contratual</strong> para retenção de dados, <strong>sujeito à revisão contratual, jurídica e à LGPD</strong>.</li>
+<li><strong>[PENDENTE]</strong> Definir classes de dados, prazos específicos, exclusão/anonimização, fundamentos legais, retenção de logs de auditoria e uso autorizado de casos históricos nos backtests.</li>
+</ul>
+<h2 id="sec-14">14. Pendências de decisão que NÃO devem ser apresentadas como fechadas</h2>
+<ol>
+<li><strong>[PENDENTE — pergunta interrompida]</strong> Quando o analista aprovar o prosseguimento com ressalvas, o agente de autoaprimoramento deve investigar essa pendência automaticamente na próxima revisão semanal ou somente mediante solicitação? A recomendação foi investigar automaticamente na rotina semanal, priorizando gravidade, mas não houve confirmação do usuário.</li>
+<li><strong>[PENDENTE]</strong> Definir critérios mensuráveis de severidade, cobertura, precisão, regressão crítica e qualidade de auditoria.</li>
+<li><strong>[PENDENTE]</strong> Definir diagrama/contratos de dados definitivos, taxonomia exata de agentes, interdependências, políticas de acesso e regras dos fluxos.</li>
+<li><strong>[PENDENTE]</strong> Implementar e validar a infraestrutura de testes isolados, o backtest e o rollback de código <strong>e dados</strong>, demonstrando que funcionam sob falhas reais.</li>
+<li><strong>[PENDENTE]</strong> Configurar permissões técnicas e financeiras, trilhas de auditoria, limites de custo/tempo e políticas de exceção.</li>
+<li><strong>[PENDENTE]</strong> Verificar os componentes presentes no repositório e distinguir implementado, parcialmente implementado e ainda necessário.</li>
+<li><strong>[PENDENTE]</strong> Validar com jurídico LGPD, contratos, prazo e usos permitidos dos documentos originais de clientes.</li>
+</ol>
+<h2 id="sec-15">15. Fluxo operacional consolidado (resumo textual)</h2>
+<ol>
+<li>Configuração do mandato e das fontes autorizadas.</li>
+<li>Ingestão, registro de origem, tratamento e reconciliação dos dados.</li>
+<li>Primeira rodada <strong>independente</strong> dos agentes especialistas.</li>
+<li>Supervisor cruza resultados e, se necessário, solicita segunda rodada com confronto de conclusões.</li>
+<li>Auditor recalcula principais indicadores e confere evidências; aprofunda apenas quando houver sinais de falha ou risco.</li>
+<li>Erros seguem <strong>auditor → supervisor → especialistas → supervisor → auditor</strong>, até resolver ou completar cinco tentativas.</li>
+<li>Etapas sem dependência de dados problemáticos continuam; etapas dependentes aguardam resolução ou autorização humana com ressalvas justificadas.</li>
+<li>Analista autorizado decide e aprova diagnóstico; histórico, riscos e justificativas são preservados.</li>
+<li>Relatório interno completo; relatório do cliente com conclusões aprovadas e ressalvas de confiabilidade material quando necessárias.</li>
+<li>Monitoramento e alertas críticos <strong>somente no portal</strong>, com revisão de diagnóstico por nova auditoria e aprovação.</li>
+<li>Autoaprimoramento semanal e tratamento extraordinário conforme regras de autorização; backtests históricos para mudanças estruturais e relatório técnico-econômico.</li>
+<li>Profissional com permissão técnica aprova; implantação geral automática <strong>somente se rollback tiver sido previamente verificado</strong>; erro grave causa retorno automático à versão estável, alerta à Oria e nova investigação.</li>
+</ol>
+<h2 id="sec-16">16. Controle de versões deste documento</h2>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Versão</th>
+<th>Data</th>
+<th>Alteração</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1.0</td>
+<td>18/11/2026</td>
+<td>Registro inicial de todas as decisões identificáveis no histórico disponível; propostas e pendências separadas.</td>
+</tr>
+<tr>
+<td>0.1.1</td>
+<td>18/11/2026</td>
+<td>Edição para distribuição: inclusão de índice, nota de cobertura histórica e instruções de continuidade; conteúdo decisório da versão 0.1.0 preservado.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Regra de atualização deste documento:</strong> a cada nova decisão, criar uma nova versão ou commit, atualizar o status de cada item e registrar as mudanças. Não substituir decisões já aprovadas silenciosamente. Este documento registra decisões de projeto; <strong>não</strong> representa validação do código existente ou garantia de aderência legal.</p>
+<h2 id="sec-17">17. Orientações para uso e continuidade</h2>
+<ul>
+<li><strong>Arquivo-base preservado:</strong> <code>oria_digital_especificacao_decisoes_v0.1.0.md</code> continua inalterado.</li>
+<li><strong>Adições futuras:</strong> novas decisões devem ser acrescentadas em versões subsequentes com data, responsável pela decisão, requisito afetado e justificativa; não apagar silenciosamente texto ou histórico de versões antigas.</li>
+<li><strong>Mudanças de decisão:</strong> registrar tanto a regra original quanto a decisão substituta, com indicação explícita de qual passa a valer.</li>
+<li><strong>Uso no desenvolvimento:</strong> este documento é uma especificação de requisitos. Antes de gerar código ou alterar infraestrutura, confrontar as seções com o repositório, os contratos existentes e as permissões disponíveis.</li>
+<li><strong>Próximo assunto sem resposta:</strong> a pergunta sobre revisão automática, na avaliação semanal, das pendências que avançaram com ressalvas permanece <strong>[PENDENTE]</strong>. O usuário optou por interromper a definição e solicitar esta documentação; não presumir sua resposta.</li>
+</ul>
+<hr/>
+<h2 id="sec-18">18. Adendo cumulativo v0.1.2 — questão anterior sobre o escopo da primeira versão</h2>
+<p><strong>Data do registro:</strong> 18/11/2026<br/>
+<strong>Natureza:</strong> recuperação de pergunta histórica, <strong>sem decisão adicional registrada</strong>.<br/>
+<strong>Preservação:</strong> o conteúdo integral da versão 0.1.1 acima foi mantido sem alteração; este adendo apenas acrescenta contexto e uma pendência.</p>
+<h3>18.1 Pergunta anterior mencionada na conversa</h3>
+<blockquote>
+<p>“A primeira versão da Oria Digital será principalmente um sistema de diagnóstico financeiro empresarial, ou deverá também executar continuamente ações de reestruturação, como monitorar indicadores, acompanhar planos de ação e recomendar intervenções?”</p>
+</blockquote>
+<ul>
+<li><strong>[PENDENTE — DEFINIÇÃO DE ESCOPO DA PRIMEIRA VERSÃO]</strong> Determinar se o primeiro lançamento deve se concentrar no diagnóstico financeiro ou já abranger acompanhamento contínuo e apoio à execução da reestruturação.</li>
+<li><strong>[SEM RESPOSTA ORIGINAL LOCALIZADA]</strong> A pergunta foi citada pelo assistente em uma resposta posterior como parte do contexto anterior. A formulação original e uma eventual resposta do usuário não estão demonstradas no trecho histórico disponível. Portanto, <strong>não considerar nenhuma alternativa aprovada</strong> com base apenas nesse resgate.</li>
+<li><strong>[NÃO CONFUNDIR COM REQUISITOS POSTERIORES]</strong> O monitoramento após diagnósticos, relatórios mensais e alertas no portal aparecem como decisões posteriores confirmadas nas seções anteriores. Isso <strong>não define automaticamente</strong> quais dessas capacidades devem integrar o lançamento inicial (MVP).</li>
+<li><strong>[PRÓXIMA AÇÃO — SOMENTE QUANDO O USUÁRIO QUISER RETOMAR]</strong> Confirmar o escopo e a sequência de entregas da primeira versão; não antecipar essa decisão.</li>
+</ul>
+<h3>18.2 Registro de versão aditivo</h3>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Versão</th>
+<th>Data</th>
+<th>Alteração</th>
+<th>Situação</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.1.2</td>
+<td>18/11/2026</td>
+<td>Adição da pergunta retrospectiva sobre o escopo da primeira versão, sem modificar decisões existentes. Exportação autocontida para HTML.</td>
+<td>Registro documental, sem novas decisões</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>Regra de continuidade:</strong> conservar as versões 0.1.0 e 0.1.1, acrescentando novos adendos para decisões futuras. Alterações de decisões anteriores só devem ocorrer mediante decisão explícita e com registro de revisão, nunca por sobrescrita silenciosa.</p>
+</article></main></div>
+<footer class="foot">Oria Digital · Documento de trabalho versionado · Nenhum componente de software foi verificado por este registro.</footer>
+</body></html>
