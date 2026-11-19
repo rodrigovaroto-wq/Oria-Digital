@@ -7,7 +7,7 @@
 
 - **README estava errado sobre a IA.** Dizia `gpt-4o-mini` na classificação e `gpt-4o` na extração. O modelo ativo é o `gpt-5.6-luna` nas duas, desde 11/09/2026 (`N8N/lib/custo.mjs`, `MODELOS_POR_PROVEDOR`; o `workflow.e1-ingestao.json` gerado cita o Luna 29 vezes). Corrigido, com o Gemini 3.5 Flash-Lite como alternativa por `IA_PROVEDOR`.
 - **README dizia Postgres 16.** Produção é 17.6 (medido na MB0, 11/11); local e CI seguem em 16. Corrigido. Contagens de migrations e testes atualizadas (189 → 190; 124 → 126).
-- **Inventário completo do que está construído:** feito como página HTML fora do repositório (a pedido do dono, não fica versionado). Contagens do `main` em 19/11: 190 migrations, 54 tabelas, 310 funções no `schema.sql`, 140 policies, 38 gatilhos, 126 suítes SQL, 203 arquivos TS no portal.
+- **Inventário completo do que está construído:** feito como página HTML fora do repositório (a pedido do dono, não fica versionado). Contagens do `main` em 19/11: 190 migrations, 55 tabelas, 37 views, 310 funções no `schema.sql`, 140 policies, 38 gatilhos, 126 suítes SQL, 203 arquivos TS no portal.
 - **NÃO CONFERIDO:** onde a instância do n8n está hospedada, a região do Supabase e a proteção do `main`.
 - Portões rodados: `conhecimento/conferir.mjs` OK, `verificar-espelho-claude-md.mjs` OK, `verificar-comandos.mjs` OK.
 
