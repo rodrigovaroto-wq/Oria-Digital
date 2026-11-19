@@ -1,6 +1,16 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 132 (19/11/2026) — README corrigido sobre a IA e o Postgres
+
+> **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`, aplicada em 18/11.
+
+- **README estava errado sobre a IA.** Dizia `gpt-4o-mini` na classificação e `gpt-4o` na extração. O modelo ativo é o `gpt-5.6-luna` nas duas, desde 11/09/2026 (`N8N/lib/custo.mjs`, `MODELOS_POR_PROVEDOR`; o `workflow.e1-ingestao.json` gerado cita o Luna 29 vezes). Corrigido, com o Gemini 3.5 Flash-Lite como alternativa por `IA_PROVEDOR`.
+- **README dizia Postgres 16.** Produção é 17.6 (medido na MB0, 11/11); local e CI seguem em 16. Corrigido. Contagens de migrations e testes atualizadas (189 → 190; 124 → 126).
+- **Inventário completo do que está construído:** feito como página HTML fora do repositório (a pedido do dono, não fica versionado). Contagens do `main` em 19/11: 190 migrations, 55 tabelas, 37 views, 310 funções no `schema.sql`, 140 policies, 38 gatilhos, 126 suítes SQL, 203 arquivos TS no portal.
+- **NÃO CONFERIDO:** onde a instância do n8n está hospedada, a região do Supabase e a proteção do `main`.
+- Portões rodados: `conhecimento/conferir.mjs` OK, `verificar-espelho-claude-md.mjs` OK, `verificar-comandos.mjs` OK.
+
 ## SESSÃO 131 (18/11/2026) — 0302 (`fato_financeiro`, P27) APLICADA EM PRODUÇÃO; repositório organizado (#302)
 
 > **Migration mais nova no repositório: `0302_a_linha_que_nao_tinha_identidade.sql` — APLICADA EM PRODUÇÃO em 18/11/2026.** É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
