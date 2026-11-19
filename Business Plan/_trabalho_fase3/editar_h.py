@@ -68,7 +68,8 @@ def escreve(f, linhas):
 def agente(cx, cy, w, h, num, nome, sz_nome):
     f = forma(MSO_SHAPE.OVAL, cx - w / 2, cy - h / 2, w, h, VERDE_CLARO, NAVY, 1.25, nome=f"agente-{num}")
     f.text_frame.margin_bottom = Inches(0.07)  # o texto sobe um pouco dentro do bloco
-    escreve(f, [("Agente", 11, False, CINZA), (nome, 12, True, NAVY)])  # mesmo corpo em todos os agentes
+    f.text_frame.margin_left = f.text_frame.margin_right = Inches(0.01)
+    escreve(f, [("Agente", sz_nome - 1, False, CINZA), (nome, sz_nome, True, NAVY)])
     return f
 
 
@@ -103,7 +104,7 @@ ymid = orq.top + orq.height / 2
 for num, (nome, frase), lado in ((9, AUDITOR, -1), (10, AUTO, 1)):
     w = Inches(1.62) if num == 9 else Inches(2.35)
     acx = OCX + lado * Inches(2.85)
-    ag = agente(acx, ymid, w, Inches(0.62), num, nome, 12 if num == 9 else 9.5)
+    ag = agente(acx, ymid, w, Inches(0.62), num, nome, 12)  # Auditor e Autoaprimoramento: 12 pt
     liga(acx + w / 2 if lado < 0 else acx - w / 2, ymid, orq.left if lado < 0 else orq.left + orq.width, ymid, tracejado=True)
     bw = Inches(2.15) if num == 9 else Inches(1.9)  # à direita o Autoaprimoramento é mais largo
     bcx = acx + lado * (w / 2 + Inches(0.12) + bw / 2)
@@ -117,13 +118,13 @@ lab.text_frame.paragraphs[0].alignment = PP_ALIGN.LEFT
 lab.text_frame.paragraphs[0].runs[0].font.italic = True
 
 COLS = [Inches(0.6 + 12.13 / 8 * (i + 0.5)) for i in range(8)]
-Y_BUS, Y_AG, AGW, AGH = Inches(3.10), Inches(3.75), Inches(1.40), Inches(0.66)
+Y_BUS, Y_AG, AGW, AGH = Inches(3.10), Inches(3.75), Inches(1.46), Inches(0.66)
 liga(OCX, orq.top + orq.height, OCX, Y_BUS, larg=1.75)
 liga(COLS[0], Y_BUS, COLS[-1], Y_BUS, larg=1.75)
 for cx, n in zip(COLS, range(1, 9)):
     nome, frase = UM_RAMO[n]
     liga(cx, Y_BUS, cx, Y_AG - AGH / 2, larg=1.75)
-    ag = agente(cx, Y_AG, AGW, AGH, n, nome, 12 if n != 7 else 11)
+    ag = agente(cx, Y_AG, AGW, AGH, n, nome, 13)  # os 8 especialistas: 13 pt
     # ramos achatados e alternados: ímpares em cima, pares embaixo; nas pontas, o balão entra para a margem
     bw, bh = Inches(2.20), Inches(0.92)  # 2,20": as linhas dos agentes pares passam livres entre os balões de cima
     bcx = min(max(cx, Inches(0.5) + bw / 2), Inches(12.83) - bw / 2)
