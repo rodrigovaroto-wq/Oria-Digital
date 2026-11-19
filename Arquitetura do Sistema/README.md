@@ -51,6 +51,7 @@ Para onde o projeto vai e como chegar lá. O estado do dia está no [`ESTADO.md`
 
 | Documento | Conteúdo |
 |---|---|
+| [`INVENTARIO_2026-11-19.html`](3%20Estado%20e%20Execução/INVENTARIO_2026-11-19.html) | **inventário de tudo o que está construído** em 19/11/2026: plataformas, stack, arquitetura, funcionamento, banco, n8n, Leitor, portal, export, testes e prontidão. Abrir no navegador. É um retrato datado: o estado do dia continua no `ESTADO.md` |
 | [`PLANO_MVP_2026-11.md`](3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md) | **o plano em vigor**: o mínimo para rodar o primeiro mandato real (aprovado em 11/11/2026) |
 | [`PLANO_DE_EXECUCAO_2026-11.md`](3%20Estado%20e%20Execução/PLANO_DE_EXECUCAO_2026-11.md) | o mapa da aplicação completa, etapa por etapa |
 | [`ARQUITETURA_ALVO_E_ROADMAP.md`](3%20Estado%20e%20Execução/ARQUITETURA_ALVO_E_ROADMAP.md) | a arquitetura-alvo: decisão por componente, camadas, portões e fases |

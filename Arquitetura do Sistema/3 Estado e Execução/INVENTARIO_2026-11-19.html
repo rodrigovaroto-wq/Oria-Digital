@@ -1,0 +1,727 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Oria Digital — Inventário</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<style>
+/* Layout: índice fixo à esquerda (desktop) + coluna de leitura; no celular, índice vira bloco no topo.
+   Paleta Cobalto do próprio portal (globals.css): papel, folha, tinta, ação cobalto. */
+:root{
+  --papel:#eef0f3; --folha:#ffffff; --tinta:#11151c; --tinta-2:#5a6172; --linha:#d7dbe3;
+  --acao:#1f2de6; --acao-suave:#e6e8fd; --ok:#2f6b3a; --ok-suave:#e3efe4; --alerta:#8a5a12; --alerta-suave:#f6ecd9;
+  --risco:#9b2335; --risco-suave:#f7e1e4; --neutro-suave:#eceef2;
+  --f-texto:"Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-dado:"Geist Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --papel:#0e1118; --folha:#151a24; --tinta:#e9edf3; --tinta-2:#8f98aa; --linha:#272e3d;
+  --acao:#8c9bff; --acao-suave:#1c2246; --ok:#7fc58a; --ok-suave:#17281b; --alerta:#e3b25e; --alerta-suave:#2c2414;
+  --risco:#f08a98; --risco-suave:#2f1820; --neutro-suave:#1b2130; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --papel:#0e1118; --folha:#151a24; --tinta:#e9edf3; --tinta-2:#8f98aa; --linha:#272e3d;
+  --acao:#8c9bff; --acao-suave:#1c2246; --ok:#7fc58a; --ok-suave:#17281b; --alerta:#e3b25e; --alerta-suave:#2c2414;
+  --risco:#f08a98; --risco-suave:#2f1820; --neutro-suave:#1b2130; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--papel);color:var(--tinta);font-family:var(--f-texto);font-size:15px;line-height:1.6;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));padding-block:0}
+a{color:var(--acao)}
+a:focus-visible,button:focus-visible{outline:2px solid var(--acao);outline-offset:2px;border-radius:4px}
+code,.mono{font-family:var(--f-dado);font-size:.86em}
+code{background:var(--neutro-suave);padding:1px 5px;border-radius:4px;overflow-wrap:anywhere}
+.shell{max-width:1240px;margin:0 auto;display:grid;grid-template-columns:240px minmax(0,1fr);gap:48px;padding-block:40px 80px}
+nav.indice{position:sticky;top:calc(env(safe-area-inset-top, 0px) + 24px);align-self:start;max-height:calc(100vh - 48px);overflow:auto;font-size:13.5px}
+nav.indice p{font-size:11.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--tinta-2);margin:0 0 10px;font-weight:600}
+nav.indice ol{list-style:none;margin:0;padding:0;display:grid;gap:2px;counter-reset:s}
+nav.indice a{display:flex;gap:10px;padding:5px 8px;border-radius:6px;color:var(--tinta-2);text-decoration:none}
+nav.indice a::before{counter-increment:s;content:counter(s, decimal-leading-zero);font-family:var(--f-dado);font-size:11.5px;color:var(--tinta-2);opacity:.7;padding-top:1px}
+nav.indice a:hover{background:var(--folha);color:var(--tinta)}
+main{min-width:0}
+header.topo{padding-bottom:28px;border-bottom:1px solid var(--linha);margin-bottom:8px}
+.selo{display:inline-flex;gap:8px;align-items:center;font-size:12px;font-family:var(--f-dado);color:var(--tinta-2);margin-bottom:14px}
+.selo b{color:var(--acao);font-weight:600}
+h1{font-size:clamp(30px,4.2vw,44px);line-height:1.1;letter-spacing:-.025em;margin:0 0 14px;font-weight:650;text-wrap:balance}
+.lead{font-size:17px;max-width:68ch;color:var(--tinta);margin:0 0 10px}
+.principio{margin-top:18px;padding:14px 16px;background:var(--acao-suave);border-radius:8px;max-width:68ch;font-weight:500}
+section{padding-top:44px;scroll-margin-top:16px}
+h2{font-size:25px;letter-spacing:-.018em;line-height:1.2;margin:0 0 6px;font-weight:650;text-wrap:balance;display:flex;gap:12px;align-items:baseline}
+h2 .n{font-family:var(--f-dado);font-size:14px;color:var(--acao);font-weight:500}
+h3{font-size:16.5px;margin:28px 0 8px;font-weight:600;letter-spacing:-.005em}
+p{max-width:72ch;margin:0 0 12px}
+.sub{color:var(--tinta-2);max-width:72ch;margin-bottom:16px}
+ul,ol.lista{max-width:72ch;padding-left:20px;margin:0 0 14px}
+li{margin-bottom:5px}
+.tabela{overflow-x:auto;margin:10px 0 18px;border:1px solid var(--linha);border-radius:8px;background:var(--folha)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--linha);vertical-align:top}
+th{font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--tinta-2);font-weight:600;background:var(--neutro-suave);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,.num{font-family:var(--f-dado);font-variant-numeric:tabular-nums;white-space:nowrap}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:18px 0 6px}
+.kpi{background:var(--folha);border:1px solid var(--linha);border-radius:8px;padding:14px 16px}
+.kpi .v{font-family:var(--f-dado);font-size:24px;font-weight:600;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.kpi .r{font-size:12.5px;color:var(--tinta-2);line-height:1.35;margin-top:2px}
+.pill{display:inline-block;font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;letter-spacing:.01em}
+.p-ok{background:var(--ok-suave);color:var(--ok)}
+.p-semi{background:var(--alerta-suave);color:var(--alerta)}
+.p-nao{background:var(--risco-suave);color:var(--risco)}
+.p-plan{background:var(--neutro-suave);color:var(--tinta-2)}
+.legenda{display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:var(--tinta-2);margin:6px 0 4px}
+.grade{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin:12px 0 18px}
+.card{background:var(--folha);border:1px solid var(--linha);border-radius:8px;padding:16px;min-width:0}
+.card h4{margin:0 0 4px;font-size:15px;font-weight:600;display:flex;justify-content:space-between;gap:8px;align-items:baseline;flex-wrap:wrap}
+.card .papel{font-size:12.5px;color:var(--tinta-2);margin-bottom:8px}
+.card ul{padding-left:18px;margin:0;font-size:14px}
+.card p{font-size:14px;margin:0 0 6px}
+.diagrama{overflow-x:auto;background:var(--folha);border:1px solid var(--linha);border-radius:8px;padding:12px;margin:12px 0 10px}
+.diagrama svg{display:block;width:100%;min-width:640px;height:auto}
+.fluxo{counter-reset:f;list-style:none;padding:0;margin:12px 0 18px;display:grid;gap:10px;max-width:none}
+.fluxo>li{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;background:var(--folha);border:1px solid var(--linha);border-radius:8px;padding:14px 16px;margin:0}
+.fluxo>li::before{counter-increment:f;content:counter(f);font-family:var(--f-dado);font-weight:600;color:var(--acao);font-size:20px;line-height:1.2}
+.fluxo b{display:block;margin-bottom:2px}
+.fluxo .onde{font-size:12px;font-family:var(--f-dado);color:var(--tinta-2)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 16px}
+.chips span{font-family:var(--f-dado);font-size:12px;background:var(--folha);border:1px solid var(--linha);border-radius:5px;padding:2px 7px}
+.nota{font-size:13.5px;color:var(--tinta-2);border-left:3px solid var(--linha);padding:2px 0 2px 12px;max-width:72ch;margin:8px 0 16px}
+.regras{counter-reset:r;list-style:none;padding:0;display:grid;gap:8px;max-width:76ch}
+.regras li{counter-increment:r;display:grid;grid-template-columns:30px 1fr;gap:8px;margin:0}
+.regras li::before{content:counter(r);font-family:var(--f-dado);color:var(--acao);font-weight:600}
+footer{margin-top:56px;padding-top:20px;border-top:1px solid var(--linha);font-size:13px;color:var(--tinta-2)}
+@media (max-width:900px){
+  .shell{grid-template-columns:minmax(0,1fr);gap:0;padding-block:24px 60px}
+  nav.indice{position:static;max-height:none;background:var(--folha);border:1px solid var(--linha);border-radius:8px;padding:14px;margin-bottom:18px}
+  nav.indice ol{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+</style>
+</head>
+<body>
+
+<div class="shell">
+<nav class="indice" aria-label="Índice">
+  <p>Índice</p>
+  <ol>
+    <li><a href="#visao">Visão geral</a></li>
+    <li><a href="#plataformas">Plataformas e serviços</a></li>
+    <li><a href="#stack">Stack e ferramentas</a></li>
+    <li><a href="#arquitetura">Arquitetura</a></li>
+    <li><a href="#funcionamento">Como funciona</a></li>
+    <li><a href="#doutrina">Doutrina e regras</a></li>
+    <li><a href="#banco">Banco de dados</a></li>
+    <li><a href="#n8n">n8n e IA</a></li>
+    <li><a href="#leitor">Leitor determinístico</a></li>
+    <li><a href="#portal">Portal</a></li>
+    <li><a href="#export">Export e book</a></li>
+    <li><a href="#taxonomia">Documentos aceitos</a></li>
+    <li><a href="#qualidade">Testes e CI</a></li>
+    <li><a href="#dev">Desenvolvimento com IA</a></li>
+    <li><a href="#docs">Documentação</a></li>
+    <li><a href="#prontidao">Prontidão</a></li>
+    <li><a href="#riscos">Riscos e próximos passos</a></li>
+  </ol>
+</nav>
+
+<main>
+<header class="topo">
+  <div class="selo"><b>Oria Partners</b> · inventário técnico · estado em 18/11/2026 · repositório <span>rodrigovaroto-wq/Oria-Digital</span></div>
+  <h1>Oria Digital: tudo o que está construído</h1>
+  <p class="lead">Sistema interno que recebe os documentos financeiros de um mandato de M&amp;A ou reestruturação, extrai as demonstrações com IA, grava cada número no Postgres com a sua origem e entrega ao analista um book em Excel com o modelo de FP&amp;A vivo em fórmula.</p>
+  <p class="lead">Está em produção, ainda antes do MVP. O núcleo funciona ponta a ponta; o que falta é provar, com documento real de cliente, que nada se perde e nada chega errado.</p>
+  <div class="principio">Princípio da casa: nenhum número sem origem, nenhuma ausência disfarçada de zero. Quando o sistema não consegue ler, conferir ou decidir, ele diz isso, com o motivo e o efeito.</div>
+</header>
+
+<!-- 1 -->
+<section id="visao">
+  <h2><span class="n">01</span>Visão geral</h2>
+  <p class="sub">O produto é confiança no dado, não análise automática. Um sistema que erra e avisa cumpre o objetivo; um que acerta 97% e cala nos 3% não cumpre.</p>
+  <h3>Em produção, medido em 18/11/2026</h3>
+  <div class="kpis">
+    <div class="kpi"><div class="v">0302</div><div class="r">migration mais nova aplicada</div></div>
+    <div class="kpi"><div class="v">81</div><div class="r">mandatos no banco</div></div>
+    <div class="kpi"><div class="v">138.931</div><div class="r">linhas extraídas</div></div>
+    <div class="kpi"><div class="v">2.999</div><div class="r">pendências registradas</div></div>
+    <div class="kpi"><div class="v">7.599</div><div class="r">conciliações gravadas</div></div>
+    <div class="kpi"><div class="v">475</div><div class="r">requisitos na sonda; 1 ausente (segredo no Vault)</div></div>
+  </div>
+  <h3>Tamanho do que foi construído</h3>
+  <div class="tabela"><table>
+    <thead><tr><th>Peça</th><th>Tamanho</th><th>Onde</th></tr></thead>
+    <tbody>
+      <tr><td>Banco</td><td>190 migrations (numeração até 0302), 54 tabelas, 310 funções, 140 policies de RLS, 38 gatilhos, 20 tipos enumerados</td><td><code>Supabase/</code></td></tr>
+      <tr><td>Testes do banco</td><td>126 suítes SQL e testes Node das ferramentas</td><td><code>Supabase/test/</code></td></tr>
+      <tr><td>Orquestração</td><td>4 workflows gerados por código, 19 bibliotecas de nós, 31 arquivos de teste</td><td><code>N8N/</code></td></tr>
+      <tr><td>Leitor</td><td>11 bibliotecas, 6 arquivos de teste (132 testes)</td><td><code>Leitor/</code></td></tr>
+      <tr><td>Portal</td><td>203 arquivos TypeScript, cerca de 45 mil linhas, 34 rotas, 15 verificadores do export</td><td><code>portal/</code></td></tr>
+      <tr><td>Export para Excel</td><td>cerca de 13.700 linhas em 3 módulos</td><td><code>portal/src/lib/</code></td></tr>
+      <tr><td>Histórico</td><td>131 sessões registradas, cerca de 302 PRs</td><td><code>ESTADO.md</code>, <code>HANDOFF.md</code></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 2 -->
+<section id="plataformas">
+  <h2><span class="n">02</span>Plataformas e serviços</h2>
+  <p class="sub">Seis serviços em uso hoje e alguns planejados. O banco é o único que guarda estado do negócio.</p>
+  <div class="grade">
+    <div class="card"><h4>Supabase <span class="pill p-ok">em uso</span></h4><div class="papel">Banco, autenticação, arquivos e segredos</div>
+      <ul><li>Postgres 17.6 em produção (o CI testa com 16)</li><li>Auth por e-mail e senha; contas criadas pelo administrador</li><li>Storage: bucket privado com os originais; teto de 50 MiB por arquivo; 75 MB em 186 arquivos (11/11)</li><li>Vault para o segredo que assina os envios</li><li>Plano gratuito; banco com 111 MB em 11/11</li><li>Migrations aplicadas pela API de gerenciamento e por notebooks</li></ul></div>
+    <div class="card"><h4>Vercel <span class="pill p-ok">em uso</span></h4><div class="papel">Hospedagem do portal</div>
+      <ul><li>Next.js renderizado no servidor</li><li>Não guarda dado de cliente; só logs de requisição</li><li>Variáveis: URL e chave anônima do Supabase, endereço e segredo do formulário do n8n</li></ul></div>
+    <div class="card"><h4>n8n <span class="pill p-ok">em uso</span></h4><div class="papel">Orquestração sem estado</div>
+      <ul><li>Instância própria (self-hosted), pod de 2 GB</li><li>Form Trigger recebe o lote; nós Code em JavaScript; credencial Postgres direta</li><li>Arquivo acima de 15 MiB é recusado: binário grande derruba a instância</li><li>Onde a instância roda: a confirmar (LGPD)</li></ul></div>
+    <div class="card"><h4>OpenAI <span class="pill p-ok">em uso</span></h4><div class="papel">Classificação e extração</div>
+      <ul><li>Modelo ativo: <code>gpt-5.6-luna</code> nas duas tarefas, com esforço de raciocínio diferente por papel</li><li>Antes: <code>gpt-4o-mini</code> classificava e <code>gpt-4o</code> extraía</li><li>Preço medido: US$ 0,20 por milhão de tokens de entrada</li></ul></div>
+    <div class="card"><h4>Google Gemini <span class="pill p-semi">alternativa pronta</span></h4><div class="papel">Segundo provedor de IA</div>
+      <ul><li><code>gemini-3.5-flash-lite</code>, pela API nativa (recebe PDF e esquema de resposta)</li><li>Troca por uma variável: <code>IA_PROVEDOR</code></li><li>O acordo de retenção zero (DPA) não passa de um provedor para outro</li></ul></div>
+    <div class="card"><h4>GitHub e SonarCloud <span class="pill p-ok">em uso</span></h4><div class="papel">Código, CI e qualidade</div>
+      <ul><li>Repositório <code>rodrigovaroto-wq/Oria-Digital</code></li><li>GitHub Actions: 4 workflows (suítes, sonda diária, republicação, inventário)</li><li>SonarCloud analisa cada PR</li><li>Proteção do <code>main</code>: não conferida</li></ul></div>
+    <div class="card"><h4>Fly.io <span class="pill p-plan">desenhado</span></h4><div class="papel">Leitor transacional</div>
+      <p>Máquina na região <code>gru</code>, ligada só quando há trabalho, cerca de US$ 6 por mês. Está só no desenho (<code>DESENHO_LEITOR_TRANSACIONAL.md</code>).</p></div>
+    <div class="card"><h4>Fontes externas <span class="pill p-plan">planejadas</span></h4><div class="papel">Trilha C e fontes oficiais</div>
+      <p>Receita (CNPJ, QSA, CNAE), CEIS/CNEP, PGFN, DataJud, provedores de processos (JUDIT, Escavador, Jusbrasil), notícias (RSS, GDELT ou clipping). Nada contratado nem implementado.</p></div>
+    <div class="card"><h4>Claude Code <span class="pill p-ok">em uso</span></h4><div class="papel">Desenvolvimento</div>
+      <p>Três contas (Claude Oria, Claude Oria 2, Claude Pessoal), cada uma dona de diretórios e de uma faixa de migrations. Ferramental próprio em <code>.claude/</code>.</p></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="stack">
+  <h2><span class="n">03</span>Stack e ferramentas</h2>
+  <p class="sub">Poucas dependências, de propósito. O portal tem sete dependências de execução.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Camada</th><th>Linguagem e ferramentas</th></tr></thead>
+    <tbody>
+      <tr><td>Banco</td><td>PL/pgSQL e SQL; RLS; views <code>security_invoker</code>; gatilhos; <code>psql</code> para aplicar e testar</td></tr>
+      <tr><td>Portal</td><td>Next.js 16.2 (App Router), React 19.2, TypeScript 5, Tailwind 4, <code>@supabase/ssr</code>, <code>@supabase/supabase-js</code>, <code>exceljs</code> (gera o .xlsx), <code>jszip</code>; fontes Geist e Geist Mono</td></tr>
+      <tr><td>Orquestração</td><td>n8n (Form Trigger, Switch, Merge, Compression, Extract From File, Postgres, HTTP); nós Code em JavaScript gerados por <code>N8N/build-workflow*.mjs</code></td></tr>
+      <tr><td>Leitor</td><td>JavaScript puro (ESM), roda igual no Node e no navegador; Web Worker no portal; <code>DecompressionStream</code> e <code>CompressionStream</code> do navegador; SHA-256 próprio</td></tr>
+      <tr><td>Testes</td><td><code>node:test</code>, suítes PL/pgSQL, <code>tsx</code> para os verificadores TypeScript, Playwright para vistorias, Python 3 nos geradores dos books sintéticos</td></tr>
+      <tr><td>Qualidade</td><td>ESLint 9, <code>tsc</code>, GitHub Actions, SonarCloud</td></tr>
+      <tr><td>Ambiente local</td><td>Node 22, Postgres 16, Python 3</td></tr>
+    </tbody>
+  </table></div>
+  <p class="nota">Regra do projeto: <code>npx</code> nunca; usa-se o binário já instalado em <code>portal/node_modules/.bin/</code>. Dependência nova só quando poucas linhas não resolvem.</p>
+</section>
+
+<!-- 4 -->
+<section id="arquitetura">
+  <h2><span class="n">04</span>Arquitetura</h2>
+  <p class="sub">Quatro camadas de código giram em torno do Postgres. Ele guarda o estado e faz as contas; as outras levam e trazem.</p>
+  <div class="diagrama" role="img" aria-label="Diagrama: analista envia ao portal; portal envia lote ao n8n; n8n chama a IA e grava no banco; arquivos grandes vão ao Leitor no navegador e só o resumo vai ao banco; portal lê e escreve no banco e exporta o book">
+  <svg viewBox="0 0 760 470" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="13">
+    <defs><marker id="seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" style="fill:var(--tinta-2)"/></marker></defs>
+    <g fill="none" style="stroke:var(--tinta-2)" stroke-width="1.25">
+      <path d="M220 80H282" marker-end="url(#seta)"/>
+      <path d="M478 80H540" marker-end="url(#seta)"/>
+      <path d="M380 116V200" marker-end="url(#seta)"/>
+      <path d="M122 116V200" marker-end="url(#seta)"/>
+      <path d="M478 236H540" marker-end="url(#seta)"/>
+      <path d="M122 272V410H152" marker-end="url(#seta)"/>
+      <path d="M380 272V372" marker-end="url(#seta)"/>
+      <path d="M700 372V160H430V116" marker-start="url(#seta)" marker-end="url(#seta)"/>
+    </g>
+    <g style="fill:var(--folha);stroke:var(--linha)" stroke-width="1.25">
+      <rect x="24" y="44" width="196" height="72" rx="8"/><rect x="282" y="44" width="196" height="72" rx="8"/><rect x="540" y="44" width="196" height="72" rx="8"/>
+      <rect x="24" y="200" width="196" height="72" rx="8"/><rect x="282" y="200" width="196" height="72" rx="8"/><rect x="540" y="200" width="140" height="72" rx="8"/>
+    </g>
+    <rect x="152" y="372" width="584" height="76" rx="8" style="fill:var(--acao-suave);stroke:var(--acao)" stroke-width="2"/>
+    <g text-anchor="middle" style="fill:var(--tinta)">
+      <text x="122" y="70" font-weight="600">Analista / cliente</text>
+      <text x="380" y="70" font-weight="600">Portal · Vercel</text>
+      <text x="638" y="70" font-weight="600">Book em Excel</text>
+      <text x="122" y="226" font-weight="600">Leitor no navegador</text>
+      <text x="380" y="226" font-weight="600">n8n · orquestração</text>
+      <text x="610" y="226" font-weight="600">OpenAI</text>
+      <text x="444" y="398" font-weight="600">Supabase · Postgres — fonte da verdade</text>
+    </g>
+    <g text-anchor="middle" font-size="11.5" style="fill:var(--tinta-2)">
+      <text x="122" y="90">envia os documentos</text><text x="122" y="105">do mandato</text>
+      <text x="380" y="90">telas, revisão, modelagem</text><text x="380" y="105">e o export do book</text>
+      <text x="638" y="90">14 abas vivas em fórmula,</text><text x="638" y="105">proveniência em nota</text>
+      <text x="122" y="246">SPED, OFX, CSV/XLSX grandes</text><text x="122" y="261">sem IA; só o resumo sai</text>
+      <text x="380" y="246">sem estado; classifica,</text><text x="380" y="261">extrai, mede custo</text>
+      <text x="610" y="246">gpt-5.6-luna</text><text x="610" y="261">(Gemini como reserva)</text>
+      <text x="444" y="418" style="fill:var(--tinta)">310 funções fazem a aritmética, a conciliação e as pendências</text>
+      <text x="444" y="434" style="fill:var(--tinta)">RLS por mandato · Storage dos originais · sonda de instalação</text>
+    </g>
+    <g font-size="11.5" style="fill:var(--tinta-2)">
+      <text x="251" y="72" text-anchor="middle">envia</text>
+      <text x="509" y="72" text-anchor="middle">exporta</text>
+      <text x="388" y="190">lote assinado</text>
+      <text x="130" y="160">arquivos grandes</text>
+      <text x="486" y="228">extrai</text>
+      <text x="130" y="340">só o resumo</text>
+      <text x="388" y="330">grava pelas funções SQL</text>
+      <text x="606" y="314" text-anchor="end">lê e escreve sob RLS</text>
+    </g>
+  </svg></div>
+  <ul>
+    <li><b>Banco:</b> fonte da verdade e motor. Toda conta que chega ao cliente é feita aqui (ADR-02).</li>
+    <li><b>n8n:</b> não guarda estado. Se cai no meio, o banco mostra o que ficou pela metade.</li>
+    <li><b>Portal:</b> sempre com a sessão do usuário, sob RLS. Nada passa por chave de serviço.</li>
+    <li><b>Leitor:</b> arquivo grande nunca passa pelo n8n nem pela IA. É lido na máquina do analista.</li>
+  </ul>
+</section>
+
+<!-- 5 -->
+<section id="funcionamento">
+  <h2><span class="n">05</span>Como funciona, do envio ao book</h2>
+  <p class="sub">O caminho de um mandato, na ordem em que acontece. Entre parênteses, quem faz.</p>
+  <ol class="fluxo">
+    <li><div><b>Criar o mandato</b>O analista abre um mandato novo no portal e define o perímetro (empresas do grupo, controladores).<div class="onde">portal · casos/novo, perimetro</div></div></li>
+    <li><div><b>Enviar os documentos</b>O portal monta um lote assinado com token e o envia ao formulário do n8n. Arquivos oficiais, zips e bases volumosas são lidos antes no navegador, num Web Worker; só o resumo sai da máquina.<div class="onde">portal · api/intake · Leitor</div></div></li>
+    <li><div><b>Conferir a assinatura</b>O banco confere o token antes de gravar qualquer coisa (<code>fn_conferir_envio</code>).<div class="onde">Supabase</div></div></li>
+    <li><div><b>Classificar cada arquivo</b>Primeiro pelo nome, sem custo; metade resolve. Se a confiança ficar abaixo de 0,7, a IA lê o conteúdo.<div class="onde">n8n · classifier.mjs, ia.mjs, merge.mjs</div></div></li>
+    <li><div><b>Rotear pelo formato</b>Cada arquivo vai a exatamente um leitor: PDF (camada de texto local), imagem, CSV, XLSX (uma aba por item), XLS, XML. Formato desconhecido fica registrado como não lido, com o motivo.<div class="onde">n8n · formato.mjs, rota-pdf.mjs, spreadsheet.mjs</div></div></li>
+    <li><div><b>Medir e orçar</b>Conta linhas com número e páginas. Calcula o custo do lote antes de gastar um centavo; se passar do teto, recusa o lote inteiro e explica.<div class="onde">n8n · cobertura.mjs, custo.mjs</div></div></li>
+    <li><div><b>Registrar o documento</b>O mesmo arquivo enviado de novo vira versão nova do mesmo documento. Se já foi extraído com o mesmo prompt e modelo, a extração é reaproveitada e não se paga de novo.<div class="onde">Supabase · fn_registrar_documento, 0118</div></div></li>
+    <li><div><b>Extrair com IA</b>O documento é fatiado em blocos que cabem no teto de saída, extraído, remontado. Se voltou menos do que o documento tem, abre pendência. Na mesma passada, a IA diz se o documento é mesmo o que o nome diz.<div class="onde">n8n · extract.mjs, aritmetica.mjs, segunda-contagem.mjs</div></div></li>
+    <li><div><b>Gravar e conferir no banco</b>As linhas entram como evidência imutável. O banco confere escala e moeda, checa completude (Portão 1) e roda as conciliações. Toda divergência vira pendência com motivo e efeito.<div class="onde">Supabase · fn_registrar_campos_extraidos, fn_reconciliar_caso</div></div></li>
+    <li><div><b>Fechar o lote</b>Grava o custo real e fecha. Lote que começou e não terminou fica visivelmente sem fechamento; falha vai para <code>execucao_falha</code>, que o portal mostra.<div class="onde">n8n · workflow de erros</div></div></li>
+    <li><div><b>Revisar</b>O analista vê o Kit Básico, a fila de revisão e as pendências. Bloqueantes impedem o avanço; outras podem ser aceitas com ressalva e justificativa.<div class="onde">portal · revisao, pendencias</div></div></li>
+    <li><div><b>Modelar</b>O analista escolhe as premissas de projeção por linha. O sistema sugere a partir do realizado e dos índices macroeconômicos.<div class="onde">portal · modelagem</div></div></li>
+    <li><div><b>Exportar</b>Sai o book em Excel: dados linha a linha com proveniência e o modelo institucional de 14 abas em fórmula.<div class="onde">portal · export</div></div></li>
+  </ol>
+  <h3>Estados do mandato</h3>
+  <div class="chips"><span>intake</span><span>em_triagem</span><span>completude_ok</span><span>em_revisao</span><span>aprovado</span><span>pronto_para_base</span><span>bloqueado</span><span>aguardando_cliente</span></div>
+  <p>Dois portões: o Portão 1 (completude) é leve e pode ser automático; o Portão 2 (aprovação) é pesado, obrigatório e de Sócio.</p>
+  <h3>Estados da pendência</h3>
+  <div class="chips"><span>aberta</span><span>em_correcao_interna</span><span>reenviada_ao_cliente</span><span>aceita_com_ressalva</span><span>rejeitada</span><span>resolvida</span></div>
+  <p>Severidades: <b>bloqueante</b> (impede o Portão 2), <b>importante</b> (acumulada pode bloquear) e <b>complementar</b>.</p>
+  <h3>Tipos de pendência que o sistema abre</h3>
+  <div class="chips"><span>item_faltante</span><span>periodo_faltante</span><span>item_vencido</span><span>arquivo_ilegivel</span><span>arquivo_corrompido</span><span>entidade_incorreta</span><span>periodo_incorreto</span><span>tipo_incorreto</span><span>classificacao_pendente</span><span>divergencia_reconciliacao</span><span>precondicao_nao_satisfeita</span><span>extracao_baixa_confianca</span><span>extracao_padrao_suspeito</span><span>extracao_falhou</span><span>item_sem_conteudo</span><span>documento_nao_extraido</span><span>linha_exigida_ausente</span><span>papel_no_grupo_indefinido</span><span>forma_de_controle_indefinida</span><span>conta_canonica_incerta</span></div>
+</section>
+
+<!-- 6 -->
+<section id="doutrina">
+  <h2><span class="n">06</span>Doutrina e regras</h2>
+  <p class="sub">As regras abaixo estão no código, não só no papel. Cada uma nasceu de um defeito que chegou em produção.</p>
+  <h3>O dial de autonomia</h3>
+  <p>Cada estágio do pipeline tem um nível. Subir exige concordância medida; a função <code>fn_mudar_dial</code> recusa o contrário (0126).</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Nível</th><th>Nome</th><th>O que significa</th></tr></thead>
+    <tbody>
+      <tr><td class="num">N0</td><td>Sombra</td><td>Roda e registra, mas não influencia decisão. Existe para medir.</td></tr>
+      <tr><td class="num">N1</td><td>Sugestão</td><td>A saída aparece como sugestão; humano confirma todo item.</td></tr>
+      <tr><td class="num">N2</td><td>Auto-aceite parcial</td><td>Acima do limiar, autônomo; abaixo, vai a humano.</td></tr>
+      <tr><td class="num">N3</td><td>Autônomo</td><td>Roda sozinho; humano audita por amostra.</td></tr>
+    </tbody>
+  </table></div>
+  <p>Estágios com dial: classificação documento → checklist, validação formal, extração de identificadores, extração de linhas financeiras, conciliação classe A, conciliação classes B/C, classificação contábil (teto N1 para sempre).</p>
+  <h3>Os oito fechamentos contra falha</h3>
+  <ol class="regras">
+    <li>Na dúvida, vai para humano, nunca para avanço silencioso.</li>
+    <li>Documento ilegível tem saída: transcrição humana assistida por planilha (0129).</li>
+    <li>Toda checagem declara pré-condições (período, entidade, escopo, moeda); sem elas, pendência.</li>
+    <li>Pendências bloqueantes não podem ser sobrepujadas; há teto de ressalvas por mandato.</li>
+    <li>Nenhum número entra na modelagem sem aceite humano explícito.</li>
+    <li>Confiança declarada pela IA não é probabilidade; autonomia só sobe com concordância medida.</li>
+    <li>Trilha de auditoria só cresce; toda decisão e mudança de autonomia é reversível.</li>
+    <li>O interpretativo não é conciliado, só aproximado para o humano decidir.</li>
+  </ol>
+  <h3>As três classes de conciliação</h3>
+  <div class="tabela"><table>
+    <thead><tr><th>Classe</th><th>Exemplos</th><th>Teto</th></tr></thead>
+    <tbody>
+      <tr><td>A · aritmética</td><td>Ativo = Passivo + PL; caixa do balanço × saldo final do fluxo; parcelas × saldo do mapa de dívida</td><td class="num">N1 → N2</td></tr>
+      <tr><td>B · semi-objetiva</td><td>Receita da DRE × faturamento mensal; despesa financeira × juros do mapa de dívida</td><td class="num">N1</td></tr>
+      <tr><td>C · interpretativa</td><td>Mapa de dívida × balanço; mútuos e intragrupo; garantias × documentos dos sócios</td><td class="num">N1</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Decisões de arquitetura registradas</h3>
+  <ul>
+    <li><b>ADR-01, evidência imutável:</b> o que foi extraído nunca é corrigido no lugar. Correção gera registro novo acima, apontando para a origem.</li>
+    <li><b>ADR-02, aritmética no motor:</b> um número que chega ao cliente tem um lugar onde é calculado, o banco. Nunca no nó, na tela ou no script de export.</li>
+  </ul>
+  <h3>As sete regras de engenharia</h3>
+  <ol class="regras">
+    <li>Nunca apresentar ausência como dado: célula em branco com nota do motivo e do efeito.</li>
+    <li>Todo invariante novo é medido não vazio: desliga-se a correção e confirma-se que o teste reprova.</li>
+    <li>O teste afirma comportamento, não mecanismo.</li>
+    <li>Nunca inventar fixture para provar bug de produção.</li>
+    <li>O comentário explica por quê, com o número medido.</li>
+    <li>Uma fatia por commit, com defeito, causa e medição na mensagem.</li>
+    <li>Estágio que não rodou precisa parecer diferente de estágio que rodou e não achou nada.</li>
+  </ol>
+</section>
+
+<!-- 7 -->
+<section id="banco">
+  <h2><span class="n">07</span>Banco de dados (Supabase / Postgres)</h2>
+  <p class="sub">A peça mais madura. Guarda o estado, faz a aritmética e a conciliação, recusa dado inconsistente e se autoconfere.</p>
+  <h3>Tabelas, por domínio</h3>
+  <div class="tabela"><table>
+    <thead><tr><th>Domínio</th><th>Tabelas</th></tr></thead>
+    <tbody>
+      <tr><td>Mandato e perímetro</td><td><code>caso</code>, <code>entidade</code>, <code>periodo</code>, <code>perimetro</code>, <code>controlador</code>, <code>controlador_vinculo</code>, <code>entidade_controlador</code>, <code>contraparte_confirmada</code></td></tr>
+      <tr><td>Documentos</td><td><code>documento</code>, <code>documento_versao</code>, <code>documento_fato</code>, <code>taxonomia_tipo_documento</code>, <code>taxonomia_tipo_cobertura</code>, <code>checklist_item_status</code></td></tr>
+      <tr><td>Extração</td><td><code>campo_extraido</code>, <code>campo_classe_sugerida</code>, <code>campo_classe_override</code>, <code>taxonomia_linha_exigida</code>, <code>taxonomia_linha_localizador</code>, <code>taxonomia_linha_alternativa</code></td></tr>
+      <tr><td>Contabilidade</td><td><code>conta_canonica</code>, <code>classe_contabil_catalogo</code>, <code>rubrica_classe</code>, <code>fato_tipo_catalogo</code>, view <code>fato_financeiro</code></td></tr>
+      <tr><td>Conferência</td><td><code>reconciliacao</code>, <code>pendencia</code>, <code>decisao</code>, <code>evento_auditoria</code>, <code>execucao_falha</code>, <code>lote_execucao</code></td></tr>
+      <tr><td>Arquivos oficiais e volumosos</td><td><code>arquivo_oficial</code>, <code>arquivo_oficial_registro</code>, <code>arquivo_oficial_lancamento_mes</code>, <code>aging_importado</code>, <code>mapeamento_de_colunas</code></td></tr>
+      <tr><td>Modelagem e entrega</td><td><code>caso_modelagem</code>, <code>caso_premissa</code>, <code>caso_linha_premissa</code>, <code>premissa_catalogo</code>, <code>caso_pergunta</code>, <code>pergunta_catalogo</code>, <code>caso_apresentacao_campo</code></td></tr>
+      <tr><td>Índices macroeconômicos</td><td><code>indice_macro_serie</code>, <code>indice_macro_obs</code>, <code>indice_macro_expectativa</code></td></tr>
+      <tr><td>Autonomia e golden set</td><td><code>estagio_autonomia</code>, <code>golden_rodada</code>, <code>golden_documento</code>, <code>golden_campo</code>, <code>golden_rotulo</code>, <code>golden_criterio</code></td></tr>
+      <tr><td>Acesso e instalação</td><td><code>membro</code>, <code>alocacao</code>, <code>instalacao_requisito</code>, <code>instalacao_cobertura</code></td></tr>
+    </tbody>
+  </table></div>
+  <h3>O que já funciona</h3>
+  <div class="grade">
+    <div class="card"><h4>Sonda de instalação</h4><p><code>fn_instalacao_conferir()</code> diz, contra qualquer banco, o que o código espera e ainda não está lá. Roda todo dia às 06:10 contra produção. Nenhum arquivo do repositório é autoridade sobre o banco; a sonda é.</p></div>
+    <div class="card"><h4>Acesso por mandato (0216)</h4><p>Sócio vê tudo; Analista lê e escreve onde está alocado; Leitura só lê. Aprovar, fechar, excluir mandato, mudar dial e gerir equipe são de Sócio, guardados por gatilho.</p></div>
+    <div class="card"><h4>Conciliação</h4><p>Checagens entre demonstrações, seção contra as próprias linhas (0133), aging de carteira contra o balanço (0274, 0277, 0278), rodadas uma vez no fim de cada lote.</p></div>
+    <div class="card"><h4>Kit Básico (0300, 0301)</h4><p>Por item do checklist: extraído, recebido sem linha, faltante, aguardando extração. Abre em 0,04 s a 0,4 s (levava 3 a 4 s).</p></div>
+    <div class="card"><h4>Dedup de extração (0118)</h4><p>O mesmo arquivo com o mesmo prompt, modelo e esquema não é pago duas vezes.</p></div>
+    <div class="card"><h4>Coordenada da linha (0270)</h4><p>Coluna <code>ln</code> com a linha do texto de onde o número veio. Em produção, 0 de 138.931 linhas têm <code>ln</code>, porque nenhuma extração nova rodou desde então.</p></div>
+    <div class="card"><h4>Identidade do número (0302)</h4><p>View <code>fato_financeiro</code> e pendência <code>conta_canonica_incerta</code>, aplicadas em 18/11. O gatilho nunca foi visto disparando numa extração real.</p></div>
+    <div class="card"><h4>Leituras em lote (0276)</h4><p>A visão geral do mandato foi de 13,4 s para 1,1 s: 12 idas viraram 1, e 230 chamadas viraram 2.</p></div>
+    <div class="card"><h4>Observabilidade (0135)</h4><p><code>fn_operacao_lotes</code> decide quatro alertas: cobertura não medida, documento com falha, documento sem medição e custo acima de 1,5× o previsto.</p></div>
+  </div>
+  <h3>Convenções de migration</h3>
+  <ul>
+    <li>O nome conta o defeito corrigido, por exemplo <code>0277_o_aging_que_apagava_a_divergencia_de_um_ano...sql</code>. O teste tem o mesmo nome.</li>
+    <li>Cada migration registra os próprios requisitos na sonda.</li>
+    <li>Tabela nova concede o próprio acesso e nasce com policy por mandato; nada vai para <code>anon</code>.</li>
+    <li>Faixas por conta evitam número duplicado; o <code>run.sh</code> reprova prefixo repetido.</li>
+    <li>Só o dono aplica em produção; antes e depois, mede-se a sonda e as contagens.</li>
+  </ul>
+  <h3>Aplicadas em produção recentemente</h3>
+  <div class="tabela"><table>
+    <thead><tr><th>Data</th><th>Migration</th><th>O que fez</th></tr></thead>
+    <tbody>
+      <tr><td class="num">18/11</td><td class="num">0302</td><td>Identidade de cada número (<code>fato_financeiro</code>)</td></tr>
+      <tr><td class="num">13/11</td><td class="num">0301</td><td>Kit Básico rápido sob RLS</td></tr>
+      <tr><td class="num">13/11</td><td class="num">0300</td><td>Item do Kit não fica "recebido" sem ninguém ter lido</td></tr>
+      <tr><td class="num">13/11</td><td class="num">0278</td><td>Conciliação do aging ligada na rodada</td></tr>
+      <tr><td class="num">13/11</td><td class="num">0277</td><td>Aging: três defeitos graves corrigidos</td></tr>
+      <tr><td class="num">12/11</td><td class="num">0276</td><td>Leituras em lote da visão geral</td></tr>
+      <tr><td class="num">12/11</td><td class="num">0274</td><td>Aging conferido com o balanço</td></tr>
+      <tr><td class="num">12/11</td><td class="num">0272</td><td>Mapeamento de colunas de AR e AP</td></tr>
+      <tr><td class="num">12/11</td><td class="num">0270–0271</td><td>Coordenada da linha; quadro de imobilizado separado do balanço</td></tr>
+      <tr><td class="num">11–12/11</td><td class="num">0240–0242</td><td>Versão vigente, período irmão, seção que só existia em código</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 8 -->
+<section id="n8n">
+  <h2><span class="n">08</span>n8n e IA</h2>
+  <p class="sub">Os workflows são gerados por código. O JSON que se importa no n8n é derivado, e o CI reprova se ele divergir do gerado.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Workflow</th><th>O que faz</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td><code>e1-ingestao</code></td><td>Intake, classificação, extração, diagnóstico, conciliação, custo e fechamento do lote</td><td><span class="pill p-ok">no ar</span></td></tr>
+      <tr><td><code>erros</code></td><td>Transforma qualquer falha numa linha de <code>execucao_falha</code></td><td><span class="pill p-semi">depende de ligar como Error Workflow</span></td></tr>
+      <tr><td><code>macro</code></td><td>Coleta índices macroeconômicos oficiais, com validação cruzada</td><td><span class="pill p-ok">existe</span></td></tr>
+      <tr><td><code>diagnostico-ia</code></td><td>Diz por que o provedor de IA recusa chamadas</td><td><span class="pill p-ok">existe</span></td></tr>
+    </tbody>
+  </table></div>
+  <h3>As 19 bibliotecas dos nós</h3>
+  <div class="tabela"><table>
+    <thead><tr><th>Arquivo</th><th>Responsabilidade</th></tr></thead>
+    <tbody>
+      <tr><td><code>classifier.mjs</code></td><td>Classificação determinística pelo nome do arquivo</td></tr>
+      <tr><td><code>ia.mjs</code></td><td>Classificação pelo conteúdo, quando o nome não basta</td></tr>
+      <tr><td><code>merge.mjs</code></td><td>Combina a classificação por nome com a por conteúdo</td></tr>
+      <tr><td><code>normalize.mjs</code></td><td>Normaliza nomes (minúsculas, sem acento, separadores)</td></tr>
+      <tr><td><code>taxonomia.mjs</code></td><td>Espelho da taxonomia de documentos</td></tr>
+      <tr><td><code>formato.mjs</code></td><td>Detecta o formato pelo conteúdo, não pela extensão</td></tr>
+      <tr><td><code>rota-pdf.mjs</code></td><td>Decide ler o PDF como texto ou como imagem</td></tr>
+      <tr><td><code>spreadsheet.mjs</code></td><td>Converte planilha em texto compacto para a IA</td></tr>
+      <tr><td><code>extract.mjs</code></td><td>Extração e diagnóstico do documento</td></tr>
+      <tr><td><code>cobertura.mjs</code></td><td>As três camadas contra truncamento e extração pela metade</td></tr>
+      <tr><td><code>aritmetica.mjs</code></td><td>Confere se o número extraído é consistente consigo mesmo</td></tr>
+      <tr><td><code>segunda-contagem.mjs</code></td><td>Segundo método, independente, de contar as linhas</td></tr>
+      <tr><td><code>repetibilidade.mjs</code></td><td>Trava determinística: mesma entrada, mesma saída</td></tr>
+      <tr><td><code>completude.mjs</code></td><td>Completude contra o Kit Básico (Portão 1)</td></tr>
+      <tr><td><code>custo.mjs</code></td><td>Orçamento e teto de gasto; tabela de preços dos modelos</td></tr>
+      <tr><td><code>provedor.mjs</code></td><td>Provedor de IA como escolha (OpenAI ou Google)</td></tr>
+      <tr><td><code>assinatura-do-envio.mjs</code></td><td>Token do envio que o banco confere</td></tr>
+      <tr><td><code>hash.mjs</code></td><td>SHA-256 do conteúdo em JavaScript puro</td></tr>
+      <tr><td><code>macro.mjs</code></td><td>Coleta e composição dos índices macroeconômicos</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Proteções da extração</h3>
+  <ul>
+    <li><b>Teto de gasto:</b> decidido depois de medir o documento e antes da primeira chamada. Lote que não cabe é recusado inteiro.</li>
+    <li><b>Fatiamento:</b> nenhum pedido passa de 60% do teto de saída do modelo; cada bloco leva o texto da primeira e da última linha como âncora.</li>
+    <li><b>Guarda de cobertura:</b> abre pendência quando volta muito menos do que o documento tem.</li>
+    <li><b>Diagnóstico:</b> a IA diz se o documento é o tipo, a empresa e o período declarados.</li>
+    <li><b>Custo medido:</b> até US$ 1,10 por book, contra teto de US$ 5.</li>
+  </ul>
+  <h3>Publicação</h3>
+  <p><code>preparar-republicacao.mjs</code> e <code>republicar.sh</code> publicam sem perder a identidade da instalação; <code>conferir-publicado.mjs</code> confere campo a campo que o publicado é o do repositório. Há um workflow do GitHub para republicar sob demanda. Medidores rodam no CI sem gastar IA: <code>medir-custo-book.mjs</code>, <code>medir-regua-cobertura.mjs</code>, <code>medir-fase0-denominador.mjs</code>.</p>
+</section>
+
+<!-- 9 -->
+<section id="leitor">
+  <h2><span class="n">09</span>Leitor determinístico</h2>
+  <p class="sub">Lê arquivos de formato conhecido sem IA. Para cada arquivo devolve um envelope: o que é, de quem, de quando, quantos registros declara e quantos foram lidos.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Formato</th><th>Estado</th><th>Medição</th></tr></thead>
+    <tbody>
+      <tr><td>SPED (ECD)</td><td><span class="pill p-ok">pronto</span></td><td>10 milhões de linhas em 37,5 s, 61 MB de memória, no navegador</td></tr>
+      <tr><td>Zip do contador</td><td><span class="pill p-semi">pronto, sem prova em produção</span></td><td>Lido em fluxo, entrada por entrada, com limites contra zip-bomba</td></tr>
+      <tr><td>CSV volumoso</td><td><span class="pill p-ok">pronto (MB1)</span></td><td>1 milhão de linhas em 2,7 s, 45 MB</td></tr>
+      <tr><td>XLSX volumoso</td><td><span class="pill p-ok">pronto (MB1)</span></td><td>1 milhão de linhas em 18,7 s, 69 MB</td></tr>
+      <tr><td>Mapeamento de colunas AR/AP</td><td><span class="pill p-ok">pronto (MB2)</span></td><td>Caminho inteiro da tela: 5,8 s (CSV) e 22,5 s (XLSX)</td></tr>
+      <tr><td>Aging de carteira</td><td><span class="pill p-ok">pronto (MB3a)</span></td><td>Faixas de vencimento numa data-base</td></tr>
+      <tr><td>OFX, CNAB 150/240/400</td><td><span class="pill p-semi">só o envelope</span></td><td>Conteúdo não lido (MB5, MB6)</td></tr>
+      <tr><td>XML fiscal, eSocial, EFD-Reinf</td><td><span class="pill p-semi">só o envelope</span></td><td>Onda 1 bloqueada: faltam três ECDs reais</td></tr>
+    </tbody>
+  </table></div>
+  <div class="chips"><span>envelope.mjs</span><span>familia.mjs</span><span>leiautes.mjs</span><span>campos.mjs</span><span>resumo.mjs</span><span>zip.mjs</span><span>sha256.mjs</span><span>tabela.mjs</span><span>mapeamento.mjs</span><span>aging.mjs</span><span>arquivo.mjs</span></div>
+  <p class="nota">Nenhum arquivo real de AR, AP ou OFX passou pelo Leitor ainda. Os geradores sintéticos provam a coerência, não a leitura de um arquivo de cliente. O n8n também não chama o Leitor; ele roda pelo portal e pela linha de comando (<code>node Leitor/ler.mjs</code>).</p>
+</section>
+
+<!-- 10 -->
+<section id="portal">
+  <h2><span class="n">10</span>Portal</h2>
+  <p class="sub">Publicado na Vercel. Lê e escreve sempre com a sessão do usuário, sob RLS. No meio de um redesenho visual (janela de vidro, direção Cobalto).</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Área</th><th>Telas e rotas</th></tr></thead>
+    <tbody>
+      <tr><td>Entrada</td><td>Login, recuperar senha, nova senha, confirmação por e-mail</td></tr>
+      <tr><td>Início</td><td>"Precisa de você" agrupado por mandato; "Seus mandatos" em tabela com régua de etapas e paginação</td></tr>
+      <tr><td>Mandatos</td><td>Lista, todos os mandatos, novo mandato</td></tr>
+      <tr><td>Dentro do mandato</td><td>Visão geral, documentos (lista, painel lateral, original, transcrição), adicionar documentos, revisão, pendências, perguntas ao cliente, perímetro, modelagem, entregáveis, histórico, apresentação de crédito, export</td></tr>
+      <tr><td>Administração</td><td>Equipe e papéis, custos de IA, dial de autonomia</td></tr>
+      <tr><td>APIs internas</td><td>Envio ao n8n, destino e status do envio, reprocessamento e status, busca global</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Papéis de usuário</h3>
+  <div class="tabela"><table>
+    <thead><tr><th>Papel</th><th>Pode</th></tr></thead>
+    <tbody>
+      <tr><td>Sócio</td><td>Tudo: ver todos os mandatos, aprovar, fechar, excluir, mudar o dial, gerir a equipe</td></tr>
+      <tr><td>Analista</td><td>Ler e escrever nos mandatos em que está alocado; resolver pendências; confirmar mapeamentos</td></tr>
+      <tr><td>Leitura</td><td>Só ler os mandatos em que está alocado</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Funcionalidades prontas</h3>
+  <ul>
+    <li>Envio com lote assinado, limite de tamanho e leitura no navegador por Web Worker.</li>
+    <li>Fila de reprocessamento para documentos com falha transitória.</li>
+    <li>Revisão das linhas e da classificação, com aceite e rejeição.</li>
+    <li>Transcrição humana assistida por planilha modelo, para documento ilegível.</li>
+    <li>Kit Básico com percentual só do que tem conteúdo e selo de origem do número.</li>
+    <li>Visão geral em blocos que aparecem por partes (título do Início em 0,28 s).</li>
+    <li>Perímetro com organograma; modelagem com premissas sugeridas do realizado.</li>
+    <li>Perguntas ao cliente, e-mail ao cliente, mensagens de falha em português.</li>
+    <li>Busca global, modo discrição, tema claro e escuro.</li>
+  </ul>
+  <h3>Semi-construído no portal</h3>
+  <ul>
+    <li>Redesenho etapa 2: o mandato e as abas ainda no visual antigo.</li>
+    <li>"Conferido" aparece como "ainda não medido"; o botão "conferi" por documento está recomendado e parado.</li>
+    <li>Tela de envio das bases volumosas (ME2) não existe.</li>
+    <li>Fila aprovada: transições, régua animada, modo "ver como o cliente vê", destaque do trecho no PDF, conta do número calculado, grade documento × fato.</li>
+    <li>O redesenho somou 10 a 40 ms ao primeiro desenho da tela; aceito por ora.</li>
+  </ul>
+</section>
+
+<!-- 11 -->
+<section id="export">
+  <h2><span class="n">11</span>Export e book em Excel</h2>
+  <p class="sub">Dois arquivos saem do mesmo veredito, por construção.</p>
+  <div class="grade">
+    <div class="card"><h4>Export de dados</h4><div class="papel"><code>?modo=dados</code></div><p>Abas linha a linha, com a proveniência de cada número em nota (documento, página, confiança). Disponível desde a ingestão; serve para conferência.</p></div>
+    <div class="card"><h4>Export completo</h4><div class="papel">o arquivo que vai ao comitê</div><p>O modelo institucional de 14 abas, vivo em fórmula. Mudar a data-base numa célula move as 14 abas.</p></div>
+  </div>
+  <h3>As 14 abas do modelo</h3>
+  <div class="chips"><span>Considerações</span><span>Capa</span><span>Output</span><span>Revenues, COGS &amp; SG&amp;A</span><span>Premissas</span><span>Income Statement</span><span>Balance Sheet</span><span>Working Capital</span><span>ST Inv. &amp; Debt</span><span>Fixed Assets &amp; CAPEX</span><span>Cash Flow</span><span>Goodwill, Taxes &amp; Div.</span><span>Anual</span><span>Tributos a Recolher</span></div>
+  <p>Gráficos do Output: receita líquida e EBITDA, margem EBITDA, dívida total e líquida, ND/EBITDA contra covenant, liquidez corrente contra covenant, caixa de fechamento contra caixa mínimo, fluxo de caixa livre.</p>
+  <h3>Garantias</h3>
+  <ul>
+    <li>Fórmulas de premissa: índice macro, crescimento composto, % de linha, dias de giro, valor por ano, preço × volume, curva mensal.</li>
+    <li>Ausência vira célula em branco com nota do motivo e do efeito.</li>
+    <li>15 verificadores reprovam o arquivo; <code>verificar-export.mts</code> tem 8.519 linhas e reprova número sem origem.</li>
+    <li><code>auditar-xlsx.mts</code> audita o arquivo exportado célula a célula.</li>
+  </ul>
+  <h3>Apresentação de crédito</h3>
+  <p>Deck em <code>.pptx</code> no padrão da casa, montado da base do mandato (<code>portal/src/lib/apresentacao/</code>). Cerca de 80% pronto; fora do MVP.</p>
+  <h3>Limites conhecidos</h3>
+  <ul>
+    <li>ND/EBITDA, DSCR e pico de caixa não estão nos três cenários.</li>
+    <li>Nada impede a mesma premissa de giro em várias contas.</li>
+    <li>25 das 36 perguntas ao cliente esperam o texto oficial do capítulo 10.</li>
+  </ul>
+</section>
+
+<!-- 12 -->
+<section id="taxonomia">
+  <h2><span class="n">12</span>Documentos que o sistema reconhece</h2>
+  <p class="sub">A taxonomia tem 34 tipos. O Kit Básico define o mínimo para um mandato fechar.</p>
+  <div class="chips"><span>DRE</span><span>BALANCO</span><span>FLUXO_CAIXA</span><span>COMBINADO</span><span>FATURAMENTO_24M</span><span>MUTUOS</span><span>FAT_INTRAGRUPO</span><span>CONTRATO_SOCIAL</span><span>DF_AUDITADA</span><span>BALANCETE</span><span>RAZAO</span><span>NOTAS_EXPL</span><span>MAPA_DIVIDA</span><span>CONTRATO_DIVIDA</span><span>EXTRATO_BANCARIO</span><span>FLUXO_PROJETADO</span><span>APLIC_FINANC</span><span>AGING_AR</span><span>AGING_AP</span><span>ESTOQUE</span><span>CONTRATOS_COM</span><span>HEADCOUNT</span><span>ORGANOGRAMA</span><span>CERTIDOES</span><span>CONTINGENCIAS</span><span>SITUACAO_FISCAL</span><span>DEBITOS_TRIB</span><span>SPED</span><span>CONTRATOS_IC</span><span>GARANTIAS</span><span>AVAIS_FIANCAS</span><span>DOCS_SOCIOS</span><span>PLANO_NEGOCIOS</span><span>PREMISSAS</span></div>
+  <p>Formatos de entrada aceitos pelo n8n: PDF (com e sem camada de texto), imagem, CSV, XLSX, XLS e XML. Pelo navegador: SPED, zip, CSV e XLSX volumosos, OFX e CNAB (envelope).</p>
+</section>
+
+<!-- 13 -->
+<section id="qualidade">
+  <h2><span class="n">13</span>Testes, CI e massa de teste</h2>
+  <p class="sub">Todo push roda cinco suítes em paralelo. O PR só fica verde se as cinco ficarem.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Job</th><th>O que prova</th></tr></thead>
+    <tbody>
+      <tr><td><code>banco</code></td><td>Monta o banco do zero com todas as migrations, roda as 126 suítes SQL e regera <code>schema.sql</code></td></tr>
+      <tr><td><code>n8n-e-derivados</code></td><td>Testes das bibliotecas; regera os 4 workflows e reprova se divergirem</td></tr>
+      <tr><td><code>portal</code></td><td>Tipagem, lint, verificadores do export e build</td></tr>
+      <tr><td><code>e2e</code></td><td>Extração → banco → export de ponta a ponta</td></tr>
+      <tr><td><code>variacoes</code></td><td>Documentos "sujos", com formatação variada</td></tr>
+    </tbody>
+  </table></div>
+  <div class="tabela"><table>
+    <thead><tr><th>Workflow de operação</th><th>Quando</th><th>O que faz</th></tr></thead>
+    <tbody>
+      <tr><td><code>sonda-producao.yml</code></td><td>Diário, 06:10</td><td>Roda a sonda contra o banco de produção</td></tr>
+      <tr><td><code>republicar.yml</code></td><td>Manual</td><td>Publica no n8n o workflow do repositório</td></tr>
+      <tr><td><code>perimetro-inventario.yml</code></td><td>Manual</td><td>Inventário de entidades e perímetro em produção</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Massa de teste</h3>
+  <ul>
+    <li>Quatro books sintéticos gerados em Python: Canastra, Distress, Espelho, Vertentes.</li>
+    <li>Gerador de volume: AR, AP e OFX de 10 mil, 100 mil e 1 milhão de linhas, que fecham com o balanço do book Distress (92 de 92 conferências).</li>
+    <li>Gerador de fontes oficiais (SPED e afins).</li>
+    <li>Capturas de rodadas reais (texto extraído, modelagem).</li>
+    <li>Vistorias com Playwright contra o portal no ar, por papel de usuário (<code>Verificação/</code>).</li>
+  </ul>
+  <p class="nota">Arquivos derivados nunca se editam à mão: <code>schema.sql</code>, <code>workflow.*.json</code>, <code>conferir_chamadas.sql</code> e <code>grafo.jsonl</code>. O CI reprova quando o commitado diverge do gerado.</p>
+</section>
+
+<!-- 14 -->
+<section id="dev">
+  <h2><span class="n">14</span>Desenvolvimento com IA</h2>
+  <p class="sub">O código é escrito com Claude Code, em três contas, com um ferramental próprio que carrega as regras do projeto.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Peça</th><th>O que é</th></tr></thead>
+    <tbody>
+      <tr><td>7 agentes</td><td><code>migrations-postgres</code>, <code>n8n-workflow</code>, <code>portal-export</code>, <code>suites-invariantes</code>, <code>revisor-defeito-silencioso</code>, <code>estado-e-handoff</code>, <code>explorador</code></td></tr>
+      <tr><td>3 comandos</td><td><code>/rodada</code> (medir, diagnosticar, executar, medir), <code>/revisar</code>, <code>/fechar</code></td></tr>
+      <tr><td>Base de conhecimento</td><td>41 fichas com âncora no código; grafo de 3.596 nós; <code>buscar.mjs</code> responde por assunto</td></tr>
+      <tr><td>Memória</td><td>42 lições que já custaram caro</td></tr>
+      <tr><td>Portões</td><td>Grafo em dia, comandos citados existem, <code>CLAUDE.md</code> espelha o CI</td></tr>
+      <tr><td>Rotina</td><td>Toda mudança passa por revisão independente; quem comita é a sessão principal, uma fatia por vez</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<!-- 15 -->
+<section id="docs">
+  <h2><span class="n">15</span>Documentação</h2>
+  <p class="sub">Tudo em <code>Arquitetura do Sistema/</code>, em português.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Pasta</th><th>Conteúdo</th></tr></thead>
+    <tbody>
+      <tr><td>1 Visão e Doutrina</td><td>Visão e escopo, doutrina de autonomia, arquitetura funcional, MVP e roadmap, ADR-01, ADR-02</td></tr>
+      <tr><td>2 Especificação</td><td>Reconciliação, classificação contábil, revisão humana, status e pendências, dados e LGPD, análise de crédito, fontes oficiais, parceiros de dados e pré-mandato, comparativos setoriais</td></tr>
+      <tr><td>3 Estado e Execução</td><td>Plano do MVP, plano de execução completo (111 etapas), mapa de execução, prontidão, como o sistema funciona, desenhos técnicos</td></tr>
+      <tr><td>4 Análises e Auditorias</td><td>Riscos, custo de IA, auditoria profunda, diagnóstico, SonarCloud, vistoria</td></tr>
+      <tr><td>5 Prompts</td><td>Roteiros de trabalho para as sessões de IA</td></tr>
+      <tr><td>6 Referência</td><td>Modelo-base do Excel, critérios de aceite, conformidade, restauração, pós-rodada</td></tr>
+      <tr><td>7 Marca</td><td>Identidade visual e redesenho do portal</td></tr>
+    </tbody>
+  </table></div>
+  <p>Na raiz: <code>README.md</code>, <code>ESTADO.md</code> (onde estamos), <code>HANDOFF.md</code> (histórico de cerca de 5.000 linhas) e <code>CLAUDE.md</code> (regras de toda sessão).</p>
+</section>
+
+<!-- 16 -->
+<section id="prontidao">
+  <h2><span class="n">16</span>Pronto, semi-pronto e faltando</h2>
+  <p class="sub">O plano do MVP tem cinco trilhas e cerca de 33 fatias, com portão previsto para 18/12/2026.</p>
+  <div class="legenda"><span class="pill p-ok">pronto</span><span class="pill p-semi">semi-pronto</span><span class="pill p-nao">não iniciado</span></div>
+  <h3>Pelo pipeline</h3>
+  <div class="tabela"><table>
+    <thead><tr><th>Estágio</th><th>Estado</th><th>Observação</th></tr></thead>
+    <tbody>
+      <tr><td>Ingestão</td><td><span class="pill p-ok">pronto</span></td><td>Classificação aceita sozinha a 0,70 sem concordância medida</td></tr>
+      <tr><td>Extração</td><td><span class="pill p-semi">semi-pronto</span></td><td>33–71% dos documentos reais com extração falha ou incompleta nos lotes de set–out</td></tr>
+      <tr><td>Completude (Portão 1)</td><td><span class="pill p-ok">pronto</span></td><td>Kit Básico pelo banco</td></tr>
+      <tr><td>Conciliação</td><td><span class="pill p-ok">pronto</span></td><td>Aging nunca viu carteira real</td></tr>
+      <tr><td>Export de dados</td><td><span class="pill p-ok">pronto</span></td><td>Sem defeito aberto conhecido</td></tr>
+      <tr><td>Modelagem</td><td><span class="pill p-semi">semi-pronto</span></td><td>Falta guarda contra giro agregado</td></tr>
+      <tr><td>Export de comitê</td><td><span class="pill p-semi">semi-pronto</span></td><td>Indicadores de dívida fora dos três cenários</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Pelas trilhas do MVP</h3>
+  <div class="tabela"><table>
+    <thead><tr><th>Fatia</th><th>O que é</th><th>Estado</th></tr></thead>
+    <tbody>
+      <tr><td class="num">MA1</td><td>Regressão paga no corpus real</td><td><span class="pill p-semi">só sintéticos</span></td></tr>
+      <tr><td class="num">MA2</td><td>Coordenada da linha</td><td><span class="pill p-semi">no banco, sem extração nova</span></td></tr>
+      <tr><td class="num">MA3</td><td>Toda linha do documento com destino</td><td><span class="pill p-nao">não iniciada</span></td></tr>
+      <tr><td class="num">MA4</td><td>Valor sem trecho literal abre pendência</td><td><span class="pill p-nao">não iniciada</span></td></tr>
+      <tr><td class="num">MA5</td><td>Portão da extração</td><td><span class="pill p-nao">não iniciada</span></td></tr>
+      <tr><td class="num">MB0</td><td>Medir antes; geradores de volume</td><td><span class="pill p-ok">feita</span></td></tr>
+      <tr><td class="num">MB1</td><td>Leitor tabular em fluxo</td><td><span class="pill p-ok">feita</span></td></tr>
+      <tr><td class="num">MB2</td><td>Mapeamento de colunas</td><td><span class="pill p-ok">feita</span></td></tr>
+      <tr><td class="num">MB3</td><td>Contas a receber: aging e conciliação</td><td><span class="pill p-ok">feita, só sintéticos</span></td></tr>
+      <tr><td class="num">MB4</td><td>Contas a pagar</td><td><span class="pill p-semi">mesmo motor, falta prova</span></td></tr>
+      <tr><td class="num">MB5</td><td>OFX</td><td><span class="pill p-nao">não iniciada</span></td></tr>
+      <tr><td class="num">MB6</td><td>CNAB e razão</td><td><span class="pill p-nao">não iniciada</span></td></tr>
+      <tr><td class="num">MB7</td><td>Agregado no banco e abas no book</td><td><span class="pill p-nao">não iniciada</span></td></tr>
+      <tr><td class="num">MC0–MC8</td><td>Processos e notícias da empresa, sócios e familiares</td><td><span class="pill p-nao">só desenho</span></td></tr>
+      <tr><td class="num">MD1–MD2</td><td>Perímetro e aceite financeiro</td><td><span class="pill p-nao">não iniciadas</span></td></tr>
+      <tr><td class="num">ME1</td><td>Defeitos que travam o uso</td><td><span class="pill p-semi">em andamento</span></td></tr>
+      <tr><td class="num">ME2</td><td>Tela das bases volumosas</td><td><span class="pill p-nao">não iniciada</span></td></tr>
+      <tr><td class="num">ME3–ME5</td><td>Proteger o <code>main</code>, restaurar backup, registro de leitura de dado pessoal</td><td><span class="pill p-nao">não iniciadas</span></td></tr>
+    </tbody>
+  </table></div>
+  <h3>Fora do MVP, mas já iniciado</h3>
+  <ul>
+    <li>Conta canônica (0242) e identidade do número (0302): em produção.</li>
+    <li>Fontes oficiais: leitor pronto; onda 1 bloqueada por falta de arquivos reais.</li>
+    <li>Deck de crédito <code>.pptx</code>: cerca de 80%.</li>
+    <li>Golden set e dial de autonomia: tabelas e regras prontas; sem rotulagem, o dial não sobe.</li>
+  </ul>
+</section>
+
+<!-- 17 -->
+<section id="riscos">
+  <h2><span class="n">17</span>Riscos, decisões e próximos passos</h2>
+  <p class="sub">O maior risco é a falta de dado real. Quase tudo que está pronto foi provado em sintético.</p>
+  <div class="tabela"><table>
+    <thead><tr><th>Risco</th><th>Efeito</th><th>Quem destrava</th></tr></thead>
+    <tbody>
+      <tr><td>Extração e classificação aceitam sozinhas sem concordância medida</td><td>Linha errada pode entrar sem humano olhar</td><td>Dono (D5)</td></tr>
+      <tr><td>Nenhum arquivo real de AR, AP ou OFX</td><td>Bases volumosas provadas só em sintético</td><td>Dono (DM7)</td></tr>
+      <tr><td>Provedor de processos não contratado</td><td>Sem teste até 27/11, processos saem do MVP</td><td>Dono (DM4)</td></tr>
+      <tr><td>Supabase no plano gratuito</td><td>Limite de tamanho do banco não confirmado</td><td>Dono (DM1)</td></tr>
+      <tr><td>Backup nunca restaurado</td><td>Backup é crença, não controle</td><td>Engenharia (ME4)</td></tr>
+      <tr><td><code>main</code> sem proteção conferida</td><td>Push direto pode pular o CI</td><td>Dono (ME3)</td></tr>
+      <tr><td>Acordo de retenção zero com o provedor de IA</td><td>Precisa existir antes de dado real em escala</td><td>Dono</td></tr>
+    </tbody>
+  </table></div>
+  <h3>Decisões pendentes do dono</h3>
+  <ul>
+    <li>DM3: quem declara os familiares (analista, cliente ou os dois).</li>
+    <li>DM4: provedor de processos para o piloto (recomendação: JUDIT e Escavador).</li>
+    <li>DM5: fonte de notícias (grátis no piloto; pago só se não bastar).</li>
+    <li>DM6: teto de custo das consultas externas por mandato.</li>
+    <li>DM7: enviar arquivos reais de AR, AP e OFX.</li>
+    <li>D5: revisão humana obrigatória nos dois estágios em autonomia não medida.</li>
+    <li>Botão "conferi" por documento.</li>
+  </ul>
+  <h3>Próximos passos, em ordem</h3>
+  <ol class="lista">
+    <li>Na próxima rodada do n8n, conferir que a extração grava <code>ln</code> e dispara o gatilho da 0302.</li>
+    <li>MA1: reenviar os originais reais (Valtra, Krauspenhar, AMO) e publicar a tabela antes × depois.</li>
+    <li>MA3 e MA4: bijeção e literalidade da extração.</li>
+    <li>ME2, depois MB5 (OFX), MB6 (CNAB e razão) e MB7 (abas no book).</li>
+    <li>Trilha C, a partir das decisões DM3 a DM6.</li>
+    <li>MD2 e o portão do MVP, previsto para 18/12/2026.</li>
+  </ol>
+</section>
+
+<footer>
+  Fontes no repositório: <code>README.md</code>, <code>ESTADO.md</code> (sessões 127 a 131), <code>PLANO_MVP_2026-11.md</code>, <code>PRONTIDAO_POR_ESTAGIO.md</code>, <code>COMO_O_SISTEMA_FUNCIONA.md</code>, especificações 04 a 14, ADR-01 e ADR-02, <code>Supabase/schema.sql</code>, <code>N8N/lib/</code>, <code>Leitor/README.md</code>, <code>portal/package.json</code>. Contagens feitas no <code>main</code> em 19/11/2026. Números de produção medidos em 18/11/2026; o banco é a autoridade, pela sonda.
+</footer>
+</main>
+</div>
+</body>
+</html>

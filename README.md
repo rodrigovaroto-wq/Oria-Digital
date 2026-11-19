@@ -19,8 +19,8 @@ e o efeito, em vez de devolver um valor plausível.
 flowchart LR
     A[Analista / cliente] -->|envia os documentos| P[Portal<br/>Next.js na Vercel]
     P -->|lote assinado por mandato| N[n8n<br/>orquestração sem estado]
-    N -->|classifica e extrai<br/>gpt-4o-mini / gpt-4o| IA[(OpenAI)]
-    N -->|chama funções SQL| DB[(Supabase<br/>Postgres 16 + RLS)]
+    N -->|classifica e extrai<br/>gpt-5.6-luna| IA[(OpenAI)]
+    N -->|chama funções SQL| DB[(Supabase<br/>Postgres 17 + RLS)]
     L[Leitor<br/>SPED, XML fiscal, CNAB, OFX, CSV/XLSX] -->|envelope por arquivo| DB
     DB -->|pendências, conciliação,<br/>kit básico, sonda| P
     P -->|revisão humana,<br/>premissas| DB
@@ -43,7 +43,7 @@ O fluxo completo, em linguagem simples, está em
 
 ```
 .
-├── Supabase/                 Banco: 189 migrations, schema derivado, 124 testes SQL, sondas
+├── Supabase/                 Banco: 190 migrations, schema derivado, 126 testes SQL, sondas
 │   ├── migrations/           NNNN_<o defeito que ela corrige>.sql — aplicadas em ordem
 │   ├── test/                 run.sh monta o banco do zero e roda todas as suítes
 │   ├── conferir/             conferidor das chamadas n8n → SQL (gerado)
@@ -81,9 +81,9 @@ Cada pasta de código tem o próprio README com o detalhe: [`Supabase/README.md`
 
 | | |
 |---|---|
-| Banco | Supabase (Postgres 16, Auth, Storage, RLS); lógica em PL/pgSQL |
+| Banco | Supabase (Postgres 17.6 em produção, Auth, Storage, Vault, RLS); lógica em PL/pgSQL. Local e CI testam em Postgres 16 |
 | Orquestração | n8n (Form Trigger, nós Code em JavaScript gerados por `N8N/build-workflow*.mjs`) |
-| IA | OpenAI: classificação em `gpt-4o-mini`, extração em `gpt-4o`, com orçamento por lote antes de gastar |
+| IA | OpenAI `gpt-5.6-luna` na classificação e na extração (desde 11/09/2026), com esforço de raciocínio por papel e orçamento por lote antes de gastar. Google `gemini-3.5-flash-lite` pronto como alternativa pela variável `IA_PROVEDOR` (`N8N/lib/provedor.mjs`, `N8N/lib/custo.mjs`) |
 | Portal | Next.js 16 (App Router), React 19, TypeScript, Tailwind 4, `@supabase/ssr`, `exceljs`; deploy na Vercel |
 | Testes | `node:test`, `psql` + PL/pgSQL, `tsx`, Playwright (vistorias), Python 3 (geradores dos books) |
 | Qualidade | GitHub Actions + SonarCloud |
@@ -153,7 +153,7 @@ As sete regras completas, e o porquê de cada uma, estão no [`CLAUDE.md`](CLAUD
 |---|---|
 | [`1 Visão e Doutrina`](Arquitetura%20do%20Sistema/1%20Visão%20e%20Doutrina/) | escopo, doutrina de autonomia (N0 → N3), arquitetura funcional e ADRs |
 | [`2 Especificação`](Arquitetura%20do%20Sistema/2%20Especificação/) | reconciliação, classificação contábil, revisão humana, status e pendências, LGPD, fontes oficiais |
-| [`3 Estado e Execução`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/) | **plano em vigor** ([`PLANO_MVP_2026-11.md`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md)), roadmap e desenhos técnicos |
+| [`3 Estado e Execução`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/) | inventário completo do que está construído ([`INVENTARIO_2026-11-19.html`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/INVENTARIO_2026-11-19.html)), **plano em vigor** ([`PLANO_MVP_2026-11.md`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md)), roadmap e desenhos técnicos |
 | [`4 Análises e Auditorias`](Arquitetura%20do%20Sistema/4%20Análises%20e%20Auditorias/) | riscos, custo de IA, auditorias e vistorias medidas |
 | [`5 Prompts`](Arquitetura%20do%20Sistema/5%20Prompts/) | roteiros de trabalho para o desenvolvimento assistido por IA |
 | [`6 Referência`](Arquitetura%20do%20Sistema/6%20Referência/) | modelo-base do Excel, critérios de aceite, conformidade, restauração |
