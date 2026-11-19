@@ -68,7 +68,7 @@ def escreve(f, linhas):
 def agente(cx, cy, w, h, num, nome, sz_nome):
     f = forma(MSO_SHAPE.OVAL, cx - w / 2, cy - h / 2, w, h, VERDE_CLARO, NAVY, 1.25, nome=f"agente-{num}")
     f.text_frame.margin_bottom = Inches(0.07)  # o texto sobe um pouco dentro do bloco
-    escreve(f, [("Agente", 11, False, CINZA), (nome, sz_nome + 1, True, NAVY)])
+    escreve(f, [("Agente", 11, False, CINZA), (nome, 12, True, NAVY)])  # mesmo corpo em todos os agentes
     return f
 
 
@@ -101,12 +101,12 @@ orq.adjustments[0] = 0.5
 escreve(orq, [("Orquestrador Oria", 15, True, BRANCO)])
 ymid = orq.top + orq.height / 2
 for num, (nome, frase), lado in ((9, AUDITOR, -1), (10, AUTO, 1)):
-    w = Inches(1.62) if num == 9 else Inches(2.10)
+    w = Inches(1.62) if num == 9 else Inches(2.35)
     acx = OCX + lado * Inches(2.85)
     ag = agente(acx, ymid, w, Inches(0.62), num, nome, 12 if num == 9 else 9.5)
     liga(acx + w / 2 if lado < 0 else acx - w / 2, ymid, orq.left if lado < 0 else orq.left + orq.width, ymid, tracejado=True)
-    bw = Inches(2.0)
-    bcx = acx + lado * (w / 2 + Inches(0.15) + bw / 2)
+    bw = Inches(2.15) if num == 9 else Inches(1.9)  # à direita o Autoaprimoramento é mais largo
+    bcx = acx + lado * (w / 2 + Inches(0.12) + bw / 2)
     bolha(bcx, ymid, bw, Inches(0.52), frase, num, 10)
     liga(acx + lado * w / 2, ymid, bcx - lado * bw / 2, ymid)
 lab = s.shapes.add_textbox(OCX + Inches(0.12), Inches(2.66), Inches(3.4), Inches(0.25))
@@ -127,7 +127,8 @@ for cx, n in zip(COLS, range(1, 9)):
     # ramos achatados e alternados: ímpares em cima, pares embaixo; nas pontas, o balão entra para a margem
     bw, bh = Inches(2.20), Inches(0.92)  # 2,20": as linhas dos agentes pares passam livres entre os balões de cima
     bcx = min(max(cx, Inches(0.5) + bw / 2), Inches(12.83) - bw / 2)
-    b = bolha(bcx, Inches(4.72 if n % 2 else 5.80), bw, bh, frase, n, 10.5)
+    # fileira de baixo 0,80" abaixo da de cima: deixa 0,12" entre balões vizinhos (medido nas elipses)
+    b = bolha(bcx, Inches(4.72 if n % 2 else 5.52), bw, bh, frase, n, 10.5)
     liga(cx, ag.top + ag.height, cx, b.top)
 
 arv = s.shapes._spTree
