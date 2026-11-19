@@ -11,11 +11,11 @@ from pptx.enum.shapes import MSO_CONNECTOR, MSO_SHAPE
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.util import Emu, Inches, Pt
 
-NAVY, ORANGE, BORDA, LINHA, CINZA, BRANCO = (RGBColor.from_string(c) for c in
-                                             ("16263B", "F04600", "D6DED6", "B7C4BA", "707070", "FFFFFF"))
+NAVY, ORANGE, BORDA, LINHA, CINZA, BRANCO, VERDE_CLARO = (RGBColor.from_string(c) for c in
+    ("16263B", "F04600", "D6DED6", "B7C4BA", "707070", "FFFFFF", "E3EBE4"))  # E3EBE4 = faixa tingida do deck
 UM_RAMO = {
     1: ("Captador", "Lê os documentos e busca dados na Receita e nos bancos"),
-    2: ("Conferidor", "Cruza a contabilidade com fontes externas e aponta o que não bate"),
+    2: ("Conferidor", "Cruza a contabilidade com fontes externas e aponta divergências"),
     3: ("Mercado", "Compara a empresa e os juros com o setor e o mercado"),
     4: ("Risco", "Mapeia processos, protestos e dívida ativa antes da crise"),
     5: ("Caixa", "Mostra até onde o caixa aguenta, semana a semana"),
@@ -66,8 +66,9 @@ def escreve(f, linhas):
 
 
 def agente(cx, cy, w, h, num, nome, sz_nome):
-    f = forma(MSO_SHAPE.OVAL, cx - w / 2, cy - h / 2, w, h, BRANCO, ORANGE, 1.5, nome=f"agente-{num}")
-    escreve(f, [("Agente", 10, False, CINZA), (nome, sz_nome, True, NAVY)])
+    f = forma(MSO_SHAPE.OVAL, cx - w / 2, cy - h / 2, w, h, VERDE_CLARO, NAVY, 1.25, nome=f"agente-{num}")
+    f.text_frame.margin_bottom = Inches(0.07)  # o texto sobe um pouco dentro do bloco
+    escreve(f, [("Agente", 11, False, CINZA), (nome, sz_nome + 1, True, NAVY)])
     return f
 
 
@@ -102,7 +103,7 @@ ymid = orq.top + orq.height / 2
 for num, (nome, frase), lado in ((9, AUDITOR, -1), (10, AUTO, 1)):
     w = Inches(1.62) if num == 9 else Inches(2.10)
     acx = OCX + lado * Inches(2.85)
-    ag = agente(acx, ymid, w, Inches(0.62), num, nome, 12 if num == 9 else 10.5)
+    ag = agente(acx, ymid, w, Inches(0.62), num, nome, 12 if num == 9 else 9.5)
     liga(acx + w / 2 if lado < 0 else acx - w / 2, ymid, orq.left if lado < 0 else orq.left + orq.width, ymid, tracejado=True)
     bw = Inches(2.0)
     bcx = acx + lado * (w / 2 + Inches(0.15) + bw / 2)
@@ -123,7 +124,10 @@ for cx, n in zip(COLS, range(1, 9)):
     nome, frase = UM_RAMO[n]
     liga(cx, Y_BUS, cx, Y_AG - AGH / 2, larg=1.75)
     ag = agente(cx, Y_AG, AGW, AGH, n, nome, 12 if n != 7 else 11)
-    b = bolha(cx, Inches(5.12), Inches(1.46), Inches(1.40), frase, n, 10)
+    # ramos achatados e alternados: ímpares em cima, pares embaixo; nas pontas, o balão entra para a margem
+    bw, bh = Inches(2.20), Inches(0.92)  # 2,20": as linhas dos agentes pares passam livres entre os balões de cima
+    bcx = min(max(cx, Inches(0.5) + bw / 2), Inches(12.83) - bw / 2)
+    b = bolha(bcx, Inches(4.72 if n % 2 else 5.80), bw, bh, frase, n, 10.5)
     liga(cx, ag.top + ag.height, cx, b.top)
 
 arv = s.shapes._spTree
