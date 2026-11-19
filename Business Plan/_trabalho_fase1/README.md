@@ -11,6 +11,8 @@
 | `registro_de_decisoes/oria_digital_decisoes_e_pendencias_v0.1.2.html` | Versão anterior, preservada sem alteração |
 | `registro_de_decisoes/gerar_v013.py` | Script que gera a v0.1.3 a partir da v0.1.2 (`python3 -I gerar_v013.py <v0.1.2.html> <saida.html>`) |
 | `workflow/oria_digital_workflow_fixo_v0.1.html` | Workflow original (antes das decisões) |
+| `workflow/oria_digital_workflow_v0.3.0.html` | **Workflow v0.3.0 (Fase 2)** — alinhado ao registro v0.1.3, com selos de status por bloco (abrir no navegador) |
+| `workflow/gerar_workflow_v030.py` | Gera o v0.3.0 (`python3 -I gerar_workflow_v030.py <saida.html>`) |
 | `workflow/oria_digital_workflow_atualizado_v0.2.0.html` | Workflow v0.2.0 (aplica a v0.1.2; anterior à entrevista) — base da Fase 2 |
 | `entrevista/oria_entrevista_lote_01..03.html` | Transcrições literais dos lotes 01–03 (entrevista por voz) |
 | `prompts_entrevista/` | Prompts usados na entrevista por voz e o banco de perguntas restantes |
