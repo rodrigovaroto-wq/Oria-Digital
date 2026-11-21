@@ -10,23 +10,25 @@ pres = zin.read("ppt/presentation.xml").decode()
 rid2t = dict(re.findall(r'Id="(rId\d+)"[^>]*Target="(slides/slide\d+\.xml)"', rels)) | \
         {a: b for b, a in re.findall(r'Target="(slides/slide\d+\.xml)"[^>]*Id="(rId\d+)"', rels)}
 ordem = ["ppt/" + rid2t[r] for r in re.findall(r'<p:sldId [^>]*r:id="(rId\d+)"', pres)]
+def renumerar(xml, k):
+    """O grupo raiz do slide (primeiro p:cNvPr) fica id=1, como em todo pptx; os demais viram k*1000+n."""
+    partes = re.split(r'(<p:cNvPr id=")\d+(")', xml)
+    # re.split com 2 grupos devolve [texto, abre, fecha, texto, ...]: cada trio após o primeiro texto é um id
+    saida = [partes[0]]
+    for i in range(1, len(partes), 3):
+        n = i // 3
+        saida.append(f"{partes[i]}{1 if n == 0 else k * 1000 + n}{partes[i + 1]}{partes[i + 2]}")
+    return "".join(saida)
+
+
 zout = zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED)
 for item in zin.infolist():
     data = zin.read(item.filename)
     if item.filename in ordem:
-        k = ordem.index(item.filename) + 1
         x = data.decode()
         if re.search(r'stCxn|endCxn|spTgt|spid=', x):
             sys.exit(f"{item.filename} referencia ids; renumerar quebraria a referência")
-        n = iter(range(1, 10**6))
-        primeiro = [True]
-        def novo(m):
-            if primeiro[0]:  # o grupo raiz do slide fica id=1, como em todo pptx
-                primeiro[0] = False
-                return m.group(0)
-            return f'<p:cNvPr id="{k*1000 + next(n)}"'
-        x = re.sub(r'<p:cNvPr id="\d+"', novo, x)
-        data = x.encode()
+        data = renumerar(x, ordem.index(item.filename) + 1).encode()
     zout.writestr(item, data)
 zout.close()
 print("ok", len(ordem), "slides")
