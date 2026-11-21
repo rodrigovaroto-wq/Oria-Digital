@@ -27,7 +27,7 @@ Base das mudanças: o registro de decisões **v0.1.3** (`Business Plan/_trabalho
 | 7 | 6 · O que o cliente ganha | Menos custo desnecessário, mais dívida amortizada | Exemplo ilustrativo em R$ |
 | 8 | 7 · O modelo de negócio | Duas receitas: o diagnóstico por mandato e o acompanhamento | **Novo na v2.** O que vendemos, para quem e as quatro receitas, sem valores (J1, J2) |
 | 9 | 8 · Estratégia operacional com IA | Onze agentes de IA dividem o diagnóstico, e o Especialista Oria decide | **Refeito na v2.** Árvore: Orquestrador → 8 especialistas, cada um com uma descrição; Auditor e Autoaprimoramento leem o resultado de todos (B1) |
-| 10 | 9 · Para levar adiante | Quatro pilares levam o Oria Digital do método validado ao mercado | Linha do tempo e "O QUE BUSCAMOS" |
+| 10 | 9 · Para levar adiante | Quatro pilares levam o Oria Digital do método validado ao mercado | Linha do tempo (Hoje → Próximo marco → Em 3 a 6 meses) e "O QUE BUSCAMOS". O prazo "Em 3 a 6 meses" foi recolocado pelo dono na v4 (21/11) |
 | 11 | Anexo 1 | 6 blocos e 31 frentes de diligência | Mapa da diligência |
 | 12–14 | Anexo 2 (1/3 a 3/3) | Blocos 1–2, 3–4 e 5–6 | Cada frente com a área de impacto e a alavanca de valor |
 
@@ -123,5 +123,7 @@ python3 ferramentas/comparativo.py Business_Plan_Oria_Digital.pptx nova_versao.p
 
 - **`qa_geometria.py`** aponta shape fora do slide, caixas de texto sobrepostas, fonte abaixo de 9 pt e **palavras que colidem no render**, que é o defeito que importa. Na v2 são **0**. Os outros achados são do próprio desenho: o sextante que sangra para fora da capa, os balões sobre as elipses e os títulos empilhados nos anexos.
 - **`comparativo.py`** compara duas versões quaisquer, lado a lado, e marca IGUAL ou ALTERADO pela contagem de pixels. Os slides são pareados pela posição: quando um slide entra ou sai, todos os seguintes aparecem como alterados.
+
+- **`renumerar_ids.py`** dá a cada forma um id único no deck inteiro (slide k → k×1000+n). **Rode-o sempre antes de publicar uma versão nova.** Motivo: no iPhone (visualizador do Arquivos/Mail), quando o mesmo id de forma aparecia em slides diferentes, formas de um slide eram desenhadas em outro. As setas do slide 5 apareciam no 6 a 10, o painel do 8 no 9 a 14 e as elipses do 9 no 10 a 14. Os slides 1 a 5 abriam bem. Na v4 havia ids repetidos em todos os slides; depois do script ficaram 0 de 563, e o render no LibreOffice ficou idêntico pixel a pixel nos 14 slides. O script recusa o slide que referencia ids (conectores colados, animação), porque renumerar quebraria a referência.
 
 **Limitação.** A conferência visual foi feita no LibreOffice, em que a Calibri é substituída pela Carlito, de métricas iguais. Abra no Microsoft PowerPoint antes de apresentar. Os pontos mais sensíveis são a árvore do slide 9 e os rótulos do gráfico do slide 7.

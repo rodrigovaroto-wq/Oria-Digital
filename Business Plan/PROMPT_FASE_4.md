@@ -130,8 +130,9 @@ questões futuras; e o que mais for estrutural para construir e operar o sistema
 - Quem monta o gabarito de páginas reais (D4); quem tem o papel Técnico além do dono (E2).
 - N-C5a (gestão das integrações), B6 (priorização das 31 frentes de diligência) e A6 (primeiro cliente além da
   Partners) seguem em aberto.
-- No BP v2, saiu do slide 10 o prazo "3 a 6 meses" e ficou no slide 5 "mais de 30 fontes"; eu não fechei
-  esses dois pontos — pergunte se precisar.
+- O prazo "Em 3 a 6 meses" voltou ao slide 10 na v4 do BP (decisão minha, 21/11). Ele vale para os primeiros
+  clientes além da Partners; confira se o plano é coerente com ele. O "mais de 30 fontes" do slide 5 segue sem
+  fechamento — pergunte se precisar.
 
 Comece lendo os arquivos da seção 1 e me apresente o item 4.1 (estrutura proposta, esqueleto do plano e lista
 de arquivos) para aprovação.
