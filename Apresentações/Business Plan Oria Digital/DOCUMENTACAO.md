@@ -31,58 +31,28 @@ Base das mudanças: o registro de decisões **v0.1.3** ([`Business Plan/07_decis
 | 11 | Anexo 1 | 6 blocos e 31 frentes de diligência | Mapa da diligência |
 | 12–14 | Anexo 2 (1/3 a 3/3) | Blocos 1–2, 3–4 e 5–6 | Cada frente com a área de impacto e a alavanca de valor |
 
-## 3. Dados e fontes (reconferidos na fonte primária em 19/11/2026)
+## 3. Dados e fontes
 
-| Slide | Dado | Fonte e recorte | Situação |
-|---|---|---|---|
-| 2 | **R$ 244,4 bi** em dívidas, com **9,3 milhões de empresas inadimplentes**: recorde | Serasa Experian, "Novo recorde: inadimplência das empresas chegou a 9,3 milhões em agosto", 20/10/2026 (dado de ago/2026) | **Conferido na fonte**. Substituiu os "R$ 18,9 bi do OBRE", que não foram encontrados em fonte primária |
-| 2, 4 | "3 meses" para montar os números à mão | Experiência da Oria Partners | Sem fonte externa |
-| 4 | 2.466 empresas **pediram recuperação judicial** em 2025 (977 processos) | Serasa Experian, 07/04/2026 | **Conferido na fonte**. Recorte corrigido: são pedidos do ano, não o estoque "em recuperação" |
-| 4 | 1.581 transações de M&A em 2025 | KPMG, Pesquisa de Fusões e Aquisições 2025 – 4º trimestre (dado do **ano inteiro**) | **Conferido na fonte**. Rótulo corrigido de "KPMG 4T25" para "KPMG (2025)" |
-| 4 | R$ 2,8 tri de crédito a pessoas jurídicas em set/2026 | Banco Central, Estatísticas Monetárias e de Crédito, 29/10/2026 | **Conferido na fonte** |
-| 4 | R$ 56 bi de **captação líquida** em FIDCs em 2026 (R$ 56,1 bi de jan a out/2026) | Anbima, "Fundos registram saída líquida de R$ 39,4 bilhões em outubro", 10/11/2026 | **Conferido na fonte**. Recorte explicitado: é captação líquida, não ofertas (ofertas de FIDC: R$ 87,8 bi de jan a set/2026) |
-| 5 | "mais de 30 fontes" | O slide 6 mostra só as principais | Mantido por decisão do dono |
-
-**Exemplo do slide 7.** É ilustrativo, e o slide diz isso duas vezes. A empresa tem R$ 500 mi de dívida e R$ 200 mi de custos operacionais por ano.
-
-| Alavanca | Conta | Natureza |
-|---|---|---|
-| Juro acima do mercado | 2 p.p. × R$ 500 mi = **R$ 10 mi / ano** | Recorrente |
-| Despesa acima do setor | 10% × R$ 200 mi = **R$ 20 mi / ano** | Recorrente |
-| Crédito tributário | **R$ 20 mi**, recuperados uma vez e usados para amortizar dívida | Único (barra verde, sem "/ ano") |
+A tabela de cada dado do deck, com fonte, recorte e situação, e o exemplo do slide 7 moram em
+[`Business Plan/01_negocio/MODELO_DE_NEGOCIO_E_ESTRATEGIA.md`](../../Business%20Plan/01_negocio/MODELO_DE_NEGOCIO_E_ESTRATEGIA.md)
+(seções 5 e 6), que é a fonte oficial do negócio (K5). Todo número novo é reconferido lá antes de
+entrar no deck (J3).
 
 **Anexos.** As contagens dos títulos batem com os selos de cada frente: slide 11, 3 + 6 + 8 + 7 + 4 + 3 = 31 frentes; slide 12, 5 com efeito no EBITDA; slide 13, 10 em risco e 10 em caixa; slide 14, 6 em risco.
 
 ## 4. Slide 8: modelo de negócio (sem valores)
 
-| Receita | Destaque | Descrição |
-|---|---|---|
-| Diagnóstico por mandato | Receita de entrada · por mandato | Base conferida, modelo financeiro, dossiê e apresentação aos credores |
-| Acompanhamento contínuo | Mensal recorrente · por contrato | Empresas em pós-reestruturação e carteiras de credores |
-| Plataforma por usuário | Licença de uso · por perfil de acesso | Empresas, credores e fundos acompanham seus mandatos e carteiras |
-| Bônus por resultado | Variável · complemento da receita | Mediante contrato, atrelado ao plano aprovado |
+O modelo de cobrança, o texto "O que vendemos" e a regra de que os valores saem do piloto (J1, J2)
+estão em [`MODELO_DE_NEGOCIO_E_ESTRATEGIA.md`](../../Business%20Plan/01_negocio/MODELO_DE_NEGOCIO_E_ESTRATEGIA.md)
+(seção 4). O modelo de projeção com premissas em branco está em
+[`MODELO_DE_PROJECAO.md`](../../Business%20Plan/01_negocio/MODELO_DE_PROJECAO.md).
 
-"O que vendemos" (texto do dono): *"Uma plataforma integrada e auditada, operada pela nossa equipe. O cliente envia os documentos e acompanha tudo em um lugar só: base conferida, modelo financeiro, dossiê e alertas com suporte direto."*
+## 5. Slide 9: os agentes e o status real
 
-Os **valores** saem do piloto, quando custo de IA, horas de analista e prazo forem medidos (J2, J6). O modelo de projeção com premissas em branco é documentação interna, não slide.
-
-## 5. Slide 9: os agentes e o status real (só nesta documentação)
-
-O slide **não mostra status** (J4): mostra o catálogo de 11 agentes (B1) e o que cada um faz. **Nenhum agente existe hoje como agente**; o que existe são módulos do sistema que a v1 transforma em agentes, começando pelo piloto (K6). Use esta tabela na conversa e atualize-a quando o plano mudar.
-
-| Agente | O que faz (texto do slide) | Base que existe hoje no sistema | No piloto (K6)? |
-|---|---|---|---|
-| Captador | Lê os documentos e busca dados na Receita e nos bancos | Leitura de 4 formatos, duplicata por fingerprint, Kit do mandato (0300/0301). Captação externa (SPED, Registrato, OFX) **não existe** | Sim (extração + captação externa) |
-| Conferidor | Cruza a contabilidade com fontes externas e aponta divergências | Conferências de balanço, caixa e DRE (0009, 0015, 0105, 0133); mútuos (0117, 0124). Cruzamento com fontes externas **não existe** | Sim |
-| Mercado | Compara a empresa e os juros com o setor e o mercado | Premissas de IPCA e Selic do Focus no export. Juro por contrato e despesas vs. setor **não existem** | Sim |
-| Risco | Mapeia processos, protestos e dívida ativa antes da crise | Dossiê de processos e notícias planejado no MVP; scorecard só como estrutura | Não (dossiê de processos entra no piloto como entrega) |
-| Caixa | Mostra até onde o caixa aguenta, semana a semana | Capital de giro (NCG e ciclo) e aging conciliado (0274). 13 semanas **não existe** | Sim |
-| Dívida | Mapeia a dívida e mede a capacidade de pagamento | Mapa da dívida e ND/EBITDA em fórmula. Covenants e waterfall **não existem** | Sim |
-| Estrategista | Propõe cortes, renegociação e propostas aos credores | Plano em 3 cenários (Base, Cliente, Stress). Simulação de propostas **não existe** | Não |
-| Entregas | Monta modelo, dossiê e apresentação, com a prova | Excel do comitê com 14 abas em fórmula; base de dados exportável. Rastreabilidade número → página **não existe** | Excel + PDF no piloto |
-| Supervisor / Orquestrador | Coordena os agentes e media divergências | **Não existe** | Sim |
-| Auditor | Revisa o trabalho de todos os agentes | **Não existe** (o equivalente hoje são as conferências em SQL e o Portão 2) | Sim |
-| Autoaprimoramento | Propõe melhorias a partir dos erros | **Não existe** | Não (entra depois do piloto, F1) |
+O slide **não mostra status** (J4). O catálogo dos 11 agentes e o **status real de cada um**, com a
+evidência no código, ficam em [`Business Plan/03_agentes/AGENTES.md`](../../Business%20Plan/03_agentes/AGENTES.md).
+Use aquela tabela na conversa. Em resumo: nenhum agente existe hoje como agente; o piloto (K6) traz
+Conferidor, Dívida, Caixa e Mercado, com Supervisor e Auditor.
 
 ## 6. Identidade visual
 
