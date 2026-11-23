@@ -21,5 +21,8 @@ Três decisões do dono que uma sessão futura não deve "melhorar":
   limpeza quando o dono manda, na conversa — nunca por CI verde ou aprovação no GitHub.
 - **Revisão em até 3 ciclos**, parando antes quando nenhum CRÍTICO/ALTO sobrevive. Não 3 a 5:
   o painel de 5 revisores foi cortado para 2 em 16/09/2026 porque repetiam achados.
+- **Triagem antes de tudo** (C código · D documentação · R rodada real · não usar). Medido:
+  150 de 327 commits (23/09–23/11/2026) tocaram só documentação, e lá suíte de produto e painel
+  de revisão não acham nada. A triagem é revista contra o diff antes do PR: D com código vira C.
 - **Regra copiada para dentro do autopilot é defeito.** Se uma etapa muda, muda no arquivo do
   comando dela; o autopilot aponta, não repete.
