@@ -1,7 +1,13 @@
 ---
 description: "Do pedido ao PR verde, no processo da casa: triagem → rodada → revisão em ciclos → fechamento → PR → CI e Sonar — e para antes do merge, que é do dono"
 argument-hint: "<o pedido, o defeito ou o sintoma>"
+disable-model-invocation: true
 ---
+
+<!-- Por que `disable-model-invocation`: todo comando daqui também entra na lista de skills que o
+modelo vê (medido em 23/11/2026: o autopilot apareceu nela na mesma sessão em que foi criado).
+Sem a trava, uma sessão que só conversava podia decidir sozinha abrir branch, commitar e abrir
+PR. Este comando age para fora do repositório; só o dono o dispara. -->
 
 Pedido: **$ARGUMENTS**
 
@@ -30,17 +36,27 @@ contexto sem achar nada. A trilha decide o que roda; **as sete regras valem em t
 
 | Trilha | Quando | O que muda |
 |---|---|---|
-| **C — código** | O pedido vai tocar `Supabase/`, `N8N/`, `portal/`, ou qualquer `.mjs`/`.ts`/`.sql` executável — inclusive portão e hook em `.claude/` | Tudo, etapas 2 a 8. Os extras da etapa 2 só para o domínio tocado |
-| **D — documentação** | Só texto que não executa: `ESTADO.md`, `MAPA`, `Arquitetura do Sistema/`, fichas, memória, `.md` de comando e agente | Etapa 2 enxuta, etapa 3 condicional, etapa 4 enxuta |
+| **D — documentação** | **Lista fechada:** só arquivos `.md` fora de `Supabase/`, `N8N/`, `portal/` e `.github/` (`ESTADO.md`, `MAPA`, `Arquitetura do Sistema/`, fichas, memória, comando, agente), mais o `grafo.jsonl` que o `indexar.mjs` regera | Etapa 2 enxuta, etapa 3 condicional, etapa 4 enxuta |
+| **C — código** | **Todo o resto.** Inclui o que não parece código e executa: `.yml` do CI, `.json` de workflow e fixture, `settings.json`, hook e portão em `.claude/` | Tudo, etapas 2 a 8. Os extras da etapa 2 só para o domínio tocado |
 | **R — rodada real** | O dono rodou um book no n8n e quer saber o que aconteceu | Siga `Arquitetura do Sistema/5 Prompts/01-rodada-real.md`. Sem defeito a corrigir → relatório e **fim, sem PR**. Com defeito → cada um vira trilha C |
 | **Não use o autopilot** | Pergunta, explicação, análise que não vai mudar arquivo; aplicar migration em produção, republicar o n8n, fazer deploy (são do dono) | Responda direto, ou devolva ao dono |
 
-Ficou em dúvida entre C e D → **C**. Errar para o lado caro custa contexto; errar para o barato
-manda código sem revisão.
+Por que D é a lista fechada, e não C: a primeira versão listava o que era código (três
+diretórios e três extensões) e todo o resto caía em D — os 4 `.yml` de `.github/workflows/`
+passavam como documentação, sem revisão. Lista de exceção esquece; lista fechada só erra para o
+lado caro. Ficou em dúvida → **C**.
 
-**A triagem é revista antes do PR** (etapa 5): `git diff --name-only origin/main...HEAD`. Se a
-trilha era D e o diff tem arquivo de código, **volte e rode a trilha C** sobre ele — trilha leve
-que deixou passar código é estágio desligado com cara de limpo (regra 7).
+**A triagem é revista antes do PR** (etapa 5), pelo mesmo critério, sem julgamento:
+
+```bash
+git fetch -q origin main   # base velha infla o diff: medido 53 arquivos contra 6 reais, em 23/11/2026
+git diff --name-only origin/main...HEAD \
+  | awk '/^(Supabase|N8N|portal|\.github)\// || (!/\.md$/ && $0 != ".claude/conhecimento/grafo.jsonl")'
+```
+
+Saída vazia confirma D. **Qualquer linha impressa é código: volte e rode a trilha C** sobre ela —
+trilha leve que deixou passar código é estágio desligado com cara de limpo (regra 7). E diga na
+linha da etapa quantos arquivos o filtro leu: zero arquivos lidos não confirma D, é diff vazio.
 
 ## 2. Entender e executar
 

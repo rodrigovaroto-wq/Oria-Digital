@@ -23,6 +23,9 @@ Três decisões do dono que uma sessão futura não deve "melhorar":
   o painel de 5 revisores foi cortado para 2 em 16/09/2026 porque repetiam achados.
 - **Triagem antes de tudo** (C código · D documentação · R rodada real · não usar). Medido:
   150 de 327 commits (23/09–23/11/2026) tocaram só documentação, e lá suíte de produto e painel
-  de revisão não acham nada. A triagem é revista contra o diff antes do PR: D com código vira C.
+  de revisão não acham nada. A triagem é revista contra o diff antes do PR: D com código vira C. **D é a lista
+  fechada** (`.md` fora das pastas de código); a versão que listava o código deixava os `.yml` do
+  CI passarem como documentação.
+- **Só o dono dispara** (`disable-model-invocation: true`): o comando age fora do repositório.
 - **Regra copiada para dentro do autopilot é defeito.** Se uma etapa muda, muda no arquivo do
   comando dela; o autopilot aponta, não repete.
