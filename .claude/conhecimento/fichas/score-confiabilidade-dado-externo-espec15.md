@@ -21,8 +21,13 @@ Admiralty, Almirantado, truth discovery, Fellegi-Sunter, itens 2.18 e 2.19, D15.
 
 - **O score sozinho nunca aprova.** Ordem: vetos → pisos por dimensão → classe → score ponderado
   com os pesos do agente que vai usar o dado (§5A). Média sem piso esconde o zero (regras 1 e 7).
-- **O score é do dado PARA UM USO.** O mesmo Focus passa no Mercado e cai em revisão no Caixa. Pesos
-  e mínimos do §5A são hipótese de julgamento, conferida em 12 casos (`5A.6`), não medida.
+- **O score é do dado PARA UM USO.** O Registrato passa na Dívida e trava nas Entregas sem
+  autorização de envio. Pesos do §5A (v2) = mediana de três avaliações independentes; os 13 casos
+  saem de `15_anexos/casos_do_score.py` — mude o número no script primeiro, depois cole a tabela.
+- **A v1 errou e foi corrigida pela comparação cega (23/11):** contava A4 duas vezes, tratava o
+  espelho do BCB como confirmação independente e deixava processo de provedor passar sozinho no Risco.
+- **Nota ausente não tem valor fixo:** sai da conta (`na`/`nm`), a cobertura mínima freia, e a fonte
+  em estreia tem teto (90 oficial, 80 demais) até 30 conferências.
 - **Divergir do documento do cliente NÃO baixa o score do externo.** É o achado (D3). Só baixa a
   divergência com outra fonte externa **independente** ou com uma identidade aritmética.
 - **Duas fontes que leem a mesma origem são uma confirmação, não duas** (dimensão A4).

@@ -36,8 +36,8 @@ limiar inventado tem a mesma aparência de um limiar medido.
 - **A conclusão central da pesquisa:** **um número único não serve para barrar.** Uma média esconde
   um zero numa dimensão (regras 1 e 7). O portão decide em camadas: **vetos → piso por dimensão →
   classe → score ponderado pelos pesos do agente** (§5A). O score sozinho nunca aprova.
-- **Pesos e mínimos por agente (§5A):** proposta inicial, de julgamento, conferida em 12 casos. Roda
-  em modo sombra até a calibração.
+- **Pesos e mínimos por agente (§5A, v2):** mediana de três avaliações independentes, com 7 regras
+  aprovadas pelo dono e 13 casos recalculáveis por script. Roda em modo sombra até a calibração.
 - **A limitação central:** concordância não é verdade. Duas fontes que copiam a mesma origem
   concordam no erro. E quando o dado externo **diverge do cliente**, isso é o achado que a Oria
   procura, não defeito da fonte: essa divergência **não** pode baixar o score do externo.
@@ -129,7 +129,7 @@ motivo) ou `nao_se_aplica`. **Nunca um padrão.**
 | B3 | **Completude** | Veio tudo o que devia? | Esperado × obtido: meses da série, CNPJs do perímetro consultados, tribunais cobertos | BCBS 239, princípio 4: exceção de completude identificada e documentada |
 | B4 | **Validade** | Tem forma de dado certo? | Tipo, domínio, unidade, dígito do CNPJ, data possível. **No banco** (`check`), não em nó Code | ISO/IEC 25012 (conformidade); degrau 4 da escada |
 | B5 | **Plausibilidade** | Faz sentido diante do histórico? | Salto fora da distribuição da própria série; número fora da faixa do setor | Pilar "distribuição" da observabilidade de dados |
-| B6 | **Identidade** | O dado é mesmo desta empresa (ou pessoa)? | CNPJ exato = certo. Por nome (processos, notícias): probabilidade de correspondência com **dois limiares** — acima, aceita; entre, humano; abaixo, recusa | Fellegi–Sunter (ligação de registros, faixa de revisão manual) |
+| B6 | **Identidade** | O dado é mesmo desta empresa (ou pessoa)? | **Veto em três níveis, sem peso:** chave exata (CNPJ/CPF) passa; por nome (processos, notícias) **nunca passa sozinho** — vai ao humano; chave divergente reprova. A probabilidade de correspondência só decide qual candidato por nome nem chega ao humano | Fellegi–Sunter (ligação de registros, faixa de revisão manual) |
 | B7 | **Custódia** | Dá para provar de onde veio e que não mudou? | Hash do conteúdo bruto, data e endpoint da coleta, versão do coletor, recibo ou assinatura em E2 | ISA 505 (A11, A12); W3C PROV; itens 1.B6 e 2.15 |
 
 **A regra da divergência (B1) — a decisão mais importante do desenho.** A referência pode ser de três
@@ -154,34 +154,46 @@ bureau que lê o balanço que o cliente publicou), a concordância é circular (
 
 ## §4 — Como as dimensões viram decisão
 
-Em quatro passos, nesta ordem. Os três primeiros decidem; o quarto só exibe.
+A ordem é fixa. Cada camada só é lida se a anterior passou. As regras completas, com os números,
+estão no §5A.
 
-1. **Vetos** (determinísticos, sem limiar a calibrar). Qualquer um deles → **BLOQUEADO**, seja qual
-   for o resto:
-   - sem autorização válida (A5) — já previsto no banco pelo item 1.B7;
-   - sem sinal de execução, ou `falhou`/`nao_consultado` lido como dado (C1);
-   - identidade abaixo do limiar inferior (B6);
-   - custódia quebrada: hash diferente, recibo ausente em E2 (B7);
-   - validade reprovada (B4);
-   - vencido além do prazo crítico da fonte (B2).
-2. **Piso por dimensão.** Cada par (tipo de dado × etapa) declara um mínimo para cada dimensão que
-   importa a ele. Abaixo do piso → o desfecho que o par declarou (§5). Dimensão `nao_medido` numa
-   dimensão com piso → trata como abaixo do piso, com o motivo.
-3. **Classe** do dado, pelo elo mais fraco entre as dimensões significativas:
+1. **Vetos** (sim ou não, fora da média). Qualquer um → **REPROVADO**:
+   - **A5 base legal, por destino:** o mesmo dado pode servir ao uso interno e não poder ir a um
+     terceiro (cliente, credor). Proibição contratual expressa reprova; autorização de envio ainda
+     não registrada leva a REVISÃO.
+   - **C1 execução:** sem prova de que a consulta rodou, não há dado — há "não consultado".
+   - **B4 validade:** por registro. O registro inválido sai, e a perda aparece na completude (B3).
+   - **B6 identidade, em três níveis:** chave exata (CNPJ/CPF) passa; correspondência por nome
+     **nunca passa sozinha** (REVISÃO); chave divergente reprova.
+   - **A1 "sem origem declarada".**
+   - **B7 em documento oficial trazido pelo cliente** (SPED, Registrato, certidão) sem recibo ou
+     autenticidade conferidos: deixa de contar como dado externo (pode ser adulteração).
+   - **B2 acima do prazo crítico** da fonte, medido contra a **data de referência do uso**.
+   - **"Nada consta"** sem execução provada (C1) e sem cobertura declarada (B3): não vale como
+     resposta negativa.
+2. **Travas** (levam a REVISÃO em todo agente; no Captador, à quarentena):
+   - conflito entre fontes externas independentes, ou identidade aritmética que não fecha (B1 = 0);
+   - identidade por nome (B6);
+   - dado **opinativo** (score de bureau, rating, notícia) fora do Risco: o score mede se a
+     transmissão é confiável, não se a opinião é verdadeira;
+   - frescor abaixo de 60 (fora do Captador).
+3. **Cobertura**: a parte do peso que de fato foi medida. Abaixo do mínimo do agente → REVISÃO.
+4. **Pisos por dimensão** do agente.
+5. **Score ponderado** com os pesos do agente que vai usar o dado, comparado com o mínimo dele.
 
-   | Classe | Quer dizer | Exemplo |
-   |---|---|---|
-   | **Confirmado** | Fonte primária, ou ≥ 2 fontes independentes concordando dentro da tolerância | IPCA do IBGE que bate com o espelho do BCB |
-   | **Provável** | Uma fonte com bom histórico, sem contradição independente | Série do SGS sem segunda fonte |
-   | **Possível** | Fonte sem histórico, ou identidade por nome na faixa de revisão aceita pelo humano | Processo achado por nome e confirmado pelo analista |
-   | **Contestado** | Fontes externas independentes discordam acima da tolerância | Dois provedores de processos com contagens diferentes |
-   | **Não julgável** | Falta dimensão significativa medida | Fonte nova, sem referência nenhuma |
+**A classe é rótulo, não portão** (com uma exceção, nas Entregas: §5A.4):
 
-   "Não julgável" é falta de conhecimento nosso, não defeito do dado — o código do Almirantado faz a
-   mesma distinção no grau 6. Ele **aparece**, com o motivo.
-4. **Score composto (0–100)**: média ponderada das notas, com os pesos **do agente ou da etapa que
-   vai usar o dado** (§5A). Pedido do dono em 23/11: o portão lê o score **depois** dos vetos e dos
-   pisos, nunca no lugar deles — é o que impede a média de esconder um zero.
+| Classe | Quer dizer | Exemplo |
+|---|---|---|
+| **Confirmado** | Confirmado por fonte independente, ou a identidade aritmética fecha | Extrato cujo saldo fecha |
+| **Provável** | Origem oficial sem segunda fonte possível, ou confirmado só por espelho da mesma origem | Focus; IPCA do IBGE com o espelho do BCB |
+| **Possível** | Parceiro ou agregador sem confirmação | Processo achado pela API do provedor |
+| **Opinião** | Saída de modelo de terceiro | Score de bureau |
+| **Contestado** | Fontes externas independentes discordam | IPCA do IBGE ≠ BCB |
+| **Não julgável** | Cobertura abaixo do mínimo | Fonte nova sem nenhuma referência |
+
+"Não julgável" é falta de conhecimento nosso, não defeito do dado — o código do Almirantado faz a
+mesma distinção no grau 6. Ele **aparece**, com o motivo.
 
 **Fonte e dado saem lado a lado, como no código do Almirantado:** "fonte primária · Confirmado",
 "agregador · Possível". Um rótulo de duas partes diz mais do que um número.
@@ -224,136 +236,182 @@ promoção por gabarito e o registro de quem mudou o quê.
 
 ---
 
-## §5A — Pesos, notas de corte e classificação por agente (proposta inicial, 23/11/2026)
+## §5A — Pesos, notas de corte e classificação por agente (v2, 23/11/2026)
 
 Pedido do dono: um peso percentual para cada nota e um score mínimo, por agente de IA e por etapa,
 para que **só o dado de alta confiabilidade passe sozinho** para a etapa seguinte.
 
-**Status destes números: hipótese inicial, não medida** (D15.8). São escolhas de julgamento,
-conferidas contra 12 casos realistas (tabela 5A.6), e não contra um gabarito. Eles entram em
-**modo sombra** — calculam, gravam e mostram, sem barrar. Só passam a bloquear depois da etapa 4
-(§12), quando a taxa de erro por classe tiver sido medida. Até lá, só os vetos bloqueiam (D15.4).
+**Como esta versão nasceu.** A v1 (a minha proposta) foi comparada com **três avaliações
+independentes** que não viram os números dela. Os três concordaram muito entre si: o mesmo peso
+variou no máximo 5 pontos, e 10 no Captador. Comigo concordaram menos: de 10 a 32 pontos de peso
+deslocados por agente. Nos 8 casos comuns, a v1 concordou com a maioria em 53 de 64 julgamentos.
+Das 11 divergências, em 6 a v1 deixava passar o que a maioria segurava. A v2 adota:
+1. a **estrutura** dos três;
+2. os **pesos na mediana** dos três;
+3. as **7 regras** que eles trouxeram, aprovadas pelo dono em 23/11/2026.
+
+O que mudou, item a item, está no §5A.8.
+
+**Status: hipótese inicial, não medida** (D15.8). Os números rodam em **modo sombra**: calculam,
+gravam e mostram, sem barrar. Só passam a bloquear depois da etapa 4 do §12. Até lá, só os vetos
+bloqueiam (D15.4).
 
 ### 5A.1 — Como cada nota é dada (rubrica objetiva, 0 a 100)
 
-Cada dimensão tem degraus fixos. "Sem histórico" e "sem referência" são **estados medidos**
-(contamos zero conferências; procuramos e não há referência), não ausências, por isso têm degrau.
+Cada nota tem três estados possíveis, e nenhum vira zero nem média:
+- **medida**, com o valor;
+- **não se aplica** (`na`): sai da conta e da cobertura;
+- **não medida** (`nm`): podia ter sido medida e não foi; sai da conta, mas **reduz a cobertura**.
 
 | Cód. | Dimensão | Degraus da nota |
 |---|---|---|
-| A1 | Origem | **100** produtor primário direto, ou documento oficial com recibo ou assinatura conferidos · **85** espelho oficial, ou canal regulado (Open Finance por integradora autorizada) · **70** parceiro contratado que declara a origem · **50** agregador ou revendedor sem origem por item · **30** raspagem · **0** sem origem declarada |
-| A2 | Histórico de acerto | **Limite inferior de Wilson (95%)** de acertos ÷ conferências × 100, com ≥ 30 conferências (30 em 30 → 89; 300 em 300 → 99; a mesma régua da D6). **Com menos de 30:** 70 se A1 ≥ 85, senão 40 (a origem oficial vale como ponto de partida; o resto começa desconfiado) |
-| A3 | Estabilidade | % de coletas com sucesso nas últimas 30, menos 20 por mudança de endereço ou de esquema não anunciada nos últimos 12 meses (mínimo 0). Fonte sem coleta anterior: 70 |
-| A4 | Independência | **100** origem própria declarada · **50** origem compartilhada com outra fonte usada no mesmo cruzamento · **30** origem desconhecida |
-| B1 | Concordância | **100** confirmado por ≥ 2 fontes externas independentes, ou a identidade aritmética fecha · **85** confirmado por 1 fonte independente · **50** sem referência independente disponível · **30** diverge até 2× a tolerância · **0** diverge acima de 2× a tolerância. **A comparação com o documento do cliente não entra** (D15.7) |
-| B2 | Frescor | **100** idade ≤ 1× a cadência da fonte · **70** ≤ 2× · **40** ≤ 3× · acima do prazo crítico: **veto** |
-| B3 | Completude | Obtidos ÷ esperados × 100 (meses da série, contas, CNPJs do perímetro, tribunais da UF) |
-| B5 | Plausibilidade | **100** dentro de 3 desvios-padrão da própria série · **50** entre 3 e 5 (alerta) · **0** acima de 5 · série com menos de 12 pontos: **60** (não testável) |
-| B6 | Identidade | **100** chave exata (CNPJ ou CPF) · **probabilidade × 100** quando acima do limiar superior (inicial 0,95) · **90** quando o humano confirmou · entre 0,60 e 0,95 sem revisão: não passa, vai ao humano · abaixo de 0,60: **veto** |
+| A1 | Origem | **100** produtor primário, ou documento oficial com autenticidade conferida · **90** espelho oficial · **85** canal regulado (Open Finance por integradora autorizada) · **70** parceiro que declara a origem · **45** agregador ou provedor sem origem declarada · **25** raspagem · **sem origem: veto** |
+| A2 | Histórico de acerto | **Fonte em estreia** (< 10 conferências): `na`, com **teto no score** (5A.3). Depois, limite inferior de Wilson (95%) de acertos ÷ conferências × 100. **Só conta a conferência feita contra uma referência de origem independente conhecida**; senão, o histórico fica circular |
+| A3 | Estabilidade | % de coletas com sucesso nas últimas 30, menos 20 por mudança de endereço ou de esquema não anunciada nos últimos 12 meses. Sem coleta anterior: `nm` |
+| B1 | Concordância | **100** confirmado por fonte externa independente · **90** a identidade aritmética fecha (saldo inicial + movimento = final) · **70** confirmado só por espelho da mesma origem · **0** conflito acima da tolerância (**trava**) · `na` quando não existe segunda fonte possível · `nm` quando podia ter sido cruzado e não foi, ou quando a origem da outra fonte é desconhecida (a confirmação não conta). **A comparação com o documento do cliente não entra** (D15.7) |
+| B2 | Frescor | Medido contra a **data de referência do uso**, não contra hoje. **100** até 1× a periodicidade da fonte · **50** com 2× · **0** com 3× (linear entre os pontos) · acima do prazo crítico: **veto** |
+| B3 | Completude | Obtidos ÷ esperados × 100 (meses, contas, CNPJs do perímetro, tribunais). Cobertura de tribunais não declarada: `nm` |
+| B5 | Plausibilidade | **100** dentro de 3 desvios-padrão da própria série · **50** entre 3 e 5 · **0** acima de 5 · menos de 12 pontos: `nm` · dado sem série numérica (processo): `na` |
+| B7 | Custódia | **100** assinatura ou recibo conferido · **80** API oficial com hash gravado na captura · **75** canal regulado com hash na captura · **50** parceiro de origem declarada com hash na captura · **30** provedor sem origem declarada (o nosso hash só prova que nada mudou depois de chegar) · **20** nenhuma prova |
 
-**Vetos, fora dos pesos** (são sim/não): A5 base legal · B4 validade · B7 custódia · C1 sinal de
-execução · B6 abaixo do limiar inferior · B2 acima do prazo crítico.
+**A4 (independência) e B6 (identidade) não têm peso.** A4 decide quanto uma confirmação vale em B1;
+dar peso a ela também contaria a mesma coisa duas vezes. B6 é veto em três níveis (§4).
 
-**Dimensão com peso ≥ 10% que ficou `nao_medido`** (o cálculo não rodou) não vira zero nem média:
-o dado é **Não julgável** e vai ao humano.
+### 5A.2 — Pesos por agente (% ; cada linha soma 100)
 
-### 5A.2 — Pesos por agente (cada linha soma 100%)
+Mediana das três avaliações. No Mercado a mediana somava 95, e os 5 pontos foram para o Frescor:
+é onde a v1 errava, deixando passar Focus vencida.
 
-| Agente / etapa | A1 Origem | A2 Histórico | A3 Estabil. | A4 Indep. | B1 Concord. | B2 Frescor | B3 Complet. | B5 Plausib. | B6 Identid. | Por que esse perfil |
-|---|---|---|---|---|---|---|---|---|---|---|
-| **Captador** (captação e identidade) | 10 | 5 | **20** | 5 | 5 | 15 | **20** | 5 | 15 | Na entrada importa a coleta ter rodado inteira e estável. Confiança fina é dos portões seguintes |
-| **Conferidor** (cruzamento) | **25** | **20** | 0 | 15 | 10 | 15 | 5 | 5 | 5 | Para servir de **referência** contra o cliente, a fonte tem de ser de origem forte, com acerto comprovado e independente |
-| **Mercado** | **25** | 10 | 10 | 5 | 15 | **20** | 10 | 5 | 0 | Séries oficiais: origem e frescor decidem; entidade não se aplica |
-| **Caixa** | 15 | 10 | 5 | 5 | **25** | 15 | **20** | 5 | 0 | O extrato tem de fechar (saldo inicial + movimento = final) e cobrir todas as contas e meses |
-| **Dívida** | **25** | 10 | 0 | 5 | 15 | **20** | 15 | 5 | 5 | Registrato e juros: origem oficial, data-base recente, todas as operações |
-| **Risco** | 15 | 10 | 5 | 10 | 10 | 15 | 15 | 0 | **20** | Processos e protestos: o maior erro é o homônimo; depois, tribunal não coberto |
-| **Estrategista** | 20 | 15 | 5 | 5 | 15 | **20** | 10 | 10 | 0 | Premissas de proposta aos credores: dado vencido ou implausível muda a proposta |
-| **Entregas** (book e documento externo) | 20 | 15 | 0 | 10 | **20** | 15 | 10 | 5 | 5 | O que sai da Oria precisa ser confirmado e independente |
+| Agente / etapa | A1 Origem | A2 Histórico | A3 Estabil. | B1 Concord. | B2 Frescor | B3 Complet. | B5 Plausib. | B7 Custódia | Por que esse perfil |
+|---|---|---|---|---|---|---|---|---|---|
+| **Captador** | **20** | 10 | 15 | 5 | 10 | **20** | 10 | 10 | Na entrada importa saber de onde veio e se veio tudo; instabilidade aparece aqui primeiro. Julgar o valor é de quem vem depois |
+| **Conferidor** | **25** | 15 | 5 | **20** | 10 | 10 | 5 | 10 | O dado externo é a **régua**: régua torta gera achado falso contra o cliente. Plausibilidade baixa de propósito (o implausível pode ser o achado) |
+| **Mercado** | **25** | 10 | 5 | 15 | **25** | 10 | 10 | 0 | Série oficial, mas que envelhece em semanas. Custódia 0: série pública se busca de novo |
+| **Caixa** | 15 | 5 | 5 | **25** | 20 | **20** | 5 | 5 | O saldo que fecha é a prova mais forte de extrato; conta ou dia faltando muda o caixa |
+| **Dívida** | 20 | 5 | 0 | 15 | 10 | **25** | 5 | **20** | Credor omitido é o erro mais caro do mapa da dívida; Registrato chega pelo cliente, então o recibo pesa |
+| **Risco** | **20** | 15 | 5 | 15 | 15 | **20** | 5 | 5 | O perigo é o falso "nada consta" (tribunal não coberto) e o provedor sem origem declarada |
+| **Estrategista** | 20 | 15 | 0 | **25** | 15 | 15 | 10 | 0 | Proposta a credor sobre número não corroborado é o erro de maior consequência; recebe dado já filtrado |
+| **Entregas** | 20 | 10 | 0 | 15 | 15 | 10 | 5 | **25** | O que sai da Oria precisa provar origem e integridade diante de terceiros |
 
-**Supervisor, Auditor e Autoaprimoramento não têm pesos**, porque não consomem dado externo
-diretamente:
-- **Supervisor:** só distribui a um especialista o dado APROVADO no portão daquele especialista. Só
-  decide sozinho (B3b-1) quando todo dado do item tem score ≥ 90 no agente de origem.
-- **Auditor:** confere 100% dos usos. Todo dado usado tem um registro em `portao_decisao` (regra 7) e
-  o score recalculado bate com o gravado. Divergência é falha do portão, com gravidade crítica.
-- **Autoaprimoramento:** lê as reprovações e os furos de portão para propor ajuste de peso ou piso.
-  Quem decide é o Técnico.
+**Supervisor, Auditor e Autoaprimoramento não têm pesos (4 de 4 avaliações):**
+- **Supervisor:** só roteia e aplica o portão do agente de destino. Um segundo portão poderia
+  divergir do primeiro.
+- **Auditor:** vê tudo, inclusive os reprovados, com a decomposição por dimensão. Ele confere:
+  - que todo dado usado tem registro em `portao_decisao` (regra 7);
+  - que o score recalculado bate com o gravado (se não bater, é falha crítica);
+  - uma **amostra de 5% dos aprovados, mais todos os que passaram com até 5 pontos de folga**.
+  Essa amostra é o que alimenta o histórico de acerto (A2).
+- **Autoaprimoramento:** propõe pesos novos a partir das reprovações, com teste retroativo. Quem
+  aplica é sempre um humano.
 
-### 5A.3 — Score mínimo, pisos e classe mínima
+### 5A.3 — Score mínimo, cobertura mínima, pisos e teto da fonte em estreia
 
-| Agente / etapa | Score mínimo | Pisos (nota mínima numa dimensão, valha o que valer a média) | Classe mínima |
+**Score** = Σ(peso × nota) ÷ Σ(pesos das notas medidas). **Cobertura** = pesos medidos ÷ pesos
+aplicáveis. As duas aparecem sempre juntas.
+
+| Agente / etapa | Score mínimo | Cobertura mínima | Pisos (nota mínima, valha o que valer a média) |
 |---|---|---|---|
-| Captador | **70** | — (os vetos bastam na entrada) | Qualquer (guarda até o contestado, marcado) |
-| Conferidor | **85** | A1 ≥ 70 · B2 ≥ 70 · **B6 = 100** (cruzamento só por chave exata) · B1 ≥ 50 | Provável |
-| Mercado | **80** | A1 ≥ 70 · B2 ≥ 70 · B1 ≥ 50 | Provável |
-| Caixa | **85** | **B1 ≥ 85** (o saldo fecha) · **B3 ≥ 95** | Provável |
-| Dívida | **85** | A1 ≥ 85 · B2 ≥ 70 · B3 ≥ 95 · B1 ≥ 50 | Provável |
-| Risco | **75** | **B6 ≥ 90** · B3 ≥ 80 · B1 ≥ 50 | Possível (o provedor **descobre**; a conclusão pede certidão) |
-| Estrategista | **85** | B2 ≥ 70 · B1 ≥ 50 | Provável |
-| Entregas, número no book | **85** | B1 ≥ 50 · B6 ≥ 95 | Provável. **Gravidade crítica** (> 5% do EBITDA ou da dívida): Confirmado, ou aceite do Sócio |
-| Entregas, texto de contexto | **70** | B1 ≥ 50 | Possível |
-| Monitoramento | O mínimo do agente que usou o dado | — | — | 
+| Captador | **60** | 60% | — (vetos e travas bastam na entrada) |
+| Conferidor | **80** | 75% | A1 ≥ 65 (agregador nunca é régua) · B2 ≥ 50 · B7 ≥ 60 |
+| Mercado | **75** | 75% | A1 ≥ 70 · B2 ≥ 70 |
+| Caixa | **75** | 75% | Em extrato: B1 ≥ 90 (o saldo fecha) e B3 ≥ 80 |
+| Dívida | **80** | 80% | A1 ≥ 60 · B3 ≥ 80 · B7 ≥ 80 em documento trazido pelo cliente |
+| Risco | **70** | 75% | A1 ≥ 45 · para afirmar "nada consta": C1 provado e B3 ≥ 80 |
+| Estrategista | **85** | 80% | B2 ≥ 60 |
+| Entregas | **85** | 85% | A1 ≥ 70 · B7 ≥ 70. Gravidade crítica (> 5% do EBITDA ou da dívida): classe Confirmado, ou aceite do Sócio |
 
-**Classe, por regra fixa:** **Contestado** se B1 ≤ 30 · **Confirmado** se B1 ≥ 85 · **Provável** se
-B1 = 50 e A1 ≥ 85 · **Possível** se B1 = 50 e A1 < 85 · **Não julgável** se uma dimensão com peso
-≥ 10% não foi medida.
+**Teto da fonte em estreia** (menos de 30 conferências): score máximo de **90** se A1 ≥ 85, ou
+**80** nos demais casos. Ele evita que tirar o histórico da conta infle a fonte nova, risco que as
+três avaliações apontaram. O teto sai quando a fonte tem 30 conferências.
 
-### 5A.4 — A classificação do resultado (o que o portão devolve)
+### 5A.4 — A classificação do resultado
 
 | Resultado | Critério objetivo | O que acontece |
 |---|---|---|
-| **APROVADO** | Nenhum veto **e** score ≥ mínimo **e** todos os pisos atendidos **e** classe ≥ classe mínima | Segue sozinho para a etapa seguinte |
-| **EM REVISÃO** | Nenhum veto **e** score ≥ mínimo − 10 **e** no máximo 1 piso falho **e** não Contestado | **Não segue sozinho.** Segue só com aceite humano registrado (analista; Sócio na gravidade alta ou crítica) e leva ressalva com motivo e efeito |
-| **REPROVADO** | Qualquer veto, **ou** score < mínimo − 10, **ou** 2 ou mais pisos falhos, **ou** Contestado (fora do Captador), **ou** Não julgável | Não segue. Param só as etapas que dependem do dado; vai ao humano com o prazo da gravidade |
+| **APROVADO** | Nenhum veto, nenhuma trava, cobertura ≥ mínimo, todos os pisos, score ≥ mínimo | Segue sozinho |
+| **REVISÃO** | Nenhum veto e score ≥ 50, mas alguma trava, cobertura, piso ou score abaixo do exigido | **Não segue sozinho.** Fila humana com o motivo e o efeito. Só segue liberado por humano (Sócio na gravidade alta ou crítica), com ressalva no book |
+| **REPROVADO** | Qualquer veto; score < 50; nas Entregas, custódia < 50; "nada consta" sem cobertura | Não segue. Nova captura na fonte primária, ou a ausência registrada com motivo — nunca zero |
+| **QUARENTENA** (só no Captador) | O que seria REVISÃO na entrada | Gravado com score e motivo, sem sair para ninguém. Conflito entre fontes: **guarda as duas versões** |
 
-O monitoramento reabre o portão quando o score de um dado em uso cai abaixo do mínimo do agente que o
-usou (por exemplo, quando o dado vence).
+### 5A.5 — As 7 regras aprovadas pelo dono (23/11/2026)
 
-### 5A.5 — O mesmo dado, julgado por agentes diferentes
+| # | Regra | Efeito objetivo |
+|---|---|---|
+| 1 | **Base legal por destino** | O mesmo dado serve ao uso interno e pode travar na saída. Sigilo bancário (Open Finance, SCR) e licença de bureau exigem autorização registrada para enviar a terceiros. Sem ela: REVISÃO; com proibição expressa: REPROVADO |
+| 2 | **"Nada consta" só vale com execução provada e cobertura medida** | Resposta negativa sem C1 e sem B3 declarado é REPROVADO em todo agente: vira "não consultado" ou "cobertura insuficiente", com o efeito |
+| 3 | **Propagação pelo menor score** | Número calculado herda o **menor** score e o **pior** resultado dos insumos. Um dado em REVISÃO numa soma deixa a soma em REVISÃO |
+| 4 | **Frescor contra a data de referência do uso** | Uma Focus de março é a versão certa para uma análise datada de março. Frescor mede a distância até a data que o uso pede |
+| 5 | **Alerta de carimbo** | Se, num portão, o humano libera sem alterar mais de 95% dos casos de REVISÃO, o alerta é de **calibração do portão**, não do humano |
+| 6 | **Amostra do Auditor** | 5% dos aprovados, mais todos os aprovados com até 5 pontos de folga; o resultado alimenta A2 |
+| 7 | **Teto e promoção da fonte em estreia** | Teto de 90 ou 80 até 30 conferências (5A.3); A2 entra na conta a partir de 10 conferências |
 
-O score **não é do dado sozinho**: é do dado **para um uso**. O Focus serve ao Mercado e não precisa
-servir ao Caixa. Um processo achado pelo provedor serve ao Risco como pista e não entra no book.
+### 5A.6 — O mesmo dado, julgado por agentes diferentes
 
-### 5A.6 — Os 12 casos usados para conferir os números (piloto, sem histórico)
+O score **não é do dado sozinho**: é do dado **para um uso**. O Registrato passa na Dívida e trava
+nas Entregas enquanto não houver autorização para mostrá-lo ao credor. O score de bureau passa no
+Risco, rotulado "opinião do bureau X", e em nenhum outro agente.
 
-Calculados com as rubricas, os pesos e as regras acima. APRO = aprovado · REV = em revisão ·
-REPR = reprovado.
+### 5A.7 — Os 13 casos (piloto, fontes em estreia)
+
+Gerados por [`15_anexos/casos_do_score.py`](15_anexos/casos_do_score.py), que é a fonte desta
+tabela. Se um número do §5A mudar, ele muda primeiro no script, e a tabela é colada de novo. APRO =
+aprovado · REV = revisão · REPR = reprovado · QUAR = quarentena.
 
 | Caso | Captador | Conferidor | Mercado | Caixa | Dívida | Risco | Estrategista | Entregas |
 |---|---|---|---|---|---|---|---|---|
-| IPCA do IBGE, confirmado pelo BCB | 98,5 APRO | 94,0 APRO | 97,0 APRO | 97,0 APRO | 97,0 APRO | 97,0 APRO | 95,5 APRO | 95,5 APRO |
-| Focus (BCB), sem segunda fonte | 96,0 APRO | 89,0 APRO | 89,5 APRO | 84,5 REV | 89,5 APRO | 92,0 APRO | 88,0 APRO | 85,5 APRO |
-| Focus vencido (2× a cadência) | 91,5 APRO | 84,5 REV | 83,5 APRO | 80,0 REV | 83,5 REV | 87,5 APRO | 82,0 REV | 81,0 REV |
-| Registrato com recibo conferido | 96,0 APRO | 89,0 APRO | 89,5 APRO | 84,5 REV | 89,5 APRO | 92,0 APRO | 88,0 APRO | 85,5 APRO |
-| Open Finance, saldo fecha | 97,0 APRO | 90,2 APRO | 93,2 APRO | 94,8 APRO | 93,2 APRO | 94,8 APRO | 92,5 APRO | 92,5 APRO |
-| Open Finance, faltando 1 de 10 contas | 95,0 APRO | 89,8 APRO | 92,2 APRO | 92,8 REV | 91,8 REV | 93,2 APRO | 91,5 APRO | 91,5 APRO |
-| Processo por CNPJ, via API de parceiro | 86,0 APRO | 64,5 REPR | 74,5 REV | 71,5 REPR | 74,0 REPR | 76,0 APRO | 73,0 REPR | 67,0 REPR |
-| Processo por nome, probabilidade 0,97 | 85,5 APRO | 64,3 REPR | 74,5 REV | 71,5 REPR | 73,8 REPR | 75,4 APRO | 73,0 REPR | 66,8 REPR |
-| Processo na certidão do tribunal | 97,8 APRO | 92,5 APRO | 94,8 APRO | 93,2 APRO | 94,8 APRO | 95,5 APRO | 93,2 APRO | 92,5 APRO |
-| Score de bureau | 86,0 APRO | 60,0 REPR | 70,5 REV | 70,5 REPR | 70,5 REPR | 74,5 REV | 70,0 REPR | 64,0 REPR |
-| Notícia por nome, probabilidade 0,90 | 66,5 REV | 55,0 REPR | 60,5 REPR | 57,0 REPR | 60,5 REPR | 63,5 REPR | 59,5 REPR | 56,5 REPR |
-| IPCA com IBGE e BCB divergentes | 93,5 APRO | 84,0 REPR | 82,0 REPR | 72,0 REPR | 82,0 REPR | 87,0 REPR | 80,5 REPR | 75,5 REPR |
+| IPCA do IBGE, espelho do BCB confere | 90 APRO | 89,7 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 89,2 APRO |
+| Focus (BCB), sem segunda fonte possível | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO |
+| Focus com o dobro da idade | 89,4 APRO | 88,1 REV | 82 REV | 83,2 REV | 88,4 REV | 86,8 REV | 86,7 REV | 83 REV |
+| Registrato com recibo; envio a credor não autorizado | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 REV |
+| Open Finance, saldo fecha, todas as contas | 90 APRO | 89,1 APRO | 90 APRO | 90 APRO | 89,5 APRO | 90 APRO | 90 APRO | 87,5 REV |
+| Open Finance, falta 1 de 10 contas | 88 APRO | 87,8 APRO | 90 APRO | 90 APRO | 86,8 APRO | 89,7 APRO | 90 APRO | 86,4 REV |
+| Processo por CNPJ, API sem origem declarada | 55 QUAR | 53,9 REV | 72,5 REV | 70,6 REV | 50 REV | 63,8 REV | 68,6 REV | 52,5 REPR |
+| Processo por nome (homônimo possível) | 55 QUAR | 53,9 REV | 72,5 REV | 70,6 REV | 50 REV | 63,8 REV | 68,6 REV | 52,5 REPR |
+| Processo na certidão do tribunal | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO | 90 APRO |
+| Score de bureau | 80 APRO | 78,1 REV | 80 REV | 80 REV | 78,8 REV | 80 APRO | 80 REV | 74 REV |
+| Notícia, por nome | 59,1 QUAR | 55,5 REV | 72,3 REV | 70,6 REV | 50 REV | 64,4 REV | 68,6 REV | 52,5 REPR |
+| IPCA: IBGE e BCB divergem | 90 QUAR | 73,2 REV | 82,2 REV | 71,8 REV | 79,7 REV | 80,3 REV | 70 REV | 77,5 REV |
+| 'Nada consta' de processos via provedor | 55 REPR | 53,9 REPR | 72,5 REPR | 70,6 REPR | 50 REPR | 63,8 REPR | 68,6 REPR | 52,5 REPR |
 
 **O que os casos mostram:**
-1. Dado oficial confirmado passa em todos os agentes.
-2. Dado contestado é guardado na captação e barrado em todo o resto.
-3. Provedor de processos e bureau servem de pista ao Risco, mas não entram no book sem certidão
-   (a regra da Espec. 13, agora como número).
-4. Notícia nunca passa sozinha.
-5. Dado vencido cai para revisão onde o frescor pesa, antes de virar reprovação.
+1. **Dado oficial confirmado** (IPCA, Focus, certidão) passa em todos os agentes, com o score no
+   teto de 90 enquanto a fonte estreia.
+2. **A Focus vencida cai em revisão** em todos os agentes, menos na entrada. Na v1, ela passava no
+   Mercado.
+3. **Registrato e Open Finance** passam em todo uso interno e travam só na saída, até a autorização
+   de envio (regra 1).
+4. **O processo achado pelo provedor nunca passa sozinho.** Na v1, ele passava no Risco. A certidão
+   do mesmo processo passa em todos os agentes.
+5. **O score de bureau** passa só no Risco, como opinião.
+6. **O conflito IBGE × BCB** fica em revisão em todos os agentes, com as duas versões guardadas.
+7. **O "nada consta" sem cobertura** é reprovado em todos os agentes.
 
-### 5A.7 — Limites desta proposta
+### 5A.8 — O que mudou da v1 para a v2
 
-- **Os pesos são julgamento.** Não existe medida de "quanto a origem vale contra o frescor". O que
-  a calibração pode medir é se o **resultado** (APROVADO, EM REVISÃO, REPROVADO) prevê o erro.
-  Se não prever, os pesos mudam, por decisão registrada.
-- **A prior de A2 (70 ou 40) decide muito no piloto**, porque nenhuma fonte terá 30 conferências tão
-  cedo. Sem ela, nenhum dado de parceiro passaria no Conferidor; com ela, a origem oficial passa
-  pela origem, não pelo acerto. A cada 30 conferências, a prior sai de cena.
-- **Mínimo − 10 para EM REVISÃO** é uma faixa arbitrária. O tamanho dela deve sair da medição:
-  quantos casos da faixa o humano aprovou, e quantos deles estavam errados.
-- **A tolerância de B1 e os limiares de B6** (0,95 e 0,60) são os valores mais sensíveis. Eles
-  são os primeiros a calibrar.
+| Ponto | v1 | v2 | Por quê |
+|---|---|---|---|
+| A4 independência | Peso de 5% a 15% | Sem peso; regula B1 | Contava duas vezes (3 de 3 avaliações) |
+| B6 identidade | Peso de até 20%; nome com p ≥ 0,95 passava sozinho | Veto em três níveis; nome nunca passa sozinho | 3 de 3 avaliações; o dono quer que só a alta confiança passe |
+| B7 custódia | Só veto | Ponderada (até 25%); veto só em documento oficial do cliente | Custódia tem graus; é o que o credor cobra (3 de 3) |
+| Espelho BCB do IPCA | Concordância 100 | 70 | Espelho confirma a captura, não a medição. Era um erro da v1 (3 de 3) |
+| Nota ausente | Valores fixos (histórico 70/40; "sem referência" 50) | Sai da conta, com cobertura mínima e teto | O valor fixo era um número inventado (regra 1) |
+| Frescor com o dobro da idade | 70 | 50 | Na v1, a Focus vencida passava no Mercado |
+| Conflito entre fontes | REPROVADO | REVISÃO, com as duas versões guardadas | A causa costuma ser revisão de série ou erro de captura, que se resolve recapturando (3 de 3) |
+| Dado opinativo | Sem regra (barrado por acaso, pela nota de origem) | Trava fora do Risco | A transmissão confiável não torna a opinião verdadeira |
+| Pesos | Julgamento meu | Mediana das três avaliações | Os três concordaram entre si (variação ≤ 5 pontos) |
+| Mínimos | 70 / 85 / 80 / 85 / 85 / 75 / 85 / 85 | 60 / 80 / 75 / 75 / 80 / 70 / 85 / 85 | Mediana das três avaliações. Comparar com a v1 engana: o score da v2 sai mais alto, porque tira da conta o que não se mediu, e o freio passa a ser a cobertura |
+
+### 5A.9 — Limites desta proposta
+
+- **Os pesos são julgamento**, agora de quatro avaliadores em vez de um. A calibração mede se o
+  **resultado** prevê o erro, não se o peso está "certo".
+- **Concordância entre avaliadores não é medida.** Os três vêm da mesma família de modelos e podem
+  compartilhar vieses. Por isso o modo sombra e o gabarito continuam obrigatórios.
+- **O teto (90 ou 80) decide muito no piloto**, porque toda fonte estreia. Ele é o primeiro número
+  a revisar quando houver 30 conferências.
+- **A cobertura mínima depende da lista do que é `na` e do que é `nm`.** Classificar errado (um
+  `nm` como `na`) infla a cobertura em silêncio. É o defeito da regra 7 do projeto, um nível acima,
+  e pede um invariante próprio quando for construído.
 
 ---
 
@@ -406,7 +464,7 @@ proveniência do W3C PROV, sem adotar RDF: só a forma, para não inventarmos no
 | Limite | O que é | Como se define | Quem decide |
 |---|---|---|---|
 | Tolerância de concordância (B1) por tipo | Diferença que ainda é "bate" | Arredondamento de publicação (já é 0,011 p.p. nas séries macro) + régua B3b-1 para valores | Dono, com a medição |
-| Limiares de identidade (B6) | Superior (aceita) e inferior (recusa) | Pela taxa de falso positivo e falso negativo aceitável, medida numa amostra rotulada (Fellegi–Sunter) | Dono |
+| Limiar de identidade por nome (B6) | Abaixo dele, o candidato por nome nem vai ao humano (acima, vai sempre; nunca passa sozinho) | Pela taxa de falso negativo aceitável, medida numa amostra rotulada (Fellegi–Sunter) | Dono |
 | Prazo de validade (B2) por fonte | Até quando o dado vale; e o prazo crítico (veto) | Cadência publicada da fonte; R7 da Espec. 13 | Catálogo; dono aprova |
 | Piso por (tipo × etapa × dimensão) | O mínimo para seguir | Pelo custo dos dois erros (§9, passo 4) | Dono, por decisão registrada |
 | Histórico mínimo (A2) | Quantas conferências antes de a fonte sair de "sem histórico" | Limite inferior de Wilson/Jeffreys; a mesma lógica dos 300 da D6 | Dono |
@@ -487,7 +545,7 @@ proveniência do W3C PROV, sem adotar RDF: só a forma, para não inventarmos no
 | **D15.5** | O score aparece para o cliente ou o credor? | **Não o número.** A ressalva com motivo e efeito, sim (regra 1). Mostrar a classe depende de parecer |
 | **D15.6** | Quem rotula a amostra de calibração? | O mesmo papel do gabarito (D4, ainda a indicar) |
 | **D15.7** | Divergência com o documento do cliente baixa o score do externo? | **Não** (§3, B1; §10, item 2) |
-| **D15.8** | Aprovar os pesos, mínimos, pisos e prioris iniciais do §5A como ponto de partida do modo sombra? | **Sim, como hipótese.** Eles rodam em sombra; só bloqueiam depois da etapa 4 (§12), e cada ajuste vira decisão registrada |
+| **D15.8** | Aprovar os pesos, mínimos, pisos e tetos do §5A (v2) como ponto de partida do modo sombra? | **Sim, como hipótese.** As 7 regras do §5A.5 foram aprovadas pelo dono em 23/11/2026; os números rodam em sombra e só bloqueiam depois da etapa 4 (§12) |
 
 ---
 

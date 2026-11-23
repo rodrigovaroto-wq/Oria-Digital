@@ -7,6 +7,7 @@
 
 - **Pedido do dono:** score para os dados captados **fora** (não os documentos do cliente), por várias dimensões, com um portão em cada etapa do processo. **Não se constrói agora.**
 - **Desenho e pesquisa:** [`Arquitetura do Sistema/2 Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md`](Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md): 13 dimensões em três níveis (fonte, dado, execução), vetos + piso por dimensão + classe (o score ponderado só é lido depois dos vetos e pisos), pesos % e score mínimo por agente com 12 casos conferidos (§5A, proposta inicial), portões nas 7 etapas, matriz por tipo de dado, 14 limitações, D15.1–D15.8 abertas, fontes no §13.
+- **§5A v2 (pedido do dono, mesmo dia):** a proposta de pesos foi comparada às cegas com três avaliações independentes (a v1 concordou com a maioria em 53 de 64 julgamentos; em 6 das 11 divergências deixava passar o que a maioria segurava). A v2 usa a estrutura dos três, os pesos na mediana e 7 regras aprovadas pelo dono. Os 13 casos saem de `Arquitetura do Sistema/2 Especificação/15_anexos/casos_do_score.py`.
 - **No plano:** itens novos **2.18** (catálogo, vetos, modo sombra) e **2.19** (calibração e portões), P2. Pendências: decisões D15.x e a prova "a classe prevê o erro".
 - **Portões rodados:** `conhecimento/conferir.mjs` OK (287/0); links relativos dos arquivos tocados: 0 quebrados.
 - **NÃO CONFERIDO:** o banco de produção (a sonda não foi rodada).
