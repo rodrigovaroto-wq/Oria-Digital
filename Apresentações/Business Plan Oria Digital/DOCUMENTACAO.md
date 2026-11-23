@@ -2,7 +2,7 @@
 
 Este documento reúne o que é preciso para entender, apresentar, manter ou refazer o deck `Business_Plan_Oria_Digital.pptx` (**v2**, 14 slides, 16:9, 13,33" × 7,5"). **Esta é a versão em vigor.** Ela substituiu a v1 (13 slides, PR #301) em 19/11/2026, depois de três rodadas de revisão do dono. A v1 fica no histórico do git; os comparativos e os scripts que produziram a v2 estão em [`Business Plan/99_historico/business_plan_v2_fase3/`](../../Business%20Plan/99_historico/business_plan_v2_fase3/).
 
-Base das mudanças: o registro de decisões **v0.1.3** ([`Business Plan/07_decisoes/`](../../Business%20Plan/07_decisoes/)), em especial A3, B1, J1–J5 e K2.
+Base das mudanças: o registro de decisões **v0.1.3** ([`Business Plan/99_historico/registro_de_decisoes/`](../../Business%20Plan/99_historico/registro_de_decisoes/); o vigente fica em [`07_decisoes/`](../../Business%20Plan/07_decisoes/)), em especial A3, B1, J1–J5 e K2.
 
 ## 1. Para quem e para quê
 

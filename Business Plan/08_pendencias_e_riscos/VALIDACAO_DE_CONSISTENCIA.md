@@ -55,6 +55,7 @@ continua aberto foi para as [pendências](PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.m
 | Sem prazo (K2) | Sim | Sem datas | Sem prazo em meses | Sem datas | Sim |
 | Valores só depois do piloto (J1, J2) | Sim | — | Slide 8 sem valores | 3.6 | Sim |
 | Provedores de IA hoje | — | "Hoje: OpenAI (um provedor)" | — | 1.D8: dois dialetos (OpenAI e Gemini) por variável, sem troca automática | **Pequena divergência**: o workflow simplifica. Corrigir numa próxima versão do workflow |
+| Backup hoje | H1-1 (cópia diária até a produção) | Bloco "Continuidade": "Hoje: cópia diária criptografada (provisória)" | — | 0.2 DESENVOLVER: não existe backup fora do Supabase | **Divergência**: o workflow escreve no presente o que é meta do 0.2 (o mesmo workflow diz "Supabase … sem backup"). Corrigir para "Até o piloto:" na próxima versão do workflow |
 | Portal do cliente hoje | 19.1: "portal do cliente não existe" | Selo PILOTO | — | 1.G1 CORRIGIR: o envio por token já existe | **Pequena divergência**: existe a base (envio por link), não a área do cliente. Sem efeito no plano |
 | "mais de 30 fontes" (slide 5) | — | Lista ~13 fontes no bloco de captação | Afirma no presente | 1.C1–1.C5 | **Em aberto**: o dono não fechou; está nas pendências |
 | Retenção (I2) | 3 camadas | 3 camadas | — | 2.12; 0.11 corrige a especificação técnica | **Divergência técnica**: `10_DADOS_RETENCAO_E_LGPD.md` ainda diz [A CONFIRMAR] |

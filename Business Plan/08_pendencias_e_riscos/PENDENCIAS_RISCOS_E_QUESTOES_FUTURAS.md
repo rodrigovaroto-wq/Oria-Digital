@@ -20,6 +20,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Deck, slide 10: retirada do prazo "3 a 6 meses" | K2 | — | Feita na Fase 3, coerente com a K2. O dono não confirmou explicitamente a frase final |
 | **Classificação de documentos em N2 sem gabarito** (`0127_o_dial_obedecido.sql:493`, "declarada, não medida"): voltar a N1 junto com a extração no item 0.5, ou manter em N2 | D6 (fala só da extração) | 0.5, G0 | **Fechada em 23/11/2026: volta a N1** (D6-1, registro v0.1.4) |
 | Gravidade "alto" (G5): "> 1%" de quê? O registro diz só "> 1%"; as regras leem "do EBITDA ou da dívida", como no crítico | G5 | 1.D6 | **Fechada em 23/11/2026: do EBITDA ou da dívida** (G5-1, registro v0.1.5) |
+| Reconferir os defeitos do lote 2 que travam o uso (antiga ME1 do PLANO_MVP) e abrir um item por defeito que continuar aberto | — | Fase 1 | Aberta: a lista não foi reconferida na Fase 4 |
 | Tirar do piloto alguma fonte de mercado do slide 5 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP; item 1.C5) | K6 (pede **todos** os dados de mercado no piloto) | 1.C5, G1 | Só com decisão registrada do dono; sem ela, ficam no piloto |
 | Ligar a conciliação do aging na rodada (`fn_reconciliar_caso`) | — | 1.A2 | **Fechada em 13/11/2026**: ligada pela `0278`, aplicada em produção (`ESTADO.md`, sessão 129b) |
 | Arquivo real de AR e AP para medir a leitura | DM7 do PLANO_MVP | 1.A1 | Depende do dono |
@@ -78,8 +79,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 ## 6. Questões futuras (sem decisão, sem prazo)
 
 - Autosserviço (A4).
-- Apresentação a credores como produto (G4, depois do piloto).
-- Valuation, recuperação de credores e apresentação de crédito (etapas do plano antigo de 111 etapas).
+- Valuation e recuperação de credores (etapas do plano antigo de 111 etapas). A apresentação a credores é o item 2.6 do plano.
 
 ## 7. Fora do escopo técnico (19.14)
 

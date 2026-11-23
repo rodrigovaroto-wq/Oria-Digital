@@ -106,6 +106,7 @@ Absorve as trilhas A, B e D do `PLANO_MVP_2026-11` e o `PLANO_LINHA_A_LINHA`.
 | 1.A6 | **Regressão no corpus real e portão da extração** (antigas MA1, MA5) | P1 · G0 | 1.A5, 1.B1 | Claude · Dono paga a rodada | DESENVOLVER (sem registro de conclusão) | Documento com extração falha ou incompleta ≤ 5%, cada um com causa; custo por book medido e registrado (`medir-custo-book.mjs`), com alerta acima de US$ 5 (D5: o teto só é fixado depois do piloto) |
 | 1.A7 | **Aceite financeiro do book** (antiga MD2) | P1 | 1.A2, 1.A6 | Dono | DESENVOLVER | ≥ 95% dos documentos com linha; toda diferença explicada |
 | 1.A8 | **Perímetro do grupo** (antiga MD1), só se o 1º mandato for grupo | P2 | — | Claude | CORRIGIR (em parte): `0179`–`0183` (entidade, perímetro, controle comum) | Perímetro declarado pela tela no mandato |
+| 1.A9 | **CNAB de retorno e razão contábil** (antiga MB6): liquidações por dia e por sacado, cruzadas com o AR; razão em CSV/XLSX, Σ por conta × mês contra o balancete | P2 | 1.A1 | Claude (`Leitor/`) | CORRIGIR. A família CNAB é reconhecida no envelope (`Leitor/lib/familia.mjs`); o conteúdo do CNAB de retorno e o razão não são lidos | Liquidações cruzadas com o AR e razão conferido contra o balancete, ou divergência declarada |
 
 ### Trilha B — Extração (D3), captação externa e cruzamento (Conferidor)
 
@@ -124,10 +125,10 @@ Absorve as trilhas A, B e D do `PLANO_MVP_2026-11` e o `PLANO_LINHA_A_LINHA`.
 | ID | Tarefa | Prio. | Depende de | Papel | Situação | Pronto quando |
 |---|---|---|---|---|---|---|
 | 1.C1 | **Séries macro do BCB** (IPCA, IGP-M, INPC, Selic, CDI) | P1 | — | Claude | CORRIGIR. Captação existe: `0025`, `N8N/lib/macro.mjs`; agendamento diário no `N8N/workflow.macro.json` (`scheduleTrigger`). Execução em produção **não conferida**; **não há alerta de frescor** (série vencida não avisa) | Série com data da última atualização visível e alerta quando vencida |
-| 1.C2 | **Focus e juros por modalidade** (BCB) | P1 · G0 | — | Claude (n8n + banco) | CORRIGIR. Focus já é captado (expectativas anuais de IPCA, Selic, IGP-M, PIB e câmbio em `indice_macro_expectativa`, `0025`; `N8N/lib/macro.mjs`, `INDICADORES_FOCUS`). Juros por modalidade: DESENVOLVER | Juros por modalidade gravados com data e fonte; atualização automática medida para as duas séries |
-| 1.C3 | **CVM** (empresas do setor), **IBGE** e **CAGED/RAIS** | P1 · G0 | — | Claude | IBGE: em parte (IPCA via SIDRA, só como conferência cruzada, `N8N/lib/macro.mjs`). CVM e CAGED/RAIS: DESENVOLVER | Idem, por fonte; fonte que falhou aparece como "falhou", não como vazia |
+| 1.C2 | **Focus e juros por modalidade** (BCB) | P1 · G0 | — | Claude (n8n + banco) | CORRIGIR. Focus já é captado (expectativas anuais de IPCA, Selic, IGP-M, PIB e câmbio em `indice_macro_expectativa`, `0025`; `N8N/lib/macro.mjs`, `INDICADORES_FOCUS`). Juros por modalidade: DESENVOLVER | Juros por modalidade gravados com data e fonte; atualização automática medida para as duas séries; alerta quando vencida |
+| 1.C3 | **CVM** (empresas do setor), **IBGE** e **CAGED/RAIS** | P1 · G0 | — | Claude | IBGE: em parte (IPCA via SIDRA, só como conferência cruzada, `N8N/lib/macro.mjs`). CVM e CAGED/RAIS: DESENVOLVER | Idem, por fonte, com alerta quando vencida; fonte que falhou aparece como "falhou", não como vazia |
 | 1.C4 | **Painel de frescor**: cada fonte com última atualização, estado e efeito | P2 | 1.C1–1.C3 | Claude (portal) | DESENVOLVER | Fonte vencida aparece vencida |
-| 1.C5 | Demais fontes do slide 5 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP) | P1 | 1.C3 | Claude | DESENVOLVER | Por fonte, como 1.C3. A K6 pede **todos** os dados de mercado no piloto: tirá-lo do piloto exige decisão registrada do dono |
+| 1.C5 | Demais fontes do slide 5 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP) | P1 | 1.C3 | Claude | DESENVOLVER | Por fonte, como 1.C3 (inclusive o alerta quando vencida). A K6 pede **todos** os dados de mercado no piloto: tirá-lo do piloto exige decisão registrada do dono |
 
 ### Trilha D — Base dos agentes
 
@@ -291,7 +292,7 @@ mesma onda vão um depois do outro.
 | Onda | Itens (prioridade P1 em negrito) |
 |---|---|
 | **1** | **0.1** · **0.2** · **0.4** · **0.5** · **0.6** · 0.11 · **1.A1** · **1.A4** · 1.A8 · **1.B1** · **1.B4** · **1.B7** · **1.C1** · **1.C2** · **1.C3** · **1.D1** · **1.D6** · **1.F1** · **1.F5** · **1.J2** |
-| **2** | **0.3** · **0.7** · 0.9 · **1.A2** · **1.A3** · **1.A5** · **1.B2** · **1.B6** · 1.C4 · **1.C5** · **1.D2** · **1.D3** · **1.D7** · **1.F2** · **1.G1** · **1.H1** |
+| **2** | **0.3** · **0.7** · 0.9 · **1.A2** · **1.A3** · **1.A5** · 1.A9 · **1.B2** · **1.B6** · 1.C4 · **1.C5** · **1.D2** · **1.D3** · **1.D7** · **1.F2** · **1.G1** · **1.H1** |
 | **3** | **0.8** · 0.10 · **1.A6** · **1.B3** · 1.D10 · **1.D4** · **1.D5** · **1.D8** · **1.D9** · **1.F3** · **1.F6** · 1.G2 · **1.H2** · **1.H4** · **1.I1** |
 | **4** | **1.A7** · **1.B5** · **1.E2** · **1.E3** · **1.E4** · **1.H3** · **1.I2** · 1.I3 · **1.J1** |
 | **5** | **1.E1** · **1.F4** · **1.H5** |
@@ -306,14 +307,17 @@ Migrations nunca vão em paralelo entre si: a numeração é sequencial e a sond
 
 | Plano anterior | Para onde foi |
 |---|---|
-| `PLANO_MVP_2026-11` trilhas A, B, D | Fase 1, trilha A (MB0–MB3 e MB3c já feitas: 1.A1, 1.A2) |
+| `PLANO_MVP_2026-11` trilhas A, B, D | Fase 1, trilha A (MB0–MB3 e MB3c já feitas: 1.A1, 1.A2; MB5 → 1.A4; MB6 → 1.A9; MB7 → 1.A1–1.A3 (o agregado no banco e as abas de aging no book); MD1 → 1.A8; MD2 → 1.A7) |
 | `PLANO_MVP_2026-11` trilha C | Fase 1, trilha H |
-| `PLANO_MVP_2026-11` trilha E (ME1–ME5) | 1.A3 (ME2), 0.6 (ME3), 0.3 (ME4), 1.B7 e 2.15 (ME5) |
+| `PLANO_MVP_2026-11` trilha E (ME1–ME5) | 1.A3 (ME2), 0.6 (ME3), 0.3 (ME4), 1.B7 e 2.15 (ME5). ME1 (defeitos do lote 2 que travam o uso) **não virou item**: a lista não foi reconferida nesta fase; está nas pendências |
 | `PLANO_LINHA_A_LINHA` | 1.A5, 1.A6 |
 | `DESENHO_QUATRO_FUNCOES_2026-11` | O desenho técnico segue válido; a área do cliente virou 1.G1; o achado, 1.B5 |
 | `ARQUITETURA_ALVO_E_ROADMAP` fases F0–F4 | As decisões por componente seguem como referência técnica; as fases foram substituídas por este plano |
 | `MAPA_DE_EXECUCAO` B6 (operação) | 0.2, 0.3, 0.6 |
-| `STATUS_POR_ETAPA_2026-11-11` (111 etapas) | Inventário usado nas trilhas; as etapas de valuation, recuperação de credores e apresentação de crédito ficam para depois da v1, salvo decisão do dono |
+| `PLANO_DE_EXECUCAO_2026-11` (30 fatias, 6 semanas) | Sem mapeamento item a item: foi o plano que o `PLANO_MVP_2026-11` recortou; o que dele seguia aberto está nas linhas do PLANO_MVP acima |
+| `PRONTIDAO_POR_ESTAGIO` | Sem mapeamento item a item: é um inventário de 20/08/2026; os pontos abertos dele estão cobertos pelas trilhas A e B e pelos itens 0.5 e 3.3 |
+| `1 Visão e Doutrina/03_MVP_E_ROADMAP` | Sem mapeamento item a item: o MVP "workflow completo em modo conservador" virou o piloto (Fase 1) e o roadmap "construir → calibrar" virou os itens 0.5 e 3.3 (autonomia medida) |
+| `STATUS_POR_ETAPA_2026-11-11` (111 etapas) | Inventário usado nas trilhas; as etapas de valuation e recuperação de credores ficam para depois da v1, salvo decisão do dono; a apresentação a credores é o item 2.6 (decisão G4: depois do piloto) |
 
 ## 12. Andamento
 
