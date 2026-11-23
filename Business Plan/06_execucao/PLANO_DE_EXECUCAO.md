@@ -26,6 +26,9 @@ Cada item tem:
 | **Situação** | **FEITO** (existe e atende), **CORRIGIR** (existe e precisa mudar), **DESENVOLVER** (não existe), sempre com a evidência (arquivo, migration, suíte) |
 | **Pronto quando** | O critério medível. Item só fecha com a medida feita, não com o código escrito (regra 7 do `CLAUDE.md`) |
 
+**G0–G3 são os portões deste plano.** Quando um item cita uma decisão do registro com o mesmo
+nome (G1 monitoramento, G2 relatório, G3 acesso do cliente), o texto diz "decisão G1", "decisão G3".
+
 **FEITO exige a medida.** Um item só passa a FEITO quando a medida do "pronto quando" foi feita, e a linha
 de Andamento cita onde ela está (teste, sonda, número). Código que existe sem a medida é CORRIGIR.
 
@@ -124,7 +127,7 @@ Absorve as trilhas A, B e D do `PLANO_MVP_2026-11` e o `PLANO_LINHA_A_LINHA`.
 | 1.C2 | **Focus e juros por modalidade** (BCB) | P1 · G0 | — | Claude (n8n + banco) | CORRIGIR. Focus já é captado (expectativas anuais de IPCA, Selic, IGP-M, PIB e câmbio em `indice_macro_expectativa`, `0025`; `N8N/lib/macro.mjs`, `INDICADORES_FOCUS`). Juros por modalidade: DESENVOLVER | Juros por modalidade gravados com data e fonte; atualização automática medida para as duas séries |
 | 1.C3 | **CVM** (empresas do setor), **IBGE** e **CAGED/RAIS** | P1 · G0 | — | Claude | IBGE: em parte (IPCA via SIDRA, só como conferência cruzada, `N8N/lib/macro.mjs`). CVM e CAGED/RAIS: DESENVOLVER | Idem, por fonte; fonte que falhou aparece como "falhou", não como vazia |
 | 1.C4 | **Painel de frescor**: cada fonte com última atualização, estado e efeito | P2 | 1.C1–1.C3 | Claude (portal) | DESENVOLVER | Fonte vencida aparece vencida |
-| 1.C5 | Demais fontes do slide 5 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP) | P2 | 1.C3 | Claude | DESENVOLVER | Por fonte, como 1.C3. A K6 pede **todos** os dados de mercado no piloto: tirá-lo do piloto exige decisão registrada do dono |
+| 1.C5 | Demais fontes do slide 5 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP) | P1 | 1.C3 | Claude | DESENVOLVER | Por fonte, como 1.C3. A K6 pede **todos** os dados de mercado no piloto: tirá-lo do piloto exige decisão registrada do dono |
 
 ### Trilha D — Base dos agentes
 
@@ -168,7 +171,7 @@ Cada agente: definir as frentes de diligência que cobre (B6), construir sobre 1
 
 | ID | Tarefa | Prio. | Depende de | Papel | Situação | Pronto quando |
 |---|---|---|---|---|---|---|
-| 1.G1 | **Envio e acompanhamento pelo cliente** (A5): link seguro por mandato (G3) | P1 · G0 | 1.F5 | Claude (portal) | CORRIGIR. Envio por token existe (`N8N/lib/assinatura-do-envio.mjs`, `0216`, `0223`); desenho aprovado em `DESENHO_QUATRO_FUNCOES_2026-11.md` §2 | Cliente envia e vê o Kit e o andamento do próprio mandato, e nada mais (teste) |
+| 1.G1 | **Envio e acompanhamento pelo cliente** (A5): link seguro por mandato (decisão G3) | P1 · G0 | 1.F5 | Claude (portal) | CORRIGIR. Envio por token existe (`N8N/lib/assinatura-do-envio.mjs`, `0216`, `0223`); desenho aprovado em `DESENHO_QUATRO_FUNCOES_2026-11.md` §2 | Cliente envia e vê o Kit e o andamento do próprio mandato, e nada mais (teste) |
 | 1.G2 | **O cliente não vê os agentes** (L6): vê diagnóstico, fonte de cada número e aprovação humana | P2 | 1.G1 | Claude (portal) | DESENVOLVER | Varredura das telas do cliente não acha nome de agente |
 
 ### Trilha H — Dossiê de processos e notícias
@@ -180,7 +183,7 @@ Absorve a trilha C do `PLANO_MVP_2026-11` (MC0–MC8).
 | 1.H1 | **Decisões e jurídico** (antiga MC0): base legal para consultar pessoa física, texto da autorização, provedor de processos, fonte de notícias | P1 | 1.B7 | Dono · Advogado | DESENVOLVER | As quatro respostas registradas |
 | 1.H2 | **Pessoas vinculadas e fontes públicas da empresa** (Receita/QSA, CEIS/CNEP, PGFN) | P1 | 1.H1 | Claude | DESENVOLVER. Zero ocorrência em código | Uma linha por entidade × fonte por rodada, inclusive a vazia |
 | 1.H3 | **Processos** por CPF/CNPJ (provedor) e cruzamento com contingências; achado só pelo nome = possível homônimo | P1 | 1.H1, 1.H2 | Claude · Fornecedor | DESENVOLVER. Só existe o fato `litigio_relevante` lido do texto do documento (`0148`) | Nenhum processo achado só pelo nome contado como confirmado |
-| 1.H4 | **Notícias** por razão social e por sócio + empresa | P2 | 1.H1 | Claude | DESENVOLVER | Título, veículo, data, link e trecho por notícia |
+| 1.H4 | **Notícias** por razão social e por sócio + empresa | P1 | 1.H1 | Claude | DESENVOLVER | Título, veículo, data, link e trecho por notícia |
 | 1.H5 | **O dossiê** no portal e no book, com o estado de cada fonte (encontrado, nada encontrado, falhou, não consultado) | P1 | 1.H2–1.H4 | Claude | DESENVOLVER | Nenhuma pessoa vinculada sem estado por fonte |
 
 ### Trilha I — Entregáveis
@@ -221,19 +224,19 @@ Absorve a trilha C do `PLANO_MVP_2026-11` (MC0–MC8).
 | 2.5 | **Open Finance** via integradora regulada (C4); upload manual sempre disponível | P2 | Parceria (Res. Conjunta 21/2026) | Dono · Fornecedor · Claude | DESENVOLVER | Extrato por Open Finance concilia como o OFX (1.A4) |
 | 2.6 | **Agente Entregas** e apresentação a credores (G4) | P2 | 1.I1, 1.I2 | Claude | CORRIGIR. Apresentação `.pptx` existe (suíte em `.github/workflows/suites.yml`) | Apresentação com a prova de cada número |
 | 2.7 | **Ajustes de EBITDA e QoE** sugeridos com evidência, aplicados só com aceite (B8) | P2 | 1.D7 | Claude | DESENVOLVER | Nenhum ajuste aplicado sem aceite (teste) |
-| 2.8 | **Monitoramento** com agenda por cliente (G1) | P1 | G1 | Claude | DESENVOLVER. Único agendamento em código é o macro | Reconsulta periódica gera alerta em mudança |
-| 2.9 | **Relatório periódico** (G2) e **alertas só no portal interno** | P1 | 2.8 | Claude | DESENVOLVER | Relatório mensal de um mandato em acompanhamento, revisado antes de ir ao cliente |
+| 2.8 | **Monitoramento** com agenda por cliente (decisão G1) | P1 | G1 | Claude | DESENVOLVER. Único agendamento em código é o macro | Reconsulta periódica gera alerta em mudança |
+| 2.9 | **Relatório periódico** (decisão G2) e **alertas só no portal interno** | P1 | 2.8 | Claude | DESENVOLVER | Relatório mensal de um mandato em acompanhamento, revisado antes de ir ao cliente |
 | 2.10 | **Autoaprimoramento — fase A** (F1, F1-3, F4, F5, F6, E4): só propõe prompts e regras; relatório semanal; erros validados pelo Auditor; bloqueio de escrita sobre o que mede | P2 | G1, 1.D5, 1.J2 | Claude · **Técnico** decide | DESENVOLVER | Relatório semanal gerado; tentativa de escrever no gabarito reprova |
 | 2.11 | **Publicação por chave liga/desliga** e caminho gradual (F2, F3); migrations "acrescenta primeiro, remove depois"; erro grave fora da rotina com duas autorizações (v0.1.2 §10.2) | P2 | 0.9 | Claude | DESENVOLVER. O dial é autonomia, não chave de publicação | Desligar a chave numa cópia deixa os diagnósticos antigos iguais (teste de reversão) |
 | 2.12 | **Retenção em três camadas** e expurgo com bloqueio por processo (I2) | P2 | Parecer jurídico | Claude · Advogado | DESENVOLVER | Expurgo de um mandato de teste apaga originais e preserva entregáveis; bloqueio impede |
 | 2.13 | **Benchmarks próprios anonimizados** (C7) | P3 | 0.10, parecer jurídico | Claude | DESENVOLVER | Base sem dado identificável; mandato sem cláusula fica de fora |
-| 2.14 | **Consultoria-cliente** vê os mandatos dos clientes dela (L4) | P2 | 1.F5 | Claude | DESENVOLVER | Teste de vazamento entre consultorias reprova sem a política |
+| 2.14 | **Consultoria-cliente** vê os mandatos dos clientes dela (L4) | P1 | 1.F5 | Claude | DESENVOLVER | Teste de vazamento entre consultorias reprova sem a política |
 | 2.15 | **Trilha de auditoria com cadeia de hashes** e cópia externa imutável (H6) | P1 | 0.1 | Claude | CORRIGIR. Trilha só de acréscimo existe (`0215`, `0224`), sem hash encadeado | Alterar um evento quebra a cadeia e gera alerta (teste) |
-| 2.16 | **Login com verificação em duas etapas** (G3) | P1 | 1.G1 | Claude (portal) | DESENVOLVER | Login sem segundo fator recusado |
+| 2.16 | **Login com verificação em duas etapas** (decisão G3) | P1 | 1.G1 | Claude (portal) | DESENVOLVER | Login sem segundo fator recusado |
 
 ### Portão G2 — pronto para o primeiro cliente além da Partners
 
-2.15 e 2.16 fechados (H6, G3), isolamento por organização provado (1.F5, 2.14), RIPD revisto para o
+2.15 e 2.16 fechados (decisões H6 e G3), isolamento por organização provado (1.F5, 2.14), RIPD revisto para o
 novo cliente, e o primeiro cliente definido (A6).
 
 ---
@@ -249,6 +252,12 @@ novo cliente, e o primeiro cliente definido (A6).
 | 3.5 | **Segundo revisor sempre** quando houver equipe (E1) | P2 | Contratação | **[a contratar]** | DESENVOLVER | Nenhuma autoaprovação, mesmo interna |
 | 3.6 | **Preços e tetos** (J1, N-C6b, D5) a partir do piloto | P1 | G1 | Dono | DESENVOLVER | Valores registrados numa nova versão do registro |
 | 3.7 | **Técnico separado do Sócio** (E2, K3) | P2 | Contratação | **[a contratar]** | DESENVOLVER | Mudança técnica aprovada por pessoa diferente do dono |
+
+### Portão G3 — produção definitiva
+
+3.1 e 3.2 fechados, com as metas da decisão H7 medidas num teste de recuperação real (banco + arquivos):
+perda máxima de minutos e volta em até 4 h. 3.6 fechado (preços e tetos registrados). Os itens P2 da
+Fase 3 podem seguir depois do portão.
 
 ## 8. FASE 4 — Arquitetura final e futuro (condicionada)
 
@@ -282,8 +291,8 @@ mesma onda vão um depois do outro.
 | Onda | Itens (prioridade P1 em negrito) |
 |---|---|
 | **1** | **0.1** · **0.2** · **0.4** · **0.5** · **0.6** · 0.11 · **1.A1** · **1.A4** · 1.A8 · **1.B1** · **1.B4** · **1.B7** · **1.C1** · **1.C2** · **1.C3** · **1.D1** · **1.D6** · **1.F1** · **1.F5** · **1.J2** |
-| **2** | **0.3** · **0.7** · 0.9 · **1.A2** · **1.A3** · **1.A5** · **1.B2** · **1.B6** · 1.C4 · 1.C5 · **1.D2** · **1.D3** · **1.D7** · **1.F2** · **1.G1** · **1.H1** |
-| **3** | **0.8** · 0.10 · **1.A6** · **1.B3** · 1.D10 · **1.D4** · **1.D5** · **1.D8** · **1.D9** · **1.F3** · **1.F6** · 1.G2 · **1.H2** · 1.H4 · **1.I1** |
+| **2** | **0.3** · **0.7** · 0.9 · **1.A2** · **1.A3** · **1.A5** · **1.B2** · **1.B6** · 1.C4 · **1.C5** · **1.D2** · **1.D3** · **1.D7** · **1.F2** · **1.G1** · **1.H1** |
+| **3** | **0.8** · 0.10 · **1.A6** · **1.B3** · 1.D10 · **1.D4** · **1.D5** · **1.D8** · **1.D9** · **1.F3** · **1.F6** · 1.G2 · **1.H2** · **1.H4** · **1.I1** |
 | **4** | **1.A7** · **1.B5** · **1.E2** · **1.E3** · **1.E4** · **1.H3** · **1.I2** · 1.I3 · **1.J1** |
 | **5** | **1.E1** · **1.F4** · **1.H5** |
 | **6** | **1.E5** |

@@ -65,7 +65,7 @@ Hoje **não existe rotina de expurgo**.
 2. Contrato de dados com cada provedor de IA (D1).
 3. Backup provisório e um teste de restauração (H1-1, H7).
 4. n8n com mínimo privilégio (H2).
-5. Extração de volta a N1 até medir (D6).
+5. Extração e classificação de documentos de volta a N1 até medir, com `auto_promocao` desligada (D6, D6-1; item 0.5).
 6. Proteção do repositório: o `.github/CODEOWNERS` diz que, sem a regra de proteção do `main`, a
    revisão não bloqueia o merge; a regra ligada **não foi conferida** (K4).
 
