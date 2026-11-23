@@ -204,6 +204,7 @@ Absorve a trilha C do `PLANO_MVP_2026-11` (MC0–MC8).
 
 ### Portão G1 — piloto concluído e medido
 
+- Todos os itens P1 da Fase 1 fechados (a regra da seção 1). Em particular:
 - Pelo menos um mandato real da Partners do envio à entrega, com **segundo revisor**.
 - As 6 medidas da J6 preenchidas; o [modelo de projeção](../01_negocio/MODELO_DE_PROJECAO.md) recebe os
   primeiros valores.
@@ -230,15 +231,18 @@ Absorve a trilha C do `PLANO_MVP_2026-11` (MC0–MC8).
 | 2.10 | **Autoaprimoramento — fase A** (F1, F1-3, F4, F5, F6, E4): só propõe prompts e regras; relatório semanal; erros validados pelo Auditor; bloqueio de escrita sobre o que mede | P2 | G1, 1.D5, 1.J2 | Claude · **Técnico** decide | DESENVOLVER | Relatório semanal gerado; tentativa de escrever no gabarito reprova |
 | 2.11 | **Publicação por chave liga/desliga** e caminho gradual (F2, F3); migrations "acrescenta primeiro, remove depois"; erro grave fora da rotina com duas autorizações (v0.1.2 §10.2) | P2 | 0.9 | Claude | DESENVOLVER. O dial é autonomia, não chave de publicação | Desligar a chave numa cópia deixa os diagnósticos antigos iguais (teste de reversão) |
 | 2.12 | **Retenção em três camadas** e expurgo com bloqueio por processo (I2) | P2 | Parecer jurídico | Claude · Advogado | DESENVOLVER | Expurgo de um mandato de teste apaga originais e preserva entregáveis; bloqueio impede |
-| 2.13 | **Benchmarks próprios anonimizados** (C7) | P3 | 0.10, parecer jurídico | Claude | DESENVOLVER | Base sem dado identificável; mandato sem cláusula fica de fora |
+| 2.13 | **Benchmarks próprios anonimizados** (C7) | P2 | 0.10, parecer jurídico | Claude | DESENVOLVER. A decisão C7 diz "desde já"; fica na Fase 2 porque depende do parecer jurídico (C7, seção 19.13) e da anonimização (0.10) | Base sem dado identificável; mandato sem cláusula fica de fora |
 | 2.14 | **Consultoria-cliente** vê os mandatos dos clientes dela (L4) | P1 | 1.F5 | Claude | DESENVOLVER | Teste de vazamento entre consultorias reprova sem a política |
 | 2.15 | **Trilha de auditoria com cadeia de hashes** e cópia externa imutável (H6) | P1 | 0.1 | Claude | CORRIGIR. Trilha só de acréscimo existe (`0215`, `0224`), sem hash encadeado | Alterar um evento quebra a cadeia e gera alerta (teste) |
 | 2.16 | **Login com verificação em duas etapas** (decisão G3) | P1 | 1.G1 | Claude (portal) | DESENVOLVER | Login sem segundo fator recusado |
+| 2.17 | **RIPD revisto para o primeiro cliente além da Partners** (I5): dados, fluxos e controles do novo cliente | P1 | 0.8, 2.14 | Claude (parte técnica) · Advogado (parte jurídica) | DESENVOLVER | RIPD revisto, com a parte jurídica validada por advogado, antes do primeiro mandato do novo cliente |
 
 ### Portão G2 — pronto para o primeiro cliente além da Partners
 
-2.15 e 2.16 fechados (decisões H6 e G3), isolamento por organização provado (1.F5, 2.14), RIPD revisto para o
-novo cliente, e o primeiro cliente definido (A6).
+Todos os itens P1 da Fase 2 fechados: 2.8 e 2.9 (monitoramento e relatório periódico, que a v1 inclui pela
+decisão A2), 2.14 (isolamento entre consultorias, com 1.F5), 2.15 e 2.16 (decisões H6 e G3) e 2.17 (RIPD
+revisto para o novo cliente). E o primeiro cliente além da Partners definido pelo dono (decisão A6, nas
+pendências).
 
 ---
 
@@ -256,7 +260,7 @@ novo cliente, e o primeiro cliente definido (A6).
 
 ### Portão G3 — produção definitiva
 
-3.1 e 3.2 fechados, com as metas da decisão H7 medidas num teste de recuperação real (banco + arquivos):
+Todos os itens P1 da Fase 3 fechados: 3.1 e 3.2, com as metas da decisão H7 medidas num teste de recuperação real (banco + arquivos):
 perda máxima de minutos e volta em até 4 h. 3.6 fechado (preços e tetos registrados). Os itens P2 da
 Fase 3 podem seguir depois do portão.
 
