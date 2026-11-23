@@ -15,12 +15,14 @@ externa, portão, gate, barreira, piso, limiar, veto, classe, Confirmado, Contes
 Admiralty, Almirantado, truth discovery, Fellegi-Sunter, itens 2.18 e 2.19, D15.
 
 **Estado (23/11/2026): só desenho e pesquisa. Nada construído, por pedido do dono.** Itens 2.18
-(catálogo, vetos, modo sombra) e 2.19 (calibração e portões) do plano; decisões D15.1–D15.7 abertas.
+(catálogo, vetos, modo sombra) e 2.19 (calibração e portões) do plano; decisões D15.1–D15.8 abertas.
 
 ## O que surpreende quem chega sem ler a Espec. 15
 
-- **O portão não lê um número.** Decide por vetos + piso por dimensão + classe pelo elo mais fraco.
-  O número de 0 a 100 só ordena o painel. Média esconde o zero de uma dimensão (regras 1 e 7).
+- **O score sozinho nunca aprova.** Ordem: vetos → pisos por dimensão → classe → score ponderado
+  com os pesos do agente que vai usar o dado (§5A). Média sem piso esconde o zero (regras 1 e 7).
+- **O score é do dado PARA UM USO.** O mesmo Focus passa no Mercado e cai em revisão no Caixa. Pesos
+  e mínimos do §5A são hipótese de julgamento, conferida em 12 casos (`5A.6`), não medida.
 - **Divergir do documento do cliente NÃO baixa o score do externo.** É o achado (D3). Só baixa a
   divergência com outra fonte externa **independente** ou com uma identidade aritmética.
 - **Duas fontes que leem a mesma origem são uma confirmação, não duas** (dimensão A4).

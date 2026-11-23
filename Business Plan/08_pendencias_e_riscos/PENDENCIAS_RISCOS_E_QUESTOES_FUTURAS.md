@@ -25,7 +25,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Tirar do piloto alguma fonte de mercado do slide 6 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP; item 1.C5) | K6 (pede **todos** os dados de mercado no piloto) | 1.C5, G1 | Só com decisão registrada do dono; sem ela, ficam no piloto |
 | Ligar a conciliação do aging na rodada (`fn_reconciliar_caso`) | — | 1.A2 | **Fechada em 13/11/2026**: ligada pela `0278`, aplicada em produção (`ESTADO.md`, sessão 129b) |
 | Arquivo real de AR e AP para medir a leitura | DM7 do PLANO_MVP | 1.A1 | Depende do dono |
-| **Score de confiabilidade do dado externo** (pedido de 23/11/2026): escopo (inclui SPED e Registrato trazidos pelo cliente?), forma do rótulo, quem fura o portão, o que bloqueia antes da calibração, o que o cliente vê, quem rotula, se divergência com o cliente baixa o score | D15.1–D15.7 (a registrar; recomendações na [Espec. 15](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md), §11) | 2.18, 2.19 | Aberta. **Não se constrói agora**; os pisos só depois do modo sombra |
+| **Score de confiabilidade do dado externo** (pedido de 23/11/2026): escopo (inclui SPED e Registrato trazidos pelo cliente?), forma do rótulo, quem fura o portão, o que bloqueia antes da calibração, o que o cliente vê, quem rotula, se divergência com o cliente baixa o score, e os pesos e mínimos iniciais por agente | D15.1–D15.8 (a registrar; recomendações na [Espec. 15](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md), §11) | 2.18, 2.19 | Aberta. **Não se constrói agora**; os pisos só depois do modo sombra |
 
 ## 2. Dependências de terceiros
 
