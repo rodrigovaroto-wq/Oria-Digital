@@ -1,6 +1,18 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 134 (23/11/2026) — pendência nova: score de confiabilidade do dado externo (Espec. 15)
+
+> **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`.
+
+- **Pedido do dono:** score para os dados captados **fora** (não os documentos do cliente), por várias dimensões, com um portão em cada etapa do processo. **Não se constrói agora.**
+- **Desenho e pesquisa:** [`Arquitetura do Sistema/2 Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md`](Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md): 13 dimensões em três níveis (fonte, dado, execução), vetos + piso por dimensão + classe (o portão nunca lê um número único), portões nas 7 etapas, matriz por tipo de dado, 14 limitações, D15.1–D15.7 abertas, fontes no §13.
+- **No plano:** itens novos **2.18** (catálogo, vetos, modo sombra) e **2.19** (calibração e portões), P2. Pendências: decisões D15.x e a prova "a classe prevê o erro".
+- **Portões rodados:** `conhecimento/conferir.mjs` OK (287/0); links relativos dos arquivos tocados: 0 quebrados.
+- **NÃO CONFERIDO:** o banco de produção (a sonda não foi rodada).
+- **O dono faz à mão:** decidir D15.1–D15.7 (recomendações no §11 da Espec. 15).
+
+
 ## SESSÃO 133 (19–23/11/2026) — Fase 4: pasta `Business Plan/` organizada e plano de execução único
 
 > **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`.

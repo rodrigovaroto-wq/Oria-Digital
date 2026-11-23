@@ -46,6 +46,7 @@ Como cada parte deve se comportar.
 | [`12_FONTES_OFICIAIS_E_CAPTACAO.md`](2%20Especificação/12_FONTES_OFICIAIS_E_CAPTACAO.md) | SPED, eSocial, CNAB e a captação automática (é a especificação do [`Leitor/`](../Leitor/)) |
 | [`13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md`](2%20Especificação/13_PARCEIROS_DE_DADOS_E_PRE_MANDATO.md) | parceiros de dados e o momento pré-mandato; anexos em [`13_anexos/`](2%20Especificação/13_anexos/) |
 | [`14_COMPARATIVOS_SETORIAIS.md`](2%20Especificação/14_COMPARATIVOS_SETORIAIS.md) | análise comparativa: onde cortar custo e onde crescer receita |
+| [`15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md`](2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md) | score de confiabilidade do dado captado fora e os portões por etapa (desenho; nada construído) |
 | [`f0/`](2%20Especificação/f0/README.md) | o kit da fundação: baseline, build-vs-buy, taxonomia, schema conceitual, golden set e especificação do output |
 
 ## 3 Estado e Execução
