@@ -4,7 +4,7 @@ tipo: doutrina
 toca:
   - Business Plan/README.md
   - Business Plan/06_execucao/PLANO_DE_EXECUCAO.md
-  - Business Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.3.html
+  - Business Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html
   - Business Plan/03_agentes/AGENTES.md
   - Business Plan/04_regras_de_negocio/REGRAS_E_DEFINICOES.md
   - Business Plan/08_pendencias_e_riscos/PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.md

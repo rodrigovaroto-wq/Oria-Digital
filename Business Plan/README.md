@@ -13,7 +13,7 @@ delas fica só no registro.
 
 | Assunto | Fonte oficial |
 |---|---|
-| **Decisões** (o que foi decidido, com a fala do dono) | [`07_decisoes/`](07_decisoes/README.md) — registro **v0.1.3** |
+| **Decisões** (o que foi decidido, com a fala do dono) | [`07_decisoes/`](07_decisoes/README.md) — registro **v0.1.4** |
 | **Modelo de negócio, proposta de valor, clientes, cobrança, mercado, estratégia comercial, pedido ao sócio** | [`01_negocio/MODELO_DE_NEGOCIO_E_ESTRATEGIA.md`](01_negocio/MODELO_DE_NEGOCIO_E_ESTRATEGIA.md) |
 | Modelo de projeção (premissas em branco até o piloto) | [`01_negocio/MODELO_DE_PROJECAO.md`](01_negocio/MODELO_DE_PROJECAO.md) |
 | **Workflow do produto** e ponte para a arquitetura técnica | [`02_workflow_e_arquitetura/`](02_workflow_e_arquitetura/README.md) — workflow **v0.3.0** |

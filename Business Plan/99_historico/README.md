@@ -8,7 +8,7 @@ para cá na Fase 4 sem nenhuma alteração de conteúdo (commit "Business Plan 1
 
 | Pasta ou arquivo | O que é | Substituído por |
 |---|---|---|
-| [`registro_de_decisoes/`](registro_de_decisoes/) | Registro de decisões **v0.1.2** (18/11/2026) | v0.1.3, em [`07_decisoes/`](../07_decisoes/) |
+| [`registro_de_decisoes/`](registro_de_decisoes/) | Registro de decisões **v0.1.2** (18/11/2026) e **v0.1.3** (19/11/2026, entrevista de definição), com o gerador `gerar_v013.py` | v0.1.4, em [`07_decisoes/`](../07_decisoes/) |
 | [`workflow/oria_digital_workflow_fixo_v0.1.html`](workflow/oria_digital_workflow_fixo_v0.1.html) | Workflow original, anterior às decisões | v0.3.0, em [`02_workflow_e_arquitetura/`](../02_workflow_e_arquitetura/) |
 | [`workflow/oria_digital_workflow_atualizado_v0.2.0.html`](workflow/oria_digital_workflow_atualizado_v0.2.0.html) | Workflow v0.2.0 (aplica a v0.1.2; anterior à entrevista) | v0.3.0 |
 | [`entrevista/oria_entrevista_lote_01..03.html`](entrevista/) | Transcrições literais dos lotes 01–03 (entrevista por voz) | Seção 19 do registro v0.1.3 |
@@ -23,7 +23,7 @@ Os caminhos antigos e os novos:
 
 | Antes (até a Fase 3) | Agora |
 |---|---|
-| `_trabalho_fase1/registro_de_decisoes/…v0.1.3.html` e `gerar_v013.py` | `07_decisoes/` |
+| `_trabalho_fase1/registro_de_decisoes/…v0.1.3.html` e `gerar_v013.py` | `07_decisoes/` até 23/11/2026; depois da v0.1.4, `99_historico/registro_de_decisoes/` |
 | `_trabalho_fase1/registro_de_decisoes/…v0.1.2.html` | `99_historico/registro_de_decisoes/` |
 | `_trabalho_fase1/workflow/…v0.3.0.html` e `gerar_workflow_v030.py` | `02_workflow_e_arquitetura/` |
 | `_trabalho_fase1/workflow/…v0.1.html` e `…v0.2.0.html` | `99_historico/workflow/` |
@@ -63,7 +63,7 @@ Os geradores leem só os caminhos passados na linha de comando. Medido na Fase 4
 arquivos saem idênticos byte a byte aos versionados.
 
 ```bash
-python3 -I "Business Plan/07_decisoes/gerar_v013.py" "Business Plan/99_historico/registro_de_decisoes/oria_digital_decisoes_e_pendencias_v0.1.2.html" /tmp/v013.html
+python3 -I "Business Plan/99_historico/registro_de_decisoes/gerar_v013.py" "Business Plan/99_historico/registro_de_decisoes/oria_digital_decisoes_e_pendencias_v0.1.2.html" /tmp/v013.html
 ```
 
 ```bash

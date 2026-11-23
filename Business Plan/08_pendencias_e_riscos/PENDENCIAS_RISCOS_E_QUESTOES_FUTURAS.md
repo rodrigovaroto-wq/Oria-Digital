@@ -1,7 +1,7 @@
 # Pendências, riscos e questões futuras
 
 **Lista viva.** A decisão que gerou cada item está no
-[registro v0.1.3](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.3.html) (seção 19.13); aqui fica
+[registro v0.1.4](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html) (seção 19.13); aqui fica
 a **situação** e o item do [plano](../06_execucao/PLANO_DE_EXECUCAO.md) que a resolve. Quando um item
 fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma nova versão do registro.
 
@@ -18,7 +18,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Quem é o segundo revisor na Partners | R1 | 1.F2 | Aberta: pessoa a indicar |
 | Deck, slide 5: "mais de 30 fontes" | — | — | **Não fechado pelo dono.** Hoje o código capta poucas fontes externas (séries do BCB e os arquivos do cliente). A regra 6 da documentação do deck diz que nada é afirmado no presente se ainda não existe |
 | Deck, slide 10: retirada do prazo "3 a 6 meses" | K2 | — | Feita na Fase 3, coerente com a K2. O dono não confirmou explicitamente a frase final |
-| **Classificação de documentos em N2 sem gabarito** (`0127_o_dial_obedecido.sql:493`, "declarada, não medida"): voltar a N1 junto com a extração no item 0.5, ou manter em N2 | D6 (fala só da extração) | 0.5, G0 | **Decisão do dono.** Achada na revisão independente da Fase 4 |
+| **Classificação de documentos em N2 sem gabarito** (`0127_o_dial_obedecido.sql:493`, "declarada, não medida"): voltar a N1 junto com a extração no item 0.5, ou manter em N2 | D6 (fala só da extração) | 0.5, G0 | **Fechada em 23/11/2026: volta a N1** (D6-1, registro v0.1.4) |
 | Ligar a conciliação do aging na rodada (`fn_reconciliar_caso`) | — | 1.A2 | Decisão do dono (vinda do PLANO_MVP) |
 | Arquivo real de AR e AP para medir a leitura | DM7 do PLANO_MVP | 1.A1 | Depende do dono |
 

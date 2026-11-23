@@ -1,7 +1,7 @@
 # Regras de negócio e definições operacionais
 
 **Fonte oficial** dos parâmetros e das definições que o sistema aplica. Cada regra cita o código da
-decisão no [registro v0.1.3](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.3.html); o texto da
+decisão no [registro v0.1.4](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html); o texto da
 decisão e a fala do dono ficam lá. Os números aqui são **réguas ajustáveis e versionadas** (G5): mudar
 um valor é decisão registrada numa nova versão do registro, nunca edição silenciosa deste arquivo.
 
@@ -98,7 +98,7 @@ Os níveis N0 (sombra) a N3 (autônomo) estão definidos na doutrina técnica
 - **Subir uma etapa a N2** exige ~**300 amostras** por etapa e tipo de documento, **parte cega**, com acerto
   mínimo de **98% no limite inferior** do intervalo. (Referência: 300 acertos em 300 dão limite
   inferior de 98,7%; 30 em 30 dão só 88,6%. Fonte: [síntese da pesquisa](../09_pesquisa/SINTESE_DA_PESQUISA_FASE1.md), §3.)
-- **A extração volta a N1 até ser medida.** Piora medida rebaixa automaticamente.
+- **A extração e a classificação de documentos voltam a N1 até serem medidas** (D6, D6-1). Piora medida rebaixa automaticamente.
 - **Gabarito:** 30 a 50 páginas reais, formatos mais comuns, conferido célula a célula, refeito a cada
   semestre, antes de trocar ou manter modelo e fornecedor (D4). Parte dele fica **oculta** (F5).
 

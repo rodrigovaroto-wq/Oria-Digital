@@ -27,7 +27,7 @@
 {"k":"n","id":"arquivo:Business Plan/03_agentes/AGENTES.md","t":"arquivo","f":"Business Plan/03_agentes/AGENTES.md","txt":"AGENTES.md"}
 {"k":"n","id":"arquivo:Business Plan/04_regras_de_negocio/REGRAS_E_DEFINICOES.md","t":"arquivo","f":"Business Plan/04_regras_de_negocio/REGRAS_E_DEFINICOES.md","txt":"REGRAS_E_DEFINICOES.md"}
 {"k":"n","id":"arquivo:Business Plan/06_execucao/PLANO_DE_EXECUCAO.md","t":"arquivo","f":"Business Plan/06_execucao/PLANO_DE_EXECUCAO.md","txt":"PLANO_DE_EXECUCAO.md"}
-{"k":"n","id":"arquivo:Business Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.3.html","t":"arquivo","f":"Business Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.3.html","txt":"oria_digital_decisoes_e_pendencias_v0.1.3.html"}
+{"k":"n","id":"arquivo:Business Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html","t":"arquivo","f":"Business Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html","txt":"oria_digital_decisoes_e_pendencias_v0.1.4.html"}
 {"k":"n","id":"arquivo:Business Plan/08_pendencias_e_riscos/PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.md","t":"arquivo","f":"Business Plan/08_pendencias_e_riscos/PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.md","txt":"PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.md"}
 {"k":"n","id":"arquivo:Business Plan/README.md","t":"arquivo","f":"Business Plan/README.md","txt":"README.md"}
 {"k":"n","id":"arquivo:CLAUDE.md","t":"arquivo","f":"CLAUDE.md","txt":"CLAUDE.md"}
@@ -2609,7 +2609,7 @@
 {"k":"e","de":"ficha:plano-unico-e-business-plan-fase4","rel":"TOCA","pa":"arquivo:Business Plan/03_agentes/AGENTES.md","f":".claude/conhecimento/fichas/plano-unico-e-business-plan-fase4.md"}
 {"k":"e","de":"ficha:plano-unico-e-business-plan-fase4","rel":"TOCA","pa":"arquivo:Business Plan/04_regras_de_negocio/REGRAS_E_DEFINICOES.md","f":".claude/conhecimento/fichas/plano-unico-e-business-plan-fase4.md"}
 {"k":"e","de":"ficha:plano-unico-e-business-plan-fase4","rel":"TOCA","pa":"arquivo:Business Plan/06_execucao/PLANO_DE_EXECUCAO.md","f":".claude/conhecimento/fichas/plano-unico-e-business-plan-fase4.md"}
-{"k":"e","de":"ficha:plano-unico-e-business-plan-fase4","rel":"TOCA","pa":"arquivo:Business Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.3.html","f":".claude/conhecimento/fichas/plano-unico-e-business-plan-fase4.md"}
+{"k":"e","de":"ficha:plano-unico-e-business-plan-fase4","rel":"TOCA","pa":"arquivo:Business Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html","f":".claude/conhecimento/fichas/plano-unico-e-business-plan-fase4.md"}
 {"k":"e","de":"ficha:plano-unico-e-business-plan-fase4","rel":"TOCA","pa":"arquivo:Business Plan/08_pendencias_e_riscos/PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.md","f":".claude/conhecimento/fichas/plano-unico-e-business-plan-fase4.md"}
 {"k":"e","de":"ficha:plano-unico-e-business-plan-fase4","rel":"TOCA","pa":"arquivo:Business Plan/README.md","f":".claude/conhecimento/fichas/plano-unico-e-business-plan-fase4.md"}
 {"k":"e","de":"ficha:ponytail-auditado-nao-instalar","rel":"TOCA","pa":"arquivo:.claude/agents/migrations-postgres.md","f":".claude/conhecimento/fichas/ponytail-auditado-nao-instalar.md"}
