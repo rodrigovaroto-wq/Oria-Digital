@@ -34,7 +34,8 @@ E três deles contradiziam regra escrita: `/test-generate` e `/tdd-green` produz
 ## O que ficou no lugar
 
 Três comandos escritos **aqui**, que citam os agentes deste projeto e as sete regras:
-`/rodada`, `/revisar`, `/fechar` (em `.claude/commands/`). Os sete agentes de `.claude/agents/`
+`/rodada`, `/revisar`, `/fechar` (em `.claude/commands/`) — e `/autopilot` (23/11/2026), que não
+descreve trabalho novo: encadeia os três e acrescenta PR, CI e limpeza pós-merge. Os sete agentes de `.claude/agents/`
 continuam sendo o despacho de trabalho, como o `CLAUDE.md` sempre disse.
 
 ## Se alguém quiser um de volta

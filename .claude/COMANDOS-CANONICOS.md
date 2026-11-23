@@ -56,7 +56,7 @@ node --test '.claude/conhecimento/test/*.test.mjs'  # ANTES de indexar: o grafo 
                                                    # indexar essa pergunta é verdadeira por construção)
 node .claude/conhecimento/indexar.mjs && git diff --exit-code -- .claude/conhecimento/grafo.jsonl \
   && node .claude/conhecimento/conferir.mjs   # o índice do conhecimento é derivado e tem portão
-node .claude/verificar-comandos.mjs           # todo subagent_type citado por comando existe
+node .claude/verificar-comandos.mjs           # todo subagent_type e todo caminho citado por comando existem
 node .claude/verificar-espelho-claude-md.mjs  # este bloco não ficou para trás do CI
 sudo -u postgres env PGHOST=/tmp PGPORT=5432 PGUSER=postgres Supabase/test/run.sh
 CONFERIR_PSQL="sudo -u postgres psql -h /tmp -p 5432" CONFERIR_DB=tdf_test \
