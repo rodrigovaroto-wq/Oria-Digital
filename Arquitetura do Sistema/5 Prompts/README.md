@@ -30,7 +30,7 @@ este projeto chama de lente central.
 | Execução de uma fase | `/rodada` |
 | Red team | `04-defeito-sem-erro.md` + `revisor-defeito-silencioso` |
 | Code review | `/revisar` |
-| Commit / PR | `/fechar` passo 1, sobre a regra 6 |
+| Commit / PR | `/fechar` passo 1, sobre a regra 6; o PR, o CI e a limpeza pós-merge são do `/autopilot` |
 | Checkpoint | `/fechar` |
 | Retomada após interrupção | `00-continuacao.md` |
 | **Gate entre fases** | **`05-gate-de-fase.md`** — era a única sem dono |

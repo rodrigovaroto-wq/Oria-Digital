@@ -77,7 +77,8 @@ cuja linha casa com a tarefa — os arquivos estão em `.claude/agents/`.
 importados foram removidos em 16/09/2026: custavam 19.439 bytes de `description` no prompt de
 TODA sessão, nenhum conhecia as sete regras, e três contradiziam a regra 2 (`/test-generate`,
 `/tdd-green`, `/sql-migrations`). A procedência ficou em `.claude/COMANDOS.md`. Sobraram três
-comandos escritos aqui — `/rodada`, `/revisar`, `/fechar` —, e o portão que prova que todo
+comandos escritos aqui — `/rodada`, `/revisar`, `/fechar` — e, em 23/11/2026, um quarto que só os
+encadeia até o PR verde: `/autopilot` (para antes do merge, que é do dono). O portão que prova que todo
 `subagent_type` citado existe é `node .claude/verificar-comandos.mjs`.
 
 **O plugin `superpowers` está DESLIGADO neste projeto** (`.claude/settings.json`,
