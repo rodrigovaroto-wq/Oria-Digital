@@ -13,7 +13,7 @@ Nada aqui é parecer jurídico.
 | Separação **por organização** no mesmo banco (RLS); banco dedicado para cliente regulado que exigir | H4 | RLS por **mandato** existe (`0216`); camada de organização **não existe** |
 | Chaves de **mínimo privilégio** para o n8n e para os agentes; fim do acesso total | H2, H4 | O n8n usa a chave `service_role`, de acesso total (`N8N/README.md`, credencial do Storage) |
 | **Teste automático de vazamento** entre organizações, que precisa reprovar | H4 | Existe teste entre membros e mandatos (`Supabase/test/acesso_por_caso.test.sql`); entre organizações, não |
-| n8n: nenhum mandato real novo nele até a produção real; destino final no estudo | H2 | — |
+| n8n: nenhum mandato real novo na instância atual; o piloto já roda fora dela (produção real, H1-1); destino final no estudo | H2 | Itens 0.4 e 0.12 do plano |
 
 ## 2. Trilha de auditoria
 
@@ -26,8 +26,8 @@ Nada aqui é parecer jurídico.
 
 | Momento | Regra | Decisões |
 |---|---|---|
-| **Até o piloto** | Cópia **diária automática, criptografada**, do banco e dos arquivos, **fora do Supabase**; perda máxima de 1 dia; **um teste de restauração antes do piloto** | H1-1, H7 |
-| **Produção** | Plano pago com backup contínuo, região São Paulo, cópia separada dos arquivos; perda máxima de minutos; volta em até 4 h; teste de recuperação **trimestral** (banco + arquivos, tempo anotado) | H1, H7 |
+| **Até o primeiro mandato do piloto** | Cópia **diária automática, criptografada**, do banco e dos arquivos, **fora do Supabase**; perda máxima de 1 dia; **um teste de restauração antes do piloto** | H1-1, H7 |
+| **Produção, a partir do primeiro mandato do piloto** (o piloto conta como produção real, H1-1; item 0.12 do plano) | Plano pago com backup contínuo, região São Paulo, cópia separada dos arquivos; perda máxima de minutos; volta em até 4 h; teste de recuperação **trimestral** (banco + arquivos, tempo anotado) | H1, H7 |
 | Sempre | O backup do provedor **não cobre os arquivos** (Storage) — a cópia dos arquivos é separada | Síntese §4 |
 
 Hoje **não existe backup** fora do esquema (`Supabase/README.md` só documenta `pg_dump --schema-only`) e o
@@ -68,6 +68,8 @@ Hoje **não existe rotina de expurgo**.
 5. Extração e classificação de documentos de volta a N1 até medir, com `auto_promocao` desligada (D6, D6-1; item 0.5).
 6. Proteção do repositório: o `.github/CODEOWNERS` diz que, sem a regra de proteção do `main`, a
    revisão não bloqueia o merge; a regra ligada **não foi conferida** (K4).
+7. Infraestrutura de produção do piloto (H1-1, H2, H7; item 0.12): backup contínuo, cópia separada dos
+   arquivos, automação fora da instância atual do n8n, metas de minutos e de 4 h medidas num teste.
 
 ## 8. Pendentes de parecer jurídico
 

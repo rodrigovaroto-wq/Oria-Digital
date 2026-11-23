@@ -42,7 +42,7 @@ os agentes, em [`03_agentes/AGENTES.md`](../03_agentes/AGENTES.md); papéis e pu
 FASE 0  Fundação ─────────────► G0  pronto para o 1º mandato do piloto
 FASE 1  Piloto com a Partners ─► G1  piloto concluído e medido   (1ª entrega da v1, K6)
 FASE 2  Restante da v1 ────────► G2  pronto para o 1º cliente além da Partners
-FASE 3  Evolução operacional ──► G3  produção definitiva
+FASE 3  Evolução operacional ──► G3  produção para vários clientes
 FASE 4  Arquitetura final e futuro (condicionada a gatilhos, parcerias e pareceres)
 ```
 
@@ -79,11 +79,12 @@ trilhas abaixo.
 | **0.9** | **Três ambientes** (H8): desenvolvimento, teste descartável por mudança, produção; nenhuma credencial de produção fora dela | P2 | 0.1 | Claude · Dono | CORRIGIR. Existe o banco de teste do CI (`Supabase/test/run.sh`, `tdf_test`) e a produção; não há dev separado | Os três existem; varredura não acha credencial de produção fora dela |
 | **0.10** | **Anonimização** de dado real para teste (H8, F4) | P2 | 0.9 | Claude | DESENVOLVER | Cópia anonimizada de um mandato real roda a suíte; varredura não acha CNPJ/CPF/nome reais |
 | **0.11** | **Alinhar duas especificações técnicas ao registro**: `Arquitetura do Sistema/2 Especificação/10_DADOS_RETENCAO_E_LGPD.md` (I2, H1, H7, H8) e `06_HUMAN_IN_THE_LOOP.md` (E1, E2, R1) | P3 | — | Claude · Dono | CORRIGIR. A 10 ainda marca os prazos [A CONFIRMAR]; a 06 ainda cita "revisor sênior / gerente" (linha 14) | As duas especificações não contradizem o registro vigente (v0.1.5) |
+| **0.12** | **Infraestrutura de produção do piloto** (H1-1, H1, H2, H7): o piloto conta como produção real. No banco e na automação escolhidos pelo estudo: backup contínuo, cópia separada dos arquivos, região São Paulo; automação (n8n ou o substituto) **fora da instância atual** | P1 | 0.1, 0.3 | Claude · Dono contrata e aplica | DESENVOLVER. Hoje: banco no plano gratuito sem backup; n8n numa instância compartilhada (decisão H2: ali só até a produção real) | Num teste de recuperação real (banco + arquivos): perda máxima de minutos e volta em até 4 h, medidas; nenhum mandato do piloto roda na instância atual do n8n |
 
 ### Portão G0 — pronto para o primeiro mandato do piloto
 
-Todos os itens **P1** da Fase 0 fechados (0.1 a 0.8) **e** os itens P1 da Fase 1 que o primeiro mandato
-usa (marcados "G0" abaixo). Conferência: sonda sem ausências além de `envio_segredo_no_vault` (falso ausente conhecido: a leitura da sonda não alcança o Vault; `ESTADO.md`, sessão 131), backup e restauração medidos, contrato e
+Todos os itens **P1** da Fase 0 fechados (0.1 a 0.8 e 0.12, a infraestrutura de produção do piloto) **e** os itens P1 da Fase 1 que o primeiro mandato
+usa (marcados "G0" abaixo). Conferência: sonda sem ausências além de `envio_segredo_no_vault` (falso ausente conhecido: a leitura da sonda não alcança o Vault; `ESTADO.md`, sessão 131), backup e restauração medidos, metas de produção (H7) medidas no 0.12, contrato e
 RIPD assinados.
 
 ---
@@ -251,7 +252,7 @@ pendências).
 
 | ID | Tarefa | Prio. | Depende de | Papel | Situação | Pronto quando |
 |---|---|---|---|---|---|---|
-| 3.1 | **Produção definitiva** (H1, H7): plano pago, backup contínuo, região São Paulo, cópia separada dos arquivos | P1 | 0.1, G1 | Dono · Claude | DESENVOLVER | Perda máxima de minutos medida |
+| 3.1 | **Produção para vários clientes** (H1, H7): redimensionar banco, arquivos e automação pela capacidade e pelo custo medidos no piloto, antes do primeiro cliente além da Partners. A infraestrutura de produção do próprio piloto é o 0.12 | P1 | 0.12, G1 | Dono · Claude | DESENVOLVER | Perda máxima de minutos medida |
 | 3.2 | **Teste de recuperação trimestral** (H7) | P1 | 3.1 | Claude | DESENVOLVER | Volta em ≤ 4 h, banco + arquivos, tempo anotado |
 | 3.3 | **Subir etapas a N2** com ~300 amostras e parte cega (D6) | P2 | 1.J2, 1.E5 | Claude · Dono rotula | CORRIGIR. O mecanismo de promoção existe (`0126` golden set, `0136` veredito, `0137` promoção automática, `0218` recorte), mas com a régua antiga: 30 vereditos e 0,95 de concordância. Não existe rebaixamento automático por piora | `golden_criterio` com ~300 amostras por etapa e tipo de documento, parte cega, limite inferior ≥ 98% (D6); `auto_promocao` religada só depois; **piora medida rebaixa automaticamente** (D6), com teste que reprova sem o rebaixamento |
 | 3.4 | **Gabarito refeito a cada semestre** (D4) | P2 | 1.J2 | [a indicar] | DESENVOLVER | Rodada semestral registrada |
@@ -259,7 +260,7 @@ pendências).
 | 3.6 | **Preços e tetos** (J1, N-C6b, D5) a partir do piloto | P1 | G1 | Dono | DESENVOLVER | Valores registrados numa nova versão do registro |
 | 3.7 | **Técnico separado do Sócio** (E2, K3) | P2 | Contratação | **[a contratar]** | DESENVOLVER | Mudança técnica aprovada por pessoa diferente do dono |
 
-### Portão G3 — produção definitiva
+### Portão G3 — produção para vários clientes
 
 Todos os itens P1 da Fase 3 fechados: 3.1 e 3.2, com as metas da decisão H7 medidas num teste de recuperação real (banco + arquivos):
 perda máxima de minutos e volta em até 4 h. 3.6 fechado (preços e tetos registrados). Os itens P2 da
@@ -298,7 +299,7 @@ mesma onda vão um depois do outro.
 |---|---|
 | **1** | **0.1** · **0.2** · **0.4** · **0.5** · **0.6** · 0.11 · **1.A1** · **1.A4** · 1.A8 · **1.B1** · **1.B4** · **1.B7** · **1.C1** · **1.C2** · **1.C3** · **1.D1** · **1.D6** · **1.F1** · **1.F5** · **1.J2** |
 | **2** | **0.3** · **0.7** · 0.9 · **1.A2** · **1.A3** · **1.A5** · 1.A9 · **1.B2** · **1.B6** · 1.C4 · **1.C5** · **1.D2** · **1.D3** · **1.D7** · **1.F2** · **1.G1** · **1.H1** |
-| **3** | **0.8** · 0.10 · **1.A6** · 1.A10 · **1.B3** · 1.D10 · **1.D4** · **1.D5** · **1.D8** · **1.D9** · **1.F3** · **1.F6** · 1.G2 · **1.H2** · **1.H4** · **1.I1** |
+| **3** | **0.8** · 0.10 · **0.12** · **1.A6** · 1.A10 · **1.B3** · 1.D10 · **1.D4** · **1.D5** · **1.D8** · **1.D9** · **1.F3** · **1.F6** · 1.G2 · **1.H2** · **1.H4** · **1.I1** |
 | **4** | **1.A7** · **1.B5** · **1.E2** · **1.E3** · **1.E4** · **1.H3** · **1.I2** · 1.I3 · **1.J1** |
 | **5** | **1.E1** · **1.F4** · **1.H5** |
 | **6** | **1.E5** |
