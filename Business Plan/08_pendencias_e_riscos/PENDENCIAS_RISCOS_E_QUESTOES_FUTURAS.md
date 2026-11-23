@@ -20,7 +20,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Deck, slide 10: retirada do prazo "3 a 6 meses" | K2 | — | Feita na Fase 3, coerente com a K2. O dono não confirmou explicitamente a frase final |
 | **Classificação de documentos em N2 sem gabarito** (`0127_o_dial_obedecido.sql:493`, "declarada, não medida"): voltar a N1 junto com a extração no item 0.5, ou manter em N2 | D6 (fala só da extração) | 0.5, G0 | **Fechada em 23/11/2026: volta a N1** (D6-1, registro v0.1.4) |
 | Gravidade "alto" (G5): "> 1%" de quê? O registro diz só "> 1%"; as regras leem "do EBITDA ou da dívida", como no crítico | G5 | 1.D6 | **Fechada em 23/11/2026: do EBITDA ou da dívida** (G5-1, registro v0.1.5) |
-| Ligar a conciliação do aging na rodada (`fn_reconciliar_caso`) | — | 1.A2 | Decisão do dono (vinda do PLANO_MVP) |
+| Ligar a conciliação do aging na rodada (`fn_reconciliar_caso`) | — | 1.A2 | **Fechada em 13/11/2026**: ligada pela `0278`, aplicada em produção (`ESTADO.md`, sessão 129) |
 | Arquivo real de AR e AP para medir a leitura | DM7 do PLANO_MVP | 1.A1 | Depende do dono |
 
 ## 2. Dependências de terceiros

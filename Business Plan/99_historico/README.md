@@ -59,11 +59,15 @@ plano novo aproveita como inventário.
 
 ## Como regerar as versões HTML
 
-Os geradores leem só os caminhos passados na linha de comando. Medido na Fase 4: regerados, os dois
+Os geradores leem só os caminhos passados na linha de comando. Medido na Fase 4: regerados, os
 arquivos saem idênticos byte a byte aos versionados.
 
 ```bash
 python3 -I "Business Plan/99_historico/registro_de_decisoes/gerar_v013.py" "Business Plan/99_historico/registro_de_decisoes/oria_digital_decisoes_e_pendencias_v0.1.2.html" /tmp/v013.html
+```
+
+```bash
+python3 -I "Business Plan/99_historico/registro_de_decisoes/gerar_v014.py" "Business Plan/99_historico/registro_de_decisoes/oria_digital_decisoes_e_pendencias_v0.1.3.html" /tmp/v014.html
 ```
 
 ```bash
