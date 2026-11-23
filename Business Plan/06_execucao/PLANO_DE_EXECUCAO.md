@@ -83,7 +83,7 @@ trilhas abaixo.
 ### Portão G0 — pronto para o primeiro mandato do piloto
 
 Todos os itens **P1** da Fase 0 fechados (0.1 a 0.8) **e** os itens P1 da Fase 1 que o primeiro mandato
-usa (marcados "G0" abaixo). Conferência: sonda sem ausências, backup e restauração medidos, contrato e
+usa (marcados "G0" abaixo). Conferência: sonda sem ausências além de `envio_segredo_no_vault` (falso ausente conhecido: a leitura da sonda não alcança o Vault; `ESTADO.md`, sessão 131), backup e restauração medidos, contrato e
 RIPD assinados.
 
 ---
@@ -208,7 +208,7 @@ Absorve a trilha C do `PLANO_MVP_2026-11` (MC0–MC8).
   primeiros valores.
 - Conferidor, Dívida, Caixa e Mercado medidos no gabarito; Supervisor e Auditor rodaram (sinal positivo
   de execução, regra 7).
-- Todas as fontes de mercado do piloto (1.C1–1.C5) com data de atualização e alerta de frescor.
+- Todas as fontes de mercado do piloto (1.C1–1.C3 e 1.C5) com data de atualização e alerta de frescor.
 - O **dossiê de processos e notícias** (1.H5) entregue no mandato, com o estado de cada fonte (K6).
 
 ---

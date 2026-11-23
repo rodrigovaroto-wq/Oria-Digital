@@ -31,7 +31,7 @@ continua aberto foi para as [pendências](PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.m
 | Provedores múltiplos e roteamento por região | 1.D8 |
 | Custo por etapa e agente; medição por mandato | 1.D9, 1.J1 |
 | Gabarito com parte oculta; régua de autonomia; extração em N1 | 1.J2, 0.5, 3.3 |
-| Agentes do piloto e dados de mercado | 1.C1–1.C4, 1.D4, 1.D5, 1.E1–1.E4 |
+| Agentes do piloto e dados de mercado | 1.C1–1.C5, 1.D4, 1.D5, 1.E1–1.E4 |
 | Portal do cliente com link seguro; duas etapas depois | 1.G1, 2.16 |
 | Excel com link para documento e página + PDF | 1.I1, 1.I2 |
 | Monitoramento e relatório periódico | 2.8, 2.9 |
