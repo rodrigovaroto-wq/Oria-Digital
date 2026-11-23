@@ -1,5 +1,9 @@
 # Arquitetura-alvo e roadmap — evolução para plataforma de inteligência financeira
 
+> **ROADMAP SUPERADO em 23/11/2026** pelo plano de execução único [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1).
+> As **fases, gates e o caminho crítico** (seções 5 a 12) são histórico. A **decisão por componente**, as camadas, a
+> arquitetura final e as divergências (seções 1 a 4) seguem como referência técnica, sujeitas ao estudo de infraestrutura (item 0.1 do plano).
+
 **Data:** 15/09/2026 · **Base:** `main` em `de556c2` · **Origem:** derivado da
 `Arquitetura do Sistema/4 Análises e Auditorias/AUDITORIA_PROFUNDA_2026-09-15.md`, cujos números
 foram medidos nesta árvore.

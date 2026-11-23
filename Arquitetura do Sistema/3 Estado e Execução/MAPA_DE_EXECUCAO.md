@@ -1,5 +1,9 @@
 # Mapa de execução — daqui até o projeto fechado
 
+> **SUPERADO em 23/11/2026** pelo plano de execução único [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1 do registro v0.1.3).
+> Este arquivo fica como histórico, sem outra alteração. O que dele seguia aberto, e para onde foi, está na
+> seção 11 daquele plano (por bloco, não item a item).
+
 **Data:** 09/09/2026, sessão 81 · **Base conferida:** `main` em `668b6fe`, CI verde (PR #203).
 **Tocado em 26/10/2026:** só a linha B9 do quadro e a §14 (Espec. 13). **Tocado em 15/10/2026 (S109):** só a linha B8 do quadro (zip no navegador). **Tocado em 13/10/2026 (S107 e S108):** só a linha B8 do quadro e a §13 (Espec. 12). O resto do corpo continua
 conferido em 09/09.

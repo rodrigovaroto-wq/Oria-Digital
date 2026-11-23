@@ -1,5 +1,9 @@
 # 03 — MVP e Roadmap
 
+> **SUPERADO em 23/11/2026** pelo plano de execução único [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1 do registro v0.1.3).
+> Este arquivo fica como histórico, sem outra alteração. O que dele seguia aberto, e para onde foi, está na
+> seção 11 daquele plano (por bloco, não item a item).
+
 ## MVP = workflow completo em Modo Conservador
 
 **Definição:** o MVP contém **todos os estágios e todas as camadas**, conectados ponta a
