@@ -1,5 +1,9 @@
 # Prontidão por estágio — o que falta para o objetivo estar 100% cumprido
 
+> **SUPERADO em 23/11/2026** pelo plano de execução único [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1 do registro v0.1.3).
+> Este arquivo fica como histórico, sem outra alteração. O mapeamento de cada item antigo para o plano novo
+> está na seção 11 daquele plano.
+
 **Data:** 20/08/2026, sessão 55 · **Base:** `dbc5eec` · suítes: banco 884 · export 618 · n8n 298 ·
 transcrição 35 · e2e 46.
 
