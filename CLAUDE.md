@@ -70,7 +70,7 @@ cuja linha casa com a tarefa — os arquivos estão em `.claude/agents/`.
 | `portal-export` | `portal/src/**`, `export.ts`, endereços de célula | médio |
 | `suites-invariantes` | Executar o protocolo de invariante não-vazio (condicional) | médio |
 | `revisor-defeito-silencioso` | Revisar um diff sob a lente central do projeto | forte |
-| `estado-e-handoff` | Atualizar `ESTADO.md`, `MAPA`, memória, PR | barato |
+| `estado-e-handoff` | Atualizar `ESTADO.md`, o plano de execução, memória, PR | barato |
 | `explorador` | Fan-out amplo, só depois de `buscar.mjs` vir vazio (condicional) | barato |
 
 **Estes sete são a lista inteira.** Os 30 agentes `importado.*` e os 52 comandos de barra

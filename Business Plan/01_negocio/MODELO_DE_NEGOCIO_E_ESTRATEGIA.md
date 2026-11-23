@@ -42,13 +42,14 @@ gatilhos para reduzir custo e dívida e aumentar receita e lucro em pouco tempo.
 cliente envia os documentos e acompanha tudo em um lugar só: base conferida, modelo financeiro, dossiê
 e alertas com suporte direto."*
 
-| Receita | Natureza | Descrição |
+| Receita | Destaque (texto literal do slide 8) | Descrição |
 |---|---|---|
-| **Diagnóstico por mandato** | Receita de entrada, por mandato | Base conferida, modelo financeiro, dossiê e apresentação aos credores |
-| **Acompanhamento contínuo** | Mensal recorrente, por contrato | Empresas em pós-reestruturação e carteiras de credores (G1, G2) |
-| **Plataforma por usuário** | Licença de uso, por perfil de acesso (mais adiante) | Empresas, credores e fundos acompanham seus mandatos e carteiras |
-| **Bônus por resultado** | Variável, opcional | Mediante contrato, atrelado ao plano aprovado. Nunca como base |
+| **Diagnóstico por mandato** | Receita de entrada · por mandato | Base conferida, modelo financeiro, dossiê e apresentação aos credores |
+| **Acompanhamento contínuo** | Mensal recorrente · por contrato | Empresas em pós-reestruturação e carteiras de credores (G1, G2) |
+| **Plataforma por usuário** | Licença de uso · por perfil de acesso | Empresas, credores e fundos acompanham seus mandatos e carteiras |
+| **Bônus por resultado** | Variável · complemento da receita | Mediante contrato, atrelado ao plano aprovado |
 
+- **Regras de cobrança (J1):** a licença por usuário vem mais adiante; o bônus por resultado é só opcional, nunca a base.
 - **Valores:** definidos **depois do piloto**, com custo de IA, horas de analista e prazo medidos em
   cada mandato (J2, J6). O deck mostra só o modelo, sem valores.
 - **Projeção:** [`MODELO_DE_PROJECAO.md`](MODELO_DE_PROJECAO.md), com as premissas em branco.
@@ -66,22 +67,22 @@ diz isso duas vezes.
 |---|---|---|
 | Juro acima do mercado | 2 p.p. × R$ 500 mi = **R$ 10 mi / ano** | Recorrente |
 | Despesa acima do setor | 10% × R$ 200 mi = **R$ 20 mi / ano** | Recorrente |
-| Crédito tributário | **R$ 20 mi**, recuperados uma vez e usados para amortizar dívida | Único |
+| Crédito tributário | **R$ 20 mi**, recuperados uma vez e usados para amortizar dívida | Único (no gráfico: barra verde, sem "/ ano") |
 
 ## 6. Mercado: dados e fontes
 
 Reconferidos na fonte primária em 19/11/2026 (J3). **Todo número externo novo passa pela mesma
 reconferência, com o recorte certo, antes de entrar no deck.**
 
-| Dado | Fonte e recorte | Situação |
-|---|---|---|
-| **R$ 244,4 bi** em dívidas, **9,3 milhões de empresas inadimplentes**: recorde | Serasa Experian, "Novo recorde: inadimplência das empresas chegou a 9,3 milhões em agosto", 20/10/2026 (dado de ago/2026) | Conferido. Substituiu os "R$ 18,9 bi do OBRE", sem fonte primária |
-| "3 meses" para montar os números à mão | Experiência da Oria Partners | Sem fonte externa |
-| **2.466 empresas pediram recuperação judicial** em 2025 (977 processos) | Serasa Experian, 07/04/2026 | Conferido. São pedidos do ano, não o estoque. No 1º semestre de 2026 os pedidos caíram (435 × 509, pesquisa da Fase 1) |
-| **1.581 transações de M&A** em 2025 | KPMG, Pesquisa de Fusões e Aquisições 2025 – 4º trimestre (ano inteiro) | Conferido |
-| **R$ 2,8 tri** de crédito a pessoas jurídicas em set/2026 | Banco Central, Estatísticas Monetárias e de Crédito, 29/10/2026 | Conferido |
-| **R$ 56 bi de captação líquida** em FIDCs em 2026 (R$ 56,1 bi de jan a out) | Anbima, 10/11/2026 | Conferido. É captação líquida, não ofertas (ofertas de FIDC: R$ 87,8 bi de jan a set/2026) |
-| "mais de 30 fontes" (slide 5) | O slide 6 mostra só as principais | Mantido por decisão do dono. **Ponto não fechado:** ver pendências |
+| Slide | Dado | Fonte e recorte | Situação |
+|---|---|---|---|
+| 2 | **R$ 244,4 bi** em dívidas, **9,3 milhões de empresas inadimplentes**: recorde | Serasa Experian, "Novo recorde: inadimplência das empresas chegou a 9,3 milhões em agosto", 20/10/2026 (dado de ago/2026) | Conferido. Substituiu os "R$ 18,9 bi do OBRE", sem fonte primária |
+| 2, 4 | "3 meses" para montar os números à mão | Experiência da Oria Partners | Sem fonte externa |
+| 4 | **2.466 empresas pediram recuperação judicial** em 2025 (977 processos) | Serasa Experian, 07/04/2026 | Conferido. São pedidos do ano, não o estoque. No 1º semestre de 2026 os pedidos caíram (435 × 509, pesquisa da Fase 1) |
+| 4 | **1.581 transações de M&A** em 2025 | KPMG, Pesquisa de Fusões e Aquisições 2025 – 4º trimestre (ano inteiro) | Conferido. Rótulo corrigido de "KPMG 4T25" para "KPMG (2025)" |
+| 4 | **R$ 2,8 tri** de crédito a pessoas jurídicas em set/2026 | Banco Central, Estatísticas Monetárias e de Crédito, 29/10/2026 | Conferido |
+| 4 | **R$ 56 bi de captação líquida** em FIDCs em 2026 (R$ 56,1 bi de jan a out) | Anbima, "Fundos registram saída líquida de R$ 39,4 bilhões em outubro", 10/11/2026 | Conferido. É captação líquida, não ofertas (ofertas de FIDC: R$ 87,8 bi de jan a set/2026) |
+| 5 | "mais de 30 fontes" | O slide 6 mostra só as principais | Mantido por decisão do dono. **Ponto não fechado:** ver pendências |
 
 ## 7. Concorrência e posicionamento
 
