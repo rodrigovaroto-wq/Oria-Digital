@@ -78,7 +78,8 @@ MÉDIO/BAIXO deixados vão nomeados na descrição do PR.
 ```bash
 git fetch -q origin main   # base velha infla o diff: medido 53 arquivos contra 6 reais
 # quotePath=false: sem ele o git põe entre aspas caminho com acento ("Execu\303\247\303\243o"),
-# o `.md` não casa e documentação vira trilha C — 30 caminhos assim na main de 23/11/2026
+# o `.md` não casa e documentação vira trilha C — nos 25 commits mais novos da main em
+# 23/11/2026, 25 `.md` de documentação iam para C por isso
 git -c core.quotePath=false diff --name-only origin/main...HEAD | tee /dev/stderr | wc -l
 git -c core.quotePath=false diff --name-only origin/main...HEAD \
   | awk '/^(Supabase|N8N|portal|\.github)\// || (!/\.md$/ && $0 != ".claude/conhecimento/grafo.jsonl")'
