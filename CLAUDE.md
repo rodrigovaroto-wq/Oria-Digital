@@ -79,7 +79,7 @@ TODA sessão, nenhum conhecia as sete regras, e três contradiziam a regra 2 (`/
 `/tdd-green`, `/sql-migrations`). A procedência ficou em `.claude/COMANDOS.md`. Sobraram três
 comandos escritos aqui — `/rodada`, `/revisar`, `/fechar` — e, em 23/11/2026, um quarto que só os
 encadeia até o PR verde: `/autopilot` (para antes do merge, que é do dono). O portão que prova que todo
-`subagent_type` citado existe é `node .claude/verificar-comandos.mjs`.
+`subagent_type` e todo caminho citado existem é `node .claude/verificar-comandos.mjs`.
 
 **O plugin `superpowers` está DESLIGADO neste projeto** (`.claude/settings.json`,
 `enabledPlugins`), pelo mesmo critério que cortou os 52 comandos importados. Das 14 skills, 5

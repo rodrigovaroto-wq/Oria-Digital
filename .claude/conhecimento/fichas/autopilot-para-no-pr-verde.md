@@ -33,6 +33,9 @@ Três decisões do dono que uma sessão futura não deve "melhorar":
   por push seguinte). Trilha D não abre `rodada.md` nem `revisar.md` e lê de `fechar.md` só o
   passo 5 (393 de 3.130 bytes). O comando caiu de 10.252 para 6.448 bytes; os porquês moram
   aqui, não lá. Migration esquecida é da `sonda-producao.yml` diária, não de chamada da sessão.
-- **Caminho citado em comando é conferido** pelo `verificar-comandos.mjs` (desde 23/11/2026).
+- **Caminho citado em comando é conferido** pelo `verificar-comandos.mjs` (desde 23/11/2026):
+  crase de linha, bloco cercado e link; com `/` a partir de uma pasta da raiz, nome solto contra o
+  que o git versiona. A 1ª versão só lia a crase inteira e deixava `node .claude/x.mjs` de fora —
+  a revisão independente mediu 6 invocações sem conferência. Lia 14 caminhos; lê 55.
 - **Regra copiada para dentro do autopilot é defeito.** Se uma etapa muda, muda no arquivo do
   comando dela; o autopilot aponta, não repete.

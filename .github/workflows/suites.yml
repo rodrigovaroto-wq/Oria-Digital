@@ -321,13 +321,15 @@ jobs:
             || { echo "::error::o grafo commitado diverge do repositório — rode node .claude/conhecimento/indexar.mjs e commite o resultado"; exit 1; }
           node .claude/conhecimento/conferir.mjs
 
-      - name: Portão dos comandos de barra (todo subagent_type existe)
+      - name: Portão dos comandos de barra (todo subagent_type e todo caminho citado existem)
         # Despacho para `subagent_type` inexistente falha em tempo de execução, e
         # o comando só descobre isso no meio de uma tarefa de alguém. Medido na
         # primeira execução, contra os 52 comandos importados: 57 citações
         # quebradas, 30 nomes distintos, 13 comandos. Aqueles 52 saíram em
         # 16/09/2026 (`.claude/COMANDOS.md`) e o portão continua valendo para os
-        # três escritos aqui. Não precisa de banco nem de build; roda em segundos.
+        # escritos aqui. Desde 23/11/2026 confere também os caminhos que os comandos
+        # mandam abrir ou rodar (55 na primeira passada; renomear buscar.mjs deixava
+        # o portão verde). Não precisa de banco nem de build; roda em segundos.
         run: node .claude/verificar-comandos.mjs
 
       - name: Espelho CLAUDE.md ↔ CI (suítes e medidores)
