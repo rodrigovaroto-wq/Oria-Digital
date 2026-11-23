@@ -27,5 +27,12 @@ Três decisões do dono que uma sessão futura não deve "melhorar":
   fechada** (`.md` fora das pastas de código); a versão que listava o código deixava os `.yml` do
   CI passarem como documentação.
 - **Só o dono dispara** (`disable-model-invocation: true`): o comando age fora do repositório.
+- **Tokens: só o necessário.** Sem assinatura do PR (8 checks = até 8 despertares relendo o
+  contexto inteiro); uma conferida agendada aos 8 min (CI de PR levou 5–7 min nos runs de
+  23/11) e no máximo mais duas de 4 min. Um push só (dos 10 últimos runs de PR, 5 cancelados
+  por push seguinte). Trilha D não abre `rodada.md` nem `revisar.md` e lê de `fechar.md` só o
+  passo 5 (393 de 3.130 bytes). O comando caiu de 10.252 para 6.448 bytes; os porquês moram
+  aqui, não lá. Migration esquecida é da `sonda-producao.yml` diária, não de chamada da sessão.
+- **Caminho citado em comando é conferido** pelo `verificar-comandos.mjs` (desde 23/11/2026).
 - **Regra copiada para dentro do autopilot é defeito.** Se uma etapa muda, muda no arquivo do
   comando dela; o autopilot aponta, não repete.
