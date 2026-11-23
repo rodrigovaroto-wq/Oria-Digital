@@ -8,7 +8,7 @@ para cá na Fase 4 sem nenhuma alteração de conteúdo (commit "Business Plan 1
 
 | Pasta ou arquivo | O que é | Substituído por |
 |---|---|---|
-| [`registro_de_decisoes/`](registro_de_decisoes/) | Registro de decisões **v0.1.2** (18/11/2026) e **v0.1.3** (19/11/2026, entrevista de definição), com o gerador `gerar_v013.py` | v0.1.4, em [`07_decisoes/`](../07_decisoes/) |
+| [`registro_de_decisoes/`](registro_de_decisoes/) | Registro de decisões **v0.1.2** (18/11/2026), **v0.1.3** (19/11/2026, entrevista de definição) e **v0.1.4** (23/11/2026, D6-1), com os geradores `gerar_v013.py` e `gerar_v014.py` | v0.1.5, em [`07_decisoes/`](../07_decisoes/) |
 | [`workflow/oria_digital_workflow_fixo_v0.1.html`](workflow/oria_digital_workflow_fixo_v0.1.html) | Workflow original, anterior às decisões | v0.3.0, em [`02_workflow_e_arquitetura/`](../02_workflow_e_arquitetura/) |
 | [`workflow/oria_digital_workflow_atualizado_v0.2.0.html`](workflow/oria_digital_workflow_atualizado_v0.2.0.html) | Workflow v0.2.0 (aplica a v0.1.2; anterior à entrevista) | v0.3.0 |
 | [`entrevista/oria_entrevista_lote_01..03.html`](entrevista/) | Transcrições literais dos lotes 01–03 (entrevista por voz) | Seção 19 do registro v0.1.3 |

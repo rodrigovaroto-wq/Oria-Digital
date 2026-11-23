@@ -1,7 +1,7 @@
 # Memória, autoaprimoramento e governança
 
 **Fonte oficial** de como o sistema guarda memória, como ele melhora e quem decide o quê. Cita os
-códigos do [registro v0.1.4](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html). Segurança
+códigos do [registro v0.1.5](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.5.html). Segurança
 e dados pessoais estão em [`SEGURANCA_E_DADOS_PESSOAIS.md`](SEGURANCA_E_DADOS_PESSOAIS.md).
 
 ## 1. Papéis e quem decide

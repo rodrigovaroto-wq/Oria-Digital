@@ -13,7 +13,7 @@ delas fica só no registro.
 
 | Assunto | Fonte oficial |
 |---|---|
-| **Decisões** (o que foi decidido, com a fala do dono) | [`07_decisoes/`](07_decisoes/README.md) — registro **v0.1.4** |
+| **Decisões** (o que foi decidido, com a fala do dono) | [`07_decisoes/`](07_decisoes/README.md) — registro **v0.1.5** |
 | **Modelo de negócio, proposta de valor, clientes, cobrança, mercado, estratégia comercial, pedido ao sócio** | [`01_negocio/MODELO_DE_NEGOCIO_E_ESTRATEGIA.md`](01_negocio/MODELO_DE_NEGOCIO_E_ESTRATEGIA.md) |
 | Modelo de projeção (premissas em branco até o piloto) | [`01_negocio/MODELO_DE_PROJECAO.md`](01_negocio/MODELO_DE_PROJECAO.md) |
 | **Workflow do produto** e ponte para a arquitetura técnica | [`02_workflow_e_arquitetura/`](02_workflow_e_arquitetura/README.md) — workflow **v0.3.0** |
@@ -38,7 +38,7 @@ delas fica só no registro.
 
 ## Como manter
 
-1. **Decisão nova ou mudada:** nova versão do registro (v0.1.4…), nunca edição da vigente; depois
+1. **Decisão nova ou mudada:** nova versão do registro (a próxima é a v0.1.6), nunca edição da vigente; depois
    atualize os arquivos que citam o código (ver [`07_decisoes/README.md`](07_decisoes/README.md)).
 2. **Item do plano avançou:** atualize a situação e a evidência no plano e no `AGENTES.md`, se for um
    agente. É o último passo de cada rodada (agente `estado-e-handoff`, comando `/fechar`).

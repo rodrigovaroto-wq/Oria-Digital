@@ -4,7 +4,7 @@
 com uma nota "superado por" (lista em [`99_historico/README.md`](../99_historico/README.md)).
 **Sem calendário** (K2): só sequência, dependências e critério de pronto.
 
-- **Base:** registro de decisões [v0.1.4](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html)
+- **Base:** registro de decisões [v0.1.5](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.5.html)
   e [workflow v0.3.0](../02_workflow_e_arquitetura/oria_digital_workflow_v0.3.0.html).
 - **Situação conferida no código** em 19/11/2026, `main` em `e85ac9c`, migration mais nova `0302`.
   O banco de produção **não** foi consultado para este plano: o que está no banco é confirmado pela
@@ -75,7 +75,7 @@ trilhas abaixo.
 | **0.8** | **RIPD** (I5): relatório de impacto à proteção de dados — mapa de dados, fluxos e controles | P1 | 0.1, 0.7 | Claude (parte técnica) · Advogado (parte jurídica) | DESENVOLVER | Parte técnica escrita; parte jurídica validada por advogado |
 | **0.9** | **Três ambientes** (H8): desenvolvimento, teste descartável por mudança, produção; nenhuma credencial de produção fora dela | P2 | 0.1 | Claude · Dono | CORRIGIR. Existe o banco de teste do CI (`Supabase/test/run.sh`, `tdf_test`) e a produção; não há dev separado | Os três existem; varredura não acha credencial de produção fora dela |
 | **0.10** | **Anonimização** de dado real para teste (H8, F4) | P2 | 0.9 | Claude | DESENVOLVER | Cópia anonimizada de um mandato real roda a suíte; varredura não acha CNPJ/CPF/nome reais |
-| **0.11** | **Alinhar duas especificações técnicas ao registro**: `Arquitetura do Sistema/2 Especificação/10_DADOS_RETENCAO_E_LGPD.md` (I2, H1, H7, H8) e `06_HUMAN_IN_THE_LOOP.md` (E1, E2, R1) | P3 | — | Claude · Dono | CORRIGIR. A 10 ainda marca os prazos [A CONFIRMAR]; a 06 ainda cita "revisor sênior / gerente" (linha 14) | As duas especificações não contradizem o registro vigente (v0.1.4) |
+| **0.11** | **Alinhar duas especificações técnicas ao registro**: `Arquitetura do Sistema/2 Especificação/10_DADOS_RETENCAO_E_LGPD.md` (I2, H1, H7, H8) e `06_HUMAN_IN_THE_LOOP.md` (E1, E2, R1) | P3 | — | Claude · Dono | CORRIGIR. A 10 ainda marca os prazos [A CONFIRMAR]; a 06 ainda cita "revisor sênior / gerente" (linha 14) | As duas especificações não contradizem o registro vigente (v0.1.5) |
 
 ### Portão G0 — pronto para o primeiro mandato do piloto
 

@@ -1,7 +1,7 @@
 # Regras de negócio e definições operacionais
 
 **Fonte oficial** dos parâmetros e das definições que o sistema aplica. Cada regra cita o código da
-decisão no [registro v0.1.4](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html); o texto da
+decisão no [registro v0.1.5](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.5.html); o texto da
 decisão e a fala do dono ficam lá. Os números aqui são **réguas ajustáveis e versionadas** (G5): mudar
 um valor é decisão registrada numa nova versão do registro, nunca edição silenciosa deste arquivo.
 
@@ -43,7 +43,7 @@ um valor é decisão registrada numa nova versão do registro, nunca edição si
 | Nível | Critério | Prazo de decisão humana (E5) |
 |---|---|---|
 | **Crítico** | Muda a conclusão; > 5% do EBITDA ou da dívida; passivo não declarado; covenant rompido | 1 dia útil |
-| **Alto** | > 1%, ou muda um indicador-chave. *Base do 1% não dita pelo dono; lida aqui como "do EBITDA ou da dívida", como no crítico — a confirmar (pendências)* | 2 dias úteis |
+| **Alto** | > 1% do EBITDA ou da dívida (G5-1), ou muda um indicador-chave | 2 dias úteis |
 | **Médio** | Acima da régua B3b-1 e < 1% | 5 dias úteis |
 | **Baixo** | Dentro da régua B3b-1 | Sem prazo |
 
