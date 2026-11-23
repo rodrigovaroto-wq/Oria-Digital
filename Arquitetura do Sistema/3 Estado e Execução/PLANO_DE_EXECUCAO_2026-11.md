@@ -1,8 +1,8 @@
 # Plano de execução — de 02/11/2026 até a aplicação completa
 
 > **SUPERADO em 23/11/2026** pelo plano de execução único [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1 do registro v0.1.3).
-> Este arquivo fica como histórico, sem outra alteração. O mapeamento de cada item antigo para o plano novo
-> está na seção 11 daquele plano.
+> Este arquivo fica como histórico, sem outra alteração. O que dele seguia aberto, e para onde foi, está na
+> seção 11 daquele plano (por bloco, não item a item).
 
 **Data:** 30/10/2026, sessão 114 · **Base:** `main` em `62c8b55` (PR #265 mergeado) · **Banco de
 produção:** `0216` aplicada e conferida nesta sessão (catálogo inteiro 287/287 presente).

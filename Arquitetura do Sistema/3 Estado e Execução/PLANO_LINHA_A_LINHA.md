@@ -1,8 +1,8 @@
 # Plano — nenhuma linha faltando, nenhuma linha inventada
 
 > **SUPERADO em 23/11/2026** pelo plano de execução único [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1 do registro v0.1.3).
-> Este arquivo fica como histórico, sem outra alteração. O mapeamento de cada item antigo para o plano novo
-> está na seção 11 daquele plano.
+> Este arquivo fica como histórico, sem outra alteração. O que dele seguia aberto, e para onde foi, está na
+> seção 11 daquele plano (por bloco, não item a item).
 
 > Pedido do dono, 01/09/2026, depois da rodada do araucária: *"NÃO PODE PASSAR NENHUMA LINHA
 > FALTANDO DADOS OU EXCEDENDO/CRIANDO DADOS, faça um planejamento de como acabar com esse

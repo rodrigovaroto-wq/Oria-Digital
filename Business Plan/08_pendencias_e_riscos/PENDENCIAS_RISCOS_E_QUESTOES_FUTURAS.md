@@ -21,7 +21,8 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | **Classificação de documentos em N2 sem gabarito** (`0127_o_dial_obedecido.sql:493`, "declarada, não medida"): voltar a N1 junto com a extração no item 0.5, ou manter em N2 | D6 (fala só da extração) | 0.5, G0 | **Fechada em 23/11/2026: volta a N1** (D6-1, registro v0.1.4) |
 | Gravidade "alto" (G5): "> 1%" de quê? O registro diz só "> 1%"; as regras leem "do EBITDA ou da dívida", como no crítico | G5 | 1.D6 | **Fechada em 23/11/2026: do EBITDA ou da dívida** (G5-1, registro v0.1.5) |
 | Reconferir os defeitos do lote 2 que travam o uso (antiga ME1 do PLANO_MVP) e abrir um item por defeito que continuar aberto | — | Fase 1 | Aberta: a lista não foi reconferida na Fase 4 |
-| Tirar do piloto alguma fonte de mercado do slide 5 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP; item 1.C5) | K6 (pede **todos** os dados de mercado no piloto) | 1.C5, G1 | Só com decisão registrada do dono; sem ela, ficam no piloto |
+| Conferir pela sonda se a `0205_os_campos_da_apresentacao.sql` (campos da apresentação de crédito, bloco B4 do MAPA antigo) está aplicada em produção | — | 2.6 | Aberta: não conferida na Fase 4 |
+| Tirar do piloto alguma fonte de mercado do slide 6 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP; item 1.C5) | K6 (pede **todos** os dados de mercado no piloto) | 1.C5, G1 | Só com decisão registrada do dono; sem ela, ficam no piloto |
 | Ligar a conciliação do aging na rodada (`fn_reconciliar_caso`) | — | 1.A2 | **Fechada em 13/11/2026**: ligada pela `0278`, aplicada em produção (`ESTADO.md`, sessão 129b) |
 | Arquivo real de AR e AP para medir a leitura | DM7 do PLANO_MVP | 1.A1 | Depende do dono |
 

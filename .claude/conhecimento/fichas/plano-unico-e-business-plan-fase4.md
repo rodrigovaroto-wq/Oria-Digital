@@ -22,7 +22,7 @@ pendências, riscos, MAPA_DE_EXECUCAO, PLANO_MVP, superado.
 
 1. **Os planos de `Arquitetura do Sistema/3 Estado e Execução/` estão superados** (MAPA_DE_EXECUCAO,
    PLANO_MVP_2026-11, PLANO_DE_EXECUCAO_2026-11, PRONTIDAO_POR_ESTAGIO, PLANO_LINHA_A_LINHA e o roadmap
-   do ARQUITETURA_ALVO). Ainda são citados em 27 comentários de migration e de código (24 arquivos, medido com `git grep` em 23/11/2026) como origem de
+   do ARQUITETURA_ALVO). Ainda são citados em 27 comentários de migration e de código (24 arquivos, medido em 23/11/2026 com `git grep -cE "MAPA_DE_EXECUCAO|PLANO_MVP|PRONTIDAO_POR_ESTAGIO|PLANO_LINHA_A_LINHA|PLANO_DE_EXECUCAO_2026|ARQUITETURA_ALVO" -- ':!*.md' ':!*.html' ':!*.jsonl'`) como origem de
    uma fatia — isso é histórico, não instrução. O que falta está em
    `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` (decisão K1), e é ele que o `estado-e-handoff` e o
    `/fechar` atualizam.
