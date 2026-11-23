@@ -30,7 +30,7 @@ pendências, riscos, MAPA_DE_EXECUCAO, PLANO_MVP, superado.
 3. **Nenhum agente do produto existe** (19/11/2026). Os 7 de `.claude/agents/` são do desenvolvimento.
 4. **A infraestrutura não está decidida** (R2): LangGraph, Cloud Run, Supabase, n8n e Langfuse são
    candidatos de um estudo com ≥ 5 opções por item, que é o item 0.1 e vem antes do primeiro mandato.
-5. **Decisão nunca se edita:** mudança vira registro v0.1.4 (ver `Business Plan/07_decisoes/README.md`).
+5. **Decisão nunca se edita:** mudança vira a próxima versão do registro (a vigente é a v0.1.4; ver `Business Plan/07_decisoes/README.md`).
 6. **Uma fonte por assunto:** negócio em `Business Plan/`, técnica em `Arquitetura do Sistema/`, deck
    derivado em `Apresentações/` (K5). Não copie conteúdo entre elas; aponte.
 

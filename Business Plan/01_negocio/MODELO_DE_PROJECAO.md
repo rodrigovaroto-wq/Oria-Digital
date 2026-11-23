@@ -42,4 +42,6 @@ preenchido leva a fonte (mandato, período, medida) e a data.
 
 Margem por mandato = preço − (horas × custo-hora + IA + dados + parte da infraestrutura). Ponto de
 equilíbrio = custo fixo ÷ margem por mandato. As contas ficam **em fórmula**, numa planilha que lê esta
-tabela; elas não são feitas à mão neste arquivo.
+tabela; elas não são feitas à mão neste arquivo. **No Excel, célula vazia vale zero:** cada fórmula
+devolve vazio, com a nota do motivo, quando qualquer entrada dela estiver em branco. Sem isso, custo em
+branco vira margem igual ao preço (regra 1).

@@ -30,7 +30,8 @@ a pergunta, está em [`../99_historico/entrevista/03_rascunho_adendo_v0.1.3.md`]
    sobre a v0.1.4. Confira que todo o texto da versão anterior continua na nova (só o título e o
    número da versão mudam).
 3. A versão anterior e o gerador dela vão para
-   [`../99_historico/registro_de_decisoes/`](../99_historico/registro_de_decisoes/).
+   [`../99_historico/registro_de_decisoes/`](../99_historico/registro_de_decisoes/). Depois de mover,
+   atualize o comando abaixo para o caminho novo do gerador e para a versão nova.
 4. Atualize os documentos que citam a decisão afetada e os links para o registro. Para achá-los:
 
 ```bash

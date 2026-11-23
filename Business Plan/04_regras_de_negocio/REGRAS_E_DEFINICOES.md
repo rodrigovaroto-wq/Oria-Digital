@@ -43,7 +43,7 @@ um valor é decisão registrada numa nova versão do registro, nunca edição si
 | Nível | Critério | Prazo de decisão humana (E5) |
 |---|---|---|
 | **Crítico** | Muda a conclusão; > 5% do EBITDA ou da dívida; passivo não declarado; covenant rompido | 1 dia útil |
-| **Alto** | > 1% do EBITDA ou da dívida, ou muda um indicador-chave | 2 dias úteis |
+| **Alto** | > 1%, ou muda um indicador-chave. *Base do 1% não dita pelo dono; lida aqui como "do EBITDA ou da dívida", como no crítico — a confirmar (pendências)* | 2 dias úteis |
 | **Médio** | Acima da régua B3b-1 e < 1% | 5 dias úteis |
 | **Baixo** | Dentro da régua B3b-1 | Sem prazo |
 
@@ -99,6 +99,7 @@ Os níveis N0 (sombra) a N3 (autônomo) estão definidos na doutrina técnica
   mínimo de **98% no limite inferior** do intervalo. (Referência: 300 acertos em 300 dão limite
   inferior de 98,7%; 30 em 30 dão só 88,6%. Fonte: [síntese da pesquisa](../09_pesquisa/SINTESE_DA_PESQUISA_FASE1.md), §3.)
 - **A extração e a classificação de documentos voltam a N1 até serem medidas** (D6, D6-1). Piora medida rebaixa automaticamente.
+- **A promoção automática obedece à mesma régua.** O banco já promove etapas sozinho (`0137`), hoje com 30 vereditos: até o critério virar o da D6, ela fica desligada nessas etapas (plano, itens 0.5 e 3.3).
 - **Gabarito:** 30 a 50 páginas reais, formatos mais comuns, conferido célula a célula, refeito a cada
   semestre, antes de trocar ou manter modelo e fornecedor (D4). Parte dele fica **oculta** (F5).
 
