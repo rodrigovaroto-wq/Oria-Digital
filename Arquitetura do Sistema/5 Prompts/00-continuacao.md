@@ -30,7 +30,7 @@ Não estime nenhum destes; rode:
 
 - `git log --oneline -12`, `git fetch origin main`, e a lista de PRs abertos. Já houve sessões em
   paralelo neste repositório — não assuma nada sobre o `main`.
-- O topo do `ESTADO.md` e o `Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md`. O `HANDOFF.md` é arquivo morto: procure
+- O topo do `ESTADO.md` e o `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`. O `HANDOFF.md` é arquivo morto: procure
   nele com `grep -n`, não o leia inteiro.
 - As suítes, com os comandos de `.claude/COMANDOS-CANONICOS.md`, ANTES de mudar qualquer coisa. Suíte vermelha que já
   estava vermelha não é sua regressão — mas você precisa saber disso agora, não depois.
@@ -42,7 +42,7 @@ está APLICADO no Supabase, e o que está PUBLICADO no n8n. Os quatro são difer
 
 ## 2. Escolha o trabalho pelo mapa, não pela vontade
 
-`Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md` diz o que falta, em ordem, com critério de pronto. Pegue de lá. Se o que
+`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` diz o que falta, em ordem, com critério de pronto. Pegue de lá. Se o que
 está no topo depende do dono e não de engenharia, diga isso e pegue o próximo que não depende.
 
 ## 3. Trabalhe orquestrando
@@ -55,7 +55,7 @@ Antes de fechar cada fatia, passe o diff pelo `revisor-defeito-silencioso`.
 
 ## 4. Ao terminar
 
-- Atualize o topo do `ESTADO.md` e o `Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md` (agente `estado-e-handoff`).
+- Atualize o topo do `ESTADO.md` e o `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` (agente `estado-e-handoff`).
 - Acrescente à memória só o que passa no teste do `.claude/memory/INSTRUCTIONS.md`.
 - Deixe EXPLÍCITO o que o dono precisa fazer à mão: aplicar migrations em ordem, republicar o
   workflow pelo `preparar-republicacao.mjs`, fazer deploy do portal. Correção que não chega ao ar

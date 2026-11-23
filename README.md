@@ -153,7 +153,7 @@ As sete regras completas, e o porquê de cada uma, estão no [`CLAUDE.md`](CLAUD
 |---|---|
 | [`1 Visão e Doutrina`](Arquitetura%20do%20Sistema/1%20Visão%20e%20Doutrina/) | escopo, doutrina de autonomia (N0 → N3), arquitetura funcional e ADRs |
 | [`2 Especificação`](Arquitetura%20do%20Sistema/2%20Especificação/) | reconciliação, classificação contábil, revisão humana, status e pendências, LGPD, fontes oficiais |
-| [`3 Estado e Execução`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/) | **plano em vigor** ([`PLANO_MVP_2026-11.md`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md)), roadmap e desenhos técnicos |
+| [`3 Estado e Execução`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/) | desenhos técnicos e os planos anteriores, superados pelo plano único em `Business Plan/` |
 | [`4 Análises e Auditorias`](Arquitetura%20do%20Sistema/4%20Análises%20e%20Auditorias/) | riscos, custo de IA, auditorias e vistorias medidas |
 | [`5 Prompts`](Arquitetura%20do%20Sistema/5%20Prompts/) | roteiros de trabalho para o desenvolvimento assistido por IA |
 | [`6 Referência`](Arquitetura%20do%20Sistema/6%20Referência/) | modelo-base do Excel, critérios de aceite, conformidade, restauração |
@@ -161,10 +161,14 @@ As sete regras completas, e o porquê de cada uma, estão no [`CLAUDE.md`](CLAUD
 
 O índice comentado está em [`Arquitetura do Sistema/README.md`](Arquitetura%20do%20Sistema/README.md).
 
+**Negócio, decisões e plano:** a pasta [`Business Plan/`](Business%20Plan/README.md) é a fonte oficial de
+negócio e produto (registro de decisões, agentes, regras, governança, plano de execução). O deck para o
+sócio investidor fica em [`Apresentações/`](Apresentações/Business%20Plan%20Oria%20Digital/README.md).
+
 ---
 
 ## Estado atual
 
 O topo do [`ESTADO.md`](ESTADO.md) diz qual é a migration mais nova, o que está aplicado em
-produção e o que vem a seguir. O plano até o primeiro mandato real está em
-[`PLANO_MVP_2026-11.md`](Arquitetura%20do%20Sistema/3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md).
+produção e o que vem a seguir. O plano em vigor, único e sem datas, está em
+[`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md).

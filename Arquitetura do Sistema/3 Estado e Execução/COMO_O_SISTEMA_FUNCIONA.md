@@ -1,7 +1,7 @@
 # Como o sistema funciona, do começo ao fim
 
 Escrito em linguagem simples, de propósito. Quem quiser o detalhe técnico abre o
-`MAPA_DE_EXECUCAO.md` ou o código; aqui é o mapa da estrada.
+[plano de execução](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) ou o código; aqui é o mapa da estrada.
 
 O sistema tem **três pernas**: o n8n (que processa), o Supabase (que guarda e
 confere) e o portal (que mostra e deixa decidir). Nenhuma delas trabalha sozinha.

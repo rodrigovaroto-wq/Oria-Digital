@@ -1,6 +1,6 @@
 ---
 name: estado-e-handoff
-description: Atualizar ESTADO.md, MAPA_DE_EXECUCAO.md, a memória e a descrição do PR ao fim de uma rodada. Use como último passo, depois que o trabalho está commitado.
+description: Atualizar ESTADO.md, o plano de execução (Business Plan/06_execucao), a memória e a descrição do PR ao fim de uma rodada. Use como último passo, depois que o trabalho está commitado.
 model: haiku
 ---
 
@@ -17,7 +17,7 @@ rodada, ou está marcado **NÃO CONFERIDO** — que é uma informação, não um
 | Arquivo | O que entra |
 |---|---|
 | `ESTADO.md` (topo) | Última migration (com o defeito que ela corrige), o que foi aplicado no Supabase **e conferido pela sonda**, contagens das suítes remedidas nesta rodada |
-| `Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md` | O que fechou, o que continua aberto, quem destrava |
+| `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` | A situação do item que avançou (FEITO / CORRIGIR / DESENVOLVER) com a evidência, e uma linha na seção "Andamento". Se o item é um agente, a linha dele em `Business Plan/03_agentes/AGENTES.md`. Os planos antigos (`MAPA_DE_EXECUCAO` e outros) são histórico: não se atualizam |
 | `.claude/memory/` | Só lição que passa no teste do `INSTRUCTIONS.md`. Erre para o lado de não salvar |
 | `.claude/conhecimento/grafo.jsonl` | **Sempre**: `node .claude/conhecimento/indexar.mjs` + `conferir.mjs` antes do commit. É derivado e tem portão no CI |
 | Descrição do PR | O que entrou, e o que o dono precisa fazer à mão |

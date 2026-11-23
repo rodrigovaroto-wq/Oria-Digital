@@ -8,7 +8,10 @@ estágio, o plano e as auditorias. O **como** está no código e nos READMEs de 
 **Por onde começar:**
 1. [`Como o sistema funciona`](3%20Estado%20e%20Execução/COMO_O_SISTEMA_FUNCIONA.md): o fluxo inteiro em linguagem simples.
 2. [`00 — Visão e Escopo`](1%20Visão%20e%20Doutrina/00_VISAO_E_ESCOPO.md) e [`01 — Doutrina de Autonomia`](1%20Visão%20e%20Doutrina/01_DOUTRINA_DE_AUTONOMIA.md): o problema e a regra que governa a IA.
-3. [`PLANO_MVP_2026-11.md`](3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md): o plano em vigor.
+3. [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md): o plano em vigor (único, sem datas).
+
+Esta pasta é a fonte oficial **técnica**. A fonte oficial de **negócio e produto** (decisões, agentes,
+regras, governança, plano) é a pasta [`Business Plan/`](../Business%20Plan/README.md) (decisão K5).
 
 Os documentos numerados de `00` a `14` são a série original da especificação. Eles estão
 distribuídos pelas pastas conforme o tipo; o número continua sendo a forma de citá-los.
@@ -24,7 +27,7 @@ O que o sistema é, o que ele não é, e as decisões que não se reabrem.
 | [`00_VISAO_E_ESCOPO.md`](1%20Visão%20e%20Doutrina/00_VISAO_E_ESCOPO.md) | o problema, a redefinição do escopo e o escopo negativo |
 | [`01_DOUTRINA_DE_AUTONOMIA.md`](1%20Visão%20e%20Doutrina/01_DOUTRINA_DE_AUTONOMIA.md) | os níveis N0 (sombra) a N3 (autônomo); cada estágio só sobe com concordância medida |
 | [`02_ARQUITETURA_FUNCIONAL.md`](1%20Visão%20e%20Doutrina/02_ARQUITETURA_FUNCIONAL.md) | estágios, portões, componentes transversais e as travas de stack |
-| [`03_MVP_E_ROADMAP.md`](1%20Visão%20e%20Doutrina/03_MVP_E_ROADMAP.md) | o MVP como workflow completo; o roadmap construir → calibrar |
+| [`03_MVP_E_ROADMAP.md`](1%20Visão%20e%20Doutrina/03_MVP_E_ROADMAP.md) | **superado** (histórico): o MVP como workflow completo; o roadmap construir → calibrar |
 | [`04_ADR_01_EVIDENCIA_IMUTAVEL.md`](1%20Visão%20e%20Doutrina/04_ADR_01_EVIDENCIA_IMUTAVEL.md) | ADR-01: o que foi extraído nunca muda; o canônico é construído acima |
 | [`05_ADR_02_ARITMETICA_NO_MOTOR.md`](1%20Visão%20e%20Doutrina/05_ADR_02_ARITMETICA_NO_MOTOR.md) | ADR-02: toda conta que chega ao cliente é feita no banco, não na tela nem no Excel |
 
@@ -51,14 +54,14 @@ Para onde o projeto vai e como chegar lá. O estado do dia está no [`ESTADO.md`
 
 | Documento | Conteúdo |
 |---|---|
-| [`PLANO_MVP_2026-11.md`](3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md) | **o plano em vigor**: o mínimo para rodar o primeiro mandato real (aprovado em 11/11/2026) |
-| [`PLANO_DE_EXECUCAO_2026-11.md`](3%20Estado%20e%20Execução/PLANO_DE_EXECUCAO_2026-11.md) | o mapa da aplicação completa, etapa por etapa |
-| [`ARQUITETURA_ALVO_E_ROADMAP.md`](3%20Estado%20e%20Execução/ARQUITETURA_ALVO_E_ROADMAP.md) | a arquitetura-alvo: decisão por componente, camadas, portões e fases |
+| [`PLANO_MVP_2026-11.md`](3%20Estado%20e%20Execução/PLANO_MVP_2026-11.md) | superado pelo [plano único](../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md); era o mínimo para o primeiro mandato real (11/11/2026) |
+| [`PLANO_DE_EXECUCAO_2026-11.md`](3%20Estado%20e%20Execução/PLANO_DE_EXECUCAO_2026-11.md) | **superado** (histórico): o mapa da aplicação completa, etapa por etapa |
+| [`ARQUITETURA_ALVO_E_ROADMAP.md`](3%20Estado%20e%20Execução/ARQUITETURA_ALVO_E_ROADMAP.md) | a arquitetura-alvo: decisão por componente e camadas (referência técnica); **portões e fases superados** pelo plano único |
 | [`COMO_O_SISTEMA_FUNCIONA.md`](3%20Estado%20e%20Execução/COMO_O_SISTEMA_FUNCIONA.md) | o fluxo inteiro em linguagem simples |
-| [`MAPA_DE_EXECUCAO.md`](3%20Estado%20e%20Execução/MAPA_DE_EXECUCAO.md) | quadro de blocos com critério de pronto (o corpo é de setembro; as linhas novas apontam para os planos acima) |
-| [`PRONTIDAO_POR_ESTAGIO.md`](3%20Estado%20e%20Execução/PRONTIDAO_POR_ESTAGIO.md) | o projeto medido contra o objetivo, estágio por estágio |
-| [`PLANO_LINHA_A_LINHA.md`](3%20Estado%20e%20Execução/PLANO_LINHA_A_LINHA.md) | plano para nenhuma linha faltar nem ser inventada na extração |
-| [`DESENHO_QUATRO_FUNCOES_2026-11.md`](3%20Estado%20e%20Execução/DESENHO_QUATRO_FUNCOES_2026-11.md) | desenho técnico das quatro funções aprovadas em novembro |
+| [`MAPA_DE_EXECUCAO.md`](3%20Estado%20e%20Execução/MAPA_DE_EXECUCAO.md) | **superado** (histórico): quadro de blocos com critério de pronto (setembro a novembro de 2026) |
+| [`PRONTIDAO_POR_ESTAGIO.md`](3%20Estado%20e%20Execução/PRONTIDAO_POR_ESTAGIO.md) | **superado** (histórico): o projeto medido contra o objetivo, estágio por estágio (20/08/2026) |
+| [`PLANO_LINHA_A_LINHA.md`](3%20Estado%20e%20Execução/PLANO_LINHA_A_LINHA.md) | **superado** (histórico): plano para nenhuma linha faltar nem ser inventada na extração (absorvido nos itens 1.A5 e 1.A6) |
+| [`DESENHO_QUATRO_FUNCOES_2026-11.md`](3%20Estado%20e%20Execução/DESENHO_QUATRO_FUNCOES_2026-11.md) | desenho técnico das quatro funções aprovadas em novembro (segue válido; ordem e data superadas) |
 | [`DESENHO_LEITOR_TRANSACIONAL.md`](3%20Estado%20e%20Execução/DESENHO_LEITOR_TRANSACIONAL.md) | desenho do leitor transacional por código |
 | [`DESENHO_P3_ROTEAR_POR_CASO_ID.md`](3%20Estado%20e%20Execução/DESENHO_P3_ROTEAR_POR_CASO_ID.md) | o envio roteado pelo `caso_id` |
 | [`LINHA_DE_BASE_P4.md`](3%20Estado%20e%20Execução/LINHA_DE_BASE_P4.md) | a linha de base da leitura por IA (07/11/2026) |

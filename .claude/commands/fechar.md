@@ -32,7 +32,7 @@ Precisou de algo do meio do `HANDOFF.md`? `grep -n`, nunca leitura integral.
 
 Despache `subagent_type: "estado-e-handoff"` — é o agente barato e é o dono deste passo — ele conhece o formato de cada arquivo. Entregue a ele o
 log do passo 1 e o topo do passo 2, para que ele **não releia nada**. O que ele atualiza:
-`ESTADO.md` (topo), `MAPA_DE_EXECUCAO.md`, `.claude/memory/` quando couber, a ficha e o grafo do
+`ESTADO.md` (topo), `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`, `.claude/memory/` quando couber, a ficha e o grafo do
 conhecimento, o cabeçalho do `HANDOFF.md`, e a descrição do PR.
 
 **A regra da casa:** nada é "provavelmente feito". Cada item ou tem evidência conferida nesta

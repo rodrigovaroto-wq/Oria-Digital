@@ -22,8 +22,8 @@ com modelo de FP&A vivo em fórmula.
 |---|---|
 | `node .claude/conhecimento/buscar.mjs "<assunto>"` | **Comece por aqui, sempre — vale para a sessão principal e para todo agente despachado.** Devolve, em um comando, as fichas, os arquivos com linha, o portão que prova cada coisa e os commits do assunto — sem abrir nada. Medido: as cinco perguntas de `BASELINE.md` caíram de 50.245 para 10.667 bytes. Quando ele responde **"NADA ENCONTRADO"**, isso é "procurei e não achei" — e só aí vale o `grep` |
 | `ESTADO.md` (topo) | **Onde estamos agora** — última migration, suítes, a rodada mais recente |
-| `Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md` | **O que falta até fechar**, em ordem, com critério de pronto |
-| `Arquitetura do Sistema/3 Estado e Execução/PRONTIDAO_POR_ESTAGIO.md` | O projeto medido contra o próprio objetivo, estágio por estágio |
+| `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` | **O que falta**, plano único (K1): fases, portões, situação com evidência e critério de pronto. Os planos antigos (`MAPA_DE_EXECUCAO`, `PRONTIDAO_POR_ESTAGIO`, `PLANO_MVP`…) são histórico |
+| `Business Plan/README.md` | **O negócio e as decisões**: onde mora cada assunto (registro de decisões, agentes, regras, governança) |
 | `.claude/memory/MEMORY.md` | As lições que já custaram caro — consulte pelo `buscar.mjs` (ele indexa estas fichas); abra o índice inteiro só se o `buscar.mjs` vier vazio ou antes de mexer em migration/produção |
 | `HANDOFF.md` | **Como chegou aqui** — arquivo morto, ~5.000 linhas. Não leia inteiro |
 

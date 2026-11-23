@@ -15,7 +15,7 @@ Você mapeia, não conserta. Devolve caminhos e trechos curtos, nunca arquivos i
   Ele NUNCA devolve conteúdo, só ponteiros; a leitura continua sendo sua.
 - O nome de uma migration conta o defeito que ela corrige — `ls Supabase/migrations/` é um índice
   legível, use antes de `grep`.
-- `ESTADO.md` (topo) tem a rodada mais recente; `Arquitetura do Sistema/3 Estado e Execução/MAPA_DE_EXECUCAO.md` tem o que falta;
+- `ESTADO.md` (topo) tem a rodada mais recente; `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` tem o que falta;
   `HANDOFF.md` é arquivo morto de ~5.000 linhas — **procure nele com `grep -n`, nunca leia
   inteiro.**
 - A lógica de extração e classificação vive em `N8N/lib/`; o arquivo entregue ao cliente sai de

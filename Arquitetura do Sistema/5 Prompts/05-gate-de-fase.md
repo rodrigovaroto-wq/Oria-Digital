@@ -2,10 +2,10 @@
 
 ## Quando usar
 
-Entre uma fase do `3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md` e a seguinte. Duas vezes: ao
+Entre uma fase do `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` (portões G0–G3) e a seguinte. Duas vezes: ao
 **entrar** (o que a fase custa e de quem depende) e ao **sair** (ela pode ser declarada fechada?).
 
-Não confunda com os cinco gates da seção 5 do roadmap — DATA, MODEL, STRATEGY, CREDITOR,
+Não confunda com os cinco gates da seção 5 do roadmap antigo (`ARQUITETURA_ALVO_E_ROADMAP.md`, hoje referência técnica) — DATA, MODEL, STRATEGY, CREDITOR,
 PRESENTATION. Aqueles são marcos, fecham em fases específicas. Este roda em toda fase.
 
 ## Por que existe
