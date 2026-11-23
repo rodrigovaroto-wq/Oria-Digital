@@ -98,7 +98,7 @@ for (const f of md(join(RAIZ, 'commands'))) {
 //      com `..`, dentro de `node_modules/` (o CI deste job não instala o portal), glob,
 //      placeholder (`<x>`, `{x}`, `$X`, `NNN`, `XXXX`) e URL.
 const REPO = resolve(RAIZ, '..');
-const EXT = /\.(md|mjs|mts|cjs|js|ts|tsx|sql|sh|ya?ml|jsonl?|py|toml|properties)$/i;
+const EXT = /\.(md|mjs|mts|cjs|js|ts|tsx|sql|sh|ya?ml|jsonl?|py|toml|properties|xlsx|xlsm|csv|pdf|html|txt)$/i;
 
 let versionados;
 try {
@@ -123,17 +123,22 @@ function conferir(t, baseLink) {
   if (!t || placeholder(t) || t.startsWith('/') || t.includes('node_modules/')) return null;
   if (t.split('/').includes('..') && !baseLink) return null;
   const diretorio = t.endsWith('/');
-  if (!diretorio && !EXT.test(t)) return null;
-  if (!diretorio && /^\.[a-z]+$/i.test(t.split('/').pop())) return null;  // `.md` solto é extensão, não arquivo
+  const comExt = EXT.test(t) && !/^\.[a-z]+$/i.test(t.split('/').pop());  // `.md` solto é extensão, não arquivo
   if (baseLink) {
     const alvo = resolve(baseLink, t);
     if (!alvo.startsWith(REPO)) return null;
     return { ok: existsSync(alvo) };
   }
   const rel = t.replace(/^\.\//, '');
-  if (!rel.includes('/')) return { ok: nomesSoltos.has(rel) };
+  if (!rel.includes('/')) return comExt ? { ok: nomesSoltos.has(rel) } : null;
   const raiz = rel.split('/')[0];
-  if (!existsSync(join(REPO, raiz)) || !statSync(join(REPO, raiz)).isDirectory()) return null;
+  const raizExiste = existsSync(join(REPO, raiz)) && statSync(join(REPO, raiz)).isDirectory();
+  // Pasta da raiz que existe: confere com ou sem extensão (`N8N/lib`, `Supabase/`).
+  // Pasta da raiz que NÃO existe: com extensão conhecida ainda é caminho — renomeada ou com erro
+  // de digitação. A versão de abe4d7a pulava esse caso calada: medido na 2ª revisão, `N8N` →
+  // `n8n` deixava o portão verde com 51 de 55 caminhos. Pasta citada com `/` no fim (`N8N/`)
+  // também é caminho. Sem extensão e sem `/` no fim (`origin/main`) não é.
+  if (!raizExiste) return comExt || diretorio ? { ok: false } : null;
   const alvo = join(REPO, rel);
   return { ok: existsSync(alvo) && (!diretorio || statSync(alvo).isDirectory()) };
 }
@@ -151,7 +156,9 @@ function candidatos(trecho) {
     const r = conferir(t);
     if (r) saida.push([limpar(t), r]);
   }
-  if (saida.length === 0 && inteiro) return [[trecho.trim(), inteiro]];
+  // Nenhuma palavra existe e o trecho inteiro tem cara de caminho: é UM caminho quebrado com
+  // espaço ("Arquitetura do Sistem/5 Prompts/x.md"), e a mensagem mostra ele inteiro.
+  if (inteiro && !saida.some(([, r]) => r.ok)) return [[trecho.trim(), inteiro]];
   return saida;
 }
 
