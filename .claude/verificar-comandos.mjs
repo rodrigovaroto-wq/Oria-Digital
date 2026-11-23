@@ -17,6 +17,8 @@
 // `c4-architecture`, que despacha para quatro. Catálogo à mão erra; este arquivo
 // não, porque ele lê os comandos.
 //
+// Desde 23/11/2026 responde também "o caminho citado existe?" — ver a seção dos caminhos.
+//
 // O que este portão NÃO faz: julgar se o agente é bom, ou se o comando faz
 // sentido aqui. Só responde "o nome resolve?".
 //
@@ -74,14 +76,38 @@ for (const f of md(join(RAIZ, 'commands'))) {
   }
 }
 
+// --- os caminhos citados ----------------------------------------------------
+// Segunda pergunta, do mesmo tipo da primeira: o arquivo que o comando manda abrir ou rodar
+// existe? Comando que cita script renomeado não erra — a sessão procura, não acha, e improvisa.
+// Nasceu na análise de riscos do /autopilot (23/11/2026), que cita 11 caminhos de outros
+// arquivos e nada conferia nenhum deles.
+//
+// Só confere o que COMEÇA num diretório que existe na raiz (`N8N/x.mjs`, `Arquitetura do
+// Sistema/...`). Isso deixa de fora, sem lista de exceção, o comando inteiro entre crases
+// (`node .claude/...` — "node .claude" não é diretório), o glob e o placeholder.
+const REPO = join(RAIZ, '..');
+let caminhos = 0;
+for (const f of md(join(RAIZ, 'commands'))) {
+  const texto = readFileSync(f, 'utf8');
+  for (const m of texto.matchAll(/`([^`*<>{}$&|"']+\/[^`*<>{}$&|"']+\.[a-z]{1,5})`/g)) {
+    const caminho = m[1];
+    const raiz = caminho.split('/')[0];
+    if (!existsSync(join(REPO, raiz)) || !statSync(join(REPO, raiz)).isDirectory()) continue;
+    caminhos += 1;
+    if (existsSync(join(REPO, caminho))) continue;
+    const linha = texto.slice(0, m.index).split('\n').length;
+    achados.push({ comando: f.slice(RAIZ.length), linha, nome: `caminho inexistente: ${caminho}` });
+  }
+}
+
 const distintos = new Set(achados.map((a) => a.nome));
 if (achados.length === 0) {
-  console.log(`comandos OK — ${citacoes} citações de subagent_type, ${agentes.size} agentes conhecidos`);
+  console.log(`comandos OK — ${citacoes} citações de subagent_type, ${agentes.size} agentes conhecidos, ${caminhos} caminhos citados existem`);
   process.exit(0);
 }
 console.error(`*** ${achados.length} citações não resolvem (${distintos.size} nomes distintos) ***\n`);
 for (const a of achados.sort((x, y) => x.comando.localeCompare(y.comando) || x.linha - y.linha)) {
   console.error(`  ${a.comando}:${a.linha}  →  ${a.nome}`);
 }
-console.error(`\nInstale o agente em .claude/agents/ ou aponte a citação para um que exista.`);
+console.error(`\nInstale o agente em .claude/agents/ ou aponte a citação para um que exista; caminho inexistente → corrija o caminho no comando.`);
 process.exit(1);
