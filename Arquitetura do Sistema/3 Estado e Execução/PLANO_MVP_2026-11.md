@@ -1,5 +1,9 @@
 # Plano de execução do MVP — de 16/11/2026 até o primeiro mandato real
 
+> **SUPERADO em 23/11/2026** pelo plano de execução único [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1 do registro v0.1.3).
+> Este arquivo fica como histórico, sem outra alteração. O que dele seguia aberto, e para onde foi, está na
+> seção 11 daquele plano (por bloco, não item a item).
+
 **Data:** 11/11/2026, sessão 127 · **Base:** `main` em `28e3081` · **Migration mais nova no
 repositório:** `0271` (escrita, não aplicada) · **Em produção:** até a `0241`.
 

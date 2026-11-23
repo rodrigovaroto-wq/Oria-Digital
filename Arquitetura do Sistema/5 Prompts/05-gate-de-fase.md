@@ -2,10 +2,10 @@
 
 ## Quando usar
 
-Entre uma fase do `3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md` e a seguinte. Duas vezes: ao
+Entre uma fase do `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` (portões G0–G3) e a seguinte. Duas vezes: ao
 **entrar** (o que a fase custa e de quem depende) e ao **sair** (ela pode ser declarada fechada?).
 
-Não confunda com os cinco gates da seção 5 do roadmap — DATA, MODEL, STRATEGY, CREDITOR,
+Não confunda com os cinco gates da seção 5 do roadmap antigo (`ARQUITETURA_ALVO_E_ROADMAP.md`, seção 5, hoje histórico) — DATA, MODEL, STRATEGY, CREDITOR,
 PRESENTATION. Aqueles são marcos, fecham em fases específicas. Este roda em toda fase.
 
 ## Por que existe
@@ -44,9 +44,9 @@ evidência citada não vale.
 | **Produção** | O que está no ar é o que o repositório diz? | sonda contra produção · `conferir-publicado.mjs` · a credencial responde · o limite de runtime (RAM, cota, tamanho de lote) não mudou |
 | **Invariante** | Todo portão novo reprovou com a correção desligada? | o número de asserts que caíram, que a regra 2 manda pôr no commit |
 | **Regressão** | O que a fase não tocou continua verde? | as suítes de `.claude/COMANDOS-CANONICOS.md` que já estavam verdes |
-| **Financeiro** | O "Aceite financeiro" da fase foi satisfeito? | a linha da própria fase no roadmap |
+| **Financeiro** | O "Aceite financeiro" da fase foi satisfeito? | o "Pronto quando" dos itens da fase e o portão dela (G0–G3) no `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` |
 | **Derivado** | O gerado bate com o commitado? | `git diff --exit-code` nos workflows, fixtures, `schema.sql` e no grafo |
-| **Contaminação** | A fase criou dependência que atrapalha uma fase adiante? | o dependency graph, seção 6 do roadmap |
+| **Contaminação** | A fase criou dependência que atrapalha uma fase adiante? | a coluna "Depende de" e as ondas (seção 10) do plano de execução |
 
 **`FAIL` em Produção ou Invariante não passa** — são os dois que deixam o defeito seguir invisível.
 Nos outros, ressalva registrada é passagem válida.

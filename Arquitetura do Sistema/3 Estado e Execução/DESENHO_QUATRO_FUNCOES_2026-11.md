@@ -1,5 +1,9 @@
 # Desenho técnico — quatro funções aprovadas pelo dono (sem código)
 
+> **ORDEM E DATA SUPERADAS em 23/11/2026** pelo plano de execução único [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](../../Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1).
+> O **desenho técnico** das quatro funções segue válido: a área do cliente é o item 1.G1 do plano novo e o
+> achado, o 1.B5. O "portão de 18/12" deixou de existir (K2: plano sem datas).
+
 > **Decisões do dono (13/11/2026):**
 > - Aceitas TODAS as recomendações (D1.1 a D4.6).
 > - A Área do cliente (função 2) entra DEPOIS do portão de 18/12.

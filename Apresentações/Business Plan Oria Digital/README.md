@@ -1,6 +1,6 @@
 # Business Plan Oria Digital
 
-Versão em vigor (**v2**, 19/11/2026) do business plan para o potencial sócio investidor. A v1 (13 slides, PR #301) fica no histórico do git; os comparativos e os scripts da v2 estão em `Business Plan/_trabalho_fase3/`.
+Versão em vigor (**v2**, 19/11/2026) do business plan para o potencial sócio investidor. A v1 (13 slides, PR #301) fica no histórico do git; os comparativos e os scripts da v2 estão em [`Business Plan/99_historico/business_plan_v2_fase3/`](../../Business%20Plan/99_historico/business_plan_v2_fase3/).
 
 | Arquivo | O que é |
 |---|---|

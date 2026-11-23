@@ -1,6 +1,22 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 133 (19–23/11/2026) — Fase 4: pasta `Business Plan/` organizada e plano de execução único
+
+> **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`.
+
+- **O plano em vigor agora é um só:** [`Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`](Business%20Plan/06_execucao/PLANO_DE_EXECUCAO.md) (decisão K1), sem datas (K2). Fases 0 (fundação) → 1 (piloto com a Partners, K6) → 2 (restante da v1) → 3 (evolução operacional) → 4 (futuro), portões G0–G3. **O item 0.1, o estudo de infraestrutura com ≥ 5 opções por item, é a primeira entrega (R2).**
+- **Planos antigos superados**, com nota no topo e sem apagar: MAPA_DE_EXECUCAO, PLANO_MVP_2026-11, PLANO_DE_EXECUCAO_2026-11, PRONTIDAO_POR_ESTAGIO, PLANO_LINHA_A_LINHA, `03_MVP_E_ROADMAP`; o roadmap do ARQUITETURA_ALVO e a ordem do DESENHO_QUATRO_FUNCOES. O `estado-e-handoff`, o `/fechar` e o `CLAUDE.md` passam a apontar para o plano único.
+- **Pasta `Business Plan/`:** índice com uma fonte por assunto; registro de decisões em `07_decisoes/` (hoje a v0.1.5); workflow v0.3.0 em `02_…`; histórico em `99_historico/` (40 de 40 arquivos movidos com `git mv`, 0 linha alterada). As seções de negócio da `DOCUMENTACAO.md` do deck viraram links para lá (K5).
+- **Medido:** 88 de 88 códigos de decisão citados nos documentos oficiais; 0 links relativos quebrados no repositório; os dois geradores regeram a v0.1.3 e o workflow idênticos byte a byte. Os dois verificadores foram provados não-cegos.
+- **Achados no código que viraram itens P1 da Fase 0 (riscos K4):** extração em N2 sem medição (`0041_dial_manda.sql:419`, item 0.5); n8n com `service_role` (0.4); nenhum backup fora do Supabase (0.2, 0.3); proteção do `main` não conferida (0.6); sem contrato de dados com o provedor de IA (0.7). E: **0 das 138.931 linhas de `campo_extraido` têm `ln`** (item 1.A5).
+- **Decisão nova do dono (23/11): D6-1, registro v0.1.4.** A classificação de documentos (`classificacao_doc_checklist`, em N2 "declarada, não medida" desde a `0127`) volta a N1 junto com a extração, no item 0.5. A v0.1.4 foi registrada e depois superada pela v0.1.5 (G5-1, abaixo); a v0.1.3 e a v0.1.4 estão no histórico.
+- **Segunda revisão independente (23/11):** 3 ALTOS corrigidos. (1) O banco já promove o dial sozinho (`trg_auto_promover_dial`, `0137`) com 30 vereditos: rebaixar a N1 por migration `sistema:` não basta, o item 0.5 agora desliga `auto_promocao`. (2) Três "não existe" desmentidos pelo código: link para a página no portal (`original-do-documento.ts`), `covenant_rompido` e `litigio_relevante` como fatos do texto (`0148`). (3) Itens marcados FEITO sem a medida do critério: hoje nenhum item do plano está FEITO; a regra "FEITO exige a medida" entrou no plano e no `estado-e-handoff`. As ondas viraram as camadas de dependência (todo item das Fases 0 e 1 numa onda só).
+- **Decisão nova do dono (23/11): G5-1, registro v0.1.5.** Gravidade "alto" = > 1% do EBITDA ou da dívida (a G5 dizia só "> 1%"). Régua usada no item 1.D6.
+- **NÃO CONFERIDO:** o banco de produção (a sonda não foi rodada nesta sessão).
+- **O dono faz à mão:** revisar e mergear o PR; ligar a proteção do `main` (0.6); decidir o início do estudo de infraestrutura (0.1).
+
+
 ## SESSÃO 132 (19/11/2026) — README corrigido sobre a IA e o Postgres
 
 > **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`, aplicada em 18/11.
