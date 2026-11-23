@@ -21,8 +21,11 @@ o anterior (nos últimos 10 runs de PR, 5 foram cancelados por push seguinte).
 ## 0. Ponto de partida
 
 1. `git status -sb`. Árvore suja que não é desta tarefa → pare e pergunte.
-2. Branch: a que o harness fixou (nuvem) ou `git fetch origin main && git switch -c claude/<assunto> origin/main`. Nunca a `main`.
-3. `node .claude/conhecimento/buscar.mjs "<assunto>"` antes de abrir qualquer arquivo.
+2. `git fetch -q origin main`. Daqui em diante, tudo que compara com a main usa `origin/main`,
+   nunca a `main` local — medido em 23/11/2026: `main` local 25 commits atrás, e o diff contra
+   ela dava 56 arquivos para 9 reais.
+3. Branch: a que o harness fixou (nuvem) ou `git switch -c claude/<assunto> origin/main`. Nunca a `main`.
+4. `node .claude/conhecimento/buscar.mjs "<assunto>"` antes de abrir qualquer arquivo.
 
 ## 1. Triagem — diga a trilha em uma linha
 
@@ -57,10 +60,11 @@ de um comando rodado agora, nunca de outro `.md`.
 |---|---|
 | C | até 3; para quando nenhum CRÍTICO/ALTO sobrevive |
 | D que muda instrução (`CLAUDE.md`, comando, agente, memória) | 1 |
-| D só registro (`ESTADO.md`, `MAPA`, análise, ficha) | 0 — não abra `revisar.md` |
+| D só registro (`ESTADO.md`, `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md`, análise, ficha) | 0 — não abra `revisar.md` |
 
-Revisor é sempre `subagent_type: "revisor-defeito-silencioso"`, em contexto separado. Cada
-correção é fatia própria. Terceiro ciclo ainda com CRÍTICO/ALTO → pare e relate, sem PR.
+Chame sempre **`/revisar origin/main...HEAD`** — sem alvo, ele compara com a `main` local e o
+revisor recebe código de outros PRs. O painel é o que o `revisar.md` decide (a lente do portal
+entra quando o diff toca `portal/`); você nunca revisa o que escreveu. Cada correção é fatia própria. Terceiro ciclo ainda com CRÍTICO/ALTO → pare e relate, sem PR.
 MÉDIO/BAIXO deixados vão nomeados na descrição do PR.
 
 ## 4. Fechar
@@ -73,8 +77,10 @@ MÉDIO/BAIXO deixados vão nomeados na descrição do PR.
 
 ```bash
 git fetch -q origin main   # base velha infla o diff: medido 53 arquivos contra 6 reais
-git diff --name-only origin/main...HEAD | tee /dev/stderr | wc -l
-git diff --name-only origin/main...HEAD \
+# quotePath=false: sem ele o git põe entre aspas caminho com acento ("Execu\303\247\303\243o"),
+# o `.md` não casa e documentação vira trilha C — 30 caminhos assim na main de 23/11/2026
+git -c core.quotePath=false diff --name-only origin/main...HEAD | tee /dev/stderr | wc -l
+git -c core.quotePath=false diff --name-only origin/main...HEAD \
   | awk '/^(Supabase|N8N|portal|\.github)\// || (!/\.md$/ && $0 != ".claude/conhecimento/grafo.jsonl")'
 ```
 
@@ -93,8 +99,17 @@ inteiro (US$ 2–4 por aviso, medido). O CI de PR levou 5–7 min nos últimos r
 
 1. Nuvem: `send_later` com `delay_minutes: 8` e encerre o turno. Fora da nuvem: encerre e peça ao
    dono para dizer "ci" quando terminar.
-2. Ao acordar: **uma** chamada `pull_request_read` com `method: get_check_runs`.
-   Algum em andamento → `send_later` de 4 min, no máximo 2 vezes; depois disso, relate e pare.
+2. Ao acordar, duas chamadas `pull_request_read`: `method: get_check_runs` e `method: get_status`
+   (o deploy da Vercel é status de commit, não check run — só o `get_check_runs` não o vê).
+   **Verde é, e só é:**
+   - cada job de `.github/workflows/suites.yml` presente **pelo nome** e com `success` — a lista
+     sai de `awk '/^jobs:/{j=1;next} j && /^  [a-zA-Z0-9_-]+:$/{gsub(/[ :]/,"");print}' .github/workflows/suites.yml`;
+   - `SonarCloud Code Analysis` com `success`;
+   - `get_status` com `state: success`.
+
+   Job ausente, `skipped` ou `cancelled` não é verde: é CI que não rodou (regra 7) — um `.yml`
+   inválido não cria os jobs e deixa só os checks externos, verdes. Em andamento ou `pending` →
+   `send_later` de 4 min, no máximo 2 vezes; depois disso, relate e pare.
 3. Vermelho → leia só o log do job que falhou, corrija como fatia, push, volte ao passo 1.
    Nunca pule, desligue ou ponha teste em quarentena; nunca commit vazio.
 4. Sonar vermelho é achado de revisão: corrige ou justifica no PR.
