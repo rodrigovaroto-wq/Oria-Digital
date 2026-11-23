@@ -40,7 +40,8 @@ histórico:
 
 - `Arquitetura do Sistema/3 Estado e Execução/`: `PLANO_MVP_2026-11.md`, `PLANO_DE_EXECUCAO_2026-11.md`,
   `MAPA_DE_EXECUCAO.md`, `PRONTIDAO_POR_ESTAGIO.md`, `PLANO_LINHA_A_LINHA.md` e o roadmap de
-  `ARQUITETURA_ALVO_E_ROADMAP.md` (as decisões por componente desse arquivo seguem como referência técnica).
+  `ARQUITETURA_ALVO_E_ROADMAP.md` (as decisões por componente desse arquivo seguem como referência técnica), e a ordem e a data de
+  `DESENHO_QUATRO_FUNCOES_2026-11.md` (o desenho técnico segue válido).
 - `Arquitetura do Sistema/1 Visão e Doutrina/03_MVP_E_ROADMAP.md`.
 
 Dois planos já tinham sido apagados na organização do repositório (PR #302, commit `54418af`) e

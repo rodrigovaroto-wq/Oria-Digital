@@ -26,7 +26,7 @@ este projeto chama de lente central.
 | Etapa do roteiro externo | Quem já responde por ela aqui |
 |---|---|
 | Auditoria do estado | `Arquitetura do Sistema/4 Análises e Auditorias/` — a próxima produz o **delta**, não outra varredura do zero |
-| Plano e roadmap | `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` (plano único em vigor, portões G0–G3). Referência técnica: `3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md` — inclui as 23 camadas, os 5 gates, o dependency graph, o MVP, o DO NOT BUILD YET e o mapeamento contra a numeração de fases proposta (seção 7) |
+| Plano e roadmap | `Business Plan/06_execucao/PLANO_DE_EXECUCAO.md` (plano único em vigor, portões G0–G3). Referência técnica, **só as seções 1–4** (decisão por componente, as 23 camadas, a arquitetura final): `3 Estado e Execução/ARQUITETURA_ALVO_E_ROADMAP.md`. As seções 5–12 são histórico — incluem os 5 gates, o dependency graph, o MVP, o DO NOT BUILD YET e o mapeamento contra a numeração de fases proposta (seção 7) |
 | Execução de uma fase | `/rodada` |
 | Red team | `04-defeito-sem-erro.md` + `revisor-defeito-silencioso` |
 | Code review | `/revisar` |
