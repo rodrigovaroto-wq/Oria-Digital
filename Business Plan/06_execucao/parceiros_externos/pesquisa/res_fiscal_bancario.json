@@ -1,0 +1,449 @@
+[
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Open Finance PJ (extrato, cartões, empréstimos)",
+  "empresa": "Pluggy (plano Data)",
+  "site": "https://pluggy.ai",
+  "o_que_oferece": "Plano Data (contratado separado do plano Payments): contas reais via Open Finance regulado e conexão direta; extratos e saldos; cartões; investimentos; empréstimos; identidade/KYC; webhooks; enriquecimento (categorização, estabelecimento, recorrência); suporte por ticket. Conector Open Finance é 'premium', habilitado por contrato. Instituições com coluna 'Business' (PJ) na cobertura.",
+  "o_que_oria_usaria": "Extrato e saldos PJ, cartões PJ, empréstimos/financiamentos PJ, identidade (titularidade do CNPJ), categorização de transações (ajuda E09). Investimentos PJ ocasionalmente.",
+  "o_que_sobraria": "Conexão direta não regulada (fora do ecossistema BCB — a Oria deve preferir só o regulado), parte do volume incluído na franquia (32 empresas/mês no volume de referência, e só parte delas vai consentir), enriquecimento de merchant/recorrência pensado para PF.",
+  "pct_uso_estimado": 80,
+  "conta_do_pct": "Por contagem de módulos do plano Data: 8 itens (OF regulado, conexão direta, extrato/saldo, cartões, investimentos, empréstimos, identidade, enriquecimento+webhooks). Usa 6 (OF regulado, extrato/saldo, cartões, empréstimos, identidade, enriquecimento+webhooks); investimentos meio (0,5); conexão direta 0 → 6,5/8 ≈ 81%. MAS a franquia mínima de R$ 2.500/mês com volume incluído: se o volume incluído for muito maior que ~32 empresas × poucas chamadas, a parte ociosa da franquia derruba o % — o volume incluído não é publicado. Estimativa final ~80% sob condição.",
+  "modelo_cobranca": "Assinatura mínima mensal com volume incluído + excedente por requisição",
+  "preco_publicado": "A partir de R$ 2.500/mês (plano Data), 15 dias de teste em produção, sandbox grátis (pluggy.ai/en/pricing, consultado 24/11/2026). Volume incluído: não publicado.",
+  "brasil_lgpd": "Empresa brasileira; entidade regulada Pluggy Brasil Instituição de Pagamento LTDA (CNPJ 37.943.755/0001-30), autorizada pelo BCB como ITP. Local de processamento e DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Escopo do plano Data casa com E06 (extrato+cartões+empréstimos PJ) por ~81% dos módulos; a condição é o volume incluído na franquia de R$ 2.500/mês não ficar majoritariamente ocioso com ~32 empresas/mês e a Pluggy aceitar a Oria como parceira nos termos da Res. Conjunta 21/2026.",
+  "riscos_a_confirmar": "(1) Quem é a RECEPTORA de dados: a página diz que a Pluggy IP é ITP; ITP não é automaticamente receptora de dados — confirmar se ela é receptora ou usa instituição parceira. (2) Res. Conjunta BCB/CMN 21/2026 (publicada 26/10/2026, vigência imediata): agregador que repassa dado de Open Finance a terceiro precisa de contrato de PARCERIA; a integradora colhe consentimento expresso por parceira, a capacidade da parceira é atestada por auditor registrado na CVM antes e 1x/ano, a parceira não pode repassar dado nem derivado que identifique o cliente; lista de parceiras ao BCB até 01/12/2026. Ainda não está claro se entregar a análise ao PRÓPRIO cliente titular conta como repasse. (3) Volume incluído nos R$ 2.500. (4) Produtos efetivamente disponíveis para conta PJ por banco (endpoint /connectors?isOpenFinance=true). (5) Adesão PJ ao Open Finance ainda é baixa (estimativas de 1,4% a 3% das empresas) e o consentimento PJ trava em empresa com mais de um sócio/assinatura conjunta — um cliente em crise pode simplesmente não conseguir consentir. (6) O projeto, em 27/10/2026, citava a Res. Conjunta 4/2022 — não conferida nesta pesquisa.",
+  "fontes": [
+   "https://pluggy.ai/en/pricing",
+   "https://docs.pluggy.ai/docs/open-finance-regulated",
+   "https://finsidersbrasil.com.br/negocios-em-fintechs/na-pluggy-chegou-a-hora-de-plugar-o-open-finance-regulado",
+   "https://cesconbarrieu.com.br/open-finance-cmn-e-bcb-reformulam-as-regras-de-parcerias-e-de-governanca/",
+   "https://finsidersbrasil.com.br/reportagem-exclusiva-fintechs/mudanca-na-circulacao-de-dados-no-open-finance-obriga-empresas-de-tecnologia-a-rever-negocios/",
+   "https://www.contadores.cnt.br/legislacoes/resolucao-conjunta-bacen-no-21-de-22-10-2026.html",
+   "https://www.letsmoney.com.br/open-finance/open-finance-pj-burocracia-socios-credito",
+   "https://startups.com.br/noticias/open-finance-cresce-entre-empresas-mas-desafios-nao-sao-poucos/"
+  ]
+ },
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Open Finance PJ (extrato, cartões, empréstimos)",
+  "empresa": "Belvo",
+  "site": "https://belvo.com",
+  "o_que_oferece": "Agregação bancária Brasil via Open Finance (widget de consentimento, contas, transações, cartões, empréstimos, investimentos, dados do titular — API aceita CPF e CNPJ), iniciação de pagamentos Pix (licença ITP), produtos de enriquecimento/inteligência. Planos: Sandbox grátis; Launch US$ 1.000/mês; Growth sob medida. A solução 'oficial' de 2022 foi desenhada para instituições REGULADAS (a cliente é a receptora).",
+  "o_que_oria_usaria": "Agregação de dados bancários PJ (contas, transações, cartões, empréstimos) via widget.",
+  "o_que_sobraria": "Iniciação de pagamentos, produtos de inteligência/enriquecimento PF, suporte premium/white-glove do plano; e a maior parte da mensalidade fixa de US$ 1.000 (~R$ 5,3–5,8 mil) se o uso for ~32 empresas/mês.",
+  "pct_uso_estimado": 60,
+  "conta_do_pct": "O plano Launch não lista módulos separados (todos os planos citam as mesmas features), então a conta é por franquia: US$ 1.000/mês fixo contra ~32 empresas/mês, das quais só parte consente. Sem preço por link publicado não dá para medir; estimativa conservadora de ~60% (franquia superdimensionada para o volume). Se o contrato for só por consumo sem mínimo, subiria para ~90%.",
+  "modelo_cobranca": "Assinatura mensal (Launch US$ 1.000) ou contrato sob medida; preço reajustado anualmente pelo IPCA (contrato 2022)",
+  "preco_publicado": "Launch: US$ 1.000/mês; Growth: sob consulta (belvo.com/plans-and-pricing, consultado 24/11/2026 — a página não diz se vale para o Brasil; há página pt-br separada não lida).",
+  "brasil_lgpd": "Opera no Brasil com licença ITP; empresa de origem espanhola/mexicana — local de processamento e DPA a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Cobre os dados PJ, mas o modelo é pensado para cliente regulado e o piso de US$ 1.000/mês fica ocioso no volume da Oria; só serve se aceitar a Oria como parceira (Res. 21/2026) e cobrar por consumo.",
+  "riscos_a_confirmar": "(1) Se a Belvo é receptora para clientes NÃO regulados ou exige que o cliente seja a receptora. (2) Res. Conjunta BCB/CMN 21/2026 (publicada 26/10/2026, vigência imediata): agregador que repassa dado de Open Finance a terceiro precisa de contrato de PARCERIA; a integradora colhe consentimento expresso por parceira, a capacidade da parceira é atestada por auditor registrado na CVM antes e 1x/ano, a parceira não pode repassar dado nem derivado que identifique o cliente; lista de parceiras ao BCB até 01/12/2026. Ainda não está claro se entregar a análise ao PRÓPRIO cliente titular conta como repasse. (3) Preço por link/consulta no Brasil. (4) Adesão PJ ao Open Finance ainda é baixa (estimativas de 1,4% a 3% das empresas) e o consentimento PJ trava em empresa com mais de um sócio/assinatura conjunta — um cliente em crise pode simplesmente não conseguir consentir.",
+  "fontes": [
+   "https://belvo.com/plans-and-pricing/",
+   "https://belvo.com/blog/belvo-launches-official-open-finance-solution-regulated-institutions-brazil/",
+   "https://developers.belvo.com/docs/ofda-introduction",
+   "https://go.belvo.com/hubfs/Legal%20policies/Belvo%20-%20Condic%CC%A7o%CC%83es%20Gerais%20de%20Uso%20do%20Servic%CC%A7o%20-%2005_07_2022%20%20.pdf",
+   "https://cesconbarrieu.com.br/open-finance-cmn-e-bcb-reformulam-as-regras-de-parcerias-e-de-governanca/",
+   "https://finsidersbrasil.com.br/reportagem-exclusiva-fintechs/mudanca-na-circulacao-de-dados-no-open-finance-obriga-empresas-de-tecnologia-a-rever-negocios/",
+   "https://www.contadores.cnt.br/legislacoes/resolucao-conjunta-bacen-no-21-de-22-10-2026.html"
+  ]
+ },
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Open Finance PJ (extrato, cartões, empréstimos)",
+  "empresa": "Klavi",
+  "site": "https://www.klavi.ai",
+  "o_que_oferece": "Relatório do Crédito (cadastro, renda, despesas, capacidade de pagamento, score), Radar do Crédito (mercado de crédito observado via OF), Score Bets, Radar Competitivo, Inteligência de Mercado, Pagamentos via OF, agente klav.IA. Entidade: Klavi Instituição de Pagamento e Gestão de Dados LTDA.",
+  "o_que_oria_usaria": "Somente o dado bruto/relatório de capacidade de pagamento de um CNPJ, se existir para PJ.",
+  "o_que_sobraria": "Scores e radares de mercado (varejo, telecom, apostas), pagamentos, inteligência de marca — o portfólio é de produtos analíticos para credor/varejista, e a Oria não pode usar score pronto como número (agentes interpretam, não calculam).",
+  "pct_uso_estimado": 25,
+  "conta_do_pct": "Por contagem: 7 produtos listados; a Oria usaria 1 (Relatório do Crédito) e talvez parte de outro (dado bruto) → ~1,5/7 ≈ 21–25%.",
+  "modelo_cobranca": "Não publicado (contato comercial)",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Brasileira; ISO/IEC 27001:2022 declarada no site. DPA a confirmar.",
+  "veredito": "Rejeitado",
+  "motivo": "Portfólio de produtos analíticos e scores, majoritariamente PF e voltado a credor/varejo; a Oria usaria uma fração e ainda teria de descartar o score.",
+  "riscos_a_confirmar": "Se vende acesso a dado bruto PJ isolado por consulta, reavaliar. A própria Klavi diz que a jornada de consentimento foi desenhada para um único usuário (trava PJ com vários sócios).",
+  "fontes": [
+   "https://www.klavi.ai/",
+   "https://www.letsmoney.com.br/open-finance/open-finance-pj-burocracia-socios-credito"
+  ]
+ },
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Open Finance PJ (extrato, cartões, empréstimos)",
+  "empresa": "Quanto",
+  "site": "https://www.quanto.com.br",
+  "o_que_oferece": "API de dados bancários padronizados com autorização do usuário (assinatura recorrente); licença ITP com foco em Pix e 'ITP as a service'.",
+  "o_que_oria_usaria": "API de dados bancários PJ.",
+  "o_que_sobraria": "Iniciação de pagamento; não foi possível medir o resto do escopo pago.",
+  "pct_uso_estimado": 0,
+  "conta_do_pct": "Não calculável: site fora do ar (HTTP 503 em 24/11/2026) e sem preço/escopo publicado. Marcado 0 por falta de oferta verificável.",
+  "modelo_cobranca": "Assinatura de acesso à API (perfil CB Insights)",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Brasileira; a confirmar.",
+  "veredito": "Rejeitado",
+  "motivo": "Risco de continuidade: a empresa demitiu mais de 85% do quadro (segundo corte em menos de um ano, por falta de caixa) e o site não respondeu na consulta; não há oferta verificável.",
+  "riscos_a_confirmar": "Situação operacional atual da empresa.",
+  "fontes": [
+   "https://bpmoney.com.br/negocios/quanto-demite-97-do-quadro-de-funcionarios-em-menos-de-um-ano",
+   "https://finsidersbrasil.com.br/reportagem-exclusiva-fintechs/quanto-esta-apta-a-operar-como-iniciador-e-mira-itp-as-a-service",
+   "https://www.cbinsights.com/company/quanto/alternatives-competitors"
+  ]
+ },
+ {
+  "etapas": [
+   "E05"
+  ],
+  "categoria": "Captura de NF-e/CT-e/NFS-e por CNPJ/certificado",
+  "empresa": "Qive (ex-Arquivei)",
+  "site": "https://qive.com.br",
+  "o_que_oferece": "Planos em escada: Inicial (consulta, armazenamento e download de NF-e/NFS-e/CT-e; manifestação; fechamento de mês; relatório Excel básico; busca por chave; suporte) → Rotinas (+relatórios avançados, etiquetas, integração Mercado Livre/Tiny/Bling, busca por conteúdo, automação) → Gestão (+dashboards de fornecedor/produto/transporte/erros, INTEGRAÇÃO POR API, controle de devolução, checagem de SPED e chaves, suporte prioritário) → Customizado (SAP/TOTVS, gerente de conta, treinamento) ; plano Escritórios contábeis.",
+  "o_que_oria_usaria": "Captura por certificado, download do XML e API (para puxar no n8n) — e a API só existe a partir do plano Gestão.",
+  "o_que_sobraria": "Manifestação, fechamento de mês, relatórios e dashboards, etiquetas, integrações com ERP/marketplace, controle de devolução, checagem de SPED, automações — gestão fiscal do dia a dia que a Oria não opera.",
+  "pct_uso_estimado": 24,
+  "conta_do_pct": "Por contagem no plano Gestão (o mínimo com API): Inicial 7 itens + Rotinas 5 + Gestão 5 = 17; a Oria usa 4 (consulta/captura, download/armazenamento, busca por chave, API) → 4/17 ≈ 24%.",
+  "modelo_cobranca": "Assinatura por plano (valor sob consulta)",
+  "preco_publicado": "não publicado (qive.com.br/planos-e-precos mostra planos sem preço, 24/11/2026)",
+  "brasil_lgpd": "Brasileira; DPA/local de processamento a confirmar.",
+  "veredito": "Rejeitado",
+  "motivo": "Vende gestão fiscal recorrente; para ter API a Oria pagaria o plano Gestão e usaria ~1/4 dele.",
+  "riscos_a_confirmar": "Limite da fonte (memória — conferir na NT 2014.002): o NFeDistribuicaoDFe só devolve documentos dos últimos ~3 meses; para diagnóstico de anos anteriores a captura por certificado NÃO traz histórico — o XML antigo vem do ERP/contador do cliente (E03).",
+  "fontes": [
+   "https://qive.com.br/planos-e-precos",
+   "https://qive.com.br/funcionalidades/captura-de-documentos-fiscais-automatica"
+  ]
+ },
+ {
+  "etapas": [
+   "E05"
+  ],
+  "categoria": "Captura de NF-e/CT-e/NFS-e por CNPJ/certificado",
+  "empresa": "SIEG (HUB/Cofre)",
+  "site": "https://www.sieg.com",
+  "o_que_oferece": "SIEG HUB com Cofre de documentos fiscais (download automático de NF-e/CT-e como emitente, destinatário, remetente e tomador, armazenamento em AWS) e demais ferramentas para escritório contábil (memória — conferir: módulos de compliance/certidões).",
+  "o_que_oria_usaria": "Cofre + download de XML por certificado.",
+  "o_que_sobraria": "Ferramentas de rotina de escritório contábil (gestão de certificados de muitos clientes, conferências recorrentes) — escopo não publicado, não dá para listar com fonte.",
+  "pct_uso_estimado": 30,
+  "conta_do_pct": "Estimativa por perfil (sem lista de módulos publicada): assinatura mensal para escritório contábil, da qual a Oria usaria só o download/cofre. Número indicativo, marcar 'a confirmar'.",
+  "modelo_cobranca": "Mensalidade (indício por reclamação no Reclame Aqui); preço sob consulta",
+  "preco_publicado": "não publicado ('sob consulta' em b2bstack)",
+  "brasil_lgpd": "Brasileira; armazenamento em AWS (região a confirmar).",
+  "veredito": "Rejeitado",
+  "motivo": "Produto de assinatura para escritório contábil com operação contínua; a Oria usaria só o download. Sem preço nem escopo publicados para provar o contrário.",
+  "riscos_a_confirmar": "Lista de módulos e se existe plano só-API por CNPJ. Reclamação pública de cobrança após cancelamento (fev/2026). Limite da fonte (memória — conferir na NT 2014.002): o NFeDistribuicaoDFe só devolve documentos dos últimos ~3 meses; para diagnóstico de anos anteriores a captura por certificado NÃO traz histórico — o XML antigo vem do ERP/contador do cliente (E03).",
+  "fontes": [
+   "https://www.reclameaqui.com.br/empresa/sieg-solucoes-inteligentes/faq/",
+   "https://www.b2bstack.com.br/compare/sieg-vs-bling-erp",
+   "https://www.contabeis.com.br/noticias/53959/sieg-hub-a-ferramenta-mais-poderosa-para-gestao-de-documentos-fiscais/",
+   "https://www.reclameaqui.com.br/sieg-solucoes-inteligentes/cobranca-de-mensalidades-apos-solicitacao-de-cancelamento-do-contrato-com-a-sieg_YofhnUg2XGudT65g/"
+  ]
+ },
+ {
+  "etapas": [
+   "E05"
+  ],
+  "categoria": "Captura de NF-e/CT-e/NFS-e por CNPJ/certificado",
+  "empresa": "NFE.io — Captura Fiscal (DFe Inbound)",
+  "site": "https://nfe.io",
+  "o_que_oferece": "Produto de captura separado da emissão: polling nos ambientes nacionais por NSU, download do XML, extração de metadados, geração de PDF e webhook; NF-e, CT-e e NFS-e com filas próprias; exige certificado A1 (HSM não suportado); consultas pontuais limitadas a 20/h por CNPJ.",
+  "o_que_oria_usaria": "Tudo do produto de captura: XML + metadados + webhook para o n8n. PDF (DANFE) só como anexo.",
+  "o_que_sobraria": "Praticamente nada se contratado só o DFe Inbound; os planos públicos da NFE.io são de EMISSÃO de NFS-e (R$ 190–375/mês) e não servem.",
+  "pct_uso_estimado": 95,
+  "conta_do_pct": "Se contratado só o DFe Inbound: escopo pago = captura; a Oria usa captura, XML, metadados, webhook (4/4) e o PDF marginalmente → ~95%. Preço não publicado, então não dá para descontar franquia.",
+  "modelo_cobranca": "Não publicado para captura (a página de preços só cobre emissão de NFS-e)",
+  "preco_publicado": "não publicado para captura; planos de emissão NFS-e: Base R$ 190/mês, Crescimento R$ 265, Escala R$ 375 (nfe.io/precos, 24/11/2026) — não aplicáveis",
+  "brasil_lgpd": "Brasileira; DPA a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Único da categoria vendido como API de captura pura; serve se for contratável sem plano de emissão e cobrado por CNPJ/documento sem mínimo alto.",
+  "riscos_a_confirmar": "Preço e mínimo do DFe Inbound; se aceita contratação sem emissão; certificado A1 do cliente custodiado por terceiro (segurança/LGPD). Limite da fonte (memória — conferir na NT 2014.002): o NFeDistribuicaoDFe só devolve documentos dos últimos ~3 meses; para diagnóstico de anos anteriores a captura por certificado NÃO traz histórico — o XML antigo vem do ERP/contador do cliente (E03).",
+  "fontes": [
+   "https://nfe.io/docs/documentacao/distribuicao/dfe-inbound-documentacao-funcional-clientes/",
+   "https://nfe.io/docs/distribuicao-processamento-e-periodicidade/",
+   "https://nfe.io/precos/"
+  ]
+ },
+ {
+  "etapas": [
+   "E05"
+  ],
+  "categoria": "Captura de NF-e/CT-e/NFS-e por CNPJ/certificado",
+  "empresa": "Construir — Web Service NFeDistribuicaoDFe (Ambiente Nacional) com o certificado do cliente",
+  "site": "https://www.reformatributaria.com/wp-content/uploads/2026/07/NT2014.002_v1.40-WsNFeDistribuicaoDFe-CNPJ-alfa.pdf",
+  "o_que_oferece": "Serviço oficial gratuito da SEFAZ/Ambiente Nacional: qualquer ator de NF-e com certificado ICP-Brasil consulta documentos de interesse do CNPJ base do certificado (controle por NSU). Para CT-e há serviço equivalente; NFS-e via ambiente nacional (a confirmar).",
+  "o_que_oria_usaria": "O serviço inteiro (é só a distribuição).",
+  "o_que_sobraria": "Nada — não há contrato; o custo é engenharia (nó n8n/serviço com o A1 do cliente) e custódia segura do certificado.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Sem escopo pago: 100% por definição. Custo = desenvolvimento + custódia do certificado.",
+  "modelo_cobranca": "Gratuito (serviço público)",
+  "preco_publicado": "R$ 0 (serviço oficial)",
+  "brasil_lgpd": "Fonte oficial no Brasil; a Oria passa a custodiar o certificado A1 do cliente — exige cofre e autorização registrada.",
+  "veredito": "Recomendado",
+  "motivo": "É exatamente o que os fornecedores revendem; no volume de ~32 CNPJs/mês e uso pontual por mandato, construir sobre a fonte oficial dá 100% e mantém a proveniência na fonte.",
+  "riscos_a_confirmar": "Janela de ~3 meses do DistDFe (memória — conferir) — histórico vem do cliente; versão NT 2014.002 v1.40 traz CNPJ alfanumérico (2026); custódia do A1 e revogação ao fim do mandato.",
+  "fontes": [
+   "https://www.reformatributaria.com/wp-content/uploads/2026/07/NT2014.002_v1.40-WsNFeDistribuicaoDFe-CNPJ-alfa.pdf",
+   "https://documentacao.senior.com.br/exigenciaslegais/resources/documentos%20para%20download/nt2014_002_v1.02c_wsnfedistribuicaodfe.pdf"
+  ]
+ },
+ {
+  "etapas": [
+   "E05",
+   "E07"
+  ],
+  "categoria": "Situação fiscal / e-CAC / PGFN / certidões fiscais",
+  "empresa": "SERPRO — Integra Contador (SITFIS e consultas)",
+  "site": "https://loja.serpro.gov.br/integracontador",
+  "o_que_oferece": "API oficial Receita/SERPRO com dezenas de serviços em 3 tipos (consulta, emissão, declaração): relatório de situação fiscal (SITFIS), consulta massiva de situação fiscal, parcelamentos, PGDAS/PGMEI, DCTFWeb, caixa postal/DTE etc. Contratação online na Loja SERPRO com e-CNPJ, sem taxa de instalação nem multa; acesso pelo certificado do contribuinte ou do procurador com procuração eletrônica no e-CAC.",
+  "o_que_oria_usaria": "SITFIS (e consultas de parcelamento/DCTFWeb quando o caso pede) das empresas do mandato, com a Oria como procuradora.",
+  "o_que_sobraria": "Emissão de guias e transmissão de declarações — não são pagas se não forem chamadas.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pós-pago por transação, sem franquia: paga-se só o que se chama → ~100%. Volume de referência: 32 empresas/mês × 1–2 chamadas SITFIS ≈ 32–64 transações ≈ R$ 13–60/mês (faixa de preço de terceiros).",
+  "modelo_cobranca": "Por transação, pós-pago, preço por faixa de consumo mensal",
+  "preco_publicado": "Tabela oficial na Loja SERPRO não pôde ser lida (HTTP 403 em 24/11/2026). Terceiros: R$ 0,06–0,40 por consulta/emissão conforme faixa (contabeis.com.br, 2026); R$ 0,75–0,96 por transmissão/emissão DCTFWeb na faixa 1 (fórum, set/2025). Projeto (27/10/2026) registrava R$ 0,40–0,96 — compatível, ainda de terceiros.",
+  "brasil_lgpd": "Estatal federal, dado no Brasil; dado PJ (para PF, autorização registrada).",
+  "veredito": "Recomendado",
+  "motivo": "Fonte oficial, cobrança só pelo que se consome, escopo exato de E05 (SITFIS).",
+  "riscos_a_confirmar": "Preço exato da consulta SITFIS na faixa 1 (ler a Loja logado); quantas transações o SITFIS consome (solicitar protocolo + emitir — memória, conferir); procuração eletrônica no e-CAC de CADA empresa do mandato para o e-CNPJ da Oria (passo de E02).",
+  "fontes": [
+   "https://loja.serpro.gov.br/en/integracontador",
+   "https://serpro.gov.br/menu/noticias/noticias-2023/integra-contador-facilita-gestao-fiscal-setor-contabil",
+   "https://www.contabeis.com.br/noticias/69618/serpro-plataforma-da-reforma-tributaria-deve-entrar-em-operacao-em-2026/",
+   "https://www.contabeis.com.br/forum/tributos-federais/410290/modulo-integra-contador-tarifas/",
+   "https://www.contabeis.com.br/noticias/53105/integra-contador-ja-esta-disponivel-veja-como-contratar/"
+  ]
+ },
+ {
+  "etapas": [
+   "E05",
+   "E07"
+  ],
+  "categoria": "Situação fiscal / e-CAC / PGFN / certidões fiscais",
+  "empresa": "Infosimples (APIs fiscais)",
+  "site": "https://infosimples.com",
+  "o_que_oferece": "Catálogo de APIs sobre +830 portais públicos (a página inicial diz '+830 portais', não ~930 como o projeto registrou). Fiscais: Receita/PGFN CND federal (nova, 2ª via, lista), Situação Fiscal na Receita (pendências RFB e PGFN, com perfil de procurador/certificado), PGFN lista de devedores, CNDs estaduais (ex.: SEFAZ-DF), entre outras.",
+  "o_que_oria_usaria": "CND federal, situação fiscal/pendências, lista de devedores PGFN, CNDs estaduais/municipais, CNDT/FGTS — por consulta.",
+  "o_que_sobraria": "Só a parte da franquia mínima não consumida.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por consulta, sem módulos: ~100% do que é cobrado. Franquia mínima R$ 100/mês COMPARTILHADA por toda a conta. Só a parte fiscal: 32 empresas × ~6 consultas = 192 × R$ 0,22 ≈ R$ 42 → 42% da franquia, 58% ocioso. Somando E07 (protestos, processos, certidões, imóveis) no mesmo conta, passa de ~455 consultas/mês e a franquia deixa de ficar ociosa → ~100%.",
+  "modelo_cobranca": "Por consulta, faixas por volume mensal acumulado, + adicional por API em algumas; franquia mínima R$ 100/mês",
+  "preco_publicado": "R$ 0,22 (1–500) · 0,18 (501–2.000) · 0,16 · 0,15 · 0,13 · 0,11 · 0,10 (50.001–60.000) por consulta; franquia R$ 100/mês; algumas APIs com adicional (ex.: R$ 0,04) (infosimples.com/consultas/precos, atualizado 10/07/2026, lido 24/11/2026). ATENÇÃO: o projeto registrava R$ 0,20–0,09 em 27/10/2026 — a página hoje mostra R$ 0,22–0,10.",
+  "brasil_lgpd": "Brasileira; consulta em tempo real à fonte pública. DPA a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Cobrança por consulta dá ~100%; a condição é a conta Infosimples ser usada também em E07 (ou o consumo total passar de R$ 100/mês), senão ~58% da franquia fica ocioso só com o fiscal.",
+  "riscos_a_confirmar": "Quais APIs fiscais têm adicional por chamada; a API de Situação Fiscal pede certificado/procuração — se a Oria usar a mesma procuração do Integra Contador, decidir uma fonte só para não ter duas contas do mesmo dado; diferença de preço vs. o registrado no projeto.",
+  "fontes": [
+   "https://infosimples.com/consultas/precos/",
+   "https://infosimples.com/",
+   "https://infosimples.com/consultas/receita-federal-situacao/",
+   "https://infosimples.com/consultas/receita-federal-pgfn-nova/",
+   "https://infosimples.com/consultas/receita-federal-pgfn-devedores/"
+  ]
+ },
+ {
+  "etapas": [
+   "E05",
+   "E07"
+  ],
+  "categoria": "Situação fiscal / e-CAC / PGFN / certidões fiscais",
+  "empresa": "gov.br Conecta — API CND (Receita/PGFN)",
+  "site": "https://www.gov.br/conecta/catalogo/apis/consultar-certidao-negativa-de-debito",
+  "o_que_oferece": "API oficial de Certidão Negativa de Débitos federal (RFB+PGFN), validade 180 dias.",
+  "o_que_oria_usaria": "Emissão/consulta de CND federal.",
+  "o_que_sobraria": "Nada — mas o catálogo Conecta atende órgãos públicos (memória — conferir elegibilidade de entidade privada).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Escopo é uma única API; se acessível, 100%.",
+  "modelo_cobranca": "A confirmar (Conecta gov.br é para órgãos)",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Governo federal.",
+  "veredito": "Rejeitado",
+  "motivo": "Provável inelegibilidade de empresa privada no Conecta gov.br; o mesmo dado sai pelo Integra Contador/Infosimples.",
+  "riscos_a_confirmar": "Elegibilidade de pessoa jurídica privada no Conecta (memória — conferir).",
+  "fontes": [
+   "https://www.gov.br/conecta/catalogo/apis/consultar-certidao-negativa-de-debito",
+   "https://www.gov.br/conecta/catalogo/apis/consultar-certidao-negativa-de-debito/Documentacao_API_CND.pdf"
+  ]
+ },
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Registradoras e dados de recebíveis",
+  "empresa": "Núclea — Relatório de Consulta de CNPJ",
+  "site": "https://www.nuclea.com.br",
+  "o_que_oferece": "Relatório por CNPJ com indicadores de porte, saúde financeira/liquidez, concentração de clientes e fornecedores, sinais de risco/fraude, a partir da movimentação real de boletos, cartões e TEDs (sem Pix); uso B2B sem integração técnica, não restrito a instituição financeira. Produtos vizinhos: Consulta de Status de Boleto (seguradoras).",
+  "o_que_oria_usaria": "O relatório inteiro, como evidência externa de faturamento/liquidez para cruzar com as demonstrações (E09).",
+  "o_que_sobraria": "Nada no relatório por CNPJ, se vendido avulso; Status de Boleto não interessa.",
+  "pct_uso_estimado": 90,
+  "conta_do_pct": "Se cobrado por relatório, ~100% do relatório é útil; desconto de ~10% porque indicadores de risco/fraude prontos não viram número no Excel (só contexto). Se houver pacote mensal mínimo, recalcular contra ~32 CNPJs/mês.",
+  "modelo_cobranca": "Não publicado",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Brasileira (ex-CIP), infraestrutura do SFN no Brasil; dado PJ agregado.",
+  "veredito": "Condicional",
+  "motivo": "É o único dado 'de registradora' vendável por CNPJ a não financiador; serve se for por relatório e sem pacote ocioso. Não entrega agenda de recebíveis nem Pix.",
+  "riscos_a_confirmar": "Preço e mínimo; se exige autorização do CNPJ consultado (o projeto registra que a Núclea vende só indicadores agregados — confirmado nas matérias de 2026); metodologia dos indicadores para citar como fonte.",
+  "fontes": [
+   "https://cqcs.com.br/noticia/relatorio-de-consulta-de-cnpj-da-nuclea-permite-avaliar-comportamento-financeiro-real-de-empresas-e-apoiar-decisoes-em-seguros-pj/",
+   "https://cqcs.com.br/noticia/subscricao-inteligente-no-seguro-empresarial-como-dados-comportamentais-ampliam-a-visao-sobre-riscos/",
+   "https://cqcs.com.br/noticia/a-nuclea-movimenta-r-18-trilhoes-por-ano-e-descobriu-que-seu-maior-ativo-nao-eram-as-transacoes/"
+  ]
+ },
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Registradoras e dados de recebíveis",
+  "empresa": "CERC — consulta de agenda de recebíveis de cartão",
+  "site": "https://www.cerc.com",
+  "o_que_oferece": "Registro de recebíveis de arranjo de pagamento, avaliação de recebíveis, consulta de agenda, opt-in/opt-out, contratos e ônus — só para Participantes admitidos.",
+  "o_que_oria_usaria": "Consulta de agenda de recebíveis do cliente (com opt-in).",
+  "o_que_sobraria": "Registro, ônus, conciliação — tudo de operador de crédito.",
+  "pct_uso_estimado": 0,
+  "conta_do_pct": "Inelegível: não há contrato possível para a Oria. Manual de Ativos CERC v1.3 (fev/2026): Participante = Financiador (IF do art. 17 da Lei 4.595) ou 'Não Financeira' = 'Instituição que informa Contrato de Recebíveis e não se enquadra no conceito de Financiador' (credenciadoras, subcredenciadoras…) com conexão operacional ativa; a consulta de agenda para Financiador/Não Financeira exige autorização (opt-in) do titular. Uma consultoria que não faz contrato de recebíveis não se enquadra em nenhum dos dois papéis.",
+  "modelo_cobranca": "Tarifa de participante (não aplicável)",
+  "preco_publicado": "não aplicável",
+  "brasil_lgpd": "IMF autorizada pelo BCB.",
+  "veredito": "Rejeitado",
+  "motivo": "A Oria não é Financiador nem 'Não Financeira' que informa contrato de recebíveis; não pode ser participante nem consultar agenda. Confirma a premissa do projeto (agenda exige autorização a um financiador).",
+  "riscos_a_confirmar": "Única saída regular: o cliente baixa a agenda no portal da própria credenciadora (Cielo/Rede/Stone…) e envia em E03, ou um financiador parceiro consulta com opt-in — este último cria dependência e conflito de interesse.",
+  "fontes": [
+   "https://www.cerc.com/wp-content/uploads/2026/02/Manual-de-Ativos-Recebiveis-de-Arranjo-de-Pagamento-AP_1.3.pdf",
+   "https://cerc.com/wp-content/uploads/2024/05/Manual-AP-v1.2-Versao-Limpa.pdf"
+  ]
+ },
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Registradoras e dados de recebíveis",
+  "empresa": "B3 — Recebíveis de Cartão",
+  "site": "https://b3.com.br/pt_br/produtos-e-servicos/registro/recebiveis-de-cartao/",
+  "o_que_oferece": "Registro de recebíveis de cartão, APIs de opt-in (inclusive em lote) e consulta de agenda para instituições financeiras e não financeiras participantes; duplicata escritural.",
+  "o_que_oria_usaria": "Consulta de agenda com opt-in.",
+  "o_que_sobraria": "Registro, gravames, operações de financiamento.",
+  "pct_uso_estimado": 0,
+  "conta_do_pct": "Inelegível pelo mesmo critério das demais registradoras (participante financeiro ou não financeiro que contrata recebíveis).",
+  "modelo_cobranca": "Tarifas de participante",
+  "preco_publicado": "não aplicável",
+  "brasil_lgpd": "IMF no Brasil.",
+  "veredito": "Rejeitado",
+  "motivo": "Mesmo bloqueio da CERC: consulta de agenda é para quem opera recebíveis, com opt-in do estabelecimento.",
+  "riscos_a_confirmar": "Nenhum produto B3 de dado de recebível por CNPJ para não participante foi encontrado.",
+  "fontes": [
+   "https://b3.com.br/pt_br/produtos-e-servicos/registro/recebiveis-de-cartao/",
+   "https://www.b3.com.br/data/files/4F/22/3D/17/BA81E910014981E9AC094EA8/Manual%20de%20Operacoes%20-%20Recebiveis%20de%20Cartao.pdf"
+  ]
+ },
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Registradoras e dados de recebíveis",
+  "empresa": "TAG Tecnologia para o Sistema Financeiro",
+  "site": "https://www.tag.com.br",
+  "o_que_oferece": "Registradora de recebíveis de cartão (uma das quatro com CERC, Núclea e B3) e soluções de dados/inteligência para participantes.",
+  "o_que_oria_usaria": "Consulta de agenda (inviável sem ser participante).",
+  "o_que_sobraria": "Todo o resto.",
+  "pct_uso_estimado": 0,
+  "conta_do_pct": "Inelegível como as demais; nenhum produto de dado por CNPJ para não participante encontrado.",
+  "modelo_cobranca": "não publicado",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "IMF no Brasil.",
+  "veredito": "Rejeitado",
+  "motivo": "Mesmo bloqueio regulatório; sem oferta de dado avulso a consultoria.",
+  "riscos_a_confirmar": "Se a TAG lançar produto de indicadores por CNPJ (como a Núclea), reavaliar. Site oficial não foi lido (URL 'memória — conferir').",
+  "fontes": [
+   "https://investalk.bb.com.br/noticias/mercado/balcao-de-recebiveis-de-cartao-deslancha-apos-desafios-iniciais-e-barateia-credito-a-comerciantes",
+   "https://centraldebalancos.estaleiro.serpro.gov.br/centralbalancos/servicesapi/api/Demonstracao/pdf/157013"
+  ]
+ },
+ {
+  "etapas": [
+   "E07"
+  ],
+  "categoria": "Matrículas de imóveis / registro eletrônico",
+  "empresa": "ONR — RI Digital (Pesquisa Nacional de Bens, visualização de matrícula, certidão digital)",
+  "site": "https://ridigital.org.br",
+  "o_que_oferece": "Plataforma oficial dos cartórios de imóveis: Pesquisa Nacional de Bens por CPF/CNPJ (desde out/2026 cobre as 26 UFs + DF; indica vínculo, não necessariamente propriedade), Pesquisa Qualificada, visualização de matrícula (imagem informativa, 24h, sem valor de certidão), certidão digital com validade jurídica; integração por API com credenciamento (chave e ID de parceiro).",
+  "o_que_oria_usaria": "Pesquisa de bens por CNPJ das empresas (e CPF dos sócios com autorização LGPD), visualização de matrícula para ônus/garantias, certidão quando for para o book.",
+  "o_que_sobraria": "Nada — cada serviço é pago por pedido (emolumento).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por pedido, sem assinatura → ~100%.",
+  "modelo_cobranca": "Por pedido; valores = emolumentos de cada estado",
+  "preco_publicado": "Varia por UF (tabela de emolumentos estadual); visualização ≈ 1/3 da certidão digital (fonte de 2022 — conferir). Pesquisa Nacional de Bens: preço não citado na matéria.",
+  "brasil_lgpd": "Operador nacional regulado pelo CNJ; dado no Brasil. Pesquisa por CPF de sócio exige autorização registrada.",
+  "veredito": "Recomendado",
+  "motivo": "Fonte oficial, nacional e cobrada por pedido; cobre exatamente E07-imóveis.",
+  "riscos_a_confirmar": "Credenciamento de API para empresa privada não cartorária (manual RI Digital cita chave/ID de parceiro); custo por pesquisa nacional; prazo de resposta (não é instantâneo em todos os cartórios).",
+  "fontes": [
+   "https://forbes.com.br/forbes-money/forbes-real-estate/2026/10/cartorios-lancam-ferramenta-que-permite-pesquisar-imoveis-no-pais/",
+   "https://www.onr.org.br/wp-content/uploads/2025/10/CNBCF-Manual-projeto-e-Not-RI-Digital-2.pdf",
+   "https://ridigital.org.br/downloads/Especificacao_wssaec_dev.pdf",
+   "https://registradores.onr.org.br/Downloads/SAEC_CertidaoDigital.pdf",
+   "https://oespecialista.safra.com.br/site-registro-de-imoveis/"
+  ]
+ },
+ {
+  "etapas": [
+   "E07"
+  ],
+  "categoria": "Matrículas de imóveis / registro eletrônico",
+  "empresa": "Infosimples (APIs Registradores/ARISP e ONR Mapa)",
+  "site": "https://infosimples.com/consultas/registradores-matric-pedido/",
+  "o_que_oferece": "APIs que automatizam a conta da própria Oria no portal Registradores/RI Digital: novo pedido de visualização de matrícula (consome saldo do portal), download de matrícula, download de recibo, lista de pedidos; ONR Mapa do Registro de Imóveis. Pesquisa Prévia de Bens ARISP descontinuada.",
+  "o_que_oria_usaria": "Pedido e download de matrícula sem integrar direto no RI Digital.",
+  "o_que_sobraria": "Só franquia ociosa, se não houver outros usos.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por consulta (R$ 0,22 na faixa 1) + emolumento no saldo do portal; franquia R$ 100 compartilhada com as demais APIs Infosimples → ~100% se a conta já for usada em E05/E07.",
+  "modelo_cobranca": "Por consulta Infosimples + emolumento debitado do saldo da Oria no portal",
+  "preco_publicado": "R$ 0,22/consulta na faixa 1 + adicional da API (não publicado) + emolumento (infosimples.com/consultas/precos, 24/11/2026)",
+  "brasil_lgpd": "Brasileira; credenciais e certificado da Oria passam pela Infosimples (parâmetros pkcs12/senha).",
+  "veredito": "Condicional",
+  "motivo": "Camada fina sobre o RI Digital; vale só se a Oria já usar a conta Infosimples e não quiser credenciar API no ONR.",
+  "riscos_a_confirmar": "Não cobre a nova Pesquisa Nacional de Bens (não encontrada no catálogo); repassa certificado da Oria a terceiro; cobertura por UF não publicada.",
+  "fontes": [
+   "https://infosimples.com/consultas/registradores-matric-pedido/",
+   "https://infosimples.com/consultas/registradores-matric-download/",
+   "https://infosimples.com/consultas/onr-mapa-registro-imoveis/",
+   "https://infosimples.com/consultas/registradores-previa-bens/",
+   "https://infosimples.com/consultas/precos/"
+  ]
+ },
+ {
+  "etapas": [
+   "E06"
+  ],
+  "categoria": "Leitura do Registrato/SCR",
+  "empresa": "Não há fornecedor — construir (parser do PDF do Registrato enviado pelo cliente)",
+  "site": "https://www.gov.br/pt-br/servicos/obter-relatorio-do-sistema-de-informacoes-de-credito-scr",
+  "o_que_oferece": "Não existe API/fornecedor para não-IF. O web service do SCR (scr.bcb.gov.br/wsscr) exige habilitação no serviço WSCR0001 com 'Perfil IF'. O Registrato tem Central de Autorizações em que o titular autoriza um CPF a ver seus relatórios por prazo definido — acesso manual via gov.br, sem integração. O BCB publica só estatística agregada do SCR em dados abertos.",
+  "o_que_oria_usaria": "O PDF do Registrato (PJ e, com autorização, PF dos sócios) baixado pelo cliente e enviado em E03; leitura pelo extrator de E04.",
+  "o_que_sobraria": "Nada — não há contrato.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Sem fornecedor e sem escopo pago: 100% por definição; custo = construir o parser/validador do layout do PDF.",
+  "modelo_cobranca": "Gratuito para o titular",
+  "preco_publicado": "R$ 0 (Registrato é gratuito)",
+  "brasil_lgpd": "BCB; PF só com autorização registrada.",
+  "veredito": "Recomendado",
+  "motivo": "Confirma a premissa do projeto: não há API nem fornecedor para quem não é IF; o caminho é o cliente baixar o PDF no gov.br (ou autorizar um CPF da Oria na Central de Autorizações) e a Oria construir a leitura.",
+  "riscos_a_confirmar": "Alternativa a avaliar em E02: autorização na Central de Autorizações do Registrato para o CPF de um analista da Oria (evita depender do cliente, mas continua manual e pessoal); certidão de autenticidade do relatório existe no gov.br e pode servir de prova de proveniência.",
+  "fontes": [
+   "https://www.gov.br/pt-br/servicos/obter-relatorio-do-sistema-de-informacoes-de-credito-scr",
+   "https://www.gov.br/pt-br/servicos/gerenciar-acessos-aos-relatorios-do-registrato-na-central-de-autorizacoes",
+   "https://www.gov.br/pt-br/servicos/emitir-certidao-de-autenticidade-de-relatorio-emitidos-pelo-registrato",
+   "https://bcb.gov.br/content/estabilidadefinanceira/Leiaute_de_documentos/scrdoc3040/SCR3040_Manual_de_Consulta_Web_Service.pdf"
+  ]
+ }
+]

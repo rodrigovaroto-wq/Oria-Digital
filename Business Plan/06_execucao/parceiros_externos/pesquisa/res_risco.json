@@ -1,0 +1,607 @@
+[
+ {
+  "etapas": [
+   "E01",
+   "E07",
+   "E14"
+  ],
+  "categoria": "Bureau de crédito PJ + sócios",
+  "empresa": "Serasa Experian (Consulta CNPJ/CPF, pacotes pré-pagos PME)",
+  "site": "https://www.serasaexperian.com.br/solucoes/consulta-de-cnpj-serasa-experian",
+  "o_que_oferece": "Pacotes de créditos pré-pagos (R$ 119,99 a R$ 1.099,99) consumidos em: Decisão Completa (R$ 59,99), Consulta Sob Medida (a partir de R$ 29,99), Validação de Clientes (R$ 15,99); assinaturas mensais R$ 120 / R$ 270 com cota (consultas OU notificações OU negativações); Serasa Monitora / Saúde do seu Negócio (assinatura R$ 52,40/mês no plano anual, monitora o próprio CNPJ/CPF + até 20 clientes/fornecedores). FAQ descreve Consulta Completa com score, dívidas, cheques, protestos, falências, ações judiciais, informações societárias e antecessores.",
+  "o_que_oria_usaria": "Relatório PJ completo (score, negativações, protestos, falência, ações, participações societárias) por CNPJ do mandato; consulta PF dos sócios só com autorização LGPD.",
+  "o_que_sobraria": "No pacote pré-pago: nada (créditos são consumidos por consulta; Validação de Clientes ficaria sem uso, mas é opção de consumo, não módulo pago). Na assinatura mensal: notificações/negativações da cota (não usaríamos). Saúde do Negócio: monitoramento do próprio CNPJ (inútil para a Oria) e teto de 20 monitorados < 32 CNPJs/mês.",
+  "pct_uso_estimado": 95,
+  "conta_do_pct": "Pacote pré-pago: paga-se só o que se consome → ~100%. Desconto de ~5% pelo risco de sobra de créditos no fim do pacote. Assinatura mensal R$ 120/270: cota em 'consultas OU notificações OU negativações' — usaríamos só consultas, mas a cota é fungível, então também ~100% se o volume bater (32 PJ × R$ 59,99 ≈ R$ 1.920/mês > R$ 270). Saúde do Negócio: 1 de 3 itens úteis (monitorar terceiros), por contagem ≈ 33% → não contratar.",
+  "modelo_cobranca": "Pré-pago por pacote de créditos (portal web); API corporativa por contrato à parte (portal de integração, preço não publicado).",
+  "preco_publicado": "Decisão Completa R$ 59,99; Sob Medida a partir de R$ 29,99; menor pacote R$ 119,99 (consultado 24/11/2026, página sem data). Página antiga cita 'Consulta Completa' R$ 30,00 — a confirmar. Saúde do Negócio R$ 52,40/mês (plano anual R$ 628,80).",
+  "brasil_lgpd": "Dado e processamento no Brasil (bureau regulado pela Lei do Cadastro Positivo). DPA corporativo: a confirmar no contrato de API.",
+  "veredito": "Condicional",
+  "motivo": "Por consulta é ~100% de uso, mas o pacote PME é portal web; para integrar ao n8n é preciso o contrato de API corporativo, cujo preço e franquia não são públicos. A lista da Decisão Completa na página NÃO cita protestos/ações/falência — só o FAQ da 'Consulta Completa' cita.",
+  "riscos_a_confirmar": "1) Qual produto exato traz protestos+ações+falência+sócios (Decisão Completa vs Consulta Completa vs Relato). 2) API: existe franquia mínima mensal? Se >R$ 1.920/mês ficaria ociosa. 3) Validade dos créditos do pacote. 4) Termos de uso de PF para finalidade de M&A.",
+  "fontes": [
+   "https://www.serasaexperian.com.br/solucoes/consulta-de-cnpj-serasa-experian",
+   "https://www.serasaexperian.com.br/solucoes/saude-do-seu-negocio",
+   "https://www.serasaexperian.com.br/solucoes/relatorios",
+   "https://www.serasaexperian.com.br/portal-integracao/"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E07",
+   "E14"
+  ],
+  "categoria": "Bureau de crédito PJ + sócios",
+  "empresa": "Boa Vista SCPC (Equifax) — Define / Risco Positivo PJ",
+  "site": "https://www.directd.com.br/central-de-ajuda/apis/catalogo/BoaVistaDefineLimitePositivoPJ",
+  "o_que_oferece": "Define (cadastro, restritivos, quadro societário, hábitos de pagamento, sugestão de limite; monitoramento das restrições grátis por 30 dias após a consulta); Risco Positivo PJ (indicador de risco por CNPJ); Recomendação de Crédito Inteligente (IA, PMEs). Venda direta via contrato/associações comerciais (ACIF, ACI) ou revenda por API (Direct Data).",
+  "o_que_oria_usaria": "Define Limite Positivo PJ (relatório completo cadastral, financeiro, comportamental e judicial) por CNPJ; monitoramento de 30 dias cobre a janela do mandato.",
+  "o_que_sobraria": "Via revenda por consulta: nada. Via contrato direto/associação: depende do pacote (não publicado).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Via Direct Data (pré-pago por consulta, sem mínimo) → paga só o consumido = 100%. Contrato direto: não calculável (escopo não publicado).",
+  "modelo_cobranca": "Por consulta (revenda pré-paga) ou contrato direto/associação comercial.",
+  "preco_publicado": "Risco Positivo PJ R$ 14,03/consulta (revenda Direct Data, catálogo consultado 24/11/2026). Define Limite Positivo PJ: não publicado. Tabela direta Boa Vista: não publicada.",
+  "brasil_lgpd": "Dado no Brasil. Na revenda, a Direct Data é operadora intermediária — exigir DPA de ambas.",
+  "veredito": "Condicional",
+  "motivo": "Só faz sentido por consulta via revenda (100% de uso); preço do relatório completo (Define) não é público e o 'Acerta' não foi encontrado.",
+  "riscos_a_confirmar": "Preço do Define Limite Positivo PJ; se inclui protestos e ações (página diz 'judicial'); se o monitoramento de 30 dias vem na revenda.",
+  "fontes": [
+   "https://www.directd.com.br/central-de-ajuda/apis/catalogo/BoaVistaDefineLimitePositivoPJ",
+   "https://www.directd.com.br/central-de-ajuda/apis/catalogo/BoaVistaRiscoPositivoPJ",
+   "https://acirpriopreto.com.br/?p=43121",
+   "https://www.acif.org.br/?p=15120"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E07",
+   "E14"
+  ],
+  "categoria": "Bureau de crédito PJ + sócios",
+  "empresa": "Quod (VerifiQ PJ, Quod Consulta PJ, Score PJ)",
+  "site": "https://cloud.gic.quod.com.br/credito-pj",
+  "o_que_oferece": "VerifiQ (relatório de crédito PJ mais completo: cadastral, comportamental/Cadastro Positivo, analítico e restritivo), Quod Consulta PJ, Quod Score PJ.",
+  "o_que_oria_usaria": "VerifiQ PJ por CNPJ do mandato.",
+  "o_que_sobraria": "Não calculável: modelo comercial não publicado.",
+  "pct_uso_estimado": null,
+  "conta_do_pct": "Sem preço nem modelo publicado; se for por consulta sem franquia → ~100%; se houver franquia mensal acima de ~R$ 2 mil (32 CNPJs × ~R$ 60), cai abaixo de 80%.",
+  "modelo_cobranca": "a confirmar",
+  "preco_publicado": "não publicado (pesquisa 24/11/2026)",
+  "brasil_lgpd": "Dado no Brasil (gestora do Cadastro Positivo). DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Produto cobre o escopo, mas sem preço nem modelo público; só entra se vender por consulta sem franquia ociosa.",
+  "riscos_a_confirmar": "Modelo de cobrança, franquia mínima, se o VerifiQ traz protestos/ações/falência e quadro societário.",
+  "fontes": [
+   "https://cloud.gic.quod.com.br/credito-pj",
+   "https://lp.quod.com.br/solucoes-analise-credito-pj/solucao/index.html"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Bureau de crédito PJ + sócios",
+  "empresa": "Direct Data — protestos IEPTB/CENPROT + negativação + score (agregador por API)",
+  "site": "https://www.directd.com.br/central-de-ajuda/apis/catalogo/ProtestosBasica",
+  "o_que_oferece": "Catálogo de 137+ APIs pagas uma a uma: Protestos Nacional IEPTB Básica (R$ 2,95) e Completa (R$ 8,10, com matriz e filiais), Protestos IEPTB Online (R$ 3,50 segundo guia), Detalhamento Negativo (R$ 2,38), Score PF/PJ (R$ 1,98), SCR Bacen Detalhada (R$ 4,90), revenda Boa Vista PJ.",
+  "o_que_oria_usaria": "Protestos Completa por CNPJ (substitui a consulta de protestos da Infosimples, descontinuada) e Básica por CPF; Detalhamento Negativo e Score como bureau leve.",
+  "o_que_sobraria": "Nada: cada API é paga só quando chamada.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pré-pago por chamada, sem contrato mínimo; menor recarga R$ 50 e crédito pré-pago 'não expira' (página de dossiê) → 100%. Estimativa: 32 × (8,10 + 2,38 + 1,98) + 24 × 2,95 ≈ R$ 469/mês.",
+  "modelo_cobranca": "Por consulta, pré-pago (recarga a partir de R$ 50) ou pós-pago com desconto por faixa.",
+  "preco_publicado": "Protestos Básica R$ 2,95; Completa R$ 8,10; Detalhamento Negativo R$ 2,38; Score R$ 1,98; SCR R$ 4,90 (catálogo Direct Data, consultado 24/11/2026; preço de tabela do pré-pago).",
+  "brasil_lgpd": "Empresa brasileira; homologada CENPROT para protestos. DPA: a confirmar. SCR exige autorização do titular.",
+  "veredito": "Recomendado",
+  "motivo": "Paga só o consumido e resolve protestos (lacuna aberta pela Infosimples) por fonte oficial homologada, sem pacote.",
+  "riscos_a_confirmar": "Não substitui o relatório completo de bureau (ações/falência/sócios do Serasa); conferir se 'Detalhamento Negativo' é dado Boa Vista/Quod e com que defasagem. Afirmação de que concorrentes exigem mínimo é marketing da própria Direct Data.",
+  "fontes": [
+   "https://www.directd.com.br/central-de-ajuda/apis/catalogo/ProtestosBasica",
+   "https://directd.com.br/central-de-ajuda/apis/catalogo/ProtestosCompleta",
+   "https://www.directd.com.br/guias/processos-e-protestos-antes-do-credito",
+   "https://www.directd.com.br/central-de-ajuda/apis/catalogo/DetalhamentoNegativo",
+   "https://www.directd.com.br/central-de-ajuda/apis/catalogo/Score",
+   "https://directd.com.br/precos"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Processos judiciais por CPF/CNPJ + monitoramento",
+  "empresa": "JUDIT (API)",
+  "site": "https://judit.io/planos-api/",
+  "o_que_oferece": "API só de dados processuais: consulta histórica Data Lake e On Demand por CPF/CNPJ/OAB/nome, Contador, monitoramento processual (CNJ), monitoramento via DJEN, monitoramento de novas ações por entidade, monitoramento customizado (filtro). Webhooks.",
+  "o_que_oria_usaria": "Consulta histórica On Demand por CNPJ e CPF (dossiê), Contador para triagem, monitoramento de novas ações por entidade durante o mandato (E14).",
+  "o_que_sobraria": "Monitoramento customizado e DJEN por processo (opcionais, pagos só se usados).",
+  "pct_uso_estimado": 95,
+  "conta_do_pct": "Tudo é por transação → ~100%. Pré-pago exige pacote de créditos a partir de R$ 5 mil; consumo estimado: 56 consultas On Demand (~R$ 6 por bloco de 1.000 processos) + monitoramento de novas ações 32 CNPJs × R$ 15 = R$ 480 → ~R$ 800–900/mês; o pacote dura ~6 meses. Desconto de 5% pelo risco de crédito expirar. Pós-pago anual na faixa '1k' pode exigir compromisso de volume — a confirmar.",
+  "modelo_cobranca": "Por transação: pós-pago (contrato anual, faixas) ou pré-pago (pacote de créditos R$ 5k–100k).",
+  "preco_publicado": "Pós-pago faixa 1k: Data Lake R$ 1,50 e On Demand R$ 6,00 por 1.000 processos retornados; Contador R$ 0,50; monitoramento processual R$ 1,50/transação; novas ações R$ 15,00 + R$ 0,25/processo capturado. Pré-pago (pacote R$ 5k): On Demand R$ 6,00; Contador R$ 1,00; novas ações R$ 15,00/mês. Página atualizada em abr/2026, consultada 24/11/2026 — confere com o apurado em 27/10.",
+  "brasil_lgpd": "Empresa brasileira; dado público processual. DPA: a confirmar.",
+  "veredito": "Recomendado",
+  "motivo": "Fornecedor de um produto só (processos), cobrança por transação e preço público; a Oria usaria praticamente tudo que pagaria.",
+  "riscos_a_confirmar": "Validade dos créditos do pacote pré-pago de R$ 5k; se a faixa '1k' do pós-pago impõe mínimo mensal; unidade exata da cobrança 'por 1.000 processos retornados' (por consulta ou por processo); cobertura de tribunais com segredo/físicos.",
+  "fontes": [
+   "https://judit.io/planos-api/",
+   "https://judit.io/planos-plataforma/",
+   "https://judit.io/blog/apis-dados-juridicos-integracoes/api-judit-consultas-monitoramento-processos/"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Processos judiciais por CPF/CNPJ + monitoramento",
+  "empresa": "Escavador (API)",
+  "site": "https://escavador.com/solucoes/consulta-de-processos",
+  "o_que_oferece": "API (v1/v2) de busca por CPF/CNPJ por tribunal e por nome do envolvido, monitoramento de processos e de nomes; plataforma web (plano Básico R$ 9,90/mês, 10 acessos e 3 processos monitorados) e plano empresarial.",
+  "o_que_oria_usaria": "API: busca de processos por CPF/CNPJ e monitoramento de nomes durante o mandato.",
+  "o_que_sobraria": "Na API por saldo: nada. Plano web não seria contratado.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "API com saldo pré-pago debitado por requisição (painel mostra preços por serviço) → 100%. Projeto apurou em 27/10/2026 'valor base por pessoa, pré-pago, sem mínimo' — não reconfirmado hoje (página de preços devolveu 403).",
+  "modelo_cobranca": "API pré-paga por saldo (preço por serviço no painel).",
+  "preco_publicado": "API: não publicado fora do painel (pesquisa 24/11/2026; escavador.com/precos devolveu 403). Plano web Básico R$ 9,90/mês (resultado de busca).",
+  "brasil_lgpd": "Empresa brasileira; política de privacidade publicada. DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Modelo por saldo dá ~100% de uso, mas o preço por consulta só aparece dentro do painel; entra se o custo por CPF/CNPJ for competitivo com JUDIT.",
+  "riscos_a_confirmar": "Preço por busca por documento e por monitoramento; busca é por tribunal (várias chamadas por pessoa?) — isso multiplica o custo.",
+  "fontes": [
+   "https://www.escavador.com/blog/?p=191",
+   "https://www.escavador.com/blog/?p=187",
+   "https://escavador.com/solucoes/monitoramentos",
+   "https://www.escavador.com/precos"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Processos judiciais por CPF/CNPJ + monitoramento",
+  "empresa": "Direct Data — Processos Judiciais (API)",
+  "site": "https://www.directd.com.br/apis/processos-judiciais-simplificada",
+  "o_que_oferece": "Processos Judiciais Simplificada (R$ 1,50), Agrupada (R$ 1,10), Completa (R$ 3,30) por CPF/CNPJ em TJs, TRTs e TRFs; monitoramento de novos processos citado no produto Dossiê.",
+  "o_que_oria_usaria": "Completa por CNPJ e CPF.",
+  "o_que_sobraria": "Nada (por chamada).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pré-pago por chamada sem mínimo → 100%. 56 × R$ 3,30 ≈ R$ 185/mês.",
+  "modelo_cobranca": "Por consulta, pré-pago ou pós-pago.",
+  "preco_publicado": "Simplificada R$ 1,50; Agrupada R$ 1,10; Completa R$ 3,30 (catálogo/guia Direct Data, out/2026, consultado 24/11/2026).",
+  "brasil_lgpd": "Empresa brasileira; o catálogo marca processos como 'fornecedor externo' — há um sub-operador não identificado.",
+  "veredito": "Recomendado",
+  "motivo": "Mais barato por consulta e sem mínimo; serve como fonte principal ou segunda fonte para cruzar com JUDIT.",
+  "riscos_a_confirmar": "Quem é o fornecedor externo (pode ser a própria JUDIT/Escavador — então não é fonte independente); preço do monitoramento; profundidade da 'Completa'.",
+  "fontes": [
+   "https://www.directd.com.br/apis/processos-judiciais-simplificada",
+   "https://www.directd.com.br/central-de-ajuda/apis/catalogo/ProcessosJudiciaisCompleta",
+   "https://www.directd.com.br/central-de-ajuda/apis/catalogo/ProcessosJudiciaisAgrupada",
+   "https://www.directd.com.br/apis"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Processos judiciais por CPF/CNPJ + monitoramento",
+  "empresa": "Jusbrasil Soluções (ex-Digesto)",
+  "site": "https://www.legaltechnologyhub.com/vendors/jusbrasil-solucoes/",
+  "o_que_oferece": "Plataforma jurídica corporativa: monitoramento de processos e publicações, gestão de carteira para departamentos jurídicos, risco legal e due diligence, API; plano Enterprise por usuários.",
+  "o_que_oria_usaria": "Consulta e monitoramento de processos por CPF/CNPJ.",
+  "o_que_sobraria": "Gestão de carteira jurídica, publicações/intimações, assentos de usuários — ferramenta de departamento jurídico, não de dossiê.",
+  "pct_uso_estimado": 30,
+  "conta_do_pct": "Por contagem de módulos do plano Enterprise (monitoramento de processos, publicações, gestão de carteira, painel/usuários, API): usaria 1–2 de 5 → 20–40%. Referência de preço: Enterprise Premium até 10 usuários R$ 21.252,65/ano (≈ R$ 1.771/mês) contra ~R$ 200–900/mês de consumo real em JUDIT/Direct Data.",
+  "modelo_cobranca": "Assinatura anual de plataforma por usuários; API por proposta.",
+  "preco_publicado": "Enterprise (Premium) até 10 usuários: R$ 21.252,65/ano (ato de inexigibilidade da Casa Civil, 2026). API: não publicado.",
+  "brasil_lgpd": "Empresa brasileira. DPA: a confirmar.",
+  "veredito": "Rejeitado",
+  "motivo": "Produto empacotado para jurídico interno; a Oria pagaria assentos e gestão de carteira que não usa (< 80%).",
+  "riscos_a_confirmar": "Se houver API pura por consulta sem assinatura, reavaliar.",
+  "fontes": [
+   "https://www.gov.br/casacivil/pt-br/acesso-a-informacao/licitacoes-e-contratos/secretaria-de-administracao/contratacoes-diretas/atos-de-inexigibilidade-2026/tr-237-2026.pdf",
+   "https://www.legaltechnologyhub.com/vendors/jusbrasil-solucoes/",
+   "https://jusbrasil.com.br/pro"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Processos judiciais por CPF/CNPJ + monitoramento",
+  "empresa": "Predictus",
+  "site": "https://www.nsctotal.com.br/?p=7371079",
+  "o_que_oferece": "Base de dados judiciais; consulta por nome, CPF, razão social, CNPJ, OAB ou número; plataforma web ou API para motores de crédito/ERPs.",
+  "o_que_oria_usaria": "API de consulta por CPF/CNPJ.",
+  "o_que_sobraria": "Não calculável (modelo não publicado).",
+  "pct_uso_estimado": null,
+  "conta_do_pct": "Sem preço/modelo público. Se por consulta → ~100%; se assinatura de plataforma → provavelmente < 80%.",
+  "modelo_cobranca": "a confirmar",
+  "preco_publicado": "não publicado (pesquisa 24/11/2026; só material promocional encontrado)",
+  "brasil_lgpd": "Empresa brasileira. DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Só entra se vender API por consulta sem franquia; hoje não há dado para comparar com JUDIT.",
+  "riscos_a_confirmar": "Preço, modelo, monitoramento.",
+  "fontes": [
+   "https://www.nsctotal.com.br/?p=7371079",
+   "https://www.nsctotal.com.br/?p=7396636"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Processos judiciais por CPF/CNPJ + monitoramento",
+  "empresa": "Codilo",
+  "site": "https://www.codilo.com.br",
+  "o_que_oferece": "PESQUISA FALHOU: duas buscas não retornaram nenhuma página da Codilo. Pelo conhecimento prévio, API de consulta e monitoramento processual (fonte: memória — conferir).",
+  "o_que_oria_usaria": "a confirmar",
+  "o_que_sobraria": "a confirmar",
+  "pct_uso_estimado": null,
+  "conta_do_pct": "Sem dados.",
+  "modelo_cobranca": "a confirmar",
+  "preco_publicado": "não publicado / pesquisa falhou",
+  "brasil_lgpd": "a confirmar",
+  "veredito": "Condicional",
+  "motivo": "Sem informação verificável; não avaliar até obter tabela.",
+  "riscos_a_confirmar": "Tudo.",
+  "fontes": [
+   "memória — conferir"
+  ]
+ },
+ {
+  "etapas": [
+   "E07"
+  ],
+  "categoria": "Certidões negativas (TJ, TRF, TRT, CNDT, criminais, CNDs)",
+  "empresa": "Infosimples",
+  "site": "https://infosimples.com/consultas/precos/",
+  "o_que_oferece": "Centenas de APIs de consulta a fontes públicas cobradas por chamada: certidão unificada da Justiça Federal (TRF), CEAT de cada TRT, CNDT, CND federal (Receita/PGFN), CND estaduais (SEFAZ) e municipais, juntas comerciais, registradores (ARISP) etc. Consulta de protestos descontinuada (CENPROT passou a exigir gov.br — apurado em 27/10).",
+  "o_que_oria_usaria": "TRF unificada, CEAT do TRT da sede, CNDT, TJ do estado, CND federal/PGFN, CND estadual — ~6 certidões por CNPJ/CPF; também as consultas fiscais da E05.",
+  "o_que_sobraria": "Franquia mínima de R$ 100/mês se o consumo ficar abaixo.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Base R$ 0,22/consulta (1–500/mês) + preço adicional por fonte. 56 documentos × ~6 certidões = ~336 consultas × R$ 0,22 = ~R$ 74 + adicionais. A franquia de R$ 100/mês é compartilhada com as consultas fiscais (E05); somando adicionais e E05 o consumo passa de R$ 100 → franquia não fica ociosa → ~100%. Se a Infosimples fosse usada SÓ para certidões sem adicionais: 74/100 = 74%.",
+  "modelo_cobranca": "Pré-pago por consulta, preço por faixa de volume + adicional por fonte; franquia mínima R$ 100/mês por conta.",
+  "preco_publicado": "Base R$ 0,22 (1–500) a R$ 0,10 (50.001–60.000) por consulta; franquia R$ 100/mês; crédito de avaliação R$ 100 (página de preços consultada 24/11/2026; um resultado de busca cita R$ 0,20 na 1ª faixa e atualização 10/07/2026 — conferir). Preços adicionais por certidão: não recuperados (página de adicionais devolveu 404).",
+  "brasil_lgpd": "Empresa brasileira, emite NFS-e. DPA: a confirmar.",
+  "veredito": "Recomendado",
+  "motivo": "Cobertura mais ampla de certidões por API, cobrança por chamada; a franquia de R$ 100 é coberta pelo consumo somado com a E05.",
+  "riscos_a_confirmar": "Preço adicional de cada certidão (TJs costumam ter adicional); lista exata de TJs e TRTs (busca achou CEAT de 18 TRTs; projeto apurou 23 de 24); certidões que exigem captcha/gov.br podem ser descontinuadas como a de protestos.",
+  "fontes": [
+   "https://infosimples.com/consultas/precos/",
+   "https://infosimples.com/consultas/estimativa/",
+   "https://infosimples.com/consultas/tribunal-trf-cert-unificada/",
+   "https://infosimples.com/consultas/tribunal-trt1-ceat/",
+   "https://infosimples.com/consultas/receita-federal-pgfn/",
+   "https://infosimples.com/consultas/sefaz-certidao-debitos/"
+  ]
+ },
+ {
+  "etapas": [
+   "E07"
+  ],
+  "categoria": "Certidões negativas (TJ, TRF, TRT, CNDT, criminais, CNDs)",
+  "empresa": "Direct Data — certidões",
+  "site": "https://www.directd.com.br/apis/tj-certidao-civel-criminal-fiscal",
+  "o_que_oferece": "TJ certidão cível/criminal/fiscal (R$ 0,36; só AC, AM, BA, DF, ES, GO, MT, PA, PB, PE, PI, RN, RR, RS, SE, TO), CNDT/TST (R$ 0,36), CND estadual (R$ 0,36), PGFN (R$ 0,36), FGTS.",
+  "o_que_oria_usaria": "Todas, quando o estado é coberto.",
+  "o_que_sobraria": "Nada (por chamada, sem franquia).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pré-pago por chamada, sem mínimo → 100%.",
+  "modelo_cobranca": "Por consulta, pré-pago.",
+  "preco_publicado": "R$ 0,36 por certidão (TJ, CNDT, CND estadual, PGFN) — catálogo Direct Data, consultado 24/11/2026.",
+  "brasil_lgpd": "Empresa brasileira. DPA: a confirmar.",
+  "veredito": "Recomendado",
+  "motivo": "100% de uso e sem franquia, mas cobertura menor (TJ só em 16 UFs, sem SP/RJ/MG/PR/SC; TRF/TRT não vistos na página) — serve de complemento ou contingência da Infosimples.",
+  "riscos_a_confirmar": "Cobertura de TRF e TRT; TJSP/TJRJ/TJMG ausentes na lista.",
+  "fontes": [
+   "https://www.directd.com.br/apis/tj-certidao-civel-criminal-fiscal",
+   "https://www.directd.com.br/apis",
+   "https://www.directd.com.br/guias/cnd-cndt-fgts-fornecedores"
+  ]
+ },
+ {
+  "etapas": [
+   "E07"
+  ],
+  "categoria": "Certidões negativas (TJ, TRF, TRT, CNDT, criminais, CNDs)",
+  "empresa": "Fontes oficiais diretas (TST/CNDT, PF antecedentes criminais, Conecta gov.br)",
+  "site": "https://www.gov.br/pt-br/servicos/emitir-certidao-de-antecedentes-criminais",
+  "o_que_oferece": "Emissão gratuita: CNDT no TST, certidão de antecedentes criminais da Polícia Federal, CND federal; algumas por API no catálogo Conecta (uso restrito a órgãos públicos).",
+  "o_que_oria_usaria": "Antecedentes criminais PF dos sócios (com autorização), CNDT.",
+  "o_que_sobraria": "Nada (gratuito).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Custo zero → nada pago fica sem uso. Custo real é de engenharia (captcha, mudanças de layout).",
+  "modelo_cobranca": "Gratuito",
+  "preco_publicado": "R$ 0",
+  "brasil_lgpd": "Órgãos públicos brasileiros. Dado de PF exige autorização registrada na E02.",
+  "veredito": "Recomendado",
+  "motivo": "Para as poucas certidões criminais de PF, a fonte oficial gratuita evita intermediário; o resto vai pela Infosimples.",
+  "riscos_a_confirmar": "Antecedentes PF exige dados do titular (nome da mãe, data de nascimento) e pode exigir gov.br; APIs do Conecta não são abertas ao setor privado (memória — conferir).",
+  "fontes": [
+   "https://www.gov.br/pt-br/servicos/emitir-certidao-de-antecedentes-criminais",
+   "https://www.gov.br/pf/pt-br/assuntos/antecedentes-criminais",
+   "https://www.gov.br/conecta/catalogo/apis/antecedentes-criminais"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E07",
+   "E14"
+  ],
+  "categoria": "Due diligence / KYC / background check",
+  "empresa": "Direct Data — Dossiê personalizado",
+  "site": "https://directd.com.br/dossie",
+  "o_que_oferece": "Dossiê PF e PJ montado com as APIs escolhidas: cadastro Receita, processos (TJ/TRF/TRT; trabalhistas, recuperação judicial, falência), PEP, OFAC, CADIN, protestos, CND, mídia negativa, Diário Oficial; monitoramento de novos processos e menções negativas.",
+  "o_que_oria_usaria": "Processos, protestos, PEP/OFAC, CND, cadastro, mídia negativa, monitoramento — praticamente todo o dossiê E07.",
+  "o_que_sobraria": "Nada: paga-se por API/atributo escolhido.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "'Sem mensalidade fixa. Sem contrato mínimo de volume'; paga só as APIs selecionadas → 100%. Estimativa por tabela: CNPJ = protestos completa 8,10 + processos completa 3,30 + CNDT 0,36 + TJ 0,36 + score 1,98 + negativação 2,38 ≈ R$ 16,48; CPF = protestos 2,95 + processos 3,30 + AML/PEP 0,72 ≈ R$ 6,97 → 32×16,48 + 24×6,97 ≈ R$ 695/mês (sem mídia negativa, preço não publicado).",
+  "modelo_cobranca": "Por API consultada, pré-pago (créditos não expiram) ou pós-pago.",
+  "preco_publicado": "Por componente (ver conta); dossiê fechado: não publicado (simulação gratuita).",
+  "brasil_lgpd": "Empresa brasileira; vários componentes de 'fornecedor externo'. DPA: a confirmar.",
+  "veredito": "Recomendado",
+  "motivo": "É o único avaliado que cobre ≥80% do dossiê (processos, protestos, PEP/sanções, CNDs, cadastro, mídia) cobrando só o que se usa — pode substituir 2–3 fornecedores (protestos, processos, parte das certidões).",
+  "riscos_a_confirmar": "Cobertura de sanções brasileiras (CEIS/CNEP não vistos — são grátis em dados abertos); preço e fonte da mídia negativa; identidade dos fornecedores externos (dependência em cadeia); qualidade vs JUDIT/Infosimples.",
+  "fontes": [
+   "https://directd.com.br/dossie",
+   "https://directd.com.br/precos",
+   "https://www.directd.com.br/apis",
+   "https://www.directd.com.br/guias/dossie-de-empresa-limite-de-credito"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E07",
+   "E14"
+  ],
+  "categoria": "Due diligence / KYC / background check",
+  "empresa": "Exato Digital",
+  "site": "https://exato.digital",
+  "o_que_oferece": "Background check PF/PJ (relatório em 3–5 min, portal ou API); projeto apurou 300+ fontes; processos, PEP, sanções, mídia negativa, monitoramento citados na página; planos por assinatura e relatório avulso.",
+  "o_que_oria_usaria": "Relatório avulso PF/PJ como dossiê pré-mandato (E01).",
+  "o_que_sobraria": "Avulso: nada. Assinatura: a confirmar.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Avulso → 100%. Custo: 56 × R$ 39,90 ≈ R$ 2.234/mês — ~3× o dossiê equivalente montado na Direct Data (~R$ 695). Em assinatura: não calculável.",
+  "modelo_cobranca": "Relatório avulso e assinatura (Dealroom: 'subscription-based'; Capterra: 'contact vendor').",
+  "preco_publicado": "R$ 39,90 por relatório avulso (apurado pelo projeto em 27/10/2026; NÃO reconfirmado em 24/11/2026 — Capterra diz 'contact vendor').",
+  "brasil_lgpd": "Startup brasileira. DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Uso de ~100% no avulso, mas custa ~3× montar o mesmo dossiê por componentes; só vale se o relatório trouxer fontes que os outros não têm.",
+  "riscos_a_confirmar": "Preço atual; se o avulso inclui processos completos e mídia negativa; API no avulso; monitoramento.",
+  "fontes": [
+   "https://exato.digital",
+   "https://www.capterra.com/p/10033151/Exato-Digital/",
+   "https://app.dealroom.co/companies/exato",
+   "https://www.cbinsights.com/company/exato-digital"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E07",
+   "E14"
+  ],
+  "categoria": "Due diligence / KYC / background check",
+  "empresa": "Kronoos",
+  "site": "https://www.kronoos.com",
+  "o_que_oferece": "Módulos: KYC/KYP (compliance, due diligence, jurídico, reputacional, global, RH), Gestão de Certidões, Gestão de Terceiros (Watcher, WES), Monitor de Transações Financeiras (PLD/FT), API, KronoosOps (serviço de analistas). Mídia negativa em 3.500+ fontes (divulgação).",
+  "o_que_oria_usaria": "KYC/KYP (dossiê PJ e PF com jurídico e reputacional/mídia negativa), Gestão de Certidões, API.",
+  "o_que_sobraria": "Monitor de Transações (PLD), Gestão de Terceiros (carteira de fornecedores), KronoosOps, frente de RH.",
+  "pct_uso_estimado": 50,
+  "conta_do_pct": "Por contagem (sem preço por módulo): usaria 2 de 4 produtos pagos (KYC/KYP, Certidões; não Terceiros nem Transações) = 50%. Se vender só dossiê KYC por API por consulta → ~100%.",
+  "modelo_cobranca": "Planos (página 'Planos' sem valores) — a confirmar.",
+  "preco_publicado": "não publicado (pesquisa 24/11/2026)",
+  "brasil_lgpd": "Empresa brasileira. DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Plataforma de compliance com módulos que a Oria não usa; só entra se contratável como API de dossiê/mídia negativa por consulta.",
+  "riscos_a_confirmar": "Modelo de cobrança; se mídia negativa é vendida isolada; fontes usadas.",
+  "fontes": [
+   "https://www.kronoos.com",
+   "https://www.migalhas.com.br/quentes/402552/pedidos-de-dossies-de-compliance-das-empresas-crescem-acima-de-40",
+   "https://monitormercantil.com.br/vantagens-da-verificacao-de-antecedentes-para-as-pmes/"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E07"
+  ],
+  "categoria": "Due diligence / KYC / background check",
+  "empresa": "BigDataCorp",
+  "site": "https://bigdatacorp.com.br",
+  "o_que_oferece": "Centenas de datasets PF/PJ (cadastro, processos, mídia, sócios, KYC…), modelos, BigIA (MCP, analytics generativo), programa de parceiros; base com ~250 mi de registros de pessoas (fonte terceira).",
+  "o_que_oria_usaria": "~6–10 datasets (cadastro, sócios, processos, mídia negativa, PEP/sanções).",
+  "o_que_sobraria": "Datasets de marketing, enriquecimento, modelos, BigIA — e qualquer volume mínimo não consumido.",
+  "pct_uso_estimado": null,
+  "conta_do_pct": "Se cobra por dataset consultado sem mínimo → ~100%. Concorrente (Direct Data) afirma que a BigDataCorp exige contrato e volume mínimo — não confirmado. Com mínimo típico de contrato corporativo e consumo da Oria de ~56 documentos/mês, a parte ociosa provavelmente passaria de 20%.",
+  "modelo_cobranca": "Contrato / consulta on demand (sem desconto) — a confirmar.",
+  "preco_publicado": "não publicado (pesquisa 24/11/2026)",
+  "brasil_lgpd": "Empresa brasileira. DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Suíte grande; só passa nos 80% se cobrar por dataset sem volume mínimo — o que a evidência disponível (fala de concorrente) sugere que não acontece.",
+  "riscos_a_confirmar": "Volume mínimo/contrato; preço por dataset de processos e mídia.",
+  "fontes": [
+   "https://www.directd.com.br/guias/melhor-api-consulta-cnpj-cpf",
+   "https://www.parcerias.bigdatacorp.com.br/faq",
+   "https://tiinside.com.br/25/09/2025/bigdatacorp-unifica-solucoes-de-inteligencia-artificial-na-plataforma-bigia/"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E07"
+  ],
+  "categoria": "Due diligence / KYC / background check",
+  "empresa": "idwall",
+  "site": "https://www.idwall.co",
+  "o_que_oferece": "Identidade digital e onboarding (validação de documento, biometria/face match), background check PF/PJ, KYB, antifraude (memória — conferir).",
+  "o_que_oria_usaria": "Background check/KYB.",
+  "o_que_sobraria": "Onboarding documental, biometria, antifraude de cadastro — núcleo do produto, sem uso para a Oria.",
+  "pct_uso_estimado": 30,
+  "conta_do_pct": "Por contagem de linhas de produto (onboarding/documentos, biometria, antifraude, background check/KYB): usaria 1 de 4 ≈ 25–35%. Se vender só background check por consulta → ~100%, mas sem preço público.",
+  "modelo_cobranca": "a confirmar",
+  "preco_publicado": "não publicado (pesquisa 24/11/2026)",
+  "brasil_lgpd": "Empresa brasileira. DPA: a confirmar.",
+  "veredito": "Rejeitado",
+  "motivo": "Focada em onboarding de clientes em escala (fintech/varejo); a Oria pagaria pela pilha de identidade que não usa.",
+  "riscos_a_confirmar": "Existência de API de background check avulsa.",
+  "fontes": [
+   "https://www.cbinsights.com/company/idwall",
+   "memória — conferir"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E07"
+  ],
+  "categoria": "Due diligence / KYC / background check",
+  "empresa": "Neoway (B3)",
+  "site": "https://www.neoway.com.br",
+  "o_que_oferece": "Plataforma de dados/analytics por assinatura com soluções de marketing e vendas (prospecção), crédito, risco/compliance, fraude, ESG (memória — conferir).",
+  "o_que_oria_usaria": "Risco/compliance (dossiê PJ, sócios, processos, mídia).",
+  "o_que_sobraria": "Marketing/vendas, crédito para carteira, fraude, analytics/ML.",
+  "pct_uso_estimado": 25,
+  "conta_do_pct": "Por contagem de frentes da plataforma (marketing/vendas, crédito, compliance/risco, fraude, ESG): usaria 1–1,5 de 5 ≈ 20–30%. Contrato corporativo anual (preço não publicado; B2BStack cita 'R$ 49,90/mês' sem fonte oficial — não confiável).",
+  "modelo_cobranca": "Assinatura corporativa (a confirmar).",
+  "preco_publicado": "não publicado oficialmente (B2BStack: R$ 49,90/mês, não oficial)",
+  "brasil_lgpd": "Empresa brasileira, controlada pela B3. Há acordo de leniência CGU/AGU firmado com a Neoway (só o título foi visto — conteúdo a confirmar).",
+  "veredito": "Rejeitado",
+  "motivo": "Suíte grande; a Oria usaria só a frente de compliance (< 80% do escopo pago).",
+  "riscos_a_confirmar": "Conteúdo do acordo de leniência; existência de API avulsa de compliance.",
+  "fontes": [
+   "https://www.b2bstack.com.br/compare/sap-ariba-vs-neoway",
+   "https://www.gov.br/cgu/pt-br/assuntos/integridade-privada/acordo-leniencia/acordos-firmados/Anexo_3042633_Anexo_II_assinado.pdf",
+   "https://startups.com.br/noticias/b3-fecha-a-compra-da-neoway-por-r-18-bilhao/"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Notícias / mídia negativa",
+  "empresa": "GDELT DOC 2.0 API",
+  "site": "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+  "o_que_oferece": "API gratuita, sem chave, de busca em notícias globais (65 idiomas traduzidos, inclui português), filtros sourcecountry/sourcelang, janela de ~3 meses (memória — conferir); limite ~1 requisição a cada 5 s.",
+  "o_que_oria_usaria": "Busca por razão social/nome fantasia e nome dos sócios, filtrada por Brasil/português.",
+  "o_que_sobraria": "Nada (gratuito).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Custo zero → 100%.",
+  "modelo_cobranca": "Gratuito",
+  "preco_publicado": "R$ 0",
+  "brasil_lgpd": "Serviço nos EUA; consulta envia nomes de PF ao exterior (transferência internacional — avaliar base legal). Processamento fora do Brasil.",
+  "veredito": "Recomendado",
+  "motivo": "Grátis e programável como primeira camada; mas cobertura de veículos regionais pequenos é fraca — 'nenhuma notícia' não pode virar 'sem mídia negativa' (regra 7).",
+  "riscos_a_confirmar": "Cobertura de imprensa regional/setorial brasileira; janela histórica; nome de PF enviado a serviço estrangeiro.",
+  "fontes": [
+   "https://blog.gdeltproject.org/gdelt-doc-2-0-api-debuts/",
+   "https://apify.com/bgfc97/gdelt-news-scraper.md",
+   "https://www.gdeltproject.org/data.html"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Notícias / mídia negativa",
+  "empresa": "Google News RSS",
+  "site": "https://news.google.com/rss/search?q=",
+  "o_que_oferece": "Feed RSS gratuito por termo de busca, com hl=pt-BR/gl=BR (memória — conferir).",
+  "o_que_oria_usaria": "Alerta por razão social e sócios + termos de risco (fraude, recuperação judicial, operação, denúncia).",
+  "o_que_sobraria": "Nada (gratuito).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Custo zero → 100%.",
+  "modelo_cobranca": "Gratuito",
+  "preco_publicado": "R$ 0",
+  "brasil_lgpd": "Google (EUA); nomes de PF saem do país.",
+  "veredito": "Condicional",
+  "motivo": "Melhor cobertura de veículos pequenos que o GDELT, mas sem API oficial nem garantia de uso comercial; só como fonte complementar com limitação registrada.",
+  "riscos_a_confirmar": "Termos de uso do Google para uso automatizado/comercial; limites de taxa; estabilidade do endpoint.",
+  "fontes": [
+   "memória — conferir"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Notícias / mídia negativa",
+  "empresa": "Kronoos (mídia negativa)",
+  "site": "https://www.kronoos.com",
+  "o_que_oferece": "Mídia negativa em 3.500+ fontes com resultado em <1 min (divulgação da empresa), dentro da plataforma KYC.",
+  "o_que_oria_usaria": "Mídia negativa por CNPJ/CPF.",
+  "o_que_sobraria": "Ver linha Kronoos em due diligence (se vier com a plataforma).",
+  "pct_uso_estimado": null,
+  "conta_do_pct": "Se vendido avulso por consulta → ~100%; dentro da plataforma → ~50% (ver linha KYC).",
+  "modelo_cobranca": "a confirmar",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Empresa brasileira. DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Fonte especializada em mídia negativa brasileira; só entra se contratável isolada por consulta.",
+  "riscos_a_confirmar": "Venda isolada; preço; lista de fontes.",
+  "fontes": [
+   "https://www.migalhas.com.br/quentes/402552/pedidos-de-dossies-de-compliance-das-empresas-crescem-acima-de-40",
+   "https://www.kronoos.com"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Notícias / mídia negativa",
+  "empresa": "Knewin",
+  "site": "https://www.knewin.com",
+  "o_que_oferece": "Clipping e monitoramento de mídia (1 mi+ veículos, redes sociais, rádio, TV), gestão de reputação com score, gestão de crise com alertas, relatórios para comunicação/PR; app de alertas.",
+  "o_que_oria_usaria": "Busca/alerta de notícias negativas sobre ~56 nomes por mês.",
+  "o_que_sobraria": "Rádio/TV, redes sociais, score de reputação, gestão de crise, relatórios de PR.",
+  "pct_uso_estimado": 20,
+  "conta_do_pct": "Por contagem de módulos (imprensa web, redes sociais, rádio/TV, reputação/score, gestão de crise): usaria 1 de 5 = 20%. Preço inicial não oficial R$ 200–500/mês (B2BStack, atribuição ambígua).",
+  "modelo_cobranca": "Assinatura mensal por plano/termos monitorados.",
+  "preco_publicado": "não publicado oficialmente (B2BStack: R$ 200 ou R$ 500/mês, sem clareza de qual fornecedor)",
+  "brasil_lgpd": "Empresa brasileira. API não confirmada.",
+  "veredito": "Rejeitado",
+  "motivo": "Ferramenta de comunicação corporativa para monitorar a própria marca; a Oria usaria só a busca de imprensa (~20%).",
+  "riscos_a_confirmar": "Existência de API de busca avulsa.",
+  "fontes": [
+   "https://www.b2bstack.com.br/compare/clipcoverage-vs-knewin",
+   "https://torre.ai/teams/Knewin",
+   "https://fusoesaquisicoes.com/acontece-no-setor/knewin-adquire-newsmonitor-e-expande-operacao-no-brasil/"
+  ]
+ },
+ {
+  "etapas": [
+   "E07",
+   "E14"
+  ],
+  "categoria": "Notícias / mídia negativa",
+  "empresa": "Boxnet",
+  "site": "https://www.boxnet.com.br",
+  "o_que_oferece": "PESQUISA FALHOU (busca retornou só concorrentes). Pelo conhecimento prévio: clipping e monitoramento de imprensa/redes para assessoria de comunicação, por assinatura (memória — conferir).",
+  "o_que_oria_usaria": "Busca de notícias negativas.",
+  "o_que_sobraria": "Clipping de PR, redes sociais, relatórios de comunicação (memória — conferir).",
+  "pct_uso_estimado": 20,
+  "conta_do_pct": "Estimativa por analogia com a Knewin (mesmo tipo de produto): 1 de ~5 módulos ≈ 20% — memória, conferir.",
+  "modelo_cobranca": "Assinatura (memória — conferir)",
+  "preco_publicado": "não publicado / pesquisa falhou",
+  "brasil_lgpd": "Empresa brasileira (memória — conferir).",
+  "veredito": "Rejeitado",
+  "motivo": "Mesmo perfil de clipping para PR; não verificado por fonte — rejeição provisória.",
+  "riscos_a_confirmar": "Tudo; confirmar produto e preço se o dono quiser reabrir.",
+  "fontes": [
+   "memória — conferir"
+  ]
+ }
+]

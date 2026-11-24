@@ -1,0 +1,719 @@
+[
+ {
+  "etapas": [
+   "E04"
+  ],
+  "categoria": "Extração de PDF/imagem de demonstrações financeiras",
+  "empresa": "Microsoft Azure AI Document Intelligence (Layout)",
+  "site": "https://azure.microsoft.com/pricing/details/ai-document-intelligence/",
+  "o_que_oferece": "Pay-as-you-go por página: Read (OCR), Layout/modelos pré-construídos (tabelas, títulos, parágrafos, marcas de seleção), extração customizada, classificador, add-ons (alta resolução, fontes, fórmulas), query fields; free tier 500 páginas/mês; commitment tiers opcionais.",
+  "o_que_oria_usaria": "Layout (tabelas de DRE/balanço com coordenadas e página, base para proveniência documento/página) e eventualmente Read para páginas só-texto.",
+  "o_que_sobraria": "Nada fixo: modelos pré-construídos de recibo/ID/W-2, custom e commitment tiers não são contratados — só se paga o que se chama.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Cobrança por página sem franquia mínima no S0: escopo pago = páginas analisadas pelo Layout = escopo usado → ~100%. Premissa de volume (não medida): 4 mandatos × 8 empresas = 32 empresas/mês; ~150–300 páginas por empresa → ~5–10 mil páginas/mês. Custo: 10 mil págs × US$10/1.000 = ~US$100/mês (menos 500 grátis).",
+  "modelo_cobranca": "Por página (S0 pay-as-you-go), por 1.000 páginas",
+  "preco_publicado": "Brazil South (API oficial de preços Azure, consultada 24/11/2026): S0 Pre-built/Layout US$10,00/1.000 págs; S0 Batch Layout US$10,00/1.000; S0 Read US$1,50/1.000 (0–1M) e US$0,60/1.000 (>1M); add-on batch US$6,00/1.000; custom extraction batch US$30,00/1.000. Página de preço pública mostra placeholders '$-'.",
+  "brasil_lgpd": "Sim: há medidores de preço para a região brazilsouth (Brazil South, São Paulo) — o recurso pode ser criado no Brasil. DPA padrão Microsoft (Products and Services DPA). Disponibilidade da versão v4.0 do Layout em Brazil South: a confirmar no portal.",
+  "veredito": "Recomendado",
+  "motivo": "Único dos seis com processamento no Brasil comprovado por tabela de preço regional, cobrança 100% por consumo e Layout com tabelas e coordenadas por página.",
+  "riscos_a_confirmar": "Confirmar que Layout v4 (2024-11-30) roda em Brazil South (houve restrição regional em versões preview); qualidade em DRE/balanço em português com tabelas multi-página — rodar amostra real dos mandatos; preço em R$ varia com câmbio/IOF.",
+  "fontes": [
+   "https://prices.azure.com/api/retail/prices?$filter=armRegionName eq 'brazilsouth' and contains(meterName,'Layout')",
+   "https://azure.microsoft.com/pricing/details/ai-document-intelligence/",
+   "https://learn.microsoft.com/en-us/azure/ai-services/document-intelligence/prebuilt/layout"
+  ]
+ },
+ {
+  "etapas": [
+   "E04"
+  ],
+  "categoria": "Extração de PDF/imagem de demonstrações financeiras",
+  "empresa": "Reducto",
+  "site": "https://reducto.ai/pricing",
+  "o_que_oferece": "Plano Standard pay-as-you-go: APIs Parse (r-1 US$10/1.000 págs; r-1 mini US$1/1.000), Extract (US$20/1.000), Deep Extract (US$40/1.000 + US$1/1.000 por campo), Split, Classify, Edit; até 5 assentos Studio; US$150 de uso grátis. Growth (custom): ZDR, BAA, residência EU/AU. Enterprise: VPC/on-prem.",
+  "o_que_oria_usaria": "Parse (ou Extract com schema) das demonstrações; Split para separar DRE/balanço/DFC em PDFs consolidados.",
+  "o_que_sobraria": "Edit, Office SDK e Studio ficam sem uso, mas não são cobrados (por consumo).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Standard é por consumo sem franquia → ~100%. Premissa de volume (não medida): 4 mandatos × 8 empresas = 32 empresas/mês; ~150–300 páginas por empresa → ~5–10 mil páginas/mês. Custo Parse: 10 mil × US$10/1.000 = ~US$100/mês; Extract US$200/mês.",
+  "modelo_cobranca": "Por página por endpoint (rate card por produto desde 01/09/2026)",
+  "preco_publicado": "Parse r-1 US$10/1.000 págs; Extract US$20/1.000; Deep Extract US$40/1.000; Classify US$7,50/1.000; batch −20% (reducto.ai/pricing, consultado 24/11/2026)",
+  "brasil_lgpd": "Não há região Brasil. Standard processa nos EUA; residência EU/AU e Zero Data Retention só no Growth (preço sob consulta). DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Uso ~100% no Standard, mas o documento do cliente sairia do Brasil e a retenção zero exige o plano Growth (custom).",
+  "riscos_a_confirmar": "Migração de preço por crédito → por produto em 01/09/2026 (docs divergem); custo do Growth para ter ZDR; qualidade em PT-BR.",
+  "fontes": [
+   "https://reducto.ai/pricing",
+   "https://docs.reducto.ai/reference/pricing-migration"
+  ]
+ },
+ {
+  "etapas": [
+   "E04"
+  ],
+  "categoria": "Extração de PDF/imagem de demonstrações financeiras",
+  "empresa": "LlamaParse (LlamaIndex / LlamaCloud)",
+  "site": "https://developers.llamaindex.ai/llamaparse/general/pricing/",
+  "o_que_oferece": "Créditos: pay-as-you-go US$1,50/1.000 créditos; plano Pro US$500/mês com 400 mil créditos (overage US$1,25/1.000); Free 10 mil créditos/mês. Tiers de parse: Fast 1 crédito/pág, Cost-effective 3, Agentic 10, Agentic Plus 25; layout extraction +3. LlamaCloud inclui também Extract, Index/RAG, Classify.",
+  "o_que_oria_usaria": "Parse tier Agentic/Cost-effective para demonstrações.",
+  "o_que_sobraria": "No pay-as-you-go: nada. No Pro: 400 mil créditos/mês vs. ~30–100 mil consumidos (10 mil págs × 3–10 créditos) → 75–92% da franquia ociosa.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "PAYG: por consumo → ~100%. Pro: 30k–100k ÷ 400k créditos = 8–25% → reprova. Premissa de volume (não medida): 4 mandatos × 8 empresas = 32 empresas/mês; ~150–300 páginas por empresa → ~5–10 mil páginas/mês.",
+  "modelo_cobranca": "Créditos por página (PAYG ou plano com franquia)",
+  "preco_publicado": "US$1,50/1.000 créditos PAYG; Pro US$1,25/1.000 (developers.llamaindex.ai, 24/11/2026); valores do Pro US$500/400k vêm de captura de terceiros (activepieces, nov/2026) — conferir",
+  "brasil_lgpd": "Sem região Brasil (US; EU disponível em LlamaCloud — a confirmar por plano). DPA a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Só passa os 80% no pay-as-you-go; o plano Pro deixaria >75% sem uso. Processamento fora do Brasil.",
+  "riscos_a_confirmar": "Tabela de créditos mudou várias vezes em 2026 (docs divergem: Fast 1 vs 5 créditos); região EU por plano; qualidade em PT-BR.",
+  "fontes": [
+   "https://developers.llamaindex.ai/llamaparse/general/pricing/",
+   "https://www.activepieces.com/blog/llamaparse-pricing-plans-credits-costs-2026"
+  ]
+ },
+ {
+  "etapas": [
+   "E04"
+  ],
+  "categoria": "Extração de PDF/imagem de demonstrações financeiras",
+  "empresa": "Mistral OCR (Mistral AI)",
+  "site": "https://docs.mistral.ai/inference/pricing",
+  "o_que_oferece": "API por página: OCR 4.1/4.0 US$4/1.000 págs (cache US$0,40/1.000); OCR 3 US$2/1.000 (batch −50%); Document AI/annotations US$5/1.000 (página de preço) ou US$3/1.000 no OCR 3 (model card). Endpoint global ou EU (+10%).",
+  "o_que_oria_usaria": "OCR com saída markdown/tabelas como segundo extrator (redundância/conferência cruzada) ou fallback barato.",
+  "o_que_sobraria": "Nada fixo — por consumo.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por consumo sem franquia → ~100%. Premissa de volume (não medida): 4 mandatos × 8 empresas = 32 empresas/mês; ~150–300 páginas por empresa → ~5–10 mil páginas/mês. Custo: 10 mil × US$4/1.000 = ~US$40/mês.",
+  "modelo_cobranca": "Por página",
+  "preco_publicado": "OCR 4.1 US$4/1.000 págs; OCR 3 US$2/1.000 (docs.mistral.ai/inference/pricing, 24/11/2026)",
+  "brasil_lgpd": "Sem região Brasil; endpoints global ou EU (+10%). DPA da Mistral (UE) — a confirmar termos.",
+  "veredito": "Condicional",
+  "motivo": "Mais barato e 100% por consumo, mas processa fora do Brasil (melhor caso: UE). Serve como segundo extrator, não como principal sob 'só Brasil'.",
+  "riscos_a_confirmar": "Qualidade em tabelas financeiras PT-BR com colunas de períodos; preço de annotations diverge entre páginas.",
+  "fontes": [
+   "https://docs.mistral.ai/inference/pricing",
+   "https://docs.mistral.ai/models/ocr-3-25-12",
+   "https://mistral.ai/news/mistral-ocr-3"
+  ]
+ },
+ {
+  "etapas": [
+   "E04"
+  ],
+  "categoria": "Extração de PDF/imagem de demonstrações financeiras",
+  "empresa": "Amazon Textract",
+  "site": "https://aws.amazon.com/textract/pricing/",
+  "o_que_oferece": "Por página: DetectDocumentText US$0,0015; AnalyzeDocument Tables US$0,015; Forms US$0,05; Queries US$0,015; Forms+Tables+Queries US$0,07; Layout grátis com Tables; Custom Queries US$0,025; AnalyzeExpense/ID/Lending.",
+  "o_que_oria_usaria": "AnalyzeDocument Tables (+Layout).",
+  "o_que_sobraria": "Nada fixo — por consumo.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por consumo → ~100%. Premissa de volume (não medida): 4 mandatos × 8 empresas = 32 empresas/mês; ~150–300 páginas por empresa → ~5–10 mil páginas/mês. Custo Tables: 10 mil × US$0,015 = ~US$150/mês (preço US West).",
+  "modelo_cobranca": "Por página",
+  "preco_publicado": "Tables US$0,015/pág (US West Oregon, aws.amazon.com/textract/pricing, 24/11/2026)",
+  "brasil_lgpd": "NÃO disponível em sa-east-1 (São Paulo): a lista oficial de endpoints não tem a região. Mais próximo: us-east-1/ca-central-1.",
+  "veredito": "Condicional",
+  "motivo": "Uso 100%, mas sem região Brasil e mais caro que o Azure Layout (US$15 vs US$10/1.000) — dominado pelo Azure; só faria sentido se a Oria já estivesse em AWS.",
+  "riscos_a_confirmar": "Suporte a português nas tabelas (fonte: memória — conferir).",
+  "fontes": [
+   "https://aws.amazon.com/textract/pricing/",
+   "https://docs.aws.amazon.com/general/latest/gr/textract.html"
+  ]
+ },
+ {
+  "etapas": [
+   "E04"
+  ],
+  "categoria": "Extração de PDF/imagem de demonstrações financeiras",
+  "empresa": "Google Cloud Document AI (Layout Parser / Form Parser)",
+  "site": "https://cloud.google.com/document-ai/pricing",
+  "o_que_oferece": "Processadores por página: Layout Parser US$10/1.000 (com chunking; faixas US$9 e US$8 em volume), OCR, Form Parser, processadores especializados, custom extractor; re-chunking US$0,02/1.000.",
+  "o_que_oria_usaria": "Layout Parser ou Form Parser para tabelas.",
+  "o_que_sobraria": "Nada fixo — por consumo.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por consumo → ~100%. Premissa de volume (não medida): 4 mandatos × 8 empresas = 32 empresas/mês; ~150–300 páginas por empresa → ~5–10 mil páginas/mês. Custo: ~US$100/mês.",
+  "modelo_cobranca": "Por página",
+  "preco_publicado": "Layout Parser US$10/1.000 págs (cloud.google.com/document-ai/pricing, 24/11/2026)",
+  "brasil_lgpd": "NÃO há southamerica-east1: Layout Parser só em global, us, eu, europe-west4, us-central1; OCR/Form Parser em us/eu e algumas regiões da Ásia/Europa/Canadá.",
+  "veredito": "Condicional",
+  "motivo": "Uso 100% e mesmo preço do Azure, mas sem processamento no Brasil — dominado pelo Azure Document Intelligence.",
+  "riscos_a_confirmar": "Preço por região não publicado na página (só via calculadora).",
+  "fontes": [
+   "https://cloud.google.com/document-ai/pricing",
+   "https://docs.cloud.google.com/document-ai/docs/regions"
+  ]
+ },
+ {
+  "etapas": [
+   "E04",
+   "E11"
+  ],
+  "categoria": "Provedores de modelos de IA",
+  "empresa": "Google Gemini no Vertex AI (região southamerica-east1)",
+  "site": "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/data-residency",
+  "o_que_oferece": "Tokens por consumo no Vertex AI; endpoints global, multi-região e regionais. Garantia de processamento de ML em southamerica-east1 só para Gemini 2.5 Flash (128k).",
+  "o_que_oria_usaria": "Gemini 2.5 Flash em southamerica-east1 como provedor do modo 'só Brasil' (interpretação/classificação), e Gemini mais novo via endpoint global fora desse modo.",
+  "o_que_sobraria": "Nada fixo — por token.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pay-per-token sem franquia → ~100%.",
+  "modelo_cobranca": "Por token (entrada/saída)",
+  "preco_publicado": "Não confirmado nesta coleta (página de preços do Vertex não carregou). Referência de memória: Gemini 2.5 Flash ~US$0,30/US$2,50 por 1M tokens — memória, conferir.",
+  "brasil_lgpd": "Sim, mas só um modelo: a tabela de residência lista Brazil (southamerica-east1) apenas para Gemini 2.5 Flash 128k; Gemini 2.5 Flash 1M e os demais Gemini não têm Brasil; nenhum modelo de parceiro (Claude) tem coluna Brasil. DPA Google Cloud (CDPA).",
+  "veredito": "Recomendado",
+  "motivo": "Único provedor encontrado com processamento de LLM garantido no Brasil, por consumo; é o candidato do modo 'só Brasil'.",
+  "riscos_a_confirmar": "Dependência de um único modelo (2.5 Flash) que pode entrar em descontinuação — confirmar data de fim de vida e se Gemini 3.x ganhará Brasil; preço atual; o repositório hoje chama generativelanguage (AI Studio), que NÃO tem residência — seria preciso migrar para o Vertex.",
+  "fontes": [
+   "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/data-residency",
+   "https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations"
+  ]
+ },
+ {
+  "etapas": [
+   "E04",
+   "E11"
+  ],
+  "categoria": "Provedores de modelos de IA",
+  "empresa": "Anthropic Claude API (direta)",
+  "site": "https://platform.claude.com/docs/en/about-claude/pricing",
+  "o_que_oferece": "Tokens por consumo; Batch −50%; prompt caching; inference_geo 'us' (×1,1) ou global; ferramentas server-side (web search US$10/1.000) cobradas só se usadas.",
+  "o_que_oria_usaria": "Sonnet/Haiku para os agentes que interpretam e para extração estruturada; Batch para reprocessamentos.",
+  "o_que_sobraria": "Nada fixo — por token.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pay-per-token sem franquia → ~100%.",
+  "modelo_cobranca": "Por token",
+  "preco_publicado": "Sonnet 5 / 5.5 US$2 entrada / US$10 saída por 1M; Haiku 5.5 US$0,10/US$0,50 (até 100k tokens de prompt); Opus 5.5 US$4/US$20; Batch −50%; inference_geo 'us' ×1,1 (platform.claude.com, 24/11/2026)",
+  "brasil_lgpd": "Sem opção Brasil: inference_geo só 'us' ou global. Serve como 2º provedor fora do modo 'só Brasil'. DPA disponível nos termos comerciais (a confirmar assinatura).",
+  "veredito": "Condicional",
+  "motivo": "100% por consumo e forte para os agentes, mas não atende 'só Brasil'; condição: usar só em mandatos sem essa exigência.",
+  "riscos_a_confirmar": "Termos de retenção (zero data retention) para dado de cliente; confirmar DPA/LGPD.",
+  "fontes": [
+   "https://platform.claude.com/docs/en/about-claude/pricing"
+  ]
+ },
+ {
+  "etapas": [
+   "E04",
+   "E11"
+  ],
+  "categoria": "Provedores de modelos de IA",
+  "empresa": "Claude via Amazon Bedrock (sa-east-1)",
+  "site": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.html",
+  "o_que_oferece": "Claude por token faturado na conta AWS; inferência In-Region, Geo cross-region (US/EU/AU/IN) ou Global; endpoints regionais com +10% sobre global.",
+  "o_que_oria_usaria": "Claude Sonnet chamado a partir de sa-east-1.",
+  "o_que_sobraria": "Nada fixo — por token.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pay-per-token → ~100%.",
+  "modelo_cobranca": "Por token (AWS Marketplace)",
+  "preco_publicado": "Não coletado (aws.amazon.com/bedrock/pricing) — a confirmar",
+  "brasil_lgpd": "NÃO garante Brasil: no model card do Claude Sonnet 5, sa-east-1 só tem inferência Global cross-region (sem In-Region e sem perfil Geo para América do Sul) — a requisição pode ser processada em qualquer região do mundo.",
+  "veredito": "Condicional",
+  "motivo": "Uso 100%, mas a chamada de São Paulo é roteada globalmente; não acrescenta nada à API direta para a exigência 'só Brasil'. Só vale se a Oria quiser faturar IA na conta AWS.",
+  "riscos_a_confirmar": "Preço do Claude no Bedrock; se a AWS lançar In-Region em sa-east-1 (fez em Seul/Singapura).",
+  "fontes": [
+   "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5.md",
+   "https://platform.claude.com/docs/en/about-claude/pricing"
+  ]
+ },
+ {
+  "etapas": [
+   "E04",
+   "E11"
+  ],
+  "categoria": "Provedores de modelos de IA",
+  "empresa": "Claude via Google Vertex AI",
+  "site": "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/partner-models/claude/use-claude",
+  "o_que_oferece": "Claude por token faturado no GCP; endpoints global e multi-região (US/EU); regionais só para modelos ≤ Sonnet 4.6; +10% em regional/multi-região.",
+  "o_que_oria_usaria": "Claude no mesmo projeto GCP do Gemini (uma conta, um faturamento).",
+  "o_que_sobraria": "Nada fixo — por token.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pay-per-token → ~100%.",
+  "modelo_cobranca": "Por token",
+  "preco_publicado": "Não coletado (página de preço Vertex não carregou) — a confirmar",
+  "brasil_lgpd": "NÃO: a tabela de residência do Vertex não tem coluna Brasil para modelos de parceiros; multi-região só US e EU.",
+  "veredito": "Condicional",
+  "motivo": "Uso 100%; útil só para consolidar faturamento com o Gemini no GCP. Não atende 'só Brasil'.",
+  "riscos_a_confirmar": "Preço e disponibilidade dos modelos Claude mais novos no Vertex.",
+  "fontes": [
+   "https://docs.cloud.google.com/vertex-ai/generative-ai/docs/learn/data-residency",
+   "https://platform.claude.com/docs/en/about-claude/pricing"
+  ]
+ },
+ {
+  "etapas": [
+   "E04",
+   "E11"
+  ],
+  "categoria": "Provedores de modelos de IA",
+  "empresa": "Azure OpenAI (Microsoft Foundry) — Brazil South",
+  "site": "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability",
+  "o_que_oferece": "Modelos OpenAI por token em implantações Global Standard, Data Zone (US/EU/APAC) ou Standard/Regional; provisionado opcional.",
+  "o_que_oria_usaria": "GPT via recurso em Brazil South.",
+  "o_que_sobraria": "Nada fixo no Standard/Global — por token.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pay-per-token → ~100%.",
+  "modelo_cobranca": "Por token",
+  "preco_publicado": "Não coletado — a confirmar",
+  "brasil_lgpd": "Parcial e insuficiente: brazilsouth aparece só em Global Standard (processa em qualquer lugar). Na tabela Standard/Regional (processamento na região) Brazil South não tem nenhum GPT (gpt-4.1, gpt-4o, gpt-5.1 todos '-'); só text-embedding-ada-002 v2. Não há Data Zone Brasil.",
+  "veredito": "Condicional",
+  "motivo": "Uso 100%, mas não entrega LLM processado no Brasil; equivale ao OpenAI global com contrato Microsoft.",
+  "riscos_a_confirmar": "Se o contrato Microsoft (DPA) for preferido, é alternativa ao OpenAI direto; acompanhar entrada de GPT regional em Brazil South.",
+  "fontes": [
+   "https://learn.microsoft.com/en-us/azure/foundry/foundry-models/concepts/models-sold-directly-by-azure-region-availability"
+  ]
+ },
+ {
+  "etapas": [
+   "E04",
+   "E11"
+  ],
+  "categoria": "Provedores de modelos de IA",
+  "empresa": "OpenAI API (direta)",
+  "site": "https://developers.openai.com/api/docs/guides/data-residency",
+  "o_que_oferece": "Tokens por consumo; residência de dados (armazenamento e/ou processamento) em US, EU, AU, JP, IN, AE (processamento) e CA, SG, KR, GB (só armazenamento); +10% para modelos de 05/03/2026 em diante; exige elegibilidade via vendas.",
+  "o_que_oria_usaria": "Modelos GPT já usados hoje pelo repositório (32 ocorrências de api.openai.com em N8N/portal/Supabase).",
+  "o_que_sobraria": "Nada fixo — por token.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Pay-per-token → ~100%.",
+  "modelo_cobranca": "Por token",
+  "preco_publicado": "Não coletado nesta rodada — a confirmar",
+  "brasil_lgpd": "NÃO: Brasil não está na lista de regiões de residência.",
+  "veredito": "Condicional",
+  "motivo": "Uso 100% e já integrado, mas não atende 'só Brasil'; serve como 2º/3º provedor global.",
+  "riscos_a_confirmar": "Elegibilidade para residência; termos de retenção.",
+  "fontes": [
+   "https://developers.openai.com/api/docs/guides/data-residency.md"
+  ]
+ },
+ {
+  "etapas": [
+   "E11"
+  ],
+  "categoria": "Orquestração durável dos agentes",
+  "empresa": "DBOS (Transact, open source, sobre Postgres)",
+  "site": "https://www.dbos.dev/pricing",
+  "o_que_oferece": "Biblioteca DBOS Transact (open source, 'free forever', TypeScript dbos-transact-ts) que grava o checkpoint de cada passo no Postgres da própria aplicação. Pagos opcionais: Pro US$99/mês (1M checkpoints, Conductor/painel), Teams US$499, Enterprise.",
+  "o_que_oria_usaria": "Só a biblioteca, gravando estado no Postgres/Supabase que a Oria já tem: workflows retomáveis, retry, fila, idempotência.",
+  "o_que_sobraria": "Nada pago se ficar só na biblioteca. Se assinar o Pro: 1M checkpoints vs ~2–4 mil usados (<1%) → reprovaria.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Biblioteca gratuita: escopo pago = 0 → nada ocioso (100%). Pro US$99 seria ~0,4% da franquia — não assinar. Volume estimado (premissa): 32 empresas/mês × ~10 agentes × ~5–10 passos ≈ 2–4 mil passos/mês.",
+  "modelo_cobranca": "Gratuito (lib OSS); planos por checkpoints opcionais",
+  "preco_publicado": "Transact grátis; Pro US$99/mês 1M checkpoints, +US$50/M; Teams US$499 (dbos.dev/pricing, 24/11/2026)",
+  "brasil_lgpd": "Estado fica no Postgres da Oria (Supabase) — se o projeto Supabase estiver em sa-east-1, fica no Brasil. Nenhum dado vai a terceiro na versão só-biblioteca.",
+  "veredito": "Recomendado",
+  "motivo": "Durabilidade em TypeScript sobre o Postgres que já existe, sem fornecedor novo no caminho do dado e sem custo no volume de referência (degrau 5 da escada: plataforma existente).",
+  "riscos_a_confirmar": "Compatibilidade com o pooler do Supabase (conexões de sessão vs transação); convivência com o n8n atual; licença exata da lib (MIT — memória, conferir).",
+  "fontes": [
+   "https://www.dbos.dev/pricing",
+   "https://github.com/dbos-inc/dbos-transact-ts"
+  ]
+ },
+ {
+  "etapas": [
+   "E11"
+  ],
+  "categoria": "Orquestração durável dos agentes",
+  "empresa": "Temporal Cloud",
+  "site": "https://temporal.io/pricing",
+  "o_que_oferece": "Pay-as-you-go sem mínimo (desde set/2026, substituiu o Essentials de US$100): US$50/M actions (faixas até US$25/M), storage ativo US$0,042/GBh e retido US$0,00105/GBh; Business mín. US$500/mês; Enterprise anual. Temporal open source self-host gratuito.",
+  "o_que_oria_usaria": "Namespace em aws-sa-east-1, workflows/activities TypeScript para os agentes.",
+  "o_que_sobraria": "No PAYG nada fixo.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "PAYG sem mínimo → ~100%. Volume estimado (premissa): 32 empresas/mês × ~10 agentes × ~5–10 passos ≈ 2–4 mil passos/mês. ~10–40 mil actions → <US$2/mês + storage.",
+  "modelo_cobranca": "Por action + storage (PAYG)",
+  "preco_publicado": "US$50/1M actions primeiros 5M; mínimo US$0 no PAYG (temporal.io/pricing, 24/11/2026)",
+  "brasil_lgpd": "Sim: região São Paulo (aws-sa-east-1) disponível para namespace; sem replicação multi-região a partir dela. Payloads podem ser criptografados no cliente (Data Converter).",
+  "veredito": "Condicional",
+  "motivo": "Uso ~100% e região Brasil, mas exige workers hospedados (a Vercel não serve worker de longa duração) — infraestrutura nova que o DBOS evita.",
+  "riscos_a_confirmar": "Onde rodar os workers no Brasil; data exata da troca Essentials→PAYG (fontes divergem); suporte só por comunidade no PAYG.",
+  "fontes": [
+   "https://temporal.io/pricing",
+   "https://docs.temporal.io/cloud/regions",
+   "https://www.usagepricing.com/blueprint/activity/temporal-2026-09-14-paygo-replaces-essentials"
+  ]
+ },
+ {
+  "etapas": [
+   "E11"
+  ],
+  "categoria": "Orquestração durável dos agentes",
+  "empresa": "Inngest",
+  "site": "https://www.inngest.com/pricing",
+  "o_que_oferece": "Hobby grátis: 50 mil execuções/mês, 5 passos concorrentes, histórico 24h; Pro a partir de US$99/mês: 1M execuções, 100 concorrentes, histórico 7 dias; Enterprise custom. Open source self-host.",
+  "o_que_oria_usaria": "Funções duráveis com step.run em TypeScript, chamadas pelo portal na Vercel.",
+  "o_que_sobraria": "Hobby: nada pago. Pro: 1M execuções vs ~3–5 mil (<1%).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Hobby gratuito cobre o volume → 100%; Pro seria <1% da franquia (reprova). Volume estimado (premissa): 32 empresas/mês × ~10 agentes × ~5–10 passos ≈ 2–4 mil passos/mês.",
+  "modelo_cobranca": "Por execução (franquia por plano)",
+  "preco_publicado": "Hobby US$0 50k exec; Pro desde US$99/mês 1M exec, +US$50/1M (inngest.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Região de dados não publicada (Cloud presumivelmente EUA); payload dos passos trafega pelo Inngest Cloud. Self-host resolve.",
+  "veredito": "Condicional",
+  "motivo": "Só passa no Hobby (grátis), cujo histórico de 24h e 5 concorrentes são apertados para auditoria; o Pro ficaria >99% ocioso. Dado sai do Brasil.",
+  "riscos_a_confirmar": "Região do Cloud; criptografia de payload; limites do Hobby para produção.",
+  "fontes": [
+   "https://www.inngest.com/pricing"
+  ]
+ },
+ {
+  "etapas": [
+   "E11"
+  ],
+  "categoria": "Orquestração durável dos agentes",
+  "empresa": "Trigger.dev",
+  "site": "https://trigger.dev/pricing",
+  "o_que_oferece": "Free (US$5 de créditos), Hobby US$10, Pro US$50 (créditos iguais ao preço); cobra compute por segundo (Micro US$0,0000169/s a Large 2x US$0,00068/s) + US$0,000025 por run; Apache 2.0 self-host.",
+  "o_que_oria_usaria": "Tasks TypeScript longas (extração, agentes) rodando na infra do Trigger.dev.",
+  "o_que_sobraria": "Créditos mensais do plano podem sobrar no volume baixo; recursos como Realtime, preview branches, schedules em excesso.",
+  "pct_uso_estimado": 90,
+  "conta_do_pct": "Créditos = preço do plano e cobrança por segundo → próximo de 100% se o consumo atingir os créditos; estimativa conservadora 90% por possível crédito não consumido no Hobby. Volume estimado (premissa): 32 empresas/mês × ~10 agentes × ~5–10 passos ≈ 2–4 mil passos/mês.",
+  "modelo_cobranca": "Assinatura convertida em créditos + compute por segundo",
+  "preco_publicado": "Hobby US$10/mês, Pro US$50/mês; run US$0,25/10 mil (trigger.dev/pricing, 24/11/2026)",
+  "brasil_lgpd": "Regiões não publicadas na página; o código e os documentos rodam na infra deles (fora do Brasil, presumivelmente). Self-host possível.",
+  "veredito": "Condicional",
+  "motivo": "Uso alto, mas executa o trabalho (com o documento do cliente) na nuvem deles, fora do Brasil; condição: self-host ou aceitar processamento externo.",
+  "riscos_a_confirmar": "Regiões de execução; DPA.",
+  "fontes": [
+   "https://trigger.dev/pricing"
+  ]
+ },
+ {
+  "etapas": [
+   "E11"
+  ],
+  "categoria": "Orquestração durável dos agentes",
+  "empresa": "Restate",
+  "site": "https://www.restate.dev/cloud",
+  "o_que_oferece": "Restate Cloud Free 100 mil durable actions/mês; pagos a partir de US$75/mês por uso; BYOC (AWS/GCP próprio); servidor open source em binário único para self-host; SDK TypeScript (memória — conferir).",
+  "o_que_oria_usaria": "Handlers duráveis TypeScript.",
+  "o_que_sobraria": "Free cobre o volume; pago a partir de US$75 ficaria ocioso.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Free (100k actions) cobre ~10–40 mil → 100% de nada pago; plano de US$75 ficaria majoritariamente ocioso. Volume estimado (premissa): 32 empresas/mês × ~10 agentes × ~5–10 passos ≈ 2–4 mil passos/mês.",
+  "modelo_cobranca": "Por durable action",
+  "preco_publicado": "Free 100k actions/mês; pagos desde US$75/mês (restate.dev/cloud, 24/11/2026)",
+  "brasil_lgpd": "Cloud sem região publicada; BYOC/self-host em sa-east-1 resolveria (exige operar o servidor).",
+  "veredito": "Condicional",
+  "motivo": "Grátis no volume, mas Cloud fora do Brasil e self-host exige operar mais um servidor — o DBOS dá o mesmo sobre o Postgres existente.",
+  "riscos_a_confirmar": "Região do Cloud; licença do servidor (BSL? — conferir).",
+  "fontes": [
+   "https://www.restate.dev/cloud"
+  ]
+ },
+ {
+  "etapas": [
+   "E11",
+   "E17"
+  ],
+  "categoria": "Observabilidade de IA",
+  "empresa": "Langfuse (self-host MIT; Cloud opcional)",
+  "site": "https://langfuse.com/pricing",
+  "o_que_oferece": "Open source MIT (todas as features abertas desde jun/2025: tracing, custo por geração, datasets, LLM-as-judge, experimentos, anotação, prompts). Cloud: Hobby grátis 50k unidades/30 dias/2 usuários; Core US$29 100k unidades/90 dias; Pro US$199 (3 anos de retenção); Enterprise US$2.499. Overage US$8/100k.",
+  "o_que_oria_usaria": "Traces por mandato/empresa/agente, custo por etapa e por agente, datasets e evals (LLM-as-judge) para o autoaprimoramento.",
+  "o_que_sobraria": "Self-host: nada pago. Core: prompt management e playground provavelmente sem uso (prompts vivem no repositório).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Self-host MIT: escopo pago = 0 → 100%. Core US$29 por contagem de módulos: tracing, custo, datasets, evals, anotação usados (5) vs prompt mgmt, playground (2) sem uso → 5/7 ≈ 71% por contagem; mas a franquia de 100k unidades é consumida pelo tracing, que é o grosso do preço → ~90% ponderado (estimativa).",
+  "modelo_cobranca": "Gratuito (self-host) ou assinatura + unidades",
+  "preco_publicado": "Hobby US$0; Core US$29/mês; Pro US$199; overage US$8/100k (langfuse.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Cloud só US, EU ou Japão. Self-host (Postgres + ClickHouse + Redis + S3) pode rodar em sa-east-1 → dados no Brasil. Adquirida pela ClickHouse em 16/01/2026, mantendo licença MIT.",
+  "veredito": "Recomendado",
+  "motivo": "Cobre exatamente custo por etapa/agente, traces e evals; self-host no Brasil sem custo de licença. Se não quiser operar, Cloud Core/Hobby fica fora do Brasil (traces contêm trecho do documento).",
+  "riscos_a_confirmar": "Custo de operar ClickHouse no self-host; o que mudar no roadmap pós-ClickHouse; mascarar PII nos traces se usar o Cloud.",
+  "fontes": [
+   "https://langfuse.com/pricing",
+   "https://clickhouse.com/blog/clickhouse-acquires-langfuse-open-source-llm-observability",
+   "https://langfuse.com/press"
+  ]
+ },
+ {
+  "etapas": [
+   "E11",
+   "E17"
+  ],
+  "categoria": "Observabilidade de IA",
+  "empresa": "Arize Phoenix (OSS) / Arize AX",
+  "site": "https://arize.com/pricing/",
+  "o_que_oferece": "Phoenix open source, local-first: tracing OpenTelemetry, evals, experimentos, prompts. Arize AX: Free 25k spans/15 dias; Pro US$50/mês 50k spans/30 dias; Enterprise custom (self-host).",
+  "o_que_oria_usaria": "Tracing, custo por token, evals.",
+  "o_que_sobraria": "Phoenix: nada pago. AX Pro: 'signals'/monitoramento de ML clássico sem uso.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Phoenix self-host gratuito → 100%. AX Pro ~80% por contagem (tracing, custo, evals, datasets usados; signals/monitores de ML sem uso).",
+  "modelo_cobranca": "OSS gratuito; AX por spans",
+  "preco_publicado": "AX Free US$0; Pro US$50/mês (arize.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Phoenix self-host pode rodar no Brasil; AX SaaS sem região Brasil publicada.",
+  "veredito": "Condicional",
+  "motivo": "Alternativa viável ao Langfuse em self-host; agregação de custo por agente/mandato é mais fraca que a do Langfuse (avaliação qualitativa, conferir).",
+  "riscos_a_confirmar": "Feature de custo no Phoenix OSS vs AX; retenção curta no Free/Pro.",
+  "fontes": [
+   "https://arize.com/pricing/"
+  ]
+ },
+ {
+  "etapas": [
+   "E11",
+   "E17"
+  ],
+  "categoria": "Observabilidade de IA",
+  "empresa": "LangSmith (LangChain)",
+  "site": "https://www.langchain.com/pricing",
+  "o_que_oferece": "Developer US$0 (1 assento, 5k traces); Plus US$39/assento/mês (10k traces, retenção base 14 dias) que empacota Agent Server, Fleet (agent builder, LSUs), Engine, Sandboxes, LLM Gateway, Tuned Evaluators; self-host só Enterprise.",
+  "o_que_oria_usaria": "Tracing, custo, datasets, evals.",
+  "o_que_sobraria": "Agent Server, Fleet, Engine, Sandboxes, LLM Gateway — a Oria não usa LangChain/LangGraph.",
+  "pct_uso_estimado": 44,
+  "conta_do_pct": "Por contagem de módulos do Plus: usa 4 (tracing, custo, datasets, evals) de 9 (+ Agent Server, Fleet, Engine, Sandboxes, Gateway) = 44%.",
+  "modelo_cobranca": "Por assento + traces",
+  "preco_publicado": "Plus US$39/assento/mês; 10k traces incluídos (langchain.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Cloud US ou EU; self-host só no Enterprise.",
+  "veredito": "Rejeitado",
+  "motivo": "Mais da metade do plano é plataforma de agentes LangChain que a Oria não usa; retenção base de 14 dias é curta para auditoria.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://www.langchain.com/pricing"
+  ]
+ },
+ {
+  "etapas": [
+   "E11",
+   "E17"
+  ],
+  "categoria": "Observabilidade de IA",
+  "empresa": "Helicone",
+  "site": "https://www.helicone.ai/pricing",
+  "o_que_oferece": "Gateway/proxy + logs: Hobby grátis 10k requisições/7 dias; Pro US$79/mês; Team US$799; sessions, custo, prompts, scores, datasets, cache, rate limit, fallback.",
+  "o_que_oria_usaria": "Log de custo por requisição.",
+  "o_que_sobraria": "Gateway, cache, rate limit, fallbacks, playground, HQL; e o produto está sem roadmap.",
+  "pct_uso_estimado": 50,
+  "conta_do_pct": "Por contagem (Pro): usaria logs/custo, sessions, scores/datasets (≈4) de ≈8 módulos (+ gateway, cache, rate limit, fallback, HQL) ≈ 50%.",
+  "modelo_cobranca": "Assinatura + uso",
+  "preco_publicado": "Pro US$79/mês; Team US$799 (helicone.ai/pricing, 24/11/2026)",
+  "brasil_lgpd": "Sem região publicada; self-host só Enterprise.",
+  "veredito": "Rejeitado",
+  "motivo": "Adquirida pela Mintlify em 03/03/2026 e em modo de manutenção (sem novas features); uso <80% do Pro.",
+  "riscos_a_confirmar": "Relatos não confirmados de fechamento para novos cadastros.",
+  "fontes": [
+   "https://www.helicone.ai/pricing",
+   "https://helicone.ai/blog/joining-mintlify",
+   "https://www.mintlify.com/blog/mintlify-acquires-helicone"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E02"
+  ],
+  "categoria": "Assinatura eletrônica (autorização LGPD, pré-mandato, termos)",
+  "empresa": "ZapSign",
+  "site": "https://zapsign.com.br/precos/",
+  "o_que_oferece": "Profissional (10 usuários, sem API): 20 docs R$39,90/mês; Equipe (30 usuários, com API): 20 docs R$69,90/mês (R$49,90 no anual à vista), 80 docs R$119,90; excedente R$2,50/doc; OTP e-mail incluso; SMS R$0,10 e WhatsApp R$0,50 por assinatura; validações de identidade avulsas (R$1,50–R$5,00).",
+  "o_que_oria_usaria": "Equipe 20 docs com API (portal dispara a autorização LGPD e grava o comprovante com data/hora).",
+  "o_que_sobraria": "Franquia ociosa quando o mês tiver <20 docs; 30 usuários vs ~3 usados (assentos não são cobrados à parte).",
+  "pct_uso_estimado": 75,
+  "conta_do_pct": "Franquia: 15 (meio de 10–20) ÷ 20 = 75%; com 16+ docs/mês ≥80%; excedente avulso R$2,50 sem ociosidade. Volume de referência: 10–20 documentos/mês.",
+  "modelo_cobranca": "Assinatura com franquia de documentos + avulsos",
+  "preco_publicado": "Equipe 20 docs R$69,90/mês ou R$49,90/mês anual (zapsign.com.br/precos, 24/11/2026)",
+  "brasil_lgpd": "Empresa brasileira; validade jurídica pela MP 2.200-2/Lei 14.063; local de hospedagem a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Passa 80% se o volume for ≥16 documentos/mês; é a opção com API mais barata entre os planos com franquia.",
+  "riscos_a_confirmar": "Onde os dados ficam hospedados; se a API também consome a franquia de 20.",
+  "fontes": [
+   "https://zapsign.com.br/precos/"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E02"
+  ],
+  "categoria": "Assinatura eletrônica (autorização LGPD, pré-mandato, termos)",
+  "empresa": "Clicksign",
+  "site": "https://www.clicksign.com/planos",
+  "o_que_oferece": "Start (5 usuários, API incluída, sem WhatsApp): 20/50/100/200 docs, R$69,00 (R$55,20 com cupom Black Friday); Plus e Automação com WhatsApp; excedente R$3,00/doc no Start-20; documentoscopia R$4,50/uso; Avançado sob consulta.",
+  "o_que_oria_usaria": "Start 20 docs com API.",
+  "o_que_sobraria": "Franquia ociosa abaixo de 20 docs/mês.",
+  "pct_uso_estimado": 75,
+  "conta_do_pct": "15 ÷ 20 = 75%; ≥80% com 16+ docs/mês. Volume de referência: 10–20 documentos/mês.",
+  "modelo_cobranca": "Assinatura com franquia",
+  "preco_publicado": "Start 20 docs R$69,00/mês (R$55,20 promocional BF20) (clicksign.com/planos, 24/11/2026)",
+  "brasil_lgpd": "Empresa brasileira; hospedagem a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Mesmo critério da ZapSign (≥16 docs/mês), um pouco mais cara fora da promoção.",
+  "riscos_a_confirmar": "Promoção BF20 temporária; associação plano×excedente ambígua na página.",
+  "fontes": [
+   "https://www.clicksign.com/planos"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E02"
+  ],
+  "categoria": "Assinatura eletrônica (autorização LGPD, pré-mandato, termos)",
+  "empresa": "Autentique",
+  "site": "https://intercom.help/autentiqueqg/pt-BR/articles/2973249-planos",
+  "o_que_oferece": "Gratuito até 10 docs/mês; Profissional R$99/mês (docs ilimitados); Corporativo ≥R$2.000. API por unidade: criar documento R$0,06; assinatura por e-mail R$0,013, WhatsApp R$0,12, SMS R$0,16.",
+  "o_que_oria_usaria": "API por unidade (≈R$0,19 por documento com 2 signatários).",
+  "o_que_sobraria": "Se a API exigir o Profissional como compromisso de R$99: consumo de ~R$4/mês → ~4% do compromisso.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Se a API puder ser usada por unidade sem plano: ~100% (R$0,19 × 20 ≈ R$4/mês). Se exigir o Profissional (o valor do plano 'funciona como compromisso'): reprova. Volume de referência: 10–20 documentos/mês.",
+  "modelo_cobranca": "Por unidade na API (com possível compromisso de plano)",
+  "preco_publicado": "Criar doc R$0,06; assinatura e-mail R$0,013; WhatsApp R$0,12 (central de ajuda Autentique, 24/11/2026)",
+  "brasil_lgpd": "Empresa brasileira; hospedagem a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Único modelo verdadeiramente por consumo encontrado; condição: confirmar que a API funciona sem o compromisso de R$99.",
+  "riscos_a_confirmar": "Regra do compromisso mínimo da API; limite 60 req/min.",
+  "fontes": [
+   "https://intercom.help/autentiqueqg/pt-BR/articles/2973249-planos"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E02"
+  ],
+  "categoria": "Assinatura eletrônica (autorização LGPD, pré-mandato, termos)",
+  "empresa": "D4Sign",
+  "site": "https://d4sign.com.br/planos-e-precos",
+  "o_que_oferece": "Básico R$39,90 e Avançado R$59,90 (20 docs, sem API Premium); Profissional R$79,90 (API Premium + automação CLM + D4Sign.AI); Personalizado sob consulta; usuários ilimitados.",
+  "o_que_oria_usaria": "Profissional pela API.",
+  "o_que_sobraria": "CLM (automação de contratos) e D4Sign.AI incluídos no Profissional, sem uso; franquia de docs não informada.",
+  "pct_uso_estimado": 50,
+  "conta_do_pct": "Por contagem no Profissional: usa assinatura + API (2) de 4 blocos (+ CLM, IA) = 50%.",
+  "modelo_cobranca": "Assinatura",
+  "preco_publicado": "Profissional R$79,90/mês (d4sign.com.br/planos-e-precos, 24/11/2026); franquia por faixa não publicada",
+  "brasil_lgpd": "Empresa brasileira; hospedagem a confirmar.",
+  "veredito": "Rejeitado",
+  "motivo": "A API só vem no plano que empacota CLM e IA, que a Oria não usaria.",
+  "riscos_a_confirmar": "Franquia de documentos do Profissional.",
+  "fontes": [
+   "https://d4sign.com.br/planos-e-precos",
+   "https://quasa.io/pt/media/clicksign-ou-d4sign-usuarios-extras-podem-inverter-o-plano-mais-barato"
+  ]
+ },
+ {
+  "etapas": [
+   "E01",
+   "E02"
+  ],
+  "categoria": "Assinatura eletrônica (autorização LGPD, pré-mandato, termos)",
+  "empresa": "Docusign",
+  "site": "https://ecom.docusign.com/plans-and-pricing/esignature",
+  "o_que_oferece": "Personal US$11/mês (5 envelopes/mês); Standard US$30/usuário/mês e Business Pro US$45 (100 envelopes/usuário/ano, anual); planos de API separados (preço não exibido).",
+  "o_que_oria_usaria": "Envelopes via API.",
+  "o_que_sobraria": "Templates avançados, colaboração, pagamentos, bulk send do Business Pro; para 20 envelopes/mês seriam ~3 assentos Standard.",
+  "pct_uso_estimado": 40,
+  "conta_do_pct": "Estimativa por contagem: integração por API exige plano de API à parte, e o plano eSignature por assento traz módulos de colaboração não usados; envelopes/assento limitam (100/ano). Valor indicativo, não ponderado por preço.",
+  "modelo_cobranca": "Por assento + envelopes; API em plano separado",
+  "preco_publicado": "Standard US$30/usuário/mês anual; API: não publicado nesta página (24/11/2026)",
+  "brasil_lgpd": "Processamento fora do Brasil por padrão (a confirmar); cobra em USD.",
+  "veredito": "Rejeitado",
+  "motivo": "Modelo por assento em USD com API separada, desenhado para volume e times maiores; nacionais com API custam menos e servem o volume.",
+  "riscos_a_confirmar": "Preço do plano de API.",
+  "fontes": [
+   "https://ecom.docusign.com/plans-and-pricing/esignature"
+  ]
+ },
+ {
+  "etapas": [
+   "E13"
+  ],
+  "categoria": "Geração de relatório PDF a partir de template",
+  "empresa": "Biblioteca open source (Playwright/Chromium page.pdf ou @react-pdf/renderer) — sem fornecedor",
+  "site": "https://playwright.dev/docs/api/class-page#page-pdf",
+  "o_que_oferece": "Gerar PDF a partir de HTML/React no próprio backend (rota do portal ou serviço n8n). Sem licença, sem franquia.",
+  "o_que_oria_usaria": "Template HTML/React com os mesmos dados do Excel e a citação documento/página/fonte.",
+  "o_que_sobraria": "Nada pago.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Escopo pago = 0 → 100%. Volume estimado (premissa): 4 mandatos × alguns relatórios/versões ≈ 10–50 PDFs/mês.",
+  "modelo_cobranca": "Gratuito (open source)",
+  "preco_publicado": "Gratuito",
+  "brasil_lgpd": "Roda onde a Oria roda; o relatório não sai para terceiro.",
+  "veredito": "Recomendado",
+  "motivo": "Volume de dezenas de PDFs/mês não justifica serviço pago; o dado financeiro do cliente não precisa ir a um terceiro. Repositório hoje não tem nenhuma lib de PDF (só exceljs).",
+  "riscos_a_confirmar": "Chromium em função serverless da Vercel tem limite de tamanho (usar @sparticuz/chromium ou gerar no worker/n8n) — memória, conferir; @react-pdf não renderiza HTML/CSS arbitrário.",
+  "fontes": [
+   "https://playwright.dev/docs/api/class-page#page-pdf",
+   "https://react-pdf.org"
+  ]
+ },
+ {
+  "etapas": [
+   "E13"
+  ],
+  "categoria": "Geração de relatório PDF a partir de template",
+  "empresa": "Carbone.io",
+  "site": "https://carbone.io/pricing.html",
+  "o_que_oferece": "Cloud: Free 100 docs/mês; Essential €29 (1.000 docs); Community Edition on-premise gratuita (licença source-available, sem gráficos/imagens dinâmicas/HTML); Enterprise on-prem €1.500/ano. Templates DOCX/XLSX/ODT.",
+  "o_que_oria_usaria": "Template DOCX desenhado em Word e preenchido com JSON.",
+  "o_que_sobraria": "Cloud Free: nada pago. Essential: 1.000 docs vs 10–50 (≤5%).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Cloud Free/Community: escopo pago 0 → 100%. Essential €29: 50/1.000 = 5% → reprova. Volume estimado (premissa): 4 mandatos × alguns relatórios/versões ≈ 10–50 PDFs/mês.",
+  "modelo_cobranca": "Assinatura com franquia ou on-prem gratuito",
+  "preco_publicado": "Free €0 100 docs; Essential €29/mês 1.000 docs; Community on-prem grátis (carbone.io/pricing, 24/11/2026)",
+  "brasil_lgpd": "Cloud na Europa (a confirmar); Community on-prem roda no Brasil.",
+  "veredito": "Condicional",
+  "motivo": "Só sem pagar (Free ou Community); vale se a equipe quiser editar o layout em Word em vez de HTML. Gráficos exigem licença Enterprise.",
+  "riscos_a_confirmar": "Licença Carbone Code License (source-available, não OSI).",
+  "fontes": [
+   "https://carbone.io/pricing.html"
+  ]
+ },
+ {
+  "etapas": [
+   "E13"
+  ],
+  "categoria": "Geração de relatório PDF a partir de template",
+  "empresa": "PDFMonkey",
+  "site": "https://pdfmonkey.io/pricing",
+  "o_que_oferece": "Free 20 docs/mês (retenção 1 dia); Starter €5 (300 docs); Pro €15 (3.000); Pro+ €60; Premium €300; templates HTML/Liquid ilimitados; infra na Europa.",
+  "o_que_oria_usaria": "Starter.",
+  "o_que_sobraria": "Starter: 250–290 de 300 docs.",
+  "pct_uso_estimado": 10,
+  "conta_do_pct": "Starter: 10–50 ÷ 300 ≈ 3–17% (média ~10%). Free (20) pode não cobrir picos. Volume estimado (premissa): 4 mandatos × alguns relatórios/versões ≈ 10–50 PDFs/mês.",
+  "modelo_cobranca": "Assinatura com franquia",
+  "preco_publicado": "Starter €5/mês 300 docs (pdfmonkey.io/pricing, 24/11/2026)",
+  "brasil_lgpd": "Servidores europeus; dado sai do Brasil.",
+  "veredito": "Rejeitado",
+  "motivo": "Franquia >80% ociosa no menor plano pago; open source resolve sem enviar o relatório a terceiro.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://pdfmonkey.io/pricing"
+  ]
+ },
+ {
+  "etapas": [
+   "E13"
+  ],
+  "categoria": "Geração de relatório PDF a partir de template",
+  "empresa": "DocRaptor",
+  "site": "https://docraptor.com/signup",
+  "o_que_oferece": "HTML→PDF (Prince): Free 5 docs; Basic US$15 (125 docs); Professional US$29 (325); Premium US$75 (1.250)…",
+  "o_que_oria_usaria": "Basic.",
+  "o_que_sobraria": "75–115 de 125 docs.",
+  "pct_uso_estimado": 24,
+  "conta_do_pct": "Basic: 10–50 ÷ 125 = 8–40% (média ~24%). Volume estimado (premissa): 4 mandatos × alguns relatórios/versões ≈ 10–50 PDFs/mês.",
+  "modelo_cobranca": "Assinatura com franquia",
+  "preco_publicado": "Basic US$15/mês 125 docs (docraptor.com/signup, 24/11/2026)",
+  "brasil_lgpd": "EUA (a confirmar).",
+  "veredito": "Rejeitado",
+  "motivo": "Franquia majoritariamente ociosa; qualidade tipográfica superior não compensa no volume.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://docraptor.com/signup"
+  ]
+ },
+ {
+  "etapas": [
+   "E13"
+  ],
+  "categoria": "Geração de relatório PDF a partir de template",
+  "empresa": "APITemplate.io",
+  "site": "https://apitemplate.io/pricing/",
+  "o_que_oferece": "Free 50 docs; PDF Basic US$19–24 (3.000 PDFs, 20 templates); Standard US$69–89; Enterprise; hospedado na AWS (região não informada); DPA por e-mail.",
+  "o_que_oria_usaria": "PDF Basic.",
+  "o_que_sobraria": "~2.950 de 3.000 PDFs.",
+  "pct_uso_estimado": 1,
+  "conta_do_pct": "10–50 ÷ 3.000 ≈ 0,3–1,7%. Volume estimado (premissa): 4 mandatos × alguns relatórios/versões ≈ 10–50 PDFs/mês.",
+  "modelo_cobranca": "Assinatura com franquia",
+  "preco_publicado": "PDF Basic US$19 (anual) / US$24 (mensal) 3.000 PDFs (apitemplate.io/pricing, 24/11/2026)",
+  "brasil_lgpd": "Região AWS não informada.",
+  "veredito": "Rejeitado",
+  "motivo": "Franquia >98% ociosa.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://apitemplate.io/pricing/"
+  ]
+ }
+]
