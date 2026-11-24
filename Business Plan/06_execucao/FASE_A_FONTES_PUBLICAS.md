@@ -1,0 +1,175 @@
+# Fase A — Fontes públicas grátis (prioridade em vigor)
+
+**Detalhe da primeira fase da prioridade definida pelo dono em 24/11/2026.** O plano único continua
+sendo o [`PLANO_DE_EXECUCAO.md`](PLANO_DE_EXECUCAO.md) (K1): ele diz a ordem; este arquivo diz o
+passo a passo da Fase A. Nada aqui está construído.
+
+## 1. A ordem que o dono definiu
+
+```
+Fase A  Fontes públicas grátis ──► todas as APIs conectadas e visíveis no portal
+Fase B  Book confiável ───────────► extrato conciliado, página de cada número, Registrato e SPED lidos
+Fase C  Conferência e análises ───► contabilidade × fontes, mapa da dívida, caixa 13 semanas, juro × mercado
+```
+
+- **Por que esta ordem:** são as partes que a Oria constrói sozinha, com dado que já existe e grátis,
+  sem esperar parceiro, contrato ou demo. Depois delas entram as três plataformas prontas (Direct
+  Data, JUDIT, Serasa) e o restante do plano.
+- **Os agentes de IA vêm depois das três fases.** A pergunta "o MVP fica sem agentes?" foi feita ao
+  dono em 24/11/2026 e **não teve resposta explícita**; o que ele decidiu foi a ordem A → B → C.
+  Registrar só a ordem até ele confirmar o resto.
+- **A Fase 0 não some.** Os itens P1 da Fase 0 (backup, n8n com chave restrita, extração em N1,
+  contrato com a IA, RIPD) continuam exigidos antes do **primeiro mandato real** (portão G0). A
+  Fase A puxa só a cópia de segurança para o começo (A1).
+
+## 2. Decisões do dono (24/11/2026) — registrar na v0.1.7 do registro
+
+| # | Decisão | Efeito na Fase A |
+|---|---|---|
+| 1 | Ordem A → B → C como prioridade | Este arquivo |
+| 2 | Cadastro CNPJ pelo **espelho gratuito** (BrasilAPI), marcado como **não oficial** | A base oficial da Receita fica **pendente** ([pendências](../08_pendencias_e_riscos/PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.md)) |
+| 3 | Listas pequenas baixadas inteiras; **PGFN e PEP por consulta** | A PGFN entra na A4; o PEP é de pessoa física e fica fora da Fase A |
+| 4 | Consultar os sócios **mesmo sem autorização registrada**, mas **por enquanto só a empresa** | A Fase A consulta só CNPJ. **Conflito a resolver antes de consultar pessoa física:** a decisão contradiz a N-C7b e a regra R5 da Espec. 13 ("nada de PF sem autorização; a recusa é no banco") e o item 1.B7 do plano. Precisa de decisão registrada e conversa com o advogado |
+| 5 | Cópia de segurança agora, **pequena e rápida** | A1, a versão mínima dos itens 0.2 e 0.3 |
+
+## 3. O que o teste de 24/11/2026 mostrou
+
+Cada API foi chamada deste ambiente de desenvolvimento. "Não respondeu" pode ser bloqueio só daqui:
+conferir no ambiente de produção antes de concluir que a fonte caiu.
+
+| Situação | Fontes |
+|---|---|
+| **Já existe no sistema** | BCB/SGS (IPCA, IGP-M, INPC, Selic, CDI, câmbio) e Focus, com agendamento diário (`0025`, `N8N/lib/macro.mjs`, `N8N/workflow.macro.json`). **Execução em produção não conferida** |
+| **Respondeu, sem chave** | BCB juros por modalidade (Olinda), IBGE/SIDRA, CVM dados abertos, IPEADATA, Comex Stat, ANBIMA (curva de juros), BrasilAPI (CNPJ), downloads da CGU (CEIS, CNEP), PGFN (página de dados abertos), IBAMA, lista do MTE (trabalho escravo) |
+| **Pede chave gratuita** | API da CGU (401) e DataJud (401). A Fase A não precisa de nenhuma das duas: a CGU entra pelo download e o DataJud fica fora (ver §6) |
+| **Não respondeu daqui** | CAGED (FTP do PDET) e ANEEL |
+
+## 4. Dois tipos de fonte
+
+| Tipo | Quando roda | Onde roda | Por quê |
+|---|---|---|---|
+| **Mercado** (séries do BCB, IBGE, CVM…) | Agendado, todo dia ou todo mês | n8n, como o macro de hoje | Não leva nenhum dado de cliente |
+| **Empresa** (cadastro, sanções, dívida ativa…) | Ao criar o caso e pelo botão "Atualizar" | **Servidor do portal** (Vercel, São Paulo) | O CNPJ do cliente é dado do mandato, e a decisão H2 proíbe mandato real novo no n8n atual |
+
+## 5. O roteiro, em 5 fatias
+
+Cada fatia segue as sete regras do `CLAUDE.md`: uma fatia por commit, invariante **medido não-vazio**,
+o porquê com o número, e um sinal positivo de que rodou (regra 7: fonte que não rodou não pode
+parecer fonte que rodou e não achou nada).
+
+### A1 · Cópia de segurança mínima (itens 0.2 e 0.3, versão enxuta)
+
+- **O que é:** uma rotina no GitHub Actions, uma vez por dia, que copia o banco e os arquivos do
+  Storage, criptografa e guarda como artefato do próprio GitHub por 30 dias. Nenhum fornecedor novo.
+- **Armadilha conhecida:** o papel usado no `pg_dump` precisa enxergar todas as linhas. Um papel só
+  de leitura, sem passar pela RLS, gera um arquivo **vazio sem erro**. A rotina compara a contagem
+  de linhas de 5 tabelas-chave no arquivo com a do banco e falha se não bater.
+- **Teste de restauração, uma vez:** restaurar o arquivo no Postgres do CI e rodar a sonda.
+- **O dono faz:** cadastrar dois segredos no GitHub (a conexão do banco e a senha da criptografia).
+- **Pronto quando:** uma restauração funciona do zero e as contagens batem.
+- **Limite conhecido:** 30 dias de histórico e perda máxima de 1 dia. É a regra provisória da H1-1;
+  a definitiva (perda de minutos, volta em 4 h) é o item 0.12.
+
+### A2 · Base comum no banco
+
+- **O que é:** três tabelas novas (desenho da Espec. 13 §3 e da Espec. 15 §7):
+  - `fonte_externa` (o catálogo): nome, de onde vem, se é oficial, frequência, quando vence;
+  - `consulta_externa`: cada consulta, com fonte, alvo, data, validade, custo (zero aqui) e
+    **resultado em quatro estados**: encontrado, nada encontrado, falhou, não consultado;
+  - `fato_externo`: o dado achado, ligado à consulta que o trouxe.
+- **Regras no banco, não na tela:** consulta de fonte fora do catálogo é recusada; "falhou" nunca
+  vira "nada encontrado"; toda tabela nova com RLS por mandato e o próprio GRANT (`0214`); sonda
+  sabe que elas existem.
+- **Pronto quando:** um teste SQL com uma API derrubada grava "falhou" (desligar a regra faz o teste
+  reprovar, com o número de asserts no commit).
+
+### A3 · Dados de mercado (agendados) — itens 1.C1 a 1.C5
+
+Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
+
+| Ordem | Fonte | O que traz | Para que serve |
+|---|---|---|---|
+| 1 | Conferir o macro em produção | Último dado gravado de cada série | Saber se o que existe roda |
+| 2 | BCB juros por modalidade | Taxa média por tipo de empréstimo PJ | Fase C: juro de cada contrato × mercado |
+| 3 | BCB/SGS: INCC, IBC-Br, crédito e inadimplência PJ, câmbio de outras moedas | Séries mensais | Premissas e cenário |
+| 4 | IBGE/SIDRA | PIB, produção e vendas por setor, emprego | Empresa × setor |
+| 5 | CVM | Cadastro e demonstrações das companhias abertas | Pares do setor |
+| 6 | ANBIMA | Curva de juros | Despesa financeira projetada |
+| 7 | IPEADATA, Comex Stat | Risco-país, exportação e importação por produto | Cenário e exposição externa |
+| 8 | CAGED | Emprego por setor | Conferir o acesso em produção antes |
+| 9 | Setoriais do slide 6: ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP | Indicadores do setor | A decisão K6 pede todas no piloto |
+
+- **Tamanho:** o banco está no plano gratuito (500 MB). Antes da CVM, medir o tamanho do banco e
+  guardar só os campos usados. Se não couber, a decisão volta ao dono.
+- **Pronto quando:** cada fonte aparece no catálogo com a data da última atualização; derrubar uma
+  fonte aparece como "falhou", nunca como "sem dado".
+
+### A4 · Dados da empresa (sob demanda, só CNPJ) — item 1.H2, parte da empresa
+
+| Fonte | Como | Observação |
+|---|---|---|
+| Cadastro, CNAE, situação e quadro de sócios | BrasilAPI, uma consulta por CNPJ | **Marcada "não oficial"** (decisão 2). Os nomes dos sócios vêm junto e ficam guardados, mas **não são consultados** em outra fonte nesta fase |
+| Sanções (CEIS, CNEP) | Download diário da lista inteira da CGU; procura pelo CNPJ | Lista pequena (decisão 3) |
+| Trabalho escravo (MTE) | Lista semestral inteira; procura pelo CNPJ | Lista pequena |
+| IBAMA (autos e embargos) | Medir o tamanho primeiro. Pequeno: baixar inteiro. Grande: ler em fluxo e guardar só os CNPJs do caso | — |
+| PGFN (dívida ativa) | Por consulta (decisão 3). **A fonte por CNPJ ainda não foi achada:** se só houver o arquivo trimestral, ler em fluxo e guardar só os CNPJs do caso, sem guardar o arquivo | Descobrir isso é o primeiro passo da fatia |
+
+- **Onde roda:** no servidor do portal, ao criar o caso e no botão "Atualizar dados públicos".
+- **Pronto quando:** num caso de teste com 3 empresas, cada empresa tem uma linha por fonte,
+  inclusive a vazia; com a BrasilAPI fora do ar, a linha diz "falhou".
+
+### A5 · No portal e no Excel — item 1.C4 e parte do 1.H5
+
+- **Painel "Fontes públicas"** (equipe): cada fonte com última atualização, estado e próxima rodada.
+  Vencida aparece vencida.
+- **Aba nova do mandato, "Dados públicos":** por empresa, cada fonte com o resultado (achou, não
+  achou, falhou, não consultou), a data e o link. Selo "não oficial" no cadastro da BrasilAPI.
+- **No Excel:** uma aba de fontes externas, com cada dado, a data e a origem. Atenção ao risco já
+  conhecido de deslocar endereços de célula ao inserir linhas (memória `splicerows-desloca-enderecos`).
+- **Pronto quando:** um mandato de teste mostra tudo isso no navegador, sem número sem fonte, e a
+  suíte do export passa.
+
+### Ordem e paralelismo
+
+```
+A1 ─┐
+A2 ─┴─► A3 (n8n) ─┐
+        A4 (portal)┴─► A5 (portal e Excel)
+```
+
+- A1 e A2 andam juntas: arquivos diferentes.
+- A3 e A4 andam juntas depois da A2: uma mexe no n8n, a outra no portal.
+- A5 fecha a fase.
+- **Especialistas:** `migrations-postgres` (A2 e as tabelas da A4), `n8n-workflow` (A3),
+  `portal-export` (A4 e A5), `suites-invariantes` (cada invariante), `revisor-defeito-silencioso`
+  (todo diff, nunca o autor), `estado-e-handoff` (fecha cada fatia).
+
+## 6. O que fica fora da Fase A, e por quê
+
+| Fica fora | Por quê | Quando volta |
+|---|---|---|
+| Base oficial da Receita (CNPJ) | Vários GB; não cabe no plano gratuito | Pendente, depois da infraestrutura (0.12) |
+| Sócios pessoa física (PEP, sanções por CPF) | Decisão 4: por enquanto só a empresa; conflito com a N-C7b a resolver | Depois da decisão registrada |
+| DataJud | Só consulta por número de processo; a descoberta de processos vem da JUDIT | Junto com a JUDIT |
+| Painel Receita | Exige o login gov.br da própria empresa | Fase do kickoff com o cliente |
+| B3 (cotações históricas) | Arquivo grande e sem uso definido no book | Quando houver uso |
+| Preço de commodities (Banco Mundial) | Opcional na planilha de captação | Depois da Fase C |
+
+## 7. Portão da Fase A (pronto quando)
+
+1. A cópia de segurança roda todo dia e uma restauração foi feita.
+2. Todas as fontes da A3 e da A4 estão no catálogo, com data e estado.
+3. Num caso de teste, cada empresa tem uma linha por fonte, inclusive vazia, e uma API derrubada
+   aparece como "falhou".
+4. O portal mostra o painel de fontes e a aba "Dados públicos"; o Excel mostra a origem de cada dado
+   externo.
+5. Cada invariante novo foi medido não-vazio, com o número no commit.
+
+## 8. Riscos
+
+- **A BrasilAPI é mantida pela comunidade.** Pode atrasar em relação à Receita ou sair do ar. Mostrar
+  a data da base de origem e tratar a queda como "falhou".
+- **Consultar a BrasilAPI revela a terceiros quais CNPJs a Oria pesquisa.** Baixo, mas existe.
+- **Fonte pública muda de endereço sem aviso.** Já aconteceu com a Receita e com o Comex Stat (27/10).
+  Por isso o estado "falhou" é obrigatório desde a A2.
+- **Espaço no banco gratuito.** Medir antes de cada carga grande.

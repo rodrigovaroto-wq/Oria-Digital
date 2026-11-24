@@ -1,0 +1,730 @@
+[
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Dados de mercado e pares (comparáveis)",
+  "empresa": "Fontes públicas gratuitas: CVM Dados Abertos (DFP/ITR) + B3 Cotações Históricas (COTAHIST) + BCB/SGS + IBGE/SIDRA",
+  "site": "https://dados.cvm.gov.br/dataset/cia_aberta-doc-dfp",
+  "o_que_oferece": "CVM: DFP e ITR de todas as companhias abertas (BP, DRE, DFC, DRA) em arquivos anuais ZIP e API, licença ODbL, ITR desde 2011. B3: série histórica de cotações de todos os papéis desde 1986, download .zip gratuito, layout publicado. BCB/SGS: juros por modalidade (já captado). IBGE: pesquisas setoriais (já captado).",
+  "o_que_oria_usaria": "Tudo o que precisa para comparáveis de capital aberto: margem EBITDA, alavancagem, giro, ROIC dos pares (a partir de DFP/ITR); valor de mercado e múltiplos (preço de fechamento x ações, do COTAHIST); taxa de mercado por modalidade (SGS). Cálculo fica no motor da Oria, com fonte e data por número.",
+  "o_que_sobraria": "Nada pago. Custo é de engenharia: normalizar o plano de contas da CVM entre empresas e ajustar cotações por proventos (o COTAHIST vem sem ajuste).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Custo zero: não há escopo pago ocioso. 100% por definição.",
+  "modelo_cobranca": "Gratuito",
+  "preco_publicado": "R$ 0 (CVM, B3 COTAHIST, BCB, IBGE — consultado 24/11/2026)",
+  "brasil_lgpd": "Dados públicos de pessoas jurídicas, servidos por órgãos brasileiros; sem DPA necessário.",
+  "veredito": "Recomendado",
+  "motivo": "Cobrem o núcleo do agente Mercado para pares abertos (fundamentos + preço) e taxa por modalidade. Nenhum pago abaixo acrescenta algo que passe nos 80%.",
+  "riscos_a_confirmar": "COTAHIST não ajusta por proventos/desdobramentos (a Oria precisa ajustar ou usar só preço da data-base). Poucos pares abertos em setores de PME — isso é coberto na categoria de benchmarks setoriais, não por terminal. Conferir periodicidade de atualização dos ZIP da CVM.",
+  "fontes": [
+   "https://dados.cvm.gov.br/dataset/cia_aberta-doc-dfp",
+   "https://dados.cvm.gov.br/dataset/47430550-8043-458d-9740-77cd64c4a731",
+   "https://www.b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/market-data/historico/mercado-a-vista/cotacoes-historicas/",
+   "https://www.b3.com.br:443/data/files/33/67/B9/50/D84057102C784E47AC094EA8/SeriesHistoricas_Layout.pdf"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Dados de mercado e pares (comparáveis)",
+  "empresa": "ANBIMA Feed (pacotes avulsos)",
+  "site": "https://feed.anbima.com.br/en/",
+  "o_que_oferece": "Pacotes vendidos separadamente, mensalidade fixa: Títulos Públicos (curvas de juros/ETTJ, curvas intradiárias, estimativa Selic, projeções IPCA/IGP-M), Debêntures, Índices+, Índices, CRI&CRA, FIDCs, Fundos 555, Estruturados, Offshore, ETFs. Três modalidades: End User (uso interno, 'sharing or distributing information is not permitted'), Distribuição (ambiente com login, + taxa por cliente) e Feed Partner (redistribuição ilimitada).",
+  "o_que_oria_usaria": "Só faria sentido o pacote Debêntures (taxas indicativas, PU, spread de mercado secundário) para comparar o custo dos contratos de dívida do cliente com o crédito corporativo de mercado, com histórico (o ANBIMA Data gratuito mostra só os últimos 5 dias úteis, extração manual). Títulos Públicos/ETTJ: a curva diária é publicada de graça no site da ANBIMA e o Focus/SGS já dão projeções.",
+  "o_que_sobraria": "Pacote Títulos Públicos: de 5 itens a Oria usaria 1-2 (ETTJ e taxas indicativas); curvas intradiárias, estimativa Selic e projeções IPCA/IGP-M duplicam Focus/SGS. Pacote Debêntures: quase todo usado se houver mandato com dívida de mercado.",
+  "pct_uso_estimado": 85,
+  "conta_do_pct": "Por pacote, por contagem de itens. Debêntures: cadastro, taxa indicativa, PU, spread → usa 3-4 de 4 ≈ 85-100%. Títulos Públicos: 2 de 5 = 40% (Rejeitado isoladamente). O número 85 vale só para o pacote Debêntures.",
+  "modelo_cobranca": "Assinatura mensal fixa por pacote (+ taxa por login de cliente na modalidade Distribuição)",
+  "preco_publicado": "Debêntures: R$ 1.144,16/mês End User; R$ 1.144,16 + R$ 11,44 por cliente/mês Distribuição. Títulos Públicos: R$ 686,50/mês End User; R$ 686,50 + R$ 6,86 por cliente Distribuição (feed.anbima.com.br, consultado 24/11/2026)",
+  "brasil_lgpd": "Entidade brasileira, dado de mercado (sem dado pessoal).",
+  "veredito": "Condicional",
+  "motivo": "Passa nos 80% só com o pacote Debêntures e só se os mandatos tiverem dívida de mercado a comparar. Como a Oria entrega o número ao cliente no Excel, a modalidade correta tende a ser Distribuição, não End User.",
+  "riscos_a_confirmar": "Confirmar com a ANBIMA se citar a taxa num entregável ao cliente conta como 'distribuição' (End User proíbe compartilhar). Confirmar se o histórico de spreads está no pacote e desde quando. A página indica que um pacote é gratuito para associados — conferir qual.",
+  "fontes": [
+   "https://feed.anbima.com.br/en/",
+   "https://www.anbima.com.br/pt_br/noticias/spread-do-mercado-secundario-de-debentures-agora-e-divulgado-no-anbima-data.htm",
+   "https://www.anbima.com.br/pt_br/noticias/consulte-todas-as-informacoes-sobre-debentures.htm"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Dados de mercado e pares (comparáveis)",
+  "empresa": "Economatica",
+  "site": "https://www.economatica.com",
+  "o_que_oferece": "Plataforma/terminal com base de companhias abertas (Brasil e América Latina), ações, fundos, renda fixa e dados redistribuídos de B3, ANBIMA, CVM e BACEN; acesso por plataforma e API; licença por usuário com credencial individual.",
+  "o_que_oria_usaria": "Fundamentos padronizados de pares abertos brasileiros e múltiplos — exatamente o que CVM DFP/ITR + COTAHIST já entregam de graça (com mais trabalho de normalização).",
+  "o_que_sobraria": "Fundos, renda fixa, América Latina, séries de mercado intradiário, ferramentas de screening e carteira. E o próprio uso principal fica limitado: os termos só permitem 'small parts of the data for internal reports', proíbem redistribuição e dizem que dado B3 é só para 'internal analysis' — o entregável da Oria vai para o cliente.",
+  "pct_uso_estimado": 25,
+  "conta_do_pct": "Por contagem de módulos (preço não publicado): ~6 blocos (ações BR, fundamentos BR, LatAm, fundos, renda fixa, ferramentas de análise); a Oria usaria 1,5 (fundamentos BR + preço) ≈ 25%. E o dado gratuito cobre esse 1,5.",
+  "modelo_cobranca": "Licença/assinatura por usuário, contrato",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Empresa brasileira; dado de mercado. Sem dado pessoal.",
+  "veredito": "Rejeitado",
+  "motivo": "Uso ~25% por contagem e a licença veda levar o dado ao entregável do cliente, que é o produto da Oria.",
+  "riscos_a_confirmar": "Preço e possibilidade de licença de redistribuição só por proposta comercial.",
+  "fontes": [
+   "https://www.economatica.com/en/terms-conditions"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Dados de mercado e pares (comparáveis)",
+  "empresa": "Quantum Finance (Quantum Axis)",
+  "site": "https://quantumfinance.com.br/en/solutions/",
+  "o_que_oferece": "Quantum Axis: base financeira ampla (fundos, previdência, renda fixa, ações), carteiras, backtest, monitoramento de risco e liquidez; acesso web, mobile, API e data link. Produtos irmãos: Quantum Portfolio, Quantum Prev.",
+  "o_que_oria_usaria": "Fundamentos de companhias abertas e preços para múltiplos.",
+  "o_que_sobraria": "Núcleo do produto é gestão de carteira/fundos (carteiras, backtest, risco, previdência) — sem uso para diagnóstico de reestruturação.",
+  "pct_uso_estimado": 20,
+  "conta_do_pct": "Por contagem: ~5 blocos (fundos, renda fixa, ações/fundamentos, carteiras/backtest, risco/liquidez); usa 1 → 20%.",
+  "modelo_cobranca": "Licença/assinatura, contrato",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Empresa brasileira; dado de mercado.",
+  "veredito": "Rejeitado",
+  "motivo": "Produto feito para gestor de recursos; a Oria usaria ~20% e o que usaria já é gratuito na CVM/B3.",
+  "riscos_a_confirmar": "Preço só por proposta.",
+  "fontes": [
+   "https://quantumfinance.com.br/en/?p=1194",
+   "https://quantumfinance.com.br/en/solutions/"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Dados de mercado e pares (comparáveis)",
+  "empresa": "B3 Market Data / UP2DATA",
+  "site": "https://b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/up2data/perguntas-frequentes/contratacao-e-precos.htm",
+  "o_que_oferece": "Entrega de datasets B3 (fim de dia, cadastros, derivativos, empréstimo de ativos, índices etc.) com taxa de acesso mensal + tarifas por usuário/dataset; regras separadas para uso interno, distribuição e divulgação; até 2 chaves de acesso na assinatura padrão.",
+  "o_que_oria_usaria": "Preço de fechamento e quantidade de ações para valor de mercado dos pares; talvez curva DI futuro.",
+  "o_que_sobraria": "Taxa de acesso à plataforma + datasets de derivativos, empréstimo, cadastros detalhados. O preço de fechamento sai de graça no COTAHIST.",
+  "pct_uso_estimado": 15,
+  "conta_do_pct": "A taxa de acesso é fixa e paga a plataforma inteira; a Oria usaria 1-2 datasets de dezenas, ambos disponíveis de graça → estimativa ~15% (por contagem, valores da Política Comercial não lidos).",
+  "modelo_cobranca": "Taxa de acesso mensal + tarifa por dataset/usuário; contrato obrigatório para distribuir",
+  "preco_publicado": "Valores na Política Comercial UP2DATA 2.4.5 (07/10/2025) — não extraídos nesta pesquisa; a conferir",
+  "brasil_lgpd": "B3, Brasil.",
+  "veredito": "Rejeitado",
+  "motivo": "Paga uma plataforma de dados de bolsa para usar o preço de fechamento, que a B3 já publica de graça.",
+  "riscos_a_confirmar": "Se um dia a Oria precisar de curva DI futuro ou dados intradiários, reavaliar com a tabela da Política Comercial.",
+  "fontes": [
+   "https://b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/up2data/perguntas-frequentes/contratacao-e-precos.htm",
+   "https://www.b3.com.br/data/files/44/20/90/B2/E7D5F910CEC024F9AC094EA8/UP2DATA_Politica_Comercial_2.4.5.pdf",
+   "https://www.b3.com.br/pt_br/market-data-e-indices/servicos-de-dados/market-data/historico/mercado-a-vista/cotacoes-historicas/"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Dados de mercado e pares (comparáveis)",
+  "empresa": "S&P Capital IQ Pro",
+  "site": "https://www.spglobal.com/market-intelligence/",
+  "o_que_oferece": "Terminal global: fundamentos de empresas abertas e parte das fechadas, transações de M&A, estimativas de consenso, notícias, ratings, setores, Excel plug-in, screening.",
+  "o_que_oria_usaria": "Comparáveis brasileiros e, no máximo, base de transações de M&A para múltiplos de saída.",
+  "o_que_sobraria": "Cobertura global, estimativas, notícias, ratings, ferramentas de banco de investimento — a maior parte do valor do assento.",
+  "pct_uso_estimado": 10,
+  "conta_do_pct": "Por contagem de grandes módulos (~8: fundamentos globais, fundamentos BR, transações, estimativas, notícias, ratings, setores, plug-in); usa 1 de forma regular (fundamentos BR, que é gratuito) e eventualmente transações → ~10-15%. Preço: US$ 13-30 mil/usuário/ano (agregador, não oficial) contra uso de 4 mandatos/mês.",
+  "modelo_cobranca": "Assinatura anual por usuário",
+  "preco_publicado": "não publicado oficialmente; agregador cita US$ 13.000–30.000/usuário/ano (multiples.vc, 2026 — conferir)",
+  "brasil_lgpd": "Processamento nos EUA; dado de PJ.",
+  "veredito": "Rejeitado",
+  "motivo": "Terminal global para uso de ~10%; o pedaço útil (pares BR) é gratuito.",
+  "riscos_a_confirmar": "Única razão para reabrir: base de transações de M&A brasileiras para múltiplos — avaliar à parte e só se o Business Plan exigir.",
+  "fontes": [
+   "https://multiples.vc/compare/pricing/md"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Dados de mercado e pares (comparáveis)",
+  "empresa": "Bloomberg Terminal",
+  "site": "https://www.bloomberg.com/professional/",
+  "o_que_oferece": "Terminal com dados de mercado em tempo real de todas as classes de ativos, notícias, mensageria, analytics, fundamentos globais, API de desktop.",
+  "o_que_oria_usaria": "Fundamentos de pares brasileiros e curvas de juros.",
+  "o_que_sobraria": "Tempo real, notícias, chat, trading, cobertura global — quase todo o assento.",
+  "pct_uso_estimado": 5,
+  "conta_do_pct": "Por contagem de ~10 grandes funções, usa 1 (e gratuita em fonte oficial) → ~5-10%. Preço de referência ~US$ 31.980/ano por terminal único (terceiros, sem tabela oficial), contrato de 2 anos.",
+  "modelo_cobranca": "Assinatura por terminal, contrato de 2 anos",
+  "preco_publicado": "não publicado oficialmente; terceiros citam ~US$ 31.980/ano por terminal único em 2026 (privateequitylist.com — conferir)",
+  "brasil_lgpd": "Processamento fora do Brasil.",
+  "veredito": "Rejeitado",
+  "motivo": "Custo ~US$ 32 mil/ano por um uso de ~5% que fontes públicas já cobrem; a licença também restringe redistribuição ao cliente (memória — conferir).",
+  "riscos_a_confirmar": "Nenhum que justifique reabrir.",
+  "fontes": [
+   "https://privateequitylist.com/intelligence/md/bloomberg-terminal-cost",
+   "https://www.koyfin.com/blog/bloomberg-terminal-cost/"
+  ]
+ },
+ {
+  "etapas": [
+   "E08",
+   "E02"
+  ],
+  "categoria": "Benchmarks setoriais de empresas fechadas/PMEs",
+  "empresa": "Receita Federal — Painel Receita (+ Dados Setoriais) e IBGE PIA/PAS/PAC",
+  "site": "https://www.gov.br/pt-br/servicos/consultar-painel-receita",
+  "o_que_oferece": "Painel Receita (gratuito): compara a empresa com o setor por CNAE (grupo, classe ou subclasse) e opcionalmente só com empresas do mesmo porte; indicadores de receita, participação de mercado, lucro, liquidez, alavancagem, endividamento, a partir de ECF/PGDAS. Receita 'Dados Setoriais': receita e arrecadação por CNAE/regime/UF. IBGE PIA/PAS/PAC (já captado via SIDRA): receita, custos, salários por atividade.",
+  "o_que_oria_usaria": "Tudo: é o único benchmark com dado declarado de empresas fechadas, por CNAE e porte — exatamente a comparação 'despesa da empresa vs setor' do agente Mercado.",
+  "o_que_sobraria": "Nada pago.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Gratuito → 100%.",
+  "modelo_cobranca": "Gratuito",
+  "preco_publicado": "R$ 0 ('Este serviço é gratuito', gov.br, consultado 24/11/2026)",
+  "brasil_lgpd": "Receita Federal/IBGE, Brasil. O Painel exige login gov.br Prata/Ouro da própria PJ ou representante legal → entra no fluxo de autorização de E02.",
+  "veredito": "Condicional",
+  "motivo": "Passa nos 80% sem esforço (é grátis); a condição é operacional: o cliente (ou procurador) precisa entrar no gov.br e exportar/permitir a consulta, então vira item da autorização em E02.",
+  "riscos_a_confirmar": "Confirmar se procurador/contador acessa, se há exportação ou só tela (pode exigir captura manual), e quais indicadores aparecem (a página do serviço não cita margem EBITDA; uma publicação de terceiro cita). Portaria RFB 678/2026 mudou a regra de CNAE/porte usados.",
+  "fontes": [
+   "https://www.gov.br/pt-br/servicos/consultar-painel-receita",
+   "https://www.gov.br/receitafederal/pt-br/centrais-de-conteudo/publicacoes/estudos/pessoas-juridicas-por-setor",
+   "https://www.gov.br/receitafederal/pt-br/centrais-de-conteudo/publicacoes/estudos/pessoas-juridicas-por-setor/estudos-setoriais-das-pessoas-juridicas/dados-setoriais-2023/metadados.pdf",
+   "https://www.legisweb.com.br/legislacao/?id=495009"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Benchmarks setoriais de empresas fechadas/PMEs",
+  "empresa": "Neoway (B3)",
+  "site": "https://www.neoway.com.br",
+  "o_que_oferece": "Plataforma de dados e analytics de empresas: prospecção (sales & marketing), crédito, compliance/PLD, verticais (agro, manufatura), dados cadastrais, societários e estimativas de faturamento.",
+  "o_que_oria_usaria": "Faixa de faturamento estimado e porte de empresas do setor para montar grupo de pares de capital fechado.",
+  "o_que_sobraria": "Prospecção, enriquecimento de CRM, modelos de crédito, compliance (este último talvez útil em E07, mas outra categoria). Não há margem/EBITDA/balanço de fechadas — dado é estimado.",
+  "pct_uso_estimado": 15,
+  "conta_do_pct": "Por contagem de ~5 soluções (marketing, crédito, compliance, verticais, plataforma de dados); para benchmark de margem usa no máximo parte de 1 → ~15%.",
+  "modelo_cobranca": "Contrato enterprise",
+  "preco_publicado": "não publicado (comparador cita 'R$ 49,90 mensal' — não crível para o produto enterprise; desconsiderado)",
+  "brasil_lgpd": "Empresa brasileira; processa dado de PF (sócios) — exigiria DPA.",
+  "veredito": "Rejeitado",
+  "motivo": "Não entrega o que o benchmark precisa (margens e endividamento reais de fechadas) e o contrato empacota prospecção/crédito.",
+  "riscos_a_confirmar": "Se a Oria avaliar Neoway para E07 (compliance/risco), reavaliar lá — não aqui.",
+  "fontes": [
+   "https://www.capterra.com/p/192359/Neoway-Platform/",
+   "https://neoway.com.br/en/solutions/sales-and-marketing?hsLang=en",
+   "https://www.b2bstack.com.br/compare/neoway-vs-econodata"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Benchmarks setoriais de empresas fechadas/PMEs",
+  "empresa": "Serasa Experian (dados setoriais)",
+  "site": "https://www.serasaexperian.com.br",
+  "o_que_oferece": "Indicadores públicos de demanda por crédito e inadimplência por setor/porte/UF, série Econodrops 'Setor em Foco', e (pago) produtos de crédito como Credit Rating, que inclui perspectiva setorial.",
+  "o_que_oria_usaria": "Indicadores públicos de inadimplência e demanda de crédito por setor (gratuitos, em release).",
+  "o_que_sobraria": "Não foi encontrado produto pago de benchmark de demonstrações financeiras por setor; os pagos são de crédito/consulta por CNPJ (avaliados em E06/E07).",
+  "pct_uso_estimado": 0,
+  "conta_do_pct": "Sem produto pago identificado para esta finalidade → não há escopo pago a medir; os releases setoriais são gratuitos.",
+  "modelo_cobranca": "Releases gratuitos; produtos de crédito por consulta/contrato",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Brasil; bureau de crédito.",
+  "veredito": "Rejeitado",
+  "motivo": "Para benchmark setorial de margens não há produto identificado; usar os releases públicos como contexto e avaliar Serasa só em E06/E07.",
+  "riscos_a_confirmar": "Perguntar ao comercial se existe base de balanços setoriais (ex.: dos balanços que recebem para rating). Pesquisa não achou.",
+  "fontes": [
+   "https://www.serasaexperian.com.br/sala-de-imprensa/pmes/serasa-experian-lanca-serie-de-analises-dos-setores-economicos-para-apoiar-pmes/",
+   "https://www.serasaexperian.com.br/images-cms/wp-content/uploads/2022/09/Manual_do_Produto-Credit_Rating.pdf",
+   "https://www.serasaexperian.com.br/sala-de-imprensa/servicos-de-credito/setor-de-servicos-reune-63-por-cento-das-empresas-brasileiras-mas-fatura-17-por-cento-abaixo-da-media-aponta-serasa-experian/"
+  ]
+ },
+ {
+  "etapas": [
+   "E08",
+   "E01"
+  ],
+  "categoria": "Benchmarks setoriais de empresas fechadas/PMEs",
+  "empresa": "Speedio",
+  "site": "https://speedio.com.br",
+  "o_que_oferece": "Prospecção B2B: listas por CNAE/porte/região, contatos, dados de sócios, faixa de faturamento e funcionários, consultas e exportações por franquia.",
+  "o_que_oria_usaria": "Faixa de faturamento e funcionários para montar grupo de pares; talvez prospecção em E01.",
+  "o_que_sobraria": "Contatos, cadência comercial, exportações para CRM. Sem demonstrações financeiras.",
+  "pct_uso_estimado": 15,
+  "conta_do_pct": "Plano de entrada ~300 consultas + 300 exportações/mês; benchmark de 4 mandatos x ~8 empresas usa ~32 consultas e não usa contatos/exportações → ~10-15%.",
+  "modelo_cobranca": "Assinatura mensal com franquia, fidelidade 12 meses no plano avançado",
+  "preco_publicado": "não publicado no site; terceiros: R$ 719 a R$ 1.379/mês (concorrente SocialHub, set/2026) e R$ 1.149/mês (comparador) — conferir",
+  "brasil_lgpd": "Brasil; trata dado de PF (sócios/contatos).",
+  "veredito": "Rejeitado",
+  "motivo": "Ferramenta de prospecção; o dado financeiro é faixa estimada, inútil para comparar margem.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://www.socialhub.pro/?p=32817",
+   "https://deepline.com/gtm-stack/providers/speedio",
+   "https://www.b2bstack.com.br/compare/speedio-vs-exact-sales"
+  ]
+ },
+ {
+  "etapas": [
+   "E08",
+   "E01"
+  ],
+  "categoria": "Benchmarks setoriais de empresas fechadas/PMEs",
+  "empresa": "Econodata",
+  "site": "https://www.econodata.com.br",
+  "o_que_oferece": "Plataforma de prospecção e inteligência de mercado; API REST de enriquecimento por CNPJ com faturamento estimado (faixa), funcionários, CNAE, regime tributário, 'saúde financeira', comércio exterior, tecnologias.",
+  "o_que_oria_usaria": "Faturamento estimado e porte para seleção de pares via API.",
+  "o_que_sobraria": "Prospecção, listas, contatos, tecnologias. 'Faturamento presumido' é faixa, não DRE.",
+  "pct_uso_estimado": 20,
+  "conta_do_pct": "Por contagem de ~6 grupos de dado no Premium; usa 1-2 (faturamento, porte) → ~20-30%.",
+  "modelo_cobranca": "Freemium + Premium sob medida; API",
+  "preco_publicado": "não publicado; concorrente cita ~R$ 590–890/mês (SocialHub, conferir)",
+  "brasil_lgpd": "Brasil; trata dado de PF de contato.",
+  "veredito": "Rejeitado",
+  "motivo": "Mesmo problema da Speedio: dado firmográfico estimado, não benchmark financeiro.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://www.econodata.com.br/api",
+   "https://www.econodata.com.br/prospectar-detalhe",
+   "https://www.socialhub.pro/alternativa-econodata/"
+  ]
+ },
+ {
+  "etapas": [
+   "E08"
+  ],
+  "categoria": "Benchmarks setoriais de empresas fechadas/PMEs",
+  "empresa": "Moody's Orbis (Bureau van Dijk)",
+  "site": "https://www.moodys.com/web/en/us/capabilities/company-reference-data/orbis.html",
+  "o_que_oferece": "Base global de empresas (99% privadas), demonstrações padronizadas entre regimes contábeis, estrutura societária, beneficiário final, indicadores de risco.",
+  "o_que_oria_usaria": "Demonstrações de fechadas brasileiras — que só existem onde a lei obriga publicar (S.A. fechadas grandes); LTDA/PME praticamente não aparecem.",
+  "o_que_sobraria": "Cobertura global, beneficiário final, risco, ferramentas de compliance/transfer pricing.",
+  "pct_uso_estimado": 10,
+  "conta_do_pct": "Por contagem: ~5 blocos (financeiros globais, BR, estrutura societária, beneficiário final, risco); usa parte de 1 → ~10%.",
+  "modelo_cobranca": "Licença enterprise",
+  "preco_publicado": "não publicado",
+  "brasil_lgpd": "Processamento fora do Brasil; contém dado de PF (beneficiários).",
+  "veredito": "Rejeitado",
+  "motivo": "Licença enterprise global para cobertura brasileira de PME que a fonte não tem.",
+  "riscos_a_confirmar": "Cobertura de Brasil não publicada; pedir breakdown se algum dia reabrir.",
+  "fontes": [
+   "https://www.moodys.com/web/en/us/capabilities/company-reference-data/orbis.html",
+   "https://pipeline.zoominfo.com/sales/orbis-review"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Banco de dados Postgres gerenciado em São Paulo",
+  "empresa": "Supabase Pro + PITR (região sa-east-1)",
+  "site": "https://supabase.com/pricing",
+  "o_que_oferece": "Pro US$ 25/mês por organização: Postgres, Auth (MFA TOTP incluso), Storage, Edge Functions, Realtime, 8 GB disco/projeto, backup diário 7 dias, US$ 10/mês de crédito de compute (1 Micro). Add-ons: compute (Micro US$ 10, Small US$ 15, Medium US$ 60/mês), PITR US$ 100/mês (7 dias), US$ 200 (14), US$ 400 (28), branching US$ 0,01344/branch-hora, MFA por telefone US$ 75/mês.",
+  "o_que_oria_usaria": "Postgres (núcleo), Auth com MFA, Storage dos documentos, PITR 7 dias (RPO de minutos), região São Paulo, 3 projetos (dev, homologação, produção).",
+  "o_que_sobraria": "Realtime e Edge Functions provavelmente sem uso; cota de 100k MAU muito acima do volume. São itens sem preço próprio dentro do plano.",
+  "pct_uso_estimado": 90,
+  "conta_do_pct": "Ponderado por preço: conta típica = Pro 25 + PITR 100 + compute prod Small 15 + 2 projetos Micro 20 (créditos cobrem 10) ≈ US$ 150/mês. Itens ociosos (Realtime/Edge) não têm preço separado e são uma fração do Pro base de US$ 25 → ociosidade ≤ ~US$ 10 de 150 → ~90-93%.",
+  "modelo_cobranca": "Assinatura por organização + uso + add-ons por projeto",
+  "preco_publicado": "Pro US$ 25/mês; PITR US$ 100/mês (7 d); compute Small US$ 15/mês, Micro US$ 10/mês (supabase.com/pricing e docs PITR, consultado 24/11/2026)",
+  "brasil_lgpd": "Região sa-east-1 (São Paulo) disponível. DPA: a confirmar se é assinável no Pro (pesquisa não confirmou). SOC2/ISO só no Team (US$ 599).",
+  "veredito": "Recomendado",
+  "motivo": "Mantém a stack atual, atende São Paulo + PITR (perda de minutos) com uso ~90%; o Team (US$ 599) seria pago quase só por SOC2/SLA → não passa nos 80%.",
+  "riscos_a_confirmar": "1) PITR pode exigir compute mínimo Small (memória — conferir). 2) Supabase não publica RTO; tempo de restauração cresce com o tamanho do banco — medir um restore para provar as 4 h. 3) Projeto atual está em qual região? Migrar para sa-east-1 exige novo projeto + migração. 4) PITR fica fora do spend cap. 5) DPA no Pro.",
+  "fontes": [
+   "https://supabase.com/pricing.md",
+   "https://supabase.com/docs/guides/platform/manage-your-usage/point-in-time-recovery",
+   "https://supabase.com/docs/guides/platform/regions",
+   "https://supabase.com/docs/guides/platform/backups"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Banco de dados Postgres gerenciado em São Paulo",
+  "empresa": "Supabase Team",
+  "site": "https://supabase.com/pricing",
+  "o_que_oferece": "Tudo do Pro + SOC2/ISO 27001, backups 14 dias, logs 28 dias, SSO no dashboard, suporte prioritário com SLA. A partir de US$ 599/mês.",
+  "o_que_oria_usaria": "O mesmo do Pro; SOC2 só se um cliente exigir relatório.",
+  "o_que_sobraria": "Os ~US$ 574 de diferença pagam SOC2, SLA de suporte, retenção maior de log — sem uso no volume de 4 mandatos/mês.",
+  "pct_uso_estimado": 20,
+  "conta_do_pct": "Ponderado por preço: a Oria usaria o equivalente ao Pro (~US$ 25 + add-ons, que se pagam à parte nos dois) → 25/599 ≈ 4% do incremento; contando os itens de valor do Team (SOC2, SLA, logs 28 d, backup 14 d, SSO) usa 1 (backup 14 d) de 5 = 20%.",
+  "modelo_cobranca": "Assinatura",
+  "preco_publicado": "a partir de US$ 599/mês (supabase.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Mesma região sa-east-1.",
+  "veredito": "Rejeitado",
+  "motivo": "Paga-se compliance e suporte que a Oria não usaria hoje.",
+  "riscos_a_confirmar": "Reabrir se um cliente institucional exigir SOC2 do subprocessador.",
+  "fontes": [
+   "https://supabase.com/pricing.md"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Banco de dados Postgres gerenciado em São Paulo",
+  "empresa": "Neon (Launch/Scale, aws-sa-east-1)",
+  "site": "https://neon.com/pricing",
+  "o_que_oferece": "Postgres serverless por uso: Launch US$ 0,106/CU-hora, Scale US$ 0,222/CU-hora; storage US$ 0,35/GB-mês; restore instantâneo US$ 0,20/GB-mês (até 7 d no Launch, 30 d no Scale); branching; sem mínimo mensal. SOC2, SLA e IP allow só no Scale.",
+  "o_que_oria_usaria": "Só o Postgres + restore (PITR) + branches para os 3 ambientes.",
+  "o_que_sobraria": "Praticamente nada no modelo por uso.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Cobrança por CU-hora/GB sem franquia → ~100%.",
+  "modelo_cobranca": "Por uso (CU-hora, GB-mês)",
+  "preco_publicado": "Launch US$ 0,106/CU-h; Scale US$ 0,222/CU-h; storage US$ 0,35/GB-mês; PITR US$ 0,20/GB-mês (neon.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Região AWS São Paulo GA desde fev/2025. DPA: a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Passa nos 80% e tem SP, mas só faz sentido se a Oria sair do Supabase — e aí perde Auth e Storage, que teria de contratar à parte (mais fornecedores).",
+  "riscos_a_confirmar": "Launch sem SLA nem IP allow; produção pede Scale. Custo de migração de Auth/RLS/Storage. Conta 'compute sempre ligado' para n8n pesado pode ficar acima do Supabase.",
+  "fontes": [
+   "https://neon.com/pricing",
+   "https://neon.com/docs/changelog/2025-02-28",
+   "https://neon.com/docs/introduction/regions"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Banco de dados Postgres gerenciado em São Paulo",
+  "empresa": "AWS RDS for PostgreSQL (sa-east-1)",
+  "site": "https://aws.amazon.com/rds/postgresql/pricing/",
+  "o_que_oferece": "Postgres gerenciado por hora de instância + GB de disco + backup; PITR nativo (retenção até 35 dias), Multi-AZ opcional (dobra a instância).",
+  "o_que_oria_usaria": "Tudo que contratar (paga só instância/disco/backup).",
+  "o_que_sobraria": "Nada no modelo por uso.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por uso → ~100%. Referência: db.t4g.micro ~US$ 25/mês e db.t4g.small ~US$ 50/mês em sa-east-1 (Bytebase, rótulo das colunas incerto — conferir na calculadora AWS).",
+  "modelo_cobranca": "Por hora de instância + GB-mês",
+  "preco_publicado": "não confirmado na página oficial; terceiros: db.t4g.small ~US$ 50/mês sa-east-1 (conferir)",
+  "brasil_lgpd": "Dado em São Paulo; DPA AWS (GDPR/LGPD) padrão no contrato (memória — conferir).",
+  "veredito": "Condicional",
+  "motivo": "Uso 100% e SP, mas exige sair do Supabase e operar Auth, Storage, API e backups por conta própria — custo de operação para equipe pequena.",
+  "riscos_a_confirmar": "Sem Auth/Storage/API REST: reescrever o que o portal usa do Supabase. Preço exato em sa-east-1.",
+  "fontes": [
+   "https://aws.amazon.com/rds/postgresql/pricing/",
+   "https://www.bytebase.com/dbcost/rds/instance/db.t4g.small/",
+   "https://www.bytebase.com/dbcost/rds/instance/db.t4g.micro/"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Banco de dados Postgres gerenciado em São Paulo",
+  "empresa": "Google Cloud SQL for PostgreSQL (southamerica-east1)",
+  "site": "https://cloud.google.com/sql/pricing",
+  "o_que_oferece": "Postgres gerenciado por vCPU-hora + GiB-hora + disco; HA regional (aprox. dobra o compute); PITR; cobrança por segundo.",
+  "o_que_oria_usaria": "Tudo que contratar.",
+  "o_que_sobraria": "Nada no modelo por uso.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por uso → ~100%.",
+  "modelo_cobranca": "Por vCPU-hora, GiB-hora, GB-mês",
+  "preco_publicado": "não confirmado para southamerica-east1 (página oficial exige escolher a região) — a confirmar",
+  "brasil_lgpd": "Região São Paulo; DPA Google Cloud padrão (memória — conferir).",
+  "veredito": "Condicional",
+  "motivo": "Mesma situação do RDS: passa nos 80%, mas troca a plataforma inteira e a equipe passa a operar Auth/Storage.",
+  "riscos_a_confirmar": "Preço em São Paulo; sem vantagem clara sobre RDS para quem já usa AWS por baixo (Supabase roda em AWS).",
+  "fontes": [
+   "https://cloud.google.com/sql/pricing?hl=en",
+   "https://cloud.google.com/sql/docs/postgres/region-availability-overview?hl=pt-br"
+  ]
+ },
+ {
+  "etapas": [
+   "E03",
+   "E05",
+   "E08",
+   "E16"
+  ],
+  "categoria": "Automação/coleta (substituto do n8n no PikaPods)",
+  "empresa": "n8n Community self-host em VM AWS sa-east-1 (EC2)",
+  "site": "https://docs.n8n.io/n8n-community-license/sustainable-use-license",
+  "o_que_oferece": "n8n Community Edition gratuito (Sustainable Use License) rodando em VM própria: execuções ilimitadas; SSO/RBAC/log streaming/ambientes nativos ficam de fora (licença Enterprise).",
+  "o_que_oria_usaria": "Tudo: os workflows atuais sem reescrita; 3 ambientes = 3 instâncias (o repositório já gera e republica workflows por gerador, então não precisa do recurso pago de 'environments').",
+  "o_que_sobraria": "Nada pago; VM é por hora.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Software gratuito + VM por uso. Referência: t4g.medium sa-east-1 ~US$ 0,0536/h ≈ US$ 39/mês (terceiros — conferir) + disco; dev/homolog em instância menor ou ligada sob demanda.",
+  "modelo_cobranca": "Por hora de VM (AWS)",
+  "preco_publicado": "t4g.medium sa-east-1 ~US$ 39/mês on-demand (aws-pricing.com, conferir na AWS); n8n Community: R$ 0",
+  "brasil_lgpd": "Dado e processamento em São Paulo; DPA AWS. Resolve o problema do PikaPods (UE/EUA, sem DPA).",
+  "veredito": "Recomendado",
+  "motivo": "Zero reescrita, processamento no Brasil e uso ~100%; o custo extra é operar a VM (atualizar, monitorar, fazer backup da base do n8n).",
+  "riscos_a_confirmar": "Confirmar com license@n8n.io que o uso da Oria (cliente recebe o resultado, não usa o n8n) é 'internal business purpose' — a FAQ indica que sim. Patch de segurança e backup da instância ficam com a Oria.",
+  "fontes": [
+   "https://docs.n8n.io/n8n-community-license/sustainable-use-license",
+   "https://docs.n8n.io/n8n-community-license/community-license/license-faq",
+   "https://aws-pricing.com/t4g.medium.html",
+   "https://www.devzero.io/instances/aws/t4g.medium"
+  ]
+ },
+ {
+  "etapas": [
+   "E03",
+   "E05",
+   "E08",
+   "E16"
+  ],
+  "categoria": "Automação/coleta (substituto do n8n no PikaPods)",
+  "empresa": "n8n Community self-host em Magalu Cloud (br-se1)",
+  "site": "https://magalu.cloud/precos/",
+  "o_que_oferece": "Mesma Community Edition em VM de nuvem brasileira cobrada em reais; regiões BR-SE1 (3 zonas) e BR-NE1.",
+  "o_que_oria_usaria": "Tudo, como na opção AWS.",
+  "o_que_sobraria": "Nada pago.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Software gratuito + VM por uso → 100%.",
+  "modelo_cobranca": "Por hora/mês de VM, em R$",
+  "preco_publicado": "não lido — a calculadora da página não carregou; a confirmar",
+  "brasil_lgpd": "Empresa e datacenter brasileiros; DPA a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Passa nos 80% e fatura em reais; condicional porque preço, DPA e maturidade operacional não foram confirmados — e AWS já seria o provedor do backup.",
+  "riscos_a_confirmar": "Tabela de preços, SLA, DPA, snapshots.",
+  "fontes": [
+   "https://magalu.cloud/precos/",
+   "https://minhaagenda.cursoseventos.nic.br/files/apresentacao/arquivo/2093/Historico Magalu Cloud - Nic.br (2025).pdf",
+   "https://forbes.com.br/forbes-tech/2023/12/magazine-luiza-lanca-servico-de-nuvem-com-promessa-de-precos-mais-acessiveis/"
+  ]
+ },
+ {
+  "etapas": [
+   "E03",
+   "E05",
+   "E08",
+   "E16"
+  ],
+  "categoria": "Automação/coleta (substituto do n8n no PikaPods)",
+  "empresa": "n8n Cloud",
+  "site": "https://n8n.io/pricing",
+  "o_que_oferece": "Starter €20/mês (anual), 2,5k execuções, 5 concorrentes; Pro €50/mês, 10k execuções; Business €667/mês só self-hosted; Enterprise sob consulta (ambientes dev/prod, SSO, log streaming). Hospedado em Frankfurt.",
+  "o_que_oria_usaria": "Execuções e editor; ambientes só no Enterprise.",
+  "o_que_sobraria": "Créditos de AI builder e cota de execuções acima do volume.",
+  "pct_uso_estimado": 85,
+  "conta_do_pct": "Pro: cobra por faixa de execuções; volume de 4 mandatos x ~8 empresas x dezenas de coletas cabe em 10k, uso estimado ~80-90% da faixa (estimativa, não medido).",
+  "modelo_cobranca": "Assinatura por faixa de execuções",
+  "preco_publicado": "Starter €20/mês, Pro €50/mês (anual), Business €667/mês (n8n.io/pricing, 24/11/2026)",
+  "brasil_lgpd": "Dados na UE (Frankfurt) — contra a preferência por processamento no Brasil.",
+  "veredito": "Rejeitado",
+  "motivo": "O uso até passaria, mas não há região Brasil e os 3 ambientes exigem Enterprise; não resolve o problema que motiva a troca do PikaPods.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://n8n.io/pricing",
+   "https://jetadmin.io/blog/n8n-pricing/"
+  ]
+ },
+ {
+  "etapas": [
+   "E03",
+   "E05",
+   "E08",
+   "E16"
+  ],
+  "categoria": "Automação/coleta (substituto do n8n no PikaPods)",
+  "empresa": "Pipedream",
+  "site": "https://pipedream.com/pricing",
+  "o_que_oferece": "Plataforma de workflows em código com 3.000+ conectores; em out/2026 os planos teriam virado Free (só dev), Startup (US$ 99/mês anual, 10k créditos) e Business. Adquirida pela Workday (acordo de 19/11/2025).",
+  "o_que_oria_usaria": "Execução de coletas.",
+  "o_que_sobraria": "Conectores SaaS e Connect (auth de usuários finais) sem uso; franquia de créditos.",
+  "pct_uso_estimado": 50,
+  "conta_do_pct": "Startup: produto central do plano é Connect (integrações para usuários finais), que a Oria não usa; por contagem ~50% (estimativa).",
+  "modelo_cobranca": "Assinatura com créditos",
+  "preco_publicado": "Startup US$ 99/mês anual ou US$ 150 mensal (usagepricing.com, out/2026 — não confirmado no site oficial)",
+  "brasil_lgpd": "Processamento nos EUA.",
+  "veredito": "Rejeitado",
+  "motivo": "Exige reescrever todos os workflows, roda nos EUA, preço e roadmap incertos após a compra pela Workday.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://pipedream.com/docs/pricing",
+   "https://www.usagepricing.com/blueprint/activity/pipedream-2026-10-04-startup-plan-replaces-tiers",
+   "https://newsroom.workday.com/2025-11-19-Workday-Signs-Definitive-Agreement-to-Acquire-Pipedream"
+  ]
+ },
+ {
+  "etapas": [
+   "E03",
+   "E05",
+   "E08",
+   "E16"
+  ],
+  "categoria": "Automação/coleta (substituto do n8n no PikaPods)",
+  "empresa": "Windmill (self-host open-source ou Cloud)",
+  "site": "https://windmill.dev/pricing",
+  "o_que_oferece": "Orquestrador de scripts/workflows (TypeScript, Python, SQL) open-source; Cloud Team ~US$ 10/usuário/mês (terceiros); Enterprise por assento + compute unit.",
+  "o_que_oria_usaria": "Self-host gratuito numa VM em SP.",
+  "o_que_sobraria": "Nada no self-host gratuito.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Self-host gratuito → 100%.",
+  "modelo_cobranca": "Gratuito (self-host) / por usuário (Cloud)",
+  "preco_publicado": "Self-host gratuito; Cloud Team ~US$ 10/usuário/mês (terceiros, conferir)",
+  "brasil_lgpd": "Self-host: onde a Oria escolher (SP).",
+  "veredito": "Condicional",
+  "motivo": "Passa nos 80%, mas só vale se a Oria decidir reescrever os workflows e geradores do n8n — custo que o n8n self-host evita.",
+  "riscos_a_confirmar": "Esforço de migração dos geradores N8N/lib e dos testes de workflow.",
+  "fontes": [
+   "https://windmill.dev/pricing",
+   "https://windmill.dev/docs/misc/plans_details"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Backup externo e trilha imutável",
+  "empresa": "AWS S3 com Object Lock (sa-east-1), conta separada",
+  "site": "https://aws.amazon.com/s3/pricing/",
+  "o_que_oferece": "Armazenamento de objetos por GB-mês + requisições; Object Lock modo Compliance (WORM, nem o root apaga antes do prazo); versionamento; criptografia SSE-KMS; classes mais baratas (Standard-IA, Glacier).",
+  "o_que_oria_usaria": "Bucket com Object Lock Compliance para: dump diário criptografado do Postgres, cópia do Storage, e exportação diária da cadeia de hashes da trilha de auditoria.",
+  "o_que_sobraria": "Nada; paga por GB guardado.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por uso, sem franquia → 100%. Ordem de grandeza: S3 Standard em SP ~US$ 0,0405/GB-mês (terceiros, conferir); 100 GB ≈ US$ 4/mês.",
+  "modelo_cobranca": "Por GB-mês + requisições + saída",
+  "preco_publicado": "S3 Standard São Paulo ~US$ 0,0405/GB-mês (upstash.com, out/2026 — conferir na AWS)",
+  "brasil_lgpd": "Dado em São Paulo; DPA AWS.",
+  "veredito": "Recomendado",
+  "motivo": "Única opção imutável de verdade em território brasileiro com uso 100%; resolve backup e cópia externa da trilha no mesmo bucket.",
+  "riscos_a_confirmar": "'Fora do provedor': o Supabase roda na AWS — usar conta AWS separada, com credenciais que o Supabase/n8n só conseguem gravar (não apagar). Se o dono quiser outro provedor físico, ver Backblaze. Quem roda o pg_dump (n8n na VM ou GitHub Actions) também precisa de sinal positivo de execução (regra 7).",
+  "fontes": [
+   "https://aws.amazon.com/s3/pricing/",
+   "https://upstash.com/blog/aws-s3-pricing-explained-2026"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Backup externo e trilha imutável",
+  "empresa": "Backblaze B2 com Object Lock",
+  "site": "https://www.backblaze.com/cloud-storage/pricing",
+  "o_que_oferece": "Armazenamento S3-compatível US$ 6,95/TB-mês (desde 01/05/2026), saída grátis até 3x o volume, API grátis; Object Lock com modo Compliance. Regiões: US West, US East, EU Central (Amsterdã), CA East (Toronto).",
+  "o_que_oria_usaria": "Mesmo uso do S3: dumps + Storage + cadeia de hashes, imutáveis.",
+  "o_que_sobraria": "Nada.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Por uso, primeiros 10 GB grátis → 100%.",
+  "modelo_cobranca": "Por TB-mês",
+  "preco_publicado": "US$ 6,95/TB por 30 dias (backblaze.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Sem região no Brasil → transferência internacional (LGPD art. 33); DPA a confirmar.",
+  "veredito": "Condicional",
+  "motivo": "Passa nos 80% e é provedor físico diferente da AWS; condicional porque o dado sai do Brasil — serve como segunda cópia, não como única.",
+  "riscos_a_confirmar": "Base legal para transferência internacional; DPA.",
+  "fontes": [
+   "https://www.backblaze.com/pricing.md",
+   "https://www.backblaze.com/docs/cloud-storage-data-regions",
+   "https://www.backblaze.com/docs/cloud-storage-object-lock",
+   "https://www.usagepricing.com/blueprint/backblaze"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Backup externo e trilha imutável",
+  "empresa": "SimpleBackups",
+  "site": "https://simplebackups.com/pricing",
+  "o_que_oferece": "Serviço que agenda pg_dump e cópia de buckets para o destino do cliente (S3, B2, GCS…): Basic grátis (1 job diário), Lite US$ 49/mês (5 jobs, a cada 12 h), Plus US$ 99/mês (20 jobs, horário), Max US$ 299/mês (100 jobs, 5 min); criptografia; empresa belga.",
+  "o_que_oria_usaria": "2-3 jobs diários (Postgres produção, Storage, export da trilha).",
+  "o_que_sobraria": "No Lite: 2-3 de 5 jobs ociosos, 50 GB de SimpleStorage não usados (destino seria o S3 próprio).",
+  "pct_uso_estimado": 55,
+  "conta_do_pct": "Lite por contagem de jobs: 3/5 = 60%, menos o armazenamento incluso não usado → ~55%.",
+  "modelo_cobranca": "Assinatura por nº de jobs",
+  "preco_publicado": "Lite US$ 49/mês, Plus US$ 99/mês (simplebackups.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Runners em local não declarado (empresa na Bélgica, GDPR, ISO 27001); teria credencial de leitura do banco → DPA necessário.",
+  "veredito": "Rejeitado",
+  "motivo": "Paga 5 jobs para usar 3, e o job é um pg_dump + upload que a VM do n8n ou um GitHub Action fazem de graça; adiciona um subprocessador com acesso total ao banco.",
+  "riscos_a_confirmar": "Página de preço não lista Supabase entre os bancos suportados (há guia).",
+  "fontes": [
+   "https://simplebackups.com/pricing",
+   "https://simplebackups.com/platform/supabase",
+   "https://simplebackups.com/llms.txt"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Autenticação com 2FA",
+  "empresa": "Supabase Auth (MFA TOTP)",
+  "site": "https://supabase.com/docs/guides/auth/auth-mfa",
+  "o_que_oferece": "Auth já incluído no plano Supabase; MFA por TOTP gratuito e habilitado em todos os projetos; MFA por telefone US$ 75/mês (add-on); nível aal2 no JWT para exigir 2FA em RLS; enforcement de MFA para membros da organização no dashboard (Pro+).",
+  "o_que_oria_usaria": "Login + TOTP obrigatório para usuários do portal (aal2 exigido nas políticas RLS) e MFA obrigatório para quem acessa o dashboard.",
+  "o_que_sobraria": "Nada pago (não contratar MFA por telefone).",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Custo incremental zero (já dentro do Supabase Pro) → 100%.",
+  "modelo_cobranca": "Incluído no plano",
+  "preco_publicado": "TOTP gratuito; MFA por telefone US$ 75/mês (supabase.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Mesma região do banco (sa-east-1).",
+  "veredito": "Recomendado",
+  "motivo": "Já pago, já integrado ao RLS; trocar de fornecedor só acrescentaria custo e um subprocessador.",
+  "riscos_a_confirmar": "Exigir aal2 é manual em cada política RLS — falta numa tabela nova passa calado; precisa de invariante/sonda que confira todas as tabelas (regra 2 e 7).",
+  "fontes": [
+   "https://supabase.com/docs/guides/auth/auth-mfa",
+   "https://supabase.com/blog/mfa-auth-via-rls",
+   "https://supabase.com/docs/guides/platform/multi-factor-authentication",
+   "https://supabase.com/pricing.md"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Autenticação com 2FA",
+  "empresa": "Clerk",
+  "site": "https://clerk.com/pricing",
+  "o_que_oferece": "Hobby grátis (sem MFA); Pro US$ 25/mês (US$ 20 anual) com 50k usuários retidos, MFA (app, SMS, códigos), passkeys, 1 conexão SAML; Business US$ 300/mês; componentes de UI prontos, organizações, billing.",
+  "o_que_oria_usaria": "Login + MFA.",
+  "o_que_sobraria": "Organizações, billing, UI pronta, 50k MRU para ~30 usuários; e duplicaria o Supabase Auth já pago.",
+  "pct_uso_estimado": 60,
+  "conta_do_pct": "Por contagem de recursos do Pro (~6: login, MFA, passkeys, SSO, organizações, billing/UI): usa 2-3 → ~40-60%.",
+  "modelo_cobranca": "Assinatura + por usuário retido",
+  "preco_publicado": "Pro US$ 25/mês; Business US$ 300/mês (clerk.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Região de dados não informada (EUA, memória — conferir); sem região Brasil.",
+  "veredito": "Rejeitado",
+  "motivo": "Paga de novo o que o Supabase Auth já entrega e tira a identidade da região SP; integração com RLS fica indireta.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://clerk.com/pricing"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Autenticação com 2FA",
+  "empresa": "WorkOS AuthKit",
+  "site": "https://workos.com/pricing",
+  "o_que_oferece": "AuthKit grátis até 1M MAU com senha, social, passkeys, MFA, magic auth; SSO empresarial US$ 125/conexão/mês (1-15); domínio próprio US$ 99/mês.",
+  "o_que_oria_usaria": "Login + MFA (grátis).",
+  "o_que_sobraria": "Nada pago se ficar no gratuito; SSO por conexão só se cliente exigir.",
+  "pct_uso_estimado": 100,
+  "conta_do_pct": "Gratuito no volume → 100% (desconsiderando domínio próprio US$ 99/mês, que seria 0% útil).",
+  "modelo_cobranca": "Grátis até 1M MAU; SSO por conexão",
+  "preco_publicado": "AuthKit grátis até 1M MAU; SSO US$ 125/conexão (workos.com/pricing, 24/11/2026)",
+  "brasil_lgpd": "Processamento EUA; sem região Brasil identificada.",
+  "veredito": "Condicional",
+  "motivo": "Passa nos 80% por ser grátis, mas só faria sentido se um cliente exigir SSO SAML; hoje duplica o Supabase Auth e tira o dado de identidade do Brasil.",
+  "riscos_a_confirmar": "Integração com RLS do Supabase via JWT de terceiro.",
+  "fontes": [
+   "https://workos.com/pricing.md",
+   "https://clerk.com/articles/the-real-cost-of-enterprise-sso-per-connection-vs-per-mau-p-3.md"
+  ]
+ },
+ {
+  "etapas": [
+   "E16"
+  ],
+  "categoria": "Autenticação com 2FA",
+  "empresa": "Auth0 (Okta)",
+  "site": "https://auth0.com/pricing",
+  "o_que_oferece": "Free até 25k MAU; B2B Essentials a partir de US$ 150/mês (500 MAU, MFA Pro incluso); B2B Professional ~US$ 800/mês; Enterprise MFA add-on US$ 100/mês; organizações, actions, conexões empresariais.",
+  "o_que_oria_usaria": "Login + MFA.",
+  "o_que_sobraria": "Organizações, actions, conexões empresariais, cota de MAU muito acima de ~30 usuários.",
+  "pct_uso_estimado": 30,
+  "conta_do_pct": "Essentials por contagem (~6 recursos), usa 2 → ~30%.",
+  "modelo_cobranca": "Assinatura por faixa de MAU",
+  "preco_publicado": "B2B Essentials a partir de US$ 150/mês (terceiros, nov/2026 — conferir em auth0.com/pricing)",
+  "brasil_lgpd": "Regiões US/EU/AU; sem Brasil.",
+  "veredito": "Rejeitado",
+  "motivo": "Mais caro, fora do Brasil e redundante com o Supabase Auth.",
+  "riscos_a_confirmar": "—",
+  "fontes": [
+   "https://auth0.com/pricing",
+   "https://ssojet.com/blog/auth0-free-tier-limits",
+   "https://community.auth0.com/t/customer-data-locations/104690"
+  ]
+ }
+]
