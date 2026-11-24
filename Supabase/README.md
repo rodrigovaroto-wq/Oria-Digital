@@ -1508,3 +1508,12 @@ supabase db execute --file Supabase/migrations/0302_a_linha_que_nao_tinha_identi
 #   select (select count(*) from cand c join pap p on p.t = c.t and p.chave = c.chave and coalesce(p.unidade, '') = coalesce(c.unidade, '')) as linhas_elegiveis,
 #          (select count(*) from fato_financeiro where caso_id = '<uuid do mandato>') as fatos;
 #   -- se algum dia a avaliação da pendência de uma extração falhar (evento fato_pendencia_falhou), a avaliação manual do serviço é: select fn_fato_pendencia_da_versao('<versão>');
+
+# A 0303 cria a BASE COMUM DAS FONTES EXTERNAS (Fase A, A2): `fonte_externa` (catálogo, 22 fontes semeadas), `consulta_externa` (cada tentativa, em 4 estados: encontrado, nada_encontrado, falhou, nao_consultado; IMUTÁVEL; alvo SÓ CNPJ, CPF recusado de propósito) e `fato_externo`, e a função única `fn_registrar_consulta_externa`, que CLASSIFICA o desfecho cru (timeout/erro/status que não seja 2xx -> falhou; 2xx sem itens -> nada_encontrado; 2xx com itens -> encontrado). É por ela que passam o n8n (A3) e o portal (A4).
+# >>> Só cria objetos novos e semeia o catálogo: nenhuma tabela existente, nenhuma função existente muda. Nenhum segredo, nenhum dado de cliente. Reaplicável (`on conflict do nothing` no seed, requisitos por upsert); as tabelas e funções são `create` simples: reaplicar numa instalação que já a tem morre ALTO na primeira, o que é o sinal certo.
+# >>> O `authenticated` só LÊ as três tabelas; a escrita é a função (Sócio/Analista do mandato para empresa; Sócio para mercado). `fonte_externa.http_inexistente` é NULO nas 22: o 404 é `falhou` até alguém confirmar, por fonte, em produção, que ela devolve esse status para "alvo não consta".
+supabase db execute --file Supabase/migrations/0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0303' and not presente;   -- ZERO linhas (25 requisitos)
+#   select tipo, count(*) from fonte_externa group by 1;   -- empresa 7, mercado 15
+#   select count(*) from consulta_externa;   -- 0: nada consulta ainda (A3 e A4 vêm depois)
