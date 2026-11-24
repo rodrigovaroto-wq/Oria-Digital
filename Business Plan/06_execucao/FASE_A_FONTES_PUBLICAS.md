@@ -2,7 +2,7 @@
 
 **Detalhe da primeira fase da prioridade definida pelo dono em 24/11/2026.** O plano único continua
 sendo o [`PLANO_DE_EXECUCAO.md`](PLANO_DE_EXECUCAO.md) (K1): ele diz a ordem; este arquivo diz o
-passo a passo da Fase A. Nada aqui está construído.
+passo a passo da Fase A. A1 e A2 têm código (situação no Andamento do plano único); as fatias A3 a A5 não estão construídas.
 
 ## 1. A ordem que o dono definiu
 

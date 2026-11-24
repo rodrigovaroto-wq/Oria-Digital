@@ -1,6 +1,24 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 138 (24/11/2026) — Fase A: cópia de segurança (A1) e a base das fontes externas (A2, migration 0303)
+
+> **Nada aplicado em produção.** A migration mais nova é a **`0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql`**: ESCRITA, NÃO APLICADA. Corrige o risco de uma fonte derrubada parecer "sem nada": a consulta tem quatro estados, e "falhou" nunca vira "nada encontrado". Quem responde se ela está em produção é a sonda (`fn_instalacao_conferir() where migration = '0303'`), depois da aplicação.
+
+- **A2 FEITO no código e no teste.** Tabelas `fonte_externa` (22 fontes; a BrasilAPI é a única "não oficial"), `consulta_externa` (imutável; quatro estados; hash do corpo obrigatório em `encontrado` e em `nada_encontrado`, nunca o da string vazia) e `fato_externo`. Ponto único de classificação: `fn_registrar_consulta_externa`. Sonda com 36 requisitos (ordem 1420–1455).
+- **A1 CORRIGIR.** Cópia diária (`.github/workflows/copia-de-seguranca.yml`, 06:40 UTC, `workflow_dispatch`) com `Supabase/backup/copia-do-banco.sh` (copiar | conferir) e `copia-do-storage.py`. Medido em Postgres 16 local: restaura do zero, as cinco tabelas-chave batem; papel sujeito à RLS é recusado pelo script; download truncado reprova. **NÃO medido contra produção:** o GitHub só dispara workflow que está na `main`, então a primeira execução real é depois do merge. Por isso o critério "uma restauração funciona do zero" ainda não está cumprido.
+- **Segredos cadastrados pelo dono:** `BACKUP_DB_URL` (Session pooler, papel postgres), `BACKUP_PASSPHRASE` e `SUPABASE_SERVICE_ROLE_KEY`.
+- **Medido nesta rodada:** `Supabase/test/run.sh` completo, saída 0, 77 arquivos de teste com "TODOS OS TESTES PASSARAM" (4.553 linhas `ok` no log); a 0303 com `EXECUCOES=196 FALHAS=0`. A medida do não-vazio (regra 2) está nas mensagens dos commits: 96/0, depois 183/0, depois 196/0, com cada regra desligada reprovando. Não rodei nesta rodada as suítes de N8N, Leitor e portal: a rodada não as tocou.
+- **Verificadores:** `conferir.mjs` 303/0; `verificar-comandos.mjs` OK; `verificar-espelho-claude-md.mjs` OK.
+- **Memória:** nenhuma entrada nova. As três candidatas (`pg_dump -n` sem extensão; `row_security = off` na contagem; corpo vazio com hash) já estão escritas nos comentários de `copia-do-banco.sh` e da 0303, e na ficha `fase-a-a1-a2-copia-de-seguranca-e-base-externa.md` em `.claude/conhecimento/fichas/`. O teste de `.claude/memory/INSTRUCTIONS.md` as reprova.
+- **Achados deixados** (nomeados no PR): os cinco da A2 e os três riscos da A1, na ficha e na descrição do PR.
+- **O dono faz à mão**, nesta ordem:
+  1. Aplicar a `0303` no Supabase, depois da `0302`, e conferir: `select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0303' and not presente;` deve voltar 0 linhas de 36.
+  2. Depois do merge: Actions → "Cópia de segurança" → Run workflow, e mandar o resultado. Guardar a `BACKUP_PASSPHRASE` fora do GitHub.
+  3. Conferir o tamanho do Storage contra a cota de artefatos do GitHub (500 MB se o repositório for privado no plano Free). Não medido.
+  4. Registrar as decisões 6–8 de `FASE_A_FONTES_PUBLICAS.md` na v0.1.7.
+  5. Decidir o EXECUTE do `authenticated` em `fn_registrar_consulta_externa` antes da A4: o portal só tem o JWT da pessoa. A alternativa é levar a chave de serviço à Vercel.
+
 ## SESSÃO 137 (24/11/2026) — parceiros externos e a prioridade nova: Fase A (fontes públicas grátis)
 
 > **Só documentação e planilhas. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
@@ -18,7 +36,7 @@
 - **NÃO CONFERIDO:** o banco de produção (a sonda não foi rodada) e se o macro diário roda em produção (primeiro passo da A3).
 - **O dono faz à mão:**
   - registrar as decisões na v0.1.7;
-  - cadastrar os dois segredos da cópia de segurança (A1);
+  - cadastrar os dois segredos da cópia de segurança (A1). **Corrigido na sessão 138: são três** (BACKUP_DB_URL, BACKUP_PASSPHRASE e SUPABASE_SERVICE_ROLE_KEY), e o dono confirmou que estão cadastrados;
   - responder se o MVP fica sem agentes.
 
 
