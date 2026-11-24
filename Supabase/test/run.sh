@@ -1059,6 +1059,10 @@ echo "== 0301 — o Kit que levava quatro segundos para abrir (fn_kit_do_caso ig
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/o_kit_que_levava_quatro_segundos_para_abrir.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0303 — a fonte que caía e parecia não ter nada (base comum das fontes externas: API derrubada grava falhou e nunca nada_encontrado, falhou imutável, fonte fora do catálogo e CPF recusados, fato só em consulta encontrada, RLS por mandato COMO authenticated, escrita só pela função)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_fonte_que_caia_e_parecia_nao_ter_nada.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
