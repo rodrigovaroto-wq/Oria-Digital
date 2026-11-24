@@ -1,6 +1,20 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 135 (24/11/2026) — o score do dado externo entra no plano, distribuído pelas fases
+
+> **Só documentação. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
+
+- **O dono aprovou a v2 do §5A da Espec. 15** (pesos na mediana de três avaliações independentes e as 7 regras) e pediu para integrar ao plano, por fase, pensando na construção de cada agente.
+- **Fase 0:** 0.13, registrar D15.1–D15.8 e as 7 regras no registro v0.1.6.
+- **Fase 1, Trilha K nova:** 1.K1 catálogo das fontes; **1.K2 vetos no banco (P1)**; 1.K3 score em modo sombra e o portão de cada agente do piloto (Captador, Conferidor, Mercado, Caixa, Dívida, book), com `casos_do_score.py` como oráculo do teste; 1.K4 propagação pelo menor score e frescor pela data do uso; 1.K5 painel. A tabela "Em que fase nasce o portão de cada agente" está na trilha. Nenhum item de agente passou a depender da Trilha K: em sombra, o portão não bloqueia.
+- **Fase 2:** 2.18 refeito (portões de Risco, Estrategista, Entregas, Captador formal e monitoramento); 2.19 refeito (furos de portão e alerta de carimbo). **Fase 3:** 3.8 calibração; 3.9 bloqueio em degraus com rebaixamento automático.
+- **Contrato dos agentes** (`AGENTES.md`, item 8): todo dado externo chega ao agente pelo portão dele; os números ficam só na Espec. 15.
+- **A proposta em página** foi para `Arquitetura do Sistema/2 Especificação/15_anexos/Portoes_de_Confiabilidade_Oria_v2.html` (retrato derivado do §5A, com impressão em PDF).
+- **Medido:** as ondas de paralelismo continuam válidas (73 itens das Fases 0 e 1, cada um numa onda só, nenhuma dependência na mesma onda ou depois).
+- **O dono faz à mão:** confirmar a v0.1.6 quando o 0.13 for feito.
+
+
 ## SESSÃO 134 (23/11/2026) — pendência nova: score de confiabilidade do dado externo (Espec. 15)
 
 > **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`.

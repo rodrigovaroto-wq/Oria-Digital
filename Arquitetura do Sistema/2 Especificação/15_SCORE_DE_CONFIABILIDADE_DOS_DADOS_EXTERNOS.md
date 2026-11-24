@@ -354,7 +354,10 @@ Risco, rotulado "opinião do bureau X", e em nenhum outro agente.
 ### 5A.7 — Os 13 casos (piloto, fontes em estreia)
 
 Gerados por [`15_anexos/casos_do_score.py`](15_anexos/casos_do_score.py), que é a fonte desta
-tabela. Se um número do §5A mudar, ele muda primeiro no script, e a tabela é colada de novo. APRO =
+tabela. A proposta em página (com impressão em PDF) está em
+[`15_anexos/Portoes_de_Confiabilidade_Oria_v2.html`](15_anexos/Portoes_de_Confiabilidade_Oria_v2.html):
+é um **retrato derivado** do §5A em 23/11/2026, não uma fonte; se o §5A mudar, a página fica velha
+até ser refeita. Se um número do §5A mudar, ele muda primeiro no script, e a tabela é colada de novo. APRO =
 aprovado · REV = revisão · REPR = reprovado · QUAR = quarentena.
 
 | Caso | Captador | Conferidor | Mercado | Caixa | Dívida | Risco | Estrategista | Entregas |
@@ -561,7 +564,21 @@ proveniência do W3C PROV, sem adotar RDF: só a forma, para não inventarmos no
 | **5** | Pisos fixados e portões ligados em degraus | Etapa 4; decisão do dono | Cada portão ligado tem a decisão que o fixou; teste que reprova sem o portão |
 | **6** | Rebaixamento automático e revisão semanal dos furos | 2.10 (E4) | Piora medida rebaixa o portão (teste) |
 
-No plano de execução, isto são os itens **2.18** (etapas 0–3) e **2.19** (etapas 4–6).
+**No plano de execução (24/11/2026), por fase:**
+
+| Etapa | Item do plano | Fase |
+|---|---|---|
+| 0 | 0.13 (registro v0.1.6) | 0 — Fundação |
+| 1 | 1.K1 | 1 — Piloto |
+| 2 | 1.K2 (P1) | 1 — Piloto |
+| 3 | 1.K3 (portões dos agentes do piloto), 1.K4 (propagação e frescor pela data do uso), 1.K5 (painel) | 1 — Piloto |
+| 3, agentes da Fase 2 | 2.18 (Risco, Estrategista, Entregas, Captador formal, monitoramento) | 2 — Restante da v1 |
+| 6, revisão dos furos | 2.19 (alerta de carimbo) | 2 — Restante da v1 |
+| 4 | 3.8 (calibração) | 3 — Evolução operacional |
+| 5 e 6 | 3.9 (bloqueio em degraus, rebaixamento automático) | 3 — Evolução operacional |
+
+A tabela "Em que fase nasce o portão de cada agente", na Trilha K do plano, diz qual portão do §5A.2
+nasce com qual agente.
 
 ---
 

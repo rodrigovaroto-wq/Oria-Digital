@@ -25,7 +25,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Tirar do piloto alguma fonte de mercado do slide 6 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP; item 1.C5) | K6 (pede **todos** os dados de mercado no piloto) | 1.C5, G1 | Só com decisão registrada do dono; sem ela, ficam no piloto |
 | Ligar a conciliação do aging na rodada (`fn_reconciliar_caso`) | — | 1.A2 | **Fechada em 13/11/2026**: ligada pela `0278`, aplicada em produção (`ESTADO.md`, sessão 129b) |
 | Arquivo real de AR e AP para medir a leitura | DM7 do PLANO_MVP | 1.A1 | Depende do dono |
-| **Score de confiabilidade do dado externo** (pedido de 23/11/2026): escopo (inclui SPED e Registrato trazidos pelo cliente?), forma do rótulo, quem fura o portão, o que bloqueia antes da calibração, o que o cliente vê, quem rotula, se divergência com o cliente baixa o score, e os pesos e mínimos iniciais por agente | D15.1–D15.8 (a registrar; recomendações na [Espec. 15](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md), §11) | 2.18, 2.19 | Aberta. **Não se constrói agora**; os pisos só bloqueiam depois do modo sombra. Em 23/11/2026 o dono aprovou as 7 regras do §5A.5 e a v2 dos pesos (mediana de três avaliações independentes) como ponto de partida; falta registrá-las numa nova versão do registro de decisões |
+| **Score de confiabilidade do dado externo** (pedido de 23/11/2026): escopo (inclui SPED e Registrato trazidos pelo cliente?), forma do rótulo, quem fura o portão, o que bloqueia antes da calibração, o que o cliente vê, quem rotula, se divergência com o cliente baixa o score, e os pesos e mínimos iniciais por agente | D15.1–D15.8 (a registrar; recomendações na [Espec. 15](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md), §11) | 0.13, 1.K1–1.K5, 2.18, 2.19, 3.8, 3.9 | Aberta. Em 23/11/2026 o dono aprovou as 7 regras do §5A.5 e a v2 dos pesos (mediana de três avaliações independentes); em 24/11 o score entrou no plano, distribuído pelas fases. Falta registrar as decisões na v0.1.6 (item 0.13). Os pisos só bloqueiam depois da calibração (3.8, 3.9) |
 
 ## 2. Dependências de terceiros
 
@@ -62,7 +62,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Cadeia de hashes | Alterar um evento quebra a cadeia | 2.15 |
 | Troca de provedor de IA | Derrubar um provedor; a tarefa segue | 1.D8 |
 | Extração que não perde linha | Regressão no corpus real; falha silenciosa = 0 | 1.A5, 1.A6 |
-| Score do dado externo prevê o erro | Gabarito do dado externo; taxa de erro por classe com intervalo; se "Confirmado" erra como "Provável", a classe não serve (Espec. 15, §9) | 2.19 |
+| Score do dado externo prevê o erro | Gabarito do dado externo; taxa de erro por resultado e por agente, com intervalo; se APROVADO erra tanto quanto REVISÃO, o desenho volta à mesa (Espec. 15, §9) | 3.8 |
 
 ## 5. Riscos
 
