@@ -10,7 +10,6 @@ Entradas (não editar a planilha à mão; regere):
 - pesquisa/ponte.json ............ as plataformas-ponte, com compatibilidade e utilidade
 - pesquisa/res_*.json ............ 1ª rodada: fornecedores de dados por API (integração definitiva)
 - combinacao.py .................. a combinação proposta, a cobertura por etapa e as perguntas
-- plano_por_etapa.py ............. a escolha da 1ª rodada por etapa (marca "escolhido")
 
 As duas métricas (definição do dono, 24/11/2026), sobre as ferramentas DA PLATAFORMA:
 - Compatibilidade = ferramentas da plataforma ligadas ao tema da Oria ÷ total de ferramentas dela
@@ -27,7 +26,6 @@ from openpyxl.utils import get_column_letter
 AQUI = Path(__file__).resolve().parent
 sys.path.insert(0, str(AQUI))  # python -I não põe a pasta do script no path
 from combinacao import COBERTURA, COMBINACAO, ETAPAS, PERGUNTAS_FIXAS  # noqa: E402
-from plano_por_etapa import PLANO  # noqa: E402
 
 FONTE = "Arial"
 TINTA = "1F2937"        # texto principal
@@ -207,14 +205,26 @@ def main(saida: str):
     forn = []
     for nome in ("res_risco.json", "res_fiscal_bancario.json", "res_mercado_infra.json", "res_ia_plataforma.json"):
         forn.extend(json.loads((AQUI / "pesquisa" / nome).read_text(encoding="utf-8")))
-    # Escolhas da 1ª rodada (plano_por_etapa.PLANO), por prefixo exato do nome da empresa no JSON.
+    # Escolhas da 1ª rodada, por prefixo exato do nome da empresa no JSON.
     # Comparar por pedaço de texto marcava B3, n8n Magalu e Infosimples fiscal por engano.
     escolhidos = ("Direct Data", "Autentique", "n8n Community self-host em VM AWS", "Anthropic Claude API",
                   "Google Gemini no Vertex", "Microsoft Azure AI Document", "Construir — Web Service NFe",
                   "SERPRO", "Pluggy", "Núclea", "JUDIT", "Infosimples", "Fontes oficiais diretas", "GDELT",
                   "ONR", "Fontes públicas gratuitas", "Receita Federal — Painel", "DBOS", "Langfuse",
                   "Biblioteca open source", "Supabase Pro", "AWS S3", "Supabase Auth", "Não há fornecedor")
-    assert len(PLANO) > 0
+    # A mesma empresa avaliada em duas categorias (medido: só a Neoway, em risco e em benchmarks,
+    # ambas Rejeitado) vira UMA linha, com as categorias juntas — o dono pediu planilha sem repetição.
+    juntos = {}
+    for x in forn:
+        chave = x["empresa"].strip().lower()  # nome completo: "Infosimples" e "Infosimples (APIs fiscais)" são produtos diferentes
+        if chave in juntos:
+            a = juntos[chave]
+            assert a["veredito"] == x["veredito"], f"{x['empresa']}: vereditos diferentes, não juntar às cegas"
+            a["categoria"] += " · " + x["categoria"]
+            a["motivo"] += " | " + x["motivo"]
+        else:
+            juntos[chave] = dict(x)
+    forn = list(juntos.values())
     ordem_v = {"Recomendado": 0, "Condicional": 1, "Rejeitado": 2}
     forn.sort(key=lambda x: (x["etapas"][0], ordem_v.get(x["veredito"], 9)))
     dados = []

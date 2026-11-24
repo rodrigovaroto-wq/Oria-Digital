@@ -311,7 +311,7 @@ def main(saida: str):
         ("Etapas — as 17 etapas do processo (E01–E17). É a chave que liga esta planilha à Planilha 2.", False),
         ("Funcionalidades — o que o sistema faz, com a decisão de origem, o agente, a entrega (Piloto/V1/Futuro), a situação hoje e a natureza.", False),
         ("Integrações — cada sistema externo com que o Oria Digital precisa falar.", False),
-        ("Dados a captar — os 179 dados do plano de captação (Espec. 13, verificado em 27/10/2026), com a etapa, o agente que usa e a origem.", False),
+        ("Dados a captar — a etapa, o agente e a origem de cada um dos 179 dados. O detalhe de cada dado (o que buscar, onde, criticidade, parceiro) está no Plano_de_Captacao_v3.xlsx (Arquitetura do Sistema/2 Especificação/13_anexos), pelo mesmo número de linha — não é copiado aqui para não haver dado repetido.", False),
         ("Resumo — contagens por etapa, em fórmula.", False),
         ("", False),
         ("Como ler a coluna 'Natureza'", True),
@@ -361,12 +361,15 @@ def main(saida: str):
     src = openpyxl.load_workbook(CAPTACAO, data_only=True)["Plano por item"]
     rows = [r for r in src.iter_rows(min_row=2, values_only=True) if r[0] is not None]
     ws = wb.create_sheet("Dados a captar")
-    cols = ["#", "Esfera", "Frente", "Tema", "O que vamos buscar", "Resultado esperado", "Criticidade", "Status atual", "Onde buscar (recomendado)", "Meio", "Origem", "Etapa principal", "Agente que usa", "Precisa de parceiro?", "Parceiro sugerido (27/10)", "Observação / risco"]
-    cabecalho(ws, cols, [5, 18, 22, 22, 40, 36, 10, 11, 32, 24, 12, 10, 16, 10, 26, 40])
+    # Só o que é NOVO em relação ao Plano_de_Captacao_v3.xlsx: a etapa, o agente e a origem.
+    # A versão anterior copiava as 179 linhas inteiras (medido: 179 de 179 iguais à origem) e o dono
+    # pediu o repositório sem dado repetido. O "#" é o número da linha lá; "Tema" fica só para ler.
+    cols = ["# no Plano de Captação", "Tema", "Etapa principal", "Agente que usa", "Origem"]
+    cabecalho(ws, cols, [12, 34, 14, 20, 14])
     dados = []
     for r in rows:
-        (num, esfera, frente, tema, buscar, resultado, crit, status, onde, meio, _fact, parceiro, sugerido, _esf, _c1, _c2, obs) = r
-        dados.append((num, esfera, frente, tema, buscar, resultado, crit, status, onde, meio, origem_por_meio(meio or ""), etapa_por_meio(frente or "", meio or ""), agente_por_frente(frente or ""), parceiro, sugerido, obs))
+        num, frente, tema, meio = r[0], r[2] or "", r[3], r[9] or ""
+        dados.append((num, tema, etapa_por_meio(frente, meio), agente_por_frente(frente), origem_por_meio(meio)))
     linhas(ws, dados)
     n_dados = len(dados)
 
@@ -384,7 +387,7 @@ def main(saida: str):
         ws.cell(row=i, column=8, value=f'=COUNTIFS(Funcionalidades!$B$2:$B${nf},A{i},Funcionalidades!$J$2:$J${nf},"Existe*")')
         ws.cell(row=i, column=9, value=f'=COUNTIFS(Funcionalidades!$B$2:$B${nf},A{i},Funcionalidades!$I$2:$I${nf},"Piloto*")')
         ws.cell(row=i, column=10, value=f'=COUNTIF(Integrações!$E$2:$E${len(I) + 1},"*"&A{i}&"*")')
-        ws.cell(row=i, column=11, value=f"=COUNTIF('Dados a captar'!$L$2:$L${n_dados + 1},\"*\"&A{i}&\"*\")")
+        ws.cell(row=i, column=11, value=f"=COUNTIF('Dados a captar'!$C$2:$C${n_dados + 1},\"*\"&A{i}&\"*\")")
     tot = len(ETAPAS) + 2
     ws.cell(row=tot, column=2, value="TOTAL")
     for col in range(3, 10):
