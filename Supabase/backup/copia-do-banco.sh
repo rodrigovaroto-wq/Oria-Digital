@@ -158,8 +158,13 @@ R -d "$RESTAURO_DB" -c "$sonda" >"$OUT/sonda-restaurada.txt"
 # 24/11/2026: com o segredo presente na origem, este passo acusou exatamente `envio_segredo_no_vault`
 # — a prova de que a comparação não é cega. Em produção ele já falta (ESTADO.md), então lá não muda.
 FORA_DE_PROPOSITO="envio_segredo_no_vault"
-perdido="$(comm -13 "$OUT/sonda-producao.txt" "$OUT/sonda-restaurada.txt" | grep -vxF "$FORA_DE_PROPOSITO" || true)"
-if comm -13 "$OUT/sonda-producao.txt" "$OUT/sonda-restaurada.txt" | grep -qxF "$FORA_DE_PROPOSITO"; then
+# `LC_ALL=C sort` nos dois: o `order by` de cada banco segue a collation dele (en_US ignora `_`),
+# e o `comm` exige a mesma ordem — sem isso, chave comum vira "só na cópia" (alarme falso).
+LC_ALL=C sort -o "$OUT/sonda-producao.txt" "$OUT/sonda-producao.txt"
+LC_ALL=C sort -o "$OUT/sonda-restaurada.txt" "$OUT/sonda-restaurada.txt"
+so_na_copia="$(LC_ALL=C comm -13 "$OUT/sonda-producao.txt" "$OUT/sonda-restaurada.txt")"
+perdido="$(printf '%s\n' "$so_na_copia" | grep -vxF -e "$FORA_DE_PROPOSITO" -e '' || true)"
+if printf '%s\n' "$so_na_copia" | grep -qxF "$FORA_DE_PROPOSITO"; then
   log "esperado: $FORA_DE_PROPOSITO falta na cópia (o Vault não é copiado; recadastrar após restaurar)"
 fi
 log "sonda: produção sem $(wc -l <"$OUT/sonda-producao.txt") item(ns); cópia sem $(wc -l <"$OUT/sonda-restaurada.txt")"

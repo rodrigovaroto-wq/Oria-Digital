@@ -11,7 +11,7 @@
 #     sem erro está explicada em `Supabase/backup/copia-do-banco.sh`);
 #   - a sonda roda na cópia restaurada e não pode faltar nada que falta só nela;
 #   - cada arquivo listado em `storage.objects` foi baixado; um que falhe reprova.
-# A restauração roda TODO DIA, num Postgres descartável da mesma versão de produção.
+# A restauração roda TODO DIA, num Postgres descartável da versão do pg_dump (igual ou mais nova que produção).
 #
 # POR QUE O ARTEFATO SOBE ANTES DA CONFERÊNCIA. Se a conferência reprovar, o arquivo do dia ainda
 # existe (melhor que nada) e o job fica vermelho dizendo o que não bateu.
@@ -73,7 +73,9 @@ jobs:
           echo "produção: PostgreSQL $major; pg_dump do runner: $cliente"
           # pg_dump precisa ser da mesma versão de produção ou mais novo.
           test "$cliente" -ge "$major"
-          echo "major=$major" >> "$GITHUB_OUTPUT"
+          # A restauração roda na versão do CLIENTE (>= produção): restaurar em servidor mais velho que
+          # o pg_dump que gerou a cópia não é suportado (revisão: cliente 18.6 × produção 17.6).
+          echo "major=$cliente" >> "$GITHUB_OUTPUT"
 
       - name: Copiar o banco (snapshot + contagem + dump)
         run: Supabase/backup/copia-do-banco.sh copiar "$RUNNER_TEMP/copia"
@@ -88,7 +90,12 @@ jobs:
           tar -C copia --exclude=.sessao.txt -cf - . | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
             --passphrase-fd 3 -o copia.tar.gpg 3<<<"$BACKUP_PASSPHRASE"
           # Prova de que o arquivo cifrado abre com a senha cadastrada (cifra que não decifra = sem cópia).
-          gpg --batch --pinentry-mode loopback --passphrase-fd 3 -d copia.tar.gpg 3<<<"$BACKUP_PASSPHRASE" | tar -t | grep -q 'banco.dump'
+          # A lista vai para arquivo ANTES do grep: `grep -q` fecha o pipe ao achar o nome, o tar morre
+          # de SIGPIPE e, sob pipefail, o passo reprova sem guardar nada — reproduzido na revisão com
+          # 400 arquivos no Storage (3 de 3 rodadas, PIPESTATUS 2 141 0).
+          gpg --batch --pinentry-mode loopback --passphrase-fd 3 -d copia.tar.gpg 3<<<"$BACKUP_PASSPHRASE" | tar -t >lista.txt
+          grep -qx './banco.dump' lista.txt
+          echo "arquivos na cópia: $(wc -l <lista.txt)"; rm lista.txt
           ls -l copia.tar.gpg
           echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
 
@@ -101,7 +108,7 @@ jobs:
           if-no-files-found: error
           compression-level: 0  # já está cifrado: comprimir de novo só gasta tempo
 
-      - name: Postgres descartável para a restauração (mesma versão de produção)
+      - name: Postgres descartável para a restauração (versão do pg_dump, >= produção)
         run: |
           set -euo pipefail
           docker run -d --name restauro -e POSTGRES_PASSWORD=postgres -p 5432:5432 "postgres:${{ steps.versao.outputs.major }}"

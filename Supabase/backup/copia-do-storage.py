@@ -31,16 +31,22 @@ def main() -> int:
         return 1
     api = os.environ.get("SUPABASE_URL") or f"https://{usuario.split('.', 1)[1]}.supabase.co"
 
-    lista = subprocess.run(
+    # Sem check=True: o traceback dele imprime a lista de argumentos, com a URL e a senha; se a senha
+    # tiver `\\` ou `'`, o repr a escapa e a máscara de segredo do GitHub deixa de casar.
+    r = subprocess.run(
         ["psql", url_banco, "-X", "-qAt", "-v", "ON_ERROR_STOP=1", "-F", "\t", "-c",
-         "set row_security = off; select bucket_id, name from storage.objects where name is not null order by 1, 2"],
-        check=True, capture_output=True, text=True).stdout.splitlines()
-    objetos = [linha.split("\t", 1) for linha in lista if linha]
+         "set row_security = off; select bucket_id, coalesce(metadata->>'size', ''), name"
+         " from storage.objects where name is not null order by 1, 3"],
+        capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"ERRO ao listar storage.objects:\n{r.stderr}", file=sys.stderr)
+        return 1
+    objetos = [linha.split("\t", 2) for linha in r.stdout.splitlines() if linha]
     # `row_security = off` acima: se o papel passasse pela RLS, o Postgres RECUSA a consulta em vez
     # de devolver só parte da lista.
 
     falhas, total_bytes = [], 0
-    for bucket, nome in objetos:
+    for bucket, tamanho, nome in objetos:
         destino = os.path.join(pasta, bucket, nome)
         if not os.path.abspath(destino).startswith(os.path.abspath(pasta) + os.sep):
             falhas.append(f"{bucket}/{nome}: nome sai da pasta de destino")
@@ -53,7 +59,18 @@ def main() -> int:
             with urllib.request.urlopen(pedido, timeout=120) as r, open(destino, "wb") as f:
                 while bloco := r.read(1 << 20):
                     f.write(bloco)
-            total_bytes += os.path.getsize(destino)
+            # A conexão que cai no meio não levanta exceção: `read()` devolve b"" e o laço acaba com o
+            # arquivo pela metade (revisão: 100.000 de 5.000.000 bytes, sem erro, Python 3.13). O tamanho
+            # que o Storage registrou é a régua; sem ele, o Content-Length.
+            esperado = int(tamanho) if tamanho else r.headers.get("Content-Length")
+            obtido = os.path.getsize(destino)
+            if esperado is None:
+                falhas.append(f"{bucket}/{nome}: sem tamanho conhecido para conferir o download")
+                continue
+            if obtido != int(esperado):
+                falhas.append(f"{bucket}/{nome}: baixados {obtido} de {esperado} bytes")
+                continue
+            total_bytes += obtido
         except Exception as e:  # qualquer falha conta: a cópia é tudo ou é falha
             falhas.append(f"{bucket}/{nome}: {e}")
 
