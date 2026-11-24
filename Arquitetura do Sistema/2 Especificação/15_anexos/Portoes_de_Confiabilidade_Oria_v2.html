@@ -131,13 +131,13 @@ footer{padding-top:1.5rem;color:var(--muted);font-size:.82rem;overflow-wrap:anyw
 <body>
 <div class="wrap">
 <header>
-  <div class="eyebrow">Oria Digital · Espec. 15 · §5A v2 · 23/11/2026</div>
+  <div class="eyebrow">Oria Digital · Espec. 15 · §5A v2 · registro v0.1.6 · 24/11/2026</div>
   <h1>Portões de confiabilidade dos dados externos</h1>
   <p class="lede">Cada dado captado fora do cliente (Banco Central, IBGE, CVM, tribunais, bureau, Open Finance) recebe notas por dimensão. Cada agente de IA tem um portão com pesos e mínimos próprios. Só o dado de alta confiabilidade passa sozinho para a etapa seguinte.</p>
   <div class="status">
-    <span class="tag"><b>Status:</b> hipótese inicial, roda em modo sombra</span>
+    <span class="tag"><b>Status:</b> decidido (D15 a D15.15); números a calibrar</span>
     <span class="tag"><b>Pesos:</b> mediana de 3 avaliações independentes</span>
-    <span class="tag"><b>Bloqueia de verdade:</b> só depois da calibração</span>
+    <span class="tag"><b>No piloto:</b> vetos e pisos bloqueiam; score em sombra até a calibração</span>
   </div>
 </header>
 
@@ -203,7 +203,7 @@ footer{padding-top:1.5rem;color:var(--muted);font-size:.82rem;overflow-wrap:anyw
   <h2 id="t-resultado">O que o portão devolve</h2>
   <div class="res-grid">
     <div class="res"><span class="chip APROVADO">APROVADO</span><p>Nenhum veto, nenhuma trava, cobertura, pisos e score acima do mínimo. <b>Segue sozinho.</b></p></div>
-    <div class="res"><span class="chip REVISÃO">REVISÃO</span><p>Nenhum veto e score ≥ 50, mas algo abaixo do exigido. <b>Só segue liberado por humano</b>, com ressalva no book.</p></div>
+    <div class="res"><span class="chip REVISÃO">REVISÃO</span><p>Nenhum veto e score ≥ 50, mas algo abaixo do exigido. <b>Só segue liberado por um analista</b>, com justificativa e ressalva no book.</p></div>
     <div class="res"><span class="chip REPROVADO">REPROVADO</span><p>Veto, score abaixo de 50, ou "nada consta" sem cobertura. <b>Não segue.</b> Recapturar na fonte primária ou registrar a ausência.</p></div>
     <div class="res"><span class="chip QUARENTENA">QUARENTENA</span><p>Só na entrada (Captador). <b>Gravado com o motivo, sem sair para ninguém.</b> Em conflito, guarda as duas versões.</p></div>
   </div>

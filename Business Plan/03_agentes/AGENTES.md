@@ -46,8 +46,9 @@ são do **ambiente de desenvolvimento** (quem constrói o sistema), não do prod
    com pesos, score mínimo, cobertura mínima e pisos próprios. Os números estão **só** na
    [Espec. 15, §5A](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md);
    em que fase nasce o portão de cada agente está no [plano](../06_execucao/PLANO_DE_EXECUCAO.md),
-   Trilha K. No piloto, o portão roda em modo sombra (não bloqueia); Supervisor, Auditor e
-   Autoaprimoramento não têm pesos próprios.
+   Trilha K. No piloto, vetos e pisos já bloqueiam e o score ponderado roda em modo sombra (D15.4);
+   o dado em REVISÃO segue só liberado por um analista, com justificativa (D15.3). Supervisor,
+   Auditor e Autoaprimoramento não têm pesos próprios.
 
 ## 3. Fluxo entre os agentes
 

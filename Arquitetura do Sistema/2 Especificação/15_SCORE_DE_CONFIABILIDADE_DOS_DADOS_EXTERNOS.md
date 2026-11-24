@@ -211,8 +211,9 @@ mesma distinção no grau 6. Ele **aparece**, com o motivo.
 | **PARA** | Só as etapas que **dependem** desse dado esperam; as independentes seguem. Vai ao humano com o prazo da gravidade | "Diagnóstico não confiável não sai como definitivo" (v0.1.2 §5); E5 |
 
 **Furar o portão** é possível, mas é decisão humana em campo estruturado (N-B5b): quem, por quê, com
-qual evidência. Dado de gravidade crítica: só o Sócio (como na E3-1). Todo furo entra na revisão
-semanal (E4) — é o antídoto contra Goodhart.
+qual evidência. **Qualquer analista libera, em qualquer gravidade** (D15.3, decisão do dono em
+24/11/2026): liberar o **dado** não é aprovar o **diagnóstico**, que continua pela E3 e pela E3-1. Todo
+furo entra na revisão semanal (E4, D15.13) — é o antídoto contra Goodhart.
 
 | Etapa (fragmento do processo) | O que o portão pergunta | Dimensões que mais pesam | Ao reprovar |
 |---|---|---|---|
@@ -252,9 +253,11 @@ Das 11 divergências, em 6 a v1 deixava passar o que a maioria segurava. A v2 ad
 
 O que mudou, item a item, está no §5A.8.
 
-**Status: hipótese inicial, não medida** (D15.8). Os números rodam em **modo sombra**: calculam,
-gravam e mostram, sem barrar. Só passam a bloquear depois da etapa 4 do §12. Até lá, só os vetos
-bloqueiam (D15.4).
+**Status: hipótese inicial, não medida** (D15.8). **No piloto, os vetos e os pisos já bloqueiam**
+(D15.4, decisão do dono em 24/11/2026): veto reprova, piso falho manda para REVISÃO. As travas do §4
+(conflito, identidade por nome, opinião fora do Risco, frescor < 60) contam como pisos globais e
+bloqueiam junto. **O score ponderado e a cobertura rodam em modo sombra** (calculam, gravam e
+mostram, sem barrar) até a calibração (etapa 4 do §12; item 3.8 do plano).
 
 ### 5A.1 — Como cada nota é dada (rubrica objetiva, 0 a 100)
 
@@ -329,11 +332,11 @@ três avaliações apontaram. O teto sai quando a fonte tem 30 conferências.
 | Resultado | Critério objetivo | O que acontece |
 |---|---|---|
 | **APROVADO** | Nenhum veto, nenhuma trava, cobertura ≥ mínimo, todos os pisos, score ≥ mínimo | Segue sozinho |
-| **REVISÃO** | Nenhum veto e score ≥ 50, mas alguma trava, cobertura, piso ou score abaixo do exigido | **Não segue sozinho.** Fila humana com o motivo e o efeito. Só segue liberado por humano (Sócio na gravidade alta ou crítica), com ressalva no book |
+| **REVISÃO** | Nenhum veto e score ≥ 50, mas alguma trava, cobertura, piso ou score abaixo do exigido | **Não segue sozinho.** Fila humana com o motivo e o efeito. Só segue liberado por humano — qualquer analista, com justificativa (D15.3) —, com ressalva no book |
 | **REPROVADO** | Qualquer veto; score < 50; nas Entregas, custódia < 50; "nada consta" sem cobertura | Não segue. Nova captura na fonte primária, ou a ausência registrada com motivo — nunca zero |
 | **QUARENTENA** (só no Captador) | O que seria REVISÃO na entrada | Gravado com score e motivo, sem sair para ninguém. Conflito entre fontes: **guarda as duas versões** |
 
-### 5A.5 — As 7 regras aprovadas pelo dono (23/11/2026)
+### 5A.5 — As 7 regras aprovadas pelo dono (23/11/2026; D15.9–D15.15)
 
 | # | Regra | Efeito objetivo |
 |---|---|---|
@@ -356,7 +359,7 @@ Risco, rotulado "opinião do bureau X", e em nenhum outro agente.
 Gerados por [`15_anexos/casos_do_score.py`](15_anexos/casos_do_score.py), que é a fonte desta
 tabela. A proposta em página (com impressão em PDF) está em
 [`15_anexos/Portoes_de_Confiabilidade_Oria_v2.html`](15_anexos/Portoes_de_Confiabilidade_Oria_v2.html):
-é um **retrato derivado** do §5A em 23/11/2026, não uma fonte; se o §5A mudar, a página fica velha
+é um **retrato derivado** do §5A em 24/11/2026 (com as decisões da v0.1.6), não uma fonte; se o §5A mudar, a página fica velha
 até ser refeita. Se um número do §5A mudar, ele muda primeiro no script, e a tabela é colada de novo. APRO =
 aprovado · REV = revisão · REPR = reprovado · QUAR = quarentena.
 
@@ -471,7 +474,7 @@ proveniência do W3C PROV, sem adotar RDF: só a forma, para não inventarmos no
 | Prazo de validade (B2) por fonte | Até quando o dado vale; e o prazo crítico (veto) | Cadência publicada da fonte; R7 da Espec. 13 | Catálogo; dono aprova |
 | Piso por (tipo × etapa × dimensão) | O mínimo para seguir | Pelo custo dos dois erros (§9, passo 4) | Dono, por decisão registrada |
 | Histórico mínimo (A2) | Quantas conferências antes de a fonte sair de "sem histórico" | Limite inferior de Wilson/Jeffreys; a mesma lógica dos 300 da D6 | Dono |
-| Quem fura o portão | Analista, Sócio | Pela gravidade (G5) | Dono (D15.3) |
+| Quem fura o portão | Qualquer analista, em qualquer gravidade, com justificativa | Decidido | Dono (D15.3, 24/11/2026) |
 
 ---
 
@@ -480,8 +483,10 @@ proveniência do W3C PROV, sem adotar RDF: só a forma, para não inventarmos no
 1. **Catálogo e vetos primeiro.** São determinísticos e não precisam de calibração: autorização,
    sinal de execução, custódia, validade. Cada veto nasce com o seu invariante **medido não-vazio**
    (regra 2): plantar a falha, ver o portão reprovar, contar os asserts.
-2. **Modo sombra (N0).** Calcular todas as dimensões e a classe, gravar em `avaliacao_dado`, mostrar
-   no painel — **sem barrar nada**. Durante o piloto inteiro.
+2. **Piloto: vetos e pisos bloqueando, score em sombra** (D15.4). Calcular todas as dimensões, a
+   classe, a cobertura e o score, gravar em `avaliacao_dado`, mostrar no painel. Vetos reprovam e
+   pisos (com as travas) mandam para REVISÃO desde o primeiro mandato; o score e a cobertura **não
+   barram** até a calibração.
 3. **Gabarito do dado externo.** Uma amostra de observações rotuladas por humano (certa, errada, não
    é desta empresa), reusando o gabarito que já existe (`0126`). Parte cega, como na D6.
 4. **Medir se a classe prevê o erro.** Para cada classe, a taxa de erro observada com o seu limite
@@ -537,18 +542,23 @@ proveniência do W3C PROV, sem adotar RDF: só a forma, para não inventarmos no
 
 ---
 
-## §11 — Decisões do dono (abertas)
+## §11 — Decisões do dono (respondidas em 24/11/2026; registro v0.1.6, seção 22)
 
-| Código | Pergunta | Recomendação |
-|---|---|---|
-| **D15.1** | O documento oficial trazido pelo cliente (SPED, Registrato, certidões, canal E2) entra no score? | **Sim**, com custódia (B7) como veto: sem recibo ou hash, não conta como externo |
-| **D15.2** | O rótulo é classe (Confirmado… Não julgável) ou número de 0 a 100? | **Classe**, ao lado da origem da fonte. O número só no painel interno |
-| **D15.3** | Quem pode furar o portão? | Analista para gravidade baixa e média; **Sócio** para alta e crítica (como a E3-1). Sempre com justificativa |
-| **D15.4** | Algum portão bloqueia antes do modo sombra acabar? | **Só os vetos** (§4, passo 1). Pisos esperam a calibração |
-| **D15.5** | O score aparece para o cliente ou o credor? | **Não o número.** A ressalva com motivo e efeito, sim (regra 1). Mostrar a classe depende de parecer |
-| **D15.6** | Quem rotula a amostra de calibração? | O mesmo papel do gabarito (D4, ainda a indicar) |
-| **D15.7** | Divergência com o documento do cliente baixa o score do externo? | **Não** (§3, B1; §10, item 2) |
-| **D15.8** | Aprovar os pesos, mínimos, pisos e tetos do §5A (v2) como ponto de partida do modo sombra? | **Sim, como hipótese.** As 7 regras do §5A.5 foram aprovadas pelo dono em 23/11/2026; os números rodam em sombra e só bloqueiam depois da etapa 4 (§12) |
+Todas fechadas. O texto oficial e a fala do dono estão no
+[registro v0.1.6](../../Business%20Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.6.html);
+aqui fica o resumo e o que mudou em relação à recomendação desta especificação.
+
+| Código | Pergunta | Decisão do dono | Igual à recomendação? |
+|---|---|---|---|
+| **D15.1** | O documento oficial trazido pelo cliente (SPED, Registrato, certidões) entra no score? | Sim, só com recibo, hash ou autenticidade conferidos | Sim |
+| **D15.2** | O que o analista vê no portal interno? | Resultado + classe + score, com cobertura e motivo | Sim (a classe virou rótulo na v2) |
+| **D15.3** | Quem pode furar o portão? | **Qualquer analista, em qualquer gravidade**, com justificativa | **Não** (recomendação: Sócio na alta e crítica). A E3 e a E3-1 continuam valendo para o diagnóstico |
+| **D15.4** | O que bloqueia antes da calibração? | **Vetos e pisos** (as travas contam como pisos globais); score e cobertura em sombra | **Não** (recomendação: só os vetos) |
+| **D15.5** | O cliente ou o credor vê o score? | Só a ressalva, com motivo e efeito | Sim |
+| **D15.6** | Quem rotula a amostra de calibração? | O dono, no piloto (como na D4-1) | Recomendação era "o papel do gabarito"; o dono assumiu os dois |
+| **D15.7** | Divergência com o cliente baixa o score do externo? | Não, é o achado | Sim |
+| **D15.8** | Os números do §5A (v2) são o ponto de partida? | Sim, como hipótese a calibrar | Sim |
+| **D15.9–D15.15** | As 7 regras do §5A.5 | Aprovadas | — |
 
 ---
 
@@ -556,11 +566,11 @@ proveniência do W3C PROV, sem adotar RDF: só a forma, para não inventarmos no
 
 | Etapa | O que | Depende de | Pronto quando |
 |---|---|---|---|
-| **0** | Decisões D15.1–D15.8 | — | Registradas numa nova versão do registro de decisões |
+| **0** | Decisões D15.1–D15.15 | — | **Feito em 24/11/2026:** registro v0.1.6, seção 22 |
 | **1** | Catálogo `fonte_externa` com origem, cadência, validade e origem compartilhada | Espec. 13 etapa da `consulta_externa`; 1.C1–1.C3 | Toda fonte captada no catálogo; fonte sem origem declarada aparece como "sem origem" |
 | **2** | Vetos no banco | 1.B7, 1.B6 | Cada veto com invariante medido não-vazio (regra 2) |
 | **3** | Dimensões e classe em modo sombra (N0) + painel | 1.B5, 1.C4 | Toda observação externa tem avaliação por dimensão, com estado; nenhuma em branco sem motivo |
-| **4** | Gabarito do dado externo e medição por classe | 1.J2, D15.6 | Taxa de erro por classe medida, com intervalo |
+| **4** | Gabarito do dado externo e medição por classe (rotulado pelo dono no piloto, D15.6) | 1.J2, D15.6 | Taxa de erro por classe medida, com intervalo |
 | **5** | Pisos fixados e portões ligados em degraus | Etapa 4; decisão do dono | Cada portão ligado tem a decisão que o fixou; teste que reprova sem o portão |
 | **6** | Rebaixamento automático e revisão semanal dos furos | 2.10 (E4) | Piora medida rebaixa o portão (teste) |
 

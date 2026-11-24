@@ -1,7 +1,7 @@
 # Decisões do Oria Digital
 
 **Fonte oficial das decisões de negócio e de produto:**
-[`oria_digital_decisoes_e_pendencias_v0.1.5.html`](oria_digital_decisoes_e_pendencias_v0.1.5.html)
+[`oria_digital_decisoes_e_pendencias_v0.1.6.html`](oria_digital_decisoes_e_pendencias_v0.1.6.html)
 (abrir no navegador; autocontido).
 
 - Seções 1–18: o registro v0.1.2, preservado sem alteração.
@@ -10,6 +10,9 @@
   técnicos derivados (19.15).
 - **Seções 20 e 21**: as decisões da Fase 4 (23/11/2026): a **D6-1** (a classificação de documentos
   volta a N1 junto com a extração) e a **G5-1** (gravidade "alto" = > 1% do EBITDA ou da dívida).
+- **Seção 22** (24/11/2026): o score de confiabilidade do dado externo — **D15**, as respostas do dono
+  **D15.1–D15.8** e as 7 regras **D15.9–D15.15** —, a **D4-1** (o dono monta o gabarito do piloto) e a
+  **J7** (o slide 5 do deck mantém "mais de 30 fontes" como meta).
 - Onde uma decisão revisa outra, as duas ficam registradas e o adendo diz qual vale.
 
 O registro guarda **decisões**, não implementação. O que já está construído, e a evidência, está no
@@ -17,7 +20,7 @@ plano de execução ([`../06_execucao/PLANO_DE_EXECUCAO.md`](../06_execucao/PLAN
 
 ## Como citar
 
-Pelo código da decisão: `K6`, `B3b-1`, `N-C7a`, `D6-1`, `G5-1`. Os demais documentos da pasta citam o código e
+Pelo código da decisão: `K6`, `B3b-1`, `N-C7a`, `D6-1`, `G5-1`, `D15.4`. Os demais documentos da pasta citam o código e
 **não copiam** o texto da decisão. Em dúvida de interpretação, a fala completa da entrevista, pergunta
 a pergunta, está em [`../99_historico/entrevista/03_rascunho_adendo_v0.1.3.md`](../99_historico/entrevista/03_rascunho_adendo_v0.1.3.md).
 
@@ -25,9 +28,9 @@ a pergunta, está em [`../99_historico/entrevista/03_rascunho_adendo_v0.1.3.md`]
 
 1. Nunca editar a versão vigente. Uma mudança vira **nova versão** (v0.1.6, v0.1.7…), com um adendo no
    fim: código, data, fala do dono, decisão afetada e qual passa a valer.
-2. A versão nova é gerada a partir da anterior pelo gerador da versão, como a v0.1.5 foi gerada da
-   v0.1.4 por [`gerar_v015.py`](gerar_v015.py): copie-o para `gerar_v016.py`, troque o adendo e rode-o
-   sobre a v0.1.5. Confira que todo o texto da versão anterior continua na nova (só o título e o
+2. A versão nova é gerada a partir da anterior pelo gerador da versão, como a v0.1.6 foi gerada da
+   v0.1.5 por [`gerar_v016.py`](gerar_v016.py): copie-o para `gerar_v017.py`, troque o adendo e rode-o
+   sobre a v0.1.6. Confira que todo o texto da versão anterior continua na nova (só o título e o
    número da versão mudam).
 3. A versão anterior e o gerador dela vão para
    [`../99_historico/registro_de_decisoes/`](../99_historico/registro_de_decisoes/). Depois de mover,
@@ -39,7 +42,7 @@ grep -rn "B3b-1" "Business Plan" --include=*.md
 ```
 
 ```bash
-python3 -I "Business Plan/07_decisoes/gerar_v015.py" "Business Plan/99_historico/registro_de_decisoes/oria_digital_decisoes_e_pendencias_v0.1.4.html" /tmp/v015.html
+python3 -I "Business Plan/07_decisoes/gerar_v016.py" "Business Plan/99_historico/registro_de_decisoes/oria_digital_decisoes_e_pendencias_v0.1.5.html" /tmp/v016.html
 ```
 
 ## Versões
@@ -50,4 +53,5 @@ python3 -I "Business Plan/07_decisoes/gerar_v015.py" "Business Plan/99_historico
 | 0.1.2 | 18/11/2026 | Pergunta sobre o escopo da v1, sem resposta | [`99_historico/registro_de_decisoes/`](../99_historico/registro_de_decisoes/) |
 | 0.1.3 | 19/11/2026 | Entrevista de definição completa: 88 decisões | [`99_historico/registro_de_decisoes/`](../99_historico/registro_de_decisoes/) |
 | 0.1.4 | 23/11/2026 | D6-1: classificação de documentos volta a N1 junto com a extração | [`99_historico/registro_de_decisoes/`](../99_historico/registro_de_decisoes/) |
-| **0.1.5** | 23/11/2026 | G5-1: gravidade "alto" = > 1% do EBITDA ou da dívida | **Esta pasta (vigente)** |
+| 0.1.5 | 23/11/2026 | G5-1: gravidade "alto" = > 1% do EBITDA ou da dívida | [`99_historico/registro_de_decisoes/`](../99_historico/registro_de_decisoes/) |
+| **0.1.6** | 24/11/2026 | D15, D15.1–D15.15 (score do dado externo), D4-1 (gabarito), J7 (slide 5) | **Esta pasta (vigente)** |

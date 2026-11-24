@@ -1,7 +1,7 @@
 # Regras de negócio e definições operacionais
 
 **Fonte oficial** dos parâmetros e das definições que o sistema aplica. Cada regra cita o código da
-decisão no [registro v0.1.5](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.5.html); o texto da
+decisão no [registro v0.1.6](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.6.html); o texto da
 decisão e a fala do dono ficam lá. Os números aqui são **réguas ajustáveis e versionadas** (G5): mudar
 um valor é decisão registrada numa nova versão do registro, nunca edição silenciosa deste arquivo.
 
@@ -89,6 +89,7 @@ um valor é decisão registrada numa nova versão do registro, nunca edição si
 | Benchmarks próprios: só anonimizados, com cláusula contratual; mandato sem cobertura fica de fora | C7 |
 | **Proveniência por dado:** fonte, data de coleta, autorização aplicável e versão do diagnóstico | N-C7a |
 | **Autorização geral por cliente** (não por diagnóstico), com data, fontes e finalidade | N-C7b |
+| **Score do dado externo:** todo dado captado fora do cliente passa pelo portão do agente que o usa. Veto reprova; piso falho manda para REVISÃO, que qualquer analista libera com justificativa; o score ponderado só bloqueia depois da calibração. Divergir do cliente é achado, não baixa o score. Os números estão na [Espec. 15, §5A](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md) | D15, D15.1–D15.15 |
 
 ## 7. Autonomia da IA (D6)
 

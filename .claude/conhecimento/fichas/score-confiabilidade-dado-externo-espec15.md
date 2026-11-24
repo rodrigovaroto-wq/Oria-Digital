@@ -14,11 +14,11 @@ Termos de busca: score, nota, confiabilidade, confiança, qualidade de dados, da
 externa, portão, gate, barreira, piso, limiar, veto, classe, Confirmado, Contestado, Não julgável,
 Admiralty, Almirantado, truth discovery, Fellegi-Sunter, Trilha K, 1.K1, 1.K3, 3.8, 3.9, D15.
 
-**Estado (24/11/2026): no plano, nada construído.** Distribuído pelas fases: decisões D15 no 0.13
-(registro v0.1.6); base e portões dos agentes do piloto em modo sombra na **Trilha K** (1.K1–1.K5;
-só o 1.K2, os vetos, é P1); agentes da Fase 2 no 2.18; furos e alerta de carimbo no 2.19; calibração
-e bloqueio de verdade no 3.8 e 3.9. A tabela "Em que fase nasce o portão de cada agente" está na
-Trilha K do plano.
+**Estado (24/11/2026): decidido e no plano, nada construído.** Decisões no registro v0.1.6, seção 22
+(D15, D15.1–D15.15). Duas respostas do dono **diferem da recomendação da Espec. 15**: pisos já
+bloqueiam no piloto (D15.4; só o score ponderado fica em sombra até o 3.8) e qualquer analista libera
+o dado em REVISÃO, em qualquer gravidade (D15.3). No plano: Trilha K da Fase 1 (1.K2 vetos e 1.K3
+portões dos agentes são P1), 2.18 e 2.19 na Fase 2, 3.8 e 3.9 na Fase 3.
 
 ## O que surpreende quem chega sem ler a Espec. 15
 

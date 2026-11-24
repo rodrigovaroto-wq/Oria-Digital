@@ -1,6 +1,16 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 136 (24/11/2026) — registro de decisões v0.1.6: o score do dado externo decidido
+
+> **Só documentação. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
+
+- **Item 0.13 FEITO.** [Registro v0.1.6](Business%20Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.6.html), seção 22: **D15** (o score), **D15.1–D15.8** (respostas do dono às perguntas da Espec. 15), **D15.9–D15.15** (as 7 regras), **D4-1** (o dono monta o gabarito do piloto) e **J7** (o slide 5 mantém "mais de 30 fontes" como meta). A v0.1.5 e o gerador dela foram para `99_historico/registro_de_decisoes/` com `git mv`.
+- **Duas respostas do dono divergem da recomendação, e mudaram o plano:** **D15.4**, pisos já bloqueiam no piloto (o 1.K3 virou P1; só o score ponderado fica em sombra até o 3.8); **D15.3**, qualquer analista libera o dado em REVISÃO, em qualquer gravidade (a E3 e a E3-1 continuam para o diagnóstico).
+- **Continuam abertas, por escolha do dono:** R1 (quem é o segundo revisor; "indico depois"), N-C5a e A6.
+- **Medido:** da v0.1.5 para a v0.1.6 mudaram só 3 caracteres (versão e data); 90 → 108 decisões com âncora; os geradores regeram a v0.1.5 e a v0.1.6 idênticas byte a byte; 18 de 18 códigos novos citados em documento oficial (verificador provado não-cego: sem J7 ou sem D4-1 no texto, acusa a falta); 0 links relativos quebrados em 238 arquivos `.md` e `.html`.
+
+
 ## SESSÃO 135 (24/11/2026) — o score do dado externo entra no plano, distribuído pelas fases
 
 > **Só documentação. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
