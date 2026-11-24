@@ -2,7 +2,7 @@
 -- 0303 — A FONTE QUE CAÍA E PARECIA NÃO TER NADA: a base comum das fontes externas (Fase A, fatia A2) — catálogo `fonte_externa`,
 --        `consulta_externa` (cada tentativa, com o resultado em QUATRO estados) e `fato_externo` (o dado achado, ligado à consulta que o trouxe),
 --        mais o ponto único de registro `fn_registrar_consulta_externa`, que é quem CLASSIFICA o desfecho
--- (Cria 3 tabelas, 5 funções de gatilho, 1 função de registro, 7 gatilhos (um deles deferido), 22 linhas de catálogo, 3 views de sonda e 33
+-- (Cria 3 tabelas, 5 funções de gatilho, 1 função de registro, 7 gatilhos (um deles deferido), 22 linhas de catálogo, 3 views de sonda e 36
 --  requisitos. Nenhum backfill: as tabelas nascem vazias, o catálogo é seed. Desenho: Espec. 13 §3 e §6, Espec. 15 §7, FASE_A_FONTES_PUBLICAS.md §5 A2.)
 --
 -- O DEFEITO QUE ISTO FECHA ANTES DE ELE EXISTIR (regra 7). A Fase A liga ~20 APIs públicas (mercado, pelo n8n; empresa, pelo servidor do portal). Uma API
@@ -22,8 +22,10 @@
 --       - o status que a FONTE documenta como "não existe" (`fonte_externa.http_inexistente`) -> `nada_encontrado`;
 --       - QUALQUER OUTRO status (1xx, 3xx, 4xx, 5xx)    -> `falhou`. 2xx sem a lista `itens` é recusado: o chamador não leu a resposta, e "não li" não é "vazio".
 --       - PROVA DE LEITURA (achado E do revisor, 24/11): "nada" e "achado" exigem o corpo cru (o hash) e, em fonte de LISTA (CGU CEIS/CNEP, MTE, IBAMA: baixadas
---         inteiras e procuradas pelo CNPJ), `registros_lidos` > 0. 200 com corpo nulo, ou lista vazia/truncada/página de manutenção servida com 200, vira `falhou`: um
+--         inteiras e procuradas pelo CNPJ), `registros_lidos` > 0. 200 com corpo nulo, ou lista vazia/página de manutenção servida com 200, vira `falhou`: um
 --         "[]" sem prova de que a lista foi lida é indistinguível de "a CGU não tem sanção para este CNPJ".
+--         TETO CONHECIDO: `registros_lidos > 0` só pega a lista VAZIA. Uma lista TRUNCADA que ainda traz registros (download cortado no meio) NÃO é detectada aqui, e o "nada" dela
+--         passaria. Um mínimo esperado de registros por fonte (CEIS, CNEP, MTE, IBAMA) é da A4: ela o mede e o põe no catálogo ao conectar cada lista. Até lá, esta migration não promete mais que isso.
 --   * O 404 NÃO é tratado como "não existe" por padrão, e esta é a decisão de desenho que importa: um 404 é também o que uma fonte que MUDOU DE
 --     ENDEREÇO devolve (o risco que o plano já registrou). `http_inexistente` nasce NULO para as 22 fontes do seed e só é preenchido, por fonte, depois de
 --     alguém CONFIRMAR em produção que aquela API devolve esse status para "este CNPJ não consta" e não para "esta rota não existe". Enquanto for nulo,
@@ -35,7 +37,7 @@
 --
 -- AS REGRAS NO BANCO, não na tela (o que o portal e o n8n não conseguem desfazer):
 --   1. `falhou` nunca vira `nada_encontrado`: `consulta_externa` é IMUTÁVEL (gatilho BEFORE UPDATE recusa QUALQUER atualização, inclusive do service_role e do
---      superusuário; nova tentativa = nova linha). Não há como corrigir "falhou" para "nada" nem por engano nem por script. E o DELETE também é recusado (achado F do
+--      superusuário em sessão normal; só um superusuário com session_replication_role = replica passa por cima dos gatilhos (é o que a limpeza do teste usa, de propósito); nova tentativa = nova linha). Não há como corrigir "falhou" para "nada" nem por engano nem por script. E o DELETE também é recusado (achado F do
 --      revisor): o service_role tem DELETE, e apagar a linha "falhou" mais nova faz a "nada_encontrado" ANTIGA voltar a ser a mais recente — o mesmo defeito por outra
 --      porta. A ÚNICA exceção é a cascata de quem apaga o MANDATO (`caso_id ... on delete cascade`; o gatilho só deixa passar quando o caso já não existe): o dado de
 --      cliente sai com o mandato. Consulta de mercado (sem mandato) nunca se apaga.
@@ -58,7 +60,7 @@
 --      mandato (`fn_pode_escrever_caso`) ou conexão de serviço; mercado: Sócio ou conexão de serviço. O `anon` não executa a função.
 --      DATA E PRAZO SÃO DO BANCO (achado D, ALTO): a função NÃO recebe mais a data da consulta. Antes, `p_consultada_em` era do chamador e o `authenticated` tinha
 --      EXECUTE: um Analista gravava um `nada_encontrado` datado 2099, que virava "a consulta mais recente" e escondia as falhas reais. Agora o gatilho de INSERT
---      sobrescreve `data_consulta := now()` e calcula `validade_em` a partir do catálogo — vale também para o service_role que grave direto na tabela.
+--      sobrescreve `data_consulta` (clock_timestamp()) e calcula `validade_em` a partir do catálogo — vale também para o service_role que grave direto na tabela.
 --      EXECUTE do authenticated: MANTIDO, de propósito. O servidor do portal (A4) chama com o JWT da pessoa (todo cliente Supabase do portal é o da sessão; nenhum
 --      tem a chave de serviço) e o botão "Atualizar dados públicos" é do Analista do mandato; revogar obrigaria a A4 a carregar a chave de serviço na Vercel, um
 --      segredo novo que é decisão do dono. O que se fecha aqui é o que o EXECUTE permitia fabricar SEM o chamador afirmar uma leitura: a data (acima) e o "nada" sem
@@ -76,8 +78,10 @@
 --      velha). Um CHECK amarra 'cadencia' ao número certo e 'minimo_por_desconhecida' a cadência nula e 1 dia. `consulta_externa.validade_em` é NOT NULL e é
 --      calculado pelo gatilho a partir do catálogo, nunca pelo chamador. ATENÇÃO À COLUNA `cadencia`: no rascunho anterior ela misturava "quanto a Oria BUSCA" (o
 --      macro roda mensal, dia 12; o CGU "download diário" é a nossa rotina) com "quanto a fonte PUBLICA". O prazo depende da PUBLICAÇÃO, então `cadencia` agora é só
---      a de publicação, e onde o repositório e o plano só dizem a de BUSCA (SGS, Focus, CGU, BrasilAPI, PGFN) ela é nula e o prazo é o mínimo. A única de publicação
---      que o plano diz é a do MTE ("lista semestral", FASE_A §5 A4): 180 dias. A3 e A4 trocam o mínimo pelo prazo real ao conectar cada fonte.
+--      a de publicação, e onde o repositório e o plano só dizem a de BUSCA (SGS, Focus, CGU, BrasilAPI, PGFN) ela é nula e o prazo é o mínimo. O MTE ("lista semestral", FASE_A §5 A4)
+--      é a fonte que parecia ter cadência de publicação, mas o plano diz a periodicidade da LISTA, não a DATA em que ela é publicada: 180 dias contados da consulta venceriam
+--      meses depois de uma lista nova já ter saído (regra 8, "nunca parece nova estando velha"). DECISÃO DO DONO (24/11/2026, revisão): o MTE também fica em 1 dia, origem
+--      'minimo_por_desconhecida', cadência nula, até a A4 conhecer a data de publicação. A3 e A4 trocam o mínimo pelo prazo real ao conectar cada fonte.
 --  11. FONTE DE LISTA OU DE CONSULTA (achado E): `fonte_externa.forma` diz se a fonte é baixada inteira e procurada pelo CNPJ ('lista': CEIS, CNEP, MTE, IBAMA autos e
 --      embargos) ou respondida por consulta ('consulta'). Só a lista tem o "200 vazio que parece ausência" e exige `registros_lidos` > 0. A PGFN fica 'consulta'
 --      (decisão 3 do dono); se a A4 só achar o arquivo trimestral, vira 'lista' por UPDATE no catálogo.
@@ -86,7 +90,7 @@
 --   * `autorizacao_id` e `caso.momento` (Espec. 13 §3 peças 2 e 3): vêm com a tabela `autorizacao`, que o plano coloca no item 1.B7. Sem pessoa física aqui, não há o que autorizar.
 --   * `origem_compartilhada_com` (Espec. 15 §7, dimensão A4 do score): é do score de confiabilidade (1.B), não da base comum.
 --   * Cadência de PUBLICAÇÃO e URL: só estão no seed onde o repositório ou o plano DIZEM. O resto é NULO, com o motivo no comentário de cada linha. O prazo (decisão 8)
---     nunca é nulo: onde a cadência é nula ele é o mínimo de 1 dia, com origem 'minimo_por_desconhecida'. Medido no seed: 21 de 22 no mínimo, 1 (MTE) por cadência.
+--     nunca é nulo: onde a cadência é nula ele é o mínimo de 1 dia, com origem 'minimo_por_desconhecida'. Medido no seed: 22 de 22 no mínimo (nenhuma por cadência: a data de publicação do MTE é da A4).
 --   * A cadência de BUSCA do macro: o plano (FASE_A §3) diz "agendamento diário", mas o gerador N8N/build-workflow-macro.mjs agenda MENSAL (dia 12, 06h; o IPCA do
 --     mês anterior só sai por volta do dia 10). É a cadência de busca, não a de publicação (o SGS tem série diária e mensal): não entra em `cadencia` (ver 10).
 --   * `oficial`: verdadeiro para todas, menos a BrasilAPI. Decisão 6 do dono (24/11/2026, ao revisar a A2): ANBIMA, CCEE e FipeZAP são fontes OFICIAIS (o rascunho
@@ -94,7 +98,7 @@
 --     "não oficial"). A escala de origem do score (Espec. 15 A1) decide o peso de cada uma; esta coluna só diz o que o dono decidiu sobre o selo "oficial".
 --
 -- O QUE FICA A APLICAR À MÃO NO SUPABASE: esta migration inteira (nenhum segredo, nenhum dado de cliente). Conferir com a sonda:
---   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0303' and not presente;   -- ZERO linhas (33 requisitos)
+--   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0303' and not presente;   -- ZERO linhas (36 requisitos)
 --
 -- MEDIÇÃO NÃO-VAZIA (regra 2): Supabase/test/a_fonte_que_caia_e_parecia_nao_ter_nada.test.sql. O número de asserts e o de reprovações com cada guarda desligada são
 -- medidos por outro passo desta rodada e vão na mensagem do commit; esta migration não declara um número que ainda não foi medido (o cabeçalho não leva placeholder).
@@ -134,7 +138,7 @@ create table fonte_externa (
 comment on table fonte_externa is
   '0303: o catálogo das fontes externas (Espec. 13 §3, Espec. 15 §7). Toda consulta aponta para uma linha daqui (FK): fonte fora do catálogo é recusada pelo banco. `tipo` diz onde roda e se carrega dado de cliente: mercado (agendado, n8n, sem CNPJ) ou empresa (sob demanda, servidor do portal, por CNPJ).';
 comment on column fonte_externa.oficial is 'O selo "oficial" decidido pelo dono. Falso só para o espelho gratuito (BrasilAPI, decisão 2 de 24/11/2026); ANBIMA, CCEE e FipeZAP são oficiais (decisão 6, 24/11/2026). Não é o peso da fonte no score (Espec. 15 A1).';
-comment on column fonte_externa.forma is 'lista = a fonte é baixada INTEIRA e procurada pelo CNPJ (CGU CEIS/CNEP, MTE, IBAMA): um 200 vazio pode ser lista truncada ou página de manutenção, então "nada" exige registros_lidos > 0 e 404 nunca vira "não existe". consulta = a fonte responde por alvo.';
+comment on column fonte_externa.forma is 'lista = a fonte é baixada INTEIRA e procurada pelo CNPJ (CGU CEIS/CNEP, MTE, IBAMA): um 200 vazio pode ser lista vazia ou página de manutenção, então "nada" exige registros_lidos > 0 e 404 nunca vira "não existe" (teto: lista truncada que ainda traz registros não é detectada; o mínimo esperado por fonte é da A4). consulta = a fonte responde por alvo.';
 comment on column fonte_externa.cadencia is 'Cadência de PUBLICAÇÃO da fonte (quanto ELA publica, não quanto a Oria busca: o macro roda mensal e a CGU é baixada diária por NÓS, e isso não entra aqui). NULA = o plano e o repositório não dizem, ou varia por série (SGS tem série diária e mensal); ausência, não zero (regra 1).';
 comment on column fonte_externa.validade_dias is 'Prazo de vencimento de uma consulta, em dias: até a PRÓXIMA PUBLICAÇÃO da fonte (decisão 8 do dono, 24/11/2026). Nunca nulo. Cadência desconhecida = 1 dia (vence cedo; nunca parece nova estando velha). A3 e A4 trocam o mínimo pelo real ao conectar cada fonte.';
 comment on column fonte_externa.validade_origem is 'De onde veio o prazo: publicado (a fonte o publica), cadencia (derivado da cadência de PUBLICAÇÃO: diária 1, semanal 7, mensal 30, trimestral 90, semestral 180, anual 365; o CHECK confere o número) ou minimo_por_desconhecida (cadência desconhecida ou variável: 1 dia).';
@@ -155,7 +159,7 @@ create table consulta_externa (
   fonte           text not null references fonte_externa(chave),
   caso_id         uuid references caso(id) on delete cascade,
   alvo_cnpj       text,
-  data_consulta   timestamptz not null default now(),   -- o gatilho a sobrescreve com now(): a data é do banco, nunca de quem chama
+  data_consulta   timestamptz not null default clock_timestamp(),   -- o gatilho a sobrescreve com clock_timestamp(): a data é do banco, nunca de quem chama
   validade_em     timestamptz not null,                  -- calculada pelo gatilho: data_consulta + o prazo do catálogo
   custo           numeric(12, 4) not null,                -- sem default: custo desconhecido não vira zero medido; quem registra diz (0 nas fontes gratuitas)
   registros_lidos integer,
@@ -174,7 +178,10 @@ create table consulta_externa (
     or (resultado = 'encontrado' and coalesce(http_status between 200 and 299, false))
     or (resultado = 'nada_encontrado' and coalesce(http_status between 200 and 299 or http_status between 400 and 499, false))
     or  resultado = 'falhou'),  -- coalesce: sem ele, status NULO dá NULL e o CHECK PASSA (nada_encontrado sem status foi aceito até o teste reprovar)
-  constraint consulta_externa_prova_de_leitura check (resultado not in ('encontrado', 'nada_encontrado') or hash_bruto is not null),
+  -- Prova de leitura: encontrado e nada_encontrado exigem o hash, e NÃO o da string vazia (corpo vazio não prova leitura: ver a função); nao_consultado não tem corpo, logo não tem hash.
+  constraint consulta_externa_prova_de_leitura check (
+       (resultado not in ('encontrado', 'nada_encontrado') or (hash_bruto is not null and hash_bruto <> 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'))
+   and (resultado <> 'nao_consultado' or hash_bruto is null)),
   constraint consulta_externa_registros_validos check (registros_lidos is null or registros_lidos >= 0),
   constraint consulta_externa_hash_formato check (hash_bruto is null or hash_bruto ~ '^[0-9a-f]{64}$'),
   constraint consulta_externa_custo_nao_negativo check (custo >= 0),
@@ -185,14 +192,14 @@ comment on table consulta_externa is
 comment on constraint consulta_externa_alvo_so_cnpj on consulta_externa is
   '0303: 14 dígitos, sem máscara. CPF (11 dígitos) é recusado de propósito até a decisão do dono sobre pessoa física (N-C7b/R5 da Espec. 13; pendências).';
 comment on constraint consulta_externa_motivo_obrigatorio on consulta_externa is '0303: falhou e nao_consultado dizem a causa; ausência sem causa nem efeito não se registra (regra 1).';
-comment on constraint consulta_externa_prova_de_leitura on consulta_externa is '0303: tanto "encontrado" quanto "nada_encontrado" exigem o hash do corpo cru: sem a prova de que a resposta foi lida, um "[]" é indistinguível de uma fonte que não respondeu.';
+comment on constraint consulta_externa_prova_de_leitura on consulta_externa is '0303: tanto "encontrado" quanto "nada_encontrado" exigem o hash do corpo cru, e não o hash da string vazia (corpo vazio não prova leitura): sem a prova de que a resposta foi lida, um "[]" é indistinguível de uma fonte que não respondeu. nao_consultado não tem hash (não houve corpo).';
 comment on constraint consulta_externa_status_coerente on consulta_externa is '0303: o resultado concorda com o status HTTP: encontrado só com 2xx; nada_encontrado só com 2xx ou 4xx (o 4xx documentado pela fonte, conferido no gatilho); nao_consultado sem status; falhou com qualquer um.';
-comment on column consulta_externa.hash_bruto is 'sha256 do corpo cru devolvido pela fonte (texto exato, UTF-8). Obrigatório em `encontrado` e em `nada_encontrado`: é a prova do que a fonte disse. Nulo só em falhou e nao_consultado (não houve corpo lido).';
+comment on column consulta_externa.hash_bruto is 'sha256 do corpo cru devolvido pela fonte (texto exato, UTF-8). Obrigatório em `encontrado` e em `nada_encontrado`: é a prova do que a fonte disse. Nulo em nao_consultado (obrigatoriamente: não houve corpo) e em falhou sem corpo; em encontrado e nada_encontrado nunca é o da string vazia.';
 comment on column consulta_externa.custo is 'Preço da consulta (Espec. 13 R6), SEM default: quem registra diz o custo (0 nas fontes gratuitas da Fase A). Custo desconhecido não é zero medido; existe para o custo por caso ser medido, não estimado.';
-comment on column consulta_externa.registros_lidos is 'Quantos registros o chamador LEU da fonte. Obrigatório (> 0) em fonte de lista (fonte_externa.forma) para "encontrado" e "nada_encontrado": lista vazia, truncada ou página de manutenção servida com 200 é falhou. Opcional nas fontes de consulta.';
+comment on column consulta_externa.registros_lidos is 'Quantos registros o chamador LEU da fonte. Obrigatório (> 0) em fonte de lista (fonte_externa.forma) para "encontrado" e "nada_encontrado": lista vazia ou página de manutenção servida com 200 é falhou (lista truncada com registros não é detectada: o mínimo esperado por fonte é da A4). Opcional nas fontes de consulta.';
 comment on column consulta_externa.registrado_por is 'auth.uid() de quem registrou pela função; nulo = conexão de serviço (n8n, script). A função é executável pelo authenticated (o portal chama com o JWT da pessoa), então a autoria fica gravada.';
 comment on column consulta_externa.validade_em is 'Quando a consulta vence: data_consulta + fonte_externa.validade_dias, calculado pelo gatilho de INSERT a partir do catálogo, nunca pelo chamador. Nunca nulo (decisão 8 do dono, 24/11/2026: toda fonte tem prazo).';
-comment on column consulta_externa.data_consulta is 'Sempre now() do banco (o gatilho de INSERT sobrescreve qualquer valor): quem chama não escolhe a data, senão um nada_encontrado datado no futuro viraria a consulta "mais recente" e esconderia as falhas reais.';
+comment on column consulta_externa.data_consulta is 'Sempre clock_timestamp() do banco (o gatilho de INSERT sobrescreve qualquer valor; clock_timestamp e não now(), para duas consultas da mesma transação não empatarem): quem chama não escolhe a data, senão um nada_encontrado datado no futuro viraria a consulta "mais recente" e esconderia as falhas reais.';
 comment on column consulta_externa.motivo is 'falhou: o erro (HTTP, timeout…). nao_consultado: por que não se consultou e o que isso deixa desconhecido. Livre nos outros dois.';
 
 create index consulta_externa_fonte on consulta_externa (fonte, data_consulta desc);
@@ -247,11 +254,11 @@ begin
   if new.resultado = 'nada_encontrado' and not (new.http_status between 200 and 299) and new.http_status is distinct from f.http_inexistente then
     raise exception 'nada_encontrado com HTTP % que a fonte "%" não documenta como "não existe": é falha, não ausência', new.http_status, new.fonte using errcode = '23514';
   end if;
-  -- FONTE DE LISTA (achado E): um 200 vazio pode ser lista truncada ou página de manutenção. "Achado" e "nada" só valem com registros lidos > 0, e um 4xx de lista é o
+  -- FONTE DE LISTA (achado E): um 200 vazio pode ser lista vazia ou página de manutenção (uma lista truncada com registros não é detectada aqui: teto conhecido, o mínimo por fonte é da A4). "Achado" e "nada" só valem com registros lidos > 0, e um 4xx de lista é o
   -- arquivo que sumiu, nunca "este CNPJ não consta" (por isso o 4xx "documentado" de http_inexistente não vale para lista).
   if f.forma = 'lista' and new.resultado in ('encontrado', 'nada_encontrado') then
     if coalesce(new.registros_lidos, 0) <= 0 then
-      raise exception 'A fonte "%" é uma LISTA: % exige registros_lidos > 0 (lista vazia, truncada ou página de manutenção com 200 é falha, não ausência)', new.fonte, new.resultado using errcode = '23514';
+      raise exception 'A fonte "%" é uma LISTA: % exige registros_lidos > 0 (lista vazia ou página de manutenção com 200 é falha, não ausência)', new.fonte, new.resultado using errcode = '23514';
     end if;
     if new.resultado = 'nada_encontrado' and not (new.http_status between 200 and 299) then
       raise exception 'A fonte "%" é uma LISTA: um 4xx é o arquivo que sumiu, não "este CNPJ não consta"', new.fonte using errcode = '23514';
@@ -259,20 +266,21 @@ begin
   end if;
   -- DATA E PRAZO SÃO DO BANCO (achado D e decisão 8): o chamador (que pode ser um Analista com EXECUTE na função, ou o service_role gravando direto) não escolhe a data
   -- (um "nada_encontrado" datado 2099 viraria a consulta mais recente e esconderia as falhas reais) nem o vencimento (vem do catálogo; validade_dias é NOT NULL).
-  new.data_consulta := now();
+  -- clock_timestamp() e não now(): now() é o início da TRANSAÇÃO, e duas consultas da mesma transação ficariam com a mesma data, deixando "a mais recente" indefinida (o n8n registra várias fontes numa transação).
+  new.data_consulta := clock_timestamp();
   new.validade_em := new.data_consulta + make_interval(days => f.validade_dias);
   new.registrado_por := auth.uid();
   return new;
 end $$;
 comment on function fn_trg_consulta_externa_valida() is
-  '0303: a consulta aponta para fonte do catálogo, e o tipo da fonte decide o que ela leva (empresa: mandato e CNPJ; mercado: nenhum dos dois); nada_encontrado com status 4xx só vale se for o status que a fonte documenta como "não existe" (fonte_externa.http_inexistente), e nunca em fonte de lista; fonte de lista exige registros_lidos > 0 em encontrado e nada_encontrado. Sobrescreve data_consulta (now()), validade_em (catálogo) e registrado_por (auth.uid()): nada disso é do chamador.';
+  '0303: a consulta aponta para fonte do catálogo, e o tipo da fonte decide o que ela leva (empresa: mandato e CNPJ; mercado: nenhum dos dois); nada_encontrado com status 4xx só vale se for o status que a fonte documenta como "não existe" (fonte_externa.http_inexistente), e nunca em fonte de lista; fonte de lista exige registros_lidos > 0 em encontrado e nada_encontrado. Sobrescreve data_consulta (clock_timestamp()), validade_em (catálogo) e registrado_por (auth.uid()): nada disso é do chamador.';
 
 create function fn_trg_externo_imutavel() returns trigger
 language plpgsql set search_path = public, pg_temp as $$
 begin
   raise exception '% é imutável: uma nova tentativa é uma nova linha (falhou nunca vira nada_encontrado)', tg_table_name using errcode = 'restrict_violation';
 end $$;
-comment on function fn_trg_externo_imutavel() is '0303: recusa todo UPDATE em consulta_externa e fato_externo, inclusive do service_role e do superusuário. A correção de "falhou" é outra consulta, não uma atualização.';
+comment on function fn_trg_externo_imutavel() is '0303: recusa todo UPDATE em consulta_externa e fato_externo, inclusive do service_role e do superusuário em sessão normal (session_replication_role = replica, só de superusuário, passa por cima: é o que a limpeza do teste usa). A correção de "falhou" é outra consulta, não uma atualização.';
 
 -- SEM DELETE (achado F). A imutabilidade só cobria UPDATE e o service_role tem DELETE: apagar a linha "falhou" mais nova faz a "nada_encontrado" ANTIGA voltar a ser a mais
 -- recente ("falhou some, nada antigo volta"). A única saída legítima é a CASCATA de quem apaga o mandato (`caso_id ... on delete cascade`, e o fato cascateia da consulta): ela
@@ -336,8 +344,8 @@ revoke all on function fn_trg_consulta_externa_valida(), fn_trg_externo_imutavel
 -- Chamadores previstos (nenhum existe ainda): o n8n das fontes de mercado (A3) e o servidor do portal para as de empresa (A4). Nenhum deles classifica;
 -- todos entregam o desfecho cru. `p_itens` é a lista JÁ LIDA da resposta (um objeto {chave, valor, referencia?} por dado): o chamador sabe o formato
 -- da fonte, a função decide o que a lista vazia e a lista cheia significam. O hash é do `p_corpo` em texto exato (UTF-8), não do jsonb normalizado.
--- `p_corpo` é o texto cru lido ('' é um corpo vazio LIDO; null é "não li"). `p_registros_lidos` é quantos registros o chamador varreu (obrigatório > 0 para fonte de lista).
--- `p_custo` NÃO tem default (achado I): custo desconhecido não vira zero medido; quem chama diz 0 nas fontes gratuitas. Não há `p_consultada_em` (achado D): a data é now().
+-- `p_corpo` é o texto cru lido; null E vazio (ou só espaço) são "não li" (um 200 vazio de proxy em manutenção não é leitura). `p_registros_lidos` é quantos registros o chamador varreu (obrigatório > 0 para fonte de lista).
+-- `p_custo` NÃO tem default (achado I): custo desconhecido não vira zero medido; quem chama diz 0 nas fontes gratuitas. Não há `p_consultada_em` (achado D): a data é clock_timestamp() do banco.
 create function fn_registrar_consulta_externa(
   p_fonte           text,
   p_caso            uuid,
@@ -388,8 +396,9 @@ begin
     if length(btrim(p_nao_consultado)) = 0 then
       raise exception 'nao_consultado exige o motivo (e o efeito: o que fica desconhecido)' using errcode = '22023';
     end if;
-    if p_http_status is not null or nullif(btrim(coalesce(p_erro, '')), '') is not null or p_itens is not null or p_registros_lidos is not null then
-      raise exception 'nao_consultado contradiz uma resposta: não houve chamada, então não há status, erro, itens nem registros lidos' using errcode = '22023';
+    if p_http_status is not null or nullif(btrim(coalesce(p_erro, '')), '') is not null or p_itens is not null or p_registros_lidos is not null or p_corpo is not null then
+      -- p_corpo também: não houve chamada, e um hash gravado em nao_consultado seria uma prova de leitura que nunca aconteceu.
+      raise exception 'nao_consultado contradiz uma resposta: não houve chamada, então não há status, erro, itens, corpo nem registros lidos' using errcode = '22023';
     end if;
     v_res := 'nao_consultado';
     v_motivo := p_nao_consultado;
@@ -409,12 +418,14 @@ begin
       raise exception 'Cada item precisa ser {"chave": texto, "valor": não nulo}: dado sem chave ou sem valor não é fato' using errcode = '22023';
     end if;
     -- PROVA DE LEITURA (achado E): "nada" e "achado" só com o corpo cru lido e, em fonte de lista, com registros varridos. Sem isto é falha (lado seguro), com o motivo.
-    if p_corpo is null then
+    -- CORPO VAZIO NÃO É LEITURA (achado 1 do 2º ciclo): '' tem hash (sha256 da string vazia) e passaria como prova. PGFN/BrasilAPI atrás de proxy devolvem 200 vazio em manutenção e o
+    -- chamador faz JSON.parse(body || '[]'): chegaria aqui como "200, []" e gravaria "nada". Corpo nulo, vazio ou só espaço/quebra de linha (btrim padrão só tira espaço: por isso a lista de caracteres) = "não li" = falhou.
+    if p_corpo is null or btrim(p_corpo, E' \t\r\n') = '' then
       v_res := 'falhou';
-      v_motivo := format('HTTP %s sem o corpo cru (p_corpo nulo): sem prova de leitura não se grava "nada" nem "achado"', p_http_status);
+      v_motivo := format('HTTP %s sem o corpo cru (p_corpo %s): sem prova de leitura não se grava "nada" nem "achado"', p_http_status, case when p_corpo is null then 'nulo' else 'vazio' end);
     elsif f.forma = 'lista' and coalesce(p_registros_lidos, 0) <= 0 then
       v_res := 'falhou';
-      v_motivo := format('HTTP %s mas %s registros lidos da lista: lista vazia, truncada ou página de manutenção não é "nada"', p_http_status, coalesce(p_registros_lidos::text, 'nenhum informado de'));
+      v_motivo := format('HTTP %s mas %s registros lidos da lista: lista vazia ou página de manutenção não é "nada"', p_http_status, coalesce(p_registros_lidos::text, 'nenhum informado de'));
     else
       v_res := case when jsonb_array_length(p_itens) = 0 then 'nada_encontrado' else 'encontrado' end;
     end if;
@@ -422,9 +433,9 @@ begin
     if p_itens is not null and jsonb_typeof(p_itens) = 'array' and jsonb_array_length(p_itens) > 0 then
       raise exception 'HTTP % ("não existe" para esta fonte) vindo com itens: resposta contraditória', p_http_status using errcode = '22023';
     end if;
-    if p_corpo is null then
+    if p_corpo is null or btrim(p_corpo, E' \t\r\n') = '' then
       v_res := 'falhou';
-      v_motivo := format('HTTP %s sem o corpo cru (p_corpo nulo): sem prova de leitura não se grava "nada"', p_http_status);
+      v_motivo := format('HTTP %s sem o corpo cru (p_corpo %s): sem prova de leitura não se grava "nada"', p_http_status, case when p_corpo is null then 'nulo' else 'vazio' end);
     else
       v_res := 'nada_encontrado';
       v_motivo := format('HTTP %s: a fonte documenta este status como "alvo não consta"', p_http_status);
@@ -451,7 +462,7 @@ begin
   return jsonb_build_object('id', v_id, 'resultado', v_res, 'motivo', v_motivo, 'fatos', v_n);
 end $$;
 comment on function fn_registrar_consulta_externa(text, uuid, text, integer, text, text, jsonb, integer, numeric, text) is
-  '0303: o ÚNICO ponto de escrita de consulta_externa e fato_externo (o authenticated não tem grant de escrita). Recebe o desfecho CRU da chamada e classifica: motivo de não consultar -> nao_consultado; erro informado ou sem status HTTP (timeout, rede) -> falhou; 2xx com itens [] -> nada_encontrado, com itens -> encontrado + um fato por item, MAS só com o corpo cru lido (p_corpo) e, em fonte de lista, com p_registros_lidos > 0 (senão falhou); o 4xx que a fonte de consulta documenta como "não existe" (fonte_externa.http_inexistente, nulo por padrão) -> nada_encontrado; qualquer outro status -> falhou. 2xx sem a lista de itens é recusado (22023), como custo nulo ou negativo. A data é now() e o vencimento vem do catálogo: o chamador não escolhe. Fonte fora do catálogo: 23503. Sem permissão: 42501 (empresa: Sócio ou Analista do mandato; mercado: Sócio). Devolve {id, resultado, motivo, fatos}.';
+  '0303: o ÚNICO ponto de escrita de consulta_externa e fato_externo (o authenticated não tem grant de escrita). Recebe o desfecho CRU da chamada e classifica: motivo de não consultar -> nao_consultado; erro informado ou sem status HTTP (timeout, rede) -> falhou; 2xx com itens [] -> nada_encontrado, com itens -> encontrado + um fato por item, MAS só com o corpo cru lido (p_corpo) e, em fonte de lista, com p_registros_lidos > 0 (senão falhou); o 4xx que a fonte de consulta documenta como "não existe" (fonte_externa.http_inexistente, nulo por padrão) -> nada_encontrado; qualquer outro status -> falhou. 2xx sem a lista de itens é recusado (22023), como custo nulo ou negativo. A data é clock_timestamp() do banco e o vencimento vem do catálogo: o chamador não escolhe. Fonte fora do catálogo: 23503. Sem permissão: 42501 (empresa: Sócio ou Analista do mandato; mercado: Sócio). Devolve {id, resultado, motivo, fatos}.';
 revoke all on function fn_registrar_consulta_externa(text, uuid, text, integer, text, text, jsonb, integer, numeric, text) from public, anon;
 grant execute on function fn_registrar_consulta_externa(text, uuid, text, integer, text, text, jsonb, integer, numeric, text) to authenticated, service_role;
 
@@ -460,8 +471,7 @@ grant execute on function fn_registrar_consulta_externa(text, uuid, text, intege
 -- -----------------------------------------------------------------------------
 -- URL: só onde o repositório já a usa (N8N/lib/macro.mjs) ou onde o plano a nomeia; o resto a A3/A4 preenchem ao conectar a fonte, depois de conferir o endereço.
 -- cadencia = a de PUBLICAÇÃO da fonte (decisão 8 do dono; ver cabeçalho, item 10). O repositório e o plano só dizem a de BUSCA para bcb_sgs e bcb_focus (macro mensal, dia 12),
--- cgu_* ("download diário": é a NOSSA rotina), brasilapi e pgfn ("por consulta"): nelas a cadência é NULA e o prazo é o mínimo de 1 dia. Só o MTE tem cadência de publicação
--- dita ("lista semestral", FASE_A §5 A4): 180 dias. As outras 15 não dizem nada: mínimo de 1 dia. A3 e A4 trocam o mínimo pelo real ao conectar cada fonte.
+-- cgu_* ("download diário": é a NOSSA rotina), brasilapi e pgfn ("por consulta"): nelas a cadência é NULA e o prazo é o mínimo de 1 dia. O MTE diz só a periodicidade da lista ("lista semestral", FASE_A §5 A4), não a data de publicação: 1 dia, como as outras 21 (decisão do dono, 24/11/2026). A3 e A4 trocam o mínimo pelo real ao conectar cada fonte.
 -- forma: 'lista' = baixada inteira e procurada pelo CNPJ (cgu_ceis, cgu_cnep, mte_trabalho_escravo, ibama_autos, ibama_embargos); o resto é por consulta.
 -- http_inexistente: nulo em todas (decisão 7 do dono: a A4 mede o 404 de cada fonte de empresa e o preenche; ver cabeçalho).
 insert into fonte_externa (chave, nome, origem, url, tipo, oficial, forma, cadencia, validade_dias, validade_origem, fornecedor, base_legal_tipica, observacao) values
@@ -483,7 +493,7 @@ insert into fonte_externa (chave, nome, origem, url, tipo, oficial, forma, caden
   ('brasilapi_cnpj',    'BrasilAPI — Cadastro de CNPJ (espelho não oficial)','BrasilAPI (comunidade), espelho da Receita Federal', null, 'empresa', false, 'consulta', null, 1, 'minimo_por_desconhecida', 'BrasilAPI', 'dado_publico', 'A4. Decisão 2 do dono (24/11/2026): NÃO OFICIAL. Traz cadastro, CNAE, situação e quadro de sócios; os sócios ficam guardados e não são consultados (só CNPJ). http_inexistente nulo até confirmar o status de "CNPJ não consta" em produção.'),
   ('cgu_ceis',          'CGU — Cadastro de Empresas Inidôneas e Suspensas (CEIS)', 'Controladoria-Geral da União', null, 'empresa', true, 'lista', null, 1, 'minimo_por_desconhecida', 'CGU', 'dado_publico', 'A4. Download da lista inteira; a consulta procura o CNPJ nela (lista pequena, decisão 3).'),
   ('cgu_cnep',          'CGU — Cadastro Nacional de Empresas Punidas (CNEP)', 'Controladoria-Geral da União', null, 'empresa', true, 'lista', null, 1, 'minimo_por_desconhecida', 'CGU', 'dado_publico', 'A4. Mesma forma do CEIS.'),
-  ('mte_trabalho_escravo','MTE — Cadastro de empregadores (trabalho escravo)', 'Ministério do Trabalho e Emprego', null, 'empresa', true, 'lista', 'semestral', 180, 'cadencia', 'MTE', 'dado_publico', 'A4. Lista semestral inteira; a consulta procura o CNPJ.'),
+  ('mte_trabalho_escravo','MTE — Cadastro de empregadores (trabalho escravo)', 'Ministério do Trabalho e Emprego', null, 'empresa', true, 'lista', null, 1, 'minimo_por_desconhecida', 'MTE', 'dado_publico', 'A4. Lista semestral inteira; a consulta procura o CNPJ. Prazo de 1 dia até a A4 conhecer a DATA de publicação da lista (decisão do dono, 24/11/2026): 180 dias da consulta venceriam tarde demais.'),
   ('ibama_autos',       'IBAMA — Autos de infração',                       'IBAMA', null, 'empresa', true, 'lista', null, 1, 'minimo_por_desconhecida', 'IBAMA', 'dado_publico', 'A4. Autos e embargos são duas listas, duas linhas: o resultado de uma não esconde a falha da outra. Medir o tamanho antes de baixar.'),
   ('ibama_embargos',    'IBAMA — Áreas embargadas',                        'IBAMA', null, 'empresa', true, 'lista', null, 1, 'minimo_por_desconhecida', 'IBAMA', 'dado_publico', 'A4. Ver ibama_autos.'),
   ('pgfn_divida_ativa', 'PGFN — Dívida ativa da União',                    'Procuradoria-Geral da Fazenda Nacional', null, 'empresa', true, 'consulta', null, 1, 'minimo_por_desconhecida', 'PGFN', 'dado_publico', 'A4. Por consulta (decisão 3). A fonte POR CNPJ ainda não foi achada: se só houver o arquivo trimestral, ler em fluxo e guardar só os CNPJs do caso.')
@@ -501,13 +511,14 @@ create view instalacao_sonda_consulta_externa_checks as
        or (k.conname = 'consulta_externa_alvo_so_cnpj' and pg_get_constraintdef(k.oid) like '%[0-9]{14}%')
        or (k.conname = 'consulta_externa_motivo_obrigatorio' and pg_get_constraintdef(k.oid) like '%btrim%')
        or (k.conname = 'consulta_externa_status_coerente' and pg_get_constraintdef(k.oid) like '%nao_consultado%')
-       or (k.conname = 'consulta_externa_prova_de_leitura' and pg_get_constraintdef(k.oid) like '%nada_encontrado%' and pg_get_constraintdef(k.oid) like '%hash_bruto IS NOT NULL%')
+       or (k.conname = 'consulta_externa_prova_de_leitura' and pg_get_constraintdef(k.oid) like '%nada_encontrado%' and pg_get_constraintdef(k.oid) like '%hash_bruto IS NOT NULL%'
+            and pg_get_constraintdef(k.oid) like '%e3b0c44298fc1c14%' and pg_get_constraintdef(k.oid) like '%nao_consultado%')
        or (k.conname = 'consulta_externa_registros_validos' and pg_get_constraintdef(k.oid) like '%registros_lidos >= 0%')
        or (k.conname = 'consulta_externa_hash_formato' and pg_get_constraintdef(k.oid) like '%[0-9a-f]{64}%')
        or (k.conname = 'consulta_externa_custo_nao_negativo' and pg_get_constraintdef(k.oid) like '%custo >= %')
        or (k.conname = 'consulta_externa_validade_depois' and pg_get_constraintdef(k.oid) like '%validade_em >= data_consulta%'));
 comment on view instalacao_sonda_consulta_externa_checks is
-  'Sonda da 0303: uma linha = uma das 9 CHECKs de consulta_externa existe, validada, com o conteúdo certo (resultado nos quatro estados; alvo só CNPJ de 14 dígitos; motivo obrigatório; status coerente; hash em encontrado E em nada_encontrado; registros lidos >= 0; hash de 64 hex; custo >= 0; validade depois da consulta). Menos de 9: o service_role grava resultado incoerente com o status, falha sem motivo ou CPF.';
+  'Sonda da 0303: uma linha = uma das 9 CHECKs de consulta_externa existe, validada, com o conteúdo certo (resultado nos quatro estados; alvo só CNPJ de 14 dígitos; motivo obrigatório; status coerente; hash em encontrado E em nada_encontrado, nunca o da string vazia, e nenhum em nao_consultado; registros lidos >= 0; hash de 64 hex; custo >= 0; validade depois da consulta). Menos de 9: o service_role grava resultado incoerente com o status, falha sem motivo ou CPF.';
 
 -- TODA FONTE TEM PRAZO (decisão 8): validade_dias e validade_origem NOT NULL e o CHECK que amarra a origem ao número. Sem isto o catálogo volta a aceitar fonte sem prazo.
 create view instalacao_sonda_fonte_externa_prazo as
@@ -604,16 +615,22 @@ insert into instalacao_requisito
    'O fato não se apaga (só a cascata da consulta). Sem o gatilho, o dado achado some e a consulta "encontrado" fica sem fato.', 'importante', 1446),
   ('fonte_externa_prazo_obrigatorio', '0303', 'comportamento', 'instalacao_sonda_fonte_externa_prazo', null, 1,
    'Toda fonte tem prazo (decisão 8): validade_dias, validade_origem e forma NOT NULL, CHECK origem x número, validade_em NOT NULL. Zero linhas = fonte sem prazo, e a consulta dela nunca vence (parece nova estando velha).', 'bloqueante', 1447),
-  ('consulta_externa_lista_exige_registros', '0303', 'corpo', 'fn_registrar_consulta_externa', 'p_registros_lidos', null,
-   'Fonte de lista só dá "nada"/"achado" com registros lidos > 0, e todo 2xx exige o corpo cru. Corpo sem isto = lista vazia, truncada ou página de manutenção com 200 vira "sem sanções".', 'bloqueante', 1448),
-  ('consulta_externa_data_e_prazo_do_banco', '0303', 'corpo', 'fn_trg_consulta_externa_valida', 'new.data_consulta := now()', null,
+  ('consulta_externa_lista_exige_registros', '0303', 'corpo', 'fn_registrar_consulta_externa', 'coalesce(p_registros_lidos, 0) <= 0', null,
+   'Fonte de lista só dá "nada"/"achado" com registros lidos > 0 (marcador do ramo, não o nome do parâmetro, que também está na assinatura). Corpo sem isto = lista vazia ou página de manutenção com 200 vira "sem sanções" (lista truncada com registros não é detectada: teto, mínimo por fonte na A4).', 'bloqueante', 1448),
+  ('consulta_externa_data_e_prazo_do_banco', '0303', 'corpo', 'fn_trg_consulta_externa_valida', 'new.data_consulta := clock_timestamp()', null,
    'A data da consulta é do banco e o vencimento vem do catálogo. Corpo sem isto = um "nada_encontrado" datado 2099 vira a consulta mais recente e esconde as falhas reais.', 'bloqueante', 1449),
   ('fonte_externa_forma_coluna', '0303', 'coluna', 'fonte_externa.forma', null, null,
    'Lista ou consulta. Coluna ausente = a função não distingue a fonte baixada inteira (200 vazio suspeito) da respondida por alvo.', 'importante', 1450),
   ('fonte_externa_validade_origem_coluna', '0303', 'coluna', 'fonte_externa.validade_origem', null, null,
    'De onde veio o prazo (publicado, cadência, mínimo por desconhecida). Coluna ausente = o prazo de 1 dia não se distingue de um prazo medido.', 'importante', 1451),
   ('consulta_externa_registros_lidos_coluna', '0303', 'coluna', 'consulta_externa.registros_lidos', null, null,
-   'Quantos registros o chamador leu da fonte. Coluna ausente = a lista vazia não se distingue da lista lida sem achado.', 'importante', 1452)
+   'Quantos registros o chamador leu da fonte. Coluna ausente = a lista vazia não se distingue da lista lida sem achado.', 'importante', 1452),
+  ('consulta_externa_corpo_vazio_nao_e_leitura', '0303', 'corpo', 'fn_registrar_consulta_externa', 'btrim(p_corpo, E'' \t\r\n'') = ''''', null,
+   'Corpo vazio (ou só espaço) é "não li": falhou. Corpo sem isto = o 200 vazio de um proxy em manutenção tem o hash da string vazia, passa como prova de leitura e grava "nada_encontrado".', 'bloqueante', 1453),
+  ('consulta_externa_valida_lista_registros', '0303', 'corpo', 'fn_trg_consulta_externa_valida', 'coalesce(new.registros_lidos, 0) <= 0', null,
+   'O gatilho recusa encontrado e nada_encontrado de fonte de LISTA sem registros lidos, também para quem grava direto. Corpo sem isto = o service_role grava "nada" de uma lista que não foi lida.', 'bloqueante', 1454),
+  ('consulta_externa_valida_lista_4xx', '0303', 'corpo', 'fn_trg_consulta_externa_valida', 'not (new.http_status between 200 and 299) then', null,
+   'O gatilho recusa nada_encontrado com 4xx em fonte de LISTA (marcador: o `then` que fecha só o ramo da lista; o mesmo teste sem o `then` também está no ramo geral), mesmo que http_inexistente seja preenchido: 4xx de lista é o arquivo que sumiu. Corpo sem isto = o 404 de uma lista que mudou de endereço vira "sem sanções".', 'bloqueante', 1455)
 on conflict (chave) do update set
   migration = excluded.migration, tipo = excluded.tipo, objeto = excluded.objeto,
   marcador = excluded.marcador, criterio_seed = excluded.criterio_seed,
@@ -621,7 +638,7 @@ on conflict (chave) do update set
 
 update instalacao_cobertura
    set ate_migration = greatest(ate_migration, '0303'), revisado_em = current_date,
-       observacao = 'A 0303 cria a base comum das fontes externas (Fase A, A2): fonte_externa (catálogo, 22 fontes semeadas), consulta_externa (4 estados, imutável e sem DELETE, alvo só CNPJ, data e prazo do banco) e fato_externo, a função única fn_registrar_consulta_externa que classifica o desfecho cru (falhou nunca vira nada_encontrado), RLS por mandato, 7 gatilhos, 3 views de sonda e 33 requisitos novos (ordem 1420-1452). Não toca nenhuma função existente.'
+       observacao = 'A 0303 cria a base comum das fontes externas (Fase A, A2): fonte_externa (catálogo, 22 fontes semeadas), consulta_externa (4 estados, imutável e sem DELETE, alvo só CNPJ, data e prazo do banco) e fato_externo, a função única fn_registrar_consulta_externa que classifica o desfecho cru (falhou nunca vira nada_encontrado), RLS por mandato, 7 gatilhos, 3 views de sonda e 36 requisitos novos (ordem 1420-1455). Não toca nenhuma função existente.'
  where id = true;
 
 commit;

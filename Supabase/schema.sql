@@ -15263,8 +15263,9 @@ begin
     if length(btrim(p_nao_consultado)) = 0 then
       raise exception 'nao_consultado exige o motivo (e o efeito: o que fica desconhecido)' using errcode = '22023';
     end if;
-    if p_http_status is not null or nullif(btrim(coalesce(p_erro, '')), '') is not null or p_itens is not null or p_registros_lidos is not null then
-      raise exception 'nao_consultado contradiz uma resposta: não houve chamada, então não há status, erro, itens nem registros lidos' using errcode = '22023';
+    if p_http_status is not null or nullif(btrim(coalesce(p_erro, '')), '') is not null or p_itens is not null or p_registros_lidos is not null or p_corpo is not null then
+      -- p_corpo também: não houve chamada, e um hash gravado em nao_consultado seria uma prova de leitura que nunca aconteceu.
+      raise exception 'nao_consultado contradiz uma resposta: não houve chamada, então não há status, erro, itens, corpo nem registros lidos' using errcode = '22023';
     end if;
     v_res := 'nao_consultado';
     v_motivo := p_nao_consultado;
@@ -15284,12 +15285,14 @@ begin
       raise exception 'Cada item precisa ser {"chave": texto, "valor": não nulo}: dado sem chave ou sem valor não é fato' using errcode = '22023';
     end if;
     -- PROVA DE LEITURA (achado E): "nada" e "achado" só com o corpo cru lido e, em fonte de lista, com registros varridos. Sem isto é falha (lado seguro), com o motivo.
-    if p_corpo is null then
+    -- CORPO VAZIO NÃO É LEITURA (achado 1 do 2º ciclo): '' tem hash (sha256 da string vazia) e passaria como prova. PGFN/BrasilAPI atrás de proxy devolvem 200 vazio em manutenção e o
+    -- chamador faz JSON.parse(body || '[]'): chegaria aqui como "200, []" e gravaria "nada". Corpo nulo, vazio ou só espaço/quebra de linha (btrim padrão só tira espaço: por isso a lista de caracteres) = "não li" = falhou.
+    if p_corpo is null or btrim(p_corpo, E' \t\r\n') = '' then
       v_res := 'falhou';
-      v_motivo := format('HTTP %s sem o corpo cru (p_corpo nulo): sem prova de leitura não se grava "nada" nem "achado"', p_http_status);
+      v_motivo := format('HTTP %s sem o corpo cru (p_corpo %s): sem prova de leitura não se grava "nada" nem "achado"', p_http_status, case when p_corpo is null then 'nulo' else 'vazio' end);
     elsif f.forma = 'lista' and coalesce(p_registros_lidos, 0) <= 0 then
       v_res := 'falhou';
-      v_motivo := format('HTTP %s mas %s registros lidos da lista: lista vazia, truncada ou página de manutenção não é "nada"', p_http_status, coalesce(p_registros_lidos::text, 'nenhum informado de'));
+      v_motivo := format('HTTP %s mas %s registros lidos da lista: lista vazia ou página de manutenção não é "nada"', p_http_status, coalesce(p_registros_lidos::text, 'nenhum informado de'));
     else
       v_res := case when jsonb_array_length(p_itens) = 0 then 'nada_encontrado' else 'encontrado' end;
     end if;
@@ -15297,9 +15300,9 @@ begin
     if p_itens is not null and jsonb_typeof(p_itens) = 'array' and jsonb_array_length(p_itens) > 0 then
       raise exception 'HTTP % ("não existe" para esta fonte) vindo com itens: resposta contraditória', p_http_status using errcode = '22023';
     end if;
-    if p_corpo is null then
+    if p_corpo is null or btrim(p_corpo, E' \t\r\n') = '' then
       v_res := 'falhou';
-      v_motivo := format('HTTP %s sem o corpo cru (p_corpo nulo): sem prova de leitura não se grava "nada"', p_http_status);
+      v_motivo := format('HTTP %s sem o corpo cru (p_corpo %s): sem prova de leitura não se grava "nada"', p_http_status, case when p_corpo is null then 'nulo' else 'vazio' end);
     else
       v_res := 'nada_encontrado';
       v_motivo := format('HTTP %s: a fonte documenta este status como "alvo não consta"', p_http_status);
@@ -15330,7 +15333,7 @@ end $$;
 -- Name: FUNCTION fn_registrar_consulta_externa(p_fonte text, p_caso uuid, p_alvo_cnpj text, p_http_status integer, p_erro text, p_corpo text, p_itens jsonb, p_registros_lidos integer, p_custo numeric, p_nao_consultado text); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_registrar_consulta_externa(p_fonte text, p_caso uuid, p_alvo_cnpj text, p_http_status integer, p_erro text, p_corpo text, p_itens jsonb, p_registros_lidos integer, p_custo numeric, p_nao_consultado text) IS '0303: o ÚNICO ponto de escrita de consulta_externa e fato_externo (o authenticated não tem grant de escrita). Recebe o desfecho CRU da chamada e classifica: motivo de não consultar -> nao_consultado; erro informado ou sem status HTTP (timeout, rede) -> falhou; 2xx com itens [] -> nada_encontrado, com itens -> encontrado + um fato por item, MAS só com o corpo cru lido (p_corpo) e, em fonte de lista, com p_registros_lidos > 0 (senão falhou); o 4xx que a fonte de consulta documenta como "não existe" (fonte_externa.http_inexistente, nulo por padrão) -> nada_encontrado; qualquer outro status -> falhou. 2xx sem a lista de itens é recusado (22023), como custo nulo ou negativo. A data é now() e o vencimento vem do catálogo: o chamador não escolhe. Fonte fora do catálogo: 23503. Sem permissão: 42501 (empresa: Sócio ou Analista do mandato; mercado: Sócio). Devolve {id, resultado, motivo, fatos}.';
+COMMENT ON FUNCTION public.fn_registrar_consulta_externa(p_fonte text, p_caso uuid, p_alvo_cnpj text, p_http_status integer, p_erro text, p_corpo text, p_itens jsonb, p_registros_lidos integer, p_custo numeric, p_nao_consultado text) IS '0303: o ÚNICO ponto de escrita de consulta_externa e fato_externo (o authenticated não tem grant de escrita). Recebe o desfecho CRU da chamada e classifica: motivo de não consultar -> nao_consultado; erro informado ou sem status HTTP (timeout, rede) -> falhou; 2xx com itens [] -> nada_encontrado, com itens -> encontrado + um fato por item, MAS só com o corpo cru lido (p_corpo) e, em fonte de lista, com p_registros_lidos > 0 (senão falhou); o 4xx que a fonte de consulta documenta como "não existe" (fonte_externa.http_inexistente, nulo por padrão) -> nada_encontrado; qualquer outro status -> falhou. 2xx sem a lista de itens é recusado (22023), como custo nulo ou negativo. A data é clock_timestamp() do banco e o vencimento vem do catálogo: o chamador não escolhe. Fonte fora do catálogo: 23503. Sem permissão: 42501 (empresa: Sócio ou Analista do mandato; mercado: Sócio). Devolve {id, resultado, motivo, fatos}.';
 
 --
 -- Name: fn_registrar_diagnostico(uuid, uuid, text, boolean, text, text, text, public.legibilidade, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
@@ -18473,11 +18476,11 @@ begin
   if new.resultado = 'nada_encontrado' and not (new.http_status between 200 and 299) and new.http_status is distinct from f.http_inexistente then
     raise exception 'nada_encontrado com HTTP % que a fonte "%" não documenta como "não existe": é falha, não ausência', new.http_status, new.fonte using errcode = '23514';
   end if;
-  -- FONTE DE LISTA (achado E): um 200 vazio pode ser lista truncada ou página de manutenção. "Achado" e "nada" só valem com registros lidos > 0, e um 4xx de lista é o
+  -- FONTE DE LISTA (achado E): um 200 vazio pode ser lista vazia ou página de manutenção (uma lista truncada com registros não é detectada aqui: teto conhecido, o mínimo por fonte é da A4). "Achado" e "nada" só valem com registros lidos > 0, e um 4xx de lista é o
   -- arquivo que sumiu, nunca "este CNPJ não consta" (por isso o 4xx "documentado" de http_inexistente não vale para lista).
   if f.forma = 'lista' and new.resultado in ('encontrado', 'nada_encontrado') then
     if coalesce(new.registros_lidos, 0) <= 0 then
-      raise exception 'A fonte "%" é uma LISTA: % exige registros_lidos > 0 (lista vazia, truncada ou página de manutenção com 200 é falha, não ausência)', new.fonte, new.resultado using errcode = '23514';
+      raise exception 'A fonte "%" é uma LISTA: % exige registros_lidos > 0 (lista vazia ou página de manutenção com 200 é falha, não ausência)', new.fonte, new.resultado using errcode = '23514';
     end if;
     if new.resultado = 'nada_encontrado' and not (new.http_status between 200 and 299) then
       raise exception 'A fonte "%" é uma LISTA: um 4xx é o arquivo que sumiu, não "este CNPJ não consta"', new.fonte using errcode = '23514';
@@ -18485,7 +18488,8 @@ begin
   end if;
   -- DATA E PRAZO SÃO DO BANCO (achado D e decisão 8): o chamador (que pode ser um Analista com EXECUTE na função, ou o service_role gravando direto) não escolhe a data
   -- (um "nada_encontrado" datado 2099 viraria a consulta mais recente e esconderia as falhas reais) nem o vencimento (vem do catálogo; validade_dias é NOT NULL).
-  new.data_consulta := now();
+  -- clock_timestamp() e não now(): now() é o início da TRANSAÇÃO, e duas consultas da mesma transação ficariam com a mesma data, deixando "a mais recente" indefinida (o n8n registra várias fontes numa transação).
+  new.data_consulta := clock_timestamp();
   new.validade_em := new.data_consulta + make_interval(days => f.validade_dias);
   new.registrado_por := auth.uid();
   return new;
@@ -18495,7 +18499,7 @@ end $$;
 -- Name: FUNCTION fn_trg_consulta_externa_valida(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_trg_consulta_externa_valida() IS '0303: a consulta aponta para fonte do catálogo, e o tipo da fonte decide o que ela leva (empresa: mandato e CNPJ; mercado: nenhum dos dois); nada_encontrado com status 4xx só vale se for o status que a fonte documenta como "não existe" (fonte_externa.http_inexistente), e nunca em fonte de lista; fonte de lista exige registros_lidos > 0 em encontrado e nada_encontrado. Sobrescreve data_consulta (now()), validade_em (catálogo) e registrado_por (auth.uid()): nada disso é do chamador.';
+COMMENT ON FUNCTION public.fn_trg_consulta_externa_valida() IS '0303: a consulta aponta para fonte do catálogo, e o tipo da fonte decide o que ela leva (empresa: mandato e CNPJ; mercado: nenhum dos dois); nada_encontrado com status 4xx só vale se for o status que a fonte documenta como "não existe" (fonte_externa.http_inexistente), e nunca em fonte de lista; fonte de lista exige registros_lidos > 0 em encontrado e nada_encontrado. Sobrescreve data_consulta (clock_timestamp()), validade_em (catálogo) e registrado_por (auth.uid()): nada disso é do chamador.';
 
 --
 -- Name: fn_trg_controlador_vinculo_valido(); Type: FUNCTION; Schema: public; Owner: -
@@ -18641,7 +18645,7 @@ end $$;
 -- Name: FUNCTION fn_trg_externo_imutavel(); Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON FUNCTION public.fn_trg_externo_imutavel() IS '0303: recusa todo UPDATE em consulta_externa e fato_externo, inclusive do service_role e do superusuário. A correção de "falhou" é outra consulta, não uma atualização.';
+COMMENT ON FUNCTION public.fn_trg_externo_imutavel() IS '0303: recusa todo UPDATE em consulta_externa e fato_externo, inclusive do service_role e do superusuário em sessão normal (session_replication_role = replica, só de superusuário, passa por cima: é o que a limpeza do teste usa). A correção de "falhou" é outra consulta, não uma atualização.';
 
 --
 -- Name: fn_trg_externo_sem_delete(); Type: FUNCTION; Schema: public; Owner: -
@@ -20307,7 +20311,7 @@ CREATE TABLE public.consulta_externa (
     fonte text NOT NULL,
     caso_id uuid,
     alvo_cnpj text,
-    data_consulta timestamp with time zone DEFAULT now() NOT NULL,
+    data_consulta timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
     validade_em timestamp with time zone NOT NULL,
     custo numeric(12,4) NOT NULL,
     registros_lidos integer,
@@ -20324,7 +20328,7 @@ CREATE TABLE public.consulta_externa (
     CONSTRAINT consulta_externa_fornecedor_check CHECK ((btrim(fornecedor) <> ''::text)),
     CONSTRAINT consulta_externa_hash_formato CHECK (((hash_bruto IS NULL) OR (hash_bruto ~ '^[0-9a-f]{64}$'::text))),
     CONSTRAINT consulta_externa_motivo_obrigatorio CHECK (((resultado <> ALL (ARRAY['falhou'::text, 'nao_consultado'::text])) OR (length(btrim(COALESCE(motivo, ''::text))) > 0))),
-    CONSTRAINT consulta_externa_prova_de_leitura CHECK (((resultado <> ALL (ARRAY['encontrado'::text, 'nada_encontrado'::text])) OR (hash_bruto IS NOT NULL))),
+    CONSTRAINT consulta_externa_prova_de_leitura CHECK ((((resultado <> ALL (ARRAY['encontrado'::text, 'nada_encontrado'::text])) OR ((hash_bruto IS NOT NULL) AND (hash_bruto <> 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'::text))) AND ((resultado <> 'nao_consultado'::text) OR (hash_bruto IS NULL)))),
     CONSTRAINT consulta_externa_registros_validos CHECK (((registros_lidos IS NULL) OR (registros_lidos >= 0))),
     CONSTRAINT consulta_externa_resultado_valido CHECK ((resultado = ANY (ARRAY['encontrado'::text, 'nada_encontrado'::text, 'falhou'::text, 'nao_consultado'::text]))),
     CONSTRAINT consulta_externa_status_coerente CHECK ((((resultado = 'nao_consultado'::text) AND (http_status IS NULL)) OR ((resultado = 'encontrado'::text) AND COALESCE(((http_status >= 200) AND (http_status <= 299)), false)) OR ((resultado = 'nada_encontrado'::text) AND COALESCE((((http_status >= 200) AND (http_status <= 299)) OR ((http_status >= 400) AND (http_status <= 499))), false)) OR (resultado = 'falhou'::text))),
@@ -20341,7 +20345,7 @@ COMMENT ON TABLE public.consulta_externa IS '0303: cada TENTATIVA de consulta a 
 -- Name: COLUMN consulta_externa.data_consulta; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.consulta_externa.data_consulta IS 'Sempre now() do banco (o gatilho de INSERT sobrescreve qualquer valor): quem chama não escolhe a data, senão um nada_encontrado datado no futuro viraria a consulta "mais recente" e esconderia as falhas reais.';
+COMMENT ON COLUMN public.consulta_externa.data_consulta IS 'Sempre clock_timestamp() do banco (o gatilho de INSERT sobrescreve qualquer valor; clock_timestamp e não now(), para duas consultas da mesma transação não empatarem): quem chama não escolhe a data, senão um nada_encontrado datado no futuro viraria a consulta "mais recente" e esconderia as falhas reais.';
 
 --
 -- Name: COLUMN consulta_externa.validade_em; Type: COMMENT; Schema: public; Owner: -
@@ -20359,7 +20363,7 @@ COMMENT ON COLUMN public.consulta_externa.custo IS 'Preço da consulta (Espec. 1
 -- Name: COLUMN consulta_externa.registros_lidos; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.consulta_externa.registros_lidos IS 'Quantos registros o chamador LEU da fonte. Obrigatório (> 0) em fonte de lista (fonte_externa.forma) para "encontrado" e "nada_encontrado": lista vazia, truncada ou página de manutenção servida com 200 é falhou. Opcional nas fontes de consulta.';
+COMMENT ON COLUMN public.consulta_externa.registros_lidos IS 'Quantos registros o chamador LEU da fonte. Obrigatório (> 0) em fonte de lista (fonte_externa.forma) para "encontrado" e "nada_encontrado": lista vazia ou página de manutenção servida com 200 é falhou (lista truncada com registros não é detectada: o mínimo esperado por fonte é da A4). Opcional nas fontes de consulta.';
 
 --
 -- Name: COLUMN consulta_externa.registrado_por; Type: COMMENT; Schema: public; Owner: -
@@ -20371,7 +20375,7 @@ COMMENT ON COLUMN public.consulta_externa.registrado_por IS 'auth.uid() de quem 
 -- Name: COLUMN consulta_externa.hash_bruto; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.consulta_externa.hash_bruto IS 'sha256 do corpo cru devolvido pela fonte (texto exato, UTF-8). Obrigatório em `encontrado` e em `nada_encontrado`: é a prova do que a fonte disse. Nulo só em falhou e nao_consultado (não houve corpo lido).';
+COMMENT ON COLUMN public.consulta_externa.hash_bruto IS 'sha256 do corpo cru devolvido pela fonte (texto exato, UTF-8). Obrigatório em `encontrado` e em `nada_encontrado`: é a prova do que a fonte disse. Nulo em nao_consultado (obrigatoriamente: não houve corpo) e em falhou sem corpo; em encontrado e nada_encontrado nunca é o da string vazia.';
 
 --
 -- Name: COLUMN consulta_externa.motivo; Type: COMMENT; Schema: public; Owner: -
@@ -20395,7 +20399,7 @@ COMMENT ON CONSTRAINT consulta_externa_motivo_obrigatorio ON public.consulta_ext
 -- Name: CONSTRAINT consulta_externa_prova_de_leitura ON consulta_externa; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON CONSTRAINT consulta_externa_prova_de_leitura ON public.consulta_externa IS '0303: tanto "encontrado" quanto "nada_encontrado" exigem o hash do corpo cru: sem a prova de que a resposta foi lida, um "[]" é indistinguível de uma fonte que não respondeu.';
+COMMENT ON CONSTRAINT consulta_externa_prova_de_leitura ON public.consulta_externa IS '0303: tanto "encontrado" quanto "nada_encontrado" exigem o hash do corpo cru, e não o hash da string vazia (corpo vazio não prova leitura): sem a prova de que a resposta foi lida, um "[]" é indistinguível de uma fonte que não respondeu. nao_consultado não tem hash (não houve corpo).';
 
 --
 -- Name: CONSTRAINT consulta_externa_status_coerente ON consulta_externa; Type: COMMENT; Schema: public; Owner: -
@@ -20969,7 +20973,7 @@ COMMENT ON COLUMN public.fonte_externa.oficial IS 'O selo "oficial" decidido pel
 -- Name: COLUMN fonte_externa.forma; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.fonte_externa.forma IS 'lista = a fonte é baixada INTEIRA e procurada pelo CNPJ (CGU CEIS/CNEP, MTE, IBAMA): um 200 vazio pode ser lista truncada ou página de manutenção, então "nada" exige registros_lidos > 0 e 404 nunca vira "não existe". consulta = a fonte responde por alvo.';
+COMMENT ON COLUMN public.fonte_externa.forma IS 'lista = a fonte é baixada INTEIRA e procurada pelo CNPJ (CGU CEIS/CNEP, MTE, IBAMA): um 200 vazio pode ser lista vazia ou página de manutenção, então "nada" exige registros_lidos > 0 e 404 nunca vira "não existe" (teto: lista truncada que ainda traz registros não é detectada; o mínimo esperado por fonte é da A4). consulta = a fonte responde por alvo.';
 
 --
 -- Name: COLUMN fonte_externa.cadencia; Type: COMMENT; Schema: public; Owner: -
@@ -21343,13 +21347,13 @@ COMMENT ON VIEW public.instalacao_sonda_combinado_estrutural IS '(0157, achado D
 CREATE VIEW public.instalacao_sonda_consulta_externa_checks AS
  SELECT (conname)::text AS restricao
    FROM pg_constraint k
-  WHERE ((conrelid = ('public.consulta_externa'::regclass)::oid) AND (contype = 'c'::"char") AND convalidated AND (((conname = 'consulta_externa_resultado_valido'::name) AND (pg_get_constraintdef(oid) ~~ '%nada_encontrado%'::text)) OR ((conname = 'consulta_externa_alvo_so_cnpj'::name) AND (pg_get_constraintdef(oid) ~~ '%[0-9]{14}%'::text)) OR ((conname = 'consulta_externa_motivo_obrigatorio'::name) AND (pg_get_constraintdef(oid) ~~ '%btrim%'::text)) OR ((conname = 'consulta_externa_status_coerente'::name) AND (pg_get_constraintdef(oid) ~~ '%nao_consultado%'::text)) OR ((conname = 'consulta_externa_prova_de_leitura'::name) AND (pg_get_constraintdef(oid) ~~ '%nada_encontrado%'::text) AND (pg_get_constraintdef(oid) ~~ '%hash_bruto IS NOT NULL%'::text)) OR ((conname = 'consulta_externa_registros_validos'::name) AND (pg_get_constraintdef(oid) ~~ '%registros_lidos >= 0%'::text)) OR ((conname = 'consulta_externa_hash_formato'::name) AND (pg_get_constraintdef(oid) ~~ '%[0-9a-f]{64}%'::text)) OR ((conname = 'consulta_externa_custo_nao_negativo'::name) AND (pg_get_constraintdef(oid) ~~ '%custo >= %'::text)) OR ((conname = 'consulta_externa_validade_depois'::name) AND (pg_get_constraintdef(oid) ~~ '%validade_em >= data_consulta%'::text))));
+  WHERE ((conrelid = ('public.consulta_externa'::regclass)::oid) AND (contype = 'c'::"char") AND convalidated AND (((conname = 'consulta_externa_resultado_valido'::name) AND (pg_get_constraintdef(oid) ~~ '%nada_encontrado%'::text)) OR ((conname = 'consulta_externa_alvo_so_cnpj'::name) AND (pg_get_constraintdef(oid) ~~ '%[0-9]{14}%'::text)) OR ((conname = 'consulta_externa_motivo_obrigatorio'::name) AND (pg_get_constraintdef(oid) ~~ '%btrim%'::text)) OR ((conname = 'consulta_externa_status_coerente'::name) AND (pg_get_constraintdef(oid) ~~ '%nao_consultado%'::text)) OR ((conname = 'consulta_externa_prova_de_leitura'::name) AND (pg_get_constraintdef(oid) ~~ '%nada_encontrado%'::text) AND (pg_get_constraintdef(oid) ~~ '%hash_bruto IS NOT NULL%'::text) AND (pg_get_constraintdef(oid) ~~ '%e3b0c44298fc1c14%'::text) AND (pg_get_constraintdef(oid) ~~ '%nao_consultado%'::text)) OR ((conname = 'consulta_externa_registros_validos'::name) AND (pg_get_constraintdef(oid) ~~ '%registros_lidos >= 0%'::text)) OR ((conname = 'consulta_externa_hash_formato'::name) AND (pg_get_constraintdef(oid) ~~ '%[0-9a-f]{64}%'::text)) OR ((conname = 'consulta_externa_custo_nao_negativo'::name) AND (pg_get_constraintdef(oid) ~~ '%custo >= %'::text)) OR ((conname = 'consulta_externa_validade_depois'::name) AND (pg_get_constraintdef(oid) ~~ '%validade_em >= data_consulta%'::text))));
 
 --
 -- Name: VIEW instalacao_sonda_consulta_externa_checks; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON VIEW public.instalacao_sonda_consulta_externa_checks IS 'Sonda da 0303: uma linha = uma das 9 CHECKs de consulta_externa existe, validada, com o conteúdo certo (resultado nos quatro estados; alvo só CNPJ de 14 dígitos; motivo obrigatório; status coerente; hash em encontrado E em nada_encontrado; registros lidos >= 0; hash de 64 hex; custo >= 0; validade depois da consulta). Menos de 9: o service_role grava resultado incoerente com o status, falha sem motivo ou CPF.';
+COMMENT ON VIEW public.instalacao_sonda_consulta_externa_checks IS 'Sonda da 0303: uma linha = uma das 9 CHECKs de consulta_externa existe, validada, com o conteúdo certo (resultado nos quatro estados; alvo só CNPJ de 14 dígitos; motivo obrigatório; status coerente; hash em encontrado E em nada_encontrado, nunca o da string vazia, e nenhum em nao_consultado; registros lidos >= 0; hash de 64 hex; custo >= 0; validade depois da consulta). Menos de 9: o service_role grava resultado incoerente com o status, falha sem motivo ou CPF.';
 
 --
 -- Name: instalacao_sonda_conta_canonica_constraints; Type: VIEW; Schema: public; Owner: -

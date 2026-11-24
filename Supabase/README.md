@@ -1514,6 +1514,6 @@ supabase db execute --file Supabase/migrations/0302_a_linha_que_nao_tinha_identi
 # >>> O `authenticated` só LÊ as três tabelas; a escrita é a função (Sócio/Analista do mandato para empresa; Sócio para mercado). `fonte_externa.http_inexistente` é NULO nas 22: o 404 é `falhou` até alguém confirmar, por fonte, em produção, que ela devolve esse status para "alvo não consta".
 supabase db execute --file Supabase/migrations/0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql
 # DEPOIS DE APLICAR, confira:
-#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0303' and not presente;   -- ZERO linhas (33 requisitos)
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0303' and not presente;   -- ZERO linhas (36 requisitos)
 #   select tipo, count(*) from fonte_externa group by 1;   -- empresa 7, mercado 15
 #   select count(*) from consulta_externa;   -- 0: nada consulta ainda (A3 e A4 vêm depois)

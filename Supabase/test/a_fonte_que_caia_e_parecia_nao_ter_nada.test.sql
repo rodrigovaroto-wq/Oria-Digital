@@ -2,7 +2,7 @@
 -- Rodar via Supabase/test/run.sh.
 --
 -- O QUE ESTE ARQUIVO PROVA (comportamento, regra 3): uma API derrubada (HTTP 503, timeout sem status, erro de leitura) grava "falhou" e NUNCA "nada_encontrado";
--- "falhou" não vira outra coisa por UPDATE (nem do superusuário); fonte fora do catálogo, CPF, fato em consulta sem achado e escrita direta pelo portal são
+-- "falhou" não vira outra coisa por UPDATE (nem do superusuário em sessão normal; em modo replica ele passa por cima, e é o que a limpeza usa); fonte fora do catálogo, CPF, fato em consulta sem achado e escrita direta pelo portal são
 -- recusados; o usuário de OUTRO mandato não vê a consulta (a escrita e a leitura rodam COMO `authenticated`, a lição de
 -- .claude/memory/rls-so-select-passa-no-superusuario.md). Também: toda fonte tem prazo (decisão 8), "nada" exige prova de leitura e, em fonte de lista, registros lidos > 0,
 -- a data é do banco, custo é explícito, nem UPDATE nem DELETE apagam uma falha, o caminho do SERVIÇO (sem JWT, role service_role, como o n8n chama) e o gatilho deferido
@@ -223,9 +223,9 @@ begin
   select count(*) filter (where validade_origem = 'minimo_por_desconhecida' and validade_dias = 1 and cadencia is null),
          count(*) filter (where validade_origem = 'cadencia')
     into v_n, v_n2 from fonte_externa;
-  perform teste_assert_0303(v_n = 21 and v_n2 = 1, 'o seed: 21 no mínimo de 1 dia (cadência de publicação desconhecida) e 1 por cadência (o MTE)', v_n || '/' || v_n2);
-  perform teste_assert_0303((select validade_dias from fonte_externa where chave = 'mte_trabalho_escravo') = 180 and (select cadencia from fonte_externa where chave = 'mte_trabalho_escravo') = 'semestral',
-    'o MTE, único com cadência de publicação dita no plano ("lista semestral"), vence em 180 dias');
+  perform teste_assert_0303(v_n = 22 and v_n2 = 0, 'o seed: as 22 no mínimo de 1 dia (cadência de publicação desconhecida) e nenhuma por cadência (o MTE incluído, decisão do dono)', v_n || '/' || v_n2);
+  perform teste_assert_0303((select validade_dias = 1 and cadencia is null and validade_origem = 'minimo_por_desconhecida' from fonte_externa where chave = 'mte_trabalho_escravo'),
+    'o MTE (o plano diz a periodicidade da lista, não a data de publicação) vence em 1 dia, cadência nula: nunca parece nova estando velha (decisão do dono)');
   perform teste_assert_0303((select cadencia is null and validade_dias = 1 from fonte_externa where chave = 'bcb_sgs')
     and (select cadencia is null and validade_dias = 1 from fonte_externa where chave = 'cgu_ceis'),
     'a cadência de BUSCA (SGS mensal, CGU diária por nós) não vira prazo: a de publicação é desconhecida, então 1 dia');
@@ -274,8 +274,26 @@ begin
   raise notice '--- 3. a classificação do que deu certo, e o que a função recusa em vez de adivinhar ---';
   v_r := teste_res_0303('brasilapi_cnpj', v_a, c_ok, 200, null, '[]', '[]'::jsonb);
   perform teste_assert_0303(v_r = 'nada_encontrado', 'HTTP 200 com corpo lido e lista vazia grava nada_encontrado (fonte de consulta)', v_r);
+  -- CORPO VAZIO NÃO É LEITURA (2º ciclo, achado 1). Regra 4: o antigo assert aqui afirmava que "204 com '' vira nada_encontrado na BrasilAPI", e isso NÃO foi medido contra a
+  -- BrasilAPI (nenhuma resposta real foi vista); só se sabe que um 200/204 vazio de proxy em manutenção, lido com JSON.parse(body || '[]'), chega como "sem itens". O que se afirma
+  -- é o comportamento seguro: corpo vazio (ou só espaço) é "não li" e grava falhou, nunca nada_encontrado.
   v_r := teste_res_0303('brasilapi_cnpj', v_a, c_ok, 204, null, '', '[]'::jsonb);
-  perform teste_assert_0303(v_r = 'nada_encontrado', 'HTTP 204 com corpo vazio LIDO ('''') e lista vazia grava nada_encontrado', v_r);
+  perform teste_assert_0303(v_r = 'falhou', 'HTTP 204 com corpo VAZIO ('''') grava falhou: a string vazia tem hash, mas não prova leitura', v_r);
+  v_r := teste_res_0303('brasilapi_cnpj', v_a, c_ok, 200, null, '', '[]'::jsonb);
+  perform teste_assert_0303(v_r = 'falhou', 'HTTP 200 com corpo vazio (proxy em manutenção) grava falhou, não nada_encontrado', v_r);
+  v_r := teste_res_0303('brasilapi_cnpj', v_a, c_ok, 200, null, E' \n\t ', '[]'::jsonb);
+  perform teste_assert_0303(v_r = 'falhou', 'corpo só de espaço e quebra de linha também é "não li": falhou', v_r);
+  v_r := teste_res_0303('brasilapi_cnpj', v_a, c_ok, 200, null, '', v_itens);
+  perform teste_assert_0303(v_r = 'falhou', 'corpo vazio COM itens também é falhou: o dado não tem a prova do que a fonte disse', v_r);
+  v_r := teste_res_0303('cgu_ceis', v_a, c_ok, 200, null, '', '[]'::jsonb, null, 100);
+  perform teste_assert_0303(v_r = 'falhou', 'fonte de lista com corpo vazio e registros_lidos informado ainda é falhou (o corpo é a prova)', v_r);
+  perform teste_assert_0303((select motivo like '%corpo cru%' and motivo like '%vazio%' from consulta_externa where fonte = 'brasilapi_cnpj' and http_status = 204 and resultado = 'falhou' order by id limit 1),
+    'e o motivo diz que o corpo estava vazio');
+  perform teste_assert_0303(not exists (select 1 from consulta_externa where hash_bruto = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855' and resultado in ('encontrado', 'nada_encontrado')),
+    'nenhuma consulta nada_encontrado/encontrado do banco tem o hash da string vazia');
+  perform teste_assert_0303(teste_ins_0303('brasilapi_cnpj', v_a, c_ok, 'nada_encontrado', 200, null, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') = '23514', 'escrita direta: nada_encontrado com o hash da string vazia é recusado (CHECK)');
+  perform teste_assert_0303(teste_ins_0303('brasilapi_cnpj', v_a, c_ok, 'encontrado', 200, null, 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') = '23514', 'escrita direta: encontrado com o hash da string vazia é recusado (CHECK)');
+  perform teste_assert_0303(teste_ins_0303('brasilapi_cnpj', v_a, c_ok, 'falhou', 200, 'corpo vazio', 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855') = 'ok', 'controle: o hash da string vazia é aceito em falhou (é o registro do que se viu)');
   v_r := teste_res_0303('cgu_ceis', v_a, c_ok, 200, null, '[{"cnpj":"99999999000199"}]', '[]'::jsonb, null, 18234);
   perform teste_assert_0303(v_r = 'nada_encontrado', 'fonte de LISTA com 18234 registros varridos e nenhum do CNPJ grava nada_encontrado', v_r);
   v_j := fn_registrar_consulta_externa('brasilapi_cnpj', v_a, c_ok, 200, null, v_corpo, v_itens, null, 0);
@@ -289,7 +307,7 @@ begin
     and (select custo from consulta_externa where id = v_id) = 0
     and (select validade_em from consulta_externa where id = v_id) = (select data_consulta from consulta_externa where id = v_id) + interval '1 day',
     'fornecedor e base legal vêm do catálogo, o custo é o informado (0) e a validade é a data + o prazo do catálogo (1 dia: o mínimo da BrasilAPI)');
-  perform teste_assert_0303((select data_consulta from consulta_externa where id = v_id) = now(), 'a data da consulta é o now() do banco');
+  perform teste_assert_0303((select data_consulta from consulta_externa where id = v_id) between now() and clock_timestamp(), 'a data da consulta é a do banco (clock_timestamp: entre o início da transação e agora)');
   v_r := teste_res_0303('brasilapi_cnpj', v_a, c_ok, 200, null, '{}', null);
   perform teste_assert_0303(v_r = '22023', 'HTTP 200 SEM a lista de itens é recusado (22023): "não li" não vira "vazio"', v_r);
   v_r := teste_res_0303('brasilapi_cnpj', v_a, c_ok, 200, null, '{}', '{"a":1}'::jsonb);
@@ -303,9 +321,13 @@ begin
   perform teste_assert_0303(v_r = 'nao_consultado', 'o motivo de não consultar grava nao_consultado', v_r);
   v_r := teste_res_0303('pgfn_divida_ativa', v_a, c_ok, null, null, null, null, '   ');
   perform teste_assert_0303(v_r = '22023', 'nao_consultado sem motivo (só espaços) é recusado: ausência sem a causa não se registra', v_r);
+  v_r := teste_res_0303('pgfn_divida_ativa', v_a, c_ok, null, null, '{"x":1}', null, 'não consultei');
+  perform teste_assert_0303(v_r = '22023', 'nao_consultado com corpo é contraditório (não houve chamada, não há corpo nem hash): recusado', v_r);
+  perform teste_assert_0303(teste_ins_0303('pgfn_divida_ativa', v_a, c_ok, 'nao_consultado', null, 'não consultei', repeat('a', 64)) = '23514', 'escrita direta: nao_consultado com hash é recusado (CHECK)');
+  perform teste_assert_0303(teste_ins_0303('pgfn_divida_ativa', v_a, c_ok, 'nao_consultado', null, 'não consultei', null) = 'ok', 'controle: nao_consultado sem hash entra');
   v_r := teste_res_0303('pgfn_divida_ativa', v_a, c_ok, 200, null, null, '[]'::jsonb, 'não consultei');
   perform teste_assert_0303(v_r = '22023', 'nao_consultado com status e itens (uma resposta) é contraditório: recusado', v_r);
-  perform teste_assert_0303((select http_status from consulta_externa where fonte = 'pgfn_divida_ativa' and resultado = 'nao_consultado') is null,
+  perform teste_assert_0303((select bool_and(http_status is null) from consulta_externa where fonte = 'pgfn_divida_ativa' and resultado = 'nao_consultado'),
     'nao_consultado fica sem status HTTP');
   -- o "não existe" documentado pela fonte (só ele vira nada_encontrado)
   update fonte_externa set http_inexistente = 404 where chave = 'brasilapi_cnpj';
@@ -354,7 +376,7 @@ begin
   v_r := teste_res_0303('cgu_ceis', v_a, c_ok, 200, null, '[]', '[]'::jsonb);
   perform teste_assert_0303(v_r = 'falhou', 'fonte de LISTA, 200 com lista vazia e registros_lidos NÃO informado grava falhou', v_r);
   v_r := teste_res_0303('cgu_ceis', v_a, c_ok, 200, null, '[]', '[]'::jsonb, null, 0);
-  perform teste_assert_0303(v_r = 'falhou', 'fonte de LISTA com 0 registros lidos (lista vazia, truncada ou página de manutenção com 200) grava falhou', v_r);
+  perform teste_assert_0303(v_r = 'falhou', 'fonte de LISTA com 0 registros lidos (lista vazia ou página de manutenção com 200) grava falhou', v_r);
   perform teste_assert_0303((select motivo like '%registros lidos%' from consulta_externa where fonte = 'cgu_ceis' and resultado = 'falhou' and registros_lidos = 0 limit 1), 'e o motivo diz o que faltou: os registros lidos');
   v_r := teste_res_0303('cgu_ceis', v_a, c_ok, 200, null, '<html>Manutenção</html>', '[]'::jsonb, null, 0);
   perform teste_assert_0303(v_r = 'falhou', 'a página de manutenção servida com 200 (nenhum registro lido) é falhou', v_r);
@@ -393,9 +415,13 @@ begin
     values ('cgu_ceis', v_a, c_ok, '2099-01-01', '2099-12-31', 0, 'teste', 'dado_publico', 200, repeat('e', 64), 9, 'nada_encontrado') returning id into v_id;
   exception when others then v_t := sqlstate; end;
   perform teste_assert_0303(v_t is null, 'arranjo: a escrita direta com data e validade de 2099 entra (o gatilho as sobrescreve)', v_t);
-  perform teste_assert_0303((select data_consulta = now() and validade_em = now() + interval '1 day' from consulta_externa where id = v_id),
-    'um nada_encontrado datado 2099 NÃO fica em 2099: data = now() do banco e validade = o catálogo (1 dia), nunca o que o chamador mandou');
-  perform teste_assert_0303(not exists (select 1 from consulta_externa where data_consulta > now() + interval '1 second'), 'nenhuma consulta no banco está no futuro (a "mais recente" é sempre uma real)');
+  perform teste_assert_0303((select data_consulta between now() and clock_timestamp() and validade_em = data_consulta + interval '1 day' from consulta_externa where id = v_id),
+    'um nada_encontrado datado 2099 NÃO fica em 2099: data = a do banco e validade = o catálogo (1 dia), nunca o que o chamador mandou');
+  v_j := fn_registrar_consulta_externa('bcb_sgs', null, null, 503, null, null, null, null, 0);
+  v_id2 := (fn_registrar_consulta_externa('bcb_sgs', null, null, 200, null, '[{"d":1}]', '[{"chave":"ordem_2","valor":2}]'::jsonb, null, 0) ->> 'id')::uuid;
+  perform teste_assert_0303((select b.data_consulta > a.data_consulta from consulta_externa a, consulta_externa b where a.id = (v_j ->> 'id')::uuid and b.id = v_id2),
+    'duas consultas da MESMA transação têm datas distintas e ordenadas (clock_timestamp, não now()): "a mais recente" nunca fica indefinida');
+  perform teste_assert_0303(not exists (select 1 from consulta_externa where data_consulta > clock_timestamp() + interval '1 second'), 'nenhuma consulta no banco está no futuro (a "mais recente" é sempre uma real)');
   perform teste_assert_0303((select registrado_por is not distinct from auth.uid() from consulta_externa where id = v_id), 'o registrado_por é o auth.uid() de quem gravou, não o que o chamador mandar');
   v_r := teste_reg_0303(u_ana, 'brasilapi_cnpj', v_a, c_ok, 503, null, null, null);
   perform teste_assert_0303((select registrado_por = u_ana from consulta_externa where id = ((v_r::jsonb) ->> 'id')::uuid), 'registrado pela Analista, a consulta guarda quem foi (auth.uid()): a autoria de um "nada" fica rastreável');
@@ -573,9 +599,9 @@ begin
   -- ------------------------------------------------------------------ 7. A SONDA
   raise notice '--- 7. a sonda enxerga tudo o que a 0303 instala ---';
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0303' and not presente;
-  perform teste_assert_0303(v_n = 0, 'a sonda enxerga os 33 requisitos da 0303 (zero ausentes)', (select string_agg(chave || ': ' || coalesce(detalhe, ''), ' | ') from fn_instalacao_conferir() where migration = '0303' and not presente));
+  perform teste_assert_0303(v_n = 0, 'a sonda enxerga os 36 requisitos da 0303 (zero ausentes)', (select string_agg(chave || ': ' || coalesce(detalhe, ''), ' | ') from fn_instalacao_conferir() where migration = '0303' and not presente));
   select count(*) into v_n from fn_instalacao_conferir() where migration = '0303';
-  perform teste_assert_0303(v_n = 33, 'e o catálogo da 0303 tem 33 requisitos (não está vazio nem encolheu)', v_n::text);
+  perform teste_assert_0303(v_n = 36, 'e o catálogo da 0303 tem 36 requisitos (não está vazio nem encolheu)', v_n::text);
 
   -- DEVOLVE O ESTADO. O mandato apagado leva as consultas dele e os fatos pela CASCATA (a única saída do DELETE recusado): conta antes e depois, para a limpeza não correr sobre o vazio.
   select count(*) into v_n from consulta_externa where caso_id in (v_a, v_b);
