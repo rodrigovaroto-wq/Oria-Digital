@@ -42,6 +42,13 @@ são do **ambiente de desenvolvimento** (quem constrói o sistema), não do prod
 6. **Medição:** custo, tempo e erros registrados por execução, por etapa e por agente (D5, J6).
 7. **Cobertura das 31 frentes de diligência:** definida na construção de cada agente (B6). O mapa das
    frentes está nos anexos do deck (slides 11–14).
+8. **Portão do dado externo:** todo dado captado fora do cliente chega ao agente pelo portão dele,
+   com pesos, score mínimo, cobertura mínima e pisos próprios. Os números estão **só** na
+   [Espec. 15, §5A](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md);
+   em que fase nasce o portão de cada agente está no [plano](../06_execucao/PLANO_DE_EXECUCAO.md),
+   Trilha K. No piloto, vetos e pisos já bloqueiam e o score ponderado roda em modo sombra (D15.4);
+   o dado em REVISÃO segue só liberado por um analista, com justificativa (D15.3). Supervisor,
+   Auditor e Autoaprimoramento não têm pesos próprios.
 
 ## 3. Fluxo entre os agentes
 

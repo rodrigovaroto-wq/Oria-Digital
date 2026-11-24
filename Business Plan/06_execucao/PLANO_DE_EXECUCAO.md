@@ -4,7 +4,7 @@
 com uma nota "superado por" (lista em [`99_historico/README.md`](../99_historico/README.md)).
 **Sem calendário** (K2): só sequência, dependências e critério de pronto.
 
-- **Base:** registro de decisões [v0.1.5](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.5.html)
+- **Base:** registro de decisões [v0.1.6](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.6.html)
   e [workflow v0.3.0](../02_workflow_e_arquitetura/oria_digital_workflow_v0.3.0.html).
 - **Situação conferida no código** em 19/11/2026, `main` em `e85ac9c`, migration mais nova `0302`.
   O banco de produção **não** foi consultado para este plano: o que está no banco é confirmado pela
@@ -78,8 +78,9 @@ trilhas abaixo.
 | **0.8** | **RIPD** (I5): relatório de impacto à proteção de dados — mapa de dados, fluxos e controles | P1 | 0.1, 0.7 | Claude (parte técnica) · Advogado (parte jurídica) | DESENVOLVER | Parte técnica escrita; parte jurídica validada por advogado |
 | **0.9** | **Três ambientes** (H8): desenvolvimento, teste descartável por mudança, produção; nenhuma credencial de produção fora dela | P2 | 0.1 | Claude · Dono | CORRIGIR. Existe o banco de teste do CI (`Supabase/test/run.sh`, `tdf_test`) e a produção; não há dev separado | Os três existem; varredura não acha credencial de produção fora dela |
 | **0.10** | **Anonimização** de dado real para teste (H8, F4) | P2 | 0.9 | Claude | DESENVOLVER | Cópia anonimizada de um mandato real roda a suíte; varredura não acha CNPJ/CPF/nome reais |
-| **0.11** | **Alinhar duas especificações técnicas ao registro**: `Arquitetura do Sistema/2 Especificação/10_DADOS_RETENCAO_E_LGPD.md` (I2, H1, H7, H8) e `06_HUMAN_IN_THE_LOOP.md` (E1, E2, R1) | P3 | — | Claude · Dono | CORRIGIR. A 10 ainda marca os prazos [A CONFIRMAR]; a 06 ainda cita "revisor sênior / gerente" (linha 14) | As duas especificações não contradizem o registro vigente (v0.1.5) |
+| **0.11** | **Alinhar duas especificações técnicas ao registro**: `Arquitetura do Sistema/2 Especificação/10_DADOS_RETENCAO_E_LGPD.md` (I2, H1, H7, H8) e `06_HUMAN_IN_THE_LOOP.md` (E1, E2, R1) | P3 | — | Claude · Dono | CORRIGIR. A 10 ainda marca os prazos [A CONFIRMAR]; a 06 ainda cita "revisor sênior / gerente" (linha 14) | As duas especificações não contradizem o registro vigente (v0.1.6) |
 | **0.12** | **Infraestrutura de produção do piloto** (H1-1, H1, H2, H7): o piloto conta como produção real. No banco e na automação escolhidos pelo estudo: backup contínuo, cópia separada dos arquivos, região São Paulo; automação (n8n ou o substituto) **fora da instância atual** | P1 | 0.1, 0.3 | Claude · Dono contrata e aplica | DESENVOLVER. Hoje: banco no plano gratuito sem backup; n8n numa instância compartilhada (decisão H2: ali só até a produção real) | Num teste de recuperação real (banco + arquivos): perda máxima de minutos e volta em até 4 h, medidas; nenhum mandato do piloto roda na instância atual do n8n |
+| 0.13 | **Registrar as decisões do score do dado externo** ([Espec. 15](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md), §11 e §5A.5) numa nova versão do registro | P2 | — | Claude escreve · Dono confirma | **FEITO (24/11/2026).** [Registro v0.1.6](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.6.html), seção 22: D15, D15.1–D15.15, D4-1 e J7. Medido: da v0.1.5 só mudaram 3 caracteres (número da versão e data); 90 → 108 decisões com âncora | v0.1.6 publicada com as decisões D15 e as 7 regras; a Espec. 15 e este plano citam o código delas |
 
 ### Portão G0 — pronto para o primeiro mandato do piloto
 
@@ -149,7 +150,7 @@ Absorve as trilhas A, B e D do `PLANO_MVP_2026-11` e o `PLANO_LINHA_A_LINHA`.
 
 ### Trilha E — Agentes de análise do piloto
 
-Cada agente: definir as frentes de diligência que cobre (B6), construir sobre 1.D1, medir no gabarito.
+Cada agente: definir as frentes de diligência que cobre (B6), construir sobre 1.D1, medir no gabarito. O dado externo que cada um usa passa pelo portão dele (Espec. 15, §5A), em modo sombra no piloto (Trilha K).
 
 | ID | Tarefa | Prio. | Depende de | Papel | Situação | Pronto quando |
 |---|---|---|---|---|---|---|
@@ -197,12 +198,51 @@ Absorve a trilha C do `PLANO_MVP_2026-11` (MC0–MC8).
 | 1.I2 | **Relatório em PDF** com autoria Oria Digital e "limitações relevantes" | P1 | 1.F3 | Claude | DESENVOLVER. Nenhuma biblioteca de PDF no portal | PDF de um mandato real revisado pelo segundo revisor |
 | 1.I3 | **Relatório interno** completo (erros, pendências, auditoria) × do cliente | P2 | 1.D5 | Claude | CORRIGIR. O relatório interno existe como as telas do mandato | Os dois relatórios saem do mesmo diagnóstico, com conteúdo diferente por regra |
 
+### Trilha K — Score de confiabilidade do dado externo ([Espec. 15](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md))
+
+Pedido do dono (23–24/11/2026): cada dado captado **fora** do cliente passa por um portão em cada
+agente, e só o de alta confiabilidade segue sozinho. **No piloto, os vetos e os pisos já bloqueiam**
+(D15.4): veto reprova, piso falho (inclusive as travas) manda para REVISÃO, que qualquer analista
+pode liberar com justificativa (D15.3). **O score ponderado e a cobertura rodam em modo sombra**
+(calculam, gravam e mostram, sem barrar); o bloqueio pelo score vem na Fase 3 (3.8, 3.9), depois de medido. Os pesos, mínimos e pisos de cada agente estão
+**só** na Espec. 15, §5A (uma fonte por assunto); aqui fica a ordem de construção.
+
+| ID | Tarefa | Prio. | Depende de | Papel | Situação | Pronto quando |
+|---|---|---|---|---|---|---|
+| 1.K1 | **Catálogo das fontes externas** (`fonte_externa`, Espec. 15 §7): origem (A1), periodicidade e prazo crítico (B2), origem compartilhada (A4), se o dado é opinativo, base legal típica | P2 | 0.13 | Claude (banco) | DESENVOLVER | Toda fonte captada no piloto (1.B3, 1.B4, 1.C1–1.C5, 1.H2–1.H4) está no catálogo; fonte sem origem declarada aparece como "sem origem", nunca em branco |
+| 1.K2 | **Vetos do portão no banco** (§4, passo 1): origem não declarada, validade por registro, custódia de documento oficial trazido pelo cliente (recibo do SPED e do Registrato), prazo crítico pela data do uso, "nada consta" sem execução e sem cobertura (regra 2), base legal **por destino** (regra 1). Reusa o que já é P1 em 1.B7 (autorização), 1.C3 (falhou ≠ vazio) e 1.H3 (homônimo) | P1 | 1.K1, 1.B7 | Claude (banco) | DESENVOLVER | Cada veto com invariante medido não-vazio (regra 2 do projeto): plantar a falha, ver o portão reprovar, contar os asserts |
+| 1.K3 | **Portão de cada agente do piloto: pisos bloqueando, score em sombra** (§5A, D15.4): notas por dimensão com estado (medida, `na`, `nm`), cobertura, teto da fonte em estreia (regra 7); `avaliacao_dado`, `portao_regra` e `portao_decisao`; portões do **Captador** (quarentena), **Conferidor**, **Mercado**, **Caixa**, **Dívida** e do **book**. Reusa o dial (`fn_dial_permite_auto`, `0127`) em N0 | P1 | 1.K2, 1.B5, 1.B6, 1.D3 | Claude (banco) | DESENVOLVER. Os 13 casos de referência existem em `15_anexos/casos_do_score.py` | Toda observação externa usada num mandato do piloto tem avaliação e decisão de portão gravadas por agente, nenhuma em branco; as decisões gravadas para os 13 casos batem com `casos_do_score.py` (o script é o oráculo do teste) |
+| 1.K4 | **Propagação pelo menor score** (regra 3) e **frescor pela data do uso** (regra 4): número calculado herda o menor score e o pior resultado dos insumos | P2 | 1.K3, 1.I1 | Claude (banco + export) | DESENVOLVER | Num mandato de teste, uma soma com um insumo em REVISÃO sai em REVISÃO no book (teste reprova sem a propagação) |
+| 1.K5 | **Painel do score**, ao lado do painel de frescor (1.C4): por dado e por agente, o resultado, o score, a cobertura e o motivo | P2 | 1.K3, 1.C4 | Claude (portal) | DESENVOLVER. Proposta visual: `15_anexos/Portoes_de_Confiabilidade_Oria_v2.html` | Dado em REVISÃO mostra o motivo e o efeito; dado não avaliado aparece como não avaliado, nunca como aprovado |
+
+**Em que fase nasce o portão de cada agente.** O portão nasce junto com o agente que o usa. Nenhum
+item de agente passa a depender da Trilha K: o agente funciona sem o portão, e o 1.K3 liga o portão
+de cada um quando fica pronto (pisos bloqueando, score em sombra).
+
+| Agente | Item do agente | Fase do portão | O que entra junto |
+|---|---|---|---|
+| Captador (funções do piloto) | Trilhas B e C | 1 (1.K3) | Quarentena na entrada; conflito guarda as duas versões |
+| Conferidor | 1.E1 | 1 (1.K3) | Agregador nunca serve de régua; dado opinativo não serve de referência |
+| Mercado | 1.E4 | 1 (1.K3) | Frescor pela data do uso (1.K4) |
+| Caixa | 1.E3 | 1 (1.K3) | Em extrato, o saldo tem de fechar |
+| Dívida | 1.E2 | 1 (1.K3) | Recibo do Registrato como veto de custódia (1.K2) |
+| Supervisor | 1.D4 | 1 | **Sem pesos:** só repassa o dado APROVADO no portão do agente de destino |
+| Auditor | 1.D5 | 1 | **Sem pesos:** confere todo uso no `portao_decisao`, mais 5% dos aprovados e todos os que passaram com até 5 pontos de folga (regra 6) |
+| Book (Excel) | 1.I1 | 1 (1.K3, 1.K4) | Portão "Entregas" aplicado a cada número do book |
+| Risco | 2.2 | 2 (2.18) | Dado opinativo passa só aqui, rotulado como opinião; "nada consta" só com cobertura |
+| Estrategista | 2.3 | 2 (2.18) | Nenhum dado opinativo nem contestado como premissa |
+| Entregas (agente) | 2.6 | 2 (2.18) | Base legal por destino: sigilo bancário e licença de bureau para terceiros |
+| Captador formal | 2.1 | 2 (2.18) | Assume o portão de entrada das funções do piloto |
+| Monitoramento | 2.8 | 2 (2.18) | Reabre o portão quando o score de um dado em uso cai abaixo do mínimo |
+| Autoaprimoramento | 2.10 | 2 (2.19) | **Sem pesos:** lê os furos de portão e propõe ajustes; quem aplica é um humano |
+| Todos | — | 3 (3.8, 3.9) | Calibração e bloqueio de verdade |
+
 ### Trilha J — Medição e gabarito
 
 | ID | Tarefa | Prio. | Depende de | Papel | Situação | Pronto quando |
 |---|---|---|---|---|---|---|
 | 1.J1 | **Medição automática por mandato** (J6): dias, horas de analista, custo de IA e dados, erros por etapa e agente, achados em R$ | P1 · G0 | 1.D9 | Claude | DESENVOLVER. Custo por lote existe; o resto não | Painel por mandato com as 6 medidas preenchidas num mandato real |
-| 1.J2 | **Gabarito de 30–50 páginas reais**, conferido célula a célula, com parte oculta (D4, F5) | P1 | — | **Quem monta: [a indicar]** (D4) · Claude prepara | CORRIGIR. Gabarito rotulável existe (`0126`, `0130`); quantas amostras estão rotuladas não foi medido | 30–50 páginas rotuladas; parte oculta inacessível ao agente |
+| 1.J2 | **Gabarito de 30–50 páginas reais**, conferido célula a célula, com parte oculta (D4, F5) | P1 | — | **Dono** (D4-1) · Claude prepara | CORRIGIR. Gabarito rotulável existe (`0126`, `0130`); quantas amostras estão rotuladas não foi medido | 30–50 páginas rotuladas; parte oculta inacessível ao agente |
 
 ### Portão G1 — piloto concluído e medido
 
@@ -238,6 +278,8 @@ Absorve a trilha C do `PLANO_MVP_2026-11` (MC0–MC8).
 | 2.15 | **Trilha de auditoria com cadeia de hashes** e cópia externa imutável (H6) | P1 | 0.1 | Claude | CORRIGIR. Trilha só de acréscimo existe (`0215`, `0224`), sem hash encadeado | Alterar um evento quebra a cadeia e gera alerta (teste) |
 | 2.16 | **Login com verificação em duas etapas** (decisão G3) | P1 | 1.G1 | Claude (portal) | DESENVOLVER | Login sem segundo fator recusado |
 | 2.17 | **RIPD revisto para o primeiro cliente além da Partners** (I5): dados, fluxos e controles do novo cliente | P1 | 0.8, 2.14 | Claude (parte técnica) · Advogado (parte jurídica) | DESENVOLVER | RIPD revisto, com a parte jurídica validada por advogado, antes do primeiro mandato do novo cliente |
+| 2.18 | **Portões do score dos agentes da Fase 2**, em modo sombra ([Espec. 15](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md), §5A): Risco (opinião só aqui, rotulada; "nada consta" com cobertura), Estrategista, Entregas (base legal por destino, regra 1), Captador formal (assume o portão de entrada) e monitoramento (reabre o portão quando o score cai) | P2 | 1.K3, e o item de cada agente (2.1, 2.2, 2.3, 2.6, 2.8) | Claude | DESENVOLVER | Cada agente da Fase 2 grava a decisão de portão de todo dado externo que usa; os casos de bureau, processo e "nada consta" de `casos_do_score.py` batem com o gravado |
+| 2.19 | **Revisão semanal dos furos de portão e alerta de carimbo** (regra 5): toda liberação humana de REVISÃO entra na revisão semanal (E4); portão em que o humano libera sem alterar mais de 95% dos casos gera alerta de calibração | P2 | 2.10, 1.K3 | Claude · **Técnico** decide | DESENVOLVER | Relatório semanal lista os furos por portão; alerta disparado num caso de teste com 96% de liberação sem alteração |
 
 ### Portão G2 — pronto para o primeiro cliente além da Partners
 
@@ -259,6 +301,8 @@ pendências).
 | 3.5 | **Segundo revisor sempre** quando houver equipe (E1) | P2 | Contratação | **[a contratar]** | DESENVOLVER | Nenhuma autoaprovação, mesmo interna |
 | 3.6 | **Preços e tetos** (J1, N-C6b, D5) a partir do piloto | P1 | G1 | Dono | DESENVOLVER | Valores registrados numa nova versão do registro |
 | 3.7 | **Técnico separado do Sócio** (E2, K3) | P2 | Contratação | **[a contratar]** | DESENVOLVER | Mudança técnica aprovada por pessoa diferente do dono |
+| 3.8 | **Calibração do score do dado externo** ([Espec. 15](../../Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md), §9): gabarito do dado externo (parte cega), taxa de erro medida por resultado (APROVADO, REVISÃO) e por agente; ajuste de pesos, mínimos e teto **primeiro em `casos_do_score.py`**, depois no §5A; teto da fonte em estreia revisto quando ela tiver 30 conferências | P2 | 1.K3, 1.J2, 3.4 | Claude · Dono rotula e decide | DESENVOLVER | Taxa de erro por resultado e por agente publicada, com intervalo; se APROVADO erra tanto quanto REVISÃO, o desenho volta à mesa (decisão registrada) |
+| 3.9 | **Bloqueio de verdade, em degraus, por agente** (§9, passo 6): alerta → ressalva → bloqueio, com **rebaixamento automático** quando o erro medido piora (D6), como no 3.3 | P2 | 3.8 | Claude · Dono fixa os pisos | DESENVOLVER | Cada portão ligado cita a decisão que fixou o piso; teste reprova sem o portão; piora medida rebaixa o portão sozinha |
 
 ### Portão G3 — produção para vários clientes
 
@@ -278,8 +322,8 @@ Fase 3 podem seguir depois do portão.
 
 ## 9. O que depende de pessoas, terceiros ou decisões
 
-- **Pessoas** (K3): analista da Partners como segundo revisor (1.F2) **[a indicar]**; quem monta o gabarito
-  (1.J2, D4) **[a indicar]**; Técnico separado (3.7) e equipe para segundo revisor sempre (3.5) **[a contratar]**.
+- **Pessoas** (K3): analista da Partners como segundo revisor (1.F2) **[a indicar]** (o dono indica depois, 24/11/2026);
+  o gabarito do piloto é montado pelo dono (1.J2, D4-1); Técnico separado (3.7) e equipe para segundo revisor sempre (3.5) **[a contratar]**.
 - **Terceiros e decisões em aberto:** lista viva em
   [`08_pendencias_e_riscos/PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.md`](../08_pendencias_e_riscos/PENDENCIAS_RISCOS_E_QUESTOES_FUTURAS.md).
 
@@ -297,12 +341,12 @@ mesma onda vão um depois do outro.
 
 | Onda | Itens (prioridade P1 em negrito) |
 |---|---|
-| **1** | **0.1** · **0.2** · **0.4** · **0.5** · **0.6** · 0.11 · **1.A1** · **1.A4** · 1.A8 · **1.B1** · **1.B4** · **1.B7** · **1.C1** · **1.C2** · **1.C3** · **1.D1** · **1.D6** · **1.F1** · **1.F5** · **1.J2** |
-| **2** | **0.3** · **0.7** · 0.9 · **1.A2** · **1.A3** · **1.A5** · 1.A9 · **1.B2** · **1.B6** · 1.C4 · **1.C5** · **1.D2** · **1.D3** · **1.D7** · **1.F2** · **1.G1** · **1.H1** |
-| **3** | **0.8** · 0.10 · **0.12** · **1.A6** · 1.A10 · **1.B3** · 1.D10 · **1.D4** · **1.D5** · **1.D8** · **1.D9** · **1.F3** · **1.F6** · 1.G2 · **1.H2** · **1.H4** · **1.I1** |
+| **1** | **0.1** · **0.2** · **0.4** · **0.5** · **0.6** · 0.11 · **1.A1** · **1.A4** · 1.A8 · **1.B1** · **1.B4** · **1.B7** · **1.C1** · **1.C2** · **1.C3** · **1.D1** · **1.D6** · **1.F1** · **1.F5** · **1.J2** · 0.13 |
+| **2** | **0.3** · **0.7** · 0.9 · **1.A2** · **1.A3** · **1.A5** · 1.A9 · **1.B2** · **1.B6** · 1.C4 · **1.C5** · **1.D2** · **1.D3** · **1.D7** · **1.F2** · **1.G1** · **1.H1** · 1.K1 |
+| **3** | **0.8** · 0.10 · **0.12** · **1.A6** · 1.A10 · **1.B3** · 1.D10 · **1.D4** · **1.D5** · **1.D8** · **1.D9** · **1.F3** · **1.F6** · 1.G2 · **1.H2** · **1.H4** · **1.I1** · **1.K2** |
 | **4** | **1.A7** · **1.B5** · **1.E2** · **1.E3** · **1.E4** · **1.H3** · **1.I2** · 1.I3 · **1.J1** |
-| **5** | **1.E1** · **1.F4** · **1.H5** |
-| **6** | **1.E5** |
+| **5** | **1.E1** · **1.F4** · **1.H5** · **1.K3** |
+| **6** | **1.E5** · 1.K4 · 1.K5 |
 
 O estudo de infraestrutura (0.1) está na onda 1 e é a primeira entrega (R2); a orquestração dos agentes
 (1.D3) depende dele e só começa na onda 2.
@@ -341,3 +385,6 @@ nova e a evidência. O estado do dia continua no `ESTADO.md`.
 | Data | Item | Situação | Evidência |
 |---|---|---|---|
 | 19–23/11/2026 | Plano criado (Fase 4) | — | Este arquivo; PR da Fase 4 |
+| 23/11/2026 | 2.18, 2.19 (novos) | DESENVOLVER | Pedido do dono: score de confiabilidade do dado externo e portões por etapa. Desenho e pesquisa na Espec. 15; nada construído |
+| 24/11/2026 | 0.13, 1.K1–1.K5, 2.18, 2.19 (refeitos), 3.8, 3.9 | DESENVOLVER | O score do dado externo distribuído pelas fases (Espec. 15 §5A v2, aprovado pelo dono): decisões na Fase 0; base e portões dos agentes do piloto em sombra na Fase 1 (Trilha K); agentes da Fase 2; calibração e bloqueio na Fase 3. Os antigos 2.18 (catálogo e sombra) e 2.19 (portões) foram absorvidos pela 1.K1–1.K3 e pela 3.8–3.9 |
+| 24/11/2026 | 0.13 | FEITO | Registro v0.1.6 (seção 22): D15, D15.1–D15.15, D4-1, J7. Respostas do dono que mudaram o plano: pisos bloqueiam já no piloto (D15.4, o 1.K3 vira P1); qualquer analista libera o dado em REVISÃO (D15.3); o dono monta o gabarito do piloto (D4-1, 1.J2) |

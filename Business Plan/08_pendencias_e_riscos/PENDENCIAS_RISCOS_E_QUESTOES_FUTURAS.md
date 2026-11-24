@@ -1,7 +1,7 @@
 # Pendências, riscos e questões futuras
 
 **Lista viva.** A decisão que gerou cada item está no
-[registro v0.1.5](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.5.html) (seção 19.13); aqui fica
+[registro v0.1.6](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.6.html) (seção 19.13); aqui fica
 a **situação** e o item do [plano](../06_execucao/PLANO_DE_EXECUCAO.md) que a resolve. Quando um item
 fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma nova versão do registro.
 
@@ -14,9 +14,9 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Priorização das 31 frentes de diligência | B6 | 1.E1–1.E4, 2.2, 2.3 | Definida na construção de cada agente |
 | Primeiro cliente além da Partners | A6 | G2 | Aberta (hipótese registrada) |
 | Valores: teto de dados pagos, teto de IA, preços | N-C6b, D5, J1, J2 | 3.6 | Depende da medição do piloto |
-| Quem monta o gabarito (papel) | D4 | 1.J2 | Aberta |
-| Quem é o segundo revisor na Partners | R1 | 1.F2 | Aberta: pessoa a indicar |
-| Deck, slide 5: "mais de 30 fontes" | — | — | **Não fechado pelo dono.** Hoje o código capta poucas fontes externas (séries do BCB e os arquivos do cliente). A regra 6 da documentação do deck diz que nada é afirmado no presente se ainda não existe |
+| Quem monta o gabarito (papel) | D4 | 1.J2 | **Fechada em 24/11/2026: o dono, no piloto** (D4-1, registro v0.1.6) |
+| Quem é o segundo revisor na Partners | R1 | 1.F2 | Aberta: pessoa a indicar. Em 24/11/2026 o dono disse que indica depois |
+| Deck, slide 5: "mais de 30 fontes" | J7 | — | **Fechada em 24/11/2026: o slide fica como está**, como meta do que o sistema terá de fazer (J7, registro v0.1.6). Exceção explícita à regra 6 da documentação do deck |
 | Deck, slide 10: retirada do prazo "3 a 6 meses" | K2 | — | Feita na Fase 3, coerente com a K2. O dono não confirmou explicitamente a frase final |
 | **Classificação de documentos em N2 sem gabarito** (`0127_o_dial_obedecido.sql:493`, "declarada, não medida"): voltar a N1 junto com a extração no item 0.5, ou manter em N2 | D6 (fala só da extração) | 0.5, G0 | **Fechada em 23/11/2026: volta a N1** (D6-1, registro v0.1.4) |
 | Gravidade "alto" (G5): "> 1%" de quê? O registro diz só "> 1%"; as regras leem "do EBITDA ou da dívida", como no crítico | G5 | 1.D6 | **Fechada em 23/11/2026: do EBITDA ou da dívida** (G5-1, registro v0.1.5) |
@@ -25,6 +25,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Tirar do piloto alguma fonte de mercado do slide 6 (ANEEL/CCEE, ANTT/ANP, SUSEP, FipeZAP; item 1.C5) | K6 (pede **todos** os dados de mercado no piloto) | 1.C5, G1 | Só com decisão registrada do dono; sem ela, ficam no piloto |
 | Ligar a conciliação do aging na rodada (`fn_reconciliar_caso`) | — | 1.A2 | **Fechada em 13/11/2026**: ligada pela `0278`, aplicada em produção (`ESTADO.md`, sessão 129b) |
 | Arquivo real de AR e AP para medir a leitura | DM7 do PLANO_MVP | 1.A1 | Depende do dono |
+| **Score de confiabilidade do dado externo** (pedido de 23/11/2026): escopo, rótulo, quem fura o portão, o que bloqueia antes da calibração, o que o cliente vê, quem rotula, divergência com o cliente, pesos iniciais e as 7 regras | D15, D15.1–D15.15 | 0.13, 1.K1–1.K5, 2.18, 2.19, 3.8, 3.9 | **Fechada em 24/11/2026** (registro v0.1.6, seção 22). Pisos bloqueiam já no piloto (D15.4); o score ponderado só depois da calibração (3.8) |
 
 ## 2. Dependências de terceiros
 
@@ -61,6 +62,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Cadeia de hashes | Alterar um evento quebra a cadeia | 2.15 |
 | Troca de provedor de IA | Derrubar um provedor; a tarefa segue | 1.D8 |
 | Extração que não perde linha | Regressão no corpus real; falha silenciosa = 0 | 1.A5, 1.A6 |
+| Score do dado externo prevê o erro | Gabarito do dado externo; taxa de erro por resultado e por agente, com intervalo; se APROVADO erra tanto quanto REVISÃO, o desenho volta à mesa (Espec. 15, §9) | 3.8 |
 
 ## 5. Riscos
 

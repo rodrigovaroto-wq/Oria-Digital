@@ -4,7 +4,7 @@
 ([`Apresentações/Business Plan Oria Digital/`](../../Apresentações/Business%20Plan%20Oria%20Digital/)) é
 **derivado** deste arquivo: quando um dado ou uma definição de negócio muda, muda aqui primeiro e o
 deck é refeito depois. As decisões citadas estão no
-[registro v0.1.5](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.5.html).
+[registro v0.1.6](../07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.6.html).
 
 ## 1. Objetivo (OBJ)
 

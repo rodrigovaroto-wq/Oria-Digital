@@ -1,6 +1,43 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 136 (24/11/2026) — registro de decisões v0.1.6: o score do dado externo decidido
+
+> **Só documentação. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
+
+- **Item 0.13 FEITO.** [Registro v0.1.6](Business%20Plan/07_decisoes/oria_digital_decisoes_e_pendencias_v0.1.6.html), seção 22: **D15** (o score), **D15.1–D15.8** (respostas do dono às perguntas da Espec. 15), **D15.9–D15.15** (as 7 regras), **D4-1** (o dono monta o gabarito do piloto) e **J7** (o slide 5 mantém "mais de 30 fontes" como meta). A v0.1.5 e o gerador dela foram para `99_historico/registro_de_decisoes/` com `git mv`.
+- **Duas respostas do dono divergem da recomendação, e mudaram o plano:** **D15.4**, pisos já bloqueiam no piloto (o 1.K3 virou P1; só o score ponderado fica em sombra até o 3.8); **D15.3**, qualquer analista libera o dado em REVISÃO, em qualquer gravidade (a E3 e a E3-1 continuam para o diagnóstico).
+- **Continuam abertas, por escolha do dono:** R1 (quem é o segundo revisor; "indico depois"), N-C5a e A6.
+- **Medido:** da v0.1.5 para a v0.1.6 mudaram só 3 caracteres (versão e data); 90 → 108 decisões com âncora; os geradores regeram a v0.1.5 e a v0.1.6 idênticas byte a byte; 18 de 18 códigos novos citados em documento oficial (verificador provado não-cego: sem J7 ou sem D4-1 no texto, acusa a falta); 0 links relativos quebrados em 238 arquivos `.md` e `.html`.
+
+
+## SESSÃO 135 (24/11/2026) — o score do dado externo entra no plano, distribuído pelas fases
+
+> **Só documentação. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
+
+- **O dono aprovou a v2 do §5A da Espec. 15** (pesos na mediana de três avaliações independentes e as 7 regras) e pediu para integrar ao plano, por fase, pensando na construção de cada agente.
+- **Fase 0:** 0.13, registrar D15.1–D15.8 e as 7 regras no registro v0.1.6.
+- **Fase 1, Trilha K nova:** 1.K1 catálogo das fontes; **1.K2 vetos no banco (P1)**; 1.K3 score em modo sombra e o portão de cada agente do piloto (Captador, Conferidor, Mercado, Caixa, Dívida, book), com `casos_do_score.py` como oráculo do teste; 1.K4 propagação pelo menor score e frescor pela data do uso; 1.K5 painel. A tabela "Em que fase nasce o portão de cada agente" está na trilha. Nenhum item de agente passou a depender da Trilha K: em sombra, o portão não bloqueia.
+- **Fase 2:** 2.18 refeito (portões de Risco, Estrategista, Entregas, Captador formal e monitoramento); 2.19 refeito (furos de portão e alerta de carimbo). **Fase 3:** 3.8 calibração; 3.9 bloqueio em degraus com rebaixamento automático.
+- **Contrato dos agentes** (`AGENTES.md`, item 8): todo dado externo chega ao agente pelo portão dele; os números ficam só na Espec. 15.
+- **A proposta em página** foi para `Arquitetura do Sistema/2 Especificação/15_anexos/Portoes_de_Confiabilidade_Oria_v2.html` (retrato derivado do §5A, com impressão em PDF).
+- **Medido:** as ondas de paralelismo continuam válidas (73 itens das Fases 0 e 1, cada um numa onda só, nenhuma dependência na mesma onda ou depois).
+- **O dono faz à mão:** confirmar a v0.1.6 quando o 0.13 for feito.
+
+
+## SESSÃO 134 (23/11/2026) — pendência nova: score de confiabilidade do dado externo (Espec. 15)
+
+> **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`.
+
+- **Pedido do dono:** score para os dados captados **fora** (não os documentos do cliente), por várias dimensões, com um portão em cada etapa do processo. **Não se constrói agora.**
+- **Desenho e pesquisa:** [`Arquitetura do Sistema/2 Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md`](Arquitetura%20do%20Sistema/2%20Especificação/15_SCORE_DE_CONFIABILIDADE_DOS_DADOS_EXTERNOS.md): 13 dimensões em três níveis (fonte, dado, execução), vetos + piso por dimensão + classe (o score ponderado só é lido depois dos vetos e pisos), pesos % e score mínimo por agente com 12 casos conferidos (§5A, proposta inicial), portões nas 7 etapas, matriz por tipo de dado, 14 limitações, D15.1–D15.8 abertas, fontes no §13.
+- **§5A v2 (pedido do dono, mesmo dia):** a proposta de pesos foi comparada às cegas com três avaliações independentes (a v1 concordou com a maioria em 53 de 64 julgamentos; em 6 das 11 divergências deixava passar o que a maioria segurava). A v2 usa a estrutura dos três, os pesos na mediana e 7 regras aprovadas pelo dono. Os 13 casos saem de `Arquitetura do Sistema/2 Especificação/15_anexos/casos_do_score.py`.
+- **No plano:** itens novos **2.18** (catálogo, vetos, modo sombra) e **2.19** (calibração e portões), P2. Pendências: decisões D15.x e a prova "a classe prevê o erro".
+- **Portões rodados:** `conhecimento/conferir.mjs` OK (287/0); links relativos dos arquivos tocados: 0 quebrados.
+- **NÃO CONFERIDO:** o banco de produção (a sonda não foi rodada).
+- **O dono faz à mão:** decidir D15.1–D15.8 (recomendações no §11 da Espec. 15).
+
+
 ## SESSÃO 133 (19–23/11/2026) — Fase 4: pasta `Business Plan/` organizada e plano de execução único
 
 > **Só documentação. Nenhuma migration, nenhum código, nada aplicado em produção.** A migration mais nova continua a `0302`.
