@@ -1,9 +1,12 @@
 ---
 description: "Revisar um diff sob a lente deste projeto: defeito silencioso + fidelidade do número, e a lente do portal só quando o diff toca portal/"
-argument-hint: "<o diff, o número do PR, ou vazio para git diff main...HEAD>"
+argument-hint: "<o diff, o número do PR, ou vazio para git diff origin/main...HEAD>"
 ---
 
-Revise: **$ARGUMENTS** (vazio → `git diff main...HEAD`).
+Revise: **$ARGUMENTS** (vazio → `git fetch -q origin main` e `git diff origin/main...HEAD`).
+
+Nunca contra a `main` local: ela não anda sozinha. Medido em 23/11/2026, 25 commits atrás, e o
+diff contra ela dava 56 arquivos para 9 reais — o revisor recebia código de outros PRs.
 
 **Não revise você mesmo primeiro.** Quem escreveu a mudança não a revisa — é a única razão de esta
 revisão custar um contexto separado.

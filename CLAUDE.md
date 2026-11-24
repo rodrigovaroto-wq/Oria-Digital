@@ -77,8 +77,9 @@ cuja linha casa com a tarefa — os arquivos estão em `.claude/agents/`.
 importados foram removidos em 16/09/2026: custavam 19.439 bytes de `description` no prompt de
 TODA sessão, nenhum conhecia as sete regras, e três contradiziam a regra 2 (`/test-generate`,
 `/tdd-green`, `/sql-migrations`). A procedência ficou em `.claude/COMANDOS.md`. Sobraram três
-comandos escritos aqui — `/rodada`, `/revisar`, `/fechar` —, e o portão que prova que todo
-`subagent_type` citado existe é `node .claude/verificar-comandos.mjs`.
+comandos escritos aqui — `/rodada`, `/revisar`, `/fechar` — e, em 23/11/2026, um quarto que só os
+encadeia até o PR verde: `/autopilot` (para antes do merge, que é do dono). O portão que prova que todo
+`subagent_type` e todo caminho citado existem é `node .claude/verificar-comandos.mjs`.
 
 **O plugin `superpowers` está DESLIGADO neste projeto** (`.claude/settings.json`,
 `enabledPlugins`), pelo mesmo critério que cortou os 52 comandos importados. Das 14 skills, 5
@@ -105,7 +106,8 @@ capturando o `HEAD` na hora. Ver `Arquitetura do Sistema/5 Prompts/03-onda-paral
 Assine o PR ao criá-lo, como o harness manda — mas **desinscreva assim que CI e Sonar
 ficarem verdes** e diga isso ao dono. Notificação que chega depois de 1h parada regrava o
 cache inteiro: medido US$ 2–4 por aviso com contexto de 465–520k (sessões de 06/10 e 30/10),
-sem trabalho novo nenhum. Merge e comentário tardio são o dono quem traz.
+sem trabalho novo nenhum. Merge e comentário tardio são o dono quem traz. O `/autopilot` nem
+assina: o PR tem 8 checks, e ele troca a assinatura por uma conferida agendada (`send_later`).
 
 ## Antes de codar
 
