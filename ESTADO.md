@@ -1,6 +1,27 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 137 (24/11/2026) — parceiros externos e a prioridade nova: Fase A (fontes públicas grátis)
+
+> **Só documentação e planilhas. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
+
+- **Duas planilhas** em `Business Plan/06_execucao/parceiros_externos/`, ambas geradas por script (não editar à mão):
+  - **Planilha 1:** 103 funcionalidades, 35 integrações e a etapa/agente/origem dos 179 dados da captação, que apontam para o `Plano_de_Captacao_v3.xlsx` em vez de copiá-lo.
+  - **Planilha 2 (v2, linguagem simples):** 44 plataformas-ponte com compatibilidade e utilidade, a combinação proposta e o que falta construir, as perguntas para as demos e 102 fornecedores por API.
+- **Prioridade nova do dono:** Fase A (fontes públicas grátis) → B (book confiável) → C (conferência e análises), antes das plataformas pagas e dos agentes. Detalhe em [`Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md`](Business%20Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md); §0 nova no plano único.
+- **Decisões do dono, a registrar na v0.1.7:**
+  - CNPJ pelo espelho BrasilAPI, marcado "não oficial"; a base oficial da Receita fica pendente.
+  - Listas pequenas baixadas inteiras; PGFN e PEP por consulta.
+  - Sócios pessoa física sem autorização registrada, **mas a Fase A consulta só empresas**. Isso contradiz a N-C7b e a R5: está nas pendências.
+  - Cópia de segurança mínima já na A1.
+- **Medido em 24/11:** 17 APIs públicas respondem deste ambiente; CGU e DataJud pedem chave; CAGED (FTP) e ANEEL não responderam daqui (conferir em produção).
+- **NÃO CONFERIDO:** o banco de produção (a sonda não foi rodada) e se o macro diário roda em produção (primeiro passo da A3).
+- **O dono faz à mão:**
+  - registrar as decisões na v0.1.7;
+  - cadastrar os dois segredos da cópia de segurança (A1);
+  - responder se o MVP fica sem agentes.
+
+
 ## SESSÃO 136 (24/11/2026) — registro de decisões v0.1.6: o score do dado externo decidido
 
 > **Só documentação. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
