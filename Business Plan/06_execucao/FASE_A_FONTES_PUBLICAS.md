@@ -125,16 +125,18 @@ Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
 
 **Medido para o passo 2 (25/11/2026, dados abertos da CVM):**
 
-- Cadastro: 2.680 companhias, 748 ativas, 1,5 MB.
-- DFP 2025: 12,9 MB zipado. O consolidado tem 443 companhias e 244 mil linhas em BPA, BPP, DRE e DFC (DMPL e DVA fora).
+- Cadastro: 2.680 linhas, 1,5 MB. Uma companhia aparece uma vez por mercado (bolsa, balcão): são 2.533 CNPJ únicos, 655 ativos.
+- DFP 2025: 12,9 MB zipado, **1.192.514 linhas** somando todos os CSV (consolidado e individual; BPA, BPP, DRE, DRA, DFC, DMPL, DVA; dois exercícios). Só o exercício ÚLTIMO: 595.476. Recortes menores, para comparação: consolidado em BPA, BPP, DRE e DFC_MI, 443 companhias e 244.012 linhas (dois exercícios); contas até o nível 3, só o último exercício, 43.387.
 - Só as contas até o nível 3 (ex.: `1.01.01`), no último exercício: 43 mil linhas por ano.
 - ITR 2026: 29,5 MB zipado. Não aberto: o número de linhas não foi medido.
 
-**DECIDIDO pelo dono em 25/11/2026:** (1) **DFP inteira**; (2) **ITR entra**; (3) **gravar pela proposta**: baixar só quando o arquivo da CVM mudar e registrar a consulta mesmo quando nada mudou. Consequência que fica com o passo 2: pela estimativa abaixo, que NÃO foi medida, DFP inteira + ITR pode não caber nos 387 MB livres. O primeiro passo da fonte 5 é medir as linhas do ITR e o tamanho real por linha numa carga de teste. Se não couber, a decisão volta ao dono, com o número medido.
+**DECIDIDO pelo dono em 25/11/2026:** (1) **DFP inteira**; (2) **ITR entra**; (3) **gravar pela proposta**: baixar só quando o arquivo da CVM mudar e registrar a consulta mesmo quando nada mudou.
+
+**⚠ A decisão (1) PRECISA SER REVISTA pelo dono antes de gravar** (achado da revisão final do PR #318, conferido em 25/11). Quando a decisão foi tomada, o número na mesa era 244 mil linhas, que é só um recorte. A DFP inteira de 2025 tem **1,19 milhão de linhas**; só o último exercício, 595 mil. A cerca de 400 B por linha (ESTIMADO, o tamanho real por linha não foi medido), dá cerca de 240 MB por ano só com o último exercício, antes do ITR, contra 387 MB livres. Não cabe com o ITR. O primeiro passo da fonte 5 é medir o tamanho real por linha e as linhas do ITR, e levar ao dono três recortes com o número medido: (a) só consolidado, último exercício; (b) consolidado e só BPA, BPP, DRE e DFC; (c) contas até o nível 3.
 
 **O que estava em decisão** (registro):
 
-1. **Recorte.** A DFP inteira são 244 mil linhas por ano. A cerca de 400 B por linha com índice, dá cerca de 100 MB por ano: não cabe nos 387 MB livres junto com o ITR. Contas até o nível 3, consolidado, último exercício, são 43 mil linhas, cerca de 17 MB por ano (ESTIMADO).
+1. **Recorte.** (Número da época, SUPERADO: tomava 244 mil linhas, que é o consolidado de 4 demonstrações, como a DFP inteira; ver o aviso acima.) A DFP inteira são 244 mil linhas por ano. A cerca de 400 B por linha com índice, dá cerca de 100 MB por ano: não cabe nos 387 MB livres junto com o ITR. Contas até o nível 3, consolidado, último exercício, são 43 mil linhas, cerca de 17 MB por ano (ESTIMADO).
 2. **ITR (trimestral) entra ou não.** Medir as linhas antes de decidir.
 3. **Forma de gravar.** A CVM publica por ano e por trimestre. Regravar todo dia, como o macro faz, multiplicaria o volume. A proposta é baixar só quando o arquivo mudar (o `last-modified` medido é de 22/11/2026) e registrar a consulta mesmo quando nada mudou. Decidir também se os dados vão para `fato_externo`, que é imutável e guarda um JSON por linha, ou para uma tabela própria e enxuta.
 
