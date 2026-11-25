@@ -116,6 +116,26 @@ Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
 - Fontes 5 a 9: **não feitas.** A CVM (fonte 5) só começa depois de medir o banco (113 MB em 25/11).
 - **Falta para a A3 fechar:** a 1ª execução AGENDADA em produção, de 26/11 06h (09:00 UTC), ainda NÃO CONFERIDA (agendada em `trig_01PbmDVYHXaVJrkBiqwhG9Qo`). E as fontes 5 a 9. Até a agenda ser conferida, as fontes da A3 têm medida só da execução manual por cópia.
 
+**Próximos 2 passos (definidos em 25/11/2026, sessão 140):**
+
+| Passo | O que | Critério de pronto | Quem |
+|---|---|---|---|
+| **1. Conferir a agenda** | A 1ª execução AGENDADA do macro (26/11, 06h = 09:00 UTC), já com a fonte 4. Conferida agendada para 26/11 às 09:30 UTC | 43 consultas `encontrado` desde 08:55 UTC (12 `bcb_sgs`, 19 `bcb_juros_modalidade`, 5 `bcb_focus`, 7 `ibge_sidra`); ~267 fatos novos (202 setoriais); a execução no n8n veio da agenda, não de webhook. Se não bater: diagnóstico antes de qualquer fonte nova | Claude (conferida); dono: nada |
+| **2. Fonte 5 — CVM (pares do setor)** | Cadastro e demonstrações das companhias abertas. Antes do código, medir o banco e o dono decidir o recorte | Catálogo `cvm_dados_abertos` com url e cadência de publicação; uma consulta por ARQUIVO baixado, com `registros_lidos` > 0 (fonte de lista); "falhou" visível; o tamanho do banco medido antes e depois | Dono decide o recorte; Claude implementa |
+
+**Medido para o passo 2 (25/11/2026, dados abertos da CVM):**
+
+- Cadastro: 2.680 companhias, 748 ativas, 1,5 MB.
+- DFP 2025: 12,9 MB zipado. O consolidado tem 443 companhias e 244 mil linhas em BPA, BPP, DRE e DFC (DMPL e DVA fora).
+- Só as contas até o nível 3 (ex.: `1.01.01`), no último exercício: 43 mil linhas por ano.
+- ITR 2026: 29,5 MB zipado. Não aberto: o número de linhas não foi medido.
+
+**Decisões que voltam ao dono antes do passo 2** (a regra do plano: se não couber, decide o dono):
+
+1. **Recorte.** A DFP inteira são 244 mil linhas por ano. A cerca de 400 B por linha com índice, dá cerca de 100 MB por ano: não cabe nos 387 MB livres junto com o ITR. Contas até o nível 3, consolidado, último exercício, são 43 mil linhas, cerca de 17 MB por ano (ESTIMADO).
+2. **ITR (trimestral) entra ou não.** Medir as linhas antes de decidir.
+3. **Forma de gravar.** A CVM publica por ano e por trimestre. Regravar todo dia, como o macro faz, multiplicaria o volume. A proposta é baixar só quando o arquivo mudar (o `last-modified` medido é de 22/11/2026) e registrar a consulta mesmo quando nada mudou. Decidir também se os dados vão para `fato_externo`, que é imutável e guarda um JSON por linha, ou para uma tabela própria e enxuta.
+
 ### A4 · Dados da empresa (sob demanda, só CNPJ) — item 1.H2, parte da empresa
 
 | Fonte | Como | Observação |
