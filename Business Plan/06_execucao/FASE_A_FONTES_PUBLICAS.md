@@ -2,7 +2,7 @@
 
 **Detalhe da primeira fase da prioridade definida pelo dono em 24/11/2026.** O plano único continua
 sendo o [`PLANO_DE_EXECUCAO.md`](PLANO_DE_EXECUCAO.md) (K1): ele diz a ordem; este arquivo diz o
-passo a passo da Fase A. Nada aqui está construído.
+passo a passo da Fase A. **A1 e A2 estão feitas e em produção** (25/11/2026; medidas no Andamento do plano único e no `ESTADO.md`, sessão 138). As fatias A3 a A5 não estão construídas; a próxima é a A3.
 
 ## 1. A ordem que o dono definiu
 
@@ -31,6 +31,9 @@ Fase C  Conferência e análises ───► contabilidade × fontes, mapa da d
 | 3 | Listas pequenas baixadas inteiras; **PGFN e PEP por consulta** | A PGFN entra na A4; o PEP é de pessoa física e fica fora da Fase A |
 | 4 | Consultar os sócios **mesmo sem autorização registrada**, mas **por enquanto só a empresa** | A Fase A consulta só CNPJ. **Conflito a resolver antes de consultar pessoa física:** a decisão contradiz a N-C7b e a regra R5 da Espec. 13 ("nada de PF sem autorização; a recusa é no banco") e o item 1.B7 do plano. Precisa de decisão registrada e conversa com o advogado |
 | 5 | Cópia de segurança agora, **pequena e rápida** | A1, a versão mínima dos itens 0.2 e 0.3 |
+| 6 | ANBIMA, CCEE e FipeZAP são **fontes oficiais** (24/11, ao revisar a A2) | `oficial = verdadeiro` no catálogo; só a BrasilAPI fica "não oficial" |
+| 7 | O 404 da fonte que quer dizer "não existe" é tratado **na A4**, fonte por fonte | Até lá todo 404 grava "falhou"; na A4, cada fonte de empresa mede o seu 404 e preenche `http_inexistente` |
+| 8 | **Toda fonte tem prazo de validade**, à prova de falhas (24/11) | O banco recusa fonte sem prazo. Prazo = até a próxima publicação: o publicado pela fonte; senão, o da cadência (diária 1, semanal 7, mensal 30, trimestral 90, semestral 180, anual 365 dias); cadência desconhecida ou variável = **1 dia** (vence cedo, nunca parece nova estando velha). A origem do prazo fica gravada; A3 e A4 trocam o mínimo pelo real ao conectar cada fonte |
 
 ## 3. O que o teste de 24/11/2026 mostrou
 
@@ -117,6 +120,9 @@ Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
 - **Onde roda:** no servidor do portal, ao criar o caso e no botão "Atualizar dados públicos".
 - **Pronto quando:** num caso de teste com 3 empresas, cada empresa tem uma linha por fonte,
   inclusive a vazia; com a BrasilAPI fora do ar, a linha diz "falhou".
+- **Primeiro passo de cada fonte (decisão 7):** medir o que ela devolve para um CNPJ que não existe.
+  Se for um 404 documentado, preencher `http_inexistente` no catálogo e o teste prova que ele vira
+  "nada encontrado"; qualquer outro 404 continua "falhou".
 
 ### A5 · No portal e no Excel — item 1.C4 e parte do 1.H5
 

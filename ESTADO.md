@@ -1,6 +1,37 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 138 (24–25/11/2026) — Fase A: A1 (cópia de segurança) e A2 (base das fontes externas) FEITAS e em produção
+
+> **Migration mais nova: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql`, APLICADA EM PRODUÇÃO em 24/11/2026** (pela API de gerenciamento, 1,6 s, arquivo do commit `a4e813f`, md5 `a874a608…`). Antes: Postgres 17.6, cobertura 0302, 475 itens na sonda e 0 ausentes, `fonte_externa` inexistente, 81 casos / 2.999 pendências / 7.599 reconciliações. Depois: cobertura 0303, 511 itens e 0 ausentes, os 36 da 0303 presentes, 22 fontes (1 não oficial), 81 / 2.999 / 7.599 (nada tocado). PRs: #310 (A1+A2), #311 (cópia para repositório privado, senha com `@`), #312 (novas tentativas no Storage).
+
+### ▶ PRÓXIMA SESSÃO — COMECE AQUI: Fase A, fatia A3 (dados de mercado, n8n)
+
+- **Pedido pronto para colar:** `/autopilot Fase A, fatia A3 (dados de mercado). Leia ESTADO.md sessão 138 e Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md §5 A3. Primeiro passo: conferir se o macro diário roda em produção (último dado gravado de cada série). Depois uma fonte por commit, na ordem da tabela da A3; antes da CVM, medir o tamanho do banco (plano gratuito, 500 MB). Toda fonte registra pela fn_registrar_consulta_externa (0303) e "falhou" nunca vira "nada encontrado".`
+- **Não depende do dono.** A A4 (dados da empresa, portal) depende de uma decisão antes de começar: quem registra as consultas — o analista pelo portal (hoje: `authenticated` tem EXECUTE e o registro grava `registrado_por`) ou só o servidor (exige a chave de serviço na Vercel).
+- **Ponto de entrada no código:** `fonte_externa` (catálogo, 22 fontes, todas com prazo mínimo de 1 dia até a fatia medir a cadência real) e `fn_registrar_consulta_externa(fonte, caso, cnpj, http_status, erro, corpo, itens, registros_lidos, custo, nao_consultado)`; o macro existente está em `N8N/lib/macro.mjs` e `N8N/build-workflow-macro.mjs` (agenda mensal, dia 12 — o plano dizia diário).
+
+### O que esta sessão fez
+
+- **A2 FEITA e em produção** (0303): `fonte_externa`, `consulta_externa` (imutável; quatro estados; hash do corpo obrigatório em `encontrado` e `nada_encontrado`, nunca o da string vazia; data e validade pelo banco; só CNPJ), `fato_externo`; ponto único `fn_registrar_consulta_externa`; sonda com 36 requisitos (1420–1455). Teste `EXECUCOES=196 FALHAS=0`; não-vazio medido (regra central 54 asserts). Três ciclos de revisão; o 3º sem CRÍTICO/ALTO.
+- **A1 FEITA, critério medido em 25/11/2026** (run 45683483492 no repositório PRIVADO `rodrigovaroto-wq/OriaDigital-backup`, que chama o workflow reutilizável `.github/workflows/copia-de-seguranca.yml` daqui): contagens no snapshot de produção = cópia restaurada do zero em Postgres 18 (caso 81, documento 2.165, entidade 408, pendência 2.999, reconciliação 7.599); Storage 186/186 objetos (78,3 MB); sonda na cópia sem perda (só `envio_segredo_no_vault`: o Vault fica fora de propósito). Artefatos cifrados (AES-256): banco 11,5 MB por 7 dias, documentos 42,4 MB por 3 dias ≈ 207 MB dos 500 MB. Roda todo dia às 06:40 UTC.
+- **Por que no repositório privado:** o Oria-Digital é PÚBLICO e artefato de Actions de repositório público pode ser baixado por qualquer pessoa logada (decisão do dono, 25/11).
+- **Defeitos achados pela execução real e corrigidos:** senha com `@` quebrava a URL e o erro imprimiu o fim da senha no log (log apagado; `codificar-url.py`); a chave `sb_secret_…` dava HTTP 400 em todo download (a Storage responde 400 para "não encontrado"; a certa é a `service_role` legada); 4 de 186 downloads com HTTP 522 passageiro reprovavam a cópia (até 3 tentativas, `6b84155`).
+- **Segredos (25/11):** senha do banco trocada pelo dono (sem `@`); atualizados `BACKUP_DB_URL`, `BACKUP_PASSPHRASE`, `SUPABASE_SERVICE_ROLE_KEY` no repositório privado, `SONDA_DB_URL` no Oria-Digital (sonda verde depois, run 45678622441) e a credencial "Postgres (Trat. Dados)" do n8n. O `BACKUP_DB_URL` antigo do Oria-Digital não é mais usado.
+- **Decisões do dono (24/11), no `FASE_A_FONTES_PUBLICAS.md` §2:** 6) ANBIMA, CCEE e FipeZAP oficiais; 7) o 404 "não existe" tratado na A4, fonte por fonte; 8) toda fonte com prazo, cadência desconhecida = 1 dia.
+
+### NÃO CONFERIDO / riscos abertos
+
+- **O n8n conecta com a senha nova do banco?** A próxima execução da ingestão ou do macro responde. A A3 começa por aí.
+- **7 cópias diárias seguidas** (critério do item 0.2) completam em 2/12 se nada falhar. **Nada avisa se o agendamento parar** (risco nomeado; candidato: a `sonda-producao.yml` conferir a idade do último artefato).
+- **Achados deixados da A2** (MÉDIO/BAIXO): marcador da sonda 1453 nos dois ramos; corpo só com BOM/NBSP não conta como vazio; 200 + corpo vazio + itens nulo dá 22023 em vez de gravar `falhou`; `p_erro` só com `\n`; falta assert do 4xx com corpo de espaço.
+
+### O dono faz à mão
+
+1. Registrar as decisões 6–8 na v0.1.7 do registro (ou pedir ao Claude numa rodada pequena).
+2. Antes da A4: decidir quem registra as consultas (ver acima).
+3. Responder se o MVP fica sem agentes; e o conflito de pessoa física (decisão 4 × N-C7b/R5) antes de qualquer consulta por CPF.
+
 ## SESSÃO 137 (24/11/2026) — parceiros externos e a prioridade nova: Fase A (fontes públicas grátis)
 
 > **Só documentação e planilhas. Nenhuma migration, nenhum código do produto, nada aplicado em produção.** A migration mais nova continua a `0302`.
@@ -18,7 +49,7 @@
 - **NÃO CONFERIDO:** o banco de produção (a sonda não foi rodada) e se o macro diário roda em produção (primeiro passo da A3).
 - **O dono faz à mão:**
   - registrar as decisões na v0.1.7;
-  - cadastrar os dois segredos da cópia de segurança (A1);
+  - cadastrar os dois segredos da cópia de segurança (A1). **Corrigido na sessão 138: são três** (BACKUP_DB_URL, BACKUP_PASSPHRASE e SUPABASE_SERVICE_ROLE_KEY), e o dono confirmou que estão cadastrados;
   - responder se o MVP fica sem agentes.
 
 
@@ -87,7 +118,7 @@
 
 ## SESSÃO 131 (18/11/2026) — 0302 (`fato_financeiro`, P27) APLICADA EM PRODUÇÃO; repositório organizado (#302)
 
-> **Migration mais nova no repositório: `0302_a_linha_que_nao_tinha_identidade.sql` — APLICADA EM PRODUÇÃO em 18/11/2026.** É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
+> **Migration mais nova no repositório: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql` (Fase A, A2: a base comum das fontes externas) — ESCRITA, NÃO APLICADA em produção; a sonda (`fn_instalacao_conferir() where migration = '0303'`) é quem responde.** A anterior, `0302_a_linha_que_nao_tinha_identidade.sql`, foi APLICADA EM PRODUÇÃO em 18/11/2026. É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
 
 - **0302 APLICADA EM PRODUÇÃO em 18/11/2026** (pedido do dono). Pelo MCP do Supabase, em dois notebooks: "0302 — aplicar" (célula 1: o `alter type ... add value`, sozinho; célula 2: o resto do arquivo do commit `1e68bcb` sem `begin`/`commit` e sem os comentários de nível de topo) e "0302 — conferir depois". A cópia de transporte foi conferida antes no banco de teste: reaplicada, a assinatura md5 dos objetos não muda (`09fc3a17…`) e a sonda dá 20 de 20.
   - Antes: Postgres 17; cobertura 0301; 455 itens na sonda, 1 ausente (`envio_segredo_no_vault`, o de sempre); 81 mandatos; 2.999 pendências; 138.931 linhas em `campo_extraido`, 0 com `ln`; `fato_financeiro` inexistente; rótulo `conta_canonica_incerta` inexistente.

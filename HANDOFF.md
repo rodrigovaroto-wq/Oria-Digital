@@ -4,7 +4,13 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 129 — COMECE AQUI (12/11/2026)
+## ▶ SESSÃO 138 — COMECE AQUI (24–25/11/2026)
+
+- **Leia a seção "SESSÃO 138" no topo do `ESTADO.md`** (`sed -n '1,40p' ESTADO.md`): ela traz o bloco "▶ PRÓXIMA SESSÃO" com o pedido pronto para a fatia A3.
+- **Migration mais nova: 0303, APLICADA em produção** (sonda: 36 de 36). A cópia de segurança diária roda no repositório privado `OriaDigital-backup` e foi medida (restaura do zero, contagens iguais).
+- **PRs integrados:** #310, #311, #312.
+
+## SESSÃO 129 (12/11/2026; histórico, a mais nova está acima)
 
 - **Leia a seção "SESSÃO 129" e o bloco "▶ PRÓXIMOS PASSOS" no topo do `ESTADO.md`.** Este cabeçalho só aponta para lá.
 - **Migration mais nova: 0277**, NÃO aplicada em produção. Aplicar é decisão do dono (reemite as funções quentes). Branch `claude/tender-albattani-vx6m60`, sem PR.

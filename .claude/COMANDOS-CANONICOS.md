@@ -104,6 +104,13 @@ CONFERIR_PSQL="psql 'postgresql://usuario:SENHA@host:5432/postgres'" node Supaba
 # O caminho normal é Actions → "Republicar workflow no n8n"; o script que ela roda é:
 N8N_URL=... N8N_API_KEY=... N8N_WORKFLOW_ID=... bash N8N/republicar.sh
 # N8N_ARQUIVO_REPO escolhe QUAL dos quatro (padrão: a ingestão) — generalizado em 16/09/2026
+# E a cópia de segurança (Fase A, fatia A1). Roda no repositório PRIVADO que chama o workflow
+# reutilizável `copia-de-seguranca.yml` (diária, 03:40 BRT). À mão, os mesmos scripts; senha com `@`
+# precisa ser codificada antes, e `conferir` restaura no Postgres das PG*:
+BACKUP_DB_URL_CRU=... python3 -I Supabase/backup/codificar-url.py   # imprime BACKUP_DB_URL= codificada
+BACKUP_DB_URL=... bash Supabase/backup/copia-do-banco.sh copiar /tmp/copia
+BACKUP_DB_URL=... SUPABASE_SERVICE_ROLE_KEY=... python3 -I Supabase/backup/copia-do-storage.py /tmp/copia/storage
+BACKUP_DB_URL=... PGHOST=localhost PGUSER=postgres bash Supabase/backup/copia-do-banco.sh conferir /tmp/copia
 
 # portal
 cd portal && ./node_modules/.bin/tsc --noEmit && ./node_modules/.bin/eslint . \

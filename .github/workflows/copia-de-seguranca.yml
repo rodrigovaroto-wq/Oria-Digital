@@ -1,0 +1,197 @@
+# CÓPIA DE SEGURANÇA DIÁRIA — banco + arquivos do Storage, criptografados (Fase A, fatia A1).
+#
+# ESTE WORKFLOW NÃO RODA NESTE REPOSITÓRIO: ele é REUTILIZÁVEL (`workflow_call`) e quem o chama,
+# com o agendamento e os segredos, é um repositório PRIVADO separado. Por quê: este repositório é
+# PÚBLICO, e artefato de Actions de repositório público pode ser baixado por qualquer pessoa logada
+# no GitHub — o banco e os documentos dos clientes ficariam protegidos só pela senha da cifra
+# (decisão do dono em 24/11/2026, depois da 1ª execução). O chamador é este, inteiro:
+#
+#   on: { schedule: [ { cron: '40 6 * * *' } ], workflow_dispatch: {} }
+#   jobs:
+#     copia:
+#       uses: rodrigovaroto-wq/Oria-Digital/.github/workflows/copia-de-seguranca.yml@main
+#       secrets: inherit
+#
+# RETENÇÃO, e por que não 30 dias: o repositório privado no plano gratuito tem 500 MB de artefatos.
+# Medido em 24/11/2026: Storage com 186 arquivos e 78,3 MB; tabelas copiadas com 96 MB (o dump
+# comprimido é menor, ainda NÃO medido). 30 dias de tudo seriam ~2,4 GB. Por isso o banco e os
+# documentos saem em artefatos SEPARADOS, com retenção própria (entradas abaixo): 7 e 3 dias de
+# partida. ESTIMATIVA, não medida: cabe em 500 MB só se o dump tiver até ~37 MB (7×dump + 3×78).
+# A 1ª execução imprime o tamanho de cada .gpg: ajustar a retenção por esse número.
+#
+# POR QUE EXISTE. Até 24/11/2026 a Oria não tinha cópia nenhuma fora do Supabase, e o projeto está
+# no plano gratuito, que não guarda backup que o dono possa baixar. É a versão mínima dos itens 0.2
+# e 0.3 do plano de execução: perda máxima de 1 dia e 30 dias de histórico (a regra provisória da
+# H1-1; a definitiva, perda de minutos e volta em 4 h, é o item 0.12).
+#
+# O QUE PROVA QUE A CÓPIA PRESTA, e não só que o arquivo existe (regra 7):
+#   - as linhas de 5 tabelas-chave contadas em produção e na cópia RESTAURADA, no mesmo snapshot,
+#     têm de ser iguais e maiores que zero (a armadilha do papel que passa pela RLS e gera dump vazio
+#     sem erro está explicada em `Supabase/backup/copia-do-banco.sh`);
+#   - a sonda roda na cópia restaurada e não pode faltar nada que falta só nela;
+#   - cada arquivo listado em `storage.objects` foi baixado; um que falhe reprova.
+# A restauração roda TODO DIA, num Postgres descartável da versão do pg_dump (igual ou mais nova que produção).
+#
+# POR QUE O ARTEFATO SOBE ANTES DA CONFERÊNCIA. Se a conferência reprovar, o arquivo do dia ainda
+# existe (melhor que nada) e o job fica vermelho dizendo o que não bateu.
+#
+# POR QUE FALHA SEM SEGREDO, em vez de pular: pular deixaria o workflow verde sem copiar nada — "não
+# rodou" idêntico a "rodou". Mesmo critério do `sonda-producao.yml`.
+#
+# PARA RESTAURAR (o dono): no repositório privado, baixe os artefatos `copia-banco-<data>` e
+# `copia-storage-<data>` em Actions, e então, para cada um:
+#   gpg --decrypt <arquivo>.tar.gpg | tar -x     (pede a BACKUP_PASSPHRASE)
+# Saem `banco.dump` (pg_restore), `papeis.sql`, `extensoes.txt`, as contagens e `storage/<bucket>/...`.
+# Os segredos do Vault NÃO estão na cópia: cadastrá-los de novo depois de restaurar.
+# ATENÇÃO à retenção diferente: o banco de um dia sem o par `copia-storage` do mesmo dia (do 4º dia
+# em diante) restaura `storage.objects` apontando para arquivos que não estão na cópia — o portal
+# lista o documento e dá 404, sem erro na restauração. Restaurar banco e documentos do MESMO dia.
+
+name: Cópia de segurança
+
+on:
+  workflow_call:
+    inputs:
+      retencao_banco_dias:
+        type: number
+        default: 7
+      retencao_storage_dias:
+        type: number
+        default: 3
+    secrets:
+      BACKUP_DB_URL:
+        required: true
+      BACKUP_PASSPHRASE:
+        required: true
+      SUPABASE_SERVICE_ROLE_KEY:
+        required: true
+
+concurrency:
+  group: copia-de-seguranca
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  copia:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # BACKUP_DB_URL NÃO entra aqui: o segredo cru (com `@` na senha) só chega aos dois passos que o
+      # conferem e codificam; os demais leem a URL codificada que o passo de codificação põe no
+      # $GITHUB_ENV — assim nenhum passo conecta com a forma que vaza a senha no erro.
+      BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+    steps:
+      - name: Checkout (os scripts moram neste repositório, não no chamador)
+        uses: actions/checkout@v4
+        with:
+          repository: rodrigovaroto-wq/Oria-Digital
+          ref: main
+
+      - name: Conferir os segredos
+        env:
+          BACKUP_DB_URL: ${{ secrets.BACKUP_DB_URL }}
+        run: |
+          set -euo pipefail
+          falta=0
+          for s in BACKUP_DB_URL BACKUP_PASSPHRASE SUPABASE_SERVICE_ROLE_KEY; do
+            if [ -z "${!s:-}" ]; then echo "::error::Secret $s não cadastrado — esta execução NÃO copiou nada."; falta=1; fi
+          done
+          [ "$falta" = 0 ] || exit 1
+          case "$BACKUP_DB_URL" in
+            *:6543/*) echo "::error::BACKUP_DB_URL usa a porta 6543 (Transaction pooler): o pg_dump não funciona nela. Use a do Session pooler (5432)."; exit 1 ;;
+          esac
+          echo "segredos presentes (os valores nunca são impressos)"
+
+      - name: Codificar a senha da URL do banco
+        env:
+          BACKUP_DB_URL_CRU: ${{ secrets.BACKUP_DB_URL }}
+        # A 1ª execução (24/11/2026) morreu em "could not translate host name \"<fim da senha>@aws-1-…
+        # pooler.supabase.com\"": a senha tem `@`, que numa URL precisa ser `%40`. O libpq cortou no
+        # primeiro `@` e — pior — o erro imprimiu o pedaço da senha no log, porque o GitHub só mascara o
+        # segredo INTEIRO. Este passo reescreve a URL com a senha codificada e mascara as duas formas
+        # antes de qualquer conexão. Nenhum caractere da senha é impresso.
+        run: |
+          set -euo pipefail
+          python3 -I Supabase/backup/codificar-url.py >"$RUNNER_TEMP/url.env"
+          # ::add-mask:: de cada valor ANTES de ele entrar no ambiente dos próximos passos.
+          while IFS= read -r m; do echo "::add-mask::$m"; done < <(sed -n 's/^MASCARA=//p' "$RUNNER_TEMP/url.env")
+          sed -n 's/^BACKUP_DB_URL=/BACKUP_DB_URL=/p' "$RUNNER_TEMP/url.env" >>"$GITHUB_ENV"
+          rm "$RUNNER_TEMP/url.env"
+
+      - name: Versão de produção e cliente do Postgres
+        id: versao
+        run: |
+          set -euo pipefail
+          major="$(psql "$BACKUP_DB_URL" -X -qAt -c 'show server_version_num' | cut -c1-2)"
+          cliente="$(pg_dump --version | grep -oE '[0-9]+' | head -1)"
+          echo "produção: PostgreSQL $major; pg_dump do runner: $cliente"
+          # pg_dump precisa ser da mesma versão de produção ou mais novo.
+          test "$cliente" -ge "$major"
+          # A restauração roda na versão do CLIENTE (>= produção): restaurar em servidor mais velho que
+          # o pg_dump que gerou a cópia não é suportado (revisão: cliente 18.6 × produção 17.6).
+          echo "major=$cliente" >> "$GITHUB_OUTPUT"
+
+      - name: Copiar o banco (snapshot + contagem + dump)
+        run: Supabase/backup/copia-do-banco.sh copiar "$RUNNER_TEMP/copia"
+
+      - name: Copiar os arquivos do Storage
+        run: python3 -I Supabase/backup/copia-do-storage.py "$RUNNER_TEMP/copia/storage"
+
+      - name: Criptografar (banco e documentos em arquivos separados)
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP"
+          mkdir -p copia/storage  # Storage vazio não pode derrubar o tar
+          cifrar() {  # cifrar <saida.tar.gpg> <arquivo-que-tem-de-estar-dentro> <args do tar...>
+            local saida="$1" prova="$2"; shift 2
+            tar "$@" | gpg --batch --yes --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+              --passphrase-fd 3 -o "$saida" 3<<<"$BACKUP_PASSPHRASE"
+            # Prova de que o arquivo cifrado abre com a senha cadastrada (cifra que não decifra = sem cópia).
+            # A lista vai para arquivo ANTES do grep: `grep -q` fecha o pipe ao achar o nome, o tar morre
+            # de SIGPIPE e, sob pipefail, o passo reprova sem guardar nada — reproduzido na revisão com
+            # 400 arquivos no Storage (3 de 3 rodadas, PIPESTATUS 2 141 0).
+            gpg --batch --pinentry-mode loopback --passphrase-fd 3 -d "$saida" 3<<<"$BACKUP_PASSPHRASE" | tar -t >lista.txt
+            grep -q "$prova" lista.txt
+            echo "$saida: $(wc -l <lista.txt) entradas, $(du -h "$saida" | cut -f1)"; rm lista.txt
+          }
+          cifrar copia-banco.tar.gpg '^./banco.dump$' -C copia --exclude=.sessao.txt --exclude=./storage -cf - .
+          # `^./storage/<bucket>/<algo>`: a própria pasta (`./storage/`) sempre está no tar, então casar só
+          # o prefixo provaria nada; exige ao menos um arquivo dentro de um bucket. Storage vazio reprova
+          # (produção tinha 186 objetos em 24/11/2026).
+          cifrar copia-storage.tar.gpg '^./storage/[^/]*/.' -C copia -cf - ./storage
+          echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_ENV"
+
+      - name: Guardar o banco
+        uses: actions/upload-artifact@v4
+        with:
+          name: copia-banco-${{ env.date }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/copia-banco.tar.gpg
+          retention-days: ${{ inputs.retencao_banco_dias }}
+          if-no-files-found: error
+          compression-level: 0  # já está cifrado: comprimir de novo só gasta tempo
+
+      - name: Guardar os documentos
+        uses: actions/upload-artifact@v4
+        with:
+          name: copia-storage-${{ env.date }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/copia-storage.tar.gpg
+          retention-days: ${{ inputs.retencao_storage_dias }}
+          if-no-files-found: error
+          compression-level: 0
+
+      - name: Postgres descartável para a restauração (versão do pg_dump, >= produção)
+        run: |
+          set -euo pipefail
+          docker run -d --name restauro -e POSTGRES_PASSWORD=postgres -p 5432:5432 "postgres:${{ steps.versao.outputs.major }}"
+          for _ in $(seq 1 60); do docker exec restauro pg_isready -U postgres -q && break; sleep 1; done
+          docker exec restauro pg_isready -U postgres
+
+      - name: Conferir a cópia (restaurar do zero + contagens + sonda)
+        env:
+          PGHOST: localhost
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: Supabase/backup/copia-do-banco.sh conferir "$RUNNER_TEMP/copia"
