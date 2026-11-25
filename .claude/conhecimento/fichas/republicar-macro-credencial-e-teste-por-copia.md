@@ -35,8 +35,8 @@ teste ponta a ponta, produção, UGhv57BU3YNukVxV.
   Ela grava em produção o mesmo que a execução das 06h gravaria (consultas reais e upsert
   idempotente nos índices). Resultado: execução 10048 `success` em 16 s, 37 consultas `encontrado`.
 - **O webhook da cópia dá 404 logo depois de ativar** (registro atrasado). Medido em 25/11/2026 na
-  sessão 140: a 1ª chamada deu 404; com espera de 3 s e até 5 tentativas, deu 200 (execução 10052,
-  `success` em 12 s). Nada rodou nas tentativas com 404. A causa exata NÃO foi medida; o que foi
+  sessão 140: a 1ª chamada deu 404 e nada rodou; com espera de 3 s e até 5 tentativas, deu 200
+  (execuções 10051 e 10052, `success` em 12 s cada). A causa exata NÃO foi medida; o que foi
   medido é que esperar e repetir deu 200.
 
 ## O que NÃO se testa assim
