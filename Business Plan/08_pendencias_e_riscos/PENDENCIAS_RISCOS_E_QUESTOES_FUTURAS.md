@@ -27,7 +27,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Arquivo real de AR e AP para medir a leitura | DM7 do PLANO_MVP | 1.A1 | Depende do dono |
 | **Base oficial da Receita para o cadastro CNPJ** (arquivos abertos, vários GB): a Fase A usa o espelho gratuito BrasilAPI, marcado "não oficial" | Decisão do dono de 24/11/2026 (a registrar na v0.1.7) | Fase A (A4) → 0.12 | Aberta: volta quando houver banco pago (0.12) |
 | **Consultar sócios pessoa física sem autorização registrada** (decisão do dono de 24/11/2026) contradiz a N-C7b, a regra R5 da Espec. 13 e o item 1.B7 | N-C7b, a registrar na v0.1.7 | Consulta de PF (PEP, sanções por CPF) | Aberta: a Fase A consulta só empresas. Antes de consultar PF, registrar a decisão e ouvir o advogado |
-| **Régua de autonomia N2 passa de 98% para 95% no limite inferior** (decisão do dono de 25/11/2026, D6-2) | D6, a registrar na v0.1.7 | Plano 3.3; regras §7 | Decidida; a v0.1.6 ainda diz 98% |
+| **Régua de autonomia N2 passa de ~300 amostras e 98% para ~110 amostras e 95% no limite inferior** (decisão do dono de 25/11/2026, D6-2) | D6, a registrar na v0.1.7 | Plano 3.3; regras §7 | Decidida; a v0.1.6 ainda diz ~300 e 98% |
 | **Ordem A → B → C como prioridade** e a pergunta "o MVP fica sem agentes?" ([detalhe](../06_execucao/FASE_A_FONTES_PUBLICAS.md)) | A registrar na v0.1.7 | Plano, §0 | A ordem foi decidida; a pergunta dos agentes não teve resposta explícita |
 | **Score de confiabilidade do dado externo** (pedido de 23/11/2026): escopo, rótulo, quem fura o portão, o que bloqueia antes da calibração, o que o cliente vê, quem rotula, divergência com o cliente, pesos iniciais e as 7 regras | D15, D15.1–D15.15 | 0.13, 1.K1–1.K5, 2.18, 2.19, 3.8, 3.9 | **Fechada em 24/11/2026** (registro v0.1.6, seção 22). Pisos bloqueiam já no piloto (D15.4); o score ponderado só depois da calibração (3.8) |
 
@@ -61,7 +61,7 @@ fecha, marque a data e a evidência; a decisão nova, se houver, vai para uma no
 | Backup e restauração | Restaurar e conferir pela sonda | 0.2, 0.3 |
 | Isolamento entre organizações | Teste de vazamento que reprova sem a política | 1.F5, 2.14 |
 | Agente nunca calcula | Agente que inventa número tem a saída recusada | 1.D1 |
-| Autonomia N2 | ~300 amostras, parte cega, ≥ 95% no limite inferior (D6-2) | 3.3 |
+| Autonomia N2 | ~110 amostras, parte cega, ≥ 95% no limite inferior (D6-2) | 3.3 |
 | Reversão por chave | Desligar a chave numa cópia; diagnósticos antigos iguais | 2.11 |
 | Cadeia de hashes | Alterar um evento quebra a cadeia | 2.15 |
 | Troca de provedor de IA | Derrubar um provedor; a tarefa segue | 1.D8 |

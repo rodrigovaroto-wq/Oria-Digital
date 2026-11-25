@@ -160,7 +160,7 @@ F = [
     # E15
     ("E15", "Autoaprimoramento", "Propostas semanais de prompts e regras (fase A)", "Relatório ao Técnico; erros validados pelo Auditor", "F1; F1-3; F6; E4", "Autoaprimoramento", "V1", "Desenvolver", "2.10", "Construir (núcleo)", "—"),
     ("E15", "Autoaprimoramento", "Gabarito de 30–50 páginas com parte oculta", "Conferido célula a célula; refeito por semestre", "D4; D4-1; F5", "Dono", "Piloto", "Existe · evoluir", "1.J2, 3.4", "Construir (núcleo)", "—"),
-    ("E15", "Autoaprimoramento", "Régua de autonomia N0–N3 (~300 amostras, parte cega)", "Piora medida rebaixa", "D6", "Sistema", "V1", "Existe · evoluir", "3.3", "Construir (núcleo)", "—"),
+    ("E15", "Autoaprimoramento", "Régua de autonomia N0–N3 (~110 amostras, parte cega)", "Piora medida rebaixa", "D6", "Sistema", "V1", "Existe · evoluir", "3.3", "Construir (núcleo)", "—"),
     ("E15", "Autoaprimoramento", "Chave liga/desliga por mudança e publicação gradual", "Sombra → 1–2 clientes → todos; reversão comprovada", "F2; F3", "Técnico", "V1", "Desenvolver", "2.11", "Construir (núcleo)", "—"),
     ("E15", "Autoaprimoramento", "Backtest com casos anonimizados", "Mudança que afeta número", "F4", "Técnico", "V1", "Desenvolver", "0.10, 2.10", "Construir (núcleo)", "—"),
     # E16

@@ -16,7 +16,7 @@ limiar inventado tem a mesma aparência de um limiar medido.
    **Este score se apoia nelas, não cria um mecanismo paralelo.**
 3. As regras de negócio (`Business Plan/04_regras_de_negocio/REGRAS_E_DEFINICOES.md`): D3 (o
    externo tem o maior peso no cruzamento, os dois valores ficam guardados), B3b-1 (régua do que se
-   resolve sozinho), G5 e G5-1 (gravidade), D6 (≥ 300 amostras e limite inferior ≥ 98% para subir
+   resolve sozinho), G5 e G5-1 (gravidade), D6 e D6-2 (~110 amostras e limite inferior ≥ 95% para subir
    autonomia).
 4. A **doutrina de autonomia** (`1 Visão e Doutrina/01_DOUTRINA_DE_AUTONOMIA.md`): o dial N0–N3 e a
    função `fn_dial_permite_auto(estágio, confiança)` (`0127`). **O portão do score usa esse mesmo
