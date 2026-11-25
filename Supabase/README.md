@@ -1517,3 +1517,9 @@ supabase db execute --file Supabase/migrations/0303_a_fonte_que_caia_e_parecia_n
 #   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0303' and not presente;   -- ZERO linhas (36 requisitos)
 #   select tipo, count(*) from fonte_externa group by 1;   -- empresa 7, mercado 15
 #   select count(*) from consulta_externa;   -- 0: nada consulta ainda (A3 e A4 vêm depois)
+
+# A 0304 atualiza 3 linhas do catálogo `fonte_externa` (o macro virou diário às 06h; `bcb_juros_modalidade` conectada via SGS, mensal, 30 dias) e acrescenta 1 requisito à sonda. Só UPDATE por chave: reaplicável.
+supabase db execute --file Supabase/migrations/0304_a_fonte_que_dizia_mensal_e_rodava_todo_dia.sql
+# DEPOIS DE APLICAR, confira:
+#   select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0304' and not presente;   -- ZERO linhas (1 requisito)
+#   select chave, url is not null as tem_url, cadencia, validade_dias, validade_origem from fonte_externa where chave in ('bcb_sgs','bcb_focus','bcb_juros_modalidade');   -- juros: mensal, 30, cadencia

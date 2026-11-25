@@ -3,7 +3,8 @@
 
 ## SESSÃO 138 (24–25/11/2026) — Fase A: A1 (cópia de segurança) e A2 (base das fontes externas) FEITAS e em produção
 
-> **Migration mais nova: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql`, APLICADA EM PRODUÇÃO em 24/11/2026** (pela API de gerenciamento, 1,6 s, arquivo do commit `a4e813f`, md5 `a874a608…`). Antes: Postgres 17.6, cobertura 0302, 475 itens na sonda e 0 ausentes, `fonte_externa` inexistente, 81 casos / 2.999 pendências / 7.599 reconciliações. Depois: cobertura 0303, 511 itens e 0 ausentes, os 36 da 0303 presentes, 22 fontes (1 não oficial), 81 / 2.999 / 7.599 (nada tocado). PRs: #310 (A1+A2), #311 (cópia para repositório privado, senha com `@`), #312 (novas tentativas no Storage).
+> **Migration mais nova: `0304_a_fonte_que_dizia_mensal_e_rodava_todo_dia.sql` (Fase A, A3: o catálogo `fonte_externa` acompanha o macro diário; juros por modalidade conectada via SGS, mensal, 30 dias) — ESCRITA, NÃO APLICADA em produção; a sonda (`fn_instalacao_conferir() where migration = '0304'`) é quem responde.**
+> **Migration anterior: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql`, APLICADA EM PRODUÇÃO em 24/11/2026** (pela API de gerenciamento, 1,6 s, arquivo do commit `a4e813f`, md5 `a874a608…`). Antes: Postgres 17.6, cobertura 0302, 475 itens na sonda e 0 ausentes, `fonte_externa` inexistente, 81 casos / 2.999 pendências / 7.599 reconciliações. Depois: cobertura 0303, 511 itens e 0 ausentes, os 36 da 0303 presentes, 22 fontes (1 não oficial), 81 / 2.999 / 7.599 (nada tocado). PRs: #310 (A1+A2), #311 (cópia para repositório privado, senha com `@`), #312 (novas tentativas no Storage).
 
 ### ▶ PRÓXIMA SESSÃO — COMECE AQUI: Fase A, fatia A3 (dados de mercado, n8n)
 
@@ -118,7 +119,7 @@
 
 ## SESSÃO 131 (18/11/2026) — 0302 (`fato_financeiro`, P27) APLICADA EM PRODUÇÃO; repositório organizado (#302)
 
-> **Migration mais nova no repositório: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql` (Fase A, A2: a base comum das fontes externas) — ESCRITA, NÃO APLICADA em produção; a sonda (`fn_instalacao_conferir() where migration = '0303'`) é quem responde.** A anterior, `0302_a_linha_que_nao_tinha_identidade.sql`, foi APLICADA EM PRODUÇÃO em 18/11/2026. É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
+> **Migration anterior no repositório: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql` (Fase A, A2: a base comum das fontes externas) — ESCRITA, NÃO APLICADA em produção; a sonda (`fn_instalacao_conferir() where migration = '0303'`) é quem responde.** A anterior, `0302_a_linha_que_nao_tinha_identidade.sql`, foi APLICADA EM PRODUÇÃO em 18/11/2026. É a antiga 0243 do #296 (P27, `fato_financeiro`), com o mesmo corpo. Onde as seções abaixo dizem "0243", leia "0302".
 
 - **0302 APLICADA EM PRODUÇÃO em 18/11/2026** (pedido do dono). Pelo MCP do Supabase, em dois notebooks: "0302 — aplicar" (célula 1: o `alter type ... add value`, sozinho; célula 2: o resto do arquivo do commit `1e68bcb` sem `begin`/`commit` e sem os comentários de nível de topo) e "0302 — conferir depois". A cópia de transporte foi conferida antes no banco de teste: reaplicada, a assinatura md5 dos objetos não muda (`09fc3a17…`) e a sonda dá 20 de 20.
   - Antes: Postgres 17; cobertura 0301; 455 itens na sonda, 1 ausente (`envio_segredo_no_vault`, o de sempre); 81 mandatos; 2.999 pendências; 138.931 linhas em `campo_extraido`, 0 com `ln`; `fato_financeiro` inexistente; rótulo `conta_canonica_incerta` inexistente.

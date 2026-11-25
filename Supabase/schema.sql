@@ -21767,6 +21767,24 @@ CREATE VIEW public.instalacao_sonda_fonte_externa_prazo AS
 COMMENT ON VIEW public.instalacao_sonda_fonte_externa_prazo IS 'Sonda da 0303: uma linha = fonte_externa tem validade_dias, validade_origem e forma NOT NULL, o CHECK que amarra a origem do prazo ao número (decisão 8 do dono) e consulta_externa.validade_em é NOT NULL. Zero linhas: uma fonte pode ficar sem prazo e a consulta dela nunca vence.';
 
 --
+-- Name: instalacao_sonda_fontes_do_macro_conectadas; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.instalacao_sonda_fontes_do_macro_conectadas AS
+ SELECT 1 AS ok
+  WHERE ((( SELECT count(*) AS count
+           FROM public.fonte_externa
+          WHERE ((fonte_externa.chave = ANY (ARRAY['bcb_sgs'::text, 'bcb_focus'::text, 'bcb_juros_modalidade'::text])) AND (fonte_externa.url IS NOT NULL))) = 3) AND (EXISTS ( SELECT 1
+           FROM public.fonte_externa
+          WHERE ((fonte_externa.chave = 'bcb_juros_modalidade'::text) AND (fonte_externa.cadencia = 'mensal'::text) AND (fonte_externa.validade_dias = 30) AND (fonte_externa.validade_origem = 'cadencia'::text)))));
+
+--
+-- Name: VIEW instalacao_sonda_fontes_do_macro_conectadas; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON VIEW public.instalacao_sonda_fontes_do_macro_conectadas IS 'Sonda da 0304: uma linha = bcb_sgs, bcb_focus e bcb_juros_modalidade têm url e a de juros é mensal, 30 dias, origem cadencia. Zero linhas = a 0304 não foi aplicada (o catálogo ainda descreve o macro mensal e os juros sem url e com prazo de 1 dia) ou uma fonte que o macro lê ficou sem endereço.';
+
+--
 -- Name: instalacao_sonda_gatilho_original_apagado; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -28855,6 +28873,13 @@ GRANT SELECT ON TABLE public.instalacao_sonda_fato_financeiro_view_invoker TO se
 
 GRANT SELECT ON TABLE public.instalacao_sonda_fonte_externa_prazo TO authenticated;
 GRANT SELECT ON TABLE public.instalacao_sonda_fonte_externa_prazo TO service_role;
+
+--
+-- Name: TABLE instalacao_sonda_fontes_do_macro_conectadas; Type: ACL; Schema: public; Owner: -
+--
+
+GRANT SELECT ON TABLE public.instalacao_sonda_fontes_do_macro_conectadas TO authenticated;
+GRANT SELECT ON TABLE public.instalacao_sonda_fontes_do_macro_conectadas TO service_role;
 
 --
 -- Name: TABLE instalacao_sonda_gatilho_original_apagado; Type: ACL; Schema: public; Owner: -

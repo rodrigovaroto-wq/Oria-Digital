@@ -1063,6 +1063,10 @@ echo "== 0303 — a fonte que caía e parecia não ter nada (base comum das font
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_fonte_que_caia_e_parecia_nao_ter_nada.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
 
+echo "== 0304 — a fonte que dizia mensal e rodava todo dia (catálogo acompanha o macro: juros por modalidade conectada, mensal, 30 dias; consulta vence pelo prazo do catálogo; a sonda enxerga o requisito)"
+psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/a_fonte_que_dizia_mensal_e_rodava_todo_dia.test.sql 2>&1 \
+  | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
+
 echo "== a sonda legível para o leitor só-leitura da API (supabase_read_only_user): nenhuma view da sonda chama função sem o grant dele"
 psql -v ON_ERROR_STOP=1 -d "$DB" -f Supabase/test/sonda_para_o_leitor_somente_leitura.test.sql 2>&1 \
   | grep -E '^(NOTICE|ERROR|psql|WARNING)' | sed -E 's/^NOTICE:  //'
