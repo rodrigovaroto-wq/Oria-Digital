@@ -26,7 +26,7 @@ grátis e sem depender de parceiro, contrato ou demo:
 
 - **Depois das três fases:** as plataformas prontas (Direct Data, JUDIT, Serasa) e o restante do plano.
 - **O que não mudou:** os itens P1 da Fase 0 continuam exigidos antes do primeiro mandato real (G0).
-- **A registrar na v0.1.7 do registro:** a ordem e as decisões da §2 do detalhe da Fase A.
+- **A registrar na v0.1.7 do registro:** a ordem e as decisões da §2 do detalhe da Fase A, e a D6-2 (régua de autonomia N2 passa a 95% no limite inferior, decisão do dono de 25/11/2026).
 
 ## 1. Como ler
 
@@ -311,7 +311,7 @@ pendências).
 |---|---|---|---|---|---|---|
 | 3.1 | **Produção para vários clientes** (H1, H7): redimensionar banco, arquivos e automação pela capacidade e pelo custo medidos no piloto, antes do primeiro cliente além da Partners. A infraestrutura de produção do próprio piloto é o 0.12 | P1 | 0.12, G1 | Dono · Claude | DESENVOLVER | Perda máxima de minutos medida |
 | 3.2 | **Teste de recuperação trimestral** (H7) | P1 | 3.1 | Claude | DESENVOLVER | Volta em ≤ 4 h, banco + arquivos, tempo anotado |
-| 3.3 | **Subir etapas a N2** com ~300 amostras e parte cega (D6) | P2 | 1.J2, 1.E5 | Claude · Dono rotula | CORRIGIR. O mecanismo de promoção existe (`0126` golden set, `0136` veredito, `0137` promoção automática, `0218` recorte), mas com a régua antiga: 30 vereditos e 0,95 de concordância. Não existe rebaixamento automático por piora | `golden_criterio` com ~300 amostras por etapa e tipo de documento, parte cega, limite inferior ≥ 98% (D6); `auto_promocao` religada só depois; **piora medida rebaixa automaticamente** (D6), com teste que reprova sem o rebaixamento |
+| 3.3 | **Subir etapas a N2** com ~300 amostras e parte cega (D6) | P2 | 1.J2, 1.E5 | Claude · Dono rotula | CORRIGIR. O mecanismo de promoção existe (`0126` golden set, `0136` veredito, `0137` promoção automática, `0218` recorte), mas com a régua antiga: 30 vereditos e 0,95 de concordância. Não existe rebaixamento automático por piora | `golden_criterio` com ~300 amostras por etapa e tipo de documento, parte cega, limite inferior ≥ 95% (D6, D6-2); `auto_promocao` religada só depois; **piora medida rebaixa automaticamente** (D6), com teste que reprova sem o rebaixamento |
 | 3.4 | **Gabarito refeito a cada semestre** (D4) | P2 | 1.J2 | [a indicar] | DESENVOLVER | Rodada semestral registrada |
 | 3.5 | **Segundo revisor sempre** quando houver equipe (E1) | P2 | Contratação | **[a contratar]** | DESENVOLVER | Nenhuma autoaprovação, mesmo interna |
 | 3.6 | **Preços e tetos** (J1, N-C6b, D5) a partir do piloto | P1 | G1 | Dono | DESENVOLVER | Valores registrados numa nova versão do registro |

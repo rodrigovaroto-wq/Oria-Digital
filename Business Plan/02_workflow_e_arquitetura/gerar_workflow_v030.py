@@ -299,7 +299,7 @@ y3 = s2_end + 30
 sections.append(("goCtrl", y3))
 section_title(y3 + 42, "03", "CONTROLES TRANSVERSAIS: QUALIDADE, SEGURANÇA E DADOS", "Valem para todo o ciclo", "#6f7f8c")
 c1 = row(y3 + 80, [
-    (600, dict(kind="gate", label="AUTONOMIA POR ETAPA", title="N0 → N1 → N2 → N3", lines=["N2 exige ~300 amostras (parte cega), ≥98%", "Extração volta a N1 até medir · piora rebaixa"], status="EXISTE · EVOLUIR")),
+    (600, dict(kind="gate", label="AUTONOMIA POR ETAPA", title="N0 → N1 → N2 → N3", lines=["N2 exige ~300 amostras (parte cega), ≥95%", "Extração volta a N1 até medir · piora rebaixa"], status="EXISTE · EVOLUIR")),
     (600, dict(kind="gate", label="QUALIDADE DA EXTRAÇÃO", title="Gabarito de páginas reais", lines=["30–50 páginas, célula a célula", "Refeito a cada semestre · decide modelo/fornecedor"], status="PILOTO")),
     (600, dict(kind="note", label="MODELOS DE IA", title="Dois ou mais provedores", lines=["Troca automática · roteamento por região", "Cliente pode exigir “só Brasil”"], status="PILOTO")),
     (600, dict(kind="note", label="CUSTO", title="Medido por etapa e agente", lines=["Alerta acima de US$ 5 por diagnóstico", "Barato classifica · médio extrai · topo sintetiza"], status="PILOTO")),
