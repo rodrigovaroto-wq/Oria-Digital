@@ -922,3 +922,17 @@ test('A3.4: onde o IBGE publica a hierarquia, a lista de agregados é exatamente
     assert.deepEqual([...lista].sort(), pais.sort(), `${tabela}: agregados x hierarquia do IBGE`);
   }
 });
+
+// Achado MÉDIO da revisão final do PR #318: na 5932 as folhas são DUAS decomposições do mesmo PIB
+// (oferta e demanda). Resposta REAL: a ótica separa as duas, e cada lado, somado só nas folhas, é
+// uma partição só (nenhuma categoria da demanda cai na oferta, e o PIB é das duas).
+test('A3.4: no PIB por setor, oferta e demanda vêm separadas pela ótica, nunca misturadas', () => {
+  const itens = setorialDe(0, fixSidra('pib')).itens;
+  const por = (o) => [...new Set(itens.filter((f) => f.valor.otica === o).map((f) => f.valor.categoria_codigo))].sort();
+  assert.deepEqual(por('demanda'), ['93404', '93405', '93406', '93407', '93408']);
+  assert.deepEqual(por('ambas'), ['90707']);
+  assert.ok(por('oferta').includes('90706') && !por('oferta').includes('93406'), 'impostos na oferta; FBCF fora dela');
+  assert.equal(itens.filter((f) => f.valor.otica === null).length, 0);
+  // fora da 5932 há uma partição só: ótica nula
+  assert.ok(setorialDe(5, fixSidra('emp')).itens.every((f) => f.valor.otica === null));
+});
