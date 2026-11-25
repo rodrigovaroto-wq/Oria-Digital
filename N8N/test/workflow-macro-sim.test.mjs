@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SERIES_MACRO, INDICADORES_FOCUS, numeroMacro, JUROS_PJ_SGS, JANELA_JUROS_MESES } from '../lib/macro.mjs';
+import { SERIES_MACRO, INDICADORES_FOCUS, numeroMacro, JUROS_PJ_SGS, JANELA_JUROS_MESES, SGS_EXTRA, JANELA_SGS_EXTRA } from '../lib/macro.mjs';
 
 // Executa os códigos REAIS dos nós Code do workflow gerado, com a semântica do
 // N8N ($input/$json/$()). O mesmo padrão de `workflow-sim.test.mjs`: o mirror
@@ -549,7 +549,8 @@ test('ordem: todo nó capaz de lançar só roda DEPOIS de todos os Registrar Con
   const lanca = workflow.nodes.filter((n) =>
     (n.type.endsWith('.code') && /\bthrow\b/.test(n.parameters.jsCode ?? ''))
     || (/httpRequest|postgres/.test(n.type) && n.onError !== 'continueRegularOutput')).map((n) => n.name);
-  assert.equal(registrar.length, 4, 'um registro por fonte: SGS, Focus, SIDRA e Juros');
+  assert.equal(registrar.length, 5, 'um registro por corrente: SGS, Focus, SIDRA, Juros e SGS Extra');
+  assert.ok(registrar.includes('Registrar Consulta SGS Extra'));
   assert.ok(lanca.includes('Normalizar Observações') && lanca.includes('Normalizar Focus'), 'os dois que lançam de propósito');
 
   // Há caminho do gatilho até T que NÃO passa por R? (busca no grafo sem atravessar R)
@@ -568,4 +569,82 @@ test('ordem: todo nó capaz de lançar só roda DEPOIS de todos os Registrar Con
       assert.ok(!alcancaSem(t, r), `"${t}" pode rodar sem que "${r}" tenha registrado antes`);
     }
   }
+});
+
+
+// --- A3 fatia 2: IBC-Br, crédito/inadimplência PJ e euro (bcb_sgs -> fato_externo) ---
+const extraDe = (sgs, httpJson) => {
+  const m = SGS_EXTRA.find((x) => x.sgs === sgs);
+  return rodarCode('Ler SGS Extra', {
+    itens: [httpJson],
+    porNome: { 'Séries SGS Extra': { __sgs: sgs, __meta: { nome: m.nome, natureza: m.natureza, unidade: m.unidade, periodicidade: m.periodicidade } } },
+  })[0].json.__consulta;
+};
+const DIARIA_OK = JSON.stringify([
+  { data: '24/11/2026', valor: '6.4260000' }, { data: '25/11/2026', valor: '6.4413000' }]);
+
+test('A3.2: só entra série de nome CONFIRMADO; 192 (INCC suposto) e 7458 ficam fora', () => {
+  const codigos = SGS_EXTRA.map((s) => s.sgs).sort();
+  assert.deepEqual(codigos, [20540, 21083, 21086, 21619, 24363, 24364]);
+  assert.ok(!codigos.includes(192), 'rótulo por suposição (regra 1)');
+  assert.ok(!codigos.includes(7458), 'parou em 2025');
+  const gerado = rodarCode('Séries SGS Extra').map((i) => i.json);
+  assert.equal(gerado.length, SGS_EXTRA.length);
+  for (const g of gerado) {
+    const n = JANELA_SGS_EXTRA[g.__meta.periodicidade];
+    assert.match(g.__url, new RegExp(`bcdata\\.sgs\\.${g.__sgs}/dados/ultimos/${n}\\?formato=json$`));
+  }
+  assert.equal(JANELA_SGS_EXTRA.mensal, 2);
+  assert.ok(JANELA_SGS_EXTRA.diaria <= 5, 'janela diária maior multiplica as linhas do fato imutável');
+});
+
+test('A3.2: fato mensal e diário carregam unidade, natureza e que NÃO compõem; fonte bcb_sgs', () => {
+  const m = extraDe(21083, resp(200, JUROS_OK));
+  assert.equal(m.fonte, 'bcb_sgs');
+  assert.deepEqual(m.itens[1], {
+    chave: 'sgs:21083',
+    valor: { data_ref: '2026-09-01', valor: 23.87, unidade: '% da carteira', natureza: 'proporcao', compoe: false,
+      periodicidade: 'mensal', serie: SGS_EXTRA.find((x) => x.sgs === 21083).nome },
+    referencia: 'sgs.21083:2026-09',
+  });
+  const d = extraDe(21619, resp(200, DIARIA_OK));
+  assert.equal(d.itens.length, 2);
+  assert.equal(d.itens[1].valor.data_ref, '2026-11-25', 'diária: a data é a do dia, não do mês');
+  assert.equal(d.itens[1].valor.unidade, 'R$/EUR');
+  assert.equal(d.itens[1].valor.periodicidade, 'diaria');
+  assert.equal(d.itens[1].referencia, 'sgs.21619:2026-11-25');
+  assert.ok(SGS_EXTRA.every((s) => s.natureza && s.periodicidade));
+  assert.ok(d.itens.concat(m.itens).every((i) => i.valor.compoe === false));
+  // unidade desconhecida fica NULA e dita, nunca inventada
+  assert.equal(extraDe(20540, resp(200, JUROS_OK)).itens[0].valor.unidade, null);
+});
+
+test('A3.2: SGS extra derrubado - nunca 2xx com itens []; a falha de uma série não some', () => {
+  for (const [rotulo, h] of Object.entries({
+    '500': resp(500, 'x'), 'sem resposta': { error: { message: 'timeout' } }, 'vazio': resp(200, ''),
+    'não-JSON': resp(200, '<html/>'), 'lista vazia': resp(200, '[]'), 'objeto de erro': resp(200, '{"error":"x"}'),
+  })) {
+    for (const s of SGS_EXTRA) {
+      const c = extraDe(s.sgs, h);
+      afirmarContrato(c, `extra ${s.sgs} ${rotulo}`);
+      assert.ok(!(c.http_status >= 200 && c.http_status <= 299) || c.erro, `${s.sgs} ${rotulo}: chegaria como 2xx limpo`);
+    }
+  }
+  const cs = SGS_EXTRA.map((s) => extraDe(s.sgs, s.sgs === 21619 ? resp(500, 'boom') : resp(200, JUROS_OK)));
+  assert.equal(cs.filter((c) => c.http_status === 500).length, 1);
+  assert.equal(cs.filter((c) => c.http_status === 200 && c.itens.length === 2).length, 5);
+});
+
+test('A3.2: o registro novo é um Registrar Consulta, em série e só de registro', () => {
+  const c = workflow.connections;
+  const alvo = (n) => c[n].main[0].map((x) => x.node);
+  assert.deepEqual(alvo('Séries SGS Extra'), ['BCB SGS Extra']);
+  assert.deepEqual(alvo('BCB SGS Extra'), ['Ler SGS Extra']);
+  assert.deepEqual(alvo('Ler SGS Extra'), ['Registrar Consulta SGS Extra']);
+  const reg = nodeDe('Registrar Consulta SGS Extra');
+  assert.equal(reg.onError, 'continueRegularOutput');
+  assert.equal(reg.alwaysOutputData, true);
+  assert.equal(reg.parameters.options.queryBatching, 'independently');
+  assert.ok(!/Ler SGS Extra|BCB SGS Extra/.test(nodeDe('Normalizar Observações').parameters.jsCode), 'não vai para indice_macro_obs');
+  assert.equal(nodeDe('BCB SGS Extra').parameters.options.response.response.responseFormat, 'text');
 });

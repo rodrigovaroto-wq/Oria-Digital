@@ -466,3 +466,57 @@ export function itensJuros(sgs, nome) {
     });
   };
 }
+
+// ---------------------------------------------------------------------------
+// A3 fatia 2 — BCB/SGS (fonte bcb_sgs): atividade, crédito/inadimplência PJ e euro.
+// Destino fato_externo (NÃO indice_macro_obs: a aba Macro do cliente é a A5), mesma
+// janela e mesmo desenho da fatia 1 (uma consulta por série, na corrente linear).
+//
+// SÓ ENTRA SÉRIE COM NOME CONFIRMADO POR FONTE DO BCB (regra 1: nunca rotular por suposição):
+//  - 24363, 24364, 20540, 21083, 21086: título e conceito lidos no CKAN do BCB (dadosabertos).
+//  - 21619: o CKAN não a indexa. Confirmada pelo VALOR contra a API PTAX do próprio BCB
+//    (Olinda, CotacaoMoedaDia, EUR, boletim "Fechamento PTAX", cotacaoVenda): 24/11/2026
+//    = 6,4260 e 23/11/2026 = 6,5076 nas DUAS fontes, exatos. Quem lê o nome pelo valor deve
+//    saber disso: o rótulo vem da identidade de valor, não de um texto de catálogo.
+//    (21620, a compra, bate com cotacaoCompra: 6,4248 e 6,5057.)
+// FICA FORA: 192 (suposição: INCC % a.m.; responde 0,22 e 0,37 em set/out 2026, mas o CKAN
+// não a indexa, a página de metadados do SGS estava fora do ar em 25/11/2026 e nenhuma outra
+// fonte do BCB a traz: nome NÃO confirmado) e 7458 (parou em 2025).
+//
+// UNIDADE e NATUREZA vão em cada fato, para o leitor não adivinhar se compõe: nenhuma
+// destas séries compõe nem soma no tempo (compoe: false). 20540 tem unidade NULA de
+// propósito: o conceito do BCB diz "saldo em final de período" mas não a unidade, e
+// R$ milhões seria suposição. O fato diz isso em vez de afirmar uma unidade.
+// ---------------------------------------------------------------------------
+export const SGS_EXTRA = [
+  { sgs: 24363, nome: 'IBC-Br (Índice de Atividade Econômica do Banco Central)', natureza: 'indice', unidade: 'índice', periodicidade: 'mensal' },
+  { sgs: 24364, nome: 'IBC-Br com ajuste sazonal', natureza: 'indice', unidade: 'índice', periodicidade: 'mensal' },
+  { sgs: 20540, nome: 'Saldo da carteira de crédito, pessoas jurídicas, total', natureza: 'estoque', unidade: null, periodicidade: 'mensal' },
+  { sgs: 21083, nome: 'Inadimplência da carteira de crédito (atraso acima de 90 dias), pessoas jurídicas, total', natureza: 'proporcao', unidade: '% da carteira', periodicidade: 'mensal' },
+  { sgs: 21086, nome: 'Inadimplência da carteira de crédito com recursos livres (atraso acima de 90 dias), pessoas jurídicas, total', natureza: 'proporcao', unidade: '% da carteira', periodicidade: 'mensal' },
+  { sgs: 21619, nome: 'Euro, PTAX de fechamento, venda', natureza: 'cotacao', unidade: 'R$/EUR', periodicidade: 'diaria' },
+];
+
+// JANELA por observação, por periodicidade. Mensal: 2 (o último publicado + a revisão do
+// anterior), igual à fatia 1. Diária: 5 observações (~1 semana útil: cobre feriado e um dia
+// sem coleta). TETO: fato_externo é imutável e a janela é re-registrada todo dia; medido pelo
+// gerador, 5 mensais x 2 + 1 diária x 5 = 15 fatos + 6 consultas = 21 linhas/dia. Histórico
+// longo é fatia futura, se a Fase C pedir.
+export const JANELA_SGS_EXTRA = { mensal: JANELA_JUROS_MESES, diaria: 5 };
+
+// Itens: um fato por observação. data_ref é a data DA observação: dia 1 do mês nas mensais
+// (convenção do SGS) e o dia real na diária; periodicidade diz qual das duas é.
+export function itensSgsExtra(sgs, meta) {
+  return function (validas) {
+    return validas.map(function (o) {
+      return {
+        chave: 'sgs:' + sgs,
+        valor: {
+          data_ref: o.data_ref, valor: o.valor, unidade: meta.unidade, natureza: meta.natureza,
+          compoe: false, periodicidade: meta.periodicidade, serie: meta.nome,
+        },
+        referencia: 'sgs.' + sgs + ':' + (meta.periodicidade === 'diaria' ? o.data_ref : o.data_ref.slice(0, 7)),
+      };
+    });
+  };
+}

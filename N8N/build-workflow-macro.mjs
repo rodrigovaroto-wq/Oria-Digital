@@ -18,6 +18,7 @@ import {
   SERIES_MACRO, INDICADORES_FOCUS, urlSgs, urlFocus, urlSidraIpca, numeroMacro,
   lerRespostaHttp, consultaSgs, consultaFocus, consultaSidra,
   JUROS_PJ_SGS, urlSgsUltimos, itensJuros,
+  SGS_EXTRA, JANELA_SGS_EXTRA, itensSgsExtra,
 } from './lib/macro.mjs';
 
 // `numeroMacro` EMBUTIDA do fonte, não copiada à mão. É o padrão que o gerador da
@@ -321,6 +322,38 @@ return { json: { __consulta: c.consulta } };`,
 
   node('Retomar Dados', 'n8n-nodes-base.code', 2, { jsCode: 'return [{ json: {} }];' }),
 
+  // A3 fatia 2: IBC-Br, crédito/inadimplência PJ e euro (BCB/SGS, fonte bcb_sgs) -> fato_externo.
+  // Mesmo desenho dos juros: uma consulta por série, só registro, na corrente linear ANTES de
+  // qualquer nó que lance. A lista (só série com nome confirmado), a janela por periodicidade
+  // e a unidade de cada uma estão justificadas em lib/macro.mjs.
+  node('Séries SGS Extra', 'n8n-nodes-base.code', 2, {
+    jsCode: `return ${JSON.stringify(
+      SGS_EXTRA.map((s) => ({ json: {
+        __sgs: s.sgs, __meta: { nome: s.nome, natureza: s.natureza, unidade: s.unidade, periodicidade: s.periodicidade },
+        __url: urlSgsUltimos(s.sgs, JANELA_SGS_EXTRA[s.periodicidade]),
+      } })),
+    )};`,
+  }),
+
+  node('BCB SGS Extra', 'n8n-nodes-base.httpRequest', 4.2, {
+    url: '={{ $json.__url }}', options: HTTP_OPCOES,
+  }, HTTP_TOLERANTE),
+
+  node('Ler SGS Extra', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForEachItem',
+    jsCode: embutir(consultaSgs, itensSgsExtra) + `
+let ctx = {};
+try { ctx = $('Séries SGS Extra').item.json; } catch (e) { ctx = {}; }
+const c = consultaSgs($json, 'sgs:' + ctx.__sgs, { itens: itensSgsExtra(ctx.__sgs, ctx.__meta || {}) });
+if (!ctx.__sgs && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';
+return { json: { __consulta: c.consulta } };`,
+  }),
+
+  node('Registrar Consulta SGS Extra', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery', query: SQL_CONSULTA,
+    options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
+  }, PG_CONSULTA),
+
   node('Normalizar Observações', 'n8n-nodes-base.code', 2, { jsCode: CODE_NORMALIZAR }),
 
   node('Gravar Índices', 'n8n-nodes-base.postgres', 2.5, {
@@ -393,7 +426,11 @@ const connections = {
   'Séries Juros': liga('BCB Juros'),
   'BCB Juros': liga('Ler Juros'),
   'Ler Juros': liga('Registrar Consulta Juros'),
-  'Registrar Consulta Juros': liga('Séries a Coletar'),
+  'Registrar Consulta Juros': liga('Séries SGS Extra'),
+  'Séries SGS Extra': liga('BCB SGS Extra'),
+  'BCB SGS Extra': liga('Ler SGS Extra'),
+  'Ler SGS Extra': liga('Registrar Consulta SGS Extra'),
+  'Registrar Consulta SGS Extra': liga('Séries a Coletar'),
   'Séries a Coletar': liga('BCB SGS'),
   'BCB SGS': liga('Ler SGS'),
   'Ler SGS': liga('Registrar Consulta SGS'),
