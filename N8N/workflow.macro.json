@@ -31,7 +31,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2340,
+        3380,
         0
       ]
     },
@@ -55,7 +55,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        2600,
+        3640,
         0
       ],
       "onError": "continueRegularOutput",
@@ -73,7 +73,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2860,
+        3900,
         0
       ]
     },
@@ -91,7 +91,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        3120,
+        4160,
         0
       ],
       "credentials": {
@@ -115,7 +115,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5720,
+        6760,
         0
       ]
     },
@@ -139,7 +139,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        4680,
+        5720,
         0
       ],
       "onError": "continueRegularOutput",
@@ -156,7 +156,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4940,
+        5980,
         0
       ]
     },
@@ -174,7 +174,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        5200,
+        6240,
         0
       ],
       "credentials": {
@@ -198,7 +198,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5720,
+        6760,
         180
       ]
     },
@@ -295,7 +295,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4420,
+        5460,
         0
       ]
     },
@@ -308,7 +308,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5460,
+        6500,
         0
       ]
     },
@@ -398,6 +398,90 @@
     },
     {
       "parameters": {
+        "jsCode": "return [{\"json\":{\"__tabela\":5932,\"__variavel\":6561,\"__periodicidade\":\"trimestral\",\"__agregados\":[\"90691\",\"90696\",\"90705\",\"90707\"],\"__otica\":{\"oferta\":[\"90687\",\"90691\",\"90692\",\"90693\",\"90695\",\"90694\",\"90696\",\"90697\",\"90698\",\"90699\",\"90700\",\"90702\",\"90701\",\"90703\",\"90705\",\"90706\"],\"demanda\":[\"93404\",\"93405\",\"93406\",\"93407\",\"93408\"],\"ambas\":[\"90707\"]},\"__url\":\"https://apisidra.ibge.gov.br/values/t/5932/n1/all/v/6561/p/last%202/c11255/all\"}},{\"json\":{\"__tabela\":8888,\"__variavel\":11602,\"__periodicidade\":\"mensal\",\"__agregados\":[\"129314\",\"129316\"],\"__otica\":null,\"__url\":\"https://apisidra.ibge.gov.br/values/t/8888/n1/all/v/11602/p/last%202/c544/all\"}},{\"json\":{\"__tabela\":8880,\"__variavel\":11709,\"__periodicidade\":\"mensal\",\"__agregados\":[],\"__otica\":null,\"__url\":\"https://apisidra.ibge.gov.br/values/t/8880/n1/all/v/11709/p/last%202/c11046/56734\"}},{\"json\":{\"__tabela\":8882,\"__variavel\":11709,\"__periodicidade\":\"mensal\",\"__agregados\":[\"90672\",\"2759\"],\"__otica\":null,\"__url\":\"https://apisidra.ibge.gov.br/values/t/8882/n1/all/v/11709/p/last%202/c11046/56734/c85/all\"}},{\"json\":{\"__tabela\":8688,\"__variavel\":11624,\"__periodicidade\":\"mensal\",\"__agregados\":[\"107071\",\"106869\",\"106870\",\"106874\",\"31397\",\"31399\",\"31421\",\"106876\",\"31422\",\"31426\"],\"__otica\":null,\"__url\":\"https://apisidra.ibge.gov.br/values/t/8688/n1/all/v/11624/p/last%202/c11046/56726/c12355/all\"}},{\"json\":{\"__tabela\":6323,\"__variavel\":4090,\"__periodicidade\":\"trimestre_movel\",\"__agregados\":[\"47946\"],\"__otica\":null,\"__url\":\"https://apisidra.ibge.gov.br/values/t/6323/n1/all/v/4090/p/last%202/c888/all\"}}];"
+      },
+      "id": "s-ries-sidra-setorial",
+      "name": "Séries SIDRA Setorial",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.__url }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text",
+              "outputPropertyName": "corpo_cru"
+            }
+          },
+          "timeout": 60000
+        }
+      },
+      "id": "ibge-sidra-setorial",
+      "name": "IBGE SIDRA Setorial",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r, campo) {\n  const j = r || {};\n  const nomeCorpo = campo || 'data';\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j[nomeCorpo] === 'string' ? j[nomeCorpo] : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaSidraSetorial(resp, meta, opcoes) {\n  const m = meta || {};\n  const l = lerRespostaHttp(resp, (opcoes || {}).campo);\n  // QUAL série caiu vai no erro de TODO caminho de falha (revisão de 7e2b1f8): a fonte ibge_sidra\n  // tem 7 consultas por dia com a mesma fonte, falhou não tem fato e, sem o prefixo, o motivo\n  // gravado seria só \"HTTP 400\" (0303, ramo sem erro), sem dizer se caiu o IPCA ou a PMS.\n  // Erro informado num 4xx vai pelo ramo \"erro informado\" da 0303 e não pelo de\n  // http_inexistente: aqui não muda nada, porque ibge_sidra é fonte de mercado sem alvo e\n  // http_inexistente é nulo; se um dia deixar de ser, este prefixo precisa ser revisto.\n  const id = 'SIDRA ' + m.tabela + '/' + m.variavel + ': ';\n  const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro === null ? null : id + l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null) return { consulta: c, dado: null };\n  if (l.http_status < 200 || l.http_status > 299) { c.erro = id + 'HTTP ' + l.http_status; return { consulta: c, dado: null }; }\n  if (!Array.isArray(l.json)) {\n    c.erro = id + 'HTTP ' + l.http_status + ' com JSON que não é a lista do SIDRA';\n    return { consulta: c, dado: null };\n  }\n  c.registros_lidos = l.json.length;\n  const cab = l.json[0] || {};\n  let ultima = 0;\n  for (const k of Object.keys(cab)) {\n    const mk = k.match(/^D(\\d+)C$/);\n    if (mk && Number(mk[1]) > ultima) ultima = Number(mk[1]);\n  }\n  if (ultima < 4) {\n    c.erro = id + 'HTTP ' + l.http_status + ' com cabeçalho SIDRA sem dimensão de categoria (D4 em diante) em ' + l.json.length + ' linhas lidas';\n    return { consulta: c, dado: null };\n  }\n  const fatos = [];\n  const ausentes = [];\n  for (const o of l.json.slice(1)) {\n    const per = String((o && o.D3C) || '');\n    const cod = String((o && o['D' + ultima + 'C']) || '');\n    // As dimensões ENTRE o período (D3) e a categoria (a última) qualificam o número: na PMC e\n    // na PMS é o \"Tipos de índice\" (volume x receita nominal). Sem elas, o fato não dizia que\n    // é volume e duas séries da mesma tabela/variável dariam a mesma referência (revisão de\n    // 7e2b1f8). Vão no valor, com o nome da dimensão que o próprio SIDRA dá, e na referência.\n    const dims = {}; let codDims = '';\n    for (let d = 4; d < ultima; d++) {\n      dims[String(cab['D' + d + 'N'] || ('D' + d))] = o && o['D' + d + 'N'];\n      codDims += String((o && o['D' + d + 'C']) || '') + ':';\n    }\n    const v = numeroMacro(o && o.V);\n    if (v === null || !/^\\d{6}$/.test(per) || cod === '') { ausentes.push(cod + ':' + per); continue; }\n    fatos.push({\n      chave: 'sidra:' + m.tabela + '/' + m.variavel,\n      valor: {\n        periodo: per, periodo_nome: o.D3N, categoria_codigo: cod, categoria: o['D' + ultima + 'N'], valor: v,\n        unidade: o.MN, compoe: false, periodicidade: m.periodicidade, serie: o.D2N, dimensoes: dims,\n        agregado: (m.agregados || []).indexOf(cod) >= 0, mes_final: mesFinalSidra(per, m.periodicidade),\n        otica: oticaSidra(m.otica, cod),\n      },\n      referencia: 'sidra.' + m.tabela + '.' + m.variavel + ':' + codDims + cod + ':' + per,\n    });\n  }\n  if (fatos.length === 0) {\n    c.erro = id + 'HTTP ' + l.http_status + ' sem nenhum valor numérico em ' + l.json.length + ' linhas lidas (cabeçalho incluído)';\n    return { consulta: c, dado: null };\n  }\n  for (const f of fatos) { f.valor.ausentes_na_consulta = ausentes.length; f.valor.ausentes_em = ausentes; }\n  c.itens = fatos;\n  return { consulta: c, dado: l.json };\n}\nfunction mesFinalSidra(per, periodicidade) {\n  const mm = String(per || '').match(/^(\\d{4})(\\d{2})$/);\n  if (!mm) return null;\n  if (periodicidade === 'trimestral') {\n    const t = Number(mm[2]);\n    return t >= 1 && t <= 4 ? mm[1] + '-' + String(t * 3).padStart(2, '0') : null;\n  }\n  if (periodicidade === 'mensal' || periodicidade === 'trimestre_movel') {\n    const mes = Number(mm[2]);\n    return mes >= 1 && mes <= 12 ? mm[1] + '-' + mm[2] : null;\n  }\n  return null;\n}\nfunction oticaSidra(otica, cod) {\n  if (!otica) return null;\n  for (const o of ['oferta', 'demanda', 'ambas']) { if ((otica[o] || []).indexOf(cod) >= 0) return o; }\n  return null;\n}\nlet ctx = {};\ntry { ctx = $('Séries SIDRA Setorial').item.json; } catch (e) { ctx = {}; }\nconst c = consultaSidraSetorial($json, { tabela: ctx.__tabela, variavel: ctx.__variavel, periodicidade: ctx.__periodicidade, agregados: ctx.__agregados, otica: ctx.__otica }, { campo: \"corpo_cru\" });\n// Série não identificada: diz isso SEMPRE, inclusive quando a chamada também falhou (achado BAIXO\n// da revisão de f5147ab: no não-2xx o motivo virava \"SIDRA undefined/undefined: HTTP 500\").\n// Sem série, nenhum fato se grava: um fato sem tabela não diz o que mede.\nif (!ctx.__tabela) {\n  c.consulta.erro = 'não foi possível identificar a série desta chamada' + (c.consulta.erro ? ' (' + c.consulta.erro + ')' : '');\n  c.consulta.itens = null;\n}\nreturn { json: { __consulta: c.consulta } };"
+      },
+      "id": "ler-sidra-setorial",
+      "name": "Ler SIDRA Setorial",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-sidra-setorial",
+      "name": "Registrar Consulta SIDRA Setorial",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        3120,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
         "jsCode": "const SERIES = [{\"codigo\":\"IPCA\",\"sgs\":433},{\"codigo\":\"IGPM\",\"sgs\":189},{\"codigo\":\"INPC\",\"sgs\":188},{\"codigo\":\"SELIC\",\"sgs\":4390},{\"codigo\":\"CDI\",\"sgs\":4391},{\"codigo\":\"CAMBIO_USD\",\"sgs\":3698}];\nfunction num(b){ if(typeof b==='number') return isFinite(b)?b:null;\n  const t=String(b==null?'':b).trim(); if(!t) return null;\n  const n=Number(t.includes(',')?t.replace(/\\./g,'').replace(',','.'):t); return isFinite(n)?n:null; }\nfunction dataSgs(b){ const m=String(b==null?'':b).match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);\n  return m? m[3]+'-'+m[2]+'-'+m[1] : null; }\n// O no' HTTP Request do n8n EXPLODE resposta JSON que e' array em N itens. O SGS\n// devolve [{data,valor}, ...x132], entao 'Manter Contexto SGS' (runOnceForEachItem)\n// recebe UM objeto por item e gravava __corpo = {data,valor} -- nao um array. O\n// '!Array.isArray(corpo) continue' abaixo descartava TODOS os ~792 itens das 6\n// series mensais, em silencio. Sobrevivia so' o ramo IBGE/SIDRA, que ja' remontava\n// o array ($input.all().map(...)) porque e' UMA requisicao so'.\n//\n// Nao se remonta aqui de proposito: cada item ja' carrega o __serie CERTO, pelo\n// pareamento de itens do n8n ($('Series a Coletar').item). Agrupar de novo por\n// serie seria refazer, com risco, um trabalho que o n8n ja' fez.\n//\n// A distincao importa: corpo de ERRO da API tambem e' um objeto unico. Envolver\n// qualquer objeto num array faria a falha virar \"zero observacoes\" -- o mesmo\n// silencio, por outra porta. So' o que TEM CARA DE OBSERVACAO e' aceito; o resto\n// e' contado em 'descartados', e e' esse numero que torna a falha visivel.\nfunction ehObsSgs(o){ return !!o && typeof o==='object' && !Array.isArray(o) && ('data' in o) && ('valor' in o); }\nfunction comoArray(c){ return Array.isArray(c) ? c : (ehObsSgs(c) ? [c] : null); }\nconst obs=[];\nlet descartados=0;\nfor (const item of $input.all()) {\n  const j=item.json||{};\n  const serie=j.__serie, corpo=comoArray(j.__corpo);\n  if(!serie||!corpo){ descartados++; continue; }\n  if(j.__fonte==='IBGE/SIDRA'){\n    for(const o of corpo.slice(1)){\n      const m=String(o&&o.D3C||'').match(/^(\\d{4})(\\d{2})$/);\n      const v=num(o&&o.V);\n      if(m&&v!==null) obs.push({serie:'IPCA',fonte:'IBGE/SIDRA',data_ref:m[1]+'-'+m[2]+'-01',valor:v});\n    }\n  } else {\n    for(const o of corpo){\n      const d=dataSgs(o&&o.data), v=num(o&&o.valor);\n      if(d&&v!==null) obs.push({serie:serie,fonte:'BCB/SGS',data_ref:d,valor:v});\n    }\n  }\n}\n// FALHAR ALTO. Antes isto terminava em return com n:0 e NUNCA lancava: com\n// neverError nos HTTP, falha de API virava corpo de erro, o continue engolia, a\n// funcao do banco recebia '[]' e devolvia 0,0 -- e a execucao agendada fechava\n// VERDE. O workflow roda dia 12; ninguem olha uma execucao verde.\n//\n// Zero observacao NUNCA e' resultado legitimo aqui: o SGS devolve os ultimos 132\n// meses em toda chamada, entao \"coletei e nada veio\" significa que a resposta nao\n// era o que se esperava. O padrao certo ja' existia no repositorio -- CODE_LISTAR\n// do gerador da ingestao lanca quando o formulario vem sem arquivo -- e estava\n// aplicado so' la'.\n//\n// A mensagem carrega o que foi VISTO, nao so' o que faltou: quantos itens\n// chegaram, quantos foram descartados e uma amostra do corpo. Sem isso o proximo\n// diagnostico recomeca do zero, que foi o custo do v30.\nif (obs.length === 0) {\n  const amostra = JSON.stringify(($input.all()[0] || {}).json || {}).slice(0, 400);\n  throw new Error('Coleta de indices macro NAO trouxe observacao nenhuma. Itens recebidos: '\n    + $input.all().length + ', descartados: ' + descartados\n    + '. Zero nunca e resultado legitimo aqui (o SGS devolve 132 meses por chamada), '\n    + 'entao a resposta nao era o esperado. Primeiro item recebido: ' + amostra);\n}\n// 'descartados' sai no payload de proposito: e' o unico numero que distingue\n// \"coletou e nao mudou nada\" de \"a API respondeu outra coisa e nada foi lido\".\nreturn [{ json: { observacoes: obs, n: obs.length, descartados } }];"
       },
       "id": "normalizar-observa-es",
@@ -405,7 +489,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5980,
+        7020,
         0
       ]
     },
@@ -422,7 +506,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        6240,
+        7280,
         0
       ],
       "credentials": {
@@ -446,7 +530,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        6500,
+        7540,
         0
       ],
       "credentials": {
@@ -469,7 +553,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3380,
+        4420,
         0
       ]
     },
@@ -493,7 +577,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3640,
+        4680,
         0
       ],
       "onError": "continueRegularOutput",
@@ -511,7 +595,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3900,
+        4940,
         0
       ]
     },
@@ -529,7 +613,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        4160,
+        5200,
         0
       ],
       "credentials": {
@@ -553,7 +637,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5720,
+        6760,
         360
       ]
     },
@@ -566,7 +650,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5980,
+        7020,
         360
       ]
     },
@@ -583,7 +667,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        6240,
+        7280,
         360
       ],
       "credentials": {
@@ -688,6 +772,50 @@
       ]
     },
     "Registrar Consulta SGS Extra": {
+      "main": [
+        [
+          {
+            "node": "Séries SIDRA Setorial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Séries SIDRA Setorial": {
+      "main": [
+        [
+          {
+            "node": "IBGE SIDRA Setorial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IBGE SIDRA Setorial": {
+      "main": [
+        [
+          {
+            "node": "Ler SIDRA Setorial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler SIDRA Setorial": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta SIDRA Setorial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta SIDRA Setorial": {
       "main": [
         [
           {

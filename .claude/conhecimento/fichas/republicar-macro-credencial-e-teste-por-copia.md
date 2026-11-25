@@ -34,6 +34,10 @@ teste ponta a ponta, produção, UGhv57BU3YNukVxV.
   ativada, chamada uma vez, lida por `/executions/<id>?includeData=true` e apagada no `finally`.
   Ela grava em produção o mesmo que a execução das 06h gravaria (consultas reais e upsert
   idempotente nos índices). Resultado: execução 10048 `success` em 16 s, 37 consultas `encontrado`.
+- **O webhook da cópia dá 404 logo depois de ativar** (registro atrasado). Medido em 25/11/2026 na
+  sessão 140: a 1ª chamada deu 404 e nada rodou; com espera de 3 s e até 5 tentativas, deu 200
+  (execuções 10051 e 10052, `success` em 12 s cada). A causa exata NÃO foi medida; o que foi
+  medido é que esperar e repetir deu 200.
 
 ## O que NÃO se testa assim
 

@@ -107,13 +107,38 @@ Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
 - **Pronto quando:** cada fonte aparece no catálogo com a data da última atualização; derrubar uma
   fonte aparece como "falhou", nunca como "sem dado".
 
-**Estado (25/11/2026, sessão 139):**
+**Estado (25/11/2026, sessões 139 e 140):**
 
 - Fonte 1 (macro em produção): **medida.** O macro rodava mensal (dia 12); execuções em 12/10 e 12/11; último mês gravado: SELIC/CDI 2026-11, CÂMBIO_USD/IGPM 2026-10, IPCA/INPC 2026-09.
-- Fonte 2 (juros PJ por modalidade): **feita no repositório** (`f102a92`, 0304). 19 séries pelo SGS. A taxa banco a banco da Olinda fica para depois (decisão do dono).
+- Fonte 2 (juros PJ por modalidade): **feita e em produção** (sessão 139: `f102a92`, 0304; execução 10048 com 19 séries de juros). A taxa banco a banco da Olinda fica para depois (decisão do dono).
 - Fonte 3 (SGS): **parcial** (`5e5c1d4`): IBC-Br, crédito e inadimplência PJ, euro PTAX. Ficaram de fora o INCC (nome não confirmado) e a série 7458 (parou em 2025).
-- Fontes 4 a 9: **não feitas.**
-- **Falta para a A3 fechar:** a republicação do macro e a 1ª execução em produção (NÃO CONFERIDAS). Sem isso, nenhuma fonte da A3 tem medida em produção.
+- Fonte 4 (IBGE/SIDRA setorial): **feita e em produção** (sessão 140: `7e2b1f8`, `f5147ab`). 6 séries: PIB por setor, PIM-PF, PMC (total e por atividade), PMS, ocupados por grupamento. Uma consulta `ibge_sidra` por série; dados só em `fato_externo`. Medido pela sessão 140 em produção: macro republicado com 34 nós; execução 10052 `success`, 43 consultas `encontrado` (7 de `ibge_sidra`), 202 fatos setoriais. Sem migration.
+- Fontes 5 a 9: **não feitas.** A CVM (fonte 5) só começa depois de medir o banco (113 MB em 25/11).
+- **Falta para a A3 fechar:** a 1ª execução AGENDADA em produção, de 26/11 06h (09:00 UTC), ainda NÃO CONFERIDA (agendada em `trig_01PbmDVYHXaVJrkBiqwhG9Qo`). E as fontes 5 a 9. Até a agenda ser conferida, as fontes da A3 têm medida só da execução manual por cópia.
+
+**Próximos 2 passos (definidos em 25/11/2026, sessão 140):**
+
+| Passo | O que | Critério de pronto | Quem |
+|---|---|---|---|
+| **1. Conferir a agenda** | A 1ª execução AGENDADA do macro (26/11, 06h = 09:00 UTC), já com a fonte 4. Conferida agendada para 26/11 às 09:30 UTC | 43 consultas `encontrado` desde 08:55 UTC (12 `bcb_sgs`, 19 `bcb_juros_modalidade`, 5 `bcb_focus`, 7 `ibge_sidra`); ~267 fatos novos (202 setoriais); a execução no n8n veio da agenda, não de webhook. Se não bater: diagnóstico antes de qualquer fonte nova | Claude (conferida); dono: nada |
+| **2. Fonte 5 — CVM (pares do setor)** | Cadastro e demonstrações das companhias abertas. Antes do código, medir o banco e o dono decidir o recorte | Catálogo `cvm_dados_abertos` com url e cadência de publicação; uma consulta por ARQUIVO baixado, com `registros_lidos` > 0 (fonte de lista); "falhou" visível; o tamanho do banco medido antes e depois | Dono decide o recorte; Claude implementa |
+
+**Medido para o passo 2 (25/11/2026, dados abertos da CVM):**
+
+- Cadastro: 2.680 linhas, 1,5 MB. Uma companhia aparece uma vez por mercado (bolsa, balcão): são 2.533 CNPJ únicos, 655 ativos.
+- DFP 2025: 12,9 MB zipado, **1.192.514 linhas** somando todos os CSV (consolidado e individual; BPA, BPP, DRE, DRA, DFC, DMPL, DVA; dois exercícios). Só o exercício ÚLTIMO: 595.476. Recortes menores, para comparação: consolidado em BPA, BPP, DRE e DFC_MI, 443 companhias e 244.012 linhas (dois exercícios); contas até o nível 3, só o último exercício, 43.387.
+- Só as contas até o nível 3 (ex.: `1.01.01`), no último exercício: 43 mil linhas por ano.
+- ITR 2026: 29,5 MB zipado. Não aberto: o número de linhas não foi medido.
+
+**DECIDIDO pelo dono em 25/11/2026:** (1) **DFP inteira**; (2) **ITR entra**; (3) **gravar pela proposta**: baixar só quando o arquivo da CVM mudar e registrar a consulta mesmo quando nada mudou.
+
+**⚠ A decisão (1) PRECISA SER REVISTA pelo dono antes de gravar** (achado da revisão final do PR #318, conferido em 25/11). Quando a decisão foi tomada, o número na mesa era 244 mil linhas, que é só um recorte. A DFP inteira de 2025 tem **1,19 milhão de linhas**; só o último exercício, 595 mil. A cerca de 400 B por linha (ESTIMADO, o tamanho real por linha não foi medido), dá cerca de 240 MB por ano só com o último exercício, antes do ITR, contra 387 MB livres. Não cabe com o ITR. O primeiro passo da fonte 5 é medir o tamanho real por linha e as linhas do ITR, e levar ao dono três recortes com o número medido: (a) só consolidado, último exercício; (b) consolidado e só BPA, BPP, DRE e DFC; (c) contas até o nível 3.
+
+**O que estava em decisão** (registro):
+
+1. **Recorte.** (Número da época, SUPERADO: tomava 244 mil linhas, que é o consolidado de 4 demonstrações, como a DFP inteira; ver o aviso acima.) A DFP inteira são 244 mil linhas por ano. A cerca de 400 B por linha com índice, dá cerca de 100 MB por ano: não cabe nos 387 MB livres junto com o ITR. Contas até o nível 3, consolidado, último exercício, são 43 mil linhas, cerca de 17 MB por ano (ESTIMADO).
+2. **ITR (trimestral) entra ou não.** Medir as linhas antes de decidir.
+3. **Forma de gravar.** A CVM publica por ano e por trimestre. Regravar todo dia, como o macro faz, multiplicaria o volume. A proposta é baixar só quando o arquivo mudar (o `last-modified` medido é de 22/11/2026) e registrar a consulta mesmo quando nada mudou. Decidir também se os dados vão para `fato_externo`, que é imutável e guarda um JSON por linha, ou para uma tabela própria e enxuta.
 
 ### A4 · Dados da empresa (sob demanda, só CNPJ) — item 1.H2, parte da empresa
 

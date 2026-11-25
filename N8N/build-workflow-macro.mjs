@@ -19,6 +19,7 @@ import {
   lerRespostaHttp, consultaSgs, consultaFocus, consultaSidra,
   JUROS_PJ_SGS, urlSgsUltimos, itensJuros,
   SGS_EXTRA, JANELA_SGS_EXTRA, itensSgsExtra,
+  SIDRA_SETORIAL, urlSidraSetorial, consultaSidraSetorial, mesFinalSidra, oticaSidra,
 } from './lib/macro.mjs';
 
 // `numeroMacro` EMBUTIDA do fonte, não copiada à mão. É o padrão que o gerador da
@@ -363,6 +364,43 @@ return { json: { __consulta: c.consulta } };`,
     options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
   }, PG_CONSULTA),
 
+  // A3 fatia 4: IBGE/SIDRA setorial (PIB, indústria, varejo, serviços, emprego) -> fato_externo.
+  // Mesmo desenho: uma consulta por série (6), só registro, ANTES de qualquer nó que lance.
+  // Fica logo depois do SGS Extra e antes de 'Séries a Coletar': é a continuação natural da
+  // corrente de registro e todo nó que lança (Normalizar*) vem depois dela.
+  node('Séries SIDRA Setorial', 'n8n-nodes-base.code', 2, {
+    jsCode: `return ${JSON.stringify(
+      SIDRA_SETORIAL.map((s) => ({ json: {
+        __tabela: s.tabela, __variavel: s.variavel, __periodicidade: s.periodicidade, __agregados: s.agregados, __otica: s.otica || null, __url: urlSidraSetorial(s),
+      } })),
+    )};`,
+  }),
+
+  node('IBGE SIDRA Setorial', 'n8n-nodes-base.httpRequest', 4.2, {
+    url: '={{ $json.__url }}', options: HTTP_OPCOES,
+  }, HTTP_TOLERANTE),
+
+  node('Ler SIDRA Setorial', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForEachItem',
+    jsCode: embutir(consultaSidraSetorial, mesFinalSidra, oticaSidra) + `
+let ctx = {};
+try { ctx = $('Séries SIDRA Setorial').item.json; } catch (e) { ctx = {}; }
+const c = consultaSidraSetorial($json, { tabela: ctx.__tabela, variavel: ctx.__variavel, periodicidade: ctx.__periodicidade, agregados: ctx.__agregados, otica: ctx.__otica }, { campo: ${CAMPO} });
+// Série não identificada: diz isso SEMPRE, inclusive quando a chamada também falhou (achado BAIXO
+// da revisão de f5147ab: no não-2xx o motivo virava "SIDRA undefined/undefined: HTTP 500").
+// Sem série, nenhum fato se grava: um fato sem tabela não diz o que mede.
+if (!ctx.__tabela) {
+  c.consulta.erro = 'não foi possível identificar a série desta chamada' + (c.consulta.erro ? ' (' + c.consulta.erro + ')' : '');
+  c.consulta.itens = null;
+}
+return { json: { __consulta: c.consulta } };`,
+  }),
+
+  node('Registrar Consulta SIDRA Setorial', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery', query: SQL_CONSULTA,
+    options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
+  }, PG_CONSULTA),
+
   node('Normalizar Observações', 'n8n-nodes-base.code', 2, { jsCode: CODE_NORMALIZAR }),
 
   node('Gravar Índices', 'n8n-nodes-base.postgres', 2.5, {
@@ -439,7 +477,11 @@ const connections = {
   'Séries SGS Extra': liga('BCB SGS Extra'),
   'BCB SGS Extra': liga('Ler SGS Extra'),
   'Ler SGS Extra': liga('Registrar Consulta SGS Extra'),
-  'Registrar Consulta SGS Extra': liga('Séries a Coletar'),
+  'Registrar Consulta SGS Extra': liga('Séries SIDRA Setorial'),
+  'Séries SIDRA Setorial': liga('IBGE SIDRA Setorial'),
+  'IBGE SIDRA Setorial': liga('Ler SIDRA Setorial'),
+  'Ler SIDRA Setorial': liga('Registrar Consulta SIDRA Setorial'),
+  'Registrar Consulta SIDRA Setorial': liga('Séries a Coletar'),
   'Séries a Coletar': liga('BCB SGS'),
   'BCB SGS': liga('Ler SGS'),
   'Ler SGS': liga('Registrar Consulta SGS'),

@@ -1,0 +1,156 @@
+{
+ "fonte": "https://servicodados.ibge.gov.br/api/v3/agregados/8688/metadados",
+ "lido_em": "2026-11-25",
+ "tabela": 8688,
+ "classificacao": {
+  "id": 12355,
+  "nome": "Atividades de serviços",
+  "categorias": [
+   {
+    "id": 107071,
+    "nome": "Total",
+    "nivel": 0
+   },
+   {
+    "id": 106869,
+    "nome": "1. Serviços prestados às famílias",
+    "nivel": 1
+   },
+   {
+    "id": 106870,
+    "nome": "1.1 Serviços de alojamento e alimentação",
+    "nivel": 2
+   },
+   {
+    "id": 56692,
+    "nome": "1.1.1 Alojamento",
+    "nivel": 3
+   },
+   {
+    "id": 56693,
+    "nome": "1.1.2 Alimentação",
+    "nivel": 3
+   },
+   {
+    "id": 31396,
+    "nome": "1.2 Outros serviços prestados às famílias",
+    "nivel": 2
+   },
+   {
+    "id": 106874,
+    "nome": "2. Serviços de informação e comunicação",
+    "nivel": 1
+   },
+   {
+    "id": 31397,
+    "nome": "2.1 Serviços de Tecnologia de Informação e Comunicação (TIC)",
+    "nivel": 2
+   },
+   {
+    "id": 39321,
+    "nome": "2.1.1 Telecomunicações",
+    "nivel": 3
+   },
+   {
+    "id": 39322,
+    "nome": "2.1.2 Serviços de Tecnologia da Informação",
+    "nivel": 3
+   },
+   {
+    "id": 31398,
+    "nome": "2.2 Serviços audiovisuais, de edição e agências de notícias",
+    "nivel": 2
+   },
+   {
+    "id": 31399,
+    "nome": "3. Serviços profissionais, administrativos e complementares",
+    "nivel": 1
+   },
+   {
+    "id": 31400,
+    "nome": "3.1 Serviços técnico-profissionais",
+    "nivel": 2
+   },
+   {
+    "id": 31421,
+    "nome": "3.2 Serviços administrativos e complementares",
+    "nivel": 2
+   },
+   {
+    "id": 56694,
+    "nome": "3.2.1 Aluguéis não imobiliários",
+    "nivel": 3
+   },
+   {
+    "id": 56695,
+    "nome": "3.2.2 Serviços de apoio às atividades empresariais",
+    "nivel": 3
+   },
+   {
+    "id": 106876,
+    "nome": "4. Transportes, serviços auxiliares aos transportes e correio",
+    "nivel": 1
+   },
+   {
+    "id": 31422,
+    "nome": "4.1 Transporte terrestre",
+    "nivel": 2
+   },
+   {
+    "id": 56696,
+    "nome": "4.1.1 Rodoviário de cargas",
+    "nivel": 3
+   },
+   {
+    "id": 56697,
+    "nome": "4.1.2 Rodoviário de passageiros",
+    "nivel": 3
+   },
+   {
+    "id": 56698,
+    "nome": "4.1.3 Outros segmentos do transporte terrestre",
+    "nivel": 3
+   },
+   {
+    "id": 31423,
+    "nome": "4.2 Transporte aquaviário",
+    "nivel": 2
+   },
+   {
+    "id": 31424,
+    "nome": "4.3 Transporte aéreo",
+    "nivel": 2
+   },
+   {
+    "id": 31425,
+    "nome": "4.4 Armazenagem, serviços auxiliares aos transportes e correio",
+    "nivel": 2
+   },
+   {
+    "id": 31426,
+    "nome": "5. Outros serviços",
+    "nivel": 1
+   },
+   {
+    "id": 56699,
+    "nome": "5.1 Esgoto, gestão de resíduos, recuperação de materiais e descontaminação",
+    "nivel": 2
+   },
+   {
+    "id": 56700,
+    "nome": "5.2 Atividades auxiliares dos serviços financeiros",
+    "nivel": 2
+   },
+   {
+    "id": 56701,
+    "nome": "5.3 Atividades imobiliárias",
+    "nivel": 2
+   },
+   {
+    "id": 56702,
+    "nome": "5.4 Outros serviços não especificados anteriormente",
+    "nivel": 2
+   }
+  ]
+ }
+}
