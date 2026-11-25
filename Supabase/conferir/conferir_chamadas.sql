@@ -43,8 +43,13 @@ declare
     ['workflow.e1-ingestao.json · Abrir Lote', 'select fn_abrir_lote_execucao($1::uuid, $2::text, $3::jsonb) as resultado'],
     ['workflow.e1-ingestao.json · Conferir Lote', 'select fn_conferir_lote($1::uuid) as resultado'],
     ['workflow.erros.json · Registrar Falha', 'select fn_registrar_falha_execucao($1::uuid, $2::text, $3::text, $4::text, $5::jsonb) as r'],
+    ['workflow.macro.json · Registrar Consulta SGS', 'select fn_registrar_consulta_externa(q.p->>''fonte'', null, null, (q.p->>''http_status'')::int, q.p->>''erro'', q.p->>''corpo'', nullif(q.p->''itens'', ''null''::jsonb), (q.p->>''registros_lidos'')::int, 0) as consulta from (select $1::jsonb as p) q'],
+    ['workflow.macro.json · Registrar Consulta SIDRA', 'select fn_registrar_consulta_externa(q.p->>''fonte'', null, null, (q.p->>''http_status'')::int, q.p->>''erro'', q.p->>''corpo'', nullif(q.p->''itens'', ''null''::jsonb), (q.p->>''registros_lidos'')::int, 0) as consulta from (select $1::jsonb as p) q'],
+    ['workflow.macro.json · Registrar Consulta Juros', 'select fn_registrar_consulta_externa(q.p->>''fonte'', null, null, (q.p->>''http_status'')::int, q.p->>''erro'', q.p->>''corpo'', nullif(q.p->''itens'', ''null''::jsonb), (q.p->>''registros_lidos'')::int, 0) as consulta from (select $1::jsonb as p) q'],
+    ['workflow.macro.json · Registrar Consulta SGS Extra', 'select fn_registrar_consulta_externa(q.p->>''fonte'', null, null, (q.p->>''http_status'')::int, q.p->>''erro'', q.p->>''corpo'', nullif(q.p->''itens'', ''null''::jsonb), (q.p->>''registros_lidos'')::int, 0) as consulta from (select $1::jsonb as p) q'],
     ['workflow.macro.json · Gravar Índices', 'select * from fn_registrar_indice_macro($1::jsonb)'],
     ['workflow.macro.json · Conferir Fontes', 'select * from fn_divergencias_indice_macro()'],
+    ['workflow.macro.json · Registrar Consulta Focus', 'select fn_registrar_consulta_externa(q.p->>''fonte'', null, null, (q.p->>''http_status'')::int, q.p->>''erro'', q.p->>''corpo'', nullif(q.p->''itens'', ''null''::jsonb), (q.p->>''registros_lidos'')::int, 0) as consulta from (select $1::jsonb as p) q'],
     ['workflow.macro.json · Gravar Expectativas', 'select fn_registrar_expectativa_macro($1::jsonb) as n']
   ];
 begin
