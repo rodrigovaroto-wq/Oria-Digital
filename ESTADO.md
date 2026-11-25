@@ -1,6 +1,53 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
+## SESSÃO 140 (25/11/2026) — A3 fonte 4: IBGE/SIDRA setorial EM PRODUÇÃO (macro republicado com 34 nós, execução 10052 `success`)
+
+> **Migration mais nova: continua `0304`.** Nenhuma migration nova na sessão 140: o catálogo `ibge_sidra` já existia (cadência nula, prazo 1 dia).
+>
+> **Branch:** `claude/charming-cori-j1fa07`, commits `7e2b1f8` (fonte 4) e `f5147ab` (correção da revisão). **PR: ainda não aberto** (a sessão principal abre). Portal não tocado.
+>
+> **Produção (medido pela sessão 140, 25/11/2026, 21:21 a 21:33 UTC):** macro republicado da branch com `N8N_CRED_IDS='{"Supabase Postgres":"D7NYaWY1UYKy2vBc"}'` (34 nós, "PUBLICADO E CONFERIDO"). Execução 10052 por cópia com webhook: `success` em 12 s, 43 consultas `encontrado` (12 bcb_sgs, 19 bcb_juros_modalidade, 5 bcb_focus, 7 ibge_sidra), 202 fatos setoriais além dos 65 de sempre. Banco: 113 MB de 500 MB.
+>
+> **NÃO CONFERIDO NO FECHAMENTO desta rodada:** a sessão de fechamento não acessou o banco nem o n8n. Os números acima são os medidos pela sessão 140, registrados aqui. A **execução AGENDADA de 26/11 06h (09:00 UTC) ainda não aconteceu** (hoje é 25/11).
+
+### ▶ PRÓXIMA SESSÃO — COMECE AQUI: conferir a agenda de 26/11 e seguir para a fonte 5 (CVM)
+
+- **Pedido pronto para colar:** `/autopilot Fase A, fatia A3 (dados de mercado), continuação. Leia ESTADO.md sessão 140 e Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md §5 A3. Primeiro passo: conferir a execução AGENDADA de 26/11 06h (09:00 UTC) do macro (workflow UGhv57BU3YNukVxV): esperado 43 consultas "encontrado" (ibge_sidra 7) e cerca de 267 fatos na execução (202 setoriais + 65). Depois a fonte 5 (CVM): medir o banco antes (113 MB em 25/11 21:34 UTC) e guardar só os campos usados.
+- **Cuidado com a conferência agendada `trig_01PbmDVYHXaVJrkBiqwhG9Qo` (26/11 09:30 UTC):** o prompt dela manda "aplicar a migration da fonte 4 e republicar o macro". As duas coisas estão erradas: a fonte 4 não tem migration, e a republicação já foi feita em 25/11 21:33. A sessão que a receber deve conferir (passos 1 a 3 do prompt) e **não** aplicar nem republicar sem reler esta seção.
+- Achado 3 (o Total do emprego 6323 vem junto das componentes, sem marca): resolver quando a A5 for ler `fato_externo`.
+
+### O que a sessão 140 fez
+
+- **Fonte 4 (IBGE/SIDRA setorial), `7e2b1f8`:** 6 séries (PIB por setor 5932/6561; PIM-PF 8888/11602; PMC total 8880 e por atividade 8882/11709; PMS 8688/11624; ocupados 6323/4090). Uma consulta `ibge_sidra` por série, registrada por `fn_registrar_consulta_externa` antes de qualquer nó que lança. Dados só em `fato_externo`, nunca em `indice_macro_obs`. Valor ausente do SIDRA ("-", "..", "...", "X") não vira fato nem zero: a contagem vai em cada fato. 2xx sem valor numérico vira falhou. Nome da série vem do D2N do SIDRA. Fixtures: 6 respostas reais de 25/11 (idênticas byte a byte às de produção).
+- **Correção da revisão, `f5147ab`:** fato sem "volume" e referência colidível (corrigido); falha que não dizia a tabela (corrigido).
+- **Republicação (sem migration):** o macro saiu de 30 para 34 nós, e a execução real foi por cópia com webhook, como na 139.
+
+### Medido × suposto
+
+| Afirmação | Situação |
+|---|---|
+| Macro republicado com 34 nós, "PUBLICADO E CONFERIDO" | **MEDIDO** pela sessão 140 (25/11 21:33 UTC). NÃO remedido no fechamento |
+| Execução 10052 `success`, 43 consultas `encontrado`, 202 fatos setoriais | **MEDIDO** pela sessão 140 (cópia com webhook). NÃO remedido no fechamento |
+| Banco 113 MB de 500 MB | **MEDIDO** pela sessão 140 (25/11 21:34 UTC). NÃO remedido |
+| Execução AGENDADA de 26/11 06h (34 nós) | **NÃO CONFERIDO**: ainda não aconteceu. Conferência agendada: `trig_01PbmDVYHXaVJrkBiqwhG9Qo` |
+| Suíte do macro: 54 de 54 | **MEDIDO no fechamento** (25/11): `node --test N8N/test/macro.test.mjs N8N/test/workflow-macro-sim.test.mjs` |
+| Suíte N8N: 768 testes, 763 passam, 5 falham | **MEDIDO no fechamento**. As 5 falhas são as de sempre, de livros de teste não gerados no container: `abas-do-xlsx`, `workflow-sim` (ENOENT do book), duas da Vertentes (títulos numerados e régua) e o controle negativo P6b. A mensagem de `7e2b1f8` dizia 766/761 e "macro 52/52": a conta antiga, antes de `f5147ab` acrescentar 2 testes |
+| Gerador `build-workflow-macro.mjs` em dia com o JSON commitado | **MEDIDO no fechamento**: regerado, sem diferença |
+| Tamanho: ~29 MB/ano da fonte 4 | **ESTIMADO** (357 B por fato × 202 fatos/dia). Medir de novo antes da CVM |
+| Fonte 4 não precisou de migration | **MEDIDO** pelo código: o catálogo `ibge_sidra` existia (0303/0304) |
+
+### Revisão
+
+- Ciclo 1 (`7e2b1f8`): 0 CRÍTICO/ALTO; 4 MÉDIOS. Corrigidos em `f5147ab`: fato sem volume e referência colidível; falha sem a tabela. Deixados: Total do emprego junto das componentes (achado 3, acima; nenhum consumidor de `fato_externo` ainda). ESTADO sem a republicação (resolvido: republicado). BAIXOS deixados: `periodo` com significado diferente por periodicidade (mitigado por `periodicidade` e `periodo_nome`); testes 1 e 5 travam contagem de nós e janela (mecanismo).
+- Ciclo 2 (`f5147ab`): 0 CRÍTICO/ALTO/MÉDIO. BAIXOS deixados: a asserção "nenhuma referência se repete" é vazia nas fixtures reais (quem fecha é o teste da receita nominal derivada); a guarda "não foi possível identificar a série" perde a frase no não-2xx (o motivo vira "SIDRA undefined/undefined").
+
+### O que o dono faz à mão
+
+**Nada.** Republicação feita pela sessão 140 (25/11 21:33 UTC). Sem migration. Portal não tocado.
+
+---
+
 ## SESSÃO 139 (25/11/2026) — A3: o macro vira diário, com a consulta registrada por fonte — EM PRODUÇÃO (#315, 0304 aplicada, macro republicado e testado)
 
 > **Migration mais nova: `0304_a_fonte_que_dizia_mensal_e_rodava_todo_dia.sql`, APLICADA EM PRODUÇÃO em 25/11/2026** (API de gerenciamento, 1,2 s, arquivo do commit `da1b259`, md5 `3ce423a9…`). Antes: cobertura 0303, 511 itens e 0 ausentes, juros sem url, 0 consultas, 81 casos. Depois: cobertura 0304, 512 itens e 0 ausentes (`fontes_do_macro_conectadas` presente), 81 casos.
@@ -10,7 +57,7 @@
 > **Nenhuma migration nova além da 0304.** Mudanças: `N8N/` (macro), `Supabase/migrations/0304`, testes, documentação. Portal não tocado.
 > **Branch:** `claude/brave-ptolemy-3yux4w`, commits `5e5c1d4`, `f102a92`, `b87dd18` (fatias A3 0–2), `da1b259` (0304), `0fc6cde` e `8d7eb3e` (revisão). PR [#315](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/315), integrado em 25/11 (`3d219cb`).
 
-### ▶ PRÓXIMA SESSÃO — COMECE AQUI: confirmar a republicação e seguir a A3 (fonte 4)
+### (superada pela sessão 140) PRÓXIMA SESSÃO da 139: confirmar a republicação e seguir a A3 (fonte 4)
 
 - **Pedido pronto para colar:** `/autopilot Fase A, fatia A3 (dados de mercado), continuação. Leia ESTADO.md sessão 139 e Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md §5 A3. Primeiro passo: conferir que a execução agendada das 06h (09:00 UTC) de 26/11 gravou 37 consultas "encontrado" (a 0304 e a republicação já estão em produção desde 25/11). Depois a fonte 4 (IBGE/SIDRA setorial), com a mesma forma: uma consulta por série, registrada pela fn_registrar_consulta_externa; "falhou" nunca vira "nada encontrado". Antes da CVM (fonte 5), medir o tamanho do banco (112 MB de 500 MB em 25/11).`
 - **Não começar a fonte 4 antes da 1ª execução em produção.** Sem ela, a A3 inteira continua sem medida em produção, e a fonte 4 nasce sobre o mesmo chão não medido.

@@ -107,13 +107,14 @@ Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
 - **Pronto quando:** cada fonte aparece no catálogo com a data da última atualização; derrubar uma
   fonte aparece como "falhou", nunca como "sem dado".
 
-**Estado (25/11/2026, sessão 139):**
+**Estado (25/11/2026, sessões 139 e 140):**
 
 - Fonte 1 (macro em produção): **medida.** O macro rodava mensal (dia 12); execuções em 12/10 e 12/11; último mês gravado: SELIC/CDI 2026-11, CÂMBIO_USD/IGPM 2026-10, IPCA/INPC 2026-09.
-- Fonte 2 (juros PJ por modalidade): **feita no repositório** (`f102a92`, 0304). 19 séries pelo SGS. A taxa banco a banco da Olinda fica para depois (decisão do dono).
+- Fonte 2 (juros PJ por modalidade): **feita e em produção** (sessão 139: `f102a92`, 0304; execução 10048 com 19 séries de juros). A taxa banco a banco da Olinda fica para depois (decisão do dono).
 - Fonte 3 (SGS): **parcial** (`5e5c1d4`): IBC-Br, crédito e inadimplência PJ, euro PTAX. Ficaram de fora o INCC (nome não confirmado) e a série 7458 (parou em 2025).
-- Fontes 4 a 9: **não feitas.**
-- **Falta para a A3 fechar:** a republicação do macro e a 1ª execução em produção (NÃO CONFERIDAS). Sem isso, nenhuma fonte da A3 tem medida em produção.
+- Fonte 4 (IBGE/SIDRA setorial): **feita e em produção** (sessão 140: `7e2b1f8`, `f5147ab`). 6 séries: PIB por setor, PIM-PF, PMC (total e por atividade), PMS, ocupados por grupamento. Uma consulta `ibge_sidra` por série; dados só em `fato_externo`. Medido pela sessão 140 em produção: macro republicado com 34 nós; execução 10052 `success`, 43 consultas `encontrado` (7 de `ibge_sidra`), 202 fatos setoriais. Sem migration.
+- Fontes 5 a 9: **não feitas.** A CVM (fonte 5) só começa depois de medir o banco (113 MB em 25/11).
+- **Falta para a A3 fechar:** a 1ª execução AGENDADA em produção, de 26/11 06h (09:00 UTC), ainda NÃO CONFERIDA (agendada em `trig_01PbmDVYHXaVJrkBiqwhG9Qo`). E as fontes 5 a 9. Até a agenda ser conferida, as fontes da A3 têm medida só da execução manual por cópia.
 
 ### A4 · Dados da empresa (sob demanda, só CNPJ) — item 1.H2, parte da empresa
 
