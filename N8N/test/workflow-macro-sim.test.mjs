@@ -906,3 +906,19 @@ test('A3.4: chamada sem série identificada diz isso, falhe a chamada ou não, e
     assert.equal(c.itens, null);
   }
 });
+
+// Achado BAIXO da revisão de e70ab01: "todo agregado da lista existe na resposta" prova só que não
+// SOBRA código; tirar um pai da lista (ex.: 106870, Alojamento e alimentação) não reprovava nada.
+// Onde o IBGE publica a hierarquia (nível da categoria no metadado), a lista tem de ser IGUAL à que
+// a hierarquia dá: categoria seguida de outra de nível maior é pai. Os metadados são o recorte REAL
+// da API de metadados de 25/11/2026 (só a classificação usada: id, nome, nível), em fixtures/.
+// 5932 e 8888 ficam de fora: lá o metadado põe tudo no nível 0 (a lista vem do nome; ver lib).
+test('A3.4: onde o IBGE publica a hierarquia, a lista de agregados é exatamente a dela', () => {
+  for (const tabela of [8688, 8882, 6323]) {
+    const meta = JSON.parse(readFileSync(join(__dirname, 'fixtures', 'sidra-setorial', `meta-${tabela}.json`), 'utf8'));
+    const cats = meta.classificacao.categorias;
+    const pais = cats.filter((x, k) => k + 1 < cats.length && cats[k + 1].nivel > x.nivel).map((x) => String(x.id));
+    const lista = SIDRA_SETORIAL.find((s) => s.tabela === tabela).agregados;
+    assert.deepEqual([...lista].sort(), pais.sort(), `${tabela}: agregados x hierarquia do IBGE`);
+  }
+});

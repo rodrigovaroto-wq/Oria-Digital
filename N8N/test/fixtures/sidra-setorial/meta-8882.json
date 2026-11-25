@@ -1,0 +1,66 @@
+{
+ "fonte": "https://servicodados.ibge.gov.br/api/v3/agregados/8882/metadados",
+ "lido_em": "2026-11-25",
+ "tabela": 8882,
+ "classificacao": {
+  "id": 85,
+  "nome": "Atividades",
+  "categorias": [
+   {
+    "id": 90671,
+    "nome": "Combustíveis e lubrificantes",
+    "nivel": 0
+   },
+   {
+    "id": 90672,
+    "nome": "Hipermercados, supermercados, produtos alimentícios, bebidas e fumo",
+    "nivel": 0
+   },
+   {
+    "id": 103154,
+    "nome": "Hipermercados e supermercados",
+    "nivel": 1
+   },
+   {
+    "id": 90673,
+    "nome": "Tecidos, vestuário e calçados",
+    "nivel": 0
+   },
+   {
+    "id": 2759,
+    "nome": "Móveis e eletrodomésticos",
+    "nivel": 0
+   },
+   {
+    "id": 31555,
+    "nome": "Móveis",
+    "nivel": 1
+   },
+   {
+    "id": 31556,
+    "nome": "Eletrodomésticos",
+    "nivel": 1
+   },
+   {
+    "id": 103155,
+    "nome": "Artigos farmacêuticos, médicos, ortopédicos, de perfumaria e cosméticos",
+    "nivel": 0
+   },
+   {
+    "id": 103156,
+    "nome": "Livros, jornais, revistas e papelaria",
+    "nivel": 0
+   },
+   {
+    "id": 103157,
+    "nome": "Equipamentos e materiais para escritório, informática e comunicação",
+    "nivel": 0
+   },
+   {
+    "id": 103158,
+    "nome": "Outros artigos de uso pessoal e doméstico",
+    "nivel": 0
+   }
+  ]
+ }
+}
