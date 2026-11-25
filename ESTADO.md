@@ -1,27 +1,36 @@
 # Estado do projeto — leia isto antes do `HANDOFF.md`
 
 
-## SESSÃO 138 (24/11/2026) — Fase A: cópia de segurança (A1) e a base das fontes externas (A2, migration 0303)
+## SESSÃO 138 (24–25/11/2026) — Fase A: A1 (cópia de segurança) e A2 (base das fontes externas) FEITAS e em produção
 
-> **0303 APLICADA EM PRODUÇÃO em 24/11/2026** (a pedido do dono, pela API de gerenciamento, 1,6 s, arquivo do commit `a4e813f`, md5 `a874a608…`). Antes: Postgres 17.6; cobertura 0302; 475 itens na sonda, 0 ausentes; `fonte_externa` inexistente; 81 casos, 2.999 pendências, 7.599 reconciliações. Depois: cobertura 0303; 511 itens, 0 ausentes; os 36 da 0303 presentes; 22 fontes (1 não oficial); 81 / 2.999 / 7.599 (nada tocado). PR #310 integrado (`1f4e914`).
+> **Migration mais nova: `0303_a_fonte_que_caia_e_parecia_nao_ter_nada.sql`, APLICADA EM PRODUÇÃO em 24/11/2026** (pela API de gerenciamento, 1,6 s, arquivo do commit `a4e813f`, md5 `a874a608…`). Antes: Postgres 17.6, cobertura 0302, 475 itens na sonda e 0 ausentes, `fonte_externa` inexistente, 81 casos / 2.999 pendências / 7.599 reconciliações. Depois: cobertura 0303, 511 itens e 0 ausentes, os 36 da 0303 presentes, 22 fontes (1 não oficial), 81 / 2.999 / 7.599 (nada tocado). PRs: #310 (A1+A2), #311 (cópia para repositório privado, senha com `@`), #312 (novas tentativas no Storage).
 
-- **A1: a 1ª execução real falhou e mudou o desenho.** Run 45502655217: `could not translate host name` — a senha do banco tem `@`, e o erro imprimiu o fim dela no log (apagado; o dono decidiu NÃO trocar a senha). E o repositório é PÚBLICO: artefato aqui seria baixável por qualquer pessoa logada. Correção (`d0d3e24`): o workflow virou reutilizável e a senha é codificada; a cópia roda num **repositório privado separado**, com retenção 7 dias (banco) e 3 dias (documentos) pela cota de 500 MB. Storage medido: 186 objetos, 78,3 MB; tabelas copiadas 96 MB; dump ainda não medido.
-- **A1: CRITÉRIO MEDIDO em 25/11/2026** (run 45683483492 do repositório privado `OriaDigital-backup`, workflow reutilizável em `a3a5adb`, PR #312). Contagens no snapshot de produção = cópia restaurada do zero em Postgres 18: caso 81, documento 2.165, entidade 408, pendência 2.999, reconciliação 7.599; Storage 186 de 186 objetos (78,3 MB), 0 novas tentativas; sonda na cópia sem perda (só `envio_segredo_no_vault`, o Vault fica fora de propósito). Artefatos cifrados: banco 11,5 MB (7 dias), documentos 42,4 MB (3 dias) ≈ 207 MB dos 500 MB. Agendada todo dia 06:40 UTC. **Falta para fechar o 0.2 do plano:** 7 cópias diárias seguidas (o critério de lá); e nada avisa se o agendamento parar (risco nomeado).
-- **Segredos depois desta rodada:** senha do banco trocada pelo dono em 25/11 (sem `@`); atualizados `BACKUP_DB_URL` e `SUPABASE_SERVICE_ROLE_KEY` (a `service_role` legada; a `sb_secret_…` dava 400 em todo download) no repositório privado, `SONDA_DB_URL` no Oria-Digital (sonda verde depois) e a credencial "Postgres (Trat. Dados)" do n8n. **NÃO CONFERIDO:** que o n8n conecta com a senha nova (próxima execução da ingestão ou do macro responde).
+### ▶ PRÓXIMA SESSÃO — COMECE AQUI: Fase A, fatia A3 (dados de mercado, n8n)
 
-- **A2 FEITO no código e no teste.** Tabelas `fonte_externa` (22 fontes; a BrasilAPI é a única "não oficial"), `consulta_externa` (imutável; quatro estados; hash do corpo obrigatório em `encontrado` e em `nada_encontrado`, nunca o da string vazia) e `fato_externo`. Ponto único de classificação: `fn_registrar_consulta_externa`. Sonda com 36 requisitos (ordem 1420–1455).
-- **A1 CORRIGIR.** Cópia diária (`.github/workflows/copia-de-seguranca.yml`, 06:40 UTC, `workflow_dispatch`) com `Supabase/backup/copia-do-banco.sh` (copiar | conferir) e `copia-do-storage.py`. Medido em Postgres 16 local: restaura do zero, as cinco tabelas-chave batem; papel sujeito à RLS é recusado pelo script; download truncado reprova. **NÃO medido contra produção:** o GitHub só dispara workflow que está na `main`, então a primeira execução real é depois do merge. Por isso o critério "uma restauração funciona do zero" ainda não está cumprido.
-- **Segredos cadastrados pelo dono:** `BACKUP_DB_URL` (Session pooler, papel postgres), `BACKUP_PASSPHRASE` e `SUPABASE_SERVICE_ROLE_KEY`.
-- **Medido nesta rodada:** `Supabase/test/run.sh` completo, saída 0, 77 arquivos de teste com "TODOS OS TESTES PASSARAM" (4.553 linhas `ok` no log); a 0303 com `EXECUCOES=196 FALHAS=0`. A medida do não-vazio (regra 2) está nas mensagens dos commits: 96/0, depois 183/0, depois 196/0, com cada regra desligada reprovando. Não rodei nesta rodada as suítes de N8N, Leitor e portal: a rodada não as tocou.
-- **Verificadores:** `conferir.mjs` 303/0; `verificar-comandos.mjs` OK; `verificar-espelho-claude-md.mjs` OK.
-- **Memória:** nenhuma entrada nova. As três candidatas (`pg_dump -n` sem extensão; `row_security = off` na contagem; corpo vazio com hash) já estão escritas nos comentários de `copia-do-banco.sh` e da 0303, e na ficha `fase-a-a1-a2-copia-de-seguranca-e-base-externa.md` em `.claude/conhecimento/fichas/`. O teste de `.claude/memory/INSTRUCTIONS.md` as reprova.
-- **Achados deixados** (nomeados no PR): os cinco da A2 e os três riscos da A1, na ficha e na descrição do PR.
-- **O dono faz à mão**, nesta ordem:
-  1. Aplicar a `0303` no Supabase, depois da `0302`, e conferir: `select chave, presente, detalhe from fn_instalacao_conferir() where migration = '0303' and not presente;` deve voltar 0 linhas de 36.
-  2. Depois do merge: Actions → "Cópia de segurança" → Run workflow, e mandar o resultado. Guardar a `BACKUP_PASSPHRASE` fora do GitHub.
-  3. Conferir o tamanho do Storage contra a cota de artefatos do GitHub (500 MB se o repositório for privado no plano Free). Não medido.
-  4. Registrar as decisões 6–8 de `FASE_A_FONTES_PUBLICAS.md` na v0.1.7.
-  5. Decidir o EXECUTE do `authenticated` em `fn_registrar_consulta_externa` antes da A4: o portal só tem o JWT da pessoa. A alternativa é levar a chave de serviço à Vercel.
+- **Pedido pronto para colar:** `/autopilot Fase A, fatia A3 (dados de mercado). Leia ESTADO.md sessão 138 e Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md §5 A3. Primeiro passo: conferir se o macro diário roda em produção (último dado gravado de cada série). Depois uma fonte por commit, na ordem da tabela da A3; antes da CVM, medir o tamanho do banco (plano gratuito, 500 MB). Toda fonte registra pela fn_registrar_consulta_externa (0303) e "falhou" nunca vira "nada encontrado".`
+- **Não depende do dono.** A A4 (dados da empresa, portal) depende de uma decisão antes de começar: quem registra as consultas — o analista pelo portal (hoje: `authenticated` tem EXECUTE e o registro grava `registrado_por`) ou só o servidor (exige a chave de serviço na Vercel).
+- **Ponto de entrada no código:** `fonte_externa` (catálogo, 22 fontes, todas com prazo mínimo de 1 dia até a fatia medir a cadência real) e `fn_registrar_consulta_externa(fonte, caso, cnpj, http_status, erro, corpo, itens, registros_lidos, custo, nao_consultado)`; o macro existente está em `N8N/lib/macro.mjs` e `N8N/build-workflow-macro.mjs` (agenda mensal, dia 12 — o plano dizia diário).
+
+### O que esta sessão fez
+
+- **A2 FEITA e em produção** (0303): `fonte_externa`, `consulta_externa` (imutável; quatro estados; hash do corpo obrigatório em `encontrado` e `nada_encontrado`, nunca o da string vazia; data e validade pelo banco; só CNPJ), `fato_externo`; ponto único `fn_registrar_consulta_externa`; sonda com 36 requisitos (1420–1455). Teste `EXECUCOES=196 FALHAS=0`; não-vazio medido (regra central 54 asserts). Três ciclos de revisão; o 3º sem CRÍTICO/ALTO.
+- **A1 FEITA, critério medido em 25/11/2026** (run 45683483492 no repositório PRIVADO `rodrigovaroto-wq/OriaDigital-backup`, que chama o workflow reutilizável `.github/workflows/copia-de-seguranca.yml` daqui): contagens no snapshot de produção = cópia restaurada do zero em Postgres 18 (caso 81, documento 2.165, entidade 408, pendência 2.999, reconciliação 7.599); Storage 186/186 objetos (78,3 MB); sonda na cópia sem perda (só `envio_segredo_no_vault`: o Vault fica fora de propósito). Artefatos cifrados (AES-256): banco 11,5 MB por 7 dias, documentos 42,4 MB por 3 dias ≈ 207 MB dos 500 MB. Roda todo dia às 06:40 UTC.
+- **Por que no repositório privado:** o Oria-Digital é PÚBLICO e artefato de Actions de repositório público pode ser baixado por qualquer pessoa logada (decisão do dono, 25/11).
+- **Defeitos achados pela execução real e corrigidos:** senha com `@` quebrava a URL e o erro imprimiu o fim da senha no log (log apagado; `codificar-url.py`); a chave `sb_secret_…` dava HTTP 400 em todo download (a Storage responde 400 para "não encontrado"; a certa é a `service_role` legada); 4 de 186 downloads com HTTP 522 passageiro reprovavam a cópia (até 3 tentativas, `6b84155`).
+- **Segredos (25/11):** senha do banco trocada pelo dono (sem `@`); atualizados `BACKUP_DB_URL`, `BACKUP_PASSPHRASE`, `SUPABASE_SERVICE_ROLE_KEY` no repositório privado, `SONDA_DB_URL` no Oria-Digital (sonda verde depois, run 45678622441) e a credencial "Postgres (Trat. Dados)" do n8n. O `BACKUP_DB_URL` antigo do Oria-Digital não é mais usado.
+- **Decisões do dono (24/11), no `FASE_A_FONTES_PUBLICAS.md` §2:** 6) ANBIMA, CCEE e FipeZAP oficiais; 7) o 404 "não existe" tratado na A4, fonte por fonte; 8) toda fonte com prazo, cadência desconhecida = 1 dia.
+
+### NÃO CONFERIDO / riscos abertos
+
+- **O n8n conecta com a senha nova do banco?** A próxima execução da ingestão ou do macro responde. A A3 começa por aí.
+- **7 cópias diárias seguidas** (critério do item 0.2) completam em 2/12 se nada falhar. **Nada avisa se o agendamento parar** (risco nomeado; candidato: a `sonda-producao.yml` conferir a idade do último artefato).
+- **Achados deixados da A2** (MÉDIO/BAIXO): marcador da sonda 1453 nos dois ramos; corpo só com BOM/NBSP não conta como vazio; 200 + corpo vazio + itens nulo dá 22023 em vez de gravar `falhou`; `p_erro` só com `\n`; falta assert do 4xx com corpo de espaço.
+
+### O dono faz à mão
+
+1. Registrar as decisões 6–8 na v0.1.7 do registro (ou pedir ao Claude numa rodada pequena).
+2. Antes da A4: decidir quem registra as consultas (ver acima).
+3. Responder se o MVP fica sem agentes; e o conflito de pessoa física (decisão 4 × N-C7b/R5) antes de qualquer consulta por CPF.
 
 ## SESSÃO 137 (24/11/2026) — parceiros externos e a prioridade nova: Fase A (fontes públicas grátis)
 

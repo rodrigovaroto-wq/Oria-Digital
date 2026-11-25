@@ -4,11 +4,11 @@ Nota de transição de contexto — **leia isto primeiro, é o resumo pra retoma
 novo.** O histórico detalhado sessão-a-sessão está preservado abaixo (seção "Sessão 7 (cont.¹⁻¹⁶)")
 só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
-## ▶ SESSÃO 138 — COMECE AQUI (24/11/2026)
+## ▶ SESSÃO 138 — COMECE AQUI (24–25/11/2026)
 
-- **Leia a seção "SESSÃO 138" no topo do `ESTADO.md`** (`sed -n '1,60p' ESTADO.md`). Este cabeçalho só aponta para lá.
-- **Migration mais nova: 0303**, ESCRITA, NÃO aplicada em produção. A cópia de segurança (A1) está no repositório e ainda não rodou na `main`.
-- **PR desta rodada:** ainda não aberto nesta sessão. A descrição está pronta no scratchpad da sessão, em `pr.md`. Quando houver número, troque aqui.
+- **Leia a seção "SESSÃO 138" no topo do `ESTADO.md`** (`sed -n '1,40p' ESTADO.md`): ela traz o bloco "▶ PRÓXIMA SESSÃO" com o pedido pronto para a fatia A3.
+- **Migration mais nova: 0303, APLICADA em produção** (sonda: 36 de 36). A cópia de segurança diária roda no repositório privado `OriaDigital-backup` e foi medida (restaura do zero, contagens iguais).
+- **PRs integrados:** #310, #311, #312.
 
 ## SESSÃO 129 (12/11/2026; histórico, a mais nova está acima)
 
