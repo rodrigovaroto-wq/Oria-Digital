@@ -35,6 +35,8 @@ aviso. A aba Macro do Excel congelaria.
 
 ## Como saber que a correção está viva
 
-Na 1ª execução depois da republicação, a saída de "BCB SGS" mostra `corpo_cru` ao lado de
-`statusCode`, e `consulta_externa` do dia tem `encontrado` nas fontes que responderam. Isso é
-medição em produção: o teste só prova o contrato do código, não a versão publicada.
+MEDIDO em produção em 25/11/2026, depois da republicação do #315: na execução real 10048 (cópia
+do macro publicado com webhook; ver `republicar-macro-credencial-e-teste-por-copia`), a saída de
+"BCB SGS" trouxe exatamente `corpo_cru`, `headers`, `statusCode` (200) e `statusMessage` — a forma
+que a fixture deriva do código do n8n — e as 37 consultas saíram `encontrado`. A versão do n8n em
+produção é a do `N8N/README.md`; se ela mudar, repita essa leitura antes de confiar na fixture.
