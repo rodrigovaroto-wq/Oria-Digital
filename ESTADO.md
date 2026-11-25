@@ -44,7 +44,7 @@
 - Ciclo 1 (`7e2b1f8`): 0 CRÍTICO/ALTO; 4 MÉDIOS e 2 BAIXOS. Todos corrigidos: `f5147ab` (volume e referência; falha com a tabela), `e70ab01` (agregado; `mes_final`), `cdbb0f3` (testes de mecanismo), republicação (ESTADO).
 - Ciclo 2 (`f5147ab`): 2 BAIXOS, corrigidos em `e70ab01` (guarda da série não identificada) e `cdbb0f3` (assert vazio).
 - Ciclo 3 (`e70ab01`, `cdbb0f3`): 1 ALTO (o teste de ordem passava vazio quando uma aresta sumia: afirmação falsa no `cdbb0f3`) e 1 BAIXO (completude da lista de agregados). Corrigidos em `6bfe67d` e `42f9283`.
-- Revisão independente final (PR inteiro, `98c7116`): 0 CRÍTICO/ALTO; 2 MÉDIOS: a 5932 tem duas decomposições do PIB (oferta e demanda) e a regra de soma contava o PIB duas vezes, corrigido em `339fee0` (`otica`); ESTADO e HANDOFF com achados corrigidos dados como abertos, corrigido nesta revisão de texto. **Nenhum achado deixado.**
+- Revisão independente final (PR inteiro, `98c7116`): 0 CRÍTICO/ALTO; 2 MÉDIOS: a 5932 tem duas decomposições do PIB (oferta e demanda) e a regra de soma contava o PIB duas vezes, corrigido em `339fee0` (`otica`; republicado e executado: 10054 `success`, 43 consultas `encontrado`, 5932 com 32 oferta, 10 demanda, 2 ambas); ESTADO e HANDOFF com achados corrigidos dados como abertos, corrigido nesta revisão de texto. **Nenhum achado deixado.**
 
 ### O que o dono faz à mão
 
