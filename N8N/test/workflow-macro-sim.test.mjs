@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { SERIES_MACRO, INDICADORES_FOCUS, numeroMacro } from '../lib/macro.mjs';
+import { SERIES_MACRO, INDICADORES_FOCUS, numeroMacro, JUROS_PJ_SGS, JANELA_JUROS_MESES } from '../lib/macro.mjs';
 
 // Executa os códigos REAIS dos nós Code do workflow gerado, com a semântica do
 // N8N ($input/$json/$()). O mesmo padrão de `workflow-sim.test.mjs`: o mirror
@@ -423,7 +423,8 @@ test('A3: topologia - registro ANTES dos dados, em série, e sem poder derrubá-
   ]) {
     assert.deepEqual(alvo(http), [ler]);
     assert.deepEqual(alvo(ler), [reg], 'o registro vem logo depois da leitura, antes dos dados');
-    assert.deepEqual(alvo(reg), [retoma]);
+    assert.ok(nodeDe(retoma), `${retoma} (retoma os dados) tem de existir`);
+    assert.deepEqual(alvo('Retomar Dados').includes(retoma), true, `${retoma} só parte depois de TODOS os registros`);
     const n = nodeDe(reg);
     assert.match(n.parameters.query, /fn_registrar_consulta_externa/);
     assert.equal(n.onError, 'continueRegularOutput', `${reg}: erro do registro não pode parar os dados`);
@@ -444,4 +445,127 @@ test('A3: o export não muda - nenhuma série nova entra na gravação de índic
   // As séries novas da A3 NÃO vão para indice_macro_obs (a aba Macro do cliente é a A5).
   const nomes = rodarCode('Séries a Coletar').map((i) => i.json.__serie).sort();
   assert.deepEqual(nomes, SERIES_MACRO.map((s) => s.codigo).sort());
+});
+
+
+// --- A3 fatia 1: juros por modalidade PJ (SGS) -> fonte bcb_juros_modalidade, 1 consulta por série ---
+const JUROS_OK = JSON.stringify([{ data: '01/08/2026', valor: '24.10' }, { data: '01/09/2026', valor: '23.87' }]);
+const jurosDe = (sgs, httpJson) => rodarCode('Ler Juros', {
+  itens: [httpJson], porNome: { 'Séries Juros': { __sgs: sgs, __nome: `serie ${sgs}` } },
+})[0].json.__consulta;
+
+test('A3.1: as séries de juros saem com a janela fixa e SEM os totais redundantes', () => {
+  const gerado = rodarCode('Séries Juros').map((i) => i.json);
+  assert.equal(gerado.length, JUROS_PJ_SGS.length);
+  assert.equal(new Set(gerado.map((g) => g.__sgs)).size, gerado.length, 'código repetido dobra linhas por dia');
+  for (const g of gerado) {
+    assert.match(g.__url, new RegExp(`bcdata\\.sgs\\.${g.__sgs}/dados/ultimos/${JANELA_JUROS_MESES}\\?formato=json$`));
+  }
+  assert.ok(JANELA_JUROS_MESES <= 3, 'janela maior que 3 meses multiplica as linhas do fato_externo imutável');
+  for (const total of [20718, 20725, 20730, 20733, 20757]) {
+    assert.ok(!gerado.some((g) => g.__sgs === total), `o total ${total} é soma de folhas já incluídas`);
+  }
+  assert.ok(gerado.some((g) => g.__sgs === 20715), 'o total PJ fica como referência');
+});
+
+test('A3.1: resposta boa vira UM fato por mês, na fonte bcb_juros_modalidade', () => {
+  const c = jurosDe(20722, resp(200, JUROS_OK));
+  assert.equal(c.fonte, 'bcb_juros_modalidade');
+  assert.equal(c.http_status, 200);
+  assert.equal(c.erro, null);
+  assert.equal(c.corpo, JUROS_OK);
+  assert.deepEqual(c.itens, [
+    { chave: 'sgs:20722', valor: { data_ref: '2026-08-01', taxa_aa: 24.1, serie: 'serie 20722' }, referencia: 'sgs.20722:2026-08' },
+    { chave: 'sgs:20722', valor: { data_ref: '2026-09-01', taxa_aa: 23.87, serie: 'serie 20722' }, referencia: 'sgs.20722:2026-09' },
+  ]);
+  afirmarContrato(c, 'juros ok');
+});
+
+test('A3.1: juros derrubado - 500, sem resposta, vazio, não-JSON, [] : NUNCA 2xx com itens []', () => {
+  // 200 com [] é FALHOU, não nada_encontrado: o SGS responde ultimos/N com as últimas
+  // observações de toda série existente (inclusive descontinuada), então lista vazia é
+  // resposta inesperada. Série descontinuada aparece pela data_ref velha no fato, não por [].
+  for (const [rotulo, h] of Object.entries({
+    '500': resp(500, 'x'), 'sem resposta': { error: { message: 'timeout' } }, 'vazio': resp(200, ''),
+    'não-JSON': resp(200, '<html/>'), 'lista vazia': resp(200, '[]'), 'objeto de erro': resp(200, '{"error":"x"}'),
+    'só observações inválidas': resp(200, '[{"data":"jan/26","valor":"1"}]'),
+  })) {
+    const c = jurosDe(20722, h);
+    afirmarContrato(c, `juros ${rotulo}`);
+    assert.equal(c.fonte, 'bcb_juros_modalidade');
+    const dois = c.http_status >= 200 && c.http_status <= 299;
+    assert.ok(!dois || c.erro, `juros ${rotulo}: chegaria ao banco como 2xx limpo`);
+  }
+  assert.equal(jurosDe(20722, resp(500, 'x')).http_status, 500);
+  assert.equal(jurosDe(20722, { error: 'x' }).http_status, null);
+});
+
+test('A3.1: a falha de UMA série de juros não é escondida pelas outras', () => {
+  const cs = JUROS_PJ_SGS.map((s) => jurosDe(s.sgs, s.sgs === 20726 ? resp(500, 'boom') : resp(200, JUROS_OK)));
+  assert.equal(cs.length, 19);
+  assert.equal(cs.filter((c) => c.http_status === 500).length, 1);
+  const boas = cs.filter((c) => c.http_status === 200);
+  assert.equal(boas.length, 18);
+  boas.forEach((c) => afirmarContrato(c, 'juros'));
+  // linhas por dia no fato_externo: 19 consultas + 2 meses x 19 séries = 57 (a falha não gera fato)
+  assert.equal(cs.length + boas.reduce((n, c) => n + c.itens.length, 0), 19 + 36);
+});
+
+test('A3.1: topologia - juros só REGISTRA, não toca indice_macro_obs, e o registro não derruba nada', () => {
+  const c = workflow.connections;
+  const alvo = (n) => c[n].main[0].map((x) => x.node);
+  assert.ok(alvo('Agenda Diária').includes('Séries Juros'));
+  assert.deepEqual(alvo('Séries Juros'), ['BCB Juros']);
+  assert.deepEqual(alvo('BCB Juros'), ['Ler Juros']);
+  assert.deepEqual(alvo('Ler Juros'), ['Registrar Consulta Juros']);
+  // Os dados dos juros NUNCA chegam a indice_macro_obs: nenhum nó além do registro lê o Ler Juros.
+  const leitores = workflow.nodes.filter((n) => /Ler Juros|BCB Juros/.test(n.parameters.jsCode ?? '') && n.name !== 'Ler Juros');
+  assert.deepEqual(leitores.map((n) => n.name), [], 'só o registro consome a corrente de juros');
+  assert.ok(!/__consulta|Ler Juros/.test(nodeDe('Normalizar Observações').parameters.jsCode));
+  const reg = nodeDe('Registrar Consulta Juros');
+  assert.equal(reg.onError, 'continueRegularOutput');
+  assert.equal(reg.alwaysOutputData, true);
+  assert.equal(reg.parameters.options.queryBatching, 'independently');
+  const h = nodeDe('BCB Juros');
+  assert.equal(h.parameters.options.response.response.fullResponse, true);
+  assert.equal(h.parameters.options.response.response.responseFormat, 'text');
+  assert.equal(h.onError, 'continueRegularOutput');
+});
+
+// --- INVARIANTE DE ORDEM: nenhum nó capaz de lançar roda antes de algum "Registrar Consulta*" ---
+// Defeito (apontado na revisão da fatia 1): os ramos SGS/Focus/SIDRA/Juros saíam do gatilho em
+// PARALELO, e o Normalizar lança de propósito (zero observação). A ordem entre ramos do n8n
+// (executionOrder v1) depende da posição no canvas, não do grafo: num dia de queda geral, o
+// throw de um ramo podia abortar a execução ANTES de outro ramo registrar a sua consulta, e
+// "não rodou" ficava igual a "rodou" justo quando "falhou" mais importa (regra 7).
+// Afirma COMPORTAMENTO (todo caminho do gatilho até um nó que lança passa por TODOS os
+// registros), não a forma do desenho: qualquer arranjo que cumpra a ordem passa.
+test('ordem: todo nó capaz de lançar só roda DEPOIS de todos os Registrar Consulta', () => {
+  const c = workflow.connections;
+  const filhos = (n) => (c[n]?.main ?? []).flat().map((x) => x.node);
+  const gatilho = workflow.nodes.find((n) => n.type.endsWith('scheduleTrigger')).name;
+  const registrar = workflow.nodes.filter((n) => n.name.startsWith('Registrar Consulta')).map((n) => n.name);
+  // "Capaz de lançar": Code com throw explícito, ou qualquer HTTP/Postgres SEM continueRegularOutput.
+  const lanca = workflow.nodes.filter((n) =>
+    (n.type.endsWith('.code') && /\bthrow\b/.test(n.parameters.jsCode ?? ''))
+    || (/httpRequest|postgres/.test(n.type) && n.onError !== 'continueRegularOutput')).map((n) => n.name);
+  assert.equal(registrar.length, 4, 'um registro por fonte: SGS, Focus, SIDRA e Juros');
+  assert.ok(lanca.includes('Normalizar Observações') && lanca.includes('Normalizar Focus'), 'os dois que lançam de propósito');
+
+  // Há caminho do gatilho até T que NÃO passa por R? (busca no grafo sem atravessar R)
+  const alcancaSem = (alvo, proibido) => {
+    const visto = new Set([proibido]); const pilha = [gatilho];
+    while (pilha.length) {
+      const n = pilha.pop();
+      if (n === alvo) return true;
+      if (visto.has(n)) continue;
+      visto.add(n); filhos(n).forEach((f) => pilha.push(f));
+    }
+    return false;
+  };
+  for (const t of lanca) {
+    for (const r of registrar) {
+      assert.ok(!alcancaSem(t, r), `"${t}" pode rodar sem que "${r}" tenha registrado antes`);
+    }
+  }
 });

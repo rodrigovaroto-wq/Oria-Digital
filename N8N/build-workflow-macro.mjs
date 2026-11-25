@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import {
   SERIES_MACRO, INDICADORES_FOCUS, urlSgs, urlFocus, urlSidraIpca, numeroMacro,
   lerRespostaHttp, consultaSgs, consultaFocus, consultaSidra,
+  JUROS_PJ_SGS, urlSgsUltimos, itensJuros,
 } from './lib/macro.mjs';
 
 // `numeroMacro` EMBUTIDA do fonte, não copiada à mão. É o padrão que o gerador da
@@ -286,6 +287,40 @@ return [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: c.dado, __con
     jsCode: "return $('Ler SIDRA').all().map((i) => ({ json: { __serie: i.json.__serie, __fonte: i.json.__fonte, __corpo: i.json.__corpo } }));",
   }),
 
+  // A3 fatia 1: taxa média de juros por modalidade PJ (BCB/SGS), fonte bcb_juros_modalidade.
+  // No MESMO workflow diário (um gatilho, uma credencial, um lugar para o dono olhar), mas
+  // numa corrente PRÓPRIA e só de registro: os dados vão para fato_externo, não para
+  // indice_macro_obs (a aba Macro do cliente não muda; é a A5). Uma consulta por série, e a
+  // lista (19 de 24 códigos) e a janela de 2 meses estão justificadas em lib/macro.mjs.
+  node('Séries Juros', 'n8n-nodes-base.code', 2, {
+    jsCode: `return ${JSON.stringify(
+      JUROS_PJ_SGS.map((s) => ({ json: { __sgs: s.sgs, __nome: s.nome, __url: urlSgsUltimos(s.sgs) } })),
+    )};`,
+  }),
+
+  node('BCB Juros', 'n8n-nodes-base.httpRequest', 4.2, {
+    url: '={{ $json.__url }}', options: HTTP_OPCOES,
+  }, HTTP_TOLERANTE),
+
+  node('Ler Juros', 'n8n-nodes-base.code', 2, {
+    mode: 'runOnceForEachItem',
+    jsCode: embutir(consultaSgs, itensJuros) + `
+let ctx = {};
+try { ctx = $('Séries Juros').item.json; } catch (e) { ctx = {}; }
+const c = consultaSgs($json, 'sgs:' + ctx.__sgs, { fonte: 'bcb_juros_modalidade', itens: itensJuros(ctx.__sgs, ctx.__nome) });
+if (!ctx.__sgs && !c.consulta.erro) c.consulta.erro = 'não foi possível identificar a série desta chamada';
+return { json: { __consulta: c.consulta } };`,
+  }),
+
+  node('Registrar Consulta Juros', 'n8n-nodes-base.postgres', 2.5, {
+    operation: 'executeQuery', query: SQL_CONSULTA,
+    options: { queryBatching: 'independently', queryReplacement: '={{ JSON.stringify($json.__consulta) }}' },
+  }, PG_CONSULTA),
+
+  node('Chamar SIDRA', 'n8n-nodes-base.code', 2, { jsCode: 'return [{ json: {} }];' }),
+
+  node('Retomar Dados', 'n8n-nodes-base.code', 2, { jsCode: 'return [{ json: {} }];' }),
+
   node('Normalizar Observações', 'n8n-nodes-base.code', 2, { jsCode: CODE_NORMALIZAR }),
 
   node('Gravar Índices', 'n8n-nodes-base.postgres', 2.5, {
@@ -343,27 +378,40 @@ return { json: { __serie: serie, __corpo: c.dado, __consulta: c.consulta } };`,
 ];
 
 const liga = (...nomes) => ({ main: [nomes.map((node) => ({ node, type: 'main', index: 0 }))] });
-// Cada fonte: HTTP -> Ler (monta o desfecho cru) -> Registrar Consulta -> Manter/Marcar (retoma os DADOS).
-// Registro ANTES dos dados, em série e não em dois ramos paralelos: a ordem de execução de ramos do n8n
-// depende do canvas, e se o Normalizar (que lança de propósito) rodasse primeiro, a consulta da
-// execução que falhou nunca seria gravada — justo a que importa.
+// ORDEM DETERMINÍSTICA, por CORRENTE ÚNICA: todas as consultas (Juros, SGS, Focus, SIDRA) são
+// registradas uma depois da outra, e SÓ ENTÃO os dados seguem para os normalizadores. Era o
+// risco da fatia 1: com os ramos em paralelo a partir do gatilho, o throw do Normalizar (zero
+// observação, de propósito) podia abortar a execução antes de outro ramo registrar a sua
+// consulta, e a ordem entre ramos do n8n (executionOrder v1) vem da POSIÇÃO no canvas, não
+// do grafo. Em corrente linear não há ramo concorrente: a ordem é a das arestas. Os dados
+// são lidos pelo NOME do nó Ler (não pelo que o registro devolveu), então a corrente não os
+// altera; o registro (onError continue + alwaysOutputData) nunca interrompe a corrente.
+// Cada passo que alimenta um HTTP de chamada única passa por um nó Code (roda UMA vez,
+// qualquer que seja o nº de itens que chegou), senão o HTTP rodaria uma vez por item.
 const connections = {
-  'Agenda Diária': liga('Séries a Coletar', 'IBGE SIDRA (IPCA)', 'Indicadores Focus'),
+  'Agenda Diária': liga('Séries Juros'),
+  'Séries Juros': liga('BCB Juros'),
+  'BCB Juros': liga('Ler Juros'),
+  'Ler Juros': liga('Registrar Consulta Juros'),
+  'Registrar Consulta Juros': liga('Séries a Coletar'),
   'Séries a Coletar': liga('BCB SGS'),
   'BCB SGS': liga('Ler SGS'),
   'Ler SGS': liga('Registrar Consulta SGS'),
-  'Registrar Consulta SGS': liga('Manter Contexto SGS'),
-  'Manter Contexto SGS': liga('Normalizar Observações'),
-  'IBGE SIDRA (IPCA)': liga('Ler SIDRA'),
-  'Ler SIDRA': liga('Registrar Consulta SIDRA'),
-  'Registrar Consulta SIDRA': liga('Marcar Fonte IBGE'),
-  'Marcar Fonte IBGE': liga('Normalizar Observações'),
-  'Normalizar Observações': liga('Gravar Índices'),
-  'Gravar Índices': liga('Conferir Fontes'),
+  'Registrar Consulta SGS': liga('Indicadores Focus'),
   'Indicadores Focus': liga('BCB Focus'),
   'BCB Focus': liga('Ler Focus'),
   'Ler Focus': liga('Registrar Consulta Focus'),
-  'Registrar Consulta Focus': liga('Manter Contexto Focus'),
+  'Registrar Consulta Focus': liga('Chamar SIDRA'),
+  'Chamar SIDRA': liga('IBGE SIDRA (IPCA)'),
+  'IBGE SIDRA (IPCA)': liga('Ler SIDRA'),
+  'Ler SIDRA': liga('Registrar Consulta SIDRA'),
+  // Aqui TODAS as consultas já foram gravadas. Daqui em diante pode lançar.
+  'Registrar Consulta SIDRA': liga('Retomar Dados'),
+  'Retomar Dados': liga('Manter Contexto SGS', 'Marcar Fonte IBGE', 'Manter Contexto Focus'),
+  'Manter Contexto SGS': liga('Normalizar Observações'),
+  'Marcar Fonte IBGE': liga('Normalizar Observações'),
+  'Normalizar Observações': liga('Gravar Índices'),
+  'Gravar Índices': liga('Conferir Fontes'),
   'Manter Contexto Focus': liga('Normalizar Focus'),
   'Normalizar Focus': liga('Gravar Expectativas'),
 };
