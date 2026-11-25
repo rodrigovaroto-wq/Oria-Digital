@@ -16,8 +16,8 @@
 ### ▶ PRÓXIMA SESSÃO — COMECE AQUI: conferir a agenda de 26/11 e seguir para a fonte 5 (CVM)
 
 - **Pedido pronto para colar:** `/autopilot Fase A, fatia A3 (dados de mercado), continuação. Leia ESTADO.md sessão 140 e Business Plan/06_execucao/FASE_A_FONTES_PUBLICAS.md §5 A3. Primeiro passo: conferir a execução AGENDADA de 26/11 06h (09:00 UTC) do macro (workflow UGhv57BU3YNukVxV): esperado 43 consultas "encontrado" (ibge_sidra 7) e cerca de 267 fatos na execução (202 setoriais + 65). Depois a fonte 5 (CVM): medir o banco antes (113 MB em 25/11 21:34 UTC) e guardar só os campos usados.
-- **Cuidado com a conferência agendada `trig_01PbmDVYHXaVJrkBiqwhG9Qo` (26/11 09:30 UTC):** o prompt dela manda "aplicar a migration da fonte 4 e republicar o macro". As duas coisas estão erradas: a fonte 4 não tem migration, e a republicação já foi feita em 25/11 21:33. A sessão que a receber deve conferir (passos 1 a 3 do prompt) e **não** aplicar nem republicar sem reler esta seção.
-- Achado 3 (o Total do emprego 6323 vem junto das componentes, sem marca): resolver quando a A5 for ler `fato_externo`.
+- **Conferência agendada `trig_01PbmDVYHXaVJrkBiqwhG9Qo` (26/11 09:30 UTC):** o prompt foi corrigido às 21:36 UTC de 25/11 e só CONFERE (43 consultas, ~267 fatos, disparo pela agenda). Não aplica nem republica nada.
+- **Decisões do dono para a fonte 5 (CVM), 25/11/2026:** DFP inteira; ITR entra; baixar só quando o arquivo da CVM mudar e registrar a consulta mesmo sem mudança. Primeiro passo da fonte 5: medir as linhas do ITR e o banco, e conferir que DFP+ITR cabem (estimativa não medida: DFP ~100 MB/ano). Se não couber, volta ao dono. Detalhe em `FASE_A_FONTES_PUBLICAS.md` §5 A3.
 
 ### O que a sessão 140 fez
 
@@ -33,16 +33,18 @@
 | Execução 10052 `success`, 43 consultas `encontrado`, 202 fatos setoriais | **MEDIDO** pela sessão 140 (cópia com webhook). NÃO remedido no fechamento |
 | Banco 113 MB de 500 MB | **MEDIDO** pela sessão 140 (25/11 21:34 UTC). NÃO remedido |
 | Execução AGENDADA de 26/11 06h (34 nós) | **NÃO CONFERIDO**: ainda não aconteceu. Conferência agendada: `trig_01PbmDVYHXaVJrkBiqwhG9Qo` |
-| Suíte do macro: 54 de 54 | **MEDIDO no fechamento** (25/11): `node --test N8N/test/macro.test.mjs N8N/test/workflow-macro-sim.test.mjs` |
-| Suíte N8N: 768 testes, 763 passam, 5 falham | **MEDIDO no fechamento**. As 5 falhas são as de sempre, de livros de teste não gerados no container: `abas-do-xlsx`, `workflow-sim` (ENOENT do book), duas da Vertentes (títulos numerados e régua) e o controle negativo P6b. A mensagem de `7e2b1f8` dizia 766/761 e "macro 52/52": a conta antiga, antes de `f5147ab` acrescentar 2 testes |
+| Suíte do macro: 60 de 60 | **MEDIDO** (25/11, depois das correções `e70ab01`…`339fee0`): `node --test N8N/test/macro.test.mjs N8N/test/workflow-macro-sim.test.mjs` |
+| Suíte N8N: 772 testes, 767 passam, 5 falham | **MEDIDO** em `e70ab01` (25/11). As 5 falhas são as de sempre, de livros de teste não gerados no container (`abas-do-xlsx`, `workflow-sim`, duas da Vertentes, P6b). Os commits seguintes só acrescentam testes do macro |
 | Gerador `build-workflow-macro.mjs` em dia com o JSON commitado | **MEDIDO no fechamento**: regerado, sem diferença |
 | Tamanho: ~29 MB/ano da fonte 4 | **ESTIMADO** (357 B por fato × 202 fatos/dia). Medir de novo antes da CVM |
 | Fonte 4 não precisou de migration | **MEDIDO** pelo código: o catálogo `ibge_sidra` existia (0303/0304) |
 
 ### Revisão
 
-- Ciclo 1 (`7e2b1f8`): 0 CRÍTICO/ALTO; 4 MÉDIOS. Corrigidos em `f5147ab`: fato sem volume e referência colidível; falha sem a tabela. Deixados: Total do emprego junto das componentes (achado 3, acima; nenhum consumidor de `fato_externo` ainda). ESTADO sem a republicação (resolvido: republicado). BAIXOS deixados: `periodo` com significado diferente por periodicidade (mitigado por `periodicidade` e `periodo_nome`); testes 1 e 5 travam contagem de nós e janela (mecanismo).
-- Ciclo 2 (`f5147ab`): 0 CRÍTICO/ALTO/MÉDIO. BAIXOS deixados: a asserção "nenhuma referência se repete" é vazia nas fixtures reais (quem fecha é o teste da receita nominal derivada); a guarda "não foi possível identificar a série" perde a frase no não-2xx (o motivo vira "SIDRA undefined/undefined").
+- Ciclo 1 (`7e2b1f8`): 0 CRÍTICO/ALTO; 4 MÉDIOS e 2 BAIXOS. Todos corrigidos: `f5147ab` (volume e referência; falha com a tabela), `e70ab01` (agregado; `mes_final`), `cdbb0f3` (testes de mecanismo), republicação (ESTADO).
+- Ciclo 2 (`f5147ab`): 2 BAIXOS, corrigidos em `e70ab01` (guarda da série não identificada) e `cdbb0f3` (assert vazio).
+- Ciclo 3 (`e70ab01`, `cdbb0f3`): 1 ALTO (o teste de ordem passava vazio quando uma aresta sumia: afirmação falsa no `cdbb0f3`) e 1 BAIXO (completude da lista de agregados). Corrigidos em `6bfe67d` e `42f9283`.
+- Revisão independente final (PR inteiro, `98c7116`): 0 CRÍTICO/ALTO; 2 MÉDIOS: a 5932 tem duas decomposições do PIB (oferta e demanda) e a regra de soma contava o PIB duas vezes, corrigido em `339fee0` (`otica`); ESTADO e HANDOFF com achados corrigidos dados como abertos, corrigido nesta revisão de texto. **Nenhum achado deixado.**
 
 ### O que o dono faz à mão
 

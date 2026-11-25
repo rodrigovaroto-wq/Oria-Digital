@@ -130,7 +130,9 @@ Uma fonte por commit, nesta ordem (as primeiras servem à Fase C):
 - Só as contas até o nível 3 (ex.: `1.01.01`), no último exercício: 43 mil linhas por ano.
 - ITR 2026: 29,5 MB zipado. Não aberto: o número de linhas não foi medido.
 
-**Decisões que voltam ao dono antes do passo 2** (a regra do plano: se não couber, decide o dono):
+**DECIDIDO pelo dono em 25/11/2026:** (1) **DFP inteira**; (2) **ITR entra**; (3) **gravar pela proposta**: baixar só quando o arquivo da CVM mudar e registrar a consulta mesmo quando nada mudou. Consequência que fica com o passo 2: pela estimativa abaixo, que NÃO foi medida, DFP inteira + ITR pode não caber nos 387 MB livres. O primeiro passo da fonte 5 é medir as linhas do ITR e o tamanho real por linha numa carga de teste. Se não couber, a decisão volta ao dono, com o número medido.
+
+**O que estava em decisão** (registro):
 
 1. **Recorte.** A DFP inteira são 244 mil linhas por ano. A cerca de 400 B por linha com índice, dá cerca de 100 MB por ano: não cabe nos 387 MB livres junto com o ITR. Contas até o nível 3, consolidado, último exercício, são 43 mil linhas, cerca de 17 MB por ano (ESTIMADO).
 2. **ITR (trimestral) entra ou não.** Medir as linhas antes de decidir.

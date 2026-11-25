@@ -8,8 +8,8 @@ só como referência — não precisa ler tudo pra continuar, comece por aqui.
 
 - **Leia a seção "SESSÃO 140" no topo do `ESTADO.md`** (`sed -n '1,60p' ESTADO.md`): ela traz o bloco "▶ PRÓXIMA SESSÃO" e o pedido pronto para colar.
 - **Migration mais nova: 0304, APLICADA em produção em 25/11** (sessão 139). A sessão 140 não trouxe migration nova.
-- **Cuidado:** a conferência agendada `trig_01PbmDVYHXaVJrkBiqwhG9Qo` (26/11 09:30 UTC) manda aplicar uma migration que não existe e republicar um macro já republicado. Ver o ESTADO.
-- **PR desta rodada:** ainda não aberto. Branch `claude/charming-cori-j1fa07`. A sessão principal abre o PR depois do fechamento.
+- A conferência agendada `trig_01PbmDVYHXaVJrkBiqwhG9Qo` (26/11 09:30 UTC) só confere a execução agendada do macro (prompt corrigido em 25/11, 21:36 UTC).
+- **PR desta rodada:** [#318](https://github.com/rodrigovaroto-wq/Oria-Digital/pull/318), branch `claude/charming-cori-j1fa07`.
 
 ## SESSÃO 138 (24–25/11/2026; histórico, a mais nova está acima)
 

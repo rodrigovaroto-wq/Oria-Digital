@@ -24,7 +24,7 @@ grátis e sem depender de parceiro, contrato ou demo:
 | 2 | **B — Book confiável** | 1.A1–1.A10, 1.B3, 1.B4, 1.B6, 1.I1 | A detalhar quando a A fechar |
 | 3 | **C — Conferência e análises** | 1.B5, 1.K2, a parte de motor de 1.E2–1.E4 (dívida, caixa 13 semanas, juro × mercado) | A detalhar quando a B fechar |
 
-**Próximos 2 passos (25/11/2026):** (1) conferir a 1ª execução agendada do macro, de 26/11 às 06h, com a fonte 4; (2) Fase A, A3, fonte 5 (CVM), que só começa depois de o dono decidir o recorte: a DFP inteira tem cerca de 244 mil linhas por ano e não cabe no plano gratuito com o ITR. Detalhe, números medidos e critério de pronto em [`FASE_A_FONTES_PUBLICAS.md`](FASE_A_FONTES_PUBLICAS.md), §5 A3.
+**Próximos 2 passos (25/11/2026):** (1) conferir a 1ª execução agendada do macro, de 26/11 às 06h, com a fonte 4; (2) Fase A, A3, fonte 5 (CVM). O dono decidiu em 25/11: DFP inteira, ITR entra, baixar só quando o arquivo mudar. Primeiro, medir se cabe: a DFP tem 244 mil linhas por ano e o ITR não foi medido. Detalhe, números medidos e critério de pronto em [`FASE_A_FONTES_PUBLICAS.md`](FASE_A_FONTES_PUBLICAS.md), §5 A3.
 
 - **Depois das três fases:** as plataformas prontas (Direct Data, JUDIT, Serasa) e o restante do plano.
 - **O que não mudou:** os itens P1 da Fase 0 continuam exigidos antes do primeiro mandato real (G0).
