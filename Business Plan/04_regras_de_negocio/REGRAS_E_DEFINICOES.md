@@ -96,9 +96,9 @@ um valor é decisão registrada numa nova versão do registro, nunca edição si
 Os níveis N0 (sombra) a N3 (autônomo) estão definidos na doutrina técnica
 (`Arquitetura do Sistema/1 Visão e Doutrina/01_DOUTRINA_DE_AUTONOMIA.md`). A régua de negócio é:
 
-- **Subir uma etapa a N2** exige ~**300 amostras** por etapa e tipo de documento, **parte cega**, com acerto
-  mínimo de **98% no limite inferior** do intervalo. (Referência: 300 acertos em 300 dão limite
-  inferior de 98,7%; 30 em 30 dão só 88,6%. Fonte: [síntese da pesquisa](../09_pesquisa/SINTESE_DA_PESQUISA_FASE1.md), §3.)
+- **Subir uma etapa a N2** exige ~**110 amostras** por etapa e tipo de documento, **parte cega**, com acerto
+  mínimo de **95% no limite inferior** do intervalo (decisão do dono de 25/11/2026, D6-2; eram ~300 amostras e 98%). (Referência, intervalo de Wilson a 95%: 110 acertos em 110 dão limite
+  inferior de 96,6%, e 109 em 110 dão 95,0%, a folga de um erro; 73 em 73 é o mínimo sem erro nenhum; 60 em 60 dão só 94,0%; 30 em 30, 88,6%. Fonte: [síntese da pesquisa](../09_pesquisa/SINTESE_DA_PESQUISA_FASE1.md), §3.)
 - **A extração e a classificação de documentos voltam a N1 até serem medidas** (D6, D6-1). Piora medida rebaixa automaticamente.
 - **A promoção automática obedece à mesma régua.** O banco já promove etapas sozinho (`0137`), hoje com 30 vereditos: até o critério virar o da D6, ela fica desligada nessas etapas (plano, itens 0.5 e 3.3).
 - **Gabarito:** 30 a 50 páginas reais, formatos mais comuns, conferido célula a célula, refeito a cada
