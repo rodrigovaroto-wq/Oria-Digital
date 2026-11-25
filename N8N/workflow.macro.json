@@ -6,15 +6,15 @@
         "rule": {
           "interval": [
             {
-              "field": "months",
-              "triggerAtDayOfMonth": 12,
+              "field": "days",
+              "daysInterval": 1,
               "triggerAtHour": 6
             }
           ]
         }
       },
-      "id": "agenda-mensal",
-      "name": "Agenda Mensal",
+      "id": "agenda-di-ria",
+      "name": "Agenda Diária",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -41,9 +41,12 @@
         "options": {
           "response": {
             "response": {
-              "neverError": true
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
             }
-          }
+          },
+          "timeout": 60000
         }
       },
       "id": "bcb-sgs",
@@ -62,10 +65,10 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "return { json: { __serie: $('Séries a Coletar').item.json.__serie, __fonte: 'BCB/SGS', __corpo: $json } };"
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r) {\n  const j = r || {};\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j.body === 'string' ? j.body : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaSgs(resp, serie) {\n  const l = lerRespostaHttp(resp);\n  const c = { fonte: 'bcb_sgs', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };\n  if (!Array.isArray(l.json)) {\n    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista de observações do SGS';\n    return { consulta: c, dado: null };\n  }\n  let n = 0, ultimo = '';\n  for (const o of l.json) {\n    const m = String((o && o.data) || '').match(/^(\\d{2})\\/(\\d{2})\\/(\\d{4})$/);\n    if (m && numeroMacro(o.valor) !== null) { n++; const iso = m[3] + '-' + m[2]; if (iso > ultimo) ultimo = iso; }\n  }\n  c.registros_lidos = l.json.length;\n  if (n === 0) {\n    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma observação válida em ' + l.json.length + ' itens lidos';\n    return { consulta: c, dado: null };\n  }\n  c.itens = [{ chave: serie, valor: { ultimo_mes: ultimo, n } }];\n  return { consulta: c, dado: l.json };\n}\nlet serie = null;\ntry { serie = $('Séries a Coletar').item.json.__serie; } catch (e) { serie = null; }\nconst c = consultaSgs($json, serie || 'SGS');\nreturn { json: { __serie: serie, __fonte: 'BCB/SGS', __corpo: c.dado, __consulta: c.consulta } };"
       },
-      "id": "manter-contexto-sgs",
-      "name": "Manter Contexto SGS",
+      "id": "ler-sgs",
+      "name": "Ler SGS",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
@@ -75,13 +78,58 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-sgs",
+      "name": "Registrar Consulta SGS",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1040,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Ler SGS').all().map((i) => ({ json: { __serie: i.json.__serie, __fonte: i.json.__fonte, __corpo: i.json.__corpo } }));"
+      },
+      "id": "manter-contexto-sgs",
+      "name": "Manter Contexto SGS",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "parameters": {
         "url": "https://apisidra.ibge.gov.br/values/t/1737/n1/all/v/63/p/last%20132",
         "options": {
           "response": {
             "response": {
-              "neverError": true
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
             }
-          }
+          },
+          "timeout": 60000
         }
       },
       "id": "ibge-sidra-ipca-",
@@ -99,14 +147,56 @@
     },
     {
       "parameters": {
-        "jsCode": "return [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: $input.all().map(i => i.json) } }];"
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r) {\n  const j = r || {};\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j.body === 'string' ? j.body : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaSidra(resp) {\n  const l = lerRespostaHttp(resp);\n  const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };\n  if (!Array.isArray(l.json)) {\n    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista do SIDRA';\n    return { consulta: c, dado: null };\n  }\n  let n = 0, ultimo = '';\n  for (const o of l.json.slice(1)) {\n    const m = String((o && o.D3C) || '').match(/^(\\d{4})(\\d{2})$/);\n    if (m && numeroMacro(o.V) !== null) { n++; const ym = m[1] + '-' + m[2]; if (ym > ultimo) ultimo = ym; }\n  }\n  c.registros_lidos = l.json.length;\n  if (n === 0) {\n    c.erro = 'HTTP ' + l.http_status + ' sem nenhum mês válido em ' + l.json.length + ' linhas lidas';\n    return { consulta: c, dado: null };\n  }\n  c.itens = [{ chave: 'IPCA', valor: { ultimo_mes: ultimo, n } }];\n  return { consulta: c, dado: l.json };\n}\nconst c = consultaSidra(($input.all()[0] || {}).json);\nreturn [{ json: { __serie: 'IPCA', __fonte: 'IBGE/SIDRA', __corpo: c.dado, __consulta: c.consulta } }];"
+      },
+      "id": "ler-sidra",
+      "name": "Ler SIDRA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-sidra",
+      "name": "Registrar Consulta SIDRA",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        780,
+        180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Ler SIDRA').all().map((i) => ({ json: { __serie: i.json.__serie, __fonte: i.json.__fonte, __corpo: i.json.__corpo } }));"
       },
       "id": "marcar-fonte-ibge",
       "name": "Marcar Fonte IBGE",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        520,
+        1040,
         180
       ]
     },
@@ -119,7 +209,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1040,
+        1560,
         180
       ]
     },
@@ -136,7 +226,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1300,
+        1820,
         180
       ],
       "credentials": {
@@ -160,7 +250,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1560,
+        2080,
         180
       ],
       "credentials": {
@@ -193,9 +283,12 @@
         "options": {
           "response": {
             "response": {
-              "neverError": true
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "text"
             }
-          }
+          },
+          "timeout": 60000
         }
       },
       "id": "bcb-focus",
@@ -214,14 +307,56 @@
     {
       "parameters": {
         "mode": "runOnceForEachItem",
-        "jsCode": "return { json: { __serie: $('Indicadores Focus').item.json.__serie, __corpo: $json } };"
+        "jsCode": "function numeroMacro(bruto) {\n  if (typeof bruto === 'number') return Number.isFinite(bruto) ? bruto : null;\n  const t = String(bruto ?? '').trim();\n  if (!t) return null;\n  const n = Number(t.includes(',') ? t.replace(/\\./g, '').replace(',', '.') : t);\n  return Number.isFinite(n) ? n : null;\n}\nfunction lerRespostaHttp(r) {\n  const j = r || {};\n  if (j.statusCode === undefined && j.error !== undefined) {\n    const e = j.error;\n    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);\n    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };\n  }\n  const st = Number(j.statusCode);\n  if (!Number.isInteger(st)) {\n    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };\n  }\n  const corpo = typeof j.body === 'string' ? j.body : null;\n  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };\n  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };\n  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };\n  try {\n    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };\n  } catch (e) {\n    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };\n  }\n}\nfunction consultaFocus(resp, indicador) {\n  const l = lerRespostaHttp(resp);\n  const c = { fonte: 'bcb_focus', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };\n  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };\n  const linhas = l.json && Array.isArray(l.json.value) ? l.json.value : null;\n  if (linhas === null) {\n    c.erro = 'HTTP ' + l.http_status + ' com JSON sem a lista value do Olinda';\n    return { consulta: c, dado: null };\n  }\n  let recente = '';\n  for (const x of linhas) { if (x && x.Data > recente) recente = x.Data; }\n  const anos = {};\n  for (const x of linhas) {\n    if (x && x.Data === recente && Number.isInteger(Number(x.DataReferencia)) && numeroMacro(x.Mediana) !== null) anos[x.DataReferencia] = 1;\n  }\n  const nAnos = Object.keys(anos).length;\n  c.registros_lidos = linhas.length;\n  if (nAnos === 0) {\n    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma expectativa válida em ' + linhas.length + ' linhas lidas';\n    return { consulta: c, dado: null };\n  }\n  c.itens = [{ chave: indicador, valor: { coletado_em: recente, n_anos: nAnos } }];\n  return { consulta: c, dado: l.json };\n}\nlet serie = null;\ntry { serie = $('Indicadores Focus').item.json.__serie; } catch (e) { serie = null; }\nconst c = consultaFocus($json, serie || 'Focus');\nreturn { json: { __serie: serie, __corpo: c.dado, __consulta: c.consulta } };"
+      },
+      "id": "ler-focus",
+      "name": "Ler Focus",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "select fn_registrar_consulta_externa(q.p->>'fonte', null, null, (q.p->>'http_status')::int, q.p->>'erro', q.p->>'corpo', nullif(q.p->'itens', 'null'::jsonb), (q.p->>'registros_lidos')::int, 0) as consulta from (select $1::jsonb as p) q",
+        "options": {
+          "queryBatching": "independently",
+          "queryReplacement": "={{ JSON.stringify($json.__consulta) }}"
+        }
+      },
+      "id": "registrar-consulta-focus",
+      "name": "Registrar Consulta Focus",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1040,
+        360
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "REPLACE",
+          "name": "Supabase Postgres"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000
+    },
+    {
+      "parameters": {
+        "jsCode": "return $('Ler Focus').all().map((i) => ({ json: { __serie: i.json.__serie, __corpo: i.json.__corpo } }));"
       },
       "id": "manter-contexto-focus",
       "name": "Manter Contexto Focus",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        780,
+        1300,
         360
       ]
     },
@@ -234,7 +369,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1040,
+        1560,
         360
       ]
     },
@@ -251,7 +386,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.5,
       "position": [
-        1300,
+        1820,
         360
       ],
       "credentials": {
@@ -267,7 +402,7 @@
     }
   ],
   "connections": {
-    "Agenda Mensal": {
+    "Agenda Diária": {
       "main": [
         [
           {
@@ -303,6 +438,28 @@
       "main": [
         [
           {
+            "node": "Ler SGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler SGS": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta SGS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta SGS": {
+      "main": [
+        [
+          {
             "node": "Manter Contexto SGS",
             "type": "main",
             "index": 0
@@ -322,6 +479,28 @@
       ]
     },
     "IBGE SIDRA (IPCA)": {
+      "main": [
+        [
+          {
+            "node": "Ler SIDRA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler SIDRA": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta SIDRA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta SIDRA": {
       "main": [
         [
           {
@@ -380,6 +559,28 @@
       "main": [
         [
           {
+            "node": "Ler Focus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ler Focus": {
+      "main": [
+        [
+          {
+            "node": "Registrar Consulta Focus",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar Consulta Focus": {
+      "main": [
+        [
+          {
             "node": "Manter Contexto Focus",
             "type": "main",
             "index": 0
@@ -414,6 +615,6 @@
     "executionOrder": "v1"
   },
   "meta": {
-    "note": "Gerado por N8N/build-workflow-macro.mjs. Coleta mensal de IPCA/IGP-M/INPC/Selic/CDI/câmbio (BCB/SGS), da expectativa Focus por ano e do IPCA no IBGE/SIDRA para conferência cruzada. A ingestão é idempotente por (serie, fonte, data_ref): rebaixar a janela toda vez é intencional — é assim que uma revisão de série feita pela fonte chega até nós."
+    "note": "Gerado por N8N/build-workflow-macro.mjs. Coleta diária de IPCA/IGP-M/INPC/Selic/CDI/câmbio (BCB/SGS), da expectativa Focus por ano e do IPCA no IBGE/SIDRA para conferência cruzada. A ingestão é idempotente por (serie, fonte, data_ref): rebaixar a janela toda vez é intencional — é assim que uma revisão de série feita pela fonte chega até nós."
   }
 }

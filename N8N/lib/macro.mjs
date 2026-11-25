@@ -270,3 +270,127 @@ export function mediaAnualGeometrica(retornosAnuais, janela) {
   return (Math.pow(fator, 1 / janela) - 1) * 100;
 }
 
+
+// ---------------------------------------------------------------------------
+// REGISTRO DA CONSULTA (A3, fatia 0): o desfecho CRU de cada chamada HTTP do macro
+// vai para fn_registrar_consulta_externa (0303), que é quem classifica.
+//
+// Por que existe: o macro rodava mensal e nada registrava que rodou — "rodou e
+// não achou nada" e "não rodou" tinham a mesma cara (regra 7). E um 500 do BCB com
+// neverError chegava como corpo, o Normalizar descartava, e só o throw do "zero
+// observação" aparecia, sem dizer QUAL série nem com que status.
+//
+// Estas funções são EMBUTIDAS nos nós Code pelo gerador (Function.toString), como
+// numeroMacro: nó Code do n8n não importa arquivo. Por isso cada uma é
+// autocontida (só chama as outras desta seção e numeroMacro, que o gerador
+// embute junto) e os comentários aqui dentro NÃO podem ter crase nem dólar-chave
+// (fecharia ou interpolaria o template literal do gerador).
+//
+// Contrato com o nó HTTP: options.response.response = { fullResponse: true,
+// neverError: true, responseFormat: 'text' }. Isso entrega UM item por chamada
+// com { statusCode, body: texto cru } — sem o split do array em N itens e com o
+// corpo exato de que o hash é a prova de leitura. Chamada que nem respondeu
+// (timeout, DNS) chega pelo onError continueRegularOutput como { error }.
+// ---------------------------------------------------------------------------
+
+// Desfecho cru -> { http_status, erro, corpo, json }. NUNCA lança.
+//   - sem resposta        -> http_status null + erro com o motivo (a função grava falhou)
+//   - 2xx vazio/não-JSON  -> http_status 2xx + erro (a função grava falhou)
+//   - fora de 2xx         -> http_status real, erro null (a função grava falhou "HTTP 500")
+// Um 2xx sem erro tem json parseado: é o único caso em que o chamador pode montar itens.
+export function lerRespostaHttp(r) {
+  const j = r || {};
+  if (j.statusCode === undefined && j.error !== undefined) {
+    const e = j.error;
+    const msg = typeof e === 'string' ? e : (e && (e.message || e.description)) || JSON.stringify(e);
+    return { http_status: null, erro: 'sem resposta HTTP: ' + String(msg).slice(0, 300), corpo: null, json: null };
+  }
+  const st = Number(j.statusCode);
+  if (!Number.isInteger(st)) {
+    return { http_status: null, erro: 'a resposta do nó HTTP veio sem statusCode', corpo: null, json: null };
+  }
+  const corpo = typeof j.body === 'string' ? j.body : null;
+  if (st < 200 || st > 299) return { http_status: st, erro: null, corpo, json: null };
+  if (corpo === null) return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não veio como texto cru', corpo, json: null };
+  if (corpo.trim() === '') return { http_status: st, erro: 'HTTP ' + st + ' com corpo vazio', corpo, json: null };
+  try {
+    return { http_status: st, erro: null, corpo, json: JSON.parse(corpo) };
+  } catch (e) {
+    return { http_status: st, erro: 'HTTP ' + st + ' com corpo que não é JSON', corpo, json: null };
+  }
+}
+
+// SGS: uma consulta por SÉRIE chamada. Itens = RESUMO {ultimo_mes, n} (1 fato por
+// consulta), não as ~132 observações: estas já vão para indice_macro_obs.
+// Zero observação válida num 2xx nunca vira "nada encontrado": o SGS devolve 132
+// meses em toda chamada, então zero é resposta inesperada (mesmo critério do throw do Normalizar).
+export function consultaSgs(resp, serie) {
+  const l = lerRespostaHttp(resp);
+  const c = { fonte: 'bcb_sgs', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
+  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
+  if (!Array.isArray(l.json)) {
+    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista de observações do SGS';
+    return { consulta: c, dado: null };
+  }
+  let n = 0, ultimo = '';
+  for (const o of l.json) {
+    const m = String((o && o.data) || '').match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (m && numeroMacro(o.valor) !== null) { n++; const iso = m[3] + '-' + m[2]; if (iso > ultimo) ultimo = iso; }
+  }
+  c.registros_lidos = l.json.length;
+  if (n === 0) {
+    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma observação válida em ' + l.json.length + ' itens lidos';
+    return { consulta: c, dado: null };
+  }
+  c.itens = [{ chave: serie, valor: { ultimo_mes: ultimo, n } }];
+  return { consulta: c, dado: l.json };
+}
+
+// Focus: uma consulta por INDICADOR chamado. Resumo = {coletado_em, n_anos} da coleta mais recente.
+export function consultaFocus(resp, indicador) {
+  const l = lerRespostaHttp(resp);
+  const c = { fonte: 'bcb_focus', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
+  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
+  const linhas = l.json && Array.isArray(l.json.value) ? l.json.value : null;
+  if (linhas === null) {
+    c.erro = 'HTTP ' + l.http_status + ' com JSON sem a lista value do Olinda';
+    return { consulta: c, dado: null };
+  }
+  let recente = '';
+  for (const x of linhas) { if (x && x.Data > recente) recente = x.Data; }
+  const anos = {};
+  for (const x of linhas) {
+    if (x && x.Data === recente && Number.isInteger(Number(x.DataReferencia)) && numeroMacro(x.Mediana) !== null) anos[x.DataReferencia] = 1;
+  }
+  const nAnos = Object.keys(anos).length;
+  c.registros_lidos = linhas.length;
+  if (nAnos === 0) {
+    c.erro = 'HTTP ' + l.http_status + ' sem nenhuma expectativa válida em ' + linhas.length + ' linhas lidas';
+    return { consulta: c, dado: null };
+  }
+  c.itens = [{ chave: indicador, valor: { coletado_em: recente, n_anos: nAnos } }];
+  return { consulta: c, dado: l.json };
+}
+
+// SIDRA: uma consulta (IPCA). A primeira linha é o cabeçalho descritivo, não dado.
+export function consultaSidra(resp) {
+  const l = lerRespostaHttp(resp);
+  const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
+  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
+  if (!Array.isArray(l.json)) {
+    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista do SIDRA';
+    return { consulta: c, dado: null };
+  }
+  let n = 0, ultimo = '';
+  for (const o of l.json.slice(1)) {
+    const m = String((o && o.D3C) || '').match(/^(\d{4})(\d{2})$/);
+    if (m && numeroMacro(o.V) !== null) { n++; const ym = m[1] + '-' + m[2]; if (ym > ultimo) ultimo = ym; }
+  }
+  c.registros_lidos = l.json.length;
+  if (n === 0) {
+    c.erro = 'HTTP ' + l.http_status + ' sem nenhum mês válido em ' + l.json.length + ' linhas lidas';
+    return { consulta: c, dado: null };
+  }
+  c.itens = [{ chave: 'IPCA', valor: { ultimo_mes: ultimo, n } }];
+  return { consulta: c, dado: l.json };
+}

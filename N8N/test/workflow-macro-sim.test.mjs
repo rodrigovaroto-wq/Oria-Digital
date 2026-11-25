@@ -14,11 +14,14 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const workflow = JSON.parse(readFileSync(join(__dirname, '..', 'workflow.macro.json'), 'utf8'));
 const nodeDe = (nome) => workflow.nodes.find((n) => n.name === nome);
 
-function rodarCode(nome, { itens = [], porNome = {} } = {}) {
+function rodarCode(nome, { itens = [], porNome = {}, todosPorNome = {} } = {}) {
   const n = nodeDe(nome);
   assert.ok(n, `nó ${nome} não existe no workflow gerado`);
   const $input = { all: () => itens.map((json) => ({ json })) };
-  const $ = (outro) => ({ item: { json: porNome[outro] } });
+  const $ = (outro) => ({
+    item: { json: porNome[outro] },
+    all: () => (todosPorNome[outro] ?? []).map((json) => ({ json })),
+  });
   const fn = new Function('$input', '$', '$json', `${n.parameters.jsCode}`);
   if (n.parameters.mode === 'runOnceForEachItem') {
     return itens.map((json) => fn($input, $, json));
@@ -26,13 +29,19 @@ function rodarCode(nome, { itens = [], porNome = {} } = {}) {
   return fn($input, $, itens[0]);
 }
 
-test('workflow macro: agenda mensal depois da divulgação do IPCA', () => {
-  const t = nodeDe('Agenda Mensal');
-  const dia = t.parameters.rule.interval[0].triggerAtDayOfMonth;
-  // Dia 12 e não dia 1: o IBGE divulga o IPCA do mês anterior por volta do dia
-  // 10. Coletar antes traria o mês sempre incompleto e faria a conferência
-  // entre fontes acusar divergência por ATRASO DE PUBLICAÇÃO, não por erro.
-  assert.ok(dia >= 10, `coleta no dia ${dia} corre na frente da divulgação do IPCA`);
+test('workflow macro: agenda DIÁRIA, na mesma hora de antes (06h)', () => {
+  // Decisão do dono (25/11/2026): era mensal no dia 12. Medido no mesmo dia: o IPCA de
+  // outubro já estava no SGS e só entraria em 12/12. Diário também é o que faz a ausência
+  // de uma consulta no banco significar "não rodou" (regra 7).
+  const t = nodeDe('Agenda Diária');
+  assert.ok(t, 'o gatilho tem de existir com o nome novo');
+  assert.equal(nodeDe('Agenda Mensal'), undefined, 'sobrou o gatilho mensal');
+  const regra = t.parameters.rule.interval;
+  assert.equal(regra.length, 1);
+  assert.equal(regra[0].field, 'days');
+  assert.equal(regra[0].daysInterval, 1);
+  assert.equal(regra[0].triggerAtHour, 6);
+  assert.equal(regra[0].triggerAtDayOfMonth, undefined, 'dia do mês fixo faria a agenda voltar a mensal');
 });
 
 test('workflow macro: toda série do catálogo entra na coleta', () => {
@@ -272,4 +281,167 @@ test('coleta com dado válido não lança', () => {
     ] } }],
   });
   assert.equal(foc[0].json.n, 1);
+});
+
+
+// --- A3 fatia 0: cada chamada HTTP registra o desfecho CRU na fn_registrar_consulta_externa ---
+// INVARIANTE (comportamento, não mecanismo): uma fonte derrubada NUNCA chega ao banco como
+// "2xx com lista vazia" (que a função grava como nada_encontrado). Queda de HTTP, timeout e
+// corpo vazio têm de chegar com o status/erro reais, e a falha de UMA série não pode ser
+// escondida pelo sucesso das outras.
+const SGS_OK = JSON.stringify([{ data: '01/08/2026', valor: '0.10' }, { data: '01/09/2026', valor: '0.14' }]);
+const resp = (statusCode, body) => ({ statusCode, statusMessage: '', headers: {}, body });
+
+// O que o banco receberia de 'Ler SGS' para uma série, dada a resposta do nó HTTP.
+const consultaSgsDe = (serie, httpJson) => rodarCode('Ler SGS', {
+  itens: [httpJson], porNome: { 'Séries a Coletar': { __serie: serie } },
+})[0].json.__consulta;
+
+// Contrato de TODA consulta que o macro manda ao banco, de qualquer fonte.
+function afirmarContrato(c, rotulo) {
+  const dois = c.http_status >= 200 && c.http_status <= 299;
+  if (dois && !c.erro) {
+    assert.ok(Array.isArray(c.itens) && c.itens.length > 0, `${rotulo}: 2xx sem erro tem de trazer itens, nunca lista vazia`);
+    assert.ok(typeof c.corpo === 'string' && c.corpo.trim() !== '', `${rotulo}: 2xx sem erro tem de trazer o corpo cru`);
+  }
+  if (c.http_status === null) assert.ok(c.erro, `${rotulo}: sem status HTTP tem de levar o erro`);
+}
+
+test('A3: Ler SGS - resposta boa vira consulta com RESUMO pequeno (1 item) e o corpo cru', () => {
+  const c = consultaSgsDe('IPCA', resp(200, SGS_OK));
+  assert.equal(c.fonte, 'bcb_sgs');
+  assert.equal(c.http_status, 200);
+  assert.equal(c.erro, null);
+  assert.equal(c.corpo, SGS_OK, 'o hash é do texto exato');
+  assert.deepEqual(c.itens, [{ chave: 'IPCA', valor: { ultimo_mes: '2026-09', n: 2 } }]);
+  assert.equal(c.registros_lidos, 2);
+  afirmarContrato(c, 'ok');
+});
+
+test('A3: SGS derrubado - 500, sem resposta, corpo vazio, não-JSON, lista vazia: NUNCA 2xx com itens []', () => {
+  const casos = {
+    'HTTP 500': [resp(500, '{"error":"x"}'), (c) => assert.equal(c.http_status, 500)],
+    'HTTP 429': [resp(429, 'slow down'), (c) => assert.equal(c.http_status, 429)],
+    'timeout / sem resposta': [{ error: { message: 'timeout of 60000ms exceeded' } },
+      (c) => { assert.equal(c.http_status, null); assert.match(c.erro, /timeout of 60000ms/); }],
+    '200 com corpo vazio': [resp(200, ''), (c) => assert.match(c.erro, /corpo vazio/)],
+    '200 só com espaço': [resp(200, ' \n'), (c) => assert.match(c.erro, /corpo vazio/)],
+    '200 que não é JSON': [resp(200, '<html>manutencao</html>'), (c) => assert.match(c.erro, /não é JSON/)],
+    '200 com lista vazia': [resp(200, '[]'), (c) => assert.match(c.erro, /nenhuma observação válida/)],
+    '200 com objeto de erro': [resp(200, '{"error":"Bad Request"}'), (c) => assert.match(c.erro, /não é a lista/)],
+  };
+  for (const [rotulo, [httpJson, extra]] of Object.entries(casos)) {
+    const c = consultaSgsDe('SELIC', httpJson);
+    afirmarContrato(c, rotulo);
+    extra(c);
+    const dois = c.http_status >= 200 && c.http_status <= 299;
+    assert.ok(!(dois && !c.erro), `${rotulo}: chegaria ao banco como 2xx limpo`);
+    assert.ok(!(dois && Array.isArray(c.itens) && c.itens.length === 0), `${rotulo}: 2xx com itens [] vira nada_encontrado`);
+  }
+});
+
+test('A3: a falha de UMA série não é escondida pelo sucesso das outras (uma consulta por série)', () => {
+  const series = SERIES_MACRO.map((s) => s.codigo);
+  const consultas = series.map((s) => consultaSgsDe(s, s === 'CDI' ? resp(500, 'boom') : resp(200, SGS_OK)));
+  assert.equal(consultas.length, 6);
+  const falhas = consultas.filter((c) => c.http_status !== 200);
+  assert.equal(falhas.length, 1);
+  assert.equal(falhas[0].http_status, 500);
+  consultas.forEach((c, i) => afirmarContrato(c, series[i]));
+  assert.deepEqual(consultas.filter((c) => c.http_status === 200).map((c) => c.itens[0].chave).sort(),
+    series.filter((s) => s !== 'CDI').sort());
+});
+
+test('A3: Focus - uma consulta por indicador, resumo da coleta mais recente; queda nunca vira 2xx vazio', () => {
+  const rodar = (httpJson) => rodarCode('Ler Focus', {
+    itens: [httpJson], porNome: { 'Indicadores Focus': { __serie: 'IPCA' } },
+  })[0].json.__consulta;
+  const corpo = JSON.stringify({ value: [
+    { Data: '2026-11-21', DataReferencia: '2026', Mediana: 4.5 }, { Data: '2026-11-21', DataReferencia: '2027', Mediana: 4.0 },
+    { Data: '2026-11-14', DataReferencia: '2026', Mediana: 4.6 },
+  ] });
+  const ok = rodar(resp(200, corpo));
+  assert.equal(ok.fonte, 'bcb_focus');
+  assert.deepEqual(ok.itens, [{ chave: 'IPCA', valor: { coletado_em: '2026-11-21', n_anos: 2 } }]);
+  assert.equal(ok.corpo, corpo);
+  for (const [rotulo, h] of Object.entries({
+    '500': resp(500, 'x'), 'sem resposta': { error: 'ECONNRESET' }, 'vazio': resp(200, ''),
+    'value vazio': resp(200, '{"value":[]}'), 'sem value': resp(200, '{"odata":1}'),
+  })) afirmarContrato(rodar(h), `focus ${rotulo}`);
+  assert.equal(rodar(resp(500, 'x')).http_status, 500);
+  assert.equal(rodar({ error: 'ECONNRESET' }).http_status, null);
+  assert.ok(rodar(resp(200, '')).erro);
+  assert.ok(rodar(resp(200, '{"value":[]}')).erro, 'value vazio não é nada_encontrado');
+});
+
+test('A3: SIDRA - cabeçalho não conta; queda nunca vira 2xx vazio', () => {
+  const rodar = (h) => rodarCode('Ler SIDRA', { itens: [h] })[0].json;
+  const corpo = JSON.stringify([{ D3C: 'Mês (Código)', V: 'Valor' }, { D3C: '202608', V: '0.10' }, { D3C: '202609', V: '0.14' }]);
+  const ok = rodar(resp(200, corpo)).__consulta;
+  assert.equal(ok.fonte, 'ibge_sidra');
+  assert.deepEqual(ok.itens, [{ chave: 'IPCA', valor: { ultimo_mes: '2026-09', n: 2 } }]);
+  for (const h of [resp(503, 'x'), { error: 'ENOTFOUND' }, resp(200, ''), resp(200, '[]'),
+    resp(200, JSON.stringify([{ D3C: 'Mês (Código)', V: 'Valor' }]))]) {
+    afirmarContrato(rodar(h).__consulta, 'sidra');
+  }
+  assert.equal(rodar(resp(503, 'x')).__consulta.http_status, 503);
+});
+
+test('A3: os dados seguem para o Normalizar do jeito de antes (o registro não os toca)', () => {
+  // Ler SGS -> Manter Contexto SGS devolve __corpo como o ARRAY inteiro (o "array inteiro" já testado)
+  // e a série que caiu como __corpo null, que o Normalizar CONTA em descartados.
+  const lidos = ['IPCA', 'CDI'].map((s) => rodarCode('Ler SGS', {
+    itens: [s === 'CDI' ? resp(500, 'x') : resp(200, SGS_OK)], porNome: { 'Séries a Coletar': { __serie: s } },
+  })[0].json);
+  const mantidos = rodarCode('Manter Contexto SGS', { todosPorNome: { 'Ler SGS': lidos } });
+  assert.equal(mantidos.length, 2);
+  assert.ok(mantidos.every((m) => m.json.__consulta === undefined), 'a consulta não segue para o Normalizar');
+  const saida = rodarCode('Normalizar Observações', { itens: mantidos.map((m) => m.json) });
+  assert.equal(saida[0].json.observacoes.length, 2);
+  assert.equal(saida[0].json.descartados, 1, 'a série que caiu é contada, não engolida');
+  assert.ok(saida[0].json.observacoes.every((o) => o.serie === 'IPCA'));
+
+  const focus = rodarCode('Ler Focus', { itens: [resp(200, JSON.stringify({ value: [
+    { Data: '2026-11-21', DataReferencia: '2026', Mediana: 4.5, Media: 4.5, numeroRespondentes: 100 }] }))],
+  porNome: { 'Indicadores Focus': { __serie: 'IPCA' } } })[0].json;
+  const f = rodarCode('Manter Contexto Focus', { todosPorNome: { 'Ler Focus': [focus] } });
+  assert.equal(rodarCode('Normalizar Focus', { itens: f.map((x) => x.json) })[0].json.expectativas.length, 1);
+
+  const sid = rodarCode('Ler SIDRA', { itens: [resp(200, JSON.stringify([{ D3C: 'h', V: 'v' }, { D3C: '202609', V: '0.14' }]))] })[0].json;
+  const m = rodarCode('Marcar Fonte IBGE', { todosPorNome: { 'Ler SIDRA': [sid] } });
+  assert.equal(m[0].json.__fonte, 'IBGE/SIDRA');
+  assert.equal(rodarCode('Normalizar Observações', { itens: m.map((x) => x.json) })[0].json.observacoes[0].data_ref, '2026-09-01');
+});
+
+test('A3: topologia - registro ANTES dos dados, em série, e sem poder derrubá-los', () => {
+  const c = workflow.connections;
+  const alvo = (n) => c[n].main[0].map((x) => x.node);
+  for (const [http, ler, reg, retoma] of [
+    ['BCB SGS', 'Ler SGS', 'Registrar Consulta SGS', 'Manter Contexto SGS'],
+    ['BCB Focus', 'Ler Focus', 'Registrar Consulta Focus', 'Manter Contexto Focus'],
+    ['IBGE SIDRA (IPCA)', 'Ler SIDRA', 'Registrar Consulta SIDRA', 'Marcar Fonte IBGE'],
+  ]) {
+    assert.deepEqual(alvo(http), [ler]);
+    assert.deepEqual(alvo(ler), [reg], 'o registro vem logo depois da leitura, antes dos dados');
+    assert.deepEqual(alvo(reg), [retoma]);
+    const n = nodeDe(reg);
+    assert.match(n.parameters.query, /fn_registrar_consulta_externa/);
+    assert.equal(n.onError, 'continueRegularOutput', `${reg}: erro do registro não pode parar os dados`);
+    assert.equal(n.alwaysOutputData, true, `${reg}: sem saída os dados não seguiriam`);
+    assert.equal(n.parameters.options.queryBatching, 'independently', `${reg}: uma consulta recusada não leva as outras`);
+    assert.equal(n.credentials.postgres.id, 'REPLACE');
+    const h = nodeDe(http).parameters.options.response.response;
+    assert.equal(h.fullResponse, true, `${http}: sem o status real a falha vira corpo anônimo`);
+    assert.equal(h.responseFormat, 'text', `${http}: o hash é do corpo cru`);
+    assert.equal(h.neverError, true);
+  }
+  // a função recebe 10 parâmetros, o último com default; o nó passa os 9 primeiros (mercado: caso/cnpj nulos, custo 0)
+  assert.match(nodeDe('Registrar Consulta SGS').parameters.query, /null, null, \(q\.p->>'http_status'\)::int/);
+  assert.match(nodeDe('Registrar Consulta SGS').parameters.query, /, 0\) as consulta/);
+});
+
+test('A3: o export não muda - nenhuma série nova entra na gravação de índices', () => {
+  // As séries novas da A3 NÃO vão para indice_macro_obs (a aba Macro do cliente é a A5).
+  const nomes = rodarCode('Séries a Coletar').map((i) => i.json.__serie).sort();
+  assert.deepEqual(nomes, SERIES_MACRO.map((s) => s.codigo).sort());
 });
