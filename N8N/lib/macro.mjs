@@ -570,10 +570,18 @@ export function urlSidraSetorial(s, n = JANELA_SIDRA_SETORIAL) {
 export function consultaSidraSetorial(resp, meta, opcoes) {
   const m = meta || {};
   const l = lerRespostaHttp(resp, (opcoes || {}).campo);
-  const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
-  if (l.erro !== null || l.http_status < 200 || l.http_status > 299) return { consulta: c, dado: null };
+  // QUAL série caiu vai no erro de TODO caminho de falha (revisão de 7e2b1f8): a fonte ibge_sidra
+  // tem 7 consultas por dia com a mesma fonte, falhou não tem fato e, sem o prefixo, o motivo
+  // gravado seria só "HTTP 400" (0303, ramo sem erro), sem dizer se caiu o IPCA ou a PMS.
+  // Erro informado num 4xx vai pelo ramo "erro informado" da 0303 e não pelo de
+  // http_inexistente: aqui não muda nada, porque ibge_sidra é fonte de mercado sem alvo e
+  // http_inexistente é nulo; se um dia deixar de ser, este prefixo precisa ser revisto.
+  const id = 'SIDRA ' + m.tabela + '/' + m.variavel + ': ';
+  const c = { fonte: 'ibge_sidra', http_status: l.http_status, erro: l.erro === null ? null : id + l.erro, corpo: l.corpo, itens: null, registros_lidos: null };
+  if (l.erro !== null) return { consulta: c, dado: null };
+  if (l.http_status < 200 || l.http_status > 299) { c.erro = id + 'HTTP ' + l.http_status; return { consulta: c, dado: null }; }
   if (!Array.isArray(l.json)) {
-    c.erro = 'HTTP ' + l.http_status + ' com JSON que não é a lista do SIDRA';
+    c.erro = id + 'HTTP ' + l.http_status + ' com JSON que não é a lista do SIDRA';
     return { consulta: c, dado: null };
   }
   c.registros_lidos = l.json.length;
@@ -584,7 +592,7 @@ export function consultaSidraSetorial(resp, meta, opcoes) {
     if (mk && Number(mk[1]) > ultima) ultima = Number(mk[1]);
   }
   if (ultima < 4) {
-    c.erro = 'HTTP ' + l.http_status + ' com cabeçalho SIDRA sem dimensão de categoria (D4 em diante) em ' + l.json.length + ' linhas lidas';
+    c.erro = id + 'HTTP ' + l.http_status + ' com cabeçalho SIDRA sem dimensão de categoria (D4 em diante) em ' + l.json.length + ' linhas lidas';
     return { consulta: c, dado: null };
   }
   const fatos = [];
@@ -592,19 +600,28 @@ export function consultaSidraSetorial(resp, meta, opcoes) {
   for (const o of l.json.slice(1)) {
     const per = String((o && o.D3C) || '');
     const cod = String((o && o['D' + ultima + 'C']) || '');
+    // As dimensões ENTRE o período (D3) e a categoria (a última) qualificam o número: na PMC e
+    // na PMS é o "Tipos de índice" (volume x receita nominal). Sem elas, o fato não dizia que
+    // é volume e duas séries da mesma tabela/variável dariam a mesma referência (revisão de
+    // 7e2b1f8). Vão no valor, com o nome da dimensão que o próprio SIDRA dá, e na referência.
+    const dims = {}; let codDims = '';
+    for (let d = 4; d < ultima; d++) {
+      dims[String(cab['D' + d + 'N'] || ('D' + d))] = o && o['D' + d + 'N'];
+      codDims += String((o && o['D' + d + 'C']) || '') + ':';
+    }
     const v = numeroMacro(o && o.V);
     if (v === null || !/^\d{6}$/.test(per) || cod === '') { ausentes.push(cod + ':' + per); continue; }
     fatos.push({
       chave: 'sidra:' + m.tabela + '/' + m.variavel,
       valor: {
         periodo: per, periodo_nome: o.D3N, categoria_codigo: cod, categoria: o['D' + ultima + 'N'], valor: v,
-        unidade: o.MN, compoe: false, periodicidade: m.periodicidade, serie: o.D2N,
+        unidade: o.MN, compoe: false, periodicidade: m.periodicidade, serie: o.D2N, dimensoes: dims,
       },
-      referencia: 'sidra.' + m.tabela + '.' + m.variavel + ':' + cod + ':' + per,
+      referencia: 'sidra.' + m.tabela + '.' + m.variavel + ':' + codDims + cod + ':' + per,
     });
   }
   if (fatos.length === 0) {
-    c.erro = 'HTTP ' + l.http_status + ' sem nenhum valor numérico em ' + l.json.length + ' linhas lidas (cabeçalho incluído)';
+    c.erro = id + 'HTTP ' + l.http_status + ' sem nenhum valor numérico em ' + l.json.length + ' linhas lidas (cabeçalho incluído)';
     return { consulta: c, dado: null };
   }
   for (const f of fatos) { f.valor.ausentes_na_consulta = ausentes.length; f.valor.ausentes_em = ausentes; }

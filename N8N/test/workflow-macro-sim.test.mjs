@@ -629,12 +629,17 @@ test('A3.4: a resposta REAL de cada tabela vira fatos (categoria = última dimen
       assert.equal(f.valor.compoe, false);
       assert.equal(f.valor.periodicidade, s.periodicidade);
       assert.ok(typeof f.valor.valor === 'number' && f.valor.categoria_codigo && f.valor.categoria && f.valor.unidade && f.valor.serie);
-      assert.equal(f.referencia, `sidra.${s.tabela}.${s.variavel}:${f.valor.categoria_codigo}:${f.valor.periodo}`);
+      assert.ok(f.referencia.startsWith(`sidra.${s.tabela}.${s.variavel}:`) && f.referencia.endsWith(`:${f.valor.categoria_codigo}:${f.valor.periodo}`));
       assert.equal(f.valor.ausentes_na_consulta, 0);
     }
     total += c.itens.length;
   });
   assert.equal(total, 202);
+  // cada fato identifica um número só: nenhuma referência se repete dentro da série
+  FIX.forEach((nome, i) => {
+    const refs = setorialDe(i, fixSidra(nome)).itens.map((f) => f.referencia);
+    assert.equal(new Set(refs).size, refs.length, `${nome}: referência repetida`);
+  });
   // categoria é a ÚLTIMA dimensão: no PMC por atividade é Atividades (D5), não Tipos de índice (D4)
   const cat = setorialDe(3, fixSidra('pmcat')).itens[0].valor;
   assert.equal(cat.categoria_codigo, '90671');
@@ -820,5 +825,32 @@ test('contrato HTTP -> Ler: a resposta boa, na forma do n8n para o nó gerado, �
     assert.equal(saida.http_status, 200);
     assert.ok(Array.isArray(saida.itens) && saida.itens.length > 0, `${ler}: sem itens`);
     assert.equal(saida.corpo, corpo, `${ler}: o corpo cru tem de chegar intacto (é o que o banco hasheia)`);
+  }
+});
+
+// Revisão de 7e2b1f8 (MÉDIO 1): na PMC e na PMS o número é de VOLUME, e isso só está na dimensão
+// "Tipos de índice" (D4), entre o período e a atividade. O fato tem de dizê-lo, e o mesmo ponto em
+// receita nominal (56725) não pode ganhar a mesma referência. A linha de receita nominal é DERIVADA
+// da fixture real trocando só D4C/D4N e o valor (não foi capturada: a série pedida é a de volume).
+test('A3.4: o fato da PMS diz que é volume, e volume e receita nominal nunca dividem a referência', () => {
+  const linhas = fixSidra('pms');
+  const vol = setorialDe(4, linhas).itens[0];
+  assert.match(vol.valor.dimensoes['Tipos de índice'], /volume/i);
+  const nominal = { ...linhas[1], D4C: '56725', D4N: 'Índice de receita nominal de serviços', V: '9.9' };
+  const itens = setorialDe(4, [linhas[0], linhas[1], nominal]).itens;
+  assert.equal(itens.length, 2);
+  assert.notEqual(itens[0].referencia, itens[1].referencia);
+  assert.match(itens[1].valor.dimensoes['Tipos de índice'], /receita nominal/i);
+});
+
+// Revisão de 7e2b1f8 (MÉDIO 2): ibge_sidra tem 7 consultas por dia; o falhou tem de dizer QUAL
+// tabela caiu, inclusive no não-2xx sem texto de erro (a 0303 gravaria só "HTTP 400").
+test('A3.4: a consulta que falhou diz qual tabela do SIDRA caiu', () => {
+  const s = SIDRA_SETORIAL[4];
+  const casos = [resp(400, 'Tabela inexistente'), { error: { message: 'ETIMEDOUT' } }, resp(200, JSON.stringify([fixSidra('pms')[0]]))];
+  for (const r of casos) {
+    const c = setorialDe(4, r, { cru: true });
+    assert.equal(c.itens, null);
+    assert.ok(c.erro && c.erro.includes(s.tabela + '/' + s.variavel), 'erro sem a tabela: ' + c.erro);
   }
 });
