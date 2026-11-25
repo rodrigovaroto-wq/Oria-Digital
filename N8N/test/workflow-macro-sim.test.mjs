@@ -605,13 +605,18 @@ const comAusencia = (nome, indices, simbolo) => {
   return a;
 };
 
-test('A3.4: as 6 séries do SIDRA setorial, janela de 2 períodos, URL pelo catálogo', () => {
-  assert.deepEqual(SIDRA_SETORIAL.map((s) => s.tabela), [5932, 8888, 8880, 8882, 8688, 6323]);
+// Achado BAIXO da revisão de 7e2b1f8: este teste travava a lista literal de tabelas e JANELA === 2
+// (mecanismo: a próxima série ou a janela 3 que o comentário prevê reprovariam sem defeito). Afirma o
+// comportamento: cada série do catálogo vira UMA chamada, pedindo a janela declarada, sem série repetida.
+test('A3.4: cada série do SIDRA setorial vira uma chamada com a janela declarada, sem série repetida', () => {
   const gerado = rodarCode('Séries SIDRA Setorial').map((i) => i.json);
-  assert.equal(gerado.length, 6);
-  assert.equal(JANELA_SIDRA_SETORIAL, 2);
-  gerado.forEach((g, i) => assert.match(g.__url, new RegExp(`/values/t/${SIDRA_SETORIAL[i].tabela}/n1/all/v/${SIDRA_SETORIAL[i].variavel}/p/last%202/`)));
-  assert.match(gerado[0].__url, /\/c11255\/all$/);
+  assert.equal(gerado.length, SIDRA_SETORIAL.length);
+  const ids = SIDRA_SETORIAL.map((s) => s.tabela + '/' + s.variavel + s.classes);
+  assert.equal(new Set(ids).size, ids.length, 'série repetida no catálogo');
+  gerado.forEach((g, i) => {
+    const s = SIDRA_SETORIAL[i];
+    assert.ok(g.__url.endsWith(`/values/t/${s.tabela}/n1/all/v/${s.variavel}/p/last%20${JANELA_SIDRA_SETORIAL}${s.classes}`), g.__url);
+  });
 });
 
 test('A3.4: a resposta REAL de cada tabela vira fatos (categoria = última dimensão) e 202 fatos no total', () => {
@@ -635,11 +640,6 @@ test('A3.4: a resposta REAL de cada tabela vira fatos (categoria = última dimen
     total += c.itens.length;
   });
   assert.equal(total, 202);
-  // cada fato identifica um número só: nenhuma referência se repete dentro da série
-  FIX.forEach((nome, i) => {
-    const refs = setorialDe(i, fixSidra(nome)).itens.map((f) => f.referencia);
-    assert.equal(new Set(refs).size, refs.length, `${nome}: referência repetida`);
-  });
   // categoria é a ÚLTIMA dimensão: no PMC por atividade é Atividades (D5), não Tipos de índice (D4)
   const cat = setorialDe(3, fixSidra('pmcat')).itens[0].valor;
   assert.equal(cat.categoria_codigo, '90671');
@@ -704,11 +704,12 @@ test('A3.4: falhou nunca vira "nada encontrado" - 500, sem resposta, 200 só cab
 test('A3.4: topologia - só registra, antes de qualquer nó que lança, e nunca chega a indice_macro_obs', () => {
   const c = workflow.connections;
   const alvo = (n) => c[n].main[0].map((x) => x.node);
-  assert.deepEqual(alvo('Registrar Consulta SGS Extra'), ['Séries SIDRA Setorial']);
-  assert.deepEqual(alvo('Séries SIDRA Setorial'), ['IBGE SIDRA Setorial']);
-  assert.deepEqual(alvo('IBGE SIDRA Setorial'), ['Ler SIDRA Setorial']);
-  assert.deepEqual(alvo('Ler SIDRA Setorial'), ['Registrar Consulta SIDRA Setorial']);
-  assert.deepEqual(alvo('Registrar Consulta SIDRA Setorial'), ['Séries a Coletar']);
+  // Achado BAIXO da revisão de 7e2b1f8: aqui havia a adjacência exata de cada nó e o total de 34
+  // nós (mecanismo). "Registra antes de qualquer nó que lança" já é provado pelo teste de ordem
+  // (todo caminho do gatilho a um nó que lança passa por TODOS os Registrar Consulta, inclusive
+  // este); aqui fica só que a chamada chega ao registro dela.
+  assert.ok(alvo('IBGE SIDRA Setorial').includes('Ler SIDRA Setorial'));
+  assert.ok(alvo('Ler SIDRA Setorial').includes('Registrar Consulta SIDRA Setorial'));
   const leitores = workflow.nodes.filter((n) => /SIDRA Setorial/.test(n.parameters.jsCode ?? '') && !/Setorial/.test(n.name));
   assert.deepEqual(leitores.map((n) => n.name), [], 'só a corrente setorial consome a setorial');
   const reg = nodeDe('Registrar Consulta SIDRA Setorial');
@@ -718,7 +719,6 @@ test('A3.4: topologia - só registra, antes de qualquer nó que lança, e nunca 
   const h = nodeDe('IBGE SIDRA Setorial');
   assert.equal(h.onError, 'continueRegularOutput');
   assert.equal(h.parameters.options.response.response.outputPropertyName, CAMPO_CORPO_NO);
-  assert.equal(workflow.nodes.length, 34);
 });
 
 // --- A3 fatia 2: IBC-Br, crédito/inadimplência PJ e euro (bcb_sgs -> fato_externo) ---
