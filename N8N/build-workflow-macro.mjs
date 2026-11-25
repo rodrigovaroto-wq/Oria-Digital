@@ -19,7 +19,7 @@ import {
   lerRespostaHttp, consultaSgs, consultaFocus, consultaSidra,
   JUROS_PJ_SGS, urlSgsUltimos, itensJuros,
   SGS_EXTRA, JANELA_SGS_EXTRA, itensSgsExtra,
-  SIDRA_SETORIAL, urlSidraSetorial, consultaSidraSetorial, mesFinalSidra,
+  SIDRA_SETORIAL, urlSidraSetorial, consultaSidraSetorial, mesFinalSidra, oticaSidra,
 } from './lib/macro.mjs';
 
 // `numeroMacro` EMBUTIDA do fonte, não copiada à mão. É o padrão que o gerador da
@@ -382,7 +382,7 @@ return { json: { __consulta: c.consulta } };`,
 
   node('Ler SIDRA Setorial', 'n8n-nodes-base.code', 2, {
     mode: 'runOnceForEachItem',
-    jsCode: embutir(consultaSidraSetorial, mesFinalSidra) + `
+    jsCode: embutir(consultaSidraSetorial, mesFinalSidra, oticaSidra) + `
 let ctx = {};
 try { ctx = $('Séries SIDRA Setorial').item.json; } catch (e) { ctx = {}; }
 const c = consultaSidraSetorial($json, { tabela: ctx.__tabela, variavel: ctx.__variavel, periodicidade: ctx.__periodicidade, agregados: ctx.__agregados, otica: ctx.__otica }, { campo: ${CAMPO} });

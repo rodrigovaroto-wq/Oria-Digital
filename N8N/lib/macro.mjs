@@ -564,15 +564,28 @@ export const JANELA_SIDRA_SETORIAL = 2;
 //
 // ÓTICA (só a 5932). Achado MÉDIO da revisão final do PR #318: lá as folhas (agregado false) NÃO
 // formam UMA partição, formam DUAS do mesmo PIB: a da oferta (setores + impostos líquidos) e a da
-// demanda (consumo das famílias e do governo, FBCF, exportação e importação, esta com sinal
-// negativo). Somar ou contar todas as folhas conta o PIB duas vezes, e FBCF não é "setor". O fato
-// leva otica: 'oferta' | 'demanda' | 'ambas' (o PIB, total das duas). Nas outras tabelas, otica é
-// nula: há uma partição só. A regra completa de quem soma entre categorias: só agregado false E da
-// MESMA otica. Códigos da demanda conferidos no metadado de 25/11/2026 (93404 a 93408).
+// demanda (consumo das famílias e do governo, FBCF, exportação e importação). FBCF não é "setor", e
+// tratar as duas como uma lista mistura componentes de identidades diferentes. O fato leva otica:
+// 'oferta' | 'demanda' | 'ambas' (o PIB, total das duas), SÓ para código das listas abaixo; código
+// fora delas (o IBGE renumerou ou acrescentou, ex.: "Variação de estoques") sai com otica NULA, nunca
+// com um rótulo por exclusão (regra 1). Nas outras tabelas, otica é nula: há uma partição só.
+//
+// SOMA ENTRE CATEGORIAS (revisão de 339fee0): só faz sentido em grandeza que se soma. Hoje só a 6323
+// (unidade "Mil pessoas"); PIB, PIM, PMC e PMS são TAXAS em % (variação contra o mesmo período do ano
+// anterior) e não se somam entre setores: na 5932 real, a soma das folhas da oferta dá 36,6 em 202602
+// contra um PIB de 2,0. Quem agrega taxa pondera, e o peso não está aqui. Onde a soma vale, a regra é:
+// só agregado false E da mesma otica. E o V da importação é a variação do volume (positivo, 5,5 em
+// 202602), não uma parcela com sinal: aplicar sinal negativo inverteria o número.
+// Códigos conferidos no metadado do IBGE de 25/11/2026 (todas as 22 categorias no nível 0).
 export const SIDRA_SETORIAL = [
   { tabela: 5932, variavel: 6561, classes: '/c11255/all', periodicidade: 'trimestral',
     agregados: ['90691', '90696', '90705', '90707'],
-    otica: { demanda: ['93404', '93405', '93406', '93407', '93408'], ambas: ['90707'] } },
+    otica: {
+      oferta: ['90687', '90691', '90692', '90693', '90695', '90694', '90696', '90697', '90698', '90699',
+        '90700', '90702', '90701', '90703', '90705', '90706'],
+      demanda: ['93404', '93405', '93406', '93407', '93408'],
+      ambas: ['90707'],
+    } },
   { tabela: 8888, variavel: 11602, classes: '/c544/all', periodicidade: 'mensal', agregados: ['129314', '129316'] },
   { tabela: 8880, variavel: 11709, classes: '/c11046/56734', periodicidade: 'mensal', agregados: [] },
   { tabela: 8882, variavel: 11709, classes: '/c11046/56734/c85/all', periodicidade: 'mensal', agregados: ['90672', '2759'] },
@@ -608,6 +621,13 @@ export function mesFinalSidra(per, periodicidade) {
     const mes = Number(mm[2]);
     return mes >= 1 && mes <= 12 ? mm[1] + '-' + mm[2] : null;
   }
+  return null;
+}
+
+// A ótica do código pelas listas da série; código que nenhuma lista cita -> null (nunca por exclusão).
+export function oticaSidra(otica, cod) {
+  if (!otica) return null;
+  for (const o of ['oferta', 'demanda', 'ambas']) { if ((otica[o] || []).indexOf(cod) >= 0) return o; }
   return null;
 }
 
@@ -661,7 +681,7 @@ export function consultaSidraSetorial(resp, meta, opcoes) {
         periodo: per, periodo_nome: o.D3N, categoria_codigo: cod, categoria: o['D' + ultima + 'N'], valor: v,
         unidade: o.MN, compoe: false, periodicidade: m.periodicidade, serie: o.D2N, dimensoes: dims,
         agregado: (m.agregados || []).indexOf(cod) >= 0, mes_final: mesFinalSidra(per, m.periodicidade),
-        otica: !m.otica ? null : (m.otica.demanda || []).indexOf(cod) >= 0 ? 'demanda' : (m.otica.ambas || []).indexOf(cod) >= 0 ? 'ambas' : 'oferta',
+        otica: oticaSidra(m.otica, cod),
       },
       referencia: 'sidra.' + m.tabela + '.' + m.variavel + ':' + codDims + cod + ':' + per,
     });

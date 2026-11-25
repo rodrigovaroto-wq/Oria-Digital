@@ -933,6 +933,12 @@ test('A3.4: no PIB por setor, oferta e demanda vêm separadas pela ótica, nunca
   assert.deepEqual(por('ambas'), ['90707']);
   assert.ok(por('oferta').includes('90706') && !por('oferta').includes('93406'), 'impostos na oferta; FBCF fora dela');
   assert.equal(itens.filter((f) => f.valor.otica === null).length, 0);
+  // código que nenhuma lista cita (IBGE acrescentou "Variação de estoques", por exemplo) sai NULO,
+  // nunca 'oferta' por exclusão. DERIVADO da fixture real: só o código e o nome da linha trocados.
+  const linhas = fixSidra('pib');
+  const novo = { ...linhas[1], D4C: '99999', D4N: 'Variação de estoques' };
+  const f = setorialDe(0, [linhas[0], novo]).itens[0];
+  assert.equal(f.valor.otica, null);
   // fora da 5932 há uma partição só: ótica nula
   assert.ok(setorialDe(5, fixSidra('emp')).itens.every((f) => f.valor.otica === null));
 });
